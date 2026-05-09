@@ -26,6 +26,10 @@ defmodule Lattice.Transport.WebSocket.Client do
     GenServer.call(pid, {:send, envelope})
   end
 
+  def send_raw_text(pid, text) when is_binary(text) do
+    GenServer.call(pid, {:send_raw_text, text})
+  end
+
   def recv_envelope(pid, timeout \\ 5_000) do
     GenServer.call(pid, {:recv, timeout}, timeout + 500)
   end
@@ -50,6 +54,11 @@ defmodule Lattice.Transport.WebSocket.Client do
   @impl true
   def handle_call({:send, envelope}, _from, state) do
     reply = :gen_tcp.send(state.socket, encode_client_text_frame(Envelope.encode(envelope)))
+    {:reply, reply, state}
+  end
+
+  def handle_call({:send_raw_text, text}, _from, state) do
+    reply = :gen_tcp.send(state.socket, encode_client_text_frame(text))
     {:reply, reply, state}
   end
 

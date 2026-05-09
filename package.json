@@ -1,0 +1,11 @@
+{
+  "name": "lattice-poc",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "browser:e2e": "node scripts/lattice_browser_e2e.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.53.0"
+  }
+}

@@ -15,6 +15,8 @@ The core thesis is simple: a tab gets zero implicit authority. It cannot use raw
 - Default-deny tab topology with explicit mediated bridges.
 - A minimal `Lattice.MovableProcess` prototype that routes server-side and tab-side operations through one logical handle.
 - Browser demo files plus a server task.
+- An adversarial `lattice_stress` lab that attacks caps, lifecycle races,
+  WebSocket envelopes, process crashes, load, soak, and two-browser UI behavior.
 
 ## What It Does Not Prove
 
@@ -29,6 +31,14 @@ The core thesis is simple: a tab gets zero implicit authority. It cannot use raw
 mix deps.get
 mix test
 scripts/lattice_poc_demo.sh
+```
+
+For the stress lab:
+
+```sh
+mix lattice.stress --tabs 500 --caps 2000 --calls 50000 --bridges 1000
+npm install
+npm run browser:e2e
 ```
 
 For the browser demo:
@@ -66,6 +76,14 @@ Open the same URL in a second browser tab to trigger the automatic mediated brid
 - `Lattice.Demo.TabWorker`.
 - Mix tasks for the deterministic and browser demos.
 
+`apps/lattice_stress` owns:
+
+- `LatticeStress.ProbeServer`, `LatticeStress.ProbeTab`, and
+  `LatticeStress.Barrier`.
+- Adversarial, race, property, WebSocket abuse, failure, load/soak, and browser
+  E2E tests.
+- `mix lattice.stress`, the repeatable local load harness.
+
 ## Browser Realm
 
 The browser demo is the real tab-realm boundary for V0. It connects over WebSocket, requests an echo capability, performs an allowed call, and performs a denied call. The deterministic demo command also uses the WebSocket boundary.
@@ -73,6 +91,7 @@ The browser demo is the real tab-realm boundary for V0. It connects over WebSock
 When two browser tabs are connected, the demo server makes the server side visible: it broadcasts presence, capability events, denials, bridge openings, bridge returns, and audit counts to the page. The center server node and lower ledger update from server-pushed events.
 
 For a requirement-by-requirement status map, see [docs/acceptance_checklist.md](docs/acceptance_checklist.md).
+For adversarial validation details, see [docs/stress_lab.md](docs/stress_lab.md).
 
 ## Dependencies
 
@@ -80,5 +99,8 @@ The core app is plain OTP. The server app adds only:
 
 - `cowboy` for the WebSocket and HTTP boundary.
 - `jason` for safe JSON envelopes.
+- `stream_data` in the stress app test environment for property-based authority
+  checks.
+- `@playwright/test` for the optional two-browser E2E script.
 
 No browser code stores long-lived secrets, and no tab-facing code exposes arbitrary RPC, `:os.cmd`, code loading, process introspection, raw pids, or global registration.
