@@ -10,8 +10,20 @@ defmodule Lattice do
   alias Lattice.{Audit, Cap, CapStore, Gateway, Topology}
 
   def connect_tab(attrs), do: Topology.connect_tab(attrs)
-  def disconnect_tab(tab_id), do: Topology.disconnect_tab(tab_id)
-  def eject(tab_id, reason), do: Topology.eject(tab_id, reason)
+
+  def disconnect_tab(tab_id) do
+    with {:ok, closed_tab} <- Topology.disconnect_tab(tab_id),
+         :ok <- CapStore.revoke_tab(tab_id, :normal) do
+      {:ok, closed_tab}
+    end
+  end
+
+  def eject(tab_id, reason) do
+    with {:ok, closed_tab} <- Topology.eject(tab_id, reason),
+         :ok <- CapStore.revoke_tab(tab_id, reason) do
+      {:ok, closed_tab}
+    end
+  end
 
   def grant(tab_id, target, ops, opts \\ []) do
     CapStore.grant(tab_id, normalize_target(target), ops, opts)
@@ -50,6 +62,14 @@ defmodule Lattice do
   end
 
   def audit_events, do: Audit.events()
+
+  def diagnostics do
+    %{
+      topology: Topology.snapshot(),
+      caps: CapStore.snapshot(),
+      audit_count: length(Audit.events())
+    }
+  end
 
   def reset! do
     Topology.reset()

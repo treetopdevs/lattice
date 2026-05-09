@@ -176,12 +176,12 @@ defmodule Lattice.Transport.WebSocket do
   end
 
   defp handle_envelope(
-         %{"type" => "call", "cap_id" => cap_id, "payload" => payload},
+         %{"type" => "call", "cap_id" => cap_id, "payload" => payload} = envelope,
          %{tab: tab} = state
        )
        when not is_nil(tab) do
     reply =
-      case Lattice.call(tab.id, cap_id, payload) do
+      case gateway_call(tab.id, cap_id, payload, Map.get(envelope, "target")) do
         {:ok, result} ->
           LatticeServer.DemoHub.event(:call, %{
             tab_id: tab.id,
@@ -205,12 +205,12 @@ defmodule Lattice.Transport.WebSocket do
   end
 
   defp handle_envelope(
-         %{"type" => "cast", "cap_id" => cap_id, "payload" => payload},
+         %{"type" => "cast", "cap_id" => cap_id, "payload" => payload} = envelope,
          %{tab: tab} = state
        )
        when not is_nil(tab) do
     reply =
-      case Lattice.cast(tab.id, cap_id, payload) do
+      case gateway_cast(tab.id, cap_id, payload, Map.get(envelope, "target")) do
         :ok ->
           LatticeServer.DemoHub.event(:cast, %{tab_id: tab.id, cap_id: cap_id})
           %{type: "cast_result", ok: true}
@@ -257,6 +257,61 @@ defmodule Lattice.Transport.WebSocket do
     frame = Envelope.encode(%{type: "error", error_type: type, reason: inspect(reason)})
     {:reply, {:text, frame}, state}
   end
+
+  defp gateway_call(tab_id, cap_id, payload, requested_target) do
+    with :ok <- reject_target_override(tab_id, cap_id, requested_target) do
+      Lattice.call(tab_id, cap_id, payload)
+    end
+  end
+
+  defp gateway_cast(tab_id, cap_id, payload, requested_target) do
+    with :ok <- reject_target_override(tab_id, cap_id, requested_target) do
+      Lattice.cast(tab_id, cap_id, payload)
+    end
+  end
+
+  defp reject_target_override(_tab_id, _cap_id, nil), do: :ok
+
+  defp reject_target_override(tab_id, cap_id, requested_target)
+       when is_binary(requested_target) do
+    case Lattice.CapStore.get(cap_id) do
+      {:ok, cap} ->
+        if requested_target in allowed_target_labels(cap.target) do
+          :ok
+        else
+          Lattice.Audit.record(:deny, %{
+            tab_id: tab_id,
+            cap_id: cap.id,
+            requested_target: requested_target,
+            actual_target: inspect(cap.target),
+            reason: :target_mismatch
+          })
+
+          {:error, :target_mismatch}
+        end
+
+      :error ->
+        {:error, :unknown_cap}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp reject_target_override(tab_id, _cap_id, requested_target) do
+    Lattice.Audit.record(:deny, %{
+      tab_id: tab_id,
+      requested_target: inspect(requested_target),
+      reason: :malformed_target
+    })
+
+    {:error, :malformed_target}
+  end
+
+  defp allowed_target_labels({:server_pid, _pid}), do: ["server_process"]
+  defp allowed_target_labels({:server_name, name}), do: [Atom.to_string(name)]
+  defp allowed_target_labels({:tab, tab_id}), do: ["tab:" <> tab_id]
+  defp allowed_target_labels(other), do: [inspect(other)]
 
   defp parse_ops(ops) when is_list(ops) do
     Enum.flat_map(ops, fn

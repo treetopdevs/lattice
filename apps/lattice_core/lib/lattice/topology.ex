@@ -35,9 +35,14 @@ defmodule Lattice.Topology do
   def bridge_allowed?(from_tab_id, to_tab_id, cap_id),
     do: GenServer.call(__MODULE__, {:bridge_allowed?, from_tab_id, to_tab_id, cap_id})
 
-  def deliver_to_tab(tab_id, envelope, timeout \\ 5_000),
-    do: GenServer.call(__MODULE__, {:deliver_to_tab, tab_id, envelope, timeout}, timeout + 500)
+  def deliver_to_tab(tab_id, envelope, timeout \\ 5_000) do
+    with {:ok, {transport, connection_pid}} <-
+           GenServer.call(__MODULE__, {:delivery_info, tab_id}) do
+      transport.deliver_call(connection_pid, envelope, timeout)
+    end
+  end
 
+  def snapshot, do: GenServer.call(__MODULE__, :snapshot)
   def reset, do: GenServer.call(__MODULE__, :reset)
 
   @impl true
@@ -140,10 +145,10 @@ defmodule Lattice.Topology do
     {:reply, allowed?, state}
   end
 
-  def handle_call({:deliver_to_tab, tab_id, envelope, timeout}, _from, state) do
+  def handle_call({:delivery_info, tab_id}, _from, state) do
     case Map.fetch(state.tabs, tab_id) do
       {:ok, %Tab{state: :connected, transport: transport, connection_pid: connection_pid}} ->
-        {:reply, transport.deliver_call(connection_pid, envelope, timeout), state}
+        {:reply, {:ok, {transport, connection_pid}}, state}
 
       {:ok, _tab} ->
         {:reply, {:error, :tab_not_connected}, state}
@@ -163,6 +168,19 @@ defmodule Lattice.Topology do
     {:reply, reply, state}
   end
 
+  def handle_call(:snapshot, _from, state) do
+    {:reply,
+     %{
+       tabs: state.tabs,
+       bridges: state.bridges,
+       connected_tab_ids:
+         state.tabs
+         |> Enum.filter(fn {_id, tab} -> tab.state == :connected end)
+         |> Enum.map(fn {id, _tab} -> id end)
+         |> MapSet.new()
+     }, state}
+  end
+
   def handle_call(:reset, _from, state) do
     state.tabs
     |> Map.values()
@@ -178,6 +196,7 @@ defmodule Lattice.Topology do
         {_reply, state} =
           close_tab(state, tab_id, :disconnected, :tab_disconnect, :connection_down)
 
+        Task.start(fn -> Lattice.CapStore.revoke_tab(tab_id, :connection_down) end)
         {:noreply, state}
 
       nil ->
@@ -189,7 +208,6 @@ defmodule Lattice.Topology do
     case Map.fetch(state.tabs, tab_id) do
       {:ok, %Tab{state: :connected} = tab} ->
         cleanup_workers(tab, reason)
-        Lattice.CapStore.revoke_tab(tab_id, reason)
         closed_tab = Tab.close(tab, lifecycle_state)
 
         Audit.record(audit_type, %{

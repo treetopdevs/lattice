@@ -90,6 +90,10 @@ defmodule Lattice.Cap do
   def token(%__MODULE__{id: id}), do: id
   def token(id) when is_binary(id), do: id
 
+  def safe_token(%__MODULE__{id: id}) when is_binary(id), do: {:ok, id}
+  def safe_token(id) when is_binary(id), do: {:ok, id}
+  def safe_token(_), do: {:error, :malformed_cap}
+
   def expired?(%__MODULE__{expires_at: nil}), do: false
 
   def expired?(%__MODULE__{expires_at: expires_at}),

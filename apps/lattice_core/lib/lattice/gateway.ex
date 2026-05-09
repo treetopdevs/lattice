@@ -85,7 +85,14 @@ defmodule Lattice.Gateway do
   end
 
   defp forward_cast(tab_id, %Cap{target: {:server_pid, pid}, id: cap_id}, payload) do
-    GenServer.cast(pid, {:lattice_cast, %{from_tab_id: tab_id, cap_id: cap_id, payload: payload}})
+    if Process.alive?(pid) do
+      GenServer.cast(
+        pid,
+        {:lattice_cast, %{from_tab_id: tab_id, cap_id: cap_id, payload: payload}}
+      )
+    else
+      {:error, :target_down}
+    end
   end
 
   defp forward_cast(tab_id, %Cap{target: {:server_name, name}, id: cap_id}, payload) do

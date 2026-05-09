@@ -16,7 +16,13 @@ defmodule Lattice.CapStore do
   end
 
   def revoke(cap_or_id, reason \\ :manual) do
-    GenServer.call(__MODULE__, {:revoke, Cap.token(cap_or_id), reason})
+    with {:ok, cap_id} <- Cap.safe_token(cap_or_id) do
+      GenServer.call(__MODULE__, {:revoke, cap_id, reason})
+    else
+      {:error, reason} ->
+        Audit.record(:deny, %{reason: reason, op: :revoke})
+        {:error, reason}
+    end
   end
 
   def revoke_tab(tab_id, reason \\ :tab_closed) do
@@ -24,10 +30,22 @@ defmodule Lattice.CapStore do
   end
 
   def authorize(tab_id, cap_or_id, op) do
-    GenServer.call(__MODULE__, {:authorize, tab_id, Cap.token(cap_or_id), Cap.normalize_op(op)})
+    with {:ok, cap_id} <- Cap.safe_token(cap_or_id) do
+      GenServer.call(__MODULE__, {:authorize, tab_id, cap_id, Cap.normalize_op(op)})
+    else
+      {:error, reason} ->
+        Audit.record(:deny, %{tab_id: tab_id, op: op, reason: reason})
+        {:error, reason}
+    end
   end
 
-  def get(cap_or_id), do: GenServer.call(__MODULE__, {:get, Cap.token(cap_or_id)})
+  def get(cap_or_id) do
+    with {:ok, cap_id} <- Cap.safe_token(cap_or_id) do
+      GenServer.call(__MODULE__, {:get, cap_id})
+    end
+  end
+
+  def snapshot, do: GenServer.call(__MODULE__, :snapshot)
   def reset, do: GenServer.call(__MODULE__, :reset)
 
   @impl true
@@ -38,15 +56,26 @@ defmodule Lattice.CapStore do
     if Topology.tab_connected?(tab_id) do
       cap = Cap.new(tab_id, target, ops, opts)
 
-      Audit.record(:grant, %{
-        tab_id: tab_id,
-        cap_id: cap.id,
-        target: inspect_target(target),
-        ops: MapSet.to_list(cap.ops)
-      })
+      if Map.has_key?(state.caps, cap.id) do
+        Audit.record(:deny, %{
+          tab_id: tab_id,
+          cap_id: cap.id,
+          target: inspect_target(target),
+          reason: :cap_id_collision
+        })
 
-      Topology.register_cap(tab_id, cap.id)
-      {:reply, {:ok, cap}, put_in(state, [:caps, cap.id], cap)}
+        {:reply, {:error, :cap_id_collision}, state}
+      else
+        Audit.record(:grant, %{
+          tab_id: tab_id,
+          cap_id: cap.id,
+          target: inspect_target(target),
+          ops: MapSet.to_list(cap.ops)
+        })
+
+        Topology.register_cap(tab_id, cap.id)
+        {:reply, {:ok, cap}, put_in(state, [:caps, cap.id], cap)}
+      end
     else
       Audit.record(:deny, %{
         tab_id: tab_id,
@@ -127,6 +156,17 @@ defmodule Lattice.CapStore do
 
   def handle_call({:get, cap_id}, _from, state) do
     {:reply, Map.fetch(state.caps, cap_id), state}
+  end
+
+  def handle_call(:snapshot, _from, state) do
+    active_caps =
+      state.caps
+      |> Enum.reject(fn {_id, cap} ->
+        cap.revoked? or Cap.expired?(cap) or Cap.use_limited?(cap)
+      end)
+      |> Map.new()
+
+    {:reply, %{caps: state.caps, active_caps: active_caps}, state}
   end
 
   def handle_call(:reset, _from, _state), do: {:reply, :ok, %{caps: %{}}}
