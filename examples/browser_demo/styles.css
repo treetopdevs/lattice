@@ -1,0 +1,577 @@
+:root {
+  color-scheme: light;
+  --bg: oklch(0.955 0.012 164);
+  --ink: oklch(0.19 0.025 174);
+  --muted: oklch(0.49 0.03 178);
+  --line: oklch(0.83 0.022 174);
+  --panel: oklch(0.982 0.008 160);
+  --panel-2: oklch(0.925 0.016 168);
+  --server: oklch(0.66 0.12 172);
+  --server-deep: oklch(0.35 0.08 176);
+  --warn: oklch(0.6 0.19 28);
+  --violet: oklch(0.58 0.16 292);
+  --radius: 8px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  background:
+    linear-gradient(90deg, oklch(0.9 0.018 172 / 0.42) 1px, transparent 1px),
+    linear-gradient(0deg, oklch(0.9 0.018 172 / 0.42) 1px, transparent 1px),
+    radial-gradient(circle at 50% 46%, oklch(0.88 0.05 168), transparent 38rem),
+    var(--bg);
+  background-size: 44px 44px, 44px 44px, auto, auto;
+}
+
+button {
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  cursor: pointer;
+  transition:
+    border-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+button:hover:not(:disabled),
+button:focus-visible {
+  border-color: var(--server);
+  outline: none;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  color: oklch(0.64 0.02 174);
+  background: oklch(0.93 0.01 166);
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.shell {
+  width: min(1180px, calc(100vw - 32px));
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 22px 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 18px;
+}
+
+.topbar,
+.console-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.brand,
+.session-strip,
+.ledger-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.brand {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.brand-mark {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--server);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 3px var(--bg);
+}
+
+.session-strip span {
+  min-width: 74px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: oklch(0.97 0.008 160 / 0.78);
+  text-align: center;
+}
+
+.stage {
+  position: relative;
+  min-height: 560px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, oklch(0.987 0.007 160 / 0.88), oklch(0.93 0.018 170 / 0.74)),
+    var(--panel);
+}
+
+.wires {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.wire {
+  fill: none;
+  stroke: oklch(0.62 0.05 174 / 0.32);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 8 14;
+}
+
+.wire-deny {
+  stroke: oklch(0.62 0.11 28 / 0.22);
+  opacity: 0;
+}
+
+.realm,
+.server-node {
+  position: absolute;
+  display: grid;
+  place-items: center;
+}
+
+.realm {
+  --realm-hue: 152;
+  width: 220px;
+  height: 220px;
+  top: 176px;
+}
+
+.realm-self {
+  left: 92px;
+}
+
+.realm-peer {
+  right: 92px;
+  opacity: 0.45;
+  filter: grayscale(0.35);
+}
+
+.has-peer .realm-peer {
+  opacity: 1;
+  filter: none;
+}
+
+.realm-orbit {
+  position: absolute;
+  width: 196px;
+  height: 196px;
+  border: 1px solid oklch(0.64 0.1 var(--realm-hue) / 0.44);
+  border-radius: 50%;
+}
+
+.realm-orbit::before,
+.realm-orbit::after {
+  content: "";
+  position: absolute;
+  inset: 24px;
+  border: 1px dashed oklch(0.65 0.11 var(--realm-hue) / 0.38);
+  border-radius: 50%;
+}
+
+.realm-orbit::after {
+  inset: 54px;
+  border-style: solid;
+  opacity: 0.62;
+}
+
+.realm-core {
+  z-index: 1;
+  width: 86px;
+  height: 86px;
+  display: grid;
+  place-items: center;
+  border: 1px solid oklch(0.58 0.14 var(--realm-hue));
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 30%, oklch(0.98 0.04 var(--realm-hue)), transparent 45%),
+    oklch(0.78 0.12 var(--realm-hue));
+  box-shadow: 0 20px 54px oklch(0.3 0.08 var(--realm-hue) / 0.24);
+}
+
+.realm-letter {
+  font-size: 30px;
+  font-weight: 850;
+  color: oklch(0.22 0.04 var(--realm-hue));
+}
+
+.realm-meta {
+  position: absolute;
+  bottom: -10px;
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.realm-meta code {
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.server-node {
+  width: 244px;
+  height: 244px;
+  left: calc(50% - 122px);
+  top: 150px;
+}
+
+.server-rings {
+  position: absolute;
+  inset: 0;
+}
+
+.server-rings span {
+  position: absolute;
+  inset: calc(var(--i, 0) * 34px);
+  border: 1px solid oklch(0.56 0.09 174 / 0.35);
+  border-radius: 50%;
+}
+
+.server-rings span:nth-child(1) {
+  --i: 0;
+}
+
+.server-rings span:nth-child(2) {
+  --i: 1;
+}
+
+.server-rings span:nth-child(3) {
+  --i: 2;
+}
+
+.server-core {
+  z-index: 1;
+  width: 112px;
+  height: 112px;
+  display: grid;
+  place-items: center;
+  border: 1px solid oklch(0.42 0.08 176);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 42% 28%, oklch(0.98 0.04 166), transparent 35%),
+    linear-gradient(145deg, oklch(0.73 0.11 170), oklch(0.44 0.1 178));
+  color: oklch(0.16 0.03 176);
+  box-shadow: 0 28px 78px oklch(0.32 0.07 176 / 0.32);
+}
+
+.server-light {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: oklch(0.92 0.16 152);
+  box-shadow: 0 0 24px oklch(0.78 0.18 152);
+}
+
+.server-title {
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.server-stats {
+  position: absolute;
+  bottom: -4px;
+  display: flex;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.server-stats span {
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: oklch(0.97 0.008 160 / 0.88);
+}
+
+.cap-token,
+.deny-mark {
+  position: absolute;
+  left: calc(50% - 18px);
+  top: 270px;
+  width: 36px;
+  height: 18px;
+  border-radius: 999px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cap-token {
+  border: 1px solid oklch(0.54 0.12 158);
+  background: oklch(0.84 0.12 154);
+  box-shadow: 0 0 32px oklch(0.7 0.16 154 / 0.54);
+}
+
+.deny-mark {
+  width: 42px;
+  height: 42px;
+  border: 2px solid var(--warn);
+  background: oklch(0.94 0.07 28 / 0.58);
+  transform: rotate(45deg);
+}
+
+.console-row {
+  align-items: stretch;
+}
+
+.ledger {
+  flex: 1;
+  min-height: 166px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: oklch(0.97 0.008 160 / 0.86);
+  padding: 14px;
+}
+
+.ledger-head {
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.ledger ol {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ledger-item {
+  min-height: 36px;
+  display: grid;
+  grid-template-columns: 44px 1fr 30px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px;
+  border: 1px solid oklch(0.85 0.018 172);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.ledger-glyph {
+  color: var(--server-deep);
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.ledger-route {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ledger-item code {
+  color: oklch(0.55 0.04 174);
+  text-align: right;
+}
+
+.event-deny {
+  border-color: oklch(0.72 0.1 28);
+  background: oklch(0.96 0.035 28);
+}
+
+.event-bridge_open,
+.event-bridge_result {
+  border-color: oklch(0.72 0.09 292);
+  background: oklch(0.96 0.025 292);
+}
+
+.controls {
+  width: 188px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.controls button:first-child,
+.controls button:last-child {
+  grid-column: 1 / -1;
+}
+
+.pulse-grant .cap-token {
+  animation: cap-pass 760ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pulse-call .wire-self,
+.pulse-server .wire-self {
+  animation: wire-glow 760ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pulse-deny .wire-deny {
+  opacity: 1;
+  animation: deny-wire 760ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pulse-deny .deny-mark {
+  animation: deny-mark 760ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pulse-bridge .wire-self,
+.pulse-bridge .wire-peer,
+.pulse-return .wire-self,
+.pulse-return .wire-peer,
+.pulse-incoming .wire-peer {
+  animation: wire-glow 760ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pulse-bridge .server-core,
+.pulse-return .server-core,
+.pulse-incoming .realm-core {
+  animation: node-pop 560ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes wire-glow {
+  0% {
+    stroke: oklch(0.62 0.05 174 / 0.32);
+    stroke-dashoffset: 0;
+  }
+  35% {
+    stroke: oklch(0.72 0.14 158 / 0.92);
+    stroke-width: 5;
+  }
+  100% {
+    stroke: oklch(0.62 0.05 174 / 0.32);
+    stroke-dashoffset: -44;
+  }
+}
+
+@keyframes deny-wire {
+  0% {
+    stroke-dashoffset: 0;
+  }
+  45% {
+    stroke: oklch(0.62 0.19 28 / 0.9);
+    stroke-width: 5;
+  }
+  100% {
+    opacity: 0;
+    stroke-dashoffset: -42;
+  }
+}
+
+@keyframes cap-pass {
+  0% {
+    opacity: 0;
+    transform: translateX(-330px) scale(0.72);
+  }
+  22%,
+  76% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(330px) scale(1);
+  }
+}
+
+@keyframes deny-mark {
+  0% {
+    opacity: 0;
+    transform: rotate(45deg) scale(0.5);
+  }
+  32% {
+    opacity: 1;
+    transform: rotate(45deg) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(45deg) scale(1.15);
+  }
+}
+
+@keyframes node-pop {
+  0% {
+    transform: scale(1);
+  }
+  34% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (max-width: 860px) {
+  .shell {
+    width: min(100vw - 20px, 720px);
+    padding: 12px 0;
+  }
+
+  .topbar,
+  .console-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .stage {
+    min-height: 680px;
+  }
+
+  .realm {
+    width: 180px;
+    height: 180px;
+    top: auto;
+  }
+
+  .realm-self {
+    left: calc(50% - 90px);
+    top: 46px;
+  }
+
+  .server-node {
+    left: calc(50% - 112px);
+    top: 238px;
+    width: 224px;
+    height: 224px;
+  }
+
+  .realm-peer {
+    right: auto;
+    left: calc(50% - 90px);
+    bottom: 54px;
+  }
+
+  .wires {
+    transform: rotate(90deg) scale(1.14);
+  }
+
+  .ledger ol {
+    grid-template-columns: 1fr;
+  }
+
+  .controls {
+    width: 100%;
+  }
+}

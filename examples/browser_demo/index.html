@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lattice</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span>Lattice</span>
+        </div>
+        <div class="session-strip" aria-live="polite">
+          <span id="connectionState">offline</span>
+          <span id="tabBadge">waiting</span>
+          <span id="auditBadge">audit 0</span>
+        </div>
+      </header>
+
+      <section class="stage" aria-label="Lattice process plane story">
+        <svg class="wires" viewBox="0 0 1200 560" role="img" aria-label="Capability mediated links">
+          <path id="wireSelfServer" class="wire wire-self" d="M250 278 C380 204 470 204 566 278" />
+          <path id="wireServerPeer" class="wire wire-peer" d="M634 278 C730 204 820 204 950 278" />
+          <path id="wireDeny" class="wire wire-deny" d="M250 350 C420 430 780 430 950 350" />
+        </svg>
+
+        <article class="realm realm-self" id="selfNode">
+          <div class="realm-orbit"></div>
+          <div class="realm-core">
+            <span class="realm-letter" id="selfLetter">A</span>
+          </div>
+          <div class="realm-meta">
+            <span id="selfStatus">tab</span>
+            <code id="selfId">not connected</code>
+          </div>
+        </article>
+
+        <article class="server-node" id="serverNode">
+          <div class="server-rings" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <div class="server-core">
+            <span class="server-light"></span>
+            <span class="server-title">server</span>
+          </div>
+          <div class="server-stats">
+            <span id="tabCount">0 tabs</span>
+            <span id="capState">caps closed</span>
+          </div>
+        </article>
+
+        <article class="realm realm-peer" id="peerNode">
+          <div class="realm-orbit"></div>
+          <div class="realm-core">
+            <span class="realm-letter" id="peerLetter">B</span>
+          </div>
+          <div class="realm-meta">
+            <span id="peerStatus">second tab</span>
+            <code id="peerId">open another tab</code>
+          </div>
+        </article>
+
+        <div class="cap-token" id="capToken" aria-hidden="true"></div>
+        <div class="deny-mark" id="denyMark" aria-hidden="true"></div>
+      </section>
+
+      <section class="console-row" aria-label="Server side visibility">
+        <div class="ledger">
+          <div class="ledger-head">
+            <span>server plane</span>
+            <span id="ledgerClock">live</span>
+          </div>
+          <ol id="ledgerList"></ol>
+        </div>
+
+        <div class="controls" aria-label="Manual demo controls">
+          <button id="connect" type="button">connect</button>
+          <button id="grant" type="button" disabled>grant</button>
+          <button id="allowed" type="button" disabled>call</button>
+          <button id="denied" type="button" disabled>deny</button>
+          <button id="disconnect" type="button" disabled>disconnect</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="./client.js"></script>
+  </body>
+</html>
