@@ -83,3 +83,10 @@
 - Command run: `mix format && mix test`, `scripts/lattice_poc_demo.sh`, `scripts/lattice_poc_demo.sh 4056`, `curl -fsS http://localhost:4056/ | head -n 8`, and in-app browser visual inspection.
 - Result: browser demo now shows tab realms, central server plane, live server ledger, capability grant/call/deny events, audit counts, and an automatic two-tab bridge story over real WebSocket clients. Tests verify A->B and B->A mediated bridge events.
 - Blocker or remaining limitation: the Codex in-app browser did not keep two visual tabs connected simultaneously during inspection, so the two-tab choreography was validated through real WebSocket integration tests; the page itself was visually inspected in the one-tab waiting state.
+
+## Checkpoint: Browser Story Clarity Pass
+
+- Files changed: `examples/browser_demo/index.html`, `examples/browser_demo/client.js`, `examples/browser_demo/styles.css`, `docs/lattice_poc_status.md`.
+- Command run: `mix format`, `mix test`, `scripts/lattice_poc_demo.sh`, `scripts/lattice_poc_demo.sh 4057`, `curl -fsS http://localhost:4057/ | head -n 8`, in-app browser grant/call/deny flow, and a second real WebSocket client connected to the browser demo server for the mediated two-realm story.
+- Result: succeeded. Manual calls are no longer auto-triggered after grant; each tab's controls name the local actor, the actor-aware route animation distinguishes self, peer, grant, deny, and bridge traffic, and the server audit stream now states owner, target, cap, gateway allow/refuse, and bridge intent in plain language.
+- Blocker or remaining limitation: none for the browser POC; the automated visual smoke used the repository's real WebSocket client as the second realm while the page remains usable with two normal browser tabs.

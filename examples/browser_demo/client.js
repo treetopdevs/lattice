@@ -27,8 +27,9 @@ const els = {
 let ws;
 let tabId;
 let echoCapId;
-let autoRan = false;
 let ledger = [];
+let tabsById = new Map();
+let selfLabel = "tab";
 
 const eventGlyphs = {
   tab_connect: "in",
@@ -67,8 +68,9 @@ function connect() {
     els.connectionState.textContent = "offline";
     tabId = undefined;
     echoCapId = undefined;
-    autoRan = false;
+    selfLabel = "tab";
     setButtons(false);
+    resetControlLabels();
     document.body.classList.remove("is-connected");
   });
 }
@@ -87,11 +89,6 @@ function handleMessage(msg) {
     document.body.classList.add("is-connected");
     setButtons(true);
     send({ type: "state_request" });
-
-    if (!autoRan) {
-      autoRan = true;
-      window.setTimeout(requestGrant, 550);
-    }
   }
 
   if (msg.type === "snapshot") {
@@ -109,19 +106,17 @@ function handleMessage(msg) {
 
   if (msg.type === "grant") {
     echoCapId = msg.cap.id;
-    els.capState.textContent = "cap open";
-    els.allowed.disabled = false;
-    pulse("grant");
-    window.setTimeout(allowedCall, 750);
-    window.setTimeout(deniedCall, 1350);
+    els.capState.textContent = "your Echo cap";
+    setButtons(true);
+    setControlLabels(selfLabel);
   }
 
   if (msg.type === "call_result") {
-    pulse(msg.ok ? "call" : "deny");
+    els.capState.textContent = msg.ok ? "call allowed" : "call denied";
   }
 
   if (msg.type === "tab_call") {
-    pulse("incoming");
+    pulseRoute("bridge");
 
     window.setTimeout(() => {
       send({
@@ -175,18 +170,22 @@ function renderPresence(tabs, auditCount) {
   const self = tabs.find((tab) => tab.id === tabId);
   const peer = tabs.find((tab) => tab.id !== tabId);
 
+  tabsById = new Map(tabs.map((tab) => [tab.id, tab]));
   els.auditBadge.textContent = `audit ${auditCount}`;
   els.tabCount.textContent = `${tabs.length} ${tabs.length === 1 ? "tab" : "tabs"}`;
 
   if (self) {
-    els.selfLetter.textContent = self.label || "A";
+    selfLabel = self.label || "A";
+    els.selfLetter.textContent = selfLabel;
     els.selfNode.style.setProperty("--realm-hue", self.hue || 152);
+    els.selfStatus.textContent = `${selfLabel} · this tab`;
+    setControlLabels(selfLabel);
   }
 
   if (peer) {
     els.peerLetter.textContent = peer.label || "B";
     els.peerId.textContent = shortId(peer.id);
-    els.peerStatus.textContent = "peer tab";
+    els.peerStatus.textContent = `${peer.label || "B"} · peer tab`;
     els.peerNode.style.setProperty("--realm-hue", peer.hue || 280);
     document.body.classList.add("has-peer");
   } else {
@@ -199,9 +198,10 @@ function renderPresence(tabs, auditCount) {
 function renderEvent(event, auditCount) {
   if (!event) return;
   els.auditBadge.textContent = `audit ${auditCount}`;
+  els.capState.textContent = capStateText(event);
   ledger = [event, ...ledger].slice(0, 9);
   drawLedger();
-  pulse(event.kind);
+  pulseEvent(event);
 }
 
 function renderLedger(events) {
@@ -220,46 +220,143 @@ function drawLedger() {
       glyph.className = "ledger-glyph";
       glyph.textContent = eventGlyphs[event.kind] || "evt";
 
-      const route = document.createElement("span");
-      route.className = "ledger-route";
-      route.textContent = routeText(event);
+      const body = document.createElement("span");
+      body.className = "ledger-body";
+
+      const title = document.createElement("strong");
+      title.textContent = eventTitle(event);
+
+      const detail = document.createElement("span");
+      detail.textContent = eventDetail(event);
 
       const id = document.createElement("code");
       id.textContent = String(event.id).padStart(2, "0");
 
-      item.append(glyph, route, id);
+      body.append(title, detail);
+      item.append(glyph, body, id);
       return item;
     }),
   );
 }
 
-function routeText(event) {
+function eventTitle(event) {
   const data = event.data || {};
-  const from = shortId(data.from_tab_id || data.tab_id);
-  const to = data.to_tab_id ? ` -> ${shortId(data.to_tab_id)}` : "";
-  return `${from}${to}`;
+  const actor = labelForId(data.tab_id || data.from_tab_id);
+  const target = data.to_tab_id ? labelForId(data.to_tab_id) : targetName(data.target);
+
+  return (
+    {
+      tab_connect: `${actor} connected`,
+      tab_disconnect: `${actor} disconnected`,
+      grant: `server granted EchoServer to ${actor}`,
+      call: `${actor} called ${target || "EchoServer"}`,
+      cast: `${actor} cast`,
+      deny: `${actor} denied`,
+      bridge_intent: `server opened mediated path`,
+      bridge_open: `bridge cap granted: ${actor} to ${target}`,
+      bridge_result: `${target} answered ${actor}`,
+      tab_render_result: `${actor} rendered tab-side`,
+    }[event.kind] || event.kind
+  );
 }
 
-function pulse(kind) {
-  const className =
-    {
-      grant: "pulse-grant",
-      call: "pulse-call",
-      deny: "pulse-deny",
-      bridge_intent: "pulse-bridge",
-      bridge_open: "pulse-bridge",
-      bridge_result: "pulse-return",
-      incoming: "pulse-incoming",
-      tab_render_result: "pulse-return",
-    }[kind] || "pulse-server";
+function eventDetail(event) {
+  const data = event.data || {};
+  const actor = labelForId(data.tab_id || data.from_tab_id);
+  const target = data.to_tab_id ? labelForId(data.to_tab_id) : targetName(data.target);
+  const cap = data.cap_id ? `cap ${shortId(data.cap_id)}` : "no cap";
+
+  if (event.kind === "grant") return `only ${actor} can use ${cap} on ${target || "EchoServer"}`;
+  if (event.kind === "call") return `${actor} used ${cap}; gateway allowed`;
+  if (event.kind === "deny") return `${actor}; ${String(data.reason || "not authorized")}; gateway refused`;
+  if (event.kind === "bridge_intent") return `${actor} may call ${target}; no direct tab network`;
+  if (event.kind === "bridge_open") return `owner ${actor}; target ${target}; ${cap}`;
+  if (event.kind === "bridge_result") return `request crossed the server gateway and returned`;
+  if (event.kind === "tab_connect") return "zero authority until a cap is granted";
+  if (event.kind === "tab_disconnect") return "owned caps revoked, workers cleaned";
+  return `${actor}${target ? ` -> ${target}` : ""}`;
+}
+
+function labelForId(id) {
+  if (!id) return "server";
+  const tab = tabsById.get(id);
+  if (!tab) return shortId(id);
+  const suffix = id === tabId ? "this tab" : "peer tab";
+  return `${tab.label || shortId(id)} ${suffix}`;
+}
+
+function targetName(target) {
+  if (!target) return "";
+  if (target === "echo") return "EchoServer";
+  if (String(target).startsWith("tab:")) return labelForId(String(target).slice(4));
+  return String(target).replace("Elixir.Lattice.Demo.", "");
+}
+
+function shortLabelForId(id) {
+  if (!id) return "server";
+  if (id === tabId) return "you";
+  const tab = tabsById.get(id);
+  return tab ? tab.label || "peer" : shortId(id);
+}
+
+function capStateText(event) {
+  const data = event.data || {};
+  const actor = shortLabelForId(data.tab_id || data.from_tab_id);
+  const target = shortLabelForId(data.to_tab_id);
+
+  if (event.kind === "grant") return actor === "you" ? "your Echo cap" : `${actor} Echo cap`;
+  if (event.kind === "call") return `${actor} call ok`;
+  if (event.kind === "deny") return actor === "you" ? "your call denied" : `${actor} denied`;
+  if (event.kind === "bridge_open") return `${actor} to ${target}`;
+  if (event.kind === "bridge_result") return `${actor} to ${target} ok`;
+  if (event.kind === "tab_render_result") return `${actor} rendered`;
+  if (event.kind === "tab_disconnect") return `${actor} offline`;
+  return els.capState.textContent;
+}
+
+function pulseEvent(event) {
+  const data = event.data || {};
+  const actorId = data.tab_id || data.from_tab_id;
+
+  if (event.kind === "deny") {
+    pulseRoute(actorId === tabId ? "deny-self" : "deny-peer");
+    return;
+  }
+
+  if (data.to_tab_id || event.kind.startsWith("bridge")) {
+    pulseRoute("bridge");
+    return;
+  }
+
+  if (event.kind === "grant") {
+    pulseRoute(actorId === tabId ? "grant-self" : "grant-peer");
+    return;
+  }
+
+  if (event.kind === "call" || event.kind === "cast") {
+    pulseRoute(actorId === tabId ? "self" : "peer");
+    return;
+  }
+
+  if (event.kind === "tab_render_result") {
+    pulseRoute(actorId === tabId ? "self" : "peer");
+    return;
+  }
+
+  pulseRoute("server");
+}
+
+function pulseRoute(route) {
+  const className = `pulse-${route}`;
 
   document.body.classList.remove(
-    "pulse-grant",
-    "pulse-call",
-    "pulse-deny",
+    "pulse-self",
+    "pulse-peer",
+    "pulse-grant-self",
+    "pulse-grant-peer",
+    "pulse-deny-self",
+    "pulse-deny-peer",
     "pulse-bridge",
-    "pulse-return",
-    "pulse-incoming",
     "pulse-server",
   );
 
@@ -271,10 +368,22 @@ function pulse(kind) {
 
 function setButtons(connected) {
   els.connect.disabled = connected;
-  els.grant.disabled = !connected;
+  els.grant.disabled = !connected || Boolean(echoCapId);
   els.denied.disabled = !connected;
   els.disconnect.disabled = !connected;
   els.allowed.disabled = !connected || !echoCapId;
+}
+
+function setControlLabels(label) {
+  els.grant.textContent = echoCapId ? `${label} holds Echo cap` : `grant ${label} -> Echo`;
+  els.allowed.textContent = `call Echo as ${label}`;
+  els.denied.textContent = `fake cap as ${label}`;
+}
+
+function resetControlLabels() {
+  els.grant.textContent = "grant tab -> Echo";
+  els.allowed.textContent = "call Echo";
+  els.denied.textContent = "try fake cap";
 }
 
 els.connect.addEventListener("click", connect);

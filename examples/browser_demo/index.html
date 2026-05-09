@@ -24,7 +24,6 @@
         <svg class="wires" viewBox="0 0 1200 560" role="img" aria-label="Capability mediated links">
           <path id="wireSelfServer" class="wire wire-self" d="M250 278 C380 204 470 204 566 278" />
           <path id="wireServerPeer" class="wire wire-peer" d="M634 278 C730 204 820 204 950 278" />
-          <path id="wireDeny" class="wire wire-deny" d="M250 350 C420 430 780 430 950 350" />
         </svg>
 
         <article class="realm realm-self" id="selfNode">
@@ -72,17 +71,17 @@
       <section class="console-row" aria-label="Server side visibility">
         <div class="ledger">
           <div class="ledger-head">
-            <span>server plane</span>
-            <span id="ledgerClock">live</span>
+            <span>server audit stream</span>
+            <span id="ledgerClock">newest first</span>
           </div>
           <ol id="ledgerList"></ol>
         </div>
 
         <div class="controls" aria-label="Manual demo controls">
           <button id="connect" type="button">connect</button>
-          <button id="grant" type="button" disabled>grant</button>
-          <button id="allowed" type="button" disabled>call</button>
-          <button id="denied" type="button" disabled>deny</button>
+          <button id="grant" type="button" disabled>grant echo cap</button>
+          <button id="allowed" type="button" disabled>call echo</button>
+          <button id="denied" type="button" disabled>try forbidden cap</button>
           <button id="disconnect" type="button" disabled>disconnect</button>
         </div>
       </section>
