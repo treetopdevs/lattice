@@ -9,7 +9,7 @@ defmodule Lattice.Gateway do
   alias Lattice.{Audit, Cap, CapStore, Topology}
 
   def call(tab_id, cap_or_id, payload, timeout \\ 5_000) do
-    with {:ok, cap} <- CapStore.authorize(tab_id, cap_or_id, :call),
+    with {:ok, cap} <- CapStore.authorize(tab_id, cap_or_id, :call, payload),
          :ok <- validate_target(tab_id, cap),
          {:ok, result} <- forward_call(tab_id, cap, payload, timeout) do
       {:ok, result}
@@ -20,7 +20,7 @@ defmodule Lattice.Gateway do
   end
 
   def cast(tab_id, cap_or_id, payload) do
-    with {:ok, cap} <- CapStore.authorize(tab_id, cap_or_id, :cast),
+    with {:ok, cap} <- CapStore.authorize(tab_id, cap_or_id, :cast, payload),
          :ok <- validate_target(tab_id, cap),
          :ok <- forward_cast(tab_id, cap, payload) do
       :ok

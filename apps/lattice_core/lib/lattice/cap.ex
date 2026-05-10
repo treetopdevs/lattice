@@ -6,6 +6,8 @@ defmodule Lattice.Cap do
   the server side and includes owner, target, operation, expiry, and audit data.
   """
 
+  alias Lattice.Cap.{Caveat, Session}
+
   @enforce_keys [:id, :issuer, :owner_tab_id, :target, :ops, :created_at]
   defstruct [
     :id,
@@ -13,10 +15,17 @@ defmodule Lattice.Cap do
     :owner_tab_id,
     :target,
     :ops,
+    :parent_id,
+    :root_id,
     :ttl_ms,
     :expires_at,
     :use_limit,
     uses: 0,
+    caveats: [],
+    delegation_allowed?: false,
+    provenance: [],
+    schema: nil,
+    session: nil,
     revoked?: false,
     audit: %{},
     created_at: nil,
@@ -36,10 +45,17 @@ defmodule Lattice.Cap do
           owner_tab_id: String.t(),
           target: target(),
           ops: MapSet.t(atom()),
+          parent_id: String.t() | nil,
+          root_id: String.t() | nil,
           ttl_ms: non_neg_integer() | nil,
           expires_at: integer() | nil,
           use_limit: pos_integer() | nil,
           uses: non_neg_integer(),
+          caveats: [Caveat.t()],
+          delegation_allowed?: boolean(),
+          provenance: [map()],
+          schema: map() | nil,
+          session: Session.t() | nil,
           revoked?: boolean(),
           audit: map(),
           created_at: integer(),
@@ -64,12 +80,20 @@ defmodule Lattice.Cap do
       owner_tab_id: owner_tab_id,
       target: target,
       ops: normalize_ops(ops),
+      parent_id: Keyword.get(opts, :parent_id),
+      root_id: Keyword.get(opts, :root_id),
       ttl_ms: ttl_ms,
       expires_at: Keyword.get(opts, :expires_at) || if(ttl_ms, do: now + ttl_ms),
       use_limit: Keyword.get(opts, :use_limit),
+      caveats: Caveat.from_opts(opts),
+      delegation_allowed?: Keyword.get(opts, :delegation_allowed?, false),
+      provenance: Keyword.get(opts, :provenance, []),
+      schema: Keyword.get(opts, :schema),
+      session: Keyword.get(opts, :session) && Session.new(Keyword.fetch!(opts, :session)),
       audit: Keyword.get(opts, :audit, %{}),
       created_at: now
     }
+    |> then(fn cap -> %{cap | root_id: cap.root_id || cap.id} end)
   end
 
   def random_token do
@@ -115,10 +139,15 @@ defmodule Lattice.Cap do
     %{
       "id" => cap.id,
       "owner_tab_id" => cap.owner_tab_id,
+      "parent_id" => cap.parent_id,
+      "root_id" => cap.root_id,
       "ops" => cap.ops |> MapSet.to_list() |> Enum.map(&Atom.to_string/1),
       "ttl_ms" => cap.ttl_ms,
       "expires_at" => cap.expires_at,
       "use_limit" => cap.use_limit,
+      "caveats" => Enum.map(cap.caveats, &Caveat.external/1),
+      "delegation_allowed" => cap.delegation_allowed?,
+      "provenance" => cap.provenance,
       "target" => external_target(cap.target)
     }
   end

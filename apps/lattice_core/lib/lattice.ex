@@ -29,6 +29,16 @@ defmodule Lattice do
     CapStore.grant(tab_id, normalize_target(target), ops, opts)
   end
 
+  def delegate(parent_cap_or_id, to_tab_id, opts \\ []) do
+    opts =
+      case Keyword.fetch(opts, :target) do
+        {:ok, target} -> Keyword.put(opts, :target, normalize_target(target))
+        :error -> opts
+      end
+
+    CapStore.delegate(parent_cap_or_id, to_tab_id, opts)
+  end
+
   def revoke(cap_or_id, reason \\ :manual), do: CapStore.revoke(cap_or_id, reason)
   def call(tab_id, cap_or_id, payload), do: Gateway.call(tab_id, cap_or_id, payload)
   def cast(tab_id, cap_or_id, payload), do: Gateway.cast(tab_id, cap_or_id, payload)
@@ -72,6 +82,7 @@ defmodule Lattice do
   end
 
   def reset! do
+    Lattice.IFC.reset()
     Topology.reset()
     CapStore.reset()
     Audit.reset()

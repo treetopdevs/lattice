@@ -9,6 +9,7 @@ defmodule LatticeCore.Application do
   def start(_type, _args) do
     children = [
       Lattice.Audit,
+      Lattice.IFC,
       Lattice.CapStore,
       Lattice.Topology,
       {DynamicSupervisor, name: Lattice.TabWorkerSupervisor, strategy: :one_for_one}

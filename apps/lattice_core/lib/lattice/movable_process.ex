@@ -10,6 +10,22 @@ defmodule Lattice.MovableProcess do
 
   defstruct [:pid]
 
+  @effects %{
+    generate_storyboard: %{
+      realm: :server,
+      effects: [:compute],
+      requires: []
+    },
+    render_preview: %{
+      realm: :tab,
+      effects: [:dom_render],
+      requires: [:render_cap]
+    }
+  }
+
+  def effects, do: @effects
+  def effect_for(callback), do: Map.fetch(@effects, callback)
+
   def start_link(tab_id, opts \\ []) do
     GenServer.start_link(__MODULE__, {tab_id, opts})
   end
