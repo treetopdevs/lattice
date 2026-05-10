@@ -8,6 +8,13 @@ The core thesis is simple: a tab gets zero implicit authority. It cannot use raw
 
 - A runnable umbrella project with `lattice_core`, `lattice_server`, and `lattice_demo`.
 - Explicit grants, denies, revocation, TTL/expiry, use limits, and per-tab isolation.
+- Macaroon-style attenuated capabilities with caveats, delegation provenance,
+  runtime typed/session checks, and parent-child revocation semantics.
+- A process graph as trust graph snapshot/inspector with JSON, DOT, and
+  Mermaid exports.
+- Executable research demos for wallet-as-process, capability-gated agent tool
+  use, consent-gated live introspection, federated browser-worker simulation,
+  capability-attested causality, dynamic IFC, and a red-team sandbox.
 - A Cowboy WebSocket boundary that accepts safe JSON envelopes from browser-like tab clients.
 - A real WebSocket deterministic demo, not an in-process transport shortcut.
 - A live browser stage that shows tab realms, the server plane, capability events, denied attempts, and mediated tab-to-tab bridge pulses.
@@ -31,6 +38,7 @@ The core thesis is simple: a tab gets zero implicit authority. It cannot use raw
 mix deps.get
 mix test
 scripts/lattice_poc_demo.sh
+scripts/lattice_research_demo.sh
 ```
 
 For the stress lab:
@@ -52,6 +60,21 @@ Then open [http://localhost:4040](http://localhost:4040).
 Open the same URL in a second browser tab to trigger the automatic mediated bridge story. The tabs never talk directly; the server opens short-lived capabilities and routes the visual pulse through `Lattice.Gateway`.
 
 `scripts/lattice_browser_demo.sh 4040` is kept as an alias for the browser-server path.
+
+For the research demonstrator:
+
+```sh
+mix lattice.research.demo
+mix lattice.graph.snapshot --format json
+mix lattice.graph.snapshot --format dot
+mix lattice.graph.snapshot --format mermaid
+```
+
+Research notes:
+
+- [docs/research/architecture.md](docs/research/architecture.md)
+- [docs/research/operational_model.md](docs/research/operational_model.md)
+- [docs/research/paper_skeleton.md](docs/research/paper_skeleton.md)
 
 ## Architecture
 
