@@ -10,6 +10,8 @@ defmodule LatticeCore.Application do
     children = [
       Lattice.Audit,
       Lattice.IFC,
+      Lattice.Graph.Annotations,
+      Lattice.Flagship,
       Lattice.CapStore,
       Lattice.Topology,
       {DynamicSupervisor, name: Lattice.TabWorkerSupervisor, strategy: :one_for_one}
