@@ -12,6 +12,10 @@ The core thesis is simple: a tab gets zero implicit authority. It cannot use raw
   runtime typed/session checks, and parent-child revocation semantics.
 - A process graph as trust graph snapshot/inspector with JSON, DOT, and
   Mermaid exports.
+- A browser-visible flagship demo where wallet consent creates one caveated
+  authority edge, allowed purchase traffic reaches the wallet process, and
+  over-budget, wrong-vendor, stolen-cap, and replay-after-revoke attempts are
+  denied with live graph and audit evidence.
 - Executable research demos for wallet-as-process, capability-gated agent tool
   use, consent-gated live introspection, federated browser-worker simulation,
   capability-attested causality, dynamic IFC, and a red-team sandbox.
@@ -39,6 +43,7 @@ mix deps.get
 mix test
 scripts/lattice_poc_demo.sh
 scripts/lattice_research_demo.sh
+scripts/lattice_flagship_demo.sh
 ```
 
 For the stress lab:
@@ -64,14 +69,23 @@ Open the same URL in a second browser tab to trigger the automatic mediated brid
 For the research demonstrator:
 
 ```sh
+scripts/lattice_flagship_demo.sh 4041
 mix lattice.research.demo
 mix lattice.graph.snapshot --format json
 mix lattice.graph.snapshot --format dot
 mix lattice.graph.snapshot --format mermaid
+npm run flagship:e2e
 ```
+
+The flagship E2E is Playwright test code in `tests/e2e/flagship.spec.mjs`.
+It records the browser run and writes an acceptability report to
+`output/playwright/flagship-video-evaluation.json`, so the same path can be
+added to CI later with artifact upload around `output/playwright/`.
 
 Research notes:
 
+- [docs/flagship_demo.md](docs/flagship_demo.md)
+- [docs/authority_invariants.md](docs/authority_invariants.md)
 - [docs/research/architecture.md](docs/research/architecture.md)
 - [docs/research/operational_model.md](docs/research/operational_model.md)
 - [docs/research/paper_skeleton.md](docs/research/paper_skeleton.md)
@@ -84,6 +98,7 @@ Research notes:
 - `Lattice.Realm`, `Lattice.Tab`, and `Lattice.Cap` data structures.
 - `Lattice.CapStore`, `Lattice.Gateway`, `Lattice.Topology`, and `Lattice.Audit`.
 - `Lattice.MovableProcess`.
+- `Lattice.Flagship` and `Lattice.Graph.*` for the canonical live graph demo.
 
 `apps/lattice_server` owns:
 
@@ -124,6 +139,6 @@ The core app is plain OTP. The server app adds only:
 - `jason` for safe JSON envelopes.
 - `stream_data` in the stress app test environment for property-based authority
   checks.
-- `@playwright/test` for the optional two-browser E2E script.
+- `@playwright/test` for browser E2E validation and the flagship recording.
 
 No browser code stores long-lived secrets, and no tab-facing code exposes arbitrary RPC, `:os.cmd`, code loading, process introspection, raw pids, or global registration.

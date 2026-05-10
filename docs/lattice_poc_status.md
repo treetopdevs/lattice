@@ -97,3 +97,10 @@
 - Command run: `mix deps.get`, `mix format`, `mix test`, `mix test apps/lattice_stress/test/browser_e2e_test.exs --only browser_e2e`, `npm install`, `npm run browser:e2e`, and `mix lattice.stress --tabs 8 --caps 16 --calls 120 --bridges 8 --concurrency 8` through the load-smoke test.
 - Result: succeeded. Added adversarial authority tests, deterministic race tests, StreamData property tests, WebSocket abuse tests, failure semantics tests, lifecycle/load smoke, `mix lattice.stress`, and a real two-browser Playwright E2E check. The stress pass found and fixed Topology/CapStore lock inversion, slow tab delivery blocking Topology, malformed cap crashes, cap-id collision overwrite, and dead-pid cast false positives.
 - Blocker or remaining limitation: the harness is local-node pressure and in-memory state remains volatile; CapStore/Audit crash behavior is fail-closed but not durable recovery.
+
+## Checkpoint: Flagship Wallet/Graph Artifact
+
+- Files changed: `apps/lattice_core/lib/lattice/flagship*`, `apps/lattice_core/lib/lattice/graph*`, `apps/lattice_server/lib/lattice_server/flagship_handler.ex`, `examples/flagship_demo/*`, `scripts/lattice_flagship_demo.sh`, `scripts/lattice_flagship_e2e.mjs`, docs, and focused tests.
+- Command run: implementation edit pass.
+- Result: added a browser-visible canonical story where a wallet realm issues one caveated cap to a planner tab, a $199 bookshop purchase succeeds, over-budget/wrong-vendor/stolen-cap/replay-after-revoke attempts fail, the wallet ledger proves denied operations did not reach the target process, and the same graph snapshot powers the UI plus JSON/Mermaid/DOT exports.
+- Blocker or remaining limitation: the flagship UI uses polling JSON rather than WebSocket/SSE because clarity and reliability were prioritized for the research artifact.

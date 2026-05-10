@@ -37,6 +37,8 @@ The working implementation is in `apps/lattice_core`.
 - `Lattice.Demo.*` modules provide executable wallet, agent-tool,
   introspection, and federated-worker scenarios.
 - `Lattice.RedTeam.Sandbox` runs repeatable adversarial attempts.
+- `Lattice.Flagship` provides the browser-visible canonical wallet story and
+  feeds the live graph inspector.
 
 ## What Is Simulated
 
@@ -84,10 +86,11 @@ capabilities as graph edges with lifecycle state. `Lattice.Graph.Policy` checks:
 
 ```sh
 mix test apps/lattice_core/test
+scripts/lattice_flagship_demo.sh 4041
+npm run flagship:e2e
 mix lattice.research.demo
 mix lattice.graph.snapshot --format json
 mix lattice.graph.snapshot --format dot
 mix lattice.graph.snapshot --format mermaid
 scripts/lattice_research_demo.sh
 ```
-
