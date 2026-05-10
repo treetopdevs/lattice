@@ -14,6 +14,7 @@ defmodule LatticeServer do
       :cowboy_router.compile([
         {:_,
          [
+           {"/api/flagship/[...]", LatticeServer.FlagshipHandler, %{}},
            {"/ws", Lattice.Transport.WebSocket,
             %{grant_targets: grant_targets, auto_story?: auto_story?}},
            {:_, LatticeServer.StaticHandler, %{static_dir: static_dir}}

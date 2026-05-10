@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lattice Flagship Demo</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Lattice flagship artifact</p>
+        <h1>Live process/trust graph inspector</h1>
+      </div>
+      <div class="status-strip" aria-live="polite">
+        <span id="connectionStatus">polling</span>
+        <span id="policyStatus">policy pending</span>
+        <span id="auditCount">0 audit events</span>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="story-panel" aria-labelledby="story-title">
+        <div class="section-head">
+          <h2 id="story-title">Wallet authority story</h2>
+          <button id="runAll" class="primary" type="button">Run full story</button>
+        </div>
+        <ol id="storySteps" class="story-steps"></ol>
+
+        <div class="controls" aria-label="Demo controls">
+          <button type="button" data-action="reset">Reset</button>
+          <button type="button" data-action="connect">Connect realms</button>
+          <button type="button" data-action="grant">Issue caveated cap</button>
+          <button type="button" data-action="allowed">Approve $199 bookshop</button>
+          <button type="button" data-action="over_budget">Attempt $425</button>
+          <button type="button" data-action="wrong_vendor">Attempt wrong vendor</button>
+          <button type="button" data-action="stolen">Steal cap from red-team tab</button>
+          <button type="button" data-action="revoke">Revoke cap</button>
+          <button type="button" data-action="replay">Replay revoked cap</button>
+        </div>
+      </section>
+
+      <section class="graph-panel" aria-labelledby="graph-title">
+        <div class="section-head">
+          <div>
+            <h2 id="graph-title">Process graph as trust graph</h2>
+            <p>Allowed authority edges are solid. Denied attempts are dashed. Revoked caps stay visible.</p>
+          </div>
+          <div class="legend" aria-label="Graph legend">
+            <span><i class="swatch allowed"></i>allowed</span>
+            <span><i class="swatch denied"></i>denied</span>
+            <span><i class="swatch revoked"></i>revoked</span>
+          </div>
+        </div>
+        <svg id="graph" role="img" aria-label="Live Lattice graph"></svg>
+      </section>
+
+      <aside class="inspector-panel" aria-labelledby="inspector-title">
+        <div class="section-head">
+          <h2 id="inspector-title">Inspector</h2>
+          <button id="refreshJson" type="button">Refresh JSON</button>
+        </div>
+        <div id="detail" class="detail">Select a node or edge.</div>
+
+        <h3>Wallet ledger</h3>
+        <div id="walletLedger" class="ledger"></div>
+
+        <h3>Audit trail</h3>
+        <ol id="auditTrail" class="audit-list"></ol>
+      </aside>
+    </main>
+
+    <section class="claims" aria-labelledby="claims-title">
+      <div class="section-head">
+        <h2 id="claims-title">Claims table</h2>
+        <nav class="exports" aria-label="Graph exports">
+          <a href="/api/flagship/export/json" target="_blank" rel="noreferrer">JSON</a>
+          <a href="/api/flagship/export/mermaid" target="_blank" rel="noreferrer">Mermaid</a>
+          <a href="/api/flagship/export/dot" target="_blank" rel="noreferrer">DOT</a>
+        </nav>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Claim</th>
+            <th>Status</th>
+            <th>Evidence</th>
+          </tr>
+        </thead>
+        <tbody id="claimsTable"></tbody>
+      </table>
+      <label class="json-label" for="rawJson">Raw snapshot</label>
+      <textarea id="rawJson" readonly spellcheck="false"></textarea>
+    </section>
+
+    <script type="module" src="/client.js"></script>
+  </body>
+</html>
