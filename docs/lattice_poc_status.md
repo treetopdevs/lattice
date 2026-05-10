@@ -104,3 +104,10 @@
 - Command run: implementation edit pass.
 - Result: added a browser-visible canonical story where a wallet realm issues one caveated cap to a planner tab, a $199 bookshop purchase succeeds, over-budget/wrong-vendor/stolen-cap/replay-after-revoke attempts fail, the wallet ledger proves denied operations did not reach the target process, and the same graph snapshot powers the UI plus JSON/Mermaid/DOT exports.
 - Blocker or remaining limitation: the flagship UI uses polling JSON rather than WebSocket/SSE because clarity and reliability were prioritized for the research artifact.
+
+## Checkpoint: Flagship Evidence Hardening
+
+- Files changed: `.github/workflows/flagship.yml`, `scripts/lattice_verify_flagship.sh`, `Lattice.Flagship.Claims`, flagship UI files, HTTP/test coverage, and docs.
+- Command run: implementation edit pass.
+- Result: added a CI workflow that installs BEAM/Node/Playwright, runs the local flagship verification script, records the browser E2E, evaluates video acceptability, writes populated graph and claims artifacts, and uploads `output/playwright/` plus `output/flagship/`. The live inspector now has presenter-mode copy, numbered steps, richer node/edge details, selected-edge highlighting, a code-owned claims endpoint, and a claims JSON artifact.
+- Blocker or remaining limitation: CI has not been observed on GitHub yet in this local run; the workflow is added for the next push or pull request.

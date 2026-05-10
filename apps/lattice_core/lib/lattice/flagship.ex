@@ -10,21 +10,94 @@ defmodule Lattice.Flagship do
   use GenServer
 
   alias Lattice.Demo.LocalTab
+  alias Lattice.Flagship.Claims
   alias Lattice.Flagship.Wallet
 
   @limit 300
   @vendor "bookshop"
   @provenance_label "wallet-consent"
 
-  @step_order [
-    :connect,
-    :grant,
-    :allowed,
-    :over_budget,
-    :wrong_vendor,
-    :stolen,
-    :revoke,
-    :replay
+  @steps [
+    %{
+      id: :connect,
+      action: "connect",
+      label: "Connect realms",
+      pending_detail: "Awaiting realm connection.",
+      narration:
+        "Wallet, planner, and red-team realms are live. They still have zero ambient authority over the wallet process."
+    },
+    %{
+      id: :grant,
+      action: "grant",
+      label: "Issue caveated cap",
+      pending_detail: "Awaiting wallet consent and cap issuance.",
+      narration:
+        "Wallet consent created one caveated authority edge: planner to wallet, bookshop only, at or below $300, with confirmation and provenance."
+    },
+    %{
+      id: :allowed,
+      action: "allowed",
+      label: "Approve $199 bookshop",
+      story_label: "Approve $199 at bookshop",
+      pending_detail: "Awaiting a purchase that satisfies all caveats.",
+      narration:
+        "The benign purchase satisfies every caveat, reaches the wallet process, and increments the wallet ledger exactly once."
+    },
+    %{
+      id: :over_budget,
+      action: "over_budget",
+      label: "Attempt $425",
+      story_label: "Deny over budget",
+      pending_detail: "Awaiting an over-budget denial.",
+      narration:
+        "The planner still holds the cap, but the amount caveat rejects this message before the wallet process can see it."
+    },
+    %{
+      id: :wrong_vendor,
+      action: "wrong_vendor",
+      label: "Attempt wrong vendor",
+      story_label: "Deny wrong vendor",
+      pending_detail: "Awaiting a wrong-vendor denial.",
+      narration:
+        "The numeric bound is satisfied, but the symbolic vendor caveat rejects the message before delivery."
+    },
+    %{
+      id: :stolen,
+      action: "stolen",
+      label: "Steal cap from red-team tab",
+      story_label: "Deny stolen cap",
+      pending_detail: "Awaiting a stolen-cap denial.",
+      narration:
+        "The cap object is not enough by itself. The gateway rejects use from the wrong tab realm, which blocks a confused-deputy path."
+    },
+    %{
+      id: :revoke,
+      action: "revoke",
+      label: "Revoke cap",
+      pending_detail: "Awaiting wallet revocation.",
+      narration:
+        "Wallet consent has been withdrawn. The graph keeps the revoked edge visible for audit, but it can no longer carry authority."
+    },
+    %{
+      id: :replay,
+      action: "replay",
+      label: "Replay revoked cap",
+      story_label: "Deny replay",
+      pending_detail: "Awaiting replay denial after revocation.",
+      narration:
+        "Replay after revocation is denied before delivery. The wallet ledger stays at one successful purchase."
+    }
+  ]
+
+  @steps_by_id Map.new(@steps, &{&1.id, &1})
+  @step_order Enum.map(@steps, & &1.id)
+
+  @actions [
+    %{id: :run_all, action: "run_all", label: "Run full story", primary: true},
+    %{id: :reset, action: "reset", label: "Reset"}
+    | Enum.map(@steps, fn step ->
+        %{id: step.id, action: step.action, label: step.label, step: step.id}
+      end)
   ]
 
   def start_link(_opts) do
@@ -42,7 +115,17 @@ defmodule Lattice.Flagship do
   def replay, do: GenServer.call(__MODULE__, :replay)
   def run_all, do: GenServer.call(__MODULE__, :run_all, 10_000)
   def snapshot, do: GenServer.call(__MODULE__, :snapshot)
+  def claims, do: Claims.all()
+  def actions, do: Enum.map(@actions, &Map.drop(&1, [:id]))
   def export(format), do: GenServer.call(__MODULE__, {:export, format})
+  def valid_action_token?(token), do: GenServer.call(__MODULE__, {:valid_action_token?, token})
+
+  def perform(action_name) when is_binary(action_name) do
+    case Enum.find(@actions, &(&1.action == action_name)) do
+      nil -> {:error, :unknown_action}
+      %{id: action} -> apply(__MODULE__, action, [])
+    end
+  end
 
   @impl true
   def init(state), do: {:ok, state}
@@ -152,10 +235,15 @@ defmodule Lattice.Flagship do
       case format do
         "mermaid" -> Lattice.Graph.Export.export(snapshot.graph, :mermaid)
         "dot" -> Lattice.Graph.Export.export(snapshot.graph, :dot)
+        "claims" -> Jason.encode!(Claims.all(), pretty: true)
         _ -> Jason.encode!(snapshot, pretty: true)
       end
 
     {:reply, {:ok, body}, state}
+  end
+
+  def handle_call({:valid_action_token?, token}, _from, state) do
+    {:reply, is_binary(token) and token == state.action_token, state}
   end
 
   defp ensure_connected(%{wallet_pid: wallet_pid} = state) when is_pid(wallet_pid), do: state
@@ -165,15 +253,18 @@ defmodule Lattice.Flagship do
 
     {:ok, wallet_pid} = GenServer.start(Wallet, label: "Flagship wallet")
     {:ok, inspector_pid} = GenServer.start(Lattice.Graph.Inspector, [])
-    {:ok, _wallet_client, wallet_tab} = LocalTab.connect(identity: %{role: "wallet_tab"})
-    {:ok, _agent_client, agent_tab} = LocalTab.connect(identity: %{role: "planner_agent"})
-    {:ok, _attacker_client, attacker_tab} = LocalTab.connect(identity: %{role: "red_team"})
+    {:ok, wallet_client_pid, wallet_tab} = LocalTab.connect(identity: %{role: "wallet_tab"})
+    {:ok, agent_client_pid, agent_tab} = LocalTab.connect(identity: %{role: "planner_agent"})
+    {:ok, attacker_client_pid, attacker_tab} = LocalTab.connect(identity: %{role: "red_team"})
 
     state =
       %{
         state
         | wallet_pid: wallet_pid,
           inspector_pid: inspector_pid,
+          wallet_client_pid: wallet_client_pid,
+          agent_client_pid: agent_client_pid,
+          attacker_client_pid: attacker_client_pid,
           wallet_tab: wallet_tab,
           agent_tab: agent_tab,
           attacker_tab: attacker_tab
@@ -368,10 +459,6 @@ defmodule Lattice.Flagship do
   end
 
   defp register_annotations(state) do
-    gateway_pid = Process.whereis(Lattice.Gateway)
-    cap_store_pid = Process.whereis(Lattice.CapStore)
-    audit_pid = Process.whereis(Lattice.Audit)
-
     [
       %{
         id: "process:wallet",
@@ -388,38 +475,9 @@ defmodule Lattice.Flagship do
         realm: "server",
         lifecycle_state: "connected",
         pid: inspect(state.inspector_pid)
-      },
-      %{
-        id: "process:gateway",
-        kind: "gateway",
-        label: "Gateway",
-        realm: "server",
-        lifecycle_state: if(gateway_pid, do: "connected", else: "virtual")
-      },
-      %{
-        id: "process:cap_store",
-        kind: "cap_store",
-        label: "CapStore",
-        realm: "server",
-        lifecycle_state: if(cap_store_pid, do: "connected", else: "virtual")
-      },
-      %{
-        id: "process:audit",
-        kind: "audit",
-        label: "Audit",
-        realm: "server",
-        lifecycle_state: if(audit_pid, do: "connected", else: "virtual")
       }
     ]
     |> Enum.each(&Lattice.Graph.Annotations.register_node/1)
-
-    register_annotation_edge(%{
-      from: "process:gateway",
-      to: "process:cap_store",
-      kind: "authorizes_via"
-    })
-
-    register_annotation_edge(%{from: "process:gateway", to: "process:audit", kind: "records"})
 
     register_annotation_edge(%{
       from: "process:graph_inspector",
@@ -445,7 +503,10 @@ defmodule Lattice.Flagship do
     %{
       type: "flagship_snapshot",
       current_step: state.current_step,
+      presenter: presenter(state),
       story: story(state),
+      actions: actions(),
+      action_token: state.action_token,
       actors: actors(state),
       policy: policy(),
       cap: external_cap(state.cap),
@@ -453,7 +514,7 @@ defmodule Lattice.Flagship do
       results: state.results,
       graph: graph,
       audit_events: audit_events,
-      claims: claims(),
+      claims: Claims.all(),
       exports: %{
         json: "/api/flagship/export/json",
         mermaid: "/api/flagship/export/mermaid",
@@ -463,11 +524,27 @@ defmodule Lattice.Flagship do
   end
 
   defp story(state) do
-    Enum.map(@step_order, fn step ->
+    @step_order
+    |> Enum.with_index(1)
+    |> Enum.map(fn {step, index} ->
       state.steps[step]
       |> Map.put(:id, step)
       |> Map.put(:label, step_label(step))
+      |> Map.put(:step_number, index)
+      |> Map.put(:active, state.current_step == step)
     end)
+  end
+
+  defp presenter(state) do
+    %{
+      headline: presenter_headline(state.current_step),
+      current_step: state.current_step,
+      current_step_number: step_number(state.current_step),
+      invariant:
+        "Capabilities are authority edges. Lifecycle and audit events explain why an edge can or cannot carry a message.",
+      narration: presenter_narration(state.current_step),
+      next_action: next_action(state)
+    }
   end
 
   defp actors(state) do
@@ -501,43 +578,44 @@ defmodule Lattice.Flagship do
   defp normalize_result({:ok, result}), do: %{ok: true, result: result}
   defp normalize_result({:error, reason}), do: %{ok: false, error: inspect(reason)}
 
-  defp step_label(:connect), do: "Connect realms"
-  defp step_label(:grant), do: "Issue caveated cap"
-  defp step_label(:allowed), do: "Approve $199 at bookshop"
-  defp step_label(:over_budget), do: "Deny over budget"
-  defp step_label(:wrong_vendor), do: "Deny wrong vendor"
-  defp step_label(:stolen), do: "Deny stolen cap"
-  defp step_label(:revoke), do: "Revoke cap"
-  defp step_label(:replay), do: "Deny replay"
+  defp step_label(step) do
+    step
+    |> step_definition()
+    |> Map.get(:story_label)
+    |> case do
+      nil -> step_definition(step).label
+      label -> label
+    end
+  end
 
-  defp claims do
-    [
-      %{
-        claim: "Caveated capability authorizes the wallet edge",
-        status: "implemented",
-        evidence: "Lattice.CapStore + Lattice.Cap.Caveat + flagship tests"
-      },
-      %{
-        claim: "Denied overreach does not reach the wallet process",
-        status: "implemented",
-        evidence: "Wallet delivery count remains unchanged after deny"
-      },
-      %{
-        claim: "Process graph is the trust graph",
-        status: "implemented",
-        evidence: "Lattice.Graph.Snapshot powers UI and export commands"
-      },
-      %{
-        claim: "Browser/worker realms are first-class process realms",
-        status: "simulated",
-        evidence: "LocalTab and WebSocket demo model browser realms, not AtomVM-WASM"
-      },
-      %{
-        claim: "Formal verification of authority preservation",
-        status: "future work",
-        evidence: "Operational model and property tests exist, mechanized proof does not"
-      }
-    ]
+  defp step_number(step) do
+    case Enum.find_index(@step_order, &(&1 == step)) do
+      nil -> nil
+      index -> index + 1
+    end
+  end
+
+  defp presenter_headline(nil), do: "Ready: no wallet authority has been granted"
+  defp presenter_headline(:reset), do: "Reset: the trust graph is clean"
+  defp presenter_headline(step), do: "#{step_label(step)}"
+
+  defp presenter_narration(nil) do
+    "Start by connecting the three realms. The graph should show processes before it shows authority."
+  end
+
+  defp presenter_narration(:reset) do
+    "All demo processes and authority edges have been cleared. The next visible change should be realm presence, not wallet authority."
+  end
+
+  defp presenter_narration(step), do: step_definition(step).narration
+
+  defp next_action(state) do
+    @step_order
+    |> Enum.find(fn step -> state.steps[step].status == :pending end)
+    |> case do
+      nil -> "Next: inspect the selected edge, audit event, graph exports, and CI artifacts."
+      step -> "Next: #{step_label(step)}"
+    end
   end
 
   defp record_story(action, status, detail) do
@@ -545,29 +623,48 @@ defmodule Lattice.Flagship do
   end
 
   defp stop_demo_processes(state) do
-    Enum.each([state.wallet_pid, state.inspector_pid], fn
-      pid when is_pid(pid) ->
-        if Process.alive?(pid), do: Process.exit(pid, :kill)
-
-      _other ->
-        :ok
-    end)
+    [
+      state.wallet_pid,
+      state.inspector_pid,
+      state.wallet_client_pid,
+      state.agent_client_pid,
+      state.attacker_client_pid
+    ]
+    |> Enum.each(&stop_process/1)
   end
+
+  defp stop_process(pid) when is_pid(pid) do
+    if Process.alive?(pid) do
+      GenServer.stop(pid, :normal, 1_000)
+    end
+  catch
+    :exit, _reason -> :ok
+  end
+
+  defp stop_process(_other), do: :ok
 
   defp initial_state do
     %{
       wallet_pid: nil,
       inspector_pid: nil,
+      wallet_client_pid: nil,
+      agent_client_pid: nil,
+      attacker_client_pid: nil,
       wallet_tab: nil,
       agent_tab: nil,
       attacker_tab: nil,
       cap: nil,
       current_step: nil,
+      action_token: Lattice.Realm.random_id(24),
       results: %{},
       steps:
         Map.new(@step_order, fn step ->
-          {step, %{status: :pending, detail: "Pending"}}
+          {step, %{status: :pending, detail: pending_detail(step)}}
         end)
     }
   end
+
+  defp pending_detail(step), do: step_definition(step).pending_detail
+
+  defp step_definition(step), do: Map.fetch!(@steps_by_id, step)
 end

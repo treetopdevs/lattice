@@ -174,11 +174,61 @@ h3 {
   list-style: none;
 }
 
+.presenter-card {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 14px;
+  border: 1px solid color-mix(in oklch, var(--accent), var(--line) 35%);
+  border-radius: 8px;
+  padding: 12px;
+  background: oklch(25% 0.026 76);
+}
+
+.presenter-card small,
+.step small,
+td small {
+  display: block;
+  color: var(--faint);
+  font-size: 0.72rem;
+  font-weight: 720;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.presenter-card strong {
+  font-size: 0.98rem;
+}
+
+.presenter-card p {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.presenter-card .invariant {
+  color: var(--text);
+}
+
+.next-action {
+  width: fit-content;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 8px;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 760;
+}
+
 .step {
   border: 1px solid var(--line);
   border-radius: 7px;
   padding: 10px;
   background: var(--panel-2);
+}
+
+.step.active {
+  outline: 2px solid color-mix(in oklch, var(--accent), transparent 35%);
+  outline-offset: 2px;
 }
 
 .step strong,
@@ -223,6 +273,12 @@ h3 {
   stroke-width: 1.4;
 }
 
+.node,
+.edge,
+.audit-list li {
+  cursor: pointer;
+}
+
 .node text {
   fill: var(--text);
   font-size: 12px;
@@ -249,6 +305,11 @@ h3 {
   stroke: var(--focus);
 }
 
+.node.selected rect {
+  stroke: var(--accent);
+  stroke-width: 2.8;
+}
+
 .node.server_process rect,
 .node.gateway rect,
 .node.cap_store rect,
@@ -256,20 +317,55 @@ h3 {
   stroke: oklch(70% 0.08 154);
 }
 
-.edge {
+.edge-line,
+.edge-hit {
   fill: none;
+}
+
+.edge-line {
   stroke: var(--good);
   stroke-width: 2.2;
   opacity: 0.86;
 }
 
-.edge.denied {
+.edge-hit {
+  stroke: transparent;
+  stroke-width: 18;
+  pointer-events: stroke;
+}
+
+.edge-label {
+  fill: var(--muted);
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 4;
+  font-size: 10px;
+  font-weight: 760;
+  pointer-events: auto;
+  text-anchor: middle;
+}
+
+.edge.denied .edge-label {
+  fill: var(--bad);
+}
+
+.edge.revoked .edge-label,
+.edge.expired .edge-label {
+  fill: var(--revoked);
+}
+
+.edge.selected .edge-line {
+  stroke-width: 4;
+  opacity: 1;
+}
+
+.edge.denied .edge-line {
   stroke: var(--bad);
   stroke-dasharray: 7 7;
 }
 
-.edge.revoked,
-.edge.expired {
+.edge.revoked .edge-line,
+.edge.expired .edge-line {
   stroke: var(--revoked);
   stroke-dasharray: 3 6;
 }
@@ -311,8 +407,51 @@ pre {
   color: var(--text);
 }
 
+h4 {
+  margin: 10px 0 6px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: minmax(92px, 0.45fr) 1fr;
+  gap: 5px 10px;
+  margin: 10px 0;
+}
+
+.detail-grid dt {
+  color: var(--faint);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+}
+
+.detail-grid dd {
+  margin: 0;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.detail-list {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding-left: 18px;
+  color: var(--text);
+}
+
+.decision-note,
+.claims-source {
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
 .ledger,
-.audit-list {
+.audit-list,
+.edge-list {
   display: grid;
   gap: 7px;
   margin: 0;
@@ -324,7 +463,8 @@ pre {
 }
 
 .ledger-row,
-.audit-list li {
+.audit-list li,
+.edge-list li {
   border: 1px solid var(--line);
   border-radius: 7px;
   padding: 8px;
@@ -333,10 +473,32 @@ pre {
   line-height: 1.35;
 }
 
-.audit-list {
+.audit-list,
+.edge-list {
   list-style: none;
   max-height: 360px;
   overflow: auto;
+}
+
+.edge-choice {
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  text-align: left;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.edge-choice.denied {
+  color: var(--bad);
+}
+
+.edge-choice.revoked,
+.edge-choice.expired {
+  color: var(--revoked);
 }
 
 .audit.deny,
@@ -372,6 +534,12 @@ td {
 th {
   color: var(--muted);
   font-weight: 760;
+}
+
+td small {
+  margin-top: 6px;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .claim {

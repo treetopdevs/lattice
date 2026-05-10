@@ -18,20 +18,12 @@ Run it:
 scripts/lattice_flagship_demo.sh 4041
 ```
 
-Open `http://localhost:4041`.
+Open `http://localhost:4041`. The demo listener binds to loopback by default.
 
 ## What To Click
 
-1. `Connect realms`
-2. `Issue caveated cap`
-3. `Approve $199 bookshop`
-4. `Attempt $425`
-5. `Attempt wrong vendor`
-6. `Steal cap from red-team tab`
-7. `Revoke cap`
-8. `Replay revoked cap`
-
-The same path can be run at once with `Run full story`.
+Use the controls rendered by the live snapshot's `actions` list. The same path
+can be run at once with the primary action, `Run full story`.
 
 ## What To Inspect
 
@@ -47,6 +39,7 @@ The same path can be run at once with `Run full story`.
 ## Validation
 
 ```sh
+scripts/lattice_verify_flagship.sh
 mix test apps/lattice_core/test/lattice_flagship_test.exs
 mix test apps/lattice_server/test/flagship_http_test.exs
 npm run flagship:e2e
@@ -69,3 +62,42 @@ Artifacts are written under `output/playwright/`:
 - `flagship-video-evaluation.json` records the acceptability checks for video
   presence, size, duration if `ffprobe` is installed, resolution, and screenshot
   evidence.
+
+`scripts/lattice_verify_flagship.sh` mirrors the CI path from a fresh checkout:
+it installs dependencies unless skipped, checks formatting, runs the flagship
+Mix tests, runs flagship browser E2E, evaluates the video, validates claim
+evidence paths, and writes graph evidence.
+
+Additional verification artifacts are written under `output/flagship/`:
+
+- `flagship-snapshot.json` contains the populated flagship snapshot after
+  `Lattice.Flagship.run_all/0`.
+- `flagship-graph.json` contains the graph source used by the UI.
+- `flagship-graph.mmd` contains the Mermaid graph export.
+- `flagship-graph.dot` contains the Graphviz export.
+- `claims.json` contains the code-owned claims table from
+  `Lattice.Flagship.Claims`.
+
+GitHub Actions runs the same evidence path in
+`.github/workflows/flagship.yml` and uploads `output/playwright/` plus
+`output/flagship/` as the `lattice-flagship-evidence` artifact.
+
+## Presenter Notes
+
+The story panel is deliberately deterministic: reset clears live authority,
+each step has a number, and the presenter card names the current invariant and
+next action. During a talk or review, the key checkpoints are:
+
+- after `Connect realms`, the graph has actors but no wallet authority;
+- after `Issue caveated cap`, one caveated authority edge exists;
+- after `Approve $199 bookshop`, the wallet ledger increments exactly once;
+- after each denial, the selected edge and audit trail explain the reason;
+- after `Revoke cap`, replay stays denied and the revoked edge remains visible.
+
+## Claims Source
+
+The claims table is generated from `Lattice.Flagship.Claims`, exposed at
+`/api/flagship/claims`, embedded in the live snapshot, and exported by the
+verification script as `output/flagship/claims.json`. That keeps implemented,
+simulated, and future-work claims tied to runnable evidence instead of copied
+into independent prose.

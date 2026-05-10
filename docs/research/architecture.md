@@ -88,9 +88,16 @@ capabilities as graph edges with lifecycle state. `Lattice.Graph.Policy` checks:
 mix test apps/lattice_core/test
 scripts/lattice_flagship_demo.sh 4041
 npm run flagship:e2e
+scripts/lattice_verify_flagship.sh
 mix lattice.research.demo
 mix lattice.graph.snapshot --format json
 mix lattice.graph.snapshot --format dot
 mix lattice.graph.snapshot --format mermaid
 scripts/lattice_research_demo.sh
 ```
+
+`scripts/lattice_verify_flagship.sh` is the conference and CI evidence path. It
+runs the flagship tests, records and evaluates the browser story, validates
+claim evidence paths, then writes populated snapshot, graph, and claims
+artifacts under `output/flagship/`. GitHub Actions uses the same path and
+uploads those files with the Playwright video artifacts.

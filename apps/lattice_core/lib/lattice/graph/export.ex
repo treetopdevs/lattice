@@ -30,40 +30,40 @@ defmodule Lattice.Graph.Export do
   def export(snapshot, "mermaid"), do: export(snapshot, :mermaid)
 
   defp dot_node(node) do
-    id = node[:id] || node["id"]
-    label = node[:label] || node["label"] || id
-    kind = node[:kind] || node["kind"]
-    ~s(  "#{id}" [label="#{escape(label)}", shape="#{shape(kind)}"];)
+    id = node.id
+    label = node[:label] || id
+    kind = node.kind
+    ~s(  "#{escape(id)}" [label="#{escape(label)}", shape="#{shape(kind)}"];)
   end
 
   defp dot_edge(edge) do
     label =
       [
-        edge[:kind] || edge["kind"],
-        edge[:status] || edge["status"],
-        edge[:reason] || edge["reason"]
+        edge.kind,
+        edge[:status],
+        edge[:reason]
       ]
       |> Enum.reject(&is_nil/1)
       |> Enum.join(" ")
 
-    ~s(  "#{edge[:from] || edge["from"]}" -> "#{edge[:to] || edge["to"]}" [label="#{escape(label)}"];)
+    ~s(  "#{escape(edge.from)}" -> "#{escape(edge.to)}" [label="#{escape(label)}"];)
   end
 
   defp mermaid_node(node) do
-    id = node[:id] || node["id"]
-    label = node[:label] || node["label"] || id
+    id = node.id
+    label = node[:label] || id
     ~s(  #{mermaid_id(id)}["#{escape(label)}"])
   end
 
   defp mermaid_edge(edge) do
     line =
-      if (edge[:status] || edge["status"]) == "denied" do
+      if edge[:status] == "denied" do
         "-.->"
       else
         "-->"
       end
 
-    ~s(  #{mermaid_id(edge[:from] || edge["from"])} #{line}|"#{edge[:kind] || edge["kind"]}"| #{mermaid_id(edge[:to] || edge["to"])})
+    ~s(  #{mermaid_id(edge.from)} #{line}|"#{edge.kind}"| #{mermaid_id(edge.to)})
   end
 
   defp shape("capability"), do: "hexagon"

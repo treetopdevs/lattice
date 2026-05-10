@@ -19,7 +19,8 @@ defmodule Lattice.Graph.Snapshot do
       nodes: nodes(topology, cap_snapshot, ifc, annotations, audit_events),
       edges: edges(topology, cap_snapshot, ifc, annotations, audit_events),
       audit_event_count: length(audit_events),
-      policy: Lattice.Graph.Policy.check_current()
+      policy: Lattice.Graph.Policy.check_current(),
+      ui: ui_contract()
     }
   end
 
@@ -151,10 +152,15 @@ defmodule Lattice.Graph.Snapshot do
        target_process_nodes ++
        cap_nodes ++
        bridge_nodes ++ ifc_nodes ++ annotations.nodes)
-    |> Enum.uniq_by(fn node -> node[:id] || node["id"] end)
+    |> Enum.uniq_by(& &1.id)
   end
 
   defp edges(topology, cap_snapshot, ifc, annotations, audit_events) do
+    core_edges = [
+      %{from: "process:gateway", to: "process:cap_store", kind: "authorizes_via"},
+      %{from: "process:gateway", to: "process:audit", kind: "records"}
+    ]
+
     tab_edges =
       Enum.flat_map(topology.tabs, fn {id, tab} ->
         realm_edge = %{from: "realm:server", to: "tab:#{id}", kind: "connected_realm"}
@@ -220,12 +226,46 @@ defmodule Lattice.Graph.Snapshot do
     cleanup_edges = cleanup_edges(audit_events)
     audit_edges = audit_edges(audit_events, cap_snapshot.caps)
 
-    (tab_edges ++
+    (core_edges ++
+       tab_edges ++
        cap_edges ++ bridge_edges ++ ifc_edges ++ cleanup_edges ++ audit_edges ++ annotations.edges)
     |> Enum.uniq_by(fn edge ->
-      {edge[:from] || edge["from"], edge[:to] || edge["to"], edge[:kind] || edge["kind"],
-       edge[:audit_event_id] || edge["audit_event_id"]}
+      {edge.from, edge.to, edge.kind, edge[:audit_event_id]}
     end)
+  end
+
+  defp ui_contract do
+    %{
+      visible_node_kinds: [
+        "realm",
+        "tab",
+        "gateway",
+        "cap_store",
+        "audit",
+        "server_process",
+        "capability",
+        "bridge",
+        "supervisor"
+      ],
+      node_columns: [
+        %{kinds: ["realm", "tab"]},
+        %{kinds: ["gateway", "cap_store", "audit", "supervisor"]},
+        %{kinds: ["capability", "bridge"]},
+        %{kinds: ["server_process"]}
+      ],
+      decision_edge_kinds: ["denied_attempt", "revoked", "expired", "invokes"],
+      edge_classes: [
+        %{class: "denied", kinds: ["denied_attempt"], statuses: ["denied"]},
+        %{class: "revoked", kinds: ["revoked"], statuses: ["revoked"]},
+        %{class: "expired", kinds: [], statuses: ["expired"]},
+        %{class: "allowed", kinds: [], statuses: []}
+      ],
+      edge_labels: %{
+        "holds_cap" => "holds cap",
+        "authorizes" => "authorizes",
+        "revoked" => "revoked"
+      }
+    }
   end
 
   defp cap_status(%Cap{revoked?: true}), do: "revoked"

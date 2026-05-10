@@ -7,6 +7,7 @@
     "flagship:e2e:test": "npx --no-install playwright test tests/e2e/flagship.spec.mjs --config playwright.config.mjs",
     "flagship:e2e:evaluate": "node scripts/evaluate_flagship_video.mjs",
     "flagship:e2e": "npm run flagship:e2e:test && npm run flagship:e2e:evaluate",
+    "flagship:verify": "scripts/lattice_verify_flagship.sh",
     "e2e": "npm run browser:e2e && npm run flagship:e2e"
   },
   "devDependencies": {

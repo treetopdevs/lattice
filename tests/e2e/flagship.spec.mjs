@@ -22,57 +22,69 @@ test("flagship wallet/process graph story is inspectable end to end", async ({ p
   await holdForVideo();
 
   await expect(page.getByRole("heading", { name: "Live process/trust graph inspector" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Run full story" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Connect realms" })).toBeVisible();
+  const actionLabels = await loadActionLabels();
+  await expect(page.getByRole("button", { name: actionLabels.run_all })).toBeVisible();
+  await expect(page.getByRole("button", { name: actionLabels.connect })).toBeVisible();
+  await expect(page.getByText("Presenter mode")).toBeVisible();
   await expect(page.getByRole("link", { name: "JSON" })).toHaveAttribute("href", "/api/flagship/export/json");
   await expect(page.getByRole("link", { name: "Mermaid" })).toHaveAttribute(
     "href",
     "/api/flagship/export/mermaid",
   );
   await expect(page.getByRole("link", { name: "DOT" })).toHaveAttribute("href", "/api/flagship/export/dot");
+  await expect(page.getByRole("link", { name: "Claims" })).toHaveAttribute("href", "/api/flagship/claims");
 
-  await clickStep("Reset");
+  await clickAction("reset");
   await expect(page.getByText("No wallet deliveries yet.")).toBeVisible();
 
-  await clickStep("Connect realms");
+  await clickAction("connect");
   await expect(page.getByText("Wallet, planner, red-team tab")).toBeVisible();
+  await expect(page.getByText("zero ambient authority")).toBeVisible();
   await expect(page.locator(".node.tab").first()).toBeVisible();
 
-  await clickStep("Issue caveated cap");
+  await clickAction("grant");
   await expect(page.getByText("Wallet issued one caveated cap")).toBeVisible();
   await expect(page.locator(".node.capability").first()).toBeVisible();
 
-  await clickStep("Approve $199 bookshop");
+  await clickAction("allowed");
   await expect(page.getByText("$199 bookshop Systems Programming Book")).toBeVisible();
   await expect(page.locator(".edge.allowed").first()).toBeVisible();
 
-  await clickStep("Attempt $425");
+  await clickAction("over_budget");
   await expect(page.locator("#auditTrail").getByText("amount_exceeds_caveat")).toBeVisible();
   await expect(page.locator(".edge.denied").first()).toBeVisible();
 
-  await clickStep("Attempt wrong vendor");
+  await clickAction("wrong_vendor");
   await expect(page.locator("#auditTrail").getByText("vendor_not_allowed")).toBeVisible();
 
-  await clickStep("Steal cap from red-team tab");
+  await clickAction("stolen");
   await expect(page.locator("#auditTrail").getByText("wrong_owner")).toBeVisible();
 
-  await clickStep("Revoke cap");
+  await clickAction("revoke");
   await expect(page.getByText("Wallet consent revoked")).toBeVisible();
 
-  await clickStep("Replay revoked cap");
+  await clickAction("replay");
   await expect(page.locator("#auditTrail").getByText("revoked")).toBeVisible();
 
-  await clickStep("Refresh JSON");
+  await page.getByRole("button", { name: "Refresh JSON" }).click();
+  await holdForVideo();
   await expect(page.locator("#rawJson")).toHaveValue(/"graph"/);
   await expect(page.locator("#rawJson")).toHaveValue(/"denied_attempt"/);
 
   await page.locator(".node.capability").first().click();
   await holdForVideo();
   await expect(page.locator("#detail")).toContainText("capability");
+  await expect(page.locator("#detail")).toContainText("Caveats");
 
-  await clickStep("Reset");
-  await clickStep("Run full story");
-  await expect(page.getByText("Deny replay")).toBeVisible();
+  await page.locator("#edgeList button").filter({ hasText: "amount_exceeds_caveat" }).first().click();
+  await holdForVideo();
+  await expect(page.locator("#detail")).toContainText("Denial reason");
+
+  await clickAction("reset");
+  await clickAction("run_all");
+  await expect(page.locator("#storySteps").getByText("Deny replay")).toBeVisible();
+  await expect(page.locator("#nextAction")).toContainText("inspect");
+  await expect(page.locator("#claimsSource")).toContainText("code-owned claims");
   await expect(page.locator(".claim.implemented").first()).toBeVisible();
   await expect(page.locator(".claim.simulated").first()).toBeVisible();
   await expect(page.locator(".claim.future").first()).toBeVisible();
@@ -80,9 +92,17 @@ test("flagship wallet/process graph story is inspectable end to end", async ({ p
   await mkdir(`${root}/output/playwright`, { recursive: true });
   await page.screenshot({ path: `${root}/output/playwright/flagship-demo.png`, fullPage: true });
 
-  async function clickStep(name) {
-    await page.getByRole("button", { name }).click();
+  async function clickAction(action) {
+    await page.getByRole("button", { name: actionLabels[action] }).click();
     await holdForVideo();
+  }
+
+  async function loadActionLabels() {
+    return page.evaluate(async () => {
+      const response = await fetch("/api/flagship/snapshot");
+      const snapshot = await response.json();
+      return Object.fromEntries(snapshot.actions.map((action) => [action.action, action.label]));
+    });
   }
 
   async function holdForVideo() {

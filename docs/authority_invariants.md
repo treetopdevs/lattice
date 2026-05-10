@@ -25,12 +25,18 @@ Lattice's flagship demo is built around one invariant:
 mix test apps/lattice_core/test/lattice_flagship_test.exs
 mix test apps/lattice_server/test/flagship_http_test.exs
 npm run flagship:e2e
+scripts/lattice_verify_flagship.sh
 scripts/lattice_flagship_demo.sh 4041
 ```
 
 The Playwright evidence includes a recorded `.webm` of the user path plus
 `output/playwright/flagship-video-evaluation.json`, which fails the run if the
 recording or final screenshot is missing or clearly unusable.
+
+The verification script also exports `output/flagship/claims.json` from
+`Lattice.Flagship.Claims` after validating its evidence paths, so the claims
+table is generated from code and can be uploaded as CI evidence alongside the
+graph JSON, Mermaid, DOT, screenshot, and video.
 
 ## Non-Claims
 

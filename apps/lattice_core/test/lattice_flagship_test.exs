@@ -9,10 +9,15 @@ defmodule LatticeCore.FlagshipTest do
   test "flagship story proves allowed purchase and denied overreach without delivery" do
     assert {:ok, snapshot} = Lattice.Flagship.connect()
     assert step_status(snapshot, :connect) == "done"
+    assert snapshot.presenter.current_step == :connect
+    assert snapshot.presenter.next_action == "Next: #{action_label(snapshot, "grant")}"
+    assert action_label(snapshot, "run_all")
 
     assert {:ok, snapshot} = Lattice.Flagship.grant()
     assert step_status(snapshot, :grant) == "done"
     assert snapshot.cap["caveats"] != []
+    assert Enum.all?(snapshot.claims, &Map.has_key?(&1, :evidence_refs))
+    assert :ok = Lattice.Flagship.Claims.validate!(repo_root())
 
     assert {:ok, allowed} = Lattice.Flagship.allowed()
     assert allowed.results.allowed.delivered_to_wallet? == true
@@ -45,6 +50,7 @@ defmodule LatticeCore.FlagshipTest do
 
     assert Enum.any?(replay.graph.edges, &(edge_kind(&1) == "denied_attempt"))
     assert Enum.any?(replay.graph.edges, &(edge_kind(&1) == "revoked"))
+    assert replay.presenter.next_action =~ "inspect"
   end
 
   test "flagship exports use the same graph source as the live inspector" do
@@ -62,6 +68,30 @@ defmodule LatticeCore.FlagshipTest do
     assert {:ok, dot} = Lattice.Flagship.export("dot")
     assert dot =~ "digraph lattice"
     assert dot =~ "denied_attempt"
+
+    assert {:ok, claims} = Lattice.Flagship.export("claims")
+    assert [%{"id" => "capability_wallet_edge"} | _] = Jason.decode!(claims)
+  end
+
+  test "reset stops local tab client processes" do
+    assert {:ok, snapshot} = Lattice.Flagship.connect()
+
+    tab_ids = [
+      snapshot.actors.wallet_tab_id,
+      snapshot.actors.planner_tab_id,
+      snapshot.actors.red_team_tab_id
+    ]
+
+    client_pids =
+      Lattice.diagnostics().topology.tabs
+      |> Map.take(tab_ids)
+      |> Map.values()
+      |> Enum.map(& &1.connection_pid)
+
+    assert Enum.all?(client_pids, &Process.alive?/1)
+
+    assert {:ok, _snapshot} = Lattice.Flagship.reset()
+    refute Enum.any?(client_pids, &Process.alive?/1)
   end
 
   defp step_status(snapshot, step) do
@@ -71,5 +101,12 @@ defmodule LatticeCore.FlagshipTest do
     |> to_string()
   end
 
-  defp edge_kind(edge), do: edge[:kind] || edge["kind"]
+  defp edge_kind(edge), do: edge.kind
+  defp repo_root, do: Path.expand("../../..", __DIR__)
+
+  defp action_label(snapshot, action_name) do
+    snapshot.actions
+    |> Enum.find(&(&1.action == action_name))
+    |> Map.fetch!(:label)
+  end
 end

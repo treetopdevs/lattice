@@ -74,6 +74,7 @@ mix lattice.research.demo
 mix lattice.graph.snapshot --format json
 mix lattice.graph.snapshot --format dot
 mix lattice.graph.snapshot --format mermaid
+scripts/lattice_verify_flagship.sh
 npm run flagship:e2e
 ```
 
@@ -81,6 +82,9 @@ The flagship E2E is Playwright test code in `tests/e2e/flagship.spec.mjs`.
 It records the browser run and writes an acceptability report to
 `output/playwright/flagship-video-evaluation.json`, so the same path can be
 added to CI later with artifact upload around `output/playwright/`.
+The local verification script mirrors the GitHub Actions workflow, stays scoped
+to the flagship evidence path, and writes populated graph and claims artifacts
+under `output/flagship/`.
 
 Research notes:
 

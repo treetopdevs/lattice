@@ -23,21 +23,17 @@
       <section class="story-panel" aria-labelledby="story-title">
         <div class="section-head">
           <h2 id="story-title">Wallet authority story</h2>
-          <button id="runAll" class="primary" type="button">Run full story</button>
+        </div>
+        <div class="presenter-card" aria-live="polite">
+          <small>Presenter mode</small>
+          <strong id="presenterTitle">Ready</strong>
+          <p id="presenterCopy"></p>
+          <p id="scenarioInvariant" class="invariant"></p>
+          <span id="nextAction" class="next-action"></span>
         </div>
         <ol id="storySteps" class="story-steps"></ol>
 
-        <div class="controls" aria-label="Demo controls">
-          <button type="button" data-action="reset">Reset</button>
-          <button type="button" data-action="connect">Connect realms</button>
-          <button type="button" data-action="grant">Issue caveated cap</button>
-          <button type="button" data-action="allowed">Approve $199 bookshop</button>
-          <button type="button" data-action="over_budget">Attempt $425</button>
-          <button type="button" data-action="wrong_vendor">Attempt wrong vendor</button>
-          <button type="button" data-action="stolen">Steal cap from red-team tab</button>
-          <button type="button" data-action="revoke">Revoke cap</button>
-          <button type="button" data-action="replay">Replay revoked cap</button>
-        </div>
+        <div id="controls" class="controls" aria-label="Demo controls"></div>
       </section>
 
       <section class="graph-panel" aria-labelledby="graph-title">
@@ -65,6 +61,9 @@
         <h3>Wallet ledger</h3>
         <div id="walletLedger" class="ledger"></div>
 
+        <h3>Graph decisions</h3>
+        <ol id="edgeList" class="edge-list"></ol>
+
         <h3>Audit trail</h3>
         <ol id="auditTrail" class="audit-list"></ol>
       </aside>
@@ -77,8 +76,10 @@
           <a href="/api/flagship/export/json" target="_blank" rel="noreferrer">JSON</a>
           <a href="/api/flagship/export/mermaid" target="_blank" rel="noreferrer">Mermaid</a>
           <a href="/api/flagship/export/dot" target="_blank" rel="noreferrer">DOT</a>
+          <a href="/api/flagship/claims" target="_blank" rel="noreferrer">Claims</a>
         </nav>
       </div>
+      <p id="claimsSource" class="claims-source">0 code-owned claims</p>
       <table>
         <thead>
           <tr>

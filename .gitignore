@@ -10,6 +10,7 @@
 # JavaScript browser E2E dependencies.
 /node_modules/
 /output/playwright/
+/output/flagship/
 
 # Where third-party dependencies like ExDoc output generated docs.
 /doc/

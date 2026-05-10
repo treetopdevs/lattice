@@ -7,15 +7,14 @@ defmodule LatticeServer.FlagshipHandler do
   def init(req, _opts) do
     method = :cowboy_req.method(req)
     path = :cowboy_req.path(req)
-    {status, content_type, body} = route(method, path)
+    {status, content_type, body} = route(method, path, req)
 
     req =
       :cowboy_req.reply(
         status,
         %{
           "content-type" => content_type,
-          "cache-control" => "no-store",
-          "access-control-allow-origin" => "*"
+          "cache-control" => "no-store"
         },
         body,
         req
@@ -24,39 +23,46 @@ defmodule LatticeServer.FlagshipHandler do
     {:ok, req, %{}}
   end
 
-  defp route("GET", "/api/flagship/snapshot") do
+  defp route("GET", "/api/flagship/snapshot", _req) do
     json(200, Lattice.Flagship.snapshot())
   end
 
-  defp route("GET", "/api/flagship/export/json") do
+  defp route("GET", "/api/flagship/export/json", _req) do
     {:ok, body} = Lattice.Flagship.export("json")
     {200, "application/json; charset=utf-8", body}
   end
 
-  defp route("GET", "/api/flagship/export/mermaid") do
+  defp route("GET", "/api/flagship/export/mermaid", _req) do
     {:ok, body} = Lattice.Flagship.export("mermaid")
     {200, "text/plain; charset=utf-8", body}
   end
 
-  defp route("GET", "/api/flagship/export/dot") do
+  defp route("GET", "/api/flagship/export/dot", _req) do
     {:ok, body} = Lattice.Flagship.export("dot")
     {200, "text/vnd.graphviz; charset=utf-8", body}
   end
 
-  defp route("POST", "/api/flagship/reset"), do: action(&Lattice.Flagship.reset/0)
-  defp route("POST", "/api/flagship/connect"), do: action(&Lattice.Flagship.connect/0)
-  defp route("POST", "/api/flagship/grant"), do: action(&Lattice.Flagship.grant/0)
-  defp route("POST", "/api/flagship/allowed"), do: action(&Lattice.Flagship.allowed/0)
-  defp route("POST", "/api/flagship/over_budget"), do: action(&Lattice.Flagship.over_budget/0)
-  defp route("POST", "/api/flagship/wrong_vendor"), do: action(&Lattice.Flagship.wrong_vendor/0)
-  defp route("POST", "/api/flagship/stolen"), do: action(&Lattice.Flagship.stolen/0)
-  defp route("POST", "/api/flagship/revoke"), do: action(&Lattice.Flagship.revoke/0)
-  defp route("POST", "/api/flagship/replay"), do: action(&Lattice.Flagship.replay/0)
-  defp route("POST", "/api/flagship/run_all"), do: action(&Lattice.Flagship.run_all/0)
+  defp route("GET", "/api/flagship/claims", _req) do
+    {:ok, body} = Lattice.Flagship.export("claims")
+    {200, "application/json; charset=utf-8", body}
+  end
 
-  defp route("OPTIONS", _path), do: {204, "text/plain; charset=utf-8", ""}
+  defp route("POST", "/api/flagship/" <> action_name, req) do
+    cond do
+      not valid_action_request?(req) ->
+        json(403, %{error: "forbidden"})
 
-  defp route(_method, _path), do: json(404, %{error: "not_found"})
+      action_name in Enum.map(Lattice.Flagship.actions(), & &1.action) ->
+      action(fn -> Lattice.Flagship.perform(action_name) end)
+
+      true ->
+      json(404, %{error: "not_found"})
+    end
+  end
+
+  defp route("OPTIONS", _path, _req), do: {204, "text/plain; charset=utf-8", ""}
+
+  defp route(_method, _path, _req), do: json(404, %{error: "not_found"})
 
   defp action(fun) do
     case fun.() do
@@ -70,4 +76,10 @@ defmodule LatticeServer.FlagshipHandler do
 
   defp json(status, payload),
     do: {status, "application/json; charset=utf-8", Jason.encode!(payload)}
+
+  defp valid_action_request?(req) do
+    "x-lattice-flagship-token"
+    |> :cowboy_req.header(req, nil)
+    |> Lattice.Flagship.valid_action_token?()
+  end
 end
