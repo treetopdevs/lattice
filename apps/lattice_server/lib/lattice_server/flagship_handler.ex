@@ -53,10 +53,10 @@ defmodule LatticeServer.FlagshipHandler do
         json(403, %{error: "forbidden"})
 
       action_name in Enum.map(Lattice.Flagship.actions(), & &1.action) ->
-      action(fn -> Lattice.Flagship.perform(action_name) end)
+        action(fn -> Lattice.Flagship.perform(action_name) end)
 
       true ->
-      json(404, %{error: "not_found"})
+        json(404, %{error: "not_found"})
     end
   end
 
