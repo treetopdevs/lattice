@@ -200,6 +200,17 @@ defmodule LatticeCore.PocTest do
       assert [{:call, _envelope}] = TestTabClient.messages(pid_b)
     end
 
+    test "bridge cast to a disconnected target tab is denied without delivery" do
+      {_pid_a, tab_a} = connect_tab()
+      {pid_b, tab_b} = connect_tab()
+      {:ok, bridge_cap} = Lattice.bridge(tab_a.id, tab_b.id, [:cast], ttl: 10_000)
+
+      assert {:ok, _closed} = Lattice.disconnect_tab(tab_b.id)
+      assert {:error, :tab_not_connected} = Lattice.cast(tab_a.id, bridge_cap, %{op: :relay})
+      assert [] = TestTabClient.messages(pid_b)
+      assert_audit(:deny, reason: :tab_not_connected)
+    end
+
     test "bridge revocation denies later traffic" do
       {_pid_a, tab_a} = connect_tab()
       {_pid_b, tab_b} = connect_tab()

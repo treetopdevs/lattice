@@ -19,7 +19,7 @@ async function post(action) {
   try {
     const response = await fetch(`${api}/${action}`, {
       method: "POST",
-      headers: { "x-lattice-flagship-token": snapshot.action_token },
+      credentials: "same-origin",
     });
     snapshot = await response.json();
     suppressRefreshUntil = Date.now() + 700;

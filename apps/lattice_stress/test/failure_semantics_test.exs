@@ -38,6 +38,20 @@ defmodule LatticeStress.FailureSemanticsTest do
     assert %{call_count: 0} = ProbeServer.stats(probe)
   end
 
+  test "Topology crash loses volatile tabs and stale caps fail closed after restart", %{
+    probe: probe,
+    tab: tab
+  } do
+    {:ok, cap} = Lattice.grant(tab.id, probe, [:call])
+    old = Process.whereis(Lattice.Topology)
+    Process.exit(old, :kill)
+    wait_until(fn -> restarted?(Lattice.Topology, old) end)
+
+    refute Lattice.Topology.tab_connected?(tab.id)
+    assert {:error, :tab_not_connected} = Lattice.call(tab.id, cap, %{after_topology_crash: true})
+    assert %{call_count: 0} = ProbeServer.stats(probe)
+  end
+
   test "Audit crash loses volatile history but authorization still fails closed afterward", %{
     probe: probe,
     tab: tab

@@ -108,6 +108,19 @@ defmodule LatticeStress.WebSocketAbuseTest do
     {:ok, cap} = Lattice.bridge(tab_a, tab_b, [:call], ttl: 10_000)
     assert {:error, :timeout} = Lattice.Gateway.call(tab_a, cap, %{op: :relay}, 20)
 
+    assert {:ok, %{"type" => "tab_call", "request_id" => request_id}} =
+             recv_type(client_b, "tab_call")
+
+    assert :ok =
+             Client.send_envelope(client_b, %{
+               type: "tab_render_result",
+               request_id: request_id,
+               result: %{late: true}
+             })
+
+    assert {:ok, %{"type" => "error", "error_type" => "unknown_request"}} =
+             recv_type(client_b, "error")
+
     Client.close(client_a)
     Client.close(client_b)
   end

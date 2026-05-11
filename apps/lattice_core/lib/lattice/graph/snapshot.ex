@@ -279,8 +279,8 @@ defmodule Lattice.Graph.Snapshot do
   end
 
   defp target_id({:server_pid, pid}), do: process_id(pid)
-  defp target_id({:server_name, name}), do: "process:name:#{name}"
-  defp target_id({:tab, id}), do: "tab:#{id}"
+  defp target_id({:server_name, _name} = target), do: "process:name:#{Cap.target_label(target)}"
+  defp target_id({:tab, _id} = target), do: Cap.target_label(target)
   defp target_id(other), do: "target:#{inspect(other)}"
 
   defp target_node({:server_pid, pid}) do
@@ -295,10 +295,12 @@ defmodule Lattice.Graph.Snapshot do
   end
 
   defp target_node({:server_name, name}) do
+    target = {:server_name, name}
+
     %{
-      id: "process:name:#{name}",
+      id: target_id(target),
       kind: "server_process",
-      label: Atom.to_string(name),
+      label: Cap.target_label(target),
       realm: "server",
       lifecycle_state: if(Process.whereis(name), do: "connected", else: "down")
     }

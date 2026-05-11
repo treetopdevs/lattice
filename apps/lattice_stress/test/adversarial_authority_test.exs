@@ -3,16 +3,15 @@ defmodule LatticeStress.AdversarialAuthorityTest do
 
   alias LatticeStress.{ProbeServer, ProbeTab}
 
-  @registered_probe LatticeStress.RegisteredProbe
-
   setup do
     Lattice.reset!()
     Lattice.Demo.SecretServer.reset_deliveries()
 
     {:ok, probe} = ProbeServer.start_link(owner: self(), name: :primary_probe)
+    registered_probe_name = :"registered_probe_#{System.unique_integer([:positive])}"
 
     {:ok, registered_probe} =
-      ProbeServer.start_link(owner: self(), registered_name: @registered_probe)
+      ProbeServer.start_link(owner: self(), registered_name: registered_probe_name)
 
     {:ok, tab_a_pid, tab_a} = ProbeTab.connect(identity: %{user: "alice"})
     {:ok, tab_b_pid, tab_b} = ProbeTab.connect(identity: %{user: "bob"})
@@ -22,6 +21,7 @@ defmodule LatticeStress.AdversarialAuthorityTest do
      %{
        probe: probe,
        registered_probe: registered_probe,
+       registered_probe_name: registered_probe_name,
        tab_a_pid: tab_a_pid,
        tab_a: tab_a,
        tab_b_pid: tab_b_pid,
@@ -62,6 +62,21 @@ defmodule LatticeStress.AdversarialAuthorityTest do
       :wrong_owner,
       probe
     )
+  end
+
+  test "stolen delegable cap id cannot mint attacker-owned child authority", %{
+    probe: probe,
+    tab_a: tab_a,
+    tab_b: tab_b
+  } do
+    {:ok, cap} = Lattice.grant(tab_a.id, probe, [:call], delegation_allowed?: true)
+
+    assert {:error, :delegator_required} = Lattice.delegate(cap.id, tab_b.id)
+    assert {:error, :wrong_owner} = Lattice.delegate(tab_b.id, cap.id, tab_b.id)
+
+    assert {:ok, child} = Lattice.delegate(tab_a.id, cap.id, tab_b.id)
+    assert {:ok, _} = Lattice.call(tab_b.id, child, %{ok: :delegated})
+    assert %{call_count: 1} = ProbeServer.stats(probe)
   end
 
   test "valid cap used with wrong operation is denied before cast delivery", %{
@@ -195,11 +210,12 @@ defmodule LatticeStress.AdversarialAuthorityTest do
 
   test "attempt to reach registered name directly without a cap is denied", %{
     registered_probe: probe,
+    registered_probe_name: registered_probe_name,
     tab_a: tab
   } do
     assert_denied_no_server_delivery(
       fn ->
-        Lattice.call(tab.id, Atom.to_string(@registered_probe), %{attack: :registered_name})
+        Lattice.call(tab.id, Atom.to_string(registered_probe_name), %{attack: :registered_name})
       end,
       :unknown_cap,
       probe

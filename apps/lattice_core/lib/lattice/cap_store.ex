@@ -16,12 +16,32 @@ defmodule Lattice.CapStore do
     GenServer.call(__MODULE__, {:grant, tab_id, target, ops, opts})
   end
 
-  def delegate(parent_cap_or_id, to_tab_id, opts \\ []) do
+  def delegate(delegating_tab_id, parent_cap_or_id, to_tab_id, opts \\ [])
+
+  def delegate(nil, parent_cap_or_id, to_tab_id, _opts) do
     with {:ok, parent_id} <- Cap.safe_token(parent_cap_or_id) do
-      GenServer.call(__MODULE__, {:delegate, parent_id, to_tab_id, opts})
+      Audit.record(:deny, %{
+        reason: :delegator_required,
+        op: :delegate,
+        parent_id: parent_id,
+        to_tab_id: to_tab_id
+      })
+
+      {:error, :delegator_required}
     else
       {:error, reason} ->
-        Audit.record(:deny, %{reason: reason, op: :delegate})
+        Audit.record(:deny, %{reason: reason, op: :delegate, to_tab_id: to_tab_id})
+        {:error, reason}
+    end
+  end
+
+  def delegate(delegating_tab_id, parent_cap_or_id, to_tab_id, opts)
+      when is_binary(delegating_tab_id) do
+    with {:ok, parent_id} <- Cap.safe_token(parent_cap_or_id) do
+      GenServer.call(__MODULE__, {:delegate, delegating_tab_id, parent_id, to_tab_id, opts})
+    else
+      {:error, reason} ->
+        Audit.record(:deny, %{reason: reason, op: :delegate, tab_id: delegating_tab_id})
         {:error, reason}
     end
   end
@@ -99,13 +119,15 @@ defmodule Lattice.CapStore do
     end
   end
 
-  def handle_call({:delegate, parent_id, to_tab_id, opts}, _from, state) do
+  def handle_call({:delegate, delegating_tab_id, parent_id, to_tab_id, opts}, _from, state) do
     with {:ok, parent} <- fetch_live_parent(state, parent_id),
+         :ok <- delegator_owns_parent?(parent, delegating_tab_id),
+         true <- Topology.tab_connected?(delegating_tab_id) || {:error, :tab_not_connected},
          true <- Topology.tab_connected?(to_tab_id) || {:error, :tab_not_connected},
          {:ok, child} <- Attenuation.derive(parent, to_tab_id, opts),
          :ok <- cap_id_available?(state, child.id) do
       Audit.record(:delegate, %{
-        from_tab_id: parent.owner_tab_id,
+        from_tab_id: delegating_tab_id,
         to_tab_id: to_tab_id,
         parent_id: parent.id,
         child_id: child.id,
@@ -118,6 +140,7 @@ defmodule Lattice.CapStore do
       {:error, reason} ->
         Audit.record(:deny, %{
           op: :delegate,
+          tab_id: delegating_tab_id,
           parent_id: parent_id,
           to_tab_id: to_tab_id,
           reason: reason
@@ -242,7 +265,8 @@ defmodule Lattice.CapStore do
     do: {:error, :revoked, :deny}
 
   defp check_cap(%Cap{} = cap, _tab_id, op, payload, state) do
-    with :ok <- parent_chain_live?(cap, state),
+    with :ok <- owner_tab_connected?(cap),
+         :ok <- parent_chain_live?(cap, state),
          :ok <- base_cap_live?(cap, op),
          :ok <- Caveat.enforce(cap, payload),
          {:ok, session} <- Session.advance(cap.session, payload) do
@@ -261,6 +285,13 @@ defmodule Lattice.CapStore do
       true -> {:error, :operation_not_allowed, :deny}
     end
   end
+
+  defp owner_tab_connected?(%Cap{owner_tab_id: owner_tab_id}) do
+    if Topology.tab_connected?(owner_tab_id), do: :ok, else: {:error, :tab_not_connected, :deny}
+  end
+
+  defp delegator_owns_parent?(%Cap{owner_tab_id: owner_tab_id}, owner_tab_id), do: :ok
+  defp delegator_owns_parent?(_parent, _delegating_tab_id), do: {:error, :wrong_owner}
 
   defp parent_chain_live?(%Cap{parent_id: nil}, _state), do: :ok
 
@@ -300,7 +331,5 @@ defmodule Lattice.CapStore do
   end
 
   defp inspect_target({:server_pid, pid}), do: inspect(pid)
-  defp inspect_target({:server_name, name}), do: Atom.to_string(name)
-  defp inspect_target({:tab, tab_id}), do: "tab:" <> tab_id
-  defp inspect_target(other), do: inspect(other)
+  defp inspect_target(target), do: Cap.target_label(target)
 end

@@ -29,14 +29,37 @@ defmodule Lattice do
     CapStore.grant(tab_id, normalize_target(target), ops, opts)
   end
 
-  def delegate(parent_cap_or_id, to_tab_id, opts \\ []) do
+  def delegate(parent_cap_or_id, to_tab_id, opts \\ [])
+
+  def delegate(from_tab_id, parent_cap_or_id, to_tab_id)
+      when is_binary(from_tab_id) and is_binary(to_tab_id) do
+    delegate(from_tab_id, parent_cap_or_id, to_tab_id, [])
+  end
+
+  def delegate(%Cap{owner_tab_id: owner_tab_id} = parent_cap, to_tab_id, opts)
+      when is_list(opts) do
+    delegate(owner_tab_id, parent_cap, to_tab_id, opts)
+  end
+
+  def delegate(parent_cap_or_id, to_tab_id, opts) when is_list(opts) do
+    case Keyword.fetch(opts, :from_tab_id) do
+      {:ok, from_tab_id} ->
+        opts = Keyword.delete(opts, :from_tab_id)
+        delegate(from_tab_id, parent_cap_or_id, to_tab_id, opts)
+
+      :error ->
+        CapStore.delegate(nil, parent_cap_or_id, to_tab_id, opts)
+    end
+  end
+
+  def delegate(from_tab_id, parent_cap_or_id, to_tab_id, opts) when is_binary(from_tab_id) do
     opts =
       case Keyword.fetch(opts, :target) do
         {:ok, target} -> Keyword.put(opts, :target, normalize_target(target))
         :error -> opts
       end
 
-    CapStore.delegate(parent_cap_or_id, to_tab_id, opts)
+    CapStore.delegate(from_tab_id, parent_cap_or_id, to_tab_id, opts)
   end
 
   def revoke(cap_or_id, reason \\ :manual), do: CapStore.revoke(cap_or_id, reason)

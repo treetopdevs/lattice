@@ -24,15 +24,25 @@ defmodule LatticeServer.FlagshipHttpTest do
     assert {:ok, 200, html} = http_get(port, "/")
     assert html =~ "Live process/trust graph inspector"
 
+    assert {:ok, 200, snapshot_head, snapshot_body} =
+             raw_http_with_head(port, "GET", "/api/flagship/snapshot")
+
+    refute Map.has_key?(Jason.decode!(snapshot_body), "action_token")
+    assert action_cookie_from_head(snapshot_head) =~ "lattice_flagship_token="
+
     assert {:ok, 403, forbidden} = raw_http(port, "POST", "/api/flagship/run_all")
     assert %{"error" => "forbidden"} = Jason.decode!(forbidden)
 
     assert {:ok, snapshot} = post_json(port, "/api/flagship/run_all")
+    refute Map.has_key?(snapshot, "action_token")
     assert snapshot["wallet"]["delivery_count"] == 1
     assert snapshot["presenter"]["next_action"] =~ "inspect"
     assert snapshot["results"]["over_budget"]["delivered_to_wallet?"] == false
     assert snapshot["results"]["stolen"]["result"]["error"] == ":wrong_owner"
     assert snapshot["results"]["replay"]["result"]["error"] == ":revoked"
+
+    assert {:ok, 200, exported_json} = http_get(port, "/api/flagship/export/json")
+    refute Map.has_key?(Jason.decode!(exported_json), "action_token")
 
     assert {:ok, 200, mermaid} = http_get(port, "/api/flagship/export/mermaid")
     assert mermaid =~ "graph TD"
@@ -49,9 +59,9 @@ defmodule LatticeServer.FlagshipHttpTest do
   end
 
   defp post_json(port, path) do
-    with {:ok, token} <- action_token(port),
+    with {:ok, cookie} <- action_cookie(port),
          {:ok, status, body} when status in 200..299 <-
-           raw_http(port, "POST", path, [{"x-lattice-flagship-token", token}]) do
+           raw_http(port, "POST", path, [{"cookie", cookie}]) do
       {:ok, Jason.decode!(body)}
     end
   end
@@ -84,10 +94,19 @@ defmodule LatticeServer.FlagshipHttpTest do
     {:ok, String.to_integer(status), head, body}
   end
 
-  defp action_token(port) do
-    with {:ok, 200, body} <- http_get(port, "/api/flagship/snapshot"),
-         %{"action_token" => token} <- Jason.decode!(body) do
-      {:ok, token}
+  defp action_cookie(port) do
+    with {:ok, 200, head, body} <- raw_http_with_head(port, "GET", "/api/flagship/snapshot"),
+         snapshot when is_map(snapshot) <- Jason.decode!(body),
+         nil <- Map.get(snapshot, "action_token"),
+         cookie when is_binary(cookie) <- action_cookie_from_head(head) do
+      {:ok, cookie}
+    end
+  end
+
+  defp action_cookie_from_head(head) do
+    case Regex.run(~r/^set-cookie:\s*([^;\r\n]+)/im, head) do
+      [_, cookie] -> cookie
+      _ -> nil
     end
   end
 

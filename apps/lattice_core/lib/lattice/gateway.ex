@@ -81,7 +81,14 @@ defmodule Lattice.Gateway do
       payload: payload
     }
 
-    Topology.deliver_to_tab(target_tab_id, envelope, timeout)
+    case Topology.deliver_to_tab(target_tab_id, envelope, timeout) do
+      {:error, reason} = error ->
+        audit_tab_delivery_denied(tab_id, target_tab_id, cap_id, reason)
+        error
+
+      other ->
+        other
+    end
   end
 
   defp forward_cast(tab_id, %Cap{target: {:server_pid, pid}, id: cap_id}, payload) do
@@ -117,8 +124,13 @@ defmodule Lattice.Gateway do
       payload: payload
     }
 
-    with {:ok, tab} <- Topology.get_tab(target_tab_id) do
-      tab.transport.deliver_cast(tab.connection_pid, envelope)
+    case Topology.deliver_cast_to_tab(target_tab_id, envelope) do
+      {:error, reason} = error ->
+        audit_tab_delivery_denied(tab_id, target_tab_id, cap_id, reason)
+        error
+
+      other ->
+        other
     end
   end
 
@@ -128,5 +140,14 @@ defmodule Lattice.Gateway do
     catch
       :exit, _ -> {:error, :target_down}
     end
+  end
+
+  defp audit_tab_delivery_denied(tab_id, target_tab_id, cap_id, reason) do
+    Audit.record(:deny, %{
+      tab_id: tab_id,
+      target_tab_id: target_tab_id,
+      cap_id: cap_id,
+      reason: reason
+    })
   end
 end

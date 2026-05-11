@@ -29,8 +29,8 @@ defmodule Lattice.Cap.Session do
   def advance(nil, _payload), do: {:ok, nil}
 
   def advance(%__MODULE__{} = session, payload) do
-    with {:ok, step} <- step_from(payload),
-         {:ok, next_state} <- next_state(session, step) do
+    with {:ok, requested_step} <- step_from(payload),
+         {:ok, step, next_state} <- next_state(session, requested_step) do
       {:ok, %{session | state: next_state, history: session.history ++ [step]}}
     end
   end
@@ -38,19 +38,34 @@ defmodule Lattice.Cap.Session do
   defp step_from(payload) when is_map(payload) do
     case fetch_payload(payload, [:session_step, "session_step", :op, "op"]) do
       {:ok, step} when is_atom(step) -> {:ok, step}
-      {:ok, step} when is_binary(step) -> {:ok, String.to_atom(step)}
+      {:ok, step} when is_binary(step) -> {:ok, step}
       _ -> {:error, :session_step_required}
     end
   end
 
   defp step_from(_payload), do: {:error, :session_step_required}
 
-  defp next_state(%__MODULE__{state: state, transitions: transitions}, step) do
-    case get_in(transitions, [state, step]) do
-      nil -> {:error, {:session_step_not_allowed, state, step}}
-      next -> {:ok, next}
+  defp next_state(%__MODULE__{state: state, transitions: transitions}, requested_step) do
+    transitions
+    |> Map.get(state, %{})
+    |> find_transition(requested_step)
+    |> case do
+      nil -> {:error, {:session_step_not_allowed, state, requested_step}}
+      {step, next} -> {:ok, step, next}
     end
   end
+
+  defp find_transition(edges, requested_step) do
+    Enum.find(edges, fn {step, _next} -> same_step?(step, requested_step) end)
+  end
+
+  defp same_step?(step, requested_step) when is_atom(step) and is_atom(requested_step),
+    do: step == requested_step
+
+  defp same_step?(step, requested_step) when is_atom(step) and is_binary(requested_step),
+    do: Atom.to_string(step) == requested_step
+
+  defp same_step?(step, requested_step), do: step == requested_step
 
   defp normalize_transitions(transitions) do
     Map.new(transitions, fn {from, edges} ->

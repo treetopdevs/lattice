@@ -148,12 +148,15 @@ defmodule Lattice.Cap do
       "caveats" => Enum.map(cap.caveats, &Caveat.external/1),
       "delegation_allowed" => cap.delegation_allowed?,
       "provenance" => cap.provenance,
-      "target" => external_target(cap.target)
+      "target" => target_label(cap.target)
     }
   end
 
-  defp external_target({:server_pid, _pid}), do: "server_process"
-  defp external_target({:server_name, name}), do: Atom.to_string(name)
-  defp external_target({:tab, tab_id}), do: "tab:" <> tab_id
-  defp external_target(other), do: inspect(other)
+  def target_label({:server_pid, _pid}), do: "server_process"
+  def target_label({:server_name, name}), do: Atom.to_string(name)
+  def target_label({:tab, tab_id}), do: "tab:" <> tab_id
+  def target_label(other), do: inspect(other)
+
+  def target_labels({:server_pid, pid} = target), do: [target_label(target), inspect(pid)]
+  def target_labels(target), do: [target_label(target)]
 end

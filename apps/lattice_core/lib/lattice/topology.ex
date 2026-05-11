@@ -42,6 +42,13 @@ defmodule Lattice.Topology do
     end
   end
 
+  def deliver_cast_to_tab(tab_id, envelope) do
+    with {:ok, {transport, connection_pid}} <-
+           GenServer.call(__MODULE__, {:delivery_info, tab_id}) do
+      transport.deliver_cast(connection_pid, envelope)
+    end
+  end
+
   def snapshot, do: GenServer.call(__MODULE__, :snapshot)
   def reset, do: GenServer.call(__MODULE__, :reset)
 

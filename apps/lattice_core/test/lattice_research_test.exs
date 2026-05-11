@@ -105,6 +105,21 @@ defmodule LatticeCore.ResearchTest do
                })
     end
 
+    test "child caps cannot remove a parent use limit" do
+      {:ok, wallet} = CapWallet.start_link([])
+      {:ok, _wallet_pid, wallet_tab} = LocalTab.connect(identity: %{role: "wallet"})
+      {:ok, _merchant_pid, merchant_tab} = LocalTab.connect(identity: %{role: "merchant"})
+
+      {:ok, parent} =
+        Lattice.grant(wallet_tab.id, wallet, [:call],
+          delegation_allowed?: true,
+          use_limit: 1
+        )
+
+      assert {:error, :use_limit_escalation} =
+               Lattice.delegate(parent, merchant_tab.id, use_limit: nil)
+    end
+
     test "confused-deputy overreach is structurally rejected by the membrane" do
       result = CapWallet.run_demo()
 
@@ -154,6 +169,26 @@ defmodule LatticeCore.ResearchTest do
 
       assert {:error, {:session_step_not_allowed, :closed, :capture}} =
                Lattice.call(tab.id, cap, %{amount: 5, vendor: "books", session_step: :capture})
+    end
+
+    test "payload session-step strings do not create atoms" do
+      {:ok, wallet} = CapWallet.start_link([])
+      {:ok, _pid, tab} = LocalTab.connect(identity: %{role: "session-client"})
+
+      {:ok, cap} =
+        Lattice.grant(tab.id, wallet, [:call],
+          session: %{
+            state: :ready,
+            transitions: %{ready: %{authorize: :authorized}}
+          }
+        )
+
+      step = "attacker_step_#{System.unique_integer([:positive])}"
+
+      assert {:error, {:session_step_not_allowed, :ready, ^step}} =
+               Lattice.call(tab.id, cap, %{"session_step" => step})
+
+      assert_raise ArgumentError, fn -> String.to_existing_atom(step) end
     end
   end
 

@@ -16,7 +16,7 @@ defmodule Lattice.Cap.Attenuation do
          {:ok, target} <- child_target(parent, Keyword.get(opts, :target, parent.target)),
          {:ok, expires_at, ttl_ms} <- child_expiry(parent, opts),
          {:ok, use_limit} <-
-           child_use_limit(parent, Keyword.get(opts, :use_limit, parent.use_limit)),
+           child_use_limit(parent, requested_use_limit(parent, opts)),
          child_caveats <- Caveat.from_opts(opts),
          :ok <- caveats_monotonic?(parent.caveats, child_caveats),
          schema <- Keyword.get(opts, :schema, parent.schema),
@@ -102,14 +102,22 @@ defmodule Lattice.Cap.Attenuation do
     end
   end
 
-  defp child_use_limit(_parent, nil), do: {:ok, nil}
   defp child_use_limit(%Cap{use_limit: nil}, use_limit), do: {:ok, use_limit}
+
+  defp child_use_limit(%Cap{use_limit: parent_limit}, nil) when not is_nil(parent_limit),
+    do: {:error, :use_limit_escalation}
 
   defp child_use_limit(%Cap{use_limit: parent_limit}, child_limit)
        when child_limit <= parent_limit,
        do: {:ok, child_limit}
 
   defp child_use_limit(_parent, _child_limit), do: {:error, :use_limit_escalation}
+
+  defp requested_use_limit(parent, opts) do
+    if Keyword.has_key?(opts, :use_limit),
+      do: Keyword.fetch!(opts, :use_limit),
+      else: parent.use_limit
+  end
 
   defp caveats_monotonic?(parent_caveats, child_caveats) do
     all = parent_caveats ++ child_caveats

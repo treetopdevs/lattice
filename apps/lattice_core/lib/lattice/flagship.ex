@@ -117,6 +117,7 @@ defmodule Lattice.Flagship do
   def snapshot, do: GenServer.call(__MODULE__, :snapshot)
   def claims, do: Claims.all()
   def actions, do: Enum.map(@actions, &Map.drop(&1, [:id]))
+  def action_token, do: GenServer.call(__MODULE__, :action_token)
   def export(format), do: GenServer.call(__MODULE__, {:export, format})
   def valid_action_token?(token), do: GenServer.call(__MODULE__, {:valid_action_token?, token})
 
@@ -226,6 +227,10 @@ defmodule Lattice.Flagship do
 
   def handle_call(:snapshot, _from, state) do
     {:reply, snapshot_from(state), state}
+  end
+
+  def handle_call(:action_token, _from, state) do
+    {:reply, state.action_token, state}
   end
 
   def handle_call({:export, format}, _from, state) do
@@ -506,7 +511,6 @@ defmodule Lattice.Flagship do
       presenter: presenter(state),
       story: story(state),
       actions: actions(),
-      action_token: state.action_token,
       actors: actors(state),
       policy: policy(),
       cap: external_cap(state.cap),

@@ -10,6 +10,7 @@ defmodule Lattice.Transport.WebSocket do
   @behaviour :cowboy_websocket
   @behaviour Lattice.Transport
 
+  alias Lattice.Cap
   alias Lattice.Transport.WebSocket.Envelope
 
   @impl Lattice.Transport
@@ -21,7 +22,9 @@ defmodule Lattice.Transport.WebSocket do
     receive do
       {:lattice_out_reply, ^ref, reply} -> reply
     after
-      timeout -> {:error, :timeout}
+      timeout ->
+        send(connection_pid, {:lattice_out_cancel, request_id})
+        {:error, :timeout}
     end
   end
 
@@ -69,6 +72,10 @@ defmodule Lattice.Transport.WebSocket do
       })
 
     {:reply, {:text, frame}, %{state | pending: pending}}
+  end
+
+  def websocket_info({:lattice_out_cancel, request_id}, state) do
+    {:ok, %{state | pending: Map.delete(state.pending, request_id)}}
   end
 
   def websocket_info({:lattice_out_cast, envelope}, state) do
@@ -276,7 +283,7 @@ defmodule Lattice.Transport.WebSocket do
        when is_binary(requested_target) do
     case Lattice.CapStore.get(cap_id) do
       {:ok, cap} ->
-        if requested_target in allowed_target_labels(cap.target) do
+        if requested_target in Cap.target_labels(cap.target) do
           :ok
         else
           Lattice.Audit.record(:deny, %{
@@ -308,18 +315,7 @@ defmodule Lattice.Transport.WebSocket do
     {:error, :malformed_target}
   end
 
-  defp allowed_target_labels({:server_pid, _pid}), do: ["server_process"]
-  defp allowed_target_labels({:server_name, name}), do: [Atom.to_string(name)]
-  defp allowed_target_labels({:tab, tab_id}), do: ["tab:" <> tab_id]
-  defp allowed_target_labels(other), do: [inspect(other)]
-
   defp parse_ops(ops) when is_list(ops) do
-    Enum.flat_map(ops, fn
-      "call" -> [:call]
-      "cast" -> [:cast]
-      :call -> [:call]
-      :cast -> [:cast]
-      _ -> []
-    end)
+    Enum.map(ops, &Cap.normalize_op/1)
   end
 end
