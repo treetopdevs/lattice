@@ -25,6 +25,7 @@ defmodule LatticeCore.FlagshipTest do
 
     assert {:ok, over_budget} = Lattice.Flagship.over_budget()
     assert over_budget.results.over_budget.result.ok == false
+    assert over_budget.results.over_budget.result.error == ":amount_exceeds_caveat"
     assert over_budget.results.over_budget.delivered_to_wallet? == false
     assert over_budget.wallet.delivery_count == 1
 
@@ -51,13 +52,30 @@ defmodule LatticeCore.FlagshipTest do
     assert Enum.any?(replay.graph.edges, &(edge_kind(&1) == "denied_attempt"))
     assert Enum.any?(replay.graph.edges, &(edge_kind(&1) == "revoked"))
     assert replay.presenter.next_action =~ "inspect"
+
+    for {action, expected} <- expected_results(replay) do
+      result = Map.fetch!(replay.results, action)
+      assert result.expected_result == expected
+      assert result.result.ok == expected.ok
+      assert result.delivered_to_wallet? == expected.delivered_to_wallet?
+
+      if Map.has_key?(expected, :error) do
+        assert result.result.error == expected.error
+      end
+    end
   end
 
   test "flagship exports use the same graph source as the live inspector" do
     assert {:ok, _snapshot} = Lattice.Flagship.run_all()
+    assert %Lattice.Flagship.Snapshot{} = Lattice.Flagship.snapshot()
 
     assert {:ok, json} = Lattice.Flagship.export("json")
-    assert %{"graph" => %{"nodes" => nodes, "edges" => edges}} = Jason.decode!(json)
+    assert %{"graph" => %{"nodes" => nodes, "edges" => edges}} = decoded = Jason.decode!(json)
+
+    assert [] =
+             Enum.map(Lattice.Flagship.Snapshot.required_keys(), &Atom.to_string/1) --
+               Map.keys(decoded)
+
     assert is_list(nodes)
     assert is_list(edges)
 
@@ -71,6 +89,21 @@ defmodule LatticeCore.FlagshipTest do
 
     assert {:ok, claims} = Lattice.Flagship.export("claims")
     assert [%{"id" => "capability_wallet_edge"} | _] = Jason.decode!(claims)
+  end
+
+  test "deny audit events without tab metadata stay visible in the graph" do
+    assert {:ok, snapshot} = Lattice.Flagship.grant()
+    cap_id = snapshot.cap["id"]
+
+    Lattice.Audit.record(:deny, %{cap_id: cap_id, reason: :manual_deny_without_tab})
+
+    edge =
+      Lattice.Graph.snapshot().edges
+      |> Enum.find(&(&1.kind == "denied_attempt" and &1.reason == ":manual_deny_without_tab"))
+
+    assert edge
+    assert edge.from == "process:gateway"
+    refute edge.from == "tab:unknown"
   end
 
   test "reset stops local tab client processes" do
@@ -103,6 +136,12 @@ defmodule LatticeCore.FlagshipTest do
 
   defp edge_kind(edge), do: edge.kind
   defp repo_root, do: Path.expand("../../..", __DIR__)
+
+  defp expected_results(snapshot) do
+    snapshot.story
+    |> Enum.filter(&Map.has_key?(&1, :expected_result))
+    |> Map.new(&{&1.id, &1.expected_result})
+  end
 
   defp action_label(snapshot, action_name) do
     snapshot.actions

@@ -78,19 +78,24 @@ defmodule Lattice.Flagship.Claims do
 
   def all, do: @claims
 
-  def validate!(root \\ File.cwd!(), opts \\ []) do
+  def validate(root \\ File.cwd!(), opts \\ []) do
     generated_artifacts? = Keyword.get(opts, :generated_artifacts?, false)
     missing = Enum.flat_map(@claims, &missing_paths(&1, root, generated_artifacts?))
 
     if missing == [] do
       :ok
     else
-      details =
-        missing
-        |> Enum.map(fn {claim_id, kind, path} -> "#{claim_id} #{kind}: #{path}" end)
-        |> Enum.join(", ")
+      {:error, missing}
+    end
+  end
 
-      raise ArgumentError, "flagship claims reference missing paths: #{details}"
+  def validate!(root \\ File.cwd!(), opts \\ []) do
+    case validate(root, opts) do
+      :ok ->
+        :ok
+
+      {:error, missing} ->
+        raise ArgumentError, "flagship claims reference missing paths: #{inspect(missing)}"
     end
   end
 

@@ -6,6 +6,44 @@ defmodule Lattice.Graph.Snapshot do
   alias Lattice.Cap
   alias Lattice.Cap.Caveat
 
+  @audit_edge_specs %{
+    cap_use: %{
+      from: :actor_or_gateway,
+      to: :event_target,
+      kind: "invokes",
+      status: "allowed",
+      op?: true
+    },
+    deny: %{
+      from: :actor_or_owner_or_gateway,
+      to: :event_target,
+      kind: "denied_attempt",
+      status: "denied",
+      reason: :inspect_reason
+    },
+    expired_cap: %{
+      from: :actor_or_gateway,
+      to: :cap,
+      kind: "expired",
+      status: "expired",
+      reason: :inspect_reason
+    },
+    use_limit_exceeded: %{
+      from: :actor_or_gateway,
+      to: :cap,
+      kind: "denied_attempt",
+      status: "denied",
+      reason: "use_limit_exceeded"
+    },
+    revoke: %{
+      from: :actor_or_gateway,
+      to: :cap,
+      kind: "revoked",
+      status: "revoked",
+      reason: :raw_reason
+    }
+  }
+
   def build do
     diagnostics = Lattice.diagnostics()
     topology = diagnostics.topology
@@ -326,87 +364,54 @@ defmodule Lattice.Graph.Snapshot do
 
   defp audit_edges(audit_events, caps) do
     Enum.flat_map(audit_events, fn event ->
-      case event.type do
-        :cap_use ->
-          cap_id = metadata(event, :cap_id)
-          cap = Map.get(caps, cap_id)
-
-          [
-            %{
-              from: "tab:#{metadata(event, :tab_id)}",
-              to: event_target(cap, cap_id),
-              kind: "invokes",
-              status: "allowed",
-              audit_event_id: event.id,
-              cap_id: cap_id,
-              op: metadata(event, :op)
-            }
-          ]
-
-        :deny ->
-          cap_id = metadata(event, :cap_id)
-          cap = Map.get(caps, cap_id)
-
-          [
-            %{
-              from:
-                "tab:#{metadata(event, :tab_id) || metadata(event, :owner_tab_id) || "unknown"}",
-              to: event_target(cap, cap_id),
-              kind: "denied_attempt",
-              status: "denied",
-              audit_event_id: event.id,
-              cap_id: cap_id,
-              reason: inspect(metadata(event, :reason))
-            }
-          ]
-
-        :expired_cap ->
-          cap_id = metadata(event, :cap_id)
-
-          [
-            %{
-              from: "tab:#{metadata(event, :tab_id)}",
-              to: "cap:#{cap_id}",
-              kind: "expired",
-              status: "expired",
-              audit_event_id: event.id,
-              reason: inspect(metadata(event, :reason))
-            }
-          ]
-
-        :use_limit_exceeded ->
-          cap_id = metadata(event, :cap_id)
-
-          [
-            %{
-              from: "tab:#{metadata(event, :tab_id)}",
-              to: "cap:#{cap_id}",
-              kind: "denied_attempt",
-              status: "denied",
-              audit_event_id: event.id,
-              reason: "use_limit_exceeded"
-            }
-          ]
-
-        :revoke ->
-          cap_id = metadata(event, :cap_id)
-
-          [
-            %{
-              from: "tab:#{metadata(event, :tab_id)}",
-              to: "cap:#{cap_id}",
-              kind: "revoked",
-              status: "revoked",
-              audit_event_id: event.id,
-              reason: metadata(event, :reason)
-            }
-          ]
-
-        _ ->
-          []
+      case Map.fetch(@audit_edge_specs, event.type) do
+        {:ok, spec} -> [audit_edge(event, caps, spec)]
+        :error -> []
       end
     end)
   end
+
+  defp audit_edge(event, caps, spec) do
+    cap_id = metadata(event, :cap_id)
+    cap = Map.get(caps, cap_id)
+
+    %{
+      from: audit_edge_from(event, spec.from),
+      to: audit_edge_to(event, cap, cap_id, spec.to),
+      kind: spec.kind,
+      status: spec.status,
+      audit_event_id: event.id
+    }
+    |> maybe_put(:cap_id, cap_id)
+    |> maybe_put(:op, if(spec[:op?], do: metadata(event, :op)))
+    |> maybe_put(:reason, audit_edge_reason(event, spec[:reason]))
+  end
+
+  defp audit_edge_from(event, :actor_or_owner_or_gateway) do
+    actor_node(event, [:tab_id, :owner_tab_id])
+  end
+
+  defp audit_edge_from(event, :actor_or_gateway), do: actor_node(event, [:tab_id])
+
+  defp audit_edge_to(_event, cap, cap_id, :event_target), do: event_target(cap, cap_id)
+  defp audit_edge_to(_event, _cap, nil, :cap), do: "process:gateway"
+  defp audit_edge_to(_event, _cap, cap_id, :cap), do: "cap:#{cap_id}"
+
+  defp audit_edge_reason(event, :inspect_reason), do: inspect(metadata(event, :reason))
+  defp audit_edge_reason(event, :raw_reason), do: metadata(event, :reason)
+  defp audit_edge_reason(_event, reason), do: reason
+
+  defp actor_node(event, keys) do
+    keys
+    |> Enum.find_value(&metadata(event, &1))
+    |> case do
+      tab_id when is_binary(tab_id) and tab_id != "" -> "tab:#{tab_id}"
+      _missing -> "process:gateway"
+    end
+  end
+
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
   defp cleanup_edges(audit_events) do
     audit_events

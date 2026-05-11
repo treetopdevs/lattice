@@ -37,6 +37,10 @@ defmodule Lattice.Graph.Annotations do
     GenServer.call(__MODULE__, {:register_edge, normalize(edge)})
   end
 
+  def register_edge!(edge) when is_map(edge) do
+    :ok = register_edge(edge)
+  end
+
   def snapshot, do: GenServer.call(__MODULE__, :snapshot)
   def reset, do: GenServer.call(__MODULE__, :reset)
 
@@ -66,9 +70,16 @@ defmodule Lattice.Graph.Annotations do
 
   defp normalize(map) do
     Map.new(map, fn
-      {key, value} when is_binary(key) -> {Map.get(@known_keys, key, key), normalize_value(value)}
+      {key, value} when is_binary(key) -> {known_key!(key), normalize_value(value)}
       {key, value} -> {key, normalize_value(value)}
     end)
+  end
+
+  defp known_key!(key) do
+    case Map.fetch(@known_keys, key) do
+      {:ok, atom_key} -> atom_key
+      :error -> raise ArgumentError, "unknown graph annotation key: #{inspect(key)}"
+    end
   end
 
   defp normalize_value(value) when is_map(value), do: normalize(value)
