@@ -3,6 +3,11 @@ defmodule LatticeServer.FlagshipHandler do
 
   @behaviour :cowboy_handler
 
+  @max_action_body_bytes 1_024
+  @snapshot_rate_limit 90
+  @action_rate_limit 30
+  @rate_window_ms 10_000
+
   @impl true
   def init(req, _opts) do
     method = :cowboy_req.method(req)
@@ -32,10 +37,14 @@ defmodule LatticeServer.FlagshipHandler do
     {:ok, req, %{}}
   end
 
-  defp route("GET", "/api/flagship/snapshot", _req) do
-    200
-    |> json(Lattice.Flagship.snapshot())
-    |> with_action_cookie()
+  defp route("GET", "/api/flagship/snapshot", req) do
+    if rate_allowed?(req, "GET", "snapshot", @snapshot_rate_limit) do
+      200
+      |> json(Lattice.Flagship.snapshot())
+      |> with_action_cookie()
+    else
+      json(429, %{error: "rate_limited"})
+    end
   end
 
   defp route("GET", "/api/flagship/export/json", _req) do
@@ -60,14 +69,23 @@ defmodule LatticeServer.FlagshipHandler do
 
   defp route("POST", "/api/flagship/" <> action_name, req) do
     cond do
+      action_name not in Enum.map(Lattice.Flagship.actions(), & &1.action) ->
+        json(404, %{error: "not_found"})
+
+      not allowed_origin?(req) ->
+        json(403, %{error: "forbidden"})
+
+      not action_body_within_limit?(req) ->
+        json(413, %{error: "request_body_too_large"})
+
+      not rate_allowed?(req, "POST", action_name, @action_rate_limit) ->
+        json(429, %{error: "rate_limited"})
+
       not valid_action_request?(req) ->
         json(403, %{error: "forbidden"})
 
-      action_name in Enum.map(Lattice.Flagship.actions(), & &1.action) ->
-        action(fn -> Lattice.Flagship.perform(action_name) end)
-
       true ->
-        json(404, %{error: "not_found"})
+        action(fn -> Lattice.Flagship.perform(action_name) end)
     end
   end
 
@@ -102,8 +120,72 @@ defmodule LatticeServer.FlagshipHandler do
     header_token = :cowboy_req.header("x-lattice-flagship-token", req, nil)
     cookie_token = action_cookie_token(req)
 
-    Lattice.Flagship.valid_action_token?(header_token) ||
-      Lattice.Flagship.valid_action_token?(cookie_token)
+    Lattice.Flagship.consume_action_token?(header_token) ||
+      Lattice.Flagship.consume_action_token?(cookie_token)
+  end
+
+  defp allowed_origin?(req) do
+    case :cowboy_req.header("origin", req, nil) do
+      nil -> loopback_request?(req)
+      "" -> loopback_request?(req)
+      origin -> loopback_peer?(req) and same_loopback_origin?(origin, request_origin(req))
+    end
+  end
+
+  defp loopback_request?(req) do
+    with true <- loopback_peer?(req),
+         %URI{host: host} <- request_origin(req) do
+      loopback_host?(host)
+    else
+      _other -> false
+    end
+  end
+
+  defp same_loopback_origin?(origin, request_origin) do
+    with %URI{scheme: scheme, host: host, port: port} when scheme in ["http", "https"] <-
+           URI.parse(origin),
+         %URI{scheme: req_scheme, host: req_host, port: req_port} <-
+           request_origin,
+         true <- loopback_host?(host),
+         true <- loopback_host?(req_host) do
+      scheme == req_scheme and host == req_host and port == req_port
+    else
+      _other -> false
+    end
+  end
+
+  defp request_origin(req) do
+    host = :cowboy_req.header("host", req, "")
+    scheme = req |> :cowboy_req.scheme() |> to_string()
+    URI.parse("#{scheme}://#{host}")
+  end
+
+  defp loopback_host?(host) when host in ["127.0.0.1", "::1", "localhost"], do: true
+  defp loopback_host?(_host), do: false
+
+  defp loopback_peer?(req), do: peer_ip(req) in ["127.0.0.1", "::1"]
+
+  defp action_body_within_limit?(req) do
+    content_length = :cowboy_req.header("content-length", req, "0")
+    transfer_encoding = :cowboy_req.header("transfer-encoding", req, nil)
+
+    transfer_encoding in [nil, "identity"] and
+      case Integer.parse(content_length) do
+        {bytes, ""} -> bytes <= @max_action_body_bytes
+        _other -> false
+      end
+  end
+
+  defp rate_allowed?(req, method, route, limit) do
+    key = {:flagship, method, route, peer_ip(req)}
+    LatticeServer.RateLimiter.allow?(key, limit: limit, window_ms: @rate_window_ms)
+  end
+
+  defp peer_ip(req) do
+    case :cowboy_req.peer(req) do
+      {ip, _port} -> ip |> :inet.ntoa() |> to_string()
+      _other -> "unknown"
+    end
   end
 
   defp with_action_cookie({status, headers, body, _set_action_cookie?}) do

@@ -27,9 +27,10 @@ const checks = [
   ["video size", videoStat.size >= minBytes, `${videoStat.size} bytes`],
   ["screenshot exists", true, screenshot],
   ["screenshot size", screenshotStat.size >= 80_000, `${screenshotStat.size} bytes`],
-  ["video duration", probe.duration == null || probe.duration >= minDuration, `${probe.duration ?? "unavailable"} seconds`],
-  ["video width", probe.width == null || probe.width >= minWidth, `${probe.width ?? "unavailable"} px`],
-  ["video height", probe.height == null || probe.height >= minHeight, `${probe.height ?? "unavailable"} px`],
+  ["ffprobe available", probe.available === true, probe.error || "available"],
+  ["video duration", Number.isFinite(probe.duration) && probe.duration >= minDuration, `${probe.duration ?? "unavailable"} seconds`],
+  ["video width", Number.isInteger(probe.width) && probe.width >= minWidth, `${probe.width ?? "unavailable"} px`],
+  ["video height", Number.isInteger(probe.height) && probe.height >= minHeight, `${probe.height ?? "unavailable"} px`],
 ];
 
 const acceptable = checks.every(([_name, passed]) => passed);
@@ -100,15 +101,23 @@ function probeVideo(file) {
     { encoding: "utf8" },
   );
 
-  if (result.status !== 0) return {};
+  if (result.error) return { available: false, error: result.error.message };
+  if (result.status !== 0) {
+    return { available: false, error: result.stderr || `ffprobe exited ${result.status}` };
+  }
 
-  const parsed = JSON.parse(result.stdout);
-  const stream = parsed.streams?.[0] || {};
-  return {
-    duration: parsed.format?.duration ? Number(parsed.format.duration) : null,
-    width: stream.width ?? null,
-    height: stream.height ?? null,
-  };
+  try {
+    const parsed = JSON.parse(result.stdout);
+    const stream = parsed.streams?.[0] || {};
+    return {
+      available: true,
+      duration: parsed.format?.duration ? Number(parsed.format.duration) : null,
+      width: stream.width ?? null,
+      height: stream.height ?? null,
+    };
+  } catch (error) {
+    return { available: false, error: error.message };
+  }
 }
 
 function fail(message) {

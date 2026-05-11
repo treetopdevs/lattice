@@ -1,10 +1,12 @@
 defmodule LatticeServer.FlagshipHttpTest do
   use ExUnit.Case, async: false
 
+  alias LatticeServer.TestSupport.HTTP
+
   setup do
     Lattice.Flagship.reset()
     listener = :"lattice_flagship_http_test_#{System.unique_integer([:positive])}"
-    port = free_port()
+    port = HTTP.free_port()
 
     {:ok, _pid} =
       LatticeServer.start_http(
@@ -21,17 +23,45 @@ defmodule LatticeServer.FlagshipHttpTest do
   end
 
   test "flagship HTTP API serves UI, runs story, and exports graph", %{port: port} do
-    assert {:ok, 200, html} = http_get(port, "/")
+    assert {:ok, 200, html} = HTTP.http_get(port, "/")
     assert html =~ "Live process/trust graph inspector"
 
     assert {:ok, 200, snapshot_head, snapshot_body} =
-             raw_http_with_head(port, "GET", "/api/flagship/snapshot")
+             HTTP.raw_http_with_head(port, "GET", "/api/flagship/snapshot")
 
     refute Map.has_key?(Jason.decode!(snapshot_body), "action_token")
     assert action_cookie_from_head(snapshot_head) =~ "lattice_flagship_token="
 
-    assert {:ok, 403, forbidden} = raw_http(port, "POST", "/api/flagship/run_all")
+    assert {:ok, 403, forbidden} = HTTP.raw_http(port, "POST", "/api/flagship/run_all")
     assert %{"error" => "forbidden"} = Jason.decode!(forbidden)
+
+    assert {:ok, 403, forbidden} =
+             HTTP.raw_http(port, "POST", "/api/flagship/run_all", [
+               {"cookie", "lattice_flagship_token=not-the-token"}
+             ])
+
+    assert %{"error" => "forbidden"} = Jason.decode!(forbidden)
+
+    assert {:ok, cookie} = action_cookie(port)
+
+    assert {:ok, 403, forbidden} =
+             HTTP.raw_http(port, "POST", "/api/flagship/run_all", [
+               {"cookie", cookie},
+               {"origin", "http://evil.example"}
+             ])
+
+    assert %{"error" => "forbidden"} = Jason.decode!(forbidden)
+
+    assert {:ok, 413, too_large} =
+             HTTP.raw_http(
+               port,
+               "POST",
+               "/api/flagship/run_all",
+               [{"cookie", cookie}, {"origin", "http://localhost:#{port}"}],
+               String.duplicate("x", 1_025)
+             )
+
+    assert %{"error" => "request_body_too_large"} = Jason.decode!(too_large)
 
     assert {:ok, snapshot} = post_json(port, "/api/flagship/run_all")
     refute Map.has_key?(snapshot, "action_token")
@@ -40,62 +70,45 @@ defmodule LatticeServer.FlagshipHttpTest do
     assert snapshot["results"]["over_budget"]["delivered_to_wallet?"] == false
     assert snapshot["results"]["stolen"]["result"]["error"] == ":wrong_owner"
     assert snapshot["results"]["replay"]["result"]["error"] == ":revoked"
+    assert_expected_results(snapshot)
 
-    assert {:ok, 200, exported_json} = http_get(port, "/api/flagship/export/json")
+    assert {:ok, 200, exported_json} = HTTP.http_get(port, "/api/flagship/export/json")
     refute Map.has_key?(Jason.decode!(exported_json), "action_token")
 
-    assert {:ok, 200, mermaid} = http_get(port, "/api/flagship/export/mermaid")
+    assert {:ok, 200, mermaid} = HTTP.http_get(port, "/api/flagship/export/mermaid")
     assert mermaid =~ "graph TD"
 
-    assert {:ok, 200, claims} = http_get(port, "/api/flagship/claims")
+    assert {:ok, 200, claims} = HTTP.http_get(port, "/api/flagship/claims")
     assert [%{"id" => "capability_wallet_edge"} | _] = Jason.decode!(claims)
 
-    assert {:ok, 200, head, _body} = raw_http_with_head(port, "GET", "/api/flagship/snapshot")
+    assert {:ok, 200, head, _body} =
+             HTTP.raw_http_with_head(port, "GET", "/api/flagship/snapshot")
+
     refute String.downcase(head) =~ "access-control-allow-origin"
   end
 
-  defp http_get(port, path) do
-    raw_http(port, "GET", path)
+  test "flagship action cookie is consumed once", %{port: port} do
+    assert {:ok, cookie} = action_cookie(port)
+
+    assert {:ok, 200, _head, _body} =
+             HTTP.raw_http_with_head(port, "POST", "/api/flagship/reset", [{"cookie", cookie}])
+
+    assert {:ok, 403, forbidden} =
+             HTTP.raw_http(port, "POST", "/api/flagship/reset", [{"cookie", cookie}])
+
+    assert %{"error" => "forbidden"} = Jason.decode!(forbidden)
   end
 
   defp post_json(port, path) do
     with {:ok, cookie} <- action_cookie(port),
          {:ok, status, body} when status in 200..299 <-
-           raw_http(port, "POST", path, [{"cookie", cookie}]) do
+           HTTP.raw_http(port, "POST", path, [{"cookie", cookie}]) do
       {:ok, Jason.decode!(body)}
     end
   end
 
-  defp raw_http(port, method, path, headers \\ []) do
-    {:ok, status, _head, body} = raw_http_with_head(port, method, path, headers)
-    {:ok, status, body}
-  end
-
-  defp raw_http_with_head(port, method, path, headers \\ []) do
-    {:ok, socket} = :gen_tcp.connect(~c"localhost", port, [:binary, active: false])
-
-    header_lines = Enum.map(headers, fn {key, value} -> "#{key}: #{value}\r\n" end)
-
-    request = [
-      method,
-      " ",
-      path,
-      " HTTP/1.1\r\nhost: localhost\r\n",
-      header_lines,
-      "connection: close\r\ncontent-length: 0\r\n\r\n"
-    ]
-
-    :ok = :gen_tcp.send(socket, request)
-    response = recv_all(socket, "")
-    :gen_tcp.close(socket)
-
-    [head, body] = String.split(response, "\r\n\r\n", parts: 2)
-    ["HTTP/1.1", status | _rest] = String.split(head, " ", parts: 3)
-    {:ok, String.to_integer(status), head, body}
-  end
-
   defp action_cookie(port) do
-    with {:ok, 200, head, body} <- raw_http_with_head(port, "GET", "/api/flagship/snapshot"),
+    with {:ok, 200, head, body} <- HTTP.raw_http_with_head(port, "GET", "/api/flagship/snapshot"),
          snapshot when is_map(snapshot) <- Jason.decode!(body),
          nil <- Map.get(snapshot, "action_token"),
          cookie when is_binary(cookie) <- action_cookie_from_head(head) do
@@ -104,23 +117,23 @@ defmodule LatticeServer.FlagshipHttpTest do
   end
 
   defp action_cookie_from_head(head) do
-    case Regex.run(~r/^set-cookie:\s*([^;\r\n]+)/im, head) do
-      [_, cookie] -> cookie
-      _ -> nil
-    end
+    HTTP.cookie_from_head(head, "lattice_flagship_token")
   end
 
-  defp recv_all(socket, acc) do
-    case :gen_tcp.recv(socket, 0, 2_000) do
-      {:ok, chunk} -> recv_all(socket, acc <> chunk)
-      {:error, :closed} -> acc
-    end
-  end
+  defp assert_expected_results(snapshot) do
+    snapshot["story"]
+    |> Enum.filter(&Map.has_key?(&1, "expected_result"))
+    |> Enum.each(fn step ->
+      result = Map.fetch!(snapshot["results"], step["id"])
+      expected = step["expected_result"]
 
-  defp free_port do
-    {:ok, socket} = :gen_tcp.listen(0, [:binary, active: false])
-    {:ok, port} = :inet.port(socket)
-    :gen_tcp.close(socket)
-    port
+      assert result["expected_result"] == expected
+      assert result["result"]["ok"] == expected["ok"]
+      assert result["delivered_to_wallet?"] == expected["delivered_to_wallet?"]
+
+      if Map.has_key?(expected, "error") do
+        assert result["result"]["error"] == expected["error"]
+      end
+    end)
   end
 end

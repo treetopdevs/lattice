@@ -22,7 +22,20 @@ defmodule LatticeServer do
          ]}
       ])
 
-    :cowboy.start_clear(listener, [{:ip, ip}, {:port, port}], %{env: %{dispatch: dispatch}})
+    :cowboy.start_clear(
+      listener,
+      [{:ip, ip}, {:port, port}],
+      %{
+        env: %{dispatch: dispatch},
+        idle_timeout: 10_000,
+        max_header_name_length: 64,
+        max_header_value_length: 4_096,
+        max_headers: 64,
+        max_keepalive: 20,
+        max_request_line_length: 2_048,
+        request_timeout: 5_000
+      }
+    )
   end
 
   def stop_http(listener \\ :lattice_demo_http) do

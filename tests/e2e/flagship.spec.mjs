@@ -48,23 +48,24 @@ test("flagship wallet/process graph story is inspectable end to end", async ({ p
 
   await clickAction("allowed");
   await expect(page.getByText("$199 bookshop Systems Programming Book")).toBeVisible();
+  await waitForDecisionEdge({ kind: "invokes", status: "allowed" });
   await expect(page.locator(".edge.allowed").first()).toBeVisible();
 
   await clickAction("over_budget");
-  await expect(page.locator("#auditTrail").getByText("amount_exceeds_caveat")).toBeVisible();
+  await waitForDecisionEdge({ kind: "denied_attempt", reason: "amount_exceeds_caveat" });
   await expect(page.locator(".edge.denied").first()).toBeVisible();
 
   await clickAction("wrong_vendor");
-  await expect(page.locator("#auditTrail").getByText("vendor_not_allowed")).toBeVisible();
+  await waitForDecisionEdge({ kind: "denied_attempt", reason: "vendor_not_allowed" });
 
   await clickAction("stolen");
-  await expect(page.locator("#auditTrail").getByText("wrong_owner")).toBeVisible();
+  await waitForDecisionEdge({ kind: "denied_attempt", reason: "wrong_owner" });
 
   await clickAction("revoke");
   await expect(page.getByText("Wallet consent revoked")).toBeVisible();
 
   await clickAction("replay");
-  await expect(page.locator("#auditTrail").getByText("revoked")).toBeVisible();
+  await waitForDecisionEdge({ kind: "denied_attempt", reason: "revoked" });
 
   await page.getByRole("button", { name: "Refresh JSON" }).click();
   await holdForVideo();
@@ -82,6 +83,7 @@ test("flagship wallet/process graph story is inspectable end to end", async ({ p
 
   await clickAction("reset");
   await clickAction("run_all");
+  await waitForExpectedResults();
   await expect(page.locator("#storySteps").getByText("Deny replay")).toBeVisible();
   await expect(page.locator("#nextAction")).toContainText("inspect");
   await expect(page.locator("#claimsSource")).toContainText("code-owned claims");
@@ -94,7 +96,78 @@ test("flagship wallet/process graph story is inspectable end to end", async ({ p
 
   async function clickAction(action) {
     await page.getByRole("button", { name: actionLabels[action] }).click();
+    await waitForAction(action);
     await holdForVideo();
+  }
+
+  async function waitForAction(action) {
+    await expect
+      .poll(
+        () =>
+          page.evaluate((actionName) => {
+            const current = window.__latticeSnapshot;
+            if (!current) return false;
+            if (actionName === "reset") return current.wallet?.delivery_count === 0 && current.cap == null;
+            if (actionName === "run_all") return current.current_step === "replay" && Boolean(current.results?.replay);
+            return current.current_step === actionName;
+          }, action),
+        { timeout: 5_000 },
+      )
+      .toBe(true);
+  }
+
+  async function waitForDecisionEdge(expected) {
+    await expect
+      .poll(
+        () =>
+          page.evaluate((expectedEdge) => {
+            return (window.__latticeSnapshot?.graph?.edges || []).some((edge) => {
+              const kindMatches = !expectedEdge.kind || edge.kind === expectedEdge.kind;
+              const statusMatches = !expectedEdge.status || edge.status === expectedEdge.status;
+              const reasonMatches =
+                !expectedEdge.reason || String(edge.reason || "").includes(expectedEdge.reason);
+              return kindMatches && statusMatches && reasonMatches;
+            });
+          }, expected),
+        { timeout: 5_000 },
+      )
+      .toBe(true);
+  }
+
+  async function waitForExpectedResults() {
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const current = window.__latticeSnapshot;
+            if (!current) return false;
+
+            return current.story
+              .filter((step) => step.expected_result)
+              .every((step) => {
+                const result = current.results?.[step.id];
+                if (!result) return false;
+
+                const expected = step.expected_result;
+                const okMatches = result.result?.ok === expected.ok;
+                const deliveryMatches =
+                  result["delivered_to_wallet?"] === expected["delivered_to_wallet?"];
+                const expectedMatches = Object.entries(expected).every(
+                  ([key, value]) => result.expected_result?.[key] === value,
+                );
+                const errorMatches = !expected.error || result.result?.error === expected.error;
+
+                return (
+                  okMatches &&
+                  deliveryMatches &&
+                  expectedMatches &&
+                  errorMatches
+                );
+              });
+          }),
+        { timeout: 5_000 },
+      )
+      .toBe(true);
   }
 
   async function loadActionLabels() {

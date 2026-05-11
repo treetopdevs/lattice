@@ -2,6 +2,7 @@ defmodule LatticeServer.WebSocketIntegrationTest do
   use ExUnit.Case, async: false
 
   alias Lattice.Transport.WebSocket.Client
+  alias LatticeServer.TestSupport.HTTP
 
   defmodule Echo do
     use GenServer
@@ -18,7 +19,7 @@ defmodule LatticeServer.WebSocketIntegrationTest do
     Lattice.reset!()
     LatticeServer.DemoHub.reset()
     listener = :"lattice_ws_test_#{System.unique_integer([:positive])}"
-    port = free_port()
+    port = HTTP.free_port()
     echo = start_supervised!(Echo)
 
     {:ok, _pid} =
@@ -124,13 +125,6 @@ defmodule LatticeServer.WebSocketIntegrationTest do
     Client.close(client_b)
     Task.shutdown(task_a, :brutal_kill)
     Task.shutdown(task_b, :brutal_kill)
-  end
-
-  defp free_port do
-    {:ok, socket} = :gen_tcp.listen(0, [:binary, active: false])
-    {:ok, port} = :inet.port(socket)
-    :gen_tcp.close(socket)
-    port
   end
 
   defp recv_type(client, type, timeout \\ 5_000) do

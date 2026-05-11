@@ -1,4 +1,8 @@
 const api = "/api/flagship";
+const REFRESH_INTERVAL_MS = 900;
+const POST_REFRESH_SUPPRESSION_MS = 700;
+const DETAIL_REFRESH_SUPPRESSION_MS = 3_000;
+const GRAPH_VIEW_BOX = "0 0 1120 620";
 const graphEl = document.querySelector("#graph");
 const detailEl = document.querySelector("#detail");
 const rawJsonEl = document.querySelector("#rawJson");
@@ -6,13 +10,14 @@ const controlsEl = document.querySelector("#controls");
 let snapshot = null;
 let selected = null;
 let suppressRefreshUntil = 0;
+window.__latticeSnapshot = null;
 
 document.querySelector("#refreshJson").addEventListener("click", () => {
   rawJsonEl.value = JSON.stringify(snapshot, null, 2);
 });
 
 await refresh();
-setInterval(refresh, 900);
+setInterval(refresh, REFRESH_INTERVAL_MS);
 
 async function post(action) {
   setBusy(true);
@@ -21,9 +26,15 @@ async function post(action) {
       method: "POST",
       credentials: "same-origin",
     });
-    snapshot = await response.json();
-    suppressRefreshUntil = Date.now() + 700;
-    render();
+    const payload = await readJson(response);
+    if (!response.ok) {
+      showRequestError(payload?.error || `HTTP ${response.status}`);
+      return;
+    }
+    setSnapshot(payload);
+    showRequestError(null);
+  } catch (error) {
+    showRequestError(error.message || "request_failed");
   } finally {
     setBusy(false);
   }
@@ -33,13 +44,35 @@ async function refresh() {
   if (Date.now() < suppressRefreshUntil) return;
 
   try {
-    const response = await fetch(`${api}/snapshot`);
-    snapshot = await response.json();
+    const response = await fetch(`${api}/snapshot`, { credentials: "same-origin" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    setSnapshot(await readJson(response));
     document.querySelector("#connectionStatus").textContent = "live polling";
-    render();
   } catch (_error) {
     document.querySelector("#connectionStatus").textContent = "offline";
   }
+}
+
+function setSnapshot(nextSnapshot) {
+  snapshot = nextSnapshot;
+  window.__latticeSnapshot = nextSnapshot;
+  suppressRefreshUntil = Date.now() + POST_REFRESH_SUPPRESSION_MS;
+  render();
+}
+
+async function readJson(response) {
+  const text = await response.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch (_error) {
+    return { error: text };
+  }
+}
+
+function showRequestError(error) {
+  const status = document.querySelector("#connectionStatus");
+  if (error) status.textContent = `action blocked: ${error}`;
 }
 
 function setBusy(busy) {
@@ -88,7 +121,7 @@ function renderStory() {
   list.replaceChildren(
     ...snapshot.story.map((step) => {
       const item = document.createElement("li");
-      item.className = `step ${step.status} ${step.active ? "active" : ""}`;
+      item.className = `step ${safeClass(step.status)} ${step.active ? "active" : ""}`;
       item.innerHTML = `<small>Step ${escapeHtml(step.step_number)}</small><strong>${escapeHtml(
         step.label,
       )}</strong><span>${escapeHtml(step.detail)}</span>`;
@@ -120,7 +153,7 @@ function renderAudit() {
   list.replaceChildren(
     ...snapshot.audit_events.slice(-14).reverse().map((event) => {
       const item = document.createElement("li");
-      item.className = `audit ${event.type}`;
+      item.className = `audit ${safeClass(event.type)}`;
       item.textContent = `${event.id}. ${event.type} ${summarize(event.metadata)}`;
       item.addEventListener("click", () => showDetail("audit", event));
       return item;
@@ -161,7 +194,7 @@ function renderClaims() {
   table.replaceChildren(
     ...snapshot.claims.map((claim) => {
       const row = document.createElement("tr");
-      row.innerHTML = `<td>${escapeHtml(claim.claim)}</td><td><span class="claim ${claim.status}">${escapeHtml(
+      row.innerHTML = `<td>${escapeHtml(claim.claim)}</td><td><span class="claim ${safeClasses(claim.status)}">${escapeHtml(
         claim.status,
       )}</span></td><td>${escapeHtml(claim.evidence)}<small>${escapeHtml(
         (claim.evidence_refs || []).join(" | "),
@@ -176,7 +209,7 @@ function renderGraph() {
   const nodes = visibleNodes(graph.nodes, graph.ui);
   const edges = graph.edges.filter((edge) => includeEdge(edge, nodes)).sort((a, b) => edgeRank(a) - edgeRank(b));
   const positions = layout(nodes, graph.ui);
-  graphEl.setAttribute("viewBox", "0 0 1120 620");
+  graphEl.setAttribute("viewBox", GRAPH_VIEW_BOX);
   graphEl.replaceChildren(
     markerDefs(),
     ...edges.map((edge, index) => edgeSvg(edge, positions, index)),
@@ -252,7 +285,10 @@ function nodeSvg(node, positions) {
   const id = node.id;
   const pos = positions.get(id);
   const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
-  group.setAttribute("class", `node ${node.kind} ${node.status || node.lifecycle_state || ""}`);
+  group.setAttribute(
+    "class",
+    `node ${safeClass(node.kind)} ${safeClass(node.status || node.lifecycle_state || "")}`,
+  );
   if (selectedKey() === nodeKey(node)) group.classList.add("selected");
   group.setAttribute("transform", `translate(${pos.x}, ${pos.y})`);
   group.addEventListener("click", () => showDetail("node", node));
@@ -302,7 +338,7 @@ function edgeRank(edge) {
 
 function showDetail(type, value) {
   selected = { type, value, key: type === "edge" ? edgeKey(value) : nodeKey(value) };
-  suppressRefreshUntil = Date.now() + 3_000;
+  suppressRefreshUntil = Date.now() + DETAIL_REFRESH_SUPPRESSION_MS;
   detailEl.innerHTML = detailHtml(type, value);
   renderGraph();
 }
@@ -406,6 +442,18 @@ function escapeHtml(value) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+}
+
+function safeClass(value) {
+  return String(value || "").replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
+function safeClasses(value) {
+  return String(value || "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(safeClass)
+    .join(" ");
 }
 
 function graphUi() {
