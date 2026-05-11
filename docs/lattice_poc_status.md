@@ -100,7 +100,7 @@
 
 ## Checkpoint: Flagship Wallet/Graph Artifact
 
-- Files changed: `apps/lattice_core/lib/lattice/flagship*`, `apps/lattice_core/lib/lattice/graph*`, `apps/lattice_server/lib/lattice_server/flagship_handler.ex`, `examples/flagship_demo/*`, `scripts/lattice_flagship_demo.sh`, `scripts/lattice_flagship_e2e.mjs`, docs, and focused tests.
+- Files changed: `apps/lattice_core/lib/lattice/flagship*`, `apps/lattice_core/lib/lattice/graph*`, `apps/lattice_server/lib/lattice_server/flagship_handler.ex`, `examples/flagship_demo/*`, `scripts/lattice_flagship_demo.sh`, docs, and focused tests.
 - Command run: implementation edit pass.
 - Result: added a browser-visible canonical story where a wallet realm issues one caveated cap to a planner tab, a $199 bookshop purchase succeeds, over-budget/wrong-vendor/stolen-cap/replay-after-revoke attempts fail, the wallet ledger proves denied operations did not reach the target process, and the same graph snapshot powers the UI plus JSON/Mermaid/DOT exports.
 - Blocker or remaining limitation: the flagship UI uses polling JSON rather than WebSocket/SSE because clarity and reliability were prioritized for the research artifact.
