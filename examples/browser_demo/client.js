@@ -33,15 +33,15 @@ let selfLabel = "tab";
 let manualDisconnect = false;
 let reconnectTimer;
 let reconnectDelay = 250;
-let lastSeq = Number(window.localStorage.getItem("lattice.resume.seq") || "0");
-let clientId = window.localStorage.getItem("lattice.resume.client_id");
+let lastSeq = Number(window.sessionStorage.getItem("lattice.resume.seq") || "0");
+let clientId = window.sessionStorage.getItem("lattice.resume.client_id");
 
 if (!clientId) {
   clientId =
     window.crypto && window.crypto.randomUUID
       ? window.crypto.randomUUID()
       : `client-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  window.localStorage.setItem("lattice.resume.client_id", clientId);
+  window.sessionStorage.setItem("lattice.resume.client_id", clientId);
 }
 
 const eventGlyphs = {
@@ -129,7 +129,7 @@ function handleMessage(msg) {
   if (msg.type === "welcome") {
     tabId = msg.tab_id;
     clientId = msg.client_id || clientId;
-    window.localStorage.setItem("lattice.resume.client_id", clientId);
+    window.sessionStorage.setItem("lattice.resume.client_id", clientId);
     els.connectionState.textContent = "online";
     els.tabBadge.textContent = shortId(tabId);
     els.selfId.textContent = shortId(tabId);
@@ -145,7 +145,7 @@ function handleMessage(msg) {
 
   if (msg.type === "rehydrate") {
     lastSeq = 0;
-    window.localStorage.setItem("lattice.resume.seq", "0");
+    window.sessionStorage.setItem("lattice.resume.seq", "0");
   }
 
   if (msg.type === "snapshot") {
@@ -227,7 +227,7 @@ function disconnect() {
 function rememberSeq(msg) {
   if (typeof msg.seq !== "number" || msg.seq <= lastSeq) return;
   lastSeq = msg.seq;
-  window.localStorage.setItem("lattice.resume.seq", String(lastSeq));
+  window.sessionStorage.setItem("lattice.resume.seq", String(lastSeq));
 }
 
 function renderPresence(tabs, auditCount) {
