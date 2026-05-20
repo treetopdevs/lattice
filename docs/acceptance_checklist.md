@@ -11,6 +11,7 @@ This file maps the requested POC contract to the current repository state after 
 | Gateway as only cross-realm path | Done | `Lattice.Gateway`; WebSocket tab messages call through it |
 | Audit events | Done in memory | `Lattice.Audit`; tests inspect events |
 | Real WebSocket tab transport | Done | `Lattice.Transport.WebSocket`; integration tests and demo script use it |
+| Bounded WebSocket resume | Done | `LatticeServer.ResumeToken`, `LatticeServer.ResumeProxy`; focused resume tests prove replay, rehydrate fallback, and one-shot JWTs |
 | Browser demo page and JS client | Done | `examples/browser_demo/index.html`, `examples/browser_demo/client.js` |
 | Visible server plane | Done | `LatticeServer.DemoHub` broadcasts presence, server events, and audit counts to the browser stage |
 | Tab lifecycle cleanup | Done | disconnect/eject revoke caps and terminate tab workers |
@@ -31,3 +32,4 @@ This file maps the requested POC contract to the current repository state after 
 - Browser auth/origin hardening is not production-grade.
 - Raw Erlang distribution frames are deliberately not accepted by the gateway.
 - Capability and audit state are not durable or clustered.
+- WebSocket resume buffers only the short-lived demo stream, not authority or durable history.

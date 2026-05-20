@@ -30,6 +30,19 @@ let echoCapId;
 let ledger = [];
 let tabsById = new Map();
 let selfLabel = "tab";
+let manualDisconnect = false;
+let reconnectTimer;
+let reconnectDelay = 250;
+let lastSeq = Number(window.localStorage.getItem("lattice.resume.seq") || "0");
+let clientId = window.localStorage.getItem("lattice.resume.client_id");
+
+if (!clientId) {
+  clientId =
+    window.crypto && window.crypto.randomUUID
+      ? window.crypto.randomUUID()
+      : `client-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  window.localStorage.setItem("lattice.resume.client_id", clientId);
+}
 
 const eventGlyphs = {
   tab_connect: "in",
@@ -51,13 +64,28 @@ function shortId(id) {
 function connect() {
   if (ws && ws.readyState === WebSocket.OPEN) return;
 
+  manualDisconnect = false;
+  window.clearTimeout(reconnectTimer);
   const url = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`;
   ws = new WebSocket(url);
   els.connectionState.textContent = "connecting";
   setButtons(false);
 
-  ws.addEventListener("open", () => {
-    send({ type: "hello", identity: { surface: "browser-demo", color: "green" } });
+  ws.addEventListener("open", async () => {
+    reconnectDelay = 250;
+
+    try {
+      const jwt = await fetchResumeToken();
+      send({ type: "resume", seq: lastSeq, jwt });
+    } catch (_error) {
+      lastSeq = 0;
+    }
+
+    send({
+      type: "hello",
+      client_id: clientId,
+      identity: { surface: "browser-demo", color: "green", client_id: clientId },
+    });
   });
 
   ws.addEventListener("message", (event) => {
@@ -72,7 +100,23 @@ function connect() {
     setButtons(false);
     resetControlLabels();
     document.body.classList.remove("is-connected");
+
+    if (!manualDisconnect) {
+      scheduleReconnect();
+    }
   });
+}
+
+async function fetchResumeToken() {
+  const response = await fetch(`/api/session-token?client_id=${encodeURIComponent(clientId)}`);
+  const body = await response.json();
+  return body.token;
+}
+
+function scheduleReconnect() {
+  window.clearTimeout(reconnectTimer);
+  reconnectTimer = window.setTimeout(connect, reconnectDelay);
+  reconnectDelay = Math.min(Math.floor(reconnectDelay * 1.8), 3000);
 }
 
 function send(envelope) {
@@ -80,8 +124,12 @@ function send(envelope) {
 }
 
 function handleMessage(msg) {
+  rememberSeq(msg);
+
   if (msg.type === "welcome") {
     tabId = msg.tab_id;
+    clientId = msg.client_id || clientId;
+    window.localStorage.setItem("lattice.resume.client_id", clientId);
     els.connectionState.textContent = "online";
     els.tabBadge.textContent = shortId(tabId);
     els.selfId.textContent = shortId(tabId);
@@ -89,6 +137,15 @@ function handleMessage(msg) {
     document.body.classList.add("is-connected");
     setButtons(true);
     send({ type: "state_request" });
+  }
+
+  if (msg.type === "resume_ok") {
+    els.connectionState.textContent = msg.replayed > 0 ? "resumed" : "online";
+  }
+
+  if (msg.type === "rehydrate") {
+    lastSeq = 0;
+    window.localStorage.setItem("lattice.resume.seq", "0");
   }
 
   if (msg.type === "snapshot") {
@@ -163,7 +220,14 @@ function deniedCall() {
 
 function disconnect() {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  manualDisconnect = true;
   send({ type: "disconnect" });
+}
+
+function rememberSeq(msg) {
+  if (typeof msg.seq !== "number" || msg.seq <= lastSeq) return;
+  lastSeq = msg.seq;
+  window.localStorage.setItem("lattice.resume.seq", String(lastSeq));
 }
 
 function renderPresence(tabs, auditCount) {

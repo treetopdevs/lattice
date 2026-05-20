@@ -41,6 +41,7 @@ Denials are recorded in `Lattice.Audit`.
 `Lattice.Transport.WebSocket` is a Cowboy WebSocket handler. It accepts JSON envelopes:
 
 - `hello`
+- `resume`
 - `grant_request`
 - `call`
 - `cast`
@@ -52,6 +53,18 @@ The parser rejects malformed input and unknown envelope types. It does not use u
 `Lattice.Transport.WebSocket.Client` is a minimal WebSocket wire client used by tests and `scripts/lattice_poc_demo.sh`. It performs an HTTP upgrade, sends masked client frames, reads server frames, and exercises the same gateway path as a browser.
 
 `LatticeServer.DemoHub` makes the server side visible for the browser demo. It tracks connected WebSocket tabs, broadcasts presence and server events, and starts a two-tab story when a second tab joins. The story opens a short-lived bridge and sends a pulse through `Lattice.Gateway`; there is still no direct tab-to-tab networking.
+
+## Resume On Reconnect
+
+The browser demo has a bounded resume path for the visual server stream:
+
+- `GET /api/session-token?client_id=...` issues a short-lived HS256 JWT with `sub`, `iss`, `aud`, `iat`, `exp`, `type`, and one-shot `jti` claims.
+- `LatticeServer.ResumeToken` stores token JTIs in ETS and rejects expired, unknown, or replayed JTIs.
+- `LatticeServer.ResumeProxy` runs as a supervised per-client micro-proxy behind a `Registry` and `DynamicSupervisor`. It keeps a small sequenced ring buffer of idempotent `DemoHub` frames and lingers briefly after disconnect.
+- A reconnecting client sends `{"type":"resume","seq":last_seen,"jwt":token}` before `hello`.
+- If the missed frames are still buffered, the server replies with `resume_ok` and streams the sequenced frames in order. If the gap is too old, it replies with `rehydrate` and the browser asks for a fresh snapshot after `hello`.
+
+This does not preserve tab authority. Disconnect still revokes owned caps and cleans up tab workers; resume only smooths the browser-visible event stream.
 
 ## Test Harness
 

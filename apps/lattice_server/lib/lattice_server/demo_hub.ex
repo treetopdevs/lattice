@@ -35,6 +35,7 @@ defmodule LatticeServer.DemoHub do
       id: tab.id,
       session_id: tab.session_id,
       pid: pid,
+      client_id: Map.get(tab.metadata, :client_id) || Map.get(tab.metadata, "client_id"),
       connected_at: System.system_time(:millisecond),
       label: label_for(length(state.order)),
       hue: hue_for(length(state.order))
@@ -159,9 +160,26 @@ defmodule LatticeServer.DemoHub do
   end
 
   defp broadcast(frame, state) do
+    live_client_ids =
+      state.tabs
+      |> Enum.map(fn {_tab_id, entry} -> entry.client_id end)
+      |> Enum.reject(&is_nil/1)
+      |> MapSet.new()
+
     Enum.each(state.tabs, fn {_tab_id, entry} ->
-      send(entry.pid, {:lattice_demo_push, frame})
+      send(entry.pid, {:lattice_demo_push, sequence_frame(entry.client_id, frame)})
     end)
+
+    LatticeServer.ResumeProxy.push_disconnected(frame, live_client_ids)
+  end
+
+  defp sequence_frame(nil, frame), do: frame
+
+  defp sequence_frame(client_id, frame) do
+    case LatticeServer.ResumeProxy.push(client_id, frame) do
+      {:ok, sequenced} -> sequenced
+      {:error, _reason} -> frame
+    end
   end
 
   defp snapshot_from(state) do

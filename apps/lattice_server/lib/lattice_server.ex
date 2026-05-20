@@ -10,14 +10,23 @@ defmodule LatticeServer do
     static_dir = Keyword.get(opts, :static_dir, Path.expand("examples/browser_demo", File.cwd!()))
     grant_targets = Keyword.get(opts, :grant_targets, %{})
     auto_story? = Keyword.get(opts, :auto_story?, true)
+    resume_proxy_ttl_ms = Keyword.get(opts, :resume_proxy_ttl_ms, 15_000)
+    resume_buffer_size = Keyword.get(opts, :resume_buffer_size, 64)
 
     dispatch =
       :cowboy_router.compile([
         {:_,
          [
            {"/api/flagship/[...]", LatticeServer.FlagshipHandler, %{}},
+           {"/api/session-token", LatticeServer.SessionTokenHandler, %{format: :json}},
+           {"/session-token", LatticeServer.SessionTokenHandler, %{format: :text}},
            {"/ws", Lattice.Transport.WebSocket,
-            %{grant_targets: grant_targets, auto_story?: auto_story?}},
+            %{
+              grant_targets: grant_targets,
+              auto_story?: auto_story?,
+              resume_proxy_ttl_ms: resume_proxy_ttl_ms,
+              resume_buffer_size: resume_buffer_size
+            }},
            {:_, LatticeServer.StaticHandler, %{static_dir: static_dir}}
          ]}
       ])

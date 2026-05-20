@@ -8,6 +8,9 @@ defmodule LatticeServer.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      LatticeServer.ResumeToken,
+      {Registry, keys: :unique, name: LatticeServer.ResumeProxyRegistry},
+      {DynamicSupervisor, name: LatticeServer.ResumeProxySupervisor, strategy: :one_for_one},
       LatticeServer.DemoHub,
       LatticeServer.RateLimiter
     ]

@@ -11,6 +11,9 @@ defmodule LatticeServer.WebSocketEnvelopeTest do
   test "WebSocket envelope parser accepts known safe JSON envelopes" do
     assert {:ok, %{"type" => "hello", "identity" => %{"user" => "browser"}}} =
              Envelope.parse(~s({"type":"hello","identity":{"user":"browser"}}))
+
+    assert {:ok, %{"type" => "resume", "seq" => 7, "jwt" => "token"}} =
+             Envelope.parse(~s({"type":"resume","seq":7,"jwt":"token"}))
   end
 
   test "WebSocket envelope parser rejects malformed input" do

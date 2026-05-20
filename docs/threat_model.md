@@ -13,10 +13,13 @@
 - Browser tab to server WebSocket boundary.
 - Tab-originated envelope to `Lattice.Gateway`.
 - Capability store to target process forwarding.
+- Resume token endpoint to WebSocket `resume` envelope.
 
 ## Attacker Model
 
 The attacker can control browser JavaScript in a tab realm, send arbitrary WebSocket JSON, replay observed cap ids from the same tab until revoked or exhausted, attempt to use another tab's cap, forge unknown cap ids, request unknown targets, and disconnect or reconnect tabs. The POC does not model a compromised server.
+
+For resume, an attacker may replay an observed resume JWT or ask for an old sequence window. Resume JWTs are short-lived and one-shot through ETS-backed JTIs; old sequence windows return `rehydrate` instead of unbounded replay.
 
 ## Erlang Distribution Risks In A Browser Context
 
@@ -36,7 +39,7 @@ Lattice treats caps as the authority unit. A cap is unguessable, issued to one t
 
 - In-memory cap and audit state only.
 - No production authentication or CSRF/origin policy.
-- No durable replay protection beyond use limits and revocation.
+- Resume replay protection is in-memory and node-local.
 - No cluster replication or failover.
 - WebSocket demo is intentionally small.
 - Raw Erlang distribution frames are deliberately not accepted by the gateway.

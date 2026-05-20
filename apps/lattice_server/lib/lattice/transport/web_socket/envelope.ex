@@ -6,7 +6,7 @@ defmodule Lattice.Transport.WebSocket.Envelope do
   `:erlang.binary_to_term/1` on browser-provided data.
   """
 
-  @allowed_types ~w(hello state_request grant_request call cast disconnect tab_render_result)
+  @allowed_types ~w(hello resume state_request grant_request call cast disconnect tab_render_result)
 
   def parse(text) when is_binary(text) and byte_size(text) <= 65_536 do
     with {:ok, decoded} <- Jason.decode(text),

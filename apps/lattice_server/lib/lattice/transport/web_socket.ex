@@ -12,6 +12,7 @@ defmodule Lattice.Transport.WebSocket do
 
   alias Lattice.Cap
   alias Lattice.Transport.WebSocket.Envelope
+  alias LatticeServer.{ResumeProxy, ResumeToken}
 
   @impl Lattice.Transport
   def deliver_call(connection_pid, envelope, timeout) do
@@ -39,8 +40,11 @@ defmodule Lattice.Transport.WebSocket do
     {:cowboy_websocket, req,
      %{
        tab: nil,
+       client_id: nil,
        grant_targets: Map.get(opts, :grant_targets, %{}),
        auto_story?: Map.get(opts, :auto_story?, true),
+       resume_proxy_ttl_ms: Map.get(opts, :resume_proxy_ttl_ms, 15_000),
+       resume_buffer_size: Map.get(opts, :resume_buffer_size, 64),
        pending: %{},
        caps: %{}
      }}
@@ -96,42 +100,68 @@ defmodule Lattice.Transport.WebSocket do
   def websocket_info(_message, state), do: {:ok, state}
 
   @impl :cowboy_websocket
-  def terminate(_reason, _req, %{tab: %{id: tab_id}}) do
-    LatticeServer.DemoHub.unregister(tab_id)
-    Lattice.disconnect_tab(tab_id)
+  def terminate(_reason, _req, state) do
+    cleanup_connection(state)
     :ok
   end
 
-  def terminate(_reason, _req, _state), do: :ok
-
   defp handle_envelope(%{"type" => "hello"} = envelope, %{tab: nil} = state) do
     identity = Map.get(envelope, "identity", %{})
+    requested_client_id = client_id_from(envelope) || state.client_id
 
     {:ok, tab} =
       Lattice.connect_tab(%{
         transport: __MODULE__,
         connection_pid: self(),
         identity: identity,
-        metadata: %{transport: "websocket"}
+        metadata:
+          %{transport: "websocket"}
+          |> maybe_put(:client_id, requested_client_id)
       })
+
+    client_id = requested_client_id || tab.id
+    {:ok, _proxy} = attach_resume_proxy(client_id, state)
 
     reply =
       Envelope.encode(%{
         type: "welcome",
         tab_id: tab.id,
-        session_id: tab.session_id
+        session_id: tab.session_id,
+        client_id: client_id
       })
 
     LatticeServer.DemoHub.register(tab, auto_story?: state.auto_story?)
 
-    {:reply, {:text, reply}, %{state | tab: tab}}
+    {:reply, {:text, reply}, %{state | tab: tab, client_id: client_id}}
   end
 
   defp handle_envelope(%{"type" => "hello"}, state) do
-    reply =
-      Envelope.encode(%{type: "welcome", tab_id: state.tab.id, session_id: state.tab.session_id})
+    client_id = state.client_id || state.tab.id
+    {:ok, _proxy} = attach_resume_proxy(client_id, state)
 
-    {:reply, {:text, reply}, state}
+    reply =
+      Envelope.encode(%{
+        type: "welcome",
+        tab_id: state.tab.id,
+        session_id: state.tab.session_id,
+        client_id: client_id
+      })
+
+    {:reply, {:text, reply}, %{state | client_id: client_id}}
+  end
+
+  defp handle_envelope(%{"type" => "resume", "jwt" => jwt} = envelope, state) do
+    with {:ok, from_seq} <- parse_resume_seq(Map.get(envelope, "seq", 0)),
+         {:ok, claims} <- ResumeToken.consume(jwt),
+         client_id when is_binary(client_id) <- claims["sub"] do
+      resume_client(client_id, from_seq, state)
+    else
+      {:error, reason} ->
+        reply_error(:resume_denied, reason, state)
+
+      _other ->
+        reply_error(:resume_denied, :invalid_claims, state)
+    end
   end
 
   defp handle_envelope(%{"type" => "state_request"}, %{tab: tab} = state)
@@ -250,11 +280,10 @@ defmodule Lattice.Transport.WebSocket do
     end
   end
 
-  defp handle_envelope(%{"type" => "disconnect"}, %{tab: %{id: tab_id}} = state) do
-    LatticeServer.DemoHub.unregister(tab_id)
-    Lattice.disconnect_tab(tab_id)
+  defp handle_envelope(%{"type" => "disconnect"}, %{tab: %{id: _tab_id}} = state) do
+    cleanup_connection(state)
     reply = Envelope.encode(%{type: "disconnect_result", ok: true})
-    {:reply, {:text, reply}, %{state | tab: nil}}
+    {:reply, {:text, reply}, %{state | tab: nil, client_id: nil, pending: %{}}}
   end
 
   defp handle_envelope(_envelope, state),
@@ -318,4 +347,99 @@ defmodule Lattice.Transport.WebSocket do
   defp parse_ops(ops) when is_list(ops) do
     Enum.map(ops, &Cap.normalize_op/1)
   end
+
+  defp resume_client(client_id, from_seq, state) do
+    state = %{state | client_id: client_id}
+
+    case ResumeProxy.resume(client_id, from_seq) do
+      {:ok, missed, latest_seq} ->
+        {:ok, _proxy} = attach_resume_proxy(client_id, state)
+
+        frames =
+          [
+            %{type: "resume_ok", replayed: length(missed), latest_seq: latest_seq}
+            | missed
+          ]
+          |> Enum.map(&{:text, Envelope.encode(&1)})
+
+        {:reply, frames, state}
+
+      {:error, :out_of_window, latest_seq} ->
+        {:ok, _proxy} = attach_resume_proxy(client_id, state)
+
+        reply =
+          Envelope.encode(%{
+            type: "rehydrate",
+            reason: "out_of_window",
+            latest_seq: latest_seq
+          })
+
+        {:reply, {:text, reply}, state}
+
+      {:error, :not_found} ->
+        {:ok, _proxy} = attach_resume_proxy(client_id, state)
+
+        reply =
+          Envelope.encode(%{
+            type: "rehydrate",
+            reason: "resume_window_missing",
+            latest_seq: 0
+          })
+
+        {:reply, {:text, reply}, state}
+    end
+  end
+
+  defp attach_resume_proxy(client_id, state) do
+    ResumeProxy.attach(client_id, self(),
+      ttl_ms: state.resume_proxy_ttl_ms,
+      buffer_size: state.resume_buffer_size
+    )
+  end
+
+  defp cleanup_connection(%{client_id: client_id, tab: tab}) do
+    ResumeProxy.detach(client_id, self())
+
+    case tab do
+      %{id: tab_id} ->
+        LatticeServer.DemoHub.unregister(tab_id)
+        Lattice.disconnect_tab(tab_id)
+
+      _other ->
+        :ok
+    end
+  end
+
+  defp client_id_from(%{"client_id" => client_id}) when is_binary(client_id),
+    do: clean_client_id(client_id)
+
+  defp client_id_from(%{"identity" => %{"client_id" => client_id}}) when is_binary(client_id),
+    do: clean_client_id(client_id)
+
+  defp client_id_from(_envelope), do: nil
+
+  defp clean_client_id(client_id) do
+    client_id = String.trim(client_id)
+
+    cond do
+      byte_size(client_id) < 8 -> nil
+      byte_size(client_id) > 128 -> nil
+      String.match?(client_id, ~r/^[A-Za-z0-9_.:-]+$/) -> client_id
+      true -> nil
+    end
+  end
+
+  defp parse_resume_seq(seq) when is_integer(seq) and seq >= 0, do: {:ok, seq}
+
+  defp parse_resume_seq(seq) when is_binary(seq) do
+    case Integer.parse(seq) do
+      {parsed, ""} when parsed >= 0 -> {:ok, parsed}
+      _other -> {:error, :invalid_resume_seq}
+    end
+  end
+
+  defp parse_resume_seq(_seq), do: {:error, :invalid_resume_seq}
+
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 end
