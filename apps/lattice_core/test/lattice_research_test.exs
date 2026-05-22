@@ -291,8 +291,9 @@ defmodule LatticeCore.ResearchTest do
 
       Lattice.reset!()
       federation = FederatedWorkers.run_demo()
-      assert {:error, :bridge_required} = federation.denied_direct
-      assert {:ok, %{worker_b_received: "mediated"}} = federation.bridged
+      assert federation.status == :requires_connected_browser_workers
+      assert federation.worker_client == "/worker-client.js"
+      assert federation.endpoint == "/api/federated-workers/run"
 
       Lattice.reset!()
       attacks = Sandbox.run()

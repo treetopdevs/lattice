@@ -19,7 +19,7 @@ how fault topology and authority topology can be made visible as one structure.
 - Location-transparent actor messaging without ambient pid/name authority.
 - Process graph as trust graph inspector with invariant checks.
 - Executable prototypes for causality, IFC, agent tools, wallet processes, live
-  introspection, federated worker simulation, and red-team sandboxing.
+  introspection, browser Worker bridge mediation, and red-team sandboxing.
 
 ## System Model
 
@@ -44,7 +44,8 @@ introspection. All cross-realm operations present a cap id to the gateway.
 
 - Unit tests for authority preservation and denial behavior.
 - Graph invariant tests for topology/policy consistency.
-- Demo scripts for wallet, agent, introspection, federation, and red-team flows.
+- Demo scripts for wallet, agent, introspection, browser-worker federation, and
+  red-team flows.
 - Stress lab from existing `lattice_stress` app for lifecycle and abuse cases.
 
 ## Explicit Non-Claims
@@ -57,7 +58,6 @@ introspection. All cross-realm operations present a cap id to the gateway.
 ## Future Work
 
 - Mechanize the operational semantics.
-- Replace local-tab simulation with AtomVM-WASM browser nodes.
+- Extend the browser Worker bridge proof into AtomVM-WASM browser nodes.
 - Add durable cap/audit replication and replay protection.
 - Explore UI consent ceremonies for live process introspection.
-

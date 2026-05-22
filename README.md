@@ -17,7 +17,7 @@ The core thesis is simple: a tab gets zero implicit authority. It cannot use raw
   over-budget, wrong-vendor, stolen-cap, and replay-after-revoke attempts are
   denied with live graph and audit evidence.
 - Executable research demos for wallet-as-process, capability-gated agent tool
-  use, consent-gated live introspection, federated browser-worker simulation,
+  use, consent-gated live introspection, a real browser Worker bridge proof,
   capability-attested causality, dynamic IFC, and a red-team sandbox.
 - A Cowboy WebSocket boundary that accepts safe JSON envelopes from browser-like tab clients.
 - A real WebSocket deterministic demo, not an in-process transport shortcut.
@@ -52,6 +52,7 @@ For the stress lab:
 mix lattice.stress --tabs 500 --caps 2000 --calls 50000 --bridges 1000
 npm install
 npm run browser:e2e
+npm run browser:worker:e2e
 ```
 
 For the browser demo:
@@ -63,6 +64,10 @@ scripts/lattice_poc_demo.sh 4040
 Then open [http://localhost:4040](http://localhost:4040).
 
 Open the same URL in a second browser tab to trigger the automatic mediated bridge story. The tabs never talk directly; the server opens short-lived capabilities and routes the visual pulse through `Lattice.Gateway`.
+
+`npm run browser:worker:e2e` runs the focused Web Worker proof: two browser
+Workers connect as tab realms, a direct tab cap is denied, and an explicit
+bridge delivers exactly one mediated payload.
 
 `scripts/lattice_browser_demo.sh 4040` is kept as an alias for the browser-server path.
 

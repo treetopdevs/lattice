@@ -18,6 +18,7 @@ defmodule LatticeServer do
         {:_,
          [
            {"/api/flagship/[...]", LatticeServer.FlagshipHandler, %{}},
+           {"/api/federated-workers/run", LatticeServer.FederatedWorkersHandler, %{}},
            {"/api/session-token", LatticeServer.SessionTokenHandler, %{format: :json}},
            {"/session-token", LatticeServer.SessionTokenHandler, %{format: :text}},
            {"/ws", Lattice.Transport.WebSocket,

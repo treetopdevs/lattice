@@ -33,11 +33,14 @@ defmodule LatticeServer.StaticHandler do
   defp file_for("/"), do: {:ok, "index.html"}
   defp file_for("/index.html"), do: {:ok, "index.html"}
   defp file_for("/client.js"), do: {:ok, "client.js"}
+  defp file_for("/worker-client.js"), do: {:ok, "worker-client.js"}
+  defp file_for("/worker.html"), do: {:ok, "worker.html"}
   defp file_for("/styles.css"), do: {:ok, "styles.css"}
   defp file_for(_), do: {:error, :not_found}
 
   defp safe_file?(file), do: not String.contains?(file, "..")
   defp content_type("client.js"), do: "application/javascript; charset=utf-8"
+  defp content_type("worker-client.js"), do: "application/javascript; charset=utf-8"
   defp content_type("styles.css"), do: "text/css; charset=utf-8"
   defp content_type(_), do: "text/html; charset=utf-8"
 end

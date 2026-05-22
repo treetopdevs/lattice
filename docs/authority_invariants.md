@@ -18,6 +18,9 @@ Lattice's flagship demo is built around one invariant:
 - Every allow, deny, and revoke is visible in `Lattice.Audit`.
 - `Lattice.Graph.Snapshot` turns those decisions into allowed, denied, and
   revoked graph edges.
+- The browser Worker proof connects two real `Worker` realms, denies a direct
+  tab cap without a bridge, then delivers the same payload through an explicit
+  mediated bridge.
 
 ## Evidence Commands
 
@@ -25,6 +28,7 @@ Lattice's flagship demo is built around one invariant:
 mix test apps/lattice_core/test/lattice_flagship_test.exs
 mix test apps/lattice_server/test/flagship_http_test.exs
 npm run flagship:e2e
+node scripts/lattice_browser_worker_e2e.mjs
 scripts/lattice_verify_flagship.sh
 scripts/lattice_flagship_demo.sh 4041
 ```
@@ -40,8 +44,8 @@ graph JSON, Mermaid, DOT, screenshot, and video.
 
 ## Non-Claims
 
-- The browser/worker realm model is simulated unless the WebSocket browser demo
-  is being exercised.
+- Browser Worker realms are real Web Workers in the focused WebSocket bridge
+  proof; AtomVM/WASM browser nodes remain future work.
 - The graph inspector is an in-memory live view, not durable audit storage.
 - The authority invariant is validated by tests and property-style checks, not
   by mechanized formal verification.

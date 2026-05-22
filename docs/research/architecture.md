@@ -35,15 +35,16 @@ The working implementation is in `apps/lattice_core`.
 - `Lattice.IFC` implements a dynamic information-flow-control prototype.
 - `Lattice.MovableProcess.effects/0` exposes realm/effect annotations.
 - `Lattice.Demo.*` modules provide executable wallet, agent-tool,
-  introspection, and federated-worker scenarios.
+  introspection, and browser-worker bridge scenarios.
 - `Lattice.RedTeam.Sandbox` runs repeatable adversarial attempts.
 - `Lattice.Flagship` provides the browser-visible canonical wallet story and
   feeds the live graph inspector.
 
-## What Is Simulated
+## What Is Simulated Or Narrow
 
-- Browser-worker federation in `Lattice.Demo.FederatedWorkers` uses in-process
-  tab transports. It models bridge semantics but is not AtomVM/WASM.
+- Browser-worker federation now uses real browser `Worker` instances over the
+  WebSocket tab boundary for the narrow bridge proof. It is still not
+  AtomVM/WASM or Erlang distribution in the browser.
 - The AI-agent demo is a simulated agent realm making tool calls. It does not
   call an LLM or external AI API.
 - The macaroon module presents a caveat-bearing token shape. Runtime authority

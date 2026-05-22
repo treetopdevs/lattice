@@ -43,14 +43,16 @@ defmodule Lattice.Flagship.Claims do
     },
     %{
       id: "browser_worker_realms",
-      claim: "Browser and worker realms are first-class process realms",
-      status: "simulated",
-      evidence: "LocalTab and WebSocket demos model browser realms, not AtomVM-WASM",
+      claim: "Browser Web Worker realms participate in mediated Lattice bridges",
+      status: "implemented",
+      evidence:
+        "Dedicated browser Worker client connects over WebSocket and proves direct-deny plus explicit bridge delivery",
       evidence_refs: [
-        "apps/lattice_core/lib/lattice/demo/local_tab.ex",
-        "examples/browser_demo/client.js"
+        "apps/lattice_core/lib/lattice/demo/federated_workers.ex",
+        "examples/browser_demo/worker-client.js",
+        "scripts/lattice_browser_worker_e2e.mjs"
       ],
-      artifact: "output/playwright/flagship-demo.png"
+      artifact: "output/playwright/browser-worker-demo.json"
     },
     %{
       id: "formal_authority_preservation",

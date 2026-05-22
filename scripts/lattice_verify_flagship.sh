@@ -18,7 +18,8 @@ if [[ "${LATTICE_SKIP_PLAYWRIGHT_INSTALL:-0}" != "1" ]]; then
 fi
 
 mix format --check-formatted
-mix test apps/lattice_core/test/lattice_flagship_test.exs apps/lattice_server/test/flagship_http_test.exs
+mix test apps/lattice_core/test/lattice_flagship_test.exs apps/lattice_server/test/flagship_http_test.exs apps/lattice_server/test/federated_workers_http_test.exs
+npm run browser:worker:e2e
 npm run flagship:e2e
 
 mix run -e '
@@ -39,6 +40,7 @@ Lattice.Flagship.Claims.validate!(File.cwd!(), generated_artifacts?: true)
 printf "\nFlagship verification artifacts:\n"
 printf "  video: %s\n" "$(find "$PLAYWRIGHT_OUT/test-results" -name 'video.webm' -type f | sort | tail -n 1)"
 printf "  screenshot: %s/flagship-demo.png\n" "$PLAYWRIGHT_OUT"
+printf "  browser Worker proof: %s/browser-worker-demo.json\n" "$PLAYWRIGHT_OUT"
 printf "  video evaluation: %s/flagship-video-evaluation.json\n" "$PLAYWRIGHT_OUT"
 printf "  snapshot JSON: %s/flagship-snapshot.json\n" "$FLAGSHIP_OUT"
 printf "  graph JSON: %s/flagship-graph.json\n" "$FLAGSHIP_OUT"
