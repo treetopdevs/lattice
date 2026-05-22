@@ -33,17 +33,23 @@ defmodule Lattice.Gateway do
   defp validate_target(tab_id, %Cap{target: {:tab, tab_id}}), do: :ok
 
   defp validate_target(tab_id, %Cap{target: {:tab, target_tab_id}, id: cap_id}) do
-    if Topology.bridge_allowed?(tab_id, target_tab_id, cap_id) do
-      :ok
-    else
-      Audit.record(:deny, %{
-        tab_id: tab_id,
-        target_tab_id: target_tab_id,
-        cap_id: cap_id,
-        reason: :bridge_required
-      })
+    cond do
+      not Topology.tab_connected?(target_tab_id) ->
+        audit_tab_delivery_denied(tab_id, target_tab_id, cap_id, :tab_not_connected)
+        {:error, :tab_not_connected}
 
-      {:error, :bridge_required}
+      Topology.bridge_allowed?(tab_id, target_tab_id, cap_id) ->
+        :ok
+
+      true ->
+        Audit.record(:deny, %{
+          tab_id: tab_id,
+          target_tab_id: target_tab_id,
+          cap_id: cap_id,
+          reason: :bridge_required
+        })
+
+        {:error, :bridge_required}
     end
   end
 
@@ -61,14 +67,14 @@ defmodule Lattice.Gateway do
     {:error, :invalid_target}
   end
 
-  defp forward_call(tab_id, %Cap{target: {:server_pid, pid}}, payload, timeout) do
-    safe_server_call(tab_id, pid, payload, timeout)
+  defp forward_call(tab_id, %Cap{target: {:server_pid, pid}, id: cap_id}, payload, timeout) do
+    safe_server_call(tab_id, cap_id, pid, payload, timeout)
   end
 
-  defp forward_call(tab_id, %Cap{target: {:server_name, name}}, payload, timeout) do
+  defp forward_call(tab_id, %Cap{target: {:server_name, name}, id: cap_id}, payload, timeout) do
     case Process.whereis(name) do
       nil -> {:error, :target_down}
-      pid -> safe_server_call(tab_id, pid, payload, timeout)
+      pid -> safe_server_call(tab_id, cap_id, pid, payload, timeout)
     end
   end
 
@@ -134,9 +140,13 @@ defmodule Lattice.Gateway do
     end
   end
 
-  defp safe_server_call(tab_id, pid, payload, timeout) do
+  defp safe_server_call(tab_id, cap_id, pid, payload, timeout) do
     try do
-      GenServer.call(pid, {:lattice_call, %{from_tab_id: tab_id, payload: payload}}, timeout)
+      GenServer.call(
+        pid,
+        {:lattice_call, %{from_tab_id: tab_id, cap_id: cap_id, payload: payload}},
+        timeout
+      )
     catch
       :exit, _ -> {:error, :target_down}
     end

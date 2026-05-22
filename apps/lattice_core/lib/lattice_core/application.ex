@@ -14,7 +14,8 @@ defmodule LatticeCore.Application do
       Lattice.Flagship,
       Lattice.CapStore,
       Lattice.Topology,
-      {DynamicSupervisor, name: Lattice.TabWorkerSupervisor, strategy: :one_for_one}
+      {DynamicSupervisor, name: Lattice.TabWorkerSupervisor, strategy: :one_for_one},
+      Lattice.LiveOps
     ]
 
     opts = [strategy: :one_for_one, name: LatticeCore.Supervisor]

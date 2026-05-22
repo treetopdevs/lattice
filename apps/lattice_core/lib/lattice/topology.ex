@@ -216,6 +216,7 @@ defmodule Lattice.Topology do
       {:ok, %Tab{state: :connected} = tab} ->
         cleanup_workers(tab, reason)
         closed_tab = Tab.close(tab, lifecycle_state)
+        {bridges, removed_bridge_ids} = remove_tab_bridges(state.bridges, tab_id)
 
         Audit.record(audit_type, %{
           tab_id: tab_id,
@@ -223,7 +224,20 @@ defmodule Lattice.Topology do
           session_id: tab.session_id
         })
 
-        {{:ok, closed_tab}, put_in(state, [:tabs, tab_id], closed_tab)}
+        Enum.each(removed_bridge_ids, fn bridge_id ->
+          Audit.record(:bridge_cleanup, %{
+            tab_id: tab_id,
+            bridge_id: bridge_id,
+            reason: inspect(reason)
+          })
+        end)
+
+        state =
+          state
+          |> put_in([:tabs, tab_id], closed_tab)
+          |> Map.put(:bridges, bridges)
+
+        {{:ok, closed_tab}, state}
 
       {:ok, tab} ->
         {{:ok, tab}, state}
@@ -244,6 +258,16 @@ defmodule Lattice.Topology do
         worker: inspect(pid),
         reason: inspect(reason)
       })
+    end)
+  end
+
+  defp remove_tab_bridges(bridges, tab_id) do
+    Enum.reduce(bridges, {%{}, []}, fn {id, bridge}, {kept, removed} ->
+      if bridge.from_tab_id == tab_id or bridge.to_tab_id == tab_id do
+        {kept, [id | removed]}
+      else
+        {Map.put(kept, id, bridge), removed}
+      end
     end)
   end
 

@@ -107,6 +107,7 @@ defmodule Lattice do
   def reset! do
     Lattice.IFC.reset()
     Lattice.Graph.Annotations.reset()
+    Lattice.LiveOps.reset()
     Topology.reset()
     CapStore.reset()
     Audit.reset()
