@@ -30,6 +30,7 @@ This file maps the requested POC contract to the current repository state after 
 | LiveOps adversarial suite | Done | `apps/lattice_stress/test/liveops_adversarial_test.exs` |
 | LiveOps one-command demo | Done | `scripts/lattice_liveops_demo.sh` writes `output/liveops/*` artifacts |
 | LiveOps E2E | Done | `scripts/lattice_liveops_e2e.mjs`, `npm run liveops:e2e` |
+| Browser BEAM carrier research | Boundary spike | `apps/lattice_carrier_spike`, `mix lattice.browser_carrier.proof`, `docs/research/browser_beam_carrier_spike.md` |
 | No in-process runtime tab transport | Done | Runtime tab traffic uses WebSocket; test helpers live under `test_support` only |
 | No non-runnable carrier surface | Done | Raw distribution is not part of the POC |
 | Docs | Done | `README.md`, `docs/unified_beam_plane_poc.md`, `docs/threat_model.md`, `docs/lattice_poc_status.md`, `docs/demo/lattice_liveops_demo_acceptance.md` |
@@ -39,6 +40,8 @@ This file maps the requested POC contract to the current repository state after 
 - Security is POC-level and in-memory.
 - Browser auth/origin hardening is not production-grade.
 - Raw Erlang distribution frames are deliberately not accepted by the gateway.
+- Browser BEAM / `web_socket_dist` carrier work is a research branch boundary
+  proof until Popcorn plus the browser JS carrier are reproducibly runnable.
 - Capability and audit state are not durable or clustered.
 - WebSocket resume buffers only the short-lived demo stream, not authority or durable history.
 - LiveOps proves a deterministic demo workflow, not production authentication,

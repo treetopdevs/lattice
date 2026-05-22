@@ -12,6 +12,7 @@
 /output/playwright/
 /output/flagship/
 /output/liveops/
+/output/browser_beam_carrier/
 
 # Where third-party dependencies like ExDoc output generated docs.
 /doc/

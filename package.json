@@ -7,6 +7,7 @@
     "liveops:e2e": "node scripts/lattice_liveops_e2e.mjs",
     "browser:worker:e2e": "node scripts/lattice_browser_worker_e2e.mjs",
     "browser:resume:e2e": "node scripts/lattice_browser_resume_e2e.mjs",
+    "browser:carrier:proof": "scripts/lattice_browser_carrier_spike.sh",
     "flagship:e2e:test": "npx --no-install playwright test tests/e2e/flagship.spec.mjs --config playwright.config.mjs",
     "flagship:e2e:evaluate": "node scripts/evaluate_flagship_video.mjs",
     "flagship:e2e": "npm run flagship:e2e:test && npm run flagship:e2e:evaluate",

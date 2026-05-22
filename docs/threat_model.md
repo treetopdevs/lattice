@@ -34,6 +34,12 @@ Raw Erlang distribution is broad authority. If exposed carelessly, a browser nod
 
 This POC does not accept raw Erlang distribution frames.
 
+The `spike/browser-beam-carrier` research branch narrows this into an isolated
+experiment: `tcp_filter_dist` must reject every distribution control message
+except a JSON logical-call frame addressed to a single carrier gateway process.
+That gateway still routes through `Lattice.Gateway`; possession of a
+distribution cookie is not treated as Lattice authority.
+
 ## Why Cookie Possession Is Insufficient
 
 An Erlang distribution cookie authenticates admission to a distribution fabric. It does not express least authority for individual targets and operations. Cookie possession does not answer whether a tab may call a specific process, send to another tab, load code, register names, or create atoms.
@@ -58,4 +64,6 @@ device-specific caps.
 - No cluster replication or failover.
 - WebSocket demo is intentionally small.
 - Raw Erlang distribution frames are deliberately not accepted by the gateway.
+- Browser BEAM carrier work is isolated to a research spike until the Popcorn
+  and browser `web_socket_dist` toolchain is reproducibly runnable.
 - LiveOps media devices are simulated actors, not real camera/video transport.
