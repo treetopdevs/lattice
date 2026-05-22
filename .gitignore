@@ -11,6 +11,7 @@
 /node_modules/
 /output/playwright/
 /output/flagship/
+/output/liveops/
 
 # Where third-party dependencies like ExDoc output generated docs.
 /doc/

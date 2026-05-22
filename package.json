@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "browser:e2e": "node scripts/lattice_browser_e2e.mjs",
+    "liveops:e2e": "node scripts/lattice_liveops_e2e.mjs",
     "browser:worker:e2e": "node scripts/lattice_browser_worker_e2e.mjs",
     "browser:resume:e2e": "node scripts/lattice_browser_resume_e2e.mjs",
     "flagship:e2e:test": "npx --no-install playwright test tests/e2e/flagship.spec.mjs --config playwright.config.mjs",
