@@ -68,9 +68,12 @@ defmodule Lattice.Flagship.Claims do
     %{
       id: "capability_attested_causality",
       claim: "Capability-attested causality overlays the graph",
-      status: "future work",
-      evidence: "Best next research track after the flagship path is stable",
+      status: "simulated",
+      evidence:
+        "Executable hash-chain prototype and tests exist; not integrated into the flagship graph overlay",
       evidence_refs: [
+        "apps/lattice_core/lib/lattice/causality.ex",
+        "apps/lattice_core/test/lattice_research_test.exs",
         "docs/research/architecture.md",
         "docs/flagship_demo.md"
       ],

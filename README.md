@@ -22,6 +22,9 @@ The core thesis is simple: a tab gets zero implicit authority. It cannot use raw
 - A Cowboy WebSocket boundary that accepts safe JSON envelopes from browser-like tab clients.
 - A real WebSocket deterministic demo, not an in-process transport shortcut.
 - A live browser stage that shows tab realms, the server plane, capability events, denied attempts, and mediated tab-to-tab bridge pulses.
+- A staged LiveOps broadcast-control demo with producer, graphics operator,
+  remote camera, and observer roles; scoped approval caps; device actors; visible
+  denials; disconnect cleanup; and Playwright evidence.
 - Tab lifecycle cleanup for caps and tab-attached workers.
 - Default-deny tab topology with explicit mediated bridges.
 - A minimal `Lattice.MovableProcess` prototype that routes server-side and tab-side operations through one logical handle.
@@ -71,6 +74,19 @@ bridge delivers exactly one mediated payload.
 
 `scripts/lattice_browser_demo.sh 4040` is kept as an alias for the browser-server path.
 
+For the LiveOps demo:
+
+```sh
+LATTICE_SKIP_DEPS=1 LATTICE_SKIP_PLAYWRIGHT_INSTALL=1 scripts/lattice_liveops_demo.sh
+mix lattice.liveops 4042
+```
+
+The one-command script runs a deterministic WebSocket proof, runs the Playwright
+multi-tab stage, and writes topology, audit, summary, screenshot, and optional
+recording artifacts under `output/liveops/`. For the interactive stage, open
+`http://localhost:4042/?role=producer`, `?role=graphics_operator`,
+`?role=remote_camera`, and `?role=observer` in separate tabs.
+
 For the research demonstrator:
 
 ```sh
@@ -94,6 +110,7 @@ under `output/flagship/`.
 Research notes:
 
 - [docs/flagship_demo.md](docs/flagship_demo.md)
+- [docs/demo/lattice_liveops_demo_acceptance.md](docs/demo/lattice_liveops_demo_acceptance.md)
 - [docs/authority_invariants.md](docs/authority_invariants.md)
 - [docs/research/architecture.md](docs/research/architecture.md)
 - [docs/research/operational_model.md](docs/research/operational_model.md)
@@ -108,6 +125,8 @@ Research notes:
 - `Lattice.CapStore`, `Lattice.Gateway`, `Lattice.Topology`, and `Lattice.Audit`.
 - `Lattice.MovableProcess`.
 - `Lattice.Flagship` and `Lattice.Graph.*` for the canonical live graph demo.
+- `Lattice.LiveOps` and `Lattice.LiveOps.Device` for the staged LiveOps
+  authority demo.
 
 `apps/lattice_server` owns:
 
@@ -136,6 +155,12 @@ Research notes:
 The browser demo is the real tab-realm boundary for V0. It connects over WebSocket, requests an echo capability, performs an allowed call, and performs a denied call. The deterministic demo command also uses the WebSocket boundary.
 
 When two browser tabs are connected, the demo server makes the server side visible: it broadcasts presence, capability events, denials, bridge openings, bridge returns, and audit counts to the page. The center server node and lower ledger update from server-pushed events.
+
+The LiveOps stage uses the same boundary. Role tabs receive only server-issued
+capabilities for their role and devices. A graphics operator cannot publish
+until a producer grants a short-lived, scoped publish cap; replay, expiry,
+wrong-role, stolen-cap, forged-target, malformed-envelope, disconnect-race, and
+stale-reconnect paths are covered by tests and the demo script.
 
 For a requirement-by-requirement status map, see [docs/acceptance_checklist.md](docs/acceptance_checklist.md).
 For adversarial validation details, see [docs/stress_lab.md](docs/stress_lab.md).
