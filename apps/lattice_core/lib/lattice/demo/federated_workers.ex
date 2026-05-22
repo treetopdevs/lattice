@@ -33,7 +33,8 @@ defmodule Lattice.Demo.FederatedWorkers do
            Lattice.call(from_worker_tab_id, bridge_cap, %{
              "op" => "relay",
              "body" => Keyword.get(opts, :body, "mediated")
-           }) do
+           }),
+         :ok <- Lattice.revoke(bridge_cap, :browser_worker_bridge_closed) do
       %{
         mode: :browser_worker,
         from_worker_tab_id: from_worker_tab_id,

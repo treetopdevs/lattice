@@ -48,6 +48,8 @@ defmodule LatticeServer.FederatedWorkersHTTPTest do
                body
              )
 
+    response = Jason.decode!(response_body)
+
     assert %{
              "denied_direct" => %{"ok" => false, "error" => "bridge_required"},
              "bridged" => %{
@@ -57,10 +59,27 @@ defmodule LatticeServer.FederatedWorkersHTTPTest do
                  "worker_b_received" => "mediated"
                }
              }
-           } = Jason.decode!(response_body)
+           } = response
 
     assert_receive {:worker_tab_call, %{"op" => "relay", "body" => "mediated"}}, 1_000
     refute_receive {:worker_tab_call, %{"op" => "relay", "body" => "direct"}}, 100
+
+    assert {:ok, direct_cap} = Lattice.CapStore.get(response["direct_cap_id"])
+    assert direct_cap.revoked?
+    assert {:ok, bridge_cap} = Lattice.CapStore.get(response["bridge_cap_id"])
+    assert bridge_cap.revoked?
+
+    assert :ok =
+             Client.send_envelope(worker_a, %{
+               type: "call",
+               cap_id: response["bridge_cap_id"],
+               payload: %{op: "relay", body: "after-run"}
+             })
+
+    assert {:ok, %{"type" => "call_result", "ok" => false, "error" => ":revoked"}} =
+             recv_type(worker_a, "call_result")
+
+    refute_receive {:worker_tab_call, %{"op" => "relay", "body" => "after-run"}}, 100
 
     Client.close(worker_a)
     Client.close(worker_b)

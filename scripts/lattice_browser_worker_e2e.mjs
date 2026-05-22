@@ -67,6 +67,39 @@ try {
     },
   });
 
+  const deniedBeforeBridgeReuse = await page.evaluate(
+    () => window.__workerEvents.filter((event) => event.type === "call_result" && event.ok === false).length,
+  );
+
+  await page.evaluate((capId) => {
+    window.__workers["worker-a"].postMessage({
+      type: "call",
+      cap_id: capId,
+      payload: { op: "relay", body: "after-run" },
+    });
+  }, demoResult.bridge_cap_id);
+
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          (previous) =>
+            window.__workerEvents.filter((event) => event.type === "call_result" && event.ok === false).length >
+            previous,
+          deniedBeforeBridgeReuse,
+        ),
+      { timeout: 5_000 },
+    )
+    .toBe(true);
+
+  const deniedResultsAfterBridgeReuse = await page.evaluate(() =>
+    window.__workerEvents
+      .filter((event) => event.type === "call_result" && event.ok === false)
+      .map((event) => event.error),
+  );
+
+  expect(deniedResultsAfterBridgeReuse).toContain(":revoked");
+
   const relaysToWorkerB = await page.evaluate(() =>
     window.__workerEvents
       .filter((event) => event.workerName === "worker-b" && event.type === "tab_call" && event.payload?.op === "relay")
@@ -83,6 +116,7 @@ try {
         url,
         workerTabs: await page.evaluate(() => window.__workerTabs),
         demoResult,
+        deniedResultsAfterBridgeReuse,
         relaysToWorkerB,
       },
       null,
