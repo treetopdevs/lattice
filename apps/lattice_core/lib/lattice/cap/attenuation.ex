@@ -2,13 +2,15 @@ defmodule Lattice.Cap.Attenuation do
   @moduledoc """
   Monotonic attenuation for PID-as-capability grants.
 
-  A child capability may narrow target, operations, use count, expiration,
-  payload caveats, schema, and session protocol. It may not widen any parent
-  authority.
+  A child capability may narrow target, operations, use count, expiration, and
+  payload caveats. Parent payload schemas and session protocols are preserved on
+  delegated children so child exercise cannot bypass parent runtime constraints.
+  It may not widen any parent authority.
   """
 
   alias Lattice.Cap
   alias Lattice.Cap.Caveat
+  alias Lattice.Cap.Session
 
   def derive(%Cap{} = parent, child_owner_tab_id, opts) do
     with :ok <- parent_delegates?(parent),
@@ -19,8 +21,8 @@ defmodule Lattice.Cap.Attenuation do
            child_use_limit(parent, requested_use_limit(parent, opts)),
          child_caveats <- Caveat.from_opts(opts),
          :ok <- caveats_monotonic?(parent.caveats, child_caveats),
-         schema <- Keyword.get(opts, :schema, parent.schema),
-         session <- Keyword.get(opts, :session, parent.session) do
+         {:ok, schema} <- child_schema(parent, opts),
+         {:ok, session} <- child_session(parent, opts) do
       {:ok,
        Cap.new(child_owner_tab_id, target, MapSet.to_list(ops),
          id: Keyword.get(opts, :id),
@@ -45,7 +47,9 @@ defmodule Lattice.Cap.Attenuation do
          {:ok, _target} <- child_target(parent, child.target),
          {:ok, _expires_at, _ttl_ms} <- child_expiry(parent, expires_at: child.expires_at),
          {:ok, _use_limit} <- child_use_limit(parent, child.use_limit),
-         :ok <- caveats_monotonic?(parent.caveats, child.caveats) do
+         :ok <- caveats_monotonic?(parent.caveats, child.caveats),
+         :ok <- schema_monotonic?(parent.schema, child.schema),
+         :ok <- session_monotonic?(parent.session, child.session) do
       true
     else
       _ -> false
@@ -118,6 +122,71 @@ defmodule Lattice.Cap.Attenuation do
       do: Keyword.fetch!(opts, :use_limit),
       else: parent.use_limit
   end
+
+  defp child_schema(%Cap{schema: nil}, opts), do: {:ok, Keyword.get(opts, :schema)}
+
+  defp child_schema(%Cap{schema: parent_schema}, opts) do
+    case Keyword.fetch(opts, :schema) do
+      :error ->
+        {:ok, parent_schema}
+
+      {:ok, nil} ->
+        {:ok, parent_schema}
+
+      {:ok, child_schema} ->
+        if schema_preserves_parent?(parent_schema, child_schema) do
+          {:ok, child_schema}
+        else
+          {:error, :schema_escalation}
+        end
+    end
+  end
+
+  defp schema_preserves_parent?(parent_schema, child_schema)
+       when is_map(parent_schema) and is_map(child_schema) do
+    Enum.all?(parent_schema, fn {field, type} -> Map.get(child_schema, field) == type end)
+  end
+
+  defp schema_preserves_parent?(parent_schema, child_schema), do: parent_schema == child_schema
+
+  defp schema_monotonic?(nil, _child_schema), do: :ok
+
+  defp schema_monotonic?(parent_schema, child_schema) do
+    if schema_preserves_parent?(parent_schema, child_schema),
+      do: :ok,
+      else: {:error, :schema_escalation}
+  end
+
+  defp child_session(%Cap{session: nil}, opts), do: {:ok, Keyword.get(opts, :session)}
+
+  defp child_session(%Cap{session: parent_session}, opts) do
+    case Keyword.fetch(opts, :session) do
+      :error ->
+        {:ok, parent_session}
+
+      {:ok, nil} ->
+        {:ok, parent_session}
+
+      {:ok, requested_session} ->
+        if Session.new(requested_session) == parent_session do
+          {:ok, parent_session}
+        else
+          {:error, :session_escalation}
+        end
+    end
+  end
+
+  defp session_monotonic?(nil, _child_session), do: :ok
+
+  defp session_monotonic?(%Session{} = parent_session, %Session{} = child_session) do
+    if child_session.transitions == parent_session.transitions do
+      :ok
+    else
+      {:error, :session_escalation}
+    end
+  end
+
+  defp session_monotonic?(_parent_session, _child_session), do: {:error, :session_escalation}
 
   defp caveats_monotonic?(parent_caveats, child_caveats) do
     all = parent_caveats ++ child_caveats

@@ -120,6 +120,77 @@ defmodule LatticeCore.ResearchTest do
                Lattice.delegate(parent, merchant_tab.id, use_limit: nil)
     end
 
+    test "child cap exercise preserves parent use limit, schema, and session constraints" do
+      {:ok, wallet} = CapWallet.start_link([])
+      {:ok, _wallet_pid, wallet_tab} = LocalTab.connect(identity: %{role: "wallet"})
+      {:ok, _merchant_a_pid, merchant_a_tab} = LocalTab.connect(identity: %{role: "merchant-a"})
+      {:ok, _merchant_b_pid, merchant_b_tab} = LocalTab.connect(identity: %{role: "merchant-b"})
+
+      parent_schema = %{amount: :number, vendor: :string, session_step: :atom}
+
+      parent_session = %{
+        state: :ready,
+        transitions: %{ready: %{authorize: :authorized}}
+      }
+
+      {:ok, parent} =
+        Lattice.grant(wallet_tab.id, wallet, [:call],
+          delegation_allowed?: true,
+          use_limit: 1,
+          schema: parent_schema,
+          session: parent_session
+        )
+
+      {:ok, child_a} =
+        Lattice.delegate(parent, merchant_a_tab.id,
+          schema: nil,
+          session: nil,
+          use_limit: 1
+        )
+
+      {:ok, child_b} =
+        Lattice.delegate(parent, merchant_b_tab.id,
+          schema: nil,
+          session: nil,
+          use_limit: 1
+        )
+
+      assert child_a.schema == parent_schema
+      assert %Lattice.Cap.Session{state: :ready} = child_a.session
+
+      assert {:error, {:payload_type_mismatch, :amount, :number}} =
+               Lattice.call(merchant_a_tab.id, child_a, %{
+                 amount: "five",
+                 vendor: "bookshop",
+                 session_step: :authorize
+               })
+
+      assert {:error, {:session_step_not_allowed, :ready, :capture}} =
+               Lattice.call(merchant_a_tab.id, child_a, %{
+                 amount: 5,
+                 vendor: "bookshop",
+                 session_step: :capture
+               })
+
+      assert {:ok, %{charged: 5}} =
+               Lattice.call(merchant_a_tab.id, child_a, %{
+                 amount: 5,
+                 vendor: "bookshop",
+                 session_step: :authorize
+               })
+
+      assert {:error, :use_limit_exceeded} =
+               Lattice.call(merchant_b_tab.id, child_b, %{
+                 amount: 5,
+                 vendor: "bookshop",
+                 session_step: :authorize
+               })
+
+      assert {:ok, stored_parent} = Lattice.CapStore.get(parent.id)
+      assert stored_parent.uses == 1
+      assert %Lattice.Cap.Session{state: :authorized} = stored_parent.session
+    end
+
     test "confused-deputy overreach is structurally rejected by the membrane" do
       result = CapWallet.run_demo()
 

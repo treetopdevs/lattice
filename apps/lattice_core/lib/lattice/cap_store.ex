@@ -198,8 +198,9 @@ defmodule Lattice.CapStore do
     case Map.fetch(state.caps, cap_id) do
       {:ok, cap} ->
         case check_cap(cap, tab_id, op, payload, state) do
-          {:ok, checked_cap} ->
+          {:ok, checked_cap, checked_ancestors} ->
             used = %{checked_cap | uses: checked_cap.uses + 1}
+            caps = store_used_caps(state.caps, used, checked_ancestors)
 
             Audit.record(:cap_use, %{
               tab_id: tab_id,
@@ -209,7 +210,7 @@ defmodule Lattice.CapStore do
               session_state: checked_cap.session && checked_cap.session.state
             })
 
-            {:reply, {:ok, used}, put_in(state, [:caps, cap_id], used)}
+            {:reply, {:ok, used}, %{state | caps: caps}}
 
           {:error, reason, event_type} ->
             Audit.record(event_type, %{
@@ -266,11 +267,14 @@ defmodule Lattice.CapStore do
 
   defp check_cap(%Cap{} = cap, _tab_id, op, payload, state) do
     with :ok <- owner_tab_connected?(cap),
-         :ok <- parent_chain_live?(cap, state),
+         {:ok, ancestors} <- parent_chain(cap, state),
+         :ok <- parent_chain_live?(ancestors),
          :ok <- base_cap_live?(cap, op),
+         :ok <- enforce_parent_chain(ancestors, payload),
          :ok <- Caveat.enforce(cap, payload),
+         {:ok, checked_ancestors} <- advance_parent_sessions(ancestors, payload),
          {:ok, session} <- Session.advance(cap.session, payload) do
-      {:ok, %{cap | session: session}}
+      {:ok, %{cap | session: session}, checked_ancestors}
     else
       {:error, reason, event_type} -> {:error, reason, event_type}
       {:error, reason} -> {:error, reason, :deny}
@@ -293,23 +297,61 @@ defmodule Lattice.CapStore do
   defp delegator_owns_parent?(%Cap{owner_tab_id: owner_tab_id}, owner_tab_id), do: :ok
   defp delegator_owns_parent?(_parent, _delegating_tab_id), do: {:error, :wrong_owner}
 
-  defp parent_chain_live?(%Cap{parent_id: nil}, _state), do: :ok
+  defp parent_chain(%Cap{parent_id: nil}, _state), do: {:ok, []}
 
-  defp parent_chain_live?(%Cap{parent_id: parent_id}, state) do
+  defp parent_chain(%Cap{parent_id: parent_id}, state) do
     case Map.fetch(state.caps, parent_id) do
-      {:ok, %Cap{revoked?: true}} ->
-        {:error, :parent_revoked, :deny}
-
       {:ok, parent} ->
-        if Cap.expired?(parent) do
-          {:error, :parent_expired, :expired_cap}
-        else
-          parent_chain_live?(parent, state)
+        with {:ok, ancestors} <- parent_chain(parent, state) do
+          {:ok, [parent | ancestors]}
         end
 
       :error ->
         {:error, :parent_missing, :deny}
     end
+  end
+
+  defp parent_chain_live?(ancestors) do
+    Enum.reduce_while(ancestors, :ok, fn
+      %Cap{revoked?: true}, :ok ->
+        {:halt, {:error, :parent_revoked, :deny}}
+
+      %Cap{} = parent, :ok ->
+        cond do
+          Cap.expired?(parent) -> {:halt, {:error, :parent_expired, :expired_cap}}
+          Cap.use_limited?(parent) -> {:halt, {:error, :use_limit_exceeded, :use_limit_exceeded}}
+          true -> {:cont, :ok}
+        end
+    end)
+  end
+
+  defp enforce_parent_chain(ancestors, payload) do
+    Enum.reduce_while(ancestors, :ok, fn parent, :ok ->
+      case Caveat.enforce(parent, payload) do
+        :ok -> {:cont, :ok}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+  end
+
+  defp advance_parent_sessions(ancestors, payload) do
+    ancestors
+    |> Enum.reduce_while({:ok, []}, fn parent, {:ok, checked} ->
+      case Session.advance(parent.session, payload) do
+        {:ok, session} -> {:cont, {:ok, [%{parent | session: session} | checked]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:ok, checked} -> {:ok, Enum.reverse(checked)}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp store_used_caps(caps, used, checked_ancestors) do
+    Enum.reduce(checked_ancestors, Map.put(caps, used.id, used), fn parent, caps ->
+      Map.update!(caps, parent.id, fn _ -> %{parent | uses: parent.uses + 1} end)
+    end)
   end
 
   defp descendant_ids(caps, cap_id) do

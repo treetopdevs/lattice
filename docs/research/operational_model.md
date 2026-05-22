@@ -59,7 +59,9 @@ topology_allows(tab, cap'.target)
 call/cast(tab, cap, payload) forwards
 ```
 
-Authorization increments use count and may advance a session automaton.
+Authorization increments use count and may advance a session automaton. When a
+child cap is exercised, successful authorization also consumes parent-chain use
+limits and advances parent-chain session state.
 
 ### Deny
 
@@ -74,6 +76,8 @@ child.target = parent.target
 child.expiry <= parent.expiry
 child.use_limit <= parent.use_limit
 child caveats are equal or stricter
+child schema preserves parent schema
+child session preserves parent session protocol
 -----------------------------------------
 delegate(parent, child_tab, child_constraints) -> child
 ```
@@ -111,4 +115,3 @@ The prototype lattice is `public < internal < confidential < secret`.
 - `apps/lattice_core/test/lattice_research_test.exs`
 - `mix lattice.research.demo`
 - `mix lattice.graph.snapshot`
-
