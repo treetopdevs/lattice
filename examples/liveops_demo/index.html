@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lattice LiveOps</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span>Lattice LiveOps</span>
+        </div>
+        <div class="metrics" aria-live="polite">
+          <span id="connectionState" data-testid="connection-state">offline</span>
+          <span id="roleBadge" data-testid="role-badge">role</span>
+          <span id="auditCount" data-testid="audit-count">audit 0</span>
+          <span id="denialCount" data-testid="denial-count">denials 0</span>
+        </div>
+      </header>
+
+      <section class="stage" aria-label="LiveOps topology">
+        <div class="server-plane" data-testid="server-plane">
+          <span class="server-label">server plane</span>
+          <strong>Lattice.Gateway</strong>
+          <span id="serverStatus">waiting for realms</span>
+        </div>
+
+        <div class="preview-monitor" data-testid="preview-monitor">
+          <div class="preview-bars" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+          <strong id="onAirText" data-testid="on-air-text">preview idle</strong>
+        </div>
+
+        <div id="actorLayer" class="actor-layer" data-testid="actor-layer"></div>
+        <div id="capLayer" class="cap-layer" data-testid="cap-layer"></div>
+        <div id="deviceLayer" class="device-layer" data-testid="device-layer"></div>
+      </section>
+
+      <section class="ops-grid" aria-label="LiveOps controls and audit">
+        <div class="controls" data-testid="controls">
+          <div class="control-group">
+            <span>graphics</span>
+            <button id="previewOverlay" type="button" data-testid="action-preview">preview</button>
+            <button id="requestPublish" type="button" data-testid="action-request-publish">
+              request publish
+            </button>
+            <button id="publishOverlay" type="button" data-testid="action-publish">publish</button>
+            <button id="replayPublish" type="button" data-testid="action-replay-publish">
+              replay publish
+            </button>
+            <button id="renderGraphics" type="button" data-testid="action-render-graphics">
+              render device
+            </button>
+          </div>
+
+          <div class="control-group">
+            <span>producer</span>
+            <button id="approvePublish" type="button" data-testid="action-approve">
+              approve
+            </button>
+            <button id="approveExpired" type="button" data-testid="action-approve-expired">
+              expired approve
+            </button>
+            <button id="revokePublish" type="button" data-testid="action-revoke">revoke</button>
+            <button id="monitorPreview" type="button" data-testid="action-monitor-preview">
+              monitor
+            </button>
+          </div>
+
+          <div class="control-group">
+            <span>camera</span>
+            <button id="cameraFrame" type="button" data-testid="action-camera-frame">frame</button>
+            <button id="tallyLight" type="button" data-testid="action-tally">tally</button>
+            <button id="staleCamera" type="button" data-testid="action-stale-camera">
+              stale cap
+            </button>
+          </div>
+
+          <div class="control-group">
+            <span>session</span>
+            <button id="observerPublish" type="button" data-testid="action-observer-publish">
+              wrong-role publish
+            </button>
+            <button id="connect" type="button" data-testid="action-connect">connect</button>
+            <button id="disconnect" type="button" data-testid="action-disconnect">disconnect</button>
+          </div>
+        </div>
+
+        <div class="ledger" data-testid="ledger">
+          <div class="ledger-head">
+            <span>authoritative event stream</span>
+            <span id="ledgerClock">newest first</span>
+          </div>
+          <ol id="ledgerList" data-testid="ledger-list"></ol>
+        </div>
+      </section>
+    </main>
+
+    <script src="./client.js"></script>
+  </body>
+</html>

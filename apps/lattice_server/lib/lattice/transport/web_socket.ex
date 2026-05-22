@@ -130,6 +130,7 @@ defmodule Lattice.Transport.WebSocket do
         client_id: client_id
       })
 
+    maybe_register_liveops(tab)
     LatticeServer.DemoHub.register(tab, auto_story?: state.auto_story?)
 
     {:reply, {:text, reply}, %{state | tab: tab, client_id: client_id}}
@@ -262,6 +263,42 @@ defmodule Lattice.Transport.WebSocket do
           %{type: "cast_result", ok: false, error: inspect(reason)}
       end
 
+    {:reply, {:text, Envelope.encode(reply)}, state}
+  end
+
+  defp handle_envelope(
+         %{"type" => "liveops_action", "action" => action, "cap_id" => cap_id} = envelope,
+         %{tab: tab} = state
+       )
+       when not is_nil(tab) do
+    payload =
+      envelope
+      |> Map.get("payload", %{})
+      |> case do
+        payload when is_map(payload) -> payload
+        _other -> %{}
+      end
+      |> Map.put("action", action)
+      |> Map.put("cap_id", cap_id)
+
+    reply =
+      case gateway_call(tab.id, cap_id, payload, Map.get(envelope, "target")) do
+        {:ok, result} ->
+          %{type: "liveops_result", ok: true, action: action, result: result}
+
+        {:error, reason} ->
+          Lattice.LiveOps.record_denial(tab.id, action, reason, %{cap_id: cap_id})
+
+          %{type: "liveops_result", ok: false, action: action, error: inspect(reason)}
+      end
+
+    {:reply, {:text, Envelope.encode(reply)}, state}
+  end
+
+  defp handle_envelope(%{"type" => "liveops_action", "action" => action}, %{tab: tab} = state)
+       when not is_nil(tab) do
+    Lattice.LiveOps.record_denial(tab.id, action, :cap_required, %{})
+    reply = %{type: "liveops_result", ok: false, action: action, error: ":cap_required"}
     {:reply, {:text, Envelope.encode(reply)}, state}
   end
 
@@ -402,6 +439,7 @@ defmodule Lattice.Transport.WebSocket do
 
     case tab do
       %{id: tab_id} ->
+        maybe_cleanup_liveops(tab, :websocket_disconnect)
         LatticeServer.DemoHub.unregister(tab_id)
         Lattice.disconnect_tab(tab_id)
 
@@ -442,4 +480,27 @@ defmodule Lattice.Transport.WebSocket do
 
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
+
+  defp maybe_register_liveops(tab) do
+    if liveops_tab?(tab) do
+      Lattice.LiveOps.register_tab(tab)
+    else
+      :ok
+    end
+  end
+
+  defp maybe_cleanup_liveops(tab, reason) do
+    if liveops_tab?(tab) do
+      Lattice.LiveOps.cleanup_tab(tab.id, reason)
+    else
+      :ok
+    end
+  end
+
+  defp liveops_tab?(%{identity: identity}) when is_map(identity) do
+    surface = Map.get(identity, :surface) || Map.get(identity, "surface")
+    surface == "liveops-demo"
+  end
+
+  defp liveops_tab?(_tab), do: false
 end

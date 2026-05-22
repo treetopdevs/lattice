@@ -147,14 +147,24 @@ defmodule LatticeServer.DemoHub do
 
   defp broadcast_presence(state) do
     broadcast(
-      %{type: "presence", tabs: tabs_from(state), audit_count: length(Lattice.audit_events())},
+      %{
+        type: "presence",
+        tabs: tabs_from(state),
+        audit_count: length(Lattice.audit_events()),
+        liveops: liveops_snapshot()
+      },
       state
     )
   end
 
   defp broadcast_event(event, state) when is_map(event) do
     broadcast(
-      %{type: "server_event", event: event, audit_count: length(Lattice.audit_events())},
+      %{
+        type: "server_event",
+        event: event,
+        audit_count: length(Lattice.audit_events()),
+        liveops: liveops_snapshot()
+      },
       state
     )
   end
@@ -187,7 +197,8 @@ defmodule LatticeServer.DemoHub do
       type: "snapshot",
       tabs: tabs_from(state),
       events: Enum.reverse(state.events),
-      audit_count: length(Lattice.audit_events())
+      audit_count: length(Lattice.audit_events()),
+      liveops: liveops_snapshot()
     }
   end
 
@@ -207,5 +218,13 @@ defmodule LatticeServer.DemoHub do
 
   defp hue_for(index) do
     Enum.at([152, 280, 32, 210], rem(index, 4))
+  end
+
+  defp liveops_snapshot do
+    if Process.whereis(Lattice.LiveOps) do
+      Lattice.LiveOps.snapshot()
+    else
+      nil
+    end
   end
 end
