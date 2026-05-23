@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lattice — Compute-to-Data: adversarial review &amp; honest design note</title>
+<style>
+  :root{
+    --ink:#1f2933; --muted:#52606d; --faint:#7b8794;
+    --bg:#ffffff; --panel:#f7f9fb; --border:#d8dee6;
+    --blue:#2563eb; --blue-bg:#eef4ff;
+    --green:#15803d; --green-bg:#eefbf2;
+    --red:#dc2626; --red-bg:#fdf0f0;
+    --amber:#b45309; --amber-bg:#fdf6ec;
+    --code:#0b1f33;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; color:var(--ink); background:var(--bg);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  .wrap{max-width:920px; margin:0 auto; padding:48px 22px 96px}
+  header.masthead{border-bottom:2px solid var(--ink); padding-bottom:22px; margin-bottom:8px}
+  .eyebrow{font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--faint); font-weight:700}
+  h1{font-size:30px; line-height:1.2; margin:.35em 0 .2em; letter-spacing:-.01em}
+  .sub{color:var(--muted); font-size:16px; max-width:62ch}
+  .meta{color:var(--faint); font-size:13px; margin-top:14px}
+  h2{font-size:22px; margin:54px 0 6px; letter-spacing:-.01em; padding-top:10px}
+  h2 .n{color:var(--faint); font-weight:600; font-size:15px; margin-right:.5em; vertical-align:2px}
+  h3{font-size:17px; margin:30px 0 4px}
+  p{margin:.7em 0}
+  a{color:var(--blue)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.9em; background:#eef1f4; padding:.08em .35em; border-radius:4px; color:var(--code)}
+  pre{background:#0b1f33; color:#e7eef7; border-radius:10px; padding:16px 18px; overflow:auto; font-size:13px; line-height:1.55; margin:14px 0}
+  pre code{background:none; color:inherit; padding:0; font-size:13px}
+  .tok-c{color:#8aa0b6} /* comment */
+  .tok-k{color:#f0a868} /* keyword/atom */
+  .tok-n{color:#7fd6c0} /* name */
+  .callout{border-radius:10px; padding:14px 18px; margin:18px 0; border:1px solid; font-size:15px}
+  .callout .lbl{font-weight:700; font-size:12px; letter-spacing:.08em; text-transform:uppercase; display:block; margin-bottom:4px}
+  .c-red{background:var(--red-bg); border-color:#f3c6c6}    .c-red .lbl{color:var(--red)}
+  .c-green{background:var(--green-bg); border-color:#bfe6cd} .c-green .lbl{color:var(--green)}
+  .c-amber{background:var(--amber-bg); border-color:#f0dcb8} .c-amber .lbl{color:var(--amber)}
+  .c-blue{background:var(--blue-bg); border-color:#c8dbfb}   .c-blue .lbl{color:var(--blue)}
+  figure{margin:26px 0; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px 18px 8px}
+  figure svg{display:block; width:100%; height:auto}
+  figcaption{color:var(--muted); font-size:13.5px; margin:10px 4px 8px; line-height:1.5}
+  figcaption b{color:var(--ink)}
+  table{border-collapse:collapse; width:100%; margin:18px 0; font-size:14.5px}
+  th,td{border:1px solid var(--border); padding:9px 12px; text-align:left; vertical-align:top}
+  th{background:var(--panel); font-size:12.5px; letter-spacing:.04em; text-transform:uppercase; color:var(--muted)}
+  td code{font-size:.86em}
+  .tag{display:inline-block; font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; letter-spacing:.03em}
+  .tag.exist{background:var(--green-bg); color:var(--green)}
+  .tag.new{background:var(--blue-bg); color:var(--blue)}
+  .tag.gap{background:var(--red-bg); color:var(--red)}
+  ul{margin:.6em 0; padding-left:1.3em}
+  li{margin:.32em 0}
+  .stepper{display:flex; gap:14px; margin:20px 0; flex-wrap:wrap}
+  .step{flex:1 1 220px; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px 16px}
+  .step .num{display:inline-flex; width:26px; height:26px; border-radius:50%; background:var(--ink); color:#fff; align-items:center; justify-content:center; font-weight:700; font-size:14px; margin-bottom:8px}
+  .step h4{margin:.1em 0 .3em; font-size:15px}
+  .step p{margin:.2em 0; font-size:13.5px; color:var(--muted)}
+  .toc{background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px 20px; margin:26px 0; font-size:14.5px}
+  .toc ol{margin:.3em 0; padding-left:1.4em}
+  .toc a{text-decoration:none}
+  hr{border:0; border-top:1px solid var(--border); margin:48px 0}
+  .foot{color:var(--faint); font-size:13px; margin-top:40px}
+  .kbd{font-family:ui-monospace,monospace; background:#eef1f4; border:1px solid var(--border); border-bottom-width:2px; border-radius:5px; padding:1px 6px; font-size:.82em}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <div class="eyebrow">Lattice · design review</div>
+  <h1>Compute-to-Data: an adversarial review and an honest reframe</h1>
+  <p class="sub">Why &ldquo;ship a constrained process into the private data realm&rdquo; quietly inverts the trust boundary that makes today&rsquo;s demos sound &mdash; and the version of the idea the existing primitives can actually back.</p>
+  <p class="meta">Scope: critique of the proposed <code>Lattice.ComputeCapsule</code> direction + a buildable design note. Grounded in the current tree: <code>Lattice.Gateway</code>, <code>Lattice.Cap</code>/<code>Caveat</code>, <code>Lattice.IFC</code>, <code>Lattice.Cap.Membrane</code>, <code>Lattice.MovableProcess</code>, <code>Lattice.Audit</code>.</p>
+</header>
+
+<div class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#inv">The load-bearing objection: the enforcement boundary inverts</a></li>
+    <li><a href="#out">Output-gating &ne; input-gating; a schema is not a leak bound</a></li>
+    <li><a href="#exists">Most &ldquo;new&rdquo; primitives already exist &mdash; except the hard one</a></li>
+    <li><a href="#reframe">The reframe: the data realm <em>is</em> a least-authority process</a></li>
+    <li><a href="#ifc">Design note: wiring IFC into Cap as an outbound membrane</a></li>
+    <li><a href="#consent">Request-time vs release-time consent</a></li>
+    <li><a href="#scope">Honest claim &amp; out-of-scope</a></li>
+    <li><a href="#road">Sequencing</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================= -->
+<h2 id="inv"><span class="n">01</span>The load-bearing objection: the enforcement boundary inverts</h2>
+
+<p>Everything that works in Lattice today works because <b>the enforcer sits on the far side of a trust boundary from the attacker.</b> <code>Lattice.Gateway</code> is &ldquo;the only legal path across realms,&rdquo; and it runs <em>server-side</em>. The browser tab holds an opaque <code>id</code>; the real <code>%Cap{}</code> with its caveats lives in <code>CapStore</code> on the server. The tab is untrusted, the server enforces, and a stolen or forged cap dies at the gateway. The browser physically cannot reach the enforcement code.</p>
+
+<p>Compute-to-data flips the model: now the <b>data lives in the untrusted realm</b> (the browser) and the <em>app</em> is what you don&rsquo;t trust with it. So who enforces the export membrane? It has to run in the browser, beside the data. If app-supplied capsule code executes in the same JS context that can read <code>:labs</code>, then &ldquo;the framework enforces what can leave&rdquo; reduces to <em>JavaScript checking JavaScript in a runtime the capsule author influences</em>. There is no OS / process / language boundary there. The membrane becomes advisory.</p>
+
+<figure>
+<svg viewBox="0 0 960 392" role="img" aria-label="Two panels comparing the sound wallet demo trust boundary against the unsound naive capsule boundary">
+  <defs>
+    <marker id="ah1" markerWidth="11" markerHeight="9" refX="9" refY="4.5" orient="auto"><path d="M0,0 L11,4.5 L0,9 Z" fill="#52606d"/></marker>
+    <marker id="ah1r" markerWidth="11" markerHeight="9" refX="9" refY="4.5" orient="auto"><path d="M0,0 L11,4.5 L0,9 Z" fill="#dc2626"/></marker>
+  </defs>
+
+  <!-- Panel A : sound -->
+  <rect x="10" y="40" width="455" height="338" rx="12" fill="#f4faf6" stroke="#bfe6cd"/>
+  <text x="237" y="66" text-anchor="middle" font-size="14" font-weight="700" fill="#15803d">TODAY — wallet / LiveOps (sound)</text>
+  <line x1="272" y1="86" x2="272" y2="358" stroke="#9aa5b1" stroke-width="1.5" stroke-dasharray="5 5"/>
+  <text x="272" y="100" text-anchor="middle" font-size="11" fill="#7b8794">trust boundary</text>
+
+  <rect x="36" y="170" width="150" height="86" rx="9" fill="#fff" stroke="#9aa5b1"/>
+  <text x="111" y="200" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1f2933">Browser tab</text>
+  <text x="111" y="220" text-anchor="middle" font-size="12" fill="#52606d">untrusted attacker</text>
+  <text x="111" y="238" text-anchor="middle" font-size="12" fill="#52606d">holds opaque cap id</text>
+
+  <rect x="300" y="124" width="150" height="216" rx="9" fill="#ffffff" stroke="#15803d"/>
+  <text x="375" y="146" text-anchor="middle" font-size="12.5" font-weight="700" fill="#15803d">Server (trusted)</text>
+  <rect x="314" y="156" width="122" height="44" rx="7" fill="#eefbf2" stroke="#bfe6cd"/>
+  <text x="375" y="174" text-anchor="middle" font-size="12.5" font-weight="700" fill="#15803d">Gateway</text>
+  <text x="375" y="190" text-anchor="middle" font-size="11.5" fill="#52606d">the enforcer</text>
+  <rect x="314" y="210" width="122" height="44" rx="7" fill="#f7f9fb" stroke="#d8dee6"/>
+  <text x="375" y="228" text-anchor="middle" font-size="12.5" fill="#1f2933">CapStore</text>
+  <text x="375" y="244" text-anchor="middle" font-size="11.5" fill="#52606d">real %Cap{}</text>
+  <rect x="314" y="264" width="122" height="48" rx="7" fill="#f7f9fb" stroke="#d8dee6"/>
+  <text x="375" y="284" text-anchor="middle" font-size="12.5" fill="#1f2933">Wallet process</text>
+  <text x="375" y="300" text-anchor="middle" font-size="11.5" fill="#52606d">+ secrets</text>
+
+  <line x1="186" y1="200" x2="312" y2="178" stroke="#52606d" stroke-width="1.6" marker-end="url(#ah1)"/>
+  <text x="248" y="180" text-anchor="middle" font-size="11.5" fill="#52606d">request</text>
+
+  <text x="237" y="364" text-anchor="middle" font-size="12" fill="#52606d">Enforcer + secrets are across the boundary. A stolen cap dies at the Gateway.</text>
+
+  <!-- Panel B : unsound -->
+  <rect x="495" y="40" width="455" height="338" rx="12" fill="#fdf4f4" stroke="#f3c6c6"/>
+  <text x="722" y="66" text-anchor="middle" font-size="14" font-weight="700" fill="#dc2626">NAIVE CAPSULE (unsound)</text>
+  <line x1="628" y1="86" x2="628" y2="358" stroke="#9aa5b1" stroke-width="1.5" stroke-dasharray="5 5"/>
+  <text x="628" y="100" text-anchor="middle" font-size="11" fill="#7b8794">trust boundary</text>
+
+  <rect x="514" y="170" width="100" height="86" rx="9" fill="#fff" stroke="#9aa5b1"/>
+  <text x="564" y="198" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2933">App server</text>
+  <text x="564" y="217" text-anchor="middle" font-size="11.5" fill="#52606d">not trusted</text>
+  <text x="564" y="233" text-anchor="middle" font-size="11.5" fill="#52606d">with data</text>
+
+  <rect x="650" y="120" width="288" height="222" rx="9" fill="#ffffff" stroke="#9aa5b1"/>
+  <text x="794" y="142" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2933">Browser realm</text>
+  <rect x="664" y="152" width="260" height="178" rx="9" fill="#fdf0f0" stroke="#dc2626" stroke-dasharray="6 4"/>
+
+  <rect x="676" y="164" width="120" height="48" rx="7" fill="#fff" stroke="#d8dee6"/>
+  <text x="736" y="184" text-anchor="middle" font-size="12.5" fill="#1f2933">Capsule</text>
+  <text x="736" y="200" text-anchor="middle" font-size="11" fill="#52606d">app-supplied code</text>
+  <rect x="804" y="164" width="108" height="48" rx="7" fill="#fff" stroke="#d8dee6"/>
+  <text x="858" y="184" text-anchor="middle" font-size="12" fill="#1f2933">Export</text>
+  <text x="858" y="200" text-anchor="middle" font-size="11" fill="#52606d">membrane (JS)</text>
+  <rect x="676" y="224" width="236" height="44" rx="7" fill="#fff" stroke="#d8dee6"/>
+  <text x="794" y="251" text-anchor="middle" font-size="12.5" fill="#1f2933">Private vault — raw data</text>
+  <text x="794" y="306" text-anchor="middle" font-size="12" font-weight="700" fill="#dc2626">one JS trust domain</text>
+
+  <line x1="614" y1="196" x2="676" y2="184" stroke="#dc2626" stroke-width="1.6" marker-end="url(#ah1r)"/>
+  <text x="640" y="170" text-anchor="middle" font-size="11" fill="#dc2626">ships capsule</text>
+
+  <text x="722" y="364" text-anchor="middle" font-size="12" fill="#52606d">Enforcer runs in JS beside the data, influenced by the app. Membrane is advisory.</text>
+</svg>
+<figcaption><b>The inversion.</b> The wallet/LiveOps claim (&ldquo;denied ops never reached the process&rdquo;) is <b>verifiable from the server ledger</b>. The capsule claim (&ldquo;raw data never left the browser&rdquo;) is the opposite: hard to demonstrate, and the most tempting shortcut &mdash; vault actually server-side, or capsule actually run server-side on uploaded data &mdash; <b>looks identical in a screenshot</b> while inverting the headline.</figcaption>
+</figure>
+
+<div class="callout c-red">
+  <span class="lbl">Headline objection</span>
+  Compute-to-data puts the data <em>and</em> the enforcement boundary inside the realm you don&rsquo;t trust with the data. That is categorically weaker than the wallet demo, and it is weaker in the exact dimension the pitch markets. Given how scrupulous the docs are about non-claims (&ldquo;media devices are simulated&rdquo;, &ldquo;real Web Workers but no AtomVM&rdquo;), this demo has an unusually high lie surface.
+</div>
+
+<!-- ============================================================= -->
+<h2 id="out"><span class="n">02</span>Output-gating &ne; input-gating; a schema is not a leak bound</h2>
+
+<p>Today&rsquo;s caps gate <em>who may invoke what op on what target</em> &mdash; authority to <b>act</b>. <code>Caveat.enforce/2</code> runs over the <em>input</em> payload before forwarding. Compute-to-data needs authority over <em>what information flows out of a computation</em> &mdash; declassification, which is the IFC half. And <code>Lattice.IFC</code> today is a toy: a four-level GenServer that records allowed/denied transfers, not wired into <code>Cap</code> or <code>Gateway</code> at all. So the pitch leans the entire &ldquo;killer demo&rdquo; onto the <b>weakest, least-developed primitive</b> and renames it the membrane.</p>
+
+<p>Concretely, <code>emits LabSummarySchema</code> checks <em>type/shape</em>, not <em>information content</em>:</p>
+
+<figure>
+<svg viewBox="0 0 960 300" role="img" aria-label="A private record being smuggled through a type-valid output schema via crafted strings, arithmetic encoding, and template choice">
+  <defs><marker id="ah2" markerWidth="11" markerHeight="9" refX="9" refY="4.5" orient="auto"><path d="M0,0 L11,4.5 L0,9 Z" fill="#b45309"/></marker></defs>
+
+  <rect x="28" y="70" width="210" height="168" rx="10" fill="#fff" stroke="#9aa5b1"/>
+  <text x="133" y="96" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1f2933">Private record</text>
+  <text x="48" y="124" font-size="12.5" fill="#52606d">• 12 medications</text>
+  <text x="48" y="148" font-size="12.5" fill="#52606d">• 8 lab panels</text>
+  <text x="48" y="172" font-size="12.5" fill="#52606d">• 3 diagnoses</text>
+  <text x="48" y="196" font-size="12.5" fill="#52606d">• wearable stream</text>
+  <text x="48" y="220" font-size="12.5" fill="#52606d">• free-text notes</text>
+
+  <rect x="560" y="58" width="372" height="192" rx="10" fill="#fdf6ec" stroke="#f0dcb8"/>
+  <text x="746" y="84" text-anchor="middle" font-size="13.5" font-weight="700" fill="#b45309">LabSummarySchema — type-valid output</text>
+  <rect x="578" y="98" width="336" height="34" rx="6" fill="#fff" stroke="#e3e8ee"/>
+  <text x="592" y="120" font-size="12.5" fill="#1f2933">abnormal_count: int</text>
+  <rect x="578" y="138" width="336" height="34" rx="6" fill="#fff" stroke="#e3e8ee"/>
+  <text x="592" y="160" font-size="12.5" fill="#1f2933">trend: rising | falling | stable</text>
+  <rect x="578" y="178" width="336" height="34" rx="6" fill="#fff" stroke="#e3e8ee"/>
+  <text x="592" y="200" font-size="12.5" fill="#1f2933">flagged_tests: [string]</text>
+  <text x="746" y="236" text-anchor="middle" font-size="11.5" fill="#b45309">max_result_bytes 8192  ≈  8000 chars</text>
+
+  <line x1="240" y1="190" x2="576" y2="195" stroke="#b45309" stroke-width="1.5" marker-end="url(#ah2)"/>
+  <text x="408" y="184" text-anchor="middle" font-size="11.5" fill="#b45309">encode record as crafted strings</text>
+  <line x1="240" y1="150" x2="576" y2="155" stroke="#b45309" stroke-width="1.5" marker-end="url(#ah2)"/>
+  <text x="408" y="144" text-anchor="middle" font-size="11.5" fill="#b45309">arithmetic-encode into the int</text>
+  <line x1="240" y1="118" x2="576" y2="115" stroke="#b45309" stroke-width="1.5" marker-end="url(#ah2)"/>
+  <text x="408" y="108" text-anchor="middle" font-size="11.5" fill="#b45309">decision channel: which of N templates</text>
+
+  <text x="480" y="284" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2933">Type-checks. Still leaks. A schema bounds the bottle, not the message.</text>
+</svg>
+<figcaption>The schema constrains the bottle, not the message in it. 8&nbsp;KB is plenty to exfiltrate a real chunk of a record; the pitch&rsquo;s &ldquo;Result Filter&rdquo; hand-waves exactly this. Residual channels (encoding in allowed fields, template-choice, result timing) survive any pure type check.</figcaption>
+</figure>
+
+<div class="callout c-blue">
+  <span class="lbl">Skipped mitigation</span>
+  <b>Consent on release, not just on request.</b> Show the user the <em>actual output bytes</em> and have them approve the <em>declassification</em> &mdash; not a capability up front. That is the strong privacy story and it fits &ldquo;the user grants.&rdquo; The pitch approves the request before the computation runs, so the user never sees what leaves.
+</div>
+
+<!-- ============================================================= -->
+<h2 id="exists"><span class="n">03</span>Most &ldquo;new&rdquo; primitives already exist &mdash; except the hard one</h2>
+
+<p>Mapping the pitch onto the current tree, <code>ComputeCapsule</code> is mostly a recombination and rename:</p>
+
+<table>
+  <thead><tr><th>Pitch primitive</th><th>Status</th><th>Already in the tree</th></tr></thead>
+  <tbody>
+    <tr><td>ConsentCapability</td><td><span class="tag exist">exists</span></td><td><code>Lattice.Cap</code> — issued to one tab, scoped target/ops</td></tr>
+    <tr><td>OneTimeExecution</td><td><span class="tag exist">exists</span></td><td><code>Cap.use_limit</code> / <code>uses</code></td></tr>
+    <tr><td>ExportPolicy / ResultSchema</td><td><span class="tag exist">partial</span></td><td><code>Caveat :payload_schema</code> + <code>Cap.Typed.validate</code> — but <b>input only</b></td></tr>
+    <tr><td>Revocation</td><td><span class="tag exist">exists</span></td><td><code>Cap.revoke/2</code>, parent/child semantics</td></tr>
+    <tr><td>TTL / expiry</td><td><span class="tag exist">exists</span></td><td><code>Cap.ttl_ms</code> / <code>expires_at</code></td></tr>
+    <tr><td>LocalAuditTrail</td><td><span class="tag exist">exists</span></td><td><code>Lattice.Audit</code></td></tr>
+    <tr><td>Export membrane</td><td><span class="tag exist">named</span></td><td><code>Lattice.Cap.Membrane</code> — already rejects ambient-target smuggling (inbound)</td></tr>
+    <tr><td>&ldquo;Move the computation&rdquo;</td><td><span class="tag exist">exists</span></td><td><code>Lattice.MovableProcess</code></td></tr>
+    <tr><td>DataRealm labels / declassification</td><td><span class="tag gap">prototype</span></td><td><code>Lattice.IFC</code> — toy GenServer, <b>not wired to Cap/Gateway</b></td></tr>
+    <tr><td><b>App-authored code run locally on private data w/ enforced output</b></td><td><span class="tag gap">not built</span></td><td>&mdash; needs a real sandbox (AtomVM/WASM = your own future work)</td></tr>
+  </tbody>
+</table>
+
+<p>The genuinely new, genuinely hard part &mdash; <b>run app-authored code locally against private data with an enforced output membrane</b> &mdash; is exactly the part the server-authoritative architecture doesn&rsquo;t support and can&rsquo;t cheaply get in a browser. The pitch&rsquo;s novelty and its impossibility are the same sentence.</p>
+
+<p>And: <b>&ldquo;inspectable&rdquo;</b> only survives if the capsule is declarative. A human cannot meaningfully audit arbitrary code in a consent dialog. To keep &ldquo;the user sees exactly what is requested&rdquo; honest, the capsule <em>must</em> be a parameterized query from a vetted catalog &mdash; a fine design, but a much smaller claim than &ldquo;ship a constrained process.&rdquo;</p>
+
+<!-- ============================================================= -->
+<h2 id="reframe"><span class="n">04</span>The reframe: the data realm <em>is</em> a least-authority process</h2>
+
+<p>Stop saying &ldquo;ship a constrained process <em>into</em> the data.&rdquo; Say: <b>the data realm is itself a least-authority process that exposes only capability-gated, schema-bounded query operations.</b> The &ldquo;capsule&rdquo; is the attenuated cap + parameters; the <em>vault</em> (user-owned code) runs the vetted query and applies the export membrane. Put the enforcer in the vault realm &mdash; never in the app&rsquo;s capsule.</p>
+
+<figure>
+<svg viewBox="0 0 960 300" role="img" aria-label="App with zero authority sends typed query parameters through the gateway and membrane to a user-owned vault realm, which returns only a typed answer">
+  <defs>
+    <marker id="ah3" markerWidth="11" markerHeight="9" refX="9" refY="4.5" orient="auto"><path d="M0,0 L11,4.5 L0,9 Z" fill="#2563eb"/></marker>
+    <marker id="ah3g" markerWidth="11" markerHeight="9" refX="9" refY="4.5" orient="auto"><path d="M0,0 L11,4.5 L0,9 Z" fill="#15803d"/></marker>
+  </defs>
+
+  <rect x="28" y="96" width="158" height="96" rx="10" fill="#fff" stroke="#9aa5b1"/>
+  <text x="107" y="128" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1f2933">App / capsule</text>
+  <text x="107" y="148" text-anchor="middle" font-size="11.5" fill="#52606d">zero implicit authority</text>
+  <text x="107" y="166" text-anchor="middle" font-size="11.5" fill="#52606d">(a &ldquo;tab&rdquo;)</text>
+
+  <rect x="338" y="84" width="190" height="120" rx="10" fill="#eef4ff" stroke="#2563eb"/>
+  <text x="433" y="112" text-anchor="middle" font-size="13.5" font-weight="700" fill="#2563eb">Gateway</text>
+  <text x="433" y="132" text-anchor="middle" font-size="12" fill="#1f2933">+ Export Membrane</text>
+  <text x="433" y="156" text-anchor="middle" font-size="11.5" fill="#52606d">+ IFC declassify check</text>
+  <text x="433" y="174" text-anchor="middle" font-size="11.5" fill="#52606d">+ Audit</text>
+
+  <rect x="688" y="64" width="244" height="170" rx="10" fill="#eefbf2" stroke="#15803d"/>
+  <text x="810" y="90" text-anchor="middle" font-size="13" font-weight="700" fill="#15803d">Vault realm (user-owned)</text>
+  <rect x="704" y="102" width="212" height="44" rx="7" fill="#fff" stroke="#bfe6cd"/>
+  <text x="810" y="122" text-anchor="middle" font-size="12.5" font-weight="700" fill="#15803d">Vault process</text>
+  <text x="810" y="138" text-anchor="middle" font-size="11.5" fill="#52606d">the enforcer</text>
+  <rect x="704" y="154" width="212" height="40" rx="7" fill="#fff" stroke="#bfe6cd"/>
+  <text x="810" y="179" text-anchor="middle" font-size="12.5" fill="#1f2933">Private data</text>
+  <text x="810" y="216" text-anchor="middle" font-size="11" fill="#15803d">co-located + user-authored</text>
+
+  <!-- forward -->
+  <line x1="186" y1="124" x2="338" y2="124" stroke="#2563eb" stroke-width="1.7" marker-end="url(#ah3)"/>
+  <text x="262" y="116" text-anchor="middle" font-size="11" fill="#2563eb">query select + params (typed)</text>
+  <line x1="528" y1="124" x2="688" y2="124" stroke="#2563eb" stroke-width="1.7" marker-end="url(#ah3)"/>
+  <text x="608" y="116" text-anchor="middle" font-size="11" fill="#2563eb">run vetted query</text>
+  <!-- return -->
+  <line x1="688" y1="166" x2="530" y2="166" stroke="#15803d" stroke-width="1.7" marker-end="url(#ah3g)"/>
+  <text x="608" y="184" text-anchor="middle" font-size="11" fill="#15803d">raw result (stays in realm)</text>
+  <line x1="336" y1="166" x2="186" y2="166" stroke="#15803d" stroke-width="1.7" marker-end="url(#ah3g)"/>
+  <text x="261" y="184" text-anchor="middle" font-size="11" fill="#15803d">typed answer only</text>
+
+  <text x="480" y="270" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2933">App never receives a handle to the data. The enforcer is co-located with the data and user-authored.</text>
+</svg>
+<figcaption><b>This maps onto what already exists.</b> Vault = the authoritative process (the role the server plays today). App/capsule = a tab with zero implicit authority. <code>Gateway</code> + <code>Membrane</code> mediate; <code>IFC</code> records the declassification; <code>Audit</code> logs it. &ldquo;Compute-to-data&rdquo; collapses into &ldquo;the data realm is a least-authority process&rdquo; &mdash; <em>exactly Lattice&rsquo;s thesis</em>, not a new paradigm bolted on. In the browser-honest version the vault is a Worker/origin the capsule cannot directly read; the capsule may only <code>postMessage</code> a query selection &mdash; the default-deny tab topology with explicit mediated bridges you already have.</figcaption>
+</figure>
+
+<div class="callout c-green">
+  <span class="lbl">The honest claim</span>
+  The app never receives a handle to the data &mdash; only a <b>typed, attenuated, revocable, audited answer</b>, and every declassification is consented and logged. That is true and demonstrable. &ldquo;Raw data never leaves&rdquo; is an isolation guarantee a browser can&rsquo;t give against the app&rsquo;s own code &mdash; so don&rsquo;t promise it.
+</div>
+
+<!-- ============================================================= -->
+<h2 id="ifc"><span class="n">05</span>Design note: wiring IFC into Cap as an outbound membrane</h2>
+
+<p>Today the enforcement path is inbound only: <code>Gateway.call/4</code> &rarr; <code>CapStore.authorize</code> (which runs <code>Caveat.enforce/2</code> on the payload) &rarr; <code>forward_call</code> &rarr; returns the target&rsquo;s result <em>straight back, uninspected</em>. To gate output you bracket the computation with an outbound check that lives <em>in the vault realm</em>.</p>
+
+<figure>
+<svg viewBox="0 0 960 472" role="img" aria-label="Seven-step flow showing the declassification path, color coded by reuse-existing, new, or strong-optional">
+  <defs><marker id="ah4" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#7b8794"/></marker></defs>
+
+  <!-- step boxes -->
+  <g font-size="13">
+    <rect x="220" y="16"  width="520" height="44" rx="9" fill="#eefbf2" stroke="#bfe6cd"/>
+    <text x="248" y="38" font-weight="700" fill="#15803d">1.</text>
+    <text x="272" y="34" fill="#1f2933">App presents cap + params  →  Gateway.authorize</text>
+    <text x="272" y="50" font-size="11" fill="#52606d">input caveats &mdash; existing</text>
+
+    <rect x="220" y="80" width="520" height="44" rx="9" fill="#eef4ff" stroke="#c8dbfb"/>
+    <text x="248" y="102" font-weight="700" fill="#2563eb">2.</text>
+    <text x="272" y="98" fill="#1f2933">Gateway.query  →  run query inside the Vault realm</text>
+    <text x="272" y="114" font-size="11" fill="#52606d">new query path</text>
+
+    <rect x="220" y="144" width="520" height="44" rx="9" fill="#eef4ff" stroke="#c8dbfb"/>
+    <text x="248" y="166" font-weight="700" fill="#2563eb">3.</text>
+    <text x="272" y="162" fill="#1f2933">Raw result  →  Export Membrane (outbound)</text>
+    <text x="272" y="178" font-size="11" fill="#52606d">new outbound half of Cap.Membrane</text>
+
+    <rect x="220" y="208" width="520" height="56" rx="9" fill="#eef4ff" stroke="#c8dbfb"/>
+    <text x="248" y="230" font-weight="700" fill="#2563eb">4.</text>
+    <text x="272" y="228" fill="#1f2933">Membrane checks the RESULT:</text>
+    <text x="272" y="246" font-size="11.5" fill="#52606d">result_schema (Typed) · max_result_bytes · IFC.allowed?(data_label → release_label)</text>
+
+    <rect x="220" y="284" width="520" height="44" rx="9" fill="#fdf6ec" stroke="#f0dcb8"/>
+    <text x="248" y="306" font-weight="700" fill="#b45309">5.</text>
+    <text x="272" y="302" fill="#1f2933">(optional, strong)  Release-time consent</text>
+    <text x="272" y="318" font-size="11" fill="#52606d">user sees the actual bytes before they leave</text>
+
+    <rect x="220" y="348" width="520" height="44" rx="9" fill="#eefbf2" stroke="#bfe6cd"/>
+    <text x="248" y="370" font-weight="700" fill="#15803d">6.</text>
+    <text x="272" y="366" fill="#1f2933">Audit  :declassify  /  :export_deny</text>
+    <text x="272" y="382" font-size="11" fill="#52606d">existing Lattice.Audit</text>
+
+    <rect x="220" y="412" width="520" height="44" rx="9" fill="#f7f9fb" stroke="#d8dee6"/>
+    <text x="248" y="434" font-weight="700" fill="#1f2933">7.</text>
+    <text x="272" y="430" fill="#1f2933">Typed answer  →  App      (else deny)</text>
+    <text x="272" y="446" font-size="11" fill="#52606d">no handle ever crosses</text>
+  </g>
+
+  <!-- connectors -->
+  <g stroke="#7b8794" stroke-width="1.4">
+    <line x1="290" y1="60"  x2="290" y2="80"  marker-end="url(#ah4)"/>
+    <line x1="290" y1="124" x2="290" y2="144" marker-end="url(#ah4)"/>
+    <line x1="290" y1="188" x2="290" y2="208" marker-end="url(#ah4)"/>
+    <line x1="290" y1="264" x2="290" y2="284" marker-end="url(#ah4)"/>
+    <line x1="290" y1="328" x2="290" y2="348" marker-end="url(#ah4)"/>
+    <line x1="290" y1="392" x2="290" y2="412" marker-end="url(#ah4)"/>
+  </g>
+
+  <!-- legend -->
+  <g font-size="11.5">
+    <rect x="760" y="40" width="14" height="14" rx="3" fill="#eefbf2" stroke="#bfe6cd"/><text x="780" y="51" fill="#52606d">reuses existing</text>
+    <rect x="760" y="64" width="14" height="14" rx="3" fill="#eef4ff" stroke="#c8dbfb"/><text x="780" y="75" fill="#52606d">new</text>
+    <rect x="760" y="88" width="14" height="14" rx="3" fill="#fdf6ec" stroke="#f0dcb8"/><text x="780" y="99" fill="#52606d">optional / strong</text>
+  </g>
+</svg>
+<figcaption>The membrane moves from inbound-only to bracketing the computation. The enforcer (<code>ExportMembrane</code> + <code>IFC</code>) runs in the vault realm, co-located with the data &mdash; that is the key, not the renaming.</figcaption>
+</figure>
+
+<h3>The honest capsule DSL (declarative, catalog-selected)</h3>
+<pre><code><span class="tok-c"># Not "ship arbitrary code". Select a vetted query from a catalog,</span>
+<span class="tok-c"># parameterize it, and attenuate the answer.</span>
+<span class="tok-k">capsule</span> <span class="tok-n">:lab_summary_90d</span> <span class="tok-k">do</span>
+  reads             [<span class="tok-n">:labs</span>]            <span class="tok-c"># input authority (cap-gated)</span>
+  params            window: {<span class="tok-n">:days</span>, 90}
+  emits             <span class="tok-n">LabSummarySchema</span>    <span class="tok-c"># OUTPUT type</span>
+  release_label     <span class="tok-n">:internal</span>          <span class="tok-c"># declassify ceiling (IFC)</span>
+  max_result_bytes  8_192
+  network           <span class="tok-n">false</span>
+  ttl_ms            60_000
+  consent           <span class="tok-n">:on_release</span>         <span class="tok-c"># approve the bytes, not just the request</span>
+<span class="tok-k">end</span></code></pre>
+
+<h3>Elixir integration sketch (not in the tree)</h3>
+<pre><code><span class="tok-c"># caveat.ex — add OUTPUT-side caveat types alongside the input ones</span>
+<span class="tok-n">:result_schema</span>       <span class="tok-c"># validated against the RESULT, not the payload</span>
+<span class="tok-n">:max_result_bytes</span>
+<span class="tok-n">:declassify</span>          <span class="tok-c"># {from_label, to_label} ceiling, checked via Lattice.IFC</span>
+
+<span class="tok-c"># gateway.ex — bracket the computation with an outbound membrane</span>
+<span class="tok-k">def</span> <span class="tok-n">query</span>(tab_id, cap_or_id, params, timeout \\ 5_000) <span class="tok-k">do</span>
+  <span class="tok-k">with</span> {<span class="tok-n">:ok</span>, cap}    &lt;- CapStore.authorize(tab_id, cap_or_id, <span class="tok-n">:query</span>, params),
+       <span class="tok-n">:ok</span>           &lt;- validate_target(tab_id, cap),
+       {<span class="tok-n">:ok</span>, raw}    &lt;- forward_call(tab_id, cap, params, timeout),
+       {<span class="tok-n">:ok</span>, answer} &lt;- ExportMembrane.release(cap, raw) <span class="tok-c"># NEW: outbound gate</span> <span class="tok-k">do</span>
+    {<span class="tok-n">:ok</span>, answer}
+  <span class="tok-k">end</span>
+<span class="tok-k">end</span>
+
+<span class="tok-c"># export_membrane.ex — the outbound half (today's Membrane only guards inbound)</span>
+<span class="tok-k">def</span> <span class="tok-n">release</span>(%Cap{} = cap, result) <span class="tok-k">do</span>
+  <span class="tok-k">with</span> <span class="tok-n">:ok</span>          &lt;- Typed.validate(result_schema(cap), result),
+       <span class="tok-n">:ok</span>          &lt;- within_bytes(cap, result),
+       <span class="tok-n">:ok</span>          &lt;- IFC.declassify(data_label(cap), release_label(cap)),
+       {<span class="tok-n">:ok</span>, bytes} &lt;- maybe_human_release(cap, result) <span class="tok-k">do</span>
+    Audit.record(<span class="tok-n">:declassify</span>, %{cap_id: cap.id, to: release_label(cap)})
+    {<span class="tok-n">:ok</span>, bytes}
+  <span class="tok-k">else</span>
+    {<span class="tok-n">:error</span>, reason} -&gt;
+      Audit.record(<span class="tok-n">:export_deny</span>, %{cap_id: cap.id, reason: reason})
+      {<span class="tok-n">:error</span>, reason}
+  <span class="tok-k">end</span>
+<span class="tok-k">end</span></code></pre>
+
+<!-- ============================================================= -->
+<h2 id="consent"><span class="n">06</span>Request-time vs release-time consent</h2>
+
+<figure>
+<svg viewBox="0 0 960 230" role="img" aria-label="Two consent timelines: request-time approves before computation and never sees output; release-time approves the actual bytes">
+  <defs><marker id="ah5" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#9aa5b1"/></marker></defs>
+
+  <text x="30" y="34" font-size="13.5" font-weight="700" fill="#dc2626">Request-time consent  (the pitch)</text>
+  <line x1="40" y1="64" x2="900" y2="64" stroke="#9aa5b1" stroke-width="1.4" marker-end="url(#ah5)"/>
+  <circle cx="120" cy="64" r="6" fill="#dc2626"/><text x="120" y="92" text-anchor="middle" font-size="11.5" fill="#52606d">user approves</text><text x="120" y="107" text-anchor="middle" font-size="11.5" fill="#52606d">the request</text>
+  <circle cx="430" cy="64" r="6" fill="#9aa5b1"/><text x="430" y="92" text-anchor="middle" font-size="11.5" fill="#52606d">compute runs</text>
+  <circle cx="740" cy="64" r="6" fill="#9aa5b1"/><text x="740" y="92" text-anchor="middle" font-size="11.5" fill="#52606d">bytes leave</text>
+  <text x="740" y="107" text-anchor="middle" font-size="11.5" fill="#dc2626">user never saw them</text>
+
+  <text x="30" y="156" font-size="13.5" font-weight="700" fill="#15803d">Release-time consent  (recommended)</text>
+  <line x1="40" y1="186" x2="900" y2="186" stroke="#9aa5b1" stroke-width="1.4" marker-end="url(#ah5)"/>
+  <circle cx="120" cy="186" r="6" fill="#9aa5b1"/><text x="120" y="214" text-anchor="middle" font-size="11.5" fill="#52606d">request</text>
+  <circle cx="430" cy="186" r="6" fill="#9aa5b1"/><text x="430" y="214" text-anchor="middle" font-size="11.5" fill="#52606d">compute runs</text>
+  <circle cx="740" cy="186" r="6" fill="#15803d"/><text x="740" y="214" text-anchor="middle" font-size="11.5" fill="#15803d">user approves the actual bytes → leave</text>
+</svg>
+<figcaption>Approving the <em>request</em> means the user blesses a question whose answer they never see. Approving the <em>release</em> means the human-in-the-loop reviews the exact declassified output. For a privacy demo, release-time review is the difference between a slogan and a guarantee &mdash; and it&rsquo;s the one mitigation that meaningfully constrains the covert channels in &sect;02.</figcaption>
+</figure>
+
+<!-- ============================================================= -->
+<h2 id="scope"><span class="n">07</span>Honest claim &amp; out-of-scope</h2>
+
+<div class="callout c-amber">
+  <span class="lbl">Out-of-scope (state it like the existing non-claims)</span>
+  Even with an outbound membrane + IFC + release-time consent, <b>covert channels within the allowed schema remain</b>: encoding in permitted fields, the decision channel (which template), and result timing. Treat these as out-of-scope until there is a real isolation sandbox <em>and</em> quantitative IFC &mdash; the same way the docs already say &ldquo;media devices are simulated&rdquo; and &ldquo;AtomVM/WASM browser nodes remain future work.&rdquo; Mitigations that help short of that: canonical enum-only outputs (no free text), minimized result shapes, and human release review.
+</div>
+
+<p><b>Net:</b> the direction &mdash; making information-flow / export control a first-class Lattice concern &mdash; is the more differentiated frontier than browser clustering. Caps-as-access-control is well-trodden (object capabilities, macaroons); caps fused with IFC and a consent UI over a real cross-realm boundary is less trodden and fits the BEAM process metaphor. Just claim what the primitives can back, and put the enforcer in the realm that owns the data.</p>
+
+<!-- ============================================================= -->
+<h2 id="road"><span class="n">08</span>Sequencing</h2>
+<p>This is a good <em>third lens</em>, not a third flagship to build now. The README already advertises a wide surface (wallet, LiveOps, research demos, stress lab). Three half-credible flagships are weaker than one bulletproof one &mdash; and this is the one most likely to ship a subtle cheat.</p>
+
+<div class="stepper">
+  <div class="step">
+    <span class="num">1</span>
+    <h4>Make the wallet flagship airtight</h4>
+    <p>It already has a server-verifiable claim. Keep depth over breadth before adding a privacy story.</p>
+  </div>
+  <div class="step">
+    <span class="num">2</span>
+    <h4>Promote IFC from toy to real</h4>
+    <p>Wire <code>Lattice.IFC</code> into <code>Cap</code> as the outbound membrane in &sect;05. Add <code>:result_schema</code>, <code>:max_result_bytes</code>, <code>:declassify</code> caveats + a <code>Gateway.query</code> path.</p>
+  </div>
+  <div class="step">
+    <span class="num">3</span>
+    <h4>Narrow vault-realm demo</h4>
+    <p>&ldquo;Data realm answers attenuated queries,&rdquo; with release-time consent and the covert-channel limitation stated up front. Vault = user-owned process the capsule cannot read.</p>
+  </div>
+</div>
+
+<hr>
+<p class="foot">
+  Design review for the <code>claude/private-data-capsule-demo-Y0Tse</code> branch. Diagrams are inline SVG (renders offline). Code blocks marked &ldquo;sketch&rdquo; are not in the tree. Open this file in any browser; print to PDF with <span class="kbd">Ctrl/Cmd&nbsp;+&nbsp;P</span> for a shareable copy.
+</p>
+
+</div>
+</body>
+</html>
