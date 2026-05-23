@@ -82,16 +82,17 @@ runtime and are deferred for the feasibility reasons above.
 | Hostile raw-distribution shapes fail closed before delivery | GATE | test 2 (reg-name, pid send, RPC-shaped, spawn); `EchoTarget` call_count 0 | committed |
 | Forged / malformed logical calls denied without ambient delivery | GATE | test 3 (`:unknown_cap`, call_count 0) | committed |
 | BEAM-native struct/provenance forgery is unrepresentable over the carrier | GATE | frame schema in `message.ex` (JSON-only, string ids) | committed (implicit) |
-| Replay of a used `use_limit: 1` cap over the carrier is denied | GATE | — | **GAP — to add** |
+| Replay of a used `use_limit: 1` cap over the carrier is denied | GATE | `"replay of a used single-use cap over the carrier is denied"` in `browser_carrier_spike_test.exs` (`:use_limit_exceeded`, no second delivery) | committed (`ab08264`) |
 | Real Popcorn agent completes a logical call from a browser tab | ARTIFACT | — | **deferred (feasibility)** |
 | Optional: `origin: :beam` on the *main* WS demo is audited, never authority | GATE | — | **optional, not started** |
 
 ## Remaining work, in priority order
 
-1. **Close the replay GATE gap.** Add a carrier test: grant a `use_limit: 1`
-   cap, drive one successful logical call, then replay the same frame and assert
-   denial + `:browser_beam_carrier_denied` audit. Small, deterministic, finishes
-   the server-side story.
+1. ~~**Close the replay GATE gap.**~~ Done in `ab08264`. The same commit also
+   replaced `Process.sleep`-based synchronization in the suite with a
+   deterministic `GenServer.call(gateway, :state)` flush, removing an
+   order-dependent flake in the forged-cap test (cold-VM module loading could
+   exceed the old 20ms sleep).
 2. **Pick one honest browser-side completion step** (from the research note):
    vendor/reproducibly build `@otp-interop/web-socket-dist`, add a Popcorn iframe
    agent that calls the JS carrier shim, and run the listener under
