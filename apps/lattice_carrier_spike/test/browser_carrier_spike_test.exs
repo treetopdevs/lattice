@@ -98,12 +98,47 @@ defmodule LatticeCarrierSpike.BrowserCarrierSpikeTest do
       })
 
     BrowserGateway.logical_call(gateway, forged)
-    Process.sleep(20)
+    flush_gateway(gateway)
 
     assert %{call_count: 0} = EchoTarget.stats(target)
     assert_audit(:deny, reason: :unknown_cap)
     assert_audit(:browser_beam_carrier_denied, request_id: "forged", reason: :unknown_cap)
   end
+
+  test "replay of a used single-use cap over the carrier is denied" do
+    {:ok, target} = EchoTarget.start_link(owner: self())
+    {:ok, tab} = Lattice.connect_tab(%{transport: :carrier_spike, connection_pid: self()})
+    {:ok, cap} = Lattice.grant(tab.id, target, [:call], use_limit: 1)
+    {:ok, gateway} = BrowserGateway.start_link(reply_nodes: fn -> [] end)
+
+    frame =
+      LatticeCarrierSpike.logical_call_frame(%{
+        request_id: "replay",
+        tab_id: tab.id,
+        cap_id: cap.id,
+        payload: %{"op" => "echo", "value" => 7}
+      })
+
+    # First use succeeds and consumes the single-use cap.
+    BrowserGateway.logical_call(gateway, frame)
+    assert_receive {:carrier_target_call, %{payload: %{"value" => 7}}}
+    flush_gateway(gateway)
+    assert %{call_count: 1} = EchoTarget.stats(target)
+    assert_audit(:browser_beam_carrier_call, request_id: "replay", cap_id: cap.id)
+
+    # Replaying the identical frame is denied without a second target delivery.
+    BrowserGateway.logical_call(gateway, frame)
+    flush_gateway(gateway)
+    refute_received {:carrier_target_call, _envelope}
+
+    assert %{call_count: 1} = EchoTarget.stats(target)
+    assert_audit(:use_limit_exceeded, cap_id: cap.id, reason: :use_limit_exceeded)
+    assert_audit(:browser_beam_carrier_denied, request_id: "replay", reason: :use_limit_exceeded)
+  end
+
+  # The gateway processes its mailbox in order, so a synchronous state call
+  # guarantees any frames sent before it have finished handle_info/3.
+  defp flush_gateway(gateway), do: GenServer.call(gateway, :state)
 
   defp assert_audit(type, filters) do
     assert Enum.any?(Lattice.audit_events(), fn event ->
