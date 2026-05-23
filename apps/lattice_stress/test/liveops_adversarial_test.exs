@@ -63,7 +63,7 @@ defmodule LatticeStress.LiveOpsAdversarialTest do
              })
 
     assert_audit(:deny, reason: :wrong_owner)
-    assert_audit(:liveops_denied, reason: :cap_action_mismatch)
+    assert_audit(:deny, reason: :cap_action_mismatch)
     assert_audit(:expired_cap, reason: :expired)
   end
 

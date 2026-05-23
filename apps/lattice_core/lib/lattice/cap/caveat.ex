@@ -20,6 +20,7 @@ defmodule Lattice.Cap.Caveat do
           | :delegation
           | :allowed_realm
           | :payload_schema
+          | :action
 
   @type t :: %__MODULE__{type: type(), value: term()}
 
@@ -31,6 +32,7 @@ defmodule Lattice.Cap.Caveat do
   def delegation(value), do: new(:delegation, value)
   def allowed_realm(value), do: new(:allowed_realm, value)
   def payload_schema(schema), do: new(:payload_schema, schema)
+  def action(value), do: new(:action, action_token(value))
 
   def from_opts(opts) do
     base = opts |> Keyword.get(:caveats, []) |> Enum.flat_map(&normalize_many/1)
@@ -44,6 +46,7 @@ defmodule Lattice.Cap.Caveat do
       |> maybe_put(:delegation, Keyword.get(opts, :delegation))
       |> maybe_put(:allowed_realm, Keyword.get(opts, :allowed_realm))
       |> maybe_put(:payload_schema, Keyword.get(opts, :schema))
+      |> maybe_put(:action, Keyword.get(opts, :action))
 
     Enum.map(base ++ derived, &normalize/1)
   end
@@ -56,6 +59,7 @@ defmodule Lattice.Cap.Caveat do
   def normalize({:delegation, value}), do: delegation(value)
   def normalize({:allowed_realm, value}), do: allowed_realm(value)
   def normalize({:payload_schema, value}), do: payload_schema(value)
+  def normalize({:action, value}), do: action(value)
 
   def enforce(cap, payload) do
     with :ok <- enforce_schema(cap, payload) do
@@ -147,6 +151,16 @@ defmodule Lattice.Cap.Caveat do
     end
   end
 
+  defp enforce_one(%__MODULE__{type: :action, value: expected}, payload) do
+    case fetch_payload(payload, [:action, "action"]) do
+      {:ok, value} ->
+        if action_token(value) == expected, do: :ok, else: {:error, :cap_action_mismatch}
+
+      _ ->
+        {:error, :cap_action_mismatch}
+    end
+  end
+
   defp enforce_one(%__MODULE__{type: :payload_schema}, _payload), do: :ok
   defp enforce_one(%__MODULE__{type: :delegation}, _payload), do: :ok
   defp enforce_one(%__MODULE__{type: :allowed_realm}, _payload), do: :ok
@@ -169,6 +183,13 @@ defmodule Lattice.Cap.Caveat do
   defp normalize_symbol(value) when is_atom(value), do: value
   defp normalize_symbol(value) when is_binary(value), do: String.downcase(value)
   defp normalize_symbol(value), do: value
+
+  defp action_token(value) when is_atom(value), do: value |> Atom.to_string() |> action_token()
+
+  defp action_token(value) when is_binary(value),
+    do: value |> String.trim() |> String.downcase() |> String.replace("-", "_")
+
+  defp action_token(value), do: value
 
   defp external_value(%MapSet{} = set), do: MapSet.to_list(set)
   defp external_value(value), do: value

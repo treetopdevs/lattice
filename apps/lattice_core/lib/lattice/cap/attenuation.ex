@@ -194,6 +194,7 @@ defmodule Lattice.Cap.Attenuation do
     with :ok <- number_monotonic?(parent_caveats, all, :amount_max),
          :ok <- symbol_monotonic?(parent_caveats, all, :vendor),
          :ok <- symbol_monotonic?(parent_caveats, all, :provenance_label),
+         :ok <- symbol_monotonic?(parent_caveats, all, :action),
          :ok <- confirmation_monotonic?(parent_caveats, all),
          :ok <- delegation_monotonic?(parent_caveats, all) do
       :ok

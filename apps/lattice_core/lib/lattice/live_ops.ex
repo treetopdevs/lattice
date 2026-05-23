@@ -5,40 +5,19 @@ defmodule Lattice.LiveOps do
   Browser tabs may render this state, but they do not grant, infer, or mutate
   authority. Every operation that matters still arrives through `Lattice.Gateway`
   with a capability issued to the calling tab.
+
+  Authority lives in exactly one place: `Lattice.CapStore`. This process is a
+  domain executor and projection. It never re-authorizes a call — by the time a
+  `{:lattice_call, …}` envelope arrives, `CapStore` has already enforced owner,
+  revocation, expiry, use-limit, ops, schema, and the action caveat. LiveOps only
+  executes the overlay/approval/publish workflow and renders state, deriving every
+  capability's status from `CapStore` so the two can never drift.
   """
 
   use GenServer
 
-  alias Lattice.{Audit, Cap, Tab}
-
-  @roles [:producer, :graphics_operator, :remote_camera, :observer]
-  @role_colors %{
-    producer: "#2f6fed",
-    graphics_operator: "#8a4fff",
-    remote_camera: "#008f6b",
-    observer: "#6b7280"
-  }
-
-  @role_actions %{
-    producer: [:approve_publish, :revoke_publish, :observe],
-    graphics_operator: [:preview_overlay, :request_publish, :observe],
-    remote_camera: [:observe],
-    observer: [:observe]
-  }
-
-  @role_devices %{
-    producer: [:preview_monitor],
-    graphics_operator: [:graphics_renderer],
-    remote_camera: [:camera_feed, :tally_light],
-    observer: []
-  }
-
-  @device_actions %{
-    camera_feed: :camera_frame,
-    graphics_renderer: :render_graphics,
-    tally_light: :set_tally,
-    preview_monitor: :monitor_preview
-  }
+  alias Lattice.{Audit, Tab}
+  alias Lattice.LiveOps.{Policy, Serializer}
 
   @default_publish_ttl_ms 15_000
 
@@ -67,7 +46,7 @@ defmodule Lattice.LiveOps do
     GenServer.call(__MODULE__, {:device_event, kind, tab_id, device_id, action, cap_id, payload})
   end
 
-  def device_action(kind), do: Map.fetch!(@device_actions, normalize_action(kind))
+  def device_action(kind), do: Policy.device_action(normalize_action(kind))
 
   @impl true
   def init(_opts), do: {:ok, fresh_state()}
@@ -77,14 +56,14 @@ defmodule Lattice.LiveOps do
     role = role_from(tab.identity)
 
     if Map.has_key?(state.actors, tab.id) do
-      {:reply, {:ok, public_actor(Map.fetch!(state.actors, tab.id), state)}, state}
+      {:reply, {:ok, Serializer.actor_view(state, Map.fetch!(state.actors, tab.id))}, state}
     else
       actor = %{
         tab_id: tab.id,
         session_id: tab.session_id,
         role: role,
         label: label_for(role, state.role_counts[role] + 1),
-        color: Map.fetch!(@role_colors, role),
+        color: Policy.color_for(role),
         state: :connected,
         caps: %{},
         devices: %{},
@@ -106,7 +85,7 @@ defmodule Lattice.LiveOps do
           color: actor.color
         })
 
-      {:reply, {:ok, public_actor(actor, state)}, state}
+      {:reply, {:ok, Serializer.actor_view(state, actor)}, state}
     end
   end
 
@@ -155,16 +134,16 @@ defmodule Lattice.LiveOps do
     {:reply, {:ok, op}, state}
   end
 
-  def handle_call(:snapshot, _from, state), do: {:reply, snapshot_from(state), state}
+  def handle_call(:snapshot, _from, state), do: {:reply, Serializer.snapshot(state), state}
   def handle_call(:events, _from, state), do: {:reply, Enum.reverse(state.events), state}
   def handle_call(:reset, _from, _state), do: {:reply, :ok, fresh_state()}
 
   def handle_call({:export, :json}, _from, state) do
-    {:reply, Jason.encode!(snapshot_from(state), pretty: true), state}
+    {:reply, Jason.encode!(Serializer.snapshot(state), pretty: true), state}
   end
 
   def handle_call({:export, :mermaid}, _from, state) do
-    {:reply, mermaid_from(state), state}
+    {:reply, Serializer.mermaid(state), state}
   end
 
   def handle_call({:export, format}, from, state) when format in ["json", "mermaid"] do
@@ -177,17 +156,14 @@ defmodule Lattice.LiveOps do
 
   def handle_call({:lattice_call, envelope}, _from, state) do
     tab_id = Map.fetch!(envelope, :from_tab_id)
-    cap_id = Map.get(envelope, :cap_id)
     payload = Map.get(envelope, :payload, %{})
-    action = action_from(payload)
 
-    case authorize_action(state, tab_id, cap_id, action) do
-      {:ok, actor, cap_record} ->
-        {reply, state} = run_action(state, actor, cap_record, payload)
+    case fetch_actor(state, tab_id) do
+      {:ok, actor} ->
+        {reply, state} = run_action(state, actor, payload)
         {:reply, reply, state}
 
       {:error, reason} ->
-        state = deny(state, tab_id, action, reason, %{cap_id: cap_id})
         {:reply, {:error, reason}, state}
     end
   end
@@ -209,12 +185,12 @@ defmodule Lattice.LiveOps do
     %{
       actors: %{},
       order: [],
-      caps: %{},
+      cap_index: %{},
       approvals: %{},
       operations: [],
       events: [],
       sequence: 0,
-      role_counts: Map.new(@roles, &{&1, 0}),
+      role_counts: Map.new(Policy.roles(), &{&1, 0}),
       approval_sequence: 0,
       operation_sequence: 0,
       device_sequence: 0,
@@ -229,170 +205,153 @@ defmodule Lattice.LiveOps do
   end
 
   defp grant_role_caps(actor, state) do
-    Enum.reduce(Map.fetch!(@role_actions, actor.role), {actor, state}, fn action,
-                                                                          {actor, state} ->
-      grant_action_cap(actor, state, action, __MODULE__, %{
-        target: "server_plane",
-        kind: :role
-      })
+    Enum.reduce(Policy.role_actions(actor.role), {actor, state}, fn action, {actor, state} ->
+      grant_role_cap(actor, state, action)
     end)
   end
 
   defp spawn_devices(actor, state) do
-    Enum.reduce(Map.fetch!(@role_devices, actor.role), {actor, state}, fn kind, {actor, state} ->
+    Enum.reduce(Policy.role_devices(actor.role), {actor, state}, fn kind, {actor, state} ->
       device_id = "device-#{state.device_sequence + 1}-#{kind}"
 
-      {:ok, pid} =
-        Lattice.spawn_linked(
-          actor.tab_id,
-          Lattice.LiveOps.Device,
-          [kind: kind, device_id: device_id, role: actor.role],
-          []
-        )
+      case Lattice.spawn_linked(
+             actor.tab_id,
+             Lattice.LiveOps.Device,
+             [kind: kind, device_id: device_id, role: actor.role],
+             []
+           ) do
+        {:ok, pid} ->
+          ref = Process.monitor(pid)
+          state = %{state | device_sequence: state.device_sequence + 1}
+          state = put_in(state.device_refs[ref], {actor.tab_id, device_id})
 
-      ref = Process.monitor(pid)
-      state = %{state | device_sequence: state.device_sequence + 1}
-      state = put_in(state.device_refs[ref], {actor.tab_id, device_id})
+          device = %{
+            id: device_id,
+            kind: kind,
+            role: actor.role,
+            tab_id: actor.tab_id,
+            pid: inspect(pid),
+            state: :connected
+          }
 
-      device = %{
-        id: device_id,
-        kind: kind,
-        role: actor.role,
-        tab_id: actor.tab_id,
-        pid: inspect(pid),
-        state: :connected
-      }
+          actor = put_in(actor.devices[device_id], device)
 
-      actor = put_in(actor.devices[device_id], device)
+          {actor, state} =
+            grant_device_cap(actor, state, Policy.device_action(kind), pid, device_id, kind)
 
-      {actor, state} =
-        grant_action_cap(actor, state, Map.fetch!(@device_actions, kind), pid, %{
-          target: device_id,
-          device_id: device_id,
-          device_kind: kind,
-          kind: :device
-        })
+          state =
+            emit(state, :liveops_device_joined, %{
+              tab_id: actor.tab_id,
+              role: actor.role,
+              device_id: device_id,
+              device_kind: kind
+            })
 
-      state =
-        emit(state, :liveops_device_joined, %{
-          tab_id: actor.tab_id,
-          role: actor.role,
-          device_id: device_id,
-          device_kind: kind
-        })
+          {actor, state}
 
-      {actor, state}
+        {:error, reason} ->
+          state = %{state | device_sequence: state.device_sequence + 1}
+
+          state =
+            emit(state, :liveops_device_skipped, %{
+              tab_id: actor.tab_id,
+              role: actor.role,
+              device_kind: kind,
+              reason: inspect(reason)
+            })
+
+          {actor, state}
+      end
     end)
   end
 
-  defp grant_action_cap(actor, state, action, target, attrs) do
+  defp grant_role_cap(actor, state, action) do
     {:ok, cap} =
-      Lattice.grant(actor.tab_id, target, [:call],
-        schema: %{action: :string},
-        audit: %{
-          liveops_action: Atom.to_string(action),
-          liveops_role: Atom.to_string(actor.role),
-          liveops_kind: Atom.to_string(attrs.kind),
-          liveops_target: attrs.target
-        }
+      Lattice.grant(actor.tab_id, __MODULE__, [:call], Policy.role_cap_opts(action, actor.role))
+
+    entry = %{
+      owner_tab_id: cap.owner_tab_id,
+      action: action,
+      role: actor.role,
+      target: "server_plane",
+      kind: :role,
+      device_id: nil,
+      device_kind: nil,
+      approval_id: nil,
+      approved_by_tab_id: nil
+    }
+
+    put_cap(actor, state, cap, entry)
+  end
+
+  defp grant_device_cap(actor, state, action, pid, device_id, kind) do
+    {:ok, cap} =
+      Lattice.grant(
+        actor.tab_id,
+        pid,
+        [:call],
+        Policy.device_cap_opts(action, actor.role, device_id, kind)
       )
 
-    record = cap_record(cap, action, actor.role, attrs)
-    actor = put_in(actor.caps[action], record)
-    state = %{state | caps: Map.put(state.caps, cap.id, record)}
+    entry = %{
+      owner_tab_id: cap.owner_tab_id,
+      action: action,
+      role: actor.role,
+      target: device_id,
+      kind: :device,
+      device_id: device_id,
+      device_kind: kind,
+      approval_id: nil,
+      approved_by_tab_id: nil
+    }
 
-    state =
-      emit(state, :liveops_cap_granted, %{
-        tab_id: actor.tab_id,
-        role: actor.role,
-        cap_id: cap.id,
-        action: action,
-        target: record.target,
-        status: record.status,
-        ttl_ms: record.ttl_ms,
-        expires_at: record.expires_at,
-        approval_id: Map.get(record, :approval_id),
-        device_id: Map.get(record, :device_id)
-      })
-
-    {actor, state}
+    put_cap(actor, state, cap, entry)
   end
 
   defp grant_publish_cap(state, operator, producer, approval, ttl_ms) do
     {:ok, cap} =
-      Lattice.grant(operator.tab_id, __MODULE__, [:call],
-        ttl: ttl_ms,
-        use_limit: 1,
-        schema: %{action: :string, request_id: :string},
-        audit: %{
-          liveops_action: "publish",
-          liveops_role: "graphics_operator",
-          liveops_kind: "approval",
-          liveops_target: "server_plane",
-          approval_id: approval.id,
-          approved_by_tab_id: producer.tab_id
-        }
+      Lattice.grant(
+        operator.tab_id,
+        __MODULE__,
+        [:call],
+        Policy.publish_cap_opts(approval, producer.tab_id, ttl_ms)
       )
 
-    record =
-      cap_record(cap, :publish, :graphics_operator, %{
-        target: "server_plane",
-        kind: :approval,
-        approval_id: approval.id,
-        approved_by_tab_id: producer.tab_id
-      })
+    entry = %{
+      owner_tab_id: cap.owner_tab_id,
+      action: :publish,
+      role: :graphics_operator,
+      target: "server_plane",
+      kind: :approval,
+      device_id: nil,
+      device_kind: nil,
+      approval_id: approval.id,
+      approved_by_tab_id: producer.tab_id
+    }
 
-    operator = put_in(operator, [:caps, :publish], record)
+    {operator, state} = put_cap(operator, state, cap, entry)
+    state = put_actor(state, operator)
+    {cap, state}
+  end
 
-    state =
-      state
-      |> put_actor(operator)
-      |> put_in([:caps, cap.id], record)
+  defp put_cap(actor, state, cap, entry) do
+    actor = put_in(actor.caps[entry.action], cap.id)
+    state = put_in(state.cap_index[cap.id], entry)
 
     state =
       emit(state, :liveops_cap_granted, %{
-        tab_id: operator.tab_id,
-        role: operator.role,
+        tab_id: actor.tab_id,
+        role: actor.role,
         cap_id: cap.id,
-        action: :publish,
-        target: "server_plane",
-        status: :active,
+        action: entry.action,
+        target: entry.target,
         ttl_ms: cap.ttl_ms,
         expires_at: cap.expires_at,
-        approval_id: approval.id,
-        approved_by_tab_id: producer.tab_id
+        approval_id: entry.approval_id,
+        device_id: entry.device_id
       })
 
-    {record, state}
-  end
-
-  defp cap_record(%Cap{} = cap, action, role, attrs) do
-    %{
-      id: cap.id,
-      action: normalize_action(action),
-      role: normalize_role(role),
-      owner_tab_id: cap.owner_tab_id,
-      target: attrs.target,
-      status: :active,
-      ttl_ms: cap.ttl_ms,
-      expires_at: cap.expires_at,
-      use_limit: cap.use_limit,
-      approval_id: Map.get(attrs, :approval_id),
-      approved_by_tab_id: Map.get(attrs, :approved_by_tab_id),
-      device_id: Map.get(attrs, :device_id),
-      device_kind: Map.get(attrs, :device_kind),
-      kind: attrs.kind
-    }
-  end
-
-  defp authorize_action(state, tab_id, cap_id, action) do
-    with {:ok, actor} <- fetch_actor(state, tab_id),
-         {:ok, cap_record} <- fetch_cap_record(state, cap_id),
-         :ok <- cap_action_matches(cap_record, action),
-         :ok <- role_allows_action(actor.role, action),
-         :ok <- cap_role_matches(cap_record, actor.role) do
-      {:ok, actor, cap_record}
-    end
+    {actor, state}
   end
 
   defp fetch_actor(state, tab_id) do
@@ -403,33 +362,7 @@ defmodule Lattice.LiveOps do
     end
   end
 
-  defp fetch_cap_record(_state, nil), do: {:error, :cap_required}
-
-  defp fetch_cap_record(state, cap_id) do
-    case Map.fetch(state.caps, cap_id) do
-      {:ok, %{status: :active} = cap_record} -> {:ok, cap_record}
-      {:ok, _cap_record} -> {:error, :cap_not_active}
-      :error -> {:error, :unknown_liveops_cap}
-    end
-  end
-
-  defp cap_action_matches(%{action: action}, action), do: :ok
-  defp cap_action_matches(_cap_record, _action), do: {:error, :cap_action_mismatch}
-
-  defp role_allows_action(role, :publish) when role == :graphics_operator, do: :ok
-
-  defp role_allows_action(role, action) do
-    if action in Map.fetch!(@role_actions, role) do
-      :ok
-    else
-      {:error, :role_not_allowed}
-    end
-  end
-
-  defp cap_role_matches(%{role: role}, role), do: :ok
-  defp cap_role_matches(_cap_record, _role), do: {:error, :cap_role_mismatch}
-
-  defp run_action(state, actor, _cap_record, payload) do
+  defp run_action(state, actor, payload) do
     case action_from(payload) do
       :preview_overlay ->
         preview_overlay(state, actor, payload)
@@ -447,11 +380,10 @@ defmodule Lattice.LiveOps do
         publish(state, actor, payload)
 
       :observe ->
-        {{:ok, snapshot_from(state)}, state}
+        {{:ok, Serializer.snapshot(state)}, state}
 
       action ->
-        {{:error, {:unknown_action, action}},
-         deny(state, actor.tab_id, action, :unknown_action, %{})}
+        {{:error, {:unknown_action, action}}, state}
     end
   end
 
@@ -544,9 +476,7 @@ defmodule Lattice.LiveOps do
 
       {{:ok, %{approval_id: approval.id, publish_cap_id: publish_cap.id}}, state}
     else
-      {:error, reason} ->
-        {{:error, reason},
-         deny(state, actor.tab_id, :approve_publish, reason, %{approval_id: approval_id})}
+      {:error, reason} -> {{:error, reason}, state}
     end
   end
 
@@ -555,7 +485,7 @@ defmodule Lattice.LiveOps do
 
     case Map.fetch(state.approvals, approval_id) do
       {:ok, %{publish_cap_id: cap_id} = approval} when is_binary(cap_id) ->
-        state = revoke_cap_record(state, cap_id, :producer_revoke)
+        state = revoke_cap(state, cap_id, :producer_revoke)
         approval = %{approval | status: :revoked}
         state = put_in(state.approvals[approval.id], approval)
 
@@ -571,14 +501,10 @@ defmodule Lattice.LiveOps do
         {{:ok, %{approval_id: approval.id, revoked: cap_id}}, state}
 
       {:ok, _approval} ->
-        {{:error, :approval_has_no_publish_cap},
-         deny(state, actor.tab_id, :revoke_publish, :approval_has_no_publish_cap, %{
-           approval_id: approval_id
-         })}
+        {{:error, :approval_has_no_publish_cap}, state}
 
       :error ->
-        {{:error, :unknown_approval},
-         deny(state, actor.tab_id, :revoke_publish, :unknown_approval, %{approval_id: approval_id})}
+        {{:error, :unknown_approval}, state}
     end
   end
 
@@ -610,7 +536,7 @@ defmodule Lattice.LiveOps do
           result: :on_air
         })
 
-      state = revoke_cap_record(state, approval.publish_cap_id, :publish_used)
+      state = revoke_cap(state, approval.publish_cap_id, :publish_used)
 
       state =
         emit(state, :liveops_cap_revoked, %{
@@ -622,9 +548,7 @@ defmodule Lattice.LiveOps do
 
       {{:ok, %{operation_id: op.id, on_air: overlay}}, state}
     else
-      {:error, reason} ->
-        {{:error, reason},
-         deny(state, actor.tab_id, :publish, reason, %{approval_id: approval_id, cap_id: cap_id})}
+      {:error, reason} -> {{:error, reason}, state}
     end
   end
 
@@ -656,24 +580,9 @@ defmodule Lattice.LiveOps do
     end
   end
 
-  defp revoke_cap_record(state, cap_id, reason) do
+  defp revoke_cap(state, cap_id, reason) do
     _ = Lattice.revoke(cap_id, reason)
-
-    case Map.fetch(state.caps, cap_id) do
-      {:ok, record} ->
-        record = %{record | status: :revoked}
-
-        state =
-          update_in(state, [:actors, record.owner_tab_id, :caps], fn
-            nil -> nil
-            caps -> Map.put(caps, record.action, record)
-          end)
-
-        put_in(state.caps[cap_id], record)
-
-      :error ->
-        state
-    end
+    state
   end
 
   defp cleanup_actor(state, tab_id, reason) do
@@ -682,7 +591,7 @@ defmodule Lattice.LiveOps do
         state =
           actor.caps
           |> Map.values()
-          |> Enum.reduce(state, fn cap, state -> revoke_cap_record(state, cap.id, reason) end)
+          |> Enum.reduce(state, fn cap_id, state -> revoke_cap(state, cap_id, reason) end)
 
         state =
           state.approvals
@@ -769,119 +678,6 @@ defmodule Lattice.LiveOps do
     end
   end
 
-  defp snapshot_from(state) do
-    now = System.monotonic_time(:millisecond)
-
-    %{
-      realm: "broadcast_liveops",
-      server_plane: %{
-        id: "liveops-server-plane",
-        label: "LiveOps server plane",
-        gateway: "Lattice.Gateway"
-      },
-      actors:
-        state.order
-        |> Enum.filter(&Map.has_key?(state.actors, &1))
-        |> Enum.map(&public_actor(Map.fetch!(state.actors, &1), state, now)),
-      caps:
-        state.caps
-        |> Map.values()
-        |> Enum.sort_by(& &1.id)
-        |> Enum.map(&public_cap(&1, now)),
-      approvals:
-        state.approvals
-        |> Map.values()
-        |> Enum.sort_by(& &1.id)
-        |> Enum.map(&public_approval(&1, now)),
-      operations:
-        state.operations
-        |> Enum.reverse()
-        |> Enum.map(&stringify_atom_values/1),
-      events: Enum.reverse(state.events),
-      counters: %{
-        actors: map_size(state.actors),
-        caps: map_size(state.caps),
-        approvals: map_size(state.approvals),
-        operations: length(state.operations),
-        denials: state.denials,
-        audit: length(Audit.events())
-      }
-    }
-  end
-
-  defp public_actor(actor, state, now \\ System.monotonic_time(:millisecond)) do
-    %{
-      tab_id: actor.tab_id,
-      session_id: actor.session_id,
-      role: actor.role,
-      label: actor.label,
-      color: actor.color,
-      state: actor.state,
-      caps:
-        actor.caps
-        |> Map.values()
-        |> Enum.sort_by(&Atom.to_string(&1.action))
-        |> Enum.map(&public_cap(&1, now)),
-      devices:
-        actor.devices
-        |> Map.values()
-        |> Enum.sort_by(& &1.id)
-        |> Enum.map(&stringify_atom_values/1),
-      pending_approvals:
-        state.approvals
-        |> Map.values()
-        |> Enum.filter(&(&1.operator_tab_id == actor.tab_id and &1.status == :pending))
-        |> Enum.map(& &1.id)
-    }
-  end
-
-  defp public_cap(cap, now) do
-    cap
-    |> stringify_atom_values()
-    |> Map.put(:expires_in_ms, expires_in(cap.expires_at, now))
-  end
-
-  defp public_approval(approval, now) do
-    approval
-    |> stringify_atom_values()
-    |> Map.put(:expires_in_ms, expires_in(Map.get(approval, :expires_at), now))
-  end
-
-  defp expires_in(nil, _now), do: nil
-  defp expires_in(expires_at, now), do: max(expires_at - now, 0)
-
-  defp mermaid_from(state) do
-    snapshot = snapshot_from(state)
-
-    actor_lines =
-      Enum.map(snapshot.actors, fn actor ->
-        id = mermaid_id(actor.tab_id)
-        ~s(  #{id}["#{actor.label} #{actor.role}"])
-      end)
-
-    device_lines =
-      snapshot.actors
-      |> Enum.flat_map(fn actor ->
-        Enum.map(actor.devices, fn device ->
-          ~s(  #{mermaid_id(device.id)}["#{device.kind}"])
-        end)
-      end)
-
-    cap_lines =
-      Enum.map(snapshot.caps, fn cap ->
-        from = mermaid_id(cap.owner_tab_id)
-        to = mermaid_id(cap.target)
-        arrow = if cap.status == "revoked", do: "-.->", else: "-->"
-        ~s(  #{from} #{arrow}|"#{cap.action}"| #{to})
-      end)
-
-    ["graph TD", ~s(  server["LiveOps server plane"])]
-    |> Kernel.++(actor_lines)
-    |> Kernel.++(device_lines)
-    |> Kernel.++(cap_lines)
-    |> Enum.join("\n")
-  end
-
   defp operation(state, action, tab_id, attrs) do
     %{
       id: operation_id(state),
@@ -893,25 +689,7 @@ defmodule Lattice.LiveOps do
 
   defp operation_id(state), do: "operation-#{state.operation_sequence + 1}"
 
-  defp role_from(identity) do
-    identity
-    |> value_for(:role)
-    |> normalize_role()
-  end
-
-  defp normalize_role(role) when is_atom(role) and role in @roles, do: role
-
-  defp normalize_role(role) when is_binary(role) do
-    role
-    |> String.trim()
-    |> String.downcase()
-    |> String.replace("-", "_")
-    |> then(fn role ->
-      Enum.find(@roles, :observer, &(Atom.to_string(&1) == role))
-    end)
-  end
-
-  defp normalize_role(_role), do: :observer
+  defp role_from(identity), do: identity |> value_for(:role) |> Policy.normalize_role()
 
   defp normalize_action(action) when is_atom(action), do: action
 
@@ -971,29 +749,8 @@ defmodule Lattice.LiveOps do
   defp compact_payload(payload) when is_map(payload) do
     payload
     |> Map.take(["action", "overlay", "frame", "state", :action, :overlay, :frame, :state])
-    |> stringify_atom_values()
+    |> Serializer.stringify_atom_values()
   end
 
   defp compact_payload(_payload), do: %{}
-
-  defp stringify_atom_values(map) when is_map(map) do
-    Map.new(map, fn {key, value} ->
-      {key, stringify_atom_value(value)}
-    end)
-  end
-
-  defp stringify_atom_value(value) when is_atom(value), do: Atom.to_string(value)
-  defp stringify_atom_value(value) when is_map(value), do: stringify_atom_values(value)
-
-  defp stringify_atom_value(value) when is_list(value),
-    do: Enum.map(value, &stringify_atom_value/1)
-
-  defp stringify_atom_value(value), do: value
-
-  defp mermaid_id(value) do
-    value
-    |> to_string()
-    |> String.replace(~r/[^a-zA-Z0-9_]/, "_")
-    |> then(&("n_" <> &1))
-  end
 end

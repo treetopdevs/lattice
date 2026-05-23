@@ -107,7 +107,7 @@ defmodule LatticeCore.LiveOpsTest do
              })
 
     assert operation_count(:publish) == before_count
-    assert_audit(:liveops_denied, tab_id: observer.id, reason: :cap_action_mismatch)
+    assert_audit(:deny, tab_id: observer.id, reason: :cap_action_mismatch)
   end
 
   test "device actors are cap gated and cleaned with tab lifecycle" do
