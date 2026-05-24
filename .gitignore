@@ -30,3 +30,6 @@ erl_crash.dump
 .cursorindexingignore
 .expert/
 .specstory/
+
+# Local toolchain override (mise: defer Erlang/Elixir to asdf's OTP 28).
+.mise.toml

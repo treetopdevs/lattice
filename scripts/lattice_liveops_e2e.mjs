@@ -1,27 +1,27 @@
 #!/usr/bin/env node
-import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
-import net from "node:net";
 import path from "node:path";
 import { chromium, expect } from "@playwright/test";
+import { freePort, startServer } from "../tests/e2e/support/lattice-server.mjs";
 
 const root = new URL("..", import.meta.url).pathname;
 const port = Number(process.env.LATTICE_LIVEOPS_PORT || (await freePort()));
 const outDir = process.env.LATTICE_LIVEOPS_OUT || path.join(root, "output/liveops");
-const url = `http://localhost:${port}/`;
 
 await fs.mkdir(outDir, { recursive: true });
 
-const server = spawn("mix", ["lattice.liveops", String(port)], {
-  cwd: root,
-  stdio: ["ignore", "pipe", "pipe"],
+const server = await startServer({
+  root,
+  command: "mix",
+  args: ["lattice.liveops", String(port)],
+  port,
 });
+const url = server.url;
 
 const contexts = [];
 let browser;
 
 try {
-  await waitForHttp(url, 20_000);
   browser = await launchBrowser();
 
   const producer = await openRole(browser, "producer", { recordVideo: true });
@@ -147,7 +147,7 @@ try {
 } finally {
   for (const context of contexts.reverse()) await context.close().catch(() => {});
   if (browser) await browser.close();
-  server.kill("SIGTERM");
+  await server.stop();
 }
 
 async function openRole(browser, role, opts = {}) {
@@ -176,38 +176,4 @@ async function launchBrowser() {
     if (process.env.PLAYWRIGHT_CHANNEL) throw error;
     return chromium.launch({ headless: true });
   }
-}
-
-async function waitForHttp(target, timeoutMs) {
-  const deadline = Date.now() + timeoutMs;
-  let lastError;
-
-  while (Date.now() < deadline) {
-    try {
-      const response = await fetch(target);
-      if (response.ok) return;
-    } catch (error) {
-      lastError = error;
-    }
-
-    await delay(100);
-  }
-
-  throw new Error(`Timed out waiting for ${target}: ${lastError?.message || "no response"}`);
-}
-
-function freePort() {
-  return new Promise((resolve, reject) => {
-    const server = net.createServer();
-    server.unref();
-    server.on("error", reject);
-    server.listen(0, () => {
-      const address = server.address();
-      server.close(() => resolve(address.port));
-    });
-  });
-}
-
-function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

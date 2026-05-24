@@ -1,14 +1,28 @@
 import { spawn } from "node:child_process";
 import net from "node:net";
 
-export async function startFlagshipServer(root) {
-  const port = Number(process.env.LATTICE_FLAGSHIP_E2E_PORT || (await freePort()));
-  const url = `http://127.0.0.1:${port}/`;
-  const timeoutMs = Number(process.env.LATTICE_FLAGSHIP_START_TIMEOUT_MS || 45_000);
+const DEFAULT_TIMEOUT_MS = 45_000;
 
-  const serverProcess = spawn("mix", ["lattice.demo.flagship", String(port)], {
+export async function startServer({
+  root,
+  command = "mix",
+  args = [],
+  port,
+  host = "127.0.0.1",
+  timeoutMs,
+  readyPath = "/",
+  env,
+} = {}) {
+  const resolvedPort = Number(port ?? (await freePort()));
+  const url = `http://${host}:${resolvedPort}/`;
+  const resolvedTimeout = Number(
+    timeoutMs ?? process.env.LATTICE_E2E_START_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS,
+  );
+
+  const serverProcess = spawn(command, args, {
     cwd: root,
     stdio: ["ignore", "pipe", "pipe"],
+    ...(env ? { env } : {}),
   });
 
   let stdout = "";
@@ -27,15 +41,32 @@ export async function startFlagshipServer(root) {
     exitStatus = { code, signal };
   });
 
-  await waitForHttp(url, timeoutMs, () => ({ stdout, stderr, exitStatus }));
+  const target = url + readyPath.replace(/^\//, "");
+  await waitForHttp(target, resolvedTimeout, () => ({ stdout, stderr, exitStatus }));
 
   return {
-    port,
+    port: resolvedPort,
     url,
+    process: serverProcess,
     stop() {
       return stopProcess(serverProcess);
     },
   };
+}
+
+export async function startFlagshipServer(root) {
+  const port = Number(process.env.LATTICE_FLAGSHIP_E2E_PORT || (await freePort()));
+  const timeoutMs = process.env.LATTICE_FLAGSHIP_START_TIMEOUT_MS
+    ? Number(process.env.LATTICE_FLAGSHIP_START_TIMEOUT_MS)
+    : undefined;
+
+  return startServer({
+    root,
+    command: "mix",
+    args: ["lattice.demo.flagship", String(port)],
+    port,
+    timeoutMs,
+  });
 }
 
 async function waitForHttp(target, timeoutMs, errorContext) {
@@ -91,7 +122,7 @@ function stopProcess(child) {
   });
 }
 
-function freePort() {
+export function freePort() {
   return new Promise((resolve, reject) => {
     const server = net.createServer();
     server.unref();

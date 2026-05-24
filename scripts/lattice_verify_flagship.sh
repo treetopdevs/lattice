@@ -19,6 +19,7 @@ fi
 
 mix format --check-formatted
 mix test apps/lattice_core/test/lattice_flagship_test.exs apps/lattice_server/test/flagship_http_test.exs apps/lattice_server/test/federated_workers_http_test.exs
+mix compile
 npm run browser:worker:e2e
 npm run flagship:e2e
 

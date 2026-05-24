@@ -1,11 +1,9 @@
 #!/usr/bin/env node
-import { spawn } from "node:child_process";
-import net from "node:net";
 import { chromium, expect } from "@playwright/test";
+import { freePort, startServer } from "../tests/e2e/support/lattice-server.mjs";
 
 const root = new URL("..", import.meta.url).pathname;
 const port = Number(process.env.LATTICE_E2E_PORT || (await freePort()));
-const url = `http://localhost:${port}/`;
 
 const serverExpr = `
 Lattice.reset!()
@@ -18,15 +16,17 @@ LatticeServer.DemoHub.reset()
   )
 `;
 
-const server = spawn("mix", ["run", "--no-halt", "-e", serverExpr], {
-  cwd: root,
-  stdio: ["ignore", "pipe", "pipe"],
+const server = await startServer({
+  root,
+  command: "mix",
+  args: ["run", "--no-halt", "-e", serverExpr],
+  port,
 });
+const url = server.url;
 
 let browser;
 
 try {
-  await waitForHttp(url, 15_000);
   browser = await launchBrowser();
 
   const contextA = await browser.newContext();
@@ -57,7 +57,7 @@ try {
   console.log(`Lattice browser resume E2E passed at ${url}`);
 } finally {
   if (browser) await browser.close();
-  server.kill("SIGTERM");
+  await server.stop();
 }
 
 async function launchBrowser() {
@@ -69,38 +69,4 @@ async function launchBrowser() {
     if (process.env.PLAYWRIGHT_CHANNEL) throw error;
     return chromium.launch({ headless: true });
   }
-}
-
-async function waitForHttp(target, timeoutMs) {
-  const deadline = Date.now() + timeoutMs;
-  let lastError;
-
-  while (Date.now() < deadline) {
-    try {
-      const response = await fetch(target);
-      if (response.ok) return;
-    } catch (error) {
-      lastError = error;
-    }
-
-    await delay(100);
-  }
-
-  throw new Error(`Timed out waiting for ${target}: ${lastError?.message || "no response"}`);
-}
-
-function freePort() {
-  return new Promise((resolve, reject) => {
-    const server = net.createServer();
-    server.unref();
-    server.on("error", reject);
-    server.listen(0, () => {
-      const address = server.address();
-      server.close(() => resolve(address.port));
-    });
-  });
-}
-
-function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
