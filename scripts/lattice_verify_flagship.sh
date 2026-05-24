@@ -19,6 +19,12 @@ fi
 
 mix format --check-formatted
 mix test apps/lattice_core/test/lattice_flagship_test.exs apps/lattice_server/test/flagship_http_test.exs apps/lattice_server/test/federated_workers_http_test.exs
+
+# The browser E2Es spawn dev-env demo servers and poll for HTTP readiness on a
+# short timeout. `mix test` only warms the test build, so warm the dev build here
+# to keep a cold compile from pushing first boot past that timeout.
+mix compile
+
 npm run browser:worker:e2e
 npm run flagship:e2e
 
