@@ -55,14 +55,14 @@ defmodule LatticeServer.StaticHandler do
 
   defp content_type("client.js"), do: "application/javascript; charset=utf-8"
   defp content_type("worker-client.js"), do: "application/javascript; charset=utf-8"
-  defp content_type("shell.js"), do: "text/javascript; charset=utf-8"
+  defp content_type("shell.js"), do: "application/javascript; charset=utf-8"
   defp content_type("styles.css"), do: "text/css; charset=utf-8"
 
   defp content_type(file) do
     cond do
       String.ends_with?(file, ".wasm") -> "application/wasm"
       String.ends_with?(file, ".avm") -> "application/octet-stream"
-      String.ends_with?(file, ".js") -> "text/javascript; charset=utf-8"
+      String.ends_with?(file, ".js") -> "application/javascript; charset=utf-8"
       String.ends_with?(file, ".html") -> "text/html; charset=utf-8"
       true -> "text/html; charset=utf-8"
     end

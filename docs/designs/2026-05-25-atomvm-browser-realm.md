@@ -28,7 +28,7 @@ Make the Lattice "tab realm" a **real BEAM process** running AtomVM-compiled-to-
 | Component | New/Existing | Location |
 |---|---|---|
 | **Shell** (thin JS I/O shim) | New | `examples/atomvm_tab/shell.js`, `index.html` |
-| **AtomVM runtime** (pinned prebuilt **alpha**) | New (staged, sha256-checked) | `examples/atomvm_tab/vendor/AtomVM-web-v0.7.0-alpha.1.{js,wasm}` + `atomvmlib-v0.7.0-alpha.1.avm` |
+| **AtomVM runtime** (pinned prebuilt **alpha**) | New (staged, sha256-checked) | `examples/atomvm_tab/AtomVM-web-v0.7.0-alpha.1.{js,wasm}` + `atomvmlib.avm` |
 | **Realm** (in-tab BEAM process) | New | `apps/lattice_tab/lib/lattice/tab/realm.ex` |
 | **Protocol** (pure state reducer) | New | `apps/lattice_tab/lib/lattice/tab/protocol.ex` |
 | **Codec** (JSON in BEAM) | New | `apps/lattice_tab/lib/lattice/tab/codec.ex` |
@@ -85,7 +85,7 @@ This reconciles against the real inbound whitelist frozen at [envelope.ex:9](../
 
 ### `Lattice.Tab.Protocol` — `apps/lattice_tab/lib/lattice/tab/protocol.ex`
 - **Pattern:** pure reducer module (no process, no I/O). Mirrors how the server keeps decode separate from effect.
-- **Behavior:** `handle(state, envelope)` returns `{state, [outbound], [render_intent]}`. Holds `tab_id`, `session_id`, held `cap_id`s, peers, demo state. Chooses which held `cap_id` to use when building a `call`/`cast`. **Stays inside AtomVM's subset** (no bitstrings, no big integers, no ETS).
+- **Behavior:** `handle(state, envelope)` returns `{state, [outbound], [render_intent]}`. Holds `client_id`, `tab_id`, `session_id`, held `cap_id`s (`caps`), and `status`. Chooses which held `cap_id` to use when building a `call`/`cast`. **Stays inside AtomVM's subset** (no bitstrings, no big integers, no ETS).
 
 ### `Lattice.Tab.Realm` — `apps/lattice_tab/lib/lattice/tab/realm.ex`
 - **Pattern:** a registered process running a `receive` loop (upgraded to `gen_server` only if Phase 0 confirms AtomVM's `gen_server` is adequate — the pure reducer makes this choice non-load-bearing).

@@ -61,6 +61,9 @@ defmodule Lattice.Tab.Protocol do
      [%{kind: "status", text: "connected", tab_id: state.tab_id}]}
   end
 
+  # Demo scope: the core demo grants a single "echo" cap, so it is stored under
+  # that fixed key. Phase 3 (full state machine) generalizes to multiple named
+  # caps keyed by the granted target.
   def handle(%__MODULE__{} = state, %{"type" => "grant", "cap" => %{"id" => cap_id}}) do
     {%{state | caps: Map.put(state.caps, "echo", cap_id)}, [],
      [%{kind: "cap", text: "granted", cap_id: cap_id}]}
