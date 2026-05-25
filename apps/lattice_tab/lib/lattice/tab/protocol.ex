@@ -75,6 +75,19 @@ defmodule Lattice.Tab.Protocol do
     {state, [], [%{kind: "cast_result", ok: env["ok"], error: env["error"]}]}
   end
 
+  def handle(%__MODULE__{} = state, %{"type" => "tab_call", "request_id" => request_id} = env) do
+    result = render_tab_call(state, env)
+    reply = %{"type" => "tab_render_result", "request_id" => request_id, "result" => result}
+    {state, [reply], [%{kind: "pulse", route: "bridge"}]}
+  end
+
+  def handle(%__MODULE__{} = state, %{"type" => "error"} = env) do
+    {state, [], [%{kind: "error", text: env["error_type"], reason: env["reason"]}]}
+  end
+
+  # Fall-through: any other (or out-of-scope) type is a no-op. MUST be the last clause.
+  def handle(%__MODULE__{} = state, _envelope), do: {state, [], []}
+
   @doc "Build a grant_request for a server-named target (e.g. \"echo\")."
   @spec grant_request(t(), String.t()) :: step()
   def grant_request(%__MODULE__{} = state, target) when is_binary(target) do
@@ -92,5 +105,19 @@ defmodule Lattice.Tab.Protocol do
       :error ->
         {state, [], [%{kind: "error", text: "no cap held"}]}
     end
+  end
+
+  # Real result for a capability-mediated tab_call (replaces the JS fakes).
+  defp render_tab_call(%__MODULE__{tab_id: tab_id}, env) do
+    payload = env["payload"] || %{}
+
+    %{
+      "realm" => "atomvm",
+      "received_by" => tab_id,
+      "from_tab_id" => env["from_tab_id"],
+      "op" => payload["op"],
+      "pulse" => payload["pulse"],
+      "rendered" => true
+    }
   end
 end
