@@ -8,6 +8,8 @@ defmodule LatticeServer do
     ip = Keyword.get(opts, :ip, {127, 0, 0, 1})
     listener = Keyword.get(opts, :listener, :lattice_demo_http)
     static_dir = Keyword.get(opts, :static_dir, Path.expand("examples/browser_demo", File.cwd!()))
+    atomvm_tab_dir =
+      Keyword.get(opts, :atomvm_tab_dir, Path.expand("examples/atomvm_tab", File.cwd!()))
     grant_targets = Keyword.get(opts, :grant_targets, %{})
     auto_story? = Keyword.get(opts, :auto_story?, true)
     resume_proxy_ttl_ms = Keyword.get(opts, :resume_proxy_ttl_ms, 15_000)
@@ -28,6 +30,8 @@ defmodule LatticeServer do
               resume_proxy_ttl_ms: resume_proxy_ttl_ms,
               resume_buffer_size: resume_buffer_size
             }},
+           {"/atomvm_tab/[...]", LatticeServer.StaticHandler,
+            %{static_dir: atomvm_tab_dir, isolate?: true}},
            {:_, LatticeServer.StaticHandler, %{static_dir: static_dir}}
          ]}
       ])
@@ -37,6 +41,7 @@ defmodule LatticeServer do
       [{:ip, ip}, {:port, port}],
       %{
         env: %{dispatch: dispatch},
+        max_frame_size: 65_536,
         idle_timeout: 10_000,
         max_header_name_length: 64,
         max_header_value_length: 4_096,
