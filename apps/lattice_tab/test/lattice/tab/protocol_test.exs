@@ -50,4 +50,41 @@ defmodule Lattice.Tab.ProtocolTest do
       assert %{kind: "cap", text: "granted", cap_id: "cap_echo_42"} in intents
     end
   end
+
+  describe "build + result" do
+    setup do
+      base = Protocol.init("c1")
+      {state, _o, _i} = Protocol.handle(base, %{"type" => "grant", "cap" => %{"id" => "cap_echo_42"}})
+      {:ok, granted: state}
+    end
+
+    test "grant_request/2 builds a grant_request envelope" do
+      {_state, outbound, _intents} = Protocol.grant_request(Protocol.init("c1"), "echo")
+      assert outbound == [%{"type" => "grant_request", "target" => "echo"}]
+    end
+
+    test "call/3 builds a call using the held echo cap", %{granted: state} do
+      {_state, outbound, _intents} = Protocol.call(state, "echo", "visible capability")
+
+      assert [%{"type" => "call", "cap_id" => "cap_echo_42", "payload" => payload}] = outbound
+      assert payload == %{"op" => "echo", "message" => "visible capability"}
+    end
+
+    test "call/3 without a held cap emits an error intent and no outbound" do
+      {_state, outbound, intents} = Protocol.call(Protocol.init("c1"), "echo", "x")
+      assert outbound == []
+      assert [%{kind: "error", text: "no cap held"}] = intents
+    end
+
+    test "call_result maps ok:true to an allowed intent", %{granted: state} do
+      {_state, outbound, intents} = Protocol.handle(state, %{"type" => "call_result", "ok" => true, "result" => %{"echo" => "hi"}})
+      assert outbound == []
+      assert %{kind: "call_result", ok: true} = hd(intents)
+    end
+
+    test "cast_result maps ok:false to a denied intent", %{granted: state} do
+      {_state, _outbound, intents} = Protocol.handle(state, %{"type" => "cast_result", "ok" => false, "error" => ":denied"})
+      assert %{kind: "cast_result", ok: false} = hd(intents)
+    end
+  end
 end

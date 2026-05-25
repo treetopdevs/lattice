@@ -65,4 +65,32 @@ defmodule Lattice.Tab.Protocol do
     {%{state | caps: Map.put(state.caps, "echo", cap_id)}, [],
      [%{kind: "cap", text: "granted", cap_id: cap_id}]}
   end
+
+  # consume results
+  def handle(%__MODULE__{} = state, %{"type" => "call_result"} = env) do
+    {state, [], [%{kind: "call_result", ok: env["ok"], result: env["result"], error: env["error"]}]}
+  end
+
+  def handle(%__MODULE__{} = state, %{"type" => "cast_result"} = env) do
+    {state, [], [%{kind: "cast_result", ok: env["ok"], error: env["error"]}]}
+  end
+
+  @doc "Build a grant_request for a server-named target (e.g. \"echo\")."
+  @spec grant_request(t(), String.t()) :: step()
+  def grant_request(%__MODULE__{} = state, target) when is_binary(target) do
+    {state, [%{"type" => "grant_request", "target" => target}], []}
+  end
+
+  @doc "Build a `call` using a held cap. The Realm — not the shell — selects the cap."
+  @spec call(t(), String.t(), String.t()) :: step()
+  def call(%__MODULE__{caps: caps} = state, op, message) do
+    case Map.fetch(caps, "echo") do
+      {:ok, cap_id} ->
+        env = %{"type" => "call", "cap_id" => cap_id, "payload" => %{"op" => op, "message" => message}}
+        {state, [env], []}
+
+      :error ->
+        {state, [], [%{kind: "error", text: "no cap held"}]}
+    end
+  end
 end
