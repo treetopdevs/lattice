@@ -45,4 +45,24 @@ defmodule Lattice.Tab.Protocol do
 
     {state, [envelope], [%{kind: "status", text: "connecting"}]}
   end
+
+  @doc "Reduce one inbound envelope into new state + outbound envelopes + render-intents."
+  @spec handle(t(), envelope()) :: step()
+  def handle(%__MODULE__{} = state, %{"type" => "welcome"} = env) do
+    state = %{
+      state
+      | tab_id: env["tab_id"],
+        session_id: env["session_id"],
+        client_id: env["client_id"] || state.client_id,
+        status: :online
+    }
+
+    {state, [%{"type" => "state_request"}],
+     [%{kind: "status", text: "connected", tab_id: state.tab_id}]}
+  end
+
+  def handle(%__MODULE__{} = state, %{"type" => "grant", "cap" => %{"id" => cap_id}}) do
+    {%{state | caps: Map.put(state.caps, "echo", cap_id)}, [],
+     [%{kind: "cap", text: "granted", cap_id: cap_id}]}
+  end
 end
