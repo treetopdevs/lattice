@@ -68,7 +68,8 @@ defmodule Lattice.Tab.Protocol do
 
   # consume results
   def handle(%__MODULE__{} = state, %{"type" => "call_result"} = env) do
-    {state, [], [%{kind: "call_result", ok: env["ok"], result: env["result"], error: env["error"]}]}
+    {state, [],
+     [%{kind: "call_result", ok: env["ok"], result: env["result"], error: env["error"]}]}
   end
 
   def handle(%__MODULE__{} = state, %{"type" => "cast_result"} = env) do
@@ -99,7 +100,12 @@ defmodule Lattice.Tab.Protocol do
   def call(%__MODULE__{caps: caps} = state, op, message) do
     case Map.fetch(caps, "echo") do
       {:ok, cap_id} ->
-        env = %{"type" => "call", "cap_id" => cap_id, "payload" => %{"op" => op, "message" => message}}
+        env = %{
+          "type" => "call",
+          "cap_id" => cap_id,
+          "payload" => %{"op" => op, "message" => message}
+        }
+
         {state, [env], []}
 
       :error ->

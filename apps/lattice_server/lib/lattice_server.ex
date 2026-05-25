@@ -8,8 +8,10 @@ defmodule LatticeServer do
     ip = Keyword.get(opts, :ip, {127, 0, 0, 1})
     listener = Keyword.get(opts, :listener, :lattice_demo_http)
     static_dir = Keyword.get(opts, :static_dir, Path.expand("examples/browser_demo", File.cwd!()))
+
     atomvm_tab_dir =
       Keyword.get(opts, :atomvm_tab_dir, Path.expand("examples/atomvm_tab", File.cwd!()))
+
     grant_targets = Keyword.get(opts, :grant_targets, %{})
     auto_story? = Keyword.get(opts, :auto_story?, true)
     resume_proxy_ttl_ms = Keyword.get(opts, :resume_proxy_ttl_ms, 15_000)

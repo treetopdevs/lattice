@@ -32,7 +32,9 @@ defmodule LatticeServer.AtomvmStaticTest do
 
   describe "/atomvm_tab isolation" do
     test "index.html is served cross-origin-isolated", %{port: port} do
-      assert {:ok, 200, head, body} = HTTP.raw_http_with_head(port, "GET", "/atomvm_tab/index.html")
+      assert {:ok, 200, head, body} =
+               HTTP.raw_http_with_head(port, "GET", "/atomvm_tab/index.html")
+
       assert body =~ "atomvm"
       assert head =~ "cross-origin-opener-policy: same-origin"
       assert head =~ "cross-origin-embedder-policy: require-corp"
@@ -48,7 +50,8 @@ defmodule LatticeServer.AtomvmStaticTest do
     end
 
     test "unknown atomvm_tab file is 404 (whitelist preserved)", %{port: port} do
-      assert {:ok, 404, _head, _body} = HTTP.raw_http_with_head(port, "GET", "/atomvm_tab/secret.key")
+      assert {:ok, 404, _head, _body} =
+               HTTP.raw_http_with_head(port, "GET", "/atomvm_tab/secret.key")
     end
   end
 

@@ -40,8 +40,13 @@ defmodule LatticeServer.StaticHandler do
   defp file_for("/atomvm_tab/index.html"), do: {:ok, "index.html"}
   defp file_for("/atomvm_tab/styles.css"), do: {:ok, "styles.css"}
   defp file_for("/atomvm_tab/shell.js"), do: {:ok, "shell.js"}
-  defp file_for("/atomvm_tab/AtomVM-web-v0.7.0-alpha.1.js"), do: {:ok, "AtomVM-web-v0.7.0-alpha.1.js"}
-  defp file_for("/atomvm_tab/AtomVM-web-v0.7.0-alpha.1.wasm"), do: {:ok, "AtomVM-web-v0.7.0-alpha.1.wasm"}
+
+  defp file_for("/atomvm_tab/AtomVM-web-v0.7.0-alpha.1.js"),
+    do: {:ok, "AtomVM-web-v0.7.0-alpha.1.js"}
+
+  defp file_for("/atomvm_tab/AtomVM-web-v0.7.0-alpha.1.wasm"),
+    do: {:ok, "AtomVM-web-v0.7.0-alpha.1.wasm"}
+
   defp file_for("/atomvm_tab/lattice_tab.avm"), do: {:ok, "lattice_tab.avm"}
   defp file_for("/atomvm_tab/atomvmlib.avm"), do: {:ok, "atomvmlib.avm"}
   defp file_for(_), do: {:error, :not_found}

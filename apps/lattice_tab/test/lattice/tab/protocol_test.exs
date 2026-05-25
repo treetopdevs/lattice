@@ -31,7 +31,13 @@ defmodule Lattice.Tab.ProtocolTest do
     end
 
     test "welcome stores tab_id/session_id and emits state_request", %{state: state} do
-      env = %{"type" => "welcome", "tab_id" => "tab_9", "session_id" => "sess_1", "client_id" => "client-abc-123"}
+      env = %{
+        "type" => "welcome",
+        "tab_id" => "tab_9",
+        "session_id" => "sess_1",
+        "client_id" => "client-abc-123"
+      }
+
       {state, outbound, intents} = Protocol.handle(state, env)
 
       assert state.tab_id == "tab_9"
@@ -54,7 +60,10 @@ defmodule Lattice.Tab.ProtocolTest do
   describe "build + result" do
     setup do
       base = Protocol.init("c1")
-      {state, _o, _i} = Protocol.handle(base, %{"type" => "grant", "cap" => %{"id" => "cap_echo_42"}})
+
+      {state, _o, _i} =
+        Protocol.handle(base, %{"type" => "grant", "cap" => %{"id" => "cap_echo_42"}})
+
       {:ok, granted: state}
     end
 
@@ -77,20 +86,35 @@ defmodule Lattice.Tab.ProtocolTest do
     end
 
     test "call_result maps ok:true to an allowed intent", %{granted: state} do
-      {_state, outbound, intents} = Protocol.handle(state, %{"type" => "call_result", "ok" => true, "result" => %{"echo" => "hi"}})
+      {_state, outbound, intents} =
+        Protocol.handle(state, %{
+          "type" => "call_result",
+          "ok" => true,
+          "result" => %{"echo" => "hi"}
+        })
+
       assert outbound == []
       assert %{kind: "call_result", ok: true} = hd(intents)
     end
 
     test "cast_result maps ok:false to a denied intent", %{granted: state} do
-      {_state, _outbound, intents} = Protocol.handle(state, %{"type" => "cast_result", "ok" => false, "error" => ":denied"})
+      {_state, _outbound, intents} =
+        Protocol.handle(state, %{"type" => "cast_result", "ok" => false, "error" => ":denied"})
+
       assert %{kind: "cast_result", ok: false} = hd(intents)
     end
   end
 
   describe "handle/2 — tab_call milestone" do
     setup do
-      {state, _o, _i} = Protocol.handle(Protocol.init("c1"), %{"type" => "welcome", "tab_id" => "tab_A", "session_id" => "s", "client_id" => "c1"})
+      {state, _o, _i} =
+        Protocol.handle(Protocol.init("c1"), %{
+          "type" => "welcome",
+          "tab_id" => "tab_A",
+          "session_id" => "s",
+          "client_id" => "c1"
+        })
+
       {:ok, state: state}
     end
 
@@ -104,7 +128,9 @@ defmodule Lattice.Tab.ProtocolTest do
 
       {^state, outbound, intents} = Protocol.handle(state, env)
 
-      assert [%{"type" => "tab_render_result", "request_id" => "req_42", "result" => result}] = outbound
+      assert [%{"type" => "tab_render_result", "request_id" => "req_42", "result" => result}] =
+               outbound
+
       assert result["realm"] == "atomvm"
       assert result["received_by"] == "tab_A"
       assert result["from_tab_id"] == "tab_B"
@@ -115,7 +141,9 @@ defmodule Lattice.Tab.ProtocolTest do
     end
 
     test "error envelope becomes an error intent, no outbound", %{state: state} do
-      {_state, outbound, intents} = Protocol.handle(state, %{"type" => "error", "error_type" => "denied", "reason" => ":nope"})
+      {_state, outbound, intents} =
+        Protocol.handle(state, %{"type" => "error", "error_type" => "denied", "reason" => ":nope"})
+
       assert outbound == []
       assert %{kind: "error", text: "denied"} = hd(intents)
     end
