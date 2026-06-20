@@ -111,3 +111,115 @@
 - Command run: implementation edit pass.
 - Result: added a CI workflow that installs BEAM/Node/Playwright, runs the local flagship verification script, records the browser E2E, evaluates video acceptability, writes populated graph and claims artifacts, and uploads `output/playwright/` plus `output/flagship/`. The live inspector now has presenter-mode copy, numbered steps, richer node/edge details, selected-edge highlighting, a code-owned claims endpoint, and a claims JSON artifact.
 - Blocker or remaining limitation: CI has not been observed on GitHub yet in this local run; the workflow is added for the next push or pull request.
+
+---
+
+# Lattice 2.0 — Replicas on a Capability-Attested Log
+
+All 2.0 work lives in `apps/lattice_core/lib/lattice/` (alongside the reused v1
+modules) and `apps/lattice_core/test/lattice2/`. Toolchain: Elixir 1.19.5 / OTP 28
+(via asdf; the repo's mise config disables mise's erlang/elixir so asdf's working
+OTP 28 + `mix` are used). Run mix with `~/.asdf/shims/mix`.
+
+## Checkpoint: Phase 0 — Carry-forward (v1 baseline)
+- Command: `mix test` (lattice_core).
+- Result: v1 suite green (41 tests) before any 2.0 change; behavior 19 baseline.
+
+## Checkpoint: Phase A — Log core
+- Files: `lattice/{identity,op,dag,log,sync,net,clock}.ex`; `test/lattice2/log_sync_test.exs`.
+- Behaviors: 1 (raw op-set convergence), 3 (idempotent sync), 4 (tamper rejection).
+- Crypto verified on OTP 28: deterministic seeded Ed25519 (`:crypto.generate_key(:eddsa,
+  :ed25519, seed32)`), sign/verify with tamper rejection, order-independent
+  `term_to_binary(_, [:deterministic])`.
+- Result: green.
+
+## Checkpoint: Phase B — Replica + CRDTs + reduction
+- Files: `lattice/crdt/{lww,or_set,causal_list}.ex`, `lattice/{replica,reduce,sim}.ex`,
+  `lattice/demo/thread.ex`; `test/lattice2/{replica_reduce,crdt_property}_test.exs`.
+- Behaviors: 1, 2 (delivery-order independence — byte-identical), 18 (same-path
+  equivalence) + CRDT join-law property tests.
+- Result: green. Surfaced and fixed two unrealistic property generators (reused element
+  ids / non-unique LWW tags) that don't occur in the real system (ids are content
+  hashes; tags are `{height, op_id}`).
+
+## Checkpoint: Phase C — Authority + unified chain
+- Files: `lattice/authority.ex`, `lattice/authority/delegation.ex`, evolved
+  `lattice/cap.ex` (+`chain`/`replica`), `lattice/live.ex`;
+  `test/lattice2/{authority,unified_chain}_test.exs`.
+- Behaviors: 5 (cap-gated append), 6 (serialized authority / queue-through-holder),
+  7 (offline-authoritative), 8 (stale-holder), 9 (double-transfer anomaly),
+  10 (revocation), 16 (unified chain — keystone: one delegation authorizes a log
+  append AND a live Gateway message; one revoke kills both).
+- Result: green.
+
+## Checkpoint: Phase D — Durable messaging + lifecycle
+- Files: `lattice/{registry,materializer,promise}.ex`; wired into the supervision tree
+  and `Lattice.reset!/0`; `test/lattice2/lifecycle_test.exs`.
+- Behaviors: 11 (durable send, exactly-once, causal order), 12 (promise across
+  dormancy, resolved from log), 13 (lifecycle monitors + permanent replica-wide
+  tombstone), 14 (realm death + disk restore).
+- Result: green.
+
+## Checkpoint: Phase E — Succession, time travel, property suite
+- Files: `lattice/{log,dag}.ex` (+`from_ops`, `reachable` fix, `heights`),
+  `Lattice.state_at/3`; `test/lattice2/{succession_time_travel,convergence_property}_test.exs`.
+- Behaviors: 15 (succession + returning-holder stale quarantine; premature succession
+  quarantined), 17 (time travel via causal frontier), 18, 19.
+- Fixed a real bug in `Dag.reachable/2` (pre-seeded accumulator skipped exploring the
+  frontier ops' deps, yielding a size-1 slice) found by the time-travel test.
+- Property suite (StreamData, 3 realms, randomized commands/transfers/partitions/
+  delivery, seeded): (a) convergence, (b) single-writer authority at each honored op's
+  causal position, (c) byte-identical re-run, (d) identical quarantine sets.
+
+## Validation loop
+- `mix format` — clean.
+- `mix test` (lattice_core) — **9 properties, 67 tests, 0 failures.** Re-run across
+  seeds 1/7/99/2024/555 and 12345 — stable.
+- `elixir scripts/lattice2_demo.exs` and `mix run scripts/lattice2_demo.exs` — runs
+  end-to-end with narrated output (collaborate → partition → divergent posts/edits →
+  holder locks offline → tab's lock quarantined + audited → heal/merge → queued
+  request replayed → transfer → offline-authoritative → succession after dormancy →
+  returning holder's stale lock quarantined → `state_at` replay).
+
+## Behavior coverage (all 19 + property suite)
+| # | Behavior | Test |
+|---|---|---|
+| 1 | Convergence | log_sync, replica_reduce |
+| 2 | Delivery-order independence | replica_reduce, crdt_property |
+| 3 | Idempotent sync | log_sync |
+| 4 | Tamper rejection | log_sync |
+| 5 | Cap-gated append | authority |
+| 6 | Authoritative serialization | authority |
+| 7 | Offline-authoritative | authority |
+| 8 | Stale-holder quarantine | authority |
+| 9 | Double-transfer anomaly | authority |
+| 10 | Revocation | authority |
+| 11 | Durable send | lifecycle |
+| 12 | Promise across dormancy | lifecycle |
+| 13 | Lifecycle monitors / tombstone | lifecycle |
+| 14 | Realm death + resurrection | lifecycle |
+| 15 | Succession | succession_time_travel |
+| 16 | Unified chain (keystone) | unified_chain |
+| 17 | Time travel | succession_time_travel |
+| 18 | Same-path equivalence | replica_reduce |
+| 19 | v1 invariants preserved | lattice_core_poc_test (v1 suite) |
+| — | Property suite (a–d) | convergence_property |
+
+## Failing property seeds
+None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
+
+## Remaining limitations (honest boundaries)
+- **No encryption** — signed, not sealed (see `threat_model_v2.md`). Plaintext bodies;
+  Keyhive E2EE is out of scope.
+- **No compaction** — a Replica's identity is its entire op-log; reduction re-folds all
+  ops and sync ships full id sets. First scaling cliff (`path_to_real.md`).
+- **Canonical encoding is `:erlang.term_to_binary` (pinned)** — BEAM-specific; a real
+  multi-runtime carrier needs canonical CBOR (ADR 0001).
+- **Succession dormancy = absence of heartbeats**, not a true liveness oracle (ADR 0004).
+- **Public API name clashes** — v1 already defines `Lattice.call/3`, `Lattice.grant/4`,
+  `Lattice.cast/3`. The 2.0 promise-`call`/capability-`grant` are reached via
+  `Lattice.Registry` and in-log delegation ops rather than re-binding v1 names; the
+  non-clashing 2.0 functions (`materialize`, `tombstone`, `monitor`, `send_durable`,
+  `await`, `state_at`, `go_dormant`) are on the `Lattice` facade. Nothing assumes
+  in-process locality.
+- **Stretch goals not done**: second OS-process BEAM node; naive snapshot compaction.
