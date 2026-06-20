@@ -4,12 +4,14 @@ defmodule Lattice2.UnifiedChainTest do
 
   The same signed delegation chain authorizes BOTH a log append (its leaf id is
   cited in `Lattice.Op.cap`) and a live ephemeral message sent through the v1
-  `Lattice.Gateway` (the chain rides in a `Lattice.Cap`). One revoke — an in-log
-  `:revoke` op plus the linked v1 cap revocation — kills both paths.
+  `Lattice.Gateway` (the chain rides in a `Lattice.Cap`). A single in-log `:revoke`
+  op kills both paths — consulted by the append path (reduction quarantine) and the
+  live path (`Live.authorize`) alike; the v1 cap revocation is defense-in-depth for a
+  direct Gateway call that bypasses `Live.authorize`.
   """
   use ExUnit.Case, async: false
 
-  alias Lattice.{Authority, Cap, Identity, Live, Log, Op, Reduce}
+  alias Lattice.{Authority, Cap, CapStore, Gateway, Identity, Live, Log, Op, Reduce}
   alias Lattice.Authority.Delegation
   alias Lattice.Demo.Thread
 
@@ -68,17 +70,30 @@ defmodule Lattice2.UnifiedChainTest do
     # (b) LIVE PATH — same chain, routed through the v1 Gateway to the target.
     assert {:ok, {:echo, %{hello: 1}}} = Live.call(cap, log, %{hello: 1})
 
-    # ---- Revoke the one chain. ----
-    log = Live.revoke(log, server, d.id, cap.id)
+    # ---- The unification: ONE in-log :revoke op kills BOTH paths. ----
+    # Append only the in-log revoke (do not touch the v1 cap yet), so we can prove
+    # the live denial comes from the same in-log revocation the append path uses.
+    revoke_op = Op.new(server, replica, Log.frontier(log), :authority, {:revoke, d.id})
+    log = Log.append!(log, revoke_op)
 
-    # (a') LOG APPEND PATH now dead.
+    # (a') LOG APPEND PATH now dead — reduction quarantines ops citing the delegation.
     post2 = Op.new(tab, replica, Log.frontier(log), :command, {:post, ["after"]}, cap: d.id)
     log = Log.append!(log, post2)
     assert Map.get(Authority.analyze(Thread, log).reasons, post2.id) == :revoked_capability
-    q2 = Authority.quarantine(Thread, log)
-    refute "after" in Reduce.reduce(Thread, log, quarantine: q2).messages
 
-    # (b') LIVE PATH now dead — denied by the same in-log revocation.
+    refute "after" in Reduce.reduce(Thread, log, quarantine: Authority.quarantine(Thread, log)).messages
+
+    # (b') LIVE PATH now dead — Live.authorize consults the SAME in-log revocation.
+    # Proof it is the in-log op (not a v1-cap state) doing the work: the v1 cap is
+    # still live in CapStore, yet the live call is denied.
+    assert {:ok, %Cap{revoked?: false}} = CapStore.get(cap.id)
     assert {:error, :revoked} = Live.call(cap, log, %{hello: 2})
+
+    # Defense-in-depth: a DIRECT v1 Gateway call (bypassing Live.authorize) still
+    # works until the linked v1 cap is revoked; `Live.revoke/4` does both, so after
+    # it the direct path is blocked too.
+    assert {:ok, {:echo, _}} = Gateway.call("tab", cap.id, %{direct: true})
+    _log = Live.revoke(log, server, d.id, cap.id)
+    assert {:error, :revoked} = Gateway.call("tab", cap.id, %{direct: true})
   end
 end

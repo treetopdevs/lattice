@@ -19,8 +19,11 @@ modules it reuses (`Lattice.Cap`, `Lattice.Gateway`, `Lattice.Realm`/`Tab`,
    final logs and state (behavior 18).
 2. **One delegation chain, two uses.** The signed `Lattice.Authority.Delegation`
    that authorizes appending an op to a log also authorizes sending a live ephemeral
-   message through the v1 Gateway (`Lattice.Live`). Revoking it — one in-log
-   `:revoke` op — kills both paths (behavior 16, the keystone).
+   message through the v1 Gateway (`Lattice.Live`). The unification is concrete: a
+   single in-log `:revoke` op is consulted by *both* the append path (reduction
+   quarantine) and the live path (`Live.authorize/2`), so one revoke kills both
+   (behavior 16, the keystone). `Live.revoke/4` also revokes the linked v1 cap as
+   defense-in-depth for a *direct* `Gateway.call` that bypasses `Live.authorize/2`.
 3. **Determinism.** Given the same set of ops, every realm reduces to byte-identical
    state regardless of delivery order, partition schedule, or interleaving. Total
    order where needed is the topological order of the causal DAG with op-hash

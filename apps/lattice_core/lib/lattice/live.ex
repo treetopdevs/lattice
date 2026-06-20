@@ -10,9 +10,16 @@ defmodule Lattice.Live do
       message sent through the v1 `Lattice.Gateway`.
 
   `authorize/2` is the single gate the live path uses. It checks the chain's
-  signatures/attenuation **and** consults the Replica log for revocation — the same
-  in-log `:revoke` op that kills the append path. So one `revoke/4` (an in-log
-  revoke op plus the linked v1 cap revocation) kills both paths.
+  signatures/attenuation **and** consults the Replica log for revocation — the *same*
+  in-log `:revoke` op that the append path checks (via `Lattice.Authority` reduction
+  quarantine). That shared in-log revocation is the true unification: **one in-log
+  `:revoke` op kills both the append path and the live path.**
+
+  `revoke/4` additionally revokes the linked v1 cap in `Lattice.CapStore`. That is
+  *defense-in-depth*, not the mechanism that kills the live path here: a caller who
+  goes through `Live.call/3` is already stopped by the in-log check before the Gateway
+  is reached. The v1 cap revocation matters only for a *direct* `Lattice.Gateway.call`
+  that bypasses `authorize/2` — that path is governed by the v1 cap's revoked state.
 
   This module assumes the v1 capability plane (`Lattice.CapStore`, `Lattice.Topology`,
   `Lattice.Gateway`) is running, exactly as in v1 — nothing here bypasses it.
@@ -62,9 +69,10 @@ defmodule Lattice.Live do
   end
 
   @doc """
-  Revoke a unified delegation, killing both paths in one act: append an in-log
-  `:revoke` op (kills future log appends citing it) and revoke the linked v1 cap in
-  `Lattice.CapStore` (kills the live Gateway path). Returns the updated log.
+  Revoke a unified delegation. The in-log `:revoke` op is what kills both the append
+  path (reduction quarantine) and the live `Live.call/3` path (`authorize/2`). The
+  additional `Lattice.CapStore` revocation is defense-in-depth that also blocks a
+  *direct* `Lattice.Gateway.call` bypassing `authorize/2`. Returns the updated log.
   """
   @spec revoke(Log.t(), Identity.t(), String.t(), String.t()) :: Log.t()
   def revoke(%Log{} = log, %Identity{} = issuer, delegation_id, v1_cap_id) do
