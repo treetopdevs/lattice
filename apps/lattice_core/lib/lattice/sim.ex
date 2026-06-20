@@ -254,11 +254,13 @@ defmodule Lattice.Sim do
   defp parent_delegation(sim, realm, opts) do
     needed_roles = opts |> Keyword.get(:roles, []) |> MapSet.new()
     needed_ops = opts |> Keyword.get(:ops, []) |> MapSet.new()
+    needed_live = Keyword.get(opts, :live, false)
 
     sim.caps
     |> Map.get(realm, [])
     |> Enum.find(fn d ->
-      MapSet.subset?(needed_roles, d.roles) and MapSet.subset?(needed_ops, d.ops)
+      MapSet.subset?(needed_roles, d.roles) and MapSet.subset?(needed_ops, d.ops) and
+        (not needed_live or d.live)
     end)
   end
 

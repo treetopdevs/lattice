@@ -33,7 +33,9 @@ defmodule Lattice.Live do
     1. the cap carries a non-empty chain bound to `log`'s replica,
     2. the chain verifies (sigs + genesis + attenuation),
     3. the leaf confers `:live`,
-    4. the leaf is not revoked in the log (same revocation as the append path).
+    4. the leaf delegation is admitted in the log (so the live path cannot accept a
+       chain the append path would reject — same admission rule for both uses),
+    5. the leaf is not revoked in the log (same revocation as the append path).
   """
   @spec authorize(Cap.t(), Log.t()) :: :ok | {:error, atom()}
   def authorize(%Cap{} = cap, %Log{} = log) do
@@ -44,6 +46,7 @@ defmodule Lattice.Live do
       cap.replica != log.replica -> {:error, :wrong_replica}
       Authority.verify_chain(cap.chain, log.replica) != :ok -> {:error, :invalid_chain}
       not leaf.live -> {:error, :live_not_granted}
+      not Authority.delegation_active?(log, leaf.id) -> {:error, :delegation_not_in_log}
       Authority.revoked?(log, leaf.id) -> {:error, :revoked}
       true -> :ok
     end

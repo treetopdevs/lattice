@@ -48,7 +48,11 @@ defmodule Lattice.Identity do
   @spec verify(pubkey(), binary(), binary()) :: boolean()
   def verify(pub, message, signature)
       when is_binary(pub) and is_binary(message) and is_binary(signature) do
+    # A forged op may carry a malformed `author`; :crypto raises on a bad key rather
+    # than returning false, so guard it — a malformed key is simply an invalid op.
     :crypto.verify(:eddsa, :none, message, signature, [pub, :ed25519])
+  rescue
+    _ -> false
   end
 
   def verify(_pub, _message, _signature), do: false

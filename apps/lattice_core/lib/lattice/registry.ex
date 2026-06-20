@@ -122,6 +122,11 @@ defmodule Lattice.Registry do
           entry = %{entry | lifecycle: :tombstoned}
           {:reply, {:error, :tombstoned}, put_entry(st, key, entry)}
 
+        # Idempotent: already live — return current state without restarting (a second
+        # start_child would return {:error, {:already_started, _}}).
+        entry.lifecycle == :live and is_pid(entry.mat_pid) and Process.alive?(entry.mat_pid) ->
+          {:reply, {:ok, current_state(entry)}, st}
+
         true ->
           {entry, delivered} = process_inbox(entry)
           {pid, ref} = start_materializer(key)
@@ -200,7 +205,9 @@ defmodule Lattice.Registry do
     to_key = {to_realm, replica}
 
     with {:ok, from_entry} <- fetch(st, from_key) do
-      op = author(from_entry, :inbox, {:message, payload})
+      # Scope the message to its destination realm so only that realm's
+      # materialization delivers it (not every realm hosting the replica).
+      op = author(from_entry, :inbox, {:message, to_realm, payload})
       st = put_entry(st, from_key, %{from_entry | log: Log.append!(from_entry.log, op)})
       st = do_sync(st, from_key, to_key)
       {:reply, :ok, st}
@@ -219,7 +226,9 @@ defmodule Lattice.Registry do
 
     with {:ok, from_entry} <- fetch(st, from_key) do
       ref = "ref:" <> Lattice.Cap.random_token()
-      req = author(from_entry, :inbox, {:request, ref, query})
+      # Scope the request to its destination realm so only that realm answers it
+      # (the caller must not answer its own outbound request).
+      req = author(from_entry, :inbox, {:request, ref, to_realm, query})
       st = put_entry(st, from_key, %{from_entry | log: Log.append!(from_entry.log, req)})
       st = do_sync(st, from_key, to_key)
       promise = %Promise{ref: ref, replica: replica, target: to_realm, from: from_realm}
@@ -322,11 +331,13 @@ defmodule Lattice.Registry do
   end
 
   defp start_materializer(key) do
-    {:ok, pid} =
-      DynamicSupervisor.start_child(Lattice.MaterializerSupervisor, {Materializer, key})
+    pid =
+      case DynamicSupervisor.start_child(Lattice.MaterializerSupervisor, {Materializer, key}) do
+        {:ok, pid} -> pid
+        {:error, {:already_started, pid}} -> pid
+      end
 
-    ref = Process.monitor(pid)
-    {pid, ref}
+    {pid, Process.monitor(pid)}
   end
 
   defp stop_materializer(st, %{mat_pid: nil}), do: st
@@ -344,13 +355,15 @@ defmodule Lattice.Registry do
   defp process_inbox(entry) do
     ordered = Dag.topo_sort(Log.ops(entry.log))
     state = current_state(entry)
+    realm = entry.identity.realm_id
     acked = inbox_set(ordered, :delivered)
     responded = inbox_set(ordered, :response)
 
     {log, delivered} =
       Enum.reduce(ordered, {entry.log, []}, fn op, {log, delivered} ->
         case op.body do
-          {:message, payload} when op.kind == :inbox ->
+          # Only the destination realm delivers/answers; others ignore the op.
+          {:message, ^realm, payload} when op.kind == :inbox ->
             if MapSet.member?(acked, op.id) do
               {log, delivered}
             else
@@ -366,7 +379,7 @@ defmodule Lattice.Registry do
               {Log.append!(log, ack), [{op.id, payload} | delivered]}
             end
 
-          {:request, ref, query} when op.kind == :inbox ->
+          {:request, ref, ^realm, query} when op.kind == :inbox ->
             if MapSet.member?(responded, ref) do
               {log, delivered}
             else

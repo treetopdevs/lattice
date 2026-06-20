@@ -42,6 +42,14 @@ defmodule Lattice.Dag do
       end
 
     kahn(ready, indegree, children, by_id, [])
+    |> tap(fn ordered ->
+      # A hash-DAG cannot contain cycles (an op's deps are hashes of prior ops), so
+      # every op must be placed. If not, the input is malformed (a cycle or a
+      # corrupt dep) — fail loud rather than silently return a partial order.
+      if length(ordered) != map_size(by_id) do
+        raise ArgumentError, "Lattice.Dag.topo_sort: input is not a DAG (cycle or corrupt deps)"
+      end
+    end)
   end
 
   defp kahn(ready, indegree, children, by_id, acc) do
@@ -79,18 +87,20 @@ defmodule Lattice.Dag do
   defp collect_ancestors(_ops, [], acc), do: acc
 
   defp collect_ancestors(ops, [dep | rest], acc) do
-    if MapSet.member?(acc, dep) do
-      collect_ancestors(ops, rest, acc)
-    else
-      acc = MapSet.put(acc, dep)
+    cond do
+      MapSet.member?(acc, dep) ->
+        collect_ancestors(ops, rest, acc)
 
-      acc =
-        case Map.fetch(ops, dep) do
-          {:ok, op} -> collect_ancestors(ops, op.deps, acc)
-          :error -> acc
-        end
+      true ->
+        # Only include deps that are within the provided op set (the documented
+        # contract); a dep pointing outside the set is not an ancestor here.
+        acc =
+          case Map.fetch(ops, dep) do
+            {:ok, op} -> collect_ancestors(ops, op.deps, MapSet.put(acc, dep))
+            :error -> acc
+          end
 
-      collect_ancestors(ops, rest, acc)
+        collect_ancestors(ops, rest, acc)
     end
   end
 

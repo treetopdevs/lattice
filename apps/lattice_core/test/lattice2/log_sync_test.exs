@@ -105,6 +105,30 @@ defmodule Lattice2.LogSyncTest do
     assert [%{reason: :bad_signature}] = Log.quarantine(log)
   end
 
+  test "behavior 4 regression: a quarantined forgery does not poison the valid op with the same id" do
+    a = realm("a")
+    genesis = Op.new(a, @replica, [], :command, {:post, "g"})
+    valid = Op.new(a, @replica, [genesis.id], :command, {:post, "real"})
+    # The op id excludes the signature, so a forgery shares the genuine op's id.
+    forged = %{valid | sig: <<0::512>>}
+
+    assert forged.id == valid.id
+    refute Op.valid?(forged)
+    assert Op.valid?(valid)
+
+    log = Log.append!(Log.new(@replica), genesis)
+
+    # Forgery arrives first and is quarantined...
+    {log, r1} = Sync.deliver(log, [forged])
+    refute Log.has?(log, forged.id)
+    assert [{_id, :bad_signature}] = r1.quarantined
+
+    # ...the genuine op with the same id is still accepted (no id-poisoning).
+    {log, r2} = Sync.deliver(log, [valid])
+    assert Log.has?(log, valid.id)
+    assert r2.accepted == [valid.id]
+  end
+
   test "any dep-respecting delivery order converges (buffering missing deps)" do
     a = realm("a")
     g = Op.new(a, @replica, [], :command, {:post, "g"})

@@ -125,13 +125,15 @@ Monitors subscribe to `{:lattice_lifecycle, key, state}` transitions and
 
 ### Durable messaging & promises
 
-* **Durable send** (behavior 11): a `{:message, payload}` inbox op is delivered to the
-  target's next materialization exactly once (an in-log `{:delivered, id}` ack makes
-  re-delivery idempotent), in causal order.
-* **Promises** (behavior 12): `Lattice.call/3` authors a `{:request, ref, query}` op
-  and returns a `Lattice.Promise`; the target answers with a `{:response, ref, result}`
-  op; `Lattice.await/2` reads the result from the log — surviving dormancy of either
-  side, because resolution lives in the log, not a mailbox.
+* **Durable send** (behavior 11): a `{:message, to_realm, payload}` inbox op is
+  delivered to the destination realm's next materialization exactly once (an in-log
+  `{:delivered, id}` ack makes re-delivery idempotent), in causal order.
+* **Promises** (behavior 12): `Lattice.Registry.call/4` authors a
+  `{:request, ref, to_realm, query}` op and returns a `Lattice.Promise` (the v1 facade
+  owns `Lattice.call/3`, so the 2.0 promise call lives on `Lattice.Registry`); the
+  destination realm answers with a `{:response, ref, result}` op; `Lattice.await/2`
+  reads the result from the log — surviving dormancy of either side, because
+  resolution lives in the log, not a mailbox.
 
 ### Persistence (behavior 14)
 

@@ -110,11 +110,16 @@ defmodule Lattice.Log do
       has?(log, op.id) ->
         {:ok, log}
 
-      structurally_quarantined?(log, op.id) ->
-        {:quarantined, log, :already_quarantined}
-
+      # Signature is checked BEFORE the quarantine guard so a genuine op can never be
+      # blocked by a previously-quarantined forgery sharing its id (the id excludes
+      # the signature, so a forgery can poison an id otherwise). Invalid ops are
+      # quarantined idempotently.
       not Op.valid?(op) ->
-        {:quarantined, quarantine_op(log, op, :bad_signature), :bad_signature}
+        if structurally_quarantined?(log, op.id) do
+          {:quarantined, log, :already_quarantined}
+        else
+          {:quarantined, quarantine_op(log, op, :bad_signature), :bad_signature}
+        end
 
       true ->
         case missing_deps(log, op) do
@@ -166,11 +171,20 @@ defmodule Lattice.Log do
   @spec restore(Path.t()) :: {:ok, t()} | {:error, term()}
   def restore(path) do
     with {:ok, bin} <- File.read(path),
-         {:lattice_log_dump_v1, %__MODULE__{} = log} <- :erlang.binary_to_term(bin) do
+         {:ok, term} <- safe_binary_to_term(bin),
+         {:lattice_log_dump_v1, %__MODULE__{} = log} <- term do
       {:ok, log}
     else
       {:error, _} = err -> err
       _ -> {:error, :corrupt_dump}
     end
+  end
+
+  # `:safe` blocks atom/resource creation from a tampered dump; a dump referencing
+  # unknown atoms (or otherwise unsafe terms) raises, which we map to an error.
+  defp safe_binary_to_term(bin) do
+    {:ok, :erlang.binary_to_term(bin, [:safe])}
+  rescue
+    _ -> {:error, :unsafe_dump}
   end
 end

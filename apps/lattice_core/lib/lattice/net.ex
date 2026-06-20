@@ -14,8 +14,8 @@ defmodule Lattice.Net do
 
     * `partition/3` / `heal/3` — cut and restore the link between two realms;
     * `connected?/3` — gate sync and live delivery;
-    * a deterministic, seeded delivery queue (`enqueue/4` + `drain/2` /
-      `deliver_one/1`) for scheduling live messages in a reproducible order.
+    * a deterministic, seeded delivery queue (`enqueue/4` + `drain/2`) for
+      scheduling live messages in a reproducible order.
 
   Wall clocks are never consulted (design invariant 5); ordering is by a logical
   sequence counter and an explicit seed.

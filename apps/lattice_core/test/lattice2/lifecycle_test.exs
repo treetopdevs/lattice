@@ -107,6 +107,7 @@ defmodule Lattice2.LifecycleTest do
     dump =
       Path.join(System.tmp_dir!(), "lattice_server_#{System.unique_integer([:positive])}.dump")
 
+    on_exit(fn -> File.rm(dump) end)
     :ok = Registry.dump("server", @replica, dump)
 
     # Kill the realm: drop everything from the runtime.
@@ -124,7 +125,5 @@ defmodule Lattice2.LifecycleTest do
     :ok = Registry.host(Sim.identity(sim, "tab"), Thread, @replica, Lattice.Log.new(@replica))
     :ok = Registry.sync("server", "tab", @replica)
     assert {:ok, _title} = Registry.await("tab", @replica, promise)
-
-    File.rm(dump)
   end
 end

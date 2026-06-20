@@ -89,6 +89,10 @@ defmodule Lattice.Reduce do
     {crdts, ops}
   end
 
+  # Unknown/malformed commands are surfaced and excluded upstream by
+  # `Lattice.Authority` (`:unknown_command` / `:malformed_command` quarantine), so a
+  # gated reduction never reaches this with an undefined command. The rescue is only a
+  # defensive fallback for direct (ungated) `reduce/3` calls; it returns no mutations.
   defp apply_command(_op, replica_module, cmd, args) do
     replica_module.__apply_command__(cmd, args)
   rescue

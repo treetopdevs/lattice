@@ -124,14 +124,19 @@ defmodule Lattice.Replica do
 
       @doc "Build a validated command body `{name, args}` for an op."
       def command_body(name, args) when is_list(args) do
-        case List.keyfind(__lattice_commands__(), name, 0) do
-          {^name, arity, _arg_names} when length(args) == arity ->
+        commands = __lattice_commands__()
+        arity = length(args)
+
+        cond do
+          # Match on name AND arity, so overloaded command names resolve correctly.
+          Enum.any?(commands, fn {n, a, _} -> n == name and a == arity end) ->
             {:ok, {name, args}}
 
-          {^name, arity, _} ->
-            {:error, {:bad_arity, name, expected: arity, got: length(args)}}
+          Enum.any?(commands, fn {n, _a, _} -> n == name end) ->
+            arities = for {^name, a, _} <- commands, do: a
+            {:error, {:bad_arity, name, expected: arities, got: arity}}
 
-          nil ->
+          true ->
             {:error, {:unknown_command, name}}
         end
       end
@@ -150,7 +155,12 @@ defmodule Lattice.Replica do
   end
 
   @doc false
-  def __normalize_field__(_name, opts) do
+  def __normalize_field__(name, opts) do
+    if Keyword.has_key?(opts, :authority) and Keyword.has_key?(opts, :merge) do
+      raise ArgumentError,
+            "field #{inspect(name)}: `authority:` and `merge:` are mutually exclusive"
+    end
+
     cond do
       role = Keyword.get(opts, :authority) ->
         %{kind: :authority, role: role, default: Keyword.get(opts, :default)}

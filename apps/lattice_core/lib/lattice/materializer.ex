@@ -38,8 +38,16 @@ defmodule Lattice.Materializer do
   @doc "Issue a live query against the materialization (fast-path)."
   def query(key, q) do
     case whereis(key) do
-      nil -> {:error, :not_live}
-      pid -> GenServer.call(pid, {:query, q})
+      nil ->
+        {:error, :not_live}
+
+      pid ->
+        # The materializer is transient; it may exit between whereis/1 and the call.
+        try do
+          GenServer.call(pid, {:query, q})
+        catch
+          :exit, _ -> {:error, :not_live}
+        end
     end
   end
 

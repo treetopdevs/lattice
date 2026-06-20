@@ -85,6 +85,21 @@ defmodule Lattice.Authority do
   defp links_attenuate?([parent, child | rest]),
     do: Delegation.attenuates?(child, parent) and links_attenuate?([child | rest])
 
+  @doc """
+  True if `delegation_id` is admitted in `log` and valid (present, signatures + chain
+  attenuation hold). The live path requires this so it cannot accept a chain the
+  append path would never admit — keeping the two uses of one delegation in step.
+  """
+  @spec delegation_active?(Log.t(), String.t()) :: boolean()
+  def delegation_active?(%Log{} = log, delegation_id) do
+    delegations = collect_delegations(Log.topo_ops(log))
+
+    case Map.fetch(delegations, delegation_id) do
+      {:ok, %{deleg: d}} -> validate_delegation(d, delegations) == :ok
+      :error -> false
+    end
+  end
+
   @doc "True if a valid revoke of `delegation_id` currently exists (live-path check)."
   @spec revoked?(Log.t(), String.t()) :: boolean()
   def revoked?(%Log{} = log, delegation_id) do
@@ -143,11 +158,19 @@ defmodule Lattice.Authority do
 
   # --- Delegation collection / validation ---------------------------------
 
+  # A delegation (content-addressed) may be introduced by more than one op (e.g. the
+  # same grant appended by two realms). Track all introducing op ids so visibility is
+  # "any introducing op is a causal ancestor", not just the last-seen one.
   defp collect_delegations(ordered) do
     Enum.reduce(ordered, %{}, fn op, acc ->
       case delegation_in(op) do
-        nil -> acc
-        %Delegation{} = d -> Map.put(acc, d.id, %{deleg: d, op_id: op.id, author: op.author})
+        nil ->
+          acc
+
+        %Delegation{} = d ->
+          Map.update(acc, d.id, %{deleg: d, op_ids: [op.id]}, fn entry ->
+            %{entry | op_ids: [op.id | entry.op_ids]}
+          end)
       end
     end)
   end
@@ -203,8 +226,9 @@ defmodule Lattice.Authority do
   end
 
   defp invalid_delegation_ops(delegations, deleg_valid) do
-    for {id, %{op_id: op_id}} <- delegations,
+    for {id, %{op_ids: op_ids}} <- delegations,
         deleg_valid[id] != :ok,
+        op_id <- op_ids,
         into: %{} do
       {op_id, elem(deleg_valid[id], 1)}
     end
@@ -426,13 +450,28 @@ defmodule Lattice.Authority do
         _ -> {nil, nil}
       end
 
-    mutations = command_mutations(module, cmd, args)
-    roles_needed = mutation_roles(module, mutations)
+    cond do
+      is_nil(cmd) ->
+        {:error, :malformed_command}
 
-    with :ok <- cap_ok(op, cmd, delegations, deleg_valid, ancestors, revokes, roles_needed),
-         :ok <- authority_ok(op, roles_needed, ancestors, timelines) do
-      :ok
+      # An op naming a command the Replica does not define is quarantined explicitly
+      # rather than silently contributing no mutations (design invariant 4).
+      not command_defined?(module, cmd) ->
+        {:error, :unknown_command}
+
+      true ->
+        mutations = command_mutations(module, cmd, args)
+        roles_needed = mutation_roles(module, mutations)
+
+        with :ok <- cap_ok(op, cmd, delegations, deleg_valid, ancestors, revokes, roles_needed),
+             :ok <- authority_ok(op, roles_needed, ancestors, timelines) do
+          :ok
+        end
     end
+  end
+
+  defp command_defined?(module, cmd) do
+    Enum.any?(module.__lattice_commands__(), fn {name, _arity, _args} -> name == cmd end)
   end
 
   defp command_mutations(_module, nil, _args), do: []
@@ -457,12 +496,12 @@ defmodule Lattice.Authority do
       :error ->
         {:error, :no_capability}
 
-      {:ok, %{deleg: d, op_id: deleg_op}} ->
+      {:ok, %{deleg: d, op_ids: deleg_ops}} ->
         cond do
           deleg_valid[d.id] != :ok -> {:error, :invalid_capability}
           op.author != d.audience -> {:error, :capability_wrong_audience}
           not MapSet.member?(d.ops, cmd) -> {:error, :operation_not_granted}
-          not MapSet.member?(anc, deleg_op) -> {:error, :capability_not_visible}
+          not Enum.any?(deleg_ops, &MapSet.member?(anc, &1)) -> {:error, :capability_not_visible}
           not Enum.all?(roles_needed, &MapSet.member?(d.roles, &1)) -> {:error, :role_not_granted}
           revoked_as_of?(op, d, delegations, revokes, ancestors) -> {:error, :revoked_capability}
           true -> :ok
