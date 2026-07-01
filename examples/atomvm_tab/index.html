@@ -2,14 +2,25 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Lattice — AtomVM tab (placeholder)</title>
+    <title>Lattice — AtomVM tab</title>
     <link rel="stylesheet" href="/atomvm_tab/styles.css" />
   </head>
   <body>
     <main id="app" data-atomvm-ready="false">
       <h1>Lattice AtomVM tab</h1>
-      <p id="status">shell + WASM bridge land after the Phase-0 spike.</p>
+      <p id="status">booting…</p>
+      <ul id="ledger"></ul>
     </main>
-    <!-- shell.js + AtomVM bundle are wired post-spike (deferred tasks). -->
+    <script>
+      // Global Module is read by the (non-modularized) AtomVM bundle.
+      var Module = {
+        locateFile: function (p) {
+          return p.endsWith(".wasm") ? "/atomvm_tab/AtomVM-web-v0.7.0-alpha.1.wasm" : p;
+        },
+        arguments: ["/atomvm_tab/lattice_tab.avm", "/atomvm_tab/atomvmlib.avm", "/atomvm_tab/exavmlib.avm"],
+      };
+    </script>
+    <script async src="/atomvm_tab/AtomVM-web-v0.7.0-alpha.1.js"></script>
+    <script type="module" src="/atomvm_tab/shell.js"></script>
   </body>
 </html>

@@ -49,6 +49,7 @@ defmodule LatticeServer.StaticHandler do
 
   defp file_for("/atomvm_tab/lattice_tab.avm"), do: {:ok, "lattice_tab.avm"}
   defp file_for("/atomvm_tab/atomvmlib.avm"), do: {:ok, "atomvmlib.avm"}
+  defp file_for("/atomvm_tab/exavmlib.avm"), do: {:ok, "exavmlib.avm"}
   defp file_for(_), do: {:error, :not_found}
 
   defp safe_file?(file), do: not String.contains?(file, "..")

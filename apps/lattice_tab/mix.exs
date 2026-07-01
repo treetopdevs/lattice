@@ -11,7 +11,9 @@ defmodule LatticeTab.MixProject do
       lockfile: "../../mix.lock",
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      # ExAtomVM packbeam: first module with start/0 is the entry.
+      atomvm: [start: Lattice.Tab.Main]
     ]
   end
 
@@ -22,8 +24,7 @@ defmodule LatticeTab.MixProject do
   end
 
   defp deps do
-    # Intentionally empty — Protocol operates on plain maps (no JSON dep),
-    # so it stays inside AtomVM's subset and needs nothing at runtime.
-    []
+    # exatomvm is BUILD-ONLY (provides `mix atomvm.packbeam`); never a runtime dep.
+    [{:exatomvm, github: "atomvm/exatomvm", runtime: false, only: [:dev, :test]}]
   end
 end

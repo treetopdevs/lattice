@@ -1,0 +1,25 @@
+{
+  "gates": {
+    "C3_boot": true,
+    "C4_roundtrip": true,
+    "C6_json_in_beam": true,
+    "C4_security_no_eval": true,
+    "C5_no_deadlock": true,
+    "C5_latency_budget_p99_16ms": true
+  },
+  "evidence": {
+    "crossOriginIsolated": true,
+    "wsSupported_pathB": "true",
+    "initApi": "global `var Module = {arguments:[avm...], locateFile}` + <script src=AtomVM-web-*.js>; JS->BEAM Module.cast/Module.call; BEAM->JS emscripten:promise_resolve / run_script",
+    "callReplyRaw": "{\"client_id\":\"client-abc-123\",\"identity\":{\"client_id\":\"client-abc-123\",\"surface\":\"atomvm-tab\"},\"type\":\"hello\"}",
+    "latency_ms": {
+      "n": 300,
+      "p50": 0.14,
+      "p99": 0.63,
+      "max": 1.66
+    },
+    "avmOut": [],
+    "avmErr": []
+  },
+  "consoleTail": []
+}

@@ -12,6 +12,8 @@
     "flagship:e2e:evaluate": "node scripts/evaluate_flagship_video.mjs",
     "flagship:e2e": "npm run flagship:e2e:test && npm run flagship:e2e:evaluate",
     "flagship:verify": "scripts/lattice_verify_flagship.sh",
+    "atomvm:smoke": "~/.nvm/versions/node/v22.15.1/bin/node scripts/lattice_atomvm_tab_smoke.mjs",
+    "atomvm:e2e": "node scripts/lattice_atomvm_tab_e2e.mjs",
     "e2e": "npm run browser:e2e && npm run browser:worker:e2e && npm run browser:resume:e2e && npm run flagship:e2e"
   },
   "devDependencies": {
