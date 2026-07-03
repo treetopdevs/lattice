@@ -39,6 +39,16 @@ The core thesis is simple: a tab gets zero implicit authority. It cannot use raw
 - Durable audit storage, clustered state, multi-node failover, or production authentication.
 - A full framework API beyond the narrow proof paths covered by tests.
 
+## Toolchain / Prerequisites
+
+Requires Erlang/OTP 28 and Elixir 1.19.5-otp-28 (matches CI; asdf pins them via
+`~/.tool-versions`). On the primary dev machine, `mix` on `PATH` is a broken mise shim
+(mise's global config pins OTP 27 and its `mix` shim leaks flags) — invoke mix as
+`~/.asdf/shims/mix` instead. The scoped fix and full explanation live in `.mise.toml`
+at the repo root (untracked, machine-local); see `AGENTS.md` for the agent-facing
+command map. The commands below are written as plain `mix`; locally, run them via
+`~/.asdf/shims/mix`.
+
 ## Run It
 
 ```sh
