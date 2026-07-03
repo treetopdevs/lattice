@@ -79,11 +79,13 @@ as follow-ups (see the config comments for exact suppressions):
 - **Credo `MapJoin`** (disabled) — `lattice_server/test/web_socket_envelope_test.exs:41`
   `Enum.map|>Enum.join` → `Enum.map_join`.
 - **Credo `WithSingleClause`** (disabled) — deliberate codebase style; not a follow-up.
-- **Credo `--strict` baseline** — plan 003's green gate is non-strict `mix credo`
-  (exit 0). `mix credo --strict` is NOT green: it exits 14 with 56 low-priority issues
-  (48 `Design.AliasUsage`, 6 readability incl. `AliasOrder`/`PreferImplicitTry`,
-  2 `Refactor.Apply`). These must be fixed or explicitly baselined in `.credo.exs`
-  before wiring `--strict` into CI per plan 003's maintenance note.
+- **Credo `--strict` baseline** (baselined at the Phase-1 capstone) — the 56 strict-only
+  low-priority issues (48 `Design.AliasUsage`, 5 `Readability.AliasOrder`,
+  1 `Readability.PreferImplicitTry`, 2 `Refactor.Apply`) are set to `exit_status: 0` in
+  `.credo.exs` so `mix credo --strict` exits 0 while still reporting them. Follow-ups:
+  alias deeply-nested modules where it helps readability, mechanically reorder the 5
+  alias groups, and revisit the explicit `try` (`gateway.ex:144`) and the two deliberate
+  dynamic `apply/3` sites (`sim.ex` command dispatch, `live_ops.ex`).
 - **Sobelow `Traversal.FileModule`** in `static_handler.ex` — ignored via
   `.sobelow-conf` `ignore_files`; confirmed false positive (same allowlist analysis as
   audit SECURITY-05 below). Not a follow-up.
