@@ -72,6 +72,7 @@ defmodule Lattice.Reduce do
 
     by_field = Enum.group_by(mutations, fn {field, _op, _m} -> field end)
     add_index = build_add_index(by_field)
+    all_ancestors = Dag.all_ancestors(ops)
 
     crdts =
       for {field, spec} <- replica_module.__lattice_fields__(), into: %{} do
@@ -80,7 +81,7 @@ defmodule Lattice.Reduce do
         {field,
          build_field(spec, field_mutations, %{
            heights: heights,
-           ops: ops,
+           all_ancestors: all_ancestors,
            add_index: add_index,
            field: field
          })}
@@ -134,7 +135,7 @@ defmodule Lattice.Reduce do
     end)
   end
 
-  defp build_or_set(muts, %{ops: ops, add_index: add_index, field: field}) do
+  defp build_or_set(muts, %{all_ancestors: all_ancestors, add_index: add_index, field: field}) do
     elem_adds = Map.get(add_index, field, %{})
 
     Enum.reduce(muts, OrSet.new(), fn
@@ -142,7 +143,7 @@ defmodule Lattice.Reduce do
         OrSet.add(set, elem, op.id)
 
       {_field, op, {:remove, elem}}, set ->
-        ancestors = Dag.ancestors(ops, op.id)
+        ancestors = Map.get(all_ancestors, op.id, MapSet.new())
         observed = elem_adds |> Map.get(elem, MapSet.new()) |> MapSet.intersection(ancestors)
         OrSet.remove(set, observed)
 

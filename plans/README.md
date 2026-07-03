@@ -23,7 +23,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 002 | `mix verify` one-command health gate | P1 | S | — | DONE |
 | 003 | Static analysis: Credo + Sobelow | P1 | S–M | — | DONE |
 | 004 | Repo-root `AGENTS.md` + toolchain doc | P1 | S | — | DONE |
-| 005 | Cut v2 reduction/authority O(n²) re-scans | P2 | M | 001 (rec.) | TODO |
+| 005 | Cut v2 reduction/authority O(n²) re-scans | P2 | M | 001 (rec.) | DONE |
 | 006 | Direct tests for v2 infra + stronger property runs | P2 | M | 001 (rec.) | TODO |
 | 007 | Stop leaking internal auth reasons over WebSocket | P3 | S | — | TODO |
 | 008 | CapStore child-index + handle `register_cap` result | P3 | S–M | — | TODO |
