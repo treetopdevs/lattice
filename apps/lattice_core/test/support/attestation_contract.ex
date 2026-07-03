@@ -32,8 +32,10 @@ defmodule Lattice.Attestation.Contract do
       @impl_mod impl
 
       setup do
-        %{alice: Identity.from_seed("realm:alice", <<1::256>>),
-          bob: Identity.from_seed("realm:bob", <<2::256>>)}
+        %{
+          alice: Identity.from_seed("realm:alice", <<1::256>>),
+          bob: Identity.from_seed("realm:bob", <<2::256>>)
+        }
       end
 
       test "cast_vouch returns an opaque token and an appendable :vouch body", %{alice: alice} do
@@ -71,7 +73,9 @@ defmodule Lattice.Attestation.Contract do
       end
 
       # ---- the property that is REAL only at M4 ----
-      test "receipt-freeness: an alternative is indistinguishable from a genuine vouch", %{alice: alice} do
+      test "receipt-freeness: an alternative is indistinguishable from a genuine vouch", %{
+        alice: alice
+      } do
         if @impl_mod.receipt_free?() do
           {token, genuine} = Attestation.cast_vouch(@impl_mod, alice, :yes)
           alt = Attestation.produce_alt(@impl_mod, token, :no)

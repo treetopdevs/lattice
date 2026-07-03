@@ -1,0 +1,18 @@
+{
+  "quarantine": [
+    "rBgS1yjEzP2aQyOaxR08p7KtCp9cnlOiwgZ7TVHp-dw"
+  ],
+  "audit": [
+    {
+      "reason": "not_holder",
+      "op": "rBgS1yjEzP2aQyOaxR08p7KtCp9cnlOiwgZ7TVHp-dw",
+      "event": "command_quarantine"
+    }
+  ],
+  "reasons": {
+    "rBgS1yjEzP2aQyOaxR08p7KtCp9cnlOiwgZ7TVHp-dw": "not_holder"
+  },
+  "holders": {
+    "clerk": "xI19LiI0w767"
+  }
+}

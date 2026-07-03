@@ -15,7 +15,7 @@ defmodule Lattice.Reduce do
       losers). Excluding them here is how "quarantined ops never reach state" is
       enforced, while the ops themselves remain in the log (design invariant 4).
     * `:frontier` — restrict reduction to the causal slice reachable from these op
-      ids, which is exactly `Lattice.state_at/2` time travel (behavior 17).
+      ids, which is exactly `Lattice.state_at/3` time travel (behavior 17).
   """
 
   alias Lattice.{Dag, Log, Op}

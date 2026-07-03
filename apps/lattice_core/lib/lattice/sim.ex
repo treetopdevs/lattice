@@ -15,7 +15,7 @@ defmodule Lattice.Sim do
   log is the truth; the connection is the cache" testable (behavior 18).
   """
 
-  alias Lattice.{Authority, Identity, Log, Net, Op, Reduce, Sync}
+  alias Lattice.{Authority, Identity, Log, Net, Op, Sync}
   alias Lattice.Authority.Delegation
 
   defstruct module: nil, replica: nil, realms: %{}, logs: %{}, net: %Net{}, caps: %{}
@@ -221,11 +221,7 @@ defmodule Lattice.Sim do
   def log(%__MODULE__{logs: logs}, realm_id), do: Map.fetch!(logs, realm_id)
 
   @spec state(t(), String.t()) :: map()
-  def state(%__MODULE__{} = sim, realm_id) do
-    log = log(sim, realm_id)
-    quarantine = Authority.quarantine(sim.module, log)
-    Reduce.reduce(sim.module, log, quarantine: quarantine)
-  end
+  def state(%__MODULE__{} = sim, realm_id), do: Lattice.state(sim.module, log(sim, realm_id))
 
   @spec authority(t(), String.t()) :: Authority.analysis()
   def authority(%__MODULE__{} = sim, realm_id),

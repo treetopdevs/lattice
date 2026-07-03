@@ -104,3 +104,25 @@ device at M2. Decide the carrier (AtomVM vs JS/Vue client) by the M2 spike, not 
 2. Run `scripts/township_demo.exs`; confirm the narration and the quarantine/tally beats.
 3. Only then open roadmap R1 (real persistence, KERI rotation). Leave R2's stub-swap until the
    research track delivers the primitive and the M4 contract module passes.
+
+## Parallel tracks — this overlay is the *application* track
+
+Township is a downstream **consumer** of the substrate; developing Lattice itself happens in
+the repo's own `plans/` directory (the **substrate** track). The two run in parallel and meet
+at one seam:
+
+- **Substrate track** — `plans/` (generated 2026-06-20). Foundation & hardening (`000`–`009`,
+  e.g. 001 gates the full property suite in CI — needed before Township's M1 property claims can
+  be trusted), then the direction spikes (`010`–`013`). **Plan `010` (prove v2 over a real
+  carrier, replacing simulated `Net`) is the item that unblocks Township's exit gate G1** — the
+  physical-carrier run these tests can't reach on `Sim` today.
+- **Application track** — this overlay. W0–W4 on `Sim` now, structured so the W1/W3 assertions
+  swap onto the real carrier unchanged when `010` lands.
+- **The seam** — `plans/010a-carrier-township-acceptance.md` (in this overlay). It binds `010`'s
+  convergence GATE to Township **W1/W3** as the application oracle, and records the coupling `010`
+  defers: a **Vue 3.5 / JS browser realm cannot emit `:erlang.term_to_binary`**, so canonical
+  **CBOR (ADR-P08)** becomes a hard prerequisite the instant a non-BEAM realm joins. Read `010`
+  and `010a` together before doing carrier or browser-realm work.
+
+Run as two Fable worktrees: worktree 1 executes `010` + the ADRs in `010a`; worktree 2 keeps this
+overlay green and swaps the W1/W3 harness from `Sim` to the real carrier when it exists.

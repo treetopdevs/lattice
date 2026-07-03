@@ -150,6 +150,18 @@ defmodule Lattice do
     do: Lattice.Registry.await(realm, replica, promise)
 
   @doc """
+  Materialize the current state of `log` interpreted by Replica `module`, applying
+  the authority quarantine. The value-level twin of `Lattice.Sim.state/2` — same
+  `Reduce`/`Authority` path, usable on any `Lattice.Log` (e.g. one restored from disk).
+  Live-process state reads go through `Lattice.Registry.state/2` (realm, replica);
+  this function is the value-level path over a `%Lattice.Log{}`.
+  """
+  def state(module, %Lattice.Log{} = log) do
+    quarantine = Lattice.Authority.quarantine(module, log)
+    Lattice.Reduce.reduce(module, log, quarantine: quarantine)
+  end
+
+  @doc """
   Reproduce historical state as of a causal `frontier` (a list of op ids), applying
   the authority quarantine that held within that causal slice. Behavior 17.
   """
