@@ -21,7 +21,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 000 | **Goal**: land 001–009 (foundation & hardening) | — | — | sequences 001–009 | TODO |
 | 001 | CI gates the full unit/property suite (+dep cache) | P1 | S | — | DONE |
 | 002 | `mix verify` one-command health gate | P1 | S | — | DONE |
-| 003 | Static analysis: Credo + Sobelow | P1 | S–M | — | TODO |
+| 003 | Static analysis: Credo + Sobelow | P1 | S–M | — | DONE |
 | 004 | Repo-root `AGENTS.md` + toolchain doc | P1 | S | — | TODO |
 | 005 | Cut v2 reduction/authority O(n²) re-scans | P2 | M | 001 (rec.) | TODO |
 | 006 | Direct tests for v2 infra + stronger property runs | P2 | M | 001 (rec.) | TODO |
@@ -57,6 +57,39 @@ highest-value next step and a prerequisite signal for 013 (compaction).
   snapshot/verify experiments faster to iterate.
 - **003's `mix credo`/`mix sobelow`** can later be folded into 001's CI job and 002's
   alias (noted in those plans' Maintenance sections).
+
+## Plan 003 baselined findings (follow-ups, not fixed in 003)
+
+Static analysis landed with a green baseline; these genuine-but-minor findings were
+suppressed in `.credo.exs` / `apps/lattice_server/.sobelow-conf` and are recorded here
+as follow-ups (see the config comments for exact suppressions):
+
+- **Credo `RedundantWithClauseResult`** (disabled) — 5 redundant final `with` clauses:
+  `lattice_core/lib/lattice/authority.ex:466`, `lattice_core/lib/lattice/cap/attenuation.ex:194`,
+  `lattice_server/lib/lattice/transport/web_socket/client.ex:22,67,93`. Trivial cleanups.
+- **Credo `CyclomaticComplexity`** (baselined `max_complexity: 16`) — worst offender
+  `lattice_core/lib/lattice/replica.ex:108` (complexity 16); also `authority.ex:205,492`
+  (10), `cap.ex:83` (11). Candidates for extraction during plan 005's engine work.
+- **Credo `FunctionArity`** (baselined `max_arity: 9`) — `authority.ex:348` takes 9
+  params; group into a struct/keyword when next touched.
+- **Credo `Nesting`** (baselined `max_nesting: 3`) — 21 sites nest one past the default 2
+  (engine case-in-reduce style); depth >3 still flags.
+- **Credo `CondStatements`** (disabled) — `dag.ex:90`, `sync.ex:79` are two-branch
+  `cond`s that could be `if`.
+- **Credo `MapJoin`** (disabled) — `lattice_server/test/web_socket_envelope_test.exs:41`
+  `Enum.map|>Enum.join` → `Enum.map_join`.
+- **Credo `WithSingleClause`** (disabled) — deliberate codebase style; not a follow-up.
+- **Credo `--strict` baseline** — plan 003's green gate is non-strict `mix credo`
+  (exit 0). `mix credo --strict` is NOT green: it exits 14 with 56 low-priority issues
+  (48 `Design.AliasUsage`, 6 readability incl. `AliasOrder`/`PreferImplicitTry`,
+  2 `Refactor.Apply`). These must be fixed or explicitly baselined in `.credo.exs`
+  before wiring `--strict` into CI per plan 003's maintenance note.
+- **Sobelow `Traversal.FileModule`** in `static_handler.ex` — ignored via
+  `.sobelow-conf` `ignore_files`; confirmed false positive (same allowlist analysis as
+  audit SECURITY-05 below). Not a follow-up.
+- **Note**: the Sobelow dep also had to be declared in `apps/lattice_server/mix.exs`
+  (dev/test only) — umbrella-root deps are not visible as Mix tasks inside child apps,
+  so plan 003's "dep is available umbrella-wide" premise did not hold for task discovery.
 
 ## Findings considered and rejected
 
