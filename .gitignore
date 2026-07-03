@@ -16,6 +16,7 @@
 
 # Where third-party dependencies like ExDoc output generated docs.
 /doc/
+apps/*/doc/
 
 # Temporary files, for example, from tests.
 /tmp/

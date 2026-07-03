@@ -27,7 +27,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 006 | Direct tests for v2 infra + stronger property runs | P2 | M | 001 (rec.) | DONE |
 | 007 | Stop leaking internal auth reasons over WebSocket | P3 | S | — | DONE |
 | 008 | CapStore child-index + handle `register_cap` result | P3 | S–M | — | DONE |
-| 009 | README Lattice 2.0 section + ex_doc | P3 | S | — | TODO |
+| 009 | README Lattice 2.0 section + ex_doc | P3 | S | — | DONE |
 | 010 | (spike) Prove v2 over a real carrier (replace `Net`) | P2 | L | 006 (rec.) | TODO |
 | 011 | (design) Clean `Lattice.V2` facade | P3 | S–M | — | TODO |
 | 012 | (design) Visualize v2 Replica op-DAGs | P3 | S–M | — | TODO |

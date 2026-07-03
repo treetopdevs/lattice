@@ -12,7 +12,17 @@ defmodule LatticeCore.MixProject do
       elixir: "~> 1.19",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      name: "Lattice",
+      source_url: "https://github.com/treetopdevs/lattice",
+      docs: [
+        main: "Lattice",
+        extras: [
+          "../../docs/lattice2_design.md",
+          "../../docs/threat_model_v2.md",
+          "../../docs/path_to_real.md"
+        ]
+      ]
     ]
   end
 
@@ -32,6 +42,7 @@ defmodule LatticeCore.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:jason, "~> 1.4"},
       {:stream_data, "~> 1.1", only: [:dev, :test]}
     ]
