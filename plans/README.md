@@ -19,7 +19,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
 | 000 | **Goal**: land 001–009 (foundation & hardening) | — | — | sequences 001–009 | TODO |
-| 001 | CI gates the full unit/property suite (+dep cache) | P1 | S | — | TODO |
+| 001 | CI gates the full unit/property suite (+dep cache) | P1 | S | — | DONE |
 | 002 | `mix verify` one-command health gate | P1 | S | — | TODO |
 | 003 | Static analysis: Credo + Sobelow | P1 | S–M | — | TODO |
 | 004 | Repo-root `AGENTS.md` + toolchain doc | P1 | S | — | TODO |
