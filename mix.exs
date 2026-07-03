@@ -12,12 +12,13 @@ defmodule Lattice.MixProject do
   end
 
   def cli do
-    [preferred_envs: [verify: :test]]
+    [preferred_envs: [verify: :test, check: :test]]
   end
 
   defp aliases do
     [
-      verify: ["format --check-formatted", "test"]
+      verify: ["format --check-formatted", "test"],
+      check: ["verify", "credo --strict"]
     ]
   end
 

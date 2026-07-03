@@ -23,8 +23,16 @@ worktrees do not carry it; the asdf-shim rule is the reliable invocation everywh
 
 ```sh
 ~/.asdf/shims/mix verify                          # format --check-formatted + full test suite
+~/.asdf/shims/mix check                           # verify + credo --strict
 ~/.asdf/shims/mix test                            # full suite only
 ~/.asdf/shims/mix run scripts/lattice2_demo.exs   # narrated Lattice 2.0 end-to-end demo
+```
+
+Sobelow is **per-app** (it targets the Phoenix/Cowboy boundary app, not the umbrella), so
+it is not part of `mix check`. Run it in `apps/lattice_server`:
+
+```sh
+cd apps/lattice_server && ~/.asdf/shims/mix sobelow --exit
 ```
 
 All tests must pass and formatting must be clean before considering any change done.

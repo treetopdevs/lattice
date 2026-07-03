@@ -86,3 +86,7 @@ jobs:
         run: mix format --check-formatted
       - name: Run full test suite
         run: mix test
+      - name: Credo (strict)
+        run: mix credo --strict
+      - name: Sobelow (lattice_server)
+        run: cd apps/lattice_server && mix sobelow --exit
