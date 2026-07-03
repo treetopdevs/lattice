@@ -6,7 +6,18 @@ defmodule Lattice.MixProject do
       apps_path: "apps",
       version: "0.1.0",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      aliases: aliases()
+    ]
+  end
+
+  def cli do
+    [preferred_envs: [verify: :test]]
+  end
+
+  defp aliases do
+    [
+      verify: ["format --check-formatted", "test"]
     ]
   end
 
