@@ -17,6 +17,8 @@ defmodule Lattice2.ConvergencePropertyTest do
   use ExUnit.Case, async: true
   use ExUnitProperties
 
+  @moduletag timeout: 120_000
+
   alias Lattice.{Authority, Dag, Log, Sim}
   alias Lattice.Demo.Thread
 
@@ -106,7 +108,8 @@ defmodule Lattice2.ConvergencePropertyTest do
   property "a+d: all realms converge to equal state and identical quarantine sets after heal+sync" do
     check all(
             actions <- list_of(action_gen(), max_length: 14),
-            seed <- string(:alphanumeric, min_length: 1, max_length: 6)
+            seed <- string(:alphanumeric, min_length: 1, max_length: 6),
+            max_runs: 500
           ) do
       sim = run(actions, seed)
       states = Enum.map(@realms, &Sim.state(sim, &1))
@@ -120,7 +123,8 @@ defmodule Lattice2.ConvergencePropertyTest do
   property "b: locked? is only ever mutated by the holder at each honored op's causal position" do
     check all(
             actions <- list_of(action_gen(), max_length: 14),
-            seed <- string(:alphanumeric, min_length: 1, max_length: 6)
+            seed <- string(:alphanumeric, min_length: 1, max_length: 6),
+            max_runs: 500
           ) do
       sim = run(actions, seed)
       log = Sim.log(sim, "r0")
@@ -142,15 +146,14 @@ defmodule Lattice2.ConvergencePropertyTest do
         slice = Log.from_ops(@replica, Map.take(ops, MapSet.to_list(slice_ids)))
         assert Authority.holder(Thread, slice, :moderator) == op.author
       end
-
-      assert true
     end
   end
 
   property "c: re-running the same action sequence is byte-identical" do
     check all(
             actions <- list_of(action_gen(), max_length: 14),
-            seed <- string(:alphanumeric, min_length: 1, max_length: 6)
+            seed <- string(:alphanumeric, min_length: 1, max_length: 6),
+            max_runs: 500
           ) do
       a = run(actions, seed) |> Sim.state("r0")
       b = run(actions, seed) |> Sim.state("r0")
