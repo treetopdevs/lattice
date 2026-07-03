@@ -55,7 +55,7 @@ defmodule LatticeServer.LiveOpsWebSocketTest do
             %{
               "type" => "liveops_result",
               "ok" => false,
-              "error" => ":cap_action_mismatch"
+              "error" => "unauthorized"
             }} = recv_type(client, "liveops_result")
 
     assert Enum.any?(

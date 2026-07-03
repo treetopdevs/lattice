@@ -25,7 +25,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 004 | Repo-root `AGENTS.md` + toolchain doc | P1 | S | — | DONE |
 | 005 | Cut v2 reduction/authority O(n²) re-scans | P2 | M | 001 (rec.) | DONE |
 | 006 | Direct tests for v2 infra + stronger property runs | P2 | M | 001 (rec.) | DONE |
-| 007 | Stop leaking internal auth reasons over WebSocket | P3 | S | — | TODO |
+| 007 | Stop leaking internal auth reasons over WebSocket | P3 | S | — | DONE |
 | 008 | CapStore child-index + handle `register_cap` result | P3 | S–M | — | TODO |
 | 009 | README Lattice 2.0 section + ex_doc | P3 | S | — | TODO |
 | 010 | (spike) Prove v2 over a real carrier (replace `Net`) | P2 | L | 006 (rec.) | TODO |

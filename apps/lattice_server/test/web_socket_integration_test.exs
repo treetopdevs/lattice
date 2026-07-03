@@ -76,8 +76,24 @@ defmodule LatticeServer.WebSocketIntegrationTest do
                payload: %{message: "denied"}
              })
 
-    assert {:ok, %{"type" => "call_result", "ok" => false, "error" => ":unknown_cap"}} =
+    assert {:ok, %{"type" => "call_result", "ok" => false, "error" => unknown_cap_error}} =
              recv_type(client, "call_result")
+
+    assert unknown_cap_error == "invalid_request"
+
+    # A different internal failure (malformed cap vs unknown cap) must map to
+    # the same coarse public code — the reconnaissance distinction is gone.
+    assert :ok =
+             Client.send_envelope(client, %{
+               type: "call",
+               cap_id: %{"id" => "not-a-token"},
+               payload: %{message: "denied"}
+             })
+
+    assert {:ok, %{"type" => "call_result", "ok" => false, "error" => malformed_cap_error}} =
+             recv_type(client, "call_result")
+
+    assert malformed_cap_error == unknown_cap_error
 
     assert :ok = Client.send_envelope(client, %{type: "disconnect"})
 

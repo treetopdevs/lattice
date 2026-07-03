@@ -76,7 +76,7 @@ defmodule LatticeServer.FederatedWorkersHTTPTest do
                payload: %{op: "relay", body: "after-run"}
              })
 
-    assert {:ok, %{"type" => "call_result", "ok" => false, "error" => ":revoked"}} =
+    assert {:ok, %{"type" => "call_result", "ok" => false, "error" => "unauthorized"}} =
              recv_type(worker_a, "call_result")
 
     refute_receive {:worker_tab_call, %{"op" => "relay", "body" => "after-run"}}, 100
