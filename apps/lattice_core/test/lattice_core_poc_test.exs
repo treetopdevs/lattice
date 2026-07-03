@@ -97,6 +97,26 @@ defmodule LatticeCore.PocTest do
       assert_audit(:revoke, cap_id: cap.id)
     end
 
+    test "revoking the root of a delegation chain revokes all descendants" do
+      {_pid_a, tab_a} = connect_tab()
+      {_pid_b, tab_b} = connect_tab()
+      {_pid_c, tab_c} = connect_tab()
+      server = start_supervised!({TestServer, self()})
+
+      {:ok, root} = Lattice.grant(tab_a.id, server, [:call], delegation_allowed?: true)
+      {:ok, child} = Lattice.delegate(tab_a.id, root.id, tab_b.id, delegation_allowed?: true)
+      {:ok, grandchild} = Lattice.delegate(tab_b.id, child.id, tab_c.id)
+
+      assert :ok = Lattice.revoke(root, :test)
+
+      for cap <- [root, child, grandchild] do
+        assert {:ok, %{revoked?: true}} = Lattice.CapStore.get(cap.id)
+        assert_audit(:revoke, cap_id: cap.id)
+      end
+
+      assert {:error, :revoked} = Lattice.call(tab_c.id, grandchild, %{message: "after revoke"})
+    end
+
     test "expired cap is denied" do
       {_tab_pid, tab} = connect_tab()
       server = start_supervised!({TestServer, self()})
