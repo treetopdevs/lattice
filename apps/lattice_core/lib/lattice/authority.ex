@@ -265,6 +265,7 @@ defmodule Lattice.Authority do
     init = %{
       holder: nil,
       acquires: [],
+      heartbeats: [],
       decided: %{},
       quarantine: %{},
       audit: []
@@ -283,13 +284,13 @@ defmodule Lattice.Authority do
           end
 
         {:transfer, d, at_tick} ->
-          decide_transfer(st, op, role, d, at_tick, ancestors, deleg_valid, ordered)
+          decide_transfer(st, op, role, d, at_tick, ancestors, deleg_valid)
 
         {:succeed, d, at_tick} ->
-          decide_succeed(st, op, role, d, at_tick, ancestors, deleg_valid, policies, ordered)
+          decide_succeed(st, op, role, d, at_tick, ancestors, deleg_valid, policies)
 
         {:heartbeat, at_tick} ->
-          decide_heartbeat(st, op, at_tick, ancestors, ordered)
+          decide_heartbeat(st, op, at_tick, ancestors)
       end
     end)
   end
@@ -325,9 +326,9 @@ defmodule Lattice.Authority do
     }
   end
 
-  defp decide_transfer(st, op, role, d, at_tick, ancestors, deleg_valid, ordered) do
+  defp decide_transfer(st, op, role, d, at_tick, ancestors, deleg_valid) do
     anc = Map.get(ancestors, op.id, MapSet.new())
-    holder_at_deps = holder_as_of(anc, st.decided, ordered)
+    holder_at_deps = holder_from_acquires(st.acquires, anc)
 
     cond do
       deleg_valid[d.id] != :ok or op.author != d.issuer or not MapSet.member?(d.roles, role) ->
@@ -345,9 +346,9 @@ defmodule Lattice.Authority do
     end
   end
 
-  defp decide_succeed(st, op, role, d, at_tick, ancestors, deleg_valid, policies, ordered) do
+  defp decide_succeed(st, op, role, d, at_tick, ancestors, deleg_valid, policies) do
     anc = Map.get(ancestors, op.id, MapSet.new())
-    last_active = last_active_as_of(anc, st.decided, ordered)
+    last_active = last_active_from(st.acquires, st.heartbeats, anc)
     policy = Map.get(policies, role)
 
     cond do
@@ -366,12 +367,16 @@ defmodule Lattice.Authority do
     end
   end
 
-  defp decide_heartbeat(st, op, at_tick, ancestors, ordered) do
+  defp decide_heartbeat(st, op, at_tick, ancestors) do
     anc = Map.get(ancestors, op.id, MapSet.new())
-    holder_at_deps = holder_as_of(anc, st.decided, ordered)
+    holder_at_deps = holder_from_acquires(st.acquires, anc)
 
     if op.author == holder_at_deps do
-      %{st | decided: Map.put(st.decided, op.id, %{type: :heartbeat, at_tick: at_tick})}
+      %{
+        st
+        | heartbeats: st.heartbeats ++ [%{op_id: op.id, at_tick: at_tick}],
+          decided: Map.put(st.decided, op.id, %{type: :heartbeat, at_tick: at_tick})
+      }
     else
       st
     end
@@ -386,26 +391,12 @@ defmodule Lattice.Authority do
     }
   end
 
-  # Holder after applying valid acquire events whose op id is in `anc`, in order.
-  defp holder_as_of(anc, decided, ordered) do
-    Enum.reduce(ordered, nil, fn op, holder ->
-      case Map.get(decided, op.id) do
-        %{type: :acquire, holder: h} -> if MapSet.member?(anc, op.id), do: h, else: holder
-        _ -> holder
-      end
-    end)
-  end
+  # Latest activity tick (acquire or heartbeat) visible in `anc`; 0 if none.
+  defp last_active_from(acquires, heartbeats, anc) do
+    ticks =
+      for ev <- acquires ++ heartbeats, MapSet.member?(anc, ev.op_id), do: ev.at_tick
 
-  defp last_active_as_of(anc, decided, ordered) do
-    Enum.reduce(ordered, 0, fn op, acc ->
-      case Map.get(decided, op.id) do
-        %{type: type, at_tick: tick} when type in [:acquire, :heartbeat] ->
-          if MapSet.member?(anc, op.id), do: max(acc, tick), else: acc
-
-        _ ->
-          acc
-      end
-    end)
+    Enum.max([0 | ticks])
   end
 
   # --- Command validation -------------------------------------------------
