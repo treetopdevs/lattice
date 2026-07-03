@@ -31,7 +31,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 010 | (spike) Prove v2 over a real carrier (replace `Net`) | P2 | L | 006 (rec.) | DONE (light path; GATE met — ADR 0005, `apps/lattice_node_spike`) |
 | 011 | (design) Clean `Lattice.V2` facade | P3 | S–M | — | DONE |
 | 012 | (design) Visualize v2 Replica op-DAGs | P3 | S–M | — | DONE |
-| 013 | (spike) Log compaction (Sedimentree) feasibility | P3 | L–XL | 005, 010 (rec.) | TODO |
+| 013 | (spike) Log compaction (Sedimentree) feasibility | P3 | L–XL | 005, 010 (rec.) | DONE (GATE met — ADR 0006; throwaway prototype in `lattice_core` test/support; production integration not built, gated on carrier ack) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
