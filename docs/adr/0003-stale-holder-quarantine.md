@@ -1,9 +1,11 @@
 # ADR 0003 — Stale-holder quarantine policy
 
 ## Status
+
 Accepted (POC).
 
 ## Context
+
 A serialized `authority:` field (e.g. `Thread.locked?`, role `:moderator`) is a
 single-writer token that moves between realms via transfers and successions. When the
 token moves away from a realm and that realm — not having observed the move — authors
@@ -12,6 +14,7 @@ violate single-writer), and not silently dropped (invariant 4). Every realm must
 the same verdict from the merged log (property d, behaviors 8 and 15).
 
 ## Decision
+
 An authoritative command op `O` by author `A` on a role `R` is **honored** iff:
 
 1. **Holder-at-causal-position.** `A` is the holder of `R` computed by reducing the
@@ -28,6 +31,7 @@ transfer must be authored by the holder-at-its-deps; the double-transfer loser i
 `:double_transfer`).
 
 ## Why clause 2 is needed and correct
+
 Clause 1 alone would honor a returning holder's op: from `A`'s causal view it still
 holds the token (it never saw the move). Clause 2 says: if a *valid* holder-change `E`
 moved the token away from `A` and `E` was authored without seeing `O` (they are causally
@@ -44,6 +48,7 @@ transfer — `A` either ordered the command before the transfer, `O ∈ ancestor
 it is honored, or after, and clause 1 already rejects it.)
 
 ## Consequences
+
 * The returning original holder in the succession scenario (behavior 15) has its lock
   op quarantined as `:stale_holder` on every realm; the successor is the holder.
 * This favours **availability of the new holder over the work of the lagging old

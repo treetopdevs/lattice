@@ -1,9 +1,11 @@
 # ADR 0001 — Canonical encoding for op ids and signatures
 
 ## Status
+
 Accepted (POC).
 
 ## Context
+
 Every `Lattice.Op` id is the SHA-256 hash of a canonical encoding of its fields, and
 the author's Ed25519 signature is over the same bytes. For the log to be a sound,
 deterministic, tamper-evident hash-DAG, two logically-identical ops **must** encode to
@@ -11,6 +13,7 @@ identical bytes on every realm and every run, and any change to any field **must
 change the bytes.
 
 ## Decision
+
 Encode the tagged tuple `{:lattice_op_v1, replica, author, sorted(deps), kind, body,
 cap}` with `:erlang.term_to_binary/2` using the options `[:deterministic,
 {:minor_version, 2}]`, then `sha256 |> Base.url_encode64(padding: false)` for the id.
@@ -19,6 +22,7 @@ the id. Delegations use the same approach (`{:lattice_delegation_v1, ...}` with 
 `ops`/`roles`).
 
 ## Rationale
+
 * `:deterministic` makes `term_to_binary` emit maps in a canonical (key-sorted) order,
   removing the only common source of non-determinism for Erlang terms. Verified on the
   target toolchain (OTP 28): two maps with different insertion order encode identically.
@@ -28,6 +32,7 @@ the id. Delegations use the same approach (`{:lattice_delegation_v1, ...}` with 
   frontier.
 
 ## Caveats (honest limitations)
+
 * **Atoms vs. binaries are distinct.** `:post` and `"post"` encode differently. Command
   bodies use atoms consistently; a real wire protocol must pin a schema so that a
   re-serialized op hashes identically.
@@ -41,5 +46,6 @@ the id. Delegations use the same approach (`{:lattice_delegation_v1, ...}` with 
   binaries, lists, tuples, and maps thereof.
 
 ## Alternatives considered
+
 * Canonical CBOR / a hand-rolled deterministic serializer — more portable but more code
   than a falsifiable POC needs. Deferred to `path_to_real.md`.

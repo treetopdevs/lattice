@@ -225,7 +225,13 @@ deleg_events =
   end)
 
 edge_kind = fn kind, d ->
-  roles = if MapSet.size(d.roles) > 0, do: " roles=[#{Enum.join(Enum.sort(d.roles), ",")}]"
+  roles =
+    if MapSet.size(d.roles) > 0 do
+      " roles=[#{Enum.join(Enum.sort(d.roles), ",")}]"
+    else
+      ""
+    end
+
   "#{kind}#{roles} ops=[#{Enum.join(Enum.sort(d.ops), ",")}]"
 end
 

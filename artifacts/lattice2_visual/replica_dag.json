@@ -140,11 +140,11 @@
     }
   ],
   "replica": "replica:thread:visual",
-  "holders": {
-    "moderator": "vKQcCxInoaBu"
-  },
   "frontier": [
     "6X-Lg4aYbWzIpXFjG0NiSTyGMYuXv9XM-mSvF0qjeG0",
     "ESEqUTgkds4iRL-CD2QKBcGhP-zjEJWoHnDlC84DGaE"
-  ]
+  ],
+  "holders": {
+    "moderator": "vKQcCxInoaBu"
+  }
 }

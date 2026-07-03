@@ -1,14 +1,17 @@
 # ADR 0002 — Hash-DAG causality over vector clocks
 
 ## Status
+
 Accepted (POC).
 
 ## Context
+
 Lattice needs (a) causal ordering of ops, (b) tamper-evidence, and (c) a deterministic
 total order for fields that require one (LWW registers, the serialized authority
 field). It must converge under arbitrary partition and delivery order.
 
 ## Decision
+
 Causality is carried by a **content-addressed hash-DAG**: each op's `id` is the hash of
 its content, and `deps` is the set of predecessor ids the author had observed (its
 frontier). The causal frontier is the set of ops no other op depends on. Where a total
@@ -18,6 +21,7 @@ CRDT ordering tags use `{causal_height, op_id}` where height is `0` for roots an
 `1 + max(dep heights)`.
 
 ## Rationale
+
 * **Tamper-evidence for free.** Because ids are content hashes and deps cite ids,
   mutating any op changes its id and orphans all descendants — no separate Merkle
   structure needed.
@@ -30,6 +34,7 @@ CRDT ordering tags use `{causal_height, op_id}` where height is `0` for roots an
   actor enumeration.
 
 ## Consequences
+
 * The frontier-diff sync (`Lattice.Sync`) reconciles by exchanging missing ids; the POC
   ships the full id set (tiny scale). A production carrier negotiates recursively from
   frontiers — an optimization, not a semantic change (see `path_to_real.md`).
@@ -41,6 +46,7 @@ CRDT ordering tags use `{causal_height, op_id}` where height is `0` for roots an
   observed-remove rule (causal ancestry), not by the tiebreak.
 
 ## Alternatives considered
+
 * **Vector clocks** — rejected: actor-set management, no tamper-evidence, no help with
   the single-writer authority token.
 * **A single Lamport clock** — rejected: needs message exchange to advance and doesn't

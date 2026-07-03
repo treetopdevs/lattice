@@ -359,7 +359,8 @@ defmodule Lattice.Transport.WebSocket do
              :use_limit_exceeded,
              :operation_not_allowed,
              :cap_action_mismatch,
-             :cap_required
+             :cap_required,
+             :bridge_required
            ] ->
         "unauthorized"
 
@@ -382,7 +383,7 @@ defmodule Lattice.Transport.WebSocket do
            ] ->
         "invalid_request"
 
-      r when r in [:tab_not_connected, :target_down, :bridge_required, :timeout] ->
+      r when r in [:tab_not_connected, :target_down, :timeout] ->
         "unavailable"
 
       :rate_limited ->

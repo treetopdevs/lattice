@@ -181,6 +181,7 @@ defmodule Lattice2.CompactionSpikeTest do
       tuple({constant(:unlock), idx()}),
       tuple({constant(:transfer), idx()}),
       tuple({constant(:revoke), member_of([1, 2])}),
+      tuple({constant(:request), idx(), string(:alphanumeric, min_length: 1, max_length: 8)}),
       tuple({constant(:heartbeat), idx()}),
       tuple({constant(:succeed), idx()}),
       tuple({constant(:partition), idx(), idx()}),
@@ -242,6 +243,9 @@ defmodule Lattice2.CompactionSpikeTest do
 
   defp apply_action({:revoke, which}, {sim, t}, grants),
     do: {elem(Sim.revoke(sim, "r0", grants[which].id), 0), t}
+
+  defp apply_action({:request, i, ref}, {sim, t}, _g),
+    do: {elem(Sim.request(sim, realm(i), ref, {:lock, []}), 0), t}
 
   defp apply_action({:heartbeat, i}, {sim, t}, _g),
     do: {elem(Sim.heartbeat(sim, realm(i), :moderator, t), 0), t + 1}

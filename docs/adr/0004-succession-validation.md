@@ -1,9 +1,11 @@
 # ADR 0004 — Succession validation
 
 ## Status
+
 Accepted (POC).
 
 ## Context
+
 A serialized role can be handed on explicitly by its holder (a `:transfer`), but it must
 also recover from a holder that has gone dormant and cannot transfer. Succession lets a
 **designated successor** claim the role after the holder has been silent past a
@@ -11,6 +13,7 @@ threshold — and it must be verifiable from the log alone, deterministically, w
 wall clocks (invariant 5).
 
 ## Decision
+
 The succession policy is recorded in the log at genesis:
 `policies[role] = %{successor: <pubkey>, dormant_ticks: n}` (the demo/tests resolve a
 realm id to its pubkey at creation time).
@@ -37,12 +40,14 @@ authoritative ops that did not observe it are quarantined `:stale_holder`
 ([ADR 0003](0003-stale-holder-quarantine.md)) — behavior 15.
 
 ## Rationale
+
 * **Log-derivable & deterministic.** Successor identity, the threshold, `last_active`,
   and `at_tick` are all in the log; every realm computes the same verdict.
 * **No wall clock.** Ticks are explicit values carried in op bodies; reduction never
   reads live clock state, so `state_at`/replay are exact.
 
 ## Caveats (honest limitations)
+
 * **Dormancy = absence of heartbeats**, not a true liveness oracle. A live-but-silent
   holder that stops heartbeating looks dormant. A production system would derive
   heartbeats from connection liveness (the carrier), not application calls; this POC
