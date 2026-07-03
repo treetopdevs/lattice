@@ -150,7 +150,9 @@ Headline guarantees (all asserted by tests):
 The code lives in `apps/lattice_core/lib/lattice/` (`Op`, `Log`, `Sync`, `Net`,
 `Clock`, `Crdt`, `Replica`, `Reduce`, `Authority`, `Registry`, `Materializer`,
 `Promise`, `Live`, `Sim`), with the public facade on `Lattice` (`materialize/2`,
-`state_at/3`, `send_durable/3`, `await/2`, ...) and `Lattice.Registry`. Run it:
+`state_at/3`, `send_durable/3`, `await/2`, ...) and `Lattice.Registry`. For a single
+coherent v2 surface use `Lattice.V2` (`materialize/2`, `dormant/2`, `send/3`,
+`call/4` + `await/2`, ...); its `@moduledoc` carries the v1 ↔ v2 verb table. Run it:
 
 ```sh
 mix run scripts/lattice2_demo.exs

@@ -29,7 +29,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 008 | CapStore child-index + handle `register_cap` result | P3 | S–M | — | DONE |
 | 009 | README Lattice 2.0 section + ex_doc | P3 | S | — | DONE |
 | 010 | (spike) Prove v2 over a real carrier (replace `Net`) | P2 | L | 006 (rec.) | TODO |
-| 011 | (design) Clean `Lattice.V2` facade | P3 | S–M | — | TODO |
+| 011 | (design) Clean `Lattice.V2` facade | P3 | S–M | — | DONE |
 | 012 | (design) Visualize v2 Replica op-DAGs | P3 | S–M | — | TODO |
 | 013 | (spike) Log compaction (Sedimentree) feasibility | P3 | L–XL | 005, 010 (rec.) | TODO |
 

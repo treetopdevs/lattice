@@ -124,9 +124,10 @@ defmodule Lattice do
   # lives in `Lattice.{Op,Log,Sync,Net,Clock,Crdt,Authority,Replica,Reduce,
   # Registry,Materializer,Promise,Live,Sim}`. Functions whose v1 names/arities
   # would collide (`call/3`, `grant/4`) are reached through `Lattice.Registry`
-  # and the in-log delegation ops; the rest are surfaced here. Nothing assumes
-  # in-process locality — realms are addressed by id, so `Lattice.Net` can be
-  # swapped for a real carrier (see docs/path_to_real.md).
+  # and the in-log delegation ops; the rest are surfaced here. `Lattice.V2`
+  # offers the same verbs as one coherent facade (see its v1 ↔ v2 table).
+  # Nothing assumes in-process locality — realms are addressed by id, so
+  # `Lattice.Net` can be swapped for a real carrier (see docs/path_to_real.md).
   # ===================================================================
 
   @doc "Materialize a replica on a realm (live process); returns `{:ok, state}`."
