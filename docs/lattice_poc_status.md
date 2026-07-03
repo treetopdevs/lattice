@@ -222,4 +222,7 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
   non-clashing 2.0 functions (`materialize`, `tombstone`, `monitor`, `send_durable`,
   `await`, `state_at`, `go_dormant`) are on the `Lattice` facade. Nothing assumes
   in-process locality.
-- **Stretch goals not done**: second OS-process BEAM node; naive snapshot compaction.
+- **Stretch goals**: ~~second OS-process BEAM node~~ — **done** by the plan-010
+  carrier spike (`apps/lattice_node_spike`, ADR 0005): two BEAM OS processes converge
+  over a real WebSocket, byte-identical to the `Lattice.Sim` oracle. Still not done:
+  naive snapshot compaction.

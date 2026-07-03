@@ -28,6 +28,19 @@ The deterministic-simulation test suite stays valuable as the carrier's conforma
 oracle: a real carrier must produce the same final logs/state as `Lattice.Sim` for the
 same op set.
 
+**Spike result (plan 010, 2026-07-03) — the light path is proven.** `Lattice.Carrier`
+(behaviour + `Lattice.Carrier.sync/3` driver) now defines this seam, and
+`apps/lattice_node_spike` runs it for real: two BEAM OS processes, each holding one
+realm's `Lattice.Log`, exchanging ops over a genuine WebSocket (Cowboy server +
+`:gen_tcp` RFC 6455 client; no Erlang distribution). A partition (socket closed) +
+offline divergence + heal (reconnect + sync) converges to **byte-identical reduced
+state** on both nodes, equal to the `Lattice.Sim` oracle for the same op set; re-sync
+transfers nothing; an op tampered on the wire is quarantined by `Log.accept/2`'s
+signature check; `Sync`/`Reduce`/`Authority` were untouched. The pinned
+`term_to_binary` wire encoding round-trips hash/verify-identically BEAM↔BEAM — the
+CBOR replacement below remains the hard prerequisite for any non-BEAM peer. Details
+and open-question answers: `docs/adr/0005-carrier-interface.md`.
+
 ## 2. Efficient frontier-diff sync (Beelay)
 
 The POC's `Lattice.Sync` ships the full set of op ids to compute a diff — fine at demo
