@@ -48,11 +48,16 @@ defmodule Lattice.Sim do
   @spec create_replica(t(), String.t(), keyword()) :: {t(), Op.t()}
   def create_replica(%__MODULE__{} = sim, creator_realm, opts \\ []) do
     creator = identity(sim, creator_realm)
+    # Bind the replica id to the creator's key so the genesis it self-issues is the
+    # replica's cryptographic root of trust — a forged genesis by any other realm
+    # cannot match the commitment and is quarantined by `Lattice.Authority`.
+    replica = Authority.bind_replica(sim.replica, creator.pub)
+    sim = %{sim | replica: replica}
     ops = command_names(sim.module)
     roles = roles(sim.module)
 
     genesis_deleg =
-      Delegation.genesis(creator, sim.replica,
+      Delegation.genesis(creator, replica,
         ops: ops,
         roles: MapSet.to_list(roles),
         live: true
@@ -65,13 +70,12 @@ defmodule Lattice.Sim do
         {role, %{successor: identity(sim, succ).pub, dormant_ticks: n}}
       end)
 
-    op = Op.new(creator, sim.replica, [], :authority, {:genesis, genesis_deleg, policies})
+    op = Op.new(creator, replica, [], :authority, {:genesis, genesis_deleg, policies})
 
     sim =
       %{
         sim
-        | logs:
-            Map.new(sim.logs, fn {id, _log} -> {id, Log.append!(Log.new(sim.replica), op)} end)
+        | logs: Map.new(sim.logs, fn {id, _log} -> {id, Log.append!(Log.new(replica), op)} end)
       }
       |> add_cap(creator_realm, genesis_deleg)
 
@@ -213,6 +217,10 @@ defmodule Lattice.Sim do
   end
 
   # --- Reads ---------------------------------------------------------------
+
+  @doc "The replica id — bound to the creator's root key once `create_replica/3` has run."
+  @spec replica(t()) :: String.t()
+  def replica(%__MODULE__{replica: replica}), do: replica
 
   @spec identity(t(), String.t()) :: Identity.t()
   def identity(%__MODULE__{realms: realms}, realm_id), do: Map.fetch!(realms, realm_id)

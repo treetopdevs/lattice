@@ -109,16 +109,17 @@ defmodule Lattice.Registry do
   @impl true
   def handle_call({:host, identity, module, replica, log}, _from, st) do
     key = {identity.realm_id, replica}
-    entry = new_entry(identity, module, replica, log || Log.new(replica))
+    entry = new_entry(identity, module, log || Log.new(replica))
     {:reply, :ok, put_entry(st, key, entry)}
   end
 
   def handle_call({:materialize, key}, _from, st) do
     with {:ok, entry} <- fetch(st, key) do
       cond do
-        # A tombstone is an op: once it is in the log (here or arrived via sync) the
-        # pair can never rematerialize, on every realm (behavior 13).
-        tombstoned?(entry.log) ->
+        # A tombstone is an op: once a *root-authored* one is in the log (here or
+        # arrived via sync) the pair can never rematerialize, on every realm
+        # (behavior 13). A tombstone from any other author is ignored (Authority).
+        Authority.tombstoned?(entry.log) ->
           entry = %{entry | lifecycle: :tombstoned}
           {:reply, {:error, :tombstoned}, put_entry(st, key, entry)}
 
@@ -160,12 +161,19 @@ defmodule Lattice.Registry do
   def handle_call({:tombstone, key}, _from, st) do
     case fetch(st, key) do
       {:ok, entry} ->
-        op = author(entry, :tombstone, {:tombstone, key})
-        log = Log.append!(entry.log, op)
-        st = stop_materializer(st, entry)
-        entry = %{entry | lifecycle: :tombstoned, mat_pid: nil, mat_ref: nil, log: log}
-        notify(entry, {:lattice_lifecycle, key, :tombstoned})
-        {:reply, :ok, put_entry(st, key, entry)}
+        # Tombstone is a privileged, irreversible kill switch: only the replica's
+        # bound root may author one. A non-root request is refused, and even if an
+        # attacker forged the op directly, `Authority.tombstoned?/1` would ignore it.
+        if Authority.root(entry.log) == entry.identity.pub do
+          op = author(entry, :tombstone, {:tombstone, key})
+          log = Log.append!(entry.log, op)
+          st = stop_materializer(st, entry)
+          entry = %{entry | lifecycle: :tombstoned, mat_pid: nil, mat_ref: nil, log: log}
+          notify(entry, {:lattice_lifecycle, key, :tombstoned})
+          {:reply, :ok, put_entry(st, key, entry)}
+        else
+          {:reply, {:error, :unauthorized}, st}
+        end
 
       :error ->
         {:reply, {:error, :unknown}, st}
@@ -259,7 +267,7 @@ defmodule Lattice.Registry do
 
     case Log.restore(path) do
       {:ok, log} ->
-        {:reply, :ok, put_entry(st, key, new_entry(identity, module, replica, log))}
+        {:reply, :ok, put_entry(st, key, new_entry(identity, module, log))}
 
       {:error, _} = err ->
         {:reply, err, st}
@@ -300,21 +308,19 @@ defmodule Lattice.Registry do
 
   # --- Internals -----------------------------------------------------------
 
-  defp new_entry(identity, module, replica, log) do
+  # `replica` is taken from the log so it carries the log's *bound* replica id (the
+  # one committed by every op), keeping authored ops on the same replica as the log.
+  defp new_entry(identity, module, log) do
     %{
       identity: identity,
       module: module,
-      replica: replica,
+      replica: log.replica,
       log: log,
       lifecycle: :dormant,
       mat_pid: nil,
       mat_ref: nil,
       monitors: MapSet.new()
     }
-  end
-
-  defp tombstoned?(log) do
-    log |> Log.ops() |> Map.values() |> Enum.any?(&(&1.kind == :tombstone))
   end
 
   defp fetch(st, key), do: Map.fetch(st.entries, key)

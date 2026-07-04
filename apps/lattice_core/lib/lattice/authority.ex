@@ -37,6 +37,9 @@ defmodule Lattice.Authority do
   alias Lattice.{Dag, Identity, Log, Op}
   alias Lattice.Authority.Delegation
 
+  # Separates a replica *name* from the root-key commitment bound into its id.
+  @root_marker "#root:"
+
   @type analysis :: %{
           quarantine: MapSet.t(Op.id()),
           reasons: %{Op.id() => atom()},
@@ -54,6 +57,84 @@ defmodule Lattice.Authority do
   def holder(module, %Log{} = log, role), do: Map.get(analyze(module, log).holders, role)
 
   @doc """
+  Bind a replica *name* to its root public key, returning the replica id.
+
+  Every op commits to its replica id (it is part of the signed/hashed encoding), so
+  a bound id cryptographically pins *which* self-issued genesis is the legitimate
+  root: a genesis forged by any other key cannot match the commitment, and `analyze`
+  refuses to honor it. Idempotent — re-binding an already-bound id is a no-op.
+  """
+  @spec bind_replica(String.t(), Identity.pubkey()) :: String.t()
+  def bind_replica(name, root_pub) when is_binary(name) and is_binary(root_pub) do
+    case replica_commitment(name) do
+      nil -> name <> @root_marker <> root_tag(root_pub)
+      _already_bound -> name
+    end
+  end
+
+  @doc "The root-key commitment carried by a bound replica id, or nil if unbound."
+  @spec replica_commitment(String.t()) :: String.t() | nil
+  def replica_commitment(replica) when is_binary(replica) do
+    case String.split(replica, @root_marker, parts: 2) do
+      [_name, tag] when byte_size(tag) > 0 -> tag
+      _ -> nil
+    end
+  end
+
+  @doc "The replica's bound root public key (nil until a valid root genesis is present)."
+  @spec root(Log.t()) :: Identity.pubkey() | nil
+  def root(%Log{} = log) do
+    ordered = Log.topo_ops(log)
+    {commitment, genesis_ids} = deleg_context(log, ordered)
+    deleg_valid = validate_delegations(collect_delegations(ordered), commitment, genesis_ids)
+    resolve_root(ordered, deleg_valid, commitment)
+  end
+
+  @doc """
+  True if `log` carries a tombstone op authored by the replica's bound root.
+
+  A tombstone is a privileged, irreversible kill switch, so — like every other
+  authoritative op — it is honored only from the legitimate root. A tombstone
+  forged by any other realm and synced in is ignored here and quarantined by
+  `analyze` (`:unauthorized_tombstone`), not obeyed.
+  """
+  @spec tombstoned?(Log.t()) :: boolean()
+  def tombstoned?(%Log{} = log) do
+    case root(log) do
+      nil ->
+        false
+
+      root_pub ->
+        log
+        |> Log.ops()
+        |> Map.values()
+        |> Enum.any?(&(&1.kind == :tombstone and &1.author == root_pub))
+    end
+  end
+
+  # Collision-resistant commitment to a public key (full SHA-256, url-safe).
+  defp root_tag(pub) when is_binary(pub) do
+    :crypto.hash(:sha256, pub) |> Base.url_encode64(padding: false)
+  end
+
+  # A genesis is root-eligible when the replica is unbound (legacy) or its audience
+  # matches the replica's root commitment.
+  defp root_matches?(nil, _audience), do: true
+  defp root_matches?(commitment, audience), do: root_tag(audience) == commitment
+
+  # {replica root commitment, set of delegation ids introduced by :genesis ops}.
+  defp deleg_context(%Log{} = log, ordered) do
+    {replica_commitment(log.replica), genesis_deleg_ids(ordered)}
+  end
+
+  defp genesis_deleg_ids(ordered) do
+    for op <- ordered, match?({:genesis, %Delegation{}, _}, op.body), into: MapSet.new() do
+      {:genesis, %Delegation{id: id}, _} = op.body
+      id
+    end
+  end
+
+  @doc """
   Verify a delegation chain in isolation (no log): each link's signature, the
   genesis self-issue, and attenuation along the chain. This is the proof the live
   path checks — the same delegations whose ids are cited by log ops.
@@ -68,6 +149,9 @@ defmodule Lattice.Authority do
 
       not (is_nil(genesis.parent_id) and genesis.issuer == genesis.audience) ->
         {:error, :bad_genesis}
+
+      not root_matches?(replica_commitment(replica), genesis.audience) ->
+        {:error, :impostor_genesis}
 
       not Enum.all?(chain, &Delegation.valid_sig?/1) ->
         {:error, :bad_signature}
@@ -92,10 +176,12 @@ defmodule Lattice.Authority do
   """
   @spec delegation_active?(Log.t(), String.t()) :: boolean()
   def delegation_active?(%Log{} = log, delegation_id) do
-    delegations = collect_delegations(Log.topo_ops(log))
+    ordered = Log.topo_ops(log)
+    {commitment, genesis_ids} = deleg_context(log, ordered)
+    delegations = collect_delegations(ordered)
 
     case Map.fetch(delegations, delegation_id) do
-      {:ok, %{deleg: d}} -> validate_delegation(d, delegations) == :ok
+      {:ok, %{deleg: d}} -> validate_delegation(d, delegations, commitment, genesis_ids) == :ok
       :error -> false
     end
   end
@@ -104,8 +190,10 @@ defmodule Lattice.Authority do
   @spec revoked?(Log.t(), String.t()) :: boolean()
   def revoked?(%Log{} = log, delegation_id) do
     ordered = Log.topo_ops(log)
+    {commitment, genesis_ids} = deleg_context(log, ordered)
     delegations = collect_delegations(ordered)
-    root = root_creator(ordered)
+    deleg_valid = validate_delegations(delegations, commitment, genesis_ids)
+    root = resolve_root(ordered, deleg_valid, commitment)
 
     Enum.any?(ordered, fn op ->
       match?({:revoke, ^delegation_id}, op.body) and
@@ -120,13 +208,15 @@ defmodule Lattice.Authority do
     ordered = Dag.topo_sort(ops)
     ancestors = Dag.all_ancestors(ops)
 
+    {commitment, genesis_ids} = deleg_context(log, ordered)
     delegations = collect_delegations(ordered)
-    policies = collect_policies(ordered)
-    deleg_valid = validate_delegations(delegations)
-    root = root_creator(ordered)
+    deleg_valid = validate_delegations(delegations, commitment, genesis_ids)
+    policies = collect_policies(ordered, deleg_valid)
+    root = resolve_root(ordered, deleg_valid, commitment)
     revokes = collect_revokes(ordered, delegations, root)
 
     invalid_deleg = invalid_delegation_ops(delegations, deleg_valid)
+    tombstone_q = unauthorized_tombstones(ordered, root)
     roles = all_roles(module)
 
     timelines =
@@ -146,6 +236,7 @@ defmodule Lattice.Authority do
       invalid_deleg
       |> Map.merge(role_q)
       |> Map.merge(cmd_q)
+      |> Map.merge(tombstone_q)
 
     %{
       quarantine: reasons |> Map.keys() |> MapSet.new(),
@@ -187,36 +278,59 @@ defmodule Lattice.Authority do
 
   defp delegation_in(_), do: nil
 
-  defp collect_policies(ordered) do
+  # Succession policies are conferred only by a *valid* genesis — an impostor genesis
+  # (one whose audience does not match the replica's root commitment) is quarantined
+  # and cannot inject a successor.
+  defp collect_policies(ordered, deleg_valid) do
     Enum.reduce(ordered, %{}, fn op, acc ->
       case op.body do
-        {:genesis, _d, policies} when is_map(policies) -> Map.merge(acc, policies)
-        _ -> acc
+        {:genesis, %Delegation{id: id}, policies} when is_map(policies) ->
+          if Map.get(deleg_valid, id) == :ok, do: Map.merge(acc, policies), else: acc
+
+        _ ->
+          acc
       end
     end)
   end
 
-  defp validate_delegations(delegations) do
+  defp validate_delegations(delegations, commitment, genesis_ids) do
     Map.new(delegations, fn {id, %{deleg: d}} ->
-      {id, validate_delegation(d, delegations)}
+      {id, validate_delegation(d, delegations, commitment, genesis_ids)}
     end)
   end
 
-  defp validate_delegation(%Delegation{} = d, delegations) do
+  defp validate_delegation(%Delegation{} = d, delegations, commitment, genesis_ids) do
     cond do
       not Delegation.valid_sig?(d) ->
         {:error, :bad_delegation_sig}
 
       is_nil(d.parent_id) ->
-        if d.issuer == d.audience, do: :ok, else: {:error, :nongenesis_root}
+        cond do
+          d.issuer != d.audience ->
+            {:error, :nongenesis_root}
+
+          # A self-issued delegation offered *as a genesis* (in a `:genesis` op) is the
+          # replica's root claim: on a bound replica it is honored only if its audience
+          # matches the committed root key, so a forged genesis confers nothing.
+          MapSet.member?(genesis_ids, d.id) and not root_matches?(commitment, d.audience) ->
+            {:error, :impostor_genesis}
+
+          true ->
+            :ok
+        end
 
       true ->
         case Map.fetch(delegations, d.parent_id) do
           {:ok, %{deleg: parent}} ->
             cond do
-              validate_delegation(parent, delegations) != :ok -> {:error, :invalid_parent}
-              not Delegation.attenuates?(d, parent) -> {:error, :not_attenuated}
-              true -> :ok
+              validate_delegation(parent, delegations, commitment, genesis_ids) != :ok ->
+                {:error, :invalid_parent}
+
+              not Delegation.attenuates?(d, parent) ->
+                {:error, :not_attenuated}
+
+              true ->
+                :ok
             end
 
           :error ->
@@ -234,13 +348,28 @@ defmodule Lattice.Authority do
     end
   end
 
-  defp root_creator(ordered) do
+  # The single legitimate root: the audience of the *valid* genesis. On a bound
+  # replica exactly one genesis can be valid (the one matching the commitment); on a
+  # legacy unbound replica this is the first genesis in canonical order.
+  defp resolve_root(ordered, deleg_valid, commitment) do
     Enum.find_value(ordered, fn op ->
       case op.body do
-        {:genesis, %Delegation{audience: aud}, _policies} -> aud
-        _ -> nil
+        {:genesis, %Delegation{id: id, audience: aud}, _policies} ->
+          if Map.get(deleg_valid, id) == :ok and root_matches?(commitment, aud), do: aud
+
+        _ ->
+          nil
       end
     end)
+  end
+
+  # A tombstone is honored only from the bound root; any other author's tombstone is
+  # quarantined (and therefore ignored by the lifecycle) rather than obeyed.
+  defp unauthorized_tombstones(ordered, root) do
+    for %Op{kind: :tombstone, id: id, author: author} <- ordered,
+        author != root,
+        into: %{},
+        do: {id, :unauthorized_tombstone}
   end
 
   defp collect_revokes(ordered, delegations, root) do

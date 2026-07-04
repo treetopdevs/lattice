@@ -94,7 +94,7 @@ defmodule Lattice2.SuccessionTimeTravelTest do
       Lattice.Reduce.reduce(
         Thread,
         Log.from_ops(
-          @replica,
+          Sim.replica(sim),
           Map.take(
             Log.ops(log),
             MapSet.to_list(Lattice.Dag.reachable(Log.ops(log), snapshot_frontier))

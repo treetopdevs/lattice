@@ -122,7 +122,7 @@ defmodule Lattice2.LifecycleTest do
 
     # The pending promise resolves after rematerialization (the request op was in
     # the dumped log; rematerializing answered it). Re-host tab and sync to read it.
-    :ok = Registry.host(Sim.identity(sim, "tab"), Thread, @replica, Lattice.Log.new(@replica))
+    :ok = Registry.host(Sim.identity(sim, "tab"), Thread, @replica, Lattice.Log.new(Sim.replica(sim)))
     :ok = Registry.sync("server", "tab", @replica)
     assert {:ok, _title} = Registry.await("tab", @replica, promise)
   end

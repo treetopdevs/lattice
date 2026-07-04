@@ -51,7 +51,7 @@ defmodule Lattice2.ReplicaReduceTest do
     # Equal to the no-partition result: reducing the merged op set in any order is
     # path-independent.
     merged = Map.values(Log.ops(Sim.log(sim, "server")))
-    {fresh, _} = Sync.deliver(Log.new(@replica), Enum.reverse(merged))
+    {fresh, _} = Sync.deliver(Log.new(Sim.replica(sim)), Enum.reverse(merged))
     quarantine = Lattice.Authority.quarantine(Thread, fresh)
     assert Reduce.reduce(Thread, fresh, quarantine: quarantine) == server_state
   end

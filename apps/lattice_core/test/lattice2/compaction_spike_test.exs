@@ -132,7 +132,7 @@ defmodule Lattice2.CompactionSpikeTest do
     {:ok, snapshot, _retained} = CompactionSpike.compact(Thread, log, frontier)
 
     covered_ids = Dag.reachable(Log.ops(log), frontier)
-    covered_log = Log.from_ops(@replica, Map.take(Log.ops(log), MapSet.to_list(covered_ids)))
+    covered_log = Log.from_ops(log.replica, Map.take(Log.ops(log), MapSet.to_list(covered_ids)))
 
     assert CompactionSpike.verify(Thread, snapshot, covered_log) == :ok
 
@@ -144,7 +144,7 @@ defmodule Lattice2.CompactionSpikeTest do
 
     # A covered-op set that does not reduce to the snapshot is caught.
     [victim | _] = covered_log |> Log.ops() |> Map.keys() |> Enum.sort()
-    pruned = Log.from_ops(@replica, Map.delete(Log.ops(covered_log), victim))
+    pruned = Log.from_ops(covered_log.replica, Map.delete(Log.ops(covered_log), victim))
     assert CompactionSpike.verify(Thread, snapshot, pruned) == {:error, :snapshot_mismatch}
   end
 

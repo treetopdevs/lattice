@@ -87,7 +87,7 @@ defmodule Lattice2.ReplicaSnapshotTest do
     json = Jason.decode!(ReplicaSnapshot.export(graph, :json))
     assert length(json["nodes"]) == length(graph.nodes)
     assert length(json["edges"]) == length(graph.edges)
-    assert json["replica"] == @replica
+    assert json["replica"] == log.replica
   end
 
   test "build is deterministic: same log, byte-identical renders" do

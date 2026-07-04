@@ -22,7 +22,7 @@ defmodule LatticeNodeSpike.Scenario do
   def replica_module, do: Thread
 
   @spec replica() :: String.t()
-  def replica, do: @replica
+  def replica, do: Sim.replica(base_sim())
 
   @doc """
   Shared deterministic prefix: node_a creates the Thread, grants node_b, both

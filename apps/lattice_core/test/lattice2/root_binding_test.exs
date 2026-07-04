@@ -1,0 +1,148 @@
+defmodule Lattice2.RootBindingTest do
+  @moduledoc """
+  Security regression tests for the two authority-soundness gaps from the
+  adversarial review:
+
+    * **Root binding** — a replica is cryptographically bound to the key that
+      created it, so a forged self-issued genesis cannot seize roles, become the
+      revocation superuser, or inject a succession policy. Forged genesis ops are
+      quarantined (`:impostor_genesis`), not honored.
+    * **Tombstone gate** — the replica-wide, irreversible tombstone kill switch is
+      honored only from the bound root. A non-root request is refused, and a
+      tombstone op forged by any other realm and synced in is ignored, not obeyed.
+  """
+  use ExUnit.Case, async: false
+
+  alias Lattice.{Authority, Registry, Sim}
+  alias Lattice.Authority.Delegation
+  alias Lattice.Demo.Thread
+
+  @replica "replica:thread:rootbind"
+
+  setup do
+    Lattice.reset!()
+    on_exit(fn -> Lattice.reset!() end)
+    :ok
+  end
+
+  defp founded do
+    Sim.new(Thread, @replica, ["server", "tab", "evil"], seed: "rootbind")
+    |> Sim.create_replica("server",
+      policies: %{moderator: %{successor: "tab", dormant_ticks: 3}}
+    )
+    |> elem(0)
+    |> Sim.sync_all()
+  end
+
+  # An attacker self-issues a genesis granting itself roles/ops and syncs it in.
+  defp forge_genesis(sim, realm, roles, ops, policies \\ %{}) do
+    evil = Sim.identity(sim, realm)
+    deleg = Delegation.genesis(evil, Sim.replica(sim), ops: ops, roles: roles, live: true)
+    {sim, op} = Sim.append(sim, realm, :authority, {:genesis, deleg, policies})
+    {Sim.sync_all(sim), op, deleg}
+  end
+
+  # --- Root binding --------------------------------------------------------
+
+  test "create_replica binds the replica id to the creator's root key" do
+    sim = founded()
+    assert Authority.replica_commitment(Sim.replica(sim)) != nil
+    # The honest root is unaffected: server still holds every role it granted itself.
+    assert Sim.holder(sim, "server", :moderator) == Sim.identity(sim, "server").pub
+  end
+
+  test "a forged self-issued genesis is quarantined and confers no role on any realm" do
+    sim = founded()
+    {sim, genesis_op, _deleg} = forge_genesis(sim, "evil", [:moderator], [:post, :lock, :unlock])
+
+    assert {true, :impostor_genesis} = Sim.quarantined(sim, "server", genesis_op.id)
+    assert {true, :impostor_genesis} = Sim.quarantined(sim, "tab", genesis_op.id)
+
+    # The attacker did not seize :moderator; the real root still holds it identically
+    # on every realm.
+    assert Sim.holder(sim, "server", :moderator) == Sim.identity(sim, "server").pub
+    assert Sim.holder(sim, "tab", :moderator) == Sim.identity(sim, "server").pub
+    refute Sim.holder(sim, "evil", :moderator) == Sim.identity(sim, "evil").pub
+  end
+
+  test "an attacker cannot self-grant a plain capability via a forged genesis" do
+    sim = founded()
+    {sim, _g, deleg} = forge_genesis(sim, "evil", [], [:post])
+
+    # evil posts citing its own forged genesis as the capability.
+    {sim, post} = Sim.command(sim, "evil", :post, ["propaganda"], cap: deleg.id)
+
+    assert {true, :invalid_capability} = Sim.quarantined(sim, "evil", post.id)
+    refute "propaganda" in Sim.state(sim, "evil").messages
+  end
+
+  test "an attacker cannot run an authority command via a forged genesis role" do
+    sim = founded()
+    {sim, _g, deleg} = forge_genesis(sim, "evil", [:moderator], [:lock, :unlock])
+
+    {sim, lock} = Sim.command(sim, "evil", :lock, [], cap: deleg.id)
+    assert {true, reason} = Sim.quarantined(sim, "evil", lock.id)
+    assert reason in [:invalid_capability, :not_holder, :role_not_granted]
+    refute Sim.state(sim, "evil").locked?
+  end
+
+  test "an attacker cannot inject a succession policy via a forged genesis" do
+    sim = founded()
+    evil = Sim.identity(sim, "evil")
+    # Forge a genesis carrying a policy that names evil as the immediate successor.
+    {sim, g, _deleg} =
+      forge_genesis(sim, "evil", [:moderator], [:lock], %{
+        moderator: %{successor: evil.pub, dormant_ticks: 0}
+      })
+
+    assert {true, :impostor_genesis} = Sim.quarantined(sim, "server", g.id)
+
+    # The injected policy is not honored, so evil's succession attempt is unauthorized.
+    {sim, succ} = Sim.succeed(sim, "evil", :moderator, at_tick: 100)
+    assert {true, reason} = Sim.quarantined(sim, "evil", succ.id)
+    assert reason in [:unauthorized_succession, :invalid_succession]
+    refute Sim.holder(sim, "evil", :moderator) == evil.pub
+  end
+
+  # --- Tombstone gate ------------------------------------------------------
+
+  defp hosted_registry do
+    sim = founded()
+    base = Sim.log(sim, "server")
+    :ok = Registry.host(Sim.identity(sim, "server"), Thread, @replica, base)
+    :ok = Registry.host(Sim.identity(sim, "tab"), Thread, @replica, base)
+    sim
+  end
+
+  test "only the bound root may tombstone; a non-root request is refused" do
+    _sim = hosted_registry()
+
+    # tab is not the root: refused, and the replica stays alive.
+    assert {:error, :unauthorized} = Registry.tombstone("tab", @replica)
+    assert {:ok, _} = Registry.materialize("tab", @replica)
+    :ok = Registry.go_dormant("tab", @replica)
+
+    # server is the root: tombstone succeeds and is permanent, on every realm.
+    assert :ok = Registry.tombstone("server", @replica)
+    assert {:error, :tombstoned} = Registry.materialize("server", @replica)
+    :ok = Registry.sync("server", "tab", @replica)
+    assert {:error, :tombstoned} = Registry.materialize("tab", @replica)
+  end
+
+  test "a tombstone op forged by a non-root realm is ignored, not obeyed" do
+    sim = founded()
+    key = {"evil", Sim.replica(sim)}
+    {sim, ts} = Sim.append(sim, "evil", :tombstone, {:tombstone, key})
+    sim = Sim.sync_all(sim)
+
+    assert {true, :unauthorized_tombstone} = Sim.quarantined(sim, "server", ts.id)
+    refute Authority.tombstoned?(Sim.log(sim, "server"))
+
+    # A root-authored tombstone IS honored.
+    {sim, _ts2} =
+      Sim.append(sim, "server", :tombstone, {:tombstone, {"server", Sim.replica(sim)}})
+
+    sim = Sim.sync_all(sim)
+    assert Authority.tombstoned?(Sim.log(sim, "server"))
+  end
+end
