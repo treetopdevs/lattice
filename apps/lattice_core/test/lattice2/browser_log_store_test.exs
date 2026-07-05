@@ -1,8 +1,10 @@
 defmodule Lattice.BrowserLogStoreTest do
   use ExUnit.Case, async: true
 
+  alias Lattice.BrowserLogStore
   alias Lattice.Demo.Thread
-  alias Lattice.{BrowserLogStore, Log, Sim}
+  alias Lattice.Log
+  alias Lattice.Sim
 
   test "snapshot payload is JSON-safe and restores a log" do
     sim = Sim.new(Thread, "replica:browser-store", ["tab"], seed: "browser-store")

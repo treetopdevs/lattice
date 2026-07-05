@@ -2,8 +2,10 @@ defmodule Lattice.SyncShapeTest do
   use ExUnit.Case, async: true
 
   alias Lattice.Demo.Thread
+  alias Lattice.Log
+  alias Lattice.Sim
+  alias Lattice.Sync
   alias Lattice.Sync.Shape
-  alias Lattice.{Log, Sim, Sync}
 
   test "all shape preserves existing missing/2 behavior" do
     sim = Sim.new(Thread, "replica:shape", ["a", "b"], seed: "shape")

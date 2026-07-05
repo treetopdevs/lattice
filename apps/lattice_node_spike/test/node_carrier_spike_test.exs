@@ -22,8 +22,11 @@ defmodule LatticeNodeSpike.NodeCarrierSpikeTest do
 
   use ExUnit.Case, async: false
 
+  alias Lattice.Carrier
   alias Lattice.Carrier.Backoff
-  alias Lattice.{Carrier, Log, Sim, Sync}
+  alias Lattice.Log
+  alias Lattice.Sim
+  alias Lattice.Sync
   alias LatticeNodeSpike.{Scenario, WsCarrier}
 
   @moduletag timeout: 120_000
