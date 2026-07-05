@@ -28,19 +28,26 @@ try {
   await expect(pageB.getByText("2 tabs")).toBeVisible({ timeout: 5_000 });
   await expect(pageA.getByText("server opened mediated path")).toBeVisible({ timeout: 5_000 });
 
-  await pageA.getByRole("button", { name: "grant A -> Echo" }).click();
-  await expect(pageA.getByRole("button", { name: "A holds Echo cap" })).toBeVisible({
+  const actor = await tabLabel(pageA);
+  const peer = actor === "A" ? "B" : "A";
+
+  await pageA.getByRole("button", { name: `grant ${actor} -> Echo` }).click();
+  await expect(pageA.getByRole("button", { name: `${actor} holds Echo cap` })).toBeVisible({
     timeout: 5_000,
   });
 
-  await pageA.getByRole("button", { name: "call Echo as A" }).click();
-  await expect(pageA.getByText("A this tab called EchoServer")).toBeVisible({ timeout: 5_000 });
-  await expect(pageB.getByText("A peer tab called EchoServer")).toBeVisible({ timeout: 5_000 });
-  await expect(pageB.getByText("B this tab called EchoServer")).toHaveCount(0);
+  await pageA.getByRole("button", { name: `call Echo as ${actor}` }).click();
+  await expect(pageA.getByText(`${actor} this tab called EchoServer`)).toBeVisible({
+    timeout: 5_000,
+  });
+  await expect(pageB.getByText(`${actor} peer tab called EchoServer`)).toBeVisible({
+    timeout: 5_000,
+  });
+  await expect(pageB.getByText(`${peer} this tab called EchoServer`)).toHaveCount(0);
 
-  await pageA.getByRole("button", { name: "fake cap as A" }).click();
-  await expect(pageA.getByText("A this tab denied")).toBeVisible({ timeout: 5_000 });
-  await expect(pageB.getByText("A peer tab denied")).toBeVisible({ timeout: 5_000 });
+  await pageA.getByRole("button", { name: `fake cap as ${actor}` }).click();
+  await expect(pageA.getByText(`${actor} this tab denied`)).toBeVisible({ timeout: 5_000 });
+  await expect(pageB.getByText(`${actor} peer tab denied`)).toBeVisible({ timeout: 5_000 });
 
   console.log(`Lattice browser E2E passed at ${url}`);
 } finally {
@@ -57,4 +64,14 @@ async function launchBrowser() {
     if (process.env.PLAYWRIGHT_CHANNEL) throw error;
     return chromium.launch({ headless: true });
   }
+}
+
+async function tabLabel(page) {
+  const grant = page.getByRole("button", { name: /grant [AB] -> Echo/ });
+  await expect(grant).toBeVisible({ timeout: 5_000 });
+
+  const label = (await grant.textContent())?.match(/^grant ([AB]) -> Echo$/)?.[1];
+  if (!label) throw new Error("Could not read browser tab label from grant button");
+
+  return label;
 }
