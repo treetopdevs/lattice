@@ -62,6 +62,28 @@ defmodule LatticeNodeSpike.NodeCarrierSpikeTest do
     assert_receive {^port, {:exit_status, 0}}, 10_000
   end
 
+  test "large transfers are split into bounded push frames" do
+    {port, ws_port} = spawn_peer("node_a")
+    sim_b = Scenario.base_sim() |> bulk_posts(150)
+    log_b = Sim.log(sim_b, "node_b")
+
+    {:ok, conn} = WsCarrier.connect(port: ws_port)
+    {:ok, log_b, stats, conn} = Carrier.sync(WsCarrier, conn, log_b)
+
+    assert %{sent: 150, received: 0} = Map.take(stats, [:sent, :received])
+
+    batches = WsCarrier.last_push_batches(conn)
+    assert length(batches) > 1
+    assert Enum.all?(batches, &(&1.count <= 64))
+    assert Enum.all?(batches, &(&1.bytes <= 65_536))
+
+    {:ok, peer_report} = WsCarrier.state_report(conn)
+    assert peer_report["op_ids"] == Enum.sort(Log.op_ids(log_b))
+
+    assert {:ok, %{"type" => "shutdown_result"}} = WsCarrier.shutdown(conn)
+    assert_receive {^port, {:exit_status, 0}}, 10_000
+  end
+
   test "GATE: two OS-process BEAM nodes converge over a real WebSocket carrier" do
     {port, ws_port} = spawn_peer("node_a")
 
@@ -191,6 +213,13 @@ defmodule LatticeNodeSpike.NodeCarrierSpikeTest do
     end)
 
     {port, await_ready(port, [])}
+  end
+
+  defp bulk_posts(sim, count) do
+    Enum.reduce(1..count, sim, fn i, acc ->
+      {acc, _op} = Sim.command(acc, "node_b", :post, ["bulk #{i}"])
+      acc
+    end)
   end
 
   defp await_ready(port, seen) do

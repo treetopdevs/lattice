@@ -15,7 +15,7 @@ defmodule LatticeNodeSpike.WsCarrier do
 
   @behaviour Lattice.Carrier
 
-  alias Lattice.Carrier.{Session, Wire}
+  alias Lattice.Carrier.{Batch, Session, Wire}
   alias Lattice.Transport.WebSocket.Client
   alias LatticeNodeSpike.Scenario
   alias LatticeNodeSpike.Wire, as: NodeWire
@@ -23,9 +23,9 @@ defmodule LatticeNodeSpike.WsCarrier do
   @recv_timeout 10_000
 
   @enforce_keys [:client]
-  defstruct [:client]
+  defstruct [:client, last_push_batches: []]
 
-  @type t :: %__MODULE__{client: pid()}
+  @type t :: %__MODULE__{client: pid(), last_push_batches: [map()]}
 
   @doc "Open a WebSocket to the peer's `/carrier` endpoint."
   @spec connect(keyword()) :: {:ok, t()} | {:error, term()}
@@ -71,6 +71,10 @@ defmodule LatticeNodeSpike.WsCarrier do
   @spec shutdown(t()) :: {:ok, map()} | {:error, term()}
   def shutdown(%__MODULE__{} = conn), do: request(conn, %{type: "shutdown"})
 
+  @doc "Metadata for the most recent push batches: count and encoded frame bytes."
+  @spec last_push_batches(t()) :: [%{count: non_neg_integer(), bytes: non_neg_integer()}]
+  def last_push_batches(%__MODULE__{last_push_batches: batches}), do: batches
+
   # --- Lattice.Carrier callbacks ---------------------------------------------
 
   @impl Lattice.Carrier
@@ -92,11 +96,19 @@ defmodule LatticeNodeSpike.WsCarrier do
 
   @impl Lattice.Carrier
   def push(%__MODULE__{} = conn, ops) when is_list(ops) do
-    encoded = Enum.map(ops, &NodeWire.encode/1)
+    batches =
+      Batch.chunk(ops,
+        max_ops: 64,
+        max_bytes: 64_000,
+        size_fun: &op_wire_bytes/1
+      )
 
-    with {:ok, %{"type" => "push_result"} = result} <-
-           request(conn, %{type: "push", ops: encoded}) do
-      {:ok, Wire.decode_report(result), conn}
+    case push_batches(conn, batches, [], []) do
+      {:ok, reports, batch_meta} ->
+        {:ok, Batch.merge_reports(reports), %{conn | last_push_batches: batch_meta}}
+
+      {:error, _reason} = error ->
+        error
     end
   end
 
@@ -109,6 +121,22 @@ defmodule LatticeNodeSpike.WsCarrier do
   end
 
   # --- Internals ---------------------------------------------------------------
+
+  defp push_batches(_conn, [], reports, batch_meta) do
+    {:ok, Enum.reverse(reports), Enum.reverse(batch_meta)}
+  end
+
+  defp push_batches(conn, [batch | rest], reports, batch_meta) do
+    encoded = Enum.map(batch, &NodeWire.encode/1)
+    request_frame = %{type: "push", ops: encoded}
+
+    with {:ok, %{"type" => "push_result"} = result} <- request(conn, request_frame) do
+      meta = %{count: length(batch), bytes: request_frame |> Jason.encode!() |> byte_size()}
+      push_batches(conn, rest, [Wire.decode_report(result) | reports], [meta | batch_meta])
+    end
+  end
+
+  defp op_wire_bytes(op), do: op |> NodeWire.encode() |> Jason.encode!() |> byte_size()
 
   defp authenticate(%__MODULE__{} = conn, opts) do
     identity =
