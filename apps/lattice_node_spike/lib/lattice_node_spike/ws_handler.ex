@@ -18,6 +18,7 @@ defmodule LatticeNodeSpike.WsHandler do
 
   @behaviour :cowboy_websocket
 
+  alias Lattice.Carrier.Session
   alias Lattice.Carrier.Wire, as: CarrierWire
   alias LatticeNodeSpike.{Peer, Wire}
 
@@ -53,6 +54,11 @@ defmodule LatticeNodeSpike.WsHandler do
   end
 
   # --- Protocol ---------------------------------------------------------------
+
+  defp handle_msg("carrier_challenge", challenge, %{peer: peer}) do
+    {realm, identity} = Peer.session_identity(peer)
+    Session.respond(challenge, identity, realm)
+  end
 
   defp handle_msg("frontier", _msg, %{peer: peer}) do
     %{type: "frontier_result", ids: Peer.op_ids(peer)}

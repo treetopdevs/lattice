@@ -4,8 +4,10 @@ defmodule LatticeNodeSpike.WsCarrier do
 
   The connection wraps `Lattice.Transport.WebSocket.Client` — a raw `:gen_tcp`
   client that performs the RFC 6455 handshake and framing against the peer OS
-  process's Cowboy listener. Every callback is one JSON request/response round
-  trip; ops travel as Base64 `:erlang.term_to_binary` (`LatticeNodeSpike.Wire`).
+  process's Cowboy listener. Connection setup starts with a signed
+  challenge/response. Every sync callback after that is one JSON
+  request/response round trip; ops travel through the shared JSON-safe carrier
+  wire frame shape.
 
   `Lattice.Carrier.sync/3` drives this module and `Lattice.Carrier.SimNet`
   identically — that interchangeability is the seam the spike proves.
@@ -13,9 +15,10 @@ defmodule LatticeNodeSpike.WsCarrier do
 
   @behaviour Lattice.Carrier
 
-  alias Lattice.Carrier.Wire, as: CarrierWire
+  alias Lattice.Carrier.{Session, Wire}
   alias Lattice.Transport.WebSocket.Client
-  alias LatticeNodeSpike.Wire
+  alias LatticeNodeSpike.Scenario
+  alias LatticeNodeSpike.Wire, as: NodeWire
 
   @recv_timeout 10_000
 
@@ -28,7 +31,19 @@ defmodule LatticeNodeSpike.WsCarrier do
   @spec connect(keyword()) :: {:ok, t()} | {:error, term()}
   def connect(opts) do
     opts = Keyword.put_new(opts, :path, "/carrier")
-    with {:ok, client} <- Client.connect(opts), do: {:ok, %__MODULE__{client: client}}
+
+    with {:ok, client} <- Client.connect(opts) do
+      conn = %__MODULE__{client: client}
+
+      case authenticate(conn, opts) do
+        :ok ->
+          {:ok, conn}
+
+        {:error, _reason} = error ->
+          _ = Client.close(client)
+          error
+      end
+    end
   end
 
   @doc "Close the socket — the physical partition."
@@ -70,18 +85,18 @@ defmodule LatticeNodeSpike.WsCarrier do
   def pull(%__MODULE__{} = conn, %MapSet{} = have) do
     with {:ok, %{"type" => "ops", "ops" => encoded}} <-
            request(conn, %{type: "pull", have: Enum.sort(have)}),
-         {:ok, ops} <- Wire.decode_all(encoded) do
+         {:ok, ops} <- NodeWire.decode_all(encoded) do
       {:ok, ops, conn}
     end
   end
 
   @impl Lattice.Carrier
   def push(%__MODULE__{} = conn, ops) when is_list(ops) do
-    encoded = Enum.map(ops, &Wire.encode/1)
+    encoded = Enum.map(ops, &NodeWire.encode/1)
 
     with {:ok, %{"type" => "push_result"} = result} <-
            request(conn, %{type: "push", ops: encoded}) do
-      {:ok, CarrierWire.decode_report(result), conn}
+      {:ok, Wire.decode_report(result), conn}
     end
   end
 
@@ -94,6 +109,29 @@ defmodule LatticeNodeSpike.WsCarrier do
   end
 
   # --- Internals ---------------------------------------------------------------
+
+  defp authenticate(%__MODULE__{} = conn, opts) do
+    identity =
+      Keyword.get_lazy(opts, :identity, fn ->
+        peer_identity(Keyword.get(opts, :realm, "node_b"))
+      end)
+
+    realm = Keyword.get(opts, :realm, identity.realm_id)
+    peer_realm = Keyword.get(opts, :peer_realm, "node_a")
+    replica = Keyword.get(opts, :replica, Scenario.replica())
+    peer_pubkey = Keyword.get_lazy(opts, :peer_pubkey, fn -> peer_identity(peer_realm).pub end)
+
+    challenge = Session.challenge(realm, replica, wire_version: Wire.version())
+
+    with {:ok, %{"type" => "carrier_hello"} = response} <- request(conn, challenge) do
+      Session.verify_response(challenge, response,
+        expected_realm: peer_realm,
+        expected_pubkey: peer_pubkey
+      )
+    end
+  end
+
+  defp peer_identity(realm), do: Lattice.Identity.from_seed(realm, "carrier-spike")
 
   defp request(%__MODULE__{client: client}, msg) do
     with :ok <- Client.send_envelope(client, msg),

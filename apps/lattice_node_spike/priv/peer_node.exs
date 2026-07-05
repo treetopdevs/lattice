@@ -16,7 +16,8 @@
 {:ok, _} = Application.ensure_all_started(:jason)
 {:ok, _} = Application.ensure_all_started(:cowboy)
 
-{:ok, peer} = LatticeNodeSpike.Peer.start_link(realm: realm)
+identity = Lattice.Identity.from_seed(realm, "carrier-spike")
+{:ok, peer} = LatticeNodeSpike.Peer.start_link(realm: realm, identity: identity)
 {:ok, port} = LatticeNodeSpike.PeerServer.start(peer)
 
 IO.puts("PEER_READY #{port}")

@@ -29,6 +29,23 @@ defmodule LatticeNodeSpike.NodeCarrierSpikeTest do
 
   @script Path.expand("../priv/peer_node.exs", __DIR__)
 
+  test "carrier session rejects the wrong peer key before sync" do
+    {port, ws_port} = spawn_peer("node_a")
+    wrong_pubkey = Lattice.Identity.from_seed("node_a", "wrong-carrier-spike").pub
+
+    assert {:error, :bad_signature} =
+             WsCarrier.connect(
+               port: ws_port,
+               realm: "node_b",
+               peer_realm: "node_a",
+               peer_pubkey: wrong_pubkey
+             )
+
+    {:ok, conn} = WsCarrier.connect(port: ws_port)
+    assert {:ok, %{"type" => "shutdown_result"}} = WsCarrier.shutdown(conn)
+    assert_receive {^port, {:exit_status, 0}}, 10_000
+  end
+
   test "GATE: two OS-process BEAM nodes converge over a real WebSocket carrier" do
     {port, ws_port} = spawn_peer("node_a")
 
