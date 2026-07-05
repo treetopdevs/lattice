@@ -226,3 +226,18 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
   carrier spike (`apps/lattice_node_spike`, ADR 0005): two BEAM OS processes converge
   over a real WebSocket, byte-identical to the `Lattice.Sim` oracle. Still not done:
   naive snapshot compaction.
+
+## Checkpoint: M1 Close-Out Countersign
+
+- Files changed: `docs/adr/0001-canonical-encoding.md`,
+  `apps/lattice_core/test/lattice2/lifecycle_test.exs`, `docs/lattice_poc_status.md`.
+- Behaviors: 1-19 unchanged; D-A1 doc delta closed in ADR 0001.
+- Command run: `~/.asdf/shims/mix deps.get && ~/.asdf/shims/mix format --check-formatted && ~/.asdf/shims/mix test && ~/.asdf/shims/mix run scripts/lattice2_demo.exs`.
+- Result: succeeded on 2026-07-05. `mix test` used ExUnit seed 366664 and passed:
+  `lattice_core` 13 properties, 123 tests; `lattice_server` 15 tests;
+  `lattice_carrier_spike` 4 tests; `lattice_demo` 3 tests; `lattice_stress` 1 property,
+  52 tests with browser/load tags excluded; `lattice_node_spike` 1 test. The narrated
+  Lattice 2.0 demo completed through partition, quarantine, heal/merge, transfer,
+  succession, stale-holder quarantine, and `state_at` replay.
+- Blocker or remaining limitation: none for M1 close-out; M2 open questions remain as
+  documented in `docs/path_to_real.md` and ADRs 0005/0006.

@@ -21,6 +21,22 @@ cap}` with `:erlang.term_to_binary/2` using the options `[:deterministic,
 the id. Delegations use the same approach (`{:lattice_delegation_v1, ...}` with sorted
 `ops`/`roles`).
 
+## Cryptographic agility
+
+This POC deliberately pins SHA-256 for content addressing and Ed25519 for signatures so
+the behavior suite can be deterministic and falsifiable. Those choices are not meant to
+be permanent protocol commitments. A production wire format should version the hash and
+signature suite in the encoded op/delegation schema, so future realms can verify old
+entries while admitting a new suite through an explicit migration.
+
+The expected post-quantum path is a sibling or successor suite rather than an in-place
+reinterpretation of existing ids: for example, Dilithium-class signatures for general
+post-quantum signing, or SPHINCS+-class signatures where conservative stateless signing
+is preferred. Rotation is modeled as a future log operation or delegation update that
+binds a successor key/suite to the current authority chain; it must not change how
+already-authored ops hash, sign, or verify. Implementing post-quantum crypto, key
+rotation, or key recovery remains outside this POC.
+
 ## Rationale
 
 * `:deterministic` makes `term_to_binary` emit maps in a canonical (key-sorted) order,
