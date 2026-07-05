@@ -96,16 +96,21 @@ defmodule LatticeNodeSpike.WsCarrier do
 
   @impl Lattice.Carrier
   def push(%__MODULE__{} = conn, ops) when is_list(ops) do
-    batches =
-      Batch.chunk(ops,
-        max_ops: 64,
-        max_bytes: 64_000,
-        size_fun: &op_wire_bytes/1
-      )
+    entries = Enum.map(ops, &encode_entry/1)
 
-    case push_batches(conn, batches, [], []) do
-      {:ok, reports, batch_meta} ->
-        {:ok, Batch.merge_reports(reports), %{conn | last_push_batches: batch_meta}}
+    case Batch.chunk(entries,
+           max_ops: 64,
+           max_bytes: 64_000,
+           size_fun: fn {_encoded, bytes} -> bytes end
+         ) do
+      {:ok, batches} ->
+        case push_batches(conn, batches, [], []) do
+          {:ok, reports, batch_meta} ->
+            {:ok, Batch.merge_reports(reports), %{conn | last_push_batches: batch_meta}}
+
+          {:error, _reason} = error ->
+            error
+        end
 
       {:error, _reason} = error ->
         error
@@ -127,7 +132,7 @@ defmodule LatticeNodeSpike.WsCarrier do
   end
 
   defp push_batches(conn, [batch | rest], reports, batch_meta) do
-    encoded = Enum.map(batch, &NodeWire.encode/1)
+    encoded = Enum.map(batch, fn {encoded, _bytes} -> encoded end)
     request_frame = %{type: "push", ops: encoded}
 
     with {:ok, %{"type" => "push_result"} = result} <- request(conn, request_frame),
@@ -141,7 +146,10 @@ defmodule LatticeNodeSpike.WsCarrier do
     end
   end
 
-  defp op_wire_bytes(op), do: op |> NodeWire.encode() |> Jason.encode!() |> byte_size()
+  defp encode_entry(op) do
+    encoded = NodeWire.encode(op)
+    {encoded, encoded |> Jason.encode!() |> byte_size()}
+  end
 
   defp authenticate(%__MODULE__{} = conn, session) do
     challenge =

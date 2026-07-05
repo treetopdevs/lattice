@@ -42,10 +42,11 @@ defmodule Lattice.Carrier.Session do
          {:ok, claimed_pubkey} <- Base.decode64(pub_b64),
          true <- claimed_pubkey == expected_pubkey,
          {:ok, sig} <- Base.decode64(sig_b64),
+         {:ok, transcript} <- safe_transcript(challenge, expected_realm, expected_pubkey),
          true <-
            Identity.verify(
              expected_pubkey,
-             transcript(challenge, expected_realm, expected_pubkey),
+             transcript,
              sig
            ) do
       :ok
@@ -78,10 +79,11 @@ defmodule Lattice.Carrier.Session do
          {:ok, claimed_pubkey} <- Base.decode64(pub_b64),
          true <- claimed_pubkey == expected_pubkey,
          {:ok, sig} <- Base.decode64(sig_b64),
+         {:ok, transcript} <- safe_transcript(challenge, expected_realm, expected_pubkey),
          true <-
            Identity.verify(
              expected_pubkey,
-             transcript(challenge, expected_realm, expected_pubkey),
+             transcript,
              sig
            ) do
       :ok
@@ -104,5 +106,11 @@ defmodule Lattice.Carrier.Session do
       realm,
       pubkey
     ])
+  end
+
+  defp safe_transcript(challenge, realm, pubkey) do
+    {:ok, transcript(challenge, realm, pubkey)}
+  rescue
+    ArgumentError -> {:error, :malformed_session}
   end
 end

@@ -59,4 +59,20 @@ defmodule Lattice.CarrierSessionTest do
                expected_pubkey: identity.pub
              )
   end
+
+  test "malformed signed challenges are rejected without raising" do
+    identity = Identity.from_seed("node-b", "carrier-session")
+
+    challenge =
+      "node-b"
+      |> Session.challenge("replica:session", wire_version: 1)
+      |> Session.sign_challenge(identity)
+      |> Map.put("wire_version", -1)
+
+    assert {:error, :malformed_session} =
+             Session.verify_challenge(challenge,
+               expected_realm: "node-b",
+               expected_pubkey: identity.pub
+             )
+  end
 end

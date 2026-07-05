@@ -15,8 +15,8 @@ change the bytes.
 ## Decision
 
 Encode signed op and delegation payloads with `Lattice.Canonical`, a deliberately small,
-versioned CBOR-shaped term subset. Op payloads are tagged `lattice-op-v2`; delegations
-are tagged `lattice-delegation-v2`. The resulting bytes are hashed with SHA-256 and
+CBOR-shaped term subset. Op payloads are tagged `lattice-op-v2`; delegations are tagged
+`lattice-delegation-v2`. The resulting bytes are hashed with SHA-256 and
 Base64url-encoded for ids, and the same bytes are signed with Ed25519.
 
 `deps` are deduplicated and sorted before encoding so frontier ordering never affects
@@ -37,6 +37,11 @@ be permanent protocol commitments. A production wire format should version the h
 signature suite in the encoded op/delegation schema, so future realms can verify old
 entries while admitting a new suite through an explicit migration.
 
+The current structs do **not** carry an encoding-suite field, so M2 is not a migration
+format for pre-M2 persisted logs. A production migration needs either legacy-suite
+verification during restore or a new per-entry suite marker before old and new signed
+bytes can coexist in one durable store.
+
 The expected post-quantum path is a sibling or successor suite rather than an in-place
 reinterpretation of existing ids: for example, Dilithium-class signatures for general
 post-quantum signing, or SPHINCS+-class signatures where conservative stateless signing
@@ -47,7 +52,12 @@ rotation, or key recovery remains outside this POC.
 
 ## Rationale
 
-* Maps sort by fully encoded key bytes, so insertion order cannot change signed bytes.
+* Maps sort lexicographically by fully encoded key bytes, so insertion order cannot
+  change signed bytes. This is not RFC 7049 canonical-CBOR map ordering; browser
+  runtimes must implement this Lattice rule directly rather than delegating to a stock
+  canonical-CBOR library.
+* MapSet elements are encoded first and then sorted lexicographically by their canonical
+  bytes, avoiding BEAM term-order dependencies.
 * Sorting `deps` decouples the id from the order a realm happened to observe its
   frontier.
 * The encoded term subset is small enough for non-BEAM runtimes to implement without

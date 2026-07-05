@@ -1,9 +1,10 @@
 defmodule Lattice.CarrierTest do
   use ExUnit.Case, async: true
 
-  alias Lattice.{Carrier, Log, Net, Sim, Sync}
+  alias Lattice.{Carrier, Identity, Log, Net, Op, Sim, Sync}
   alias Lattice.Carrier.SimNet
   alias Lattice.Demo.Thread
+  alias Lattice.Sync.Shape
 
   @replica "replica:thread:carrier-test"
 
@@ -52,6 +53,24 @@ defmodule Lattice.CarrierTest do
     assert stats.received == 0
     assert stats.pushed.accepted == []
     assert stats.pulled.accepted == []
+  end
+
+  test "Carrier.sync can restrict transfer with a dependency-closed shape" do
+    identity = Identity.from_seed("a", "carrier-shape")
+    replica = "replica:carrier-shape"
+    post = Op.new(identity, replica, [], :command, {:post, ["visible"]})
+    title = Op.new(identity, replica, [], :command, {:set_title, ["hidden"]})
+    log_a = replica |> Log.new() |> Log.append!(post) |> Log.append!(title)
+    log_b = Log.new(replica)
+    conn = SimNet.connect(Net.new(), "a", "b", log_b)
+
+    assert {:ok, _log_a, stats, conn} =
+             Carrier.sync(SimNet, conn, log_a, shape: Shape.commands([:post]))
+
+    peer_ids = Log.op_ids(SimNet.peer_log(conn))
+    assert stats.sent == 1
+    assert MapSet.member?(peer_ids, post.id)
+    refute MapSet.member?(peer_ids, title.id)
   end
 
   test "every callback is gated by the simulated partition" do

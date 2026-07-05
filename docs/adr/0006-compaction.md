@@ -123,8 +123,11 @@ An op may be dropped iff it is in `reachable(F)` for a frontier `F` such that:
 above, not a wired production compaction gate. A frontier may be considered
 carrier-stable only when every current participant has acknowledged the same normalized
 frontier; an empty current set is never stable, and a rejoining participant must
-acknowledge the frontier again. Snapshot signatures/quorum and snapshot-only bootstrap
-trust remain separate unresolved production requirements.
+acknowledge the frontier again. Because this helper uses exact frontier equality, a
+production GC loop must actively propose and coordinate candidate GC frontiers; passive
+heartbeats that keep advancing to newer leaf ids do not prove they still agree on the
+same compactable frontier. Snapshot signatures/quorum and snapshot-only bootstrap trust
+remain separate unresolved production requirements.
 
 ## Decision 5: sync impact
 

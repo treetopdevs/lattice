@@ -24,4 +24,10 @@ defmodule Lattice.CarrierBackoffTest do
 
     assert Backoff.delay_ms(b, 0) == 0
   end
+
+  test "large attempts are capped before exponentiation" do
+    b = Backoff.new(base_ms: 1, max_ms: Integer.pow(2, 100), jitter_ms: 0, seed: "peer-a")
+
+    assert Backoff.delay_ms(b, 64) == Backoff.delay_ms(b, 63)
+  end
 end

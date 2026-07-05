@@ -62,6 +62,27 @@ defmodule LatticeNodeSpike.WsCarrierSecurityTest do
     :ok = WsCarrier.close(conn)
   end
 
+  test "push rejects a single op that exceeds the frame byte budget" do
+    port = start_bad_push_server()
+    node_b = identity("node_b")
+    node_a = identity("node_a")
+
+    assert {:ok, conn} =
+             WsCarrier.connect(
+               port: port,
+               identity: node_b,
+               realm: "node_b",
+               peer_realm: "node_a",
+               peer_pubkey: node_a.pub,
+               replica: @replica
+             )
+
+    op = Lattice.Op.new(node_b, @replica, [], :command, {:post, String.duplicate("x", 70_000)})
+
+    assert {:error, {:oversized_item, _bytes, 64_000}} = WsCarrier.push(conn, [op])
+    :ok = WsCarrier.close(conn)
+  end
+
   defp start_peer_server do
     {:ok, peer} =
       Peer.start_link(

@@ -4,13 +4,31 @@ defmodule Lattice.CarrierBatchTest do
   alias Lattice.Carrier.Batch
 
   test "splits by max op count" do
-    assert Batch.chunk([1, 2, 3, 4, 5], max_ops: 2, size_fun: fn _ -> 1 end, max_bytes: 100) ==
+    assert {:ok, chunks} =
+             Batch.chunk([1, 2, 3, 4, 5],
+               max_ops: 2,
+               size_fun: fn _ -> 1 end,
+               max_bytes: 100
+             )
+
+    assert chunks ==
              [[1, 2], [3, 4], [5]]
   end
 
   test "splits by encoded bytes" do
-    chunks = Batch.chunk(["aaaa", "bbbb", "c"], max_ops: 10, size_fun: &byte_size/1, max_bytes: 5)
+    assert {:ok, chunks} =
+             Batch.chunk(["aaaa", "bbbb", "c"],
+               max_ops: 10,
+               size_fun: &byte_size/1,
+               max_bytes: 5
+             )
+
     assert chunks == [["aaaa"], ["bbbb", "c"]]
+  end
+
+  test "rejects a single item that exceeds the frame byte budget" do
+    assert {:error, {:oversized_item, 6, 5}} =
+             Batch.chunk(["xxxxxx"], max_ops: 10, size_fun: &byte_size/1, max_bytes: 5)
   end
 
   test "merges sync reports preserving order" do

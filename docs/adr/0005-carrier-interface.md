@@ -61,8 +61,9 @@ realm must implement the shared wire schema before it can replace the BEAM bridg
 - full op wire frames are centralized in `Lattice.Carrier.Wire`;
 - carrier sessions require explicit local/peer trust anchors and are authenticated by
   signed challenge/response before protocol messages are served;
-- reconnect/backoff and batch budgets are explicit;
-- partial sync shapes are dependency-closed;
+- reconnect/backoff helpers and batch budgets are explicit;
+- partial sync shapes are dependency-closed and can restrict `Carrier.sync/4` outbound
+  transfer;
 - compaction GC now has a tested membership acknowledgement helper, but no production
   compaction caller yet.
 

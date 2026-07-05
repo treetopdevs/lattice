@@ -32,6 +32,7 @@ defmodule Lattice.Carrier do
   """
 
   alias Lattice.{Log, Op, Sync}
+  alias Lattice.Sync.Shape
 
   @typedoc "Opaque, implementation-defined connection value."
   @type conn :: term()
@@ -70,8 +71,25 @@ defmodule Lattice.Carrier do
   @spec sync(module(), conn(), Log.t()) ::
           {:ok, Log.t(), stats(), conn()} | {:error, term()}
   def sync(carrier, conn, %Log{} = log) when is_atom(carrier) do
+    sync(carrier, conn, log, [])
+  end
+
+  @doc """
+  Reconcile with options.
+
+  Supported options:
+
+    * `:shape` — a `Lattice.Sync.Shape` used to restrict the outbound op set to a
+      dependency-closed subset. Pull remains carrier-defined unless a carrier grows a
+      shape-aware pull callback.
+  """
+  @spec sync(module(), conn(), Log.t(), keyword()) ::
+          {:ok, Log.t(), stats(), conn()} | {:error, term()}
+  def sync(carrier, conn, %Log{} = log, opts) when is_atom(carrier) and is_list(opts) do
+    shape = Keyword.get(opts, :shape)
+
     with {:ok, peer_ids, conn} <- carrier.advertise(conn, log),
-         to_push = Sync.missing(log, peer_ids),
+         to_push = missing(log, peer_ids, shape),
          {:ok, push_report, conn} <- carrier.push(conn, to_push),
          {:ok, pulled, conn} <- carrier.pull(conn, Log.op_ids(log)) do
       {log, pull_report} = Sync.deliver(log, pulled)
@@ -86,4 +104,7 @@ defmodule Lattice.Carrier do
       {:ok, log, stats, conn}
     end
   end
+
+  defp missing(log, peer_ids, nil), do: Sync.missing(log, peer_ids)
+  defp missing(log, peer_ids, %Shape{} = shape), do: Sync.missing(log, peer_ids, shape)
 end
