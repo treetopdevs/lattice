@@ -21,10 +21,9 @@ defmodule Lattice.Op do
 
   ## Canonical encoding
 
-  The signed/hashed bytes are `:erlang.term_to_binary/2` of a tagged tuple of
-  `{replica, author, sorted(deps), kind, body, cap}` with the `:deterministic`
-  option (maps are sorted, so the same logical content always encodes to the
-  same bytes). `deps` is sorted so frontier order never affects the id. See
+  The signed/hashed bytes are `Lattice.Canonical` bytes over
+  `{replica, author, sorted(deps), kind, body, cap}`. `deps` is sorted so
+  frontier order never affects the id. See
   `docs/adr/0001-canonical-encoding.md` for the caveats of this choice.
   """
 
@@ -32,8 +31,6 @@ defmodule Lattice.Op do
 
   @enforce_keys [:id, :replica, :author, :deps, :kind, :body, :sig]
   defstruct [:id, :replica, :author, :deps, :kind, :body, :cap, :sig]
-
-  @encoding_tag :lattice_op_v1
 
   @type kind :: :command | :authority | :inbox | :tombstone
   @type id :: String.t()
@@ -100,10 +97,7 @@ defmodule Lattice.Op do
   def normalize_deps(deps) when is_list(deps), do: deps |> Enum.uniq() |> Enum.sort()
 
   defp canonical_bytes(replica, author, deps, kind, body, cap) do
-    :erlang.term_to_binary(
-      {@encoding_tag, replica, author, deps, kind, body, cap},
-      [:deterministic, {:minor_version, 2}]
-    )
+    Lattice.Canonical.op_bytes(replica, author, deps, kind, body, cap)
   end
 
   defp hash(bytes) do
