@@ -1,0 +1,150 @@
+{
+  "nodes": [
+    {
+      "id": "PRO3mNNcMp2FAkelppHOrvMFR1Mkqit2LXqhj48VKMs",
+      "label": "PRO3mNNc authority genesis",
+      "reason": null,
+      "status": "honored",
+      "author": "c9-d-Nze72mR",
+      "kind": "authority",
+      "height": 0
+    },
+    {
+      "id": "XoUjA980vAEf-5_Wj52whbF1D-Psrkt9UXGNCqFS0i4",
+      "label": "XoUjA980 authority grant -> vKQcCxInoaBu",
+      "reason": null,
+      "status": "honored",
+      "author": "c9-d-Nze72mR",
+      "kind": "authority",
+      "height": 1
+    },
+    {
+      "id": "FBKAMOYjhPlXCmLuAVMdGtdm2xVwltkkFYcGQyofX_M",
+      "label": "FBKAMOYj command :join [\"tab\"]",
+      "reason": null,
+      "status": "honored",
+      "author": "vKQcCxInoaBu",
+      "kind": "command",
+      "height": 2
+    },
+    {
+      "id": "t_6WdEbpE4yvGIa9NCw7imEdQmMeOJmyJlH06zVDLmg",
+      "label": "t_6WdEbp command :join [\"server\"]",
+      "reason": null,
+      "status": "honored",
+      "author": "c9-d-Nze72mR",
+      "kind": "command",
+      "height": 2
+    },
+    {
+      "id": "AVdP54JK6fBk1rVy5ff7xp0VZMGH6Q73se4sntml_Ys",
+      "label": "AVdP54JK command :post [\"tab: ack, watching dashboards\"…",
+      "reason": null,
+      "status": "honored",
+      "author": "vKQcCxInoaBu",
+      "kind": "command",
+      "height": 3
+    },
+    {
+      "id": "TK18MJPBT3ocVBbUOazoile1vFR0gY5TbrZyxwA2smY",
+      "label": "TK18MJPB command :post [\"server: deploy window is 17:00…",
+      "reason": null,
+      "status": "honored",
+      "author": "c9-d-Nze72mR",
+      "kind": "command",
+      "height": 3
+    },
+    {
+      "id": "Z4Wfl0HNsySnYiVV-Csn545jCwpwGGWwG6fyAUa_FVM",
+      "label": "Z4Wfl0HN authority heartbeat :moderator @t5",
+      "reason": null,
+      "status": "honored",
+      "author": "c9-d-Nze72mR",
+      "kind": "authority",
+      "height": 4
+    },
+    {
+      "id": "6X-Lg4aYbWzIpXFjG0NiSTyGMYuXv9XM-mSvF0qjeG0",
+      "label": "6X-Lg4aY command :lock [] QUARANTINED(stale_holder)",
+      "reason": "stale_holder",
+      "status": "quarantined",
+      "author": "c9-d-Nze72mR",
+      "kind": "command",
+      "height": 5
+    },
+    {
+      "id": "ESEqUTgkds4iRL-CD2QKBcGhP-zjEJWoHnDlC84DGaE",
+      "label": "ESEqUTgk authority succeed :moderator @t9",
+      "reason": null,
+      "status": "honored",
+      "author": "vKQcCxInoaBu",
+      "kind": "authority",
+      "height": 5
+    }
+  ],
+  "edges": [
+    {
+      "kind": "dep",
+      "to": "Z4Wfl0HNsySnYiVV-Csn545jCwpwGGWwG6fyAUa_FVM",
+      "from": "AVdP54JK6fBk1rVy5ff7xp0VZMGH6Q73se4sntml_Ys"
+    },
+    {
+      "kind": "dep",
+      "to": "AVdP54JK6fBk1rVy5ff7xp0VZMGH6Q73se4sntml_Ys",
+      "from": "FBKAMOYjhPlXCmLuAVMdGtdm2xVwltkkFYcGQyofX_M"
+    },
+    {
+      "kind": "dep",
+      "to": "TK18MJPBT3ocVBbUOazoile1vFR0gY5TbrZyxwA2smY",
+      "from": "FBKAMOYjhPlXCmLuAVMdGtdm2xVwltkkFYcGQyofX_M"
+    },
+    {
+      "kind": "dep",
+      "to": "XoUjA980vAEf-5_Wj52whbF1D-Psrkt9UXGNCqFS0i4",
+      "from": "PRO3mNNcMp2FAkelppHOrvMFR1Mkqit2LXqhj48VKMs"
+    },
+    {
+      "kind": "dep",
+      "to": "Z4Wfl0HNsySnYiVV-Csn545jCwpwGGWwG6fyAUa_FVM",
+      "from": "TK18MJPBT3ocVBbUOazoile1vFR0gY5TbrZyxwA2smY"
+    },
+    {
+      "kind": "dep",
+      "to": "FBKAMOYjhPlXCmLuAVMdGtdm2xVwltkkFYcGQyofX_M",
+      "from": "XoUjA980vAEf-5_Wj52whbF1D-Psrkt9UXGNCqFS0i4"
+    },
+    {
+      "kind": "dep",
+      "to": "t_6WdEbpE4yvGIa9NCw7imEdQmMeOJmyJlH06zVDLmg",
+      "from": "XoUjA980vAEf-5_Wj52whbF1D-Psrkt9UXGNCqFS0i4"
+    },
+    {
+      "kind": "dep",
+      "to": "6X-Lg4aYbWzIpXFjG0NiSTyGMYuXv9XM-mSvF0qjeG0",
+      "from": "Z4Wfl0HNsySnYiVV-Csn545jCwpwGGWwG6fyAUa_FVM"
+    },
+    {
+      "kind": "dep",
+      "to": "ESEqUTgkds4iRL-CD2QKBcGhP-zjEJWoHnDlC84DGaE",
+      "from": "Z4Wfl0HNsySnYiVV-Csn545jCwpwGGWwG6fyAUa_FVM"
+    },
+    {
+      "kind": "dep",
+      "to": "AVdP54JK6fBk1rVy5ff7xp0VZMGH6Q73se4sntml_Ys",
+      "from": "t_6WdEbpE4yvGIa9NCw7imEdQmMeOJmyJlH06zVDLmg"
+    },
+    {
+      "kind": "dep",
+      "to": "TK18MJPBT3ocVBbUOazoile1vFR0gY5TbrZyxwA2smY",
+      "from": "t_6WdEbpE4yvGIa9NCw7imEdQmMeOJmyJlH06zVDLmg"
+    }
+  ],
+  "replica": "replica:thread:visual",
+  "frontier": [
+    "6X-Lg4aYbWzIpXFjG0NiSTyGMYuXv9XM-mSvF0qjeG0",
+    "ESEqUTgkds4iRL-CD2QKBcGhP-zjEJWoHnDlC84DGaE"
+  ],
+  "holders": {
+    "moderator": "vKQcCxInoaBu"
+  }
+}

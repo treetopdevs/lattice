@@ -1,0 +1,22 @@
+digraph lattice {
+  "PRO3mNNcMp2FAkelppHOrvMFR1Mkqit2LXqhj48VKMs" [label="PRO3mNNc authority genesis", shape="ellipse"];
+  "XoUjA980vAEf-5_Wj52whbF1D-Psrkt9UXGNCqFS0i4" [label="XoUjA980 authority grant -> vKQcCxInoaBu", shape="ellipse"];
+  "FBKAMOYjhPlXCmLuAVMdGtdm2xVwltkkFYcGQyofX_M" [label="FBKAMOYj command :join [\"tab\"]", shape="ellipse"];
+  "t_6WdEbpE4yvGIa9NCw7imEdQmMeOJmyJlH06zVDLmg" [label="t_6WdEbp command :join [\"server\"]", shape="ellipse"];
+  "AVdP54JK6fBk1rVy5ff7xp0VZMGH6Q73se4sntml_Ys" [label="AVdP54JK command :post [\"tab: ack, watching dashboards\"…", shape="ellipse"];
+  "TK18MJPBT3ocVBbUOazoile1vFR0gY5TbrZyxwA2smY" [label="TK18MJPB command :post [\"server: deploy window is 17:00…", shape="ellipse"];
+  "Z4Wfl0HNsySnYiVV-Csn545jCwpwGGWwG6fyAUa_FVM" [label="Z4Wfl0HN authority heartbeat :moderator @t5", shape="ellipse"];
+  "6X-Lg4aYbWzIpXFjG0NiSTyGMYuXv9XM-mSvF0qjeG0" [label="6X-Lg4aY command :lock [] QUARANTINED(stale_holder)", shape="ellipse"];
+  "ESEqUTgkds4iRL-CD2QKBcGhP-zjEJWoHnDlC84DGaE" [label="ESEqUTgk authority succeed :moderator @t9", shape="ellipse"];
+  "AVdP54JK6fBk1rVy5ff7xp0VZMGH6Q73se4sntml_Ys" -> "Z4Wfl0HNsySnYiVV-Csn545jCwpwGGWwG6fyAUa_FVM" [label="dep"];
+  "FBKAMOYjhPlXCmLuAVMdGtdm2xVwltkkFYcGQyofX_M" -> "AVdP54JK6fBk1rVy5ff7xp0VZMGH6Q73se4sntml_Ys" [label="dep"];
+  "FBKAMOYjhPlXCmLuAVMdGtdm2xVwltkkFYcGQyofX_M" -> "TK18MJPBT3ocVBbUOazoile1vFR0gY5TbrZyxwA2smY" [label="dep"];
+  "PRO3mNNcMp2FAkelppHOrvMFR1Mkqit2LXqhj48VKMs" -> "XoUjA980vAEf-5_Wj52whbF1D-Psrkt9UXGNCqFS0i4" [label="dep"];
+  "TK18MJPBT3ocVBbUOazoile1vFR0gY5TbrZyxwA2smY" -> "Z4Wfl0HNsySnYiVV-Csn545jCwpwGGWwG6fyAUa_FVM" [label="dep"];
+  "XoUjA980vAEf-5_Wj52whbF1D-Psrkt9UXGNCqFS0i4" -> "FBKAMOYjhPlXCmLuAVMdGtdm2xVwltkkFYcGQyofX_M" [label="dep"];
+  "XoUjA980vAEf-5_Wj52whbF1D-Psrkt9UXGNCqFS0i4" -> "t_6WdEbpE4yvGIa9NCw7imEdQmMeOJmyJlH06zVDLmg" [label="dep"];
+  "Z4Wfl0HNsySnYiVV-Csn545jCwpwGGWwG6fyAUa_FVM" -> "6X-Lg4aYbWzIpXFjG0NiSTyGMYuXv9XM-mSvF0qjeG0" [label="dep"];
+  "Z4Wfl0HNsySnYiVV-Csn545jCwpwGGWwG6fyAUa_FVM" -> "ESEqUTgkds4iRL-CD2QKBcGhP-zjEJWoHnDlC84DGaE" [label="dep"];
+  "t_6WdEbpE4yvGIa9NCw7imEdQmMeOJmyJlH06zVDLmg" -> "AVdP54JK6fBk1rVy5ff7xp0VZMGH6Q73se4sntml_Ys" [label="dep"];
+  "t_6WdEbpE4yvGIa9NCw7imEdQmMeOJmyJlH06zVDLmg" -> "TK18MJPBT3ocVBbUOazoile1vFR0gY5TbrZyxwA2smY" [label="dep"];
+}

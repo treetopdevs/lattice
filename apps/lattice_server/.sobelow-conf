@@ -1,0 +1,19 @@
+# Sobelow config for apps/lattice_server (plan 003).
+#
+# ignore_files: static_handler.ex triggers Traversal.FileModule (low confidence),
+# a confirmed false positive — the filename passed to File.read comes from a
+# hardcoded allowlist (file_for/1 maps six exact routes to fixed names) and is
+# additionally guarded by safe_file?/1; no user-controlled path reaches File.read.
+[
+  exit: false,
+  format: "txt",
+  ignore_files: ["lib/lattice_server/static_handler.ex"],
+  ignore: [],
+  out: nil,
+  private: false,
+  router: nil,
+  skip: false,
+  threshold: :low,
+  verbose: false,
+  version: false
+]

@@ -99,7 +99,8 @@ try {
       .map((event) => event.error),
   );
 
-  expect(deniedResultsAfterBridgeReuse).toContain(":revoked");
+  // plan 007 coarsened WebSocket error codes: :revoked now surfaces as "unauthorized".
+  expect(deniedResultsAfterBridgeReuse).toContain("unauthorized");
 
   const relaysToWorkerB = await page.evaluate(() =>
     window.__workerEvents

@@ -15,7 +15,12 @@ defmodule LatticeCore.Application do
       Lattice.CapStore,
       Lattice.Topology,
       {DynamicSupervisor, name: Lattice.TabWorkerSupervisor, strategy: :one_for_one},
-      Lattice.LiveOps
+      Lattice.LiveOps,
+      # Lattice 2.0 — logical clock + Replica materialization plane
+      Lattice.Clock,
+      {Registry, keys: :unique, name: Lattice.Materializer.Registry},
+      {DynamicSupervisor, name: Lattice.MaterializerSupervisor, strategy: :one_for_one},
+      Lattice.Registry
     ]
 
     opts = [strategy: :one_for_one, name: LatticeCore.Supervisor]

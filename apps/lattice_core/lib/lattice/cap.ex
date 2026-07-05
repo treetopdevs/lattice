@@ -30,7 +30,14 @@ defmodule Lattice.Cap do
     audit: %{},
     created_at: nil,
     revoked_at: nil,
-    revoked_reason: nil
+    revoked_reason: nil,
+    # --- Lattice 2.0 unification (design invariant 2) ---
+    # `chain` is the verifiable signed delegation proof; `replica` ties this cap to
+    # a Replica's op-log. The SAME cap therefore authorizes both a live Gateway
+    # message (its v1 runtime fields) and a log op (its `chain` leaf is cited in
+    # `Lattice.Op.cap`). See `Lattice.Live` and behavior 16.
+    replica: nil,
+    chain: []
   ]
 
   @type target ::
@@ -60,8 +67,18 @@ defmodule Lattice.Cap do
           audit: map(),
           created_at: integer(),
           revoked_at: integer() | nil,
-          revoked_reason: term()
+          revoked_reason: term(),
+          replica: String.t() | nil,
+          chain: [Lattice.Authority.Delegation.t()]
         }
+
+  @doc "Attach a 2.0 delegation chain + replica to a v1 cap (unification)."
+  def with_chain(%__MODULE__{} = cap, replica, chain) when is_list(chain),
+    do: %{cap | replica: replica, chain: chain}
+
+  @doc "The leaf (most-attenuated) delegation of this cap's chain, or nil."
+  def leaf(%__MODULE__{chain: []}), do: nil
+  def leaf(%__MODULE__{chain: chain}), do: List.last(chain)
 
   def new(owner_tab_id, target, ops, opts \\ []) when is_list(ops) or is_map(ops) do
     now = System.monotonic_time(:millisecond)

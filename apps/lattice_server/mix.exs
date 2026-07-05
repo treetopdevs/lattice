@@ -28,7 +28,10 @@ defmodule LatticeServer.MixProject do
     [
       {:lattice_core, in_umbrella: true},
       {:cowboy, "~> 2.12"},
-      {:jason, "~> 1.4"}
+      {:jason, "~> 1.4"},
+      # Sobelow scans one Mix project at a time; umbrella-root deps are not visible
+      # as tasks inside child apps, so the security linter is declared here too.
+      {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false}
     ]
   end
 end

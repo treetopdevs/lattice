@@ -80,7 +80,7 @@ defmodule Lattice.CapStore do
   def reset, do: GenServer.call(__MODULE__, :reset)
 
   @impl true
-  def init(_opts), do: {:ok, %{caps: %{}}}
+  def init(_opts), do: {:ok, %{caps: %{}, children: %{}}}
 
   @impl true
   def handle_call({:grant, tab_id, target, ops, opts}, _from, state) do
@@ -97,16 +97,28 @@ defmodule Lattice.CapStore do
 
         {:reply, {:error, :cap_id_collision}, state}
       else
-        Audit.record(:grant, %{
-          tab_id: tab_id,
-          cap_id: cap.id,
-          target: inspect_target(target),
-          ops: MapSet.to_list(cap.ops),
-          caveats: Enum.map(cap.caveats, &Caveat.external/1)
-        })
+        case Topology.register_cap(tab_id, cap.id) do
+          :ok ->
+            Audit.record(:grant, %{
+              tab_id: tab_id,
+              cap_id: cap.id,
+              target: inspect_target(target),
+              ops: MapSet.to_list(cap.ops),
+              caveats: Enum.map(cap.caveats, &Caveat.external/1)
+            })
 
-        Topology.register_cap(tab_id, cap.id)
-        {:reply, {:ok, cap}, put_in(state, [:caps, cap.id], cap)}
+            {:reply, {:ok, cap}, state |> put_in([:caps, cap.id], cap) |> index_child(cap)}
+
+          {:error, reason} ->
+            Audit.record(:deny, %{
+              tab_id: tab_id,
+              cap_id: cap.id,
+              target: inspect_target(target),
+              reason: reason
+            })
+
+            {:reply, {:error, reason}, state}
+        end
       end
     else
       Audit.record(:deny, %{
@@ -125,7 +137,8 @@ defmodule Lattice.CapStore do
          true <- Topology.tab_connected?(delegating_tab_id) || {:error, :tab_not_connected},
          true <- Topology.tab_connected?(to_tab_id) || {:error, :tab_not_connected},
          {:ok, child} <- Attenuation.derive(parent, to_tab_id, opts),
-         :ok <- cap_id_available?(state, child.id) do
+         :ok <- cap_id_available?(state, child.id),
+         :ok <- Topology.register_cap(to_tab_id, child.id) do
       Audit.record(:delegate, %{
         from_tab_id: delegating_tab_id,
         to_tab_id: to_tab_id,
@@ -134,8 +147,7 @@ defmodule Lattice.CapStore do
         caveats: Enum.map(child.caveats, &Caveat.external/1)
       })
 
-      Topology.register_cap(to_tab_id, child.id)
-      {:reply, {:ok, child}, put_in(state, [:caps, child.id], child)}
+      {:reply, {:ok, child}, state |> put_in([:caps, child.id], child) |> index_child(child)}
     else
       {:error, reason} ->
         Audit.record(:deny, %{
@@ -153,7 +165,7 @@ defmodule Lattice.CapStore do
   def handle_call({:revoke, cap_id, reason}, _from, state) do
     case Map.fetch(state.caps, cap_id) do
       {:ok, _cap} ->
-        affected_ids = [cap_id | descendant_ids(state.caps, cap_id)]
+        affected_ids = [cap_id | descendant_ids(state.children, cap_id)]
         caps = revoke_caps(state.caps, affected_ids, reason)
 
         Enum.each(affected_ids, fn id ->
@@ -245,7 +257,7 @@ defmodule Lattice.CapStore do
     {:reply, %{caps: state.caps, active_caps: active_caps}, state}
   end
 
-  def handle_call(:reset, _from, _state), do: {:reply, :ok, %{caps: %{}}}
+  def handle_call(:reset, _from, _state), do: {:reply, :ok, %{caps: %{}, children: %{}}}
 
   defp fetch_live_parent(state, parent_id) do
     case Map.fetch(state.caps, parent_id) do
@@ -354,13 +366,27 @@ defmodule Lattice.CapStore do
     end)
   end
 
-  defp descendant_ids(caps, cap_id) do
-    children =
-      caps
-      |> Enum.filter(fn {_id, cap} -> cap.parent_id == cap_id end)
-      |> Enum.map(fn {id, _cap} -> id end)
+  # The children index is an optimization for descendant traversal; `caps[*].parent_id`
+  # remains the source of truth. Revoked caps are marked, never deleted, so stale index
+  # entries cannot resurrect a cap — `revoke_caps/3` simply re-marks them.
+  defp index_child(state, %Cap{parent_id: nil}), do: state
 
-    children ++ Enum.flat_map(children, &descendant_ids(caps, &1))
+  defp index_child(state, %Cap{parent_id: parent_id, id: id}) do
+    update_in(state, [:children, parent_id], fn
+      nil -> MapSet.new([id])
+      set -> MapSet.put(set, id)
+    end)
+  end
+
+  defp descendant_ids(children_index, cap_id) do
+    case Map.get(children_index, cap_id) do
+      nil ->
+        []
+
+      set ->
+        kids = MapSet.to_list(set)
+        kids ++ Enum.flat_map(kids, &descendant_ids(children_index, &1))
+    end
   end
 
   defp revoke_caps(caps, ids, reason) do

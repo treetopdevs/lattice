@@ -5,6 +5,12 @@ defmodule Lattice.Transport.WebSocket do
   Browser messages are JSON envelopes and are converted into gateway calls. The
   handler never accepts raw pids, registered names, RPC commands, or Erlang
   external term format from the browser.
+
+  Error frames sent to the client carry only a coarse public code from a fixed
+  enumeration (`"unauthorized"`, `"invalid_request"`, `"unavailable"`,
+  `"rate_limited"`, `"error"`) via `public_error/1` — never the internal
+  reason atom. The precise reason stays server-side (audit/deny records). New
+  error sites must use `public_error/1`, not `inspect/1`.
   """
 
   @behaviour :cowboy_websocket
@@ -233,10 +239,10 @@ defmodule Lattice.Transport.WebSocket do
           LatticeServer.DemoHub.event(:deny, %{
             tab_id: tab.id,
             cap_id: cap_id,
-            reason: inspect(reason)
+            reason: public_error(reason)
           })
 
-          %{type: "call_result", ok: false, error: inspect(reason)}
+          %{type: "call_result", ok: false, error: public_error(reason)}
       end
 
     {:reply, {:text, Envelope.encode(reply)}, state}
@@ -257,10 +263,10 @@ defmodule Lattice.Transport.WebSocket do
           LatticeServer.DemoHub.event(:deny, %{
             tab_id: tab.id,
             cap_id: cap_id,
-            reason: inspect(reason)
+            reason: public_error(reason)
           })
 
-          %{type: "cast_result", ok: false, error: inspect(reason)}
+          %{type: "cast_result", ok: false, error: public_error(reason)}
       end
 
     {:reply, {:text, Envelope.encode(reply)}, state}
@@ -289,7 +295,7 @@ defmodule Lattice.Transport.WebSocket do
         {:error, reason} ->
           Lattice.LiveOps.record_denial(tab.id, action, reason, %{cap_id: cap_id})
 
-          %{type: "liveops_result", ok: false, action: action, error: inspect(reason)}
+          %{type: "liveops_result", ok: false, action: action, error: public_error(reason)}
       end
 
     {:reply, {:text, Envelope.encode(reply)}, state}
@@ -298,7 +304,14 @@ defmodule Lattice.Transport.WebSocket do
   defp handle_envelope(%{"type" => "liveops_action", "action" => action}, %{tab: tab} = state)
        when not is_nil(tab) do
     Lattice.LiveOps.record_denial(tab.id, action, :cap_required, %{})
-    reply = %{type: "liveops_result", ok: false, action: action, error: ":cap_required"}
+
+    reply = %{
+      type: "liveops_result",
+      ok: false,
+      action: action,
+      error: public_error(:cap_required)
+    }
+
     {:reply, {:text, Envelope.encode(reply)}, state}
   end
 
@@ -327,8 +340,58 @@ defmodule Lattice.Transport.WebSocket do
     do: reply_error(:denied, :hello_required_or_invalid_envelope, state)
 
   defp reply_error(type, reason, state) do
-    frame = Envelope.encode(%{type: "error", error_type: type, reason: inspect(reason)})
+    frame = Envelope.encode(%{type: "error", error_type: type, reason: public_error(reason)})
     {:reply, {:text, frame}, state}
+  end
+
+  # Maps internal failure reasons to a small, stable set of client-safe codes.
+  # Never echoes an unknown internal term verbatim — anything unrecognized
+  # collapses to "error". Keep this enumeration fixed so clients can switch on
+  # it; the precise reason is retained server-side via Audit/deny records.
+  defp public_error(reason) do
+    case reason do
+      r
+      when r in [
+             :wrong_owner,
+             :revoked,
+             :parent_revoked,
+             :expired,
+             :use_limit_exceeded,
+             :operation_not_allowed,
+             :cap_action_mismatch,
+             :cap_required,
+             :bridge_required
+           ] ->
+        "unauthorized"
+
+      r
+      when r in [
+             :unknown_cap,
+             :invalid_target,
+             :malformed_cap,
+             :malformed_target,
+             :target_mismatch,
+             :unknown_target,
+             :unknown_grant_target,
+             :malformed,
+             :unknown_type,
+             :missing_type,
+             :unsupported_frame,
+             :invalid_resume_seq,
+             :invalid_claims,
+             :hello_required_or_invalid_envelope
+           ] ->
+        "invalid_request"
+
+      r when r in [:tab_not_connected, :target_down, :timeout] ->
+        "unavailable"
+
+      :rate_limited ->
+        "rate_limited"
+
+      _other ->
+        "error"
+    end
   end
 
   defp gateway_call(tab_id, cap_id, payload, requested_target) do

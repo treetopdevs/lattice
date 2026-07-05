@@ -1,0 +1,18 @@
+{
+  "quarantine": [
+    "peNmkS5U_DjGoCnnR3LYY2WT_YH3qzjz0sd6xTneHuw"
+  ],
+  "audit": [
+    {
+      "reason": "not_holder",
+      "op": "peNmkS5U_DjGoCnnR3LYY2WT_YH3qzjz0sd6xTneHuw",
+      "event": "command_quarantine"
+    }
+  ],
+  "reasons": {
+    "peNmkS5U_DjGoCnnR3LYY2WT_YH3qzjz0sd6xTneHuw": "not_holder"
+  },
+  "holders": {
+    "clerk": "xI19LiI0w767"
+  }
+}

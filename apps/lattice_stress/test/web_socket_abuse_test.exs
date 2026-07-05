@@ -56,7 +56,7 @@ defmodule LatticeStress.WebSocketAbuseTest do
                payload: %{attack: "malformed-cap"}
              })
 
-    assert {:ok, %{"type" => "call_result", "ok" => false, "error" => ":malformed_cap"}} =
+    assert {:ok, %{"type" => "call_result", "ok" => false, "error" => "invalid_request"}} =
              recv_type(client, "call_result")
 
     assert %{call_count: 0} = ProbeServer.stats(probe)
@@ -78,7 +78,7 @@ defmodule LatticeStress.WebSocketAbuseTest do
                payload: %{attack: "wrong-target"}
              })
 
-    assert {:ok, %{"type" => "call_result", "ok" => false, "error" => ":target_mismatch"}} =
+    assert {:ok, %{"type" => "call_result", "ok" => false, "error" => "invalid_request"}} =
              recv_type(client, "call_result")
 
     assert %{call_count: 0} = ProbeServer.stats(probe)

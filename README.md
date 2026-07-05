@@ -39,6 +39,16 @@ The core thesis is simple: a tab gets zero implicit authority. It cannot use raw
 - Durable audit storage, clustered state, multi-node failover, or production authentication.
 - A full framework API beyond the narrow proof paths covered by tests.
 
+## Toolchain / Prerequisites
+
+Requires Erlang/OTP 28 and Elixir 1.19.5-otp-28 (matches CI; asdf pins them via
+`~/.tool-versions`). On the primary dev machine, `mix` on `PATH` is a broken mise shim
+(mise's global config pins OTP 27 and its `mix` shim leaks flags) — invoke mix as
+`~/.asdf/shims/mix` instead. The scoped fix and full explanation live in `.mise.toml`
+at the repo root (untracked, machine-local); see `AGENTS.md` for the agent-facing
+command map. The commands below are written as plain `mix`; locally, run them via
+`~/.asdf/shims/mix`.
+
 ## Run It
 
 ```sh
@@ -115,6 +125,45 @@ Research notes:
 - [docs/research/architecture.md](docs/research/architecture.md)
 - [docs/research/operational_model.md](docs/research/operational_model.md)
 - [docs/research/paper_skeleton.md](docs/research/paper_skeleton.md)
+
+## Lattice 2.0 — Replicas on a Capability-Attested Log
+
+Alongside the v1 capability plane above, this repo contains a fully implemented
+**Lattice 2.0** POC: a **Replica** is a process whose identity is a durable, signed
+op-log; its materializations are ephemeral BEAM processes that are pure reductions of
+that log. The log is the truth; the connection is the cache.
+
+Headline guarantees (all asserted by tests):
+
+- **Offline-convergent state** — CRDT fields (`:lww`, `:or_set`, `:causal_list`)
+  converge deterministically after partition and sync.
+- **Serialized authority** — one writer role per authority field, held via a
+  transferable, revocable signed delegation chain; stale holders are quarantined
+  identically on every realm.
+- **One chain, two uses** — the same in-log delegation authorizes both a log append
+  and a live ephemeral message through the v1 Gateway; a single in-log revoke kills both.
+- **Determinism** — the same op set reduces to byte-identical state on every realm,
+  regardless of delivery order or partition schedule.
+- **Durable messaging** — inbox ops and promises survive dormancy; `await` resolves
+  after the target rematerializes.
+
+The code lives in `apps/lattice_core/lib/lattice/` (`Op`, `Log`, `Sync`, `Net`,
+`Clock`, `Crdt`, `Replica`, `Reduce`, `Authority`, `Registry`, `Materializer`,
+`Promise`, `Live`, `Sim`), with the public facade on `Lattice` (`materialize/2`,
+`state_at/3`, `send_durable/3`, `await/2`, ...) and `Lattice.Registry`. For a single
+coherent v2 surface use `Lattice.V2` (`materialize/2`, `dormant/2`, `send/3`,
+`call/4` + `await/2`, ...); its `@moduledoc` carries the v1 ↔ v2 verb table. Run it:
+
+```sh
+mix run scripts/lattice2_demo.exs
+mix test apps/lattice_core/test/lattice2/
+```
+
+This is a POC on simulated realms: no encryption, no key rotation, no log compaction,
+no real network carrier yet. Design docs: [docs/lattice2_design.md](docs/lattice2_design.md),
+the ADRs in [docs/adr/](docs/adr/), [docs/threat_model_v2.md](docs/threat_model_v2.md),
+[docs/path_to_real.md](docs/path_to_real.md), and [docs/lattice_poc_status.md](docs/lattice_poc_status.md).
+Module docs render via ex_doc: `cd apps/lattice_core && mix docs`.
 
 ## Architecture
 

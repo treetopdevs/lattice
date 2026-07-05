@@ -178,7 +178,7 @@ defmodule LatticeStress.LiveOpsAdversarialTest do
             %{
               "type" => "liveops_result",
               "ok" => false,
-              "error" => ":target_mismatch"
+              "error" => "invalid_request"
             }} = recv_type(client, "liveops_result")
 
     assert_audit(:deny, reason: :target_mismatch)

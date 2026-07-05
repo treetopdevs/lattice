@@ -111,9 +111,68 @@ defmodule Lattice do
     Topology.reset()
     CapStore.reset()
     Audit.reset()
+    Lattice.Clock.reset()
+    Lattice.Registry.reset()
   end
 
   def external_cap(%Cap{} = cap), do: Cap.external(cap)
+
+  # ===================================================================
+  # Lattice 2.0 — Replicas on a capability-attested log.
+  #
+  # The v1 facade (connect_tab/grant/call/... above) is preserved. The 2.0 model
+  # lives in `Lattice.{Op,Log,Sync,Net,Clock,Crdt,Authority,Replica,Reduce,
+  # Registry,Materializer,Promise,Live,Sim}`. Functions whose v1 names/arities
+  # would collide (`call/3`, `grant/4`) are reached through `Lattice.Registry`
+  # and the in-log delegation ops; the rest are surfaced here. `Lattice.V2`
+  # offers the same verbs as one coherent facade (see its v1 ↔ v2 table).
+  # Nothing assumes in-process locality — realms are addressed by id, so
+  # `Lattice.Net` can be swapped for a real carrier (see docs/path_to_real.md).
+  # ===================================================================
+
+  @doc "Materialize a replica on a realm (live process); returns `{:ok, state}`."
+  def materialize(realm, replica), do: Lattice.Registry.materialize(realm, replica)
+
+  @doc "Send a realm's materialization dormant (its log persists)."
+  def go_dormant(realm, replica), do: Lattice.Registry.go_dormant(realm, replica)
+
+  @doc "Permanently tombstone a replica (an op; blocks rematerialization everywhere)."
+  def tombstone(realm, replica), do: Lattice.Registry.tombstone(realm, replica)
+
+  @doc "Subscribe the calling process to a materialization's lifecycle + messages."
+  def monitor(realm, replica), do: Lattice.Registry.monitor(realm, replica, self())
+
+  @doc "Durably send `payload` between realms; delivered on the target's next materialization."
+  def send_durable(from_realm, {to_realm, replica}, payload),
+    do: Lattice.Registry.deliver(from_realm, to_realm, replica, payload)
+
+  @doc "Await a durable promise from `realm`'s log: `{:ok, result}` or `:pending`."
+  def await(realm, %Lattice.Promise{replica: replica} = promise),
+    do: Lattice.Registry.await(realm, replica, promise)
+
+  @doc """
+  Materialize the current state of `log` interpreted by Replica `module`, applying
+  the authority quarantine. The value-level twin of `Lattice.Sim.state/2` — same
+  `Reduce`/`Authority` path, usable on any `Lattice.Log` (e.g. one restored from disk).
+  Live-process state reads go through `Lattice.Registry.state/2` (realm, replica);
+  this function is the value-level path over a `%Lattice.Log{}`.
+  """
+  def state(module, %Lattice.Log{} = log) do
+    quarantine = Lattice.Authority.quarantine(module, log)
+    Lattice.Reduce.reduce(module, log, quarantine: quarantine)
+  end
+
+  @doc """
+  Reproduce historical state as of a causal `frontier` (a list of op ids), applying
+  the authority quarantine that held within that causal slice. Behavior 17.
+  """
+  def state_at(module, %Lattice.Log{} = log, frontier) do
+    reachable = Lattice.Dag.reachable(Lattice.Log.ops(log), List.wrap(frontier))
+    sub_ops = Map.take(Lattice.Log.ops(log), MapSet.to_list(reachable))
+    sub_log = Lattice.Log.from_ops(log.replica, sub_ops)
+    quarantine = Lattice.Authority.quarantine(module, sub_log)
+    Lattice.Reduce.reduce(module, sub_log, quarantine: quarantine)
+  end
 
   def normalize_target({:tab, tab_id}) when is_binary(tab_id), do: {:tab, tab_id}
   def normalize_target({:server, pid}) when is_pid(pid), do: {:server_pid, pid}
