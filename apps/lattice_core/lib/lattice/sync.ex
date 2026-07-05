@@ -19,7 +19,7 @@ defmodule Lattice.Sync do
   idempotently — is unchanged by that optimization.
   """
 
-  alias Lattice.{Log, Op}
+  alias Lattice.{Dag, Log, Op}
   alias Lattice.Sync.Shape
 
   @type report :: %{
@@ -32,7 +32,9 @@ defmodule Lattice.Sync do
   @doc "Ops in `source` that a peer holding `have` ids lacks, in causal order."
   @spec missing(Log.t(), MapSet.t(Op.id())) :: [Op.t()]
   def missing(%Log{} = source, %MapSet{} = have) do
-    missing(source, have, Shape.all())
+    source
+    |> Log.topo_ops()
+    |> Enum.reject(&MapSet.member?(have, &1.id))
   end
 
   @doc "Shape-filtered missing ops expanded to causal dependency closure."
@@ -44,7 +46,7 @@ defmodule Lattice.Sync do
       |> Enum.filter(&Shape.selected?(shape, &1))
       |> MapSet.new(& &1.id)
 
-    closure = dependency_closure(source, selected_ids)
+    closure = Dag.reachable(Log.ops(source), MapSet.to_list(selected_ids))
 
     source
     |> Log.topo_ops()
@@ -107,23 +109,5 @@ defmodule Lattice.Sync do
         rejected: Enum.reverse(report.rejected),
         pending: Enum.map(still_pending, & &1.id)
     }
-  end
-
-  defp dependency_closure(%Log{} = log, ids) do
-    by_id = Log.ops(log)
-    do_dependency_closure(by_id, MapSet.to_list(ids), MapSet.new())
-  end
-
-  defp do_dependency_closure(_by_id, [], acc), do: acc
-
-  defp do_dependency_closure(by_id, [id | rest], acc) do
-    if MapSet.member?(acc, id) do
-      do_dependency_closure(by_id, rest, acc)
-    else
-      case Map.fetch(by_id, id) do
-        {:ok, op} -> do_dependency_closure(by_id, op.deps ++ rest, MapSet.put(acc, id))
-        :error -> do_dependency_closure(by_id, rest, MapSet.put(acc, id))
-      end
-    end
   end
 end

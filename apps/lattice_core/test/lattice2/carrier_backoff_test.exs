@@ -18,4 +18,10 @@ defmodule Lattice.CarrierBackoffTest do
     assert Backoff.delay_ms(b, 4) == 500
     assert Backoff.delay_ms(b, Backoff.reset_attempt()) == 50
   end
+
+  test "jitter never makes a sleep delay negative" do
+    b = Backoff.new(base_ms: 1, max_ms: 1, jitter_ms: 100, seed: "seed0")
+
+    assert Backoff.delay_ms(b, 0) == 0
+  end
 end

@@ -52,9 +52,9 @@ modules it reuses (`Lattice.Cap`, `Lattice.Gateway`, `Lattice.Realm`/`Tab`,
 }
 ```
 
-* **Canonical encoding** — `:erlang.term_to_binary/2` with `:deterministic`, over a
-  tagged tuple of `{replica, author, sorted(deps), kind, body, cap}`. See
-  [ADR 0001](adr/0001-canonical-encoding.md).
+* **Canonical encoding** — `Lattice.Canonical`, a small CBOR-shaped subset over
+  `{replica, author, sorted(deps), kind, body, cap}` with explicit tags for BEAM
+  atoms/tuples/MapSets/delegations. See [ADR 0001](adr/0001-canonical-encoding.md).
 * **Hash-chaining** — `id` is the content hash and `deps` cite predecessor ids, so
   the log is a tamper-evident hash-DAG: mutating any field changes the id and breaks
   every descendant. See [ADR 0002](adr/0002-hash-dag-causality.md).

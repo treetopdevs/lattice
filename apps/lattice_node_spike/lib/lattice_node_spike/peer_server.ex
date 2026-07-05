@@ -7,11 +7,23 @@ defmodule LatticeNodeSpike.PeerServer do
 
   @listener :lattice_node_spike_listener
 
-  @spec start(pid() | atom()) :: {:ok, :inet.port_number()}
-  def start(peer) do
+  @spec start(pid() | atom(), keyword()) :: {:ok, :inet.port_number()}
+  def start(peer, opts) do
+    trusted_peer_realm = Keyword.fetch!(opts, :trusted_peer_realm)
+    trusted_peer_pubkey = Keyword.fetch!(opts, :trusted_peer_pubkey)
+
     dispatch =
       :cowboy_router.compile([
-        {:_, [{"/carrier", LatticeNodeSpike.WsHandler, %{peer: peer}}]}
+        {:_,
+         [
+           {"/carrier", LatticeNodeSpike.WsHandler,
+            %{
+              peer: peer,
+              authenticated?: false,
+              trusted_peer_realm: trusted_peer_realm,
+              trusted_peer_pubkey: trusted_peer_pubkey
+            }}
+         ]}
       ])
 
     {:ok, _pid} =

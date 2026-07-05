@@ -105,6 +105,23 @@ defmodule Lattice2.LogSyncTest do
     assert [%{reason: :bad_signature}] = Log.quarantine(log)
   end
 
+  test "behavior 4 regression: unencodable tampering is invalid and quarantined, not raised" do
+    a = realm("a")
+    genesis = Op.new(a, @replica, [], :command, {:post, "g"})
+    op = Op.new(a, @replica, [genesis.id], :command, {:count, 1})
+    tampered = %{op | body: {:count, -1}}
+
+    refute Op.valid?(tampered)
+
+    log = Log.append!(Log.new(@replica), genesis)
+    {log, report} = Sync.deliver(log, [tampered])
+    tampered_id = tampered.id
+
+    refute Log.has?(log, tampered.id)
+    assert [{^tampered_id, :bad_signature}] = report.quarantined
+    assert [%{op: ^tampered, reason: :bad_signature}] = Log.quarantine(log)
+  end
+
   test "behavior 4 regression: a quarantined forgery does not poison the valid op with the same id" do
     a = realm("a")
     genesis = Op.new(a, @replica, [], :command, {:post, "g"})

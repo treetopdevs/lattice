@@ -130,7 +130,7 @@ OTP 28 + `mix` are used). Run mix with `~/.asdf/shims/mix`.
 - Behaviors: 1 (raw op-set convergence), 3 (idempotent sync), 4 (tamper rejection).
 - Crypto verified on OTP 28: deterministic seeded Ed25519 (`:crypto.generate_key(:eddsa,
   :ed25519, seed32)`), sign/verify with tamper rejection, order-independent
-  `term_to_binary(_, [:deterministic])`.
+  `Lattice.Canonical` bytes.
 - Result: green.
 
 ## Checkpoint: Phase B — Replica + CRDTs + reduction
@@ -213,8 +213,9 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
   Keyhive E2EE is out of scope.
 - **No compaction** — a Replica's identity is its entire op-log; reduction re-folds all
   ops and sync ships full id sets. First scaling cliff (`path_to_real.md`).
-- **Canonical encoding is `:erlang.term_to_binary` (pinned)** — BEAM-specific; a real
-  multi-runtime carrier needs canonical CBOR (ADR 0001).
+- **Browser/AtomVM parity is not done** — signed bytes now use `Lattice.Canonical`
+  instead of pinned BEAM external-term bytes, but non-BEAM realms still need native
+  implementations of the canonical subset and `Lattice.Carrier.Wire` (ADR 0001).
 - **Succession dormancy = absence of heartbeats**, not a true liveness oracle (ADR 0004).
 - **Public API name clashes** — v1 already defines `Lattice.call/3`, `Lattice.grant/4`,
   `Lattice.cast/3`. The 2.0 promise-`call`/capability-`grant` are reached via

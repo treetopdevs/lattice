@@ -16,9 +16,8 @@ defmodule LatticeNodeSpike do
     * `LatticeNodeSpike.WsCarrier` — the `Lattice.Carrier` implementation the
       test drives from this OS process, over
       `Lattice.Transport.WebSocket.Client` (raw `:gen_tcp`, real handshake).
-    * `LatticeNodeSpike.Wire` — op wire format: Base64 of the pinned
-      `:erlang.term_to_binary/2` encoding (canonical CBOR is the recorded
-      follow-up for non-BEAM realms; ADR 0001 / ADR 0005).
+    * `LatticeNodeSpike.Wire` — delegates to the shared JSON-safe
+      `Lattice.Carrier.Wire` op frame schema from ADR 0005.
     * `priv/peer_node.exs` — the second OS process's entry point.
 
   The GATE test lives in `test/node_carrier_spike_test.exs`.

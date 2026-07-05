@@ -118,11 +118,12 @@ at one seam:
   physical-carrier run these tests can't reach on `Sim` today.
 - **Application track** — this overlay. W0–W4 on `Sim` now, structured so the W1/W3 assertions
   swap onto the real carrier unchanged when `010` lands.
-- **The seam** — `plans/010a-carrier-township-acceptance.md` (in this overlay). It binds `010`'s
-  convergence GATE to Township **W1/W3** as the application oracle, and records the coupling `010`
-  defers: a **Vue 3.5 / JS browser realm cannot emit `:erlang.term_to_binary`**, so canonical
-  **CBOR (ADR-P08)** becomes a hard prerequisite the instant a non-BEAM realm joins. Read `010`
-  and `010a` together before doing carrier or browser-realm work.
+- **The seam** — `plans/010-real-carrier-spike.md` is the substrate carrier gate in this
+  checkout. A Township overlay may add its own `010a` acceptance plan, but that file is
+  not present here. The remaining coupling is explicit: a **Vue 3.5 / JS browser realm**
+  must implement `Lattice.Canonical` and `Lattice.Carrier.Wire` natively before it can
+  author or verify ops without the BEAM bridge.
 
-Run as two Fable worktrees: worktree 1 executes `010` + the ADRs in `010a`; worktree 2 keeps this
-overlay green and swaps the W1/W3 harness from `Sim` to the real carrier when it exists.
+Run as two Fable worktrees when the Township overlay is present: worktree 1 executes the
+substrate `010` carrier work; worktree 2 keeps the overlay green and swaps the W1/W3
+harness from `Sim` to the real carrier when it exists.

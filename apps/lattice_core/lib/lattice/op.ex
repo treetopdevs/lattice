@@ -86,6 +86,8 @@ defmodule Lattice.Op do
   def valid?(%__MODULE__{} = op) do
     encoding = canonical_encoding(op)
     op.id == hash(encoding) and Identity.verify(op.author, encoding, op.sig)
+  rescue
+    ArgumentError -> false
   end
 
   @doc "Recompute what an op's id *should* be from its content (ignoring the stored id)."

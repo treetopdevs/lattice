@@ -42,10 +42,12 @@ with the shared canonical bytes and wire frames described below. Details and
 open-question answers: `docs/adr/0005-carrier-interface.md`.
 
 **M2 hardening result (2026-07-05).** The carrier substrate now has canonical signed
-bytes, shared wire frames, signed challenge/response sessions, deterministic reconnect
-backoff, dependency-closed partial sync shapes, bounded push batches, membership
-acknowledgements for future compaction GC, and a browser log-store payload contract.
-The browser/AtomVM track still needs to consume those schemas in its own runtime.
+bytes, shared wire frames, explicit trust anchors plus signed challenge/response
+sessions, deterministic reconnect backoff, dependency-closed partial sync shapes,
+bounded push batches, tested membership acknowledgements for future compaction GC, and
+a BEAM-side browser log-store payload helper that preserves quarantine reports. The
+browser/AtomVM track still needs to consume those schemas and wire persistence in its
+own runtime.
 
 ## 2. Efficient frontier-diff sync (Beelay)
 

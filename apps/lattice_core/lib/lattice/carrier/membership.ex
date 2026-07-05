@@ -34,13 +34,24 @@ defmodule Lattice.Carrier.Membership do
     }
   end
 
+  @spec join(t(), String.t()) :: t()
+  def join(%__MODULE__{} = membership, realm) do
+    %{
+      membership
+      | current: MapSet.put(membership.current, realm),
+        left: MapSet.delete(membership.left, realm),
+        acks: Map.delete(membership.acks, realm)
+    }
+  end
+
   @spec stable_frontier?(t(), [String.t()]) :: boolean()
-  def stable_frontier?(%__MODULE__{} = membership, frontier) do
+  def stable_frontier?(%__MODULE__{current: current} = membership, frontier) do
     frontier = normalize(frontier)
 
-    Enum.all?(membership.current, fn realm ->
-      Map.get(membership.acks, realm) == frontier
-    end)
+    MapSet.size(current) > 0 and
+      Enum.all?(membership.current, fn realm ->
+        Map.get(membership.acks, realm) == frontier
+      end)
   end
 
   defp normalize(frontier), do: frontier |> Enum.uniq() |> Enum.sort()

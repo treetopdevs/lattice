@@ -17,7 +17,6 @@ defmodule LatticeNodeSpike.WsCarrier do
 
   alias Lattice.Carrier.{Batch, Session, Wire}
   alias Lattice.Transport.WebSocket.Client
-  alias LatticeNodeSpike.Scenario
   alias LatticeNodeSpike.Wire, as: NodeWire
 
   @recv_timeout 10_000
@@ -32,10 +31,11 @@ defmodule LatticeNodeSpike.WsCarrier do
   def connect(opts) do
     opts = Keyword.put_new(opts, :path, "/carrier")
 
-    with {:ok, client} <- Client.connect(opts) do
+    with {:ok, session} <- session_opts(opts),
+         {:ok, client} <- Client.connect(opts) do
       conn = %__MODULE__{client: client}
 
-      case authenticate(conn, opts) do
+      case authenticate(conn, session) do
         :ok ->
           {:ok, conn}
 
@@ -130,36 +130,60 @@ defmodule LatticeNodeSpike.WsCarrier do
     encoded = Enum.map(batch, &NodeWire.encode/1)
     request_frame = %{type: "push", ops: encoded}
 
-    with {:ok, %{"type" => "push_result"} = result} <- request(conn, request_frame) do
+    with {:ok, %{"type" => "push_result"} = result} <- request(conn, request_frame),
+         {:ok, report} <- Wire.decode_report(result) do
       meta = %{count: length(batch), bytes: request_frame |> Jason.encode!() |> byte_size()}
-      push_batches(conn, rest, [Wire.decode_report(result) | reports], [meta | batch_meta])
+      push_batches(conn, rest, [report | reports], [meta | batch_meta])
+    else
+      {:ok, %{"type" => type}} -> {:error, {:unexpected_reply, type}}
+      {:ok, other} -> {:error, {:unexpected_reply, other}}
+      {:error, _reason} = error -> error
     end
   end
 
   defp op_wire_bytes(op), do: op |> NodeWire.encode() |> Jason.encode!() |> byte_size()
 
-  defp authenticate(%__MODULE__{} = conn, opts) do
-    identity =
-      Keyword.get_lazy(opts, :identity, fn ->
-        peer_identity(Keyword.get(opts, :realm, "node_b"))
-      end)
-
-    realm = Keyword.get(opts, :realm, identity.realm_id)
-    peer_realm = Keyword.get(opts, :peer_realm, "node_a")
-    replica = Keyword.get(opts, :replica, Scenario.replica())
-    peer_pubkey = Keyword.get_lazy(opts, :peer_pubkey, fn -> peer_identity(peer_realm).pub end)
-
-    challenge = Session.challenge(realm, replica, wire_version: Wire.version())
+  defp authenticate(%__MODULE__{} = conn, session) do
+    challenge =
+      session.realm
+      |> Session.challenge(session.replica, wire_version: Wire.version())
+      |> Session.sign_challenge(session.identity)
 
     with {:ok, %{"type" => "carrier_hello"} = response} <- request(conn, challenge) do
       Session.verify_response(challenge, response,
-        expected_realm: peer_realm,
-        expected_pubkey: peer_pubkey
+        expected_realm: session.peer_realm,
+        expected_pubkey: session.peer_pubkey
       )
+    else
+      {:ok, %{"type" => type}} -> {:error, {:unexpected_reply, type}}
+      {:ok, other} -> {:error, {:unexpected_reply, other}}
+      {:error, _reason} = error -> error
     end
   end
 
-  defp peer_identity(realm), do: Lattice.Identity.from_seed(realm, "carrier-spike")
+  defp session_opts(opts) do
+    with {:ok, identity} <- required_opt(opts, :identity),
+         {:ok, realm} <- required_opt(opts, :realm),
+         {:ok, peer_realm} <- required_opt(opts, :peer_realm),
+         {:ok, peer_pubkey} <- required_opt(opts, :peer_pubkey),
+         {:ok, replica} <- required_opt(opts, :replica) do
+      {:ok,
+       %{
+         identity: identity,
+         realm: realm,
+         peer_realm: peer_realm,
+         peer_pubkey: peer_pubkey,
+         replica: replica
+       }}
+    end
+  end
+
+  defp required_opt(opts, key) do
+    case Keyword.fetch(opts, key) do
+      {:ok, value} -> {:ok, value}
+      :error -> {:error, {:missing_required_opt, key}}
+    end
+  end
 
   defp request(%__MODULE__{client: client}, msg) do
     with :ok <- Client.send_envelope(client, msg),

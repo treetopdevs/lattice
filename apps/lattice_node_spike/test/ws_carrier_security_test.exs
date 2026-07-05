@@ -1,0 +1,134 @@
+defmodule LatticeNodeSpike.WsCarrierSecurityTest do
+  use ExUnit.Case, async: false
+
+  alias Lattice.Identity
+  alias Lattice.Transport.WebSocket.Client
+  alias LatticeNodeSpike.{Peer, PeerServer, WsCarrier}
+
+  @replica "replica:ws-carrier-security"
+
+  test "connect requires explicit local identity and peer trust anchors before dialing" do
+    node_b = identity("node_b")
+
+    assert {:error, {:missing_required_opt, :identity}} =
+             WsCarrier.connect(
+               port: 1,
+               realm: "node_b",
+               peer_realm: "node_a",
+               peer_pubkey: identity("node_a").pub,
+               replica: @replica
+             )
+
+    assert {:error, {:missing_required_opt, :peer_pubkey}} =
+             WsCarrier.connect(
+               port: 1,
+               identity: node_b,
+               realm: "node_b",
+               peer_realm: "node_a",
+               replica: @replica
+             )
+  end
+
+  test "handler rejects protocol requests before a verified carrier session" do
+    port = start_peer_server()
+
+    {:ok, client} = Client.connect(port: port, path: "/carrier")
+    :ok = Client.send_envelope(client, %{type: "status"})
+
+    assert {:ok, %{"type" => "error", "reason" => "unauthenticated"}} =
+             Client.recv_envelope(client)
+
+    :ok = Client.close(client)
+  end
+
+  test "push returns an unexpected_reply error for off-protocol success frames" do
+    port = start_bad_push_server()
+    node_b = identity("node_b")
+    node_a = identity("node_a")
+
+    assert {:ok, conn} =
+             WsCarrier.connect(
+               port: port,
+               identity: node_b,
+               realm: "node_b",
+               peer_realm: "node_a",
+               peer_pubkey: node_a.pub,
+               replica: @replica
+             )
+
+    op = Lattice.Op.new(node_b, @replica, [], :command, {:post, "hello"})
+
+    assert {:error, {:unexpected_reply, "status_result"}} = WsCarrier.push(conn, [op])
+    :ok = WsCarrier.close(conn)
+  end
+
+  defp start_peer_server do
+    {:ok, peer} =
+      Peer.start_link(
+        realm: "node_a",
+        identity: identity("node_a"),
+        name: :"peer_#{System.unique_integer([:positive])}"
+      )
+
+    {:ok, port} =
+      PeerServer.start(peer,
+        trusted_peer_realm: "node_b",
+        trusted_peer_pubkey: identity("node_b").pub
+      )
+
+    on_exit(fn -> _ = PeerServer.stop() end)
+    port
+  end
+
+  defp start_bad_push_server do
+    listener = :"bad_push_#{System.unique_integer([:positive])}"
+    identity = identity("node_a")
+
+    dispatch =
+      :cowboy_router.compile([
+        {:_, [{"/carrier", __MODULE__.BadPushHandler, %{realm: "node_a", identity: identity}}]}
+      ])
+
+    {:ok, _pid} = :cowboy.start_clear(listener, [port: 0], %{env: %{dispatch: dispatch}})
+    on_exit(fn -> _ = :cowboy.stop_listener(listener) end)
+    :ranch.get_port(listener)
+  end
+
+  defp identity(realm), do: Identity.from_seed(realm, "carrier-spike")
+
+  defmodule BadPushHandler do
+    @behaviour :cowboy_websocket
+
+    alias Lattice.Carrier.Session
+
+    @impl :cowboy_websocket
+    def init(req, state), do: {:cowboy_websocket, req, state}
+
+    @impl :cowboy_websocket
+    def websocket_init(state), do: {:ok, state}
+
+    @impl :cowboy_websocket
+    def websocket_handle({:text, text}, state) do
+      reply =
+        case Jason.decode(text) do
+          {:ok, %{"type" => "carrier_challenge"} = challenge} ->
+            Session.respond(challenge, state.identity, state.realm)
+
+          {:ok, %{"type" => "push"}} ->
+            %{type: "status_result", phase: "base"}
+
+          _other ->
+            %{type: "error", reason: "unexpected_test_message"}
+        end
+
+      {:reply, {:text, Jason.encode!(reply)}, state}
+    end
+
+    def websocket_handle(_frame, state) do
+      {:reply, {:text, Jason.encode!(%{type: "error", reason: "unsupported_frame"})}, state}
+    end
+
+    @impl :cowboy_websocket
+    def websocket_info(_message, state), do: {:ok, state}
+  end
+end

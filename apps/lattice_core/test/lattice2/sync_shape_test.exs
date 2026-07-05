@@ -2,7 +2,9 @@ defmodule Lattice.SyncShapeTest do
   use ExUnit.Case, async: true
 
   alias Lattice.Demo.Thread
+  alias Lattice.Identity
   alias Lattice.Log
+  alias Lattice.Op
   alias Lattice.Sim
   alias Lattice.Sync
   alias Lattice.Sync.Shape
@@ -37,6 +39,22 @@ defmodule Lattice.SyncShapeTest do
     assert genesis.id in ids
     assert grant_op.id in ids
     refute title.id in ids
+  end
+
+  test "command shapes retain tombstones so partial materialization cannot resurrect deletions" do
+    identity = Identity.from_seed("a", "shape-tombstone")
+    replica = "replica:shape-tombstone"
+    post = Op.new(identity, replica, [], :command, {:post, ["visible"]})
+    tombstone = Op.new(identity, replica, [post.id], :tombstone, {:delete, post.id})
+    log = replica |> Log.new() |> Log.append!(post) |> Log.append!(tombstone)
+
+    ids =
+      log
+      |> Sync.missing(MapSet.new(), Shape.commands([:post]))
+      |> Enum.map(& &1.id)
+
+    assert post.id in ids
+    assert tombstone.id in ids
   end
 
   defp find_grant_op(log, delegation_id) do

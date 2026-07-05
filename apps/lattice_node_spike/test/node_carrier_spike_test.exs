@@ -37,15 +37,9 @@ defmodule LatticeNodeSpike.NodeCarrierSpikeTest do
     {port, ws_port} = spawn_peer("node_a")
     wrong_pubkey = Lattice.Identity.from_seed("node_a", "wrong-carrier-spike").pub
 
-    assert {:error, :bad_signature} =
-             WsCarrier.connect(
-               port: ws_port,
-               realm: "node_b",
-               peer_realm: "node_a",
-               peer_pubkey: wrong_pubkey
-             )
+    assert {:error, :bad_signature} = connect(ws_port, peer_pubkey: wrong_pubkey)
 
-    {:ok, conn} = WsCarrier.connect(port: ws_port)
+    {:ok, conn} = connect(ws_port)
     assert {:ok, %{"type" => "shutdown_result"}} = WsCarrier.shutdown(conn)
     assert_receive {^port, {:exit_status, 0}}, 10_000
   end
@@ -56,7 +50,7 @@ defmodule LatticeNodeSpike.NodeCarrierSpikeTest do
 
     assert Enum.any?(0..3, &(Backoff.delay_ms(backoff, &1) > 0))
 
-    {:ok, conn} = WsCarrier.connect(port: ws_port)
+    {:ok, conn} = connect(ws_port)
     :ok = WsCarrier.close(conn)
 
     {:ok, conn} = reconnect_when_diverged(ws_port, backoff: backoff)
@@ -70,7 +64,7 @@ defmodule LatticeNodeSpike.NodeCarrierSpikeTest do
     sim_b = Scenario.base_sim() |> bulk_posts(150)
     log_b = Sim.log(sim_b, "node_b")
 
-    {:ok, conn} = WsCarrier.connect(port: ws_port)
+    {:ok, conn} = connect(ws_port)
     {:ok, log_b, stats, conn} = Carrier.sync(WsCarrier, conn, log_b)
 
     assert %{sent: 150, received: 0} = Map.take(stats, [:sent, :received])
@@ -96,7 +90,7 @@ defmodule LatticeNodeSpike.NodeCarrierSpikeTest do
     sim_b = Scenario.base_sim()
     log_b = Sim.log(sim_b, "node_b")
 
-    {:ok, conn} = WsCarrier.connect(port: ws_port)
+    {:ok, conn} = connect(ws_port)
     assert {:ok, "base"} = WsCarrier.status(conn)
 
     {:ok, peer_ids, conn} = WsCarrier.advertise(conn, log_b)
@@ -195,7 +189,8 @@ defmodule LatticeNodeSpike.NodeCarrierSpikeTest do
 
   defp spawn_peer(realm) do
     args =
-      Enum.flat_map(code_paths(), &["-pa", &1]) ++ [@script, realm]
+      Enum.flat_map(code_paths(), &["-pa", &1]) ++
+        [@script, realm, "node_b", Base.encode64(identity("node_b").pub)]
 
     port =
       Port.open({:spawn_executable, elixir_bin()}, [
@@ -252,7 +247,7 @@ defmodule LatticeNodeSpike.NodeCarrierSpikeTest do
         Backoff.new(base_ms: 100, max_ms: 100, seed: "node_a")
       end)
 
-    {:ok, conn} = WsCarrier.connect(port: ws_port)
+    {:ok, conn} = connect(ws_port)
 
     case WsCarrier.status(conn) do
       {:ok, "diverged"} ->
@@ -302,4 +297,19 @@ defmodule LatticeNodeSpike.NodeCarrierSpikeTest do
   defp repo_root, do: Path.expand("../../..", __DIR__)
 
   defp format_output(lines), do: lines |> Enum.reverse() |> Enum.join("\n")
+
+  defp connect(ws_port, opts \\ []) do
+    defaults = [
+      port: ws_port,
+      identity: identity("node_b"),
+      realm: "node_b",
+      peer_realm: "node_a",
+      peer_pubkey: identity("node_a").pub,
+      replica: Scenario.replica()
+    ]
+
+    WsCarrier.connect(Keyword.merge(defaults, opts))
+  end
+
+  defp identity(realm), do: Lattice.Identity.from_seed(realm, "carrier-spike")
 end

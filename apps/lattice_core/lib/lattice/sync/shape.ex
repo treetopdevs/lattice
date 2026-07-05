@@ -24,5 +24,6 @@ defmodule Lattice.Sync.Shape do
   end
 
   def selected?(%__MODULE__{mode: :commands}, %{kind: :authority}), do: true
+  def selected?(%__MODULE__{mode: :commands}, %{kind: :tombstone}), do: true
   def selected?(%__MODULE__{}, _op), do: false
 end

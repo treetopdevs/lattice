@@ -7,9 +7,12 @@ defmodule Lattice.Carrier.Wire do
   """
 
   alias Lattice.Authority.Delegation
+  alias Lattice.Canonical
   alias Lattice.Op
 
   @version 1
+  @max_json_safe_integer 9_007_199_254_740_991
+  @max_canonical_integer 18_446_744_073_709_551_615
 
   @spec version() :: pos_integer()
   def version, do: @version
@@ -48,7 +51,9 @@ defmodule Lattice.Carrier.Wire do
          {:ok, sig} <- Base.decode64(sig_b64),
          {:ok, kind} <- existing_atom(kind),
          {:ok, body} <- decode_term(body),
-         {:ok, cap} <- decode_term(cap) do
+         {:ok, cap} <- decode_term(cap),
+         true <- Canonical.signable?(body),
+         true <- Canonical.signable?(cap) do
       {:ok,
        %Op{
          id: id,
@@ -105,32 +110,67 @@ defmodule Lattice.Carrier.Wire do
   @spec encode_push_result(map()) :: map()
   def encode_push_result(report), do: Map.put(encode_report(report), "type", "push_result")
 
-  @spec decode_report(map()) :: map()
+  @spec decode_report(map()) ::
+          {:ok, Lattice.Sync.report()} | {:error, :malformed_term}
   def decode_report(%{
         "accepted" => accepted,
         "quarantined" => quarantined,
         "rejected" => rejected,
         "pending" => pending
       }) do
-    %{
-      accepted: accepted,
-      quarantined: decode_reason_pairs(quarantined),
-      rejected: decode_reason_pairs(rejected),
-      pending: pending
-    }
+    with true <- string_list?(accepted),
+         {:ok, quarantined} <- decode_reason_pairs(quarantined),
+         {:ok, rejected} <- decode_reason_pairs(rejected),
+         true <- string_list?(pending) do
+      {:ok,
+       %{
+         accepted: accepted,
+         quarantined: quarantined,
+         rejected: rejected,
+         pending: pending
+       }}
+    else
+      _ -> {:error, :malformed_term}
+    end
   end
+
+  def decode_report(_), do: {:error, :malformed_term}
 
   defp encode_reason_pairs(pairs) do
     Enum.map(pairs, fn {id, reason} -> [id, Atom.to_string(reason)] end)
   end
 
   defp decode_reason_pairs(pairs) do
-    Enum.map(pairs, fn [id, reason] -> {id, String.to_existing_atom(reason)} end)
+    Enum.reduce_while(pairs, {:ok, []}, fn
+      [id, reason], {:ok, acc} when is_binary(id) and is_binary(reason) ->
+        case existing_atom(reason) do
+          {:ok, reason} -> {:cont, {:ok, [{id, reason} | acc]}}
+          {:error, _reason} -> {:halt, {:error, :malformed_term}}
+        end
+
+      _other, _acc ->
+        {:halt, {:error, :malformed_term}}
+    end)
+    |> case do
+      {:ok, pairs} -> {:ok, Enum.reverse(pairs)}
+      {:error, _reason} = error -> error
+    end
   end
+
+  defp string_list?(values), do: is_list(values) and Enum.all?(values, &is_binary/1)
 
   defp encode_term(nil), do: ["nil"]
   defp encode_term(value) when is_boolean(value), do: ["bool", value]
-  defp encode_term(value) when is_integer(value), do: ["int", value]
+
+  defp encode_term(value)
+       when is_integer(value) and value >= 0 and value <= @max_json_safe_integer,
+       do: ["int", value]
+
+  defp encode_term(value)
+       when is_integer(value) and value > @max_json_safe_integer and
+              value <= @max_canonical_integer,
+       do: ["int", Integer.to_string(value)]
+
   defp encode_term(value) when is_binary(value), do: ["bin", Base.encode64(value)]
   defp encode_term(value) when is_atom(value), do: ["atom", Atom.to_string(value)]
   defp encode_term(value) when is_list(value), do: ["list", Enum.map(value, &encode_term/1)]
@@ -140,7 +180,13 @@ defmodule Lattice.Carrier.Wire do
   end
 
   defp encode_term(%MapSet{} = value) do
-    ["mapset", value |> MapSet.to_list() |> Enum.sort() |> Enum.map(&encode_term/1)]
+    values =
+      value
+      |> MapSet.to_list()
+      |> Enum.sort_by(&Canonical.term/1)
+      |> Enum.map(&encode_term/1)
+
+    ["mapset", values]
   end
 
   defp encode_term(%Delegation{} = delegation), do: ["delegation", encode_delegation(delegation)]
@@ -149,9 +195,23 @@ defmodule Lattice.Carrier.Wire do
     ["map", Enum.map(value, fn {k, v} -> [encode_term(k), encode_term(v)] end)]
   end
 
+  defp encode_term(value) do
+    raise ArgumentError, "unsupported wire term: #{inspect(value)}"
+  end
+
   defp decode_term(["nil"]), do: {:ok, nil}
   defp decode_term(["bool", value]) when is_boolean(value), do: {:ok, value}
-  defp decode_term(["int", value]) when is_integer(value), do: {:ok, value}
+
+  defp decode_term(["int", value])
+       when is_integer(value) and value >= 0 and value <= @max_json_safe_integer, do: {:ok, value}
+
+  defp decode_term(["int", value]) when is_binary(value) do
+    case Integer.parse(value) do
+      {int, ""} when int >= 0 and int <= @max_canonical_integer -> {:ok, int}
+      _other -> {:error, :malformed_term}
+    end
+  end
+
   defp decode_term(["bin", value]) when is_binary(value), do: Base.decode64(value)
   defp decode_term(["atom", value]) when is_binary(value), do: existing_atom(value)
   defp decode_term(["list", values]) when is_list(values), do: decode_list(values)

@@ -27,7 +27,7 @@ defmodule Lattice.Carrier.Backoff do
   @spec delay_ms(t(), non_neg_integer()) :: non_neg_integer()
   def delay_ms(%__MODULE__{} = backoff, attempt) when attempt >= 0 do
     raw = min(backoff.max_ms, backoff.base_ms * Integer.pow(2, attempt))
-    raw + jitter(backoff.seed, attempt, backoff.jitter_ms)
+    max(0, raw + jitter(backoff.seed, attempt, backoff.jitter_ms))
   end
 
   defp jitter(_seed, _attempt, 0), do: 0

@@ -5,15 +5,16 @@ defmodule LatticeNodeSpike.WsHandler do
   JSON request/response envelopes (`type` selects the operation):
 
     * `frontier`        → `frontier_result` with the peer's sorted op-id list
-    * `pull` (`have`)   → `ops` with the ops the caller lacks (Base64 wire form)
+    * `pull` (`have`)   → `ops` with the ops the caller lacks (JSON carrier wire form)
     * `push` (`ops`)    → `push_result` with the `Lattice.Sync.deliver/2` report
     * `live` (`payload`)→ `live_result` (never logged; echoes the log size)
     * `status`          → `status_result` (`base` | `diverged`)
     * `state`           → `state_result` (reduced-state bytes, ids, quarantine)
     * `shutdown`        → `shutdown_result`, then the OS process halts
 
-  Connection close (however it happens) notifies the peer — that is the
-  physical partition signal that triggers offline divergence.
+  An authenticated connection close notifies the peer — that is the physical partition
+  signal that triggers offline divergence. Unauthenticated sockets never advance peer
+  state.
   """
 
   @behaviour :cowboy_websocket
@@ -30,10 +31,11 @@ defmodule LatticeNodeSpike.WsHandler do
 
   @impl :cowboy_websocket
   def websocket_handle({:text, text}, state) do
-    reply =
+    {reply, state} =
       case Jason.decode(text) do
-        {:ok, %{"type" => type} = msg} -> handle_msg(type, msg, state)
-        _other -> %{type: "error", reason: "malformed"}
+        {:ok, %{"type" => "carrier_challenge"} = msg} -> handle_challenge(msg, state)
+        {:ok, %{"type" => type} = msg} -> authenticated_msg(type, msg, state)
+        _other -> {%{type: "error", reason: "malformed"}, state}
       end
 
     {:reply, {:text, Jason.encode!(reply)}, state}
@@ -49,15 +51,32 @@ defmodule LatticeNodeSpike.WsHandler do
   @impl :cowboy_websocket
   def terminate(_reason, _req, state) do
     # The physical partition: the socket is gone.
-    Peer.socket_closed(state.peer)
+    if Map.get(state, :authenticated?, false), do: Peer.socket_closed(state.peer)
     :ok
   end
 
   # --- Protocol ---------------------------------------------------------------
 
-  defp handle_msg("carrier_challenge", challenge, %{peer: peer}) do
-    {realm, identity} = Peer.session_identity(peer)
-    Session.respond(challenge, identity, realm)
+  defp handle_challenge(challenge, state) do
+    case Session.verify_challenge(challenge,
+           expected_realm: state.trusted_peer_realm,
+           expected_pubkey: state.trusted_peer_pubkey
+         ) do
+      :ok ->
+        {realm, identity} = Peer.session_identity(state.peer)
+        {Session.respond(challenge, identity, realm), %{state | authenticated?: true}}
+
+      {:error, reason} ->
+        {%{type: "error", reason: Atom.to_string(reason)}, state}
+    end
+  end
+
+  defp authenticated_msg(type, msg, %{authenticated?: true} = state) do
+    {handle_msg(type, msg, state), state}
+  end
+
+  defp authenticated_msg(_type, _msg, state) do
+    {%{type: "error", reason: "unauthenticated"}, state}
   end
 
   defp handle_msg("frontier", _msg, %{peer: peer}) do

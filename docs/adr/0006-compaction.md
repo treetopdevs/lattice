@@ -119,11 +119,12 @@ An op may be dropped iff it is in `reachable(F)` for a frontier `F` such that:
 
 ## M2 acknowledgement contract
 
-`Lattice.Carrier.Membership` is the production-facing acknowledgement primitive for the
-GC rule above. A frontier may be considered carrier-stable only when every current
-participant has acknowledged the same normalized frontier. Leaving participants stop
-blocking future frontiers but remain recorded in membership history. This still does
-not make snapshot-only bootstrap trusted; snapshot signatures/quorum remain separate.
+`Lattice.Carrier.Membership` is a tested acknowledgement helper for the future GC rule
+above, not a wired production compaction gate. A frontier may be considered
+carrier-stable only when every current participant has acknowledged the same normalized
+frontier; an empty current set is never stable, and a rejoining participant must
+acknowledge the frontier again. Snapshot signatures/quorum and snapshot-only bootstrap
+trust remain separate unresolved production requirements.
 
 ## Decision 5: sync impact
 

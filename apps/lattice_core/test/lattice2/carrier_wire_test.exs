@@ -15,6 +15,30 @@ defmodule Lattice.CarrierWireTest do
     assert {:error, :malformed_op} = Wire.decode_op(%{"v" => 99})
   end
 
+  test "op frames reject terms outside the canonical signable domain" do
+    id = Identity.from_seed("alice", "carrier-wire-negative")
+    op = Op.new(id, "replica:wire", [], :command, {:count, 1})
+
+    frame =
+      op
+      |> Wire.encode_op()
+      |> put_in(["body"], ["tuple", [["atom", "count"], ["int", -1]]])
+
+    assert {:error, :malformed_op} = Wire.decode_op(frame)
+  end
+
+  test "large integers are encoded as decimal strings so JSON peers preserve precision" do
+    id = Identity.from_seed("alice", "carrier-wire-large-int")
+    large = Integer.pow(2, 53) + 1
+    op = Op.new(id, "replica:wire", [], :command, {:count, large})
+
+    frame = Wire.encode_op(op)
+    large_string = Integer.to_string(large)
+
+    assert ["tuple", [["atom", "count"], ["int", ^large_string]]] = frame["body"]
+    assert {:ok, ^op} = frame |> Jason.encode!() |> Jason.decode!() |> Wire.decode_op()
+  end
+
   test "reports round-trip with existing atoms only" do
     report = %{
       accepted: ["a"],
@@ -23,7 +47,25 @@ defmodule Lattice.CarrierWireTest do
       pending: ["c"]
     }
 
-    assert Wire.decode_report(Wire.encode_report(report)) == report
+    assert {:ok, ^report} = Wire.decode_report(Wire.encode_report(report))
+  end
+
+  test "malformed report reason pairs return errors instead of raising" do
+    assert {:error, :malformed_term} =
+             Wire.decode_report(%{
+               "accepted" => [],
+               "quarantined" => [["id", "definitely_not_an_existing_atom"]],
+               "rejected" => [],
+               "pending" => []
+             })
+
+    assert {:error, :malformed_term} =
+             Wire.decode_report(%{
+               "accepted" => [],
+               "quarantined" => [["id"]],
+               "rejected" => [],
+               "pending" => []
+             })
   end
 
   test "stats frame is JSON-safe" do

@@ -33,4 +33,30 @@ defmodule Lattice.CarrierSessionTest do
                expected_pubkey: other.pub
              )
   end
+
+  test "responses from the right realm but missing required fields are malformed" do
+    challenge = Session.challenge("server", "replica:session", wire_version: 1)
+    identity = Identity.from_seed("node-a", "carrier-session")
+
+    assert {:error, :malformed_session} =
+             Session.verify_response(challenge, %{"realm" => "node-a"},
+               expected_realm: "node-a",
+               expected_pubkey: identity.pub
+             )
+  end
+
+  test "signed challenges authenticate the caller before protocol messages are served" do
+    identity = Identity.from_seed("node-b", "carrier-session")
+
+    challenge =
+      "node-b"
+      |> Session.challenge("replica:session", wire_version: 1)
+      |> Session.sign_challenge(identity)
+
+    assert :ok =
+             Session.verify_challenge(challenge,
+               expected_realm: "node-b",
+               expected_pubkey: identity.pub
+             )
+  end
 end

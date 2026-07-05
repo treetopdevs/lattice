@@ -12,7 +12,7 @@ defmodule LatticeNodeSpike.Peer do
 
   use GenServer
 
-  alias Lattice.{Identity, Log, Sync}
+  alias Lattice.{Log, Sync}
   alias LatticeNodeSpike.Scenario
 
   # --- Client API (called from the WebSocket handler) -----------------------
@@ -50,9 +50,7 @@ defmodule LatticeNodeSpike.Peer do
   @impl GenServer
   def init(opts) do
     realm = Keyword.fetch!(opts, :realm)
-
-    identity =
-      Keyword.get_lazy(opts, :identity, fn -> Identity.from_seed(realm, "carrier-spike") end)
+    identity = Keyword.fetch!(opts, :identity)
 
     {:ok,
      %{realm: realm, identity: identity, sim: Scenario.base_sim(), phase: :base, live_seen: 0}}

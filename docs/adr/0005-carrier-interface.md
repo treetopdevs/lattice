@@ -59,10 +59,12 @@ realm must implement the shared wire schema before it can replace the BEAM bridg
 
 - canonical signed bytes are no longer BEAM-term-only;
 - full op wire frames are centralized in `Lattice.Carrier.Wire`;
-- carrier sessions are authenticated by signed challenge/response;
+- carrier sessions require explicit local/peer trust anchors and are authenticated by
+  signed challenge/response before protocol messages are served;
 - reconnect/backoff and batch budgets are explicit;
 - partial sync shapes are dependency-closed;
-- compaction GC now has a membership acknowledgement primitive.
+- compaction GC now has a tested membership acknowledgement helper, but no production
+  compaction caller yet.
 
 ## Spike result (plan 010 GATE) — all criteria met
 
