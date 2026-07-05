@@ -22,6 +22,7 @@ defmodule LatticeNodeSpike.NodeCarrierSpikeTest do
 
   use ExUnit.Case, async: false
 
+  alias Lattice.Carrier.Backoff
   alias Lattice.{Carrier, Log, Sim, Sync}
   alias LatticeNodeSpike.{Scenario, WsCarrier}
 
@@ -42,6 +43,21 @@ defmodule LatticeNodeSpike.NodeCarrierSpikeTest do
              )
 
     {:ok, conn} = WsCarrier.connect(port: ws_port)
+    assert {:ok, %{"type" => "shutdown_result"}} = WsCarrier.shutdown(conn)
+    assert_receive {^port, {:exit_status, 0}}, 10_000
+  end
+
+  test "reconnect waits on deterministic non-zero backoff while peer reaches divergence" do
+    {port, ws_port} = spawn_peer("node_a")
+    backoff = Backoff.new(base_ms: 5, max_ms: 20, jitter_ms: 0, seed: "node_a")
+
+    assert Enum.any?(0..3, &(Backoff.delay_ms(backoff, &1) > 0))
+
+    {:ok, conn} = WsCarrier.connect(port: ws_port)
+    :ok = WsCarrier.close(conn)
+
+    {:ok, conn} = reconnect_when_diverged(ws_port, backoff: backoff)
+    assert {:ok, "diverged"} = WsCarrier.status(conn)
     assert {:ok, %{"type" => "shutdown_result"}} = WsCarrier.shutdown(conn)
     assert_receive {^port, {:exit_status, 0}}, 10_000
   end
@@ -196,7 +212,14 @@ defmodule LatticeNodeSpike.NodeCarrierSpikeTest do
     end
   end
 
-  defp reconnect_when_diverged(ws_port, attempts \\ 50) do
+  defp reconnect_when_diverged(ws_port, opts \\ []) do
+    attempts = Keyword.get(opts, :attempts, 50)
+
+    backoff =
+      Keyword.get_lazy(opts, :backoff, fn ->
+        Backoff.new(base_ms: 100, max_ms: 100, seed: "node_a")
+      end)
+
     {:ok, conn} = WsCarrier.connect(port: ws_port)
 
     case WsCarrier.status(conn) do
@@ -207,24 +230,24 @@ defmodule LatticeNodeSpike.NodeCarrierSpikeTest do
         # The peer diverges on the *close* of the previous socket; give the
         # cowboy terminate → Peer cast a moment to land, without closing this
         # socket again (that would be a second partition).
-        Process.sleep(100)
-        await_divergence(conn, attempts)
+        await_divergence(conn, attempts, backoff, Backoff.reset_attempt())
 
       other ->
         flunk("unexpected peer status after reconnect: #{inspect(other)}")
     end
   end
 
-  defp await_divergence(conn, 0), do: flunk("peer never diverged: #{inspect(conn)}")
+  defp await_divergence(conn, 0, _backoff, _attempt),
+    do: flunk("peer never diverged: #{inspect(conn)}")
 
-  defp await_divergence(conn, attempts) do
+  defp await_divergence(conn, attempts, backoff, attempt) do
     case WsCarrier.status(conn) do
       {:ok, "diverged"} ->
         {:ok, conn}
 
       {:ok, "base"} ->
-        Process.sleep(100)
-        await_divergence(conn, attempts - 1)
+        Process.sleep(Backoff.delay_ms(backoff, attempt))
+        await_divergence(conn, attempts - 1, backoff, attempt + 1)
     end
   end
 
