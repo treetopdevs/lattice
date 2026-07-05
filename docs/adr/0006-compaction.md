@@ -117,6 +117,14 @@ An op may be dropped iff it is in `reachable(F)` for a frontier `F` such that:
      floor. Frontiers at-or-above `F` keep working. If history-below-`F` matters, archive
      covered ops cold instead of deleting (compaction of the *hot* path either way).
 
+## M2 acknowledgement contract
+
+`Lattice.Carrier.Membership` is the production-facing acknowledgement primitive for the
+GC rule above. A frontier may be considered carrier-stable only when every current
+participant has acknowledged the same normalized frontier. Leaving participants stop
+blocking future frontiers but remain recorded in membership history. This still does
+not make snapshot-only bootstrap trusted; snapshot signatures/quorum remain separate.
+
 ## Decision 5: sync impact
 
 - **Compacted ↔ compacted at same `F`**: advertise `frontier + retained op-ids`; transfer
