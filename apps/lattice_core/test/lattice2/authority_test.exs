@@ -9,7 +9,8 @@ defmodule Lattice2.AuthorityTest do
   """
   use ExUnit.Case, async: true
 
-  alias Lattice.Sim
+  alias Lattice.Authority.Delegation
+  alias Lattice.{Log, Op, Sim}
 
   @replica "replica:thread:auth"
 
@@ -161,5 +162,48 @@ defmodule Lattice2.AuthorityTest do
     assert {true, :revoked_capability} = Sim.quarantined(sim, "server", after_post.id)
     assert "before revoke" in Sim.state(sim, "server").messages
     refute "after revoke" in Sim.state(sim, "server").messages
+  end
+
+  test "bad-arity command ops are quarantined instead of disappearing" do
+    {sim, _g} = base() |> Sim.create_replica("server")
+    {sim, grant} = Sim.grant(sim, "server", "tab", ops: [:post])
+    sim = Sim.sync_all(sim)
+
+    {sim, bad_post} = Sim.append(sim, "tab", :command, {:post, []}, cap: grant.id)
+
+    assert {true, :bad_command_arity} = Sim.quarantined(sim, "tab", bad_post.id)
+  end
+
+  test "a bad-sig delegation intro cannot poison a later valid intro with the same id" do
+    {sim, _g} = base() |> Sim.create_replica("server")
+    server = Sim.identity(sim, "server")
+    tab = Sim.identity(sim, "tab")
+    genesis = hd(sim.caps["server"])
+
+    valid = Delegation.new(server, Sim.replica(sim), tab.pub, ops: [:post], parent_id: genesis.id)
+    forged = %{valid | sig: <<0::512>>}
+    assert forged.id == valid.id
+    refute Delegation.valid_sig?(forged)
+    assert Delegation.valid_sig?(valid)
+
+    log = Sim.log(sim, "server")
+
+    forged_grant =
+      Op.new(server, Sim.replica(sim), Log.frontier(log), :authority, {:grant, forged})
+
+    log = Log.append!(log, forged_grant)
+    valid_grant = Op.new(server, Sim.replica(sim), Log.frontier(log), :authority, {:grant, valid})
+    log = Log.append!(log, valid_grant)
+
+    post =
+      Op.new(tab, Sim.replica(sim), Log.frontier(log), :command, {:post, ["kept"]}, cap: valid.id)
+
+    log = Log.append!(log, post)
+
+    analysis = Lattice.Authority.analyze(Lattice.Demo.Thread, log)
+    assert Map.get(analysis.reasons, forged_grant.id) == :bad_delegation_sig
+    refute MapSet.member?(analysis.quarantine, valid_grant.id)
+    refute MapSet.member?(analysis.quarantine, post.id)
+    assert "kept" in Lattice.state(Lattice.Demo.Thread, log).messages
   end
 end

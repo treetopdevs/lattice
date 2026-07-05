@@ -34,8 +34,8 @@ defmodule Lattice.Authority do
   Quarantined ops stay in the log and are reported in `audit` (design invariant 4).
   """
 
-  alias Lattice.{Dag, Identity, Log, Op}
   alias Lattice.Authority.Delegation
+  alias Lattice.{Dag, Identity, Log, Op}
 
   # Separates a replica *name* from the root-key commitment bound into its id.
   @root_marker "#root:"
@@ -86,8 +86,9 @@ defmodule Lattice.Authority do
   def root(%Log{} = log) do
     ordered = Log.topo_ops(log)
     {commitment, genesis_ids} = deleg_context(log, ordered)
-    deleg_valid = validate_delegations(collect_delegations(ordered), commitment, genesis_ids)
-    resolve_root(ordered, deleg_valid, commitment)
+    delegations = collect_delegations(ordered)
+    deleg_valid = validate_delegations(delegations, commitment, genesis_ids)
+    resolve_root(ordered, delegations, deleg_valid, commitment)
   end
 
   @doc """
@@ -181,8 +182,11 @@ defmodule Lattice.Authority do
     delegations = collect_delegations(ordered)
 
     case Map.fetch(delegations, delegation_id) do
-      {:ok, %{deleg: d}} -> validate_delegation(d, delegations, commitment, genesis_ids) == :ok
-      :error -> false
+      {:ok, %{deleg: %Delegation{} = d}} ->
+        validate_delegation(d, delegations, commitment, genesis_ids) == :ok
+
+      _ ->
+        false
     end
   end
 
@@ -193,7 +197,7 @@ defmodule Lattice.Authority do
     {commitment, genesis_ids} = deleg_context(log, ordered)
     delegations = collect_delegations(ordered)
     deleg_valid = validate_delegations(delegations, commitment, genesis_ids)
-    root = resolve_root(ordered, deleg_valid, commitment)
+    root = resolve_root(ordered, delegations, deleg_valid, commitment)
 
     Enum.any?(ordered, fn op ->
       match?({:revoke, ^delegation_id}, op.body) and
@@ -211,8 +215,8 @@ defmodule Lattice.Authority do
     {commitment, genesis_ids} = deleg_context(log, ordered)
     delegations = collect_delegations(ordered)
     deleg_valid = validate_delegations(delegations, commitment, genesis_ids)
-    policies = collect_policies(ordered, deleg_valid)
-    root = resolve_root(ordered, deleg_valid, commitment)
+    policies = collect_policies(ordered, delegations, deleg_valid)
+    root = resolve_root(ordered, delegations, deleg_valid, commitment)
     revokes = collect_revokes(ordered, delegations, root)
 
     invalid_deleg = invalid_delegation_ops(delegations, deleg_valid)
@@ -250,8 +254,9 @@ defmodule Lattice.Authority do
   # --- Delegation collection / validation ---------------------------------
 
   # A delegation (content-addressed) may be introduced by more than one op (e.g. the
-  # same grant appended by two realms). Track all introducing op ids so visibility is
-  # "any introducing op is a causal ancestor", not just the last-seen one.
+  # same grant appended by two realms). Track valid introducing op ids separately from
+  # invalid same-id forgeries so an early bad signature cannot poison the genuine
+  # delegation, while the forged op is still quarantined for audit.
   defp collect_delegations(ordered) do
     Enum.reduce(ordered, %{}, fn op, acc ->
       case delegation_in(op) do
@@ -259,11 +264,34 @@ defmodule Lattice.Authority do
           acc
 
         %Delegation{} = d ->
-          Map.update(acc, d.id, %{deleg: d, op_ids: [op.id]}, fn entry ->
-            %{entry | op_ids: [op.id | entry.op_ids]}
-          end)
+          collect_delegation_intro(acc, d, op.id)
       end
     end)
+  end
+
+  defp collect_delegation_intro(acc, %Delegation{} = d, op_id) do
+    if Delegation.valid_sig?(d) do
+      collect_valid_delegation_intro(acc, d, op_id)
+    else
+      collect_invalid_delegation_intro(acc, d, op_id)
+    end
+  end
+
+  defp collect_valid_delegation_intro(acc, %Delegation{} = d, op_id) do
+    Map.update(acc, d.id, %{deleg: d, op_ids: [op_id], invalid_ops: %{}}, fn entry ->
+      %{entry | deleg: entry.deleg || d, op_ids: [op_id | entry.op_ids]}
+    end)
+  end
+
+  defp collect_invalid_delegation_intro(acc, %Delegation{} = d, op_id) do
+    Map.update(
+      acc,
+      d.id,
+      %{deleg: nil, op_ids: [], invalid_ops: %{op_id => :bad_delegation_sig}},
+      fn entry ->
+        %{entry | invalid_ops: Map.put(entry.invalid_ops, op_id, :bad_delegation_sig)}
+      end
+    )
   end
 
   defp delegation_in(%Op{kind: :authority, body: body}) do
@@ -281,11 +309,13 @@ defmodule Lattice.Authority do
   # Succession policies are conferred only by a *valid* genesis — an impostor genesis
   # (one whose audience does not match the replica's root commitment) is quarantined
   # and cannot inject a successor.
-  defp collect_policies(ordered, deleg_valid) do
+  defp collect_policies(ordered, delegations, deleg_valid) do
     Enum.reduce(ordered, %{}, fn op, acc ->
       case op.body do
-        {:genesis, %Delegation{id: id}, policies} when is_map(policies) ->
-          if Map.get(deleg_valid, id) == :ok, do: Map.merge(acc, policies), else: acc
+        {:genesis, %Delegation{id: id} = d, policies} when is_map(policies) ->
+          if Map.get(deleg_valid, id) == :ok and valid_delegation_intro?(delegations, d, op.id),
+            do: Map.merge(acc, policies),
+            else: acc
 
         _ ->
           acc
@@ -294,8 +324,12 @@ defmodule Lattice.Authority do
   end
 
   defp validate_delegations(delegations, commitment, genesis_ids) do
-    Map.new(delegations, fn {id, %{deleg: d}} ->
-      {id, validate_delegation(d, delegations, commitment, genesis_ids)}
+    Map.new(delegations, fn
+      {id, %{deleg: %Delegation{} = d}} ->
+        {id, validate_delegation(d, delegations, commitment, genesis_ids)}
+
+      {id, %{deleg: nil}} ->
+        {id, {:error, :bad_delegation_sig}}
     end)
   end
 
@@ -321,7 +355,7 @@ defmodule Lattice.Authority do
 
       true ->
         case Map.fetch(delegations, d.parent_id) do
-          {:ok, %{deleg: parent}} ->
+          {:ok, %{deleg: %Delegation{} = parent}} ->
             cond do
               validate_delegation(parent, delegations, commitment, genesis_ids) != :ok ->
                 {:error, :invalid_parent}
@@ -333,6 +367,9 @@ defmodule Lattice.Authority do
                 :ok
             end
 
+          {:ok, %{deleg: nil}} ->
+            {:error, :invalid_parent}
+
           :error ->
             {:error, :missing_parent}
         end
@@ -340,22 +377,34 @@ defmodule Lattice.Authority do
   end
 
   defp invalid_delegation_ops(delegations, deleg_valid) do
-    for {id, %{op_ids: op_ids}} <- delegations,
-        deleg_valid[id] != :ok,
-        op_id <- op_ids,
-        into: %{} do
-      {op_id, elem(deleg_valid[id], 1)}
-    end
+    invalid_intros =
+      for {_id, %{invalid_ops: invalid_ops}} <- delegations,
+          {op_id, reason} <- invalid_ops,
+          into: %{} do
+        {op_id, reason}
+      end
+
+    invalid_canonical =
+      for {id, %{op_ids: op_ids}} <- delegations,
+          deleg_valid[id] != :ok,
+          op_id <- op_ids,
+          into: %{} do
+        {op_id, elem(deleg_valid[id], 1)}
+      end
+
+    Map.merge(invalid_canonical, invalid_intros)
   end
 
   # The single legitimate root: the audience of the *valid* genesis. On a bound
   # replica exactly one genesis can be valid (the one matching the commitment); on a
   # legacy unbound replica this is the first genesis in canonical order.
-  defp resolve_root(ordered, deleg_valid, commitment) do
+  defp resolve_root(ordered, delegations, deleg_valid, commitment) do
     Enum.find_value(ordered, fn op ->
       case op.body do
-        {:genesis, %Delegation{id: id, audience: aud}, _policies} ->
-          if Map.get(deleg_valid, id) == :ok and root_matches?(commitment, aud), do: aud
+        {:genesis, %Delegation{id: id, audience: aud} = d, _policies} ->
+          if Map.get(deleg_valid, id) == :ok and root_matches?(commitment, aud) and
+               valid_delegation_intro?(delegations, d, op.id),
+             do: aud
 
         _ ->
           nil
@@ -383,7 +432,15 @@ defmodule Lattice.Authority do
 
   defp revoke_authorized?(%Op{author: author}, deleg_id, delegations, root) do
     case Map.fetch(delegations, deleg_id) do
-      {:ok, %{deleg: d}} -> author == d.issuer or author == root
+      {:ok, %{deleg: %Delegation{} = d}} -> author == d.issuer or author == root
+      {:ok, %{deleg: nil}} -> false
+      :error -> false
+    end
+  end
+
+  defp valid_delegation_intro?(delegations, %Delegation{id: id}, op_id) do
+    case Map.fetch(delegations, id) do
+      {:ok, %{op_ids: op_ids}} -> op_id in op_ids
       :error -> false
     end
   end
@@ -424,16 +481,17 @@ defmodule Lattice.Authority do
     end)
   end
 
-  defp role_event(%Op{kind: :authority, body: body}, role, _delegations) do
+  defp role_event(%Op{kind: :authority, body: body} = op, role, delegations) do
     case body do
       {:genesis, %Delegation{} = d, _policies} ->
-        if MapSet.member?(d.roles, role), do: {:genesis, d}
+        if valid_delegation_intro?(delegations, d, op.id) and MapSet.member?(d.roles, role),
+          do: {:genesis, d}
 
       {:transfer, ^role, %Delegation{} = d, tick} ->
-        {:transfer, d, tick}
+        if valid_delegation_intro?(delegations, d, op.id), do: {:transfer, d, tick}
 
       {:succeed, ^role, %Delegation{} = d, tick} ->
-        {:succeed, d, tick}
+        if valid_delegation_intro?(delegations, d, op.id), do: {:succeed, d, tick}
 
       {:heartbeat, ^role, tick} ->
         {:heartbeat, tick}
@@ -574,24 +632,30 @@ defmodule Lattice.Authority do
       is_nil(cmd) ->
         {:error, :malformed_command}
 
-      # An op naming a command the Replica does not define is quarantined explicitly
-      # rather than silently contributing no mutations (design invariant 4).
-      not command_defined?(module, cmd) ->
-        {:error, :unknown_command}
-
       true ->
-        mutations = command_mutations(module, cmd, args)
-        roles_needed = mutation_roles(module, mutations)
+        case command_status(module, cmd, args) do
+          :ok ->
+            mutations = command_mutations(module, cmd, args)
+            roles_needed = mutation_roles(module, mutations)
 
-        with :ok <- cap_ok(op, cmd, delegations, deleg_valid, ancestors, revokes, roles_needed),
-             :ok <- authority_ok(op, roles_needed, ancestors, timelines) do
-          :ok
+            with :ok <-
+                   cap_ok(op, cmd, delegations, deleg_valid, ancestors, revokes, roles_needed),
+                 :ok <- authority_ok(op, roles_needed, ancestors, timelines) do
+              :ok
+            end
+
+          {:error, reason} ->
+            {:error, reason}
         end
     end
   end
 
-  defp command_defined?(module, cmd) do
-    Enum.any?(module.__lattice_commands__(), fn {name, _arity, _args} -> name == cmd end)
+  defp command_status(module, cmd, args) do
+    case module.command_body(cmd, args) do
+      {:ok, {^cmd, _args}} -> :ok
+      {:error, {:bad_arity, ^cmd, _details}} -> {:error, :bad_command_arity}
+      {:error, {:unknown_command, ^cmd}} -> {:error, :unknown_command}
+    end
   end
 
   defp command_mutations(_module, nil, _args), do: []
@@ -616,7 +680,7 @@ defmodule Lattice.Authority do
       :error ->
         {:error, :no_capability}
 
-      {:ok, %{deleg: d, op_ids: deleg_ops}} ->
+      {:ok, %{deleg: %Delegation{} = d, op_ids: deleg_ops}} ->
         cond do
           deleg_valid[d.id] != :ok -> {:error, :invalid_capability}
           op.author != d.audience -> {:error, :capability_wrong_audience}
@@ -626,6 +690,9 @@ defmodule Lattice.Authority do
           revoked_as_of?(op, d, delegations, revokes, ancestors) -> {:error, :revoked_capability}
           true -> :ok
         end
+
+      {:ok, %{deleg: nil}} ->
+        {:error, :invalid_capability}
     end
   end
 
@@ -642,8 +709,11 @@ defmodule Lattice.Authority do
 
   defp delegation_chain_ids(%Delegation{} = d, delegations) do
     case d.parent_id && Map.fetch(delegations, d.parent_id) do
-      {:ok, %{deleg: parent}} -> [d.id | delegation_chain_ids(parent, delegations)]
-      _ -> [d.id]
+      {:ok, %{deleg: %Delegation{} = parent}} ->
+        [d.id | delegation_chain_ids(parent, delegations)]
+
+      _ ->
+        [d.id]
     end
   end
 
