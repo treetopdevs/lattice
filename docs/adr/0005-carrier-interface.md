@@ -1,6 +1,6 @@
 # ADR 0005 — The carrier interface (`Lattice.Carrier`), proven over a real WebSocket
 
-- **Status**: accepted (plan 010 light-path spike, 2026-07-03)
+- **Status**: accepted (plan 010 light-path spike, 2026-07-03; M2 hardening, 2026-07-05)
 - **Context**: Lattice 2.0's thesis — *the log is the truth; the connection is the
   cache; nothing assumes in-process locality* — was proven only inside one BEAM, with
   `Lattice.Net` simulating delivery. `docs/path_to_real.md` §1 designates `Lattice.Net`
@@ -31,8 +31,10 @@ Deliberate exclusions:
   sync, and real-socket sync.
 
 `Lattice.Carrier.sync/3` is the transport-independent reconciliation driver: it
-composes the four callbacks with the **unchanged** `Lattice.Sync.missing/2` +
-`Lattice.Sync.deliver/2`. Two implementations exist:
+composes the four callbacks with the unchanged `Lattice.Sync.missing/2` default path +
+`Lattice.Sync.deliver/2`. M2 adds dependency-closed `Lattice.Sync.missing/3` shapes for
+callers that need partial sync without changing existing carrier semantics. Two
+implementations exist:
 
 - `Lattice.Carrier.SimNet` — in-process, gated by `Lattice.Net.connected?/3`
   (`{:error, :partitioned}` while cut). Pinned against `Sync.reconcile/2` in
@@ -41,19 +43,26 @@ composes the four callbacks with the **unchanged** `Lattice.Sync.missing/2` +
   via `Lattice.Transport.WebSocket.Client`) against a Cowboy listener in a **second
   BEAM OS process** (`apps/lattice_node_spike`).
 
-## Decision 2: wire format — `term_to_binary` now, CBOR before any non-BEAM realm
+## Decision 2: wire format — shared versioned carrier frames
 
-Ops travel as Base64 of `:erlang.term_to_binary(op, [:deterministic, {:minor_version, 2}])`
-— the same pinned encoding `Lattice.Op` hashes/signs (ADR 0001) — inside JSON
-envelopes. The receiver decodes with `[:safe]` and accepts only a well-formed
-`%Lattice.Op{}`.
+Ops travel inside JSON envelopes using `Lattice.Carrier.Wire`, a centralized,
+versioned, JSON-safe frame schema. The wire module serializes complete ops,
+delegations, sync reports, and push-result frames; integrity is still decided by
+`Lattice.Log.accept/2`, not by the carrier decoder.
 
-Observed in the spike: the round trip re-hashes and re-verifies identically between
-two BEAM OS processes (same OTP), so the ADR-0001 shortcut holds for the BEAM↔BEAM
-light path. It is **BEAM-specific by construction**: a Vue/JS or AtomVM-WASM browser
-realm cannot emit `term_to_binary`, so **canonical CBOR (the ADR-0001 follow-up)
-becomes a hard prerequisite the instant a non-BEAM realm joins** — that is the first
-work item of the heavy path, not this spike.
+Signed op and delegation bytes are no longer BEAM-term-only: `Lattice.Op` and
+`Lattice.Authority.Delegation` use `Lattice.Canonical` (ADR 0001). The current BEAM
+carrier still reconstructs `%Lattice.Op{}` structs internally, so the browser/AtomVM
+realm must implement the shared wire schema before it can replace the BEAM bridge.
+
+## M2 hardening delta
+
+- canonical signed bytes are no longer BEAM-term-only;
+- full op wire frames are centralized in `Lattice.Carrier.Wire`;
+- carrier sessions are authenticated by signed challenge/response;
+- reconnect/backoff and batch budgets are explicit;
+- partial sync shapes are dependency-closed;
+- compaction GC now has a membership acknowledgement primitive.
 
 ## Spike result (plan 010 GATE) — all criteria met
 
@@ -102,14 +111,14 @@ sides author offline (including an unauthorized `:lock`) → reconnect (**heal**
 
 ## What the AtomVM/browser (heavy) path still needs
 
-1. Canonical CBOR encoding for ops + delegations (hash/verify parity across
-   runtimes) — the hard prerequisite above.
+1. A native browser/AtomVM implementation of `Lattice.Canonical` and
+   `Lattice.Carrier.Wire` for hash/verify and frame parity across runtimes.
 2. The phase-0 bake-off of `docs/plans/2026-05-23-atomvm-browser-design.md`
    (AtomVM-emscripten vs Popcorn), OTP-version pinning for `:crypto` eddsa.
-3. Browser-side log persistence (dump/restore onto browser storage).
-4. Production hardening deferred from this spike: authenticated carrier sessions,
-   reconnection backoff, partial sync ("shapes"), and batching/backpressure for
-   large op transfers.
+3. Browser-side log persistence now has a JSON-safe payload contract and IndexedDB
+   adapter; the cleaned browser realm still needs to consume it.
+4. Production deployment hardening still remains around PKI/identity binding,
+   confidentiality, snapshot trust, and operational observability.
 
 ## Consequences
 
