@@ -18,6 +18,7 @@ defmodule LatticeNodeSpike.WsHandler do
 
   @behaviour :cowboy_websocket
 
+  alias Lattice.Carrier.Wire, as: CarrierWire
   alias LatticeNodeSpike.{Peer, Wire}
 
   @impl :cowboy_websocket
@@ -66,15 +67,7 @@ defmodule LatticeNodeSpike.WsHandler do
     case Wire.decode_all(encoded) do
       {:ok, ops} ->
         report = Peer.deliver(peer, ops)
-
-        %{
-          type: "push_result",
-          accepted: report.accepted,
-          quarantined:
-            Enum.map(report.quarantined, fn {id, reason} -> [id, to_string(reason)] end),
-          rejected: Enum.map(report.rejected, fn {id, reason} -> [id, to_string(reason)] end),
-          pending: report.pending
-        }
+        CarrierWire.encode_push_result(report)
 
       {:error, :malformed_op} ->
         %{type: "error", reason: "malformed_op"}

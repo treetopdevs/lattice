@@ -13,6 +13,7 @@ defmodule LatticeNodeSpike.WsCarrier do
 
   @behaviour Lattice.Carrier
 
+  alias Lattice.Carrier.Wire, as: CarrierWire
   alias Lattice.Transport.WebSocket.Client
   alias LatticeNodeSpike.Wire
 
@@ -80,7 +81,7 @@ defmodule LatticeNodeSpike.WsCarrier do
 
     with {:ok, %{"type" => "push_result"} = result} <-
            request(conn, %{type: "push", ops: encoded}) do
-      {:ok, decode_report(result), conn}
+      {:ok, CarrierWire.decode_report(result), conn}
     end
   end
 
@@ -102,20 +103,5 @@ defmodule LatticeNodeSpike.WsCarrier do
         other -> {:ok, other}
       end
     end
-  end
-
-  defp decode_report(result) do
-    %{
-      accepted: Map.get(result, "accepted", []),
-      quarantined: decode_reason_pairs(Map.get(result, "quarantined", [])),
-      rejected: decode_reason_pairs(Map.get(result, "rejected", [])),
-      pending: Map.get(result, "pending", [])
-    }
-  end
-
-  # Reasons on the wire are strings; they map back onto the fixed set of atoms
-  # `Lattice.Log.accept/2` emits (all of which exist in this VM already).
-  defp decode_reason_pairs(pairs) do
-    Enum.map(pairs, fn [id, reason] -> {id, String.to_existing_atom(reason)} end)
   end
 end
