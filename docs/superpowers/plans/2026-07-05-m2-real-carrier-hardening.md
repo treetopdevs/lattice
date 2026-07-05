@@ -660,6 +660,10 @@ git commit -m "feat(carrier): authenticate carrier sessions"
 
 Create `apps/lattice_core/test/lattice2/carrier_backoff_test.exs`:
 
+This test file pins four contracts: deterministic capped exponential delay, reset
+to the first attempt, zero-floor clamping when jitter would go negative, and
+bounded exponent growth for very large attempt values.
+
 ```elixir
 defmodule Lattice.CarrierBackoffTest do
   use ExUnit.Case, async: true
@@ -681,6 +685,18 @@ defmodule Lattice.CarrierBackoffTest do
     assert Backoff.delay_ms(b, 4) == 500
     assert Backoff.delay_ms(b, Backoff.reset_attempt()) == 50
   end
+
+  test "jitter never makes a sleep delay negative" do
+    b = Backoff.new(base_ms: 1, max_ms: 1, jitter_ms: 100, seed: "seed0")
+
+    assert Backoff.delay_ms(b, 0) == 0
+  end
+
+  test "large attempts are capped before exponentiation" do
+    b = Backoff.new(base_ms: 1, max_ms: Integer.pow(2, 100), jitter_ms: 0, seed: "peer-a")
+
+    assert Backoff.delay_ms(b, 64) == Backoff.delay_ms(b, 63)
+  end
 end
 ```
 
@@ -695,6 +711,16 @@ defmodule Lattice.Carrier.Backoff do
   @enforce_keys [:base_ms, :max_ms, :jitter_ms, :seed]
   defstruct [:base_ms, :max_ms, :jitter_ms, :seed]
 
+  @max_exponent_attempt 63
+
+  @type t :: %__MODULE__{
+          base_ms: pos_integer(),
+          max_ms: pos_integer(),
+          jitter_ms: non_neg_integer(),
+          seed: binary()
+        }
+
+  @spec new(keyword()) :: t()
   def new(opts) do
     %__MODULE__{
       base_ms: Keyword.fetch!(opts, :base_ms),
@@ -704,11 +730,15 @@ defmodule Lattice.Carrier.Backoff do
     }
   end
 
+  @spec reset_attempt() :: 0
   def reset_attempt, do: 0
 
-  def delay_ms(%__MODULE__{} = b, attempt) when attempt >= 0 do
-    raw = min(b.max_ms, b.base_ms * Integer.pow(2, attempt))
-    raw + jitter(b.seed, attempt, b.jitter_ms)
+  @spec delay_ms(t(), non_neg_integer()) :: non_neg_integer()
+  def delay_ms(%__MODULE__{} = backoff, attempt) when attempt >= 0 do
+    raw =
+      min(backoff.max_ms, backoff.base_ms * Integer.pow(2, min(attempt, @max_exponent_attempt)))
+
+    max(0, raw + jitter(backoff.seed, attempt, backoff.jitter_ms))
   end
 
   defp jitter(_seed, _attempt, 0), do: 0
@@ -888,13 +918,30 @@ defmodule Lattice.CarrierBatchTest do
   alias Lattice.Carrier.Batch
 
   test "splits by max op count" do
-    assert Batch.chunk([1, 2, 3, 4, 5], max_ops: 2, size_fun: fn _ -> 1 end, max_bytes: 100) ==
-             [[1, 2], [3, 4], [5]]
+    assert {:ok, chunks} =
+             Batch.chunk([1, 2, 3, 4, 5],
+               max_ops: 2,
+               size_fun: fn _ -> 1 end,
+               max_bytes: 100
+             )
+
+    assert chunks == [[1, 2], [3, 4], [5]]
   end
 
   test "splits by encoded bytes" do
-    chunks = Batch.chunk(["aaaa", "bbbb", "c"], max_ops: 10, size_fun: &byte_size/1, max_bytes: 5)
+    assert {:ok, chunks} =
+             Batch.chunk(["aaaa", "bbbb", "c"],
+               max_ops: 10,
+               size_fun: &byte_size/1,
+               max_bytes: 5
+             )
+
     assert chunks == [["aaaa"], ["bbbb", "c"]]
+  end
+
+  test "rejects a single item that exceeds the frame byte budget" do
+    assert {:error, {:oversized_item, 6, 5}} =
+             Batch.chunk(["xxxxxx"], max_ops: 10, size_fun: &byte_size/1, max_bytes: 5)
   end
 
   test "merges sync reports preserving order" do
@@ -921,28 +968,53 @@ Create `apps/lattice_core/lib/lattice/carrier/batch.ex`:
 defmodule Lattice.Carrier.Batch do
   @moduledoc "Bounded transfer batches for carrier push/pull frames."
 
+  @spec chunk([term()], keyword()) ::
+          {:ok, [[term()]]} | {:error, {:oversized_item, non_neg_integer(), pos_integer()}}
   def chunk(items, opts) do
     max_ops = Keyword.fetch!(opts, :max_ops)
     max_bytes = Keyword.fetch!(opts, :max_bytes)
     size_fun = Keyword.fetch!(opts, :size_fun)
 
-    {chunks, current, _count, _bytes} =
-      Enum.reduce(items, {[], [], 0, 0}, fn item, {chunks, current, count, bytes} ->
-        size = size_fun.(item)
+    items
+    |> Enum.reduce_while({[], [], 0, 0}, fn item, {chunks, current, count, bytes} ->
+      size = size_fun.(item)
 
-        if current != [] and (count >= max_ops or bytes + size > max_bytes) do
-          {[Enum.reverse(current) | chunks], [item], 1, size}
-        else
-          {chunks, [item | current], count + 1, bytes + size}
-        end
-      end)
+      cond do
+        size > max_bytes ->
+          {:halt, {:error, {:oversized_item, size, max_bytes}}}
 
-    (if current == [], do: chunks, else: [Enum.reverse(current) | chunks])
-    |> Enum.reverse()
+        current != [] and (count >= max_ops or bytes + size > max_bytes) ->
+          {:cont, {[Enum.reverse(current) | chunks], [item], 1, size}}
+
+        true ->
+          {:cont, {chunks, [item | current], count + 1, bytes + size}}
+      end
+    end)
+    |> case do
+      {:error, _reason} = error ->
+        error
+
+      {chunks, current, _count, _bytes} ->
+        chunks =
+          if(current == [], do: chunks, else: [Enum.reverse(current) | chunks])
+          |> Enum.reverse()
+
+        {:ok, chunks}
+    end
   end
 
+  @spec chunk!([term()], keyword()) :: [[term()]]
+  def chunk!(items, opts) do
+    case chunk(items, opts) do
+      {:ok, chunks} -> chunks
+      {:error, reason} -> raise ArgumentError, "cannot chunk carrier batch: #{inspect(reason)}"
+    end
+  end
+
+  @spec merge_reports([Lattice.Sync.report()]) :: Lattice.Sync.report()
   def merge_reports(reports) do
-    Enum.reduce(reports, %{accepted: [], quarantined: [], rejected: [], pending: []}, fn report, acc ->
+    Enum.reduce(reports, %{accepted: [], quarantined: [], rejected: [], pending: []}, fn report,
+                                                                                         acc ->
       %{
         accepted: acc.accepted ++ report.accepted,
         quarantined: acc.quarantined ++ report.quarantined,
@@ -959,12 +1031,21 @@ end
 In `apps/lattice_node_spike/lib/lattice_node_spike/ws_carrier.ex`, split `ops` before sending:
 
 ```elixir
-batches =
-  Lattice.Carrier.Batch.chunk(ops,
-    max_ops: 64,
-    max_bytes: 64_000,
-    size_fun: fn op -> op |> Wire.encode() |> Jason.encode!() |> byte_size() end
-  )
+entries = Enum.map(ops, &encode_entry/1)
+
+case Batch.chunk(entries,
+       max_ops: 64,
+       max_bytes: 64_000,
+       size_fun: fn {_encoded, bytes} -> bytes end
+     ) do
+  {:ok, batches} ->
+    with {:ok, reports, batch_meta} <- push_batches(conn, batches, [], []) do
+      {:ok, Batch.merge_reports(reports), %{conn | last_push_batches: batch_meta}}
+    end
+
+  {:error, _reason} = error ->
+    error
+end
 ```
 
 Send each batch as a separate `"push"` request, collect reports, and return `Batch.merge_reports(reports)`.

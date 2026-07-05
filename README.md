@@ -159,10 +159,16 @@ mix run scripts/lattice2_demo.exs
 mix test apps/lattice_core/test/lattice2/
 ```
 
-This is a POC on simulated realms: no encryption, no key rotation, no log compaction,
-no real network carrier yet. Design docs: [docs/lattice2_design.md](docs/lattice2_design.md),
-the ADRs in [docs/adr/](docs/adr/), [docs/threat_model_v2.md](docs/threat_model_v2.md),
-[docs/path_to_real.md](docs/path_to_real.md), and [docs/lattice_poc_status.md](docs/lattice_poc_status.md).
+The original v2 proof runs on simulated realms, and M2 now adds a hardened real
+WebSocket carrier substrate for BEAM peers: canonical cross-runtime signed bytes,
+shared carrier wire frames, signed session authentication, bounded batches,
+partial sync shapes, and browser log-store payloads. This is still a POC: no
+encryption, no key rotation, no production log compaction, and no native
+AtomVM/WASM browser tab realm yet. Design docs:
+[docs/lattice2_design.md](docs/lattice2_design.md), the ADRs in
+[docs/adr/](docs/adr/), [docs/threat_model_v2.md](docs/threat_model_v2.md),
+[docs/path_to_real.md](docs/path_to_real.md), and
+[docs/lattice_poc_status.md](docs/lattice_poc_status.md).
 Module docs render via ex_doc: `cd apps/lattice_core && mix docs`.
 
 ## Architecture

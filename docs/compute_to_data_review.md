@@ -108,7 +108,7 @@ Mapping the pitch onto the current tree, `ComputeCapsule` is mostly a recombinat
 | Export membrane | **named** | `Lattice.Cap.Membrane` — already rejects ambient-target smuggling (inbound) |
 | "Move the computation" | exists | `Lattice.MovableProcess` |
 | DataRealm labels / declassification | **prototype** | `Lattice.IFC` — toy GenServer, **not wired to Cap/Gateway** |
-| **App-authored code run locally on private data w/ enforced output** | **not built** | — needs a real sandbox (AtomVM/WASM = your own future work) |
+| **App-authored code run locally on private data w/ enforced output** | **not built** | — needs a real isolation sandbox; M2 provides the carrier substrate, not a native browser sandbox |
 
 The genuinely new, genuinely hard part — **run app-authored code locally against private data with an enforced output membrane** — is exactly the part the server-authoritative architecture doesn't support and can't cheaply get in a browser. The pitch's novelty and its impossibility are the same sentence.
 
@@ -248,7 +248,7 @@ Approving the *request* means the user blesses a question whose answer they neve
 ## 07 · Honest claim & out-of-scope
 
 > [!WARNING]
-> **Out-of-scope (state it like the existing non-claims).** Even with an outbound membrane + IFC + release-time consent, **covert channels within the allowed schema remain**: encoding in permitted fields, the decision channel (which template), and result timing. Treat these as out-of-scope until there is a real isolation sandbox *and* quantitative IFC — the same way the docs already say "media devices are simulated" and "AtomVM/WASM browser nodes remain future work." Mitigations that help short of that: canonical enum-only outputs (no free text), minimized result shapes, and human release review.
+> **Out-of-scope (state it like the existing non-claims).** Even with an outbound membrane + IFC + release-time consent, **covert channels within the allowed schema remain**: encoding in permitted fields, the decision channel (which template), and result timing. Treat these as out-of-scope until there is a real isolation sandbox *and* quantitative IFC — the same way the docs now distinguish "M2 carrier substrate exists" from "native AtomVM/WASM browser realm remains unimplemented." Mitigations that help short of that: canonical enum-only outputs (no free text), minimized result shapes, and human release review.
 
 **Net:** the direction — making information-flow / export control a first-class Lattice concern — is the more differentiated frontier than browser clustering. Caps-as-access-control is well-trodden (object capabilities, macaroons); caps fused with IFC and a consent UI over a real cross-realm boundary is less trodden and fits the BEAM process metaphor. Just claim what the primitives can back, and put the enforcer in the realm that owns the data.
 

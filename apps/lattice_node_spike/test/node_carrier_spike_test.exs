@@ -264,17 +264,17 @@ defmodule LatticeNodeSpike.NodeCarrierSpikeTest do
     end
   end
 
-  defp await_divergence(conn, 0, _backoff, _attempt),
-    do: flunk("peer never diverged: #{inspect(conn)}")
-
   defp await_divergence(conn, attempts, backoff, attempt) do
     case WsCarrier.status(conn) do
       {:ok, "diverged"} ->
         {:ok, conn}
 
-      {:ok, "base"} ->
+      {:ok, "base"} when attempts > 0 ->
         Process.sleep(Backoff.delay_ms(backoff, attempt))
         await_divergence(conn, attempts - 1, backoff, attempt + 1)
+
+      {:ok, "base"} ->
+        flunk("peer never diverged: #{inspect(conn)}")
     end
   end
 

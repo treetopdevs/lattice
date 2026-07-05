@@ -71,10 +71,12 @@ change the observable contract (converge to identical op sets, idempotently).
 
 ## 4. Compaction is the first scaling cliff (Sedimentree)
 
-A Replica's identity is its **entire** op-log, which grows without bound — the POC never
-compacts (only an optional naive snapshot was in scope). The first thing that breaks at
-scale is memory/disk and reduction cost: reducing a long-lived thread means folding
-every op ever written, and sync ships ever-larger histories.
+A Replica's identity is its **entire** op-log, which grows without bound. The plan-013
+spike proves a Sedimentree-style summary can preserve state/authority equivalence at a
+stable frontier, but production compaction is not wired into `Lattice.Log`, `Registry`,
+`Sync`, `Authority`, or `Reduce`. The first thing that breaks at scale is memory/disk
+and reduction cost: reducing a long-lived thread means folding every op ever written,
+and sync ships ever-larger histories.
 
 The fix is **Sedimentree-style layered compaction**: periodically snapshot the reduced
 state at a stable causal frontier, retain a verifiable chain of snapshots ("strata"),
@@ -87,8 +89,8 @@ delicate because:
   enough of the authority DAG (or a verified summary of holder state) to keep
   stale-holder/revocation checks sound.
 
-Until compaction exists, Lattice 2.0 is correct but not durable-at-scale — which is the
-honest boundary of this POC.
+Until production compaction exists, Lattice 2.0 is correct but not durable-at-scale —
+which is the honest boundary of this POC.
 
 ## 5. Other deferred work (explicitly out of POC scope)
 

@@ -57,6 +57,26 @@ defmodule Lattice.SyncShapeTest do
     assert tombstone.id in ids
   end
 
+  test "command shapes retain tombstones without pulling excluded deleted commands" do
+    identity = Identity.from_seed("a", "shape-excluded-tombstone")
+    replica = "replica:shape-excluded-tombstone"
+    hidden = Op.new(identity, replica, [], :command, {:set_title, ["hidden"]})
+    tombstone = Op.new(identity, replica, [], :tombstone, {:delete, hidden.id})
+    log = replica |> Log.new() |> Log.append!(hidden) |> Log.append!(tombstone)
+    shape = Shape.commands([:post])
+
+    assert Shape.selected?(shape, tombstone)
+    refute Shape.selected?(shape, hidden)
+
+    ids =
+      log
+      |> Sync.missing(MapSet.new(), shape)
+      |> Enum.map(& &1.id)
+
+    assert tombstone.id in ids
+    refute hidden.id in ids
+  end
+
   defp find_grant_op(log, delegation_id) do
     Enum.find(Log.topo_ops(log), fn
       %{kind: :authority, body: {:grant, %{id: ^delegation_id}}} -> true

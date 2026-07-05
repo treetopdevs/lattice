@@ -212,7 +212,13 @@ defmodule Lattice.Carrier.Wire do
     end
   end
 
-  defp decode_term(["bin", value]) when is_binary(value), do: Base.decode64(value)
+  defp decode_term(["bin", value]) when is_binary(value) do
+    case Base.decode64(value) do
+      {:ok, bin} -> {:ok, bin}
+      :error -> {:error, :malformed_term}
+    end
+  end
+
   defp decode_term(["atom", value]) when is_binary(value), do: existing_atom(value)
   defp decode_term(["list", values]) when is_list(values), do: decode_list(values)
 

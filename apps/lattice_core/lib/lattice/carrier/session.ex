@@ -39,9 +39,9 @@ defmodule Lattice.Carrier.Session do
            "pubkey" => pub_b64,
            "signature" => sig_b64
          } <- challenge,
-         {:ok, claimed_pubkey} <- Base.decode64(pub_b64),
+         {:ok, claimed_pubkey} <- decode64(pub_b64),
          true <- claimed_pubkey == expected_pubkey,
-         {:ok, sig} <- Base.decode64(sig_b64),
+         {:ok, sig} <- decode64(sig_b64),
          {:ok, transcript} <- safe_transcript(challenge, expected_realm, expected_pubkey),
          true <-
            Identity.verify(
@@ -76,9 +76,9 @@ defmodule Lattice.Carrier.Session do
     expected_pubkey = Keyword.fetch!(opts, :expected_pubkey)
 
     with %{"realm" => ^expected_realm, "pubkey" => pub_b64, "signature" => sig_b64} <- response,
-         {:ok, claimed_pubkey} <- Base.decode64(pub_b64),
+         {:ok, claimed_pubkey} <- decode64(pub_b64),
          true <- claimed_pubkey == expected_pubkey,
-         {:ok, sig} <- Base.decode64(sig_b64),
+         {:ok, sig} <- decode64(sig_b64),
          {:ok, transcript} <- safe_transcript(challenge, expected_realm, expected_pubkey),
          true <-
            Identity.verify(
@@ -107,6 +107,9 @@ defmodule Lattice.Carrier.Session do
       pubkey
     ])
   end
+
+  defp decode64(value) when is_binary(value), do: Base.decode64(value)
+  defp decode64(_value), do: {:error, :malformed_session}
 
   defp safe_transcript(challenge, realm, pubkey) do
     {:ok, transcript(challenge, realm, pubkey)}

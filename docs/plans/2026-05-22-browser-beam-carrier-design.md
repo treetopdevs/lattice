@@ -5,6 +5,12 @@ Branch: `spike/browser-beam-carrier`
 Status: reconciliation record — committed work exists; this document aligns the
 intended design with reality and scopes the remaining work.
 
+2026-07-05 sync note: M2 supersedes the old carrier-planning framing with a hardened
+WebSocket carrier substrate for BEAM peers (`Lattice.Carrier`,
+`Lattice.Carrier.Wire`, canonical signed bytes, session auth, batching, and browser
+log-store payloads). This document remains the historical server-side distribution
+boundary record; native browser/AtomVM acceptance is still separate work.
+
 ## Why this document exists
 
 A brainstorming pass proposed a two-phase plan:

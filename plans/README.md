@@ -36,11 +36,11 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
-**Recommended order**: 001 → 002 → 003 → 004 (the DX/CI foundation; all small, low-risk,
-and they make every later change safer to verify). Then 005, 006 (v2 engine
+**Historical execution order**: 001 → 002 → 003 → 004 (the DX/CI foundation; all small,
+low-risk, and they made every later change safer to verify). Then 005, 006 (v2 engine
 hygiene/tests), then 007, 008, 009 (security/perf/docs) in any order. The direction items
-(010–013) are larger and independent of the fixes; 010 (real carrier) is the
-highest-value next step and a prerequisite signal for 013 (compaction).
+(010–013) were larger and independent of the fixes; 010 (real carrier) was the
+highest-value direction step and a prerequisite signal for 013 (compaction).
 
 ## Dependency notes
 
@@ -139,8 +139,8 @@ Recorded so they are not re-audited next run. Each was opened and read during ve
 - **Cowboy/Playwright constraint lag (DEPS-04, DEPS-05)** — MINOR. `~> 2.12` vs locked
   2.14.2, Playwright `^1.53` vs 1.59. Mechanical bumps; do alongside other dep work.
 - **Structured logging / telemetry (DX-06)** — DEFERRED. Real observability gap on the
-  server, but MED value for a loopback POC; revisit when a real carrier (010) makes
-  multi-node debugging matter.
+  server. Now that the real carrier substrate exists, revisit this before longer-running
+  multi-node demos or production deployment work.
 
 ## Notes for the operator
 

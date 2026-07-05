@@ -75,4 +75,37 @@ defmodule Lattice.CarrierSessionTest do
                expected_pubkey: identity.pub
              )
   end
+
+  test "non-string signed challenge fields are malformed instead of raising" do
+    identity = Identity.from_seed("node-b", "carrier-session")
+
+    challenge =
+      "node-b"
+      |> Session.challenge("replica:session", wire_version: 1)
+      |> Session.sign_challenge(identity)
+
+    for field <- ["pubkey", "signature"] do
+      assert {:error, :malformed_session} =
+               challenge
+               |> Map.put(field, 42)
+               |> Session.verify_challenge(
+                 expected_realm: "node-b",
+                 expected_pubkey: identity.pub
+               )
+    end
+  end
+
+  test "non-string response fields are malformed instead of raising" do
+    identity = Identity.from_seed("node-a", "carrier-session")
+    challenge = Session.challenge("server", "replica:session", wire_version: 1)
+    response = Session.respond(challenge, identity, "node-a")
+
+    for field <- ["pubkey", "signature"] do
+      assert {:error, :malformed_session} =
+               Session.verify_response(challenge, Map.put(response, field, 42),
+                 expected_realm: "node-a",
+                 expected_pubkey: identity.pub
+               )
+    end
+  end
 end

@@ -141,9 +141,10 @@ remain separate unresolved production requirements.
   verify the retained region normally, but must **trust** the snapshot (it cannot
   re-reduce ops it never had). Trust anchoring — snapshot signed by a role, or by a
   quorum of realms that verified it — is an open design question below.
-- Carrier note (ADR 0005): the snapshot hash uses `term_to_binary [:deterministic]`,
-  inheriting the ADR-0001 BEAM-only caveat; canonical CBOR is a prerequisite for
-  cross-runtime snapshot verification just as it is for op hashing.
+- Carrier note (ADR 0005): op/delegation hashing now uses `Lattice.Canonical`, but the
+  spike snapshot hash still uses `term_to_binary [:deterministic]`. Production
+  cross-runtime snapshot verification needs a snapshot canonical encoder or an extension
+  of `Lattice.Canonical`; do not treat the spike hash as the final browser/AtomVM format.
 
 ## What the spike deliberately reimplements (and why that is honest)
 

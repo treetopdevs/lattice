@@ -147,8 +147,11 @@ The two/three in-process "realms" in tests and the demo are stand-ins for **serv
 BEAM nodes** and **browser AtomVM nodes**. `Lattice.Net` is the simulated transport
 (partition/heal + seeded delivery). Crucially, nothing in the public API assumes
 in-process locality — realms are addressed by id — so a real AtomVM/WebSocket carrier
-can replace `Lattice.Net` without changing application code. See
-[path_to_real.md](path_to_real.md).
+can replace `Lattice.Net` without changing application code. M2 proves the server-BEAM
+side of that claim with `Lattice.Carrier` and `apps/lattice_node_spike`: two OS
+processes sync over a real WebSocket and converge to the `Lattice.Sim` oracle. The
+native browser/AtomVM peer still needs its own implementation of `Lattice.Canonical` and
+`Lattice.Carrier.Wire`. See [path_to_real.md](path_to_real.md) and ADR 0005.
 
 ## Module map
 

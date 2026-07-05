@@ -27,6 +27,18 @@ defmodule Lattice.CarrierWireTest do
     assert {:error, :malformed_op} = Wire.decode_op(frame)
   end
 
+  test "op frames normalize malformed nested binary terms" do
+    id = Identity.from_seed("alice", "carrier-wire-malformed-bin")
+    op = Op.new(id, "replica:wire", [], :command, {:post, "hello"})
+
+    frame =
+      op
+      |> Wire.encode_op()
+      |> put_in(["body"], ["tuple", [["atom", "post"], ["bin", "not base64"]]])
+
+    assert {:error, :malformed_op} = Wire.decode_op(frame)
+  end
+
   test "large integers are encoded as decimal strings so JSON peers preserve precision" do
     id = Identity.from_seed("alice", "carrier-wire-large-int")
     large = Integer.pow(2, 53) + 1
