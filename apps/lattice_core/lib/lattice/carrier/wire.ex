@@ -302,6 +302,8 @@ defmodule Lattice.Carrier.Wire do
          live: live,
          sig: sig
        }}
+    else
+      _ -> {:error, :malformed_term}
     end
   end
 

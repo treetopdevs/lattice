@@ -61,7 +61,7 @@ defmodule Lattice.SyncShapeTest do
     identity = Identity.from_seed("a", "shape-excluded-tombstone")
     replica = "replica:shape-excluded-tombstone"
     hidden = Op.new(identity, replica, [], :command, {:set_title, ["hidden"]})
-    tombstone = Op.new(identity, replica, [], :tombstone, {:delete, hidden.id})
+    tombstone = Op.new(identity, replica, [hidden.id], :tombstone, {:delete, hidden.id})
     log = replica |> Log.new() |> Log.append!(hidden) |> Log.append!(tombstone)
     shape = Shape.commands([:post])
 

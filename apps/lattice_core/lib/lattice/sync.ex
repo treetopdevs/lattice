@@ -37,16 +37,29 @@ defmodule Lattice.Sync do
     |> Enum.reject(&MapSet.member?(have, &1.id))
   end
 
-  @doc "Shape-filtered missing ops expanded to causal dependency closure."
+  @doc "Shape-filtered missing ops with causal closure for selected non-tombstone ops."
   @spec missing(Log.t(), MapSet.t(Op.id()), Shape.t()) :: [Op.t()]
   def missing(%Log{} = source, %MapSet{} = have, %Shape{} = shape) do
-    selected_ids =
+    selected_ops =
       source
       |> Log.topo_ops()
       |> Enum.filter(&Shape.selected?(shape, &1))
+
+    closure_seeds =
+      selected_ops
+      |> Enum.reject(&(&1.kind == :tombstone))
+      |> Enum.map(& &1.id)
+
+    tombstone_ids =
+      selected_ops
+      |> Enum.filter(&(&1.kind == :tombstone))
       |> MapSet.new(& &1.id)
 
-    closure = Dag.reachable(Log.ops(source), MapSet.to_list(selected_ids))
+    closure =
+      source
+      |> Log.ops()
+      |> Dag.reachable(closure_seeds)
+      |> MapSet.union(tombstone_ids)
 
     source
     |> Log.topo_ops()
