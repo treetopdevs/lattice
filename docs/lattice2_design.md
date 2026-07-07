@@ -153,6 +153,12 @@ processes sync over a real WebSocket and converge to the `Lattice.Sim` oracle. T
 native browser/AtomVM peer still needs its own implementation of `Lattice.Canonical` and
 `Lattice.Carrier.Wire`. See [path_to_real.md](path_to_real.md) and ADR 0005.
 
+Compact proof harnesses are useful only when they exercise this canonical path.
+Avoid parallel proof stacks that reimplement log, authority, attestation, or
+reduction beside `Lattice.Log`, `Lattice.Authority`, `Lattice.Reduce`, and
+`Lattice.Sync`; mergeable proof work should land as scenarios or regression tests
+against the real modules so the evidence cannot drift from runtime semantics.
+
 ## Module map
 
 | Concern | Modules |
