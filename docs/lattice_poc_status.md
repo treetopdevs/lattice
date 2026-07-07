@@ -265,3 +265,20 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
   productized runtime. Native browser/AtomVM peers still need their own
   `Lattice.Canonical`/`Lattice.Carrier.Wire` implementations and production compaction
   still needs snapshot-aware `Authority`/`Reduce`, GC coordination, and snapshot trust.
+
+## Checkpoint: Township G1 Real Carrier Acceptance
+
+- Files changed: `apps/lattice_node_spike/lib/lattice_node_spike/township_scenario.ex`,
+  `apps/lattice_node_spike/lib/lattice_node_spike/peer.ex`,
+  `apps/lattice_node_spike/priv/peer_node.exs`,
+  `apps/lattice_node_spike/test/township_carrier_test.exs`,
+  `scripts/township_carrier_demo.exs`, and Township docs/comments.
+- Behaviors: Township W0-W3 now have a real-carrier acceptance path over two BEAM OS
+  processes through `LatticeNodeSpike.WsCarrier`, with final state checked against the
+  existing `Lattice.Sim` oracle. Semantic quarantine reasons are compared across both
+  nodes and the oracle; dump/restore is checked on the carrier-converged matter log.
+- Command run: `~/.asdf/shims/mix test apps/lattice_node_spike/test/township_carrier_test.exs`
+  and `~/.asdf/shims/mix run scripts/township_carrier_demo.exs`.
+- Result: succeeded on 2026-07-05. G1 is an acceptance slice for Township on the real
+  BEAM WebSocket carrier; it does not add a native AtomVM/WASM browser realm, real
+  receipt-free crypto, or production compaction.

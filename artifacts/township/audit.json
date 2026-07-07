@@ -1,4 +1,10 @@
 {
+  "quarantine": [
+    "mVp4COeiXTD__9c6y-OfO406aHuMZFDT3ahLtFZvLag"
+  ],
+  "reasons": {
+    "mVp4COeiXTD__9c6y-OfO406aHuMZFDT3ahLtFZvLag": "not_holder"
+  },
   "audit": [
     {
       "reason": "not_holder",
@@ -8,11 +14,5 @@
   ],
   "holders": {
     "clerk": "xI19LiI0w767"
-  },
-  "quarantine": [
-    "mVp4COeiXTD__9c6y-OfO406aHuMZFDT3ahLtFZvLag"
-  ],
-  "reasons": {
-    "mVp4COeiXTD__9c6y-OfO406aHuMZFDT3ahLtFZvLag": "not_holder"
   }
 }

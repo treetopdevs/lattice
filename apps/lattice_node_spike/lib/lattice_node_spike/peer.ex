@@ -3,7 +3,7 @@ defmodule LatticeNodeSpike.Peer do
   Holds one realm's `Lattice.Log` inside the peer OS process.
 
   The peer starts holding only the deterministic shared prefix
-  (`Scenario.base_sim/0`). When the first WebSocket connection *closes* — the
+  (`Scenario.base_sim/0` by default). When the first WebSocket connection *closes* — the
   physical partition — it authors its offline commands (`Scenario.diverge/2`),
   so divergence happens strictly while no socket exists. All op application
   goes through `Lattice.Sync.deliver/2`, i.e. the same `Lattice.Log.accept/2`
@@ -12,7 +12,7 @@ defmodule LatticeNodeSpike.Peer do
 
   use GenServer
 
-  alias Lattice.{Log, Sync}
+  alias Lattice.{Authority, Log, Sync}
   alias LatticeNodeSpike.Scenario
 
   # --- Client API (called from the WebSocket handler) -----------------------
@@ -51,9 +51,17 @@ defmodule LatticeNodeSpike.Peer do
   def init(opts) do
     realm = Keyword.fetch!(opts, :realm)
     identity = Keyword.fetch!(opts, :identity)
+    scenario = Keyword.get(opts, :scenario, Scenario)
 
     {:ok,
-     %{realm: realm, identity: identity, sim: Scenario.base_sim(), phase: :base, live_seen: 0}}
+     %{
+       realm: realm,
+       identity: identity,
+       scenario: scenario,
+       sim: scenario.base_sim(),
+       phase: :base,
+       live_seen: 0
+     }}
   end
 
   @impl GenServer
@@ -81,15 +89,17 @@ defmodule LatticeNodeSpike.Peer do
 
   def handle_call(:state_report, _from, state) do
     log = log(state)
+    scenario = state.scenario
 
     report = %{
-      state_b64: log |> Scenario.state_bytes() |> Base.encode64(),
+      state_b64: log |> scenario.state_bytes() |> Base.encode64(),
       op_ids: log |> Log.op_ids() |> Enum.sort(),
       frontier: Log.frontier(log),
       structural_quarantine:
         Enum.map(Log.quarantine(log), fn %{op: op, reason: reason} ->
           [op.id, Atom.to_string(reason)]
         end),
+      authority_quarantine: authority_quarantine(scenario, log),
       log_size: Log.size(log)
     }
 
@@ -102,7 +112,8 @@ defmodule LatticeNodeSpike.Peer do
 
   @impl GenServer
   def handle_cast(:socket_closed, %{phase: :base} = state) do
-    {:noreply, %{state | sim: Scenario.diverge(state.sim, state.realm), phase: :diverged}}
+    scenario = state.scenario
+    {:noreply, %{state | sim: scenario.diverge(state.sim, state.realm), phase: :diverged}}
   end
 
   def handle_cast(:socket_closed, state), do: {:noreply, state}
@@ -111,5 +122,13 @@ defmodule LatticeNodeSpike.Peer do
 
   defp put_log(%{sim: sim, realm: realm} = state, new_log) do
     %{state | sim: %{sim | logs: Map.put(sim.logs, realm, new_log)}}
+  end
+
+  defp authority_quarantine(scenario, log) do
+    scenario.replica_module()
+    |> Authority.analyze(log)
+    |> Map.fetch!(:reasons)
+    |> Enum.map(fn {op_id, reason} -> [op_id, Atom.to_string(reason)] end)
+    |> Enum.sort()
   end
 end

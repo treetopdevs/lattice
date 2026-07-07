@@ -12,6 +12,7 @@ defmodule LatticeNodeSpike.Scenario do
   """
 
   alias Lattice.Demo.Thread
+  alias Lattice.Identity
   alias Lattice.{Log, Sim}
 
   @replica "replica:thread:carrier-spike"
@@ -23,6 +24,9 @@ defmodule LatticeNodeSpike.Scenario do
 
   @spec replica() :: String.t()
   def replica, do: Sim.replica(base_sim())
+
+  @spec session_identity(String.t()) :: Identity.t()
+  def session_identity(realm), do: Identity.from_seed(realm, @seed)
 
   @doc """
   Shared deterministic prefix: node_a creates the Thread, grants node_b, both
