@@ -10,14 +10,21 @@
 # `PEER_READY <port>` for the parent to connect to. It halts on a `shutdown`
 # protocol message or when stdin closes (the parent died).
 
-[realm] = System.argv()
+[realm, trusted_peer_realm, trusted_peer_pubkey_b64] = System.argv()
 
 {:ok, _} = Application.ensure_all_started(:crypto)
 {:ok, _} = Application.ensure_all_started(:jason)
 {:ok, _} = Application.ensure_all_started(:cowboy)
 
-{:ok, peer} = LatticeNodeSpike.Peer.start_link(realm: realm)
-{:ok, port} = LatticeNodeSpike.PeerServer.start(peer)
+identity = Lattice.Identity.from_seed(realm, "carrier-spike")
+{:ok, peer} = LatticeNodeSpike.Peer.start_link(realm: realm, identity: identity)
+trusted_peer_pubkey = Base.decode64!(trusted_peer_pubkey_b64)
+
+{:ok, port} =
+  LatticeNodeSpike.PeerServer.start(peer,
+    trusted_peer_realm: trusted_peer_realm,
+    trusted_peer_pubkey: trusted_peer_pubkey
+  )
 
 IO.puts("PEER_READY #{port}")
 

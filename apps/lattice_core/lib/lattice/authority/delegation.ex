@@ -95,11 +95,7 @@ defmodule Lattice.Authority.Delegation do
   end
 
   defp encode(replica, issuer, audience, parent_id, ops, roles, live) do
-    :erlang.term_to_binary(
-      {:lattice_delegation_v1, replica, issuer, audience, parent_id, Enum.sort(ops),
-       Enum.sort(roles), live},
-      [:deterministic]
-    )
+    Lattice.Canonical.delegation_bytes(replica, issuer, audience, parent_id, ops, roles, live)
   end
 
   defp hash(bytes), do: :crypto.hash(:sha256, bytes) |> Base.url_encode64(padding: false)

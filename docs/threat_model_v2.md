@@ -22,6 +22,10 @@ v2 adds a **durable, signed, content-addressed op-log** as the unit of identity 
 * **Authorization provenance.** Each op cites a delegation chain rooting at the
   replica's genesis key; unauthorized, stale, revoked, and double-spent-authority ops
   are deterministically quarantined and audited (behaviors 5–10, 15, 16).
+* **Authenticated carrier sessions and bounded transfer behavior.** The real WebSocket
+  carrier now verifies the peer realm/key with a signed challenge/response before sync,
+  uses explicit reconnect backoff, and splits large pushes into bounded frames. These
+  harden the transport boundary; they do not add confidentiality or consensus.
 
 ## What v2 does NOT provide
 
@@ -39,6 +43,9 @@ v2 adds a **durable, signed, content-addressed op-log** as the unit of identity 
   reorder delivery. Lattice converges for any *dep-respecting* delivery and detects
   *tampered* ops, but a carrier that simply drops ops degrades availability (the log is
   still internally consistent; it is just incomplete until sync completes).
+* **No consensus or global truth service.** Peer-authenticated sessions prove which key
+  answered a carrier connection; they do not decide which log head is globally
+  canonical, prevent forks, or provide Byzantine agreement.
 * **No protection against a compromised key.** If a realm's private key leaks, the
   attacker can author validly-signed ops as that realm and exercise exactly the
   authority that realm legitimately holds. Revocation (`:revoke`) bounds future damage
@@ -67,8 +74,10 @@ here.
 * **The genesis/root key is fully trusted** for a replica — it grants all initial
   authority and can revoke any delegation. Compromise of the root is unrecoverable in
   this POC.
-* **The carrier (`Lattice.Net` here) is untrusted for confidentiality and availability
-  but cannot forge or tamper** — any modification is caught by signature/hash
-  verification. It is trusted only to eventually deliver (for liveness).
+* **The carrier (`Lattice.Net` in simulation, WebSocket in the real spike) is untrusted
+  for confidentiality and availability but cannot forge or tamper** — any modification
+  is caught by signature/hash verification. M2 authenticates the peer key before sync
+  and bounds transfer behavior; the carrier is still trusted only to eventually deliver
+  for liveness.
 * **The simulated realms** stand for real server/browser nodes; in-process locality is
   a test convenience, not a trust assumption.

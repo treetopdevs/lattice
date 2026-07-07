@@ -15,17 +15,22 @@
 - **Depends on**: 006 useful (pins the simulated `Net` contract the carrier must match)
 - **Category**: direction
 - **Planned at**: commit `81b9bfd`, 2026-06-20
+- **Current status**: DONE for the light path. ADR 0005 records the accepted carrier
+  interface, `apps/lattice_node_spike` proves two BEAM OS processes converge over a real
+  WebSocket, and M2 hardens the substrate with canonical signed bytes, shared wire frames,
+  session authentication, batching, partial sync helpers, and browser persistence payloads.
 
 ## Why this matters
 
-Lattice 2.0 is proven only **in-process**: `Lattice.Sim` + `Lattice.Net` simulate
-partitions and delivery in one BEAM. The thesis — "the log is the truth; the connection
-is the cache; nothing assumes in-process locality" — is asserted but not demonstrated
-across a real boundary. `net.ex:1-12` and `docs/path_to_real.md` explicitly designate
-`Lattice.Net` as the swappable seam, and a server-side carrier spike
-(`apps/lattice_carrier_spike`) plus an AtomVM browser design (`docs/plans/2026-05-23-atomvm-browser-design.md`)
-already exist. The highest-value next step is to run a v2 convergence scenario over a
-**real** carrier and show identical final logs/state to the simulator.
+At planning time, Lattice 2.0 had been proven only **in-process**:
+`Lattice.Sim` + `Lattice.Net` simulated partitions and delivery in one BEAM. The thesis
+— "the log is the truth; the connection is the cache; nothing assumes in-process
+locality" — needed a real-boundary proof. `net.ex:1-12` and `docs/path_to_real.md`
+explicitly designated `Lattice.Net` as the swappable seam, and a server-side carrier
+spike (`apps/lattice_carrier_spike`) plus an AtomVM browser design
+(`docs/plans/2026-05-23-atomvm-browser-design.md`) already existed. This plan's job was
+to run a v2 convergence scenario over a **real** carrier and show identical final
+logs/state to the simulator; ADR 0005 records the successful result.
 
 ## Recommended approach: two paths, do the light one first
 
@@ -91,15 +96,18 @@ This plan covers the **light path** spike and the shared `Carrier` abstraction.
 ## Scope
 
 **In scope**: a new/extended spike app, a carrier ADR/doc, spike tests, and a
-`Lattice.Carrier` behaviour module. The wire format (start with the pinned
-`:erlang.term_to_binary` used by `Lattice.Op`; note CBOR as the cross-runtime follow-up).
+`Lattice.Carrier` behaviour module. Historical note: the light-path spike started with
+BEAM-local bytes; M2 replaced op/delegation signed bytes with `Lattice.Canonical` and
+centralized full-op JSON-safe frames in `Lattice.Carrier.Wire`.
 
 **Out of scope**:
 - Changing `Lattice.Sync`/`Reduce`/`Authority`/`Log` semantics — the carrier must be
   additive; if you find you must change them, STOP and report (the "no in-process
   locality" claim would be at stake).
 - The AtomVM/WASM browser build — separate (heavy) plan.
-- Production hardening (auth, reconnection backoff, partial sync) — note as follow-ups.
+- Production hardening (auth, reconnection backoff, partial sync) — completed to M2
+  substrate level; production reconnect loops, native browser peer consumption, and
+  deployment hardening remain follow-ups.
 
 ## STOP conditions
 

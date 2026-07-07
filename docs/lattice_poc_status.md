@@ -130,7 +130,7 @@ OTP 28 + `mix` are used). Run mix with `~/.asdf/shims/mix`.
 - Behaviors: 1 (raw op-set convergence), 3 (idempotent sync), 4 (tamper rejection).
 - Crypto verified on OTP 28: deterministic seeded Ed25519 (`:crypto.generate_key(:eddsa,
   :ed25519, seed32)`), sign/verify with tamper rejection, order-independent
-  `term_to_binary(_, [:deterministic])`.
+  `Lattice.Canonical` bytes.
 - Result: green.
 
 ## Checkpoint: Phase B — Replica + CRDTs + reduction
@@ -212,9 +212,12 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
 - **No encryption** — signed, not sealed (see `threat_model_v2.md`). Plaintext bodies;
   Keyhive E2EE is out of scope.
 - **No compaction** — a Replica's identity is its entire op-log; reduction re-folds all
-  ops and sync ships full id sets. First scaling cliff (`path_to_real.md`).
-- **Canonical encoding is `:erlang.term_to_binary` (pinned)** — BEAM-specific; a real
-  multi-runtime carrier needs canonical CBOR (ADR 0001).
+  ops and sync still starts from full id sets. The compaction feasibility spike is done,
+  and M2 adds carrier membership acknowledgements, but production snapshot-aware
+  materialization/GC is not built. First scaling cliff (`path_to_real.md`, ADR 0006).
+- **Browser/AtomVM parity is not done** — signed bytes now use `Lattice.Canonical`
+  instead of pinned BEAM external-term bytes, but non-BEAM realms still need native
+  implementations of the canonical subset and `Lattice.Carrier.Wire` (ADR 0001).
 - **Succession dormancy = absence of heartbeats**, not a true liveness oracle (ADR 0004).
 - **Public API name clashes** — v1 already defines `Lattice.call/3`, `Lattice.grant/4`,
   `Lattice.cast/3`. The 2.0 promise-`call`/capability-`grant` are reached via
@@ -225,7 +228,7 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
 - **Stretch goals**: ~~second OS-process BEAM node~~ — **done** by the plan-010
   carrier spike (`apps/lattice_node_spike`, ADR 0005): two BEAM OS processes converge
   over a real WebSocket, byte-identical to the `Lattice.Sim` oracle. Still not done:
-  naive snapshot compaction.
+  production snapshot compaction and a native browser/AtomVM realm.
 
 ## Checkpoint: M1 Close-Out Countersign
 
@@ -239,5 +242,26 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
   52 tests with browser/load tags excluded; `lattice_node_spike` 1 test. The narrated
   Lattice 2.0 demo completed through partition, quarantine, heal/merge, transfer,
   succession, stale-holder quarantine, and `state_at` replay.
-- Blocker or remaining limitation: none for M1 close-out; M2 open questions remain as
-  documented in `docs/path_to_real.md` and ADRs 0005/0006.
+- Blocker or remaining limitation: none for M1 close-out; M2 work followed as documented
+  in `docs/path_to_real.md` and ADRs 0005/0006.
+
+## Checkpoint: M2 Real Carrier Hardening
+
+- Files changed: `apps/lattice_core/lib/lattice/canonical.ex`,
+  `apps/lattice_core/lib/lattice/carrier/*`, `apps/lattice_core/lib/lattice/sync*`,
+  `apps/lattice_core/lib/lattice/browser_log_store.ex`, `apps/lattice_node_spike/*`,
+  `examples/atomvm_tab/log-store.js`, docs, and focused tests.
+- Behaviors: existing Lattice 2.0 log, authority, reduction, and carrier semantics preserved;
+  op/delegation signed bytes no longer depend on BEAM external-term encoding.
+- Command run: `~/.asdf/shims/mix format --check-formatted && ~/.asdf/shims/mix test`,
+  `~/.asdf/shims/mix credo --strict`, and
+  `(cd apps/lattice_server && ~/.asdf/shims/mix sobelow --exit)`.
+- Result: succeeded on 2026-07-05. M2 adds canonical cross-runtime signed bytes,
+  centralized JSON-safe carrier wire frames, explicit trust anchors plus signed
+  challenge/response sessions, deterministic backoff helpers, dependency-closed partial
+  sync shapes, bounded push batches, membership acknowledgements for future compaction GC,
+  and a browser log-store payload plus IndexedDB adapter contract.
+- Blocker or remaining limitation: M2 is a hardened carrier substrate, not the full
+  productized runtime. Native browser/AtomVM peers still need their own
+  `Lattice.Canonical`/`Lattice.Carrier.Wire` implementations and production compaction
+  still needs snapshot-aware `Authority`/`Reduce`, GC coordination, and snapshot trust.

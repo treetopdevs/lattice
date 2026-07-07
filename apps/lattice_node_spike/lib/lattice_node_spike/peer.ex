@@ -39,6 +39,9 @@ defmodule LatticeNodeSpike.Peer do
   @doc "Reduced-state bytes + log facts for the byte-identity assertions."
   def state_report(peer), do: GenServer.call(peer, :state_report)
 
+  @doc "Realm id and identity used to authenticate carrier sessions."
+  def session_identity(peer), do: GenServer.call(peer, :session_identity)
+
   @doc "Socket closed: author the offline commands (once)."
   def socket_closed(peer), do: GenServer.cast(peer, :socket_closed)
 
@@ -47,7 +50,10 @@ defmodule LatticeNodeSpike.Peer do
   @impl GenServer
   def init(opts) do
     realm = Keyword.fetch!(opts, :realm)
-    {:ok, %{realm: realm, sim: Scenario.base_sim(), phase: :base, live_seen: 0}}
+    identity = Keyword.fetch!(opts, :identity)
+
+    {:ok,
+     %{realm: realm, identity: identity, sim: Scenario.base_sim(), phase: :base, live_seen: 0}}
   end
 
   @impl GenServer
@@ -88,6 +94,10 @@ defmodule LatticeNodeSpike.Peer do
     }
 
     {:reply, report, state}
+  end
+
+  def handle_call(:session_identity, _from, state) do
+    {:reply, {state.realm, state.identity}, state}
   end
 
   @impl GenServer

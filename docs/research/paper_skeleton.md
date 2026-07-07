@@ -50,7 +50,8 @@ introspection. All cross-realm operations present a cap id to the gateway.
 
 ## Explicit Non-Claims
 
-- No real AtomVM/WASM distribution is implemented.
+- No real AtomVM/WASM distribution is implemented; M2 proves the WebSocket carrier
+  substrate for BEAM peers, not a native browser BEAM realm.
 - No formal verification is claimed.
 - No production authentication, persistence, or cluster replication is claimed.
 - No LLM API is invoked by the simulated AI-agent demo.
@@ -58,6 +59,7 @@ introspection. All cross-realm operations present a cap id to the gateway.
 ## Future Work
 
 - Mechanize the operational semantics.
-- Extend the browser Worker bridge proof into AtomVM-WASM browser nodes.
+- Extend the browser Worker bridge proof into native AtomVM-WASM browser nodes that
+  consume `Lattice.Canonical` and `Lattice.Carrier.Wire`.
 - Add durable cap/audit replication and replay protection.
 - Explore UI consent ceremonies for live process introspection.

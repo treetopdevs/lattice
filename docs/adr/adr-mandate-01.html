@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADR-MANDATE-01 — The Mandate Primitive: Set-Membership Constitutive Authority</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders:opsz,wght@10..72,500;10..72,700;10..72,800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F3F5F3;
+    --panel:#FCFDFC;
+    --ink:#182420;
+    --ink-soft:#41504B;
+    --teal:#0E6B5B;
+    --teal-soft:#E0EEEA;
+    --amber:#B4551F;
+    --amber-soft:#F6E8DE;
+    --violet:#584A93;
+    --violet-soft:#E9E5F4;
+    --done:#3E7A3E;
+    --done-soft:#E4EFE2;
+    --line:#CBD5CF;
+    --grid:rgba(14,107,91,.075);
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --serif:'Source Serif 4',Georgia,serif;
+    --disp:'Big Shoulders','Arial Narrow',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto}
+    *,*::before,*::after{animation:none!important;transition:none!important}
+  }
+  body{
+    background:
+      linear-gradient(var(--grid) 1px,transparent 1px),
+      linear-gradient(90deg,var(--grid) 1px,transparent 1px),
+      var(--paper);
+    background-size:28px 28px,28px 28px,auto;
+    color:var(--ink);
+    font-family:var(--serif);
+    font-size:17px;
+    line-height:1.65;
+  }
+  a{color:var(--teal)}
+  .wrap{max-width:940px;margin:0 auto;padding:0 24px}
+
+  header.mast{border-bottom:3px solid var(--ink);padding:40px 0 26px}
+  .doc-id{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);display:flex;flex-wrap:wrap;gap:8px 20px;margin-bottom:20px}
+  .doc-id b{color:var(--teal);font-weight:600}
+  h1.title{font-family:var(--disp);font-weight:800;font-size:clamp(44px,8vw,86px);line-height:.94;letter-spacing:.005em;text-transform:uppercase}
+  h1 .thin{font-weight:500;color:var(--teal)}
+  .subtitle{font-size:clamp(17px,2.2vw,21px);max-width:60ch;margin-top:16px;color:var(--ink-soft);font-style:italic}
+  .chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+  .chip{font-family:var(--mono);font-size:12.5px;padding:5px 12px;border:1.5px solid var(--ink);background:var(--panel)}
+  .chip.live{border-color:var(--teal);color:var(--teal);background:var(--teal-soft)}
+  .chip.res{border-color:var(--violet);color:var(--violet);background:var(--violet-soft)}
+  .chip.date{border-style:dashed;color:var(--ink-soft)}
+
+  section{padding:48px 0 4px}
+  .sec-head{display:flex;align-items:baseline;gap:16px;border-bottom:2px solid var(--ink);padding-bottom:9px;margin-bottom:24px}
+  .sec-num{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--teal);letter-spacing:.1em;white-space:nowrap}
+  h2{font-family:var(--disp);font-weight:700;font-size:clamp(26px,4vw,40px);text-transform:uppercase;letter-spacing:.01em;line-height:1}
+  h3{font-family:var(--disp);font-weight:700;font-size:22px;text-transform:uppercase;letter-spacing:.02em;margin:30px 0 10px}
+  h4{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--teal);margin:24px 0 9px}
+  p{margin:0 0 15px;max-width:74ch}
+  p.lede{font-size:19px;line-height:1.58}
+  .mono{font-family:var(--mono);font-size:.86em;background:var(--teal-soft);padding:1px 5px;border-radius:2px}
+  em.term{font-style:normal;font-weight:600;color:var(--teal)}
+
+  .status-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0;border:1.5px solid var(--ink);background:var(--panel);margin:22px 0}
+  .status-row .cell{padding:12px 16px;border-right:1.5px solid var(--line)}
+  .status-row .cell:last-child{border-right:0}
+  .status-row .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:4px}
+  .status-row .v{font-family:var(--mono);font-size:13.5px;font-weight:600;color:var(--ink)}
+  .status-row .v.teal{color:var(--teal)}
+  .status-row .v.violet{color:var(--violet)}
+
+  .thesis{border-left:5px solid var(--teal);background:var(--panel);padding:20px 24px;margin:24px 0;max-width:78ch;font-size:19px;line-height:1.5}
+
+  .warnbox{border:1.5px solid var(--amber);background:var(--amber-soft);padding:17px 21px;margin:20px 0;max-width:78ch}
+  .warnbox .lbl{font-family:var(--mono);font-size:11.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);margin-bottom:6px}
+  .warnbox p{font-size:15.5px;margin-bottom:8px}
+  .warnbox p:last-child{margin-bottom:0}
+
+  .contrast{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:22px 0}
+  @media(max-width:620px){.contrast{grid-template-columns:1fr}}
+  .contrast .side{border:1.5px solid var(--line);background:var(--panel);border-top:4px solid var(--ink);padding:16px 18px}
+  .contrast .side.cap{border-top-color:var(--ink-soft)}
+  .contrast .side.man{border-top-color:var(--teal)}
+  .contrast .side .tag{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft)}
+  .contrast .side h5{font-family:var(--disp);font-size:22px;font-weight:700;text-transform:uppercase;margin:5px 0 8px}
+  .contrast .side.man h5{color:var(--teal)}
+  .contrast .side ul{list-style:none;font-size:14.5px}
+  .contrast .side li{padding:5px 0 5px 16px;position:relative;border-bottom:1px dotted var(--line)}
+  .contrast .side li:last-child{border-bottom:0}
+  .contrast .side li::before{content:"·";position:absolute;left:2px;color:var(--teal);font-weight:700}
+
+  .decision{border:2px solid var(--ink);background:var(--panel);margin:22px 0;padding:0}
+  .decision .dh{background:var(--ink);color:var(--paper);font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;padding:10px 18px}
+  .decision .db{padding:18px 22px}
+  .decision .db p:last-child{margin-bottom:0}
+  .decision b.d{font-family:var(--disp);font-size:20px;text-transform:uppercase;letter-spacing:.02em;color:var(--teal);display:block;margin-bottom:6px}
+
+  ol.deletes{counter-reset:d;list-style:none;margin:18px 0;max-width:80ch}
+  ol.deletes li{counter-increment:d;display:grid;grid-template-columns:52px 1fr;gap:0 16px;padding:14px 0;border-bottom:1px solid var(--line)}
+  ol.deletes li::before{content:"×"counter(d);font-family:var(--mono);font-size:15px;font-weight:600;color:var(--amber);padding-top:2px}
+  ol.deletes b{font-family:var(--disp);font-size:18px;text-transform:uppercase;letter-spacing:.02em;display:block}
+  ol.deletes p{font-size:15px;margin:4px 0 0}
+
+  pre{font-family:var(--mono);font-size:13px;line-height:1.55;background:var(--ink);color:#DCE8E3;padding:18px 20px;overflow-x:auto;margin:18px 0;border-radius:2px}
+  pre .c{color:#7FA89C}
+  pre .k{color:#8FD8C7;font-weight:600}
+  pre .a{color:#E0A97A}
+
+  .tax{border:1.5px solid var(--violet);background:var(--violet-soft);padding:16px 20px;margin:20px 0;max-width:80ch}
+  .tax .lbl{font-family:var(--mono);font-size:11.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--violet);margin-bottom:6px}
+  .tax p{font-size:15px;margin-bottom:8px}
+  .tax p:last-child{margin-bottom:0}
+
+  table{width:100%;border-collapse:collapse;margin:18px 0;background:var(--panel);font-size:14.5px}
+  th{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;text-align:left;background:var(--ink);color:var(--paper);padding:9px 12px}
+  td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  td.ph{font-family:var(--mono);font-weight:600;color:var(--teal);white-space:nowrap}
+
+  .nongoal{border:1.5px dashed var(--ink);padding:16px 20px;margin:20px 0;background:var(--panel);max-width:80ch}
+  .nongoal .lbl{font-family:var(--mono);font-size:11.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:8px}
+  .nongoal ul{list-style:none;font-size:15px}
+  .nongoal li{padding:5px 0 5px 20px;position:relative}
+  .nongoal li::before{content:"—";position:absolute;left:0;color:var(--amber)}
+
+  footer{border-top:3px solid var(--ink);margin-top:56px;padding:26px 0 54px}
+  footer p{font-size:14px;color:var(--ink-soft)}
+  .lastline{margin-top:10px;font-family:var(--mono);font-size:12px;letter-spacing:.1em}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="mast">
+  <div class="doc-id">
+    <span>TREETOPDEVS / <b>LATTICE</b></span>
+    <span>DECISION RECORD · <b>ADR-MANDATE-01</b></span>
+    <span>SUPERSEDES: —</span>
+  </div>
+  <h1 class="title">The<br>Man<span class="thin">date</span></h1>
+  <p class="subtitle">A set-membership primitive for constitutive, upward, unilaterally-revocable authority — the mechanical form of "power derived from the governed." Deliberately narrow.</p>
+  <div class="chips">
+    <span class="chip live">STATUS · ACCEPTED (NARROW)</span>
+    <span class="chip res">SYBIL-DEFENSE · OUT OF SCOPE ⚗</span>
+    <span class="chip date">JULY 2026 · WORKING DOC</span>
+  </div>
+</header>
+
+<div class="status-row">
+  <div class="cell"><div class="k">Layer</div><div class="v teal">L2 · Trust (application seam)</div></div>
+  <div class="cell"><div class="k">Reuses</div><div class="v">Q-03 · V-01 · Cap chain</div></div>
+  <div class="cell"><div class="k">Prototype at</div><div class="v teal">M5 · Township</div></div>
+  <div class="cell"><div class="k">Recursion gated</div><div class="v violet">M6 · Federation</div></div>
+</div>
+
+<!-- CONTEXT -->
+<section>
+  <div class="sec-head"><span class="sec-num">1 · CONTEXT</span><h2>What forced the decision</h2></div>
+
+  <p class="lede">Standard capability delegation flows <em>downward and attenuating</em>: a holder grants a narrower slice of what it already has, and keeps the whole. That models permission. It does not model <em>constitution</em> — the relationship where an aggregate's authority is not lent to it as an errand but <em>brought into being</em> by the standing consent of its members, and ceases when that consent is withdrawn.</p>
+
+  <div class="thesis">A reporter mandates a newsroom. The newsroom mandates a news&nbsp;DAO. At every level, authority is not a stored field the aggregate possesses — it is a quantity the aggregate <em>derives</em>, per question, from the live mandates beneath it. Withdraw the mandate and the derived authority recomputes downward. That is the state deriving its power from the people, made into an op.</div>
+
+  <p>This needs a primitive distinct from <span class="mono">Cap</span>. Reusing the Cap name would corrupt both: a Cap attenuates and is retained by its issuer; a Mandate does neither. It is a new object with two hard properties — it flows <em>up</em> the aggregation hierarchy, and it is <em>constitutive</em> rather than task-scoped.</p>
+</section>
+
+<!-- THE FORK -->
+<section>
+  <div class="sec-head"><span class="sec-num">2 · DECISION</span><h2>One grantor, one weight. Fixed scope.</h2></div>
+
+  <p class="lede">Two forks decided together, because the second only stays clean given the first.</p>
+
+  <div class="decision">
+    <div class="dh">Decision A — the weight model</div>
+    <div class="db">
+      <b class="d">Set-membership over transferable weight</b>
+      <p>A mandate is a <em>membership fact</em>, not a conserved substance. Authority-at-a-level is <span class="mono">|live mandates satisfying the scope predicate|</span> — a fold over a set, idempotent and commutative, which the DAG converges on with no new invariant. A grantor either is-mandating a grantee for a scope, or is not. There is no fractional standing, no "60% of my voice," nothing to split, transfer, or double-spend.</p>
+      <p><b>Rejected:</b> transferable weight (a scalar a grantor holds and can apportion). It reintroduces a conserved quantity, drags in the delegative-democracy / Liquid Democracy attack surface (delegation cycles, super-voter concentration, weight-buying via transfer), and slides toward token mechanics — an explicit non-goal of Township.</p>
+    </div>
+  </div>
+
+  <div class="decision">
+    <div class="dh">Decision B — the scope model</div>
+    <div class="db">
+      <b class="d">Fixed atom over predicate</b>
+      <p>A mandate binds to exactly one scope, drawn from a station vocabulary (e.g. <span class="mono">:editorial_standards_vote</span>). Consent is granted per scope. A <em>new</em> scope an aggregate invents later starts with zero mandates until members opt in — which is not a limitation but the correct behaviour: consent must not auto-extend to questions no one agreed to.</p>
+      <p><b>Rejected (for the pilot):</b> a mandate matching a <em>predicate over questions</em>. More expressive, but it immediately reintroduces the "did I consent to <em>this</em> interpretation of my grant" ambiguity that written constitutions spend centuries litigating. Ship the narrow thing; make scope-generality a documented non-goal.</p>
+    </div>
+  </div>
+</section>
+
+<!-- CAP VS MANDATE -->
+<section>
+  <div class="sec-head"><span class="sec-num">3 · SHAPE</span><h2>Mandate is not a Cap</h2></div>
+
+  <div class="contrast">
+    <div class="side cap">
+      <span class="tag">Existing · L1</span>
+      <h5>Cap</h5>
+      <ul>
+        <li>Flows <b>down</b> a delegation chain</li>
+        <li><b>Attenuates</b> — each hop narrows</li>
+        <li>Issuer <b>retains</b> the full authority</li>
+        <li>Grants a <b>task</b>: "you may do X"</li>
+        <li>Revocation severs a granted slice</li>
+      </ul>
+    </div>
+    <div class="side man">
+      <span class="tag">New · L2</span>
+      <h5>Mandate</h5>
+      <ul>
+        <li>Flows <b>up</b> the aggregation hierarchy</li>
+        <li><b>Does not attenuate</b> — it is presence or absence</li>
+        <li>Grantor <b>contributes</b> to what the grantee's authority <em>is</em></li>
+        <li>Grants <b>constitution</b>: "you may derive authority from my standing consent"</li>
+        <li>Revocation is <b>unilateral</b> — needs no counter-sign, cannot be vetoed</li>
+      </ul>
+    </div>
+  </div>
+
+  <h4>Op-shape</h4>
+  <p>Two ops on the existing 2.0 authority DAG. Nothing new in the substrate.</p>
+  <pre><span class="c"># mandate.grant — signed by the grantor's key alone</span>
+{
+  <span class="k">:kind</span>        => <span class="a">:authority</span>,        <span class="c"># existing op kind</span>
+  <span class="k">:sub</span>         => <span class="a">:mandate_grant</span>,
+  <span class="k">:grantor</span>     => grantor_pubkey,     <span class="c"># did:key-class; NOT a user row</span>
+  <span class="k">:grantee</span>     => grantee_replica_id, <span class="c"># the newsroom's Replica</span>
+  <span class="k">:scope</span>       => <span class="a">:editorial_standards_vote</span>,
+  <span class="k">:expires_at</span>  => nil                  <span class="c"># nil = standing consent</span>
+}
+
+<span class="c"># mandate.revoke — UNILATERAL. only the grantor's key authorizes it.</span>
+{
+  <span class="k">:kind</span>        => <span class="a">:authority</span>,
+  <span class="k">:sub</span>         => <span class="a">:mandate_revoke</span>,
+  <span class="k">:grantor</span>     => grantor_pubkey,     <span class="c"># must match the grant's grantor</span>
+  <span class="k">:grant_ref</span>   => granted_op_hash     <span class="c"># the mandate being withdrawn</span>
+}</pre>
+
+  <p>Authority is a <em>read</em>, never a stored field — the line that makes this democracy rather than a table of weighted signatures:</p>
+  <pre><span class="c"># A realm's authority over a scope is a pure fold over live mandates.</span>
+<span class="c"># Deps-decidable, identical across replicas => property (d) holds unchanged.</span>
+standing(grantee, scope) =
+  count(mandates where grantee == grantee
+                   and scope   == scope
+                   and state   == <span class="a">:live</span>)</pre>
+</section>
+
+<!-- REUSE -->
+<section>
+  <div class="sec-head"><span class="sec-num">4 · WHY IT COSTS ALMOST NOTHING</span><h2>The machinery already exists</h2></div>
+
+  <table>
+    <thead><tr><th style="width:200px">Mandate needs</th><th>Provided by</th></tr></thead>
+    <tbody>
+      <tr><td class="ph">Signed grant / revoke</td><td>The <span class="mono">:authority</span> op kind and canonical signing (Q-01/Q-02) — a mandate is just an authority op with a new <span class="mono">:sub</span>.</td></tr>
+      <tr><td class="ph">Unilateral revoke, no veto</td><td>One policy: the revoke op validates iff signed by the same key as the grant. The grantee has no <span class="mono">approve_revocation</span> action because there is nothing to approve.</td></tr>
+      <tr><td class="ph">Withdrawal defeats dependent acts</td><td>The Q-03 quarantine cascade, pointed at mandates: any grantee action whose validity <em>depended on</em> a now-revoked mandate is quarantined the instant the revoke is causally observed — exactly V-01's "did the author causally observe the authority-changing op."</td></tr>
+      <tr><td class="ph">Convergent count across replicas</td><td>Property (a) convergence + property (d) identical quarantine sets. Set-membership is order-independent, so the fold is byte-identical under property (c).</td></tr>
+    </tbody>
+  </table>
+
+  <p>The op-shape is specifiable against M1's machinery today. It is not an M1 primitive — but it takes no new substrate, only a new <span class="mono">:sub</span> and one policy.</p>
+</section>
+
+<!-- WHAT THE CHOICE DELETES -->
+<section>
+  <div class="sec-head"><span class="sec-num">5 · CONSEQUENCE</span><h2>The attack classes this deletes</h2></div>
+
+  <p class="lede">The value of Decision A is mostly in what becomes <em>unexpressible</em>. You defend these by subtraction, not by mechanism.</p>
+
+  <ol class="deletes">
+    <li><div><b>Weight-buying via transfer</b><p>You cannot sell "40% of my standing" because standing is not a scalar you hold. No conserved substance ⇒ no market in it.</p></div></li>
+    <li><div><b>Delegation cycles &amp; super-voters</b><p>The Liquid Democracy pathologies (A mandates B mandates A; one node accreting transferred weight) have no surface — membership does not chain into concentration.</p></div></li>
+    <li><div><b>Silent re-mandating</b><p>A grantee cannot forward a grantor's mandate upward without the grantor's fresh consent, because the grantor's key is the only thing that can emit a grant. Consent is transitive only through explicit re-granting at each level.</p></div></li>
+    <li><div><b>Scope creep by reinterpretation</b><p>Fixed-atom scope (Decision B) means a mandate for one question can never be counted toward another. New questions start empty.</p></div></li>
+  </ol>
+</section>
+
+<!-- THE TAX -->
+<section>
+  <div class="sec-head"><span class="sec-num">6 · THE TAX</span><h2>What this strengthens, and what it charges</h2></div>
+
+  <p>Per the PD-001 rule: every mechanism that strengthens one adversary defense states which of the other two it taxes. The Mandate is strongly <em>A3-resistant</em> — there is no authority to seize, and consent-withdrawal dissolves acts that rode on it. It taxes the other two.</p>
+
+  <div class="warnbox">
+    <div class="lbl">A2 — the faction · this is where the whole threat concentrates</div>
+    <p>If authority is <span class="mono">count(live mandates)</span>, then <b>manufacturing grantors is the takeover.</b> Set-membership does not defend Sybil — it makes admission the entire game. A grantee that fabricates 10,000 grantor keys and self-mandates has "constituted" enormous authority, perfectly validly from the DAG's view. The primitive presupposes a real, Sybil-resistant grantor set; it does not produce one. Whoever answers "who is a real reporter" holds the actual power.</p>
+  </div>
+
+  <div class="warnbox">
+    <div class="lbl">A1 — the coercer · aggregation concentrates the target</div>
+    <p>Compelling one grantor's key compels one voice. Compelling a grantee's <em>fold</em> compels everyone who mandated it, at once, invisibly. Upward aggregation is a coercion-concentration surface. Township's answer is scale + social recourse (the equivocation branch, M4); the recursion to DAO scale is not covered by this ADR.</p>
+  </div>
+
+  <div class="tax">
+    <div class="lbl">Where the hard part actually lives</div>
+    <p>This is not a flaw in the Mandate — it is the Mandate being honest about where the difficulty is. One-grantor-one-weight does not <em>solve</em> Sybil; it <em>relocates the entire problem onto admission</em> and makes that relocation visible. That is a feature: the ADR names exactly one unsolved thing instead of smuggling it into a weighting scheme.</p>
+    <p>At Township scale the answer already exists — vouch-gated admission, one shared verifier, a human community that would notice 10,000 phantom reporters. That is precisely why the <b>reporter → newsroom</b> level is prototypable now (M5) and the <b>newsroom → DAO</b> recursion is deferred: it is the federation seam (M6) wearing new clothes. "Does newsroom-local mandate → DAO-federated mandate compose or leak?" <em>is</em> R-06.</p>
+  </div>
+</section>
+
+<!-- SCOPE FENCE -->
+<section>
+  <div class="sec-head"><span class="sec-num">7 · SCOPE FENCE</span><h2>Deliberately excluded</h2></div>
+
+  <div class="nongoal">
+    <div class="lbl">Not in this ADR — do not implement under its authority</div>
+    <ul>
+      <li>Transferable / fractional weight, and everything downstream of it (Liquid Democracy, quadratic mechanisms, token accounting).</li>
+      <li>Predicate-scoped mandates. Fixed atom only.</li>
+      <li>Sybil-resistant admission — the grantor set is <em>assumed</em> real; constituting it is Township's vouch layer (separate), not this primitive.</li>
+      <li>The newsroom → DAO recursion as a shipped mechanism. Its <em>op-shape</em> composes trivially; whether it <em>composes without leaking</em> is M6 / R-06.</li>
+      <li>Coercion-resistance of upward aggregation (M4 equivocation branch).</li>
+      <li>Nested-revocation cardinality leak ("reporter X withdrew from newsroom Y" is observable) — flagged, measured at Township scale, not solved here (R-05).</li>
+    </ul>
+  </div>
+
+  <p>If any excluded item starts looking necessary <em>inside</em> the pilot, the requirement is questioned before the machinery is added — the standing "do-not-implement" discipline.</p>
+</section>
+
+<footer>
+  <p>Decision: <b>accept the narrow Mandate</b> — set-membership, fixed-scope, unilateral revoke — as an L2 application-seam primitive prototyped at Township (reporter → newsroom, single level, one shared verifier). Recursion and Sybil-resistant admission are named, deferred, and mapped to existing gates (M4/M6, R-04/R-05/R-06). No new substrate; one new authority-op <span class="mono">:sub</span> and one revoke policy.</p>
+  <p>References: PD-001 §1 (three-adversary Pareto surface), §6 Q-03 (quarantine cascade), V-01 (one predicate for stale-holder + revocation), R-04/R-05/R-06 (Sybil, cardinality, federation seam). KERI pre-rotation ↔ MACI key-change as the compatible-primitives precedent for authority-change-as-ordinary-op.</p>
+  <p class="lastline">LATTICE · ADR-MANDATE-01 · JULY 2026 — CONSENT IS A COUNT, AND IT CAN BE WITHDRAWN.</p>
+</footer>
+
+</div>
+</body>
+</html>

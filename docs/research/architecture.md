@@ -3,11 +3,11 @@
 Status: working research demonstrator with explicitly labeled simulations.
 
 Lattice explores a unified BEAM-shaped process plane where browser tabs, server
-processes, tab-owned workers, bridges, and future AtomVM-WASM nodes are treated
-as realms in one actor topology. The core claim is not that a browser becomes a
-trusted Erlang node. The claim is that cross-realm authority can be expressed as
-object capabilities that preserve OTP-like lifecycle semantics across an
-asymmetric trust boundary.
+processes, tab-owned workers, bridges, real carrier peers, and planned AtomVM-WASM
+nodes are treated as realms in one actor topology. The core claim is not that a
+browser becomes a trusted Erlang node. The claim is that cross-realm authority can
+be expressed as object capabilities that preserve OTP-like lifecycle semantics across
+an asymmetric trust boundary.
 
 ## Thesis Object
 
@@ -39,6 +39,8 @@ The working implementation is in `apps/lattice_core`.
 - `Lattice.RedTeam.Sandbox` runs repeatable adversarial attempts.
 - `Lattice.Flagship` provides the browser-visible canonical wallet story and
   feeds the live graph inspector.
+- `Lattice.Carrier`, `Lattice.Carrier.Wire`, and the node spike prove the Lattice 2.0
+  op-log can sync over a real WebSocket carrier while preserving the simulator oracle.
 
 ## What Is Simulated Or Narrow
 
@@ -57,7 +59,8 @@ The working implementation is in `apps/lattice_core`.
 
 ## What Is Future Work
 
-- Real AtomVM-WASM transport and distribution experiments.
+- Native AtomVM-WASM browser realm implementation against `Lattice.Canonical` and
+  `Lattice.Carrier.Wire`.
 - Formal operational semantics mechanized in a proof assistant.
 - Durable replicated capability/audit state.
 - Production authentication, origin policy, CSRF protection, and persistence.

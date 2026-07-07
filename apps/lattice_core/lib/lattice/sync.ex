@@ -19,7 +19,8 @@ defmodule Lattice.Sync do
   idempotently — is unchanged by that optimization.
   """
 
-  alias Lattice.{Log, Op}
+  alias Lattice.{Dag, Log, Op}
+  alias Lattice.Sync.Shape
 
   @type report :: %{
           accepted: [Op.id()],
@@ -34,6 +35,35 @@ defmodule Lattice.Sync do
     source
     |> Log.topo_ops()
     |> Enum.reject(&MapSet.member?(have, &1.id))
+  end
+
+  @doc "Shape-filtered missing ops with causal closure for selected non-tombstone ops."
+  @spec missing(Log.t(), MapSet.t(Op.id()), Shape.t()) :: [Op.t()]
+  def missing(%Log{} = source, %MapSet{} = have, %Shape{} = shape) do
+    selected_ops =
+      source
+      |> Log.topo_ops()
+      |> Enum.filter(&Shape.selected?(shape, &1))
+
+    closure_seeds =
+      selected_ops
+      |> Enum.reject(&(&1.kind == :tombstone))
+      |> Enum.map(& &1.id)
+
+    tombstone_ids =
+      selected_ops
+      |> Enum.filter(&(&1.kind == :tombstone))
+      |> MapSet.new(& &1.id)
+
+    closure =
+      source
+      |> Log.ops()
+      |> Dag.reachable(closure_seeds)
+      |> MapSet.union(tombstone_ids)
+
+    source
+    |> Log.topo_ops()
+    |> Enum.filter(&(MapSet.member?(closure, &1.id) and not MapSet.member?(have, &1.id)))
   end
 
   @doc "Apply a batch of ops to a log, buffering missing-dep ops and retrying."

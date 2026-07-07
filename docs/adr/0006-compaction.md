@@ -117,6 +117,18 @@ An op may be dropped iff it is in `reachable(F)` for a frontier `F` such that:
      floor. Frontiers at-or-above `F` keep working. If history-below-`F` matters, archive
      covered ops cold instead of deleting (compaction of the *hot* path either way).
 
+## M2 acknowledgement contract
+
+`Lattice.Carrier.Membership` is a tested acknowledgement helper for the future GC rule
+above, not a wired production compaction gate. A frontier may be considered
+carrier-stable only when every current participant has acknowledged the same normalized
+frontier; an empty current set is never stable, and a rejoining participant must
+acknowledge the frontier again. Because this helper uses exact frontier equality, a
+production GC loop must actively propose and coordinate candidate GC frontiers; passive
+heartbeats that keep advancing to newer leaf ids do not prove they still agree on the
+same compactable frontier. Snapshot signatures/quorum and snapshot-only bootstrap trust
+remain separate unresolved production requirements.
+
 ## Decision 5: sync impact
 
 - **Compacted ↔ compacted at same `F`**: advertise `frontier + retained op-ids`; transfer
@@ -129,9 +141,10 @@ An op may be dropped iff it is in `reachable(F)` for a frontier `F` such that:
   verify the retained region normally, but must **trust** the snapshot (it cannot
   re-reduce ops it never had). Trust anchoring — snapshot signed by a role, or by a
   quorum of realms that verified it — is an open design question below.
-- Carrier note (ADR 0005): the snapshot hash uses `term_to_binary [:deterministic]`,
-  inheriting the ADR-0001 BEAM-only caveat; canonical CBOR is a prerequisite for
-  cross-runtime snapshot verification just as it is for op hashing.
+- Carrier note (ADR 0005): op/delegation hashing now uses `Lattice.Canonical`, but the
+  spike snapshot hash still uses `term_to_binary [:deterministic]`. Production
+  cross-runtime snapshot verification needs a snapshot canonical encoder or an extension
+  of `Lattice.Canonical`; do not treat the spike hash as the final browser/AtomVM format.
 
 ## What the spike deliberately reimplements (and why that is honest)
 

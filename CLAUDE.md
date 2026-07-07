@@ -52,14 +52,16 @@ Drive these to green under the standard loop (`mix format` → `mix test` → th
 - **G5** — `scripts/township_demo.exs` narrates W0→W4 clean and emits trust-graph + audit
   artifacts an outsider can replay (reuse the V1 `mix lattice.graph.snapshot` exporters).
 
-### G1 is the known gap — read this
+### G1 is the remaining integration gap — read this
 
 G1 wants W0–W3 on **two physical BEAM nodes over the real WebSocket carrier**. That carrier is
-**M2 and does not exist yet** — `Lattice.Sim` uses simulated realms and a simulated `Net`.
-These tests prove the *logic* on the real substrate; the physical-carrier run is a later,
-stronger execution of the *same* assertions. Do not fake G1 by claiming Sim is the carrier.
-When M2 lands, re-point the demo's realm setup at the real transport and the assertions carry
-over unchanged (that portability is the design goal, per `PD-001 §6 V-03`).
+now present as the M2 substrate (`Lattice.Carrier`, `apps/lattice_node_spike`, and the
+canonical/wire/session helpers). The Township overlay has not yet been re-pointed from
+`Lattice.Sim` to that carrier. These tests prove the *logic* on the real substrate; the
+physical-carrier run is the next, stronger execution of the same assertions. Do not fake
+G1 by claiming Sim is the carrier. Re-point the demo's realm setup at the real transport
+and the assertions should carry over unchanged (that portability is the design goal, per
+`PD-001 §6 V-03`).
 
 ## Constraints — the "do not implement" boundary (PD-001 §6)
 
@@ -70,7 +72,9 @@ requirement, not the boundary:
   There is intentionally no sixth workflow.
 - **No key rotation, recovery, or E2EE** — M3 (roadmap R1). `Township.Matter` assumes stable
   identities for the POC.
-- **No compaction** — the first scaling cliff; acknowledged, not built.
+- **No production compaction** — the first scaling cliff; the feasibility spike and M2
+  carrier acknowledgements exist, but snapshot-aware `Authority`/`Reduce` integration and
+  GC coordination are not built.
 - **No real receipt-free crypto** — M4 (roadmap R2). The `Stub` stands in; `receipt_free?`
   stays `false` until the primitive clears JCJ.
 
@@ -95,7 +99,9 @@ Use these real signatures — do not invent parallel APIs:
 Prefer the **latest** Elixir, Phoenix LiveView, and Vue where a choice is open. The one UI
 surface (PD-001-A §A4) is a single Phoenix LiveView with five panels — reserved for the app
 layer per `PD-001 §2`; Vue 3.5 only if a non-LiveView browser realm is needed as the second
-device at M2. Decide the carrier (AtomVM vs JS/Vue client) by the M2 spike, not by preference.
+device. M2 chose and hardened the WebSocket carrier substrate; the remaining browser choice is
+whether the tab realm is implemented as native AtomVM/WASM or a JS/Vue client that consumes
+`Lattice.Canonical` and `Lattice.Carrier.Wire`.
 
 ## First moves
 
@@ -113,16 +119,17 @@ at one seam:
 
 - **Substrate track** — `plans/` (generated 2026-06-20). Foundation & hardening (`000`–`009`,
   e.g. 001 gates the full property suite in CI — needed before Township's M1 property claims can
-  be trusted), then the direction spikes (`010`–`013`). **Plan `010` (prove v2 over a real
-  carrier, replacing simulated `Net`) is the item that unblocks Township's exit gate G1** — the
-  physical-carrier run these tests can't reach on `Sim` today.
+  be trusted), then the direction spikes (`010`–`013`) and M2 hardening. **Plan `010` and M2 now
+  provide the carrier substrate that unblocks Township's exit gate G1** — the remaining work is
+  a Township harness/demo pass over that carrier instead of `Sim`.
 - **Application track** — this overlay. W0–W4 on `Sim` now, structured so the W1/W3 assertions
-  swap onto the real carrier unchanged when `010` lands.
-- **The seam** — `plans/010a-carrier-township-acceptance.md` (in this overlay). It binds `010`'s
-  convergence GATE to Township **W1/W3** as the application oracle, and records the coupling `010`
-  defers: a **Vue 3.5 / JS browser realm cannot emit `:erlang.term_to_binary`**, so canonical
-  **CBOR (ADR-P08)** becomes a hard prerequisite the instant a non-BEAM realm joins. Read `010`
-  and `010a` together before doing carrier or browser-realm work.
+  swap onto the real carrier unchanged.
+- **The seam** — `plans/010-real-carrier-spike.md`, ADR 0005, and M2 are the substrate carrier
+  gate in this checkout. A Township overlay may add its own `010a` acceptance plan, but that file
+  is not present here. The remaining coupling is explicit: any native browser realm
+  (AtomVM/WASM or JS/Vue) must implement `Lattice.Canonical` and `Lattice.Carrier.Wire` before it
+  can author or verify ops without the BEAM bridge.
 
-Run as two Fable worktrees: worktree 1 executes `010` + the ADRs in `010a`; worktree 2 keeps this
-overlay green and swaps the W1/W3 harness from `Sim` to the real carrier when it exists.
+Run as two Fable worktrees when the Township overlay is present: worktree 1 keeps the substrate
+carrier hardening green; worktree 2 keeps the overlay green and swaps the W1/W3 harness from
+`Sim` to the real carrier.

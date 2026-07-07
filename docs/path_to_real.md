@@ -10,17 +10,17 @@ Keyhive/Beelay interop slots in, and why compaction is the first scaling cliff.
 never does — realms are addressed by id, sync is a function over two logs, and live
 sends go through the v1 Gateway. To run a realm in a second OS process / a browser:
 
-* **Wire format.** Define an explicit, language-neutral canonical encoding for ops and
-  delegations (canonical CBOR is the natural choice) so that a Rust/JS/AtomVM peer and
-  a BEAM peer hash and verify identically. This replaces the `:erlang.term_to_binary`
-  shortcut (ADR 0001) — the *only* place the current encoding is BEAM-specific.
+* **Wire format.** M2 defines `Lattice.Canonical` for signed op/delegation bytes and
+  `Lattice.Carrier.Wire` for versioned JSON-safe full-op frames. A Rust/JS/AtomVM peer
+  still needs its own implementation of that schema, but it no longer has to reproduce
+  `:erlang.term_to_binary` to hash and verify ops.
 * **Transport.** Carry op batches and live messages over WebSocket (server↔browser) or
   Erlang distribution (server↔server). The v1 repo already has a WebSocket boundary
   (`apps/lattice_server`) and a browser-BEAM carrier spike to build on. `Lattice.Sync`
   and `Lattice.Live` keep their signatures; only the bytes-on-the-wire layer changes.
 * **AtomVM browser node.** The "tab" realm becomes an AtomVM instance running the same
   `Lattice.Op`/`Log`/`Reduce`/`Authority` code, persisting its log in browser storage
-  and dumping/restoring exactly as `Lattice.Log.dump/restore` already do.
+  and dumping/restoring via the JSON-safe `Lattice.BrowserLogStore` payload contract.
 * **Liveness-driven heartbeats.** Succession dormancy (ADR 0004) should derive its
   heartbeats from real connection liveness on the carrier rather than explicit ops.
 
@@ -36,10 +36,18 @@ realm's `Lattice.Log`, exchanging ops over a genuine WebSocket (Cowboy server +
 offline divergence + heal (reconnect + sync) converges to **byte-identical reduced
 state** on both nodes, equal to the `Lattice.Sim` oracle for the same op set; re-sync
 transfers nothing; an op tampered on the wire is quarantined by `Log.accept/2`'s
-signature check; `Sync`/`Reduce`/`Authority` were untouched. The pinned
-`term_to_binary` wire encoding round-trips hash/verify-identically BEAM↔BEAM — the
-CBOR replacement below remains the hard prerequisite for any non-BEAM peer. Details
-and open-question answers: `docs/adr/0005-carrier-interface.md`.
+signature check; `Sync`/`Reduce`/`Authority` were untouched. The original light path
+used pinned `term_to_binary` for BEAM↔BEAM frames; M2 replaces that current boundary
+with the shared canonical bytes and wire frames described below. Details and
+open-question answers: `docs/adr/0005-carrier-interface.md`.
+
+**M2 hardening result (2026-07-05).** The carrier substrate now has canonical signed
+bytes, shared wire frames, explicit trust anchors plus signed challenge/response
+sessions, deterministic reconnect backoff helpers, dependency-closed partial sync shapes
+that can restrict outbound carrier transfer, bounded push batches, tested membership
+acknowledgements for future compaction GC, and a BEAM-side browser log-store payload
+helper that preserves quarantine reports. The browser/AtomVM track still needs to
+consume those schemas and wire persistence in its own runtime.
 
 ## 2. Efficient frontier-diff sync (Beelay)
 
@@ -63,10 +71,12 @@ change the observable contract (converge to identical op sets, idempotently).
 
 ## 4. Compaction is the first scaling cliff (Sedimentree)
 
-A Replica's identity is its **entire** op-log, which grows without bound — the POC never
-compacts (only an optional naive snapshot was in scope). The first thing that breaks at
-scale is memory/disk and reduction cost: reducing a long-lived thread means folding
-every op ever written, and sync ships ever-larger histories.
+A Replica's identity is its **entire** op-log, which grows without bound. The plan-013
+spike proves a Sedimentree-style summary can preserve state/authority equivalence at a
+stable frontier, but production compaction is not wired into `Lattice.Log`, `Registry`,
+`Sync`, `Authority`, or `Reduce`. The first thing that breaks at scale is memory/disk
+and reduction cost: reducing a long-lived thread means folding every op ever written,
+and sync ships ever-larger histories.
 
 The fix is **Sedimentree-style layered compaction**: periodically snapshot the reduced
 state at a stable causal frontier, retain a verifiable chain of snapshots ("strata"),
@@ -79,12 +89,12 @@ delicate because:
   enough of the authority DAG (or a verified summary of holder state) to keep
   stale-holder/revocation checks sound.
 
-Until compaction exists, Lattice 2.0 is correct but not durable-at-scale — which is the
-honest boundary of this POC.
+Until production compaction exists, Lattice 2.0 is correct but not durable-at-scale —
+which is the honest boundary of this POC.
 
 ## 5. Other deferred work (explicitly out of POC scope)
 
-Multi-Replica references and cross-replica GC; partial-sync "shapes" (subscribe to a
-slice of a Replica); performance optimization of reduction (incremental rather than
-full re-fold); real PKI / identity binding; and consensus (deliberately avoided — the
-model is coordination-free CRDT + single-writer authority, not BFT consensus).
+Multi-Replica references and cross-replica GC; performance optimization of reduction
+(incremental rather than full re-fold); real PKI / identity binding; confidentiality;
+snapshot trust/quorum; and consensus (deliberately avoided — the model is
+coordination-free CRDT + single-writer authority, not BFT consensus).

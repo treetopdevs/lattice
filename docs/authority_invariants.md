@@ -45,7 +45,8 @@ graph JSON, Mermaid, DOT, screenshot, and video.
 ## Non-Claims
 
 - Browser Worker realms are real Web Workers in the focused WebSocket bridge
-  proof; AtomVM/WASM browser nodes remain future work.
+  proof. M2 adds the real carrier substrate and shared wire/canonical schemas, but a
+  native AtomVM/WASM browser tab realm remains future work.
 - The graph inspector is an in-memory live view, not durable audit storage.
 - The authority invariant is validated by tests and property-style checks, not
   by mechanized formal verification.

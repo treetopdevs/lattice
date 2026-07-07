@@ -1,19 +1,17 @@
 # Design: Really Adding AtomVM to the Browser Side
 
 Date: 2026-05-23
-Status: Validated design, not yet implemented. Supersedes the "AtomVM-WASM
-nodes remain future work" disclaimers in `docs/research/architecture.md`,
-`docs/authority_invariants.md`, `docs/research/paper_skeleton.md`, and
-`docs/stress_lab.md`.
+Status: Validated design, not yet implemented. M2 has since landed the shared carrier
+prerequisites (`Lattice.Canonical`, `Lattice.Carrier.Wire`, session auth, and browser
+log-store payloads), but this AtomVM/WASM tab realm itself is still future work.
 
 ## Problem
 
-Today a Lattice "tab realm" is ~450 lines of JavaScript (`examples/*/client.js`)
-that connects to the Cowboy WebSocket at `/ws` and exchanges strict JSON
-envelopes through the capability gateway. The browser only ever *describes* a
-process; no BEAM runs in the tab. Every AtomVM mention in the repo is an
-aspiration labelled future work. This design makes the tab realm a **real BEAM
-process** running AtomVM compiled to WebAssembly, without weakening the
+At design time, a Lattice "tab realm" was ~450 lines of JavaScript
+(`examples/*/client.js`) that connected to the Cowboy WebSocket at `/ws` and exchanged
+strict JSON envelopes through the capability gateway. The browser only ever
+*described* a process; no BEAM ran in the tab. This design makes the tab realm a
+**real BEAM process** running AtomVM compiled to WebAssembly, without weakening the
 least-authority thesis.
 
 ## Decisions taken (the three forks)

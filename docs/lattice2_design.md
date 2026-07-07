@@ -52,9 +52,9 @@ modules it reuses (`Lattice.Cap`, `Lattice.Gateway`, `Lattice.Realm`/`Tab`,
 }
 ```
 
-* **Canonical encoding** — `:erlang.term_to_binary/2` with `:deterministic`, over a
-  tagged tuple of `{replica, author, sorted(deps), kind, body, cap}`. See
-  [ADR 0001](adr/0001-canonical-encoding.md).
+* **Canonical encoding** — `Lattice.Canonical`, a small CBOR-shaped subset over
+  `{replica, author, sorted(deps), kind, body, cap}` with explicit tags for BEAM
+  atoms/tuples/MapSets/delegations. See [ADR 0001](adr/0001-canonical-encoding.md).
 * **Hash-chaining** — `id` is the content hash and `deps` cite predecessor ids, so
   the log is a tamper-evident hash-DAG: mutating any field changes the id and breaks
   every descendant. See [ADR 0002](adr/0002-hash-dag-causality.md).
@@ -147,8 +147,11 @@ The two/three in-process "realms" in tests and the demo are stand-ins for **serv
 BEAM nodes** and **browser AtomVM nodes**. `Lattice.Net` is the simulated transport
 (partition/heal + seeded delivery). Crucially, nothing in the public API assumes
 in-process locality — realms are addressed by id — so a real AtomVM/WebSocket carrier
-can replace `Lattice.Net` without changing application code. See
-[path_to_real.md](path_to_real.md).
+can replace `Lattice.Net` without changing application code. M2 proves the server-BEAM
+side of that claim with `Lattice.Carrier` and `apps/lattice_node_spike`: two OS
+processes sync over a real WebSocket and converge to the `Lattice.Sim` oracle. The
+native browser/AtomVM peer still needs its own implementation of `Lattice.Canonical` and
+`Lattice.Carrier.Wire`. See [path_to_real.md](path_to_real.md) and ADR 0005.
 
 ## Module map
 

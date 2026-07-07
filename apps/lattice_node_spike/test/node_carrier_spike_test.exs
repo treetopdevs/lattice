@@ -22,12 +22,64 @@ defmodule LatticeNodeSpike.NodeCarrierSpikeTest do
 
   use ExUnit.Case, async: false
 
-  alias Lattice.{Carrier, Log, Sim, Sync}
+  alias Lattice.Carrier
+  alias Lattice.Carrier.Backoff
+  alias Lattice.Log
+  alias Lattice.Sim
+  alias Lattice.Sync
   alias LatticeNodeSpike.{Scenario, WsCarrier}
 
   @moduletag timeout: 120_000
 
   @script Path.expand("../priv/peer_node.exs", __DIR__)
+
+  test "carrier session rejects the wrong peer key before sync" do
+    {port, ws_port} = spawn_peer("node_a")
+    wrong_pubkey = Lattice.Identity.from_seed("node_a", "wrong-carrier-spike").pub
+
+    assert {:error, :bad_signature} = connect(ws_port, peer_pubkey: wrong_pubkey)
+
+    {:ok, conn} = connect(ws_port)
+    assert {:ok, %{"type" => "shutdown_result"}} = WsCarrier.shutdown(conn)
+    assert_receive {^port, {:exit_status, 0}}, 10_000
+  end
+
+  test "reconnect waits on deterministic non-zero backoff while peer reaches divergence" do
+    {port, ws_port} = spawn_peer("node_a")
+    backoff = Backoff.new(base_ms: 5, max_ms: 20, jitter_ms: 0, seed: "node_a")
+
+    assert Enum.any?(0..3, &(Backoff.delay_ms(backoff, &1) > 0))
+
+    {:ok, conn} = connect(ws_port)
+    :ok = WsCarrier.close(conn)
+
+    {:ok, conn} = reconnect_when_diverged(ws_port, backoff: backoff)
+    assert {:ok, "diverged"} = WsCarrier.status(conn)
+    assert {:ok, %{"type" => "shutdown_result"}} = WsCarrier.shutdown(conn)
+    assert_receive {^port, {:exit_status, 0}}, 10_000
+  end
+
+  test "large transfers are split into bounded push frames" do
+    {port, ws_port} = spawn_peer("node_a")
+    sim_b = Scenario.base_sim() |> bulk_posts(150)
+    log_b = Sim.log(sim_b, "node_b")
+
+    {:ok, conn} = connect(ws_port)
+    {:ok, log_b, stats, conn} = Carrier.sync(WsCarrier, conn, log_b)
+
+    assert %{sent: 150, received: 0} = Map.take(stats, [:sent, :received])
+
+    batches = WsCarrier.last_push_batches(conn)
+    assert length(batches) > 1
+    assert Enum.all?(batches, &(&1.count <= 64))
+    assert Enum.all?(batches, &(&1.bytes <= 65_536))
+
+    {:ok, peer_report} = WsCarrier.state_report(conn)
+    assert peer_report["op_ids"] == Enum.sort(Log.op_ids(log_b))
+
+    assert {:ok, %{"type" => "shutdown_result"}} = WsCarrier.shutdown(conn)
+    assert_receive {^port, {:exit_status, 0}}, 10_000
+  end
 
   test "GATE: two OS-process BEAM nodes converge over a real WebSocket carrier" do
     {port, ws_port} = spawn_peer("node_a")
@@ -38,7 +90,7 @@ defmodule LatticeNodeSpike.NodeCarrierSpikeTest do
     sim_b = Scenario.base_sim()
     log_b = Sim.log(sim_b, "node_b")
 
-    {:ok, conn} = WsCarrier.connect(port: ws_port)
+    {:ok, conn} = connect(ws_port)
     assert {:ok, "base"} = WsCarrier.status(conn)
 
     {:ok, peer_ids, conn} = WsCarrier.advertise(conn, log_b)
@@ -137,7 +189,8 @@ defmodule LatticeNodeSpike.NodeCarrierSpikeTest do
 
   defp spawn_peer(realm) do
     args =
-      Enum.flat_map(code_paths(), &["-pa", &1]) ++ [@script, realm]
+      Enum.flat_map(code_paths(), &["-pa", &1]) ++
+        [@script, realm, "node_b", Base.encode64(identity("node_b").pub)]
 
     port =
       Port.open({:spawn_executable, elixir_bin()}, [
@@ -160,6 +213,13 @@ defmodule LatticeNodeSpike.NodeCarrierSpikeTest do
     {port, await_ready(port, [])}
   end
 
+  defp bulk_posts(sim, count) do
+    Enum.reduce(1..count, sim, fn i, acc ->
+      {acc, _op} = Sim.command(acc, "node_b", :post, ["bulk #{i}"])
+      acc
+    end)
+  end
+
   defp await_ready(port, seen) do
     receive do
       {^port, {:data, {:eol, "PEER_READY " <> ws_port}}} ->
@@ -179,8 +239,15 @@ defmodule LatticeNodeSpike.NodeCarrierSpikeTest do
     end
   end
 
-  defp reconnect_when_diverged(ws_port, attempts \\ 50) do
-    {:ok, conn} = WsCarrier.connect(port: ws_port)
+  defp reconnect_when_diverged(ws_port, opts \\ []) do
+    attempts = Keyword.get(opts, :attempts, 50)
+
+    backoff =
+      Keyword.get_lazy(opts, :backoff, fn ->
+        Backoff.new(base_ms: 100, max_ms: 100, seed: "node_a")
+      end)
+
+    {:ok, conn} = connect(ws_port)
 
     case WsCarrier.status(conn) do
       {:ok, "diverged"} ->
@@ -190,24 +257,24 @@ defmodule LatticeNodeSpike.NodeCarrierSpikeTest do
         # The peer diverges on the *close* of the previous socket; give the
         # cowboy terminate → Peer cast a moment to land, without closing this
         # socket again (that would be a second partition).
-        Process.sleep(100)
-        await_divergence(conn, attempts)
+        await_divergence(conn, attempts, backoff, Backoff.reset_attempt())
 
       other ->
         flunk("unexpected peer status after reconnect: #{inspect(other)}")
     end
   end
 
-  defp await_divergence(conn, 0), do: flunk("peer never diverged: #{inspect(conn)}")
-
-  defp await_divergence(conn, attempts) do
+  defp await_divergence(conn, attempts, backoff, attempt) do
     case WsCarrier.status(conn) do
       {:ok, "diverged"} ->
         {:ok, conn}
 
+      {:ok, "base"} when attempts > 0 ->
+        Process.sleep(Backoff.delay_ms(backoff, attempt))
+        await_divergence(conn, attempts - 1, backoff, attempt + 1)
+
       {:ok, "base"} ->
-        Process.sleep(100)
-        await_divergence(conn, attempts - 1)
+        flunk("peer never diverged: #{inspect(conn)}")
     end
   end
 
@@ -230,4 +297,19 @@ defmodule LatticeNodeSpike.NodeCarrierSpikeTest do
   defp repo_root, do: Path.expand("../../..", __DIR__)
 
   defp format_output(lines), do: lines |> Enum.reverse() |> Enum.join("\n")
+
+  defp connect(ws_port, opts \\ []) do
+    defaults = [
+      port: ws_port,
+      identity: identity("node_b"),
+      realm: "node_b",
+      peer_realm: "node_a",
+      peer_pubkey: identity("node_a").pub,
+      replica: Scenario.replica()
+    ]
+
+    WsCarrier.connect(Keyword.merge(defaults, opts))
+  end
+
+  defp identity(realm), do: Lattice.Identity.from_seed(realm, "carrier-spike")
 end

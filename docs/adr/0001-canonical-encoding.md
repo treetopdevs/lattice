@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (POC).
+Accepted (M2).
 
 ## Context
 
@@ -14,12 +14,20 @@ change the bytes.
 
 ## Decision
 
-Encode the tagged tuple `{:lattice_op_v1, replica, author, sorted(deps), kind, body,
-cap}` with `:erlang.term_to_binary/2` using the options `[:deterministic,
-{:minor_version, 2}]`, then `sha256 |> Base.url_encode64(padding: false)` for the id.
-`deps` is deduplicated and sorted before encoding so frontier ordering never affects
-the id. Delegations use the same approach (`{:lattice_delegation_v1, ...}` with sorted
-`ops`/`roles`).
+Encode signed op and delegation payloads with `Lattice.Canonical`, a deliberately small,
+CBOR-shaped term subset. Op payloads are tagged `lattice-op-v2`; delegations are tagged
+`lattice-delegation-v2`. The resulting bytes are hashed with SHA-256 and
+Base64url-encoded for ids, and the same bytes are signed with Ed25519.
+
+`deps` are deduplicated and sorted before encoding so frontier ordering never affects
+the id. Delegation `ops` and `roles` are sorted before encoding. Unsupported local terms
+(pids, refs, ports, functions, floats, negative integers, and unknown structs) are
+rejected before signing.
+
+Full-op carrier frames now use `Lattice.Carrier.Wire`, a JSON-safe schema that still
+reconstructs `%Lattice.Op{}` structs inside the BEAM implementation. Browser/AtomVM
+realms must consume that shared wire schema directly before they can author or verify
+ops without a BEAM bridge.
 
 ## Cryptographic agility
 
@@ -28,6 +36,11 @@ the behavior suite can be deterministic and falsifiable. Those choices are not m
 be permanent protocol commitments. A production wire format should version the hash and
 signature suite in the encoded op/delegation schema, so future realms can verify old
 entries while admitting a new suite through an explicit migration.
+
+The current structs do **not** carry an encoding-suite field, so M2 is not a migration
+format for pre-M2 persisted logs. A production migration needs either legacy-suite
+verification during restore or a new per-entry suite marker before old and new signed
+bytes can coexist in one durable store.
 
 The expected post-quantum path is a sibling or successor suite rather than an in-place
 reinterpretation of existing ids: for example, Dilithium-class signatures for general
@@ -39,29 +52,33 @@ rotation, or key recovery remains outside this POC.
 
 ## Rationale
 
-* `:deterministic` makes `term_to_binary` emit maps in a canonical (key-sorted) order,
-  removing the only common source of non-determinism for Erlang terms. Verified on the
-  target toolchain (OTP 28): two maps with different insertion order encode identically.
-* Pinning `minor_version: 2` fixes the external term format version so encodings are
-  stable across runs.
+* Maps sort lexicographically by fully encoded key bytes, so insertion order cannot
+  change signed bytes. This is not RFC 7049 canonical-CBOR map ordering; browser
+  runtimes must implement this Lattice rule directly rather than delegating to a stock
+  canonical-CBOR library.
+* MapSet elements are encoded first and then sorted lexicographically by their canonical
+  bytes, avoiding BEAM term-order dependencies.
 * Sorting `deps` decouples the id from the order a realm happened to observe its
   frontier.
+* The encoded term subset is small enough for non-BEAM runtimes to implement without
+  inheriting Erlang external-term-format semantics.
 
 ## Caveats (honest limitations)
 
 * **Atoms vs. binaries are distinct.** `:post` and `"post"` encode differently. Command
-  bodies use atoms consistently; a real wire protocol must pin a schema so that a
-  re-serialized op hashes identically.
-* **Not canonical across BEAM term-format changes.** The format is stable within a
-  pinned OTP minor version; a different runtime could in principle differ. A production
-  system should use an explicit, language-neutral canonical form (e.g. canonical CBOR)
-  rather than `term_to_binary`. The spec explicitly permits `term_to_binary` for the
-  POC if pinned and noted — this is that note.
-* **No floats / pids / refs in op bodies.** Those either don't round-trip
-  deterministically or are node-local. Bodies are restricted to atoms, integers,
-  binaries, lists, tuples, and maps thereof.
+  bodies use atoms consistently; browser runtimes must preserve that distinction in the
+  shared schema.
+* **The encoder is intentionally narrow.** It is not general CBOR and does not attempt
+  to serialize arbitrary BEAM terms. Bodies are restricted to nil, booleans,
+  non-negative integers, binaries, atoms, lists, tuples, maps, MapSets, and explicit
+  Lattice delegation structs.
+* **Full browser parity is not complete yet.** Signed bytes are no longer BEAM-term-only,
+  but the current carrier implementation still reconstructs BEAM structs internally
+  until the browser realm consumes `Lattice.Carrier.Wire` natively.
 
 ## Alternatives considered
 
-* Canonical CBOR / a hand-rolled deterministic serializer — more portable but more code
-  than a falsifiable POC needs. Deferred to `path_to_real.md`.
+* `:erlang.term_to_binary/2` with deterministic options — sufficient for the original
+  BEAM-only POC, but rejected for M2 because non-BEAM realms cannot reproduce it.
+* Full canonical CBOR — more interoperable, but larger than the term subset needed to
+  harden signed Lattice values for M2.

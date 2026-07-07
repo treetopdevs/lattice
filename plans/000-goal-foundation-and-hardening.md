@@ -179,9 +179,11 @@ worth more than a forced green.
 
 ## Maintenance notes
 
-- After this goal lands, the natural follow-ups are the direction spikes `010`–`013`
-  (real carrier, `Lattice.V2` facade, v2 DAG visualization, compaction) and the deferred
-  items recorded in `plans/README.md` (Dialyzer, dual-audit unification, LiveOps split,
-  structured logging, dep de-duplication).
+- Historical note: after this goal landed, the natural follow-ups were the direction
+  spikes `010`–`013` (real carrier, `Lattice.V2` facade, v2 DAG visualization,
+  compaction) and the deferred items recorded in `plans/README.md` (Dialyzer,
+  dual-audit unification, LiveOps split, structured logging, dep de-duplication). Those
+  direction spikes are now recorded in the plan index; production compaction and native
+  browser-realm work remain separate follow-ups.
 - The Phase-1 capstone (credo/sobelow in CI + a `mix check` alias) is what makes the new
   static-analysis gate durable; don't skip it, or the tools rot like the test suite did.

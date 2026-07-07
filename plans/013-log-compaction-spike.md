@@ -116,5 +116,6 @@ GATE. Reuse `Reduce`/`Authority`/`Dag` read-only.
 - This is the highest-risk direction item; keep it a spike until the GATE property is
   demonstrably robust across the property generators. Do not let a green spike on a toy
   log be mistaken for production readiness.
-- Coordinate with plan 010: compaction's GC needs the carrier's membership/ack signal, so
-  a real carrier likely lands first.
+- Coordinate with plan 010/M2: compaction's GC needs the carrier's membership/ack signal,
+  and M2 now provides the tested helper. Production compaction still needs a caller,
+  snapshot-aware reduction, GC coordination, and snapshot trust.
