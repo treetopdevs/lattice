@@ -1,4 +1,240 @@
 {
+  "authorityBadRevocation": {
+    "authorityQuarantine": [
+      [
+        "nc3BcEM4CyWDhoCU1Mrw3vkjEuX3tXIDlV6R01uofpQ",
+        "unauthorized_revoke"
+      ],
+      [
+        "y1GlDFwNB-YybvWaeF0vQWhT9kr-KDLEReBOkX5caMw",
+        "not_holder"
+      ]
+    ],
+    "delegationId": "gN9aanNVZeHWsS1vU8KxjyqVrWdC0VwPIzilL_QX2n0",
+    "opIds": [
+      "05op_edpvoZmeWwBMx-mTAtBcoqIcWdUcb2gIoX3Iy4",
+      "1OQlflL3hvk5vcT2FIegCtiuxGU-gDCKqURISVP_iG8",
+      "54k0ylcLeVyalnNtBaXdTN1Um356AFxOb-R9foEBOo0",
+      "C-SorKNoOhygkiAYGooEeCbGVj-_ThX__meOl2RXKt4",
+      "DbqQF-NQzb2ntnKleiWySWrksxtajihuGU3ftp5cRhU",
+      "Spi9_nVdmF9h0E9z-eGIRoZccgHFxCLJzQfOhHvPW8c",
+      "YxHX1K7NWD4iqcLkAUJ7RtWknXrn1xOd9mkPDEEyHHg",
+      "bb6dHRmYNyBLW2eVHH3tTy08Ts4LrozTdIcvcXRmLYI",
+      "nc3BcEM4CyWDhoCU1Mrw3vkjEuX3tXIDlV6R01uofpQ",
+      "tysTDHsBwKwkX50bCzSsaQlYOp1Qe6bRI-sY7zkgvHo",
+      "uP7Yf778tkRzUPhP43XVF4XsT5WZWvOxShsuOnMXUgc",
+      "xmret5C7xMai04EQDm1cEX1dDjeBqxPM7-TcDN8cfhI",
+      "y1GlDFwNB-YybvWaeF0vQWhT9kr-KDLEReBOkX5caMw"
+    ],
+    "postRevokeCommandOp": {
+      "author": "OMlRmFPtU6VkYbKW3MiZG4Il++Eb+GmRJyiGcbUDfSQ=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "post"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "cmVzaWRlbnQ6IHBvc3QgYWZ0ZXIgdW5hdXRob3JpemVkIHJldm9rZQ=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "Z045YWFuTlZaZUhXc1MxdlU4S3hqeXFWcldkQzBWd1BJemlsTF9RWDJuMA=="
+      ],
+      "deps": [
+        "nc3BcEM4CyWDhoCU1Mrw3vkjEuX3tXIDlV6R01uofpQ"
+      ],
+      "id": "bb6dHRmYNyBLW2eVHH3tTy08Ts4LrozTdIcvcXRmLYI",
+      "kind": "command",
+      "replica": "replica:matter:township-g1#root:QUB7owpVIsZn3IyoVLJbsFc5HLkozhi2PVBL5Lzhj3w",
+      "sig": "dCtBUu7C6PX7H0i/G9Rmr/xDH6Q82bsA9Lx+3qJqqoJ/fnTMOdehEcqorgJ9DLC9BTDwADZDT9KtkGBWxmrrDw==",
+      "v": 1
+    },
+    "revokeOp": {
+      "author": "OMlRmFPtU6VkYbKW3MiZG4Il++Eb+GmRJyiGcbUDfSQ=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "revoke"
+          ],
+          [
+            "bin",
+            "Z045YWFuTlZaZUhXc1MxdlU4S3hqeXFWcldkQzBWd1BJemlsTF9RWDJuMA=="
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "xmret5C7xMai04EQDm1cEX1dDjeBqxPM7-TcDN8cfhI",
+        "y1GlDFwNB-YybvWaeF0vQWhT9kr-KDLEReBOkX5caMw"
+      ],
+      "id": "nc3BcEM4CyWDhoCU1Mrw3vkjEuX3tXIDlV6R01uofpQ",
+      "kind": "authority",
+      "replica": "replica:matter:township-g1#root:QUB7owpVIsZn3IyoVLJbsFc5HLkozhi2PVBL5Lzhj3w",
+      "sig": "SdZkPxEuBrZwZMzzfP4wWHHtDheQ1xbaXlqrkJNG6myvJjfm+jH/nIpmnsC3+ElYGP82OqKSc98fI8flLZg9CA==",
+      "v": 1
+    },
+    "stateB64": "g3QAAAAFdw1jbGVya19sb2NrZWQ/dwR0cnVldwdtZW1iZXJzbAAAAAJtAAAABWNsZXJrbQAAAAhyZXNpZGVudGp3BXBvc3RzbAAAAANtAAAAGmNsZXJrOiBoZWFyaW5nIFR1ZXNkYXkgNnBtbQAAAB5yZXNpZGVudDogcG9zdGVkIHdoaWxlIG9mZmxpbmVtAAAAKHJlc2lkZW50OiBwb3N0IGFmdGVyIHVuYXV0aG9yaXplZCByZXZva2VqdwdzdW1tYXJ5bQAAABxMZWFuaW5nIGFwcHJvdmUgKGNsZXJrIGVkaXQpdwV0aXRsZW0AAAAA"
+  },
+  "authorityRevocation": {
+    "authorityQuarantine": [
+      [
+        "On8gNZOqmM1NE8M5dwSXhSRx0KaXv8QsHQHDJUHujsU",
+        "revoked_capability"
+      ],
+      [
+        "y1GlDFwNB-YybvWaeF0vQWhT9kr-KDLEReBOkX5caMw",
+        "not_holder"
+      ]
+    ],
+    "delegationId": "gN9aanNVZeHWsS1vU8KxjyqVrWdC0VwPIzilL_QX2n0",
+    "opIds": [
+      "05op_edpvoZmeWwBMx-mTAtBcoqIcWdUcb2gIoX3Iy4",
+      "1OQlflL3hvk5vcT2FIegCtiuxGU-gDCKqURISVP_iG8",
+      "54k0ylcLeVyalnNtBaXdTN1Um356AFxOb-R9foEBOo0",
+      "C-SorKNoOhygkiAYGooEeCbGVj-_ThX__meOl2RXKt4",
+      "DbqQF-NQzb2ntnKleiWySWrksxtajihuGU3ftp5cRhU",
+      "On8gNZOqmM1NE8M5dwSXhSRx0KaXv8QsHQHDJUHujsU",
+      "R53bLOx6nfV_J2jgTWqwV5g0Mqe4e_-nNfRrg6g5yjU",
+      "Spi9_nVdmF9h0E9z-eGIRoZccgHFxCLJzQfOhHvPW8c",
+      "YxHX1K7NWD4iqcLkAUJ7RtWknXrn1xOd9mkPDEEyHHg",
+      "tysTDHsBwKwkX50bCzSsaQlYOp1Qe6bRI-sY7zkgvHo",
+      "uP7Yf778tkRzUPhP43XVF4XsT5WZWvOxShsuOnMXUgc",
+      "xmret5C7xMai04EQDm1cEX1dDjeBqxPM7-TcDN8cfhI",
+      "y1GlDFwNB-YybvWaeF0vQWhT9kr-KDLEReBOkX5caMw"
+    ],
+    "preRevokeCommandId": "xmret5C7xMai04EQDm1cEX1dDjeBqxPM7-TcDN8cfhI",
+    "revokeOp": {
+      "author": "ux8h/x3NkAWj/ejlP3T15/89nMJMvweh2kYZqcXYYPM=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "revoke"
+          ],
+          [
+            "bin",
+            "Z045YWFuTlZaZUhXc1MxdlU4S3hqeXFWcldkQzBWd1BJemlsTF9RWDJuMA=="
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "xmret5C7xMai04EQDm1cEX1dDjeBqxPM7-TcDN8cfhI",
+        "y1GlDFwNB-YybvWaeF0vQWhT9kr-KDLEReBOkX5caMw"
+      ],
+      "id": "R53bLOx6nfV_J2jgTWqwV5g0Mqe4e_-nNfRrg6g5yjU",
+      "kind": "authority",
+      "replica": "replica:matter:township-g1#root:QUB7owpVIsZn3IyoVLJbsFc5HLkozhi2PVBL5Lzhj3w",
+      "sig": "5UItC4X3FMA30mxhIsoV6ojwAtgDo+AdWz9OOw0cZI3XQBnZq6Wr6TMxNatkAoyBNHTpcXpkOJ2hZ8TnM5rKCw==",
+      "v": 1
+    },
+    "revokedCommandOp": {
+      "author": "OMlRmFPtU6VkYbKW3MiZG4Il++Eb+GmRJyiGcbUDfSQ=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "post"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "cmVzaWRlbnQ6IGF0dGVtcHRlZCBhZnRlciByZXZvY2F0aW9u"
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "Z045YWFuTlZaZUhXc1MxdlU4S3hqeXFWcldkQzBWd1BJemlsTF9RWDJuMA=="
+      ],
+      "deps": [
+        "R53bLOx6nfV_J2jgTWqwV5g0Mqe4e_-nNfRrg6g5yjU"
+      ],
+      "id": "On8gNZOqmM1NE8M5dwSXhSRx0KaXv8QsHQHDJUHujsU",
+      "kind": "command",
+      "replica": "replica:matter:township-g1#root:QUB7owpVIsZn3IyoVLJbsFc5HLkozhi2PVBL5Lzhj3w",
+      "sig": "kTvV3a0nJ9Ye2I0+lO+vggaDkvmmeC7daVLZewI7el/KmoSS+UnXTh/kRSkOuwGYvw6Hp8d8R6d6MEfsAr0+Dw==",
+      "v": 1
+    },
+    "stateB64": "g3QAAAAFdw1jbGVya19sb2NrZWQ/dwR0cnVldwdtZW1iZXJzbAAAAAJtAAAABWNsZXJrbQAAAAhyZXNpZGVudGp3BXBvc3RzbAAAAAJtAAAAGmNsZXJrOiBoZWFyaW5nIFR1ZXNkYXkgNnBtbQAAAB5yZXNpZGVudDogcG9zdGVkIHdoaWxlIG9mZmxpbmVqdwdzdW1tYXJ5bQAAABxMZWFuaW5nIGFwcHJvdmUgKGNsZXJrIGVkaXQpdwV0aXRsZW0AAAAA"
+  },
+  "authorityUnsoundGrant": {
+    "authorityQuarantine": [
+      [
+        "BPHZerp5baDxlDOjNaUfXtarEvBG2aTvrFCZAH5qi1k",
+        "not_attenuated"
+      ],
+      [
+        "y1GlDFwNB-YybvWaeF0vQWhT9kr-KDLEReBOkX5caMw",
+        "not_holder"
+      ]
+    ],
+    "carrierOp": {
+      "author": "OMlRmFPtU6VkYbKW3MiZG4Il++Eb+GmRJyiGcbUDfSQ=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "grant"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "ux8h/x3NkAWj/ejlP3T15/89nMJMvweh2kYZqcXYYPM=",
+              "id": "g1LOTE6Vy5YMW3svRwGZaPeQ695xPfvHb9TCNCPj1JQ",
+              "issuer": "OMlRmFPtU6VkYbKW3MiZG4Il++Eb+GmRJyiGcbUDfSQ=",
+              "live": false,
+              "ops": [
+                "close_matter"
+              ],
+              "parent_id": "gN9aanNVZeHWsS1vU8KxjyqVrWdC0VwPIzilL_QX2n0",
+              "replica": "replica:matter:township-g1#root:QUB7owpVIsZn3IyoVLJbsFc5HLkozhi2PVBL5Lzhj3w",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "B/oFnugHOg1ZRHxiOiA0YbsnAGnfwfJehAh56EYf46eSJVzbMwoNvBIOwMxZka+GO7FYau3tSVz0XP3p9kMFBQ=="
+            }
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "xmret5C7xMai04EQDm1cEX1dDjeBqxPM7-TcDN8cfhI",
+        "y1GlDFwNB-YybvWaeF0vQWhT9kr-KDLEReBOkX5caMw"
+      ],
+      "id": "BPHZerp5baDxlDOjNaUfXtarEvBG2aTvrFCZAH5qi1k",
+      "kind": "authority",
+      "replica": "replica:matter:township-g1#root:QUB7owpVIsZn3IyoVLJbsFc5HLkozhi2PVBL5Lzhj3w",
+      "sig": "aMffjREVX3Wt75b4y2LPrTdHDH22nASLXcSHiY6bBiBCX3MvxbfaCcs047ps08gCGMwYb4wtNNbzqy5WTVdBDA==",
+      "v": 1
+    },
+    "parentDelegationId": "gN9aanNVZeHWsS1vU8KxjyqVrWdC0VwPIzilL_QX2n0"
+  },
   "canonicalOps": [
     {
       "bytesHex": "874d6c6174746963652d6f702d7632584b7265706c6963613a6d61747465723a746f776e736869702d673123726f6f743a515542376f77705649735a6e3349796f564c4a6273466335484c6b6f7a6869325056424c354c7a686a33775820bb1f21ff1dcd9005a3fde8e53f74f5e7ff3d9cc24cbf07a1da4619a9c5d860f380d9ea6049617574686f72697479d9ea6183d9ea604767656e65736973d9ea6389582b5a4f622d716844634f6f4d30795374674d4d426c59595f494849773665583142637646783568625f487338584b7265706c6963613a6d61747465723a746f776e736869702d673123726f6f743a515542376f77705649735a6e3349796f564c4a6273466335484c6b6f7a6869325056424c354c7a686a33775820bb1f21ff1dcd9005a3fde8e53f74f5e7ff3d9cc24cbf07a1da4619a9c5d860f35820bb1f21ff1dcd9005a3fde8e53f74f5e7ff3d9cc24cbf07a1da4619a9c5d860f3f687d9ea604561646d6974d9ea604c636c6f73655f6d6174746572d9ea6044706f7374d9ea604d72656d6f76655f6d656d626572d9ea604d72656f70656e5f6d6174746572d9ea604b7365745f73756d6d617279d9ea60497365745f7469746c6581d9ea6045636c65726bf558407f57f3f3a683530031262b9a39c96feb92ee4a65b69fe096a422a42bd90cc7b7031fdd0e641e04be004dcb45c405a274c6dbdbdb5bae3856ad77fb0c0cf2b401a1d9ea6045636c65726ba2d9ea6049737563636573736f72582038c9519853ed53a56461b296dcc8991b8225fbe11bf8699127288671b5037d24d9ea604d646f726d616e745f7469636b7303f6",

@@ -30,6 +30,9 @@ defmodule Lattice.Authority do
       superseded by a holder-change it never saw is `:stale_holder`-quarantined.
     * **Revocation** (behavior 10): ops citing a revoked delegation that are not
       causally before the revoke are quarantined.
+    * **Revocation authority**: a revoke op is honored only from the delegation
+      issuer or replica root; other revoke ops are quarantined as
+      `:unauthorized_revoke` and do not revoke the delegation.
 
   Quarantined ops stay in the log and are reported in `audit` (design invariant 4).
   """
@@ -221,6 +224,7 @@ defmodule Lattice.Authority do
 
     invalid_deleg = invalid_delegation_ops(delegations, deleg_valid)
     tombstone_q = unauthorized_tombstones(ordered, root)
+    revoke_q = unauthorized_revokes(ordered, delegations, root)
     roles = all_roles(module)
 
     timelines =
@@ -241,6 +245,7 @@ defmodule Lattice.Authority do
       |> Map.merge(role_q)
       |> Map.merge(cmd_q)
       |> Map.merge(tombstone_q)
+      |> Map.merge(revoke_q)
 
     %{
       quarantine: reasons |> Map.keys() |> MapSet.new(),
@@ -419,6 +424,13 @@ defmodule Lattice.Authority do
         author != root,
         into: %{},
         do: {id, :unauthorized_tombstone}
+  end
+
+  defp unauthorized_revokes(ordered, delegations, root) do
+    for %Op{kind: :authority, id: id, body: {:revoke, deleg_id}} = op <- ordered,
+        not revoke_authorized?(op, deleg_id, delegations, root),
+        into: %{},
+        do: {id, :unauthorized_revoke}
   end
 
   defp collect_revokes(ordered, delegations, root) do

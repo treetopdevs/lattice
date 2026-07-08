@@ -4,7 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { isDeepStrictEqual } from "node:util";
-import { authorAndPersistTownshipCommand, carrierDelegationsFromFrames, carrierOpsToSemanticOps, connectCarrierWebSocket, createJsonCarrierFrameStore, createJsonLocalOpLogStore, materialize, selectTownshipCapId, syncCarrierOnce, } from "../src/index";
+import { authorAndPersistTownshipCommand, authorTownshipCommand, authorTownshipDelegation, authorTownshipRevocation, carrierDelegationsFromFrames, carrierOpsToSemanticOps, connectCarrierWebSocket, createJsonCarrierFrameStore, createJsonLocalOpLogStore, frontier, materialize, selectTownshipCapId, syncCarrierOnce, } from "../src/index";
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "../../..");
 const vecDir = join(here, "vectors");
@@ -20,6 +20,17 @@ function check(name, got, want) {
         console.log(`       got : ${JSON.stringify(got)}`);
         console.log(`       want: ${JSON.stringify(want)}`);
     }
+}
+function sortedAuthorityQuarantine(pairs) {
+    return pairs
+        .map(([id, reason]) => [id, reason])
+        .sort(([leftId, leftReason], [rightId, rightReason]) => `${leftId}\0${leftReason}`.localeCompare(`${rightId}\0${rightReason}`));
+}
+function checkAuthorityQuarantine(name, got, want) {
+    check(name, sortedAuthorityQuarantine(got), sortedAuthorityQuarantine(want));
+}
+function hasAuthorityQuarantinePair(pairs, want) {
+    return pairs.some(([id, reason]) => id === want[0] && reason === want[1]);
 }
 class MemoryKeyValueStore {
     values = new Map();
@@ -41,6 +52,8 @@ const verifier = {
 check("fixture public key", identity.publicKeyBase64, vector.client.sessionPubkey);
 const residentAuthor = seededEd25519Identity(`${vector.client.sessionSeed}:${vector.client.realm}`);
 check("resident author public key", residentAuthor.publicKeyBase64, pubkeyForRealm(vector.realmByPubkey, vector.client.realm));
+const clerkAuthor = seededEd25519Identity(`${vector.client.sessionSeed}:${vector.peer.realm}`);
+check("clerk author public key", clerkAuthor.publicKeyBase64, pubkeyForRealm(vector.realmByPubkey, vector.peer.realm));
 const postFixture = vector.clientDivergedCarrierOps.find((frame) => frame.author === residentAuthor.publicKeyBase64 && commandName(frame) === "post");
 if (!postFixture)
     throw new Error("missing resident post fixture frame");
@@ -83,6 +96,7 @@ try {
     check("pulled peer op count", synced.pulledOps.length, 5);
     check("push frame count", synced.pushedFrames.length, 2);
     check("push accepted count", synced.pushReport.accepted.length, 2);
+    check("acknowledged outbox ids", synced.acknowledgedFrameIds, authoredClientFrames.map((frame) => frame.id));
     check("push quarantined", synced.pushReport.quarantined, []);
     const merged = synced.ops;
     const materialized = materialize(vector.schema, merged);
@@ -94,12 +108,158 @@ try {
     const peerReport = await conn.stateReport();
     check("peer state bytes", peerReport.state_b64, vector.expectAfterSync.stateB64);
     check("peer op ids", peerReport.op_ids, vector.expectAfterSync.opIds);
-    check("peer authority quarantine", peerReport.authority_quarantine, vector.expectAfterSync.authorityQuarantine);
+    checkAuthorityQuarantine("peer authority quarantine", peerReport.authority_quarantine, vector.expectAfterSync.authorityQuarantine);
+    const authorityUnsoundGrant = await authorTownshipDelegation({
+        replica: vector.replica,
+        deps: frontier(merged),
+        audiencePubkey: pubkeyForRealm(vector.realmByPubkey, vector.peer.realm),
+        parentId: vector.authorityUnsoundGrant.parentDelegationId,
+        ops: ["close_matter"],
+        roles: ["clerk"],
+        signer: residentAuthor,
+    });
+    check("authored authority-unsound grant frame", authorityUnsoundGrant, vector.authorityUnsoundGrant.carrierOp);
+    const [authorityUnsoundOp] = carrierOpsToSemanticOps([authorityUnsoundGrant], vector.realmByPubkey);
+    if (!authorityUnsoundOp)
+        throw new Error("authority-unsound grant did not decode to a semantic op");
+    const unsoundSynced = await syncCarrierOnce(conn, [...merged, authorityUnsoundOp], [authorityUnsoundGrant], vector.realmByPubkey);
+    check("authority-unsound grant pushed", carrierFrameIds(unsoundSynced.pushedFrames), [authorityUnsoundGrant.id]);
+    check("authority-unsound grant structurally accepted", unsoundSynced.pushReport.accepted, [authorityUnsoundGrant.id]);
+    check("authority-unsound grant structural quarantine", unsoundSynced.pushReport.quarantined, []);
+    const unsoundPeerReport = await conn.stateReport();
+    check("authority-unsound grant leaves state bytes unchanged", unsoundPeerReport.state_b64, vector.expectAfterSync.stateB64);
+    const expectedUnsoundQuarantine = [authorityUnsoundGrant.id, "not_attenuated"];
+    check("authority-unsound grant quarantine member", hasAuthorityQuarantinePair(unsoundPeerReport.authority_quarantine, expectedUnsoundQuarantine), true);
+    // The Sim-exported full set also includes W1's pre-existing stale-clerk not_holder entry.
+    checkAuthorityQuarantine("authority-unsound grant peer authority quarantine", unsoundPeerReport.authority_quarantine, vector.authorityUnsoundGrant.authorityQuarantine);
     await conn.shutdown();
     await peer.awaitExit();
 }
 finally {
     peer.kill();
+}
+const revocationPeer = await spawnTownshipPeer(vector);
+try {
+    let conn = await connectCarrierWebSocket({
+        url: `ws://127.0.0.1:${revocationPeer.port}/carrier`,
+        localRealm: vector.client.realm,
+        replica: vector.replica,
+        signer: identity,
+        expectedPeerRealm: vector.peer.realm,
+        expectedPeerPubkey: Buffer.from(vector.peer.sessionPubkey, "base64"),
+        verifier,
+    });
+    check("revocation initial peer status", await conn.status(), "base");
+    conn.close();
+    conn = await reconnectWhenDiverged(revocationPeer.port, vector, identity, verifier);
+    const clientDiverged = await authoredLocalLog.load();
+    const synced = await syncCarrierOnce(conn, clientDiverged, authoredClientFrames, vector.realmByPubkey);
+    const merged = synced.ops;
+    const baselineReport = await conn.stateReport();
+    check("revocation baseline state bytes", baselineReport.state_b64, vector.expectAfterSync.stateB64);
+    check("pre-revoke command is not authority-quarantined", baselineReport.authority_quarantine.some(([id]) => id === vector.authorityRevocation.preRevokeCommandId), false);
+    const revokeFrame = await authorTownshipRevocation({
+        replica: vector.replica,
+        deps: frontier(merged),
+        delegationId: vector.authorityRevocation.delegationId,
+        signer: clerkAuthor,
+    });
+    check("live authored revocation frame", revokeFrame, vector.authorityRevocation.revokeOp);
+    const [revokeOp] = carrierOpsToSemanticOps([revokeFrame], vector.realmByPubkey);
+    if (!revokeOp)
+        throw new Error("revocation frame did not decode to a semantic op");
+    const afterRevoke = await syncCarrierOnce(conn, [...merged, revokeOp], [revokeFrame], vector.realmByPubkey);
+    check("revocation pushed", carrierFrameIds(afterRevoke.pushedFrames), [revokeFrame.id]);
+    check("revocation structurally accepted", afterRevoke.pushReport.accepted, [revokeFrame.id]);
+    check("revocation structural quarantine", afterRevoke.pushReport.quarantined, []);
+    const revokedResidentPostCommand = { command: "post", text: "resident: attempted after revocation" };
+    const revokedPostFrame = await authorTownshipCommand({
+        replica: vector.replica,
+        deps: frontier(afterRevoke.ops),
+        command: revokedResidentPostCommand,
+        capId: vector.authorityRevocation.delegationId,
+        signer: residentAuthor,
+    });
+    check("live authored revoked-cap post frame", revokedPostFrame, vector.authorityRevocation.revokedCommandOp);
+    const [revokedPostOp] = carrierOpsToSemanticOps([revokedPostFrame], vector.realmByPubkey);
+    if (!revokedPostOp)
+        throw new Error("revoked-cap post frame did not decode to a semantic op");
+    const afterRevokedPost = await syncCarrierOnce(conn, [...afterRevoke.ops, revokedPostOp], [revokedPostFrame], vector.realmByPubkey);
+    check("revoked-cap post pushed", carrierFrameIds(afterRevokedPost.pushedFrames), [revokedPostFrame.id]);
+    check("revoked-cap post structurally accepted", afterRevokedPost.pushReport.accepted, [revokedPostFrame.id]);
+    check("revoked-cap post structural quarantine", afterRevokedPost.pushReport.quarantined, []);
+    const revocationReport = await conn.stateReport();
+    check("revocation lifecycle state bytes", revocationReport.state_b64, vector.authorityRevocation.stateB64);
+    check("revocation lifecycle op ids", revocationReport.op_ids, vector.authorityRevocation.opIds);
+    const expectedRevokedPair = [revokedPostFrame.id, "revoked_capability"];
+    check("revoked-cap post authority quarantine member", hasAuthorityQuarantinePair(revocationReport.authority_quarantine, expectedRevokedPair), true);
+    checkAuthorityQuarantine("revocation lifecycle peer authority quarantine", revocationReport.authority_quarantine, vector.authorityRevocation.authorityQuarantine);
+    await conn.shutdown();
+    await revocationPeer.awaitExit();
+}
+finally {
+    revocationPeer.kill();
+}
+const badRevocationPeer = await spawnTownshipPeer(vector);
+try {
+    let conn = await connectCarrierWebSocket({
+        url: `ws://127.0.0.1:${badRevocationPeer.port}/carrier`,
+        localRealm: vector.client.realm,
+        replica: vector.replica,
+        signer: identity,
+        expectedPeerRealm: vector.peer.realm,
+        expectedPeerPubkey: Buffer.from(vector.peer.sessionPubkey, "base64"),
+        verifier,
+    });
+    check("bad revocation initial peer status", await conn.status(), "base");
+    conn.close();
+    conn = await reconnectWhenDiverged(badRevocationPeer.port, vector, identity, verifier);
+    const clientDiverged = await authoredLocalLog.load();
+    const synced = await syncCarrierOnce(conn, clientDiverged, authoredClientFrames, vector.realmByPubkey);
+    const merged = synced.ops;
+    const badRevokeFrame = await authorTownshipRevocation({
+        replica: vector.replica,
+        deps: frontier(merged),
+        delegationId: vector.authorityBadRevocation.delegationId,
+        signer: residentAuthor,
+    });
+    check("live authored bad revocation frame", badRevokeFrame, vector.authorityBadRevocation.revokeOp);
+    const [badRevokeOp] = carrierOpsToSemanticOps([badRevokeFrame], vector.realmByPubkey);
+    if (!badRevokeOp)
+        throw new Error("bad revocation frame did not decode to a semantic op");
+    const afterBadRevoke = await syncCarrierOnce(conn, [...merged, badRevokeOp], [badRevokeFrame], vector.realmByPubkey);
+    check("bad revocation pushed", carrierFrameIds(afterBadRevoke.pushedFrames), [badRevokeFrame.id]);
+    check("bad revocation structurally accepted", afterBadRevoke.pushReport.accepted, [badRevokeFrame.id]);
+    check("bad revocation structural quarantine", afterBadRevoke.pushReport.quarantined, []);
+    const postAfterBadRevokeCommand = { command: "post", text: "resident: post after unauthorized revoke" };
+    const postAfterBadRevokeFrame = await authorTownshipCommand({
+        replica: vector.replica,
+        deps: frontier(afterBadRevoke.ops),
+        command: postAfterBadRevokeCommand,
+        capId: vector.authorityBadRevocation.delegationId,
+        signer: residentAuthor,
+    });
+    check("live authored post after bad revoke frame", postAfterBadRevokeFrame, vector.authorityBadRevocation.postRevokeCommandOp);
+    const [postAfterBadRevokeOp] = carrierOpsToSemanticOps([postAfterBadRevokeFrame], vector.realmByPubkey);
+    if (!postAfterBadRevokeOp)
+        throw new Error("post after bad revoke frame did not decode to a semantic op");
+    const afterPostBadRevoke = await syncCarrierOnce(conn, [...afterBadRevoke.ops, postAfterBadRevokeOp], [postAfterBadRevokeFrame], vector.realmByPubkey);
+    check("post after bad revoke pushed", carrierFrameIds(afterPostBadRevoke.pushedFrames), [postAfterBadRevokeFrame.id]);
+    check("post after bad revoke structurally accepted", afterPostBadRevoke.pushReport.accepted, [postAfterBadRevokeFrame.id]);
+    check("post after bad revoke structural quarantine", afterPostBadRevoke.pushReport.quarantined, []);
+    const badRevocationReport = await conn.stateReport();
+    check("bad revocation state bytes changed by honored post", badRevocationReport.state_b64 === vector.expectAfterSync.stateB64, false);
+    check("bad revocation lifecycle state bytes", badRevocationReport.state_b64, vector.authorityBadRevocation.stateB64);
+    check("bad revocation lifecycle op ids", badRevocationReport.op_ids, vector.authorityBadRevocation.opIds);
+    const expectedBadRevokePair = [badRevokeFrame.id, "unauthorized_revoke"];
+    check("bad revocation authority quarantine member", hasAuthorityQuarantinePair(badRevocationReport.authority_quarantine, expectedBadRevokePair), true);
+    check("post after bad revoke stays authority-honored", badRevocationReport.authority_quarantine.some(([id]) => id === postAfterBadRevokeFrame.id), false);
+    checkAuthorityQuarantine("bad revocation peer authority quarantine", badRevocationReport.authority_quarantine, vector.authorityBadRevocation.authorityQuarantine);
+    await conn.shutdown();
+    await badRevocationPeer.awaitExit();
+}
+finally {
+    badRevocationPeer.kill();
 }
 console.log(`\n${failures === 0 ? "\x1b[32m✓ live carrier checks passed\x1b[0m" : `\x1b[31m✗ ${failures} check(s) failed\x1b[0m`}`);
 process.exit(failures === 0 ? 0 : 1);
@@ -233,6 +393,14 @@ function commandName(frame) {
     if (!command || command[0] !== "atom")
         return undefined;
     return command[1];
+}
+function carrierFrameIds(frames) {
+    return frames.map((frame) => {
+        if (frame && typeof frame === "object" && typeof frame.id === "string") {
+            return frame.id;
+        }
+        throw new Error("carrier frame missing id");
+    });
 }
 function delay(ms) {
     return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));

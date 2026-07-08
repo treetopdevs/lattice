@@ -15,6 +15,7 @@ import {
 } from "@treetopdevs/lattice-client";
 import {
   TOWNSHIP_CARRIER_OUTBOX_KEY,
+  TOWNSHIP_DELEGATION_FRAMES_KEY,
   TOWNSHIP_LOCAL_OP_LOG_KEY,
   TOWNSHIP_STORAGE_NAMESPACE,
 } from "../src/native_workflow";
@@ -88,6 +89,7 @@ try {
   const values = new Map<string, string>([
     [storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY), JSON.stringify(localOps)],
     [storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY), JSON.stringify(vector.clientDivergedCarrierOps)],
+    [storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY), "[]"],
   ]);
   const calls: string[] = [];
 
@@ -116,14 +118,15 @@ try {
     JSON.parse(values.get(storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY)) ?? "[]").map((op: Op) => op.id).sort(),
     vector.expectAfterSync.opIds,
   );
-  assert.deepEqual(JSON.parse(values.get(storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY)) ?? "[]"), vector.clientDivergedCarrierOps);
-  assert.deepEqual(calls, [
-    "lattice_ensure_carrier_key",
-    "lattice_sign_carrier",
-    "lattice_kv_get",
-    "lattice_kv_get",
-    "lattice_kv_set",
-  ]);
+  assert.deepEqual(JSON.parse(values.get(storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY)) ?? "[]"), []);
+  assert.deepEqual(
+    frameIds(JSON.parse(values.get(storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY)) ?? "[]")),
+    vector.expectAfterSync.opIds,
+  );
+  assert.equal(commandCount(calls, "lattice_ensure_carrier_key"), 1);
+  assert.equal(commandCount(calls, "lattice_sign_carrier"), 1);
+  assert.equal(commandCount(calls, "lattice_kv_get"), 3);
+  assert.equal(commandCount(calls, "lattice_kv_set"), 3);
 
   const reportConn = await connectCarrierWebSocket({
     url: peerUrl(peer.port),
@@ -149,6 +152,14 @@ console.log("\x1b[32m✓ Township Tauri shell live peer sync checks passed\x1b[0
 
 function storageKey(key: string): string {
   return `${TOWNSHIP_STORAGE_NAMESPACE}:${key}`;
+}
+
+function frameIds(frames: CarrierOpFrame[]): string[] {
+  return frames.map((frame) => frame.id).sort();
+}
+
+function commandCount(calls: string[], command: string): number {
+  return calls.filter((call) => call === command).length;
 }
 
 function nativeInvoke(

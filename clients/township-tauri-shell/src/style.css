@@ -119,6 +119,10 @@ h1 {
 
 .matter-panel,
 .roster-panel,
+.actions-panel,
+.status-panel,
+.member-panel,
+.grant-panel,
 .compose-panel,
 .sync-panel,
 .posts-panel {
@@ -129,6 +133,10 @@ h1 {
 
 .matter-panel,
 .roster-panel,
+.actions-panel,
+.status-panel,
+.member-panel,
+.grant-panel,
 .compose-panel,
 .sync-panel {
   padding: 18px;
@@ -209,11 +217,67 @@ dd {
 }
 
 .compose-panel,
+.actions-panel,
+.status-panel,
+.member-panel,
+.grant-panel,
 .sync-panel {
   margin-top: 18px;
 }
 
+.action-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.action-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #dce3db;
+  border-radius: 8px;
+  background: #f8faf7;
+}
+
+.action-list li[data-state="allowed"] {
+  border-color: #9cc8b3;
+  background: #f0faf4;
+}
+
+.action-list li[data-state="blocked"] {
+  color: #52645d;
+}
+
+.action-list span {
+  overflow-wrap: anywhere;
+}
+
+.action-list strong {
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
 .post-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.member-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.grant-form {
   display: grid;
   gap: 12px;
   margin-top: 14px;
@@ -230,12 +294,41 @@ dd {
   color: #17201d;
 }
 
+.member-form input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #cbd8d2;
+  border-radius: 8px;
+  background: #fbfdfb;
+  color: #17201d;
+}
+
+.grant-form input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #cbd8d2;
+  border-radius: 8px;
+  background: #fbfdfb;
+  color: #17201d;
+}
+
 .post-form textarea:focus {
   border-color: #2f6f73;
   outline: 3px solid #d8ece8;
 }
 
+.member-form input:focus,
+.grant-form input:focus {
+  border-color: #2f6f73;
+  outline: 3px solid #d8ece8;
+}
+
 .post-actions,
+.status-actions,
+.member-actions,
+.grant-actions,
 .sync-actions {
   display: flex;
   align-items: center;
@@ -245,6 +338,15 @@ dd {
 
 .sync-actions {
   margin-top: 14px;
+}
+
+.status-actions {
+  margin-top: 14px;
+}
+
+.status-buttons {
+  display: flex;
+  gap: 10px;
 }
 
 .post-message,
@@ -264,6 +366,8 @@ dd {
 .post-message[data-state="native_unavailable"],
 .post-message[data-state="author_failed"],
 .post-message[data-state="empty_post"],
+.post-message[data-state="empty_audience"],
+.post-message[data-state="invalid_audience"],
 .sync-message[data-state="carrier_unconfigured"],
 .sync-message[data-state="native_unavailable"],
 .sync-message[data-state="sync_failed"] {
@@ -271,6 +375,8 @@ dd {
 }
 
 .post-actions button,
+.status-buttons button,
+.grant-actions button,
 .sync-actions button {
   min-width: 132px;
   min-height: 42px;
@@ -283,6 +389,8 @@ dd {
 }
 
 .post-actions button:disabled,
+.status-buttons button:disabled,
+.grant-actions button:disabled,
 .sync-actions button:disabled {
   background: #a9bbb4;
   cursor: not-allowed;
@@ -326,13 +434,27 @@ dd {
   }
 
   .post-actions,
+  .status-actions,
+  .member-actions,
+  .grant-actions,
   .sync-actions {
     align-items: stretch;
     flex-direction: column;
   }
 
+  .action-list {
+    grid-template-columns: 1fr;
+  }
+
   .post-actions button,
+  .status-buttons,
+  .status-buttons button,
+  .grant-actions button,
   .sync-actions button {
     width: 100%;
+  }
+
+  .status-buttons {
+    flex-direction: column;
   }
 }

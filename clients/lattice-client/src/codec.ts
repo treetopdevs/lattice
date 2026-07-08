@@ -47,6 +47,26 @@ export interface CarrierOpSigner {
   sign(bytes: Uint8Array): Uint8Array | Promise<Uint8Array>;
 }
 
+export interface CarrierDelegationCore {
+  replica: string;
+  issuer: string;
+  audience: string;
+  parent_id: string | null;
+  ops: readonly string[];
+  roles: readonly string[];
+  live: boolean;
+}
+
+export interface AuthorCarrierDelegationInput {
+  replica: string;
+  audiencePubkey: string | Uint8Array;
+  parentId?: string | null;
+  ops?: readonly string[];
+  roles?: readonly string[];
+  live?: boolean;
+  signer: CarrierOpSigner;
+}
+
 export interface AuthorCarrierOpInput {
   replica: string;
   deps: string[];
@@ -63,6 +83,7 @@ const tupleTag = 60_001;
 const mapsetTag = 60_002;
 const delegationTermTag = 60_003;
 const opTag = "lattice-op-v2";
+const delegationPayloadTag = "lattice-delegation-v2";
 
 /**
  * Encode the signed/hashable core of a BEAM carrier op frame using the same
@@ -123,6 +144,44 @@ export async function authorCarrierOp(input: AuthorCarrierOpInput): Promise<Carr
 
   return {
     ...unsignedFrame,
+    id,
+    sig: bytesToBase64(signature),
+  };
+}
+
+export function canonicalBytesForCarrierDelegation(delegation: CarrierDelegationCore): Uint8Array {
+  return encodeArray([
+    encodeBinaryString(delegationPayloadTag),
+    encodeBinaryString(delegation.replica),
+    encodeBytes(base64ToBytes(delegation.issuer)),
+    encodeBytes(base64ToBytes(delegation.audience)),
+    delegation.parent_id === null ? bytes(0xf6) : encodeBinaryString(delegation.parent_id),
+    encodeArray(uniqueSorted(delegation.ops).map(encodeAtom)),
+    encodeArray(uniqueSorted(delegation.roles).map(encodeAtom)),
+    bytes(delegation.live ? 0xf5 : 0xf4),
+  ]);
+}
+
+export async function authorCarrierDelegation(
+  input: AuthorCarrierDelegationInput,
+): Promise<CarrierDelegation> {
+  const unsignedDelegation: CarrierDelegationCore = {
+    replica: input.replica,
+    issuer: bytesToBase64(input.signer.publicKey),
+    audience: pubkeyBase64(input.audiencePubkey),
+    parent_id: input.parentId ?? null,
+    ops: uniqueSorted(input.ops ?? []),
+    roles: uniqueSorted(input.roles ?? []),
+    live: input.live ?? false,
+  };
+  const canonicalBytes = canonicalBytesForCarrierDelegation(unsignedDelegation);
+  const id = await canonicalHash(canonicalBytes);
+  const signature = await input.signer.sign(canonicalBytes);
+
+  return {
+    ...unsignedDelegation,
+    ops: [...unsignedDelegation.ops],
+    roles: [...unsignedDelegation.roles],
     id,
     sig: bytesToBase64(signature),
   };
@@ -261,7 +320,7 @@ function compareBytes(left: Uint8Array, right: Uint8Array): number {
   return left.length - right.length;
 }
 
-function uniqueSorted(values: string[]): string[] {
+function uniqueSorted(values: readonly string[]): string[] {
   return [...new Set(values)].sort();
 }
 
@@ -296,6 +355,10 @@ function bytesToBase64(value: Uint8Array): string {
   const btoaFn = (globalThis as unknown as { btoa?: (decoded: string) => string }).btoa;
   if (!btoaFn) throw new Error("base64 encoding unavailable");
   return btoaFn(String.fromCharCode(...value));
+}
+
+function pubkeyBase64(value: string | Uint8Array): string {
+  return typeof value === "string" ? value : bytesToBase64(value);
 }
 
 function bytes(...values: number[]): Uint8Array {

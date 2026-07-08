@@ -179,6 +179,9 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
     oracle_log = Sim.log(oracle, "resident")
     realms = realm_index(oracle)
+    authority_unsound_grant = carrier_authority_unsound_grant(oracle, oracle_log)
+    authority_revocation = carrier_authority_revocation(oracle, oracle_log)
+    authority_bad_revocation = carrier_authority_bad_revocation(oracle, oracle_log)
 
     %{
       name: "township_carrier_w1",
@@ -196,6 +199,9 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       peerDivergedCarrierOps: carrier_ops(Sim.log(diverged, "clerk")),
       oracleCarrierOps: carrier_ops(oracle_log),
       canonicalOps: canonical_ops(oracle_log),
+      authorityUnsoundGrant: authority_unsound_grant,
+      authorityRevocation: authority_revocation,
+      authorityBadRevocation: authority_bad_revocation,
       expectAfterSync: %{
         "state" => state_json(oracle_log, realms),
         "stateB64" => state_bytes_b64(oracle_log),
@@ -204,6 +210,170 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
         "authorityQuarantine" => authority_quarantine(oracle_log)
       }
     }
+  end
+
+  defp carrier_authority_bad_revocation(%Sim{} = sim, %Log{} = oracle_log) do
+    resident = Sim.identity(sim, "resident")
+    parent = resident_parent_delegation!(oracle_log, resident.pub)
+
+    {bad_revoke, bad_revoke_op} = Sim.revoke(sim, "resident", parent.id)
+
+    {bad_revoke, post_revoke_command_op} =
+      bad_revoke
+      |> Sim.sync_all()
+      |> Sim.command("resident", :post, ["resident: post after unauthorized revoke"],
+        cap: parent.id
+      )
+
+    final_log =
+      bad_revoke
+      |> Sim.sync_all()
+      |> Sim.log("resident")
+
+    authority_quarantine = authority_quarantine(final_log)
+
+    unless [bad_revoke_op.id, "unauthorized_revoke"] in authority_quarantine do
+      raise "expected bad revoke #{bad_revoke_op.id} to quarantine as unauthorized_revoke"
+    end
+
+    if Enum.any?(authority_quarantine, fn [id, _reason] -> id == post_revoke_command_op.id end) do
+      raise "expected post after bad revoke #{post_revoke_command_op.id} to remain authority-honored"
+    end
+
+    unless "resident: post after unauthorized revoke" in Lattice.state(Matter, final_log).posts do
+      raise "expected unauthorized revoke to leave delegation usable for a later post"
+    end
+
+    if state_bytes_b64(final_log) == state_bytes_b64(oracle_log) do
+      raise "expected post after unauthorized revoke to change materialized state"
+    end
+
+    %{
+      "delegationId" => parent.id,
+      "revokeOp" => CarrierWire.encode_op(bad_revoke_op),
+      "postRevokeCommandOp" => CarrierWire.encode_op(post_revoke_command_op),
+      "authorityQuarantine" => authority_quarantine,
+      "stateB64" => state_bytes_b64(final_log),
+      "opIds" => final_log |> Log.op_ids() |> MapSet.to_list() |> Enum.sort()
+    }
+  end
+
+  defp carrier_authority_unsound_grant(%Sim{} = sim, %Log{} = oracle_log) do
+    resident = Sim.identity(sim, "resident")
+    clerk = Sim.identity(sim, "clerk")
+    parent = resident_parent_delegation!(oracle_log, resident.pub)
+
+    delegation =
+      Delegation.new(resident, Sim.replica(sim), clerk.pub,
+        ops: [:close_matter],
+        roles: [:clerk],
+        parent_id: parent.id
+      )
+
+    op =
+      Op.new(
+        resident,
+        Sim.replica(sim),
+        Log.frontier(oracle_log),
+        :authority,
+        {:grant, delegation}
+      )
+
+    unsound_log = Log.append!(oracle_log, op)
+    authority_quarantine = authority_quarantine(unsound_log)
+
+    unless [op.id, "not_attenuated"] in authority_quarantine do
+      raise "expected authority-unsound grant #{op.id} to quarantine as not_attenuated"
+    end
+
+    %{
+      "carrierOp" => CarrierWire.encode_op(op),
+      "parentDelegationId" => parent.id,
+      "authorityQuarantine" => authority_quarantine
+    }
+  end
+
+  defp carrier_authority_revocation(%Sim{} = sim, %Log{} = oracle_log) do
+    resident = Sim.identity(sim, "resident")
+    parent = resident_parent_delegation!(oracle_log, resident.pub)
+    pre_revoke_command = resident_pre_revoke_command!(oracle_log, parent.id)
+
+    baseline_quarantine = authority_quarantine(oracle_log)
+
+    if Enum.any?(baseline_quarantine, fn [id, _reason] -> id == pre_revoke_command.id end) do
+      raise "expected pre-revoke command #{pre_revoke_command.id} to be authority-honored"
+    end
+
+    {revoked, revoke_op} = Sim.revoke(sim, "clerk", parent.id)
+
+    {revoked, revoked_command_op} =
+      revoked
+      |> Sim.sync_all()
+      |> Sim.command("resident", :post, ["resident: attempted after revocation"], cap: parent.id)
+
+    final_log =
+      revoked
+      |> Sim.sync_all()
+      |> Sim.log("resident")
+
+    authority_quarantine = authority_quarantine(final_log)
+
+    unless [revoked_command_op.id, "revoked_capability"] in authority_quarantine do
+      raise "expected revoked-cap command #{revoked_command_op.id} to quarantine as revoked_capability"
+    end
+
+    if Enum.any?(authority_quarantine, fn [id, _reason] -> id == revoke_op.id end) do
+      raise "expected clerk-authored revoke #{revoke_op.id} to remain authority-honored"
+    end
+
+    unless state_bytes_b64(final_log) == state_bytes_b64(oracle_log) do
+      raise "expected revocation fixture to leave materialized state unchanged"
+    end
+
+    %{
+      "delegationId" => parent.id,
+      "preRevokeCommandId" => pre_revoke_command.id,
+      "revokeOp" => CarrierWire.encode_op(revoke_op),
+      "revokedCommandOp" => CarrierWire.encode_op(revoked_command_op),
+      "authorityQuarantine" => authority_quarantine,
+      "stateB64" => state_bytes_b64(final_log),
+      "opIds" => final_log |> Log.op_ids() |> MapSet.to_list() |> Enum.sort()
+    }
+  end
+
+  defp resident_parent_delegation!(%Log{} = log, resident_pub) do
+    log
+    |> Log.topo_ops()
+    |> Enum.find_value(fn
+      %Op{kind: :authority, body: {:grant, %Delegation{} = delegation}} ->
+        if delegation.audience == resident_pub and MapSet.member?(delegation.ops, :post) and
+             not MapSet.member?(delegation.ops, :close_matter) do
+          delegation
+        end
+
+      _op ->
+        nil
+    end)
+    |> case do
+      %Delegation{} = delegation -> delegation
+      nil -> raise "missing resident parent delegation for authority-unsound grant vector"
+    end
+  end
+
+  defp resident_pre_revoke_command!(%Log{} = log, delegation_id) do
+    log
+    |> Log.topo_ops()
+    |> Enum.find(fn
+      %Op{kind: :command, cap: ^delegation_id, body: {:post, ["resident: posted while offline"]}} ->
+        true
+
+      _op ->
+        false
+    end)
+    |> case do
+      %Op{} = op -> op
+      nil -> raise "missing pre-revoke resident command for revocation vector"
+    end
   end
 
   defp carrier_base_sim do
@@ -471,6 +641,9 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       "peerDivergedCarrierOps" => scenario.peerDivergedCarrierOps,
       "oracleCarrierOps" => scenario.oracleCarrierOps,
       "canonicalOps" => scenario.canonicalOps,
+      "authorityUnsoundGrant" => scenario.authorityUnsoundGrant,
+      "authorityRevocation" => scenario.authorityRevocation,
+      "authorityBadRevocation" => scenario.authorityBadRevocation,
       "expectAfterSync" => scenario.expectAfterSync
     }
   end

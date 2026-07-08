@@ -1,4 +1,4 @@
-import type { AuthorCarrierOpInput } from "./codec";
+import type { AuthorCarrierOpInput, CarrierOpSigner } from "./codec";
 import type { CarrierDelegation, CarrierOpFrame, CarrierTerm } from "./carrier";
 import type { CarrierFrameStore, LocalOpLogStore } from "./local_log";
 import type { Op } from "./op";
@@ -29,9 +29,30 @@ export interface AuthorTownshipCommandInput extends Pick<AuthorCarrierOpInput, "
 export interface AuthorTownshipCommandFromLogInput extends Pick<AuthorTownshipCommandInput, "replica" | "command" | "capId" | "signer"> {
     localOps: Op[];
 }
+export interface AuthorTownshipDelegationInput {
+    replica: string;
+    deps: string[];
+    audiencePubkey: string | Uint8Array;
+    parentId?: string | null;
+    ops?: readonly string[];
+    roles?: readonly string[];
+    live?: boolean;
+    signer: CarrierOpSigner;
+}
+export interface AuthorTownshipRevocationInput extends Pick<AuthorCarrierOpInput, "replica" | "deps" | "signer"> {
+    delegationId: string;
+}
 export interface AuthorAndPersistTownshipCommandInput extends Pick<AuthorTownshipCommandInput, "replica" | "command" | "signer"> {
     localLog: LocalOpLogStore;
     carrierFrames: CarrierFrameStore;
+    delegationFrames?: CarrierFrameStore;
+    realmByPubkey: Record<string, string>;
+}
+export interface AuthorAndPersistTownshipDelegationInput extends Pick<AuthorTownshipDelegationInput, "replica" | "audiencePubkey" | "ops" | "roles" | "live" | "signer"> {
+    parentId?: string | null;
+    localLog: LocalOpLogStore;
+    carrierFrames: CarrierFrameStore;
+    delegationFrames?: CarrierFrameStore;
     realmByPubkey: Record<string, string>;
 }
 export interface AuthorAndPersistTownshipCommandResult {
@@ -39,9 +60,26 @@ export interface AuthorAndPersistTownshipCommandResult {
     op: Op;
     capId: string;
 }
+export interface AuthorAndPersistTownshipDelegationResult {
+    frame: CarrierOpFrame;
+    op: Op;
+    delegation: CarrierDelegation;
+    parentId: string | null;
+}
 export declare function townshipCommandBody(command: TownshipCommand): CarrierTerm;
 export declare function townshipCapTerm(capId: string | null): CarrierTerm;
+export declare function townshipGrantBody(delegation: CarrierDelegation): CarrierTerm;
+export declare function townshipRevokeBody(delegationId: string): CarrierTerm;
 export declare function selectTownshipCapId(command: TownshipCommand, delegations: CarrierDelegation[], audiencePubkey: string | Uint8Array): string | null;
+export declare function selectTownshipDelegationParentId(delegations: readonly CarrierDelegation[], issuerPubkey: string | Uint8Array, options?: {
+    replica?: string;
+    ops?: readonly string[];
+    roles?: readonly string[];
+    live?: boolean;
+}): string | null;
 export declare function authorTownshipCommand(input: AuthorTownshipCommandInput): Promise<CarrierOpFrame>;
 export declare function authorTownshipCommandFromLog(input: AuthorTownshipCommandFromLogInput): Promise<CarrierOpFrame>;
+export declare function authorTownshipDelegation(input: AuthorTownshipDelegationInput): Promise<CarrierOpFrame>;
+export declare function authorTownshipRevocation(input: AuthorTownshipRevocationInput): Promise<CarrierOpFrame>;
 export declare function authorAndPersistTownshipCommand(input: AuthorAndPersistTownshipCommandInput): Promise<AuthorAndPersistTownshipCommandResult>;
+export declare function authorAndPersistTownshipDelegation(input: AuthorAndPersistTownshipDelegationInput): Promise<AuthorAndPersistTownshipDelegationResult>;

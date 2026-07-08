@@ -5,8 +5,11 @@ import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import {
   authorAndPersistTownshipCommand,
+  authorCarrierDelegation,
+  authorTownshipDelegation,
   authorTownshipCommand,
   authorTownshipCommandFromLog,
+  authorTownshipRevocation,
   carrierDelegationsFromFrames,
   carrierOpsToSemanticOps,
   createJsonCarrierFrameStore,
@@ -14,6 +17,7 @@ import {
   selectTownshipCapId,
   townshipCapTerm,
   townshipCommandBody,
+  townshipRevokeBody,
 } from "../src/index";
 import type { CarrierOpFrame, CarrierTerm } from "../src/index";
 
@@ -41,6 +45,23 @@ interface TownshipCarrierVector {
   realmByPubkey: Record<string, string>;
   client: { realm: string; sessionSeed: string };
   clientDivergedCarrierOps: CarrierOpFrame[];
+  authorityRevocation: {
+    delegationId: string;
+    preRevokeCommandId: string;
+    revokeOp: CarrierOpFrame;
+    revokedCommandOp: CarrierOpFrame;
+    authorityQuarantine: [string, string][];
+    stateB64: string;
+    opIds: string[];
+  };
+  authorityBadRevocation: {
+    delegationId: string;
+    revokeOp: CarrierOpFrame;
+    postRevokeCommandOp: CarrierOpFrame;
+    authorityQuarantine: [string, string][];
+    stateB64: string;
+    opIds: string[];
+  };
 }
 
 class MemoryKeyValueStore {
@@ -85,6 +106,34 @@ check("carrier delegation ids from frames", delegations.map((delegation) => dele
   capId,
 ]);
 
+const grantFixture = vector.clientDivergedCarrierOps.find((frame) => authorityCommandName(frame) === "grant");
+if (!grantFixture) throw new Error("missing resident grant fixture frame");
+const grantDelegation = carrierDelegationsFromFrames([grantFixture])[0];
+if (!grantDelegation) throw new Error("missing resident grant fixture delegation");
+
+const authoredResidentDelegation = await authorCarrierDelegation({
+  replica: grantDelegation.replica,
+  audiencePubkey: residentAuthor.publicKey,
+  parentId: grantDelegation.parent_id,
+  ops: grantDelegation.ops,
+  roles: grantDelegation.roles,
+  live: grantDelegation.live,
+  signer: clerkAuthor,
+});
+check("authored resident delegation", authoredResidentDelegation, grantDelegation);
+
+const authoredResidentGrant = await authorTownshipDelegation({
+  replica: grantFixture.replica,
+  deps: grantFixture.deps,
+  audiencePubkey: residentAuthor.publicKey,
+  parentId: grantDelegation.parent_id,
+  ops: grantDelegation.ops,
+  roles: grantDelegation.roles,
+  live: grantDelegation.live,
+  signer: clerkAuthor,
+});
+check("authored resident grant frame", authoredResidentGrant, grantFixture);
+
 check(
   "resident post cap id",
   selectTownshipCapId({ command: "post", text: "resident: posted while offline" }, delegations, residentAuthor.publicKeyBase64),
@@ -106,6 +155,21 @@ const postFixture = vector.clientDivergedCarrierOps.find(
 );
 if (!postFixture) throw new Error("missing resident post fixture frame");
 const residentPostCommand = { command: "post", text: "resident: posted while offline" } as const;
+const issuedResidentPostCapId = selectTownshipCapId(
+  residentPostCommand,
+  carrierDelegationsFromFrames([authoredResidentGrant]),
+  residentAuthor.publicKeyBase64,
+);
+check("issued resident post cap id", issuedResidentPostCapId, capId);
+
+const authoredPostWithIssuedCap = await authorTownshipCommand({
+  replica: postFixture.replica,
+  deps: postFixture.deps,
+  command: residentPostCommand,
+  capId: issuedResidentPostCapId,
+  signer: residentAuthor,
+});
+check("authored resident post frame with issued cap", authoredPostWithIssuedCap, postFixture);
 
 const authoredPostFrame = await authorTownshipCommand({
   replica: postFixture.replica,
@@ -128,6 +192,92 @@ const authoredPostFrameFromLog = await authorTownshipCommandFromLog({
   signer: residentAuthor,
 });
 check("authored resident post frame from local log", authoredPostFrameFromLog, postFixture);
+
+check(
+  "revoke body",
+  townshipRevokeBody(vector.authorityRevocation.delegationId),
+  vector.authorityRevocation.revokeOp.body,
+);
+check("revocation delegates target resident grant", vector.authorityRevocation.delegationId, capId);
+check(
+  "pre-revoke command stays authorized",
+  vector.authorityRevocation.preRevokeCommandId,
+  postFixture.id,
+);
+
+const authoredRevokeFrame = await authorTownshipRevocation({
+  replica: vector.authorityRevocation.revokeOp.replica,
+  deps: vector.authorityRevocation.revokeOp.deps,
+  delegationId: vector.authorityRevocation.delegationId,
+  signer: clerkAuthor,
+});
+check("authored revocation frame", authoredRevokeFrame, vector.authorityRevocation.revokeOp);
+
+const [authoredRevokeOp] = carrierOpsToSemanticOps([authoredRevokeFrame], vector.realmByPubkey);
+if (!authoredRevokeOp) throw new Error("authored revocation did not decode to a semantic op");
+check("authored revocation semantic command", authoredRevokeOp.command, `revoke ${vector.authorityRevocation.delegationId}`);
+
+const revokedResidentPostCommand = { command: "post", text: "resident: attempted after revocation" } as const;
+const authoredRevokedPostFrame = await authorTownshipCommand({
+  replica: vector.authorityRevocation.revokedCommandOp.replica,
+  deps: vector.authorityRevocation.revokedCommandOp.deps,
+  command: revokedResidentPostCommand,
+  capId: vector.authorityRevocation.delegationId,
+  signer: residentAuthor,
+});
+check("authored revoked-cap post frame", authoredRevokedPostFrame, vector.authorityRevocation.revokedCommandOp);
+check(
+  "revoked-cap post authority quarantine member",
+  vector.authorityRevocation.authorityQuarantine.some(
+    ([id, reason]) => id === authoredRevokedPostFrame.id && reason === "revoked_capability",
+  ),
+  true,
+);
+
+check(
+  "bad revoke body",
+  townshipRevokeBody(vector.authorityBadRevocation.delegationId),
+  vector.authorityBadRevocation.revokeOp.body,
+);
+check("bad revocation targets resident grant", vector.authorityBadRevocation.delegationId, capId);
+
+const authoredBadRevokeFrame = await authorTownshipRevocation({
+  replica: vector.authorityBadRevocation.revokeOp.replica,
+  deps: vector.authorityBadRevocation.revokeOp.deps,
+  delegationId: vector.authorityBadRevocation.delegationId,
+  signer: residentAuthor,
+});
+check("authored bad revocation frame", authoredBadRevokeFrame, vector.authorityBadRevocation.revokeOp);
+
+const [authoredBadRevokeOp] = carrierOpsToSemanticOps([authoredBadRevokeFrame], vector.realmByPubkey);
+if (!authoredBadRevokeOp) throw new Error("authored bad revocation did not decode to a semantic op");
+check("authored bad revocation semantic command", authoredBadRevokeOp.command, `revoke ${vector.authorityBadRevocation.delegationId}`);
+
+const postAfterBadRevokeCommand = { command: "post", text: "resident: post after unauthorized revoke" } as const;
+const authoredPostAfterBadRevokeFrame = await authorTownshipCommand({
+  replica: vector.authorityBadRevocation.postRevokeCommandOp.replica,
+  deps: vector.authorityBadRevocation.postRevokeCommandOp.deps,
+  command: postAfterBadRevokeCommand,
+  capId: vector.authorityBadRevocation.delegationId,
+  signer: residentAuthor,
+});
+check(
+  "authored post after bad revoke frame",
+  authoredPostAfterBadRevokeFrame,
+  vector.authorityBadRevocation.postRevokeCommandOp,
+);
+check(
+  "bad revoke authority quarantine member",
+  vector.authorityBadRevocation.authorityQuarantine.some(
+    ([id, reason]) => id === authoredBadRevokeFrame.id && reason === "unauthorized_revoke",
+  ),
+  true,
+);
+check(
+  "post after bad revoke stays authorized",
+  vector.authorityBadRevocation.authorityQuarantine.some(([id]) => id === authoredPostAfterBadRevokeFrame.id),
+  false,
+);
 
 const persistedStore = createJsonLocalOpLogStore(new MemoryKeyValueStore(), "township:resident");
 await persistedStore.save(localOpsBeforePost);
@@ -193,6 +343,13 @@ process.exit(failures === 0 ? 0 : 1);
 function commandBody(command: string, arg?: string): CarrierTerm {
   const args: CarrierTerm[] = arg === undefined ? [] : [["bin", textBase64(arg)]];
   return ["tuple", [["atom", command], ["list", args]]];
+}
+
+function authorityCommandName(frame: CarrierOpFrame): string | null {
+  const body = frame.body;
+  return frame.kind === "authority" && body[0] === "tuple" && body[1][0]?.[0] === "atom"
+    ? body[1][0][1]
+    : null;
 }
 
 function textBase64(value: string): string {

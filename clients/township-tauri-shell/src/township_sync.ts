@@ -1,5 +1,6 @@
 import {
   syncCarrierOnce,
+  type CarrierOpFrame,
   type CarrierVerifier,
   type CarrierSyncClient,
 } from "@treetopdevs/lattice-client";
@@ -42,6 +43,9 @@ export interface TownshipSyncSuccess {
   pulledOpCount: number;
   pushedFrameCount: number;
   pushedFrameIds: string[];
+  compactedFrameCount: number;
+  compactedFrameIds: string[];
+  delegationFrameCount: number;
   acceptedCount: number;
   acceptedIds: string[];
   quarantinedCount: number;
@@ -50,6 +54,8 @@ export interface TownshipSyncSuccess {
   rejected: [string, string][];
   pendingCount: number;
   pending: string[];
+  authorityQuarantinedGrantCount: number;
+  authorityQuarantinedGrantIds: string[];
 }
 
 export interface TownshipSyncFailure {
@@ -112,10 +118,12 @@ export async function syncTownshipOutbox(
 
   let localOps;
   let localCarrierFrames;
+  let localDelegationFrames;
   try {
-    [localOps, localCarrierFrames] = await Promise.all([
+    [localOps, localCarrierFrames, localDelegationFrames] = await Promise.all([
       workflow.localLog.load(),
       workflow.carrierFrames.load(),
+      workflow.delegationFrames.load(),
     ]);
   } catch {
     return {
@@ -132,16 +140,34 @@ export async function syncTownshipOutbox(
       localCarrierFrames,
       options.realmByPubkey ?? TOWNSHIP_REALM_BY_PUBKEY,
     );
+    const authorityQuarantinedGrantIds = grantFrameIdsForAuthorityQuarantine(
+      localCarrierFrames,
+      synced.pushReport.quarantined,
+    );
     await workflow.localLog.save(synced.ops);
+    const delegationFrames = mergeCarrierFrames([
+      ...localDelegationFrames,
+      ...localCarrierFrames,
+      ...(synced.pulledFrames as CarrierOpFrame[]),
+    ]);
+    const acknowledgedFrameIds = new Set(synced.acknowledgedFrameIds);
+    const compactedCarrierFrames = localCarrierFrames.filter((frame) => !acknowledgedFrameIds.has(frameId(frame)));
+    await Promise.all([
+      workflow.delegationFrames.save(delegationFrames),
+      workflow.carrierFrames.save(compactedCarrierFrames),
+    ]);
 
     return {
       ok: true,
       localOpCount: synced.ops.length,
-      carrierFrameCount: localCarrierFrames.length,
+      carrierFrameCount: compactedCarrierFrames.length,
       pulledFrameCount: synced.pulledFrames.length,
       pulledOpCount: synced.pulledOps.length,
       pushedFrameCount: synced.pushedFrames.length,
       pushedFrameIds: synced.pushedFrames.map(frameId),
+      compactedFrameCount: synced.acknowledgedFrameIds.length,
+      compactedFrameIds: synced.acknowledgedFrameIds,
+      delegationFrameCount: delegationFrames.length,
       acceptedCount: synced.pushReport.accepted.length,
       acceptedIds: synced.pushReport.accepted,
       quarantinedCount: synced.pushReport.quarantined.length,
@@ -150,6 +176,8 @@ export async function syncTownshipOutbox(
       rejected: synced.pushReport.rejected,
       pendingCount: synced.pushReport.pending.length,
       pending: synced.pushReport.pending,
+      authorityQuarantinedGrantCount: authorityQuarantinedGrantIds.length,
+      authorityQuarantinedGrantIds,
     };
   } catch (error) {
     return {
@@ -160,6 +188,28 @@ export async function syncTownshipOutbox(
   } finally {
     connectedClient?.close();
   }
+}
+
+function mergeCarrierFrames(frames: CarrierOpFrame[]): CarrierOpFrame[] {
+  return [...new Map(frames.map((frame) => [frame.id, frame])).values()];
+}
+
+function grantFrameIdsForAuthorityQuarantine(
+  frames: CarrierOpFrame[],
+  quarantined: readonly (readonly [string, string])[],
+): string[] {
+  const byId = new Map(frames.map((frame) => [frame.id, frame]));
+  return quarantined
+    .filter(([id, reason]) => reason === "authority" && frameCommandName(byId.get(id)) === "grant")
+    .map(([id]) => id);
+}
+
+function frameCommandName(frame: CarrierOpFrame | undefined): string | null {
+  const body = frame?.body;
+  if (body?.[0] !== "tuple") return null;
+
+  const command = body[1][0];
+  return command?.[0] === "atom" ? command[1] : null;
 }
 
 function workflowOptions(options: SyncTownshipOutboxOptions): TownshipNativeWorkflowOptions {

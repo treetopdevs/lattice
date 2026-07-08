@@ -70,6 +70,7 @@ export interface SyncCarrierResult {
   pulledOps: Op[];
   pushedFrames: unknown[];
   pushReport: CarrierPushReport;
+  acknowledgedFrameIds: string[];
 }
 
 export interface CarrierOpFrame {
@@ -417,16 +418,20 @@ export async function syncCarrierOnce(
   const peerIds = new Set(await client.advertise());
   const pulledFrames = await client.pull(localOps.map((op) => op.id));
   const pulledOps = carrierOpsToSemanticOps(pulledFrames, realmByPubkey);
+  const peerKnownFrameIds: string[] = [];
 
   const pushedFrames = localCarrierFrames.filter((frame) => {
     const op = carrierOpToSemanticOp(frame, realmByPubkey);
-    return !peerIds.has(op.id);
+    if (!peerIds.has(op.id)) return true;
+    peerKnownFrameIds.push(carrierFrameId(frame));
+    return false;
   });
 
   const pushReport =
     pushedFrames.length === 0
       ? emptyPushReport()
       : await client.push(pushedFrames);
+  const acknowledgedFrameIds = [...new Set([...peerKnownFrameIds, ...pushReport.accepted])];
 
   return {
     ops: integrate(localOps, pulledOps),
@@ -434,7 +439,16 @@ export async function syncCarrierOnce(
     pulledOps,
     pushedFrames,
     pushReport,
+    acknowledgedFrameIds,
   };
+}
+
+function carrierFrameId(frame: unknown): string {
+  if (frame && typeof frame === "object" && typeof (frame as { id?: unknown }).id === "string") {
+    return (frame as { id: string }).id;
+  }
+
+  throw new Error("carrier frame missing id");
 }
 
 export function carrierOpsToSemanticOps(
@@ -625,7 +639,7 @@ function payloadFromBody(
         return neutralPayload(`grant ${realmForPubkey(delegation.audience, realmByPubkey)}`);
       }
       case "revoke":
-        return neutralPayload(`revoke ${String(body.values[1])}`);
+        return neutralPayload(`revoke ${binText(body.values[1])}`);
     }
   }
 

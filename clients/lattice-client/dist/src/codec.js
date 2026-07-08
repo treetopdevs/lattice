@@ -6,6 +6,7 @@ const tupleTag = 60_001;
 const mapsetTag = 60_002;
 const delegationTermTag = 60_003;
 const opTag = "lattice-op-v2";
+const delegationPayloadTag = "lattice-delegation-v2";
 /**
  * Encode the signed/hashable core of a BEAM carrier op frame using the same
  * narrow CBOR-shaped subset as `Lattice.Canonical.op_payload/1`.
@@ -56,6 +57,39 @@ export async function authorCarrierOp(input) {
     const signature = await input.signer.sign(canonicalBytes);
     return {
         ...unsignedFrame,
+        id,
+        sig: bytesToBase64(signature),
+    };
+}
+export function canonicalBytesForCarrierDelegation(delegation) {
+    return encodeArray([
+        encodeBinaryString(delegationPayloadTag),
+        encodeBinaryString(delegation.replica),
+        encodeBytes(base64ToBytes(delegation.issuer)),
+        encodeBytes(base64ToBytes(delegation.audience)),
+        delegation.parent_id === null ? bytes(0xf6) : encodeBinaryString(delegation.parent_id),
+        encodeArray(uniqueSorted(delegation.ops).map(encodeAtom)),
+        encodeArray(uniqueSorted(delegation.roles).map(encodeAtom)),
+        bytes(delegation.live ? 0xf5 : 0xf4),
+    ]);
+}
+export async function authorCarrierDelegation(input) {
+    const unsignedDelegation = {
+        replica: input.replica,
+        issuer: bytesToBase64(input.signer.publicKey),
+        audience: pubkeyBase64(input.audiencePubkey),
+        parent_id: input.parentId ?? null,
+        ops: uniqueSorted(input.ops ?? []),
+        roles: uniqueSorted(input.roles ?? []),
+        live: input.live ?? false,
+    };
+    const canonicalBytes = canonicalBytesForCarrierDelegation(unsignedDelegation);
+    const id = await canonicalHash(canonicalBytes);
+    const signature = await input.signer.sign(canonicalBytes);
+    return {
+        ...unsignedDelegation,
+        ops: [...unsignedDelegation.ops],
+        roles: [...unsignedDelegation.roles],
         id,
         sig: bytesToBase64(signature),
     };
@@ -189,6 +223,9 @@ function bytesToBase64(value) {
     if (!btoaFn)
         throw new Error("base64 encoding unavailable");
     return btoaFn(String.fromCharCode(...value));
+}
+function pubkeyBase64(value) {
+    return typeof value === "string" ? value : bytesToBase64(value);
 }
 function bytes(...values) {
     return new Uint8Array(values);

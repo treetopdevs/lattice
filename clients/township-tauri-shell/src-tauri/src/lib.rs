@@ -8,6 +8,9 @@ use rand_core::OsRng;
 use sha2::{Digest, Sha256};
 
 pub const TOWNSHIP_KEYRING_SERVICE: &str = "dev.treetop.lattice.township.carrier";
+pub const TOWNSHIP_DEV_CARRIER_KEY_ID_ENV: &str = "TOWNSHIP_DEV_CARRIER_KEY_ID";
+pub const TOWNSHIP_DEV_CARRIER_KEY_SEED_ENV: &str = "TOWNSHIP_DEV_CARRIER_KEY_SEED";
+pub const TOWNSHIP_DEV_TRACE_FILE_ENV: &str = "TOWNSHIP_DEV_TRACE_FILE";
 
 pub trait CarrierKeySeedStore: Send + Sync {
     fn load_seed(&self, key_id: &str) -> Result<Option<[u8; 32]>, String>;
@@ -126,6 +129,14 @@ impl TownshipNativeState {
         Ok(())
     }
 
+    pub fn kv_snapshot(&self) -> Result<HashMap<String, String>, String> {
+        let values = self
+            .values
+            .lock()
+            .map_err(|_| "key-value store lock poisoned".to_string())?;
+        Ok(values.clone())
+    }
+
     pub fn insert_seeded_dev_key(&self, key_id: &str, seed: &str) -> Result<(), String> {
         let digest = Sha256::digest(seed.as_bytes());
         let mut seed_bytes = [0u8; 32];
@@ -229,10 +240,11 @@ pub fn configure_township_builder<R: tauri::Runtime>(
 pub fn configure_platform_secure_township_builder<R: tauri::Runtime>(
     builder: tauri::Builder<R>,
 ) -> tauri::Builder<R> {
-    configure_township_builder(
-        builder,
-        TownshipNativeState::platform_secure(TOWNSHIP_KEYRING_SERVICE),
-    )
+    let state = TownshipNativeState::platform_secure(TOWNSHIP_KEYRING_SERVICE);
+    #[cfg(debug_assertions)]
+    seed_dev_carrier_key_from_env(&state).expect("invalid Township dev carrier key seed env");
+
+    configure_township_builder(builder, state)
 }
 
 pub fn build_platform_secure_township_app<R: tauri::Runtime>(
@@ -248,11 +260,63 @@ pub fn run() {
         .expect("error while running Township Tauri shell");
 }
 
+#[cfg(debug_assertions)]
+pub fn seed_dev_carrier_key_from_env(state: &TownshipNativeState) -> Result<bool, String> {
+    seed_dev_carrier_key_from_vars(state, std::env::vars())
+}
+
+pub fn seed_dev_carrier_key_from_vars<I, K, V>(
+    state: &TownshipNativeState,
+    vars: I,
+) -> Result<bool, String>
+where
+    I: IntoIterator<Item = (K, V)>,
+    K: AsRef<str>,
+    V: Into<String>,
+{
+    let mut key_id = None;
+    let mut seed = None;
+
+    for (key, value) in vars {
+        match key.as_ref() {
+            TOWNSHIP_DEV_CARRIER_KEY_ID_ENV => key_id = Some(value.into()),
+            TOWNSHIP_DEV_CARRIER_KEY_SEED_ENV => seed = Some(value.into()),
+            _ => {}
+        }
+    }
+
+    match (key_id, seed) {
+        (None, None) => Ok(false),
+        (Some(key_id), Some(seed)) => {
+            let key_id = key_id.trim();
+            let seed = seed.trim();
+            if key_id.is_empty() {
+                return Err(format!("{TOWNSHIP_DEV_CARRIER_KEY_ID_ENV} cannot be empty"));
+            }
+            if seed.is_empty() {
+                return Err(format!(
+                    "{TOWNSHIP_DEV_CARRIER_KEY_SEED_ENV} cannot be empty"
+                ));
+            }
+
+            state.insert_seeded_dev_key(key_id, seed)?;
+            Ok(true)
+        }
+        (Some(_), None) => Err(format!(
+            "{TOWNSHIP_DEV_CARRIER_KEY_ID_ENV} requires {TOWNSHIP_DEV_CARRIER_KEY_SEED_ENV}"
+        )),
+        (None, Some(_)) => Err(format!(
+            "{TOWNSHIP_DEV_CARRIER_KEY_SEED_ENV} requires {TOWNSHIP_DEV_CARRIER_KEY_ID_ENV}"
+        )),
+    }
+}
+
 #[tauri::command]
 fn lattice_kv_get(
     state: tauri::State<'_, TownshipNativeState>,
     key: String,
 ) -> Result<Option<String>, String> {
+    trace_dev_command("lattice_kv_get");
     state.kv_get(&key)
 }
 
@@ -262,6 +326,7 @@ fn lattice_kv_set(
     key: String,
     value: String,
 ) -> Result<(), String> {
+    trace_dev_command("lattice_kv_set");
     state.kv_set(&key, &value)
 }
 
@@ -270,6 +335,7 @@ fn lattice_ensure_carrier_key(
     state: tauri::State<'_, TownshipNativeState>,
     key_id: String,
 ) -> Result<String, String> {
+    trace_dev_command("lattice_ensure_carrier_key");
     state.ensure_carrier_key(&key_id)
 }
 
@@ -278,6 +344,7 @@ fn lattice_public_key(
     state: tauri::State<'_, TownshipNativeState>,
     key_id: String,
 ) -> Result<String, String> {
+    trace_dev_command("lattice_public_key");
     state.public_key(&key_id)
 }
 
@@ -287,5 +354,29 @@ fn lattice_sign_carrier(
     key_id: String,
     bytes: String,
 ) -> Result<String, String> {
+    trace_dev_command("lattice_sign_carrier");
     state.sign_carrier(&key_id, &bytes)
 }
+
+#[cfg(debug_assertions)]
+fn trace_dev_command(command: &str) {
+    use std::io::Write as _;
+
+    let Ok(path) = std::env::var(TOWNSHIP_DEV_TRACE_FILE_ENV) else {
+        return;
+    };
+    if path.trim().is_empty() {
+        return;
+    }
+
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
+        let _ = writeln!(file, "{command}");
+    }
+}
+
+#[cfg(not(debug_assertions))]
+fn trace_dev_command(_command: &str) {}

@@ -17,6 +17,7 @@ export const TOWNSHIP_NATIVE_KEY_ID = "township-resident";
 export const TOWNSHIP_STORAGE_NAMESPACE = "township:zoning-variance-24";
 export const TOWNSHIP_LOCAL_OP_LOG_KEY = "local_ops";
 export const TOWNSHIP_CARRIER_OUTBOX_KEY = "carrier_frames";
+export const TOWNSHIP_DELEGATION_FRAMES_KEY = "delegation_frames";
 
 const TOWNSHIP_NATIVE_PROBE_KEY = "native_probe";
 const TOWNSHIP_NATIVE_PROBE_VALUE = "native invoke ready";
@@ -34,6 +35,7 @@ export interface TownshipNativeWorkflow {
   storage: LocalKeyValueStore;
   localLog: LocalOpLogStore;
   carrierFrames: CarrierFrameStore;
+  delegationFrames: CarrierFrameStore;
   signer: CarrierSigner;
 }
 
@@ -70,6 +72,7 @@ export async function createTownshipNativeWorkflow(
     storage,
     localLog: createJsonLocalOpLogStore(storage, TOWNSHIP_LOCAL_OP_LOG_KEY),
     carrierFrames: createJsonCarrierFrameStore(storage, TOWNSHIP_CARRIER_OUTBOX_KEY),
+    delegationFrames: createJsonCarrierFrameStore(storage, TOWNSHIP_DELEGATION_FRAMES_KEY),
     signer,
   };
 }

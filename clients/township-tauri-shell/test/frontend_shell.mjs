@@ -81,6 +81,110 @@ test("Vue source exposes a cap-gated author-and-persist post action", () => {
   assert.match(app, /Post update/);
 });
 
+test("Vue source exposes a cap-gated summary edit action", () => {
+  const app = readText("src/App.vue");
+  const actions = readText("src/township_actions.ts");
+
+  assert.match(actions, /export async function submitTownshipCommand/);
+  assert.match(app, /submitTownshipCommand/);
+  assert.match(app, /summaryDraft/);
+  assert.match(app, /submitSummary/);
+  assert.match(app, /command: "set_summary"/);
+  assert.match(app, /Update summary/);
+});
+
+test("Vue source shows cap-aware action availability", () => {
+  const app = readText("src/App.vue");
+  const actions = readText("src/township_actions.ts");
+
+  assert.match(actions, /export async function loadTownshipActionAvailability/);
+  assert.match(app, /loadTownshipActionAvailability/);
+  assert.match(app, /actionAvailability/);
+  assert.match(app, /availableActions/);
+  assert.match(app, /Available actions/);
+  assert.match(app, /close_matter/);
+  assert.match(app, /remove_member/);
+});
+
+test("Vue source exposes close and reopen matter status actions", () => {
+  const app = readText("src/App.vue");
+
+  assert.match(app, /statusStatus/);
+  assert.match(app, /statusSubmitting/);
+  assert.match(app, /submitMatterStatus/);
+  assert.match(app, /statusActionAllowed/);
+  assert.match(app, /command: \{ command \}/);
+  assert.match(app, /Close matter/);
+  assert.match(app, /Reopen matter/);
+  assert.match(app, /close_matter/);
+  assert.match(app, /reopen_matter/);
+});
+
+test("Vue source exposes member-management actions", () => {
+  const app = readText("src/App.vue");
+
+  assert.match(app, /memberDraft/);
+  assert.match(app, /memberStatus/);
+  assert.match(app, /memberSubmitting/);
+  assert.match(app, /submitMemberCommand/);
+  assert.match(app, /memberActionAllowed/);
+  assert.match(app, /command: \{ command, member: memberDraft\.value \}/);
+  assert.match(app, /Member management/);
+  assert.match(app, /Member name/);
+  assert.match(app, /Admit member/);
+  assert.match(app, /Remove member/);
+  assert.match(app, /remove_member/);
+});
+
+test("Vue source exposes a cap grant ceremony", () => {
+  const app = readText("src/App.vue");
+  const actions = readText("src/township_actions.ts");
+
+  assert.match(actions, /export async function submitTownshipDelegation/);
+  assert.match(app, /submitTownshipDelegation/);
+  assert.match(app, /grantAudienceDraft/);
+  assert.match(app, /grantStatus/);
+  assert.match(app, /grantSubmitting/);
+  assert.match(app, /submitGrant/);
+  assert.match(app, /@submit\.prevent="submitGrant"/);
+  assert.match(app, /Device public key/);
+  assert.match(app, /Grant access/);
+  assert.match(app, /pending carrier sync/);
+});
+
+test("Vue source exposes a pending-sync revocation ceremony", () => {
+  const app = readText("src/App.vue");
+  const actions = readText("src/township_actions.ts");
+
+  assert.match(actions, /export async function submitTownshipRevocation/);
+  assert.match(app, /submitTownshipRevocation/);
+  assert.match(app, /revokeDelegationDraft/);
+  assert.match(app, /revokeStatus/);
+  assert.match(app, /revokeSubmitting/);
+  assert.match(app, /submitRevoke/);
+  assert.match(app, /Delegation id/);
+  assert.match(app, /Revoke access/);
+  assert.match(app, /pending carrier sync/);
+  assert.doesNotMatch(app, /access revoked/i);
+});
+
+test("Vue source does not claim phone-grade secure persistence", () => {
+  const app = readText("src/App.vue");
+
+  assert.doesNotMatch(app, /phone-grade/i);
+  assert.doesNotMatch(app, /secure persistence/i);
+  assert.doesNotMatch(app, /mobile secure/i);
+});
+
+test("frontend package exposes the real app convergence gate", () => {
+  const pkg = readJson("package.json");
+
+  assert.equal(
+    pkg.scripts["app:convergence"],
+    "npm run action:contract && npm run sync:contract && npm run live:contract && npm run tauri:launch:smoke",
+  );
+});
+
 test("Vue source exposes a carrier sync outbox action", () => {
   const app = readText("src/App.vue");
   const sync = readText("src/township_sync.ts");
@@ -100,4 +204,14 @@ test("Vue source exposes a carrier sync outbox action", () => {
   assert.match(app, /townshipCarrierPeerFromEnv\(\)/);
   assert.match(app, /syncStatus/);
   assert.match(app, /Sync outbox/);
+});
+
+test("Vue source supports smoke-only auto-sync from Vite env", () => {
+  const app = readText("src/App.vue");
+  const env = readText("src/env.d.ts");
+
+  assert.match(env, /VITE_TOWNSHIP_AUTOSYNC_ON_MOUNT/);
+  assert.match(app, /autosyncOnMount/);
+  assert.match(app, /VITE_TOWNSHIP_AUTOSYNC_ON_MOUNT/);
+  assert.match(app, /if \(autosyncOnMount && carrierPeer\) await syncOutbox\(\)/);
 });

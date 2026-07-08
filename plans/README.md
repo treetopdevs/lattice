@@ -73,6 +73,13 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 051 | Tauri Vue member-management actions | P1 | M | 050 | DONE |
 | 052 | Tauri outbox ack compaction | P1 | M | 051 | DONE |
 | 053 | TS Township delegation issuance primitive | P1 | S | 052 | DONE |
+| 054 | Tauri onboarding/cap persistence ceremony | P1 | M | 053 | DONE |
+| 055 | Mobile secure-store strategy | P1 | S | 054 | DONE |
+| 056 | Real app convergence gate | P1 | S | 055 | DONE |
+| 057 | Township storage and grant quarantine contract | P1 | S | 056 | DONE |
+| 058 | Live BEAM authority-unsound grant proof | P1 | S | 057 | DONE |
+| 059 | Revocation lifecycle proof | P1 | S | 058 | DONE |
+| 060 | Tauri revoke-access pending-sync ceremony | P1 | S | 059 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

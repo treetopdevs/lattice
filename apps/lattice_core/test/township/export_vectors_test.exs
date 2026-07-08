@@ -87,6 +87,113 @@ defmodule Township.ExportVectorsTest do
     assert length(expected["opIds"]) == length(vector["oracleCarrierOps"])
     assert expected["authorityQuarantine"] != []
 
+    assert %{
+             "carrierOp" => %{
+               "v" => 1,
+               "id" => unsound_grant_id,
+               "kind" => "authority",
+               "body" => ["tuple", [["atom", "grant"], ["delegation", _delegation]]]
+             },
+             "parentDelegationId" => parent_delegation_id,
+             "authorityQuarantine" => unsound_authority_quarantine
+           } = vector["authorityUnsoundGrant"]
+
+    assert is_binary(parent_delegation_id)
+    assert [unsound_grant_id, "not_attenuated"] in unsound_authority_quarantine
+
+    assert %{
+             "delegationId" => revoked_delegation_id,
+             "preRevokeCommandId" => pre_revoke_command_id,
+             "revokeOp" => %{
+               "id" => revoke_id,
+               "kind" => "authority",
+               "body" => revoke_body,
+               "cap" => ["nil"]
+             },
+             "revokedCommandOp" => %{
+               "id" => revoked_command_id,
+               "kind" => "command",
+               "body" => revoked_command_body,
+               "cap" => revoked_command_cap
+             },
+             "authorityQuarantine" => revocation_authority_quarantine,
+             "stateB64" => revocation_state_b64,
+             "opIds" => revocation_op_ids
+           } = vector["authorityRevocation"]
+
+    assert revoked_delegation_id == parent_delegation_id
+
+    assert revoke_body == [
+             "tuple",
+             [["atom", "revoke"], ["bin", Base.encode64(revoked_delegation_id)]]
+           ]
+
+    assert revoked_command_body == [
+             "tuple",
+             [
+               ["atom", "post"],
+               ["list", [["bin", Base.encode64("resident: attempted after revocation")]]]
+             ]
+           ]
+
+    assert revoked_command_cap == ["bin", Base.encode64(revoked_delegation_id)]
+
+    refute Enum.any?(expected["authorityQuarantine"], fn [id, _reason] ->
+             id == pre_revoke_command_id
+           end)
+
+    assert [revoked_command_id, "revoked_capability"] in revocation_authority_quarantine
+    assert revocation_state_b64 == expected["stateB64"]
+    assert revoke_id in revocation_op_ids
+    assert revoked_command_id in revocation_op_ids
+    assert length(revocation_op_ids) == length(expected["opIds"]) + 2
+
+    assert %{
+             "delegationId" => bad_revoke_delegation_id,
+             "revokeOp" => %{
+               "id" => bad_revoke_id,
+               "kind" => "authority",
+               "body" => bad_revoke_body,
+               "cap" => ["nil"]
+             },
+             "postRevokeCommandOp" => %{
+               "id" => bad_revoke_command_id,
+               "kind" => "command",
+               "body" => bad_revoke_command_body,
+               "cap" => bad_revoke_command_cap
+             },
+             "authorityQuarantine" => bad_revoke_authority_quarantine,
+             "stateB64" => bad_revoke_state_b64,
+             "opIds" => bad_revoke_op_ids
+           } = vector["authorityBadRevocation"]
+
+    assert bad_revoke_delegation_id == parent_delegation_id
+
+    assert bad_revoke_body == [
+             "tuple",
+             [["atom", "revoke"], ["bin", Base.encode64(bad_revoke_delegation_id)]]
+           ]
+
+    assert bad_revoke_command_body == [
+             "tuple",
+             [
+               ["atom", "post"],
+               ["list", [["bin", Base.encode64("resident: post after unauthorized revoke")]]]
+             ]
+           ]
+
+    assert bad_revoke_command_cap == ["bin", Base.encode64(bad_revoke_delegation_id)]
+    assert [bad_revoke_id, "unauthorized_revoke"] in bad_revoke_authority_quarantine
+
+    refute Enum.any?(bad_revoke_authority_quarantine, fn [id, _reason] ->
+             id == bad_revoke_command_id
+           end)
+
+    refute bad_revoke_state_b64 == expected["stateB64"]
+    assert bad_revoke_id in bad_revoke_op_ids
+    assert bad_revoke_command_id in bad_revoke_op_ids
+    assert length(bad_revoke_op_ids) == length(expected["opIds"]) + 2
+
     assert length(vector["canonicalOps"]) == length(vector["oracleCarrierOps"])
 
     [canonical | _] = vector["canonicalOps"]

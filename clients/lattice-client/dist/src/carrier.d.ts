@@ -59,6 +59,7 @@ export interface SyncCarrierResult {
     pulledOps: Op[];
     pushedFrames: unknown[];
     pushReport: CarrierPushReport;
+    acknowledgedFrameIds: string[];
 }
 export interface CarrierOpFrame {
     v: number;

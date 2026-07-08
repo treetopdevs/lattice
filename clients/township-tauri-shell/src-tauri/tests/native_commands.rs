@@ -1,9 +1,11 @@
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use serde::de::DeserializeOwned;
+use sha2::{Digest, Sha256};
 use township_tauri_shell::{
     build_platform_secure_township_app, configure_platform_secure_township_builder,
-    configure_township_builder, township_command_names, InMemoryCarrierKeySeedStore,
-    KeyringCarrierKeySeedStore, TownshipNativeState, TOWNSHIP_KEYRING_SERVICE,
+    configure_township_builder, seed_dev_carrier_key_from_vars, township_command_names,
+    InMemoryCarrierKeySeedStore, KeyringCarrierKeySeedStore, TownshipNativeState,
+    TOWNSHIP_DEV_CARRIER_KEY_ID_ENV, TOWNSHIP_DEV_CARRIER_KEY_SEED_ENV, TOWNSHIP_KEYRING_SERVICE,
 };
 
 const W1_SESSION_SEED: &str = "township-g1";
@@ -201,6 +203,52 @@ fn seeded_dev_key_matches_ts_w1_session_public_key_and_signature() {
 }
 
 #[test]
+fn dev_seed_env_vars_prime_the_w1_session_key() {
+    let state = TownshipNativeState::default();
+
+    let seeded = seed_dev_carrier_key_from_vars(
+        &state,
+        [
+            (
+                TOWNSHIP_DEV_CARRIER_KEY_ID_ENV.to_string(),
+                "session".to_string(),
+            ),
+            (
+                TOWNSHIP_DEV_CARRIER_KEY_SEED_ENV.to_string(),
+                W1_SESSION_SEED.to_string(),
+            ),
+        ],
+    )
+    .unwrap();
+
+    assert!(seeded);
+    assert_eq!(state.public_key("session").unwrap(), W1_SESSION_PUBKEY);
+    assert_eq!(
+        state.sign_carrier("session", W1_TRANSCRIPT_B64).unwrap(),
+        W1_SIGNATURE_B64
+    );
+}
+
+#[test]
+fn native_key_seed_bytes_do_not_enter_key_value_state() {
+    let state = TownshipNativeState::default();
+    state
+        .insert_seeded_dev_key("session", W1_SESSION_SEED)
+        .unwrap();
+    state
+        .kv_set("township:resident:ops", "[{\"id\":\"op-1\"}]")
+        .unwrap();
+    state.ensure_carrier_key("resident").unwrap();
+
+    let digest = Sha256::digest(W1_SESSION_SEED.as_bytes());
+    let snapshot = serde_json::to_string(&state.kv_snapshot().unwrap()).unwrap();
+
+    assert!(!snapshot.contains(W1_SESSION_SEED));
+    assert!(!snapshot.contains(&base64_string(&digest)));
+    assert!(!snapshot.contains(&hex_lower(&digest)));
+}
+
+#[test]
 fn ensure_carrier_key_creates_and_reuses_native_signing_keys() {
     let state = TownshipNativeState::default();
 
@@ -276,4 +324,15 @@ fn base64_bytes(value: &str) -> Vec<u8> {
     use base64::Engine as _;
 
     BASE64.decode(value).unwrap()
+}
+
+fn base64_string(bytes: &[u8]) -> String {
+    use base64::engine::general_purpose::STANDARD as BASE64;
+    use base64::Engine as _;
+
+    BASE64.encode(bytes)
+}
+
+fn hex_lower(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }

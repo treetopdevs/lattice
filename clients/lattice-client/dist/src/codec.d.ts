@@ -1,4 +1,4 @@
-import type { CarrierOpFrame, CarrierTerm } from "./carrier";
+import type { CarrierDelegation, CarrierOpFrame, CarrierTerm } from "./carrier";
 import type { Verifier } from "./identity";
 import type { Op } from "./op";
 export interface CanonicalCodec {
@@ -28,6 +28,24 @@ export interface CarrierOpSigner {
     publicKey: Uint8Array;
     sign(bytes: Uint8Array): Uint8Array | Promise<Uint8Array>;
 }
+export interface CarrierDelegationCore {
+    replica: string;
+    issuer: string;
+    audience: string;
+    parent_id: string | null;
+    ops: readonly string[];
+    roles: readonly string[];
+    live: boolean;
+}
+export interface AuthorCarrierDelegationInput {
+    replica: string;
+    audiencePubkey: string | Uint8Array;
+    parentId?: string | null;
+    ops?: readonly string[];
+    roles?: readonly string[];
+    live?: boolean;
+    signer: CarrierOpSigner;
+}
 export interface AuthorCarrierOpInput {
     replica: string;
     deps: string[];
@@ -46,6 +64,8 @@ export declare function canonicalHash(bytes: Uint8Array): Promise<string>;
 export declare function verifyCarrierOpHash(frame: CarrierOpFrame): Promise<boolean>;
 export declare function verifyCarrierOp(frame: CarrierOpFrame, verifier: Verifier): Promise<CarrierOpVerification>;
 export declare function authorCarrierOp(input: AuthorCarrierOpInput): Promise<CarrierOpFrame>;
+export declare function canonicalBytesForCarrierDelegation(delegation: CarrierDelegationCore): Uint8Array;
+export declare function authorCarrierDelegation(input: AuthorCarrierDelegationInput): Promise<CarrierDelegation>;
 /**
  * Placeholder for semantic op authoring. Carrier-frame canonical byte/hash
  * parity exists above, but this interface cannot honestly encode a reducer-level

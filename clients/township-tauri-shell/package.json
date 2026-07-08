@@ -11,9 +11,12 @@
     "frontend:contract": "node --test test/frontend_shell.mjs",
     "native:contract": "tsx test/native_workflow.ts",
     "action:contract": "tsx test/township_actions.ts",
+    "mobile:strategy": "node --test test/mobile_secure_store_strategy.mjs",
+    "app:convergence": "npm run action:contract && npm run sync:contract && npm run live:contract && npm run tauri:launch:smoke",
     "peer:contract": "tsx test/township_carrier_peer.ts",
     "sync:contract": "tsx test/township_sync.ts",
-    "live:contract": "tsx test/township_live_peer.ts"
+    "live:contract": "tsx test/township_live_peer.ts",
+    "tauri:launch:smoke": "tsx test/tauri_launch_smoke.ts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",

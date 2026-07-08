@@ -187,20 +187,32 @@ export async function syncCarrierOnce(client, localOps, localCarrierFrames, real
     const peerIds = new Set(await client.advertise());
     const pulledFrames = await client.pull(localOps.map((op) => op.id));
     const pulledOps = carrierOpsToSemanticOps(pulledFrames, realmByPubkey);
+    const peerKnownFrameIds = [];
     const pushedFrames = localCarrierFrames.filter((frame) => {
         const op = carrierOpToSemanticOp(frame, realmByPubkey);
-        return !peerIds.has(op.id);
+        if (!peerIds.has(op.id))
+            return true;
+        peerKnownFrameIds.push(carrierFrameId(frame));
+        return false;
     });
     const pushReport = pushedFrames.length === 0
         ? emptyPushReport()
         : await client.push(pushedFrames);
+    const acknowledgedFrameIds = [...new Set([...peerKnownFrameIds, ...pushReport.accepted])];
     return {
         ops: integrate(localOps, pulledOps),
         pulledFrames,
         pulledOps,
         pushedFrames,
         pushReport,
+        acknowledgedFrameIds,
     };
+}
+function carrierFrameId(frame) {
+    if (frame && typeof frame === "object" && typeof frame.id === "string") {
+        return frame.id;
+    }
+    throw new Error("carrier frame missing id");
 }
 export function carrierOpsToSemanticOps(frames, realmByPubkey = {}) {
     return frames.map((frame) => carrierOpToSemanticOp(frame, realmByPubkey));
@@ -355,7 +367,7 @@ function payloadFromBody(kind, body, realmByPubkey) {
                 return neutralPayload(`grant ${realmForPubkey(delegation.audience, realmByPubkey)}`);
             }
             case "revoke":
-                return neutralPayload(`revoke ${String(body.values[1])}`);
+                return neutralPayload(`revoke ${binText(body.values[1])}`);
         }
     }
     return neutralPayload(kind);
