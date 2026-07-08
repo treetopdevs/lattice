@@ -1,5 +1,6 @@
 defmodule Lattice.CarrierSessionTest do
   use ExUnit.Case, async: true
+  use ExUnitProperties
 
   alias Lattice.{Carrier.Session, Identity}
 
@@ -104,6 +105,36 @@ defmodule Lattice.CarrierSessionTest do
       assert {:error, :malformed_session} =
                Session.verify_response(challenge, Map.put(response, field, 42),
                  expected_realm: "node-a",
+                 expected_pubkey: identity.pub
+               )
+    end
+  end
+
+  test "consecutive challenges have distinct nonces" do
+    nonces =
+      for _ <- 1..100 do
+        Session.challenge("server", "replica:session", wire_version: 1)["nonce"]
+      end
+
+    assert MapSet.size(MapSet.new(nonces)) == 100
+  end
+
+  property "a response only verifies against its own challenge" do
+    check all(
+            realm <- member_of(["node-a", "node-b", "node-c"]),
+            replica <- string(:alphanumeric, min_length: 1, max_length: 8),
+            wire_version <- integer(1..3)
+          ) do
+      identity = Identity.from_seed(realm, "carrier-session-property")
+      challenge_a = Session.challenge("server", "replica:#{replica}", wire_version: wire_version)
+      challenge_b = Session.challenge("server", "replica:#{replica}", wire_version: wire_version)
+      response = Session.respond(challenge_a, identity, realm)
+
+      assert challenge_a["nonce"] != challenge_b["nonce"]
+
+      assert {:error, :bad_signature} =
+               Session.verify_response(challenge_b, response,
+                 expected_realm: realm,
                  expected_pubkey: identity.pub
                )
     end

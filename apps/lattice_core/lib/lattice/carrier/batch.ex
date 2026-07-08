@@ -46,14 +46,11 @@ defmodule Lattice.Carrier.Batch do
 
   @spec merge_reports([Lattice.Sync.report()]) :: Lattice.Sync.report()
   def merge_reports(reports) do
-    Enum.reduce(reports, %{accepted: [], quarantined: [], rejected: [], pending: []}, fn report,
-                                                                                         acc ->
-      %{
-        accepted: acc.accepted ++ report.accepted,
-        quarantined: acc.quarantined ++ report.quarantined,
-        rejected: acc.rejected ++ report.rejected,
-        pending: acc.pending ++ report.pending
-      }
-    end)
+    %{
+      accepted: Enum.flat_map(reports, & &1.accepted),
+      quarantined: Enum.flat_map(reports, & &1.quarantined),
+      rejected: Enum.flat_map(reports, & &1.rejected),
+      pending: Enum.flat_map(reports, & &1.pending)
+    }
   end
 end

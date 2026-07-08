@@ -16,7 +16,10 @@ defmodule LatticeNodeSpike.MixProject do
   end
 
   def application do
-    [extra_applications: [:logger, :cowboy, :jason]]
+    [
+      extra_applications: [:logger, :cowboy, :jason],
+      mod: {LatticeNodeSpike.Application, []}
+    ]
   end
 
   defp deps do

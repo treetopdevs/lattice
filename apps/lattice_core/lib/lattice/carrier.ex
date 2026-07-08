@@ -31,7 +31,10 @@ defmodule Lattice.Carrier do
   (`LatticeNodeSpike.WsCarrier`, over a real socket between two OS processes).
   """
 
-  alias Lattice.{Log, Op, Sync}
+  alias Lattice.Carrier.Telemetry
+  alias Lattice.Log
+  alias Lattice.Op
+  alias Lattice.Sync
   alias Lattice.Sync.Shape
 
   @typedoc "Opaque, implementation-defined connection value."
@@ -100,6 +103,12 @@ defmodule Lattice.Carrier do
         pushed: push_report,
         pulled: pull_report
       }
+
+      Telemetry.execute(
+        [:lattice, :carrier, :sync, :stop],
+        %{sent: stats.sent, received: stats.received},
+        %{carrier: carrier}
+      )
 
       {:ok, log, stats, conn}
     end

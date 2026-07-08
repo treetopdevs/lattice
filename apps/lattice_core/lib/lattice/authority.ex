@@ -561,7 +561,7 @@ defmodule Lattice.Authority do
     if op.author == holder_at_deps do
       %{
         st
-        | heartbeats: st.heartbeats ++ [%{op_id: op.id, at_tick: at_tick}],
+        | heartbeats: [%{op_id: op.id, at_tick: at_tick} | st.heartbeats],
           decided: Map.put(st.decided, op.id, %{type: :heartbeat, at_tick: at_tick})
       }
     else

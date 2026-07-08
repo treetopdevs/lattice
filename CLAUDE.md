@@ -52,16 +52,16 @@ Drive these to green under the standard loop (`mix format` → `mix test` → th
 - **G5** — `scripts/township_demo.exs` narrates W0→W4 clean and emits trust-graph + audit
   artifacts an outsider can replay (reuse the V1 `mix lattice.graph.snapshot` exporters).
 
-### G1 is the remaining integration gap — read this
+### G1 runs over the real BEAM carrier — read this
 
 G1 wants W0–W3 on **two physical BEAM nodes over the real WebSocket carrier**. That carrier is
 now present as the M2 substrate (`Lattice.Carrier`, `apps/lattice_node_spike`, and the
-canonical/wire/session helpers). The Township overlay has not yet been re-pointed from
-`Lattice.Sim` to that carrier. These tests prove the *logic* on the real substrate; the
-physical-carrier run is the next, stronger execution of the same assertions. Do not fake
-G1 by claiming Sim is the carrier. Re-point the demo's realm setup at the real transport
-and the assertions should carry over unchanged (that portability is the design goal, per
-`PD-001 §6 V-03`).
+canonical/wire/session helpers), and `apps/lattice_node_spike/test/township_carrier_test.exs`
+drives the Township scenario across two BEAM OS processes. The test keeps `Lattice.Sim` as
+the oracle, then asserts byte-identical materialized state and identical `:not_holder`
+authority quarantine for the stale clerk action after partition/heal. Do not replace this
+with a Sim-only claim; G1 is the real-socket run, while `scripts/township_demo.exs` remains
+the narrated Sim/W4-stub walkthrough.
 
 ## Constraints — the "do not implement" boundary (PD-001 §6)
 
@@ -120,8 +120,9 @@ at one seam:
 - **Substrate track** — `plans/` (generated 2026-06-20). Foundation & hardening (`000`–`009`,
   e.g. 001 gates the full property suite in CI — needed before Township's M1 property claims can
   be trusted), then the direction spikes (`010`–`013`) and M2 hardening. **Plan `010` and M2 now
-  provide the carrier substrate that unblocks Township's exit gate G1** — the remaining work is
-  a Township harness/demo pass over that carrier instead of `Sim`.
+  provide the carrier substrate, and plan 017 adds the Township G1 BEAM-carrier acceptance
+  harness.** Plan 014 remains the next determinism-hardening follow-up before broader carrier
+  performance work.
 - **Application track** — this overlay. W0–W4 on `Sim` now, structured so the W1/W3 assertions
   swap onto the real carrier unchanged.
 - **The seam** — `plans/010-real-carrier-spike.md`, ADR 0005, and M2 are the substrate carrier
@@ -131,5 +132,5 @@ at one seam:
   can author or verify ops without the BEAM bridge.
 
 Run as two Fable worktrees when the Township overlay is present: worktree 1 keeps the substrate
-carrier hardening green; worktree 2 keeps the overlay green and swaps the W1/W3 harness from
-`Sim` to the real carrier.
+carrier hardening green; worktree 2 keeps the overlay green and extends the G1 harness beyond
+the BEAM carrier when browser/phone realms become available.

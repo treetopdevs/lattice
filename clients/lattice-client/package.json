@@ -1,0 +1,35 @@
+{
+  "name": "@treetopdevs/lattice-client",
+  "version": "0.0.1",
+  "description": "Framework-agnostic TypeScript Lattice realm: op-DAG store, CRDT reduction (conformant to Lattice.Sim), and carrier sync. Consumed by the Tauri (Vue) and Expo (React Native) shells.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "conformance": "tsx test/conformance.ts",
+    "canonical": "tsx test/canonical.ts",
+    "township:authoring": "tsx test/township_authoring.ts",
+    "tauri:bridge": "tsx test/tauri_bridge.ts",
+    "carrier:township": "tsx test/carrier.ts",
+    "carrier:township:live": "tsx test/live_carrier.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.0",
+    "typescript": "^5.9.3"
+  },
+  "comment:tier-b-deps": "The lattice-cbor-v1 carrier-frame codec is dependency-free; shells may add @noble/ed25519 or native key custody for signer/verifier implementations.",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@types/node": "^26.1.0"
+  }
+}

@@ -1,0 +1,102 @@
+import assert from "node:assert/strict";
+import {
+  createTownshipNativeWorkflow,
+  loadTownshipNativeStatus,
+  probeTownshipNativeWorkflow,
+  TOWNSHIP_CARRIER_OUTBOX_KEY,
+  TOWNSHIP_LOCAL_OP_LOG_KEY,
+  TOWNSHIP_NATIVE_KEY_ID,
+  TOWNSHIP_STORAGE_NAMESPACE,
+} from "../src/native_workflow";
+import type { TauriInvoke } from "@treetopdevs/lattice-client";
+
+interface InvokeCall {
+  command: string;
+  args: Record<string, unknown>;
+}
+
+console.log("\n▸ Township Vue native invoke workflow");
+
+const publicKeyBase64 = bytesBase64(new Uint8Array(32).fill(7));
+const signatureBase64 = bytesBase64(new Uint8Array(64).fill(9));
+const values = new Map<string, string>();
+const calls: InvokeCall[] = [];
+
+const invoke: TauriInvoke = async <T = unknown>(
+  command: string,
+  args: Record<string, unknown> = {},
+): Promise<T> => {
+  calls.push({ command, args });
+
+  let result: unknown;
+  switch (command) {
+    case "lattice_ensure_carrier_key":
+      assert.equal(args.keyId, TOWNSHIP_NATIVE_KEY_ID);
+      result = publicKeyBase64;
+      break;
+    case "lattice_kv_set":
+      values.set(String(args.key), String(args.value));
+      result = null;
+      break;
+    case "lattice_kv_get":
+      result = values.get(String(args.key)) ?? null;
+      break;
+    case "lattice_sign_carrier":
+      assert.equal(args.keyId, TOWNSHIP_NATIVE_KEY_ID);
+      result = signatureBase64;
+      break;
+    default:
+      throw new Error(`unexpected command ${command}`);
+  }
+
+  return result as T;
+};
+
+const workflow = await createTownshipNativeWorkflow({ invoke });
+await workflow.localLog.save([]);
+await workflow.carrierFrames.save([]);
+
+assert.equal(values.get(`${TOWNSHIP_STORAGE_NAMESPACE}:${TOWNSHIP_LOCAL_OP_LOG_KEY}`), "[]");
+assert.equal(values.get(`${TOWNSHIP_STORAGE_NAMESPACE}:${TOWNSHIP_CARRIER_OUTBOX_KEY}`), "[]");
+
+const probe = await probeTownshipNativeWorkflow({ invoke });
+
+assert.equal(probe.ready, true);
+assert.equal(probe.keyId, TOWNSHIP_NATIVE_KEY_ID);
+assert.equal(probe.storageNamespace, TOWNSHIP_STORAGE_NAMESPACE);
+assert.equal(probe.publicKeyBase64, publicKeyBase64);
+assert.equal(probe.storageEcho, "native invoke ready");
+assert.equal(probe.signatureBytes, 64);
+
+assert.deepEqual(
+  calls.map((call) => call.command),
+  [
+    "lattice_ensure_carrier_key",
+    "lattice_kv_set",
+    "lattice_kv_set",
+    "lattice_ensure_carrier_key",
+    "lattice_kv_set",
+    "lattice_kv_get",
+    "lattice_sign_carrier",
+  ],
+);
+assert.equal(calls[4]?.args.key, `${TOWNSHIP_STORAGE_NAMESPACE}:native_probe`);
+assert.equal(calls[4]?.args.value, "native invoke ready");
+assert.equal(calls[6]?.args.bytes, bytesBase64(new TextEncoder().encode("township-native-probe")));
+
+const unavailable = await loadTownshipNativeStatus({
+  async invoke(command: string): Promise<never> {
+    throw new Error(`no native runtime for ${command}`);
+  },
+});
+
+assert.equal(unavailable.ready, false);
+assert.equal(unavailable.keyId, TOWNSHIP_NATIVE_KEY_ID);
+assert.equal(unavailable.storageNamespace, TOWNSHIP_STORAGE_NAMESPACE);
+assert.match(unavailable.error, /no native runtime/);
+
+console.log("\x1b[32m✓ native invoke workflow checks passed\x1b[0m");
+
+function bytesBase64(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString("base64");
+}

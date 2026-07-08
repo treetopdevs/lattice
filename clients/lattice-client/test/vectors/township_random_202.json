@@ -1,0 +1,228 @@
+{
+  "expectAtFrontier": [],
+  "expectAtFullFrontier": {
+    "quarantine": [],
+    "state": {
+      "clerk": "clerk",
+      "clerk_locked": false,
+      "members": [
+        "clerk",
+        "guest-202-3",
+        "guest-202-4",
+        "guest-202-9",
+        "neighbor",
+        "resident"
+      ],
+      "posts": [],
+      "summary": "summary 202.8",
+      "title": "Matter 202.1"
+    },
+    "winners": {
+      "clerk": "dQWyY8o3DY8oOySysu4lAT9AxsV3irI9XB_YtVFph-I",
+      "clerk_locked": null,
+      "summary": "Vs7fXic0AJZkrtGzWLvcAndBhlrCvTS5yfO67-ML05w",
+      "title": "lwdLClamsxah6mLYnRxg1dTWSTYY8iZ6o_Pz5nwIHLw"
+    }
+  },
+  "generatedBy": "Lattice.Sim",
+  "ops": [
+    {
+      "author": "clerk",
+      "command": "genesis clerk",
+      "deps": [],
+      "field": "clerk",
+      "hash": "dQWyY8o3DY8oOySysu4lAT9AxsV3irI9XB_YtVFph-I",
+      "id": "dQWyY8o3DY8oOySysu4lAT9AxsV3irI9XB_YtVFph-I",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "clerk"
+    },
+    {
+      "author": "clerk",
+      "command": "grant resident",
+      "deps": [
+        "dQWyY8o3DY8oOySysu4lAT9AxsV3irI9XB_YtVFph-I"
+      ],
+      "field": "__authority",
+      "hash": "LEp-ZOpoCDagrLzjIPcwOxEw_tca_9dj2wNNCoDvz5E",
+      "id": "LEp-ZOpoCDagrLzjIPcwOxEw_tca_9dj2wNNCoDvz5E",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "clerk",
+      "command": "grant neighbor",
+      "deps": [
+        "LEp-ZOpoCDagrLzjIPcwOxEw_tca_9dj2wNNCoDvz5E"
+      ],
+      "field": "__authority",
+      "hash": "eQB6yefg3M6Kwfs5h6mTGFyn6l4cgVtU9jsJ1eEUexQ",
+      "id": "eQB6yefg3M6Kwfs5h6mTGFyn6l4cgVtU9jsJ1eEUexQ",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "clerk",
+      "command": "admit",
+      "deps": [
+        "eQB6yefg3M6Kwfs5h6mTGFyn6l4cgVtU9jsJ1eEUexQ"
+      ],
+      "field": "members",
+      "hash": "PVJ7PZ1XFXJq8mZqnBy1SubdfmJv_nKgCcSyQBtFj8Q",
+      "id": "PVJ7PZ1XFXJq8mZqnBy1SubdfmJv_nKgCcSyQBtFj8Q",
+      "kind": "command",
+      "mutation": "add",
+      "value": "clerk"
+    },
+    {
+      "author": "clerk",
+      "command": "set_title",
+      "deps": [
+        "PVJ7PZ1XFXJq8mZqnBy1SubdfmJv_nKgCcSyQBtFj8Q"
+      ],
+      "field": "title",
+      "hash": "lwdLClamsxah6mLYnRxg1dTWSTYY8iZ6o_Pz5nwIHLw",
+      "id": "lwdLClamsxah6mLYnRxg1dTWSTYY8iZ6o_Pz5nwIHLw",
+      "kind": "command",
+      "mutation": "write",
+      "value": "Matter 202.1"
+    },
+    {
+      "author": "clerk",
+      "command": "admit",
+      "deps": [
+        "lwdLClamsxah6mLYnRxg1dTWSTYY8iZ6o_Pz5nwIHLw"
+      ],
+      "field": "members",
+      "hash": "Jg89vFf_OiaxWvxfwm0OXon2GcgUgMCfZ-hbvJ9fghw",
+      "id": "Jg89vFf_OiaxWvxfwm0OXon2GcgUgMCfZ-hbvJ9fghw",
+      "kind": "command",
+      "mutation": "add",
+      "value": "guest-202-3"
+    },
+    {
+      "author": "clerk",
+      "command": "set_summary",
+      "deps": [
+        "Jg89vFf_OiaxWvxfwm0OXon2GcgUgMCfZ-hbvJ9fghw"
+      ],
+      "field": "summary",
+      "hash": "Vs7fXic0AJZkrtGzWLvcAndBhlrCvTS5yfO67-ML05w",
+      "id": "Vs7fXic0AJZkrtGzWLvcAndBhlrCvTS5yfO67-ML05w",
+      "kind": "command",
+      "mutation": "write",
+      "value": "summary 202.8"
+    },
+    {
+      "author": "neighbor",
+      "command": "admit",
+      "deps": [
+        "eQB6yefg3M6Kwfs5h6mTGFyn6l4cgVtU9jsJ1eEUexQ"
+      ],
+      "field": "members",
+      "hash": "mlb7ZxqxlH3v_BWwcp41Ax1_g1LaTxHUONOoxSIGdCU",
+      "id": "mlb7ZxqxlH3v_BWwcp41Ax1_g1LaTxHUONOoxSIGdCU",
+      "kind": "command",
+      "mutation": "add",
+      "value": "neighbor"
+    },
+    {
+      "author": "neighbor",
+      "command": "admit",
+      "deps": [
+        "mlb7ZxqxlH3v_BWwcp41Ax1_g1LaTxHUONOoxSIGdCU"
+      ],
+      "field": "members",
+      "hash": "7wcunOWH2o0MeSjW6ZYf7-8ed-N46zzB_-fRRTzTG4w",
+      "id": "7wcunOWH2o0MeSjW6ZYf7-8ed-N46zzB_-fRRTzTG4w",
+      "kind": "command",
+      "mutation": "add",
+      "value": "guest-202-9"
+    },
+    {
+      "author": "resident",
+      "command": "admit",
+      "deps": [
+        "eQB6yefg3M6Kwfs5h6mTGFyn6l4cgVtU9jsJ1eEUexQ"
+      ],
+      "field": "members",
+      "hash": "wfRtqYyD7h87JGfy4k_79X0i9ODFbk9I5_HJuwG4UoY",
+      "id": "wfRtqYyD7h87JGfy4k_79X0i9ODFbk9I5_HJuwG4UoY",
+      "kind": "command",
+      "mutation": "add",
+      "value": "resident"
+    },
+    {
+      "author": "resident",
+      "command": "admit",
+      "deps": [
+        "wfRtqYyD7h87JGfy4k_79X0i9ODFbk9I5_HJuwG4UoY"
+      ],
+      "field": "members",
+      "hash": "AQfvJzL69WFMHtWYZUx3mm-Qzxgw2WN-bCr4TdNTp1o",
+      "id": "AQfvJzL69WFMHtWYZUx3mm-Qzxgw2WN-bCr4TdNTp1o",
+      "kind": "command",
+      "mutation": "add",
+      "value": "guest-202-4"
+    },
+    {
+      "author": "resident",
+      "command": "set_summary",
+      "deps": [
+        "AQfvJzL69WFMHtWYZUx3mm-Qzxgw2WN-bCr4TdNTp1o"
+      ],
+      "field": "summary",
+      "hash": "nmhVKdxZ4vFKH20jRU1QgtRnCUGxbfRt6a0ujv9qIyI",
+      "id": "nmhVKdxZ4vFKH20jRU1QgtRnCUGxbfRt6a0ujv9qIyI",
+      "kind": "command",
+      "mutation": "write",
+      "value": "summary 202.5"
+    },
+    {
+      "author": "resident",
+      "command": "remove_member",
+      "deps": [
+        "nmhVKdxZ4vFKH20jRU1QgtRnCUGxbfRt6a0ujv9qIyI"
+      ],
+      "field": "members",
+      "hash": "XvB1g-WFNIopHokXbDMhzo5yKDlpl-qagjKtWjE1ZJE",
+      "id": "XvB1g-WFNIopHokXbDMhzo5yKDlpl-qagjKtWjE1ZJE",
+      "kind": "command",
+      "mutation": "remove",
+      "value": "guest-202-3"
+    }
+  ],
+  "perspectives": [],
+  "scenario": "township_random_202",
+  "scenarioKind": "randomized",
+  "schema": {
+    "fields": {
+      "clerk": {
+        "authority": "clerk"
+      },
+      "clerk_locked": {
+        "default": false,
+        "gatedBy": "clerk",
+        "merge": "lww"
+      },
+      "members": {
+        "merge": "or_set"
+      },
+      "posts": {
+        "merge": "causal_list"
+      },
+      "summary": {
+        "default": "",
+        "merge": "lww"
+      },
+      "title": {
+        "default": "",
+        "merge": "lww"
+      }
+    },
+    "name": "Township.Matter"
+  },
+  "seed": 202
+}

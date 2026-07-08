@@ -7,10 +7,10 @@
 # — entirely through a capability-attested op-log. Runs the five Township
 # workflows W0–W4 in order, printing the §5 storyline as it executes.
 #
-# CARRIER CAVEAT: these realms are simulated (Lattice.Sim). The addendum's exit
-# gate G1 wants two PHYSICAL BEAM nodes over the real WebSocket boundary — that
-# is M2 and is not built yet. This demo proves the civic logic on the real
-# substrate; swapping Sim for the real carrier is the M2 upgrade of this script.
+# CARRIER NOTE: these realms are simulated (Lattice.Sim), which remains the
+# oracle for the civic logic and W4 stub storyline. Exit gate G1 now runs the
+# same W0-W3 Township scenario across two physical BEAM OS processes over the
+# real WebSocket carrier in apps/lattice_node_spike/test/township_carrier_test.exs.
 
 unless Code.ensure_loaded?(Lattice.Sim) do
   root = Path.expand("..", __DIR__)

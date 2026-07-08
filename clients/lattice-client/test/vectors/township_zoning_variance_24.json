@@ -1,0 +1,299 @@
+{
+  "expectAtFrontier": [
+    {
+      "include": [
+        "-36WpNvm7LCAmZD2R68_MIjqcRusi88snNB_xhQD9aQ",
+        "3gisahML791TEKkKa56M2GSxknsj60ZgHgEl-GIO9rs",
+        "IHBXBz7xJx_JXLmSTZQGw7u7A-BMnAxo6xQ0U-TVTvQ",
+        "NTzDm0Y8bZjjbEeGk0iUOqzsyF1eum6v-Yb5ZTAKc_Q",
+        "RbT2hkJ0AZlrdvGC2KvbgGZY04Yhq7v-PKURGf9oFQE",
+        "e_17sbyo-dGFCyV2G7z_Fn5St4Clrt9_OKE7YqhX91E",
+        "vqf1_jGFwz5mC-dGQf82VFxIRyUD10XLll23af8S-es"
+      ],
+      "note": "clerk_mid_partition",
+      "state": {
+        "clerk": "clerk",
+        "clerk_locked": false,
+        "members": [
+          "clerk",
+          "resident"
+        ],
+        "posts": [
+          "clerk: hearing Tue 6pm"
+        ],
+        "summary": "Leaning approve",
+        "title": "Zoning Variance #24"
+      }
+    },
+    {
+      "include": [
+        "-36WpNvm7LCAmZD2R68_MIjqcRusi88snNB_xhQD9aQ",
+        "3gisahML791TEKkKa56M2GSxknsj60ZgHgEl-GIO9rs",
+        "fG5WVRkc4rAl6G5i8YYCahuaIr4rwPFFZMjyTdEooNg",
+        "j2gcb5LdpWoVY93rKM9nLusQw5Us9VCrbE2aTNQ8Evg",
+        "vEyKbmA4a5ysTnOlTwE3oQrzckUZUVY0peCz3wPbRio"
+      ],
+      "note": "resident_mid_partition",
+      "state": {
+        "clerk": "clerk",
+        "clerk_locked": false,
+        "members": [],
+        "posts": [
+          "resident: I will attend",
+          "resident: posted while offline"
+        ],
+        "summary": "Needs traffic study",
+        "title": ""
+      }
+    }
+  ],
+  "expectAtFullFrontier": {
+    "quarantine": [
+      "ZRa9WmyfOD_u92_9x_IrxAGrqeQkV9zEz0ywsAIm9vs"
+    ],
+    "state": {
+      "clerk": "resident",
+      "clerk_locked": true,
+      "members": [
+        "clerk",
+        "resident"
+      ],
+      "posts": [
+        "resident: I will attend",
+        "resident: posted while offline",
+        "clerk: hearing Tue 6pm"
+      ],
+      "summary": "Leaning approve",
+      "title": "Zoning Variance #24"
+    },
+    "winners": {
+      "clerk": "OfjyS-LJwEL1NczQS-IdxPWN6LxL1SM5WfRTLISOnx0",
+      "clerk_locked": "6kDiSO8qiTfEJy0qudiJ_sk27xT9kaxoofv19HOyj3A",
+      "summary": "NTzDm0Y8bZjjbEeGk0iUOqzsyF1eum6v-Yb5ZTAKc_Q",
+      "title": "vqf1_jGFwz5mC-dGQf82VFxIRyUD10XLll23af8S-es"
+    }
+  },
+  "generatedBy": "Lattice.Sim",
+  "ops": [
+    {
+      "author": "clerk",
+      "command": "genesis clerk",
+      "deps": [],
+      "field": "clerk",
+      "hash": "3gisahML791TEKkKa56M2GSxknsj60ZgHgEl-GIO9rs",
+      "id": "3gisahML791TEKkKa56M2GSxknsj60ZgHgEl-GIO9rs",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "clerk"
+    },
+    {
+      "author": "clerk",
+      "command": "grant resident",
+      "deps": [
+        "3gisahML791TEKkKa56M2GSxknsj60ZgHgEl-GIO9rs"
+      ],
+      "field": "__authority",
+      "hash": "-36WpNvm7LCAmZD2R68_MIjqcRusi88snNB_xhQD9aQ",
+      "id": "-36WpNvm7LCAmZD2R68_MIjqcRusi88snNB_xhQD9aQ",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "clerk",
+      "command": "admit",
+      "deps": [
+        "-36WpNvm7LCAmZD2R68_MIjqcRusi88snNB_xhQD9aQ"
+      ],
+      "field": "members",
+      "hash": "IHBXBz7xJx_JXLmSTZQGw7u7A-BMnAxo6xQ0U-TVTvQ",
+      "id": "IHBXBz7xJx_JXLmSTZQGw7u7A-BMnAxo6xQ0U-TVTvQ",
+      "kind": "command",
+      "mutation": "add",
+      "value": "clerk"
+    },
+    {
+      "author": "clerk",
+      "command": "admit",
+      "deps": [
+        "IHBXBz7xJx_JXLmSTZQGw7u7A-BMnAxo6xQ0U-TVTvQ"
+      ],
+      "field": "members",
+      "hash": "RbT2hkJ0AZlrdvGC2KvbgGZY04Yhq7v-PKURGf9oFQE",
+      "id": "RbT2hkJ0AZlrdvGC2KvbgGZY04Yhq7v-PKURGf9oFQE",
+      "kind": "command",
+      "mutation": "add",
+      "value": "resident"
+    },
+    {
+      "author": "resident",
+      "command": "post",
+      "deps": [
+        "-36WpNvm7LCAmZD2R68_MIjqcRusi88snNB_xhQD9aQ"
+      ],
+      "field": "posts",
+      "hash": "fG5WVRkc4rAl6G5i8YYCahuaIr4rwPFFZMjyTdEooNg",
+      "id": "fG5WVRkc4rAl6G5i8YYCahuaIr4rwPFFZMjyTdEooNg",
+      "kind": "command",
+      "mutation": "append",
+      "value": "resident: I will attend"
+    },
+    {
+      "author": "resident",
+      "command": "set_summary",
+      "deps": [
+        "fG5WVRkc4rAl6G5i8YYCahuaIr4rwPFFZMjyTdEooNg"
+      ],
+      "field": "summary",
+      "hash": "vEyKbmA4a5ysTnOlTwE3oQrzckUZUVY0peCz3wPbRio",
+      "id": "vEyKbmA4a5ysTnOlTwE3oQrzckUZUVY0peCz3wPbRio",
+      "kind": "command",
+      "mutation": "write",
+      "value": "Needs traffic study"
+    },
+    {
+      "author": "resident",
+      "command": "post",
+      "deps": [
+        "vEyKbmA4a5ysTnOlTwE3oQrzckUZUVY0peCz3wPbRio"
+      ],
+      "field": "posts",
+      "hash": "j2gcb5LdpWoVY93rKM9nLusQw5Us9VCrbE2aTNQ8Evg",
+      "id": "j2gcb5LdpWoVY93rKM9nLusQw5Us9VCrbE2aTNQ8Evg",
+      "kind": "command",
+      "mutation": "append",
+      "value": "resident: posted while offline"
+    },
+    {
+      "author": "clerk",
+      "command": "set_title",
+      "deps": [
+        "RbT2hkJ0AZlrdvGC2KvbgGZY04Yhq7v-PKURGf9oFQE"
+      ],
+      "field": "title",
+      "hash": "vqf1_jGFwz5mC-dGQf82VFxIRyUD10XLll23af8S-es",
+      "id": "vqf1_jGFwz5mC-dGQf82VFxIRyUD10XLll23af8S-es",
+      "kind": "command",
+      "mutation": "write",
+      "value": "Zoning Variance #24"
+    },
+    {
+      "author": "clerk",
+      "command": "post",
+      "deps": [
+        "vqf1_jGFwz5mC-dGQf82VFxIRyUD10XLll23af8S-es"
+      ],
+      "field": "posts",
+      "hash": "e_17sbyo-dGFCyV2G7z_Fn5St4Clrt9_OKE7YqhX91E",
+      "id": "e_17sbyo-dGFCyV2G7z_Fn5St4Clrt9_OKE7YqhX91E",
+      "kind": "command",
+      "mutation": "append",
+      "value": "clerk: hearing Tue 6pm"
+    },
+    {
+      "author": "clerk",
+      "command": "close_matter",
+      "deps": [
+        "e_17sbyo-dGFCyV2G7z_Fn5St4Clrt9_OKE7YqhX91E",
+        "j2gcb5LdpWoVY93rKM9nLusQw5Us9VCrbE2aTNQ8Evg"
+      ],
+      "field": "clerk_locked",
+      "hash": "6kDiSO8qiTfEJy0qudiJ_sk27xT9kaxoofv19HOyj3A",
+      "id": "6kDiSO8qiTfEJy0qudiJ_sk27xT9kaxoofv19HOyj3A",
+      "kind": "command",
+      "mutation": "write",
+      "value": true
+    },
+    {
+      "author": "clerk",
+      "command": "set_summary",
+      "deps": [
+        "e_17sbyo-dGFCyV2G7z_Fn5St4Clrt9_OKE7YqhX91E"
+      ],
+      "field": "summary",
+      "hash": "NTzDm0Y8bZjjbEeGk0iUOqzsyF1eum6v-Yb5ZTAKc_Q",
+      "id": "NTzDm0Y8bZjjbEeGk0iUOqzsyF1eum6v-Yb5ZTAKc_Q",
+      "kind": "command",
+      "mutation": "write",
+      "value": "Leaning approve"
+    },
+    {
+      "author": "clerk",
+      "command": "transfer clerk",
+      "deps": [
+        "6kDiSO8qiTfEJy0qudiJ_sk27xT9kaxoofv19HOyj3A"
+      ],
+      "field": "clerk",
+      "hash": "OfjyS-LJwEL1NczQS-IdxPWN6LxL1SM5WfRTLISOnx0",
+      "id": "OfjyS-LJwEL1NczQS-IdxPWN6LxL1SM5WfRTLISOnx0",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "resident"
+    },
+    {
+      "author": "clerk",
+      "command": "reopen_matter",
+      "deps": [
+        "NTzDm0Y8bZjjbEeGk0iUOqzsyF1eum6v-Yb5ZTAKc_Q"
+      ],
+      "field": "clerk_locked",
+      "hash": "ZRa9WmyfOD_u92_9x_IrxAGrqeQkV9zEz0ywsAIm9vs",
+      "id": "ZRa9WmyfOD_u92_9x_IrxAGrqeQkV9zEz0ywsAIm9vs",
+      "kind": "command",
+      "mutation": "write",
+      "value": false
+    }
+  ],
+  "perspectives": [
+    {
+      "include": [
+        "-36WpNvm7LCAmZD2R68_MIjqcRusi88snNB_xhQD9aQ",
+        "3gisahML791TEKkKa56M2GSxknsj60ZgHgEl-GIO9rs",
+        "IHBXBz7xJx_JXLmSTZQGw7u7A-BMnAxo6xQ0U-TVTvQ",
+        "NTzDm0Y8bZjjbEeGk0iUOqzsyF1eum6v-Yb5ZTAKc_Q",
+        "RbT2hkJ0AZlrdvGC2KvbgGZY04Yhq7v-PKURGf9oFQE",
+        "e_17sbyo-dGFCyV2G7z_Fn5St4Clrt9_OKE7YqhX91E",
+        "vqf1_jGFwz5mC-dGQf82VFxIRyUD10XLll23af8S-es"
+      ],
+      "name": "clerk_mid_partition"
+    },
+    {
+      "include": [
+        "-36WpNvm7LCAmZD2R68_MIjqcRusi88snNB_xhQD9aQ",
+        "3gisahML791TEKkKa56M2GSxknsj60ZgHgEl-GIO9rs",
+        "fG5WVRkc4rAl6G5i8YYCahuaIr4rwPFFZMjyTdEooNg",
+        "j2gcb5LdpWoVY93rKM9nLusQw5Us9VCrbE2aTNQ8Evg",
+        "vEyKbmA4a5ysTnOlTwE3oQrzckUZUVY0peCz3wPbRio"
+      ],
+      "name": "resident_mid_partition"
+    }
+  ],
+  "scenario": "township_zoning_variance_24",
+  "schema": {
+    "fields": {
+      "clerk": {
+        "authority": "clerk"
+      },
+      "clerk_locked": {
+        "default": false,
+        "gatedBy": "clerk",
+        "merge": "lww"
+      },
+      "members": {
+        "merge": "or_set"
+      },
+      "posts": {
+        "merge": "causal_list"
+      },
+      "summary": {
+        "default": "",
+        "merge": "lww"
+      },
+      "title": {
+        "default": "",
+        "merge": "lww"
+      }
+    },
+    "name": "Township.Matter"
+  }
+}

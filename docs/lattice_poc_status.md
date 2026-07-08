@@ -265,3 +265,20 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
   productized runtime. Native browser/AtomVM peers still need their own
   `Lattice.Canonical`/`Lattice.Carrier.Wire` implementations and production compaction
   still needs snapshot-aware `Authority`/`Reduce`, GC coordination, and snapshot trust.
+
+## Checkpoint: Township G1 Real Carrier Acceptance
+
+- Files changed: `apps/lattice_node_spike/lib/lattice_node_spike/peer.ex`,
+  `apps/lattice_node_spike/lib/lattice_node_spike/township_scenario.ex`,
+  `apps/lattice_node_spike/priv/peer_node.exs`,
+  `apps/lattice_node_spike/test/township_carrier_test.exs`, Township-facing docs.
+- Behaviors: Township W0-W3 now run over two physical BEAM OS processes through
+  `LatticeNodeSpike.WsCarrier`, while `Lattice.Sim` remains the oracle.
+- Command run: `~/.asdf/shims/mix test apps/lattice_node_spike/test/township_carrier_test.exs`.
+- Result: succeeded on 2026-07-07. The G1 test proves deterministic prefix agreement,
+  wrong-key session rejection, partition/diverge/heal convergence, byte-identical
+  materialized state, identical `:not_holder` authority quarantine for the stale clerk
+  action, idempotent re-sync, and clean peer shutdown.
+- Blocker or remaining limitation: G1 is accepted for two BEAM nodes. Non-BEAM
+  browser/phone realms still depend on canonical CBOR/ADR-P08 work, and W4 remains
+  stubbed until the M4 receipt-free primitive exists.

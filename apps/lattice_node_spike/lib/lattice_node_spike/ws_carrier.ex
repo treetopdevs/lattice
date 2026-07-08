@@ -16,6 +16,7 @@ defmodule LatticeNodeSpike.WsCarrier do
   @behaviour Lattice.Carrier
 
   alias Lattice.Carrier.{Batch, Session, Wire}
+  alias Lattice.Carrier.Telemetry
   alias Lattice.Transport.WebSocket.Client
   alias LatticeNodeSpike.Wire, as: NodeWire
 
@@ -37,9 +38,26 @@ defmodule LatticeNodeSpike.WsCarrier do
 
       case authenticate(conn, session) do
         :ok ->
+          Telemetry.execute(
+            [:lattice, :carrier, :connect],
+            %{},
+            %{realm: session.realm, peer_realm: session.peer_realm}
+          )
+
           {:ok, conn}
 
-        {:error, _reason} = error ->
+        {:error, reason} = error ->
+          Telemetry.execute(
+            [:lattice, :carrier, :auth_failure],
+            %{},
+            %{
+              reason: reason,
+              realm: session.realm,
+              peer_realm: session.peer_realm,
+              side: :client
+            }
+          )
+
           _ = Client.close(client)
           error
       end

@@ -1,0 +1,286 @@
+# Township — Agent Team Orientation & Build Map
+
+**Read this first.** It is the single entry point for an agent team tasked with taking the
+Township vision to *100% tested and working*. It is a **map, not a spec**: every section
+points at the asset that carries the real detail, states what is proven vs. stubbed vs.
+blocked, and fixes the build order so nothing is attempted before its prerequisites exist.
+
+> **Prime directive — Sim is the oracle.** `Lattice.Sim` is the source of truth for what
+> "correct" means. Every implementation (Elixir engine, TS client, the carrier) must
+> reproduce Sim's materialized state, quarantine set, and canonical order. Any divergence
+> between two implementations of the same reduction is the **V-01 drift bug** and is a STOP
+> condition, not a patch-the-test situation.
+
+> **Grounding rule.** Verify against the real branch `claude/beautiful-gould-6b25d2`, never
+> against this document's summaries. Where a claim here disagrees with the branch, the branch
+> wins — and fixing this map is then a task. A hand-authored test vector is *not* the oracle
+> until it is regenerated from Sim.
+
+---
+
+## 0. The vision in one paragraph
+
+Township is a town-scale (≤10k) civic coordination instance on the Lattice substrate:
+self-certifying identities on residents' own devices deliberate in durable threads, grant and
+revoke real roles, and settle local matters with attestations no one can be forced to prove —
+with **no server to seize**. It is the M5 application pilot that stress-tests the substrate
+end-to-end. The full architecture, adversary model (A1 coercion / A2 faction / A3 state), and
+roadmap live in the program doc below.
+
+---
+
+## 1. Asset inventory (what exists, and what each is for)
+
+### 1.1 Vision & program docs (read to understand *why*)
+
+| Asset | Type | What it is | Trust level |
+|---|---|---|---|
+| `lattice_program_doc.html` (**PD-001**) | HTML | The master program doc: big picture, the stack (L1 Lattice → L4 Cadence), the roadmap DAG (M0–M6), the Township stretch spec (§5), and the road-to-M1 questions (§6, Q-01…Q-08, V-01…V-04, R-01…R-06). | Canonical vision. Roadmap = dependencies, not dates. |
+| `township_poc_addendum.html` (**PD-001-A**) | HTML | The POC execution plan: the **minimal cut** (prove W0–W3 on the real substrate, stub W4 attestation behind an interface), the five workflows, the exit gate G1–G5. | Canonical POC plan. |
+
+### 1.2 The application track — Township overlay (drop onto the 2.0 branch)
+
+`township_poc_overlay.zip` → unzips into the repo; paths already match.
+
+| Path | What it is | Status |
+|---|---|---|
+| `apps/lattice_core/lib/township/matter.ex` | `Township.Matter` — the civic Replica (LWW title/summary, causal-list posts, OR-set members, authority-gated `clerk_locked?`). Built only from primitives that exist today. | **Real**, parses; needs `mix compile` against branch. |
+| `apps/lattice_core/lib/lattice/attestation.ex` | `Lattice.Attestation` behaviour + `Stub` + `M4Placeholder`. **The seam** that lets W4 be honest. | Stub **proven-plumbing**; receipt-freeness **stubbed** (M4). |
+| `apps/lattice_core/test/support/attestation_contract.ex` | The contract suite the Stub AND the future M4 primitive must both pass. `flunk`s if a module claims `receipt_free?` without proving it. | **Real guardrail.** |
+| `apps/lattice_core/test/township/workflows_test.exs` | W0–W4 as falsifiable ExUnit tests driving `Sim`, each with its ASSERT line. | **Real**; run against branch — see §4 caveat on quarantine-shape assertions. |
+| `scripts/township_demo.exs` | Narrated end-to-end demo (the §5 storyline) over `Sim`. | **Real**; syntax-checked, not yet run against branch. |
+| `CLAUDE.md` (in the zip; also `CLAUDE.md` standalone) | Agent working notes for the overlay: acceptance criteria, real API signatures, the "do-not-implement" boundary, the parallel-tracks pointer. | **Start here for the app track.** |
+
+### 1.3 The substrate track — plans (drop into `plans/`)
+
+| Asset | What it is | Status |
+|---|---|---|
+| `010a-carrier-township-acceptance.md` | Seam between plan `010` (real carrier) and Township: binds 010's convergence GATE to W1/W3, and pins the **coupling finding** — a Vue/JS browser realm cannot emit `:erlang.term_to_binary`, so **canonical CBOR (ADR-P08)** is a hard prerequisite the moment a non-BEAM realm joins. | **Plan.** Builds on the repo's existing `plans/010-real-carrier-spike.md`. |
+| `011-ts-client-realm.md` | Work package for the TS client realm: two-tier structure, Sim-as-oracle, GATE/STOP, parallel worktrees. | **Plan.** |
+
+> The repo already contains `plans/000`–`009` (foundation & hardening) and `010`–`013`
+> (direction spikes). **Plan 001 (CI gates the full property suite) is a prerequisite for
+> trusting any M1 property claim** — including Township's — because CI currently runs only a
+> few flagship files. Treat 001 as a gate before believing "M1 is green."
+
+### 1.4 The client realm — TypeScript library (`ts_client_realm_overlay.zip`)
+
+Framework-agnostic; the shared spine both the Expo and Tauri shells consume.
+
+| Path | What it is | Status |
+|---|---|---|
+| `clients/lattice-client/src/{op,dag,schema,crdt/reducers,quarantine,materialize,sync,carrier}.ts` | **Tier A** — the reducer (DAG, 3 CRDTs, the single V-01 quarantine predicate, materialize, sync) plus the carrier-frame/session adapter and carrier-term delegation extraction. Encoding-independent for op ids; carrier session bytes are signed through an injected shell/key-custody signer. | **Real & verified**: strict typecheck clean, Sim-generated conformance green, carrier W1 vector check green, live TS↔BEAM WebSocket W1 green. |
+| `clients/lattice-client/src/{codec,identity,township,local_log,tauri_bridge}.ts` | **Tier B/E1 bridge** — canonical `lattice-cbor-v1` bytes + Ed25519 signing. `codec.ts` verifies carrier-frame op bytes/hashes/signatures against BEAM and can author/sign frames; `township.ts` builds `Township.Matter` command body/cap terms, selects a matching local delegation cap extracted from carrier frames, derives deps from the local op frontier, and exposes an author-and-persist workflow; `local_log.ts` persists semantic ops and pushable carrier frames through shell key-value seams; `tauri_bridge.ts` adapts Tauri-style `invoke` commands to storage and async native signing. | **Partially real**: Phase D1 parity, received-op verification, W1 command-frame authoring, Township command body/cap composition, carrier delegation extraction, local delegation cap selection, local frontier deps, JSON local-log persistence, carrier-frame outbox persistence, a shell-facing author-and-persist workflow, async carrier-session signing, and invoke-backed Tauri storage/signer bridges are proven; actual Tauri Rust commands and app wiring remain. |
+| `clients/township-tauri-shell/src-tauri` | **E1 native command core** — first Tauri v2 Rust crate for shell-side storage/signing commands (`lattice_kv_get`, `lattice_kv_set`, `lattice_public_key`, `lattice_sign_carrier`). | **Partially real**: Rust Ed25519 command core matches the W1 TS carrier-session public key/signature and key-value command semantics; builder registration, secure platform key persistence, and Vue shell wiring remain. |
+| `clients/lattice-client/test/conformance.ts` + `test/vectors/*.json` | The harness that pins the TS reducer to Sim. | **Real**; W0, W1/W2 + perspectives, W3, and five seeded randomized vectors are generated by `lattice.export_vectors`. |
+| `clients/lattice-client/test/carrier.ts` | The C3 carrier-vector harness: BEAM-compatible session transcript/signature check, full carrier-frame decoding, and W1 merge/materialization against the Sim oracle. | **Real**; `npm run carrier:township` is wired in CI. |
+| `clients/lattice-client/test/live_carrier.ts` | The live C3 harness: spawns the BEAM Township peer process, authenticates over WebSocket, pulls/pushes carrier frames, and compares both TS materialization and BEAM peer state to the Sim oracle. | **Real**; `npm run carrier:township:live` is wired in CI. |
+| `apps/lattice_core/lib/mix/tasks/lattice.export_vectors.ex` | Elixir task that emits conformance vectors *from Sim* — makes the oracle literal. | **Real** for Phase B1/B2 and C3a; emits fixed, randomized, and carrier W1 vectors. |
+| `ts-client-CLAUDE.md` | Agent working notes for the client library. | **Start here for the client track.** |
+
+### 1.5 Observability & design prototypes (the UI direction, verified logic)
+
+Three standalone HTML prototypes, all sharing one design system (PD-001 tokens) and one
+scenario (zoning-variance-24), each with headless-verified logic:
+
+| Asset | What it is | Status |
+|---|---|---|
+| `duality_canvas.html` | Materialized state ⇄ op-DAG, bidirectional cross-highlight, frontier scrubber, per-realm perspective, op-authoring. | **Verified** (10 reducer assertions). |
+| `constellation.html` | Location-transparent realms; edges = **frontier gap**; partition/heal/seize + live succession. | **Verified** (gossip/succession assertions). |
+| `adversary_console.html` | A1/A2/A3 attacks vs. defenses with honest **proven / stubbed / leaky** status per verdict. | **Verified** (attack-logic assertions). |
+
+> These are **interaction-design prototypes**, not the production UI. The real UI is Phoenix
+> LiveView 1.1 (live-pushed state/feeds) + **Vue 3.5** islands (the direct-manipulation
+> canvases), consuming the same data the LiveView reduction and the TS client expose.
+
+---
+
+## 2. Status legend — what "done" means per layer
+
+- **Proven** — a real mechanism with a passing test/oracle today.
+- **Stubbed** — plumbing works behind an interface; the hard property lands at a named milestone. Honestly labelled (e.g. `receipt_free? = false`).
+- **Blocked** — cannot be built correctly until a prerequisite lands. The only blockers in this program are: **CBOR/ADR-P08** (non-BEAM realms) and **M4 research** (receipt-freeness).
+
+Nothing here is "assumed done." If it is not a passing gate, it is not done (PD-001 invariant V).
+
+---
+
+## 3. Dependency graph (what unblocks what)
+
+```
+plans/001 (CI gates full suite) ─┐
+                                 ├─▶ trust M1 property claims ──▶ Township W0–W3 assertions credible
+M1 2.0 core (branch) ────────────┘
+                                        │
+Township overlay (Matter, Attestation, workflows) ──▶ POC on Sim (G2,G3,G5 reachable)
+                                        │
+plan 010 carrier (Lattice.Carrier + WS realm) ──▶ 010a ──▶ Township G1 (physical convergence)
+                                        │                        │
+                                        │                        └─▶ TS client sync over wire (011 D3)
+ADR-P08 CBOR ───────────────────────────┴─▶ non-BEAM realms (browser/phone) ──▶ Tier B of TS client
+                                                                     │
+                                                                     ├─▶ Expo shell   (phone)
+                                                                     └─▶ Tauri v2 shell (desktop+mobile, Vue 3.5)
+M4 research (JCJ/composition) ──▶ real receipt-free primitive ──▶ Attestation swap (W4 becomes real)
+```
+
+Two hard blockers gate the endgame: **CBOR/ADR-P08** (everything non-BEAM) and **M4 research**
+(receipt-freeness). Everything else is engineering that can proceed in parallel behind them.
+
+---
+
+## 4. Known gaps & honesty caveats (do not skip)
+
+1. **M1 "green" is unverified in CI.** Memory says 19 behaviors pass; the branch still shows a
+   V1-shaped facade beside the 2.0 core, and CI gates only a few files. **Gate plan 001 first.**
+2. **The Township workflow tests were written against an *inferred* `Sim` return shape** (esp.
+   `quarantined/3` → `{true, reason} | false`, `transfer/5`, `holder/3`). First `mix test` may
+   surface shape mismatches in the authority/quarantine assertions — treat red there as "the
+   inference was slightly off," not "the design is wrong."
+3. **The TS conformance vectors are now Sim-generated for Phase B1/B2** (`township_join_w0`,
+   `township_zoning_variance_24`, `township_succession_w3`, plus five seeded
+   `township_random_*` scenarios). CI regenerates the corpus and runs TS typecheck +
+   conformance. The randomized corpus already caught and fixed the TS OR-set observed-remove
+   drift. The corpus also includes `township_carrier_w1`, which carries full BEAM carrier
+   frames for the first C3 adapter check.
+4. **`township_demo.exs` and the overlay are syntax-/parse-checked, not compiled** against the
+   branch. Expect minor reconciliation on first `mix compile`.
+5. **G1 (physical BEAM carrier) is now reachable outside `Sim`** — plan 017 runs W0–W3
+   across two BEAM OS processes over the real WebSocket carrier, with `Sim` as oracle.
+   TS can now verify `lattice-cbor-v1` carrier-frame op hashes/signatures for W1, compose
+   `Township.Matter` command body/cap terms, extract carrier-frame delegations, select a matching
+   local delegation cap, derive deps from the local op frontier, persist/reload the local semantic op log and pushable carrier-frame
+   outbox through shell storage seams, run a shell-facing author-and-persist workflow that signs
+   a BEAM-accepted W1 command frame, delegate storage/signing through a Tauri-style async
+   `invoke` bridge, and match the bridge with a Rust native command core; non-BEAM browser/phone
+   shells still need secure platform key persistence, builder registration, and app wiring before
+   they are user-facing equivalent carrier peers.
+6. **Receipt-freeness is not real** (W4). `Attestation.Stub` is `receipt_free? = false` by
+   design; do not let anything claim otherwise before M4.
+7. **AtomVM has distribution now but no iOS/Android target** — so a phone is a TS client, not a
+   BEAM node. Re-check this if AtomVM ships a mobile target (STOP condition in plan 011).
+
+---
+
+## 5. The build order to 100% tested and working
+
+Each milestone lists its **gate** (how you know it's done) and the **asset** that carries the detail.
+
+### Phase A — Trust the substrate (foundation)
+- **A1.** Land `plans/001` — CI gates the full property suite (19 behaviors, properties, 6 seeds).
+  *Gate:* full suite green in CI, not just flagship files. *Asset:* repo `plans/000`–`006`.
+- **A2.** Compile the Township overlay against the branch; get `workflows_test.exs` W0–W3 green on
+  `Sim`; reconcile the §4.2 shape mismatches. *Gate:* W0–W3 + the four M1 properties green over
+  `Township.Matter`. *Asset:* overlay `CLAUDE.md`.
+- **A3.** Run `scripts/township_demo.exs` clean; emit trust-graph + audit artifacts.
+  *Gate:* POC G2, G3, G5. *Asset:* PD-001-A §A5.
+
+### Phase B — Make the oracle portable (client realm, Tier A)
+- **B1.** Wire `lattice.export_vectors` to real `Sim` calls (plan 011 Deliverable 1); regenerate
+  the vector. *Gate:* the TS conformance vector is Sim-generated, not hand-authored.
+  **Status:** done for W0, W1/W2 + perspectives, and W3 named vectors.
+- **B2.** Grow conformance to N randomized StreamData scenarios; both sides in CI.
+  *Gate:* TS reducer reproduces Sim on every generated scenario; drift fails the build.
+  *Asset:* `011-ts-client-realm.md`, `ts-client-CLAUDE.md`.
+  **Status:** done for N=5 deterministic seeded Sim scenarios and CI wiring in plan 020;
+  expand the corpus later without changing the artifact contract.
+
+### Phase C — Real carrier (the physical proof)
+- **C1.** Execute repo `plans/010` — define `Lattice.Carrier`, two BEAM processes over WS.
+  *Gate:* 010's own GATE (byte-identical convergence, idempotent sync, tamper rejection).
+- **C2.** Run Township **W1/W3 over the real carrier** (plan 017/010a). *Gate:* Township
+  **G1** for two BEAM nodes is green; non-BEAM carrier peers remain gated on ADR-P08.
+  *Asset:* `010a-carrier-township-acceptance.md`.
+- **C3.** Connect the TS client `sync.ts` to the WS realm; converge W1 client↔BEAM (Tier A, no
+  CBOR). *Gate:* plan 011 Deliverable 3.
+  **Status:** done for Tier A W1 in plans 021–022. The TS client signs/verifies carrier-session
+  bytes through injected shell key custody, talks to `LatticeNodeSpike.WsHandler` over a real
+  WebSocket, pulls/pushes carrier frames, and converges to the Sim oracle. Received carrier-frame
+  verification, the first author/sign primitive, Township command body/cap composition, carrier
+  delegation extraction, local delegation cap selection, local frontier dep derivation, JSON
+  local-op-log persistence, carrier-frame outbox persistence, the author-and-persist command
+  workflow, async carrier-session signing, Tauri-style invoke storage/signing bridges, and a Rust
+  native command core are covered by plans 023–034; secure key persistence, builder registration,
+  and app wiring remain Tier B/application-shell work.
+
+### Phase D — Cross the runtime boundary (CBOR, the first hard blocker)
+- **D1.** Land **ADR-P08**: canonical CBOR for `Lattice.Op`, replacing the ETF pin.
+  *Gate:* one op hashes byte-identically Elixir↔TS (Tier-B vector). *Asset:* 010a coupling section.
+  **Status:** done for the current `lattice-cbor-v1` carrier-frame suite in plan 023:
+  `township_carrier_w1` exports canonical bytes from `Lattice.Op.canonical_encoding/1`, and
+  `npm run canonical` proves every W1 carrier op hashes byte-identically in TS.
+- **D2.** Implement the TS `codec.ts` CBOR encoder; enable client-side op authoring + local verify.
+  *Gate:* plan 011 Deliverable 4; `codec.ts` no longer throws.
+  **Status:** partial. `codec.ts` can reproduce BEAM canonical bytes and op ids from carrier
+  frames, plan 024 verifies received W1 carrier-op Ed25519 signatures locally with tamper
+  rejection, plan 025 proves `authorCarrierOp` can sign a resident W1 `post` command frame that
+  is byte-for-byte equal to the Sim-exported fixture and accepted by the live BEAM carrier, and
+  plan 026 proves `authorTownshipCommand` builds the `Township.Matter` command body/cap terms for
+  all declared commands and is accepted on the live W1 path, and plan 027 proves
+  `selectTownshipCapId` chooses a local delegation by audience/op/role and feeds the live W1
+  authoring path, plan 028 proves `authorTownshipCommandFromLog` derives deps from a local
+  semantic op frontier before BEAM accepts the authored W1 frame, plan 029 proves the local
+  semantic op log can save/reload through an injected JSON key-value store before authoring, plan
+  030 proves pushable carrier frames can persist/reload from an outbox before BEAM accepts them,
+  plan 031 proves shell-neutral extraction of delegation caps from loaded carrier frames, and plan
+  032 proves a single author-and-persist workflow can load local state, choose the cap, sign, append
+  the semantic op, append the carrier frame, and reject missing-cap commands before the live BEAM
+  carrier accepts the authored frame, and plan 033 proves async carrier-session signing plus a
+  dependency-free Tauri `invoke` adapter for key-value storage and native signing, and plan 034
+  proves the Rust command core can store values and produce the same Ed25519 W1 carrier-session
+  public key/signature as TS. The remaining gap is shell integration: persist keys securely, register
+  the commands in a Tauri builder, and wire a real Tauri/Expo app.
+
+### Phase E — The shells (apps)
+- **E1.** **Tauri v2 shell** (recommended spine): Vue 3.5 frontend + Rust core (key custody, CBOR,
+  optional BEAM sidecar on desktop) consuming `@treetopdevs/lattice-client`. *Gate:* a desktop +
+  mobile build converges a Township matter against a BEAM realm.
+  **Status:** started: the TS bridge and Rust command core exist and are vector-tested; shell
+  registration/UI/live app convergence are not done.
+- **E2.** **Expo shell** (if phone-only is wanted): SDK 56+, RN 0.85, New Arch; same library, key
+  custody via secure-store/native keystore. *Gate:* a phone build converges a Township matter.
+  *Asset:* the app-shell analysis (this conversation's §Expo-vs-Tauri) — decision deferred, reversible.
+
+### Phase F — Close the coercion gap (M4, the second hard blocker)
+- **F1.** Land the receipt-free primitive per the research verdict (JCJ survival, composition —
+  PD-001 §6 R-02/R-03). *Gate:* the `Attestation.Contract` passes with `receipt_free? = true`
+  (real indistinguishability, not the `flunk` placeholder). *Asset:* `attestation.ex`, contract suite.
+- **F2.** Swap `Stub` → real primitive; W4 becomes real with **no change** to W0–W3.
+  *Gate:* POC W4 receipt-free; Township exit gate fully met.
+
+### Phase G — The full instrument (UI)
+- **G1.** Build the production UI: Phoenix LiveView 1.1 (state/feeds) + Vue 3.5 islands (canvases),
+  reusing the three prototypes' interaction grammar and verified logic. *Gate:* the five POC
+  assertions are observable + an outsider-replayable audit surface. *Asset:* the three `*.html`
+  prototypes + Duality/Constellation/Console design notes.
+
+**Definition of 100% done:** every gate A1→G1 green in CI; the POC exit gate (PD-001-A §A5)
+met with W4 *real*; Township converges across BEAM + browser/phone realms over the real carrier;
+and every claim is a passing test with `Sim` as oracle.
+
+---
+
+## 6. How to run the two (three) parallel worktrees
+
+- **Substrate worktree** — Elixir engine: Phases A, C, D1, F. Owns `Sim`, the carrier, CBOR, the
+  attestation primitive. Delegated at milestone level via the overlay `CLAUDE.md` + plans 010a/011.
+- **Client worktree** — TS library: Phases B, C3, D2. Owns the reducer/sync/conformance. Delegated
+  via `ts-client-CLAUDE.md` + plan 011. No Elixir changes for Tier A.
+- **Shell/UI worktree** (later) — Phases E, G. Vue 3.5 + LiveView; consumes the client library and
+  the LiveView reduction. Starts once Phase C/D make a real realm reachable.
+
+The worktrees meet at **conformance vectors** (substrate emits from Sim; client must pass) and at
+the **carrier seam** (010a Deliverable 3 / 011 Deliverable 3). Those two handshakes are the whole
+coordination surface — keep them green and the tracks stay honest.
+
+---
+
+## 7. One-line pointers (paste targets)
+
+- Vision: `lattice_program_doc.html` · POC plan: `township_poc_addendum.html`
+- App track start: `CLAUDE.md` (overlay) · Client track start: `ts-client-CLAUDE.md`
+- Carrier seam: `010a-carrier-township-acceptance.md` · Client plan: `011-ts-client-realm.md`
+- Overlays: `township_poc_overlay.zip`, `ts_client_realm_overlay.zip`
+- UI direction: `duality_canvas.html`, `constellation.html`, `adversary_console.html`
+- Branch of record: `treetopdevs/lattice @ claude/beautiful-gould-6b25d2`
+- Oracle: `Lattice.Sim` · Two hard blockers: **ADR-P08 (CBOR)**, **M4 (receipt-freeness)**

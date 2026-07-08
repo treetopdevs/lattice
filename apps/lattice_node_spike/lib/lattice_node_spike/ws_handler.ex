@@ -20,6 +20,7 @@ defmodule LatticeNodeSpike.WsHandler do
   @behaviour :cowboy_websocket
 
   alias Lattice.Carrier.Session
+  alias Lattice.Carrier.Telemetry
   alias Lattice.Carrier.Wire, as: CarrierWire
   alias LatticeNodeSpike.{Peer, Wire}
 
@@ -51,7 +52,16 @@ defmodule LatticeNodeSpike.WsHandler do
   @impl :cowboy_websocket
   def terminate(_reason, _req, state) do
     # The physical partition: the socket is gone.
-    if Map.get(state, :authenticated?, false), do: Peer.socket_closed(state.peer)
+    if Map.get(state, :authenticated?, false) do
+      Telemetry.execute(
+        [:lattice, :carrier, :disconnect],
+        %{},
+        %{realm: Map.get(state, :realm)}
+      )
+
+      Peer.socket_closed(state.peer)
+    end
+
     :ok
   end
 
@@ -64,9 +74,24 @@ defmodule LatticeNodeSpike.WsHandler do
          ) do
       :ok ->
         {realm, identity} = Peer.session_identity(state.peer)
-        {Session.respond(challenge, identity, realm), %{state | authenticated?: true}}
+
+        {Session.respond(challenge, identity, realm),
+         state
+         |> Map.put(:authenticated?, true)
+         |> Map.put(:realm, realm)}
 
       {:error, reason} ->
+        Telemetry.execute(
+          [:lattice, :carrier, :auth_failure],
+          %{},
+          %{
+            reason: reason,
+            expected_realm: state.trusted_peer_realm,
+            peer_realm: Map.get(challenge, "local_realm"),
+            side: :server
+          }
+        )
+
         {%{type: "error", reason: Atom.to_string(reason)}, state}
     end
   end
@@ -75,7 +100,13 @@ defmodule LatticeNodeSpike.WsHandler do
     {handle_msg(type, msg, state), state}
   end
 
-  defp authenticated_msg(_type, _msg, state) do
+  defp authenticated_msg(type, _msg, state) do
+    Telemetry.execute(
+      [:lattice, :carrier, :pre_auth_reject],
+      %{},
+      %{type: type}
+    )
+
     {%{type: "error", reason: "unauthenticated"}, state}
   end
 

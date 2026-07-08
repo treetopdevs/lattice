@@ -12,8 +12,7 @@ defmodule LatticeNodeSpike.Peer do
 
   use GenServer
 
-  alias Lattice.{Log, Sync}
-  alias LatticeNodeSpike.Scenario
+  alias Lattice.{Authority, Log, Sync}
 
   # --- Client API (called from the WebSocket handler) -----------------------
 
@@ -51,9 +50,17 @@ defmodule LatticeNodeSpike.Peer do
   def init(opts) do
     realm = Keyword.fetch!(opts, :realm)
     identity = Keyword.fetch!(opts, :identity)
+    scenario = Keyword.get(opts, :scenario, LatticeNodeSpike.Scenario)
 
     {:ok,
-     %{realm: realm, identity: identity, sim: Scenario.base_sim(), phase: :base, live_seen: 0}}
+     %{
+       realm: realm,
+       identity: identity,
+       scenario: scenario,
+       sim: scenario.base_sim(),
+       phase: :base,
+       live_seen: 0
+     }}
   end
 
   @impl GenServer
@@ -83,13 +90,14 @@ defmodule LatticeNodeSpike.Peer do
     log = log(state)
 
     report = %{
-      state_b64: log |> Scenario.state_bytes() |> Base.encode64(),
+      state_b64: log |> state.scenario.state_bytes() |> Base.encode64(),
       op_ids: log |> Log.op_ids() |> Enum.sort(),
       frontier: Log.frontier(log),
       structural_quarantine:
         Enum.map(Log.quarantine(log), fn %{op: op, reason: reason} ->
           [op.id, Atom.to_string(reason)]
         end),
+      authority_quarantine: authority_quarantine(state.scenario, log),
       log_size: Log.size(log)
     }
 
@@ -102,12 +110,20 @@ defmodule LatticeNodeSpike.Peer do
 
   @impl GenServer
   def handle_cast(:socket_closed, %{phase: :base} = state) do
-    {:noreply, %{state | sim: Scenario.diverge(state.sim, state.realm), phase: :diverged}}
+    {:noreply, %{state | sim: state.scenario.diverge(state.sim, state.realm), phase: :diverged}}
   end
 
   def handle_cast(:socket_closed, state), do: {:noreply, state}
 
   defp log(%{sim: sim, realm: realm}), do: Lattice.Sim.log(sim, realm)
+
+  defp authority_quarantine(scenario, %Log{} = log) do
+    scenario.replica_module()
+    |> Authority.analyze(log)
+    |> Map.fetch!(:reasons)
+    |> Enum.map(fn {id, reason} -> [id, Atom.to_string(reason)] end)
+    |> Enum.sort()
+  end
 
   defp put_log(%{sim: sim, realm: realm} = state, new_log) do
     %{state | sim: %{sim | logs: Map.put(sim.logs, realm, new_log)}}

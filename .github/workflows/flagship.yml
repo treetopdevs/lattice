@@ -76,6 +76,12 @@ jobs:
         with:
           otp-version: "28.1"
           elixir-version: "1.19.5"
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: clients/lattice-client/package-lock.json
       - name: Cache deps and _build
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
@@ -90,6 +96,35 @@ jobs:
         run: mix format --check-formatted
       - name: Run full test suite
         run: mix test
+      - name: Regenerate TS oracle vectors
+        run: mix lattice.export_vectors --out clients/lattice-client/test/vectors
+      - name: Install TS client dependencies
+        working-directory: clients/lattice-client
+        run: npm ci
+      - name: Typecheck TS client
+        working-directory: clients/lattice-client
+        run: npm run typecheck
+      - name: TS client conformance
+        working-directory: clients/lattice-client
+        run: npm run conformance
+      - name: TS canonical op parity
+        working-directory: clients/lattice-client
+        run: npm run canonical
+      - name: TS Township authoring
+        working-directory: clients/lattice-client
+        run: npm run township:authoring
+      - name: TS Tauri bridge
+        working-directory: clients/lattice-client
+        run: npm run tauri:bridge
+      - name: Tauri native command core
+        working-directory: clients/township-tauri-shell/src-tauri
+        run: cargo test
+      - name: TS carrier Township check
+        working-directory: clients/lattice-client
+        run: npm run carrier:township
+      - name: TS live carrier Township check
+        working-directory: clients/lattice-client
+        run: npm run carrier:township:live
       - name: Credo (strict)
         run: mix credo --strict
       - name: Sobelow (lattice_server)

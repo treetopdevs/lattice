@@ -1,0 +1,31 @@
+{
+  "name": "@treetopdevs/township-tauri-shell",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prebuild": "npm --prefix ../lattice-client run build",
+    "build": "vite build",
+    "dev": "vite --host 127.0.0.1",
+    "typecheck": "vue-tsc --noEmit",
+    "frontend:contract": "node --test test/frontend_shell.mjs",
+    "native:contract": "tsx test/native_workflow.ts",
+    "action:contract": "tsx test/township_actions.ts",
+    "peer:contract": "tsx test/township_carrier_peer.ts",
+    "sync:contract": "tsx test/township_sync.ts",
+    "live:contract": "tsx test/township_live_peer.ts"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.11.1",
+    "@treetopdevs/lattice-client": "file:../lattice-client",
+    "vue": "^3.5.39"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.7",
+    "tsx": "^4.23.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.1.3",
+    "vue-tsc": "^3.3.6"
+  },
+  "license": "Apache-2.0"
+}

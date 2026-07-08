@@ -10,14 +10,29 @@
 # `PEER_READY <port>` for the parent to connect to. It halts on a `shutdown`
 # protocol message or when stdin closes (the parent died).
 
-[realm, trusted_peer_realm, trusted_peer_pubkey_b64] = System.argv()
+{realm, trusted_peer_realm, trusted_peer_pubkey_b64, scenario} =
+  case System.argv() do
+    [realm, trusted_peer_realm, trusted_peer_pubkey_b64] ->
+      {realm, trusted_peer_realm, trusted_peer_pubkey_b64, LatticeNodeSpike.Scenario}
 
-{:ok, _} = Application.ensure_all_started(:crypto)
-{:ok, _} = Application.ensure_all_started(:jason)
-{:ok, _} = Application.ensure_all_started(:cowboy)
+    [realm, trusted_peer_realm, trusted_peer_pubkey_b64, scenario_name] ->
+      scenario = Module.concat([scenario_name])
+      Code.ensure_loaded!(scenario)
+      {realm, trusted_peer_realm, trusted_peer_pubkey_b64, scenario}
+  end
 
-identity = Lattice.Identity.from_seed(realm, "carrier-spike")
-{:ok, peer} = LatticeNodeSpike.Peer.start_link(realm: realm, identity: identity)
+{:ok, _} = Application.ensure_all_started(:lattice_node_spike)
+
+identity =
+  if function_exported?(scenario, :session_identity, 1) do
+    scenario.session_identity(realm)
+  else
+    Lattice.Identity.from_seed(realm, "carrier-spike")
+  end
+
+{:ok, peer} =
+  LatticeNodeSpike.Peer.start_link(realm: realm, identity: identity, scenario: scenario)
+
 trusted_peer_pubkey = Base.decode64!(trusted_peer_pubkey_b64)
 
 {:ok, port} =

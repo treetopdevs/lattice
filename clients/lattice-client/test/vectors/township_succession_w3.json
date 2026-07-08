@@ -1,0 +1,145 @@
+{
+  "expectAtFrontier": [],
+  "expectAtFullFrontier": {
+    "quarantine": [
+      "PNr-ZXuSWLJ2pOuVD860KIlfs4JyBLqz_i--_nFrgf0"
+    ],
+    "state": {
+      "clerk": "resident",
+      "clerk_locked": true,
+      "members": [],
+      "posts": [
+        "a durable civic record"
+      ],
+      "summary": "",
+      "title": ""
+    },
+    "winners": {
+      "clerk": "SGQsgvfW3hl9BMbQePmcTHEBpmowcs0vnqPbjfZZfiE",
+      "clerk_locked": "La14iFUUIkLyRtrNaISfp5vitwXRCfAP4V4FdvazRr8",
+      "summary": null,
+      "title": null
+    }
+  },
+  "generatedBy": "Lattice.Sim",
+  "ops": [
+    {
+      "author": "clerk",
+      "command": "genesis clerk",
+      "deps": [],
+      "field": "clerk",
+      "hash": "AQCg9_bVUlfwnYbQsZBLbABws-RePXT5y8GPTetUfnQ",
+      "id": "AQCg9_bVUlfwnYbQsZBLbABws-RePXT5y8GPTetUfnQ",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "clerk"
+    },
+    {
+      "author": "clerk",
+      "command": "grant resident",
+      "deps": [
+        "AQCg9_bVUlfwnYbQsZBLbABws-RePXT5y8GPTetUfnQ"
+      ],
+      "field": "__authority",
+      "hash": "RxB5j-q34crpGzqIcW_PDuXrvkM0oREhv0UiHcTdkoo",
+      "id": "RxB5j-q34crpGzqIcW_PDuXrvkM0oREhv0UiHcTdkoo",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "clerk",
+      "command": "post",
+      "deps": [
+        "RxB5j-q34crpGzqIcW_PDuXrvkM0oREhv0UiHcTdkoo"
+      ],
+      "field": "posts",
+      "hash": "ldP-UDL3_EvV-syeMVBoan74nzv2OIIW6q9yM-kPIi0",
+      "id": "ldP-UDL3_EvV-syeMVBoan74nzv2OIIW6q9yM-kPIi0",
+      "kind": "command",
+      "mutation": "append",
+      "value": "a durable civic record"
+    },
+    {
+      "author": "clerk",
+      "command": "authority",
+      "deps": [
+        "ldP-UDL3_EvV-syeMVBoan74nzv2OIIW6q9yM-kPIi0"
+      ],
+      "field": "__authority",
+      "hash": "KOELUxMk1sKEfZKCtsi0bquJEKXKcSULKyC4vDshowI",
+      "id": "KOELUxMk1sKEfZKCtsi0bquJEKXKcSULKyC4vDshowI",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "clerk",
+      "command": "close_matter",
+      "deps": [
+        "KOELUxMk1sKEfZKCtsi0bquJEKXKcSULKyC4vDshowI"
+      ],
+      "field": "clerk_locked",
+      "hash": "PNr-ZXuSWLJ2pOuVD860KIlfs4JyBLqz_i--_nFrgf0",
+      "id": "PNr-ZXuSWLJ2pOuVD860KIlfs4JyBLqz_i--_nFrgf0",
+      "kind": "command",
+      "mutation": "write",
+      "value": true
+    },
+    {
+      "author": "resident",
+      "command": "succeed clerk",
+      "deps": [
+        "KOELUxMk1sKEfZKCtsi0bquJEKXKcSULKyC4vDshowI"
+      ],
+      "field": "clerk",
+      "hash": "SGQsgvfW3hl9BMbQePmcTHEBpmowcs0vnqPbjfZZfiE",
+      "id": "SGQsgvfW3hl9BMbQePmcTHEBpmowcs0vnqPbjfZZfiE",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "resident"
+    },
+    {
+      "author": "resident",
+      "command": "close_matter",
+      "deps": [
+        "SGQsgvfW3hl9BMbQePmcTHEBpmowcs0vnqPbjfZZfiE"
+      ],
+      "field": "clerk_locked",
+      "hash": "La14iFUUIkLyRtrNaISfp5vitwXRCfAP4V4FdvazRr8",
+      "id": "La14iFUUIkLyRtrNaISfp5vitwXRCfAP4V4FdvazRr8",
+      "kind": "command",
+      "mutation": "write",
+      "value": true
+    }
+  ],
+  "perspectives": [],
+  "scenario": "township_succession_w3",
+  "schema": {
+    "fields": {
+      "clerk": {
+        "authority": "clerk"
+      },
+      "clerk_locked": {
+        "default": false,
+        "gatedBy": "clerk",
+        "merge": "lww"
+      },
+      "members": {
+        "merge": "or_set"
+      },
+      "posts": {
+        "merge": "causal_list"
+      },
+      "summary": {
+        "default": "",
+        "merge": "lww"
+      },
+      "title": {
+        "default": "",
+        "merge": "lww"
+      }
+    },
+    "name": "Township.Matter"
+  }
+}

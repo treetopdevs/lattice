@@ -33,8 +33,59 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 012 | (design) Visualize v2 Replica op-DAGs | P3 | S–M | — | DONE |
 | 013 | (spike) Log compaction (Sedimentree) feasibility | P3 | L–XL | 005, 010 (rec.) | DONE (GATE met — ADR 0006; throwaway prototype in `lattice_core` test/support; production integration not built, gated on carrier ack) |
 | M2 | Real carrier hardening | P1 | XL | 010, 013 | DONE (canonical bytes, auth sessions, checked batching, outbound partial sync; backoff, acks, and browser log-store are tested helpers awaiting production loops) |
+| 014 | Property-test carrier determinism (canonical/wire/batch/session) + fix delegation/map wire sort | P1 | M | — | DONE |
+| 015 | Remove O(n²) `Batch.merge_reports` on the real carrier push path | P2 | S | 014 (rec.) | DONE |
+| 016 | Remove O(n²) `Authority` heartbeat timeline append (per-state-read hot path) | P2 | M | 014 (rec.) | DONE |
+| 017 | (design/spike) Run Township W0–W3 over the real carrier — exit gate **G1** | P1 | M | — | DONE (BEAM carrier G1 accepted; see `docs/township_g1_carrier.md`) |
+| 018 | Carrier observability: structured logging + telemetry on connect/auth/sync | P3 | M | — | DONE |
+| 019 | TS client oracle exporter: Sim-generated vectors for Phase B1 | P1 | M | 017 (rec.) | DONE |
+| 020 | TS client randomized Sim conformance + CI wiring for Phase B2 | P1 | M | 019 | DONE |
+| 021 | TS carrier W1 vector adapter: session bytes, carrier-frame decode, CI check | P1 | M | 020 | DONE (live WebSocket TS process remains C3 follow-up) |
+| 022 | TS live WebSocket carrier W1: real TS↔BEAM sync over `LatticeNodeSpike.WsHandler` | P1 | M | 021 | DONE |
+| 023 | TS canonical op parity: `lattice-cbor-v1` bytes/hash for carrier-frame ops | P1 | M | 022 | DONE |
+| 024 | TS received-op verification: local Ed25519 checks for W1 carrier frames | P1 | S | 023 | DONE |
+| 025 | TS carrier-op authoring primitive: sign a BEAM-accepted W1 command frame | P1 | S | 024 | DONE |
+| 026 | TS Township command authoring: compose Matter command body/cap terms | P1 | S | 025 | DONE |
+| 027 | TS Township cap selection: choose command cap from local delegations | P1 | S | 026 | DONE |
+| 028 | TS Township frontier deps: author command from local op frontier | P1 | S | 027 | DONE |
+| 029 | TS local op-log persistence seam: JSON store for shell storage | P1 | S | 028 | DONE |
+| 030 | TS carrier frame outbox persistence: JSON store for pushable frames | P1 | S | 029 | DONE |
+| 031 | TS carrier delegation extraction: recover caps from persisted frames | P1 | S | 030 | DONE |
+| 032 | TS Township author-and-persist workflow: one shell-facing command path | P1 | S | 031 | DONE |
+| 033 | TS Tauri bridge: async key custody and invoke-backed storage | P1 | S | 032 | DONE |
+| 034 | Tauri native command core: Rust storage and signer commands | P1 | M | 033 | DONE |
+| 035 | Tauri builder command registration | P1 | S | 034 | DONE |
+| 036 | Tauri native carrier key lifecycle | P1 | S | 035 | DONE |
+| 037 | Tauri secure carrier key persistence seam | P1 | M | 036 | DONE |
+| 038 | Tauri platform-secure app builder helper | P1 | S | 037 | DONE |
+| 039 | Tauri platform-secure app construction helper | P1 | S | 038 | DONE |
+| 040 | Tauri runtime config and entrypoint | P1 | M | 039 | DONE |
+| 041 | Tauri Vue frontend asset shell | P1 | M | 040 | DONE |
+| 042 | Tauri Vue native invoke workflow | P1 | S | 041 | DONE |
+| 043 | Tauri Vue author-and-persist post action | P1 | M | 042 | DONE |
+| 044 | Tauri Vue carrier sync outbox | P1 | M | 043 | DONE |
+| 045 | Tauri Vue WebSocket carrier peer config | P1 | M | 044 | DONE |
+| 046 | Tauri shell live BEAM peer sync | P1 | M | 045 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
+
+## Round 2 (deep audit, 2026-07-07, against commit `6b2cfe5`)
+
+A second `improve deep` pass ran after the M2 carrier + Township overlay landed.
+The nine-category audit found the M2 code is well-hardened (the correctness sweep
+turned up only one cosmetic wire-determinism nit, folded into 014). The five new
+plans above target the genuinely load-bearing gaps that opened with the real
+carrier and the civic overlay. Recommended execution order:
+
+1. **014** first — determinism is the crown-jewel invariant and the M2 encode/
+   wire/batch/session layer has only example-based tests. It also hardens 015/016.
+2. **015** — a clean, low-risk linear-time fix on the real push path.
+3. **016** — same class of fix in `Authority`, but delicate (positional readers
+   depend on `acquires` chronological order — the plan documents the trap); MED risk.
+4. **017** — discharges exit gate **G1** (Township on two physical BEAM nodes over
+   the real carrier). Independent of the perf/test plans; completed by
+   `apps/lattice_node_spike/test/township_carrier_test.exs`.
+5. **018** — observability; pairs naturally with 017's multi-node runs.
 
 **Historical execution order**: 001 → 002 → 003 → 004 (the DX/CI foundation; all small,
 low-risk, and they made every later change safer to verify). Then 005, 006 (v2 engine
@@ -94,9 +145,100 @@ as follow-ups (see the config comments for exact suppressions):
   (dev/test only) — umbrella-root deps are not visible as Mix tasks inside child apps,
   so plan 003's "dep is available umbrella-wide" premise did not hold for task discovery.
 
+## Round 2 dependency notes (plans 014–018)
+
+- **014 recommended before 015 and 016** — its batch-order and convergence/
+  quarantine properties are the guard that makes both perf refactors safe to
+  verify. It is now complete; it added the expected delegation sort plus a
+  RED-discovered map-pair sort in the wire frame encoder.
+- **017 (G1) is independent** of 014–016/018 and can run in parallel; it must not
+  modify `Township.Matter`, `Lattice.Attestation`, or `Lattice.Carrier` (that
+  portability is what G1 proves — see the plan's STOP conditions). 017 is now
+  complete for two BEAM nodes; 014 now guards broader carrier determinism claims.
+- **018 pairs with 017** — the sync telemetry from 018 is a natural consumer for
+  017's multi-node GATE test, but neither blocks the other.
+
 ## Findings considered and rejected
 
 Recorded so they are not re-audited next run. Each was opened and read during vetting.
+
+### Round 2 (deep audit, 2026-07-07)
+
+- **"Wire signature verification breaks for map-bodied ops" (audit SECURITY-08)** —
+  REJECTED (false positive, empirically disproven). `Op.valid?/1`
+  (`apps/lattice_core/lib/lattice/op.ex:86-88`) re-derives canonical bytes from the
+  **decoded** Elixir term via `Canonical.op_payload/1`, and the canonical encoder
+  sorts map keys (`canonical.ex:132-139`). Elixir maps are unordered, so the wire
+  frame's map-pair ordering cannot affect verification. A round-trip check
+  (encode → decode → `Op.valid?` + canonical-byte equality) passes for map/mapset/
+  nested bodies. The real, worthwhile item here is the **missing round-trip property
+  test** → captured as plan 014.
+- **`deliver_loop` per-epoch `Enum.reverse` (audit PERF-03)** — REJECTED. This
+  re-reports the already-rejected `deliver_loop` finding from round 1; the per-epoch
+  reverse (`sync.ex:110`) is not the dominant cost and the designed delivery path is
+  dep-respecting. Not worth doing.
+- **Cowboy `~> 2.12` constraint "excludes" locked 2.14.2 (audit DEPS-03)** —
+  REJECTED (auditor error). `~> 2.12` means `>= 2.12.0 and < 3.0.0`; 2.14.2 is in
+  range. No drift; no action.
+- **Wire delegation `ops`/`roles` unsorted (audit CORRECTNESS-01)** — VALID but
+  cosmetic (decode rebuilds a `MapSet`; signature verifies over sorted canonical
+  bytes, so it is functionally harmless today). NOT a standalone plan — folded as a
+  one-line drive-by fix into plan 014.
+- **Unbounded `Log.quarantine` growth from a malicious peer (audit SECURITY-11)** —
+  DEFERRED (POC-scoped, auth-gated). The peer handler rejects all messages before a
+  signed session (`ws_handler.ex:74-80`), so only a *trusted* peer could flood
+  forged-sig ops into the unbounded `log.quarantine` list (`log.ex:34,159`). A real
+  "path to real" hardening item (bounded/evicting quarantine), but out of scope for
+  the single-node in-memory POC per `docs/threat_model_v2.md`. Revisit before any
+  adversarial multi-node deployment.
+- **No WS frame rate limiting (SECURITY-13), unbounded partial-sync closure
+  (SECURITY-12), delegation sig not re-verified at wire decode (SECURITY-14),
+  session challenge missing local-replica binding (SECURITY-15)** — DEFERRED.
+  SECURITY-12 is conditional on shapes being used over the carrier (they are not
+  yet); SECURITY-14 is defense-in-depth (authority quarantines the bad delegation
+  anyway); SECURITY-13/15 are POC-accepted transport hardening. Note for the M3/
+  path-to-real hardening pass, not this round.
+- **`Authority.analyze` re-topo-sorts on the live path (audit PERF-02)** —
+  NOT SELECTED. `delegation_active?/1` and `revoked?/1` (`authority.ex:180,196`)
+  each call `Log.topo_ops/1` per live-path check; real but lower-leverage than the
+  per-state-read timeline quadratic (plan 016). Optimize if live-path profiling
+  shows it matters.
+- **Canonical re-encode caching (PERF-05), Sim `converge` loop (PERF-06)** —
+  NOT SELECTED. PERF-05 needs profiling to justify a cached `canonical_bytes` field
+  (memory tradeoff); PERF-06 is test-harness-only DX cost. Investigate-grade, not
+  planned.
+- **Superseded `lattice_carrier_spike` app (audit TECHDEBT-01 / DEPS-01)** —
+  NOT PLANNED (decision item). It is **not** dead code — it is a leaf umbrella app
+  that still compiles and runs its own `browser_carrier_spike_test.exs` in CI — but
+  it is the plan-010 predecessor to `lattice_node_spike` and still pulls
+  `web_socket_dist` + `tcp_filter_dist` (~5 transitive web deps: bandit, mint,
+  mint_web_socket, websock_adapter). Now that M2/`lattice_node_spike` settled the
+  carrier, decide: keep as the browser-carrier exploration, or delete it and its git
+  deps. Needs an owner decision, not a mechanical plan.
+- **Umbrella siblings in `extra_applications` (audit TECHDEBT-03)** — VALID but
+  trivial. `apps/lattice_demo/mix.exs:21` and `apps/lattice_stress/mix.exs:21` list
+  `:lattice_core`/`:lattice_server`/`:lattice_demo` in `extra_applications` though
+  they are already umbrella `deps` (harmless redundancy; `:logger` should be the only
+  entry). S/LOW-value cleanup; do it opportunistically, not worth a dedicated plan.
+- **Diverged `test_tab_client` copies (TECHDEBT-02), missing Township attestation
+  integration test (TECHDEBT-05), carrier helpers lack production loops
+  (TESTS-01/TECHDEBT-04), WsCarrier lacks chaos/fault injection (TESTS-02)** —
+  DEFERRED. All real but medium-value and partly subsumed by plan 017 (once Township
+  runs over the real carrier, the backoff/membership/ack helpers get their
+  integration loop and the attestation seam gets exercised end-to-end).
+- **Jason → stdlib `JSON` migration (audit DEPS-02)** — NOT SELECTED. Elixir 1.19
+  ships a built-in `JSON`, so Jason is removable (~6 files, `Jason.DecodeError` →
+  error-tuple handling). Mechanical M-effort cleanup with MED risk (error-shape
+  change); no urgency (Jason is stable, no advisories). Optional; not planned.
+- **Doc/DX polish (audit DX-01/DX-02, DOCS-03/DOCS-06)** — NOT PLANNED as standalone
+  work. `AGENTS.md` layout table omits `lattice_node_spike`; `lattice_poc_status.md`
+  has no M2/Township checkpoint; the `township_demo.exs` stale caveat is fixed inside
+  plan 017 (Step 4). Trivial doc updates; fold into whatever change next touches
+  those files.
+- **`npm audit` / `mix hex.audit`** — the security sweep ran these read-only and
+  surfaced no critical/high advisories on the runtime dependency set worth a plan.
+
+### Round 1 (2026-06-20)
 
 - **Static-handler path traversal (audit SECURITY-05)** — REJECTED (false positive).
   `apps/lattice_server/lib/lattice_server/static_handler.ex` resolves the served file via
