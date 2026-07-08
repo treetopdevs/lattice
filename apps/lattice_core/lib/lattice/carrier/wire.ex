@@ -140,7 +140,7 @@ defmodule Lattice.Carrier.Wire do
     Enum.map(pairs, fn {id, reason} -> [id, Atom.to_string(reason)] end)
   end
 
-  defp decode_reason_pairs(pairs) do
+  defp decode_reason_pairs(pairs) when is_list(pairs) do
     Enum.reduce_while(pairs, {:ok, []}, fn
       [id, reason], {:ok, acc} when is_binary(id) and is_binary(reason) ->
         case existing_atom(reason) do
@@ -156,6 +156,8 @@ defmodule Lattice.Carrier.Wire do
       {:error, _reason} = error -> error
     end
   end
+
+  defp decode_reason_pairs(_pairs), do: {:error, :malformed_term}
 
   defp string_list?(values), do: is_list(values) and Enum.all?(values, &is_binary/1)
 

@@ -21,6 +21,8 @@ defmodule LatticeNodeSpike.WsCarrier do
   alias LatticeNodeSpike.Wire, as: NodeWire
 
   @recv_timeout 10_000
+  @max_push_ops 64
+  @max_push_bytes 64_000
 
   @enforce_keys [:client]
   defstruct [:client, last_push_batches: []]
@@ -117,9 +119,9 @@ defmodule LatticeNodeSpike.WsCarrier do
     entries = Enum.map(ops, &encode_entry/1)
 
     case Batch.chunk(entries,
-           max_ops: 64,
-           max_bytes: 64_000,
-           size_fun: fn {_encoded, bytes} -> bytes end
+           max_ops: @max_push_ops,
+           max_bytes: push_payload_budget(),
+           size_fun: &push_entry_budget_bytes/1
          ) do
       {:ok, batches} ->
         case push_batches(conn, batches, [], []) do
@@ -130,8 +132,8 @@ defmodule LatticeNodeSpike.WsCarrier do
             error
         end
 
-      {:error, _reason} = error ->
-        error
+      {:error, reason} ->
+        {:error, push_chunk_error(reason)}
     end
   end
 
@@ -168,6 +170,22 @@ defmodule LatticeNodeSpike.WsCarrier do
     encoded = NodeWire.encode(op)
     {encoded, encoded |> Jason.encode!() |> byte_size()}
   end
+
+  defp push_payload_budget, do: @max_push_bytes - push_frame_overhead()
+
+  defp push_frame_overhead do
+    %{type: "push", ops: []}
+    |> Jason.encode!()
+    |> byte_size()
+  end
+
+  defp push_entry_budget_bytes({_encoded, bytes}), do: bytes + 1
+
+  defp push_chunk_error({:oversized_item, size, _budget}) do
+    {:oversized_item, size + push_frame_overhead(), @max_push_bytes}
+  end
+
+  defp push_chunk_error(reason), do: reason
 
   defp authenticate(%__MODULE__{} = conn, session) do
     challenge =

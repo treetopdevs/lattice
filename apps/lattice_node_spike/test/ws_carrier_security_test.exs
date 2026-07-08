@@ -1,7 +1,7 @@
 defmodule LatticeNodeSpike.WsCarrierSecurityTest do
   use ExUnit.Case, async: false
 
-  alias Lattice.Identity
+  alias Lattice.{Identity, Op}
   alias Lattice.Transport.WebSocket.Client
   alias LatticeNodeSpike.{Peer, PeerServer, WsCarrier}
 
@@ -80,6 +80,32 @@ defmodule LatticeNodeSpike.WsCarrierSecurityTest do
     op = Lattice.Op.new(node_b, @replica, [], :command, {:post, String.duplicate("x", 70_000)})
 
     assert {:error, {:oversized_item, _bytes, 64_000}} = WsCarrier.push(conn, [op])
+    :ok = WsCarrier.close(conn)
+  end
+
+  test "push batches keep the complete request frame within the byte budget" do
+    port = start_peer_server()
+    node_b = identity("node_b")
+    node_a = identity("node_a")
+
+    assert {:ok, conn} =
+             WsCarrier.connect(
+               port: port,
+               identity: node_b,
+               realm: "node_b",
+               peer_realm: "node_a",
+               peer_pubkey: node_a.pub,
+               replica: @replica
+             )
+
+    ops =
+      for i <- 1..80 do
+        Op.new(node_b, @replica, [], :command, {:post, String.duplicate("x", 542) <> "#{i}"})
+      end
+
+    assert {:ok, _report, conn} = WsCarrier.push(conn, ops)
+    assert Enum.all?(WsCarrier.last_push_batches(conn), &(&1.bytes <= 64_000))
+
     :ok = WsCarrier.close(conn)
   end
 

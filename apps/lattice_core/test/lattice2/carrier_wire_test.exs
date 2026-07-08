@@ -128,6 +128,17 @@ defmodule Lattice.CarrierWireTest do
                "rejected" => [],
                "pending" => []
              })
+
+    for field <- ["quarantined", "rejected"] do
+      frame = %{
+        "accepted" => [],
+        "quarantined" => [],
+        "rejected" => [],
+        "pending" => []
+      }
+
+      assert {:error, :malformed_term} = frame |> Map.put(field, 123) |> Wire.decode_report()
+    end
   end
 
   test "stats frame is JSON-safe" do
