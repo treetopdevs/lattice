@@ -70,8 +70,8 @@ Framework-agnostic; the shared spine both the Expo and Tauri shells consume.
 | Path | What it is | Status |
 |---|---|---|
 | `clients/lattice-client/src/{op,dag,schema,crdt/reducers,quarantine,materialize,sync,carrier}.ts` | **Tier A** — the reducer (DAG, 3 CRDTs, the single V-01 quarantine predicate, materialize, sync) plus the carrier-frame/session adapter and carrier-term delegation extraction. Encoding-independent for op ids; carrier session bytes are signed through an injected shell/key-custody signer. | **Real & verified**: strict typecheck clean, Sim-generated conformance green, carrier W1 vector check green, live TS↔BEAM WebSocket W1 green. |
-| `clients/lattice-client/src/{codec,identity,township,local_log,tauri_bridge}.ts` | **Tier B/E1 bridge** — canonical `lattice-cbor-v1` bytes + Ed25519 signing. `codec.ts` verifies carrier-frame op bytes/hashes/signatures against BEAM and can author/sign frames; `township.ts` builds `Township.Matter` command body/cap terms, selects a matching local delegation cap extracted from carrier frames, derives deps from the local op frontier, and exposes an author-and-persist workflow; `local_log.ts` persists semantic ops and pushable carrier frames through shell key-value seams; `tauri_bridge.ts` adapts Tauri-style `invoke` commands to storage, async native signing, and native public-key discovery. | **Partially real**: Phase D1 parity, received-op verification, W1 command-frame authoring, Township command body/cap composition, carrier delegation extraction, local delegation cap selection, local frontier deps, JSON local-log persistence, carrier-frame outbox persistence, a shell-facing author-and-persist workflow, async carrier-session signing, invoke-backed Tauri storage/signer bridges, native Rust command registration, native key lifecycle discovery, the desktop keyring persistence seam, platform-secure app builder/construction helpers, a compile-checked Tauri runtime/config entrypoint, a Vite/Vue frontend asset shell that consumes the reducer, a Vue native-invoke storage/signing probe, a cap-gated Vue post action, a Vue carrier sync action over the existing carrier sync contract, WebSocket carrier peer config/session wiring, and live BEAM peer sync through the shell workflow are proven; live Tauri app window launch against a configured peer, onboarding/cap issuance, broader author actions, and mobile secure-store strategy remain. |
-| `clients/township-tauri-shell` | **E1 Tauri shell** — Vue 3.5 frontend plus Rust native command core for shell-side storage/signing commands (`lattice_kv_get`, `lattice_kv_set`, `lattice_ensure_carrier_key`, `lattice_public_key`, `lattice_sign_carrier`). | **Partially real**: Rust Ed25519 command core matches the W1 TS carrier-session public key/signature and key-value command semantics; a Tauri builder helper registers the native commands and is proven through mock IPC; native state can create/reuse an OS-random carrier key by ID without exposing private key material to TS; a `keyring`-backed seed store gives desktop shells a secure persistence seam; platform-secure builder and app-construction helpers wire those commands to the desktop keyring-backed state through a stable service name and supplied Tauri context; `tauri.conf.json`, Tauri build-script wiring, `run()`, and a binary entrypoint compile against the real Tauri Wry runtime; the Vue asset shell renders a reducer-backed zoning-variance matter preview, calls native invoke-backed storage/signing through a tested device-key probe, exposes a cap-gated post action that persists the signed W1 frame when local delegation evidence exists, exposes a tested carrier sync control that can push/pull through an injected carrier client while persisting the merged local log, can parse Vite peer config, authenticate a WebSocket carrier session with the native signer, verify the peer hello through WebCrypto Ed25519, and sync once against a real BEAM Township peer through that configured shell workflow; live Tauri app window launch against a real configured BEAM peer, onboarding/cap issuance, mobile secure-store strategy, and app convergence remain. |
+| `clients/lattice-client/src/{codec,identity,township,local_log,tauri_bridge}.ts` | **Tier B/E1 bridge** — canonical `lattice-cbor-v1` bytes + Ed25519 signing. `codec.ts` verifies carrier-frame op bytes/hashes/signatures against BEAM and can author/sign frames; `township.ts` builds `Township.Matter` command body/cap terms, selects a matching local delegation cap extracted from carrier frames, derives deps from the local op frontier, and exposes an author-and-persist workflow; `local_log.ts` persists semantic ops and pending carrier-frame outbox entries through shell key-value seams; `tauri_bridge.ts` adapts Tauri-style `invoke` commands to storage, async native signing, and native public-key discovery. | **Partially real**: Phase D1 parity, received-op verification, W1 command-frame authoring, Township command body/cap composition, carrier delegation extraction, local delegation cap selection, local frontier deps, JSON local-log persistence, pending carrier-frame outbox persistence with ack compaction and a legacy evidence fallback, TS delegation issuance for a BEAM-matching W1 grant frame, a shell-facing author-and-persist workflow, async carrier-session signing, invoke-backed Tauri storage/signer bridges, native Rust command registration, native key lifecycle discovery, the desktop keyring persistence seam, platform-secure app builder/construction helpers, a compile-checked Tauri runtime/config entrypoint, a Vite/Vue frontend asset shell that consumes the reducer, a Vue native-invoke storage/signing probe, cap-gated Vue post, summary, close, reopen, admit, and remove-member actions, cap-aware Vue action availability, a Vue carrier sync action over the existing carrier sync contract, WebSocket carrier peer config/session wiring, live BEAM peer sync through the shell workflow, and a smoke-only live Tauri window launch against a configured BEAM peer are proven; onboarding/cap persistence ceremony, mobile secure-store strategy, and app convergence remain. |
+| `clients/township-tauri-shell` | **E1 Tauri shell** — Vue 3.5 frontend plus Rust native command core for shell-side storage/signing commands (`lattice_kv_get`, `lattice_kv_set`, `lattice_ensure_carrier_key`, `lattice_public_key`, `lattice_sign_carrier`). | **Partially real**: Rust Ed25519 command core matches the W1 TS carrier-session public key/signature and key-value command semantics; a Tauri builder helper registers those commands and is proven through mock IPC; native state can create/reuse an OS-random carrier key by ID without exposing private key material to TS; a `keyring`-backed seed store gives desktop shells a secure persistence seam; platform-secure builder and app-construction helpers wire those commands to the desktop keyring-backed state through a stable service name and supplied Tauri context; `tauri.conf.json`, Tauri build-script wiring, `run()`, and a binary entrypoint compile against the real Tauri Wry runtime; the Vue asset shell renders a reducer-backed zoning-variance matter preview, calls native invoke-backed storage/signing through a tested device-key probe, exposes a generic command submission path plus cap-gated post, summary, close, reopen, admit, and remove-member actions that persist signed W1-compatible frames when local delegation evidence exists, renders tested cap-aware action availability from local delegation evidence, exposes a tested carrier sync control that can push/pull through an injected carrier client while persisting the merged local log, retaining delegation evidence, and compacting accepted or peer-known pending outbox frames, can parse Vite peer config, authenticate a WebSocket carrier session with the native signer, verify the peer hello through WebCrypto Ed25519, sync once against a real BEAM Township peer through that configured shell workflow, and launch the real Tauri window in a smoke harness that proves auto-sync opens and closes a carrier session; production onboarding/cap persistence ceremony, mobile secure-store strategy, and app convergence remain. |
 | `clients/lattice-client/test/conformance.ts` + `test/vectors/*.json` | The harness that pins the TS reducer to Sim. | **Real**; W0, W1/W2 + perspectives, W3, and five seeded randomized vectors are generated by `lattice.export_vectors`. |
 | `clients/lattice-client/test/carrier.ts` | The C3 carrier-vector harness: BEAM-compatible session transcript/signature check, full carrier-frame decoding, and W1 merge/materialization against the Sim oracle. | **Real**; `npm run carrier:township` is wired in CI. |
 | `clients/lattice-client/test/live_carrier.ts` | The live C3 harness: spawns the BEAM Township peer process, authenticates over WebSocket, pulls/pushes carrier frames, and compares both TS materialization and BEAM peer state to the Sim oracle. | **Real**; `npm run carrier:township:live` is wired in CI. |
@@ -157,7 +157,14 @@ Two hard blockers gate the endgame: **CBOR/ADR-P08** (everything non-BEAM) and *
    platform-secure builder/app-construction helpers for app bootstrap, compile a real Tauri
    runtime/config entrypoint, build a Vue asset shell that materializes a Township matter through
    the reducer, exercise native invoke-backed storage/signing from the Vue screen through a
-   probe, persist a cap-gated post action when local delegation evidence exists, run a Vue sync action that pushes/pulls the persisted outbox through the carrier contract with an injected carrier client, and build a WebSocket carrier session from Vite peer config; non-BEAM browser/phone shells still need live app launch against a real configured peer, onboarding/cap issuance, mobile secure persistence, and app wiring before
+  probe, persist cap-gated post and summary actions when local delegation evidence exists, render
+  cap-aware command availability from the same local delegation evidence with a legacy
+  carrier-frame fallback when the split evidence store is empty, run a Vue sync action
+   that pushes/pulls the persisted outbox through the carrier contract with an injected carrier
+   client, build a WebSocket carrier session from Vite peer config, sync that shell workflow against
+   a live BEAM peer, and smoke-launch the real Tauri window against a configured peer with
+   debug-seeded key custody; non-BEAM browser/phone shells still need production onboarding/cap
+   persistence ceremony, mobile secure persistence, and app convergence before
    they are user-facing equivalent carrier peers.
 6. **Receipt-freeness is not real** (W4). `Attestation.Stub` is `receipt_free? = false` by
    design; do not let anything claim otherwise before M4.
@@ -206,11 +213,12 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   workflow, async carrier-session signing, Tauri-style invoke storage/signing bridges, a
   registered Rust native command core, native key lifecycle discovery, a desktop keyring-backed
   persistence seam, platform-secure app builder/construction helpers, a compile-checked Tauri
-  runtime/config entrypoint, first Vue frontend asset shell, native-invoke UI probe, and cap-gated
-  post action, Vue carrier sync outbox action, WebSocket peer config/session wiring, and live BEAM
-  peer sync through the shell workflow are covered by plans 023–046; live Tauri app window launch
-  against a real configured peer, onboarding/cap issuance,
-  mobile secure persistence, and app wiring remain
+  runtime/config entrypoint, first Vue frontend asset shell, native-invoke UI probe, cap-gated
+  post, summary, close, and reopen actions, cap-aware action availability, Vue carrier sync outbox action,
+  WebSocket peer config/session wiring, live BEAM peer sync through the shell workflow, and a
+  smoke-only live Tauri window launch, cap-gated member-management actions, and pending-outbox ack
+  compaction and TS delegation issuance are covered by plans 023–053; production onboarding/cap persistence, mobile secure
+  persistence, and app convergence remain
   Tier B/application-shell work.
 
 ### Phase D — Cross the runtime boundary (CBOR, the first hard blocker)
@@ -250,10 +258,19 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   and signing through a device-key probe, plan 043 proves a cap-gated Vue post action persists
   the exact signed W1 frame when local delegation evidence exists, plan 044 proves a carrier sync
   outbox action over the existing sync contract, plan 045 proves Vite-configured WebSocket
-  carrier session wiring, and plan 046 proves the configured shell sync workflow against a live
-  BEAM Township peer. The remaining shell gaps are onboarding/cap issuance, broader author
-  actions, a live Tauri window smoke launch against a real configured peer, the mobile
-  secure-store strategy, and real Tauri/Expo app convergence.
+  carrier session wiring, plan 046 proves the configured shell sync workflow against a live BEAM
+  Township peer, and plan 047 proves the real Tauri window can launch against a configured peer and
+  auto-sync far enough to open and close a carrier session, plan 048 generalizes the shell
+  authoring wrapper and proves a cap-gated Vue summary action against the exact W1 summary frame,
+  and plan 049 proves a Vue action-availability model that derives command-level caps from
+  persisted carrier-frame delegation evidence, plan 050 proves cap-gated Vue close/reopen
+  matter-status actions against the clerk delegation path, and plan 051 proves cap-gated Vue
+  admit/remove-member actions against resident and clerk delegation paths, plan 052 splits
+  delegation evidence from the pending outbox, keeps a legacy fallback for pre-split local stores,
+  and compacts accepted or peer-known carrier frames, and plan 053 authors a BEAM-matching
+  Township grant frame for TS-side delegation issuance.
+  The remaining shell gaps are production onboarding/cap persistence ceremony, the mobile secure-store
+  strategy, and real Tauri/Expo app convergence.
 
 ### Phase E — The shells (apps)
 - **E1.** **Tauri v2 shell** (recommended spine): Vue 3.5 frontend + Rust core (key custody, CBOR,
@@ -262,11 +279,12 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   **Status:** started: the TS bridge, Rust command core, Tauri command registration, native
   carrier-key lifecycle, desktop keyring persistence seam, platform-secure builder/app-construction
   helpers, compile-checked Tauri runtime/config entrypoint, first Vue frontend asset shell,
-  native-invoke UI probe, cap-gated post action, injected-carrier sync outbox action, WebSocket
-  carrier peer config/session wiring, and live BEAM peer sync through the configured shell
-  workflow exist and are vector-/mock-IPC/browser-smoke/live-peer-tested; onboarding/cap issuance,
-  mobile secure-store choice, live Tauri window launch against a real configured peer, and live app
-  convergence are not done.
+  native-invoke UI probe, cap-gated post, summary, close, reopen, admit, and remove-member actions, cap-aware action availability,
+  injected-carrier sync outbox action, WebSocket carrier peer config/session wiring, live BEAM
+  peer sync through the configured shell workflow, and smoke-only live Tauri window launch against
+  a configured BEAM peer exist and are vector-/mock-IPC/browser-smoke/live-peer/window-smoke-tested;
+  production onboarding/cap persistence ceremony, mobile secure-store choice, and live app convergence are
+  not done.
 - **E2.** **Expo shell** (if phone-only is wanted): SDK 56+, RN 0.85, New Arch; same library, key
   custody via secure-store/native keystore. *Gate:* a phone build converges a Township matter.
   *Asset:* the app-shell analysis (this conversation's §Expo-vs-Tauri) — decision deferred, reversible.

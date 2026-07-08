@@ -66,6 +66,13 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 044 | Tauri Vue carrier sync outbox | P1 | M | 043 | DONE |
 | 045 | Tauri Vue WebSocket carrier peer config | P1 | M | 044 | DONE |
 | 046 | Tauri shell live BEAM peer sync | P1 | M | 045 | DONE |
+| 047 | Tauri live window peer smoke | P1 | M | 046 | DONE |
+| 048 | Tauri Vue broader author actions | P1 | M | 047 | DONE |
+| 049 | Tauri Vue action availability | P1 | M | 048 | DONE |
+| 050 | Tauri Vue close/reopen actions | P1 | M | 049 | DONE |
+| 051 | Tauri Vue member-management actions | P1 | M | 050 | DONE |
+| 052 | Tauri outbox ack compaction | P1 | M | 051 | DONE |
+| 053 | TS Township delegation issuance primitive | P1 | S | 052 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
