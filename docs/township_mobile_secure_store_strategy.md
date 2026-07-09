@@ -86,7 +86,11 @@ the smoke registers the freshly built app, asserts `township://` resolves to tha
 uses bare `open township://...` delivery against the already-running traced app. Plan 099 proves the
 packaged macOS cold-start path separately: with no Township process running, bare `open township://...`
 starts the registered app and the pairing URL is traced as a draft-only blocked pairing link.
-This does not prove browser/chooser UX or Android/iOS cold-start URL delivery. The native bridge
+Plan 105 separately proves Android release cold-start pairing delivery: after
+`force-stop`/assert-not-running, a no-state cold-start `VIEW`/`BROWSABLE` intent starts the app but is
+blocked with `blocked_reason=state_mismatch`, while a state-bearing cold-start intent saves pairing,
+survives relaunch as `paired=true`, and syncs. This does not prove browser/chooser UX or iOS
+cold-start URL delivery. The native bridge
 consumes a valid stored intent handoff once and requires `VIEW` plus
 `BROWSABLE`, but this does not remove every local-malicious-app threat or prove cryptographic
 nonce/state binding.
@@ -257,8 +261,18 @@ premature pairing save is emitted before armed delivery, a later state-bearing i
 force-stop/relaunch syncs from the persisted peer config. The state is a fixed probe-only constant
 baked into that release probe build, so this proves gate wiring in the release OS-delivery path, not
 browser/chooser-backed state exchange or an unforgeable production challenge.
+Plan 104 adds the named Android release convergence gate,
+`tauri:android:release:convergence`: it builds each probe APK before running its corresponding
+smoke, composing release pull/reload persistence, app-originated author/grant persistence, and
+armed OS pairing delivery into one executable release gate. The gate still uses separate probe
+builds and namespaces, so it is not one continuous production onboarding session.
+Plan 105 extends that release pairing smoke to prove Android cold-start pairing delivery: the smoke
+force-stops the app, asserts `pidof` is empty, delivers no-state and state-bearing adb
+`VIEW`/`BROWSABLE` intents, blocks the no-state cold-start with `blocked_reason=state_mismatch`,
+saves the state-bearing cold-start, relaunches with `paired=true`, and syncs from the persisted
+peer config.
 Production pairing still needs browser/chooser coverage beyond
-the adb/macOS `open` intent smokes, Android/iOS cold-start URL delivery, and browser/chooser-backed or cross-device pairing state exchange. The native command consumes a valid stored
+the adb/macOS `open` intent smokes, iOS cold-start URL delivery, and browser/chooser-backed or cross-device pairing state exchange. The native command consumes a valid stored
 handoff once and rejects non-BROWSABLE, non-VIEW, oversized, foreign-host, and port-bearing custom
 scheme intents, but a malicious local app can still send a syntactically valid public intent.
 This does not prove QR camera onboarding, authority origination, LAN
@@ -270,13 +284,13 @@ APK BEAM convergence, bounded debug APK on-device post authoring, and bounded de
 cap onboarding; Android release APK builds, installs, and preserves canonical/wire fidelity for the
 W1 fixture, and it now proves release-mode carrier handshake/status/report, release pull/reload,
 release device-local authoring, app-originated post-only attenuated grants, push/outbox drain, and release OS deep-link peer-config
-persistence over scoped loopback, and release armed OS pairing delivery with a fixed probe-only
-state; the real app now blocks unarmed OS deep-link draft import, has
+persistence over scoped loopback, release armed OS pairing delivery with a fixed probe-only
+state, Android release cold-start pairing delivery, and a named release convergence gate over those release probes; the real app now blocks unarmed OS deep-link draft import, has
 a packaged macOS real-app armed one-shot accept/block proof, proves that link loading does not
 emit traced Save Pairing, Sync Outbox, Check Carrier, or native KV-write side effects in the packaged
 smoke, proves warm macOS LaunchServices routing to the running packaged app, proves packaged
 macOS cold-start URL delivery into the draft-only blocked path, and proves app-local state binding
-for armed OS pairing-link import. It does not prove Android/iOS cold-start URL delivery,
+for armed OS pairing-link import. It does not prove iOS cold-start URL delivery,
 authority origination, QR camera onboarding,
 LAN discovery, iOS key reuse, Expo, browser/chooser behavior, browser/chooser-backed or
 cross-device pairing state exchange,
@@ -309,7 +323,7 @@ No phone-grade persistence claim is allowed until all of these are true:
 2. The app-storage implementation reloads `local_ops`, `carrier_frames`, and `delegation_frames`
    without touching the native key store.
    - Android Tauri debug APK: met for the W1 pre-signed-frame smoke by plan 080.
-   - Android Tauri release APK: bounded release pull/reload, device-local authoring, app-originated post-only attenuated grants, push/outbox drain, OS deep-link peer-config persistence, release armed OS pairing delivery with a fixed probe-only state, real-app imported pairing confirmation policy, installed unarmed OS deep-link blocking, and source-level user-armed state-bound one-shot import gating are met by plans 091-095, 100, 102, and 103 in dedicated probe namespaces or the shared Tauri app path; authority origination, QR camera onboarding, LAN discovery, browser/chooser behavior, browser/chooser-backed or cross-device pairing state exchange, and full mobile onboarding remain unproven in release mode. Plan 090 is tracked separately as carrier reachability.
+   - Android Tauri release APK: bounded release pull/reload, device-local authoring, app-originated post-only attenuated grants, push/outbox drain, OS deep-link peer-config persistence, release armed OS pairing delivery with a fixed probe-only state, Android release cold-start pairing delivery, real-app imported pairing confirmation policy, installed unarmed OS deep-link blocking, and source-level user-armed state-bound one-shot import gating are met by plans 091-095, 100, 102, 103, and 105 in dedicated probe namespaces or the shared Tauri app path; authority origination, QR camera onboarding, LAN discovery, browser/chooser behavior, browser/chooser-backed or cross-device pairing state exchange, and full mobile onboarding remain unproven in release mode. Plan 090 is tracked separately as carrier reachability.
    - Packaged macOS Tauri app: real-app armed one-shot OS delivery is met by plan 096 in an explicit `township-dev-trace` release-mode smoke build; the traced no-side-effect link-load guard is met by plan 097; warm LaunchServices scheme resolution is met by plan 098; cold-start URL delivery is met by plan 099; app-local state binding is met by plan 100; release dev-trace hydration and control-link repair is met by plan 101.
    - iOS Tauri and Expo: still unproven.
 3. A mobile smoke syncs a Township matter with a BEAM realm using persisted caps from the onboarding
@@ -319,7 +333,7 @@ No phone-grade persistence claim is allowed until all of these are true:
      on-device `post` authoring against the pulled cap, BEAM materialization, and BEAM rejection for
      a same-device operation outside the grant. Full mobile onboarding remains unproven beyond
      pull-based cap acquisition.
-   - Android Tauri release APK: bounded carrier pull/reload, OS deep-link peer-config persistence, release armed OS pairing delivery with a fixed probe-only state, device-local post authoring, app-originated post-only attenuated grants, persisted pending-outbox reload, push/outbox drain, peer-side authority enforcement, real-app imported pairing confirmation policy, installed unarmed OS deep-link blocking, and source-level user-armed state-bound one-shot import gating are met by plans 091-095, 100, 102, and 103 in dedicated probe namespaces or the shared Tauri app path; authority origination, QR camera onboarding, LAN discovery, browser/chooser behavior, browser/chooser-backed or cross-device pairing state exchange, and full onboarding remain unproven.
+   - Android Tauri release APK: bounded carrier pull/reload, OS deep-link peer-config persistence, release armed OS pairing delivery with a fixed probe-only state, Android release cold-start pairing delivery, device-local post authoring, app-originated post-only attenuated grants, persisted pending-outbox reload, push/outbox drain, peer-side authority enforcement, real-app imported pairing confirmation policy, installed unarmed OS deep-link blocking, and source-level user-armed state-bound one-shot import gating are met by plans 091-095, 100, 102, 103, and 105 in dedicated probe namespaces or the shared Tauri app path; authority origination, QR camera onboarding, LAN discovery, browser/chooser behavior, browser/chooser-backed or cross-device pairing state exchange, and full onboarding remain unproven.
    - Packaged macOS Tauri app: real-app armed one-shot OS delivery is met by plan 096 in an explicit `township-dev-trace` release-mode smoke build; the traced no-side-effect link-load guard is met by plan 097; warm LaunchServices scheme resolution is met by plan 098; cold-start URL delivery is met by plan 099; app-local state binding is met by plan 100; release dev-trace hydration and control-link repair is met by plan 101.
    - iOS Tauri and Expo: still unproven.
 4. The UI distinguishes local grant saved/pending sync from carrier-converged grant acceptance.

@@ -59,6 +59,10 @@ try {
   await assertReleasePackageIsNotDebuggable(serial);
   await assertAndroidApiLevelSupportsNetworkSecurityConfig(serial);
   await runReleaseDeepLinkPairingProof(serial);
+  peer?.kill();
+  peer = null;
+  await removeReverseMapping(serial, buildConfig.port).catch(() => undefined);
+  await runReleaseColdStartPairingDeliveryProof(serial);
 } finally {
   peer?.kill();
   if (serial) {
@@ -184,6 +188,136 @@ async function runReleaseDeepLinkPairingProof(serial: string): Promise<void> {
   console.log(`  observed sync from persisted pairing ${syncLine.trim()}`);
 }
 
+async function runReleaseColdStartPairingDeliveryProof(serial: string): Promise<void> {
+  await clearAppData(serial);
+  await clearLogcat(serial);
+  await forceStopApp(serial);
+  await waitForAppNotRunning(serial);
+  await launchApp(serial);
+
+  const nativeKeyLine = await waitForReleasePairingProbeLog(serial, "native_key");
+  assert.match(nativeKeyLine, /phase=native_key/);
+  assert.match(nativeKeyLine, new RegExp(`storage_namespace=${escapeRegExp(buildConfig.storageNamespace)}`));
+  const devicePublicKeyBase64 = devicePublicKeyFromNativeKeyLine(nativeKeyLine);
+  assert.equal(Buffer.from(devicePublicKeyBase64, "base64").length, 32);
+  assert.doesNotMatch(nativeKeyLine, forbiddenLogTerms());
+
+  const initialReloadLine = await waitForReleasePairingProbeLog(serial, "reload", (line) => line.includes("paired=false"));
+  assert.match(initialReloadLine, /outcome=loaded/);
+  assert.match(initialReloadLine, /paired=false/);
+  assert.match(initialReloadLine, /outbox_frame_count=0/);
+  assert.deepEqual(fieldIds(initialReloadLine, "local_op_ids"), []);
+  assert.deepEqual(fieldIds(initialReloadLine, "delegation_frame_ids"), []);
+  assert.doesNotMatch(initialReloadLine, forbiddenLogTerms());
+  console.log(`  observed cold-start key discovery reload ${initialReloadLine.trim()}`);
+
+  await forceStopApp(serial);
+  await waitForAppNotRunning(serial);
+
+  peer = await spawnTownshipPeer({
+    peerRealm,
+    trustedPeerRealm: buildConfig.localRealm,
+    trustedPeerPubkey: devicePublicKeyBase64,
+    scenario: "LatticeNodeSpike.TownshipScenario",
+    bootstrapAudiencePubkey: devicePublicKeyBase64,
+  });
+  assert.equal(peer.publicKeyBase64, expectedPeerPubkey);
+
+  await clearLogcat(serial);
+  await openPairingDeepLink(serial, pairingPeerConfig());
+
+  const noStateNativeKeyLine = await waitForReleasePairingProbeLog(serial, "native_key");
+  assert.equal(devicePublicKeyFromNativeKeyLine(noStateNativeKeyLine), devicePublicKeyBase64);
+  assert.doesNotMatch(noStateNativeKeyLine, forbiddenLogTerms());
+
+  const noStateReloadLine = await waitForReleasePairingProbeLog(serial, "reload", (line) => line.includes("paired=false"));
+  assert.match(noStateReloadLine, /outcome=loaded/);
+  assert.match(noStateReloadLine, /paired=false/);
+  assert.match(noStateReloadLine, /outbox_frame_count=0/);
+  assert.doesNotMatch(noStateReloadLine, forbiddenLogTerms());
+
+  const noStateArmingLine = await waitForReleasePairingProbeLog(serial, "arming", (line) => line.includes("outcome=armed"));
+  assert.match(noStateArmingLine, /phase=arming/);
+  assert.match(noStateArmingLine, /state_required=true/);
+  assert.doesNotMatch(noStateArmingLine, new RegExp(escapeRegExp(buildConfig.armState)));
+  assert.doesNotMatch(noStateArmingLine, forbiddenLogTerms());
+
+  const noStateBlockedLine = await waitForReleasePairingProbeLog(
+    serial,
+    "deeplink",
+    (line) => line.includes("outcome=blocked") && line.includes("blocked_reason=state_mismatch"),
+  );
+  assert.match(noStateBlockedLine, /phase=deeplink/);
+  assert.match(noStateBlockedLine, /outcome=blocked/);
+  assert.match(noStateBlockedLine, /blocked_reason=state_mismatch/);
+  assert.match(noStateBlockedLine, /pairing_url_count=1/);
+  assert.doesNotMatch(noStateBlockedLine, new RegExp(escapeRegExp(buildConfig.armState)));
+  assert.doesNotMatch(noStateBlockedLine, forbiddenLogTerms());
+  await assertNoPairingSavedYet(serial);
+  console.log(`  observed cold-start no-state release pairing block ${noStateBlockedLine.trim()}`);
+
+  await forceStopApp(serial);
+  await waitForAppNotRunning(serial);
+  await clearLogcat(serial);
+  await runAdb(serial, ["reverse", `tcp:${buildConfig.port}`, `tcp:${peer.port}`], 30_000);
+  await assertReverseMapping(serial, buildConfig.port, peer.port);
+  await openPairingDeepLink(serial, pairingPeerConfig(), buildConfig.armState);
+
+  const stateNativeKeyLine = await waitForReleasePairingProbeLog(serial, "native_key");
+  assert.equal(devicePublicKeyFromNativeKeyLine(stateNativeKeyLine), devicePublicKeyBase64);
+  assert.doesNotMatch(stateNativeKeyLine, forbiddenLogTerms());
+
+  const stateReloadLine = await waitForReleasePairingProbeLog(serial, "reload", (line) => line.includes("paired=false"));
+  assert.match(stateReloadLine, /outcome=loaded/);
+  assert.match(stateReloadLine, /paired=false/);
+  assert.match(stateReloadLine, /outbox_frame_count=0/);
+  assert.doesNotMatch(stateReloadLine, forbiddenLogTerms());
+
+  const stateArmingLine = await waitForReleasePairingProbeLog(serial, "arming", (line) => line.includes("outcome=armed"));
+  assert.match(stateArmingLine, /phase=arming/);
+  assert.match(stateArmingLine, /state_required=true/);
+  assert.doesNotMatch(stateArmingLine, new RegExp(escapeRegExp(buildConfig.armState)));
+  assert.doesNotMatch(stateArmingLine, forbiddenLogTerms());
+
+  const pairingLine = await waitForReleasePairingProbeLog(serial, "pairing", (line) => line.includes("outcome=saved"));
+  assert.match(pairingLine, /phase=pairing/);
+  assert.match(pairingLine, /outcome=saved/);
+  assert.match(pairingLine, new RegExp(`peer_fingerprint=${escapeRegExp(expectedPeerFingerprint)}`));
+  assert.match(pairingLine, /host_class=loopback/);
+  assert.match(pairingLine, new RegExp(`url_port=${buildConfig.port}`));
+  assert.doesNotMatch(pairingLine, forbiddenLogTerms());
+  console.log(`  observed cold-start state-bearing release pairing save ${pairingLine.trim()}`);
+
+  await forceStopApp(serial);
+  await waitForAppNotRunning(serial);
+  await clearLogcat(serial);
+  await assertReverseMapping(serial, buildConfig.port, peer.port);
+  await launchApp(serial);
+
+  const reloadLine = await waitForReleasePairingProbeLog(serial, "reload", (line) => line.includes("paired=true"));
+  assert.match(reloadLine, /outcome=loaded/);
+  assert.match(reloadLine, /paired=true/);
+  assert.match(reloadLine, new RegExp(`peer_fingerprint=${escapeRegExp(expectedPeerFingerprint)}`));
+  assert.match(reloadLine, /host_class=loopback/);
+  assert.match(reloadLine, new RegExp(`url_port=${buildConfig.port}`));
+  assert.match(reloadLine, /outbox_frame_count=0/);
+  assert.doesNotMatch(reloadLine, forbiddenLogTerms());
+  console.log(`  observed paired reload after cold-start pairing ${reloadLine.trim()}`);
+
+  const syncLine = await waitForReleasePairingProbeLog(serial, "sync", (line) => line.includes("outcome=synced"));
+  assert.match(syncLine, /phase=sync/);
+  assert.match(syncLine, /outcome=synced/);
+  assert.match(syncLine, new RegExp(`peer_fingerprint=${escapeRegExp(expectedPeerFingerprint)}`));
+  assert.notDeepEqual(fieldIds(syncLine, "pulled_op_ids"), []);
+  assert.notDeepEqual(fieldIds(syncLine, "local_op_ids"), []);
+  assert.notDeepEqual(fieldIds(syncLine, "delegation_frame_ids"), []);
+  assert.match(syncLine, /outbox_frame_count=0/);
+  assert.match(syncLine, /pushed_frame_count=0/);
+  assert.match(syncLine, /accepted_count=0/);
+  assert.doesNotMatch(syncLine, forbiddenLogTerms());
+  console.log(`  observed cold-start pairing sync ${syncLine.trim()}`);
+}
+
 function defaultReleaseApkPath(): string {
   return resolve(
     process.env.TOWNSHIP_ANDROID_RELEASE_APK ??
@@ -226,6 +360,17 @@ function releasePairingProbeConfigFromBuildScript(): ReleasePairingProbeBuildCon
   assert.equal(armState, "release-pairing-state-103");
   assert.equal(timeoutMs, "60000");
   return { port: 43193, localRealm, keyId, storageNamespace, armState, timeoutMs };
+}
+
+function pairingPeerConfig(): TownshipCarrierPeerConfig {
+  return {
+    url: `ws://127.0.0.1:${buildConfig.port}/carrier`,
+    localRealm: buildConfig.localRealm,
+    expectedPeerRealm: peerRealm,
+    expectedPeerPubkey,
+    replica,
+    keyId: buildConfig.keyId,
+  };
 }
 
 async function openPairingDeepLink(
@@ -346,6 +491,17 @@ async function assertNoPairingSavedYet(serial: string): Promise<void> {
         candidate.includes("outcome=saved"),
     );
   assert.equal(savedLine, undefined, `no-state release pairing link should not save peer config before armed delivery:\n${savedLine ?? output}`);
+}
+
+async function waitForAppNotRunning(serial: string): Promise<void> {
+  const deadline = Date.now() + 30_000;
+  let lastPid = "";
+  while (Date.now() < deadline) {
+    lastPid = (await runAdb(serial, ["shell", "pidof", appId], 10_000).catch(() => "")).trim();
+    if (!lastPid) return;
+    await delay(250);
+  }
+  throw new Error(`expected ${appId} to be stopped before cold-start pairing intent; pidof returned ${lastPid}`);
 }
 
 function devicePublicKeyFromNativeKeyLine(line: string): string {

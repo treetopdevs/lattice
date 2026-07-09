@@ -33,6 +33,7 @@
     "tauri:android:release:sync:smoke": "tsx test/tauri_android_release_sync_probe.ts",
     "tauri:android:release:author:smoke": "tsx test/tauri_android_release_author_probe.ts",
     "tauri:android:release:pairing:smoke": "tsx test/tauri_android_release_pairing_probe.ts",
+    "tauri:android:release:convergence": "npm run tauri:android:build:release:sync-probe && npm run tauri:android:release:sync:smoke && npm run tauri:android:build:release:author-probe && npm run tauri:android:release:author:smoke && npm run tauri:android:build:release:pairing-probe && npm run tauri:android:release:pairing:smoke",
     "tauri:android:release:cleartext-diagnostic:smoke": "tsx test/tauri_android_release_cleartext_diagnostic_probe.ts",
     "app:convergence": "npm run action:contract && npm run sync:contract && npm run live:contract && npm run tauri:launch:smoke && npm run tauri:deep-link:smoke",
     "tauri:ios:init": "tauri ios init --ci --skip-targets-install",

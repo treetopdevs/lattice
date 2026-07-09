@@ -123,6 +123,8 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 101 | Tauri dev-trace release hydration and control links | P1 | S | 100 | DONE |
 | 102 | Tauri release app-originated attenuated grant | P1 | M | 092 | DONE |
 | 103 | Tauri Android release armed pairing delivery | P1 | M | 100 | DONE |
+| 104 | Tauri Android release convergence gate | P1 | S | 091, 092, 103 | DONE |
+| 105 | Tauri Android release cold-start pairing delivery | P1 | M | 103, 104 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
