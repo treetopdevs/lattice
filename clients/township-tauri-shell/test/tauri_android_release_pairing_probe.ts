@@ -32,6 +32,7 @@ interface ReleasePairingProbeBuildConfig {
   localRealm: string;
   keyId: string;
   storageNamespace: string;
+  armState: string;
   timeoutMs: string;
 }
 
@@ -101,6 +102,13 @@ async function runReleaseDeepLinkPairingProof(serial: string): Promise<void> {
   });
   assert.equal(peer.publicKeyBase64, expectedPeerPubkey);
 
+  const armingLine = await waitForReleasePairingProbeLog(serial, "arming", (line) => line.includes("outcome=armed"));
+  assert.match(armingLine, /phase=arming/);
+  assert.match(armingLine, /state_required=true/);
+  assert.doesNotMatch(armingLine, new RegExp(escapeRegExp(buildConfig.armState)));
+  assert.doesNotMatch(armingLine, forbiddenLogTerms());
+  console.log(`  observed armed release pairing ${armingLine.trim()}`);
+
   await openPairingDeepLink(serial, {
     url: `ws://127.0.0.1:${buildConfig.port}/carrier`,
     localRealm: buildConfig.localRealm,
@@ -109,6 +117,32 @@ async function runReleaseDeepLinkPairingProof(serial: string): Promise<void> {
     replica,
     keyId: buildConfig.keyId,
   });
+
+  const blockedLine = await waitForReleasePairingProbeLog(
+    serial,
+    "deeplink",
+    (line) => line.includes("outcome=blocked") && line.includes("blocked_reason=state_mismatch"),
+  );
+  assert.match(blockedLine, /phase=deeplink/);
+  assert.match(blockedLine, /outcome=blocked/);
+  assert.match(blockedLine, /blocked_reason=state_mismatch/);
+  assert.match(blockedLine, /pairing_url_count=1/);
+  assert.doesNotMatch(blockedLine, new RegExp(escapeRegExp(buildConfig.armState)));
+  assert.doesNotMatch(blockedLine, forbiddenLogTerms());
+  console.log(`  observed blocked unarmed release pairing ${blockedLine.trim()}`);
+
+  await openPairingDeepLink(
+    serial,
+    {
+      url: `ws://127.0.0.1:${buildConfig.port}/carrier`,
+      localRealm: buildConfig.localRealm,
+      expectedPeerRealm: peerRealm,
+      expectedPeerPubkey,
+      replica,
+      keyId: buildConfig.keyId,
+    },
+    buildConfig.armState,
+  );
 
   const pairingLine = await waitForReleasePairingProbeLog(serial, "pairing", (line) => line.includes("outcome=saved"));
   assert.match(pairingLine, /phase=pairing/);
@@ -183,17 +217,23 @@ function releasePairingProbeConfigFromBuildScript(): ReleasePairingProbeBuildCon
   const localRealm = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_LOCAL_REALM");
   const keyId = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_KEY_ID");
   const storageNamespace = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_STORAGE_NAMESPACE");
+  const armState = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_ARM_STATE");
   const timeoutMs = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_TIMEOUT_MS");
   assert.equal(localRealm, "resident");
   assert.equal(keyId, "township-release-pairing-resident");
   assert.equal(storageNamespace, "township:release-pairing-probe");
+  assert.equal(armState, "release-pairing-state-103");
   assert.equal(timeoutMs, "60000");
-  return { port: 43193, localRealm, keyId, storageNamespace, timeoutMs };
+  return { port: 43193, localRealm, keyId, storageNamespace, armState, timeoutMs };
 }
 
-async function openPairingDeepLink(serial: string, config: TownshipCarrierPeerConfig): Promise<void> {
+async function openPairingDeepLink(
+  serial: string,
+  config: TownshipCarrierPeerConfig,
+  state?: string,
+): Promise<void> {
   const handoff = exportTownshipCarrierPairingHandoff(config);
-  const link = `township://pairing/${encodeURIComponent(handoff)}`;
+  const link = `township://pairing/${encodeURIComponent(handoff)}${state ? `?state=${encodeURIComponent(state)}` : ""}`;
   await runAdb(
     serial,
     [
@@ -250,7 +290,7 @@ async function assertAndroidApiLevelSupportsNetworkSecurityConfig(serial: string
 
 async function waitForReleasePairingProbeLog(
   serial: string,
-  phase: "native_key" | "reload" | "pairing" | "sync",
+  phase: "native_key" | "reload" | "arming" | "deeplink" | "pairing" | "sync",
   predicate: (line: string) => boolean = () => true,
 ): Promise<string> {
   const deadline = Date.now() + 90_000;

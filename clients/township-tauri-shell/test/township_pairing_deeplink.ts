@@ -53,6 +53,12 @@ assertDeepLinkOk(`township:nohost:_pairing/${encodeURIComponent(handoff)}`, hand
 assertDeepLinkOk(`township://nohost/_pairing?handoff=${encodeURIComponent(handoff)}`, handoff);
 assertDeepLinkOk(`township://nohost/_pairing_${handoff}`, handoff);
 assertDeepLinkOk(`township://nohost/_pairing_${tauriAndroidEncodedHandoff}`, handoff);
+const stateBoundLink = parseTownshipPairingDeepLink(
+  `township://pairing?handoff=${encodeURIComponent(handoff)}&state=township-state-1`,
+);
+assert.equal(stateBoundLink.ok, true);
+if (!stateBoundLink.ok) throw new Error(stateBoundLink.message);
+assert.equal(stateBoundLink.state, "township-state-1");
 
 const smuggled = encodedHandoff({
   url: "wss://deeplink.township.example/carrier",
@@ -158,8 +164,9 @@ assert.equal(gatedBlocked.length, 1);
 assert.equal(gate.armed(), false);
 assert.ok(gatedOnOpenUrl, "gated listener should subscribe to future URL events");
 
-gate.arm();
-gatedOnOpenUrl([`township://pairing/${handoff}`]);
+const firstGateState = gate.arm();
+assert.match(firstGateState, /^[0-9a-f]{32}$/);
+gatedOnOpenUrl([`township://pairing?handoff=${encodeURIComponent(handoff)}&state=${firstGateState}`]);
 assert.equal(gatedApplied.length, 1);
 assert.equal(gatedApplied[0]?.ok, true);
 assert.equal(gate.armed(), false);
@@ -168,13 +175,13 @@ gatedOnOpenUrl([`township://pairing/${handoff}`]);
 assert.equal(gatedApplied.length, 1);
 assert.equal(gatedBlocked.length, 2);
 
-gate.arm();
+const secondGateState = gate.arm();
 gatedOnOpenUrl(["garbage"]);
 assert.equal(gatedApplied.length, 2);
 assert.equal(gatedApplied[1]?.ok, false);
 assert.equal(gate.armed(), true);
 
-gatedOnOpenUrl([`township://pairing/${handoff}`]);
+gatedOnOpenUrl([`township://pairing?handoff=${encodeURIComponent(handoff)}&state=${secondGateState}`]);
 assert.equal(gatedApplied.length, 3);
 assert.equal(gatedApplied[2]?.ok, true);
 assert.equal(gate.armed(), false);
@@ -183,6 +190,57 @@ gate.arm();
 assert.equal(gate.armed(), true);
 gatedListener.stop();
 assert.equal(gate.armed(), false);
+
+const statefulGate = createOneShotTownshipPairingDeepLinkGate({ createState: () => "armed-state" });
+const statefulApplied: TownshipPairingDeepLinkParse[] = [];
+const statefulBlocked: string[] = [];
+let statefulOnOpenUrl: ((urls: readonly string[]) => void) | null = null;
+await createTownshipPairingDeepLinkListener({
+  source: {
+    async current(): Promise<readonly string[] | null> {
+      return null;
+    },
+    async onOpenUrl(callback: (urls: readonly string[]) => void): Promise<void> {
+      statefulOnOpenUrl = callback;
+    },
+  },
+  gate: statefulGate,
+  apply(parse) {
+    statefulApplied.push(parse);
+  },
+  onBlocked(blocked) {
+    statefulBlocked.push(blocked.reason);
+  },
+});
+assert.ok(statefulOnOpenUrl, "stateful gated listener should subscribe to future URL events");
+
+assert.equal(statefulGate.arm(), "armed-state");
+assert.equal(statefulGate.state(), "armed-state");
+statefulOnOpenUrl([`township://pairing?handoff=${encodeURIComponent(handoff)}`]);
+assert.equal(statefulApplied.length, 0);
+assert.deepEqual(statefulBlocked, ["state_mismatch"]);
+assert.equal(statefulGate.armed(), true);
+assert.equal(statefulGate.state(), "armed-state");
+
+statefulOnOpenUrl([`township://pairing?handoff=${encodeURIComponent(handoff)}&state=wrong-state`]);
+assert.equal(statefulApplied.length, 0);
+assert.deepEqual(statefulBlocked, ["state_mismatch", "state_mismatch"]);
+assert.equal(statefulGate.armed(), true);
+
+statefulOnOpenUrl(["garbage"]);
+assert.equal(statefulApplied.length, 1);
+assert.equal(statefulApplied[0]?.ok, false);
+assert.equal(statefulGate.armed(), true);
+
+statefulOnOpenUrl([`township://pairing?handoff=${encodeURIComponent(handoff)}&state=armed-state`]);
+assert.equal(statefulApplied.length, 2);
+assert.equal(statefulApplied[1]?.ok, true);
+assert.equal(statefulGate.armed(), false);
+assert.equal(statefulGate.state(), null);
+
+statefulOnOpenUrl([`township://pairing?handoff=${encodeURIComponent(handoff)}&state=armed-state`]);
+assert.equal(statefulApplied.length, 2);
+assert.deepEqual(statefulBlocked, ["state_mismatch", "state_mismatch", "not_armed"]);
 
 console.log("\x1b[32m✓ Township pairing deep-link ingress checks passed\x1b[0m");
 

@@ -2,7 +2,7 @@
 
 ## Status
 
-IN PROGRESS
+DONE
 
 ## Objective
 
@@ -24,9 +24,17 @@ nonce/state binding, or full mobile onboarding proof.
   - `carrier-health-started`
 - Keep those traces best-effort so normal release builds without the
   `township-dev-trace` feature still ignore missing trace IPC.
+- Gate smoke-only shortcut arming on both `VITE_TOWNSHIP_DEV_TRACE` and a
+  successful `dev-trace-runtime-ready` round trip through the feature-gated Rust
+  trace command, so an ambient Vite env leak cannot arm the shortcut in a binary
+  that lacks the trace capability.
+- Guard shortcut mounting after that async trace handshake so an unmount during
+  the handshake cannot leave a stale keydown listener installed.
 - Extend the packaged installed-app deep-link smoke to assert that none of those
   side-effect trace events appear while an armed OS-delivered pairing link is
-  loaded as a draft.
+  loaded as a draft. The assertion is bounded by ordered
+  `pairing-link-loaded:*` / `pairing-link-load-settled` traces and an allowlist
+  for the loaded-to-third-blocked trace window.
 - Update the build map, mobile secure-store strategy, and plan index without
   claiming browser/chooser coverage, Android release armed delivery,
   cryptographic nonce/state binding, or full onboarding.
@@ -48,6 +56,8 @@ nonce/state binding, or full mobile onboarding proof.
   no real app action can emit.
 - Stop if the side-effect traces are required in normal release builds without
   the explicit `township-dev-trace` feature.
+- Stop if the smoke's negative assertion is unbounded or can pass solely because
+  tracing stopped.
 - Stop if docs call this browser/chooser coverage, Android release armed
   delivery, cryptographic nonce/state binding, or full mobile onboarding.
 
@@ -60,15 +70,23 @@ nonce/state binding, or full mobile onboarding proof.
   `carrier-health-started` traces when those user actions start.
 - GREEN: `tauri:deep-link:smoke` now launches the packaged `.app`, performs the
   unarmed/armed/one-shot OS deep-link flow, and asserts none of the side-effect
-  trace events appears while the pairing link is merely loaded as a draft.
+  trace events appears in the settled draft-load window or before the
+  post-consume blocked delivery. The smoke also asserts the trace window contains
+  only the known draft-load/deep-link traces before running a positive
+  Check Carrier control.
+- GREEN: the dev-trace shortcut listener is added only after the runtime-ready
+  trace succeeds and the component is still mounted, so an unmount during the
+  async handshake does not leak the keydown shortcut.
 
 ## Second Opinion
 
-Claude Code must review this slice before it is treated as complete. Review
-should confirm that the new absence checks are no longer vacuous, that the trace
-events do not change shipping behavior without `township-dev-trace`, and that
-the docs do not overclaim browser, Android release, nonce/state, or full
-onboarding coverage.
+Claude Code reviewed the slice twice. The first pass found no blockers and
+recommended the trace-capability handshake plus a settled/allowlisted assertion
+window; the follow-up review found no blockers after those changes and approved
+marking Plan097 done subject to the wider gates. The proof is explicitly about
+absence of traced Save Pairing, Sync Outbox, Check Carrier, and native KV write
+side effects in the packaged smoke window; untraced side effects remain outside
+what this dev trace can prove.
 
 ## Verification
 
@@ -78,7 +96,10 @@ onboarding coverage.
 - `cd clients/township-tauri-shell && npm run mobile:tauri-readiness`
 - `cd clients/township-tauri-shell && npm run mobile:strategy`
 - `cd clients/township-tauri-shell && npm run typecheck`
+- `cd clients/township-tauri-shell/src-tauri && cargo test`
+- `cd clients/township-tauri-shell/src-tauri && cargo test --features township-dev-trace`
 - `git diff --check`
+- `cd apps/lattice_server && ~/.asdf/shims/mix sobelow --exit`
 - `~/.asdf/shims/mix check`
 
 ## Remaining Work

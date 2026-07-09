@@ -12,7 +12,6 @@ import {
 import {
   TOWNSHIP_NATIVE_KEY_ID,
   TOWNSHIP_TRACE_CARRIER_HEALTH_STARTED,
-  TOWNSHIP_TRACE_DEV_SHORTCUT_KEYDOWN_PREFIX,
   TOWNSHIP_TRACE_DEV_RUNTIME_READY,
   TOWNSHIP_TRACE_PAIRING_LINK_LOAD_SETTLED,
   TOWNSHIP_TRACE_PAIRING_CONFIG_SAVE_SUBMITTED,
@@ -31,6 +30,8 @@ const shellRoot = resolve(here, "..");
 const tracePath = join(tmpdir(), `township-tauri-installed-deeplink-${process.pid}.log`);
 const appBundlePath = join(shellRoot, "src-tauri", "target", "release", "bundle", "macos", "Township.app");
 const appIdentifier = "dev.treetop.lattice.township";
+const launchServicesRegister =
+  "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister";
 const smokeKeySeed = "township-installed-deeplink-smoke";
 const config: TownshipCarrierPeerConfig = {
   url: "wss://carrier.example/township",
@@ -43,6 +44,8 @@ const config: TownshipCarrierPeerConfig = {
 const handoff = exportTownshipCarrierPairingHandoff(config);
 const peerFingerprint = townshipCarrierPeerFingerprint(config.expectedPeerPubkey);
 const deepLinkUrl = `township://pairing?handoff=${encodeURIComponent(handoff)}`;
+const armPairingImportUrl = "township://dev/pairing-import/arm";
+const checkCarrierHealthUrl = "township://dev/carrier-health/check";
 
 console.log("\n▸ Township installed-app deep-link smoke");
 
@@ -55,6 +58,8 @@ rmSync(tracePath, { force: true });
 await run("npm", ["run", "tauri:build:dev-trace"], shellRoot);
 assert.ok(existsSync(appBundlePath), `expected bundled app at ${appBundlePath}`);
 assertAppBundleRegistersTownshipScheme(appBundlePath);
+await registerLaunchServicesHandler();
+await assertLaunchServicesRoutesTownshipSchemeToBundle();
 await quitTownshipApp();
 
 let app: ManagedProcess | null = null;
@@ -64,7 +69,6 @@ try {
     [
       "-n",
       "-W",
-      "-j",
       "--env",
       `TOWNSHIP_DEV_TRACE_FILE=${tracePath}`,
       "--env",
@@ -78,7 +82,7 @@ try {
   try {
     await waitForTraceLine("deep-link-listener-mounted", 60_000);
     await waitForTraceLine(TOWNSHIP_TRACE_DEV_RUNTIME_READY, 60_000);
-    await waitForTraceLine("lattice_ensure_carrier_key", 60_000);
+    await waitForTraceLine("township-native-hydration-settled", 60_000);
   } catch (error) {
     throw new Error(
       [
@@ -94,10 +98,12 @@ try {
   await waitForTraceLine("pairing-link-blocked:not-armed", 30_000);
   assert.doesNotMatch(readTrace(), new RegExp(`pairing-link-loaded:${peerFingerprint}`));
 
-  await pressTownshipPairingImportShortcut();
-  await waitForTraceLine(`${TOWNSHIP_TRACE_DEV_SHORTCUT_KEYDOWN_PREFIX}l`, 30_000);
+  await deliverDevTraceControlDeepLink(armPairingImportUrl);
   await waitForTraceLine("pairing-link-import-armed", 30_000);
-  await deliverDeepLink();
+  await waitForTracePrefix("pairing-link-import-state:", 30_000);
+  const armedState = lastTraceLineWithPrefix("pairing-link-import-state:").replace("pairing-link-import-state:", "");
+  assert.match(armedState, /^[0-9a-f]{32}$/);
+  await deliverDeepLink({ state: armedState });
   await waitForTraceLine(`pairing-link-loaded:${peerFingerprint}`, 30_000);
   await waitForTraceLine(TOWNSHIP_TRACE_PAIRING_LINK_LOAD_SETTLED, 30_000);
   const loadedIndex = lastTraceLineIndex(`pairing-link-loaded:${peerFingerprint}`);
@@ -118,7 +124,7 @@ try {
   assertNoSideEffectTraceBetween(loadedIndex, thirdBlockedIndex);
   assertAllowedDraftLoadTraceWindow(loadedIndex, thirdBlockedIndex);
 
-  await pressTownshipDevTraceShortcut("h");
+  await deliverDevTraceControlDeepLink(checkCarrierHealthUrl);
   await waitForTraceLine(TOWNSHIP_TRACE_CARRIER_HEALTH_STARTED, 30_000);
 } finally {
   await quitTownshipApp();
@@ -171,34 +177,61 @@ async function run(command: string, args: string[], cwd: string): Promise<void> 
   if (code !== 0) throw new Error(`${command} ${args.join(" ")} failed:\n${proc.lines.join("")}`);
 }
 
+async function runCapture(command: string, args: string[], cwd: string): Promise<string> {
+  const proc = spawnManaged(command, args, cwd);
+  const code = await waitForExit(proc.child);
+  if (code !== 0) throw new Error(`${command} ${args.join(" ")} failed:\n${proc.lines.join("")}`);
+  return proc.lines.join("");
+}
+
 async function quitTownshipApp(): Promise<void> {
   const proc = spawnManaged("osascript", ["-e", `quit app id "${appIdentifier}"`], shellRoot);
-  await waitForExit(proc.child);
+  const code = await Promise.race([waitForExit(proc.child), delay(2_000).then(() => "timeout" as const)]);
+  if (code === "timeout") {
+    proc.child.kill("SIGKILL");
+    await waitForExit(proc.child);
+  }
 }
 
-async function deliverDeepLink(): Promise<void> {
-  await run("open", ["-a", appBundlePath, deepLinkUrl], shellRoot);
+async function deliverDeepLink(options: { state?: string } = {}): Promise<void> {
+  const url = options.state ? `${deepLinkUrl}&state=${encodeURIComponent(options.state)}` : deepLinkUrl;
+  await run("open", [url], shellRoot);
 }
 
-async function pressTownshipPairingImportShortcut(): Promise<void> {
-  await pressTownshipDevTraceShortcut("l");
+async function registerLaunchServicesHandler(): Promise<void> {
+  assert.ok(existsSync(launchServicesRegister), `expected lsregister at ${launchServicesRegister}`);
+  await run(launchServicesRegister, ["-f", appBundlePath], shellRoot);
 }
 
-async function pressTownshipDevTraceShortcut(key: string): Promise<void> {
-  await run("open", ["-a", appBundlePath], shellRoot);
-  const script = `
-tell application "System Events"
-  tell process "Township"
-    repeat until exists window 1
-      delay 0.1
-    end repeat
-    set frontmost to true
-    delay 0.2
-    keystroke "${key}" using {command down, shift down}
-  end tell
-end tell
-`;
-  await run("osascript", ["-e", script], shellRoot);
+async function assertLaunchServicesRoutesTownshipSchemeToBundle(): Promise<void> {
+  const resolvedPath = await resolvedLaunchServicesTownshipHandlerPath();
+  assert.equal(
+    normalizeAppPath(resolvedPath),
+    normalizeAppPath(appBundlePath),
+    [
+      "expected LaunchServices to route township:// URLs to the freshly built app bundle",
+      `resolved handler: ${resolvedPath}`,
+      `expected handler: ${appBundlePath}`,
+    ].join("\n"),
+  );
+}
+
+async function resolvedLaunchServicesTownshipHandlerPath(): Promise<string> {
+  const script = [
+    "import AppKit",
+    'if let url = NSWorkspace.shared.urlForApplication(toOpen: URL(string: "township://pairing")!) {',
+    "  print(url.path)",
+    "}",
+  ].join("\n");
+  return (await runCapture("swift", ["-e", script], shellRoot)).trim();
+}
+
+function normalizeAppPath(path: string): string {
+  return path.replace(/\/+$/, "");
+}
+
+async function deliverDevTraceControlDeepLink(url: string): Promise<void> {
+  await run("open", [url], shellRoot);
 }
 
 async function stopProcess(child: ChildProcessWithoutNullStreams): Promise<void> {
@@ -216,35 +249,40 @@ function waitForExit(child: ChildProcessWithoutNullStreams): Promise<number | nu
   return new Promise((resolveExit) => child.on("exit", (code) => resolveExit(code)));
 }
 
-async function waitForTraceLine(line: string, timeoutMs: number): Promise<void> {
-  await waitForTrace((trace) => trace.split(/\r?\n/).includes(line), line, timeoutMs);
+async function waitForTraceLine(line: string, timeoutMs: number, path = tracePath): Promise<void> {
+  await waitForTrace((trace) => trace.split(/\r?\n/).includes(line), line, timeoutMs, path);
 }
 
-async function waitForTracePrefix(prefix: string, timeoutMs: number): Promise<void> {
-  await waitForTrace((trace) => trace.split(/\r?\n/).some((line) => line.startsWith(prefix)), prefix, timeoutMs);
+async function waitForTracePrefix(prefix: string, timeoutMs: number, path = tracePath): Promise<void> {
+  await waitForTrace((trace) => trace.split(/\r?\n/).some((line) => line.startsWith(prefix)), prefix, timeoutMs, path);
 }
 
 async function waitForTraceCount(line: string, count: number, timeoutMs: number): Promise<void> {
-  await waitForTrace((trace) => trace.split(/\r?\n/).filter((entry) => entry === line).length >= count, line, timeoutMs);
+  await waitForTrace(
+    (trace) => trace.split(/\r?\n/).filter((entry) => entry === line).length >= count,
+    line,
+    timeoutMs,
+  );
 }
 
 async function waitForTrace(
   predicate: (trace: string) => boolean,
   label: string,
   timeoutMs: number,
+  path = tracePath,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const trace = readTrace();
+    const trace = readTrace(path);
     if (predicate(trace)) return;
     await delay(250);
   }
-  throw new Error(`timed out waiting for ${label} trace entry:\n${readTrace()}`);
+  throw new Error(`timed out waiting for ${label} trace entry in ${path}:\n${readTrace(path)}`);
 }
 
-function readTrace(): string {
-  if (!existsSync(tracePath)) return "";
-  return readFileSync(tracePath, "utf8").trim();
+function readTrace(path = tracePath): string {
+  if (!existsSync(path)) return "";
+  return readFileSync(path, "utf8").trim();
 }
 
 function traceLines(): string[] {
@@ -257,6 +295,12 @@ function traceLineCount(line: string): number {
 
 function lastTraceLineIndex(line: string): number {
   return traceLines().lastIndexOf(line);
+}
+
+function lastTraceLineWithPrefix(prefix: string): string {
+  return traceLines()
+    .filter((line) => line.startsWith(prefix))
+    .at(-1) ?? "";
 }
 
 function assertNoSideEffectTraceBetween(startLineIndex: number, endLineIndex: number): void {

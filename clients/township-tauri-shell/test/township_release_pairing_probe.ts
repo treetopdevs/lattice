@@ -29,12 +29,14 @@ const peerConfig: TownshipCarrierPeerConfig = {
 };
 const handoff = exportTownshipCarrierPairingHandoff(peerConfig);
 const pairingLink = `township://pairing?handoff=${encodeURIComponent(handoff)}`;
+const armedPairingLink = `${pairingLink}&state=release-pairing-state-103`;
 const peerFingerprint = townshipCarrierPeerFingerprint(peerPubkey);
 
 const config = townshipReleasePairingProbeConfigFromEnv({
   VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_LOCAL_REALM: " resident ",
   VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_KEY_ID: " township-release-pairing-resident ",
   VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_STORAGE_NAMESPACE: " township:release-pairing-probe ",
+  VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_ARM_STATE: " release-pairing-state-103 ",
   VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_TIMEOUT_MS: "9000",
   VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_RETRY_DELAY_MS: "250",
 });
@@ -42,6 +44,7 @@ assert.deepEqual(config, {
   localRealm: "resident",
   keyId: "township-release-pairing-resident",
   storageNamespace: "township:release-pairing-probe",
+  armState: "release-pairing-state-103",
   timeoutMs: 9000,
   retryDelayMs: 250,
 });
@@ -116,6 +119,28 @@ assert.match(syncLine, /phase=sync/);
 assert.match(syncLine, /outcome=synced/);
 assert.match(syncLine, /pulled_op_ids=base,grant/);
 assert.match(syncLine, /outbox_frame_count=0/);
+
+const armingLine = townshipReleasePairingProbeLogLine({
+  phase: "arming",
+  outcome: "armed",
+  stateRequired: true,
+});
+assert.match(armingLine, /phase=arming/);
+assert.match(armingLine, /state_required=true/);
+assert.doesNotMatch(armingLine, /release-pairing-state-103/);
+
+const blockedLine = townshipReleasePairingProbeLogLine({
+  phase: "deeplink",
+  outcome: "blocked",
+  urlCount: 1,
+  pairingUrlCount: 1,
+  blockedReason: "state_mismatch",
+});
+assert.match(blockedLine, /phase=deeplink/);
+assert.match(blockedLine, /outcome=blocked/);
+assert.match(blockedLine, /blocked_reason=state_mismatch/);
+assert.doesNotMatch(blockedLine, /release-pairing-state-103/);
+
 const deeplinkRouteLine = townshipReleasePairingProbeLogLine({
   phase: "deeplink",
   outcome: "current",
@@ -126,8 +151,8 @@ const deeplinkRouteLine = townshipReleasePairingProbeLogLine({
 assert.match(deeplinkRouteLine, /first_route=township:nohost:_pairing/);
 assert.doesNotMatch(deeplinkRouteLine, /township-pairing:v1|eyJ1cmwi|127\.0\.0\.1/);
 assert.doesNotMatch(
-  [nativeKeyLine, emptyReloadLine, savedLine, loadedLine, syncLine, deeplinkRouteLine].join("\n"),
-  /sig|body|cap:|seed|private|secret|webview_devtools_remote|127\.0\.0\.1/,
+  [nativeKeyLine, emptyReloadLine, savedLine, loadedLine, syncLine, armingLine, blockedLine, deeplinkRouteLine].join("\n"),
+  /sig|body|cap:|seed|private|secret|webview_devtools_remote|127\.0\.0\.1|release-pairing-state-103/,
 );
 
 const emitted: string[] = [];
@@ -190,6 +215,7 @@ const delayedResult = await logTownshipReleasePairingProbeFromEnv(
     VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_LOCAL_REALM: "resident",
     VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_KEY_ID: "township-release-pairing-resident",
     VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_STORAGE_NAMESPACE: "township:release-pairing-probe",
+    VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_ARM_STATE: "release-pairing-state-103",
   },
   {
     workflow: delayedWorkflow,
@@ -198,10 +224,10 @@ const delayedResult = await logTownshipReleasePairingProbeFromEnv(
     source: {
       async current() {
         delayedCurrentCalls++;
-        return delayedCurrentCalls >= 2 ? [pairingLink] : ["township://nohost/_pairing"];
+        return delayedCurrentCalls >= 2 ? [armedPairingLink] : [pairingLink];
       },
       async onOpenUrl(callback) {
-        callback(["township://nohost/_pairing"]);
+        callback([pairingLink]);
         return () => {};
       },
     },
@@ -220,9 +246,18 @@ const delayedResult = await logTownshipReleasePairingProbeFromEnv(
 assert.equal(delayedResult?.outcome, "synced");
 assert.ok(delayedCurrentCalls >= 2, "pairing probe should poll current URLs after route-only callbacks");
 assert.ok(
+  delayedEmitted.some((line) => /phase=arming/.test(line) && /state_required=true/.test(line)),
+  "pairing probe should log that the release OS link path is armed without logging the state value",
+);
+assert.ok(
+  delayedEmitted.some((line) => /phase=deeplink/.test(line) && /outcome=blocked/.test(line) && /blocked_reason=state_mismatch/.test(line)),
+  "pairing probe should block a release OS pairing link that omits the app-local state",
+);
+assert.ok(
   delayedEmitted.some((line) => /phase=deeplink/.test(line) && /outcome=current/.test(line) && /pairing_url_count=1/.test(line)),
   "pairing probe should log the later current poll that contains the raw pairing URL",
 );
+assert.doesNotMatch(delayedEmitted.join("\n"), /release-pairing-state-103/);
 
 console.log("\x1b[32m✓ release pairing probe contract checks passed\x1b[0m");
 

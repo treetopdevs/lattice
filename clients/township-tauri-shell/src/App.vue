@@ -48,6 +48,8 @@ import {
   createOneShotTownshipPairingDeepLinkGate,
   createTownshipPairingDeepLinkListener,
   parseTownshipPairingDeepLink,
+  type TownshipPairingDeepLinkBlocked,
+  type TownshipPairingDeepLinkGateConsumption,
   type TownshipPairingDeepLinkListener,
   type TownshipPairingDeepLinkParse,
   type TownshipPairingDeepLinkSource,
@@ -149,6 +151,7 @@ const pairingDraftOrigin = ref<TownshipCarrierPairingDraftOrigin>("manual");
 const pairingSaveConfirmed = ref(false);
 const pairingDeepLinkGate = createOneShotTownshipPairingDeepLinkGate();
 const pairingDeepLinkImportArmed = ref(false);
+const pairingDeepLinkImportState = ref<string | null>(null);
 const pairingStatus = ref<{ ok: boolean; message: string } | null>(null);
 const pairingSubmitting = ref(false);
 const pairingHandoffDraft = ref("");
@@ -170,6 +173,7 @@ let canonicalProbeDeepLinkListener: TownshipCanonicalProbeDeepLinkListener | nul
 let pairingCameraScanner: TownshipPairingQrCameraScanner | null = null;
 let pairingDiscovery: TownshipPairingDiscovery | null = null;
 let devTraceShortcutMounted = false;
+let appUnmounted = false;
 const healthStatus = ref<TownshipCarrierHealthResult | null>(null);
 const healthSubmitting = ref(false);
 const syncStatus = ref<TownshipOutboxSync | null>(null);
@@ -347,6 +351,7 @@ const availableActions = computed(() => {
 });
 
 onMounted(async () => {
+  appUnmounted = false;
   const releasePairingProbeActive =
     isAndroidTauriShell() &&
     townshipReleasePairingProbeConfigFromEnv(import.meta.env as TownshipReleasePairingProbeEnv) !== null;
@@ -369,6 +374,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  appUnmounted = true;
   if (devTraceShortcutMounted) window.removeEventListener("keydown", handleDevTraceShortcut);
   devTraceShortcutMounted = false;
   canonicalProbeDeepLinkListener?.stop();
@@ -470,6 +476,7 @@ function scheduleTownshipNativeHydration() {
 async function hydrateTownshipNativeReadiness() {
   nativeStatus.value = await loadTownshipNativeStatus();
   actionAvailability.value = await loadTownshipActionAvailability();
+  if (devTraceRuntime) void traceTownshipDevEvent("township-native-hydration-settled").catch(() => {});
 }
 
 async function submitPairing() {
@@ -549,9 +556,14 @@ async function mountPairingDeepLinkListener() {
     pairingDeepLinkListener = await createTownshipPairingDeepLinkListener({
       source: createTracingPairingDeepLinkSource(createTauriPairingDeepLinkSource()),
       gate: {
-        arm: () => pairingDeepLinkGate.arm(),
+        arm: () => {
+          const state = pairingDeepLinkGate.arm();
+          pairingDeepLinkImportState.value = state;
+          return state;
+        },
         disarm: clearPairingDeepLinkImport,
         armed: () => pairingDeepLinkGate.armed(),
+        state: () => pairingDeepLinkGate.state(),
         consume: consumePairingDeepLinkImport,
       },
       apply: applyPairingDeepLink,
@@ -579,10 +591,12 @@ async function mountCanonicalProbeDeepLinkListener() {
 function armPairingDeepLinkImport(event?: Event) {
   if (event && !event.isTrusted) return;
 
-  pairingDeepLinkGate.arm();
+  const state = pairingDeepLinkGate.arm();
   pairingDeepLinkImportArmed.value = true;
+  pairingDeepLinkImportState.value = state;
   pairingStatus.value = { ok: true, message: "Pairing link import ready." };
   void traceTownshipDevEvent("pairing-link-import-armed").catch(() => {});
+  if (devTraceRuntime) void traceTownshipDevEvent(`pairing-link-import-state:${state}`).catch(() => {});
 }
 
 function disarmPairingDeepLinkImport() {
@@ -593,11 +607,13 @@ function disarmPairingDeepLinkImport() {
 function clearPairingDeepLinkImport() {
   pairingDeepLinkGate.disarm();
   pairingDeepLinkImportArmed.value = false;
+  pairingDeepLinkImportState.value = null;
 }
 
 async function mountDevTraceShortcut() {
   try {
     await traceTownshipDevEvent(TOWNSHIP_TRACE_DEV_RUNTIME_READY);
+    if (appUnmounted) return;
     window.addEventListener("keydown", handleDevTraceShortcut);
     devTraceShortcutMounted = true;
   } catch {
@@ -621,13 +637,20 @@ function handleDevTraceShortcut(event: KeyboardEvent) {
   }
 }
 
-function consumePairingDeepLinkImport(parse: TownshipPairingDeepLinkParse): boolean {
+function consumePairingDeepLinkImport(parse: TownshipPairingDeepLinkParse): TownshipPairingDeepLinkGateConsumption {
   const accepted = pairingDeepLinkGate.consume(parse);
   pairingDeepLinkImportArmed.value = pairingDeepLinkGate.armed();
+  pairingDeepLinkImportState.value = pairingDeepLinkGate.state();
   return accepted;
 }
 
-function handleBlockedPairingDeepLink() {
+function handleBlockedPairingDeepLink(blocked: TownshipPairingDeepLinkBlocked) {
+  if (blocked.reason === "state_mismatch") {
+    pairingStatus.value = { ok: false, message: "Pairing link ignored; state token did not match." };
+    void traceTownshipDevEvent("pairing-link-blocked:state-mismatch").catch(() => {});
+    return;
+  }
+
   pairingStatus.value = { ok: false, message: "Pairing link ignored; enable link import first." };
   void traceTownshipDevEvent("pairing-link-blocked:not-armed").catch(() => {});
 }
@@ -660,10 +683,36 @@ async function pairingDeepLinkUrls(urls: readonly string[] | null): Promise<read
 
   const pairingUrls: string[] = [];
   for (const url of urls) {
+    if (handleDevTraceControlDeepLink(url)) continue;
     if (parseTownshipCanonicalProbeDeepLink(url) !== null) continue;
     pairingUrls.push(url);
   }
   return pairingUrls;
+}
+
+function handleDevTraceControlDeepLink(value: string): boolean {
+  if (!devTraceRuntime) return false;
+
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+
+  if (url.protocol !== "township:" || url.hostname !== "dev") return false;
+
+  const route = url.pathname.replace(/^\/+/, "");
+  if (route === "pairing-import/arm") {
+    armPairingDeepLinkImport();
+    return true;
+  }
+  if (route === "carrier-health/check") {
+    void checkCarrierHealth();
+    return true;
+  }
+
+  return false;
 }
 
 async function tracePairingDeepLinkUrls(urls: readonly string[] | null): Promise<void> {
@@ -968,6 +1017,7 @@ function importPairingIngress(value: string): TownshipPairingDeepLinkParse {
   return {
     ok: true,
     handoff: value,
+    state: null,
     draft: imported.draft,
     peerFingerprint: imported.peerFingerprint,
   };
@@ -1459,6 +1509,9 @@ function pairingDiscoveryAdvertFromMessage(value: unknown): TownshipPairingDisco
           <button type="button" :disabled="!pairingDeepLinkImportArmed" @click="disarmPairingDeepLinkImport">
             Cancel link import
           </button>
+          <small v-if="pairingDeepLinkImportState" class="fingerprint">
+            link state {{ pairingDeepLinkImportState }}
+          </small>
           <button type="submit" :disabled="pairingSubmitting">
             {{ pairingSubmitting ? "Saving" : "Save pairing" }}
           </button>

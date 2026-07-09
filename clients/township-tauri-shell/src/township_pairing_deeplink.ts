@@ -10,6 +10,7 @@ export type TownshipPairingDeepLinkParse =
   | {
       ok: true;
       handoff: string;
+      state: string | null;
       draft: TownshipCarrierPeerConfigInput;
       peerFingerprint: string;
     }
@@ -28,15 +29,31 @@ export interface TownshipPairingDeepLinkListener {
   stop(): void;
 }
 
+export type TownshipPairingDeepLinkBlockedReason = "not_armed" | "state_mismatch";
+
+export type TownshipPairingDeepLinkGateConsumption =
+  | {
+      ok: true;
+    }
+  | {
+      ok: false;
+      reason: TownshipPairingDeepLinkBlockedReason;
+    };
+
+export interface TownshipPairingDeepLinkGateOptions {
+  createState?: () => string;
+}
+
 export interface TownshipPairingDeepLinkGate {
-  arm(): void;
+  arm(): string;
   disarm(): void;
   armed(): boolean;
-  consume(parse: TownshipPairingDeepLinkParse): boolean;
+  state(): string | null;
+  consume(parse: TownshipPairingDeepLinkParse): TownshipPairingDeepLinkGateConsumption;
 }
 
 export interface TownshipPairingDeepLinkBlocked {
-  reason: "not_armed";
+  reason: TownshipPairingDeepLinkBlockedReason;
   parse: TownshipPairingDeepLinkParse;
 }
 
@@ -61,6 +78,7 @@ export function parseTownshipPairingDeepLink(value: string): TownshipPairingDeep
   return {
     ok: true,
     handoff,
+    state: pairingStateFromLink(value),
     draft: imported.draft,
     peerFingerprint: imported.peerFingerprint,
   };
@@ -72,8 +90,9 @@ export async function createTownshipPairingDeepLinkListener(
   const applyUrls = (urls: readonly string[]) => {
     for (const url of urls) {
       const parse = parseTownshipPairingDeepLink(url);
-      if (options.gate && !options.gate.consume(parse)) {
-        options.onBlocked?.({ reason: "not_armed", parse });
+      const consumption = options.gate?.consume(parse) ?? { ok: true };
+      if (!consumption.ok) {
+        options.onBlocked?.({ reason: consumption.reason, parse });
         continue;
       }
       options.apply(parse);
@@ -92,25 +111,47 @@ export async function createTownshipPairingDeepLinkListener(
   };
 }
 
-export function createOneShotTownshipPairingDeepLinkGate(): TownshipPairingDeepLinkGate {
+export function createOneShotTownshipPairingDeepLinkGate(
+  options: TownshipPairingDeepLinkGateOptions = {},
+): TownshipPairingDeepLinkGate {
   let isArmed = false;
+  let armedState: string | null = null;
 
   return {
     arm() {
       isArmed = true;
+      armedState = present((options.createState ?? createPairingImportState)());
+      if (armedState === null) throw new Error("pairing import state cannot be empty");
+      return armedState;
     },
     disarm() {
       isArmed = false;
+      armedState = null;
     },
     armed() {
       return isArmed;
     },
+    state() {
+      return armedState;
+    },
     consume(parse: TownshipPairingDeepLinkParse) {
-      if (!isArmed) return false;
-      if (parse.ok) isArmed = false;
-      return true;
+      if (!isArmed) return { ok: false, reason: "not_armed" };
+      if (!parse.ok) return { ok: true };
+      if (parse.state !== armedState) return { ok: false, reason: "state_mismatch" };
+      isArmed = false;
+      armedState = null;
+      return { ok: true };
     },
   };
+}
+
+function createPairingImportState(): string {
+  const crypto = globalThis.crypto;
+  if (!crypto?.getRandomValues) throw new Error("crypto unavailable for pairing import state");
+
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function pairingHandoffFromLink(value: string): string | null {
@@ -139,6 +180,17 @@ function pairingHandoffFromLink(value: string): string | null {
 
   const pathHandoff = present(pairingPathHandoff(url));
   return pathHandoff;
+}
+
+function pairingStateFromLink(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("township:")) return null;
+
+  const queryStart = trimmed.indexOf("?");
+  if (queryStart < 0) return null;
+  const fragmentStart = trimmed.indexOf("#", queryStart);
+  const query = trimmed.slice(queryStart + 1, fragmentStart > queryStart ? fragmentStart : undefined);
+  return present(new URLSearchParams(query).get("state"));
 }
 
 function pairingHandoffFromTownshipScheme(value: string): string | null {

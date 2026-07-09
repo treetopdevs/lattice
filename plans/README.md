@@ -116,7 +116,13 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 094 | Tauri imported pairing confirmation policy | P1 | S | 093 | DONE |
 | 095 | Tauri armed deep-link pairing import gate | P1 | S | 094 | DONE |
 | 096 | Tauri installed-app armed deep-link delivery smoke | P1 | S | 095 | DONE |
-| 097 | Tauri pairing link no-side-effect trace guard | P1 | S | 096 | IN PROGRESS |
+| 097 | Tauri pairing link no-side-effect trace guard | P1 | S | 096 | DONE |
+| 098 | Tauri macOS LaunchServices warm routing | P1 | S | 097 | DONE |
+| 099 | Tauri macOS cold-start deep-link delivery | P1 | S | 098 | DONE |
+| 100 | Tauri armed pairing state binding | P1 | S | 095 | DONE |
+| 101 | Tauri dev-trace release hydration and control links | P1 | S | 100 | DONE |
+| 102 | Tauri release app-originated attenuated grant | P1 | M | 092 | DONE |
+| 103 | Tauri Android release armed pairing delivery | P1 | M | 100 | IN PROGRESS |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

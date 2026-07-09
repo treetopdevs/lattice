@@ -28,6 +28,7 @@ interface ReleaseAuthorProbeBuildConfig {
   peerRealm: string;
   peerPubkey: string;
   storageNamespace: string;
+  grantAudiencePubkey: string;
   postText: string;
   badSummaryText: string;
   pauseAfterAuthorMs: string;
@@ -145,6 +146,27 @@ async function runReleaseAuthorPushProof(serial: string): Promise<void> {
   assert.doesNotMatch(pullLine, forbiddenLogTerms());
   console.log(`  observed pull ${pullLine.trim()}`);
 
+  const grantLine = await waitForReleaseAuthorProbeLog(
+    serial,
+    "grant",
+    (line) => line.includes("outcome=authored"),
+  );
+  assert.match(grantLine, /phase=grant/);
+  assert.match(grantLine, /outcome=authored/);
+  const appGrantFrameId = fieldValue(grantLine, "grant_frame_id");
+  const appGrantDelegationId = fieldValue(grantLine, "grant_delegation_id");
+  assert.notEqual(appGrantFrameId, "none");
+  assert.notEqual(appGrantDelegationId, "none");
+  assert.equal(base64UrlToBase64(fieldValue(grantLine, "grant_audience_b64url")), buildConfig.grantAudiencePubkey);
+  assert.equal(fieldValue(grantLine, "parent_id"), grantDelegationId);
+  assert.match(grantLine, /outbox_frame_count=1/);
+  assert.ok(
+    Number(fieldValue(grantLine, "delegation_frame_count")) >= pulledDelegationFrameIds.length + 1,
+    "app-originated grant should be retained with delegation evidence",
+  );
+  assert.doesNotMatch(grantLine, forbiddenLogTerms());
+  console.log(`  observed app grant ${grantLine.trim()}`);
+
   const authorLine = await waitForReleaseAuthorProbeLog(
     serial,
     "author",
@@ -156,7 +178,7 @@ async function runReleaseAuthorPushProof(serial: string): Promise<void> {
   const badFrameId = fieldValue(authorLine, "bad_frame_id");
   assert.notEqual(postFrameId, badFrameId);
   assert.equal(fieldValue(authorLine, "cap_id"), grantDelegationId);
-  assert.match(authorLine, /outbox_frame_count=2/);
+  assert.match(authorLine, /outbox_frame_count=3/);
   assert.doesNotMatch(authorLine, forbiddenLogTerms());
   console.log(`  observed author ${authorLine.trim()}`);
 
@@ -171,15 +193,23 @@ async function runReleaseAuthorPushProof(serial: string): Promise<void> {
     "pre-push cold reload should retain the post op",
   );
   assert.ok(
+    fieldIds(pendingReloadLine, "local_op_ids").includes(appGrantFrameId),
+    "pre-push cold reload should retain the app-originated grant op",
+  );
+  assert.ok(
     fieldIds(pendingReloadLine, "local_op_ids").includes(badFrameId),
     "pre-push cold reload should retain the bad op",
   );
   assert.deepEqual(
-    fieldIds(pendingReloadLine, "delegation_frame_ids"),
+    fieldIds(pendingReloadLine, "delegation_frame_ids").filter((id) => pulledDelegationFrameIds.includes(id)),
     pulledDelegationFrameIds,
     "pre-push cold reload should retain the pulled delegation frames",
   );
-  assert.match(pendingReloadLine, /outbox_frame_count=2/);
+  assert.ok(
+    fieldIds(pendingReloadLine, "delegation_frame_ids").includes(appGrantFrameId),
+    "pre-push cold reload should retain the app-originated grant frame",
+  );
+  assert.match(pendingReloadLine, /outbox_frame_count=3/);
   assert.doesNotMatch(pendingReloadLine, forbiddenLogTerms());
   console.log(`  observed pre-push cold reload ${pendingReloadLine.trim()}`);
 
@@ -190,8 +220,8 @@ async function runReleaseAuthorPushProof(serial: string): Promise<void> {
   );
   assert.match(pushLine, /phase=push/);
   assert.match(pushLine, /outcome=synced/);
-  assert.deepEqual(fieldIds(pushLine, "pushed_frame_ids"), [badFrameId, postFrameId].sort());
-  assert.match(pushLine, /accepted_count=2/);
+  assert.deepEqual(fieldIds(pushLine, "pushed_frame_ids"), [appGrantFrameId, badFrameId, postFrameId].sort());
+  assert.match(pushLine, /accepted_count=3/);
   assert.match(pushLine, /pending_count=0/);
   assert.match(pushLine, /outbox_frame_count=0/);
   assert.doesNotMatch(pushLine, forbiddenLogTerms());
@@ -206,8 +236,10 @@ async function runReleaseAuthorPushProof(serial: string): Promise<void> {
   assert.match(peerLine, /outcome=reported/);
   assert.equal(fieldValue(peerLine, "post_frame_id"), postFrameId);
   assert.equal(fieldValue(peerLine, "bad_frame_id"), badFrameId);
+  assert.equal(fieldValue(peerLine, "grant_frame_id"), appGrantFrameId);
   assert.match(peerLine, /post_materialized=true/);
   assert.match(peerLine, /bad_authority_reason=operation_not_granted/);
+  assert.match(peerLine, /grant_authority_accepted=true/);
   assert.match(peerLine, /outbox_frame_count=0/);
   assert.doesNotMatch(peerLine, forbiddenLogTerms());
   console.log(`  observed peer ${peerLine.trim()}`);
@@ -227,6 +259,7 @@ async function runReleaseAuthorPushProof(serial: string): Promise<void> {
   for (const id of pulledDelegationFrameIds) {
     assert.ok(coldDelegationFrameIds.includes(id), `cold reload should retain pulled delegation frame ${id}`);
   }
+  assert.ok(coldDelegationFrameIds.includes(appGrantFrameId), "cold reload should retain app-originated grant evidence");
   assert.ok(coldDelegationFrameIds.includes(postFrameId), "cold reload should retain post carrier frame evidence");
   assert.ok(coldDelegationFrameIds.includes(badFrameId), "cold reload should retain bad carrier frame evidence");
   assert.match(coldReloadLine, /outbox_frame_count=0/);
@@ -263,6 +296,7 @@ function releaseAuthorProbeConfigFromBuildScript(): ReleaseAuthorProbeBuildConfi
   const peerRealm = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_PEER_REALM");
   const peerPubkey = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_PEER_PUBKEY");
   const storageNamespace = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_STORAGE_NAMESPACE");
+  const grantAudiencePubkey = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_GRANT_AUDIENCE_PUBKEY");
   const postText = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_POST_TEXT");
   const badSummaryText = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_BAD_SUMMARY_TEXT");
   const pauseAfterAuthorMs = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_PAUSE_AFTER_AUTHOR_MS");
@@ -271,6 +305,7 @@ function releaseAuthorProbeConfigFromBuildScript(): ReleaseAuthorProbeBuildConfi
   assert.equal(peerRealm, "clerk");
   assert.equal(peerPubkey, "Ze1W+4DnnK6aoJY5GiUoDVyZVhq5/PCL7UwQALXUQNk=");
   assert.equal(storageNamespace, "township:release-author-probe");
+  assert.equal(grantAudiencePubkey, "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=");
   assert.equal(postText, "release-probe-post");
   assert.equal(badSummaryText, "release-probe-unauthorized-summary");
   assert.equal(pauseAfterAuthorMs, "30000");
@@ -281,6 +316,7 @@ function releaseAuthorProbeConfigFromBuildScript(): ReleaseAuthorProbeBuildConfi
     peerRealm,
     peerPubkey,
     storageNamespace,
+    grantAudiencePubkey,
     postText,
     badSummaryText,
     pauseAfterAuthorMs,
@@ -322,7 +358,7 @@ async function assertAndroidApiLevelSupportsNetworkSecurityConfig(serial: string
 
 async function waitForReleaseAuthorProbeLog(
   serial: string,
-  phase: "native_key" | "reload" | "pull" | "author" | "push" | "peer",
+  phase: "native_key" | "reload" | "pull" | "grant" | "author" | "push" | "peer",
   predicate: (line: string) => boolean = () => true,
 ): Promise<string> {
   const deadline = Date.now() + 90_000;

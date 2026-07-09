@@ -7,8 +7,11 @@ import {
   type TownshipNativeWorkflowOptions,
 } from "./native_workflow";
 import {
+  createOneShotTownshipPairingDeepLinkGate,
   createTownshipPairingDeepLinkListener,
   parseTownshipPairingDeepLink,
+  type TownshipPairingDeepLinkBlockedReason,
+  type TownshipPairingDeepLinkGate,
   type TownshipPairingDeepLinkParse,
   type TownshipPairingDeepLinkSource,
 } from "./township_pairing_deeplink";
@@ -35,6 +38,7 @@ export interface TownshipReleasePairingProbeEnv {
   VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_LOCAL_REALM?: string;
   VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_KEY_ID?: string;
   VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_STORAGE_NAMESPACE?: string;
+  VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_ARM_STATE?: string;
   VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_TIMEOUT_MS?: string;
   VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_RETRY_DELAY_MS?: string;
   VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_URL?: string;
@@ -47,6 +51,7 @@ export interface TownshipReleasePairingProbeConfig {
   localRealm: string;
   keyId: string;
   storageNamespace: string;
+  armState?: string;
   timeoutMs?: number;
   retryDelayMs?: number;
 }
@@ -78,6 +83,11 @@ export type TownshipReleasePairingProbeResult =
       urlPort: string;
     }
   | {
+      phase: "arming";
+      outcome: "armed";
+      stateRequired: boolean;
+    }
+  | {
       phase: "sync";
       outcome: "synced";
       elapsedMs: number;
@@ -97,11 +107,12 @@ export type TownshipReleasePairingProbeResult =
     }
   | {
       phase: "deeplink";
-      outcome: "listener_mounted" | "current" | "callback";
+      outcome: "listener_mounted" | "current" | "callback" | "blocked";
       urlCount: number;
       pairingUrlCount: number;
       firstRoute?: string;
       firstParseReason?: string;
+      blockedReason?: TownshipPairingDeepLinkBlockedReason;
     };
 
 type TownshipReleasePairingPhaseResult =
@@ -158,16 +169,18 @@ export function townshipReleasePairingProbeConfigFromEnv(
   const storageNamespace =
     present(env.VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_STORAGE_NAMESPACE) ??
     TOWNSHIP_RELEASE_PAIRING_PROBE_STORAGE_NAMESPACE;
+  const armState = present(env.VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_ARM_STATE);
   const timeoutMs = positiveInteger(env.VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_TIMEOUT_MS);
   const retryDelayMs = positiveInteger(env.VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_RETRY_DELAY_MS);
 
-  if (!localRealm || !keyId || !storageNamespace) return null;
+  if (!localRealm || !keyId || !storageNamespace || (armState !== null && !validArmState(armState))) return null;
 
   const config: TownshipReleasePairingProbeConfig = {
     localRealm,
     keyId,
     storageNamespace,
   };
+  if (armState !== null) config.armState = armState;
   if (timeoutMs !== null) config.timeoutMs = timeoutMs;
   if (retryDelayMs !== null) config.retryDelayMs = retryDelayMs;
   return config;
@@ -309,6 +322,15 @@ export function townshipReleasePairingProbeLogLine(result: TownshipReleasePairin
     ].join(" ");
   }
 
+  if (result.phase === "arming") {
+    return [
+      TOWNSHIP_RELEASE_PAIRING_PROBE_LOG_PREFIX,
+      "phase=arming",
+      "outcome=armed",
+      `state_required=${result.stateRequired}`,
+    ].join(" ");
+  }
+
   if (result.phase === "sync" && result.outcome === "synced") {
     const fields = [
       TOWNSHIP_RELEASE_PAIRING_PROBE_LOG_PREFIX,
@@ -336,6 +358,7 @@ export function townshipReleasePairingProbeLogLine(result: TownshipReleasePairin
     ];
     if (result.firstRoute) fields.push(`first_route=${probeRouteToken(result.firstRoute)}`);
     if (result.firstParseReason) fields.push(`first_parse_reason=${probeToken(result.firstParseReason)}`);
+    if (result.blockedReason) fields.push(`blocked_reason=${probeToken(result.blockedReason)}`);
     return fields.join(" ");
   }
 
@@ -361,6 +384,16 @@ async function waitForReleasePairing(
   const retryDelayMs = options.retryDelayMs ?? options.config.retryDelayMs ?? 500;
   const source = tracedPairingDeepLinkSource(options.source ?? createTauriPairingDeepLinkSource(), options);
   const listenerRef: { stop?: () => void } = {};
+  const gate = releasePairingGate(options.config);
+
+  if (gate !== null) {
+    gate.arm();
+    await options.onResult?.({
+      phase: "arming",
+      outcome: "armed",
+      stateRequired: true,
+    });
+  }
 
   try {
     const parse = await new Promise<TownshipPairingDeepLinkParse | "timeout">((resolve) => {
@@ -374,6 +407,17 @@ async function waitForReleasePairing(
       const timer = setTimeout(() => settle("timeout"), timeoutMs);
       const settleIfActionable = (candidate: TownshipPairingDeepLinkParse) => {
         if (candidate.ok || candidate.reason !== "invalid_pairing_deeplink") {
+          const consumption = gate?.consume(candidate) ?? { ok: true };
+          if (!consumption.ok) {
+            void options.onResult?.({
+              phase: "deeplink",
+              outcome: "blocked",
+              urlCount: 1,
+              pairingUrlCount: candidate.ok ? 1 : 0,
+              blockedReason: consumption.reason,
+            });
+            return;
+          }
           clearTimeout(timer);
           settle(candidate);
         }
@@ -495,6 +539,11 @@ async function waitForReleasePairing(
       await delay(0);
     }
   }
+}
+
+function releasePairingGate(config: TownshipReleasePairingProbeConfig): TownshipPairingDeepLinkGate | null {
+  if (config.armState === undefined) return null;
+  return createOneShotTownshipPairingDeepLinkGate({ createState: () => config.armState as string });
 }
 
 function firstActionablePairingParse(urls: readonly string[] | null): TownshipPairingDeepLinkParse | null {
@@ -738,6 +787,10 @@ function present(value: string | null | undefined): string | null {
 function positiveInteger(value: string | null | undefined): number | null {
   const parsed = Number(present(value));
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function validArmState(value: string): boolean {
+  return /^[A-Za-z0-9_.:-]{8,128}$/.test(value);
 }
 
 function delay(ms: number): Promise<void> {

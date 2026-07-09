@@ -15,9 +15,11 @@ import {
   type TownshipNativeWorkflowOptions,
 } from "./native_workflow";
 import {
+  submitTownshipDelegation,
   submitTownshipPost,
   TOWNSHIP_REALM_BY_PUBKEY,
   TOWNSHIP_REPLICA,
+  type TownshipDelegationSubmission,
   type TownshipPostSubmission,
 } from "./township_actions";
 import {
@@ -43,6 +45,7 @@ export interface TownshipReleaseAuthorProbeEnv {
   VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_REPLICA?: string;
   VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_KEY_ID?: string;
   VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_STORAGE_NAMESPACE?: string;
+  VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_GRANT_AUDIENCE_PUBKEY?: string;
   VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_POST_TEXT?: string;
   VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_BAD_SUMMARY_TEXT?: string;
   VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_TIMEOUT_MS?: string;
@@ -54,6 +57,7 @@ export interface TownshipReleaseAuthorProbeConfig {
   peer: TownshipCarrierPeerConfig;
   keyId: string;
   storageNamespace: string;
+  grantAudiencePubkey?: string;
   postText: string;
   badSummaryText: string;
   timeoutMs?: number;
@@ -88,6 +92,18 @@ export type TownshipReleaseAuthorProbeResult =
       grantDelegationId: string;
     }
   | {
+      phase: "grant";
+      outcome: "authored";
+      grantFrameId: string;
+      grantDelegationId: string;
+      grantAudiencePubkey: string;
+      parentId: string | null;
+      authorPublicKeyBase64: string;
+      localOpCount: number;
+      carrierFrameCount: number;
+      delegationFrameCount: number;
+    }
+  | {
       phase: "author";
       outcome: "authored";
       postFrameId: string;
@@ -113,10 +129,12 @@ export type TownshipReleaseAuthorProbeResult =
       badFrameId: string;
       postMaterialized: boolean;
       badAuthorityReason: string;
+      appGrantFrameId?: string;
+      appGrantAuthorityAccepted?: boolean;
       carrierFrameCount: number;
     }
   | {
-      phase: "pull" | "author" | "push" | "peer";
+      phase: "pull" | "grant" | "author" | "push" | "peer";
       outcome: "error" | "timeout";
       elapsedMs: number;
       message: string;
@@ -137,11 +155,16 @@ export interface TownshipReleaseAuthorProbeSubmitPostOptions {
   realmByPubkey: Record<string, string>;
 }
 
+export interface TownshipReleaseAuthorProbeSubmitGrantOptions extends TownshipReleaseAuthorProbeSubmitPostOptions {
+  grantDelegationId: string;
+}
+
 export interface TownshipReleaseAuthorProbeBadFrameOptions extends TownshipReleaseAuthorProbeSubmitPostOptions {
   capId: string;
 }
 
 export interface TownshipReleaseAuthorProbeStateReportOptions extends TownshipReleaseAuthorProbeBadFrameOptions {
+  appGrantFrameId?: string;
   postFrameId: string;
   badFrameId: string;
   verifier?: CarrierVerifier;
@@ -152,11 +175,16 @@ export interface TownshipReleaseAuthorProbeStateReportResult {
   ok: boolean;
   postMaterialized: boolean;
   badAuthorityReason: string;
+  appGrantAuthorityAccepted?: boolean;
   message?: string;
 }
 
 interface TownshipReleaseAuthorProbeMetadata {
   stage: "authored" | "pushed";
+  appGrantFrameId?: string;
+  appGrantDelegationId?: string;
+  grantAudiencePubkey?: string;
+  grantParentId?: string | null;
   postFrameId: string;
   badFrameId: string;
   capId: string;
@@ -170,6 +198,7 @@ export interface TownshipReleaseAuthorProbeOptions extends Pick<TownshipNativeWo
   timeoutMs?: number;
   retryDelayMs?: number;
   sync?(options: TownshipReleaseAuthorProbeSyncOptions): Promise<TownshipOutboxSync>;
+  submitGrant?(options: TownshipReleaseAuthorProbeSubmitGrantOptions): Promise<TownshipDelegationSubmission>;
   submitPost?(options: TownshipReleaseAuthorProbeSubmitPostOptions): Promise<TownshipPostSubmission>;
   authorBadFrame?(options: TownshipReleaseAuthorProbeBadFrameOptions): Promise<{ frameId: string }>;
   findGrantDelegationId?(workflow: TownshipNativeWorkflow, audiencePublicKeyBase64: string): Promise<string>;
@@ -187,6 +216,7 @@ export function townshipReleaseAuthorProbeConfigFromEnv(
   const keyId = present(env.VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_KEY_ID) ?? TOWNSHIP_NATIVE_KEY_ID;
   const storageNamespace =
     present(env.VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_STORAGE_NAMESPACE) ?? TOWNSHIP_RELEASE_AUTHOR_PROBE_STORAGE_NAMESPACE;
+  const grantAudiencePubkey = present(env.VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_GRANT_AUDIENCE_PUBKEY);
   const postText = present(env.VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_POST_TEXT) ?? TOWNSHIP_RELEASE_AUTHOR_PROBE_DEFAULT_POST_TEXT;
   const badSummaryText =
     present(env.VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_BAD_SUMMARY_TEXT) ??
@@ -195,7 +225,14 @@ export function townshipReleaseAuthorProbeConfigFromEnv(
   const retryDelayMs = positiveInteger(env.VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_RETRY_DELAY_MS);
   const pauseAfterAuthorMs = positiveInteger(env.VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_PAUSE_AFTER_AUTHOR_MS);
 
-  if (!url || !validProbeUrl(url) || !localRealm || !expectedPeerRealm || !validPublicKey(expectedPeerPubkey)) {
+  if (
+    !url ||
+    !validProbeUrl(url) ||
+    !localRealm ||
+    !expectedPeerRealm ||
+    !validPublicKey(expectedPeerPubkey) ||
+    (grantAudiencePubkey !== null && !validPublicKey(grantAudiencePubkey))
+  ) {
     return null;
   }
 
@@ -213,6 +250,7 @@ export function townshipReleaseAuthorProbeConfigFromEnv(
     postText,
     badSummaryText,
   };
+  if (grantAudiencePubkey !== null) config.grantAudiencePubkey = grantAudiencePubkey;
   if (timeoutMs !== null) config.timeoutMs = timeoutMs;
   if (retryDelayMs !== null) config.retryDelayMs = retryDelayMs;
   if (pauseAfterAuthorMs !== null) config.pauseAfterAuthorMs = pauseAfterAuthorMs;
@@ -296,6 +334,12 @@ export async function probeTownshipReleaseAuthor(
   };
   await options.onResult?.(pullResult);
 
+  const appGrant = await submitReleaseAuthorAppGrant(options, realmByPubkey, grantDelegationId, authorPublicKeyBase64);
+  if (isReleaseAuthorAppGrantFailure(appGrant)) {
+    await options.onResult?.(appGrant);
+    return appGrant;
+  }
+
   const post = await (options.submitPost ?? submitReleaseAuthorPost)({
     config: options.config,
     workflow: options.workflow,
@@ -321,6 +365,7 @@ export async function probeTownshipReleaseAuthor(
   const authorReload = await reload(options.workflow);
   const authored: TownshipReleaseAuthorProbeMetadata = {
     stage: "authored",
+    ...appGrant,
     postFrameId: post.frameId,
     badFrameId: badFrame.frameId,
     capId: post.capId,
@@ -379,6 +424,7 @@ async function pushAndReport(
     postFrameId: authored.postFrameId,
     badFrameId: authored.badFrameId,
   };
+  if (authored.appGrantFrameId !== undefined) stateReportOptions.appGrantFrameId = authored.appGrantFrameId;
   if (options.verifier !== undefined) stateReportOptions.verifier = options.verifier;
   if (options.webSocket !== undefined) stateReportOptions.webSocket = options.webSocket;
   const report = await (options.stateReport ?? releaseAuthorStateReport)(stateReportOptions);
@@ -402,6 +448,16 @@ async function pushAndReport(
     await options.onResult?.(result);
     return result;
   }
+  if (authored.appGrantFrameId !== undefined && report.appGrantAuthorityAccepted !== true) {
+    const result: TownshipReleaseAuthorProbeResult = {
+      phase: "peer",
+      outcome: "error",
+      elapsedMs: 0,
+      message: `unexpected_app_grant_authority_${report.appGrantAuthorityAccepted === false ? "false" : "missing"}`,
+    };
+    await options.onResult?.(result);
+    return result;
+  }
   const finalReload = await reload(options.workflow);
   const peerResult: TownshipReleaseAuthorProbeResult = {
     phase: "peer",
@@ -412,6 +468,10 @@ async function pushAndReport(
     badAuthorityReason: report.badAuthorityReason,
     carrierFrameCount: finalReload.carrierFrameCount,
   };
+  if (authored.appGrantFrameId !== undefined) {
+    peerResult.appGrantFrameId = authored.appGrantFrameId;
+    peerResult.appGrantAuthorityAccepted = true;
+  }
   await options.onResult?.(peerResult);
   return peerResult;
 }
@@ -478,6 +538,22 @@ export function townshipReleaseAuthorProbeLogLine(result: TownshipReleaseAuthorP
     ].join(" ");
   }
 
+  if (result.phase === "grant" && result.outcome === "authored") {
+    return [
+      TOWNSHIP_RELEASE_AUTHOR_PROBE_LOG_PREFIX,
+      "phase=grant",
+      "outcome=authored",
+      `grant_frame_id=${probeToken(result.grantFrameId)}`,
+      `grant_delegation_id=${probeToken(result.grantDelegationId)}`,
+      `grant_audience_b64url=${base64UrlEncode(result.grantAudiencePubkey)}`,
+      `parent_id=${probeToken(result.parentId ?? "none")}`,
+      `author_b64url=${base64UrlEncode(result.authorPublicKeyBase64)}`,
+      `local_op_count=${result.localOpCount}`,
+      `outbox_frame_count=${result.carrierFrameCount}`,
+      `delegation_frame_count=${result.delegationFrameCount}`,
+    ].join(" ");
+  }
+
   if (result.phase === "push" && result.outcome === "synced") {
     return [
       TOWNSHIP_RELEASE_AUTHOR_PROBE_LOG_PREFIX,
@@ -492,6 +568,13 @@ export function townshipReleaseAuthorProbeLogLine(result: TownshipReleaseAuthorP
   }
 
   if (result.phase === "peer" && result.outcome === "reported") {
+    const appGrantFields =
+      result.appGrantFrameId === undefined
+        ? []
+        : [
+            `grant_frame_id=${probeToken(result.appGrantFrameId)}`,
+            `grant_authority_accepted=${result.appGrantAuthorityAccepted === true}`,
+          ];
     return [
       TOWNSHIP_RELEASE_AUTHOR_PROBE_LOG_PREFIX,
       "phase=peer",
@@ -500,6 +583,7 @@ export function townshipReleaseAuthorProbeLogLine(result: TownshipReleaseAuthorP
       `bad_frame_id=${probeToken(result.badFrameId)}`,
       `post_materialized=${result.postMaterialized}`,
       `bad_authority_reason=${probeToken(result.badAuthorityReason)}`,
+      ...appGrantFields,
       `outbox_frame_count=${result.carrierFrameCount}`,
     ].join(" ");
   }
@@ -621,13 +705,25 @@ async function loadAuthorMetadata(
       typeof parsed.capId === "string" &&
       typeof parsed.authorPublicKeyBase64 === "string"
     ) {
-      return {
+      const metadata: TownshipReleaseAuthorProbeMetadata = {
         stage: parsed.stage,
         postFrameId: parsed.postFrameId,
         badFrameId: parsed.badFrameId,
         capId: parsed.capId,
         authorPublicKeyBase64: parsed.authorPublicKeyBase64,
       };
+      if (
+        typeof parsed.appGrantFrameId === "string" &&
+        typeof parsed.appGrantDelegationId === "string" &&
+        typeof parsed.grantAudiencePubkey === "string" &&
+        (typeof parsed.grantParentId === "string" || parsed.grantParentId === null)
+      ) {
+        metadata.appGrantFrameId = parsed.appGrantFrameId;
+        metadata.appGrantDelegationId = parsed.appGrantDelegationId;
+        metadata.grantAudiencePubkey = parsed.grantAudiencePubkey;
+        metadata.grantParentId = parsed.grantParentId;
+      }
+      return metadata;
     }
   } catch {
     return null;
@@ -640,6 +736,98 @@ async function saveAuthorMetadata(
   metadata: TownshipReleaseAuthorProbeMetadata,
 ): Promise<void> {
   await workflow.storage.setItem(TOWNSHIP_RELEASE_AUTHOR_PROBE_METADATA_KEY, JSON.stringify(metadata));
+}
+
+interface ReleaseAuthorAppGrantMetadata {
+  appGrantFrameId?: string;
+  appGrantDelegationId?: string;
+  grantAudiencePubkey?: string;
+  grantParentId?: string | null;
+}
+
+interface ReleaseAuthorAppGrantFailure {
+  phase: "grant";
+  outcome: "error";
+  elapsedMs: number;
+  message: string;
+}
+
+type ReleaseAuthorAppGrantResult = ReleaseAuthorAppGrantMetadata | ReleaseAuthorAppGrantFailure;
+
+function isReleaseAuthorAppGrantFailure(result: ReleaseAuthorAppGrantResult): result is ReleaseAuthorAppGrantFailure {
+  return "phase" in result;
+}
+
+async function submitReleaseAuthorAppGrant(
+  options: TownshipReleaseAuthorProbeOptions & {
+    config: TownshipReleaseAuthorProbeConfig;
+    workflow: TownshipNativeWorkflow;
+    onResult?(result: TownshipReleaseAuthorProbeResult): Promise<void>;
+  },
+  realmByPubkey: Record<string, string>,
+  grantDelegationId: string,
+  authorPublicKeyBase64: string,
+): Promise<ReleaseAuthorAppGrantResult> {
+  if (options.config.grantAudiencePubkey === undefined) return {};
+
+  const grant = await (options.submitGrant ?? submitReleaseAuthorGrant)({
+    config: options.config,
+    workflow: options.workflow,
+    realmByPubkey,
+    grantDelegationId,
+  });
+  if (!grant.ok) {
+    return {
+      phase: "grant",
+      outcome: "error",
+      elapsedMs: 0,
+      message: grant.message,
+    };
+  }
+
+  const grantReload = await reload(options.workflow);
+  const result: TownshipReleaseAuthorProbeResult = {
+    phase: "grant",
+    outcome: "authored",
+    grantFrameId: grant.frameId,
+    grantDelegationId: grant.delegationId,
+    grantAudiencePubkey: grant.audiencePubkey,
+    parentId: grant.parentId,
+    authorPublicKeyBase64,
+    localOpCount: grantReload.localOpIds.length,
+    carrierFrameCount: grantReload.carrierFrameCount,
+    delegationFrameCount: grant.delegationFrameCount,
+  };
+  await options.onResult?.(result);
+
+  return {
+    appGrantFrameId: grant.frameId,
+    appGrantDelegationId: grant.delegationId,
+    grantAudiencePubkey: grant.audiencePubkey,
+    grantParentId: grant.parentId,
+  };
+}
+
+async function submitReleaseAuthorGrant(
+  options: TownshipReleaseAuthorProbeSubmitGrantOptions,
+): Promise<TownshipDelegationSubmission> {
+  if (options.config.grantAudiencePubkey === undefined) {
+    return {
+      ok: false,
+      reason: "empty_audience",
+      message: "No release author probe grant audience was configured.",
+    };
+  }
+
+  return submitTownshipDelegation({
+    workflow: options.workflow,
+    replica: options.config.peer.replica,
+    audiencePubkey: options.config.grantAudiencePubkey,
+    ops: ["post"],
+    roles: [],
+    live: false,
+    realmByPubkey: options.realmByPubkey,
+  });
 }
 
 async function submitReleaseAuthorPost(
@@ -697,14 +885,22 @@ async function releaseAuthorStateReport(
   if (options.webSocket !== undefined) Object.assign(connectOptions, { webSocket: options.webSocket });
   const client = await connectTownshipCarrierPeer(connectOptions);
   try {
-    const report = await client.stateReport();
-    const state = (report as { state?: { posts?: unknown[] } }).state;
-    const authorityQuarantine = (report as { authority_quarantine?: unknown }).authority_quarantine;
-    return {
+  const report = await client.stateReport();
+  const state = (report as { state?: { posts?: unknown[] } }).state;
+  const authorityQuarantine = (report as { authority_quarantine?: unknown }).authority_quarantine;
+    const result: TownshipReleaseAuthorProbeStateReportResult = {
       ok: true,
       postMaterialized: Array.isArray(state?.posts) && state.posts.includes(options.config.postText),
       badAuthorityReason: authorityReason(authorityQuarantine, options.badFrameId),
     };
+    if (options.appGrantFrameId !== undefined) {
+      const opIds = (report as { op_ids?: unknown }).op_ids;
+      result.appGrantAuthorityAccepted =
+        Array.isArray(opIds) &&
+        opIds.includes(options.appGrantFrameId) &&
+        authorityReason(authorityQuarantine, options.appGrantFrameId) === "missing";
+    }
+    return result;
   } catch (error) {
     return {
       ok: false,

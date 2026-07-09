@@ -20,9 +20,12 @@ use sha2::{Digest, Sha256};
 use tauri::Manager;
 
 pub const TOWNSHIP_KEYRING_SERVICE: &str = "dev.treetop.lattice.township.carrier";
+pub const TOWNSHIP_APP_IDENTIFIER: &str = "dev.treetop.lattice.township";
 pub const TOWNSHIP_DEV_CARRIER_KEY_ID_ENV: &str = "TOWNSHIP_DEV_CARRIER_KEY_ID";
 pub const TOWNSHIP_DEV_CARRIER_KEY_SEED_ENV: &str = "TOWNSHIP_DEV_CARRIER_KEY_SEED";
 pub const TOWNSHIP_DEV_TRACE_FILE_ENV: &str = "TOWNSHIP_DEV_TRACE_FILE";
+#[cfg(feature = "township-dev-trace")]
+pub const TOWNSHIP_DEV_TRACE_FILE_DEFAULTS_KEY: &str = "TownshipDevTraceFile";
 pub const TOWNSHIP_NATIVE_KV_FILE_ENV: &str = "TOWNSHIP_NATIVE_KV_FILE";
 pub const TOWNSHIP_PROBE_LOG_TAG: &str = "LATTICE_PROBE";
 pub const TOWNSHIP_PAIRING_DISCOVERY_PACKET_TYPE: &str = "township-pairing-discovery";
@@ -742,17 +745,17 @@ pub fn run() {
 }
 
 pub fn seed_dev_carrier_key_from_env(state: &TownshipNativeState) -> Result<bool, String> {
-    #[cfg(not(debug_assertions))]
+    #[cfg(not(any(debug_assertions, feature = "township-dev-trace")))]
     {
         let _ = state;
         return Ok(false);
     }
 
-    #[cfg(debug_assertions)]
+    #[cfg(any(debug_assertions, feature = "township-dev-trace"))]
     seed_dev_carrier_key_from_vars(state, std::env::vars())
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "township-dev-trace"))]
 pub fn seed_dev_carrier_key_from_vars<I, K, V>(
     state: &TownshipNativeState,
     vars: I,
@@ -918,12 +921,9 @@ fn log_probe_event(event: &str) {
 fn trace_dev_command(command: &str) {
     use std::io::Write as _;
 
-    let Ok(path) = std::env::var(TOWNSHIP_DEV_TRACE_FILE_ENV) else {
+    let Some(path) = trace_dev_file_path() else {
         return;
     };
-    if path.trim().is_empty() {
-        return;
-    }
 
     if let Ok(mut file) = std::fs::OpenOptions::new()
         .create(true)
@@ -932,6 +932,45 @@ fn trace_dev_command(command: &str) {
     {
         let _ = writeln!(file, "{}", sanitize_trace_dev_event(command));
     }
+}
+
+#[cfg(feature = "township-dev-trace")]
+fn trace_dev_file_path() -> Option<String> {
+    if let Ok(path) = std::env::var(TOWNSHIP_DEV_TRACE_FILE_ENV) {
+        let path = path.trim().to_string();
+        if !path.is_empty() {
+            return Some(path);
+        }
+    }
+
+    trace_dev_file_path_from_platform()
+}
+
+#[cfg(all(feature = "township-dev-trace", target_os = "macos"))]
+fn trace_dev_file_path_from_platform() -> Option<String> {
+    let output = std::process::Command::new("/usr/bin/defaults")
+        .args([
+            "read",
+            TOWNSHIP_APP_IDENTIFIER,
+            TOWNSHIP_DEV_TRACE_FILE_DEFAULTS_KEY,
+        ])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    let path = String::from_utf8(output.stdout).ok()?.trim().to_string();
+    if path.is_empty() {
+        None
+    } else {
+        Some(path)
+    }
+}
+
+#[cfg(all(feature = "township-dev-trace", not(target_os = "macos")))]
+fn trace_dev_file_path_from_platform() -> Option<String> {
+    None
 }
 
 #[cfg(not(feature = "township-dev-trace"))]

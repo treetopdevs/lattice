@@ -39,9 +39,31 @@ test("frontend package builds and tests the Township Vue shell", () => {
   assert.equal(pkg.scripts["frontend:contract"], "node --test test/frontend_shell.mjs");
   assert.equal(pkg.scripts["mobile:tauri-readiness"], "node --test test/tauri_mobile_readiness.mjs");
   assert.equal(pkg.scripts["tauri:deep-link:smoke"], "tsx test/tauri_installed_deeplink_smoke.ts");
+  assert.equal(pkg.scripts["tauri:cold-deep-link:smoke"], "tsx test/tauri_installed_cold_deeplink_smoke.ts");
   assert.equal(pkg.dependencies["@treetopdevs/lattice-client"], "file:../lattice-client");
   assert.match(pkg.devDependencies["@tauri-apps/cli"], /^\^2\./);
   assert.match(pkg.dependencies.vue, /^\^3\.5\./);
+});
+
+test("frontend package exposes installed-app cold-start deep-link smoke", () => {
+  const smoke = readText("test/tauri_installed_cold_deeplink_smoke.ts");
+  const native = readText("src-tauri/src/lib.rs");
+
+  assert.match(smoke, /TownshipDevTraceFile/);
+  assert.match(smoke, /await setDevTraceDefaults\(tracePath\)/);
+  assert.match(smoke, /await waitForTownshipAppNotRunning\(\)/);
+  assert.match(smoke, /await deliverDeepLink\(\)/);
+  assert.match(smoke, /deep-link-listener-mounted/);
+  assert.match(smoke, /deep-link:township:\/\/pairing/);
+  assert.match(smoke, /pairing-link-blocked:not-armed/);
+  assert.match(smoke, /await clearDevTraceDefaults\(\)/);
+  assert.match(native, /TOWNSHIP_DEV_TRACE_FILE_DEFAULTS_KEY/);
+  assert.match(
+    native,
+    /#\[cfg\(all\(feature = "township-dev-trace", target_os = "macos"\)\)\]\s*fn trace_dev_file_path_from_platform/,
+  );
+  assert.match(native, /trace_dev_file_path_from_platform/);
+  assert.match(native, /std::process::Command::new\("\/usr\/bin\/defaults"\)/);
 });
 
 test("frontend package exposes installed-app armed deep-link delivery smoke", () => {
@@ -54,20 +76,30 @@ test("frontend package exposes installed-app armed deep-link delivery smoke", ()
   assert.match(smoke, /township:\/\/pairing/);
   assert.match(smoke, /TOWNSHIP_DEV_TRACE_FILE/);
   assert.match(smoke, /deep-link-listener-mounted/);
-  assert.match(smoke, /waitForTraceLine\("lattice_ensure_carrier_key", 60_000\)/);
+  assert.match(smoke, /waitForTraceLine\("township-native-hydration-settled", 60_000\)/);
   assert.doesNotMatch(smoke, /waitForTraceLine\("lattice_sign_carrier", 60_000\)/);
   assert.match(smoke, /deep-link:township:\/\/pairing/);
   assert.match(smoke, /pairing-link-blocked:not-armed/);
-  assert.match(smoke, /pressTownshipPairingImportShortcut/);
+  assert.match(smoke, /township:\/\/dev\/pairing-import\/arm/);
+  assert.match(smoke, /deliverDevTraceControlDeepLink\(armPairingImportUrl\)/);
   assert.match(smoke, /pairing-link-import-armed/);
+  assert.match(smoke, /pairing-link-import-state:/);
+  assert.match(smoke, /deliverDeepLink\(\{ state: armedState \}\)/);
   assert.match(smoke, /waitForTraceLine\(`pairing-link-loaded:/);
   assert.match(smoke, /blockedBeforeThirdDelivery \+ 1/);
   assert.match(smoke, /thirdBlockedIndex > loadedIndex/);
   assert.match(smoke, /\.app/);
-  assert.match(smoke, /spawnManaged\(\s*"open",\s*\[\s*"-n",\s*"-W",\s*"-j"/);
+  assert.match(smoke, /spawnManaged\(\s*"open",\s*\[\s*"-n",\s*"-W"/);
   assert.match(smoke, /"--env"/);
+  assert.match(smoke, /await registerLaunchServicesHandler\(\)/);
+  assert.match(smoke, /await assertLaunchServicesRoutesTownshipSchemeToBundle\(\)/);
   assert.match(smoke, /function deliverDeepLink/);
-  assert.match(smoke, /run\("open", \["-a", appBundlePath, deepLinkUrl\]/);
+  assert.match(smoke, /function registerLaunchServicesHandler/);
+  assert.match(smoke, /function assertLaunchServicesRoutesTownshipSchemeToBundle/);
+  assert.match(smoke, /NSWorkspace\.shared\.urlForApplication\(toOpen:/);
+  assert.match(smoke, /const url = options\.state \? `\$\{deepLinkUrl\}&state=\$\{encodeURIComponent\(options\.state\)\}` : deepLinkUrl/);
+  assert.match(smoke, /run\("open", \[url\]/);
+  assert.doesNotMatch(smoke, /run\("open", \["-a", appBundlePath, deepLinkUrl\]/);
   assert.match(smoke, /npm", \["run", "tauri:build:dev-trace"\]/);
   assert.match(smoke, /if \(child\.exitCode !== null\) return Promise\.resolve\(child\.exitCode\)/);
   assert.match(cargoToml, /\[features\][\s\S]*township-dev-trace = \[\]/);
@@ -79,12 +111,16 @@ test("frontend package exposes installed-app armed deep-link delivery smoke", ()
   assert.match(native, /#\[cfg\(not\(feature = "township-dev-trace"\)\)\]\s*fn trace_dev_command\(_command: &str\) \{\}/);
   assert.doesNotMatch(native, /#\[cfg\(debug_assertions\)\]\s*fn trace_dev_command/);
   assert.doesNotMatch(native, /#\[cfg\(not\(debug_assertions\)\)\]\s*fn trace_dev_command/);
+  assert.match(native, /#\[cfg\(any\(debug_assertions, feature = "township-dev-trace"\)\)\]\s*pub fn seed_dev_carrier_key_from_vars/);
   assert.match(native, /lattice_trace_dev_event/);
   assert.match(app, /devTraceRuntime = truthy\(import\.meta\.env\.VITE_TOWNSHIP_DEV_TRACE\)/);
   assert.match(app, /if \(devTraceRuntime\) await mountDevTraceShortcut\(\)/);
   assert.match(app, /async function mountDevTraceShortcut\(\)/);
   assert.match(app, /await traceTownshipDevEvent\(TOWNSHIP_TRACE_DEV_RUNTIME_READY\)/);
+  assert.match(app, /traceTownshipDevEvent\("township-native-hydration-settled"\)/);
+  assert.match(app, /if \(appUnmounted\) return/);
   assert.match(app, /devTraceShortcutMounted = true/);
+  assert.match(app, /appUnmounted = true/);
   assert.match(app, /if \(devTraceShortcutMounted\) window\.removeEventListener\("keydown", handleDevTraceShortcut\)/);
   assert.match(app, /handleDevTraceShortcut/);
   assert.match(app, /if \(event && !event\.isTrusted\) return/);
@@ -96,9 +132,16 @@ test("frontend package exposes installed-app armed deep-link delivery smoke", ()
   assert.match(workflow, /TOWNSHIP_TRACE_PAIRING_LINK_LOAD_SETTLED = "pairing-link-load-settled"/);
   assert.match(app, /TOWNSHIP_TRACE_DEV_SHORTCUT_KEYDOWN_PREFIX/);
   assert.match(app, /TOWNSHIP_TRACE_PAIRING_LINK_LOAD_SETTLED/);
-  assert.match(smoke, /waitForTraceLine\(`\$\{TOWNSHIP_TRACE_DEV_SHORTCUT_KEYDOWN_PREFIX\}l`/);
+  assert.match(smoke, /township:\/\/dev\/carrier-health\/check/);
+  assert.match(smoke, /deliverDevTraceControlDeepLink\(checkCarrierHealthUrl\)/);
   assert.match(smoke, /waitForTraceLine\(TOWNSHIP_TRACE_PAIRING_LINK_LOAD_SETTLED/);
   assert.match(app, /traceTownshipDevEvent\("pairing-link-import-armed"\)/);
+  assert.match(app, /handleDevTraceControlDeepLink/);
+  assert.match(app, /route === "pairing-import\/arm"/);
+  assert.match(app, /route === "carrier-health\/check"/);
+  assert.match(app, /pairingDeepLinkImportState = ref<string \| null>\(null\)/);
+  assert.match(app, /pairingDeepLinkImportState\.value = state/);
+  assert.match(app, /traceTownshipDevEvent\(`pairing-link-import-state:\$\{state\}`\)/);
   assert.match(app, /traceTownshipDevEvent\(TOWNSHIP_TRACE_PAIRING_CONFIG_SAVE_SUBMITTED\)/);
   assert.match(app, /traceTownshipDevEvent\(TOWNSHIP_TRACE_SYNC_OUTBOX_STARTED\)/);
   assert.match(app, /traceTownshipDevEvent\(TOWNSHIP_TRACE_CARRIER_HEALTH_STARTED\)/);
@@ -419,6 +462,9 @@ test("Vue source exposes pairing handoff import without device-local identity tr
   assert.match(link, /parseTownshipPairingDeepLink/);
   assert.match(link, /createTownshipPairingDeepLinkListener/);
   assert.match(link, /createOneShotTownshipPairingDeepLinkGate/);
+  assert.match(link, /createPairingImportState/);
+  assert.match(link, /getRandomValues/);
+  assert.match(link, /state_mismatch/);
   assert.match(link, /importTownshipCarrierPairingHandoff/);
   assert.doesNotMatch(link, /@tauri-apps\/plugin-deep-link/);
   assert.match(source, /createTauriPairingDeepLinkSource/);
@@ -436,11 +482,14 @@ test("Vue source exposes pairing handoff import without device-local identity tr
   assert.match(app, /pairingDeepLinkListener/);
   assert.match(app, /pairingDeepLinkGate = createOneShotTownshipPairingDeepLinkGate\(\)/);
   assert.match(app, /pairingDeepLinkImportArmed = ref\(false\)/);
+  assert.match(app, /pairingDeepLinkImportState = ref<string \| null>\(null\)/);
   assert.match(app, /armPairingDeepLinkImport/);
   assert.match(app, /disarmPairingDeepLinkImport/);
   assert.match(app, /consumePairingDeepLinkImport/);
   assert.match(app, /onBlocked: handleBlockedPairingDeepLink/);
   assert.match(app, /Pairing link ignored; enable link import first/);
+  assert.match(app, /Pairing link ignored; state token did not match/);
+  assert.match(app, /link state/);
   assert.match(app, /Enable link import/);
   assert.match(app, /Cancel link import/);
   assert.doesNotMatch(app, /pairingDeepLinkImportArmed = ref\(true\)/);

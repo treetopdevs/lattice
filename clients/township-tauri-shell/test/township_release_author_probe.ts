@@ -14,6 +14,7 @@ console.log("\n▸ Township release author probe contract");
 
 const peerPubkey = "Ze1W+4DnnK6aoJY5GiUoDVyZVhq5/PCL7UwQALXUQNk=";
 const replica = "replica:matter:township-g1#root:QUB7owpVIsZn3IyoVLJbsFc5HLkozhi2PVBL5Lzhj3w";
+const grantAudiencePubkey = "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=";
 
 const config = townshipReleaseAuthorProbeConfigFromEnv({
   VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_URL: " ws://127.0.0.1:43192/carrier ",
@@ -23,6 +24,7 @@ const config = townshipReleaseAuthorProbeConfigFromEnv({
   VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_REPLICA: ` ${replica} `,
   VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_KEY_ID: " township-release-author-resident ",
   VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_STORAGE_NAMESPACE: " township:release-author-probe ",
+  VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_GRANT_AUDIENCE_PUBKEY: ` ${grantAudiencePubkey} `,
   VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_POST_TEXT: " release authored post ",
   VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_BAD_SUMMARY_TEXT: " release unauthorized summary ",
   VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_TIMEOUT_MS: "9000",
@@ -40,6 +42,7 @@ assert.deepEqual(config, {
   },
   keyId: "township-release-author-resident",
   storageNamespace: "township:release-author-probe",
+  grantAudiencePubkey,
   postText: "release authored post",
   badSummaryText: "release unauthorized summary",
   timeoutMs: 9000,
@@ -107,6 +110,26 @@ assert.match(pullLine, /outcome=synced/);
 assert.match(pullLine, /pulled_op_ids=grant/);
 assert.match(pullLine, /grant_delegation_id=grant-delegation/);
 
+const grantLine = townshipReleaseAuthorProbeLogLine({
+  phase: "grant",
+  outcome: "authored",
+  grantFrameId: "grant-app",
+  grantDelegationId: "grant-app-delegation",
+  grantAudiencePubkey,
+  parentId: "grant-delegation",
+  authorPublicKeyBase64: "YWJj",
+  localOpCount: 3,
+  carrierFrameCount: 1,
+  delegationFrameCount: 3,
+});
+assert.match(grantLine, /phase=grant/);
+assert.match(grantLine, /outcome=authored/);
+assert.match(grantLine, /grant_frame_id=grant-app/);
+assert.match(grantLine, /grant_delegation_id=grant-app-delegation/);
+assert.match(grantLine, /grant_audience_b64url=QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE/);
+assert.match(grantLine, /parent_id=grant-delegation/);
+assert.match(grantLine, /delegation_frame_count=3/);
+
 const authorLine = townshipReleaseAuthorProbeLogLine({
   phase: "author",
   outcome: "authored",
@@ -149,7 +172,7 @@ assert.match(peerLine, /phase=peer/);
 assert.match(peerLine, /post_materialized=true/);
 assert.match(peerLine, /bad_authority_reason=operation_not_granted/);
 assert.doesNotMatch(
-  [nativeKeyLine, reloadLine, pullLine, authorLine, pushLine, peerLine].join("\n"),
+  [nativeKeyLine, reloadLine, pullLine, grantLine, authorLine, pushLine, peerLine].join("\n"),
   /sig|body|cap:|seed|private|secret|webview_devtools_remote/,
 );
 
@@ -163,6 +186,7 @@ const result = await logTownshipReleaseAuthorProbeFromEnv(
     VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_PEER_PUBKEY: peerPubkey,
     VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_REPLICA: replica,
     VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_STORAGE_NAMESPACE: "township:release-author-probe",
+    VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_GRANT_AUDIENCE_PUBKEY: grantAudiencePubkey,
     VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_POST_TEXT: "release authored post",
     VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_BAD_SUMMARY_TEXT: "release unauthorized summary",
   },
@@ -178,7 +202,24 @@ const result = await logTownshipReleaseAuthorProbeFromEnv(
         return syncResult({ pulledFrameCount: 1, pulledOpCount: 1, pushedFrameIds: [], acceptedCount: 0 });
       }
       await syncWorkflow.carrierFrames.save([]);
-      return syncResult({ pulledFrameCount: 0, pulledOpCount: 0, pushedFrameIds: ["post", "bad"], acceptedCount: 2 });
+      return syncResult({ pulledFrameCount: 0, pulledOpCount: 0, pushedFrameIds: ["grant-app", "post", "bad"], acceptedCount: 3 });
+    },
+    async submitGrant({ workflow: grantWorkflow, config: grantConfig }) {
+      assert.equal(grantConfig.grantAudiencePubkey, grantAudiencePubkey);
+      await grantWorkflow.localLog.append({ id: "grant-app" } as Op);
+      await grantWorkflow.carrierFrames.append(frame("grant-app"));
+      await grantWorkflow.delegationFrames.append(frame("grant-app"));
+      return {
+        ok: true,
+        audiencePubkey: grantAudiencePubkey,
+        opId: "grant-app",
+        frameId: "grant-app",
+        delegationId: "grant-app-delegation",
+        parentId: "grant-delegation",
+        localOpCount: 3,
+        carrierFrameCount: 1,
+        delegationFrameCount: 3,
+      };
     },
     async submitPost({ workflow: postWorkflow }) {
       await postWorkflow.localLog.append({ id: "post" } as Op);
@@ -206,6 +247,7 @@ const result = await logTownshipReleaseAuthorProbeFromEnv(
         ok: true,
         postMaterialized: true,
         badAuthorityReason: "operation_not_granted",
+        appGrantAuthorityAccepted: true,
       };
     },
     async invoke(command, args) {
@@ -219,19 +261,33 @@ assert.equal(result?.outcome, "reported");
 assert.match(emitted[0] ?? "", /phase=native_key/);
 assert.match(emitted[1] ?? "", /phase=reload/);
 assert.match(emitted[2] ?? "", /phase=pull/);
-assert.match(emitted[3] ?? "", /phase=author/);
-assert.match(emitted[4] ?? "", /phase=push/);
-assert.match(emitted[5] ?? "", /phase=peer/);
-assert.match(emitted[5] ?? "", /bad_authority_reason=operation_not_granted/);
+assert.match(emitted[3] ?? "", /phase=grant/);
+assert.match(emitted[3] ?? "", /grant_delegation_id=grant-app-delegation/);
+assert.match(emitted[3] ?? "", /parent_id=grant-delegation/);
+assert.match(emitted[4] ?? "", /phase=author/);
+assert.match(emitted[5] ?? "", /phase=push/);
+assert.match(emitted[5] ?? "", /pushed_frame_ids=bad,grant-app,post/);
+assert.match(emitted[6] ?? "", /phase=peer/);
+assert.match(emitted[6] ?? "", /bad_authority_reason=operation_not_granted/);
 
 const resumeWorkflow = fakeWorkflow("ZGV2aWNlLXB1YmtleQ==");
-await resumeWorkflow.localLog.save([{ id: "base" } as Op, { id: "grant" } as Op, { id: "post" } as Op, { id: "bad" } as Op]);
-await resumeWorkflow.delegationFrames.save([frame("base"), frame("grant"), frame("post"), frame("bad")]);
-await resumeWorkflow.carrierFrames.save([frame("post"), frame("bad")]);
+await resumeWorkflow.localLog.save([
+  { id: "base" } as Op,
+  { id: "grant" } as Op,
+  { id: "grant-app" } as Op,
+  { id: "post" } as Op,
+  { id: "bad" } as Op,
+]);
+await resumeWorkflow.delegationFrames.save([frame("base"), frame("grant"), frame("grant-app"), frame("post"), frame("bad")]);
+await resumeWorkflow.carrierFrames.save([frame("grant-app"), frame("post"), frame("bad")]);
 await resumeWorkflow.storage.setItem(
   TOWNSHIP_RELEASE_AUTHOR_PROBE_METADATA_KEY,
   JSON.stringify({
     stage: "authored",
+    appGrantFrameId: "grant-app",
+    appGrantDelegationId: "grant-app-delegation",
+    grantAudiencePubkey,
+    grantParentId: "grant-delegation",
     postFrameId: "post",
     badFrameId: "bad",
     capId: "grant-delegation",
@@ -247,6 +303,7 @@ const resumeResult = await logTownshipReleaseAuthorProbeFromEnv(
     VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_PEER_PUBKEY: peerPubkey,
     VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_REPLICA: replica,
     VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_STORAGE_NAMESPACE: "township:release-author-probe",
+    VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_GRANT_AUDIENCE_PUBKEY: grantAudiencePubkey,
   },
   {
     workflow: resumeWorkflow,
@@ -255,7 +312,10 @@ const resumeResult = await logTownshipReleaseAuthorProbeFromEnv(
     async sync({ phase, workflow: syncWorkflow }) {
       assert.equal(phase, "push", "resume path should push the persisted outbox without re-authoring");
       await syncWorkflow.carrierFrames.save([]);
-      return syncResult({ pulledFrameCount: 0, pulledOpCount: 0, pushedFrameIds: ["post", "bad"], acceptedCount: 2 });
+      return syncResult({ pulledFrameCount: 0, pulledOpCount: 0, pushedFrameIds: ["grant-app", "post", "bad"], acceptedCount: 3 });
+    },
+    async submitGrant() {
+      assert.fail("resume path must not author a second grant");
     },
     async submitPost() {
       assert.fail("resume path must not author a second post");
@@ -268,6 +328,7 @@ const resumeResult = await logTownshipReleaseAuthorProbeFromEnv(
         ok: true,
         postMaterialized: true,
         badAuthorityReason: "operation_not_granted",
+        appGrantAuthorityAccepted: true,
       };
     },
     async invoke(command, args) {
@@ -278,8 +339,9 @@ const resumeResult = await logTownshipReleaseAuthorProbeFromEnv(
 );
 assert.equal(resumeResult?.outcome, "reported");
 assert.match(resumeEmitted[1] ?? "", /phase=reload/);
-assert.match(resumeEmitted[1] ?? "", /outbox_frame_count=2/);
+assert.match(resumeEmitted[1] ?? "", /outbox_frame_count=3/);
 assert.match(resumeEmitted[2] ?? "", /phase=push/);
+assert.match(resumeEmitted[2] ?? "", /pushed_frame_ids=bad,grant-app,post/);
 assert.match(resumeEmitted[3] ?? "", /phase=peer/);
 
 console.log("\x1b[32m✓ release author probe contract checks passed\x1b[0m");
