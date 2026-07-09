@@ -115,6 +115,8 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 093 | Tauri Android release deep-link pairing ingress | P1 | M | 092 | DONE |
 | 094 | Tauri imported pairing confirmation policy | P1 | S | 093 | DONE |
 | 095 | Tauri armed deep-link pairing import gate | P1 | S | 094 | DONE |
+| 096 | Tauri installed-app armed deep-link delivery smoke | P1 | S | 095 | DONE |
+| 097 | Tauri pairing link no-side-effect trace guard | P1 | S | 096 | IN PROGRESS |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

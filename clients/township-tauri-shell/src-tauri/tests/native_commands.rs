@@ -30,6 +30,7 @@ const PAIRING_HANDOFF: &str = "township-pairing:v1:eyJ2IjoxfQ==";
 
 #[test]
 fn command_names_match_the_tauri_bridge_contract() {
+    #[cfg(feature = "township-dev-trace")]
     assert_eq!(
         township_command_names(),
         &[
@@ -43,6 +44,22 @@ fn command_names_match_the_tauri_bridge_contract() {
             "lattice_android_current_pairing_handoff_b64",
             "lattice_log_probe",
             "lattice_trace_dev_event"
+        ]
+    );
+
+    #[cfg(not(feature = "township-dev-trace"))]
+    assert_eq!(
+        township_command_names(),
+        &[
+            "lattice_kv_get",
+            "lattice_kv_set",
+            "lattice_ensure_carrier_key",
+            "lattice_public_key",
+            "lattice_sign_carrier",
+            "lattice_discover_pairing_adverts",
+            "lattice_advertise_pairing_handoff",
+            "lattice_android_current_pairing_handoff_b64",
+            "lattice_log_probe"
         ]
     );
 }
@@ -153,6 +170,7 @@ fn registered_tauri_commands_roundtrip_through_mock_ipc() {
         Ok(()),
     );
 
+    #[cfg(feature = "township-dev-trace")]
     assert_ipc_response(
         &webview,
         "lattice_trace_dev_event",

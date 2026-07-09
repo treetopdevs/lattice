@@ -9,6 +9,9 @@ name = "township_tauri_shell"
 path = "src/lib.rs"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+township-dev-trace = []
+
 [dependencies]
 base64 = "0.22"
 ed25519-dalek = { version = "2", features = ["rand_core"] }

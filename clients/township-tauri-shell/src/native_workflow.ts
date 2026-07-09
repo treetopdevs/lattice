@@ -24,6 +24,12 @@ const TOWNSHIP_NATIVE_PROBE_VALUE = "native invoke ready";
 const TOWNSHIP_NATIVE_PROBE_CHALLENGE = "township-native-probe";
 const TOWNSHIP_TRACE_DEV_EVENT_COMMAND = "lattice_trace_dev_event";
 export const TOWNSHIP_LOG_PROBE_COMMAND = "lattice_log_probe";
+export const TOWNSHIP_TRACE_DEV_SHORTCUT_KEYDOWN_PREFIX = "dev-trace-shortcut-keydown:";
+export const TOWNSHIP_TRACE_DEV_RUNTIME_READY = "dev-trace-runtime-ready";
+export const TOWNSHIP_TRACE_PAIRING_LINK_LOAD_SETTLED = "pairing-link-load-settled";
+export const TOWNSHIP_TRACE_PAIRING_CONFIG_SAVE_SUBMITTED = "pairing-config-save-submitted";
+export const TOWNSHIP_TRACE_SYNC_OUTBOX_STARTED = "sync-outbox-started";
+export const TOWNSHIP_TRACE_CARRIER_HEALTH_STARTED = "carrier-health-started";
 
 export interface TownshipNativeWorkflowOptions {
   invoke?: TauriInvoke;

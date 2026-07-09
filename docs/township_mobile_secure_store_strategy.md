@@ -70,8 +70,14 @@ confirmation, same-config saves are idempotent, invalid drafts do not mutate sto
 parameters such as `confirm=1` do not unlock saving. Plan 095 adds the app-controlled anti-hijack
 gate for real-app OS deep-link import: link import starts unarmed, installed unarmed OS links are
 traced as blocked instead of loading pairing drafts, and one valid armed pairing link consumes the
-arm in the shared listener contract. Real-app armed delivery remains unproven beyond source/contract
-coverage. The native bridge consumes a valid stored intent handoff once and requires `VIEW` plus
+arm in the shared listener contract. Plan 096 proves packaged macOS real-app armed delivery in an
+explicit `township-dev-trace` release-mode smoke build through a trusted app-window arm gesture plus
+LaunchServices-delivered `township://pairing`: one armed
+link loads a draft, and the next link is blocked after one-shot consumption. Plan 097 adds a
+packaged no-side-effect guard for that same link-load path: Save Pairing, Sync Outbox, and Check
+Carrier now emit explicit dev-trace events when started, and the installed-app smoke asserts those
+events are absent while the link is only loaded as a draft. The native bridge
+consumes a valid stored intent handoff once and requires `VIEW` plus
 `BROWSABLE`, but this does not remove every local-malicious-app threat or prove cryptographic
 nonce/state binding.
 This also does not prove Chrome/browser navigation, chooser behavior, QR camera onboarding,
@@ -221,10 +227,14 @@ as a custom-scheme URL string, before reconstructing the pairing URL for the sha
 public because the handoff excludes local identity, key ids, seeds, and private signing material.
 This proves the release ingress path can persist and reuse a public peer config, not that a public
 `VIEW`/`BROWSABLE` intent is authorization; Plan 094 adds the real app confirmation and
-overwrite/reject policy for imported first-save and replacement writes, and Plan 095 adds a
+overwrite/reject policy for imported first-save and replacement writes, Plan 095 adds a
 user-armed one-shot OS deep-link import gate so unsolicited links do not load drafts in the real
-app. Production pairing still needs browser/chooser coverage beyond the adb intent smoke, and
-cryptographic state/nonce binding remains unproven. The native command consumes a valid stored
+app, and Plan 096 proves the armed path in a packaged macOS app through a trusted real-window arm
+gesture plus LaunchServices URL delivery in an explicit `township-dev-trace` release-mode smoke build.
+Plan 097 adds the packaged no-side-effect trace guard for that link-load path.
+Production pairing still needs browser/chooser coverage beyond
+the adb/macOS `open` intent smokes, Android release armed delivery, and cryptographic state/nonce
+binding. The native command consumes a valid stored
 handoff once and rejects non-BROWSABLE, non-VIEW, oversized, foreign-host, and port-bearing custom
 scheme intents, but a malicious local app can still send a syntactically valid public intent.
 This does not prove QR camera onboarding, app-originated grants, authority origination, LAN
@@ -236,8 +246,9 @@ APK BEAM convergence, bounded debug APK on-device post authoring, and bounded de
 cap onboarding; Android release APK builds, installs, and preserves canonical/wire fidelity for the
 W1 fixture, and it now proves release-mode carrier handshake/status/report, release pull/reload,
 release device-local authoring and push/outbox drain, and release OS deep-link peer-config
-persistence over scoped loopback; the real app now blocks unarmed OS deep-link draft import and has a
-source-proven explicit user-armed one-shot accept path. It does not prove real-app armed OS delivery,
+persistence over scoped loopback; the real app now blocks unarmed OS deep-link draft import, has
+a packaged macOS real-app armed one-shot accept/block proof, and proves that link loading does not
+start Save Pairing, Sync Outbox, or Check Carrier in the packaged smoke. It does not prove Android release armed OS delivery,
 app-originated grants, authority origination, QR camera onboarding,
 LAN discovery, iOS key reuse, Expo, browser/chooser behavior, cryptographic state/nonce binding,
 full mobile onboarding beyond pull-based cap acquisition, or phone-grade equivalence. The local iOS simulator archive remains
@@ -269,7 +280,8 @@ No phone-grade persistence claim is allowed until all of these are true:
 2. The app-storage implementation reloads `local_ops`, `carrier_frames`, and `delegation_frames`
    without touching the native key store.
    - Android Tauri debug APK: met for the W1 pre-signed-frame smoke by plan 080.
-   - Android Tauri release APK: bounded release pull/reload, device-local authoring, push/outbox drain, OS deep-link peer-config persistence, real-app imported pairing confirmation policy, installed unarmed OS deep-link blocking, and source-level user-armed one-shot import gating are met by plans 091-095 in dedicated probe namespaces or the shared Tauri app path; real-app armed OS delivery, app-originated grants, authority origination, QR camera onboarding, LAN discovery, browser/chooser behavior, cryptographic state/nonce binding, and full mobile onboarding remain unproven in release mode. Plan 090 is tracked separately as carrier reachability.
+   - Android Tauri release APK: bounded release pull/reload, device-local authoring, push/outbox drain, OS deep-link peer-config persistence, real-app imported pairing confirmation policy, installed unarmed OS deep-link blocking, and source-level user-armed one-shot import gating are met by plans 091-095 in dedicated probe namespaces or the shared Tauri app path; Android release armed OS delivery, app-originated grants, authority origination, QR camera onboarding, LAN discovery, browser/chooser behavior, cryptographic state/nonce binding, and full mobile onboarding remain unproven in release mode. Plan 090 is tracked separately as carrier reachability.
+   - Packaged macOS Tauri app: real-app armed one-shot OS delivery is met by plan 096 in an explicit `township-dev-trace` release-mode smoke build; the no-side-effect link-load guard is met by plan 097.
    - iOS Tauri and Expo: still unproven.
 3. A mobile smoke syncs a Township matter with a BEAM realm using persisted caps from the onboarding
    ceremony.
@@ -278,7 +290,9 @@ No phone-grade persistence claim is allowed until all of these are true:
      on-device `post` authoring against the pulled cap, BEAM materialization, and BEAM rejection for
      a same-device operation outside the grant. Full mobile onboarding remains unproven beyond
      pull-based cap acquisition.
-   - Android Tauri release APK: bounded carrier pull/reload, OS deep-link peer-config persistence, device-local post authoring, persisted pending-outbox reload, push/outbox drain, peer-side authority enforcement, real-app imported pairing confirmation policy, installed unarmed OS deep-link blocking, and source-level user-armed one-shot import gating are met by plans 091-095 in dedicated probe namespaces or the shared Tauri app path; real-app armed OS delivery, app-originated grants, authority origination, QR camera onboarding, LAN discovery, browser/chooser behavior, cryptographic state/nonce binding, and full onboarding remain unproven. iOS Tauri and Expo are still unproven.
+   - Android Tauri release APK: bounded carrier pull/reload, OS deep-link peer-config persistence, device-local post authoring, persisted pending-outbox reload, push/outbox drain, peer-side authority enforcement, real-app imported pairing confirmation policy, installed unarmed OS deep-link blocking, and source-level user-armed one-shot import gating are met by plans 091-095 in dedicated probe namespaces or the shared Tauri app path; Android release armed OS delivery, app-originated grants, authority origination, QR camera onboarding, LAN discovery, browser/chooser behavior, cryptographic state/nonce binding, and full onboarding remain unproven.
+   - Packaged macOS Tauri app: real-app armed one-shot OS delivery is met by plan 096 in an explicit `township-dev-trace` release-mode smoke build; the no-side-effect link-load guard is met by plan 097.
+   - iOS Tauri and Expo: still unproven.
 4. The UI distinguishes local grant saved/pending sync from carrier-converged grant acceptance.
 
 ## Stop Conditions

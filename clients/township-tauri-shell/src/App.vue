@@ -4,6 +4,12 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import {
   createTownshipNativeStorage,
   loadTownshipNativeStatus,
+  TOWNSHIP_TRACE_CARRIER_HEALTH_STARTED,
+  TOWNSHIP_TRACE_DEV_SHORTCUT_KEYDOWN_PREFIX,
+  TOWNSHIP_TRACE_DEV_RUNTIME_READY,
+  TOWNSHIP_TRACE_PAIRING_LINK_LOAD_SETTLED,
+  TOWNSHIP_TRACE_PAIRING_CONFIG_SAVE_SUBMITTED,
+  TOWNSHIP_TRACE_SYNC_OUTBOX_STARTED,
   TOWNSHIP_NATIVE_KEY_ID,
   TOWNSHIP_STORAGE_NAMESPACE,
   traceTownshipDevEvent,
@@ -89,6 +95,7 @@ import { syncTownshipOutbox, type TownshipOutboxSync } from "./township_sync";
 const matter = computed(() => townshipPreview());
 const carrierPeer = ref<TownshipCarrierPeerConfig | null>(townshipCarrierPeerFromEnv());
 const autosyncOnMount = truthy(import.meta.env.VITE_TOWNSHIP_AUTOSYNC_ON_MOUNT);
+const devTraceRuntime = truthy(import.meta.env.VITE_TOWNSHIP_DEV_TRACE);
 const nativeStatus = ref<TownshipNativeStatus>({
   ready: false,
   keyId: TOWNSHIP_NATIVE_KEY_ID,
@@ -162,6 +169,7 @@ let pairingDeepLinkListener: TownshipPairingDeepLinkListener | null = null;
 let canonicalProbeDeepLinkListener: TownshipCanonicalProbeDeepLinkListener | null = null;
 let pairingCameraScanner: TownshipPairingQrCameraScanner | null = null;
 let pairingDiscovery: TownshipPairingDiscovery | null = null;
+let devTraceShortcutMounted = false;
 const healthStatus = ref<TownshipCarrierHealthResult | null>(null);
 const healthSubmitting = ref(false);
 const syncStatus = ref<TownshipOutboxSync | null>(null);
@@ -354,12 +362,15 @@ onMounted(async () => {
     await mountPairingDeepLinkListener();
     await mountCanonicalProbeDeepLinkListener();
   }
+  if (devTraceRuntime) await mountDevTraceShortcut();
   await loadPairingConfig();
   if (autosyncOnMount && carrierPeer.value) await syncOutbox();
   scheduleTownshipNativeHydration();
 });
 
 onUnmounted(() => {
+  if (devTraceShortcutMounted) window.removeEventListener("keydown", handleDevTraceShortcut);
+  devTraceShortcutMounted = false;
   canonicalProbeDeepLinkListener?.stop();
   canonicalProbeDeepLinkListener = null;
   pairingDeepLinkListener?.stop();
@@ -430,6 +441,7 @@ async function submitRevoke() {
 
 async function syncOutbox() {
   syncSubmitting.value = true;
+  void traceTownshipDevEvent(TOWNSHIP_TRACE_SYNC_OUTBOX_STARTED).catch(() => {});
   syncStatus.value = await syncTownshipOutbox(carrierPeer.value ? { peer: carrierPeer.value } : {});
   syncSubmitting.value = false;
 }
@@ -462,6 +474,7 @@ async function hydrateTownshipNativeReadiness() {
 
 async function submitPairing() {
   pairingSubmitting.value = true;
+  void traceTownshipDevEvent(TOWNSHIP_TRACE_PAIRING_CONFIG_SAVE_SUBMITTED).catch(() => {});
   try {
     const storage = createTownshipNativeStorage();
     const saved = await saveTownshipCarrierPeerConfig(storage, pairingDraft.value, {
@@ -563,10 +576,13 @@ async function mountCanonicalProbeDeepLinkListener() {
   }
 }
 
-function armPairingDeepLinkImport() {
+function armPairingDeepLinkImport(event?: Event) {
+  if (event && !event.isTrusted) return;
+
   pairingDeepLinkGate.arm();
   pairingDeepLinkImportArmed.value = true;
   pairingStatus.value = { ok: true, message: "Pairing link import ready." };
+  void traceTownshipDevEvent("pairing-link-import-armed").catch(() => {});
 }
 
 function disarmPairingDeepLinkImport() {
@@ -577,6 +593,32 @@ function disarmPairingDeepLinkImport() {
 function clearPairingDeepLinkImport() {
   pairingDeepLinkGate.disarm();
   pairingDeepLinkImportArmed.value = false;
+}
+
+async function mountDevTraceShortcut() {
+  try {
+    await traceTownshipDevEvent(TOWNSHIP_TRACE_DEV_RUNTIME_READY);
+    window.addEventListener("keydown", handleDevTraceShortcut);
+    devTraceShortcutMounted = true;
+  } catch {
+    devTraceShortcutMounted = false;
+  }
+}
+
+function handleDevTraceShortcut(event: KeyboardEvent) {
+  const key = event.key.toLowerCase();
+  void traceTownshipDevEvent(`${TOWNSHIP_TRACE_DEV_SHORTCUT_KEYDOWN_PREFIX}${key}`).catch(() => {});
+
+  if (!event.isTrusted || !event.metaKey || !event.shiftKey || event.repeat) return;
+
+  if (key !== "l" && key !== "h") return;
+
+  event.preventDefault();
+  if (key === "l") {
+    armPairingDeepLinkImport(event);
+  } else {
+    void checkCarrierHealth();
+  }
 }
 
 function consumePairingDeepLinkImport(parse: TownshipPairingDeepLinkParse): boolean {
@@ -649,8 +691,17 @@ function applyPairingDeepLink(imported: TownshipPairingDeepLinkParse) {
   pairingHandoffFingerprint.value = imported.peerFingerprint;
   pairingQrSvg.value = null;
   markImportedPairingDraft("deep_link");
-  void traceTownshipDevEvent(`pairing-link-loaded:${imported.peerFingerprint}`).catch(() => {});
+  void tracePairingLinkLoaded(imported.peerFingerprint);
   pairingStatus.value = { ok: true, message: "Pairing link loaded; save before sync." };
+}
+
+async function tracePairingLinkLoaded(peerFingerprint: string): Promise<void> {
+  try {
+    await traceTownshipDevEvent(`pairing-link-loaded:${peerFingerprint}`);
+    await traceTownshipDevEvent(TOWNSHIP_TRACE_PAIRING_LINK_LOAD_SETTLED);
+  } catch {
+    // Development trace is optional and must not block pairing.
+  }
 }
 
 async function importPairingQrImage(event: Event) {
@@ -826,6 +877,7 @@ async function advertisePairingHandoff() {
 
 async function checkCarrierHealth() {
   healthSubmitting.value = true;
+  void traceTownshipDevEvent(TOWNSHIP_TRACE_CARRIER_HEALTH_STARTED).catch(() => {});
   healthStatus.value = await checkTownshipCarrierPeerHealth(carrierPeer.value ? { peer: carrierPeer.value } : {});
   healthSubmitting.value = false;
 }

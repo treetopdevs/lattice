@@ -47,7 +47,7 @@ const tracePath = join(tmpdir(), `township-tauri-smoke-${process.pid}.log`);
 console.log(`\n▸ ${vector.scenario} Tauri live window peer smoke`);
 
 await assertPortFree(5173);
-await run("cargo", ["build", "--bin", "township-tauri-shell"], join(shellRoot, "src-tauri"));
+await run("cargo", ["build", "--features", "township-dev-trace", "--bin", "township-tauri-shell"], join(shellRoot, "src-tauri"));
 
 const identity = seededEd25519Identity(vector.client.sessionSeed);
 assert.equal(identity.publicKeyBase64, vector.client.sessionPubkey);

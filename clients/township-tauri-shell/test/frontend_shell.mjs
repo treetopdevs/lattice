@@ -31,6 +31,10 @@ test("frontend package builds and tests the Township Vue shell", () => {
   assert.equal(pkg.type, "module");
   assert.equal(pkg.scripts.build, "vite build");
   assert.equal(pkg.scripts["tauri:build"], "tauri build --bundles app");
+  assert.equal(
+    pkg.scripts["tauri:build:dev-trace"],
+    "VITE_TOWNSHIP_DEV_TRACE=1 VITE_TOWNSHIP_AUTOSYNC_ON_MOUNT=0 tauri build --features township-dev-trace --bundles app",
+  );
   assert.equal(pkg.scripts.typecheck, "vue-tsc --noEmit");
   assert.equal(pkg.scripts["frontend:contract"], "node --test test/frontend_shell.mjs");
   assert.equal(pkg.scripts["mobile:tauri-readiness"], "node --test test/tauri_mobile_readiness.mjs");
@@ -40,28 +44,70 @@ test("frontend package builds and tests the Township Vue shell", () => {
   assert.match(pkg.dependencies.vue, /^\^3\.5\./);
 });
 
-test("frontend package exposes installed-app deep-link delivery smoke", () => {
+test("frontend package exposes installed-app armed deep-link delivery smoke", () => {
   const smoke = readText("test/tauri_installed_deeplink_smoke.ts");
   const native = readText("src-tauri/src/lib.rs");
+  const cargoToml = readText("src-tauri/Cargo.toml");
+  const app = readText("src/App.vue");
+  const workflow = readText("src/native_workflow.ts");
 
   assert.match(smoke, /township:\/\/pairing/);
   assert.match(smoke, /TOWNSHIP_DEV_TRACE_FILE/);
   assert.match(smoke, /deep-link-listener-mounted/);
+  assert.match(smoke, /waitForTraceLine\("lattice_ensure_carrier_key", 60_000\)/);
+  assert.doesNotMatch(smoke, /waitForTraceLine\("lattice_sign_carrier", 60_000\)/);
   assert.match(smoke, /deep-link:township:\/\/pairing/);
   assert.match(smoke, /pairing-link-blocked:not-armed/);
-  assert.doesNotMatch(smoke, /waitForTraceLine\(`pairing-link-loaded:/);
+  assert.match(smoke, /pressTownshipPairingImportShortcut/);
+  assert.match(smoke, /pairing-link-import-armed/);
+  assert.match(smoke, /waitForTraceLine\(`pairing-link-loaded:/);
+  assert.match(smoke, /blockedBeforeThirdDelivery \+ 1/);
+  assert.match(smoke, /thirdBlockedIndex > loadedIndex/);
   assert.match(smoke, /\.app/);
   assert.match(smoke, /spawnManaged\(\s*"open",\s*\[\s*"-n",\s*"-W",\s*"-j"/);
   assert.match(smoke, /"--env"/);
-  assert.match(smoke, /run\("open", \["-b", appIdentifier, "-u", deepLinkUrl\]/);
-  assert.match(smoke, /npm", \["run", "tauri:build"\]/);
+  assert.match(smoke, /function deliverDeepLink/);
+  assert.match(smoke, /run\("open", \["-a", appBundlePath, deepLinkUrl\]/);
+  assert.match(smoke, /npm", \["run", "tauri:build:dev-trace"\]/);
   assert.match(smoke, /if \(child\.exitCode !== null\) return Promise\.resolve\(child\.exitCode\)/);
+  assert.match(cargoToml, /\[features\][\s\S]*township-dev-trace = \[\]/);
   assert.match(native, /TOWNSHIP_DEV_TRACE_EVENT_MAX_CHARS/);
   assert.match(native, /sanitize_trace_dev_event/);
   assert.match(native, /replace\(\['\\r', '\\n', '\\0'\], " "\)/);
+  assert.match(native, /#\[cfg\(feature = "township-dev-trace"\)\]\s*#\[tauri::command\]\s*fn lattice_trace_dev_event/);
+  assert.match(native, /#\[cfg\(feature = "township-dev-trace"\)\]\s*fn trace_dev_command/);
+  assert.match(native, /#\[cfg\(not\(feature = "township-dev-trace"\)\)\]\s*fn trace_dev_command\(_command: &str\) \{\}/);
   assert.doesNotMatch(native, /#\[cfg\(debug_assertions\)\]\s*fn trace_dev_command/);
   assert.doesNotMatch(native, /#\[cfg\(not\(debug_assertions\)\)\]\s*fn trace_dev_command/);
   assert.match(native, /lattice_trace_dev_event/);
+  assert.match(app, /devTraceRuntime = truthy\(import\.meta\.env\.VITE_TOWNSHIP_DEV_TRACE\)/);
+  assert.match(app, /if \(devTraceRuntime\) await mountDevTraceShortcut\(\)/);
+  assert.match(app, /async function mountDevTraceShortcut\(\)/);
+  assert.match(app, /await traceTownshipDevEvent\(TOWNSHIP_TRACE_DEV_RUNTIME_READY\)/);
+  assert.match(app, /devTraceShortcutMounted = true/);
+  assert.match(app, /if \(devTraceShortcutMounted\) window\.removeEventListener\("keydown", handleDevTraceShortcut\)/);
+  assert.match(app, /handleDevTraceShortcut/);
+  assert.match(app, /if \(event && !event\.isTrusted\) return/);
+  assert.match(app, /event\.metaKey/);
+  assert.match(app, /event\.shiftKey/);
+  assert.match(app, /event\.key\.toLowerCase\(\)/);
+  assert.match(workflow, /TOWNSHIP_TRACE_DEV_SHORTCUT_KEYDOWN_PREFIX = "dev-trace-shortcut-keydown:"/);
+  assert.match(workflow, /TOWNSHIP_TRACE_DEV_RUNTIME_READY = "dev-trace-runtime-ready"/);
+  assert.match(workflow, /TOWNSHIP_TRACE_PAIRING_LINK_LOAD_SETTLED = "pairing-link-load-settled"/);
+  assert.match(app, /TOWNSHIP_TRACE_DEV_SHORTCUT_KEYDOWN_PREFIX/);
+  assert.match(app, /TOWNSHIP_TRACE_PAIRING_LINK_LOAD_SETTLED/);
+  assert.match(smoke, /waitForTraceLine\(`\$\{TOWNSHIP_TRACE_DEV_SHORTCUT_KEYDOWN_PREFIX\}l`/);
+  assert.match(smoke, /waitForTraceLine\(TOWNSHIP_TRACE_PAIRING_LINK_LOAD_SETTLED/);
+  assert.match(app, /traceTownshipDevEvent\("pairing-link-import-armed"\)/);
+  assert.match(app, /traceTownshipDevEvent\(TOWNSHIP_TRACE_PAIRING_CONFIG_SAVE_SUBMITTED\)/);
+  assert.match(app, /traceTownshipDevEvent\(TOWNSHIP_TRACE_SYNC_OUTBOX_STARTED\)/);
+  assert.match(app, /traceTownshipDevEvent\(TOWNSHIP_TRACE_CARRIER_HEALTH_STARTED\)/);
+  assert.match(smoke, /TOWNSHIP_TRACE_PAIRING_CONFIG_SAVE_SUBMITTED/);
+  assert.match(smoke, /TOWNSHIP_TRACE_SYNC_OUTBOX_STARTED/);
+  assert.match(smoke, /TOWNSHIP_TRACE_CARRIER_HEALTH_STARTED/);
+  assert.match(smoke, /assertNoSideEffectTraceBetween/);
+  assert.match(smoke, /assertAllowedDraftLoadTraceWindow/);
+  assert.match(smoke, /waitForTraceLine\(TOWNSHIP_TRACE_CARRIER_HEALTH_STARTED/);
 });
 
 test("Vue source mounts a reducer-backed Township matter surface", () => {
@@ -259,11 +305,13 @@ test("Vue source does not claim phone-grade secure persistence", () => {
 
 test("frontend package exposes the real app convergence gate", () => {
   const pkg = readJson("package.json");
+  const launchSmoke = readText("test/tauri_launch_smoke.ts");
 
   assert.equal(
     pkg.scripts["app:convergence"],
     "npm run action:contract && npm run sync:contract && npm run live:contract && npm run tauri:launch:smoke && npm run tauri:deep-link:smoke",
   );
+  assert.match(launchSmoke, /"build", "--features", "township-dev-trace", "--bin", "township-tauri-shell"/);
 });
 
 test("Vue source exposes a carrier sync outbox action", () => {

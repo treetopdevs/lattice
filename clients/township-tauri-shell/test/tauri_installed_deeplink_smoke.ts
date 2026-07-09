@@ -9,7 +9,15 @@ import {
   townshipCarrierPeerFingerprint,
   type TownshipCarrierPeerConfig,
 } from "../src/township_carrier_peer";
-import { TOWNSHIP_NATIVE_KEY_ID } from "../src/native_workflow";
+import {
+  TOWNSHIP_NATIVE_KEY_ID,
+  TOWNSHIP_TRACE_CARRIER_HEALTH_STARTED,
+  TOWNSHIP_TRACE_DEV_SHORTCUT_KEYDOWN_PREFIX,
+  TOWNSHIP_TRACE_DEV_RUNTIME_READY,
+  TOWNSHIP_TRACE_PAIRING_LINK_LOAD_SETTLED,
+  TOWNSHIP_TRACE_PAIRING_CONFIG_SAVE_SUBMITTED,
+  TOWNSHIP_TRACE_SYNC_OUTBOX_STARTED,
+} from "../src/native_workflow";
 import { TOWNSHIP_REPLICA } from "../src/township_actions";
 
 interface ManagedProcess {
@@ -44,9 +52,10 @@ if (process.platform !== "darwin") {
 }
 
 rmSync(tracePath, { force: true });
-await run("npm", ["run", "tauri:build"], shellRoot);
+await run("npm", ["run", "tauri:build:dev-trace"], shellRoot);
 assert.ok(existsSync(appBundlePath), `expected bundled app at ${appBundlePath}`);
 assertAppBundleRegistersTownshipScheme(appBundlePath);
+await quitTownshipApp();
 
 let app: ManagedProcess | null = null;
 try {
@@ -68,6 +77,8 @@ try {
   );
   try {
     await waitForTraceLine("deep-link-listener-mounted", 60_000);
+    await waitForTraceLine(TOWNSHIP_TRACE_DEV_RUNTIME_READY, 60_000);
+    await waitForTraceLine("lattice_ensure_carrier_key", 60_000);
   } catch (error) {
     throw new Error(
       [
@@ -78,19 +89,37 @@ try {
     );
   }
 
-  await run("open", ["-b", appIdentifier, "-u", deepLinkUrl], shellRoot);
+  await deliverDeepLink();
   await waitForTracePrefix("deep-link:township://pairing", 30_000);
   await waitForTraceLine("pairing-link-blocked:not-armed", 30_000);
   assert.doesNotMatch(readTrace(), new RegExp(`pairing-link-loaded:${peerFingerprint}`));
 
-  await clickTownshipButton("Enable link import");
+  await pressTownshipPairingImportShortcut();
+  await waitForTraceLine(`${TOWNSHIP_TRACE_DEV_SHORTCUT_KEYDOWN_PREFIX}l`, 30_000);
   await waitForTraceLine("pairing-link-import-armed", 30_000);
-  await run("open", ["-b", appIdentifier, "-u", deepLinkUrl], shellRoot);
+  await deliverDeepLink();
   await waitForTraceLine(`pairing-link-loaded:${peerFingerprint}`, 30_000);
+  await waitForTraceLine(TOWNSHIP_TRACE_PAIRING_LINK_LOAD_SETTLED, 30_000);
+  const loadedIndex = lastTraceLineIndex(`pairing-link-loaded:${peerFingerprint}`);
+  const settledIndex = lastTraceLineIndex(TOWNSHIP_TRACE_PAIRING_LINK_LOAD_SETTLED);
+  assert.notEqual(loadedIndex, -1, "expected the loaded trace line to be present");
+  assert.ok(settledIndex > loadedIndex, "expected the settled trace to follow the loaded trace");
+  assertNoSideEffectTraceBetween(loadedIndex, settledIndex);
+  assertAllowedDraftLoadTraceWindow(loadedIndex, settledIndex);
 
-  await run("open", ["-b", appIdentifier, "-u", deepLinkUrl], shellRoot);
-  await waitForTraceCount("pairing-link-blocked:not-armed", 2, 30_000);
-  assert.doesNotMatch(readTrace(), /Pairing config saved|Sync outbox|connected to carrier/i);
+  const blockedBeforeThirdDelivery = traceLineCount("pairing-link-blocked:not-armed");
+  await deliverDeepLink();
+  await waitForTraceCount("pairing-link-blocked:not-armed", blockedBeforeThirdDelivery + 1, 30_000);
+  const thirdBlockedIndex = lastTraceLineIndex("pairing-link-blocked:not-armed");
+  assert.ok(
+    thirdBlockedIndex > loadedIndex,
+    "expected the post-consume blocked trace to appear after the loaded trace",
+  );
+  assertNoSideEffectTraceBetween(loadedIndex, thirdBlockedIndex);
+  assertAllowedDraftLoadTraceWindow(loadedIndex, thirdBlockedIndex);
+
+  await pressTownshipDevTraceShortcut("h");
+  await waitForTraceLine(TOWNSHIP_TRACE_CARRIER_HEALTH_STARTED, 30_000);
 } finally {
   await quitTownshipApp();
   await app?.stop();
@@ -147,16 +176,25 @@ async function quitTownshipApp(): Promise<void> {
   await waitForExit(proc.child);
 }
 
-async function clickTownshipButton(text: string): Promise<void> {
+async function deliverDeepLink(): Promise<void> {
+  await run("open", ["-a", appBundlePath, deepLinkUrl], shellRoot);
+}
+
+async function pressTownshipPairingImportShortcut(): Promise<void> {
+  await pressTownshipDevTraceShortcut("l");
+}
+
+async function pressTownshipDevTraceShortcut(key: string): Promise<void> {
+  await run("open", ["-a", appBundlePath], shellRoot);
   const script = `
-tell application id "${appIdentifier}" to activate
 tell application "System Events"
   tell process "Township"
     repeat until exists window 1
       delay 0.1
     end repeat
     set frontmost to true
-    click (first button of window 1 whose name is "${text}")
+    delay 0.2
+    keystroke "${key}" using {command down, shift down}
   end tell
 end tell
 `;
@@ -207,6 +245,40 @@ async function waitForTrace(
 function readTrace(): string {
   if (!existsSync(tracePath)) return "";
   return readFileSync(tracePath, "utf8").trim();
+}
+
+function traceLines(): string[] {
+  return readTrace().split(/\r?\n/).filter(Boolean);
+}
+
+function traceLineCount(line: string): number {
+  return traceLines().filter((entry) => entry === line).length;
+}
+
+function lastTraceLineIndex(line: string): number {
+  return traceLines().lastIndexOf(line);
+}
+
+function assertNoSideEffectTraceBetween(startLineIndex: number, endLineIndex: number): void {
+  assert.ok(endLineIndex > startLineIndex, "expected a non-empty trace assertion window");
+  const lines = traceLines().slice(startLineIndex + 1, endLineIndex + 1);
+  assert.ok(!lines.includes(TOWNSHIP_TRACE_PAIRING_CONFIG_SAVE_SUBMITTED));
+  assert.ok(!lines.includes(TOWNSHIP_TRACE_SYNC_OUTBOX_STARTED));
+  assert.ok(!lines.includes(TOWNSHIP_TRACE_CARRIER_HEALTH_STARTED));
+  assert.ok(!lines.includes("lattice_kv_set"));
+}
+
+function assertAllowedDraftLoadTraceWindow(startLineIndex: number, endLineIndex: number): void {
+  const allowedExact = new Set([
+    TOWNSHIP_TRACE_PAIRING_LINK_LOAD_SETTLED,
+    "lattice_android_current_pairing_handoff_b64",
+    "pairing-link-blocked:not-armed",
+  ]);
+  const unexpected = traceLines()
+    .slice(startLineIndex + 1, endLineIndex + 1)
+    .filter((line) => !allowedExact.has(line) && !line.startsWith("deep-link:township://pairing?"));
+
+  assert.deepEqual(unexpected, []);
 }
 
 function delay(ms: number) {

@@ -8,6 +8,7 @@
     "build": "vite build",
     "tauri": "tauri",
     "tauri:build": "tauri build --bundles app",
+    "tauri:build:dev-trace": "VITE_TOWNSHIP_DEV_TRACE=1 VITE_TOWNSHIP_AUTOSYNC_ON_MOUNT=0 tauri build --features township-dev-trace --bundles app",
     "dev": "vite --host 127.0.0.1",
     "typecheck": "vue-tsc --noEmit",
     "frontend:contract": "node --test test/frontend_shell.mjs",

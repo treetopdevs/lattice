@@ -30,6 +30,7 @@ pub const TOWNSHIP_PAIRING_DISCOVERY_BIND_ADDR: &str = "0.0.0.0:45721";
 pub const TOWNSHIP_PAIRING_DISCOVERY_BROADCAST_ADDR: &str = "255.255.255.255:45721";
 pub const TOWNSHIP_PAIRING_DISCOVERY_DEFAULT_TIMEOUT_MS: u64 = 750;
 pub const TOWNSHIP_PAIRING_DISCOVERY_MAX_TIMEOUT_MS: u64 = 5_000;
+#[cfg(feature = "township-dev-trace")]
 const TOWNSHIP_DEV_TRACE_EVENT_MAX_CHARS: usize = 4_096;
 const TOWNSHIP_PAIRING_DISCOVERY_MAX_PACKET_BYTES: usize = 16 * 1024;
 #[cfg(target_os = "android")]
@@ -523,6 +524,7 @@ fn present_string(value: Option<String>) -> Option<String> {
     }
 }
 
+#[cfg(feature = "township-dev-trace")]
 pub fn township_command_names() -> &'static [&'static str] {
     &[
         "lattice_kv_get",
@@ -538,6 +540,21 @@ pub fn township_command_names() -> &'static [&'static str] {
     ]
 }
 
+#[cfg(not(feature = "township-dev-trace"))]
+pub fn township_command_names() -> &'static [&'static str] {
+    &[
+        "lattice_kv_get",
+        "lattice_kv_set",
+        "lattice_ensure_carrier_key",
+        "lattice_public_key",
+        "lattice_sign_carrier",
+        "lattice_discover_pairing_adverts",
+        "lattice_advertise_pairing_handoff",
+        "lattice_android_current_pairing_handoff_b64",
+        "lattice_log_probe",
+    ]
+}
+
 pub fn configure_township_builder<R: tauri::Runtime>(
     builder: tauri::Builder<R>,
     state: TownshipNativeState,
@@ -545,6 +562,7 @@ pub fn configure_township_builder<R: tauri::Runtime>(
     configure_township_commands(builder).manage(state)
 }
 
+#[cfg(feature = "township-dev-trace")]
 fn configure_township_commands<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
     configure_township_plugins(builder).invoke_handler(tauri::generate_handler![
         lattice_kv_get,
@@ -557,6 +575,21 @@ fn configure_township_commands<R: tauri::Runtime>(builder: tauri::Builder<R>) ->
         lattice_android_current_pairing_handoff_b64,
         lattice_log_probe,
         lattice_trace_dev_event
+    ])
+}
+
+#[cfg(not(feature = "township-dev-trace"))]
+fn configure_township_commands<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
+    configure_township_plugins(builder).invoke_handler(tauri::generate_handler![
+        lattice_kv_get,
+        lattice_kv_set,
+        lattice_ensure_carrier_key,
+        lattice_public_key,
+        lattice_sign_carrier,
+        lattice_discover_pairing_adverts,
+        lattice_advertise_pairing_handoff,
+        lattice_android_current_pairing_handoff_b64,
+        lattice_log_probe
     ])
 }
 
@@ -853,6 +886,7 @@ fn lattice_log_probe(event: String) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(feature = "township-dev-trace")]
 #[tauri::command]
 fn lattice_trace_dev_event(event: String) -> Result<(), String> {
     trace_dev_command(&event);
@@ -880,6 +914,7 @@ fn log_probe_event(event: &str) {
     println!("{TOWNSHIP_PROBE_LOG_TAG}: {event}");
 }
 
+#[cfg(feature = "township-dev-trace")]
 fn trace_dev_command(command: &str) {
     use std::io::Write as _;
 
@@ -899,6 +934,10 @@ fn trace_dev_command(command: &str) {
     }
 }
 
+#[cfg(not(feature = "township-dev-trace"))]
+fn trace_dev_command(_command: &str) {}
+
+#[cfg(feature = "township-dev-trace")]
 fn sanitize_trace_dev_event(command: &str) -> String {
     command
         .replace(['\r', '\n', '\0'], " ")

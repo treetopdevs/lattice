@@ -193,9 +193,12 @@ Two hard blockers gate the endgame: **CBOR/ADR-P08** (everything non-BEAM) and *
    release device-local post authoring + push/outbox-drain proof under a host-minted bootstrap
    grant, add a release OS deep-link pairing ingress + persisted peer-config proof, require
    explicit confirmation before imported pairing first-save or replacement writes in the real Tauri
-   app, prove installed unarmed OS deep-link delivery is blocked before loading pairing drafts, and
-   prove the armed one-shot accept/disarm behavior at the shared listener/source seam. Real-app armed
-   OS delivery remains a UI automation follow-up. Full mobile onboarding, cryptographic state/nonce pairing binding, app-originated
+   app, prove installed unarmed OS deep-link delivery is blocked before loading pairing drafts, prove
+   the armed one-shot accept/disarm behavior at the shared listener/source seam, and prove packaged
+   macOS real-app armed OS delivery through a trusted app-window arm gesture and LaunchServices-delivered link
+   in an explicit `township-dev-trace` release-mode smoke build, and prove that OS pairing-link
+   import does not start save, sync, or carrier-health side effects in that packaged smoke.
+   Full mobile onboarding, Android release armed delivery, cryptographic state/nonce pairing binding, app-originated
    grants, authority origination, QR camera onboarding, LAN discovery, and physical-device behavior remain unproven;
    the release BEAM carrier handshake plus pull/reload/author-push/pairing-ingress probes alone are
    not enough to call the phone shell user-facing equivalent. On this machine, the iOS
@@ -271,8 +274,8 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   on-device post authoring under a side-loaded post-only cap, Android debug APK pull-based cap
   onboarding, Android release APK build readiness, Android release APK canonical/wire fidelity,
   Android release loopback-scoped transport, Android release BEAM carrier handshake/status/state-report proof,
-  Android release APK pull-and-reload persistence, Android release APK device authoring/push/outbox drain, Android release APK OS deep-link pairing ingress/persisted peer config, the real Tauri app imported-pairing confirmation policy, installed unarmed OS deep-link blocking, and the source-level armed one-shot import gate are covered by plans 023-095.
-  Full mobile onboarding remains unproven beyond pull-based cap acquisition, and browser/chooser coverage, cryptographic state/nonce pairing binding, app-originated grants, authority origination, QR camera onboarding, LAN discovery, and physical-device behavior remain unproven after the release OS deep-link pairing + device-local authoring proofs. The iOS archive path is
+  Android release APK pull-and-reload persistence, Android release APK device authoring/push/outbox drain, Android release APK OS deep-link pairing ingress/persisted peer config, the real Tauri app imported-pairing confirmation policy, installed unarmed OS deep-link blocking, the source-level armed one-shot import gate, packaged macOS real-app armed OS delivery in a dev-trace release-mode smoke build, and the packaged link-load no-side-effect trace guard are covered by plans 023-097.
+  Full mobile onboarding remains unproven beyond pull-based cap acquisition, and Android release armed delivery, browser/chooser coverage, cryptographic state/nonce pairing binding, app-originated grants, authority origination, QR camera onboarding, LAN discovery, and physical-device behavior remain unproven after the release OS deep-link pairing + device-local authoring proofs. The iOS archive path is
   locally blocked by the selected Xcode 27 beta Tauri Swift-package failure.
 
 ### Phase D — Cross the runtime boundary (CBOR, the first hard blocker)
@@ -428,8 +431,14 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   explicitly opted into its dedicated namespace. Plan 095 adds the equivalent anti-hijack gate for
   real-app OS deep-link import: link import starts unarmed, installed unarmed OS links are traced as
   blocked instead of loading drafts, and one valid armed pairing link consumes the arm in the shared
-  listener contract. Real-app armed delivery remains unproven beyond source/contract coverage.
-  Cryptographic state/nonce binding and browser/chooser behavior remain unproven. The remaining shell gaps are iOS
+  listener contract. Plan 096 proves the armed path in a packaged macOS `.app` built with the
+  explicit `township-dev-trace` feature: the app is armed
+  through a real-window gesture, one LaunchServices-delivered `township://pairing` URL loads a draft,
+  and the next delivered URL is blocked after the one-shot arm is consumed.
+  Plan 097 makes that draft-only claim measurable by tracing the real Save Pairing, Sync Outbox, and
+  Check Carrier handlers, then asserting those side-effect traces are absent while the packaged app
+  loads the OS-delivered pairing link.
+  Android release armed delivery, cryptographic state/nonce binding, and browser/chooser behavior remain unproven. The remaining shell gaps are iOS
   simulator key-reuse proof, app-originated grants, authority origination, QR camera onboarding,
   LAN discovery, physical-device behavior, full onboarding beyond pull-based cap acquisition, and a
   physical multi-device LAN discovery smoke.
