@@ -512,16 +512,18 @@ fn present_string(value: Option<String>) -> Option<String> {
 
 pub fn township_command_names() -> &'static [&'static str] {
     #[cfg(debug_assertions)]
-    &[
-        "lattice_kv_get",
-        "lattice_kv_set",
-        "lattice_ensure_carrier_key",
-        "lattice_public_key",
-        "lattice_sign_carrier",
-        "lattice_discover_pairing_adverts",
-        "lattice_advertise_pairing_handoff",
-        "lattice_trace_dev_event",
-    ]
+    {
+        return &[
+            "lattice_kv_get",
+            "lattice_kv_set",
+            "lattice_ensure_carrier_key",
+            "lattice_public_key",
+            "lattice_sign_carrier",
+            "lattice_discover_pairing_adverts",
+            "lattice_advertise_pairing_handoff",
+            "lattice_trace_dev_event",
+        ];
+    }
 
     #[cfg(not(debug_assertions))]
     &[

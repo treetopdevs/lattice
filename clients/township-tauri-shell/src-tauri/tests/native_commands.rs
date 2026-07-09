@@ -358,10 +358,12 @@ fn platform_secure_builder_persists_native_kv_across_app_restarts_when_file_is_c
         );
     }
 
-    let app =
-        configure_platform_secure_township_builder_with_values_file(tauri::test::mock_builder(), &path)
-            .build(tauri::test::mock_context(tauri::test::noop_assets()))
-            .unwrap();
+    let app = configure_platform_secure_township_builder_with_values_file(
+        tauri::test::mock_builder(),
+        &path,
+    )
+    .build(tauri::test::mock_context(tauri::test::noop_assets()))
+    .unwrap();
     let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
         .build()
         .unwrap();

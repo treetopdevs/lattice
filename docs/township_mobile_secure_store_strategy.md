@@ -10,7 +10,7 @@ the native command boundary, reuses the same public key after force-stop/relaunc
 different key after app data clear. Plan 080 proves Android debug APK host-authored,
 pre-signed-frame BEAM
 convergence: the installed debug APK reloads persisted native KV after restart, clicks the real
-`Sync outbox` UI, syncs the W1 pre-signed carrier frames with a BEAM Township peer, and verifies
+`Sync outbox` UI, syncs the host-authored W1 pre-signed carrier frames with a BEAM Township peer, and verifies
 both local KV convergence and the peer `stateReport`. It does not exercise any cap-gated
 authoring button or persisted-cap onboarding ceremony. Those contracts are still not a phone-grade persistence or BEAM
 convergence proof; they also are not a release persistence or release mobile BEAM convergence
