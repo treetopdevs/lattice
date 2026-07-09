@@ -122,7 +122,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 100 | Tauri armed pairing state binding | P1 | S | 095 | DONE |
 | 101 | Tauri dev-trace release hydration and control links | P1 | S | 100 | DONE |
 | 102 | Tauri release app-originated attenuated grant | P1 | M | 092 | DONE |
-| 103 | Tauri Android release armed pairing delivery | P1 | M | 100 | IN PROGRESS |
+| 103 | Tauri Android release armed pairing delivery | P1 | M | 100 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

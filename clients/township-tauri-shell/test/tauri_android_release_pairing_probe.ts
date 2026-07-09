@@ -129,6 +129,7 @@ async function runReleaseDeepLinkPairingProof(serial: string): Promise<void> {
   assert.match(blockedLine, /pairing_url_count=1/);
   assert.doesNotMatch(blockedLine, new RegExp(escapeRegExp(buildConfig.armState)));
   assert.doesNotMatch(blockedLine, forbiddenLogTerms());
+  await assertNoPairingSavedYet(serial);
   console.log(`  observed blocked unarmed release pairing ${blockedLine.trim()}`);
 
   await openPairingDeepLink(
@@ -269,7 +270,22 @@ async function installReleaseApk(serial: string, apkPath: string): Promise<void>
     cleartextDomains: ["127.0.0.1", "localhost"],
   });
   await runAdb(serial, ["uninstall", appId], 30_000).catch(() => undefined);
-  await runAdb(serial, ["install", "-r", apkPath], 120_000);
+  await installApkWithRetry(serial, apkPath);
+}
+
+async function installApkWithRetry(serial: string, apkPath: string): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      await runAdb(serial, ["install", "-r", apkPath], 120_000);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (!String(error).includes("Broken pipe") || attempt === 2) break;
+      await delay(5_000);
+    }
+  }
+  throw lastError;
 }
 
 async function assertReleasePackageIsNotDebuggable(serial: string): Promise<void> {
@@ -317,6 +333,19 @@ async function waitForReleasePairingProbeLog(
     await delay(500);
   }
   throw new Error(`timed out waiting for ${TOWNSHIP_RELEASE_PAIRING_PROBE_LOG_PREFIX} phase=${phase}; last logcat:\n${lastOutput}`);
+}
+
+async function assertNoPairingSavedYet(serial: string): Promise<void> {
+  const output = await runAdb(serial, ["logcat", "-d", "-s", "LATTICE_PROBE"], 10_000);
+  const savedLine = output
+    .split(/\r?\n/)
+    .find(
+      (candidate) =>
+        candidate.includes(TOWNSHIP_RELEASE_PAIRING_PROBE_LOG_PREFIX) &&
+        candidate.includes("phase=pairing") &&
+        candidate.includes("outcome=saved"),
+    );
+  assert.equal(savedLine, undefined, `no-state release pairing link should not save peer config before armed delivery:\n${savedLine ?? output}`);
 }
 
 function devicePublicKeyFromNativeKeyLine(line: string): string {

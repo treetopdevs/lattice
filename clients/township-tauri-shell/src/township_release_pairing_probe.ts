@@ -429,9 +429,8 @@ async function waitForReleasePairing(
           const urls = await source.current();
           const candidate = firstActionablePairingParse(urls);
           if (candidate) {
-            clearTimeout(timer);
-            settle(candidate);
-            return;
+            settleIfActionable(candidate);
+            if (settled) return;
           }
         }
       };
@@ -534,6 +533,7 @@ async function waitForReleasePairing(
       urlPort: urlPort(saved.config.url),
     };
   } finally {
+    gate?.disarm();
     listenerRef.stop?.();
     if (Date.now() > deadline + 1_000) {
       await delay(0);
@@ -542,8 +542,9 @@ async function waitForReleasePairing(
 }
 
 function releasePairingGate(config: TownshipReleasePairingProbeConfig): TownshipPairingDeepLinkGate | null {
-  if (config.armState === undefined) return null;
-  return createOneShotTownshipPairingDeepLinkGate({ createState: () => config.armState as string });
+  const { armState } = config;
+  if (armState === undefined) return null;
+  return createOneShotTownshipPairingDeepLinkGate({ createState: () => armState });
 }
 
 function firstActionablePairingParse(urls: readonly string[] | null): TownshipPairingDeepLinkParse | null {

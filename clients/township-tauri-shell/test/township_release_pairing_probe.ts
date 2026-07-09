@@ -224,7 +224,7 @@ const delayedResult = await logTownshipReleasePairingProbeFromEnv(
     source: {
       async current() {
         delayedCurrentCalls++;
-        return delayedCurrentCalls >= 2 ? [armedPairingLink] : [pairingLink];
+        return delayedCurrentCalls >= 3 ? [armedPairingLink] : [pairingLink];
       },
       async onOpenUrl(callback) {
         callback([pairingLink]);
@@ -244,10 +244,15 @@ const delayedResult = await logTownshipReleasePairingProbeFromEnv(
   },
 );
 assert.equal(delayedResult?.outcome, "synced");
-assert.ok(delayedCurrentCalls >= 2, "pairing probe should poll current URLs after route-only callbacks");
+assert.ok(delayedCurrentCalls >= 3, "pairing probe should keep polling after blocked current URLs");
 assert.ok(
   delayedEmitted.some((line) => /phase=arming/.test(line) && /state_required=true/.test(line)),
   "pairing probe should log that the release OS link path is armed without logging the state value",
+);
+assert.equal(
+  delayedEmitted.filter((line) => /phase=deeplink/.test(line) && /outcome=blocked/.test(line)).length >= 2,
+  true,
+  "pairing probe should block both callback and current-poll no-state URLs",
 );
 assert.ok(
   delayedEmitted.some((line) => /phase=deeplink/.test(line) && /outcome=blocked/.test(line) && /blocked_reason=state_mismatch/.test(line)),

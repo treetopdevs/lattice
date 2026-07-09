@@ -2,7 +2,7 @@
 
 ## Status
 
-IN PROGRESS
+DONE
 
 ## Objective
 
@@ -45,21 +45,39 @@ handoff.
   state-bearing pairing.
 - GREEN: `npm run typecheck` passes after adding the release pairing probe gate
   result shapes.
+- RED: Claude Code found that the first green contract masked a real bypass:
+  the callback path was gated, but the `current()` polling path could settle a
+  no-state URL directly. Tightening the contract to keep returning the no-state
+  URL through the next poll reproduced the failure.
+- GREEN: the polling path now routes through the same gate-aware settle function
+  and keeps polling after blocked current URLs.
+- GREEN: `npm run tauri:android:build:release:pairing-probe` rebuilt the
+  non-debuggable Android release APK with the probe arm-state config.
+- GREEN: `npm run tauri:android:release:pairing:smoke` passed after observing
+  `phase=arming`, `blocked_reason=state_mismatch` for the no-state OS intent, no
+  premature `phase=pairing outcome=saved` before armed delivery, saved pairing
+  from the state-bearing OS intent, paired cold reload, and sync from the
+  persisted peer config.
 
 ## Second Opinion
 
-Pending Claude Code review. No Claude approval is claimed yet.
+Claude Code reviewed the first green draft and found a critical gate bypass in
+the polling path. That finding was reproduced with a stricter contract and fixed
+before the Android release smoke was rerun. Claude also noted that the baked arm
+state is a fixed probe-only constant, so this plan proves release OS-delivery
+gate wiring, not browser/chooser-backed state exchange or an unforgeable
+production challenge.
 
 ## Verification
 
 - `cd clients/township-tauri-shell && npm run release:pairing:contract`
 - `cd clients/township-tauri-shell && npm run typecheck`
+- `cd clients/township-tauri-shell && npm run tauri:android:build:release:pairing-probe`
+- `cd clients/township-tauri-shell && npm run tauri:android:release:pairing:smoke`
 
 ## Remaining Work
 
-- Rebuild the Android release pairing-probe APK with the probe arm-state config.
-- Run `npm run tauri:android:release:pairing:smoke` against the rebuilt APK and
-  BEAM peer.
-- If the release smoke passes, mark this plan DONE and update the build map and
-  mobile secure-store strategy to move Android release armed OS delivery out of
-  the unproven list, bounded to the release pairing probe.
+- Browser/chooser-backed state exchange remains unproven.
+- Cross-device challenge ceremony, QR camera onboarding, LAN discovery,
+  physical-device behavior, iOS proof, authority origination, and full mobile
+  onboarding remain separate bounded plans.
