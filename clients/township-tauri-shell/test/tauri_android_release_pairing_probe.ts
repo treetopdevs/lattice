@@ -193,7 +193,7 @@ function releasePairingProbeConfigFromBuildScript(): ReleasePairingProbeBuildCon
 
 async function openPairingDeepLink(serial: string, config: TownshipCarrierPeerConfig): Promise<void> {
   const handoff = exportTownshipCarrierPairingHandoff(config);
-  const link = `township://pairing?handoff=${encodeURIComponent(handoff)}`;
+  const link = `township://pairing/${encodeURIComponent(handoff)}`;
   await runAdb(
     serial,
     [
@@ -203,11 +203,13 @@ async function openPairingDeepLink(serial: string, config: TownshipCarrierPeerCo
       "-a",
       "android.intent.action.VIEW",
       "-c",
+      "android.intent.category.DEFAULT",
+      "-c",
       "android.intent.category.BROWSABLE",
       "-d",
       link,
-      "-n",
-      appActivity,
+      "-p",
+      appId,
     ],
     30_000,
   );
@@ -254,7 +256,14 @@ async function waitForReleasePairingProbeLog(
   const deadline = Date.now() + 90_000;
   let lastOutput = "";
   while (Date.now() < deadline) {
-    const output = await runAdb(serial, ["logcat", "-d", "-s", "LATTICE_PROBE"], 10_000);
+    const output = await runAdb(serial, ["logcat", "-d", "-s", "LATTICE_PROBE"], 10_000).catch((error) => {
+      lastOutput = errorMessage(error);
+      return "";
+    });
+    if (!output) {
+      await delay(1_000);
+      continue;
+    }
     lastOutput = output;
     const line = output
       .split(/\r?\n/)
@@ -340,4 +349,8 @@ function forbiddenLogTerms(): RegExp {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

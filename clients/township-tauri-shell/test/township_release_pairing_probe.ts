@@ -116,8 +116,17 @@ assert.match(syncLine, /phase=sync/);
 assert.match(syncLine, /outcome=synced/);
 assert.match(syncLine, /pulled_op_ids=base,grant/);
 assert.match(syncLine, /outbox_frame_count=0/);
+const deeplinkRouteLine = townshipReleasePairingProbeLogLine({
+  phase: "deeplink",
+  outcome: "current",
+  urlCount: 1,
+  pairingUrlCount: 0,
+  firstRoute: `township:nohost:_pairing_${handoff}`,
+});
+assert.match(deeplinkRouteLine, /first_route=township:nohost:_pairing/);
+assert.doesNotMatch(deeplinkRouteLine, /township-pairing:v1|eyJ1cmwi|127\.0\.0\.1/);
 assert.doesNotMatch(
-  [nativeKeyLine, emptyReloadLine, savedLine, loadedLine, syncLine].join("\n"),
+  [nativeKeyLine, emptyReloadLine, savedLine, loadedLine, syncLine, deeplinkRouteLine].join("\n"),
   /sig|body|cap:|seed|private|secret|webview_devtools_remote|127\.0\.0\.1/,
 );
 
@@ -156,13 +165,18 @@ const result = await logTownshipReleasePairingProbeFromEnv(
   },
 );
 assert.equal(result?.outcome, "synced");
-assert.match(emitted[0] ?? "", /phase=native_key/);
-assert.match(emitted[1] ?? "", /phase=reload/);
-assert.match(emitted[1] ?? "", /paired=false/);
-assert.match(emitted[2] ?? "", /phase=pairing/);
-assert.match(emitted[3] ?? "", /phase=reload/);
-assert.match(emitted[3] ?? "", /paired=true/);
-assert.match(emitted[4] ?? "", /phase=sync/);
+assert.ok(
+  emitted.some((line) => /phase=deeplink/.test(line) && /outcome=current/.test(line) && /pairing_url_count=1/.test(line)),
+  "pairing probe should log non-secret deep-link current counts",
+);
+const probePhases = emitted.filter((line) => !/phase=deeplink/.test(line));
+assert.match(probePhases[0] ?? "", /phase=native_key/);
+assert.match(probePhases[1] ?? "", /phase=reload/);
+assert.match(probePhases[1] ?? "", /paired=false/);
+assert.match(probePhases[2] ?? "", /phase=pairing/);
+assert.match(probePhases[3] ?? "", /phase=reload/);
+assert.match(probePhases[3] ?? "", /paired=true/);
+assert.match(probePhases[4] ?? "", /phase=sync/);
 
 const persisted = await workflow.storage.getItem("carrier_peer_config");
 assert.ok(persisted, "pairing probe should persist the deep-link peer config");

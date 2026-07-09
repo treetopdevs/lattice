@@ -51,7 +51,11 @@ import {
 } from "./township_canonical_probe";
 import { logTownshipReleaseBeamProbeFromEnv } from "./township_release_beam_probe";
 import { logTownshipReleaseAuthorProbeFromEnv } from "./township_release_author_probe";
-import { logTownshipReleasePairingProbeFromEnv } from "./township_release_pairing_probe";
+import {
+  logTownshipReleasePairingProbeFromEnv,
+  townshipReleasePairingProbeConfigFromEnv,
+  type TownshipReleasePairingProbeEnv,
+} from "./township_release_pairing_probe";
 import { logTownshipReleaseSyncProbeFromEnv } from "./township_release_sync_probe";
 import { logTownshipReleaseTransportProbesFromEnv } from "./township_release_transport_probe";
 import {
@@ -294,6 +298,9 @@ const availableActions = computed(() => {
 onMounted(async () => {
   nativeStatus.value = await loadTownshipNativeStatus();
   await loadPairingConfig();
+  const releasePairingProbeActive =
+    isAndroidTauriShell() &&
+    townshipReleasePairingProbeConfigFromEnv(import.meta.env as TownshipReleasePairingProbeEnv) !== null;
   if (isAndroidTauriShell()) {
     void logTownshipCanonicalProbe().catch(() => {});
     void logTownshipReleaseBeamProbeFromEnv().catch(() => {});
@@ -302,8 +309,10 @@ onMounted(async () => {
     void logTownshipReleasePairingProbeFromEnv().catch(() => {});
     void logTownshipReleaseTransportProbesFromEnv().catch(() => {});
   }
-  await mountCanonicalProbeDeepLinkListener();
-  await mountPairingDeepLinkListener();
+  if (!releasePairingProbeActive) {
+    await mountCanonicalProbeDeepLinkListener();
+    await mountPairingDeepLinkListener();
+  }
   if (autosyncOnMount && carrierPeer.value) await syncOutbox();
   actionAvailability.value = await loadTownshipActionAvailability();
 });

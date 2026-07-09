@@ -33,6 +33,8 @@ export interface TownshipPairingDeepLinkListenerOptions {
   apply(parse: TownshipPairingDeepLinkParse): void;
 }
 
+const TAURI_ANDROID_PAIRING_HANDOFF_PREFIX = "township-pairing_3Av1_3A";
+
 export function parseTownshipPairingDeepLink(value: string): TownshipPairingDeepLinkParse {
   const handoff = pairingHandoffFromLink(value);
   if (handoff === null) return deepLinkError("invalid_pairing_deeplink");
@@ -76,13 +78,43 @@ function pairingHandoffFromLink(value: string): string | null {
     return null;
   }
 
-  if (url.protocol !== "township:" || url.hostname !== "pairing") return null;
+  if (url.protocol !== "township:") return null;
+  if (
+    url.hostname !== "pairing" &&
+    !androidPairingPath(url.pathname) &&
+    !tauriAndroidNoHostPairingRoute(url)
+  ) {
+    return null;
+  }
 
   const queryHandoff = present(url.searchParams.get("handoff"));
   if (queryHandoff) return queryHandoff;
 
-  const pathHandoff = present(pathWithoutLeadingSlash(url.pathname));
+  const pathHandoff = present(pairingPathHandoff(url));
   return pathHandoff;
+}
+
+function androidPairingPath(pathname: string): boolean {
+  const path = pathWithoutLeadingSlash(pathname);
+  return path === "pairing" || path.startsWith("pairing/");
+}
+
+function tauriAndroidNoHostPairingRoute(url: URL): boolean {
+  const path = pathWithoutLeadingSlash(url.pathname);
+  if (url.hostname === "nohost") {
+    return path === "_pairing" || path.startsWith("_pairing/") || path.startsWith("_pairing_");
+  }
+  return path === "nohost:_pairing" || path.startsWith("nohost:_pairing/") || path.startsWith("nohost:_pairing_");
+}
+
+function pairingPathHandoff(url: URL): string {
+  const path = pathWithoutLeadingSlash(url.pathname);
+  if (url.hostname === "pairing") return normalizeTauriAndroidRouteHandoff(path);
+  if (tauriAndroidNoHostPairingRoute(url)) {
+    if (url.hostname === "nohost") return normalizeTauriAndroidRouteHandoff(path.replace(/^_pairing(?:\/|_)?/, ""));
+    return normalizeTauriAndroidRouteHandoff(path.replace(/^nohost:_pairing(?:\/|_)?/, ""));
+  }
+  return normalizeTauriAndroidRouteHandoff(path.replace(/^pairing\/?/, ""));
 }
 
 function pathWithoutLeadingSlash(pathname: string): string {
@@ -92,6 +124,11 @@ function pathWithoutLeadingSlash(pathname: string): string {
   } catch {
     return withoutSlash;
   }
+}
+
+function normalizeTauriAndroidRouteHandoff(value: string): string {
+  if (!value.startsWith(TAURI_ANDROID_PAIRING_HANDOFF_PREFIX)) return value;
+  return `township-pairing:v1:${value.slice(TAURI_ANDROID_PAIRING_HANDOFF_PREFIX.length)}`;
 }
 
 function present(value: string | null | undefined): string | null {

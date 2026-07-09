@@ -36,6 +36,7 @@ const handoffConfig: TownshipCarrierPeerConfig = {
   keyId: "sender-key",
 };
 const handoff = exportTownshipCarrierPairingHandoff(handoffConfig);
+const tauriAndroidEncodedHandoff = encodeURIComponent(handoff).replace(/%/g, "_");
 const imported = importTownshipCarrierPairingHandoff(handoff);
 assert.equal(imported.ok, true);
 if (!imported.ok) throw new Error(imported.message);
@@ -43,6 +44,12 @@ if (!imported.ok) throw new Error(imported.message);
 assertDeepLinkOk(`township://pairing?handoff=${handoff}`, handoff);
 assertDeepLinkOk(`township://pairing?handoff=${encodeURIComponent(handoff)}`, handoff);
 assertDeepLinkOk(`township://pairing/${handoff}`, handoff);
+assertDeepLinkOk(`township:/pairing?handoff=${encodeURIComponent(handoff)}`, handoff);
+assertDeepLinkOk(`township:nohost:_pairing?handoff=${encodeURIComponent(handoff)}`, handoff);
+assertDeepLinkOk(`township:nohost:_pairing/${encodeURIComponent(handoff)}`, handoff);
+assertDeepLinkOk(`township://nohost/_pairing?handoff=${encodeURIComponent(handoff)}`, handoff);
+assertDeepLinkOk(`township://nohost/_pairing_${handoff}`, handoff);
+assertDeepLinkOk(`township://nohost/_pairing_${tauriAndroidEncodedHandoff}`, handoff);
 
 const smuggled = encodedHandoff({
   url: "wss://deeplink.township.example/carrier",
@@ -69,6 +76,8 @@ assertDeepLinkError("not a url", "invalid_pairing_deeplink");
 assertDeepLinkError("https://pairing.example/?handoff=x", "invalid_pairing_deeplink");
 assertDeepLinkError("township://sync?handoff=x", "invalid_pairing_deeplink");
 assertDeepLinkError("township://pairing", "invalid_pairing_deeplink");
+assertDeepLinkError("township:nohost:_pairing", "invalid_pairing_deeplink");
+assertDeepLinkError("township://nohost/_pairing", "invalid_pairing_deeplink");
 assertDeepLinkError("township://pairing?handoff=township-pairing:v2:abc", "unsupported_pairing_version");
 assertDeepLinkError("township://pairing?handoff=township-pairing:v1:not-json", "invalid_pairing_payload");
 

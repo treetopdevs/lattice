@@ -247,6 +247,9 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   const androidMainActivity = readText(
     "clients/township-tauri-shell/src-tauri/gen/android/app/src/main/java/dev/treetop/lattice/township/MainActivity.kt",
   );
+  const androidIntentPlugin = readText(
+    "clients/township-tauri-shell/src-tauri/gen/android/app/src/main/java/dev/treetop/lattice/township/intent/TownshipIntentPlugin.kt",
+  );
   const androidKeyringShim = readText(
     "clients/township-tauri-shell/src-tauri/gen/android/app/src/main/java/io/crates/keyring/Keyring.kt",
   );
@@ -288,8 +291,24 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(androidReleaseNetworkSecurityConfig, /<domain includeSubdomains="false">localhost<\/domain>/);
   assert.match(androidDebugNetworkSecurityConfig, /<base-config cleartextTrafficPermitted="true"\s*\/>/);
   assert.match(androidMainActivity, /import io\.crates\.keyring\.Keyring/);
+  assert.match(androidMainActivity, /import android\.content\.Intent/);
+  assert.match(androidMainActivity, /import dev\.treetop\.lattice\.township\.intent\.TownshipIntentStore/);
+  assert.match(
+    androidMainActivity,
+    /override fun onCreate\(savedInstanceState: Bundle\?\) \{\s+TownshipIntentStore\.record\(intent\)[\s\S]+super\.onCreate\(savedInstanceState\)/,
+  );
+  assert.match(
+    androidMainActivity,
+    /override fun onNewIntent\(intent: Intent\) \{\s+TownshipIntentStore\.record\(intent\)[\s\S]+super\.onNewIntent\(intent\)/,
+  );
   assert.match(androidMainActivity, /System\.loadLibrary\("township_tauri_shell"\)/);
   assert.match(androidMainActivity, /Keyring\.initializeNdkContext\(applicationContext\)/);
+  assert.match(androidIntentPlugin, /object TownshipIntentStore/);
+  assert.match(androidIntentPlugin, /fun record\(intent: Intent\?\)/);
+  assert.match(androidIntentPlugin, /intent\?\.data\?\.scheme == "township"/);
+  assert.match(androidIntentPlugin, /intent\?\.data\?\.toString\(\)/);
+  assert.match(androidIntentPlugin, /fun peek\(\): String\?/);
+  assert.match(androidIntentPlugin, /currentUrl = TownshipIntentStore\.peek\(\)/);
   assert.match(androidKeyringShim, /package io\.crates\.keyring/);
   assert.match(androidKeyringShim, /companion object\s*\{\s*external fun initializeNdkContext\(context: Context\)/);
   assert.match(cargoToml, /\[lib\]\nname = "township_tauri_shell"\npath = "src\/lib\.rs"\ncrate-type = \["staticlib", "cdylib", "rlib"\]/);

@@ -40,6 +40,7 @@ const stop = await source.onOpenUrl((urls) => {
 assert.equal(importerCalls, 2);
 assert.ok(subscribed, "source should subscribe to deep-link open events");
 subscribed(openedUrls);
+await nextTick();
 assert.deepEqual(seen, [openedUrls]);
 stop?.();
 assert.equal(unlistenCount, 1);
@@ -56,6 +57,53 @@ const missingCurrent = createTauriPairingDeepLinkSource({
 });
 assert.equal(await missingCurrent.current(), null);
 assert.equal(await missingCurrent.onOpenUrl(() => {}), undefined);
+
+const rawIntentUrl = "township://pairing?handoff=township-pairing:v1:not-json";
+const routeOnlyUrl = "township://nohost/_pairing";
+const invokedCommands: string[] = [];
+const rawIntentSource = createTauriPairingDeepLinkSource({
+  async importPlugin() {
+    return {
+      async getCurrent(): Promise<readonly string[]> {
+        return [routeOnlyUrl];
+      },
+      async onOpenUrl(callback: (urls: readonly string[]) => void): Promise<void> {
+        callback([routeOnlyUrl]);
+      },
+    };
+  },
+  async invoke(command) {
+    invokedCommands.push(command);
+    return rawIntentUrl;
+  },
+});
+assert.deepEqual(await rawIntentSource.current(), [rawIntentUrl, routeOnlyUrl]);
+const rawSeen: readonly string[][] = [];
+await rawIntentSource.onOpenUrl((urls) => rawSeen.push([...urls]));
+await nextTick();
+assert.deepEqual(rawSeen, [[rawIntentUrl, routeOnlyUrl]]);
+assert.deepEqual(invokedCommands, ["lattice_android_current_intent_url", "lattice_android_current_intent_url"]);
+
+const failedRawIntentSource = createTauriPairingDeepLinkSource({
+  async importPlugin() {
+    return {
+      async getCurrent(): Promise<readonly string[]> {
+        return [routeOnlyUrl];
+      },
+      async onOpenUrl(callback: (urls: readonly string[]) => void): Promise<void> {
+        callback([routeOnlyUrl]);
+      },
+    };
+  },
+  async invoke() {
+    throw new Error("unsupported platform");
+  },
+});
+assert.deepEqual(await failedRawIntentSource.current(), [routeOnlyUrl]);
+const fallbackSeen: readonly string[][] = [];
+await failedRawIntentSource.onOpenUrl((urls) => fallbackSeen.push([...urls]));
+await nextTick();
+assert.deepEqual(fallbackSeen, [[routeOnlyUrl]]);
 
 const parsed: ReturnType<typeof parseTownshipPairingDeepLink>[] = [];
 const scriptedSource: TownshipPairingDeepLinkSource = {
@@ -79,3 +127,7 @@ assert.equal(parsed[1]?.ok, false);
 assert.equal(parsed[1]?.reason, "invalid_pairing_payload");
 
 console.log("\x1b[32m✓ Township Tauri deep-link source checks passed\x1b[0m");
+
+function nextTick(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}

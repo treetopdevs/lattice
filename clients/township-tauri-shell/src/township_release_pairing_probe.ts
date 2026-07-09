@@ -8,6 +8,7 @@ import {
 } from "./native_workflow";
 import {
   createTownshipPairingDeepLinkListener,
+  parseTownshipPairingDeepLink,
   type TownshipPairingDeepLinkParse,
   type TownshipPairingDeepLinkSource,
 } from "./township_pairing_deeplink";
@@ -93,6 +94,14 @@ export type TownshipReleasePairingProbeResult =
       outcome: "error" | "timeout";
       elapsedMs: number;
       message: string;
+    }
+  | {
+      phase: "deeplink";
+      outcome: "listener_mounted" | "current" | "callback";
+      urlCount: number;
+      pairingUrlCount: number;
+      firstRoute?: string;
+      firstParseReason?: string;
     };
 
 type TownshipReleasePairingPhaseResult =
@@ -317,6 +326,19 @@ export function townshipReleasePairingProbeLogLine(result: TownshipReleasePairin
     return fields.join(" ");
   }
 
+  if (result.phase === "deeplink") {
+    const fields = [
+      TOWNSHIP_RELEASE_PAIRING_PROBE_LOG_PREFIX,
+      "phase=deeplink",
+      `outcome=${result.outcome}`,
+      `url_count=${result.urlCount}`,
+      `pairing_url_count=${result.pairingUrlCount}`,
+    ];
+    if (result.firstRoute) fields.push(`first_route=${probeRouteToken(result.firstRoute)}`);
+    if (result.firstParseReason) fields.push(`first_parse_reason=${probeToken(result.firstParseReason)}`);
+    return fields.join(" ");
+  }
+
   return [
     TOWNSHIP_RELEASE_PAIRING_PROBE_LOG_PREFIX,
     `phase=${result.phase}`,
@@ -330,12 +352,13 @@ async function waitForReleasePairing(
   options: TownshipReleasePairingProbeOptions & {
     config: TownshipReleasePairingProbeConfig;
     workflow: TownshipNativeWorkflow;
+    onResult?(result: TownshipReleasePairingProbeResult): Promise<void>;
   },
 ): Promise<TownshipReleasePairingPhaseResult> {
   const started = Date.now();
   const timeoutMs = options.timeoutMs ?? options.config.timeoutMs ?? 60_000;
   const deadline = started + timeoutMs;
-  const source = options.source ?? createTauriPairingDeepLinkSource();
+  const source = tracedPairingDeepLinkSource(options.source ?? createTauriPairingDeepLinkSource(), options);
   const listenerRef: { stop?: () => void } = {};
 
   try {
@@ -359,6 +382,12 @@ async function waitForReleasePairing(
       })
         .then((created) => {
           listenerRef.stop = () => created.stop();
+          void options.onResult?.({
+            phase: "deeplink",
+            outcome: "listener_mounted",
+            urlCount: 0,
+            pairingUrlCount: 0,
+          });
         })
         .catch((error) => {
           clearTimeout(timer);
@@ -505,6 +534,87 @@ async function syncReleasePairingOnce(options: TownshipReleasePairingProbeSyncOp
   return syncTownshipOutbox(syncOptions);
 }
 
+function tracedPairingDeepLinkSource(
+  source: TownshipPairingDeepLinkSource,
+  options: {
+    onResult?(result: TownshipReleasePairingProbeResult): Promise<void>;
+  },
+): TownshipPairingDeepLinkSource {
+  return {
+    async current() {
+      const urls = await source.current();
+      const result: TownshipReleasePairingProbeResult = {
+        phase: "deeplink",
+        outcome: "current",
+        urlCount: urls?.length ?? 0,
+        pairingUrlCount: pairingDeepLinkCount(urls),
+      };
+      const firstRoute = firstRouteShape(urls);
+      if (firstRoute !== undefined) result.firstRoute = firstRoute;
+      const firstParseReason = firstPairingParseReason(urls);
+      if (firstParseReason !== undefined) result.firstParseReason = firstParseReason;
+      await options.onResult?.(result);
+      return urls;
+    },
+    async onOpenUrl(callback) {
+      return source.onOpenUrl((urls) => {
+        const result: TownshipReleasePairingProbeResult = {
+          phase: "deeplink",
+          outcome: "callback",
+          urlCount: urls.length,
+          pairingUrlCount: pairingDeepLinkCount(urls),
+        };
+        const firstRoute = firstRouteShape(urls);
+        if (firstRoute !== undefined) result.firstRoute = firstRoute;
+        const firstParseReason = firstPairingParseReason(urls);
+        if (firstParseReason !== undefined) result.firstParseReason = firstParseReason;
+        void options.onResult?.(result);
+        callback(urls);
+      });
+    },
+  };
+}
+
+function pairingDeepLinkCount(urls: readonly string[] | null): number {
+  return (urls ?? []).filter((url) => parseTownshipPairingDeepLink(url).ok).length;
+}
+
+function firstRouteShape(urls: readonly string[] | null): string | undefined {
+  const value = urls?.[0];
+  if (!value) return undefined;
+  try {
+    const parsed = new URL(value);
+    const protocol = parsed.protocol.replace(/:$/, "") || "unknown";
+    const host = parsed.hostname || "nohost";
+    const path = routePathShape(parsed);
+    return `${protocol}:${host}:${path}`;
+  } catch {
+    return "invalid";
+  }
+}
+
+function firstPairingParseReason(urls: readonly string[] | null): string | undefined {
+  const value = urls?.[0];
+  if (!value) return undefined;
+  const parsed = parseTownshipPairingDeepLink(value);
+  return parsed.ok ? "ok" : parsed.reason;
+}
+
+function routePathShape(url: URL): string {
+  const path = url.pathname || "/";
+  const normalized = path.replace(/^\//, "");
+  if (url.protocol === "township:" && url.hostname === "nohost" && normalized.startsWith("_pairing")) {
+    return normalized === "_pairing" ? "_pairing" : "_pairing_payload";
+  }
+  if (url.protocol === "township:" && normalized.startsWith("nohost:_pairing")) {
+    return normalized === "nohost:_pairing" ? "nohost:_pairing" : "nohost:_pairing_payload";
+  }
+  if (url.protocol === "township:" && normalized.startsWith("pairing")) {
+    return normalized === "pairing" ? "pairing" : "pairing_payload";
+  }
+  return path.length > 48 ? `${path.slice(0, 48)}_truncated` : path;
+}
+
 function validProbeUrl(value: string): boolean {
   return probeUrlScheme(value) !== "invalid" && townshipReleaseTransportProbeHostClass(value) === "loopback";
 }
@@ -618,6 +728,10 @@ function probeIdList(ids: readonly string[]): string {
 
 function probeToken(value: string): string {
   return value.trim().replace(/[^A-Za-z0-9_.:-]+/g, "_").replace(/^_+|_+$/g, "") || "empty";
+}
+
+function probeRouteToken(value: string): string {
+  return probeToken(value).replace(/(_pairing)(?:_[A-Za-z0-9_.:-]+)?$/, "$1");
 }
 
 function errorMessage(error: unknown): string {

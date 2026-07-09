@@ -31,6 +31,8 @@ pub const TOWNSHIP_PAIRING_DISCOVERY_BROADCAST_ADDR: &str = "255.255.255.255:457
 pub const TOWNSHIP_PAIRING_DISCOVERY_DEFAULT_TIMEOUT_MS: u64 = 750;
 pub const TOWNSHIP_PAIRING_DISCOVERY_MAX_TIMEOUT_MS: u64 = 5_000;
 const TOWNSHIP_PAIRING_DISCOVERY_MAX_PACKET_BYTES: usize = 16 * 1024;
+#[cfg(target_os = "android")]
+const TOWNSHIP_INTENT_PLUGIN_IDENTIFIER: &str = "dev.treetop.lattice.township.intent";
 #[cfg(any(target_os = "android", target_os = "ios"))]
 static MOBILE_KEYRING_STORE_CONFIGURED: OnceLock<()> = OnceLock::new();
 #[cfg(target_os = "android")]
@@ -531,6 +533,7 @@ pub fn township_command_names() -> &'static [&'static str] {
             "lattice_sign_carrier",
             "lattice_discover_pairing_adverts",
             "lattice_advertise_pairing_handoff",
+            "lattice_android_current_intent_url",
             "lattice_log_probe",
             "lattice_trace_dev_event",
         ];
@@ -545,6 +548,7 @@ pub fn township_command_names() -> &'static [&'static str] {
         "lattice_sign_carrier",
         "lattice_discover_pairing_adverts",
         "lattice_advertise_pairing_handoff",
+        "lattice_android_current_intent_url",
         "lattice_log_probe",
     ]
 }
@@ -559,8 +563,7 @@ pub fn configure_township_builder<R: tauri::Runtime>(
 fn configure_township_commands<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
     #[cfg(debug_assertions)]
     {
-        return builder
-            .plugin(tauri_plugin_deep_link::init())
+        return configure_township_plugins(builder)
             .invoke_handler(tauri::generate_handler![
                 lattice_kv_get,
                 lattice_kv_set,
@@ -569,24 +572,76 @@ fn configure_township_commands<R: tauri::Runtime>(builder: tauri::Builder<R>) ->
                 lattice_sign_carrier,
                 lattice_discover_pairing_adverts,
                 lattice_advertise_pairing_handoff,
+                lattice_android_current_intent_url,
                 lattice_log_probe,
                 lattice_trace_dev_event
             ]);
     }
 
     #[cfg(not(debug_assertions))]
+    configure_township_plugins(builder).invoke_handler(tauri::generate_handler![
+        lattice_kv_get,
+        lattice_kv_set,
+        lattice_ensure_carrier_key,
+        lattice_public_key,
+        lattice_sign_carrier,
+        lattice_discover_pairing_adverts,
+        lattice_advertise_pairing_handoff,
+        lattice_android_current_intent_url,
+        lattice_log_probe
+    ])
+}
+
+fn configure_township_plugins<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
+    let builder = builder.plugin(tauri_plugin_deep_link::init());
+
+    #[cfg(target_os = "android")]
+    {
+        return builder.plugin(android_intent::init());
+    }
+
+    #[cfg(not(target_os = "android"))]
     builder
-        .plugin(tauri_plugin_deep_link::init())
-        .invoke_handler(tauri::generate_handler![
-            lattice_kv_get,
-            lattice_kv_set,
-            lattice_ensure_carrier_key,
-            lattice_public_key,
-            lattice_sign_carrier,
-            lattice_discover_pairing_adverts,
-            lattice_advertise_pairing_handoff,
-            lattice_log_probe
-        ])
+}
+
+#[cfg(target_os = "android")]
+mod android_intent {
+    use serde::Deserialize;
+    use tauri::{
+        plugin::{Builder, PluginHandle, TauriPlugin},
+        Manager, Runtime,
+    };
+
+    use super::TOWNSHIP_INTENT_PLUGIN_IDENTIFIER;
+
+    pub struct TownshipIntentPlugin<R: Runtime>(PluginHandle<R>);
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct CurrentIntentResponse {
+        url: Option<String>,
+    }
+
+    pub fn init<R: Runtime>() -> TauriPlugin<R> {
+        Builder::new("township-intent")
+            .setup(|app, api| {
+                let handle =
+                    api.register_android_plugin(TOWNSHIP_INTENT_PLUGIN_IDENTIFIER, "TownshipIntentPlugin")?;
+                app.manage(TownshipIntentPlugin(handle));
+                Ok(())
+            })
+            .build()
+    }
+
+    pub fn current_url<R: Runtime>(
+        plugin: tauri::State<'_, TownshipIntentPlugin<R>>,
+    ) -> Result<Option<String>, String> {
+        plugin
+            .0
+            .run_mobile_plugin::<CurrentIntentResponse>("getCurrent", ())
+            .map(|response| response.url)
+            .map_err(|error| format!("android current intent unavailable: {error}"))
+    }
 }
 
 pub fn configure_platform_secure_township_builder<R: tauri::Runtime>(
@@ -806,6 +861,22 @@ fn lattice_advertise_pairing_handoff(
 ) -> Result<(), String> {
     trace_dev_command("lattice_advertise_pairing_handoff");
     advertise_township_pairing_handoff(handoff, label, target_addr)
+}
+
+#[cfg(target_os = "android")]
+#[tauri::command]
+fn lattice_android_current_intent_url(
+    plugin: tauri::State<'_, android_intent::TownshipIntentPlugin<tauri::Wry>>,
+) -> Result<Option<String>, String> {
+    trace_dev_command("lattice_android_current_intent_url");
+    android_intent::current_url(plugin)
+}
+
+#[cfg(not(target_os = "android"))]
+#[tauri::command]
+fn lattice_android_current_intent_url() -> Result<Option<String>, String> {
+    trace_dev_command("lattice_android_current_intent_url");
+    Ok(None)
 }
 
 #[tauri::command]
