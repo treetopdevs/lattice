@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  createTownshipNativeStorage,
   createTownshipNativeWorkflow,
   loadTownshipNativeStatus,
   probeTownshipNativeWorkflow,
@@ -7,6 +8,7 @@ import {
   TOWNSHIP_LOCAL_OP_LOG_KEY,
   TOWNSHIP_NATIVE_KEY_ID,
   TOWNSHIP_STORAGE_NAMESPACE,
+  traceTownshipDevEvent,
 } from "../src/native_workflow";
 import type { TauriInvoke } from "@treetopdevs/lattice-client";
 
@@ -45,6 +47,9 @@ const invoke: TauriInvoke = async <T = unknown>(
       assert.equal(args.keyId, TOWNSHIP_NATIVE_KEY_ID);
       result = signatureBase64;
       break;
+    case "lattice_trace_dev_event":
+      result = null;
+      break;
     default:
       throw new Error(`unexpected command ${command}`);
   }
@@ -59,7 +64,15 @@ await workflow.carrierFrames.save([]);
 assert.equal(values.get(`${TOWNSHIP_STORAGE_NAMESPACE}:${TOWNSHIP_LOCAL_OP_LOG_KEY}`), "[]");
 assert.equal(values.get(`${TOWNSHIP_STORAGE_NAMESPACE}:${TOWNSHIP_CARRIER_OUTBOX_KEY}`), "[]");
 
+const pairingStorage = createTownshipNativeStorage({ invoke, storageNamespace: "township:pairing-test" });
+await pairingStorage.setItem("carrier_peer_config", "{\"url\":\"wss://carrier.example\"}");
+assert.equal(
+  values.get("township:pairing-test:carrier_peer_config"),
+  "{\"url\":\"wss://carrier.example\"}",
+);
+
 const probe = await probeTownshipNativeWorkflow({ invoke });
+await traceTownshipDevEvent("deep-link:township://pairing", { invoke });
 
 assert.equal(probe.ready, true);
 assert.equal(probe.keyId, TOWNSHIP_NATIVE_KEY_ID);
@@ -74,15 +87,18 @@ assert.deepEqual(
     "lattice_ensure_carrier_key",
     "lattice_kv_set",
     "lattice_kv_set",
+    "lattice_kv_set",
     "lattice_ensure_carrier_key",
     "lattice_kv_set",
     "lattice_kv_get",
     "lattice_sign_carrier",
+    "lattice_trace_dev_event",
   ],
 );
-assert.equal(calls[4]?.args.key, `${TOWNSHIP_STORAGE_NAMESPACE}:native_probe`);
-assert.equal(calls[4]?.args.value, "native invoke ready");
-assert.equal(calls[6]?.args.bytes, bytesBase64(new TextEncoder().encode("township-native-probe")));
+assert.equal(calls[5]?.args.key, `${TOWNSHIP_STORAGE_NAMESPACE}:native_probe`);
+assert.equal(calls[5]?.args.value, "native invoke ready");
+assert.equal(calls[7]?.args.bytes, bytesBase64(new TextEncoder().encode("township-native-probe")));
+assert.equal(calls[8]?.args.event, "deep-link:township://pairing");
 
 const unavailable = await loadTownshipNativeStatus({
   async invoke(command: string): Promise<never> {

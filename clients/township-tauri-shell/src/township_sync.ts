@@ -1,6 +1,7 @@
 import {
   syncCarrierOnce,
   type CarrierOpFrame,
+  type CarrierStateReport,
   type CarrierVerifier,
   type CarrierSyncClient,
 } from "@treetopdevs/lattice-client";
@@ -56,6 +57,16 @@ export interface TownshipSyncSuccess {
   pending: string[];
   authorityQuarantinedGrantCount: number;
   authorityQuarantinedGrantIds: string[];
+  carrierAcceptedRevocationCount: number;
+  carrierAcceptedRevocationIds: string[];
+  authorityQuarantinedRevocationCount: number;
+  authorityQuarantinedRevocationIds: string[];
+  authorityRevokedCapabilityCount: number;
+  authorityRevokedCapabilityIds: string[];
+  authorityRevokedCapabilityAttributionCount: number;
+  authorityRevokedCapabilityAttributions: TownshipRevokedCapabilityAttribution[];
+  authorityRevokedCapabilityUnattributedCount: number;
+  authorityRevokedCapabilityUnattributedIds: string[];
 }
 
 export interface TownshipSyncFailure {
@@ -65,6 +76,23 @@ export interface TownshipSyncFailure {
 }
 
 export type TownshipOutboxSync = TownshipSyncSuccess | TownshipSyncFailure;
+
+export interface TownshipRevokedCapabilityAttribution {
+  commandId: string;
+  delegationId: string;
+}
+
+interface CarrierStateReporter {
+  stateReport(): Promise<CarrierStateReport>;
+}
+
+interface AuthorityRevokedCapabilitySummary {
+  ids: string[];
+  attributions: TownshipRevokedCapabilityAttribution[];
+  unattributedIds: string[];
+}
+
+const utf8Decoder = new TextDecoder("utf-8", { fatal: true });
 
 export async function syncTownshipOutbox(
   options: SyncTownshipOutboxOptions = {},
@@ -140,9 +168,20 @@ export async function syncTownshipOutbox(
       localCarrierFrames,
       options.realmByPubkey ?? TOWNSHIP_REALM_BY_PUBKEY,
     );
-    const authorityQuarantinedGrantIds = grantFrameIdsForAuthorityQuarantine(
+    const authorityQuarantinedGrantIds = frameIdsForAuthorityQuarantine(
       localCarrierFrames,
       synced.pushReport.quarantined,
+      "grant",
+    );
+    const carrierAcceptedRevocationIds = frameIdsForAcceptedCommand(
+      localCarrierFrames,
+      synced.pushReport.accepted,
+      "revoke",
+    );
+    const authorityQuarantinedRevocationIds = frameIdsForAuthorityQuarantine(
+      localCarrierFrames,
+      synced.pushReport.quarantined,
+      "revoke",
     );
     await workflow.localLog.save(synced.ops);
     const delegationFrames = mergeCarrierFrames([
@@ -156,6 +195,7 @@ export async function syncTownshipOutbox(
       workflow.delegationFrames.save(delegationFrames),
       workflow.carrierFrames.save(compactedCarrierFrames),
     ]);
+    const authorityRevokedCapabilities = await authorityRevokedCapabilitySummaryFromState(client, delegationFrames);
 
     return {
       ok: true,
@@ -178,6 +218,16 @@ export async function syncTownshipOutbox(
       pending: synced.pushReport.pending,
       authorityQuarantinedGrantCount: authorityQuarantinedGrantIds.length,
       authorityQuarantinedGrantIds,
+      carrierAcceptedRevocationCount: carrierAcceptedRevocationIds.length,
+      carrierAcceptedRevocationIds,
+      authorityQuarantinedRevocationCount: authorityQuarantinedRevocationIds.length,
+      authorityQuarantinedRevocationIds,
+      authorityRevokedCapabilityCount: authorityRevokedCapabilities.ids.length,
+      authorityRevokedCapabilityIds: authorityRevokedCapabilities.ids,
+      authorityRevokedCapabilityAttributionCount: authorityRevokedCapabilities.attributions.length,
+      authorityRevokedCapabilityAttributions: authorityRevokedCapabilities.attributions,
+      authorityRevokedCapabilityUnattributedCount: authorityRevokedCapabilities.unattributedIds.length,
+      authorityRevokedCapabilityUnattributedIds: authorityRevokedCapabilities.unattributedIds,
     };
   } catch (error) {
     return {
@@ -194,14 +244,91 @@ function mergeCarrierFrames(frames: CarrierOpFrame[]): CarrierOpFrame[] {
   return [...new Map(frames.map((frame) => [frame.id, frame])).values()];
 }
 
-function grantFrameIdsForAuthorityQuarantine(
+function frameIdsForAcceptedCommand(
+  frames: CarrierOpFrame[],
+  accepted: readonly string[],
+  commandName: string,
+): string[] {
+  const acceptedIds = new Set(accepted);
+  return frames
+    .filter((frame) => acceptedIds.has(frame.id) && frameCommandName(frame) === commandName)
+    .map(frameId);
+}
+
+function frameIdsForAuthorityQuarantine(
   frames: CarrierOpFrame[],
   quarantined: readonly (readonly [string, string])[],
+  commandName: string,
 ): string[] {
   const byId = new Map(frames.map((frame) => [frame.id, frame]));
   return quarantined
-    .filter(([id, reason]) => reason === "authority" && frameCommandName(byId.get(id)) === "grant")
+    .filter(([id, reason]) => reason === "authority" && frameCommandName(byId.get(id)) === commandName)
     .map(([id]) => id);
+}
+
+async function authorityRevokedCapabilitySummaryFromState(
+  client: CarrierSyncClient,
+  frames: CarrierOpFrame[],
+): Promise<AuthorityRevokedCapabilitySummary> {
+  if (!canReportCarrierState(client)) return emptyAuthorityRevokedCapabilitySummary();
+
+  try {
+    const report = await client.stateReport();
+    return authorityRevokedCapabilitySummary(report.authority_quarantine, frames);
+  } catch {
+    return emptyAuthorityRevokedCapabilitySummary();
+  }
+}
+
+function canReportCarrierState(client: CarrierSyncClient): client is CarrierSyncClient & CarrierStateReporter {
+  return typeof (client as Partial<CarrierStateReporter>).stateReport === "function";
+}
+
+function quarantineIdsForReason(
+  quarantined: readonly (readonly [string, string])[],
+  reason: string,
+): string[] {
+  return [...new Set(quarantined.filter(([, entryReason]) => entryReason === reason).map(([id]) => id))].sort();
+}
+
+function authorityRevokedCapabilitySummary(
+  quarantined: readonly (readonly [string, string])[],
+  frames: CarrierOpFrame[],
+): AuthorityRevokedCapabilitySummary {
+  const ids = quarantineIdsForReason(quarantined, "revoked_capability");
+  const framesById = new Map(frames.map((frame) => [frame.id, frame]));
+  const attributedIds = new Set<string>();
+  const attributions = ids
+    .flatMap((id) => {
+      const delegationId = delegationIdFromCapTerm(framesById.get(id)?.cap);
+      if (delegationId === null) return [];
+      attributedIds.add(id);
+      return [{ commandId: id, delegationId }];
+    })
+    .sort((left, right) => left.commandId.localeCompare(right.commandId));
+  const unattributedIds = ids.filter((id) => !attributedIds.has(id));
+
+  return { ids, attributions, unattributedIds };
+}
+
+function emptyAuthorityRevokedCapabilitySummary(): AuthorityRevokedCapabilitySummary {
+  return { ids: [], attributions: [], unattributedIds: [] };
+}
+
+function delegationIdFromCapTerm(cap: CarrierOpFrame["cap"] | undefined): string | null {
+  if (cap?.[0] !== "bin") return null;
+  const delegationId = base64Utf8(cap[1]);
+  return delegationId && delegationId.length > 0 ? delegationId : null;
+}
+
+function base64Utf8(value: string): string | null {
+  try {
+    const decoded = globalThis.atob(value);
+    const bytes = Uint8Array.from(decoded, (char) => char.charCodeAt(0));
+    return utf8Decoder.decode(bytes);
+  } catch {
+    return null;
+  }
 }
 
 function frameCommandName(frame: CarrierOpFrame | undefined): string | null {

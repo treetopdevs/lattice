@@ -67,5 +67,12 @@ Planned at commit `ee6f56c`.
 
 - Completed follow-up: plan 056 proves the current desktop app convergence gate against the BEAM
   realm path.
-- Still future: a real Tauri-mobile or Expo implementation must turn the secure-store strategy into
-  phone-grade evidence.
+- Completed follow-up: plan 076 adds generated Tauri iOS/Android target scaffolds as readiness.
+- Completed follow-up: plan 077 pins iOS deployment target, generated Xcode script entrypoint, and
+  protected Keychain feature readiness before the simulator smoke.
+- Completed follow-up: plan 079 proves Android emulator native signer key reuse and W1-transcript
+  signing, including a `pm clear` negative guard.
+- Completed follow-up: plan 080 proves Android debug APK pre-signed-frame BEAM convergence after
+  restart through persisted native KV and a real BEAM Township peer.
+- Still future: release mobile BEAM convergence and iOS native-key reuse must be proven before this
+  becomes phone-grade evidence.

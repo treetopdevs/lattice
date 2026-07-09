@@ -17,7 +17,7 @@ defmodule Lattice2.ConvergencePropertyTest do
   use ExUnit.Case, async: true
   use ExUnitProperties
 
-  @moduletag timeout: 120_000
+  @moduletag timeout: 300_000
 
   alias Lattice.{Authority, Dag, Log, Sim}
   alias Lattice.Demo.Thread

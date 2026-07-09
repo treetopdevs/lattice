@@ -80,6 +80,26 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 058 | Live BEAM authority-unsound grant proof | P1 | S | 057 | DONE |
 | 059 | Revocation lifecycle proof | P1 | S | 058 | DONE |
 | 060 | Tauri revoke-access pending-sync ceremony | P1 | S | 059 | DONE |
+| 061 | Tauri carrier-accepted revoke acknowledgement UI | P1 | S | 060 | DONE |
+| 062 | Tauri production pairing config UX | P1 | S | 061 | DONE |
+| 063 | Tauri carrier connection-health UI | P1 | S | 062 | DONE |
+| 064 | Authority revoked-capability surfacing | P1 | S | 063 | DONE |
+| 065 | Revoked-capability delegation attribution | P1 | S | 064 | DONE |
+| 066 | Tauri pairing handoff import/export | P1 | S | 065 | DONE |
+| 067 | Tauri pairing handoff QR rendering | P1 | S | 066 | DONE |
+| 068 | Tauri pairing QR image import | P1 | S | 067 | DONE |
+| 069 | Tauri pairing deep-link ingress | P1 | S | 068 | DONE |
+| 070 | Tauri static deep-link wiring | P1 | M | 069 | DONE |
+| 071 | Tauri pairing live camera QR capture | P1 | M | 070 | DONE |
+| 072 | Tauri pairing discovery candidate channel | P1 | S | 071 | DONE |
+| 073 | Tauri local-network pairing advert receive | P1 | M | 072 | DONE |
+| 074 | Tauri installed-app deep-link delivery smoke | P1 | M | 073 | DONE |
+| 075 | Tauri local-network pairing advertise | P1 | M | 074 | DONE |
+| 076 | Tauri mobile target readiness | P1 | M | 075 | DONE |
+| 077 | Tauri iOS simulator build readiness | P1 | S | 076 | BLOCKED (Xcode 27 beta Swift package failure after repo-side fixes) |
+| 078 | Tauri Android debug APK readiness | P1 | S | 076 | DONE |
+| 079 | Tauri Android emulator native key reuse | P1 | M | 078 | DONE |
+| 080 | Tauri Android debug APK BEAM convergence | P1 | M | 079 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

@@ -30,10 +30,26 @@ test("frontend package builds and tests the Township Vue shell", () => {
   assert.equal(pkg.name, "@treetopdevs/township-tauri-shell");
   assert.equal(pkg.type, "module");
   assert.equal(pkg.scripts.build, "vite build");
+  assert.equal(pkg.scripts["tauri:build"], "tauri build --bundles app");
   assert.equal(pkg.scripts.typecheck, "vue-tsc --noEmit");
   assert.equal(pkg.scripts["frontend:contract"], "node --test test/frontend_shell.mjs");
+  assert.equal(pkg.scripts["mobile:tauri-readiness"], "node --test test/tauri_mobile_readiness.mjs");
+  assert.equal(pkg.scripts["tauri:deep-link:smoke"], "tsx test/tauri_installed_deeplink_smoke.ts");
   assert.equal(pkg.dependencies["@treetopdevs/lattice-client"], "file:../lattice-client");
+  assert.match(pkg.devDependencies["@tauri-apps/cli"], /^\^2\./);
   assert.match(pkg.dependencies.vue, /^\^3\.5\./);
+});
+
+test("frontend package exposes installed-app deep-link delivery smoke", () => {
+  const smoke = readText("test/tauri_installed_deeplink_smoke.ts");
+
+  assert.match(smoke, /township:\/\/pairing/);
+  assert.match(smoke, /TOWNSHIP_DEV_TRACE_FILE/);
+  assert.match(smoke, /deep-link-listener-mounted/);
+  assert.match(smoke, /deep-link:township:\/\/pairing/);
+  assert.match(smoke, /pairing-link-loaded:/);
+  assert.match(smoke, /\.app/);
+  assert.match(smoke, /spawnManaged\(\s*"open"/);
 });
 
 test("Vue source mounts a reducer-backed Township matter surface", () => {
@@ -168,6 +184,59 @@ test("Vue source exposes a pending-sync revocation ceremony", () => {
   assert.doesNotMatch(app, /access revoked/i);
 });
 
+test("Vue source exposes carrier-accepted revocation acknowledgement without claiming access removal", () => {
+  const app = readText("src/App.vue");
+  const sync = readText("src/township_sync.ts");
+
+  assert.match(sync, /carrierAcceptedRevocationIds/);
+  assert.match(sync, /authorityQuarantinedRevocationIds/);
+  assert.match(app, /carrierAcceptedRevocationCount/);
+  assert.match(app, /carrier accepted/);
+  assert.match(app, /revoke frame/);
+  assert.match(app, /pending authority confirmation/);
+  assert.doesNotMatch(app, /access revoked/i);
+  assert.doesNotMatch(app, /access removed/i);
+  assert.doesNotMatch(app, /revocation confirmed/i);
+  assert.doesNotMatch(app, /confirmed by carrier sync/i);
+});
+
+test("Vue source surfaces authority-blocked revoked-cap commands without overclaiming revocation effectiveness", () => {
+  const app = readText("src/App.vue");
+  const sync = readText("src/township_sync.ts");
+
+  assert.match(sync, /stateReport/);
+  assert.match(sync, /authorityRevokedCapabilityIds/);
+  assert.match(sync, /authorityRevokedCapabilityAttributions/);
+  assert.match(sync, /authorityRevokedCapabilityUnattributedIds/);
+  assert.match(sync, /delegationIdFromCapTerm/);
+  assert.match(sync, /revoked_capability/);
+  assert.match(app, /authorityRevokedCapabilityCount/);
+  assert.match(app, /authorityRevokedCapabilityAttributionCount/);
+  assert.match(app, /authorityRevokedCapabilityAttributions/);
+  assert.match(app, /authorityRevokedCapabilityUnattributedCount/);
+  assert.match(app, /cited delegation/);
+  assert.match(app, /carrier reports as revoked/);
+  assert.match(app, /more blocked by carrier authority/);
+  assert.match(app, /revoked-cap command/);
+  assert.match(app, /blocked by carrier authority/);
+  assert.ok(
+    app.indexOf("authorityRevokedCapabilityAttributionCount") < app.indexOf("authorityRevokedCapabilityCount"),
+    "attributed revoked-cap message should take priority over carrier-wide fallback",
+  );
+  assert.ok(
+    app.indexOf("authorityRevokedCapabilityCount") < app.indexOf("carrierAcceptedRevocationCount"),
+    "authority-blocked revoked-cap message should take priority over carrier-accepted pending copy",
+  );
+  assert.doesNotMatch(app, /access revoked/i);
+  assert.doesNotMatch(app, /access removed/i);
+  assert.doesNotMatch(app, /revocation confirmed/i);
+  assert.doesNotMatch(app, /confirmed by carrier sync/i);
+  assert.doesNotMatch(app, /effective removal/i);
+  assert.doesNotMatch(app, /effective for all future/i);
+  assert.doesNotMatch(app, /your revocation/i);
+  assert.doesNotMatch(app, /revocation worked/i);
+});
+
 test("Vue source does not claim phone-grade secure persistence", () => {
   const app = readText("src/App.vue");
 
@@ -181,7 +250,7 @@ test("frontend package exposes the real app convergence gate", () => {
 
   assert.equal(
     pkg.scripts["app:convergence"],
-    "npm run action:contract && npm run sync:contract && npm run live:contract && npm run tauri:launch:smoke",
+    "npm run action:contract && npm run sync:contract && npm run live:contract && npm run tauri:launch:smoke && npm run tauri:deep-link:smoke",
   );
 });
 
@@ -198,12 +267,232 @@ test("Vue source exposes a carrier sync outbox action", () => {
   assert.match(peer, /connectCarrierWebSocket/);
   assert.match(peer, /createWebCryptoCarrierVerifier/);
   assert.match(peer, /townshipCarrierPeerFromEnv/);
+  assert.match(peer, /checkTownshipCarrierPeerHealth/);
+  assert.match(peer, /status\(\)/);
   assert.match(sync, /export async function syncTownshipOutbox/);
   assert.match(sync, /peer\?: TownshipCarrierPeerConfig/);
   assert.match(app, /syncTownshipOutbox/);
   assert.match(app, /townshipCarrierPeerFromEnv\(\)/);
   assert.match(app, /syncStatus/);
   assert.match(app, /Sync outbox/);
+});
+
+test("Vue source exposes runtime carrier pairing config without storing secrets", () => {
+  const app = readText("src/App.vue");
+  const peer = readText("src/township_carrier_peer.ts");
+  const nativeWorkflow = readText("src/native_workflow.ts");
+
+  assert.match(nativeWorkflow, /export function createTownshipNativeStorage/);
+  assert.match(peer, /TOWNSHIP_CARRIER_PAIRING_KEY = "carrier_peer_config"/);
+  assert.match(peer, /normalizeTownshipCarrierPeerConfig/);
+  assert.match(peer, /saveTownshipCarrierPeerConfig/);
+  assert.match(peer, /loadTownshipCarrierPeerConfig/);
+  assert.match(peer, /invalid_expected_peer_pubkey/);
+  assert.match(peer, /invalid_url/);
+  assert.match(app, /carrierPeer = ref<TownshipCarrierPeerConfig \| null>/);
+  assert.match(app, /pairingDraft/);
+  assert.match(app, /pairingStatus/);
+  assert.match(app, /loadPairingConfig/);
+  assert.match(app, /submitPairing/);
+  assert.match(app, /saveTownshipCarrierPeerConfig/);
+  assert.match(app, /loadTownshipCarrierPeerConfig/);
+  assert.match(app, /createTownshipNativeStorage/);
+  assert.match(app, /Carrier pairing/);
+  assert.match(app, /Carrier URL/);
+  assert.match(app, /Local realm/);
+  assert.match(app, /Peer realm/);
+  assert.match(app, /Peer public key/);
+  assert.match(app, /Key id/);
+  assert.match(app, /Save pairing/);
+  assert.match(app, /carrierPeer\.value/);
+  assert.doesNotMatch(app, /const carrierPeer = townshipCarrierPeerFromEnv\(\)/);
+  assert.doesNotMatch(app, /seed phrase/i);
+  assert.doesNotMatch(app, /private key/i);
+  assert.doesNotMatch(app, /shared secret/i);
+  assert.doesNotMatch(app, /connected to carrier/i);
+  assert.doesNotMatch(app, /paired with/i);
+});
+
+test("Vue source exposes pairing handoff import without device-local identity transfer", () => {
+  const app = readText("src/App.vue");
+  const peer = readText("src/township_carrier_peer.ts");
+  const link = readText("src/township_pairing_deeplink.ts");
+  const source = readText("src/township_pairing_deeplink_source.ts");
+  const pkg = readJson("package.json");
+
+  assert.equal(pkg.scripts["deeplink:contract"], "tsx test/township_pairing_deeplink.ts");
+  assert.equal(pkg.scripts["deeplink:source:contract"], "tsx test/township_pairing_deeplink_source.ts");
+  assert.match(peer, /exportTownshipCarrierPairingHandoff/);
+  assert.match(peer, /importTownshipCarrierPairingHandoff/);
+  assert.match(peer, /townshipCarrierPeerFingerprint/);
+  assert.match(link, /parseTownshipPairingDeepLink/);
+  assert.match(link, /createTownshipPairingDeepLinkListener/);
+  assert.match(link, /importTownshipCarrierPairingHandoff/);
+  assert.doesNotMatch(link, /@tauri-apps\/plugin-deep-link/);
+  assert.match(source, /createTauriPairingDeepLinkSource/);
+  assert.match(source, /import\("@tauri-apps\/plugin-deep-link"\)/);
+  assert.match(peer, /invalid_pairing_format/);
+  assert.match(peer, /unsupported_pairing_version/);
+  assert.match(peer, /invalid_pairing_payload/);
+  assert.match(app, /pairingHandoffDraft/);
+  assert.match(app, /pairingHandoffFingerprint/);
+  assert.match(app, /parseTownshipPairingDeepLink/);
+  assert.match(app, /createTownshipPairingDeepLinkListener/);
+  assert.match(app, /createTauriPairingDeepLinkSource/);
+  assert.match(app, /tauriDeepLinkRuntimeAvailable/);
+  assert.match(app, /pairingDeepLinkListener/);
+  assert.match(app, /Pairing link loaded; save before sync/);
+  assert.match(app, /deep-link-listener-mounted/);
+  assert.match(app, /pairing-link-loaded:/);
+  assert.match(app, /pairingHandoffDraft\.value = imported\.handoff/);
+  assert.match(app, /exportPairingHandoff/);
+  assert.match(app, /importPairingHandoff/);
+  assert.match(app, /Pairing handoff/);
+  assert.match(app, /Export handoff/);
+  assert.match(app, /Load handoff/);
+  assert.match(app, /Verify peer fingerprint before saving/);
+  assert.match(app, /Pairing handoff loaded; save before sync/);
+  assert.match(app, /peer fingerprint/);
+  assert.doesNotMatch(app, /handoff.*localRealm/i);
+  assert.doesNotMatch(app, /handoff.*keyId/i);
+  assert.doesNotMatch(app, /auto.?connect/i);
+  assert.doesNotMatch(app, /connected to carrier/i);
+  assert.doesNotMatch(app, /paired with/i);
+  assert.doesNotMatch(app, /deep.?link registered/i);
+  assert.doesNotMatch(app, /opened by (the )?os/i);
+  assert.doesNotMatch(app, /secure pairing/i);
+});
+
+test("Vue source renders pairing handoff QR without trust claims", () => {
+  const app = readText("src/App.vue");
+  const qr = readText("src/township_pairing_qr.ts");
+  const pkg = readJson("package.json");
+
+  assert.match(pkg.scripts["qr:contract"], /test\/township_pairing_qr\.ts/);
+  assert.match(qr, /renderTownshipPairingQrSvg/);
+  assert.match(qr, /importTownshipCarrierPairingHandoff/);
+  assert.match(qr, /role="img"/);
+  assert.match(qr, /aria-label="Township pairing QR"/);
+  assert.match(app, /renderTownshipPairingQrSvg/);
+  assert.match(app, /pairingQrSvg/);
+  assert.match(app, /v-html="pairingQrSvg"/);
+  assert.match(app, /Pairing QR/);
+  assert.match(app, /QR carries the same public handoff/);
+  assert.match(app, /fingerprint before saving/);
+  assert.doesNotMatch(app, /scan to pair/i);
+  assert.doesNotMatch(app, /deep.?link registered/i);
+  assert.doesNotMatch(app, /secure pairing/i);
+  assert.doesNotMatch(app, /connected to carrier/i);
+});
+
+test("Vue source decodes pairing QR images and camera frames as draft imports", () => {
+  const app = readText("src/App.vue");
+  const qr = readText("src/township_pairing_qr.ts");
+  const camera = readText("src/township_pairing_qr_camera.ts");
+  const pkg = readJson("package.json");
+
+  assert.equal(pkg.scripts["qr:camera:contract"], "tsx test/township_pairing_qr_camera.ts");
+  assert.match(qr, /decodeTownshipPairingQrImageData/);
+  assert.match(qr, /invalid_pairing_qr/);
+  assert.match(camera, /createTownshipPairingQrCameraScanner/);
+  assert.match(camera, /decodeTownshipPairingQrImageData/);
+  assert.match(app, /decodeTownshipPairingQrImageData/);
+  assert.match(app, /createTownshipPairingQrCameraScanner/);
+  assert.match(app, /pairingQrImageStatus/);
+  assert.match(app, /pairingCameraStatus/);
+  assert.match(app, /pairingCameraScanning/);
+  assert.match(app, /importPairingQrImage/);
+  assert.match(app, /startPairingQrCamera/);
+  assert.match(app, /stopPairingQrCamera/);
+  assert.match(app, /createBrowserPairingQrCameraSource/);
+  assert.match(app, /navigator\.mediaDevices\.getUserMedia/);
+  assert.match(app, /facingMode: "environment"/);
+  assert.match(app, /Pairing QR image/);
+  assert.match(app, /Load QR image/);
+  assert.match(app, /Pairing QR camera/);
+  assert.match(app, /Start camera/);
+  assert.match(app, /Stop camera/);
+  assert.match(app, /accept="image\/\*"/);
+  assert.match(app, /Pairing QR image loaded; save before sync/);
+  assert.match(app, /Pairing camera loaded; save before sync/);
+  assert.match(app, /pairingDraft\.value = \{[\s\S]*\.\.\.pairingDraft\.value,[\s\S]*\.\.\.decoded\.draft,/);
+  assert.match(app, /try \{[\s\S]*const decoded = await decodePairingQrImageFile\(file\)/);
+  assert.match(app, /catch \{[\s\S]*Load an image containing a Township pairing QR/);
+  assert.match(app, /finally \{[\s\S]*pairingQrImporting\.value = false;[\s\S]*input\.value = "";/);
+  assert.doesNotMatch(app, /scan to pair/i);
+  assert.doesNotMatch(app, /auto.?connect/i);
+  assert.doesNotMatch(app, /connected to carrier/i);
+  assert.doesNotMatch(app, /secure pairing/i);
+});
+
+test("Vue source exposes manual pairing discovery without auto-pairing", () => {
+  const app = readText("src/App.vue");
+  const discovery = readText("src/township_pairing_discovery.ts");
+  const discoverySource = readText("src/township_pairing_discovery_source.ts");
+  const pkg = readJson("package.json");
+
+  assert.equal(pkg.scripts["discovery:contract"], "tsx test/township_pairing_discovery.ts");
+  assert.match(discovery, /createTownshipPairingDiscovery/);
+  assert.match(discovery, /importTownshipCarrierPairingHandoff/);
+  assert.match(discoverySource, /TOWNSHIP_PAIRING_DISCOVERY_COMMAND = "lattice_discover_pairing_adverts"/);
+  assert.match(discoverySource, /TOWNSHIP_PAIRING_ADVERTISE_COMMAND = "lattice_advertise_pairing_handoff"/);
+  assert.match(discoverySource, /createTauriPairingDiscoverySource/);
+  assert.match(discoverySource, /advertiseTauriPairingHandoff/);
+  assert.match(discoverySource, /timeoutMs/);
+  assert.match(discoverySource, /townshipPairingDiscoveryAdvertsFromNative/);
+  assert.match(app, /createTownshipPairingDiscovery/);
+  assert.match(app, /createTauriPairingDiscoverySource/);
+  assert.match(app, /advertiseTauriPairingHandoff/);
+  assert.match(app, /pairingAdvertiseStatus/);
+  assert.match(app, /pairingAdvertiseSubmitting/);
+  assert.match(app, /pairingDiscoveryStatus/);
+  assert.match(app, /pairingDiscoveryRunning/);
+  assert.match(app, /pairingDiscoveryCandidate/);
+  assert.match(app, /advertisePairingHandoff/);
+  assert.match(app, /startPairingDiscovery/);
+  assert.match(app, /stopPairingDiscovery/);
+  assert.match(app, /loadDiscoveredPairing/);
+  assert.match(app, /tauriNativeRuntimeAvailable/);
+  assert.match(app, /preferNativeDiscovery/);
+  assert.match(app, /createBrowserPairingDiscoverySource/);
+  assert.match(app, /BroadcastChannel\("township-pairing-discovery"\)/);
+  assert.match(app, /postMessage\(\{[\s\S]*type: "township-pairing-discovery"[\s\S]*handoff/);
+  assert.match(app, /township-pairing-discovery/);
+  assert.match(app, /Pairing discovery/);
+  assert.match(app, /Advertise handoff/);
+  assert.match(app, /Start discovery/);
+  assert.match(app, /Stop discovery/);
+  assert.match(app, /Load discovered handoff/);
+  assert.match(app, /Public pairing handoff advertised; verify peer fingerprint before saving on another device/);
+  assert.match(app, /Discovered pairing loaded; save before sync/);
+  assert.match(app, /peer fingerprint/);
+  assert.doesNotMatch(app, /auto.?pair/i);
+  assert.doesNotMatch(app, /auto.?connect/i);
+  assert.doesNotMatch(app, /connected to carrier/i);
+  assert.doesNotMatch(app, /paired with/i);
+  assert.doesNotMatch(app, /secure pairing/i);
+  assert.doesNotMatch(app, /trusted peer/i);
+});
+
+test("Vue source exposes a one-shot carrier health probe without overclaiming connection state", () => {
+  const app = readText("src/App.vue");
+  const peer = readText("src/township_carrier_peer.ts");
+
+  assert.match(peer, /export async function checkTownshipCarrierPeerHealth/);
+  assert.match(peer, /probe_failed/);
+  assert.match(peer, /\.status\(\)/);
+  assert.match(peer, /\.close\(\)/);
+  assert.match(app, /checkTownshipCarrierPeerHealth/);
+  assert.match(app, /healthStatus/);
+  assert.match(app, /healthSubmitting/);
+  assert.match(app, /checkCarrierHealth/);
+  assert.match(app, /Check carrier/);
+  assert.match(app, /Carrier session opened/);
+  assert.match(app, /peer status/);
+  assert.doesNotMatch(app, /connected to carrier/i);
+  assert.doesNotMatch(app, /paired with/i);
+  assert.doesNotMatch(app, /durably connected/i);
+  assert.doesNotMatch(app, /carrier online/i);
 });
 
 test("Vue source supports smoke-only auto-sync from Vite env", () => {
@@ -213,5 +502,23 @@ test("Vue source supports smoke-only auto-sync from Vite env", () => {
   assert.match(env, /VITE_TOWNSHIP_AUTOSYNC_ON_MOUNT/);
   assert.match(app, /autosyncOnMount/);
   assert.match(app, /VITE_TOWNSHIP_AUTOSYNC_ON_MOUNT/);
-  assert.match(app, /if \(autosyncOnMount && carrierPeer\) await syncOutbox\(\)/);
+  assert.match(app, /if \(autosyncOnMount && carrierPeer\.value\) await syncOutbox\(\)/);
+});
+
+test("Vue source does not block smoke auto-sync on action availability hydration", () => {
+  const app = readText("src/App.vue");
+  const mountedStart = app.indexOf("onMounted(async () => {");
+  const mountedEnd = app.indexOf("async function submitPost");
+  const mounted = app.slice(mountedStart, mountedEnd);
+
+  assert.ok(mountedStart > -1, "expected App.vue to define an onMounted boot sequence");
+  assert.ok(
+    mounted.indexOf("await loadPairingConfig()") < mounted.indexOf("if (autosyncOnMount && carrierPeer.value) await syncOutbox()"),
+    "pairing config should load before smoke-only auto-sync",
+  );
+  assert.ok(
+    mounted.indexOf("if (autosyncOnMount && carrierPeer.value) await syncOutbox()")
+      < mounted.indexOf("actionAvailability.value = await loadTownshipActionAvailability()"),
+    "action availability should hydrate after smoke-only auto-sync can converge",
+  );
 });

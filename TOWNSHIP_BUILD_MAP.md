@@ -70,8 +70,8 @@ Framework-agnostic; the shared spine both the Expo and Tauri shells consume.
 | Path | What it is | Status |
 |---|---|---|
 | `clients/lattice-client/src/{op,dag,schema,crdt/reducers,quarantine,materialize,sync,carrier}.ts` | **Tier A** — the reducer (DAG, 3 CRDTs, the single V-01 quarantine predicate, materialize, sync) plus the carrier-frame/session adapter and carrier-term delegation extraction. Encoding-independent for op ids; carrier session bytes are signed through an injected shell/key-custody signer. | **Real & verified**: strict typecheck clean, Sim-generated conformance green, carrier W1 vector check green, live TS↔BEAM WebSocket W1 green. |
-| `clients/lattice-client/src/{codec,identity,township,local_log,tauri_bridge}.ts` | **Tier B/E1 bridge** — canonical `lattice-cbor-v1` bytes + Ed25519 signing. `codec.ts` verifies carrier-frame op bytes/hashes/signatures against BEAM and can author/sign frames; `township.ts` builds `Township.Matter` command body/cap terms, selects a matching local delegation cap extracted from carrier frames, derives deps from the local op frontier, and exposes author-and-persist workflows; `local_log.ts` persists semantic ops and pending carrier-frame outbox entries through shell key-value seams; `tauri_bridge.ts` adapts Tauri-style `invoke` commands to storage, async native signing, and native public-key discovery. | **Partially real**: Phase D1 parity, received-op verification, W1 command-frame authoring, Township command body/cap composition, carrier delegation extraction, local delegation cap selection, local frontier deps, JSON local-log persistence, pending carrier-frame outbox persistence with ack compaction and a legacy evidence fallback, TS delegation issuance for a BEAM-matching W1 grant frame, shell-facing author-and-persist workflows for commands, grants, and pending-sync revokes, async carrier-session signing, invoke-backed Tauri storage/signer bridges, native Rust command registration, native key lifecycle discovery, the desktop keyring persistence seam, platform-secure app builder/construction helpers, a compile-checked Tauri runtime/config entrypoint, a Vite/Vue frontend asset shell that consumes the reducer, a Vue native-invoke storage/signing probe, cap-gated Vue post, summary, close, reopen, admit, remove-member, grant-access, and revoke-access actions, cap-aware Vue action availability, a Vue carrier sync action over the existing carrier sync contract, WebSocket carrier peer config/session wiring, live BEAM peer sync through the shell workflow, a smoke-only live Tauri window launch against a configured BEAM peer, a mobile secure-store strategy contract, cold-start replay of sync state, a named desktop app convergence gate, a Sim-anchored live BEAM proof that a validly signed but non-attenuated grant is authority-quarantined, and a Sim-anchored revocation lifecycle proof that covers issuer revoke, revoked-cap use, and non-issuer revoke rejection are proven; phone-grade mobile persistence/convergence smoke, production pairing UX, and confirmed-revocation acknowledgement UI remain. |
-| `clients/township-tauri-shell` | **E1 Tauri shell** — Vue 3.5 frontend plus Rust native command core for shell-side storage/signing commands (`lattice_kv_get`, `lattice_kv_set`, `lattice_ensure_carrier_key`, `lattice_public_key`, `lattice_sign_carrier`). | **Partially real**: Rust Ed25519 command core matches the W1 TS carrier-session public key/signature and key-value command semantics; a Tauri builder helper registers those commands and is proven through mock IPC; native state can create/reuse an OS-random carrier key by ID without exposing private key material to TS; a `keyring`-backed seed store gives desktop shells a secure persistence seam; platform-secure builder and app-construction helpers wire those commands to the desktop keyring-backed state through a stable service name and supplied Tauri context; `tauri.conf.json`, Tauri build-script wiring, `run()`, and a binary entrypoint compile against the real Tauri Wry runtime; the Vue asset shell renders a reducer-backed zoning-variance matter preview, calls native invoke-backed storage/signing through a tested device-key probe, exposes a generic command submission path plus cap-gated post, summary, close, reopen, admit, remove-member, grant-access, and revoke-access actions that persist signed W1-compatible frames when local delegation evidence exists, renders tested cap-aware action availability from local delegation evidence, exposes a tested carrier sync control that can push/pull through an injected carrier client while persisting the merged local log, retaining delegation evidence, replaying cold-start state from carrier frames, and compacting accepted or peer-known pending outbox frames, can parse Vite peer config, authenticate a WebSocket carrier session with the native signer, verify the peer hello through WebCrypto Ed25519, sync once against a real BEAM Township peer through that configured shell workflow, launch the real Tauri window in a smoke harness that proves auto-sync opens and closes a carrier session, and run the named `app:convergence` gate; phone-grade mobile persistence/convergence smoke, production pairing UX, and confirmed-revocation acknowledgement UI remain. |
+| `clients/lattice-client/src/{codec,identity,township,local_log,tauri_bridge}.ts` | **Tier B/E1 bridge** — canonical `lattice-cbor-v1` bytes + Ed25519 signing. `codec.ts` verifies carrier-frame op bytes/hashes/signatures against BEAM and can author/sign frames; `township.ts` builds `Township.Matter` command body/cap terms, selects a matching local delegation cap extracted from carrier frames, derives deps from the local op frontier, and exposes author-and-persist workflows; `local_log.ts` persists semantic ops and pending carrier-frame outbox entries through shell key-value seams; `tauri_bridge.ts` adapts Tauri-style `invoke` commands to storage, async native signing, and native public-key discovery. | **Partially real**: Phase D1 parity, received-op verification, W1 command-frame authoring, Township command body/cap composition, carrier delegation extraction, local delegation cap selection, local frontier deps, JSON local-log persistence, pending carrier-frame outbox persistence with ack compaction and a legacy evidence fallback, TS delegation issuance for a BEAM-matching W1 grant frame, shell-facing author-and-persist workflows for commands, grants, and pending-sync revokes, async carrier-session signing, invoke-backed Tauri storage/signer bridges, native Rust command registration, native key lifecycle discovery, the desktop keyring persistence seam, platform-secure app builder/construction helpers, a compile-checked Tauri runtime/config entrypoint, a Vite/Vue frontend asset shell that consumes the reducer, a Vue native-invoke storage/signing probe, cap-gated Vue post, summary, close, reopen, admit, remove-member, grant-access, and revoke-access actions, cap-aware Vue action availability, a Vue carrier sync action over the existing carrier sync contract with carrier-accepted revoke-frame acknowledgement, authority blocked revoked-cap command surfacing, and delegation attribution when blocked command-frame evidence is known, WebSocket carrier peer config/session wiring, runtime persisted carrier pairing config, one-shot carrier connection-health UI, copy-paste/deep-link-safe carrier pairing handoff import/export with peer fingerprint surfacing, QR rendering, QR image import, live camera QR capture, same-origin discovery candidate channel, bounded native UDP local-network pairing advert receive/advertise with OS loopback delivery smoke, draft-only pairing deep-link ingress parsing, static Tauri deep-link plugin/config/capability wiring through a lazy source adapter, macOS installed-app `township://pairing` delivery smoke, generated Tauri iOS/Android target scaffolds, iOS simulator-readiness config for deployment target 15.0, generated Xcode script entrypoint, protected Keychain feature gating, Android debug APK build readiness through Tauri/Gradle, Android emulator native carrier key reuse plus W1-transcript signing through the platform keyring store, Android debug APK pre-signed-frame BEAM convergence through a restart-and-sync smoke, live BEAM peer sync through the shell workflow, a smoke-only live Tauri window launch against a configured BEAM peer, a mobile secure-store strategy contract, cold-start replay of sync state, a named desktop app convergence gate, a Sim-anchored live BEAM proof that a validly signed but non-attenuated grant is authority-quarantined, and a Sim-anchored revocation lifecycle proof that covers issuer revoke, revoked-cap use, and non-issuer revoke rejection are proven; Android emulator native carrier key reuse is proven, Android debug APK pre-signed-frame BEAM convergence is proven for the W1 debug smoke, iOS mobile key-reuse remains unproven, release mobile BEAM convergence remains unproven, the iOS archive remains locally blocked by an Xcode 27 beta Tauri Swift-package failure, and a physical multi-device LAN discovery smoke remains. |
+| `clients/township-tauri-shell` | **E1 Tauri shell** — Vue 3.5 frontend plus Rust native command core for shell-side storage/signing/discovery commands (`lattice_kv_get`, `lattice_kv_set`, `lattice_ensure_carrier_key`, `lattice_public_key`, `lattice_sign_carrier`, `lattice_discover_pairing_adverts`, `lattice_advertise_pairing_handoff`). | **Partially real**: Rust Ed25519 command core matches the W1 TS carrier-session public key/signature and key-value command semantics; a Tauri builder helper registers those commands and is proven through mock IPC; native state can create/reuse an OS-random carrier key by ID without exposing private key material to TS; a `keyring`-backed seed store gives desktop shells a secure persistence seam; platform-secure builder and app-construction helpers wire those commands to the desktop keyring-backed state through a stable service name and supplied Tauri context; `tauri.conf.json`, Tauri build-script wiring, `run()`, and a binary entrypoint compile against the real Tauri Wry runtime; the Vue asset shell renders a reducer-backed zoning-variance matter preview, calls native invoke-backed storage/signing through a tested device-key probe, exposes a generic command submission path plus cap-gated post, summary, close, reopen, admit, remove-member, grant-access, and revoke-access actions that persist signed W1-compatible frames when local delegation evidence exists, renders tested cap-aware action availability from local delegation evidence, exposes a tested carrier sync control that can push/pull through an injected carrier client while persisting the merged local log, retaining delegation evidence, replaying cold-start state from carrier frames, compacting accepted or peer-known pending outbox frames, surfacing carrier-accepted revoke-frame acknowledgement without claiming effective access removal, surfacing carrier authority blocked commands that tried to use revoked caps, and attributing those blocks to cited delegation ids when command-frame evidence is known, can parse Vite or runtime-persisted peer config, authenticate a WebSocket carrier session with the native signer, verify the peer hello through WebCrypto Ed25519, run a one-shot carrier status health probe without syncing data, export/load copy-paste/deep-link-safe pairing handoffs without transferring device-local identity, render that same public handoff as a QR code, import a supplied QR image or live camera QR frame as draft pairing metadata, receive same-origin public discovery candidates through a manual channel, receive and advertise local-network public pairing adverts through bounded native UDP commands/sources with OS loopback delivery smoke, parse `township://pairing` URLs into the same draft-only handoff path, compile-check and bundle Tauri's static `township` scheme/plugin/capability wiring, prove macOS installed-app OS delivery of `township://pairing` into the draft-only path through a packaged `.app` smoke, generate Tauri iOS/Android target projects, pin iOS simulator-readiness config for deployment target 15.0, the generated Xcode script entrypoint, protected Keychain support, Android debug APK build readiness through Tauri/Gradle, Android emulator native carrier key reuse plus W1-transcript signing through the platform keyring store, Android debug APK pre-signed-frame BEAM convergence through a restart-and-sync smoke, sync once against a real BEAM Township peer through that configured shell workflow, launch the real Tauri window in a smoke harness that proves auto-sync opens and closes a carrier session, and run the named `app:convergence` gate; Android emulator native carrier key reuse is proven, Android debug APK pre-signed-frame BEAM convergence is proven for the W1 debug smoke, iOS mobile key-reuse remains unproven, release mobile BEAM convergence remains unproven, the iOS archive remains locally blocked by an Xcode 27 beta Tauri Swift-package failure, and a physical multi-device LAN discovery smoke remains. |
 | `clients/lattice-client/test/conformance.ts` + `test/vectors/*.json` | The harness that pins the TS reducer to Sim. | **Real**; W0, W1/W2 + perspectives, W3, and five seeded randomized vectors are generated by `lattice.export_vectors`. |
 | `clients/lattice-client/test/carrier.ts` | The C3 carrier-vector harness: BEAM-compatible session transcript/signature check, full carrier-frame decoding, and W1 merge/materialization against the Sim oracle. | **Real**; `npm run carrier:township` is wired in CI. |
 | `clients/lattice-client/test/live_carrier.ts` | The live C3 harness: spawns the BEAM Township peer process, authenticates over WebSocket, pulls/pushes carrier frames, and compares both TS materialization and BEAM peer state to the Sim oracle. | **Real**; `npm run carrier:township:live` is wired in CI. |
@@ -161,22 +161,36 @@ Two hard blockers gate the endgame: **CBOR/ADR-P08** (everything non-BEAM) and *
   cap-aware command availability from the same local delegation evidence with a legacy
   carrier-frame fallback when the split evidence store is empty, run a Vue sync action
    that pushes/pulls the persisted outbox through the carrier contract with an injected carrier
-   client, build a WebSocket carrier session from Vite peer config, sync that shell workflow against
+   client, build a WebSocket carrier session from Vite or runtime-persisted peer config, run a
+   one-shot carrier status health probe without syncing data, sync that shell workflow against
    a live BEAM peer, smoke-launch the real Tauri window against a configured peer with
    debug-seeded key custody, issue and persist a Tauri grant-access cap ceremony, document the
    mobile secure-store boundary, replay sync state from cold-start carrier frames, and run the
    named desktop app convergence gate, prove concrete seed bytes stay out of current desktop app KV
    stores, surface reported authority-quarantined grant frames in the sync result, save a
    pending-sync Tauri revoke-access frame for locally issued delegations without removing local
-   evidence before carrier confirmation, prove over a
+   evidence before carrier confirmation, surface carrier-accepted revoke-frame acknowledgement
+   without claiming effective access removal, surface carrier authority blocked commands that used
+   revoked caps as carrier-wide authority-quarantine observations, attribute those blocks to
+   cited delegation ids when command-frame evidence is known, prove over a
    live BEAM peer that a validly signed but non-attenuated grant is structurally accepted yet
    authority-quarantined as `not_attenuated`, and prove a clerk-issued delegation can be revoked
    such that a later command citing it is authority-quarantined as `revoked_capability` while a
-   non-issuer revoke is `unauthorized_revoke` and leaves the delegation usable; non-BEAM phone
-   shells still need a real mobile
-   secure-store implementation and mobile convergence smoke before they are user-facing
-   equivalent carrier peers. Production pairing UX and confirmed-revocation acknowledgement UI remain
-   separate from the proof.
+   non-issuer revoke is `unauthorized_revoke` and leaves the delegation usable, and load
+   copy-paste/deep-link-safe pairing handoffs as draft peer metadata without transferring
+   device-local identity, render those handoffs as QR codes, import supplied QR images, capture
+   live camera QR frames, receive same-origin discovery candidates and bounded native UDP
+   local-network adverts, advertise those same public handoff packets with OS loopback smoke, parse `township://pairing` URLs through the same draft-only path, compile-check Tauri's static
+   `township` scheme/plugin/capability wiring, and prove macOS installed-app delivery through
+   a packaged `.app` smoke, generate Tauri iOS/Android target scaffolds, pin repo-side iOS
+   simulator-readiness config for deployment target 15.0, the generated Xcode script entrypoint,
+   protected Keychain support, assemble an Android debug APK through the real Tauri/Gradle
+   path, prove Android emulator native carrier key reuse plus W1-transcript signing through the
+   native command boundary, and prove Android debug APK pre-signed-frame BEAM convergence through a
+   restart-and-sync smoke. Non-BEAM phone shells still need release mobile BEAM convergence before
+   they are user-facing equivalent carrier peers. On this machine, the iOS simulator archive is
+   blocked by the selected Xcode 27 beta Tauri Swift-package failure. A physical multi-device LAN
+   discovery smoke remains separate from the proof.
 6. **Receipt-freeness is not real** (W4). `Attestation.Stub` is `receipt_free? = false` by
    design; do not let anything claim otherwise before M4.
 7. **AtomVM has distribution now but no iOS/Android target** — so a phone is a TS client, not a
@@ -231,11 +245,20 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   compaction, TS delegation issuance, the Tauri grant-access persistence ceremony, the mobile
   secure-store strategy contract, cold-start replay guard, the named desktop app convergence
   gate, current desktop app-KV no-secret checks, reported grant-authority-quarantine surfacing,
-  a Sim-anchored live BEAM proof that a non-attenuated grant is authority-quarantined, and a
-  Sim-anchored live BEAM revocation lifecycle proof with non-issuer rejection, and the Tauri
-  pending-sync revoke-access ceremony are covered
-  by plans 023–060; phone-grade mobile persistence/convergence smoke remains
-  Tier B/application-shell work.
+  a Sim-anchored live BEAM proof that a non-attenuated grant is authority-quarantined, a
+  Sim-anchored live BEAM revocation lifecycle proof with non-issuer rejection, the Tauri
+  pending-sync revoke-access ceremony, carrier-accepted revoke-frame acknowledgement UI, runtime
+  persisted carrier pairing config, one-shot carrier connection-health UI, authority
+  revoked-capability quarantine surfacing, delegation attribution for known blocked command
+  frames, copy-paste/deep-link-safe pairing handoff import/export, QR rendering, QR image
+  import, draft-only pairing deep-link ingress parsing, static Tauri deep-link
+  plugin/config/capability wiring, live camera QR capture, the same-origin discovery candidate
+  channel, bounded native UDP local-network pairing advert receive/advertise, macOS installed-app
+  deep-link delivery smoke, generated Tauri iOS/Android target scaffolds, repo-side iOS
+  simulator-readiness config, Android debug APK build readiness, Android emulator native carrier
+  key reuse, and Android debug APK pre-signed-frame BEAM convergence are covered by plans 023–080.
+  Release mobile BEAM convergence remains Tier B/application-shell work. The iOS archive path is
+  locally blocked by the selected Xcode 27 beta Tauri Swift-package failure.
 
 ### Phase D — Cross the runtime boundary (CBOR, the first hard blocker)
 - **D1.** Land **ADR-P08**: canonical CBOR for `Lattice.Op`, replacing the ETF pin.
@@ -294,10 +317,45 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   059 adds Sim-generated revocation lifecycle fixtures plus live BEAM peer proofs that a later
   command citing a revoked delegation is structurally accepted but authority-quarantined as
   `revoked_capability`, while a non-issuer revoke is `unauthorized_revoke` and leaves the
-  delegation usable, and plan 060 adds the Tauri pending-sync revoke-access ceremony for locally
-  issued delegations.
-  The remaining shell gaps are a real Tauri-mobile or Expo mobile convergence smoke plus
-  production pairing UX and confirmed-revocation acknowledgement UI.
+  delegation usable, plan 060 adds the Tauri pending-sync revoke-access ceremony for locally
+  issued delegations, plan 061 surfaces carrier-accepted revoke-frame acknowledgement without
+  treating peer-known compaction as acceptance or claiming effective access removal, plan 062
+  adds runtime persisted carrier pairing config with env fallback, plan 063 adds a
+  one-shot carrier status health probe without syncing data, plan 064 surfaces
+  carrier authority entries where commands using revoked caps were blocked as
+  `revoked_capability` without attributing that carrier-wide count to a specific local delegation.
+  Plan 065 attributes blocked commands to cited delegation ids when those command frames are in
+  known shell evidence. Plan 066 adds copy-paste/deep-link-safe carrier pairing handoff
+  import/export as draft peer metadata, strips device-local identity fields, and surfaces the peer
+  fingerprint before save. Plan 067 renders that same public handoff as a deterministic QR code
+  without adding scanner, OS registration, or discovery behavior. Plan 068 decodes supplied QR
+  images into the same draft-only handoff import path without adding live camera capture. Plan 069
+  parses `township://pairing` URLs and an injected URL source into that same draft-only handoff path
+  without adding Tauri plugin/config scheme registration. Plan 070 adds static Tauri deep-link
+  plugin/config/capability wiring plus a lazy Tauri source adapter while keeping bundle packaging
+  inactive and installed-app delivery unproven. Plan 071 captures live camera QR frames into the
+  same draft-only handoff path without saving, syncing, connecting, or discovering peers. Plan 072
+  adds a same-origin discovery candidate channel for public handoff adverts without auto-pairing or
+  claiming LAN discovery. Plan 073 adds a bounded native UDP receive path and Tauri source for
+  local-network public pairing adverts without transferring local identity, auto-pairing, or
+  claiming a production advertiser/multi-device smoke. Plan 074 activates app bundling and proves
+  macOS installed-app `township://pairing` delivery through a packaged `.app` smoke without saving,
+  syncing, connecting, or marking trust. Plan 075 adds the native UDP advertise command, TypeScript
+  adapter, Vue "Advertise handoff" ceremony, and OS loopback delivery smoke for public pairing
+  packets without saving, syncing, connecting, or marking trust. Plan 076 generates Tauri iOS and
+  Android target projects and adds a readiness contract while preserving the no-phone-grade claim
+  boundary. Plan 077 pins iOS simulator-readiness config for deployment target 15.0, the generated
+  Xcode script entrypoint, and protected Keychain support, then records the remaining local Xcode 27
+  beta Tauri Swift-package archive blocker. Plan 078 pins the Android debug APK build command, Rust
+  mobile library crate types, and Tauri mobile entrypoint marker, then proves the generated Android
+  target assembles a debug APK through Tauri/Gradle. Plan 079 adds the Android emulator native-key
+  smoke: platform-specific keyring default-store setup, Android NDK context initialization, backup
+  disabled for the carrier identity app, W1-transcript native signing, public-key reuse after
+  force-stop/relaunch, and a `pm clear` negative guard that changes the key. Plan 080 adds the Android debug-APK BEAM convergence smoke: the installed debug APK reloads persisted native KV
+  after restart, syncs pre-signed W1 carrier frames with a real BEAM Township peer over
+  `ws://10.0.2.2`, verifies local KV convergence, and checks the peer `stateReport`; release mobile
+  BEAM convergence remains unproven. The remaining shell gaps are iOS simulator key-reuse proof,
+  release mobile BEAM convergence, and a physical multi-device LAN discovery smoke.
 
 ### Phase E — The shells (apps)
 - **E1.** **Tauri v2 shell** (recommended spine): Vue 3.5 frontend + Rust core (key custody, CBOR,
@@ -307,14 +365,22 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   carrier-key lifecycle, desktop keyring persistence seam, platform-secure builder/app-construction
   helpers, compile-checked Tauri runtime/config entrypoint, first Vue frontend asset shell,
   native-invoke UI probe, cap-gated post, summary, close, reopen, admit, and remove-member actions, cap-aware action availability,
-  injected-carrier sync outbox action, WebSocket carrier peer config/session wiring, live BEAM
+  injected-carrier sync outbox action, WebSocket carrier peer config/session wiring, runtime persisted carrier pairing config, one-shot carrier connection-health UI, live BEAM
   peer sync through the configured shell workflow, smoke-only live Tauri window launch against a
   configured BEAM peer, Tauri grant-access ceremony, Tauri pending-sync revoke-access ceremony,
   mobile secure-store strategy contract, cold-start replay guard, named desktop `app:convergence` gate, concrete seed-byte app-KV checks,
-  typed reported-grant-quarantine surfacing, and the shared live BEAM authority-unsound grant and
-  revocation lifecycle proofs, including non-issuer revoke rejection, exist and are
-  vector-/mock-IPC/browser-smoke/live-peer/window-smoke-tested; phone-grade Tauri-mobile/Expo
-  convergence smoke, production pairing UX, and confirmed-revocation acknowledgement UI are not done.
+  typed reported-grant-quarantine surfacing, carrier-accepted revoke-frame acknowledgement,
+  authority revoked-capability quarantine surfacing with known-frame delegation attribution,
+  copy-paste/deep-link-safe carrier pairing handoff import/export with peer fingerprint surfacing,
+  pairing handoff QR rendering, QR image import, live camera QR capture, same-origin discovery
+  candidate channel, bounded native UDP local-network pairing advert receive/advertise with OS loopback smoke, draft-only pairing deep-link ingress parsing, static Tauri deep-link plugin/config/capability wiring, macOS installed-app deep-link delivery smoke, generated Tauri iOS/Android target scaffolds, iOS simulator-readiness config for deployment target 15.0 plus protected Keychain support, Android debug APK build readiness, Android emulator native carrier key reuse and W1-transcript signing through the platform keyring store, and the
+  shared live BEAM authority-unsound grant and revocation lifecycle proofs, including non-issuer
+  revoke rejection, exist and are
+  vector-/mock-IPC/browser-smoke/live-peer/window-smoke/emulator-smoke-tested; Android debug APK
+  pre-signed-frame BEAM convergence is proven for the W1 debug smoke, release mobile BEAM
+  convergence remains unproven, iOS mobile key-reuse remains unproven, the iOS archive remains
+  locally blocked by the selected Xcode 27 beta Tauri Swift-package archive failure, and a physical
+  multi-device LAN discovery smoke is not done.
 - **E2.** **Expo shell** (if phone-only is wanted): SDK 56+, RN 0.85, New Arch; same library, key
   custody via secure-store/native keystore. *Gate:* a phone build converges a Township matter.
   *Asset:* `docs/township_mobile_secure_store_strategy.md` plus the app-shell analysis (this

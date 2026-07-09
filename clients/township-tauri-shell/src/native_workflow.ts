@@ -22,6 +22,7 @@ export const TOWNSHIP_DELEGATION_FRAMES_KEY = "delegation_frames";
 const TOWNSHIP_NATIVE_PROBE_KEY = "native_probe";
 const TOWNSHIP_NATIVE_PROBE_VALUE = "native invoke ready";
 const TOWNSHIP_NATIVE_PROBE_CHALLENGE = "township-native-probe";
+const TOWNSHIP_TRACE_DEV_EVENT_COMMAND = "lattice_trace_dev_event";
 
 export interface TownshipNativeWorkflowOptions {
   invoke?: TauriInvoke;
@@ -57,13 +58,21 @@ export interface TownshipNativeUnavailableStatus {
 
 export type TownshipNativeStatus = TownshipNativeReadyStatus | TownshipNativeUnavailableStatus;
 
+export function createTownshipNativeStorage(
+  options: TownshipNativeWorkflowOptions = {},
+): LocalKeyValueStore {
+  const invoke = options.invoke ?? tauriInvoke;
+  const storageNamespace = options.storageNamespace ?? TOWNSHIP_STORAGE_NAMESPACE;
+  return createTauriKeyValueStore(invoke, { namespace: storageNamespace });
+}
+
 export async function createTownshipNativeWorkflow(
   options: TownshipNativeWorkflowOptions = {},
 ): Promise<TownshipNativeWorkflow> {
   const invoke = options.invoke ?? tauriInvoke;
   const keyId = options.keyId ?? TOWNSHIP_NATIVE_KEY_ID;
   const storageNamespace = options.storageNamespace ?? TOWNSHIP_STORAGE_NAMESPACE;
-  const storage = createTauriKeyValueStore(invoke, { namespace: storageNamespace });
+  const storage = createTownshipNativeStorage({ invoke, storageNamespace });
   const signer = await createTauriNativeCarrierSigner(invoke, { keyId });
 
   return {
@@ -108,6 +117,14 @@ export async function loadTownshipNativeStatus(
       error: errorMessage(error),
     };
   }
+}
+
+export async function traceTownshipDevEvent(
+  event: string,
+  options: Pick<TownshipNativeWorkflowOptions, "invoke"> = {},
+): Promise<void> {
+  const invoke = options.invoke ?? tauriInvoke;
+  await invoke(TOWNSHIP_TRACE_DEV_EVENT_COMMAND, { event });
 }
 
 function bytesBase64(bytes: Uint8Array): string {

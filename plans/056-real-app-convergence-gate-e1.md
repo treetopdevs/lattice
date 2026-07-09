@@ -52,7 +52,9 @@ secure-store strategy, with no mobile convergence claim until a real mobile smok
 
 ## Remaining Work
 
-- A future mobile convergence plan must create an actual Tauri-mobile or Expo smoke and flip the
-  phone-grade persistence gate from strategy to evidence.
+- Completed follow-up: plan 080 creates an actual Android debug APK convergence smoke for persisted
+  pre-signed W1 frames against a BEAM Township peer.
+- A future release mobile convergence plan must flip the phone-grade persistence gate from strategy
+  to release/device evidence.
 - That mobile smoke should also add a behavioral no-secrets-in-KV assertion for serialized app
   stores and a grant-specific authority/quarantine check.

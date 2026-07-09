@@ -283,7 +283,8 @@ dd {
   margin-top: 14px;
 }
 
-.post-form textarea {
+.post-form textarea,
+.grant-form textarea {
   width: 100%;
   min-height: 96px;
   resize: vertical;
@@ -314,9 +315,126 @@ dd {
   color: #17201d;
 }
 
-.post-form textarea:focus {
+.post-form textarea:focus,
+.grant-form textarea:focus {
   border-color: #2f6f73;
   outline: 3px solid #d8ece8;
+}
+
+.fingerprint {
+  display: block;
+  color: #52645d;
+  font-size: 0.86rem;
+  overflow-wrap: anywhere;
+}
+
+.pairing-qr {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px 16px;
+  padding: 12px;
+  border: 1px solid #dce3db;
+  border-radius: 8px;
+  background: #f8faf7;
+}
+
+.pairing-qr p {
+  grid-column: 2;
+  margin: 0;
+  color: #26362f;
+  font-weight: 800;
+}
+
+.pairing-qr small {
+  grid-column: 2;
+  color: #52645d;
+  font-size: 0.86rem;
+}
+
+.pairing-qr-image {
+  grid-row: 1 / span 2;
+  width: 132px;
+  height: 132px;
+}
+
+.pairing-qr-image svg {
+  display: block;
+  width: 132px;
+  height: 132px;
+}
+
+.qr-file-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 10px 12px;
+  border: 1px solid #cbd8d2;
+  border-radius: 8px;
+  background: #fbfdfb;
+}
+
+.qr-file-control span {
+  color: #52645d;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.qr-file-control input {
+  grid-column: 1 / -1;
+  max-width: 100%;
+  color: #52645d;
+  font-size: 0.9rem;
+}
+
+.qr-file-control strong {
+  color: #2f6f73;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+}
+
+.qr-camera-control,
+.pairing-discovery-control {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #cbd8d2;
+  border-radius: 8px;
+  background: #fbfdfb;
+}
+
+.qr-camera-control span,
+.pairing-discovery-control span {
+  color: #52645d;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.qr-camera-control small,
+.pairing-discovery-control small {
+  color: #52645d;
+  font-size: 0.86rem;
+}
+
+.qr-camera-actions,
+.pairing-discovery-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.pairing-discovery-candidate {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid #dce3db;
+  border-radius: 8px;
+  background: #f8faf7;
+}
+
+.pairing-discovery-candidate strong {
+  color: #26362f;
 }
 
 .member-form input:focus,
@@ -376,6 +494,9 @@ dd {
 
 .post-actions button,
 .status-buttons button,
+.qr-camera-actions button,
+.pairing-discovery-actions button,
+.pairing-discovery-candidate button,
 .grant-actions button,
 .sync-actions button {
   min-width: 132px;
@@ -390,6 +511,9 @@ dd {
 
 .post-actions button:disabled,
 .status-buttons button:disabled,
+.qr-camera-actions button:disabled,
+.pairing-discovery-actions button:disabled,
+.pairing-discovery-candidate button:disabled,
 .grant-actions button:disabled,
 .sync-actions button:disabled {
   background: #a9bbb4;
@@ -449,12 +573,40 @@ dd {
   .post-actions button,
   .status-buttons,
   .status-buttons button,
+  .qr-camera-actions,
+  .qr-camera-actions button,
+  .pairing-discovery-actions,
+  .pairing-discovery-actions button,
+  .pairing-discovery-candidate button,
   .grant-actions button,
   .sync-actions button {
     width: 100%;
   }
 
   .status-buttons {
+    flex-direction: column;
+  }
+
+  .pairing-qr {
+    grid-template-columns: 1fr;
+  }
+
+  .pairing-qr p,
+  .pairing-qr small,
+  .pairing-qr-image {
+    grid-column: 1;
+  }
+
+  .pairing-qr-image {
+    grid-row: auto;
+  }
+
+  .qr-file-control {
+    grid-template-columns: 1fr;
+  }
+
+  .qr-camera-actions,
+  .pairing-discovery-actions {
     flex-direction: column;
   }
 }

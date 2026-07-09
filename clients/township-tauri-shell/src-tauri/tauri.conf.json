@@ -24,6 +24,19 @@
     }
   },
   "bundle": {
-    "active": false
+    "active": true
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["township"]
+      },
+      "mobile": [
+        {
+          "scheme": ["township"],
+          "appLink": false
+        }
+      ]
+    }
   }
 }

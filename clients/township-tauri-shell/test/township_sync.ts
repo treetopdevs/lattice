@@ -9,6 +9,7 @@ import {
   type CarrierChallenge,
   type CarrierOpFrame,
   type CarrierPushReport,
+  type CarrierStateReport,
   type CarrierSyncClient,
   type ConnectCarrierWebSocketOptions,
   type TauriInvoke,
@@ -34,8 +35,17 @@ interface TownshipCarrierVector {
   client: { realm: string; sessionSeed: string; sessionPubkey: string };
   peer: { realm: string; sessionSeed: string; sessionPubkey: string };
   clientDivergedCarrierOps: CarrierOpFrame[];
+  oracleCarrierOps: CarrierOpFrame[];
   peerDivergedCarrierOps: CarrierOpFrame[];
   expectAfterSync: { opIds: string[] };
+  authorityRevocation: {
+    delegationId: string;
+    revokedCommandOp: CarrierOpFrame;
+    revokeOp: CarrierOpFrame;
+  };
+  authorityBadRevocation: {
+    revokeOp: CarrierOpFrame;
+  };
 }
 
 interface NativeIdentity {
@@ -136,6 +146,65 @@ class GrantAuthorityQuarantineClient implements CarrierSyncClient {
   }
 }
 
+class RevocationAuthorityQuarantineClient implements CarrierSyncClient {
+  async advertise(): Promise<string[]> {
+    return [];
+  }
+
+  async pull(): Promise<unknown[]> {
+    return [];
+  }
+
+  async push(ops: unknown[]): Promise<CarrierPushReport> {
+    const revokeFrame = (ops as CarrierOpFrame[]).find((frame) => frameCommandName(frame) === "revoke");
+    assert.ok(revokeFrame, "sync should push a revoke frame");
+    return {
+      accepted: [],
+      quarantined: [[revokeFrame.id, "authority"]],
+      rejected: [],
+      pending: [],
+    };
+  }
+}
+
+class StateReportCarrierClient implements CarrierSyncClient {
+  constructor(private readonly authorityQuarantine: [string, string][]) {}
+
+  async advertise(): Promise<string[]> {
+    return [];
+  }
+
+  async pull(): Promise<unknown[]> {
+    return [];
+  }
+
+  async push(ops: unknown[]): Promise<CarrierPushReport> {
+    return {
+      accepted: (ops as CarrierOpFrame[]).map((frame) => frame.id),
+      quarantined: [],
+      rejected: [],
+      pending: [],
+    };
+  }
+
+  async stateReport(): Promise<CarrierStateReport> {
+    return {
+      state_b64: vector.authorityRevocation.stateB64,
+      op_ids: vector.authorityRevocation.opIds,
+      frontier: [],
+      structural_quarantine: [],
+      authority_quarantine: this.authorityQuarantine,
+      log_size: vector.authorityRevocation.opIds.length,
+    };
+  }
+}
+
+class ThrowingStateReportCarrierClient extends StateReportCarrierClient {
+  async stateReport(): Promise<never> {
+    throw new Error("state report unavailable");
+  }
+}
+
 type WebSocketConstructor = NonNullable<ConnectCarrierWebSocketOptions["webSocket"]>;
 
 class ScriptedCarrierWebSocket {
@@ -198,6 +267,17 @@ class ScriptedCarrierWebSocket {
         };
         break;
       }
+      case "state":
+        response = {
+          type: "state_result",
+          state_b64: vector.expectAfterSync.stateB64,
+          op_ids: vector.expectAfterSync.opIds,
+          frontier: [],
+          structural_quarantine: [],
+          authority_quarantine: [],
+          log_size: vector.expectAfterSync.opIds.length,
+        };
+        break;
       default:
         throw new Error(`unexpected carrier envelope ${String(envelope.type)}`);
     }
@@ -369,6 +449,152 @@ assert.deepEqual(storedOutboxIds(grantQuarantineValues), [grantFixture.id]);
 assert.deepEqual(storedDelegationFrameIds(grantQuarantineValues), [grantFixture.id]);
 assert.doesNotThrow(() => assertTownshipKvStoresNoSecrets(grantQuarantineValues, secretNeedles(sessionIdentity)));
 
+const revokeFixture = vector.authorityRevocation.revokeOp;
+const badRevokeFixture = vector.authorityBadRevocation.revokeOp;
+const acceptedRevocationValues = new Map<string, string>([
+  [
+    storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY),
+    JSON.stringify(carrierOpsToSemanticOps([grantFixture, revokeFixture], vector.realmByPubkey)),
+  ],
+  [storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY), JSON.stringify([grantFixture, revokeFixture])],
+  [storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY), JSON.stringify(vector.oracleCarrierOps)],
+]);
+const acceptedRevocationSynced = await syncTownshipOutbox({
+  invoke: nativeInvoke(acceptedRevocationValues, vector.client.sessionPubkey, []),
+  client: new RecordingCarrierClient([]),
+});
+assert.equal(acceptedRevocationSynced.ok, true);
+if (!acceptedRevocationSynced.ok) throw new Error(acceptedRevocationSynced.message);
+assert.deepEqual(acceptedRevocationSynced.acceptedIds.sort(), [grantFixture.id, revokeFixture.id].sort());
+assert.equal(acceptedRevocationSynced.carrierAcceptedRevocationCount, 1);
+assert.deepEqual(acceptedRevocationSynced.carrierAcceptedRevocationIds, [revokeFixture.id]);
+assert.equal(acceptedRevocationSynced.authorityQuarantinedRevocationCount, 0);
+assert.deepEqual(acceptedRevocationSynced.authorityQuarantinedRevocationIds, []);
+assert.equal(acceptedRevocationSynced.authorityRevokedCapabilityCount, 0);
+assert.deepEqual(acceptedRevocationSynced.authorityRevokedCapabilityIds, []);
+assert.deepEqual(storedOutboxIds(acceptedRevocationValues), []);
+assertIncludesAll(
+  storedDelegationFrameIds(acceptedRevocationValues),
+  vector.oracleCarrierOps.map((frame) => frame.id),
+);
+
+const authorityConfirmedRevocationValues = new Map<string, string>([
+  [
+    storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY),
+    JSON.stringify(carrierOpsToSemanticOps([grantFixture, revokeFixture], vector.realmByPubkey)),
+  ],
+  [storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY), JSON.stringify([grantFixture, revokeFixture])],
+  [
+    storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY),
+    JSON.stringify([...vector.oracleCarrierOps, vector.authorityRevocation.revokedCommandOp]),
+  ],
+]);
+const authorityConfirmedSynced = await syncTownshipOutbox({
+  invoke: nativeInvoke(authorityConfirmedRevocationValues, vector.client.sessionPubkey, []),
+  client: new StateReportCarrierClient([
+    [vector.authorityRevocation.revokedCommandOp.id, "revoked_capability"],
+    ["unknown-revoked-command", "revoked_capability"],
+    [revokeFixture.id, "revoked_capability"],
+    ["not-holder-command", "not_holder"],
+  ]),
+});
+assert.equal(authorityConfirmedSynced.ok, true);
+if (!authorityConfirmedSynced.ok) throw new Error(authorityConfirmedSynced.message);
+assert.equal(authorityConfirmedSynced.carrierAcceptedRevocationCount, 1);
+assert.deepEqual(authorityConfirmedSynced.carrierAcceptedRevocationIds, [revokeFixture.id]);
+assert.equal(authorityConfirmedSynced.authorityRevokedCapabilityCount, 3);
+assert.deepEqual(authorityConfirmedSynced.authorityRevokedCapabilityIds, [
+  "unknown-revoked-command",
+  vector.authorityRevocation.revokedCommandOp.id,
+  revokeFixture.id,
+].sort());
+assert.equal(authorityConfirmedSynced.authorityRevokedCapabilityAttributionCount, 1);
+assert.deepEqual(authorityConfirmedSynced.authorityRevokedCapabilityAttributions, [
+  {
+    commandId: vector.authorityRevocation.revokedCommandOp.id,
+    delegationId: vector.authorityRevocation.delegationId,
+  },
+]);
+assert.equal(authorityConfirmedSynced.authorityRevokedCapabilityUnattributedCount, 2);
+assert.deepEqual(authorityConfirmedSynced.authorityRevokedCapabilityUnattributedIds, [
+  "unknown-revoked-command",
+  revokeFixture.id,
+].sort());
+assert.equal(
+  authorityConfirmedSynced.authorityRevokedCapabilityAttributionCount
+    + authorityConfirmedSynced.authorityRevokedCapabilityUnattributedCount,
+  authorityConfirmedSynced.authorityRevokedCapabilityCount,
+);
+
+const stateReportFailureValues = new Map<string, string>([
+  [
+    storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY),
+    JSON.stringify(carrierOpsToSemanticOps([grantFixture, revokeFixture], vector.realmByPubkey)),
+  ],
+  [storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY), JSON.stringify([grantFixture, revokeFixture])],
+  [storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY), JSON.stringify(vector.oracleCarrierOps)],
+]);
+const stateReportFailureSynced = await syncTownshipOutbox({
+  invoke: nativeInvoke(stateReportFailureValues, vector.client.sessionPubkey, []),
+  client: new ThrowingStateReportCarrierClient([]),
+});
+assert.equal(stateReportFailureSynced.ok, true);
+if (!stateReportFailureSynced.ok) throw new Error(stateReportFailureSynced.message);
+assert.equal(stateReportFailureSynced.authorityRevokedCapabilityCount, 0);
+assert.deepEqual(stateReportFailureSynced.authorityRevokedCapabilityIds, []);
+assert.equal(stateReportFailureSynced.authorityRevokedCapabilityAttributionCount, 0);
+assert.deepEqual(stateReportFailureSynced.authorityRevokedCapabilityAttributions, []);
+assert.equal(stateReportFailureSynced.authorityRevokedCapabilityUnattributedCount, 0);
+assert.deepEqual(stateReportFailureSynced.authorityRevokedCapabilityUnattributedIds, []);
+
+const peerKnownRevocationValues = new Map<string, string>([
+  [
+    storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY),
+    JSON.stringify(carrierOpsToSemanticOps([grantFixture, revokeFixture], vector.realmByPubkey)),
+  ],
+  [storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY), JSON.stringify([grantFixture, revokeFixture])],
+  [storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY), JSON.stringify(vector.oracleCarrierOps)],
+]);
+const peerKnownRevocationSynced = await syncTownshipOutbox({
+  invoke: nativeInvoke(peerKnownRevocationValues, vector.client.sessionPubkey, []),
+  client: new MixedAckCarrierClient([revokeFixture.id]),
+});
+assert.equal(peerKnownRevocationSynced.ok, true);
+if (!peerKnownRevocationSynced.ok) throw new Error(peerKnownRevocationSynced.message);
+assert.deepEqual(peerKnownRevocationSynced.compactedFrameIds.sort(), [grantFixture.id, revokeFixture.id].sort());
+assert.equal(peerKnownRevocationSynced.carrierAcceptedRevocationCount, 0);
+assert.deepEqual(peerKnownRevocationSynced.carrierAcceptedRevocationIds, []);
+assert.deepEqual(storedOutboxIds(peerKnownRevocationValues), []);
+assertIncludesAll(
+  storedDelegationFrameIds(peerKnownRevocationValues),
+  vector.oracleCarrierOps.map((frame) => frame.id),
+);
+
+const badRevocationValues = new Map<string, string>([
+  [
+    storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY),
+    JSON.stringify(carrierOpsToSemanticOps([badRevokeFixture], vector.realmByPubkey)),
+  ],
+  [storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY), JSON.stringify([badRevokeFixture])],
+  [storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY), JSON.stringify(vector.oracleCarrierOps)],
+]);
+const badRevocationSynced = await syncTownshipOutbox({
+  invoke: nativeInvoke(badRevocationValues, vector.client.sessionPubkey, []),
+  client: new RevocationAuthorityQuarantineClient(),
+});
+assert.equal(badRevocationSynced.ok, true);
+if (!badRevocationSynced.ok) throw new Error(badRevocationSynced.message);
+assert.deepEqual(badRevocationSynced.quarantined, [[badRevokeFixture.id, "authority"]]);
+assert.equal(badRevocationSynced.carrierAcceptedRevocationCount, 0);
+assert.deepEqual(badRevocationSynced.carrierAcceptedRevocationIds, []);
+assert.equal(badRevocationSynced.authorityQuarantinedRevocationCount, 1);
+assert.deepEqual(badRevocationSynced.authorityQuarantinedRevocationIds, [badRevokeFixture.id]);
+assert.deepEqual(storedOutboxIds(badRevocationValues), [badRevokeFixture.id]);
+assertIncludesAll(
+  storedDelegationFrameIds(badRevocationValues),
+  vector.oracleCarrierOps.map((frame) => frame.id),
+);
+
 const partialAckValues = new Map<string, string>([
   [storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY), JSON.stringify(localOps)],
   [storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY), JSON.stringify(vector.clientDivergedCarrierOps)],
@@ -452,6 +678,11 @@ function storedLocalOpIds(values: Map<string, string>): string[] {
   return (JSON.parse(values.get(storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY)) ?? "[]") as { id: string }[])
     .map((op) => op.id)
     .sort();
+}
+
+function assertIncludesAll(actual: string[], expected: string[]): void {
+  const actualSet = new Set(actual);
+  for (const id of expected) assert.equal(actualSet.has(id), true, `missing retained delegation evidence ${id}`);
 }
 
 function frameCommandName(frame: CarrierOpFrame | undefined): string | undefined {

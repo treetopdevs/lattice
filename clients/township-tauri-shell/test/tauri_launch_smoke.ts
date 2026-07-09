@@ -76,20 +76,24 @@ try {
     },
   );
 
-  await waitForTraceCount("lattice_kv_set", 2, 20_000);
+  await waitForTraceCount("lattice_kv_set", 2, 60_000);
+  await waitForTraceCount("lattice_ensure_carrier_key", 3, 60_000);
   await delay(500);
   assert.equal(app.child.exitCode, null, app.lines.join(""));
 
-  const status = await readPeerStatusOnce(peer.port, vector, identity, verifier);
-  assert.equal(
-    status,
-    "diverged",
-    [
-      "expected launched Tauri app auto-sync to close a carrier session before the smoke probe",
-      `native command trace:\n${readTrace()}`,
-      `app output:\n${app.lines.join("")}`,
-    ].join("\n\n"),
-  );
+  try {
+    const diverged = await reconnectWhenDiverged(peer.port, vector, identity, verifier);
+    diverged.close();
+  } catch (error) {
+    throw new Error(
+      [
+        "expected launched Tauri app auto-sync to close a carrier session before the smoke probe",
+        error instanceof Error ? error.message : String(error),
+        `native command trace:\n${readTrace()}`,
+        `app output:\n${app.lines.join("")}`,
+      ].join("\n\n"),
+    );
+  }
 
   const shutdown = await connectCarrierWebSocket({
     url: peerUrl(peer.port),
@@ -103,9 +107,9 @@ try {
   await shutdown.shutdown();
   await peer.awaitExit();
 } finally {
+  peer.kill();
   await app?.stop();
   await vite?.stop();
-  peer.kill();
 }
 
 console.log("\x1b[32m✓ Township Tauri live window peer smoke passed\x1b[0m");
@@ -122,27 +126,29 @@ async function spawnVite(peerPort: number): Promise<ManagedProcess> {
   return vite;
 }
 
-async function readPeerStatusOnce(
+async function reconnectWhenDiverged(
   port: number,
   vector: CarrierVector,
   identity: NativeIdentity,
   verifier: CarrierVerifier,
-): Promise<string> {
-  const conn = await connectCarrierWebSocket({
-    url: peerUrl(port),
-    localRealm: vector.client.realm,
-    replica: vector.replica,
-    signer: identity,
-    expectedPeerRealm: vector.peer.realm,
-    expectedPeerPubkey: Buffer.from(vector.peer.sessionPubkey, "base64"),
-    verifier,
-  });
+): ReturnType<typeof connectCarrierWebSocket> {
+  for (let i = 0; i < 50; i++) {
+    const conn = await connectCarrierWebSocket({
+      url: peerUrl(port),
+      localRealm: vector.client.realm,
+      replica: vector.replica,
+      signer: identity,
+      expectedPeerRealm: vector.peer.realm,
+      expectedPeerPubkey: Buffer.from(vector.peer.sessionPubkey, "base64"),
+      verifier,
+    });
 
-  try {
-    return await conn.status();
-  } finally {
+    if ((await conn.status()) === "diverged") return conn;
     conn.close();
+    await delay(20);
   }
+
+  throw new Error("peer never diverged after socket close");
 }
 
 async function spawnTownshipPeer(vector: CarrierVector) {

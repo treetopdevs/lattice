@@ -1,11 +1,24 @@
+use std::net::UdpSocket;
+use std::path::PathBuf;
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc, Mutex,
+};
+use std::time::{Duration, Instant};
+
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use serde::de::DeserializeOwned;
 use sha2::{Digest, Sha256};
 use township_tauri_shell::{
-    build_platform_secure_township_app, configure_platform_secure_township_builder,
-    configure_township_builder, seed_dev_carrier_key_from_vars, township_command_names,
+    advertise_township_pairing_handoff, build_platform_secure_township_app,
+    collect_township_pairing_discovery_adverts, configure_platform_secure_township_builder,
+    configure_platform_secure_township_builder_with_values_file, configure_township_builder,
+    decode_township_pairing_discovery_packet, encode_township_pairing_discovery_packet,
+    seed_dev_carrier_key_from_vars, township_command_names, CarrierKeySeedStore,
     InMemoryCarrierKeySeedStore, KeyringCarrierKeySeedStore, TownshipNativeState,
-    TOWNSHIP_DEV_CARRIER_KEY_ID_ENV, TOWNSHIP_DEV_CARRIER_KEY_SEED_ENV, TOWNSHIP_KEYRING_SERVICE,
+    TownshipPairingDiscoveryAdvert, TOWNSHIP_DEV_CARRIER_KEY_ID_ENV,
+    TOWNSHIP_DEV_CARRIER_KEY_SEED_ENV, TOWNSHIP_KEYRING_SERVICE,
+    TOWNSHIP_PAIRING_DISCOVERY_PACKET_TYPE,
 };
 
 const W1_SESSION_SEED: &str = "township-g1";
@@ -13,6 +26,7 @@ const W1_SESSION_PUBKEY: &str = "Ze1W+4DnnK6aoJY5GiUoDVyZVhq5/PCL7UwQALXUQNk=";
 const W1_TRANSCRIPT_B64: &str = "h1JjYXJyaWVyLXNlc3Npb24tdjFIcmVzaWRlbnRYS3JlcGxpY2E6bWF0dGVyOnRvd25zaGlwLWcxI3Jvb3Q6UVVCN293cFZJc1puM0l5b1ZMSmJzRmM1SExrb3poaTJQVkJMNUx6aGozd0tmaXhlZC1ub25jZQFIcmVzaWRlbnRYIGXtVvuA55yumqCWORolKA1cmVYaufzwi+1MEAC11EDZ";
 const W1_SIGNATURE_B64: &str =
     "TS9+HPGiV88JMWJw0vm8euvAJEkmMLDxaKnTGz7wBX5vxLYi6wKRuFHLyHgxN3Igu2tFRjPaTIqq4p2RD5CDCg==";
+const PAIRING_HANDOFF: &str = "township-pairing:v1:eyJ2IjoxfQ==";
 
 #[test]
 fn command_names_match_the_tauri_bridge_contract() {
@@ -23,7 +37,10 @@ fn command_names_match_the_tauri_bridge_contract() {
             "lattice_kv_set",
             "lattice_ensure_carrier_key",
             "lattice_public_key",
-            "lattice_sign_carrier"
+            "lattice_sign_carrier",
+            "lattice_discover_pairing_adverts",
+            "lattice_advertise_pairing_handoff",
+            "lattice_trace_dev_event"
         ]
     );
 }
@@ -84,6 +101,193 @@ fn registered_tauri_commands_roundtrip_through_mock_ipc() {
     )
     .unwrap();
     assert_signature(&public_key, W1_TRANSCRIPT_B64, &signature);
+
+    let discovery: Vec<TownshipPairingDiscoveryAdvert> = ipc_response(
+        &webview,
+        "lattice_discover_pairing_adverts",
+        serde_json::json!({ "timeoutMs": 1 }),
+    )
+    .unwrap();
+    assert!(discovery.is_empty());
+
+    let listener = UdpSocket::bind("127.0.0.1:0").unwrap();
+    listener
+        .set_read_timeout(Some(Duration::from_millis(750)))
+        .unwrap();
+    let listener_addr = listener.local_addr().unwrap().to_string();
+    assert_ipc_response(
+        &webview,
+        "lattice_advertise_pairing_handoff",
+        serde_json::json!({
+            "handoff": PAIRING_HANDOFF,
+            "label": " Town hall carrier ",
+            "targetAddr": listener_addr
+        }),
+        Ok(()),
+    );
+    let mut buffer = [0u8; 16 * 1024];
+    let (packet_len, _) = listener.recv_from(&mut buffer).unwrap();
+    assert_eq!(
+        decode_township_pairing_discovery_packet(&buffer[..packet_len])
+            .unwrap()
+            .unwrap(),
+        TownshipPairingDiscoveryAdvert {
+            label: Some("Town hall carrier".to_string()),
+            handoff: PAIRING_HANDOFF.to_string()
+        }
+    );
+
+    assert_ipc_response(
+        &webview,
+        "lattice_trace_dev_event",
+        serde_json::json!({ "event": "deep-link:township://pairing" }),
+        Ok(()),
+    );
+}
+
+#[test]
+fn discovery_packets_encode_public_pairing_adverts_only() {
+    let packet = encode_township_pairing_discovery_packet(&TownshipPairingDiscoveryAdvert {
+        label: Some(" Town hall carrier ".to_string()),
+        handoff: format!("  {PAIRING_HANDOFF}  "),
+    })
+    .unwrap();
+    let packet_value: serde_json::Value = serde_json::from_slice(&packet).unwrap();
+
+    assert_eq!(
+        packet_value,
+        serde_json::json!({
+            "type": TOWNSHIP_PAIRING_DISCOVERY_PACKET_TYPE,
+            "label": "Town hall carrier",
+            "handoff": PAIRING_HANDOFF
+        })
+    );
+    assert!(!String::from_utf8(packet)
+        .unwrap()
+        .contains("resident-device"));
+}
+
+#[test]
+fn discovery_packets_decode_public_pairing_adverts_only() {
+    let packet = serde_json::json!({
+        "type": TOWNSHIP_PAIRING_DISCOVERY_PACKET_TYPE,
+        "label": "  Town hall carrier  ",
+        "handoff": format!("  {PAIRING_HANDOFF}  "),
+        "localRealm": "resident-device-local",
+        "keyId": "resident-device-key"
+    })
+    .to_string();
+
+    let advert = decode_township_pairing_discovery_packet(packet.as_bytes())
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(
+        advert,
+        TownshipPairingDiscoveryAdvert {
+            label: Some("Town hall carrier".to_string()),
+            handoff: PAIRING_HANDOFF.to_string()
+        }
+    );
+    assert!(!serde_json::to_string(&advert)
+        .unwrap()
+        .contains("resident-device"));
+}
+
+#[test]
+fn discovery_packets_reject_malformed_or_empty_handoffs_without_poisoning_other_packets() {
+    let ignored = serde_json::json!({
+        "type": "other-discovery",
+        "handoff": PAIRING_HANDOFF
+    })
+    .to_string();
+    assert_eq!(
+        decode_township_pairing_discovery_packet(ignored.as_bytes()).unwrap(),
+        None
+    );
+
+    let missing_handoff = serde_json::json!({
+        "type": TOWNSHIP_PAIRING_DISCOVERY_PACKET_TYPE,
+        "label": "Town hall carrier"
+    })
+    .to_string();
+    assert!(
+        decode_township_pairing_discovery_packet(missing_handoff.as_bytes())
+            .unwrap_err()
+            .contains("handoff")
+    );
+    assert!(decode_township_pairing_discovery_packet(b"not json")
+        .unwrap_err()
+        .contains("invalid discovery packet"));
+}
+
+#[test]
+fn udp_pairing_discovery_advertise_sends_loopback_public_handoff_only() {
+    let listener = UdpSocket::bind("127.0.0.1:0").unwrap();
+    listener
+        .set_read_timeout(Some(Duration::from_millis(750)))
+        .unwrap();
+    let listener_addr = listener.local_addr().unwrap().to_string();
+
+    advertise_township_pairing_handoff(
+        PAIRING_HANDOFF.to_string(),
+        Some(" Town hall carrier ".to_string()),
+        Some(listener_addr),
+    )
+    .unwrap();
+
+    let mut buffer = [0u8; 16 * 1024];
+    let (packet_len, _) = listener.recv_from(&mut buffer).unwrap();
+    let packet = String::from_utf8(buffer[..packet_len].to_vec()).unwrap();
+    assert!(!packet.contains("resident-device-local"));
+    assert!(!packet.contains("resident-device-key"));
+    assert_eq!(
+        decode_township_pairing_discovery_packet(packet.as_bytes())
+            .unwrap()
+            .unwrap(),
+        TownshipPairingDiscoveryAdvert {
+            label: Some("Town hall carrier".to_string()),
+            handoff: PAIRING_HANDOFF.to_string()
+        }
+    );
+}
+
+#[test]
+fn udp_pairing_discovery_collects_loopback_public_adverts() {
+    let listener = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let listener_addr = listener.local_addr().unwrap();
+    let handle = std::thread::spawn(move || {
+        collect_township_pairing_discovery_adverts(listener, Duration::from_millis(750)).unwrap()
+    });
+
+    let sender = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let bad_packet = serde_json::json!({
+        "type": TOWNSHIP_PAIRING_DISCOVERY_PACKET_TYPE,
+        "handoff": ""
+    })
+    .to_string();
+    sender
+        .send_to(bad_packet.as_bytes(), listener_addr)
+        .unwrap();
+
+    let packet = serde_json::json!({
+        "type": TOWNSHIP_PAIRING_DISCOVERY_PACKET_TYPE,
+        "label": "Town hall carrier",
+        "handoff": PAIRING_HANDOFF,
+        "localRealm": "resident-device-local",
+        "keyId": "resident-device-key"
+    })
+    .to_string();
+    sender.send_to(packet.as_bytes(), listener_addr).unwrap();
+
+    let adverts = handle.join().unwrap();
+    assert_eq!(
+        adverts,
+        vec![TownshipPairingDiscoveryAdvert {
+            label: Some("Town hall carrier".to_string()),
+            handoff: PAIRING_HANDOFF.to_string()
+        }]
+    );
 }
 
 #[test]
@@ -125,6 +329,51 @@ fn platform_secure_app_construction_builds_mock_app_and_registers_commands() {
         serde_json::json!({ "key": "township:bootstrap:constructed-app" }),
         Ok(None::<String>),
     );
+}
+
+#[test]
+fn platform_secure_builder_persists_native_kv_across_app_restarts_when_file_is_configured() {
+    let path = unique_test_kv_path("township-platform-native-kv");
+    let _ = std::fs::remove_file(&path);
+
+    {
+        let app = configure_platform_secure_township_builder_with_values_file(
+            tauri::test::mock_builder(),
+            &path,
+        )
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
+        .unwrap();
+        let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+            .build()
+            .unwrap();
+
+        assert_ipc_response(
+            &webview,
+            "lattice_kv_set",
+            serde_json::json!({
+                "key": "township:zoning-variance-24:carrier_peer_config",
+                "value": "{\"url\":\"ws://10.0.2.2:4111/carrier\"}"
+            }),
+            Ok(()),
+        );
+    }
+
+    let app =
+        configure_platform_secure_township_builder_with_values_file(tauri::test::mock_builder(), &path)
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .unwrap();
+    let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+        .build()
+        .unwrap();
+
+    assert_ipc_response(
+        &webview,
+        "lattice_kv_get",
+        serde_json::json!({ "key": "township:zoning-variance-24:carrier_peer_config" }),
+        Ok(Some("{\"url\":\"ws://10.0.2.2:4111/carrier\"}".to_string())),
+    );
+
+    let _ = std::fs::remove_file(path);
 }
 
 fn assert_ipc_response<T>(
@@ -186,6 +435,73 @@ fn key_value_commands_roundtrip_and_preserve_missing_reads() {
         state.kv_get("township:resident:ops").unwrap(),
         Some("[{\"id\":\"op-1\"}]".to_string())
     );
+}
+
+#[test]
+fn key_value_store_reloads_from_persistent_file_across_state_instances() {
+    let path = unique_test_kv_path("township-native-kv");
+    let _ = std::fs::remove_file(&path);
+
+    let first_state = TownshipNativeState::with_persistent_values_file(&path).unwrap();
+    first_state
+        .kv_set(
+            "township:zoning-variance-24:carrier_peer_config",
+            "{\"url\":\"ws://10.0.2.2:4111/carrier\"}",
+        )
+        .unwrap();
+    first_state
+        .kv_set(
+            "township:zoning-variance-24:carrier_frames",
+            "[{\"id\":\"op-1\"}]",
+        )
+        .unwrap();
+
+    let second_state = TownshipNativeState::with_persistent_values_file(&path).unwrap();
+    assert_eq!(
+        second_state
+            .kv_get("township:zoning-variance-24:carrier_peer_config")
+            .unwrap(),
+        Some("{\"url\":\"ws://10.0.2.2:4111/carrier\"}".to_string())
+    );
+    assert_eq!(
+        second_state
+            .kv_get("township:zoning-variance-24:carrier_frames")
+            .unwrap(),
+        Some("[{\"id\":\"op-1\"}]".to_string())
+    );
+
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn corrupt_persistent_key_value_file_recovers_as_empty_replayable_state() {
+    let path = unique_test_kv_path("township-native-kv-corrupt");
+    std::fs::write(&path, "{").unwrap();
+
+    let recovered_state = TownshipNativeState::with_persistent_values_file(&path).unwrap();
+    assert_eq!(
+        recovered_state
+            .kv_get("township:zoning-variance-24:carrier_peer_config")
+            .unwrap(),
+        None
+    );
+
+    recovered_state
+        .kv_set(
+            "township:zoning-variance-24:carrier_peer_config",
+            "{\"url\":\"ws://10.0.2.2:4111/carrier\"}",
+        )
+        .unwrap();
+
+    let reloaded_state = TownshipNativeState::with_persistent_values_file(&path).unwrap();
+    assert_eq!(
+        reloaded_state
+            .kv_get("township:zoning-variance-24:carrier_peer_config")
+            .unwrap(),
+        Some("{\"url\":\"ws://10.0.2.2:4111/carrier\"}".to_string())
+    );
+
+    let _ = std::fs::remove_file(path);
 }
 
 #[test]
@@ -282,6 +598,31 @@ fn ensure_carrier_key_reloads_persisted_native_seed_across_state_instances() {
 }
 
 #[test]
+fn concurrent_ensure_carrier_key_returns_one_public_key_per_id() {
+    let state = Arc::new(TownshipNativeState::with_key_store(
+        CoordinatedMissingSeedStore::default(),
+    ));
+
+    let first = {
+        let state = Arc::clone(&state);
+        std::thread::spawn(move || state.ensure_carrier_key("resident").unwrap())
+    };
+    let second = {
+        let state = Arc::clone(&state);
+        std::thread::spawn(move || state.ensure_carrier_key("resident").unwrap())
+    };
+
+    let first_public_key = first.join().unwrap();
+    let second_public_key = second.join().unwrap();
+
+    assert_eq!(second_public_key, first_public_key);
+    assert_eq!(
+        state.ensure_carrier_key("resident").unwrap(),
+        first_public_key
+    );
+}
+
+#[test]
 fn platform_secure_constructor_exposes_keyring_backed_seed_store() {
     let _store = KeyringCarrierKeySeedStore::new("dev.treetop.lattice.test");
     let _state = TownshipNativeState::platform_secure("dev.treetop.lattice.test");
@@ -335,4 +676,42 @@ fn base64_string(bytes: &[u8]) -> String {
 
 fn hex_lower(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn unique_test_kv_path(label: &str) -> PathBuf {
+    std::env::temp_dir().join(format!(
+        "{label}-{}-{:?}.json",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ))
+}
+
+#[derive(Clone, Default)]
+struct CoordinatedMissingSeedStore {
+    seed: Arc<Mutex<Option<[u8; 32]>>>,
+    load_count: Arc<AtomicUsize>,
+}
+
+impl CarrierKeySeedStore for CoordinatedMissingSeedStore {
+    fn load_seed(&self, _key_id: &str) -> Result<Option<[u8; 32]>, String> {
+        let load_number = self.load_count.fetch_add(1, Ordering::SeqCst);
+        let deadline = Instant::now() + Duration::from_millis(100);
+        while self.load_count.load(Ordering::SeqCst) < 2 && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+
+        if load_number < 2 {
+            return Ok(None);
+        }
+
+        Ok(*self.seed.lock().unwrap())
+    }
+
+    fn save_seed(&self, _key_id: &str, seed: [u8; 32]) -> Result<(), String> {
+        *self.seed.lock().unwrap() = Some(seed);
+        Ok(())
+    }
 }
