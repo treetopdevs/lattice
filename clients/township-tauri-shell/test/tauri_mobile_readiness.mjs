@@ -295,19 +295,24 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(androidMainActivity, /import dev\.treetop\.lattice\.township\.intent\.TownshipIntentStore/);
   assert.match(
     androidMainActivity,
-    /override fun onCreate\(savedInstanceState: Bundle\?\) \{\s+TownshipIntentStore\.record\(intent\)[\s\S]+super\.onCreate\(savedInstanceState\)/,
+    /override fun onCreate\(savedInstanceState: Bundle\?\) \{\s+TownshipIntentStore\.record\(intent, "activity_on_create"\)[\s\S]+super\.onCreate\(savedInstanceState\)/,
   );
   assert.match(
     androidMainActivity,
-    /override fun onNewIntent\(intent: Intent\) \{\s+TownshipIntentStore\.record\(intent\)[\s\S]+super\.onNewIntent\(intent\)/,
+    /override fun onNewIntent\(intent: Intent\) \{\s+TownshipIntentStore\.record\(intent, "activity_on_new_intent"\)[\s\S]+super\.onNewIntent\(intent\)/,
   );
   assert.match(androidMainActivity, /System\.loadLibrary\("township_tauri_shell"\)/);
   assert.match(androidMainActivity, /Keyring\.initializeNdkContext\(applicationContext\)/);
   assert.match(androidIntentPlugin, /object TownshipIntentStore/);
-  assert.match(androidIntentPlugin, /fun record\(intent: Intent\?\)/);
+  assert.match(androidIntentPlugin, /LOG_PREFIX = "township-android-intent-store"/);
+  assert.match(androidIntentPlugin, /fun record\(intent: Intent\?, source: String = "plugin"\)/);
+  assert.match(androidIntentPlugin, /routeShape\(intent\?\.data\)/);
   assert.match(androidIntentPlugin, /intent\?\.data\?\.scheme == "township"/);
   assert.match(androidIntentPlugin, /intent\?\.data\?\.toString\(\)/);
   assert.match(androidIntentPlugin, /fun peek\(\): String\?/);
+  assert.match(androidIntentPlugin, /has_current=\$\{currentUrl != null\}/);
+  assert.match(androidIntentPlugin, /private fun routeShape\(uri: Uri\?\): String/);
+  assert.match(androidIntentPlugin, /pairing_payload/);
   assert.match(androidIntentPlugin, /currentUrl = TownshipIntentStore\.peek\(\)/);
   assert.match(androidKeyringShim, /package io\.crates\.keyring/);
   assert.match(androidKeyringShim, /companion object\s*\{\s*external fun initializeNdkContext\(context: Context\)/);
