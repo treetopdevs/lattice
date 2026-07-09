@@ -477,7 +477,7 @@ function decodeStateReport(value) {
         typeof value.log_size !== "number") {
         throw new Error("malformed carrier state response");
     }
-    return {
+    const report = {
         state_b64: value.state_b64,
         op_ids: value.op_ids,
         frontier: value.frontier,
@@ -485,6 +485,12 @@ function decodeStateReport(value) {
         authority_quarantine: reasonPairs(value.authority_quarantine, "authority_quarantine"),
         log_size: value.log_size,
     };
+    if (plainRecord(value.state))
+        report.state = value.state;
+    return report;
+}
+function plainRecord(value) {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function stringList(value, field) {
     if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {

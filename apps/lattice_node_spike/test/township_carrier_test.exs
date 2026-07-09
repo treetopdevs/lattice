@@ -2,6 +2,7 @@ defmodule LatticeNodeSpike.TownshipCarrierTest do
   use ExUnit.Case, async: false
 
   alias Lattice.{Authority, Carrier, Log, Sim}
+  alias Lattice.Authority.Delegation
   alias LatticeNodeSpike.{Peer, WsCarrier}
   alias LatticeNodeSpike.TownshipScenario
   alias Township.Matter
@@ -75,6 +76,40 @@ defmodule LatticeNodeSpike.TownshipCarrierTest do
     assert_receive {^port, {:exit_status, 0}}, 10_000
   end
 
+  test "Township peer can seed a post-only bootstrap grant for a runtime device key" do
+    name = :"township_peer_#{System.unique_integer([:positive])}"
+    device_pubkey = :crypto.hash(:sha256, "release-author-device")
+
+    peer =
+      start_supervised!(
+        {Peer,
+         [
+           realm: "clerk",
+           identity: TownshipScenario.session_identity("clerk"),
+           scenario: TownshipScenario,
+           bootstrap_audience_pubkey: device_pubkey,
+           name: name
+         ]}
+      )
+
+    base_ids =
+      TownshipScenario.base_sim()
+      |> Sim.log("resident")
+      |> Log.op_ids()
+
+    assert [
+             %{
+               kind: :authority,
+               body:
+                 {:grant,
+                  %Delegation{audience: ^device_pubkey, ops: ops, roles: roles, live: false}}
+             }
+           ] = Peer.missing_for(peer, base_ids)
+
+    assert MapSet.equal?(ops, MapSet.new([:post]))
+    assert MapSet.equal?(roles, MapSet.new())
+  end
+
   test "Township carrier session rejects the wrong peer key before sync" do
     {port, ws_port} = spawn_peer("clerk")
     wrong_pubkey = Lattice.Identity.from_seed("clerk", "wrong-township-g1").pub
@@ -111,6 +146,7 @@ defmodule LatticeNodeSpike.TownshipCarrierTest do
     {:ok, peer_report} = WsCarrier.state_report(conn)
 
     assert Base.decode64!(peer_report["state_b64"]) == local_bytes
+    assert "resident: posted while offline" in peer_report["state"]["posts"]
     assert peer_report["op_ids"] == Enum.sort(Log.op_ids(resident_log))
     assert peer_report["frontier"] == Log.frontier(resident_log)
 

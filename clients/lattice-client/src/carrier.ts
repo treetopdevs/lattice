@@ -57,6 +57,7 @@ export interface CarrierSyncClient {
 
 export interface CarrierStateReport {
   state_b64: string;
+  state?: Record<string, unknown>;
   op_ids: string[];
   frontier: string[];
   structural_quarantine: [string, string][];
@@ -763,7 +764,7 @@ function decodeStateReport(value: Record<string, unknown>): CarrierStateReport {
     throw new Error("malformed carrier state response");
   }
 
-  return {
+  const report: CarrierStateReport = {
     state_b64: value.state_b64,
     op_ids: value.op_ids,
     frontier: value.frontier,
@@ -771,6 +772,12 @@ function decodeStateReport(value: Record<string, unknown>): CarrierStateReport {
     authority_quarantine: reasonPairs(value.authority_quarantine, "authority_quarantine"),
     log_size: value.log_size,
   };
+  if (plainRecord(value.state)) report.state = value.state;
+  return report;
+}
+
+function plainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function stringList(value: unknown, field: string): string[] {

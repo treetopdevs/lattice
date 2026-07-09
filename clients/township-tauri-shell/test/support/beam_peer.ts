@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 export interface TownshipPeerProcess {
   port: number;
+  publicKeyBase64: string;
   awaitExit(): Promise<void>;
   kill(): void;
 }
@@ -14,6 +15,8 @@ export interface SpawnTownshipPeerOptions {
   trustedPeerRealm: string;
   trustedPeerPubkey: string;
   scenario?: string;
+  identitySeed?: string;
+  bootstrapAudiencePubkey?: string;
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -21,14 +24,18 @@ const shellRoot = resolve(here, "../..");
 const repoRoot = resolve(shellRoot, "../..");
 
 export async function spawnTownshipPeer(options: SpawnTownshipPeerOptions): Promise<TownshipPeerProcess> {
-  const child = spawn(elixirBin(), [
+  const args = [
     ...codePathArgs(),
     "apps/lattice_node_spike/priv/peer_node.exs",
     options.peerRealm,
     options.trustedPeerRealm,
     options.trustedPeerPubkey,
     options.scenario ?? "LatticeNodeSpike.TownshipScenario",
-  ], {
+  ];
+  if (options.identitySeed) args.push(options.identitySeed);
+  if (options.bootstrapAudiencePubkey) args.push("--bootstrap-audience", options.bootstrapAudiencePubkey);
+
+  const child = spawn(elixirBin(), args, {
     cwd: repoRoot,
     stdio: ["pipe", "pipe", "pipe"],
     env: {
@@ -39,10 +46,11 @@ export async function spawnTownshipPeer(options: SpawnTownshipPeerOptions): Prom
 
   const lines: string[] = [];
   child.stderr.on("data", (chunk: Buffer) => lines.push(chunk.toString()));
-  const port = await awaitReady(child, lines);
+  const ready = await awaitReady(child, lines);
 
   return {
-    port,
+    port: ready.port,
+    publicKeyBase64: ready.publicKeyBase64,
     awaitExit: () => awaitExit(child, lines),
     kill: () => {
       if (!child.killed && child.exitCode === null) child.kill("SIGKILL");
@@ -54,16 +62,32 @@ export function peerUrl(port: number, host = "127.0.0.1"): string {
   return `ws://${host}:${port}/carrier`;
 }
 
-function awaitReady(child: ChildProcessWithoutNullStreams, lines: string[]): Promise<number> {
+interface TownshipPeerReady {
+  port: number;
+  publicKeyBase64: string;
+}
+
+function awaitReady(child: ChildProcessWithoutNullStreams, lines: string[]): Promise<TownshipPeerReady> {
   return new Promise((resolveReady, rejectReady) => {
     const timeout = setTimeout(() => rejectReady(new Error(`peer OS process never became ready:\n${lines.join("")}`)), 60_000);
+    let publicKeyBase64: string | null = null;
     child.stdout.on("data", (chunk: Buffer) => {
       for (const line of chunk.toString().split(/\r?\n/)) {
         if (!line) continue;
         lines.push(`${line}\n`);
+        if (line.startsWith("PEER_PUBKEY ")) {
+          publicKeyBase64 = line.slice("PEER_PUBKEY ".length).trim();
+        }
         if (line.startsWith("PEER_READY ")) {
           clearTimeout(timeout);
-          resolveReady(Number.parseInt(line.slice("PEER_READY ".length), 10));
+          if (!publicKeyBase64) {
+            rejectReady(new Error(`peer OS process became ready without PEER_PUBKEY:\n${lines.join("")}`));
+            return;
+          }
+          resolveReady({
+            port: Number.parseInt(line.slice("PEER_READY ".length), 10),
+            publicKeyBase64,
+          });
         }
       }
     });

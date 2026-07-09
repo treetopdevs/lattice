@@ -47,6 +47,7 @@ export interface CarrierSyncClient {
 }
 export interface CarrierStateReport {
     state_b64: string;
+    state?: Record<string, unknown>;
     op_ids: string[];
     frontier: string[];
     structural_quarantine: [string, string][];

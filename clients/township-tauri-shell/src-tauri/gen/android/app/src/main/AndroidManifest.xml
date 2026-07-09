@@ -9,6 +9,7 @@
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:networkSecurityConfig="${networkSecurityConfig}"
         android:theme="@style/Theme.township_tauri_shell"
         android:usesCleartextTraffic="${usesCleartextTraffic}">
         <activity

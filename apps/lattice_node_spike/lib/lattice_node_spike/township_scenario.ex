@@ -9,7 +9,8 @@ defmodule LatticeNodeSpike.TownshipScenario do
   `Lattice.Attestation`, and the carrier untouched.
   """
 
-  alias Lattice.{Identity, Log, Sim}
+  alias Lattice.{Identity, Log, Op, Sim}
+  alias Lattice.Authority.Delegation
   alias Township.Matter
 
   @replica "replica:matter:township-g1"
@@ -48,6 +49,38 @@ defmodule LatticeNodeSpike.TownshipScenario do
     {sim, _} = Sim.command(sim, "clerk", :admit, ["clerk"])
     {sim, _} = Sim.command(sim, "clerk", :admit, ["resident"])
     Sim.sync_all(sim)
+  end
+
+  @doc """
+  Add a clerk-authored, post-only delegation to a runtime device public key.
+
+  Release mobile probes learn the app key only after the installed app starts.
+  This helper lets the host start a deterministic BEAM peer whose log contains
+  a grant to that public key without writing into the app's private storage.
+  """
+  @spec bootstrap_audience(Sim.t(), binary()) :: Sim.t()
+  def bootstrap_audience(%Sim{} = sim, audience_pubkey) when is_binary(audience_pubkey) do
+    issuer = Sim.identity(sim, "clerk")
+    parent = clerk_parent_delegation!(sim, [:post])
+
+    delegation =
+      Delegation.new(issuer, Sim.replica(sim), audience_pubkey,
+        ops: [:post],
+        roles: [],
+        live: false,
+        parent_id: parent.id
+      )
+
+    op =
+      Op.new(
+        issuer,
+        Sim.replica(sim),
+        sim |> Sim.log("clerk") |> Log.frontier(),
+        :authority,
+        {:grant, delegation}
+      )
+
+    %{sim | logs: Map.update!(sim.logs, "clerk", &Log.append!(&1, op))}
   end
 
   @doc "Commands `realm` authors while physically partitioned."
@@ -96,5 +129,19 @@ defmodule LatticeNodeSpike.TownshipScenario do
     Matter
     |> Lattice.state(log)
     |> :erlang.term_to_binary([:deterministic, {:minor_version, 2}])
+  end
+
+  defp clerk_parent_delegation!(%Sim{} = sim, ops) do
+    needed_ops = MapSet.new(ops)
+
+    sim.caps
+    |> Map.fetch!("clerk")
+    |> Enum.find(fn %Delegation{} = delegation ->
+      MapSet.subset?(needed_ops, delegation.ops)
+    end)
+    |> case do
+      nil -> raise ArgumentError, "TownshipScenario clerk lacks bootstrap parent delegation"
+      delegation -> delegation
+    end
   end
 end

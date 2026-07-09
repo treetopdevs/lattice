@@ -100,6 +100,19 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 078 | Tauri Android debug APK readiness | P1 | S | 076 | DONE |
 | 079 | Tauri Android emulator native key reuse | P1 | M | 078 | DONE |
 | 080 | Tauri Android debug APK BEAM convergence | P1 | M | 079 | DONE |
+| 081 | Tauri Android debug APK on-device post authoring | P1 | M | 080 | DONE |
+| 082 | Tauri Android debug APK pull-based cap onboarding | P1 | M | 081 | DONE |
+| 083 | Tauri Android release APK build readiness | P1 | S | 082 | DONE |
+| 084 | Tauri Android release APK canonical/wire fidelity | P1 | M | 083 | DONE |
+| 085 | Tauri Android release transport characterization | P1 | M | 084 | DONE |
+| 086 | Tauri Android debug APK positive transport control | P1 | M | 085 | DONE |
+| 087 | Tauri Android release-route reverse-tunnel control | P1 | S | 086 | DONE |
+| 088 | Tauri Android release-shaped cleartext diagnostic | P1 | M | 087 | DONE |
+| 089 | Tauri Android release loopback-scoped network security | P1 | M | 088 | DONE |
+| 090 | Tauri Android release BEAM carrier handshake | P1 | M | 089 | DONE |
+| 091 | Tauri Android release pull-and-reload persistence | P1 | M | 090 | DONE |
+| 092 | Tauri Android release author/push/outbox drain | P1 | M | 091 | DONE |
+| 093 | Tauri Android release deep-link pairing ingress | P1 | M | 092 | IN PROGRESS |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

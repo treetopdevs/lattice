@@ -10,28 +10,76 @@
 # `PEER_READY <port>` for the parent to connect to. It halts on a `shutdown`
 # protocol message or when stdin closes (the parent died).
 
-{realm, trusted_peer_realm, trusted_peer_pubkey_b64, scenario} =
+{realm, trusted_peer_realm, trusted_peer_pubkey_b64, scenario, identity_seed,
+ bootstrap_audience_pubkey_b64} =
   case System.argv() do
     [realm, trusted_peer_realm, trusted_peer_pubkey_b64] ->
-      {realm, trusted_peer_realm, trusted_peer_pubkey_b64, LatticeNodeSpike.Scenario}
+      {realm, trusted_peer_realm, trusted_peer_pubkey_b64, LatticeNodeSpike.Scenario, nil, nil}
 
     [realm, trusted_peer_realm, trusted_peer_pubkey_b64, scenario_name] ->
       scenario = Module.concat([scenario_name])
       Code.ensure_loaded!(scenario)
-      {realm, trusted_peer_realm, trusted_peer_pubkey_b64, scenario}
+      {realm, trusted_peer_realm, trusted_peer_pubkey_b64, scenario, nil, nil}
+
+    [realm, trusted_peer_realm, trusted_peer_pubkey_b64, scenario_name, identity_seed] ->
+      scenario = Module.concat([scenario_name])
+      Code.ensure_loaded!(scenario)
+      {realm, trusted_peer_realm, trusted_peer_pubkey_b64, scenario, identity_seed, nil}
+
+    [
+      realm,
+      trusted_peer_realm,
+      trusted_peer_pubkey_b64,
+      scenario_name,
+      "--bootstrap-audience",
+      bootstrap_audience_pubkey_b64
+    ] ->
+      scenario = Module.concat([scenario_name])
+      Code.ensure_loaded!(scenario)
+
+      {realm, trusted_peer_realm, trusted_peer_pubkey_b64, scenario, nil,
+       bootstrap_audience_pubkey_b64}
+
+    [
+      realm,
+      trusted_peer_realm,
+      trusted_peer_pubkey_b64,
+      scenario_name,
+      identity_seed,
+      "--bootstrap-audience",
+      bootstrap_audience_pubkey_b64
+    ] ->
+      scenario = Module.concat([scenario_name])
+      Code.ensure_loaded!(scenario)
+
+      {realm, trusted_peer_realm, trusted_peer_pubkey_b64, scenario, identity_seed,
+       bootstrap_audience_pubkey_b64}
   end
 
 {:ok, _} = Application.ensure_all_started(:lattice_node_spike)
 
 identity =
-  if function_exported?(scenario, :session_identity, 1) do
-    scenario.session_identity(realm)
+  cond do
+    is_binary(identity_seed) -> Lattice.Identity.from_seed(realm, identity_seed)
+    function_exported?(scenario, :session_identity, 1) -> scenario.session_identity(realm)
+    true -> Lattice.Identity.from_seed(realm, "carrier-spike")
+  end
+
+peer_opts = [realm: realm, identity: identity, scenario: scenario]
+
+peer_opts =
+  if is_binary(bootstrap_audience_pubkey_b64) do
+    Keyword.put(
+      peer_opts,
+      :bootstrap_audience_pubkey,
+      Base.decode64!(bootstrap_audience_pubkey_b64)
+    )
   else
-    Lattice.Identity.from_seed(realm, "carrier-spike")
+    peer_opts
   end
 
 {:ok, peer} =
-  LatticeNodeSpike.Peer.start_link(realm: realm, identity: identity, scenario: scenario)
+  LatticeNodeSpike.Peer.start_link(peer_opts)
 
 trusted_peer_pubkey = Base.decode64!(trusted_peer_pubkey_b64)
 
@@ -41,6 +89,7 @@ trusted_peer_pubkey = Base.decode64!(trusted_peer_pubkey_b64)
     trusted_peer_pubkey: trusted_peer_pubkey
   )
 
+IO.puts("PEER_PUBKEY #{Base.encode64(identity.pub)}")
 IO.puts("PEER_READY #{port}")
 
 # Lifeline: if the parent OS process goes away, stdin hits EOF — halt rather

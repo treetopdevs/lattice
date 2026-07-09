@@ -147,7 +147,7 @@ export async function loadTownshipCarrierPeerConfig(
 ): Promise<TownshipCarrierPeerConfig | null> {
   const envConfig = townshipCarrierPeerFromEnv(env);
 
-  let raw: string | null;
+  let raw: string | null | undefined;
   try {
     raw = await storage.getItem(TOWNSHIP_CARRIER_PAIRING_KEY);
   } catch {

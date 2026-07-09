@@ -157,6 +157,39 @@ export async function clickButtonByText(cdp: CdpClient, text: string): Promise<v
   throw new Error(`timed out waiting to click button ${text}`);
 }
 
+export async function fillTextareaByLabel(cdp: CdpClient, label: string, value: string): Promise<void> {
+  await fillControlByLabel(cdp, "textarea", label, value);
+}
+
+export async function fillInputByLabel(cdp: CdpClient, label: string, value: string): Promise<void> {
+  await fillControlByLabel(cdp, "input", label, value);
+}
+
+async function fillControlByLabel(cdp: CdpClient, selector: "input" | "textarea", label: string, value: string): Promise<void> {
+  const expectedLabel = JSON.stringify(label);
+  const desiredValue = JSON.stringify(value);
+  const selectorLiteral = JSON.stringify(selector);
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    const filled = await evaluate<boolean>(
+      cdp,
+      `(() => {
+        const control = Array.from(document.querySelectorAll(${selectorLiteral}))
+          .find((candidate) => candidate.getAttribute("aria-label") === ${expectedLabel});
+        if (!control) return false;
+        control.focus();
+        control.value = ${desiredValue};
+        control.dispatchEvent(new Event("input", { bubbles: true }));
+        control.dispatchEvent(new Event("change", { bubbles: true }));
+        return true;
+      })()`,
+    );
+    if (filled) return;
+    await delay(250);
+  }
+  throw new Error(`timed out waiting to fill ${selector} ${label}`);
+}
+
 export async function waitForDocumentText(cdp: CdpClient, text: string, timeoutMs = 60_000): Promise<void> {
   const expected = JSON.stringify(text);
   const deadline = Date.now() + timeoutMs;

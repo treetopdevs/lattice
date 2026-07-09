@@ -1,7 +1,11 @@
 use std::collections::{HashMap, HashSet};
+#[cfg(target_os = "android")]
+use std::ffi::CString;
 use std::fs;
 use std::io::ErrorKind;
 use std::net::UdpSocket;
+#[cfg(target_os = "android")]
+use std::os::raw::{c_char, c_int};
 use std::path::{Path, PathBuf};
 #[cfg(any(target_os = "android", target_os = "ios"))]
 use std::sync::OnceLock;
@@ -20,6 +24,7 @@ pub const TOWNSHIP_DEV_CARRIER_KEY_ID_ENV: &str = "TOWNSHIP_DEV_CARRIER_KEY_ID";
 pub const TOWNSHIP_DEV_CARRIER_KEY_SEED_ENV: &str = "TOWNSHIP_DEV_CARRIER_KEY_SEED";
 pub const TOWNSHIP_DEV_TRACE_FILE_ENV: &str = "TOWNSHIP_DEV_TRACE_FILE";
 pub const TOWNSHIP_NATIVE_KV_FILE_ENV: &str = "TOWNSHIP_NATIVE_KV_FILE";
+pub const TOWNSHIP_PROBE_LOG_TAG: &str = "LATTICE_PROBE";
 pub const TOWNSHIP_PAIRING_DISCOVERY_PACKET_TYPE: &str = "township-pairing-discovery";
 pub const TOWNSHIP_PAIRING_DISCOVERY_BIND_ADDR: &str = "0.0.0.0:45721";
 pub const TOWNSHIP_PAIRING_DISCOVERY_BROADCAST_ADDR: &str = "255.255.255.255:45721";
@@ -28,6 +33,11 @@ pub const TOWNSHIP_PAIRING_DISCOVERY_MAX_TIMEOUT_MS: u64 = 5_000;
 const TOWNSHIP_PAIRING_DISCOVERY_MAX_PACKET_BYTES: usize = 16 * 1024;
 #[cfg(any(target_os = "android", target_os = "ios"))]
 static MOBILE_KEYRING_STORE_CONFIGURED: OnceLock<()> = OnceLock::new();
+#[cfg(target_os = "android")]
+#[link(name = "log")]
+unsafe extern "C" {
+    fn __android_log_write(prio: c_int, tag: *const c_char, text: *const c_char) -> c_int;
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -521,6 +531,7 @@ pub fn township_command_names() -> &'static [&'static str] {
             "lattice_sign_carrier",
             "lattice_discover_pairing_adverts",
             "lattice_advertise_pairing_handoff",
+            "lattice_log_probe",
             "lattice_trace_dev_event",
         ];
     }
@@ -534,6 +545,7 @@ pub fn township_command_names() -> &'static [&'static str] {
         "lattice_sign_carrier",
         "lattice_discover_pairing_adverts",
         "lattice_advertise_pairing_handoff",
+        "lattice_log_probe",
     ]
 }
 
@@ -557,6 +569,7 @@ fn configure_township_commands<R: tauri::Runtime>(builder: tauri::Builder<R>) ->
                 lattice_sign_carrier,
                 lattice_discover_pairing_adverts,
                 lattice_advertise_pairing_handoff,
+                lattice_log_probe,
                 lattice_trace_dev_event
             ]);
     }
@@ -571,7 +584,8 @@ fn configure_township_commands<R: tauri::Runtime>(builder: tauri::Builder<R>) ->
             lattice_public_key,
             lattice_sign_carrier,
             lattice_discover_pairing_adverts,
-            lattice_advertise_pairing_handoff
+            lattice_advertise_pairing_handoff,
+            lattice_log_probe
         ])
 }
 
@@ -795,9 +809,36 @@ fn lattice_advertise_pairing_handoff(
 }
 
 #[tauri::command]
+fn lattice_log_probe(event: String) -> Result<(), String> {
+    log_probe_event(&event);
+    Ok(())
+}
+
+#[tauri::command]
 fn lattice_trace_dev_event(event: String) -> Result<(), String> {
     trace_dev_command(&event);
     Ok(())
+}
+
+#[cfg(target_os = "android")]
+fn log_probe_event(event: &str) {
+    const ANDROID_LOG_INFO: c_int = 4;
+
+    let Ok(tag) = CString::new(TOWNSHIP_PROBE_LOG_TAG) else {
+        return;
+    };
+    let Ok(message) = CString::new(event.replace('\0', " ")) else {
+        return;
+    };
+
+    unsafe {
+        let _ = __android_log_write(ANDROID_LOG_INFO, tag.as_ptr(), message.as_ptr());
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+fn log_probe_event(event: &str) {
+    println!("{TOWNSHIP_PROBE_LOG_TAG}: {event}");
 }
 
 #[cfg(debug_assertions)]

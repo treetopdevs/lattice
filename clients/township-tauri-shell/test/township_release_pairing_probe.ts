@@ -1,0 +1,271 @@
+import assert from "node:assert/strict";
+import type { CarrierOpFrame, Op } from "@treetopdevs/lattice-client";
+import type { TownshipNativeWorkflow } from "../src/native_workflow";
+import {
+  exportTownshipCarrierPairingHandoff,
+  townshipCarrierPeerFingerprint,
+  type TownshipCarrierPeerConfig,
+} from "../src/township_carrier_peer";
+import {
+  logTownshipReleasePairingProbeFromEnv,
+  townshipReleasePairingProbeConfigFromEnv,
+  townshipReleasePairingProbeLogLine,
+  TOWNSHIP_RELEASE_PAIRING_PROBE_LOG_PREFIX,
+  TOWNSHIP_RELEASE_PAIRING_PROBE_STORAGE_NAMESPACE,
+  type TownshipReleasePairingProbeResult,
+} from "../src/township_release_pairing_probe";
+
+console.log("\n▸ Township release pairing probe contract");
+
+const peerPubkey = "Ze1W+4DnnK6aoJY5GiUoDVyZVhq5/PCL7UwQALXUQNk=";
+const replica = "replica:matter:township-g1#root:QUB7owpVIsZn3IyoVLJbsFc5HLkozhi2PVBL5Lzhj3w";
+const peerConfig: TownshipCarrierPeerConfig = {
+  url: "ws://127.0.0.1:43193/carrier",
+  localRealm: "resident",
+  expectedPeerRealm: "clerk",
+  expectedPeerPubkey: peerPubkey,
+  replica,
+  keyId: "township-release-pairing-resident",
+};
+const handoff = exportTownshipCarrierPairingHandoff(peerConfig);
+const pairingLink = `township://pairing?handoff=${encodeURIComponent(handoff)}`;
+const peerFingerprint = townshipCarrierPeerFingerprint(peerPubkey);
+
+const config = townshipReleasePairingProbeConfigFromEnv({
+  VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_LOCAL_REALM: " resident ",
+  VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_KEY_ID: " township-release-pairing-resident ",
+  VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_STORAGE_NAMESPACE: " township:release-pairing-probe ",
+  VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_TIMEOUT_MS: "9000",
+  VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_RETRY_DELAY_MS: "250",
+});
+assert.deepEqual(config, {
+  localRealm: "resident",
+  keyId: "township-release-pairing-resident",
+  storageNamespace: "township:release-pairing-probe",
+  timeoutMs: 9000,
+  retryDelayMs: 250,
+});
+assert.equal(townshipReleasePairingProbeConfigFromEnv({}), null);
+assert.equal(
+  townshipReleasePairingProbeConfigFromEnv({
+    VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_LOCAL_REALM: "resident",
+    VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_KEY_ID: "township-release-pairing-resident",
+    VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_STORAGE_NAMESPACE: "township:release-pairing-probe",
+    VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_URL: "ws://127.0.0.1:43193/carrier",
+  }),
+  null,
+);
+
+const nativeKeyLine = townshipReleasePairingProbeLogLine({
+  phase: "native_key",
+  publicKeyBase64: "YWJj",
+  localRealm: "resident",
+  storageNamespace: TOWNSHIP_RELEASE_PAIRING_PROBE_STORAGE_NAMESPACE,
+});
+assert.match(nativeKeyLine, new RegExp(`^${TOWNSHIP_RELEASE_PAIRING_PROBE_LOG_PREFIX} `));
+assert.match(nativeKeyLine, /phase=native_key/);
+assert.match(nativeKeyLine, /public_key_b64url=YWJj/);
+
+const emptyReloadLine = townshipReleasePairingProbeLogLine({
+  phase: "reload",
+  outcome: "loaded",
+  paired: false,
+  carrierFrameCount: 0,
+});
+assert.match(emptyReloadLine, /phase=reload/);
+assert.match(emptyReloadLine, /paired=false/);
+
+const savedLine = townshipReleasePairingProbeLogLine({
+  phase: "pairing",
+  outcome: "saved",
+  peerFingerprint,
+  hostClass: "loopback",
+  urlPort: "43193",
+});
+assert.match(savedLine, /phase=pairing/);
+assert.match(savedLine, /outcome=saved/);
+assert.match(savedLine, /host_class=loopback/);
+assert.match(savedLine, /url_port=43193/);
+assert.match(savedLine, new RegExp(`peer_fingerprint=${peerFingerprint.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+
+const loadedLine = townshipReleasePairingProbeLogLine({
+  phase: "reload",
+  outcome: "loaded",
+  paired: true,
+  peerFingerprint,
+  hostClass: "loopback",
+  urlPort: "43193",
+  carrierFrameCount: 0,
+});
+assert.match(loadedLine, /paired=true/);
+assert.match(loadedLine, /peer_fingerprint=/);
+
+const syncLine = townshipReleasePairingProbeLogLine({
+  phase: "sync",
+  outcome: "synced",
+  elapsedMs: 12,
+  peerFingerprint,
+  pulledOpIds: ["base", "grant"],
+  localOpIds: ["base", "grant"],
+  delegationFrameIds: ["base", "grant"],
+  carrierFrameCount: 0,
+  pushedFrameCount: 0,
+  acceptedCount: 0,
+});
+assert.match(syncLine, /phase=sync/);
+assert.match(syncLine, /outcome=synced/);
+assert.match(syncLine, /pulled_op_ids=base,grant/);
+assert.match(syncLine, /outbox_frame_count=0/);
+assert.doesNotMatch(
+  [nativeKeyLine, emptyReloadLine, savedLine, loadedLine, syncLine].join("\n"),
+  /sig|body|cap:|seed|private|secret|webview_devtools_remote|127\.0\.0\.1/,
+);
+
+const emitted: string[] = [];
+const workflow = fakeWorkflow("ZGV2aWNlLXB1YmtleQ==");
+const result = await logTownshipReleasePairingProbeFromEnv(
+  {
+    VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_LOCAL_REALM: "resident",
+    VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_KEY_ID: "township-release-pairing-resident",
+    VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_STORAGE_NAMESPACE: "township:release-pairing-probe",
+  },
+  {
+    workflow,
+    retryDelayMs: 1,
+    timeoutMs: 50,
+    source: {
+      async current() {
+        return [pairingLink];
+      },
+      async onOpenUrl() {
+        return () => {};
+      },
+    },
+    async sync({ workflow: syncWorkflow, peer }) {
+      assert.equal(peer.url, "ws://127.0.0.1:43193/carrier");
+      assert.equal(peer.expectedPeerPubkey, peerPubkey);
+      await syncWorkflow.localLog.save([{ id: "base" } as Op, { id: "grant" } as Op]);
+      await syncWorkflow.delegationFrames.save([frame("base"), frame("grant")]);
+      await syncWorkflow.carrierFrames.save([]);
+      return syncResult({ pulledFrameCount: 2, pulledOpCount: 2 });
+    },
+    async invoke(command, args) {
+      if (command === "lattice_log_probe") emitted.push(String((args as { event?: unknown }).event));
+      return null;
+    },
+  },
+);
+assert.equal(result?.outcome, "synced");
+assert.match(emitted[0] ?? "", /phase=native_key/);
+assert.match(emitted[1] ?? "", /phase=reload/);
+assert.match(emitted[1] ?? "", /paired=false/);
+assert.match(emitted[2] ?? "", /phase=pairing/);
+assert.match(emitted[3] ?? "", /phase=reload/);
+assert.match(emitted[3] ?? "", /paired=true/);
+assert.match(emitted[4] ?? "", /phase=sync/);
+
+const persisted = await workflow.storage.getItem("carrier_peer_config");
+assert.ok(persisted, "pairing probe should persist the deep-link peer config");
+assert.match(persisted, /ws:\/\/127\.0\.0\.1:43193\/carrier/);
+
+console.log("\x1b[32m✓ release pairing probe contract checks passed\x1b[0m");
+
+function fakeWorkflow(publicKeyBase64: string): TownshipNativeWorkflow {
+  const localOps: Op[] = [];
+  const carrierFrames: CarrierOpFrame[] = [];
+  const delegationFrames: CarrierOpFrame[] = [];
+  const storage = new Map<string, string>();
+  return {
+    keyId: "township-release-pairing-resident",
+    storageNamespace: "township:release-pairing-probe",
+    storage: {
+      async getItem(key) {
+        return storage.get(key) ?? null;
+      },
+      async setItem(key, value) {
+        storage.set(key, value);
+      },
+      async removeItem(key) {
+        storage.delete(key);
+      },
+    },
+    localLog: opStore(localOps),
+    carrierFrames: frameStore(carrierFrames),
+    delegationFrames: frameStore(delegationFrames),
+    signer: {
+      publicKey: new Uint8Array(Buffer.from(publicKeyBase64, "base64")),
+      async sign() {
+        return new Uint8Array([1, 2, 3]);
+      },
+    },
+  };
+}
+
+function opStore(values: Op[]): TownshipNativeWorkflow["localLog"] {
+  return {
+    async load() {
+      return [...values];
+    },
+    async save(next) {
+      values.splice(0, values.length, ...next);
+    },
+    async append(op) {
+      values.push(op);
+      return [...values];
+    },
+  };
+}
+
+function frameStore(values: CarrierOpFrame[]): TownshipNativeWorkflow["carrierFrames"] {
+  return {
+    async load() {
+      return [...values];
+    },
+    async save(next) {
+      values.splice(0, values.length, ...next);
+    },
+    async append(next) {
+      values.push(next);
+      return [...values];
+    },
+  };
+}
+
+function frame(id: string): CarrierOpFrame {
+  return { id, v: 1, replica, author: "", deps: [], kind: "cmd", body: ["nil"], cap: ["nil"], sig: "" };
+}
+
+function syncResult(overrides: { pulledFrameCount: number; pulledOpCount: number }) {
+  return {
+    ok: true as const,
+    localOpCount: 0,
+    carrierFrameCount: 0,
+    pulledFrameCount: overrides.pulledFrameCount,
+    pulledOpCount: overrides.pulledOpCount,
+    pushedFrameCount: 0,
+    pushedFrameIds: [],
+    compactedFrameCount: 0,
+    compactedFrameIds: [],
+    delegationFrameCount: 0,
+    acceptedCount: 0,
+    acceptedIds: [],
+    quarantinedCount: 0,
+    quarantined: [],
+    rejectedCount: 0,
+    rejected: [],
+    pendingCount: 0,
+    pending: [],
+    authorityQuarantinedGrantCount: 0,
+    authorityQuarantinedGrantIds: [],
+    carrierAcceptedRevocationCount: 0,
+    carrierAcceptedRevocationIds: [],
+    authorityQuarantinedRevocationCount: 0,
+    authorityQuarantinedRevocationIds: [],
+    authorityRevokedCapabilityCount: 0,
+    authorityRevokedCapabilityIds: [],
+    authorityRevokedCapabilityAttributionCount: 0,
+    authorityRevokedCapabilityAttributions: [],
+    authorityRevokedCapabilityUnattributedCount: 0,
+    authorityRevokedCapabilityUnattributedIds: [],
+  };
+}

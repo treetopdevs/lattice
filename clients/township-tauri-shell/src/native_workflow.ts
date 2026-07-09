@@ -23,6 +23,7 @@ const TOWNSHIP_NATIVE_PROBE_KEY = "native_probe";
 const TOWNSHIP_NATIVE_PROBE_VALUE = "native invoke ready";
 const TOWNSHIP_NATIVE_PROBE_CHALLENGE = "township-native-probe";
 const TOWNSHIP_TRACE_DEV_EVENT_COMMAND = "lattice_trace_dev_event";
+export const TOWNSHIP_LOG_PROBE_COMMAND = "lattice_log_probe";
 
 export interface TownshipNativeWorkflowOptions {
   invoke?: TauriInvoke;
@@ -125,6 +126,14 @@ export async function traceTownshipDevEvent(
 ): Promise<void> {
   const invoke = options.invoke ?? tauriInvoke;
   await invoke(TOWNSHIP_TRACE_DEV_EVENT_COMMAND, { event });
+}
+
+export async function logTownshipProbeEvent(
+  event: string,
+  options: Pick<TownshipNativeWorkflowOptions, "invoke"> = {},
+): Promise<void> {
+  const invoke = options.invoke ?? tauriInvoke;
+  await invoke(TOWNSHIP_LOG_PROBE_COMMAND, { event });
 }
 
 function bytesBase64(bytes: Uint8Array): string {

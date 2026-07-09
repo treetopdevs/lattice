@@ -12,12 +12,16 @@ val tauriProperties = Properties().apply {
         propFile.inputStream().use { load(it) }
     }
 }
+val releaseCleartextDiagnostic = providers.environmentVariable("TOWNSHIP_ANDROID_RELEASE_CLEAR_TEXT_DIAGNOSTIC")
+    .map { it == "1" }
+    .orElse(false)
 
 android {
     compileSdk = 36
     namespace = "dev.treetop.lattice.township"
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
+        manifestPlaceholders["networkSecurityConfig"] = "@xml/township_release_network_security_config"
         applicationId = "dev.treetop.lattice.township"
         minSdk = 24
         targetSdk = 36
@@ -27,6 +31,7 @@ android {
     buildTypes {
         getByName("debug") {
             manifestPlaceholders["usesCleartextTraffic"] = "true"
+            manifestPlaceholders["networkSecurityConfig"] = "@xml/township_debug_network_security_config"
             isDebuggable = true
             isJniDebuggable = true
             isMinifyEnabled = false
@@ -37,7 +42,15 @@ android {
             }
         }
         getByName("release") {
+            // Local installability smoke only; production release signing must use an external keystore.
+            signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = true
+            if (releaseCleartextDiagnostic.get()) {
+                applicationIdSuffix = ".cleartextdiag"
+                versionNameSuffix = "-cleartextdiag"
+                manifestPlaceholders["usesCleartextTraffic"] = "true"
+                manifestPlaceholders["networkSecurityConfig"] = "@xml/township_debug_network_security_config"
+            }
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }
                     .plus(getDefaultProguardFile("proguard-android-optimize.txt"))

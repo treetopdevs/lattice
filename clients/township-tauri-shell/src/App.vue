@@ -44,6 +44,17 @@ import {
 } from "./township_pairing_deeplink";
 import { createTauriPairingDeepLinkSource } from "./township_pairing_deeplink_source";
 import {
+  createTownshipCanonicalProbeDeepLinkListener,
+  logTownshipCanonicalProbe,
+  parseTownshipCanonicalProbeDeepLink,
+  type TownshipCanonicalProbeDeepLinkListener,
+} from "./township_canonical_probe";
+import { logTownshipReleaseBeamProbeFromEnv } from "./township_release_beam_probe";
+import { logTownshipReleaseAuthorProbeFromEnv } from "./township_release_author_probe";
+import { logTownshipReleasePairingProbeFromEnv } from "./township_release_pairing_probe";
+import { logTownshipReleaseSyncProbeFromEnv } from "./township_release_sync_probe";
+import { logTownshipReleaseTransportProbesFromEnv } from "./township_release_transport_probe";
+import {
   createTownshipPairingDiscovery,
   type TownshipPairingDiscovery,
   type TownshipPairingDiscoveryAdvert,
@@ -136,6 +147,7 @@ const pairingDiscoveryCandidate = ref<Extract<TownshipPairingDiscoveryResult, { 
 const pairingAdvertiseStatus = ref<{ ok: boolean; message: string } | null>(null);
 const pairingAdvertiseSubmitting = ref(false);
 let pairingDeepLinkListener: TownshipPairingDeepLinkListener | null = null;
+let canonicalProbeDeepLinkListener: TownshipCanonicalProbeDeepLinkListener | null = null;
 let pairingCameraScanner: TownshipPairingQrCameraScanner | null = null;
 let pairingDiscovery: TownshipPairingDiscovery | null = null;
 const healthStatus = ref<TownshipCarrierHealthResult | null>(null);
@@ -282,12 +294,23 @@ const availableActions = computed(() => {
 onMounted(async () => {
   nativeStatus.value = await loadTownshipNativeStatus();
   await loadPairingConfig();
+  if (isAndroidTauriShell()) {
+    void logTownshipCanonicalProbe().catch(() => {});
+    void logTownshipReleaseBeamProbeFromEnv().catch(() => {});
+    void logTownshipReleaseSyncProbeFromEnv().catch(() => {});
+    void logTownshipReleaseAuthorProbeFromEnv().catch(() => {});
+    void logTownshipReleasePairingProbeFromEnv().catch(() => {});
+    void logTownshipReleaseTransportProbesFromEnv().catch(() => {});
+  }
+  await mountCanonicalProbeDeepLinkListener();
   await mountPairingDeepLinkListener();
   if (autosyncOnMount && carrierPeer.value) await syncOutbox();
   actionAvailability.value = await loadTownshipActionAvailability();
 });
 
 onUnmounted(() => {
+  canonicalProbeDeepLinkListener?.stop();
+  canonicalProbeDeepLinkListener = null;
   pairingDeepLinkListener?.stop();
   pairingDeepLinkListener = null;
   stopPairingQrCamera();
@@ -436,20 +459,50 @@ async function mountPairingDeepLinkListener() {
   }
 }
 
+async function mountCanonicalProbeDeepLinkListener() {
+  if (canonicalProbeDeepLinkListener !== null) return;
+
+  try {
+    canonicalProbeDeepLinkListener = await createTownshipCanonicalProbeDeepLinkListener({
+      source: createTauriPairingDeepLinkSource(),
+    });
+  } catch {
+    canonicalProbeDeepLinkListener = null;
+  }
+}
+
 function createTracingPairingDeepLinkSource(source: TownshipPairingDeepLinkSource): TownshipPairingDeepLinkSource {
   return {
     async current(): Promise<readonly string[] | null> {
       const urls = await source.current();
       void tracePairingDeepLinkUrls(urls);
-      return urls;
+      const pairingUrls = await pairingDeepLinkUrls(urls);
+      return pairingUrls.length > 0 ? pairingUrls : null;
     },
     async onOpenUrl(callback: (urls: readonly string[]) => void): Promise<(() => void) | void> {
       return source.onOpenUrl((urls) => {
         void tracePairingDeepLinkUrls(urls);
-        callback(urls);
+        void pairingDeepLinkUrls(urls).then((pairingUrls) => {
+          if (pairingUrls.length > 0) callback(pairingUrls);
+        });
       });
     },
   };
+}
+
+function isAndroidTauriShell(): boolean {
+  return isTauri() && /Android/i.test(navigator.userAgent);
+}
+
+async function pairingDeepLinkUrls(urls: readonly string[] | null): Promise<readonly string[]> {
+  if (!urls) return [];
+
+  const pairingUrls: string[] = [];
+  for (const url of urls) {
+    if (parseTownshipCanonicalProbeDeepLink(url) !== null) continue;
+    pairingUrls.push(url);
+  }
+  return pairingUrls;
 }
 
 async function tracePairingDeepLinkUrls(urls: readonly string[] | null): Promise<void> {
