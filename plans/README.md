@@ -112,7 +112,9 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 090 | Tauri Android release BEAM carrier handshake | P1 | M | 089 | DONE |
 | 091 | Tauri Android release pull-and-reload persistence | P1 | M | 090 | DONE |
 | 092 | Tauri Android release author/push/outbox drain | P1 | M | 091 | DONE |
-| 093 | Tauri Android release deep-link pairing ingress | P1 | M | 092 | IN PROGRESS |
+| 093 | Tauri Android release deep-link pairing ingress | P1 | M | 092 | DONE |
+| 094 | Tauri imported pairing confirmation policy | P1 | S | 093 | DONE |
+| 095 | Tauri armed deep-link pairing import gate | P1 | S | 094 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

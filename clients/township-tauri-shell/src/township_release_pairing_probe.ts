@@ -358,6 +358,7 @@ async function waitForReleasePairing(
   const started = Date.now();
   const timeoutMs = options.timeoutMs ?? options.config.timeoutMs ?? 60_000;
   const deadline = started + timeoutMs;
+  const retryDelayMs = options.retryDelayMs ?? options.config.retryDelayMs ?? 500;
   const source = tracedPairingDeepLinkSource(options.source ?? createTauriPairingDeepLinkSource(), options);
   const listenerRef: { stop?: () => void } = {};
 
@@ -371,13 +372,29 @@ async function waitForReleasePairing(
         }
       };
       const timer = setTimeout(() => settle("timeout"), timeoutMs);
+      const settleIfActionable = (candidate: TownshipPairingDeepLinkParse) => {
+        if (candidate.ok || candidate.reason !== "invalid_pairing_deeplink") {
+          clearTimeout(timer);
+          settle(candidate);
+        }
+      };
+      const pollCurrent = async () => {
+        while (!settled && Date.now() <= deadline) {
+          await delay(retryDelayMs);
+          if (settled) return;
+          const urls = await source.current();
+          const candidate = firstActionablePairingParse(urls);
+          if (candidate) {
+            clearTimeout(timer);
+            settle(candidate);
+            return;
+          }
+        }
+      };
       void createTownshipPairingDeepLinkListener({
         source,
         apply(candidate) {
-          if (candidate.ok || candidate.reason !== "invalid_pairing_deeplink") {
-            clearTimeout(timer);
-            settle(candidate);
-          }
+          settleIfActionable(candidate);
         },
       })
         .then((created) => {
@@ -387,6 +404,14 @@ async function waitForReleasePairing(
             outcome: "listener_mounted",
             urlCount: 0,
             pairingUrlCount: 0,
+          });
+          void pollCurrent().catch((error) => {
+            clearTimeout(timer);
+            settle({
+              ok: false,
+              reason: "invalid_pairing_deeplink",
+              message: errorMessage(error),
+            });
           });
         })
         .catch((error) => {
@@ -436,11 +461,18 @@ async function waitForReleasePairing(
       };
     }
 
-    const saved = await saveTownshipCarrierPeerConfig(options.workflow.storage, {
-      ...parse.draft,
-      localRealm: options.config.localRealm,
-      keyId: options.config.keyId,
-    });
+    const saved = await saveTownshipCarrierPeerConfig(
+      options.workflow.storage,
+      {
+        ...parse.draft,
+        localRealm: options.config.localRealm,
+        keyId: options.config.keyId,
+      },
+      {
+        origin: "release_probe",
+        confirmed: true,
+      },
+    );
     if (!saved.ok) {
       return {
         phase: "pairing",
@@ -463,6 +495,14 @@ async function waitForReleasePairing(
       await delay(0);
     }
   }
+}
+
+function firstActionablePairingParse(urls: readonly string[] | null): TownshipPairingDeepLinkParse | null {
+  for (const url of urls ?? []) {
+    const candidate = parseTownshipPairingDeepLink(url);
+    if (candidate.ok || candidate.reason !== "invalid_pairing_deeplink") return candidate;
+  }
+  return null;
 }
 
 async function retrySync(

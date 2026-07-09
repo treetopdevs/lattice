@@ -55,11 +55,28 @@ the outbox to zero, proves a pre-push cold reload with `outbox_frame_count=2`, a
 the drained persisted ids with `outbox_frame_count=0`.
 Plan 093 proves release APK OS deep-link pairing ingress in the dedicated
 `township:release-pairing-probe` storage namespace: the non-debuggable normal release app receives
-a public `township://pairing` handoff through Android's `VIEW`/`BROWSABLE` intent path, persists only
-the public peer config, force-stops/relaunches with `paired=true`, and then pulls from the trusted
-BEAM peer using the persisted deep-link endpoint rather than a build-time peer URL.
-This does not prove QR camera onboarding, app-originated grants, authority origination, LAN
-discovery, physical-device behavior, production remote TLS, or full mobile onboarding.
+a public `township://pairing` handoff through an adb-delivered Android `VIEW`/`BROWSABLE` intent,
+persists only the public peer config, force-stops/relaunches with `paired=true`, and then pulls from
+the trusted BEAM peer using the persisted deep-link endpoint rather than a build-time peer URL.
+The Android bridge extracts the public pairing handoff from the raw OS intent natively and returns it
+as base64 to TypeScript, avoiding Tauri/WebView custom-scheme URL normalization while keeping the
+handoff out of logs. The handoff is public because it carries only carrier URL, expected peer
+realm/pubkey, and replica; local realm, local key id, native signing seed, and private key material
+are intentionally excluded.
+This is still a delivery-and-persistence proof, not a production authorization ceremony. Plan 094
+adds the real Tauri app confirmation policy: imported handoff/deep-link/QR/discovery drafts cannot
+first-save or replace a different saved peer config without an explicit unchecked-by-default user
+confirmation, same-config saves are idempotent, invalid drafts do not mutate storage, and link
+parameters such as `confirm=1` do not unlock saving. Plan 095 adds the app-controlled anti-hijack
+gate for real-app OS deep-link import: link import starts unarmed, installed unarmed OS links are
+traced as blocked instead of loading pairing drafts, and one valid armed pairing link consumes the
+arm in the shared listener contract. Real-app armed delivery remains unproven beyond source/contract
+coverage. The native bridge consumes a valid stored intent handoff once and requires `VIEW` plus
+`BROWSABLE`, but this does not remove every local-malicious-app threat or prove cryptographic
+nonce/state binding.
+This also does not prove Chrome/browser navigation, chooser behavior, QR camera onboarding,
+app-originated grants, authority origination, LAN discovery, physical-device behavior, production
+remote TLS, or full mobile onboarding.
 Plan 086 proves a debug APK positive transport control on a separate loopback port: the env-gated
 probe emits `outcome=connected` only after a WebSocket frame roundtrip, and the host observes a
 debug WebView upgrade and echoed frame. That proves the instrument works in the debug surface, but
@@ -196,9 +213,20 @@ drains the outbox to zero, proves a pre-push cold reload with `outbox_frame_coun
 cold-reloads the drained persisted ids with `outbox_frame_count=0`.
 Plan 093 proves release APK OS deep-link pairing ingress in the dedicated
 `township:release-pairing-probe` storage namespace: the app receives a public `township://pairing`
-handoff through Android's `VIEW`/`BROWSABLE` intent path, persists only the public peer config,
+handoff through an adb-delivered Android `VIEW`/`BROWSABLE` intent, persists only the public peer config,
 force-stops/relaunches with `paired=true`, and pulls from the trusted BEAM peer using the persisted
 deep-link endpoint rather than a build-time peer URL.
+The bridge extracts that public handoff from the raw Android intent and transports it as base64, not
+as a custom-scheme URL string, before reconstructing the pairing URL for the shared parser. It is
+public because the handoff excludes local identity, key ids, seeds, and private signing material.
+This proves the release ingress path can persist and reuse a public peer config, not that a public
+`VIEW`/`BROWSABLE` intent is authorization; Plan 094 adds the real app confirmation and
+overwrite/reject policy for imported first-save and replacement writes, and Plan 095 adds a
+user-armed one-shot OS deep-link import gate so unsolicited links do not load drafts in the real
+app. Production pairing still needs browser/chooser coverage beyond the adb intent smoke, and
+cryptographic state/nonce binding remains unproven. The native command consumes a valid stored
+handoff once and rejects non-BROWSABLE, non-VIEW, oversized, foreign-host, and port-bearing custom
+scheme intents, but a malicious local app can still send a syntactically valid public intent.
 This does not prove QR camera onboarding, app-originated grants, authority origination, LAN
 discovery, physical-device behavior, production remote TLS, or full mobile onboarding. Plan 086 proves the same env-gated probe can
 connect and complete a WebSocket frame roundtrip in a debug APK, so it proves the harness can produce
@@ -208,9 +236,11 @@ APK BEAM convergence, bounded debug APK on-device post authoring, and bounded de
 cap onboarding; Android release APK builds, installs, and preserves canonical/wire fidelity for the
 W1 fixture, and it now proves release-mode carrier handshake/status/report, release pull/reload,
 release device-local authoring and push/outbox drain, and release OS deep-link peer-config
-persistence over scoped loopback. It does not prove app-originated grants, authority origination, QR
-camera onboarding, LAN discovery, iOS key reuse, Expo, full mobile onboarding beyond pull-based cap
-acquisition, or phone-grade equivalence. The local iOS simulator archive remains
+persistence over scoped loopback; the real app now blocks unarmed OS deep-link draft import and has a
+source-proven explicit user-armed one-shot accept path. It does not prove real-app armed OS delivery,
+app-originated grants, authority origination, QR camera onboarding,
+LAN discovery, iOS key reuse, Expo, browser/chooser behavior, cryptographic state/nonce binding,
+full mobile onboarding beyond pull-based cap acquisition, or phone-grade equivalence. The local iOS simulator archive remains
 blocked by the selected Xcode 27 beta Swift package failure in Tauri's upstream mobile build.
 
 ### Expo
@@ -239,7 +269,7 @@ No phone-grade persistence claim is allowed until all of these are true:
 2. The app-storage implementation reloads `local_ops`, `carrier_frames`, and `delegation_frames`
    without touching the native key store.
    - Android Tauri debug APK: met for the W1 pre-signed-frame smoke by plan 080.
-   - Android Tauri release APK: bounded release pull/reload, device-local authoring, push/outbox drain, and OS deep-link peer-config persistence are met by plans 091-093 in dedicated probe namespaces; app-originated grants, authority origination, QR camera onboarding, LAN discovery, and full mobile onboarding remain unproven in release mode. Plan 090 is tracked separately as carrier reachability.
+   - Android Tauri release APK: bounded release pull/reload, device-local authoring, push/outbox drain, OS deep-link peer-config persistence, real-app imported pairing confirmation policy, installed unarmed OS deep-link blocking, and source-level user-armed one-shot import gating are met by plans 091-095 in dedicated probe namespaces or the shared Tauri app path; real-app armed OS delivery, app-originated grants, authority origination, QR camera onboarding, LAN discovery, browser/chooser behavior, cryptographic state/nonce binding, and full mobile onboarding remain unproven in release mode. Plan 090 is tracked separately as carrier reachability.
    - iOS Tauri and Expo: still unproven.
 3. A mobile smoke syncs a Township matter with a BEAM realm using persisted caps from the onboarding
    ceremony.
@@ -248,7 +278,7 @@ No phone-grade persistence claim is allowed until all of these are true:
      on-device `post` authoring against the pulled cap, BEAM materialization, and BEAM rejection for
      a same-device operation outside the grant. Full mobile onboarding remains unproven beyond
      pull-based cap acquisition.
-   - Android Tauri release APK: bounded carrier pull/reload, OS deep-link peer-config persistence, device-local post authoring, persisted pending-outbox reload, push/outbox drain, and peer-side authority enforcement are met by plans 091-093 in dedicated probe namespaces; app-originated grants, authority origination, QR camera onboarding, LAN discovery, and full onboarding remain unproven. iOS Tauri and Expo are still unproven.
+   - Android Tauri release APK: bounded carrier pull/reload, OS deep-link peer-config persistence, device-local post authoring, persisted pending-outbox reload, push/outbox drain, peer-side authority enforcement, real-app imported pairing confirmation policy, installed unarmed OS deep-link blocking, and source-level user-armed one-shot import gating are met by plans 091-095 in dedicated probe namespaces or the shared Tauri app path; real-app armed OS delivery, app-originated grants, authority origination, QR camera onboarding, LAN discovery, browser/chooser behavior, cryptographic state/nonce binding, and full onboarding remain unproven. iOS Tauri and Expo are still unproven.
 4. The UI distinguishes local grant saved/pending sync from carrier-converged grant acceptance.
 
 ## Stop Conditions

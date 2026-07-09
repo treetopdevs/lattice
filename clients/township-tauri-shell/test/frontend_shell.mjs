@@ -42,14 +42,26 @@ test("frontend package builds and tests the Township Vue shell", () => {
 
 test("frontend package exposes installed-app deep-link delivery smoke", () => {
   const smoke = readText("test/tauri_installed_deeplink_smoke.ts");
+  const native = readText("src-tauri/src/lib.rs");
 
   assert.match(smoke, /township:\/\/pairing/);
   assert.match(smoke, /TOWNSHIP_DEV_TRACE_FILE/);
   assert.match(smoke, /deep-link-listener-mounted/);
   assert.match(smoke, /deep-link:township:\/\/pairing/);
-  assert.match(smoke, /pairing-link-loaded:/);
+  assert.match(smoke, /pairing-link-blocked:not-armed/);
+  assert.doesNotMatch(smoke, /waitForTraceLine\(`pairing-link-loaded:/);
   assert.match(smoke, /\.app/);
-  assert.match(smoke, /spawnManaged\(\s*"open"/);
+  assert.match(smoke, /spawnManaged\(\s*"open",\s*\[\s*"-n",\s*"-W",\s*"-j"/);
+  assert.match(smoke, /"--env"/);
+  assert.match(smoke, /run\("open", \["-b", appIdentifier, "-u", deepLinkUrl\]/);
+  assert.match(smoke, /npm", \["run", "tauri:build"\]/);
+  assert.match(smoke, /if \(child\.exitCode !== null\) return Promise\.resolve\(child\.exitCode\)/);
+  assert.match(native, /TOWNSHIP_DEV_TRACE_EVENT_MAX_CHARS/);
+  assert.match(native, /sanitize_trace_dev_event/);
+  assert.match(native, /replace\(\['\\r', '\\n', '\\0'\], " "\)/);
+  assert.doesNotMatch(native, /#\[cfg\(debug_assertions\)\]\s*fn trace_dev_command/);
+  assert.doesNotMatch(native, /#\[cfg\(not\(debug_assertions\)\)\]\s*fn trace_dev_command/);
+  assert.match(native, /lattice_trace_dev_event/);
 });
 
 test("Vue source mounts a reducer-backed Township matter surface", () => {
@@ -313,6 +325,37 @@ test("Vue source exposes runtime carrier pairing config without storing secrets"
   assert.doesNotMatch(app, /paired with/i);
 });
 
+test("Vue source gates imported pairing saves on explicit confirmation", () => {
+  const app = readText("src/App.vue");
+  const peer = readText("src/township_carrier_peer.ts");
+  const releaseProbe = readText("src/township_release_pairing_probe.ts");
+
+  assert.match(peer, /TownshipCarrierPairingDraftOrigin/);
+  assert.match(peer, /confirmation_required/);
+  assert.match(peer, /requiresPairingSaveConfirmation/);
+  assert.match(peer, /townshipCarrierPeerConfigsEqual/);
+  assert.match(app, /pairingDraftOrigin = ref<TownshipCarrierPairingDraftOrigin>\("manual"\)/);
+  assert.match(app, /pairingSaveConfirmed = ref\(false\)/);
+  assert.match(app, /pairingSaveConfirmationRequired/);
+  assert.match(app, /pairingSaveConfirmationLabel/);
+  assert.match(app, /pairingSaveConfirmationDetail/);
+  assert.match(app, /clearPairingSaveConfirmation/);
+  assert.match(app, /markImportedPairingDraft\("handoff"\)/);
+  assert.match(app, /markImportedPairingDraft\("deep_link"\)/);
+  assert.match(app, /markImportedPairingDraft\("qr_image"\)/);
+  assert.match(app, /markImportedPairingDraft\("qr_camera"\)/);
+  assert.match(app, /markImportedPairingDraft\("discovery"\)/);
+  assert.match(app, /origin: pairingDraftOrigin\.value/);
+  assert.match(app, /confirmed: pairingSaveConfirmed\.value/);
+  assert.match(app, /I verified this imported carrier pairing/);
+  assert.match(app, /I verified replacing the saved carrier pairing/);
+  assert.match(app, /Current peer/);
+  assert.match(app, /Draft peer/);
+  assert.doesNotMatch(app, /pairingSaveConfirmed = ref\(true\)/);
+  assert.match(releaseProbe, /origin: "release_probe"/);
+  assert.match(releaseProbe, /confirmed: true/);
+});
+
 test("Vue source exposes pairing handoff import without device-local identity transfer", () => {
   const app = readText("src/App.vue");
   const peer = readText("src/township_carrier_peer.ts");
@@ -327,6 +370,7 @@ test("Vue source exposes pairing handoff import without device-local identity tr
   assert.match(peer, /townshipCarrierPeerFingerprint/);
   assert.match(link, /parseTownshipPairingDeepLink/);
   assert.match(link, /createTownshipPairingDeepLinkListener/);
+  assert.match(link, /createOneShotTownshipPairingDeepLinkGate/);
   assert.match(link, /importTownshipCarrierPairingHandoff/);
   assert.doesNotMatch(link, /@tauri-apps\/plugin-deep-link/);
   assert.match(source, /createTauriPairingDeepLinkSource/);
@@ -339,8 +383,19 @@ test("Vue source exposes pairing handoff import without device-local identity tr
   assert.match(app, /parseTownshipPairingDeepLink/);
   assert.match(app, /createTownshipPairingDeepLinkListener/);
   assert.match(app, /createTauriPairingDeepLinkSource/);
+  assert.match(app, /createTauriPairingDeepLinkSource\(\{ includeAndroidPairingIntent: false \}\)/);
   assert.match(app, /tauriDeepLinkRuntimeAvailable/);
   assert.match(app, /pairingDeepLinkListener/);
+  assert.match(app, /pairingDeepLinkGate = createOneShotTownshipPairingDeepLinkGate\(\)/);
+  assert.match(app, /pairingDeepLinkImportArmed = ref\(false\)/);
+  assert.match(app, /armPairingDeepLinkImport/);
+  assert.match(app, /disarmPairingDeepLinkImport/);
+  assert.match(app, /consumePairingDeepLinkImport/);
+  assert.match(app, /onBlocked: handleBlockedPairingDeepLink/);
+  assert.match(app, /Pairing link ignored; enable link import first/);
+  assert.match(app, /Enable link import/);
+  assert.match(app, /Cancel link import/);
+  assert.doesNotMatch(app, /pairingDeepLinkImportArmed = ref\(true\)/);
   assert.match(app, /Pairing link loaded; save before sync/);
   assert.match(app, /deep-link-listener-mounted/);
   assert.match(app, /pairing-link-loaded:/);
@@ -361,6 +416,52 @@ test("Vue source exposes pairing handoff import without device-local identity tr
   assert.doesNotMatch(app, /deep.?link registered/i);
   assert.doesNotMatch(app, /opened by (the )?os/i);
   assert.doesNotMatch(app, /secure pairing/i);
+});
+
+test("Vue source mounts the pairing deep-link listener before the best-effort canonical probe listener", () => {
+  const app = readText("src/App.vue");
+  const mountedStart = app.indexOf("onMounted(async () => {");
+  const mountedEnd = app.indexOf("if (autosyncOnMount && carrierPeer.value) await syncOutbox()");
+  const mounted = app.slice(mountedStart, mountedEnd);
+
+  assert.ok(mountedStart > -1, "expected App.vue to define an onMounted boot sequence");
+  assert.ok(
+    mounted.indexOf("await mountPairingDeepLinkListener()") > -1,
+    "expected the boot sequence to mount the pairing deep-link listener",
+  );
+  assert.ok(
+    mounted.indexOf("await mountCanonicalProbeDeepLinkListener()") > -1,
+    "expected the boot sequence to mount the canonical probe listener",
+  );
+  assert.ok(
+    mounted.indexOf("await mountPairingDeepLinkListener()") <
+      mounted.indexOf("await mountCanonicalProbeDeepLinkListener()"),
+    "pairing import readiness should not sit behind a best-effort probe listener",
+  );
+});
+
+test("Vue source does not block pairing deep-link readiness on native keychain probes", () => {
+  const app = readText("src/App.vue");
+  const mountedStart = app.indexOf("onMounted(async () => {");
+  const mountedEnd = app.indexOf("if (autosyncOnMount && carrierPeer.value) await syncOutbox()");
+  const mounted = app.slice(mountedStart, mountedEnd);
+
+  assert.ok(mountedStart > -1, "expected App.vue to define an onMounted boot sequence");
+  assert.ok(
+    mounted.indexOf("await mountPairingDeepLinkListener()") > -1,
+    "expected the boot sequence to mount the pairing deep-link listener",
+  );
+  assert.equal(
+    mounted.indexOf("nativeStatus.value = await loadTownshipNativeStatus()"),
+    -1,
+    "boot should not start keychain-backed readiness before pairing imports can receive OS events",
+  );
+  assert.ok(
+    app.indexOf("async function hydrateTownshipNativeReadiness()") > -1,
+    "expected native readiness to be hydrated by a deferred helper",
+  );
+  assert.match(app, /nativeStatus\.value = await loadTownshipNativeStatus\(\)/);
+  assert.match(app, /window\.setTimeout\(\(\) => \{[\s\S]*void hydrateTownshipNativeReadiness\(\);[\s\S]*\}/);
 });
 
 test("Vue source renders pairing handoff QR without trust claims", () => {
@@ -518,7 +619,8 @@ test("Vue source does not block smoke auto-sync on action availability hydration
   );
   assert.ok(
     mounted.indexOf("if (autosyncOnMount && carrierPeer.value) await syncOutbox()")
-      < mounted.indexOf("actionAvailability.value = await loadTownshipActionAvailability()"),
-    "action availability should hydrate after smoke-only auto-sync can converge",
+      < mounted.indexOf("scheduleTownshipNativeHydration()"),
+    "native/action availability hydration should be scheduled after smoke-only auto-sync can converge",
   );
+  assert.match(app, /actionAvailability\.value = await loadTownshipActionAvailability\(\)/);
 });

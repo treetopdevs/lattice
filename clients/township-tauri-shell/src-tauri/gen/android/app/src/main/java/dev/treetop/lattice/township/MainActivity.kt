@@ -17,6 +17,7 @@ class MainActivity : TauriActivity() {
 
   override fun onNewIntent(intent: Intent) {
     TownshipIntentStore.record(intent, "activity_on_new_intent")
+    setIntent(intent)
     super.onNewIntent(intent)
   }
 }

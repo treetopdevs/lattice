@@ -28,14 +28,18 @@ import {
   exportTownshipCarrierPairingHandoff,
   importTownshipCarrierPairingHandoff,
   loadTownshipCarrierPeerConfig,
+  normalizeTownshipCarrierPeerConfig,
   saveTownshipCarrierPeerConfig,
+  townshipCarrierPeerConfigsEqual,
   townshipCarrierPeerFingerprint,
   townshipCarrierPeerFromEnv,
+  type TownshipCarrierPairingDraftOrigin,
   type TownshipCarrierPeerConfig,
   type TownshipCarrierPeerConfigInput,
   type TownshipCarrierHealthResult,
 } from "./township_carrier_peer";
 import {
+  createOneShotTownshipPairingDeepLinkGate,
   createTownshipPairingDeepLinkListener,
   parseTownshipPairingDeepLink,
   type TownshipPairingDeepLinkListener,
@@ -134,6 +138,10 @@ const postDraft = ref("");
 const postStatus = ref<TownshipPostSubmission | null>(null);
 const postSubmitting = ref(false);
 const pairingDraft = ref<TownshipCarrierPeerConfigInput>(pairingDraftFromConfig(carrierPeer.value));
+const pairingDraftOrigin = ref<TownshipCarrierPairingDraftOrigin>("manual");
+const pairingSaveConfirmed = ref(false);
+const pairingDeepLinkGate = createOneShotTownshipPairingDeepLinkGate();
+const pairingDeepLinkImportArmed = ref(false);
 const pairingStatus = ref<{ ok: boolean; message: string } | null>(null);
 const pairingSubmitting = ref(false);
 const pairingHandoffDraft = ref("");
@@ -256,6 +264,41 @@ const pairingStatusTone = computed(() => {
   if (pairingStatus.value === null) return "idle";
   return pairingStatus.value.ok ? "success" : "sync_failed";
 });
+const normalizedPairingDraftConfig = computed(() => {
+  const normalized = normalizeTownshipCarrierPeerConfig(pairingDraft.value);
+  return normalized.ok ? normalized.config : null;
+});
+const currentPairingFingerprint = computed(() =>
+  carrierPeer.value === null ? null : townshipCarrierPeerFingerprint(carrierPeer.value.expectedPeerPubkey),
+);
+const draftPairingFingerprint = computed(() =>
+  normalizedPairingDraftConfig.value === null
+    ? null
+    : townshipCarrierPeerFingerprint(normalizedPairingDraftConfig.value.expectedPeerPubkey),
+);
+const pairingSaveConfirmationRequired = computed(() => {
+  const draft = normalizedPairingDraftConfig.value;
+  if (draft === null) return false;
+  if (carrierPeer.value !== null && townshipCarrierPeerConfigsEqual(carrierPeer.value, draft)) return false;
+  if (carrierPeer.value !== null) return true;
+  return pairingDraftOrigin.value !== "manual";
+});
+const pairingSaveConfirmationLabel = computed(() =>
+  carrierPeer.value === null
+    ? "I verified this imported carrier pairing"
+    : "I verified replacing the saved carrier pairing",
+);
+const pairingSaveConfirmationDetail = computed(() => {
+  if (carrierPeer.value === null) {
+    return draftPairingFingerprint.value === null
+      ? "Verify the peer fingerprint before saving."
+      : `Draft peer ${draftPairingFingerprint.value}.`;
+  }
+
+  const current = currentPairingFingerprint.value ?? "unknown";
+  const draft = draftPairingFingerprint.value ?? "unknown";
+  return `Current peer ${current}; draft peer ${draft}.`;
+});
 const pairingQrImageStatusTone = computed(() => {
   if (pairingQrImageStatus.value === null) return "idle";
   return pairingQrImageStatus.value.ok ? "success" : "sync_failed";
@@ -296,8 +339,6 @@ const availableActions = computed(() => {
 });
 
 onMounted(async () => {
-  nativeStatus.value = await loadTownshipNativeStatus();
-  await loadPairingConfig();
   const releasePairingProbeActive =
     isAndroidTauriShell() &&
     townshipReleasePairingProbeConfigFromEnv(import.meta.env as TownshipReleasePairingProbeEnv) !== null;
@@ -310,11 +351,12 @@ onMounted(async () => {
     void logTownshipReleaseTransportProbesFromEnv().catch(() => {});
   }
   if (!releasePairingProbeActive) {
-    await mountCanonicalProbeDeepLinkListener();
     await mountPairingDeepLinkListener();
+    await mountCanonicalProbeDeepLinkListener();
   }
+  await loadPairingConfig();
   if (autosyncOnMount && carrierPeer.value) await syncOutbox();
-  actionAvailability.value = await loadTownshipActionAvailability();
+  scheduleTownshipNativeHydration();
 });
 
 onUnmounted(() => {
@@ -322,6 +364,7 @@ onUnmounted(() => {
   canonicalProbeDeepLinkListener = null;
   pairingDeepLinkListener?.stop();
   pairingDeepLinkListener = null;
+  clearPairingDeepLinkImport();
   stopPairingQrCamera();
   stopPairingDiscovery();
 });
@@ -397,23 +440,40 @@ async function loadPairingConfig() {
     carrierPeer.value = await loadTownshipCarrierPeerConfig(storage);
     pairingDraft.value = pairingDraftFromConfig(carrierPeer.value);
     pairingQrSvg.value = carrierPeer.value ? pairingQrSvgFromConfig(carrierPeer.value) : null;
+    resetPairingSaveState();
   } catch {
     carrierPeer.value = townshipCarrierPeerFromEnv();
     pairingDraft.value = pairingDraftFromConfig(carrierPeer.value);
     pairingQrSvg.value = carrierPeer.value ? pairingQrSvgFromConfig(carrierPeer.value) : null;
+    resetPairingSaveState();
   }
+}
+
+function scheduleTownshipNativeHydration() {
+  window.setTimeout(() => {
+    void hydrateTownshipNativeReadiness();
+  }, 1_000);
+}
+
+async function hydrateTownshipNativeReadiness() {
+  nativeStatus.value = await loadTownshipNativeStatus();
+  actionAvailability.value = await loadTownshipActionAvailability();
 }
 
 async function submitPairing() {
   pairingSubmitting.value = true;
   try {
     const storage = createTownshipNativeStorage();
-    const saved = await saveTownshipCarrierPeerConfig(storage, pairingDraft.value);
+    const saved = await saveTownshipCarrierPeerConfig(storage, pairingDraft.value, {
+      origin: pairingDraftOrigin.value,
+      confirmed: pairingSaveConfirmed.value,
+    });
     if (saved.ok) {
       carrierPeer.value = saved.config;
       pairingDraft.value = pairingDraftFromConfig(saved.config);
       pairingHandoffFingerprint.value = townshipCarrierPeerFingerprint(saved.config.expectedPeerPubkey);
       pairingQrSvg.value = pairingQrSvgFromConfig(saved.config);
+      resetPairingSaveState();
       pairingStatus.value = { ok: true, message: "Pairing config saved for future sync." };
     } else {
       pairingStatus.value = { ok: false, message: saved.message };
@@ -422,6 +482,20 @@ async function submitPairing() {
     pairingStatus.value = { ok: false, message: "Open in the Tauri shell to save carrier pairing." };
   }
   pairingSubmitting.value = false;
+}
+
+function clearPairingSaveConfirmation() {
+  pairingSaveConfirmed.value = false;
+}
+
+function resetPairingSaveState() {
+  pairingDraftOrigin.value = "manual";
+  pairingSaveConfirmed.value = false;
+}
+
+function markImportedPairingDraft(origin: Exclude<TownshipCarrierPairingDraftOrigin, "manual" | "release_probe">) {
+  pairingDraftOrigin.value = origin;
+  pairingSaveConfirmed.value = false;
 }
 
 function exportPairingHandoff() {
@@ -451,6 +525,7 @@ function importPairingHandoff() {
   pairingHandoffDraft.value = imported.handoff;
   pairingHandoffFingerprint.value = imported.peerFingerprint;
   pairingQrSvg.value = null;
+  markImportedPairingDraft("handoff");
   pairingStatus.value = { ok: true, message: "Pairing handoff loaded; save before sync." };
 }
 
@@ -460,11 +535,19 @@ async function mountPairingDeepLinkListener() {
   try {
     pairingDeepLinkListener = await createTownshipPairingDeepLinkListener({
       source: createTracingPairingDeepLinkSource(createTauriPairingDeepLinkSource()),
+      gate: {
+        arm: () => pairingDeepLinkGate.arm(),
+        disarm: clearPairingDeepLinkImport,
+        armed: () => pairingDeepLinkGate.armed(),
+        consume: consumePairingDeepLinkImport,
+      },
       apply: applyPairingDeepLink,
+      onBlocked: handleBlockedPairingDeepLink,
     });
     void traceTownshipDevEvent("deep-link-listener-mounted").catch(() => {});
   } catch {
     pairingDeepLinkListener = null;
+    void traceTownshipDevEvent("deep-link-listener-unavailable").catch(() => {});
   }
 }
 
@@ -473,11 +556,38 @@ async function mountCanonicalProbeDeepLinkListener() {
 
   try {
     canonicalProbeDeepLinkListener = await createTownshipCanonicalProbeDeepLinkListener({
-      source: createTauriPairingDeepLinkSource(),
+      source: createTauriPairingDeepLinkSource({ includeAndroidPairingIntent: false }),
     });
   } catch {
     canonicalProbeDeepLinkListener = null;
   }
+}
+
+function armPairingDeepLinkImport() {
+  pairingDeepLinkGate.arm();
+  pairingDeepLinkImportArmed.value = true;
+  pairingStatus.value = { ok: true, message: "Pairing link import ready." };
+}
+
+function disarmPairingDeepLinkImport() {
+  clearPairingDeepLinkImport();
+  pairingStatus.value = { ok: true, message: "Pairing link import cancelled." };
+}
+
+function clearPairingDeepLinkImport() {
+  pairingDeepLinkGate.disarm();
+  pairingDeepLinkImportArmed.value = false;
+}
+
+function consumePairingDeepLinkImport(parse: TownshipPairingDeepLinkParse): boolean {
+  const accepted = pairingDeepLinkGate.consume(parse);
+  pairingDeepLinkImportArmed.value = pairingDeepLinkGate.armed();
+  return accepted;
+}
+
+function handleBlockedPairingDeepLink() {
+  pairingStatus.value = { ok: false, message: "Pairing link ignored; enable link import first." };
+  void traceTownshipDevEvent("pairing-link-blocked:not-armed").catch(() => {});
 }
 
 function createTracingPairingDeepLinkSource(source: TownshipPairingDeepLinkSource): TownshipPairingDeepLinkSource {
@@ -538,6 +648,7 @@ function applyPairingDeepLink(imported: TownshipPairingDeepLinkParse) {
   pairingHandoffDraft.value = imported.handoff;
   pairingHandoffFingerprint.value = imported.peerFingerprint;
   pairingQrSvg.value = null;
+  markImportedPairingDraft("deep_link");
   void traceTownshipDevEvent(`pairing-link-loaded:${imported.peerFingerprint}`).catch(() => {});
   pairingStatus.value = { ok: true, message: "Pairing link loaded; save before sync." };
 }
@@ -558,6 +669,7 @@ async function importPairingQrImage(event: Event) {
       pairingHandoffDraft.value = decoded.handoff;
       pairingHandoffFingerprint.value = decoded.peerFingerprint;
       pairingQrSvg.value = null;
+      markImportedPairingDraft("qr_image");
       pairingQrImageStatus.value = { ok: true, message: "Pairing QR image loaded; save before sync." };
     } else {
       pairingQrImageStatus.value = { ok: false, message: decoded.message };
@@ -607,6 +719,7 @@ function applyPairingQrCameraCapture(decoded: TownshipPairingQrDecode) {
   pairingHandoffDraft.value = decoded.handoff;
   pairingHandoffFingerprint.value = decoded.peerFingerprint;
   pairingQrSvg.value = null;
+  markImportedPairingDraft("qr_camera");
   pairingCameraStatus.value = { ok: true, message: "Pairing camera loaded; save before sync." };
   stopPairingQrCamera();
 }
@@ -672,6 +785,7 @@ function loadDiscoveredPairing() {
   pairingHandoffDraft.value = candidate.handoff;
   pairingHandoffFingerprint.value = candidate.peerFingerprint;
   pairingQrSvg.value = null;
+  markImportedPairingDraft("discovery");
   pairingDiscoveryStatus.value = { ok: true, message: "Discovered pairing loaded; save before sync." };
 }
 
@@ -1168,6 +1282,7 @@ function pairingDiscoveryAdvertFromMessage(value: unknown): TownshipPairingDisco
           autocomplete="off"
           placeholder="Carrier URL"
           type="url"
+          @input="clearPairingSaveConfirmation"
         />
         <input
           v-model="pairingDraft.localRealm"
@@ -1175,6 +1290,7 @@ function pairingDiscoveryAdvertFromMessage(value: unknown): TownshipPairingDisco
           autocomplete="off"
           placeholder="Local realm"
           type="text"
+          @input="clearPairingSaveConfirmation"
         />
         <input
           v-model="pairingDraft.expectedPeerRealm"
@@ -1182,6 +1298,7 @@ function pairingDiscoveryAdvertFromMessage(value: unknown): TownshipPairingDisco
           autocomplete="off"
           placeholder="Peer realm"
           type="text"
+          @input="clearPairingSaveConfirmation"
         />
         <input
           v-model="pairingDraft.expectedPeerPubkey"
@@ -1189,6 +1306,7 @@ function pairingDiscoveryAdvertFromMessage(value: unknown): TownshipPairingDisco
           autocomplete="off"
           placeholder="Peer public key"
           type="text"
+          @input="clearPairingSaveConfirmation"
         />
         <input
           v-model="pairingDraft.keyId"
@@ -1196,6 +1314,7 @@ function pairingDiscoveryAdvertFromMessage(value: unknown): TownshipPairingDisco
           autocomplete="off"
           placeholder="Key id"
           type="text"
+          @input="clearPairingSaveConfirmation"
         />
         <textarea
           v-model="pairingHandoffDraft"
@@ -1207,6 +1326,17 @@ function pairingDiscoveryAdvertFromMessage(value: unknown): TownshipPairingDisco
         <small v-if="pairingHandoffFingerprint" class="fingerprint">
           peer fingerprint {{ pairingHandoffFingerprint }}. Verify peer fingerprint before saving.
         </small>
+        <div v-if="pairingSaveConfirmationRequired" class="pairing-confirmation">
+          <label>
+            <input
+              v-model="pairingSaveConfirmed"
+              aria-label="Confirm carrier pairing save"
+              type="checkbox"
+            />
+            <span>{{ pairingSaveConfirmationLabel }}</span>
+          </label>
+          <small>{{ pairingSaveConfirmationDetail }}</small>
+        </div>
         <div v-if="pairingQrSvg" class="pairing-qr">
           <p>Pairing QR</p>
           <div class="pairing-qr-image" v-html="pairingQrSvg"></div>
@@ -1271,6 +1401,12 @@ function pairingDiscoveryAdvertFromMessage(value: unknown): TownshipPairingDisco
           <p class="post-message" :data-state="pairingStatusTone">{{ pairingStatusMessage }}</p>
           <button type="button" :disabled="carrierPeer === null" @click="exportPairingHandoff">Export handoff</button>
           <button type="button" @click="importPairingHandoff">Load handoff</button>
+          <button type="button" :disabled="pairingDeepLinkImportArmed" @click="armPairingDeepLinkImport">
+            {{ pairingDeepLinkImportArmed ? "Link import ready" : "Enable link import" }}
+          </button>
+          <button type="button" :disabled="!pairingDeepLinkImportArmed" @click="disarmPairingDeepLinkImport">
+            Cancel link import
+          </button>
           <button type="submit" :disabled="pairingSubmitting">
             {{ pairingSubmitting ? "Saving" : "Save pairing" }}
           </button>

@@ -3,6 +3,7 @@ package dev.treetop.lattice.township.intent
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
+import android.util.Base64
 import android.util.Log
 import android.webkit.WebView
 import app.tauri.annotation.Command
@@ -14,6 +15,8 @@ import app.tauri.plugin.Plugin
 object TownshipIntentStore {
   private const val LOG_TAG = "LATTICE_PROBE"
   private const val LOG_PREFIX = "township-android-intent-store"
+  private const val TAURI_ANDROID_PAIRING_HANDOFF_PREFIX = "township-pairing_3Av1_3A"
+  private const val MAX_PAIRING_INTENT_URL_LENGTH = 8192
 
   @Volatile
   private var currentUrl: String? = null
@@ -22,9 +25,15 @@ object TownshipIntentStore {
     Log.i(
         LOG_TAG,
         "$LOG_PREFIX phase=record source=${probeToken(source)} action=${probeToken(intent?.action)} route_shape=${routeShape(intent?.data)}")
-    if (intent?.data?.scheme == "township" || isViewIntent(intent?.action)) {
-      currentUrl = intent?.data?.toString()
-    }
+    val rawUrl = intent?.data?.toString()
+    currentUrl =
+        rawUrl?.takeIf {
+          isViewIntent(intent.action) &&
+              hasBrowsableCategory(intent) &&
+              intent.data?.scheme == "township" &&
+              it.isNotBlank() &&
+              it.length <= MAX_PAIRING_INTENT_URL_LENGTH
+        }
   }
 
   fun peek(): String? {
@@ -32,8 +41,79 @@ object TownshipIntentStore {
     return currentUrl
   }
 
+  fun consumePairingHandoff(): String? {
+    val rawUrl = peek()
+    val handoff = pairingHandoff(rawUrl)
+    if (handoff != null) currentUrl = null
+    Log.i(
+        LOG_TAG,
+        "$LOG_PREFIX phase=handoff has_handoff=${handoff != null} route_shape=${routeShape(rawUrl?.let(Uri::parse))}")
+    return handoff
+  }
+
   private fun isViewIntent(action: String?): Boolean =
       action == Intent.ACTION_VIEW || action == "org.chromium.arc.intent.action.VIEW"
+
+  private fun hasBrowsableCategory(intent: Intent): Boolean =
+      intent.categories?.contains(Intent.CATEGORY_BROWSABLE) == true
+
+  private fun pairingHandoff(value: String?): String? {
+    val uri =
+        try {
+          value?.let(Uri::parse)
+        } catch (_: Exception) {
+          null
+        } ?: return null
+    if (uri.scheme != "township") return null
+
+    val path = Uri.decode(uri.path ?: "").trimStart('/')
+    if (!isPairingRoute(uri, path)) return null
+
+    val queryHandoff = present(uri.getQueryParameter("handoff"))
+    if (queryHandoff != null) return queryHandoff
+
+    val payload =
+        when {
+          uri.host == "pairing" -> path
+          uri.host == "nohost" -> routePayload(path, "_pairing")
+          uri.host.isNullOrEmpty() && (path == "pairing" || path.startsWith("pairing/")) ->
+              routePayload(path, "pairing")
+          uri.host.isNullOrEmpty() && (path == "nohost:_pairing" || path.startsWith("nohost:_pairing")) ->
+              routePayload(path, "nohost:_pairing")
+          else -> null
+        }
+    return present(payload)?.let(::normalizeTauriAndroidRouteHandoff)
+  }
+
+  private fun isPairingRoute(uri: Uri, path: String): Boolean =
+      when {
+        uri.port != -1 -> false
+        uri.host == "pairing" -> true
+        uri.host == "nohost" ->
+            path == "_pairing" || path.startsWith("_pairing/") || path.startsWith("_pairing_")
+        uri.host.isNullOrEmpty() ->
+            path == "pairing" ||
+                path.startsWith("pairing/") ||
+                path == "nohost:_pairing" ||
+                path.startsWith("nohost:_pairing/") ||
+                path.startsWith("nohost:_pairing_")
+        else -> false
+      }
+
+  private fun routePayload(path: String, prefix: String): String? =
+      when {
+        path == prefix -> null
+        path.startsWith("$prefix/") -> path.removePrefix("$prefix/")
+        path.startsWith("${prefix}_") -> path.removePrefix("${prefix}_")
+        else -> null
+      }
+
+  private fun normalizeTauriAndroidRouteHandoff(value: String): String =
+      if (value.startsWith(TAURI_ANDROID_PAIRING_HANDOFF_PREFIX)) {
+        "township-pairing:v1:${value.removePrefix(TAURI_ANDROID_PAIRING_HANDOFF_PREFIX)}"
+      } else {
+        value
+      }
 
   private fun routeShape(uri: Uri?): String {
     if (uri == null) return "none"
@@ -56,6 +136,9 @@ object TownshipIntentStore {
   private fun probeToken(value: String?): String =
       value?.trim()?.replace(Regex("[^A-Za-z0-9_.:-]+"), "_")?.trim('_')?.ifEmpty { "empty" }
           ?: "none"
+
+  private fun present(value: String?): String? =
+      value?.trim()?.takeIf { it.isNotEmpty() }
 }
 
 @TauriPlugin
@@ -76,7 +159,12 @@ class TownshipIntentPlugin(private val activity: Activity) : Plugin(activity) {
   @Command
   fun getCurrent(invoke: Invoke) {
     val ret = JSObject()
-    ret.put("url", currentUrl)
+    val handoff = TownshipIntentStore.consumePairingHandoff()
+    ret.put(
+        "handoffB64",
+        handoff?.let {
+          Base64.encodeToString(it.toByteArray(Charsets.UTF_8), Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
+        })
     invoke.resolve(ret)
   }
 

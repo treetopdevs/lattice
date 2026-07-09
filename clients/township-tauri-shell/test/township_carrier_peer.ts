@@ -25,6 +25,7 @@ import {
   townshipCarrierPeerFingerprint,
   townshipCarrierPeerFromEnv,
 } from "../src/township_carrier_peer";
+import { parseTownshipPairingDeepLink } from "../src/township_pairing_deeplink";
 import type { TownshipNativeWorkflow } from "../src/native_workflow";
 import { TOWNSHIP_REPLICA } from "../src/township_actions";
 import { assertTownshipKvStoresNoSecrets } from "../src/storage_contract";
@@ -253,6 +254,84 @@ const invalidSave = await saveTownshipCarrierPeerConfig(invalidSaveStorage, {
 assert.equal(invalidSave.ok, false);
 assert.equal(await invalidSaveStorage.getItem(TOWNSHIP_CARRIER_PAIRING_KEY), null);
 
+const importedFirstStorage = memoryStorage();
+const importedFirstDraft = {
+  url: "wss://imported.example/carrier",
+  localRealm: vector.client.realm,
+  expectedPeerRealm: vector.peer.realm,
+  expectedPeerPubkey: vector.peer.sessionPubkey,
+  keyId: "imported-session",
+};
+const importedFirstBlocked = await saveTownshipCarrierPeerConfig(importedFirstStorage, importedFirstDraft, {
+  origin: "deep_link",
+});
+assert.equal(importedFirstBlocked.ok, false);
+if (importedFirstBlocked.ok) throw new Error("unconfirmed imported first pairing unexpectedly saved");
+assert.deepEqual(importedFirstBlocked.errors, ["confirmation_required"]);
+assert.match(importedFirstBlocked.message, /confirm/i);
+assert.equal(await importedFirstStorage.getItem(TOWNSHIP_CARRIER_PAIRING_KEY), null);
+
+const importedFirstSaved = await saveTownshipCarrierPeerConfig(importedFirstStorage, importedFirstDraft, {
+  origin: "deep_link",
+  confirmed: true,
+});
+assert.equal(importedFirstSaved.ok, true);
+if (!importedFirstSaved.ok) throw new Error(importedFirstSaved.message);
+assert.deepEqual(await loadTownshipCarrierPeerConfig(importedFirstStorage, {}), importedFirstSaved.config);
+
+const replaceStorage = memoryStorage();
+const originalPairing = {
+  url: "wss://paired.example/carrier",
+  localRealm: vector.client.realm,
+  expectedPeerRealm: vector.peer.realm,
+  expectedPeerPubkey: vector.peer.sessionPubkey,
+  keyId: "paired-session",
+};
+const originalPairingSaved = await saveTownshipCarrierPeerConfig(replaceStorage, originalPairing);
+assert.equal(originalPairingSaved.ok, true);
+if (!originalPairingSaved.ok) throw new Error(originalPairingSaved.message);
+const originalPairingRaw = (await replaceStorage.getItem(TOWNSHIP_CARRIER_PAIRING_KEY)) ?? "";
+const sameImported = await saveTownshipCarrierPeerConfig(replaceStorage, originalPairing, { origin: "qr_camera" });
+assert.equal(sameImported.ok, true);
+assert.equal(await replaceStorage.getItem(TOWNSHIP_CARRIER_PAIRING_KEY), originalPairingRaw);
+
+const replacementPairing = {
+  ...originalPairing,
+  expectedPeerPubkey: wrongIdentity.publicKeyBase64,
+};
+const importedReplaceBlocked = await saveTownshipCarrierPeerConfig(replaceStorage, replacementPairing, {
+  origin: "handoff",
+});
+assert.equal(importedReplaceBlocked.ok, false);
+if (importedReplaceBlocked.ok) throw new Error("unconfirmed imported replacement unexpectedly saved");
+assert.deepEqual(importedReplaceBlocked.errors, ["confirmation_required"]);
+assert.equal(await replaceStorage.getItem(TOWNSHIP_CARRIER_PAIRING_KEY), originalPairingRaw);
+
+const manualReplaceBlocked = await saveTownshipCarrierPeerConfig(replaceStorage, replacementPairing);
+assert.equal(manualReplaceBlocked.ok, false);
+if (manualReplaceBlocked.ok) throw new Error("unconfirmed manual replacement unexpectedly saved");
+assert.deepEqual(manualReplaceBlocked.errors, ["confirmation_required"]);
+assert.equal(await replaceStorage.getItem(TOWNSHIP_CARRIER_PAIRING_KEY), originalPairingRaw);
+
+const invalidConfirmedReplace = await saveTownshipCarrierPeerConfig(
+  replaceStorage,
+  {
+    ...replacementPairing,
+    url: "https://paired.example/carrier",
+  },
+  { origin: "handoff", confirmed: true },
+);
+assert.equal(invalidConfirmedReplace.ok, false);
+assert.equal(await replaceStorage.getItem(TOWNSHIP_CARRIER_PAIRING_KEY), originalPairingRaw);
+
+const importedReplaceSaved = await saveTownshipCarrierPeerConfig(replaceStorage, replacementPairing, {
+  origin: "handoff",
+  confirmed: true,
+});
+assert.equal(importedReplaceSaved.ok, true);
+if (!importedReplaceSaved.ok) throw new Error(importedReplaceSaved.message);
+assert.deepEqual(await loadTownshipCarrierPeerConfig(replaceStorage, {}), importedReplaceSaved.config);
+
 const handoffConfig: TownshipCarrierPeerConfig = {
   url: " wss://handoff.township.example/carrier ",
   localRealm: "sender-local-realm",
@@ -301,6 +380,24 @@ assert.deepEqual(importedInjectedHandoff.draft, {
 });
 assert.equal("localRealm" in importedInjectedHandoff.draft, false);
 assert.equal("keyId" in importedInjectedHandoff.draft, false);
+
+const confirmParamLink = parseTownshipPairingDeepLink(`township://pairing?handoff=${encodeURIComponent(handoff)}&confirm=1`);
+assert.equal(confirmParamLink.ok, true);
+if (!confirmParamLink.ok) throw new Error(confirmParamLink.message);
+const confirmParamStorage = memoryStorage();
+const confirmParamBlocked = await saveTownshipCarrierPeerConfig(
+  confirmParamStorage,
+  {
+    ...confirmParamLink.draft,
+    localRealm: vector.client.realm,
+    keyId: "confirm-param-session",
+  },
+  { origin: "deep_link" },
+);
+assert.equal(confirmParamBlocked.ok, false);
+if (confirmParamBlocked.ok) throw new Error("deep-link confirm query unexpectedly bypassed save confirmation");
+assert.deepEqual(confirmParamBlocked.errors, ["confirmation_required"]);
+assert.equal(await confirmParamStorage.getItem(TOWNSHIP_CARRIER_PAIRING_KEY), null);
 
 assert.deepEqual(importTownshipCarrierPairingHandoff("not-a-handoff"), {
   ok: false,

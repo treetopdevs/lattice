@@ -28,9 +28,23 @@ export interface TownshipPairingDeepLinkListener {
   stop(): void;
 }
 
+export interface TownshipPairingDeepLinkGate {
+  arm(): void;
+  disarm(): void;
+  armed(): boolean;
+  consume(parse: TownshipPairingDeepLinkParse): boolean;
+}
+
+export interface TownshipPairingDeepLinkBlocked {
+  reason: "not_armed";
+  parse: TownshipPairingDeepLinkParse;
+}
+
 export interface TownshipPairingDeepLinkListenerOptions {
   source: TownshipPairingDeepLinkSource;
+  gate?: TownshipPairingDeepLinkGate | undefined;
   apply(parse: TownshipPairingDeepLinkParse): void;
+  onBlocked?(blocked: TownshipPairingDeepLinkBlocked): void;
 }
 
 const TAURI_ANDROID_PAIRING_HANDOFF_PREFIX = "township-pairing_3Av1_3A";
@@ -56,7 +70,14 @@ export async function createTownshipPairingDeepLinkListener(
   options: TownshipPairingDeepLinkListenerOptions,
 ): Promise<TownshipPairingDeepLinkListener> {
   const applyUrls = (urls: readonly string[]) => {
-    for (const url of urls) options.apply(parseTownshipPairingDeepLink(url));
+    for (const url of urls) {
+      const parse = parseTownshipPairingDeepLink(url);
+      if (options.gate && !options.gate.consume(parse)) {
+        options.onBlocked?.({ reason: "not_armed", parse });
+        continue;
+      }
+      options.apply(parse);
+    }
   };
 
   const stop = await options.source.onOpenUrl(applyUrls);
@@ -65,12 +86,37 @@ export async function createTownshipPairingDeepLinkListener(
 
   return {
     stop() {
+      options.gate?.disarm();
       stop?.();
     },
   };
 }
 
+export function createOneShotTownshipPairingDeepLinkGate(): TownshipPairingDeepLinkGate {
+  let isArmed = false;
+
+  return {
+    arm() {
+      isArmed = true;
+    },
+    disarm() {
+      isArmed = false;
+    },
+    armed() {
+      return isArmed;
+    },
+    consume(parse: TownshipPairingDeepLinkParse) {
+      if (!isArmed) return false;
+      if (parse.ok) isArmed = false;
+      return true;
+    },
+  };
+}
+
 function pairingHandoffFromLink(value: string): string | null {
+  const townshipHandoff = pairingHandoffFromTownshipScheme(value);
+  if (townshipHandoff !== null) return townshipHandoff;
+
   let url: URL;
   try {
     url = new URL(value);
@@ -79,9 +125,10 @@ function pairingHandoffFromLink(value: string): string | null {
   }
 
   if (url.protocol !== "township:") return null;
+  if (url.port !== "") return null;
   if (
     url.hostname !== "pairing" &&
-    !androidPairingPath(url.pathname) &&
+    !(url.hostname === "" && androidPairingPath(url.pathname)) &&
     !tauriAndroidNoHostPairingRoute(url)
   ) {
     return null;
@@ -94,6 +141,59 @@ function pairingHandoffFromLink(value: string): string | null {
   return pathHandoff;
 }
 
+function pairingHandoffFromTownshipScheme(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("township:")) return null;
+
+  const withoutScheme = trimmed.slice("township:".length).replace(/^\/+/, "");
+  const queryStart = withoutScheme.indexOf("?");
+  const fragmentStart = withoutScheme.indexOf("#");
+  const routeEndCandidates = [queryStart, fragmentStart].filter((index) => index >= 0);
+  const routeEnd = routeEndCandidates.length > 0 ? Math.min(...routeEndCandidates) : withoutScheme.length;
+  const route = decodePathSegment(withoutScheme.slice(0, routeEnd));
+  const query =
+    queryStart >= 0
+      ? withoutScheme.slice(queryStart + 1, fragmentStart > queryStart ? fragmentStart : undefined)
+      : "";
+
+  if (!townshipPairingRoute(route)) return null;
+
+  const queryHandoff = present(new URLSearchParams(query).get("handoff"));
+  if (queryHandoff) return queryHandoff;
+
+  return present(townshipPairingRouteHandoff(route));
+}
+
+function townshipPairingRoute(route: string): boolean {
+  return (
+    route === "pairing" ||
+    route.startsWith("pairing/") ||
+    route === "nohost/_pairing" ||
+    route.startsWith("nohost/_pairing/") ||
+    route.startsWith("nohost/_pairing_") ||
+    route === "nohost:_pairing" ||
+    route.startsWith("nohost:_pairing/") ||
+    route.startsWith("nohost:_pairing_")
+  );
+}
+
+function townshipPairingRouteHandoff(route: string): string | null {
+  if (route.startsWith("pairing/")) return normalizeTauriAndroidRouteHandoff(route.slice("pairing/".length));
+  if (route.startsWith("nohost/_pairing/")) {
+    return normalizeTauriAndroidRouteHandoff(route.slice("nohost/_pairing/".length));
+  }
+  if (route.startsWith("nohost/_pairing_")) {
+    return normalizeTauriAndroidRouteHandoff(route.slice("nohost/_pairing_".length));
+  }
+  if (route.startsWith("nohost:_pairing/")) {
+    return normalizeTauriAndroidRouteHandoff(route.slice("nohost:_pairing/".length));
+  }
+  if (route.startsWith("nohost:_pairing_")) {
+    return normalizeTauriAndroidRouteHandoff(route.slice("nohost:_pairing_".length));
+  }
+  return null;
+}
+
 function androidPairingPath(pathname: string): boolean {
   const path = pathWithoutLeadingSlash(pathname);
   return path === "pairing" || path.startsWith("pairing/");
@@ -104,6 +204,7 @@ function tauriAndroidNoHostPairingRoute(url: URL): boolean {
   if (url.hostname === "nohost") {
     return path === "_pairing" || path.startsWith("_pairing/") || path.startsWith("_pairing_");
   }
+  if (url.hostname !== "") return false;
   return path === "nohost:_pairing" || path.startsWith("nohost:_pairing/") || path.startsWith("nohost:_pairing_");
 }
 
@@ -114,15 +215,20 @@ function pairingPathHandoff(url: URL): string {
     if (url.hostname === "nohost") return normalizeTauriAndroidRouteHandoff(path.replace(/^_pairing(?:\/|_)?/, ""));
     return normalizeTauriAndroidRouteHandoff(path.replace(/^nohost:_pairing(?:\/|_)?/, ""));
   }
+  if (url.hostname !== "") return "";
   return normalizeTauriAndroidRouteHandoff(path.replace(/^pairing\/?/, ""));
 }
 
 function pathWithoutLeadingSlash(pathname: string): string {
   const withoutSlash = pathname.startsWith("/") ? pathname.slice(1) : pathname;
+  return decodePathSegment(withoutSlash);
+}
+
+function decodePathSegment(value: string): string {
   try {
-    return decodeURIComponent(withoutSlash);
+    return decodeURIComponent(value);
   } catch {
-    return withoutSlash;
+    return value;
   }
 }
 

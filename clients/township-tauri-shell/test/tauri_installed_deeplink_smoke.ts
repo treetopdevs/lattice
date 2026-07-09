@@ -66,11 +66,30 @@ try {
     ],
     shellRoot,
   );
-  await waitForTraceLine("deep-link-listener-mounted", 60_000);
+  try {
+    await waitForTraceLine("deep-link-listener-mounted", 60_000);
+  } catch (error) {
+    throw new Error(
+      [
+        error instanceof Error ? error.message : String(error),
+        `app exit code: ${String(app.child.exitCode)}`,
+        `app output:\n${app.lines.join("")}`,
+      ].join("\n\n"),
+    );
+  }
 
   await run("open", ["-b", appIdentifier, "-u", deepLinkUrl], shellRoot);
   await waitForTracePrefix("deep-link:township://pairing", 30_000);
+  await waitForTraceLine("pairing-link-blocked:not-armed", 30_000);
+  assert.doesNotMatch(readTrace(), new RegExp(`pairing-link-loaded:${peerFingerprint}`));
+
+  await clickTownshipButton("Enable link import");
+  await waitForTraceLine("pairing-link-import-armed", 30_000);
+  await run("open", ["-b", appIdentifier, "-u", deepLinkUrl], shellRoot);
   await waitForTraceLine(`pairing-link-loaded:${peerFingerprint}`, 30_000);
+
+  await run("open", ["-b", appIdentifier, "-u", deepLinkUrl], shellRoot);
+  await waitForTraceCount("pairing-link-blocked:not-armed", 2, 30_000);
   assert.doesNotMatch(readTrace(), /Pairing config saved|Sync outbox|connected to carrier/i);
 } finally {
   await quitTownshipApp();
@@ -128,6 +147,22 @@ async function quitTownshipApp(): Promise<void> {
   await waitForExit(proc.child);
 }
 
+async function clickTownshipButton(text: string): Promise<void> {
+  const script = `
+tell application id "${appIdentifier}" to activate
+tell application "System Events"
+  tell process "Township"
+    repeat until exists window 1
+      delay 0.1
+    end repeat
+    set frontmost to true
+    click (first button of window 1 whose name is "${text}")
+  end tell
+end tell
+`;
+  await run("osascript", ["-e", script], shellRoot);
+}
+
 async function stopProcess(child: ChildProcessWithoutNullStreams): Promise<void> {
   if (child.killed || child.exitCode !== null) return;
   child.kill("SIGINT");
@@ -139,6 +174,7 @@ async function stopProcess(child: ChildProcessWithoutNullStreams): Promise<void>
 }
 
 function waitForExit(child: ChildProcessWithoutNullStreams): Promise<number | null> {
+  if (child.exitCode !== null) return Promise.resolve(child.exitCode);
   return new Promise((resolveExit) => child.on("exit", (code) => resolveExit(code)));
 }
 
@@ -148,6 +184,10 @@ async function waitForTraceLine(line: string, timeoutMs: number): Promise<void> 
 
 async function waitForTracePrefix(prefix: string, timeoutMs: number): Promise<void> {
   await waitForTrace((trace) => trace.split(/\r?\n/).some((line) => line.startsWith(prefix)), prefix, timeoutMs);
+}
+
+async function waitForTraceCount(line: string, count: number, timeoutMs: number): Promise<void> {
+  await waitForTrace((trace) => trace.split(/\r?\n/).filter((entry) => entry === line).length >= count, line, timeoutMs);
 }
 
 async function waitForTrace(

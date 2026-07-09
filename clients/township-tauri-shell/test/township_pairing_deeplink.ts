@@ -9,6 +9,7 @@ import {
   type TownshipCarrierPeerConfig,
 } from "../src/township_carrier_peer";
 import {
+  createOneShotTownshipPairingDeepLinkGate,
   createTownshipPairingDeepLinkListener,
   parseTownshipPairingDeepLink,
   type TownshipPairingDeepLinkParse,
@@ -45,6 +46,8 @@ assertDeepLinkOk(`township://pairing?handoff=${handoff}`, handoff);
 assertDeepLinkOk(`township://pairing?handoff=${encodeURIComponent(handoff)}`, handoff);
 assertDeepLinkOk(`township://pairing/${handoff}`, handoff);
 assertDeepLinkOk(`township:/pairing?handoff=${encodeURIComponent(handoff)}`, handoff);
+assertDeepLinkOk(`township:////pairing?handoff=${encodeURIComponent(handoff)}`, handoff);
+assertDeepLinkOk(`township:////pairing/${encodeURIComponent(handoff)}`, handoff);
 assertDeepLinkOk(`township:nohost:_pairing?handoff=${encodeURIComponent(handoff)}`, handoff);
 assertDeepLinkOk(`township:nohost:_pairing/${encodeURIComponent(handoff)}`, handoff);
 assertDeepLinkOk(`township://nohost/_pairing?handoff=${encodeURIComponent(handoff)}`, handoff);
@@ -75,6 +78,14 @@ assert.doesNotThrow(() => assertTownshipKvStoresNoSecrets([["carrier_peer_config
 assertDeepLinkError("not a url", "invalid_pairing_deeplink");
 assertDeepLinkError("https://pairing.example/?handoff=x", "invalid_pairing_deeplink");
 assertDeepLinkError("township://sync?handoff=x", "invalid_pairing_deeplink");
+assertDeepLinkError(`township://evil.example/pairing?handoff=${encodeURIComponent(handoff)}`, "invalid_pairing_deeplink");
+assertDeepLinkError(`township:////evil.example/pairing?handoff=${encodeURIComponent(handoff)}`, "invalid_pairing_deeplink");
+assertDeepLinkError(
+  `township://evil.example/nohost:_pairing?handoff=${encodeURIComponent(handoff)}`,
+  "invalid_pairing_deeplink",
+);
+assertDeepLinkError(`township://pairing.example?handoff=${encodeURIComponent(handoff)}`, "invalid_pairing_deeplink");
+assertDeepLinkError(`township://pairing:8080?handoff=${encodeURIComponent(handoff)}`, "invalid_pairing_deeplink");
 assertDeepLinkError("township://pairing", "invalid_pairing_deeplink");
 assertDeepLinkError("township:nohost:_pairing", "invalid_pairing_deeplink");
 assertDeepLinkError("township://nohost/_pairing", "invalid_pairing_deeplink");
@@ -120,6 +131,58 @@ assert.deepEqual(applied[2], {
 });
 listener.stop();
 assert.equal(stopCount, 1);
+
+const gate = createOneShotTownshipPairingDeepLinkGate();
+const gatedApplied: TownshipPairingDeepLinkParse[] = [];
+const gatedBlocked: TownshipPairingDeepLinkParse[] = [];
+let gatedOnOpenUrl: ((urls: readonly string[]) => void) | null = null;
+const gatedListener = await createTownshipPairingDeepLinkListener({
+  source: {
+    async current(): Promise<readonly string[] | null> {
+      return [`township://pairing?handoff=${handoff}`];
+    },
+    async onOpenUrl(callback: (urls: readonly string[]) => void): Promise<void> {
+      gatedOnOpenUrl = callback;
+    },
+  },
+  gate,
+  apply(parse) {
+    gatedApplied.push(parse);
+  },
+  onBlocked(blocked) {
+    gatedBlocked.push(blocked.parse);
+  },
+});
+assert.equal(gatedApplied.length, 0);
+assert.equal(gatedBlocked.length, 1);
+assert.equal(gate.armed(), false);
+assert.ok(gatedOnOpenUrl, "gated listener should subscribe to future URL events");
+
+gate.arm();
+gatedOnOpenUrl([`township://pairing/${handoff}`]);
+assert.equal(gatedApplied.length, 1);
+assert.equal(gatedApplied[0]?.ok, true);
+assert.equal(gate.armed(), false);
+
+gatedOnOpenUrl([`township://pairing/${handoff}`]);
+assert.equal(gatedApplied.length, 1);
+assert.equal(gatedBlocked.length, 2);
+
+gate.arm();
+gatedOnOpenUrl(["garbage"]);
+assert.equal(gatedApplied.length, 2);
+assert.equal(gatedApplied[1]?.ok, false);
+assert.equal(gate.armed(), true);
+
+gatedOnOpenUrl([`township://pairing/${handoff}`]);
+assert.equal(gatedApplied.length, 3);
+assert.equal(gatedApplied[2]?.ok, true);
+assert.equal(gate.armed(), false);
+
+gate.arm();
+assert.equal(gate.armed(), true);
+gatedListener.stop();
+assert.equal(gate.armed(), false);
 
 console.log("\x1b[32m✓ Township pairing deep-link ingress checks passed\x1b[0m");
 

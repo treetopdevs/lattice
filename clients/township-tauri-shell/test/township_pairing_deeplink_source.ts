@@ -58,9 +58,46 @@ const missingCurrent = createTauriPairingDeepLinkSource({
 assert.equal(await missingCurrent.current(), null);
 assert.equal(await missingCurrent.onOpenUrl(() => {}), undefined);
 
-const rawIntentUrl = "township://pairing?handoff=township-pairing:v1:not-json";
+const hangingCurrent = createTauriPairingDeepLinkSource({
+  currentTimeoutMs: 1,
+  async importPlugin() {
+    return {
+      async getCurrent(): Promise<readonly string[] | null> {
+        return new Promise(() => {});
+      },
+      async onOpenUrl(): Promise<void> {},
+    };
+  },
+  async invoke() {
+    throw new Error("unsupported platform");
+  },
+});
+assert.equal(
+  await Promise.race([hangingCurrent.current().then(() => "returned"), delay(50).then(() => "timed_out")]),
+  "returned",
+);
+assert.equal(await hangingCurrent.current(), null);
+
+const hangingSubscription = createTauriPairingDeepLinkSource({
+  subscribeTimeoutMs: 1,
+  async importPlugin() {
+    return {
+      async getCurrent(): Promise<null> {
+        return null;
+      },
+      async onOpenUrl(): Promise<void> {
+        return new Promise(() => {});
+      },
+    };
+  },
+});
+await assert.rejects(() => hangingSubscription.onOpenUrl(() => {}), /deep-link subscription timed out/);
+
+const rawIntentHandoff = "township-pairing:v1:not-json";
+const rawIntentUrl = `township://pairing?handoff=${encodeURIComponent(rawIntentHandoff)}`;
 const routeOnlyUrl = "township://nohost/_pairing";
 const invokedCommands: string[] = [];
+const rawIntentLogEvents: string[] = [];
 const rawIntentSource = createTauriPairingDeepLinkSource({
   async importPlugin() {
     return {
@@ -72,9 +109,13 @@ const rawIntentSource = createTauriPairingDeepLinkSource({
       },
     };
   },
-  async invoke(command) {
+  async invoke(command, args) {
     invokedCommands.push(command);
-    return rawIntentUrl;
+    if (command === "lattice_log_probe") {
+      rawIntentLogEvents.push(String((args as { event?: unknown }).event));
+      return null;
+    }
+    return base64Url(rawIntentHandoff);
   },
 });
 assert.deepEqual(await rawIntentSource.current(), [rawIntentUrl, routeOnlyUrl]);
@@ -82,7 +123,42 @@ const rawSeen: readonly string[][] = [];
 await rawIntentSource.onOpenUrl((urls) => rawSeen.push([...urls]));
 await nextTick();
 assert.deepEqual(rawSeen, [[rawIntentUrl, routeOnlyUrl]]);
-assert.deepEqual(invokedCommands, ["lattice_android_current_intent_url", "lattice_android_current_intent_url"]);
+assert.deepEqual(invokedCommands, [
+  "lattice_android_current_pairing_handoff_b64",
+  "lattice_log_probe",
+  "lattice_android_current_pairing_handoff_b64",
+  "lattice_log_probe",
+]);
+assert.equal(rawIntentLogEvents.length, 2);
+for (const event of rawIntentLogEvents) {
+  assert.equal(event, "township-android-intent-source outcome=found");
+  assert.doesNotMatch(event, /township-pairing:v1|not-json/);
+}
+
+const pluginOnlyCommands: string[] = [];
+const pluginOnlySource = createTauriPairingDeepLinkSource({
+  includeAndroidPairingIntent: false,
+  async importPlugin() {
+    return {
+      async getCurrent(): Promise<readonly string[]> {
+        return [routeOnlyUrl];
+      },
+      async onOpenUrl(callback: (urls: readonly string[]) => void): Promise<void> {
+        callback([routeOnlyUrl]);
+      },
+    };
+  },
+  async invoke(command) {
+    pluginOnlyCommands.push(command);
+    return null;
+  },
+});
+assert.deepEqual(await pluginOnlySource.current(), [routeOnlyUrl]);
+const pluginOnlySeen: readonly string[][] = [];
+await pluginOnlySource.onOpenUrl((urls) => pluginOnlySeen.push([...urls]));
+await nextTick();
+assert.deepEqual(pluginOnlySeen, [[routeOnlyUrl]]);
+assert.deepEqual(pluginOnlyCommands, []);
 
 const failedRawIntentSource = createTauriPairingDeepLinkSource({
   async importPlugin() {
@@ -130,4 +206,12 @@ console.log("\x1b[32m✓ Township Tauri deep-link source checks passed\x1b[0m");
 
 function nextTick(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function base64Url(value: string): string {
+  return Buffer.from(value, "utf8").toString("base64url");
 }

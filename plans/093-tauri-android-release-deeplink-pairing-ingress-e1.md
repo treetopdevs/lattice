@@ -2,7 +2,7 @@
 
 ## Status
 
-IN PROGRESS
+DONE
 
 ## Objective
 
@@ -58,6 +58,10 @@ behavior, or production remote TLS.
 - No app-originated grant issuance, QR camera proof, LAN discovery, iOS, Expo,
   physical-device, or production TLS proof.
 - No claim that this is the final user-facing onboarding ceremony.
+- No claim that a public Android `VIEW`/`BROWSABLE` intent is an authorization
+  ceremony. This env-gated probe proves ingress and persistence only; production
+  pairing still needs a user confirmation, nonce/state binding or equivalent
+  anti-hijack ceremony, and explicit overwrite policy.
 
 ## STOP Conditions
 
@@ -85,6 +89,19 @@ behavior, or production remote TLS.
 - RED: `mobile:tauri-readiness` required this Plan 093 file, package scripts,
   app startup wiring, Android OS-intent smoke assertions, and no-overclaim docs
   before the plan/docs were present.
+- RED: `deeplink:source:contract` required the Android native bridge to expose a
+  base64 public handoff rather than a Tauri-normalized custom-scheme URL.
+- RED: `deeplink:contract` required hostless custom-scheme parsing
+  (`township:////pairing?...`) after Android WebView parsed `township://pairing`
+  differently from Node's URL implementation.
+- RED: Claude's follow-up review flagged the native Android extractor as the
+  real boundary once it returns only a handoff. Android instrumentation now
+  covers one-shot handoff consumption, foreign-host/nohost/userinfo/port/
+  uppercase/opaque rejection, non-`VIEW`/non-`BROWSABLE` rejection, and oversized
+  URI rejection in `TownshipIntentStore`.
+- GREEN: `tauri:android:release:pairing:smoke` proves the rebuilt release APK
+  accepts the adb-delivered Android `VIEW`/`BROWSABLE` intent, saves the pairing, reloads paired after
+  force-stop/relaunch, and syncs from the persisted peer config.
 
 ## Second Opinion
 
@@ -99,8 +116,38 @@ the host, and no authority-origination claim.
 
 ## Observation
 
-Pending final release APK smoke. The contract-level proof is implemented; the
-release smoke and docs must still pass before this plan is marked DONE.
+Final release smoke passed against
+`clients/township-tauri-shell/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk`
+on Android API 34. Evidence:
+
+- initial launch logged `phase=reload outcome=loaded paired=false`;
+- adb-delivered Android `VIEW`/`BROWSABLE` delivery logged
+  `phase=pairing outcome=saved` with `host_class=loopback url_port=43193`;
+- after force-stop/relaunch, the app logged `phase=reload outcome=loaded
+  paired=true` with the same peer fingerprint and no host KV inspection;
+- the persisted peer config then synced with `phase=sync outcome=synced`,
+  nonempty pulled/local/delegation ids, and
+  `outbox_frame_count=0 pushed_frame_count=0 accepted_count=0`.
+
+Implementation note: Android stores the raw intent before Tauri's deep-link
+plugin normalizes it, extracts only the public pairing handoff natively, returns
+that handoff as base64 through `lattice_android_current_pairing_handoff_b64`,
+and reconstructs a normal pairing URL in TypeScript. The native extractor
+requires `VIEW` plus `BROWSABLE`, rejects oversized, foreign-host, and
+port-bearing custom-scheme intents, and consumes a valid stored handoff once.
+The shared parser now also handles hostless custom-scheme shapes so Android
+WebView URL parsing quirks do not block the release proof.
+
+Security boundary note: the proof intentionally accepts one public pairing
+handoff in a dedicated probe namespace to exercise release ingress and storage.
+It does not authorize arbitrary future pairing writes, prove user intent, or
+define production behavior for a second pairing intent after a device is already
+paired. It also does not prove Chrome/browser navigation or chooser behavior;
+the smoke drives the Android `VIEW`/`BROWSABLE` intent through adb. A malicious
+local app can still send a syntactically valid public handoff intent, so the
+future production ceremony needs confirmation and nonce/state binding even
+though this probe's handoff excludes local identity, key ids, seeds, and private
+signing material.
 
 ## Verification
 
@@ -114,6 +161,9 @@ release smoke and docs must still pass before this plan is marked DONE.
 
 - Add a later release onboarding proof that includes QR camera or complete
   product ceremony.
+- Add a later production pairing ceremony with user confirmation, state/nonce
+  binding or equivalent anti-hijack protection, and an explicit already-paired
+  overwrite/reject policy.
 - Add later app-originated grant/revoke release proofs if the product needs
   authority issuance from mobile.
 - Keep iOS, Expo, physical-device LAN discovery, and production TLS transport

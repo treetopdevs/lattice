@@ -182,6 +182,48 @@ const persisted = await workflow.storage.getItem("carrier_peer_config");
 assert.ok(persisted, "pairing probe should persist the deep-link peer config");
 assert.match(persisted, /ws:\/\/127\.0\.0\.1:43193\/carrier/);
 
+const delayedWorkflow = fakeWorkflow("ZGV2aWNlLXB1YmtleS0y");
+const delayedEmitted: string[] = [];
+let delayedCurrentCalls = 0;
+const delayedResult = await logTownshipReleasePairingProbeFromEnv(
+  {
+    VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_LOCAL_REALM: "resident",
+    VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_KEY_ID: "township-release-pairing-resident",
+    VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_STORAGE_NAMESPACE: "township:release-pairing-probe",
+  },
+  {
+    workflow: delayedWorkflow,
+    retryDelayMs: 1,
+    timeoutMs: 50,
+    source: {
+      async current() {
+        delayedCurrentCalls++;
+        return delayedCurrentCalls >= 2 ? [pairingLink] : ["township://nohost/_pairing"];
+      },
+      async onOpenUrl(callback) {
+        callback(["township://nohost/_pairing"]);
+        return () => {};
+      },
+    },
+    async sync({ workflow: syncWorkflow }) {
+      await syncWorkflow.localLog.save([{ id: "base" } as Op, { id: "grant" } as Op]);
+      await syncWorkflow.delegationFrames.save([frame("base"), frame("grant")]);
+      await syncWorkflow.carrierFrames.save([]);
+      return syncResult({ pulledFrameCount: 2, pulledOpCount: 2 });
+    },
+    async invoke(command, args) {
+      if (command === "lattice_log_probe") delayedEmitted.push(String((args as { event?: unknown }).event));
+      return null;
+    },
+  },
+);
+assert.equal(delayedResult?.outcome, "synced");
+assert.ok(delayedCurrentCalls >= 2, "pairing probe should poll current URLs after route-only callbacks");
+assert.ok(
+  delayedEmitted.some((line) => /phase=deeplink/.test(line) && /outcome=current/.test(line) && /pairing_url_count=1/.test(line)),
+  "pairing probe should log the later current poll that contains the raw pairing URL",
+);
+
 console.log("\x1b[32m✓ release pairing probe contract checks passed\x1b[0m");
 
 function fakeWorkflow(publicKeyBase64: string): TownshipNativeWorkflow {

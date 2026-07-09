@@ -98,6 +98,8 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   const plan091 = readText("plans/091-tauri-android-release-pull-reload-e1.md");
   const plan092 = readText("plans/092-tauri-android-release-author-push-e1.md");
   const plan093 = readText("plans/093-tauri-android-release-deeplink-pairing-ingress-e1.md");
+  const plan094 = readText("plans/094-tauri-imported-pairing-confirmation-policy-e1.md");
+  const plan095 = readText("plans/095-tauri-armed-deeplink-pairing-import-e1.md");
   const releaseTransportAdr = readText("docs/adr/0010-android-release-carrier-transport-policy.md");
 
   assert.equal(pkg.scripts["tauri:ios:init"], "tauri ios init --ci --skip-targets-install");
@@ -250,6 +252,9 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   const androidIntentPlugin = readText(
     "clients/township-tauri-shell/src-tauri/gen/android/app/src/main/java/dev/treetop/lattice/township/intent/TownshipIntentPlugin.kt",
   );
+  const androidIntentStoreInstrumentedTest = readText(
+    "clients/township-tauri-shell/src-tauri/gen/android/app/src/androidTest/java/dev/treetop/lattice/township/intent/TownshipIntentStoreTest.kt",
+  );
   const androidKeyringShim = readText(
     "clients/township-tauri-shell/src-tauri/gen/android/app/src/main/java/io/crates/keyring/Keyring.kt",
   );
@@ -261,6 +266,8 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.doesNotMatch(iosPbxproj, /IPHONEOS_DEPLOYMENT_TARGET = 14\.0;/);
   assert.match(androidGradle, /namespace = "dev\.treetop\.lattice\.township"/);
   assert.match(androidGradle, /applicationId = "dev\.treetop\.lattice\.township"/);
+  assert.match(androidGradle, /testInstrumentationRunner = "androidx\.test\.runner\.AndroidJUnitRunner"/);
+  assert.match(androidGradle, /androidTestImplementation\("androidx\.test:runner:1\.5\.2"\)/);
   assert.match(androidGradle, /rootDirRel = "\.\.\/\.\.\/\.\.\/"/);
   assert.match(androidGradle, /providers\.environmentVariable\("TOWNSHIP_ANDROID_RELEASE_CLEAR_TEXT_DIAGNOSTIC"\)/);
   assert.doesNotMatch(androidGradle, /System\.getenv\("TOWNSHIP_ANDROID_RELEASE_CLEAR_TEXT_DIAGNOSTIC"\)/);
@@ -299,7 +306,7 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   );
   assert.match(
     androidMainActivity,
-    /override fun onNewIntent\(intent: Intent\) \{\s+TownshipIntentStore\.record\(intent, "activity_on_new_intent"\)[\s\S]+super\.onNewIntent\(intent\)/,
+    /override fun onNewIntent\(intent: Intent\) \{\s+TownshipIntentStore\.record\(intent, "activity_on_new_intent"\)[\s\S]+setIntent\(intent\)[\s\S]+super\.onNewIntent\(intent\)/,
   );
   assert.match(androidMainActivity, /System\.loadLibrary\("township_tauri_shell"\)/);
   assert.match(androidMainActivity, /Keyring\.initializeNdkContext\(applicationContext\)/);
@@ -307,13 +314,37 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(androidIntentPlugin, /LOG_PREFIX = "township-android-intent-store"/);
   assert.match(androidIntentPlugin, /fun record\(intent: Intent\?, source: String = "plugin"\)/);
   assert.match(androidIntentPlugin, /routeShape\(intent\?\.data\)/);
-  assert.match(androidIntentPlugin, /intent\?\.data\?\.scheme == "township"/);
-  assert.match(androidIntentPlugin, /intent\?\.data\?\.toString\(\)/);
+  assert.match(androidIntentPlugin, /intent\.data\?\.scheme == "township"/);
+  assert.match(androidIntentPlugin, /val rawUrl = intent\?\.data\?\.toString\(\)/);
+  assert.match(androidIntentPlugin, /hasBrowsableCategory\(intent\)/);
+  assert.match(androidIntentPlugin, /MAX_PAIRING_INTENT_URL_LENGTH/);
   assert.match(androidIntentPlugin, /fun peek\(\): String\?/);
   assert.match(androidIntentPlugin, /has_current=\$\{currentUrl != null\}/);
   assert.match(androidIntentPlugin, /private fun routeShape\(uri: Uri\?\): String/);
   assert.match(androidIntentPlugin, /pairing_payload/);
+  assert.match(androidIntentPlugin, /Base64\.encodeToString/);
+  assert.match(androidIntentPlugin, /ret\.put\(\s+"handoffB64"/);
+  assert.doesNotMatch(androidIntentPlugin, /"urlB64"|"intentB64"/);
+  assert.match(androidIntentPlugin, /val handoff = TownshipIntentStore\.consumePairingHandoff\(\)/);
+  assert.match(androidIntentPlugin, /val rawUrl = peek\(\)/);
+  assert.match(androidIntentPlugin, /fun consumePairingHandoff\(\): String\?/);
+  assert.match(androidIntentPlugin, /if \(handoff != null\) currentUrl = null/);
+  assert.match(androidIntentPlugin, /getQueryParameter\("handoff"\)/);
+  assert.match(androidIntentPlugin, /private fun isPairingRoute\(uri: Uri, path: String\)/);
+  assert.match(androidIntentPlugin, /if \(!isPairingRoute\(uri, path\)\) return null/);
+  assert.match(androidIntentPlugin, /uri\.port != -1 -> false/);
+  assert.match(androidIntentPlugin, /uri\.host\.isNullOrEmpty\(\)/);
   assert.match(androidIntentPlugin, /currentUrl = TownshipIntentStore\.peek\(\)/);
+  assert.match(androidIntentStoreInstrumentedTest, /consumesPairingHandoffOnce/);
+  assert.match(androidIntentStoreInstrumentedTest, /rejectsForeignHostsBeforeReturningHandoff/);
+  assert.match(androidIntentStoreInstrumentedTest, /township:\/\/pairing@evil\.example\/nohost/);
+  assert.match(androidIntentStoreInstrumentedTest, /township:\/\/pairing:80\/nohost/);
+  assert.match(androidIntentStoreInstrumentedTest, /township:\/\/PAIRING/);
+  assert.match(androidIntentStoreInstrumentedTest, /rejectsNonBrowsableOrNonViewIntents/);
+  assert.match(androidIntentStoreInstrumentedTest, /rejectsOversizedIntentUrls/);
+  assert.match(nativeLib, /struct CurrentPairingHandoffResponse[\s\S]+handoff_b64: Option<String>/);
+  assert.match(nativeLib, /fn lattice_android_current_pairing_handoff_b64/);
+  assert.doesNotMatch(nativeLib, /decode_url_b64/);
   assert.match(androidKeyringShim, /package io\.crates\.keyring/);
   assert.match(androidKeyringShim, /companion object\s*\{\s*external fun initializeNdkContext\(context: Context\)/);
   assert.match(cargoToml, /\[lib\]\nname = "township_tauri_shell"\npath = "src\/lib\.rs"\ncrate-type = \["staticlib", "cdylib", "rlib"\]/);
@@ -757,13 +788,23 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(strategy, /bad_authority_reason=operation_not_granted/);
   assert.match(strategy, /Plan 093 proves release APK OS deep-link pairing ingress/);
   assert.match(strategy, /dedicated\s+`township:release-pairing-probe` storage namespace/);
-  assert.match(strategy, /Android's `VIEW`\/`BROWSABLE` intent path/);
+  assert.match(strategy, /adb-delivered Android `VIEW`\/`BROWSABLE` intent/);
+  assert.match(strategy, /local-malicious-app threat/);
+  assert.match(strategy, /does not prove Chrome\/browser\s+navigation/);
   assert.match(strategy, /persisted deep-link endpoint rather than a build-time peer URL/);
-  assert.match(strategy, /Android Tauri release APK: bounded release pull\/reload, device-local authoring, push\/outbox drain, and OS deep-link peer-config persistence are met by plans 091-093/);
-  assert.match(strategy, /Android Tauri release APK: bounded carrier pull\/reload, OS deep-link peer-config persistence, device-local post authoring, persisted pending-outbox reload, push\/outbox drain, and peer-side authority enforcement are met by plans 091-093/);
+  assert.match(strategy, /Plan 094\s+adds the real\s+Tauri app confirmation policy/);
+  assert.match(strategy, /unchecked-by-default user\s+confirmation/);
+  assert.match(strategy, /`confirm=1` do not unlock saving/);
+  assert.match(strategy, /Plan 095 adds the app-controlled anti-hijack\s+gate/);
+  assert.match(strategy, /installed unarmed OS links are\s+traced as blocked/);
+  assert.match(strategy, /one valid armed pairing link consumes the\s+arm in the shared listener contract/);
+  assert.match(strategy, /Real-app armed delivery remains unproven beyond source\/contract\s+coverage/);
+  assert.match(strategy, /Android Tauri release APK: bounded release pull\/reload, device-local authoring, push\/outbox drain, OS deep-link peer-config persistence, real-app imported pairing confirmation policy, installed unarmed OS deep-link blocking, and source-level user-armed one-shot import gating are met by plans 091-095/);
+  assert.match(strategy, /Android Tauri release APK: bounded carrier pull\/reload, OS deep-link peer-config persistence, device-local post authoring, persisted pending-outbox reload, push\/outbox drain, peer-side authority enforcement, real-app imported pairing confirmation policy, installed unarmed OS deep-link blocking, and source-level user-armed one-shot import gating are met by plans 091-095/);
   assert.doesNotMatch(strategy, /full release Sync\/outbox\/KV convergence, and full mobile onboarding remain unproven in release/);
   assert.doesNotMatch(strategy, /Release mobile Sync\/outbox\/KV convergence, iOS Tauri, and Expo: still unproven/);
   assert.match(strategy, /does not prove QR camera onboarding, app-originated grants, authority origination, LAN\s+discovery, physical-device behavior, production remote TLS, or full mobile onboarding/);
+  assert.match(strategy, /cryptographic state\/nonce binding/);
   assert.doesNotMatch(strategy, /under release minification/);
   assert.match(strategy, /not a phone-grade persistence or BEAM\s+convergence proof/);
   assert.match(strategy, /The generated Tauri iOS and Android projects are build targets only/);
@@ -799,11 +840,18 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(buildMap, /release device-local post authoring \+ push\/outbox-drain proof/);
   assert.match(buildMap, /Plan 093 adds Android release APK OS deep-link pairing\s+ingress/);
   assert.match(buildMap, /release OS deep-link peer-config persistence proof/);
+  assert.match(buildMap, /Plan 094 adds the real Tauri app save policy/);
+  assert.match(buildMap, /requires explicit user confirmation before\s+imported first-save writes or replacement/);
+  assert.match(buildMap, /`confirm=1` as authorization/);
+  assert.match(buildMap, /Plan 095 adds the equivalent anti-hijack gate/);
+  assert.match(buildMap, /one valid armed pairing link consumes the arm in the shared\s+listener contract/);
+  assert.match(buildMap, /Real-app armed delivery remains unproven beyond source\/contract coverage/);
+  assert.match(buildMap, /plans 023-095/);
   assert.match(
     buildMap,
     /Android release APK pull-and-reload persistence provides a release pull \+ KV reload proof[\s\S]*Android release APK device-local post authoring \+ push\/outbox-drain proof exists under a host-minted bootstrap grant with pre-push pending-outbox cold reload[\s\S]*Android release APK OS deep-link pairing ingress \+ persisted peer-config proof exists in a dedicated probe namespace/,
   );
-  assert.match(buildMap, /app-originated grants, authority origination, QR camera onboarding, LAN discovery, and full onboarding remain unproven/);
+  assert.match(buildMap, /browser\/chooser coverage, cryptographic state\/nonce pairing binding, app-originated grants, authority origination, QR camera onboarding, LAN discovery/);
   assert.doesNotMatch(
     buildMap,
     /release BEAM carrier handshake\/status\/state-report proof exists while release Sync\/outbox\/KV convergence remains unproven/,
@@ -894,11 +942,26 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(plan093, /## Status\s+(?:IN PROGRESS|DONE)/);
   assert.match(plan093, /Android release deep-link pairing ingress/);
   assert.match(plan093, /township:\/\/pairing/);
-  assert.match(plan093, /Android's OS intent path|Android's `VIEW`\/`BROWSABLE` intent path/);
+  assert.match(plan093, /adb-delivered Android `VIEW`\/`BROWSABLE` delivery/);
+  assert.match(plan093, /local app can still send a syntactically valid public handoff intent/);
   assert.match(plan093, /persisted deep-link\s+endpoint rather than a build-time peer URL/);
   assert.match(plan093, /township:release-pairing-probe/);
   assert.match(plan093, /no env peer URL/i);
   assert.match(plan093, /STOP Conditions/);
+  assert.match(plan094, /## Status\s+(?:IN PROGRESS|DONE)/);
+  assert.match(plan094, /Tauri imported pairing confirmation policy/);
+  assert.match(plan094, /confirmation_required/);
+  assert.match(plan094, /confirm=1/);
+  assert.match(plan094, /same-config idempotency/);
+  assert.match(plan094, /release probe does not silently share/);
+  assert.match(plan094, /STOP Conditions/);
+  assert.match(plan095, /## Status\s+(?:IN PROGRESS|DONE)/);
+  assert.match(plan095, /Tauri armed deep-link pairing import gate/);
+  assert.match(plan095, /one-shot pairing deep-link gate/);
+  assert.match(plan095, /unarmed OS deep link can load a pairing draft/);
+  assert.match(plan095, /invalid deep links can drain/);
+  assert.match(plan095, /cryptographic state\/nonce/);
+  assert.match(plan095, /STOP Conditions/);
   assert.match(releaseTransportAdr, /Android Release Carrier Transport Policy/);
   assert.match(releaseTransportAdr, /Observed Release Transport Behavior/);
   assert.match(releaseTransportAdr, /outcome=error/);

@@ -55,6 +55,26 @@ export type TownshipCarrierPeerConfigValidation =
   | { ok: true; config: TownshipCarrierPeerConfig }
   | { ok: false; errors: TownshipCarrierPeerConfigError[]; message: string };
 
+export type TownshipCarrierPairingDraftOrigin =
+  | "manual"
+  | "handoff"
+  | "deep_link"
+  | "qr_image"
+  | "qr_camera"
+  | "discovery"
+  | "release_probe";
+
+export type TownshipCarrierPeerConfigSaveError = TownshipCarrierPeerConfigError | "confirmation_required";
+
+export type TownshipCarrierPeerConfigSaveValidation =
+  | { ok: true; config: TownshipCarrierPeerConfig }
+  | { ok: false; errors: TownshipCarrierPeerConfigSaveError[]; message: string };
+
+export interface SaveTownshipCarrierPeerConfigOptions {
+  origin?: TownshipCarrierPairingDraftOrigin;
+  confirmed?: boolean;
+}
+
 export type TownshipCarrierPairingHandoffError =
   | TownshipCarrierPeerConfigError
   | "invalid_pairing_format"
@@ -169,9 +189,23 @@ export async function loadTownshipCarrierPeerConfig(
 export async function saveTownshipCarrierPeerConfig(
   storage: LocalKeyValueStore,
   input: TownshipCarrierPeerConfigInput,
-): Promise<TownshipCarrierPeerConfigValidation> {
+  options: SaveTownshipCarrierPeerConfigOptions = {},
+): Promise<TownshipCarrierPeerConfigSaveValidation> {
   const normalized = normalizeTownshipCarrierPeerConfig(input);
   if (!normalized.ok) return normalized;
+
+  const current = await currentTownshipCarrierPeerConfig(storage);
+  if (current !== null && townshipCarrierPeerConfigsEqual(current, normalized.config)) {
+    return normalized;
+  }
+
+  if (requiresPairingSaveConfirmation(options.origin ?? "manual", current) && options.confirmed !== true) {
+    return {
+      ok: false,
+      errors: ["confirmation_required"],
+      message: pairingConfirmationRequiredMessage(current),
+    };
+  }
 
   await storage.setItem(TOWNSHIP_CARRIER_PAIRING_KEY, JSON.stringify(normalized.config));
   return normalized;
@@ -375,6 +409,39 @@ function validateTownshipCarrierPairingDraft(
     },
     peerFingerprint: townshipCarrierPeerFingerprint(expectedPeerPubkey as string),
   };
+}
+
+async function currentTownshipCarrierPeerConfig(storage: LocalKeyValueStore): Promise<TownshipCarrierPeerConfig | null> {
+  return loadTownshipCarrierPeerConfig(storage, {});
+}
+
+export function townshipCarrierPeerConfigsEqual(
+  left: TownshipCarrierPeerConfig,
+  right: TownshipCarrierPeerConfig,
+): boolean {
+  return (
+    left.url === right.url &&
+    left.localRealm === right.localRealm &&
+    left.expectedPeerRealm === right.expectedPeerRealm &&
+    left.expectedPeerPubkey === right.expectedPeerPubkey &&
+    left.replica === right.replica &&
+    (left.keyId ?? null) === (right.keyId ?? null)
+  );
+}
+
+function requiresPairingSaveConfirmation(
+  origin: TownshipCarrierPairingDraftOrigin,
+  current: TownshipCarrierPeerConfig | null,
+): boolean {
+  if (origin === "release_probe") return false;
+  if (current !== null) return true;
+  return origin !== "manual";
+}
+
+function pairingConfirmationRequiredMessage(current: TownshipCarrierPeerConfig | null): string {
+  return current === null
+    ? "Confirm this imported carrier pairing before saving."
+    : "Confirm before replacing the saved carrier pairing.";
 }
 
 function handoffDraftFromRecord(record: Record<string, unknown>): TownshipCarrierPeerConfigInput | null {

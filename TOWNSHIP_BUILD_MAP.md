@@ -191,11 +191,14 @@ Two hard blockers gate the endgame: **CBOR/ADR-P08** (everything non-BEAM) and *
    authoring with a host-authored post-only cap side-loaded into native KV, add a release pull +
    KV reload proof for carrier-pulled local op/delegation ids in a dedicated probe namespace, add a
    release device-local post authoring + push/outbox-drain proof under a host-minted bootstrap
-   grant, and add a release OS deep-link pairing ingress + persisted peer-config proof. Full mobile
-   onboarding, app-originated grants, authority origination, QR camera onboarding, LAN discovery,
-   and physical-device behavior remain unproven; the release BEAM carrier handshake plus
-   pull/reload/author-push/pairing-ingress probes alone are not enough to call the phone shell
-   user-facing equivalent. On this machine, the iOS
+   grant, add a release OS deep-link pairing ingress + persisted peer-config proof, require
+   explicit confirmation before imported pairing first-save or replacement writes in the real Tauri
+   app, prove installed unarmed OS deep-link delivery is blocked before loading pairing drafts, and
+   prove the armed one-shot accept/disarm behavior at the shared listener/source seam. Real-app armed
+   OS delivery remains a UI automation follow-up. Full mobile onboarding, cryptographic state/nonce pairing binding, app-originated
+   grants, authority origination, QR camera onboarding, LAN discovery, and physical-device behavior remain unproven;
+   the release BEAM carrier handshake plus pull/reload/author-push/pairing-ingress probes alone are
+   not enough to call the phone shell user-facing equivalent. On this machine, the iOS
    simulator archive is
    blocked by the selected Xcode 27 beta Tauri Swift-package failure. A physical multi-device LAN
    discovery smoke remains separate from the proof.
@@ -268,8 +271,8 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   on-device post authoring under a side-loaded post-only cap, Android debug APK pull-based cap
   onboarding, Android release APK build readiness, Android release APK canonical/wire fidelity,
   Android release loopback-scoped transport, Android release BEAM carrier handshake/status/state-report proof,
-  Android release APK pull-and-reload persistence, Android release APK device authoring/push/outbox drain, and Android release APK OS deep-link pairing ingress/persisted peer config are covered by plans 023-093.
-  Full mobile onboarding remains unproven beyond pull-based cap acquisition, and app-originated grants, authority origination, QR camera onboarding, LAN discovery, and physical-device behavior remain unproven after the release OS deep-link pairing + device-local authoring proofs. The iOS archive path is
+  Android release APK pull-and-reload persistence, Android release APK device authoring/push/outbox drain, Android release APK OS deep-link pairing ingress/persisted peer config, the real Tauri app imported-pairing confirmation policy, installed unarmed OS deep-link blocking, and the source-level armed one-shot import gate are covered by plans 023-095.
+  Full mobile onboarding remains unproven beyond pull-based cap acquisition, and browser/chooser coverage, cryptographic state/nonce pairing binding, app-originated grants, authority origination, QR camera onboarding, LAN discovery, and physical-device behavior remain unproven after the release OS deep-link pairing + device-local authoring proofs. The iOS archive path is
   locally blocked by the selected Xcode 27 beta Tauri Swift-package failure.
 
 ### Phase D — Cross the runtime boundary (CBOR, the first hard blocker)
@@ -412,9 +415,21 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   prove `bad_authority_reason=operation_not_granted`, and cold-reload the drained persisted ids in
   the dedicated author probe namespace. Plan 093 adds Android release APK OS deep-link pairing
   ingress: the non-debuggable normal release app receives a public `township://pairing` handoff via
-  Android `VIEW`/`BROWSABLE`, persists only the public peer config in a dedicated probe namespace,
+  an adb-delivered Android `VIEW`/`BROWSABLE` intent, persists only the public peer config in a dedicated probe namespace,
   force-stops/relaunches with `paired=true`, and pulls from the trusted BEAM peer using that
-  persisted deep-link endpoint instead of a build-time peer URL. The remaining shell gaps are iOS
+  persisted deep-link endpoint instead of a build-time peer URL; the Android bridge extracts the
+  public handoff from the raw OS intent and transports it as base64 before TypeScript reconstructs a
+  parser-safe pairing URL, consumes a valid stored handoff once, and rejects oversized,
+  non-BROWSABLE, foreign-host, and port-bearing custom-scheme intents. That is a
+  delivery-and-persistence proof, not a production authorization ceremony or browser/chooser proof;
+  Plan 094 adds the real Tauri app save policy that requires explicit user confirmation before
+  imported first-save writes or replacement of a different saved peer config, ignores link-provided
+  `confirm=1` as authorization, preserves same-config idempotency, and keeps the release probe
+  explicitly opted into its dedicated namespace. Plan 095 adds the equivalent anti-hijack gate for
+  real-app OS deep-link import: link import starts unarmed, installed unarmed OS links are traced as
+  blocked instead of loading drafts, and one valid armed pairing link consumes the arm in the shared
+  listener contract. Real-app armed delivery remains unproven beyond source/contract coverage.
+  Cryptographic state/nonce binding and browser/chooser behavior remain unproven. The remaining shell gaps are iOS
   simulator key-reuse proof, app-originated grants, authority origination, QR camera onboarding,
   LAN discovery, physical-device behavior, full onboarding beyond pull-based cap acquisition, and a
   physical multi-device LAN discovery smoke.
