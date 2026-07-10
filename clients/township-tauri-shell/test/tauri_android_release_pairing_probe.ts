@@ -358,7 +358,7 @@ function releasePairingProbeConfigFromBuildScript(): ReleasePairingProbeBuildCon
   assert.equal(keyId, "township-release-pairing-resident");
   assert.equal(storageNamespace, "township:release-pairing-probe");
   assert.equal(armState, "release-pairing-state-103");
-  assert.equal(timeoutMs, "60000");
+  assert.equal(timeoutMs, "120000");
   return { port: 43193, localRealm, keyId, storageNamespace, armState, timeoutMs };
 }
 
