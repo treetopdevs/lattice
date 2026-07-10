@@ -4,7 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { isDeepStrictEqual } from "node:util";
-import { authorAndPersistTownshipCommand, authorTownshipCommand, authorTownshipDelegation, authorTownshipRevocation, carrierDelegationsFromFrames, carrierOpsToSemanticOps, connectCarrierWebSocket, createJsonCarrierFrameStore, createJsonLocalOpLogStore, frontier, materialize, selectTownshipCapId, syncCarrierOnce, } from "../src/index";
+import { authorAndPersistTownshipCommand, authorTownshipCommand, authorTownshipDelegation, authorTownshipGenesis, authorTownshipRevocation, carrierDelegationsFromFrames, carrierOpsToSemanticOps, connectCarrierWebSocket, createJsonCarrierFrameStore, createJsonLocalOpLogStore, frontier, materialize, selectTownshipCapId, syncCarrierOnce, } from "../src/index";
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "../../..");
 const vecDir = join(here, "vectors");
@@ -54,6 +54,7 @@ const residentAuthor = seededEd25519Identity(`${vector.client.sessionSeed}:${vec
 check("resident author public key", residentAuthor.publicKeyBase64, pubkeyForRealm(vector.realmByPubkey, vector.client.realm));
 const clerkAuthor = seededEd25519Identity(`${vector.client.sessionSeed}:${vector.peer.realm}`);
 check("clerk author public key", clerkAuthor.publicKeyBase64, pubkeyForRealm(vector.realmByPubkey, vector.peer.realm));
+const evilAuthor = seededEd25519Identity(`${vector.client.sessionSeed}:evil`);
 const postFixture = vector.clientDivergedCarrierOps.find((frame) => frame.author === residentAuthor.publicKeyBase64 && commandName(frame) === "post");
 if (!postFixture)
     throw new Error("missing resident post fixture frame");
@@ -132,6 +133,26 @@ try {
     check("authority-unsound grant quarantine member", hasAuthorityQuarantinePair(unsoundPeerReport.authority_quarantine, expectedUnsoundQuarantine), true);
     // The Sim-exported full set also includes W1's pre-existing stale-clerk not_holder entry.
     checkAuthorityQuarantine("authority-unsound grant peer authority quarantine", unsoundPeerReport.authority_quarantine, vector.authorityUnsoundGrant.authorityQuarantine);
+    const forgedGenesis = await authorTownshipGenesis({
+        replica: vector.replica,
+        ops: ["post"],
+        roles: ["clerk"],
+        live: true,
+        signer: evilAuthor,
+    });
+    check("forged genesis command", commandName(forgedGenesis), "genesis");
+    check("forged genesis uses honest bound replica", forgedGenesis.replica, vector.replica);
+    const [forgedGenesisOp] = carrierOpsToSemanticOps([forgedGenesis], vector.realmByPubkey);
+    if (!forgedGenesisOp)
+        throw new Error("forged genesis did not decode to a semantic op");
+    const forgedSynced = await syncCarrierOnce(conn, [...unsoundSynced.ops, forgedGenesisOp], [forgedGenesis], vector.realmByPubkey);
+    check("forged genesis pushed", carrierFrameIds(forgedSynced.pushedFrames), [forgedGenesis.id]);
+    check("forged genesis structurally accepted", forgedSynced.pushReport.accepted, [forgedGenesis.id]);
+    check("forged genesis structural quarantine", forgedSynced.pushReport.quarantined, []);
+    const forgedPeerReport = await conn.stateReport();
+    check("forged genesis leaves state bytes unchanged", forgedPeerReport.state_b64, vector.expectAfterSync.stateB64);
+    const expectedForgedGenesisPair = [forgedGenesis.id, "impostor_genesis"];
+    check("forged genesis authority quarantine member", hasAuthorityQuarantinePair(forgedPeerReport.authority_quarantine, expectedForgedGenesisPair), true);
     await conn.shutdown();
     await peer.awaitExit();
 }

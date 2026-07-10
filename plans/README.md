@@ -135,6 +135,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 113 | Tauri Android release browser/onboarding regression gate | P1 | S | 107-112 | DONE |
 | 114 | Tauri Android release chooser onboarding state exchange | P1 | M | 111, 113 | DONE |
 | 115 | Township bounded authority origination | P1 | S | 058, 114 | DONE |
+| 116 | Tauri Android release root authority origination | P1 | M | 115 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

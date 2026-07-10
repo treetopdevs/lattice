@@ -64,6 +64,11 @@ import {
 import { logTownshipReleaseBeamProbeFromEnv } from "./township_release_beam_probe";
 import { logTownshipReleaseAuthorProbeFromEnv } from "./township_release_author_probe";
 import {
+  logTownshipReleaseRootOriginationProbeFromEnv,
+  townshipReleaseRootOriginationProbeConfigFromEnv,
+  type TownshipReleaseRootOriginationProbeEnv,
+} from "./township_release_root_origination_probe";
+import {
   logTownshipReleaseOnboardingProbeFromEnv,
   townshipReleaseOnboardingProbeConfigFromEnv,
   type TownshipReleaseOnboardingProbeEnv,
@@ -364,9 +369,16 @@ onMounted(async () => {
     isAndroidTauriShell() &&
     townshipReleaseOnboardingProbeConfigFromEnv(import.meta.env as TownshipReleaseOnboardingProbeEnv & Record<string, string | undefined>) !==
       null;
+  const releaseRootOriginationProbeActive =
+    isAndroidTauriShell() &&
+    townshipReleaseRootOriginationProbeConfigFromEnv(
+      import.meta.env as TownshipReleaseRootOriginationProbeEnv & Record<string, string | undefined>,
+    ) !== null;
   if (isAndroidTauriShell()) {
     void logTownshipCanonicalProbe().catch(() => {});
-    if (releaseOnboardingProbeActive) {
+    if (releaseRootOriginationProbeActive) {
+      void logTownshipReleaseRootOriginationProbeFromEnv().catch(() => {});
+    } else if (releaseOnboardingProbeActive) {
       void logTownshipReleaseOnboardingProbeFromEnv().catch(() => {});
     } else {
       void logTownshipReleaseBeamProbeFromEnv().catch(() => {});
@@ -376,7 +388,7 @@ onMounted(async () => {
       void logTownshipReleaseTransportProbesFromEnv().catch(() => {});
     }
   }
-  if (!releasePairingProbeActive && !releaseOnboardingProbeActive) {
+  if (!releasePairingProbeActive && !releaseOnboardingProbeActive && !releaseRootOriginationProbeActive) {
     await mountPairingDeepLinkListener();
     await mountCanonicalProbeDeepLinkListener();
   }

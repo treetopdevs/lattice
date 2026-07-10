@@ -17,6 +17,7 @@ export interface SpawnTownshipPeerOptions {
   scenario?: string;
   identitySeed?: string;
   bootstrapAudiencePubkey?: string;
+  replica?: string;
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -34,13 +35,14 @@ export async function spawnTownshipPeer(options: SpawnTownshipPeerOptions): Prom
   ];
   if (options.identitySeed) args.push(options.identitySeed);
   if (options.bootstrapAudiencePubkey) args.push("--bootstrap-audience", options.bootstrapAudiencePubkey);
+  if (options.replica) args.push("--replica", options.replica);
 
   const child = spawn(elixirBin(), args, {
     cwd: repoRoot,
     stdio: ["pipe", "pipe", "pipe"],
     env: {
       ...process.env,
-      PATH: `${join(process.env.HOME ?? "", ".asdf/shims")}:${process.env.PATH ?? ""}`,
+      PATH: pinnedBeamPath(),
     },
   });
 
@@ -120,7 +122,20 @@ function codePathArgs(): string[] {
 }
 
 function elixirBin(): string {
+  const direct = join(process.env.HOME ?? "", ".asdf/installs/elixir/1.19.5-otp-28/bin/elixir");
+  if (existsSync(direct)) return direct;
   const asdf = join(process.env.HOME ?? "", ".asdf/shims/elixir");
   if (existsSync(asdf)) return asdf;
   return "elixir";
+}
+
+function pinnedBeamPath(): string {
+  const home = process.env.HOME ?? "";
+  const beamPaths = [
+    join(home, ".asdf/installs/erlang/28.3.1/bin"),
+    join(home, ".asdf/installs/erlang/28.3.1/erts-16.2/bin"),
+    join(home, ".asdf/installs/elixir/1.19.5-otp-28/bin"),
+  ].filter(existsSync);
+
+  return [...beamPaths, process.env.PATH ?? ""].join(":");
 }

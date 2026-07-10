@@ -1,4 +1,4 @@
-import { authorCarrierDelegation, authorCarrierOp } from "./codec";
+import { authorCarrierDelegation, authorCarrierOp, canonicalHash } from "./codec";
 import { carrierDelegationsFromFrames, carrierOpsToSemanticOps } from "./carrier";
 import { frontier } from "./sync";
 export function townshipCommandBody(command) {
@@ -20,6 +20,9 @@ export function townshipCapTerm(capId) {
 }
 export function townshipGrantBody(delegation) {
     return ["tuple", [["atom", "grant"], ["delegation", delegation]]];
+}
+export function townshipGenesisBody(delegation, policies = {}) {
+    return ["tuple", [["atom", "genesis"], ["delegation", delegation], townshipGenesisPoliciesTerm(policies)]];
 }
 export function townshipRevokeBody(delegationId) {
     return ["tuple", [["atom", "revoke"], ["bin", textBase64(delegationId)]]];
@@ -97,6 +100,29 @@ export async function authorTownshipDelegation(input) {
         signer: input.signer,
     });
 }
+export async function authorTownshipGenesis(input) {
+    const replica = await bindTownshipReplica(input.replica, input.signer.publicKey);
+    const delegationInput = {
+        replica,
+        audiencePubkey: input.signer.publicKey,
+        parentId: null,
+        live: input.live ?? true,
+        signer: input.signer,
+    };
+    if (input.ops !== undefined)
+        delegationInput.ops = input.ops;
+    if (input.roles !== undefined)
+        delegationInput.roles = input.roles;
+    const delegation = await authorCarrierDelegation(delegationInput);
+    return authorCarrierOp({
+        replica,
+        deps: [],
+        kind: "authority",
+        body: townshipGenesisBody(delegation, input.policies),
+        cap: ["nil"],
+        signer: input.signer,
+    });
+}
 export function authorTownshipRevocation(input) {
     return authorCarrierOp({
         replica: input.replica,
@@ -106,6 +132,22 @@ export function authorTownshipRevocation(input) {
         cap: ["nil"],
         signer: input.signer,
     });
+}
+export async function bindTownshipReplica(replica, rootPubkey) {
+    return townshipReplicaCommitment(replica) === null
+        ? `${replica}#root:${await townshipReplicaRootTag(rootPubkey)}`
+        : replica;
+}
+export function townshipReplicaCommitment(replica) {
+    const marker = "#root:";
+    const offset = replica.indexOf(marker);
+    if (offset === -1)
+        return null;
+    const commitment = replica.slice(offset + marker.length);
+    return commitment.length > 0 ? commitment : null;
+}
+export function townshipReplicaRootTag(rootPubkey) {
+    return canonicalHash(pubkeyBytes(rootPubkey));
 }
 export async function authorAndPersistTownshipCommand(input) {
     const [localOps, delegationFrames] = await Promise.all([
@@ -201,8 +243,31 @@ function commandBody(command, args) {
         ],
     ];
 }
+function townshipGenesisPoliciesTerm(policies) {
+    return [
+        "map",
+        Object.entries(policies)
+            .sort(([left], [right]) => left.localeCompare(right))
+            .map(([role, policy]) => [
+            ["atom", role],
+            [
+                "map",
+                [
+                    [["atom", "successor"], ["bin", pubkeyBase64(policy.successorPubkey)]],
+                    [["atom", "dormant_ticks"], ["int", policy.dormantTicks]],
+                ],
+            ],
+        ]),
+    ];
+}
 function textBase64(value) {
     return bytesBase64(new TextEncoder().encode(value));
+}
+function pubkeyBase64(value) {
+    return typeof value === "string" ? value : bytesBase64(value);
+}
+function pubkeyBytes(value) {
+    return typeof value === "string" ? base64ToBytes(value) : value;
 }
 function bytesBase64(bytes) {
     if (typeof Buffer !== "undefined")
@@ -211,6 +276,14 @@ function bytesBase64(bytes) {
     if (!btoaFn)
         throw new Error("base64 encoding unavailable");
     return btoaFn(String.fromCharCode(...bytes));
+}
+function base64ToBytes(value) {
+    if (typeof Buffer !== "undefined")
+        return new Uint8Array(Buffer.from(value, "base64"));
+    const atobFn = globalThis.atob;
+    if (!atobFn)
+        throw new Error("base64 decoding unavailable");
+    return Uint8Array.from(atobFn(value), (char) => char.charCodeAt(0));
 }
 function setSubset(needed, availableValues) {
     const available = new Set(availableValues);

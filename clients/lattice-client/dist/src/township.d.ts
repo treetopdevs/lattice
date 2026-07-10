@@ -39,6 +39,18 @@ export interface AuthorTownshipDelegationInput {
     live?: boolean;
     signer: CarrierOpSigner;
 }
+export interface TownshipGenesisPolicy {
+    successorPubkey: string | Uint8Array;
+    dormantTicks: number;
+}
+export interface AuthorTownshipGenesisInput {
+    replica: string;
+    ops?: readonly string[];
+    roles?: readonly string[];
+    live?: boolean;
+    policies?: Record<string, TownshipGenesisPolicy>;
+    signer: CarrierOpSigner;
+}
 export interface AuthorTownshipRevocationInput extends Pick<AuthorCarrierOpInput, "replica" | "deps" | "signer"> {
     delegationId: string;
 }
@@ -69,6 +81,7 @@ export interface AuthorAndPersistTownshipDelegationResult {
 export declare function townshipCommandBody(command: TownshipCommand): CarrierTerm;
 export declare function townshipCapTerm(capId: string | null): CarrierTerm;
 export declare function townshipGrantBody(delegation: CarrierDelegation): CarrierTerm;
+export declare function townshipGenesisBody(delegation: CarrierDelegation, policies?: Record<string, TownshipGenesisPolicy>): CarrierTerm;
 export declare function townshipRevokeBody(delegationId: string): CarrierTerm;
 export declare function selectTownshipCapId(command: TownshipCommand, delegations: CarrierDelegation[], audiencePubkey: string | Uint8Array): string | null;
 export declare function selectTownshipDelegationParentId(delegations: readonly CarrierDelegation[], issuerPubkey: string | Uint8Array, options?: {
@@ -80,6 +93,10 @@ export declare function selectTownshipDelegationParentId(delegations: readonly C
 export declare function authorTownshipCommand(input: AuthorTownshipCommandInput): Promise<CarrierOpFrame>;
 export declare function authorTownshipCommandFromLog(input: AuthorTownshipCommandFromLogInput): Promise<CarrierOpFrame>;
 export declare function authorTownshipDelegation(input: AuthorTownshipDelegationInput): Promise<CarrierOpFrame>;
+export declare function authorTownshipGenesis(input: AuthorTownshipGenesisInput): Promise<CarrierOpFrame>;
 export declare function authorTownshipRevocation(input: AuthorTownshipRevocationInput): Promise<CarrierOpFrame>;
+export declare function bindTownshipReplica(replica: string, rootPubkey: string | Uint8Array): Promise<string>;
+export declare function townshipReplicaCommitment(replica: string): string | null;
+export declare function townshipReplicaRootTag(rootPubkey: string | Uint8Array): Promise<string>;
 export declare function authorAndPersistTownshipCommand(input: AuthorAndPersistTownshipCommandInput): Promise<AuthorAndPersistTownshipCommandResult>;
 export declare function authorAndPersistTownshipDelegation(input: AuthorAndPersistTownshipDelegationInput): Promise<AuthorAndPersistTownshipDelegationResult>;

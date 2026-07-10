@@ -10,50 +10,31 @@
 # `PEER_READY <port>` for the parent to connect to. It halts on a `shutdown`
 # protocol message or when stdin closes (the parent died).
 
-{realm, trusted_peer_realm, trusted_peer_pubkey_b64, scenario, identity_seed,
- bootstrap_audience_pubkey_b64} =
-  case System.argv() do
+pop_flag = fn argv, flag ->
+  case Enum.split_while(argv, &(&1 != flag)) do
+    {before, [^flag, value | after_]} -> {value, before ++ after_}
+    {_before, [^flag]} -> {nil, argv}
+    {_before, []} -> {nil, argv}
+  end
+end
+
+{bootstrap_audience_pubkey_b64, argv} = pop_flag.(System.argv(), "--bootstrap-audience")
+{replica, argv} = pop_flag.(argv, "--replica")
+
+{realm, trusted_peer_realm, trusted_peer_pubkey_b64, scenario, identity_seed} =
+  case argv do
     [realm, trusted_peer_realm, trusted_peer_pubkey_b64] ->
-      {realm, trusted_peer_realm, trusted_peer_pubkey_b64, LatticeNodeSpike.Scenario, nil, nil}
+      {realm, trusted_peer_realm, trusted_peer_pubkey_b64, LatticeNodeSpike.Scenario, nil}
 
     [realm, trusted_peer_realm, trusted_peer_pubkey_b64, scenario_name] ->
       scenario = Module.concat([scenario_name])
       Code.ensure_loaded!(scenario)
-      {realm, trusted_peer_realm, trusted_peer_pubkey_b64, scenario, nil, nil}
+      {realm, trusted_peer_realm, trusted_peer_pubkey_b64, scenario, nil}
 
     [realm, trusted_peer_realm, trusted_peer_pubkey_b64, scenario_name, identity_seed] ->
       scenario = Module.concat([scenario_name])
       Code.ensure_loaded!(scenario)
-      {realm, trusted_peer_realm, trusted_peer_pubkey_b64, scenario, identity_seed, nil}
-
-    [
-      realm,
-      trusted_peer_realm,
-      trusted_peer_pubkey_b64,
-      scenario_name,
-      "--bootstrap-audience",
-      bootstrap_audience_pubkey_b64
-    ] ->
-      scenario = Module.concat([scenario_name])
-      Code.ensure_loaded!(scenario)
-
-      {realm, trusted_peer_realm, trusted_peer_pubkey_b64, scenario, nil,
-       bootstrap_audience_pubkey_b64}
-
-    [
-      realm,
-      trusted_peer_realm,
-      trusted_peer_pubkey_b64,
-      scenario_name,
-      identity_seed,
-      "--bootstrap-audience",
-      bootstrap_audience_pubkey_b64
-    ] ->
-      scenario = Module.concat([scenario_name])
-      Code.ensure_loaded!(scenario)
-
-      {realm, trusted_peer_realm, trusted_peer_pubkey_b64, scenario, identity_seed,
-       bootstrap_audience_pubkey_b64}
+      {realm, trusted_peer_realm, trusted_peer_pubkey_b64, scenario, identity_seed}
   end
 
 {:ok, _} = Application.ensure_all_started(:lattice_node_spike)
@@ -66,6 +47,9 @@ identity =
   end
 
 peer_opts = [realm: realm, identity: identity, scenario: scenario]
+
+peer_opts =
+  if is_binary(replica), do: Keyword.put(peer_opts, :replica, replica), else: peer_opts
 
 peer_opts =
   if is_binary(bootstrap_audience_pubkey_b64) do

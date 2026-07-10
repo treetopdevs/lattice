@@ -51,7 +51,13 @@ defmodule LatticeNodeSpike.Peer do
     realm = Keyword.fetch!(opts, :realm)
     identity = Keyword.fetch!(opts, :identity)
     scenario = Keyword.get(opts, :scenario, LatticeNodeSpike.Scenario)
-    sim = bootstrap_sim(scenario, Keyword.get(opts, :bootstrap_audience_pubkey))
+
+    sim =
+      bootstrap_sim(
+        scenario,
+        Keyword.get(opts, :bootstrap_audience_pubkey),
+        Keyword.get(opts, :replica)
+      )
 
     {:ok,
      %{
@@ -119,10 +125,16 @@ defmodule LatticeNodeSpike.Peer do
 
   defp log(%{sim: sim, realm: realm}), do: Lattice.Sim.log(sim, realm)
 
-  defp bootstrap_sim(scenario, nil), do: scenario.base_sim()
+  defp bootstrap_sim(scenario, nil, replica) do
+    if is_binary(replica) and function_exported?(scenario, :base_sim, 1) do
+      scenario.base_sim(replica)
+    else
+      scenario.base_sim()
+    end
+  end
 
-  defp bootstrap_sim(scenario, audience_pubkey) when is_binary(audience_pubkey) do
-    sim = scenario.base_sim()
+  defp bootstrap_sim(scenario, audience_pubkey, replica) when is_binary(audience_pubkey) do
+    sim = bootstrap_sim(scenario, nil, replica)
 
     if function_exported?(scenario, :bootstrap_audience, 2) do
       scenario.bootstrap_audience(sim, audience_pubkey)
