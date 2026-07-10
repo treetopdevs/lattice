@@ -1,4 +1,4 @@
-import { authorCarrierDelegation, authorCarrierOp } from "./codec";
+import { authorCarrierDelegation, authorCarrierOp, canonicalHash } from "./codec";
 import { carrierDelegationsFromFrames, carrierOpsToSemanticOps } from "./carrier";
 import { frontier } from "./sync";
 import type { AuthorCarrierDelegationInput, AuthorCarrierOpInput, CarrierOpSigner } from "./codec";
@@ -34,6 +34,20 @@ export interface AuthorTownshipDelegationInput {
   ops?: readonly string[];
   roles?: readonly string[];
   live?: boolean;
+  signer: CarrierOpSigner;
+}
+
+export interface TownshipGenesisPolicy {
+  successorPubkey: string | Uint8Array;
+  dormantTicks: number;
+}
+
+export interface AuthorTownshipGenesisInput {
+  replica: string;
+  ops?: readonly string[];
+  roles?: readonly string[];
+  live?: boolean;
+  policies?: Record<string, TownshipGenesisPolicy>;
   signer: CarrierOpSigner;
 }
 
@@ -93,6 +107,13 @@ export function townshipCapTerm(capId: string | null): CarrierTerm {
 
 export function townshipGrantBody(delegation: CarrierDelegation): CarrierTerm {
   return ["tuple", [["atom", "grant"], ["delegation", delegation]]];
+}
+
+export function townshipGenesisBody(
+  delegation: CarrierDelegation,
+  policies: Record<string, TownshipGenesisPolicy> = {},
+): CarrierTerm {
+  return ["tuple", [["atom", "genesis"], ["delegation", delegation], townshipGenesisPoliciesTerm(policies)]];
 }
 
 export function townshipRevokeBody(delegationId: string): CarrierTerm {
@@ -186,6 +207,30 @@ export async function authorTownshipDelegation(input: AuthorTownshipDelegationIn
   });
 }
 
+export async function authorTownshipGenesis(input: AuthorTownshipGenesisInput): Promise<CarrierOpFrame> {
+  const replica = await bindTownshipReplica(input.replica, input.signer.publicKey);
+  const delegationInput: AuthorCarrierDelegationInput = {
+    replica,
+    audiencePubkey: input.signer.publicKey,
+    parentId: null,
+    live: input.live ?? true,
+    signer: input.signer,
+  };
+  if (input.ops !== undefined) delegationInput.ops = input.ops;
+  if (input.roles !== undefined) delegationInput.roles = input.roles;
+
+  const delegation = await authorCarrierDelegation(delegationInput);
+
+  return authorCarrierOp({
+    replica,
+    deps: [],
+    kind: "authority",
+    body: townshipGenesisBody(delegation, input.policies),
+    cap: ["nil"],
+    signer: input.signer,
+  });
+}
+
 export function authorTownshipRevocation(input: AuthorTownshipRevocationInput): Promise<CarrierOpFrame> {
   return authorCarrierOp({
     replica: input.replica,
@@ -195,6 +240,25 @@ export function authorTownshipRevocation(input: AuthorTownshipRevocationInput): 
     cap: ["nil"],
     signer: input.signer,
   });
+}
+
+export async function bindTownshipReplica(replica: string, rootPubkey: string | Uint8Array): Promise<string> {
+  return townshipReplicaCommitment(replica) === null
+    ? `${replica}#root:${await townshipReplicaRootTag(rootPubkey)}`
+    : replica;
+}
+
+export function townshipReplicaCommitment(replica: string): string | null {
+  const marker = "#root:";
+  const offset = replica.indexOf(marker);
+  if (offset === -1) return null;
+
+  const commitment = replica.slice(offset + marker.length);
+  return commitment.length > 0 ? commitment : null;
+}
+
+export function townshipReplicaRootTag(rootPubkey: string | Uint8Array): Promise<string> {
+  return canonicalHash(pubkeyBytes(rootPubkey));
 }
 
 export async function authorAndPersistTownshipCommand(
@@ -314,8 +378,34 @@ function commandBody(command: string, args: string[]): CarrierTerm {
   ];
 }
 
+function townshipGenesisPoliciesTerm(policies: Record<string, TownshipGenesisPolicy>): CarrierTerm {
+  return [
+    "map",
+    Object.entries(policies)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([role, policy]) => [
+        ["atom", role],
+        [
+          "map",
+          [
+            [["atom", "successor"], ["bin", pubkeyBase64(policy.successorPubkey)]],
+            [["atom", "dormant_ticks"], ["int", policy.dormantTicks]],
+          ],
+        ],
+      ]) satisfies [CarrierTerm, CarrierTerm][],
+  ];
+}
+
 function textBase64(value: string): string {
   return bytesBase64(new TextEncoder().encode(value));
+}
+
+function pubkeyBase64(value: string | Uint8Array): string {
+  return typeof value === "string" ? value : bytesBase64(value);
+}
+
+function pubkeyBytes(value: string | Uint8Array): Uint8Array {
+  return typeof value === "string" ? base64ToBytes(value) : value;
 }
 
 function bytesBase64(bytes: Uint8Array): string {
@@ -324,6 +414,14 @@ function bytesBase64(bytes: Uint8Array): string {
   const btoaFn = (globalThis as unknown as { btoa?: (decoded: string) => string }).btoa;
   if (!btoaFn) throw new Error("base64 encoding unavailable");
   return btoaFn(String.fromCharCode(...bytes));
+}
+
+function base64ToBytes(value: string): Uint8Array {
+  if (typeof Buffer !== "undefined") return new Uint8Array(Buffer.from(value, "base64"));
+
+  const atobFn = (globalThis as unknown as { atob?: (encoded: string) => string }).atob;
+  if (!atobFn) throw new Error("base64 decoding unavailable");
+  return Uint8Array.from(atobFn(value), (char) => char.charCodeAt(0));
 }
 
 function setSubset<T>(needed: ReadonlySet<T>, availableValues: readonly T[]): boolean {

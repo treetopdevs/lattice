@@ -6,10 +6,12 @@ import { isDeepStrictEqual } from "node:util";
 import {
   authorAndPersistTownshipCommand,
   authorCarrierDelegation,
+  authorTownshipGenesis,
   authorTownshipDelegation,
   authorTownshipCommand,
   authorTownshipCommandFromLog,
   authorTownshipRevocation,
+  bindTownshipReplica,
   carrierDelegationsFromFrames,
   carrierOpsToSemanticOps,
   createJsonCarrierFrameStore,
@@ -44,6 +46,7 @@ interface TownshipCarrierVector {
   replica: string;
   realmByPubkey: Record<string, string>;
   client: { realm: string; sessionSeed: string };
+  clientBaseCarrierOps: CarrierOpFrame[];
   clientDivergedCarrierOps: CarrierOpFrame[];
   authorityRevocation: {
     delegationId: string;
@@ -100,11 +103,47 @@ check("missing cap term", townshipCapTerm(null), ["nil"]);
 
 const residentAuthor = seededEd25519Identity(`${vector.client.sessionSeed}:${vector.client.realm}`);
 const clerkAuthor = seededEd25519Identity(`${vector.client.sessionSeed}:clerk`);
+const evilAuthor = seededEd25519Identity(`${vector.client.sessionSeed}:evil`);
 const delegations = carrierDelegationsFromFrames(vector.clientDivergedCarrierOps);
 check("carrier delegation ids from frames", delegations.map((delegation) => delegation.id), [
   "ZOb-qhDcOoM0yStgMMBlYY_IHIw6eX1BcvFx5hb_Hs8",
   capId,
 ]);
+
+const genesisFixture = vector.clientBaseCarrierOps.find((frame) => authorityCommandName(frame) === "genesis");
+if (!genesisFixture) throw new Error("missing genesis fixture frame");
+const genesisDelegation = carrierDelegationsFromFrames([genesisFixture])[0];
+if (!genesisDelegation) throw new Error("missing genesis fixture delegation");
+const unboundReplica = genesisFixture.replica.split("#root:")[0]!;
+check("bound Township replica id", await bindTownshipReplica(unboundReplica, clerkAuthor.publicKey), genesisFixture.replica);
+
+const authoredGenesis = await authorTownshipGenesis({
+  replica: unboundReplica,
+  ops: genesisDelegation.ops,
+  roles: genesisDelegation.roles,
+  live: genesisDelegation.live,
+  policies: {
+    clerk: {
+      successorPubkey: residentAuthor.publicKey,
+      dormantTicks: 3,
+    },
+  },
+  signer: clerkAuthor,
+});
+check("authored root-bound genesis frame", authoredGenesis, genesisFixture);
+
+const forgedGenesis = await authorTownshipGenesis({
+  replica: genesisFixture.replica,
+  ops: ["post"],
+  roles: ["clerk"],
+  live: true,
+  signer: evilAuthor,
+});
+const forgedDelegation = carrierDelegationsFromFrames([forgedGenesis])[0];
+if (!forgedDelegation) throw new Error("missing forged genesis delegation");
+check("forged genesis keeps honest root-bound replica", forgedGenesis.replica, genesisFixture.replica);
+check("forged genesis is self-issued", forgedDelegation.issuer, forgedDelegation.audience);
+check("forged genesis root differs from bound root", forgedDelegation.audience === genesisDelegation.audience, false);
 
 const grantFixture = vector.clientDivergedCarrierOps.find((frame) => authorityCommandName(frame) === "grant");
 if (!grantFixture) throw new Error("missing resident grant fixture frame");
