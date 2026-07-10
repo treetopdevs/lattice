@@ -121,6 +121,7 @@ export interface TownshipPostFailure {
 export interface TownshipDelegationSuccess {
   ok: true;
   audiencePubkey: string;
+  ops: string[];
   opId: string;
   frameId: string;
   delegationId: string;
@@ -259,6 +260,7 @@ export async function submitTownshipDelegation(
     return {
       ok: true,
       audiencePubkey: audience.value,
+      ops: [...authored.delegation.ops],
       opId: authored.op.id,
       frameId: authored.frame.id,
       delegationId: authored.delegation.id,

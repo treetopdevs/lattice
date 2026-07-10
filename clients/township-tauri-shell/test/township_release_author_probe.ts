@@ -116,6 +116,7 @@ const grantLine = townshipReleaseAuthorProbeLogLine({
   grantFrameId: "grant-app",
   grantDelegationId: "grant-app-delegation",
   grantAudiencePubkey,
+  grantOps: ["post"],
   parentId: "grant-delegation",
   authorPublicKeyBase64: "YWJj",
   localOpCount: 3,
@@ -127,6 +128,7 @@ assert.match(grantLine, /outcome=authored/);
 assert.match(grantLine, /grant_frame_id=grant-app/);
 assert.match(grantLine, /grant_delegation_id=grant-app-delegation/);
 assert.match(grantLine, /grant_audience_b64url=QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE/);
+assert.match(grantLine, /grant_ops=post/);
 assert.match(grantLine, /parent_id=grant-delegation/);
 assert.match(grantLine, /delegation_frame_count=3/);
 
@@ -212,6 +214,7 @@ const result = await logTownshipReleaseAuthorProbeFromEnv(
       return {
         ok: true,
         audiencePubkey: grantAudiencePubkey,
+        ops: ["post"],
         opId: "grant-app",
         frameId: "grant-app",
         delegationId: "grant-app-delegation",

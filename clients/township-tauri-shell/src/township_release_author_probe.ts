@@ -97,6 +97,7 @@ export type TownshipReleaseAuthorProbeResult =
       grantFrameId: string;
       grantDelegationId: string;
       grantAudiencePubkey: string;
+      grantOps: string[];
       parentId: string | null;
       authorPublicKeyBase64: string;
       localOpCount: number;
@@ -563,6 +564,7 @@ export function townshipReleaseAuthorProbeLogLine(result: TownshipReleaseAuthorP
       `grant_frame_id=${probeToken(result.grantFrameId)}`,
       `grant_delegation_id=${probeToken(result.grantDelegationId)}`,
       `grant_audience_b64url=${base64UrlEncode(result.grantAudiencePubkey)}`,
+      `grant_ops=${probeIdList(result.grantOps)}`,
       `parent_id=${probeToken(result.parentId ?? "none")}`,
       `author_b64url=${base64UrlEncode(result.authorPublicKeyBase64)}`,
       `local_op_count=${result.localOpCount}`,
@@ -809,6 +811,7 @@ async function submitReleaseAuthorAppGrant(
     grantFrameId: grant.frameId,
     grantDelegationId: grant.delegationId,
     grantAudiencePubkey: grant.audiencePubkey,
+    grantOps: grant.ops,
     parentId: grant.parentId,
     authorPublicKeyBase64,
     localOpCount: grantReload.localOpIds.length,

@@ -38,6 +38,7 @@ export interface TownshipReleaseOnboardingProbeEnv {
   VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_ARM_STATE?: string;
   VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_POST_TEXT?: string;
   VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_BAD_SUMMARY_TEXT?: string;
+  VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_GRANT_AUDIENCE_PUBKEY?: string;
   VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_TIMEOUT_MS?: string;
   VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_RETRY_DELAY_MS?: string;
   VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_PAUSE_AFTER_AUTHOR_MS?: string;
@@ -50,6 +51,7 @@ export interface TownshipReleaseOnboardingProbeConfig {
   armState: string;
   postText: string;
   badSummaryText: string;
+  grantAudiencePubkey?: string;
   timeoutMs?: number;
   retryDelayMs?: number;
   pauseAfterAuthorMs?: number;
@@ -111,11 +113,12 @@ export function townshipReleaseOnboardingProbeConfigFromEnv(
   const badSummaryText =
     present(env.VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_BAD_SUMMARY_TEXT) ??
     TOWNSHIP_RELEASE_AUTHOR_PROBE_DEFAULT_BAD_SUMMARY_TEXT;
+  const grantAudiencePubkey = present(env.VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_GRANT_AUDIENCE_PUBKEY);
   const timeoutMs = positiveInteger(env.VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_TIMEOUT_MS);
   const retryDelayMs = positiveInteger(env.VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_RETRY_DELAY_MS);
   const pauseAfterAuthorMs = positiveInteger(env.VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_PAUSE_AFTER_AUTHOR_MS);
 
-  if (!localRealm || !armState || !validArmState(armState)) return null;
+  if (!localRealm || !armState || !validArmState(armState) || (grantAudiencePubkey !== null && !validPublicKey(grantAudiencePubkey))) return null;
 
   const config: TownshipReleaseOnboardingProbeConfig = {
     localRealm,
@@ -125,6 +128,7 @@ export function townshipReleaseOnboardingProbeConfigFromEnv(
     postText,
     badSummaryText,
   };
+  if (grantAudiencePubkey !== null) config.grantAudiencePubkey = grantAudiencePubkey;
   if (timeoutMs !== null) config.timeoutMs = timeoutMs;
   if (retryDelayMs !== null) config.retryDelayMs = retryDelayMs;
   if (pauseAfterAuthorMs !== null) config.pauseAfterAuthorMs = pauseAfterAuthorMs;
@@ -211,6 +215,7 @@ export async function logTownshipReleaseOnboardingProbeFromEnv(
     postText: config.postText,
     badSummaryText: config.badSummaryText,
   };
+  if (config.grantAudiencePubkey !== undefined) authorConfig.grantAudiencePubkey = config.grantAudiencePubkey;
   if (config.timeoutMs !== undefined) authorConfig.timeoutMs = config.timeoutMs;
   if (config.retryDelayMs !== undefined) authorConfig.retryDelayMs = config.retryDelayMs;
   if (config.pauseAfterAuthorMs !== undefined) authorConfig.pauseAfterAuthorMs = config.pauseAfterAuthorMs;
@@ -293,6 +298,14 @@ function positiveInteger(value: string | null | undefined): number | null {
 
 function validArmState(value: string): boolean {
   return /^[A-Za-z0-9_.:-]{8,128}$/.test(value);
+}
+
+function validPublicKey(value: string): boolean {
+  try {
+    return atob(value).length === 32;
+  } catch {
+    return false;
+  }
 }
 
 function bytesBase64(bytes: Uint8Array): string {

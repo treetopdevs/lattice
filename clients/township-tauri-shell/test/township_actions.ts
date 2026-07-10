@@ -179,6 +179,7 @@ assert.equal(clerkGrantSubmitted.frameId, grantFixture.id);
 assert.equal(clerkGrantSubmitted.opId, grantFixture.id);
 assert.equal(clerkGrantSubmitted.delegationId, "gN9aanNVZeHWsS1vU8KxjyqVrWdC0VwPIzilL_QX2n0");
 assert.equal(clerkGrantSubmitted.parentId, "ZOb-qhDcOoM0yStgMMBlYY_IHIw6eX1BcvFx5hb_Hs8");
+assert.deepEqual(clerkGrantSubmitted.ops, ["admit", "post", "set_summary", "set_title"]);
 assert.equal(clerkGrantSubmitted.localOpCount, 2);
 assert.equal(clerkGrantSubmitted.carrierFrameCount, 1);
 assert.equal(clerkGrantSubmitted.delegationFrameCount, 2);

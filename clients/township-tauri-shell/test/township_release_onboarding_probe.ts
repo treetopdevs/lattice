@@ -26,6 +26,7 @@ const config = townshipReleaseOnboardingProbeConfigFromEnv({
   VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_ARM_STATE: " release-onboarding-state-106 ",
   VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_POST_TEXT: " release onboarding post ",
   VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_BAD_SUMMARY_TEXT: " release onboarding bad summary ",
+  VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_GRANT_AUDIENCE_PUBKEY: " QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE= ",
   VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_TIMEOUT_MS: "9000",
   VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_RETRY_DELAY_MS: "250",
   VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_PAUSE_AFTER_AUTHOR_MS: "25",
@@ -37,10 +38,43 @@ assert.deepEqual(config, {
   armState: "release-onboarding-state-106",
   postText: "release onboarding post",
   badSummaryText: "release onboarding bad summary",
+  grantAudiencePubkey: "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
   timeoutMs: 9000,
   retryDelayMs: 250,
   pauseAfterAuthorMs: 25,
 });
+
+const grantlessEnv = {
+  VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_LOCAL_REALM: "resident",
+  VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_KEY_ID: "township-release-onboarding-resident",
+  VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_STORAGE_NAMESPACE: "township:release-onboarding-probe",
+  VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_ARM_STATE: "release-onboarding-state-106",
+};
+const grantlessConfig = townshipReleaseOnboardingProbeConfigFromEnv(grantlessEnv);
+assert.deepEqual(grantlessConfig, {
+  localRealm: "resident",
+  keyId: "township-release-onboarding-resident",
+  storageNamespace: "township:release-onboarding-probe",
+  armState: "release-onboarding-state-106",
+  postText: "release probe post",
+  badSummaryText: "release probe unauthorized summary",
+});
+assert.equal(
+  townshipReleaseOnboardingProbeConfigFromEnv({
+    ...grantlessEnv,
+    VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_GRANT_AUDIENCE_PUBKEY: "QUFB",
+  }),
+  null,
+  "malformed grant audience pubkey must disable the optional child-grant path",
+);
+assert.equal(
+  townshipReleaseOnboardingProbeConfigFromEnv({
+    ...grantlessEnv,
+    VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_GRANT_AUDIENCE_PUBKEY: "!!!",
+  }),
+  null,
+  "invalid grant audience base64 must disable the optional child-grant path",
+);
 assert.equal(townshipReleaseOnboardingProbeConfigFromEnv({}), null);
 assert.equal(
   townshipReleaseOnboardingProbeConfigFromEnv({
@@ -84,6 +118,7 @@ const result = await logTownshipReleaseOnboardingProbeFromEnv(
     VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_ARM_STATE: "release-onboarding-state-106",
     VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_POST_TEXT: "release onboarding post",
     VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_BAD_SUMMARY_TEXT: "release onboarding bad summary",
+    VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_GRANT_AUDIENCE_PUBKEY: "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
   },
   {
     workflow: fakeWorkflow(),
@@ -117,6 +152,7 @@ const result = await logTownshipReleaseOnboardingProbeFromEnv(
       assert.deepEqual(authorConfig.peer, peer);
       assert.equal(authorConfig.storageNamespace, "township:release-onboarding-probe");
       assert.equal(authorConfig.postText, "release onboarding post");
+      assert.equal(authorConfig.grantAudiencePubkey, "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=");
       await onResult?.({
         phase: "pull",
         outcome: "synced",
@@ -128,6 +164,19 @@ const result = await logTownshipReleaseOnboardingProbeFromEnv(
         pushedFrameCount: 0,
         acceptedCount: 0,
         grantDelegationId: "grant-delegation",
+      });
+      await onResult?.({
+        phase: "grant",
+        outcome: "authored",
+        grantFrameId: "app-grant",
+        grantDelegationId: "app-grant-delegation",
+        grantAudiencePubkey: "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
+        grantOps: ["post"],
+        parentId: "grant-delegation",
+        authorPublicKeyBase64: "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+        localOpCount: 2,
+        carrierFrameCount: 1,
+        delegationFrameCount: 2,
       });
       await onResult?.({
         phase: "author",
@@ -158,6 +207,7 @@ const result = await logTownshipReleaseOnboardingProbeFromEnv(
 
 assert.equal(result?.phase, "complete");
 assert.ok(emitted.some((line) => line.includes("township-release-pairing-probe phase=pairing outcome=saved")));
+assert.ok(emitted.some((line) => line.includes("township-release-author-probe phase=grant outcome=authored")));
 assert.ok(emitted.some((line) => line.includes("township-release-author-probe phase=author outcome=authored")));
 assert.ok(emitted.some((line) => line.includes("township-release-onboarding-probe phase=complete outcome=reported")));
 
@@ -171,6 +221,7 @@ const resumeResult = await logTownshipReleaseOnboardingProbeFromEnv(
     VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_ARM_STATE: "release-onboarding-state-106",
     VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_POST_TEXT: "release onboarding post",
     VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_BAD_SUMMARY_TEXT: "release onboarding bad summary",
+    VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_GRANT_AUDIENCE_PUBKEY: "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
   },
   {
     workflow: fakeWorkflow({ peer, carrierFrameIds: ["bad", "post"] }),
@@ -181,6 +232,7 @@ const resumeResult = await logTownshipReleaseOnboardingProbeFromEnv(
     async author({ config: authorConfig, onResult }) {
       assert.deepEqual(authorConfig.peer, peer);
       assert.equal(authorConfig.storageNamespace, "township:release-onboarding-probe");
+      assert.equal(authorConfig.grantAudiencePubkey, "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=");
       await onResult?.({
         phase: "push",
         outcome: "synced",

@@ -158,6 +158,7 @@ async function runReleaseAuthorPushProof(serial: string): Promise<void> {
   assert.notEqual(appGrantFrameId, "none");
   assert.notEqual(appGrantDelegationId, "none");
   assert.equal(base64UrlToBase64(fieldValue(grantLine, "grant_audience_b64url")), buildConfig.grantAudiencePubkey);
+  assert.equal(fieldValue(grantLine, "grant_ops"), "post");
   assert.equal(fieldValue(grantLine, "parent_id"), grantDelegationId);
   assert.match(grantLine, /outbox_frame_count=1/);
   assert.ok(
