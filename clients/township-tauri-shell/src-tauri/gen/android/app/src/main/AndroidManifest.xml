@@ -8,14 +8,14 @@
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
+        android:label="${appLabel}"
         android:networkSecurityConfig="${networkSecurityConfig}"
         android:theme="@style/Theme.township_tauri_shell"
         android:usesCleartextTraffic="${usesCleartextTraffic}">
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
             android:launchMode="singleTask"
-            android:label="@string/main_activity_title"
+            android:label="${mainActivityLabel}"
             android:name=".MainActivity"
             android:exported="true">
             <intent-filter>

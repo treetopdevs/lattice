@@ -22,6 +22,8 @@ android {
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
         manifestPlaceholders["networkSecurityConfig"] = "@xml/township_release_network_security_config"
+        manifestPlaceholders["appLabel"] = "Township"
+        manifestPlaceholders["mainActivityLabel"] = "Township"
         applicationId = "dev.treetop.lattice.township"
         minSdk = 24
         targetSdk = 36
@@ -49,6 +51,8 @@ android {
             if (releaseCleartextDiagnostic.get()) {
                 applicationIdSuffix = ".cleartextdiag"
                 versionNameSuffix = "-cleartextdiag"
+                manifestPlaceholders["appLabel"] = "Township Diagnostic"
+                manifestPlaceholders["mainActivityLabel"] = "Township Diagnostic"
                 manifestPlaceholders["usesCleartextTraffic"] = "true"
                 manifestPlaceholders["networkSecurityConfig"] = "@xml/township_debug_network_security_config"
             }

@@ -40,12 +40,13 @@ interface ReleaseOnboardingProbeBuildConfig {
   stateExchangeUrl?: string;
   stateExchangePort?: number;
   browserIntentMode: AndroidBrowserIntentMode;
+  chooserCompetitorApk?: string;
   postText: string;
   badSummaryText: string;
   pauseAfterAuthorMs: string;
 }
 
-type AndroidBrowserIntentMode = "component" | "chooser";
+type AndroidBrowserIntentMode = "component" | "chooser" | "chooser-visible";
 
 interface BrowserPageObservation {
   path: string;
@@ -80,6 +81,7 @@ const expectedPeerPubkey = "Ze1W+4DnnK6aoJY5GiUoDVyZVhq5/PCL7UwQALXUQNk=";
 const replica = "replica:matter:township-g1#root:QUB7owpVIsZn3IyoVLJbsFc5HLkozhi2PVBL5Lzhj3w";
 const expectedPeerFingerprint = townshipCarrierPeerFingerprint(expectedPeerPubkey);
 const resolveActivityCommand = ["cmd", "package", "resolve-activity"];
+const chooserCompetitorAppId = `${appId}.cleartextdiag`;
 
 console.log("\n▸ tauri:android:release:browser-onboarding:smoke");
 console.log("  Android release APK accepts browser-backed release onboarding convergence and drains outbox");
@@ -106,6 +108,9 @@ try {
       await removeReverseMapping(serial, buildConfig.stateExchangePort).catch(() => undefined);
     }
     await forceStopApp(serial).catch(() => undefined);
+    if (buildConfig.browserIntentMode === "chooser-visible") {
+      await runAdb(serial, ["uninstall", chooserCompetitorAppId], 30_000).catch(() => undefined);
+    }
   }
   if (stateExchangeServer) await closeServer(stateExchangeServer.server).catch(() => undefined);
   await cleanupAndroid(serial, spawnedEmulator);
@@ -118,6 +123,9 @@ async function runReleaseBrowserOnboardingConvergenceProof(serial: string): Prom
   await clearAppData(serial);
   await clearLogcat(serial);
   await forceStopApp(serial);
+  if (buildConfig.browserIntentMode === "chooser-visible") {
+    await installChooserCompetitorApk(serial);
+  }
 
   if (buildConfig.stateExchangeUrl !== undefined) {
     stateExchangeServer = await startPairingStateExchangeServer(buildConfig.stateExchangeUrl);
@@ -128,7 +136,7 @@ async function runReleaseBrowserOnboardingConvergenceProof(serial: string): Prom
   const browserPackage = await resolveBrowserPackage(serial);
   console.log(`  resolved Android browser package ${browserPackage}`);
   await prepareBrowserPackageForSmoke(serial, browserPackage);
-  if (buildConfig.browserIntentMode === "chooser") {
+  if (buildConfig.browserIntentMode === "chooser" || buildConfig.browserIntentMode === "chooser-visible") {
     await assertUnpinnedTownshipPairingIntentResolves(serial);
   }
   await clearLogcat(serial);
@@ -395,6 +403,7 @@ function releaseOnboardingProbeConfigFromBuildScript(): ReleaseOnboardingProbeBu
   const badSummaryText = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_BAD_SUMMARY_TEXT");
   const pauseAfterAuthorMs = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_PAUSE_AFTER_AUTHOR_MS");
   const browserIntentMode = browserIntentModeFromEnv();
+  const chooserCompetitorApk = chooserCompetitorApkFromEnv(browserIntentMode);
   assert.equal(localRealm, "resident");
   if (buildScriptName === "tauri:android:build:release:onboarding-state-probe") {
     assert.equal(keyId, "township-release-onboarding-state-resident");
@@ -412,6 +421,7 @@ function releaseOnboardingProbeConfigFromBuildScript(): ReleaseOnboardingProbeBu
       stateExchangeUrl,
       stateExchangePort: 43197,
       browserIntentMode,
+      ...(chooserCompetitorApk ? { chooserCompetitorApk } : {}),
       postText,
       badSummaryText,
       pauseAfterAuthorMs,
@@ -433,6 +443,7 @@ function releaseOnboardingProbeConfigFromBuildScript(): ReleaseOnboardingProbeBu
     storageNamespace,
     armState,
     browserIntentMode,
+    ...(chooserCompetitorApk ? { chooserCompetitorApk } : {}),
     postText,
     badSummaryText,
     pauseAfterAuthorMs,
@@ -441,8 +452,18 @@ function releaseOnboardingProbeConfigFromBuildScript(): ReleaseOnboardingProbeBu
 
 function browserIntentModeFromEnv(): AndroidBrowserIntentMode {
   const rawMode = process.env.TOWNSHIP_ANDROID_BROWSER_INTENT_MODE?.trim() || "component";
-  assert.match(rawMode, /^(component|chooser)$/);
+  assert.match(rawMode, /^(component|chooser|chooser-visible)$/);
   return rawMode;
+}
+
+function chooserCompetitorApkFromEnv(mode: AndroidBrowserIntentMode): string | undefined {
+  const rawPath = process.env.TOWNSHIP_ANDROID_CHOOSER_COMPETITOR_APK?.trim();
+  if (mode !== "chooser-visible") {
+    assert.equal(rawPath, undefined, "competitor APK is only valid for chooser-visible mode");
+    return undefined;
+  }
+  assert.ok(rawPath, "chooser-visible mode requires TOWNSHIP_ANDROID_CHOOSER_COMPETITOR_APK");
+  return resolve(shellRoot, rawPath);
 }
 
 function pairingPeerConfig(): TownshipCarrierPeerConfig {
@@ -468,7 +489,7 @@ async function startBrowserPairingPageServer(routes: Record<string, string>): Pr
     }
     const html = browserPairingPageHtml(link);
     assert.ok(html.includes('data-township-href="township://pairing'));
-    if (buildConfig.browserIntentMode === "chooser") {
+    if (buildConfig.browserIntentMode === "chooser" || buildConfig.browserIntentMode === "chooser-visible") {
       assert.ok(html.includes("Intent;scheme=township;end"));
       assert.ok(!html.includes(";package="));
       assert.ok(!html.includes(";component="));
@@ -595,7 +616,7 @@ function androidIntentHrefForTownshipLink(link: string): string {
   const url = new URL(link);
   const canonicalHandoff = `${url.protocol}//${url.host}${url.pathname}${url.search}`;
   assert.equal(canonicalHandoff, link, "browser intent wrapper must preserve the canonical Township pairing handoff");
-  if (buildConfig.browserIntentMode === "chooser") {
+  if (buildConfig.browserIntentMode === "chooser" || buildConfig.browserIntentMode === "chooser-visible") {
     return `intent://${url.host}${url.pathname}${url.search}#Intent;scheme=township;end`;
   }
   return `intent://${url.host}${url.pathname}${url.search}#Intent;scheme=township;package=${appId};component=${appActivity};end`;
@@ -623,6 +644,30 @@ async function assertUnpinnedTownshipPairingIntentResolves(serial: string): Prom
     `expected unpinned township://pairing intent to resolve to ${appId} or Android resolver:\n${resolved}`,
   );
   console.log(`  unpinned township pairing intent is resolver-eligible (${resolved.trim()})`);
+}
+
+async function installChooserCompetitorApk(serial: string): Promise<void> {
+  const apkPath = buildConfig.chooserCompetitorApk;
+  assert.ok(apkPath, "chooser-visible smoke requires a competitor APK path");
+  assert.ok(
+    existsSync(apkPath),
+    `missing chooser competitor APK at ${apkPath}; run npm run tauri:android:build:release:chooser-competitor before this smoke`,
+  );
+  assert.notEqual(apkPath, releaseApkPath, "chooser competitor APK must be distinct from the primary release APK");
+  assert.match(apkPath, /app-universal-release-cleartextdiag\.apk$/);
+  await assertApkPackage(apkPath, chooserCompetitorAppId);
+  await assertApkUsesCleartextTraffic(apkPath, true);
+  await runAdb(serial, ["uninstall", chooserCompetitorAppId], 30_000).catch(() => undefined);
+  await installApkWithRetry(serial, apkPath);
+  await resetPreferredActivities(serial, appId);
+  await resetPreferredActivities(serial, chooserCompetitorAppId);
+  console.log(`  installed competing township handler ${chooserCompetitorAppId}`);
+}
+
+async function resetPreferredActivities(serial: string, packageName: string): Promise<void> {
+  await runAdb(serial, ["shell", "cmd", "package", "reset-preferred-activities", packageName], 30_000).catch(
+    () => undefined,
+  );
 }
 
 async function resolveBrowserPackage(serial: string): Promise<string> {
@@ -757,7 +802,7 @@ async function openBrowserPairingPageAndTap(
       if (await tapFirstVisibleText(serial, ["Close app"])) break;
       const tapIssuedAtMs = Date.now();
       await tapBrowserPairingLink(serial);
-      if (buildConfig.browserIntentMode === "chooser") await settleTownshipIntentChooser(serial);
+      await handleTownshipIntentChooser(serial);
       await delay(1_000);
       if (await tapFirstVisibleText(serial, ["Close app"])) break;
       const dismissedLateDialog = await tapFirstVisibleText(serial, ["Wait"]);
@@ -816,7 +861,7 @@ async function openBrowserPairingPageAndTapOnce(
     await delay(300);
     const tapIssuedAtMs = Date.now();
     await tapBrowserPairingLink(serial);
-    if (buildConfig.browserIntentMode === "chooser") await settleTownshipIntentChooser(serial);
+    await handleTownshipIntentChooser(serial);
     return { ...observed, pageUrl, tapIssuedAtMs };
   }
   throw new Error(`browser onboarding page ${path} could not be opened without Chrome crash UI`);
@@ -828,6 +873,49 @@ async function settleTownshipIntentChooser(serial: string): Promise<void> {
     const tapped = await tapFirstVisibleText(serial, ["Township", "Just once", "Open", "Always"]);
     if (!tapped) return;
   }
+}
+
+async function handleTownshipIntentChooser(serial: string): Promise<void> {
+  if (buildConfig.browserIntentMode === "chooser-visible") {
+    await selectTownshipFromVisibleChooser(serial);
+  } else if (buildConfig.browserIntentMode === "chooser") {
+    await settleTownshipIntentChooser(serial);
+  }
+}
+
+async function selectTownshipFromVisibleChooser(serial: string): Promise<void> {
+  const hierarchy = await waitForTownshipChooserHierarchy(serial);
+  const townshipBounds = boundsForVisibleText(hierarchy, "Township");
+  if (townshipBounds) {
+    await runAdb(serial, ["shell", "input", "tap", String(townshipBounds.x), String(townshipBounds.y)], 10_000);
+    await delay(500);
+  } else {
+    assert.ok(
+      boundsForVisibleText(hierarchy, "Open with Township"),
+      `visible chooser should list or preselect the primary Township app:\n${hierarchy}`,
+    );
+  }
+  await tapFirstVisibleText(serial, ["Just once", "Open", "Always"]);
+}
+
+async function waitForTownshipChooserHierarchy(serial: string): Promise<string> {
+  const deadline = Date.now() + 12_000;
+  let lastXml = "";
+  while (Date.now() < deadline) {
+    const xml = await windowHierarchyXml(serial).catch(() => "");
+    if (xml) {
+      lastXml = xml;
+      const townshipBounds = boundsForVisibleText(xml, "Township");
+      const townshipPreselectedBounds = boundsForVisibleText(xml, "Open with Township");
+      const competitorBounds = boundsForVisibleText(xml, "Township Diagnostic");
+      if ((townshipBounds || townshipPreselectedBounds) && competitorBounds) {
+        console.log("  visible Android resolver lists Township and Township Diagnostic");
+        return xml;
+      }
+    }
+    await delay(500);
+  }
+  throw new Error(`timed out waiting for visible Android resolver with Township competing handlers:\n${lastXml}`);
 }
 
 async function openBrowserPairingPageAndTapUntilBlocked(
