@@ -48,6 +48,44 @@ assert.deepEqual(config, {
   timeoutMs: 9000,
   retryDelayMs: 250,
 });
+
+const stateExchangeConfig = townshipReleasePairingProbeConfigFromEnv({
+  VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_LOCAL_REALM: " resident ",
+  VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_KEY_ID: " township-release-pairing-state-resident ",
+  VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_STORAGE_NAMESPACE: " township:release-pairing-state-probe ",
+  VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_STATE_EXCHANGE_URL: " http://127.0.0.1:43196/pairing-state ",
+  VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_TIMEOUT_MS: "9000",
+  VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_RETRY_DELAY_MS: "250",
+});
+assert.deepEqual(stateExchangeConfig, {
+  localRealm: "resident",
+  keyId: "township-release-pairing-state-resident",
+  storageNamespace: "township:release-pairing-state-probe",
+  stateExchangeUrl: "http://127.0.0.1:43196/pairing-state",
+  timeoutMs: 9000,
+  retryDelayMs: 250,
+});
+assert.equal(
+  townshipReleasePairingProbeConfigFromEnv({
+    VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_LOCAL_REALM: "resident",
+    VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_KEY_ID: "township-release-pairing-state-resident",
+    VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_STORAGE_NAMESPACE: "township:release-pairing-state-probe",
+    VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_ARM_STATE: "release-pairing-state-103",
+    VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_STATE_EXCHANGE_URL: "http://127.0.0.1:43196/pairing-state",
+  }),
+  null,
+  "runtime state exchange must not share a build-time arm-state constant",
+);
+assert.equal(
+  townshipReleasePairingProbeConfigFromEnv({
+    VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_LOCAL_REALM: "resident",
+    VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_KEY_ID: "township-release-pairing-state-resident",
+    VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_STORAGE_NAMESPACE: "township:release-pairing-state-probe",
+    VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_STATE_EXCHANGE_URL: "http://example.test/pairing-state",
+  }),
+  null,
+  "runtime state exchange must reject non-loopback cleartext callback URLs",
+);
 assert.equal(townshipReleasePairingProbeConfigFromEnv({}), null);
 assert.equal(
   townshipReleasePairingProbeConfigFromEnv({
@@ -263,6 +301,66 @@ assert.ok(
   "pairing probe should log the later current poll that contains the raw pairing URL",
 );
 assert.doesNotMatch(delayedEmitted.join("\n"), /release-pairing-state-103/);
+
+const exchangeWorkflow = fakeWorkflow("ZGV2aWNlLXB1YmtleS0z");
+const exchangeEmitted: string[] = [];
+let publishedState: string | null = null;
+let publishCalls = 0;
+let exchangeCurrentCalls = 0;
+const exchangeResult = await logTownshipReleasePairingProbeFromEnv(
+  {
+    VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_LOCAL_REALM: "resident",
+    VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_KEY_ID: "township-release-pairing-state-resident",
+    VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_STORAGE_NAMESPACE: "township:release-pairing-state-probe",
+    VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_STATE_EXCHANGE_URL: "http://127.0.0.1:43196/pairing-state",
+  },
+  {
+    workflow: exchangeWorkflow,
+    retryDelayMs: 1,
+    timeoutMs: 100,
+    source: {
+      async current() {
+        exchangeCurrentCalls++;
+        return publishedState ? [`${pairingLink}&state=${encodeURIComponent(publishedState)}`] : [pairingLink];
+      },
+      async onOpenUrl(callback) {
+        callback([pairingLink]);
+        return () => {};
+      },
+    },
+    async publishPairingState({ state, url }) {
+      publishCalls++;
+      assert.equal(url, "http://127.0.0.1:43196/pairing-state");
+      assert.match(state, /^[0-9a-f]{32}$/);
+      assert.notEqual(state, "release-pairing-state-103");
+      publishedState = state;
+    },
+    async sync({ workflow: syncWorkflow }) {
+      await syncWorkflow.localLog.save([{ id: "base" } as Op, { id: "grant" } as Op]);
+      await syncWorkflow.delegationFrames.save([frame("base"), frame("grant")]);
+      await syncWorkflow.carrierFrames.save([]);
+      return syncResult({ pulledFrameCount: 2, pulledOpCount: 2 });
+    },
+    async invoke(command, args) {
+      if (command === "lattice_log_probe") exchangeEmitted.push(String((args as { event?: unknown }).event));
+      return null;
+    },
+  },
+);
+assert.equal(exchangeResult?.outcome, "synced");
+assert.equal(publishCalls, 1);
+assert.ok(exchangeCurrentCalls >= 1);
+assert.match(publishedState ?? "", /^[0-9a-f]{32}$/);
+assert.ok(
+  exchangeEmitted.some((line) => /phase=arming/.test(line) && /state_required=true/.test(line)),
+  "state-exchange probe should log arming without logging the runtime state",
+);
+assert.ok(
+  exchangeEmitted.some((line) => /phase=deeplink/.test(line) && /outcome=blocked/.test(line) && /blocked_reason=state_mismatch/.test(line)),
+  "state-exchange probe should reject browser links before the runtime state is exchanged",
+);
+assert.doesNotMatch(exchangeEmitted.join("\n"), new RegExp(publishedState ?? "unreachable"));
+assert.doesNotMatch(exchangeEmitted.join("\n"), /release-pairing-state-103/);
 
 console.log("\x1b[32m✓ release pairing probe contract checks passed\x1b[0m");
 

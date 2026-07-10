@@ -39,6 +39,7 @@ export interface TownshipReleasePairingProbeEnv {
   VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_KEY_ID?: string;
   VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_STORAGE_NAMESPACE?: string;
   VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_ARM_STATE?: string;
+  VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_STATE_EXCHANGE_URL?: string;
   VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_TIMEOUT_MS?: string;
   VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_RETRY_DELAY_MS?: string;
   VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_URL?: string;
@@ -52,6 +53,7 @@ export interface TownshipReleasePairingProbeConfig {
   keyId: string;
   storageNamespace: string;
   armState?: string;
+  stateExchangeUrl?: string;
   timeoutMs?: number;
   retryDelayMs?: number;
 }
@@ -149,6 +151,7 @@ export interface TownshipReleasePairingProbeOptions extends Pick<TownshipNativeW
   webSocket?: TownshipCarrierWebSocket;
   timeoutMs?: number;
   retryDelayMs?: number;
+  publishPairingState?(options: { state: string; url: string }): Promise<void>;
   sync?(options: TownshipReleasePairingProbeSyncOptions): Promise<TownshipOutboxSync>;
 }
 
@@ -170,10 +173,20 @@ export function townshipReleasePairingProbeConfigFromEnv(
     present(env.VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_STORAGE_NAMESPACE) ??
     TOWNSHIP_RELEASE_PAIRING_PROBE_STORAGE_NAMESPACE;
   const armState = present(env.VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_ARM_STATE);
+  const stateExchangeUrl = present(env.VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_STATE_EXCHANGE_URL);
   const timeoutMs = positiveInteger(env.VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_TIMEOUT_MS);
   const retryDelayMs = positiveInteger(env.VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_RETRY_DELAY_MS);
 
-  if (!localRealm || !keyId || !storageNamespace || (armState !== null && !validArmState(armState))) return null;
+  if (
+    !localRealm ||
+    !keyId ||
+    !storageNamespace ||
+    (armState !== null && !validArmState(armState)) ||
+    (stateExchangeUrl !== null && !validStateExchangeUrl(stateExchangeUrl)) ||
+    (armState !== null && stateExchangeUrl !== null)
+  ) {
+    return null;
+  }
 
   const config: TownshipReleasePairingProbeConfig = {
     localRealm,
@@ -181,6 +194,7 @@ export function townshipReleasePairingProbeConfigFromEnv(
     storageNamespace,
   };
   if (armState !== null) config.armState = armState;
+  if (stateExchangeUrl !== null) config.stateExchangeUrl = stateExchangeUrl;
   if (timeoutMs !== null) config.timeoutMs = timeoutMs;
   if (retryDelayMs !== null) config.retryDelayMs = retryDelayMs;
   return config;
@@ -387,7 +401,22 @@ async function waitForReleasePairing(
   const gate = releasePairingGate(options.config);
 
   if (gate !== null) {
-    gate.arm();
+    const state = gate.arm();
+    if (options.config.stateExchangeUrl !== undefined) {
+      try {
+        await (options.publishPairingState ?? publishReleasePairingState)({
+          state,
+          url: options.config.stateExchangeUrl,
+        });
+      } catch {
+        return {
+          phase: "pairing",
+          outcome: "error",
+          elapsedMs: Date.now() - started,
+          message: "state_exchange_failed",
+        };
+      }
+    }
     await options.onResult?.({
       phase: "arming",
       outcome: "armed",
@@ -543,8 +572,21 @@ async function waitForReleasePairing(
 
 function releasePairingGate(config: TownshipReleasePairingProbeConfig): TownshipPairingDeepLinkGate | null {
   const { armState } = config;
-  if (armState === undefined) return null;
-  return createOneShotTownshipPairingDeepLinkGate({ createState: () => armState });
+  if (armState !== undefined) return createOneShotTownshipPairingDeepLinkGate({ createState: () => armState });
+  if (config.stateExchangeUrl !== undefined) return createOneShotTownshipPairingDeepLinkGate();
+  return null;
+}
+
+async function publishReleasePairingState(options: { state: string; url: string }): Promise<void> {
+  const request: RequestInit = {
+    method: "POST",
+    headers: {
+      "content-type": "text/plain;charset=utf-8",
+    },
+  };
+  Object.assign(request, { ["body"]: options.state });
+  const response = await fetch(options.url, request);
+  if (!response.ok) throw new Error(`pairing state exchange failed with HTTP ${response.status}`);
 }
 
 function firstActionablePairingParse(urls: readonly string[] | null): TownshipPairingDeepLinkParse | null {
@@ -792,6 +834,17 @@ function positiveInteger(value: string | null | undefined): number | null {
 
 function validArmState(value: string): boolean {
   return /^[A-Za-z0-9_.:-]{8,128}$/.test(value);
+}
+
+function validStateExchangeUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol === "https:") return true;
+    if (parsed.protocol !== "http:") return false;
+    return parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost" || parsed.hostname === "[::1]";
+  } catch {
+    return false;
+  }
 }
 
 function delay(ms: number): Promise<void> {

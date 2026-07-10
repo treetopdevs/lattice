@@ -34,7 +34,9 @@ interface ReleasePairingProbeBuildConfig {
   localRealm: string;
   keyId: string;
   storageNamespace: string;
-  armState: string;
+  armState?: string;
+  stateExchangeUrl?: string;
+  stateExchangePort?: number;
   timeoutMs: string;
 }
 
@@ -42,6 +44,12 @@ interface BrowserPairingPageServer {
   port: number;
   server: Server;
   waitForPath(path: string): Promise<void>;
+}
+
+interface PairingStateExchangeServer {
+  port: number;
+  server: Server;
+  waitForState(): Promise<string>;
 }
 
 const releaseApkPath = defaultReleaseApkPath();
@@ -58,6 +66,7 @@ console.log("  Android release APK accepts browser-backed release pairing delive
 let serial: string | null = null;
 let spawnedEmulator: ManagedProcess | null = null;
 let peer: TownshipPeerProcess | null = null;
+let stateExchangeServer: PairingStateExchangeServer | null = null;
 
 try {
   const android = await ensureAndroidDevice();
@@ -72,8 +81,12 @@ try {
   peer?.kill();
   if (serial) {
     await removeReverseMapping(serial, buildConfig.port).catch(() => undefined);
+    if (buildConfig.stateExchangePort !== undefined) {
+      await removeReverseMapping(serial, buildConfig.stateExchangePort).catch(() => undefined);
+    }
     await forceStopApp(serial).catch(() => undefined);
   }
+  if (stateExchangeServer) await closeServer(stateExchangeServer.server).catch(() => undefined);
   await cleanupAndroid(serial, spawnedEmulator);
 }
 
@@ -84,6 +97,12 @@ async function runReleaseBrowserPairingDeliveryProof(serial: string): Promise<vo
   await clearAppData(serial);
   await clearLogcat(serial);
   await forceStopApp(serial);
+
+  if (buildConfig.stateExchangeUrl !== undefined) {
+    stateExchangeServer = await startPairingStateExchangeServer(buildConfig.stateExchangeUrl);
+    await runAdb(serial, ["reverse", `tcp:${stateExchangeServer.port}`, `tcp:${stateExchangeServer.port}`], 30_000);
+    await assertReverseMapping(serial, stateExchangeServer.port, stateExchangeServer.port);
+  }
 
   const browserPackage = await resolveBrowserPackage(serial);
   console.log(`  resolved Android browser package ${browserPackage}`);
@@ -122,13 +141,24 @@ async function runReleaseBrowserPairingDeliveryProof(serial: string): Promise<vo
   const armingLine = await waitForReleasePairingProbeLog(serial, "arming", (line) => line.includes("outcome=armed"));
   assert.match(armingLine, /phase=arming/);
   assert.match(armingLine, /state_required=true/);
-  assert.doesNotMatch(armingLine, new RegExp(escapeRegExp(buildConfig.armState)));
+  if (buildConfig.armState !== undefined) {
+    assert.doesNotMatch(armingLine, new RegExp(escapeRegExp(buildConfig.armState)));
+  }
   assert.doesNotMatch(armingLine, forbiddenLogTerms());
   console.log(`  observed browser-pairing arm ${armingLine.trim()}`);
 
+  const runtimeArmState = stateExchangeServer ? await stateExchangeServer.waitForState() : buildConfig.armState;
+  assert.ok(runtimeArmState, "browser pairing smoke requires either a fixed arm state or a runtime state exchange");
+  assert.match(runtimeArmState, /^[A-Za-z0-9_.:-]{8,128}$/);
+  if (buildConfig.armState === undefined) {
+    assert.match(runtimeArmState, /^[0-9a-f]{32}$/);
+    assert.notEqual(runtimeArmState, "release-pairing-state-103");
+  }
+  assert.doesNotMatch(armingLine, new RegExp(escapeRegExp(runtimeArmState)));
+
   const handoff = exportTownshipCarrierPairingHandoff(pairingPeerConfig());
   const noStateLink = `township://pairing/${encodeURIComponent(handoff)}`;
-  const stateLink = `township://pairing/${encodeURIComponent(handoff)}?state=${encodeURIComponent(buildConfig.armState)}`;
+  const stateLink = `township://pairing/${encodeURIComponent(handoff)}?state=${encodeURIComponent(runtimeArmState)}`;
   const pageServer = await startBrowserPairingPageServer({
     "/no-state": noStateLink,
     "/state": stateLink,
@@ -146,7 +176,7 @@ async function runReleaseBrowserPairingDeliveryProof(serial: string): Promise<vo
     assert.match(blockedLine, /outcome=blocked/);
     assert.match(blockedLine, /blocked_reason=state_mismatch/);
     assert.match(blockedLine, /pairing_url_count=1/);
-    assert.doesNotMatch(blockedLine, new RegExp(escapeRegExp(buildConfig.armState)));
+    assert.doesNotMatch(blockedLine, new RegExp(escapeRegExp(runtimeArmState)));
     assert.doesNotMatch(blockedLine, forbiddenLogTerms());
     await assertNoPairingSavedYet(serial);
     console.log(`  observed browser-delivered no-state block ${blockedLine.trim()}`);
@@ -192,6 +222,10 @@ async function runReleaseBrowserPairingDeliveryProof(serial: string): Promise<vo
   assert.match(syncLine, /accepted_count=0/);
   assert.doesNotMatch(syncLine, forbiddenLogTerms());
   console.log(`  observed browser-pairing sync ${syncLine.trim()}`);
+
+  if (buildConfig.armState === undefined) {
+    await assertLogcatDoesNotContain(serial, runtimeArmState);
+  }
 }
 
 function defaultReleaseApkPath(): string {
@@ -217,8 +251,10 @@ function releasePairingProbeConfigFromBuildScript(): ReleasePairingProbeBuildCon
   const packageJson = JSON.parse(readFileSync(join(shellRoot, "package.json"), "utf8")) as {
     scripts?: Record<string, string>;
   };
+  const buildScriptName = process.env.TOWNSHIP_RELEASE_PAIRING_BUILD_SCRIPT ?? "tauri:android:build:release:pairing-probe";
   const normalRelease = packageJson.scripts?.["tauri:android:build:release"] ?? "";
-  const script = packageJson.scripts?.["tauri:android:build:release:pairing-probe"] ?? "";
+  const script = packageJson.scripts?.[buildScriptName] ?? "";
+  assert.ok(script, `missing release browser pairing build script ${buildScriptName}`);
   assert.doesNotMatch(normalRelease, /VITE_TOWNSHIP_RELEASE_PAIRING_PROBE/);
   assert.doesNotMatch(
     script,
@@ -228,13 +264,32 @@ function releasePairingProbeConfigFromBuildScript(): ReleasePairingProbeBuildCon
   const localRealm = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_LOCAL_REALM");
   const keyId = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_KEY_ID");
   const storageNamespace = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_STORAGE_NAMESPACE");
-  const armState = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_ARM_STATE");
+  const armState = optionalScriptEnv(script, "VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_ARM_STATE");
+  const stateExchangeUrl = optionalScriptEnv(script, "VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_STATE_EXCHANGE_URL");
   const timeoutMs = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_TIMEOUT_MS");
   assert.equal(localRealm, "resident");
+  assert.equal(timeoutMs, "120000");
+  if (buildScriptName === "tauri:android:build:release:pairing-state-probe") {
+    assert.equal(keyId, "township-release-pairing-state-resident");
+    assert.equal(storageNamespace, "township:release-pairing-state-probe");
+    assert.equal(armState, undefined);
+    assert.equal(stateExchangeUrl, "http://127.0.0.1:43196/pairing-state");
+    return {
+      port: 43193,
+      localRealm,
+      keyId,
+      storageNamespace,
+      stateExchangeUrl,
+      stateExchangePort: 43196,
+      timeoutMs,
+    };
+  }
+
+  assert.equal(buildScriptName, "tauri:android:build:release:pairing-probe");
   assert.equal(keyId, "township-release-pairing-resident");
   assert.equal(storageNamespace, "township:release-pairing-probe");
   assert.equal(armState, "release-pairing-state-103");
-  assert.equal(timeoutMs, "120000");
+  assert.equal(stateExchangeUrl, undefined);
   return { port: 43193, localRealm, keyId, storageNamespace, armState, timeoutMs };
 }
 
@@ -290,6 +345,69 @@ async function startBrowserPairingPageServer(routes: Record<string, string>): Pr
         await delay(250);
       }
       throw new Error(`timed out waiting for browser request to ${path}; saw ${Array.from(seenPaths).join(", ") || "none"}`);
+    },
+  };
+}
+
+async function startPairingStateExchangeServer(exchangeUrl: string): Promise<PairingStateExchangeServer> {
+  const parsed = new URL(exchangeUrl);
+  assert.equal(parsed.hostname, "127.0.0.1");
+  assert.equal(parsed.pathname, "/pairing-state");
+  const port = Number(parsed.port);
+  assert.equal(port, 43196);
+  let observedState: string | null = null;
+
+  const server = createServer((request, response) => {
+    response.setHeader("access-control-allow-origin", "*");
+    response.setHeader("access-control-allow-methods", "POST, OPTIONS");
+    response.setHeader("access-control-allow-headers", "content-type");
+    response.setHeader("cache-control", "no-store");
+
+    if (request.method === "OPTIONS") {
+      response.writeHead(204).end();
+      return;
+    }
+
+    if (request.method !== "POST" || request.url?.split("?")[0] !== "/pairing-state") {
+      response.writeHead(404).end("missing state exchange route");
+      return;
+    }
+
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", (chunk: string) => {
+      body += chunk;
+      if (body.length > 256) request.destroy(new Error("state exchange body too large"));
+    });
+    request.on("end", () => {
+      const state = body.trim();
+      if (!/^[0-9a-f]{32}$/.test(state)) {
+        response.writeHead(400).end("invalid state");
+        return;
+      }
+      observedState = state;
+      response.writeHead(204).end();
+    });
+  });
+
+  await new Promise<void>((resolveListen, rejectListen) => {
+    server.once("error", rejectListen);
+    server.listen(port, "127.0.0.1", () => {
+      server.off("error", rejectListen);
+      resolveListen();
+    });
+  });
+
+  return {
+    port,
+    server,
+    async waitForState(): Promise<string> {
+      const deadline = Date.now() + 20_000;
+      while (Date.now() < deadline) {
+        if (observedState) return observedState;
+        await delay(250);
+      }
+      throw new Error("timed out waiting for app-minted browser pairing state exchange");
     },
   };
 }
@@ -608,6 +726,11 @@ async function assertNoPairingSavedYet(serial: string): Promise<void> {
   assert.equal(savedLine, undefined, `no-state browser pairing link should not save peer config before armed delivery:\n${savedLine ?? output}`);
 }
 
+async function assertLogcatDoesNotContain(serial: string, value: string): Promise<void> {
+  const output = await runAdb(serial, ["logcat", "-d", "-s", "LATTICE_PROBE"], 10_000);
+  assert.doesNotMatch(output, new RegExp(escapeRegExp(value)), "runtime pairing state must not be emitted to probe logs");
+}
+
 async function clearLogcat(serial: string): Promise<void> {
   await runAdb(serial, ["logcat", "-c"], 10_000);
 }
@@ -652,6 +775,11 @@ function scriptEnv(script: string, name: string): string {
   const match = new RegExp(`(?:^|\\s)${name}=(?:'([^']+)'|(\\S+))`).exec(script);
   assert.ok(match?.[1] ?? match?.[2], `release browser pairing build script must bake ${name}`);
   return match[1] ?? match[2] ?? "";
+}
+
+function optionalScriptEnv(script: string, name: string): string | undefined {
+  const match = new RegExp(`(?:^|\\s)${name}=(?:'([^']+)'|(\\S+))`).exec(script);
+  return match?.[1] ?? match?.[2];
 }
 
 function base64UrlToBase64(value: string): string {
