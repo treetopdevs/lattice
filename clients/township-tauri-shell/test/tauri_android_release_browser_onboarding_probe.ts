@@ -39,10 +39,13 @@ interface ReleaseOnboardingProbeBuildConfig {
   armState?: string;
   stateExchangeUrl?: string;
   stateExchangePort?: number;
+  browserIntentMode: AndroidBrowserIntentMode;
   postText: string;
   badSummaryText: string;
   pauseAfterAuthorMs: string;
 }
+
+type AndroidBrowserIntentMode = "component" | "chooser";
 
 interface BrowserPageObservation {
   path: string;
@@ -52,6 +55,10 @@ interface BrowserPageObservation {
 interface BrowserDeliveryEvidence extends BrowserPageObservation {
   pageUrl: string;
   tapIssuedAtMs: number;
+}
+
+interface BrowserPairingSaveEvidence extends BrowserDeliveryEvidence {
+  pairingLine: string;
 }
 
 interface BrowserPairingPageServer {
@@ -121,6 +128,9 @@ async function runReleaseBrowserOnboardingConvergenceProof(serial: string): Prom
   const browserPackage = await resolveBrowserPackage(serial);
   console.log(`  resolved Android browser package ${browserPackage}`);
   await prepareBrowserPackageForSmoke(serial, browserPackage);
+  if (buildConfig.browserIntentMode === "chooser") {
+    await assertUnpinnedTownshipPairingIntentResolves(serial);
+  }
   await clearLogcat(serial);
 
   await launchApp(serial);
@@ -186,11 +196,18 @@ async function runReleaseBrowserOnboardingConvergenceProof(serial: string): Prom
     assert.doesNotMatch(blockedLine, forbiddenLogTerms());
     await assertNoPairingSavedYet(serial);
     console.log(`  observed browser-delivered onboarding no-state block ${blockedLine.trim()}`);
+    await clearLogcat(serial);
 
-    browserDelivery = await openBrowserPairingPageAndTap(serial, browserPackage, pageServer, pageBaseUrl, "/state");
+    const savedPairing = await openBrowserPairingPageAndTapUntilSaved(
+      serial,
+      browserPackage,
+      pageServer,
+      pageBaseUrl,
+      "/state",
+    );
 
-    const pairingLine = await waitForPairingProbeLog(serial, "pairing", (line) => line.includes("outcome=saved"));
-    assertBrowserPagePrecededPairingSave(browserDelivery, pairingLine);
+    browserDelivery = savedPairing;
+    const pairingLine = savedPairing.pairingLine;
     assert.match(pairingLine, /phase=pairing/);
     assert.match(pairingLine, /outcome=saved/);
     assert.match(pairingLine, new RegExp(`peer_fingerprint=${escapeRegExp(expectedPeerFingerprint)}`));
@@ -377,6 +394,7 @@ function releaseOnboardingProbeConfigFromBuildScript(): ReleaseOnboardingProbeBu
   const postText = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_POST_TEXT");
   const badSummaryText = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_BAD_SUMMARY_TEXT");
   const pauseAfterAuthorMs = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_PAUSE_AFTER_AUTHOR_MS");
+  const browserIntentMode = browserIntentModeFromEnv();
   assert.equal(localRealm, "resident");
   if (buildScriptName === "tauri:android:build:release:onboarding-state-probe") {
     assert.equal(keyId, "township-release-onboarding-state-resident");
@@ -393,6 +411,7 @@ function releaseOnboardingProbeConfigFromBuildScript(): ReleaseOnboardingProbeBu
       storageNamespace,
       stateExchangeUrl,
       stateExchangePort: 43197,
+      browserIntentMode,
       postText,
       badSummaryText,
       pauseAfterAuthorMs,
@@ -407,7 +426,23 @@ function releaseOnboardingProbeConfigFromBuildScript(): ReleaseOnboardingProbeBu
   assert.equal(postText, "release-onboarding-post");
   assert.equal(badSummaryText, "release-onboarding-unauthorized-summary");
   assert.equal(pauseAfterAuthorMs, "30000");
-  return { port: 43194, localRealm, keyId, storageNamespace, armState, postText, badSummaryText, pauseAfterAuthorMs };
+  return {
+    port: 43194,
+    localRealm,
+    keyId,
+    storageNamespace,
+    armState,
+    browserIntentMode,
+    postText,
+    badSummaryText,
+    pauseAfterAuthorMs,
+  };
+}
+
+function browserIntentModeFromEnv(): AndroidBrowserIntentMode {
+  const rawMode = process.env.TOWNSHIP_ANDROID_BROWSER_INTENT_MODE?.trim() || "component";
+  assert.match(rawMode, /^(component|chooser)$/);
+  return rawMode;
 }
 
 function pairingPeerConfig(): TownshipCarrierPeerConfig {
@@ -433,7 +468,13 @@ async function startBrowserPairingPageServer(routes: Record<string, string>): Pr
     }
     const html = browserPairingPageHtml(link);
     assert.ok(html.includes('data-township-href="township://pairing'));
-    assert.ok(html.includes(`Intent;scheme=township;package=${appId};component=${appActivity};end`));
+    if (buildConfig.browserIntentMode === "chooser") {
+      assert.ok(html.includes("Intent;scheme=township;end"));
+      assert.ok(!html.includes(";package="));
+      assert.ok(!html.includes(";component="));
+    } else {
+      assert.ok(html.includes(`Intent;scheme=township;package=${appId};component=${appActivity};end`));
+    }
     response.writeHead(200, {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store",
@@ -554,7 +595,34 @@ function androidIntentHrefForTownshipLink(link: string): string {
   const url = new URL(link);
   const canonicalHandoff = `${url.protocol}//${url.host}${url.pathname}${url.search}`;
   assert.equal(canonicalHandoff, link, "browser intent wrapper must preserve the canonical Township pairing handoff");
+  if (buildConfig.browserIntentMode === "chooser") {
+    return `intent://${url.host}${url.pathname}${url.search}#Intent;scheme=township;end`;
+  }
   return `intent://${url.host}${url.pathname}${url.search}#Intent;scheme=township;package=${appId};component=${appActivity};end`;
+}
+
+async function assertUnpinnedTownshipPairingIntentResolves(serial: string): Promise<void> {
+  const resolved = await runAdb(
+    serial,
+    [
+      "shell",
+      ...resolveActivityCommand,
+      "--brief",
+      "-a",
+      "android.intent.action.VIEW",
+      "-c",
+      "android.intent.category.BROWSABLE",
+      "-d",
+      "township://pairing/probe",
+    ],
+    30_000,
+  );
+  assert.match(
+    resolved,
+    new RegExp(`${escapeRegExp(appId)}|ResolverActivity`),
+    `expected unpinned township://pairing intent to resolve to ${appId} or Android resolver:\n${resolved}`,
+  );
+  console.log(`  unpinned township pairing intent is resolver-eligible (${resolved.trim()})`);
 }
 
 async function resolveBrowserPackage(serial: string): Promise<string> {
@@ -689,6 +757,7 @@ async function openBrowserPairingPageAndTap(
       if (await tapFirstVisibleText(serial, ["Close app"])) break;
       const tapIssuedAtMs = Date.now();
       await tapBrowserPairingLink(serial);
+      if (buildConfig.browserIntentMode === "chooser") await settleTownshipIntentChooser(serial);
       await delay(1_000);
       if (await tapFirstVisibleText(serial, ["Close app"])) break;
       const dismissedLateDialog = await tapFirstVisibleText(serial, ["Wait"]);
@@ -747,9 +816,18 @@ async function openBrowserPairingPageAndTapOnce(
     await delay(300);
     const tapIssuedAtMs = Date.now();
     await tapBrowserPairingLink(serial);
+    if (buildConfig.browserIntentMode === "chooser") await settleTownshipIntentChooser(serial);
     return { ...observed, pageUrl, tapIssuedAtMs };
   }
   throw new Error(`browser onboarding page ${path} could not be opened without Chrome crash UI`);
+}
+
+async function settleTownshipIntentChooser(serial: string): Promise<void> {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    await delay(500);
+    const tapped = await tapFirstVisibleText(serial, ["Township", "Just once", "Open", "Always"]);
+    if (!tapped) return;
+  }
 }
 
 async function openBrowserPairingPageAndTapUntilBlocked(
@@ -775,6 +853,34 @@ async function openBrowserPairingPageAndTapUntilBlocked(
     } catch (error) {
       lastError = error;
       await tapFirstVisibleText(serial, ["Close app", "Wait"]);
+      await delay(750);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
+async function openBrowserPairingPageAndTapUntilSaved(
+  serial: string,
+  browserPackage: string,
+  pageServer: BrowserPairingPageServer,
+  pageBaseUrl: string,
+  path: "/state",
+): Promise<BrowserPairingSaveEvidence> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      const delivery = await openBrowserPairingPageAndTap(serial, browserPackage, pageServer, pageBaseUrl, path);
+      const pairingLine = await waitForPairingProbeLog(
+        serial,
+        "pairing",
+        (line) => line.includes("outcome=saved"),
+        12_000,
+      );
+      assertBrowserPagePrecededPairingSave(delivery, pairingLine);
+      return { ...delivery, pairingLine };
+    } catch (error) {
+      lastError = error;
+      await tapFirstVisibleText(serial, ["Close app", "Wait", "Township", "Just once", "Open", "Always"]);
       await delay(750);
     }
   }
