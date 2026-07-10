@@ -473,6 +473,9 @@ async function resolveBrowserPackage(serial: string): Promise<string> {
 }
 
 async function prepareBrowserPackageForSmoke(serial: string, browserPackage: string): Promise<void> {
+  if (serial.startsWith("emulator-")) {
+    await runAdb(serial, ["shell", "pm", "clear", browserPackage], 30_000).catch(() => undefined);
+  }
   await runAdb(serial, ["shell", "am", "force-stop", browserPackage], 30_000).catch(() => undefined);
   if (browserPackage.includes("chrome")) {
     await runAdb(
@@ -505,12 +508,16 @@ async function prepareBrowserPackageForSmoke(serial: string, browserPackage: str
     30_000,
   ).catch(() => undefined);
 
-  await tapFirstVisibleText(serial, ["Use without an account", "Accept & continue"]);
-  await delay(3_000);
-  await tapFirstVisibleText(serial, ["No thanks"]);
-  await delay(1_000);
+  await settleBrowserFirstRun(serial);
 
   await runAdb(serial, ["shell", "am", "force-stop", browserPackage], 30_000).catch(() => undefined);
+}
+
+async function settleBrowserFirstRun(serial: string): Promise<void> {
+  await tapFirstVisibleText(serial, ["Use without an account", "Accept & continue"]);
+  await delay(1_000);
+  await tapFirstVisibleText(serial, ["No thanks"]);
+  await delay(500);
 }
 
 async function tapFirstVisibleText(serial: string, labels: string[]): Promise<boolean> {
@@ -591,7 +598,14 @@ async function openBrowserPairingPageAndTap(
       30_000,
     );
     console.log(`  opened browser pairing page ${pageUrl} with ${browserPackage}${startOutput.trim() ? ` (${startOutput.trim()})` : ""}`);
-    await pageServer.waitForPath(path);
+    await settleBrowserFirstRun(serial);
+    try {
+      await pageServer.waitForPath(path);
+    } catch (error) {
+      await settleBrowserFirstRun(serial);
+      if (pageAttempt < 2) continue;
+      throw error;
+    }
     await delay(1_500);
     if (await tapFirstVisibleText(serial, ["Close app"])) {
       await delay(500);
