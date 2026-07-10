@@ -30,13 +30,22 @@ import {
   type ManagedProcess,
 } from "./support/android_cdp";
 import { spawnTownshipPeer, type TownshipPeerProcess } from "./support/beam_peer";
+import {
+  assertLogcatDoesNotContain,
+  assertNoPairingSavedYet,
+  openBrowserPairingPageAndTapUntilBlocked,
+  startPairingStateExchangeServer,
+  type PairingStateExchangeServer,
+} from "./support/browser_pairing_state_exchange";
 
 interface ReleaseOnboardingGrantProbeBuildConfig {
   port: number;
   localRealm: string;
   keyId: string;
   storageNamespace: string;
-  armState: string;
+  armState?: string;
+  stateExchangeUrl?: string;
+  stateExchangePort?: number;
   grantAudiencePubkey: string;
   postText: string;
   badSummaryText: string;
@@ -73,6 +82,7 @@ console.log("  Android release APK accepts browser-backed release onboarding chi
 let serial: string | null = null;
 let spawnedEmulator: ManagedProcess | null = null;
 let peer: TownshipPeerProcess | null = null;
+let stateExchangeServer: PairingStateExchangeServer | null = null;
 
 try {
   const android = await ensureAndroidDevice();
@@ -87,8 +97,12 @@ try {
   peer?.kill();
   if (serial) {
     await removeReverseMapping(serial, buildConfig.port).catch(() => undefined);
+    if (buildConfig.stateExchangePort !== undefined) {
+      await removeReverseMapping(serial, buildConfig.stateExchangePort).catch(() => undefined);
+    }
     await forceStopApp(serial).catch(() => undefined);
   }
+  if (stateExchangeServer) await closeServer(stateExchangeServer.server).catch(() => undefined);
   await cleanupAndroid(serial, spawnedEmulator);
 }
 
@@ -99,6 +113,12 @@ async function runReleaseBrowserOnboardingGrantProof(serial: string): Promise<vo
   await clearAppData(serial);
   await clearLogcat(serial);
   await forceStopApp(serial);
+
+  if (buildConfig.stateExchangeUrl !== undefined) {
+    stateExchangeServer = await startPairingStateExchangeServer(buildConfig.stateExchangeUrl);
+    await runAdb(serial, ["reverse", `tcp:${stateExchangeServer.port}`, `tcp:${stateExchangeServer.port}`], 30_000);
+    await assertReverseMapping(serial, stateExchangeServer.port, stateExchangeServer.port);
+  }
 
   const browserPackage = await resolveBrowserPackage(serial);
   console.log(`  resolved Android browser package ${browserPackage}`);
@@ -117,9 +137,20 @@ async function runReleaseBrowserOnboardingGrantProof(serial: string): Promise<vo
   const armingLine = await waitForPairingProbeLog(serial, "arming", (line) => line.includes("outcome=armed"));
   assert.match(armingLine, /phase=arming/);
   assert.match(armingLine, /state_required=true/);
-  assert.doesNotMatch(armingLine, new RegExp(escapeRegExp(buildConfig.armState)));
+  if (buildConfig.armState !== undefined) {
+    assert.doesNotMatch(armingLine, new RegExp(escapeRegExp(buildConfig.armState)));
+  }
   assert.doesNotMatch(armingLine, forbiddenLogTerms());
   console.log(`  observed browser-onboarding-grant arm ${armingLine.trim()}`);
+
+  const runtimeArmState = stateExchangeServer ? await stateExchangeServer.waitForState() : buildConfig.armState;
+  assert.ok(runtimeArmState, "browser onboarding child-grant smoke requires either a fixed arm state or runtime state exchange");
+  assert.match(runtimeArmState, /^[A-Za-z0-9_.:-]{8,128}$/);
+  if (buildConfig.armState === undefined) {
+    assert.match(runtimeArmState, /^[0-9a-f]{32}$/);
+    assert.notEqual(runtimeArmState, "release-onboarding-grant-state-109");
+  }
+  assert.doesNotMatch(armingLine, new RegExp(escapeRegExp(runtimeArmState)));
 
   peer = await spawnTownshipPeer({
     peerRealm,
@@ -133,13 +164,76 @@ async function runReleaseBrowserOnboardingGrantProof(serial: string): Promise<vo
   await assertReverseMapping(serial, buildConfig.port, peer.port);
 
   const handoff = exportTownshipCarrierPairingHandoff(pairingPeerConfig());
-  const stateLink = `township://pairing/${encodeURIComponent(handoff)}?state=${encodeURIComponent(buildConfig.armState)}`;
-  const pageServer = await startBrowserPairingPageServer({ "/state": stateLink });
+  const noStateLink = `township://pairing/${encodeURIComponent(handoff)}`;
+  const wrongArmState = buildConfig.armState === undefined ? wrongRuntimeArmState(runtimeArmState) : undefined;
+  const wrongStateLink =
+    wrongArmState === undefined
+      ? undefined
+      : `township://pairing/${encodeURIComponent(handoff)}?state=${encodeURIComponent(wrongArmState)}`;
+  const stateLink = `township://pairing/${encodeURIComponent(handoff)}?state=${encodeURIComponent(runtimeArmState)}`;
+  const pageServer = await startBrowserPairingPageServer(
+    wrongStateLink === undefined
+      ? { "/state": stateLink }
+      : { "/no-state": noStateLink, "/wrong-state": wrongStateLink, "/state": stateLink },
+  );
   const pageBaseUrl = await browserPageBaseUrl(serial, pageServer.port);
 
   let browserDelivery: BrowserDeliveryEvidence;
   try {
     await clearLogcat(serial);
+    if (buildConfig.armState === undefined) {
+      assert.ok(wrongArmState, "runtime-state grant smoke should prepare a wrong-state negative control");
+      const blockedLine = await openBrowserPairingPageAndTapUntilBlocked(
+        serial,
+        browserPackage,
+        pageServer,
+        pageBaseUrl,
+        "/no-state",
+        () =>
+          waitForPairingProbeLog(
+            serial,
+            "deeplink",
+            (line) => line.includes("outcome=blocked") && line.includes("blocked_reason=state_mismatch"),
+            12_000,
+          ),
+        runtimeArmState,
+      );
+      assert.match(blockedLine, /phase=deeplink/);
+      assert.match(blockedLine, /outcome=blocked/);
+      assert.match(blockedLine, /blocked_reason=state_mismatch/);
+      assert.match(blockedLine, /pairing_url_count=1/);
+      assert.doesNotMatch(blockedLine, forbiddenLogTerms());
+      await assertNoPairingSavedYet(serial);
+      console.log(`  observed browser-delivered onboarding-grant no-state block ${blockedLine.trim()}`);
+
+      await clearLogcat(serial);
+      const wrongStateBlockedLine = await openBrowserPairingPageAndTapUntilBlocked(
+        serial,
+        browserPackage,
+        pageServer,
+        pageBaseUrl,
+        "/wrong-state",
+        () =>
+          waitForPairingProbeLog(
+            serial,
+            "deeplink",
+            (line) => line.includes("outcome=blocked") && line.includes("blocked_reason=state_mismatch"),
+            12_000,
+          ),
+        runtimeArmState,
+      );
+      assert.match(wrongStateBlockedLine, /phase=deeplink/);
+      assert.match(wrongStateBlockedLine, /outcome=blocked/);
+      assert.match(wrongStateBlockedLine, /blocked_reason=state_mismatch/);
+      assert.match(wrongStateBlockedLine, /pairing_url_count=1/);
+      assert.doesNotMatch(wrongStateBlockedLine, new RegExp(escapeRegExp(wrongArmState)));
+      assert.doesNotMatch(wrongStateBlockedLine, forbiddenLogTerms());
+      await assertNoPairingSavedYet(serial);
+      console.log(`  observed browser-delivered onboarding-grant wrong-state block ${wrongStateBlockedLine.trim()}`);
+
+      await clearLogcat(serial);
+    }
+
     browserDelivery = await openBrowserPairingPageAndTap(serial, browserPackage, pageServer, pageBaseUrl, "/state");
 
     const pairingLine = await waitForPairingProbeLog(serial, "pairing", (line) => line.includes("outcome=saved"));
@@ -312,6 +406,9 @@ async function runReleaseBrowserOnboardingGrantProof(serial: string): Promise<vo
   assert.match(finalPeerLine, /grant_authority_accepted=true/);
   assert.match(finalPeerLine, /outbox_frame_count=0/);
   assert.doesNotMatch(finalPeerLine, forbiddenLogTerms());
+  if (buildConfig.armState === undefined) {
+    await assertLogcatDoesNotContain(serial, runtimeArmState, "runtime onboarding child-grant state must not be emitted to probe logs");
+  }
   const finalLogcat = await runAdb(serial, ["logcat", "-d", "-s", "LATTICE_PROBE"], 10_000);
   const reauthoredLinePattern = new RegExp(
     `${escapeRegExp(TOWNSHIP_RELEASE_AUTHOR_PROBE_LOG_PREFIX)} phase=grant outcome=authored|${escapeRegExp(
@@ -353,8 +450,11 @@ function releaseOnboardingGrantProbeConfigFromBuildScript(): ReleaseOnboardingGr
   const packageJson = JSON.parse(readFileSync(join(shellRoot, "package.json"), "utf8")) as {
     scripts?: Record<string, string>;
   };
+  const buildScriptName =
+    process.env.TOWNSHIP_RELEASE_ONBOARDING_GRANT_BUILD_SCRIPT ?? "tauri:android:build:release:onboarding-grant-probe";
   const normalRelease = packageJson.scripts?.["tauri:android:build:release"] ?? "";
-  const script = packageJson.scripts?.["tauri:android:build:release:onboarding-grant-probe"] ?? "";
+  const script = packageJson.scripts?.[buildScriptName] ?? "";
+  assert.ok(script, `missing release browser onboarding child-grant build script ${buildScriptName}`);
   assert.doesNotMatch(normalRelease, /VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE/);
   assert.doesNotMatch(
     script,
@@ -364,15 +464,41 @@ function releaseOnboardingGrantProbeConfigFromBuildScript(): ReleaseOnboardingGr
   const localRealm = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_LOCAL_REALM");
   const keyId = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_KEY_ID");
   const storageNamespace = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_STORAGE_NAMESPACE");
-  const armState = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_ARM_STATE");
+  const armState = optionalScriptEnv(script, "VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_ARM_STATE");
+  const stateExchangeUrl = optionalScriptEnv(script, "VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_STATE_EXCHANGE_URL");
   const grantAudiencePubkey = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_GRANT_AUDIENCE_PUBKEY");
   const postText = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_POST_TEXT");
   const badSummaryText = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_BAD_SUMMARY_TEXT");
   const pauseAfterAuthorMs = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_PAUSE_AFTER_AUTHOR_MS");
   assert.equal(localRealm, "resident");
+  if (buildScriptName === "tauri:android:build:release:onboarding-grant-state-probe") {
+    assert.equal(keyId, "township-release-onboarding-grant-state-resident");
+    assert.equal(storageNamespace, "township:release-onboarding-grant-state-probe");
+    assert.equal(armState, undefined);
+    assert.equal(stateExchangeUrl, "http://127.0.0.1:43198/pairing-state");
+    assert.equal(grantAudiencePubkey, "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=");
+    assert.equal(postText, "release-onboarding-grant-state-post");
+    assert.equal(badSummaryText, "release-onboarding-grant-state-unauthorized-summary");
+    assert.equal(pauseAfterAuthorMs, "30000");
+    return {
+      port: 43199,
+      localRealm,
+      keyId,
+      storageNamespace,
+      stateExchangeUrl,
+      stateExchangePort: 43198,
+      grantAudiencePubkey,
+      postText,
+      badSummaryText,
+      pauseAfterAuthorMs,
+    };
+  }
+
+  assert.equal(buildScriptName, "tauri:android:build:release:onboarding-grant-probe");
   assert.equal(keyId, "township-release-onboarding-grant-resident");
   assert.equal(storageNamespace, "township:release-onboarding-grant-probe");
   assert.equal(armState, "release-onboarding-grant-state-109");
+  assert.equal(stateExchangeUrl, undefined);
   assert.equal(grantAudiencePubkey, "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=");
   assert.equal(postText, "release-onboarding-grant-post");
   assert.equal(badSummaryText, "release-onboarding-grant-unauthorized-summary");
@@ -746,10 +872,11 @@ async function waitForOnboardingProbeLog(
 
 async function waitForPairingProbeLog(
   serial: string,
-  phase: "reload" | "arming" | "pairing" | "sync",
+  phase: "reload" | "arming" | "pairing" | "sync" | "deeplink",
   predicate: (line: string) => boolean = () => true,
+  timeoutMs?: number,
 ): Promise<string> {
-  return waitForProbeLog(serial, TOWNSHIP_RELEASE_PAIRING_PROBE_LOG_PREFIX, phase, predicate);
+  return waitForProbeLog(serial, TOWNSHIP_RELEASE_PAIRING_PROBE_LOG_PREFIX, phase, predicate, timeoutMs);
 }
 
 async function waitForAuthorProbeLog(
@@ -765,8 +892,9 @@ async function waitForProbeLog(
   prefix: string,
   phase: string,
   predicate: (line: string) => boolean,
+  timeoutMs = 90_000,
 ): Promise<string> {
-  const deadline = Date.now() + 90_000;
+  const deadline = Date.now() + timeoutMs;
   let lastOutput = "";
   while (Date.now() < deadline) {
     const output = await runAdb(serial, ["logcat", "-d", "-s", "LATTICE_PROBE"], 10_000).catch((error) => {
@@ -838,10 +966,22 @@ function fieldValue(line: string, field: string): string {
   return match[1];
 }
 
+function wrongRuntimeArmState(runtimeArmState: string): string {
+  assert.match(runtimeArmState, /^[0-9a-f]{32}$/);
+  const last = runtimeArmState.at(-1);
+  assert.ok(last, "runtime state should not be empty");
+  return `${runtimeArmState.slice(0, -1)}${last === "0" ? "1" : "0"}`;
+}
+
 function scriptEnv(script: string, name: string): string {
   const match = new RegExp(`(?:^|\\s)${name}=(?:'([^']+)'|(\\S+))`).exec(script);
   assert.ok(match?.[1] ?? match?.[2], `release browser onboarding child-grant build script must bake ${name}`);
   return match[1] ?? match[2] ?? "";
+}
+
+function optionalScriptEnv(script: string, name: string): string | undefined {
+  const match = new RegExp(`(?:^|\\s)${name}=(?:'([^']+)'|(\\S+))`).exec(script);
+  return match?.[1] ?? match?.[2];
 }
 
 function base64UrlToBase64(value: string): string {
