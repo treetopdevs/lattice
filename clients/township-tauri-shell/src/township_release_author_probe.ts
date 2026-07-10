@@ -304,6 +304,10 @@ export async function probeTownshipReleaseAuthor(
   const prePullReload = await reload(options.workflow);
   const metadata = await loadAuthorMetadata(options.workflow);
 
+  if (metadata?.stage === "pushed" || (metadata?.stage === "authored" && prePullReload.carrierFrameCount === 0)) {
+    return reportAuthored(options, realmByPubkey, metadata);
+  }
+
   if (metadata?.stage === "authored" && prePullReload.carrierFrameCount > 0) {
     return pushAndReport(options, realmByPubkey, metadata);
   }
@@ -413,9 +417,22 @@ async function pushAndReport(
     carrierFrameCount: pushReload.carrierFrameCount,
     pendingCount: pushSync.sync.pendingCount,
   };
+  // Mark pushed only after the carrier sync returns and the reload reflects the post-push outbox.
   await saveAuthorMetadata(options.workflow, { ...authored, stage: "pushed" });
   await options.onResult?.(pushResult);
 
+  return reportAuthored(options, realmByPubkey, authored);
+}
+
+async function reportAuthored(
+  options: TownshipReleaseAuthorProbeOptions & {
+    config: TownshipReleaseAuthorProbeConfig;
+    workflow: TownshipNativeWorkflow;
+    onResult?(result: TownshipReleaseAuthorProbeResult): Promise<void>;
+  },
+  realmByPubkey: Record<string, string>,
+  authored: TownshipReleaseAuthorProbeMetadata,
+): Promise<TownshipReleaseAuthorProbeResult> {
   const stateReportOptions: TownshipReleaseAuthorProbeStateReportOptions = {
     config: options.config,
     workflow: options.workflow,

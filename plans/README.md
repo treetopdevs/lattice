@@ -125,6 +125,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 103 | Tauri Android release armed pairing delivery | P1 | M | 100 | DONE |
 | 104 | Tauri Android release convergence gate | P1 | S | 091, 092, 103 | DONE |
 | 105 | Tauri Android release cold-start pairing delivery | P1 | M | 103, 104 | DONE |
+| 106 | Tauri Android release single-APK onboarding convergence | P1 | M | 093, 092, 105 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

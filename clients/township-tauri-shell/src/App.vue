@@ -64,6 +64,11 @@ import {
 import { logTownshipReleaseBeamProbeFromEnv } from "./township_release_beam_probe";
 import { logTownshipReleaseAuthorProbeFromEnv } from "./township_release_author_probe";
 import {
+  logTownshipReleaseOnboardingProbeFromEnv,
+  townshipReleaseOnboardingProbeConfigFromEnv,
+  type TownshipReleaseOnboardingProbeEnv,
+} from "./township_release_onboarding_probe";
+import {
   logTownshipReleasePairingProbeFromEnv,
   townshipReleasePairingProbeConfigFromEnv,
   type TownshipReleasePairingProbeEnv,
@@ -355,15 +360,23 @@ onMounted(async () => {
   const releasePairingProbeActive =
     isAndroidTauriShell() &&
     townshipReleasePairingProbeConfigFromEnv(import.meta.env as TownshipReleasePairingProbeEnv) !== null;
+  const releaseOnboardingProbeActive =
+    isAndroidTauriShell() &&
+    townshipReleaseOnboardingProbeConfigFromEnv(import.meta.env as TownshipReleaseOnboardingProbeEnv & Record<string, string | undefined>) !==
+      null;
   if (isAndroidTauriShell()) {
     void logTownshipCanonicalProbe().catch(() => {});
-    void logTownshipReleaseBeamProbeFromEnv().catch(() => {});
-    void logTownshipReleaseSyncProbeFromEnv().catch(() => {});
-    void logTownshipReleaseAuthorProbeFromEnv().catch(() => {});
-    void logTownshipReleasePairingProbeFromEnv().catch(() => {});
-    void logTownshipReleaseTransportProbesFromEnv().catch(() => {});
+    if (releaseOnboardingProbeActive) {
+      void logTownshipReleaseOnboardingProbeFromEnv().catch(() => {});
+    } else {
+      void logTownshipReleaseBeamProbeFromEnv().catch(() => {});
+      void logTownshipReleaseSyncProbeFromEnv().catch(() => {});
+      void logTownshipReleaseAuthorProbeFromEnv().catch(() => {});
+      void logTownshipReleasePairingProbeFromEnv().catch(() => {});
+      void logTownshipReleaseTransportProbesFromEnv().catch(() => {});
+    }
   }
-  if (!releasePairingProbeActive) {
+  if (!releasePairingProbeActive && !releaseOnboardingProbeActive) {
     await mountPairingDeepLinkListener();
     await mountCanonicalProbeDeepLinkListener();
   }

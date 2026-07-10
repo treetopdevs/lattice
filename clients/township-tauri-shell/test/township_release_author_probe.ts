@@ -344,6 +344,53 @@ assert.match(resumeEmitted[2] ?? "", /phase=push/);
 assert.match(resumeEmitted[2] ?? "", /pushed_frame_ids=bad,grant-app,post/);
 assert.match(resumeEmitted[3] ?? "", /phase=peer/);
 
+const pushedResumeEmitted: string[] = [];
+const pushedResumeResult = await logTownshipReleaseAuthorProbeFromEnv(
+  {
+    VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_URL: "ws://127.0.0.1:43192/carrier",
+    VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_LOCAL_REALM: "resident",
+    VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_PEER_REALM: "clerk",
+    VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_PEER_PUBKEY: peerPubkey,
+    VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_REPLICA: replica,
+    VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_STORAGE_NAMESPACE: "township:release-author-probe",
+    VITE_TOWNSHIP_RELEASE_AUTHOR_PROBE_GRANT_AUDIENCE_PUBKEY: grantAudiencePubkey,
+  },
+  {
+    workflow: resumeWorkflow,
+    retryDelayMs: 1,
+    timeoutMs: 50,
+    async sync() {
+      assert.fail("pushed resume path must not sync before reporting existing peer state");
+    },
+    async submitGrant() {
+      assert.fail("pushed resume path must not author a second grant");
+    },
+    async submitPost() {
+      assert.fail("pushed resume path must not author a second post");
+    },
+    async authorBadFrame() {
+      assert.fail("pushed resume path must not author a second bad frame");
+    },
+    async stateReport() {
+      return {
+        ok: true,
+        postMaterialized: true,
+        badAuthorityReason: "operation_not_granted",
+        appGrantAuthorityAccepted: true,
+      };
+    },
+    async invoke(command, args) {
+      if (command === "lattice_log_probe") pushedResumeEmitted.push(String((args as { event?: unknown }).event));
+      return null;
+    },
+  },
+);
+assert.equal(pushedResumeResult?.outcome, "reported");
+assert.match(pushedResumeEmitted[1] ?? "", /phase=reload/);
+assert.match(pushedResumeEmitted[1] ?? "", /outbox_frame_count=0/);
+assert.match(pushedResumeEmitted[2] ?? "", /phase=peer/);
+assert.ok(!pushedResumeEmitted.some((line) => /phase=(grant|author|push)/.test(line)));
+
 console.log("\x1b[32m✓ release author probe contract checks passed\x1b[0m");
 
 function fakeWorkflow(publicKeyBase64: string): TownshipNativeWorkflow {
