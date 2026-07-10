@@ -36,7 +36,9 @@ interface ReleaseOnboardingProbeBuildConfig {
   localRealm: string;
   keyId: string;
   storageNamespace: string;
-  armState: string;
+  armState?: string;
+  stateExchangeUrl?: string;
+  stateExchangePort?: number;
   postText: string;
   badSummaryText: string;
   pauseAfterAuthorMs: string;
@@ -58,6 +60,12 @@ interface BrowserPairingPageServer {
   waitForPath(path: string, afterMs: number): Promise<BrowserPageObservation>;
 }
 
+interface PairingStateExchangeServer {
+  port: number;
+  server: Server;
+  waitForState(): Promise<string>;
+}
+
 const releaseApkPath = defaultReleaseApkPath();
 const buildConfig = releaseOnboardingProbeConfigFromBuildScript();
 const peerRealm = "clerk";
@@ -72,6 +80,7 @@ console.log("  Android release APK accepts browser-backed release onboarding con
 let serial: string | null = null;
 let spawnedEmulator: ManagedProcess | null = null;
 let peer: TownshipPeerProcess | null = null;
+let stateExchangeServer: PairingStateExchangeServer | null = null;
 
 try {
   const android = await ensureAndroidDevice();
@@ -86,8 +95,12 @@ try {
   peer?.kill();
   if (serial) {
     await removeReverseMapping(serial, buildConfig.port).catch(() => undefined);
+    if (buildConfig.stateExchangePort !== undefined) {
+      await removeReverseMapping(serial, buildConfig.stateExchangePort).catch(() => undefined);
+    }
     await forceStopApp(serial).catch(() => undefined);
   }
+  if (stateExchangeServer) await closeServer(stateExchangeServer.server).catch(() => undefined);
   await cleanupAndroid(serial, spawnedEmulator);
 }
 
@@ -98,6 +111,12 @@ async function runReleaseBrowserOnboardingConvergenceProof(serial: string): Prom
   await clearAppData(serial);
   await clearLogcat(serial);
   await forceStopApp(serial);
+
+  if (buildConfig.stateExchangeUrl !== undefined) {
+    stateExchangeServer = await startPairingStateExchangeServer(buildConfig.stateExchangeUrl);
+    await runAdb(serial, ["reverse", `tcp:${stateExchangeServer.port}`, `tcp:${stateExchangeServer.port}`], 30_000);
+    await assertReverseMapping(serial, stateExchangeServer.port, stateExchangeServer.port);
+  }
 
   const browserPackage = await resolveBrowserPackage(serial);
   console.log(`  resolved Android browser package ${browserPackage}`);
@@ -116,9 +135,20 @@ async function runReleaseBrowserOnboardingConvergenceProof(serial: string): Prom
   const armingLine = await waitForPairingProbeLog(serial, "arming", (line) => line.includes("outcome=armed"));
   assert.match(armingLine, /phase=arming/);
   assert.match(armingLine, /state_required=true/);
-  assert.doesNotMatch(armingLine, new RegExp(escapeRegExp(buildConfig.armState)));
+  if (buildConfig.armState !== undefined) {
+    assert.doesNotMatch(armingLine, new RegExp(escapeRegExp(buildConfig.armState)));
+  }
   assert.doesNotMatch(armingLine, forbiddenLogTerms());
   console.log(`  observed browser-onboarding arm ${armingLine.trim()}`);
+
+  const runtimeArmState = stateExchangeServer ? await stateExchangeServer.waitForState() : buildConfig.armState;
+  assert.ok(runtimeArmState, "browser onboarding smoke requires either a fixed arm state or runtime state exchange");
+  assert.match(runtimeArmState, /^[A-Za-z0-9_.:-]{8,128}$/);
+  if (buildConfig.armState === undefined) {
+    assert.match(runtimeArmState, /^[0-9a-f]{32}$/);
+    assert.notEqual(runtimeArmState, "release-onboarding-state-106");
+  }
+  assert.doesNotMatch(armingLine, new RegExp(escapeRegExp(runtimeArmState)));
 
   peer = await spawnTownshipPeer({
     peerRealm,
@@ -132,13 +162,31 @@ async function runReleaseBrowserOnboardingConvergenceProof(serial: string): Prom
   await assertReverseMapping(serial, buildConfig.port, peer.port);
 
   const handoff = exportTownshipCarrierPairingHandoff(pairingPeerConfig());
-  const stateLink = `township://pairing/${encodeURIComponent(handoff)}?state=${encodeURIComponent(buildConfig.armState)}`;
-  const pageServer = await startBrowserPairingPageServer({ "/state": stateLink });
+  const noStateLink = `township://pairing/${encodeURIComponent(handoff)}`;
+  const stateLink = `township://pairing/${encodeURIComponent(handoff)}?state=${encodeURIComponent(runtimeArmState)}`;
+  const pageServer = await startBrowserPairingPageServer({ "/no-state": noStateLink, "/state": stateLink });
   const pageBaseUrl = await browserPageBaseUrl(serial, pageServer.port);
 
   let browserDelivery: BrowserDeliveryEvidence;
   try {
     await clearLogcat(serial);
+    const blockedLine = await openBrowserPairingPageAndTapUntilBlocked(
+      serial,
+      browserPackage,
+      pageServer,
+      pageBaseUrl,
+      "/no-state",
+      runtimeArmState,
+    );
+    assert.match(blockedLine, /phase=deeplink/);
+    assert.match(blockedLine, /outcome=blocked/);
+    assert.match(blockedLine, /blocked_reason=state_mismatch/);
+    assert.match(blockedLine, /pairing_url_count=1/);
+    assert.doesNotMatch(blockedLine, new RegExp(escapeRegExp(runtimeArmState)));
+    assert.doesNotMatch(blockedLine, forbiddenLogTerms());
+    await assertNoPairingSavedYet(serial);
+    console.log(`  observed browser-delivered onboarding no-state block ${blockedLine.trim()}`);
+
     browserDelivery = await openBrowserPairingPageAndTap(serial, browserPackage, pageServer, pageBaseUrl, "/state");
 
     const pairingLine = await waitForPairingProbeLog(serial, "pairing", (line) => line.includes("outcome=saved"));
@@ -273,6 +321,9 @@ async function runReleaseBrowserOnboardingConvergenceProof(serial: string): Prom
   assert.doesNotMatch(finalPeerLine, forbiddenLogTerms());
   const finalLogcat = await runAdb(serial, ["logcat", "-d", "-s", "LATTICE_PROBE"], 10_000);
   assert.doesNotMatch(finalLogcat, /township-release-author-probe phase=author outcome=authored/);
+  if (buildConfig.armState === undefined) {
+    await assertLogcatDoesNotContain(serial, runtimeArmState);
+  }
   console.log(`  observed browser-onboarding final peer report ${finalPeerLine.trim()}`);
 }
 
@@ -307,8 +358,11 @@ function releaseOnboardingProbeConfigFromBuildScript(): ReleaseOnboardingProbeBu
   const packageJson = JSON.parse(readFileSync(join(shellRoot, "package.json"), "utf8")) as {
     scripts?: Record<string, string>;
   };
+  const buildScriptName =
+    process.env.TOWNSHIP_RELEASE_ONBOARDING_BUILD_SCRIPT ?? "tauri:android:build:release:onboarding-probe";
   const normalRelease = packageJson.scripts?.["tauri:android:build:release"] ?? "";
-  const script = packageJson.scripts?.["tauri:android:build:release:onboarding-probe"] ?? "";
+  const script = packageJson.scripts?.[buildScriptName] ?? "";
+  assert.ok(script, `missing release browser onboarding build script ${buildScriptName}`);
   assert.doesNotMatch(normalRelease, /VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE/);
   assert.doesNotMatch(
     script,
@@ -318,14 +372,38 @@ function releaseOnboardingProbeConfigFromBuildScript(): ReleaseOnboardingProbeBu
   const localRealm = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_LOCAL_REALM");
   const keyId = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_KEY_ID");
   const storageNamespace = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_STORAGE_NAMESPACE");
-  const armState = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_ARM_STATE");
+  const armState = optionalScriptEnv(script, "VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_ARM_STATE");
+  const stateExchangeUrl = optionalScriptEnv(script, "VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_STATE_EXCHANGE_URL");
   const postText = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_POST_TEXT");
   const badSummaryText = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_BAD_SUMMARY_TEXT");
   const pauseAfterAuthorMs = scriptEnv(script, "VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_PAUSE_AFTER_AUTHOR_MS");
   assert.equal(localRealm, "resident");
+  if (buildScriptName === "tauri:android:build:release:onboarding-state-probe") {
+    assert.equal(keyId, "township-release-onboarding-state-resident");
+    assert.equal(storageNamespace, "township:release-onboarding-state-probe");
+    assert.equal(armState, undefined);
+    assert.equal(stateExchangeUrl, "http://127.0.0.1:43197/pairing-state");
+    assert.equal(postText, "release-onboarding-state-post");
+    assert.equal(badSummaryText, "release-onboarding-state-unauthorized-summary");
+    assert.equal(pauseAfterAuthorMs, "30000");
+    return {
+      port: 43194,
+      localRealm,
+      keyId,
+      storageNamespace,
+      stateExchangeUrl,
+      stateExchangePort: 43197,
+      postText,
+      badSummaryText,
+      pauseAfterAuthorMs,
+    };
+  }
+
+  assert.equal(buildScriptName, "tauri:android:build:release:onboarding-probe");
   assert.equal(keyId, "township-release-onboarding-resident");
   assert.equal(storageNamespace, "township:release-onboarding-probe");
   assert.equal(armState, "release-onboarding-state-106");
+  assert.equal(stateExchangeUrl, undefined);
   assert.equal(postText, "release-onboarding-post");
   assert.equal(badSummaryText, "release-onboarding-unauthorized-summary");
   assert.equal(pauseAfterAuthorMs, "30000");
@@ -385,6 +463,69 @@ async function startBrowserPairingPageServer(routes: Record<string, string>): Pr
         await delay(250);
       }
       throw new Error(`timed out waiting for browser request to ${path}; saw ${Array.from(seenPaths.keys()).join(", ") || "none"}`);
+    },
+  };
+}
+
+async function startPairingStateExchangeServer(exchangeUrl: string): Promise<PairingStateExchangeServer> {
+  const parsed = new URL(exchangeUrl);
+  assert.equal(parsed.hostname, "127.0.0.1");
+  assert.equal(parsed.pathname, "/pairing-state");
+  const port = Number(parsed.port);
+  assert.equal(port, 43197);
+  let observedState: string | null = null;
+
+  const server = createServer((request, response) => {
+    response.setHeader("access-control-allow-origin", "*");
+    response.setHeader("access-control-allow-methods", "POST, OPTIONS");
+    response.setHeader("access-control-allow-headers", "content-type");
+    response.setHeader("cache-control", "no-store");
+
+    if (request.method === "OPTIONS") {
+      response.writeHead(204).end();
+      return;
+    }
+
+    if (request.method !== "POST" || request.url?.split("?")[0] !== "/pairing-state") {
+      response.writeHead(404).end("missing state exchange route");
+      return;
+    }
+
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", (chunk: string) => {
+      body += chunk;
+      if (body.length > 256) request.destroy(new Error("state exchange body too large"));
+    });
+    request.on("end", () => {
+      const state = body.trim();
+      if (!/^[0-9a-f]{32}$/.test(state)) {
+        response.writeHead(400).end("invalid state");
+        return;
+      }
+      observedState = state;
+      response.writeHead(204).end();
+    });
+  });
+
+  await new Promise<void>((resolveListen, rejectListen) => {
+    server.once("error", rejectListen);
+    server.listen(port, "127.0.0.1", () => {
+      server.off("error", rejectListen);
+      resolveListen();
+    });
+  });
+
+  return {
+    port,
+    server,
+    async waitForState(): Promise<string> {
+      const deadline = Date.now() + 20_000;
+      while (Date.now() < deadline) {
+        if (observedState) return observedState;
+        await delay(250);
+      }
+      throw new Error("timed out waiting for app-minted browser onboarding state exchange");
     },
   };
 }
@@ -495,7 +636,7 @@ async function openBrowserPairingPageAndTap(
   browserPackage: string,
   pageServer: BrowserPairingPageServer,
   pageBaseUrl: string,
-  path: "/state",
+  path: "/no-state" | "/state",
 ): Promise<BrowserDeliveryEvidence> {
   const pageUrl = `${pageBaseUrl}${path}`;
   for (let pageAttempt = 0; pageAttempt < 3; pageAttempt += 1) {
@@ -541,6 +682,80 @@ async function openBrowserPairingPageAndTap(
     }
   }
   throw new Error(`browser onboarding page ${path} could not be tapped without Chrome crash UI`);
+}
+
+async function openBrowserPairingPageAndTapOnce(
+  serial: string,
+  browserPackage: string,
+  pageServer: BrowserPairingPageServer,
+  pageBaseUrl: string,
+  path: "/no-state" | "/state",
+): Promise<BrowserDeliveryEvidence> {
+  const pageUrl = `${pageBaseUrl}${path}`;
+  for (let pageAttempt = 0; pageAttempt < 3; pageAttempt += 1) {
+    await tapFirstVisibleText(serial, ["Close app"]);
+    await runAdb(serial, ["shell", "am", "force-stop", browserPackage], 30_000).catch(() => undefined);
+    const startRequestedAtMs = Date.now();
+    const startOutput = await runAdb(
+      serial,
+      [
+        "shell",
+        "am",
+        "start",
+        "-a",
+        "android.intent.action.VIEW",
+        "-c",
+        "android.intent.category.BROWSABLE",
+        "-d",
+        pageUrl,
+        "-p",
+        browserPackage,
+      ],
+      30_000,
+    );
+    console.log(`  opened browser onboarding page ${pageUrl} with ${browserPackage}${startOutput.trim() ? ` (${startOutput.trim()})` : ""}`);
+    const observed = await pageServer.waitForPath(path, startRequestedAtMs);
+    await delay(1_500);
+    if (await tapFirstVisibleText(serial, ["Close app"])) {
+      await delay(500);
+      continue;
+    }
+    await tapFirstVisibleText(serial, ["Wait"]);
+    await delay(300);
+    const tapIssuedAtMs = Date.now();
+    await tapBrowserPairingLink(serial);
+    return { ...observed, pageUrl, tapIssuedAtMs };
+  }
+  throw new Error(`browser onboarding page ${path} could not be opened without Chrome crash UI`);
+}
+
+async function openBrowserPairingPageAndTapUntilBlocked(
+  serial: string,
+  browserPackage: string,
+  pageServer: BrowserPairingPageServer,
+  pageBaseUrl: string,
+  path: "/no-state",
+  runtimeArmState: string,
+): Promise<string> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      await openBrowserPairingPageAndTapOnce(serial, browserPackage, pageServer, pageBaseUrl, path);
+      const blockedLine = await waitForPairingProbeLog(
+        serial,
+        "deeplink",
+        (line) => line.includes("outcome=blocked") && line.includes("blocked_reason=state_mismatch"),
+        12_000,
+      );
+      assert.doesNotMatch(blockedLine, new RegExp(escapeRegExp(runtimeArmState)));
+      return blockedLine;
+    } catch (error) {
+      lastError = error;
+      await tapFirstVisibleText(serial, ["Close app", "Wait"]);
+      await delay(750);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 async function browserPageBaseUrl(serial: string, pagePort: number): Promise<string> {
@@ -670,10 +885,11 @@ async function waitForOnboardingProbeLog(
 
 async function waitForPairingProbeLog(
   serial: string,
-  phase: "reload" | "arming" | "pairing" | "sync",
+  phase: "reload" | "arming" | "pairing" | "sync" | "deeplink",
   predicate: (line: string) => boolean = () => true,
+  timeoutMs?: number,
 ): Promise<string> {
-  return waitForProbeLog(serial, TOWNSHIP_RELEASE_PAIRING_PROBE_LOG_PREFIX, phase, predicate);
+  return waitForProbeLog(serial, TOWNSHIP_RELEASE_PAIRING_PROBE_LOG_PREFIX, phase, predicate, timeoutMs);
 }
 
 async function waitForAuthorProbeLog(
@@ -689,8 +905,9 @@ async function waitForProbeLog(
   prefix: string,
   phase: string,
   predicate: (line: string) => boolean,
+  timeoutMs = 90_000,
 ): Promise<string> {
-  const deadline = Date.now() + 90_000;
+  const deadline = Date.now() + timeoutMs;
   let lastOutput = "";
   while (Date.now() < deadline) {
     const output = await runAdb(serial, ["logcat", "-d", "-s", "LATTICE_PROBE"], 10_000).catch((error) => {
@@ -732,6 +949,24 @@ async function waitForAppNotRunning(serial: string): Promise<void> {
   throw new Error(`expected ${appId} to be stopped before browser onboarding relaunch; pidof returned ${lastPid}`);
 }
 
+async function assertNoPairingSavedYet(serial: string): Promise<void> {
+  const output = await runAdb(serial, ["logcat", "-d", "-s", "LATTICE_PROBE"], 10_000);
+  const savedLine = output
+    .split(/\r?\n/)
+    .find(
+      (candidate) =>
+        candidate.includes(TOWNSHIP_RELEASE_PAIRING_PROBE_LOG_PREFIX) &&
+        candidate.includes("phase=pairing") &&
+        candidate.includes("outcome=saved"),
+    );
+  assert.equal(savedLine, undefined, `no-state browser onboarding link should not save peer config before runtime state:\n${savedLine ?? output}`);
+}
+
+async function assertLogcatDoesNotContain(serial: string, value: string): Promise<void> {
+  const output = await runAdb(serial, ["logcat", "-d", "-s", "LATTICE_PROBE"], 10_000);
+  assert.doesNotMatch(output, new RegExp(escapeRegExp(value)), "runtime onboarding state must not be emitted to probe logs");
+}
+
 async function assertReverseMapping(serial: string, devicePort: number, hostPort: number): Promise<void> {
   const output = await runAdb(serial, ["reverse", "--list"], 10_000);
   assert.match(
@@ -766,6 +1001,11 @@ function scriptEnv(script: string, name: string): string {
   const match = new RegExp(`(?:^|\\s)${name}=(?:'([^']+)'|(\\S+))`).exec(script);
   assert.ok(match?.[1] ?? match?.[2], `release browser onboarding build script must bake ${name}`);
   return match[1] ?? match[2] ?? "";
+}
+
+function optionalScriptEnv(script: string, name: string): string | undefined {
+  const match = new RegExp(`(?:^|\\s)${name}=(?:'([^']+)'|(\\S+))`).exec(script);
+  return match?.[1] ?? match?.[2];
 }
 
 function base64UrlToBase64(value: string): string {

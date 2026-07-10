@@ -59,6 +59,39 @@ assert.deepEqual(grantlessConfig, {
   postText: "release probe post",
   badSummaryText: "release probe unauthorized summary",
 });
+const stateExchangeEnv = {
+  VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_LOCAL_REALM: "resident",
+  VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_KEY_ID: "township-release-onboarding-state-resident",
+  VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_STORAGE_NAMESPACE: "township:release-onboarding-state-probe",
+  VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_STATE_EXCHANGE_URL: "http://127.0.0.1:43197/pairing-state",
+  VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_POST_TEXT: "release onboarding state post",
+  VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_BAD_SUMMARY_TEXT: "release onboarding state bad summary",
+};
+const stateExchangeConfig = townshipReleaseOnboardingProbeConfigFromEnv(stateExchangeEnv);
+assert.deepEqual(stateExchangeConfig, {
+  localRealm: "resident",
+  keyId: "township-release-onboarding-state-resident",
+  storageNamespace: "township:release-onboarding-state-probe",
+  stateExchangeUrl: "http://127.0.0.1:43197/pairing-state",
+  postText: "release onboarding state post",
+  badSummaryText: "release onboarding state bad summary",
+});
+assert.equal(
+  townshipReleaseOnboardingProbeConfigFromEnv({
+    ...stateExchangeEnv,
+    VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_ARM_STATE: "release-onboarding-state-106",
+  }),
+  null,
+  "runtime state exchange must not share a build-time arm-state constant",
+);
+assert.equal(
+  townshipReleaseOnboardingProbeConfigFromEnv({
+    ...stateExchangeEnv,
+    VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_STATE_EXCHANGE_URL: "http://example.test/pairing-state",
+  }),
+  null,
+  "runtime state exchange must reject non-loopback cleartext callback URLs",
+);
 assert.equal(
   townshipReleaseOnboardingProbeConfigFromEnv({
     ...grantlessEnv,
@@ -210,6 +243,70 @@ assert.ok(emitted.some((line) => line.includes("township-release-pairing-probe p
 assert.ok(emitted.some((line) => line.includes("township-release-author-probe phase=grant outcome=authored")));
 assert.ok(emitted.some((line) => line.includes("township-release-author-probe phase=author outcome=authored")));
 assert.ok(emitted.some((line) => line.includes("township-release-onboarding-probe phase=complete outcome=reported")));
+
+const stateExchangeEmitted: string[] = [];
+const stateExchangeResult = await logTownshipReleaseOnboardingProbeFromEnv(stateExchangeEnv, {
+  workflow: fakeWorkflow(),
+  async pair({ config: pairConfig, onResult }) {
+    assert.equal(pairConfig.storageNamespace, "township:release-onboarding-state-probe");
+    assert.equal(pairConfig.armState, undefined);
+    assert.equal(pairConfig.stateExchangeUrl, "http://127.0.0.1:43197/pairing-state");
+    await onResult?.({
+      phase: "pairing",
+      outcome: "saved",
+      peerFingerprint: "65ed56fb...b5d440d9",
+      hostClass: "loopback",
+      urlPort: "43194",
+    });
+    return {
+      phase: "sync",
+      outcome: "synced",
+      elapsedMs: 1,
+      peerFingerprint: "65ed56fb...b5d440d9",
+      pulledOpIds: ["grant"],
+      localOpIds: ["grant"],
+      delegationFrameIds: ["grant"],
+      carrierFrameCount: 0,
+      pushedFrameCount: 0,
+      acceptedCount: 0,
+    };
+  },
+  async loadPeer() {
+    return peer;
+  },
+  async author({ config: authorConfig, onResult }) {
+    assert.deepEqual(authorConfig.peer, peer);
+    assert.equal(authorConfig.storageNamespace, "township:release-onboarding-state-probe");
+    assert.equal(authorConfig.postText, "release onboarding state post");
+    await onResult?.({
+      phase: "author",
+      outcome: "authored",
+      postFrameId: "post",
+      badFrameId: "bad",
+      capId: "grant-delegation",
+      authorPublicKeyBase64: "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+      localOpCount: 3,
+      carrierFrameCount: 2,
+    });
+    return {
+      phase: "peer",
+      outcome: "reported",
+      postFrameId: "post",
+      badFrameId: "bad",
+      postMaterialized: true,
+      badAuthorityReason: "operation_not_granted",
+      carrierFrameCount: 0,
+    };
+  },
+  async invoke(command, args) {
+    if (command === "lattice_log_probe") stateExchangeEmitted.push(String((args as { event?: unknown }).event));
+    return null;
+  },
+});
+assert.equal(stateExchangeResult?.phase, "complete");
+assert.ok(
+  stateExchangeEmitted.some((line) => line.includes("township-release-onboarding-probe phase=complete outcome=reported")),
+);
 
 const resumeEmitted: string[] = [];
 let resumePairCalled = false;

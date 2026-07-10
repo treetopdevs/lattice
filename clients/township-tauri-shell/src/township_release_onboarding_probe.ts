@@ -36,6 +36,7 @@ export interface TownshipReleaseOnboardingProbeEnv {
   VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_KEY_ID?: string;
   VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_STORAGE_NAMESPACE?: string;
   VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_ARM_STATE?: string;
+  VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_STATE_EXCHANGE_URL?: string;
   VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_POST_TEXT?: string;
   VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_BAD_SUMMARY_TEXT?: string;
   VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_GRANT_AUDIENCE_PUBKEY?: string;
@@ -48,7 +49,8 @@ export interface TownshipReleaseOnboardingProbeConfig {
   localRealm: string;
   keyId: string;
   storageNamespace: string;
-  armState: string;
+  armState?: string;
+  stateExchangeUrl?: string;
   postText: string;
   badSummaryText: string;
   grantAudiencePubkey?: string;
@@ -107,6 +109,7 @@ export function townshipReleaseOnboardingProbeConfigFromEnv(
     present(env.VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_STORAGE_NAMESPACE) ??
     TOWNSHIP_RELEASE_ONBOARDING_PROBE_STORAGE_NAMESPACE;
   const armState = present(env.VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_ARM_STATE);
+  const stateExchangeUrl = present(env.VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_STATE_EXCHANGE_URL);
   const postText =
     present(env.VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_POST_TEXT) ??
     TOWNSHIP_RELEASE_AUTHOR_PROBE_DEFAULT_POST_TEXT;
@@ -118,16 +121,26 @@ export function townshipReleaseOnboardingProbeConfigFromEnv(
   const retryDelayMs = positiveInteger(env.VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_RETRY_DELAY_MS);
   const pauseAfterAuthorMs = positiveInteger(env.VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_PAUSE_AFTER_AUTHOR_MS);
 
-  if (!localRealm || !armState || !validArmState(armState) || (grantAudiencePubkey !== null && !validPublicKey(grantAudiencePubkey))) return null;
+  if (
+    !localRealm ||
+    (armState === null && stateExchangeUrl === null) ||
+    (armState !== null && !validArmState(armState)) ||
+    (stateExchangeUrl !== null && !validStateExchangeUrl(stateExchangeUrl)) ||
+    (armState !== null && stateExchangeUrl !== null) ||
+    (grantAudiencePubkey !== null && !validPublicKey(grantAudiencePubkey))
+  ) {
+    return null;
+  }
 
   const config: TownshipReleaseOnboardingProbeConfig = {
     localRealm,
     keyId,
     storageNamespace,
-    armState,
     postText,
     badSummaryText,
   };
+  if (armState !== null) config.armState = armState;
+  if (stateExchangeUrl !== null) config.stateExchangeUrl = stateExchangeUrl;
   if (grantAudiencePubkey !== null) config.grantAudiencePubkey = grantAudiencePubkey;
   if (timeoutMs !== null) config.timeoutMs = timeoutMs;
   if (retryDelayMs !== null) config.retryDelayMs = retryDelayMs;
@@ -171,8 +184,9 @@ export async function logTownshipReleaseOnboardingProbeFromEnv(
     localRealm: config.localRealm,
     keyId: config.keyId,
     storageNamespace: config.storageNamespace,
-    armState: config.armState,
   };
+  if (config.armState !== undefined) pairingConfig.armState = config.armState;
+  if (config.stateExchangeUrl !== undefined) pairingConfig.stateExchangeUrl = config.stateExchangeUrl;
   if (config.timeoutMs !== undefined) pairingConfig.timeoutMs = config.timeoutMs;
   if (config.retryDelayMs !== undefined) pairingConfig.retryDelayMs = config.retryDelayMs;
 
@@ -303,6 +317,17 @@ function validArmState(value: string): boolean {
 function validPublicKey(value: string): boolean {
   try {
     return atob(value).length === 32;
+  } catch {
+    return false;
+  }
+}
+
+function validStateExchangeUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol === "https:") return true;
+    if (parsed.protocol !== "http:") return false;
+    return ["127.0.0.1", "localhost", "[::1]"].includes(parsed.hostname);
   } catch {
     return false;
   }

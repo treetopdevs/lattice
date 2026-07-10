@@ -127,6 +127,7 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   const plan108 = readText("plans/108-tauri-android-release-browser-backed-onboarding-convergence-e1.md");
   const plan109 = readText("plans/109-tauri-android-release-browser-backed-onboarding-child-grant-e1.md");
   const plan110 = readText("plans/110-tauri-android-release-browser-backed-pairing-state-exchange-e1.md");
+  const plan111 = readText("plans/111-tauri-android-release-browser-backed-onboarding-state-exchange-e1.md");
   const releaseTransportAdr = readText("docs/adr/0010-android-release-carrier-transport-policy.md");
 
   assert.equal(pkg.scripts["tauri:ios:init"], "tauri ios init --ci --skip-targets-install");
@@ -193,6 +194,10 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
     "tsx test/tauri_android_release_browser_onboarding_probe.ts",
   );
   assert.equal(
+    pkg.scripts["tauri:android:release:browser-onboarding-state-exchange:smoke"],
+    "TOWNSHIP_RELEASE_ONBOARDING_BUILD_SCRIPT=tauri:android:build:release:onboarding-state-probe tsx test/tauri_android_release_browser_onboarding_probe.ts",
+  );
+  assert.equal(
     pkg.scripts["tauri:android:release:browser-onboarding-grant:smoke"],
     "tsx test/tauri_android_release_browser_onboarding_grant_probe.ts",
   );
@@ -211,6 +216,10 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.equal(
     pkg.scripts["tauri:android:release:browser-onboarding"],
     "npm run tauri:android:build:release:onboarding-probe && npm run tauri:android:release:browser-onboarding:smoke",
+  );
+  assert.equal(
+    pkg.scripts["tauri:android:release:browser-onboarding-state-exchange"],
+    "npm run tauri:android:build:release:onboarding-state-probe && npm run tauri:android:release:browser-onboarding-state-exchange:smoke",
   );
   assert.equal(
     pkg.scripts["tauri:android:release:browser-onboarding-grant"],
@@ -302,6 +311,23 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
     pkg.scripts["tauri:android:build:release:onboarding-probe"],
     /VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_(?:URL|PEER_REALM|PEER_PUBKEY|REPLICA)=/,
     "single-APK onboarding probe must receive peer config from the OS-delivered pairing handoff",
+  );
+  assert.match(
+    pkg.scripts["tauri:android:build:release:onboarding-state-probe"],
+    /VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_STORAGE_NAMESPACE=township:release-onboarding-state-probe/,
+  );
+  assert.match(
+    pkg.scripts["tauri:android:build:release:onboarding-state-probe"],
+    /VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_STATE_EXCHANGE_URL=http:\/\/127\.0\.0\.1:43197\/pairing-state/,
+  );
+  assert.doesNotMatch(
+    pkg.scripts["tauri:android:build:release:onboarding-state-probe"],
+    /VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_ARM_STATE=/,
+  );
+  assert.doesNotMatch(
+    pkg.scripts["tauri:android:build:release:onboarding-state-probe"],
+    /VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_(?:URL|PEER_REALM|PEER_PUBKEY|REPLICA)=/,
+    "browser-backed runtime-state onboarding probe must receive peer config from the browser-delivered pairing handoff",
   );
   assert.match(
     pkg.scripts["tauri:android:build:release:onboarding-grant-probe"],
@@ -592,6 +618,9 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(releaseOnboardingProbeSource, /TOWNSHIP_RELEASE_ONBOARDING_PROBE_STORAGE_NAMESPACE = "township:release-onboarding-probe"/);
   assert.match(releaseOnboardingProbeSource, /townshipReleaseOnboardingProbeConfigFromEnv/);
   assert.match(releaseOnboardingProbeSource, /VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_ARM_STATE/);
+  assert.match(releaseOnboardingProbeSource, /VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_STATE_EXCHANGE_URL/);
+  assert.match(releaseOnboardingProbeSource, /stateExchangeUrl/);
+  assert.match(releaseOnboardingProbeSource, /validStateExchangeUrl/);
   assert.match(releaseOnboardingProbeSource, /VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_POST_TEXT/);
   assert.match(releaseOnboardingProbeSource, /VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_GRANT_AUDIENCE_PUBKEY/);
   assert.match(releaseOnboardingProbeSource, /grantAudiencePubkey/);
@@ -898,6 +927,10 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(releaseOnboardingProbeSource, /townshipReleaseOnboardingProbeLogLine/);
   assert.doesNotMatch(releaseOnboardingProbeSource, /VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_(?:URL|PEER_REALM|PEER_PUBKEY|REPLICA)/);
   assert.match(releaseOnboardingProbeContract, /release-onboarding-state-106/);
+  assert.match(releaseOnboardingProbeContract, /http:\/\/127\.0\.0\.1:43197\/pairing-state/);
+  assert.match(releaseOnboardingProbeContract, /runtime state exchange must not share a build-time arm-state constant/);
+  assert.match(releaseOnboardingProbeContract, /runtime state exchange must reject non-loopback cleartext callback URLs/);
+  assert.match(releaseOnboardingProbeContract, /township:release-onboarding-state-probe/);
   assert.match(releaseOnboardingProbeContract, /township:release-onboarding-probe/);
   assert.match(releaseOnboardingProbeContract, /VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_GRANT_AUDIENCE_PUBKEY/);
   assert.match(releaseOnboardingProbeContract, /township-release-author-probe phase=grant outcome=authored/);
@@ -965,6 +998,14 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(androidReleaseBrowserOnboardingSmoke, /"cmd", "package", "resolve-activity"/);
   assert.match(androidReleaseBrowserOnboardingSmoke, /assertBrowserPagePrecededPairingSave/);
   assert.match(androidReleaseBrowserOnboardingSmoke, /phase=pairing/);
+  assert.match(androidReleaseBrowserOnboardingSmoke, /blocked_reason=state_mismatch/);
+  assert.match(androidReleaseBrowserOnboardingSmoke, /assertNoPairingSavedYet/);
+  assert.match(androidReleaseBrowserOnboardingSmoke, /TOWNSHIP_RELEASE_ONBOARDING_BUILD_SCRIPT/);
+  assert.match(androidReleaseBrowserOnboardingSmoke, /startPairingStateExchangeServer/);
+  assert.match(androidReleaseBrowserOnboardingSmoke, /stateExchangeUrl/);
+  assert.match(androidReleaseBrowserOnboardingSmoke, /waitForState/);
+  assert.match(androidReleaseBrowserOnboardingSmoke, /assertLogcatDoesNotContain/);
+  assert.match(androidReleaseBrowserOnboardingSmoke, /runtime onboarding state must not be emitted to probe logs/);
   assert.match(androidReleaseBrowserOnboardingSmoke, /phase=complete/);
   assert.match(androidReleaseBrowserOnboardingSmoke, /post_materialized=true/);
   assert.match(androidReleaseBrowserOnboardingSmoke, /bad_authority_reason=operation_not_granted/);
@@ -1133,8 +1174,11 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(strategy, /Plan 110 adds Android release browser-backed pairing state exchange/);
   assert.match(strategy, /runtime state is absent\s+from probe logs/);
   assert.match(strategy, /does not prove chooser UI or cross-device state exchange/);
-  assert.match(strategy, /Android Tauri release APK: bounded release pull\/reload, device-local authoring, app-originated post-only attenuated grants, push\/outbox drain, OS deep-link peer-config persistence, release armed OS pairing delivery with a fixed probe-only state, Android release cold-start pairing delivery, single-APK pairing-to-post convergence, browser-backed pairing delivery, browser-backed onboarding convergence, browser-backed onboarding child-grant composition, browser-backed runtime pairing state exchange, real-app imported pairing confirmation policy, installed unarmed OS deep-link blocking, and source-level user-armed state-bound one-shot import gating are met by plans 091-095, 100, 102, 103, 105, 106, 107, 108, 109, and 110/);
-  assert.match(strategy, /Android Tauri release APK: bounded carrier pull\/reload, OS deep-link peer-config persistence, release armed OS pairing delivery with a fixed probe-only state, Android release cold-start pairing delivery, single-APK pairing-to-post convergence, browser-backed pairing delivery, browser-backed onboarding convergence, browser-backed onboarding child-grant composition, browser-backed runtime pairing state exchange, device-local post authoring, app-originated post-only attenuated grants, persisted pending-outbox reload, push\/outbox drain, peer-side authority enforcement, real-app imported pairing confirmation policy, installed unarmed OS deep-link blocking, and source-level user-armed state-bound one-shot import gating are met by plans 091-095, 100, 102, 103, 105, 106, 107, 108, 109, and 110/);
+  assert.match(strategy, /Plan 111 adds Android release browser-backed onboarding state exchange/);
+  assert.match(strategy, /runtime state-bearing browser link drives the same onboarding pull-author-reload-push-report flow/);
+  assert.match(strategy, /does not prove chooser UI, cross-device exchange, authority origination, or full mobile onboarding/);
+  assert.match(strategy, /Android Tauri release APK: bounded release pull\/reload, device-local authoring, app-originated post-only attenuated grants, push\/outbox drain, OS deep-link peer-config persistence, release armed OS pairing delivery with a fixed probe-only state, Android release cold-start pairing delivery, single-APK pairing-to-post convergence, browser-backed pairing delivery, browser-backed onboarding convergence, browser-backed onboarding child-grant composition, browser-backed runtime pairing state exchange, browser-backed onboarding runtime state exchange, real-app imported pairing confirmation policy, installed unarmed OS deep-link blocking, and source-level user-armed state-bound one-shot import gating are met by plans 091-095, 100, 102, 103, 105, 106, 107, 108, 109, 110, and 111/);
+  assert.match(strategy, /Android Tauri release APK: bounded carrier pull\/reload, OS deep-link peer-config persistence, release armed OS pairing delivery with a fixed probe-only state, Android release cold-start pairing delivery, single-APK pairing-to-post convergence, browser-backed pairing delivery, browser-backed onboarding convergence, browser-backed onboarding child-grant composition, browser-backed runtime pairing state exchange, browser-backed onboarding runtime state exchange, device-local post authoring, app-originated post-only attenuated grants, persisted pending-outbox reload, push\/outbox drain, peer-side authority enforcement, real-app imported pairing confirmation policy, installed unarmed OS deep-link blocking, and source-level user-armed state-bound one-shot import gating are met by plans 091-095, 100, 102, 103, 105, 106, 107, 108, 109, 110, and 111/);
   assert.match(strategy, /Packaged macOS Tauri app: real-app armed one-shot OS delivery is met by plan 096/);
   assert.match(strategy, /the traced no-side-effect link-load guard is met by plan 097/);
   assert.match(strategy, /app-local state binding is met by plan 100/);
@@ -1212,12 +1256,17 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(buildMap, /browser-backed onboarding child-grant composition proof/);
   assert.match(buildMap, /Plan 110 adds Android release browser-backed pairing state exchange/);
   assert.match(buildMap, /runtime state is absent from probe\s+logs/);
-  assert.match(buildMap, /plans 023-110/);
+  assert.match(buildMap, /Plan 111 adds Android release browser-backed onboarding state exchange/);
+  assert.match(buildMap, /runtime state-bearing browser link drives the same onboarding pull-author-reload-push-report flow/);
+  assert.match(buildMap, /plans 023-111/);
   assert.match(
     buildMap,
-    /Android release APK pull-and-reload persistence provides a release pull \+ KV reload proof[\s\S]*Android release APK device-local post authoring \+ push\/outbox-drain proof exists under a host-minted bootstrap grant with pre-push pending-outbox cold reload[\s\S]*Android release APK app-originated post-only attenuated grant proof exists[\s\S]*Android release APK OS deep-link pairing ingress \+ persisted peer-config proof exists in a dedicated probe namespace[\s\S]*Android release APK armed OS pairing delivery with fixed probe-only state exists in the same pairing probe[\s\S]*Android release cold-start pairing delivery exists in the same pairing probe[\s\S]*single-APK Android release pairing-to-post convergence proof exists[\s\S]*Android release browser-backed pairing delivery proof exists[\s\S]*Android release browser-backed onboarding convergence proof exists[\s\S]*Android release browser-backed onboarding child-grant composition proof exists[\s\S]*Android release browser-backed runtime state exchange proof exists/,
+    /Android release APK pull-and-reload persistence provides a release pull \+ KV reload proof[\s\S]*Android release APK device-local post authoring \+ push\/outbox-drain proof exists under a host-minted bootstrap grant with pre-push pending-outbox cold reload[\s\S]*Android release APK app-originated post-only attenuated grant proof exists[\s\S]*Android release APK OS deep-link pairing ingress \+ persisted peer-config proof exists in a dedicated probe namespace[\s\S]*Android release APK armed OS pairing delivery with fixed probe-only state exists in the same pairing probe[\s\S]*Android release cold-start pairing delivery exists in the same pairing probe[\s\S]*single-APK Android release pairing-to-post convergence proof exists[\s\S]*Android release browser-backed pairing delivery proof exists[\s\S]*Android release browser-backed onboarding convergence proof exists[\s\S]*Android release browser-backed onboarding child-grant composition proof exists[\s\S]*Android release browser-backed runtime state exchange proof exists[\s\S]*Android release browser-backed onboarding runtime state exchange proof exists/,
   );
-  assert.match(buildMap, /chooser coverage, chooser-backed or cross-device pairing state exchange, authority origination, QR camera onboarding, LAN discovery/);
+  assert.match(
+    buildMap,
+    /chooser coverage, browser-backed child-grant runtime state exchange, chooser-backed or cross-device pairing state exchange, authority origination, QR camera onboarding, LAN discovery/,
+  );
   assert.doesNotMatch(
     buildMap,
     /release BEAM carrier handshake\/status\/state-report proof exists while release Sync\/outbox\/KV convergence remains unproven/,
@@ -1341,6 +1390,7 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(plansIndex, /\| 108 \| Tauri Android release browser-backed onboarding convergence \| P1 \| M \| 106, 107 \| DONE \|/);
   assert.match(plansIndex, /\| 109 \| Tauri Android release browser-backed onboarding child grant \| P1 \| M \| 102, 108 \| DONE \|/);
   assert.match(plansIndex, /\| 110 \| Tauri Android release browser-backed pairing state exchange \| P1 \| M \| 100, 107 \| DONE \|/);
+  assert.match(plansIndex, /\| 111 \| Tauri Android release browser-backed onboarding state exchange \| P1 \| M \| 108, 110 \| DONE \|/);
   assert.match(plan106, /## Status\s+DONE/);
   assert.match(plan106, /single-APK Android release onboarding convergence/);
   assert.match(plan106, /peer config comes only from the OS-delivered pairing handoff/);
@@ -1388,6 +1438,19 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(plan110, /does not prove chooser UI/);
   assert.match(plan110, /does not prove cross-device/);
   assert.match(plan110, /does not prove full mobile onboarding/);
+  assert.match(plan111, /## Status\s+DONE/);
+  assert.match(plan111, /Android release browser-backed onboarding state exchange/);
+  assert.match(plan111, /app-minted runtime state/);
+  assert.match(plan111, /VITE_TOWNSHIP_RELEASE_ONBOARDING_PROBE_STATE_EXCHANGE_URL/);
+  assert.match(plan111, /No build-time `ARM_STATE`/);
+  assert.match(plan111, /blocked_reason=state_mismatch/);
+  assert.match(plan111, /runtime onboarding state must not be emitted to probe logs/);
+  assert.match(plan111, /post_materialized=true/);
+  assert.match(plan111, /bad_authority_reason=operation_not_granted/);
+  assert.match(plan111, /does not prove chooser UI/);
+  assert.match(plan111, /does not prove cross-device/);
+  assert.match(plan111, /does not prove authority origination/);
+  assert.match(plan111, /does not prove full mobile onboarding/);
   assert.match(plan093, /## Status\s+(?:IN PROGRESS|DONE)/);
   assert.match(plan093, /Android release deep-link pairing ingress/);
   assert.match(plan093, /township:\/\/pairing/);
