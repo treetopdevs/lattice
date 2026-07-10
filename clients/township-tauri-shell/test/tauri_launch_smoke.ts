@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash, createPrivateKey, createPublicKey, sign as edSign, verify as edVerify } from "node:crypto";
 import { tmpdir } from "node:os";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
@@ -41,13 +41,16 @@ const vector = JSON.parse(
 ) as CarrierVector;
 
 const smokeKeyId = "township-resident";
-const smokeUrl = "http://127.0.0.1:5173/";
 const tracePath = join(tmpdir(), `township-tauri-smoke-${process.pid}.log`);
+const appBundlePath = join(shellRoot, "src-tauri", "target", "release", "bundle", "macos", "Township.app");
+const appIdentifier = "dev.treetop.lattice.township";
 
 console.log(`\n▸ ${vector.scenario} Tauri live window peer smoke`);
 
-await assertPortFree(5173);
-await run("cargo", ["build", "--features", "township-dev-trace", "--bin", "township-tauri-shell"], join(shellRoot, "src-tauri"));
+if (process.platform !== "darwin") {
+  console.log("\x1b[33m- Tauri live window peer smoke is macOS-only; skipped on this OS\x1b[0m");
+  process.exit(0);
+}
 
 const identity = seededEd25519Identity(vector.client.sessionSeed);
 assert.equal(identity.publicKeyBase64, vector.client.sessionPubkey);
@@ -58,26 +61,34 @@ const verifier: CarrierVerifier = {
 };
 
 const peer = await spawnTownshipPeer(vector);
-let vite: ManagedProcess | null = null;
 let app: ManagedProcess | null = null;
 
 try {
-  vite = await spawnVite(peer.port);
-  await waitForHttp(smokeUrl);
+  rmSync(tracePath, { force: true });
+  await buildDevTraceApp(peer.port);
+  assert.ok(existsSync(appBundlePath), `expected bundled app at ${appBundlePath}`);
+  await quitTownshipApp();
 
   app = spawnManaged(
-    binaryPath(),
-    [],
+    "open",
+    [
+      "-n",
+      "-W",
+      "--env",
+      `TOWNSHIP_DEV_TRACE_FILE=${tracePath}`,
+      "--env",
+      `TOWNSHIP_DEV_CARRIER_KEY_ID=${smokeKeyId}`,
+      "--env",
+      `TOWNSHIP_DEV_CARRIER_KEY_SEED=${vector.client.sessionSeed}`,
+      appBundlePath,
+    ],
     shellRoot,
-    {
-      TOWNSHIP_DEV_CARRIER_KEY_ID: smokeKeyId,
-      TOWNSHIP_DEV_CARRIER_KEY_SEED: vector.client.sessionSeed,
-      TOWNSHIP_DEV_TRACE_FILE: tracePath,
-    },
   );
 
-  await waitForTraceCount("lattice_kv_set", 2, 60_000);
-  await waitForTraceCount("lattice_ensure_carrier_key", 3, 60_000);
+  await waitForTraceCount("dev-trace-runtime-ready", 1, 60_000, () => launchDiagnostics(app));
+  await waitForTraceCount("township-native-hydration-settled", 1, 60_000, () => launchDiagnostics(app));
+  await waitForTraceCount("lattice_kv_set", 2, 60_000, () => launchDiagnostics(app));
+  await waitForTraceCount("lattice_ensure_carrier_key", 3, 60_000, () => launchDiagnostics(app));
   await delay(500);
   assert.equal(app.child.exitCode, null, app.lines.join(""));
 
@@ -108,14 +119,15 @@ try {
   await peer.awaitExit();
 } finally {
   peer.kill();
+  await quitTownshipApp();
   await app?.stop();
-  await vite?.stop();
 }
 
 console.log("\x1b[32m✓ Township Tauri live window peer smoke passed\x1b[0m");
 
-async function spawnVite(peerPort: number): Promise<ManagedProcess> {
-  const vite = spawnManaged("npm", ["run", "dev"], shellRoot, {
+async function buildDevTraceApp(peerPort: number): Promise<void> {
+  await run("tauri", ["build", "--features", "township-dev-trace", "--bundles", "app"], shellRoot, {
+    VITE_TOWNSHIP_DEV_TRACE: "1",
     VITE_TOWNSHIP_CARRIER_URL: peerUrl(peerPort),
     VITE_TOWNSHIP_LOCAL_REALM: vector.client.realm,
     VITE_TOWNSHIP_PEER_REALM: vector.peer.realm,
@@ -123,7 +135,6 @@ async function spawnVite(peerPort: number): Promise<ManagedProcess> {
     VITE_TOWNSHIP_CARRIER_KEY_ID: smokeKeyId,
     VITE_TOWNSHIP_AUTOSYNC_ON_MOUNT: "1",
   });
-  return vite;
 }
 
 async function reconnectWhenDiverged(
@@ -209,8 +220,8 @@ function spawnManaged(
   };
 }
 
-async function run(command: string, args: string[], cwd: string): Promise<void> {
-  const proc = spawnManaged(command, args, cwd);
+async function run(command: string, args: string[], cwd: string, env: Record<string, string> = {}): Promise<void> {
+  const proc = spawnManaged(command, args, cwd, env);
   const code = await waitForExit(proc.child);
   if (code !== 0) throw new Error(`${command} ${args.join(" ")} failed:\n${proc.lines.join("")}`);
 }
@@ -260,28 +271,6 @@ async function stopProcess(child: ChildProcessWithoutNullStreams): Promise<void>
   }
 }
 
-async function assertPortFree(port: number): Promise<void> {
-  try {
-    await fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(500) });
-  } catch {
-    return;
-  }
-  throw new Error(`port ${port} is already serving HTTP; stop the existing Vite dev server before launch smoke`);
-}
-
-async function waitForHttp(url: string): Promise<void> {
-  for (let i = 0; i < 80; i++) {
-    try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(500) });
-      if (response.ok) return;
-    } catch {
-      // keep polling until Vite is ready
-    }
-    await delay(250);
-  }
-  throw new Error(`Vite did not become ready at ${url}`);
-}
-
 function codePathArgs(): string[] {
   const libRoot = join(repoRoot, "_build/test/lib");
   if (!existsSync(libRoot)) throw new Error(`missing BEAM test build at ${libRoot}; run mix test first`);
@@ -298,16 +287,17 @@ function elixirBin(): string {
   return "elixir";
 }
 
-function binaryPath(): string {
-  return join(shellRoot, "src-tauri", "target", "debug", "township-tauri-shell");
-}
-
 function readTrace(): string {
   if (!existsSync(tracePath)) return "<empty>";
   return readFileSync(tracePath, "utf8").trim() || "<empty>";
 }
 
-async function waitForTraceCount(command: string, count: number, timeoutMs: number): Promise<void> {
+async function waitForTraceCount(
+  command: string,
+  count: number,
+  timeoutMs: number,
+  diagnostics: () => string = () => "",
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const seen = readTrace()
@@ -316,7 +306,23 @@ async function waitForTraceCount(command: string, count: number, timeoutMs: numb
     if (seen >= count) return;
     await delay(250);
   }
-  throw new Error(`timed out waiting for ${count} ${command} trace entries:\n${readTrace()}`);
+  throw new Error(`timed out waiting for ${count} ${command} trace entries:\n${readTrace()}\n\n${diagnostics()}`);
+}
+
+function launchDiagnostics(app: ManagedProcess | null): string {
+  return [
+    `app exitCode: ${String(app?.child.exitCode ?? null)}`,
+    `app output:\n${app?.lines.join("") || "<empty>"}`,
+  ].join("\n\n");
+}
+
+async function quitTownshipApp(): Promise<void> {
+  const proc = spawnManaged("osascript", ["-e", `quit app id "${appIdentifier}"`], shellRoot);
+  const code = await Promise.race([waitForExit(proc.child), delay(2_000).then(() => "timeout" as const)]);
+  if (code === "timeout") {
+    proc.child.kill("SIGKILL");
+    await waitForExit(proc.child);
+  }
 }
 
 function peerUrl(port: number): string {

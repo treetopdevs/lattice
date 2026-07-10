@@ -93,6 +93,29 @@ const hangingSubscription = createTauriPairingDeepLinkSource({
 });
 await assert.rejects(() => hangingSubscription.onOpenUrl(() => {}), /deep-link subscription timed out/);
 
+const hangingImport = createTauriPairingDeepLinkSource({
+  currentTimeoutMs: 1,
+  subscribeTimeoutMs: 1,
+  includeAndroidPairingIntent: false,
+  async importPlugin() {
+    return new Promise(() => {});
+  },
+});
+assert.equal(
+  await Promise.race([hangingImport.current().then(() => "returned"), delay(50).then(() => "timed_out")]),
+  "returned",
+);
+assert.equal(
+  await Promise.race([
+    hangingImport.onOpenUrl(() => {}).then(
+      () => "returned",
+      () => "rejected",
+    ),
+    delay(50).then(() => "timed_out"),
+  ]),
+  "rejected",
+);
+
 const rawIntentHandoff = "township-pairing:v1:not-json";
 const rawIntentUrl = `township://pairing?handoff=${encodeURIComponent(rawIntentHandoff)}`;
 const routeOnlyUrl = "township://nohost/_pairing";

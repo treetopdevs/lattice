@@ -33,13 +33,23 @@ export function createTauriPairingDeepLinkSource(
 
   return {
     async current(): Promise<readonly string[] | null> {
-      const plugin = await importPlugin();
-      const rawIntentUrl = includeAndroidPairingIntent ? await currentAndroidPairingUrl(invoke) : null;
-      const pluginCurrent = await withTimeout(plugin.getCurrent(), currentTimeoutMs, null);
+      const [rawIntentUrl, plugin] = await Promise.all([
+        includeAndroidPairingIntent ? currentAndroidPairingUrl(invoke) : Promise.resolve(null),
+        withTimeout<TauriPairingDeepLinkPlugin | null>(
+          importPlugin().catch(() => null),
+          currentTimeoutMs,
+          null,
+        ),
+      ]);
+      const pluginCurrent = plugin ? await withTimeout(plugin.getCurrent(), currentTimeoutMs, null) : null;
       return mergeRawIntentUrl(rawIntentUrl, pluginCurrent);
     },
     async onOpenUrl(callback: (urls: readonly string[]) => void): Promise<(() => void) | void> {
-      const plugin = await importPlugin();
+      const plugin = await withTimeoutReject(
+        importPlugin(),
+        subscribeTimeoutMs,
+        "deep-link plugin import timed out",
+      );
       return withTimeoutReject(
         plugin.onOpenUrl((urls) => {
           void (async () => {
