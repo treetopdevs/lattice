@@ -349,16 +349,24 @@ test("Vue source does not claim phone-grade secure persistence", () => {
 test("frontend package exposes the real app convergence gate", () => {
   const pkg = readJson("package.json");
   const launchSmoke = readText("test/tauri_launch_smoke.ts");
+  const onboardingSmoke = readText("test/tauri_packaged_onboarding_smoke.ts");
 
+  assert.equal(pkg.scripts["tauri:onboarding:smoke"], "tsx test/tauri_packaged_onboarding_smoke.ts");
   assert.equal(
     pkg.scripts["app:convergence"],
-    "npm run action:contract && npm run sync:contract && npm run onboarding:contract && npm run live:contract && npm run tauri:launch:smoke && npm run tauri:deep-link:smoke",
+    "npm run action:contract && npm run sync:contract && npm run onboarding:contract && npm run live:contract && npm run tauri:launch:smoke && npm run tauri:onboarding:smoke && npm run tauri:deep-link:smoke",
   );
   assert.match(launchSmoke, /"tauri", \["build", "--features", "township-dev-trace", "--bundles", "app"\]/);
   assert.match(launchSmoke, /VITE_TOWNSHIP_AUTOSYNC_ON_MOUNT: "1"/);
   assert.match(launchSmoke, /appBundlePath/);
   assert.match(launchSmoke, /spawnManaged\(\s*"open",\s*\[\s*"-n",\s*"-W"/);
   assert.match(launchSmoke, /"--env"/);
+  assert.match(onboardingSmoke, /township_carrier_w1\.json/);
+  assert.match(onboardingSmoke, /TownshipOnboardingScenario/);
+  assert.match(onboardingSmoke, /TOWNSHIP_NATIVE_KV_FILE/);
+  assert.match(onboardingSmoke, /township-onboarding-drained/);
+  assert.match(onboardingSmoke, /connectCarrierWebSocket/);
+  assert.match(onboardingSmoke, /assertTownshipKvStoresNoSecrets/);
 });
 
 test("Vue source exposes a carrier sync outbox action", () => {

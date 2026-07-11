@@ -40,6 +40,10 @@ test("mobile secure-store strategy keeps secrets behind native signers", () => {
   assert.match(strategy, /default `TOWNSHIP_STORAGE_NAMESPACE`/);
   assert.match(strategy, /onboarding:contract/);
   assert.match(strategy, /no resident private seed\s+material/);
+  assert.match(strategy, /Plan 119 adds packaged macOS app-runtime onboarding convergence/);
+  assert.match(strategy, /tauri:onboarding:smoke/);
+  assert.match(strategy, /isolated native KV file/);
+  assert.match(strategy, /does not prove human click-through/);
   assert.match(strategy, /does\s+not prove iOS,\s+Expo,\s+cross-device pairing state\s+exchange, or full mobile onboarding/);
 
   assert.match(tauriLib, /trait CarrierKeySeedStore/);

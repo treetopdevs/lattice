@@ -370,12 +370,12 @@ fn save_values_file(path: &Path, values: &HashMap<String, String>) -> Result<(),
 }
 
 fn township_native_kv_path_from_env() -> Result<Option<PathBuf>, String> {
-    #[cfg(not(debug_assertions))]
+    #[cfg(not(any(debug_assertions, feature = "township-dev-trace")))]
     {
         return Ok(None);
     }
 
-    #[cfg(debug_assertions)]
+    #[cfg(any(debug_assertions, feature = "township-dev-trace"))]
     match std::env::var(TOWNSHIP_NATIVE_KV_FILE_ENV) {
         Ok(path) => {
             let path = path.trim();

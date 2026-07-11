@@ -102,6 +102,7 @@ import {
   type TownshipPairingQrCameraScanner,
   type TownshipPairingQrCameraSource,
 } from "./township_pairing_qr_camera";
+import { runTownshipPackagedOnboardingFromEnv } from "./township_packaged_onboarding_probe";
 import { syncTownshipOutbox, type TownshipOutboxSync } from "./township_sync";
 
 const matter = computed(() => townshipPreview());
@@ -395,6 +396,15 @@ onMounted(async () => {
   if (devTraceRuntime) await mountDevTraceShortcut();
   await loadPairingConfig();
   if (autosyncOnMount && carrierPeer.value) await syncOutbox();
+  if (devTraceRuntime) {
+    const onboarding = await runTownshipPackagedOnboardingFromEnv(import.meta.env);
+    if (onboarding?.ok) {
+      carrierPeer.value = onboarding.pairing;
+      pairingDraft.value = pairingDraftFromConfig(onboarding.pairing);
+      postStatus.value = onboarding.post;
+      syncStatus.value = onboarding.finalSync;
+    }
+  }
   scheduleTownshipNativeHydration();
 });
 
