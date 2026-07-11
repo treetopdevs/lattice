@@ -3,6 +3,8 @@ defmodule TownshipWeb.ReplayContractBridgeTest do
 
   alias TownshipWeb.VerifiedInstrumentSnapshot
 
+  @moduletag :node_bridge
+
   @repo_root Path.expand("../../../..", __DIR__)
   @bundle_dir Path.join(@repo_root, "artifacts/township")
   @normalizer Path.join(@repo_root, "apps/township_web/assets/js/replay_contract.js")

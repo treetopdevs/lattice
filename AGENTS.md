@@ -22,10 +22,17 @@ worktrees do not carry it; the asdf-shim rule is the reliable invocation everywh
 ## Verify the repo is healthy
 
 ```sh
-~/.asdf/shims/mix verify                          # format --check-formatted + full test suite
+~/.asdf/shims/mix verify                          # format check + full BEAM test suite
 ~/.asdf/shims/mix check                           # verify + credo --strict
-~/.asdf/shims/mix test                            # full suite only
+~/.asdf/shims/mix test                            # full BEAM suite only
 ~/.asdf/shims/mix run scripts/lattice2_demo.exs   # narrated Lattice 2.0 end-to-end demo
+```
+
+The BEAM-to-JavaScript replay bridge is deliberately separate so the default health
+gate remains BEAM-only. With Node available, run its cross-runtime contract explicitly:
+
+```sh
+~/.asdf/shims/mix test apps/township_web/test/township_web/replay_contract_bridge_test.exs --include node_bridge
 ```
 
 Sobelow is **per-app** (it targets each HTTP boundary app, not the umbrella), so it is not part of

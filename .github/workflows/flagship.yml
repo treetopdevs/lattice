@@ -98,6 +98,8 @@ jobs:
         run: mix format --check-formatted
       - name: Run full test suite
         run: mix test
+      - name: BEAM to JavaScript replay contract
+        run: mix test apps/township_web/test/township_web/replay_contract_bridge_test.exs --include node_bridge
       - name: Regenerate TS oracle vectors
         run: mix lattice.export_vectors --out clients/lattice-client/test/vectors
       - name: Install TS client dependencies
