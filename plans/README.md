@@ -8,6 +8,12 @@ STOP conditions, and update your row below when done.
 **Toolchain reminder for every plan**: run mix locally as `~/.asdf/shims/mix` — the `mix`
 on `PATH` is a broken mise shim (see `.mise.toml`). In GitHub Actions, plain `mix` works.
 
+**Parked areas — do not plan new work here** (see `TOWNSHIP_BUILD_MAP.md` §4a): iOS,
+QR camera onboarding, LAN discovery, physical-device behavior, cross-device pairing
+state exchange, and any further `tauri:android:release:*` probe permutations. The
+active frontier is G1 completion (plan 126 lineage) and the remaining Phase G
+instrument work.
+
 **Landing 001–009 as one effort?** Start from the umbrella goal:
 [000-goal-foundation-and-hardening.md](000-goal-foundation-and-hardening.md). It
 sequences plans 001–009 into gated phases (DX/CI foundation → v2 engine hygiene →
