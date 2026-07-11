@@ -15,7 +15,7 @@ defmodule Lattice.Carrier.WebSocket do
 
   @behaviour Lattice.Carrier
 
-  alias Lattice.Carrier.{Batch, Session, Wire}
+  alias Lattice.Carrier.{Batch, Protocol, Session, Wire}
   alias Lattice.Carrier.Telemetry
   alias Lattice.Transport.WebSocket.Client
 
@@ -72,23 +72,24 @@ defmodule Lattice.Carrier.WebSocket do
   @doc "Peer scenario phase (`base` | `diverged`), for heal coordination."
   @spec status(t()) :: {:ok, String.t()} | {:error, term()}
   def status(%__MODULE__{} = conn) do
-    with {:ok, %{"type" => "status_result", "phase" => phase}} <-
-           request(conn, %{type: "status"}) do
-      {:ok, phase}
-    end
+    with {:ok, response} <- request(conn, Protocol.status_request()),
+         {:ok, phase} <- Protocol.decode_status_result(response),
+         do: {:ok, phase}
   end
 
   @doc "Peer's reduced-state bytes + log facts for the byte-identity assertions."
   @spec state_report(t()) :: {:ok, map()} | {:error, term()}
   def state_report(%__MODULE__{} = conn) do
-    with {:ok, %{"type" => "state_result"} = report} <- request(conn, %{type: "state"}) do
-      {:ok, report}
-    end
+    with {:ok, response} <- request(conn, Protocol.state_request()),
+         do: Protocol.decode_state_result(response)
   end
 
   @doc "Graceful peer shutdown (the peer OS process halts after replying)."
   @spec shutdown(t()) :: {:ok, map()} | {:error, term()}
-  def shutdown(%__MODULE__{} = conn), do: request(conn, %{type: "shutdown"})
+  def shutdown(%__MODULE__{} = conn) do
+    with {:ok, response} <- request(conn, Protocol.shutdown_request()),
+         do: Protocol.decode_shutdown_result(response)
+  end
 
   @doc "Metadata for the most recent push batches: count and encoded frame bytes."
   @spec last_push_batches(t()) :: [%{count: non_neg_integer(), bytes: non_neg_integer()}]
@@ -98,16 +99,16 @@ defmodule Lattice.Carrier.WebSocket do
 
   @impl Lattice.Carrier
   def advertise(%__MODULE__{} = conn, _local_log) do
-    with {:ok, %{"type" => "frontier_result", "ids" => ids}} <-
-           request(conn, %{type: "frontier"}) do
+    with {:ok, response} <- request(conn, Protocol.frontier_request()),
+         {:ok, ids} <- Protocol.decode_frontier_result(response) do
       {:ok, MapSet.new(ids), conn}
     end
   end
 
   @impl Lattice.Carrier
   def pull(%__MODULE__{} = conn, %MapSet{} = have) do
-    with {:ok, %{"type" => "ops", "ops" => encoded}} <-
-           request(conn, %{type: "pull", have: Enum.sort(have)}),
+    with {:ok, response} <- request(conn, Protocol.pull_request(have)),
+         {:ok, encoded} <- Protocol.decode_ops_result(response),
          {:ok, ops} <- Wire.decode_ops(encoded) do
       {:ok, ops, conn}
     end
@@ -138,8 +139,8 @@ defmodule Lattice.Carrier.WebSocket do
 
   @impl Lattice.Carrier
   def live(%__MODULE__{} = conn, payload) do
-    with {:ok, %{"type" => "live_result"}} <-
-           request(conn, %{type: "live", payload: payload}) do
+    with {:ok, response} <- request(conn, Protocol.live_request(payload)),
+         :ok <- Protocol.decode_live_result(response) do
       {:ok, conn}
     end
   end
@@ -152,16 +153,12 @@ defmodule Lattice.Carrier.WebSocket do
 
   defp push_batches(conn, [batch | rest], reports, batch_meta) do
     encoded = Enum.map(batch, fn {encoded, _bytes} -> encoded end)
-    request_frame = %{type: "push", ops: encoded}
+    request_frame = Protocol.push_request(encoded)
 
-    with {:ok, %{"type" => "push_result"} = result} <- request(conn, request_frame),
-         {:ok, report} <- Wire.decode_report(result) do
+    with {:ok, response} <- request(conn, request_frame),
+         {:ok, report} <- Protocol.decode_push_result(response) do
       meta = %{count: length(batch), bytes: request_frame |> Jason.encode!() |> byte_size()}
       push_batches(conn, rest, [report | reports], [meta | batch_meta])
-    else
-      {:ok, %{"type" => type}} -> {:error, {:unexpected_reply, type}}
-      {:ok, other} -> {:error, {:unexpected_reply, other}}
-      {:error, _reason} = error -> error
     end
   end
 
@@ -173,7 +170,7 @@ defmodule Lattice.Carrier.WebSocket do
   defp push_payload_budget, do: @max_push_bytes - push_frame_overhead()
 
   defp push_frame_overhead do
-    %{type: "push", ops: []}
+    Protocol.push_request([])
     |> Jason.encode!()
     |> byte_size()
   end
@@ -230,11 +227,7 @@ defmodule Lattice.Carrier.WebSocket do
 
   defp request(%__MODULE__{client: client}, msg) do
     with :ok <- Client.send_envelope(client, msg),
-         {:ok, envelope} <- Client.recv_envelope(client, @recv_timeout) do
-      case envelope do
-        %{"type" => "error"} = err -> {:error, {:peer_error, Map.get(err, "reason")}}
-        other -> {:ok, other}
-      end
-    end
+         {:ok, envelope} <- Client.recv_envelope(client, @recv_timeout),
+         do: Protocol.decode_response_envelope(envelope)
   end
 end

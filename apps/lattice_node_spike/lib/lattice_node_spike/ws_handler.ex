@@ -19,7 +19,7 @@ defmodule LatticeNodeSpike.WsHandler do
 
   @behaviour :cowboy_websocket
 
-  alias Lattice.Carrier.Session
+  alias Lattice.Carrier.{Protocol, Session}
   alias Lattice.Carrier.Telemetry
   alias Lattice.Carrier.Wire, as: CarrierWire
   alias LatticeNodeSpike.Peer
@@ -35,15 +35,15 @@ defmodule LatticeNodeSpike.WsHandler do
     {reply, state} =
       case Jason.decode(text) do
         {:ok, %{"type" => "carrier_challenge"} = msg} -> handle_challenge(msg, state)
-        {:ok, %{"type" => type} = msg} -> authenticated_msg(type, msg, state)
-        _other -> {%{type: "error", reason: "malformed"}, state}
+        {:ok, %{"type" => type} = msg} -> protocol_msg(type, msg, state)
+        _other -> {Protocol.error(:malformed_request), state}
       end
 
     {:reply, {:text, Jason.encode!(reply)}, state}
   end
 
   def websocket_handle(_frame, state) do
-    {:reply, {:text, Jason.encode!(%{type: "error", reason: "unsupported_frame"})}, state}
+    {:reply, {:text, Jason.encode!(Protocol.error(:unsupported_frame))}, state}
   end
 
   @impl :cowboy_websocket
@@ -92,66 +92,68 @@ defmodule LatticeNodeSpike.WsHandler do
           }
         )
 
-        {%{type: "error", reason: Atom.to_string(reason)}, state}
+        {Protocol.error(reason), state}
     end
   end
 
-  defp authenticated_msg(type, msg, %{authenticated?: true} = state) do
-    {handle_msg(type, msg, state), state}
+  defp protocol_msg(_type, msg, %{authenticated?: true} = state) do
+    reply =
+      case Protocol.decode_request(msg) do
+        {:ok, request} -> handle_request(request, state)
+        {:error, reason} -> Protocol.error(reason)
+      end
+
+    {reply, state}
   end
 
-  defp authenticated_msg(type, _msg, state) do
+  defp protocol_msg(type, _msg, state) do
     Telemetry.execute(
       [:lattice, :carrier, :pre_auth_reject],
       %{},
       %{type: type}
     )
 
-    {%{type: "error", reason: "unauthenticated"}, state}
+    {Protocol.error(:unauthenticated), state}
   end
 
-  defp handle_msg("frontier", _msg, %{peer: peer}) do
-    %{type: "frontier_result", ids: Peer.op_ids(peer)}
+  defp handle_request(:frontier, %{peer: peer}) do
+    peer |> Peer.op_ids() |> Protocol.frontier_result()
   end
 
-  defp handle_msg("pull", %{"have" => have}, %{peer: peer}) when is_list(have) do
+  defp handle_request({:pull, have}, %{peer: peer}) do
     ops = Peer.missing_for(peer, have)
-    %{type: "ops", ops: Enum.map(ops, &CarrierWire.encode_op/1)}
+    ops |> Enum.map(&CarrierWire.encode_op/1) |> Protocol.ops_result()
   end
 
-  defp handle_msg("push", %{"ops" => encoded}, %{peer: peer}) when is_list(encoded) do
+  defp handle_request({:push, encoded}, %{peer: peer}) do
     case CarrierWire.decode_ops(encoded) do
       {:ok, ops} ->
-        report = Peer.deliver(peer, ops)
-        CarrierWire.encode_push_result(report)
+        peer |> Peer.deliver(ops) |> Protocol.push_result()
 
       {:error, :malformed_op} ->
-        %{type: "error", reason: "malformed_op"}
+        Protocol.error(:malformed_op)
     end
   end
 
-  defp handle_msg("live", %{"payload" => payload}, %{peer: peer}) do
-    result = Peer.live(peer, payload)
-    %{type: "live_result", live_seen: result.live_seen, log_size: result.log_size}
+  defp handle_request({:live, payload}, %{peer: peer}) do
+    peer |> Peer.live(payload) |> Protocol.live_result()
   end
 
-  defp handle_msg("status", _msg, %{peer: peer}) do
-    %{type: "status_result", phase: to_string(Peer.status(peer))}
+  defp handle_request(:status, %{peer: peer}) do
+    peer |> Peer.status() |> to_string() |> Protocol.status_result()
   end
 
-  defp handle_msg("state", _msg, %{peer: peer}) do
-    peer |> Peer.state_report() |> Map.put(:type, "state_result")
+  defp handle_request(:state, %{peer: peer}) do
+    peer |> Peer.state_report() |> Protocol.state_result()
   end
 
-  defp handle_msg("shutdown", _msg, _state) do
+  defp handle_request(:shutdown, _state) do
     # Reply first; halt shortly after so the frame flushes.
     spawn(fn ->
       Process.sleep(200)
       System.halt(0)
     end)
 
-    %{type: "shutdown_result"}
+    Protocol.shutdown_result()
   end
-
-  defp handle_msg(_type, _msg, _state), do: %{type: "error", reason: "unknown_type"}
 end

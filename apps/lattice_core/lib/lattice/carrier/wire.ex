@@ -107,9 +107,6 @@ defmodule Lattice.Carrier.Wire do
     }
   end
 
-  @spec encode_push_result(map()) :: map()
-  def encode_push_result(report), do: Map.put(encode_report(report), "type", "push_result")
-
   @spec decode_report(map()) ::
           {:ok, Lattice.Sync.report()} | {:error, :malformed_term}
   def decode_report(%{

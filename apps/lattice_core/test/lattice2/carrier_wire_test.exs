@@ -3,7 +3,8 @@ defmodule Lattice.CarrierWireTest do
   use ExUnitProperties
 
   alias Lattice.Authority.Delegation
-  alias Lattice.{Canonical, Carrier.Wire, Identity, Op}
+  alias Lattice.{Canonical, Identity, Op}
+  alias Lattice.Carrier.{Protocol, Wire}
 
   @atoms [:admit, :clerk, :join, :leave, :moderator, :post, :set_summary, :set_title]
   @roles [:admin, :clerk, :member, :moderator]
@@ -143,7 +144,7 @@ defmodule Lattice.CarrierWireTest do
 
   test "stats frame is JSON-safe" do
     report = %{accepted: [], quarantined: [], rejected: [], pending: []}
-    frame = Wire.encode_push_result(report)
+    frame = Protocol.push_result(report)
 
     assert frame["type"] == "push_result"
     assert frame["accepted"] == []
