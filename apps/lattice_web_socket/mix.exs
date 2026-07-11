@@ -1,9 +1,9 @@
-defmodule LatticeNodeSpike.MixProject do
+defmodule LatticeWebSocket.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :lattice_node_spike,
+      app: :lattice_web_socket,
       version: "0.1.0",
       build_path: "../../_build",
       config_path: "../../config/config.exs",
@@ -16,17 +16,12 @@ defmodule LatticeNodeSpike.MixProject do
   end
 
   def application do
-    [
-      extra_applications: [:logger, :cowboy, :jason],
-      mod: {LatticeNodeSpike.Application, []}
-    ]
+    [extra_applications: [:logger, :crypto]]
   end
 
   defp deps do
     [
       {:lattice_core, in_umbrella: true},
-      {:lattice_web_socket, in_umbrella: true},
-      {:cowboy, "~> 2.12"},
       {:jason, "~> 1.4"}
     ]
   end

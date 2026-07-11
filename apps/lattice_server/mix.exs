@@ -27,6 +27,7 @@ defmodule LatticeServer.MixProject do
   defp deps do
     [
       {:lattice_core, in_umbrella: true},
+      {:lattice_web_socket, in_umbrella: true},
       {:cowboy, "~> 2.12"},
       {:jason, "~> 1.4"},
       # Sobelow scans one Mix project at a time; umbrella-root deps are not visible

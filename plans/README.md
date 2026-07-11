@@ -144,6 +144,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 122 | Township instrument read model | P1 | M | 121 | DONE |
 | 123 | Township LiveView instrument | P1 | L | 122 | DONE |
 | 124 | Township Vue causal replay island | P1 | L | 123 | DONE |
+| 125 | Reusable WebSocket carrier boundary | P1 | M | 017, 124 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

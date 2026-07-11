@@ -1,9 +1,10 @@
-defmodule LatticeNodeSpike.WsCarrierSecurityTest do
+defmodule LatticeNodeSpike.WebSocketCarrierSecurityTest do
   use ExUnit.Case, async: false
 
+  alias Lattice.Carrier.WebSocket, as: WsCarrier
   alias Lattice.{Identity, Op}
   alias Lattice.Transport.WebSocket.Client
-  alias LatticeNodeSpike.{Peer, PeerServer, WsCarrier}
+  alias LatticeNodeSpike.{Peer, PeerServer}
 
   @replica "replica:ws-carrier-security"
 

@@ -27,8 +27,8 @@ defmodule Lattice.Carrier do
   quarantine semantics the simulator pins.
 
   Implementations: `Lattice.Carrier.SimNet` (in-process, gated by
-  `Lattice.Net`) and the plan-010 spike's WebSocket carrier
-  (`LatticeNodeSpike.WsCarrier`, over a real socket between two OS processes).
+  `Lattice.Net`) and `Lattice.Carrier.WebSocket` (owned by the
+  `lattice_web_socket` app, over a real socket between two OS processes).
   """
 
   alias Lattice.Carrier.Telemetry

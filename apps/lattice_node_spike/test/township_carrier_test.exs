@@ -3,7 +3,8 @@ defmodule LatticeNodeSpike.TownshipCarrierTest do
 
   alias Lattice.{Authority, Carrier, Log, Sim}
   alias Lattice.Authority.Delegation
-  alias LatticeNodeSpike.{Peer, WsCarrier}
+  alias Lattice.Carrier.WebSocket, as: WsCarrier
+  alias LatticeNodeSpike.Peer
   alias LatticeNodeSpike.TownshipScenario
   alias Township.Matter
 

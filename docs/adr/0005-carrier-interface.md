@@ -39,9 +39,11 @@ implementations exist:
 - `Lattice.Carrier.SimNet` — in-process, gated by `Lattice.Net.connected?/3`
   (`{:error, :partitioned}` while cut). Pinned against `Sync.reconcile/2` in
   `apps/lattice_core/test/lattice2/carrier_test.exs`.
-- `LatticeNodeSpike.WsCarrier` — a real WebSocket (`:gen_tcp` + RFC 6455 handshake
-  via `Lattice.Transport.WebSocket.Client`) against a Cowboy listener in a **second
-  BEAM OS process** (`apps/lattice_node_spike`).
+- `Lattice.Carrier.WebSocket` — a reusable real WebSocket client adapter owned by
+  `apps/lattice_web_socket` (`:gen_tcp` + RFC 6455 handshake via
+  `Lattice.Transport.WebSocket.Client`) against a Cowboy listener in a **second BEAM OS
+  process** (`apps/lattice_node_spike`). The transport-independent carrier behaviour remains
+  owned by `lattice_core`; the WebSocket implementation is intentionally a separate app.
 
 ## Decision 2: wire format — shared versioned carrier frames
 

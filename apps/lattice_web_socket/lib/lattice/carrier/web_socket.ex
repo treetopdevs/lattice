@@ -1,4 +1,4 @@
-defmodule LatticeNodeSpike.WsCarrier do
+defmodule Lattice.Carrier.WebSocket do
   @moduledoc """
   `Lattice.Carrier` over a **real** WebSocket.
 
@@ -18,7 +18,6 @@ defmodule LatticeNodeSpike.WsCarrier do
   alias Lattice.Carrier.{Batch, Session, Wire}
   alias Lattice.Carrier.Telemetry
   alias Lattice.Transport.WebSocket.Client
-  alias LatticeNodeSpike.Wire, as: NodeWire
 
   @recv_timeout 10_000
   @max_push_ops 64
@@ -109,7 +108,7 @@ defmodule LatticeNodeSpike.WsCarrier do
   def pull(%__MODULE__{} = conn, %MapSet{} = have) do
     with {:ok, %{"type" => "ops", "ops" => encoded}} <-
            request(conn, %{type: "pull", have: Enum.sort(have)}),
-         {:ok, ops} <- NodeWire.decode_all(encoded) do
+         {:ok, ops} <- Wire.decode_ops(encoded) do
       {:ok, ops, conn}
     end
   end
@@ -167,7 +166,7 @@ defmodule LatticeNodeSpike.WsCarrier do
   end
 
   defp encode_entry(op) do
-    encoded = NodeWire.encode(op)
+    encoded = Wire.encode_op(op)
     {encoded, encoded |> Jason.encode!() |> byte_size()}
   end
 

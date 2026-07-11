@@ -183,11 +183,17 @@ Module docs render via ex_doc: `cd apps/lattice_core && mix docs`.
 - `Lattice.LiveOps` and `Lattice.LiveOps.Device` for the staged LiveOps
   authority demo.
 
+`apps/lattice_web_socket` owns:
+
+- `Lattice.Transport.WebSocket.Client`, the minimal real WebSocket client used by
+  carrier, test, and demo callers.
+- `Lattice.Transport.WebSocket.Envelope`, the safe JSON codec and browser-boundary
+  inbound vocabulary.
+- `Lattice.Carrier.WebSocket`, the reusable real carrier client adapter.
+
 `apps/lattice_server` owns:
 
 - `Lattice.Transport.WebSocket`.
-- `Lattice.Transport.WebSocket.Client`, a minimal real WebSocket client used by tests and the deterministic demo.
-- JSON envelope parsing.
 - A lightweight Cowboy HTTP/WebSocket server.
 
 `apps/lattice_demo` owns:

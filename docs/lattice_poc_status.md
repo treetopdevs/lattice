@@ -272,8 +272,9 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
   `apps/lattice_node_spike/lib/lattice_node_spike/township_scenario.ex`,
   `apps/lattice_node_spike/priv/peer_node.exs`,
   `apps/lattice_node_spike/test/township_carrier_test.exs`, Township-facing docs.
-- Behaviors: Township W0-W3 now run over two physical BEAM OS processes through
-  `LatticeNodeSpike.WsCarrier`, while `Lattice.Sim` remains the oracle.
+- Behaviors: Township W0-W3 run over two physical BEAM OS processes through the reusable
+  `Lattice.Carrier.WebSocket`, while `Lattice.Sim` remains the oracle. Plan 125 moved the client
+  adapter out of spike ownership without changing this acceptance proof.
 - Command run: `~/.asdf/shims/mix test apps/lattice_node_spike/test/township_carrier_test.exs`.
 - Result: succeeded on 2026-07-07. The G1 test proves deterministic prefix agreement,
   wrong-key session rejection, partition/diverge/heal convergence, byte-identical

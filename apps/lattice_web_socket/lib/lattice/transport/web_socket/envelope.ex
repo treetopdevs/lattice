@@ -4,6 +4,10 @@ defmodule Lattice.Transport.WebSocket.Envelope do
 
   This module deliberately uses JSON only. It never calls `binary_to_term/1` or
   `:erlang.binary_to_term/1` on browser-provided data.
+
+  `encode/1` is transport-generic. The `parse/1` allowlist remains the inbound
+  browser-tab vocabulary owned by the `lattice_server` boundary; keeping both
+  functions here avoids making the reusable client depend on that server app.
   """
 
   @allowed_types ~w(hello resume state_request grant_request call cast liveops_action disconnect tab_render_result)

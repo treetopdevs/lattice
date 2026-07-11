@@ -3,7 +3,8 @@ defmodule LatticeNodeSpike.CarrierTelemetryTest do
 
   alias Lattice.{Carrier, Net, Sim}
   alias Lattice.Carrier.{Session, SimNet, Telemetry, Wire}
-  alias LatticeNodeSpike.{Peer, Scenario, WsCarrier, WsHandler}
+  alias Lattice.Carrier.WebSocket, as: WsCarrier
+  alias LatticeNodeSpike.{Peer, Scenario, WsHandler}
 
   @moduletag timeout: 120_000
   @script Path.expand("../priv/peer_node.exs", __DIR__)

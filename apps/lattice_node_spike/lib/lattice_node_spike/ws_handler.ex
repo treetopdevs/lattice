@@ -22,7 +22,7 @@ defmodule LatticeNodeSpike.WsHandler do
   alias Lattice.Carrier.Session
   alias Lattice.Carrier.Telemetry
   alias Lattice.Carrier.Wire, as: CarrierWire
-  alias LatticeNodeSpike.{Peer, Wire}
+  alias LatticeNodeSpike.Peer
 
   @impl :cowboy_websocket
   def init(req, state), do: {:cowboy_websocket, req, state}
@@ -116,11 +116,11 @@ defmodule LatticeNodeSpike.WsHandler do
 
   defp handle_msg("pull", %{"have" => have}, %{peer: peer}) when is_list(have) do
     ops = Peer.missing_for(peer, have)
-    %{type: "ops", ops: Enum.map(ops, &Wire.encode/1)}
+    %{type: "ops", ops: Enum.map(ops, &CarrierWire.encode_op/1)}
   end
 
   defp handle_msg("push", %{"ops" => encoded}, %{peer: peer}) when is_list(encoded) do
-    case Wire.decode_all(encoded) do
+    case CarrierWire.decode_ops(encoded) do
       {:ok, ops} ->
         report = Peer.deliver(peer, ops)
         CarrierWire.encode_push_result(report)

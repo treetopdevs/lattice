@@ -1,6 +1,6 @@
 defmodule Lattice.Transport.WebSocket.Client do
   @moduledoc """
-  Minimal real WebSocket client used by tests and the deterministic POC demo.
+  Minimal real WebSocket client shared by carrier, server, test, and demo callers.
 
   This speaks the WebSocket wire protocol over `:gen_tcp`. It is intentionally
   small, but it is not an in-process transport shortcut: messages cross the same

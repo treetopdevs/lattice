@@ -27,6 +27,7 @@ defmodule LatticeStress.MixProject do
   defp deps do
     [
       {:lattice_core, in_umbrella: true},
+      {:lattice_web_socket, in_umbrella: true},
       {:lattice_server, in_umbrella: true},
       {:lattice_demo, in_umbrella: true},
       {:stream_data, "~> 1.1", only: :test}
