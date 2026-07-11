@@ -137,10 +137,10 @@ defmodule LatticeServer.WebSocketIntegrationTest do
                     %{"from_tab_id" => ^tab_b, "to_tab_id" => ^tab_a}},
                    5_000
 
-    Client.close(client_a)
-    Client.close(client_b)
     Task.shutdown(task_a, :brutal_kill)
     Task.shutdown(task_b, :brutal_kill)
+    Client.close(client_a)
+    Client.close(client_b)
   end
 
   defp recv_type(client, type, timeout \\ 5_000) do
