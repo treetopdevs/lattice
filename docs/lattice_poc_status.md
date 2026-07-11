@@ -283,3 +283,25 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
 - Blocker or remaining limitation: G1 is accepted for two BEAM nodes. Non-BEAM
   browser/phone realms still depend on canonical CBOR/ADR-P08 work, and W4 remains
   stubbed until the M4 receipt-free primitive exists.
+
+## Checkpoint: Township Read-Only Carrier Projection
+
+- Files changed: `apps/township_web/lib/township_web/carrier_projection.ex`, the
+  instrument LiveView/template and Vue hook, configured supervision, focused tests,
+  `apps/lattice_node_spike/test/township_instrument_projection_test.exs`, and the live
+  Playwright harness.
+- Behaviors: when configured, the connected instrument periodically advertises and
+  pulls from an authenticated real WebSocket peer, validates arrivals with
+  `Lattice.Sync.deliver/2`, derives the shared read model/replay, and publishes explicit
+  fresh, stale, connecting, or unavailable states through `TownshipWeb.PubSub`.
+- Command run: `~/.asdf/shims/mix test
+  apps/lattice_node_spike/test/township_instrument_projection_test.exs` and
+  `npm run township:instrument:live-e2e` alongside the focused web suites.
+- Result: Plan 126 proves the read-only WebSocket-to-PubSub-to-LiveView path against a
+  second BEAM OS process and in a real browser. The observer starts from an empty log,
+  never calls carrier push, and withholds authoritative values on pre-first-pull failure.
+- Blocker or remaining limitation: this is periodic request/response polling, not server
+  push. It adds no participant capability, write control, stable listener ownership,
+  production TLS/deployment, full G1/Phase G completion, or receipt-free W4. It does not
+  change or newly prove Tauri onboarding/cap persistence, mobile secure-store custody,
+  or real app convergence.

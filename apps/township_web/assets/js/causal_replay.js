@@ -7,12 +7,43 @@ const nodeHeight = 42
 
 export const TownshipCausalReplay = {
   mounted() {
-    const replay = parseReplay(this.el)
+    this.renderReplay()
+  },
+
+  updated() {
+    this.renderReplay()
+  },
+
+  destroyed() {
+    this.teardownReplay()
+  },
+
+  teardownReplay() {
+    this.vueApp?.unmount()
+    this.vueApp = null
+    this.mountPoint?.remove()
+    this.mountPoint = null
+  },
+
+  renderReplay() {
+    let replay
+
+    try {
+      replay = parseReplay(this.el)
+    } catch (_error) {
+      this.el.dataset.replayError = "invalid"
+      return
+    }
+
+    this.teardownReplay()
+    delete this.el.dataset.replayError
+
     const layoutState = layoutReplay(replay)
     const host = this.el
     const mountPoint = document.createElement("div")
     mountPoint.dataset.causalReplayRoot = ""
     host.append(mountPoint)
+    this.mountPoint = mountPoint
 
     this.vueApp = createApp({
       setup() {
@@ -181,10 +212,6 @@ export const TownshipCausalReplay = {
     })
 
     this.vueApp.mount(mountPoint)
-  },
-
-  destroyed() {
-    this.vueApp?.unmount()
   },
 }
 

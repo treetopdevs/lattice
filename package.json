@@ -13,6 +13,7 @@
     "flagship:e2e": "npm run flagship:e2e:test && npm run flagship:e2e:evaluate",
     "flagship:verify": "scripts/lattice_verify_flagship.sh",
     "township:instrument:e2e": "npx --no-install playwright test --config playwright.township.config.mjs",
+    "township:instrument:live-e2e": "npx --no-install playwright test --config playwright.township-live.config.mjs",
     "e2e": "npm run browser:e2e && npm run browser:worker:e2e && npm run browser:resume:e2e && npm run flagship:e2e"
   },
   "devDependencies": {

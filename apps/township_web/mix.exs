@@ -29,6 +29,7 @@ defmodule TownshipWeb.MixProject do
   defp deps do
     [
       {:lattice_core, in_umbrella: true},
+      {:lattice_web_socket, in_umbrella: true},
       {:bandit, "~> 1.12"},
       {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
       {:jason, "~> 1.4"},

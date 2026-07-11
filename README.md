@@ -196,6 +196,15 @@ Module docs render via ex_doc: `cd apps/lattice_core && mix docs`.
 - `Lattice.Transport.WebSocket`.
 - A lightweight Cowboy HTTP/WebSocket server.
 
+`apps/township_web` owns:
+
+- The read-only Phoenix LiveView instrument at `/township` and its Vue causal-replay
+  island.
+- `TownshipWeb.CarrierProjection`, an optional supervised observer that periodically
+  pulls an authenticated WebSocket peer, validates received operations through the
+  shared log/reducer path, and publishes fresh or stale snapshots through PubSub.
+- No participant key, capability, write path, server-push feed, or carrier listener.
+
 `apps/lattice_demo` owns:
 
 - `Lattice.Demo.EchoServer`.

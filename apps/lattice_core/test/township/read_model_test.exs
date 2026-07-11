@@ -108,8 +108,8 @@ defmodule Township.ReadModelTest do
     assert plan =~ "Vouches and coercion tokens never enter the Matter log"
     assert plan =~ "does not build Phoenix, LiveView, Vue"
 
-    assert build_map =~ "Plan 122 adds the Township instrument read model"
-    assert build_map =~ "plans 023-125"
+    assert build_map =~ ~r/Plan 122 adds the\s+Township\s+instrument read model/
+    assert build_map =~ "plans 023-126"
     assert build_map =~ "read-model foundation"
 
     assert plans_index =~

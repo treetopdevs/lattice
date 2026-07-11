@@ -15,10 +15,10 @@ defmodule TownshipWeb.PlanContractTest do
     assert plan =~ "npm run township:instrument:e2e"
     assert plan =~ "does not close Phase G or G1"
 
-    assert build_map =~ "Plan 123 adds the Township LiveView instrument"
+    assert build_map =~ ~r/Plan 123 adds the\s+Township LiveView instrument/
     assert build_map =~ "apps/township_web"
     assert build_map =~ "connected `/township` LiveView"
-    assert build_map =~ "plans 023-125"
+    assert build_map =~ "plans 023-126"
 
     assert plans_index =~
              "| 123 | Township LiveView instrument | P1 | L | 122 | DONE |"
@@ -43,12 +43,47 @@ defmodule TownshipWeb.PlanContractTest do
              "| 124 | Township Vue causal replay island | P1 | L | 123 | DONE |"
 
     assert build_map =~ "Plan 124 adds the Vue 3.5 causal-replay island"
-    assert build_map =~ "plans 023-125"
-    assert build_map =~ "Live controls and carrier/PubSub feeds remain"
+    assert build_map =~ "plans 023-126"
+    assert build_map =~ "Write controls and a server-push carrier feed remain"
     refute build_map =~ "live controls, carrier/PubSub feeds, and the Vue graph island remain"
 
     assert agents =~ "Vue 3.5 causal-replay island"
     assert package["devDependencies"]["vue"] == "3.5.39"
     assert package["devDependencies"]["@dagrejs/dagre"] == "3.0.0"
+  end
+
+  test "Plan 126 records a pull-only carrier projection without reclaiming app or exit gates" do
+    plan =
+      File.read!(Path.join(@repo_root, "plans/126-township-read-only-carrier-projection-g1.md"))
+
+    plans_index = File.read!(Path.join(@repo_root, "plans/README.md"))
+    build_map = File.read!(Path.join(@repo_root, "TOWNSHIP_BUILD_MAP.md"))
+    package = @repo_root |> Path.join("package.json") |> File.read!() |> Jason.decode!()
+
+    assert plan =~ ~r/## Status\s+DONE/
+    assert plan =~ "periodic request/response feed, not server push"
+    assert plan =~ "No carrier `push/2`, `live/2`"
+    assert plan =~ "No stable carrier listener/server extraction"
+    assert plan =~ "No Tauri onboarding/cap-persistence change"
+    assert plan =~ "No receipt-free primitive, W4 change, G1/Phase G completion"
+
+    assert plans_index =~
+             "| 126 | Township read-only carrier projection | P1 | L | 125 | DONE |"
+
+    assert build_map =~ ~r/Plan\s+126 adds the supervised pull-only carrier projection/
+    assert build_map =~ "periodic request/response polling"
+    assert build_map =~ "arrival-verified fresh or stale snapshots through `TownshipWeb.PubSub`"
+    assert build_map =~ "Write controls and a server-push carrier feed remain"
+
+    assert build_map =~
+             ~r/does not change or\s+newly prove Tauri onboarding\/cap persistence/
+
+    assert build_map =~ ~r/mobile secure-store custody, or real app\s+convergence/
+    assert build_map =~ "plans 023-126"
+    refute build_map =~ "Plan 126 completes G1"
+    refute build_map =~ "Plan 126 makes W4 receipt-free"
+
+    assert package["scripts"]["township:instrument:live-e2e"] ==
+             "npx --no-install playwright test --config playwright.township-live.config.mjs"
   end
 end

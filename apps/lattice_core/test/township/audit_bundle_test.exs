@@ -142,9 +142,9 @@ defmodule Township.AuditBundleTest do
     assert plan =~ "deterministic external term encoding"
     assert plan =~ "does not build Phoenix, LiveView, Vue"
 
-    assert build_map =~ "Plan 121 adds the outsider-replayable Township audit bundle"
+    assert build_map =~ ~r/Plan 121 adds the\s+outsider-replayable Township audit bundle/
     assert build_map =~ "lattice.township.verify_bundle"
-    assert build_map =~ "plans 023-125"
+    assert build_map =~ "plans 023-126"
     assert build_map =~ "Phase G's audit surface is implemented by Plan 121"
 
     assert plans_index =~

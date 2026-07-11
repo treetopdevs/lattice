@@ -46,8 +46,8 @@ roadmap live in the program doc below.
 |---|---|---|
 | `apps/lattice_core/lib/township/matter.ex` | `Township.Matter` — the civic Replica (LWW title/summary, causal-list posts, OR-set members, authority-gated `clerk_locked?`). Built only from primitives that exist today. | **Real and compiled**; W0–W4 workflow and property suites pass against the branch. |
 | `apps/lattice_core/lib/township/read_model.ex` | `Township.ReadModel` — structured Threads, Roles, Members, Attest, trust-graph, and causal op-DAG inputs for the one-screen instrument boundary. | **Real and tested**; four panels and graph evidence derive from `matter.log`, W4 vouches remain caller-held and stub-labeled, and no renderer is claimed. |
-| `apps/lattice_web_socket` | Dependency-light home of `Lattice.Transport.WebSocket.Client`, the shared JSON envelope codec, and `Lattice.Carrier.WebSocket`. | **Real and carrier-tested**; generic and Township second-process convergence, session security, batching, telemetry, and server transport suites use the promoted client. Cowboy peer/server fixtures remain in their boundary apps, and no live instrument producer is wired. |
-| `apps/township_web` | Dedicated Phoenix 1.8.9 / LiveView 1.1.32 instrument boundary over the verified bundle and shared read model. | **Real and browser-tested**; a connected `/township` LiveView renders the read-only snapshot, refuses authoritative values when verification fails, and progressively enhances verified replay frames through a Vue 3.5 canvas island. Live controls and carrier/PubSub feeds remain. |
+| `apps/lattice_web_socket` | Dependency-light home of `Lattice.Transport.WebSocket.Client`, the shared JSON envelope codec, and `Lattice.Carrier.WebSocket`. | **Real and carrier-tested**; generic and Township second-process convergence, session security, batching, telemetry, and server transport suites use the promoted client. Cowboy peer/server fixtures remain in their boundary apps; the Township projection consumes this client without taking listener ownership. |
+| `apps/township_web` | Dedicated Phoenix 1.8.9 / LiveView 1.1.32 instrument boundary over the shared read model. | **Real and browser-tested**; a connected `/township` LiveView defaults to the verified bundle and, when configured, receives a supervised pull-only carrier projection with explicit fresh, stale, connecting, and unavailable states. Vue 3.5 progressively enhances server-derived replay frames. There is no participant write path or server-push feed. |
 | `apps/lattice_core/lib/lattice/attestation.ex` | `Lattice.Attestation` behaviour + `Stub` + `M4Placeholder`. **The seam** that lets W4 be honest. | Stub **proven-plumbing**; receipt-freeness **stubbed** (M4). |
 | `apps/lattice_core/test/support/attestation_contract.ex` | The contract suite the Stub AND the future M4 primitive must both pass. `flunk`s if a module claims `receipt_free?` without proving it. | **Real guardrail.** |
 | `apps/lattice_core/test/township/workflows_test.exs` | W0–W4 as falsifiable ExUnit tests driving `Sim`, each with its ASSERT line. | **Real and green** against the branch; quarantine-shape inferences were reconciled. |
@@ -74,7 +74,7 @@ Framework-agnostic; the shared spine both the Expo and Tauri shells consume.
 | Path | What it is | Status |
 |---|---|---|
 | `clients/lattice-client/src/{op,dag,schema,crdt/reducers,quarantine,materialize,sync,carrier}.ts` | **Tier A** — the reducer (DAG, 3 CRDTs, the single V-01 quarantine predicate, materialize, sync) plus the carrier-frame/session adapter and carrier-term delegation extraction. Encoding-independent for op ids; carrier session bytes are signed through an injected shell/key-custody signer. | **Real & verified**: strict typecheck clean, Sim-generated conformance green, carrier W1 vector check green, live TS↔BEAM WebSocket W1 green. |
-| `clients/lattice-client/src/{codec,identity,township,local_log,tauri_bridge}.ts` | **Tier B/E1 bridge** — canonical `lattice-cbor-v1` bytes + Ed25519 signing. `codec.ts` verifies carrier-frame op bytes/hashes/signatures against BEAM and can author/sign frames; `township.ts` builds `Township.Matter` command body/cap terms, selects a matching local delegation cap extracted from carrier frames, derives deps from the local op frontier, and exposes author-and-persist workflows; `local_log.ts` persists semantic ops and pending carrier-frame outbox entries through shell key-value seams; `tauri_bridge.ts` adapts Tauri-style `invoke` commands to storage, async native signing, and native public-key discovery. | **Partially real** — Tier B/E1 coverage through plan 126 is tracked per plan in `plans/README.md` (each plan states its own gate and non-claims); parked gaps are listed in §4a. |
+| `clients/lattice-client/src/{codec,identity,township,local_log,tauri_bridge}.ts` | **Tier B/E1 bridge** — canonical `lattice-cbor-v1` bytes + Ed25519 signing. `codec.ts` verifies carrier-frame op bytes/hashes/signatures against BEAM and can author/sign frames; `township.ts` builds `Township.Matter` command body/cap terms, selects a matching local delegation cap extracted from carrier frames, derives deps from the local op frontier, and exposes author-and-persist workflows; `local_log.ts` persists semantic ops and pending carrier-frame outbox entries through shell key-value seams; `tauri_bridge.ts` adapts Tauri-style `invoke` commands to storage, async native signing, and native public-key discovery. | **Partially real** — Tier B/E1 coverage through plan 120 is tracked per plan in `plans/README.md` (each plan states its own gate and non-claims); parked gaps are listed in §4a. |
 | `clients/township-tauri-shell` | **E1 Tauri shell** — Vue 3.5 frontend plus Rust native command core for shell-side storage/signing/discovery commands (`lattice_kv_get`, `lattice_kv_set`, `lattice_ensure_carrier_key`, `lattice_public_key`, `lattice_sign_carrier`, `lattice_discover_pairing_adverts`, `lattice_advertise_pairing_handoff`, `lattice_log_probe`). | **Partially real** — shell coverage through plan 120 is tracked per plan in `plans/README.md`; parked gaps (iOS, QR camera onboarding, LAN discovery, physical-device behavior, cross-device state exchange) are listed in §4a. |
 | `clients/lattice-client/test/conformance.ts` + `test/vectors/*.json` | The harness that pins the TS reducer to Sim. | **Real**; W0, W1/W2 + perspectives, W3, and five seeded randomized vectors are generated by `lattice.export_vectors`. |
 | `clients/lattice-client/test/carrier.ts` | The C3 carrier-vector harness: BEAM-compatible session transcript/signature check, full carrier-frame decoding, and W1 merge/materialization against the Sim oracle. | **Real**; `npm run carrier:township` is wired in CI. |
@@ -147,13 +147,20 @@ Two hard blockers gate the endgame: **CBOR/ADR-P08** (everything non-BEAM) and *
    conformance. The randomized corpus already caught and fixed the TS OR-set observed-remove
    drift. The corpus also includes `township_carrier_w1`, which carries full BEAM carrier
    frames for the first C3 adapter check.
-4. **`township_demo.exs` and the overlay now run against the branch.** Plan 121 makes the
-   resulting state, authority verdict, op-DAG, and trust graph independently replayable through
-   `mix lattice.township.verify_bundle`. Plan 122 adds the shared structured read-model foundation
-   for the five-panel instrument. Plan 123 adds the Township LiveView instrument as a connected,
-   read-only verified snapshot. Plan 124 adds server-derived causal replay through a Vue 3.5 canvas
-   island. Plan 125 promotes the real WebSocket carrier client into a reusable app boundary while
-   keeping live controls and carrier/PubSub feeds separate.
+4. **`township_demo.exs` and the overlay now run against the branch.** Plan 121 adds the
+   outsider-replayable Township audit bundle: state, authority verdict, op-DAG, and trust graph are
+   independently checked through `mix lattice.township.verify_bundle`. Plan 122 adds the Township
+   instrument read model as the shared structured read-model foundation for five panels. Plan 123 adds the
+   Township LiveView instrument as a connected,
+   read-only verified snapshot. Plan 124 adds the Vue 3.5 causal-replay island from server-derived
+   frames. Plan 125 promotes the real WebSocket carrier client into a reusable app boundary. Plan
+   126 adds the supervised pull-only carrier projection: periodic request/response polling produces
+   arrival-verified fresh or stale snapshots through `TownshipWeb.PubSub` for the connected
+   LiveView. Write controls and a server-push carrier feed remain, as do stable listener ownership,
+   production deployment, complete G1/Phase G, and receipt-free W4. Plan 126 does not change or
+   newly prove Tauri onboarding/cap persistence, mobile secure-store custody, or real app
+   convergence; those established gates and their narrower non-claims remain recorded in plans
+   054-120.
 5. **G1 (physical BEAM carrier) is now reachable outside `Sim`** — plan 017 runs W0–W3
    across two BEAM OS processes over the real WebSocket carrier, with `Sim` as oracle.
    Everything proven since — TS client Tier B, the Tauri shell, the Android release
@@ -188,9 +195,10 @@ starts looking necessary, question the requirement, not the boundary (`CLAUDE.md
 - **Cross-device pairing state exchange** — requires a second physical device; the
   loopback state-exchange probes (plans 110–112) are the emulator ceiling.
 
-The active frontier is the POC exit gate: **complete G1** (live read-only carrier feed
-into the `/township` instrument — plan 126 lineage) and the remaining Phase G instrument
-work. Per-plan status lives in `plans/README.md`.
+Plan 126 supplies the read-only periodic carrier projection into `/township`. The active frontier
+remains **complete G1/Phase G**: write controls, a server-push feed, stable production listener
+ownership/deployment, and receipt-free W4 are not supplied by that observer. Per-plan status lives
+in `plans/README.md`.
 
 ---
 
@@ -231,7 +239,7 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   **Status:** done for Tier A W1 in plans 021–022 — the TS client signs/verifies
   carrier-session bytes through injected shell key custody, syncs with
   `LatticeNodeSpike.WsHandler` over a real WebSocket, and converges to the Sim oracle.
-  Follow-on client/shell/onboarding coverage (plans 023–126) is tracked per plan in
+  Follow-on client/shell/onboarding and instrument coverage (plans 023-126) is tracked per plan in
   `plans/README.md`; parked areas are listed in §4a.
 
 ### Phase D — Cross the runtime boundary (CBOR, the first hard blocker)
@@ -276,11 +284,14 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   assertions are observable + an outsider-replayable audit surface. *Asset:* the three `*.html`
   prototypes + Duality/Constellation/Console design notes.
   **Status:** Phase G's audit surface is implemented by Plan 121, Plan 122 adds the shared read
-  model, Plan 123 renders it through the dedicated Phoenix/LiveView boundary, and Plan 124 adds the
-  Vue 3.5 causal-replay island. The production instrument is a read-only verified snapshot: a real
-  LiveSocket connects at `/township`, verification failure withholds authoritative panel values,
-  and the canvas scrubs only server-derived frames. This is not G1 completion: Live controls and
-  carrier/PubSub feeds remain, as does the receipt-free W4 blocker.
+  model, Plan 123 renders it through the dedicated Phoenix/LiveView boundary, Plan 124 adds the Vue
+  3.5 causal-replay island, Plan 125 extracts the reusable carrier client boundary, and Plan 126
+  feeds the connected instrument through a supervised pull-only projection and PubSub. A real
+  LiveSocket connects at `/township`; verification failure withholds authoritative values; stale
+  carrier state remains labeled; and the canvas scrubs only server-derived frames. This is periodic
+  request/response polling, not server push or G1 completion. Write controls and a server-push
+  carrier feed remain, along with stable listener/deployment ownership and the receipt-free W4
+  blocker.
 
 **Definition of 100% done:** every gate A1→G1 green in CI; the POC exit gate (PD-001-A §A5)
 met with W4 *real*; Township converges across BEAM + browser/phone realms over the real carrier;

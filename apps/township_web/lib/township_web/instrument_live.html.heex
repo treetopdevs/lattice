@@ -9,248 +9,284 @@
     </div>
     <div class="title-line">
       <h1>Township</h1>
-      <span class={["source-pill", @source_state == :verified && "source-pill--verified"]}>
-        {if @source_state == :verified, do: "verified snapshot", else: "source unavailable"}
+      <span class={[
+        "source-pill",
+        @source_state in [:verified, :fresh] && "source-pill--verified",
+        @source_state == :stale && "source-pill--stale"
+      ]}>
+        {source_label(@source_state)}
       </span>
     </div>
   </header>
 
-  <%= if @source_state == :unverified do %>
-    <section id="instrument-unavailable" class="unavailable" aria-live="polite">
-      <p class="section-kicker">Integrity gate · refused</p>
-      <h2>Instrument unavailable</h2>
-      <p>
-        The audit bundle did not verify. No Township state, authority, attestation, or graph data
-        has been rendered.
-      </p>
-      <ul class="error-list">
-        <li :for={error <- @source_errors}>{error}</li>
-      </ul>
-    </section>
-  <% else %>
-    <section
-      id="source-status"
-      class="provenance-strip"
-      data-verified={to_string(@provenance.verified)}
-      aria-label="Verified source provenance"
-    >
-      <div>
-        <span class="provenance-label">Source</span>
-        <strong>{@provenance.schema}</strong>
-      </div>
-      <div>
-        <span class="provenance-label">Bundle</span>
-        <span class="path-value">{@provenance.bundle_dir}</span>
-      </div>
-      <div class="provenance-digest">
-        <span class="provenance-label">matter.log · SHA-256</span>
-        <code>{@provenance.matter_sha256}</code>
-      </div>
-    </section>
-
-    <div class="instrument-grid">
-      <section id="threads-panel" class="panel panel--threads">
-        <header class="panel-header">
-          <div>
-            <p class="section-kicker">Threads · materialized state</p>
-            <h2>{@model.threads.title}</h2>
-          </div>
-          <span class={["status-mark", @model.threads.clerk_locked? && "status-mark--locked"]}>
-            {if @model.threads.clerk_locked?, do: "closed", else: "open"}
-          </span>
-        </header>
-
-        <div class="summary-field">
-          <span class="field-label">Contested summary · LWW register</span>
-          <p>{@model.threads.summary}</p>
-        </div>
-
-        <ol class="post-list" aria-label="Deliberation posts">
-          <li :for={{post, index} <- Enum.with_index(@model.threads.posts, 1)} data-post>
-            <span class="post-index">{String.pad_leading(Integer.to_string(index), 2, "0")}</span>
-            <span>{post}</span>
-          </li>
-        </ol>
+  <%= cond do %>
+    <% @source_state == :connecting -> %>
+      <section id="instrument-connecting" class="unavailable" aria-live="polite">
+        <p class="section-kicker">Carrier · pull-only</p>
+        <h2>Carrier connecting</h2>
+        <p>Waiting for an authenticated peer snapshot.</p>
       </section>
-
-      <section id="op-dag-panel" class="panel panel--dag">
-        <header class="panel-header">
-          <div>
-            <p class="section-kicker">Op · DAG</p>
-            <h2>Causal evidence</h2>
-          </div>
-          <span class="metric">{@op_counts.total} ops</span>
-        </header>
-
-        <div
-          class="dag-counts"
-          data-op-count={@op_counts.total}
-          data-honored-count={@op_counts.honored}
-          data-quarantined-count={@op_counts.quarantined}
-        >
-          <span><strong>{@op_counts.honored}</strong> honored</span>
-          <span class="danger"><strong>{@op_counts.quarantined}</strong> quarantined</span>
-          <span><strong>{length(@model.op_dag.frontier)}</strong> frontier</span>
-        </div>
-
-        <div
-          id="causal-replay-island"
-          class="causal-replay-island"
-          phx-hook="TownshipCausalReplay"
-          phx-update="ignore"
-          data-replay-schema={@causal_replay["schema"]}
-          data-replay={Jason.encode!(@causal_replay)}
-        >
-          <noscript>
-            <p class="causal-replay__fallback" data-causal-replay-fallback>
-              Causal replay unavailable. Verified operation evidence follows.
-            </p>
-          </noscript>
-        </div>
-
-        <ol class="op-rail" aria-label="Causal operation rail">
-          <li
-            :for={node <- @model.op_dag.nodes}
-            class={["op-node", node.status == "quarantined" && "op-node--quarantined"]}
-            data-op-node
-            data-status={node.status}
-          >
-            <span class="op-height">h{node.height}</span>
-            <span class="op-kind">{node.kind}</span>
-            <code>{String.slice(node.id, 0, 8)}</code>
-            <span :if={node.reason} class="op-reason">{node.reason}</span>
-          </li>
-        </ol>
-
-        <div class="frontier-line">
-          <span class="field-label">Frontier</span>
-          <code :for={id <- @model.op_dag.frontier} data-frontier>{id}</code>
-        </div>
-      </section>
-
-      <section id="roles-panel" class="panel panel--roles">
-        <header class="panel-header">
-          <div>
-            <p class="section-kicker">Roles · serialized authority</p>
-            <h2>Current holders</h2>
-          </div>
-        </header>
-
-        <dl class="holder-list">
-          <div
-            :for={{role, fingerprint} <- Enum.sort(@model.roles.holders)}
-            data-holder={role}
-            data-fingerprint={fingerprint}
-          >
-            <dt>{role}</dt>
-            <dd>{fingerprint || "unheld"}</dd>
-          </div>
-        </dl>
-
-        <div class="audit-strip">
-          <p class="field-label">Authority quarantine</p>
-          <div
-            :for={op_id <- @model.roles.quarantine}
-            class="audit-event"
-            data-reason={@model.roles.reasons[op_id]}
-          >
-            <span>{Atom.to_string(@model.roles.reasons[op_id])}</span>
-            <code>{String.slice(op_id, 0, 12)}</code>
-          </div>
-        </div>
-      </section>
-
-      <section id="members-panel" class="panel panel--members">
-        <header class="panel-header">
-          <div>
-            <p class="section-kicker">Members · observed remove set</p>
-            <h2>Civic membership</h2>
-          </div>
-          <span class="metric">{length(@model.members.current)} current</span>
-        </header>
-
-        <ul class="member-list">
-          <li :for={member <- @model.members.current} data-member={member}>{member}</li>
+    <% @source_state == :unverified -> %>
+      <section id="instrument-unavailable" class="unavailable" aria-live="polite">
+        <p class="section-kicker">Integrity gate · refused</p>
+        <h2>Instrument unavailable</h2>
+        <p>{unavailable_copy(@source_kind)}</p>
+        <ul class="error-list">
+          <li :for={error <- @source_errors}>{error}</li>
         </ul>
-
-        <div class="denied-list">
-          <p class="field-label">Denied membership mutations</p>
-          <p :if={@model.members.denied == []} class="empty-state" data-empty="denied-members">
-            No denied member mutations in this snapshot.
-          </p>
-          <div :for={denied <- @model.members.denied} class="denied-entry">
-            <span>{denied.command} · {denied.reason}</span>
-            <code>{String.slice(denied.op_id, 0, 12)}</code>
-          </div>
-        </div>
       </section>
-
-      <section id="attest-panel" class="panel panel--attest">
-        <header class="panel-header">
+    <% true -> %>
+      <section
+        id="source-status"
+        class="provenance-strip"
+        data-verified={to_string(@provenance.verified)}
+        data-source={@provenance.source}
+        data-freshness={@provenance.freshness}
+        data-verification={@provenance.verification}
+        aria-label="Verified source provenance"
+      >
+        <%= if @provenance.source == :bundle do %>
           <div>
-            <p class="section-kicker">Attest · local decision</p>
-            <h2>Vouch tally</h2>
+            <span class="provenance-label">Source</span>
+            <strong>{@provenance.schema}</strong>
           </div>
-          <span
-            class="stub-mark"
-            data-attestation-status={@model.attest.status}
+          <div>
+            <span class="provenance-label">Bundle</span>
+            <span class="path-value">{@provenance.bundle_dir}</span>
+          </div>
+          <div class="provenance-digest">
+            <span class="provenance-label">matter.log · SHA-256</span>
+            <code>{@provenance.matter_sha256}</code>
+          </div>
+        <% else %>
+          <div>
+            <span class="provenance-label">Peer</span>
+            <strong>{@provenance.peer_realm}</strong>
+          </div>
+          <div>
+            <span class="provenance-label">Replica</span>
+            <code>{@provenance.replica}</code>
+          </div>
+          <div class="provenance-digest">
+            <span class="provenance-label">Last successful pull</span>
+            <code>{DateTime.to_iso8601(@provenance.pulled_at)}</code>
+          </div>
+          <div
+            :if={@provenance.freshness == :stale}
+            id="carrier-error"
+            data-last-error={format_last_error(@provenance.last_error)}
           >
-            W4 · stubbed
-          </span>
-        </header>
-
-        <div class="tally-result">
-          <span class="field-label">Outcome</span>
-          <strong>{@model.attest.tally.outcome}</strong>
-        </div>
-        <dl class="tally-counts">
-          <div :for={{choice, count} <- Enum.sort(@model.attest.tally.counts)}>
-            <dt>{choice}</dt>
-            <dd>{count}</dd>
+            <span class="provenance-label">Last pull error</span>
+            <code>{format_last_error(@provenance.last_error)}</code>
           </div>
-        </dl>
-        <p
-          class="receipt-status"
-          data-receipt-free={to_string(@model.attest.receipt_free?)}
-        >
-          receipt_free? <strong>{to_string(@model.attest.receipt_free?)}</strong>
-        </p>
+        <% end %>
       </section>
 
-      <section id="trust-graph-panel" class="panel panel--trust">
-        <header class="panel-header">
-          <div>
-            <p class="section-kicker">Trust graph · delegation evidence</p>
-            <h2 id="trust-graph-title">Who may act</h2>
-          </div>
-          <span class="metric">
-            {length(@model.trust_graph.nodes)} identities · {length(@model.trust_graph.edges)} grants
-          </span>
-        </header>
-
-        <div class="trust-stage" role="group" aria-labelledby="trust-graph-title">
-          <div class="trust-nodes">
-            <div :for={node <- @model.trust_graph.nodes} class="trust-node" data-trust-node>
-              <span class="trust-node-mark">
-                {if node.label == node.id,
-                  do: "ID",
-                  else: node.label |> String.first() |> String.upcase()}
-              </span>
-              <strong>{node.label}</strong>
-              <code>{node.id}</code>
+      <div class="instrument-grid">
+        <section id="threads-panel" class="panel panel--threads">
+          <header class="panel-header">
+            <div>
+              <p class="section-kicker">Threads · materialized state</p>
+              <h2>{@model.threads.title}</h2>
             </div>
+            <span class={["status-mark", @model.threads.clerk_locked? && "status-mark--locked"]}>
+              {if @model.threads.clerk_locked?, do: "closed", else: "open"}
+            </span>
+          </header>
+
+          <div class="summary-field">
+            <span class="field-label">Contested summary · LWW register</span>
+            <p>{@model.threads.summary}</p>
           </div>
 
-          <ol class="trust-edges">
-            <li :for={edge <- @model.trust_graph.edges} data-trust-edge>
-              <code>{edge.from}</code>
-              <span aria-hidden="true">→</span>
-              <code>{edge.to}</code>
-              <span>{edge.kind}</span>
+          <ol class="post-list" aria-label="Deliberation posts">
+            <li :for={{post, index} <- Enum.with_index(@model.threads.posts, 1)} data-post>
+              <span class="post-index">
+                {String.pad_leading(Integer.to_string(index), 2, "0")}
+              </span>
+              <span>{post}</span>
             </li>
           </ol>
-        </div>
-      </section>
-    </div>
+        </section>
+
+        <section id="op-dag-panel" class="panel panel--dag">
+          <header class="panel-header">
+            <div>
+              <p class="section-kicker">Op · DAG</p>
+              <h2>Causal evidence</h2>
+            </div>
+            <span class="metric">{@op_counts.total} ops</span>
+          </header>
+
+          <div
+            class="dag-counts"
+            data-op-count={@op_counts.total}
+            data-honored-count={@op_counts.honored}
+            data-quarantined-count={@op_counts.quarantined}
+          >
+            <span><strong>{@op_counts.honored}</strong> honored</span>
+            <span class="danger"><strong>{@op_counts.quarantined}</strong> quarantined</span>
+            <span><strong>{length(@model.op_dag.frontier)}</strong> frontier</span>
+          </div>
+
+          <div
+            id="causal-replay-island"
+            class="causal-replay-island"
+            phx-hook="TownshipCausalReplay"
+            phx-update="ignore"
+            data-replay-schema={@causal_replay["schema"]}
+            data-replay={Jason.encode!(@causal_replay)}
+          >
+            <noscript>
+              <p class="causal-replay__fallback" data-causal-replay-fallback>
+                Causal replay unavailable. Verified operation evidence follows.
+              </p>
+            </noscript>
+          </div>
+
+          <ol class="op-rail" aria-label="Causal operation rail">
+            <li
+              :for={node <- @model.op_dag.nodes}
+              class={["op-node", node.status == "quarantined" && "op-node--quarantined"]}
+              data-op-node
+              data-status={node.status}
+            >
+              <span class="op-height">h{node.height}</span>
+              <span class="op-kind">{node.kind}</span>
+              <code>{String.slice(node.id, 0, 8)}</code>
+              <span :if={node.reason} class="op-reason">{node.reason}</span>
+            </li>
+          </ol>
+
+          <div class="frontier-line">
+            <span class="field-label">Frontier</span>
+            <code :for={id <- @model.op_dag.frontier} data-frontier>{id}</code>
+          </div>
+        </section>
+
+        <section id="roles-panel" class="panel panel--roles">
+          <header class="panel-header">
+            <div>
+              <p class="section-kicker">Roles · serialized authority</p>
+              <h2>Current holders</h2>
+            </div>
+          </header>
+
+          <dl class="holder-list">
+            <div
+              :for={{role, fingerprint} <- Enum.sort(@model.roles.holders)}
+              data-holder={role}
+              data-fingerprint={fingerprint}
+            >
+              <dt>{role}</dt>
+              <dd>{fingerprint || "unheld"}</dd>
+            </div>
+          </dl>
+
+          <div class="audit-strip">
+            <p class="field-label">Authority quarantine</p>
+            <div
+              :for={op_id <- @model.roles.quarantine}
+              class="audit-event"
+              data-reason={@model.roles.reasons[op_id]}
+            >
+              <span>{Atom.to_string(@model.roles.reasons[op_id])}</span>
+              <code>{String.slice(op_id, 0, 12)}</code>
+            </div>
+          </div>
+        </section>
+
+        <section id="members-panel" class="panel panel--members">
+          <header class="panel-header">
+            <div>
+              <p class="section-kicker">Members · observed remove set</p>
+              <h2>Civic membership</h2>
+            </div>
+            <span class="metric">{length(@model.members.current)} current</span>
+          </header>
+
+          <ul class="member-list">
+            <li :for={member <- @model.members.current} data-member={member}>{member}</li>
+          </ul>
+
+          <div class="denied-list">
+            <p class="field-label">Denied membership mutations</p>
+            <p :if={@model.members.denied == []} class="empty-state" data-empty="denied-members">
+              No denied member mutations in this snapshot.
+            </p>
+            <div :for={denied <- @model.members.denied} class="denied-entry">
+              <span>{denied.command} · {denied.reason}</span>
+              <code>{String.slice(denied.op_id, 0, 12)}</code>
+            </div>
+          </div>
+        </section>
+
+        <section id="attest-panel" class="panel panel--attest">
+          <header class="panel-header">
+            <div>
+              <p class="section-kicker">Attest · local decision</p>
+              <h2>Vouch tally</h2>
+            </div>
+            <span
+              class="stub-mark"
+              data-attestation-status={@model.attest.status}
+            >
+              W4 · stubbed
+            </span>
+          </header>
+
+          <div class="tally-result">
+            <span class="field-label">Outcome</span>
+            <strong>{@model.attest.tally.outcome}</strong>
+          </div>
+          <dl class="tally-counts">
+            <div :for={{choice, count} <- Enum.sort(@model.attest.tally.counts)}>
+              <dt>{choice}</dt>
+              <dd>{count}</dd>
+            </div>
+          </dl>
+          <p
+            class="receipt-status"
+            data-receipt-free={to_string(@model.attest.receipt_free?)}
+          >
+            receipt_free? <strong>{to_string(@model.attest.receipt_free?)}</strong>
+          </p>
+        </section>
+
+        <section id="trust-graph-panel" class="panel panel--trust">
+          <header class="panel-header">
+            <div>
+              <p class="section-kicker">Trust graph · delegation evidence</p>
+              <h2 id="trust-graph-title">Who may act</h2>
+            </div>
+            <span class="metric">
+              {length(@model.trust_graph.nodes)} identities · {length(@model.trust_graph.edges)} grants
+            </span>
+          </header>
+
+          <div class="trust-stage" role="group" aria-labelledby="trust-graph-title">
+            <div class="trust-nodes">
+              <div :for={node <- @model.trust_graph.nodes} class="trust-node" data-trust-node>
+                <span class="trust-node-mark">
+                  {if node.label == node.id,
+                    do: "ID",
+                    else: node.label |> String.first() |> String.upcase()}
+                </span>
+                <strong>{node.label}</strong>
+                <code>{node.id}</code>
+              </div>
+            </div>
+
+            <ol class="trust-edges">
+              <li :for={edge <- @model.trust_graph.edges} data-trust-edge>
+                <code>{edge.from}</code>
+                <span aria-hidden="true">→</span>
+                <code>{edge.to}</code>
+                <span>{edge.kind}</span>
+              </li>
+            </ol>
+          </div>
+        </section>
+      </div>
   <% end %>
 </div>

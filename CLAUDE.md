@@ -26,6 +26,7 @@ is the **minimal cut** of it:
 | `apps/lattice_core/test/support/attestation_contract.ex` | Shared contract the Stub AND M4 must pass. |
 | `apps/lattice_core/test/township/workflows_test.exs` | W0–W4 as falsifiable tests. |
 | `scripts/township_demo.exs` | Narrated end-to-end run (`§5` storyline). |
+| `apps/township_web` | Read-only LiveView/Vue instrument; its optional Plan 126 projection periodically pulls a real carrier peer and publishes verified snapshots through PubSub. |
 
 ## The one bet: the seam
 
@@ -62,6 +63,10 @@ the oracle, then asserts byte-identical materialized state and identical `:not_h
 authority quarantine for the stale clerk action after partition/heal. Do not replace this
 with a Sim-only claim; G1 is the real-socket run, while `scripts/township_demo.exs` remains
 the narrated Sim/W4-stub walkthrough.
+
+Plan 126 reuses that real carrier as a strictly pull-only instrument observer. It does not run
+participant workflows, push operations, own a stable listener, complete Phase G, or change the
+Tauri onboarding, mobile secure-store, real-app convergence, or receipt-free W4 claims.
 
 ## Constraints — the "do not implement" boundary (PD-001 §6)
 

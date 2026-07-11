@@ -45,7 +45,7 @@ All tests must pass and formatting must be clean before considering any change d
 | `apps/lattice_core` | v1 capability plane (caps, gateway, topology, audit) + the Lattice 2.0 replica-on-op-log engine |
 | `apps/lattice_web_socket` | Reusable WebSocket client and real carrier adapter; no listener or supervision tree |
 | `apps/lattice_server` | Cowboy WebSocket/HTTP boundary over the shared JSON envelope codec |
-| `apps/township_web` | Phoenix/LiveView read-only Township instrument with a Vue 3.5 causal-replay island over the verified audit bundle |
+| `apps/township_web` | Phoenix/LiveView read-only Township instrument with a Vue 3.5 causal-replay island over the verified bundle or optional pull-only carrier projection |
 | `apps/lattice_demo` | Demo servers, tab workers, and the deterministic/browser demo mix tasks |
 | `apps/lattice_stress` | Adversarial stress lab: races, WS abuse, load/soak, property tests, `mix lattice.stress` |
 | `apps/lattice_carrier_spike` | Spike code for a real (non-simulated) carrier |
@@ -74,7 +74,7 @@ All tests must pass and formatting must be clean before considering any change d
 **Heavy / external dependencies** (need Node + Playwright, bind a port; run only when asked):
 
 - `npm run browser:e2e`, `npm run browser:worker:e2e`, `npm run flagship:e2e`, `npm run e2e`
-- `npm run township:instrument:e2e`
+- `npm run township:instrument:e2e`, `npm run township:instrument:live-e2e`
 - `scripts/lattice_poc_demo.sh`, `scripts/lattice_research_demo.sh`,
   `scripts/lattice_liveops_demo.sh`, `scripts/lattice_flagship_demo.sh` (the flagship
   one additionally needs ffmpeg for the recording evaluation)

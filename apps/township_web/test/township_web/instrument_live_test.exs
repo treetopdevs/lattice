@@ -2,11 +2,41 @@ defmodule TownshipWeb.InstrumentLiveTest do
   # The degraded-state test temporarily overrides the process-global source config.
   use TownshipWeb.ConnCase, async: false
 
+  alias Lattice.{Log, Sim}
+  alias Township.Matter
+  alias TownshipWeb.CarrierProjection
+
   defmodule FailingSource do
     @behaviour TownshipWeb.InstrumentSource
 
     @impl true
     def load(_opts), do: {:error, {:bundle_unverified, ["audit.json mismatch"]}}
+  end
+
+  defmodule LiveCarrier do
+    def connect(opts) do
+      {:ok,
+       %{
+         control: Keyword.get(opts, :control),
+         ops: Keyword.fetch!(opts, :ops)
+       }}
+    end
+
+    def advertise(conn, _log) do
+      case mode(conn) do
+        {:advertise_error, reason} -> {:error, reason}
+        _mode -> {:ok, MapSet.new(conn.ops, & &1.id), conn}
+      end
+    end
+
+    def pull(conn, have) do
+      {:ok, Enum.reject(conn.ops, &MapSet.member?(have, &1.id)), conn}
+    end
+
+    def close(_conn), do: :ok
+
+    defp mode(%{control: nil}), do: :ok
+    defp mode(%{control: control}), do: Agent.get(control, & &1)
   end
 
   test "dead and connected renders expose the verified five-panel instrument", %{conn: conn} do
@@ -82,6 +112,104 @@ defmodule TownshipWeb.InstrumentLiveTest do
     refute policy =~ "unsafe-inline"
   end
 
+  test "connected instrument withholds the bundle until a carrier snapshot arrives", %{conn: conn} do
+    peer_log = peer_log()
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         carrier: LiveCarrier,
+         connect_opts: [ops: Log.topo_ops(peer_log)],
+         replica: peer_log.replica,
+         peer_realm: "clerk",
+         pubsub: TownshipWeb.PubSub,
+         topic: "township:live:#{System.unique_integer([:positive])}",
+         schedule: :manual}
+      )
+
+    put_projection_config(projection)
+
+    {:ok, view, _html} = live(conn, "/township")
+
+    assert has_element?(view, "#instrument-connecting", "Carrier connecting")
+    refute render(view) =~ "Zoning variance #24"
+    refute has_element?(view, "#threads-panel")
+    refute has_element?(view, "#causal-replay-island")
+
+    assert {:ok, {:fresh, payload}} = CarrierProjection.refresh(projection)
+    rendered = render(view)
+
+    assert has_element?(
+             view,
+             "#source-status[data-source='carrier'][data-freshness='fresh'][data-verification='arrival']"
+           )
+
+    assert rendered =~ payload.read_model.threads.title
+    assert rendered =~ "Projection matter"
+    assert rendered =~ "clerk: live update"
+    assert has_element?(view, "#causal-replay-island")
+    refute rendered =~ "township-audit-bundle-v1"
+    refute rendered =~ "df911bb13013abef"
+  end
+
+  test "configured but absent projection renders carrier unavailable without bundle fallback", %{
+    conn: conn
+  } do
+    put_projection_config(:missing_township_projection)
+
+    {:ok, view, _html} = live(conn, "/township")
+    rendered = render(view)
+
+    assert has_element?(view, "#instrument-unavailable", "Instrument unavailable")
+    assert rendered =~ "configured carrier peer is unavailable"
+    refute has_element?(view, "#threads-panel")
+    refute has_element?(view, "#causal-replay-island")
+    refute rendered =~ "Zoning variance #24"
+    refute rendered =~ "township-audit-bundle-v1"
+    refute rendered =~ "df911bb13013abef"
+  end
+
+  test "carrier failure after a fresh pull keeps the instrument visibly stale", %{conn: conn} do
+    peer_log = peer_log()
+    control = start_supervised!({Agent, fn -> :ok end})
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         carrier: LiveCarrier,
+         connect_opts: [ops: Log.topo_ops(peer_log), control: control],
+         replica: peer_log.replica,
+         peer_realm: "clerk",
+         pubsub: TownshipWeb.PubSub,
+         topic: "township:live:#{System.unique_integer([:positive])}",
+         schedule: :manual}
+      )
+
+    put_projection_config(projection)
+    {:ok, view, _html} = live(conn, "/township")
+
+    assert {:ok, {:fresh, fresh}} = CarrierProjection.refresh(projection)
+    assert render(view) =~ "Projection matter"
+
+    Agent.update(control, fn _mode -> {:advertise_error, :offline} end)
+    assert {:ok, {:stale, stale}} = CarrierProjection.refresh(projection)
+    rendered = render(view)
+
+    assert stale.provenance.pulled_at == fresh.provenance.pulled_at
+
+    assert has_element?(
+             view,
+             "#source-status[data-source='carrier'][data-freshness='stale'][data-verification='arrival']"
+           )
+
+    assert rendered =~ "carrier stale"
+    assert rendered =~ "Last pull error"
+    assert rendered =~ ":offline"
+    assert rendered =~ "Projection matter"
+    assert rendered =~ "clerk: live update"
+    assert has_element?(view, "#causal-replay-island")
+  end
+
   test "an unverified source renders only an explicit unavailable state", %{conn: conn} do
     previous = Application.fetch_env!(:township_web, :instrument_source)
     Application.put_env(:township_web, :instrument_source, FailingSource)
@@ -106,5 +234,25 @@ defmodule TownshipWeb.InstrumentLiveTest do
     refute degraded =~ "approve"
     refute degraded =~ "township-audit-bundle-v1"
     refute degraded =~ "df911bb13013abefab"
+  end
+
+  defp peer_log do
+    sim = Sim.new(Matter, "replica:matter:live-projection", ["clerk"], seed: "live-projection")
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, _title} = Sim.command(sim, "clerk", :set_title, ["Projection matter"])
+    {sim, _post} = Sim.command(sim, "clerk", :post, ["clerk: live update"])
+    Sim.log(sim, "clerk")
+  end
+
+  defp put_projection_config(projection) do
+    previous = Application.get_env(:township_web, :instrument_projection_server, :missing)
+    Application.put_env(:township_web, :instrument_projection_server, projection)
+
+    on_exit(fn ->
+      case previous do
+        :missing -> Application.delete_env(:township_web, :instrument_projection_server)
+        value -> Application.put_env(:township_web, :instrument_projection_server, value)
+      end
+    end)
   end
 end

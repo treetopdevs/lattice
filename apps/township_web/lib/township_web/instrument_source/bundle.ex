@@ -35,10 +35,15 @@ defmodule TownshipWeb.InstrumentSource.Bundle do
          read_model: ReadModel.observe(log, labels: labels, vouches: demo_vouches()),
          causal_replay: ReadModel.replay(log),
          provenance: %{
+           source: :bundle,
+           freshness: :snapshot,
+           verification: :bundle,
            bundle_dir: bundle_dir,
            matter_sha256: sha256(matter_bytes),
            schema: schema,
-           verified: true
+           verified: true,
+           replica: log.replica,
+           frontier: Log.frontier(log)
          }
        }}
     else

@@ -3,7 +3,7 @@ defmodule LatticeWebSocket.PlanContractTest do
 
   @repo_root Path.expand("../../..", __DIR__)
 
-  test "Plan 125 records reusable carrier ownership without claiming a live instrument feed" do
+  test "Plan 125 records reusable carrier ownership before the later instrument feed" do
     plan = File.read!(Path.join(@repo_root, "plans/125-reusable-websocket-carrier-boundary.md"))
     plans_index = File.read!(Path.join(@repo_root, "plans/README.md"))
     build_map = File.read!(Path.join(@repo_root, "TOWNSHIP_BUILD_MAP.md"))
@@ -21,8 +21,8 @@ defmodule LatticeWebSocket.PlanContractTest do
 
     assert build_map =~ "`apps/lattice_web_socket`"
     assert build_map =~ "Plan 125 promotes the real WebSocket carrier client"
-    assert build_map =~ "plans 023-125"
-    assert build_map =~ ~r/does not wire the Township instrument to a\s+live producer/
+    assert build_map =~ "plans 023-126"
+    assert build_map =~ ~r/Plan\s+126 adds the supervised pull-only carrier projection/
 
     assert agents =~ "Reusable WebSocket client and real carrier adapter"
     assert readme =~ "`apps/lattice_web_socket` owns"

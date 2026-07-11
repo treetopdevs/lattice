@@ -132,6 +132,12 @@ code {
   color: var(--teal);
 }
 
+.source-pill--stale {
+  background: var(--amber-soft);
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
 .provenance-strip {
   align-items: start;
   background: var(--ink);
@@ -158,6 +164,10 @@ code {
 .path-value,
 .provenance-digest code {
   overflow-wrap: anywhere;
+}
+
+#carrier-error code {
+  color: #f3b18d;
 }
 
 .instrument-grid {
