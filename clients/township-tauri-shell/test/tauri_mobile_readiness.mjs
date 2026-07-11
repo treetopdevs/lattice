@@ -1438,7 +1438,7 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
     buildMap,
     /Plan 126 does not change or\s+newly prove Tauri onboarding\/cap persistence, mobile secure-store custody, or real app\s+convergence/,
   );
-  assert.match(buildMap, /plans 023-126/);
+  assert.match(buildMap, /plans 023-127/);
   assert.match(buildMap, /Xcode 27 beta Tauri Swift-package failure/);
   assert.match(buildMap, /QR camera onboarding/);
   assert.match(buildMap, /LAN discovery/);

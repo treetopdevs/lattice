@@ -47,6 +47,7 @@ roadmap live in the program doc below.
 | `apps/lattice_core/lib/township/matter.ex` | `Township.Matter` — the civic Replica (LWW title/summary, causal-list posts, OR-set members, authority-gated `clerk_locked?`). Built only from primitives that exist today. | **Real and compiled**; W0–W4 workflow and property suites pass against the branch. |
 | `apps/lattice_core/lib/township/read_model.ex` | `Township.ReadModel` — structured Threads, Roles, Members, Attest, trust-graph, and causal op-DAG inputs for the one-screen instrument boundary. | **Real and tested**; four panels and graph evidence derive from `matter.log`, W4 vouches remain caller-held and stub-labeled, and no renderer is claimed. |
 | `apps/lattice_web_socket` | Dependency-light home of `Lattice.Transport.WebSocket.Client`, the shared JSON envelope codec, and `Lattice.Carrier.WebSocket`. | **Real and carrier-tested**; generic and Township second-process convergence, session security, batching, telemetry, and server transport suites use the promoted client. Cowboy peer/server fixtures remain in their boundary apps; the Township projection consumes this client without taking listener ownership. |
+| `apps/lattice_carrier_server` | Dedicated supervised Cowboy boundary that serves one configured signed log to trusted carrier realms. | **Real and server-tested**; Plan 127 adds authenticated frontier and pull only, fail-closed source reload, fixed-port supervision, second-BEAM projection recovery, and a browser fresh/stale/fresh proof. Its key is a transport identity, not participant custody, and the listener is not a production deployment. |
 | `apps/township_web` | Dedicated Phoenix 1.8.9 / LiveView 1.1.32 instrument boundary over the shared read model. | **Real and browser-tested**; a connected `/township` LiveView defaults to the verified bundle and, when configured, receives a supervised pull-only carrier projection with explicit fresh, stale, connecting, and unavailable states. Vue 3.5 progressively enhances server-derived replay frames. There is no participant write path or server-push feed. |
 | `apps/lattice_core/lib/lattice/attestation.ex` | `Lattice.Attestation` behaviour + `Stub` + `M4Placeholder`. **The seam** that lets W4 be honest. | Stub **proven-plumbing**; receipt-freeness **stubbed** (M4). |
 | `apps/lattice_core/test/support/attestation_contract.ex` | The contract suite the Stub AND the future M4 primitive must both pass. `flunk`s if a module claims `receipt_free?` without proving it. | **Real guardrail.** |
@@ -156,11 +157,12 @@ Two hard blockers gate the endgame: **CBOR/ADR-P08** (everything non-BEAM) and *
    frames. Plan 125 promotes the real WebSocket carrier client into a reusable app boundary. Plan
    126 adds the supervised pull-only carrier projection: periodic request/response polling produces
    arrival-verified fresh or stale snapshots through `TownshipWeb.PubSub` for the connected
-   LiveView. Write controls and a server-push carrier feed remain, as do stable listener ownership,
-   production deployment, complete G1/Phase G, and receipt-free W4. Plan 126 does not change or
-   newly prove Tauri onboarding/cap persistence, mobile secure-store custody, or real app
-   convergence; those established gates and their narrower non-claims remain recorded in plans
-   054-120.
+   LiveView. Plan 127 adds the stable supervised read-only carrier server: it owns a configurable
+   Cowboy listener, authenticates trusted transport realms, and serves only authenticated frontier and pull
+   requests from a configured signed log. Write controls and a server-push carrier feed remain;
+   production deployment remains, as do complete G1/Phase G and receipt-free W4. Plan 127 does not change or newly prove Tauri onboarding/cap persistence,
+   mobile secure-store custody, or real app convergence; those established gates and their
+   narrower non-claims remain recorded in plans 054-120.
 5. **G1 (physical BEAM carrier) is now reachable outside `Sim`** — plan 017 runs W0–W3
    across two BEAM OS processes over the real WebSocket carrier, with `Sim` as oracle.
    Everything proven since — TS client Tier B, the Tauri shell, the Android release
@@ -195,10 +197,10 @@ starts looking necessary, question the requirement, not the boundary (`CLAUDE.md
 - **Cross-device pairing state exchange** — requires a second physical device; the
   loopback state-exchange probes (plans 110–112) are the emulator ceiling.
 
-Plan 126 supplies the read-only periodic carrier projection into `/township`. The active frontier
-remains **complete G1/Phase G**: write controls, a server-push feed, stable production listener
-ownership/deployment, and receipt-free W4 are not supplied by that observer. Per-plan status lives
-in `plans/README.md`.
+Plan 126 supplies the read-only periodic carrier projection into `/township`, and Plan 127 gives
+that projection a supervised non-fixture read-only listener. The active frontier remains **complete
+G1/Phase G**: write controls, a server-push feed, production deployment, and receipt-free W4 are
+not supplied by the server boundary. Per-plan status lives in `plans/README.md`.
 
 ---
 
@@ -239,7 +241,7 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   **Status:** done for Tier A W1 in plans 021–022 — the TS client signs/verifies
   carrier-session bytes through injected shell key custody, syncs with
   `LatticeNodeSpike.WsHandler` over a real WebSocket, and converges to the Sim oracle.
-  Follow-on client/shell/onboarding and instrument coverage (plans 023-126) is tracked per plan in
+  Follow-on client/shell/onboarding and instrument coverage (plans 023-127) is tracked per plan in
   `plans/README.md`; parked areas are listed in §4a.
 
 ### Phase D — Cross the runtime boundary (CBOR, the first hard blocker)
@@ -253,7 +255,7 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   **Status:** partial. `codec.ts` reproduces BEAM canonical bytes/op ids from carrier
   frames and authors BEAM-accepted W1 frames. The full progression from there —
   Township command authoring, persistence seams, the Tauri shell, Android debug/release
-  probes, onboarding gates, and the Phase G instrument work (plans 024–126) — is
+  probes, onboarding gates, and the Phase G instrument work (plans 024–127) — is
   tracked per plan in `plans/README.md`; each plan file states its own gate and
   non-claims. Parked areas: §4a.
 
@@ -285,13 +287,15 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   prototypes + Duality/Constellation/Console design notes.
   **Status:** Phase G's audit surface is implemented by Plan 121, Plan 122 adds the shared read
   model, Plan 123 renders it through the dedicated Phoenix/LiveView boundary, Plan 124 adds the Vue
-  3.5 causal-replay island, Plan 125 extracts the reusable carrier client boundary, and Plan 126
-  feeds the connected instrument through a supervised pull-only projection and PubSub. A real
+  3.5 causal-replay island, Plan 125 extracts the reusable carrier client boundary, Plan 126
+  feeds the connected instrument through a supervised pull-only projection and PubSub, and Plan
+  127 supplies that projection with a stable supervised read-only carrier server. A real
   LiveSocket connects at `/township`; verification failure withholds authoritative values; stale
-  carrier state remains labeled; and the canvas scrubs only server-derived frames. This is periodic
-  request/response polling, not server push or G1 completion. Write controls and a server-push
-  carrier feed remain, along with stable listener/deployment ownership and the receipt-free W4
-  blocker.
+  carrier state remains labeled; and the canvas scrubs only server-derived frames. The browser
+  proof drives deterministic manual refresh across an in-process server restart; autonomous polling
+  remains covered below the browser boundary. This is periodic request/response polling, not server
+  push or G1 completion. Write controls and a server-push carrier feed remain, along with production
+  deployment and the receipt-free W4 blocker.
 
 **Definition of 100% done:** every gate A1→G1 green in CI; the POC exit gate (PD-001-A §A5)
 met with W4 *real*; Township converges across BEAM + browser/phone realms over the real carrier;

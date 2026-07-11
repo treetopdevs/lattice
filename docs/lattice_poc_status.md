@@ -305,3 +305,23 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
   production TLS/deployment, full G1/Phase G completion, or receipt-free W4. It does not
   change or newly prove Tauri onboarding/cap persistence, mobile secure-store custody,
   or real app convergence.
+
+## Checkpoint: Stable Read-Only Carrier Server
+
+- Files changed: `apps/lattice_carrier_server`, the Plan 127 second-BEAM and browser
+  harnesses, umbrella boundary docs, and focused contracts.
+- Behaviors: a supervised embedded Ranch/Cowboy listener loads one injected or persisted
+  signed log, authenticates an allowlisted transport realm against the exact replica and wire
+  version, and serves only authenticated frontier and missing-op pull requests. Invalid sources
+  fail closed; disconnect, denied requests, and listener/server restart do not mutate the source.
+- Commands run: the focused `lattice_carrier_server` suite and
+  `npm run township:instrument:server-e2e`, alongside the umbrella verification gates recorded
+  in Plan 127.
+- Result: Plan 127 proves the production carrier client and Plan 126 projection can consume the
+  same source through a non-fixture server. A second BEAM OS process proves loss, stale retention,
+  restart, and fresh recovery. The connected browser proof uses deterministic manual refreshes
+  around an in-process server restart; it does not prove autonomous polling in the browser.
+- Blocker or remaining limitation: the app owns a stable read-only listener boundary, not a
+  production deployment. It has no TLS/public ingress packaging, inbound push, server-push
+  subscription, participant identity/key/capability custody, write controls, or receipt-free W4.
+  It does not complete G1/Phase G or change the established Tauri/mobile/app-convergence gates.

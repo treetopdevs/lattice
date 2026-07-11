@@ -5,14 +5,16 @@ Each plan is self-contained: an executor with **zero context from the audit sess
 run it from the plan file + the repo alone. Read the plan fully before starting, honor its
 STOP conditions, and update your row below when done.
 
-**Toolchain reminder for every plan**: run mix locally as `~/.asdf/shims/mix` — the `mix`
-on `PATH` is a broken mise shim (see `.mise.toml`). In GitHub Actions, plain `mix` works.
+**Toolchain reminder for every plan**: run mix locally through `~/.asdf/shims/mix` with the
+OTP 28/Elixir 1.19 bin directories prepended to `PATH` as shown in `AGENTS.md` — `mix` on
+`PATH` is a broken mise shim, and Homebrew Erlang can otherwise leak into spawned VMs. In
+GitHub Actions, plain `mix` works.
 
 **Parked areas — do not plan new work here** (see `TOWNSHIP_BUILD_MAP.md` §4a): iOS,
 QR camera onboarding, LAN discovery, physical-device behavior, cross-device pairing
 state exchange, and any further `tauri:android:release:*` probe permutations. The
-active frontier is G1 completion (plan 126 lineage) and the remaining Phase G
-instrument work.
+active frontier is G1 completion (Plan 127 lineage) and the remaining Phase G
+instrument work: server push, participant write controls, production deployment, and W4.
 
 **Landing 001–009 as one effort?** Start from the umbrella goal:
 [000-goal-foundation-and-hardening.md](000-goal-foundation-and-hardening.md). It
@@ -152,6 +154,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 124 | Township Vue causal replay island | P1 | L | 123 | DONE |
 | 125 | Reusable WebSocket carrier boundary | P1 | M | 017, 124 | DONE |
 | 126 | Township read-only carrier projection | P1 | L | 125 | DONE |
+| 127 | Stable read-only carrier server boundary | P1 | L | 125, 126 | IN PROGRESS |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

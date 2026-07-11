@@ -1,0 +1,42 @@
+import { writeFile } from "node:fs/promises";
+import { expect, test } from "@playwright/test";
+
+const instrumentUrl = "http://localhost:4115/township";
+const triggerFile = "/tmp/lattice-township-stable-server-trigger";
+
+test("stable carrier restart patches fresh to stale to fresh without a write", async ({ page }) => {
+  const browserErrors = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") browserErrors.push(`console: ${message.text()}`);
+  });
+  page.on("pageerror", (error) => browserErrors.push(`page: ${error.message}`));
+
+  await page.goto(instrumentUrl, { waitUntil: "domcontentloaded" });
+
+  const source = page.locator("#source-status[data-source='carrier']");
+  const island = page.locator("#causal-replay-island[data-vue-mounted='true']");
+  const writeControls = page.locator("form,[phx-submit],[phx-click]");
+
+  await expect(source).toHaveAttribute("data-freshness", "fresh");
+  await expect(page.locator("#op-dag-panel [data-op-count='13']")).toBeVisible();
+  await expect(island).toHaveAttribute("data-visible-count", "13");
+  await expect(island.locator("[data-causal-replay-root]")).toHaveCount(1);
+  await expect(writeControls).toHaveCount(0);
+
+  await writeFile(triggerFile, "stop\n", "utf8");
+
+  await expect(source).toHaveAttribute("data-freshness", "stale");
+  await expect(page.locator("#op-dag-panel [data-op-count='13']")).toBeVisible();
+  await expect(island).toHaveAttribute("data-visible-count", "13");
+  await expect(island.locator("[data-causal-replay-root]")).toHaveCount(1);
+  await expect(writeControls).toHaveCount(0);
+
+  await writeFile(triggerFile, "restart\n", "utf8");
+
+  await expect(source).toHaveAttribute("data-freshness", "fresh");
+  await expect(page.locator("#op-dag-panel [data-op-count='13']")).toBeVisible();
+  await expect(island).toHaveAttribute("data-visible-count", "13");
+  await expect(island.locator("[data-causal-replay-root]")).toHaveCount(1);
+  await expect(writeControls).toHaveCount(0);
+  expect(browserErrors).toEqual([]);
+});

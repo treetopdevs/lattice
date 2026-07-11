@@ -191,6 +191,17 @@ Module docs render via ex_doc: `cd apps/lattice_core && mix docs`.
   inbound vocabulary.
 - `Lattice.Carrier.WebSocket`, the reusable real carrier client adapter.
 
+`apps/lattice_carrier_server` owns:
+
+- A supervised read-only Cowboy carrier listener for one configured signed log.
+- Trusted-transport-realm authentication plus bounded `frontier` and missing-op
+  `pull` requests; every other authenticated request is read-only/unsupported.
+- Fail-closed path loading and source-preserving supervisor restart behavior.
+- A realm transport identity, not a participant identity, capability issuer, or
+  Township operation author.
+- No inbound push, server-push subscription, TLS/public ingress, or deployment
+  packaging. This is a stable server boundary, not a production deployment.
+
 `apps/lattice_server` owns:
 
 - `Lattice.Transport.WebSocket`.
@@ -203,7 +214,8 @@ Module docs render via ex_doc: `cd apps/lattice_core && mix docs`.
 - `TownshipWeb.CarrierProjection`, an optional supervised observer that periodically
   pulls an authenticated WebSocket peer, validates received operations through the
   shared log/reducer path, and publishes fresh or stale snapshots through PubSub.
-- No participant key, capability, write path, server-push feed, or carrier listener.
+- No participant key, capability, write path, server-push feed, or listener ownership;
+  the optional peer is supplied by another boundary such as `lattice_carrier_server`.
 
 `apps/lattice_demo` owns:
 

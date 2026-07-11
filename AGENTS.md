@@ -13,6 +13,13 @@ scoped fix (`disable_tools = ["erlang", "elixir"]`) live in `.mise.toml` at the 
 checkout root — note that file is untracked and machine-local, so fresh clones and git
 worktrees do not carry it; the asdf-shim rule is the reliable invocation everywhere.
 
+Homebrew Erlang can still win when a spawned tool resolves `erl` from `PATH`. For commands
+that start BEAM child processes, use this explicit prefix as well:
+
+```sh
+PATH="$HOME/.asdf/installs/erlang/28.3.1/bin:$HOME/.asdf/installs/elixir/1.19.5-otp-28/bin:$PATH" ~/.asdf/shims/mix ...
+```
+
 - **Required versions**: Erlang/OTP 28, Elixir 1.19.5-otp-28 — provided by asdf via
   `~/.tool-versions` (erlang 28.3.1, elixir 1.19.5-otp-28).
 - **Sanity check**: `~/.asdf/shims/mix --version` → `Mix 1.19.5 (compiled with Erlang/OTP 28)`.
@@ -36,6 +43,10 @@ cd apps/lattice_server && ~/.asdf/shims/mix sobelow --exit --skip
 cd apps/township_web && ~/.asdf/shims/mix sobelow --exit --skip
 ```
 
+`apps/lattice_carrier_server` is a raw Cowboy boundary, not a Phoenix endpoint. Its
+authentication, frame-bound, and read-only refusal matrix is the applicable security gate;
+Sobelow has no router/controller surface to inspect there.
+
 All tests must pass and formatting must be clean before considering any change done.
 
 ## Layout
@@ -44,6 +55,7 @@ All tests must pass and formatting must be clean before considering any change d
 |------|------------|
 | `apps/lattice_core` | v1 capability plane (caps, gateway, topology, audit) + the Lattice 2.0 replica-on-op-log engine |
 | `apps/lattice_web_socket` | Reusable WebSocket client and real carrier adapter; no listener or supervision tree |
+| `apps/lattice_carrier_server` | Supervised read-only Cowboy carrier server for one configured signed log; no participant custody or deployment claim |
 | `apps/lattice_server` | Cowboy WebSocket/HTTP boundary over the shared JSON envelope codec |
 | `apps/township_web` | Phoenix/LiveView read-only Township instrument with a Vue 3.5 causal-replay island over the verified bundle or optional pull-only carrier projection |
 | `apps/lattice_demo` | Demo servers, tab workers, and the deterministic/browser demo mix tasks |
@@ -74,7 +86,8 @@ All tests must pass and formatting must be clean before considering any change d
 **Heavy / external dependencies** (need Node + Playwright, bind a port; run only when asked):
 
 - `npm run browser:e2e`, `npm run browser:worker:e2e`, `npm run flagship:e2e`, `npm run e2e`
-- `npm run township:instrument:e2e`, `npm run township:instrument:live-e2e`
+- `npm run township:instrument:e2e`, `npm run township:instrument:live-e2e`,
+  `npm run township:instrument:server-e2e`
 - `scripts/lattice_poc_demo.sh`, `scripts/lattice_research_demo.sh`,
   `scripts/lattice_liveops_demo.sh`, `scripts/lattice_flagship_demo.sh` (the flagship
   one additionally needs ffmpeg for the recording evaluation)
