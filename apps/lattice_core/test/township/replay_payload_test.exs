@@ -29,4 +29,20 @@ defmodule Township.ReplayPayloadTest do
   test "refuses to encode a value outside the replay contract" do
     assert_raise ArgumentError, fn -> ReplayPayload.encode!(%{"schema" => "future"}) end
   end
+
+  test "refuses payloads that the browser normalizer cannot consume" do
+    assert {:ok, log} = Log.restore(@matter_path)
+    payload = ReplayPayload.build(log)
+
+    assert_raise ArgumentError, ~r/frames must not be empty/, fn ->
+      payload |> Map.put("frames", []) |> ReplayPayload.encode!()
+    end
+
+    [frame | rest] = payload["frames"]
+    invalid_frame = Map.put(frame, "visible_ids", ["missing-op"])
+
+    assert_raise ArgumentError, ~r/visible_ids references unknown node missing-op/, fn ->
+      payload |> Map.put("frames", [invalid_frame | rest]) |> ReplayPayload.encode!()
+    end
+  end
 end
