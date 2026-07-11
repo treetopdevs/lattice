@@ -154,7 +154,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 124 | Township Vue causal replay island | P1 | L | 123 | DONE |
 | 125 | Reusable WebSocket carrier boundary | P1 | M | 017, 124 | DONE |
 | 126 | Township read-only carrier projection | P1 | L | 125 | DONE |
-| 127 | Stable read-only carrier server boundary | P1 | L | 125, 126 | IN PROGRESS |
+| 127 | Stable read-only carrier server boundary | P1 | L | 125, 126 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

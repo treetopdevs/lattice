@@ -81,9 +81,9 @@ defmodule LatticeServer.FederatedWorkersHTTPTest do
 
     refute_receive {:worker_tab_call, %{"op" => "relay", "body" => "after-run"}}, 100
 
+    Task.shutdown(worker_loop, :brutal_kill)
     Client.close(worker_a)
     Client.close(worker_b)
-    Task.shutdown(worker_loop, :brutal_kill)
   end
 
   defp hello(client, worker) do

@@ -15,12 +15,14 @@ defmodule LatticeCarrierServer.PlanContractTest do
     poc_status = File.read!(Path.join(@repo_root, "docs/lattice_poc_status.md"))
     package = @repo_root |> Path.join("package.json") |> File.read!() |> Jason.decode!()
 
+    assert plan =~ ~r/## Status\s+DONE/
     assert plan =~ "stable read-only server boundary, not a participant realm"
     assert plan =~ "No server-initiated subscription/push protocol"
     assert plan =~ "No Tauri onboarding/cap-persistence change"
+    assert plan =~ ~r/## Completion claim\s+Complete for this scoped increment/
 
     assert plans_index =~
-             ~r/\| 127 \| Stable read-only carrier server boundary \| P1 \| L \| 125, 126 \| (?:IN PROGRESS|DONE) \|/
+             "| 127 | Stable read-only carrier server boundary | P1 | L | 125, 126 | DONE |"
 
     assert build_map =~ "`apps/lattice_carrier_server`"
     assert build_map =~ "Plan 127 adds the stable supervised read-only carrier server"

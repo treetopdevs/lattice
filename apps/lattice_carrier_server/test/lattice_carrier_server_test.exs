@@ -325,6 +325,35 @@ defmodule LatticeCarrierServerTest do
   end
 
   @tag :tmp_dir
+  test "missing and corrupt path sources refuse startup", %{tmp_dir: tmp_dir} do
+    server_identity = Identity.from_seed("town-node", "carrier-server-invalid-source")
+    client_identity = Identity.from_seed("instrument", "carrier-client-invalid-source")
+    corrupt_path = Path.join(tmp_dir, "corrupt.log")
+    assert :ok = File.write(corrupt_path, "not an Erlang term")
+
+    previous_flag = Process.flag(:trap_exit, true)
+
+    try do
+      for path <- [Path.join(tmp_dir, "missing.log"), corrupt_path] do
+        instance = {:invalid_source, System.unique_integer([:positive])}
+
+        assert {:error, reason} =
+                 LatticeCarrierServer.start_link(
+                   instance: instance,
+                   identity: server_identity,
+                   trusted_peers: %{client_identity.realm_id => client_identity.pub},
+                   source: {:path, path},
+                   listener: [port: 0]
+                 )
+
+        assert inspect(reason) =~ "source_error"
+      end
+    after
+      Process.flag(:trap_exit, previous_flag)
+    end
+  end
+
+  @tag :tmp_dir
   test "a supervised fixed-port restart reloads the same path source", %{tmp_dir: tmp_dir} do
     author = Identity.from_seed("author", "carrier-server-author")
     server_identity = Identity.from_seed("town-node", "carrier-server-restart")

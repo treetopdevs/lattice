@@ -2,7 +2,7 @@
 
 ## Status
 
-IN PROGRESS.
+DONE.
 
 ## Objective
 
@@ -261,7 +261,12 @@ child internals. Source identity is proven by fresh authenticated pulls and Sim/
   one Vue root, no browser error, and no write control in every state.
 - DOCS RED failed because the build map did not yet inventory `apps/lattice_carrier_server`; the
   map, boundary docs, cumulative readiness markers, and explicit non-claims were then advanced to
-  Plan 127. Final completion-status RED/GREEN remains gated on the release review.
+  Plan 127. Final completion-status RED then required the exact plan/index `DONE` markers after the
+  release review; changing those records made the contract GREEN.
+- The final review found one explicit seam-coverage gap: no carrier-server-level test directly
+  required missing and corrupt path sources to refuse startup. The new public `start_link/1` test
+  first exited with the linked failed supervisor (RED); trapping the exit during the assertion
+  then proved both sources return a tagged `source_error` without changing production code (GREEN).
 
 ## Second opinion
 
@@ -295,12 +300,22 @@ child internals. Source identity is proven by fresh authenticated pulls and Sim/
   using the parent server module. Claude confirmed the edge diagnosis and returned
   `VERDICT: PROCEED` on keying the ref by `LatticeCarrierServer.Listener`; the five-cycle baseline
   and all server behaviors remain unchanged.
+- Claude's complete three-commit release review independently inspected the implementation,
+  dependencies, all tests, browser/process harnesses, docs, and non-claims, reran the focused suite
+  and xref gate, and returned `VERDICT: PROCEED`. It reported no blocking issue. Its only concrete
+  test-coverage observation was the missing/corrupt path-source case above; after the RED/GREEN
+  closure, Claude re-read that public seam and returned `VERDICT: PROCEED` again.
+- The final umbrella rerun exposed the same load-sensitive WebSocket teardown race previously fixed
+  in a sibling server test: `federated_workers_http_test` closed a client while its linked reply task
+  still called that client. Claude confirmed the ownership diagnosis and returned
+  `VERDICT: PROCEED` on stopping the consumer task before its client resources. The focused test,
+  original failing umbrella seed, and both default full gates then passed.
 
 ## Verification
 
-- `apps/lattice_carrier_server`: 13 tests pass across trusted pull, coarse auth/refusal telemetry,
+- `apps/lattice_carrier_server`: 14 tests pass across trusted pull, coarse auth/refusal telemetry,
   oversized frames, disconnect immutability, pre-auth and auth matrices, read-only push/live
-  refusal, injected/path sources, invalid configuration, configured application ownership,
+  refusal, injected/path sources, missing/corrupt source refusal, invalid configuration, configured application ownership,
   fixed-port supervisor restart, second-BEAM projection recovery, and the Plan 127 docs contract.
 - Forced warnings-as-errors compilation passes in both test and production environments. The
   generated production `.app` runtime list contains `cowboy`, `jason`, and `lattice_core`, but not
@@ -316,17 +331,22 @@ child internals. Source identity is proven by fresh authenticated pulls and Sim/
 - Preserved app boundaries pass: mobile readiness, mobile secure-store strategy, 29 frontend shell
   contracts, and the full `app:convergence` chain through authoring, sync, onboarding ceremony,
   browser click-through, live BEAM, packaged app, and installed deep-link smokes.
-- Unexcluded `mix verify` and `mix check` each pass the complete umbrella with 318 tests and 25
+- Unexcluded `mix verify` and `mix check` each pass the complete umbrella with 319 tests and 25
   properties. Strict Credo exits 0 with no Plan 127 finding after the two new test alias groups were
   ordered; formatting and diff checks are clean.
 - The first externally-created feature commit accidentally included two ExUnit `tmp/` log files.
   A focused follow-up removes them, ignores the app-local `/tmp/`, restores the five-cycle xref
   baseline, and advances the cumulative mobile-readiness assertion without changing its custody
   claims.
+- The completion-state `mix verify` first reproduced the sibling federated-worker teardown race at
+  seed `66903`. Reordering only its test cleanup made that exact 319-test/25-property umbrella seed,
+  the default `mix verify`, and the default `mix check` pass; production behavior is unchanged.
 
 ## Completion claim
 
-Not complete. Plan 127 is implemented only when the production carrier client and the Plan 126
-projection can pull the same configured signed log from a supervised non-fixture server, recover
-freshness across a real server restart, and every read-only, custody, refusal, and non-claim gate
-above remains proven.
+Complete for this scoped increment. The production carrier client and the Plan 126 projection pull
+the same configured signed log from a supervised non-fixture server, retain verified stale state
+through loss, and recover freshness after a real replacement process starts. Missing/corrupt
+sources fail closed, and every read-only, custody, refusal, browser, mobile-preservation, and
+non-claim gate above remains proven. This does not add server push, participant writes or custody,
+production deployment, G1/Phase G completion, or receipt-free W4.
