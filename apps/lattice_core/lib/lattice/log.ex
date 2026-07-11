@@ -170,8 +170,14 @@ defmodule Lattice.Log do
   @doc "Restore a log previously written with `dump/2`."
   @spec restore(Path.t()) :: {:ok, t()} | {:error, term()}
   def restore(path) do
-    with {:ok, bin} <- File.read(path),
-         {:ok, term} <- safe_binary_to_term(bin),
+    with {:ok, bytes} <- File.read(path),
+         do: restore_bytes(bytes)
+  end
+
+  @doc "Restore a log from bytes previously produced by `dump/2`."
+  @spec restore_bytes(binary()) :: {:ok, t()} | {:error, term()}
+  def restore_bytes(bytes) when is_binary(bytes) do
+    with {:ok, term} <- safe_binary_to_term(bytes),
          {:lattice_log_dump_v1, %__MODULE__{} = log} <- term do
       {:ok, log}
     else
@@ -179,6 +185,8 @@ defmodule Lattice.Log do
       _ -> {:error, :corrupt_dump}
     end
   end
+
+  def restore_bytes(_bytes), do: {:error, :corrupt_dump}
 
   # `:safe` blocks atom/resource creation from a tampered dump; a dump referencing
   # unknown atoms (or otherwise unsafe terms) raises, which we map to an error.

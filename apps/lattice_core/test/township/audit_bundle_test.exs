@@ -1,6 +1,9 @@
 defmodule Township.AuditBundleTest do
   use ExUnit.Case, async: false
 
+  alias Lattice.Log
+  alias Township.AuditBundle
+
   @moduletag timeout: 120_000
 
   @repo_root Path.expand("../../../..", __DIR__)
@@ -14,6 +17,16 @@ defmodule Township.AuditBundleTest do
     "trust_graph.dot",
     "trust_graph.mermaid"
   ]
+
+  test "returns the exact verified inputs behind a successful bundle verdict" do
+    assert {:ok, verified} = AuditBundle.verify_snapshot(@tracked_dir)
+
+    assert verified.schema == "township-audit-bundle-v1"
+    assert verified.matter_bytes == File.read!(Path.join(@tracked_dir, "matter.log"))
+    assert %Log{} = verified.log
+    assert map_size(verified.labels) == 2
+    assert Log.op_ids(verified.log) != MapSet.new()
+  end
 
   test "fresh processes emit and independently verify the outsider audit bundle" do
     out_dir =

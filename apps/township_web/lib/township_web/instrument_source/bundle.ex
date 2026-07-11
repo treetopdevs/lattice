@@ -9,9 +9,7 @@ defmodule TownshipWeb.InstrumentSource.Bundle do
 
   @impl true
   def load(opts) do
-    bundle_dir = opts |> Keyword.fetch!(:bundle_dir) |> Path.expand()
-
-    case VerifiedInstrumentSnapshot.load_bundle(bundle_dir) do
+    case VerifiedInstrumentSnapshot.load_bundle(Keyword.get(opts, :bundle_dir)) do
       {:ok, snapshot} -> {:ok, snapshot}
       {:error, errors} -> {:error, {:bundle_unverified, errors}}
     end

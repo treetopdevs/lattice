@@ -33,47 +33,46 @@ defmodule TownshipWeb.VerifiedInstrumentSnapshot do
         }
 
   @doc "Verify a bundle and build its coherent instrument snapshot."
-  @spec load_bundle(Path.t()) :: {:ok, t()} | {:error, [String.t()]}
-  def load_bundle(bundle_dir) when is_binary(bundle_dir) do
-    bundle_dir = Path.expand(bundle_dir)
-
-    case AuditBundle.verify(bundle_dir) do
-      :ok -> load_verified(bundle_dir)
+  @spec load_bundle(term()) :: {:ok, t()} | {:error, [String.t()]}
+  def load_bundle(bundle_dir) do
+    case AuditBundle.verify_snapshot(bundle_dir) do
+      {:ok, verified} -> load_verified(verified)
       {:error, errors} -> {:error, errors}
     end
   rescue
     error -> {:error, [Exception.message(error)]}
   end
 
-  # bundle_dir is application-config/test-only and filenames are literals, never request-derived.
-  # sobelow_skip ["Traversal.FileModule"]
-  defp load_verified(bundle_dir) do
-    manifest_path = Path.join(bundle_dir, "manifest.json")
-    matter_path = Path.join(bundle_dir, "matter.log")
+  defp load_verified(%{
+         bundle_dir: bundle_dir,
+         labels: labels,
+         log: log,
+         matter_bytes: matter_bytes,
+         schema: schema
+       }) do
+    read_model = ReadModel.observe(log, labels: labels, vouches: demo_vouches())
+    causal_replay = ReadModel.replay(log)
 
-    with {:ok, manifest_bytes} <- File.read(manifest_path),
-         {:ok, %{"labels" => labels, "schema" => schema}} <- Jason.decode(manifest_bytes),
-         {:ok, matter_bytes} <- File.read(matter_path),
-         {:ok, log} <- Log.restore(matter_path),
-         read_model = ReadModel.observe(log, labels: labels, vouches: demo_vouches()),
-         causal_replay = ReadModel.replay(log),
-         :ok <- ensure_coherent(log, read_model, causal_replay) do
-      {:ok,
-       %__MODULE__{
-         read_model: read_model,
-         causal_replay: causal_replay,
-         op_counts: op_counts(read_model.op_dag.nodes),
-         provenance: %{
-           bundle_dir: bundle_dir,
-           matter_sha256: sha256(matter_bytes),
-           schema: schema,
-           verified: true
-         }
-       }}
-    else
-      {:error, errors} when is_list(errors) -> {:error, errors}
-      {:error, reason} -> {:error, [format_error(reason)]}
-      _invalid_manifest -> {:error, ["manifest.json contract mismatch"]}
+    case ensure_coherent(log, read_model, causal_replay) do
+      :ok ->
+        {:ok,
+         %__MODULE__{
+           read_model: read_model,
+           causal_replay: causal_replay,
+           op_counts: op_counts(read_model.op_dag.nodes),
+           provenance: %{
+             bundle_dir: bundle_dir,
+             matter_sha256: sha256(matter_bytes),
+             schema: schema,
+             verified: true
+           }
+         }}
+
+      {:error, errors} when is_list(errors) ->
+        {:error, errors}
+
+      {:error, reason} ->
+        {:error, [format_error(reason)]}
     end
   end
 

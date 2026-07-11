@@ -2,6 +2,7 @@ defmodule TownshipWeb.InstrumentSourceTest do
   use ExUnit.Case, async: true
 
   alias TownshipWeb.InstrumentSource
+  alias TownshipWeb.InstrumentSource.Bundle
   alias TownshipWeb.VerifiedInstrumentSnapshot
 
   @repo_root Path.expand("../../../..", __DIR__)
@@ -66,5 +67,13 @@ defmodule TownshipWeb.InstrumentSourceTest do
              InstrumentSource.load(bundle_dir: corrupt)
 
     assert "state.json mismatch" in corrupt_errors
+  end
+
+  test "malformed bundle configuration stays inside the source error boundary" do
+    assert {:error, {:bundle_unverified, errors}} = Bundle.load([])
+    assert errors != []
+
+    assert {:error, {:bundle_unverified, errors}} = Bundle.load(bundle_dir: nil)
+    assert errors != []
   end
 end

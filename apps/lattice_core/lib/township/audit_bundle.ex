@@ -26,6 +26,15 @@ defmodule Township.AuditBundle do
 
   @type labels :: %{optional(String.t()) => String.t()}
   @type verify_error :: String.t()
+  @type verified_snapshot :: %{
+          required(:bundle_dir) => String.t(),
+          required(:labels) => labels(),
+          required(:log) => Log.t(),
+          required(:manifest) => map(),
+          required(:manifest_bytes) => binary(),
+          required(:matter_bytes) => binary(),
+          required(:schema) => String.t()
+        }
 
   @doc "The exact files in a version-one Township audit bundle."
   @spec files() :: [String.t()]
@@ -56,37 +65,60 @@ defmodule Township.AuditBundle do
   end
 
   @doc "Restore `matter.log`, re-derive every claim, and report mismatches."
-  @spec verify(String.t()) :: :ok | {:error, [verify_error()]}
-  def verify(dir) when is_binary(dir) do
+  @spec verify(term()) :: :ok | {:error, [verify_error()]}
+  def verify(dir) do
+    case verify_snapshot(dir) do
+      {:ok, _snapshot} -> :ok
+      {:error, errors} -> {:error, errors}
+    end
+  end
+
+  @doc "Verify one captured bundle and return the exact inputs behind that verdict."
+  @spec verify_snapshot(term()) :: {:ok, verified_snapshot()} | {:error, [verify_error()]}
+  def verify_snapshot(dir) when is_binary(dir) do
     dir = Path.expand(dir)
 
     with {:ok, names} <- list_bundle(dir),
          :ok <- validate_file_set(names),
-         {:ok, manifest_doc, manifest_bytes} <- read_manifest(dir),
+         {:ok, files} <- read_bundle_files(dir),
+         manifest_bytes = Map.fetch!(files, "manifest.json"),
+         matter_bytes = Map.fetch!(files, "matter.log"),
+         {:ok, manifest_doc} <- decode_manifest(manifest_bytes),
          {:ok, labels} <- validate_manifest(manifest_doc),
          :ok <- preload_lattice_core(),
-         {:ok, log} <- Log.restore(Path.join(dir, "matter.log")),
+         {:ok, log} <- Log.restore_bytes(matter_bytes),
          {:ok, expected, known_fingerprints} <- rederive(log, labels) do
       expected = Map.put(expected, "manifest.json", json(manifest_doc))
 
       errors =
         expected
         |> Enum.flat_map(fn {file, bytes} ->
-          case read_projection(dir, file, manifest_bytes) do
-            {:ok, ^bytes} -> []
-            {:ok, _other} -> ["#{file} mismatch"]
-            {:error, reason} -> ["#{file} unreadable: #{:file.format_error(reason)}"]
-          end
+          if Map.fetch!(files, file) == bytes, do: [], else: ["#{file} mismatch"]
         end)
         |> Kernel.++(validate_label_fingerprints(known_fingerprints, labels))
         |> Enum.sort()
 
-      if errors == [], do: :ok, else: {:error, errors}
+      if errors == [] do
+        {:ok,
+         %{
+           bundle_dir: dir,
+           labels: labels,
+           log: log,
+           manifest: manifest_doc,
+           manifest_bytes: manifest_bytes,
+           matter_bytes: matter_bytes,
+           schema: Map.fetch!(manifest_doc, "schema")
+         }}
+      else
+        {:error, errors}
+      end
     else
       {:error, errors} when is_list(errors) -> {:error, errors}
       {:error, reason} -> {:error, [format_error(reason)]}
     end
   end
+
+  def verify_snapshot(_dir), do: {:error, ["bundle directory must be a path string"]}
 
   defp rederive(log, labels) do
     read_model = ReadModel.observe(log, labels: labels)
@@ -95,9 +127,6 @@ defmodule Township.AuditBundle do
   rescue
     error -> {:error, "bundle replay failed: #{Exception.message(error)}"}
   end
-
-  defp read_projection(_dir, "manifest.json", manifest_bytes), do: {:ok, manifest_bytes}
-  defp read_projection(dir, file, _manifest_bytes), do: File.read(Path.join(dir, file))
 
   defp projections(read_model, manifest_doc) do
     %{
@@ -191,13 +220,18 @@ defmodule Township.AuditBundle do
     {:error, ["bundle file set mismatch missing=#{inspect(missing)} extra=#{inspect(extra)}"]}
   end
 
-  defp read_manifest(dir) do
-    path = Path.join(dir, "manifest.json")
+  defp read_bundle_files(dir) do
+    Enum.reduce_while(@files, {:ok, %{}}, fn file, {:ok, files} ->
+      case File.read(Path.join(dir, file)) do
+        {:ok, bytes} -> {:cont, {:ok, Map.put(files, file, bytes)}}
+        {:error, reason} -> {:halt, {:error, "#{file} unreadable: #{:file.format_error(reason)}"}}
+      end
+    end)
+  end
 
-    with {:ok, bytes} <- File.read(path),
-         {:ok, document} <- Jason.decode(bytes) do
-      {:ok, document, bytes}
-    else
+  defp decode_manifest(bytes) do
+    case Jason.decode(bytes) do
+      {:ok, document} -> {:ok, document}
       {:error, reason} -> {:error, "manifest.json unreadable: #{inspect(reason)}"}
     end
   end
