@@ -286,6 +286,15 @@ child internals. Source identity is proven by fresh authenticated pulls and Sim/
   an in-process server restart, noted that custody absence rests on Elixir code/refusal tests rather
   than DOM inspection, and suggested rechecking the no-write selector after each transition. The
   test now does so.
+- Claude's documentation review checked every claim against the implementation and returned
+  `VERDICT: PROCEED`. It confirmed the listener/deployment, transport/participant identity,
+  request-response/server-push, browser/second-BEAM, and Plan-127/Phase-G distinctions, plus the
+  unchanged Tauri/mobile/app-convergence boundary. Its only wording nit was resolved by naming
+  Plan 126 as the autonomous-polling evidence below the browser boundary.
+- The verification xref RED exposed one new length-two cycle caused solely by the opaque Ranch ref
+  using the parent server module. Claude confirmed the edge diagnosis and returned
+  `VERDICT: PROCEED` on keying the ref by `LatticeCarrierServer.Listener`; the five-cycle baseline
+  and all server behaviors remain unchanged.
 
 ## Verification
 

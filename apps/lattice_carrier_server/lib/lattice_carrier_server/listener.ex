@@ -2,7 +2,7 @@ defmodule LatticeCarrierServer.Listener do
   @moduledoc false
 
   @spec ref(term()) :: term()
-  def ref(instance), do: {LatticeCarrierServer, instance}
+  def ref(instance), do: {__MODULE__, instance}
 
   @spec child_spec(keyword()) :: Supervisor.child_spec()
   def child_spec(opts) do

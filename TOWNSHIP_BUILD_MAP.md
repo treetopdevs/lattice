@@ -293,7 +293,7 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   LiveSocket connects at `/township`; verification failure withholds authoritative values; stale
   carrier state remains labeled; and the canvas scrubs only server-derived frames. The browser
   proof drives deterministic manual refresh across an in-process server restart; autonomous polling
-  remains covered below the browser boundary. This is periodic request/response polling, not server
+  remains covered by Plan 126 below the browser boundary. This is periodic request/response polling, not server
   push or G1 completion. Write controls and a server-push carrier feed remain, along with production
   deployment and the receipt-free W4 blocker.
 
