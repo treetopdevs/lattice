@@ -14,7 +14,6 @@ defmodule Township.AuditBundleTest do
     "trust_graph.dot",
     "trust_graph.mermaid"
   ]
-  @legacy_files ["audit.json", "matter.log", "trust_graph.dot", "trust_graph.mermaid"]
 
   test "fresh processes emit and independently verify the outsider audit bundle" do
     out_dir =
@@ -34,7 +33,7 @@ defmodule Township.AuditBundleTest do
     assert Enum.sort(File.ls!(out_dir)) == @bundle_files
     assert directory_snapshot(@tracked_dir) == tracked_before
 
-    for file <- @legacy_files do
+    for file <- @bundle_files do
       assert File.read!(Path.join(out_dir, file)) == Map.fetch!(tracked_before, file)
     end
 
@@ -145,9 +144,9 @@ defmodule Township.AuditBundleTest do
 
     assert build_map =~ "Plan 121 adds the outsider-replayable Township audit bundle"
     assert build_map =~ "lattice.township.verify_bundle"
-    assert build_map =~ "plans 023-121"
-    assert build_map =~ "Phase G audit surface is implemented"
-    assert build_map =~ "The production instrument UI remains unstarted"
+    assert build_map =~ "plans 023-122"
+    assert build_map =~ "Phase G's audit surface is implemented by Plan 121"
+    assert build_map =~ "The production instrument remains unrendered"
 
     assert plans_index =~
              "| 121 | Township outsider-replay audit bundle | P1 | M | 012, 017 | DONE |"

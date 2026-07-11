@@ -45,6 +45,7 @@ roadmap live in the program doc below.
 | Path | What it is | Status |
 |---|---|---|
 | `apps/lattice_core/lib/township/matter.ex` | `Township.Matter` — the civic Replica (LWW title/summary, causal-list posts, OR-set members, authority-gated `clerk_locked?`). Built only from primitives that exist today. | **Real and compiled**; W0–W4 workflow and property suites pass against the branch. |
+| `apps/lattice_core/lib/township/read_model.ex` | `Township.ReadModel` — structured Threads, Roles, Members, Attest, trust-graph, and causal op-DAG inputs for the one-screen instrument boundary. | **Real and tested**; four panels and graph evidence derive from `matter.log`, W4 vouches remain caller-held and stub-labeled, and no renderer is claimed. |
 | `apps/lattice_core/lib/lattice/attestation.ex` | `Lattice.Attestation` behaviour + `Stub` + `M4Placeholder`. **The seam** that lets W4 be honest. | Stub **proven-plumbing**; receipt-freeness **stubbed** (M4). |
 | `apps/lattice_core/test/support/attestation_contract.ex` | The contract suite the Stub AND the future M4 primitive must both pass. `flunk`s if a module claims `receipt_free?` without proving it. | **Real guardrail.** |
 | `apps/lattice_core/test/township/workflows_test.exs` | W0–W4 as falsifiable ExUnit tests driving `Sim`, each with its ASSERT line. | **Real and green** against the branch; quarantine-shape inferences were reconciled. |
@@ -146,7 +147,8 @@ Two hard blockers gate the endgame: **CBOR/ADR-P08** (everything non-BEAM) and *
    frames for the first C3 adapter check.
 4. **`township_demo.exs` and the overlay now run against the branch.** Plan 121 makes the
    resulting state, authority verdict, op-DAG, and trust graph independently replayable through
-   `mix lattice.township.verify_bundle`; the five-panel production instrument remains separate.
+   `mix lattice.township.verify_bundle`. Plan 122 adds the shared structured read-model foundation
+   for the five-panel instrument while keeping rendering and live controls separate.
 5. **G1 (physical BEAM carrier) is now reachable outside `Sim`** — plan 017 runs W0–W3
    across two BEAM OS processes over the real WebSocket carrier, with `Sim` as oracle.
    TS can now verify `lattice-cbor-v1` carrier-frame op hashes/signatures for W1, compose
@@ -303,9 +305,10 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   onboarding, Android release APK build readiness, Android release APK canonical/wire fidelity,
   Android release loopback-scoped transport, Android release BEAM carrier handshake/status/state-report proof,
   Android release APK pull-and-reload persistence, Android release APK device authoring/push/outbox drain, Android release APK OS deep-link pairing ingress/persisted peer config, the real Tauri app imported-pairing confirmation policy, installed unarmed OS deep-link blocking, the source-level state-bound armed one-shot import gate, packaged macOS real-app armed OS delivery in a hydration-settled dev-trace release-mode smoke build, the packaged link-load no-side-effect trace guard, warm macOS LaunchServices scheme resolution, packaged macOS cold-start URL delivery, the dev-trace release hydration/control-link repair, Android release app-originated post-only attenuated grant proof, Android release armed OS pairing delivery with a fixed probe-only state, the named Android release convergence gate, Android release cold-start pairing delivery, single-APK Android release pairing-to-post convergence, Android release browser-backed pairing delivery, Android release browser-backed onboarding convergence, Android release browser-backed onboarding child-grant composition, Android release browser-backed pairing runtime state exchange, Android release browser-backed onboarding runtime state exchange, Android release browser-backed onboarding child-grant runtime state exchange, the named Android release browser/onboarding regression gate, Android release chooser-eligible onboarding state exchange, Android release visible chooser onboarding selection, desktop Tauri default-namespace onboarding convergence through `onboarding:contract`, packaged macOS app-runtime onboarding convergence through `tauri:onboarding:smoke`, bounded shared TS/live-BEAM authority origination, and Android release root/authority origination are covered by plans 023-119.
-  Plans 120–121 extend that covered set through plans 023-121 with browser-rendered
-  onboarding-control convergence against a live BEAM peer and a fresh-process outsider audit
-  bundle verifier while retaining the packaged-GUI and production-instrument non-claims.
+  Plans 120–122 extend that covered set through plans 023-122 with browser-rendered
+  onboarding-control convergence against a live BEAM peer, a fresh-process outsider audit bundle
+  verifier, and a shared Township instrument read model while retaining the packaged-GUI and
+  rendered-production-instrument non-claims.
   Full mobile onboarding remains unproven beyond pull-based cap acquisition, and iOS cold-start URL delivery, cross-device pairing state exchange, QR camera onboarding, LAN discovery, and physical-device behavior remain unproven after the release OS deep-link pairing + device-local authoring + attenuated-grant + armed-delivery + Android cold-start + single-APK pairing-to-post + browser-backed delivery + browser-backed onboarding + browser-backed onboarding child-grant + browser-backed runtime state-exchange + chooser-eligible onboarding state-exchange + visible chooser selection proofs plus the shared TS/live-BEAM authority-origination and Android release root-origination proofs. The iOS archive path is
   locally blocked by the selected Xcode 27 beta Tauri Swift-package failure.
 
@@ -592,6 +595,11 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   distinct projection, and `mix lattice.township.verify_bundle` rejects authoritative corruption,
   display-label injection, and extra files in a fresh process. This implements the G5/Phase G audit
   surface without claiming that the production instrument UI exists.
+  Plan 122 adds the Township instrument read model through `Township.ReadModel.observe/2`: Threads,
+  Roles, Members, Trust graph, and causal op-DAG evidence share the same structured log derivation
+  serialized by the Plan 121 bundle; W4 tallying accepts caller-held vouch bodies and remains
+  explicitly stubbed; display labels can alter only trust-graph node labels. This is a read-model
+  foundation, not a rendered panel or live control surface.
   Plan 115 adds bounded authority origination at the shared TS/live-BEAM seam:
   `authorTownshipGenesis` emits the BEAM W1 root-bound genesis frame byte-for-byte,
   and the live BEAM peer structurally accepts but authority-quarantines a forged
@@ -648,10 +656,11 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   reusing the three prototypes' interaction grammar and verified logic. *Gate:* the five POC
   assertions are observable + an outsider-replayable audit surface. *Asset:* the three `*.html`
   prototypes + Duality/Constellation/Console design notes.
-  **Status:** Phase G audit surface is implemented by Plan 121: the deterministic bundle exposes
-  state, authority, causal op-DAG/frontier, and delegation trust-graph evidence behind a named
-  fresh-process verifier. The production instrument UI remains unstarted; no Phoenix/LiveView app
-  or Vue canvas island is claimed here.
+  **Status:** Phase G's audit surface is implemented by Plan 121, and Plan 122 adds the shared
+  read-model foundation for Threads, Roles, Members, Attest, Trust graph, and causal op-DAG
+  evidence behind the same reducer/authority/graph seams. The production instrument remains unrendered;
+  no Phoenix/LiveView app, Vue canvas island, live control, or transport-status panel is claimed
+  here.
 
 **Definition of 100% done:** every gate A1→G1 green in CI; the POC exit gate (PD-001-A §A5)
 met with W4 *real*; Township converges across BEAM + browser/phone realms over the real carrier;

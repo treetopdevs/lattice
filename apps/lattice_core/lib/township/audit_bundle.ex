@@ -8,10 +8,9 @@ defmodule Township.AuditBundle do
   """
 
   alias Jason.OrderedObject
-  alias Lattice.Authority
-  alias Lattice.Graph.{Export, ReplicaSnapshot}
-  alias Lattice.{Identity, Log}
-  alias Township.Matter
+  alias Lattice.Graph.Export
+  alias Lattice.Log
+  alias Township.ReadModel
 
   @schema "township-audit-bundle-v1"
   @artifact_entries [
@@ -39,7 +38,7 @@ defmodule Township.AuditBundle do
          :ok <- File.mkdir_p(dir),
          :ok <- Log.dump(log, Path.join(dir, "matter.log")) do
       manifest = manifest(labels)
-      projections = projections(log, labels, manifest)
+      projections = log |> ReadModel.observe(labels: labels) |> projections(manifest)
       manifest_bytes = Map.fetch!(projections, "manifest.json")
       projection_files = Map.delete(projections, "manifest.json")
 
@@ -67,7 +66,7 @@ defmodule Township.AuditBundle do
          {:ok, labels} <- validate_manifest(manifest_doc),
          :ok <- preload_lattice_core(),
          {:ok, log} <- Log.restore(Path.join(dir, "matter.log")),
-         {:ok, expected} <- rederive(log, labels) do
+         {:ok, expected, known_fingerprints} <- rederive(log, labels) do
       expected = Map.put(expected, "manifest.json", json(manifest_doc))
 
       errors =
@@ -79,7 +78,7 @@ defmodule Township.AuditBundle do
             {:error, reason} -> ["#{file} unreadable: #{:file.format_error(reason)}"]
           end
         end)
-        |> Kernel.++(validate_label_fingerprints(log, labels))
+        |> Kernel.++(validate_label_fingerprints(known_fingerprints, labels))
         |> Enum.sort()
 
       if errors == [], do: :ok, else: {:error, errors}
@@ -90,7 +89,9 @@ defmodule Township.AuditBundle do
   end
 
   defp rederive(log, labels) do
-    {:ok, projections(log, labels, manifest(labels))}
+    read_model = ReadModel.observe(log, labels: labels)
+
+    {:ok, projections(read_model, manifest(labels)), known_fingerprints(read_model)}
   rescue
     error -> {:error, "bundle replay failed: #{Exception.message(error)}"}
   end
@@ -98,49 +99,44 @@ defmodule Township.AuditBundle do
   defp read_projection(_dir, "manifest.json", manifest_bytes), do: {:ok, manifest_bytes}
   defp read_projection(dir, file, _manifest_bytes), do: File.read(Path.join(dir, file))
 
-  defp projections(log, labels, manifest_doc) do
-    analysis = Authority.analyze(Matter, log)
-    trust_graph = trust_graph_snapshot(log, labels)
-
+  defp projections(read_model, manifest_doc) do
     %{
-      "state.json" => state_json(log),
-      "audit.json" => audit_json(analysis),
-      "op_dag.json" => Matter |> ReplicaSnapshot.build(log) |> json(),
-      "trust_graph.dot" => Export.export(trust_graph, :dot) <> "\n",
-      "trust_graph.mermaid" => Export.export(trust_graph, :mermaid) <> "\n",
+      "state.json" => state_json(read_model),
+      "audit.json" => audit_json(read_model.roles),
+      "op_dag.json" => json(read_model.op_dag),
+      "trust_graph.dot" => Export.export(read_model.trust_graph, :dot) <> "\n",
+      "trust_graph.mermaid" => Export.export(read_model.trust_graph, :mermaid) <> "\n",
       "manifest.json" => json(manifest_doc)
     }
   end
 
-  defp state_json(log) do
-    state = Lattice.state(Matter, log)
-
+  defp state_json(read_model) do
     json(%{
-      "title" => state.title,
-      "summary" => state.summary,
-      "posts" => state.posts,
-      "members" => Enum.sort(state.members),
-      "clerk_locked" => state.clerk_locked?
+      "title" => read_model.threads.title,
+      "summary" => read_model.threads.summary,
+      "posts" => read_model.threads.posts,
+      "members" => read_model.members.current,
+      "clerk_locked" => read_model.threads.clerk_locked?
     })
   end
 
-  defp audit_json(analysis) do
+  defp audit_json(roles) do
     reasons =
-      analysis.reasons
+      roles.reasons
       |> Enum.sort_by(fn {id, _reason} -> id end)
       |> Enum.map(fn {id, reason} -> {id, Atom.to_string(reason)} end)
       |> OrderedObject.new()
 
     holders =
-      analysis.holders
+      roles.holders
       |> Enum.sort_by(fn {role, _pub} -> Atom.to_string(role) end)
-      |> Enum.map(fn {role, pub} -> {Atom.to_string(role), pub && Identity.fingerprint(pub)} end)
+      |> Enum.map(fn {role, fingerprint} -> {Atom.to_string(role), fingerprint} end)
       |> OrderedObject.new()
 
-    audit = Enum.map(analysis.audit, &ordered_audit_entry/1)
+    audit = Enum.map(roles.audit, &ordered_audit_entry/1)
 
     OrderedObject.new([
-      {"quarantine", analysis.quarantine |> MapSet.to_list() |> Enum.sort()},
+      {"quarantine", roles.quarantine},
       {"reasons", reasons},
       {"audit", audit},
       {"holders", holders}
@@ -165,57 +161,6 @@ defmodule Township.AuditBundle do
       |> Enum.map(fn {key, value} -> {to_string(key), ordered_json(value)} end)
 
     OrderedObject.new(ordered ++ extras)
-  end
-
-  defp trust_graph_snapshot(log, labels) do
-    events = delegation_events(log)
-
-    nodes =
-      events
-      |> Enum.flat_map(fn {_kind, delegation} -> [delegation.issuer, delegation.audience] end)
-      |> Enum.uniq()
-      |> Enum.map(fn pub ->
-        fingerprint = Identity.fingerprint(pub)
-        label = if name = labels[fingerprint], do: "#{name} #{fingerprint}", else: fingerprint
-        %{id: fingerprint, kind: "realm", label: label}
-      end)
-
-    edges =
-      Enum.map(events, fn {kind, delegation} ->
-        %{
-          from: Identity.fingerprint(delegation.issuer),
-          to: Identity.fingerprint(delegation.audience),
-          kind: delegation_edge_kind(kind, delegation)
-        }
-      end)
-
-    %{nodes: nodes, edges: edges}
-  end
-
-  defp delegation_events(log) do
-    log
-    |> Log.topo_ops()
-    |> Enum.filter(&(&1.kind == :authority))
-    |> Enum.flat_map(fn op ->
-      case op.body do
-        {:genesis, delegation, _policies} -> [{"genesis", delegation}]
-        {:grant, delegation} -> [{"grant", delegation}]
-        {:transfer, role, delegation, _tick} -> [{"transfer:#{role}", delegation}]
-        {:succeed, role, delegation, _tick} -> [{"succeed:#{role}", delegation}]
-        _other -> []
-      end
-    end)
-  end
-
-  defp delegation_edge_kind(kind, delegation) do
-    roles =
-      if MapSet.size(delegation.roles) > 0 do
-        " roles=[#{delegation.roles |> Enum.sort() |> Enum.join(",")}]"
-      else
-        ""
-      end
-
-    "#{kind}#{roles} ops=[#{delegation.ops |> Enum.sort() |> Enum.join(",")}]"
   end
 
   defp manifest(labels) do
@@ -286,18 +231,17 @@ defmodule Township.AuditBundle do
 
   defp valid_label?(_label), do: false
 
-  defp validate_label_fingerprints(log, labels) do
-    known =
-      log
-      |> delegation_events()
-      |> Enum.flat_map(fn {_kind, delegation} -> [delegation.issuer, delegation.audience] end)
-      |> MapSet.new(&Identity.fingerprint/1)
-
+  defp validate_label_fingerprints(known, labels) do
     unknown = labels |> Map.keys() |> Enum.reject(&MapSet.member?(known, &1)) |> Enum.sort()
 
     if unknown == [],
       do: [],
       else: ["manifest.json labels unknown fingerprints #{inspect(unknown)}"]
+  end
+
+  defp known_fingerprints(read_model) do
+    read_model.trust_graph.nodes
+    |> MapSet.new(& &1.id)
   end
 
   defp preload_lattice_core do
