@@ -21,6 +21,12 @@ defmodule LatticeNodeSpike.Scenario do
   @spec replica_module() :: module()
   def replica_module, do: Thread
 
+  @spec realms() :: [String.t()]
+  def realms, do: @realms
+
+  @spec session_identity(String.t()) :: Lattice.Identity.t()
+  def session_identity(realm), do: Lattice.Identity.from_seed(realm, @seed)
+
   @spec replica() :: String.t()
   def replica, do: Sim.replica(base_sim())
 

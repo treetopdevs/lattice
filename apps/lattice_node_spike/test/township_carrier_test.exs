@@ -1,11 +1,10 @@
 defmodule LatticeNodeSpike.TownshipCarrierTest do
   use ExUnit.Case, async: false
 
-  alias Lattice.{Authority, Carrier, Log, Sim}
+  alias Lattice.{Authority, Log, Sim}
   alias Lattice.Authority.Delegation
   alias Lattice.Carrier.WebSocket, as: WsCarrier
-  alias LatticeNodeSpike.Peer
-  alias LatticeNodeSpike.TownshipScenario
+  alias LatticeNodeSpike.{CarrierScenarioRunner, Peer, TownshipScenario}
   alias Township.Matter
 
   @moduletag timeout: 120_000
@@ -123,53 +122,17 @@ defmodule LatticeNodeSpike.TownshipCarrierTest do
   end
 
   test "GATE: Township W0-W3 converge over a real WebSocket carrier" do
-    {port, ws_port} = spawn_peer("clerk")
-    sim_resident = TownshipScenario.base_sim()
-    resident_log = Sim.log(sim_resident, "resident")
+    report =
+      CarrierScenarioRunner.run!(TownshipScenario,
+        peer_realm: "clerk",
+        local_realm: "resident"
+      )
 
-    {:ok, conn} = connect(ws_port)
-    assert {:ok, "base"} = WsCarrier.status(conn)
+    assert %{sent: 2, received: 5} = Map.take(report.heal_sync, [:sent, :received])
+    assert "resident: posted while offline" in report.peer_state["state"]["posts"]
 
-    {:ok, _resident_log, stats, conn} = Carrier.sync(WsCarrier, conn, resident_log)
-    assert %{sent: 0, received: 0} = Map.take(stats, [:sent, :received])
-
-    :ok = WsCarrier.close(conn)
-    sim_resident = TownshipScenario.diverge(sim_resident, "resident")
-    resident_log = Sim.log(sim_resident, "resident")
-
-    {:ok, conn} = reconnect_when_diverged(ws_port)
-    {:ok, resident_log, stats, conn} = Carrier.sync(WsCarrier, conn, resident_log)
-    assert %{sent: 2, received: 5} = Map.take(stats, [:sent, :received])
-    assert stats.pushed.quarantined == []
-    assert stats.pulled.quarantined == []
-
-    local_bytes = TownshipScenario.state_bytes(resident_log)
-    {:ok, peer_report} = WsCarrier.state_report(conn)
-
-    assert Base.decode64!(peer_report["state_b64"]) == local_bytes
-    assert "resident: posted while offline" in peer_report["state"]["posts"]
-    assert peer_report["op_ids"] == Enum.sort(Log.op_ids(resident_log))
-    assert peer_report["frontier"] == Log.frontier(resident_log)
-
-    oracle = TownshipScenario.oracle_sim()
-    expected_quarantine = authority_quarantine(resident_log)
-    stale_reopen_id = stale_reopen_id(resident_log, oracle)
-
-    assert [stale_reopen_id, "not_holder"] in expected_quarantine
-    assert peer_report["authority_quarantine"] == expected_quarantine
-
-    for realm <- TownshipScenario.realms() do
-      oracle_log = Sim.log(oracle, realm)
-      assert MapSet.equal?(Log.op_ids(oracle_log), Log.op_ids(resident_log))
-      assert TownshipScenario.state_bytes(oracle_log) == local_bytes
-      assert authority_quarantine(oracle_log) == expected_quarantine
-    end
-
-    {:ok, _resident_log, stats, conn} = Carrier.sync(WsCarrier, conn, resident_log)
-    assert %{sent: 0, received: 0} = Map.take(stats, [:sent, :received])
-
-    assert {:ok, %{"type" => "shutdown_result"}} = WsCarrier.shutdown(conn)
-    assert_receive {^port, {:exit_status, 0}}, 10_000
+    stale_reopen_id = stale_reopen_id(report.log, TownshipScenario.oracle_sim())
+    assert [stale_reopen_id, "not_holder"] in report.authority_quarantine
   end
 
   defp stale_reopen_id(%Log{} = log, %Sim{} = sim) do
@@ -186,14 +149,6 @@ defmodule LatticeNodeSpike.TownshipCarrierTest do
 
   defp command_name(body) when is_tuple(body), do: elem(body, 0)
   defp command_name(_body), do: nil
-
-  defp authority_quarantine(%Log{} = log) do
-    Matter
-    |> Authority.analyze(log)
-    |> Map.fetch!(:reasons)
-    |> Enum.map(fn {id, reason} -> [id, Atom.to_string(reason)] end)
-    |> Enum.sort()
-  end
 
   defp assert_peer_phase(peer, phase, attempts \\ 20)
 
@@ -289,27 +244,6 @@ defmodule LatticeNodeSpike.TownshipCarrierTest do
 
     WsCarrier.connect(Keyword.merge(defaults, opts))
   end
-
-  defp reconnect_when_diverged(ws_port, attempts \\ 50) do
-    {:ok, conn} = connect(ws_port)
-    await_divergence(conn, attempts)
-  end
-
-  defp await_divergence(conn, attempts) when attempts > 0 do
-    case WsCarrier.status(conn) do
-      {:ok, "diverged"} ->
-        {:ok, conn}
-
-      {:ok, "base"} ->
-        Process.sleep(10)
-        await_divergence(conn, attempts - 1)
-
-      other ->
-        flunk("unexpected peer status after reconnect: #{inspect(other)}")
-    end
-  end
-
-  defp await_divergence(conn, 0), do: flunk("peer never diverged: #{inspect(conn)}")
 
   defp identity(realm), do: TownshipScenario.session_identity(realm)
 end
