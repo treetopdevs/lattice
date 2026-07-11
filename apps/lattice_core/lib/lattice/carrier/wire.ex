@@ -107,6 +107,11 @@ defmodule Lattice.Carrier.Wire do
     }
   end
 
+  @doc "Deprecated compatibility wrapper for the protocol-owned push-result frame."
+  @deprecated "Use Lattice.Carrier.Protocol.push_result/1"
+  @spec encode_push_result(map()) :: map()
+  def encode_push_result(report), do: Lattice.Carrier.Protocol.push_result(report)
+
   @spec decode_report(map()) ::
           {:ok, Lattice.Sync.report()} | {:error, :malformed_term}
   def decode_report(%{

@@ -47,10 +47,13 @@ implementations exist:
 
 ## Decision 2: wire format — shared versioned carrier frames
 
-Ops travel inside JSON envelopes using `Lattice.Carrier.Wire`, a centralized,
-versioned, JSON-safe frame schema. The wire module serializes complete ops,
-delegations, sync reports, and push-result frames; integrity is still decided by
-`Lattice.Log.accept/2`, not by the carrier decoder.
+Ops travel inside JSON envelopes using two shared layers. `Lattice.Carrier.Wire`
+owns the versioned, JSON-safe serialization of complete ops, delegations, and
+sync reports. `Lattice.Carrier.Protocol` owns request/response envelope shape and
+message vocabulary, including push-result frames. The deprecated
+`Wire.encode_push_result/1` delegate preserves the original caller seam during
+that ownership transition. Integrity is still decided by `Lattice.Log.accept/2`,
+not by either carrier decoder.
 
 Signed op and delegation bytes are no longer BEAM-term-only: `Lattice.Op` and
 `Lattice.Authority.Delegation` use `Lattice.Canonical` (ADR 0001). The current BEAM

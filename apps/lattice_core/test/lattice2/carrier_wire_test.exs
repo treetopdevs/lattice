@@ -149,6 +149,7 @@ defmodule Lattice.CarrierWireTest do
     assert frame["type"] == "push_result"
     assert frame["accepted"] == []
     assert frame["quarantined"] == []
+    assert :erlang.apply(Wire, :encode_push_result, [report]) == frame
   end
 
   property "op wire round-trip preserves body, cap, validity, and canonical payload" do
