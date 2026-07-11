@@ -44,7 +44,7 @@ All tests must pass and formatting must be clean before considering any change d
 |------|------------|
 | `apps/lattice_core` | v1 capability plane (caps, gateway, topology, audit) + the Lattice 2.0 replica-on-op-log engine |
 | `apps/lattice_server` | Cowboy WebSocket/HTTP boundary; JSON envelope parsing |
-| `apps/township_web` | Phoenix/LiveView read-only Township instrument over the verified audit bundle |
+| `apps/township_web` | Phoenix/LiveView read-only Township instrument with a Vue 3.5 causal-replay island over the verified audit bundle |
 | `apps/lattice_demo` | Demo servers, tab workers, and the deterministic/browser demo mix tasks |
 | `apps/lattice_stress` | Adversarial stress lab: races, WS abuse, load/soak, property tests, `mix lattice.stress` |
 | `apps/lattice_carrier_spike` | Spike code for a real (non-simulated) carrier |

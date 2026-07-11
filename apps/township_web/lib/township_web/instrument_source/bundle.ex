@@ -33,6 +33,7 @@ defmodule TownshipWeb.InstrumentSource.Bundle do
       {:ok,
        %{
          read_model: ReadModel.observe(log, labels: labels, vouches: demo_vouches()),
+         causal_replay: ReadModel.replay(log),
          provenance: %{
            bundle_dir: bundle_dir,
            matter_sha256: sha256(matter_bytes),

@@ -45,6 +45,23 @@ defmodule TownshipWeb.InstrumentLiveTest do
     assert has_element?(view, "#trust-graph-panel [data-trust-edge]")
     assert has_element?(view, "#op-dag-panel [data-op-node]")
     assert has_element?(view, "#op-dag-panel [data-frontier]")
+    assert has_element?(view, "#op-dag-panel .op-rail")
+
+    assert has_element?(
+             view,
+             "#causal-replay-island[phx-hook='TownshipCausalReplay'][phx-update='ignore']"
+           )
+
+    replay =
+      rendered
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query_by_id("causal-replay-island")
+      |> LazyHTML.attribute("data-replay")
+      |> List.first()
+      |> Jason.decode!()
+
+    assert replay["schema"] == "township-causal-replay-v1"
+    assert length(replay["frames"]) == 13
 
     assert has_element?(
              view,
@@ -79,6 +96,9 @@ defmodule TownshipWeb.InstrumentLiveTest do
     for panel <- ~w(threads roles members attest trust-graph op-dag) do
       refute has_element?(view, "##{panel}-panel")
     end
+
+    refute has_element?(view, "#causal-replay-island")
+    refute degraded =~ "township-causal-replay-v1"
 
     refute degraded =~ "Zoning variance #24"
     refute degraded =~ "xI19LiI0w767"

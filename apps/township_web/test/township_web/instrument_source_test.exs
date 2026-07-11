@@ -27,6 +27,21 @@ defmodule TownshipWeb.InstrumentSourceTest do
 
     assert payload.provenance.matter_sha256 ==
              "df911bb13013abefab7af103992fd1413eb754989ecf74f26cedb9e8ef6d17d3"
+
+    assert payload.causal_replay["schema"] == "township-causal-replay-v1"
+    assert length(payload.causal_replay["frames"]) == 13
+
+    assert List.last(payload.causal_replay["frames"])["state"] == %{
+             "title" => "Zoning variance #24",
+             "summary" => "Leaning approve (clerk edit)",
+             "posts" => [
+               "resident: I'll attend",
+               "clerk: hearing Tuesday 6pm",
+               "resident: posted while offline"
+             ],
+             "members" => ["clerk", "resident"],
+             "clerk_locked" => true
+           }
   end
 
   test "refuses missing and corrupted bundles" do

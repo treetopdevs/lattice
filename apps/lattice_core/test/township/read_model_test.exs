@@ -109,7 +109,7 @@ defmodule Township.ReadModelTest do
     assert plan =~ "does not build Phoenix, LiveView, Vue"
 
     assert build_map =~ "Plan 122 adds the Township instrument read model"
-    assert build_map =~ "plans 023-123"
+    assert build_map =~ "plans 023-124"
     assert build_map =~ "read-model foundation"
 
     assert plans_index =~

@@ -143,6 +143,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 121 | Township outsider-replay audit bundle | P1 | M | 012, 017 | DONE |
 | 122 | Township instrument read model | P1 | M | 121 | DONE |
 | 123 | Township LiveView instrument | P1 | L | 122 | DONE |
+| 124 | Township Vue causal replay island | P1 | L | 123 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

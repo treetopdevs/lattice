@@ -14,6 +14,7 @@ defmodule TownshipWeb.InstrumentLive do
            page_title: "Township Instrument",
            source_state: :verified,
            model: payload.read_model,
+           causal_replay: payload.causal_replay,
            provenance: payload.provenance,
            op_counts: op_counts(payload.read_model.op_dag.nodes)
          )}

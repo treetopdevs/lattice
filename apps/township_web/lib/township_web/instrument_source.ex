@@ -3,7 +3,11 @@ defmodule TownshipWeb.InstrumentSource do
   Boundary for loading integrity-checked data into the Township instrument.
   """
 
-  @type payload :: %{read_model: Township.ReadModel.t(), provenance: map()}
+  @type payload :: %{
+          read_model: Township.ReadModel.t(),
+          causal_replay: map(),
+          provenance: map()
+        }
   @type load_error :: {:bundle_unverified, [String.t()]}
 
   @callback load(keyword()) :: {:ok, payload()} | {:error, load_error()}

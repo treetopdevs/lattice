@@ -93,6 +93,21 @@
           <span><strong>{length(@model.op_dag.frontier)}</strong> frontier</span>
         </div>
 
+        <div
+          id="causal-replay-island"
+          class="causal-replay-island"
+          phx-hook="TownshipCausalReplay"
+          phx-update="ignore"
+          data-replay-schema={@causal_replay["schema"]}
+          data-replay={Jason.encode!(@causal_replay)}
+        >
+          <noscript>
+            <p class="causal-replay__fallback" data-causal-replay-fallback>
+              Causal replay unavailable. Verified operation evidence follows.
+            </p>
+          </noscript>
+        </div>
+
         <ol class="op-rail" aria-label="Causal operation rail">
           <li
             :for={node <- @model.op_dag.nodes}
