@@ -103,6 +103,32 @@ defmodule LatticeCarrierServer.WebSocket do
     %{type: "ops", ops: ops}
   end
 
+  defp handle_message("relay", %{"op" => encoded_op}, state) do
+    with {:ok, op} <- Wire.decode_op(encoded_op),
+         {:ok, report} <- Holder.relay(state.holder, state.peer_realm, op) do
+      report |> Wire.encode_report() |> Map.put("type", "relay_result")
+    else
+      {:error, :read_only} ->
+        %{type: "error", reason: "read_only"}
+
+      {:error, :malformed_op} ->
+        %{type: "error", reason: "malformed"}
+
+      {:error, {:persistence_failed, _reason} = reason} ->
+        Telemetry.execute(
+          [:lattice, :carrier, :relay_failure],
+          %{},
+          %{reason: reason, peer_realm: state.peer_realm, side: :server}
+        )
+
+        %{type: "error", reason: "unavailable"}
+    end
+  end
+
+  defp handle_message("relay", _message, _state) do
+    %{type: "error", reason: "malformed"}
+  end
+
   defp handle_message(_type, _message, _state) do
     %{type: "error", reason: "read_only"}
   end

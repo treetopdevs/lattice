@@ -27,7 +27,7 @@ is the **minimal cut** of it:
 | `apps/lattice_core/test/township/workflows_test.exs` | W0–W4 as falsifiable tests. |
 | `scripts/township_demo.exs` | Narrated end-to-end run (`§5` storyline). |
 | `apps/township_web` | Read-only LiveView/Vue instrument; its optional Plan 126 projection periodically pulls a real carrier peer and publishes verified snapshots through PubSub. |
-| `apps/lattice_carrier_server` | Plan 127 supervised read-only listener; serves one configured signed log to trusted transport realms without participant custody. |
+| `apps/lattice_carrier_server` | Plan 127 supervised listener, read-only by default; Plan 128 permits selected trusted realms to relay already-signed operations into a path-backed log without participant custody. |
 
 ## The one bet: the seam
 
@@ -70,6 +70,13 @@ fixture. It authenticates transport realms and serves frontier/missing-op pulls 
 signed log. It does not add server push, participant custody, or production deployment; it also
 does not complete Phase G or change the Tauri onboarding, mobile secure-store, real-app
 convergence, or receipt-free W4 claims.
+
+Plan 128 adds an opt-in client-signed relay to that stable boundary. A selected transport realm
+may submit one already-signed operation; the server performs structural delivery and persists a
+changed path-backed log before acknowledgement, while a distinct observer continues to pull and
+materialize against the Sim oracle. The server does not author operations, hold participant keys or
+a separate capability store, or decide semantic authority. This request/response operation does not add `/township` write controls, server push, or participant custody, and it does not claim
+production deployment, G1/Phase G completion, or receipt-free W4.
 
 ## Constraints — the "do not implement" boundary (PD-001 §6)
 

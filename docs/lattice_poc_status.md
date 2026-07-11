@@ -325,3 +325,23 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
   production deployment. It has no TLS/public ingress packaging, inbound push, server-push
   subscription, participant identity/key/capability custody, write controls, or receipt-free W4.
   It does not complete G1/Phase G or change the established Tauri/mobile/app-convergence gates.
+
+## Checkpoint: Durable Client-Signed Carrier Relay
+
+- Files changed: `apps/lattice_carrier_server`, the reusable
+  `Lattice.Carrier.WebSocket.relay/2` request, focused real-socket and persistence tests, and the
+  second-BEAM Township projection proof recorded in Plan 128.
+- Behaviors: a path-backed server may opt selected trusted transport realms into relaying one
+  already-signed operation. Structural delivery is serialized, a changed log is atomically
+  persisted before acknowledgement, and only then does the holder expose it to frontier and pull
+  requests. Duplicate, rejected, pending, and unchanged quarantined deliveries do not rewrite the
+  source; a failed persistence leaves the old in-memory and restart state observable.
+- Oracle: a distinct authenticated observer pulls a Sim-generated participant operation before and
+  after server OS-process restart and obtains the same op ids and Township read model. A signed but
+  authority-invalid operation is structurally accepted by the relay and remains quarantined by the
+  downstream materializer, proving that semantic authority remains a materialization-time decision.
+- Blocker or remaining limitation: this is an opt-in one-op request/response relay, not a generic
+  push API or server-push feed. It adds no `/township` write control, participant private-key or
+  separate capability custody, production deployment, G1/Phase G completion, or receipt-free W4.
+  Plan 128 does not change or newly prove Tauri onboarding/cap persistence, mobile secure-store
+  custody, or real app convergence.

@@ -29,10 +29,10 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert build_map =~ "authenticated frontier and pull"
     assert build_map =~ "production deployment remains"
     assert build_map =~ "Write controls and a server-push carrier feed remain"
-    assert build_map =~ "plans 023-127"
+    assert build_map =~ "plans 023-128"
 
     assert build_map =~
-             ~r/Plan 127 does not change or newly prove Tauri onboarding\/cap persistence/
+             ~r/Plan 128 does not change or newly prove Tauri onboarding\/cap persistence/
 
     refute build_map =~ "Plan 127 completes G1"
     refute build_map =~ "Plan 127 completes Phase G"
@@ -54,5 +54,52 @@ defmodule LatticeCarrierServer.PlanContractTest do
 
     assert package["scripts"]["township:instrument:server-e2e"] ==
              "npx --no-install playwright test --config playwright.township-server.config.mjs"
+  end
+
+  test "Plan 128 records durable client-signed relay without claiming UI writes or server push" do
+    plan =
+      File.read!(Path.join(@repo_root, "plans/128-durable-client-signed-carrier-relay-g1.md"))
+
+    plans_index = File.read!(Path.join(@repo_root, "plans/README.md"))
+    build_map = File.read!(Path.join(@repo_root, "TOWNSHIP_BUILD_MAP.md"))
+    agents = File.read!(Path.join(@repo_root, "AGENTS.md"))
+    readme = File.read!(Path.join(@repo_root, "README.md"))
+    claude = File.read!(Path.join(@repo_root, "CLAUDE.md"))
+    poc_status = File.read!(Path.join(@repo_root, "docs/lattice_poc_status.md"))
+
+    assert plan =~ "The client signs and the server relays"
+    assert plan =~ "No server-initiated notification/subscription"
+    assert plan =~ "No `/township` write control"
+    assert plan =~ "No change or new claim for Tauri onboarding/cap persistence"
+    assert plan =~ ~r/## Status\s+DONE/
+    assert plan =~ ~r/## Completion claim\s+Complete for this scoped increment/
+
+    assert plans_index =~
+             "| 128 | Durable client-signed carrier relay | P1 | L | 127 | DONE |"
+
+    assert build_map =~ "Plan 128 adds the opt-in durable client-signed relay"
+    assert build_map =~ "request/response relay, not server push"
+    assert build_map =~ "Write controls and a server-push carrier feed remain"
+    assert build_map =~ "plans 023-128"
+
+    assert build_map =~
+             ~r/Plan 128 does not change or newly prove Tauri onboarding\/cap persistence/
+
+    refute build_map =~ "Plan 128 completes G1"
+    refute build_map =~ "Plan 128 completes Phase G"
+    refute build_map =~ "Plan 128 makes W4 receipt-free"
+
+    assert agents =~ "opt-in durable client-signed relay"
+    assert readme =~ "Opt-in client-signed relay realms"
+    assert readme =~ "request/response relay is not server push"
+
+    assert claude =~ "Plan 128 adds an opt-in client-signed relay"
+
+    assert claude =~
+             "does not add `/township` write controls, server push, or participant custody"
+
+    assert poc_status =~ "## Checkpoint: Durable Client-Signed Carrier Relay"
+    assert poc_status =~ "persisted before acknowledgement"
+    assert poc_status =~ "semantic authority remains a materialization-time decision"
   end
 end

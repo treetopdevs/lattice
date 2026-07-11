@@ -189,17 +189,24 @@ Module docs render via ex_doc: `cd apps/lattice_core && mix docs`.
   carrier, test, and demo callers.
 - `Lattice.Transport.WebSocket.Envelope`, the safe JSON codec and browser-boundary
   inbound vocabulary.
-- `Lattice.Carrier.WebSocket`, the reusable real carrier client adapter.
+- `Lattice.Carrier.WebSocket`, the reusable real carrier client adapter, including
+  the explicit one-op relay request used by opt-in servers.
 
 `apps/lattice_carrier_server` owns:
 
-- A supervised read-only Cowboy carrier listener for one configured signed log.
+- A supervised Cowboy carrier listener for one configured signed log; it is
+  read-only by default.
 - Trusted-transport-realm authentication plus bounded `frontier` and missing-op
-  `pull` requests; every other authenticated request is read-only/unsupported.
-- Fail-closed path loading and source-preserving supervisor restart behavior.
+  `pull` requests.
+- Opt-in client-signed relay realms for path-backed sources. The server
+  structurally checks one already-signed operation and atomically persists a
+  changed log before acknowledgement; semantic authority remains downstream.
+- Fail-closed path loading and persisted source recovery across supervisor and
+  OS-process restart.
 - A realm transport identity, not a participant identity, capability issuer, or
   Township operation author.
-- No inbound push, server-push subscription, TLS/public ingress, or deployment
+- The one-op request/response relay is not server push. There is no generic
+  inbound push, server-push subscription, TLS/public ingress, or deployment
   packaging. This is a stable server boundary, not a production deployment.
 
 `apps/lattice_server` owns:

@@ -55,7 +55,7 @@ All tests must pass and formatting must be clean before considering any change d
 |------|------------|
 | `apps/lattice_core` | v1 capability plane (caps, gateway, topology, audit) + the Lattice 2.0 replica-on-op-log engine |
 | `apps/lattice_web_socket` | Reusable WebSocket client and real carrier adapter; no listener or supervision tree |
-| `apps/lattice_carrier_server` | Supervised read-only Cowboy carrier server for one configured signed log; no participant custody or deployment claim |
+| `apps/lattice_carrier_server` | Supervised read-only Cowboy carrier server by default, with an opt-in durable client-signed relay for path-backed logs; no participant custody, semantic authority, server-push, or deployment claim |
 | `apps/lattice_server` | Cowboy WebSocket/HTTP boundary over the shared JSON envelope codec |
 | `apps/township_web` | Phoenix/LiveView read-only Township instrument with a Vue 3.5 causal-replay island over the verified bundle or optional pull-only carrier projection |
 | `apps/lattice_demo` | Demo servers, tab workers, and the deterministic/browser demo mix tasks |

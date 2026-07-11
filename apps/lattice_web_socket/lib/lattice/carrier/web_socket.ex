@@ -17,6 +17,7 @@ defmodule Lattice.Carrier.WebSocket do
 
   alias Lattice.Carrier.{Batch, Session, Wire}
   alias Lattice.Carrier.Telemetry
+  alias Lattice.Op
   alias Lattice.Transport.WebSocket.Client
 
   @recv_timeout 10_000
@@ -93,6 +94,20 @@ defmodule Lattice.Carrier.WebSocket do
   @doc "Metadata for the most recent push batches: count and encoded frame bytes."
   @spec last_push_batches(t()) :: [%{count: non_neg_integer(), bytes: non_neg_integer()}]
   def last_push_batches(%__MODULE__{last_push_batches: batches}), do: batches
+
+  @doc "Submit one already-signed op to an explicitly relay-enabled peer."
+  @spec relay(t(), Op.t()) :: {:ok, Lattice.Sync.report(), t()} | {:error, term()}
+  def relay(%__MODULE__{} = conn, %Op{} = op) do
+    with {:ok, %{"type" => "relay_result"} = result} <-
+           request(conn, %{type: "relay", op: Wire.encode_op(op)}),
+         {:ok, report} <- Wire.decode_report(result) do
+      {:ok, report, conn}
+    else
+      {:ok, %{"type" => type}} -> {:error, {:unexpected_reply, type}}
+      {:ok, other} -> {:error, {:unexpected_reply, other}}
+      {:error, _reason} = error -> error
+    end
+  end
 
   # --- Lattice.Carrier callbacks ---------------------------------------------
 

@@ -127,6 +127,45 @@ defmodule LatticeCarrierServerTest do
     assert {:error, :closed} = WebSocket.pull(connection, oversized_have)
   end
 
+  @tag :tmp_dir
+  test "an oversized relay frame closes before persistence", %{tmp_dir: tmp_dir} do
+    author = Identity.from_seed("author", "carrier-server-author")
+    server_identity = Identity.from_seed("town-node", "carrier-server-relay")
+    relay_identity = Identity.from_seed("resident", "carrier-relay-client")
+    base = Op.new(author, @replica, [], :command, {:post, "base"})
+
+    oversized =
+      Op.new(
+        relay_identity,
+        @replica,
+        [base.id],
+        :command,
+        {:post, String.duplicate("x", 70_000)}
+      )
+
+    path = Path.join(tmp_dir, "matter.log")
+    instance = {:test, System.unique_integer([:positive])}
+    assert :ok = @replica |> Log.new() |> Log.append!(base) |> Log.dump(path)
+
+    start_supervised!(
+      {LatticeCarrierServer,
+       instance: instance,
+       identity: server_identity,
+       trusted_peers: %{relay_identity.realm_id => relay_identity.pub},
+       relay_realms: [relay_identity.realm_id],
+       source: {:path, path},
+       listener: [ip: {127, 0, 0, 1}, port: 0]}
+    )
+
+    connect_opts = connect_opts(instance, server_identity, relay_identity)
+    assert {:ok, connection} = WebSocket.connect(connect_opts)
+    assert {:error, :closed} = WebSocket.relay(connection, oversized)
+
+    assert {:ok, connection} = WebSocket.connect(connect_opts)
+    assert {:ok, [^base], connection} = WebSocket.pull(connection, MapSet.new())
+    assert :ok = WebSocket.close(connection)
+  end
+
   test "authenticated disconnect emits telemetry without changing the served log" do
     author = Identity.from_seed("author", "carrier-server-author")
     server_identity = Identity.from_seed("town-node", "carrier-server")
@@ -274,6 +313,337 @@ defmodule LatticeCarrierServerTest do
     assert :ok = WebSocket.close(connection)
   end
 
+  test "relay remains read-only unless the server explicitly enables the realm" do
+    author = Identity.from_seed("author", "carrier-server-author")
+    server_identity = Identity.from_seed("town-node", "carrier-server")
+    client_identity = Identity.from_seed("resident", "carrier-relay-client")
+    base = Op.new(author, @replica, [], :command, {:post, "base"})
+    relayed = Op.new(client_identity, @replica, [base.id], :command, {:post, "relayed"})
+    log = @replica |> Log.new() |> Log.append!(base)
+    instance = {:test, System.unique_integer([:positive])}
+
+    start_supervised!(
+      {LatticeCarrierServer,
+       instance: instance,
+       identity: server_identity,
+       trusted_peers: %{client_identity.realm_id => client_identity.pub},
+       source: {:log, log},
+       listener: [ip: {127, 0, 0, 1}, port: 0]}
+    )
+
+    assert {:ok, connection} =
+             WebSocket.connect(connect_opts(instance, server_identity, client_identity))
+
+    assert {:error, {:peer_error, "read_only"}} = WebSocket.relay(connection, relayed)
+    assert {:ok, [^base], connection} = WebSocket.pull(connection, MapSet.new())
+    assert :ok = WebSocket.close(connection)
+  end
+
+  @tag :tmp_dir
+  test "an authorized realm relays one persisted op for a second observer", %{tmp_dir: tmp_dir} do
+    author = Identity.from_seed("author", "carrier-server-author")
+    server_identity = Identity.from_seed("town-node", "carrier-server-relay")
+    relay_identity = Identity.from_seed("resident", "carrier-relay-client")
+    observer_identity = Identity.from_seed("instrument", "carrier-relay-observer")
+    base = Op.new(author, @replica, [], :command, {:post, "base"})
+    relayed = Op.new(relay_identity, @replica, [base.id], :command, {:post, "relayed"})
+    path = Path.join(tmp_dir, "matter.log")
+    instance = {:test, System.unique_integer([:positive])}
+    assert :ok = @replica |> Log.new() |> Log.append!(base) |> Log.dump(path)
+
+    start_supervised!(
+      {LatticeCarrierServer,
+       instance: instance,
+       identity: server_identity,
+       trusted_peers: %{
+         relay_identity.realm_id => relay_identity.pub,
+         observer_identity.realm_id => observer_identity.pub
+       },
+       relay_realms: [relay_identity.realm_id],
+       source: {:path, path},
+       listener: [ip: {127, 0, 0, 1}, port: 0]}
+    )
+
+    assert {:ok, relay_connection} =
+             WebSocket.connect(connect_opts(instance, server_identity, relay_identity))
+
+    assert {:ok, %{accepted: [relayed_id], quarantined: [], rejected: [], pending: []},
+            relay_connection} = WebSocket.relay(relay_connection, relayed)
+
+    assert relayed_id == relayed.id
+
+    assert {:ok, observer_connection} =
+             WebSocket.connect(connect_opts(instance, server_identity, observer_identity))
+
+    observer_relay =
+      Op.new(observer_identity, @replica, [relayed.id], :command, {:post, "observer write"})
+
+    assert {:error, {:peer_error, "read_only"}} =
+             WebSocket.relay(observer_connection, observer_relay)
+
+    assert {:error, {:peer_error, "read_only"}} =
+             WebSocket.push(relay_connection, [observer_relay])
+
+    assert {:error, {:peer_error, "read_only"}} =
+             WebSocket.live(relay_connection, %{typing: true})
+
+    assert {:ok, [^base, ^relayed], observer_connection} =
+             WebSocket.pull(observer_connection, MapSet.new())
+
+    assert {:ok, persisted} = Log.restore(path)
+    assert persisted |> Log.op_ids() |> Enum.sort() == [base.id, relayed.id] |> Enum.sort()
+    assert :ok = WebSocket.close(observer_connection)
+    assert :ok = WebSocket.close(relay_connection)
+  end
+
+  @tag :tmp_dir
+  test "an authenticated malformed relay is rejected without changing the frontier", %{
+    tmp_dir: tmp_dir
+  } do
+    author = Identity.from_seed("author", "carrier-server-author")
+    server_identity = Identity.from_seed("town-node", "carrier-server-relay")
+    relay_identity = Identity.from_seed("resident", "carrier-relay-client")
+    base = Op.new(author, @replica, [], :command, {:post, "base"})
+    path = Path.join(tmp_dir, "matter.log")
+    instance = {:test, System.unique_integer([:positive])}
+    assert :ok = @replica |> Log.new() |> Log.append!(base) |> Log.dump(path)
+
+    start_supervised!(
+      {LatticeCarrierServer,
+       instance: instance,
+       identity: server_identity,
+       trusted_peers: %{relay_identity.realm_id => relay_identity.pub},
+       relay_realms: [relay_identity.realm_id],
+       source: {:path, path},
+       listener: [ip: {127, 0, 0, 1}, port: 0]}
+    )
+
+    client = authenticated_client(instance, server_identity, relay_identity)
+    assert :ok = Client.send_envelope(client, %{type: "relay"})
+
+    assert {:ok, %{"type" => "error", "reason" => "malformed"}} =
+             Client.recv_envelope(client)
+
+    assert :ok = Client.send_envelope(client, %{type: "frontier"})
+
+    assert {:ok, %{"type" => "frontier_result", "ids" => [base_id]}} =
+             Client.recv_envelope(client)
+
+    assert base_id == base.id
+    assert :ok = Client.close(client)
+  end
+
+  @tag :tmp_dir
+  test "relay reports quarantine rejection and pending without growing the frontier", %{
+    tmp_dir: tmp_dir
+  } do
+    author = Identity.from_seed("author", "carrier-server-author")
+    server_identity = Identity.from_seed("town-node", "carrier-server-relay")
+    relay_identity = Identity.from_seed("resident", "carrier-relay-client")
+    base = Op.new(author, @replica, [], :command, {:post, "base"})
+    bad_signature = Op.new(relay_identity, @replica, [base.id], :command, {:post, "bad"})
+    bad_signature = %{bad_signature | sig: <<0::512>>}
+
+    wrong_replica =
+      Op.new(relay_identity, "replica:wrong", [], :command, {:post, "wrong replica"})
+
+    missing_dep =
+      Op.new(relay_identity, @replica, ["missing-op"], :command, {:post, "missing dep"})
+
+    path = Path.join(tmp_dir, "matter.log")
+    instance = {:test, System.unique_integer([:positive])}
+    assert :ok = @replica |> Log.new() |> Log.append!(base) |> Log.dump(path)
+
+    start_supervised!(
+      {LatticeCarrierServer,
+       instance: instance,
+       identity: server_identity,
+       trusted_peers: %{relay_identity.realm_id => relay_identity.pub},
+       relay_realms: [relay_identity.realm_id],
+       source: {:path, path},
+       listener: [ip: {127, 0, 0, 1}, port: 0]}
+    )
+
+    assert {:ok, connection} =
+             WebSocket.connect(connect_opts(instance, server_identity, relay_identity))
+
+    assert {:ok,
+            %{accepted: [], quarantined: [{bad_id, :bad_signature}], rejected: [], pending: []},
+            connection} = WebSocket.relay(connection, bad_signature)
+
+    assert bad_id == bad_signature.id
+
+    assert {:ok,
+            %{accepted: [], quarantined: [], rejected: [{wrong_id, :wrong_replica}], pending: []},
+            connection} = WebSocket.relay(connection, wrong_replica)
+
+    assert wrong_id == wrong_replica.id
+
+    assert {:ok, %{accepted: [], quarantined: [], rejected: [], pending: [pending_id]},
+            connection} = WebSocket.relay(connection, missing_dep)
+
+    assert pending_id == missing_dep.id
+    assert {:ok, [^base], connection} = WebSocket.pull(connection, MapSet.new())
+    assert :ok = WebSocket.close(connection)
+  end
+
+  @tag :tmp_dir
+  test "duplicate accepted and quarantined relays do not rewrite the source", %{tmp_dir: tmp_dir} do
+    author = Identity.from_seed("author", "carrier-server-author")
+    server_identity = Identity.from_seed("town-node", "carrier-server-relay")
+    relay_identity = Identity.from_seed("resident", "carrier-relay-client")
+    base = Op.new(author, @replica, [], :command, {:post, "base"})
+    accepted = Op.new(relay_identity, @replica, [base.id], :command, {:post, "accepted"})
+    bad_signature = Op.new(relay_identity, @replica, [accepted.id], :command, {:post, "bad"})
+    bad_signature = %{bad_signature | sig: <<0::512>>}
+    path = Path.join(tmp_dir, "matter.log")
+    instance = {:test, System.unique_integer([:positive])}
+    unchanged_timestamp = 1_600_000_000
+    assert :ok = @replica |> Log.new() |> Log.append!(base) |> Log.dump(path)
+
+    start_supervised!(
+      {LatticeCarrierServer,
+       instance: instance,
+       identity: server_identity,
+       trusted_peers: %{relay_identity.realm_id => relay_identity.pub},
+       relay_realms: [relay_identity.realm_id],
+       source: {:path, path},
+       listener: [ip: {127, 0, 0, 1}, port: 0]}
+    )
+
+    assert {:ok, connection} =
+             WebSocket.connect(connect_opts(instance, server_identity, relay_identity))
+
+    assert {:ok, %{accepted: [accepted_id]}, connection} =
+             WebSocket.relay(connection, accepted)
+
+    assert accepted_id == accepted.id
+    assert :ok = File.touch(path, unchanged_timestamp)
+    assert File.stat!(path, time: :posix).mtime == unchanged_timestamp
+
+    assert {:ok, %{accepted: [], quarantined: [], rejected: [], pending: []}, connection} =
+             WebSocket.relay(connection, accepted)
+
+    assert File.stat!(path, time: :posix).mtime == unchanged_timestamp
+
+    assert {:ok, %{quarantined: [{bad_id, :bad_signature}]}, connection} =
+             WebSocket.relay(connection, bad_signature)
+
+    assert bad_id == bad_signature.id
+    assert :ok = File.touch(path, unchanged_timestamp)
+
+    assert {:ok, %{quarantined: [{bad_id, :already_quarantined}]}, connection} =
+             WebSocket.relay(connection, bad_signature)
+
+    assert bad_id == bad_signature.id
+    assert File.stat!(path, time: :posix).mtime == unchanged_timestamp
+    assert {:ok, [^base, ^accepted], connection} = WebSocket.pull(connection, MapSet.new())
+    assert :ok = WebSocket.close(connection)
+  end
+
+  @tag :tmp_dir
+  test "failed relay persistence keeps the old log through restart", %{tmp_dir: tmp_dir} do
+    author = Identity.from_seed("author", "carrier-server-author")
+    server_identity = Identity.from_seed("town-node", "carrier-server-relay-failure")
+    relay_identity = Identity.from_seed("resident", "carrier-relay-failure-client")
+    base = Op.new(author, @replica, [], :command, {:post, "base"})
+    relayed = Op.new(relay_identity, @replica, [base.id], :command, {:post, "not persisted"})
+    path = Path.join(tmp_dir, "matter.log")
+    port = free_port()
+    instance = {:test, System.unique_integer([:positive])}
+    assert :ok = @replica |> Log.new() |> Log.append!(base) |> Log.dump(path)
+    source_bytes = File.read!(path)
+
+    opts = [
+      instance: instance,
+      identity: server_identity,
+      trusted_peers: %{relay_identity.realm_id => relay_identity.pub},
+      relay_realms: [relay_identity.realm_id],
+      source: {:path, path},
+      listener: [ip: {127, 0, 0, 1}, port: port]
+    ]
+
+    server = start_supervised!({LatticeCarrierServer, opts})
+    connect_opts = connect_opts(instance, server_identity, relay_identity)
+    assert {:ok, connection} = WebSocket.connect(connect_opts)
+
+    handler_id = {__MODULE__, make_ref()}
+
+    assert :ok =
+             Telemetry.attach(
+               handler_id,
+               [:lattice, :carrier, :relay_failure],
+               &__MODULE__.handle_telemetry/4,
+               self()
+             )
+
+    on_exit(fn -> Telemetry.detach(handler_id) end)
+
+    assert :ok = File.rm(path)
+    assert :ok = File.mkdir(path)
+
+    assert {:error, {:peer_error, "unavailable"}} = WebSocket.relay(connection, relayed)
+
+    assert_receive {:telemetry, [:lattice, :carrier, :relay_failure], %{}, metadata}, 1_000
+    assert match?({:persistence_failed, _reason}, metadata.reason)
+    assert metadata.peer_realm == relay_identity.realm_id
+    assert metadata.side == :server
+    refute Map.has_key?(metadata, :path)
+    refute Map.has_key?(metadata, :op)
+
+    assert {:ok, [^base], connection} = WebSocket.pull(connection, MapSet.new())
+    assert Path.wildcard("#{path}.tmp.*") == []
+    assert :ok = WebSocket.close(connection)
+
+    assert :ok = File.rmdir(path)
+    assert :ok = File.write(path, source_bytes)
+
+    monitor = Process.monitor(server)
+    Process.exit(server, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^server, :killed}, 1_000
+
+    assert {:ok, connection} = connect_eventually(connect_opts, 2_000)
+    assert {:ok, [^base], connection} = WebSocket.pull(connection, MapSet.new())
+    assert :ok = WebSocket.close(connection)
+  end
+
+  @tag :tmp_dir
+  test "an acknowledged relay survives supervised server restart", %{tmp_dir: tmp_dir} do
+    author = Identity.from_seed("author", "carrier-server-author")
+    server_identity = Identity.from_seed("town-node", "carrier-server-relay-restart")
+    relay_identity = Identity.from_seed("resident", "carrier-relay-restart-client")
+    base = Op.new(author, @replica, [], :command, {:post, "base"})
+    relayed = Op.new(relay_identity, @replica, [base.id], :command, {:post, "durable"})
+    path = Path.join(tmp_dir, "matter.log")
+    port = free_port()
+    instance = {:test, System.unique_integer([:positive])}
+    assert :ok = @replica |> Log.new() |> Log.append!(base) |> Log.dump(path)
+
+    opts = [
+      instance: instance,
+      identity: server_identity,
+      trusted_peers: %{relay_identity.realm_id => relay_identity.pub},
+      relay_realms: [relay_identity.realm_id],
+      source: {:path, path},
+      listener: [ip: {127, 0, 0, 1}, port: port]
+    ]
+
+    server = start_supervised!({LatticeCarrierServer, opts})
+    connect_opts = connect_opts(instance, server_identity, relay_identity)
+    assert {:ok, connection} = WebSocket.connect(connect_opts)
+    assert {:ok, %{accepted: [relayed_id]}, connection} = WebSocket.relay(connection, relayed)
+    assert relayed_id == relayed.id
+    assert :ok = WebSocket.close(connection)
+
+    monitor = Process.monitor(server)
+    Process.exit(server, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^server, :killed}, 1_000
+
+    assert {:ok, connection} = connect_eventually(connect_opts, 2_000)
+    assert {:ok, [^base, ^relayed], connection} = WebSocket.pull(connection, MapSet.new())
+    assert :ok = WebSocket.close(connection)
+  end
+
   @tag :tmp_dir
   test "a path source restores and serves the configured log", %{tmp_dir: tmp_dir} do
     author = Identity.from_seed("author", "carrier-server-author")
@@ -303,6 +673,7 @@ defmodule LatticeCarrierServerTest do
 
   test "invalid transport identity and trusted-peer configuration refuse startup" do
     identity = Identity.from_seed("town-node", "carrier-server")
+    relay_identity = Identity.from_seed("resident", "carrier-relay-client")
     log = Log.new(@replica)
 
     assert {:error, {:invalid_config, :identity}} =
@@ -320,6 +691,26 @@ defmodule LatticeCarrierServerTest do
                identity: identity,
                trusted_peers: %{"instrument" => :not_a_public_key},
                source: {:log, log},
+               listener: [port: 0]
+             )
+
+    assert {:error, {:invalid_config, :relay_realms}} =
+             LatticeCarrierServer.start_link(
+               instance: {:relay_requires_path, make_ref()},
+               identity: identity,
+               trusted_peers: %{relay_identity.realm_id => relay_identity.pub},
+               relay_realms: [relay_identity.realm_id],
+               source: {:log, log},
+               listener: [port: 0]
+             )
+
+    assert {:error, {:invalid_config, :relay_realms}} =
+             LatticeCarrierServer.start_link(
+               instance: {:relay_requires_trusted_realm, make_ref()},
+               identity: identity,
+               trusted_peers: %{"instrument" => Identity.from_seed("instrument", "client").pub},
+               relay_realms: [relay_identity.realm_id],
+               source: {:path, "/unused"},
                listener: [port: 0]
              )
   end
@@ -413,6 +804,27 @@ defmodule LatticeCarrierServerTest do
     identity.realm_id
     |> Session.challenge(replica, wire_version: wire_version)
     |> Session.sign_challenge(identity)
+  end
+
+  defp authenticated_client(instance, server_identity, client_identity) do
+    assert {:ok, client} =
+             Client.connect(
+               hostname: "127.0.0.1",
+               port: LatticeCarrierServer.port(instance),
+               path: "/carrier"
+             )
+
+    challenge = signed_challenge(client_identity)
+    assert :ok = Client.send_envelope(client, challenge)
+    assert {:ok, %{"type" => "carrier_hello"} = response} = Client.recv_envelope(client)
+
+    assert :ok =
+             Session.verify_response(challenge, response,
+               expected_realm: server_identity.realm_id,
+               expected_pubkey: server_identity.pub
+             )
+
+    client
   end
 
   defp connect_opts(instance, server_identity, client_identity) do

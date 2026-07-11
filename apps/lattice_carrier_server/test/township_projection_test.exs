@@ -1,8 +1,9 @@
 defmodule LatticeCarrierServer.TownshipProjectionTest do
   use ExUnit.Case, async: false
 
-  alias Lattice.{Identity, Log}
-  alias Township.AuditBundle
+  alias Lattice.Carrier.WebSocket
+  alias Lattice.{Identity, Log, Sim}
+  alias Township.{AuditBundle, Matter, ReadModel}
   alias TownshipWeb.CarrierProjection
 
   @moduletag timeout: 120_000
@@ -55,6 +56,157 @@ defmodule LatticeCarrierServer.TownshipProjectionTest do
     stop_server(restarted_server)
   end
 
+  @tag :tmp_dir
+  test "a client-signed relay survives a second-BEAM restart and matches Sim", %{
+    tmp_dir: tmp_dir
+  } do
+    {:ok, _apps} = Application.ensure_all_started(:township_web)
+
+    replica_name = "replica:matter:stable-relay"
+    sim = Sim.new(Matter, replica_name, ["clerk", "resident"], seed: "stable-relay")
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, _grant} = Sim.grant(sim, "clerk", "resident", ops: [:post])
+    sim = Sim.sync_all(sim)
+    base_log = Sim.log(sim, "clerk")
+    replica = base_log.replica
+    relay_identity = Sim.identity(sim, "resident")
+    {sim, relayed_op} = Sim.command(sim, "resident", :post, ["resident: relayed"])
+    sim = Sim.sync_all(sim)
+    expected_log = Sim.log(sim, "clerk")
+    source_path = Path.join(tmp_dir, "matter.log")
+    assert :ok = Log.dump(base_log, source_path)
+
+    observer = Identity.from_seed("instrument", "stable-relay-projection")
+    server_identity = Identity.from_seed("town-node", "stable-carrier-server")
+    fixed_port = free_port()
+    server = spawn_server(fixed_port, observer, relay_identity, source_path)
+    assert elem(server, 1) == fixed_port
+
+    topic = "township:stable-relay:#{System.unique_integer([:positive])}"
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         connect_opts: connect_opts(fixed_port, observer, server_identity, replica),
+         replica: replica,
+         peer_realm: server_identity.realm_id,
+         pubsub: TownshipWeb.PubSub,
+         topic: topic,
+         schedule: :manual}
+      )
+
+    assert {:ok, :connecting} = CarrierProjection.subscribe(projection)
+    assert {:ok, {:fresh, base_payload}} = CarrierProjection.refresh(projection)
+    assert payload_ids(base_payload) == base_log |> Log.op_ids() |> Enum.sort()
+
+    assert {:ok, relay_connection} =
+             WebSocket.connect(connect_opts(fixed_port, relay_identity, server_identity, replica))
+
+    assert {:ok, %{accepted: [relayed_id]}, relay_connection} =
+             WebSocket.relay(relay_connection, relayed_op)
+
+    assert relayed_id == relayed_op.id
+    assert :ok = WebSocket.close(relay_connection)
+
+    assert {:ok, {:fresh, relayed_payload}} = CarrierProjection.refresh(projection)
+    assert payload_ids(relayed_payload) == expected_log |> Log.op_ids() |> Enum.sort()
+    assert relayed_payload.read_model == ReadModel.observe(expected_log)
+    assert relayed_payload.causal_replay == ReadModel.replay(expected_log)
+
+    assert {:ok, audit_connection} =
+             WebSocket.connect(connect_opts(fixed_port, observer, server_identity, replica))
+
+    assert {:ok, served_ops, audit_connection} = WebSocket.pull(audit_connection, MapSet.new())
+    assert Enum.map(served_ops, & &1.id) == Enum.map(Log.topo_ops(expected_log), & &1.id)
+    refute server_identity.pub in Enum.map(served_ops, & &1.author)
+    assert :ok = WebSocket.close(audit_connection)
+
+    kill_server(server)
+
+    assert {:ok, {:stale, stale_payload}} = CarrierProjection.refresh(projection)
+    assert payload_ids(stale_payload) == payload_ids(relayed_payload)
+
+    restarted_server = spawn_server(fixed_port, observer, relay_identity, source_path)
+    assert elem(restarted_server, 1) == fixed_port
+
+    assert {:ok, {:fresh, recovered_payload}} = CarrierProjection.refresh(projection)
+    assert payload_ids(recovered_payload) == payload_ids(relayed_payload)
+    assert recovered_payload.read_model == relayed_payload.read_model
+    assert recovered_payload.causal_replay == relayed_payload.causal_replay
+
+    stop_server(restarted_server)
+  end
+
+  @tag :tmp_dir
+  test "relay accepts a signed command while the observer preserves Sim authority quarantine", %{
+    tmp_dir: tmp_dir
+  } do
+    {:ok, _apps} = Application.ensure_all_started(:township_web)
+
+    sim =
+      Sim.new(Matter, "replica:matter:relay-authority", ["clerk", "resident"],
+        seed: "relay-authority"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, _grant} = Sim.grant(sim, "clerk", "resident", ops: [:post])
+    sim = Sim.sync_all(sim)
+    base_log = Sim.log(sim, "clerk")
+    relay_identity = Sim.identity(sim, "resident")
+    {sim, denied_op} = Sim.command(sim, "resident", :admit, ["intruder"], cap: :none)
+    sim = Sim.sync_all(sim)
+    expected_log = Sim.log(sim, "clerk")
+    source_path = Path.join(tmp_dir, "matter.log")
+    assert :ok = Log.dump(base_log, source_path)
+
+    observer = Identity.from_seed("instrument", "relay-authority-observer")
+    server_identity = Identity.from_seed("town-node", "relay-authority-server")
+    instance = {:test, System.unique_integer([:positive])}
+
+    start_supervised!(
+      {LatticeCarrierServer,
+       instance: instance,
+       identity: server_identity,
+       trusted_peers: %{
+         observer.realm_id => observer.pub,
+         relay_identity.realm_id => relay_identity.pub
+       },
+       relay_realms: [relay_identity.realm_id],
+       source: {:path, source_path},
+       listener: [ip: {127, 0, 0, 1}, port: 0]}
+    )
+
+    port = LatticeCarrierServer.port(instance)
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         connect_opts: connect_opts(port, observer, server_identity, base_log.replica),
+         replica: base_log.replica,
+         peer_realm: server_identity.realm_id,
+         pubsub: TownshipWeb.PubSub,
+         topic: "township:relay-authority:#{System.unique_integer([:positive])}",
+         schedule: :manual}
+      )
+
+    assert {:ok, relay_connection} =
+             WebSocket.connect(
+               connect_opts(port, relay_identity, server_identity, base_log.replica)
+             )
+
+    assert {:ok, %{accepted: [denied_id], quarantined: [], rejected: [], pending: []},
+            relay_connection} = WebSocket.relay(relay_connection, denied_op)
+
+    assert denied_id == denied_op.id
+    assert :ok = WebSocket.close(relay_connection)
+
+    assert {:ok, {:fresh, payload}} = CarrierProjection.refresh(projection)
+    assert payload.read_model == ReadModel.observe(expected_log)
+    assert denied_op.id in payload.read_model.roles.quarantine
+    assert payload.read_model.roles.reasons[denied_op.id] == :no_capability
+    refute "intruder" in payload.read_model.members.current
+  end
+
   defp payload_ids(payload) do
     payload.causal_replay["nodes"] |> Enum.map(& &1["id"]) |> Enum.sort()
   end
@@ -72,6 +224,10 @@ defmodule LatticeCarrierServer.TownshipProjectionTest do
   end
 
   defp spawn_server(port_number, observer) do
+    spawn_server(port_number, observer, nil, @source_path)
+  end
+
+  defp spawn_server(port_number, observer, relay_identity, source_path) do
     args =
       Enum.flat_map(code_paths(), &["-pa", &1]) ++
         [
@@ -81,8 +237,8 @@ defmodule LatticeCarrierServer.TownshipProjectionTest do
           "stable-carrier-server",
           observer.realm_id,
           Base.encode64(observer.pub),
-          @source_path
-        ]
+          source_path
+        ] ++ relay_args(relay_identity)
 
     port =
       Port.open({:spawn_executable, elixir_bin()}, [
@@ -103,9 +259,18 @@ defmodule LatticeCarrierServer.TownshipProjectionTest do
     {port, await_ready(port, [])}
   end
 
+  defp relay_args(nil), do: []
+  defp relay_args(identity), do: [identity.realm_id, Base.encode64(identity.pub)]
+
   defp stop_server({port, _ws_port}) do
     true = Port.command(port, "stop\n")
     assert_receive {^port, {:exit_status, 0}}, 10_000
+  end
+
+  defp kill_server({port, _ws_port}) do
+    os_pid = port |> Port.info(:os_pid) |> elem(1)
+    {_output, 0} = System.cmd("kill", ["-9", Integer.to_string(os_pid)], stderr_to_stdout: true)
+    assert_receive {^port, {:exit_status, _status}}, 10_000
   end
 
   defp await_ready(port, seen) do

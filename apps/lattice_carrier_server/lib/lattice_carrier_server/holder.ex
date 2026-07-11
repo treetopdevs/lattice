@@ -24,13 +24,27 @@ defmodule LatticeCarrierServer.Holder do
   @spec missing_for(GenServer.server(), [Lattice.Op.id()]) :: [Lattice.Op.t()]
   def missing_for(holder, have_ids), do: GenServer.call(holder, {:missing_for, have_ids})
 
+  @spec relay(GenServer.server(), String.t(), Lattice.Op.t()) ::
+          {:ok, Sync.report()} | {:error, term()}
+  def relay(holder, peer_realm, op), do: GenServer.call(holder, {:relay, peer_realm, op})
+
   @impl GenServer
   def init(opts) do
     identity = Keyword.fetch!(opts, :identity)
+    source = Keyword.fetch!(opts, :source)
 
-    case load_source(Keyword.fetch!(opts, :source)) do
-      {:ok, log} -> {:ok, %{identity: identity, log: log}}
-      {:error, reason} -> {:stop, {:source_error, reason}}
+    case load_source(source) do
+      {:ok, log} ->
+        {:ok,
+         %{
+           identity: identity,
+           log: log,
+           source: source,
+           relay_realms: opts |> Keyword.fetch!(:relay_realms) |> MapSet.new()
+         }}
+
+      {:error, reason} ->
+        {:stop, {:source_error, reason}}
     end
   end
 
@@ -47,6 +61,15 @@ defmodule LatticeCarrierServer.Holder do
     {:reply, Sync.missing(state.log, MapSet.new(have_ids)), state}
   end
 
+  def handle_call({:relay, peer_realm, op}, _from, state) do
+    if MapSet.member?(state.relay_realms, peer_realm) do
+      {log, report} = Sync.deliver(state.log, [op])
+      persist_relay(log, report, state)
+    else
+      {:reply, {:error, :read_only}, state}
+    end
+  end
+
   defp load_source({:log, %Log{} = log}), do: {:ok, log}
 
   defp load_source({:path, path}) when is_binary(path) do
@@ -54,6 +77,31 @@ defmodule LatticeCarrierServer.Holder do
   end
 
   defp load_source(_source), do: {:error, :invalid_source}
+
+  defp persist_relay(log, report, %{log: log} = state) do
+    {:reply, {:ok, report}, state}
+  end
+
+  defp persist_relay(log, report, %{source: {:path, path}} = state) do
+    case atomic_dump(log, path) do
+      :ok -> {:reply, {:ok, report}, %{state | log: log}}
+      {:error, reason} -> {:reply, {:error, {:persistence_failed, reason}}, state}
+    end
+  end
+
+  defp atomic_dump(log, path) do
+    suffix = System.unique_integer([:monotonic, :positive])
+    temp_path = "#{path}.tmp.#{suffix}"
+
+    result =
+      with :ok <- Log.dump(log, temp_path),
+           :ok <- File.rename(temp_path, path) do
+        :ok
+      end
+
+    _ = File.rm(temp_path)
+    result
+  end
 
   defp preload_lattice_core do
     :lattice_core
