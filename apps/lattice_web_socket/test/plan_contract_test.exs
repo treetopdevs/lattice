@@ -21,8 +21,9 @@ defmodule LatticeWebSocket.PlanContractTest do
 
     assert build_map =~ "`apps/lattice_web_socket`"
     assert build_map =~ "Plan 125 promotes the real WebSocket carrier client"
-    assert build_map =~ "plans 023-125"
-    assert build_map =~ ~r/does not wire the Township instrument to a\s+live producer/
+    assert build_map =~ "tracked **per plan"
+    assert build_map =~ "plans/README.md"
+    assert build_map =~ "no live instrument producer is wired"
 
     assert agents =~ "Reusable WebSocket client and real carrier adapter"
     assert readme =~ "`apps/lattice_web_socket` owns"

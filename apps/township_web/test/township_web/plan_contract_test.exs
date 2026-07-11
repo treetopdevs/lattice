@@ -18,7 +18,8 @@ defmodule TownshipWeb.PlanContractTest do
     assert build_map =~ "Plan 123 adds the Township LiveView instrument"
     assert build_map =~ "apps/township_web"
     assert build_map =~ "connected `/township` LiveView"
-    assert build_map =~ "plans 023-125"
+    assert build_map =~ "tracked **per plan"
+    assert build_map =~ "plans/README.md"
 
     assert plans_index =~
              "| 123 | Township LiveView instrument | P1 | L | 122 | DONE |"
@@ -42,8 +43,9 @@ defmodule TownshipWeb.PlanContractTest do
     assert plans_index =~
              "| 124 | Township Vue causal replay island | P1 | L | 123 | DONE |"
 
-    assert build_map =~ "Plan 124 adds the Vue 3.5 causal-replay island"
-    assert build_map =~ "plans 023-125"
+    assert build_map =~ "Plan 124 adds server-derived causal replay through a Vue 3.5 canvas"
+    assert build_map =~ "tracked **per plan"
+    assert build_map =~ "plans/README.md"
     assert build_map =~ "Live controls and carrier/PubSub feeds remain"
     refute build_map =~ "live controls, carrier/PubSub feeds, and the Vue graph island remain"
 
