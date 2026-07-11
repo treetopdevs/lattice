@@ -481,7 +481,7 @@ defmodule Lattice.CompactionSpike do
   end
 
   # Dormancy floor: covered activity collapses to base_tick; retained events
-  # count only if causally visible (mirrors Authority.last_active_from/3).
+  # count only if causally visible (mirrors RoleTimeline's dormancy calculation).
   defp seeded_last_active(tl, op_anc) do
     ticks =
       for ev <- tl.acquires ++ tl.heartbeats,
@@ -610,7 +610,7 @@ defmodule Lattice.CompactionSpike do
     end)
   end
 
-  # Mirrors Authority.stale_holder?/4 with the covered prefix collapsed to the
+  # Mirrors RoleTimeline.stale_holder?/4 with the covered prefix collapsed to the
   # seed: if the op's last visible acquire is the seed, the "next" holder-change
   # is the first retained acquire; otherwise it is the next retained acquire.
   defp seeded_stale_holder?(op, tl, op_anc, anc) do
