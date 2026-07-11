@@ -13,6 +13,7 @@
     "typecheck": "vue-tsc --noEmit",
     "frontend:contract": "node --test test/frontend_shell.mjs",
     "native:contract": "tsx test/native_workflow.ts",
+    "session:contract": "tsx test/township_session.ts",
     "action:contract": "tsx test/township_actions.ts",
     "canonical:probe:contract": "tsx test/township_canonical_probe.ts",
     "release:transport:contract": "tsx test/township_release_transport_probe.ts",

@@ -70,7 +70,7 @@ test("frontend package exposes installed-app armed deep-link delivery smoke", ()
   const smoke = readText("test/tauri_installed_deeplink_smoke.ts");
   const native = readText("src-tauri/src/lib.rs");
   const cargoToml = readText("src-tauri/Cargo.toml");
-  const app = readText("src/App.vue");
+  const app = `${readText("src/App.vue")}\n${readText("src/township_session.ts")}`;
   const workflow = readText("src/native_workflow.ts");
 
   assert.match(smoke, /township:\/\/pairing/);
@@ -113,7 +113,7 @@ test("frontend package exposes installed-app armed deep-link delivery smoke", ()
   assert.doesNotMatch(native, /#\[cfg\(not\(debug_assertions\)\)\]\s*fn trace_dev_command/);
   assert.match(native, /#\[cfg\(any\(debug_assertions, feature = "township-dev-trace"\)\)\]\s*pub fn seed_dev_carrier_key_from_vars/);
   assert.match(native, /lattice_trace_dev_event/);
-  assert.match(app, /devTraceRuntime = truthy\(import\.meta\.env\.VITE_TOWNSHIP_DEV_TRACE\)/);
+  assert.match(app, /devTraceRuntime = truthy\(env\.VITE_TOWNSHIP_DEV_TRACE\)/);
   assert.match(app, /if \(devTraceRuntime\) await mountDevTraceShortcut\(\)/);
   assert.match(app, /async function mountDevTraceShortcut\(\)/);
   assert.match(app, /await traceTownshipDevEvent\(TOWNSHIP_TRACE_DEV_RUNTIME_READY\)/);
@@ -153,11 +153,29 @@ test("frontend package exposes installed-app armed deep-link delivery smoke", ()
   assert.match(smoke, /waitForTraceLine\(TOWNSHIP_TRACE_CARRIER_HEALTH_STARTED/);
 });
 
+test("Vue shell delegates workflow orchestration to the Township session", () => {
+  const app = readText("src/App.vue");
+  const session = readText("src/township_session.ts");
+  const pkg = readJson("package.json");
+
+  assert.equal(pkg.scripts["session:contract"], "tsx test/township_session.ts");
+  assert.match(app, /useTownshipSession/);
+  assert.doesNotMatch(app, /from "\.\/township_actions"/);
+  assert.doesNotMatch(app, /from "\.\/township_sync"/);
+  assert.doesNotMatch(app, /from "\.\/township_carrier_peer"/);
+  assert.match(session, /export function createTownshipSession/);
+  assert.match(session, /export function useTownshipSession/);
+  assert.match(session, /interface TownshipSessionAdapters/);
+  assert.match(session, /adapters\.loadPairing/);
+  assert.match(session, /adapters\.syncOutbox/);
+  assert.match(session, /adapters\.checkHealth/);
+});
+
 test("Vue source mounts a reducer-backed Township matter surface", () => {
   const indexHtml = readText("index.html");
   const main = readText("src/main.ts");
   const preview = readText("src/township_preview.ts");
-  const app = readText("src/App.vue");
+  const app = `${readText("src/App.vue")}\n${readText("src/township_session.ts")}`;
 
   assert.match(indexHtml, /<div id="app"><\/div>/);
   assert.match(main, /createApp\(App\)\.mount\("#app"\)/);
@@ -169,7 +187,7 @@ test("Vue source mounts a reducer-backed Township matter surface", () => {
 });
 
 test("Vue source surfaces native invoke readiness from the Tauri workflow", () => {
-  const app = readText("src/App.vue");
+  const app = `${readText("src/App.vue")}\n${readText("src/township_session.ts")}`;
   const nativeWorkflow = readText("src/native_workflow.ts");
   const pkg = readJson("package.json");
 
@@ -184,7 +202,7 @@ test("Vue source surfaces native invoke readiness from the Tauri workflow", () =
 });
 
 test("Vue source exposes a cap-gated author-and-persist post action", () => {
-  const app = readText("src/App.vue");
+  const app = `${readText("src/App.vue")}\n${readText("src/township_session.ts")}`;
   const actions = readText("src/township_actions.ts");
   const pkg = readJson("package.json");
 
@@ -199,7 +217,7 @@ test("Vue source exposes a cap-gated author-and-persist post action", () => {
 });
 
 test("Vue source exposes a cap-gated summary edit action", () => {
-  const app = readText("src/App.vue");
+  const app = `${readText("src/App.vue")}\n${readText("src/township_session.ts")}`;
   const actions = readText("src/township_actions.ts");
 
   assert.match(actions, /export async function submitTownshipCommand/);
@@ -211,7 +229,7 @@ test("Vue source exposes a cap-gated summary edit action", () => {
 });
 
 test("Vue source shows cap-aware action availability", () => {
-  const app = readText("src/App.vue");
+  const app = `${readText("src/App.vue")}\n${readText("src/township_session.ts")}`;
   const actions = readText("src/township_actions.ts");
 
   assert.match(actions, /export async function loadTownshipActionAvailability/);
@@ -224,7 +242,7 @@ test("Vue source shows cap-aware action availability", () => {
 });
 
 test("Vue source exposes close and reopen matter status actions", () => {
-  const app = readText("src/App.vue");
+  const app = `${readText("src/App.vue")}\n${readText("src/township_session.ts")}`;
 
   assert.match(app, /statusStatus/);
   assert.match(app, /statusSubmitting/);
@@ -238,7 +256,7 @@ test("Vue source exposes close and reopen matter status actions", () => {
 });
 
 test("Vue source exposes member-management actions", () => {
-  const app = readText("src/App.vue");
+  const app = `${readText("src/App.vue")}\n${readText("src/township_session.ts")}`;
 
   assert.match(app, /memberDraft/);
   assert.match(app, /memberStatus/);
@@ -254,7 +272,7 @@ test("Vue source exposes member-management actions", () => {
 });
 
 test("Vue source exposes a cap grant ceremony", () => {
-  const app = readText("src/App.vue");
+  const app = `${readText("src/App.vue")}\n${readText("src/township_session.ts")}`;
   const actions = readText("src/township_actions.ts");
 
   assert.match(actions, /export async function submitTownshipDelegation/);
@@ -270,7 +288,7 @@ test("Vue source exposes a cap grant ceremony", () => {
 });
 
 test("Vue source exposes a pending-sync revocation ceremony", () => {
-  const app = readText("src/App.vue");
+  const app = `${readText("src/App.vue")}\n${readText("src/township_session.ts")}`;
   const actions = readText("src/township_actions.ts");
 
   assert.match(actions, /export async function submitTownshipRevocation/);
@@ -286,7 +304,7 @@ test("Vue source exposes a pending-sync revocation ceremony", () => {
 });
 
 test("Vue source exposes carrier-accepted revocation acknowledgement without claiming access removal", () => {
-  const app = readText("src/App.vue");
+  const app = `${readText("src/App.vue")}\n${readText("src/township_session.ts")}`;
   const sync = readText("src/township_sync.ts");
 
   assert.match(sync, /carrierAcceptedRevocationIds/);
@@ -302,7 +320,7 @@ test("Vue source exposes carrier-accepted revocation acknowledgement without cla
 });
 
 test("Vue source surfaces authority-blocked revoked-cap commands without overclaiming revocation effectiveness", () => {
-  const app = readText("src/App.vue");
+  const app = `${readText("src/App.vue")}\n${readText("src/township_session.ts")}`;
   const sync = readText("src/township_sync.ts");
 
   assert.match(sync, /stateReport/);
@@ -339,7 +357,7 @@ test("Vue source surfaces authority-blocked revoked-cap commands without overcla
 });
 
 test("Vue source does not claim phone-grade secure persistence", () => {
-  const app = readText("src/App.vue");
+  const app = `${readText("src/App.vue")}\n${readText("src/township_session.ts")}`;
 
   assert.doesNotMatch(app, /phone-grade/i);
   assert.doesNotMatch(app, /secure persistence/i);
@@ -380,7 +398,7 @@ test("frontend package exposes the real app convergence gate", () => {
 });
 
 test("Vue source exposes a carrier sync outbox action", () => {
-  const app = readText("src/App.vue");
+  const app = `${readText("src/App.vue")}\n${readText("src/township_session.ts")}`;
   const sync = readText("src/township_sync.ts");
   const peer = readText("src/township_carrier_peer.ts");
   const pkg = readJson("package.json");
@@ -403,7 +421,7 @@ test("Vue source exposes a carrier sync outbox action", () => {
 });
 
 test("Vue source exposes runtime carrier pairing config without storing secrets", () => {
-  const app = readText("src/App.vue");
+  const app = `${readText("src/App.vue")}\n${readText("src/township_session.ts")}`;
   const peer = readText("src/township_carrier_peer.ts");
   const nativeWorkflow = readText("src/native_workflow.ts");
 
@@ -439,7 +457,7 @@ test("Vue source exposes runtime carrier pairing config without storing secrets"
 });
 
 test("Vue source gates imported pairing saves on explicit confirmation", () => {
-  const app = readText("src/App.vue");
+  const app = `${readText("src/App.vue")}\n${readText("src/township_session.ts")}`;
   const peer = readText("src/township_carrier_peer.ts");
   const releaseProbe = readText("src/township_release_pairing_probe.ts");
 
@@ -470,7 +488,7 @@ test("Vue source gates imported pairing saves on explicit confirmation", () => {
 });
 
 test("Vue source exposes pairing handoff import without device-local identity transfer", () => {
-  const app = readText("src/App.vue");
+  const app = `${readText("src/App.vue")}\n${readText("src/township_session.ts")}`;
   const peer = readText("src/township_carrier_peer.ts");
   const link = readText("src/township_pairing_deeplink.ts");
   const source = readText("src/township_pairing_deeplink_source.ts");
@@ -538,7 +556,7 @@ test("Vue source exposes pairing handoff import without device-local identity tr
 });
 
 test("Vue source mounts the pairing deep-link listener before the best-effort canonical probe listener", () => {
-  const app = readText("src/App.vue");
+  const app = `${readText("src/App.vue")}\n${readText("src/township_session.ts")}`;
   const mountedStart = app.indexOf("onMounted(async () => {");
   const mountedEnd = app.indexOf("if (autosyncOnMount && carrierPeer.value) await syncOutbox()");
   const mounted = app.slice(mountedStart, mountedEnd);
@@ -560,7 +578,7 @@ test("Vue source mounts the pairing deep-link listener before the best-effort ca
 });
 
 test("Vue source does not block pairing deep-link readiness on native keychain probes", () => {
-  const app = readText("src/App.vue");
+  const app = `${readText("src/App.vue")}\n${readText("src/township_session.ts")}`;
   const mountedStart = app.indexOf("onMounted(async () => {");
   const mountedEnd = app.indexOf("if (autosyncOnMount && carrierPeer.value) await syncOutbox()");
   const mounted = app.slice(mountedStart, mountedEnd);
@@ -579,12 +597,12 @@ test("Vue source does not block pairing deep-link readiness on native keychain p
     app.indexOf("async function hydrateTownshipNativeReadiness()") > -1,
     "expected native readiness to be hydrated by a deferred helper",
   );
-  assert.match(app, /nativeStatus\.value = await loadTownshipNativeStatus\(\)/);
+  assert.match(app, /nativeStatus\.value = await adapters\.loadNativeStatus\(\)/);
   assert.match(app, /window\.setTimeout\(\(\) => \{[\s\S]*void hydrateTownshipNativeReadiness\(\);[\s\S]*\}/);
 });
 
 test("Vue source renders pairing handoff QR without trust claims", () => {
-  const app = readText("src/App.vue");
+  const app = `${readText("src/App.vue")}\n${readText("src/township_session.ts")}`;
   const qr = readText("src/township_pairing_qr.ts");
   const pkg = readJson("package.json");
 
@@ -606,7 +624,7 @@ test("Vue source renders pairing handoff QR without trust claims", () => {
 });
 
 test("Vue source decodes pairing QR images and camera frames as draft imports", () => {
-  const app = readText("src/App.vue");
+  const app = `${readText("src/App.vue")}\n${readText("src/township_session.ts")}`;
   const qr = readText("src/township_pairing_qr.ts");
   const camera = readText("src/township_pairing_qr_camera.ts");
   const pkg = readJson("package.json");
@@ -646,7 +664,7 @@ test("Vue source decodes pairing QR images and camera frames as draft imports", 
 });
 
 test("Vue source exposes manual pairing discovery without auto-pairing", () => {
-  const app = readText("src/App.vue");
+  const app = `${readText("src/App.vue")}\n${readText("src/township_session.ts")}`;
   const discovery = readText("src/township_pairing_discovery.ts");
   const discoverySource = readText("src/township_pairing_discovery_source.ts");
   const pkg = readJson("package.json");
@@ -695,7 +713,7 @@ test("Vue source exposes manual pairing discovery without auto-pairing", () => {
 });
 
 test("Vue source exposes a one-shot carrier health probe without overclaiming connection state", () => {
-  const app = readText("src/App.vue");
+  const app = `${readText("src/App.vue")}\n${readText("src/township_session.ts")}`;
   const peer = readText("src/township_carrier_peer.ts");
 
   assert.match(peer, /export async function checkTownshipCarrierPeerHealth/);
@@ -716,7 +734,7 @@ test("Vue source exposes a one-shot carrier health probe without overclaiming co
 });
 
 test("Vue source supports smoke-only auto-sync from Vite env", () => {
-  const app = readText("src/App.vue");
+  const app = `${readText("src/App.vue")}\n${readText("src/township_session.ts")}`;
   const env = readText("src/env.d.ts");
 
   assert.match(env, /VITE_TOWNSHIP_AUTOSYNC_ON_MOUNT/);
@@ -726,7 +744,7 @@ test("Vue source supports smoke-only auto-sync from Vite env", () => {
 });
 
 test("Vue source does not block smoke auto-sync on action availability hydration", () => {
-  const app = readText("src/App.vue");
+  const app = `${readText("src/App.vue")}\n${readText("src/township_session.ts")}`;
   const mountedStart = app.indexOf("onMounted(async () => {");
   const mountedEnd = app.indexOf("async function submitPost");
   const mounted = app.slice(mountedStart, mountedEnd);
@@ -741,5 +759,5 @@ test("Vue source does not block smoke auto-sync on action availability hydration
       < mounted.indexOf("scheduleTownshipNativeHydration()"),
     "native/action availability hydration should be scheduled after smoke-only auto-sync can converge",
   );
-  assert.match(app, /actionAvailability\.value = await loadTownshipActionAvailability\(\)/);
+  assert.match(app, /actionAvailability\.value = await adapters\.loadActionAvailability\(\)/);
 });
