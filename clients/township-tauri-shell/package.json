@@ -57,7 +57,7 @@
     "tauri:android:release:browser-onboarding-grant-state-exchange": "npm run tauri:android:build:release:onboarding-grant-state-probe && npm run tauri:android:release:browser-onboarding-grant-state-exchange:smoke",
     "tauri:android:release:browser-onboarding-regression": "npm run tauri:android:release:browser-pairing && npm run tauri:android:release:browser-state-exchange && npm run tauri:android:release:browser-onboarding && npm run tauri:android:release:browser-onboarding-state-exchange && npm run tauri:android:release:browser-onboarding-grant && npm run tauri:android:release:browser-onboarding-grant-state-exchange",
     "tauri:android:release:cleartext-diagnostic:smoke": "tsx test/tauri_android_release_cleartext_diagnostic_probe.ts",
-    "app:convergence": "npm run action:contract && npm run sync:contract && npm run live:contract && npm run tauri:launch:smoke && npm run tauri:deep-link:smoke",
+    "app:convergence": "npm run action:contract && npm run sync:contract && npm run onboarding:contract && npm run live:contract && npm run tauri:launch:smoke && npm run tauri:deep-link:smoke",
     "tauri:ios:init": "tauri ios init --ci --skip-targets-install",
     "tauri:android:init": "tauri android init --ci --skip-targets-install",
     "tauri:android:build:debug": "PATH=/opt/homebrew/opt/rustup/bin:$PATH tauri android build --debug --apk --ci",
@@ -86,6 +86,7 @@
     "tauri:deep-link:smoke": "tsx test/tauri_installed_deeplink_smoke.ts",
     "tauri:cold-deep-link:smoke": "tsx test/tauri_installed_cold_deeplink_smoke.ts",
     "sync:contract": "tsx test/township_sync.ts",
+    "onboarding:contract": "tsx test/township_onboarding.ts",
     "live:contract": "tsx test/township_live_peer.ts",
     "tauri:launch:smoke": "tsx test/tauri_launch_smoke.ts"
   },

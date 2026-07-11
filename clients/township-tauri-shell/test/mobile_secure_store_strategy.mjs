@@ -36,6 +36,11 @@ test("mobile secure-store strategy keeps secrets behind native signers", () => {
   assert.match(strategy, /delegation_frames/);
   assert.match(strategy, /not secrets/);
   assert.match(strategy, /No phone-grade persistence claim/);
+  assert.match(strategy, /Plan 118 adds desktop Tauri default-namespace onboarding convergence/);
+  assert.match(strategy, /default `TOWNSHIP_STORAGE_NAMESPACE`/);
+  assert.match(strategy, /onboarding:contract/);
+  assert.match(strategy, /no resident private seed\s+material/);
+  assert.match(strategy, /does\s+not prove iOS,\s+Expo,\s+cross-device pairing state\s+exchange, or full mobile onboarding/);
 
   assert.match(tauriLib, /trait CarrierKeySeedStore/);
   assert.match(tauriLib, /struct KeyringCarrierKeySeedStore/);
