@@ -107,7 +107,7 @@
           phx-hook="TownshipCausalReplay"
           phx-update="ignore"
           data-replay-schema={@snapshot.causal_replay["schema"]}
-          data-replay={Jason.encode!(@snapshot.causal_replay)}
+          data-replay={Township.ReplayPayload.encode!(@snapshot.causal_replay)}
         >
           <noscript>
             <p class="causal-replay__fallback" data-causal-replay-fallback>

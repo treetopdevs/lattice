@@ -7,19 +7,11 @@ defmodule Township.ReadModel do
   `Township.Matter`. Optional realm labels affect only delegation-graph labels.
   """
 
-  alias Lattice.{Attestation, Authority, Identity, Log, Op}
+  alias Lattice.{Attestation, Authority, Identity, Log}
   alias Lattice.Graph.ReplicaSnapshot
-  alias Township.Matter
+  alias Township.{Matter, ReplayPayload}
 
   @member_commands [:admit, :remove_member]
-  @replay_fields [
-    {"title", "Title"},
-    {"summary", "Summary"},
-    {"posts", "Deliberation"},
-    {"members", "Members"},
-    {"clerk_locked", "Clerk locked"}
-  ]
-
   @type labels :: %{optional(String.t()) => String.t()}
   @type denied_member_mutation :: %{
           op_id: String.t(),
@@ -84,80 +76,7 @@ defmodule Township.ReadModel do
 
   @doc "Build the JSON-safe causal replay payload for the Township instrument."
   @spec replay(Log.t()) :: map()
-  def replay(%Log{} = log) do
-    ordered_ops = Log.topo_ops(log)
-    graph = ReplicaSnapshot.build(Matter, log)
-
-    %{
-      "schema" => "township-causal-replay-v1",
-      "nodes" => replay_nodes(graph.nodes, log),
-      "edges" => Enum.map(graph.edges, &stringify_keys/1),
-      "frames" => replay_frames(log, ordered_ops),
-      "fields" => replay_fields(ordered_ops)
-    }
-  end
-
-  defp replay_nodes(nodes, log) do
-    Enum.map(nodes, fn node ->
-      {:ok, op} = Log.fetch(log, node.id)
-
-      node
-      |> Map.put(:field, operation_field(op))
-      |> stringify_keys()
-    end)
-  end
-
-  defp replay_frames(log, ordered_ops) do
-    ordered_ops
-    |> Enum.with_index()
-    |> Enum.map(fn {head, index} ->
-      prefix = Enum.take(ordered_ops, index + 1)
-      sub_log = Log.from_ops(log.replica, Map.new(prefix, &{&1.id, &1}))
-      frontier = Log.frontier(sub_log)
-      analysis = Authority.analyze(Matter, sub_log)
-
-      %{
-        "index" => index,
-        "head" => head.id,
-        "visible_ids" => sub_log |> Log.op_ids() |> Enum.sort(),
-        "frontier" => frontier,
-        "state" => Matter |> Lattice.state_at(log, frontier) |> state_view(),
-        "holders" => json_holders(analysis.holders),
-        "quarantine" => json_reasons(analysis.reasons)
-      }
-    end)
-  end
-
-  defp replay_fields(ordered_ops) do
-    writers =
-      Enum.reduce(ordered_ops, %{}, fn op, acc ->
-        case operation_field(op) do
-          nil -> acc
-          field -> Map.update(acc, field, [op.id], &(&1 ++ [op.id]))
-        end
-      end)
-
-    Enum.map(@replay_fields, fn {id, label} ->
-      %{"id" => id, "label" => label, "writers" => Map.get(writers, id, [])}
-    end)
-  end
-
-  defp operation_field(%Op{kind: :command, body: {command, args}}) when is_list(args) do
-    case Matter.__apply_command__(command, args) |> Enum.map(&elem(&1, 0)) |> Enum.uniq() do
-      [field] -> replay_field_id(field)
-      _other -> nil
-    end
-  rescue
-    ArgumentError -> nil
-  end
-
-  defp operation_field(%Op{}), do: nil
-
-  defp replay_field_id(field) do
-    field
-    |> Atom.to_string()
-    |> String.trim_trailing("?")
-  end
+  def replay(%Log{} = log), do: ReplayPayload.build(log)
 
   defp state_view(state) do
     %{
@@ -167,20 +86,6 @@ defmodule Township.ReadModel do
       "members" => Enum.sort(state.members),
       "clerk_locked" => state.clerk_locked?
     }
-  end
-
-  defp json_holders(holders) do
-    Map.new(holders, fn {role, pub} ->
-      {Atom.to_string(role), pub && Identity.fingerprint(pub)}
-    end)
-  end
-
-  defp json_reasons(reasons) do
-    Map.new(reasons, fn {id, reason} -> {id, Atom.to_string(reason)} end)
-  end
-
-  defp stringify_keys(map) do
-    Map.new(map, fn {key, value} -> {Atom.to_string(key), value} end)
   end
 
   defp fingerprint_holders(holders) do

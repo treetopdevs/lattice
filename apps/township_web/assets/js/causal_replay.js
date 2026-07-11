@@ -1,13 +1,13 @@
 import { Graph, layout } from "@dagrejs/dagre"
 import { computed, createApp, h, onMounted, ref, watch } from "vue"
+import { replayFromDataset } from "./replay_contract"
 
-const replaySchema = "township-causal-replay-v1"
 const nodeWidth = 152
 const nodeHeight = 42
 
 export const TownshipCausalReplay = {
   mounted() {
-    const replay = parseReplay(this.el)
+    const replay = replayFromDataset(this.el.dataset)
     const layoutState = layoutReplay(replay)
     const host = this.el
     const mountPoint = document.createElement("div")
@@ -21,14 +21,14 @@ export const TownshipCausalReplay = {
         const frame = computed(() => replay.frames[frameIndex.value])
         const selectedField = ref(null)
         const selectedOp = ref(null)
-        const nodesById = new Map(replay.nodes.map((node) => [node.id, node]))
-        const fieldsById = new Map(replay.fields.map((field) => [field.id, field]))
+        const nodesById = replay.nodesById
+        const fieldsById = replay.fieldsById
         const selectedNode = computed(() => nodesById.get(selectedOp.value) || null)
         const highlightedWriters = computed(
           () => fieldsById.get(selectedField.value)?.writers || [],
         )
         const selectedOpVisible = computed(
-          () => selectedNode.value && frame.value.visible_ids.includes(selectedNode.value.id),
+          () => selectedNode.value && frame.value.visibleIds.includes(selectedNode.value.id),
         )
         const selectedOpReason = computed(
           () => (selectedNode.value && frame.value.quarantine[selectedNode.value.id]) || null,
@@ -45,7 +45,7 @@ export const TownshipCausalReplay = {
             highlightedWriters: highlightedWriters.value,
           })
           host.dataset.replayFrame = String(nextFrame.index)
-          host.dataset.visibleCount = String(nextFrame.visible_ids.length)
+          host.dataset.visibleCount = String(nextFrame.visibleIds.length)
           host.dataset.quarantineCount = String(Object.keys(nextFrame.quarantine).length)
           setHostData(host, "selectedField", selectedField.value)
           setHostData(host, "selectedOp", selectedOp.value)
@@ -65,7 +65,7 @@ export const TownshipCausalReplay = {
           const bounds = canvas.value.getBoundingClientRect()
           const x = (event.clientX - bounds.left) * (canvas.value.width / bounds.width)
           const y = (event.clientY - bounds.top) * (canvas.value.height / bounds.height)
-          const visible = new Set(frame.value.visible_ids)
+          const visible = new Set(frame.value.visibleIds)
 
           const hit = replay.nodes.find((node) => {
             if (!visible.has(node.id)) return false
@@ -188,26 +188,6 @@ export const TownshipCausalReplay = {
   },
 }
 
-function parseReplay(host) {
-  if (host.dataset.replaySchema !== replaySchema) {
-    throw new Error(`unsupported causal replay schema ${host.dataset.replaySchema}`)
-  }
-
-  const replay = JSON.parse(host.dataset.replay)
-
-  if (
-    replay.schema !== replaySchema ||
-    !Array.isArray(replay.nodes) ||
-    !Array.isArray(replay.edges) ||
-    !Array.isArray(replay.frames) ||
-    replay.frames.length === 0
-  ) {
-    throw new Error("invalid causal replay payload")
-  }
-
-  return replay
-}
-
 function layoutReplay(replay) {
   const graph = new Graph()
   graph.setGraph({ rankdir: "TB", nodesep: 18, ranksep: 28, marginx: 24, marginy: 24 })
@@ -240,7 +220,7 @@ function layoutReplay(replay) {
 
 function paintReplay(canvas, replay, layoutState, frame, selection) {
   const context = canvas.getContext("2d")
-  const visible = new Set(frame.visible_ids)
+  const visible = new Set(frame.visibleIds)
 
   context.fillStyle = "#fbfcfa"
   context.fillRect(0, 0, canvas.width, canvas.height)
