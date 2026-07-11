@@ -31,20 +31,20 @@
     <section
       id="source-status"
       class="provenance-strip"
-      data-verified={to_string(@provenance.verified)}
+      data-verified={to_string(@snapshot.provenance.verified)}
       aria-label="Verified source provenance"
     >
       <div>
         <span class="provenance-label">Source</span>
-        <strong>{@provenance.schema}</strong>
+        <strong>{@snapshot.provenance.schema}</strong>
       </div>
       <div>
         <span class="provenance-label">Bundle</span>
-        <span class="path-value">{@provenance.bundle_dir}</span>
+        <span class="path-value">{@snapshot.provenance.bundle_dir}</span>
       </div>
       <div class="provenance-digest">
         <span class="provenance-label">matter.log · SHA-256</span>
-        <code>{@provenance.matter_sha256}</code>
+        <code>{@snapshot.provenance.matter_sha256}</code>
       </div>
     </section>
 
@@ -53,20 +53,26 @@
         <header class="panel-header">
           <div>
             <p class="section-kicker">Threads · materialized state</p>
-            <h2>{@model.threads.title}</h2>
+            <h2>{@snapshot.read_model.threads.title}</h2>
           </div>
-          <span class={["status-mark", @model.threads.clerk_locked? && "status-mark--locked"]}>
-            {if @model.threads.clerk_locked?, do: "closed", else: "open"}
+          <span class={[
+            "status-mark",
+            @snapshot.read_model.threads.clerk_locked? && "status-mark--locked"
+          ]}>
+            {if @snapshot.read_model.threads.clerk_locked?, do: "closed", else: "open"}
           </span>
         </header>
 
         <div class="summary-field">
           <span class="field-label">Contested summary · LWW register</span>
-          <p>{@model.threads.summary}</p>
+          <p>{@snapshot.read_model.threads.summary}</p>
         </div>
 
         <ol class="post-list" aria-label="Deliberation posts">
-          <li :for={{post, index} <- Enum.with_index(@model.threads.posts, 1)} data-post>
+          <li
+            :for={{post, index} <- Enum.with_index(@snapshot.read_model.threads.posts, 1)}
+            data-post
+          >
             <span class="post-index">{String.pad_leading(Integer.to_string(index), 2, "0")}</span>
             <span>{post}</span>
           </li>
@@ -79,18 +85,20 @@
             <p class="section-kicker">Op · DAG</p>
             <h2>Causal evidence</h2>
           </div>
-          <span class="metric">{@op_counts.total} ops</span>
+          <span class="metric">{@snapshot.op_counts.total} ops</span>
         </header>
 
         <div
           class="dag-counts"
-          data-op-count={@op_counts.total}
-          data-honored-count={@op_counts.honored}
-          data-quarantined-count={@op_counts.quarantined}
+          data-op-count={@snapshot.op_counts.total}
+          data-honored-count={@snapshot.op_counts.honored}
+          data-quarantined-count={@snapshot.op_counts.quarantined}
         >
-          <span><strong>{@op_counts.honored}</strong> honored</span>
-          <span class="danger"><strong>{@op_counts.quarantined}</strong> quarantined</span>
-          <span><strong>{length(@model.op_dag.frontier)}</strong> frontier</span>
+          <span><strong>{@snapshot.op_counts.honored}</strong> honored</span>
+          <span class="danger">
+            <strong>{@snapshot.op_counts.quarantined}</strong> quarantined
+          </span>
+          <span><strong>{length(@snapshot.read_model.op_dag.frontier)}</strong> frontier</span>
         </div>
 
         <div
@@ -98,8 +106,8 @@
           class="causal-replay-island"
           phx-hook="TownshipCausalReplay"
           phx-update="ignore"
-          data-replay-schema={@causal_replay["schema"]}
-          data-replay={Jason.encode!(@causal_replay)}
+          data-replay-schema={@snapshot.causal_replay["schema"]}
+          data-replay={Jason.encode!(@snapshot.causal_replay)}
         >
           <noscript>
             <p class="causal-replay__fallback" data-causal-replay-fallback>
@@ -110,7 +118,7 @@
 
         <ol class="op-rail" aria-label="Causal operation rail">
           <li
-            :for={node <- @model.op_dag.nodes}
+            :for={node <- @snapshot.read_model.op_dag.nodes}
             class={["op-node", node.status == "quarantined" && "op-node--quarantined"]}
             data-op-node
             data-status={node.status}
@@ -124,7 +132,7 @@
 
         <div class="frontier-line">
           <span class="field-label">Frontier</span>
-          <code :for={id <- @model.op_dag.frontier} data-frontier>{id}</code>
+          <code :for={id <- @snapshot.read_model.op_dag.frontier} data-frontier>{id}</code>
         </div>
       </section>
 
@@ -138,7 +146,7 @@
 
         <dl class="holder-list">
           <div
-            :for={{role, fingerprint} <- Enum.sort(@model.roles.holders)}
+            :for={{role, fingerprint} <- Enum.sort(@snapshot.read_model.roles.holders)}
             data-holder={role}
             data-fingerprint={fingerprint}
           >
@@ -150,11 +158,11 @@
         <div class="audit-strip">
           <p class="field-label">Authority quarantine</p>
           <div
-            :for={op_id <- @model.roles.quarantine}
+            :for={op_id <- @snapshot.read_model.roles.quarantine}
             class="audit-event"
-            data-reason={@model.roles.reasons[op_id]}
+            data-reason={@snapshot.read_model.roles.reasons[op_id]}
           >
-            <span>{Atom.to_string(@model.roles.reasons[op_id])}</span>
+            <span>{Atom.to_string(@snapshot.read_model.roles.reasons[op_id])}</span>
             <code>{String.slice(op_id, 0, 12)}</code>
           </div>
         </div>
@@ -166,19 +174,25 @@
             <p class="section-kicker">Members · observed remove set</p>
             <h2>Civic membership</h2>
           </div>
-          <span class="metric">{length(@model.members.current)} current</span>
+          <span class="metric">{length(@snapshot.read_model.members.current)} current</span>
         </header>
 
         <ul class="member-list">
-          <li :for={member <- @model.members.current} data-member={member}>{member}</li>
+          <li :for={member <- @snapshot.read_model.members.current} data-member={member}>
+            {member}
+          </li>
         </ul>
 
         <div class="denied-list">
           <p class="field-label">Denied membership mutations</p>
-          <p :if={@model.members.denied == []} class="empty-state" data-empty="denied-members">
+          <p
+            :if={@snapshot.read_model.members.denied == []}
+            class="empty-state"
+            data-empty="denied-members"
+          >
             No denied member mutations in this snapshot.
           </p>
-          <div :for={denied <- @model.members.denied} class="denied-entry">
+          <div :for={denied <- @snapshot.read_model.members.denied} class="denied-entry">
             <span>{denied.command} · {denied.reason}</span>
             <code>{String.slice(denied.op_id, 0, 12)}</code>
           </div>
@@ -193,7 +207,7 @@
           </div>
           <span
             class="stub-mark"
-            data-attestation-status={@model.attest.status}
+            data-attestation-status={@snapshot.read_model.attest.status}
           >
             W4 · stubbed
           </span>
@@ -201,19 +215,19 @@
 
         <div class="tally-result">
           <span class="field-label">Outcome</span>
-          <strong>{@model.attest.tally.outcome}</strong>
+          <strong>{@snapshot.read_model.attest.tally.outcome}</strong>
         </div>
         <dl class="tally-counts">
-          <div :for={{choice, count} <- Enum.sort(@model.attest.tally.counts)}>
+          <div :for={{choice, count} <- Enum.sort(@snapshot.read_model.attest.tally.counts)}>
             <dt>{choice}</dt>
             <dd>{count}</dd>
           </div>
         </dl>
         <p
           class="receipt-status"
-          data-receipt-free={to_string(@model.attest.receipt_free?)}
+          data-receipt-free={to_string(@snapshot.read_model.attest.receipt_free?)}
         >
-          receipt_free? <strong>{to_string(@model.attest.receipt_free?)}</strong>
+          receipt_free? <strong>{to_string(@snapshot.read_model.attest.receipt_free?)}</strong>
         </p>
       </section>
 
@@ -224,13 +238,19 @@
             <h2 id="trust-graph-title">Who may act</h2>
           </div>
           <span class="metric">
-            {length(@model.trust_graph.nodes)} identities · {length(@model.trust_graph.edges)} grants
+            {length(@snapshot.read_model.trust_graph.nodes)} identities · {length(
+              @snapshot.read_model.trust_graph.edges
+            )} grants
           </span>
         </header>
 
         <div class="trust-stage" role="group" aria-labelledby="trust-graph-title">
           <div class="trust-nodes">
-            <div :for={node <- @model.trust_graph.nodes} class="trust-node" data-trust-node>
+            <div
+              :for={node <- @snapshot.read_model.trust_graph.nodes}
+              class="trust-node"
+              data-trust-node
+            >
               <span class="trust-node-mark">
                 {if node.label == node.id,
                   do: "ID",
@@ -242,7 +262,7 @@
           </div>
 
           <ol class="trust-edges">
-            <li :for={edge <- @model.trust_graph.edges} data-trust-edge>
+            <li :for={edge <- @snapshot.read_model.trust_graph.edges} data-trust-edge>
               <code>{edge.from}</code>
               <span aria-hidden="true">→</span>
               <code>{edge.to}</code>

@@ -8,15 +8,12 @@ defmodule TownshipWeb.InstrumentLive do
   @impl true
   def mount(_params, _session, socket) do
     case InstrumentSource.load() do
-      {:ok, payload} ->
+      {:ok, snapshot} ->
         {:ok,
          assign(socket,
            page_title: "Township Instrument",
            source_state: :verified,
-           model: payload.read_model,
-           causal_replay: payload.causal_replay,
-           provenance: payload.provenance,
-           op_counts: op_counts(payload.read_model.op_dag.nodes)
+           snapshot: snapshot
          )}
 
       {:error, {:bundle_unverified, errors}} ->
@@ -27,13 +24,5 @@ defmodule TownshipWeb.InstrumentLive do
            source_errors: errors
          )}
     end
-  end
-
-  defp op_counts(nodes) do
-    %{
-      total: length(nodes),
-      honored: Enum.count(nodes, &(&1.status == "honored")),
-      quarantined: Enum.count(nodes, &(&1.status == "quarantined"))
-    }
   end
 end

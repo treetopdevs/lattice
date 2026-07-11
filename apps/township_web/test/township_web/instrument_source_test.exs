@@ -2,12 +2,14 @@ defmodule TownshipWeb.InstrumentSourceTest do
   use ExUnit.Case, async: true
 
   alias TownshipWeb.InstrumentSource
+  alias TownshipWeb.VerifiedInstrumentSnapshot
 
   @repo_root Path.expand("../../../..", __DIR__)
   @tracked_dir Path.join(@repo_root, "artifacts/township")
 
   test "loads the instrument model only from a verified bundle" do
-    assert {:ok, payload} = InstrumentSource.load(bundle_dir: @tracked_dir)
+    assert {:ok, %VerifiedInstrumentSnapshot{} = payload} =
+             InstrumentSource.load(bundle_dir: @tracked_dir)
 
     assert payload.read_model.threads.title == "Zoning variance #24"
     assert payload.read_model.threads.summary == "Leaning approve (clerk edit)"
