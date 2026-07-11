@@ -484,6 +484,7 @@ async function syncOutbox() {
   syncSubmitting.value = true;
   void traceTownshipDevEvent(TOWNSHIP_TRACE_SYNC_OUTBOX_STARTED).catch(() => {});
   syncStatus.value = await syncTownshipOutbox(carrierPeer.value ? { peer: carrierPeer.value } : {});
+  if (syncStatus.value.ok) actionAvailability.value = await loadTownshipActionAvailability();
   syncSubmitting.value = false;
 }
 

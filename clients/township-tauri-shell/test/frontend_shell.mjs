@@ -350,11 +350,16 @@ test("frontend package exposes the real app convergence gate", () => {
   const pkg = readJson("package.json");
   const launchSmoke = readText("test/tauri_launch_smoke.ts");
   const onboardingSmoke = readText("test/tauri_packaged_onboarding_smoke.ts");
+  const clickThrough = readText("../../tests/e2e/township_onboarding_click_through.spec.ts");
 
   assert.equal(pkg.scripts["tauri:onboarding:smoke"], "tsx test/tauri_packaged_onboarding_smoke.ts");
   assert.equal(
+    pkg.scripts["onboarding:click-through"],
+    "VITE_TOWNSHIP_DEV_TRACE= VITE_TOWNSHIP_AUTOSYNC_ON_MOUNT= npm run build && cd ../.. && npx --no-install playwright test tests/e2e/township_onboarding_click_through.spec.ts --config playwright.config.mjs",
+  );
+  assert.equal(
     pkg.scripts["app:convergence"],
-    "npm run action:contract && npm run sync:contract && npm run onboarding:contract && npm run live:contract && npm run tauri:launch:smoke && npm run tauri:onboarding:smoke && npm run tauri:deep-link:smoke",
+    "npm run action:contract && npm run sync:contract && npm run onboarding:contract && npm run onboarding:click-through && npm run live:contract && npm run tauri:launch:smoke && npm run tauri:onboarding:smoke && npm run tauri:deep-link:smoke",
   );
   assert.match(launchSmoke, /"tauri", \["build", "--features", "township-dev-trace", "--bundles", "app"\]/);
   assert.match(launchSmoke, /VITE_TOWNSHIP_AUTOSYNC_ON_MOUNT: "1"/);
@@ -367,6 +372,11 @@ test("frontend package exposes the real app convergence gate", () => {
   assert.match(onboardingSmoke, /township-onboarding-drained/);
   assert.match(onboardingSmoke, /connectCarrierWebSocket/);
   assert.match(onboardingSmoke, /assertTownshipKvStoresNoSecrets/);
+  assert.match(clickThrough, /TownshipOnboardingScenario/);
+  assert.match(clickThrough, /__TAURI_INTERNALS__/);
+  assert.match(clickThrough, /toContainText\("No local cap"\)/);
+  assert.match(clickThrough, /toContainText\("Available"\)/);
+  assert.match(clickThrough, /report\.state\.posts\.includes\(postText\)/);
 });
 
 test("Vue source exposes a carrier sync outbox action", () => {

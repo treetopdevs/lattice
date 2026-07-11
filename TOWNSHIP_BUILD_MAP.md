@@ -298,6 +298,8 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   onboarding, Android release APK build readiness, Android release APK canonical/wire fidelity,
   Android release loopback-scoped transport, Android release BEAM carrier handshake/status/state-report proof,
   Android release APK pull-and-reload persistence, Android release APK device authoring/push/outbox drain, Android release APK OS deep-link pairing ingress/persisted peer config, the real Tauri app imported-pairing confirmation policy, installed unarmed OS deep-link blocking, the source-level state-bound armed one-shot import gate, packaged macOS real-app armed OS delivery in a hydration-settled dev-trace release-mode smoke build, the packaged link-load no-side-effect trace guard, warm macOS LaunchServices scheme resolution, packaged macOS cold-start URL delivery, the dev-trace release hydration/control-link repair, Android release app-originated post-only attenuated grant proof, Android release armed OS pairing delivery with a fixed probe-only state, the named Android release convergence gate, Android release cold-start pairing delivery, single-APK Android release pairing-to-post convergence, Android release browser-backed pairing delivery, Android release browser-backed onboarding convergence, Android release browser-backed onboarding child-grant composition, Android release browser-backed pairing runtime state exchange, Android release browser-backed onboarding runtime state exchange, Android release browser-backed onboarding child-grant runtime state exchange, the named Android release browser/onboarding regression gate, Android release chooser-eligible onboarding state exchange, Android release visible chooser onboarding selection, desktop Tauri default-namespace onboarding convergence through `onboarding:contract`, packaged macOS app-runtime onboarding convergence through `tauri:onboarding:smoke`, bounded shared TS/live-BEAM authority origination, and Android release root/authority origination are covered by plans 023-119.
+  Plan 120 extends that covered set through plans 023-120 with browser-rendered onboarding-control
+  convergence against a live BEAM peer while retaining the packaged-GUI non-claim.
   Full mobile onboarding remains unproven beyond pull-based cap acquisition, and iOS cold-start URL delivery, cross-device pairing state exchange, QR camera onboarding, LAN discovery, and physical-device behavior remain unproven after the release OS deep-link pairing + device-local authoring + attenuated-grant + armed-delivery + Android cold-start + single-APK pairing-to-post + browser-backed delivery + browser-backed onboarding + browser-backed onboarding child-grant + browser-backed runtime state-exchange + chooser-eligible onboarding state-exchange + visible chooser selection proofs plus the shared TS/live-BEAM authority-origination and Android release root-origination proofs. The iOS archive path is
   locally blocked by the selected Xcode 27 beta Tauri Swift-package failure.
 
@@ -571,6 +573,13 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   default outbox, and matches peer state while an isolated native KV file contains no resident seed
   material. This does not prove human click-through, mobile, cross-device, QR/LAN, physical-device,
   or production TLS behavior.
+  Plan 120 adds browser-rendered Tauri onboarding control convergence through
+  `onboarding:click-through`: the ordinary built Vue bundle runs in Chromium with mocked native IPC,
+  requires explicit imported-pairing confirmation, pulls the resident cap from a live BEAM peer,
+  refreshes the visible Post availability, authors and pushes a post through the rendered controls,
+  drains the default outbox, and matches peer state with empty authority quarantine. Paired with Plan
+  119, this proves real controls and real carrier convergence without claiming packaged WKWebView,
+  real Rust signer, human click-through, or mobile behavior.
   Plan 115 adds bounded authority origination at the shared TS/live-BEAM seam:
   `authorTownshipGenesis` emits the BEAM W1 root-bound genesis frame byte-for-byte,
   and the live BEAM peer structurally accepts but authority-quarantines a forged
@@ -598,7 +607,7 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   injected-carrier sync outbox action, WebSocket carrier peer config/session wiring, runtime persisted carrier pairing config, one-shot carrier connection-health UI, live BEAM
   peer sync through the configured shell workflow, smoke-only live Tauri window launch against a
   configured BEAM peer, Tauri grant-access ceremony, Tauri pending-sync revoke-access ceremony,
-  mobile secure-store strategy contract, cold-start replay guard, named desktop `app:convergence` gate with default-namespace onboarding plus packaged macOS app-runtime onboarding against a live BEAM peer, concrete seed-byte app-KV checks,
+  mobile secure-store strategy contract, cold-start replay guard, named desktop `app:convergence` gate with default-namespace onboarding plus packaged macOS app-runtime onboarding and browser-rendered onboarding-control convergence against live BEAM peers, concrete seed-byte app-KV checks,
   typed reported-grant-quarantine surfacing, carrier-accepted revoke-frame acknowledgement,
   authority revoked-capability quarantine surfacing with known-frame delegation attribution,
   copy-paste/deep-link-safe carrier pairing handoff import/export with peer fingerprint surfacing,

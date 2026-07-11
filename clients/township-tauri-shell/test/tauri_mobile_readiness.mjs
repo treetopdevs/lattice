@@ -147,6 +147,7 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   const plan117 = readText("plans/117-tauri-android-release-visible-chooser-onboarding-e1.md");
   const plan118 = readText("plans/118-desktop-onboarding-convergence-e1.md");
   const plan119 = readText("plans/119-tauri-packaged-onboarding-convergence-e1.md");
+  const plan120 = readText("plans/120-tauri-browser-onboarding-click-through-e1.md");
   const releaseTransportAdr = readText("docs/adr/0010-android-release-carrier-transport-policy.md");
 
   assert.equal(pkg.scripts["tauri:ios:init"], "tauri ios init --ci --skip-targets-install");
@@ -204,8 +205,12 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.equal(pkg.scripts["onboarding:contract"], "tsx test/township_onboarding.ts");
   assert.equal(pkg.scripts["tauri:onboarding:smoke"], "tsx test/tauri_packaged_onboarding_smoke.ts");
   assert.equal(
+    pkg.scripts["onboarding:click-through"],
+    "VITE_TOWNSHIP_DEV_TRACE= VITE_TOWNSHIP_AUTOSYNC_ON_MOUNT= npm run build && cd ../.. && npx --no-install playwright test tests/e2e/township_onboarding_click_through.spec.ts --config playwright.config.mjs",
+  );
+  assert.equal(
     pkg.scripts["app:convergence"],
-    "npm run action:contract && npm run sync:contract && npm run onboarding:contract && npm run live:contract && npm run tauri:launch:smoke && npm run tauri:onboarding:smoke && npm run tauri:deep-link:smoke",
+    "npm run action:contract && npm run sync:contract && npm run onboarding:contract && npm run onboarding:click-through && npm run live:contract && npm run tauri:launch:smoke && npm run tauri:onboarding:smoke && npm run tauri:deep-link:smoke",
   );
   assert.equal(
     pkg.scripts["tauri:android:release:onboarding:smoke"],
@@ -1514,7 +1519,10 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(buildMap, /Plan 119 adds packaged macOS app-runtime onboarding convergence/);
   assert.match(buildMap, /tauri:onboarding:smoke/);
   assert.match(buildMap, /does not prove human click-through/);
-  assert.match(buildMap, /plans 023-119/);
+  assert.match(buildMap, /Plan 120 adds browser-rendered Tauri onboarding control convergence/);
+  assert.match(buildMap, /onboarding:click-through/);
+  assert.match(buildMap, /Chromium with mocked native IPC/);
+  assert.match(buildMap, /plans 023-120/);
   assert.match(
     buildMap,
     /Android release APK pull-and-reload persistence provides a release pull \+ KV reload proof[\s\S]*Android release APK device-local post authoring \+ push\/outbox-drain proof exists under a host-minted bootstrap grant with pre-push pending-outbox cold reload[\s\S]*Android release APK app-originated post-only attenuated grant proof exists[\s\S]*Android release APK OS deep-link pairing ingress \+ persisted peer-config proof exists in a dedicated probe namespace[\s\S]*Android release APK armed OS pairing delivery with fixed probe-only state exists in the same pairing probe[\s\S]*Android release cold-start pairing delivery exists in the same pairing probe[\s\S]*single-APK Android release pairing-to-post convergence proof exists[\s\S]*Android release browser-backed pairing delivery proof exists[\s\S]*Android release browser-backed onboarding convergence proof exists[\s\S]*Android release browser-backed onboarding child-grant composition proof exists[\s\S]*Android release browser-backed runtime state exchange proof exists[\s\S]*Android release browser-backed onboarding runtime state exchange proof exists[\s\S]*Android release browser-backed onboarding child-grant runtime state exchange proof exists[\s\S]*named Android release browser\/onboarding regression gate rebuilds and runs those browser-backed release proofs back-to-back[\s\S]*Android release chooser-eligible onboarding state exchange proof exists[\s\S]*Android release visible chooser onboarding selection proof exists[\s\S]*bounded TS\/live-BEAM authority origination proof exists[\s\S]*Android release root\/authority origination proof exists/,
@@ -1792,6 +1800,16 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(plan119, /does not prove human click-through/);
   assert.match(plan119, /does not prove full mobile onboarding/);
   assert.match(plansIndex, /\| 119 \| Tauri packaged onboarding convergence \| P1 \| M \| 118 \| DONE \|/);
+  assert.match(plan120, /## Status\s+DONE/);
+  assert.match(plan120, /Tauri browser onboarding click-through/);
+  assert.match(plan120, /onboarding:click-through/);
+  assert.match(plan120, /Post \/ No local cap/);
+  assert.match(plan120, /Post action to `Available`/);
+  assert.match(plan120, /real BEAM carrier/);
+  assert.match(plan120, /does not prove packaged WKWebView/);
+  assert.match(plan120, /does not use the real Rust signer/);
+  assert.match(plan120, /does not prove human click-through/);
+  assert.match(plansIndex, /\| 120 \| Tauri browser onboarding click-through \| P1 \| M \| 119 \| DONE \|/);
   assert.match(plan093, /## Status\s+(?:IN PROGRESS|DONE)/);
   assert.match(plan093, /Android release deep-link pairing ingress/);
   assert.match(plan093, /township:\/\/pairing/);
