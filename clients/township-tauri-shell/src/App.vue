@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { useTownshipSession } from "./township_session";
 
+const { view, command, pairing, connection } = useTownshipSession();
+
+const { matter, nativeStatus, actionAvailability, availableActions } = view;
+
 const {
-  matter,
-  carrierPeer,
-  nativeStatus,
-  actionAvailability,
   summaryDraft,
   summarySubmitting,
   statusSubmitting,
@@ -17,6 +17,29 @@ const {
   revokeSubmitting,
   postDraft,
   postSubmitting,
+  postStatusMessage,
+  postStatusTone,
+  summaryStatusMessage,
+  summaryStatusTone,
+  statusStatusMessage,
+  statusStatusTone,
+  memberStatusMessage,
+  memberStatusTone,
+  grantStatusMessage,
+  grantStatusTone,
+  revokeStatusMessage,
+  revokeStatusTone,
+  submitPost,
+  submitSummary,
+  submitMatterStatus,
+  statusActionAllowed,
+  submitMemberCommand,
+  memberActionAllowed,
+  submitGrant,
+  submitRevoke,
+} = command;
+
+const {
   pairingDraft,
   pairingSaveConfirmed,
   pairingDeepLinkImportArmed,
@@ -34,22 +57,6 @@ const {
   pairingDiscoveryCandidate,
   pairingAdvertiseStatus,
   pairingAdvertiseSubmitting,
-  healthSubmitting,
-  syncSubmitting,
-  postStatusMessage,
-  postStatusTone,
-  summaryStatusMessage,
-  summaryStatusTone,
-  statusStatusMessage,
-  statusStatusTone,
-  memberStatusMessage,
-  memberStatusTone,
-  grantStatusMessage,
-  grantStatusTone,
-  revokeStatusMessage,
-  revokeStatusTone,
-  syncStatusMessage,
-  syncStatusTone,
   pairingStatusMessage,
   pairingStatusTone,
   pairingSaveConfirmationRequired,
@@ -59,18 +66,6 @@ const {
   pairingCameraStatusTone,
   pairingDiscoveryStatusTone,
   pairingAdvertiseStatusTone,
-  healthStatusMessage,
-  healthStatusTone,
-  availableActions,
-  submitPost,
-  submitSummary,
-  submitMatterStatus,
-  statusActionAllowed,
-  submitMemberCommand,
-  memberActionAllowed,
-  submitGrant,
-  submitRevoke,
-  syncOutbox,
   submitPairing,
   clearPairingSaveConfirmation,
   exportPairingHandoff,
@@ -84,8 +79,19 @@ const {
   stopPairingDiscovery,
   loadDiscoveredPairing,
   advertisePairingHandoff,
+} = pairing;
+
+const {
+  carrierPeer,
+  healthSubmitting,
+  syncSubmitting,
+  syncStatusMessage,
+  syncStatusTone,
+  healthStatusMessage,
+  healthStatusTone,
+  syncOutbox,
   checkCarrierHealth,
-} = useTownshipSession();
+} = connection;
 </script>
 
 <template>

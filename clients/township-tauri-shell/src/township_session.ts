@@ -106,6 +106,11 @@ import { syncTownshipOutbox, type TownshipOutboxSync } from "./township_sync";
 
 export interface TownshipSessionAdapters {
   initialCarrierPeer(): TownshipCarrierPeerConfig | null;
+  runtimeIsTauri(): boolean;
+  scheduleHydration(callback: () => Promise<void>, delayMs: number): () => void;
+  createPairingDeepLinkSource: typeof createTauriPairingDeepLinkSource;
+  createPairingDeepLinkListener: typeof createTownshipPairingDeepLinkListener;
+  createCanonicalProbeDeepLinkListener: typeof createTownshipCanonicalProbeDeepLinkListener;
   createNativeStorage: typeof createTownshipNativeStorage;
   loadNativeStatus: typeof loadTownshipNativeStatus;
   loadActionAvailability: typeof loadTownshipActionAvailability;
@@ -121,6 +126,14 @@ export interface TownshipSessionAdapters {
 
 export const defaultTownshipSessionAdapters: TownshipSessionAdapters = {
   initialCarrierPeer: () => townshipCarrierPeerFromEnv(),
+  runtimeIsTauri: () => isTauri(),
+  scheduleHydration: (callback, delayMs) => {
+    const timer = window.setTimeout(() => void callback(), delayMs);
+    return () => window.clearTimeout(timer);
+  },
+  createPairingDeepLinkSource: createTauriPairingDeepLinkSource,
+  createPairingDeepLinkListener: createTownshipPairingDeepLinkListener,
+  createCanonicalProbeDeepLinkListener: createTownshipCanonicalProbeDeepLinkListener,
   createNativeStorage: () => createTownshipNativeStorage(),
   loadNativeStatus: () => loadTownshipNativeStatus(),
   loadActionAvailability: () => loadTownshipActionAvailability(),
@@ -138,13 +151,18 @@ export function useTownshipSession(overrides: Partial<TownshipSessionAdapters> =
   const session = createTownshipSession(overrides);
 
   onMounted(async () => {
-    await session.mount();
+    await session.lifecycle.mount();
   });
   onUnmounted(() => {
-    session.unmount();
+    session.lifecycle.unmount();
   });
 
-  return session;
+  return {
+    view: session.view,
+    command: session.command,
+    pairing: session.pairing,
+    connection: session.connection,
+  };
 }
 
 export function createTownshipSession(overrides: Partial<TownshipSessionAdapters> = {}) {
@@ -229,6 +247,7 @@ export function createTownshipSession(overrides: Partial<TownshipSessionAdapters
   const pairingAdvertiseSubmitting = ref(false);
   let pairingDeepLinkListener: TownshipPairingDeepLinkListener | null = null;
   let canonicalProbeDeepLinkListener: TownshipCanonicalProbeDeepLinkListener | null = null;
+  let cancelNativeHydration: (() => void) | null = null;
   let pairingCameraScanner: TownshipPairingQrCameraScanner | null = null;
   let pairingDiscovery: TownshipPairingDiscovery | null = null;
   let devTraceShortcutMounted = false;
@@ -458,6 +477,8 @@ export function createTownshipSession(overrides: Partial<TownshipSessionAdapters
 
   function unmount() {
     appUnmounted = true;
+    cancelNativeHydration?.();
+    cancelNativeHydration = null;
     if (devTraceShortcutMounted) window.removeEventListener("keydown", handleDevTraceShortcut);
     devTraceShortcutMounted = false;
     canonicalProbeDeepLinkListener?.stop();
@@ -552,8 +573,10 @@ export function createTownshipSession(overrides: Partial<TownshipSessionAdapters
   }
 
   function scheduleTownshipNativeHydration() {
-    window.setTimeout(() => {
-      void hydrateTownshipNativeReadiness();
+    cancelNativeHydration?.();
+    cancelNativeHydration = adapters.scheduleHydration(async () => {
+      cancelNativeHydration = null;
+      if (!appUnmounted) await hydrateTownshipNativeReadiness();
     }, 1_000);
   }
 
@@ -637,8 +660,8 @@ export function createTownshipSession(overrides: Partial<TownshipSessionAdapters
     if (pairingDeepLinkListener !== null) return;
 
     try {
-      pairingDeepLinkListener = await createTownshipPairingDeepLinkListener({
-        source: createTracingPairingDeepLinkSource(createTauriPairingDeepLinkSource()),
+      pairingDeepLinkListener = await adapters.createPairingDeepLinkListener({
+        source: createTracingPairingDeepLinkSource(adapters.createPairingDeepLinkSource()),
         gate: {
           arm: () => {
             const state = pairingDeepLinkGate.arm();
@@ -664,8 +687,8 @@ export function createTownshipSession(overrides: Partial<TownshipSessionAdapters
     if (canonicalProbeDeepLinkListener !== null) return;
 
     try {
-      canonicalProbeDeepLinkListener = await createTownshipCanonicalProbeDeepLinkListener({
-        source: createTauriPairingDeepLinkSource({ includeAndroidPairingIntent: false }),
+      canonicalProbeDeepLinkListener = await adapters.createCanonicalProbeDeepLinkListener({
+        source: adapters.createPairingDeepLinkSource({ includeAndroidPairingIntent: false }),
       });
     } catch {
       canonicalProbeDeepLinkListener = null;
@@ -759,7 +782,7 @@ export function createTownshipSession(overrides: Partial<TownshipSessionAdapters
   }
 
   function isAndroidTauriShell(): boolean {
-    return isTauri() && /Android/i.test(navigator.userAgent);
+    return adapters.runtimeIsTauri() && /Android/i.test(navigator.userAgent);
   }
 
   async function pairingDeepLinkUrls(urls: readonly string[] | null): Promise<readonly string[]> {
@@ -1024,7 +1047,7 @@ export function createTownshipSession(overrides: Partial<TownshipSessionAdapters
   }
 
   function tauriNativeRuntimeAvailable(): boolean {
-    return nativeStatus.value.ready || isTauri();
+    return nativeStatus.value.ready || adapters.runtimeIsTauri();
   }
 
   function revokeFrameCount(count: number): string {
@@ -1231,94 +1254,104 @@ export function createTownshipSession(overrides: Partial<TownshipSessionAdapters
   }
 
   return {
-    matter,
-    carrierPeer,
-    nativeStatus,
-    actionAvailability,
-    summaryDraft,
-    summarySubmitting,
-    statusSubmitting,
-    memberDraft,
-    memberSubmitting,
-    grantAudienceDraft,
-    grantSubmitting,
-    revokeDelegationDraft,
-    revokeSubmitting,
-    postDraft,
-    postSubmitting,
-    pairingDraft,
-    pairingSaveConfirmed,
-    pairingDeepLinkImportArmed,
-    pairingDeepLinkImportState,
-    pairingSubmitting,
-    pairingHandoffDraft,
-    pairingHandoffFingerprint,
-    pairingQrSvg,
-    pairingQrImageStatus,
-    pairingQrImporting,
-    pairingCameraStatus,
-    pairingCameraScanning,
-    pairingDiscoveryStatus,
-    pairingDiscoveryRunning,
-    pairingDiscoveryCandidate,
-    pairingAdvertiseStatus,
-    pairingAdvertiseSubmitting,
-    healthSubmitting,
-    syncSubmitting,
-    postStatusMessage,
-    postStatusTone,
-    summaryStatusMessage,
-    summaryStatusTone,
-    statusStatusMessage,
-    statusStatusTone,
-    memberStatusMessage,
-    memberStatusTone,
-    grantStatusMessage,
-    grantStatusTone,
-    revokeStatusMessage,
-    revokeStatusTone,
-    syncStatusMessage,
-    syncStatusTone,
-    pairingStatusMessage,
-    pairingStatusTone,
-    pairingSaveConfirmationRequired,
-    pairingSaveConfirmationLabel,
-    pairingSaveConfirmationDetail,
-    pairingQrImageStatusTone,
-    pairingCameraStatusTone,
-    pairingDiscoveryStatusTone,
-    pairingAdvertiseStatusTone,
-    healthStatusMessage,
-    healthStatusTone,
-    availableActions,
-    submitPost,
-    submitSummary,
-    submitMatterStatus,
-    statusActionAllowed,
-    submitMemberCommand,
-    memberActionAllowed,
-    submitGrant,
-    submitRevoke,
-    syncOutbox,
-    submitPairing,
-    clearPairingSaveConfirmation,
-    exportPairingHandoff,
-    importPairingHandoff,
-    armPairingDeepLinkImport,
-    disarmPairingDeepLinkImport,
-    importPairingQrImage,
-    startPairingQrCamera,
-    stopPairingQrCamera,
-    startPairingDiscovery,
-    stopPairingDiscovery,
-    loadDiscoveredPairing,
-    advertisePairingHandoff,
-    checkCarrierHealth,
-    mount,
-    unmount,
-    loadPairingConfig,
-    hydrateTownshipNativeReadiness,
-    syncStatus,
-    healthStatus,
+    view: {
+      matter,
+      nativeStatus,
+      actionAvailability,
+      availableActions,
+    },
+    command: {
+      summaryDraft,
+      summarySubmitting,
+      statusSubmitting,
+      memberDraft,
+      memberSubmitting,
+      grantAudienceDraft,
+      grantSubmitting,
+      revokeDelegationDraft,
+      revokeSubmitting,
+      postDraft,
+      postSubmitting,
+      postStatusMessage,
+      postStatusTone,
+      summaryStatusMessage,
+      summaryStatusTone,
+      statusStatusMessage,
+      statusStatusTone,
+      memberStatusMessage,
+      memberStatusTone,
+      grantStatusMessage,
+      grantStatusTone,
+      revokeStatusMessage,
+      revokeStatusTone,
+      submitPost,
+      submitSummary,
+      submitMatterStatus,
+      statusActionAllowed,
+      submitMemberCommand,
+      memberActionAllowed,
+      submitGrant,
+      submitRevoke,
+    },
+    pairing: {
+      pairingDraft,
+      pairingSaveConfirmed,
+      pairingDeepLinkImportArmed,
+      pairingDeepLinkImportState,
+      pairingSubmitting,
+      pairingHandoffDraft,
+      pairingHandoffFingerprint,
+      pairingQrSvg,
+      pairingQrImageStatus,
+      pairingQrImporting,
+      pairingCameraStatus,
+      pairingCameraScanning,
+      pairingDiscoveryStatus,
+      pairingDiscoveryRunning,
+      pairingDiscoveryCandidate,
+      pairingAdvertiseStatus,
+      pairingAdvertiseSubmitting,
+      pairingStatusMessage,
+      pairingStatusTone,
+      pairingSaveConfirmationRequired,
+      pairingSaveConfirmationLabel,
+      pairingSaveConfirmationDetail,
+      pairingQrImageStatusTone,
+      pairingCameraStatusTone,
+      pairingDiscoveryStatusTone,
+      pairingAdvertiseStatusTone,
+      submitPairing,
+      clearPairingSaveConfirmation,
+      exportPairingHandoff,
+      importPairingHandoff,
+      armPairingDeepLinkImport,
+      disarmPairingDeepLinkImport,
+      importPairingQrImage,
+      startPairingQrCamera,
+      stopPairingQrCamera,
+      startPairingDiscovery,
+      stopPairingDiscovery,
+      loadDiscoveredPairing,
+      advertisePairingHandoff,
+    },
+    connection: {
+      carrierPeer,
+      healthSubmitting,
+      syncSubmitting,
+      syncStatusMessage,
+      syncStatusTone,
+      healthStatusMessage,
+      healthStatusTone,
+      syncOutbox,
+      checkCarrierHealth,
+      syncStatus,
+      healthStatus,
+    },
+    lifecycle: {
+      mount,
+      unmount,
+      loadPairingConfig,
+      hydrateTownshipNativeReadiness,
+    },
   };
 }

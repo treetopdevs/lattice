@@ -168,6 +168,8 @@ test("Vue shell delegates workflow orchestration to the Township session", () =>
   assert.match(session, /interface TownshipSessionAdapters/);
   assert.match(session, /adapters\.loadPairing/);
   assert.match(session, /adapters\.syncOutbox/);
+  assert.match(session, /view,[\s\S]*command,[\s\S]*pairing,[\s\S]*connection,[\s\S]*lifecycle/);
+  assert.match(app, /const \{ view, command, pairing, connection \} = useTownshipSession\(\)/);
   assert.match(session, /adapters\.checkHealth/);
 });
 
@@ -517,7 +519,7 @@ test("Vue source exposes pairing handoff import without device-local identity tr
   assert.match(app, /parseTownshipPairingDeepLink/);
   assert.match(app, /createTownshipPairingDeepLinkListener/);
   assert.match(app, /createTauriPairingDeepLinkSource/);
-  assert.match(app, /createTauriPairingDeepLinkSource\(\{ includeAndroidPairingIntent: false \}\)/);
+  assert.match(app, /adapters\.createPairingDeepLinkSource\(\{ includeAndroidPairingIntent: false \}\)/);
   assert.match(app, /tauriDeepLinkRuntimeAvailable/);
   assert.match(app, /pairingDeepLinkListener/);
   assert.match(app, /pairingDeepLinkGate = createOneShotTownshipPairingDeepLinkGate\(\)/);
@@ -598,7 +600,8 @@ test("Vue source does not block pairing deep-link readiness on native keychain p
     "expected native readiness to be hydrated by a deferred helper",
   );
   assert.match(app, /nativeStatus\.value = await adapters\.loadNativeStatus\(\)/);
-  assert.match(app, /window\.setTimeout\(\(\) => \{[\s\S]*void hydrateTownshipNativeReadiness\(\);[\s\S]*\}/);
+  assert.match(app, /cancelNativeHydration = adapters\.scheduleHydration/);
+  assert.match(app, /if \(!appUnmounted\) await hydrateTownshipNativeReadiness\(\)/);
 });
 
 test("Vue source renders pairing handoff QR without trust claims", () => {
