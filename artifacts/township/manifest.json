@@ -1,0 +1,37 @@
+{
+  "artifacts": [
+    {
+      "file": "matter.log",
+      "kind": "authoritative_log"
+    },
+    {
+      "file": "state.json",
+      "kind": "materialized_state"
+    },
+    {
+      "file": "audit.json",
+      "kind": "authority_verdict"
+    },
+    {
+      "file": "op_dag.json",
+      "kind": "causal_op_dag"
+    },
+    {
+      "file": "trust_graph.dot",
+      "kind": "delegation_graph_dot"
+    },
+    {
+      "file": "trust_graph.mermaid",
+      "kind": "delegation_graph_mermaid"
+    },
+    {
+      "file": "manifest.json",
+      "kind": "display_manifest"
+    }
+  ],
+  "labels": {
+    "r9qi1OBHt24b": "clerk",
+    "xI19LiI0w767": "resident"
+  },
+  "schema": "township-audit-bundle-v1"
+}

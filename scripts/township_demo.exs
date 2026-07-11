@@ -19,7 +19,7 @@ unless Code.ensure_loaded?(Lattice.Sim) do
 end
 
 alias Lattice.{Attestation, Identity, Log, Sim}
-alias Township.Matter
+alias Township.{AuditBundle, Matter}
 
 replica = "replica:matter:zoning-variance-24"
 
@@ -168,93 +168,28 @@ T.say("current: summary=#{inspect(Sim.state(sim, "clerk").summary)}")
 
 # --------------------------------------------------------------- artifacts (G5)
 T.h("Artifacts — a replayable bundle an outside auditor can verify")
-artifacts_dir = Path.expand("../artifacts/township", __DIR__)
+
+artifacts_dir =
+  case System.get_env("TOWNSHIP_ARTIFACTS_DIR") do
+    path when is_binary(path) and path != "" -> Path.expand(path)
+    _unset -> Path.expand("../artifacts/township", __DIR__)
+  end
+
 File.mkdir_p!(artifacts_dir)
 final_log = Sim.log(sim, "resident")
 
-# matter.log — the op-log IS the replay artifact: an outsider needs nothing but
-# this file and the public Township.Matter module to re-materialize the matter.
-# The preload matters: restore/1 decodes with binary_to_term(:safe), which
-# rejects atoms not already interned, so the substrate's modules must be loaded
-# before the dump is read (a fresh `mix run -e` loads modules lazily).
-log_path = Path.join(artifacts_dir, "matter.log")
-:ok = Log.dump(final_log, log_path)
-T.say("wrote #{log_path}")
-
-T.say(
-  ~s|replay: mix run -e 'Application.spec(:lattice_core, :modules) \|> Enum.each(&Code.ensure_loaded/1); | <>
-    ~s|{:ok, log} = Lattice.Log.restore("artifacts/township/matter.log"); IO.inspect(Lattice.state(Township.Matter, log))'|
-)
-
-# audit.json — the deterministic authority verdict (quarantine, reasons, role
-# holders, audit trail) any realm recomputes identically from the same log.
-# MapSets and raw pubkeys are not JSON; sort the former, fingerprint the latter.
-analysis = Sim.authority(sim, "resident")
-
-audit_doc = %{
-  quarantine: Enum.sort(analysis.quarantine),
-  reasons: analysis.reasons,
-  holders: Map.new(analysis.holders, fn {role, pub} -> {role, pub && T.fp(pub)} end),
-  audit: analysis.audit
-}
-
-audit_path = Path.join(artifacts_dir, "audit.json")
-File.write!(audit_path, Jason.encode!(audit_doc, pretty: true) <> "\n")
-T.say("wrote #{audit_path}")
-
-# trust_graph.{dot,mermaid} — the delegation graph, straight from the log's
-# authority ops. Lattice.Graph.Export is a pure exporter over a
-# %{nodes:, edges:} snapshot, so we reuse it as-is by building that snapshot
-# from the log rather than from the live Lattice.Graph process (which tracks
-# V1 realm/tab processes; re-point this at the live graph when the M2 carrier
-# lands and the realms are real processes again).
-realm_names = Map.new(["clerk", "resident"], fn r -> {Sim.identity(sim, r).pub, r} end)
-
-deleg_events =
-  final_log
-  |> Log.topo_ops()
-  |> Enum.filter(&(&1.kind == :authority))
-  |> Enum.flat_map(fn op ->
-    case op.body do
-      {:genesis, d, _policies} -> [{"genesis", d}]
-      {:grant, d} -> [{"grant", d}]
-      {:transfer, role, d, _tick} -> [{"transfer:#{role}", d}]
-      {:succeed, role, d, _tick} -> [{"succeed:#{role}", d}]
-      _ -> []
-    end
+labels =
+  Map.new(["clerk", "resident"], fn realm ->
+    {sim |> Sim.identity(realm) |> Map.fetch!(:pub) |> Identity.fingerprint(), realm}
   end)
 
-edge_kind = fn kind, d ->
-  roles =
-    if MapSet.size(d.roles) > 0 do
-      " roles=[#{Enum.join(Enum.sort(d.roles), ",")}]"
-    else
-      ""
-    end
+{:ok, _manifest} = AuditBundle.write(artifacts_dir, final_log, labels: labels)
 
-  "#{kind}#{roles} ops=[#{Enum.join(Enum.sort(d.ops), ",")}]"
+for file <- AuditBundle.files() do
+  T.say("wrote #{Path.join(artifacts_dir, file)}")
 end
 
-snapshot = %{
-  nodes:
-    deleg_events
-    |> Enum.flat_map(fn {_kind, d} -> [d.issuer, d.audience] end)
-    |> Enum.uniq()
-    |> Enum.map(fn pub ->
-      label = if name = realm_names[pub], do: "#{name} #{T.fp(pub)}", else: T.fp(pub)
-      %{id: T.fp(pub), kind: "realm", label: label}
-    end),
-  edges:
-    Enum.map(deleg_events, fn {kind, d} ->
-      %{from: T.fp(d.issuer), to: T.fp(d.audience), kind: edge_kind.(kind, d)}
-    end)
-}
-
-for {ext, format} <- [{"dot", :dot}, {"mermaid", :mermaid}] do
-  graph_path = Path.join(artifacts_dir, "trust_graph.#{ext}")
-  File.write!(graph_path, Lattice.Graph.Export.export(snapshot, format) <> "\n")
-  T.say("wrote #{graph_path}")
-end
+T.say("verify: mix lattice.township.verify_bundle --dir #{artifacts_dir}")
 
 IO.puts(
   "\n\e[1m\e[32mTownship POC demo complete — the log was the truth; the coercer got nothing (stubbed).\e[0m"

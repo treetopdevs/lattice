@@ -140,6 +140,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 118 | Tauri desktop onboarding convergence | P1 | M | 054, 056 | DONE |
 | 119 | Tauri packaged onboarding convergence | P1 | M | 118 | DONE |
 | 120 | Tauri browser onboarding click-through | P1 | M | 119 | DONE |
+| 121 | Township outsider-replay audit bundle | P1 | M | 012, 017 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

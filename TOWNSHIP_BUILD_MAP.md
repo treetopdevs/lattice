@@ -44,11 +44,12 @@ roadmap live in the program doc below.
 
 | Path | What it is | Status |
 |---|---|---|
-| `apps/lattice_core/lib/township/matter.ex` | `Township.Matter` — the civic Replica (LWW title/summary, causal-list posts, OR-set members, authority-gated `clerk_locked?`). Built only from primitives that exist today. | **Real**, parses; needs `mix compile` against branch. |
+| `apps/lattice_core/lib/township/matter.ex` | `Township.Matter` — the civic Replica (LWW title/summary, causal-list posts, OR-set members, authority-gated `clerk_locked?`). Built only from primitives that exist today. | **Real and compiled**; W0–W4 workflow and property suites pass against the branch. |
 | `apps/lattice_core/lib/lattice/attestation.ex` | `Lattice.Attestation` behaviour + `Stub` + `M4Placeholder`. **The seam** that lets W4 be honest. | Stub **proven-plumbing**; receipt-freeness **stubbed** (M4). |
 | `apps/lattice_core/test/support/attestation_contract.ex` | The contract suite the Stub AND the future M4 primitive must both pass. `flunk`s if a module claims `receipt_free?` without proving it. | **Real guardrail.** |
-| `apps/lattice_core/test/township/workflows_test.exs` | W0–W4 as falsifiable ExUnit tests driving `Sim`, each with its ASSERT line. | **Real**; run against branch — see §4 caveat on quarantine-shape assertions. |
-| `scripts/township_demo.exs` | Narrated end-to-end demo (the §5 storyline) over `Sim`. | **Real**; syntax-checked, not yet run against branch. |
+| `apps/lattice_core/test/township/workflows_test.exs` | W0–W4 as falsifiable ExUnit tests driving `Sim`, each with its ASSERT line. | **Real and green** against the branch; quarantine-shape inferences were reconciled. |
+| `scripts/township_demo.exs` | Narrated end-to-end demo (the §5 storyline) over `Sim`. | **Real and replay-gated**; emits the seven-file Plan 121 audit bundle and names its fresh-process verifier. |
+| `apps/lattice_core/lib/township/audit_bundle.ex` | Log-rooted state, authority, causal op-DAG, and delegation-graph projection for the outsider evidence surface. | **Real**; clean bundles verify in a fresh process, authoritative and display-only corruption fail, and `matter.log` is byte-stable across VMs. |
 | `CLAUDE.md` (in the zip; also `CLAUDE.md` standalone) | Agent working notes for the overlay: acceptance criteria, real API signatures, the "do-not-implement" boundary, the parallel-tracks pointer. | **Start here for the app track.** |
 
 ### 1.3 The substrate track — plans (drop into `plans/`)
@@ -143,8 +144,9 @@ Two hard blockers gate the endgame: **CBOR/ADR-P08** (everything non-BEAM) and *
    conformance. The randomized corpus already caught and fixed the TS OR-set observed-remove
    drift. The corpus also includes `township_carrier_w1`, which carries full BEAM carrier
    frames for the first C3 adapter check.
-4. **`township_demo.exs` and the overlay are syntax-/parse-checked, not compiled** against the
-   branch. Expect minor reconciliation on first `mix compile`.
+4. **`township_demo.exs` and the overlay now run against the branch.** Plan 121 makes the
+   resulting state, authority verdict, op-DAG, and trust graph independently replayable through
+   `mix lattice.township.verify_bundle`; the five-panel production instrument remains separate.
 5. **G1 (physical BEAM carrier) is now reachable outside `Sim`** — plan 017 runs W0–W3
    across two BEAM OS processes over the real WebSocket carrier, with `Sim` as oracle.
    TS can now verify `lattice-cbor-v1` carrier-frame op hashes/signatures for W1, compose
@@ -246,6 +248,9 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   `Township.Matter`. *Asset:* overlay `CLAUDE.md`.
 - **A3.** Run `scripts/township_demo.exs` clean; emit trust-graph + audit artifacts.
   *Gate:* POC G2, G3, G5. *Asset:* PD-001-A §A5.
+  **Status:** done for the Sim demo and G5 evidence contract in Plan 121: the demo emits a
+  deterministic seven-file bundle, and a fresh process re-derives every authoritative claim from
+  `matter.log` while corruption fails verification.
 
 ### Phase B — Make the oracle portable (client realm, Tier A)
 - **B1.** Wire `lattice.export_vectors` to real `Sim` calls (plan 011 Deliverable 1); regenerate
@@ -298,8 +303,9 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   onboarding, Android release APK build readiness, Android release APK canonical/wire fidelity,
   Android release loopback-scoped transport, Android release BEAM carrier handshake/status/state-report proof,
   Android release APK pull-and-reload persistence, Android release APK device authoring/push/outbox drain, Android release APK OS deep-link pairing ingress/persisted peer config, the real Tauri app imported-pairing confirmation policy, installed unarmed OS deep-link blocking, the source-level state-bound armed one-shot import gate, packaged macOS real-app armed OS delivery in a hydration-settled dev-trace release-mode smoke build, the packaged link-load no-side-effect trace guard, warm macOS LaunchServices scheme resolution, packaged macOS cold-start URL delivery, the dev-trace release hydration/control-link repair, Android release app-originated post-only attenuated grant proof, Android release armed OS pairing delivery with a fixed probe-only state, the named Android release convergence gate, Android release cold-start pairing delivery, single-APK Android release pairing-to-post convergence, Android release browser-backed pairing delivery, Android release browser-backed onboarding convergence, Android release browser-backed onboarding child-grant composition, Android release browser-backed pairing runtime state exchange, Android release browser-backed onboarding runtime state exchange, Android release browser-backed onboarding child-grant runtime state exchange, the named Android release browser/onboarding regression gate, Android release chooser-eligible onboarding state exchange, Android release visible chooser onboarding selection, desktop Tauri default-namespace onboarding convergence through `onboarding:contract`, packaged macOS app-runtime onboarding convergence through `tauri:onboarding:smoke`, bounded shared TS/live-BEAM authority origination, and Android release root/authority origination are covered by plans 023-119.
-  Plan 120 extends that covered set through plans 023-120 with browser-rendered onboarding-control
-  convergence against a live BEAM peer while retaining the packaged-GUI non-claim.
+  Plans 120–121 extend that covered set through plans 023-121 with browser-rendered
+  onboarding-control convergence against a live BEAM peer and a fresh-process outsider audit
+  bundle verifier while retaining the packaged-GUI and production-instrument non-claims.
   Full mobile onboarding remains unproven beyond pull-based cap acquisition, and iOS cold-start URL delivery, cross-device pairing state exchange, QR camera onboarding, LAN discovery, and physical-device behavior remain unproven after the release OS deep-link pairing + device-local authoring + attenuated-grant + armed-delivery + Android cold-start + single-APK pairing-to-post + browser-backed delivery + browser-backed onboarding + browser-backed onboarding child-grant + browser-backed runtime state-exchange + chooser-eligible onboarding state-exchange + visible chooser selection proofs plus the shared TS/live-BEAM authority-origination and Android release root-origination proofs. The iOS archive path is
   locally blocked by the selected Xcode 27 beta Tauri Swift-package failure.
 
@@ -580,6 +586,12 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   drains the default outbox, and matches peer state with empty authority quarantine. Paired with Plan
   119, this proves real controls and real carrier convergence without claiming packaged WKWebView,
   real Rust signer, human click-through, or mobile behavior.
+  Plan 121 adds the outsider-replayable Township audit bundle: `matter.log` is emitted with
+  deterministic external term encoding, `state.json`, `audit.json`, and `op_dag.json` are
+  re-derived through the public reducer/authority/snapshot paths, delegation trust graphs remain a
+  distinct projection, and `mix lattice.township.verify_bundle` rejects authoritative corruption,
+  display-label injection, and extra files in a fresh process. This implements the G5/Phase G audit
+  surface without claiming that the production instrument UI exists.
   Plan 115 adds bounded authority origination at the shared TS/live-BEAM seam:
   `authorTownshipGenesis` emits the BEAM W1 root-bound genesis frame byte-for-byte,
   and the live BEAM peer structurally accepts but authority-quarantines a forged
@@ -636,6 +648,10 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   reusing the three prototypes' interaction grammar and verified logic. *Gate:* the five POC
   assertions are observable + an outsider-replayable audit surface. *Asset:* the three `*.html`
   prototypes + Duality/Constellation/Console design notes.
+  **Status:** Phase G audit surface is implemented by Plan 121: the deterministic bundle exposes
+  state, authority, causal op-DAG/frontier, and delegation trust-graph evidence behind a named
+  fresh-process verifier. The production instrument UI remains unstarted; no Phoenix/LiveView app
+  or Vue canvas island is claimed here.
 
 **Definition of 100% done:** every gate A1→G1 green in CI; the POC exit gate (PD-001-A §A5)
 met with W4 *real*; Township converges across BEAM + browser/phone realms over the real carrier;

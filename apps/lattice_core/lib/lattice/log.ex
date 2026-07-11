@@ -161,10 +161,10 @@ defmodule Lattice.Log do
 
   # --- Persistence (behavior 14) -------------------------------------------
 
-  @doc "Serialize the whole log (ops + structural quarantine) to a file on disk."
+  @doc "Serialize the whole log deterministically (ops + structural quarantine) to disk."
   @spec dump(t(), Path.t()) :: :ok | {:error, term()}
   def dump(%__MODULE__{} = log, path) do
-    File.write(path, :erlang.term_to_binary({:lattice_log_dump_v1, log}))
+    File.write(path, :erlang.term_to_binary({:lattice_log_dump_v1, log}, [:deterministic]))
   end
 
   @doc "Restore a log previously written with `dump/2`."

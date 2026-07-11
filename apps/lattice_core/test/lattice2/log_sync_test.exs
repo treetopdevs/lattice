@@ -31,6 +31,39 @@ defmodule Lattice2.LogSyncTest do
     refute different.id == op1.id
   end
 
+  test "log dumps use deterministic external term encoding" do
+    identity = realm("dump")
+
+    log =
+      Enum.reduce(1..40, Log.new(@replica), fn index, log ->
+        {log, _op} = author(log, identity, :command, {:post, Integer.to_string(index)})
+        log
+      end)
+
+    path =
+      Path.join(System.tmp_dir!(), "lattice_log_dump_#{System.unique_integer([:positive])}")
+
+    on_exit(fn -> File.rm(path) end)
+
+    assert :ok = Log.dump(log, path)
+
+    assert File.read!(path) ==
+             :erlang.term_to_binary({:lattice_log_dump_v1, log}, [:deterministic])
+  end
+
+  test "restore accepts legacy v1 dumps written without deterministic encoding" do
+    identity = realm("legacy-dump")
+    {log, _op} = author(Log.new(@replica), identity, :command, {:post, "legacy"})
+
+    path =
+      Path.join(System.tmp_dir!(), "lattice_legacy_dump_#{System.unique_integer([:positive])}")
+
+    on_exit(fn -> File.rm(path) end)
+
+    File.write!(path, :erlang.term_to_binary({:lattice_log_dump_v1, log}))
+    assert {:ok, ^log} = Log.restore(path)
+  end
+
   test "deps order does not affect the op id (frontier order independence)" do
     a = realm("a")
     base = Op.new(a, @replica, [], :command, {:post, "g"})
