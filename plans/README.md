@@ -142,6 +142,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 120 | Tauri browser onboarding click-through | P1 | M | 119 | DONE |
 | 121 | Township outsider-replay audit bundle | P1 | M | 012, 017 | DONE |
 | 122 | Township instrument read model | P1 | M | 121 | DONE |
+| 123 | Township LiveView instrument | P1 | L | 122 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

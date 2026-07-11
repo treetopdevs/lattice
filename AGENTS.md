@@ -28,11 +28,12 @@ worktrees do not carry it; the asdf-shim rule is the reliable invocation everywh
 ~/.asdf/shims/mix run scripts/lattice2_demo.exs   # narrated Lattice 2.0 end-to-end demo
 ```
 
-Sobelow is **per-app** (it targets the Phoenix/Cowboy boundary app, not the umbrella), so
-it is not part of `mix check`. Run it in `apps/lattice_server`:
+Sobelow is **per-app** (it targets each HTTP boundary app, not the umbrella), so it is not part of
+`mix check`. Run it in both boundary apps:
 
 ```sh
-cd apps/lattice_server && ~/.asdf/shims/mix sobelow --exit
+cd apps/lattice_server && ~/.asdf/shims/mix sobelow --exit --skip
+cd apps/township_web && ~/.asdf/shims/mix sobelow --exit --skip
 ```
 
 All tests must pass and formatting must be clean before considering any change done.
@@ -43,6 +44,7 @@ All tests must pass and formatting must be clean before considering any change d
 |------|------------|
 | `apps/lattice_core` | v1 capability plane (caps, gateway, topology, audit) + the Lattice 2.0 replica-on-op-log engine |
 | `apps/lattice_server` | Cowboy WebSocket/HTTP boundary; JSON envelope parsing |
+| `apps/township_web` | Phoenix/LiveView read-only Township instrument over the verified audit bundle |
 | `apps/lattice_demo` | Demo servers, tab workers, and the deterministic/browser demo mix tasks |
 | `apps/lattice_stress` | Adversarial stress lab: races, WS abuse, load/soak, property tests, `mix lattice.stress` |
 | `apps/lattice_carrier_spike` | Spike code for a real (non-simulated) carrier |
@@ -65,10 +67,12 @@ All tests must pass and formatting must be clean before considering any change d
 - `~/.asdf/shims/mix test`
 - `~/.asdf/shims/mix format`
 - `~/.asdf/shims/mix run scripts/lattice2_demo.exs`
+- `PHX_SERVER=true PORT=4100 ~/.asdf/shims/mix run --no-halt`
 
 **Heavy / external dependencies** (need Node + Playwright, bind a port; run only when asked):
 
 - `npm run browser:e2e`, `npm run browser:worker:e2e`, `npm run flagship:e2e`, `npm run e2e`
+- `npm run township:instrument:e2e`
 - `scripts/lattice_poc_demo.sh`, `scripts/lattice_research_demo.sh`,
   `scripts/lattice_liveops_demo.sh`, `scripts/lattice_flagship_demo.sh` (the flagship
   one additionally needs ffmpeg for the recording evaluation)

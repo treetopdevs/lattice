@@ -144,9 +144,8 @@ defmodule Township.AuditBundleTest do
 
     assert build_map =~ "Plan 121 adds the outsider-replayable Township audit bundle"
     assert build_map =~ "lattice.township.verify_bundle"
-    assert build_map =~ "plans 023-122"
+    assert build_map =~ "plans 023-123"
     assert build_map =~ "Phase G's audit surface is implemented by Plan 121"
-    assert build_map =~ "The production instrument remains unrendered"
 
     assert plans_index =~
              "| 121 | Township outsider-replay audit bundle | P1 | M | 012, 017 | DONE |"
