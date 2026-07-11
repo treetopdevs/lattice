@@ -1,8 +1,8 @@
 defmodule LatticeCarrierServerTest do
   use ExUnit.Case, async: false
 
-  alias Lattice.{Identity, Log, Op}
   alias Lattice.Carrier.{Session, Telemetry, WebSocket, Wire}
+  alias Lattice.{Identity, Log, Op}
   alias Lattice.Transport.WebSocket.Client
 
   @replica "replica:carrier-server:test"

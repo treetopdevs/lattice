@@ -298,7 +298,31 @@ child internals. Source identity is proven by fresh authenticated pulls and Sim/
 
 ## Verification
 
-- Pending implementation.
+- `apps/lattice_carrier_server`: 13 tests pass across trusted pull, coarse auth/refusal telemetry,
+  oversized frames, disconnect immutability, pre-auth and auth matrices, read-only push/live
+  refusal, injected/path sources, invalid configuration, configured application ownership,
+  fixed-port supervisor restart, second-BEAM projection recovery, and the Plan 127 docs contract.
+- Forced warnings-as-errors compilation passes in both test and production environments. The
+  generated production `.app` runtime list contains `cowboy`, `jason`, and `lattice_core`, but not
+  the test-only `lattice_web_socket` or `township_web` apps.
+- `mix xref graph --format cycles` reports the unchanged five baseline cycles after the Ranch-ref
+  fix, with no cycle containing the new app. Both existing HTTP-boundary Sobelow scans exit 0; the
+  raw Cowboy server's ten-test auth/read-only refusal matrix supplies its applicable security gate.
+- `mix lattice.township.verify_bundle --dir artifacts/township` passes and the tracked artifact
+  directory remains byte-clean.
+- Browser gates pass: six static Township instrument cases, the existing real-carrier live case,
+  the new stable-server fresh/stale/fresh case, and the shared browser carrier E2E. The new case
+  retains 13 ops and one Vue root with no browser error or write control in every state.
+- Preserved app boundaries pass: mobile readiness, mobile secure-store strategy, 29 frontend shell
+  contracts, and the full `app:convergence` chain through authoring, sync, onboarding ceremony,
+  browser click-through, live BEAM, packaged app, and installed deep-link smokes.
+- Unexcluded `mix verify` and `mix check` each pass the complete umbrella with 318 tests and 25
+  properties. Strict Credo exits 0 with no Plan 127 finding after the two new test alias groups were
+  ordered; formatting and diff checks are clean.
+- The first externally-created feature commit accidentally included two ExUnit `tmp/` log files.
+  A focused follow-up removes them, ignores the app-local `/tmp/`, restores the five-cycle xref
+  baseline, and advances the cumulative mobile-readiness assertion without changing its custody
+  claims.
 
 ## Completion claim
 
