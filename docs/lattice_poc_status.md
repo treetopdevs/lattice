@@ -491,3 +491,38 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
   participant key, capability, pairing, onboarding, outbox, native storage, or mobile secure-store
   custody; it adds no pushed operation/state materialization, broader participant controls,
   TLS/public deployment, complete G1/Phase G claim, or receipt-free W4.
+
+## Checkpoint: Reactive Packaged Tauri Availability Feed
+
+- Files changed: the mandatory shared-sync operation verifier, structural frame decoder, reactive
+  read-only Township refresh/controller, dynamic Vue matter projection and redacted DOM-digest
+  trace, full Sim base oracle, headless lifecycle contract, real packaged macOS feed smoke,
+  package/workflow gates, and cumulative Plan 134 documentation contracts.
+- Behaviors: every pulled frame passes canonical hash and Ed25519 verification before conversion,
+  integration, persistence, or shared-sync submission. A saved pairing opens one authenticated
+  observer subscription; its baseline triggers initial convergence, later generations coalesce to
+  one active refresh plus one latest trailing refresh, bounded reconnect retains the last verified
+  matter, concurrent pairing replacements close and await the obsolete epoch, and unmount aborts
+  persistence and later callbacks. Only a `fresh` projection replaces the rendered Vue matter.
+- Oracle: the real packaged `Township.app` runs against the stable path-backed carrier while a
+  separate resident identity relays two Sim-authored posts around a same-path server restart. DOM
+  attributes and ordered SHA-256 commitments to visible proceedings, persisted semantic ids, and
+  raw delegation-frame ids equal the independent `Lattice.Sim` base, `afterPost`, and
+  `afterRestartPost` projections in strict trace order without recording raw proceedings content.
+- Gates: `npm run carrier:relay-sync`, `npm run carrier:township:live`,
+  `npm run feed:app:contract`, both TypeScript typechecks, the existing direct feed contract, and
+  `npm run tauri:feed:smoke` are locally green. Complete `app:convergence`, the browser instrument
+  and action-handoff lanes, Rust native tests, and flagship Worker/video/artifact verification pass.
+  Pinned OTP 28 `mix verify` and `mix check` each pass the full umbrella; warning compiles, xref,
+  both Sobelow boundaries, actionlint, formatting, and diff checks are green. The headless
+  controller and third fresh-build packaged smoke are wired as hard flagship steps.
+- Hosted acceptance remains pending.
+- Result: Full local regression is green at 375 tests plus 25 properties. The RED/GREEN
+  implementation and real packaged restart gate pass. Reactive refresh never submits or compacts
+  the authored outbox, no automatic Sync trace appears, raw action/proceedings content stays out of
+  native trace, and no operation is authored by the observer identity. Final exact-worktree Claude
+  review is green with no blocker, high, or medium finding. Plan 134 remains `IN PROGRESS` until
+  hosted branch evidence is green.
+- Blocker or remaining limitation: no mobile secure-store implementation change, mobile/device
+  result, automatic participant publication, broader participant controls, production ingress/TLS
+  deployment, complete G1/Phase G claim, or receipt-free W4.

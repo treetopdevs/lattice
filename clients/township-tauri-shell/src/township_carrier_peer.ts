@@ -4,6 +4,7 @@ import {
   type CarrierWebSocketClient,
   type ConnectCarrierWebSocketOptions,
   type LocalKeyValueStore,
+  type Verifier,
 } from "@treetopdevs/lattice-client";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import {
@@ -349,6 +350,20 @@ export function createWebCryptoCarrierVerifier(subtle: SubtleCrypto | undefined 
       return ed25519.verify(signature, bytes, pubkey, { zip215: false });
     },
   };
+}
+
+export function carrierVerifierAsOperationVerifier(verifier: CarrierVerifier): Verifier {
+  return {
+    verify(author: string, bytes: Uint8Array, signature: Uint8Array): Promise<boolean> {
+      return Promise.resolve(verifier.verify(base64ToBytes(author), bytes, signature));
+    },
+  };
+}
+
+export function createWebCryptoOperationVerifier(
+  subtle: SubtleCrypto | undefined = globalThis.crypto?.subtle,
+): Verifier {
+  return carrierVerifierAsOperationVerifier(createWebCryptoCarrierVerifier(subtle));
 }
 
 function webCryptoEd25519Unavailable(error: unknown): boolean {

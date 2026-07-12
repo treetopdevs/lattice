@@ -164,6 +164,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 131 | Packaged macOS convergence CI gate | P1 | S | 129, 130 | DONE |
 | 132 | Authenticated carrier availability feed | P1 | XL | 128, 131 | DONE |
 | 133 | Direct TypeScript carrier availability feed | P1 | L | 132 | DONE |
+| 134 | Reactive packaged Tauri availability feed | P1 | XL | 133, 129, 130 | IN PROGRESS |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

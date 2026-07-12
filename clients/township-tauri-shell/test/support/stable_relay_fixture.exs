@@ -45,6 +45,7 @@ oracle = %{
   "relayRealm" => relay_identity.realm_id,
   "relayPubkey" => Base.encode64(relay_identity.pub),
   "baseOpIds" => base_log |> Log.op_ids() |> Enum.sort(),
+  "base" => projection.(base_log),
   "expectedPost" => Wire.encode_op(expected_post),
   "expectedRestartPost" => Wire.encode_op(expected_restart_post),
   "authorityInvalidOp" => Wire.encode_op(authority_invalid_op),

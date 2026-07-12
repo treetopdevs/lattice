@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { isTauri } from "@tauri-apps/api/core";
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef } from "vue";
 import {
+  createTownshipNativeWorkflow,
   createTownshipNativeStorage,
   loadTownshipNativeStatus,
+  TOWNSHIP_TRACE_CARRIER_FEED_DOM_ERROR,
+  TOWNSHIP_TRACE_CARRIER_FEED_DOM_PREFIX,
   TOWNSHIP_TRACE_CARRIER_HEALTH_STARTED,
   TOWNSHIP_TRACE_DEV_SHORTCUT_KEYDOWN_PREFIX,
   TOWNSHIP_TRACE_DEV_RUNTIME_READY,
@@ -28,9 +31,12 @@ import {
   type TownshipCommandSubmission,
   type TownshipPostSubmission,
 } from "./township_actions";
-import { townshipPreview } from "./township_preview";
+import { townshipMatterOps, townshipPreviewFromOps } from "./township_preview";
 import {
+  carrierVerifierAsOperationVerifier,
   checkTownshipCarrierPeerHealth,
+  connectTownshipCarrierPeer,
+  createWebCryptoCarrierVerifier,
   exportTownshipCarrierPairingHandoff,
   importTownshipCarrierPairingHandoff,
   loadTownshipCarrierPeerConfig,
@@ -44,6 +50,11 @@ import {
   type TownshipCarrierPeerConfigInput,
   type TownshipCarrierHealthResult,
 } from "./township_carrier_peer";
+import {
+  createTownshipFeedController,
+  type TownshipFeedController,
+  type TownshipFeedState,
+} from "./township_feed";
 import {
   createOneShotTownshipPairingDeepLinkGate,
   parseTownshipPairingDeepLink,
@@ -107,10 +118,19 @@ import {
   type TownshipPairingQrCameraSource,
 } from "./township_pairing_qr_camera";
 import { runTownshipPackagedOnboardingFromEnv } from "./township_packaged_onboarding_probe";
-import { syncTownshipOutbox, type TownshipOutboxSync } from "./township_sync";
+import {
+  syncTownshipOutbox,
+  TOWNSHIP_REALM_BY_PUBKEY,
+  type TownshipOutboxSync,
+} from "./township_sync";
 
-const matter = computed(() => townshipPreview());
+const matter = ref(townshipPreviewFromOps(townshipMatterOps));
 const carrierPeer = ref<TownshipCarrierPeerConfig | null>(townshipCarrierPeerFromEnv());
+const feedState = shallowRef<TownshipFeedState>({
+  phase: "unconfigured",
+  projection: null,
+  message: "No carrier pairing configured.",
+});
 const autosyncOnMount = truthy(import.meta.env.VITE_TOWNSHIP_AUTOSYNC_ON_MOUNT);
 const devTraceRuntime = truthy(import.meta.env.VITE_TOWNSHIP_DEV_TRACE);
 const devTraceRuntimeReady = ref(false);
@@ -191,6 +211,7 @@ let participantDeepLinkDispatcher: TownshipParticipantDeepLinkDispatcher | null 
 let canonicalProbeDeepLinkListener: TownshipCanonicalProbeDeepLinkListener | null = null;
 let pairingCameraScanner: TownshipPairingQrCameraScanner | null = null;
 let pairingDiscovery: TownshipPairingDiscovery | null = null;
+let townshipFeedController: TownshipFeedController | null = null;
 let devTraceShortcutMounted = false;
 let appUnmounted = false;
 const healthStatus = ref<TownshipCarrierHealthResult | null>(null);
@@ -398,6 +419,7 @@ onMounted(async () => {
     }
   }
   await loadPairingConfig();
+  await mountTownshipFeed();
   if (!releasePairingProbeActive && !releaseOnboardingProbeActive && !releaseRootOriginationProbeActive) {
     await mountParticipantDeepLinkDispatcher();
     await mountCanonicalProbeDeepLinkListener();
@@ -411,6 +433,7 @@ onMounted(async () => {
       pairingDraft.value = pairingDraftFromConfig(onboarding.pairing);
       postStatus.value = onboarding.post;
       syncStatus.value = onboarding.finalSync;
+      await townshipFeedController?.replacePeer(onboarding.pairing);
     }
   }
   scheduleTownshipNativeHydration();
@@ -418,6 +441,8 @@ onMounted(async () => {
 
 onUnmounted(() => {
   appUnmounted = true;
+  void townshipFeedController?.stop();
+  townshipFeedController = null;
   devTraceRuntimeReady.value = false;
   if (devTraceShortcutMounted) window.removeEventListener("keydown", handleDevTraceShortcut);
   devTraceShortcutMounted = false;
@@ -506,6 +531,76 @@ async function submitRevoke() {
   revokeSubmitting.value = false;
 }
 
+async function mountTownshipFeed() {
+  if (appUnmounted) return;
+
+  const controller = createTownshipFeedController({
+    async connect(peer) {
+      const workflow = await createTownshipNativeWorkflow({
+        ...(peer.keyId ? { keyId: peer.keyId } : {}),
+      });
+      const sessionVerifier = createWebCryptoCarrierVerifier();
+      const client = await connectTownshipCarrierPeer({
+        workflow,
+        peer,
+        verifier: sessionVerifier,
+      });
+      return {
+        client,
+        workflow,
+        verifier: carrierVerifierAsOperationVerifier(sessionVerifier),
+      };
+    },
+    onState: receiveTownshipFeedState,
+    realmByPubkey: TOWNSHIP_REALM_BY_PUBKEY,
+  });
+  townshipFeedController = controller;
+  await controller.replacePeer(carrierPeer.value);
+}
+
+function receiveTownshipFeedState(state: TownshipFeedState) {
+  if (appUnmounted) return;
+
+  feedState.value = state;
+  if (state.phase === "fresh") matter.value = state.projection.matter;
+  if (devTraceRuntime) {
+    void traceRenderedTownshipFeed(state).catch(() => {
+      void traceTownshipDevEvent(TOWNSHIP_TRACE_CARRIER_FEED_DOM_ERROR).catch(() => {});
+    });
+  }
+}
+
+async function traceRenderedTownshipFeed(state: TownshipFeedState) {
+  await nextTick();
+  if (appUnmounted || feedState.value !== state) return;
+
+  const status = document.querySelector("#carrier-feed-status");
+  const matterStatus = document.querySelector("#matter-render-status");
+  if (!status || !matterStatus) return;
+  const postTexts = Array.from(
+    document.querySelectorAll("#township-proceedings .post-list li"),
+    (entry) => entry.textContent?.trim() ?? "",
+  );
+  const postDigests = await Promise.all(postTexts.map(digestTownshipTraceText));
+  if (appUnmounted || feedState.value !== state) return;
+
+  const rendered = {
+    phase: status.getAttribute("data-phase"),
+    generation: status.getAttribute("data-generation"),
+    opCount: status.getAttribute("data-op-count"),
+    postCount: status.getAttribute("data-post-count"),
+    matterOpCount: matterStatus.getAttribute("data-op-count"),
+    matterPostCount: matterStatus.getAttribute("data-post-count"),
+    postDigests,
+  };
+  await traceTownshipDevEvent(`${TOWNSHIP_TRACE_CARRIER_FEED_DOM_PREFIX}${JSON.stringify(rendered)}`);
+}
+
+async function digestTownshipTraceText(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 async function syncOutbox() {
   syncSubmitting.value = true;
   void traceTownshipDevEvent(TOWNSHIP_TRACE_SYNC_OUTBOX_STARTED).catch(() => {});
@@ -552,6 +647,7 @@ async function submitPairing() {
     });
     if (saved.ok) {
       carrierPeer.value = saved.config;
+      await townshipFeedController?.replacePeer(saved.config);
       pairingDraft.value = pairingDraftFromConfig(saved.config);
       pairingHandoffFingerprint.value = townshipCarrierPeerFingerprint(saved.config.expectedPeerPubkey);
       pairingQrSvg.value = pairingQrSvgFromConfig(saved.config);
@@ -1277,7 +1373,13 @@ function pairingDiscoveryAdvertFromMessage(value: unknown): TownshipPairingDisco
         <h1>{{ matter.title }}</h1>
       </div>
       <div class="status-stack">
-        <div class="status-strip" :data-state="matter.status.toLowerCase()">
+        <div
+          id="matter-render-status"
+          class="status-strip"
+          :data-state="matter.status.toLowerCase()"
+          :data-op-count="matter.opCount"
+          :data-post-count="matter.posts.length"
+        >
           <span>{{ matter.status }}</span>
           <strong>{{ matter.appliedCount }}/{{ matter.opCount }}</strong>
         </div>
@@ -1670,18 +1772,32 @@ function pairingDiscoveryAdvertFromMessage(value: unknown): TownshipPairingDisco
         <span>Health and outbox sync</span>
       </div>
       <div class="sync-actions">
+        <p
+          id="carrier-feed-status"
+          class="sync-message"
+          :data-state="feedState.phase"
+          :data-phase="feedState.phase"
+          :data-generation="feedState.projection?.generation ?? ''"
+          :data-op-count="feedState.projection?.matter.opCount ?? ''"
+          :data-post-count="feedState.projection?.matter.posts.length ?? ''"
+          aria-live="polite"
+        >
+          {{ feedState.message }}
+        </p>
         <p class="sync-message" :data-state="healthStatusTone">{{ healthStatusMessage }}</p>
         <button type="button" :disabled="healthSubmitting" @click="checkCarrierHealth">
           {{ healthSubmitting ? "Checking" : "Check carrier" }}
         </button>
-        <p class="sync-message" :data-state="syncStatusTone">{{ syncStatusMessage }}</p>
+        <p id="carrier-sync-status" class="sync-message" :data-state="syncStatusTone">
+          {{ syncStatusMessage }}
+        </p>
         <button type="button" :disabled="syncSubmitting" @click="syncOutbox">
           {{ syncSubmitting ? "Syncing" : "Sync outbox" }}
         </button>
       </div>
     </section>
 
-    <section class="posts-panel">
+    <section id="township-proceedings" class="posts-panel">
       <div class="panel-heading">
         <p>Proceedings</p>
       </div>

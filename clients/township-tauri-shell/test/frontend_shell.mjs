@@ -162,10 +162,11 @@ test("Vue source mounts a reducer-backed Township matter surface", () => {
   assert.match(indexHtml, /<div id="app"><\/div>/);
   assert.match(main, /createApp\(App\)\.mount\("#app"\)/);
   assert.match(preview, /from "@treetopdevs\/lattice-client"/);
-  assert.match(preview, /materialize\(townshipMatterSchema, townshipMatterOps\)/);
+  assert.match(preview, /materialize\(townshipMatterSchema, ops\)/);
   assert.match(preview, /export function townshipPreview/);
+  assert.match(preview, /export function townshipPreviewFromOps/);
   assert.match(preview, /Zoning Variance #24/);
-  assert.match(app, /townshipPreview\(\)/);
+  assert.match(app, /townshipPreviewFromOps\(townshipMatterOps\)/);
 });
 
 test("Vue source surfaces native invoke readiness from the Tauri workflow", () => {
@@ -364,7 +365,7 @@ test("frontend package exposes the real app convergence gate", () => {
   );
   assert.equal(
     pkg.scripts["app:convergence"],
-    "npm run action:contract && npm run sync:contract && npm run stable:relay:contract && npm run onboarding:contract && npm run onboarding:click-through && npm run live:contract && npm run tauri:launch:smoke && npm run tauri:onboarding:smoke && npm run tauri:stable-relay:onboarding:smoke && npm run tauri:action-handoff:smoke && npm run tauri:deep-link:smoke",
+    "npm run action:contract && npm run sync:contract && npm run stable:relay:contract && npm run feed:contract && npm run feed:app:contract && npm run onboarding:contract && npm run onboarding:click-through && npm run live:contract && npm run tauri:launch:smoke && npm run tauri:onboarding:smoke && npm run tauri:stable-relay:onboarding:smoke && npm run tauri:action-handoff:smoke && npm run tauri:feed:smoke && npm run tauri:deep-link:smoke",
   );
   assert.match(launchSmoke, /"tauri", \["build", "--features", "township-dev-trace", "--bundles", "app"\]/);
   assert.match(launchSmoke, /VITE_TOWNSHIP_AUTOSYNC_ON_MOUNT: "1"/);

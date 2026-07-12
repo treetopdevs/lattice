@@ -166,12 +166,13 @@ test("real LiveView action crosses Tauri custody and converges through the stabl
     const postAction = appPage.locator(".action-list li").filter({
       has: appPage.getByText("Post", { exact: true }),
     });
-    await expect(postAction).toContainText("No local cap");
-    await appPage.getByRole("button", { name: "Sync outbox" }).click();
-    const syncMessage = appPage.locator(".sync-actions .sync-message").nth(1);
-    await expect(syncMessage).toHaveText(/Pushed 0, pulled [1-9]\d*, accepted 0\./, { timeout: 20_000 });
+    const feedStatus = appPage.locator("#carrier-feed-status");
+    await expect(feedStatus).toHaveAttribute("data-phase", "fresh", { timeout: 20_000 });
+    await expect(feedStatus).toHaveAttribute("data-op-count", String(oracle.baseOpIds.length));
     await expect(postAction).toContainText("Available");
     assert.deepEqual(storedIds(kv, TOWNSHIP_LOCAL_OP_LOG_KEY), [...oracle.baseOpIds].sort());
+    assert.deepEqual(storedFramesOrEmpty(kv, TOWNSHIP_CARRIER_OUTBOX_KEY), []);
+    const syncMessage = appPage.locator("#carrier-sync-status");
     await appPage.getByRole("textbox", { name: "Township post update" }).fill(unsavedDraft);
 
     await page.goto(`http://localhost:${webPort}/township`, { waitUntil: "domcontentloaded" });
@@ -293,11 +294,20 @@ test("real LiveView action crosses Tauri custody and converges through the stabl
     assert.doesNotMatch(browserOutput, new RegExp(escapeRegex(actionUrl)));
     assert.doesNotMatch(browserOutput, new RegExp(escapeRegex(postText)));
 
+    const retainedFeedOpCount = String(oracle.afterAuthorityInvalid.opIds.length);
+    await expect(feedStatus).toHaveAttribute("data-phase", "fresh", { timeout: 20_000 });
+    await expect(feedStatus).toHaveAttribute("data-op-count", retainedFeedOpCount);
+    const outageStartedAt = Date.now();
     await server.kill();
     server = null;
     await expect(source).toHaveAttribute("data-freshness", "stale", { timeout: 20_000 });
+    await expect(feedStatus).toHaveAttribute("data-phase", "reconnecting", { timeout: 20_000 });
+    await expect(feedStatus).toHaveAttribute("data-op-count", retainedFeedOpCount);
     server = await spawnServer();
     await expect(source).toHaveAttribute("data-freshness", "fresh", { timeout: 20_000 });
+    await expect(feedStatus).toHaveAttribute("data-phase", "fresh", { timeout: 20_000 });
+    await expect(feedStatus).toHaveAttribute("data-op-count", retainedFeedOpCount);
+    const outageDurationMs = Date.now() - outageStartedAt;
     await expect(page.locator("#threads-panel [data-post] > span:last-child")).toHaveText(
       oracle.afterAuthorityInvalid.readModel.threads.posts,
     );
@@ -318,7 +328,19 @@ test("real LiveView action crosses Tauri custody and converges through the stabl
     );
     assert.match(verifyOutput, /VERIFY_READY authority/);
     assert.deepEqual(await browserReplay(page), oracle.afterAuthorityInvalid.causalReplay);
-    assert.deepEqual(browserErrors, []);
+    const expectedFeedRefusal =
+      `app console: WebSocket connection to '${stableCarrierUrl(carrierPort)}' failed: ` +
+      "Error in connection establishment: net::ERR_CONNECTION_REFUSED";
+    const feedRefusals = browserErrors.filter((error) => error === expectedFeedRefusal);
+    const maxFeedRefusals = maxExpectedReconnectRefusals(outageDurationMs);
+    assert.ok(
+      feedRefusals.length <= maxFeedRefusals,
+      `expected at most ${maxFeedRefusals} feed refusals over ${outageDurationMs}ms, got ${feedRefusals.length}`,
+    );
+    assert.deepEqual(
+      browserErrors.filter((error) => error !== expectedFeedRefusal),
+      [],
+    );
   } finally {
     if (appServer) {
       appServer.server.closeAllConnections();
@@ -370,6 +392,11 @@ function storedFrames(values: Map<string, string>, key: string): CarrierOpFrame[
   return JSON.parse(requiredValue(values, storageKey(key))) as CarrierOpFrame[];
 }
 
+function storedFramesOrEmpty(values: Map<string, string>, key: string): CarrierOpFrame[] {
+  const raw = values.get(storageKey(key));
+  return raw === undefined ? [] : (JSON.parse(raw) as CarrierOpFrame[]);
+}
+
 function storedIds(values: Map<string, string>, key: string): string[] {
   const raw = requiredValue(values, storageKey(key));
   return (JSON.parse(raw) as { id: string }[]).map((entry) => entry.id).sort();
@@ -385,6 +412,19 @@ function commandCount(calls: InvokeCall[], command: string): number {
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function maxExpectedReconnectRefusals(outageDurationMs: number): number {
+  const delays = [100, 250, 500, 1_000, 2_000, 5_000] as const;
+  let elapsed = 0;
+  let attempts = 0;
+
+  while (true) {
+    const delay = delays[Math.min(attempts, delays.length - 1)] ?? 5_000;
+    if (elapsed + delay > outageDurationMs) return attempts;
+    elapsed += delay;
+    attempts += 1;
+  }
 }
 
 function delay(ms: number): Promise<void> {

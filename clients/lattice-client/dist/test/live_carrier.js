@@ -49,6 +49,11 @@ const verifier = {
         return edVerify(null, Buffer.from(bytes), publicKeyObject(pubkey), Buffer.from(signature));
     },
 };
+const operationVerifier = {
+    async verify(author, bytes, signature) {
+        return verifier.verify(Buffer.from(author, "base64"), bytes, signature);
+    },
+};
 check("fixture public key", identity.publicKeyBase64, vector.client.sessionPubkey);
 const residentAuthor = seededEd25519Identity(`${vector.client.sessionSeed}:${vector.client.realm}`);
 check("resident author public key", residentAuthor.publicKeyBase64, pubkeyForRealm(vector.realmByPubkey, vector.client.realm));
@@ -93,7 +98,9 @@ try {
     conn.close();
     conn = await reconnectWhenDiverged(peer.port, vector, identity, verifier);
     const clientDiverged = await authoredLocalLog.load();
-    const synced = await syncCarrierOnce(conn, clientDiverged, authoredClientFrames, vector.realmByPubkey);
+    const synced = await syncCarrierOnce(conn, clientDiverged, authoredClientFrames, vector.realmByPubkey, {
+        verifier: operationVerifier,
+    });
     check("pulled peer op count", synced.pulledOps.length, 5);
     check("push frame count", synced.pushedFrames.length, 2);
     check("push accepted count", synced.pushReport.accepted.length, 2);
@@ -123,7 +130,7 @@ try {
     const [authorityUnsoundOp] = carrierOpsToSemanticOps([authorityUnsoundGrant], vector.realmByPubkey);
     if (!authorityUnsoundOp)
         throw new Error("authority-unsound grant did not decode to a semantic op");
-    const unsoundSynced = await syncCarrierOnce(conn, [...merged, authorityUnsoundOp], [authorityUnsoundGrant], vector.realmByPubkey);
+    const unsoundSynced = await syncCarrierOnce(conn, [...merged, authorityUnsoundOp], [authorityUnsoundGrant], vector.realmByPubkey, { verifier: operationVerifier });
     check("authority-unsound grant pushed", carrierFrameIds(unsoundSynced.pushedFrames), [authorityUnsoundGrant.id]);
     check("authority-unsound grant structurally accepted", unsoundSynced.pushReport.accepted, [authorityUnsoundGrant.id]);
     check("authority-unsound grant structural quarantine", unsoundSynced.pushReport.quarantined, []);
@@ -145,7 +152,7 @@ try {
     const [forgedGenesisOp] = carrierOpsToSemanticOps([forgedGenesis], vector.realmByPubkey);
     if (!forgedGenesisOp)
         throw new Error("forged genesis did not decode to a semantic op");
-    const forgedSynced = await syncCarrierOnce(conn, [...unsoundSynced.ops, forgedGenesisOp], [forgedGenesis], vector.realmByPubkey);
+    const forgedSynced = await syncCarrierOnce(conn, [...unsoundSynced.ops, forgedGenesisOp], [forgedGenesis], vector.realmByPubkey, { verifier: operationVerifier });
     check("forged genesis pushed", carrierFrameIds(forgedSynced.pushedFrames), [forgedGenesis.id]);
     check("forged genesis structurally accepted", forgedSynced.pushReport.accepted, [forgedGenesis.id]);
     check("forged genesis structural quarantine", forgedSynced.pushReport.quarantined, []);
@@ -174,7 +181,9 @@ try {
     conn.close();
     conn = await reconnectWhenDiverged(revocationPeer.port, vector, identity, verifier);
     const clientDiverged = await authoredLocalLog.load();
-    const synced = await syncCarrierOnce(conn, clientDiverged, authoredClientFrames, vector.realmByPubkey);
+    const synced = await syncCarrierOnce(conn, clientDiverged, authoredClientFrames, vector.realmByPubkey, {
+        verifier: operationVerifier,
+    });
     const merged = synced.ops;
     const baselineReport = await conn.stateReport();
     check("revocation baseline state bytes", baselineReport.state_b64, vector.expectAfterSync.stateB64);
@@ -189,7 +198,9 @@ try {
     const [revokeOp] = carrierOpsToSemanticOps([revokeFrame], vector.realmByPubkey);
     if (!revokeOp)
         throw new Error("revocation frame did not decode to a semantic op");
-    const afterRevoke = await syncCarrierOnce(conn, [...merged, revokeOp], [revokeFrame], vector.realmByPubkey);
+    const afterRevoke = await syncCarrierOnce(conn, [...merged, revokeOp], [revokeFrame], vector.realmByPubkey, {
+        verifier: operationVerifier,
+    });
     check("revocation pushed", carrierFrameIds(afterRevoke.pushedFrames), [revokeFrame.id]);
     check("revocation structurally accepted", afterRevoke.pushReport.accepted, [revokeFrame.id]);
     check("revocation structural quarantine", afterRevoke.pushReport.quarantined, []);
@@ -205,7 +216,7 @@ try {
     const [revokedPostOp] = carrierOpsToSemanticOps([revokedPostFrame], vector.realmByPubkey);
     if (!revokedPostOp)
         throw new Error("revoked-cap post frame did not decode to a semantic op");
-    const afterRevokedPost = await syncCarrierOnce(conn, [...afterRevoke.ops, revokedPostOp], [revokedPostFrame], vector.realmByPubkey);
+    const afterRevokedPost = await syncCarrierOnce(conn, [...afterRevoke.ops, revokedPostOp], [revokedPostFrame], vector.realmByPubkey, { verifier: operationVerifier });
     check("revoked-cap post pushed", carrierFrameIds(afterRevokedPost.pushedFrames), [revokedPostFrame.id]);
     check("revoked-cap post structurally accepted", afterRevokedPost.pushReport.accepted, [revokedPostFrame.id]);
     check("revoked-cap post structural quarantine", afterRevokedPost.pushReport.quarantined, []);
@@ -236,7 +247,9 @@ try {
     conn.close();
     conn = await reconnectWhenDiverged(badRevocationPeer.port, vector, identity, verifier);
     const clientDiverged = await authoredLocalLog.load();
-    const synced = await syncCarrierOnce(conn, clientDiverged, authoredClientFrames, vector.realmByPubkey);
+    const synced = await syncCarrierOnce(conn, clientDiverged, authoredClientFrames, vector.realmByPubkey, {
+        verifier: operationVerifier,
+    });
     const merged = synced.ops;
     const badRevokeFrame = await authorTownshipRevocation({
         replica: vector.replica,
@@ -248,7 +261,7 @@ try {
     const [badRevokeOp] = carrierOpsToSemanticOps([badRevokeFrame], vector.realmByPubkey);
     if (!badRevokeOp)
         throw new Error("bad revocation frame did not decode to a semantic op");
-    const afterBadRevoke = await syncCarrierOnce(conn, [...merged, badRevokeOp], [badRevokeFrame], vector.realmByPubkey);
+    const afterBadRevoke = await syncCarrierOnce(conn, [...merged, badRevokeOp], [badRevokeFrame], vector.realmByPubkey, { verifier: operationVerifier });
     check("bad revocation pushed", carrierFrameIds(afterBadRevoke.pushedFrames), [badRevokeFrame.id]);
     check("bad revocation structurally accepted", afterBadRevoke.pushReport.accepted, [badRevokeFrame.id]);
     check("bad revocation structural quarantine", afterBadRevoke.pushReport.quarantined, []);
@@ -264,7 +277,7 @@ try {
     const [postAfterBadRevokeOp] = carrierOpsToSemanticOps([postAfterBadRevokeFrame], vector.realmByPubkey);
     if (!postAfterBadRevokeOp)
         throw new Error("post after bad revoke frame did not decode to a semantic op");
-    const afterPostBadRevoke = await syncCarrierOnce(conn, [...afterBadRevoke.ops, postAfterBadRevokeOp], [postAfterBadRevokeFrame], vector.realmByPubkey);
+    const afterPostBadRevoke = await syncCarrierOnce(conn, [...afterBadRevoke.ops, postAfterBadRevokeOp], [postAfterBadRevokeFrame], vector.realmByPubkey, { verifier: operationVerifier });
     check("post after bad revoke pushed", carrierFrameIds(afterPostBadRevoke.pushedFrames), [postAfterBadRevokeFrame.id]);
     check("post after bad revoke structurally accepted", afterPostBadRevoke.pushReport.accepted, [postAfterBadRevokeFrame.id]);
     check("post after bad revoke structural quarantine", afterPostBadRevoke.pushReport.quarantined, []);

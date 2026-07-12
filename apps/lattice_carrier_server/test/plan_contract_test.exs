@@ -334,7 +334,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
     packaged_job = workflow |> String.split("\n  packaged_macos:\n", parts: 2) |> List.last()
 
     assert packaged_job =~ "runs-on: macos-15-intel"
-    assert packaged_job =~ "timeout-minutes: 75"
+    assert packaged_job =~ "timeout-minutes: 90"
     assert packaged_job =~ "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830"
     assert packaged_job =~ "MIX_ENV=test mix compile"
     assert packaged_job =~ "MIX_ENV=test mix esbuild.install --if-missing"
@@ -499,5 +499,91 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert poc_status =~ "Final exact-worktree Claude review is green"
     assert poc_status =~ "Hosted implementation run `29192642981` is green"
     assert poc_status =~ "Plan 133 status is `DONE`"
+  end
+
+  test "Plan 134 defines a verified reactive feed in the packaged Tauri app" do
+    plan =
+      File.read!(
+        Path.join(@repo_root, "plans/134-reactive-packaged-tauri-availability-feed-g1.md")
+      )
+
+    client_source = File.read!(Path.join(@repo_root, "clients/lattice-client/src/carrier.ts"))
+    feed_source = File.read!(Path.join(@repo_root, "clients/township-tauri-shell/src/township_feed.ts"))
+    app_source = File.read!(Path.join(@repo_root, "clients/township-tauri-shell/src/App.vue"))
+
+    shell_package =
+      @repo_root
+      |> Path.join("clients/township-tauri-shell/package.json")
+      |> File.read!()
+      |> Jason.decode!()
+
+    plans_index = File.read!(Path.join(@repo_root, "plans/README.md"))
+    workflow = File.read!(Path.join(@repo_root, ".github/workflows/flagship.yml"))
+    build_map = File.read!(Path.join(@repo_root, "TOWNSHIP_BUILD_MAP.md"))
+    poc_status = File.read!(Path.join(@repo_root, "docs/lattice_poc_status.md"))
+
+    mobile_strategy =
+      File.read!(Path.join(@repo_root, "docs/township_mobile_secure_store_strategy.md"))
+
+    assert plan =~ ~r/## Status\s+(?:IN PROGRESS|DONE)/
+    assert plan =~ "Reactive refresh never submits or compacts the authored outbox"
+    assert plan =~ "Every pulled frame is verified before conversion or persistence"
+    assert plan =~ "No mobile secure-store implementation change"
+    assert plan =~ "No complete G1/Phase G claim and no receipt-free W4 claim"
+    assert plan =~ "onState(state: TownshipFeedState): void"
+    assert plan =~ "document.querySelector"
+    assert plan =~ "document.querySelectorAll"
+    assert plan =~ "textContent"
+    assert plan =~ "DOM-derived SHA-256"
+    assert plan =~ "timeout-minutes: 90"
+    assert plan =~ "manual Sync path is deliberately co-scoped"
+    assert plan =~ "Full local regression passed"
+    assert plan =~ "375 tests plus 25 properties"
+    assert plan =~ "Final exact-worktree Claude review returned `PROCEED`"
+    assert plan =~ "Hosted acceptance remains pending"
+
+    assert client_source =~ "verifier: Verifier"
+    assert client_source =~ "verifyCarrierOp"
+    assert feed_source =~ "export function createTownshipFeedController"
+    assert feed_source =~ "export async function refreshTownshipFromCarrier"
+    assert app_source =~ "carrier-feed-status"
+    assert app_source =~ "matter-render-status"
+    assert app_source =~ "township-proceedings"
+    assert app_source =~ "crypto.subtle.digest"
+    assert app_source =~ "postDigests"
+    refute app_source =~ ~r/posts:\s*Array\.from\(/
+    assert app_source =~ "createTownshipFeedController"
+    assert app_source =~ "townshipPreviewFromOps"
+
+    assert File.exists?(Path.join(@repo_root, "clients/township-tauri-shell/test/township_feed.ts"))
+
+    assert File.exists?(
+             Path.join(
+               @repo_root,
+               "clients/township-tauri-shell/test/tauri_carrier_feed_smoke.ts"
+             )
+           )
+
+    assert shell_package["scripts"]["feed:app:contract"] == "tsx test/township_feed.ts"
+
+    assert shell_package["scripts"]["tauri:feed:smoke"] ==
+             "tsx test/tauri_carrier_feed_smoke.ts"
+
+    assert shell_package["scripts"]["app:convergence"] =~ "tauri:feed:smoke"
+    assert workflow =~ "TS reactive Township feed controller"
+    assert workflow =~ "Verify packaged reactive carrier feed"
+    assert workflow =~ "timeout-minutes: 90"
+
+    assert plans_index =~
+             ~r/\| 134 \| Reactive packaged Tauri availability feed \| P1 \| XL \| 133, 129, 130 \| (?:IN PROGRESS|DONE) \|/
+
+    assert build_map =~ "Plan 134 adds the packaged Tauri/Vue reactive availability feed"
+    assert build_map =~ "Reactive refresh never submits or compacts the authored outbox"
+    assert build_map =~ "Full local Plan 134 regression is green"
+    assert poc_status =~ "## Checkpoint: Reactive Packaged Tauri Availability Feed"
+    assert poc_status =~ "Full local regression is green at 375 tests plus 25 properties"
+    assert poc_status =~ "Final exact-worktree Claude review is green"
+    assert poc_status =~ "Hosted acceptance remains pending"
+    assert mobile_strategy =~ "Plan 134 leaves this custody strategy unchanged"
   end
 end

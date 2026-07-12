@@ -4,6 +4,7 @@ import {
   type CarrierStateReport,
   type CarrierVerifier,
   type CarrierSyncClient,
+  type Verifier,
 } from "@treetopdevs/lattice-client";
 import {
   createTownshipNativeWorkflow,
@@ -15,7 +16,9 @@ import {
   TOWNSHIP_REPLICA,
 } from "./township_actions";
 import {
+  carrierVerifierAsOperationVerifier,
   connectTownshipCarrierPeer,
+  createWebCryptoCarrierVerifier,
   type TownshipCarrierPeerConfig,
   type TownshipCarrierWebSocket,
 } from "./township_carrier_peer";
@@ -30,6 +33,7 @@ export type TownshipSyncFailureReason =
 export interface SyncTownshipOutboxOptions extends TownshipNativeWorkflowOptions {
   client?: CarrierSyncClient;
   peer?: TownshipCarrierPeerConfig;
+  operationVerifier?: Verifier;
   verifier?: CarrierVerifier;
   webSocket?: TownshipCarrierWebSocket;
   realmByPubkey?: Record<string, string>;
@@ -118,13 +122,15 @@ export async function syncTownshipOutbox(
 
   let client = options.client;
   let connectedClient: (CarrierSyncClient & { close(): void }) | null = null;
+  const sessionVerifier = options.verifier ?? createWebCryptoCarrierVerifier();
+  const operationVerifier = options.operationVerifier ?? carrierVerifierAsOperationVerifier(sessionVerifier);
   if (!client && options.peer) {
     try {
       const connectOptions = {
         workflow,
         peer: options.peer,
+        verifier: sessionVerifier,
       };
-      if (options.verifier !== undefined) Object.assign(connectOptions, { verifier: options.verifier });
       if (options.webSocket !== undefined) Object.assign(connectOptions, { webSocket: options.webSocket });
       connectedClient = await connectTownshipCarrierPeer(connectOptions);
       client = connectedClient;
@@ -167,7 +173,7 @@ export async function syncTownshipOutbox(
       localOps,
       localCarrierFrames,
       options.realmByPubkey ?? TOWNSHIP_REALM_BY_PUBKEY,
-      { submission: options.peer?.submission ?? "push" },
+      { verifier: operationVerifier, submission: options.peer?.submission ?? "push" },
     );
     const authorityQuarantinedGrantIds = frameIdsForAuthorityQuarantine(
       localCarrierFrames,

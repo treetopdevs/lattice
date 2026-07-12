@@ -30,6 +30,11 @@ interface StableFeedOracle {
   relayRealm: string;
   relayPubkey: string;
   baseOpIds: string[];
+  base: {
+    opIds: string[];
+    readModel: { threads: { posts: string[] } };
+    causalReplay: unknown;
+  };
   expectedPost: CarrierOpFrame;
   expectedRestartPost: CarrierOpFrame;
   afterPost: { opIds: string[] };
@@ -81,6 +86,7 @@ try {
   const oracle = JSON.parse(readFileSync(join(tempRoot, "oracle.json"), "utf8")) as StableFeedOracle;
   assert.equal(oracle.relayRealm, "resident");
   assert.equal(oracle.relayPubkey, relayIdentity.publicKeyBase64);
+  assert.deepEqual(oracle.base.opIds, oracle.baseOpIds);
 
   const port = await freeTcpPort();
   const spawnServer = () =>

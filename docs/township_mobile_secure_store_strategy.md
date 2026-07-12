@@ -428,6 +428,11 @@ retains only a typed availability hint and the headless stable-server gate perfo
 onboarding, capability persistence, pairing, outbox, native key, or native storage mutation. It adds
 no mobile secure-store implementation, mobile relay, Android/iOS probe, physical-device behavior,
 or phone-grade claim.
+Plan 134 leaves this custody strategy unchanged. The packaged desktop app reuses the existing native
+session key and ordinary replayable KV boundary as a read-only observer; every pulled frame is
+verified before the local read log and delegation evidence are persisted. Reactive refresh never
+authors, submits, acknowledges, or compacts an outbox frame. This adds no mobile secure-store
+implementation, Android/iOS probe, physical-device behavior, Expo result, or phone-grade claim.
 Plan 086 proves the same env-gated probe can
 connect and complete a WebSocket frame roundtrip in a debug APK, so it proves the harness can produce
 a positive on-device result but still does not prove release Sync/outbox/KV convergence. Plan 087 proves

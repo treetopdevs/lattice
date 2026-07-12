@@ -1,3 +1,4 @@
+import { verifyCarrierOp } from "./codec";
 import { integrate } from "./sync";
 export function carrierDelegationsFromFrames(frames) {
     return frames.flatMap((frame) => carrierDelegationsFromTerm(frame.body));
@@ -365,10 +366,16 @@ export class CarrierWebSocketClient {
         route.close(reason);
     }
 }
-export async function syncCarrierOnce(client, localOps, localCarrierFrames, realmByPubkey = {}, options = {}) {
+export async function syncCarrierOnce(client, localOps, localCarrierFrames, realmByPubkey = {}, options) {
     const peerIds = new Set(await client.advertise());
     const pulledFrames = await client.pull(localOps.map((op) => op.id));
-    const pulledOps = carrierOpsToSemanticOps(pulledFrames, realmByPubkey);
+    const pulledCarrierFrames = pulledFrames.map(decodeCarrierOpFrame);
+    for (const frame of pulledCarrierFrames) {
+        const verification = await verifyCarrierOp(frame, options.verifier);
+        if (!verification.valid)
+            throw new Error(`carrier op verification failed: ${frame.id}`);
+    }
+    const pulledOps = carrierOpsToSemanticOps(pulledCarrierFrames, realmByPubkey);
     const peerKnownFrameIds = [];
     const candidateFrames = localCarrierFrames.filter((frame) => {
         const op = carrierOpToSemanticOp(frame, realmByPubkey);
@@ -480,6 +487,9 @@ function carrierFrameId(frame) {
 }
 export function carrierOpsToSemanticOps(frames, realmByPubkey = {}) {
     return frames.map((frame) => carrierOpToSemanticOp(frame, realmByPubkey));
+}
+export function decodeCarrierOpFrame(frame) {
+    return assertCarrierOpFrame(frame);
 }
 export function carrierOpToSemanticOp(frame, realmByPubkey = {}) {
     const op = assertCarrierOpFrame(frame);

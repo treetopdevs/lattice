@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createPublicKey, verify as edVerify } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,6 +10,7 @@ import {
   type CarrierPushReport,
   type CarrierRelayClient,
   type CarrierSyncClient,
+  type Verifier,
 } from "../src/index";
 
 interface CarrierVector {
@@ -54,12 +56,14 @@ class ScriptedRelaySyncClient implements CarrierSyncClient, CarrierRelayClient {
 class PushRecordingClient implements CarrierSyncClient {
   readonly pushedIds: string[] = [];
 
+  constructor(private readonly pulledFrames: unknown[] = []) {}
+
   async advertise(): Promise<string[]> {
     return [];
   }
 
   async pull(): Promise<unknown[]> {
-    return [];
+    return [...this.pulledFrames];
   }
 
   async push(ops: unknown[]): Promise<CarrierPushReport> {
@@ -77,10 +81,32 @@ const vector = JSON.parse(
 const [genesis, grant, , , summary, post] = vector.clientDivergedCarrierOps;
 if (!genesis || !grant || !summary || !post) throw new Error("missing relay sync fixtures");
 const localOps = carrierOpsToSemanticOps(vector.clientDivergedCarrierOps, vector.realmByPubkey);
+const operationVerifier: Verifier = { verify: verifyEd25519 };
+
+for (const { label, frame } of [
+  { label: "tampered signature", frame: { ...genesis, sig: tamperBase64(genesis.sig) } },
+  { label: "tampered id", frame: { ...genesis, id: `${genesis.id}x` } },
+]) {
+  const invalidPullClient = new PushRecordingClient([frame]);
+  let invalidPullError: unknown;
+
+  try {
+    await syncCarrierOnce(invalidPullClient, [], [post], vector.realmByPubkey, {
+      verifier: operationVerifier,
+    });
+  } catch (error) {
+    invalidPullError = error;
+  }
+
+  assert.equal(invalidPullClient.pushedIds.length, 0, `${label} must fail before push`);
+  assert.ok(invalidPullError instanceof Error, `${label} must reject the sync`);
+}
 
 const defaultPush = new PushRecordingClient();
 const defaultFrames = [post, summary];
-const defaultSynced = await syncCarrierOnce(defaultPush, localOps, defaultFrames, vector.realmByPubkey);
+const defaultSynced = await syncCarrierOnce(defaultPush, localOps, defaultFrames, vector.realmByPubkey, {
+  verifier: operationVerifier,
+});
 assert.deepEqual(defaultPush.pushedIds, defaultFrames.map((frame) => frame.id));
 assert.deepEqual(defaultSynced.pushedFrames, defaultFrames);
 
@@ -97,7 +123,7 @@ const relaySynced = await syncCarrierOnce(
   localOps,
   relayFrames,
   vector.realmByPubkey,
-  { submission: "relay" },
+  { verifier: operationVerifier, submission: "relay" },
 );
 const causalOrder = [genesis.id, grant.id, summary.id, post.id];
 assert.deepEqual(relayClient.relayedIds, causalOrder);
@@ -117,7 +143,7 @@ const confirmedDuplicate = await syncCarrierOnce(
   localOps,
   [post],
   vector.realmByPubkey,
-  { submission: "relay" },
+  { verifier: operationVerifier, submission: "relay" },
 );
 assert.equal(confirmedDuplicateClient.advertiseCalls, 2);
 assert.deepEqual(confirmedDuplicateClient.relayedIds, [post.id]);
@@ -130,7 +156,7 @@ const unconfirmedDuplicate = await syncCarrierOnce(
   localOps,
   [post],
   vector.realmByPubkey,
-  { submission: "relay" },
+  { verifier: operationVerifier, submission: "relay" },
 );
 assert.equal(unconfirmedDuplicateClient.advertiseCalls, 2);
 assert.deepEqual(unconfirmedDuplicate.acknowledgedFrameIds, []);
@@ -149,7 +175,11 @@ const pushOnlyClient: CarrierSyncClient = {
   },
 };
 await assert.rejects(
-  () => syncCarrierOnce(pushOnlyClient, localOps, [post], vector.realmByPubkey, { submission: "relay" }),
+  () =>
+    syncCarrierOnce(pushOnlyClient, localOps, [post], vector.realmByPubkey, {
+      verifier: operationVerifier,
+      submission: "relay",
+    }),
   /does not support relay/,
 );
 assert.equal(pushFallbackCalls, 0);
@@ -165,4 +195,21 @@ function frameId(frame: unknown): string {
     return (frame as { id: string }).id;
   }
   throw new Error("carrier frame missing id");
+}
+
+function tamperBase64(encoded: string): string {
+  const bytes = Buffer.from(encoded, "base64");
+  bytes[0] = (bytes[0] ?? 0) ^ 0x01;
+  return bytes.toString("base64");
+}
+
+async function verifyEd25519(author: string, bytes: Uint8Array, signature: Uint8Array): Promise<boolean> {
+  const spkiPrefix = Buffer.from("302a300506032b6570032100", "hex");
+  const publicKey = createPublicKey({
+    key: Buffer.concat([spkiPrefix, Buffer.from(author, "base64")]),
+    format: "der",
+    type: "spki",
+  });
+
+  return edVerify(null, Buffer.from(bytes), publicKey, Buffer.from(signature));
 }

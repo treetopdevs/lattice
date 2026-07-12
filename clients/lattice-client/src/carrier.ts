@@ -1,4 +1,6 @@
 import type { Mutation, Op, OpKind } from "./op";
+import { verifyCarrierOp } from "./codec";
+import type { Verifier } from "./identity";
 import { integrate } from "./sync";
 
 export interface CarrierChallenge {
@@ -74,6 +76,7 @@ export interface CarrierRelayClient {
 export type CarrierSubmission = "push" | "relay";
 
 export interface SyncCarrierOptions {
+  verifier: Verifier;
   submission?: CarrierSubmission;
 }
 
@@ -643,11 +646,18 @@ export async function syncCarrierOnce(
   localOps: Op[],
   localCarrierFrames: unknown[],
   realmByPubkey: Record<string, string> = {},
-  options: SyncCarrierOptions = {},
+  options: SyncCarrierOptions,
 ): Promise<SyncCarrierResult> {
   const peerIds = new Set(await client.advertise());
   const pulledFrames = await client.pull(localOps.map((op) => op.id));
-  const pulledOps = carrierOpsToSemanticOps(pulledFrames, realmByPubkey);
+  const pulledCarrierFrames = pulledFrames.map(decodeCarrierOpFrame);
+
+  for (const frame of pulledCarrierFrames) {
+    const verification = await verifyCarrierOp(frame, options.verifier);
+    if (!verification.valid) throw new Error(`carrier op verification failed: ${frame.id}`);
+  }
+
+  const pulledOps = carrierOpsToSemanticOps(pulledCarrierFrames, realmByPubkey);
   const peerKnownFrameIds: string[] = [];
 
   const candidateFrames = localCarrierFrames.filter((frame) => {
@@ -785,6 +795,10 @@ export function carrierOpsToSemanticOps(
   realmByPubkey: Record<string, string> = {},
 ): Op[] {
   return frames.map((frame) => carrierOpToSemanticOp(frame, realmByPubkey));
+}
+
+export function decodeCarrierOpFrame(frame: unknown): CarrierOpFrame {
+  return assertCarrierOpFrame(frame);
 }
 
 export function carrierOpToSemanticOp(

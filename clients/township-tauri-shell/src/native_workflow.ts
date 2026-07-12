@@ -30,6 +30,8 @@ export const TOWNSHIP_TRACE_PAIRING_LINK_LOAD_SETTLED = "pairing-link-load-settl
 export const TOWNSHIP_TRACE_PAIRING_CONFIG_SAVE_SUBMITTED = "pairing-config-save-submitted";
 export const TOWNSHIP_TRACE_SYNC_OUTBOX_STARTED = "sync-outbox-started";
 export const TOWNSHIP_TRACE_CARRIER_HEALTH_STARTED = "carrier-health-started";
+export const TOWNSHIP_TRACE_CARRIER_FEED_DOM_PREFIX = "carrier-feed-dom:";
+export const TOWNSHIP_TRACE_CARRIER_FEED_DOM_ERROR = "carrier-feed-dom-error";
 
 export interface TownshipNativeWorkflowOptions {
   invoke?: TauriInvoke;

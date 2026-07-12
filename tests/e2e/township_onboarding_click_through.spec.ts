@@ -73,6 +73,11 @@ const verifier: CarrierVerifier = {
     return edVerify(null, Buffer.from(bytes), publicKeyObject(pubkey), Buffer.from(signature));
   },
 };
+const carrierSessionTranscriptPrefix = Buffer.from([
+  0x87,
+  0x52,
+  ...Buffer.from("carrier-session-v1", "utf8"),
+]);
 
 let appServer: StaticAppServer;
 
@@ -141,7 +146,7 @@ test("resident controls refresh pulled caps and converge through the native seam
 
     await expect(postAction).toContainText("No local cap");
     await page.getByRole("button", { name: "Sync outbox" }).click();
-    const syncMessage = page.locator(".sync-actions .sync-message").nth(1);
+    const syncMessage = page.locator("#carrier-sync-status");
     await expect(syncMessage).toHaveText(/Pushed 0, pulled [1-9]\d*, accepted 0\./, { timeout: 20_000 });
 
     // RED on Plan 120: sync persisted the cap, but the rendered availability snapshot stayed stale.
@@ -150,7 +155,7 @@ test("resident controls refresh pulled caps and converge through the native seam
     const postText = "resident: prepared in the instrument";
     const actionUrl = townshipPostActionUrl(vector.replica, postText);
     const kvBeforeIntent = [...kv.entries()];
-    const signCallsBeforeIntent = calls.filter(({ command }) => command === "lattice_sign_carrier").length;
+    const nonSessionSignsBeforeIntent = nonSessionSignCount(calls);
     const callsBeforeIntent = calls.length;
 
     await deliverTauriDeepLink(page, calls, actionUrl);
@@ -161,9 +166,9 @@ test("resident controls refresh pulled caps and converge through the native seam
     await expect(page.getByRole("textbox", { name: "Township post update" })).toHaveValue("");
     assert.deepEqual([...kv.entries()], kvBeforeIntent, "action ingress must not change native KV state");
     assert.equal(
-      calls.filter(({ command }) => command === "lattice_sign_carrier").length,
-      signCallsBeforeIntent,
-      "action ingress must not sign",
+      nonSessionSignCount(calls),
+      nonSessionSignsBeforeIntent,
+      "action ingress must not sign a non-session payload",
     );
     const actionIngressTraces = calls
       .slice(callsBeforeIntent)
@@ -176,7 +181,7 @@ test("resident controls refresh pulled caps and converge through the native seam
     await expect(incoming).toHaveCount(0);
     await expect(page.getByRole("textbox", { name: "Township post update" })).toHaveValue(postText);
     assert.deepEqual([...kv.entries()], kvBeforeIntent, "accepting a request must remain draft-only");
-    assert.equal(calls.filter(({ command }) => command === "lattice_sign_carrier").length, signCallsBeforeIntent);
+    assert.equal(nonSessionSignCount(calls), nonSessionSignsBeforeIntent);
 
     await page.getByRole("button", { name: "Post update" }).click();
     const postPanel = page.locator(".compose-panel").filter({
@@ -185,12 +190,12 @@ test("resident controls refresh pulled caps and converge through the native seam
     await expect(postPanel.locator(".post-actions .post-message")).toContainText("Saved signed frame", {
       timeout: 10_000,
     });
+    assert.equal(nonSessionSignCount(calls), nonSessionSignsBeforeIntent + 1);
 
     await page.getByRole("button", { name: "Sync outbox" }).click();
     await expect(syncMessage).toHaveText(/Pushed 1, pulled \d+, accepted 1\./, { timeout: 20_000 });
 
     assert.deepEqual(JSON.parse(requiredValue(kv, storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY))), []);
-    assert.ok(calls.some(({ command }) => command === "lattice_sign_carrier"));
     assert.doesNotThrow(() =>
       assertTownshipKvStoresNoSecrets(kv, [
         residentDeviceSeed,
@@ -388,6 +393,14 @@ function requiredString(record: Record<string, unknown>, key: string): string {
   const value = record[key];
   if (typeof value !== "string") throw new Error(`missing string argument ${key}`);
   return value;
+}
+
+function nonSessionSignCount(calls: InvokeCall[]): number {
+  return calls.filter(({ command, args }) => {
+    if (command !== "lattice_sign_carrier") return false;
+    const signedBytes = Buffer.from(requiredString(args, "bytes"), "base64");
+    return !signedBytes.subarray(0, carrierSessionTranscriptPrefix.length).equals(carrierSessionTranscriptPrefix);
+  }).length;
 }
 
 function requiredValue(values: Map<string, string>, key: string): string {

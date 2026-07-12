@@ -129,7 +129,11 @@ export const townshipMatterOps: Op[] = [
 ];
 
 export function townshipPreview(): TownshipMatterPreview {
-  const materialized = materialize(townshipMatterSchema, townshipMatterOps);
+  return townshipPreviewFromOps(townshipMatterOps);
+}
+
+export function townshipPreviewFromOps(ops: Op[]): TownshipMatterPreview {
+  const materialized = materialize(townshipMatterSchema, ops);
   const state = materialized.state;
 
   return {
@@ -139,7 +143,7 @@ export function townshipPreview(): TownshipMatterPreview {
     status: state.clerk_locked === true ? "Locked" : "Open",
     members: stringArray(state.members),
     posts: stringArray(state.posts),
-    opCount: townshipMatterOps.length,
+    opCount: ops.length,
     appliedCount: materialized.order.length - materialized.quarantine.length,
     quarantineCount: materialized.quarantine.length,
   };

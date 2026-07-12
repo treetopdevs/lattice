@@ -1,4 +1,5 @@
 import type { Op, OpKind } from "./op";
+import type { Verifier } from "./identity";
 export interface CarrierChallenge {
     type: "carrier_challenge";
     local_realm: string;
@@ -60,6 +61,7 @@ export interface CarrierRelayClient {
 }
 export type CarrierSubmission = "push" | "relay";
 export interface SyncCarrierOptions {
+    verifier: Verifier;
     submission?: CarrierSubmission;
 }
 export interface CarrierStateReport {
@@ -153,7 +155,8 @@ export declare class CarrierWebSocketClient {
     private unsubscribeAvailability;
     private closeAvailability;
 }
-export declare function syncCarrierOnce(client: CarrierSyncClient, localOps: Op[], localCarrierFrames: unknown[], realmByPubkey?: Record<string, string>, options?: SyncCarrierOptions): Promise<SyncCarrierResult>;
+export declare function syncCarrierOnce(client: CarrierSyncClient, localOps: Op[], localCarrierFrames: unknown[], realmByPubkey: Record<string, string> | undefined, options: SyncCarrierOptions): Promise<SyncCarrierResult>;
 export declare function carrierOpsToSemanticOps(frames: unknown[], realmByPubkey?: Record<string, string>): Op[];
+export declare function decodeCarrierOpFrame(frame: unknown): CarrierOpFrame;
 export declare function carrierOpToSemanticOp(frame: unknown, realmByPubkey?: Record<string, string>): Op;
 export {};

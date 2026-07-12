@@ -134,6 +134,9 @@ jobs:
       - name: Install Tauri shell dependencies
         working-directory: clients/township-tauri-shell
         run: npm ci
+      - name: TS reactive Township feed controller
+        working-directory: clients/township-tauri-shell
+        run: npm run feed:app:contract
       - name: TS live stable carrier availability feed
         working-directory: clients/township-tauri-shell
         run: npm run feed:contract
@@ -173,7 +176,7 @@ jobs:
   packaged_macos:
     name: Packaged macOS convergence
     runs-on: macos-15-intel
-    timeout-minutes: 75
+    timeout-minutes: 90
 
     steps:
       - name: Checkout
@@ -234,3 +237,7 @@ jobs:
       - name: Verify packaged action handoff
         working-directory: clients/township-tauri-shell
         run: npm run tauri:action-handoff:smoke
+
+      - name: Verify packaged reactive carrier feed
+        working-directory: clients/township-tauri-shell
+        run: npm run tauri:feed:smoke
