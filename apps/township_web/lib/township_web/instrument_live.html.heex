@@ -82,6 +82,40 @@
         <% end %>
       </section>
 
+      <section
+        :if={@source_state == :fresh}
+        id="participant-post-panel"
+        class="participant-action"
+        aria-labelledby="participant-post-title"
+      >
+        <header>
+          <p class="section-kicker">Participant action</p>
+          <h2 id="participant-post-title">Post from your device</h2>
+        </header>
+        <form id="participant-post-form" phx-submit="prepare_post">
+          <label for={@post_intent_form[:text].id}>Resident update</label>
+          <textarea
+            id={@post_intent_form[:text].id}
+            name={@post_intent_form[:text].name}
+            rows="2"
+            autocomplete="off"
+          >{Phoenix.HTML.Form.normalize_value("textarea", @post_intent_form[:text].value)}</textarea>
+          <button type="submit">Prepare in app</button>
+        </form>
+        <div :if={@post_intent_url} class="participant-action__handoff">
+          <p id="participant-post-prepared" aria-live="polite">Unsigned and unconfirmed</p>
+          <a id="participant-post-handoff" href={@post_intent_url}>Open in Township app</a>
+        </div>
+        <p
+          :if={@post_intent_error}
+          id="participant-post-error"
+          class="participant-action__error"
+          aria-live="polite"
+        >
+          {@post_intent_error}
+        </p>
+      </section>
+
       <div class="instrument-grid">
         <section id="threads-panel" class="panel panel--threads">
           <header class="panel-header">

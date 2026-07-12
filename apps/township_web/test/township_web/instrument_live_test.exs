@@ -152,6 +152,107 @@ defmodule TownshipWeb.InstrumentLiveTest do
     refute rendered =~ "df911bb13013abef"
   end
 
+  test "fresh carrier state prepares one unsigned participant post without changing the model", %{
+    conn: conn
+  } do
+    peer_log = peer_log()
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         carrier: LiveCarrier,
+         connect_opts: [ops: Log.topo_ops(peer_log)],
+         replica: peer_log.replica,
+         peer_realm: "clerk",
+         pubsub: TownshipWeb.PubSub,
+         topic: "township:post-intent:#{System.unique_integer([:positive])}",
+         schedule: :manual}
+      )
+
+    put_projection_config(projection)
+    {:ok, view, _html} = live(conn, "/township")
+
+    refute has_element?(view, "#participant-post-form")
+    assert {:ok, {:fresh, _payload}} = CarrierProjection.refresh(projection)
+    assert has_element?(view, "#participant-post-form")
+
+    op_count = peer_log |> Log.op_ids() |> MapSet.size()
+    assert has_element?(view, "#op-dag-panel [data-op-count='#{op_count}']")
+
+    post_text = "resident: prepared in the instrument"
+
+    view
+    |> form("#participant-post-form", %{"post" => %{"text" => "  #{post_text}  "}})
+    |> render_submit()
+
+    assert has_element?(view, "#participant-post-handoff[href^='township://action?intent=']")
+
+    assert has_element?(
+             view,
+             "#participant-post-prepared[aria-live='polite']",
+             "Unsigned and unconfirmed"
+           )
+
+    payload = view |> action_intent_href() |> decoded_action_intent()
+    assert payload["v"] == 1
+    assert payload["id"] =~ ~r/\A[0-9a-f]{32}\z/
+    assert payload["replica"] == peer_log.replica
+    assert payload["command"] == %{"command" => "post", "text" => post_text}
+    assert Map.keys(payload) |> Enum.sort() == ["command", "id", "replica", "v"]
+
+    assert has_element?(view, "#op-dag-panel [data-op-count='#{op_count}']")
+    refute has_element?(view, "#threads-panel [data-post]", post_text)
+  end
+
+  test "participant post preparation rejects invalid text and disappears when the carrier is stale",
+       %{
+         conn: conn
+       } do
+    peer_log = peer_log()
+    control = start_supervised!({Agent, fn -> :ok end})
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         carrier: LiveCarrier,
+         connect_opts: [ops: Log.topo_ops(peer_log), control: control],
+         replica: peer_log.replica,
+         peer_realm: "clerk",
+         pubsub: TownshipWeb.PubSub,
+         topic: "township:post-intent-state:#{System.unique_integer([:positive])}",
+         schedule: :manual}
+      )
+
+    put_projection_config(projection)
+    {:ok, view, _html} = live(conn, "/township")
+    assert {:ok, {:fresh, _payload}} = CarrierProjection.refresh(projection)
+
+    view
+    |> form("#participant-post-form", %{"post" => %{"text" => " "}})
+    |> render_submit()
+
+    assert has_element?(
+             view,
+             "#participant-post-error[aria-live='polite']",
+             "Write an update before opening the app"
+           )
+
+    refute has_element?(view, "#participant-post-handoff")
+
+    render_hook(view, "prepare_post", %{"post" => %{"text" => %{"smuggled" => true}}})
+
+    assert has_element?(
+             view,
+             "#participant-post-error[aria-live='polite']",
+             "Write an update before opening the app"
+           )
+
+    Agent.update(control, fn _mode -> {:advertise_error, :offline} end)
+    assert {:ok, {:stale, _payload}} = CarrierProjection.refresh(projection)
+    refute has_element?(view, "#participant-post-form")
+    refute has_element?(view, "#participant-post-handoff")
+  end
+
   test "configured but absent projection renders carrier unavailable without bundle fallback", %{
     conn: conn
   } do
@@ -254,5 +355,21 @@ defmodule TownshipWeb.InstrumentLiveTest do
         value -> Application.put_env(:township_web, :instrument_projection_server, value)
       end
     end)
+  end
+
+  defp action_intent_href(view) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query_by_id("participant-post-handoff")
+    |> LazyHTML.attribute("href")
+    |> List.first()
+  end
+
+  defp decoded_action_intent(url) do
+    %URI{scheme: "township", host: "action", query: query} = URI.parse(url)
+    %{"intent" => encoded} = URI.decode_query(query)
+    {:ok, json} = Base.url_decode64(encoded, padding: false)
+    Jason.decode!(json)
   end
 end

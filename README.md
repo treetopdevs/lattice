@@ -203,6 +203,8 @@ Module docs render via ex_doc: `cd apps/lattice_core && mix docs`.
   changed log before acknowledgement; semantic authority remains downstream.
 - A packaged Tauri client proof that selects relay explicitly, keeps native participant-key
   custody, and converges with a fresh pull-only observer after server restart.
+- A cross-surface proof that a LiveView-prepared unsigned post request can enter that same
+  client-custody path and become Sim-equal without server-side authoring.
 - Fail-closed path loading and persisted source recovery across supervisor and
   OS-process restart.
 - A realm transport identity, not a participant identity, capability issuer, or
@@ -218,15 +220,19 @@ Module docs render via ex_doc: `cd apps/lattice_core && mix docs`.
 
 `apps/township_web` owns:
 
-- The read-only Phoenix LiveView instrument at `/township` and its Vue causal-replay
-  island.
+- The Phoenix LiveView instrument at `/township` and its Vue causal-replay island. A
+  fresh carrier-backed `/township` instrument may prepare one unsigned post request
+  for explicit review in the paired Tauri app; verified/stale/offline views remain
+  observation-only.
 - `TownshipWeb.CarrierProjection`, an optional supervised observer that periodically
   pulls an authenticated WebSocket peer, validates received operations through the
   shared log/reducer path, and publishes fresh or stale snapshots through PubSub.
 - Startup loads the trusted Township reducer and authority schemas before the first pull so the
   existing-atom wire guard also works in a fresh BEAM VM.
-- No participant key, capability, write path, server-push feed, or listener ownership;
-  the optional peer is supplied by another boundary such as `lattice_carrier_server`.
+- No participant key, capability, delegation frame, dependency frontier, signature,
+  operation authoring, server-push feed, or listener ownership. The optional peer is
+  supplied by another boundary such as `lattice_carrier_server`, and authored results
+  appear only through its projection.
 
 `apps/lattice_demo` owns:
 

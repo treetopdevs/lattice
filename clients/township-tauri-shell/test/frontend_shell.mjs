@@ -364,7 +364,7 @@ test("frontend package exposes the real app convergence gate", () => {
   );
   assert.equal(
     pkg.scripts["app:convergence"],
-    "npm run action:contract && npm run sync:contract && npm run stable:relay:contract && npm run onboarding:contract && npm run onboarding:click-through && npm run live:contract && npm run tauri:launch:smoke && npm run tauri:onboarding:smoke && npm run tauri:stable-relay:onboarding:smoke && npm run tauri:deep-link:smoke",
+    "npm run action:contract && npm run sync:contract && npm run stable:relay:contract && npm run onboarding:contract && npm run onboarding:click-through && npm run live:contract && npm run tauri:launch:smoke && npm run tauri:onboarding:smoke && npm run tauri:stable-relay:onboarding:smoke && npm run tauri:action-handoff:smoke && npm run tauri:deep-link:smoke",
   );
   assert.match(launchSmoke, /"tauri", \["build", "--features", "township-dev-trace", "--bundles", "app"\]/);
   assert.match(launchSmoke, /VITE_TOWNSHIP_AUTOSYNC_ON_MOUNT: "1"/);
@@ -480,15 +480,17 @@ test("Vue source gates imported pairing saves on explicit confirmation", () => {
   assert.match(releaseProbe, /confirmed: true/);
 });
 
-test("Vue source exposes pairing handoff import without device-local identity transfer", () => {
+test("Vue source preserves gated pairing import through the shared participant dispatcher", () => {
   const app = readText("src/App.vue");
   const peer = readText("src/township_carrier_peer.ts");
   const link = readText("src/township_pairing_deeplink.ts");
   const source = readText("src/township_pairing_deeplink_source.ts");
+  const dispatcher = readText("src/township_deep_link_dispatcher.ts");
   const pkg = readJson("package.json");
 
   assert.equal(pkg.scripts["deeplink:contract"], "tsx test/township_pairing_deeplink.ts");
   assert.equal(pkg.scripts["deeplink:source:contract"], "tsx test/township_pairing_deeplink_source.ts");
+  assert.equal(pkg.scripts["deeplink:dispatcher:contract"], "tsx test/township_deep_link_dispatcher.ts");
   assert.match(peer, /exportTownshipCarrierPairingHandoff/);
   assert.match(peer, /importTownshipCarrierPairingHandoff/);
   assert.match(peer, /townshipCarrierPeerFingerprint/);
@@ -508,18 +510,29 @@ test("Vue source exposes pairing handoff import without device-local identity tr
   assert.match(app, /pairingHandoffDraft/);
   assert.match(app, /pairingHandoffFingerprint/);
   assert.match(app, /parseTownshipPairingDeepLink/);
-  assert.match(app, /createTownshipPairingDeepLinkListener/);
+  assert.match(dispatcher, /createTownshipParticipantDeepLinkDispatcher/);
+  assert.match(dispatcher, /options\.source\.onOpenUrl\(handleUrls\)/);
+  assert.match(dispatcher, /handleUrls\(await options\.source\.current\(\)\)/);
+  assert.match(app, /createTownshipParticipantDeepLinkDispatcher/);
+  assert.match(app, /routeOtherParticipantDeepLink/);
   assert.match(app, /createTauriPairingDeepLinkSource/);
-  assert.match(app, /createTauriPairingDeepLinkSource\(\{ includeAndroidPairingIntent: false \}\)/);
+  assert.match(
+    app,
+    /source: createTauriPairingDeepLinkSource\(\{ includeAndroidPairingIntent: true \}\)/,
+  );
+  assert.match(
+    app,
+    /source: createTauriPairingDeepLinkSource\(\{ includeAndroidPairingIntent: false \}\)/,
+  );
   assert.match(app, /tauriDeepLinkRuntimeAvailable/);
-  assert.match(app, /pairingDeepLinkListener/);
+  assert.match(app, /participantDeepLinkDispatcher/);
   assert.match(app, /pairingDeepLinkGate = createOneShotTownshipPairingDeepLinkGate\(\)/);
   assert.match(app, /pairingDeepLinkImportArmed = ref\(false\)/);
   assert.match(app, /pairingDeepLinkImportState = ref<string \| null>\(null\)/);
   assert.match(app, /armPairingDeepLinkImport/);
   assert.match(app, /disarmPairingDeepLinkImport/);
   assert.match(app, /consumePairingDeepLinkImport/);
-  assert.match(app, /onBlocked: handleBlockedPairingDeepLink/);
+  assert.match(app, /handleBlockedPairingDeepLink\(\{ reason: consumption\.reason, parse \}\)/);
   assert.match(app, /Pairing link ignored; enable link import first/);
   assert.match(app, /Pairing link ignored; state token did not match/);
   assert.match(app, /link state/);
@@ -548,38 +561,47 @@ test("Vue source exposes pairing handoff import without device-local identity tr
   assert.doesNotMatch(app, /secure pairing/i);
 });
 
-test("Vue source mounts the pairing deep-link listener before the best-effort canonical probe listener", () => {
+test("Vue source mounts participant ingress before the best-effort canonical probe listener", () => {
   const app = readText("src/App.vue");
   const mountedStart = app.indexOf("onMounted(async () => {");
-  const mountedEnd = app.indexOf("if (autosyncOnMount && carrierPeer.value) await syncOutbox()");
+  const mountedEnd = app.indexOf("\n});\n\nonUnmounted", mountedStart);
   const mounted = app.slice(mountedStart, mountedEnd);
 
   assert.ok(mountedStart > -1, "expected App.vue to define an onMounted boot sequence");
   assert.ok(
-    mounted.indexOf("await mountPairingDeepLinkListener()") > -1,
-    "expected the boot sequence to mount the pairing deep-link listener",
+    mounted.indexOf("await mountParticipantDeepLinkDispatcher()") > -1,
+    "expected the boot sequence to mount the shared participant dispatcher",
   );
   assert.ok(
     mounted.indexOf("await mountCanonicalProbeDeepLinkListener()") > -1,
     "expected the boot sequence to mount the canonical probe listener",
   );
   assert.ok(
-    mounted.indexOf("await mountPairingDeepLinkListener()") <
+    mounted.indexOf("await mountParticipantDeepLinkDispatcher()") <
       mounted.indexOf("await mountCanonicalProbeDeepLinkListener()"),
-    "pairing import readiness should not sit behind a best-effort probe listener",
+    "participant ingress readiness should not sit behind a best-effort probe listener",
   );
 });
 
-test("Vue source does not block pairing deep-link readiness on native keychain probes", () => {
+test("Vue source does not block participant deep-link readiness on native keychain probes", () => {
   const app = readText("src/App.vue");
   const mountedStart = app.indexOf("onMounted(async () => {");
-  const mountedEnd = app.indexOf("if (autosyncOnMount && carrierPeer.value) await syncOutbox()");
+  const mountedEnd = app.indexOf("\n});\n\nonUnmounted", mountedStart);
   const mounted = app.slice(mountedStart, mountedEnd);
 
   assert.ok(mountedStart > -1, "expected App.vue to define an onMounted boot sequence");
   assert.ok(
-    mounted.indexOf("await mountPairingDeepLinkListener()") > -1,
-    "expected the boot sequence to mount the pairing deep-link listener",
+    mounted.indexOf("await mountParticipantDeepLinkDispatcher()") > -1,
+    "expected the boot sequence to mount the shared participant dispatcher",
+  );
+  assert.ok(
+    mounted.indexOf("await loadPairingConfig()") < mounted.indexOf("await mountParticipantDeepLinkDispatcher()"),
+    "participant action validation should have the saved replica before cold-start URLs are dispatched",
+  );
+  assert.ok(
+    mounted.indexOf("await mountParticipantDeepLinkDispatcher()") <
+      mounted.indexOf("scheduleTownshipNativeHydration()"),
+    "participant ingress should mount before deferred keychain readiness starts",
   );
   assert.equal(
     mounted.indexOf("nativeStatus.value = await loadTownshipNativeStatus()"),
@@ -592,6 +614,38 @@ test("Vue source does not block pairing deep-link readiness on native keychain p
   );
   assert.match(app, /nativeStatus\.value = await loadTownshipNativeStatus\(\)/);
   assert.match(app, /window\.setTimeout\(\(\) => \{[\s\S]*void hydrateTownshipNativeReadiness\(\);[\s\S]*\}/);
+});
+
+test("Vue source limits packaged action execution to a dev-trace control over production functions", () => {
+  const app = readText("src/App.vue");
+  const smoke = readText("test/tauri_action_handoff_smoke.ts");
+  const pkg = readJson("package.json");
+
+  assert.equal(pkg.scripts["tauri:action-handoff:smoke"], "tsx test/tauri_action_handoff_smoke.ts");
+  assert.match(pkg.scripts["app:convergence"], /tauri:action-handoff:smoke/);
+  assert.match(app, /const devTraceRuntimeReady = ref\(false\)/);
+  assert.match(
+    app,
+    /function handleDevTraceControlDeepLink\(value: string\): boolean \{[\s\S]*if \(!devTraceRuntime \|\| !devTraceRuntimeReady\.value\) return false/,
+  );
+  assert.match(
+    app,
+    /await traceTownshipDevEvent\(TOWNSHIP_TRACE_DEV_RUNTIME_READY\)[\s\S]*devTraceRuntimeReady\.value = true/,
+  );
+  assert.match(app, /route === "action-intent\/submit"/);
+  assert.match(
+    app,
+    /async function submitPendingPostIntentFromDevTrace\(\)[\s\S]*acceptPendingPostIntent\(\)[\s\S]*await submitPost\(\)[\s\S]*await syncOutbox\(\)/,
+  );
+  assert.doesNotMatch(app, /VITE_TOWNSHIP_ACTION_INTENT_AUTO/);
+  assert.match(smoke, /spawnTownshipActionLiveProjection/);
+  assert.match(smoke, /#participant-post-handoff/);
+  assert.match(smoke, /await deliverDeepLink\(handoff\.url\)/);
+  assert.match(smoke, /township:\/\/dev\/action-intent\/submit/);
+  assert.match(smoke, /assertLaunchServicesRoutesTownshipSchemeToBundle/);
+  assert.match(smoke, /spawnStableCarrierServer/);
+  assert.match(smoke, /stable_relay_verify\.exs/);
+  assert.match(smoke, /assertTraceRedacted/);
 });
 
 test("Vue source renders pairing handoff QR without trust claims", () => {

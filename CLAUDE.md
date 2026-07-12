@@ -26,7 +26,7 @@ is the **minimal cut** of it:
 | `apps/lattice_core/test/support/attestation_contract.ex` | Shared contract the Stub AND M4 must pass. |
 | `apps/lattice_core/test/township/workflows_test.exs` | W0–W4 as falsifiable tests. |
 | `scripts/township_demo.exs` | Narrated end-to-end run (`§5` storyline). |
-| `apps/township_web` | Read-only LiveView/Vue instrument; its optional Plan 126 projection periodically pulls a real carrier peer and publishes verified snapshots through PubSub. |
+| `apps/township_web` | Read-oriented LiveView/Vue instrument; its optional Plan 126 projection periodically pulls a real carrier peer and publishes verified snapshots through PubSub, while Plan 130 lets a fresh projection prepare one unsigned post request for app-owned review and authoring. |
 | `apps/lattice_carrier_server` | Plan 127 supervised listener, read-only by default; Plan 128 permits selected trusted realms to relay already-signed operations into a path-backed log without participant custody. |
 
 ## The one bet: the seam
@@ -87,6 +87,17 @@ The older packaged generic-push smoke remains unchanged. This is a packaged desk
 proof, not mobile relay or a new secure-store implementation, and it still adds no `/township`
 write controls, server push, participant custody, production deployment, Phase G completion, or
 receipt-free W4.
+
+Plan 130 adds the first participant post handoff. A fresh carrier-backed `/township` LiveView may
+prepare one versioned unsigned request from its projected replica and public post text. The paired
+Tauri app treats that link as untrusted review input, preserves any existing local draft, validates
+the replica against saved pairing, and requires separate Use request, Post, and Sync actions before
+its existing local-cap, local-frontier, native-key, persisted-outbox, and stable-relay path runs.
+Phoenix never receives participant keys, capabilities, delegation frames, dependencies, signatures,
+or authoring authority. The Ubuntu flagship gate and a packaged macOS LaunchServices gate compare
+the resulting operation and restarted projection with `Lattice.Sim`. This is not server push,
+broader participant controls, production deployment, Phase G completion, receipt-free W4, or a new
+mobile/device or secure-store result.
 
 ## Constraints — the "do not implement" boundary (PD-001 §6)
 

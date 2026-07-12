@@ -46,15 +46,19 @@ import {
 } from "./township_carrier_peer";
 import {
   createOneShotTownshipPairingDeepLinkGate,
-  createTownshipPairingDeepLinkListener,
   parseTownshipPairingDeepLink,
   type TownshipPairingDeepLinkBlocked,
   type TownshipPairingDeepLinkGateConsumption,
-  type TownshipPairingDeepLinkListener,
   type TownshipPairingDeepLinkParse,
-  type TownshipPairingDeepLinkSource,
 } from "./township_pairing_deeplink";
 import { createTauriPairingDeepLinkSource } from "./township_pairing_deeplink_source";
+import type { TownshipPostActionIntent } from "./township_action_intent";
+import {
+  createTownshipParticipantDeepLinkDispatcher,
+  type TownshipActionIntentRejection,
+  type TownshipActionIntentTrace,
+  type TownshipParticipantDeepLinkDispatcher,
+} from "./township_deep_link_dispatcher";
 import {
   createTownshipCanonicalProbeDeepLinkListener,
   logTownshipCanonicalProbe,
@@ -109,6 +113,7 @@ const matter = computed(() => townshipPreview());
 const carrierPeer = ref<TownshipCarrierPeerConfig | null>(townshipCarrierPeerFromEnv());
 const autosyncOnMount = truthy(import.meta.env.VITE_TOWNSHIP_AUTOSYNC_ON_MOUNT);
 const devTraceRuntime = truthy(import.meta.env.VITE_TOWNSHIP_DEV_TRACE);
+const devTraceRuntimeReady = ref(false);
 const nativeStatus = ref<TownshipNativeStatus>({
   ready: false,
   keyId: TOWNSHIP_NATIVE_KEY_ID,
@@ -157,6 +162,9 @@ const revokeSubmitting = ref(false);
 const postDraft = ref("");
 const postStatus = ref<TownshipPostSubmission | null>(null);
 const postSubmitting = ref(false);
+const pendingPostIntent = ref<TownshipPostActionIntent | null>(null);
+const acceptedPostIntent = ref<TownshipPostActionIntent | null>(null);
+const actionIntentStatus = ref<{ ok: boolean; message: string } | null>(null);
 const pairingDraft = ref<TownshipCarrierPeerConfigInput>(pairingDraftFromConfig(carrierPeer.value));
 const pairingDraftOrigin = ref<TownshipCarrierPairingDraftOrigin>("manual");
 const pairingSaveConfirmed = ref(false);
@@ -179,7 +187,7 @@ const pairingDiscoveryRunning = ref(false);
 const pairingDiscoveryCandidate = ref<Extract<TownshipPairingDiscoveryResult, { ok: true }> | null>(null);
 const pairingAdvertiseStatus = ref<{ ok: boolean; message: string } | null>(null);
 const pairingAdvertiseSubmitting = ref(false);
-let pairingDeepLinkListener: TownshipPairingDeepLinkListener | null = null;
+let participantDeepLinkDispatcher: TownshipParticipantDeepLinkDispatcher | null = null;
 let canonicalProbeDeepLinkListener: TownshipCanonicalProbeDeepLinkListener | null = null;
 let pairingCameraScanner: TownshipPairingQrCameraScanner | null = null;
 let pairingDiscovery: TownshipPairingDiscovery | null = null;
@@ -389,12 +397,12 @@ onMounted(async () => {
       void logTownshipReleaseTransportProbesFromEnv().catch(() => {});
     }
   }
+  await loadPairingConfig();
   if (!releasePairingProbeActive && !releaseOnboardingProbeActive && !releaseRootOriginationProbeActive) {
-    await mountPairingDeepLinkListener();
+    await mountParticipantDeepLinkDispatcher();
     await mountCanonicalProbeDeepLinkListener();
   }
   if (devTraceRuntime) await mountDevTraceShortcut();
-  await loadPairingConfig();
   if (autosyncOnMount && carrierPeer.value) await syncOutbox();
   if (devTraceRuntime) {
     const onboarding = await runTownshipPackagedOnboardingFromEnv(import.meta.env);
@@ -410,21 +418,39 @@ onMounted(async () => {
 
 onUnmounted(() => {
   appUnmounted = true;
+  devTraceRuntimeReady.value = false;
   if (devTraceShortcutMounted) window.removeEventListener("keydown", handleDevTraceShortcut);
   devTraceShortcutMounted = false;
   canonicalProbeDeepLinkListener?.stop();
   canonicalProbeDeepLinkListener = null;
-  pairingDeepLinkListener?.stop();
-  pairingDeepLinkListener = null;
+  participantDeepLinkDispatcher?.stop();
+  participantDeepLinkDispatcher = null;
   clearPairingDeepLinkImport();
+  clearPendingPostIntent();
   stopPairingQrCamera();
   stopPairingDiscovery();
 });
 
 async function submitPost() {
+  const acceptedIntent = acceptedPostIntent.value;
+  if (acceptedIntent && carrierPeer.value?.replica !== acceptedIntent.replica) {
+    actionIntentStatus.value = {
+      ok: false,
+      message: "Post request no longer matches the saved Township pairing.",
+    };
+    return;
+  }
+
   postSubmitting.value = true;
-  postStatus.value = await submitTownshipPost({ text: postDraft.value });
-  if (postStatus.value.ok) postDraft.value = "";
+  postStatus.value = await submitTownshipPost({
+    text: postDraft.value,
+    ...(acceptedIntent ? { replica: acceptedIntent.replica } : {}),
+  });
+  if (postStatus.value.ok) {
+    postDraft.value = "";
+    acceptedPostIntent.value = null;
+    actionIntentStatus.value = null;
+  }
   postSubmitting.value = false;
 }
 
@@ -585,29 +611,21 @@ function importPairingHandoff() {
   pairingStatus.value = { ok: true, message: "Pairing handoff loaded; save before sync." };
 }
 
-async function mountPairingDeepLinkListener() {
-  if (pairingDeepLinkListener !== null) return;
+async function mountParticipantDeepLinkDispatcher() {
+  if (participantDeepLinkDispatcher !== null) return;
 
   try {
-    pairingDeepLinkListener = await createTownshipPairingDeepLinkListener({
-      source: createTracingPairingDeepLinkSource(createTauriPairingDeepLinkSource()),
-      gate: {
-        arm: () => {
-          const state = pairingDeepLinkGate.arm();
-          pairingDeepLinkImportState.value = state;
-          return state;
-        },
-        disarm: clearPairingDeepLinkImport,
-        armed: () => pairingDeepLinkGate.armed(),
-        state: () => pairingDeepLinkGate.state(),
-        consume: consumePairingDeepLinkImport,
-      },
-      apply: applyPairingDeepLink,
-      onBlocked: handleBlockedPairingDeepLink,
+    participantDeepLinkDispatcher = await createTownshipParticipantDeepLinkDispatcher({
+      source: createTauriPairingDeepLinkSource({ includeAndroidPairingIntent: true }),
+      expectedReplica: () => carrierPeer.value?.replica ?? null,
+      stageAction: stagePostIntent,
+      rejectAction: rejectPostIntent,
+      routeOther: routeOtherParticipantDeepLink,
+      traceAction: tracePostIntent,
     });
     void traceTownshipDevEvent("deep-link-listener-mounted").catch(() => {});
   } catch {
-    pairingDeepLinkListener = null;
+    participantDeepLinkDispatcher = null;
     void traceTownshipDevEvent("deep-link-listener-unavailable").catch(() => {});
   }
 }
@@ -650,9 +668,11 @@ async function mountDevTraceShortcut() {
   try {
     await traceTownshipDevEvent(TOWNSHIP_TRACE_DEV_RUNTIME_READY);
     if (appUnmounted) return;
+    devTraceRuntimeReady.value = true;
     window.addEventListener("keydown", handleDevTraceShortcut);
     devTraceShortcutMounted = true;
   } catch {
+    devTraceRuntimeReady.value = false;
     devTraceShortcutMounted = false;
   }
 }
@@ -691,43 +711,72 @@ function handleBlockedPairingDeepLink(blocked: TownshipPairingDeepLinkBlocked) {
   void traceTownshipDevEvent("pairing-link-blocked:not-armed").catch(() => {});
 }
 
-function createTracingPairingDeepLinkSource(source: TownshipPairingDeepLinkSource): TownshipPairingDeepLinkSource {
-  return {
-    async current(): Promise<readonly string[] | null> {
-      const urls = await source.current();
-      void tracePairingDeepLinkUrls(urls);
-      const pairingUrls = await pairingDeepLinkUrls(urls);
-      return pairingUrls.length > 0 ? pairingUrls : null;
-    },
-    async onOpenUrl(callback: (urls: readonly string[]) => void): Promise<(() => void) | void> {
-      return source.onOpenUrl((urls) => {
-        void tracePairingDeepLinkUrls(urls);
-        void pairingDeepLinkUrls(urls).then((pairingUrls) => {
-          if (pairingUrls.length > 0) callback(pairingUrls);
-        });
-      });
-    },
-  };
+function stagePostIntent(intent: TownshipPostActionIntent) {
+  pendingPostIntent.value = intent;
+  actionIntentStatus.value = { ok: true, message: "Post request ready for review." };
+}
+
+function rejectPostIntent(rejection: TownshipActionIntentRejection) {
+  actionIntentStatus.value = { ok: false, message: rejection.message };
+}
+
+async function tracePostIntent(trace: TownshipActionIntentTrace): Promise<void> {
+  await traceTownshipDevEvent(`action-intent:${trace.outcome}:${trace.intentId ?? "none"}`);
+}
+
+function acceptPendingPostIntent(event?: Event) {
+  if (event && !event.isTrusted) return;
+
+  const intent = pendingPostIntent.value;
+  if (!intent) return;
+  if (carrierPeer.value?.replica !== intent.replica) {
+    actionIntentStatus.value = {
+      ok: false,
+      message: "Post request no longer matches the saved Township pairing.",
+    };
+    return;
+  }
+
+  postDraft.value = intent.command.text;
+  acceptedPostIntent.value = intent;
+  pendingPostIntent.value = null;
+  actionIntentStatus.value = { ok: true, message: "Post request moved to the local draft." };
+}
+
+function dismissPendingPostIntent(event?: Event) {
+  if (event && !event.isTrusted) return;
+  pendingPostIntent.value = null;
+  actionIntentStatus.value = { ok: true, message: "Post request dismissed." };
+}
+
+function clearPendingPostIntent() {
+  pendingPostIntent.value = null;
+  acceptedPostIntent.value = null;
+  actionIntentStatus.value = null;
+}
+
+function routeOtherParticipantDeepLink(value: string) {
+  if (handleDevTraceControlDeepLink(value)) return;
+  if (parseTownshipCanonicalProbeDeepLink(value) !== null) return;
+
+  void tracePairingDeepLinkUrls([value]);
+  const parse = parseTownshipPairingDeepLink(value);
+  const consumption = consumePairingDeepLinkImport(parse);
+
+  if (!consumption.ok) {
+    handleBlockedPairingDeepLink({ reason: consumption.reason, parse });
+    return;
+  }
+
+  applyPairingDeepLink(parse);
 }
 
 function isAndroidTauriShell(): boolean {
   return isTauri() && /Android/i.test(navigator.userAgent);
 }
 
-async function pairingDeepLinkUrls(urls: readonly string[] | null): Promise<readonly string[]> {
-  if (!urls) return [];
-
-  const pairingUrls: string[] = [];
-  for (const url of urls) {
-    if (handleDevTraceControlDeepLink(url)) continue;
-    if (parseTownshipCanonicalProbeDeepLink(url) !== null) continue;
-    pairingUrls.push(url);
-  }
-  return pairingUrls;
-}
-
 function handleDevTraceControlDeepLink(value: string): boolean {
-  if (!devTraceRuntime) return false;
+  if (!devTraceRuntime || !devTraceRuntimeReady.value) return false;
 
   let url: URL;
   try {
@@ -747,8 +796,43 @@ function handleDevTraceControlDeepLink(value: string): boolean {
     void checkCarrierHealth();
     return true;
   }
+  if (route === "action-intent/submit") {
+    void submitPendingPostIntentFromDevTrace();
+    return true;
+  }
 
   return false;
+}
+
+async function submitPendingPostIntentFromDevTrace() {
+  const intent = pendingPostIntent.value;
+  if (!intent) {
+    await traceActionIntentDevSubmit("missing");
+    return;
+  }
+
+  acceptPendingPostIntent();
+  if (acceptedPostIntent.value?.id !== intent.id) {
+    await traceActionIntentDevSubmit("rejected");
+    return;
+  }
+
+  await submitPost();
+  if (!postStatus.value?.ok) {
+    await traceActionIntentDevSubmit("author-failed");
+    return;
+  }
+
+  await syncOutbox();
+  await traceActionIntentDevSubmit(syncStatus.value?.ok ? "synced" : "sync-failed");
+}
+
+async function traceActionIntentDevSubmit(outcome: string): Promise<void> {
+  try {
+    await traceTownshipDevEvent(`action-intent-dev-submit:${outcome}`);
+  } catch {
+    // Test-only observability must not change the production action functions.
+  }
 }
 
 async function tracePairingDeepLinkUrls(urls: readonly string[] | null): Promise<void> {
@@ -1389,11 +1473,26 @@ function pairingDiscoveryAdvertFromMessage(value: unknown): TownshipPairingDisco
       </form>
     </section>
 
+    <section v-if="pendingPostIntent" id="participant-action-request" class="incoming-action-panel" aria-live="polite">
+      <div class="panel-heading">
+        <p>Post request</p>
+        <span>Unsigned browser handoff</span>
+      </div>
+      <p class="incoming-action-text">{{ pendingPostIntent.command.text }}</p>
+      <div class="incoming-action-controls">
+        <button type="button" @click="acceptPendingPostIntent">Use request</button>
+        <button type="button" class="secondary-action" @click="dismissPendingPostIntent">Dismiss</button>
+      </div>
+    </section>
+
     <section class="compose-panel">
       <div class="panel-heading">
         <p>Post update</p>
         <span>Signed local action</span>
       </div>
+      <p v-if="actionIntentStatus" class="post-message" :data-state="actionIntentStatus.ok ? 'success' : 'author_failed'" aria-live="polite">
+        {{ actionIntentStatus.message }}
+      </p>
       <form class="post-form" @submit.prevent="submitPost">
         <textarea
           v-model="postDraft"

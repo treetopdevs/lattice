@@ -213,12 +213,16 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
     "tsx test/tauri_stable_relay_onboarding_smoke.ts",
   );
   assert.equal(
+    pkg.scripts["tauri:action-handoff:smoke"],
+    "tsx test/tauri_action_handoff_smoke.ts",
+  );
+  assert.equal(
     pkg.scripts["onboarding:click-through"],
     "VITE_TOWNSHIP_DEV_TRACE= VITE_TOWNSHIP_AUTOSYNC_ON_MOUNT= npm run build && cd ../.. && npx --no-install playwright test tests/e2e/township_onboarding_click_through.spec.ts --config playwright.config.mjs",
   );
   assert.equal(
     pkg.scripts["app:convergence"],
-    "npm run action:contract && npm run sync:contract && npm run stable:relay:contract && npm run onboarding:contract && npm run onboarding:click-through && npm run live:contract && npm run tauri:launch:smoke && npm run tauri:onboarding:smoke && npm run tauri:stable-relay:onboarding:smoke && npm run tauri:deep-link:smoke",
+    "npm run action:contract && npm run sync:contract && npm run stable:relay:contract && npm run onboarding:contract && npm run onboarding:click-through && npm run live:contract && npm run tauri:launch:smoke && npm run tauri:onboarding:smoke && npm run tauri:stable-relay:onboarding:smoke && npm run tauri:action-handoff:smoke && npm run tauri:deep-link:smoke",
   );
   assert.equal(
     pkg.scripts["tauri:android:release:onboarding:smoke"],
@@ -1433,7 +1437,7 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(strategy, /Android emulator now proves native carrier key reuse/);
   assert.match(strategy, /No phone-grade persistence claim is allowed/);
   assert.match(buildMap, /clients\/township-tauri-shell/);
-  assert.match(buildMap, /shell coverage through plan 129/);
+  assert.match(buildMap, /shell coverage through plan 130/);
   assert.match(
     buildMap,
     /desktop and Android-release convergence, onboarding,\s+and pairing proofs exist through plan 120/,
@@ -1443,7 +1447,7 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
     buildMap,
     /Plan 128 does not change or\s+newly prove Tauri onboarding\/cap persistence,\s+mobile secure-store custody, or real app\s+convergence/,
   );
-  assert.match(buildMap, /plans 023-129/);
+  assert.match(buildMap, /plans 023-130/);
   assert.match(buildMap, /Xcode 27 beta Tauri Swift-package failure/);
   assert.match(buildMap, /QR camera onboarding/);
   assert.match(buildMap, /LAN discovery/);

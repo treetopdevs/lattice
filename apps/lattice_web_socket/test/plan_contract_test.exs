@@ -21,7 +21,7 @@ defmodule LatticeWebSocket.PlanContractTest do
 
     assert build_map =~ "`apps/lattice_web_socket`"
     assert build_map =~ "Plan 125 promotes the real WebSocket carrier client"
-    assert build_map =~ "plans 023-129"
+    assert build_map =~ "plans 023-130"
     assert build_map =~ ~r/Plan\s+126 adds the supervised pull-only carrier projection/
 
     assert agents =~ "Reusable WebSocket client and real carrier adapter"

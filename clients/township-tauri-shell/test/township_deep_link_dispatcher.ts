@@ -1,0 +1,106 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  createTownshipParticipantDeepLinkDispatcher,
+  type TownshipActionIntentTrace,
+} from "../src/township_deep_link_dispatcher";
+
+interface ActionIntentFixture {
+  payload: {
+    v: 1;
+    id: string;
+    replica: string;
+    command: { command: "post"; text: string };
+  };
+  url: string;
+}
+
+console.log("\n▸ Township participant deep-link dispatcher");
+
+const here = dirname(fileURLToPath(import.meta.url));
+const fixture = JSON.parse(
+  readFileSync(join(here, "fixtures", "township_action_intent_v1.json"), "utf8"),
+) as ActionIntentFixture;
+const pairingUrl = "township://pairing?handoff=township-pairing:v1:not-json";
+const androidPairingUrl = "township://nohost/_pairing/township-pairing_3Av1_3Anot-json";
+const calls: string[] = [];
+const staged: ActionIntentFixture["payload"][] = [];
+const rejected: string[] = [];
+const other: string[] = [];
+const traces: TownshipActionIntentTrace[] = [];
+let expectedReplica: string | null = fixture.payload.replica;
+let opened: ((urls: readonly string[]) => void) | null = null;
+let unlistenCount = 0;
+
+const dispatcher = await createTownshipParticipantDeepLinkDispatcher({
+  source: {
+    async current() {
+      calls.push("current");
+      return [pairingUrl, fixture.url, androidPairingUrl];
+    },
+    async onOpenUrl(callback) {
+      calls.push("subscribe");
+      opened = callback;
+      return () => {
+        unlistenCount++;
+      };
+    },
+  },
+  expectedReplica: () => expectedReplica,
+  stageAction(intent) {
+    staged.push(intent);
+  },
+  rejectAction(rejection) {
+    rejected.push(rejection.reason);
+  },
+  routeOther(url) {
+    other.push(url);
+  },
+  traceAction(trace) {
+    traces.push(trace);
+  },
+});
+
+assert.deepEqual(calls, ["subscribe", "current"], "dispatcher must close the cold-start subscription race");
+assert.deepEqual(staged, [fixture.payload]);
+assert.deepEqual(other, [pairingUrl, androidPairingUrl]);
+assert.deepEqual(rejected, []);
+assert.deepEqual(traces, [{ intentId: fixture.payload.id, outcome: "staged" }]);
+assert.ok(opened, "dispatcher should retain one participant-ingress callback");
+
+opened([fixture.url]);
+assert.deepEqual(staged, [fixture.payload, fixture.payload], "repeated ingress remains review-only and observable");
+
+opened(["township://action?intent=not-base64url!"]);
+assert.equal(rejected.at(-1), "invalid_action");
+assert.equal(other.includes("township://action?intent=not-base64url!"), false);
+
+expectedReplica = "replica:matter:other";
+opened([fixture.url]);
+assert.equal(rejected.at(-1), "replica_mismatch");
+
+expectedReplica = null;
+opened([fixture.url]);
+assert.equal(rejected.at(-1), "pairing_missing");
+
+opened(["garbage", "township://probe/canonical?vector=township_carrier_w1"]);
+assert.deepEqual(other.slice(-2), ["garbage", "township://probe/canonical?vector=township_carrier_w1"]);
+
+assert.deepEqual(traces.slice(-4), [
+  { intentId: fixture.payload.id, outcome: "staged" },
+  { intentId: null, outcome: "invalid_action" },
+  { intentId: fixture.payload.id, outcome: "replica_mismatch" },
+  { intentId: fixture.payload.id, outcome: "pairing_missing" },
+]);
+
+const traceBytes = JSON.stringify(traces);
+assert.doesNotMatch(traceBytes, /resident: from instrument/);
+assert.doesNotMatch(traceBytes, /replica:matter/);
+assert.doesNotMatch(traceBytes, /township:\/\/action/);
+
+dispatcher.stop();
+assert.equal(unlistenCount, 1);
+
+console.log("\x1b[32m✓ Township participant deep-link dispatcher checks passed\x1b[0m");

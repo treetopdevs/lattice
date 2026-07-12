@@ -34,12 +34,19 @@ jobs:
         with:
           node-version: "22"
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            clients/lattice-client/package-lock.json
+            clients/township-tauri-shell/package-lock.json
 
       - name: Install Elixir dependencies
         run: mix deps.get
 
       - name: Install Node dependencies
-        run: npm ci
+        run: |
+          npm ci
+          npm --prefix clients/lattice-client ci
+          npm --prefix clients/township-tauri-shell ci
 
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium

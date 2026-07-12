@@ -375,3 +375,36 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
   strategy unchanged; it adds no mobile relay/device claim, new secure-store implementation,
   server push, `/township` participant write path, server-held participant key/cap inventory,
   production TLS/deployment, G1/Phase G completion, or receipt-free W4.
+
+## Checkpoint: LiveView-to-Tauri Participant Post Handoff
+
+- Files changed: the strict Elixir/TypeScript action-intent contract, `/township` preparation form,
+  shared Tauri participant deep-link dispatcher and review state, the Ubuntu cross-surface gate,
+  packaged macOS action-handoff smoke, and flagship workflow wiring recorded in Plan 130.
+- Behaviors: only a fresh carrier-backed LiveView may prepare one bounded, versioned, unsigned
+  `post` request from `provenance.replica`. Deep-link ingress stages it separately from the local
+  draft and performs no signing, KV/log/outbox mutation, pairing save, or carrier connection. The
+  app validates the saved pairing replica and requires separate Use request, Post, and Sync actions;
+  only then do its existing local cap/frontier, native signer, durable outbox, and relay seams run.
+- Oracle: both gates consume a `Lattice.Sim` fixture rather than reconstructing the expected
+  operation in Phoenix or TypeScript. They prove the authored frame is exact, the relay persists it,
+  the outbox drains, the original LiveView/Vue projection equals Sim, and a distinct fresh BEAM
+  observer still equals Sim after a same-path/port server restart. After the app-authored post is
+  proven, the Ubuntu gate also relays the fixture's separately signed authority-invalid control and
+  positively observes its `no_capability` quarantine in LiveView, Vue replay, and the fresh-process
+  verifier; quarantine equality is not an empty-vs-empty assertion.
+- Gates: `npm run township:action-handoff:e2e` is Ubuntu-running and wired into the flagship script
+  and workflow. `npm run tauri:action-handoff:smoke` delivers the real LiveView-produced URL through
+  LaunchServices to a freshly built release-mode app with native key/KV custody; it remains a local
+  macOS requirement rather than a CI-enforced macOS lane.
+- Result: the focused action/LiveView, dispatcher/frontend/typecheck, Ubuntu Playwright, stable
+  server regression, and freshly rebuilt packaged macOS gates passed on 2026-07-12. The full
+  release matrix passed with 336 tests and 25 properties under pinned OTP 28, complete client and
+  shell contracts, packaged app convergence, all browser/flagship gates, immutable bundle
+  verification, warnings-as-errors compilation, the unchanged five-cycle xref baseline, both
+  Sobelow boundaries, strict Credo, exact lockfile installation, and clean diff whitespace.
+- Blocker or remaining limitation: this is the first participant `post` handoff, not a generic
+  command bus, server push, broader participant controls, signed intent receipt, duplicate-op
+  guarantee, production deployment, full G1/Phase G completion, mobile/device proof, new secure
+  store, or receipt-free W4. Phoenix never receives participant keys, caps, delegations,
+  dependencies, signatures, or authoring authority.

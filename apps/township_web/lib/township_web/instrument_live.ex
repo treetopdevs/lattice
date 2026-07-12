@@ -3,14 +3,52 @@ defmodule TownshipWeb.InstrumentLive do
 
   use TownshipWeb, :live_view
 
-  alias TownshipWeb.{CarrierProjection, InstrumentSource}
+  alias TownshipWeb.{ActionIntent, CarrierProjection, InstrumentSource}
 
   @impl true
   def mount(_params, _session, socket) do
+    socket = initialize_action_intent(socket)
+
     case configured_projection(socket) do
       {:ok, projection_state} -> {:ok, apply_projection(socket, projection_state)}
       :disabled -> load_snapshot(socket)
     end
+  end
+
+  @impl true
+  def handle_event(
+        "prepare_post",
+        %{"post" => %{"text" => text}},
+        %{assigns: %{source_state: :fresh, provenance: %{replica: replica}}} = socket
+      ) do
+    case ActionIntent.post_url(replica, text) do
+      {:ok, url} ->
+        {:noreply,
+         assign(socket,
+           post_intent_form: post_intent_form(text),
+           post_intent_url: url,
+           post_intent_replica: replica,
+           post_intent_error: nil
+         )}
+
+      {:error, reason} ->
+        {:noreply,
+         assign(socket,
+           post_intent_form: post_intent_form(text),
+           post_intent_url: nil,
+           post_intent_replica: nil,
+           post_intent_error: action_intent_error(reason)
+         )}
+    end
+  end
+
+  def handle_event("prepare_post", _params, socket) do
+    {:noreply,
+     assign(socket,
+       post_intent_url: nil,
+       post_intent_replica: nil,
+       post_intent_error: "A fresh carrier snapshot is required before opening the app."
+     )}
   end
 
   @impl true
@@ -56,7 +94,9 @@ defmodule TownshipWeb.InstrumentLive do
   end
 
   defp apply_projection(socket, :connecting) do
-    assign(socket,
+    socket
+    |> clear_action_intent()
+    |> assign(
       page_title: "Township Instrument Connecting",
       source_state: :connecting
     )
@@ -70,7 +110,9 @@ defmodule TownshipWeb.InstrumentLive do
   end
 
   defp assign_payload(socket, source_state, payload) do
-    assign(socket,
+    socket
+    |> retain_action_intent(source_state, payload.provenance.replica)
+    |> assign(
       page_title: "Township Instrument",
       source_state: source_state,
       model: payload.read_model,
@@ -81,13 +123,50 @@ defmodule TownshipWeb.InstrumentLive do
   end
 
   defp assign_unavailable(socket, source_kind, errors) do
-    assign(socket,
+    socket
+    |> clear_action_intent()
+    |> assign(
       page_title: "Township Instrument Unavailable",
       source_state: :unverified,
       source_kind: source_kind,
       source_errors: errors
     )
   end
+
+  defp initialize_action_intent(socket) do
+    assign(socket,
+      post_intent_form: post_intent_form(""),
+      post_intent_url: nil,
+      post_intent_replica: nil,
+      post_intent_error: nil
+    )
+  end
+
+  defp retain_action_intent(socket, :fresh, replica) do
+    case socket.assigns.post_intent_replica do
+      nil -> socket
+      ^replica -> socket
+      _other_replica -> clear_action_intent(socket)
+    end
+  end
+
+  defp retain_action_intent(socket, _source_state, _replica), do: clear_action_intent(socket)
+
+  defp clear_action_intent(socket) do
+    assign(socket,
+      post_intent_form: post_intent_form(""),
+      post_intent_url: nil,
+      post_intent_replica: nil,
+      post_intent_error: nil
+    )
+  end
+
+  defp post_intent_form(text) when is_binary(text), do: to_form(%{"text" => text}, as: :post)
+  defp post_intent_form(_text), do: post_intent_form("")
+
+  defp action_intent_error(:invalid_text), do: "Write an update before opening the app."
+  defp action_intent_error(:text_too_large), do: "Keep the update within 4096 UTF-8 bytes."
+  defp action_intent_error(_reason), do: "The participant action could not be prepared."
 
   defp source_label(:verified), do: "verified snapshot"
   defp source_label(:fresh), do: "carrier fresh"

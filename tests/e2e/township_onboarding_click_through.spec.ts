@@ -147,13 +147,44 @@ test("resident controls refresh pulled caps and converge through the native seam
     // RED on Plan 120: sync persisted the cap, but the rendered availability snapshot stayed stale.
     await expect(postAction).toContainText("Available");
 
-    const postText = "resident: clicked through onboarding";
-    await page.getByRole("textbox", { name: "Township post update" }).fill(postText);
+    const postText = "resident: prepared in the instrument";
+    const actionUrl = townshipPostActionUrl(vector.replica, postText);
+    const kvBeforeIntent = [...kv.entries()];
+    const signCallsBeforeIntent = calls.filter(({ command }) => command === "lattice_sign_carrier").length;
+    const callsBeforeIntent = calls.length;
+
+    await deliverTauriDeepLink(page, calls, actionUrl);
+
+    const incoming = page.locator("#participant-action-request");
+    await expect(incoming).toContainText("Post request");
+    await expect(incoming).toContainText(postText);
+    await expect(page.getByRole("textbox", { name: "Township post update" })).toHaveValue("");
+    assert.deepEqual([...kv.entries()], kvBeforeIntent, "action ingress must not change native KV state");
+    assert.equal(
+      calls.filter(({ command }) => command === "lattice_sign_carrier").length,
+      signCallsBeforeIntent,
+      "action ingress must not sign",
+    );
+    const actionIngressTraces = calls
+      .slice(callsBeforeIntent)
+      .filter(({ command }) => command === "lattice_trace_dev_event")
+      .map(({ args }) => String(args.event));
+    assert.ok(actionIngressTraces.some((event) => event.includes("action-intent:staged")));
+    assert.doesNotMatch(actionIngressTraces.join("\n"), /resident: prepared|replica:matter|township:\/\/action/);
+
+    await page.getByRole("button", { name: "Use request" }).click();
+    await expect(incoming).toHaveCount(0);
+    await expect(page.getByRole("textbox", { name: "Township post update" })).toHaveValue(postText);
+    assert.deepEqual([...kv.entries()], kvBeforeIntent, "accepting a request must remain draft-only");
+    assert.equal(calls.filter(({ command }) => command === "lattice_sign_carrier").length, signCallsBeforeIntent);
+
     await page.getByRole("button", { name: "Post update" }).click();
     const postPanel = page.locator(".compose-panel").filter({
       has: page.getByText("Post update", { exact: true }),
     });
-    await expect(postPanel.locator(".post-message")).toContainText("Saved signed frame", { timeout: 10_000 });
+    await expect(postPanel.locator(".post-actions .post-message")).toContainText("Saved signed frame", {
+      timeout: 10_000,
+    });
 
     await page.getByRole("button", { name: "Sync outbox" }).click();
     await expect(syncMessage).toHaveText(/Pushed 1, pulled \d+, accepted 1\./, { timeout: 20_000 });
@@ -258,6 +289,46 @@ async function installTauriIpc(
       },
     };
   });
+}
+
+async function deliverTauriDeepLink(page: Page, calls: InvokeCall[], url: string): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        calls.filter(
+          ({ command, args }) => command === "plugin:event|listen" && args.event === "deep-link://new-url",
+        ).length,
+      { timeout: 10_000 },
+    )
+    .toBeGreaterThan(0);
+
+  const handlerIds = calls
+    .filter(({ command, args }) => command === "plugin:event|listen" && args.event === "deep-link://new-url")
+    .map(({ args }) => Number(args.handler));
+
+  await page.evaluate(
+    ({ ids, deepLink }) => {
+      const scope = globalThis as typeof globalThis & Record<string, any>;
+      for (const id of ids) {
+        scope.__TAURI_INTERNALS__.runCallback(id, {
+          event: "deep-link://new-url",
+          id,
+          payload: [deepLink],
+        });
+      }
+    },
+    { ids: handlerIds, deepLink: url },
+  );
+}
+
+function townshipPostActionUrl(replica: string, text: string): string {
+  const payload = {
+    v: 1,
+    id: "89abcdef0123456789abcdef01234567",
+    replica,
+    command: { command: "post", text },
+  };
+  return `township://action?intent=${Buffer.from(JSON.stringify(payload), "utf8").toString("base64url")}`;
 }
 
 async function startStaticAppServer(root: string): Promise<StaticAppServer> {

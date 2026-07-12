@@ -170,6 +170,93 @@ code {
   color: #f3b18d;
 }
 
+.participant-action {
+  align-items: end;
+  background: var(--teal-soft);
+  border-bottom: 1px solid var(--teal);
+  display: grid;
+  gap: 14px 20px;
+  grid-template-columns: minmax(180px, 0.6fr) minmax(320px, 1.8fr) minmax(190px, 0.7fr);
+  padding: 14px 22px;
+}
+
+.participant-action header,
+.participant-action h2,
+.participant-action p {
+  margin: 0;
+}
+
+.participant-action h2 {
+  font-family: var(--display);
+  font-size: 24px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.participant-action form {
+  align-items: end;
+  display: grid;
+  gap: 6px 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.participant-action label {
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 10px;
+  grid-column: 1 / -1;
+  text-transform: uppercase;
+}
+
+.participant-action textarea {
+  background: var(--panel);
+  border: 1px solid var(--teal);
+  border-radius: 2px;
+  color: var(--ink);
+  min-height: 48px;
+  padding: 8px 10px;
+  resize: vertical;
+  width: 100%;
+}
+
+.participant-action button,
+.participant-action__handoff a {
+  align-items: center;
+  background: var(--teal);
+  border: 1px solid var(--teal);
+  border-radius: 2px;
+  color: #ffffff;
+  display: inline-flex;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  justify-content: center;
+  min-height: 44px;
+  padding: 8px 12px;
+  text-align: center;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.participant-action__handoff {
+  display: grid;
+  gap: 6px;
+}
+
+.participant-action__handoff p {
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.participant-action__error {
+  color: var(--danger);
+  font-family: var(--mono);
+  font-size: 11px;
+  grid-column: 2 / -1;
+}
+
 .instrument-grid {
   display: grid;
   gap: 14px;
@@ -789,6 +876,15 @@ code {
 }
 
 @media (max-width: 980px) {
+  .participant-action {
+    grid-template-columns: minmax(160px, 0.7fr) minmax(280px, 1.5fr);
+  }
+
+  .participant-action__handoff,
+  .participant-action__error {
+    grid-column: 2;
+  }
+
   .provenance-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -844,6 +940,22 @@ code {
 
   .provenance-digest {
     grid-column: auto;
+  }
+
+  .participant-action {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+    padding: 14px;
+  }
+
+  .participant-action form {
+    grid-template-columns: 1fr;
+  }
+
+  .participant-action button,
+  .participant-action__handoff,
+  .participant-action__error {
+    grid-column: 1;
   }
 
   .instrument-grid {

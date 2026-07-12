@@ -124,6 +124,7 @@ h1 {
 .member-panel,
 .grant-panel,
 .compose-panel,
+.incoming-action-panel,
 .sync-panel,
 .posts-panel {
   border: 1px solid #d8dfd7;
@@ -138,6 +139,7 @@ h1 {
 .member-panel,
 .grant-panel,
 .compose-panel,
+.incoming-action-panel,
 .sync-panel {
   padding: 18px;
 }
@@ -221,6 +223,7 @@ dd {
 .status-panel,
 .member-panel,
 .grant-panel,
+.incoming-action-panel,
 .sync-panel {
   margin-top: 18px;
 }
@@ -263,6 +266,25 @@ dd {
   flex: 0 0 auto;
   font-size: 0.78rem;
   text-transform: uppercase;
+}
+
+.incoming-action-panel {
+  border-color: #9c92c8;
+  background: #f5f3fb;
+}
+
+.incoming-action-text {
+  margin: 14px 0;
+  color: #30285b;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.incoming-action-controls {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
 }
 
 .post-form {
@@ -495,6 +517,7 @@ dd {
 }
 
 .post-actions button,
+.incoming-action-controls button,
 .status-buttons button,
 .qr-camera-actions button,
 .pairing-discovery-actions button,
@@ -511,7 +534,14 @@ dd {
   font-weight: 800;
 }
 
+.incoming-action-controls .secondary-action {
+  border: 1px solid #7368aa;
+  background: #ffffff;
+  color: #493f7f;
+}
+
 .post-actions button:disabled,
+.incoming-action-controls button:disabled,
 .status-buttons button:disabled,
 .qr-camera-actions button:disabled,
 .pairing-discovery-actions button:disabled,
@@ -560,6 +590,7 @@ dd {
   }
 
   .post-actions,
+  .incoming-action-controls,
   .status-actions,
   .member-actions,
   .grant-actions,
@@ -573,6 +604,7 @@ dd {
   }
 
   .post-actions button,
+  .incoming-action-controls button,
   .status-buttons,
   .status-buttons button,
   .qr-camera-actions,

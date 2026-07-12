@@ -29,6 +29,22 @@ export interface StableCarrierServerProcess {
   kill(): Promise<void>;
 }
 
+export interface TownshipActionLiveProjectionProcess {
+  port: number;
+  output: string[];
+  stop(): Promise<void>;
+}
+
+export interface SpawnTownshipActionLiveProjectionOptions {
+  webPort: number;
+  carrierPort: number;
+  serverRealm: string;
+  serverPubkey: string;
+  observerRealm: string;
+  observerSeed: string;
+  replica: string;
+}
+
 export interface SpawnStableCarrierServerOptions {
   port: number;
   serverRealm: string;
@@ -175,6 +191,48 @@ export async function spawnStableCarrierServer(
   };
 }
 
+export async function spawnTownshipActionLiveProjection(
+  options: SpawnTownshipActionLiveProjectionOptions,
+): Promise<TownshipActionLiveProjectionProcess> {
+  const child = spawn(
+    mixBin(),
+    [
+      "run",
+      "--no-start",
+      "scripts/township_action_handoff_live.exs",
+      String(options.carrierPort),
+      options.serverRealm,
+      options.serverPubkey,
+      options.observerRealm,
+      options.observerSeed,
+      options.replica,
+    ],
+    {
+      cwd: repoRoot,
+      stdio: ["pipe", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        MIX_ENV: "test",
+        PHX_SERVER: "true",
+        PORT: String(options.webPort),
+        PATH: pinnedBeamPath(),
+      },
+    },
+  );
+  const output: string[] = [];
+  child.stdout.on("data", (chunk: Buffer) => output.push(chunk.toString()));
+  child.stderr.on("data", (chunk: Buffer) => output.push(chunk.toString()));
+  await awaitOutputMarker(child, output, "TOWNSHIP_ACTION_HANDOFF_READY", 60_000);
+
+  return {
+    port: options.webPort,
+    output,
+    async stop() {
+      await terminateProcess(child);
+    },
+  };
+}
+
 interface TownshipPeerReady {
   port: number;
   publicKeyBase64: string;
@@ -227,6 +285,47 @@ function awaitProcessExit(child: ChildProcessWithoutNullStreams, timeoutMs: numb
       clearTimeout(timeout);
       resolveExit(code);
     });
+  });
+}
+
+async function awaitOutputMarker(
+  child: ChildProcessWithoutNullStreams,
+  output: string[],
+  marker: string,
+  timeoutMs: number,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (output.join("").includes(marker)) return;
+    if (child.exitCode !== null || child.signalCode !== null) {
+      throw new Error(`process exited before ${marker}:\n${output.join("")}`);
+    }
+    await delay(25);
+  }
+  throw new Error(`timed out waiting for ${marker}:\n${output.join("")}`);
+}
+
+async function terminateProcess(child: ChildProcessWithoutNullStreams): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  child.kill("SIGTERM");
+  if (!(await exitsWithin(child, 3_000)) && child.exitCode === null && child.signalCode === null) {
+    child.kill("SIGKILL");
+    await exitsWithin(child, 3_000);
+  }
+}
+
+async function exitsWithin(child: ChildProcessWithoutNullStreams, timeoutMs: number): Promise<boolean> {
+  if (child.exitCode !== null || child.signalCode !== null) return true;
+  return new Promise((resolveExit) => {
+    const onExit = () => {
+      clearTimeout(timeout);
+      resolveExit(true);
+    };
+    const timeout = setTimeout(() => {
+      child.off("exit", onExit);
+      resolveExit(false);
+    }, timeoutMs);
+    child.once("exit", onExit);
   });
 }
 
@@ -290,6 +389,11 @@ function elixirBin(): string {
   return "elixir";
 }
 
+function mixBin(): string {
+  const asdf = join(process.env.HOME ?? "", ".asdf/shims/mix");
+  return existsSync(asdf) ? asdf : "mix";
+}
+
 function pinnedBeamPath(): string {
   const home = process.env.HOME ?? "";
   const beamPaths = [
@@ -299,4 +403,8 @@ function pinnedBeamPath(): string {
   ].filter(existsSync);
 
   return [...beamPaths, process.env.PATH ?? ""].join(":");
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
 }

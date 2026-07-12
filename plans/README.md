@@ -13,8 +13,8 @@ GitHub Actions, plain `mix` works.
 **Parked areas — do not plan new work here** (see `TOWNSHIP_BUILD_MAP.md` §4a): iOS,
 QR camera onboarding, LAN discovery, physical-device behavior, cross-device pairing
 state exchange, and any further `tauri:android:release:*` probe permutations. The
-active frontier is G1 completion (Plan 129 lineage) and the remaining Phase G
-instrument work: server push, participant write controls, production deployment, and W4.
+active frontier is G1 completion (Plan 130 lineage) and the remaining Phase G
+instrument work: server push, broader participant controls, production deployment, and W4.
 
 **Landing 001–009 as one effort?** Start from the umbrella goal:
 [000-goal-foundation-and-hardening.md](000-goal-foundation-and-hardening.md). It
@@ -157,6 +157,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 127 | Stable read-only carrier server boundary | P1 | L | 125, 126 | DONE |
 | 128 | Durable client-signed carrier relay | P1 | L | 127 | DONE |
 | 129 | Packaged Tauri stable-relay convergence | P1 | L | 128, 118-120 | DONE |
+| 130 | LiveView-to-Tauri participant post handoff | P1 | L | 129, 123, 126 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
