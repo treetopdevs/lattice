@@ -41,8 +41,8 @@ Add a non-optional `packaged_macos` job to `.github/workflows/flagship.yml` that
 1. runs on `macos-15-intel` with a bounded timeout and no `continue-on-error`;
 2. checks out without persisted credentials and installs the pinned OTP 28.1, Elixir 1.19.5, and
    Node 22 toolchains;
-3. caches Cargo registry/build state, installs TS-client and Tauri-shell dependencies from their
-   lockfiles, and rebuilds the client's exported `dist` before the shell packages its file dependency;
+3. caches Cargo registry/build state, installs root, TS-client, and Tauri-shell dependencies from
+   their lockfiles, and rebuilds the client's exported `dist` before the shell packages its file dependency;
 4. compiles the umbrella in `MIX_ENV=test` so the BEAM support processes have real ebin paths;
 5. installs the pinned esbuild binary needed by the action smoke's cold `assets.build` step;
 6. installs the shell's pinned Playwright Chromium build;
@@ -93,6 +93,8 @@ while the higher macOS billing multiplier would matter if the repository becomes
 - this Plan 131 file and the plan/build-map/status documentation needed to make the CI claim honest
 - package or smoke support only if the first hosted run exposes a real setup-beam, runner, or GUI
   lifecycle incompatibility; any such change must preserve the existing local proof
+- the existing Ubuntu native-core job's Tauri Linux system prerequisites if the hosted run proves
+  its real-Wry tests cannot compile on the bare runner; this remains environment repair, not product scope
 
 ## Non-goals
 
@@ -152,8 +154,8 @@ harness, Cargo manifest, and asset pipeline and returned `PROCEED`. It confirmed
 on the missing workflow job and that the smokes may run sequentially, provided CI compiles
 `MIX_ENV=test` before the stable-relay smoke. Its material finding was that a cold action-handoff run
 would fail because `mix assets.build` does not install esbuild; the required job now installs the
-pinned esbuild binary explicitly. It also confirmed root `npm ci` is unnecessary for these smokes:
-the lattice-client and Tauri-shell lockfile installs are the two load-bearing Node dependency steps.
+pinned esbuild binary explicitly. Its initial claim that root `npm ci` was unnecessary was later
+falsified by the first hosted run and is corrected below.
 
 Claude's pre-push implementation review returned `REVISE` because it believed a clean checkout had
 no built lattice-client export and would fail ESM loading before either smoke. Live `git ls-files`
@@ -170,6 +172,24 @@ before the hosted push. It verified the cache is scoped to `packaged_macos`, the
 the shell file-dependency install, the cold BEAM/esbuild prerequisites are present, both no-skip
 protections remain contract-pinned, and this plan still withholds completion pending real hosted
 WKWebView and LaunchServices execution.
+
+The first hosted run exposed a separate existing RED in the Ubuntu unit job: `cargo test` failed in
+`glib-sys` and `gobject-sys` because the bare runner lacked their pkg-config development libraries.
+Claude inspected the native tests and returned `PROCEED` on installing Tauri's official Ubuntu
+prerequisite set. The tests intentionally bootstrap the real Wry runtime, so removing Tauri default
+features or rewriting them onto a mock would weaken the established native-core gate. Provisioning
+the system libraries adds no Linux package, GUI launch, carrier convergence, mobile, Phase G, or W4
+claim; it only lets the existing compile-and-logic test execute as written.
+
+Hosted run `29180508051` then passed the entire macOS setup and the real packaged stable-relay
+onboarding smoke. The action-handoff smoke failed before LaunchServices because its real Phoenix
+`mix assets.build` could not resolve root-owned `vue` and `@dagrejs/dagre`; the packaged job had not
+created root `node_modules`. Claude's focused correction returned `PROCEED`: root `npm ci` is the
+smallest honest fix, the existing esbuild working directory resolves those dependencies by walking
+up to the repository root, and no `NODE_PATH` or bundling change is needed. The root lockfile now
+participates in setup-node's cache key, and root install precedes both smokes. The stable-relay pass
+is evidence that hosted app launch and native-custody onboarding are feasible; action handoff
+remains unproven in CI until the corrected run reaches and passes its full boundary.
 
 An implementation review remains required before completion.
 

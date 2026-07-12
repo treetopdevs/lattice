@@ -292,6 +292,12 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert plan =~ "No new carrier message, subscription, notification, or server-push protocol"
     assert plan =~ "No G1/Phase G completion and no receipt-free W4 claim"
 
+    assert workflow =~ "Install Tauri Linux prerequisites"
+    assert workflow =~ "libwebkit2gtk-4.1-dev"
+    assert workflow =~ "libxdo-dev"
+    assert workflow =~ "libayatana-appindicator3-dev"
+    assert workflow =~ "librsvg2-dev"
+
     assert workflow =~ "\n  packaged_macos:\n"
     packaged_job = workflow |> String.split("\n  packaged_macos:\n", parts: 2) |> List.last()
 
@@ -300,6 +306,8 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert packaged_job =~ "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830"
     assert packaged_job =~ "MIX_ENV=test mix compile"
     assert packaged_job =~ "MIX_ENV=test mix esbuild.install --if-missing"
+    assert packaged_job =~ "package-lock.json"
+    assert packaged_job =~ ~r/run: \|\s+npm ci\s+.*npm --prefix clients\/lattice-client ci/s
     assert packaged_job =~ "npm --prefix clients/lattice-client run build"
     assert packaged_job =~ "npx --no-install playwright install chromium"
     assert packaged_job =~ "npm run tauri:stable-relay:onboarding:smoke"

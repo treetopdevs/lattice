@@ -123,6 +123,19 @@ jobs:
       - name: TS Tauri bridge
         working-directory: clients/lattice-client
         run: npm run tauri:bridge
+      - name: Install Tauri Linux prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
       - name: Tauri native command core
         working-directory: clients/township-tauri-shell/src-tauri
         run: cargo test
@@ -166,6 +179,7 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: |
+            package-lock.json
             clients/lattice-client/package-lock.json
             clients/township-tauri-shell/package-lock.json
 
@@ -190,6 +204,7 @@ jobs:
 
       - name: Install client and shell dependencies
         run: |
+          npm ci
           npm --prefix clients/lattice-client ci
           npm --prefix clients/lattice-client run build
           npm --prefix clients/township-tauri-shell ci
