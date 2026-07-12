@@ -2,7 +2,7 @@
 
 ## Status
 
-IN PROGRESS
+DONE
 
 ## Objective
 
@@ -283,12 +283,21 @@ live gate; packaged app feed consumption belongs in a separately gated follow-up
   minimal GREEN now closes the client and rejects pending/future receives.
 - Final exact-worktree Claude review returned `PROCEED` with no blocker, high, or medium finding.
   It rechecked all ten stop conditions, prior findings, source/generated-output parity, live oracle,
-  lifecycle races, CI executability, and non-claims. Hosted publication evidence remains the final
-  closure gate.
+  lifecycle races, CI executability, and non-claims.
+
+Hosted run `29192642981` passed on implementation commit
+`38c635d6a64171a6015860dab8c9e60e7b570ea6`:
+
+- `Verify flagship artifact` passed in 3m16s, including the recorded browser/video evidence path;
+- `Unit + property suite` passed in 4m38s, including the new fake TypeScript feed contract, shared
+  client build, shell dependency install, real stable-server feed contract, full BEAM suite,
+  TypeScript parity/carrier checks, Tauri native core, strict Credo, and Sobelow; and
+- `Packaged macOS convergence` passed in 10m02s on the real app bundle, with stable-relay onboarding
+  in 2m08s and post-restart action handoff in 1m54s.
 
 ## Completion claim
 
-Not yet complete. Completion requires the deterministic demultiplexing/mailbox contracts, the live
-stable-server direct TypeScript proof, hard hosted CI, final independent review, and all cumulative
-status surfaces to be green. Even then, this plan will not claim a reactive Tauri/Vue app loop,
-custody/mobile changes, broader participant controls, deployment, complete G1/Phase G, or W4.
+Complete for this scoped increment. Plan 133 adds the typed latest-value TypeScript availability
+subscription, fail-closed request/notification demultiplexing and lifecycle, a real verified-pull
+stable-server proof across restart, and hard hosted CI. It does not claim a reactive Tauri/Vue app
+loop, custody/mobile changes, broader participant controls, deployment, complete G1/Phase G, or W4.

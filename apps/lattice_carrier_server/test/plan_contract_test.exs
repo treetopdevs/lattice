@@ -440,7 +440,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
     build_map = File.read!(Path.join(@repo_root, "TOWNSHIP_BUILD_MAP.md"))
     poc_status = File.read!(Path.join(@repo_root, "docs/lattice_poc_status.md"))
 
-    assert plan =~ ~r/## Status\s+(?:IN PROGRESS|DONE)/
+    assert plan =~ ~r/## Status\s+DONE/
     assert plan =~ ~r/latest availability plus at most one waiting\s+consumer/
     assert plan =~ ~r/does not claim wire-level browser\/Node WebSocket\s+backpressure/
 
@@ -458,6 +458,8 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert plan =~ ~r/focused unsubscribe\s+diagnosis returned `VERDICT FIX`/
     assert plan =~ "Final exact-worktree Claude review returned `PROCEED`"
     assert plan =~ ~r/no blocker, high, or medium finding/
+    assert plan =~ "Hosted run `29192642981` passed"
+    assert plan =~ ~r/## Completion claim\s+Complete for this scoped increment/
 
     assert client_source =~ "export interface CarrierAvailability"
     assert client_source =~ "export interface CarrierAvailabilitySubscription"
@@ -479,13 +481,13 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert workflow =~ "npm run feed:contract"
 
     assert plans_index =~
-             ~r/\| 133 \| Direct TypeScript carrier availability feed \| P1 \| L \| 132 \| (?:IN PROGRESS|DONE) \|/
+             "| 133 | Direct TypeScript carrier availability feed | P1 | L | 132 | DONE |"
 
     assert build_map =~ "Plan 133 adds the direct typed TypeScript availability subscription"
     assert build_map =~ "Reactive Tauri/Vue feed consumption remains separately gated"
-    assert build_map =~ "direct-TypeScript gate CI-wired"
+    assert build_map =~ "direct-TypeScript gate CI-enforced"
 
-    assert build_map =~
+    refute build_map =~
              "Hosted execution of that new hard step remains the Plan 133 closure gate"
 
     refute build_map =~
@@ -495,5 +497,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert poc_status =~ "No reactive Tauri/Vue app feed loop"
     assert poc_status =~ "Full local regression is green"
     assert poc_status =~ "Final exact-worktree Claude review is green"
+    assert poc_status =~ "Hosted implementation run `29192642981` is green"
+    assert poc_status =~ "Plan 133 status is `DONE`"
   end
 end

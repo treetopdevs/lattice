@@ -484,8 +484,9 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
   374 tests plus 25 properties, every shared-client script, both TypeScript typechecks, the complete
   shell `app:convergence` matrix, warning-free forced test/production compiles, unchanged xref,
   Sobelow, and workflow lint. Final exact-worktree Claude review is green with no blocker, high, or
-  medium finding. Implementation publication and hosted CI remain Plan 133 closure gates, so its
-  plan status remains `IN PROGRESS`.
+  medium finding. Hosted implementation run `29192642981` is green across the flagship artifact,
+  unit/property suite (including both new TypeScript feed gates), and packaged macOS convergence.
+  Plan 133 status is `DONE`.
 - Blocker or remaining limitation: No reactive Tauri/Vue app feed loop. Plan 133 changes no
   participant key, capability, pairing, onboarding, outbox, native storage, or mobile secure-store
   custody; it adds no pushed operation/state materialization, broader participant controls,

@@ -163,7 +163,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 130 | LiveView-to-Tauri participant post handoff | P1 | L | 129, 123, 126 | DONE |
 | 131 | Packaged macOS convergence CI gate | P1 | S | 129, 130 | DONE |
 | 132 | Authenticated carrier availability feed | P1 | XL | 128, 131 | DONE |
-| 133 | Direct TypeScript carrier availability feed | P1 | L | 132 | IN PROGRESS |
+| 133 | Direct TypeScript carrier availability feed | P1 | L | 132 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
