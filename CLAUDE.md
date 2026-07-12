@@ -99,6 +99,14 @@ the resulting operation and restarted projection with `Lattice.Sim`. This is not
 broader participant controls, production deployment, Phase G completion, receipt-free W4, or a new
 mobile/device or secure-store result.
 
+Plan 131 makes the packaged macOS gates mandatory in CI. A hard-failing `macos-15-intel` flagship
+job builds and launches the actual app for stable-relay onboarding and LiveView action handoff,
+retaining native key/KV custody, LaunchServices ingress, restart recovery, and exact Sim comparison.
+The Ubuntu native-core job now provisions Tauri's official Linux build prerequisites so its real
+Wry tests execute instead of failing at pkg-config. This is CI enforcement and environment repair,
+not server push, broader participant controls, production deployment, mobile/device proof, Phase G
+completion, or receipt-free W4.
+
 ## Constraints — the "do not implement" boundary (PD-001 §6)
 
 Named and **excluded from this POC**. If one starts looking necessary, question the

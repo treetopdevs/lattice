@@ -205,6 +205,8 @@ Module docs render via ex_doc: `cd apps/lattice_core && mix docs`.
   custody, and converges with a fresh pull-only observer after server restart.
 - A cross-surface proof that a LiveView-prepared unsigned post request can enter that same
   client-custody path and become Sim-equal without server-side authoring.
+- Both packaged macOS convergence smokes are mandatory in flagship CI: the hosted job builds and
+  launches the real app for stable-relay onboarding and LiveView action handoff.
 - Fail-closed path loading and persisted source recovery across supervisor and
   OS-process restart.
 - A realm transport identity, not a participant identity, capability issuer, or

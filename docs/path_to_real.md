@@ -49,7 +49,7 @@ acknowledgements for future compaction GC, and a BEAM-side browser log-store pay
 helper that preserves quarantine reports. The browser/AtomVM track still needs to
 consume those schemas and wire persistence in its own runtime.
 
-**Stable write-boundary and app result (Plans 127-130, 2026-07-12).** A dedicated supervised
+**Stable write-boundary and app result (Plans 127-131, 2026-07-12).** A dedicated supervised
 `lattice_carrier_server` now serves authenticated pull by default and may opt selected trusted
 realms into relaying one already-signed operation to a path-backed source. The server persists a
 changed log before acknowledgement and keeps only a transport identity. Plan 129 closes the
@@ -65,6 +65,13 @@ capability/dependency/key custody, and authors and relays only after explicit re
 actions. The Ubuntu gate and packaged macOS LaunchServices gate compare the observed operation and
 fresh restarted projection with `Lattice.Sim`. This does not add server push, broader participant
 controls, a mobile/device result, TLS/public deployment, full Phase G, or receipt-free W4.
+
+Plan 131 closes the packaged-proof CI gap without adding runtime capability. A non-optional hosted
+macOS job builds and launches the actual app for both stable-relay onboarding and LiveView action
+handoff; run `29180961767` passed native custody, LaunchServices, restart recovery, and Sim equality.
+The Linux unit runner now installs Tauri's build prerequisites for its real-Wry tests, but this is
+not a Linux package/GUI result. Server push, broader controls, mobile/device behavior, TLS/public
+deployment, full Phase G, and receipt-free W4 remain open.
 
 ## 2. Efficient frontier-diff sync (Beelay)
 

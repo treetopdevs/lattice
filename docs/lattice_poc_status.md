@@ -395,8 +395,8 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
   verifier; quarantine equality is not an empty-vs-empty assertion.
 - Gates: `npm run township:action-handoff:e2e` is Ubuntu-running and wired into the flagship script
   and workflow. `npm run tauri:action-handoff:smoke` delivers the real LiveView-produced URL through
-  LaunchServices to a freshly built release-mode app with native key/KV custody; it remains a local
-  macOS requirement rather than a CI-enforced macOS lane.
+  LaunchServices to a freshly built release-mode app with native key/KV custody. Plan 131 now runs
+  it as a mandatory hosted macOS lane alongside packaged stable-relay onboarding.
 - Result: the focused action/LiveView, dispatcher/frontend/typecheck, Ubuntu Playwright, stable
   server regression, and freshly rebuilt packaged macOS gates passed on 2026-07-12. The full
   release matrix passed with 336 tests and 25 properties under pinned OTP 28, complete client and
@@ -408,3 +408,24 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
   guarantee, production deployment, full G1/Phase G completion, mobile/device proof, new secure
   store, or receipt-free W4. Phoenix never receives participant keys, caps, delegations,
   dependencies, signatures, or authoring authority.
+
+## Checkpoint: Packaged macOS Convergence CI Gate
+
+- Files changed: the flagship workflow, its anti-decay Plan 131 contract, Tauri Linux build
+  prerequisites for the existing native-core job, and cumulative status documentation.
+- Behaviors: a non-optional `macos-15-intel` job installs pinned BEAM/Node/esbuild/Playwright and
+  lockfile dependencies, rebuilds the shared client, then executes both unchanged packaged smokes.
+  It has no `continue-on-error`, platform skip, stale-bundle reuse, or app-build bypass.
+- Oracle: stable-relay onboarding and LiveView action handoff still consume their existing Sim
+  fixtures and prove native signing/KV custody, durable acknowledgement, restart recovery, exact
+  operation/state equality, and redacted evidence through actual app bundles.
+- Gates: the Plan 131 ExUnit contract pins the runner, both smoke commands, real-build posture,
+  root/client/shell setup, and absence of soft failure. Hosted run `29180961767` passed
+  `Packaged macOS convergence`, `Unit + property suite`, and `Verify flagship artifact` on commit
+  `85b2b3bd1b2c2a7b81b06aace61ec3c2b977ea2a`.
+- Result: both real packaged macOS convergence smokes are CI-enforced. The first hosted run exposed
+  missing root Phoenix asset dependencies and longstanding Ubuntu Wry build prerequisites; both
+  were repaired without weakening the smokes or native tests, and the corrected rerun was green.
+- Blocker or remaining limitation: Plan 131 adds no runtime feature, server push, broader
+  participant control, deployment, Linux packaged-app/GUI result, mobile/device proof, secure-store
+  change, G1/Phase G completion, or receipt-free W4.

@@ -34,6 +34,10 @@ generic command bus, or complete all `/township` controls, server push, deployme
   its cross-surface correctness core in an Ubuntu-running flagship gate and records packaged macOS
   execution separately; a subsequent small CI-hardening plan must make the macOS lane non-optional.
 
+Follow-up: Plan 131 now runs both the packaged stable-relay onboarding and action-handoff smokes as
+a non-optional `macos-15-intel` flagship job. Plan 130's original completion claim remains scoped to
+the local packaged proof available at that time; the current branch is CI-enforced.
+
 ## Critical trust separation
 
 1. `/township` prepares an **unsigned request**, not an operation. It may hold public post text, a

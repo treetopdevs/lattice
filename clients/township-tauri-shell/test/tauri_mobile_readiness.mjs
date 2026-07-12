@@ -1437,7 +1437,7 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(strategy, /Android emulator now proves native carrier key reuse/);
   assert.match(strategy, /No phone-grade persistence claim is allowed/);
   assert.match(buildMap, /clients\/township-tauri-shell/);
-  assert.match(buildMap, /shell coverage through plan 130/);
+  assert.match(buildMap, /shell coverage through plan 131/);
   assert.match(
     buildMap,
     /desktop and Android-release convergence, onboarding,\s+and pairing proofs exist through plan 120/,
@@ -1447,7 +1447,7 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
     buildMap,
     /Plan 128 does not change or\s+newly prove Tauri onboarding\/cap persistence,\s+mobile secure-store custody, or real app\s+convergence/,
   );
-  assert.match(buildMap, /plans 023-130/);
+  assert.match(buildMap, /plans 023-131/);
   assert.match(buildMap, /Xcode 27 beta Tauri Swift-package failure/);
   assert.match(buildMap, /QR camera onboarding/);
   assert.match(buildMap, /LAN discovery/);

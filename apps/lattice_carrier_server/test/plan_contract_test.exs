@@ -29,7 +29,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert build_map =~ "authenticated frontier and pull"
     assert build_map =~ "production deployment remains"
     assert build_map =~ "Broader participant controls and a server-push carrier feed remain"
-    assert build_map =~ "plans 023-130"
+    assert build_map =~ "plans 023-131"
 
     assert build_map =~
              ~r/Plan 128 does not change or newly prove Tauri onboarding\/cap persistence/
@@ -80,7 +80,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert build_map =~ "Plan 128 adds the opt-in durable client-signed relay"
     assert build_map =~ "request/response relay, not server push"
     assert build_map =~ "Broader participant controls and a server-push carrier feed remain"
-    assert build_map =~ "plans 023-130"
+    assert build_map =~ "plans 023-131"
 
     assert build_map =~
              ~r/Plan 128 does not change or newly prove Tauri onboarding\/cap persistence/
@@ -150,7 +150,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert build_map =~ "Plan 129 connects the packaged desktop Tauri onboarding ceremony"
     assert build_map =~ "exact Sim-generated operation"
     assert build_map =~ "mobile secure-store strategy remains unchanged"
-    assert build_map =~ "plans 023-130"
+    assert build_map =~ "plans 023-131"
     refute build_map =~ "Plan 129 completes Phase G"
     refute build_map =~ "Plan 129 makes W4 receipt-free"
 
@@ -223,7 +223,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
 
     assert build_map =~ "Plan 130 adds the first participant post handoff"
     assert build_map =~ "unsigned request"
-    assert build_map =~ "plans 023-130"
+    assert build_map =~ "plans 023-131"
     refute build_map =~ "Plan 130 completes G1"
     refute build_map =~ "Plan 130 completes Phase G"
     refute build_map =~ "Plan 130 makes W4 receipt-free"
@@ -268,6 +268,16 @@ defmodule LatticeCarrierServer.PlanContractTest do
     plan =
       File.read!(Path.join(@repo_root, "plans/131-packaged-macos-convergence-ci-gate-g1.md"))
 
+    plans_index = File.read!(Path.join(@repo_root, "plans/README.md"))
+    build_map = File.read!(Path.join(@repo_root, "TOWNSHIP_BUILD_MAP.md"))
+    claude = File.read!(Path.join(@repo_root, "CLAUDE.md"))
+    readme = File.read!(Path.join(@repo_root, "README.md"))
+    poc_status = File.read!(Path.join(@repo_root, "docs/lattice_poc_status.md"))
+    path_to_real = File.read!(Path.join(@repo_root, "docs/path_to_real.md"))
+
+    mobile_strategy =
+      File.read!(Path.join(@repo_root, "docs/township_mobile_secure_store_strategy.md"))
+
     workflow = File.read!(Path.join(@repo_root, ".github/workflows/flagship.yml"))
 
     stable_smoke =
@@ -286,11 +296,31 @@ defmodule LatticeCarrierServer.PlanContractTest do
         )
       )
 
-    assert plan =~ ~r/## Status\s+(?:IN PROGRESS|DONE)/
+    assert plan =~ ~r/## Status\s+DONE/
     assert plan =~ ~r/actual\s+`Township\.app` bundle/
     assert plan =~ "A platform skip, prebuilt stale bundle, mocked native IPC surface"
     assert plan =~ "No new carrier message, subscription, notification, or server-push protocol"
     assert plan =~ "No G1/Phase G completion and no receipt-free W4 claim"
+    assert plan =~ "Hosted run `29180961767`"
+    assert plan =~
+             "final exact-diff review covered the complete `802437a8..85b2b3bd` implementation range"
+
+    assert plan =~ ~r/returned\s+`PROCEED` with no blocker,\s+high, or medium finding/
+    assert plan =~ ~r/## Completion claim\s+Complete for this scoped increment/
+
+    assert plans_index =~
+             "| 131 | Packaged macOS convergence CI gate | P1 | S | 129, 130 | DONE |"
+
+    assert build_map =~ "Plan 131 makes both packaged macOS convergence proofs CI-enforced"
+    assert build_map =~ "plans 023-131"
+    refute build_map =~ "Plan 131 completes Phase G"
+    refute build_map =~ "Plan 131 makes W4 receipt-free"
+
+    assert claude =~ "Plan 131 makes the packaged macOS gates mandatory in CI"
+    assert readme =~ "Both packaged macOS convergence smokes are mandatory in flagship CI"
+    assert poc_status =~ "## Checkpoint: Packaged macOS Convergence CI Gate"
+    assert path_to_real =~ "Plan 131 closes the packaged-proof CI gap"
+    assert mobile_strategy =~ "Plan 131 reuses this custody strategy unchanged"
 
     assert workflow =~ "Install Tauri Linux prerequisites"
     assert workflow =~ "libwebkit2gtk-4.1-dev"

@@ -2,7 +2,7 @@
 
 ## Status
 
-IN PROGRESS
+DONE (2026-07-12)
 
 ## Objective
 
@@ -137,6 +137,29 @@ while the higher macOS billing multiplier would matter if the repository becomes
    full pinned-OTP `mix verify`/`mix check`, and an exact-diff Claude review. Confirm the pushed
    workflow run is green at the final commit.
 
+## TDD evidence
+
+1. The new Plan 131 contract first failed only because `.github/workflows/flagship.yml` had no
+   `packaged_macos` job. Adding the pinned runner, hard-failure posture, cold toolchain setup, and
+   both unchanged smoke commands made the focused five-test contract green.
+2. `actionlint` then reported ShellCheck `SC2209` on inline `MIX_ENV` assignments. Prefixing the
+   commands with `env` preserved the contract and made workflow lint green.
+3. Pre-push review found the cold `assets.build` esbuild installer was absent. The job now installs
+   the pinned esbuild binary before either smoke. A disputed client-export finding was checked
+   against `git ls-files`: `dist` is tracked, but rebuilding it before shell install still prevents
+   stale generated output from entering the file dependency.
+4. Hosted run `29180508051` was the first empirical RED. The new macOS job passed real packaged
+   stable-relay onboarding, proving hosted app launch and native custody. Its action smoke failed
+   because the real Phoenix asset build lacked root-owned `vue` and `@dagrejs/dagre`. The existing
+   Ubuntu native-core step separately failed because its real-Wry Cargo graph lacked Tauri's Linux
+   development libraries.
+5. Root `npm ci` and root lockfile caching fixed the real asset boundary without externalizing or
+   mocking dependencies. Tauri's official Ubuntu prerequisite set fixed the existing Wry compile
+   gate without changing Cargo features or tests. The focused contract and `actionlint` stayed green.
+6. Hosted run `29180961767` then passed all three jobs. The macOS job executed and passed packaged
+   stable-relay onboarding and packaged LiveView action handoff; the Ubuntu unit job executed and
+   passed the real native-core tests plus every downstream carrier/static gate.
+
 ## Second opinion
 
 Claude Code Opus reviewed the clean Plan 130 frontier read-only and returned `PROCEED`. It ranked
@@ -191,13 +214,42 @@ participates in setup-node's cache key, and root install precedes both smokes. T
 is evidence that hosted app launch and native-custody onboarding are feasible; action handoff
 remains unproven in CI until the corrected run reaches and passes its full boundary.
 
-An implementation review remains required before completion.
+Claude's final exact-diff review covered the complete `802437a8..85b2b3bd` implementation range,
+the final documentation/status diff, and all untracked files. It returned `PROCEED` with no blocker,
+high, or medium finding. It verified that the job-scoped contract cannot borrow assertions from the
+Ubuntu jobs, both smoke bodies remain unchanged, setup ordering and action pins are sound, the Linux
+libraries repair the real-Wry environment without adding a Linux GUI claim, and every Phase G/W4/
+deployment/mobile non-claim remains explicit.
+
+The remaining informational limits are explicit: "mandatory" means hard-failing within flagship CI,
+not branch-protected, and future Markdown-only edits are excluded by the workflow's existing path
+filter.
 
 ## Verification
 
-Pending TDD and hosted CI execution.
+Hosted run `29180961767` passed on commit `85b2b3bd1b2c2a7b81b06aace61ec3c2b977ea2a`:
+
+- `Packaged macOS convergence` passed in 9m40s on `macos-15-intel`;
+- the real packaged stable-relay onboarding smoke passed in 4m32s;
+- the real packaged action-handoff smoke passed in 1m22s;
+- `Unit + property suite` passed, including the real-Wry native core; and
+- `Verify flagship artifact` passed.
+
+Focused Plan 131 contracts, workflow YAML parsing, `actionlint`, client build, local packaged smokes,
+full pinned-OTP verification, and final Claude review passed before the final Plan 131 commit:
+
+- both local packaged stable-relay onboarding and action-handoff smokes passed;
+- `mobile:tauri-readiness` and all affected cumulative plan contracts passed;
+- `actionlint`, focused formatting, and `git diff --check` passed;
+- `mix verify` and `mix check` each passed 337 tests and 25 properties under the pinned OTP 28 /
+  Elixir 1.19.5 toolchain; and
+- strict Credo exited zero with the repository's existing non-blocking suggestions.
 
 ## Completion claim
 
-Not complete while the required packaged macOS job is absent or has not passed on the pushed
-workflow revision.
+Complete for this scoped increment: both existing real packaged macOS convergence proofs now run as
+a non-optional, hard-failing flagship CI job on a standard hosted runner. The successful job builds
+and launches the actual app twice, exercises native custody and LaunchServices, and compares the
+stable-relay and participant-handoff results with Sim. The Ubuntu native-core sibling is green on its
+real Wry runtime. This adds no server push, broader participant controls, production deployment,
+mobile/device behavior, complete G1/Phase G, or receipt-free W4.
