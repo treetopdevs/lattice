@@ -105,15 +105,14 @@ defmodule LatticeCarrierServer.PlanContractTest do
 
   test "Plan 129 records packaged Tauri stable-relay convergence without expanding custody or mobile claims" do
     plan =
-      File.read!(
-        Path.join(@repo_root, "plans/129-packaged-tauri-stable-relay-convergence-g1.md")
-      )
+      File.read!(Path.join(@repo_root, "plans/129-packaged-tauri-stable-relay-convergence-g1.md"))
 
     plans_index = File.read!(Path.join(@repo_root, "plans/README.md"))
     build_map = File.read!(Path.join(@repo_root, "TOWNSHIP_BUILD_MAP.md"))
     claude = File.read!(Path.join(@repo_root, "CLAUDE.md"))
     poc_status = File.read!(Path.join(@repo_root, "docs/lattice_poc_status.md"))
     path_to_real = File.read!(Path.join(@repo_root, "docs/path_to_real.md"))
+
     mobile_strategy =
       File.read!(Path.join(@repo_root, "docs/township_mobile_secure_store_strategy.md"))
 
@@ -167,6 +166,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
              "tsx test/tauri_stable_relay_onboarding_smoke.ts"
 
     assert shell_package["scripts"]["app:convergence"] =~ "stable:relay:contract"
+
     assert shell_package["scripts"]["app:convergence"] =~
              "tauri:stable-relay:onboarding:smoke"
 
@@ -231,7 +231,10 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert claude =~ "Plan 130 adds the first participant post handoff"
     assert claude =~ "Phoenix never receives participant keys"
     assert claude =~ "Read-oriented LiveView/Vue instrument"
-    assert readme =~ "fresh carrier-backed `/township` instrument may prepare one unsigned post request"
+
+    assert readme =~
+             "fresh carrier-backed `/township` instrument may prepare one unsigned post request"
+
     assert poc_status =~ "## Checkpoint: LiveView-to-Tauri Participant Post Handoff"
     assert poc_status =~ ~r/full\s+release matrix passed with 336 tests and 25 properties/
     assert path_to_real =~ "Plan 130 closes the first participant-loop gap"
@@ -259,5 +262,54 @@ defmodule LatticeCarrierServer.PlanContractTest do
 
     assert plan =~
              ~r/the packaged macOS gate uses the native-gated development\s+control/
+  end
+
+  test "Plan 131 makes both real packaged macOS convergence proofs mandatory in CI" do
+    plan =
+      File.read!(Path.join(@repo_root, "plans/131-packaged-macos-convergence-ci-gate-g1.md"))
+
+    workflow = File.read!(Path.join(@repo_root, ".github/workflows/flagship.yml"))
+
+    stable_smoke =
+      File.read!(
+        Path.join(
+          @repo_root,
+          "clients/township-tauri-shell/test/tauri_stable_relay_onboarding_smoke.ts"
+        )
+      )
+
+    action_smoke =
+      File.read!(
+        Path.join(
+          @repo_root,
+          "clients/township-tauri-shell/test/tauri_action_handoff_smoke.ts"
+        )
+      )
+
+    assert plan =~ ~r/## Status\s+(?:IN PROGRESS|DONE)/
+    assert plan =~ ~r/actual\s+`Township\.app` bundle/
+    assert plan =~ "A platform skip, prebuilt stale bundle, mocked native IPC surface"
+    assert plan =~ "No new carrier message, subscription, notification, or server-push protocol"
+    assert plan =~ "No G1/Phase G completion and no receipt-free W4 claim"
+
+    assert workflow =~ "\n  packaged_macos:\n"
+    packaged_job = workflow |> String.split("\n  packaged_macos:\n", parts: 2) |> List.last()
+
+    assert packaged_job =~ "runs-on: macos-15-intel"
+    assert packaged_job =~ "timeout-minutes: 75"
+    assert packaged_job =~ "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830"
+    assert packaged_job =~ "MIX_ENV=test mix compile"
+    assert packaged_job =~ "MIX_ENV=test mix esbuild.install --if-missing"
+    assert packaged_job =~ "npm --prefix clients/lattice-client run build"
+    assert packaged_job =~ "npx --no-install playwright install chromium"
+    assert packaged_job =~ "npm run tauri:stable-relay:onboarding:smoke"
+    assert packaged_job =~ "npm run tauri:action-handoff:smoke"
+    refute packaged_job =~ "continue-on-error"
+    refute packaged_job =~ "TOWNSHIP_SKIP_ACTION_APP_BUILD"
+
+    assert stable_smoke =~ "process.platform !== \"darwin\""
+    assert stable_smoke =~ "Packaged Tauri stable-relay onboarding smoke passed"
+    assert action_smoke =~ "process.platform !== \"darwin\""
+    assert action_smoke =~ "Packaged Tauri action-handoff smoke passed"
   end
 end

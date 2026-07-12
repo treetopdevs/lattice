@@ -142,3 +142,66 @@ jobs:
         run: mix credo --strict
       - name: Sobelow (lattice_server)
         run: cd apps/lattice_server && mix sobelow --exit
+
+  packaged_macos:
+    name: Packaged macOS convergence
+    runs-on: macos-15-intel
+    timeout-minutes: 75
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up BEAM
+        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
+        with:
+          otp-version: "28.1"
+          elixir-version: "1.19.5"
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            clients/lattice-client/package-lock.json
+            clients/township-tauri-shell/package-lock.json
+
+      - name: Cache Cargo dependencies and build
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            clients/township-tauri-shell/src-tauri/target
+          key: ${{ runner.os }}-${{ runner.arch }}-township-tauri-${{ hashFiles('clients/township-tauri-shell/src-tauri/Cargo.lock', 'clients/township-tauri-shell/src-tauri/src/**/*.rs') }}
+          restore-keys: ${{ runner.os }}-${{ runner.arch }}-township-tauri-
+
+      - name: Install Elixir dependencies
+        run: env MIX_ENV=test mix deps.get
+
+      - name: Compile BEAM support
+        run: env MIX_ENV=test mix compile
+
+      - name: Install Township esbuild binary
+        run: env MIX_ENV=test mix esbuild.install --if-missing
+
+      - name: Install client and shell dependencies
+        run: |
+          npm --prefix clients/lattice-client ci
+          npm --prefix clients/lattice-client run build
+          npm --prefix clients/township-tauri-shell ci
+
+      - name: Install shell Playwright browser
+        working-directory: clients/township-tauri-shell
+        run: npx --no-install playwright install chromium
+
+      - name: Verify packaged stable-relay onboarding
+        working-directory: clients/township-tauri-shell
+        run: npm run tauri:stable-relay:onboarding:smoke
+
+      - name: Verify packaged action handoff
+        working-directory: clients/township-tauri-shell
+        run: npm run tauri:action-handoff:smoke
