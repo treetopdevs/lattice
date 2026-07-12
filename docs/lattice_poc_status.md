@@ -516,13 +516,15 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
   Pinned OTP 28 `mix verify` and `mix check` each pass the full umbrella; warning compiles, xref,
   both Sobelow boundaries, actionlint, formatting, and diff checks are green. The headless
   controller and third fresh-build packaged smoke are wired as hard flagship steps.
-- Hosted acceptance remains pending.
+- Hosted implementation run `29210581826` is green at
+  `bfe8bcf2c2d3e7276ba92922f6e991922992b1c2`. `Verify flagship artifact` completed in 3m28s,
+  `Unit + property suite` completed in 4m34s, and `Packaged macOS convergence` completed in 8m16s;
+  all three hard packaged stable-relay onboarding, action-handoff, and reactive-feed steps passed.
 - Result: Full local regression is green at 375 tests plus 25 properties. The RED/GREEN
   implementation and real packaged restart gate pass. Reactive refresh never submits or compacts
   the authored outbox, no automatic Sync trace appears, raw action/proceedings content stays out of
   native trace, and no operation is authored by the observer identity. Final exact-worktree Claude
-  review is green with no blocker, high, or medium finding. Plan 134 remains `IN PROGRESS` until
-  hosted branch evidence is green.
+  review is green with no blocker, high, or medium finding. Plan 134 status is `DONE`.
 - Blocker or remaining limitation: no mobile secure-store implementation change, mobile/device
   result, automatic participant publication, broader participant controls, production ingress/TLS
   deployment, complete G1/Phase G claim, or receipt-free W4.

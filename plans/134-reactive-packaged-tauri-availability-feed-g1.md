@@ -2,7 +2,7 @@
 
 ## Status
 
-IN PROGRESS
+DONE
 
 ## Objective
 
@@ -373,13 +373,21 @@ Full local regression passed on 2026-07-12:
   independently read the complete diff plus all untracked Plan 134 files, checked every stop
   condition, generated parity, the five regression fixes, CI executability, and all non-claims.
 
-Hosted acceptance remains pending. The pushed implementation run and evidence-backed closure run
-must pass the hard unit, flagship, and packaged macOS jobs.
+## Hosted implementation evidence
+
+Hosted implementation run `29210581826` is green at
+`bfe8bcf2c2d3e7276ba92922f6e991922992b1c2`:
+
+- `Verify flagship artifact` completed in 3m28s.
+- `Unit + property suite` completed in 4m34s, including the reactive controller and live stable
+  carrier availability feed steps.
+- `Packaged macOS convergence` completed in 8m16s. Its stable-relay onboarding, action handoff,
+  and reactive carrier feed steps all passed without a skipped or soft-failed gate.
 
 ## Completion claim
 
-Not yet complete. Completion requires required pulled-frame verification, the read-only refresh,
-bounded controller lifecycle, rendered Vue projection, and real packaged restart gate are locally
-green, and final exact-worktree independent review passed. Hard hosted CI and cumulative closure
-evidence remain. Even then, this increment will not claim automatic authored-frame publication,
-custody/mobile changes, broader controls, deployment, complete G1/Phase G, or receipt-free W4.
+Complete for this scoped increment. Required pulled-frame verification, the read-only refresh,
+bounded controller lifecycle, rendered Vue projection, and the real packaged restart gate are
+locally green; final exact-worktree independent review passed; and hard hosted CI is green. This
+increment does not claim automatic authored-frame publication, custody/mobile changes, broader
+controls, deployment, complete G1/Phase G, or receipt-free W4.

@@ -525,7 +525,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
     mobile_strategy =
       File.read!(Path.join(@repo_root, "docs/township_mobile_secure_store_strategy.md"))
 
-    assert plan =~ ~r/## Status\s+(?:IN PROGRESS|DONE)/
+    assert plan =~ ~r/## Status\s+DONE/
     assert plan =~ "Reactive refresh never submits or compacts the authored outbox"
     assert plan =~ "Every pulled frame is verified before conversion or persistence"
     assert plan =~ "No mobile secure-store implementation change"
@@ -540,7 +540,13 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert plan =~ "Full local regression passed"
     assert plan =~ "375 tests plus 25 properties"
     assert plan =~ "Final exact-worktree Claude review returned `PROCEED`"
-    assert plan =~ "Hosted acceptance remains pending"
+    assert plan =~ "Hosted implementation run `29210581826` is green"
+    assert plan =~ "`bfe8bcf2c2d3e7276ba92922f6e991922992b1c2`"
+    assert plan =~ "`Verify flagship artifact` completed in 3m28s"
+    assert plan =~ "`Unit + property suite` completed in 4m34s"
+    assert plan =~ "`Packaged macOS convergence` completed in 8m16s"
+    assert plan =~ "Complete for this scoped increment"
+    refute plan =~ "Hosted acceptance remains pending"
 
     assert client_source =~ "verifier: Verifier"
     assert client_source =~ "verifyCarrierOp"
@@ -575,15 +581,22 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert workflow =~ "timeout-minutes: 90"
 
     assert plans_index =~
-             ~r/\| 134 \| Reactive packaged Tauri availability feed \| P1 \| XL \| 133, 129, 130 \| (?:IN PROGRESS|DONE) \|/
+             "| 134 | Reactive packaged Tauri availability feed | P1 | XL | 133, 129, 130 | DONE |"
 
     assert build_map =~ "Plan 134 adds the packaged Tauri/Vue reactive availability feed"
     assert build_map =~ "Reactive refresh never submits or compacts the authored outbox"
     assert build_map =~ "Full local Plan 134 regression is green"
+    assert build_map =~ "Hosted Plan 134 run `29210581826` is green"
+    refute build_map =~ "hosted Plan 134 result pending"
+    refute build_map =~ "Plan 134 completes G1"
+    refute build_map =~ "Plan 134 completes Phase G"
+    refute build_map =~ "Plan 134 completes W4"
     assert poc_status =~ "## Checkpoint: Reactive Packaged Tauri Availability Feed"
     assert poc_status =~ "Full local regression is green at 375 tests plus 25 properties"
     assert poc_status =~ "Final exact-worktree Claude review is green"
-    assert poc_status =~ "Hosted acceptance remains pending"
+    assert poc_status =~ "Hosted implementation run `29210581826` is green"
+    assert poc_status =~ "Plan 134 status is `DONE`"
+    refute poc_status =~ "Hosted acceptance remains pending"
     assert mobile_strategy =~ "Plan 134 leaves this custody strategy unchanged"
   end
 end
