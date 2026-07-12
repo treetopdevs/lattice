@@ -374,7 +374,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
     claude = File.read!(Path.join(@repo_root, "CLAUDE.md"))
     poc_status = File.read!(Path.join(@repo_root, "docs/lattice_poc_status.md"))
 
-    assert plan =~ ~r/## Status\s+(?:IN PROGRESS|DONE)/
+    assert plan =~ ~r/## Status\s+DONE/
     assert plan =~ "The pushed frame is a liveness hint, never state transfer"
     assert plan =~ "Generation cannot move backward"
     assert plan =~ "at most 64"
@@ -382,6 +382,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert plan =~ "Plan 133 must add TypeScript"
     assert plan =~ "No server-pushed operation/state materialization"
     assert plan =~ "No complete G1/Phase G claim and no receipt-free W4 claim"
+    assert plan =~ "Hosted run `29188555667` passed"
 
     Code.ensure_loaded!(LatticeCarrierServer.Holder)
 
@@ -398,7 +399,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert action_smoke =~ "RELAY_READY restart"
 
     assert plans_index =~
-             ~r/\| 132 \| Authenticated carrier availability feed \| P1 \| XL \| 128, 131 \| (?:IN PROGRESS|DONE) \|/
+             "| 132 | Authenticated carrier availability feed | P1 | XL | 128, 131 | DONE |"
 
     assert build_map =~ "Plan 132 adds an authenticated bounded `ops_available` hint"
     assert build_map =~ "verified pull remains the only materialization path"

@@ -161,7 +161,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 129 | Packaged Tauri stable-relay convergence | P1 | L | 128, 118-120 | DONE |
 | 130 | LiveView-to-Tauri participant post handoff | P1 | L | 129, 123, 126 | DONE |
 | 131 | Packaged macOS convergence CI gate | P1 | S | 129, 130 | DONE |
-| 132 | Authenticated carrier availability feed | P1 | XL | 128, 131 | IN PROGRESS |
+| 132 | Authenticated carrier availability feed | P1 | XL | 128, 131 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

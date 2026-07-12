@@ -2,7 +2,7 @@
 
 ## Status
 
-IN PROGRESS (local verification complete; hosted CI pending)
+DONE (2026-07-12)
 
 ## Objective
 
@@ -354,8 +354,17 @@ returned `PROCEED`; the bound is now independent of relay rate.
 - The final exact-diff Claude review returned `PROCEED` with no blocker, high, or medium finding and
   confirmed every stop condition, the literal subscriber-mailbox bound, and the fixed-port helper's
   honesty. Its LOW premature-`DONE` finding drove a focused documentation-contract RED/GREEN; the
-  follow-up returned `PROCEED`. Hosted CI remains mandatory publication evidence. Its run is
-  appended only after it completes; no pending gate is claimed as green.
+  follow-up returned `PROCEED`.
+
+Hosted run `29188555667` passed on commit
+`84ba382ff124a324cfe8bcfc2eb40164d08fe341`:
+
+- `Verify flagship artifact` passed in 3m22s, including the recorded browser/video evidence path;
+- `Unit + property suite` passed in 4m14s, including the full BEAM suite, TypeScript parity and
+  carrier checks, the Tauri native command core, strict Credo, and Sobelow; and
+- `Packaged macOS convergence` passed in 9m35s on the real app bundle. The stable-relay onboarding
+  smoke passed in 2m32s and the Plan 132 action-handoff smoke passed in 2m08s, including first push
+  before the 60-second poll, restart recovery, and the second post-restart pushed generation.
 
 ## Completion claim
 
