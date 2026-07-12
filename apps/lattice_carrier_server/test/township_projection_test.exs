@@ -1,7 +1,7 @@
 defmodule LatticeCarrierServer.TownshipProjectionTest do
   use ExUnit.Case, async: false
 
-  alias Lattice.Carrier.WebSocket
+  alias Lattice.Carrier.{Backoff, WebSocket}
   alias Lattice.{Identity, Log, Sim}
   alias Township.{AuditBundle, Matter, ReadModel}
   alias TownshipWeb.CarrierProjection
@@ -134,6 +134,113 @@ defmodule LatticeCarrierServer.TownshipProjectionTest do
     assert recovered_payload.read_model == relayed_payload.read_model
     assert recovered_payload.causal_replay == relayed_payload.causal_replay
 
+    stop_server(restarted_server)
+  end
+
+  @tag :tmp_dir
+  test "a second-BEAM availability feed drives Sim convergence and resubscribes after restart", %{
+    tmp_dir: tmp_dir
+  } do
+    {:ok, _apps} = Application.ensure_all_started(:township_web)
+
+    replica_name = "replica:matter:stable-feed"
+    sim = Sim.new(Matter, replica_name, ["clerk", "resident"], seed: "stable-feed")
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, _grant} = Sim.grant(sim, "clerk", "resident", ops: [:post])
+    sim = Sim.sync_all(sim)
+    base_log = Sim.log(sim, "clerk")
+    relay_identity = Sim.identity(sim, "resident")
+    {sim, first_relayed_op} = Sim.command(sim, "resident", :post, ["resident: pushed feed"])
+    sim = Sim.sync_all(sim)
+    first_expected_log = Sim.log(sim, "clerk")
+
+    {sim, second_relayed_op} =
+      Sim.command(sim, "resident", :post, ["resident: pushed after restart"])
+
+    sim = Sim.sync_all(sim)
+    restarted_expected_log = Sim.log(sim, "clerk")
+    source_path = Path.join(tmp_dir, "matter.log")
+    assert :ok = Log.dump(base_log, source_path)
+
+    observer = Identity.from_seed("instrument", "stable-feed-projection")
+    server_identity = Identity.from_seed("town-node", "stable-carrier-server")
+    fixed_port = free_port()
+    server = spawn_server(fixed_port, observer, relay_identity, source_path)
+    topic = "township:stable-feed:#{System.unique_integer([:positive])}"
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         feed: :server_push,
+         connect_opts: connect_opts(fixed_port, observer, server_identity, base_log.replica),
+         replica: base_log.replica,
+         peer_realm: server_identity.realm_id,
+         pubsub: TownshipWeb.PubSub,
+         topic: topic,
+         schedule: [
+           initial_delay_ms: 60_000,
+           poll_interval_ms: 60_000,
+           backoff: Backoff.new(base_ms: 50, max_ms: 200, seed: "stable-feed")
+         ]}
+      )
+
+    assert {:ok, :connecting} = CarrierProjection.subscribe(projection)
+    assert {:ok, {:fresh, base_payload}} = CarrierProjection.refresh(projection)
+    assert_receive {:township_instrument, {:fresh, ^base_payload}}
+    assert payload_ids(base_payload) == base_log |> Log.op_ids() |> Enum.sort()
+
+    assert {:ok, relay_connection} =
+             WebSocket.connect(
+               connect_opts(fixed_port, relay_identity, server_identity, base_log.replica)
+             )
+
+    assert {:ok, %{accepted: [relayed_id]}, relay_connection} =
+             WebSocket.relay(relay_connection, first_relayed_op)
+
+    assert relayed_id == first_relayed_op.id
+
+    assert_receive {:township_instrument, {:fresh, pushed_payload}}, 5_000
+    assert payload_ids(pushed_payload) == first_expected_log |> Log.op_ids() |> Enum.sort()
+    assert pushed_payload.read_model == ReadModel.observe(first_expected_log)
+    assert pushed_payload.causal_replay == ReadModel.replay(first_expected_log)
+    assert pushed_payload.provenance.refresh_trigger == :server_push
+    assert pushed_payload.provenance.feed_generation == Log.size(first_expected_log)
+    assert :ok = WebSocket.close(relay_connection)
+
+    kill_server(server)
+    assert_receive {:township_instrument, {:stale, stale_payload}}, 5_000
+    assert payload_ids(stale_payload) == payload_ids(pushed_payload)
+
+    restarted_server = spawn_server(fixed_port, observer, relay_identity, source_path)
+    assert elem(restarted_server, 1) == fixed_port
+
+    assert_receive {:township_instrument, {:fresh, recovered_payload}}, 5_000
+    assert payload_ids(recovered_payload) == payload_ids(pushed_payload)
+    assert recovered_payload.read_model == pushed_payload.read_model
+    assert recovered_payload.causal_replay == pushed_payload.causal_replay
+    assert recovered_payload.provenance.refresh_trigger == :poll
+    assert recovered_payload.provenance.feed_generation == Log.size(first_expected_log)
+
+    assert {:ok, relay_connection} =
+             WebSocket.connect(
+               connect_opts(fixed_port, relay_identity, server_identity, base_log.replica)
+             )
+
+    assert {:ok, %{accepted: [second_relayed_id]}, relay_connection} =
+             WebSocket.relay(relay_connection, second_relayed_op)
+
+    assert second_relayed_id == second_relayed_op.id
+
+    assert_receive {:township_instrument, {:fresh, restarted_push_payload}}, 5_000
+
+    assert payload_ids(restarted_push_payload) ==
+             restarted_expected_log |> Log.op_ids() |> Enum.sort()
+
+    assert restarted_push_payload.read_model == ReadModel.observe(restarted_expected_log)
+    assert restarted_push_payload.causal_replay == ReadModel.replay(restarted_expected_log)
+    assert restarted_push_payload.provenance.refresh_trigger == :server_push
+    assert restarted_push_payload.provenance.feed_generation == Log.size(restarted_expected_log)
+    assert :ok = WebSocket.close(relay_connection)
     stop_server(restarted_server)
   end
 

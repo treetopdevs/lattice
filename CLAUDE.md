@@ -107,6 +107,18 @@ Wry tests execute instead of failing at pkg-config. This is CI enforcement and e
 not server push, broader participant controls, production deployment, mobile/device proof, Phase G
 completion, or receipt-free W4.
 
+Plan 132 replaces fast polling as the normal convergence trigger for the carrier-backed instrument.
+An authenticated BEAM subscriber receives a bounded `ops_available` generation hint only after a
+changed path-backed log is durably persisted, then runs the unchanged verified frontier/pull,
+delivery, reduction, and Sim-comparison path. The packaged action gate proves push-triggered
+convergence before its 60-second poll can run, recovers through reconnect after server restart, and
+then proves the new subscription with a second pushed generation. The hint carries no operation or
+semantic authority. The projection preallocates its local subscription ref before a connect worker
+starts, so a first-connect or reconnect hint cannot race ref installation; an epoch-discarded worker
+connection is closed. Direct TypeScript feed support remains Plan 133; broader participant controls,
+production deployment, mobile/device custody changes, Phase G completion, and receipt-free W4 remain
+open.
+
 ## Constraints — the "do not implement" boundary (PD-001 §6)
 
 Named and **excluded from this POC**. If one starts looking necessary, question the

@@ -36,11 +36,15 @@ interface StableRelayOracle {
   relayPubkey: string;
   baseOpIds: string[];
   expectedPost: CarrierOpFrame;
-  afterPost: {
-    opIds: string[];
-    readModel: { threads: { posts: string[] } };
-    causalReplay: { nodes: Array<{ id: string }>; [key: string]: unknown };
-  };
+  expectedRestartPost: CarrierOpFrame;
+  afterPost: StableRelayProjection;
+  afterRestartPost: StableRelayProjection;
+}
+
+interface StableRelayProjection {
+  opIds: string[];
+  readModel: { threads: { posts: string[] } };
+  causalReplay: { nodes: Array<{ id: string }>; [key: string]: unknown };
 }
 
 interface NativeIdentity {
@@ -61,6 +65,7 @@ interface LiveViewHandoff {
   page: Page;
   url: string;
   intentId: string;
+  baselineFeedGeneration: number;
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -202,7 +207,7 @@ try {
     oracle.expectedPost,
   );
   assert.ok(traceLineCount("lattice_sign_carrier") > signCountBeforeIngress);
-  await waitForLiveViewConvergence(handoff.page, oracle);
+  await waitForLiveViewConvergence(handoff.page, oracle.afterPost, handoff.baselineFeedGeneration);
 
   assert.match(await verifyStableRelay(server, oracle), /VERIFY_READY post/);
   await server.kill();
@@ -211,7 +216,12 @@ try {
   server = await spawnServer();
   await waitForAttribute(handoff.page, "#source-status[data-source='carrier']", "data-freshness", "fresh", 20_000);
   assert.match(await verifyStableRelay(server, oracle), /VERIFY_READY post/);
-  await waitForLiveViewConvergence(handoff.page, oracle);
+  await waitForLiveViewRestartRecovery(handoff.page, oracle.afterPost, handoff.baselineFeedGeneration);
+
+  const restartBaselineFeedGeneration = await carrierFeedGeneration(handoff.page);
+  assert.match(await relayRestartPost(server, oracle), /RELAY_READY restart/);
+  await waitForLiveViewConvergence(handoff.page, oracle.afterRestartPost, restartBaselineFeedGeneration);
+  assert.match(await verifyStableRelay(server, oracle, "restart"), /VERIFY_READY restart/);
 
   const secretNeedles = [
     relaySeed,
@@ -259,6 +269,22 @@ async function prepareLiveViewHandoff(webPort: number, replica: string): Promise
   try {
     await page.goto(`http://localhost:${webPort}/township`, { waitUntil: "domcontentloaded" });
     await waitForAttribute(page, "#source-status[data-source='carrier']", "data-freshness", "fresh", 20_000);
+    await waitForAttribute(
+      page,
+      "#source-status[data-source='carrier']",
+      "data-refresh-trigger",
+      "manual",
+      20_000,
+    );
+    const baselineText = await page
+      .locator("#source-status[data-source='carrier']")
+      .getAttribute("data-feed-generation");
+    assert.ok(baselineText, "expected the pre-relay carrier feed generation");
+    const baselineFeedGeneration = Number(baselineText);
+    assert.ok(
+      Number.isSafeInteger(baselineFeedGeneration) && baselineFeedGeneration >= 0,
+      `invalid pre-relay feed generation ${baselineText}`,
+    );
     await page.getByRole("textbox", { name: "Resident update" }).fill(postText);
     await page.getByRole("button", { name: "Prepare in app" }).click();
     const url = await page.locator("#participant-post-handoff").getAttribute("href");
@@ -267,39 +293,112 @@ async function prepareLiveViewHandoff(webPort: number, replica: string): Promise
     assert.equal(intent.replica, replica);
     assert.deepEqual(intent.command, { command: "post", text: postText });
     assert.match(intent.id, /^[0-9a-f]{32}$/);
-    return { browser, page, url, intentId: intent.id };
+    return { browser, page, url, intentId: intent.id, baselineFeedGeneration };
   } catch (error) {
     await browser.close();
     throw error;
   }
 }
 
-async function waitForLiveViewConvergence(page: Page, oracle: StableRelayOracle): Promise<void> {
+async function waitForLiveViewConvergence(
+  page: Page,
+  expected: StableRelayProjection,
+  baselineFeedGeneration: number,
+): Promise<void> {
+  await waitFor(
+    async () => {
+      const status = page.locator("#source-status[data-source='carrier']");
+      const trigger = await status.getAttribute("data-refresh-trigger");
+      const generationText = await status.getAttribute("data-feed-generation");
+      if (trigger !== "server_push" || generationText === null) return false;
+      const generation = Number(generationText);
+      return Number.isSafeInteger(generation) && generation > baselineFeedGeneration;
+    },
+    "server-push provenance beyond the pre-relay baseline",
+    20_000,
+  );
+
+  await waitForLiveViewState(page, expected);
+}
+
+async function waitForLiveViewRestartRecovery(
+  page: Page,
+  expected: StableRelayProjection,
+  baselineFeedGeneration: number,
+): Promise<void> {
+  await waitFor(
+    async () => {
+      const status = page.locator("#source-status[data-source='carrier']");
+      const trigger = await status.getAttribute("data-refresh-trigger");
+      const generationText = await status.getAttribute("data-feed-generation");
+      if (trigger !== "poll" || generationText === null) return false;
+      const generation = Number(generationText);
+      return Number.isSafeInteger(generation) && generation > baselineFeedGeneration;
+    },
+    "verified reconnect recovery after the carrier restart",
+    20_000,
+  );
+
+  await waitForLiveViewState(page, expected);
+}
+
+async function waitForLiveViewState(page: Page, expected: StableRelayProjection): Promise<void> {
   await waitForAttribute(
     page,
     "#op-dag-panel .dag-counts",
     "data-op-count",
-    String(oracle.afterPost.opIds.length),
+    String(expected.opIds.length),
     20_000,
   );
   await waitFor(
     async () =>
       JSON.stringify(await page.locator("#threads-panel [data-post] > span:last-child").allTextContents()) ===
-      JSON.stringify(oracle.afterPost.readModel.threads.posts),
+      JSON.stringify(expected.readModel.threads.posts),
     "LiveView post state",
     20_000,
   );
   await waitFor(
     async () => {
       const encoded = await page.locator("#causal-replay-island").getAttribute("data-replay");
-      return encoded !== null && JSON.stringify(JSON.parse(encoded)) === JSON.stringify(oracle.afterPost.causalReplay);
+      return encoded !== null && JSON.stringify(JSON.parse(encoded)) === JSON.stringify(expected.causalReplay);
     },
     "Vue causal replay",
     20_000,
   );
 }
 
-async function verifyStableRelay(server: StableCarrierServerProcess, oracle: StableRelayOracle): Promise<string> {
+async function carrierFeedGeneration(page: Page): Promise<number> {
+  const generationText = await page
+    .locator("#source-status[data-source='carrier']")
+    .getAttribute("data-feed-generation");
+  assert.ok(generationText, "expected a carrier feed generation");
+  const generation = Number(generationText);
+  assert.ok(Number.isSafeInteger(generation) && generation >= 0, `invalid carrier feed generation ${generationText}`);
+  return generation;
+}
+
+async function relayRestartPost(server: StableCarrierServerProcess, oracle: StableRelayOracle): Promise<string> {
+  return runBeamSupport(
+    "clients/township-tauri-shell/test/support/stable_relay_relay.exs",
+    [
+      String(server.port),
+      server.realm,
+      server.publicKeyBase64,
+      oracle.relayRealm,
+      relaySeed,
+      oracle.replica,
+      oraclePath,
+      "restart",
+    ],
+    "RELAY_READY restart",
+  );
+}
+
+async function verifyStableRelay(
+  server: StableCarrierServerProcess,
+  oracle: StableRelayOracle,
+  mode = "post",
+): Promise<string> {
   return runBeamSupport(
     "clients/township-tauri-shell/test/support/stable_relay_verify.exs",
     [
@@ -310,9 +409,9 @@ async function verifyStableRelay(server: StableCarrierServerProcess, oracle: Sta
       observerSeed,
       oracle.replica,
       oraclePath,
-      "post",
+      mode,
     ],
-    "VERIFY_READY post",
+    `VERIFY_READY ${mode}`,
   );
 }
 
@@ -542,10 +641,30 @@ async function waitFor(
   throw new Error(
     [
       `timed out waiting for ${label}`,
+      `source status:\n${await sourceStatusDiagnostics()}`,
       `trace:\n${readTrace() || "<empty>"}`,
       `app exit: ${String(app?.child.exitCode)}`,
       `app output:\n${app?.lines.join("") || "<empty>"}`,
+      `stable carrier output:\n${server?.output.join("") || "<empty>"}`,
+      `LiveView output:\n${liveServer?.output.join("") || "<empty>"}`,
     ].join("\n\n"),
+  );
+}
+
+async function sourceStatusDiagnostics(): Promise<string> {
+  if (!handoff) return "<handoff unavailable>";
+  const status = handoff.page.locator("#source-status[data-source='carrier']");
+  if ((await status.count()) === 0) return "<source status absent>";
+
+  return JSON.stringify(
+    {
+      freshness: await status.getAttribute("data-freshness"),
+      refreshTrigger: await status.getAttribute("data-refresh-trigger"),
+      feedGeneration: await status.getAttribute("data-feed-generation"),
+      html: await status.evaluate((element) => element.outerHTML),
+    },
+    null,
+    2,
   );
 }
 

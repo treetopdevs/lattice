@@ -43,6 +43,8 @@
         data-source={@provenance.source}
         data-freshness={@provenance.freshness}
         data-verification={@provenance.verification}
+        data-refresh-trigger={Map.get(@provenance, :refresh_trigger)}
+        data-feed-generation={Map.get(@provenance, :feed_generation)}
         aria-label="Verified source provenance"
       >
         <%= if @provenance.source == :bundle do %>

@@ -18,7 +18,7 @@ defmodule TownshipWeb.PlanContractTest do
     assert build_map =~ ~r/Plan 123 adds the\s+Township LiveView instrument/
     assert build_map =~ "apps/township_web"
     assert build_map =~ "connected `/township` LiveView"
-    assert build_map =~ "plans 023-131"
+    assert build_map =~ "plans 023-132"
 
     assert plans_index =~
              "| 123 | Township LiveView instrument | P1 | L | 122 | DONE |"
@@ -43,8 +43,8 @@ defmodule TownshipWeb.PlanContractTest do
              "| 124 | Township Vue causal replay island | P1 | L | 123 | DONE |"
 
     assert build_map =~ "Plan 124 adds the Vue 3.5 causal-replay island"
-    assert build_map =~ "plans 023-131"
-    assert build_map =~ "Broader participant controls and a server-push carrier feed remain"
+    assert build_map =~ "plans 023-132"
+    assert build_map =~ ~r/broader participant controls remain/i
     refute build_map =~ "live controls, carrier/PubSub feeds, and the Vue graph island remain"
 
     assert agents =~ "Vue 3.5 causal-replay island"
@@ -73,13 +73,13 @@ defmodule TownshipWeb.PlanContractTest do
     assert build_map =~ ~r/Plan\s+126 adds the supervised pull-only carrier projection/
     assert build_map =~ "periodic request/response polling"
     assert build_map =~ "arrival-verified fresh or stale snapshots through `TownshipWeb.PubSub`"
-    assert build_map =~ "Broader participant controls and a server-push carrier feed remain"
+    assert build_map =~ ~r/broader participant controls remain/i
 
     assert build_map =~
              ~r/does not change or\s+newly prove Tauri onboarding\/cap persistence/
 
     assert build_map =~ ~r/mobile secure-store custody, or real app\s+convergence/
-    assert build_map =~ "plans 023-131"
+    assert build_map =~ "plans 023-132"
     refute build_map =~ "Plan 126 completes G1"
     refute build_map =~ "Plan 126 makes W4 receipt-free"
 

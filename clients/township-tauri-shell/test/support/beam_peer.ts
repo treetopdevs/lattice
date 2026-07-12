@@ -25,6 +25,7 @@ export interface StableCarrierServerProcess {
   port: number;
   realm: string;
   publicKeyBase64: string;
+  output: string[];
   stop(): Promise<void>;
   kill(): Promise<void>;
 }
@@ -177,6 +178,7 @@ export async function spawnStableCarrierServer(
     port: ready.port,
     realm: options.serverRealm,
     publicKeyBase64: ready.publicKeyBase64,
+    output: lines,
     async stop() {
       if (child.exitCode !== null || child.signalCode !== null) return;
       child.stdin.write("stop\n");

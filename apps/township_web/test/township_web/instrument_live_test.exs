@@ -141,7 +141,22 @@ defmodule TownshipWeb.InstrumentLiveTest do
 
     assert has_element?(
              view,
-             "#source-status[data-source='carrier'][data-freshness='fresh'][data-verification='arrival']"
+             "#source-status[data-source='carrier'][data-freshness='fresh'][data-verification='arrival'][data-refresh-trigger='manual']"
+           )
+
+    pushed_payload = %{
+      payload
+      | provenance:
+          payload.provenance
+          |> Map.put(:refresh_trigger, :server_push)
+          |> Map.put(:feed_generation, 4)
+    }
+
+    send(view.pid, {:township_instrument, {:fresh, pushed_payload}})
+
+    assert has_element?(
+             view,
+             "#source-status[data-refresh-trigger='server_push'][data-feed-generation='4']"
            )
 
     assert rendered =~ payload.read_model.threads.title

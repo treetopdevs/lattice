@@ -429,3 +429,33 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
 - Blocker or remaining limitation: Plan 131 adds no runtime feature, server push, broader
   participant control, deployment, Linux packaged-app/GUI result, mobile/device proof, secure-store
   change, G1/Phase G completion, or receipt-free W4.
+
+## Checkpoint: Authenticated Carrier Availability Feed
+
+- Files changed: the durable holder subscription registry, authenticated Cowboy feed protocol,
+  active-once BEAM WebSocket request/notification demultiplexer, carrier subscription wrapper,
+  push-assisted `TownshipWeb.CarrierProjection`, rendered provenance, and the Plan 132 real-socket,
+  second-BEAM, and packaged browser gates.
+- Behaviors: authenticated peers may `subscribe` and `unsubscribe`; a changed path-backed log is
+  persisted before the holder advances its restart-stable generation and emits a bounded,
+  coalesced `ops_available` hint. Each subscriber has at most one outstanding holder message, and
+  acknowledgment returns the latest durable generation before the frame timer flushes. The hint is
+  routed independently of request replies and wakes the existing verified
+  frontier/pull/`Sync.deliver`/read-model path. It never materializes an operation directly. Close
+  events stale the current projection, clear the old subscription reference, and
+  enter bounded reconnect/backoff while the 60-second periodic poll remains a backstop. The owner
+  preallocates a secret pending ref before the worker starts, so an early first-connect/reconnect hint
+  queues one trailing pull; epoch-discarded workers close their private connection.
+- Oracle: the first post converges with `server_push` provenance before the safety poll can run and
+  matches `Lattice.Sim` in op ids, read model, and causal replay. Restarted subscriptions are re-proven by a second pushed generation after persisted reconnect recovery, both in the real
+  second-BEAM test and through the packaged LiveView/Vue browser gate.
+- Gates: focused holder/server/demultiplexer/projection suites; the second-BEAM availability-feed
+  test; TypeScript typecheck; and `npm run tauri:action-handoff:smoke` with a freshly built app for
+  final acceptance. Cumulative build-map contracts now run through plans 023-132.
+- Result: the bounded availability protocol, verified-pull convergence, restart recovery, and
+  post-restart re-subscription proofs are implemented. Final local verification and hosted CI remain
+  publication gates and are recorded in the plan file only after they complete.
+- Blocker or remaining limitation: direct TypeScript notification demultiplexing remains Plan 133.
+  Plan 132 adds no pushed-op/state materialization, broader participant controls, participant
+  custody, mobile secure-store change, TLS/public deployment, complete G1/Phase G claim, or
+  receipt-free W4.

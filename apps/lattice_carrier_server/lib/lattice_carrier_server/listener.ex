@@ -30,7 +30,7 @@ defmodule LatticeCarrierServer.Listener do
     protocol_opts = %{
       connection_type: :supervisor,
       env: %{dispatch: dispatch},
-      idle_timeout: 10_000,
+      idle_timeout: LatticeCarrierServer.WebSocket.authenticated_idle_timeout_ms(),
       max_header_name_length: 64,
       max_header_value_length: 4_096,
       max_headers: 64,

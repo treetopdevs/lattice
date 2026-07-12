@@ -28,8 +28,8 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert build_map =~ "Plan 127 adds the stable supervised read-only carrier server"
     assert build_map =~ "authenticated frontier and pull"
     assert build_map =~ "production deployment remains"
-    assert build_map =~ "Broader participant controls and a server-push carrier feed remain"
-    assert build_map =~ "plans 023-131"
+    assert build_map =~ ~r/broader participant controls remain/i
+    assert build_map =~ "plans 023-132"
 
     assert build_map =~
              ~r/Plan 128 does not change or newly prove Tauri onboarding\/cap persistence/
@@ -43,7 +43,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
 
     assert readme =~ "`apps/lattice_carrier_server` owns"
     assert readme =~ "transport identity, not a participant identity"
-    assert readme =~ "not a production deployment"
+    assert readme =~ ~r/not a production\s+deployment/
 
     assert claude =~ "Plan 127 adds the stable read-only carrier server"
     assert claude =~ "does not add server push, participant custody, or production deployment"
@@ -78,9 +78,9 @@ defmodule LatticeCarrierServer.PlanContractTest do
              "| 128 | Durable client-signed carrier relay | P1 | L | 127 | DONE |"
 
     assert build_map =~ "Plan 128 adds the opt-in durable client-signed relay"
-    assert build_map =~ "request/response relay, not server push"
-    assert build_map =~ "Broader participant controls and a server-push carrier feed remain"
-    assert build_map =~ "plans 023-131"
+    assert build_map =~ ~r/request\/response\s+relay,\s+not server push/
+    assert build_map =~ ~r/broader participant controls remain/i
+    assert build_map =~ "plans 023-132"
 
     assert build_map =~
              ~r/Plan 128 does not change or newly prove Tauri onboarding\/cap persistence/
@@ -91,7 +91,8 @@ defmodule LatticeCarrierServer.PlanContractTest do
 
     assert agents =~ "opt-in durable client-signed relay"
     assert readme =~ "Opt-in client-signed relay realms"
-    assert readme =~ "request/response relay is not server push"
+    assert readme =~ "explicit one-op relay request"
+    assert readme =~ ~r/availability frame contains no operation/i
 
     assert claude =~ "Plan 128 adds an opt-in client-signed relay"
 
@@ -150,7 +151,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert build_map =~ "Plan 129 connects the packaged desktop Tauri onboarding ceremony"
     assert build_map =~ "exact Sim-generated operation"
     assert build_map =~ "mobile secure-store strategy remains unchanged"
-    assert build_map =~ "plans 023-131"
+    assert build_map =~ "plans 023-132"
     refute build_map =~ "Plan 129 completes Phase G"
     refute build_map =~ "Plan 129 makes W4 receipt-free"
 
@@ -223,7 +224,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
 
     assert build_map =~ "Plan 130 adds the first participant post handoff"
     assert build_map =~ "unsigned request"
-    assert build_map =~ "plans 023-131"
+    assert build_map =~ "plans 023-132"
     refute build_map =~ "Plan 130 completes G1"
     refute build_map =~ "Plan 130 completes Phase G"
     refute build_map =~ "Plan 130 makes W4 receipt-free"
@@ -302,6 +303,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert plan =~ "No new carrier message, subscription, notification, or server-push protocol"
     assert plan =~ "No G1/Phase G completion and no receipt-free W4 claim"
     assert plan =~ "Hosted run `29180961767`"
+
     assert plan =~
              "final exact-diff review covered the complete `802437a8..85b2b3bd` implementation range"
 
@@ -312,7 +314,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
              "| 131 | Packaged macOS convergence CI gate | P1 | S | 129, 130 | DONE |"
 
     assert build_map =~ "Plan 131 makes both packaged macOS convergence proofs CI-enforced"
-    assert build_map =~ "plans 023-131"
+    assert build_map =~ "plans 023-132"
     refute build_map =~ "Plan 131 completes Phase G"
     refute build_map =~ "Plan 131 makes W4 receipt-free"
 
@@ -349,5 +351,65 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert stable_smoke =~ "Packaged Tauri stable-relay onboarding smoke passed"
     assert action_smoke =~ "process.platform !== \"darwin\""
     assert action_smoke =~ "Packaged Tauri action-handoff smoke passed"
+  end
+
+  test "Plan 132 defines an authenticated availability hint without pushed-op materialization" do
+    plan =
+      File.read!(Path.join(@repo_root, "plans/132-authenticated-carrier-availability-feed-g1.md"))
+
+    projection_script =
+      File.read!(Path.join(@repo_root, "scripts/township_action_handoff_live.exs"))
+
+    action_smoke =
+      File.read!(
+        Path.join(
+          @repo_root,
+          "clients/township-tauri-shell/test/tauri_action_handoff_smoke.ts"
+        )
+      )
+
+    plans_index = File.read!(Path.join(@repo_root, "plans/README.md"))
+    build_map = File.read!(Path.join(@repo_root, "TOWNSHIP_BUILD_MAP.md"))
+    readme = File.read!(Path.join(@repo_root, "README.md"))
+    claude = File.read!(Path.join(@repo_root, "CLAUDE.md"))
+    poc_status = File.read!(Path.join(@repo_root, "docs/lattice_poc_status.md"))
+
+    assert plan =~ ~r/## Status\s+(?:IN PROGRESS|DONE)/
+    assert plan =~ "The pushed frame is a liveness hint, never state transfer"
+    assert plan =~ "Generation cannot move backward"
+    assert plan =~ "at most 64"
+    assert plan =~ "frontier_truncated"
+    assert plan =~ "Plan 133 must add TypeScript"
+    assert plan =~ "No server-pushed operation/state materialization"
+    assert plan =~ "No complete G1/Phase G claim and no receipt-free W4 claim"
+
+    Code.ensure_loaded!(LatticeCarrierServer.Holder)
+
+    assert function_exported?(LatticeCarrierServer.Holder, :subscribe, 2)
+    assert function_exported?(LatticeCarrierServer.Holder, :acknowledge, 3)
+    assert function_exported?(LatticeCarrierServer.Holder, :unsubscribe, 2)
+
+    assert projection_script =~ "feed: :server_push"
+    assert projection_script =~ "poll_interval_ms: 60_000"
+    refute projection_script =~ "poll_interval_ms: 250"
+    assert action_smoke =~ "baselineFeedGeneration"
+    assert action_smoke =~ "data-refresh-trigger"
+    assert action_smoke =~ "data-feed-generation"
+    assert action_smoke =~ "RELAY_READY restart"
+
+    assert plans_index =~
+             ~r/\| 132 \| Authenticated carrier availability feed \| P1 \| XL \| 128, 131 \| (?:IN PROGRESS|DONE) \|/
+
+    assert build_map =~ "Plan 132 adds an authenticated bounded `ops_available` hint"
+    assert build_map =~ "verified pull remains the only materialization path"
+    assert build_map =~ "Direct TypeScript subscription remains Plan 133"
+    assert build_map =~ "plans 023-132"
+
+    assert readme =~ "Authenticated `subscribe` / `unsubscribe`"
+    assert readme =~ ~r/verified pull remains the only\s+materialization path/
+    assert claude =~ "Plan 132 replaces fast polling as the normal convergence trigger"
+    assert claude =~ "Direct TypeScript feed support remains Plan 133"
+    assert poc_status =~ "## Checkpoint: Authenticated Carrier Availability Feed"
+    assert poc_status =~ "Restarted subscriptions are re-proven by a second pushed generation"
   end
 end

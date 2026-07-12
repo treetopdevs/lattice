@@ -14,7 +14,14 @@ alias TownshipWeb.CarrierProjection
 ] = System.argv()
 
 oracle = oracle_path |> File.read!() |> Jason.decode!()
-expected_key = if mode == "authority", do: "afterAuthorityInvalid", else: "afterPost"
+
+expected_key =
+  case mode do
+    "authority" -> "afterAuthorityInvalid"
+    "restart" -> "afterRestartPost"
+    _mode -> "afterPost"
+  end
+
 expected = Map.fetch!(oracle, expected_key)
 observer = Identity.from_seed(observer_realm, observer_seed)
 server_pubkey = Base.decode64!(server_pubkey_b64)
@@ -50,6 +57,7 @@ payload =
 
     other ->
       {:ok, diagnostic_connection} = WebSocket.connect(connect_opts)
+
       {:ok, diagnostic_ops, diagnostic_connection} =
         WebSocket.pull(diagnostic_connection, MapSet.new())
 
@@ -76,7 +84,9 @@ end
 
 served_ids = served_ops |> Enum.map(& &1.id) |> Enum.sort()
 if served_ids != expected["opIds"], do: raise("served operation ids do not match #{mode} oracle")
-if server_pubkey in Enum.map(served_ops, & &1.author), do: raise("server transport key authored an operation")
+
+if server_pubkey in Enum.map(served_ops, & &1.author),
+  do: raise("server transport key authored an operation")
 
 if mode == "authority" do
   denied_id = oracle["authorityInvalidOp"]["id"]

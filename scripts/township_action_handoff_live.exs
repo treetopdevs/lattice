@@ -27,10 +27,11 @@ connect_opts = [
 ]
 
 Application.put_env(:township_web, :instrument_projection_options,
+  feed: :server_push,
   connect_opts: connect_opts,
   replica: replica,
   peer_realm: server_realm,
-  schedule: [initial_delay_ms: 0, poll_interval_ms: 250]
+  schedule: [initial_delay_ms: 60_000, poll_interval_ms: 60_000]
 )
 
 Application.put_env(

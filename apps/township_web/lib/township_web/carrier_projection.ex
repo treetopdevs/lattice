@@ -1,15 +1,15 @@
 defmodule TownshipWeb.CarrierProjection do
   @moduledoc """
-  Pull-only Township instrument projection over an authenticated carrier.
+  Verified-pull Township instrument projection over an authenticated carrier.
 
   The projection owns its peer log, carrier connection, read-model derivation,
-  and PubSub publication. It never transfers local operations to the peer.
+  and PubSub publication. Availability hints may wake a pull but never materialize
+  state directly, and the projection never transfers local operations to the peer.
   """
 
   use GenServer
 
-  alias Lattice.Carrier.Backoff
-  alias Lattice.{Authority, Log, Sync}
+  alias Lattice.{Authority, Carrier.Backoff, Log, Sync}
   alias Township.{Matter, ReadModel}
 
   @event :township_instrument
@@ -50,28 +50,44 @@ defmodule TownshipWeb.CarrierProjection do
     Code.ensure_loaded!(Matter)
 
     replica = Keyword.fetch!(opts, :replica)
+    carrier = Keyword.get(opts, :carrier, Lattice.Carrier.WebSocket)
+    feed = Keyword.get(opts, :feed, :poll)
 
-    state =
-      %{
-        carrier: Keyword.get(opts, :carrier, Lattice.Carrier.WebSocket),
-        connect_opts: Keyword.fetch!(opts, :connect_opts),
-        replica: replica,
-        peer_realm: Keyword.fetch!(opts, :peer_realm),
-        pubsub: Keyword.get(opts, :pubsub, TownshipWeb.PubSub),
-        topic: Keyword.get(opts, :topic, "township:instrument"),
-        labels: Keyword.get(opts, :labels, %{}),
-        vouches: Keyword.get(opts, :vouches, []),
-        conn: nil,
-        log: Log.new(replica),
-        current: :connecting,
-        schedule: normalize_schedule(Keyword.get(opts, :schedule, :manual), replica),
-        attempt: Backoff.reset_attempt(),
-        poll_timer: nil,
-        refresh_job: nil,
-        waiters: []
-      }
+    case validate_feed(carrier, feed) do
+      :ok ->
+        state =
+          %{
+            carrier: carrier,
+            feed: feed,
+            owner: self(),
+            connect_opts: Keyword.fetch!(opts, :connect_opts),
+            replica: replica,
+            peer_realm: Keyword.fetch!(opts, :peer_realm),
+            pubsub: Keyword.get(opts, :pubsub, TownshipWeb.PubSub),
+            topic: Keyword.get(opts, :topic, "township:instrument"),
+            labels: Keyword.get(opts, :labels, %{}),
+            vouches: Keyword.get(opts, :vouches, []),
+            conn: nil,
+            connection_epoch: 0,
+            feed_ref: nil,
+            pending_feed_ref: nil,
+            feed_generation: nil,
+            refresh_trigger: nil,
+            log: Log.new(replica),
+            current: :connecting,
+            schedule: normalize_schedule(Keyword.get(opts, :schedule, :manual), replica),
+            attempt: Backoff.reset_attempt(),
+            poll_timer: nil,
+            refresh_job: nil,
+            trailing_refresh: nil,
+            waiters: []
+          }
 
-    {:ok, schedule_initial_refresh(state)}
+        {:ok, schedule_initial_refresh(state)}
+
+      {:error, reason} ->
+        {:stop, reason}
+    end
   end
 
   @impl GenServer
@@ -82,7 +98,7 @@ defmodule TownshipWeb.CarrierProjection do
   def handle_call(:current, _from, state), do: {:reply, state.current, state}
 
   def handle_call(:refresh, from, state) do
-    {:noreply, queue_refresh(state, from)}
+    {:noreply, queue_refresh(state, from, :manual)}
   end
 
   @impl GenServer
@@ -90,25 +106,82 @@ defmodule TownshipWeb.CarrierProjection do
         {:scheduled_refresh, token},
         %{poll_timer: %{token: token}} = state
       ) do
-    {:noreply, state |> Map.put(:poll_timer, nil) |> queue_refresh(nil)}
+    trigger = state.poll_timer.trigger
+    {:noreply, state |> Map.put(:poll_timer, nil) |> queue_refresh(nil, trigger)}
   end
 
   def handle_info({:scheduled_refresh, _stale_token}, state), do: {:noreply, state}
 
   def handle_info(
+        {:lattice_carrier, ref, %{"type" => "ops_available", "generation" => generation}},
+        %{feed: :server_push} = state
+      )
+      when is_reference(ref) and is_integer(generation) and generation >= 0 do
+    if active_feed_ref?(state, ref) and newer_generation?(generation, state.feed_generation) do
+      state = %{state | feed_generation: generation}
+      {:noreply, queue_refresh(state, nil, :server_push)}
+    else
+      {:noreply, state}
+    end
+  end
+
+  def handle_info(
+        {:lattice_carrier, ref, {:closed, reason}},
+        %{feed: :server_push} = state
+      )
+      when is_reference(ref) do
+    if active_feed_ref?(state, ref) do
+      failure = {:carrier_closed, reason}
+      current = failure_state(state.current, failure)
+
+      state =
+        state
+        |> disconnect()
+        |> publish(current)
+        |> queue_refresh(nil, :server_push)
+
+      {:noreply, state}
+    else
+      {:noreply, state}
+    end
+  end
+
+  def handle_info(
         {@refresh_result, token, result},
-        %{refresh_job: %{token: token, monitor: monitor}} = state
+        %{refresh_job: %{token: token, monitor: monitor} = job} = state
       ) do
     Process.demonitor(monitor, [:flush])
-    {:noreply, complete_refresh(result, %{state | refresh_job: nil})}
+
+    state = %{state | refresh_job: nil}
+
+    state =
+      if job.connection_epoch == state.connection_epoch do
+        complete_refresh(result, state)
+      else
+        state
+        |> close_discarded_connection(result)
+        |> reply_waiters(state.current)
+      end
+
+    state = maybe_queue_trailing(state)
+    {:noreply, state}
   end
 
   def handle_info(
         {:DOWN, monitor, :process, _pid, reason},
-        %{refresh_job: %{monitor: monitor}} = state
+        %{refresh_job: %{monitor: monitor} = job} = state
       ) do
-    state = state |> Map.put(:refresh_job, nil) |> disconnect()
-    {:noreply, complete_refresh({:error, {:refresh_worker_down, reason}, state}, state)}
+    state =
+      if job.connection_epoch == state.connection_epoch do
+        state = state |> Map.put(:refresh_job, nil) |> disconnect()
+        complete_refresh({:error, {:refresh_worker_down, reason}, state}, state)
+      else
+        state |> Map.put(:refresh_job, nil) |> reply_waiters(state.current)
+      end
+
+    state = maybe_queue_trailing(state)
+
+    {:noreply, state}
   end
 
   def handle_info(_message, state), do: {:noreply, state}
@@ -121,10 +194,11 @@ defmodule TownshipWeb.CarrierProjection do
     :ok
   end
 
-  defp queue_refresh(%{refresh_job: nil} = state, waiter) do
+  defp queue_refresh(%{refresh_job: nil} = state, waiter, trigger) do
+    state = prepare_feed_subscription(state)
     token = make_ref()
     owner = self()
-    snapshot = %{state | refresh_job: nil, waiters: []}
+    snapshot = %{state | refresh_job: nil, waiters: [], refresh_trigger: trigger}
 
     {:ok, pid} =
       Task.start(fn ->
@@ -135,12 +209,25 @@ defmodule TownshipWeb.CarrierProjection do
 
     %{
       state
-      | refresh_job: %{token: token, pid: pid, monitor: monitor},
+      | refresh_job: %{
+          token: token,
+          pid: pid,
+          monitor: monitor,
+          connection_epoch: state.connection_epoch
+        },
         waiters: add_waiter(state.waiters, waiter)
     }
   end
 
-  defp queue_refresh(state, waiter) do
+  defp queue_refresh(state, waiter, :server_push) do
+    %{
+      state
+      | trailing_refresh: :server_push,
+        waiters: add_waiter(state.waiters, waiter)
+    }
+  end
+
+  defp queue_refresh(state, waiter, _trigger) do
     %{state | waiters: add_waiter(state.waiters, waiter)}
   end
 
@@ -170,7 +257,22 @@ defmodule TownshipWeb.CarrierProjection do
   end
 
   defp merge_pull_state(state, pulled_state) do
-    %{state | conn: pulled_state.conn, log: pulled_state.log}
+    %{
+      state
+      | conn: pulled_state.conn,
+        connection_epoch: pulled_state.connection_epoch,
+        feed_ref: state.feed_ref || pulled_state.feed_ref,
+        pending_feed_ref: pulled_state.pending_feed_ref,
+        feed_generation: newest_generation(state.feed_generation, pulled_state.feed_generation),
+        log: pulled_state.log
+    }
+  end
+
+  defp maybe_queue_trailing(%{trailing_refresh: nil} = state), do: state
+
+  defp maybe_queue_trailing(state) do
+    trigger = state.trailing_refresh
+    state |> Map.put(:trailing_refresh, nil) |> queue_refresh(nil, trigger)
   end
 
   defp publish(state, current) do
@@ -189,7 +291,7 @@ defmodule TownshipWeb.CarrierProjection do
   defp schedule_initial_refresh(%{schedule: :manual} = state), do: state
 
   defp schedule_initial_refresh(state) do
-    arm_scheduled_refresh(state, state.schedule.initial_delay_ms)
+    arm_scheduled_refresh(state, state.schedule.initial_delay_ms, :initial)
   end
 
   defp schedule_next_refresh(%{schedule: :manual} = state, _result), do: state
@@ -197,7 +299,7 @@ defmodule TownshipWeb.CarrierProjection do
   defp schedule_next_refresh(state, :success) do
     state
     |> Map.put(:attempt, Backoff.reset_attempt())
-    |> arm_scheduled_refresh(state.schedule.poll_interval_ms)
+    |> arm_scheduled_refresh(state.schedule.poll_interval_ms, :poll)
   end
 
   defp schedule_next_refresh(state, :failure) do
@@ -205,14 +307,14 @@ defmodule TownshipWeb.CarrierProjection do
 
     state
     |> Map.put(:attempt, state.attempt + 1)
-    |> arm_scheduled_refresh(delay_ms)
+    |> arm_scheduled_refresh(delay_ms, :poll)
   end
 
-  defp arm_scheduled_refresh(state, delay_ms) do
+  defp arm_scheduled_refresh(state, delay_ms, trigger) do
     state = cancel_poll_timer(state)
     token = make_ref()
     timer_ref = Process.send_after(self(), {:scheduled_refresh, token}, delay_ms)
-    %{state | poll_timer: %{ref: timer_ref, token: token}}
+    %{state | poll_timer: %{ref: timer_ref, token: token, trigger: trigger}}
   end
 
   defp cancel_poll_timer(%{poll_timer: nil} = state), do: state
@@ -239,10 +341,22 @@ defmodule TownshipWeb.CarrierProjection do
     }
   end
 
+  defp validate_feed(_carrier, :poll), do: :ok
+
+  defp validate_feed(carrier, :server_push) do
+    if Code.ensure_loaded?(carrier) and function_exported?(carrier, :subscribe, 3) do
+      :ok
+    else
+      {:error, {:unsupported_carrier_feed, carrier}}
+    end
+  end
+
+  defp validate_feed(_carrier, feed), do: {:error, {:invalid_feed, feed}}
+
   defp pull_projection(state) do
     case ensure_connected(state) do
-      {:ok, conn} -> pull_connected(%{state | conn: conn})
-      {:error, reason} -> {:error, reason, state}
+      {:ok, state} -> pull_connected(state)
+      {:error, reason, state} -> {:error, reason, state}
     end
   end
 
@@ -255,24 +369,96 @@ defmodule TownshipWeb.CarrierProjection do
       payload = project(log, state)
       {:ok, payload, %{state | conn: conn, log: log}}
     else
-      {:error, reason} -> {:error, reason, disconnect(state)}
+      {:error, reason} ->
+        {:error, reason, disconnect(state)}
     end
   end
 
-  defp ensure_connected(%{conn: nil} = state), do: state.carrier.connect(state.connect_opts)
-  defp ensure_connected(state), do: {:ok, state.conn}
+  defp ensure_connected(%{conn: nil, feed: :poll} = state) do
+    case state.carrier.connect(state.connect_opts) do
+      {:ok, conn} -> {:ok, %{state | conn: conn}}
+      {:error, reason} -> {:error, reason, state}
+    end
+  end
 
-  defp disconnect(%{conn: nil} = state), do: state
+  defp ensure_connected(%{conn: nil, feed: :server_push} = state) do
+    case state.carrier.connect(state.connect_opts) do
+      {:ok, conn} -> subscribe_connected(state, conn)
+      {:error, reason} -> {:error, reason, clear_pending_feed_ref(state)}
+    end
+  end
+
+  defp ensure_connected(state), do: {:ok, state}
+
+  defp subscribe_connected(%{pending_feed_ref: ref} = state, conn) when is_reference(ref) do
+    case state.carrier.subscribe(conn, state.owner, ref) do
+      {:ok, %{ref: ^ref, generation: generation}, conn}
+      when is_integer(generation) and generation >= 0 ->
+        if newer_or_equal_generation?(generation, state.feed_generation) do
+          {:ok,
+           %{
+             state
+             | conn: conn,
+               feed_ref: ref,
+               pending_feed_ref: nil,
+               feed_generation: generation
+           }}
+        else
+          _ = safe_close(state.carrier, conn)
+
+          {:error, {:feed_generation_regression, state.feed_generation, generation},
+           clear_pending_feed_ref(state)}
+        end
+
+      {:error, reason} ->
+        _ = safe_close(state.carrier, conn)
+        {:error, reason, clear_pending_feed_ref(state)}
+
+      _other ->
+        _ = safe_close(state.carrier, conn)
+        {:error, :malformed_subscription, clear_pending_feed_ref(state)}
+    end
+  end
+
+  defp subscribe_connected(state, conn) do
+    _ = safe_close(state.carrier, conn)
+    {:error, :missing_pending_subscription, clear_pending_feed_ref(state)}
+  end
+
+  defp disconnect(%{conn: nil, feed_ref: nil, pending_feed_ref: nil} = state), do: state
+
+  defp disconnect(%{conn: nil} = state) do
+    %{
+      state
+      | connection_epoch: state.connection_epoch + 1,
+        feed_ref: nil,
+        pending_feed_ref: nil
+    }
+  end
 
   defp disconnect(state) do
     _ = safe_close(state.carrier, state.conn)
-    %{state | conn: nil}
+
+    %{
+      state
+      | conn: nil,
+        connection_epoch: state.connection_epoch + 1,
+        feed_ref: nil,
+        pending_feed_ref: nil
+    }
   end
 
   defp safe_close(carrier, conn) do
     carrier.close(conn)
   catch
     _kind, _reason -> :ok
+  end
+
+  defp close_discarded_connection(state, {_status, _value, %{conn: nil}}), do: state
+
+  defp close_discarded_connection(state, {_status, _value, %{conn: conn}}) do
+    _ = safe_close(state.carrier, conn)
+    state
   end
 
   defp ensure_no_peer_regression(log, peer_ids) do
@@ -311,9 +497,33 @@ defmodule TownshipWeb.CarrierProjection do
         peer_realm: state.peer_realm,
         replica: state.replica,
         frontier: Log.frontier(log),
+        refresh_trigger: state.refresh_trigger,
+        feed_generation: state.feed_generation,
         pulled_at: DateTime.utc_now(),
         last_error: nil
       }
     }
+  end
+
+  defp newer_generation?(_generation, nil), do: true
+  defp newer_generation?(generation, current), do: generation > current
+
+  defp newer_or_equal_generation?(_generation, nil), do: true
+  defp newer_or_equal_generation?(generation, current), do: generation >= current
+
+  defp newest_generation(nil, generation), do: generation
+  defp newest_generation(generation, nil), do: generation
+  defp newest_generation(left, right), do: max(left, right)
+
+  defp prepare_feed_subscription(%{feed: :server_push, conn: nil, pending_feed_ref: nil} = state) do
+    %{state | pending_feed_ref: make_ref()}
+  end
+
+  defp prepare_feed_subscription(state), do: state
+
+  defp clear_pending_feed_ref(state), do: %{state | pending_feed_ref: nil}
+
+  defp active_feed_ref?(state, ref) do
+    ref == state.feed_ref or ref == state.pending_feed_ref
   end
 end

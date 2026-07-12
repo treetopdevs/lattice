@@ -418,6 +418,11 @@ Plan 131 reuses this custody strategy unchanged while making the two packaged ma
 in CI. The hosted runner still exercises the existing native signer and isolated replayable KV
 boundary; it adds no new key command, secure-store implementation, mobile relay, iOS/Expo,
 physical-device, or phone-grade claim.
+Plan 132 also reuses this custody strategy unchanged. Its authenticated availability hint is
+consumed by the BEAM projection and carries no participant key, capability, delegation, or authored
+operation; the packaged browser proof continues to use the existing native signer and replayable KV
+boundary. It adds no secure-store implementation, mobile relay, iOS/Expo, physical-device, or
+phone-grade claim.
 Plan 086 proves the same env-gated probe can
 connect and complete a WebSocket frame roundtrip in a debug APK, so it proves the harness can produce
 a positive on-device result but still does not prove release Sync/outbox/KV convergence. Plan 087 proves

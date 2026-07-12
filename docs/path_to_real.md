@@ -73,6 +73,13 @@ The Linux unit runner now installs Tauri's build prerequisites for its real-Wry 
 not a Linux package/GUI result. Server push, broader controls, mobile/device behavior, TLS/public
 deployment, full Phase G, and receipt-free W4 remain open.
 
+Plan 132 closes the BEAM/LiveView server-push liveness gap without pushing operations or state. An
+authenticated subscriber receives a bounded generation hint only after durable source change, then
+uses the same verified frontier/pull/materialization path. The packaged gate rules out its 60-second
+poll for changed-log convergence and proves a replacement subscription with a second pushed
+generation after restart. Direct TypeScript feed support remains Plan 133; broader controls,
+mobile/device custody changes, TLS/public deployment, full Phase G, and receipt-free W4 remain open.
+
 ## 2. Efficient frontier-diff sync (Beelay)
 
 The POC's `Lattice.Sync` ships the full set of op ids to compute a diff — fine at demo

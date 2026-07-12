@@ -203,6 +203,7 @@ defmodule LatticeCarrierServerTest do
     assert metadata.realm == server_identity.realm_id
     assert metadata.peer_realm == client_identity.realm_id
     assert metadata.side == :server
+    assert Map.has_key?(metadata, :reason)
 
     assert {:ok, connection} = WebSocket.connect(connect_opts)
     assert {:ok, [^op], connection} = WebSocket.pull(connection, MapSet.new())
@@ -230,12 +231,229 @@ defmodule LatticeCarrierServerTest do
                path: "/carrier"
              )
 
+    assert :ok = Client.send_envelope(client, %{type: "subscribe"})
+
+    assert {:ok, %{"type" => "error", "reason" => "unauthenticated"}} =
+             Client.recv_envelope(client)
+
     assert :ok = Client.send_envelope(client, %{type: "frontier"})
 
     assert {:ok, %{"type" => "error", "reason" => "unauthenticated"}} =
              Client.recv_envelope(client)
 
     assert :ok = Client.close(client)
+  end
+
+  test "an upgraded socket closes when authentication misses its deadline" do
+    assert LatticeCarrierServer.WebSocket.authentication_timeout_ms() == 5_000
+    assert LatticeCarrierServer.WebSocket.authenticated_idle_timeout_ms() == 120_000
+    assert LatticeCarrierServer.WebSocket.authenticated_idle_timeout_ms() > 60_000
+
+    server_identity = Identity.from_seed("town-node", "carrier-server-auth-deadline")
+    client_identity = Identity.from_seed("instrument", "carrier-auth-deadline-client")
+    instance = {:test, System.unique_integer([:positive])}
+
+    start_supervised!(
+      {LatticeCarrierServer,
+       instance: instance,
+       identity: server_identity,
+       trusted_peers: %{client_identity.realm_id => client_identity.pub},
+       source: {:log, Log.new(@replica)},
+       listener: [ip: {127, 0, 0, 1}, port: 0]}
+    )
+
+    assert {:ok, client} =
+             Client.connect(
+               hostname: "127.0.0.1",
+               port: LatticeCarrierServer.port(instance),
+               path: "/carrier"
+             )
+
+    authenticated = authenticated_client(instance, server_identity, client_identity)
+    Process.sleep(5_100)
+    assert {:error, :closed} = Client.recv_envelope(client, 500)
+    assert :ok = Client.send_envelope(authenticated, %{type: "frontier"})
+
+    assert {:ok, %{"type" => "frontier_result", "ids" => []}} =
+             Client.recv_envelope(authenticated)
+
+    assert :ok = Client.close(client)
+    assert :ok = Client.close(authenticated)
+  end
+
+  test "an authenticated client subscribes to a bounded availability baseline" do
+    author = Identity.from_seed("author", "carrier-server-subscription-author")
+    server_identity = Identity.from_seed("town-node", "carrier-server-subscription")
+    client_identity = Identity.from_seed("instrument", "carrier-subscription-client")
+
+    log =
+      Enum.reduce(1..70, Log.new(@replica), fn index, log ->
+        Log.append!(log, Op.new(author, @replica, [], :command, {:post, "head #{index}"}))
+      end)
+
+    instance = {:test, System.unique_integer([:positive])}
+
+    start_supervised!(
+      {LatticeCarrierServer,
+       instance: instance,
+       identity: server_identity,
+       trusted_peers: %{client_identity.realm_id => client_identity.pub},
+       source: {:log, log},
+       listener: [ip: {127, 0, 0, 1}, port: 0]}
+    )
+
+    client = authenticated_client(instance, server_identity, client_identity)
+    assert :ok = Client.send_envelope(client, %{type: "subscribe"})
+
+    assert {:ok,
+            %{
+              "type" => "subscribe_result",
+              "generation" => 70,
+              "frontier" => frontier,
+              "frontier_truncated" => true
+            }} = Client.recv_envelope(client)
+
+    assert frontier == log |> Log.frontier() |> Enum.take(64)
+    assert :ok = Client.send_envelope(client, %{type: "unsubscribe"})
+    assert {:ok, %{"type" => "unsubscribe_result"}} = Client.recv_envelope(client)
+    assert :ok = Client.close(client)
+  end
+
+  @tag :tmp_dir
+  test "a durable relay emits one availability frame to an authenticated subscriber", %{
+    tmp_dir: tmp_dir
+  } do
+    author = Identity.from_seed("author", "carrier-server-feed-author")
+    server_identity = Identity.from_seed("town-node", "carrier-server-feed")
+    relay_identity = Identity.from_seed("resident", "carrier-server-feed-relay")
+    observer_identity = Identity.from_seed("instrument", "carrier-server-feed-observer")
+    base = Op.new(author, @replica, [], :command, {:post, "base"})
+    relayed = Op.new(relay_identity, @replica, [base.id], :command, {:post, "relayed"})
+
+    after_unsubscribe =
+      Op.new(relay_identity, @replica, [relayed.id], :command, {:post, "after unsubscribe"})
+
+    path = Path.join(tmp_dir, "matter.log")
+    assert :ok = @replica |> Log.new() |> Log.append!(base) |> Log.dump(path)
+    instance = {:test, System.unique_integer([:positive])}
+
+    start_supervised!(
+      {LatticeCarrierServer,
+       instance: instance,
+       identity: server_identity,
+       trusted_peers: %{
+         relay_identity.realm_id => relay_identity.pub,
+         observer_identity.realm_id => observer_identity.pub
+       },
+       relay_realms: [relay_identity.realm_id],
+       source: {:path, path},
+       listener: [ip: {127, 0, 0, 1}, port: 0]}
+    )
+
+    subscriber = authenticated_client(instance, server_identity, observer_identity)
+    assert :ok = Client.send_envelope(subscriber, %{type: "subscribe"})
+
+    assert {:ok, %{"type" => "subscribe_result", "generation" => 1}} =
+             Client.recv_envelope(subscriber)
+
+    assert {:ok, relay_connection} =
+             WebSocket.connect(connect_opts(instance, server_identity, relay_identity))
+
+    assert {:ok, %{accepted: [relayed_id]}, relay_connection} =
+             WebSocket.relay(relay_connection, relayed)
+
+    assert relayed_id == relayed.id
+
+    assert {:ok,
+            %{
+              "type" => "ops_available",
+              "generation" => 2,
+              "frontier" => [frontier],
+              "frontier_truncated" => false
+            }} = Client.recv_envelope(subscriber)
+
+    assert frontier == relayed.id
+    assert {:ok, %{accepted: []}, relay_connection} = WebSocket.relay(relay_connection, relayed)
+    assert {:error, :timeout} = Client.recv_envelope(subscriber, 50)
+
+    assert :ok = Client.send_envelope(subscriber, %{type: "unsubscribe"})
+    assert {:ok, %{"type" => "unsubscribe_result"}} = Client.recv_envelope(subscriber)
+
+    assert {:ok, %{accepted: [after_id]}, relay_connection} =
+             WebSocket.relay(relay_connection, after_unsubscribe)
+
+    assert after_id == after_unsubscribe.id
+    assert {:error, :timeout} = Client.recv_envelope(subscriber, 50)
+    assert :ok = Client.close(subscriber)
+    assert :ok = WebSocket.close(relay_connection)
+  end
+
+  @tag :tmp_dir
+  test "availability frames coalesce to the latest durable generation", %{tmp_dir: tmp_dir} do
+    author = Identity.from_seed("author", "carrier-server-coalesce-author")
+    server_identity = Identity.from_seed("town-node", "carrier-server-coalesce")
+    relay_identity = Identity.from_seed("resident", "carrier-server-coalesce-relay")
+    observer_identity = Identity.from_seed("instrument", "carrier-server-coalesce-observer")
+    base = Op.new(author, @replica, [], :command, {:post, "base"})
+    first = Op.new(relay_identity, @replica, [base.id], :command, {:post, "first"})
+    second = Op.new(relay_identity, @replica, [first.id], :command, {:post, "second"})
+    path = Path.join(tmp_dir, "matter.log")
+    assert :ok = @replica |> Log.new() |> Log.append!(base) |> Log.dump(path)
+    instance = {:test, System.unique_integer([:positive])}
+
+    start_supervised!(
+      {LatticeCarrierServer,
+       instance: instance,
+       identity: server_identity,
+       trusted_peers: %{
+         relay_identity.realm_id => relay_identity.pub,
+         observer_identity.realm_id => observer_identity.pub
+       },
+       relay_realms: [relay_identity.realm_id],
+       source: {:path, path},
+       listener: [ip: {127, 0, 0, 1}, port: 0]}
+    )
+
+    subscriber = authenticated_client(instance, server_identity, observer_identity)
+    assert :ok = Client.send_envelope(subscriber, %{type: "subscribe"})
+
+    assert {:ok, %{"type" => "subscribe_result", "generation" => 1}} =
+             Client.recv_envelope(subscriber)
+
+    assert {:ok, relay_connection} =
+             WebSocket.connect(connect_opts(instance, server_identity, relay_identity))
+
+    holder = GenServer.whereis(LatticeCarrierServer.Holder.via(instance))
+    assert {:monitors, [{:process, subscriber_socket}]} = Process.info(holder, :monitors)
+    assert true = :erlang.suspend_process(subscriber_socket)
+
+    relay_connection =
+      try do
+        assert {:ok, %{accepted: [first_id]}, first_connection} =
+                 WebSocket.relay(relay_connection, first)
+
+        assert first_id == first.id
+
+        assert {:ok, %{accepted: [second_id]}, second_connection} =
+                 WebSocket.relay(first_connection, second)
+
+        assert second_id == second.id
+        second_connection
+      after
+        assert true = :erlang.resume_process(subscriber_socket)
+      end
+
+    assert {:ok,
+            %{
+              "type" => "ops_available",
+              "generation" => 3,
+              "frontier" => [frontier]
+            }} = Client.recv_envelope(subscriber)
+
+    assert frontier == second.id
+    assert {:error, :timeout} = Client.recv_envelope(subscriber, 100)
+    assert :ok = Client.close(subscriber)
+    assert :ok = WebSocket.close(relay_connection)
   end
 
   test "auth refusal telemetry distinguishes realm replica version and malformed challenges" do
@@ -841,26 +1059,40 @@ defmodule LatticeCarrierServerTest do
 
   defp connect_eventually(opts, timeout) do
     deadline = System.monotonic_time(:millisecond) + timeout
-    hostname = opts |> Keyword.fetch!(:hostname) |> String.to_charlist()
-    port = Keyword.fetch!(opts, :port)
+    connect_before(opts, deadline)
+  end
 
-    with :ok <- wait_for_tcp(hostname, port, deadline) do
-      WebSocket.connect(opts)
+  defp connect_before(opts, deadline) do
+    case isolated_connect(opts) do
+      {:ok, _connection} = connected ->
+        connected
+
+      {:error, _reason} = error ->
+        if System.monotonic_time(:millisecond) < deadline do
+          Process.sleep(25)
+          connect_before(opts, deadline)
+        else
+          error
+        end
     end
   end
 
-  defp wait_for_tcp(hostname, port, deadline) do
-    case :gen_tcp.connect(hostname, port, [:binary, active: false], 100) do
-      {:ok, socket} ->
-        :gen_tcp.close(socket)
+  defp isolated_connect(opts) do
+    caller = self()
+    tag = make_ref()
 
-      {:error, reason} ->
-        if System.monotonic_time(:millisecond) < deadline do
-          Process.sleep(25)
-          wait_for_tcp(hostname, port, deadline)
-        else
-          {:error, reason}
-        end
+    {pid, monitor} =
+      spawn_monitor(fn ->
+        send(caller, {tag, WebSocket.connect(opts)})
+      end)
+
+    receive do
+      {^tag, result} ->
+        Process.demonitor(monitor, [:flush])
+        result
+
+      {:DOWN, ^monitor, :process, ^pid, reason} ->
+        {:error, reason}
     end
   end
 

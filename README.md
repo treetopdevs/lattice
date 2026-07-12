@@ -190,7 +190,8 @@ Module docs render via ex_doc: `cd apps/lattice_core && mix docs`.
 - `Lattice.Transport.WebSocket.Envelope`, the safe JSON codec and browser-boundary
   inbound vocabulary.
 - `Lattice.Carrier.WebSocket`, the reusable real carrier client adapter, including
-  the explicit one-op relay request used by opt-in servers.
+  the explicit one-op relay request used by opt-in servers and authenticated
+  availability subscriptions over the atomic request/notification demultiplexer.
 
 `apps/lattice_carrier_server` owns:
 
@@ -207,13 +208,19 @@ Module docs render via ex_doc: `cd apps/lattice_core && mix docs`.
   client-custody path and become Sim-equal without server-side authoring.
 - Both packaged macOS convergence smokes are mandatory in flagship CI: the hosted job builds and
   launches the real app for stable-relay onboarding and LiveView action handoff.
+- Authenticated `subscribe` / `unsubscribe` requests register monitored carrier peers. After a
+  changed path-backed log is durably persisted, the server emits one bounded, coalesced
+  `ops_available` generation hint; duplicate, rejected, pending, read-only, and failed-persistence
+  attempts emit nothing. A slow subscriber has at most one outstanding holder hint; acknowledging it
+  atomically recovers the latest durable generation.
 - Fail-closed path loading and persisted source recovery across supervisor and
   OS-process restart.
 - A realm transport identity, not a participant identity, capability issuer, or
   Township operation author.
-- The one-op request/response relay is not server push. There is no generic
-  inbound push, server-push subscription, TLS/public ingress, or deployment
-  packaging. This is a stable server boundary, not a production deployment.
+- The availability frame contains no operation or semantic result: verified pull remains the only
+  materialization path. There is no direct pushed-op/state materialization, direct TypeScript feed,
+  TLS/public ingress, or deployment packaging. This is a stable server boundary, not a production
+  deployment.
 
 `apps/lattice_server` owns:
 
@@ -226,15 +233,15 @@ Module docs render via ex_doc: `cd apps/lattice_core && mix docs`.
   fresh carrier-backed `/township` instrument may prepare one unsigned post request
   for explicit review in the paired Tauri app; verified/stale/offline views remain
   observation-only.
-- `TownshipWeb.CarrierProjection`, an optional supervised observer that periodically
-  pulls an authenticated WebSocket peer, validates received operations through the
-  shared log/reducer path, and publishes fresh or stale snapshots through PubSub.
+- `TownshipWeb.CarrierProjection`, an optional supervised observer that either polls slowly or
+  subscribes to authenticated availability hints, then validates received operations through the
+  same frontier/pull/log/reducer path and publishes fresh or stale snapshots through PubSub.
 - Startup loads the trusted Township reducer and authority schemas before the first pull so the
   existing-atom wire guard also works in a fresh BEAM VM.
-- No participant key, capability, delegation frame, dependency frontier, signature,
-  operation authoring, server-push feed, or listener ownership. The optional peer is
-  supplied by another boundary such as `lattice_carrier_server`, and authored results
-  appear only through its projection.
+- No participant key, capability, delegation frame, dependency frontier, signature, operation
+  authoring, direct pushed operation, or listener ownership. The optional peer is supplied by
+  another boundary such as `lattice_carrier_server`, and authored results appear only after the
+  projection's verified pull.
 
 `apps/lattice_demo` owns:
 

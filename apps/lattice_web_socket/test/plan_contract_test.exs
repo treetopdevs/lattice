@@ -21,12 +21,33 @@ defmodule LatticeWebSocket.PlanContractTest do
 
     assert build_map =~ "`apps/lattice_web_socket`"
     assert build_map =~ "Plan 125 promotes the real WebSocket carrier client"
-    assert build_map =~ "plans 023-131"
+    assert build_map =~ "plans 023-132"
     assert build_map =~ ~r/Plan\s+126 adds the supervised pull-only carrier projection/
 
     assert agents =~ "Reusable WebSocket client and real carrier adapter"
     assert readme =~ "`apps/lattice_web_socket` owns"
     assert carrier_adr =~ "`Lattice.Carrier.WebSocket`"
     assert poc_status =~ ~r/through the reusable\s+`Lattice.Carrier.WebSocket`/
+  end
+
+  test "Plan 132 exposes atomic demultiplexing and carrier availability subscriptions" do
+    plan =
+      File.read!(Path.join(@repo_root, "plans/132-authenticated-carrier-availability-feed-g1.md"))
+
+    assert plan =~ ~r/## Status\s+(?:IN PROGRESS|DONE)/
+    assert plan =~ "one atomic request/reply API"
+    assert plan =~ "never both"
+    assert plan =~ "masked pong"
+    assert plan =~ ~r/WebSocket\s+message fragmentation is not/
+
+    Code.ensure_loaded!(Lattice.Transport.WebSocket.Client)
+    Code.ensure_loaded!(Lattice.Carrier.WebSocket)
+
+    assert function_exported?(Lattice.Transport.WebSocket.Client, :request_envelope, 3)
+    assert function_exported?(Lattice.Transport.WebSocket.Client, :subscribe, 4)
+    assert function_exported?(Lattice.Transport.WebSocket.Client, :unsubscribe, 2)
+    assert function_exported?(Lattice.Carrier.WebSocket, :subscribe, 2)
+    assert function_exported?(Lattice.Carrier.WebSocket, :subscribe, 3)
+    assert function_exported?(Lattice.Carrier.WebSocket, :unsubscribe, 1)
   end
 end

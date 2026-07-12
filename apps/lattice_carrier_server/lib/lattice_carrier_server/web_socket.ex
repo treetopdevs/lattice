@@ -7,14 +7,27 @@ defmodule LatticeCarrierServer.WebSocket do
   alias LatticeCarrierServer.Holder
 
   @max_frame_size 64_000
+  @availability_coalesce_ms 50
+  @authentication_timeout_ms 5_000
+  @authenticated_idle_timeout_ms 120_000
+
+  @spec authentication_timeout_ms() :: pos_integer()
+  def authentication_timeout_ms, do: @authentication_timeout_ms
+
+  @spec authenticated_idle_timeout_ms() :: pos_integer()
+  def authenticated_idle_timeout_ms, do: @authenticated_idle_timeout_ms
 
   @impl :cowboy_websocket
   def init(req, state) do
-    {:cowboy_websocket, req, state, %{idle_timeout: 10_000, max_frame_size: @max_frame_size}}
+    {:cowboy_websocket, req, state,
+     %{idle_timeout: @authenticated_idle_timeout_ms, max_frame_size: @max_frame_size}}
   end
 
   @impl :cowboy_websocket
-  def websocket_init(state), do: {:ok, state}
+  def websocket_init(state) do
+    timer = Process.send_after(self(), :authentication_deadline, @authentication_timeout_ms)
+    {:ok, Map.put(state, :authentication_timer, timer)}
+  end
 
   @impl :cowboy_websocket
   def websocket_handle({:text, text}, state) do
@@ -38,6 +51,36 @@ defmodule LatticeCarrierServer.WebSocket do
   end
 
   @impl :cowboy_websocket
+  def websocket_info(
+        {:lattice_carrier_ops_available, holder, availability},
+        %{subscribed?: true, subscription_holder: holder} = state
+      ) do
+    {:ok, queue_availability(state, acknowledge_availability(holder, availability))}
+  end
+
+  def websocket_info(:flush_ops_available, state) do
+    case Map.get(state, :pending_availability) do
+      nil ->
+        {:ok, Map.delete(state, :availability_timer)}
+
+      availability ->
+        frame = availability |> Map.put(:type, "ops_available") |> Jason.encode!()
+
+        {:reply, {:text, frame},
+         state
+         |> Map.delete(:availability_timer)
+         |> Map.delete(:pending_availability)}
+    end
+  end
+
+  def websocket_info(:authentication_deadline, %{authenticated?: false} = state) do
+    {:stop, Map.delete(state, :authentication_timer)}
+  end
+
+  def websocket_info(:authentication_deadline, state) do
+    {:ok, Map.delete(state, :authentication_timer)}
+  end
+
   def websocket_info(_message, state), do: {:ok, state}
 
   defp authenticate(challenge, state) do
@@ -55,6 +98,7 @@ defmodule LatticeCarrierServer.WebSocket do
 
       {response,
        state
+       |> cancel_authentication_deadline()
        |> Map.put(:authenticated?, true)
        |> Map.put(:peer_realm, peer_realm)
        |> Map.put(:realm, identity.realm_id)}
@@ -87,11 +131,34 @@ defmodule LatticeCarrierServer.WebSocket do
   defp auth_failure_reason(_reason), do: :malformed_session
 
   defp authenticated_message(type, message, %{authenticated?: true} = state) do
-    {handle_message(type, message, state), state}
+    authenticated_request(type, message, state)
   end
 
   defp authenticated_message(_type, _message, state) do
     {%{type: "error", reason: "unauthenticated"}, state}
+  end
+
+  defp authenticated_request("subscribe", _message, state) do
+    {:ok, availability} = Holder.subscribe(state.holder, self())
+
+    {Map.put(availability, :type, "subscribe_result"),
+     state
+     |> Map.put(:subscribed?, true)
+     |> Map.put(:subscription_holder, GenServer.whereis(state.holder))}
+  end
+
+  defp authenticated_request("unsubscribe", _message, state) do
+    :ok = Holder.unsubscribe(state.holder, self())
+
+    {%{type: "unsubscribe_result"},
+     state
+     |> cancel_pending_availability()
+     |> Map.put(:subscribed?, false)
+     |> Map.delete(:subscription_holder)}
+  end
+
+  defp authenticated_request(type, message, state) do
+    {handle_message(type, message, state), state}
   end
 
   defp handle_message("frontier", _message, state) do
@@ -133,16 +200,84 @@ defmodule LatticeCarrierServer.WebSocket do
     %{type: "error", reason: "read_only"}
   end
 
+  defp queue_availability(state, availability) do
+    pending = Map.get(state, :pending_availability)
+
+    latest =
+      if pending == nil or availability.generation > pending.generation,
+        do: availability,
+        else: pending
+
+    state = Map.put(state, :pending_availability, latest)
+
+    if Map.has_key?(state, :availability_timer) do
+      state
+    else
+      Map.put(
+        state,
+        :availability_timer,
+        Process.send_after(self(), :flush_ops_available, @availability_coalesce_ms)
+      )
+    end
+  end
+
+  defp acknowledge_availability(holder, availability) do
+    case Holder.acknowledge(holder, self(), availability.generation) do
+      {:ok, nil} -> availability
+      {:ok, latest} -> latest
+    end
+  catch
+    :exit, _reason -> availability
+  end
+
+  defp cancel_pending_availability(state) do
+    if timer = Map.get(state, :availability_timer) do
+      Process.cancel_timer(timer)
+    end
+
+    state
+    |> Map.delete(:availability_timer)
+    |> Map.delete(:pending_availability)
+  end
+
+  defp cancel_authentication_deadline(state) do
+    if timer = Map.get(state, :authentication_timer) do
+      Process.cancel_timer(timer)
+    end
+
+    Map.delete(state, :authentication_timer)
+  end
+
   @impl :cowboy_websocket
-  def terminate(_reason, _req, %{authenticated?: true} = state) do
-    Telemetry.execute(
-      [:lattice, :carrier, :disconnect],
-      %{},
-      %{realm: state.realm, peer_realm: state.peer_realm, side: :server}
-    )
+  def terminate(reason, _req, state) do
+    unsubscribe_on_terminate(state)
+
+    if state.authenticated? do
+      Telemetry.execute(
+        [:lattice, :carrier, :disconnect],
+        %{},
+        %{
+          realm: state.realm,
+          peer_realm: state.peer_realm,
+          reason: disconnect_reason(reason),
+          side: :server
+        }
+      )
+    end
 
     :ok
   end
 
-  def terminate(_reason, _req, _state), do: :ok
+  defp unsubscribe_on_terminate(%{subscribed?: true} = state) do
+    Holder.unsubscribe(state.holder, self())
+  catch
+    :exit, _reason -> :ok
+  end
+
+  defp unsubscribe_on_terminate(_state), do: :ok
+
+  defp disconnect_reason({:remote, code, _payload}), do: {:remote, code}
+  defp disconnect_reason({:error, reason}), do: {:error, reason}
+  defp disconnect_reason(reason) when is_atom(reason), do: reason
+  defp disconnect_reason(_reason), do: :other
 end

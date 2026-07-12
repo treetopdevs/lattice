@@ -77,6 +77,502 @@ defmodule TownshipWeb.CarrierProjectionTest do
     end
   end
 
+  defmodule FeedCarrier do
+    def connect(opts) do
+      test_pid = Keyword.fetch!(opts, :test_pid)
+      send(test_pid, :carrier_connected)
+
+      {:ok,
+       %{
+         control: Keyword.fetch!(opts, :control),
+         test_pid: test_pid
+       }}
+    end
+
+    def subscribe(conn, owner, subscription) do
+      generation = Agent.get(conn.control, & &1.generation)
+      send(conn.test_pid, {:carrier_subscribed, owner, subscription, generation})
+      {:ok, %{ref: subscription, generation: generation}, conn}
+    end
+
+    def advertise(conn, %Log{} = log) do
+      send(conn.test_pid, {:advertise, Log.op_ids(log)})
+
+      control =
+        Agent.get_and_update(conn.control, fn state ->
+          {state, Map.put(state, :block_advertise, false)}
+        end)
+
+      if Map.get(control, :block_advertise, false) do
+        send(conn.test_pid, {:advertise_waiting, self()})
+
+        receive do
+          :continue_advertise -> :ok
+        end
+      end
+
+      {:ok, MapSet.new(control.ops, & &1.id), Map.put(conn, :advertised_ops, control.ops)}
+    end
+
+    def pull(conn, %MapSet{} = have) do
+      send(conn.test_pid, {:pull, have})
+      ops = Map.get_lazy(conn, :advertised_ops, fn -> Agent.get(conn.control, & &1.ops) end)
+      {:ok, Enum.reject(ops, &MapSet.member?(have, &1.id)), conn}
+    end
+
+    def close(conn) do
+      send(conn.test_pid, :carrier_closed)
+      :ok
+    end
+  end
+
+  test "server-push mode refuses a carrier without the subscription extension" do
+    peer_log = peer_log()
+    previous_flag = Process.flag(:trap_exit, true)
+
+    try do
+      assert {:error, {:unsupported_carrier_feed, PullOnlyCarrier}} =
+               CarrierProjection.start_link(
+                 carrier: PullOnlyCarrier,
+                 feed: :server_push,
+                 connect_opts: [ops: Log.topo_ops(peer_log), test_pid: self()],
+                 replica: peer_log.replica,
+                 peer_realm: "clerk",
+                 pubsub: TownshipWeb.PubSub,
+                 topic: "township:projection:unsupported-feed",
+                 schedule: :manual
+               )
+    after
+      Process.flag(:trap_exit, previous_flag)
+    end
+  end
+
+  test "non-reference feed tokens are ignored before subscription" do
+    peer_log = peer_log()
+
+    control =
+      start_supervised!(
+        {Agent, fn -> %{ops: Log.topo_ops(peer_log), generation: Log.size(peer_log)} end}
+      )
+
+    topic = "township:projection:invalid-feed-ref:#{System.unique_integer([:positive])}"
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         carrier: FeedCarrier,
+         feed: :server_push,
+         connect_opts: [control: control, test_pid: self()],
+         replica: peer_log.replica,
+         peer_realm: "clerk",
+         pubsub: TownshipWeb.PubSub,
+         topic: topic,
+         schedule: :manual}
+      )
+
+    assert {:ok, :connecting} = CarrierProjection.subscribe(projection)
+
+    send(
+      projection,
+      {:lattice_carrier, nil, %{"type" => "ops_available", "generation" => 1}}
+    )
+
+    send(projection, {:lattice_carrier, nil, {:closed, :closed}})
+
+    refute_receive :carrier_connected, 100
+    refute_receive {:township_instrument, _state}
+  end
+
+  test "a newer availability generation triggers verified pull and records push provenance" do
+    {initial_log, advanced_log} = peer_log_pair()
+
+    control =
+      start_supervised!(
+        {Agent, fn -> %{ops: Log.topo_ops(initial_log), generation: Log.size(initial_log)} end}
+      )
+
+    topic = "township:projection:feed:#{System.unique_integer([:positive])}"
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         carrier: FeedCarrier,
+         feed: :server_push,
+         connect_opts: [control: control, test_pid: self()],
+         replica: initial_log.replica,
+         peer_realm: "clerk",
+         pubsub: TownshipWeb.PubSub,
+         topic: topic,
+         schedule: :manual}
+      )
+
+    assert {:ok, :connecting} = CarrierProjection.subscribe(projection)
+    assert {:ok, {:fresh, initial}} = CarrierProjection.refresh(projection)
+
+    assert_receive {:carrier_subscribed, ^projection, subscription, initial_generation}
+    assert initial_generation == Log.size(initial_log)
+    assert initial.provenance.refresh_trigger == :manual
+    assert initial.provenance.feed_generation == initial_generation
+    assert_receive {:township_instrument, {:fresh, ^initial}}
+    assert_receive {:advertise, initial_have}
+    assert MapSet.size(initial_have) == 0
+    assert_receive {:pull, initial_pull_have}
+    assert MapSet.size(initial_pull_have) == 0
+
+    next_generation = Log.size(advanced_log)
+
+    Agent.update(control, fn state ->
+      %{state | ops: Log.topo_ops(advanced_log), generation: next_generation}
+    end)
+
+    send(
+      projection,
+      {:lattice_carrier, subscription,
+       %{
+         "type" => "ops_available",
+         "generation" => next_generation,
+         "frontier" => Log.frontier(advanced_log),
+         "frontier_truncated" => false
+       }}
+    )
+
+    assert_receive {:township_instrument, {:fresh, advanced}}, 1_000
+    assert advanced.read_model.threads.posts == ["clerk: first update", "clerk: pushed update"]
+    assert advanced.provenance.refresh_trigger == :server_push
+    assert advanced.provenance.feed_generation == next_generation
+    assert_receive {:advertise, advertised}
+    assert advertised == Log.op_ids(initial_log)
+    assert_receive {:pull, pulled_have}
+    assert pulled_have == Log.op_ids(initial_log)
+
+    send(
+      projection,
+      {:lattice_carrier, subscription,
+       %{"type" => "ops_available", "generation" => next_generation}}
+    )
+
+    refute_receive {:advertise, _have}, 80
+    refute_receive :push_called
+  end
+
+  test "a notification during the first subscribed pull queues a trailing refresh" do
+    {initial_log, advanced_log} = peer_log_pair()
+
+    control =
+      start_supervised!(
+        {Agent,
+         fn ->
+           %{
+             ops: Log.topo_ops(initial_log),
+             generation: Log.size(initial_log),
+             block_advertise: true
+           }
+         end}
+      )
+
+    topic = "township:projection:pending-feed:#{System.unique_integer([:positive])}"
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         carrier: FeedCarrier,
+         feed: :server_push,
+         connect_opts: [control: control, test_pid: self()],
+         replica: initial_log.replica,
+         peer_realm: "clerk",
+         pubsub: TownshipWeb.PubSub,
+         topic: topic,
+         schedule: :manual}
+      )
+
+    assert {:ok, :connecting} = CarrierProjection.subscribe(projection)
+    refresh = Task.async(fn -> CarrierProjection.refresh(projection) end)
+
+    assert_receive {:carrier_subscribed, ^projection, subscription, _generation}
+    assert_receive {:advertise_waiting, refresh_worker}
+    assert_receive {:advertise, initial_have}
+    assert MapSet.size(initial_have) == 0
+
+    next_generation = Log.size(advanced_log)
+
+    Agent.update(control, fn state ->
+      %{state | ops: Log.topo_ops(advanced_log), generation: next_generation}
+    end)
+
+    send(
+      projection,
+      {:lattice_carrier, subscription,
+       %{"type" => "ops_available", "generation" => next_generation}}
+    )
+
+    :ok = Phoenix.PubSub.unsubscribe(TownshipWeb.PubSub, topic)
+    assert {:ok, :connecting} = CarrierProjection.subscribe(projection)
+    send(refresh_worker, :continue_advertise)
+
+    assert {:ok, {:fresh, initial}} = Task.await(refresh)
+    assert initial.read_model.threads.posts == ["clerk: first update"]
+    assert_receive {:township_instrument, {:fresh, ^initial}}
+
+    assert_receive {:township_instrument, {:fresh, advanced}}, 1_000
+    assert advanced.read_model.threads.posts == ["clerk: first update", "clerk: pushed update"]
+    assert advanced.provenance.refresh_trigger == :server_push
+    assert advanced.provenance.feed_generation == next_generation
+  end
+
+  test "a newer generation during refresh queues one trailing verified pull" do
+    {initial_log, intermediate_log, final_log} = peer_log_triple()
+
+    control =
+      start_supervised!(
+        {Agent, fn -> %{ops: Log.topo_ops(initial_log), generation: Log.size(initial_log)} end}
+      )
+
+    topic = "township:projection:trailing:#{System.unique_integer([:positive])}"
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         carrier: FeedCarrier,
+         feed: :server_push,
+         connect_opts: [control: control, test_pid: self()],
+         replica: initial_log.replica,
+         peer_realm: "clerk",
+         pubsub: TownshipWeb.PubSub,
+         topic: topic,
+         schedule: :manual}
+      )
+
+    assert {:ok, :connecting} = CarrierProjection.subscribe(projection)
+    assert {:ok, {:fresh, initial}} = CarrierProjection.refresh(projection)
+    assert_receive {:carrier_subscribed, ^projection, subscription, _generation}
+    assert_receive {:township_instrument, {:fresh, ^initial}}
+    assert_receive {:advertise, _initial_have}
+    assert_receive {:pull, _initial_pull}
+
+    intermediate_generation = Log.size(intermediate_log)
+
+    Agent.update(control, fn state ->
+      %{
+        state
+        | ops: Log.topo_ops(intermediate_log),
+          generation: intermediate_generation
+      }
+      |> Map.put(:block_advertise, true)
+    end)
+
+    send(
+      projection,
+      {:lattice_carrier, subscription,
+       %{"type" => "ops_available", "generation" => intermediate_generation}}
+    )
+
+    assert_receive {:advertise_waiting, refresh_worker}, 1_000
+    assert_receive {:advertise, _intermediate_have}
+    final_generation = Log.size(final_log)
+
+    Agent.update(control, fn state ->
+      %{state | ops: Log.topo_ops(final_log), generation: final_generation}
+    end)
+
+    send(
+      projection,
+      {:lattice_carrier, subscription,
+       %{"type" => "ops_available", "generation" => final_generation}}
+    )
+
+    send(refresh_worker, :continue_advertise)
+
+    assert_receive {:township_instrument, {:fresh, intermediate}}, 1_000
+
+    assert intermediate.read_model.threads.posts ==
+             ["clerk: first update", "clerk: pushed update"]
+
+    assert_receive {:pull, _intermediate_pull}
+
+    assert_receive {:township_instrument, {:fresh, final}}, 1_000
+
+    assert final.read_model.threads.posts ==
+             ["clerk: first update", "clerk: pushed update", "clerk: trailing update"]
+
+    assert final.provenance.refresh_trigger == :server_push
+    assert final.provenance.feed_generation == final_generation
+    assert_receive {:advertise, _trailing_have}
+    assert_receive {:pull, _trailing_pull}
+    refute_receive {:advertise, _extra_have}, 80
+  end
+
+  test "a close event stales, reconnects, resubscribes, and rejects the old ref" do
+    {initial_log, advanced_log} = peer_log_pair()
+
+    control =
+      start_supervised!(
+        {Agent, fn -> %{ops: Log.topo_ops(initial_log), generation: Log.size(initial_log)} end}
+      )
+
+    topic = "township:projection:reconnect:#{System.unique_integer([:positive])}"
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         carrier: FeedCarrier,
+         feed: :server_push,
+         connect_opts: [control: control, test_pid: self()],
+         replica: initial_log.replica,
+         peer_realm: "clerk",
+         pubsub: TownshipWeb.PubSub,
+         topic: topic,
+         schedule: :manual}
+      )
+
+    assert {:ok, :connecting} = CarrierProjection.subscribe(projection)
+    assert {:ok, {:fresh, initial}} = CarrierProjection.refresh(projection)
+    assert_receive {:carrier_subscribed, ^projection, old_ref, _generation}
+    assert_receive {:township_instrument, {:fresh, ^initial}}
+    assert_receive :carrier_connected
+    assert_receive {:advertise, _initial_have}
+    assert_receive {:pull, _initial_pull}
+
+    next_generation = Log.size(advanced_log)
+
+    Agent.update(control, fn state ->
+      %{state | ops: Log.topo_ops(advanced_log), generation: next_generation}
+    end)
+
+    send(projection, {:lattice_carrier, old_ref, {:closed, :closed}})
+
+    assert_receive {:township_instrument, {:stale, stale}}, 1_000
+    assert stale.read_model == initial.read_model
+    assert stale.provenance.last_error == {:carrier_closed, :closed}
+    assert_receive :carrier_closed
+    assert_receive :carrier_connected, 1_000
+
+    assert_receive {:carrier_subscribed, ^projection, new_ref, ^next_generation}, 1_000
+    refute new_ref == old_ref
+
+    assert_receive {:township_instrument, {:fresh, recovered}}, 1_000
+    assert recovered.read_model.threads.posts == ["clerk: first update", "clerk: pushed update"]
+    assert recovered.provenance.refresh_trigger == :server_push
+    assert recovered.provenance.feed_generation == next_generation
+    assert_receive {:advertise, _reconnect_have}
+    assert_receive {:pull, _reconnect_pull}
+
+    send(
+      projection,
+      {:lattice_carrier, old_ref,
+       %{"type" => "ops_available", "generation" => next_generation + 1}}
+    )
+
+    refute_receive {:advertise, _stale_ref_have}, 80
+  end
+
+  test "an in-flight result cannot resurrect a connection after close" do
+    {initial_log, advanced_log} = peer_log_pair()
+
+    control =
+      start_supervised!(
+        {Agent, fn -> %{ops: Log.topo_ops(initial_log), generation: Log.size(initial_log)} end}
+      )
+
+    topic = "township:projection:close-race:#{System.unique_integer([:positive])}"
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         carrier: FeedCarrier,
+         feed: :server_push,
+         connect_opts: [control: control, test_pid: self()],
+         replica: initial_log.replica,
+         peer_realm: "clerk",
+         pubsub: TownshipWeb.PubSub,
+         topic: topic,
+         schedule: :manual}
+      )
+
+    assert {:ok, :connecting} = CarrierProjection.subscribe(projection)
+    assert {:ok, {:fresh, initial}} = CarrierProjection.refresh(projection)
+    assert_receive {:carrier_subscribed, ^projection, old_ref, _generation}
+    assert_receive {:township_instrument, {:fresh, ^initial}}
+    assert_receive :carrier_connected
+    assert_receive {:advertise, _initial_have}
+    assert_receive {:pull, _initial_pull}
+
+    next_generation = Log.size(advanced_log)
+
+    Agent.update(control, fn state ->
+      state
+      |> Map.put(:ops, Log.topo_ops(advanced_log))
+      |> Map.put(:generation, next_generation)
+      |> Map.put(:block_advertise, true)
+    end)
+
+    send(
+      projection,
+      {:lattice_carrier, old_ref, %{"type" => "ops_available", "generation" => next_generation}}
+    )
+
+    assert_receive {:advertise_waiting, old_worker}, 1_000
+    assert_receive {:advertise, _old_have}
+    send(projection, {:lattice_carrier, old_ref, {:closed, :closed}})
+    assert_receive {:township_instrument, {:stale, _stale}}, 1_000
+    assert_receive :carrier_closed
+    send(old_worker, :continue_advertise)
+
+    assert_receive :carrier_connected, 1_000
+    assert_receive {:carrier_subscribed, ^projection, new_ref, ^next_generation}, 1_000
+    refute new_ref == old_ref
+
+    assert_receive {:township_instrument, {:fresh, recovered}}, 1_000
+    assert recovered.read_model.threads.posts == ["clerk: first update", "clerk: pushed update"]
+    assert recovered.provenance.feed_generation == next_generation
+  end
+
+  test "a discarded first-refresh result closes its pending carrier connection" do
+    initial_log = peer_log()
+
+    control =
+      start_supervised!(
+        {Agent,
+         fn ->
+           %{
+             ops: Log.topo_ops(initial_log),
+             generation: Log.size(initial_log),
+             block_advertise: true
+           }
+         end}
+      )
+
+    topic = "township:projection:pending-close:#{System.unique_integer([:positive])}"
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         carrier: FeedCarrier,
+         feed: :server_push,
+         connect_opts: [control: control, test_pid: self()],
+         replica: initial_log.replica,
+         peer_realm: "clerk",
+         pubsub: TownshipWeb.PubSub,
+         topic: topic,
+         schedule: :manual}
+      )
+
+    assert {:ok, :connecting} = CarrierProjection.subscribe(projection)
+    refresh = Task.async(fn -> CarrierProjection.refresh(projection) end)
+
+    assert_receive {:carrier_subscribed, ^projection, pending_ref, _generation}
+    assert_receive {:advertise_waiting, refresh_worker}
+    assert_receive {:advertise, _initial_have}
+
+    send(projection, {:lattice_carrier, pending_ref, {:closed, :closed}})
+
+    assert_receive {:township_instrument, {:unavailable, {:carrier_closed, :closed}}}
+
+    send(refresh_worker, :continue_advertise)
+
+    assert {:ok, {:unavailable, {:carrier_closed, :closed}}} = Task.await(refresh)
+    assert_receive :carrier_closed, 1_000
+  end
+
   test "pulls a peer log into a fresh instrument projection without pushing" do
     peer_log = peer_log()
     topic = "township:projection:#{System.unique_integer([:positive])}"
@@ -381,5 +877,27 @@ defmodule TownshipWeb.CarrierProjectionTest do
     {sim, _title} = Sim.command(sim, "clerk", :set_title, ["Projection matter"])
     {sim, _post} = Sim.command(sim, "clerk", :post, ["clerk: first update"])
     Sim.log(sim, "clerk")
+  end
+
+  defp peer_log_pair do
+    sim = Sim.new(Matter, "replica:matter:projection", ["clerk"], seed: "projection")
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, _title} = Sim.command(sim, "clerk", :set_title, ["Projection matter"])
+    {sim, _post} = Sim.command(sim, "clerk", :post, ["clerk: first update"])
+    initial = Sim.log(sim, "clerk")
+    {sim, _pushed} = Sim.command(sim, "clerk", :post, ["clerk: pushed update"])
+    {initial, Sim.log(sim, "clerk")}
+  end
+
+  defp peer_log_triple do
+    sim = Sim.new(Matter, "replica:matter:projection", ["clerk"], seed: "projection")
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, _title} = Sim.command(sim, "clerk", :set_title, ["Projection matter"])
+    {sim, _post} = Sim.command(sim, "clerk", :post, ["clerk: first update"])
+    initial = Sim.log(sim, "clerk")
+    {sim, _pushed} = Sim.command(sim, "clerk", :post, ["clerk: pushed update"])
+    intermediate = Sim.log(sim, "clerk")
+    {sim, _trailing} = Sim.command(sim, "clerk", :post, ["clerk: trailing update"])
+    {initial, intermediate, Sim.log(sim, "clerk")}
   end
 end

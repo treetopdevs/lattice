@@ -25,9 +25,21 @@ defmodule Lattice.Carrier.WebSocket do
   @max_push_bytes 64_000
 
   @enforce_keys [:client]
-  defstruct [:client, last_push_batches: []]
+  defstruct [
+    :client,
+    :subscription_ref,
+    :subscription_owner,
+    :subscription_generation,
+    last_push_batches: []
+  ]
 
-  @type t :: %__MODULE__{client: pid(), last_push_batches: [map()]}
+  @type t :: %__MODULE__{
+          client: pid(),
+          subscription_ref: reference() | nil,
+          subscription_owner: pid() | nil,
+          subscription_generation: non_neg_integer() | nil,
+          last_push_batches: [map()]
+        }
 
   @doc "Open a WebSocket to the peer's `/carrier` endpoint."
   @spec connect(keyword()) :: {:ok, t()} | {:error, term()}
@@ -69,6 +81,59 @@ defmodule Lattice.Carrier.WebSocket do
   @doc "Close the socket — the physical partition."
   @spec close(t()) :: :ok
   def close(%__MODULE__{client: client}), do: Client.close(client)
+
+  @doc "Subscribe an owner to authenticated carrier availability hints."
+  @spec subscribe(t(), pid()) ::
+          {:ok, %{ref: reference(), generation: non_neg_integer()}, t()} | {:error, term()}
+  def subscribe(%__MODULE__{subscription_ref: nil} = conn, owner) when is_pid(owner) do
+    subscribe(conn, owner, make_ref())
+  end
+
+  def subscribe(%__MODULE__{}, _owner), do: {:error, :already_subscribed}
+
+  @doc "Subscribe with an owner-preallocated local reference."
+  @spec subscribe(t(), pid(), reference()) ::
+          {:ok, %{ref: reference(), generation: non_neg_integer()}, t()} | {:error, term()}
+  def subscribe(%__MODULE__{subscription_ref: nil} = conn, owner, subscription)
+      when is_pid(owner) and is_reference(subscription) do
+    case Client.subscribe(conn.client, "ops_available", owner,
+           tag: :lattice_carrier,
+           subscription: subscription
+         ) do
+      {:ok, subscription} ->
+        subscribe_remote(conn, owner, subscription)
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
+  def subscribe(%__MODULE__{}, _owner, _subscription), do: {:error, :already_subscribed}
+
+  @doc "Remove the authenticated availability subscription from both peers."
+  @spec unsubscribe(t()) :: {:ok, t()} | {:error, term()}
+  def unsubscribe(%__MODULE__{subscription_ref: nil} = conn), do: {:ok, conn}
+
+  def unsubscribe(%__MODULE__{} = conn) do
+    result = request(conn, %{type: "unsubscribe"})
+    :ok = Client.unsubscribe(conn.client, conn.subscription_ref)
+    conn = clear_subscription(conn)
+
+    case result do
+      {:ok, %{"type" => "unsubscribe_result"}} -> {:ok, conn}
+      {:ok, %{"type" => type}} -> {:error, {:unexpected_reply, type}}
+      {:ok, other} -> {:error, {:unexpected_reply, other}}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  @doc "Return the local subscription reference and server baseline generation."
+  @spec subscription(t()) :: {:ok, %{ref: reference(), generation: non_neg_integer()}} | :none
+  def subscription(%__MODULE__{subscription_ref: nil}), do: :none
+
+  def subscription(%__MODULE__{} = conn) do
+    {:ok, %{ref: conn.subscription_ref, generation: conn.subscription_generation}}
+  end
 
   @doc "Peer scenario phase (`base` | `diverged`), for heal coordination."
   @spec status(t()) :: {:ok, String.t()} | {:error, term()}
@@ -201,6 +266,59 @@ defmodule Lattice.Carrier.WebSocket do
 
   defp push_chunk_error(reason), do: reason
 
+  defp subscribe_remote(conn, owner, subscription) do
+    case request(conn, %{type: "subscribe"}) do
+      {:ok, %{"type" => "subscribe_result"} = result} ->
+        case decode_availability(result) do
+          {:ok, availability} ->
+            conn = %{
+              conn
+              | subscription_ref: subscription,
+                subscription_owner: owner,
+                subscription_generation: availability.generation
+            }
+
+            {:ok, %{ref: subscription, generation: availability.generation}, conn}
+
+          {:error, _reason} = error ->
+            :ok = Client.unsubscribe(conn.client, subscription)
+            error
+        end
+
+      {:ok, %{"type" => type}} ->
+        :ok = Client.unsubscribe(conn.client, subscription)
+        {:error, {:unexpected_reply, type}}
+
+      {:ok, other} ->
+        :ok = Client.unsubscribe(conn.client, subscription)
+        {:error, {:unexpected_reply, other}}
+
+      {:error, _reason} = error ->
+        :ok = Client.unsubscribe(conn.client, subscription)
+        error
+    end
+  end
+
+  defp decode_availability(%{
+         "generation" => generation,
+         "frontier" => frontier,
+         "frontier_truncated" => truncated
+       })
+       when is_integer(generation) and generation >= 0 and is_list(frontier) and
+              is_boolean(truncated) do
+    if Enum.all?(frontier, &is_binary/1) do
+      {:ok, %{generation: generation, frontier: frontier, frontier_truncated: truncated}}
+    else
+      {:error, :malformed_availability}
+    end
+  end
+
+  defp decode_availability(_result), do: {:error, :malformed_availability}
+
+  defp clear_subscription(conn) do
+    %{conn | subscription_ref: nil, subscription_owner: nil, subscription_generation: nil}
+  end
+
   defp authenticate(%__MODULE__{} = conn, session) do
     challenge =
       session.realm
@@ -244,8 +362,7 @@ defmodule Lattice.Carrier.WebSocket do
   end
 
   defp request(%__MODULE__{client: client}, msg) do
-    with :ok <- Client.send_envelope(client, msg),
-         {:ok, envelope} <- Client.recv_envelope(client, @recv_timeout) do
+    with {:ok, envelope} <- Client.request_envelope(client, msg, @recv_timeout) do
       case envelope do
         %{"type" => "error"} = err -> {:error, {:peer_error, Map.get(err, "reason")}}
         other -> {:ok, other}
