@@ -254,8 +254,8 @@ Plan 132 replaces fast instrument polling with authenticated server-initiated av
 that wake verified pull. Plan 133 adds the direct typed TypeScript availability subscription and a
 real stable-server feed gate while preserving verified pull as the only materialization path.
 The active frontier remains **complete G1/Phase G**:
-reactive Tauri/Vue feed consumption, broader participant controls, production deployment, and
-receipt-free W4 are not supplied by the current feed work. Per-plan status lives in
+broader participant controls, production deployment, and receipt-free W4 are not supplied by the
+current feed work. Per-plan status lives in
 `plans/README.md`.
 
 ---
@@ -368,9 +368,11 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   arrive only through verified request/response pull; the pushed frame is a liveness hint, not
   materialization or G1 completion. Plan 133 adds the shared direct TypeScript subscription and
   headless real-socket gate: it retains only the latest hint, verifies pulled frames before Sim
-  comparison, and replaces the subscription after restart. No reactive Tauri/Vue app feed loop is
-  claimed. Broader participant controls, production deployment, and the receipt-free W4 blocker
-  remain.
+  comparison, and replaces the subscription after restart. Plan 134 adds the packaged reactive
+  Tauri/Vue feed loop: the saved pairing drives verified read-only refresh, latest-only coalescing,
+  rendered Sim-equal state, and replacement-subscription recovery after restart without automatic
+  outbox submission. Broader participant controls, production deployment, and the receipt-free W4
+  blocker remain.
 
 **Definition of 100% done:** every gate A1→G1 green in CI; the POC exit gate (PD-001-A §A5)
 met with W4 *real*; Township converges across BEAM + browser/phone realms over the real carrier;

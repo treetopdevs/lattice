@@ -587,7 +587,12 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert build_map =~ "Reactive refresh never submits or compacts the authored outbox"
     assert build_map =~ "Full local Plan 134 regression is green"
     assert build_map =~ "Hosted Plan 134 run `29210581826` is green"
+    assert build_map =~ ~r/Plan 134 adds the packaged reactive\s+Tauri\/Vue feed loop/
     refute build_map =~ "hosted Plan 134 result pending"
+    refute build_map =~
+             "The active frontier remains **complete G1/Phase G**:\nreactive Tauri/Vue feed consumption"
+
+    refute build_map =~ "No reactive Tauri/Vue app feed loop is\n  claimed"
     refute build_map =~ "Plan 134 completes G1"
     refute build_map =~ "Plan 134 completes Phase G"
     refute build_map =~ "Plan 134 completes W4"
