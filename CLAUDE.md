@@ -115,9 +115,17 @@ convergence before its 60-second poll can run, recovers through reconnect after 
 then proves the new subscription with a second pushed generation. The hint carries no operation or
 semantic authority. The projection preallocates its local subscription ref before a connect worker
 starts, so a first-connect or reconnect hint cannot race ref installation; an epoch-discarded worker
-connection is closed. Direct TypeScript feed support remains Plan 133; broader participant controls,
-production deployment, mobile/device custody changes, Phase G completion, and receipt-free W4 remain
-open.
+connection is closed.
+
+Plan 133 adds direct TypeScript availability subscriptions to the shared
+`CarrierWebSocketClient`. It allows one atomic request in flight, installs the typed notification
+route before sending `subscribe`, retains at most one latest hint plus one waiting consumer, and
+fails the socket and old subscription closed on malformed input, regression, error, or close. A
+headless real-socket gate uses the stable server to prove first hint before pull, canonical
+hash/signature verification and Sim-equal ids, duplicate silence, same-path restart replacement,
+and a second pushed generation. It does not mount Vue or launch the Tauri app. Reactive app feed
+consumption, broader participant controls, production deployment, mobile/device custody changes,
+Phase G completion, and receipt-free W4 remain open.
 
 ## Constraints — the "do not implement" boundary (PD-001 §6)
 

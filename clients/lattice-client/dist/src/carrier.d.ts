@@ -40,6 +40,16 @@ export interface CarrierPushReport {
     rejected: [string, string][];
     pending: string[];
 }
+export interface CarrierAvailability {
+    generation: number;
+    frontier: string[];
+    frontierTruncated: boolean;
+}
+export interface CarrierAvailabilitySubscription {
+    readonly baseline: CarrierAvailability;
+    next(): Promise<CarrierAvailability>;
+    unsubscribe(): Promise<void>;
+}
 export interface CarrierSyncClient {
     advertise(): Promise<string[]>;
     pull(have: string[]): Promise<unknown[]>;
@@ -123,8 +133,8 @@ export declare function verifyCarrierHello(challenge: CarrierChallenge, hello: u
 export declare function connectCarrierWebSocket(opts: ConnectCarrierWebSocketOptions): Promise<CarrierWebSocketClient>;
 export declare class CarrierWebSocketClient {
     private readonly socket;
-    private queue;
-    private waiters;
+    private pendingRequest;
+    private availabilityRoute;
     private closed;
     constructor(socket: WebSocketLike);
     advertise(): Promise<string[]>;
@@ -134,10 +144,14 @@ export declare class CarrierWebSocketClient {
     status(): Promise<string>;
     stateReport(): Promise<CarrierStateReport>;
     shutdown(): Promise<void>;
+    subscribeAvailability(): Promise<CarrierAvailabilitySubscription>;
     close(): void;
     request(envelope: unknown): Promise<unknown>;
     private receive;
-    private failPending;
+    private rejectPending;
+    private failClient;
+    private unsubscribeAvailability;
+    private closeAvailability;
 }
 export declare function syncCarrierOnce(client: CarrierSyncClient, localOps: Op[], localCarrierFrames: unknown[], realmByPubkey?: Record<string, string>, options?: SyncCarrierOptions): Promise<SyncCarrierResult>;
 export declare function carrierOpsToSemanticOps(frames: unknown[], realmByPubkey?: Record<string, string>): Op[];

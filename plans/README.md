@@ -13,10 +13,11 @@ GitHub Actions, plain `mix` works.
 **Parked areas — do not plan new work here** (see `TOWNSHIP_BUILD_MAP.md` §4a): iOS,
 QR camera onboarding, LAN discovery, physical-device behavior, cross-device pairing
 state exchange, and any further `tauri:android:release:*` probe permutations. Plan 131 closes the
-packaged macOS CI-enforcement gap, and Plan 132 closes the BEAM/LiveView server-push liveness gap
-without pushing operations or state. The active frontier remains G1 completion and the remaining
-Phase G work: direct TypeScript feed support (Plan 133), broader participant controls, production
-deployment, and W4.
+packaged macOS CI-enforcement gap, Plan 132 closes the BEAM/LiveView server-push liveness gap, and
+Plan 133 adds the reusable direct-TypeScript subscription plus a real stable-server gate without
+pushing operations or state. The active frontier remains G1 completion and the remaining Phase G
+work: reactive Tauri/Vue feed consumption, broader participant controls, production deployment,
+and W4.
 
 **Landing 001–009 as one effort?** Start from the umbrella goal:
 [000-goal-foundation-and-hardening.md](000-goal-foundation-and-hardening.md). It
@@ -162,6 +163,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 130 | LiveView-to-Tauri participant post handoff | P1 | L | 129, 123, 126 | DONE |
 | 131 | Packaged macOS convergence CI gate | P1 | S | 129, 130 | DONE |
 | 132 | Authenticated carrier availability feed | P1 | XL | 128, 131 | DONE |
+| 133 | Direct TypeScript carrier availability feed | P1 | L | 132 | IN PROGRESS |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

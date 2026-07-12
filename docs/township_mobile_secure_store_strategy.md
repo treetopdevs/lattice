@@ -423,6 +423,11 @@ consumed by the BEAM projection and carries no participant key, capability, dele
 operation; the packaged browser proof continues to use the existing native signer and replayable KV
 boundary. It adds no secure-store implementation, mobile relay, iOS/Expo, physical-device, or
 phone-grade claim.
+Plan 133 also leaves this custody strategy unchanged. Its shared TypeScript transport subscription
+retains only a typed availability hint and the headless stable-server gate performs no app
+onboarding, capability persistence, pairing, outbox, native key, or native storage mutation. It adds
+no mobile secure-store implementation, mobile relay, Android/iOS probe, physical-device behavior,
+or phone-grade claim.
 Plan 086 proves the same env-gated probe can
 connect and complete a WebSocket frame roundtrip in a debug APK, so it proves the harness can produce
 a positive on-device result but still does not prove release Sync/outbox/KV convergence. Plan 087 proves

@@ -75,13 +75,13 @@ Framework-agnostic; the shared spine both the Expo and Tauri shells consume.
 | Path | What it is | Status |
 |---|---|---|
 | `clients/lattice-client/src/{op,dag,schema,crdt/reducers,quarantine,materialize,sync,carrier}.ts` | **Tier A** — the reducer (DAG, 3 CRDTs, the single V-01 quarantine predicate, materialize, sync) plus the carrier-frame/session adapter and carrier-term delegation extraction. Encoding-independent for op ids; carrier session bytes are signed through an injected shell/key-custody signer. | **Real & verified**: strict typecheck clean, Sim-generated conformance green, carrier W1 vector check green, live TS↔BEAM WebSocket W1 green. |
-| `clients/lattice-client/src/{codec,identity,township,local_log,tauri_bridge}.ts` | **Tier B/E1 bridge** — canonical `lattice-cbor-v1` bytes + Ed25519 signing. `codec.ts` verifies carrier-frame op bytes/hashes/signatures against BEAM and can author/sign frames; `township.ts` builds `Township.Matter` command body/cap terms, selects a matching local delegation cap extracted from carrier frames, derives deps from the local op frontier, and exposes author-and-persist workflows; `local_log.ts` persists semantic ops and pending carrier-frame outbox entries through shell key-value seams; `tauri_bridge.ts` adapts Tauri-style `invoke` commands to storage, async native signing, and native public-key discovery. | **Partially real** — Tier B/E1 coverage through plan 132 is tracked per plan in `plans/README.md` (each plan states its own gate and non-claims); parked gaps are listed in §4a. Plan 129 adds explicit one-op relay transport and causally ordered, acknowledged-only relay draining while preserving generic push as the default; Plan 130 reuses those app-owned authoring seams unchanged; Plan 131 adds CI enforcement without changing runtime behavior. Plan 132 changes only the BEAM feed path; Direct TypeScript subscription remains Plan 133. |
-| `clients/township-tauri-shell` | **E1 Tauri shell** — Vue 3.5 frontend plus Rust native command core for shell-side storage/signing/discovery commands (`lattice_kv_get`, `lattice_kv_set`, `lattice_ensure_carrier_key`, `lattice_public_key`, `lattice_sign_carrier`, `lattice_discover_pairing_adverts`, `lattice_advertise_pairing_handoff`, `lattice_log_probe`). | **Partially real** — shell coverage through plan 132 is tracked per plan in `plans/README.md`. Plan 129 connects the packaged desktop Tauri onboarding ceremony to the stable relay with explicit persisted mode, native signing, pulled cap evidence, exact Sim-generated operation equality, durable outbox drain, and fresh-observer restart convergence. Plan 130 stages a strict unsigned action intent separately from the local draft, validates its replica against saved pairing, and requires explicit Use request, Post, and Sync actions before that same native-custody path runs. Plan 131 makes both packaged proofs mandatory in CI without altering custody. Plan 132 strengthens the action-handoff smoke with push-triggered browser convergence and a second post-restart generation while leaving native custody unchanged. The mobile secure-store strategy remains unchanged; parked gaps (iOS, QR camera onboarding, LAN discovery, physical-device behavior, cross-device state exchange) remain in §4a. |
+| `clients/lattice-client/src/{codec,identity,township,local_log,tauri_bridge}.ts` | **Tier B/E1 bridge** — canonical `lattice-cbor-v1` bytes + Ed25519 signing. `codec.ts` verifies carrier-frame op bytes/hashes/signatures against BEAM and can author/sign frames; `township.ts` builds `Township.Matter` command body/cap terms, selects a matching local delegation cap extracted from carrier frames, derives deps from the local op frontier, and exposes author-and-persist workflows; `local_log.ts` persists semantic ops and pending carrier-frame outbox entries through shell key-value seams; `tauri_bridge.ts` adapts Tauri-style `invoke` commands to storage, async native signing, and native public-key discovery. | **Partially real** — Tier B/E1 coverage through plan 133 is tracked per plan in `plans/README.md` (each plan states its own gate and non-claims); parked gaps are listed in §4a. Plan 129 adds explicit one-op relay transport and causally ordered, acknowledged-only relay draining while preserving generic push as the default; Plan 130 reuses those app-owned authoring seams unchanged; Plan 131 adds CI enforcement without changing runtime behavior; and Plan 132 adds the BEAM feed path. Plan 133 adds the direct typed TypeScript availability subscription with one atomic request in flight, a pre-registered notification route, typed baseline/hints, latest-only O(1) retained state, fail-closed teardown, and a real stable-server verified-pull gate. Reactive Tauri/Vue feed consumption remains separately gated. |
+| `clients/township-tauri-shell` | **E1 Tauri shell** — Vue 3.5 frontend plus Rust native command core for shell-side storage/signing/discovery commands (`lattice_kv_get`, `lattice_kv_set`, `lattice_ensure_carrier_key`, `lattice_public_key`, `lattice_sign_carrier`, `lattice_discover_pairing_adverts`, `lattice_advertise_pairing_handoff`, `lattice_log_probe`). | **Partially real** — shell coverage through plan 133 is tracked per plan in `plans/README.md`. Plan 129 connects the packaged desktop Tauri onboarding ceremony to the stable relay with explicit persisted mode, native signing, pulled cap evidence, exact Sim-generated operation equality, durable outbox drain, and fresh-observer restart convergence. Plan 130 stages a strict unsigned action intent separately from the local draft, validates its replica against saved pairing, and requires explicit Use request, Post, and Sync actions before that same native-custody path runs. Plan 131 makes both packaged proofs mandatory in CI without altering custody. Plan 132 strengthens the action-handoff smoke with push-triggered browser convergence and a second post-restart generation while leaving native custody unchanged. Plan 133 places a headless direct-TypeScript feed contract beside the shell but does not mount Vue or launch the app. The mobile secure-store strategy remains unchanged; parked gaps (iOS, QR camera onboarding, LAN discovery, physical-device behavior, cross-device state exchange) remain in §4a. |
 | `clients/lattice-client/test/conformance.ts` + `test/vectors/*.json` | The harness that pins the TS reducer to Sim. | **Real**; W0, W1/W2 + perspectives, W3, and five seeded randomized vectors are generated by `lattice.export_vectors`. |
 | `clients/lattice-client/test/carrier.ts` | The C3 carrier-vector harness: BEAM-compatible session transcript/signature check, full carrier-frame decoding, and W1 merge/materialization against the Sim oracle. | **Real**; `npm run carrier:township` is wired in CI. |
 | `clients/lattice-client/test/carrier_relay*.ts` | One-op relay wire and drain contracts: explicit relay envelope, stable causal order, no push fallback, report aggregation, duplicate re-advertisement, and retry-safe acknowledgement. | **Real**; `carrier:relay` and `carrier:relay-sync` are wired in flagship CI. |
 | `clients/lattice-client/test/live_carrier.ts` | The live C3 harness: spawns the BEAM Township peer process, authenticates over WebSocket, pulls/pushes carrier frames, and compares both TS materialization and BEAM peer state to the Sim oracle. | **Real**; `npm run carrier:township:live` is wired in CI. |
-| `clients/township-tauri-shell/test/{township_stable_relay,tauri_stable_relay_onboarding_smoke,tauri_action_handoff_smoke}.ts` | Production stable-server and packaged-app convergence gates. | **Real and CI-enforced on macOS**; the fast socket contract proves refusals, idempotency, authority quarantine, and restart, while the two packaged app smokes prove native-custody onboarding, LiveView action handoff, exact Sim equality, and restart recovery. Plan 132 makes the action-handoff smoke positively require a pushed generation before its 60-second poll, then proves a new pushed generation after server restart. Both packaged smokes are in `app:convergence` and the non-optional Plan 131 hosted macOS job; the older generic-push packaged smoke remains separate. |
+| `clients/township-tauri-shell/test/{township_stable_relay,township_carrier_feed,tauri_stable_relay_onboarding_smoke,tauri_action_handoff_smoke}.ts` | Production stable-server, direct-TypeScript feed, and packaged-app convergence gates. | **Real; packaged gates CI-enforced and direct-TypeScript gate CI-wired**; the fast socket contract proves refusals, idempotency, authority quarantine, and restart, while the two packaged macOS app smokes prove native-custody onboarding, LiveView action handoff, exact Sim equality, and restart recovery. Plan 132 makes the action-handoff smoke positively require a pushed generation before its 60-second poll, then proves a new pushed generation after server restart. Plan 133 adds a headless Ubuntu gate that subscribes through the shared TypeScript client, verifies every subsequently pulled frame, proves duplicate silence, replaces the subscription after same-path restart, and observes a second generation. It is not a packaged-app or reactive Vue proof. Hosted execution of that new hard step remains the Plan 133 closure gate. Both packaged smokes remain in `app:convergence` and the non-optional Plan 131 hosted macOS job; the older generic-push packaged smoke remains separate. |
 | `apps/lattice_core/lib/mix/tasks/lattice.export_vectors.ex` | Elixir task that emits conformance vectors *from Sim* — makes the oracle literal. | **Real** for Phase B1/B2 and C3a; emits fixed, randomized, and carrier W1 vectors with grant-quarantine and revocation lifecycle fixtures. |
 | `ts-client-CLAUDE.md` | Agent working notes for the client library. | **Start here for the client track.** |
 
@@ -196,13 +196,16 @@ Two hard blockers gate the endgame: **CBOR/ADR-P08** (everything non-BEAM) and *
    hint wakes atomic request/notification demultiplexing and the unchanged verified pull path. The
    packaged gate proves the first pushed generation before its 60-second poll, recovers after a
    same-path server restart, and proves the replacement subscription with a second pushed
-   generation. Direct TypeScript subscription remains Plan 133; broader controls, deployment,
-   mobile/device changes, complete Phase G, and real W4 remain open.
+   generation. Plan 133 adds the direct typed TypeScript availability subscription: notifications
+   cannot satisfy atomic requests, a pre-baseline hint is retained in a latest-only mailbox, and a
+   real stable-server gate verifies pulled hashes/signatures and Sim op ids before and after
+   restart. Reactive Tauri/Vue feed consumption remains separately gated; broader controls,
+   deployment, mobile/device changes, complete Phase G, and real W4 remain open.
 5. **G1 (physical BEAM carrier) is now reachable outside `Sim`** — plan 017 runs W0–W3
    across two BEAM OS processes over the real WebSocket carrier, with `Sim` as oracle.
    Everything proven since — TS client Tier B, the Tauri shell, the Android release
    probes, the onboarding gates, and the Phase G instrument work — is tracked **per plan
-   in `plans/README.md`**; coverage and enforcement through plans 023-132 carry their own gates and
+   in `plans/README.md`**; coverage and enforcement through plans 023-133 carry their own gates and
    non-claims, so read
    the plan before trusting a claim repeated anywhere else. Areas parked as
    blocked-on-external-factors are listed in §4a and must not accrete new probe
@@ -239,10 +242,11 @@ producer through client-signed request/response relay, Plan 129 proves that the 
 desktop app can author through it and converge after restart, Plan 130 connects one fresh LiveView
 post request to that app-owned path, Plan 131 makes both packaged macOS proofs mandatory in CI, and
 Plan 132 replaces fast instrument polling with authenticated server-initiated availability hints
-that wake verified pull.
+that wake verified pull. Plan 133 adds the direct typed TypeScript availability subscription and a
+real stable-server feed gate while preserving verified pull as the only materialization path.
 The active frontier remains **complete G1/Phase G**:
-direct TypeScript feed support, broader participant controls, production deployment, and
-receipt-free W4 are not supplied by this BEAM/LiveView feed. Per-plan status lives in
+reactive Tauri/Vue feed consumption, broader participant controls, production deployment, and
+receipt-free W4 are not supplied by the current feed work. Per-plan status lives in
 `plans/README.md`.
 
 ---
@@ -284,7 +288,7 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   **Status:** done for Tier A W1 in plans 021–022 — the TS client signs/verifies
   carrier-session bytes through injected shell key custody, syncs with
   `LatticeNodeSpike.WsHandler` over a real WebSocket, and converges to the Sim oracle.
-  Follow-on client/shell/onboarding and instrument coverage (plans 023-132) is tracked per plan in
+  Follow-on client/shell/onboarding and instrument coverage (plans 023-133) is tracked per plan in
   `plans/README.md`; parked areas are listed in §4a.
 
 ### Phase D — Cross the runtime boundary (CBOR, the first hard blocker)
@@ -298,7 +302,7 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   **Status:** partial. `codec.ts` reproduces BEAM canonical bytes/op ids from carrier
   frames and authors BEAM-accepted W1 frames. The full progression from there —
   Township command authoring, persistence seams, the Tauri shell, Android debug/release
-  probes, onboarding gates, and the Phase G instrument work (plans 024–132) — is
+  probes, onboarding gates, and the Phase G instrument work (plans 024–133) — is
   tracked per plan in `plans/README.md`; each plan file states its own gate and
   non-claims. Parked areas: §4a.
 
@@ -353,8 +357,11 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   carrier state remains labeled; and the canvas scrubs only server-derived frames. The browser
   feed gate rules out polling as the cause of changed-log convergence. Operations and state still
   arrive only through verified request/response pull; the pushed frame is a liveness hint, not
-  materialization or G1 completion. Broader participant controls, direct TypeScript feed support,
-  production deployment, and the receipt-free W4 blocker remain.
+  materialization or G1 completion. Plan 133 adds the shared direct TypeScript subscription and
+  headless real-socket gate: it retains only the latest hint, verifies pulled frames before Sim
+  comparison, and replaces the subscription after restart. No reactive Tauri/Vue app feed loop is
+  claimed. Broader participant controls, production deployment, and the receipt-free W4 blocker
+  remain.
 
 **Definition of 100% done:** every gate A1→G1 green in CI; the POC exit gate (PD-001-A §A5)
 met with W4 *real*; Township converges across BEAM + browser/phone realms over the real carrier;

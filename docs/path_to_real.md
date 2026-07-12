@@ -77,8 +77,16 @@ Plan 132 closes the BEAM/LiveView server-push liveness gap without pushing opera
 authenticated subscriber receives a bounded generation hint only after durable source change, then
 uses the same verified frontier/pull/materialization path. The packaged gate rules out its 60-second
 poll for changed-log convergence and proves a replacement subscription with a second pushed
-generation after restart. Direct TypeScript feed support remains Plan 133; broader controls,
-mobile/device custody changes, TLS/public deployment, full Phase G, and receipt-free W4 remain open.
+generation after restart.
+
+Plan 133 closes the shared direct-TypeScript feed gap without turning the app into a reactive feed
+consumer. `CarrierWebSocketClient` demultiplexes `ops_available` from one in-flight atomic request,
+decodes a typed baseline/hint, and retains only the latest notification plus one waiter. A real
+stable-server gate proves first hint before pull, canonical hash/signature verification and
+Sim-equal ids, duplicate silence, same-path restart replacement, and a second hint. This is an O(1)
+application-state claim, not a browser/Node WebSocket-buffering or backpressure claim. Reactive
+Tauri/Vue feed consumption, broader controls, mobile/device custody changes, TLS/public deployment,
+full Phase G, and receipt-free W4 remain open.
 
 ## 2. Efficient frontier-diff sync (Beelay)
 

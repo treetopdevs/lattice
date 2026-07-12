@@ -88,7 +88,9 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: clients/lattice-client/package-lock.json
+          cache-dependency-path: |
+            clients/lattice-client/package-lock.json
+            clients/township-tauri-shell/package-lock.json
       - name: Cache deps and _build
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
@@ -123,6 +125,18 @@ jobs:
       - name: TS Tauri bridge
         working-directory: clients/lattice-client
         run: npm run tauri:bridge
+      - name: TS carrier availability feed contract
+        working-directory: clients/lattice-client
+        run: npm run carrier:feed
+      - name: Build TS client for shell feed gate
+        working-directory: clients/lattice-client
+        run: npm run build
+      - name: Install Tauri shell dependencies
+        working-directory: clients/township-tauri-shell
+        run: npm ci
+      - name: TS live stable carrier availability feed
+        working-directory: clients/township-tauri-shell
+        run: npm run feed:contract
       - name: Install Tauri Linux prerequisites
         run: |
           sudo apt-get update

@@ -29,7 +29,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert build_map =~ "authenticated frontier and pull"
     assert build_map =~ "production deployment remains"
     assert build_map =~ ~r/broader participant controls remain/i
-    assert build_map =~ "plans 023-132"
+    assert build_map =~ "plans 023-133"
 
     assert build_map =~
              ~r/Plan 128 does not change or newly prove Tauri onboarding\/cap persistence/
@@ -80,7 +80,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert build_map =~ "Plan 128 adds the opt-in durable client-signed relay"
     assert build_map =~ ~r/request\/response\s+relay,\s+not server push/
     assert build_map =~ ~r/broader participant controls remain/i
-    assert build_map =~ "plans 023-132"
+    assert build_map =~ "plans 023-133"
 
     assert build_map =~
              ~r/Plan 128 does not change or newly prove Tauri onboarding\/cap persistence/
@@ -151,7 +151,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert build_map =~ "Plan 129 connects the packaged desktop Tauri onboarding ceremony"
     assert build_map =~ "exact Sim-generated operation"
     assert build_map =~ "mobile secure-store strategy remains unchanged"
-    assert build_map =~ "plans 023-132"
+    assert build_map =~ "plans 023-133"
     refute build_map =~ "Plan 129 completes Phase G"
     refute build_map =~ "Plan 129 makes W4 receipt-free"
 
@@ -224,7 +224,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
 
     assert build_map =~ "Plan 130 adds the first participant post handoff"
     assert build_map =~ "unsigned request"
-    assert build_map =~ "plans 023-132"
+    assert build_map =~ "plans 023-133"
     refute build_map =~ "Plan 130 completes G1"
     refute build_map =~ "Plan 130 completes Phase G"
     refute build_map =~ "Plan 130 makes W4 receipt-free"
@@ -314,7 +314,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
              "| 131 | Packaged macOS convergence CI gate | P1 | S | 129, 130 | DONE |"
 
     assert build_map =~ "Plan 131 makes both packaged macOS convergence proofs CI-enforced"
-    assert build_map =~ "plans 023-132"
+    assert build_map =~ "plans 023-133"
     refute build_map =~ "Plan 131 completes Phase G"
     refute build_map =~ "Plan 131 makes W4 receipt-free"
 
@@ -403,14 +403,97 @@ defmodule LatticeCarrierServer.PlanContractTest do
 
     assert build_map =~ "Plan 132 adds an authenticated bounded `ops_available` hint"
     assert build_map =~ "verified pull remains the only materialization path"
-    assert build_map =~ "Direct TypeScript subscription remains Plan 133"
-    assert build_map =~ "plans 023-132"
+    assert build_map =~ "Plan 133 adds the direct typed TypeScript availability subscription"
+    assert build_map =~ "plans 023-133"
 
     assert readme =~ "Authenticated `subscribe` / `unsubscribe`"
     assert readme =~ ~r/verified pull remains the only\s+materialization path/
     assert claude =~ "Plan 132 replaces fast polling as the normal convergence trigger"
-    assert claude =~ "Direct TypeScript feed support remains Plan 133"
+    assert claude =~ "Plan 133 adds direct TypeScript availability subscriptions"
     assert poc_status =~ "## Checkpoint: Authenticated Carrier Availability Feed"
     assert poc_status =~ "Restarted subscriptions are re-proven by a second pushed generation"
+  end
+
+  test "Plan 133 defines a direct TypeScript availability feed with a real live gate" do
+    plan =
+      File.read!(
+        Path.join(@repo_root, "plans/133-direct-typescript-carrier-availability-feed-g1.md")
+      )
+
+    client_source =
+      File.read!(Path.join(@repo_root, "clients/lattice-client/src/carrier.ts"))
+
+    client_package =
+      @repo_root
+      |> Path.join("clients/lattice-client/package.json")
+      |> File.read!()
+      |> Jason.decode!()
+
+    shell_package =
+      @repo_root
+      |> Path.join("clients/township-tauri-shell/package.json")
+      |> File.read!()
+      |> Jason.decode!()
+
+    plans_index = File.read!(Path.join(@repo_root, "plans/README.md"))
+    workflow = File.read!(Path.join(@repo_root, ".github/workflows/flagship.yml"))
+    build_map = File.read!(Path.join(@repo_root, "TOWNSHIP_BUILD_MAP.md"))
+    poc_status = File.read!(Path.join(@repo_root, "docs/lattice_poc_status.md"))
+
+    assert plan =~ ~r/## Status\s+(?:IN PROGRESS|DONE)/
+    assert plan =~ ~r/latest availability plus at most one waiting\s+consumer/
+    assert plan =~ ~r/does not claim wire-level browser\/Node WebSocket\s+backpressure/
+
+    assert plan =~ "no test-controlled `pull` is invoked"
+    assert plan =~ ~r/may keep an\s+`advertise` request in flight/
+
+    assert plan =~
+             ~r/does not yet turn the Tauri\/Vue application into a reactive\s+feed consumer/
+
+    assert plan =~ "No mobile secure-store implementation change"
+    assert plan =~ "complete G1/Phase G"
+    assert plan =~ "receipt-free W4"
+    assert plan =~ "Full local regression passed on 2026-07-12"
+    assert plan =~ ~r/374\s+tests and 25 properties/
+    assert plan =~ ~r/focused unsubscribe\s+diagnosis returned `VERDICT FIX`/
+    assert plan =~ "Final exact-worktree Claude review returned `PROCEED`"
+    assert plan =~ ~r/no blocker, high, or medium finding/
+
+    assert client_source =~ "export interface CarrierAvailability"
+    assert client_source =~ "export interface CarrierAvailabilitySubscription"
+    assert client_source =~ "subscribeAvailability()"
+
+    assert File.exists?(Path.join(@repo_root, "clients/lattice-client/test/carrier_feed.ts"))
+
+    assert File.exists?(
+             Path.join(
+               @repo_root,
+               "clients/township-tauri-shell/test/township_carrier_feed.ts"
+             )
+           )
+
+    assert client_package["scripts"]["carrier:feed"] == "tsx test/carrier_feed.ts"
+    assert shell_package["scripts"]["feed:contract"] == "tsx test/township_carrier_feed.ts"
+    assert workflow =~ "TS carrier availability feed contract"
+    assert workflow =~ "npm run carrier:feed"
+    assert workflow =~ "npm run feed:contract"
+
+    assert plans_index =~
+             ~r/\| 133 \| Direct TypeScript carrier availability feed \| P1 \| L \| 132 \| (?:IN PROGRESS|DONE) \|/
+
+    assert build_map =~ "Plan 133 adds the direct typed TypeScript availability subscription"
+    assert build_map =~ "Reactive Tauri/Vue feed consumption remains separately gated"
+    assert build_map =~ "direct-TypeScript gate CI-wired"
+
+    assert build_map =~
+             "Hosted execution of that new hard step remains the Plan 133 closure gate"
+
+    refute build_map =~
+             "clients/lattice-client/src/{codec,identity,township,local_log,tauri_bridge,carrier}.ts"
+
+    assert poc_status =~ "## Checkpoint: Direct TypeScript Carrier Availability Feed"
+    assert poc_status =~ "No reactive Tauri/Vue app feed loop"
+    assert poc_status =~ "Full local regression is green"
+    assert poc_status =~ "Final exact-worktree Claude review is green"
   end
 end

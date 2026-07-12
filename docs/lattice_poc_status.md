@@ -451,11 +451,42 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
   second-BEAM test and through the packaged LiveView/Vue browser gate.
 - Gates: focused holder/server/demultiplexer/projection suites; the second-BEAM availability-feed
   test; TypeScript typecheck; and `npm run tauri:action-handoff:smoke` with a freshly built app for
-  final acceptance. Cumulative build-map contracts now run through plans 023-132.
+  final acceptance. Cumulative build-map contracts now run through plans 023-133.
 - Result: the bounded availability protocol, verified-pull convergence, restart recovery, and
-  post-restart re-subscription proofs are implemented. Final local verification and hosted CI remain
-  publication gates and are recorded in the plan file only after they complete.
-- Blocker or remaining limitation: direct TypeScript notification demultiplexing remains Plan 133.
-  Plan 132 adds no pushed-op/state materialization, broader participant controls, participant
-  custody, mobile secure-store change, TLS/public deployment, complete G1/Phase G claim, or
-  receipt-free W4.
+  post-restart re-subscription proofs are implemented. Hosted implementation run `29188555667` and
+  branch-tip closure run `29189290561` both passed the flagship artifact, unit/property, and real
+  packaged macOS convergence jobs.
+- Blocker or remaining limitation: Plan 132 itself adds no direct TypeScript subscription,
+  pushed-op/state materialization, broader participant controls, participant custody, mobile
+  secure-store change, TLS/public deployment, complete G1/Phase G claim, or receipt-free W4. The
+  subsequent direct-TypeScript substrate is recorded separately below.
+
+## Checkpoint: Direct TypeScript Carrier Availability Feed
+
+- Files changed: `clients/lattice-client/src/carrier.ts`, its deterministic fake-socket feed
+  contract, the headless stable-server feed contract beside the Tauri shell, package scripts,
+  hosted Ubuntu workflow steps, and cumulative Plan 133 documentation contracts.
+- Behaviors: `CarrierWebSocketClient` permits one atomic request in flight and reserves
+  `ops_available` for a pre-registered typed subscription route. The baseline remains exactly the
+  `subscribe_result`; a newer pre-baseline hint survives in a latest-only mailbox. At most one
+  latest availability and one `next()` waiter are retained. Duplicate generations coalesce;
+  regression, malformed input, unsolicited replies, transport failure, and close tear down pending
+  work and the old subscription fail closed. Unsubscribe is idempotent after its reply.
+- Oracle: the real stable server emits the first hint before any test-controlled pull. Every
+  subsequently pulled carrier frame passes canonical hash and Ed25519 signature verification, and
+  sorted ids equal the Sim-derived post oracle. Duplicate relay is silent. Same-path restart
+  preserves the baseline generation, rejects the old subscription, and a replacement subscription
+  observes a second hint whose verified pull equals the restart Sim oracle.
+- Gates: `npm run carrier:feed`, both TypeScript typechecks, and `npm run feed:contract` are the
+  focused local seams. The existing `Unit + property suite` job installs both workspaces, runs the
+  fake contract, rebuilds the shared client, and runs the live stable-server contract as hard steps.
+- Result: implementation and focused fake/live gates are green. Full local regression is green at
+  374 tests plus 25 properties, every shared-client script, both TypeScript typechecks, the complete
+  shell `app:convergence` matrix, warning-free forced test/production compiles, unchanged xref,
+  Sobelow, and workflow lint. Final exact-worktree Claude review is green with no blocker, high, or
+  medium finding. Implementation publication and hosted CI remain Plan 133 closure gates, so its
+  plan status remains `IN PROGRESS`.
+- Blocker or remaining limitation: No reactive Tauri/Vue app feed loop. Plan 133 changes no
+  participant key, capability, pairing, onboarding, outbox, native storage, or mobile secure-store
+  custody; it adds no pushed operation/state materialization, broader participant controls,
+  TLS/public deployment, complete G1/Phase G claim, or receipt-free W4.

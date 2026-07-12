@@ -49,6 +49,18 @@ export interface CarrierPushReport {
   pending: string[];
 }
 
+export interface CarrierAvailability {
+  generation: number;
+  frontier: string[];
+  frontierTruncated: boolean;
+}
+
+export interface CarrierAvailabilitySubscription {
+  readonly baseline: CarrierAvailability;
+  next(): Promise<CarrierAvailability>;
+  unsubscribe(): Promise<void>;
+}
+
 export interface CarrierSyncClient {
   advertise(): Promise<string[]>;
   pull(have: string[]): Promise<unknown[]>;
@@ -318,34 +330,134 @@ export async function connectCarrierWebSocket(
   await waitForOpen(socket);
 
   const client = new CarrierWebSocketClient(socket);
-  const challenge =
-    opts.wireVersion === undefined
-      ? carrierChallenge(opts.localRealm, opts.replica)
-      : carrierChallenge(opts.localRealm, opts.replica, { wireVersion: opts.wireVersion });
-  const hello = await client.request(await signCarrierChallenge(challenge, opts.signer));
+  try {
+    const challenge =
+      opts.wireVersion === undefined
+        ? carrierChallenge(opts.localRealm, opts.replica)
+        : carrierChallenge(opts.localRealm, opts.replica, { wireVersion: opts.wireVersion });
+    const hello = await client.request(await signCarrierChallenge(challenge, opts.signer));
 
-  await verifyCarrierHello(
-    challenge,
-    hello,
-    opts.expectedPeerRealm,
-    opts.expectedPeerPubkey,
-    opts.verifier,
-  );
+    await verifyCarrierHello(
+      challenge,
+      hello,
+      opts.expectedPeerRealm,
+      opts.expectedPeerPubkey,
+      opts.verifier,
+    );
 
-  return client;
+    return client;
+  } catch (error) {
+    client.close();
+    throw error;
+  }
+}
+
+class CarrierAvailabilityRoute implements CarrierAvailabilitySubscription {
+  private baselineValue: CarrierAvailability | null = null;
+  private retained: CarrierAvailability | null = null;
+  private highestGeneration: number | null = null;
+  private waiter: {
+    resolve: (availability: CarrierAvailability) => void;
+    reject: (reason: unknown) => void;
+  } | null = null;
+  private closedReason: unknown | null = null;
+  private unsubscribePromise: Promise<void> | null = null;
+
+  constructor(
+    private readonly unsubscribeRoute: (route: CarrierAvailabilityRoute) => Promise<void>,
+  ) {}
+
+  get baseline(): CarrierAvailability {
+    if (!this.baselineValue) throw new Error("carrier availability subscription not established");
+    return this.baselineValue;
+  }
+
+  establish(baseline: CarrierAvailability): void {
+    this.baselineValue = baseline;
+
+    if (this.retained && this.retained.generation <= baseline.generation) {
+      this.retained = null;
+    }
+
+    this.highestGeneration = Math.max(
+      baseline.generation,
+      this.highestGeneration ?? baseline.generation,
+    );
+  }
+
+  offer(availability: CarrierAvailability): void {
+    if (this.closedReason !== null) return;
+
+    if (this.highestGeneration !== null) {
+      if (availability.generation < this.highestGeneration) {
+        throw new Error("carrier availability generation regressed");
+      }
+      if (availability.generation === this.highestGeneration) return;
+    }
+
+    this.highestGeneration = availability.generation;
+    const waiter = this.waiter;
+    if (waiter) {
+      this.waiter = null;
+      waiter.resolve(availability);
+    } else {
+      this.retained = availability;
+    }
+  }
+
+  next(): Promise<CarrierAvailability> {
+    if (this.closedReason !== null) return Promise.reject(this.closedReason);
+    if (this.retained) {
+      const availability = this.retained;
+      this.retained = null;
+      return Promise.resolve(availability);
+    }
+    if (this.waiter) return Promise.reject(new Error("carrier availability receive already in flight"));
+
+    return new Promise((resolve, reject) => {
+      this.waiter = { resolve, reject };
+    });
+  }
+
+  unsubscribe(): Promise<void> {
+    if (!this.unsubscribePromise) {
+      this.unsubscribePromise = this.unsubscribeRoute(this).catch((error: unknown) => {
+        this.unsubscribePromise = null;
+        throw error;
+      });
+    }
+    return this.unsubscribePromise;
+  }
+
+  close(reason: unknown): void {
+    if (this.closedReason !== null) return;
+
+    this.closedReason = reason;
+    this.retained = null;
+    const waiter = this.waiter;
+    this.waiter = null;
+    waiter?.reject(reason);
+  }
 }
 
 export class CarrierWebSocketClient {
-  private queue: unknown[] = [];
-  private waiters: { resolve: (value: unknown) => void; reject: (reason: unknown) => void }[] = [];
+  private pendingRequest: {
+    resolve: (value: unknown) => void;
+    reject: (reason: unknown) => void;
+  } | null = null;
+  private availabilityRoute: CarrierAvailabilityRoute | null = null;
   private closed = false;
 
   constructor(private readonly socket: WebSocketLike) {
     socket.addEventListener("message", (event) => this.receive(event.data));
-    socket.addEventListener("error", (event) => this.failPending(event));
+    socket.addEventListener("error", (event) =>
+      this.failClient(event instanceof Error ? event : new Error("carrier websocket error")),
+    );
     socket.addEventListener("close", () => {
       this.closed = true;
-      this.failPending(new Error("carrier websocket closed"));
+      const error = new Error("carrier websocket closed");
+      this.rejectPending(error);
+      this.closeAvailability(error);
     });
   }
 
@@ -391,38 +503,138 @@ export class CarrierWebSocketClient {
     if (!hasType(response, "shutdown_result")) throw new Error("malformed carrier shutdown response");
   }
 
+  async subscribeAvailability(): Promise<CarrierAvailabilitySubscription> {
+    if (this.closed) throw new Error("carrier websocket closed");
+    if (this.availabilityRoute) throw new Error("carrier availability subscription already active");
+
+    const route = new CarrierAvailabilityRoute((activeRoute) =>
+      this.unsubscribeAvailability(activeRoute),
+    );
+    this.availabilityRoute = route;
+
+    try {
+      const response = await this.request({ type: "subscribe" });
+      let baseline: CarrierAvailability;
+      try {
+        baseline = decodeAvailability(response, "subscribe_result");
+      } catch (error) {
+        this.failClient(error);
+        throw error;
+      }
+      route.establish(baseline);
+      return route;
+    } catch (error) {
+      if (this.availabilityRoute === route) this.availabilityRoute = null;
+      route.close(error);
+      throw error;
+    }
+  }
+
   close(): void {
+    if (this.closed) return;
     this.closed = true;
+    this.rejectPending(new Error("carrier websocket closed"));
+    this.closeAvailability(new Error("carrier websocket closed"));
     this.socket.close();
   }
 
   async request(envelope: unknown): Promise<unknown> {
     if (this.closed) throw new Error("carrier websocket closed");
+    if (this.pendingRequest) throw new Error("carrier request already in flight");
 
+    let pending: NonNullable<CarrierWebSocketClient["pendingRequest"]>;
     const response = new Promise<unknown>((resolve, reject) => {
-      const queued = this.queue.shift();
-      if (queued !== undefined) {
-        resolve(queued);
-      } else {
-        this.waiters.push({ resolve, reject });
+      pending = { resolve, reject };
+      this.pendingRequest = pending;
+
+      try {
+        this.socket.send(JSON.stringify(envelope));
+      } catch (error) {
+        if (this.pendingRequest === pending) {
+          this.pendingRequest = null;
+          reject(error);
+        }
       }
     });
 
-    this.socket.send(JSON.stringify(envelope));
     const decoded = await response;
     if (hasType(decoded, "error")) throw new Error(`carrier peer error: ${String(decoded.reason)}`);
     return decoded;
   }
 
   private receive(data: unknown): void {
-    const decoded = decodeEnvelope(data);
-    const waiter = this.waiters.shift();
-    if (waiter) waiter.resolve(decoded);
-    else this.queue.push(decoded);
+    let decoded: unknown;
+    try {
+      decoded = decodeEnvelope(data);
+    } catch {
+      this.failClient(new Error("malformed carrier envelope"));
+      return;
+    }
+
+    if (hasType(decoded, "ops_available")) {
+      const route = this.availabilityRoute;
+      if (!route) {
+        this.failClient(new Error("unexpected carrier notification"));
+        return;
+      }
+
+      try {
+        route.offer(decodeAvailability(decoded, "ops_available"));
+      } catch (error) {
+        this.failClient(error);
+      }
+      return;
+    }
+
+    const pending = this.pendingRequest;
+    if (!pending) {
+      this.failClient(new Error("unexpected carrier response"));
+      return;
+    }
+
+    this.pendingRequest = null;
+    pending.resolve(decoded);
   }
 
-  private failPending(reason: unknown): void {
-    for (const waiter of this.waiters.splice(0)) waiter.reject(reason);
+  private rejectPending(reason: unknown): void {
+    const pending = this.pendingRequest;
+    if (!pending) return;
+
+    this.pendingRequest = null;
+    pending.reject(reason);
+  }
+
+  private failClient(reason: unknown): void {
+    this.rejectPending(reason);
+    this.closeAvailability(reason);
+    if (this.closed) return;
+
+    this.closed = true;
+    this.socket.close();
+  }
+
+  private async unsubscribeAvailability(route: CarrierAvailabilityRoute): Promise<void> {
+    if (this.availabilityRoute !== route) return;
+
+    const response = await this.request({ type: "unsubscribe" });
+    if (!hasType(response, "unsubscribe_result")) {
+      const error = new Error("malformed carrier unsubscribe response");
+      this.failClient(error);
+      throw error;
+    }
+
+    if (this.availabilityRoute === route) {
+      this.availabilityRoute = null;
+      route.close(new Error("carrier availability subscription closed"));
+    }
+  }
+
+  private closeAvailability(reason: unknown): void {
+    const route = this.availabilityRoute;
+    if (!route) return;
+
+    this.availabilityRoute = null;
+    route.close(reason);
   }
 }
 
@@ -853,6 +1065,29 @@ function stringListField(value: unknown, field: string, type: string): string[] 
     throw new Error(`malformed carrier ${field} list`);
   }
   return list;
+}
+
+function decodeAvailability(value: unknown, type: "subscribe_result" | "ops_available"): CarrierAvailability {
+  if (!hasType(value, type)) throw new Error(`malformed carrier ${type} response`);
+  if (!Number.isSafeInteger(value.generation) || (value.generation as number) < 0) {
+    throw new Error(`malformed carrier ${type} generation`);
+  }
+  if (
+    !Array.isArray(value.frontier) ||
+    value.frontier.length > 64 ||
+    !value.frontier.every((id) => typeof id === "string")
+  ) {
+    throw new Error(`malformed carrier ${type} frontier`);
+  }
+  if (typeof value.frontier_truncated !== "boolean") {
+    throw new Error(`malformed carrier ${type} frontier_truncated`);
+  }
+
+  return {
+    generation: value.generation as number,
+    frontier: [...value.frontier],
+    frontierTruncated: value.frontier_truncated,
+  };
 }
 
 function decodePushReport(value: Record<string, unknown>): CarrierPushReport {

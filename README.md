@@ -213,13 +213,18 @@ Module docs render via ex_doc: `cd apps/lattice_core && mix docs`.
   `ops_available` generation hint; duplicate, rejected, pending, read-only, and failed-persistence
   attempts emit nothing. A slow subscriber has at most one outstanding holder hint; acknowledging it
   atomically recovers the latest durable generation.
+- The shared TypeScript `CarrierWebSocketClient` exposes a typed availability subscription that
+  demultiplexes hints from one in-flight atomic request and retains only the latest hint plus one
+  waiter. A real stable-server gate proves hint-before-pull ordering, verified hashes/signatures,
+  Sim-equal ids, duplicate silence, and subscription replacement after same-path restart. The
+  Tauri/Vue application does not yet consume this feed reactively.
 - Fail-closed path loading and persisted source recovery across supervisor and
   OS-process restart.
 - A realm transport identity, not a participant identity, capability issuer, or
   Township operation author.
 - The availability frame contains no operation or semantic result: verified pull remains the only
-  materialization path. There is no direct pushed-op/state materialization, direct TypeScript feed,
-  TLS/public ingress, or deployment packaging. This is a stable server boundary, not a production
+  materialization path. There is no direct pushed-op/state materialization, reactive Tauri/Vue feed
+  loop, TLS/public ingress, or deployment packaging. This is a stable server boundary, not a production
   deployment.
 
 `apps/lattice_server` owns:
