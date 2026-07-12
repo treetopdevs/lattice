@@ -57,6 +57,7 @@ assert.deepEqual(applied, [
       expectedPeerRealm: config.expectedPeerRealm,
       expectedPeerPubkey: config.expectedPeerPubkey,
       replica: config.replica,
+      submission: "push",
     },
     peerFingerprint: "0d0d0d0d...0d0d0d0d",
   },

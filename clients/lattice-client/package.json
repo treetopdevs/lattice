@@ -21,6 +21,8 @@
     "township:authoring": "tsx test/township_authoring.ts",
     "tauri:bridge": "tsx test/tauri_bridge.ts",
     "carrier:township": "tsx test/carrier.ts",
+    "carrier:relay": "tsx test/carrier_relay.ts",
+    "carrier:relay-sync": "tsx test/carrier_relay_sync.ts",
     "carrier:township:live": "tsx test/live_carrier.ts"
   },
   "devDependencies": {

@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
+import { createServer } from "node:net";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -18,6 +19,25 @@ export interface SpawnTownshipPeerOptions {
   identitySeed?: string;
   bootstrapAudiencePubkey?: string;
   replica?: string;
+}
+
+export interface StableCarrierServerProcess {
+  port: number;
+  realm: string;
+  publicKeyBase64: string;
+  stop(): Promise<void>;
+  kill(): Promise<void>;
+}
+
+export interface SpawnStableCarrierServerOptions {
+  port: number;
+  serverRealm: string;
+  identitySeed: string;
+  trustedPeerRealm: string;
+  trustedPeerPubkey: string;
+  sourcePath: string;
+  relayRealm?: string;
+  relayPubkey?: string;
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -64,9 +84,150 @@ export function peerUrl(port: number, host = "127.0.0.1"): string {
   return `ws://${host}:${port}/carrier`;
 }
 
+export function stableCarrierUrl(port: number, host = "127.0.0.1"): string {
+  return `ws://${host}:${port}/carrier`;
+}
+
+export async function freeTcpPort(): Promise<number> {
+  return new Promise((resolvePort, rejectPort) => {
+    const server = createServer();
+    server.once("error", rejectPort);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        server.close();
+        rejectPort(new Error("failed to reserve a TCP port"));
+        return;
+      }
+      server.close((error) => {
+        if (error) rejectPort(error);
+        else resolvePort(address.port);
+      });
+    });
+  });
+}
+
+export async function runBeamSupport(
+  script: string,
+  args: string[],
+  expectedMarker: string,
+): Promise<string> {
+  const child = spawn(elixirBin(), [...codePathArgs(), script, ...args], {
+    cwd: repoRoot,
+    stdio: ["pipe", "pipe", "pipe"],
+    env: { ...process.env, PATH: pinnedBeamPath() },
+  });
+  const lines: string[] = [];
+  child.stdout.on("data", (chunk: Buffer) => lines.push(chunk.toString()));
+  child.stderr.on("data", (chunk: Buffer) => lines.push(chunk.toString()));
+  const code = await awaitProcessExit(child, 60_000);
+  const output = lines.join("");
+  if (code !== 0) throw new Error(`${script} exited with ${code}:\n${output}`);
+  if (!output.includes(expectedMarker)) {
+    throw new Error(`${script} exited without ${expectedMarker}:\n${output}`);
+  }
+  return output;
+}
+
+export async function spawnStableCarrierServer(
+  options: SpawnStableCarrierServerOptions,
+): Promise<StableCarrierServerProcess> {
+  if ((options.relayRealm === undefined) !== (options.relayPubkey === undefined)) {
+    throw new Error("stable carrier relay realm and public key must be configured together");
+  }
+
+  const args = [
+    ...codePathArgs(),
+    "apps/lattice_carrier_server/priv/server_node.exs",
+    String(options.port),
+    options.serverRealm,
+    options.identitySeed,
+    options.trustedPeerRealm,
+    options.trustedPeerPubkey,
+    options.sourcePath,
+  ];
+  if (options.relayRealm && options.relayPubkey) args.push(options.relayRealm, options.relayPubkey);
+
+  const child = spawn(elixirBin(), args, {
+    cwd: repoRoot,
+    stdio: ["pipe", "pipe", "pipe"],
+    env: { ...process.env, PATH: pinnedBeamPath() },
+  });
+  const lines: string[] = [];
+  child.stderr.on("data", (chunk: Buffer) => lines.push(chunk.toString()));
+  const ready = await awaitStableCarrierReady(child, lines);
+
+  return {
+    port: ready.port,
+    realm: options.serverRealm,
+    publicKeyBase64: ready.publicKeyBase64,
+    async stop() {
+      if (child.exitCode !== null || child.signalCode !== null) return;
+      child.stdin.write("stop\n");
+      const code = await awaitProcessExit(child, 10_000);
+      if (code !== 0) throw new Error(`stable carrier server exited with ${code}:\n${lines.join("")}`);
+    },
+    async kill() {
+      if (child.exitCode !== null || child.signalCode !== null) return;
+      child.kill("SIGKILL");
+      await awaitProcessExit(child, 10_000);
+    },
+  };
+}
+
 interface TownshipPeerReady {
   port: number;
   publicKeyBase64: string;
+}
+
+function awaitStableCarrierReady(
+  child: ChildProcessWithoutNullStreams,
+  lines: string[],
+): Promise<TownshipPeerReady> {
+  return new Promise((resolveReady, rejectReady) => {
+    const timeout = setTimeout(
+      () => rejectReady(new Error(`stable carrier server never became ready:\n${lines.join("")}`)),
+      60_000,
+    );
+    let publicKeyBase64: string | null = null;
+    let buffered = "";
+    child.stdout.on("data", (chunk: Buffer) => {
+      buffered += chunk.toString();
+      const complete = buffered.split(/\r?\n/);
+      buffered = complete.pop() ?? "";
+      for (const line of complete) {
+        if (!line) continue;
+        lines.push(`${line}\n`);
+        if (line.startsWith("SERVER_PUBKEY ")) publicKeyBase64 = line.slice("SERVER_PUBKEY ".length).trim();
+        if (line.startsWith("SERVER_READY ")) {
+          clearTimeout(timeout);
+          if (!publicKeyBase64) {
+            rejectReady(new Error(`stable carrier server became ready without SERVER_PUBKEY:\n${lines.join("")}`));
+            return;
+          }
+          resolveReady({
+            port: Number.parseInt(line.slice("SERVER_READY ".length), 10),
+            publicKeyBase64,
+          });
+        }
+      }
+    });
+    child.on("exit", (code) => {
+      clearTimeout(timeout);
+      rejectReady(new Error(`stable carrier server exited (${code}) before READY:\n${lines.join("")}`));
+    });
+  });
+}
+
+function awaitProcessExit(child: ChildProcessWithoutNullStreams, timeoutMs: number): Promise<number | null> {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(child.exitCode);
+  return new Promise((resolveExit, rejectExit) => {
+    const timeout = setTimeout(() => rejectExit(new Error("BEAM support process did not exit")), timeoutMs);
+    child.once("exit", (code) => {
+      clearTimeout(timeout);
+      resolveExit(code);
+    });
+  });
 }
 
 function awaitReady(child: ChildProcessWithoutNullStreams, lines: string[]): Promise<TownshipPeerReady> {

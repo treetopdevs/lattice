@@ -122,6 +122,12 @@ jobs:
       - name: TS carrier Township check
         working-directory: clients/lattice-client
         run: npm run carrier:township
+      - name: TS one-op carrier relay check
+        working-directory: clients/lattice-client
+        run: npm run carrier:relay
+      - name: TS relay-aware carrier sync check
+        working-directory: clients/lattice-client
+        run: npm run carrier:relay-sync
       - name: TS live carrier Township check
         working-directory: clients/lattice-client
         run: npm run carrier:township:live

@@ -55,6 +55,16 @@ export interface CarrierSyncClient {
   push(ops: unknown[]): Promise<CarrierPushReport>;
 }
 
+export interface CarrierRelayClient {
+  relay(op: CarrierOpFrame): Promise<CarrierPushReport>;
+}
+
+export type CarrierSubmission = "push" | "relay";
+
+export interface SyncCarrierOptions {
+  submission?: CarrierSubmission;
+}
+
 export interface CarrierStateReport {
   state_b64: string;
   state?: Record<string, unknown>;
@@ -356,6 +366,12 @@ export class CarrierWebSocketClient {
     return decodePushReport(response);
   }
 
+  async relay(op: CarrierOpFrame): Promise<CarrierPushReport> {
+    const response = await this.request({ type: "relay", op });
+    if (!hasType(response, "relay_result")) throw new Error("malformed carrier relay response");
+    return decodePushReport(response);
+  }
+
   async status(): Promise<string> {
     const response = await this.request({ type: "status" });
     if (!hasType(response, "status_result") || typeof response.phase !== "string") {
@@ -415,33 +431,133 @@ export async function syncCarrierOnce(
   localOps: Op[],
   localCarrierFrames: unknown[],
   realmByPubkey: Record<string, string> = {},
+  options: SyncCarrierOptions = {},
 ): Promise<SyncCarrierResult> {
   const peerIds = new Set(await client.advertise());
   const pulledFrames = await client.pull(localOps.map((op) => op.id));
   const pulledOps = carrierOpsToSemanticOps(pulledFrames, realmByPubkey);
   const peerKnownFrameIds: string[] = [];
 
-  const pushedFrames = localCarrierFrames.filter((frame) => {
+  const candidateFrames = localCarrierFrames.filter((frame) => {
     const op = carrierOpToSemanticOp(frame, realmByPubkey);
     if (!peerIds.has(op.id)) return true;
     peerKnownFrameIds.push(carrierFrameId(frame));
     return false;
   });
 
-  const pushReport =
-    pushedFrames.length === 0
-      ? emptyPushReport()
-      : await client.push(pushedFrames);
-  const acknowledgedFrameIds = [...new Set([...peerKnownFrameIds, ...pushReport.accepted])];
+  const submission = options.submission ?? "push";
+  const submitted = await submitCarrierFrames(client, candidateFrames, submission);
+  const acknowledgedFrameIds = [
+    ...new Set([
+      ...peerKnownFrameIds,
+      ...submitted.pushReport.accepted,
+      ...submitted.confirmedDuplicateIds,
+    ]),
+  ];
 
   return {
     ops: integrate(localOps, pulledOps),
     pulledFrames,
     pulledOps,
-    pushedFrames,
-    pushReport,
+    pushedFrames: submitted.pushedFrames,
+    pushReport: submitted.pushReport,
     acknowledgedFrameIds,
   };
+}
+
+interface CarrierSubmissionResult {
+  pushedFrames: unknown[];
+  pushReport: CarrierPushReport;
+  confirmedDuplicateIds: string[];
+}
+
+async function submitCarrierFrames(
+  client: CarrierSyncClient,
+  frames: unknown[],
+  submission: CarrierSubmission,
+): Promise<CarrierSubmissionResult> {
+  if (submission === "push") {
+    return {
+      pushedFrames: frames,
+      pushReport: frames.length === 0 ? emptyPushReport() : await client.push(frames),
+      confirmedDuplicateIds: [],
+    };
+  }
+
+  if (!canRelay(client)) throw new Error("carrier sync client does not support relay");
+
+  const pushedFrames = stableCausalCarrierFrames(frames);
+  const pushReport = emptyPushReport();
+  const confirmedDuplicateIds: string[] = [];
+
+  for (const frame of pushedFrames) {
+    const report = await client.relay(frame);
+    appendPushReport(pushReport, report);
+
+    if (pushReportEmpty(report)) {
+      const advertisedIds = new Set(await client.advertise());
+      if (advertisedIds.has(frame.id)) confirmedDuplicateIds.push(frame.id);
+    }
+  }
+
+  return { pushedFrames, pushReport, confirmedDuplicateIds };
+}
+
+function canRelay(client: CarrierSyncClient): client is CarrierSyncClient & CarrierRelayClient {
+  return typeof (client as Partial<CarrierRelayClient>).relay === "function";
+}
+
+function stableCausalCarrierFrames(frames: unknown[]): CarrierOpFrame[] {
+  const ops = frames.map(assertCarrierOpFrame);
+  const firstIndexById = new Map<string, number>();
+  for (const [index, op] of ops.entries()) {
+    if (!firstIndexById.has(op.id)) firstIndexById.set(op.id, index);
+  }
+
+  const indegree = ops.map(() => 0);
+  const dependents = ops.map(() => [] as number[]);
+  for (const [index, op] of ops.entries()) {
+    const localDependencies = new Set<number>();
+    for (const dependencyId of op.deps) {
+      const dependencyIndex = firstIndexById.get(dependencyId);
+      if (dependencyIndex !== undefined) localDependencies.add(dependencyIndex);
+    }
+    indegree[index] = localDependencies.size;
+    for (const dependencyIndex of localDependencies) dependents[dependencyIndex]?.push(index);
+  }
+
+  const ready = indegree.flatMap((degree, index) => (degree === 0 ? [index] : []));
+  const ordered: CarrierOpFrame[] = [];
+  while (ready.length > 0) {
+    ready.sort((left, right) => left - right);
+    const index = ready.shift();
+    if (index === undefined) break;
+    ordered.push(ops[index] as CarrierOpFrame);
+
+    for (const dependent of dependents[index] ?? []) {
+      indegree[dependent] = (indegree[dependent] ?? 0) - 1;
+      if (indegree[dependent] === 0) ready.push(dependent);
+    }
+  }
+
+  if (ordered.length !== ops.length) throw new Error("carrier frame dependency cycle");
+  return ordered;
+}
+
+function appendPushReport(target: CarrierPushReport, report: CarrierPushReport): void {
+  target.accepted.push(...report.accepted);
+  target.quarantined.push(...report.quarantined);
+  target.rejected.push(...report.rejected);
+  target.pending.push(...report.pending);
+}
+
+function pushReportEmpty(report: CarrierPushReport): boolean {
+  return (
+    report.accepted.length === 0 &&
+    report.quarantined.length === 0 &&
+    report.rejected.length === 0 &&
+    report.pending.length === 0
+  );
 }
 
 function carrierFrameId(frame: unknown): string {

@@ -78,6 +78,16 @@ materialize against the Sim oracle. The server does not author operations, hold 
 a separate capability store, or decide semantic authority. This request/response operation does not add `/township` write controls, server push, or participant custody, and it does not claim
 production deployment, G1/Phase G completion, or receipt-free W4.
 
+Plan 129 connects the packaged Tauri app to the stable relay without moving custody. Pairing carries
+an explicit public `push`/`relay` transport mode; the desktop app uses its existing native key and
+persisted delegation frames to pull, author the exact Sim operation, relay one signed frame at a
+time, and compact only durable acknowledgements. A distinct fresh-BEAM
+`TownshipWeb.CarrierProjection` matches Sim after the stable server restarts from the same path.
+The older packaged generic-push smoke remains unchanged. This is a packaged desktop convergence
+proof, not mobile relay or a new secure-store implementation, and it still adds no `/township`
+write controls, server push, participant custody, production deployment, Phase G completion, or
+receipt-free W4.
+
 ## Constraints — the "do not implement" boundary (PD-001 §6)
 
 Named and **excluded from this POC**. If one starts looking necessary, question the

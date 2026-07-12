@@ -51,6 +51,7 @@ assert.deepEqual(imported.draft, {
   expectedPeerRealm: config.expectedPeerRealm,
   expectedPeerPubkey: config.expectedPeerPubkey,
   replica: config.replica,
+  submission: "push",
 });
 
 const image = qrModulesToImageData(rendered.modules);

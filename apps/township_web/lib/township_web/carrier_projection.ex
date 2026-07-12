@@ -9,8 +9,8 @@ defmodule TownshipWeb.CarrierProjection do
   use GenServer
 
   alias Lattice.Carrier.Backoff
-  alias Lattice.{Log, Sync}
-  alias Township.ReadModel
+  alias Lattice.{Authority, Log, Sync}
+  alias Township.{Matter, ReadModel}
 
   @event :township_instrument
   @refresh_result :township_carrier_projection_refresh
@@ -45,6 +45,10 @@ defmodule TownshipWeb.CarrierProjection do
 
   @impl GenServer
   def init(opts) do
+    # Carrier wire decoding permits only existing atoms, so load the trusted schema before pulling.
+    Code.ensure_loaded!(Authority)
+    Code.ensure_loaded!(Matter)
+
     replica = Keyword.fetch!(opts, :replica)
 
     state =

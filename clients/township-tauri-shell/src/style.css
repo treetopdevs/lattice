@@ -305,7 +305,8 @@ dd {
   color: #17201d;
 }
 
-.grant-form input {
+.grant-form input,
+.grant-form select {
   width: 100%;
   min-height: 44px;
   padding: 10px 12px;
@@ -438,7 +439,8 @@ dd {
 }
 
 .member-form input:focus,
-.grant-form input:focus {
+.grant-form input:focus,
+.grant-form select:focus {
   border-color: #2f6f73;
   outline: 3px solid #d8ece8;
 }

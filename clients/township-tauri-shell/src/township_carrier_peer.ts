@@ -16,6 +16,8 @@ import { TOWNSHIP_REPLICA } from "./township_actions";
 export const TOWNSHIP_CARRIER_PAIRING_KEY = "carrier_peer_config";
 export const TOWNSHIP_CARRIER_PAIRING_HANDOFF_PREFIX = "township-pairing:v1:";
 
+export type TownshipCarrierSubmission = "push" | "relay";
+
 export interface TownshipCarrierPeerConfig {
   url: string;
   localRealm: string;
@@ -23,6 +25,7 @@ export interface TownshipCarrierPeerConfig {
   expectedPeerPubkey: string;
   replica: string;
   keyId?: string;
+  submission?: TownshipCarrierSubmission;
 }
 
 export interface TownshipCarrierPeerEnv {
@@ -32,6 +35,7 @@ export interface TownshipCarrierPeerEnv {
   VITE_TOWNSHIP_PEER_PUBKEY?: string;
   VITE_TOWNSHIP_REPLICA?: string;
   VITE_TOWNSHIP_CARRIER_KEY_ID?: string;
+  VITE_TOWNSHIP_CARRIER_SUBMISSION?: string;
 }
 
 export interface TownshipCarrierPeerConfigInput {
@@ -41,10 +45,12 @@ export interface TownshipCarrierPeerConfigInput {
   expectedPeerPubkey?: string | null | undefined;
   replica?: string | null | undefined;
   keyId?: string | null | undefined;
+  submission?: string | null | undefined;
 }
 
 export type TownshipCarrierPeerConfigError =
   | "invalid_expected_peer_pubkey"
+  | "invalid_submission"
   | "invalid_url"
   | "missing_expected_peer_pubkey"
   | "missing_expected_peer_realm"
@@ -120,6 +126,7 @@ export function townshipCarrierPeerFromEnv(
     expectedPeerPubkey: env.VITE_TOWNSHIP_PEER_PUBKEY,
     replica: env.VITE_TOWNSHIP_REPLICA,
     keyId: env.VITE_TOWNSHIP_CARRIER_KEY_ID,
+    submission: env.VITE_TOWNSHIP_CARRIER_SUBMISSION,
   });
   return normalized.ok ? normalized.config : null;
 }
@@ -132,6 +139,7 @@ export function normalizeTownshipCarrierPeerConfig(
   const expectedPeerRealm = present(input.expectedPeerRealm);
   const expectedPeerPubkey = present(input.expectedPeerPubkey);
   const errors: TownshipCarrierPeerConfigError[] = [];
+  const submission = normalizeCarrierSubmission(input.submission, errors);
 
   if (!url) errors.push("missing_url");
   else if (!validCarrierUrl(url)) errors.push("invalid_url");
@@ -158,6 +166,7 @@ export function normalizeTownshipCarrierPeerConfig(
   };
   const keyId = present(input.keyId);
   if (keyId) config.keyId = keyId;
+  if (submission === "relay") config.submission = submission;
   return { ok: true, config };
 }
 
@@ -212,12 +221,13 @@ export async function saveTownshipCarrierPeerConfig(
 }
 
 export function exportTownshipCarrierPairingHandoff(config: TownshipCarrierPeerConfig): string {
-  const payload = {
+  const payload: Record<string, string> = {
     url: config.url,
     expectedPeerRealm: config.expectedPeerRealm,
     expectedPeerPubkey: config.expectedPeerPubkey,
     replica: config.replica,
   };
+  if (config.submission === "relay") payload.submission = config.submission;
 
   return `${TOWNSHIP_CARRIER_PAIRING_HANDOFF_PREFIX}${base64UrlEncodeText(JSON.stringify(payload))}`;
 }
@@ -383,6 +393,7 @@ function validateTownshipCarrierPairingDraft(
   const expectedPeerRealm = present(input.expectedPeerRealm);
   const expectedPeerPubkey = present(input.expectedPeerPubkey);
   const errors: TownshipCarrierPeerConfigError[] = [];
+  const submission = normalizeCarrierSubmission(input.submission, errors);
 
   if (!url) errors.push("missing_url");
   else if (!validCarrierUrl(url)) errors.push("invalid_url");
@@ -399,14 +410,17 @@ function validateTownshipCarrierPairingDraft(
     };
   }
 
+  const draft: TownshipCarrierPeerConfigInput = {
+    url: url as string,
+    expectedPeerRealm: expectedPeerRealm as string,
+    expectedPeerPubkey: expectedPeerPubkey as string,
+    replica: present(input.replica) ?? TOWNSHIP_REPLICA,
+    submission,
+  };
+
   return {
     ok: true,
-    draft: {
-      url: url as string,
-      expectedPeerRealm: expectedPeerRealm as string,
-      expectedPeerPubkey: expectedPeerPubkey as string,
-      replica: present(input.replica) ?? TOWNSHIP_REPLICA,
-    },
+    draft,
     peerFingerprint: townshipCarrierPeerFingerprint(expectedPeerPubkey as string),
   };
 }
@@ -425,7 +439,8 @@ export function townshipCarrierPeerConfigsEqual(
     left.expectedPeerRealm === right.expectedPeerRealm &&
     left.expectedPeerPubkey === right.expectedPeerPubkey &&
     left.replica === right.replica &&
-    (left.keyId ?? null) === (right.keyId ?? null)
+    (left.keyId ?? null) === (right.keyId ?? null) &&
+    (left.submission ?? "push") === (right.submission ?? "push")
   );
 }
 
@@ -449,13 +464,23 @@ function handoffDraftFromRecord(record: Record<string, unknown>): TownshipCarrie
   const expectedPeerRealm = handoffStringField(record, "expectedPeerRealm");
   const expectedPeerPubkey = handoffStringField(record, "expectedPeerPubkey");
   const replica = handoffStringField(record, "replica");
-  if (url === false || expectedPeerRealm === false || expectedPeerPubkey === false || replica === false) return null;
+  const submission = handoffStringField(record, "submission");
+  if (
+    url === false ||
+    expectedPeerRealm === false ||
+    expectedPeerPubkey === false ||
+    replica === false ||
+    submission === false
+  ) {
+    return null;
+  }
 
   return {
     url,
     expectedPeerRealm,
     expectedPeerPubkey,
     replica,
+    submission,
   };
 }
 
@@ -514,6 +539,8 @@ function pairingErrorMessage(errors: TownshipCarrierPeerConfigError[]): string {
     switch (error) {
       case "invalid_expected_peer_pubkey":
         return "peer public key must be 32-byte base64";
+      case "invalid_submission":
+        return "submission must be push or relay";
       case "invalid_url":
         return "Carrier URL must start with ws:// or wss://";
       case "missing_expected_peer_pubkey":
@@ -527,6 +554,17 @@ function pairingErrorMessage(errors: TownshipCarrierPeerConfigError[]): string {
     }
   });
   return `Pairing config invalid: ${labels.join("; ")}.`;
+}
+
+function normalizeCarrierSubmission(
+  value: string | null | undefined,
+  errors: TownshipCarrierPeerConfigError[],
+): TownshipCarrierSubmission {
+  const submission = present(value);
+  if (submission === null || submission === "push") return "push";
+  if (submission === "relay") return submission;
+  errors.push("invalid_submission");
+  return "push";
 }
 
 function healthWorkflowOptions(

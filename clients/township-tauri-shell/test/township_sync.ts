@@ -9,6 +9,7 @@ import {
   type CarrierChallenge,
   type CarrierOpFrame,
   type CarrierPushReport,
+  type CarrierRelayClient,
   type CarrierStateReport,
   type CarrierSyncClient,
   type ConnectCarrierWebSocketOptions,
@@ -99,6 +100,73 @@ class PartialAckCarrierClient implements CarrierSyncClient {
       quarantined: frames.slice(1, 2).map((frame) => [frame.id, "authority"] as [string, string]),
       rejected: frames.slice(2, 3).map((frame) => [frame.id, "invalid"] as [string, string]),
       pending: frames.slice(3, 4).map((frame) => frame.id),
+    };
+  }
+}
+
+class RetryingRelayCarrierClient implements CarrierSyncClient, CarrierRelayClient {
+  readonly knownIds = new Set<string>();
+  readonly relayedIds: string[] = [];
+  pushCalls = 0;
+
+  constructor(private failOnceId: string | null) {}
+
+  async advertise(): Promise<string[]> {
+    return [...this.knownIds];
+  }
+
+  async pull(): Promise<unknown[]> {
+    return [];
+  }
+
+  async push(): Promise<CarrierPushReport> {
+    this.pushCalls++;
+    throw new Error("generic push fallback called");
+  }
+
+  async relay(op: CarrierOpFrame): Promise<CarrierPushReport> {
+    this.relayedIds.push(op.id);
+    if (this.failOnceId === op.id) {
+      this.failOnceId = null;
+      throw new Error("relay response lost");
+    }
+
+    this.knownIds.add(op.id);
+    return {
+      accepted: [op.id],
+      quarantined: [],
+      rejected: [],
+      pending: [],
+    };
+  }
+}
+
+class MixedRelayCarrierClient implements CarrierSyncClient, CarrierRelayClient {
+  readonly relayedIds: string[] = [];
+  pushCalls = 0;
+
+  constructor(private readonly reports: ReadonlyMap<string, CarrierPushReport>) {}
+
+  async advertise(): Promise<string[]> {
+    return [];
+  }
+
+  async pull(): Promise<unknown[]> {
+    return [];
+  }
+
+  async push(): Promise<CarrierPushReport> {
+    this.pushCalls++;
+    throw new Error("generic push fallback called");
+  }
+
+  async relay(op: CarrierOpFrame): Promise<CarrierPushReport> {
+    this.relayedIds.push(op.id);
+    return this.reports.get(op.id) ?? {
+      accepted: [],
+      quarantined: [],
+      rejected: [],
+      pending: [],
     };
   }
 }
@@ -637,6 +705,94 @@ assert.equal(mixedAckSynced.quarantinedCount, 1);
 assert.equal(mixedAckSynced.rejectedCount, 1);
 assert.equal(mixedAckSynced.pendingCount, 1);
 
+const summaryFixture = vector.clientDivergedCarrierOps.find((frame) => frameCommandName(frame) === "set_summary");
+const postFixture = vector.clientDivergedCarrierOps.find((frame) => frameCommandName(frame) === "post");
+if (!summaryFixture || !postFixture) throw new Error("missing relay retry fixtures");
+const relayRetryOutbox = [postFixture, summaryFixture];
+const relayRetryValues = new Map<string, string>([
+  [storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY), JSON.stringify(localOps)],
+  [storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY), JSON.stringify(relayRetryOutbox)],
+  [storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY), "[]"],
+]);
+const relayRetryClient = new RetryingRelayCarrierClient(postFixture.id);
+const relayPeer = {
+  url: "ws://unused.test/carrier",
+  localRealm: vector.client.realm,
+  expectedPeerRealm: vector.peer.realm,
+  expectedPeerPubkey: vector.peer.sessionPubkey,
+  replica: vector.replica,
+  submission: "relay" as const,
+};
+const failedRelaySync = await syncTownshipOutbox({
+  invoke: nativeInvoke(relayRetryValues, vector.client.sessionPubkey, []),
+  client: relayRetryClient,
+  peer: relayPeer,
+});
+assert.equal(failedRelaySync.ok, false);
+if (failedRelaySync.ok) throw new Error("partial relay failure unexpectedly succeeded");
+assert.equal(failedRelaySync.reason, "sync_failed");
+assert.equal(failedRelaySync.message, "relay response lost");
+assert.deepEqual(relayRetryClient.relayedIds, [summaryFixture.id, postFixture.id]);
+assert.equal(relayRetryClient.pushCalls, 0);
+assert.deepEqual(
+  JSON.parse(relayRetryValues.get(storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY)) ?? "[]"),
+  relayRetryOutbox,
+);
+
+const retriedRelaySync = await syncTownshipOutbox({
+  invoke: nativeInvoke(relayRetryValues, vector.client.sessionPubkey, []),
+  client: relayRetryClient,
+  peer: relayPeer,
+});
+assert.equal(retriedRelaySync.ok, true);
+if (!retriedRelaySync.ok) throw new Error(retriedRelaySync.message);
+assert.deepEqual(relayRetryClient.relayedIds, [summaryFixture.id, postFixture.id, postFixture.id]);
+assert.equal(relayRetryClient.pushCalls, 0);
+assert.deepEqual(retriedRelaySync.pushedFrameIds, [postFixture.id]);
+assert.deepEqual(retriedRelaySync.acceptedIds, [postFixture.id]);
+assert.deepEqual(retriedRelaySync.compactedFrameIds.sort(), [summaryFixture.id, postFixture.id].sort());
+assert.deepEqual(storedOutboxIds(relayRetryValues), []);
+
+const [genesisFixture, relayGrantFixture] = vector.clientDivergedCarrierOps;
+if (!genesisFixture || !relayGrantFixture) throw new Error("missing mixed relay fixtures");
+const mixedRelayOutbox = [postFixture, relayGrantFixture, genesisFixture, summaryFixture];
+const mixedRelayValues = new Map<string, string>([
+  [storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY), JSON.stringify(localOps)],
+  [storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY), JSON.stringify(mixedRelayOutbox)],
+  [storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY), "[]"],
+]);
+const mixedRelayClient = new MixedRelayCarrierClient(
+  new Map([
+    [genesisFixture.id, carrierPushReport({ accepted: [genesisFixture.id] })],
+    [relayGrantFixture.id, carrierPushReport({ quarantined: [[relayGrantFixture.id, "authority"]] })],
+    [summaryFixture.id, carrierPushReport({ rejected: [[summaryFixture.id, "invalid"]] })],
+    [postFixture.id, carrierPushReport({ pending: [postFixture.id] })],
+  ]),
+);
+const mixedRelaySync = await syncTownshipOutbox({
+  invoke: nativeInvoke(mixedRelayValues, vector.client.sessionPubkey, []),
+  client: mixedRelayClient,
+  peer: relayPeer,
+});
+assert.equal(mixedRelaySync.ok, true);
+if (!mixedRelaySync.ok) throw new Error(mixedRelaySync.message);
+assert.deepEqual(mixedRelayClient.relayedIds, [
+  genesisFixture.id,
+  relayGrantFixture.id,
+  summaryFixture.id,
+  postFixture.id,
+]);
+assert.equal(mixedRelayClient.pushCalls, 0);
+assert.deepEqual(mixedRelaySync.acceptedIds, [genesisFixture.id]);
+assert.deepEqual(mixedRelaySync.quarantined, [[relayGrantFixture.id, "authority"]]);
+assert.deepEqual(mixedRelaySync.rejected, [[summaryFixture.id, "invalid"]]);
+assert.deepEqual(mixedRelaySync.pending, [postFixture.id]);
+assert.deepEqual(mixedRelaySync.compactedFrameIds, [genesisFixture.id]);
+assert.deepEqual(
+  JSON.parse(mixedRelayValues.get(storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY)) ?? "[]"),
+  [postFixture, relayGrantFixture, summaryFixture],
+);
+
 const unconfigured = await syncTownshipOutbox({
   invoke: nativeInvoke(new Map(), vector.client.sessionPubkey, []),
 });
@@ -696,6 +852,15 @@ function secretNeedles(...identities: NativeIdentity[]): string[] {
 
 function commandCount(calls: string[], command: string): number {
   return calls.filter((call) => call === command).length;
+}
+
+function carrierPushReport(report: Partial<CarrierPushReport>): CarrierPushReport {
+  return {
+    accepted: report.accepted ?? [],
+    quarantined: report.quarantined ?? [],
+    rejected: report.rejected ?? [],
+    pending: report.pending ?? [],
+  };
 }
 
 function nativeInvoke(

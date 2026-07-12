@@ -22,6 +22,7 @@ import {
   saveTownshipCarrierPeerConfig,
   TOWNSHIP_CARRIER_PAIRING_KEY,
   type TownshipCarrierPeerConfig,
+  townshipCarrierPeerConfigsEqual,
   townshipCarrierPeerFingerprint,
   townshipCarrierPeerFromEnv,
 } from "../src/township_carrier_peer";
@@ -153,6 +154,23 @@ assert.deepEqual(
   },
 );
 assert.equal(townshipCarrierPeerFromEnv({}), null);
+assert.deepEqual(
+  townshipCarrierPeerFromEnv({
+    VITE_TOWNSHIP_CARRIER_URL: "ws://127.0.0.1:4111/carrier",
+    VITE_TOWNSHIP_LOCAL_REALM: vector.client.realm,
+    VITE_TOWNSHIP_PEER_REALM: vector.peer.realm,
+    VITE_TOWNSHIP_PEER_PUBKEY: vector.peer.sessionPubkey,
+    VITE_TOWNSHIP_CARRIER_SUBMISSION: "relay",
+  }),
+  {
+    url: "ws://127.0.0.1:4111/carrier",
+    localRealm: vector.client.realm,
+    expectedPeerRealm: vector.peer.realm,
+    expectedPeerPubkey: vector.peer.sessionPubkey,
+    replica: TOWNSHIP_REPLICA,
+    submission: "relay",
+  },
+);
 assert.equal(
   townshipCarrierPeerFromEnv({
     VITE_TOWNSHIP_CARRIER_URL: "ws://127.0.0.1:4111/carrier",
@@ -181,6 +199,43 @@ assert.deepEqual(normalized, {
     keyId: "session",
   },
 });
+
+const normalizedRelay = normalizeTownshipCarrierPeerConfig({
+  url: "wss://carrier.township.example/sync",
+  localRealm: vector.client.realm,
+  expectedPeerRealm: vector.peer.realm,
+  expectedPeerPubkey: vector.peer.sessionPubkey,
+  submission: "relay",
+});
+assert.equal(normalizedRelay.ok, true);
+if (!normalizedRelay.ok) throw new Error(normalizedRelay.message);
+assert.equal(normalizedRelay.config.submission, "relay");
+
+const normalizedExplicitPush = normalizeTownshipCarrierPeerConfig({
+  url: "wss://carrier.township.example/sync",
+  localRealm: vector.client.realm,
+  expectedPeerRealm: vector.peer.realm,
+  expectedPeerPubkey: vector.peer.sessionPubkey,
+  submission: "push",
+});
+assert.equal(normalizedExplicitPush.ok, true);
+if (!normalizedExplicitPush.ok) throw new Error(normalizedExplicitPush.message);
+assert.equal("submission" in normalizedExplicitPush.config, false);
+
+const invalidSubmission = normalizeTownshipCarrierPeerConfig(
+  JSON.parse(
+    JSON.stringify({
+      url: "wss://carrier.township.example/sync",
+      localRealm: vector.client.realm,
+      expectedPeerRealm: vector.peer.realm,
+      expectedPeerPubkey: vector.peer.sessionPubkey,
+      submission: "fallback",
+    }),
+  ),
+);
+assert.equal(invalidSubmission.ok, false);
+if (invalidSubmission.ok) throw new Error("invalid submission unexpectedly validated");
+assert.deepEqual(invalidSubmission.errors, ["invalid_submission"]);
 
 const invalid = normalizeTownshipCarrierPeerConfig({
   url: "https://carrier.township.example/sync",
@@ -332,12 +387,34 @@ assert.equal(importedReplaceSaved.ok, true);
 if (!importedReplaceSaved.ok) throw new Error(importedReplaceSaved.message);
 assert.deepEqual(await loadTownshipCarrierPeerConfig(replaceStorage, {}), importedReplaceSaved.config);
 
+const submissionStorage = memoryStorage();
+const pushPairingSaved = await saveTownshipCarrierPeerConfig(submissionStorage, originalPairing);
+assert.equal(pushPairingSaved.ok, true);
+if (!pushPairingSaved.ok) throw new Error(pushPairingSaved.message);
+const relayPairing = { ...originalPairing, submission: "relay" as const };
+assert.equal(townshipCarrierPeerConfigsEqual(pushPairingSaved.config, relayPairing), false);
+const relayReplaceBlocked = await saveTownshipCarrierPeerConfig(submissionStorage, relayPairing);
+assert.equal(relayReplaceBlocked.ok, false);
+if (relayReplaceBlocked.ok) throw new Error("unconfirmed relay mode replacement unexpectedly saved");
+assert.deepEqual(relayReplaceBlocked.errors, ["confirmation_required"]);
+const relayPairingSaved = await saveTownshipCarrierPeerConfig(submissionStorage, relayPairing, {
+  confirmed: true,
+});
+assert.equal(relayPairingSaved.ok, true);
+if (!relayPairingSaved.ok) throw new Error(relayPairingSaved.message);
+assert.equal(relayPairingSaved.config.submission, "relay");
+assert.deepEqual(await loadTownshipCarrierPeerConfig(submissionStorage, {}), relayPairingSaved.config);
+const relayPairingRaw = (await submissionStorage.getItem(TOWNSHIP_CARRIER_PAIRING_KEY)) ?? "";
+assert.equal(JSON.parse(relayPairingRaw).submission, "relay");
+assert.doesNotThrow(() => assertTownshipKvStoresNoSecrets([[TOWNSHIP_CARRIER_PAIRING_KEY, relayPairingRaw]]));
+
 const handoffConfig: TownshipCarrierPeerConfig = {
   url: " wss://handoff.township.example/carrier ",
   localRealm: "sender-local-realm",
   expectedPeerRealm: "township-peer-東京都",
   expectedPeerPubkey: vector.peer.sessionPubkey,
   replica: vector.replica,
+  submission: "push",
   keyId: "sender-device-key",
 };
 const handoff = exportTownshipCarrierPairingHandoff(handoffConfig);
@@ -350,16 +427,48 @@ assert.doesNotMatch(handoff, /seed|private|secret/i);
 const importedHandoff = importTownshipCarrierPairingHandoff(handoff);
 assert.equal(importedHandoff.ok, true);
 if (!importedHandoff.ok) throw new Error(importedHandoff.message);
+assert.equal(importedHandoff.draft.submission, "push");
 assert.deepEqual(importedHandoff.draft, {
   url: "wss://handoff.township.example/carrier",
   expectedPeerRealm: "township-peer-東京都",
   expectedPeerPubkey: vector.peer.sessionPubkey,
   replica: vector.replica,
+  submission: "push",
 });
 assert.equal("localRealm" in importedHandoff.draft, false);
 assert.equal("keyId" in importedHandoff.draft, false);
 assert.equal(importedHandoff.peerFingerprint, townshipCarrierPeerFingerprint(vector.peer.sessionPubkey));
 assert.match(importedHandoff.peerFingerprint, /^[0-9a-f]{8}\.\.\.[0-9a-f]{8}$/);
+
+const relayHandoff = exportTownshipCarrierPairingHandoff({
+  ...handoffConfig,
+  submission: "relay",
+});
+const importedRelayHandoff = importTownshipCarrierPairingHandoff(relayHandoff);
+assert.equal(importedRelayHandoff.ok, true);
+if (!importedRelayHandoff.ok) throw new Error(importedRelayHandoff.message);
+assert.deepEqual(importedRelayHandoff.draft, {
+  url: "wss://handoff.township.example/carrier",
+  expectedPeerRealm: "township-peer-東京都",
+  expectedPeerPubkey: vector.peer.sessionPubkey,
+  replica: vector.replica,
+  submission: "relay",
+});
+assert.equal("localRealm" in importedRelayHandoff.draft, false);
+assert.equal("keyId" in importedRelayHandoff.draft, false);
+
+const invalidSubmissionHandoff = importTownshipCarrierPairingHandoff(
+  encodedHandoff({
+    url: "wss://handoff.township.example/carrier",
+    expectedPeerRealm: vector.peer.realm,
+    expectedPeerPubkey: vector.peer.sessionPubkey,
+    replica: vector.replica,
+    submission: "fallback",
+  }),
+);
+assert.equal(invalidSubmissionHandoff.ok, false);
+if (invalidSubmissionHandoff.ok) throw new Error("invalid relay handoff unexpectedly imported");
+assert.deepEqual(invalidSubmissionHandoff.errors, ["invalid_submission"]);
 
 const injectedHandoff = encodedHandoff({
   url: "wss://handoff.township.example/carrier",
@@ -377,6 +486,7 @@ assert.deepEqual(importedInjectedHandoff.draft, {
   expectedPeerRealm: vector.peer.realm,
   expectedPeerPubkey: vector.peer.sessionPubkey,
   replica: vector.replica,
+  submission: "push",
 });
 assert.equal("localRealm" in importedInjectedHandoff.draft, false);
 assert.equal("keyId" in importedInjectedHandoff.draft, false);

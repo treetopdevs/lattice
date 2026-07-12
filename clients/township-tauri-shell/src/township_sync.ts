@@ -167,6 +167,7 @@ export async function syncTownshipOutbox(
       localOps,
       localCarrierFrames,
       options.realmByPubkey ?? TOWNSHIP_REALM_BY_PUBKEY,
+      { submission: options.peer?.submission ?? "push" },
     );
     const authorityQuarantinedGrantIds = frameIdsForAuthorityQuarantine(
       localCarrierFrames,

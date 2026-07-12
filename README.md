@@ -201,6 +201,8 @@ Module docs render via ex_doc: `cd apps/lattice_core && mix docs`.
 - Opt-in client-signed relay realms for path-backed sources. The server
   structurally checks one already-signed operation and atomically persists a
   changed log before acknowledgement; semantic authority remains downstream.
+- A packaged Tauri client proof that selects relay explicitly, keeps native participant-key
+  custody, and converges with a fresh pull-only observer after server restart.
 - Fail-closed path loading and persisted source recovery across supervisor and
   OS-process restart.
 - A realm transport identity, not a participant identity, capability issuer, or
@@ -221,6 +223,8 @@ Module docs render via ex_doc: `cd apps/lattice_core && mix docs`.
 - `TownshipWeb.CarrierProjection`, an optional supervised observer that periodically
   pulls an authenticated WebSocket peer, validates received operations through the
   shared log/reducer path, and publishes fresh or stale snapshots through PubSub.
+- Startup loads the trusted Township reducer and authority schemas before the first pull so the
+  existing-atom wire guard also works in a fresh BEAM VM.
 - No participant key, capability, write path, server-push feed, or listener ownership;
   the optional peer is supplied by another boundary such as `lattice_carrier_server`.
 

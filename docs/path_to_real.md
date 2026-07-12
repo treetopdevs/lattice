@@ -49,6 +49,16 @@ acknowledgements for future compaction GC, and a BEAM-side browser log-store pay
 helper that preserves quarantine reports. The browser/AtomVM track still needs to
 consume those schemas and wire persistence in its own runtime.
 
+**Stable write-boundary and app result (Plans 127-129, 2026-07-11).** A dedicated supervised
+`lattice_carrier_server` now serves authenticated pull by default and may opt selected trusted
+realms into relaying one already-signed operation to a path-backed source. The server persists a
+changed log before acknowledgement and keeps only a transport identity. Plan 129 closes the
+packaged desktop write-boundary gap: the actual Tauri app carries explicit relay pairing state,
+uses its existing native key and pulled delegation evidence to author the Sim-identical post,
+drains only acknowledged outbox frames, and converges with a distinct fresh-BEAM observer after an
+OS-process restart. This remains request/response relay, not server push, participant custody,
+mobile relay, TLS/public deployment, or a receipt-free attestation result.
+
 ## 2. Efficient frontier-diff sync (Beelay)
 
 The POC's `Lattice.Sync` ships the full set of op ids to compute a diff — fine at demo

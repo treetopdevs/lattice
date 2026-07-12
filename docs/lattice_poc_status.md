@@ -345,3 +345,33 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
   separate capability custody, production deployment, G1/Phase G completion, or receipt-free W4.
   Plan 128 does not change or newly prove Tauri onboarding/cap persistence, mobile secure-store
   custody, or real app convergence.
+
+## Checkpoint: Packaged Tauri Stable-Relay Convergence
+
+- Files changed: the TypeScript carrier relay/drain API, Tauri pairing submission ceremony,
+  production-server subprocess support, Sim fixture and fresh-BEAM projection verifier, and the
+  separate packaged stable-relay onboarding smoke recorded in Plan 129.
+- Behaviors: omitted pairing mode remains generic push; explicit relay mode survives env, native KV,
+  handoff/QR/deep-link ingress, equality, and UI confirmation. Relay drains one causally ordered
+  signed frame at a time, retains quarantine/reject/pending entries, independently confirms empty
+  duplicate responses, and preserves the full local outbox across later request failure.
+- Oracle: the actual packaged macOS Tauri app pulls the Sim prefix and resident delegation from the
+  production eight-argument stable server, authors the exact full Sim-generated post frame through
+  native key custody, relays it, and drains the accepted outbox. After a server OS-process kill and
+  restart from the same path and port, a distinct fresh-BEAM `TownshipWeb.CarrierProjection`
+  matches Sim op ids, read model, and causal replay; the server key is not an operation author.
+- Gates: `carrier:relay`, `carrier:relay-sync`, `stable:relay:contract`, and
+  `tauri:stable-relay:onboarding:smoke`; the older `tauri:onboarding:smoke` remains a separate
+  generic-push regression. The fast socket contract also proves observer relay refusal,
+  relay-realm generic-push refusal, idempotency, and structural acceptance plus downstream
+  authority quarantine.
+- Commands run: the complete TS client and shell contract matrices; `npm run app:convergence`;
+  static/live/stable Township browser gates plus shared browser E2E; bundle verification and
+  immutability; forced test/prod warnings-as-errors compilation; xref cycles; both boundary
+  Sobelow scans; pinned-OTP-28 `mix verify` and `mix check`.
+- Result: succeeded on 2026-07-11. Both packaged carrier modes pass, the five-cycle xref baseline is
+  unchanged, and the complete umbrella passes 331 tests plus 25 properties with strict Credo.
+- Blocker or remaining limitation: Plan 129 reuses the native custody and mobile secure-store
+  strategy unchanged; it adds no mobile relay/device claim, new secure-store implementation,
+  server push, `/township` participant write path, server-held participant key/cap inventory,
+  production TLS/deployment, G1/Phase G completion, or receipt-free W4.

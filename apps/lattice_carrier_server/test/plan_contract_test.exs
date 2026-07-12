@@ -29,7 +29,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert build_map =~ "authenticated frontier and pull"
     assert build_map =~ "production deployment remains"
     assert build_map =~ "Write controls and a server-push carrier feed remain"
-    assert build_map =~ "plans 023-128"
+    assert build_map =~ "plans 023-129"
 
     assert build_map =~
              ~r/Plan 128 does not change or newly prove Tauri onboarding\/cap persistence/
@@ -80,7 +80,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert build_map =~ "Plan 128 adds the opt-in durable client-signed relay"
     assert build_map =~ "request/response relay, not server push"
     assert build_map =~ "Write controls and a server-push carrier feed remain"
-    assert build_map =~ "plans 023-128"
+    assert build_map =~ "plans 023-129"
 
     assert build_map =~
              ~r/Plan 128 does not change or newly prove Tauri onboarding\/cap persistence/
@@ -101,5 +101,76 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert poc_status =~ "## Checkpoint: Durable Client-Signed Carrier Relay"
     assert poc_status =~ "persisted before acknowledgement"
     assert poc_status =~ "semantic authority remains a materialization-time decision"
+  end
+
+  test "Plan 129 records packaged Tauri stable-relay convergence without expanding custody or mobile claims" do
+    plan =
+      File.read!(
+        Path.join(@repo_root, "plans/129-packaged-tauri-stable-relay-convergence-g1.md")
+      )
+
+    plans_index = File.read!(Path.join(@repo_root, "plans/README.md"))
+    build_map = File.read!(Path.join(@repo_root, "TOWNSHIP_BUILD_MAP.md"))
+    claude = File.read!(Path.join(@repo_root, "CLAUDE.md"))
+    poc_status = File.read!(Path.join(@repo_root, "docs/lattice_poc_status.md"))
+    path_to_real = File.read!(Path.join(@repo_root, "docs/path_to_real.md"))
+    mobile_strategy =
+      File.read!(Path.join(@repo_root, "docs/township_mobile_secure_store_strategy.md"))
+
+    shell_package =
+      @repo_root
+      |> Path.join("clients/township-tauri-shell/package.json")
+      |> File.read!()
+      |> Jason.decode!()
+
+    old_smoke =
+      File.read!(
+        Path.join(
+          @repo_root,
+          "clients/township-tauri-shell/test/tauri_packaged_onboarding_smoke.ts"
+        )
+      )
+
+    new_smoke =
+      File.read!(
+        Path.join(
+          @repo_root,
+          "clients/township-tauri-shell/test/tauri_stable_relay_onboarding_smoke.ts"
+        )
+      )
+
+    assert plan =~ "Packaged Tauri stable-relay convergence"
+    assert plan =~ "No server push"
+    assert plan =~ "No new native key command, secure-store implementation"
+    assert plan =~ ~r/## Status\s+DONE/
+    assert plan =~ ~r/## Completion claim\s+Complete for this scoped increment/
+
+    assert plans_index =~
+             "| 129 | Packaged Tauri stable-relay convergence | P1 | L | 128, 118-120 | DONE |"
+
+    assert build_map =~ "Plan 129 connects the packaged desktop Tauri onboarding ceremony"
+    assert build_map =~ "exact Sim-generated operation"
+    assert build_map =~ "mobile secure-store strategy remains unchanged"
+    assert build_map =~ "plans 023-129"
+    refute build_map =~ "Plan 129 completes Phase G"
+    refute build_map =~ "Plan 129 makes W4 receipt-free"
+
+    assert claude =~ "Plan 129 connects the packaged Tauri app to the stable relay"
+    assert poc_status =~ "## Checkpoint: Packaged Tauri Stable-Relay Convergence"
+    assert path_to_real =~ ~r/Plan 129 closes the\s+packaged desktop write-boundary gap/
+    assert mobile_strategy =~ "Plan 129 reuses this custody strategy unchanged"
+
+    assert shell_package["scripts"]["stable:relay:contract"] ==
+             "tsx test/township_stable_relay.ts"
+
+    assert shell_package["scripts"]["tauri:stable-relay:onboarding:smoke"] ==
+             "tsx test/tauri_stable_relay_onboarding_smoke.ts"
+
+    assert shell_package["scripts"]["app:convergence"] =~ "stable:relay:contract"
+    assert shell_package["scripts"]["app:convergence"] =~
+             "tauri:stable-relay:onboarding:smoke"
+
+    refute old_smoke =~ "submission: \"relay\""
+    assert new_smoke =~ "submission: \"relay\""
   end
 end

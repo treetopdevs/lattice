@@ -353,13 +353,18 @@ test("frontend package exposes the real app convergence gate", () => {
   const clickThrough = readText("../../tests/e2e/township_onboarding_click_through.spec.ts");
 
   assert.equal(pkg.scripts["tauri:onboarding:smoke"], "tsx test/tauri_packaged_onboarding_smoke.ts");
+  assert.equal(pkg.scripts["stable:relay:contract"], "tsx test/township_stable_relay.ts");
+  assert.equal(
+    pkg.scripts["tauri:stable-relay:onboarding:smoke"],
+    "tsx test/tauri_stable_relay_onboarding_smoke.ts",
+  );
   assert.equal(
     pkg.scripts["onboarding:click-through"],
     "VITE_TOWNSHIP_DEV_TRACE= VITE_TOWNSHIP_AUTOSYNC_ON_MOUNT= npm run build && cd ../.. && npx --no-install playwright test tests/e2e/township_onboarding_click_through.spec.ts --config playwright.config.mjs",
   );
   assert.equal(
     pkg.scripts["app:convergence"],
-    "npm run action:contract && npm run sync:contract && npm run onboarding:contract && npm run onboarding:click-through && npm run live:contract && npm run tauri:launch:smoke && npm run tauri:onboarding:smoke && npm run tauri:deep-link:smoke",
+    "npm run action:contract && npm run sync:contract && npm run stable:relay:contract && npm run onboarding:contract && npm run onboarding:click-through && npm run live:contract && npm run tauri:launch:smoke && npm run tauri:onboarding:smoke && npm run tauri:stable-relay:onboarding:smoke && npm run tauri:deep-link:smoke",
   );
   assert.match(launchSmoke, /"tauri", \["build", "--features", "township-dev-trace", "--bundles", "app"\]/);
   assert.match(launchSmoke, /VITE_TOWNSHIP_AUTOSYNC_ON_MOUNT: "1"/);
@@ -428,6 +433,12 @@ test("Vue source exposes runtime carrier pairing config without storing secrets"
   assert.match(app, /Peer realm/);
   assert.match(app, /Peer public key/);
   assert.match(app, /Key id/);
+  assert.match(app, /v-model="pairingDraft\.submission"/);
+  assert.match(app, /aria-label="Carrier submission"/);
+  assert.match(app, /<option value="push">Generic push<\/option>/);
+  assert.match(app, /<option value="relay">One-op relay<\/option>/);
+  assert.match(app, /submission: config\.submission \?\? "push"/);
+  assert.match(peer, /submission\?: TownshipCarrierSubmission/);
   assert.match(app, /Save pairing/);
   assert.match(app, /carrierPeer\.value/);
   assert.doesNotMatch(app, /const carrierPeer = townshipCarrierPeerFromEnv\(\)/);

@@ -1017,6 +1017,7 @@ function pairingDraftFromConfig(config: TownshipCarrierPeerConfig | null): Towns
       localRealm: "",
       expectedPeerRealm: "",
       expectedPeerPubkey: "",
+      submission: "push",
       keyId: TOWNSHIP_NATIVE_KEY_ID,
     };
   }
@@ -1027,6 +1028,7 @@ function pairingDraftFromConfig(config: TownshipCarrierPeerConfig | null): Towns
     expectedPeerRealm: config.expectedPeerRealm,
     expectedPeerPubkey: config.expectedPeerPubkey,
     replica: config.replica,
+    submission: config.submission ?? "push",
     keyId: config.keyId ?? TOWNSHIP_NATIVE_KEY_ID,
   };
 }
@@ -1454,6 +1456,14 @@ function pairingDiscoveryAdvertFromMessage(value: unknown): TownshipPairingDisco
           type="text"
           @input="clearPairingSaveConfirmation"
         />
+        <select
+          v-model="pairingDraft.submission"
+          aria-label="Carrier submission"
+          @change="clearPairingSaveConfirmation"
+        >
+          <option value="push">Generic push</option>
+          <option value="relay">One-op relay</option>
+        </select>
         <textarea
           v-model="pairingHandoffDraft"
           aria-label="Pairing handoff"

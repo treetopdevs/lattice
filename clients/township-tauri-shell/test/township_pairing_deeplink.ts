@@ -34,6 +34,7 @@ const handoffConfig: TownshipCarrierPeerConfig = {
   expectedPeerRealm: vector.peer.realm,
   expectedPeerPubkey: vector.peer.sessionPubkey,
   replica: vector.replica,
+  submission: "push",
   keyId: "sender-key",
 };
 const handoff = exportTownshipCarrierPairingHandoff(handoffConfig);
@@ -76,6 +77,7 @@ assert.deepEqual(smuggledLink.draft, {
   expectedPeerRealm: vector.peer.realm,
   expectedPeerPubkey: vector.peer.sessionPubkey,
   replica: vector.replica,
+  submission: "push",
 });
 assert.equal("localRealm" in smuggledLink.draft, false);
 assert.equal("keyId" in smuggledLink.draft, false);

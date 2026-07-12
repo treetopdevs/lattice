@@ -45,6 +45,13 @@ export interface CarrierSyncClient {
     pull(have: string[]): Promise<unknown[]>;
     push(ops: unknown[]): Promise<CarrierPushReport>;
 }
+export interface CarrierRelayClient {
+    relay(op: CarrierOpFrame): Promise<CarrierPushReport>;
+}
+export type CarrierSubmission = "push" | "relay";
+export interface SyncCarrierOptions {
+    submission?: CarrierSubmission;
+}
 export interface CarrierStateReport {
     state_b64: string;
     state?: Record<string, unknown>;
@@ -123,6 +130,7 @@ export declare class CarrierWebSocketClient {
     advertise(): Promise<string[]>;
     pull(have: string[]): Promise<unknown[]>;
     push(ops: unknown[]): Promise<CarrierPushReport>;
+    relay(op: CarrierOpFrame): Promise<CarrierPushReport>;
     status(): Promise<string>;
     stateReport(): Promise<CarrierStateReport>;
     shutdown(): Promise<void>;
@@ -131,7 +139,7 @@ export declare class CarrierWebSocketClient {
     private receive;
     private failPending;
 }
-export declare function syncCarrierOnce(client: CarrierSyncClient, localOps: Op[], localCarrierFrames: unknown[], realmByPubkey?: Record<string, string>): Promise<SyncCarrierResult>;
+export declare function syncCarrierOnce(client: CarrierSyncClient, localOps: Op[], localCarrierFrames: unknown[], realmByPubkey?: Record<string, string>, options?: SyncCarrierOptions): Promise<SyncCarrierResult>;
 export declare function carrierOpsToSemanticOps(frames: unknown[], realmByPubkey?: Record<string, string>): Op[];
 export declare function carrierOpToSemanticOp(frame: unknown, realmByPubkey?: Record<string, string>): Op;
 export {};
