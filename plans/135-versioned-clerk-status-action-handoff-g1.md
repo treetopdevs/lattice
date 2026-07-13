@@ -2,7 +2,7 @@
 
 ## Status
 
-IN PROGRESS
+DONE
 
 ## Objective
 
@@ -305,13 +305,24 @@ Cumulative:
   378 tests plus 25 properties; complete shell convergence, all Township browser lanes, flagship
   Worker/video/artifact verification, forced warning-free test/production compiles, the unchanged
   five-cycle xref baseline, both Sobelow boundaries, actionlint, formatting, diff hygiene, and 23
-  Rust native/runtime tests are green. Hosted acceptance remains pending, so Plan 135 stays
-  `IN PROGRESS` until the implementation run, closure contract, and branch-tip run are green.
+  Rust native/runtime tests are green.
+- Final exact-worktree Claude review returned `PROCEED` with no blocker, high, or medium finding.
+  Its focused no-cap boundary follow-up also returned `PROCEED` after the plan matched the actual
+  author-only and publication boundaries.
+- The first hosted run `29216313162` proved the flagship and all four packaged macOS steps, but its
+  new frontend-contract step exposed a stale exact mirror of `app:convergence`. The focused local
+  RED reproduced 30/31; Claude returned `UPDATE_EXPECTATION`, and the one-line exact mirror fix
+  restored 31/31 without changing runtime behavior.
+- Hosted implementation run `29216789652` is green at
+  `6a55a91ad82ccc30cc52ed09142864b8d76c1bb4`. `Verify flagship artifact` completed in 3m19s,
+  `Unit + property suite` completed in 4m14s, and `Packaged macOS convergence` completed in 11m39s.
+  Stable-relay onboarding, unchanged Plan 130 action handoff, Plan 135 no-rebuild clerk handoff,
+  and the reactive feed smoke all passed in the required order.
 
 ## Completion claim
 
-Not yet complete. Completion requires exact cross-runtime v2 compatibility, fresh-only LiveView
+Complete for this scoped increment. Exact cross-runtime v2 compatibility, fresh-only LiveView
 preparation, command-specific app review/signing with separate Sync, local no-cap refusal, real
 packaged Open -> Locked -> Open convergence against Sim, unchanged Plan 130 evidence, hard hosted
-CI, cumulative docs, and final independent review. Even then, this increment will not claim the
+CI, cumulative docs, and final independent review are green. This completion does not claim the
 deferred or parked work above.

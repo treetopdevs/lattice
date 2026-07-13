@@ -547,9 +547,11 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
   `npm run tauri:clerk-action-handoff:smoke` is green when run standalone, and hard unit/packaged workflow
   steps are wired without a second hosted Tauri build. Full local regression is green at 378 tests plus 25 properties,
   complete shell/browser/flagship convergence, warnings-as-errors, xref, both Sobelow scans,
-  actionlint, formatting, diff hygiene, and 23 Rust tests. Hosted acceptance remains pending.
-- Result: Plan 135 remains `IN PROGRESS`; the current evidence establishes the local versioned
-  clerk-status custody seam without claiming hosted closure.
+  actionlint, formatting, diff hygiene, and 23 Rust tests. Hosted implementation run `29216789652` is green at
+  `6a55a91ad82ccc30cc52ed09142864b8d76c1bb4`: flagship completed in 3m19s, unit/property in
+  4m14s, and packaged macOS in 11m39s with all four packaged steps green.
+- Result: Plan 135 status is `DONE`; local and hosted evidence establish the scoped versioned
+  clerk-status custody seam.
 - Blocker or remaining limitation: no automatic authored-frame publication, mobile secure-store
   implementation, mobile/device result, member/delegation command bus, production ingress/TLS
   deployment, complete G1/Phase G claim, or receipt-free W4.

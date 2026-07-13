@@ -634,7 +634,16 @@ defmodule LatticeCarrierServer.PlanContractTest do
     mobile_strategy =
       File.read!(Path.join(@repo_root, "docs/township_mobile_secure_store_strategy.md"))
 
-    assert plan =~ ~r/## Status\s+(?:IN PROGRESS|DONE)/
+    [_, plan135_tail] =
+      String.split(
+        poc_status,
+        "## Checkpoint: Versioned Clerk Status Action Handoff",
+        parts: 2
+      )
+
+    [plan135_checkpoint | _rest] = String.split(plan135_tail, "\n## Checkpoint:", parts: 2)
+
+    assert plan =~ ~r/## Status\s+DONE/
     assert plan =~ "v1 remains exactly post-only"
     assert plan =~ ~s({"v":2,"id":"<32-lowercase-hex>","replica":"<replica>","command":{"command":"close_matter"}})
     assert plan =~ "Unknown versions and cross-version keys fail closed"
@@ -653,7 +662,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert plan =~ "No complete G1/Phase G claim and no receipt-free W4 claim"
 
     assert plans_index =~
-             "| 135 | Versioned clerk status action handoff | P1 | XL | 050, 054, 130, 131, 134 | IN PROGRESS |"
+             "| 135 | Versioned clerk status action handoff | P1 | XL | 050, 054, 130, 131, 134 | DONE |"
 
     refute plans_index =~
              "reactive Tauri/Vue feed consumption, broader participant controls"
@@ -665,21 +674,31 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert plan =~ "Packaged close/reopen smoke is green"
     assert plan =~ "Full local regression passed on 2026-07-12"
     assert plan =~ "378 tests plus 25 properties"
-    assert plan =~ "Hosted acceptance remains pending"
+    assert plan =~ "Final exact-worktree Claude review returned `PROCEED`"
+    assert plan =~ "Hosted implementation run `29216789652` is green"
+    assert plan =~ "`6a55a91ad82ccc30cc52ed09142864b8d76c1bb4`"
+    assert plan =~ "`Verify flagship artifact` completed in 3m19s"
+    assert plan =~ "`Unit + property suite` completed in 4m14s"
+    assert plan =~ "`Packaged macOS convergence` completed in 11m39s"
+    assert plan =~ ~r/## Completion claim\s+Complete for this scoped increment/
+    refute plan =~ "Hosted acceptance remains pending"
 
     assert build_map =~ "Plan 135 adds the versioned clerk status action handoff"
     assert build_map =~ "Use request, Sign close/reopen, and separate Sync outbox"
     assert build_map =~ "Open -> Locked -> Open"
     assert build_map =~ "No automatic authored-frame publication"
     assert build_map =~ "Full local Plan 135 regression is green at 378 tests plus 25 properties"
+    assert build_map =~ "Hosted Plan 135 run `29216789652` is green"
+    assert build_map =~ "Plan 135 status is `DONE`"
     refute build_map =~ "Plan 135 completes G1"
     refute build_map =~ "Plan 135 completes Phase G"
 
     assert poc_status =~ "## Checkpoint: Versioned Clerk Status Action Handoff"
-    assert poc_status =~ "`npm run tauri:clerk-action-handoff:smoke` is green"
-    assert poc_status =~ "Full local regression is green at 378 tests plus 25 properties"
-    assert poc_status =~ "Hosted acceptance remains pending"
-    assert poc_status =~ "Plan 135 remains `IN PROGRESS`"
+    assert plan135_checkpoint =~ "`npm run tauri:clerk-action-handoff:smoke` is green"
+    assert plan135_checkpoint =~ "Full local regression is green at 378 tests plus 25 properties"
+    assert plan135_checkpoint =~ "Hosted implementation run `29216789652` is green"
+    assert plan135_checkpoint =~ "Plan 135 status is `DONE`"
+    refute plan135_checkpoint =~ "Hosted acceptance remains pending"
 
     assert mobile_strategy =~ "Plan 135 leaves this custody strategy unchanged"
     assert mobile_strategy =~ "separate explicit Sync"
