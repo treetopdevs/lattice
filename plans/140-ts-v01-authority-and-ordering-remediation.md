@@ -170,6 +170,32 @@ The third delegation-proof tracer bullet is green locally but does not complete 
   Adversarial non-holder and double-transfer coverage, causal-list ordering, dangling-dependency
   height, holder unification, and succession remain below. Plan 140 stays `IN PROGRESS`.
 
+## Execution checkpoint: adversarial transfer corpus (scope items a-c)
+
+The finding-1 adversarial transfer coverage is green locally but does not complete this plan:
+
+- Three standalone Sim-exported vectors pin the transfer trust decisions the earlier honored-pass
+  checkpoints implemented. `township_authority_forged_transfer` replays finding 1's executed
+  counterexample: a structurally valid self-issued delegation carries a non-holder's transfer,
+  concurrent with a real clerk command across a partition. Sim quarantines the forged transfer as
+  `:transfer_not_holder` and the forger's follow-up gated command as `:not_holder` while the
+  legitimate concurrent clerk command stays honored. `township_authority_double_transfer` makes the
+  holder equivocate two concurrent transfers from the same frontier: the first in canonical order
+  moves the role and the second quarantines as `:double_transfer`.
+  `township_authority_unattenuated_transfer` cites a validly signed delegation whose ops exceed its
+  parent; Sim quarantines the transfer as `:invalid_transfer` and clerk keeps the role. Exporter
+  guards raise if any of those oracle verdicts change.
+- The TS reducer passed all three vectors on first contact — the honored-authority pass from the
+  valid-W1-transfer checkpoint already refuses each shape for the oracle's reason — so this slice
+  adds corpus coverage and exporter pins, not client code. The missing
+  non-holder/double-transfer/unsound-delegation coverage held open by the first checkpoint's GREEN
+  review is now closed by Sim-generated vectors instead of review argument.
+- Regenerating the corpus changed no pre-existing vector bytes; only the three new adversarial
+  fixtures were added. Exporter and Township tests, formatting, conformance, the V-01 refusal
+  guard, canonical parity, and the direct carrier gate are green.
+- Causal-list ordering, dangling-dependency height, holder-definition unification, and restoring
+  the fail-closed zoning/succession scenarios remain below. Plan 140 stays `IN PROGRESS`.
+
 ## Priority
 
 **P0 — STOP-condition remediation.** This plan blocks Plan 139 (revocation handoff) and any

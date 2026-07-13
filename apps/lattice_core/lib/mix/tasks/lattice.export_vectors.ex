@@ -51,6 +51,9 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_authority_forged_delegation_id(),
       township_authority_forged_delegation_sig(),
       township_authority_delegation_id_collision(),
+      township_authority_forged_transfer(),
+      township_authority_double_transfer(),
+      township_authority_unattenuated_transfer(),
       township_carrier_w1()
     ]
 
@@ -565,6 +568,224 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
     %{
       name: "township_authority_delegation_id_collision",
+      kind: "adversarial",
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: replica,
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      authorityQuarantine: authority_quarantine
+    }
+  end
+
+  defp township_authority_forged_transfer do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:authority-forged-transfer",
+        ["clerk", "mallory"],
+        seed: "township:authority-forged-transfer"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    sim = Sim.sync_all(sim)
+    sim = Sim.partition(sim, "clerk", "mallory")
+
+    clerk = Sim.identity(sim, "clerk")
+    mallory = Sim.identity(sim, "mallory")
+    replica = Sim.replica(sim)
+
+    forged_delegation =
+      Delegation.genesis(mallory, replica,
+        ops: [:close_matter, :reopen_matter],
+        roles: [:clerk],
+        live: true
+      )
+
+    unless Delegation.valid_sig?(forged_delegation) do
+      raise "expected the non-holder's self-issued delegation to stay structurally valid"
+    end
+
+    {sim, forged_transfer} =
+      Sim.append(sim, "mallory", :authority, {:transfer, :clerk, forged_delegation, 0})
+
+    {sim, mallory_command} =
+      Sim.command(sim, "mallory", :close_matter, [], cap: forged_delegation.id)
+
+    {sim, clerk_command} = Sim.command(sim, "clerk", :close_matter, [])
+
+    sim = sim |> Sim.heal("clerk", "mallory") |> Sim.sync_all()
+    log = Sim.log(sim, "clerk")
+
+    unless MapSet.member?(Log.op_ids(log), clerk_command.id) do
+      raise "expected the legitimate clerk command to reach the merged log"
+    end
+
+    authority_quarantine = authority_quarantine(log)
+
+    expected_quarantine =
+      Enum.sort([
+        [forged_transfer.id, "transfer_not_holder"],
+        [mallory_command.id, "not_holder"]
+      ])
+
+    unless authority_quarantine == expected_quarantine do
+      raise "expected only the forged transfer and its follow-up command to quarantine"
+    end
+
+    unless Authority.holder(Matter, log, :clerk) == clerk.pub do
+      raise "expected the forged non-holder transfer not to move clerk authority"
+    end
+
+    unless Lattice.state(Matter, log).clerk_locked? == true do
+      raise "expected the legitimate concurrent clerk command to stay honored"
+    end
+
+    realms = realm_index(sim)
+
+    %{
+      name: "township_authority_forged_transfer",
+      kind: "adversarial",
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: replica,
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      authorityQuarantine: authority_quarantine
+    }
+  end
+
+  defp township_authority_double_transfer do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:authority-double-transfer",
+        ["clerk", "resident", "mallory"],
+        seed: "township:authority-double-transfer"
+      )
+
+    {sim, genesis} = Sim.create_replica(sim, "clerk")
+    {:genesis, genesis_delegation, _policies} = genesis.body
+
+    clerk = Sim.identity(sim, "clerk")
+    resident = Sim.identity(sim, "resident")
+    mallory = Sim.identity(sim, "mallory")
+    replica = Sim.replica(sim)
+
+    to_resident =
+      Delegation.new(clerk, replica, resident.pub,
+        ops: [:close_matter, :reopen_matter],
+        roles: [:clerk],
+        parent_id: genesis_delegation.id
+      )
+
+    to_mallory =
+      Delegation.new(clerk, replica, mallory.pub,
+        ops: [:close_matter, :reopen_matter],
+        roles: [:clerk],
+        parent_id: genesis_delegation.id
+      )
+
+    unless Delegation.attenuates?(to_resident, genesis_delegation) and
+             Delegation.attenuates?(to_mallory, genesis_delegation) do
+      raise "expected both equivocating transfers to carry sound delegations"
+    end
+
+    first_transfer =
+      Op.new(clerk, replica, [genesis.id], :authority, {:transfer, :clerk, to_resident, 0})
+
+    second_transfer =
+      Op.new(clerk, replica, [genesis.id], :authority, {:transfer, :clerk, to_mallory, 0})
+
+    unless first_transfer.id < second_transfer.id do
+      raise "expected the resident transfer to sort first so the mallory branch equivocates"
+    end
+
+    log =
+      replica
+      |> Log.new()
+      |> Log.append!(genesis)
+      |> Log.append!(first_transfer)
+      |> Log.append!(second_transfer)
+
+    authority_quarantine = authority_quarantine(log)
+
+    unless authority_quarantine == [[second_transfer.id, "double_transfer"]] do
+      raise "expected only the equivocating second transfer to quarantine"
+    end
+
+    unless Authority.holder(Matter, log, :clerk) == resident.pub do
+      raise "expected the first transfer in canonical order to move clerk authority"
+    end
+
+    realms = realm_index(sim)
+
+    %{
+      name: "township_authority_double_transfer",
+      kind: "adversarial",
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: replica,
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      authorityQuarantine: authority_quarantine
+    }
+  end
+
+  defp township_authority_unattenuated_transfer do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:authority-unattenuated-transfer",
+        ["clerk", "resident"],
+        seed: "township:authority-unattenuated-transfer"
+      )
+
+    {sim, genesis} = Sim.create_replica(sim, "clerk")
+    {:genesis, genesis_delegation, _policies} = genesis.body
+
+    clerk = Sim.identity(sim, "clerk")
+    resident = Sim.identity(sim, "resident")
+    replica = Sim.replica(sim)
+
+    overbroad =
+      Delegation.new(clerk, replica, resident.pub,
+        ops: [:close_matter, :seize_records],
+        roles: [:clerk],
+        parent_id: genesis_delegation.id
+      )
+
+    unless Delegation.valid_sig?(overbroad) and
+             not Delegation.attenuates?(overbroad, genesis_delegation) do
+      raise "expected a validly signed delegation that exceeds its parent capability"
+    end
+
+    transfer =
+      Op.new(clerk, replica, [genesis.id], :authority, {:transfer, :clerk, overbroad, 0})
+
+    log =
+      replica
+      |> Log.new()
+      |> Log.append!(genesis)
+      |> Log.append!(transfer)
+
+    authority_quarantine = authority_quarantine(log)
+
+    unless authority_quarantine == [[transfer.id, "invalid_transfer"]] do
+      raise "expected the unattenuated transfer to quarantine as invalid"
+    end
+
+    unless Authority.holder(Matter, log, :clerk) == clerk.pub do
+      raise "expected the unattenuated transfer not to move clerk authority"
+    end
+
+    realms = realm_index(sim)
+
+    %{
+      name: "township_authority_unattenuated_transfer",
       kind: "adversarial",
       log: log,
       realms: realms,

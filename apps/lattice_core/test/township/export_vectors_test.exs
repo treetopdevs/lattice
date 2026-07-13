@@ -18,6 +18,9 @@ defmodule Township.ExportVectorsTest do
     assert File.exists?(Path.join(out_dir, "township_authority_forged_delegation_id.json"))
     assert File.exists?(Path.join(out_dir, "township_authority_forged_delegation_sig.json"))
     assert File.exists?(Path.join(out_dir, "township_authority_delegation_id_collision.json"))
+    assert File.exists?(Path.join(out_dir, "township_authority_forged_transfer.json"))
+    assert File.exists?(Path.join(out_dir, "township_authority_double_transfer.json"))
+    assert File.exists?(Path.join(out_dir, "township_authority_unattenuated_transfer.json"))
 
     random_paths = Path.wildcard(Path.join(out_dir, "township_random_*.json"))
     assert length(random_paths) >= 5
@@ -349,6 +352,137 @@ defmodule Township.ExportVectorsTest do
     assert expected["state"]["clerk"] == "clerk"
     assert expected["authorityQuarantine"] == [[forged_genesis_id, "bad_delegation_sig"]]
     assert expected["winners"]["clerk"] == pristine_genesis_id
+  end
+
+  test "lattice.export_vectors pins a forged non-holder transfer to the Sim oracle" do
+    out_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "lattice_forged_transfer_vectors_#{System.unique_integer([:positive])}"
+      )
+
+    on_exit(fn -> File.rm_rf(out_dir) end)
+
+    Mix.Task.clear()
+    assert :ok = Mix.Task.run("lattice.export_vectors", ["--out", out_dir])
+
+    vector =
+      out_dir
+      |> Path.join("township_authority_forged_transfer.json")
+      |> File.read!()
+      |> Jason.decode!()
+
+    assert vector["generatedBy"] == "Lattice.Sim"
+    assert vector["scenario"] == "township_authority_forged_transfer"
+    assert vector["scenarioKind"] == "adversarial"
+
+    ops = vector["ops"]
+
+    assert [genesis] = Enum.filter(ops, &(&1["kind"] == "authority" and &1["author"] == "clerk"))
+
+    assert [forged_transfer] =
+             Enum.filter(ops, &(&1["kind"] == "authority" and &1["author"] == "mallory"))
+
+    assert [mallory_command] =
+             Enum.filter(ops, &(&1["kind"] == "command" and &1["author"] == "mallory"))
+
+    assert [clerk_command] =
+             Enum.filter(ops, &(&1["kind"] == "command" and &1["author"] == "clerk"))
+
+    expected = vector["expectAtFullFrontier"]
+    assert expected["state"]["clerk"] == "clerk"
+    assert expected["state"]["clerk_locked"] == true
+
+    assert expected["authorityQuarantine"] ==
+             Enum.sort([
+               [forged_transfer["id"], "transfer_not_holder"],
+               [mallory_command["id"], "not_holder"]
+             ])
+
+    assert Enum.sort(expected["quarantine"]) ==
+             Enum.sort([forged_transfer["id"], mallory_command["id"]])
+
+    assert expected["winners"]["clerk"] == genesis["id"]
+    assert expected["winners"]["clerk_locked"] == clerk_command["id"]
+  end
+
+  test "lattice.export_vectors pins an equivocating double transfer to the Sim oracle" do
+    out_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "lattice_double_transfer_vectors_#{System.unique_integer([:positive])}"
+      )
+
+    on_exit(fn -> File.rm_rf(out_dir) end)
+
+    Mix.Task.clear()
+    assert :ok = Mix.Task.run("lattice.export_vectors", ["--out", out_dir])
+
+    vector =
+      out_dir
+      |> Path.join("township_authority_double_transfer.json")
+      |> File.read!()
+      |> Jason.decode!()
+
+    assert vector["generatedBy"] == "Lattice.Sim"
+    assert vector["scenario"] == "township_authority_double_transfer"
+    assert vector["scenarioKind"] == "adversarial"
+
+    authority_ops = Enum.filter(vector["ops"], &(&1["kind"] == "authority"))
+    assert length(authority_ops) == 3
+
+    assert [genesis] = Enum.filter(authority_ops, &(&1["deps"] == []))
+
+    assert [first_transfer] =
+             Enum.filter(authority_ops, &(&1["deps"] != [] and &1["value"] == "resident"))
+
+    assert [second_transfer] =
+             Enum.filter(authority_ops, &(&1["deps"] != [] and &1["value"] == "mallory"))
+
+    assert first_transfer["deps"] == [genesis["id"]]
+    assert second_transfer["deps"] == [genesis["id"]]
+    assert first_transfer["id"] < second_transfer["id"]
+
+    expected = vector["expectAtFullFrontier"]
+    assert expected["state"]["clerk"] == "resident"
+    assert expected["authorityQuarantine"] == [[second_transfer["id"], "double_transfer"]]
+    assert expected["quarantine"] == [second_transfer["id"]]
+    assert expected["winners"]["clerk"] == first_transfer["id"]
+  end
+
+  test "lattice.export_vectors pins an unattenuated transfer refusal to the Sim oracle" do
+    out_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "lattice_unattenuated_transfer_vectors_#{System.unique_integer([:positive])}"
+      )
+
+    on_exit(fn -> File.rm_rf(out_dir) end)
+
+    Mix.Task.clear()
+    assert :ok = Mix.Task.run("lattice.export_vectors", ["--out", out_dir])
+
+    vector =
+      out_dir
+      |> Path.join("township_authority_unattenuated_transfer.json")
+      |> File.read!()
+      |> Jason.decode!()
+
+    assert vector["generatedBy"] == "Lattice.Sim"
+    assert vector["scenario"] == "township_authority_unattenuated_transfer"
+    assert vector["scenarioKind"] == "adversarial"
+
+    assert [genesis] =
+             Enum.filter(vector["ops"], &(&1["kind"] == "authority" and &1["deps"] == []))
+
+    assert [transfer] =
+             Enum.filter(vector["ops"], &(&1["kind"] == "authority" and &1["deps"] != []))
+
+    expected = vector["expectAtFullFrontier"]
+    assert expected["state"]["clerk"] == "clerk"
+    assert expected["authorityQuarantine"] == [[transfer["id"], "invalid_transfer"]]
+    assert expected["quarantine"] == [transfer["id"]]
+    assert expected["winners"]["clerk"] == genesis["id"]
   end
 
   test "lattice.export_vectors writes a real-carrier Township W1 vector for the TS client" do
