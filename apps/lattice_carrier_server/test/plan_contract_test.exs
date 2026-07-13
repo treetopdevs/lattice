@@ -936,4 +936,50 @@ defmodule LatticeCarrierServer.PlanContractTest do
 
     assert mobile_strategy =~ "Plan 137 leaves this custody strategy unchanged"
   end
+
+  test "Plan 138 defines a versioned delegation grant handoff with recipient use and Sim authority proof" do
+    plan =
+      File.read!(Path.join(@repo_root, "plans/138-versioned-delegation-grant-handoff-g1.md"))
+
+    plans_index = File.read!(Path.join(@repo_root, "plans/README.md"))
+
+    assert plan =~ ~r/## Status\s+IN PROGRESS/
+    assert plan =~ "v1 through v4 remain exactly unchanged"
+
+    assert plan =~
+             ~s({"v":5,"id":"<32-lowercase-hex>","replica":"<replica>","authority":{"action":"grant","audience":"<canonical-base64-ed25519-pubkey>","ops":["admit","post","set_summary","set_title"],"roles":[],"live":false}})
+
+    assert plan =~ "top-level object permits exactly `authority`, `id`, `replica`, and `v`"
+
+    assert plan =~
+             "nested authority object permits exactly `action`, `audience`, `live`, `ops`, and `roles`"
+
+    assert plan =~ "one fixed resident grant profile"
+    assert plan =~ "only while its carrier source is fresh"
+    assert plan =~ "Use request -> Sign grant -> Sync outbox"
+    assert plan =~ "rechecks the saved pairing replica before signing"
+    assert plan =~ "reuses `submitTownshipDelegation`"
+    assert plan =~ "selects the issuer parent from persisted delegation evidence"
+    assert plan =~ "zero native signatures and zero KV writes"
+    assert plan =~ "Phoenix receives no participant identity, private key, parent capability"
+    assert plan =~ "the same packaged app bundle launches as two isolated participant identities"
+    assert plan =~ "issuer app"
+    assert plan =~ "recipient app"
+    assert plan =~ "pulls and persists the new delegation evidence"
+    assert plan =~ "authors a post under that delegation"
+    assert plan =~ "`Lattice.Sim` is the independent oracle"
+    assert plan =~ "source, Tauri feed, and LiveView"
+    assert plan =~ ~r/over-broad grant is rejected as `not_attenuated`/
+    assert plan =~ "structural delivery"
+    assert plan =~ "does not prove live-BEAM authority honoring"
+    assert plan =~ "TOWNSHIP_SKIP_DELEGATION_GRANT_APP_BUILD=1"
+    assert plan =~ "No mobile secure-store implementation change"
+    assert plan =~ "No cross-device capability transfer or recipient-device custody claim"
+    assert plan =~ "No revocation or succession handoff"
+    assert plan =~ "Plan 139 is the immediate v6 revocation follow-on"
+    assert plan =~ "No complete G1/Phase G claim and no receipt-free W4 claim"
+
+    assert plans_index =~
+             "| 138 | Versioned delegation grant handoff | P1 | XL | 053, 054, 058, 130, 137 | IN PROGRESS |"
+  end
 end

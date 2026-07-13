@@ -18,8 +18,9 @@ Plan 133 adds the reusable direct-TypeScript subscription plus a real stable-ser
 pushing operations or state, Plan 134 closes the packaged reactive Tauri/Vue feed-consumption gap,
 Plan 135 closes the first versioned clerk-status handoff slice, and Plan 136 closes the bundled
 `set_title`/`set_summary` field-edit slice. Plan 137 closes the bundled `admit`/`remove_member` roster handoff slice.
-Capability-lifecycle controls (delegation, revocation, and succession), G1 completion, remaining
-Phase G work, production deployment, and W4 remain.
+Plan 138 now advances the first capability-lifecycle slice through a versioned delegation grant,
+real packaged recipient use, and Sim-anchored unsound-grant refusal. Revocation, succession, G1
+completion, remaining Phase G work, production deployment, and W4 remain.
 
 **Landing 001–009 as one effort?** Start from the umbrella goal:
 [000-goal-foundation-and-hardening.md](000-goal-foundation-and-hardening.md). It
@@ -170,6 +171,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 135 | Versioned clerk status action handoff | P1 | XL | 050, 054, 130, 131, 134 | DONE |
 | 136 | Versioned field-edit action handoff | P1 | XL | 048, 135 | DONE |
 | 137 | Versioned roster action handoff | P1 | XL | 051, 054, 130, 136 | DONE |
+| 138 | Versioned delegation grant handoff | P1 | XL | 053, 054, 058, 130, 137 | IN PROGRESS |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
