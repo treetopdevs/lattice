@@ -1,3 +1,4 @@
+import { ed25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { canonicalBytesForCarrierDelegation } from "./codec";
 import { ancestors } from "./dag";
@@ -102,7 +103,7 @@ function collectDelegations(ops) {
     return delegations;
 }
 function validDelegation(delegation, delegations, cache, visiting) {
-    if (!delegationIdMatches(delegation)) {
+    if (!delegationSelfConsistent(delegation)) {
         cache.set(delegation.id, false);
         return false;
     }
@@ -137,17 +138,25 @@ function validDelegation(delegation, delegations, cache, visiting) {
     cache.set(delegation.id, valid);
     return valid;
 }
-function delegationIdMatches(delegation) {
-    const canonicalBytes = canonicalBytesForCarrierDelegation({
-        replica: delegation.replica,
-        issuer: delegation.issuer,
-        audience: delegation.audience,
-        parent_id: delegation.parentId,
-        ops: delegation.ops,
-        roles: delegation.roles,
-        live: delegation.live,
-    });
-    return bytesToBase64Url(sha256(canonicalBytes)) === delegation.id;
+function delegationSelfConsistent(delegation) {
+    if (delegation.sig === undefined)
+        return false;
+    try {
+        const canonicalBytes = canonicalBytesForCarrierDelegation({
+            replica: delegation.replica,
+            issuer: delegation.issuer,
+            audience: delegation.audience,
+            parent_id: delegation.parentId,
+            ops: delegation.ops,
+            roles: delegation.roles,
+            live: delegation.live,
+        });
+        return (bytesToBase64Url(sha256(canonicalBytes)) === delegation.id &&
+            ed25519.verify(base64ToBytes(delegation.sig), canonicalBytes, base64ToBytes(delegation.issuer), { zip215: false }));
+    }
+    catch {
+        return false;
+    }
 }
 function subset(child, parent) {
     const parentSet = new Set(parent);

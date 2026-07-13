@@ -734,6 +734,7 @@ function delegationEvidence(delegation, realmByPubkey) {
         ops: [...delegation.ops],
         roles: [...delegation.roles],
         live: delegation.live,
+        sig: delegation.sig,
     };
 }
 function realmForPubkey(pubkeyBase64, realmByPubkey) {

@@ -33,10 +33,10 @@ which runs the SAME Sim calls as `workflows_test.exs`. Do not hand-maintain vect
   storage/signing through a Tauri-style async `invoke` bridge. The honest remaining seam is shell
   integration: native command implementations and app wiring.
 
-Do not unblock Tier B with an ad hoc client-side hash. Op ids continue through the canonical codec;
-the only synchronous hash dependency is exact-pinned `@noble/hashes`, used by semantic reduction to
-recompute persisted bound-root and delegation-id commitments and pinned to BEAM by adversarial Sim
-vectors.
+Do not unblock Tier B with ad hoc client-side cryptography. Op ids continue through the canonical
+codec. Semantic reduction exact-pins `@noble/hashes` for synchronous bound-root and delegation-id
+commitments and `@noble/curves` for synchronous delegation-signature verification; adversarial Sim
+vectors pin both decisions to the BEAM oracle.
 
 ## What exists vs what's left
 
@@ -114,9 +114,13 @@ until re-decoded from carrier evidence.
 
 The delegation-id tracer bullet changes only a valid genesis delegation's declared id. Sim reports
 `bad_delegation_sig`; TS now recomputes unpadded base64url SHA-256 over the shared canonical
-delegation bytes for every chain link before honoring it. This proves the id-to-content commitment,
-not Ed25519 authenticity. A self-consistent id with a bad signature and a same-declared-id collision
-remain separate adversarial work; do not claim full V-01 restoration from these slices.
+delegation bytes for every chain link before honoring it. The delegation-signature tracer bullet
+then changes only one signature bit while preserving those canonical bytes and the declared id. TS
+retains the embedded proof and verifies every link synchronously with strict Ed25519; missing or
+malformed proof fails closed. These slices prove id-to-content commitment and signature authenticity
+for the exported evidence, but a same-declared-id collision remains separate adversarial work. Do
+not claim full V-01 restoration from these slices or general malformed-signature acceptance parity
+between OTP and the TypeScript verifier.
 
 Left to do (the real work package — see `plans/011-ts-client-realm.md`):
 1. Expand the randomized Sim corpus beyond the current N=5 seeded scenarios when a broader
@@ -130,10 +134,10 @@ Left to do (the real work package — see `plans/011-ts-client-realm.md`):
 Latest TypeScript (5.9+), ESM, `moduleResolution: bundler`, full strict incl.
 `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes`. Run: `npm run typecheck`,
 `npm run conformance`, `npm run canonical`, `npm run township:authoring`, `npm run tauri:bridge`.
-The framework-neutral core has one exact-pinned runtime dependency, `@noble/hashes`, for
-browser/Node/RN-compatible synchronous SHA-256 in bound-root semantic reduction.
-Shell signer deps when needed: `@noble/ed25519` (audited, RN/browser/Node) behind `identity.ts`, or
-native key custody through `tauri_bridge.ts`.
+The framework-neutral core has two exact-pinned runtime dependencies: `@noble/hashes` for
+browser/Node/RN-compatible synchronous SHA-256 and `@noble/curves` for strict synchronous Ed25519
+verification in authority reduction. Signer implementations remain injected behind `identity.ts`;
+private-key custody belongs in an audited shell implementation or behind `tauri_bridge.ts`.
 
 ## Shell consumption (do NOT put UI in this library)
 

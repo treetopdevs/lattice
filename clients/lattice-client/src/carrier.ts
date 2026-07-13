@@ -1094,6 +1094,7 @@ function delegationEvidence(
     ops: [...delegation.ops],
     roles: [...delegation.roles],
     live: delegation.live,
+    sig: delegation.sig,
   };
 }
 

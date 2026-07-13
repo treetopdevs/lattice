@@ -89,8 +89,8 @@ The second bound-root tracer bullet is green locally but does not complete this 
   embedded replica as a fallback trust anchor.
 - Existing corpus bytes remain unchanged; only the new adversarial vector was added. Focused
   exporter tests, conformance, typecheck, the V-01 refusal guard, and canonical parity are green.
-  Delegation id/signature proof remains the next trust-anchor work before additional authority
-  scenarios leave fail-closed. Plan 140 stays `IN PROGRESS`.
+  Delegation id and signature proof are covered by the later checkpoints below; additional authority
+  scenarios remain fail-closed. Plan 140 stays `IN PROGRESS`.
 
 ## Execution checkpoint: delegation id commitment
 
@@ -111,11 +111,37 @@ The first delegation-proof tracer bullet is green locally but does not complete 
   added. Exporter and Township tests, formatting, conformance, TypeScript typecheck/build, the V-01
   refusal guard, canonical parity, authoring/Tauri, direct/live carrier, Vue build, reactive-feed,
   and explicit-Sync gates are green. Full `mix verify` is green at 397 tests and 25 properties.
-- This slice proves the id-to-content commitment only. It does **not** verify the delegation's
-  Ed25519 signature, harden malformed codec input, or retire the separate same-declared-id collision
-  shape where an invalid introduction could poison a legitimate collected delegation. Signature
-  proof is the next trust-anchor tracer bullet; collision behavior remains required adversarial
+- This checkpoint proves the id-to-content commitment only. Delegation-signature authenticity is
+  covered by the next checkpoint. The separate same-declared-id collision shape, where an invalid
+  introduction could poison a legitimate collected delegation, remains required adversarial
   coverage before the authority pass is complete. Plan 140 stays `IN PROGRESS`.
+
+## Execution checkpoint: delegation signature proof
+
+The second delegation-proof tracer bullet is green locally but does not complete this plan:
+
+- A standalone Sim-exported `township_authority_forged_delegation_sig` vector first proves a
+  pristine clerk genesis establishes authority with no quarantine. It then flips one bit in the
+  64-byte embedded delegation signature while keeping the delegation's canonical bytes and declared
+  id unchanged, and signs a fresh valid outer op. Sim quarantines the op as
+  `:bad_delegation_sig`, leaves `clerk` unassigned, and reports no holder winner.
+- Before GREEN, the unchanged conformance reducer honored the forged genesis and failed exactly at
+  `state.clerk`, the quarantine set, and `winner.clerk`; every pre-existing scenario remained green
+  or deliberately fail-closed. The vector diagnostics independently prove that the outer op and
+  delegation id are valid while the embedded delegation signature is not.
+- Carrier decoding now retains the embedded signature in semantic authority evidence. Every
+  delegation link must pass the existing canonical id commitment and synchronous strict Ed25519
+  verification before its structural facts can be honored. Missing, malformed, or wrong-length
+  proof fails closed without making materialization asynchronous or adding an injected verifier.
+- Regenerating the corpus changed no pre-existing vector bytes; only the new adversarial fixture was
+  added. Exporter and Township tests, conformance, typecheck/build, the V-01 refusal guard, canonical
+  parity, authoring/Tauri, direct/live carrier, Vue build, reactive-feed, and explicit-Sync gates are
+  green. Full `mix verify` is green at 398 tests and 25 properties. Exact-diff Claude GREEN review
+  returned `PROCEED` with no code blocker.
+- This checkpoint proves the exported one-bit forgery is rejected under the strict browser/Node/RN
+  verifier profile. It does **not** claim general malformed or malleable signature acceptance parity
+  with OTP. The same-declared-id collision remains the next trust-anchor adversarial slice. Plan 140
+  stays `IN PROGRESS`.
 
 ## Priority
 

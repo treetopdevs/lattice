@@ -109,6 +109,35 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
     );
   }
 
+  if (vec.scenario === "township_authority_forged_delegation_sig") {
+    const [frame] = carrierFrames ?? [];
+    check(
+      "forged delegation signature outer op hash/signature",
+      frame === undefined ? null : await verifyCarrierOp(frame, verifier),
+      { hash: true, signature: true, valid: true },
+    );
+
+    const [delegation] = frame === undefined ? [] : carrierDelegationsFromFrames([frame]);
+    const delegationBytes =
+      delegation === undefined ? undefined : canonicalBytesForCarrierDelegation(delegation);
+    check(
+      "forged delegation signature hash",
+      delegationBytes === undefined ? null : await canonicalHash(delegationBytes),
+      delegation?.id,
+    );
+    check(
+      "forged delegation signature verification",
+      delegation === undefined || delegationBytes === undefined
+        ? true
+        : await verifyEd25519(
+            delegation.issuer,
+            delegationBytes,
+            Buffer.from(delegation.sig, "base64"),
+          ),
+      false,
+    );
+  }
+
   if (REFUSED_PENDING_PLAN_140.has(vec.scenario)) {
     let threw: unknown = null;
     try {

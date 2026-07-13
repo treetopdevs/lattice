@@ -16,6 +16,7 @@ defmodule Township.ExportVectorsTest do
     assert File.exists?(Path.join(out_dir, "township_authority_forged_root.json"))
     assert File.exists?(Path.join(out_dir, "township_authority_embedded_replica_bypass.json"))
     assert File.exists?(Path.join(out_dir, "township_authority_forged_delegation_id.json"))
+    assert File.exists?(Path.join(out_dir, "township_authority_forged_delegation_sig.json"))
 
     random_paths = Path.wildcard(Path.join(out_dir, "township_random_*.json"))
     assert length(random_paths) >= 5
@@ -215,6 +216,65 @@ defmodule Township.ExportVectorsTest do
 
     assert replica == vector["replica"]
     assert String.match?(forged_delegation_id, ~r/\A[A-Za-z0-9_-]{43}\z/)
+    assert is_binary(delegation_sig) and delegation_sig != ""
+    assert is_binary(op_sig) and op_sig != ""
+
+    expected = vector["expectAtFullFrontier"]
+    assert expected["state"]["clerk"] == nil
+    assert [forged_genesis_id, "bad_delegation_sig"] in expected["authorityQuarantine"]
+  end
+
+  test "lattice.export_vectors isolates a forged delegation signature that Sim rejects" do
+    out_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "lattice_forged_delegation_sig_vectors_#{System.unique_integer([:positive])}"
+      )
+
+    on_exit(fn -> File.rm_rf(out_dir) end)
+
+    Mix.Task.clear()
+    assert :ok = Mix.Task.run("lattice.export_vectors", ["--out", out_dir])
+
+    vector =
+      out_dir
+      |> Path.join("township_authority_forged_delegation_sig.json")
+      |> File.read!()
+      |> Jason.decode!()
+
+    assert vector["generatedBy"] == "Lattice.Sim"
+    assert vector["scenario"] == "township_authority_forged_delegation_sig"
+    assert vector["scenarioKind"] == "adversarial"
+
+    assert [
+             %{
+               "id" => forged_genesis_id,
+               "replica" => replica,
+               "author" => issuer,
+               "body" => [
+                 "tuple",
+                 [
+                   ["atom", "genesis"],
+                   [
+                     "delegation",
+                     %{
+                       "id" => delegation_id,
+                       "replica" => replica,
+                       "issuer" => issuer,
+                       "audience" => issuer,
+                       "parent_id" => nil,
+                       "sig" => delegation_sig
+                     }
+                   ],
+                   ["map", _policies]
+                 ]
+               ],
+               "sig" => op_sig
+             }
+           ] = vector["oracleCarrierOps"]
+
+    assert replica == vector["replica"]
+    assert String.match?(delegation_id, ~r/\A[A-Za-z0-9_-]{43}\z/)
     assert is_binary(delegation_sig) and delegation_sig != ""
     assert is_binary(op_sig) and op_sig != ""
 

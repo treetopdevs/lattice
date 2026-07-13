@@ -11,6 +11,8 @@ export interface AuthorityDelegationEvidence {
     ops: string[];
     roles: string[];
     live: boolean;
+    /** Embedded delegation signature retained from carrier evidence when available. */
+    sig?: string;
 }
 export type AuthorityEvidence = {
     type: "genesis";
