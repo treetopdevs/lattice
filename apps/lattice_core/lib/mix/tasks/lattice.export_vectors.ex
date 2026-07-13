@@ -13,7 +13,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
   alias Lattice.Authority.Delegation
   alias Lattice.Canonical
   alias Lattice.Carrier.Wire, as: CarrierWire
-  alias Lattice.{Log, Op, Sim, Sync}
+  alias Lattice.{Identity, Log, Op, Sim, Sync}
   alias Township.Matter
 
   @shortdoc "Export Lattice.Sim conformance vectors for the TS client"
@@ -48,6 +48,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_succession_w3(),
       township_authority_forged_root(),
       township_authority_embedded_replica_bypass(),
+      township_authority_forged_delegation_id(),
       township_carrier_w1()
     ]
 
@@ -271,6 +272,93 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
     %{
       name: "township_authority_embedded_replica_bypass",
+      kind: "adversarial",
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: replica,
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      authorityQuarantine: authority_quarantine
+    }
+  end
+
+  defp township_authority_forged_delegation_id do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:authority-forged-delegation-id",
+        ["clerk"],
+        seed: "township:authority-forged-delegation-id"
+      )
+
+    clerk = Sim.identity(sim, "clerk")
+    replica = Authority.bind_replica(Sim.replica(sim), clerk.pub)
+
+    pristine_delegation =
+      Delegation.genesis(clerk, replica,
+        ops: [:close_matter, :reopen_matter],
+        roles: [:clerk],
+        live: true
+      )
+
+    pristine_genesis =
+      Op.new(
+        clerk,
+        replica,
+        [],
+        :authority,
+        {:genesis, pristine_delegation, %{}}
+      )
+
+    pristine_log = Log.append!(Log.new(replica), pristine_genesis)
+
+    unless Authority.holder(Matter, pristine_log, :clerk) == clerk.pub and
+             authority_quarantine(pristine_log) == [] do
+      raise "expected pristine delegation genesis to establish clerk authority"
+    end
+
+    forged_id = String.duplicate("A", 43)
+    forged_delegation = %{pristine_delegation | id: forged_id}
+    pristine_bytes = Canonical.delegation_payload(pristine_delegation)
+    forged_bytes = Canonical.delegation_payload(forged_delegation)
+
+    unless forged_id != pristine_delegation.id and
+             String.match?(forged_id, ~r/\A[A-Za-z0-9_-]{43}\z/) and
+             pristine_bytes == forged_bytes and
+             Identity.verify(forged_delegation.issuer, forged_bytes, forged_delegation.sig) and
+             not Delegation.valid_sig?(forged_delegation) do
+      raise "expected forged delegation to differ only by its plausible declared id"
+    end
+
+    forged_genesis =
+      Op.new(
+        clerk,
+        replica,
+        [],
+        :authority,
+        {:genesis, forged_delegation, %{}}
+      )
+
+    unless Op.valid?(forged_genesis) do
+      raise "expected forged-delegation-id outer op to be cryptographically valid"
+    end
+
+    log = Log.append!(Log.new(replica), forged_genesis)
+    authority_quarantine = authority_quarantine(log)
+
+    unless [forged_genesis.id, "bad_delegation_sig"] in authority_quarantine do
+      raise "expected forged delegation id #{forged_genesis.id} to quarantine"
+    end
+
+    unless is_nil(Authority.holder(Matter, log, :clerk)) do
+      raise "expected forged delegation id to leave clerk unassigned"
+    end
+
+    realms = realm_index(sim)
+
+    %{
+      name: "township_authority_forged_delegation_id",
       kind: "adversarial",
       log: log,
       realms: realms,

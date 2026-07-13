@@ -1,4 +1,5 @@
 import { sha256 } from "@noble/hashes/sha2.js";
+import { canonicalBytesForCarrierDelegation } from "./codec";
 import { ancestors } from "./dag";
 import type {
   AuthorityDelegationEvidence,
@@ -160,6 +161,11 @@ function validDelegation(
   cache: Map<string, boolean>,
   visiting: Set<string>,
 ): boolean {
+  if (!delegationIdMatches(delegation)) {
+    cache.set(delegation.id, false);
+    return false;
+  }
+
   const cached = cache.get(delegation.id);
   if (cached !== undefined) return cached;
   const collected = delegations.get(delegation.id);
@@ -189,6 +195,20 @@ function validDelegation(
   visiting.delete(delegation.id);
   cache.set(delegation.id, valid);
   return valid;
+}
+
+function delegationIdMatches(delegation: AuthorityDelegationEvidence): boolean {
+  const canonicalBytes = canonicalBytesForCarrierDelegation({
+    replica: delegation.replica,
+    issuer: delegation.issuer,
+    audience: delegation.audience,
+    parent_id: delegation.parentId,
+    ops: delegation.ops,
+    roles: delegation.roles,
+    live: delegation.live,
+  });
+
+  return bytesToBase64Url(sha256(canonicalBytes)) === delegation.id;
 }
 
 function subset(child: readonly string[], parent: readonly string[]): boolean {

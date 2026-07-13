@@ -92,6 +92,31 @@ The second bound-root tracer bullet is green locally but does not complete this 
   Delegation id/signature proof remains the next trust-anchor work before additional authority
   scenarios leave fail-closed. Plan 140 stays `IN PROGRESS`.
 
+## Execution checkpoint: delegation id commitment
+
+The first delegation-proof tracer bullet is green locally but does not complete this plan:
+
+- A standalone Sim-exported `township_authority_forged_delegation_id` vector first proves a
+  pristine clerk genesis establishes authority with no quarantine. It then changes only the
+  delegation's declared id to a plausible 43-character base64url value, leaving its canonical core
+  and Ed25519 signature byte-valid, and signs a fresh valid outer op. Sim quarantines that op as
+  `:bad_delegation_sig`, leaves `clerk` unassigned, and reports no holder winner.
+- Before GREEN, the unchanged conformance harness honored the forged genesis and failed exactly at
+  `state.clerk`, the quarantine set, and `winner.clerk`; every pre-existing scenario remained green
+  or deliberately fail-closed. Semantic authority validation now recomputes each delegation link's
+  id as unpadded base64url SHA-256 over the shared canonical delegation bytes before trusting its
+  structural chain facts. The implementation stays synchronous and browser-compatible and creates
+  no runtime import cycle.
+- Regenerating the corpus changed no pre-existing vector bytes; only the new adversarial fixture was
+  added. Exporter and Township tests, formatting, conformance, TypeScript typecheck/build, the V-01
+  refusal guard, canonical parity, authoring/Tauri, direct/live carrier, Vue build, reactive-feed,
+  and explicit-Sync gates are green. Full `mix verify` is green at 397 tests and 25 properties.
+- This slice proves the id-to-content commitment only. It does **not** verify the delegation's
+  Ed25519 signature, harden malformed codec input, or retire the separate same-declared-id collision
+  shape where an invalid introduction could poison a legitimate collected delegation. Signature
+  proof is the next trust-anchor tracer bullet; collision behavior remains required adversarial
+  coverage before the authority pass is complete. Plan 140 stays `IN PROGRESS`.
+
 ## Priority
 
 **P0 — STOP-condition remediation.** This plan blocks Plan 139 (revocation handoff) and any

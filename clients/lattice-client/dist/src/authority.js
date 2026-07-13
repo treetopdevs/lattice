@@ -1,4 +1,5 @@
 import { sha256 } from "@noble/hashes/sha2.js";
+import { canonicalBytesForCarrierDelegation } from "./codec";
 import { ancestors } from "./dag";
 import { isAuthorityField } from "./schema";
 /**
@@ -101,6 +102,10 @@ function collectDelegations(ops) {
     return delegations;
 }
 function validDelegation(delegation, delegations, cache, visiting) {
+    if (!delegationIdMatches(delegation)) {
+        cache.set(delegation.id, false);
+        return false;
+    }
     const cached = cache.get(delegation.id);
     if (cached !== undefined)
         return cached;
@@ -131,6 +136,18 @@ function validDelegation(delegation, delegations, cache, visiting) {
     visiting.delete(delegation.id);
     cache.set(delegation.id, valid);
     return valid;
+}
+function delegationIdMatches(delegation) {
+    const canonicalBytes = canonicalBytesForCarrierDelegation({
+        replica: delegation.replica,
+        issuer: delegation.issuer,
+        audience: delegation.audience,
+        parent_id: delegation.parentId,
+        ops: delegation.ops,
+        roles: delegation.roles,
+        live: delegation.live,
+    });
+    return bytesToBase64Url(sha256(canonicalBytes)) === delegation.id;
 }
 function subset(child, parent) {
     const parentSet = new Set(parent);

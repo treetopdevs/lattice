@@ -35,7 +35,8 @@ which runs the SAME Sim calls as `workflows_test.exs`. Do not hand-maintain vect
 
 Do not unblock Tier B with an ad hoc client-side hash. Op ids continue through the canonical codec;
 the only synchronous hash dependency is exact-pinned `@noble/hashes`, used by semantic reduction to
-recompute a persisted bound-root commitment and pinned to BEAM by the adversarial Sim vector.
+recompute persisted bound-root and delegation-id commitments and pinned to BEAM by adversarial Sim
+vectors.
 
 ## What exists vs what's left
 
@@ -103,14 +104,19 @@ first Tauri v2 Rust command core for `lattice_kv_get`, `lattice_kv_set`, `lattic
 `lattice_sign_carrier`. `cargo test` proves key-value semantics, missing-key/error handling, and the
 same W1 carrier-session Ed25519 public key/signature as the TS bridge.
 
-Bound-root authority slices in progress (plan 140): conformance includes both a validly signed
+Authority trust-anchor slices in progress (plan 140): conformance includes both a validly signed
 forged genesis on a clerk-bound replica and a bypass whose embedded delegation names a separate
 attacker-bound replica. Carrier decoding retains the outer replica on semantic ops, and the reducer
 recomputes the root commitment from that outer id, quarantines both impostor shapes, and materializes
 an unassigned authority holder as `null`. Do not add equality between the outer and embedded replica:
 Sim's reduction does not require it. Evidence persisted before outer-replica retention fails closed
-until re-decoded from carrier evidence. Delegation id/signature validation remains separate
-trust-anchor work; do not claim full V-01 restoration from these slices.
+until re-decoded from carrier evidence.
+
+The delegation-id tracer bullet changes only a valid genesis delegation's declared id. Sim reports
+`bad_delegation_sig`; TS now recomputes unpadded base64url SHA-256 over the shared canonical
+delegation bytes for every chain link before honoring it. This proves the id-to-content commitment,
+not Ed25519 authenticity. A self-consistent id with a bad signature and a same-declared-id collision
+remain separate adversarial work; do not claim full V-01 restoration from these slices.
 
 Left to do (the real work package — see `plans/011-ts-client-realm.md`):
 1. Expand the randomized Sim corpus beyond the current N=5 seeded scenarios when a broader
