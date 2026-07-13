@@ -466,6 +466,46 @@ assert.deepEqual(missingCapValues, missingCapValuesBefore);
 assert.equal(missingCapCalls.filter((command) => command === "lattice_sign_carrier").length, 0);
 assert.equal(missingCapCalls.filter((command) => command === "lattice_kv_set").length, 0);
 
+const postOnlyGrantValues = townshipValues([genesisFixture]);
+const postOnlyGrant = await submitTownshipDelegation({
+  invoke: nativeInvoke(postOnlyGrantValues, clerkIdentity, []),
+  audiencePubkey: residentIdentity.publicKeyBase64,
+  ops: ["post"],
+});
+
+assert.equal(postOnlyGrant.ok, true);
+if (!postOnlyGrant.ok) throw new Error(postOnlyGrant.message);
+
+const postOnlyFrames = storedDelegationFrames(postOnlyGrantValues);
+const postOnlyAvailability = await loadTownshipActionAvailability({
+  invoke: nativeInvoke(townshipValues(postOnlyFrames), residentIdentity, []),
+});
+
+assert.equal(postOnlyAvailability.ready, true);
+if (!postOnlyAvailability.ready) throw new Error(postOnlyAvailability.message);
+assert.deepEqual(allowedCommands(postOnlyAvailability.commands), ["post"]);
+
+for (const command of [
+  { command: "set_summary", text: "unauthorized summary" },
+  { command: "set_title", text: "unauthorized title" },
+] as const) {
+  const noFieldCapValues = townshipValues(postOnlyFrames);
+  const noFieldCapValuesBefore = new Map(noFieldCapValues);
+  const noFieldCapCalls: string[] = [];
+  const noFieldCap = await submitTownshipCommand({
+    invoke: nativeInvoke(noFieldCapValues, residentIdentity, noFieldCapCalls),
+    command,
+  });
+
+  assert.equal(noFieldCap.ok, false);
+  if (noFieldCap.ok) throw new Error(`${command.command} unexpectedly succeeded`);
+  assert.equal(noFieldCap.reason, "missing_delegation");
+  assert.equal(noFieldCap.commandName, command.command);
+  assert.deepEqual(noFieldCapValues, noFieldCapValuesBefore);
+  assert.equal(noFieldCapCalls.filter((name) => name === "lattice_sign_carrier").length, 0);
+  assert.equal(noFieldCapCalls.filter((name) => name === "lattice_kv_set").length, 0);
+}
+
 const emptySummary = await submitTownshipCommand({
   invoke: nativeInvoke(new Map(), residentIdentity, []),
   command: { command: "set_summary", text: "   " },

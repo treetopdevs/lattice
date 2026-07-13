@@ -22,9 +22,16 @@ test("stable carrier restart patches fresh to stale to fresh without transferrin
   await expect(island).toHaveAttribute("data-visible-count", "13");
   await expect(island.locator("[data-causal-replay-root]")).toHaveCount(1);
   await expect(participantForm).toHaveCount(1);
+  await expect(page.locator("#participant-title-handoff")).toHaveCount(0);
+  await expect(page.locator("#participant-summary-handoff")).toHaveCount(0);
   await expect(page.locator("#participant-post-handoff")).toHaveCount(0);
   await expect(page.locator("#participant-status-handoff")).toHaveCount(0);
-  expect(await liveViewEvents(page)).toEqual(["prepare_post", "prepare_status_action"]);
+  expect(await liveViewEvents(page)).toEqual([
+    "prepare_title_edit",
+    "prepare_summary_edit",
+    "prepare_post",
+    "prepare_status_action",
+  ]);
 
   await writeFile(triggerFile, "stop\n", "utf8");
 
@@ -42,8 +49,16 @@ test("stable carrier restart patches fresh to stale to fresh without transferrin
   await expect(island).toHaveAttribute("data-visible-count", "13");
   await expect(island.locator("[data-causal-replay-root]")).toHaveCount(1);
   await expect(participantForm).toHaveCount(1);
+  await expect(page.locator("#participant-title-handoff")).toHaveCount(0);
+  await expect(page.locator("#participant-summary-handoff")).toHaveCount(0);
+  await expect(page.locator("#participant-post-handoff")).toHaveCount(0);
   await expect(page.locator("#participant-status-handoff")).toHaveCount(0);
-  expect(await liveViewEvents(page)).toEqual(["prepare_post", "prepare_status_action"]);
+  expect(await liveViewEvents(page)).toEqual([
+    "prepare_title_edit",
+    "prepare_summary_edit",
+    "prepare_post",
+    "prepare_status_action",
+  ]);
   expect(browserErrors).toEqual([]);
 });
 

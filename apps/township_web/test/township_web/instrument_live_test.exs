@@ -275,6 +275,165 @@ defmodule TownshipWeb.InstrumentLiveTest do
     refute has_element?(view, "#participant-post-handoff")
   end
 
+  test "fresh carrier state prepares one v3 summary edit the client cannot retarget", %{
+    conn: conn
+  } do
+    peer_log = peer_log()
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         carrier: LiveCarrier,
+         connect_opts: [ops: Log.topo_ops(peer_log)],
+         replica: peer_log.replica,
+         peer_realm: "clerk",
+         pubsub: TownshipWeb.PubSub,
+         topic: "township:summary-intent:#{System.unique_integer([:positive])}",
+         schedule: :manual}
+      )
+
+    put_projection_config(projection)
+    {:ok, view, _html} = live(conn, "/township")
+
+    refute has_element?(view, "#participant-summary-form")
+    assert {:ok, {:fresh, payload}} = CarrierProjection.refresh(projection)
+    assert has_element?(view, "#participant-summary-form")
+
+    view
+    |> form("#participant-summary-form", %{
+      "summary" => %{"text" => "  Needs traffic study  "}
+    })
+    |> render_submit()
+
+    assert has_element?(
+             view,
+             "#participant-summary-handoff[href^='township://action?intent=']"
+           )
+
+    summary_payload = view |> summary_action_intent_href() |> decoded_action_intent()
+    assert summary_payload["v"] == 3
+    assert summary_payload["replica"] == peer_log.replica
+
+    assert summary_payload["command"] == %{
+             "command" => "set_summary",
+             "text" => "Needs traffic study"
+           }
+
+    assert Map.keys(summary_payload) |> Enum.sort() == ["command", "id", "replica", "v"]
+
+    view
+    |> form("#participant-post-form", %{"post" => %{"text" => "existing post request"}})
+    |> render_submit()
+
+    render_hook(view, "prepare_status_action", %{})
+    assert has_element?(view, "#participant-post-handoff")
+    assert has_element?(view, "#participant-status-handoff")
+
+    render_hook(view, "prepare_summary_edit", %{
+      "summary" => %{
+        "text" => "smuggle attempt",
+        "command" => "set_title",
+        "field" => "set_title"
+      }
+    })
+
+    retarget_payload = view |> summary_action_intent_href() |> decoded_action_intent()
+
+    assert retarget_payload["command"] == %{
+             "command" => "set_summary",
+             "text" => "smuggle attempt"
+           }
+
+    assert has_element?(view, "#participant-post-handoff")
+    assert has_element?(view, "#participant-status-handoff")
+
+    replacement_payload = put_in(payload.provenance.replica, peer_log.replica <> ":replacement")
+    send(view.pid, {:township_instrument, {:fresh, replacement_payload}})
+
+    assert has_element?(view, "#participant-summary-form")
+    refute has_element?(view, "#participant-summary-handoff")
+
+    send(view.pid, {:township_instrument, {:fresh, payload}})
+
+    view
+    |> form("#participant-summary-form", %{"summary" => %{"text" => " "}})
+    |> render_submit()
+
+    assert has_element?(
+             view,
+             "#participant-summary-error[aria-live='polite']",
+             "Write an update before opening the app"
+           )
+
+    refute has_element?(view, "#participant-summary-handoff")
+
+    send(view.pid, {:township_instrument, {:stale, payload}})
+    refute has_element?(view, "#participant-summary-form")
+    refute has_element?(view, "#participant-summary-handoff")
+  end
+
+  test "fresh carrier state prepares title in the same single field-request slot", %{
+    conn: conn
+  } do
+    peer_log = peer_log()
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         carrier: LiveCarrier,
+         connect_opts: [ops: Log.topo_ops(peer_log)],
+         replica: peer_log.replica,
+         peer_realm: "clerk",
+         pubsub: TownshipWeb.PubSub,
+         topic: "township:title-intent:#{System.unique_integer([:positive])}",
+         schedule: :manual}
+      )
+
+    put_projection_config(projection)
+    {:ok, view, _html} = live(conn, "/township")
+
+    refute has_element?(view, "#participant-title-form")
+    assert {:ok, {:fresh, payload}} = CarrierProjection.refresh(projection)
+    assert has_element?(view, "#participant-title-form")
+
+    view
+    |> form("#participant-summary-form", %{"summary" => %{"text" => "summary request"}})
+    |> render_submit()
+
+    view
+    |> form("#participant-post-form", %{"post" => %{"text" => "existing post request"}})
+    |> render_submit()
+
+    render_hook(view, "prepare_status_action", %{})
+    assert has_element?(view, "#participant-summary-handoff")
+
+    render_hook(view, "prepare_title_edit", %{
+      "title" => %{
+        "text" => "  Budget Hearing  ",
+        "command" => "set_summary",
+        "field" => "set_summary"
+      }
+    })
+
+    assert has_element?(view, "#participant-title-handoff[href^='township://action?intent=']")
+    refute has_element?(view, "#participant-summary-handoff")
+    assert has_element?(view, "#participant-post-handoff")
+    assert has_element?(view, "#participant-status-handoff")
+
+    title_payload = view |> title_action_intent_href() |> decoded_action_intent()
+    assert title_payload["v"] == 3
+    assert title_payload["replica"] == peer_log.replica
+    assert title_payload["command"] == %{"command" => "set_title", "text" => "Budget Hearing"}
+
+    render_hook(view, "prepare_summary_edit", %{"summary" => %{"text" => "replacement summary"}})
+    assert has_element?(view, "#participant-summary-handoff")
+    refute has_element?(view, "#participant-title-handoff")
+
+    send(view.pid, {:township_instrument, {:stale, payload}})
+    refute has_element?(view, "#participant-title-form")
+    refute has_element?(view, "#participant-title-handoff")
+  end
+
   test "fresh carrier state derives close and reopen intents and clears them when stale", %{
     conn: conn
   } do
@@ -468,6 +627,24 @@ defmodule TownshipWeb.InstrumentLiveTest do
     |> render()
     |> LazyHTML.from_fragment()
     |> LazyHTML.query_by_id("participant-status-handoff")
+    |> LazyHTML.attribute("href")
+    |> List.first()
+  end
+
+  defp summary_action_intent_href(view) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query_by_id("participant-summary-handoff")
+    |> LazyHTML.attribute("href")
+    |> List.first()
+  end
+
+  defp title_action_intent_href(view) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query_by_id("participant-title-handoff")
     |> LazyHTML.attribute("href")
     |> List.first()
   end

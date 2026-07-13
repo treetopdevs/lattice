@@ -1,0 +1,12 @@
+{
+  "payload": {
+    "v": 3,
+    "id": "fedcba9876543210fedcba9876543210",
+    "replica": "replica:matter:one",
+    "command": {
+      "command": "set_title",
+      "text": "Budget Hearing"
+    }
+  },
+  "url": "township://action?intent=eyJ2IjozLCJpZCI6ImZlZGNiYTk4NzY1NDMyMTBmZWRjYmE5ODc2NTQzMjEwIiwicmVwbGljYSI6InJlcGxpY2E6bWF0dGVyOm9uZSIsImNvbW1hbmQiOnsiY29tbWFuZCI6InNldF90aXRsZSIsInRleHQiOiJCdWRnZXQgSGVhcmluZyJ9fQ"
+}

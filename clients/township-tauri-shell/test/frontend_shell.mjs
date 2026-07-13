@@ -365,7 +365,7 @@ test("frontend package exposes the real app convergence gate", () => {
   );
   assert.equal(
     pkg.scripts["app:convergence"],
-    "npm run action:contract && npm run sync:contract && npm run stable:relay:contract && npm run feed:contract && npm run feed:app:contract && npm run onboarding:contract && npm run onboarding:click-through && npm run live:contract && npm run tauri:launch:smoke && npm run tauri:onboarding:smoke && npm run tauri:stable-relay:onboarding:smoke && npm run tauri:action-handoff:smoke && TOWNSHIP_SKIP_CLERK_ACTION_APP_BUILD=1 npm run tauri:clerk-action-handoff:smoke && npm run tauri:feed:smoke && npm run tauri:deep-link:smoke",
+    "npm run action:contract && npm run sync:contract && npm run stable:relay:contract && npm run feed:contract && npm run feed:app:contract && npm run onboarding:contract && npm run onboarding:click-through && npm run live:contract && npm run tauri:launch:smoke && npm run tauri:onboarding:smoke && npm run tauri:stable-relay:onboarding:smoke && npm run tauri:action-handoff:smoke && TOWNSHIP_SKIP_CLERK_ACTION_APP_BUILD=1 npm run tauri:clerk-action-handoff:smoke && TOWNSHIP_SKIP_FIELD_ACTION_APP_BUILD=1 npm run tauri:field-action-handoff:smoke && npm run tauri:feed:smoke && npm run tauri:deep-link:smoke",
   );
   assert.match(launchSmoke, /"tauri", \["build", "--features", "township-dev-trace", "--bundles", "app"\]/);
   assert.match(launchSmoke, /VITE_TOWNSHIP_AUTOSYNC_ON_MOUNT: "1"/);
@@ -662,6 +662,59 @@ test("Vue keeps versioned clerk status signing separate from outbox sync", () =>
   assert.match(app, /Sign \$\{statusIntentVerb\(acceptedStatusIntent\)\}/);
   assert.match(signStatus, /await submitMatterStatus\(intent\.command\.command, intent\.replica\)/);
   assert.doesNotMatch(signStatus, /syncOutbox/);
+});
+
+test("Vue keeps versioned field-edit review and signing separate from local drafts and sync", () => {
+  const app = readText("src/App.vue");
+  const acceptStart = app.indexOf("function acceptPendingActionIntent");
+  const acceptEnd = app.indexOf("function dismissPendingActionIntent", acceptStart);
+  const acceptIntent = app.slice(acceptStart, acceptEnd);
+  const signStart = app.indexOf("async function signAcceptedFieldIntent");
+  const signEnd = app.indexOf("function dismissAcceptedFieldIntent", signStart);
+  const signField = app.slice(signStart, signEnd);
+
+  assert.ok(acceptStart >= 0 && acceptEnd > acceptStart);
+  assert.ok(signStart >= 0 && signEnd > signStart);
+  assert.match(app, /import type \{[\s\S]*TownshipFieldActionIntent[\s\S]*\} from "\.\/township_action_intent"/);
+  assert.match(app, /const acceptedFieldIntent = ref<TownshipFieldActionIntent \| null>\(null\)/);
+  assert.match(acceptIntent, /intent\.v === 3[\s\S]*acceptedFieldIntent\.value = intent/);
+  assert.doesNotMatch(acceptIntent, /summaryDraft\.value\s*=/);
+  assert.match(app, /id="participant-field-request"/);
+  assert.match(app, /Sign \$\{fieldIntentVerb\(acceptedFieldIntent\)\}/);
+  assert.match(app, /route === "action-field\/use"/);
+  assert.match(app, /route === "action-field\/sign"/);
+  assert.match(
+    app,
+    /async function usePendingFieldIntentFromDevTrace\(\)[\s\S]*acceptPendingActionIntent\(\)[\s\S]*acceptedFieldIntent\.value\?\.id === intent\.id/,
+  );
+  assert.match(
+    app,
+    /async function signAcceptedFieldIntentFromDevTrace\(\)[\s\S]*fieldActionAllowed\(intent\.command\.command\)[\s\S]*await signAcceptedFieldIntent\(\)/,
+  );
+  assert.match(app, /traceFieldIntentDevControl\("sync", syncStatus\.value\?\.ok \? "synced" : "failed"\)/);
+  assert.match(
+    signField,
+    /await submitTownshipCommand\(\{[\s\S]*command: intent\.command,[\s\S]*replica: intent\.replica/,
+  );
+  assert.doesNotMatch(signField, /syncOutbox/);
+});
+
+test("Vue traces rendered title and summary only through SHA-256 commitments", () => {
+  const app = readText("src/App.vue");
+  const start = app.indexOf("async function traceRenderedTownshipFeed");
+  const end = app.indexOf("async function digestTownshipTraceText", start);
+  const traceFeed = app.slice(start, end);
+
+  assert.ok(start >= 0 && end > start);
+  assert.match(app, /id="matter-title"/);
+  assert.match(app, /id="matter-summary"/);
+  assert.match(traceFeed, /document\.querySelector\("#matter-title"\)/);
+  assert.match(traceFeed, /document\.querySelector\("#matter-summary"\)/);
+  assert.match(traceFeed, /titleDigest/);
+  assert.match(traceFeed, /summaryDigest/);
+  assert.match(traceFeed, /digestTownshipTraceText/);
+  assert.doesNotMatch(traceFeed, /\btitle:\s*titleText/);
+  assert.doesNotMatch(traceFeed, /\bsummary:\s*summaryText/);
 });
 
 test("Vue source renders pairing handoff QR without trust claims", () => {

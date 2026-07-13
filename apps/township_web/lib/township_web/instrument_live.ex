@@ -52,6 +52,74 @@ defmodule TownshipWeb.InstrumentLive do
   end
 
   def handle_event(
+        "prepare_summary_edit",
+        %{"summary" => %{"text" => text}},
+        %{assigns: %{source_state: :fresh, provenance: %{replica: replica}}} = socket
+      ) do
+    case ActionIntent.field_url(replica, :set_summary, text) do
+      {:ok, url} ->
+        {:noreply,
+         socket
+         |> clear_title_intent()
+         |> assign(
+           summary_intent_form: summary_intent_form(text),
+           summary_intent_url: url,
+           summary_intent_replica: replica,
+           summary_intent_error: nil
+         )}
+
+      {:error, reason} ->
+        {:noreply,
+         socket
+         |> clear_title_intent()
+         |> assign(
+           summary_intent_form: summary_intent_form(text),
+           summary_intent_url: nil,
+           summary_intent_replica: nil,
+           summary_intent_error: action_intent_error(reason)
+         )}
+    end
+  end
+
+  def handle_event("prepare_summary_edit", _params, socket) do
+    {:noreply, clear_summary_intent(socket)}
+  end
+
+  def handle_event(
+        "prepare_title_edit",
+        %{"title" => %{"text" => text}},
+        %{assigns: %{source_state: :fresh, provenance: %{replica: replica}}} = socket
+      ) do
+    case ActionIntent.field_url(replica, :set_title, text) do
+      {:ok, url} ->
+        {:noreply,
+         socket
+         |> clear_summary_intent()
+         |> assign(
+           title_intent_form: title_intent_form(text),
+           title_intent_url: url,
+           title_intent_replica: replica,
+           title_intent_error: nil
+         )}
+
+      {:error, reason} ->
+        {:noreply,
+         socket
+         |> clear_summary_intent()
+         |> assign(
+           title_intent_form: title_intent_form(text),
+           title_intent_url: nil,
+           title_intent_replica: nil,
+           title_intent_error: action_intent_error(reason)
+         )}
+    end
+  end
+
+  def handle_event("prepare_title_edit", _params, socket) do
+    {:noreply, clear_title_intent(socket)}
+  end
+
+  def handle_event(
         "prepare_status_action",
         _params,
         %{
@@ -143,6 +211,8 @@ defmodule TownshipWeb.InstrumentLive do
   defp assign_payload(socket, source_state, payload) do
     socket
     |> retain_action_intent(source_state, payload.provenance.replica)
+    |> retain_summary_intent(source_state, payload.provenance.replica)
+    |> retain_title_intent(source_state, payload.provenance.replica)
     |> retain_status_intent(source_state, payload.read_model, payload.provenance.replica)
     |> assign(
       page_title: "Township Instrument",
@@ -171,6 +241,14 @@ defmodule TownshipWeb.InstrumentLive do
       post_intent_url: nil,
       post_intent_replica: nil,
       post_intent_error: nil,
+      summary_intent_form: summary_intent_form(""),
+      summary_intent_url: nil,
+      summary_intent_replica: nil,
+      summary_intent_error: nil,
+      title_intent_form: title_intent_form(""),
+      title_intent_url: nil,
+      title_intent_replica: nil,
+      title_intent_error: nil,
       status_intent_url: nil,
       status_intent_command: nil,
       status_intent_replica: nil
@@ -186,6 +264,26 @@ defmodule TownshipWeb.InstrumentLive do
   end
 
   defp retain_action_intent(socket, _source_state, _replica), do: clear_action_intent(socket)
+
+  defp retain_summary_intent(socket, :fresh, replica) do
+    case socket.assigns.summary_intent_replica do
+      nil -> socket
+      ^replica -> socket
+      _other_replica -> clear_summary_intent(socket)
+    end
+  end
+
+  defp retain_summary_intent(socket, _source_state, _replica), do: clear_summary_intent(socket)
+
+  defp retain_title_intent(socket, :fresh, replica) do
+    case socket.assigns.title_intent_replica do
+      nil -> socket
+      ^replica -> socket
+      _other_replica -> clear_title_intent(socket)
+    end
+  end
+
+  defp retain_title_intent(socket, _source_state, _replica), do: clear_title_intent(socket)
 
   defp retain_status_intent(socket, :fresh, model, replica) do
     cond do
@@ -212,6 +310,14 @@ defmodule TownshipWeb.InstrumentLive do
       post_intent_url: nil,
       post_intent_replica: nil,
       post_intent_error: nil,
+      summary_intent_form: summary_intent_form(""),
+      summary_intent_url: nil,
+      summary_intent_replica: nil,
+      summary_intent_error: nil,
+      title_intent_form: title_intent_form(""),
+      title_intent_url: nil,
+      title_intent_replica: nil,
+      title_intent_error: nil,
       status_intent_url: nil,
       status_intent_command: nil,
       status_intent_replica: nil
@@ -226,11 +332,39 @@ defmodule TownshipWeb.InstrumentLive do
     )
   end
 
+  defp clear_summary_intent(socket) do
+    assign(socket,
+      summary_intent_form: summary_intent_form(""),
+      summary_intent_url: nil,
+      summary_intent_replica: nil,
+      summary_intent_error: nil
+    )
+  end
+
+  defp clear_title_intent(socket) do
+    assign(socket,
+      title_intent_form: title_intent_form(""),
+      title_intent_url: nil,
+      title_intent_replica: nil,
+      title_intent_error: nil
+    )
+  end
+
   defp status_action_command(%{threads: %{clerk_locked?: true}}), do: :reopen_matter
   defp status_action_command(_model), do: :close_matter
 
   defp post_intent_form(text) when is_binary(text), do: to_form(%{"text" => text}, as: :post)
   defp post_intent_form(_text), do: post_intent_form("")
+
+  defp summary_intent_form(text) when is_binary(text),
+    do: to_form(%{"text" => text}, as: :summary)
+
+  defp summary_intent_form(_text), do: summary_intent_form("")
+
+  defp title_intent_form(text) when is_binary(text),
+    do: to_form(%{"text" => text}, as: :title)
+
+  defp title_intent_form(_text), do: title_intent_form("")
 
   defp action_intent_error(:invalid_text), do: "Write an update before opening the app."
   defp action_intent_error(:text_too_large), do: "Keep the update within 4096 UTF-8 bytes."

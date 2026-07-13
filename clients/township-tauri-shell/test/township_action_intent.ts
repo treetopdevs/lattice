@@ -24,6 +24,26 @@ interface StatusActionIntentFixture {
   url: string;
 }
 
+interface FieldActionIntentFixture {
+  payload: {
+    v: 3;
+    id: string;
+    replica: string;
+    command: { command: "set_summary"; text: string };
+  };
+  url: string;
+}
+
+interface TitleActionIntentFixture {
+  payload: {
+    v: 3;
+    id: string;
+    replica: string;
+    command: { command: "set_title"; text: string };
+  };
+  url: string;
+}
+
 console.log("\n▸ Township action-intent contract");
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -33,6 +53,12 @@ const fixture = JSON.parse(
 const statusFixture = JSON.parse(
   readFileSync(join(here, "fixtures", "township_status_action_intent_v2.json"), "utf8"),
 ) as StatusActionIntentFixture;
+const fieldFixture = JSON.parse(
+  readFileSync(join(here, "fixtures", "township_field_action_intent_v3.json"), "utf8"),
+) as FieldActionIntentFixture;
+const titleFixture = JSON.parse(
+  readFileSync(join(here, "fixtures", "township_title_action_intent_v3.json"), "utf8"),
+) as TitleActionIntentFixture;
 
 assert.deepEqual(parseTownshipActionIntentDeepLink(fixture.url), {
   ok: true,
@@ -41,6 +67,14 @@ assert.deepEqual(parseTownshipActionIntentDeepLink(fixture.url), {
 assert.deepEqual(parseTownshipActionIntentDeepLink(statusFixture.url), {
   ok: true,
   intent: statusFixture.payload,
+});
+assert.deepEqual(parseTownshipActionIntentDeepLink(fieldFixture.url), {
+  ok: true,
+  intent: fieldFixture.payload,
+});
+assert.deepEqual(parseTownshipActionIntentDeepLink(titleFixture.url), {
+  ok: true,
+  intent: titleFixture.payload,
 });
 
 const reopenPayload: StatusActionIntentFixture["payload"] = {
@@ -86,7 +120,7 @@ assert.deepEqual(
   },
 );
 
-assert.deepEqual(parseTownshipActionIntentDeepLink(actionUrl({ ...fixture.payload, v: 3 })), {
+assert.deepEqual(parseTownshipActionIntentDeepLink(actionUrl({ ...fixture.payload, v: 4 })), {
   ok: false,
   reason: "unsupported_action_version",
   message: "Township action request invalid: unsupported version.",
@@ -112,6 +146,7 @@ assert.deepEqual(parseTownshipActionIntentDeepLink(actionUrl({ ...statusFixture.
 
 for (const payload of [
   { ...fixture.payload, v: 1, command: { command: "close_matter" } },
+  { ...fixture.payload, v: 3 },
   { ...statusFixture.payload, command: { command: "post" } },
   { ...statusFixture.payload, command: { command: "admit" } },
   { ...statusFixture.payload, command: { ...statusFixture.payload.command, member: "smuggled" } },
@@ -126,6 +161,11 @@ for (const payload of [
   { ...fixture.payload, command: { ...fixture.payload.command, text: " " } },
   { ...fixture.payload, command: { ...fixture.payload.command, text: "x".repeat(4_097) } },
   { ...fixture.payload, command: { ...fixture.payload.command, cap: "smuggled" } },
+  { ...fieldFixture.payload, command: { ...fieldFixture.payload.command, command: "post" } },
+  { ...fieldFixture.payload, command: { ...fieldFixture.payload.command, text: " " } },
+  { ...fieldFixture.payload, command: { ...fieldFixture.payload.command, text: "x".repeat(4_097) } },
+  { ...fieldFixture.payload, command: { ...fieldFixture.payload.command, member: "smuggled" } },
+  { ...fieldFixture.payload, extra: "smuggled" },
 ]) {
   assert.equal(parseTownshipActionIntentDeepLink(actionUrl(payload)).ok, false, JSON.stringify(payload));
 }

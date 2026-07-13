@@ -65,6 +65,7 @@ import {
 import { createTauriPairingDeepLinkSource } from "./township_pairing_deeplink_source";
 import type {
   TownshipActionIntent,
+  TownshipFieldActionIntent,
   TownshipPostActionIntent,
   TownshipStatusActionIntent,
 } from "./township_action_intent";
@@ -189,6 +190,8 @@ const postSubmitting = ref(false);
 const pendingActionIntent = ref<TownshipActionIntent | null>(null);
 const acceptedPostIntent = ref<TownshipPostActionIntent | null>(null);
 const acceptedStatusIntent = ref<TownshipStatusActionIntent | null>(null);
+const acceptedFieldIntent = ref<TownshipFieldActionIntent | null>(null);
+const fieldIntentSubmitting = ref<TownshipFieldActionIntent["command"]["command"] | null>(null);
 const actionIntentStatus = ref<{ ok: boolean; message: string } | null>(null);
 const pairingDraft = ref<TownshipCarrierPeerConfigInput>(pairingDraftFromConfig(carrierPeer.value));
 const pairingDraftOrigin = ref<TownshipCarrierPairingDraftOrigin>("manual");
@@ -584,12 +587,20 @@ async function traceRenderedTownshipFeed(state: TownshipFeedState) {
 
   const status = document.querySelector("#carrier-feed-status");
   const matterStatus = document.querySelector("#matter-render-status");
-  if (!status || !matterStatus) return;
+  const title = document.querySelector("#matter-title");
+  const summary = document.querySelector("#matter-summary");
+  if (!status || !matterStatus || !title || !summary) return;
+  const titleText = title.textContent?.trim() ?? "";
+  const summaryText = summary.textContent?.trim() ?? "";
   const postTexts = Array.from(
     document.querySelectorAll("#township-proceedings .post-list li"),
     (entry) => entry.textContent?.trim() ?? "",
   );
-  const postDigests = await Promise.all(postTexts.map(digestTownshipTraceText));
+  const [titleDigest, summaryDigest, postDigests] = await Promise.all([
+    digestTownshipTraceText(titleText),
+    digestTownshipTraceText(summaryText),
+    Promise.all(postTexts.map(digestTownshipTraceText)),
+  ]);
   if (appUnmounted || feedState.value !== state) return;
 
   const rendered = {
@@ -600,6 +611,8 @@ async function traceRenderedTownshipFeed(state: TownshipFeedState) {
     matterOpCount: matterStatus.getAttribute("data-op-count"),
     matterPostCount: matterStatus.getAttribute("data-post-count"),
     matterState: matterStatus.getAttribute("data-state"),
+    titleDigest,
+    summaryDigest,
     postDigests,
   };
   await traceTownshipDevEvent(`${TOWNSHIP_TRACE_CARRIER_FEED_DOM_PREFIX}${JSON.stringify(rendered)}`);
@@ -846,8 +859,14 @@ function acceptPendingActionIntent(event?: Event) {
     postDraft.value = intent.command.text;
     acceptedPostIntent.value = intent;
     actionIntentStatus.value = { ok: true, message: "Post request moved to the local draft." };
-  } else {
+  } else if (intent.v === 2) {
     acceptedStatusIntent.value = intent;
+    actionIntentStatus.value = {
+      ok: true,
+      message: `${actionIntentLabel(intent)} ready to sign on this device.`,
+    };
+  } else if (intent.v === 3) {
+    acceptedFieldIntent.value = intent;
     actionIntentStatus.value = {
       ok: true,
       message: `${actionIntentLabel(intent)} ready to sign on this device.`,
@@ -899,20 +918,71 @@ function dismissAcceptedStatusIntent(event?: Event) {
   };
 }
 
+async function signAcceptedFieldIntent(event?: Event) {
+  if (event && !event.isTrusted) return;
+
+  const intent = acceptedFieldIntent.value;
+  if (!intent) return;
+  if (carrierPeer.value?.replica !== intent.replica) {
+    actionIntentStatus.value = {
+      ok: false,
+      message: `${actionIntentLabel(intent)} no longer matches the saved Township pairing.`,
+    };
+    return;
+  }
+
+  fieldIntentSubmitting.value = intent.command.command;
+  const submission = await submitTownshipCommand({
+    command: intent.command,
+    replica: intent.replica,
+  });
+  fieldIntentSubmitting.value = null;
+
+  if (submission.ok) {
+    acceptedFieldIntent.value = null;
+    actionIntentStatus.value = null;
+  } else {
+    actionIntentStatus.value = { ok: false, message: submission.message };
+  }
+}
+
+function dismissAcceptedFieldIntent(event?: Event) {
+  if (event && !event.isTrusted) return;
+  const intent = acceptedFieldIntent.value;
+  acceptedFieldIntent.value = null;
+  actionIntentStatus.value = {
+    ok: true,
+    message: `${intent ? actionIntentLabel(intent) : "Field edit request"} dismissed.`,
+  };
+}
+
 function clearActionIntents() {
   pendingActionIntent.value = null;
   acceptedPostIntent.value = null;
   acceptedStatusIntent.value = null;
+  acceptedFieldIntent.value = null;
   actionIntentStatus.value = null;
 }
 
 function actionIntentLabel(intent: TownshipActionIntent): string {
   if (intent.v === 1) return "Post request";
-  return intent.command.command === "close_matter" ? "Close matter request" : "Reopen matter request";
+  if (intent.v === 2) {
+    return intent.command.command === "close_matter" ? "Close matter request" : "Reopen matter request";
+  }
+  return intent.command.command === "set_title" ? "Title edit request" : "Summary edit request";
 }
 
 function statusIntentVerb(intent: TownshipStatusActionIntent): "close" | "reopen" {
   return intent.command.command === "close_matter" ? "close" : "reopen";
+}
+
+function fieldIntentVerb(intent: TownshipFieldActionIntent): "title edit" | "summary edit" {
+  return intent.command.command === "set_title" ? "title edit" : "summary edit";
+}
+
+function fieldActionAllowed(command: TownshipFieldActionIntent["command"]["command"]): boolean {
+  const availability = actionAvailability.value;
+  return availability.ready && availability.commands[command].allowed;
 }
 
 function routeOtherParticipantDeepLink(value: string) {
@@ -966,6 +1036,14 @@ function handleDevTraceControlDeepLink(value: string): boolean {
   }
   if (route === "action-status/sign") {
     void signAcceptedStatusIntentFromDevTrace();
+    return true;
+  }
+  if (route === "action-field/use") {
+    void usePendingFieldIntentFromDevTrace();
+    return true;
+  }
+  if (route === "action-field/sign") {
+    void signAcceptedFieldIntentFromDevTrace();
     return true;
   }
   if (route === "carrier/sync") {
@@ -1036,14 +1114,52 @@ async function signAcceptedStatusIntentFromDevTrace() {
   await traceStatusIntentDevControl("sign", statusStatus.value?.ok ? "signed" : "failed");
 }
 
+async function usePendingFieldIntentFromDevTrace() {
+  const intent = pendingActionIntent.value;
+  if (!intent || intent.v !== 3) {
+    await traceFieldIntentDevControl("use", "missing");
+    return;
+  }
+
+  acceptPendingActionIntent();
+  await traceFieldIntentDevControl(
+    "use",
+    acceptedFieldIntent.value?.id === intent.id ? "accepted" : "rejected",
+  );
+}
+
+async function signAcceptedFieldIntentFromDevTrace() {
+  const intent = acceptedFieldIntent.value;
+  if (!intent) {
+    await traceFieldIntentDevControl("sign", "missing");
+    return;
+  }
+  if (!fieldActionAllowed(intent.command.command)) {
+    await traceFieldIntentDevControl("sign", "blocked");
+    return;
+  }
+
+  await signAcceptedFieldIntent();
+  await traceFieldIntentDevControl("sign", acceptedFieldIntent.value === null ? "signed" : "failed");
+}
+
 async function syncStatusIntentFromDevTrace() {
   await syncOutbox();
   await traceStatusIntentDevControl("sync", syncStatus.value?.ok ? "synced" : "failed");
+  await traceFieldIntentDevControl("sync", syncStatus.value?.ok ? "synced" : "failed");
 }
 
 async function traceStatusIntentDevControl(step: string, outcome: string): Promise<void> {
   try {
     await traceTownshipDevEvent(`action-status-dev-${step}:${outcome}`);
+  } catch {
+    // Test-only observability must not change the production action functions.
+  }
+}
+
+async function traceFieldIntentDevControl(step: string, outcome: string): Promise<void> {
+  try {
+    await traceTownshipDevEvent(`action-field-dev-${step}:${outcome}`);
   } catch {
     // Test-only observability must not change the production action functions.
   }
@@ -1488,7 +1604,7 @@ function pairingDiscoveryAdvertFromMessage(value: unknown): TownshipPairingDisco
     <header class="topbar">
       <div>
         <p class="eyebrow">Township</p>
-        <h1>{{ matter.title }}</h1>
+        <h1 id="matter-title">{{ matter.title }}</h1>
       </div>
       <div class="status-stack">
         <div
@@ -1515,7 +1631,7 @@ function pairingDiscoveryAdvertFromMessage(value: unknown): TownshipPairingDisco
           <p>Summary</p>
           <span>Clerk: {{ matter.clerk }}</span>
         </div>
-        <p class="summary">{{ matter.summary }}</p>
+        <p id="matter-summary" class="summary">{{ matter.summary }}</p>
         <dl class="metrics">
           <div>
             <dt>Members</dt>
@@ -1698,7 +1814,7 @@ function pairingDiscoveryAdvertFromMessage(value: unknown): TownshipPairingDisco
         <p>{{ actionIntentLabel(pendingActionIntent) }}</p>
         <span>Unsigned browser handoff</span>
       </div>
-      <p v-if="pendingActionIntent.v === 1" class="incoming-action-text">{{ pendingActionIntent.command.text }}</p>
+      <p v-if="pendingActionIntent.v === 1 || pendingActionIntent.v === 3" class="incoming-action-text">{{ pendingActionIntent.command.text }}</p>
       <div class="incoming-action-controls">
         <button type="button" @click="acceptPendingActionIntent">Use request</button>
         <button type="button" class="secondary-action" @click="dismissPendingActionIntent">Dismiss</button>
@@ -1719,6 +1835,24 @@ function pairingDiscoveryAdvertFromMessage(value: unknown): TownshipPairingDisco
           {{ statusSubmitting === acceptedStatusIntent.command.command ? "Signing" : `Sign ${statusIntentVerb(acceptedStatusIntent)}` }}
         </button>
         <button type="button" class="secondary-action" @click="dismissAcceptedStatusIntent">Dismiss request</button>
+      </div>
+    </section>
+
+    <section v-if="acceptedFieldIntent" id="participant-field-request" class="incoming-action-panel" aria-live="polite">
+      <div class="panel-heading">
+        <p>{{ actionIntentLabel(acceptedFieldIntent) }}</p>
+        <span>Local capability required</span>
+      </div>
+      <p class="incoming-action-text">{{ acceptedFieldIntent.command.text }}</p>
+      <div class="incoming-action-controls">
+        <button
+          type="button"
+          :disabled="fieldIntentSubmitting !== null || !fieldActionAllowed(acceptedFieldIntent.command.command)"
+          @click="signAcceptedFieldIntent"
+        >
+          {{ fieldIntentSubmitting === acceptedFieldIntent.command.command ? "Signing" : `Sign ${fieldIntentVerb(acceptedFieldIntent)}` }}
+        </button>
+        <button type="button" class="secondary-action" @click="dismissAcceptedFieldIntent">Dismiss request</button>
       </div>
     </section>
 

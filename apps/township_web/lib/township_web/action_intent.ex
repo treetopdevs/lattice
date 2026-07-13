@@ -59,6 +59,38 @@ defmodule TownshipWeb.ActionIntent do
     end
   end
 
+  @spec field_url(String.t(), :set_title | :set_summary, String.t(), keyword()) ::
+          {:ok, String.t()}
+          | {:error,
+             :invalid_replica
+             | :invalid_command
+             | :invalid_text
+             | :text_too_large
+             | :invalid_intent_id}
+  def field_url(replica, command, text, opts \\ []) do
+    intent_id = Keyword.get_lazy(opts, :intent_id, &new_intent_id/0)
+
+    with {:ok, replica} <- normalize_replica(replica),
+         {:ok, command} <- normalize_field_command(command),
+         {:ok, text} <- normalize_text(text),
+         :ok <- validate_intent_id(intent_id) do
+      payload =
+        Jason.OrderedObject.new([
+          {"v", 3},
+          {"id", intent_id},
+          {"replica", replica},
+          {"command",
+           Jason.OrderedObject.new([
+             {"command", command},
+             {"text", text}
+           ])}
+        ])
+
+      encoded = payload |> Jason.encode!() |> Base.url_encode64(padding: false)
+      {:ok, "township://action?intent=#{encoded}"}
+    end
+  end
+
   defp normalize_replica(replica) when is_binary(replica) do
     if String.valid?(replica) do
       replica = trim_ascii_edges(replica)
@@ -94,6 +126,10 @@ defmodule TownshipWeb.ActionIntent do
   defp normalize_status_command(:close_matter), do: {:ok, "close_matter"}
   defp normalize_status_command(:reopen_matter), do: {:ok, "reopen_matter"}
   defp normalize_status_command(_command), do: {:error, :invalid_command}
+
+  defp normalize_field_command(:set_title), do: {:ok, "set_title"}
+  defp normalize_field_command(:set_summary), do: {:ok, "set_summary"}
+  defp normalize_field_command(_command), do: {:error, :invalid_command}
 
   defp validate_intent_id(intent_id) when is_binary(intent_id) do
     if Regex.match?(@intent_id_regex, intent_id), do: :ok, else: {:error, :invalid_intent_id}

@@ -13,6 +13,16 @@ defmodule TownshipWeb.ActionIntentTest do
                          __DIR__
                        )
 
+  @field_fixture_path Path.expand(
+                        "../../../../clients/township-tauri-shell/test/fixtures/township_field_action_intent_v3.json",
+                        __DIR__
+                      )
+
+  @title_fixture_path Path.expand(
+                        "../../../../clients/township-tauri-shell/test/fixtures/township_title_action_intent_v3.json",
+                        __DIR__
+                      )
+
   test "post_url emits the exact custody-free cross-runtime v1 contract" do
     fixture = @fixture_path |> File.read!() |> Jason.decode!()
     payload = fixture["payload"]
@@ -97,6 +107,40 @@ defmodule TownshipWeb.ActionIntentTest do
 
     assert {:error, :invalid_intent_id} =
              ActionIntent.status_url("replica", :close_matter, intent_id: "not-an-id")
+  end
+
+  test "field_url emits the exact custody-free v3 summary contract" do
+    fixture = @field_fixture_path |> File.read!() |> Jason.decode!()
+    payload = fixture["payload"]
+
+    assert {:ok, url} =
+             ActionIntent.field_url(
+               payload["replica"],
+               :set_summary,
+               payload["command"]["text"],
+               intent_id: payload["id"]
+             )
+
+    assert url == fixture["url"]
+    assert decoded_payload(url) == payload
+    assert Map.keys(payload) |> Enum.sort() == ["command", "id", "replica", "v"]
+    assert Map.keys(payload["command"]) |> Enum.sort() == ["command", "text"]
+  end
+
+  test "field_url bundles title in the same exact v3 contract" do
+    fixture = @title_fixture_path |> File.read!() |> Jason.decode!()
+    payload = fixture["payload"]
+
+    assert {:ok, url} =
+             ActionIntent.field_url(
+               payload["replica"],
+               :set_title,
+               payload["command"]["text"],
+               intent_id: payload["id"]
+             )
+
+    assert url == fixture["url"]
+    assert decoded_payload(url) == payload
   end
 
   defp decoded_payload(url) do

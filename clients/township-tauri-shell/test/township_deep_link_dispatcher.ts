@@ -23,6 +23,11 @@ interface StatusActionIntentFixture {
   url: string;
 }
 
+interface FieldActionIntentFixture {
+  payload: Extract<TownshipActionIntent, { v: 3 }>;
+  url: string;
+}
+
 console.log("\n▸ Township participant deep-link dispatcher");
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -32,6 +37,12 @@ const fixture = JSON.parse(
 const statusFixture = JSON.parse(
   readFileSync(join(here, "fixtures", "township_status_action_intent_v2.json"), "utf8"),
 ) as StatusActionIntentFixture;
+const fieldFixture = JSON.parse(
+  readFileSync(join(here, "fixtures", "township_field_action_intent_v3.json"), "utf8"),
+) as FieldActionIntentFixture;
+const titleFixture = JSON.parse(
+  readFileSync(join(here, "fixtures", "township_title_action_intent_v3.json"), "utf8"),
+) as FieldActionIntentFixture;
 const pairingUrl = "township://pairing?handoff=township-pairing:v1:not-json";
 const androidPairingUrl = "township://nohost/_pairing/township-pairing_3Av1_3Anot-json";
 const calls: string[] = [];
@@ -82,10 +93,14 @@ assert.deepEqual(traces, [
 ]);
 assert.ok(opened, "dispatcher should retain one participant-ingress callback");
 
-opened([fixture.url]);
+expectedReplica = fieldFixture.payload.replica;
+opened([fieldFixture.url, titleFixture.url]);
+assert.deepEqual(staged, [fixture.payload, statusFixture.payload, fieldFixture.payload, titleFixture.payload]);
+
+opened([fieldFixture.url]);
 assert.deepEqual(
   staged,
-  [fixture.payload, statusFixture.payload, fixture.payload],
+  [fixture.payload, statusFixture.payload, fieldFixture.payload, titleFixture.payload, fieldFixture.payload],
   "repeated ingress remains review-only and observable",
 );
 
@@ -94,25 +109,27 @@ assert.equal(rejected.at(-1), "invalid_action");
 assert.equal(other.includes("township://action?intent=not-base64url!"), false);
 
 expectedReplica = "replica:matter:other";
-opened([fixture.url]);
+opened([titleFixture.url]);
 assert.equal(rejected.at(-1), "replica_mismatch");
 
 expectedReplica = null;
-opened([fixture.url]);
+opened([fieldFixture.url]);
 assert.equal(rejected.at(-1), "pairing_missing");
 
 opened(["garbage", "township://probe/canonical?vector=township_carrier_w1"]);
 assert.deepEqual(other.slice(-2), ["garbage", "township://probe/canonical?vector=township_carrier_w1"]);
 
 assert.deepEqual(traces.slice(-4), [
-  { intentId: fixture.payload.id, outcome: "staged" },
+  { intentId: fieldFixture.payload.id, outcome: "staged" },
   { intentId: null, outcome: "invalid_action" },
-  { intentId: fixture.payload.id, outcome: "replica_mismatch" },
-  { intentId: fixture.payload.id, outcome: "pairing_missing" },
+  { intentId: titleFixture.payload.id, outcome: "replica_mismatch" },
+  { intentId: fieldFixture.payload.id, outcome: "pairing_missing" },
 ]);
 
 const traceBytes = JSON.stringify(traces);
 assert.doesNotMatch(traceBytes, /resident: from instrument/);
+assert.doesNotMatch(traceBytes, /Needs traffic study/);
+assert.doesNotMatch(traceBytes, /Budget Hearing/);
 assert.doesNotMatch(traceBytes, /replica:matter/);
 assert.doesNotMatch(traceBytes, /township:\/\/action/);
 

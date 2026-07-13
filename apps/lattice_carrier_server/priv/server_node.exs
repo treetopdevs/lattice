@@ -2,25 +2,18 @@
 
 {port_text, realm, identity_seed, trusted_peers, relay_realms, source_path} =
   case System.argv() do
-    [port, server_realm, seed, trusted_realm, trusted_pubkey, path] ->
-      {port, server_realm, seed, %{trusted_realm => Base.decode64!(trusted_pubkey)}, [], path}
+    [port, server_realm, seed, trusted_realm, trusted_pubkey, path | relay_args]
+    when rem(length(relay_args), 2) == 0 ->
+      relay_peers =
+        relay_args
+        |> Enum.chunk_every(2)
+        |> Enum.map(fn [relay_realm, relay_pubkey] ->
+          {relay_realm, Base.decode64!(relay_pubkey)}
+        end)
 
-    [
-      port,
-      server_realm,
-      seed,
-      trusted_realm,
-      trusted_pubkey,
-      path,
-      relay_realm,
-      relay_pubkey
-    ] ->
-      peers = %{
-        trusted_realm => Base.decode64!(trusted_pubkey),
-        relay_realm => Base.decode64!(relay_pubkey)
-      }
-
-      {port, server_realm, seed, peers, [relay_realm], path}
+      peers = Map.new([{trusted_realm, Base.decode64!(trusted_pubkey)} | relay_peers])
+      relay_realms = Enum.map(relay_peers, &elem(&1, 0))
+      {port, server_realm, seed, peers, relay_realms, path}
   end
 
 identity = Lattice.Identity.from_seed(realm, identity_seed)

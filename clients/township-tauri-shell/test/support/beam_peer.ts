@@ -55,6 +55,7 @@ export interface SpawnStableCarrierServerOptions {
   sourcePath: string;
   relayRealm?: string;
   relayPubkey?: string;
+  relayPeers?: readonly { realm: string; pubkey: string }[];
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -152,6 +153,15 @@ export async function spawnStableCarrierServer(
   if ((options.relayRealm === undefined) !== (options.relayPubkey === undefined)) {
     throw new Error("stable carrier relay realm and public key must be configured together");
   }
+  if (options.relayPeers && (options.relayRealm || options.relayPubkey)) {
+    throw new Error("stable carrier relay peers cannot be combined with the legacy relay pair");
+  }
+
+  const relayPeers =
+    options.relayPeers ??
+    (options.relayRealm && options.relayPubkey
+      ? [{ realm: options.relayRealm, pubkey: options.relayPubkey }]
+      : []);
 
   const args = [
     ...codePathArgs(),
@@ -163,7 +173,7 @@ export async function spawnStableCarrierServer(
     options.trustedPeerPubkey,
     options.sourcePath,
   ];
-  if (options.relayRealm && options.relayPubkey) args.push(options.relayRealm, options.relayPubkey);
+  for (const peer of relayPeers) args.push(peer.realm, peer.pubkey);
 
   const child = spawn(elixirBin(), args, {
     cwd: repoRoot,

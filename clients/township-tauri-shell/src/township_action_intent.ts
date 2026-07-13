@@ -17,7 +17,20 @@ export interface TownshipStatusActionIntent {
   };
 }
 
-export type TownshipActionIntent = TownshipPostActionIntent | TownshipStatusActionIntent;
+export interface TownshipFieldActionIntent {
+  v: 3;
+  id: string;
+  replica: string;
+  command: {
+    command: "set_title" | "set_summary";
+    text: string;
+  };
+}
+
+export type TownshipActionIntent =
+  | TownshipPostActionIntent
+  | TownshipStatusActionIntent
+  | TownshipFieldActionIntent;
 
 export type TownshipActionIntentParse =
   | { ok: true; intent: TownshipActionIntent }
@@ -71,7 +84,7 @@ export function parseTownshipActionIntentDeepLink(value: string): TownshipAction
   }
 
   if (!isRecord(payload)) return payloadError();
-  if (payload.v !== 1 && payload.v !== 2) {
+  if (payload.v !== 1 && payload.v !== 2 && payload.v !== 3) {
     return {
       ok: false,
       reason: "unsupported_action_version",
@@ -94,14 +107,27 @@ export function parseTownshipActionIntentDeepLink(value: string): TownshipAction
     };
   }
 
-  if (!exactKeys(payload.command, ["command"])) return payloadError();
-  if (payload.command.command !== "close_matter" && payload.command.command !== "reopen_matter") {
+  if (payload.v === 2) {
+    if (!exactKeys(payload.command, ["command"])) return payloadError();
+    if (payload.command.command !== "close_matter" && payload.command.command !== "reopen_matter") {
+      return payloadError();
+    }
+
+    return {
+      ok: true,
+      intent: payload as unknown as TownshipStatusActionIntent,
+    };
+  }
+
+  if (!exactKeys(payload.command, ["command", "text"])) return payloadError();
+  if (payload.command.command !== "set_title" && payload.command.command !== "set_summary") {
     return payloadError();
   }
+  if (!canonicalBoundedString(payload.command.text, MAX_TEXT_BYTES)) return payloadError();
 
   return {
     ok: true,
-    intent: payload as unknown as TownshipStatusActionIntent,
+    intent: payload as unknown as TownshipFieldActionIntent,
   };
 }
 

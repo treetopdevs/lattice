@@ -20,8 +20,11 @@ expected_key =
     "authority" -> "afterAuthorityInvalid"
     "base" -> "base"
     "close" -> "afterClose"
+    "peer" -> "afterPeer"
     "reopen" -> "afterReopen"
     "restart" -> "afterRestartPost"
+    "summary" -> "afterSummary"
+    "title" -> "afterTitle"
     _mode -> "afterPost"
   end
 

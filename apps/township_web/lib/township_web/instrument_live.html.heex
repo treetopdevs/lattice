@@ -86,6 +86,78 @@
 
       <section
         :if={@source_state == :fresh}
+        id="participant-title-panel"
+        class="participant-action"
+        aria-labelledby="participant-title-title"
+      >
+        <header>
+          <p class="section-kicker">Participant action</p>
+          <h2 id="participant-title-title">Edit the matter title from your device</h2>
+        </header>
+        <form id="participant-title-form" phx-submit="prepare_title_edit">
+          <label for={@title_intent_form[:text].id}>New title</label>
+          <textarea
+            id={@title_intent_form[:text].id}
+            name={@title_intent_form[:text].name}
+            rows="2"
+            autocomplete="off"
+          >{Phoenix.HTML.Form.normalize_value("textarea", @title_intent_form[:text].value)}</textarea>
+          <button type="submit">Prepare title in app</button>
+        </form>
+        <div :if={@title_intent_url} class="participant-action__handoff">
+          <p id="participant-title-prepared" aria-live="polite">
+            Unsigned title edit
+          </p>
+          <a id="participant-title-handoff" href={@title_intent_url}>Open in Township app</a>
+        </div>
+        <p
+          :if={@title_intent_error}
+          id="participant-title-error"
+          class="participant-action__error"
+          aria-live="polite"
+        >
+          {@title_intent_error}
+        </p>
+      </section>
+
+      <section
+        :if={@source_state == :fresh}
+        id="participant-summary-panel"
+        class="participant-action"
+        aria-labelledby="participant-summary-title"
+      >
+        <header>
+          <p class="section-kicker">Participant action</p>
+          <h2 id="participant-summary-title">Edit the matter summary from your device</h2>
+        </header>
+        <form id="participant-summary-form" phx-submit="prepare_summary_edit">
+          <label for={@summary_intent_form[:text].id}>New summary</label>
+          <textarea
+            id={@summary_intent_form[:text].id}
+            name={@summary_intent_form[:text].name}
+            rows="2"
+            autocomplete="off"
+          >{Phoenix.HTML.Form.normalize_value("textarea", @summary_intent_form[:text].value)}</textarea>
+          <button type="submit">Prepare summary in app</button>
+        </form>
+        <div :if={@summary_intent_url} class="participant-action__handoff">
+          <p id="participant-summary-prepared" aria-live="polite">
+            Unsigned summary edit
+          </p>
+          <a id="participant-summary-handoff" href={@summary_intent_url}>Open in Township app</a>
+        </div>
+        <p
+          :if={@summary_intent_error}
+          id="participant-summary-error"
+          class="participant-action__error"
+          aria-live="polite"
+        >
+          {@summary_intent_error}
+        </p>
+      </section>
+
+      <section
+        :if={@source_state == :fresh}
         id="participant-post-panel"
         class="participant-action"
         aria-labelledby="participant-post-title"

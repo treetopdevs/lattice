@@ -708,7 +708,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
              "tsx test/tauri_clerk_action_handoff_smoke.ts"
 
     assert shell_package["scripts"]["app:convergence"] =~
-             ~r/tauri:action-handoff:smoke && TOWNSHIP_SKIP_CLERK_ACTION_APP_BUILD=1 npm run tauri:clerk-action-handoff:smoke && npm run tauri:feed:smoke/
+             ~r/tauri:action-handoff:smoke && TOWNSHIP_SKIP_CLERK_ACTION_APP_BUILD=1 npm run tauri:clerk-action-handoff:smoke/
 
     assert workflow =~
              ~r/TS Township shell typecheck\s+working-directory: clients\/township-tauri-shell\s+run: npm run typecheck/
@@ -730,5 +730,64 @@ defmodule LatticeCarrierServer.PlanContractTest do
 
     assert workflow =~
              ~r/Verify packaged clerk status handoff\s+working-directory: clients\/township-tauri-shell\s+env:\s+TOWNSHIP_SKIP_CLERK_ACTION_APP_BUILD: "1"\s+run: npm run tauri:clerk-action-handoff:smoke/
+  end
+
+  test "Plan 136 defines one bundled argument-bearing field-edit handoff" do
+    plan =
+      File.read!(
+        Path.join(@repo_root, "plans/136-versioned-field-edit-action-handoff-g1.md")
+      )
+
+    plans_index = File.read!(Path.join(@repo_root, "plans/README.md"))
+    workflow = File.read!(Path.join(@repo_root, ".github/workflows/flagship.yml"))
+
+    shell_package =
+      @repo_root
+      |> Path.join("clients/township-tauri-shell/package.json")
+      |> File.read!()
+      |> Jason.decode!()
+
+    assert plan =~ ~r/## Status\s+IN PROGRESS/
+    assert plan =~ "v1 and v2 remain exactly unchanged"
+
+    assert plan =~
+             ~s({"v":3,"id":"<32-lowercase-hex>","replica":"<replica>","command":{"command":"set_summary","text":"<text>"}})
+
+    assert plan =~
+             ~s({"v":3,"id":"<32-lowercase-hex>","replica":"<replica>","command":{"command":"set_title","text":"<text>"}})
+
+    assert plan =~
+             ~r/one v3 command union bundles both `set_title` and\s+`set_summary`/
+    assert plan =~ "Unknown versions and cross-version keys fail closed"
+    assert plan =~ "Use request -> Sign edit -> Sync outbox"
+    assert plan =~ "No-cap participant refusal"
+    assert plan =~ "zero native signatures and zero KV writes"
+    assert plan =~ "contested-summary"
+    assert plan =~ "authorizes both the participant"
+    assert plan =~ "and distinct peer relay realms"
+    assert plan =~ "outbox frame id remains byte-identical"
+    assert plan =~ "`Lattice.Sim` is the independent oracle"
+    assert plan =~ ~r/reuses the existing action-handoff app bundle\s+in hosted CI/
+    assert plan =~ "No automatic authored-frame publication"
+    assert plan =~ "No mobile secure-store implementation change"
+    assert plan =~ "No complete G1/Phase G claim and no receipt-free W4 claim"
+
+    assert plans_index =~
+             "| 136 | Versioned field-edit action handoff | P1 | XL | 048, 135 | IN PROGRESS |"
+
+    assert plans_index =~
+             "Plan 136's bundled argument-bearing `set_title`/`set_summary` handoff"
+
+    assert shell_package["scripts"]["tauri:field-action-handoff:smoke"] ==
+             "tsx test/tauri_field_action_handoff_smoke.ts"
+
+    assert shell_package["scripts"]["app:convergence"] =~
+             ~r/tauri:clerk-action-handoff:smoke && TOWNSHIP_SKIP_FIELD_ACTION_APP_BUILD=1 npm run tauri:field-action-handoff:smoke && npm run tauri:feed:smoke/
+
+    assert workflow =~
+             ~r/Verify packaged clerk status handoff[\s\S]*Verify packaged field edit handoff[\s\S]*Verify packaged reactive carrier feed/
+
+    assert workflow =~
+             ~r/Verify packaged field edit handoff\s+working-directory: clients\/township-tauri-shell\s+env:\s+TOWNSHIP_SKIP_FIELD_ACTION_APP_BUILD: "1"\s+run: npm run tauri:field-action-handoff:smoke/
   end
 end
