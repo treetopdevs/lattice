@@ -44,6 +44,26 @@ interface TitleActionIntentFixture {
   url: string;
 }
 
+interface RemoveMemberActionIntentFixture {
+  payload: {
+    v: 4;
+    id: string;
+    replica: string;
+    command: { command: "remove_member"; member: string };
+  };
+  url: string;
+}
+
+interface AdmitActionIntentFixture {
+  payload: {
+    v: 4;
+    id: string;
+    replica: string;
+    command: { command: "admit"; member: string };
+  };
+  url: string;
+}
+
 console.log("\n▸ Township action-intent contract");
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -59,6 +79,12 @@ const fieldFixture = JSON.parse(
 const titleFixture = JSON.parse(
   readFileSync(join(here, "fixtures", "township_title_action_intent_v3.json"), "utf8"),
 ) as TitleActionIntentFixture;
+const removeMemberFixture = JSON.parse(
+  readFileSync(join(here, "fixtures", "township_remove_member_action_intent_v4.json"), "utf8"),
+) as RemoveMemberActionIntentFixture;
+const admitFixture = JSON.parse(
+  readFileSync(join(here, "fixtures", "township_admit_action_intent_v4.json"), "utf8"),
+) as AdmitActionIntentFixture;
 
 assert.deepEqual(parseTownshipActionIntentDeepLink(fixture.url), {
   ok: true,
@@ -75,6 +101,14 @@ assert.deepEqual(parseTownshipActionIntentDeepLink(fieldFixture.url), {
 assert.deepEqual(parseTownshipActionIntentDeepLink(titleFixture.url), {
   ok: true,
   intent: titleFixture.payload,
+});
+assert.deepEqual(parseTownshipActionIntentDeepLink(removeMemberFixture.url), {
+  ok: true,
+  intent: removeMemberFixture.payload,
+});
+assert.deepEqual(parseTownshipActionIntentDeepLink(admitFixture.url), {
+  ok: true,
+  intent: admitFixture.payload,
 });
 
 const reopenPayload: StatusActionIntentFixture["payload"] = {
@@ -120,7 +154,7 @@ assert.deepEqual(
   },
 );
 
-assert.deepEqual(parseTownshipActionIntentDeepLink(actionUrl({ ...fixture.payload, v: 4 })), {
+assert.deepEqual(parseTownshipActionIntentDeepLink(actionUrl({ ...fixture.payload, v: 5 })), {
   ok: false,
   reason: "unsupported_action_version",
   message: "Township action request invalid: unsupported version.",
@@ -166,8 +200,46 @@ for (const payload of [
   { ...fieldFixture.payload, command: { ...fieldFixture.payload.command, text: "x".repeat(4_097) } },
   { ...fieldFixture.payload, command: { ...fieldFixture.payload.command, member: "smuggled" } },
   { ...fieldFixture.payload, extra: "smuggled" },
+  { ...fixture.payload, v: 4 },
 ]) {
   assert.equal(parseTownshipActionIntentDeepLink(actionUrl(payload)).ok, false, JSON.stringify(payload));
+}
+
+for (const member of [" ", " resident:alice ", "x".repeat(4_097), 42, null]) {
+  assertInvalidPayload({
+    ...removeMemberFixture.payload,
+    command: { ...removeMemberFixture.payload.command, member },
+  });
+}
+
+for (const payload of [
+  {
+    ...removeMemberFixture.payload,
+    command: { ...removeMemberFixture.payload.command, text: "smuggled" },
+  },
+  {
+    ...removeMemberFixture.payload,
+    command: { ...removeMemberFixture.payload.command, cap: "smuggled" },
+  },
+  {
+    ...removeMemberFixture.payload,
+    command: { command: "post", member: "resident:alice" },
+  },
+  { ...removeMemberFixture.payload, v: 3 },
+  { ...removeMemberFixture.payload, extra: "smuggled" },
+]) {
+  assertInvalidPayload(payload);
+}
+
+for (const member of ["\uFEFFresident:alice\uFEFF", "\u0085resident:alice\u0085", "x".repeat(4_096)]) {
+  const payload = {
+    ...removeMemberFixture.payload,
+    command: { ...removeMemberFixture.payload.command, member },
+  };
+  assert.deepEqual(parseTownshipActionIntentDeepLink(actionUrl(payload)), {
+    ok: true,
+    intent: payload,
+  });
 }
 
 console.log("\x1b[32m✓ Township action-intent contract checks passed\x1b[0m");
@@ -178,4 +250,12 @@ function actionUrl(payload: unknown): string {
 
 function encoded(payload: unknown): string {
   return Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+}
+
+function assertInvalidPayload(payload: unknown): void {
+  assert.deepEqual(parseTownshipActionIntentDeepLink(actionUrl(payload)), {
+    ok: false,
+    reason: "invalid_action_payload",
+    message: "Township action request invalid: payload could not be accepted.",
+  });
 }

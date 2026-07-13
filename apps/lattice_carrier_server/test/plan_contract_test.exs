@@ -508,7 +508,10 @@ defmodule LatticeCarrierServer.PlanContractTest do
       )
 
     client_source = File.read!(Path.join(@repo_root, "clients/lattice-client/src/carrier.ts"))
-    feed_source = File.read!(Path.join(@repo_root, "clients/township-tauri-shell/src/township_feed.ts"))
+
+    feed_source =
+      File.read!(Path.join(@repo_root, "clients/township-tauri-shell/src/township_feed.ts"))
+
     app_source = File.read!(Path.join(@repo_root, "clients/township-tauri-shell/src/App.vue"))
 
     shell_package =
@@ -570,7 +573,9 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert app_source =~ "createTownshipFeedController"
     assert app_source =~ "townshipPreviewFromOps"
 
-    assert File.exists?(Path.join(@repo_root, "clients/township-tauri-shell/test/township_feed.ts"))
+    assert File.exists?(
+             Path.join(@repo_root, "clients/township-tauri-shell/test/township_feed.ts")
+           )
 
     assert File.exists?(
              Path.join(
@@ -598,6 +603,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert build_map =~ "Hosted Plan 134 run `29210581826` is green"
     assert build_map =~ ~r/Plan 134 adds the packaged reactive\s+Tauri\/Vue feed loop/
     refute build_map =~ "hosted Plan 134 result pending"
+
     refute build_map =~
              "The active frontier remains **complete G1/Phase G**:\nreactive Tauri/Vue feed consumption"
 
@@ -616,9 +622,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
 
   test "Plan 135 defines a versioned clerk status handoff across the app custody seam" do
     plan =
-      File.read!(
-        Path.join(@repo_root, "plans/135-versioned-clerk-status-action-handoff-g1.md")
-      )
+      File.read!(Path.join(@repo_root, "plans/135-versioned-clerk-status-action-handoff-g1.md"))
 
     plans_index = File.read!(Path.join(@repo_root, "plans/README.md"))
     build_map = File.read!(Path.join(@repo_root, "TOWNSHIP_BUILD_MAP.md"))
@@ -645,7 +649,10 @@ defmodule LatticeCarrierServer.PlanContractTest do
 
     assert plan =~ ~r/## Status\s+DONE/
     assert plan =~ "v1 remains exactly post-only"
-    assert plan =~ ~s({"v":2,"id":"<32-lowercase-hex>","replica":"<replica>","command":{"command":"close_matter"}})
+
+    assert plan =~
+             ~s({"v":2,"id":"<32-lowercase-hex>","replica":"<replica>","command":{"command":"close_matter"}})
+
     assert plan =~ "Unknown versions and cross-version keys fail closed"
     assert plan =~ "Use request -> Sign close/reopen -> Sync outbox"
     assert plan =~ "No-cap resident refusal"
@@ -734,9 +741,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
 
   test "Plan 136 defines one bundled argument-bearing field-edit handoff" do
     plan =
-      File.read!(
-        Path.join(@repo_root, "plans/136-versioned-field-edit-action-handoff-g1.md")
-      )
+      File.read!(Path.join(@repo_root, "plans/136-versioned-field-edit-action-handoff-g1.md"))
 
     plans_index = File.read!(Path.join(@repo_root, "plans/README.md"))
     build_map = File.read!(Path.join(@repo_root, "TOWNSHIP_BUILD_MAP.md"))
@@ -763,6 +768,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
 
     assert plan =~
              ~r/one v3 command union bundles both `set_title` and\s+`set_summary`/
+
     assert plan =~ "Unknown versions and cross-version keys fail closed"
     assert plan =~ "Use request -> Sign edit -> Sync outbox"
     assert plan =~ "No-cap participant refusal"
@@ -783,7 +789,10 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert plan =~ "`Unit + property suite` completed in 4m30s"
     assert plan =~ "`Packaged macOS convergence` completed in 11m24s"
     assert plan =~ ~r/## Completion claim\s+Complete for this scoped increment/
-    refute plan =~ "Hosted implementation, closure documentation, and branch-tip CI remain pending"
+
+    refute plan =~
+             "Hosted implementation, closure documentation, and branch-tip CI remain pending"
+
     refute plan =~ "Not yet complete"
 
     assert plans_index =~
@@ -795,7 +804,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
              "tsx test/tauri_field_action_handoff_smoke.ts"
 
     assert shell_package["scripts"]["app:convergence"] =~
-             ~r/tauri:clerk-action-handoff:smoke && TOWNSHIP_SKIP_FIELD_ACTION_APP_BUILD=1 npm run tauri:field-action-handoff:smoke && npm run tauri:feed:smoke/
+             ~r/tauri:clerk-action-handoff:smoke && TOWNSHIP_SKIP_FIELD_ACTION_APP_BUILD=1 npm run tauri:field-action-handoff:smoke/
 
     assert workflow =~
              ~r/Verify packaged clerk status handoff[\s\S]*Verify packaged field edit handoff[\s\S]*Verify packaged reactive carrier feed/
@@ -824,5 +833,68 @@ defmodule LatticeCarrierServer.PlanContractTest do
     refute plan136_checkpoint =~ "Hosted acceptance remains pending"
 
     assert mobile_strategy =~ "Plan 136 leaves this custody strategy unchanged"
+  end
+
+  test "Plan 137 defines one bundled roster handoff with a Sim add-wins proof" do
+    plan =
+      File.read!(Path.join(@repo_root, "plans/137-versioned-roster-action-handoff-g1.md"))
+
+    plans_index = File.read!(Path.join(@repo_root, "plans/README.md"))
+
+    shell_package =
+      @repo_root
+      |> Path.join("clients/township-tauri-shell/package.json")
+      |> File.read!()
+      |> Jason.decode!()
+
+    workflow = File.read!(Path.join(@repo_root, ".github/workflows/flagship.yml"))
+
+    assert plan =~ ~r/## Status\s+IN PROGRESS/
+    assert plan =~ "v1, v2, and v3 remain exactly unchanged"
+
+    assert plan =~
+             ~s({"v":4,"id":"<32-lowercase-hex>","replica":"<replica>","command":{"command":"admit","member":"<member>"}})
+
+    assert plan =~
+             ~s({"v":4,"id":"<32-lowercase-hex>","replica":"<replica>","command":{"command":"remove_member","member":"<member>"}})
+
+    assert plan =~
+             ~r/one v4 command union bundles both `admit` and\s+`remove_member`/
+
+    assert plan =~ "nested command permits exactly `command` and `member`"
+    assert plan =~ "Use request -> Sign roster action -> Sync outbox"
+    assert plan =~ "only while its carrier source is fresh"
+    assert plan =~ ~r/fails locally\s+as `missing_delegation` before operation construction/
+    assert plan =~ "Phoenix receives no participant identity, private key, capability"
+    assert plan =~ "persisted capability evidence for both roster commands"
+    assert plan =~ "zero native signatures and zero KV writes"
+    assert plan =~ "capability-valid on both branches"
+    assert plan =~ "contested member is already admitted at the shared base frontier"
+    assert plan =~ "both roster operations are concurrent from that shared base"
+    assert plan =~ "observed-remove add-wins"
+    assert plan =~ "outbox frame remains byte-identical"
+    assert plan =~ "`Lattice.Sim` is the independent oracle"
+    assert plan =~ "one installed clerk app identity"
+    assert plan =~ "distinct authorized peer relay realm"
+    assert plan =~ "TOWNSHIP_SKIP_ROSTER_ACTION_APP_BUILD=1"
+    assert plan =~ "No mobile secure-store implementation change"
+    assert plan =~ "No delegation, revocation, or succession handoff"
+    assert plan =~ "not an authority-quarantine or authority-role proof"
+    assert plan =~ "No complete G1/Phase G claim and no receipt-free W4 claim"
+
+    assert plans_index =~
+             "| 137 | Versioned roster action handoff | P1 | XL | 051, 054, 130, 136 | IN PROGRESS |"
+
+    assert plans_index =~
+             "Plan 137's bundled `admit`/`remove_member` roster handoff"
+
+    assert shell_package["scripts"]["tauri:roster-action-handoff:smoke"] ==
+             "tsx test/tauri_roster_action_handoff_smoke.ts"
+
+    assert shell_package["scripts"]["app:convergence"] =~
+             ~r/tauri:field-action-handoff:smoke && TOWNSHIP_SKIP_ROSTER_ACTION_APP_BUILD=1 npm run tauri:roster-action-handoff:smoke && npm run tauri:feed:smoke/
+
+    assert workflow =~
+             ~r/Verify packaged roster handoff\s+working-directory: clients\/township-tauri-shell\s+env:\s+TOWNSHIP_SKIP_ROSTER_ACTION_APP_BUILD: "1"\s+run: npm run tauri:roster-action-handoff:smoke/
   end
 end

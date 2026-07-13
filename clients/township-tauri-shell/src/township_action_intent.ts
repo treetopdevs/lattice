@@ -27,10 +27,23 @@ export interface TownshipFieldActionIntent {
   };
 }
 
-export type TownshipActionIntent =
+export interface TownshipRosterActionIntent {
+  v: 4;
+  id: string;
+  replica: string;
+  command: {
+    command: "admit" | "remove_member";
+    member: string;
+  };
+}
+
+export type TownshipReviewableActionIntent =
   | TownshipPostActionIntent
   | TownshipStatusActionIntent
-  | TownshipFieldActionIntent;
+  | TownshipFieldActionIntent
+  | TownshipRosterActionIntent;
+
+export type TownshipActionIntent = TownshipReviewableActionIntent;
 
 export type TownshipActionIntentParse =
   | { ok: true; intent: TownshipActionIntent }
@@ -42,6 +55,7 @@ export type TownshipActionIntentParse =
 
 const MAX_REPLICA_BYTES = 1_024;
 const MAX_TEXT_BYTES = 4_096;
+const MAX_MEMBER_BYTES = 4_096;
 const MAX_URL_BYTES = 8_192;
 const INTENT_ID = /^[0-9a-f]{32}$/;
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
@@ -84,7 +98,7 @@ export function parseTownshipActionIntentDeepLink(value: string): TownshipAction
   }
 
   if (!isRecord(payload)) return payloadError();
-  if (payload.v !== 1 && payload.v !== 2 && payload.v !== 3) {
+  if (payload.v !== 1 && payload.v !== 2 && payload.v !== 3 && payload.v !== 4) {
     return {
       ok: false,
       reason: "unsupported_action_version",
@@ -119,16 +133,33 @@ export function parseTownshipActionIntentDeepLink(value: string): TownshipAction
     };
   }
 
-  if (!exactKeys(payload.command, ["command", "text"])) return payloadError();
-  if (payload.command.command !== "set_title" && payload.command.command !== "set_summary") {
-    return payloadError();
-  }
-  if (!canonicalBoundedString(payload.command.text, MAX_TEXT_BYTES)) return payloadError();
+  if (payload.v === 3) {
+    if (!exactKeys(payload.command, ["command", "text"])) return payloadError();
+    if (payload.command.command !== "set_title" && payload.command.command !== "set_summary") {
+      return payloadError();
+    }
+    if (!canonicalBoundedString(payload.command.text, MAX_TEXT_BYTES)) return payloadError();
 
-  return {
-    ok: true,
-    intent: payload as unknown as TownshipFieldActionIntent,
-  };
+    return {
+      ok: true,
+      intent: payload as unknown as TownshipFieldActionIntent,
+    };
+  }
+
+  if (payload.v === 4) {
+    if (!exactKeys(payload.command, ["command", "member"])) return payloadError();
+    if (payload.command.command !== "admit" && payload.command.command !== "remove_member") {
+      return payloadError();
+    }
+    if (!canonicalBoundedString(payload.command.member, MAX_MEMBER_BYTES)) return payloadError();
+
+    return {
+      ok: true,
+      intent: payload as unknown as TownshipRosterActionIntent,
+    };
+  }
+
+  return payloadError();
 }
 
 function decodeBase64Url(value: string): string {

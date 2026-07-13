@@ -365,7 +365,7 @@ test("frontend package exposes the real app convergence gate", () => {
   );
   assert.equal(
     pkg.scripts["app:convergence"],
-    "npm run action:contract && npm run sync:contract && npm run stable:relay:contract && npm run feed:contract && npm run feed:app:contract && npm run onboarding:contract && npm run onboarding:click-through && npm run live:contract && npm run tauri:launch:smoke && npm run tauri:onboarding:smoke && npm run tauri:stable-relay:onboarding:smoke && npm run tauri:action-handoff:smoke && TOWNSHIP_SKIP_CLERK_ACTION_APP_BUILD=1 npm run tauri:clerk-action-handoff:smoke && TOWNSHIP_SKIP_FIELD_ACTION_APP_BUILD=1 npm run tauri:field-action-handoff:smoke && npm run tauri:feed:smoke && npm run tauri:deep-link:smoke",
+    "npm run action:contract && npm run sync:contract && npm run stable:relay:contract && npm run feed:contract && npm run feed:app:contract && npm run onboarding:contract && npm run onboarding:click-through && npm run live:contract && npm run tauri:launch:smoke && npm run tauri:onboarding:smoke && npm run tauri:stable-relay:onboarding:smoke && npm run tauri:action-handoff:smoke && TOWNSHIP_SKIP_CLERK_ACTION_APP_BUILD=1 npm run tauri:clerk-action-handoff:smoke && TOWNSHIP_SKIP_FIELD_ACTION_APP_BUILD=1 npm run tauri:field-action-handoff:smoke && TOWNSHIP_SKIP_ROSTER_ACTION_APP_BUILD=1 npm run tauri:roster-action-handoff:smoke && npm run tauri:feed:smoke && npm run tauri:deep-link:smoke",
   );
   assert.match(launchSmoke, /"tauri", \["build", "--features", "township-dev-trace", "--bundles", "app"\]/);
   assert.match(launchSmoke, /VITE_TOWNSHIP_AUTOSYNC_ON_MOUNT: "1"/);
@@ -383,6 +383,59 @@ test("frontend package exposes the real app convergence gate", () => {
   assert.match(clickThrough, /toContainText\("No local cap"\)/);
   assert.match(clickThrough, /toContainText\("Available"\)/);
   assert.match(clickThrough, /report\.state\.posts\.includes\(postText\)/);
+});
+
+test("frontend package exposes a Sim-anchored packaged v4 roster convergence gate", () => {
+  const pkg = readJson("package.json");
+  const smoke = readText("test/tauri_roster_action_handoff_smoke.ts");
+  const fixture = readText("test/support/stable_roster_action_fixture.exs");
+  const peerRelay = readText("test/support/stable_roster_action_peer_relay.exs");
+  const workflow = readText("../../.github/workflows/flagship.yml");
+
+  assert.equal(
+    pkg.scripts["tauri:roster-action-handoff:smoke"],
+    "tsx test/tauri_roster_action_handoff_smoke.ts",
+  );
+  assert.match(fixture, /TownshipOnboardingScenario\.base_sim/);
+  assert.match(fixture, /Dag\.ancestors/);
+  assert.match(fixture, /expected_remove\.deps != base_frontier/);
+  assert.match(fixture, /expected_peer_admit\.deps != base_frontier/);
+  assert.match(fixture, /expected_remove\.cap != genesis_cap_id/);
+  assert.match(fixture, /ROSTER_FIXTURE_READY/);
+  assert.match(peerRelay, /expectedPeerAdmit/);
+  assert.match(peerRelay, /ROSTER_PEER_RELAY_READY/);
+  assert.match(smoke, /#participant-roster-handoff/);
+  assert.match(smoke, /assertLaunchServicesRoutesTownshipSchemeToBundle/);
+  assert.match(smoke, /township:\/\/dev\/action-roster\/use/);
+  assert.match(smoke, /township:\/\/dev\/action-roster\/sign/);
+  assert.match(smoke, /township:\/\/dev\/carrier\/sync/);
+  assert.match(smoke, /submitTownshipCommand/);
+  assert.match(smoke, /missing_delegation/);
+  assert.match(smoke, /lattice_sign_carrier/);
+  assert.match(smoke, /lattice_kv_set/);
+  assert.match(smoke, /expectedRemove/);
+  assert.match(smoke, /expectedPeerAdmit/);
+  assert.match(smoke, /expectedAdmit/);
+  assert.match(smoke, /afterContested\.causalReplay/);
+  assert.match(smoke, /afterAdmit\.causalReplay/);
+  assert.match(smoke, /memberDigests/);
+  assert.match(smoke, /relayPeerAdmitBeforeSync/);
+  assert.match(
+    pkg.scripts["app:convergence"],
+    /TOWNSHIP_SKIP_FIELD_ACTION_APP_BUILD=1 npm run tauri:field-action-handoff:smoke && TOWNSHIP_SKIP_ROSTER_ACTION_APP_BUILD=1 npm run tauri:roster-action-handoff:smoke && npm run tauri:feed:smoke/,
+  );
+  assert.match(
+    workflow,
+    /Verify packaged field edit handoff[\s\S]*TOWNSHIP_SKIP_FIELD_ACTION_APP_BUILD: "1"[\s\S]*npm run tauri:field-action-handoff:smoke[\s\S]*Verify packaged roster handoff[\s\S]*TOWNSHIP_SKIP_ROSTER_ACTION_APP_BUILD: "1"[\s\S]*npm run tauri:roster-action-handoff:smoke[\s\S]*Verify packaged reactive carrier feed/,
+  );
+  for (const command of [
+    "npm run action-intent:contract",
+    "npm run deeplink:dispatcher:contract",
+    "npm run action:contract",
+    "npm run frontend:contract",
+  ]) {
+    assert.match(workflow, new RegExp(command.replaceAll(":", "\\:")));
+  }
 });
 
 test("Vue source exposes a carrier sync outbox action", () => {
@@ -656,7 +709,7 @@ test("Vue keeps versioned clerk status signing separate from outbox sync", () =>
   const signStatus = app.slice(start, end);
 
   assert.ok(start >= 0 && end > start);
-  assert.match(app, /const pendingActionIntent = ref<TownshipActionIntent \| null>\(null\)/);
+  assert.match(app, /const pendingActionIntent = ref<TownshipReviewableActionIntent \| null>\(null\)/);
   assert.match(app, /const acceptedStatusIntent = ref<TownshipStatusActionIntent \| null>\(null\)/);
   assert.match(app, /id="participant-status-request"/);
   assert.match(app, /Sign \$\{statusIntentVerb\(acceptedStatusIntent\)\}/);
@@ -699,7 +752,102 @@ test("Vue keeps versioned field-edit review and signing separate from local draf
   assert.doesNotMatch(signField, /syncOutbox/);
 });
 
-test("Vue traces rendered title and summary only through SHA-256 commitments", () => {
+test("Vue stages and accepts v4 roster requests inertly in a separate review state", () => {
+  const app = readText("src/App.vue");
+  const actionIntent = readText("src/township_action_intent.ts");
+  const dispatcher = readText("src/township_deep_link_dispatcher.ts");
+  const stageStart = app.indexOf("function stageActionIntent");
+  const stageEnd = app.indexOf("function rejectActionIntent", stageStart);
+  const stageIntent = app.slice(stageStart, stageEnd);
+  const acceptStart = app.indexOf("function acceptPendingActionIntent");
+  const acceptEnd = app.indexOf("function dismissPendingActionIntent", acceptStart);
+  const acceptIntent = app.slice(acceptStart, acceptEnd);
+  const rosterAcceptStart = acceptIntent.indexOf("else if (intent.v === 4)");
+  const rosterAcceptEnd = acceptIntent.indexOf("} else {", rosterAcceptStart);
+  const acceptRosterIntent = acceptIntent.slice(rosterAcceptStart, rosterAcceptEnd);
+  const labelStart = app.indexOf("function actionIntentLabel");
+  const labelEnd = app.indexOf("function statusIntentVerb", labelStart);
+  const label = app.slice(labelStart, labelEnd);
+
+  assert.ok(stageStart >= 0 && stageEnd > stageStart);
+  assert.ok(acceptStart >= 0 && acceptEnd > acceptStart);
+  assert.ok(rosterAcceptStart >= 0 && rosterAcceptEnd > rosterAcceptStart);
+  assert.ok(labelStart >= 0 && labelEnd > labelStart);
+  assert.match(
+    actionIntent,
+    /export type TownshipReviewableActionIntent =[^;]*TownshipRosterActionIntent/s,
+  );
+  assert.doesNotMatch(dispatcher, /parsed\.intent\.v === 4/);
+  assert.match(app, /TownshipRosterActionIntent/);
+  assert.match(app, /const acceptedRosterIntent = ref<TownshipRosterActionIntent \| null>\(null\)/);
+  assert.match(stageIntent, /pendingActionIntent\.value = intent/);
+  assert.doesNotMatch(stageIntent, /submitTownshipCommand|syncOutbox|accepted\w+Intent\.value|Draft\.value/);
+  assert.match(acceptIntent, /intent\.v === 4[\s\S]*acceptedRosterIntent\.value = intent/);
+  assert.doesNotMatch(acceptIntent, /submitTownshipCommand|syncOutbox/);
+  assert.doesNotMatch(
+    acceptRosterIntent,
+    /memberDraft\.value|postDraft\.value|accepted(?:Post|Status|Field)Intent\.value/,
+  );
+  assert.match(app, /function assertNeverActionIntent\(_intent: never\): never/);
+  assert.match(acceptIntent, /intent\.v === 4[\s\S]*assertNeverActionIntent\(intent\)/);
+  assert.match(label, /intent\.v === 4[\s\S]*return assertNeverActionIntent\(intent\)/);
+  assert.match(app, /pendingActionIntent\.v === 4[\s\S]*pendingActionIntent\.command\.member/);
+  assert.match(app, /id="participant-roster-request"/);
+  assert.match(app, /acceptedRosterIntent\.command\.member/);
+  assert.match(app, /acceptedRosterIntent\.value = null/);
+  assert.doesNotMatch(acceptRosterIntent, /signAcceptedRosterIntent|submitTownshipCommand|syncOutbox/);
+});
+
+test("Vue signs accepted v4 roster requests locally while keeping outbox sync separate", () => {
+  const app = readText("src/App.vue");
+  const signStart = app.indexOf("async function signAcceptedRosterIntent");
+  const signEnd = app.indexOf("function dismissAcceptedRosterIntent", signStart);
+  const signRoster = app.slice(signStart, signEnd);
+  const useDevStart = app.indexOf("async function usePendingRosterIntentFromDevTrace");
+  const useDevEnd = app.indexOf("async function signAcceptedRosterIntentFromDevTrace", useDevStart);
+  const useDev = app.slice(useDevStart, useDevEnd);
+  const signDevStart = useDevEnd;
+  const signDevEnd = app.indexOf("async function syncStatusIntentFromDevTrace", signDevStart);
+  const signDev = app.slice(signDevStart, signDevEnd);
+  const traceStart = app.indexOf("async function traceRosterIntentDevControl");
+  const traceEnd = app.indexOf("async function tracePairingDeepLinkUrls", traceStart);
+  const traceRoster = app.slice(traceStart, traceEnd);
+
+  assert.ok(signStart >= 0 && signEnd > signStart);
+  assert.ok(useDevStart >= 0 && useDevEnd > useDevStart);
+  assert.ok(signDevStart >= 0 && signDevEnd > signDevStart);
+  assert.ok(traceStart >= 0 && traceEnd > traceStart);
+  assert.match(
+    app,
+    /const rosterIntentSubmitting = ref<TownshipRosterActionIntent\["command"\]\["command"\] \| null>\(null\)/,
+  );
+  assert.match(signRoster, /carrierPeer\.value\?\.replica !== intent\.replica[\s\S]*return/);
+  assert.match(signRoster, /rosterIntentSubmitting\.value = intent\.command\.command/);
+  assert.match(
+    signRoster,
+    /await submitTownshipCommand\(\{[\s\S]*command: intent\.command,[\s\S]*replica: intent\.replica/,
+  );
+  assert.match(signRoster, /rosterIntentSubmitting\.value = null/);
+  assert.match(signRoster, /if \(submission\.ok\)[\s\S]*acceptedRosterIntent\.value = null/);
+  assert.doesNotMatch(signRoster, /syncOutbox/);
+  assert.match(app, /function rosterActionAllowed\(command: TownshipRosterActionIntent\["command"\]\["command"\]\): boolean/);
+  assert.match(app, /function rosterIntentVerb\(intent: TownshipRosterActionIntent\): "admit" \| "remove member"/);
+  assert.match(app, /@click="signAcceptedRosterIntent"/);
+  assert.match(app, /Sign \$\{rosterIntentVerb\(acceptedRosterIntent\)\}/);
+  assert.match(
+    app,
+    /:disabled="rosterIntentSubmitting !== null \|\| !rosterActionAllowed\(acceptedRosterIntent\.command\.command\)"/,
+  );
+  assert.match(app, /route === "action-roster\/use"/);
+  assert.match(app, /route === "action-roster\/sign"/);
+  assert.match(useDev, /intent\.v !== 4[\s\S]*acceptPendingActionIntent\(\)[\s\S]*acceptedRosterIntent\.value\?\.id === intent\.id/);
+  assert.match(signDev, /rosterActionAllowed\(intent\.command\.command\)[\s\S]*await signAcceptedRosterIntent\(\)/);
+  assert.match(app, /traceRosterIntentDevControl\("sync", syncStatus\.value\?\.ok \? "synced" : "failed"\)/);
+  assert.match(traceRoster, /action-roster-dev-\$\{step\}:\$\{outcome\}/);
+  assert.doesNotMatch(traceRoster, /\.member|intent|action URL|deep-link/);
+});
+
+test("Vue traces rendered title, summary, and members only through SHA-256 commitments", () => {
   const app = readText("src/App.vue");
   const start = app.indexOf("async function traceRenderedTownshipFeed");
   const end = app.indexOf("async function digestTownshipTraceText", start);
@@ -708,13 +856,18 @@ test("Vue traces rendered title and summary only through SHA-256 commitments", (
   assert.ok(start >= 0 && end > start);
   assert.match(app, /id="matter-title"/);
   assert.match(app, /id="matter-summary"/);
+  assert.match(app, /id="township-roster"/);
   assert.match(traceFeed, /document\.querySelector\("#matter-title"\)/);
   assert.match(traceFeed, /document\.querySelector\("#matter-summary"\)/);
+  assert.match(traceFeed, /document\.querySelectorAll\("#township-roster \.member-list li"\)/);
   assert.match(traceFeed, /titleDigest/);
   assert.match(traceFeed, /summaryDigest/);
+  assert.match(traceFeed, /memberDigests/);
   assert.match(traceFeed, /digestTownshipTraceText/);
   assert.doesNotMatch(traceFeed, /\btitle:\s*titleText/);
   assert.doesNotMatch(traceFeed, /\bsummary:\s*summaryText/);
+  assert.doesNotMatch(traceFeed, /\bmembers:\s*memberTexts/);
+  assert.doesNotMatch(traceFeed, /memberTexts\s*[,}]/);
 });
 
 test("Vue source renders pairing handoff QR without trust claims", () => {

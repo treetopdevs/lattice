@@ -265,6 +265,12 @@ jobs:
           TOWNSHIP_SKIP_FIELD_ACTION_APP_BUILD: "1"
         run: npm run tauri:field-action-handoff:smoke
 
+      - name: Verify packaged roster handoff
+        working-directory: clients/township-tauri-shell
+        env:
+          TOWNSHIP_SKIP_ROSTER_ACTION_APP_BUILD: "1"
+        run: npm run tauri:roster-action-handoff:smoke
+
       - name: Verify packaged reactive carrier feed
         working-directory: clients/township-tauri-shell
         run: npm run tauri:feed:smoke

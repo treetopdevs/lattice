@@ -158,6 +158,56 @@
 
       <section
         :if={@source_state == :fresh}
+        id="participant-roster-panel"
+        class="participant-action"
+        aria-labelledby="participant-roster-title"
+      >
+        <header>
+          <p class="section-kicker">Participant action</p>
+          <h2 id="participant-roster-title">Manage members from your device</h2>
+        </header>
+        <form id="participant-admit-form" phx-submit="prepare_admit">
+          <label for={@admit_intent_form[:member].id}>Member id to admit</label>
+          <input
+            type="text"
+            id={@admit_intent_form[:member].id}
+            name={@admit_intent_form[:member].name}
+            value={@admit_intent_form[:member].value}
+            autocomplete="off"
+          />
+          <button type="submit">Prepare admission in app</button>
+        </form>
+        <form id="participant-roster-form" phx-submit="prepare_remove_member">
+          <label for={@roster_intent_form[:member].id}>Member id to remove</label>
+          <input
+            type="text"
+            id={@roster_intent_form[:member].id}
+            name={@roster_intent_form[:member].name}
+            value={@roster_intent_form[:member].value}
+            autocomplete="off"
+          />
+          <button type="submit">Prepare removal in app</button>
+        </form>
+        <div :if={@roster_intent_url} class="participant-action__handoff">
+          <p id="participant-roster-prepared" aria-live="polite">
+            {if @roster_intent_command == :admit,
+              do: "Unsigned member admission",
+              else: "Unsigned member removal"}
+          </p>
+          <a id="participant-roster-handoff" href={@roster_intent_url}>Open in Township app</a>
+        </div>
+        <p
+          :if={@roster_intent_error}
+          id="participant-roster-error"
+          class="participant-action__error"
+          aria-live="polite"
+        >
+          {@roster_intent_error}
+        </p>
+      </section>
+
+      <section
+        :if={@source_state == :fresh}
         id="participant-post-panel"
         class="participant-action"
         aria-labelledby="participant-post-title"

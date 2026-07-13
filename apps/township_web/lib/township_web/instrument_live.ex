@@ -120,6 +120,70 @@ defmodule TownshipWeb.InstrumentLive do
   end
 
   def handle_event(
+        "prepare_admit",
+        %{"admit" => %{"member" => member}},
+        %{assigns: %{source_state: :fresh, provenance: %{replica: replica}}} = socket
+      ) do
+    case ActionIntent.roster_url(replica, :admit, member) do
+      {:ok, url} ->
+        {:noreply,
+         assign(socket,
+           admit_intent_form: admit_intent_form(member),
+           roster_intent_url: url,
+           roster_intent_command: :admit,
+           roster_intent_replica: replica,
+           roster_intent_error: nil
+         )}
+
+      {:error, reason} ->
+        {:noreply,
+         assign(socket,
+           admit_intent_form: admit_intent_form(member),
+           roster_intent_url: nil,
+           roster_intent_command: nil,
+           roster_intent_replica: replica,
+           roster_intent_error: action_intent_error(reason)
+         )}
+    end
+  end
+
+  def handle_event("prepare_admit", _params, socket) do
+    {:noreply, clear_roster_intent(socket)}
+  end
+
+  def handle_event(
+        "prepare_remove_member",
+        %{"roster" => %{"member" => member}},
+        %{assigns: %{source_state: :fresh, provenance: %{replica: replica}}} = socket
+      ) do
+    case ActionIntent.roster_url(replica, :remove_member, member) do
+      {:ok, url} ->
+        {:noreply,
+         assign(socket,
+           roster_intent_form: roster_intent_form(member),
+           roster_intent_url: url,
+           roster_intent_command: :remove_member,
+           roster_intent_replica: replica,
+           roster_intent_error: nil
+         )}
+
+      {:error, reason} ->
+        {:noreply,
+         assign(socket,
+           roster_intent_form: roster_intent_form(member),
+           roster_intent_url: nil,
+           roster_intent_command: nil,
+           roster_intent_replica: replica,
+           roster_intent_error: action_intent_error(reason)
+         )}
+    end
+  end
+
+  def handle_event("prepare_remove_member", _params, socket) do
+    {:noreply, clear_roster_intent(socket)}
+  end
+
+  def handle_event(
         "prepare_status_action",
         _params,
         %{
@@ -213,6 +277,7 @@ defmodule TownshipWeb.InstrumentLive do
     |> retain_action_intent(source_state, payload.provenance.replica)
     |> retain_summary_intent(source_state, payload.provenance.replica)
     |> retain_title_intent(source_state, payload.provenance.replica)
+    |> retain_roster_intent(source_state, payload.provenance.replica)
     |> retain_status_intent(source_state, payload.read_model, payload.provenance.replica)
     |> assign(
       page_title: "Township Instrument",
@@ -249,6 +314,12 @@ defmodule TownshipWeb.InstrumentLive do
       title_intent_url: nil,
       title_intent_replica: nil,
       title_intent_error: nil,
+      admit_intent_form: admit_intent_form(""),
+      roster_intent_form: roster_intent_form(""),
+      roster_intent_url: nil,
+      roster_intent_command: nil,
+      roster_intent_replica: nil,
+      roster_intent_error: nil,
       status_intent_url: nil,
       status_intent_command: nil,
       status_intent_replica: nil
@@ -285,6 +356,16 @@ defmodule TownshipWeb.InstrumentLive do
 
   defp retain_title_intent(socket, _source_state, _replica), do: clear_title_intent(socket)
 
+  defp retain_roster_intent(socket, :fresh, replica) do
+    case socket.assigns.roster_intent_replica do
+      nil -> socket
+      ^replica -> socket
+      _other_replica -> clear_roster_intent(socket)
+    end
+  end
+
+  defp retain_roster_intent(socket, _source_state, _replica), do: clear_roster_intent(socket)
+
   defp retain_status_intent(socket, :fresh, model, replica) do
     cond do
       is_nil(socket.assigns.status_intent_url) ->
@@ -318,6 +399,12 @@ defmodule TownshipWeb.InstrumentLive do
       title_intent_url: nil,
       title_intent_replica: nil,
       title_intent_error: nil,
+      admit_intent_form: admit_intent_form(""),
+      roster_intent_form: roster_intent_form(""),
+      roster_intent_url: nil,
+      roster_intent_command: nil,
+      roster_intent_replica: nil,
+      roster_intent_error: nil,
       status_intent_url: nil,
       status_intent_command: nil,
       status_intent_replica: nil
@@ -350,6 +437,17 @@ defmodule TownshipWeb.InstrumentLive do
     )
   end
 
+  defp clear_roster_intent(socket) do
+    assign(socket,
+      admit_intent_form: admit_intent_form(""),
+      roster_intent_form: roster_intent_form(""),
+      roster_intent_url: nil,
+      roster_intent_command: nil,
+      roster_intent_replica: nil,
+      roster_intent_error: nil
+    )
+  end
+
   defp status_action_command(%{threads: %{clerk_locked?: true}}), do: :reopen_matter
   defp status_action_command(_model), do: :close_matter
 
@@ -366,8 +464,20 @@ defmodule TownshipWeb.InstrumentLive do
 
   defp title_intent_form(_text), do: title_intent_form("")
 
+  defp admit_intent_form(member) when is_binary(member),
+    do: to_form(%{"member" => member}, as: :admit)
+
+  defp admit_intent_form(_member), do: admit_intent_form("")
+
+  defp roster_intent_form(member) when is_binary(member),
+    do: to_form(%{"member" => member}, as: :roster)
+
+  defp roster_intent_form(_member), do: roster_intent_form("")
+
   defp action_intent_error(:invalid_text), do: "Write an update before opening the app."
   defp action_intent_error(:text_too_large), do: "Keep the update within 4096 UTF-8 bytes."
+  defp action_intent_error(:invalid_member), do: "Enter a member before opening the app."
+  defp action_intent_error(:member_too_large), do: "Keep the member id within 4096 UTF-8 bytes."
   defp action_intent_error(_reason), do: "The participant action could not be prepared."
 
   defp source_label(:verified), do: "verified snapshot"

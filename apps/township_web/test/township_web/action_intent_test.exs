@@ -23,6 +23,16 @@ defmodule TownshipWeb.ActionIntentTest do
                         __DIR__
                       )
 
+  @remove_member_fixture_path Path.expand(
+                                "../../../../clients/township-tauri-shell/test/fixtures/township_remove_member_action_intent_v4.json",
+                                __DIR__
+                              )
+
+  @admit_fixture_path Path.expand(
+                        "../../../../clients/township-tauri-shell/test/fixtures/township_admit_action_intent_v4.json",
+                        __DIR__
+                      )
+
   test "post_url emits the exact custody-free cross-runtime v1 contract" do
     fixture = @fixture_path |> File.read!() |> Jason.decode!()
     payload = fixture["payload"]
@@ -141,6 +151,90 @@ defmodule TownshipWeb.ActionIntentTest do
 
     assert url == fixture["url"]
     assert decoded_payload(url) == payload
+  end
+
+  test "roster_url emits the exact custody-free v4 remove-member contract" do
+    fixture = @remove_member_fixture_path |> File.read!() |> Jason.decode!()
+    payload = fixture["payload"]
+
+    assert {:ok, url} =
+             ActionIntent.roster_url(
+               payload["replica"],
+               :remove_member,
+               payload["command"]["member"],
+               intent_id: payload["id"]
+             )
+
+    assert url == fixture["url"]
+    assert decoded_payload(url) == payload
+    assert Map.keys(payload) |> Enum.sort() == ["command", "id", "replica", "v"]
+    assert Map.keys(payload["command"]) |> Enum.sort() == ["command", "member"]
+
+    refute Enum.any?(
+             ~w(author cap capability delegation deps key local_realm private_key pubkey sig signature text),
+             &contains_key?(payload, &1)
+           )
+  end
+
+  test "roster_url bundles admit in the same exact v4 contract" do
+    fixture = @admit_fixture_path |> File.read!() |> Jason.decode!()
+    payload = fixture["payload"]
+
+    assert {:ok, url} =
+             ActionIntent.roster_url(
+               payload["replica"],
+               :admit,
+               payload["command"]["member"],
+               intent_id: payload["id"]
+             )
+
+    assert url == fixture["url"]
+    assert decoded_payload(url) == payload
+  end
+
+  test "roster_url normalizes member ids independently and rejects malformed values" do
+    id = "0123456789abcdef0123456789abcdef"
+
+    assert {:ok, trimmed_url} =
+             ActionIntent.roster_url(" replica:matter:one ", :remove_member, " resident:alice ",
+               intent_id: id
+             )
+
+    assert decoded_payload(trimmed_url) == %{
+             "v" => 4,
+             "id" => id,
+             "replica" => "replica:matter:one",
+             "command" => %{"command" => "remove_member", "member" => "resident:alice"}
+           }
+
+    unicode_member = "\uFEFFresident:alice\u0085"
+
+    assert {:ok, unicode_url} =
+             ActionIntent.roster_url("replica", :remove_member, unicode_member, intent_id: id)
+
+    assert decoded_payload(unicode_url)["command"]["member"] == unicode_member
+
+    assert {:error, :invalid_command} =
+             ActionIntent.roster_url("replica", :post, "resident", intent_id: id)
+
+    assert {:error, :invalid_replica} =
+             ActionIntent.roster_url(" ", :remove_member, "resident", intent_id: id)
+
+    assert {:error, :invalid_member} =
+             ActionIntent.roster_url("replica", :remove_member, " ", intent_id: id)
+
+    assert {:error, :invalid_member} =
+             ActionIntent.roster_url("replica", :remove_member, <<255>>, intent_id: id)
+
+    assert {:error, :member_too_large} =
+             ActionIntent.roster_url("replica", :remove_member, String.duplicate("x", 4_097),
+               intent_id: id
+             )
+
+    assert {:error, :invalid_intent_id} =
+             ActionIntent.roster_url("replica", :remove_member, "resident",
+               intent_id: "not-an-id"
+             )
   end
 
   defp decoded_payload(url) do

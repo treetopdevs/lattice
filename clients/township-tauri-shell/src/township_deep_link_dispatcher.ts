@@ -1,6 +1,6 @@
 import {
   parseTownshipActionIntentDeepLink,
-  type TownshipActionIntent,
+  type TownshipReviewableActionIntent,
 } from "./township_action_intent";
 import type { TownshipPairingDeepLinkSource } from "./township_pairing_deeplink";
 
@@ -24,7 +24,7 @@ export interface TownshipParticipantDeepLinkDispatcher {
 export interface TownshipParticipantDeepLinkDispatcherOptions {
   source: TownshipPairingDeepLinkSource;
   expectedReplica(): string | null;
-  stageAction(intent: TownshipActionIntent): void;
+  stageAction(intent: TownshipReviewableActionIntent): void;
   rejectAction(rejection: TownshipActionIntentRejection): void;
   routeOther(url: string): void;
   traceAction?(trace: TownshipActionIntentTrace): void | Promise<void>;

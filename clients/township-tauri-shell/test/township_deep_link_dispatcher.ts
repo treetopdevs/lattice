@@ -6,7 +6,10 @@ import {
   createTownshipParticipantDeepLinkDispatcher,
   type TownshipActionIntentTrace,
 } from "../src/township_deep_link_dispatcher";
-import type { TownshipActionIntent } from "../src/township_action_intent";
+import type {
+  TownshipActionIntent,
+  TownshipReviewableActionIntent,
+} from "../src/township_action_intent";
 
 interface ActionIntentFixture {
   payload: {
@@ -28,6 +31,11 @@ interface FieldActionIntentFixture {
   url: string;
 }
 
+interface RosterActionIntentFixture {
+  payload: Extract<TownshipActionIntent, { v: 4 }>;
+  url: string;
+}
+
 console.log("\n▸ Township participant deep-link dispatcher");
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -43,10 +51,16 @@ const fieldFixture = JSON.parse(
 const titleFixture = JSON.parse(
   readFileSync(join(here, "fixtures", "township_title_action_intent_v3.json"), "utf8"),
 ) as FieldActionIntentFixture;
+const removeMemberFixture = JSON.parse(
+  readFileSync(join(here, "fixtures", "township_remove_member_action_intent_v4.json"), "utf8"),
+) as RosterActionIntentFixture;
+const admitFixture = JSON.parse(
+  readFileSync(join(here, "fixtures", "township_admit_action_intent_v4.json"), "utf8"),
+) as RosterActionIntentFixture;
 const pairingUrl = "township://pairing?handoff=township-pairing:v1:not-json";
 const androidPairingUrl = "township://nohost/_pairing/township-pairing_3Av1_3Anot-json";
 const calls: string[] = [];
-const staged: TownshipActionIntent[] = [];
+const staged: TownshipReviewableActionIntent[] = [];
 const rejected: string[] = [];
 const other: string[] = [];
 const traces: TownshipActionIntentTrace[] = [];
@@ -104,6 +118,22 @@ assert.deepEqual(
   "repeated ingress remains review-only and observable",
 );
 
+expectedReplica = removeMemberFixture.payload.replica;
+const stagedBeforeRoster = staged.length;
+const rejectedBeforeRoster = rejected.length;
+opened([removeMemberFixture.url, admitFixture.url, removeMemberFixture.url]);
+assert.deepEqual(staged.slice(stagedBeforeRoster), [
+  removeMemberFixture.payload,
+  admitFixture.payload,
+  removeMemberFixture.payload,
+]);
+assert.equal(rejected.length, rejectedBeforeRoster);
+assert.deepEqual(traces.slice(-3), [
+  { intentId: removeMemberFixture.payload.id, outcome: "staged" },
+  { intentId: admitFixture.payload.id, outcome: "staged" },
+  { intentId: removeMemberFixture.payload.id, outcome: "staged" },
+]);
+
 opened(["township://action?intent=not-base64url!"]);
 assert.equal(rejected.at(-1), "invalid_action");
 assert.equal(other.includes("township://action?intent=not-base64url!"), false);
@@ -119,8 +149,7 @@ assert.equal(rejected.at(-1), "pairing_missing");
 opened(["garbage", "township://probe/canonical?vector=township_carrier_w1"]);
 assert.deepEqual(other.slice(-2), ["garbage", "township://probe/canonical?vector=township_carrier_w1"]);
 
-assert.deepEqual(traces.slice(-4), [
-  { intentId: fieldFixture.payload.id, outcome: "staged" },
+assert.deepEqual(traces.slice(-3), [
   { intentId: null, outcome: "invalid_action" },
   { intentId: titleFixture.payload.id, outcome: "replica_mismatch" },
   { intentId: fieldFixture.payload.id, outcome: "pairing_missing" },

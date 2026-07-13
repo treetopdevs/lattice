@@ -4,7 +4,7 @@ defmodule TownshipWeb.InstrumentLiveTest do
 
   alias Lattice.{Log, Sim}
   alias Township.Matter
-  alias TownshipWeb.CarrierProjection
+  alias TownshipWeb.{ActionIntent, CarrierProjection}
 
   defmodule FailingSource do
     @behaviour TownshipWeb.InstrumentSource
@@ -83,6 +83,7 @@ defmodule TownshipWeb.InstrumentLiveTest do
     assert has_element?(view, "#op-dag-panel [data-op-node]")
     assert has_element?(view, "#op-dag-panel [data-frontier]")
     assert has_element?(view, "#op-dag-panel .op-rail")
+    refute has_element?(view, "#participant-roster-form")
 
     assert has_element?(
              view,
@@ -273,6 +274,225 @@ defmodule TownshipWeb.InstrumentLiveTest do
     assert {:ok, {:stale, _payload}} = CarrierProjection.refresh(projection)
     refute has_element?(view, "#participant-post-form")
     refute has_element?(view, "#participant-post-handoff")
+  end
+
+  test "fresh carrier state prepares one v4 remove-member request without retargeting or replacing other intents",
+       %{conn: conn} do
+    peer_log = peer_log()
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         carrier: LiveCarrier,
+         connect_opts: [ops: Log.topo_ops(peer_log)],
+         replica: peer_log.replica,
+         peer_realm: "clerk",
+         pubsub: TownshipWeb.PubSub,
+         topic: "township:remove-member-intent:#{System.unique_integer([:positive])}",
+         schedule: :manual}
+      )
+
+    put_projection_config(projection)
+    {:ok, view, _html} = live(conn, "/township")
+
+    refute has_element?(view, "#participant-roster-form")
+    assert {:ok, {:fresh, payload}} = CarrierProjection.refresh(projection)
+    assert has_element?(view, "#participant-roster-form")
+
+    view
+    |> form("#participant-summary-form", %{"summary" => %{"text" => "existing summary request"}})
+    |> render_submit()
+
+    view
+    |> form("#participant-post-form", %{"post" => %{"text" => "existing post request"}})
+    |> render_submit()
+
+    render_hook(view, "prepare_status_action", %{})
+
+    assert has_element?(view, "#participant-summary-handoff")
+    assert has_element?(view, "#participant-post-handoff")
+    assert has_element?(view, "#participant-status-handoff")
+
+    op_count = peer_log |> Log.op_ids() |> MapSet.size()
+
+    render_hook(view, "prepare_remove_member", %{
+      "roster" => %{
+        "member" => "  resident:alice  ",
+        "command" => "admit",
+        "text" => "smuggled"
+      }
+    })
+
+    assert has_element?(view, "#participant-roster-handoff[href^='township://action?intent=']")
+    assert has_element?(view, "#participant-roster-prepared", "Unsigned member removal")
+
+    roster_url = roster_action_intent_href(view)
+    roster_payload = decoded_action_intent(roster_url)
+
+    assert roster_payload["v"] == 4
+    assert roster_payload["id"] =~ ~r/\A[0-9a-f]{32}\z/
+    assert roster_payload["replica"] == peer_log.replica
+
+    assert roster_payload["command"] == %{
+             "command" => "remove_member",
+             "member" => "resident:alice"
+           }
+
+    assert Map.keys(roster_payload) |> Enum.sort() == ["command", "id", "replica", "v"]
+    assert Map.keys(roster_payload["command"]) |> Enum.sort() == ["command", "member"]
+
+    assert {:ok, expected_url} =
+             ActionIntent.roster_url(peer_log.replica, :remove_member, "resident:alice",
+               intent_id: roster_payload["id"]
+             )
+
+    assert roster_url == expected_url
+    assert has_element?(view, "#participant-summary-handoff")
+    assert has_element?(view, "#participant-post-handoff")
+    assert has_element?(view, "#participant-status-handoff")
+    assert has_element?(view, "#participant-post-form textarea", "existing post request")
+    assert has_element?(view, "#op-dag-panel [data-op-count='#{op_count}']")
+    refute has_element?(view, "#members-panel [data-member='resident:alice']")
+
+    replacement_payload = put_in(payload.provenance.replica, peer_log.replica <> ":replacement")
+    send(view.pid, {:township_instrument, {:fresh, replacement_payload}})
+
+    assert has_element?(view, "#participant-roster-form")
+    refute has_element?(view, "#participant-roster-handoff")
+
+    send(view.pid, {:township_instrument, {:fresh, payload}})
+
+    view
+    |> form("#participant-roster-form", %{"roster" => %{"member" => " "}})
+    |> render_submit()
+
+    assert has_element?(
+             view,
+             "#participant-roster-error[aria-live='polite']",
+             "Enter a member before opening the app"
+           )
+
+    refute has_element?(view, "#participant-roster-handoff")
+
+    send(view.pid, {:township_instrument, {:fresh, replacement_payload}})
+
+    refute has_element?(view, "#participant-roster-error")
+    assert has_element?(view, "#participant-roster-form input[value='']")
+
+    send(view.pid, {:township_instrument, {:stale, payload}})
+    refute has_element?(view, "#participant-roster-form")
+    refute has_element?(view, "#participant-roster-handoff")
+  end
+
+  test "fresh carrier state prepares admit in the same single roster-request slot", %{conn: conn} do
+    peer_log = peer_log()
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         carrier: LiveCarrier,
+         connect_opts: [ops: Log.topo_ops(peer_log)],
+         replica: peer_log.replica,
+         peer_realm: "clerk",
+         pubsub: TownshipWeb.PubSub,
+         topic: "township:admit-intent:#{System.unique_integer([:positive])}",
+         schedule: :manual}
+      )
+
+    put_projection_config(projection)
+    {:ok, view, _html} = live(conn, "/township")
+
+    refute has_element?(view, "#participant-admit-form")
+    assert {:ok, {:fresh, payload}} = CarrierProjection.refresh(projection)
+    assert has_element?(view, "#participant-admit-form")
+    assert has_element?(view, "#participant-roster-form")
+
+    view
+    |> form("#participant-summary-form", %{"summary" => %{"text" => "existing summary request"}})
+    |> render_submit()
+
+    view
+    |> form("#participant-post-form", %{"post" => %{"text" => "existing post request"}})
+    |> render_submit()
+
+    render_hook(view, "prepare_status_action", %{})
+
+    render_hook(view, "prepare_admit", %{
+      "admit" => %{
+        "member" => "  resident:bob  ",
+        "command" => "remove_member",
+        "text" => "smuggled"
+      }
+    })
+
+    assert has_element?(view, "#participant-roster-handoff[href^='township://action?intent=']")
+    assert has_element?(view, "#participant-roster-prepared", "Unsigned member admission")
+    refute has_element?(view, "#participant-admit-handoff")
+
+    admit_url = roster_action_intent_href(view)
+    admit_payload = decoded_action_intent(admit_url)
+
+    assert admit_payload["v"] == 4
+    assert admit_payload["replica"] == peer_log.replica
+    assert admit_payload["command"] == %{"command" => "admit", "member" => "resident:bob"}
+
+    assert {:ok, expected_admit_url} =
+             ActionIntent.roster_url(peer_log.replica, :admit, "resident:bob",
+               intent_id: admit_payload["id"]
+             )
+
+    assert admit_url == expected_admit_url
+    assert has_element?(view, "#participant-summary-handoff")
+    assert has_element?(view, "#participant-post-handoff")
+    assert has_element?(view, "#participant-status-handoff")
+    assert has_element?(view, "#participant-post-form textarea", "existing post request")
+
+    view
+    |> form("#participant-roster-form", %{"roster" => %{"member" => "resident:alice"}})
+    |> render_submit()
+
+    remove_url = roster_action_intent_href(view)
+    remove_payload = decoded_action_intent(remove_url)
+
+    refute remove_url == admit_url
+
+    assert remove_payload["command"] == %{
+             "command" => "remove_member",
+             "member" => "resident:alice"
+           }
+
+    assert has_element?(view, "#participant-roster-prepared", "Unsigned member removal")
+    assert has_element?(view, "#participant-summary-handoff")
+    assert has_element?(view, "#participant-post-handoff")
+    assert has_element?(view, "#participant-status-handoff")
+
+    view
+    |> form("#participant-admit-form", %{"admit" => %{"member" => "resident:carol"}})
+    |> render_submit()
+
+    form_admit_payload = view |> roster_action_intent_href() |> decoded_action_intent()
+    assert form_admit_payload["command"] == %{"command" => "admit", "member" => "resident:carol"}
+    assert has_element?(view, "#participant-roster-prepared", "Unsigned member admission")
+
+    replacement_payload = put_in(payload.provenance.replica, peer_log.replica <> ":replacement")
+    send(view.pid, {:township_instrument, {:fresh, replacement_payload}})
+
+    assert has_element?(view, "#participant-admit-form")
+    assert has_element?(view, "#participant-roster-form")
+    refute has_element?(view, "#participant-roster-handoff")
+
+    send(view.pid, {:township_instrument, {:fresh, payload}})
+
+    view
+    |> form("#participant-admit-form", %{"admit" => %{"member" => " "}})
+    |> render_submit()
+
+    assert has_element?(view, "#participant-roster-error")
+
+    send(view.pid, {:township_instrument, {:fresh, replacement_payload}})
+
+    refute has_element?(view, "#participant-roster-error")
+    assert has_element?(view, "#participant-admit-form input[value='']")
   end
 
   test "fresh carrier state prepares one v3 summary edit the client cannot retarget", %{
@@ -645,6 +865,15 @@ defmodule TownshipWeb.InstrumentLiveTest do
     |> render()
     |> LazyHTML.from_fragment()
     |> LazyHTML.query_by_id("participant-title-handoff")
+    |> LazyHTML.attribute("href")
+    |> List.first()
+  end
+
+  defp roster_action_intent_href(view) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query_by_id("participant-roster-handoff")
     |> LazyHTML.attribute("href")
     |> List.first()
   end

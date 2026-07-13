@@ -64,9 +64,10 @@ import {
 } from "./township_pairing_deeplink";
 import { createTauriPairingDeepLinkSource } from "./township_pairing_deeplink_source";
 import type {
-  TownshipActionIntent,
   TownshipFieldActionIntent,
   TownshipPostActionIntent,
+  TownshipReviewableActionIntent,
+  TownshipRosterActionIntent,
   TownshipStatusActionIntent,
 } from "./township_action_intent";
 import {
@@ -187,11 +188,13 @@ const revokeSubmitting = ref(false);
 const postDraft = ref("");
 const postStatus = ref<TownshipPostSubmission | null>(null);
 const postSubmitting = ref(false);
-const pendingActionIntent = ref<TownshipActionIntent | null>(null);
+const pendingActionIntent = ref<TownshipReviewableActionIntent | null>(null);
 const acceptedPostIntent = ref<TownshipPostActionIntent | null>(null);
 const acceptedStatusIntent = ref<TownshipStatusActionIntent | null>(null);
 const acceptedFieldIntent = ref<TownshipFieldActionIntent | null>(null);
+const acceptedRosterIntent = ref<TownshipRosterActionIntent | null>(null);
 const fieldIntentSubmitting = ref<TownshipFieldActionIntent["command"]["command"] | null>(null);
+const rosterIntentSubmitting = ref<TownshipRosterActionIntent["command"]["command"] | null>(null);
 const actionIntentStatus = ref<{ ok: boolean; message: string } | null>(null);
 const pairingDraft = ref<TownshipCarrierPeerConfigInput>(pairingDraftFromConfig(carrierPeer.value));
 const pairingDraftOrigin = ref<TownshipCarrierPairingDraftOrigin>("manual");
@@ -596,10 +599,15 @@ async function traceRenderedTownshipFeed(state: TownshipFeedState) {
     document.querySelectorAll("#township-proceedings .post-list li"),
     (entry) => entry.textContent?.trim() ?? "",
   );
-  const [titleDigest, summaryDigest, postDigests] = await Promise.all([
+  const memberTexts = Array.from(
+    document.querySelectorAll("#township-roster .member-list li"),
+    (entry) => entry.textContent?.trim() ?? "",
+  );
+  const [titleDigest, summaryDigest, postDigests, memberDigests] = await Promise.all([
     digestTownshipTraceText(titleText),
     digestTownshipTraceText(summaryText),
     Promise.all(postTexts.map(digestTownshipTraceText)),
+    Promise.all(memberTexts.map(digestTownshipTraceText)),
   ]);
   if (appUnmounted || feedState.value !== state) return;
 
@@ -614,6 +622,7 @@ async function traceRenderedTownshipFeed(state: TownshipFeedState) {
     titleDigest,
     summaryDigest,
     postDigests,
+    memberDigests,
   };
   await traceTownshipDevEvent(`${TOWNSHIP_TRACE_CARRIER_FEED_DOM_PREFIX}${JSON.stringify(rendered)}`);
 }
@@ -829,7 +838,7 @@ function handleBlockedPairingDeepLink(blocked: TownshipPairingDeepLinkBlocked) {
   void traceTownshipDevEvent("pairing-link-blocked:not-armed").catch(() => {});
 }
 
-function stageActionIntent(intent: TownshipActionIntent) {
+function stageActionIntent(intent: TownshipReviewableActionIntent) {
   pendingActionIntent.value = intent;
   actionIntentStatus.value = { ok: true, message: `${actionIntentLabel(intent)} ready for review.` };
 }
@@ -871,6 +880,14 @@ function acceptPendingActionIntent(event?: Event) {
       ok: true,
       message: `${actionIntentLabel(intent)} ready to sign on this device.`,
     };
+  } else if (intent.v === 4) {
+    acceptedRosterIntent.value = intent;
+    actionIntentStatus.value = {
+      ok: true,
+      message: `${actionIntentLabel(intent)} held for local review.`,
+    };
+  } else {
+    assertNeverActionIntent(intent);
   }
 
   pendingActionIntent.value = null;
@@ -956,20 +973,69 @@ function dismissAcceptedFieldIntent(event?: Event) {
   };
 }
 
+async function signAcceptedRosterIntent(event?: Event) {
+  if (event && !event.isTrusted) return;
+
+  const intent = acceptedRosterIntent.value;
+  if (!intent) return;
+  if (carrierPeer.value?.replica !== intent.replica) {
+    actionIntentStatus.value = {
+      ok: false,
+      message: `${actionIntentLabel(intent)} no longer matches the saved Township pairing.`,
+    };
+    return;
+  }
+
+  rosterIntentSubmitting.value = intent.command.command;
+  const submission = await submitTownshipCommand({
+    command: intent.command,
+    replica: intent.replica,
+  });
+  rosterIntentSubmitting.value = null;
+
+  if (submission.ok) {
+    acceptedRosterIntent.value = null;
+    actionIntentStatus.value = null;
+  } else {
+    actionIntentStatus.value = { ok: false, message: submission.message };
+  }
+}
+
+function dismissAcceptedRosterIntent(event?: Event) {
+  if (event && !event.isTrusted) return;
+  const intent = acceptedRosterIntent.value;
+  acceptedRosterIntent.value = null;
+  actionIntentStatus.value = {
+    ok: true,
+    message: `${intent ? actionIntentLabel(intent) : "Roster request"} dismissed.`,
+  };
+}
+
 function clearActionIntents() {
   pendingActionIntent.value = null;
   acceptedPostIntent.value = null;
   acceptedStatusIntent.value = null;
   acceptedFieldIntent.value = null;
+  acceptedRosterIntent.value = null;
   actionIntentStatus.value = null;
 }
 
-function actionIntentLabel(intent: TownshipActionIntent): string {
+function actionIntentLabel(intent: TownshipReviewableActionIntent): string {
   if (intent.v === 1) return "Post request";
   if (intent.v === 2) {
     return intent.command.command === "close_matter" ? "Close matter request" : "Reopen matter request";
   }
-  return intent.command.command === "set_title" ? "Title edit request" : "Summary edit request";
+  if (intent.v === 3) {
+    return intent.command.command === "set_title" ? "Title edit request" : "Summary edit request";
+  }
+  if (intent.v === 4) {
+    return intent.command.command === "admit" ? "Admit member request" : "Remove member request";
+  }
+  return assertNeverActionIntent(intent);
+}
+
+function assertNeverActionIntent(_intent: never): never {
+  throw new Error("Unsupported staged action intent.");
 }
 
 function statusIntentVerb(intent: TownshipStatusActionIntent): "close" | "reopen" {
@@ -981,6 +1047,15 @@ function fieldIntentVerb(intent: TownshipFieldActionIntent): "title edit" | "sum
 }
 
 function fieldActionAllowed(command: TownshipFieldActionIntent["command"]["command"]): boolean {
+  const availability = actionAvailability.value;
+  return availability.ready && availability.commands[command].allowed;
+}
+
+function rosterIntentVerb(intent: TownshipRosterActionIntent): "admit" | "remove member" {
+  return intent.command.command === "admit" ? "admit" : "remove member";
+}
+
+function rosterActionAllowed(command: TownshipRosterActionIntent["command"]["command"]): boolean {
   const availability = actionAvailability.value;
   return availability.ready && availability.commands[command].allowed;
 }
@@ -1044,6 +1119,14 @@ function handleDevTraceControlDeepLink(value: string): boolean {
   }
   if (route === "action-field/sign") {
     void signAcceptedFieldIntentFromDevTrace();
+    return true;
+  }
+  if (route === "action-roster/use") {
+    void usePendingRosterIntentFromDevTrace();
+    return true;
+  }
+  if (route === "action-roster/sign") {
+    void signAcceptedRosterIntentFromDevTrace();
     return true;
   }
   if (route === "carrier/sync") {
@@ -1143,10 +1226,40 @@ async function signAcceptedFieldIntentFromDevTrace() {
   await traceFieldIntentDevControl("sign", acceptedFieldIntent.value === null ? "signed" : "failed");
 }
 
+async function usePendingRosterIntentFromDevTrace() {
+  const intent = pendingActionIntent.value;
+  if (!intent || intent.v !== 4) {
+    await traceRosterIntentDevControl("use", "missing");
+    return;
+  }
+
+  acceptPendingActionIntent();
+  await traceRosterIntentDevControl(
+    "use",
+    acceptedRosterIntent.value?.id === intent.id ? "accepted" : "rejected",
+  );
+}
+
+async function signAcceptedRosterIntentFromDevTrace() {
+  const intent = acceptedRosterIntent.value;
+  if (!intent) {
+    await traceRosterIntentDevControl("sign", "missing");
+    return;
+  }
+  if (!rosterActionAllowed(intent.command.command)) {
+    await traceRosterIntentDevControl("sign", "blocked");
+    return;
+  }
+
+  await signAcceptedRosterIntent();
+  await traceRosterIntentDevControl("sign", acceptedRosterIntent.value === null ? "signed" : "failed");
+}
+
 async function syncStatusIntentFromDevTrace() {
   await syncOutbox();
   await traceStatusIntentDevControl("sync", syncStatus.value?.ok ? "synced" : "failed");
   await traceFieldIntentDevControl("sync", syncStatus.value?.ok ? "synced" : "failed");
+  await traceRosterIntentDevControl("sync", syncStatus.value?.ok ? "synced" : "failed");
 }
 
 async function traceStatusIntentDevControl(step: string, outcome: string): Promise<void> {
@@ -1160,6 +1273,14 @@ async function traceStatusIntentDevControl(step: string, outcome: string): Promi
 async function traceFieldIntentDevControl(step: string, outcome: string): Promise<void> {
   try {
     await traceTownshipDevEvent(`action-field-dev-${step}:${outcome}`);
+  } catch {
+    // Test-only observability must not change the production action functions.
+  }
+}
+
+async function traceRosterIntentDevControl(step: string, outcome: string): Promise<void> {
+  try {
+    await traceTownshipDevEvent(`action-roster-dev-${step}:${outcome}`);
   } catch {
     // Test-only observability must not change the production action functions.
   }
@@ -1648,7 +1769,7 @@ function pairingDiscoveryAdvertFromMessage(value: unknown): TownshipPairingDisco
         </dl>
       </article>
 
-      <aside class="roster-panel">
+      <aside id="township-roster" class="roster-panel">
         <div class="panel-heading">
           <p>Members</p>
         </div>
@@ -1815,9 +1936,28 @@ function pairingDiscoveryAdvertFromMessage(value: unknown): TownshipPairingDisco
         <span>Unsigned browser handoff</span>
       </div>
       <p v-if="pendingActionIntent.v === 1 || pendingActionIntent.v === 3" class="incoming-action-text">{{ pendingActionIntent.command.text }}</p>
+      <p v-if="pendingActionIntent.v === 4" class="incoming-action-text">{{ pendingActionIntent.command.member }}</p>
       <div class="incoming-action-controls">
         <button type="button" @click="acceptPendingActionIntent">Use request</button>
         <button type="button" class="secondary-action" @click="dismissPendingActionIntent">Dismiss</button>
+      </div>
+    </section>
+
+    <section v-if="acceptedRosterIntent" id="participant-roster-request" class="incoming-action-panel" aria-live="polite">
+      <div class="panel-heading">
+        <p>{{ actionIntentLabel(acceptedRosterIntent) }}</p>
+        <span>Unsigned local review</span>
+      </div>
+      <p class="incoming-action-text">{{ acceptedRosterIntent.command.member }}</p>
+      <div class="incoming-action-controls">
+        <button
+          type="button"
+          :disabled="rosterIntentSubmitting !== null || !rosterActionAllowed(acceptedRosterIntent.command.command)"
+          @click="signAcceptedRosterIntent"
+        >
+          {{ rosterIntentSubmitting === acceptedRosterIntent.command.command ? "Signing" : `Sign ${rosterIntentVerb(acceptedRosterIntent)}` }}
+        </button>
+        <button type="button" class="secondary-action" @click="dismissAcceptedRosterIntent">Dismiss request</button>
       </div>
     </section>
 

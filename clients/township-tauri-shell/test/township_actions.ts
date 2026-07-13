@@ -165,6 +165,10 @@ assert.deepEqual(allowedCommands(clerkAvailability.commands), [
   "set_title",
 ]);
 assert.equal(clerkAvailability.commands.close_matter.capId, "ZOb-qhDcOoM0yStgMMBlYY_IHIw6eX1BcvFx5hb_Hs8");
+assert.equal(clerkAvailability.commands.admit.allowed, true);
+assert.equal(clerkAvailability.commands.admit.capId, "ZOb-qhDcOoM0yStgMMBlYY_IHIw6eX1BcvFx5hb_Hs8");
+assert.equal(clerkAvailability.commands.remove_member.allowed, true);
+assert.equal(clerkAvailability.commands.remove_member.capId, "ZOb-qhDcOoM0yStgMMBlYY_IHIw6eX1BcvFx5hb_Hs8");
 
 const clerkGrantValues = townshipValues([genesisFixture]);
 const clerkGrantSubmitted = await submitTownshipDelegation({
@@ -378,9 +382,28 @@ assert.equal(residentAdmitSubmitted.carrierFrameCount, 1);
 assert.equal(storedLocalOps(residentAdmitValues).at(-1)?.command, "admit");
 assert.equal(frameCommandName(storedCarrierFrames(residentAdmitValues).at(-1)), "admit");
 
+const clerkAdmitValues = townshipValues(vector.clientDivergedCarrierOps);
+const clerkAdmitCalls: string[] = [];
+const clerkAdmitSubmitted = await submitTownshipCommand({
+  invoke: nativeInvoke(clerkAdmitValues, clerkIdentity, clerkAdmitCalls),
+  command: { command: "admit", member: "neighbor" },
+});
+
+assert.equal(clerkAdmitSubmitted.ok, true);
+if (!clerkAdmitSubmitted.ok) throw new Error(clerkAdmitSubmitted.message);
+assert.deepEqual(clerkAdmitSubmitted.command, { command: "admit", member: "neighbor" });
+assert.equal(clerkAdmitSubmitted.capId, "ZOb-qhDcOoM0yStgMMBlYY_IHIw6eX1BcvFx5hb_Hs8");
+assert.equal(clerkAdmitSubmitted.localOpCount, vector.clientDivergedCarrierOps.length + 1);
+assert.equal(clerkAdmitSubmitted.carrierFrameCount, 1);
+assert.equal(storedLocalOps(clerkAdmitValues).at(-1)?.command, "admit");
+assert.equal(frameCommandName(storedCarrierFrames(clerkAdmitValues).at(-1)), "admit");
+assert.equal(clerkAdmitCalls.filter((command) => command === "lattice_sign_carrier").length, 1);
+assert.equal(clerkAdmitCalls.filter((command) => command === "lattice_kv_set").length, 2);
+
 const clerkRemoveValues = townshipValues(vector.clientDivergedCarrierOps);
+const clerkRemoveCalls: string[] = [];
 const clerkRemoveSubmitted = await submitTownshipCommand({
-  invoke: nativeInvoke(clerkRemoveValues, clerkIdentity, []),
+  invoke: nativeInvoke(clerkRemoveValues, clerkIdentity, clerkRemoveCalls),
   command: { command: "remove_member", member: "resident" },
 });
 
@@ -392,6 +415,8 @@ assert.equal(clerkRemoveSubmitted.localOpCount, vector.clientDivergedCarrierOps.
 assert.equal(clerkRemoveSubmitted.carrierFrameCount, 1);
 assert.equal(storedLocalOps(clerkRemoveValues).at(-1)?.command, "remove_member");
 assert.equal(frameCommandName(storedCarrierFrames(clerkRemoveValues).at(-1)), "remove_member");
+assert.equal(clerkRemoveCalls.filter((command) => command === "lattice_sign_carrier").length, 1);
+assert.equal(clerkRemoveCalls.filter((command) => command === "lattice_kv_set").length, 2);
 
 const availabilityNativeUnavailable = await loadTownshipActionAvailability({
   async invoke(command: string): Promise<never> {
@@ -488,22 +513,24 @@ assert.deepEqual(allowedCommands(postOnlyAvailability.commands), ["post"]);
 for (const command of [
   { command: "set_summary", text: "unauthorized summary" },
   { command: "set_title", text: "unauthorized title" },
+  { command: "admit", member: "unauthorized neighbor" },
+  { command: "remove_member", member: "resident" },
 ] as const) {
-  const noFieldCapValues = townshipValues(postOnlyFrames);
-  const noFieldCapValuesBefore = new Map(noFieldCapValues);
-  const noFieldCapCalls: string[] = [];
-  const noFieldCap = await submitTownshipCommand({
-    invoke: nativeInvoke(noFieldCapValues, residentIdentity, noFieldCapCalls),
+  const noCoveredCapValues = townshipValues(postOnlyFrames);
+  const noCoveredCapValuesBefore = new Map(noCoveredCapValues);
+  const noCoveredCapCalls: string[] = [];
+  const noCoveredCap = await submitTownshipCommand({
+    invoke: nativeInvoke(noCoveredCapValues, residentIdentity, noCoveredCapCalls),
     command,
   });
 
-  assert.equal(noFieldCap.ok, false);
-  if (noFieldCap.ok) throw new Error(`${command.command} unexpectedly succeeded`);
-  assert.equal(noFieldCap.reason, "missing_delegation");
-  assert.equal(noFieldCap.commandName, command.command);
-  assert.deepEqual(noFieldCapValues, noFieldCapValuesBefore);
-  assert.equal(noFieldCapCalls.filter((name) => name === "lattice_sign_carrier").length, 0);
-  assert.equal(noFieldCapCalls.filter((name) => name === "lattice_kv_set").length, 0);
+  assert.equal(noCoveredCap.ok, false);
+  if (noCoveredCap.ok) throw new Error(`${command.command} unexpectedly succeeded`);
+  assert.equal(noCoveredCap.reason, "missing_delegation");
+  assert.equal(noCoveredCap.commandName, command.command);
+  assert.deepEqual(noCoveredCapValues, noCoveredCapValuesBefore);
+  assert.equal(noCoveredCapCalls.filter((name) => name === "lattice_sign_carrier").length, 0);
+  assert.equal(noCoveredCapCalls.filter((name) => name === "lattice_kv_set").length, 0);
 }
 
 const emptySummary = await submitTownshipCommand({

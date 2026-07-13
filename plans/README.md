@@ -17,8 +17,9 @@ packaged macOS CI-enforcement gap, Plan 132 closes the BEAM/LiveView server-push
 Plan 133 adds the reusable direct-TypeScript subscription plus a real stable-server gate without
 pushing operations or state, Plan 134 closes the packaged reactive Tauri/Vue feed-consumption gap,
 Plan 135 closes the first versioned clerk-status handoff slice, and Plan 136 closes the bundled
-`set_title`/`set_summary` field-edit slice. G1 completion and Phase G work beyond field edits,
-production deployment, and W4 remain.
+`set_title`/`set_summary` field-edit slice. The remaining participant-control frontier is now being
+advanced by Plan 137's bundled `admit`/`remove_member` roster handoff. G1 completion, capability
+lifecycle controls, remaining Phase G work, production deployment, and W4 remain.
 
 **Landing 001–009 as one effort?** Start from the umbrella goal:
 [000-goal-foundation-and-hardening.md](000-goal-foundation-and-hardening.md). It
@@ -168,6 +169,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 134 | Reactive packaged Tauri availability feed | P1 | XL | 133, 129, 130 | DONE |
 | 135 | Versioned clerk status action handoff | P1 | XL | 050, 054, 130, 131, 134 | DONE |
 | 136 | Versioned field-edit action handoff | P1 | XL | 048, 135 | DONE |
+| 137 | Versioned roster action handoff | P1 | XL | 051, 054, 130, 136 | IN PROGRESS |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

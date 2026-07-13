@@ -8,6 +8,7 @@ defmodule TownshipWeb.ActionIntent do
 
   @max_replica_bytes 1_024
   @max_text_bytes 4_096
+  @max_member_bytes 4_096
   @intent_id_regex ~r/\A[0-9a-f]{32}\z/
   @ascii_edge_whitespace ~r/\A[\x09-\x0D\x20]+|[\x09-\x0D\x20]+\z/u
 
@@ -91,6 +92,38 @@ defmodule TownshipWeb.ActionIntent do
     end
   end
 
+  @spec roster_url(String.t(), :admit | :remove_member, String.t(), keyword()) ::
+          {:ok, String.t()}
+          | {:error,
+             :invalid_replica
+             | :invalid_command
+             | :invalid_member
+             | :member_too_large
+             | :invalid_intent_id}
+  def roster_url(replica, command, member, opts \\ []) do
+    intent_id = Keyword.get_lazy(opts, :intent_id, &new_intent_id/0)
+
+    with {:ok, replica} <- normalize_replica(replica),
+         {:ok, command} <- normalize_roster_command(command),
+         {:ok, member} <- normalize_member(member),
+         :ok <- validate_intent_id(intent_id) do
+      payload =
+        Jason.OrderedObject.new([
+          {"v", 4},
+          {"id", intent_id},
+          {"replica", replica},
+          {"command",
+           Jason.OrderedObject.new([
+             {"command", command},
+             {"member", member}
+           ])}
+        ])
+
+      encoded = payload |> Jason.encode!() |> Base.url_encode64(padding: false)
+      {:ok, "township://action?intent=#{encoded}"}
+    end
+  end
+
   defp normalize_replica(replica) when is_binary(replica) do
     if String.valid?(replica) do
       replica = trim_ascii_edges(replica)
@@ -123,6 +156,22 @@ defmodule TownshipWeb.ActionIntent do
 
   defp normalize_text(_text), do: {:error, :invalid_text}
 
+  defp normalize_member(member) when is_binary(member) do
+    if String.valid?(member) do
+      member = trim_ascii_edges(member)
+
+      cond do
+        member == "" -> {:error, :invalid_member}
+        byte_size(member) > @max_member_bytes -> {:error, :member_too_large}
+        true -> {:ok, member}
+      end
+    else
+      {:error, :invalid_member}
+    end
+  end
+
+  defp normalize_member(_member), do: {:error, :invalid_member}
+
   defp normalize_status_command(:close_matter), do: {:ok, "close_matter"}
   defp normalize_status_command(:reopen_matter), do: {:ok, "reopen_matter"}
   defp normalize_status_command(_command), do: {:error, :invalid_command}
@@ -130,6 +179,10 @@ defmodule TownshipWeb.ActionIntent do
   defp normalize_field_command(:set_title), do: {:ok, "set_title"}
   defp normalize_field_command(:set_summary), do: {:ok, "set_summary"}
   defp normalize_field_command(_command), do: {:error, :invalid_command}
+
+  defp normalize_roster_command(:admit), do: {:ok, "admit"}
+  defp normalize_roster_command(:remove_member), do: {:ok, "remove_member"}
+  defp normalize_roster_command(_command), do: {:error, :invalid_command}
 
   defp validate_intent_id(intent_id) when is_binary(intent_id) do
     if Regex.match?(@intent_id_regex, intent_id), do: :ok, else: {:error, :invalid_intent_id}

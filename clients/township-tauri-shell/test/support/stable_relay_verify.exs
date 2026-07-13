@@ -23,6 +23,9 @@ expected_key =
     "peer" -> "afterPeer"
     "reopen" -> "afterReopen"
     "restart" -> "afterRestartPost"
+    "roster_admit" -> "afterAdmit"
+    "roster_contested" -> "afterContested"
+    "roster_peer" -> "afterPeer"
     "summary" -> "afterSummary"
     "title" -> "afterTitle"
     _mode -> "afterPost"
@@ -93,6 +96,23 @@ if served_ids != expected["opIds"], do: raise("served operation ids do not match
 
 if server_pubkey in Enum.map(served_ops, & &1.author),
   do: raise("server transport key authored an operation")
+
+if String.starts_with?(mode, "roster_") do
+  allowed_authors =
+    MapSet.new([
+      Base.decode64!(Map.fetch!(oracle, "participantPubkey")),
+      Base.decode64!(Map.fetch!(oracle, "peerPubkey"))
+    ])
+
+  unexpected_authors =
+    served_ops
+    |> Enum.map(& &1.author)
+    |> MapSet.new()
+    |> MapSet.difference(allowed_authors)
+
+  if MapSet.size(unexpected_authors) > 0,
+    do: raise("roster source contains an operation by the server or pull-only observer")
+end
 
 if mode == "authority" do
   denied_id = oracle["authorityInvalidOp"]["id"]
