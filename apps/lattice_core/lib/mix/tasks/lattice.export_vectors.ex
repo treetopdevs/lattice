@@ -110,7 +110,11 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       perspectives: [
         %{name: "clerk_mid_partition", log: Sim.log(clerk_branch, "clerk")},
         %{name: "resident_mid_partition", log: Sim.log(resident_branch, "resident")}
-      ]
+      ],
+      replica: Sim.replica(healed),
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(merged),
+      authorityQuarantine: authority_quarantine(merged)
     }
   end
 
@@ -165,11 +169,17 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     {merged, _left_report, _right_report} =
       Sync.reconcile(Sim.log(sim, "clerk"), Sim.log(stale_branch, "clerk"))
 
+    realms = realm_index(sim)
+
     %{
       name: "township_succession_w3",
       log: merged,
-      realms: realm_index(sim),
-      perspectives: []
+      realms: realms,
+      perspectives: [],
+      replica: Sim.replica(sim),
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(merged),
+      authorityQuarantine: authority_quarantine(merged)
     }
   end
 

@@ -4,6 +4,7 @@ import type {
   Mutation,
   Op,
   OpKind,
+  SuccessionPolicyEvidence,
 } from "./op";
 import { verifyCarrierOp } from "./codec";
 import type { Verifier } from "./identity";
@@ -956,6 +957,7 @@ function payloadFromBody(
     switch (command) {
       case "genesis": {
         const delegation = delegationTerm(body.values[1]);
+        const policies = successionPolicies(body.values[2], realmByPubkey);
         if (delegation.roles.includes("clerk")) {
           return {
             field: "clerk",
@@ -965,10 +967,18 @@ function payloadFromBody(
             authority: {
               type: "genesis",
               delegation: delegationEvidence(delegation, realmByPubkey),
+              ...(policies === undefined ? {} : { policies }),
             },
           };
         }
         return neutralPayload("genesis");
+      }
+      case "heartbeat": {
+        const role = atomName(body.values[1]);
+        return {
+          ...neutralPayload(`heartbeat ${role}`),
+          authority: { type: "heartbeat", role, atTick: integerValue(body.values[2]) },
+        };
       }
       case "transfer": {
         const role = atomName(body.values[1]);
@@ -1096,6 +1106,55 @@ function delegationEvidence(
     live: delegation.live,
     sig: delegation.sig,
   };
+}
+
+function successionPolicies(
+  term: DecodedTerm | undefined,
+  realmByPubkey: Record<string, string>,
+): Record<string, SuccessionPolicyEvidence> | undefined {
+  if (typeof term !== "object" || term === null || !("type" in term) || term.type !== "map") {
+    return undefined;
+  }
+
+  const policies: Record<string, SuccessionPolicyEvidence> = {};
+  for (const [roleTerm, policyTerm] of term.pairs) {
+    if (
+      typeof policyTerm !== "object" ||
+      policyTerm === null ||
+      !("type" in policyTerm) ||
+      policyTerm.type !== "map"
+    ) {
+      continue;
+    }
+
+    let successorRealm: string | undefined;
+    let dormantTicks: number | undefined;
+    for (const [keyTerm, valueTerm] of policyTerm.pairs) {
+      const key = atomName(keyTerm);
+      if (key === "successor") {
+        successorRealm = realmForPubkey(binBase64(valueTerm), realmByPubkey);
+      } else if (key === "dormant_ticks") {
+        dormantTicks = integerValue(valueTerm);
+      }
+    }
+
+    if (successorRealm !== undefined && dormantTicks !== undefined) {
+      policies[atomName(roleTerm)] = { successorRealm, dormantTicks };
+    }
+  }
+
+  return Object.keys(policies).length > 0 ? policies : undefined;
+}
+
+function binBase64(term: DecodedTerm | undefined): string {
+  if (typeof term !== "object" || term === null || !("type" in term) || term.type !== "bin") {
+    throw new Error("expected binary term");
+  }
+  if (typeof Buffer !== "undefined") return Buffer.from(term.bytes).toString("base64");
+
+  const btoaFn = (globalThis as unknown as { btoa?: (decoded: string) => string }).btoa;
+  if (!btoaFn) throw new Error("base64 encoding unavailable");
+  return btoaFn(String.fromCharCode(...term.bytes));
 }
 
 function realmForPubkey(pubkeyBase64: string, realmByPubkey: Record<string, string>): string {

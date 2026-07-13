@@ -14,9 +14,15 @@ export interface AuthorityDelegationEvidence {
     /** Embedded delegation signature retained from carrier evidence when available. */
     sig?: string;
 }
+/** Succession policy conferred by a valid genesis: who may seize a role, and when. */
+export interface SuccessionPolicyEvidence {
+    successorRealm: string;
+    dormantTicks: number;
+}
 export type AuthorityEvidence = {
     type: "genesis";
     delegation: AuthorityDelegationEvidence;
+    policies?: Record<string, SuccessionPolicyEvidence>;
 } | {
     type: "grant";
     delegation: AuthorityDelegationEvidence;
@@ -24,6 +30,10 @@ export type AuthorityEvidence = {
     type: "transfer" | "succeed";
     role: string;
     delegation: AuthorityDelegationEvidence;
+    atTick: number;
+} | {
+    type: "heartbeat";
+    role: string;
     atTick: number;
 };
 export interface Op {

@@ -25,15 +25,26 @@ export interface AuthorityDelegationEvidence {
   sig?: string;
 }
 
+/** Succession policy conferred by a valid genesis: who may seize a role, and when. */
+export interface SuccessionPolicyEvidence {
+  successorRealm: string;
+  dormantTicks: number;
+}
+
 export type AuthorityEvidence =
-  | { type: "genesis"; delegation: AuthorityDelegationEvidence }
+  | {
+      type: "genesis";
+      delegation: AuthorityDelegationEvidence;
+      policies?: Record<string, SuccessionPolicyEvidence>;
+    }
   | { type: "grant"; delegation: AuthorityDelegationEvidence }
   | {
       type: "transfer" | "succeed";
       role: string;
       delegation: AuthorityDelegationEvidence;
       atTick: number;
-    };
+    }
+  | { type: "heartbeat"; role: string; atTick: number };
 
 export interface Op {
   /** Content-address id from Elixir. In Tier A this is an opaque handle. */

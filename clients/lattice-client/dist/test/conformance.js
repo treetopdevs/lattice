@@ -14,17 +14,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { createPublicKey, verify as edVerify } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { canonicalBytesForCarrierDelegation, canonicalHash, carrierDelegationsFromFrames, carrierOpsToSemanticOps, decodeCarrierOpFrame, materialize, verifyCarrierOp, V01UnvalidatedAuthorityError, } from "../src/index";
-// Scenarios that change an authority role (a transfer or succession) after
-// genesis. The TS reducer cannot yet validate those (it honored ANY signed
-// transfer/succeed — the V-01 authority-drift defect), so until Plan 140 ports
-// real validation, `materialize` fails CLOSED and refuses them. We assert the
-// refusal here instead of asserting a (currently unsafe) state. Plan 140 removes
-// each name from this set as it restores validated reduction for that shape.
-const REFUSED_PENDING_PLAN_140 = new Set([
-    "township_zoning_variance_24",
-    "township_succession_w3",
-]);
+import { canonicalBytesForCarrierDelegation, canonicalHash, carrierDelegationsFromFrames, carrierOpsToSemanticOps, decodeCarrierOpFrame, materialize, verifyCarrierOp, } from "../src/index";
 const here = dirname(fileURLToPath(import.meta.url));
 const vecDir = join(here, "vectors");
 const verifier = { verify: verifyEd25519 };
@@ -133,17 +123,6 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
         check("delegation collision forged outer op sorts first", forgedFrame === undefined || pristineFrame === undefined
             ? null
             : forgedFrame.id < pristineFrame.id, true);
-    }
-    if (REFUSED_PENDING_PLAN_140.has(vec.scenario)) {
-        let threw = null;
-        try {
-            materialize(vec.schema, ops);
-        }
-        catch (e) {
-            threw = e;
-        }
-        check("refuses authority-role change (fail-closed, pending Plan 140)", threw instanceof V01UnvalidatedAuthorityError, true);
-        continue;
     }
     // full-frontier materialization
     const full = materialize(vec.schema, ops);

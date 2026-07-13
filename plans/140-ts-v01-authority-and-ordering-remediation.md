@@ -225,6 +225,45 @@ Both ordering findings are fixed and Sim-pinned locally, but this does not compl
   Holder-definition unification and restoring the fail-closed zoning/succession scenarios remain
   below. Plan 140 stays `IN PROGRESS`.
 
+## Execution checkpoint: succession port, holder unification, and the last refusals removed
+
+Every remaining fail-closed scenario is restored and every local gate is green; only the hosted
+flagship run remains before this plan can claim its completion gate:
+
+- The zoning and succession vectors now carry the same additive evidence fields as the adversarial
+  corpus (`replica`, `realmByPubkey`, `oracleCarrierOps`, plus an `authorityQuarantine` pin inside
+  the expectations). A field-level comparison against the prior committed vectors proved the ops,
+  ids, state, quarantine, and winners are byte-identical — the regeneration is additive evidence,
+  not a BEAM-side behavior change, and both stale actions pin as `stale_holder`.
+- Restoring zoning was evidence-only: with real carrier frames decoded, the existing honored pass
+  validates its genesis and clerk transfer, quarantines the stale reopen, and reproduces both
+  mid-partition perspectives — 23 checks green with no reducer change.
+- Restoring succession ported the remaining authority vocabulary. Carrier decoding now retains
+  genesis succession policies (successor key mapped to a realm, dormant ticks) and heartbeat
+  events (role, tick). The authority pass collects policies only from geneses whose delegations
+  validate (the oracle's `collect_policies`), records heartbeats only when the author holds the
+  role at the heartbeat's deps, stamps every honored acquire with its tick, and honors a `succeed`
+  only when it is self-issued to the policy's successor and its tick clears the last visible
+  acquire/heartbeat activity plus the dormancy window (`decide_succeed`).
+- Finding 4 is closed by construction: `quarantine.ts` no longer keeps its own
+  max-`{depth, hash}` holder definition. Gated commands are judged against the honored acquire
+  timeline exported by the authority pass, using the oracle's own predicates — last visible
+  acquire for `:not_holder`, and the immediately-next acquire that never saw the command for
+  `:stale_holder`. Evidence-less single-genesis histories record their acquire so the unified
+  predicate serves Tier-A vectors unchanged.
+- `REFUSED_PENDING_PLAN_140` is deleted; every vector asserts full state, quarantine, and winners.
+  The `V01UnvalidatedAuthorityError` guard remains the fail-closed backstop for histories outside
+  the ported vocabulary (missing evidence, unknown event shapes) and `npm run v01:guard` still
+  passes.
+- Local gates: TypeScript typecheck/build, conformance (19 vectors, no refusals), V-01 guard,
+  canonical parity, Township authoring, Tauri bridge, direct carrier, relay, relay-sync, live
+  carrier, and carrier feed are green; the shell's stable-relay, direct-feed, and reactive
+  feed/controller contracts are green, and the packaged reactive feed smoke passes against the
+  existing built bundle. Full `mix verify` is green. The packaged onboarding smoke needs the Tauri
+  CLI (hosted macOS job); it was not run here.
+- Remaining before `DONE`: a green hosted flagship run (including the packaged macOS jobs), which
+  is this plan's "Flagship CI green" gate. No code work is known to remain.
+
 ## Priority
 
 **P0 — STOP-condition remediation.** This plan blocks Plan 139 (revocation handoff) and any

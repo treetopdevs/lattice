@@ -1,6 +1,12 @@
 {
   "expectAtFrontier": [],
   "expectAtFullFrontier": {
+    "authorityQuarantine": [
+      [
+        "PNr-ZXuSWLJ2pOuVD860KIlfs4JyBLqz_i--_nFrgf0",
+        "stale_holder"
+      ]
+    ],
     "quarantine": [
       "PNr-ZXuSWLJ2pOuVD860KIlfs4JyBLqz_i--_nFrgf0"
     ],
@@ -113,7 +119,304 @@
       "value": true
     }
   ],
+  "oracleCarrierOps": [
+    {
+      "author": "vrBCfq4/W72X5ZmWHkOPUwH2AXzkZApeNUnb42F9W7s=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "vrBCfq4/W72X5ZmWHkOPUwH2AXzkZApeNUnb42F9W7s=",
+              "id": "VDGulH9tx41zXolec2XlQeWQx1ikNTqJ3rLmxahYyhk",
+              "issuer": "vrBCfq4/W72X5ZmWHkOPUwH2AXzkZApeNUnb42F9W7s=",
+              "live": true,
+              "ops": [
+                "admit",
+                "close_matter",
+                "post",
+                "remove_member",
+                "reopen_matter",
+                "set_summary",
+                "set_title"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:succession-w3#root:5Lf0nLa2nM62QJYZ_JR3Ly7x7WacH4AhUv0slB7dznw",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "jOv9zzd6u3k+sCYwqtvASSeh2N/YAsXmp7NDnQ/ekCBwX9lmJ5eRtMan5ql0hAa9uYMNeL0TmgnQnSFxZCE5Ag=="
+            }
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "clerk"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "successor"
+                      ],
+                      [
+                        "bin",
+                        "NTpQIazgrutpBnzVVBgC7/F8QJLKdZ5BptTL8WN25lE="
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "dormant_ticks"
+                      ],
+                      [
+                        "int",
+                        3
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [],
+      "id": "AQCg9_bVUlfwnYbQsZBLbABws-RePXT5y8GPTetUfnQ",
+      "kind": "authority",
+      "replica": "replica:matter:succession-w3#root:5Lf0nLa2nM62QJYZ_JR3Ly7x7WacH4AhUv0slB7dznw",
+      "sig": "lx0pzOFLYjesr9BFMSeVje1H0DOBZff1RU7bpHnmDGgKfazI9iiDYZItDEMVyzdppM6EKBx2uJcq61YF+L5SBQ==",
+      "v": 1
+    },
+    {
+      "author": "vrBCfq4/W72X5ZmWHkOPUwH2AXzkZApeNUnb42F9W7s=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "grant"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "NTpQIazgrutpBnzVVBgC7/F8QJLKdZ5BptTL8WN25lE=",
+              "id": "NZfZqNv80vpUjSkbk_D9imqcHr5NyQu0Q9qdti9rJ1E",
+              "issuer": "vrBCfq4/W72X5ZmWHkOPUwH2AXzkZApeNUnb42F9W7s=",
+              "live": false,
+              "ops": [
+                "post"
+              ],
+              "parent_id": "VDGulH9tx41zXolec2XlQeWQx1ikNTqJ3rLmxahYyhk",
+              "replica": "replica:matter:succession-w3#root:5Lf0nLa2nM62QJYZ_JR3Ly7x7WacH4AhUv0slB7dznw",
+              "roles": [],
+              "sig": "DjI3P6SJnvib74dC0wAw7lpmP1pyHLv52cp4HJpGL1m8gBihh0RF7eiuBn2A0mrqEyd/wM2RdPkwj6F+8iASBQ=="
+            }
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "AQCg9_bVUlfwnYbQsZBLbABws-RePXT5y8GPTetUfnQ"
+      ],
+      "id": "RxB5j-q34crpGzqIcW_PDuXrvkM0oREhv0UiHcTdkoo",
+      "kind": "authority",
+      "replica": "replica:matter:succession-w3#root:5Lf0nLa2nM62QJYZ_JR3Ly7x7WacH4AhUv0slB7dznw",
+      "sig": "se0GLU5YZJE/esTKYuXWkFjPYWoeiIzqnl2sTe4toVDKaRd5Afv1AekPGGO8e9lp1IIz7Qo5sV/Djv4cSzBDDA==",
+      "v": 1
+    },
+    {
+      "author": "vrBCfq4/W72X5ZmWHkOPUwH2AXzkZApeNUnb42F9W7s=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "post"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "YSBkdXJhYmxlIGNpdmljIHJlY29yZA=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "VkRHdWxIOXR4NDF6WG9sZWMyWGxRZVdReDFpa05UcUozckxteGFoWXloaw=="
+      ],
+      "deps": [
+        "RxB5j-q34crpGzqIcW_PDuXrvkM0oREhv0UiHcTdkoo"
+      ],
+      "id": "ldP-UDL3_EvV-syeMVBoan74nzv2OIIW6q9yM-kPIi0",
+      "kind": "command",
+      "replica": "replica:matter:succession-w3#root:5Lf0nLa2nM62QJYZ_JR3Ly7x7WacH4AhUv0slB7dznw",
+      "sig": "bYTGVrI397mMotliIHwERvXvJWS42jOaBbawi4tH5rdJqyoSYSr8M2opNIBvSS1+yJkT7ZGDUx1Hn8oGyvpIAA==",
+      "v": 1
+    },
+    {
+      "author": "vrBCfq4/W72X5ZmWHkOPUwH2AXzkZApeNUnb42F9W7s=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "heartbeat"
+          ],
+          [
+            "atom",
+            "clerk"
+          ],
+          [
+            "int",
+            1
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "ldP-UDL3_EvV-syeMVBoan74nzv2OIIW6q9yM-kPIi0"
+      ],
+      "id": "KOELUxMk1sKEfZKCtsi0bquJEKXKcSULKyC4vDshowI",
+      "kind": "authority",
+      "replica": "replica:matter:succession-w3#root:5Lf0nLa2nM62QJYZ_JR3Ly7x7WacH4AhUv0slB7dznw",
+      "sig": "wnWnfz7/Hfgc8IxQvm2Bk2Vjs5qpIQO8TYxpjUGtwet1vgU0zNV3KFxsewt9IATT/0ZjYRmkAxY1Pl4JTbG6Cg==",
+      "v": 1
+    },
+    {
+      "author": "vrBCfq4/W72X5ZmWHkOPUwH2AXzkZApeNUnb42F9W7s=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "close_matter"
+          ],
+          [
+            "list",
+            []
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "VkRHdWxIOXR4NDF6WG9sZWMyWGxRZVdReDFpa05UcUozckxteGFoWXloaw=="
+      ],
+      "deps": [
+        "KOELUxMk1sKEfZKCtsi0bquJEKXKcSULKyC4vDshowI"
+      ],
+      "id": "PNr-ZXuSWLJ2pOuVD860KIlfs4JyBLqz_i--_nFrgf0",
+      "kind": "command",
+      "replica": "replica:matter:succession-w3#root:5Lf0nLa2nM62QJYZ_JR3Ly7x7WacH4AhUv0slB7dznw",
+      "sig": "t61mHt0v72BGP3pV4/AwuRxf7CR+/pRZD7omrQ2bc/+VOnQreXaKcvHf8cZMOGCzgihIAY0DbVGqD987+5twBw==",
+      "v": 1
+    },
+    {
+      "author": "NTpQIazgrutpBnzVVBgC7/F8QJLKdZ5BptTL8WN25lE=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "succeed"
+          ],
+          [
+            "atom",
+            "clerk"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "NTpQIazgrutpBnzVVBgC7/F8QJLKdZ5BptTL8WN25lE=",
+              "id": "Iw8rw_gn8-RmIC4CEUSTCl976nCV-cgBy0o_oYWj07o",
+              "issuer": "NTpQIazgrutpBnzVVBgC7/F8QJLKdZ5BptTL8WN25lE=",
+              "live": false,
+              "ops": [
+                "close_matter",
+                "reopen_matter"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:succession-w3#root:5Lf0nLa2nM62QJYZ_JR3Ly7x7WacH4AhUv0slB7dznw",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "hcDAqMOJCnbFDlWVouhiz77TXWIP7vJlPXmZ59hHw41c0C6rUioJq9P9sa7LfxZbjuuAxyFs8IwQnzelibRGBw=="
+            }
+          ],
+          [
+            "int",
+            4
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "KOELUxMk1sKEfZKCtsi0bquJEKXKcSULKyC4vDshowI"
+      ],
+      "id": "SGQsgvfW3hl9BMbQePmcTHEBpmowcs0vnqPbjfZZfiE",
+      "kind": "authority",
+      "replica": "replica:matter:succession-w3#root:5Lf0nLa2nM62QJYZ_JR3Ly7x7WacH4AhUv0slB7dznw",
+      "sig": "4480MFXIme2DsozOaLc3Hllegw0REY+TKtBUlhU2UoCqQmZhvRSig4YlYe9jtu5HBUQUQp1CSu2k8p1K2s+xCA==",
+      "v": 1
+    },
+    {
+      "author": "NTpQIazgrutpBnzVVBgC7/F8QJLKdZ5BptTL8WN25lE=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "close_matter"
+          ],
+          [
+            "list",
+            []
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "SXc4cndfZ244LVJtSUM0Q0VVU1RDbDk3Nm5DVi1jZ0J5MG9fb1lXajA3bw=="
+      ],
+      "deps": [
+        "SGQsgvfW3hl9BMbQePmcTHEBpmowcs0vnqPbjfZZfiE"
+      ],
+      "id": "La14iFUUIkLyRtrNaISfp5vitwXRCfAP4V4FdvazRr8",
+      "kind": "command",
+      "replica": "replica:matter:succession-w3#root:5Lf0nLa2nM62QJYZ_JR3Ly7x7WacH4AhUv0slB7dznw",
+      "sig": "S/0p160RN2PDYIi7y+Og+nf8n/Yo/i9qW+rKTAvv9fO1XdcpktyZWz6D5TvjeGLRgLRkgNDt4mndiT6HpuVcCA==",
+      "v": 1
+    }
+  ],
   "perspectives": [],
+  "realmByPubkey": {
+    "NTpQIazgrutpBnzVVBgC7/F8QJLKdZ5BptTL8WN25lE=": "resident",
+    "vrBCfq4/W72X5ZmWHkOPUwH2AXzkZApeNUnb42F9W7s=": "clerk"
+  },
+  "replica": "replica:matter:succession-w3#root:5Lf0nLa2nM62QJYZ_JR3Ly7x7WacH4AhUv0slB7dznw",
   "scenario": "township_succession_w3",
   "schema": {
     "fields": {

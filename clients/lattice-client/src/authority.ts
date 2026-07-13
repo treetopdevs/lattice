@@ -6,18 +6,33 @@ import type {
   AuthorityDelegationEvidence,
   AuthorityEvidence,
   Op,
+  SuccessionPolicyEvidence,
 } from "./op";
 import { isAuthorityField } from "./schema";
 import type { ReplicaSchema } from "./schema";
 
+/** One honored role acquisition, in processing (canonical) order. */
+export interface HonoredAcquire {
+  opId: string;
+  holder: string;
+  atTick: number;
+}
+
 export interface AuthorityAnalysis {
   honoredWrites: ReadonlySet<string>;
   quarantinedWrites: ReadonlySet<string>;
+  /** Honored acquires per role, in the order they were honored (the oracle's timeline). */
+  acquiresByRole: ReadonlyMap<string, readonly HonoredAcquire[]>;
 }
 
 interface RoleState {
   holder: string | null;
-  acquires: { opId: string; holder: string }[];
+  acquires: HonoredAcquire[];
+  heartbeats: { opId: string; atTick: number }[];
+}
+
+function emptyRoleState(): RoleState {
+  return { holder: null, acquires: [], heartbeats: [] };
 }
 
 /**
@@ -41,34 +56,61 @@ export function analyzeAuthority(
 
   const delegations = collectDelegations(visible);
   const delegationValidity = new Map<string, boolean>();
+  const policies = collectPolicies(visible, delegations, delegationValidity);
   const states = new Map<string, RoleState>();
   const honoredWrites = new Set<string>();
   const quarantinedWrites = new Set<string>();
 
   for (const op of visible) {
+    if (op.authority?.type === "heartbeat") {
+      // Heartbeats never write a field: they only refresh the holder's
+      // last-active tick, and only when the author holds the role at its deps.
+      const heartbeat = op.authority;
+      const state = states.get(heartbeat.role) ?? emptyRoleState();
+      const anc = ancestors(op.id, byId as Map<string, Op>);
+      const holderAtDeps = [...state.acquires]
+        .reverse()
+        .find((acquire) => anc.has(acquire.opId))?.holder;
+      if (holderAtDeps === op.author) {
+        state.heartbeats.push({ opId: op.id, atTick: heartbeat.atTick });
+      }
+      states.set(heartbeat.role, state);
+      continue;
+    }
+
     if (!authorityRoleWrite(schema, op)) continue;
 
     const writeCount = writesPerRole.get(op.field) ?? 0;
     if (op.authority === undefined) {
       if (writeCount > 1) throw new Error(`missing authority evidence for ${op.id}`);
+      const state = states.get(op.field) ?? emptyRoleState();
+      if (typeof op.value === "string") {
+        state.holder = op.value;
+        state.acquires.push({ opId: op.id, holder: op.value, atTick: 0 });
+        states.set(op.field, state);
+      }
       honoredWrites.add(op.id);
       continue;
     }
 
-    const state = states.get(op.field) ?? { holder: null, acquires: [] };
+    const evidence = op.authority;
+    const state = states.get(op.field) ?? emptyRoleState();
     const honored = authorityWriteHonored(
       op,
-      op.authority,
+      evidence,
       state,
       delegations,
       delegationValidity,
+      policies,
       byId,
     );
 
     if (honored) {
-      const holder = op.authority.delegation.audienceRealm;
+      const holder = evidence.delegation.audienceRealm;
+      const atTick =
+        evidence.type === "transfer" || evidence.type === "succeed" ? evidence.atTick : 0;
       state.holder = holder;
-      state.acquires.push({ opId: op.id, holder });
+      state.acquires.push({ opId: op.id, holder, atTick });
       states.set(op.field, state);
       honoredWrites.add(op.id);
     } else {
@@ -84,7 +126,11 @@ export function analyzeAuthority(
     }
   }
 
-  return { honoredWrites, quarantinedWrites };
+  const acquiresByRole = new Map<string, readonly HonoredAcquire[]>(
+    [...states].map(([role, state]) => [role, state.acquires]),
+  );
+
+  return { honoredWrites, quarantinedWrites, acquiresByRole };
 }
 
 function authorityRoleWrite(schema: ReplicaSchema, op: Op): boolean {
@@ -99,8 +145,11 @@ function authorityWriteHonored(
   state: RoleState,
   delegations: ReadonlyMap<string, AuthorityDelegationEvidence | null>,
   delegationValidity: Map<string, boolean>,
+  policies: ReadonlyMap<string, SuccessionPolicyEvidence>,
   byId: ReadonlyMap<string, Op>,
 ): boolean {
+  if (evidence.type === "heartbeat") return false;
+
   const delegation = evidence.delegation;
   if (
     delegation.audienceRealm !== op.value ||
@@ -121,20 +170,63 @@ function authorityWriteHonored(
     );
   }
 
-  if (evidence.type !== "transfer" || evidence.role !== op.field) {
-    throw new Error(`unsupported authority event ${evidence.type} for ${op.id}`);
+  if (evidence.type === "transfer" && evidence.role === op.field) {
+    const visible = ancestors(op.id, byId as Map<string, Op>);
+    const holderAtDeps = [...state.acquires]
+      .reverse()
+      .find((acquire) => visible.has(acquire.opId))?.holder;
+
+    return (
+      delegation.issuerRealm === op.author &&
+      holderAtDeps === op.author &&
+      state.holder === op.author
+    );
   }
 
-  const visible = ancestors(op.id, byId as Map<string, Op>);
-  const holderAtDeps = [...state.acquires]
-    .reverse()
-    .find((acquire) => visible.has(acquire.opId))?.holder;
+  if (evidence.type === "succeed" && evidence.role === op.field) {
+    const policy = policies.get(op.field);
+    if (
+      delegation.issuerRealm !== op.author ||
+      delegation.audienceRealm !== op.author ||
+      policy === undefined ||
+      policy.successorRealm !== op.author
+    ) {
+      return false;
+    }
 
-  return (
-    delegation.issuerRealm === op.author &&
-    holderAtDeps === op.author &&
-    state.holder === op.author
-  );
+    const visible = ancestors(op.id, byId as Map<string, Op>);
+    const lastActive = Math.max(
+      0,
+      ...state.acquires.filter((a) => visible.has(a.opId)).map((a) => a.atTick),
+      ...state.heartbeats.filter((h) => visible.has(h.opId)).map((h) => h.atTick),
+    );
+
+    return evidence.atTick >= lastActive + policy.dormantTicks;
+  }
+
+  throw new Error(`unsupported authority event ${evidence.type} for ${op.id}`);
+}
+
+/** Succession policies are conferred only by a genesis whose delegation is valid. */
+function collectPolicies(
+  ops: readonly Op[],
+  delegations: ReadonlyMap<string, AuthorityDelegationEvidence | null>,
+  delegationValidity: Map<string, boolean>,
+): Map<string, SuccessionPolicyEvidence> {
+  const policies = new Map<string, SuccessionPolicyEvidence>();
+
+  for (const op of ops) {
+    const evidence = op.authority;
+    if (evidence?.type !== "genesis" || evidence.policies === undefined) continue;
+    if (!validDelegation(evidence.delegation, delegations, delegationValidity, new Set())) {
+      continue;
+    }
+    for (const [role, policy] of Object.entries(evidence.policies)) {
+      policies.set(role, policy);
+    }
+  }
+
+  return policies;
 }
 
 function collectDelegations(
@@ -143,8 +235,10 @@ function collectDelegations(
   const delegations = new Map<string, AuthorityDelegationEvidence | null>();
 
   for (const op of ops) {
-    const delegation = op.authority?.delegation;
-    if (!delegation || !delegationSelfConsistent(delegation)) continue;
+    const evidence = op.authority;
+    if (evidence === undefined || evidence.type === "heartbeat") continue;
+    const delegation = evidence.delegation;
+    if (!delegationSelfConsistent(delegation)) continue;
     const existing = delegations.get(delegation.id);
     if (existing === undefined) {
       delegations.set(delegation.id, delegation);
