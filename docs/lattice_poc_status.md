@@ -555,3 +555,36 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
 - Blocker or remaining limitation: no automatic authored-frame publication, mobile secure-store
   implementation, mobile/device result, member/delegation command bus, production ingress/TLS
   deployment, complete G1/Phase G claim, or receipt-free W4.
+
+## Checkpoint: Versioned Field-Edit Action Handoff
+
+- Files changed: the exact v3 title/summary action-intent producer and decoder fixtures,
+  fresh-only LiveView field preparation, shared participant dispatcher, command-specific Tauri
+  review and signing ceremony, multi-realm stable-server test harness, Sim field fixture,
+  dedicated packaged smoke, fast shell contracts, workflow gate, and cumulative Plan 136 docs.
+- Behaviors: v1 remains post-only and v2 remains clerk-status-only. A fresh instrument prepares
+  `set_title` or `set_summary`; its server handler fixes the command despite client parameters.
+  The app stages and accepts the request without storage, signing, draft replacement, or network
+  activity, rechecks the saved replica before native-custody signing, leaves the exact frame in
+  the local outbox, and publishes only through a separate explicit Sync. A post-only participant
+  fails both field commands locally before native signing or KV writes.
+- Oracle: the real installed app signs its resident summary from the shared base frontier, keeps
+  that Sim-equal frame byte-identical while a distinct clerk relay publishes a concurrent summary,
+  and then converges the stable source, Tauri feed, and LiveView to Sim's contested LWW result only
+  after explicit Sync. The same app repeats the inert, pending, Sync, and three-surface convergence
+  ceremony for title without server or observer authoring.
+- Gates: focused Elixir, TypeScript, Vue, Plan, and no-cap contracts are green. Full local regression
+  is green at 383 tests plus 25 properties, complete app/browser/flagship convergence,
+  warnings-as-errors, the unchanged five-cycle xref baseline, both Sobelow scans, actionlint,
+  formatting, diff hygiene, and 23 Rust tests. Final exact-worktree Claude review and its focused
+  follow-ups returned `PROCEED` with no blocker, high, or medium finding.
+- Hosted implementation run `29223172342` is green at
+  `0382f96b582b4efd9a751b8b81c76be58f719691`. `Verify flagship artifact` completed in 3m49s,
+  `Unit + property suite` completed in 4m30s, and `Packaged macOS convergence` completed in 11m24s.
+  Stable onboarding, unchanged post, no-build clerk, no-build field edit, and reactive feed all
+  passed in the required order.
+- Result: Plan 136 status is `DONE`; local and hosted evidence establish the scoped versioned
+  field-edit custody seam and contested convergence proof.
+- Blocker or remaining limitation: no automatic authored-frame publication, mobile secure-store
+  implementation, mobile/device result, roster/delegation/revocation/succession command bus,
+  production ingress/TLS deployment, complete G1/Phase G claim, or receipt-free W4.

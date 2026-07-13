@@ -437,6 +437,11 @@ Plan 135 leaves this custody strategy unchanged. The packaged desktop clerk path
 signer and ordinary replayable delegation/log/outbox KV evidence, and the signed close or reopen
 frame remains local until a separate explicit Sync. No mobile secure-store implementation, mobile
 relay, Android/iOS probe, physical-device behavior, Expo result, or phone-grade claim is added.
+Plan 136 leaves this custody strategy unchanged. The packaged desktop field-edit path reuses the
+native signer and ordinary replayable delegation/log/outbox KV evidence, and the signed
+`set_title` or `set_summary` frame remains local until a separate explicit Sync. No mobile
+secure-store implementation, mobile relay, Android/iOS probe, physical-device behavior, Expo
+result, or phone-grade claim is added.
 Plan 086 proves the same env-gated probe can
 connect and complete a WebSocket frame roundtrip in a debug APK, so it proves the harness can produce
 a positive on-device result but still does not prove release Sync/outbox/KV convergence. Plan 087 proves

@@ -739,7 +739,12 @@ defmodule LatticeCarrierServer.PlanContractTest do
       )
 
     plans_index = File.read!(Path.join(@repo_root, "plans/README.md"))
+    build_map = File.read!(Path.join(@repo_root, "TOWNSHIP_BUILD_MAP.md"))
+    poc_status = File.read!(Path.join(@repo_root, "docs/lattice_poc_status.md"))
     workflow = File.read!(Path.join(@repo_root, ".github/workflows/flagship.yml"))
+
+    mobile_strategy =
+      File.read!(Path.join(@repo_root, "docs/township_mobile_secure_store_strategy.md"))
 
     shell_package =
       @repo_root
@@ -747,7 +752,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
       |> File.read!()
       |> Jason.decode!()
 
-    assert plan =~ ~r/## Status\s+IN PROGRESS/
+    assert plan =~ ~r/## Status\s+DONE/
     assert plan =~ "v1 and v2 remain exactly unchanged"
 
     assert plan =~
@@ -771,12 +776,20 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert plan =~ "No automatic authored-frame publication"
     assert plan =~ "No mobile secure-store implementation change"
     assert plan =~ "No complete G1/Phase G claim and no receipt-free W4 claim"
+    assert plan =~ "383 tests plus 25 properties"
+    assert plan =~ "Hosted implementation run `29223172342` is green"
+    assert plan =~ "`0382f96b582b4efd9a751b8b81c76be58f719691`"
+    assert plan =~ "`Verify flagship artifact` completed in 3m49s"
+    assert plan =~ "`Unit + property suite` completed in 4m30s"
+    assert plan =~ "`Packaged macOS convergence` completed in 11m24s"
+    assert plan =~ ~r/## Completion claim\s+Complete for this scoped increment/
+    refute plan =~ "Hosted implementation, closure documentation, and branch-tip CI remain pending"
+    refute plan =~ "Not yet complete"
 
     assert plans_index =~
-             "| 136 | Versioned field-edit action handoff | P1 | XL | 048, 135 | IN PROGRESS |"
+             "| 136 | Versioned field-edit action handoff | P1 | XL | 048, 135 | DONE |"
 
-    assert plans_index =~
-             "Plan 136's bundled argument-bearing `set_title`/`set_summary` handoff"
+    assert plans_index =~ "Plan 136 closes the bundled"
 
     assert shell_package["scripts"]["tauri:field-action-handoff:smoke"] ==
              "tsx test/tauri_field_action_handoff_smoke.ts"
@@ -789,5 +802,27 @@ defmodule LatticeCarrierServer.PlanContractTest do
 
     assert workflow =~
              ~r/Verify packaged field edit handoff\s+working-directory: clients\/township-tauri-shell\s+env:\s+TOWNSHIP_SKIP_FIELD_ACTION_APP_BUILD: "1"\s+run: npm run tauri:field-action-handoff:smoke/
+
+    assert build_map =~ "Plan 136 adds the versioned field-edit action handoff"
+    assert build_map =~ "Hosted Plan 136 run `29223172342` is green"
+    assert build_map =~ "Plan 136 status is `DONE`"
+    refute build_map =~ "Plan 136 completes G1"
+    refute build_map =~ "Plan 136 completes Phase G"
+
+    [_, plan136_tail] =
+      String.split(
+        poc_status,
+        "## Checkpoint: Versioned Field-Edit Action Handoff",
+        parts: 2
+      )
+
+    [plan136_checkpoint | _rest] = String.split(plan136_tail, "\n## Checkpoint:", parts: 2)
+
+    assert plan136_checkpoint =~ "383 tests plus 25 properties"
+    assert plan136_checkpoint =~ "Hosted implementation run `29223172342` is green"
+    assert plan136_checkpoint =~ "Plan 136 status is `DONE`"
+    refute plan136_checkpoint =~ "Hosted acceptance remains pending"
+
+    assert mobile_strategy =~ "Plan 136 leaves this custody strategy unchanged"
   end
 end
