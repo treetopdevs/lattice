@@ -10,7 +10,6 @@ import {
   signCarrierChallenge,
   toRequest,
   toSend,
-  V01UnvalidatedAuthorityError,
 } from "../src/index";
 import type { Op, ReplicaSchema } from "../src/index";
 import type { CarrierChallenge } from "../src/index";
@@ -83,21 +82,18 @@ check("client pulls five peer ops", toRequest(clientDiverged, peerDiverged.map((
 
 const pulled = peerDiverged.filter((op) => toRequest(clientDiverged, [op.id]).includes(op.id));
 const merged = integrate(clientDiverged, pulled);
+const materialized = materialize(vector.schema, merged);
 
-// The carrier W1 log contains a clerk transfer. Frame decode, session
-// transcript, and sync (below) are proven independently of reduction; the
-// materialized state/quarantine assertions are deferred to Plan 140, which
-// restores validated authority reduction. Until then the reducer fails CLOSED
-// on the role change rather than silently honor an unvalidated transfer.
-check("merged op ids", merged.map((o) => o.id).sort(), vector.expectAfterSync.opIds);
-
-let materializeThrew: unknown = null;
-try {
-  materialize(vector.schema, merged);
-} catch (e) {
-  materializeThrew = e;
+for (const [field, want] of Object.entries(vector.expectAfterSync.state)) {
+  check(`state.${field}`, materialized.state[field], want);
 }
-check("W1 authority-role change refused (fail-closed, pending Plan 140)", materializeThrew instanceof V01UnvalidatedAuthorityError, true);
+
+check("merged op ids", merged.map((o) => o.id).sort(), vector.expectAfterSync.opIds);
+check(
+  "authority quarantine",
+  materialized.quarantine.sort(),
+  vector.expectAfterSync.authorityQuarantine.map(([id]) => id).sort(),
+);
 
 console.log(`\n${failures === 0 ? "\x1b[32m✓ carrier checks passed\x1b[0m" : `\x1b[31m✗ ${failures} check(s) failed\x1b[0m`}`);
 process.exit(failures === 0 ? 0 : 1);

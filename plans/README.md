@@ -173,7 +173,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 137 | Versioned roster action handoff | P1 | XL | 051, 054, 130, 136 | DONE |
 | 138 | Versioned delegation grant handoff | P1 | XL | 053, 054, 058, 130, 137 | DONE |
 | 139 | Versioned revocation action handoff | P1 | XL | 138, **140, 141** | BLOCKED (gated on 140/141 — see Round 3) |
-| 140 | Restore V-01 guarantee in TS client (authority + ordering) | **P0** | L | 019, 020, 058 | TODO |
+| 140 | Restore V-01 guarantee in TS client (authority + ordering) | **P0** | L | 019, 020, 058 | IN PROGRESS |
 | 141 | Serialize shell persistence (stop silent op loss) | **P0** | M | 029, 030, 032 | TODO |
 | 142 | Carrier session replay protection + durability honesty | P1 | M | 127, 128 | TODO |
 | 143 | Consolidate the versioned action ladder (pay down accretion) | P2 | L | 138 | TODO |

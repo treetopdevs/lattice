@@ -286,6 +286,45 @@ assert.equal(invalidDelegations.saveCount, 0);
 assert.equal(invalidOutbox.accessCount, 0);
 assert.equal(invalidClient.forbiddenCallCount, 0);
 
+const evidenceFreeAuthorityOp: Op = {
+  id: "evidence-free-authority-write",
+  deps: [vector.expectAfterSync.opIds.at(-1) ?? "missing-dependency"],
+  kind: "authority",
+  author: "resident",
+  field: "clerk",
+  mutation: "write",
+  value: "resident",
+  hash: "evidence-free-authority-write",
+  command: "unvalidated clerk write",
+};
+const refusedLocalLog = new MemoryOpLog([
+  ...carrierOpsToSemanticOps(vector.oracleCarrierOps, vector.realmByPubkey),
+  evidenceFreeAuthorityOp,
+]);
+const refusedDelegations = new MemoryFrameStore(vector.oracleCarrierOps);
+const refusedOutbox = new ForbiddenOutboxStore();
+const refusedWorkflow = workflow(refusedLocalLog, refusedDelegations, refusedOutbox);
+const refusedClient = new ReadOnlyPullClient([]);
+const beforeRefusedLocal = JSON.stringify(refusedLocalLog.ops);
+const beforeRefusedDelegations = JSON.stringify(refusedDelegations.frames);
+
+await assert.rejects(
+  refreshTownshipFromCarrier({
+    client: refusedClient,
+    workflow: refusedWorkflow,
+    verifier,
+    realmByPubkey: vector.realmByPubkey,
+    generation: 9,
+  }),
+  /V-01 fail-closed/,
+);
+assert.equal(JSON.stringify(refusedLocalLog.ops), beforeRefusedLocal);
+assert.equal(JSON.stringify(refusedDelegations.frames), beforeRefusedDelegations);
+assert.equal(refusedLocalLog.saveCount, 0);
+assert.equal(refusedDelegations.saveCount, 0);
+assert.equal(refusedOutbox.accessCount, 0);
+assert.equal(refusedClient.forbiddenCallCount, 0);
+
 const controllerLocalLog = new MemoryOpLog(localOps);
 const controllerDelegations = new MemoryFrameStore(vector.clientDivergedCarrierOps);
 const controllerOutbox = new ForbiddenOutboxStore();

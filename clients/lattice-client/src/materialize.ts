@@ -4,6 +4,7 @@ import type { ReplicaSchema } from "./schema";
 import { index, depth, canonicalOrder } from "./dag";
 import { isQuarantined } from "./quarantine";
 import { lww, orSet, causalList } from "./crdt/reducers";
+import { analyzeAuthority } from "./authority";
 
 /**
  * Thrown by {@link materialize} when a log changes an authority role beyond its
@@ -16,15 +17,17 @@ import { lww, orSet, causalList } from "./crdt/reducers";
  */
 export class V01UnvalidatedAuthorityError extends Error {
   readonly role: string;
-  constructor(role: string, writes: number) {
+  override readonly cause: unknown;
+  constructor(role: string, writes: number, cause?: unknown) {
     super(
       `V-01 fail-closed: refusing to materialize a log that changes authority role "${role}" ` +
-        `(${writes} authority writes to it). The TS reducer cannot yet validate role ` +
-        `transfers or succession, so it establishes the initial holder but will not honor a ` +
-        `change it cannot prove — see plans/140.`,
+        `(${writes} authority writes to it). The TS reducer cannot fully validate this role's ` +
+        `authority history because evidence is missing or an event is unsupported, so it will not ` +
+        `honor a change it cannot prove — see plans/140.`,
     );
     this.name = "V01UnvalidatedAuthorityError";
     this.role = role;
+    this.cause = cause;
   }
 }
 
@@ -54,20 +57,6 @@ export function materialize(
   const byId = index(ops);
   const inc = included ?? new Set(ops.map((o) => o.id));
 
-  // V-01 fail-closed guard (stop-gap ahead of Plan 140). A role is established
-  // once by its genesis; any further authority write to it is a transfer or
-  // succession this reducer cannot validate. Refuse the whole log rather than
-  // guess a holder — a wrong holder inverts the quarantine set on the next pass.
-  const authorityWritesPerRole = new Map<string, number>();
-  for (const o of ops) {
-    if (!inc.has(o.id) || o.kind !== "authority") continue;
-    const spec = schema.fields[o.field];
-    if (!spec || !isAuthorityField(spec)) continue;
-    const writes = (authorityWritesPerRole.get(o.field) ?? 0) + 1;
-    authorityWritesPerRole.set(o.field, writes);
-    if (writes > 1) throw new V01UnvalidatedAuthorityError(o.field, writes);
-  }
-
   const order = canonicalOrder(
     ops.filter((o) => inc.has(o.id)),
     byId,
@@ -76,13 +65,31 @@ export function materialize(
   const depthCache = new Map<string, number>();
   const depthOf = (id: string) => depth(id, byId, depthCache);
   const concCache = new Map<string, Set<string>>();
+  let authority;
+  try {
+    authority = analyzeAuthority(schema, ops, inc, order, byId);
+  } catch (error) {
+    const role = authorityFailureRole(schema, ops, inc);
+    throw new V01UnvalidatedAuthorityError(role, authorityWriteCount(schema, ops, inc), error);
+  }
 
   // 1. quarantine pass (deps-decidable, over the included set)
   const quarantine: string[] = [];
-  const quarantined = new Set<string>();
+  const quarantined = new Set(authority.quarantinedWrites);
   for (const id of order) {
     const op = byId.get(id)!;
-    const q = isQuarantined(op, schema, orderSet, byId, concCache);
+    if (quarantined.has(id)) {
+      quarantine.push(id);
+      continue;
+    }
+    const q = isQuarantined(
+      op,
+      schema,
+      orderSet,
+      byId,
+      concCache,
+      authority.honoredWrites,
+    );
     if (q.quarantined) {
       quarantine.push(id);
       quarantined.add(id);
@@ -118,4 +125,30 @@ export function materialize(
   }
 
   return { state, quarantine, order, winners };
+}
+
+function authorityWriteCount(
+  schema: ReplicaSchema,
+  ops: Op[],
+  included: ReadonlySet<string>,
+): number {
+  return ops.filter((op) => {
+    if (!included.has(op.id) || op.kind !== "authority") return false;
+    const spec = schema.fields[op.field];
+    return spec !== undefined && isAuthorityField(spec);
+  }).length;
+}
+
+function authorityFailureRole(
+  schema: ReplicaSchema,
+  ops: Op[],
+  included: ReadonlySet<string>,
+): string {
+  return (
+    ops.find((op) => {
+      if (!included.has(op.id) || op.kind !== "authority") return false;
+      const spec = schema.fields[op.field];
+      return spec !== undefined && isAuthorityField(spec);
+    })?.field ?? "unknown"
+  );
 }

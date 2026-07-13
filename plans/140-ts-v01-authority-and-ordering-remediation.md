@@ -2,7 +2,7 @@
 
 ## Status
 
-TODO
+IN PROGRESS
 
 ## Stop-gap already in place (2026-07-13)
 
@@ -22,6 +22,31 @@ semantics are ported (or the honored-authority pass lands), remove its name from
 `carrier.ts` / `live_carrier.ts`. The stop-gap is not the fix — it converts silent divergence
 into a loud refusal; finding 2 (causal-list ordering), 3 (dangling-dep base), and 4 (holder
 definitions) are untouched by it and remain this plan's work.
+
+## Execution checkpoint: valid W1 transfer and branch-tip recovery
+
+The first vertical slice is green locally but does not complete this plan:
+
+- The existing Sim-exported `township_carrier_w1` state, quarantine, and winner assertions first
+  failed at the blanket second-authority-write refusal. Carrier decoding now retains delegation
+  facts, and one shared authority timeline honors the valid clerk transfer only after checking its
+  causal holder, current holder, role, parent chain, and attenuation. The direct and live carrier
+  gates again compare every W1 state field and authority quarantine against Sim. The zoning and
+  succession vectors remain fail-closed.
+- Hosted closure run `29250801527` exposed the same blanket-refusal regression at
+  `npm run feed:app:contract`. The exact command now passes. Reactive refresh also materializes
+  before either store write; a separate RED proved an unsupported authority history previously
+  wrote both stores before refusing, and the GREEN leaves both byte-unchanged with zero saves.
+- Focused client and shell typechecks, conformance, the fail-closed guard, direct carrier, live
+  carrier, and reactive feed gates are green. Exact-diff Claude RED and GREEN reviews returned
+  `PROCEED` for this fenced slice.
+- This checkpoint makes no general V-01 restoration claim. Claude's GREEN review retains a high
+  gate on forged-genesis root commitment and delegation-signature proof, plus missing adversarial
+  non-holder/double-transfer coverage. Until that trust-anchor gate lands, the structural W1 pass
+  can still honor an evidence-bearing transfer rooted in a fabricated self-delegation that Sim
+  would reject; only evidence-free and unsupported histories remain fail-closed. Those gates,
+  causal-list ordering, dangling-dependency height, holder unification, and succession remain
+  below. Plan 140 stays `IN PROGRESS`.
 
 ## Priority
 
@@ -121,13 +146,19 @@ partial/pruned logs — with the existing corpus unchanged and green.
 
 ## TDD sequence
 
-1. Export the adversarial corpus. Run `npm run conformance` in `clients/lattice-client`.
-   **Expect red** on (a)–(f). Commit the corpus with the failing assertions skipped-and-linked
-   or on a branch gate, per repo convention — the red run is the executable proof.
-2. Fix the dangling-dep base and `{height, id}` ordering. Vectors (d)–(f) go green.
-3. Implement the honored-authority pass. Vectors (a)–(c) go green.
-4. Unify the holder definitions on the honored pass; full suite + existing corpus green.
-5. Run the live carrier gates (`carrier:township`, `carrier:township:live`) unchanged.
+1. Restore one existing valid transfer through the real carrier-decoded public seam. Keep every
+   other named authority-change conformance scenario fail-closed until its evidence and semantics
+   land.
+2. Add one Sim-exported adversarial authority scenario at a time: forged non-holder transfer,
+   double transfer, then invalid/unattenuated delegation. Each vector must fail before its matching
+   authority-pass increment and pass without weakening the fallback refusal.
+3. Prove the authority trust anchor: delegation id/signature and bound-root commitment must be
+   checked at the carrier evidence boundary before any additional scenario leaves fail-closed.
+   Do not add a caller-controlled trust boolean.
+4. Add one concurrent-list Sim vector and fix `{height, id}` ordering; then add one partial-log/LWW
+   vector and fix the dangling-dependency base. Existing vector files remain byte-identical.
+5. Unify every holder lookup on the honored pass, restore each existing scenario's state and
+   quarantine assertions only when supported, then run the unchanged direct/live carrier gates.
 
 ## Required gates
 

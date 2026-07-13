@@ -86,6 +86,7 @@ export async function refreshTownshipFromCarrier(
   const pulledOps = carrierOpsToSemanticOps(pulledFrames, options.realmByPubkey);
   const ops = integrate(localOps, pulledOps);
   const delegationFrames = mergeCarrierFrames([...localDelegationFrames, ...pulledFrames]);
+  const matter = townshipPreviewFromOps(ops);
 
   throwIfRefreshStopped(options.signal);
   await Promise.all([
@@ -96,7 +97,7 @@ export async function refreshTownshipFromCarrier(
   return {
     generation: options.generation,
     opIds: ops.map((op) => op.id).sort(),
-    matter: townshipPreviewFromOps(ops),
+    matter,
   };
 }
 

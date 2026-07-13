@@ -2,6 +2,29 @@ import { isAuthorityField } from "./schema";
 import { index, depth, canonicalOrder } from "./dag";
 import { isQuarantined } from "./quarantine";
 import { lww, orSet, causalList } from "./crdt/reducers";
+import { analyzeAuthority } from "./authority";
+/**
+ * Thrown by {@link materialize} when a log changes an authority role beyond its
+ * establishing genesis. This is the V-01 fail-closed guard: the reducer has no
+ * authority validation yet (`carrier.ts` honors any signed transfer/succeed and
+ * `quarantine.ts` never gates authority ops), so a forged transfer authored by a
+ * non-holder would otherwise be silently honored — inverting both the holder and
+ * the quarantine set relative to the `Lattice.Sim` oracle (the V-01 STOP
+ * condition). Until Plan 140 ports real validation, we refuse rather than guess.
+ */
+export class V01UnvalidatedAuthorityError extends Error {
+    role;
+    cause;
+    constructor(role, writes, cause) {
+        super(`V-01 fail-closed: refusing to materialize a log that changes authority role "${role}" ` +
+            `(${writes} authority writes to it). The TS reducer cannot fully validate this role's ` +
+            `authority history because evidence is missing or an event is unsupported, so it will not ` +
+            `honor a change it cannot prove — see plans/140.`);
+        this.name = "V01UnvalidatedAuthorityError";
+        this.role = role;
+        this.cause = cause;
+    }
+}
 /**
  * Materialize a replica from ops. `included` optionally bounds the visible set
  * (a frontier); default is all ops. This is a pure function of (schema, ops,
@@ -17,12 +40,24 @@ export function materialize(schema, ops, included) {
     const depthCache = new Map();
     const depthOf = (id) => depth(id, byId, depthCache);
     const concCache = new Map();
+    let authority;
+    try {
+        authority = analyzeAuthority(schema, ops, inc, order, byId);
+    }
+    catch (error) {
+        const role = authorityFailureRole(schema, ops, inc);
+        throw new V01UnvalidatedAuthorityError(role, authorityWriteCount(schema, ops, inc), error);
+    }
     // 1. quarantine pass (deps-decidable, over the included set)
     const quarantine = [];
-    const quarantined = new Set();
+    const quarantined = new Set(authority.quarantinedWrites);
     for (const id of order) {
         const op = byId.get(id);
-        const q = isQuarantined(op, schema, orderSet, byId, concCache);
+        if (quarantined.has(id)) {
+            quarantine.push(id);
+            continue;
+        }
+        const q = isQuarantined(op, schema, orderSet, byId, concCache, authority.honoredWrites);
         if (q.quarantined) {
             quarantine.push(id);
             quarantined.add(id);
@@ -58,4 +93,20 @@ export function materialize(schema, ops, included) {
         }
     }
     return { state, quarantine, order, winners };
+}
+function authorityWriteCount(schema, ops, included) {
+    return ops.filter((op) => {
+        if (!included.has(op.id) || op.kind !== "authority")
+            return false;
+        const spec = schema.fields[op.field];
+        return spec !== undefined && isAuthorityField(spec);
+    }).length;
+}
+function authorityFailureRole(schema, ops, included) {
+    return (ops.find((op) => {
+        if (!included.has(op.id) || op.kind !== "authority")
+            return false;
+        const spec = schema.fields[op.field];
+        return spec !== undefined && isAuthorityField(spec);
+    })?.field ?? "unknown");
 }

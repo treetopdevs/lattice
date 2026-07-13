@@ -14,7 +14,11 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { materialize, V01UnvalidatedAuthorityError } from "../src/index";
+import {
+  carrierOpsToSemanticOps,
+  materialize,
+  V01UnvalidatedAuthorityError,
+} from "../src/index";
 import type { Op, ReplicaSchema } from "../src/index";
 
 // Scenarios that change an authority role (a transfer or succession) after
@@ -24,7 +28,6 @@ import type { Op, ReplicaSchema } from "../src/index";
 // refusal here instead of asserting a (currently unsafe) state. Plan 140 removes
 // each name from this set as it restores validated reduction for that shape.
 const REFUSED_PENDING_PLAN_140 = new Set([
-  "township_carrier_w1",
   "township_zoning_variance_24",
   "township_succession_w3",
 ]);
@@ -50,6 +53,8 @@ interface Vector {
   scenario: string;
   schema: ReplicaSchema;
   ops: Op[];
+  oracleCarrierOps?: unknown[];
+  realmByPubkey?: Record<string, string>;
   expectAtFullFrontier: {
     state: Record<string, unknown>;
     quarantine: string[];
@@ -62,10 +67,17 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
   const vec = JSON.parse(readFileSync(join(vecDir, file), "utf8")) as Vector;
   console.log(`\n▸ ${vec.scenario}  (${file})`);
 
+  const ops =
+    vec.scenario === "township_carrier_w1" &&
+    vec.oracleCarrierOps !== undefined &&
+    vec.realmByPubkey !== undefined
+      ? carrierOpsToSemanticOps(vec.oracleCarrierOps, vec.realmByPubkey)
+      : vec.ops;
+
   if (REFUSED_PENDING_PLAN_140.has(vec.scenario)) {
     let threw: unknown = null;
     try {
-      materialize(vec.schema, vec.ops);
+      materialize(vec.schema, ops);
     } catch (e) {
       threw = e;
     }
@@ -74,7 +86,7 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
   }
 
   // full-frontier materialization
-  const full = materialize(vec.schema, vec.ops);
+  const full = materialize(vec.schema, ops);
   const exp = vec.expectAtFullFrontier;
 
   for (const [field, want] of Object.entries(exp.state)) {
@@ -89,7 +101,7 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
 
   // partial-frontier assertions (the LWW flip, perspective, etc.)
   for (const fr of vec.expectAtFrontier ?? []) {
-    const m = materialize(vec.schema, vec.ops, new Set(fr.include));
+    const m = materialize(vec.schema, ops, new Set(fr.include));
     for (const [field, want] of Object.entries(fr.state)) {
       check(`@frontier[${fr.include.length}] state.${field}${fr.note ? ` (${fr.note})` : ""}`, m.state[field], want);
     }

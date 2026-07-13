@@ -13,7 +13,7 @@ import type { ReplicaSchema } from "./schema";
  * `included` bounds the visible op set (a frontier). `byId` and the concurrency
  * cache are passed in so the materializer computes them once.
  */
-export declare function isQuarantined(op: Op, schema: ReplicaSchema, included: Set<string>, byId: Map<string, Op>, concCache?: Map<string, Set<string>>): {
+export declare function isQuarantined(op: Op, schema: ReplicaSchema, included: Set<string>, byId: Map<string, Op>, concCache?: Map<string, Set<string>>, honoredAuthorityWrites?: ReadonlySet<string>): {
     quarantined: boolean;
     reason?: string;
 };

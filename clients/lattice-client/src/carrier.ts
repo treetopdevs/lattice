@@ -1,4 +1,10 @@
-import type { Mutation, Op, OpKind } from "./op";
+import type {
+  AuthorityDelegationEvidence,
+  AuthorityEvidence,
+  Mutation,
+  Op,
+  OpKind,
+} from "./op";
 import { verifyCarrierOp } from "./codec";
 import type { Verifier } from "./identity";
 import { integrate } from "./sync";
@@ -213,6 +219,7 @@ interface Payload {
   mutation: Mutation;
   value: unknown;
   command: string;
+  authority?: AuthorityEvidence;
 }
 
 const textEncoder = new TextEncoder();
@@ -819,6 +826,7 @@ export function carrierOpToSemanticOp(
     value: payload.value,
     hash: op.id,
     command: payload.command,
+    ...(payload.authority === undefined ? {} : { authority: payload.authority }),
   };
 }
 
@@ -953,6 +961,10 @@ function payloadFromBody(
             mutation: "write",
             value: realmForPubkey(delegation.issuer, realmByPubkey),
             command: "genesis clerk",
+            authority: {
+              type: "genesis",
+              delegation: delegationEvidence(delegation, realmByPubkey),
+            },
           };
         }
         return neutralPayload("genesis");
@@ -965,6 +977,12 @@ function payloadFromBody(
           mutation: "write",
           value: realmForPubkey(delegation.audience, realmByPubkey),
           command: `transfer ${role}`,
+          authority: {
+            type: "transfer",
+            role,
+            delegation: delegationEvidence(delegation, realmByPubkey),
+            atTick: integerValue(body.values[3]),
+          },
         };
       }
       case "succeed": {
@@ -975,11 +993,23 @@ function payloadFromBody(
           mutation: "write",
           value: realmForPubkey(delegation.audience, realmByPubkey),
           command: `succeed ${role}`,
+          authority: {
+            type: "succeed",
+            role,
+            delegation: delegationEvidence(delegation, realmByPubkey),
+            atTick: integerValue(body.values[3]),
+          },
         };
       }
       case "grant": {
         const delegation = delegationTerm(body.values[1]);
-        return neutralPayload(`grant ${realmForPubkey(delegation.audience, realmByPubkey)}`);
+        return {
+          ...neutralPayload(`grant ${realmForPubkey(delegation.audience, realmByPubkey)}`),
+          authority: {
+            type: "grant",
+            delegation: delegationEvidence(delegation, realmByPubkey),
+          },
+        };
       }
       case "revoke":
         return neutralPayload(`revoke ${binText(body.values[1])}`);
@@ -1041,6 +1071,29 @@ function binText(term: DecodedTerm | undefined): string {
 function delegationTerm(term: DecodedTerm | undefined): DelegationTerm {
   if (typeof term === "object" && term !== null && "type" in term && term.type === "delegation") return term;
   throw new Error("expected delegation term");
+}
+
+function integerValue(term: DecodedTerm | undefined): number {
+  if (typeof term === "number" && Number.isSafeInteger(term)) return term;
+  throw new Error("expected integer term");
+}
+
+function delegationEvidence(
+  delegation: DelegationTerm,
+  realmByPubkey: Record<string, string>,
+): AuthorityDelegationEvidence {
+  return {
+    id: delegation.id,
+    replica: delegation.replica,
+    issuer: delegation.issuer,
+    audience: delegation.audience,
+    issuerRealm: realmForPubkey(delegation.issuer, realmByPubkey),
+    audienceRealm: realmForPubkey(delegation.audience, realmByPubkey),
+    parentId: delegation.parent_id,
+    ops: [...delegation.ops],
+    roles: [...delegation.roles],
+    live: delegation.live,
+  };
 }
 
 function realmForPubkey(pubkeyBase64: string, realmByPubkey: Record<string, string>): string {

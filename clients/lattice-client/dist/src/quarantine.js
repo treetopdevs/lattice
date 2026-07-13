@@ -14,12 +14,12 @@ import { gatedBy } from "./schema";
  * `included` bounds the visible op set (a frontier). `byId` and the concurrency
  * cache are passed in so the materializer computes them once.
  */
-export function isQuarantined(op, schema, included, byId, concCache = new Map()) {
+export function isQuarantined(op, schema, included, byId, concCache = new Map(), honoredAuthorityWrites) {
     const role = gatedBy(schema, op.field);
     if (!role)
         return { quarantined: false };
     const visible = ancestors(op.id, byId);
-    const holder = latestAuthorityWrite(role, visible, byId);
+    const holder = latestAuthorityWrite(role, visible, byId, honoredAuthorityWrites);
     if (holder && holder.value !== op.author) {
         return {
             quarantined: true,
@@ -32,6 +32,8 @@ export function isQuarantined(op, schema, included, byId, concCache = new Map())
         const a = byId.get(otherId);
         if (!a || a.kind !== "authority" || a.field !== role)
             continue;
+        if (honoredAuthorityWrites && !honoredAuthorityWrites.has(a.id))
+            continue;
         if (a.value === op.author)
             continue; // holder is still the author
         if (concurrent(a.id, op.id, byId, concCache)) {
@@ -43,12 +45,14 @@ export function isQuarantined(op, schema, included, byId, concCache = new Map())
     }
     return { quarantined: false };
 }
-function latestAuthorityWrite(role, visible, byId) {
+function latestAuthorityWrite(role, visible, byId, honoredAuthorityWrites) {
     let best = null;
     const depthCache = new Map();
     for (const id of visible) {
         const op = byId.get(id);
         if (!op || op.kind !== "authority" || op.field !== role || op.mutation !== "write")
+            continue;
+        if (honoredAuthorityWrites && !honoredAuthorityWrites.has(op.id))
             continue;
         if (!best ||
             depth(op.id, byId, depthCache) > depth(best.id, byId, depthCache) ||

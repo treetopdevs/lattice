@@ -23,12 +23,13 @@ export function isQuarantined(
   included: Set<string>,
   byId: Map<string, Op>,
   concCache = new Map<string, Set<string>>(),
+  honoredAuthorityWrites?: ReadonlySet<string>,
 ): { quarantined: boolean; reason?: string } {
   const role = gatedBy(schema, op.field);
   if (!role) return { quarantined: false };
 
   const visible = ancestors(op.id, byId);
-  const holder = latestAuthorityWrite(role, visible, byId);
+  const holder = latestAuthorityWrite(role, visible, byId, honoredAuthorityWrites);
   if (holder && holder.value !== op.author) {
     return {
       quarantined: true,
@@ -40,6 +41,7 @@ export function isQuarantined(
     if (otherId === op.id) continue;
     const a = byId.get(otherId);
     if (!a || a.kind !== "authority" || a.field !== role) continue;
+    if (honoredAuthorityWrites && !honoredAuthorityWrites.has(a.id)) continue;
     if (a.value === op.author) continue; // holder is still the author
     if (concurrent(a.id, op.id, byId, concCache)) {
       return {
@@ -55,6 +57,7 @@ function latestAuthorityWrite(
   role: string,
   visible: Set<string>,
   byId: Map<string, Op>,
+  honoredAuthorityWrites?: ReadonlySet<string>,
 ): Op | null {
   let best: Op | null = null;
   const depthCache = new Map<string, number>();
@@ -62,6 +65,7 @@ function latestAuthorityWrite(
   for (const id of visible) {
     const op = byId.get(id);
     if (!op || op.kind !== "authority" || op.field !== role || op.mutation !== "write") continue;
+    if (honoredAuthorityWrites && !honoredAuthorityWrites.has(op.id)) continue;
 
     if (
       !best ||
