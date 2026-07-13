@@ -11,5 +11,5 @@ export declare function lww(writers: Op[], depthOf: (id: string) => number): {
 };
 /** OR-set: add-wins observed-remove set, with add ops as tags. */
 export declare function orSet(fieldOps: Op[], byId: Map<string, Op>): unknown[];
-/** Causal list: appended values in canonical causal order. */
-export declare function causalList(fieldOps: Op[], order: string[]): unknown[];
+/** Causal list: appended values ordered by `{causal height, op id}` (Sim's sort key). */
+export declare function causalList(fieldOps: Op[], depthOf: (id: string) => number): unknown[];

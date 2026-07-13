@@ -29,14 +29,20 @@ export function ancestors(id, byId, cache = new Map()) {
 export function concurrent(a, b, byId, cache = new Map()) {
     return !ancestors(a, byId, cache).has(b) && !ancestors(b, byId, cache).has(a);
 }
-/** Lamport depth = longest path from a root. Deterministic; used as the LWW clock. */
+/**
+ * Lamport depth = longest path from a root. Deterministic; used as the LWW clock.
+ * A dep absent from `byId` (pruned/partial log) counts as −1 so an op whose deps
+ * are all missing sits at height 0 — the same base as `dag.ex`.
+ */
 export function depth(id, byId, cache = new Map()) {
     const hit = cache.get(id);
     if (hit !== undefined)
         return hit;
     const op = byId.get(id);
     const ds = op ? op.deps : [];
-    const d = ds.length ? Math.max(...ds.map((x) => depth(x, byId, cache))) + 1 : 0;
+    const d = ds.length
+        ? Math.max(...ds.map((x) => (byId.has(x) ? depth(x, byId, cache) : -1))) + 1
+        : 0;
     cache.set(id, d);
     return d;
 }

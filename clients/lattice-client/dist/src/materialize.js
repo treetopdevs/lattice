@@ -89,7 +89,7 @@ export function materialize(schema, ops, included) {
             state[field] = orSet(fieldOps, byId);
         }
         else if (spec.merge === "causal_list") {
-            state[field] = causalList(fieldOps, order);
+            state[field] = causalList(fieldOps, depthOf);
         }
     }
     return { state, quarantine, order, winners };

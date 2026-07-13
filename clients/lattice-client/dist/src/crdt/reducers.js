@@ -53,12 +53,11 @@ export function orSet(fieldOps, byId) {
         .map(([, value]) => value)
         .sort(compareValues);
 }
-/** Causal list: appended values in canonical causal order. */
-export function causalList(fieldOps, order) {
-    const orderIdx = new Map(order.map((id, i) => [id, i]));
+/** Causal list: appended values ordered by `{causal height, op id}` (Sim's sort key). */
+export function causalList(fieldOps, depthOf) {
     return [...fieldOps]
         .filter((o) => o.mutation === "append")
-        .sort((a, b) => (orderIdx.get(a.id) - orderIdx.get(b.id)))
+        .sort((a, b) => depthOf(a.id) - depthOf(b.id) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
         .map((o) => o.value);
 }
 function valueKey(value) {

@@ -21,6 +21,8 @@ defmodule Township.ExportVectorsTest do
     assert File.exists?(Path.join(out_dir, "township_authority_forged_transfer.json"))
     assert File.exists?(Path.join(out_dir, "township_authority_double_transfer.json"))
     assert File.exists?(Path.join(out_dir, "township_authority_unattenuated_transfer.json"))
+    assert File.exists?(Path.join(out_dir, "township_causal_list_partition.json"))
+    assert File.exists?(Path.join(out_dir, "township_partial_log_lww.json"))
 
     random_paths = Path.wildcard(Path.join(out_dir, "township_random_*.json"))
     assert length(random_paths) >= 5
@@ -483,6 +485,99 @@ defmodule Township.ExportVectorsTest do
     assert expected["authorityQuarantine"] == [[transfer["id"], "invalid_transfer"]]
     assert expected["quarantine"] == [transfer["id"]]
     assert expected["winners"]["clerk"] == genesis["id"]
+  end
+
+  test "lattice.export_vectors pins concurrent-append causal order to {height, op_id}" do
+    out_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "lattice_causal_order_vectors_#{System.unique_integer([:positive])}"
+      )
+
+    on_exit(fn -> File.rm_rf(out_dir) end)
+
+    Mix.Task.clear()
+    assert :ok = Mix.Task.run("lattice.export_vectors", ["--out", out_dir])
+
+    vector =
+      out_dir
+      |> Path.join("township_causal_list_partition.json")
+      |> File.read!()
+      |> Jason.decode!()
+
+    assert vector["generatedBy"] == "Lattice.Sim"
+    assert vector["scenario"] == "township_causal_list_partition"
+    assert vector["scenarioKind"] == "adversarial"
+
+    posts =
+      Enum.filter(vector["ops"], &(&1["field"] == "posts" and &1["mutation"] == "append"))
+
+    assert length(posts) == 3
+
+    resident_posts = Enum.filter(posts, &(&1["author"] == "resident"))
+
+    assert [second_branch] =
+             Enum.filter(resident_posts, fn post ->
+               Enum.any?(resident_posts, &(&1["id"] in post["deps"]))
+             end)
+
+    assert [first_branch] = resident_posts -- [second_branch]
+    assert [concurrent] = Enum.filter(posts, &(&1["author"] == "clerk"))
+
+    assert first_branch["id"] < concurrent["id"]
+    assert second_branch["id"] < concurrent["id"]
+
+    expected = vector["expectAtFullFrontier"]
+    assert expected["quarantine"] == []
+
+    assert expected["state"]["posts"] == [
+             "resident: first branch post",
+             "clerk: concurrent post",
+             "resident: second branch post"
+           ]
+  end
+
+  test "lattice.export_vectors pins the dangling-dependency height base on a pruned log" do
+    out_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "lattice_partial_log_vectors_#{System.unique_integer([:positive])}"
+      )
+
+    on_exit(fn -> File.rm_rf(out_dir) end)
+
+    Mix.Task.clear()
+    assert :ok = Mix.Task.run("lattice.export_vectors", ["--out", out_dir])
+
+    vector =
+      out_dir
+      |> Path.join("township_partial_log_lww.json")
+      |> File.read!()
+      |> Jason.decode!()
+
+    assert vector["generatedBy"] == "Lattice.Sim"
+    assert vector["scenario"] == "township_partial_log_lww"
+    assert vector["scenarioKind"] == "adversarial"
+
+    ops = vector["ops"]
+    op_ids = MapSet.new(ops, & &1["id"])
+
+    assert [bridge] = Enum.filter(ops, &(&1["kind"] == "inbox"))
+    assert [pruned_dep] = bridge["deps"]
+    refute MapSet.member?(op_ids, pruned_dep)
+
+    summaries =
+      Enum.filter(ops, &(&1["field"] == "summary" and &1["mutation"] == "write"))
+
+    assert [pruned_branch] = Enum.filter(summaries, &(bridge["id"] in &1["deps"]))
+    assert [root_branch] = summaries -- [pruned_branch]
+    assert root_branch["id"] > pruned_branch["id"]
+
+    expected = vector["expectAtFullFrontier"]
+    assert expected["quarantine"] == []
+    assert expected["state"]["summary"] == "summary from the surviving root"
+    assert expected["state"]["title"] == ""
+    assert expected["winners"]["summary"] == root_branch["id"]
   end
 
   test "lattice.export_vectors writes a real-carrier Township W1 vector for the TS client" do

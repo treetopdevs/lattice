@@ -54,6 +54,8 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_authority_forged_transfer(),
       township_authority_double_transfer(),
       township_authority_unattenuated_transfer(),
+      township_causal_list_partition(),
+      township_partial_log_lww(),
       township_carrier_w1()
     ]
 
@@ -794,6 +796,149 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       realmByPubkey: carrier_realm_by_pubkey(realms),
       oracleCarrierOps: carrier_ops(log),
       authorityQuarantine: authority_quarantine
+    }
+  end
+
+  defp township_causal_list_partition do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:causal-order-7",
+        ["clerk", "resident"],
+        seed: "township:causal-order-7"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, _grant} = Sim.grant(sim, "clerk", "resident", ops: [:admit, :post])
+    sim = Sim.sync_all(sim)
+    {sim, _} = Sim.command(sim, "clerk", :admit, ["clerk"])
+    {sim, _} = Sim.command(sim, "clerk", :admit, ["resident"])
+    sim = Sim.sync_all(sim)
+
+    sim = Sim.partition(sim, "clerk", "resident")
+    {sim, post_m} = Sim.command(sim, "resident", :post, ["resident: first branch post"])
+    {sim, post_a} = Sim.command(sim, "resident", :post, ["resident: second branch post"])
+    {sim, post_z} = Sim.command(sim, "clerk", :post, ["clerk: concurrent post"])
+    sim = sim |> Sim.heal("clerk", "resident") |> Sim.sync_all()
+
+    log = Sim.log(sim, "clerk")
+
+    # The single concurrent post sits one causal height BELOW the second branch
+    # post, but both branch-post ids sort below it. A topological order that
+    # tiebreaks ready ops by ascending id therefore emits the deeper branch post
+    # first, while `{height, op_id}` puts the concurrent post between the two —
+    # exactly the finding-2 drift class this vector exists to pin.
+    unless post_m.id < post_z.id and post_a.id < post_z.id do
+      raise "expected both branch post ids to sort below the concurrent post id"
+    end
+
+    expected_posts = [
+      "resident: first branch post",
+      "clerk: concurrent post",
+      "resident: second branch post"
+    ]
+
+    unless Lattice.state(Matter, log).posts == expected_posts do
+      raise "expected {height, op_id} to order the concurrent post between the branch posts"
+    end
+
+    unless Lattice.Authority.analyze(Matter, log) |> Map.fetch!(:quarantine) |> Enum.empty?() do
+      raise "expected the concurrent-append partition to quarantine nothing"
+    end
+
+    realms = realm_index(sim)
+
+    %{
+      name: "township_causal_list_partition",
+      kind: "adversarial",
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: Sim.replica(sim),
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      authorityQuarantine: authority_quarantine(log)
+    }
+  end
+
+  defp township_partial_log_lww do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:partial-log-2",
+        ["clerk"],
+        seed: "township:partial-log-2"
+      )
+
+    {sim, genesis} = Sim.create_replica(sim, "clerk")
+    {:genesis, genesis_deleg, _policies} = genesis.body
+    {sim, pruned_parent} = Sim.command(sim, "clerk", :set_title, ["working title"])
+
+    clerk = Sim.identity(sim, "clerk")
+    replica = Sim.replica(sim)
+
+    # The bridge is an inbox request — the one op kind that needs no capability
+    # justification — so pruning its parent leaves nothing to quarantine and the
+    # vector isolates the dangling-dependency height base alone.
+    bridge =
+      Op.new(
+        clerk,
+        replica,
+        [pruned_parent.id],
+        :inbox,
+        {:request, "prune-bridge", {:post, ["bridge"]}}
+      )
+
+    {:ok, pruned_branch_body} =
+      Matter.command_body(:set_summary, ["summary reached through the pruned branch"])
+
+    {:ok, root_branch_body} =
+      Matter.command_body(:set_summary, ["summary from the surviving root"])
+
+    pruned_branch_summary =
+      Op.new(clerk, replica, [bridge.id, genesis.id], :command, pruned_branch_body,
+        cap: genesis_deleg.id
+      )
+
+    root_branch_summary =
+      Op.new(clerk, replica, [genesis.id], :command, root_branch_body, cap: genesis_deleg.id)
+
+    unless root_branch_summary.id > pruned_branch_summary.id do
+      raise "expected the surviving-root summary id to break the height tie in its favor"
+    end
+
+    full_log =
+      Sim.log(sim, "clerk")
+      |> Log.append!(bridge)
+      |> Log.append!(pruned_branch_summary)
+      |> Log.append!(root_branch_summary)
+
+    unless Lattice.state(Matter, full_log).summary ==
+             "summary reached through the pruned branch" do
+      raise "expected the complete log to prefer the causally deeper summary"
+    end
+
+    log = %{full_log | ops: Map.delete(full_log.ops, pruned_parent.id)}
+
+    unless Authority.analyze(Matter, log) |> Map.fetch!(:reasons) |> Enum.empty?() do
+      raise "expected the pruned log to quarantine nothing"
+    end
+
+    state = Lattice.state(Matter, log)
+
+    unless state.summary == "summary from the surviving root" and state.title == "" do
+      raise "expected the -1 dangling-dependency base to flip the summary winner"
+    end
+
+    realms = realm_index(sim)
+
+    %{
+      name: "township_partial_log_lww",
+      kind: "adversarial",
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: replica
     }
   end
 

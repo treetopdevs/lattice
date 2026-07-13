@@ -196,6 +196,35 @@ The finding-1 adversarial transfer coverage is green locally but does not comple
 - Causal-list ordering, dangling-dependency height, holder-definition unification, and restoring
   the fail-closed zoning/succession scenarios remain below. Plan 140 stays `IN PROGRESS`.
 
+## Execution checkpoint: causal-list order and dangling-dependency base (findings 2-3)
+
+Both ordering findings are fixed and Sim-pinned locally, but this does not complete the plan:
+
+- `township_causal_list_partition` is the finding-2 drift class made concrete: two chained branch
+  posts concurrent with one post whose id sorts above both. A Kahn topological sort with an
+  ascending-id ready queue emits the deeper branch post before the concurrent post, while Sim's
+  `{height, op_id}` sort key puts the concurrent post between the two. Eleven of forty probed seeds
+  diverged; the exported seed's guards raise if the id relations or Sim's materialized order drift.
+  The vector failed exactly at `state.posts` before the fix. `causalList` now sorts appends by
+  `{depth, op id}` — the oracle's sort key — instead of canonical-order position.
+- `township_partial_log_lww` isolates finding 3 without dragging in capability visibility: probing
+  showed Sim quarantines any capability-citing op whose causal past is pruned away
+  (`:capability_not_visible`), so the vector bridges the pruned parent through an inbox request —
+  the one op kind that needs no capability justification and quarantines nothing on either side. A
+  summary write above that bridge ties a concurrent root-level summary at height 1 under Sim's
+  −1 missing-dependency base but sat at depth 2 under the TS 0 base, flipping the LWW winner. The
+  vector failed exactly at `state.summary` and `winner.summary` before the fix; `dag.ts` `depth`
+  now counts absent deps as −1, matching `dag.ex`.
+- Regenerating the corpus changed no pre-existing vector bytes; only the two new fixtures were
+  added. Exporter and Township tests, formatting, conformance, typecheck/build, the V-01 refusal
+  guard, canonical parity, authoring/Tauri, and direct/live carrier gates are green. Full
+  `mix verify` is green at 404 tests and 25 properties.
+- The pruned-log capability-visibility rule itself (`:capability_not_visible`) is oracle-only
+  behavior the TS reducer does not yet reproduce; the corpus deliberately does not exercise it, and
+  porting it belongs with the deferred general capability-validation work, not this ordering slice.
+  Holder-definition unification and restoring the fail-closed zoning/succession scenarios remain
+  below. Plan 140 stays `IN PROGRESS`.
+
 ## Priority
 
 **P0 — STOP-condition remediation.** This plan blocks Plan 139 (revocation handoff) and any

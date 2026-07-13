@@ -120,7 +120,7 @@ export function materialize(
     } else if (spec.merge === "or_set") {
       state[field] = orSet(fieldOps, byId);
     } else if (spec.merge === "causal_list") {
-      state[field] = causalList(fieldOps, order);
+      state[field] = causalList(fieldOps, depthOf);
     }
   }
 
