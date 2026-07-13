@@ -482,6 +482,10 @@ test("frontend package exposes a Sim-anchored packaged v5 delegation grant hando
   assert.match(smoke, /lattice_kv_set/);
   assert.match(smoke, /assertTownshipKvStoresNoSecrets/);
   assert.match(
+    smoke,
+    /function pinnedToolPath\(\): string \{[\s\S]*?process\.env\.PATH \?\? ""[\s\S]*?\.filter\(\(path\) => path\.length > 0 && \(path === process\.env\.PATH \|\| existsSync\(path\)\)\)[\s\S]*?\.join\(":"\);\n\}/,
+  );
+  assert.match(
     pkg.scripts["app:convergence"],
     /TOWNSHIP_SKIP_ROSTER_ACTION_APP_BUILD=1 npm run tauri:roster-action-handoff:smoke && TOWNSHIP_SKIP_DELEGATION_GRANT_APP_BUILD=1 npm run tauri:delegation-grant-handoff:smoke && npm run tauri:feed:smoke/,
   );

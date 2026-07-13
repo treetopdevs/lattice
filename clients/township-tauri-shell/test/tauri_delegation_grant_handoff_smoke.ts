@@ -1110,8 +1110,9 @@ function pinnedToolPath(): string {
     "/opt/homebrew/bin",
     "/usr/bin",
     "/bin",
+    process.env.PATH ?? "",
   ]
-    .filter((path) => path.length > 0 && existsSync(path))
+    .filter((path) => path.length > 0 && (path === process.env.PATH || existsSync(path)))
     .join(":");
 }
 
