@@ -116,6 +116,9 @@ jobs:
       - name: TS client conformance
         working-directory: clients/lattice-client
         run: npm run conformance
+      - name: TS V-01 authority fail-closed guard
+        working-directory: clients/lattice-client
+        run: npm run v01:guard
       - name: TS canonical op parity
         working-directory: clients/lattice-client
         run: npm run canonical

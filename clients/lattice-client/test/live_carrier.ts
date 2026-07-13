@@ -19,6 +19,7 @@ import {
   materialize,
   selectTownshipCapId,
   syncCarrierOnce,
+  V01UnvalidatedAuthorityError,
 } from "../src/index";
 import type { CarrierOpFrame, CarrierVerifier, Op, ReplicaSchema, Verifier } from "../src/index";
 
@@ -199,12 +200,20 @@ try {
   check("push quarantined", synced.pushReport.quarantined, []);
 
   const merged = synced.ops;
-  const materialized = materialize(vector.schema, merged);
-  for (const [field, want] of Object.entries(vector.expectAfterSync.state)) {
-    check(`state.${field}`, materialized.state[field], want);
-  }
-  check("authority quarantine", materialized.quarantine.sort(), vector.expectAfterSync.authorityQuarantine.map(([id]) => id).sort());
+  // The live W1 log contains a clerk transfer. The real TS↔BEAM sync, push, and
+  // acknowledgement above are proven independently of reduction; materialized
+  // state/quarantine assertions are deferred to Plan 140, which restores
+  // validated authority reduction. Until then the reducer fails CLOSED on the
+  // role change rather than silently honor an unvalidated transfer. The BEAM
+  // peer state below is still checked against Sim (BEAM has real authority).
   check("merged op ids", merged.map((op: Op) => op.id).sort(), vector.expectAfterSync.opIds);
+  let materializeThrew: unknown = null;
+  try {
+    materialize(vector.schema, merged);
+  } catch (e) {
+    materializeThrew = e;
+  }
+  check("W1 authority-role change refused (fail-closed, pending Plan 140)", materializeThrew instanceof V01UnvalidatedAuthorityError, true);
 
   const peerReport = await conn.stateReport();
   check("peer state bytes", peerReport.state_b64, vector.expectAfterSync.stateB64);

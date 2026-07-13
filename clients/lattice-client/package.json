@@ -17,6 +17,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "conformance": "tsx test/conformance.ts",
+    "v01:guard": "tsx test/v01_authority_guard.ts",
     "canonical": "tsx test/canonical.ts",
     "township:authoring": "tsx test/township_authoring.ts",
     "tauri:bridge": "tsx test/tauri_bridge.ts",

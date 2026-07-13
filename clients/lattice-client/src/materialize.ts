@@ -5,6 +5,29 @@ import { index, depth, canonicalOrder } from "./dag";
 import { isQuarantined } from "./quarantine";
 import { lww, orSet, causalList } from "./crdt/reducers";
 
+/**
+ * Thrown by {@link materialize} when a log changes an authority role beyond its
+ * establishing genesis. This is the V-01 fail-closed guard: the reducer has no
+ * authority validation yet (`carrier.ts` honors any signed transfer/succeed and
+ * `quarantine.ts` never gates authority ops), so a forged transfer authored by a
+ * non-holder would otherwise be silently honored — inverting both the holder and
+ * the quarantine set relative to the `Lattice.Sim` oracle (the V-01 STOP
+ * condition). Until Plan 140 ports real validation, we refuse rather than guess.
+ */
+export class V01UnvalidatedAuthorityError extends Error {
+  readonly role: string;
+  constructor(role: string, writes: number) {
+    super(
+      `V-01 fail-closed: refusing to materialize a log that changes authority role "${role}" ` +
+        `(${writes} authority writes to it). The TS reducer cannot yet validate role ` +
+        `transfers or succession, so it establishes the initial holder but will not honor a ` +
+        `change it cannot prove — see plans/140.`,
+    );
+    this.name = "V01UnvalidatedAuthorityError";
+    this.role = role;
+  }
+}
+
 export interface Materialized {
   /** field -> materialized value */
   state: Record<string, unknown>;
@@ -30,6 +53,21 @@ export function materialize(
 ): Materialized {
   const byId = index(ops);
   const inc = included ?? new Set(ops.map((o) => o.id));
+
+  // V-01 fail-closed guard (stop-gap ahead of Plan 140). A role is established
+  // once by its genesis; any further authority write to it is a transfer or
+  // succession this reducer cannot validate. Refuse the whole log rather than
+  // guess a holder — a wrong holder inverts the quarantine set on the next pass.
+  const authorityWritesPerRole = new Map<string, number>();
+  for (const o of ops) {
+    if (!inc.has(o.id) || o.kind !== "authority") continue;
+    const spec = schema.fields[o.field];
+    if (!spec || !isAuthorityField(spec)) continue;
+    const writes = (authorityWritesPerRole.get(o.field) ?? 0) + 1;
+    authorityWritesPerRole.set(o.field, writes);
+    if (writes > 1) throw new V01UnvalidatedAuthorityError(o.field, writes);
+  }
+
   const order = canonicalOrder(
     ops.filter((o) => inc.has(o.id)),
     byId,
