@@ -18,6 +18,9 @@ oracle = oracle_path |> File.read!() |> Jason.decode!()
 expected_key =
   case mode do
     "authority" -> "afterAuthorityInvalid"
+    "base" -> "base"
+    "close" -> "afterClose"
+    "reopen" -> "afterReopen"
     "restart" -> "afterRestartPost"
     _mode -> "afterPost"
   end

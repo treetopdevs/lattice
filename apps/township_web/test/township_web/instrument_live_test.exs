@@ -25,12 +25,19 @@ defmodule TownshipWeb.InstrumentLiveTest do
     def advertise(conn, _log) do
       case mode(conn) do
         {:advertise_error, reason} -> {:error, reason}
+        {:ops, ops} -> {:ok, MapSet.new(ops, & &1.id), conn}
         _mode -> {:ok, MapSet.new(conn.ops, & &1.id), conn}
       end
     end
 
     def pull(conn, have) do
-      {:ok, Enum.reject(conn.ops, &MapSet.member?(have, &1.id)), conn}
+      ops =
+        case mode(conn) do
+          {:ops, ops} -> ops
+          _mode -> conn.ops
+        end
+
+      {:ok, Enum.reject(ops, &MapSet.member?(have, &1.id)), conn}
     end
 
     def close(_conn), do: :ok
@@ -268,6 +275,73 @@ defmodule TownshipWeb.InstrumentLiveTest do
     refute has_element?(view, "#participant-post-handoff")
   end
 
+  test "fresh carrier state derives close and reopen intents and clears them when stale", %{
+    conn: conn
+  } do
+    {open_log, closed_log} = peer_status_logs()
+    control = start_supervised!({Agent, fn -> {:ops, Log.topo_ops(open_log)} end})
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         carrier: LiveCarrier,
+         connect_opts: [ops: Log.topo_ops(open_log), control: control],
+         replica: open_log.replica,
+         peer_realm: "clerk",
+         pubsub: TownshipWeb.PubSub,
+         topic: "township:status-intent:#{System.unique_integer([:positive])}",
+         schedule: :manual}
+      )
+
+    put_projection_config(projection)
+    {:ok, view, _html} = live(conn, "/township")
+
+    refute has_element?(view, "#participant-status-action")
+    assert {:ok, {:fresh, payload}} = CarrierProjection.refresh(projection)
+
+    assert has_element?(view, "#participant-status-action", "Prepare close in app")
+
+    render_hook(view, "prepare_status_action", %{"command" => "reopen_matter"})
+
+    assert has_element?(view, "#participant-status-handoff[href^='township://action?intent=']")
+    assert has_element?(view, "#participant-status-prepared", "Unsigned close request")
+
+    close_payload = view |> status_action_intent_href() |> decoded_action_intent()
+    assert close_payload["v"] == 2
+    assert close_payload["replica"] == open_log.replica
+    assert close_payload["command"] == %{"command" => "close_matter"}
+
+    replacement_payload = put_in(payload.provenance.replica, open_log.replica <> ":replacement")
+    send(view.pid, {:township_instrument, {:fresh, replacement_payload}})
+
+    refute has_element?(view, "#participant-status-handoff")
+    assert has_element?(view, "#participant-status-action", "Prepare close in app")
+
+    send(view.pid, {:township_instrument, {:fresh, payload}})
+    render_hook(view, "prepare_status_action", %{})
+    assert has_element?(view, "#participant-status-handoff")
+
+    Agent.update(control, fn _ops -> {:ops, Log.topo_ops(closed_log)} end)
+    assert {:ok, {:fresh, _payload}} = CarrierProjection.refresh(projection)
+
+    refute has_element?(view, "#participant-status-handoff")
+    assert has_element?(view, "#participant-status-action", "Prepare reopen in app")
+
+    view
+    |> element("#participant-status-prepare")
+    |> render_click()
+
+    reopen_payload = view |> status_action_intent_href() |> decoded_action_intent()
+    assert reopen_payload["v"] == 2
+    assert reopen_payload["replica"] == open_log.replica
+    assert reopen_payload["command"] == %{"command" => "reopen_matter"}
+
+    Agent.update(control, fn _ops -> {:advertise_error, :offline} end)
+    assert {:ok, {:stale, _payload}} = CarrierProjection.refresh(projection)
+    refute has_element?(view, "#participant-status-action")
+    refute has_element?(view, "#participant-status-handoff")
+  end
+
   test "configured but absent projection renders carrier unavailable without bundle fallback", %{
     conn: conn
   } do
@@ -360,6 +434,14 @@ defmodule TownshipWeb.InstrumentLiveTest do
     Sim.log(sim, "clerk")
   end
 
+  defp peer_status_logs do
+    sim = Sim.new(Matter, "replica:matter:status-action", ["clerk"], seed: "status-action")
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    open_log = Sim.log(sim, "clerk")
+    {sim, _close} = Sim.command(sim, "clerk", :close_matter, [])
+    {open_log, Sim.log(sim, "clerk")}
+  end
+
   defp put_projection_config(projection) do
     previous = Application.get_env(:township_web, :instrument_projection_server, :missing)
     Application.put_env(:township_web, :instrument_projection_server, projection)
@@ -377,6 +459,15 @@ defmodule TownshipWeb.InstrumentLiveTest do
     |> render()
     |> LazyHTML.from_fragment()
     |> LazyHTML.query_by_id("participant-post-handoff")
+    |> LazyHTML.attribute("href")
+    |> List.first()
+  end
+
+  defp status_action_intent_href(view) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query_by_id("participant-status-handoff")
     |> LazyHTML.attribute("href")
     |> List.first()
   end

@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseTownshipActionIntentDeepLink } from "../src/township_action_intent";
 
-interface ActionIntentFixture {
+interface PostActionIntentFixture {
   payload: {
     v: 1;
     id: string;
@@ -14,16 +14,42 @@ interface ActionIntentFixture {
   url: string;
 }
 
+interface StatusActionIntentFixture {
+  payload: {
+    v: 2;
+    id: string;
+    replica: string;
+    command: { command: "close_matter" | "reopen_matter" };
+  };
+  url: string;
+}
+
 console.log("\n▸ Township action-intent contract");
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixture = JSON.parse(
   readFileSync(join(here, "fixtures", "township_action_intent_v1.json"), "utf8"),
-) as ActionIntentFixture;
+) as PostActionIntentFixture;
+const statusFixture = JSON.parse(
+  readFileSync(join(here, "fixtures", "township_status_action_intent_v2.json"), "utf8"),
+) as StatusActionIntentFixture;
 
 assert.deepEqual(parseTownshipActionIntentDeepLink(fixture.url), {
   ok: true,
   intent: fixture.payload,
+});
+assert.deepEqual(parseTownshipActionIntentDeepLink(statusFixture.url), {
+  ok: true,
+  intent: statusFixture.payload,
+});
+
+const reopenPayload: StatusActionIntentFixture["payload"] = {
+  ...statusFixture.payload,
+  command: { command: "reopen_matter" },
+};
+assert.deepEqual(parseTownshipActionIntentDeepLink(actionUrl(reopenPayload)), {
+  ok: true,
+  intent: reopenPayload,
 });
 
 for (const text of ["\uFEFFresident update\uFEFF", "\u0085resident update\u0085"]) {
@@ -60,8 +86,39 @@ assert.deepEqual(
   },
 );
 
+assert.deepEqual(parseTownshipActionIntentDeepLink(actionUrl({ ...fixture.payload, v: 3 })), {
+  ok: false,
+  reason: "unsupported_action_version",
+  message: "Township action request invalid: unsupported version.",
+});
+assert.deepEqual(
+  parseTownshipActionIntentDeepLink(
+    actionUrl({
+      ...statusFixture.payload,
+      command: { ...statusFixture.payload.command, text: "smuggled" },
+    }),
+  ),
+  {
+    ok: false,
+    reason: "invalid_action_payload",
+    message: "Township action request invalid: payload could not be accepted.",
+  },
+);
+assert.deepEqual(parseTownshipActionIntentDeepLink(actionUrl({ ...statusFixture.payload, command: null })), {
+  ok: false,
+  reason: "invalid_action_payload",
+  message: "Township action request invalid: payload could not be accepted.",
+});
+
 for (const payload of [
-  { ...fixture.payload, v: 2 },
+  { ...fixture.payload, v: 1, command: { command: "close_matter" } },
+  { ...statusFixture.payload, command: { command: "post" } },
+  { ...statusFixture.payload, command: { command: "admit" } },
+  { ...statusFixture.payload, command: { ...statusFixture.payload.command, member: "smuggled" } },
+  { ...statusFixture.payload, command: { ...statusFixture.payload.command, cap: "smuggled" } },
+  { ...statusFixture.payload, extra: "smuggled" },
+  { ...statusFixture.payload, id: "not-an-id" },
+  { ...statusFixture.payload, replica: " " },
   { ...fixture.payload, extra: "smuggled" },
   { ...fixture.payload, id: "not-an-id" },
   { ...fixture.payload, replica: " " },

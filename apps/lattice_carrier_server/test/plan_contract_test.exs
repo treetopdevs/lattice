@@ -525,6 +525,15 @@ defmodule LatticeCarrierServer.PlanContractTest do
     mobile_strategy =
       File.read!(Path.join(@repo_root, "docs/township_mobile_secure_store_strategy.md"))
 
+    [_, plan134_tail] =
+      String.split(
+        poc_status,
+        "## Checkpoint: Reactive Packaged Tauri Availability Feed",
+        parts: 2
+      )
+
+    [plan134_checkpoint | _rest] = String.split(plan134_tail, "\n## Checkpoint:", parts: 2)
+
     assert plan =~ ~r/## Status\s+DONE/
     assert plan =~ "Reactive refresh never submits or compacts the authored outbox"
     assert plan =~ "Every pulled frame is verified before conversion or persistence"
@@ -601,7 +610,106 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert poc_status =~ "Final exact-worktree Claude review is green"
     assert poc_status =~ "Hosted implementation run `29210581826` is green"
     assert poc_status =~ "Plan 134 status is `DONE`"
-    refute poc_status =~ "Hosted acceptance remains pending"
+    refute plan134_checkpoint =~ "Hosted acceptance remains pending"
     assert mobile_strategy =~ "Plan 134 leaves this custody strategy unchanged"
+  end
+
+  test "Plan 135 defines a versioned clerk status handoff across the app custody seam" do
+    plan =
+      File.read!(
+        Path.join(@repo_root, "plans/135-versioned-clerk-status-action-handoff-g1.md")
+      )
+
+    plans_index = File.read!(Path.join(@repo_root, "plans/README.md"))
+    build_map = File.read!(Path.join(@repo_root, "TOWNSHIP_BUILD_MAP.md"))
+    poc_status = File.read!(Path.join(@repo_root, "docs/lattice_poc_status.md"))
+    workflow = File.read!(Path.join(@repo_root, ".github/workflows/flagship.yml"))
+
+    shell_package =
+      @repo_root
+      |> Path.join("clients/township-tauri-shell/package.json")
+      |> File.read!()
+      |> Jason.decode!()
+
+    mobile_strategy =
+      File.read!(Path.join(@repo_root, "docs/township_mobile_secure_store_strategy.md"))
+
+    assert plan =~ ~r/## Status\s+(?:IN PROGRESS|DONE)/
+    assert plan =~ "v1 remains exactly post-only"
+    assert plan =~ ~s({"v":2,"id":"<32-lowercase-hex>","replica":"<replica>","command":{"command":"close_matter"}})
+    assert plan =~ "Unknown versions and cross-version keys fail closed"
+    assert plan =~ "Use request -> Sign close/reopen -> Sync outbox"
+    assert plan =~ "No-cap resident refusal"
+    assert plan =~ "zero native signatures and zero KV writes"
+    assert plan =~ ~r/Relay is not a\s+dependency of author-only submission/
+    assert plan =~ ~r/zero Sync trace and an unchanged stable-relay source/
+    assert plan =~ "Open -> Locked -> Open"
+    assert plan =~ "`Lattice.Sim` is the independent oracle"
+    assert plan =~ ~r/reuses the existing action-handoff app bundle\s+in hosted CI/
+    assert plan =~ "Plan 130's packaged post handoff remains unchanged"
+    assert plan =~ "W2 already owns the stale ex-clerk `:not_holder` proof"
+    assert plan =~ "No automatic authored-frame publication"
+    assert plan =~ "No mobile secure-store implementation change"
+    assert plan =~ "No complete G1/Phase G claim and no receipt-free W4 claim"
+
+    assert plans_index =~
+             "| 135 | Versioned clerk status action handoff | P1 | XL | 050, 054, 130, 131, 134 | IN PROGRESS |"
+
+    refute plans_index =~
+             "reactive Tauri/Vue feed consumption, broader participant controls"
+
+    assert build_map =~ "broader participant controls, production deployment, and receipt-free W4"
+    assert mobile_strategy =~ "Carrier signatures and delegation ids are the integrity boundary"
+
+    assert plan =~ "## Implementation evidence"
+    assert plan =~ "Packaged close/reopen smoke is green"
+    assert plan =~ "Full local regression passed on 2026-07-12"
+    assert plan =~ "378 tests plus 25 properties"
+    assert plan =~ "Hosted acceptance remains pending"
+
+    assert build_map =~ "Plan 135 adds the versioned clerk status action handoff"
+    assert build_map =~ "Use request, Sign close/reopen, and separate Sync outbox"
+    assert build_map =~ "Open -> Locked -> Open"
+    assert build_map =~ "No automatic authored-frame publication"
+    assert build_map =~ "Full local Plan 135 regression is green at 378 tests plus 25 properties"
+    refute build_map =~ "Plan 135 completes G1"
+    refute build_map =~ "Plan 135 completes Phase G"
+
+    assert poc_status =~ "## Checkpoint: Versioned Clerk Status Action Handoff"
+    assert poc_status =~ "`npm run tauri:clerk-action-handoff:smoke` is green"
+    assert poc_status =~ "Full local regression is green at 378 tests plus 25 properties"
+    assert poc_status =~ "Hosted acceptance remains pending"
+    assert poc_status =~ "Plan 135 remains `IN PROGRESS`"
+
+    assert mobile_strategy =~ "Plan 135 leaves this custody strategy unchanged"
+    assert mobile_strategy =~ "separate explicit Sync"
+    assert mobile_strategy =~ "No mobile secure-store implementation"
+
+    assert shell_package["scripts"]["tauri:clerk-action-handoff:smoke"] ==
+             "tsx test/tauri_clerk_action_handoff_smoke.ts"
+
+    assert shell_package["scripts"]["app:convergence"] =~
+             ~r/tauri:action-handoff:smoke && TOWNSHIP_SKIP_CLERK_ACTION_APP_BUILD=1 npm run tauri:clerk-action-handoff:smoke && npm run tauri:feed:smoke/
+
+    assert workflow =~
+             ~r/TS Township shell typecheck\s+working-directory: clients\/township-tauri-shell\s+run: npm run typecheck/
+
+    assert workflow =~
+             ~r/TS Township action-intent contract\s+working-directory: clients\/township-tauri-shell\s+run: npm run action-intent:contract/
+
+    assert workflow =~
+             ~r/TS Township deep-link dispatcher contract\s+working-directory: clients\/township-tauri-shell\s+run: npm run deeplink:dispatcher:contract/
+
+    assert workflow =~
+             ~r/TS Township action contract\s+working-directory: clients\/township-tauri-shell\s+run: npm run action:contract/
+
+    assert workflow =~
+             ~r/TS Township frontend contract\s+working-directory: clients\/township-tauri-shell\s+run: npm run frontend:contract/
+
+    assert workflow =~
+             ~r/Verify packaged action handoff[\s\S]*Verify packaged clerk status handoff[\s\S]*Verify packaged reactive carrier feed/
+
+    assert workflow =~
+             ~r/Verify packaged clerk status handoff\s+working-directory: clients\/township-tauri-shell\s+env:\s+TOWNSHIP_SKIP_CLERK_ACTION_APP_BUILD: "1"\s+run: npm run tauri:clerk-action-handoff:smoke/
   end
 end

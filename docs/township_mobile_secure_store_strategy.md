@@ -433,6 +433,10 @@ session key and ordinary replayable KV boundary as a read-only observer; every p
 verified before the local read log and delegation evidence are persisted. Reactive refresh never
 authors, submits, acknowledges, or compacts an outbox frame. This adds no mobile secure-store
 implementation, Android/iOS probe, physical-device behavior, Expo result, or phone-grade claim.
+Plan 135 leaves this custody strategy unchanged. The packaged desktop clerk path reuses the native
+signer and ordinary replayable delegation/log/outbox KV evidence, and the signed close or reopen
+frame remains local until a separate explicit Sync. No mobile secure-store implementation, mobile
+relay, Android/iOS probe, physical-device behavior, Expo result, or phone-grade claim is added.
 Plan 086 proves the same env-gated probe can
 connect and complete a WebSocket frame roundtrip in a debug APK, so it proves the harness can produce
 a positive on-device result but still does not prove release Sync/outbox/KV convergence. Plan 087 proves

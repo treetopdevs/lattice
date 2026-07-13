@@ -528,3 +528,28 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
 - Blocker or remaining limitation: no mobile secure-store implementation change, mobile/device
   result, automatic participant publication, broader participant controls, production ingress/TLS
   deployment, complete G1/Phase G claim, or receipt-free W4.
+
+## Checkpoint: Versioned Clerk Status Action Handoff
+
+- Files changed: the exact v2 action-intent producer/decoder fixture, fresh-only LiveView status
+  preparation, shared participant dispatcher, command-specific Tauri review and signing ceremony,
+  Sim clerk fixture, dedicated packaged smoke, fast shell contracts, flagship wiring, and cumulative
+  Plan 135 documentation contracts.
+- Behaviors: v1 stays post-only. A fresh verified open matter prepares close and a locked matter
+  prepares reopen; client parameters cannot choose the command. The app stages and accepts the
+  request without side effects, signs against the validated pairing replica through the existing
+  native-custody path, leaves one frame in the local outbox, and publishes only through a separate
+  explicit Sync. A no-cap resident fails locally before signing, KV writes, or relay.
+- Oracle: the real installed app and a separate LiveView observer converge through Sim-equal
+  Open -> Locked -> Open against the stable path-backed relay. The smoke proves exact frames,
+  explicit outbox drain, fresh reactive projections, redaction, and no server-authored operation.
+- Gates: focused Elixir, TypeScript, Vue, and Plan contracts are green.
+  `npm run tauri:clerk-action-handoff:smoke` is green when run standalone, and hard unit/packaged workflow
+  steps are wired without a second hosted Tauri build. Full local regression is green at 378 tests plus 25 properties,
+  complete shell/browser/flagship convergence, warnings-as-errors, xref, both Sobelow scans,
+  actionlint, formatting, diff hygiene, and 23 Rust tests. Hosted acceptance remains pending.
+- Result: Plan 135 remains `IN PROGRESS`; the current evidence establishes the local versioned
+  clerk-status custody seam without claiming hosted closure.
+- Blocker or remaining limitation: no automatic authored-frame publication, mobile secure-store
+  implementation, mobile/device result, member/delegation command bus, production ingress/TLS
+  deployment, complete G1/Phase G claim, or receipt-free W4.

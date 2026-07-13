@@ -636,7 +636,7 @@ test("Vue source limits packaged action execution to a dev-trace control over pr
   assert.match(app, /route === "action-intent\/submit"/);
   assert.match(
     app,
-    /async function submitPendingPostIntentFromDevTrace\(\)[\s\S]*acceptPendingPostIntent\(\)[\s\S]*await submitPost\(\)[\s\S]*await syncOutbox\(\)/,
+    /async function submitPendingPostIntentFromDevTrace\(\)[\s\S]*acceptPendingActionIntent\(\)[\s\S]*await submitPost\(\)[\s\S]*await syncOutbox\(\)/,
   );
   assert.doesNotMatch(app, /VITE_TOWNSHIP_ACTION_INTENT_AUTO/);
   assert.match(smoke, /spawnTownshipActionLiveProjection/);
@@ -647,6 +647,21 @@ test("Vue source limits packaged action execution to a dev-trace control over pr
   assert.match(smoke, /spawnStableCarrierServer/);
   assert.match(smoke, /stable_relay_verify\.exs/);
   assert.match(smoke, /assertTraceRedacted/);
+});
+
+test("Vue keeps versioned clerk status signing separate from outbox sync", () => {
+  const app = readText("src/App.vue");
+  const start = app.indexOf("async function signAcceptedStatusIntent");
+  const end = app.indexOf("function dismissAcceptedStatusIntent", start);
+  const signStatus = app.slice(start, end);
+
+  assert.ok(start >= 0 && end > start);
+  assert.match(app, /const pendingActionIntent = ref<TownshipActionIntent \| null>\(null\)/);
+  assert.match(app, /const acceptedStatusIntent = ref<TownshipStatusActionIntent \| null>\(null\)/);
+  assert.match(app, /id="participant-status-request"/);
+  assert.match(app, /Sign \$\{statusIntentVerb\(acceptedStatusIntent\)\}/);
+  assert.match(signStatus, /await submitMatterStatus\(intent\.command\.command, intent\.replica\)/);
+  assert.doesNotMatch(signStatus, /syncOutbox/);
 });
 
 test("Vue source renders pairing handoff QR without trust claims", () => {

@@ -450,8 +450,10 @@ const missingCapValues = new Map<string, string>([
   [storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY), "[]"],
   [storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY), "[]"],
 ]);
+const missingCapValuesBefore = new Map(missingCapValues);
+const missingCapCalls: string[] = [];
 const missingCap = await submitTownshipCommand({
-  invoke: nativeInvoke(missingCapValues, residentIdentity, []),
+  invoke: nativeInvoke(missingCapValues, residentIdentity, missingCapCalls),
   command: { command: "close_matter" },
 });
 
@@ -460,6 +462,9 @@ if (missingCap.ok) throw new Error("missing-cap command unexpectedly succeeded")
 assert.equal(missingCap.reason, "missing_delegation");
 assert.equal(missingCap.commandName, "close_matter");
 assert.match(missingCap.message, /No local delegation/);
+assert.deepEqual(missingCapValues, missingCapValuesBefore);
+assert.equal(missingCapCalls.filter((command) => command === "lattice_sign_carrier").length, 0);
+assert.equal(missingCapCalls.filter((command) => command === "lattice_kv_set").length, 0);
 
 const emptySummary = await submitTownshipCommand({
   invoke: nativeInvoke(new Map(), residentIdentity, []),

@@ -118,6 +118,29 @@
         </p>
       </section>
 
+      <section
+        :if={@source_state == :fresh}
+        id="participant-status-action"
+        class="participant-action"
+        aria-labelledby="participant-status-title"
+      >
+        <header>
+          <p class="section-kicker">Clerk action</p>
+          <h2 id="participant-status-title">Matter status from your device</h2>
+        </header>
+        <button id="participant-status-prepare" type="button" phx-click="prepare_status_action">
+          {if @model.threads.clerk_locked?,
+            do: "Prepare reopen in app",
+            else: "Prepare close in app"}
+        </button>
+        <div :if={@status_intent_url} class="participant-action__handoff">
+          <p id="participant-status-prepared" aria-live="polite">
+            Unsigned {if @status_intent_command == :reopen_matter, do: "reopen", else: "close"} request
+          </p>
+          <a id="participant-status-handoff" href={@status_intent_url}>Open in Township app</a>
+        </div>
+      </section>
+
       <div class="instrument-grid">
         <section id="threads-panel" class="panel panel--threads">
           <header class="panel-header">

@@ -37,6 +37,28 @@ defmodule TownshipWeb.ActionIntent do
     end
   end
 
+  @spec status_url(String.t(), :close_matter | :reopen_matter, keyword()) ::
+          {:ok, String.t()}
+          | {:error, :invalid_replica | :invalid_command | :invalid_intent_id}
+  def status_url(replica, command, opts \\ []) do
+    intent_id = Keyword.get_lazy(opts, :intent_id, &new_intent_id/0)
+
+    with {:ok, replica} <- normalize_replica(replica),
+         {:ok, command} <- normalize_status_command(command),
+         :ok <- validate_intent_id(intent_id) do
+      payload =
+        Jason.OrderedObject.new([
+          {"v", 2},
+          {"id", intent_id},
+          {"replica", replica},
+          {"command", Jason.OrderedObject.new([{"command", command}])}
+        ])
+
+      encoded = payload |> Jason.encode!() |> Base.url_encode64(padding: false)
+      {:ok, "township://action?intent=#{encoded}"}
+    end
+  end
+
   defp normalize_replica(replica) when is_binary(replica) do
     if String.valid?(replica) do
       replica = trim_ascii_edges(replica)
@@ -68,6 +90,10 @@ defmodule TownshipWeb.ActionIntent do
   end
 
   defp normalize_text(_text), do: {:error, :invalid_text}
+
+  defp normalize_status_command(:close_matter), do: {:ok, "close_matter"}
+  defp normalize_status_command(:reopen_matter), do: {:ok, "reopen_matter"}
+  defp normalize_status_command(_command), do: {:error, :invalid_command}
 
   defp validate_intent_id(intent_id) when is_binary(intent_id) do
     if Regex.match?(@intent_id_regex, intent_id), do: :ok, else: {:error, :invalid_intent_id}

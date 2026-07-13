@@ -8,6 +8,11 @@ defmodule TownshipWeb.ActionIntentTest do
                   __DIR__
                 )
 
+  @status_fixture_path Path.expand(
+                         "../../../../clients/township-tauri-shell/test/fixtures/township_status_action_intent_v2.json",
+                         __DIR__
+                       )
+
   test "post_url emits the exact custody-free cross-runtime v1 contract" do
     fixture = @fixture_path |> File.read!() |> Jason.decode!()
     payload = fixture["payload"]
@@ -56,6 +61,42 @@ defmodule TownshipWeb.ActionIntentTest do
 
     assert {:error, :text_too_large} =
              ActionIntent.post_url("replica", String.duplicate("x", 4_097), intent_id: id)
+  end
+
+  test "status_url emits exact custody-free v2 close and reopen contracts" do
+    fixture = @status_fixture_path |> File.read!() |> Jason.decode!()
+    payload = fixture["payload"]
+
+    assert {:ok, url} =
+             ActionIntent.status_url(payload["replica"], :close_matter, intent_id: payload["id"])
+
+    assert url == fixture["url"]
+    assert decoded_payload(url) == payload
+
+    assert {:ok, reopen_url} =
+             ActionIntent.status_url(" replica:matter:one ", :reopen_matter,
+               intent_id: "0123456789abcdef0123456789abcdef"
+             )
+
+    assert decoded_payload(reopen_url) == %{
+             "v" => 2,
+             "id" => "0123456789abcdef0123456789abcdef",
+             "replica" => "replica:matter:one",
+             "command" => %{"command" => "reopen_matter"}
+           }
+
+    assert {:error, :invalid_command} =
+             ActionIntent.status_url("replica", :post,
+               intent_id: "0123456789abcdef0123456789abcdef"
+             )
+
+    assert {:error, :invalid_replica} =
+             ActionIntent.status_url(" ", :close_matter,
+               intent_id: "0123456789abcdef0123456789abcdef"
+             )
+
+    assert {:error, :invalid_intent_id} =
+             ActionIntent.status_url("replica", :close_matter, intent_id: "not-an-id")
   end
 
   defp decoded_payload(url) do

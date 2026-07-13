@@ -8,8 +8,19 @@ export interface TownshipPostActionIntent {
   };
 }
 
+export interface TownshipStatusActionIntent {
+  v: 2;
+  id: string;
+  replica: string;
+  command: {
+    command: "close_matter" | "reopen_matter";
+  };
+}
+
+export type TownshipActionIntent = TownshipPostActionIntent | TownshipStatusActionIntent;
+
 export type TownshipActionIntentParse =
-  | { ok: true; intent: TownshipPostActionIntent }
+  | { ok: true; intent: TownshipActionIntent }
   | {
       ok: false;
       reason: "invalid_action_deeplink" | "invalid_action_payload" | "unsupported_action_version";
@@ -60,7 +71,7 @@ export function parseTownshipActionIntentDeepLink(value: string): TownshipAction
   }
 
   if (!isRecord(payload)) return payloadError();
-  if (payload.v !== 1) {
+  if (payload.v !== 1 && payload.v !== 2) {
     return {
       ok: false,
       reason: "unsupported_action_version",
@@ -70,13 +81,27 @@ export function parseTownshipActionIntentDeepLink(value: string): TownshipAction
   if (!exactKeys(payload, ["command", "id", "replica", "v"])) return payloadError();
   if (typeof payload.id !== "string" || !INTENT_ID.test(payload.id)) return payloadError();
   if (!canonicalBoundedString(payload.replica, MAX_REPLICA_BYTES)) return payloadError();
-  if (!isRecord(payload.command) || !exactKeys(payload.command, ["command", "text"])) return payloadError();
-  if (payload.command.command !== "post") return payloadError();
-  if (!canonicalBoundedString(payload.command.text, MAX_TEXT_BYTES)) return payloadError();
+  if (!isRecord(payload.command)) return payloadError();
+
+  if (payload.v === 1) {
+    if (!exactKeys(payload.command, ["command", "text"])) return payloadError();
+    if (payload.command.command !== "post") return payloadError();
+    if (!canonicalBoundedString(payload.command.text, MAX_TEXT_BYTES)) return payloadError();
+
+    return {
+      ok: true,
+      intent: payload as unknown as TownshipPostActionIntent,
+    };
+  }
+
+  if (!exactKeys(payload.command, ["command"])) return payloadError();
+  if (payload.command.command !== "close_matter" && payload.command.command !== "reopen_matter") {
+    return payloadError();
+  }
 
   return {
     ok: true,
-    intent: payload as unknown as TownshipPostActionIntent,
+    intent: payload as unknown as TownshipStatusActionIntent,
   };
 }
 

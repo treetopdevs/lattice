@@ -152,6 +152,52 @@ test("resident controls refresh pulled caps and converge through the native seam
     // RED on Plan 120: sync persisted the cap, but the rendered availability snapshot stayed stale.
     await expect(postAction).toContainText("Available");
 
+    const closeAction = page.locator(".action-list li").filter({
+      has: page.getByText("Close matter", { exact: true }),
+    });
+    await expect(closeAction).toContainText("No local cap");
+
+    const preservedDraft = "resident draft stays local";
+    await page.getByRole("textbox", { name: "Township post update" }).fill(preservedDraft);
+    const closeActionUrl = townshipStatusActionUrl(vector.replica, "close_matter");
+    const kvBeforeCloseIntent = [...kv.entries()];
+    const nonSessionSignsBeforeCloseIntent = nonSessionSignCount(calls);
+    const kvSetsBeforeCloseIntent = commandCount(calls, "lattice_kv_set");
+    const callsBeforeCloseIntent = calls.length;
+
+    await deliverTauriDeepLink(page, calls, closeActionUrl);
+
+    const closeIncoming = page.locator("#participant-action-request");
+    await expect(closeIncoming).toContainText("Close matter request");
+    await expect(closeIncoming.locator(".incoming-action-text")).toHaveCount(0);
+    await expect(page.getByRole("textbox", { name: "Township post update" })).toHaveValue(preservedDraft);
+    assert.deepEqual([...kv.entries()], kvBeforeCloseIntent, "status ingress must not change native KV state");
+    assert.equal(nonSessionSignCount(calls), nonSessionSignsBeforeCloseIntent);
+    assert.equal(commandCount(calls, "lattice_kv_set"), kvSetsBeforeCloseIntent);
+
+    const closeIngressTraces = calls
+      .slice(callsBeforeCloseIntent)
+      .filter(({ command }) => command === "lattice_trace_dev_event")
+      .map(({ args }) => String(args.event));
+    assert.ok(closeIngressTraces.some((event) => event.includes("action-intent:staged")));
+    assert.doesNotMatch(closeIngressTraces.join("\n"), /close_matter|replica:matter|township:\/\/action/);
+
+    await closeIncoming.getByRole("button", { name: "Use request" }).click();
+    await expect(closeIncoming).toHaveCount(0);
+
+    const acceptedClose = page.locator("#participant-status-request");
+    await expect(acceptedClose).toContainText("Close matter request");
+    await expect(acceptedClose.getByRole("button", { name: "Sign close" })).toBeDisabled();
+    await expect(page.getByRole("textbox", { name: "Township post update" })).toHaveValue(preservedDraft);
+    assert.deepEqual([...kv.entries()], kvBeforeCloseIntent, "using a no-cap request must remain local state only");
+    assert.equal(nonSessionSignCount(calls), nonSessionSignsBeforeCloseIntent);
+    assert.equal(commandCount(calls, "lattice_kv_set"), kvSetsBeforeCloseIntent);
+    assert.deepEqual(JSON.parse(requiredValue(kv, storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY))), []);
+
+    await acceptedClose.getByRole("button", { name: "Dismiss request" }).click();
+    await expect(acceptedClose).toHaveCount(0);
+    await page.getByRole("textbox", { name: "Township post update" }).fill("");
+
     const postText = "resident: prepared in the instrument";
     const actionUrl = townshipPostActionUrl(vector.replica, postText);
     const kvBeforeIntent = [...kv.entries()];
@@ -336,6 +382,19 @@ function townshipPostActionUrl(replica: string, text: string): string {
   return `township://action?intent=${Buffer.from(JSON.stringify(payload), "utf8").toString("base64url")}`;
 }
 
+function townshipStatusActionUrl(
+  replica: string,
+  command: "close_matter" | "reopen_matter",
+): string {
+  const payload = {
+    v: 2,
+    id: "fedcba9876543210fedcba9876543210",
+    replica,
+    command: { command },
+  };
+  return `township://action?intent=${Buffer.from(JSON.stringify(payload), "utf8").toString("base64url")}`;
+}
+
 async function startStaticAppServer(root: string): Promise<StaticAppServer> {
   const server = createServer((request, response) => {
     const pathname = decodeURIComponent(new URL(request.url ?? "/", "http://127.0.0.1").pathname);
@@ -401,6 +460,10 @@ function nonSessionSignCount(calls: InvokeCall[]): number {
     const signedBytes = Buffer.from(requiredString(args, "bytes"), "base64");
     return !signedBytes.subarray(0, carrierSessionTranscriptPrefix.length).equals(carrierSessionTranscriptPrefix);
   }).length;
+}
+
+function commandCount(calls: InvokeCall[], command: string): number {
+  return calls.filter((call) => call.command === command).length;
 }
 
 function requiredValue(values: Map<string, string>, key: string): string {

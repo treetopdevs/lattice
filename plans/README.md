@@ -15,9 +15,9 @@ QR camera onboarding, LAN discovery, physical-device behavior, cross-device pair
 state exchange, and any further `tauri:android:release:*` probe permutations. Plan 131 closes the
 packaged macOS CI-enforcement gap, Plan 132 closes the BEAM/LiveView server-push liveness gap, and
 Plan 133 adds the reusable direct-TypeScript subscription plus a real stable-server gate without
-pushing operations or state. The active frontier remains G1 completion and the remaining Phase G
-work: reactive Tauri/Vue feed consumption, broader participant controls, production deployment,
-and W4.
+pushing operations or state, and Plan 134 closes the packaged reactive Tauri/Vue feed-consumption
+gap. Plan 135 is the active first clerk-status handoff slice; the remaining frontier is G1
+completion and Phase G work beyond close/reopen, production deployment, and W4.
 
 **Landing 001–009 as one effort?** Start from the umbrella goal:
 [000-goal-foundation-and-hardening.md](000-goal-foundation-and-hardening.md). It
@@ -165,6 +165,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 132 | Authenticated carrier availability feed | P1 | XL | 128, 131 | DONE |
 | 133 | Direct TypeScript carrier availability feed | P1 | L | 132 | DONE |
 | 134 | Reactive packaged Tauri availability feed | P1 | XL | 133, 129, 130 | DONE |
+| 135 | Versioned clerk status action handoff | P1 | XL | 050, 054, 130, 131, 134 | IN PROGRESS |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

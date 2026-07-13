@@ -51,6 +51,37 @@ defmodule TownshipWeb.InstrumentLive do
      )}
   end
 
+  def handle_event(
+        "prepare_status_action",
+        _params,
+        %{
+          assigns: %{
+            source_state: :fresh,
+            model: model,
+            provenance: %{replica: replica}
+          }
+        } = socket
+      ) do
+    command = status_action_command(model)
+
+    case ActionIntent.status_url(replica, command) do
+      {:ok, url} ->
+        {:noreply,
+         assign(socket,
+           status_intent_url: url,
+           status_intent_command: command,
+           status_intent_replica: replica
+         )}
+
+      {:error, _reason} ->
+        {:noreply, clear_status_intent(socket)}
+    end
+  end
+
+  def handle_event("prepare_status_action", _params, socket) do
+    {:noreply, clear_status_intent(socket)}
+  end
+
   @impl true
   def handle_info({:township_instrument, projection_state}, socket) do
     {:noreply, apply_projection(socket, projection_state)}
@@ -112,6 +143,7 @@ defmodule TownshipWeb.InstrumentLive do
   defp assign_payload(socket, source_state, payload) do
     socket
     |> retain_action_intent(source_state, payload.provenance.replica)
+    |> retain_status_intent(source_state, payload.read_model, payload.provenance.replica)
     |> assign(
       page_title: "Township Instrument",
       source_state: source_state,
@@ -138,7 +170,10 @@ defmodule TownshipWeb.InstrumentLive do
       post_intent_form: post_intent_form(""),
       post_intent_url: nil,
       post_intent_replica: nil,
-      post_intent_error: nil
+      post_intent_error: nil,
+      status_intent_url: nil,
+      status_intent_command: nil,
+      status_intent_replica: nil
     )
   end
 
@@ -152,14 +187,47 @@ defmodule TownshipWeb.InstrumentLive do
 
   defp retain_action_intent(socket, _source_state, _replica), do: clear_action_intent(socket)
 
+  defp retain_status_intent(socket, :fresh, model, replica) do
+    cond do
+      is_nil(socket.assigns.status_intent_url) ->
+        socket
+
+      socket.assigns.status_intent_replica != replica ->
+        clear_status_intent(socket)
+
+      socket.assigns.status_intent_command != status_action_command(model) ->
+        clear_status_intent(socket)
+
+      true ->
+        socket
+    end
+  end
+
+  defp retain_status_intent(socket, _source_state, _model, _replica),
+    do: clear_status_intent(socket)
+
   defp clear_action_intent(socket) do
     assign(socket,
       post_intent_form: post_intent_form(""),
       post_intent_url: nil,
       post_intent_replica: nil,
-      post_intent_error: nil
+      post_intent_error: nil,
+      status_intent_url: nil,
+      status_intent_command: nil,
+      status_intent_replica: nil
     )
   end
+
+  defp clear_status_intent(socket) do
+    assign(socket,
+      status_intent_url: nil,
+      status_intent_command: nil,
+      status_intent_replica: nil
+    )
+  end
+
+  defp status_action_command(%{threads: %{clerk_locked?: true}}), do: :reopen_matter
+  defp status_action_command(_model), do: :close_matter
 
   defp post_intent_form(text) when is_binary(text), do: to_form(%{"text" => text}, as: :post)
   defp post_intent_form(_text), do: post_intent_form("")

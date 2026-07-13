@@ -134,6 +134,21 @@ jobs:
       - name: Install Tauri shell dependencies
         working-directory: clients/township-tauri-shell
         run: npm ci
+      - name: TS Township shell typecheck
+        working-directory: clients/township-tauri-shell
+        run: npm run typecheck
+      - name: TS Township action-intent contract
+        working-directory: clients/township-tauri-shell
+        run: npm run action-intent:contract
+      - name: TS Township deep-link dispatcher contract
+        working-directory: clients/township-tauri-shell
+        run: npm run deeplink:dispatcher:contract
+      - name: TS Township action contract
+        working-directory: clients/township-tauri-shell
+        run: npm run action:contract
+      - name: TS Township frontend contract
+        working-directory: clients/township-tauri-shell
+        run: npm run frontend:contract
       - name: TS reactive Township feed controller
         working-directory: clients/township-tauri-shell
         run: npm run feed:app:contract
@@ -237,6 +252,12 @@ jobs:
       - name: Verify packaged action handoff
         working-directory: clients/township-tauri-shell
         run: npm run tauri:action-handoff:smoke
+
+      - name: Verify packaged clerk status handoff
+        working-directory: clients/township-tauri-shell
+        env:
+          TOWNSHIP_SKIP_CLERK_ACTION_APP_BUILD: "1"
+        run: npm run tauri:clerk-action-handoff:smoke
 
       - name: Verify packaged reactive carrier feed
         working-directory: clients/township-tauri-shell
