@@ -840,6 +840,8 @@ defmodule LatticeCarrierServer.PlanContractTest do
       File.read!(Path.join(@repo_root, "plans/137-versioned-roster-action-handoff-g1.md"))
 
     plans_index = File.read!(Path.join(@repo_root, "plans/README.md"))
+    build_map = File.read!(Path.join(@repo_root, "TOWNSHIP_BUILD_MAP.md"))
+    poc_status = File.read!(Path.join(@repo_root, "docs/lattice_poc_status.md"))
 
     shell_package =
       @repo_root
@@ -849,7 +851,10 @@ defmodule LatticeCarrierServer.PlanContractTest do
 
     workflow = File.read!(Path.join(@repo_root, ".github/workflows/flagship.yml"))
 
-    assert plan =~ ~r/## Status\s+IN PROGRESS/
+    mobile_strategy =
+      File.read!(Path.join(@repo_root, "docs/township_mobile_secure_store_strategy.md"))
+
+    assert plan =~ ~r/## Status\s+DONE/
     assert plan =~ "v1, v2, and v3 remain exactly unchanged"
 
     assert plan =~
@@ -881,12 +886,20 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert plan =~ "No delegation, revocation, or succession handoff"
     assert plan =~ "not an authority-quarantine or authority-role proof"
     assert plan =~ "No complete G1/Phase G claim and no receipt-free W4 claim"
+    assert plan =~ "389 tests plus 25 properties"
+    assert plan =~ "Hosted implementation run `29233959489` is green"
+    assert plan =~ "`cae78810b7858064a5c4ab07db950057a367df70`"
+    assert plan =~ "`Verify flagship artifact` completed in 3m40s"
+    assert plan =~ "`Unit + property suite` completed in 4m51s"
+    assert plan =~ "`Packaged macOS convergence` completed in 7m46s"
+    assert plan =~ ~r/## Completion claim\s+Complete for this scoped increment/
+    refute plan =~ "Hard hosted unit, flagship, and packaged macOS runs remain required"
+    refute plan =~ "Not yet complete"
 
     assert plans_index =~
-             "| 137 | Versioned roster action handoff | P1 | XL | 051, 054, 130, 136 | IN PROGRESS |"
+             "| 137 | Versioned roster action handoff | P1 | XL | 051, 054, 130, 136 | DONE |"
 
-    assert plans_index =~
-             "Plan 137's bundled `admit`/`remove_member` roster handoff"
+    assert plans_index =~ "Plan 137 closes the bundled `admit`/`remove_member` roster handoff slice"
 
     assert shell_package["scripts"]["tauri:roster-action-handoff:smoke"] ==
              "tsx test/tauri_roster_action_handoff_smoke.ts"
@@ -896,5 +909,31 @@ defmodule LatticeCarrierServer.PlanContractTest do
 
     assert workflow =~
              ~r/Verify packaged roster handoff\s+working-directory: clients\/township-tauri-shell\s+env:\s+TOWNSHIP_SKIP_ROSTER_ACTION_APP_BUILD: "1"\s+run: npm run tauri:roster-action-handoff:smoke/
+
+    assert build_map =~ "Plan 137 adds the versioned roster action handoff"
+    assert build_map =~ "Hosted Plan 137 run `29233959489` is green"
+    assert build_map =~ "Plan 137 status is `DONE`"
+
+    assert build_map =~
+             "The remaining participant-control work now narrows to capability-lifecycle controls"
+
+    refute build_map =~ "Plan 137 completes G1"
+    refute build_map =~ "Plan 137 completes Phase G"
+
+    [_, plan137_tail] =
+      String.split(
+        poc_status,
+        "## Checkpoint: Versioned Roster Action Handoff",
+        parts: 2
+      )
+
+    [plan137_checkpoint | _rest] = String.split(plan137_tail, "\n## Checkpoint:", parts: 2)
+
+    assert plan137_checkpoint =~ "389 tests plus 25 properties"
+    assert plan137_checkpoint =~ "Hosted implementation run `29233959489` is green"
+    assert plan137_checkpoint =~ "Plan 137 status is `DONE`"
+    refute plan137_checkpoint =~ "Hosted acceptance remains pending"
+
+    assert mobile_strategy =~ "Plan 137 leaves this custody strategy unchanged"
   end
 end

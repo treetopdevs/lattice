@@ -442,6 +442,11 @@ native signer and ordinary replayable delegation/log/outbox KV evidence, and the
 `set_title` or `set_summary` frame remains local until a separate explicit Sync. No mobile
 secure-store implementation, mobile relay, Android/iOS probe, physical-device behavior, Expo
 result, or phone-grade claim is added.
+Plan 137 leaves this custody strategy unchanged. The packaged desktop roster path reuses the native
+signer and ordinary replayable delegation/log/outbox KV evidence, and the signed `admit` or
+`remove_member` frame remains local until a separate explicit Sync. No mobile secure-store
+implementation, mobile relay, Android/iOS probe, physical-device behavior, Expo result, or
+phone-grade claim is added.
 Plan 086 proves the same env-gated probe can
 connect and complete a WebSocket frame roundtrip in a debug APK, so it proves the harness can produce
 a positive on-device result but still does not prove release Sync/outbox/KV convergence. Plan 087 proves

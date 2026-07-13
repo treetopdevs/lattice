@@ -588,3 +588,39 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
 - Blocker or remaining limitation: no automatic authored-frame publication, mobile secure-store
   implementation, mobile/device result, roster/delegation/revocation/succession command bus,
   production ingress/TLS deployment, complete G1/Phase G claim, or receipt-free W4.
+
+## Checkpoint: Versioned Roster Action Handoff
+
+- Files changed: the exact v4 roster action-intent producer and decoder fixtures, fresh-only
+  LiveView admit/remove preparation, shared participant dispatcher, command-aware Tauri review and
+  signing ceremony, Sim roster fixture, multi-realm stable-server helpers, dedicated packaged
+  smoke, fast shell contracts, workflow gate, and cumulative Plan 137 documentation contracts.
+- Behaviors: v1 remains post-only, v2 remains clerk-status-only, and v3 remains field-edit-only. A
+  fresh instrument prepares exact `admit` or `remove_member` requests whose server handlers fix the
+  command despite client parameters. The app stages and accepts either request without storage,
+  signing, draft replacement, or network activity; rechecks the saved replica before native-custody
+  signing; leaves the exact frame in the local outbox; and publishes only through a separate
+  explicit Sync. A post-only participant fails both roster commands locally before native signing
+  or KV writes.
+- Oracle: the real installed app signs an observed remove from a shared base while a distinct
+  authorized peer publishes a concurrent admit for the same member. The pending remove remains
+  byte-identical, the source remains peer-only before Sync, and explicit Sync converges the stable
+  source, Tauri feed, and LiveView to the independent `Lattice.Sim` observed-remove add-wins result.
+  The same app then repeats the inert, pending, Sync, and three-surface ceremony for admit, without
+  server or observer authoring.
+- Gates: focused Elixir, TypeScript, Vue, Plan, no-cap, and packaged contracts are green. Full local
+  regression is green at 389 tests plus 25 properties, complete app/browser/flagship convergence,
+  warnings-as-errors, the unchanged five-cycle xref baseline, both Sobelow scans, actionlint,
+  formatting, diff hygiene, and 23 Rust tests. Final exact-worktree Claude review and its focused
+  validation-error follow-ups returned `PROCEED` with no blocker, high, or medium finding.
+- Hosted implementation run `29233959489` is green at
+  `cae78810b7858064a5c4ab07db950057a367df70`. `Verify flagship artifact` completed in 3m40s,
+  `Unit + property suite` completed in 4m51s, and `Packaged macOS convergence` completed in 7m46s.
+  Stable onboarding, post, no-build clerk, no-build field edit, no-build roster, and reactive feed
+  all passed in the required order.
+- Result: Plan 137 status is `DONE`; local and hosted evidence establish the scoped versioned roster
+  custody seam and contested add-wins convergence proof.
+- Blocker or remaining limitation: no automatic authored-frame publication, mobile secure-store
+  implementation or mobile/device result, delegation/revocation/succession handoff or general
+  command bus, authority-role or quarantine proof, production ingress/TLS deployment, complete
+  G1/Phase G claim, or receipt-free W4.

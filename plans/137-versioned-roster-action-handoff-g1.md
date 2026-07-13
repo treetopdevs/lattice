@@ -2,7 +2,7 @@
 
 ## Status
 
-IN PROGRESS
+DONE
 
 ## Objective
 
@@ -407,10 +407,18 @@ Cumulative:
 - Claude has returned `PROCEED` on every meaningful implementation, capability, packaged, CI, and
   cumulative evaluation. Its exact final-worktree review found no blocker, high, or medium issue;
   its one low replica-feedback observation drove the paired TDD slice above, and the resulting
-  review left the commit-readiness verdict unchanged. Hard hosted unit, flagship, and packaged
-  macOS runs remain required before closure.
+  review left the commit-readiness verdict unchanged.
+- Hosted implementation run `29233959489` is green at
+  `cae78810b7858064a5c4ab07db950057a367df70`. `Verify flagship artifact` completed in 3m40s,
+  `Unit + property suite` completed in 4m51s, and `Packaged macOS convergence` completed in 7m46s.
+  Stable-relay onboarding, the unchanged post handoff, the no-build clerk handoff, the no-build
+  field-edit handoff, the no-build roster handoff, and the reactive feed smoke all passed in the
+  required order.
 
 ## Completion claim
 
-Not yet complete. Plan 137 remains `IN PROGRESS` until every focused, packaged, cumulative, hosted,
-documentation, and independent-review gate above is green.
+Complete for this scoped increment. Exact cross-runtime v4 compatibility, fresh-only LiveView
+preparation, command-specific app review/signing with separate Sync, local no-cap refusal, real
+packaged observed-remove add-wins and sequential-admit convergence against Sim, unchanged v1-v3
+evidence, hard hosted CI, cumulative docs, and final independent review are green. This completion
+does not claim the deferred or parked work above.
