@@ -172,8 +172,38 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 136 | Versioned field-edit action handoff | P1 | XL | 048, 135 | DONE |
 | 137 | Versioned roster action handoff | P1 | XL | 051, 054, 130, 136 | DONE |
 | 138 | Versioned delegation grant handoff | P1 | XL | 053, 054, 058, 130, 137 | IN PROGRESS |
+| 139 | Versioned revocation action handoff | P1 | XL | 138, **140, 141** | BLOCKED (gated on 140/141 — see Round 3) |
+| 140 | Restore V-01 guarantee in TS client (authority + ordering) | **P0** | L | 019, 020, 058 | TODO |
+| 141 | Serialize shell persistence (stop silent op loss) | **P0** | M | 029, 030, 032 | TODO |
+| 142 | Carrier session replay protection + durability honesty | P1 | M | 127, 128 | TODO |
+| 143 | Consolidate the versioned action ladder (pay down accretion) | P2 | L | 138 | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
+
+## Round 3 (external review, 2026-07-13, against `codex/township-build-map` @ `97f250b9`)
+
+A whole-tree review (Phoenix instrument, Tauri/Vue shell, TS client core, Rust custody,
+carrier server, CI, and the in-flight Plan 138 diff) found the loop **converging in process
+and feature terms but violating its own V-01 prime directive at the core**, plus a
+confirmed silent-data-loss race and a linear-accretion habit now producing bugs. Two
+findings are STOP-condition-grade and were confirmed by source inspection and executed
+counterexamples:
+
+- **Plan 140 (P0)** — the TS client honors forged authority ops the Sim oracle rejects
+  (`carrier.ts:944` + `quarantine.ts:20`), and `causal_list` ordering drifts from Sim's
+  `{height, id}` under concurrent appends. Both invisible to the current happy-path
+  conformance corpus. This is the V-01 drift bug the build map calls a STOP condition.
+- **Plan 141 (P0)** — `local_log.ts` stores are non-atomic load→save-whole-array, and
+  `township_sync.ts`/`township_feed.ts` save a pre-network snapshot over ops authored during
+  the network window → silent permanent op loss. Corrupt KV silently wipes the store.
+
+**Execution order for Round 3: 140 and 141 first (P0, they unblock 139), then 142 (before the
+listener leaves loopback), then 143 (consolidation — the first net-negative plan, do it before
+any v7 action). Plan 139 is BLOCKED until 140 and 141 are DONE:** shipping revocation on a TS
+client that can be lied to about who holds authority would compound the defect. The wire/parser/
+signing core is genuinely converged and is not the target of any Round 3 plan; the targets are
+the adversarial-semantics gap (140), the persistence race (141), the auth replay (142), and the
+duplicated UI/test estate plus the source-text/prose tests that entrench it (143).
 
 ## Round 2 (deep audit, 2026-07-07, against commit `6b2cfe5`)
 
