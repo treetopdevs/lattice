@@ -106,7 +106,13 @@ jobs:
       - name: Run full test suite
         run: mix test
       - name: Regenerate TS oracle vectors
-        run: mix lattice.export_vectors --out clients/lattice-client/test/vectors
+        # Run in :test env, not the default :dev env. A cache-restored _build/dev can
+        # carry .beam mtimes newer than the freshly checked-out .ex sources, so Mix's
+        # staleness check skips recompiling and this task silently runs stale code —
+        # observed in CI regenerating a pre-session 9-scenario vector set instead of
+        # the current 19. `mix test` (above) just forced a correct :test recompile in
+        # this same job, so reuse that env instead of trusting :dev's staleness check.
+        run: MIX_ENV=test mix lattice.export_vectors --out clients/lattice-client/test/vectors
       - name: Install TS client dependencies
         working-directory: clients/lattice-client
         run: npm ci
