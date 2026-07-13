@@ -172,8 +172,8 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 136 | Versioned field-edit action handoff | P1 | XL | 048, 135 | DONE |
 | 137 | Versioned roster action handoff | P1 | XL | 051, 054, 130, 136 | DONE |
 | 138 | Versioned delegation grant handoff | P1 | XL | 053, 054, 058, 130, 137 | DONE |
-| 139 | Versioned revocation action handoff | P1 | XL | 138, **140, 141** | BLOCKED (gated on 140/141 — see Round 3) |
-| 140 | Restore V-01 guarantee in TS client (authority + ordering) | **P0** | L | 019, 020, 058 | IN PROGRESS (all local gates green; hosted flagship run pending) |
+| 139 | Versioned revocation action handoff | P1 | XL | 138, **140, 141** | BLOCKED (gated on 141 — see Round 3) |
+| 140 | Restore V-01 guarantee in TS client (authority + ordering) | **P0** | L | 019, 020, 058 | DONE |
 | 141 | Serialize shell persistence (stop silent op loss) | **P0** | M | 029, 030, 032 | TODO |
 | 142 | Carrier session replay protection + durability honesty | P1 | M | 127, 128 | TODO |
 | 143 | Consolidate the versioned action ladder (pay down accretion) | P2 | L | 138 | TODO |
@@ -204,6 +204,14 @@ client that can be lied to about who holds authority would compound the defect. 
 signing core is genuinely converged and is not the target of any Round 3 plan; the targets are
 the adversarial-semantics gap (140), the persistence race (141), the auth replay (142), and the
 duplicated UI/test estate plus the source-text/prose tests that entrench it (143).
+
+**Plan 140 is DONE (2026-07-13).** The TS client now validates every authority event
+(genesis/transfer/succeed/heartbeat) against the same trust anchors as the oracle, orders
+`causal_list` by `{height, op_id}`, and uses the oracle's −1 dangling-dependency height base —
+defended by an adversarial Sim-exported corpus (forged/double/unattenuated transfer, same-id
+delegation collision, concurrent-append partition, pruned-log LWW) rather than by review. Hosted
+flagship run `29290474614` is green across all three jobs. Plan 139 remains BLOCKED on Plan 141
+alone.
 
 ## Round 2 (deep audit, 2026-07-07, against commit `6b2cfe5`)
 

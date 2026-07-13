@@ -2,7 +2,7 @@
 
 ## Status
 
-IN PROGRESS
+DONE
 
 ## Stop-gap already in place (2026-07-13)
 
@@ -263,6 +263,34 @@ flagship run remains before this plan can claim its completion gate:
   CLI (hosted macOS job); it was not run here.
 - Remaining before `DONE`: a green hosted flagship run (including the packaged macOS jobs), which
   is this plan's "Flagship CI green" gate. No code work is known to remain.
+
+## Execution checkpoint: hosted flagship gate (Plan 140 complete)
+
+The first hosted flagship run (`29289557943`) failed, but not on Plan 140's reduction logic — it
+exposed a pre-existing CI environment defect that this checkpoint's fix-forward closes without
+touching any TS or Elixir reduction code:
+
+- The job's `_build`/`deps` cache is keyed only on `mix.lock`. A cache restore can leave `.beam`
+  mtimes newer than the freshly checked-out `.ex` sources, so Mix's staleness check skips
+  recompiling. `mix test` (which runs in `:test` env) recompiled correctly and its own exporter
+  tests wrote the full 19-scenario corpus from temp dirs; the separate `mix lattice.export_vectors`
+  step (default `:dev` env) then silently ran a stale pre-session build and wrote only 9 files,
+  overwriting the committed `township_succession_w3.json` with a copy lacking the
+  `oracleCarrierOps`/`realmByPubkey` evidence this plan's succession checkpoint added. Removing the
+  old `REFUSED_PENDING_PLAN_140` refusal (this plan's own change, since succession is now validated
+  for real) turned that silent staleness into a hard `V01UnvalidatedAuthorityError` crash in the TS
+  conformance step.
+- Fix: `.github/workflows/flagship.yml`'s "Regenerate TS oracle vectors" step now runs under
+  `MIX_ENV=test`, reusing the environment `mix test` just proved fresh in the same job instead of
+  trusting `:dev`'s staleness detector. Verified locally before pushing:
+  `MIX_ENV=test mix lattice.export_vectors` regenerates all 19 files byte-identical to committed.
+- Hosted Plan 140 run `29290474614` is green across all three jobs: Unit + property suite (TS
+  conformance, 19 vectors, no refusals), Verify flagship artifact, and Packaged macOS convergence.
+- **Plan 140 is `DONE`.** The V-01 guarantee is now defended by the adversarial corpus rather than
+  by code review, on every named scenario: forged/double/unattenuated transfer, same-id delegation
+  collision, causal-list ordering under partition, the dangling-dependency height base, and full
+  succession/heartbeat/policy semantics. Plan 139 (revocation) remains blocked on Plan 141
+  (persistence serialization), not on this plan.
 
 ## Priority
 
