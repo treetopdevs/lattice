@@ -46,6 +46,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_join_w0(),
       township_zoning_variance_24(),
       township_succession_w3(),
+      township_authority_forged_root(),
       township_carrier_w1()
     ]
 
@@ -160,6 +161,61 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       log: merged,
       realms: realm_index(sim),
       perspectives: []
+    }
+  end
+
+  defp township_authority_forged_root do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:authority-forged-root",
+        ["clerk", "mallory"],
+        seed: "township:authority-forged-root"
+      )
+
+    clerk = Sim.identity(sim, "clerk")
+    mallory = Sim.identity(sim, "mallory")
+    replica = Authority.bind_replica(Sim.replica(sim), clerk.pub)
+
+    impostor_delegation =
+      Delegation.genesis(mallory, replica,
+        ops: [:close_matter, :reopen_matter],
+        roles: [:clerk],
+        live: true
+      )
+
+    impostor_genesis =
+      Op.new(
+        mallory,
+        replica,
+        [],
+        :authority,
+        {:genesis, impostor_delegation, %{}}
+      )
+
+    log = Log.append!(Log.new(replica), impostor_genesis)
+    authority_quarantine = authority_quarantine(log)
+
+    unless [impostor_genesis.id, "impostor_genesis"] in authority_quarantine do
+      raise "expected impostor genesis #{impostor_genesis.id} to quarantine"
+    end
+
+    unless is_nil(Authority.holder(Matter, log, :clerk)) do
+      raise "expected impostor genesis to leave clerk unassigned"
+    end
+
+    realms = realm_index(sim)
+
+    %{
+      name: "township_authority_forged_root",
+      kind: "adversarial",
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: replica,
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      authorityQuarantine: authority_quarantine
     }
   end
 
@@ -579,16 +635,20 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
     winners = winners(ops, MapSet.new(quarantine))
 
+    expected =
+      %{
+        "state" => state_json(log, realms),
+        "quarantine" => quarantine,
+        "winners" => winners
+      }
+      |> maybe_put("authorityQuarantine", Map.get(scenario, :authorityQuarantine))
+
     %{
       "generatedBy" => "Lattice.Sim",
       "scenario" => name,
       "schema" => schema_json(),
       "ops" => ops,
-      "expectAtFullFrontier" => %{
-        "state" => state_json(log, realms),
-        "quarantine" => quarantine,
-        "winners" => winners
-      },
+      "expectAtFullFrontier" => expected,
       "expectAtFrontier" =>
         Enum.map(perspectives, fn perspective ->
           %{
@@ -607,6 +667,9 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     }
     |> maybe_put("scenarioKind", Map.get(scenario, :kind))
     |> maybe_put("seed", Map.get(scenario, :seed))
+    |> maybe_put("replica", Map.get(scenario, :replica))
+    |> maybe_put("realmByPubkey", Map.get(scenario, :realmByPubkey))
+    |> maybe_put("oracleCarrierOps", Map.get(scenario, :oracleCarrierOps))
   end
 
   defp to_vector(%{carrier?: true} = scenario) do

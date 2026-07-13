@@ -71,7 +71,7 @@ export function materialize(schema, ops, included) {
         const fieldOps = live.filter((o) => o.field === field);
         if (isAuthorityField(spec)) {
             // holder = last authority op in canonical order
-            let holder = spec.default;
+            let holder = spec.default !== undefined ? spec.default : null;
             let winner = null;
             for (const o of fieldOps) {
                 holder = o.value;

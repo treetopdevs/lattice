@@ -1,3 +1,4 @@
+import { sha256 } from "@noble/hashes/sha2.js";
 import { ancestors } from "./dag";
 import type {
   AuthorityDelegationEvidence,
@@ -112,7 +113,8 @@ function authorityWriteHonored(
       state.holder === null &&
       delegation.parentId === null &&
       delegation.issuer === delegation.audience &&
-      delegation.issuerRealm === op.author
+      delegation.issuerRealm === op.author &&
+      replicaRootMatches(delegation.replica, delegation.audience)
     );
   }
 
@@ -191,6 +193,43 @@ function validDelegation(
 function subset(child: readonly string[], parent: readonly string[]): boolean {
   const parentSet = new Set(parent);
   return child.every((value) => parentSet.has(value));
+}
+
+function replicaRootMatches(replica: string, audience: string): boolean {
+  const commitment = replicaRootCommitment(replica);
+  return commitment === null || bytesToBase64Url(sha256(base64ToBytes(audience))) === commitment;
+}
+
+function replicaRootCommitment(replica: string): string | null {
+  const marker = "#root:";
+  const offset = replica.indexOf(marker);
+  if (offset === -1) return null;
+
+  const commitment = replica.slice(offset + marker.length);
+  return commitment.length > 0 ? commitment : null;
+}
+
+function base64ToBytes(value: string): Uint8Array {
+  if (typeof Buffer !== "undefined") return new Uint8Array(Buffer.from(value, "base64"));
+
+  const atobFn = (globalThis as unknown as { atob?: (encoded: string) => string }).atob;
+  if (!atobFn) throw new Error("base64 decoding unavailable");
+  return Uint8Array.from(atobFn(value), (char) => char.charCodeAt(0));
+}
+
+function bytesToBase64Url(value: Uint8Array): string {
+  const base64 =
+    typeof Buffer !== "undefined"
+      ? Buffer.from(value).toString("base64")
+      : browserBase64(value);
+
+  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function browserBase64(value: Uint8Array): string {
+  const btoaFn = (globalThis as unknown as { btoa?: (decoded: string) => string }).btoa;
+  if (!btoaFn) throw new Error("base64 encoding unavailable");
+  return btoaFn(String.fromCharCode(...value));
 }
 
 function delegationKey(delegation: AuthorityDelegationEvidence): string {

@@ -33,8 +33,9 @@ which runs the SAME Sim calls as `workflows_test.exs`. Do not hand-maintain vect
   storage/signing through a Tauri-style async `invoke` bridge. The honest remaining seam is shell
   integration: native command implementations and app wiring.
 
-Do not try to unblock Tier B by inventing a client-side hash. That reintroduces the exact
-cross-runtime divergence plan 010a is about.
+Do not unblock Tier B with an ad hoc client-side hash. Op ids continue through the canonical codec;
+the only synchronous hash dependency is exact-pinned `@noble/hashes`, used by semantic reduction to
+recompute a persisted bound-root commitment and pinned to BEAM by the adversarial Sim vector.
 
 ## What exists vs what's left
 
@@ -102,6 +103,12 @@ first Tauri v2 Rust command core for `lattice_kv_get`, `lattice_kv_set`, `lattic
 `lattice_sign_carrier`. `cargo test` proves key-value semantics, missing-key/error handling, and the
 same W1 carrier-session Ed25519 public key/signature as the TS bridge.
 
+Bound-root authority slice in progress (plan 140): conformance includes a validly signed forged
+genesis on a clerk-bound replica. The reducer recomputes the root commitment synchronously from
+persisted delegation evidence, quarantines the impostor genesis, and materializes an unassigned
+authority holder as `null`. Delegation id/signature validation and carrier-op replica retention are
+still separate trust-anchor work; do not claim full V-01 restoration from this slice.
+
 Left to do (the real work package — see `plans/011-ts-client-realm.md`):
 1. Expand the randomized Sim corpus beyond the current N=5 seeded scenarios when a broader
    generator is useful; keep the same vector contract and CI gate.
@@ -114,6 +121,8 @@ Left to do (the real work package — see `plans/011-ts-client-realm.md`):
 Latest TypeScript (5.9+), ESM, `moduleResolution: bundler`, full strict incl.
 `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes`. Run: `npm run typecheck`,
 `npm run conformance`, `npm run canonical`, `npm run township:authoring`, `npm run tauri:bridge`.
+The framework-neutral core has one exact-pinned runtime dependency, `@noble/hashes`, for
+browser/Node/RN-compatible synchronous SHA-256 in bound-root semantic reduction.
 Shell signer deps when needed: `@noble/ed25519` (audited, RN/browser/Node) behind `identity.ts`, or
 native key custody through `tauri_bridge.ts`.
 

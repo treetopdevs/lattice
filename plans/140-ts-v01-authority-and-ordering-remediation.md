@@ -42,11 +42,35 @@ The first vertical slice is green locally but does not complete this plan:
   `PROCEED` for this fenced slice.
 - This checkpoint makes no general V-01 restoration claim. Claude's GREEN review retains a high
   gate on forged-genesis root commitment and delegation-signature proof, plus missing adversarial
-  non-holder/double-transfer coverage. Until that trust-anchor gate lands, the structural W1 pass
-  can still honor an evidence-bearing transfer rooted in a fabricated self-delegation that Sim
-  would reject; only evidence-free and unsupported histories remain fail-closed. Those gates,
-  causal-list ordering, dangling-dependency height, holder unification, and succession remain
-  below. Plan 140 stays `IN PROGRESS`.
+  non-holder/double-transfer coverage. The original checkpoint wording incorrectly said Sim rejects
+  a fabricated self-issued non-genesis delegation: Sim accepts that delegation structurally and
+  rejects a forged non-holder transfer as `:transfer_not_holder`. The separate bound-root gap was a
+  forged *genesis*, which the next checkpoint isolates. Delegation proof, causal-list ordering,
+  dangling-dependency height, holder unification, and succession remain below. Plan 140 stays
+  `IN PROGRESS`.
+
+## Execution checkpoint: bound-root impostor genesis
+
+The bound-root half of the authority trust anchor is green locally but does not complete this plan:
+
+- A standalone Sim-exported `township_authority_forged_root` adversarial vector binds the replica
+  to clerk's public key, then introduces a validly Mallory-signed Mallory genesis. Sim quarantines
+  the op as `:impostor_genesis`, leaves `clerk` unassigned, and emits the exact carrier frame and
+  realm map needed by the TS public decoder. Exporter guards fail if that oracle behavior changes.
+- The conformance harness now decodes any vector carrying `oracleCarrierOps` and `realmByPubkey`.
+  Before reduction, this scenario independently proves the carrier op hash/signature and embedded
+  delegation hash/signature, so the expected rejection cannot pass because of malformed evidence.
+- `analyzeAuthority` checks a `#root:` commitment only for genesis evidence, using exact-pinned
+  browser-compatible synchronous SHA-256 over the raw audience key. Legacy unbound replicas and
+  self-issued non-genesis delegations retain Sim's behavior; the valid bound W1 genesis remains
+  honored. An authority field with no honored write now materializes as JSON-stable `null`, matching
+  Sim's `nil`, rather than disappearing as JavaScript `undefined`.
+- Regenerating the checked-in corpus changed no pre-existing vector bytes; only the new adversarial
+  fixture was added. Focused exporter tests, formatting, and TS conformance are green.
+- This slice does **not** introduce an Ed25519 acceptance policy or complete delegation id/signature
+  validation in persisted semantic reduction. Semantic `Op` also still drops the carrier frame's
+  replica and recomputes the commitment from `delegation.replica`; retaining and cross-checking the
+  op replica belongs with that remaining persisted-evidence work. Plan 140 stays `IN PROGRESS`.
 
 ## Priority
 
@@ -152,9 +176,9 @@ partial/pruned logs — with the existing corpus unchanged and green.
 2. Add one Sim-exported adversarial authority scenario at a time: forged non-holder transfer,
    double transfer, then invalid/unattenuated delegation. Each vector must fail before its matching
    authority-pass increment and pass without weakening the fallback refusal.
-3. Prove the authority trust anchor: delegation id/signature and bound-root commitment must be
-   checked at the carrier evidence boundary before any additional scenario leaves fail-closed.
-   Do not add a caller-controlled trust boolean.
+3. Prove the authority trust anchor in persisted, recomputable slices: the bound-root commitment
+   checkpoint above lands first; delegation id/signature and op-replica cross-checking remain before
+   any additional scenario leaves fail-closed. Do not add a caller-controlled trust boolean.
 4. Add one concurrent-list Sim vector and fix `{height, id}` ordering; then add one partial-log/LWW
    vector and fix the dangling-dependency base. Existing vector files remain byte-identical.
 5. Unify every holder lookup on the honored pass, restore each existing scenario's state and

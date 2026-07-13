@@ -13,6 +13,7 @@ defmodule Township.ExportVectorsTest do
     assert File.exists?(Path.join(out_dir, "township_join_w0.json"))
     assert File.exists?(Path.join(out_dir, "township_succession_w3.json"))
     assert File.exists?(Path.join(out_dir, "township_carrier_w1.json"))
+    assert File.exists?(Path.join(out_dir, "township_authority_forged_root.json"))
 
     random_paths = Path.wildcard(Path.join(out_dir, "township_random_*.json"))
     assert length(random_paths) >= 5
@@ -51,6 +52,57 @@ defmodule Township.ExportVectorsTest do
 
     assert [%{"name" => "clerk_mid_partition"}, %{"name" => "resident_mid_partition"}] =
              vector["perspectives"]
+  end
+
+  test "lattice.export_vectors isolates an impostor genesis that Sim rejects" do
+    out_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "lattice_forged_root_vectors_#{System.unique_integer([:positive])}"
+      )
+
+    on_exit(fn -> File.rm_rf(out_dir) end)
+
+    Mix.Task.clear()
+    assert :ok = Mix.Task.run("lattice.export_vectors", ["--out", out_dir])
+
+    vector =
+      out_dir
+      |> Path.join("township_authority_forged_root.json")
+      |> File.read!()
+      |> Jason.decode!()
+
+    assert vector["generatedBy"] == "Lattice.Sim"
+    assert vector["scenario"] == "township_authority_forged_root"
+    assert vector["scenarioKind"] == "adversarial"
+    assert is_binary(vector["replica"])
+    assert is_map(vector["realmByPubkey"])
+    assert length(vector["oracleCarrierOps"]) == 1
+
+    expected = vector["expectAtFullFrontier"]
+    assert expected["state"]["clerk"] == nil
+
+    assert [
+             %{
+               "id" => impostor_genesis_id,
+               "kind" => "authority",
+               "body" => [
+                 "tuple",
+                 [
+                   ["atom", "genesis"],
+                   [
+                     "delegation",
+                     %{"parent_id" => nil, "roles" => roles, "issuer" => issuer}
+                   ],
+                   ["map", _policies]
+                 ]
+               ],
+               "author" => issuer
+             }
+           ] = vector["oracleCarrierOps"]
+
+    assert "clerk" in roles
+    assert [impostor_genesis_id, "impostor_genesis"] in expected["authorityQuarantine"]
   end
 
   test "lattice.export_vectors writes a real-carrier Township W1 vector for the TS client" do
