@@ -103,11 +103,14 @@ first Tauri v2 Rust command core for `lattice_kv_get`, `lattice_kv_set`, `lattic
 `lattice_sign_carrier`. `cargo test` proves key-value semantics, missing-key/error handling, and the
 same W1 carrier-session Ed25519 public key/signature as the TS bridge.
 
-Bound-root authority slice in progress (plan 140): conformance includes a validly signed forged
-genesis on a clerk-bound replica. The reducer recomputes the root commitment synchronously from
-persisted delegation evidence, quarantines the impostor genesis, and materializes an unassigned
-authority holder as `null`. Delegation id/signature validation and carrier-op replica retention are
-still separate trust-anchor work; do not claim full V-01 restoration from this slice.
+Bound-root authority slices in progress (plan 140): conformance includes both a validly signed
+forged genesis on a clerk-bound replica and a bypass whose embedded delegation names a separate
+attacker-bound replica. Carrier decoding retains the outer replica on semantic ops, and the reducer
+recomputes the root commitment from that outer id, quarantines both impostor shapes, and materializes
+an unassigned authority holder as `null`. Do not add equality between the outer and embedded replica:
+Sim's reduction does not require it. Evidence persisted before outer-replica retention fails closed
+until re-decoded from carrier evidence. Delegation id/signature validation remains separate
+trust-anchor work; do not claim full V-01 restoration from these slices.
 
 Left to do (the real work package — see `plans/011-ts-client-realm.md`):
 1. Expand the randomized Sim corpus beyond the current N=5 seeded scenarios when a broader

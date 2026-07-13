@@ -818,6 +818,7 @@ export function carrierOpToSemanticOp(
 
   return {
     id: op.id,
+    replica: op.replica,
     deps: op.deps,
     kind: op.kind,
     author: realmForPubkey(op.author, realmByPubkey),

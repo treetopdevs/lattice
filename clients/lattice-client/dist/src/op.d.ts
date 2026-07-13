@@ -27,6 +27,8 @@ export type AuthorityEvidence = {
 export interface Op {
     /** Content-address id from Elixir. In Tier A this is an opaque handle. */
     id: string;
+    /** Outer replica retained from a decoded carrier frame when available. */
+    replica?: string;
     /** Causal parents (ids). The DAG edges. */
     deps: string[];
     kind: OpKind;

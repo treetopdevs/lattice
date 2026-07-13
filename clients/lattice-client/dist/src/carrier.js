@@ -497,6 +497,7 @@ export function carrierOpToSemanticOp(frame, realmByPubkey = {}) {
     const payload = payloadFromBody(op.kind, body, realmByPubkey);
     return {
         id: op.id,
+        replica: op.replica,
         deps: op.deps,
         kind: op.kind,
         author: realmForPubkey(op.author, realmByPubkey),

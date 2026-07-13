@@ -47,6 +47,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_zoning_variance_24(),
       township_succession_w3(),
       township_authority_forged_root(),
+      township_authority_embedded_replica_bypass(),
       township_carrier_w1()
     ]
 
@@ -208,6 +209,68 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
     %{
       name: "township_authority_forged_root",
+      kind: "adversarial",
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: replica,
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      authorityQuarantine: authority_quarantine
+    }
+  end
+
+  defp township_authority_embedded_replica_bypass do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:authority-embedded-replica-bypass",
+        ["clerk", "mallory"],
+        seed: "township:authority-embedded-replica-bypass"
+      )
+
+    clerk = Sim.identity(sim, "clerk")
+    mallory = Sim.identity(sim, "mallory")
+    replica = Authority.bind_replica(Sim.replica(sim), clerk.pub)
+
+    embedded_replica =
+      Authority.bind_replica("replica:matter:mallory-root-claim", mallory.pub)
+
+    impostor_delegation =
+      Delegation.genesis(mallory, embedded_replica,
+        ops: [:close_matter, :reopen_matter],
+        roles: [:clerk],
+        live: true
+      )
+
+    impostor_genesis =
+      Op.new(
+        mallory,
+        replica,
+        [],
+        :authority,
+        {:genesis, impostor_delegation, %{}}
+      )
+
+    unless Op.valid?(impostor_genesis) and Delegation.valid_sig?(impostor_delegation) do
+      raise "expected embedded-replica bypass evidence to be cryptographically valid"
+    end
+
+    log = Log.append!(Log.new(replica), impostor_genesis)
+    authority_quarantine = authority_quarantine(log)
+
+    unless [impostor_genesis.id, "impostor_genesis"] in authority_quarantine do
+      raise "expected embedded-replica bypass #{impostor_genesis.id} to quarantine"
+    end
+
+    unless is_nil(Authority.holder(Matter, log, :clerk)) do
+      raise "expected embedded-replica bypass to leave clerk unassigned"
+    end
+
+    realms = realm_index(sim)
+
+    %{
+      name: "township_authority_embedded_replica_bypass",
       kind: "adversarial",
       log: log,
       realms: realms,

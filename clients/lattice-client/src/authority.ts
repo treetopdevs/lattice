@@ -114,7 +114,8 @@ function authorityWriteHonored(
       delegation.parentId === null &&
       delegation.issuer === delegation.audience &&
       delegation.issuerRealm === op.author &&
-      replicaRootMatches(delegation.replica, delegation.audience)
+      op.replica !== undefined &&
+      replicaRootMatches(op.replica, delegation.audience)
     );
   }
 

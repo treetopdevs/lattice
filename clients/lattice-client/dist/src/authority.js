@@ -70,7 +70,8 @@ function authorityWriteHonored(op, evidence, state, delegations, delegationValid
             delegation.parentId === null &&
             delegation.issuer === delegation.audience &&
             delegation.issuerRealm === op.author &&
-            replicaRootMatches(delegation.replica, delegation.audience));
+            op.replica !== undefined &&
+            replicaRootMatches(op.replica, delegation.audience));
     }
     if (evidence.type !== "transfer" || evidence.role !== op.field) {
         throw new Error(`unsupported authority event ${evidence.type} for ${op.id}`);

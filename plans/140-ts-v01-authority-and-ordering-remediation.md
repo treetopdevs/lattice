@@ -68,9 +68,29 @@ The bound-root half of the authority trust anchor is green locally but does not 
 - Regenerating the checked-in corpus changed no pre-existing vector bytes; only the new adversarial
   fixture was added. Focused exporter tests, formatting, and TS conformance are green.
 - This slice does **not** introduce an Ed25519 acceptance policy or complete delegation id/signature
-  validation in persisted semantic reduction. Semantic `Op` also still drops the carrier frame's
-  replica and recomputes the commitment from `delegation.replica`; retaining and cross-checking the
-  op replica belongs with that remaining persisted-evidence work. Plan 140 stays `IN PROGRESS`.
+  validation in persisted semantic reduction. Plan 140 stays `IN PROGRESS`.
+
+## Execution checkpoint: outer-replica root anchor
+
+The second bound-root tracer bullet is green locally but does not complete this plan:
+
+- A separate Sim-exported `township_authority_embedded_replica_bypass` vector places a validly
+  Mallory-signed genesis in an outer clerk-bound op while the embedded delegation names a different
+  Mallory-bound replica. Exporter guards prove both signatures and ids are valid, then pin Sim's
+  `:impostor_genesis` quarantine and unassigned clerk result. The previous TS path trusted the
+  embedded replica and honored Mallory, producing an exact three-assertion RED.
+- Carrier decoding now retains the outer frame replica on the semantic `Op`, and genesis root
+  eligibility uses that outer commitment. It deliberately does **not** require equality with
+  `delegation.replica`: direct oracle probes proved Sim honors a differently named embedded replica
+  when both ids commit to the same root key, so an equality rule would create a new V-01 divergence.
+- Authority evidence without a retained outer replica fails closed. The field is additive and
+  optional for the existing Tier-A vector shape, but authority-bearing semantic JSON persisted
+  before this checkpoint must be re-decoded from retained carrier evidence rather than treating the
+  embedded replica as a fallback trust anchor.
+- Existing corpus bytes remain unchanged; only the new adversarial vector was added. Focused
+  exporter tests, conformance, typecheck, the V-01 refusal guard, and canonical parity are green.
+  Delegation id/signature proof remains the next trust-anchor work before additional authority
+  scenarios leave fail-closed. Plan 140 stays `IN PROGRESS`.
 
 ## Priority
 
@@ -177,8 +197,8 @@ partial/pruned logs — with the existing corpus unchanged and green.
    double transfer, then invalid/unattenuated delegation. Each vector must fail before its matching
    authority-pass increment and pass without weakening the fallback refusal.
 3. Prove the authority trust anchor in persisted, recomputable slices: the bound-root commitment
-   checkpoint above lands first; delegation id/signature and op-replica cross-checking remain before
-   any additional scenario leaves fail-closed. Do not add a caller-controlled trust boolean.
+   and outer-replica checkpoints above land first; delegation id/signature proof remains before any
+   additional scenario leaves fail-closed. Do not add a caller-controlled trust boolean.
 4. Add one concurrent-list Sim vector and fix `{height, id}` ordering; then add one partial-log/LWW
    vector and fix the dangling-dependency base. Existing vector files remain byte-identical.
 5. Unify every holder lookup on the honored pass, restore each existing scenario's state and

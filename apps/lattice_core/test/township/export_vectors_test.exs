@@ -14,6 +14,7 @@ defmodule Township.ExportVectorsTest do
     assert File.exists?(Path.join(out_dir, "township_succession_w3.json"))
     assert File.exists?(Path.join(out_dir, "township_carrier_w1.json"))
     assert File.exists?(Path.join(out_dir, "township_authority_forged_root.json"))
+    assert File.exists?(Path.join(out_dir, "township_authority_embedded_replica_bypass.json"))
 
     random_paths = Path.wildcard(Path.join(out_dir, "township_random_*.json"))
     assert length(random_paths) >= 5
@@ -102,6 +103,63 @@ defmodule Township.ExportVectorsTest do
            ] = vector["oracleCarrierOps"]
 
     assert "clerk" in roles
+    assert [impostor_genesis_id, "impostor_genesis"] in expected["authorityQuarantine"]
+  end
+
+  test "lattice.export_vectors isolates an embedded-replica root bypass that Sim rejects" do
+    out_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "lattice_embedded_replica_vectors_#{System.unique_integer([:positive])}"
+      )
+
+    on_exit(fn -> File.rm_rf(out_dir) end)
+
+    Mix.Task.clear()
+    assert :ok = Mix.Task.run("lattice.export_vectors", ["--out", out_dir])
+
+    vector =
+      out_dir
+      |> Path.join("township_authority_embedded_replica_bypass.json")
+      |> File.read!()
+      |> Jason.decode!()
+
+    assert vector["generatedBy"] == "Lattice.Sim"
+    assert vector["scenario"] == "township_authority_embedded_replica_bypass"
+    assert vector["scenarioKind"] == "adversarial"
+
+    assert [
+             %{
+               "id" => impostor_genesis_id,
+               "replica" => outer_replica,
+               "author" => issuer,
+               "body" => [
+                 "tuple",
+                 [
+                   ["atom", "genesis"],
+                   [
+                     "delegation",
+                     %{
+                       "replica" => embedded_replica,
+                       "issuer" => issuer,
+                       "audience" => issuer,
+                       "sig" => delegation_sig
+                     }
+                   ],
+                   ["map", _policies]
+                 ]
+               ],
+               "sig" => op_sig
+             }
+           ] = vector["oracleCarrierOps"]
+
+    assert outer_replica == vector["replica"]
+    refute outer_replica == embedded_replica
+    assert is_binary(delegation_sig) and delegation_sig != ""
+    assert is_binary(op_sig) and op_sig != ""
+
+    expected = vector["expectAtFullFrontier"]
+    assert expected["state"]["clerk"] == nil
     assert [impostor_genesis_id, "impostor_genesis"] in expected["authorityQuarantine"]
   end
 
