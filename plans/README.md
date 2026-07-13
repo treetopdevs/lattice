@@ -18,9 +18,9 @@ Plan 133 adds the reusable direct-TypeScript subscription plus a real stable-ser
 pushing operations or state, Plan 134 closes the packaged reactive Tauri/Vue feed-consumption gap,
 Plan 135 closes the first versioned clerk-status handoff slice, and Plan 136 closes the bundled
 `set_title`/`set_summary` field-edit slice. Plan 137 closes the bundled `admit`/`remove_member` roster handoff slice.
-Plan 138 now advances the first capability-lifecycle slice through a versioned delegation grant,
-real packaged recipient use, and Sim-anchored unsound-grant refusal. Revocation, succession, G1
-completion, remaining Phase G work, production deployment, and W4 remain.
+Plan 138 closes the versioned delegation-grant handoff slice through real packaged recipient use
+and Sim-anchored unsound-grant refusal. Revocation remains blocked behind Plans 140 and 141;
+succession, G1 completion, remaining Phase G work, production deployment, and W4 also remain.
 
 **Landing 001–009 as one effort?** Start from the umbrella goal:
 [000-goal-foundation-and-hardening.md](000-goal-foundation-and-hardening.md). It
@@ -171,7 +171,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 135 | Versioned clerk status action handoff | P1 | XL | 050, 054, 130, 131, 134 | DONE |
 | 136 | Versioned field-edit action handoff | P1 | XL | 048, 135 | DONE |
 | 137 | Versioned roster action handoff | P1 | XL | 051, 054, 130, 136 | DONE |
-| 138 | Versioned delegation grant handoff | P1 | XL | 053, 054, 058, 130, 137 | IN PROGRESS |
+| 138 | Versioned delegation grant handoff | P1 | XL | 053, 054, 058, 130, 137 | DONE |
 | 139 | Versioned revocation action handoff | P1 | XL | 138, **140, 141** | BLOCKED (gated on 140/141 — see Round 3) |
 | 140 | Restore V-01 guarantee in TS client (authority + ordering) | **P0** | L | 019, 020, 058 | TODO |
 | 141 | Serialize shell persistence (stop silent op loss) | **P0** | M | 029, 030, 032 | TODO |

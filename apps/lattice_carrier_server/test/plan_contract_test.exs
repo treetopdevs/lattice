@@ -943,8 +943,21 @@ defmodule LatticeCarrierServer.PlanContractTest do
       File.read!(Path.join(@repo_root, "plans/138-versioned-delegation-grant-handoff-g1.md"))
 
     plans_index = File.read!(Path.join(@repo_root, "plans/README.md"))
+    build_map = File.read!(Path.join(@repo_root, "TOWNSHIP_BUILD_MAP.md"))
+    poc_status = File.read!(Path.join(@repo_root, "docs/lattice_poc_status.md"))
 
-    assert plan =~ ~r/## Status\s+IN PROGRESS/
+    mobile_strategy =
+      File.read!(Path.join(@repo_root, "docs/township_mobile_secure_store_strategy.md"))
+
+    shell_package =
+      @repo_root
+      |> Path.join("clients/township-tauri-shell/package.json")
+      |> File.read!()
+      |> Jason.decode!()
+
+    workflow = File.read!(Path.join(@repo_root, ".github/workflows/flagship.yml"))
+
+    assert plan =~ ~r/## Status\s+DONE/
     assert plan =~ "v1 through v4 remain exactly unchanged"
 
     assert plan =~
@@ -962,6 +975,7 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert plan =~ "reuses `submitTownshipDelegation`"
     assert plan =~ "selects the issuer parent from persisted delegation evidence"
     assert plan =~ "zero native signatures and zero KV writes"
+    assert plan =~ ~r/fails as `missing_delegation` before any signature or\s+write/
     assert plan =~ "Phoenix receives no participant identity, private key, parent capability"
     assert plan =~ "the same packaged app bundle launches as two isolated participant identities"
     assert plan =~ "issuer app"
@@ -977,10 +991,65 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert plan =~ "No mobile secure-store implementation change"
     assert plan =~ "No cross-device capability transfer or recipient-device custody claim"
     assert plan =~ "No revocation or succession handoff"
-    assert plan =~ "Plan 139 is the immediate v6 revocation follow-on"
+    assert plan =~
+             ~r/Plan 139 remains the v6 revocation follow-on after Plans 140\s+and 141/
     assert plan =~ "No complete G1/Phase G claim and no receipt-free W4 claim"
+    assert plan =~ "394 tests plus 25 properties"
+    assert plan =~ "Hosted implementation run `29248868666` is green"
+    assert plan =~ "`367eec72a1c7263de2997623bfe83a2bf81ff35b`"
+    assert plan =~ "`Verify flagship artifact` completed in 3m36s"
+    assert plan =~ "`Unit + property suite` completed in 4m26s"
+    assert plan =~ "`Packaged macOS convergence` completed in 11m55s"
+    assert plan =~ "Final exact-worktree Claude review returned `PROCEED`"
+    assert plan =~ ~r/no blocker,\s+high, or medium finding/
+    assert plan =~ ~r/recipient\s+app pulls and persists the issued delegation/
+    assert plan =~ ~r/byte-identical to\s+`Lattice.Sim`/
+    assert plan =~ "cites the new delegation"
+    assert plan =~ "structurally relayed"
+    assert plan =~ "reduces as `not_attenuated`"
+    assert plan =~ "no usable authority"
+    assert plan =~ ~r/## Completion claim\s+Complete for this scoped increment/
+    refute plan =~ "Not yet complete"
+    refute plan =~ "Hosted acceptance remains pending"
 
     assert plans_index =~
-             "| 138 | Versioned delegation grant handoff | P1 | XL | 053, 054, 058, 130, 137 | IN PROGRESS |"
+             "| 138 | Versioned delegation grant handoff | P1 | XL | 053, 054, 058, 130, 137 | DONE |"
+
+    assert plans_index =~
+             "Plan 138 closes the versioned delegation-grant handoff slice"
+
+    assert shell_package["scripts"]["tauri:delegation-grant-handoff:smoke"] ==
+             "tsx test/tauri_delegation_grant_handoff_smoke.ts"
+
+    assert shell_package["scripts"]["app:convergence"] =~
+             ~r/tauri:roster-action-handoff:smoke && TOWNSHIP_SKIP_DELEGATION_GRANT_APP_BUILD=1 npm run tauri:delegation-grant-handoff:smoke && npm run tauri:feed:smoke/
+
+    assert workflow =~
+             ~r/Verify packaged delegation grant handoff\s+working-directory: clients\/township-tauri-shell\s+env:\s+TOWNSHIP_SKIP_DELEGATION_GRANT_APP_BUILD: "1"\s+run: npm run tauri:delegation-grant-handoff:smoke/
+
+    assert build_map =~ "Plan 138 adds the versioned delegation grant handoff"
+    assert build_map =~ "Hosted Plan 138 run `29248868666` is green"
+    assert build_map =~ "Plan 138 status is `DONE`"
+    assert build_map =~ "delegation issuance slice is closed"
+    refute build_map =~ "Plan 138 completes G1"
+    refute build_map =~ "Plan 138 completes Phase G"
+    refute build_map =~ "Plan 138 makes W4 receipt-free"
+
+    [_, plan138_tail] =
+      String.split(
+        poc_status,
+        "## Checkpoint: Versioned Delegation Grant Handoff",
+        parts: 2
+      )
+
+    [plan138_checkpoint | _rest] = String.split(plan138_tail, "\n## Checkpoint:", parts: 2)
+
+    assert plan138_checkpoint =~ "394 tests plus 25 properties"
+    assert plan138_checkpoint =~ "Hosted implementation run `29248868666` is green"
+    assert plan138_checkpoint =~ "Plan 138 status is `DONE`"
+    assert plan138_checkpoint =~ "not_attenuated"
+    refute plan138_checkpoint =~ "Hosted acceptance remains pending"
+
+    assert mobile_strategy =~ "Plan 138 leaves this custody strategy unchanged"
   end
 end

@@ -2,7 +2,7 @@
 
 ## Status
 
-IN PROGRESS
+DONE
 
 ## Objective
 
@@ -37,8 +37,8 @@ authority bus.
 - An issuance-only frame-appearance test is too weak: it would not prove the recipient can use the
   issued capability or that an unsound grant fails authority reduction.
 - Grant and revoke are separate plans. They have different public arguments, authoring functions,
-  failure semantics, and oracle stages; revoke also requires an issued delegation. Plan 139 is the
-  immediate v6 revocation follow-on.
+  failure semantics, and oracle stages; revoke also requires an issued delegation. Plan 139 remains
+  the v6 revocation follow-on after the P0 authority and persistence work in Plans 140 and 141.
 - Succession is time/policy driven and has no Tauri authoring seam yet. It follows the ordinary
   grant/revoke lifecycle rather than being forced into this request protocol.
 - iOS, QR camera, LAN discovery, physical-device behavior, cross-device pairing state exchange,
@@ -331,7 +331,8 @@ Cumulative:
 - No automatic authored-frame publication.
 - No mobile secure-store implementation change.
 - No cross-device capability transfer or recipient-device custody claim.
-- No revocation or succession handoff; Plan 139 is the immediate v6 revocation follow-on.
+- No revocation or succession handoff; Plan 139 remains the v6 revocation follow-on after Plans 140
+  and 141.
 - No live-BEAM authority-honoring claim from the stable structural relay.
 - No signed receipt, production ingress, TLS, notarization, or deployment.
 - No complete G1/Phase G claim and no receipt-free W4 claim.
@@ -368,7 +369,62 @@ Cumulative:
 - The cumulative contract first failed with 12 tests, 1 failure because this plan file was absent.
   Every Plan 127-137 contract remained green.
 
+## Implementation evidence
+
+- Exact v5 producer/parser fixtures first failed on the missing producer and unsupported version,
+  then passed with canonical padded 32-byte Ed25519 audiences, exact key sets, the fixed resident
+  policy, and fail-closed malformed, noncanonical, cross-version, and custody-field cases. The
+  fresh-only LiveView form owns only the public audience; its server handler fixes the profile,
+  preserves every v1-v4 slot, and clears grant state on invalid input, replica replacement, or
+  freshness loss.
+- The shared dispatcher stages v5 inertly in an independent review state. Use performs no signing,
+  KV write, source mutation, or Sync. Sign rechecks the paired replica and reuses
+  `submitTownshipDelegation` to select persisted parent evidence, derive the local frontier, invoke
+  native custody, and retain the exact grant in the local log, delegation store, and outbox. A
+  participant without an attenuating parent fails as `missing_delegation` before any signature or
+  write; focused spies prove zero native signatures and zero KV writes.
+- The deterministic `LatticeNodeSpike.TownshipGrantHandoffScenario` supplies the base, sound grant,
+  recipient post, over-broad grant, attempted unsound use, projections, and exact authority reasons.
+  The packaged issuer signs the byte-identical sound grant and publishes only through explicit
+  Sync. The same app bundle then launches with a separate recipient key and KV file; the recipient
+  app pulls and persists the issued delegation, authors a post byte-identical to `Lattice.Sim` that
+  cites the new delegation, and publishes only through its own explicit Sync. Stable source, Tauri
+  feed, and LiveView converge to the Sim projections without server or observer authorship.
+- The negative grant and attempted use are structurally relayed only after the sound lifecycle.
+  Sim and the source projection prove that the over-broad grant reduces as `not_attenuated`, its
+  use reduces as `invalid_capability`, and it conveys no usable authority. The installed app's final
+  matter state remains open. This is a Sim/source authority proof, not a claim that the TypeScript
+  reducer generally validates authority operations or that structural relay acceptance honors a
+  capability; Plan 058 retains the separate live-BEAM authority proof and Plan 140 owns the broader
+  TypeScript V-01 remediation.
+- The no-build packaged smoke passes through LaunchServices with the exact same app executable for
+  both identities. It proves ingress/Use/Sign source boundaries, exact pending frames, separate Sync,
+  verified recipient pull, source/Tauri/LiveView convergence, final open matter state, and redaction
+  of private seeds, complete keys, action URLs, signatures, and raw proceedings. The cumulative app
+  chain runs stable onboarding, post, clerk, field, roster, grant, and reactive feed against one
+  shared bundle.
+- Complete local regression passed on 2026-07-13. Pinned OTP 28 `mix verify` and `mix check` each
+  pass 394 tests plus 25 properties; typecheck, intent/dispatcher/action/fixture/frontend contracts,
+  standalone and no-build packaged grant smokes, app/browser/flagship convergence, forced test and
+  production compiles, the unchanged xref baseline, both Sobelow scans, actionlint, formatting,
+  diff hygiene, and all 23 Rust tests are green.
+- The first hosted implementation run `29246110879` exposed one CI-only path defect before feature
+  execution: the grant smoke filtered `setup-beam`'s inherited `PATH`, so bare `mix` failed with
+  `ENOENT`. A 39/40 source-contract RED pinned both the inherited path and its filter escape; the
+  two-line fix passed 40/40, typecheck, the Sim fixture, and the no-build packaged smoke. Claude's
+  RED and GREEN reviews returned `PROCEED` with no blocker, high, or medium finding.
+- Final exact-worktree Claude review returned `PROCEED` with no blocker, high, or medium finding.
+- Hosted implementation run `29248868666` is green at
+  `367eec72a1c7263de2997623bfe83a2bf81ff35b`. `Verify flagship artifact` completed in 3m36s,
+  `Unit + property suite` completed in 4m26s, and `Packaged macOS convergence` completed in 11m55s.
+  Stable onboarding, post, no-build clerk, no-build field edit, no-build roster, no-build delegation
+  grant, and reactive feed all passed in the required order.
+
 ## Completion claim
 
-Not yet complete. Plan 138 remains `IN PROGRESS` until every focused, packaged, cumulative, hosted,
-documentation, and independent-review gate above is green.
+Complete for this scoped increment. Plan 138 closes the versioned delegation-grant handoff across
+fresh LiveView preparation, installed-app custody, explicit relay, isolated recipient use, and
+Sim/source authority refusal. It does not complete G1 or Phase G, change mobile secure-store
+custody, transfer a key or capability between devices, prove general TypeScript or stable-relay
+authority enforcement, add revocation or succession, deploy production ingress, or make W4
+receipt-free.

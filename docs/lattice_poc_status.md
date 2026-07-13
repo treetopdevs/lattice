@@ -624,3 +624,41 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
   implementation or mobile/device result, delegation/revocation/succession handoff or general
   command bus, authority-role or quarantine proof, production ingress/TLS deployment, complete
   G1/Phase G claim, or receipt-free W4.
+
+## Checkpoint: Versioned Delegation Grant Handoff
+
+- Files changed: the exact v5 grant-intent producer and decoder fixtures, fresh-only LiveView grant
+  preparation, shared participant dispatcher, fixed-policy Tauri review and signing ceremony, Sim
+  grant/recipient-use/unsound fixture, multi-realm stable-server helpers, dedicated packaged smoke,
+  fast shell contracts, hosted workflow gate, CI path regression guard, and cumulative Plan 138
+  documentation contracts.
+- Behaviors: v1-v4 remain frozen. A fresh instrument accepts only a canonical public recipient key
+  and prepares the server-owned resident profile. The issuer app stages and accepts the request
+  without storage, signing, or network activity; rechecks the paired replica; selects persisted
+  parent evidence; signs through native custody; and publishes only through a separate explicit
+  Sync. A no-parent participant fails as `missing_delegation` before any native signature or KV
+  write.
+- Oracle: the same installed app executable runs with isolated issuer and recipient native keys and
+  KV files. After issuer Sync, the recipient pulls and persists the issued delegation, authors a
+  byte-identical Sim post that cites it, and reaches source/Tauri/LiveView equality only after its
+  own Sync. A later over-broad grant is structurally relayed but reduces as `not_attenuated`; its
+  attempted use is `invalid_capability`, conveys no usable authority, and leaves the matter open.
+  Sim and the source projection own this semantic result, not structural acceptance or a general
+  TypeScript-authority claim.
+- Gates: focused Elixir, TypeScript, Vue, intent, dispatcher, action, fixture, no-parent, and
+  packaged contracts are green. Full local regression is green at 394 tests plus 25 properties,
+  complete app/browser/flagship convergence, warnings-as-errors, the unchanged xref baseline, both
+  Sobelow scans, actionlint, formatting, diff hygiene, and 23 Rust tests. Claude's implementation,
+  CI-failure, and CI-fix reviews returned `PROCEED` with no blocker, high, or medium finding.
+- Hosted implementation run `29248868666` is green at
+  `367eec72a1c7263de2997623bfe83a2bf81ff35b`. `Verify flagship artifact` completed in 3m36s,
+  `Unit + property suite` completed in 4m26s, and `Packaged macOS convergence` completed in 11m55s.
+  Stable onboarding, post, no-build clerk, no-build field edit, no-build roster, no-build delegation
+  grant, and reactive feed all passed in the required order.
+- Result: Plan 138 status is `DONE`; local and hosted evidence establish the scoped delegation-grant
+  custody seam, isolated recipient use, and Sim/source unsound-grant refusal.
+- Blocker or remaining limitation: no automatic authored-frame publication, cross-device key or
+  capability transfer, mobile secure-store implementation or mobile/device result, revocation or
+  succession handoff, general TypeScript or stable-relay authority enforcement, production
+  ingress/TLS deployment, complete G1/Phase G claim, or receipt-free W4. Plan 139 remains blocked
+  behind Plans 140 and 141.

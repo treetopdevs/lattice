@@ -447,6 +447,12 @@ signer and ordinary replayable delegation/log/outbox KV evidence, and the signed
 `remove_member` frame remains local until a separate explicit Sync. No mobile secure-store
 implementation, mobile relay, Android/iOS probe, physical-device behavior, Expo result, or
 phone-grade claim is added.
+Plan 138 leaves this custody strategy unchanged. The packaged desktop issuer and recipient each use
+an isolated native signer plus ordinary replayable delegation/log/outbox KV evidence; no private
+seed or capability object moves between them, and each signed frame remains local until that app's
+separate explicit Sync. This adds no mobile secure-store implementation, cross-device custody
+transfer, mobile relay, Android/iOS probe, physical-device behavior, Expo result, or phone-grade
+claim.
 Plan 086 proves the same env-gated probe can
 connect and complete a WebSocket frame roundtrip in a debug APK, so it proves the harness can produce
 a positive on-device result but still does not prove release Sync/outbox/KV convergence. Plan 087 proves
