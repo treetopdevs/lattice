@@ -144,7 +144,7 @@ function collectDelegations(
 
   for (const op of ops) {
     const delegation = op.authority?.delegation;
-    if (!delegation) continue;
+    if (!delegation || !delegationSelfConsistent(delegation)) continue;
     const existing = delegations.get(delegation.id);
     if (existing === undefined) {
       delegations.set(delegation.id, delegation);
@@ -162,10 +162,7 @@ function validDelegation(
   cache: Map<string, boolean>,
   visiting: Set<string>,
 ): boolean {
-  if (!delegationSelfConsistent(delegation)) {
-    cache.set(delegation.id, false);
-    return false;
-  }
+  if (!delegationSelfConsistent(delegation)) return false;
 
   const cached = cache.get(delegation.id);
   if (cached !== undefined) return cached;

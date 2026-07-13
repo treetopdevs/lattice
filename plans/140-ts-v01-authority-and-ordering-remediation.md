@@ -143,6 +143,33 @@ The second delegation-proof tracer bullet is green locally but does not complete
   with OTP. The same-declared-id collision remains the next trust-anchor adversarial slice. Plan 140
   stays `IN PROGRESS`.
 
+## Execution checkpoint: same-declared-id delegation collision
+
+The third delegation-proof tracer bullet is green locally but does not complete this plan:
+
+- A standalone Sim-exported `township_authority_delegation_id_collision` vector introduces a forged
+  genesis whose embedded delegation reuses the pristine delegation's declared id and canonical bytes
+  but carries a one-bit-flipped 64-byte signature, and whose valid outer op canonically sorts
+  **before** the pristine genesis. Sim quarantines only the forged op as `:bad_delegation_sig` and
+  keeps clerk bound through the pristine genesis. Exporter guards prove both outer ops are valid,
+  the two embedded delegations share canonical bytes and declared id, and only the pristine embedded
+  signature verifies.
+- Before GREEN, the harness's four collision diagnostics passed while `state.clerk`, the quarantine
+  set, and `winner.clerk` failed: the earlier-sorting invalid introduction occupied the shared-id
+  collection and wrote `false` into the validity cache under the pristine delegation's id, so the
+  pristine genesis was dishonored. The semantic fix is two lines: delegations that fail
+  self-consistency (id commitment + strict Ed25519) never enter `collectDelegations`, and a failed
+  self-consistency check in `validDelegation` returns without caching a verdict under an unproven
+  claimed id. Structurally distinct same-id delegations that each pass self-consistency still
+  collect as conflicted and stay refused.
+- Regenerating the corpus changed no pre-existing vector bytes; only the new adversarial fixture was
+  added. Exporter and Township tests, formatting, conformance, TypeScript typecheck/build, the V-01
+  refusal guard, canonical parity, authoring/Tauri, and direct/live carrier gates are green. Full
+  `mix verify` is green at 399 tests and 25 properties.
+- This checkpoint closes the same-declared-id collision shape named by the previous checkpoint.
+  Adversarial non-holder and double-transfer coverage, causal-list ordering, dangling-dependency
+  height, holder unification, and succession remain below. Plan 140 stays `IN PROGRESS`.
+
 ## Priority
 
 **P0 — STOP-condition remediation.** This plan blocks Plan 139 (revocation handoff) and any

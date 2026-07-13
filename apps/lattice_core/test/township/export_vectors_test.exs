@@ -17,6 +17,7 @@ defmodule Township.ExportVectorsTest do
     assert File.exists?(Path.join(out_dir, "township_authority_embedded_replica_bypass.json"))
     assert File.exists?(Path.join(out_dir, "township_authority_forged_delegation_id.json"))
     assert File.exists?(Path.join(out_dir, "township_authority_forged_delegation_sig.json"))
+    assert File.exists?(Path.join(out_dir, "township_authority_delegation_id_collision.json"))
 
     random_paths = Path.wildcard(Path.join(out_dir, "township_random_*.json"))
     assert length(random_paths) >= 5
@@ -281,6 +282,73 @@ defmodule Township.ExportVectorsTest do
     expected = vector["expectAtFullFrontier"]
     assert expected["state"]["clerk"] == nil
     assert [forged_genesis_id, "bad_delegation_sig"] in expected["authorityQuarantine"]
+  end
+
+  test "lattice.export_vectors keeps an early same-id forgery from poisoning a valid delegation" do
+    out_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "lattice_delegation_id_collision_vectors_#{System.unique_integer([:positive])}"
+      )
+
+    on_exit(fn -> File.rm_rf(out_dir) end)
+
+    Mix.Task.clear()
+    assert :ok = Mix.Task.run("lattice.export_vectors", ["--out", out_dir])
+
+    vector =
+      out_dir
+      |> Path.join("township_authority_delegation_id_collision.json")
+      |> File.read!()
+      |> Jason.decode!()
+
+    assert vector["generatedBy"] == "Lattice.Sim"
+    assert vector["scenario"] == "township_authority_delegation_id_collision"
+    assert vector["scenarioKind"] == "adversarial"
+
+    assert [
+             %{
+               "id" => forged_genesis_id,
+               "replica" => replica,
+               "author" => issuer,
+               "body" => [
+                 "tuple",
+                 [
+                   ["atom", "genesis"],
+                   ["delegation", forged_delegation],
+                   ["map", _forged_policies]
+                 ]
+               ],
+               "sig" => forged_op_sig
+             },
+             %{
+               "id" => pristine_genesis_id,
+               "replica" => replica,
+               "author" => issuer,
+               "body" => [
+                 "tuple",
+                 [
+                   ["atom", "genesis"],
+                   ["delegation", pristine_delegation],
+                   ["map", _pristine_policies]
+                 ]
+               ],
+               "sig" => pristine_op_sig
+             }
+           ] = vector["oracleCarrierOps"]
+
+    assert replica == vector["replica"]
+    assert forged_genesis_id < pristine_genesis_id
+    assert forged_delegation["id"] == pristine_delegation["id"]
+    assert Map.drop(forged_delegation, ["sig"]) == Map.drop(pristine_delegation, ["sig"])
+    assert forged_delegation["sig"] != pristine_delegation["sig"]
+    assert is_binary(forged_op_sig) and forged_op_sig != ""
+    assert is_binary(pristine_op_sig) and pristine_op_sig != ""
+
+    expected = vector["expectAtFullFrontier"]
+    assert expected["state"]["clerk"] == "clerk"
+    assert expected["authorityQuarantine"] == [[forged_genesis_id, "bad_delegation_sig"]]
+    assert expected["winners"]["clerk"] == pristine_genesis_id
   end
 
   test "lattice.export_vectors writes a real-carrier Township W1 vector for the TS client" do

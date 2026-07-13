@@ -50,6 +50,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_authority_embedded_replica_bypass(),
       township_authority_forged_delegation_id(),
       township_authority_forged_delegation_sig(),
+      township_authority_delegation_id_collision(),
       township_carrier_w1()
     ]
 
@@ -459,6 +460,111 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
     %{
       name: "township_authority_forged_delegation_sig",
+      kind: "adversarial",
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: replica,
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      authorityQuarantine: authority_quarantine
+    }
+  end
+
+  defp township_authority_delegation_id_collision do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:authority-delegation-id-collision",
+        ["clerk"],
+        seed: "township:authority-delegation-id-collision"
+      )
+
+    clerk = Sim.identity(sim, "clerk")
+    replica = Authority.bind_replica(Sim.replica(sim), clerk.pub)
+
+    pristine_delegation =
+      Delegation.genesis(clerk, replica,
+        ops: [:close_matter, :reopen_matter],
+        roles: [:clerk],
+        live: true
+      )
+
+    pristine_genesis =
+      Op.new(
+        clerk,
+        replica,
+        [],
+        :authority,
+        {:genesis, pristine_delegation, %{}}
+      )
+
+    pristine_log = Log.append!(Log.new(replica), pristine_genesis)
+
+    unless Authority.holder(Matter, pristine_log, :clerk) == clerk.pub and
+             authority_quarantine(pristine_log) == [] do
+      raise "expected pristine collision control to establish clerk authority"
+    end
+
+    <<first_sig_byte, rest_sig::binary>> = pristine_delegation.sig
+
+    forged_delegation = %{
+      pristine_delegation
+      | sig: <<Bitwise.bxor(first_sig_byte, 1), rest_sig::binary>>
+    }
+
+    pristine_bytes = Canonical.delegation_payload(pristine_delegation)
+    forged_bytes = Canonical.delegation_payload(forged_delegation)
+
+    unless byte_size(pristine_delegation.sig) == 64 and
+             byte_size(forged_delegation.sig) == 64 and
+             forged_delegation.id == pristine_delegation.id and
+             forged_delegation.sig != pristine_delegation.sig and
+             pristine_bytes == forged_bytes and
+             Identity.verify(pristine_delegation.issuer, pristine_bytes, pristine_delegation.sig) and
+             not Identity.verify(
+               forged_delegation.issuer,
+               forged_bytes,
+               forged_delegation.sig
+             ) and
+             not Delegation.valid_sig?(forged_delegation) do
+      raise "expected collision forgery to differ only by one signature bit"
+    end
+
+    forged_genesis =
+      Op.new(
+        clerk,
+        replica,
+        [],
+        :authority,
+        {:genesis, forged_delegation, %{}}
+      )
+
+    unless Op.valid?(pristine_genesis) and Op.valid?(forged_genesis) and
+             forged_genesis.id < pristine_genesis.id do
+      raise "expected valid outer ops with forged introduction first in canonical order"
+    end
+
+    log =
+      replica
+      |> Log.new()
+      |> Log.append!(forged_genesis)
+      |> Log.append!(pristine_genesis)
+
+    authority_quarantine = authority_quarantine(log)
+
+    unless authority_quarantine == [[forged_genesis.id, "bad_delegation_sig"]] do
+      raise "expected only the forged same-id introduction to quarantine"
+    end
+
+    unless Authority.holder(Matter, log, :clerk) == clerk.pub do
+      raise "expected forged same-id introduction not to poison pristine authority"
+    end
+
+    realms = realm_index(sim)
+
+    %{
+      name: "township_authority_delegation_id_collision",
       kind: "adversarial",
       log: log,
       realms: realms,

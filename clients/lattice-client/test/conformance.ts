@@ -138,6 +138,105 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
     );
   }
 
+  if (vec.scenario === "township_authority_delegation_id_collision") {
+    const [forgedFrame, pristineFrame] = carrierFrames ?? [];
+    check(
+      "delegation collision outer op hash/signatures",
+      forgedFrame === undefined || pristineFrame === undefined
+        ? null
+        : [
+            await verifyCarrierOp(forgedFrame, verifier),
+            await verifyCarrierOp(pristineFrame, verifier),
+          ],
+      [
+        { hash: true, signature: true, valid: true },
+        { hash: true, signature: true, valid: true },
+      ],
+    );
+
+    const [forgedDelegation, pristineDelegation] =
+      forgedFrame === undefined || pristineFrame === undefined
+        ? []
+        : carrierDelegationsFromFrames([forgedFrame, pristineFrame]);
+    const forgedBytes =
+      forgedDelegation === undefined
+        ? undefined
+        : canonicalBytesForCarrierDelegation(forgedDelegation);
+    const pristineBytes =
+      pristineDelegation === undefined
+        ? undefined
+        : canonicalBytesForCarrierDelegation(pristineDelegation);
+
+    check(
+      "delegation collision canonical identity",
+      forgedBytes === undefined ||
+        pristineBytes === undefined ||
+        forgedDelegation === undefined ||
+        pristineDelegation === undefined
+        ? null
+        : {
+            bytesEqual: Buffer.from(forgedBytes).equals(Buffer.from(pristineBytes)),
+            forgedHash: await canonicalHash(forgedBytes),
+            forgedId: forgedDelegation.id,
+            pristineHash: await canonicalHash(pristineBytes),
+            pristineId: pristineDelegation.id,
+          },
+      forgedDelegation === undefined || pristineDelegation === undefined
+        ? null
+        : {
+            bytesEqual: true,
+            forgedHash: pristineDelegation.id,
+            forgedId: pristineDelegation.id,
+            pristineHash: pristineDelegation.id,
+            pristineId: pristineDelegation.id,
+          },
+    );
+
+    const forgedSig =
+      forgedDelegation === undefined ? undefined : Buffer.from(forgedDelegation.sig, "base64");
+    const pristineSig =
+      pristineDelegation === undefined
+        ? undefined
+        : Buffer.from(pristineDelegation.sig, "base64");
+    check(
+      "delegation collision embedded signature asymmetry",
+      forgedDelegation === undefined ||
+        pristineDelegation === undefined ||
+        forgedBytes === undefined ||
+        pristineBytes === undefined ||
+        forgedSig === undefined ||
+        pristineSig === undefined
+        ? null
+        : {
+            signaturesEqual: forgedSig.equals(pristineSig),
+            lengths: [forgedSig.length, pristineSig.length],
+            forgedValid: await verifyEd25519(
+              forgedDelegation.issuer,
+              forgedBytes,
+              forgedSig,
+            ),
+            pristineValid: await verifyEd25519(
+              pristineDelegation.issuer,
+              pristineBytes,
+              pristineSig,
+            ),
+          },
+      {
+        signaturesEqual: false,
+        lengths: [64, 64],
+        forgedValid: false,
+        pristineValid: true,
+      },
+    );
+    check(
+      "delegation collision forged outer op sorts first",
+      forgedFrame === undefined || pristineFrame === undefined
+        ? null
+        : forgedFrame.id < pristineFrame.id,
+      true,
+    );
+  }
+
   if (REFUSED_PENDING_PLAN_140.has(vec.scenario)) {
     let threw: unknown = null;
     try {

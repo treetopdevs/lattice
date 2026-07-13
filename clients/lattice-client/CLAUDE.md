@@ -117,10 +117,14 @@ The delegation-id tracer bullet changes only a valid genesis delegation's declar
 delegation bytes for every chain link before honoring it. The delegation-signature tracer bullet
 then changes only one signature bit while preserving those canonical bytes and the declared id. TS
 retains the embedded proof and verifies every link synchronously with strict Ed25519; missing or
-malformed proof fails closed. These slices prove id-to-content commitment and signature authenticity
-for the exported evidence, but a same-declared-id collision remains separate adversarial work. Do
-not claim full V-01 restoration from these slices or general malformed-signature acceptance parity
-between OTP and the TypeScript verifier.
+malformed proof fails closed. The collision tracer bullet then replays the signature forgery under
+the pristine delegation's declared id, canonically sorted before the pristine introduction: only
+self-consistent delegations enter the shared collection, and a failed self-consistency check never
+caches a verdict under its claimed id, so the forged op quarantines as `bad_delegation_sig` while
+the pristine genesis stays honored. These slices prove id-to-content commitment, signature
+authenticity, and collision isolation for the exported evidence. Do not claim full V-01 restoration
+from these slices or general malformed-signature acceptance parity between OTP and the TypeScript
+verifier.
 
 Left to do (the real work package — see `plans/011-ts-client-realm.md`):
 1. Expand the randomized Sim corpus beyond the current N=5 seeded scenarios when a broader
