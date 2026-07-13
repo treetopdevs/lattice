@@ -899,13 +899,14 @@ defmodule LatticeCarrierServer.PlanContractTest do
     assert plans_index =~
              "| 137 | Versioned roster action handoff | P1 | XL | 051, 054, 130, 136 | DONE |"
 
-    assert plans_index =~ "Plan 137 closes the bundled `admit`/`remove_member` roster handoff slice"
+    assert plans_index =~
+             "Plan 137 closes the bundled `admit`/`remove_member` roster handoff slice"
 
     assert shell_package["scripts"]["tauri:roster-action-handoff:smoke"] ==
              "tsx test/tauri_roster_action_handoff_smoke.ts"
 
     assert shell_package["scripts"]["app:convergence"] =~
-             ~r/tauri:field-action-handoff:smoke && TOWNSHIP_SKIP_ROSTER_ACTION_APP_BUILD=1 npm run tauri:roster-action-handoff:smoke && npm run tauri:feed:smoke/
+             ~r/tauri:field-action-handoff:smoke && TOWNSHIP_SKIP_ROSTER_ACTION_APP_BUILD=1 npm run tauri:roster-action-handoff:smoke && TOWNSHIP_SKIP_DELEGATION_GRANT_APP_BUILD=1 npm run tauri:delegation-grant-handoff:smoke && npm run tauri:feed:smoke/
 
     assert workflow =~
              ~r/Verify packaged roster handoff\s+working-directory: clients\/township-tauri-shell\s+env:\s+TOWNSHIP_SKIP_ROSTER_ACTION_APP_BUILD: "1"\s+run: npm run tauri:roster-action-handoff:smoke/

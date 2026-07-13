@@ -512,7 +512,7 @@ function nativeUnavailableAvailability(): TownshipActionAvailabilityUnavailable 
 function normalizeAudiencePubkey(
   value: string,
 ): { ok: true; value: string } | { ok: false; failure: TownshipDelegationFailure } {
-  const trimmed = value.trim();
+  const trimmed = trimAsciiEdges(value);
   if (trimmed.length === 0) {
     return {
       ok: false,
@@ -529,6 +529,10 @@ function normalizeAudiencePubkey(
   }
 
   return { ok: true, value: trimmed };
+}
+
+function trimAsciiEdges(value: string): string {
+  return value.replace(/^[\u0009-\u000D\u0020]+|[\u0009-\u000D\u0020]+$/g, "");
 }
 
 function base64Bytes(value: string): Uint8Array | null {

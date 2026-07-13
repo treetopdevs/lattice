@@ -33,6 +33,11 @@ defmodule TownshipWeb.ActionIntentTest do
                         __DIR__
                       )
 
+  @grant_fixture_path Path.expand(
+                        "../../../../clients/township-tauri-shell/test/fixtures/township_grant_action_intent_v5.json",
+                        __DIR__
+                      )
+
   test "post_url emits the exact custody-free cross-runtime v1 contract" do
     fixture = @fixture_path |> File.read!() |> Jason.decode!()
     payload = fixture["payload"]
@@ -235,6 +240,64 @@ defmodule TownshipWeb.ActionIntentTest do
              ActionIntent.roster_url("replica", :remove_member, "resident",
                intent_id: "not-an-id"
              )
+  end
+
+  test "grant_url emits the exact custody-free v5 resident grant contract" do
+    fixture = @grant_fixture_path |> File.read!() |> Jason.decode!()
+    payload = fixture["payload"]
+
+    assert {:ok, url} =
+             ActionIntent.grant_url(payload["replica"], payload["authority"]["audience"],
+               intent_id: payload["id"]
+             )
+
+    assert url == fixture["url"]
+    assert decoded_payload(url) == payload
+    assert Map.keys(payload) |> Enum.sort() == ["authority", "id", "replica", "v"]
+
+    assert Map.keys(payload["authority"]) |> Enum.sort() ==
+             ["action", "audience", "live", "ops", "roles"]
+
+    assert payload["authority"] == %{
+             "action" => "grant",
+             "audience" => "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
+             "ops" => ["admit", "post", "set_summary", "set_title"],
+             "roles" => [],
+             "live" => false
+           }
+
+    refute Enum.any?(
+             ~w(author cap capability delegation deps key local_realm parent private_key pubkey sig signature),
+             &contains_key?(payload, &1)
+           )
+  end
+
+  test "grant_url canonicalizes audience input and rejects invalid public keys" do
+    id = "0123456789abcdef0123456789abcdef"
+    audience = "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE="
+
+    assert {:ok, trimmed_url} =
+             ActionIntent.grant_url(" replica:matter:one ", " #{audience} ", intent_id: id)
+
+    assert decoded_payload(trimmed_url)["authority"]["audience"] == audience
+
+    invalid_audiences = [
+      "",
+      " ",
+      "not-base64!",
+      String.trim_trailing(audience, "="),
+      String.replace_suffix(audience, "E=", "F="),
+      Base.encode64(:binary.copy(<<0>>, 31)),
+      Base.encode64(:binary.copy(<<0>>, 33)),
+      Base.encode64(:binary.copy(<<255>>, 32)) |> String.replace("/", "_"),
+      <<255>>,
+      nil
+    ]
+
+    for invalid <- invalid_audiences do
+      assert {:error, :invalid_audience} =
+               ActionIntent.grant_url("replica:matter:one", invalid, intent_id: id)
+    end
   end
 
   defp decoded_payload(url) do

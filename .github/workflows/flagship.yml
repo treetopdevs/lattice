@@ -146,6 +146,9 @@ jobs:
       - name: TS Township action contract
         working-directory: clients/township-tauri-shell
         run: npm run action:contract
+      - name: TS Township delegation-grant fixture
+        working-directory: clients/township-tauri-shell
+        run: npm run grant:fixture:contract
       - name: TS Township frontend contract
         working-directory: clients/township-tauri-shell
         run: npm run frontend:contract
@@ -270,6 +273,12 @@ jobs:
         env:
           TOWNSHIP_SKIP_ROSTER_ACTION_APP_BUILD: "1"
         run: npm run tauri:roster-action-handoff:smoke
+
+      - name: Verify packaged delegation grant handoff
+        working-directory: clients/township-tauri-shell
+        env:
+          TOWNSHIP_SKIP_DELEGATION_GRANT_APP_BUILD: "1"
+        run: npm run tauri:delegation-grant-handoff:smoke
 
       - name: Verify packaged reactive carrier feed
         working-directory: clients/township-tauri-shell

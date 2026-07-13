@@ -115,9 +115,17 @@ The exact public JSON shape is:
 - `action` is exactly `grant`. This is an authority operation, not a `Township.Matter` command.
 - The producer fixes one fixed resident grant profile: sorted ops `admit`, `post`, `set_summary`,
   and `set_title`; no roles; and `live: false`. The browser supplies only `audience`.
-- `audience` is exactly one canonical padded base64 encoding of a 32-byte Ed25519 public key.
-  Empty, edge-whitespace, malformed, noncanonical, wrong-length, base64url-substituted, and
-  oversized values fail closed in both runtimes.
+- `audience` is exactly one canonical padded standard base64 encoding of a 32-byte Ed25519 public
+  key. Producers canonicalize public input: `TownshipWeb.ActionIntent.grant_url/3` and the Tauri
+  `submitTownshipDelegation` / `normalizeAudiencePubkey` authoring path trim ASCII edge whitespace,
+  then require exact canonical padded standard base64 of 32 bytes and emit the canonical trimmed
+  value, following the producer rule frozen for v1-v4. The encoded v5 payload therefore always
+  carries an already-canonical audience.
+- The TypeScript deep-link parser requires the payload audience already canonical and rejects any
+  edge whitespace, following the encoded-field rule frozen for v1-v4.
+- Empty-after-trim, malformed, noncanonical, wrong-length, base64url-substituted, and oversized
+  audiences fail closed in every surface. Edge whitespace is normalized by producer-role surfaces
+  but fails closed in the deep-link parser because encoded wire input carrying it is noncanonical.
 - Unknown versions, malformed outer base64url, extra keys, cross-version fields, parent-cap ids,
   dependencies, authors, signatures, private material, and altered policy values fail closed.
 - `id` remains an unsigned diagnostic correlation label and never enters the delegation or
@@ -236,8 +244,10 @@ RED.
    `not_attenuated` requirement, then add only the reviewed plan.
 2. **Cross-runtime v5 RED/GREEN.** Produce a literal v5 fixture from
    `TownshipWeb.ActionIntent.grant_url/3`; consume it in the TS parser. First fail on the missing
-   producer and unsupported version. Prove exact key sets, fixed policy, canonical audience, frozen
-   v1-v4, unknown versions, malformed outer encoding, smuggled custody fields, and extra keys.
+   producer and unsupported version. Prove exact key sets, fixed policy, producer trim-then-validate
+   canonical emission, parser canonical-only rejection for edge-whitespace/noncanonical/wrong-length/
+   base64url/oversized audiences, frozen v1-v4, unknown versions, malformed outer encoding,
+   smuggled custody fields, and extra keys.
 3. **Fresh LiveView RED/GREEN.** Test fresh preparation, every non-fresh refusal, replica source and
    replacement, producer error, independent prior-intent slots, fixed policy, and client inability
    to switch the action or permissions.
@@ -295,7 +305,8 @@ Cumulative:
 - Any change to v1-v4 payloads, versions, accepted fields, parser results, review branches,
   fixtures, or packaged behavior.
 - Any v5 command payload, altered policy, noncanonical audience, custody field, unknown field, or
-  unknown version accepted by either runtime.
+  unknown version accepted by either runtime, or an encoded v5 audience carrying edge whitespace
+  accepted by the TypeScript deep-link parser.
 - Browser-supplied ops, roles, liveness, cap, deps, author, signature, or authority verdict reaches
   the authoring path.
 - Any non-fresh LiveView source prepares a grant or client parameters replace the server-owned

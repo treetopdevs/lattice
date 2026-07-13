@@ -65,6 +65,7 @@ import {
 import { createTauriPairingDeepLinkSource } from "./township_pairing_deeplink_source";
 import type {
   TownshipFieldActionIntent,
+  TownshipGrantActionIntent,
   TownshipPostActionIntent,
   TownshipReviewableActionIntent,
   TownshipRosterActionIntent,
@@ -193,8 +194,10 @@ const acceptedPostIntent = ref<TownshipPostActionIntent | null>(null);
 const acceptedStatusIntent = ref<TownshipStatusActionIntent | null>(null);
 const acceptedFieldIntent = ref<TownshipFieldActionIntent | null>(null);
 const acceptedRosterIntent = ref<TownshipRosterActionIntent | null>(null);
+const acceptedGrantIntent = ref<TownshipGrantActionIntent | null>(null);
 const fieldIntentSubmitting = ref<TownshipFieldActionIntent["command"]["command"] | null>(null);
 const rosterIntentSubmitting = ref<TownshipRosterActionIntent["command"]["command"] | null>(null);
+const grantIntentSubmitting = ref(false);
 const actionIntentStatus = ref<{ ok: boolean; message: string } | null>(null);
 const pairingDraft = ref<TownshipCarrierPeerConfigInput>(pairingDraftFromConfig(carrierPeer.value));
 const pairingDraftOrigin = ref<TownshipCarrierPairingDraftOrigin>("manual");
@@ -886,6 +889,12 @@ function acceptPendingActionIntent(event?: Event) {
       ok: true,
       message: `${actionIntentLabel(intent)} held for local review.`,
     };
+  } else if (intent.v === 5) {
+    acceptedGrantIntent.value = intent;
+    actionIntentStatus.value = {
+      ok: true,
+      message: `${actionIntentLabel(intent)} held for local review.`,
+    };
   } else {
     assertNeverActionIntent(intent);
   }
@@ -1011,12 +1020,54 @@ function dismissAcceptedRosterIntent(event?: Event) {
   };
 }
 
+async function signAcceptedGrantIntent(event?: Event) {
+  if (event && !event.isTrusted) return;
+
+  const intent = acceptedGrantIntent.value;
+  if (!intent) return;
+  if (carrierPeer.value?.replica !== intent.replica) {
+    actionIntentStatus.value = {
+      ok: false,
+      message: `${actionIntentLabel(intent)} no longer matches the saved Township pairing.`,
+    };
+    return;
+  }
+
+  grantIntentSubmitting.value = true;
+  const submission = await submitTownshipDelegation({
+    audiencePubkey: intent.authority.audience,
+    ops: intent.authority.ops,
+    roles: intent.authority.roles,
+    live: intent.authority.live,
+    replica: intent.replica,
+  });
+  grantIntentSubmitting.value = false;
+
+  if (submission.ok) {
+    acceptedGrantIntent.value = null;
+    actionIntentStatus.value = { ok: true, message: "Grant signed and held for explicit Sync." };
+  } else {
+    actionIntentStatus.value = { ok: false, message: submission.message };
+  }
+}
+
+function dismissAcceptedGrantIntent(event?: Event) {
+  if (event && !event.isTrusted) return;
+  const intent = acceptedGrantIntent.value;
+  acceptedGrantIntent.value = null;
+  actionIntentStatus.value = {
+    ok: true,
+    message: `${intent ? actionIntentLabel(intent) : "Grant access request"} dismissed.`,
+  };
+}
+
 function clearActionIntents() {
   pendingActionIntent.value = null;
   acceptedPostIntent.value = null;
   acceptedStatusIntent.value = null;
   acceptedFieldIntent.value = null;
   acceptedRosterIntent.value = null;
+  acceptedGrantIntent.value = null;
   actionIntentStatus.value = null;
 }
 
@@ -1031,6 +1082,7 @@ function actionIntentLabel(intent: TownshipReviewableActionIntent): string {
   if (intent.v === 4) {
     return intent.command.command === "admit" ? "Admit member request" : "Remove member request";
   }
+  if (intent.v === 5) return "Grant access request";
   return assertNeverActionIntent(intent);
 }
 
@@ -1058,6 +1110,10 @@ function rosterIntentVerb(intent: TownshipRosterActionIntent): "admit" | "remove
 function rosterActionAllowed(command: TownshipRosterActionIntent["command"]["command"]): boolean {
   const availability = actionAvailability.value;
   return availability.ready && availability.commands[command].allowed;
+}
+
+function grantIntentFingerprint(intent: TownshipGrantActionIntent): string {
+  return townshipCarrierPeerFingerprint(intent.authority.audience);
 }
 
 function routeOtherParticipantDeepLink(value: string) {
@@ -1105,6 +1161,14 @@ function handleDevTraceControlDeepLink(value: string): boolean {
     void submitPendingPostIntentFromDevTrace();
     return true;
   }
+  if (route === "action-post/use") {
+    void usePendingPostIntentFromDevTrace();
+    return true;
+  }
+  if (route === "action-post/sign") {
+    void signAcceptedPostIntentFromDevTrace();
+    return true;
+  }
   if (route === "action-status/use") {
     void usePendingStatusIntentFromDevTrace();
     return true;
@@ -1127,6 +1191,14 @@ function handleDevTraceControlDeepLink(value: string): boolean {
   }
   if (route === "action-roster/sign") {
     void signAcceptedRosterIntentFromDevTrace();
+    return true;
+  }
+  if (route === "action-grant/use") {
+    void usePendingGrantIntentFromDevTrace();
+    return true;
+  }
+  if (route === "action-grant/sign") {
+    void signAcceptedGrantIntentFromDevTrace();
     return true;
   }
   if (route === "carrier/sync") {
@@ -1166,6 +1238,30 @@ async function traceActionIntentDevSubmit(outcome: string): Promise<void> {
   } catch {
     // Test-only observability must not change the production action functions.
   }
+}
+
+async function usePendingPostIntentFromDevTrace() {
+  const intent = pendingActionIntent.value;
+  if (!intent || intent.v !== 1) {
+    await tracePostIntentDevControl("use", "missing");
+    return;
+  }
+
+  acceptPendingActionIntent();
+  await tracePostIntentDevControl(
+    "use",
+    acceptedPostIntent.value?.id === intent.id ? "accepted" : "rejected",
+  );
+}
+
+async function signAcceptedPostIntentFromDevTrace() {
+  if (!acceptedPostIntent.value) {
+    await tracePostIntentDevControl("sign", "missing");
+    return;
+  }
+
+  await submitPost();
+  await tracePostIntentDevControl("sign", acceptedPostIntent.value === null ? "signed" : "failed");
 }
 
 async function usePendingStatusIntentFromDevTrace() {
@@ -1255,11 +1351,37 @@ async function signAcceptedRosterIntentFromDevTrace() {
   await traceRosterIntentDevControl("sign", acceptedRosterIntent.value === null ? "signed" : "failed");
 }
 
+async function usePendingGrantIntentFromDevTrace() {
+  const intent = pendingActionIntent.value;
+  if (!intent || intent.v !== 5) {
+    await traceGrantIntentDevControl("use", "missing");
+    return;
+  }
+
+  acceptPendingActionIntent();
+  await traceGrantIntentDevControl(
+    "use",
+    acceptedGrantIntent.value?.id === intent.id ? "accepted" : "rejected",
+  );
+}
+
+async function signAcceptedGrantIntentFromDevTrace() {
+  if (!acceptedGrantIntent.value) {
+    await traceGrantIntentDevControl("sign", "missing");
+    return;
+  }
+
+  await signAcceptedGrantIntent();
+  await traceGrantIntentDevControl("sign", acceptedGrantIntent.value === null ? "signed" : "failed");
+}
+
 async function syncStatusIntentFromDevTrace() {
   await syncOutbox();
+  await tracePostIntentDevControl("sync", syncStatus.value?.ok ? "synced" : "failed");
   await traceStatusIntentDevControl("sync", syncStatus.value?.ok ? "synced" : "failed");
   await traceFieldIntentDevControl("sync", syncStatus.value?.ok ? "synced" : "failed");
   await traceRosterIntentDevControl("sync", syncStatus.value?.ok ? "synced" : "failed");
+  await traceGrantIntentDevControl("sync", syncStatus.value?.ok ? "synced" : "failed");
 }
 
 async function traceStatusIntentDevControl(step: string, outcome: string): Promise<void> {
@@ -1281,6 +1403,22 @@ async function traceFieldIntentDevControl(step: string, outcome: string): Promis
 async function traceRosterIntentDevControl(step: string, outcome: string): Promise<void> {
   try {
     await traceTownshipDevEvent(`action-roster-dev-${step}:${outcome}`);
+  } catch {
+    // Test-only observability must not change the production action functions.
+  }
+}
+
+async function tracePostIntentDevControl(step: string, outcome: string): Promise<void> {
+  try {
+    await traceTownshipDevEvent(`action-post-dev-${step}:${outcome}`);
+  } catch {
+    // Test-only observability must not change the production action functions.
+  }
+}
+
+async function traceGrantIntentDevControl(step: string, outcome: string): Promise<void> {
+  try {
+    await traceTownshipDevEvent(`action-grant-dev-${step}:${outcome}`);
   } catch {
     // Test-only observability must not change the production action functions.
   }
@@ -1940,6 +2078,25 @@ function pairingDiscoveryAdvertFromMessage(value: unknown): TownshipPairingDisco
       <div class="incoming-action-controls">
         <button type="button" @click="acceptPendingActionIntent">Use request</button>
         <button type="button" class="secondary-action" @click="dismissPendingActionIntent">Dismiss</button>
+      </div>
+    </section>
+
+    <section v-if="acceptedGrantIntent" id="participant-grant-request" class="incoming-action-panel" aria-live="polite">
+      <div class="panel-heading">
+        <p>{{ actionIntentLabel(acceptedGrantIntent) }}</p>
+        <span>Unsigned local review</span>
+      </div>
+      <p class="incoming-action-text">Recipient {{ grantIntentFingerprint(acceptedGrantIntent) }}</p>
+      <p class="incoming-action-text">Operations: {{ acceptedGrantIntent.authority.ops.join(", ") }}</p>
+      <p class="incoming-action-text">
+        {{ acceptedGrantIntent.authority.roles.length === 0 ? "No roles" : acceptedGrantIntent.authority.roles.join(", ") }}
+        ; {{ acceptedGrantIntent.authority.live ? "Live" : "Offline" }}
+      </p>
+      <div class="incoming-action-controls">
+        <button type="button" :disabled="grantIntentSubmitting" @click="signAcceptedGrantIntent">
+          {{ grantIntentSubmitting ? "Signing" : "Sign grant" }}
+        </button>
+        <button type="button" class="secondary-action" @click="dismissAcceptedGrantIntent">Dismiss request</button>
       </div>
     </section>
 

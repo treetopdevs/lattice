@@ -64,6 +64,22 @@ interface AdmitActionIntentFixture {
   url: string;
 }
 
+interface GrantActionIntentFixture {
+  payload: {
+    v: 5;
+    id: string;
+    replica: string;
+    authority: {
+      action: "grant";
+      audience: string;
+      ops: ["admit", "post", "set_summary", "set_title"];
+      roles: [];
+      live: false;
+    };
+  };
+  url: string;
+}
+
 console.log("\n▸ Township action-intent contract");
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -85,6 +101,9 @@ const removeMemberFixture = JSON.parse(
 const admitFixture = JSON.parse(
   readFileSync(join(here, "fixtures", "township_admit_action_intent_v4.json"), "utf8"),
 ) as AdmitActionIntentFixture;
+const grantFixture = JSON.parse(
+  readFileSync(join(here, "fixtures", "township_grant_action_intent_v5.json"), "utf8"),
+) as GrantActionIntentFixture;
 
 assert.deepEqual(parseTownshipActionIntentDeepLink(fixture.url), {
   ok: true,
@@ -109,6 +128,66 @@ assert.deepEqual(parseTownshipActionIntentDeepLink(removeMemberFixture.url), {
 assert.deepEqual(parseTownshipActionIntentDeepLink(admitFixture.url), {
   ok: true,
   intent: admitFixture.payload,
+});
+
+const grantAudience = grantFixture.payload.authority.audience;
+
+for (const audience of [
+  ` ${grantAudience}`,
+  `${grantAudience} `,
+  "",
+  "not-base64!",
+  grantAudience.slice(0, -1),
+  `${grantAudience.slice(0, -2)}F=`,
+  Buffer.alloc(31, 0x41).toString("base64"),
+  Buffer.alloc(33, 0x41).toString("base64"),
+  Buffer.alloc(32, 0xff).toString("base64").replaceAll("/", "_"),
+  "A".repeat(4_097),
+  42,
+  null,
+]) {
+  assertInvalidPayload({
+    ...grantFixture.payload,
+    authority: { ...grantFixture.payload.authority, audience },
+  });
+}
+
+for (const authority of [
+  { ...grantFixture.payload.authority, action: "revoke" },
+  { ...grantFixture.payload.authority, ops: ["post", "admit", "set_summary", "set_title"] },
+  { ...grantFixture.payload.authority, ops: ["admit", "post", "set_summary"] },
+  { ...grantFixture.payload.authority, roles: ["resident"] },
+  { ...grantFixture.payload.authority, live: true },
+  { ...grantFixture.payload.authority, cap: "smuggled" },
+]) {
+  assertInvalidPayload({ ...grantFixture.payload, authority });
+}
+
+for (const payload of [
+  { ...grantFixture.payload, command: { command: "post", text: "smuggled" } },
+  { ...grantFixture.payload, text: "smuggled" },
+  { ...grantFixture.payload, member: "smuggled" },
+  { ...grantFixture.payload, cap: "smuggled" },
+  { ...grantFixture.payload, deps: [] },
+  { ...grantFixture.payload, author: "smuggled" },
+  { ...grantFixture.payload, signature: "smuggled" },
+  { ...grantFixture.payload, private_key: "smuggled" },
+  { ...grantFixture.payload, extra: "smuggled" },
+  { ...grantFixture.payload, id: "not-an-id" },
+  { ...grantFixture.payload, replica: " " },
+  {
+    v: 1,
+    id: fixture.payload.id,
+    replica: fixture.payload.replica,
+    authority: grantFixture.payload.authority,
+  },
+]) {
+  assertInvalidPayload(payload);
+}
+
+assert.deepEqual(parseTownshipActionIntentDeepLink(grantFixture.url), {
+  ok: true,
+  intent: grantFixture.payload,
 });
 
 const reopenPayload: StatusActionIntentFixture["payload"] = {
@@ -154,7 +233,7 @@ assert.deepEqual(
   },
 );
 
-assert.deepEqual(parseTownshipActionIntentDeepLink(actionUrl({ ...fixture.payload, v: 5 })), {
+assert.deepEqual(parseTownshipActionIntentDeepLink(actionUrl({ ...fixture.payload, v: 6 })), {
   ok: false,
   reason: "unsupported_action_version",
   message: "Township action request invalid: unsupported version.",

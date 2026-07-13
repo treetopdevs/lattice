@@ -6,6 +6,8 @@ defmodule TownshipWeb.InstrumentLiveTest do
   alias Township.Matter
   alias TownshipWeb.{ActionIntent, CarrierProjection}
 
+  @grant_audience "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE="
+
   defmodule FailingSource do
     @behaviour TownshipWeb.InstrumentSource
 
@@ -60,6 +62,8 @@ defmodule TownshipWeb.InstrumentLiveTest do
     end
 
     assert has_element?(view, "#source-status[data-verified='true']")
+    refute has_element?(view, "#participant-grant-form")
+    refute has_element?(view, "#participant-grant-handoff")
     assert rendered =~ "township-audit-bundle-v1"
 
     assert rendered =~
@@ -382,6 +386,160 @@ defmodule TownshipWeb.InstrumentLiveTest do
     send(view.pid, {:township_instrument, {:stale, payload}})
     refute has_element?(view, "#participant-roster-form")
     refute has_element?(view, "#participant-roster-handoff")
+  end
+
+  test "fresh carrier state prepares one fixed v5 grant without replacing other intents or mutating state",
+       %{conn: conn} do
+    peer_log = peer_log()
+    control = start_supervised!({Agent, fn -> :ok end})
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         carrier: LiveCarrier,
+         connect_opts: [ops: Log.topo_ops(peer_log), control: control],
+         replica: peer_log.replica,
+         peer_realm: "clerk",
+         pubsub: TownshipWeb.PubSub,
+         topic: "township:grant-intent:#{System.unique_integer([:positive])}",
+         schedule: :manual}
+      )
+
+    put_projection_config(projection)
+    {:ok, view, _html} = live(conn, "/township")
+
+    refute has_element?(view, "#participant-grant-form")
+    render_hook(view, "prepare_grant", %{"grant" => %{"audience" => @grant_audience}})
+    refute has_element?(view, "#participant-grant-handoff")
+
+    assert {:ok, {:fresh, payload}} = CarrierProjection.refresh(projection)
+    assert has_element?(view, "#participant-grant-form")
+
+    view
+    |> form("#participant-summary-form", %{"summary" => %{"text" => "existing summary request"}})
+    |> render_submit()
+
+    view
+    |> form("#participant-post-form", %{"post" => %{"text" => "existing post request"}})
+    |> render_submit()
+
+    render_hook(view, "prepare_status_action", %{})
+
+    view
+    |> form("#participant-roster-form", %{"roster" => %{"member" => "resident:alice"}})
+    |> render_submit()
+
+    op_count = peer_log |> Log.op_ids() |> MapSet.size()
+
+    render_hook(view, "prepare_grant", %{
+      "grant" => %{
+        "audience" => "  #{@grant_audience}  ",
+        "ops" => ["close_matter"],
+        "roles" => ["root"],
+        "live" => true,
+        "cap" => "smuggled"
+      },
+      "signature" => "smuggled"
+    })
+
+    assert has_element?(view, "#participant-grant-handoff[href^='township://action?intent=']")
+    assert has_element?(view, "#participant-grant-prepared", "Unsigned resident grant")
+
+    grant_url = grant_action_intent_href(view)
+    grant_payload = decoded_action_intent(grant_url)
+
+    assert grant_payload["v"] == 5
+    assert grant_payload["id"] =~ ~r/\A[0-9a-f]{32}\z/
+    assert grant_payload["replica"] == peer_log.replica
+
+    assert grant_payload["authority"] == %{
+             "action" => "grant",
+             "audience" => @grant_audience,
+             "ops" => ["admit", "post", "set_summary", "set_title"],
+             "roles" => [],
+             "live" => false
+           }
+
+    assert Map.keys(grant_payload) |> Enum.sort() == ["authority", "id", "replica", "v"]
+
+    assert Map.keys(grant_payload["authority"]) |> Enum.sort() ==
+             ["action", "audience", "live", "ops", "roles"]
+
+    assert {:ok, expected_url} =
+             ActionIntent.grant_url(peer_log.replica, @grant_audience,
+               intent_id: grant_payload["id"]
+             )
+
+    assert grant_url == expected_url
+
+    send(view.pid, {:township_instrument, {:fresh, payload}})
+    assert grant_action_intent_href(view) == grant_url
+
+    assert has_element?(view, "#participant-summary-handoff")
+    assert has_element?(view, "#participant-post-handoff")
+    assert has_element?(view, "#participant-status-handoff")
+    assert has_element?(view, "#participant-roster-handoff")
+    assert has_element?(view, "#participant-post-form textarea", "existing post request")
+    assert has_element?(view, "#op-dag-panel [data-op-count='#{op_count}']")
+    refute has_element?(view, "#members-panel [data-member='resident:alice']")
+
+    replacement_audience = Base.encode64(:binary.copy(<<66>>, 32))
+
+    view
+    |> form("#participant-grant-form", %{"grant" => %{"audience" => replacement_audience}})
+    |> render_submit()
+
+    replacement_url = grant_action_intent_href(view)
+    refute replacement_url == grant_url
+    assert decoded_action_intent(replacement_url)["authority"]["audience"] == replacement_audience
+    assert has_element?(view, "#participant-summary-handoff")
+    assert has_element?(view, "#participant-post-handoff")
+    assert has_element?(view, "#participant-status-handoff")
+    assert has_element?(view, "#participant-roster-handoff")
+
+    view
+    |> form("#participant-grant-form", %{"grant" => %{"audience" => "not-base64!"}})
+    |> render_submit()
+
+    assert has_element?(
+             view,
+             "#participant-grant-error[aria-live='polite']",
+             "Enter a canonical recipient public key before opening the app"
+           )
+
+    refute has_element?(view, "#participant-grant-handoff")
+    assert has_element?(view, "#participant-summary-handoff")
+    assert has_element?(view, "#participant-post-handoff")
+    assert has_element?(view, "#participant-status-handoff")
+    assert has_element?(view, "#participant-roster-handoff")
+
+    replacement_payload = put_in(payload.provenance.replica, peer_log.replica <> ":replacement")
+    send(view.pid, {:township_instrument, {:fresh, replacement_payload}})
+
+    assert has_element?(view, "#participant-grant-form")
+    refute has_element?(view, "#participant-grant-error")
+    assert has_element?(view, "#participant-grant-form input[value='']")
+
+    send(view.pid, {:township_instrument, {:fresh, payload}})
+
+    view
+    |> form("#participant-grant-form", %{"grant" => %{"audience" => @grant_audience}})
+    |> render_submit()
+
+    send(view.pid, {:township_instrument, {:unavailable, :offline}})
+    refute has_element?(view, "#participant-grant-form")
+    refute has_element?(view, "#participant-grant-handoff")
+
+    send(view.pid, {:township_instrument, {:fresh, payload}})
+
+    view
+    |> form("#participant-grant-form", %{"grant" => %{"audience" => @grant_audience}})
+    |> render_submit()
+
+    Agent.update(control, fn _mode -> {:advertise_error, :offline} end)
+    assert {:ok, {:stale, _payload}} = CarrierProjection.refresh(projection)
+    refute has_element?(view, "#participant-grant-form")
+    refute has_element?(view, "#participant-grant-handoff")
   end
 
   test "fresh carrier state prepares admit in the same single roster-request slot", %{conn: conn} do
@@ -874,6 +1032,15 @@ defmodule TownshipWeb.InstrumentLiveTest do
     |> render()
     |> LazyHTML.from_fragment()
     |> LazyHTML.query_by_id("participant-roster-handoff")
+    |> LazyHTML.attribute("href")
+    |> List.first()
+  end
+
+  defp grant_action_intent_href(view) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query_by_id("participant-grant-handoff")
     |> LazyHTML.attribute("href")
     |> List.first()
   end

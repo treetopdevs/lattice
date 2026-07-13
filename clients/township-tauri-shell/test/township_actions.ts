@@ -173,7 +173,7 @@ assert.equal(clerkAvailability.commands.remove_member.capId, "ZOb-qhDcOoM0yStgMM
 const clerkGrantValues = townshipValues([genesisFixture]);
 const clerkGrantSubmitted = await submitTownshipDelegation({
   invoke: nativeInvoke(clerkGrantValues, clerkIdentity, []),
-  audiencePubkey: residentIdentity.publicKeyBase64,
+  audiencePubkey: ` \t\v\f${residentIdentity.publicKeyBase64}\r\n`,
   ops: ["admit", "post", "set_summary", "set_title"],
 });
 
@@ -183,6 +183,7 @@ assert.equal(clerkGrantSubmitted.frameId, grantFixture.id);
 assert.equal(clerkGrantSubmitted.opId, grantFixture.id);
 assert.equal(clerkGrantSubmitted.delegationId, "gN9aanNVZeHWsS1vU8KxjyqVrWdC0VwPIzilL_QX2n0");
 assert.equal(clerkGrantSubmitted.parentId, "ZOb-qhDcOoM0yStgMMBlYY_IHIw6eX1BcvFx5hb_Hs8");
+assert.equal(clerkGrantSubmitted.audiencePubkey, residentIdentity.publicKeyBase64);
 assert.deepEqual(clerkGrantSubmitted.ops, ["admit", "post", "set_summary", "set_title"]);
 assert.equal(clerkGrantSubmitted.localOpCount, 2);
 assert.equal(clerkGrantSubmitted.carrierFrameCount, 1);
@@ -302,9 +303,30 @@ if (invalidGrantAudience.ok) throw new Error("invalid-audience grant unexpectedl
 assert.equal(invalidGrantAudience.reason, "invalid_audience");
 assert.equal(invalidGrantAudienceCalls.length, 0);
 
+for (const audiencePubkey of [
+  `\uFEFF${residentIdentity.publicKeyBase64}\uFEFF`,
+  residentIdentity.publicKeyBase64.slice(0, -1),
+  "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUF=",
+  Buffer.alloc(31, 0x41).toString("base64"),
+  Buffer.alloc(33, 0x41).toString("base64"),
+  Buffer.alloc(32, 0xff).toString("base64").replaceAll("/", "_"),
+  "A".repeat(4_097),
+]) {
+  const invalidCanonicalAudienceCalls: string[] = [];
+  const invalidCanonicalAudience = await submitTownshipDelegation({
+    invoke: nativeInvoke(new Map(), clerkIdentity, invalidCanonicalAudienceCalls),
+    audiencePubkey,
+  });
+  assert.equal(invalidCanonicalAudience.ok, false);
+  if (invalidCanonicalAudience.ok) throw new Error("noncanonical grant audience unexpectedly succeeded");
+  assert.equal(invalidCanonicalAudience.reason, "invalid_audience");
+  assert.equal(invalidCanonicalAudienceCalls.length, 0);
+}
+
 const missingGrantParentValues = new Map<string, string>();
+const missingGrantParentCalls: string[] = [];
 const missingGrantParent = await submitTownshipDelegation({
-  invoke: nativeInvoke(missingGrantParentValues, clerkIdentity, []),
+  invoke: nativeInvoke(missingGrantParentValues, clerkIdentity, missingGrantParentCalls),
   audiencePubkey: residentIdentity.publicKeyBase64,
 });
 assert.equal(missingGrantParent.ok, false);
@@ -314,6 +336,8 @@ assert.match(missingGrantParent.message, /No local delegation/);
 assert.deepEqual(storedLocalOps(missingGrantParentValues), []);
 assert.deepEqual(storedCarrierFrames(missingGrantParentValues), []);
 assert.deepEqual(storedDelegationFrames(missingGrantParentValues), []);
+assert.equal(missingGrantParentCalls.filter((command) => command === "lattice_sign_carrier").length, 0);
+assert.equal(missingGrantParentCalls.filter((command) => command === "lattice_kv_set").length, 0);
 
 const residentEscalationValues = townshipValues(vector.clientDivergedCarrierOps);
 const residentEscalationCalls: string[] = [];

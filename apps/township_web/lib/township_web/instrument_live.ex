@@ -120,6 +120,36 @@ defmodule TownshipWeb.InstrumentLive do
   end
 
   def handle_event(
+        "prepare_grant",
+        %{"grant" => %{"audience" => audience}},
+        %{assigns: %{source_state: :fresh, provenance: %{replica: replica}}} = socket
+      ) do
+    case ActionIntent.grant_url(replica, audience) do
+      {:ok, url} ->
+        {:noreply,
+         assign(socket,
+           grant_intent_form: grant_intent_form(audience),
+           grant_intent_url: url,
+           grant_intent_replica: replica,
+           grant_intent_error: nil
+         )}
+
+      {:error, reason} ->
+        {:noreply,
+         assign(socket,
+           grant_intent_form: grant_intent_form(audience),
+           grant_intent_url: nil,
+           grant_intent_replica: replica,
+           grant_intent_error: action_intent_error(reason)
+         )}
+    end
+  end
+
+  def handle_event("prepare_grant", _params, socket) do
+    {:noreply, clear_grant_intent(socket)}
+  end
+
+  def handle_event(
         "prepare_admit",
         %{"admit" => %{"member" => member}},
         %{assigns: %{source_state: :fresh, provenance: %{replica: replica}}} = socket
@@ -277,6 +307,7 @@ defmodule TownshipWeb.InstrumentLive do
     |> retain_action_intent(source_state, payload.provenance.replica)
     |> retain_summary_intent(source_state, payload.provenance.replica)
     |> retain_title_intent(source_state, payload.provenance.replica)
+    |> retain_grant_intent(source_state, payload.provenance.replica)
     |> retain_roster_intent(source_state, payload.provenance.replica)
     |> retain_status_intent(source_state, payload.read_model, payload.provenance.replica)
     |> assign(
@@ -314,6 +345,10 @@ defmodule TownshipWeb.InstrumentLive do
       title_intent_url: nil,
       title_intent_replica: nil,
       title_intent_error: nil,
+      grant_intent_form: grant_intent_form(""),
+      grant_intent_url: nil,
+      grant_intent_replica: nil,
+      grant_intent_error: nil,
       admit_intent_form: admit_intent_form(""),
       roster_intent_form: roster_intent_form(""),
       roster_intent_url: nil,
@@ -355,6 +390,16 @@ defmodule TownshipWeb.InstrumentLive do
   end
 
   defp retain_title_intent(socket, _source_state, _replica), do: clear_title_intent(socket)
+
+  defp retain_grant_intent(socket, :fresh, replica) do
+    case socket.assigns.grant_intent_replica do
+      nil -> socket
+      ^replica -> socket
+      _other_replica -> clear_grant_intent(socket)
+    end
+  end
+
+  defp retain_grant_intent(socket, _source_state, _replica), do: clear_grant_intent(socket)
 
   defp retain_roster_intent(socket, :fresh, replica) do
     case socket.assigns.roster_intent_replica do
@@ -399,6 +444,10 @@ defmodule TownshipWeb.InstrumentLive do
       title_intent_url: nil,
       title_intent_replica: nil,
       title_intent_error: nil,
+      grant_intent_form: grant_intent_form(""),
+      grant_intent_url: nil,
+      grant_intent_replica: nil,
+      grant_intent_error: nil,
       admit_intent_form: admit_intent_form(""),
       roster_intent_form: roster_intent_form(""),
       roster_intent_url: nil,
@@ -437,6 +486,15 @@ defmodule TownshipWeb.InstrumentLive do
     )
   end
 
+  defp clear_grant_intent(socket) do
+    assign(socket,
+      grant_intent_form: grant_intent_form(""),
+      grant_intent_url: nil,
+      grant_intent_replica: nil,
+      grant_intent_error: nil
+    )
+  end
+
   defp clear_roster_intent(socket) do
     assign(socket,
       admit_intent_form: admit_intent_form(""),
@@ -464,6 +522,11 @@ defmodule TownshipWeb.InstrumentLive do
 
   defp title_intent_form(_text), do: title_intent_form("")
 
+  defp grant_intent_form(audience) when is_binary(audience),
+    do: to_form(%{"audience" => audience}, as: :grant)
+
+  defp grant_intent_form(_audience), do: grant_intent_form("")
+
   defp admit_intent_form(member) when is_binary(member),
     do: to_form(%{"member" => member}, as: :admit)
 
@@ -478,6 +541,10 @@ defmodule TownshipWeb.InstrumentLive do
   defp action_intent_error(:text_too_large), do: "Keep the update within 4096 UTF-8 bytes."
   defp action_intent_error(:invalid_member), do: "Enter a member before opening the app."
   defp action_intent_error(:member_too_large), do: "Keep the member id within 4096 UTF-8 bytes."
+
+  defp action_intent_error(:invalid_audience),
+    do: "Enter a canonical recipient public key before opening the app."
+
   defp action_intent_error(_reason), do: "The participant action could not be prepared."
 
   defp source_label(:verified), do: "verified snapshot"

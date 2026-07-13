@@ -36,6 +36,11 @@ interface RosterActionIntentFixture {
   url: string;
 }
 
+interface GrantActionIntentFixture {
+  payload: Extract<TownshipActionIntent, { v: 5 }>;
+  url: string;
+}
+
 console.log("\n▸ Township participant deep-link dispatcher");
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -57,6 +62,9 @@ const removeMemberFixture = JSON.parse(
 const admitFixture = JSON.parse(
   readFileSync(join(here, "fixtures", "township_admit_action_intent_v4.json"), "utf8"),
 ) as RosterActionIntentFixture;
+const grantFixture = JSON.parse(
+  readFileSync(join(here, "fixtures", "township_grant_action_intent_v5.json"), "utf8"),
+) as GrantActionIntentFixture;
 const pairingUrl = "township://pairing?handoff=township-pairing:v1:not-json";
 const androidPairingUrl = "township://nohost/_pairing/township-pairing_3Av1_3Anot-json";
 const calls: string[] = [];
@@ -134,12 +142,23 @@ assert.deepEqual(traces.slice(-3), [
   { intentId: removeMemberFixture.payload.id, outcome: "staged" },
 ]);
 
+expectedReplica = grantFixture.payload.replica;
+const stagedBeforeGrant = staged.length;
+const rejectedBeforeGrant = rejected.length;
+opened([grantFixture.url, grantFixture.url]);
+assert.deepEqual(staged.slice(stagedBeforeGrant), [grantFixture.payload, grantFixture.payload]);
+assert.equal(rejected.length, rejectedBeforeGrant);
+assert.deepEqual(traces.slice(-2), [
+  { intentId: grantFixture.payload.id, outcome: "staged" },
+  { intentId: grantFixture.payload.id, outcome: "staged" },
+]);
+
 opened(["township://action?intent=not-base64url!"]);
 assert.equal(rejected.at(-1), "invalid_action");
 assert.equal(other.includes("township://action?intent=not-base64url!"), false);
 
 expectedReplica = "replica:matter:other";
-opened([titleFixture.url]);
+opened([grantFixture.url]);
 assert.equal(rejected.at(-1), "replica_mismatch");
 
 expectedReplica = null;
@@ -151,7 +170,7 @@ assert.deepEqual(other.slice(-2), ["garbage", "township://probe/canonical?vector
 
 assert.deepEqual(traces.slice(-3), [
   { intentId: null, outcome: "invalid_action" },
-  { intentId: titleFixture.payload.id, outcome: "replica_mismatch" },
+  { intentId: grantFixture.payload.id, outcome: "replica_mismatch" },
   { intentId: fieldFixture.payload.id, outcome: "pairing_missing" },
 ]);
 

@@ -365,7 +365,7 @@ test("frontend package exposes the real app convergence gate", () => {
   );
   assert.equal(
     pkg.scripts["app:convergence"],
-    "npm run action:contract && npm run sync:contract && npm run stable:relay:contract && npm run feed:contract && npm run feed:app:contract && npm run onboarding:contract && npm run onboarding:click-through && npm run live:contract && npm run tauri:launch:smoke && npm run tauri:onboarding:smoke && npm run tauri:stable-relay:onboarding:smoke && npm run tauri:action-handoff:smoke && TOWNSHIP_SKIP_CLERK_ACTION_APP_BUILD=1 npm run tauri:clerk-action-handoff:smoke && TOWNSHIP_SKIP_FIELD_ACTION_APP_BUILD=1 npm run tauri:field-action-handoff:smoke && TOWNSHIP_SKIP_ROSTER_ACTION_APP_BUILD=1 npm run tauri:roster-action-handoff:smoke && npm run tauri:feed:smoke && npm run tauri:deep-link:smoke",
+    "npm run action:contract && npm run sync:contract && npm run stable:relay:contract && npm run feed:contract && npm run feed:app:contract && npm run onboarding:contract && npm run onboarding:click-through && npm run live:contract && npm run tauri:launch:smoke && npm run tauri:onboarding:smoke && npm run tauri:stable-relay:onboarding:smoke && npm run tauri:action-handoff:smoke && TOWNSHIP_SKIP_CLERK_ACTION_APP_BUILD=1 npm run tauri:clerk-action-handoff:smoke && TOWNSHIP_SKIP_FIELD_ACTION_APP_BUILD=1 npm run tauri:field-action-handoff:smoke && TOWNSHIP_SKIP_ROSTER_ACTION_APP_BUILD=1 npm run tauri:roster-action-handoff:smoke && TOWNSHIP_SKIP_DELEGATION_GRANT_APP_BUILD=1 npm run tauri:delegation-grant-handoff:smoke && npm run tauri:feed:smoke && npm run tauri:deep-link:smoke",
   );
   assert.match(launchSmoke, /"tauri", \["build", "--features", "township-dev-trace", "--bundles", "app"\]/);
   assert.match(launchSmoke, /VITE_TOWNSHIP_AUTOSYNC_ON_MOUNT: "1"/);
@@ -422,7 +422,7 @@ test("frontend package exposes a Sim-anchored packaged v4 roster convergence gat
   assert.match(smoke, /relayPeerAdmitBeforeSync/);
   assert.match(
     pkg.scripts["app:convergence"],
-    /TOWNSHIP_SKIP_FIELD_ACTION_APP_BUILD=1 npm run tauri:field-action-handoff:smoke && TOWNSHIP_SKIP_ROSTER_ACTION_APP_BUILD=1 npm run tauri:roster-action-handoff:smoke && npm run tauri:feed:smoke/,
+    /TOWNSHIP_SKIP_FIELD_ACTION_APP_BUILD=1 npm run tauri:field-action-handoff:smoke && TOWNSHIP_SKIP_ROSTER_ACTION_APP_BUILD=1 npm run tauri:roster-action-handoff:smoke && TOWNSHIP_SKIP_DELEGATION_GRANT_APP_BUILD=1 npm run tauri:delegation-grant-handoff:smoke && npm run tauri:feed:smoke/,
   );
   assert.match(
     workflow,
@@ -436,6 +436,63 @@ test("frontend package exposes a Sim-anchored packaged v4 roster convergence gat
   ]) {
     assert.match(workflow, new RegExp(command.replaceAll(":", "\\:")));
   }
+});
+
+test("frontend package exposes a Sim-anchored packaged v5 delegation grant handoff", () => {
+  const pkg = readJson("package.json");
+  const smoke = readText("test/tauri_delegation_grant_handoff_smoke.ts");
+  const fixture = readText("test/support/stable_grant_handoff_fixture.exs");
+  const unsoundRelay = readText("test/support/stable_grant_handoff_relay.exs");
+  const verifier = readText("test/support/stable_relay_verify.exs");
+  const workflow = readText("../../.github/workflows/flagship.yml");
+
+  assert.equal(
+    pkg.scripts["tauri:delegation-grant-handoff:smoke"],
+    "tsx test/tauri_delegation_grant_handoff_smoke.ts",
+  );
+  assert.match(fixture, /TownshipGrantHandoffScenario\.oracle/);
+  assert.match(fixture, /GRANT_FIXTURE_READY/);
+  assert.match(unsoundRelay, /unsoundGrant/);
+  assert.match(unsoundRelay, /unsoundUse/);
+  assert.match(unsoundRelay, /GRANT_UNSOUND_RELAY_READY/);
+  assert.match(verifier, /grant_base/);
+  assert.match(verifier, /grant_sound/);
+  assert.match(verifier, /grant_recipient_use/);
+  assert.match(verifier, /grant_unsound/);
+  assert.match(smoke, /issuerKvPath/);
+  assert.match(smoke, /recipientKvPath/);
+  assert.match(smoke, /issuerSeed/);
+  assert.match(smoke, /recipientSeed/);
+  assert.match(smoke, /#participant-grant-handoff/);
+  assert.match(smoke, /#participant-post-handoff/);
+  assert.match(smoke, /assertLaunchServicesRoutesTownshipSchemeToBundle/);
+  assert.match(smoke, /township:\/\/dev\/action-grant\/use/);
+  assert.match(smoke, /township:\/\/dev\/action-grant\/sign/);
+  assert.match(smoke, /township:\/\/dev\/action-post\/use/);
+  assert.match(smoke, /township:\/\/dev\/action-post\/sign/);
+  assert.match(smoke, /township:\/\/dev\/carrier\/sync/);
+  assert.match(smoke, /soundGrant\.frame/);
+  assert.match(smoke, /recipientUse\.frame/);
+  assert.match(smoke, /not_attenuated/);
+  assert.match(smoke, /invalid_capability/);
+  assert.match(smoke, /matterState/);
+  assert.match(smoke, /assertSourceUnchanged/);
+  assert.match(smoke, /assertNoParentControls/);
+  assert.match(smoke, /lattice_sign_carrier/);
+  assert.match(smoke, /lattice_kv_set/);
+  assert.match(smoke, /assertTownshipKvStoresNoSecrets/);
+  assert.match(
+    pkg.scripts["app:convergence"],
+    /TOWNSHIP_SKIP_ROSTER_ACTION_APP_BUILD=1 npm run tauri:roster-action-handoff:smoke && TOWNSHIP_SKIP_DELEGATION_GRANT_APP_BUILD=1 npm run tauri:delegation-grant-handoff:smoke && npm run tauri:feed:smoke/,
+  );
+  assert.match(
+    workflow,
+    /Verify packaged roster handoff[\s\S]*Verify packaged delegation grant handoff[\s\S]*TOWNSHIP_SKIP_DELEGATION_GRANT_APP_BUILD: "1"[\s\S]*npm run tauri:delegation-grant-handoff:smoke[\s\S]*Verify packaged reactive carrier feed/,
+  );
+  assert.match(
+    workflow,
+    /TS Township delegation-grant fixture[\s\S]*npm run grant:fixture:contract/,
+  );
 });
 
 test("Vue source exposes a carrier sync outbox action", () => {
@@ -702,6 +759,32 @@ test("Vue source limits packaged action execution to a dev-trace control over pr
   assert.match(smoke, /assertTraceRedacted/);
 });
 
+test("Vue exposes separate redacted v1 post Use and Sign controls before explicit Sync", () => {
+  const app = readText("src/App.vue");
+  const useStart = app.indexOf("async function usePendingPostIntentFromDevTrace");
+  const useEnd = app.indexOf("async function signAcceptedPostIntentFromDevTrace", useStart);
+  const usePost = app.slice(useStart, useEnd);
+  const signStart = useEnd;
+  const signEnd = app.indexOf("async function usePendingStatusIntentFromDevTrace", signStart);
+  const signPost = app.slice(signStart, signEnd);
+  const traceStart = app.indexOf("async function tracePostIntentDevControl");
+  const traceEnd = app.indexOf("async function tracePairingDeepLinkUrls", traceStart);
+  const tracePost = app.slice(traceStart, traceEnd);
+
+  assert.ok(useStart >= 0 && useEnd > useStart);
+  assert.ok(signStart >= 0 && signEnd > signStart);
+  assert.ok(traceStart >= 0 && traceEnd > traceStart);
+  assert.match(app, /route === "action-post\/use"/);
+  assert.match(app, /route === "action-post\/sign"/);
+  assert.match(usePost, /intent\.v !== 1[\s\S]*acceptPendingActionIntent\(\)[\s\S]*acceptedPostIntent\.value\?\.id === intent\.id/);
+  assert.doesNotMatch(usePost, /submitPost|syncOutbox/);
+  assert.match(signPost, /await submitPost\(\)/);
+  assert.doesNotMatch(signPost, /syncOutbox/);
+  assert.match(app, /tracePostIntentDevControl\("sync", syncStatus\.value\?\.ok \? "synced" : "failed"\)/);
+  assert.match(tracePost, /action-post-dev-\$\{step\}:\$\{outcome\}/);
+  assert.doesNotMatch(tracePost, /\.text|postDraft|intent|action URL|deep-link/);
+});
+
 test("Vue keeps versioned clerk status signing separate from outbox sync", () => {
   const app = readText("src/App.vue");
   const start = app.indexOf("async function signAcceptedStatusIntent");
@@ -845,6 +928,91 @@ test("Vue signs accepted v4 roster requests locally while keeping outbox sync se
   assert.match(app, /traceRosterIntentDevControl\("sync", syncStatus\.value\?\.ok \? "synced" : "failed"\)/);
   assert.match(traceRoster, /action-roster-dev-\$\{step\}:\$\{outcome\}/);
   assert.doesNotMatch(traceRoster, /\.member|intent|action URL|deep-link/);
+});
+
+test("Vue stages and accepts v5 grant requests inertly in an independent review state", () => {
+  const app = readText("src/App.vue");
+  const actionIntent = readText("src/township_action_intent.ts");
+  const dispatcher = readText("src/township_deep_link_dispatcher.ts");
+  const stageStart = app.indexOf("function stageActionIntent");
+  const stageEnd = app.indexOf("function rejectActionIntent", stageStart);
+  const stageIntent = app.slice(stageStart, stageEnd);
+  const acceptStart = app.indexOf("function acceptPendingActionIntent");
+  const acceptEnd = app.indexOf("function dismissPendingActionIntent", acceptStart);
+  const acceptIntent = app.slice(acceptStart, acceptEnd);
+  const grantAcceptStart = acceptIntent.indexOf("else if (intent.v === 5)");
+  const grantAcceptEnd = acceptIntent.indexOf("} else {", grantAcceptStart);
+  const acceptGrantIntent = acceptIntent.slice(grantAcceptStart, grantAcceptEnd);
+  const labelStart = app.indexOf("function actionIntentLabel");
+  const labelEnd = app.indexOf("function assertNeverActionIntent", labelStart);
+  const label = app.slice(labelStart, labelEnd);
+
+  assert.ok(stageStart >= 0 && stageEnd > stageStart);
+  assert.ok(acceptStart >= 0 && acceptEnd > acceptStart);
+  assert.ok(grantAcceptStart >= 0 && grantAcceptEnd > grantAcceptStart);
+  assert.ok(labelStart >= 0 && labelEnd > labelStart);
+  assert.match(
+    actionIntent,
+    /export type TownshipReviewableActionIntent =[^;]*TownshipGrantActionIntent/s,
+  );
+  assert.doesNotMatch(dispatcher, /parsed\.intent\.v === 5/);
+  assert.match(app, /TownshipGrantActionIntent/);
+  assert.match(app, /const acceptedGrantIntent = ref<TownshipGrantActionIntent \| null>\(null\)/);
+  assert.match(stageIntent, /pendingActionIntent\.value = intent/);
+  assert.doesNotMatch(stageIntent, /submitTownshipDelegation|syncOutbox|accepted\w+Intent\.value|Draft\.value/);
+  assert.match(acceptGrantIntent, /acceptedGrantIntent\.value = intent/);
+  assert.doesNotMatch(acceptGrantIntent, /submitTownshipDelegation|syncOutbox|grantAudienceDraft\.value/);
+  assert.doesNotMatch(
+    acceptGrantIntent,
+    /accepted(?:Post|Status|Field|Roster)Intent\.value/,
+  );
+  assert.match(label, /intent\.v === 5[\s\S]*return "Grant access request"/);
+  assert.match(app, /id="participant-grant-request"/);
+  assert.match(app, /grantIntentFingerprint\(acceptedGrantIntent\)/);
+  assert.match(app, /acceptedGrantIntent\.authority\.ops\.join\(", "\)/);
+  assert.match(app, /acceptedGrantIntent\.authority\.roles\.length === 0/);
+  assert.match(app, /acceptedGrantIntent\.authority\.live \? "Live" : "Offline"/);
+});
+
+test("Vue signs accepted v5 grants locally while keeping explicit Sync separate", () => {
+  const app = readText("src/App.vue");
+  const signStart = app.indexOf("async function signAcceptedGrantIntent");
+  const signEnd = app.indexOf("function dismissAcceptedGrantIntent", signStart);
+  const signGrant = app.slice(signStart, signEnd);
+  const useDevStart = app.indexOf("async function usePendingGrantIntentFromDevTrace");
+  const useDevEnd = app.indexOf("async function signAcceptedGrantIntentFromDevTrace", useDevStart);
+  const useDev = app.slice(useDevStart, useDevEnd);
+  const signDevStart = useDevEnd;
+  const signDevEnd = app.indexOf("async function syncStatusIntentFromDevTrace", signDevStart);
+  const signDev = app.slice(signDevStart, signDevEnd);
+  const traceStart = app.indexOf("async function traceGrantIntentDevControl");
+  const traceEnd = app.indexOf("async function tracePairingDeepLinkUrls", traceStart);
+  const traceGrant = app.slice(traceStart, traceEnd);
+
+  assert.ok(signStart >= 0 && signEnd > signStart);
+  assert.ok(useDevStart >= 0 && useDevEnd > useDevStart);
+  assert.ok(signDevStart >= 0 && signDevEnd > signDevStart);
+  assert.ok(traceStart >= 0 && traceEnd > traceStart);
+  assert.match(app, /const grantIntentSubmitting = ref\(false\)/);
+  assert.match(signGrant, /carrierPeer\.value\?\.replica !== intent\.replica[\s\S]*return/);
+  assert.match(signGrant, /grantIntentSubmitting\.value = true/);
+  assert.match(
+    signGrant,
+    /await submitTownshipDelegation\(\{[\s\S]*audiencePubkey: intent\.authority\.audience,[\s\S]*ops: intent\.authority\.ops,[\s\S]*roles: intent\.authority\.roles,[\s\S]*live: intent\.authority\.live,[\s\S]*replica: intent\.replica/,
+  );
+  assert.match(signGrant, /grantIntentSubmitting\.value = false/);
+  assert.match(signGrant, /if \(submission\.ok\)[\s\S]*acceptedGrantIntent\.value = null/);
+  assert.doesNotMatch(signGrant, /syncOutbox/);
+  assert.doesNotMatch(signGrant, /grantStatus\.value/);
+  assert.match(app, /@click="signAcceptedGrantIntent"/);
+  assert.match(app, />[\s\S]*Sign grant[\s\S]*<\/button>/);
+  assert.match(app, /route === "action-grant\/use"/);
+  assert.match(app, /route === "action-grant\/sign"/);
+  assert.match(useDev, /intent\.v !== 5[\s\S]*acceptPendingActionIntent\(\)[\s\S]*acceptedGrantIntent\.value\?\.id === intent\.id/);
+  assert.match(signDev, /await signAcceptedGrantIntent\(\)/);
+  assert.match(app, /traceGrantIntentDevControl\("sync", syncStatus\.value\?\.ok \? "synced" : "failed"\)/);
+  assert.match(traceGrant, /action-grant-dev-\$\{step\}:\$\{outcome\}/);
+  assert.doesNotMatch(traceGrant, /\.audience|recipient|intent|action URL|deep-link/);
 });
 
 test("Vue traces rendered title, summary, and members only through SHA-256 commitments", () => {

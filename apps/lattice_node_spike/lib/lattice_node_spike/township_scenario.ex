@@ -9,8 +9,8 @@ defmodule LatticeNodeSpike.TownshipScenario do
   `Lattice.Attestation`, and the carrier untouched.
   """
 
-  alias Lattice.{Identity, Log, Op, Sim}
   alias Lattice.Authority.Delegation
+  alias Lattice.{Identity, Log, Op, Sim}
   alias Township.Matter
 
   @replica "replica:matter:township-g1"
@@ -34,8 +34,9 @@ defmodule LatticeNodeSpike.TownshipScenario do
   independently from seeded identities.
   """
   @spec base_sim() :: Sim.t()
-  def base_sim do
-    sim = Sim.new(Matter, @replica, @realms, seed: @seed)
+  @spec base_sim([String.t()]) :: Sim.t()
+  def base_sim(realms \\ @realms) when is_list(realms) do
+    sim = Sim.new(Matter, @replica, realms, seed: @seed)
 
     {sim, _genesis} =
       Sim.create_replica(sim, "clerk",

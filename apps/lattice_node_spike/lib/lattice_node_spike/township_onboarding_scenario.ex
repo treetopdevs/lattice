@@ -15,8 +15,11 @@ defmodule LatticeNodeSpike.TownshipOnboardingScenario do
   defdelegate replica_module(), to: TownshipScenario
 
   @spec base_sim() :: Sim.t()
-  def base_sim do
-    sim = TownshipScenario.base_sim()
+  def base_sim, do: base_sim(TownshipScenario.realms())
+
+  @spec base_sim([String.t()]) :: Sim.t()
+  def base_sim(realms) when is_list(realms) do
+    sim = TownshipScenario.base_sim(realms)
     {sim, _summary} = Sim.command(sim, "resident", :set_summary, ["Needs traffic study"])
     Sim.sync_all(sim)
   end

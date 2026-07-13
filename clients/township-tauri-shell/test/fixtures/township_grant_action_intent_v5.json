@@ -1,0 +1,20 @@
+{
+  "payload": {
+    "v": 5,
+    "id": "89abcdef0123456789abcdef01234567",
+    "replica": "replica:matter:one",
+    "authority": {
+      "action": "grant",
+      "audience": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
+      "ops": [
+        "admit",
+        "post",
+        "set_summary",
+        "set_title"
+      ],
+      "roles": [],
+      "live": false
+    }
+  },
+  "url": "township://action?intent=eyJ2Ijo1LCJpZCI6Ijg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3IiwicmVwbGljYSI6InJlcGxpY2E6bWF0dGVyOm9uZSIsImF1dGhvcml0eSI6eyJhY3Rpb24iOiJncmFudCIsImF1ZGllbmNlIjoiUVVGQlFVRkJRVUZCUVVGQlFVRkJRVUZCUVVGQlFVRkJRVUZCUVVGQlFVRT0iLCJvcHMiOlsiYWRtaXQiLCJwb3N0Iiwic2V0X3N1bW1hcnkiLCJzZXRfdGl0bGUiXSwicm9sZXMiOltdLCJsaXZlIjpmYWxzZX19"
+}
