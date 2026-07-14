@@ -263,9 +263,22 @@ const actionIntentDescriptors = [
     successMessage: () => "Grant signed and held for explicit Sync.",
     onStatus: () => selectActionIntentStatus("grant"),
   }),
+  defineActionIntentRuntime({
+    slot: "revoke",
+    version: 6,
+    reviewOrder: 4,
+    currentReplica: currentActionIntentReplica,
+    submit: submitAcceptedRevokeIntent,
+    acceptMessage: (intent) => `${actionIntentLabel(intent)} held for local review.`,
+    dismissFallback: "Revoke access request",
+    successMessage: () => "Revoke signed and held for explicit Sync.",
+    busy: () => revokeSubmitting.value,
+    onStatus: () => selectActionIntentStatus("revoke"),
+  }),
 ] as const;
 const postActionIntent = actionIntentDescriptorForSlot("post");
 const postSubmitting = postActionIntent.submitting;
+const revokeIntentSubmitting = actionIntentDescriptorForSlot("revoke").submitting;
 const actionIntentStatus = computed(() => statusForActionIntentSlot(activeActionIntentStatusSlot.value));
 const acceptedIntentReviews = computed<AcceptedIntentReview[]>(() => {
   return actionIntentDescriptors
@@ -603,6 +616,14 @@ async function submitAcceptedGrantIntent(intent: ActionIntentForVersion<5>) {
   return submission.ok ? { ok: true, message: "" } : { ok: false, message: submission.message };
 }
 
+async function submitAcceptedRevokeIntent(intent: ActionIntentForVersion<6>) {
+  const submission = await submitTownshipRevocation({
+    delegationId: intent.authority.delegation,
+    replica: intent.replica,
+  });
+  return submission.ok ? { ok: true, message: "" } : { ok: false, message: submission.message };
+}
+
 async function submitSummary() {
   if (summarySubmitting.value) return;
 
@@ -674,7 +695,7 @@ async function submitGrant() {
 }
 
 async function submitRevoke() {
-  if (revokeSubmitting.value) return;
+  if (revokeSubmitting.value || revokeIntentSubmitting.value) return;
 
   revokeSubmitting.value = true;
   try {
@@ -1854,8 +1875,8 @@ function pairingDiscoveryAdvertFromMessage(value: unknown): TownshipPairingDisco
         />
         <div class="grant-actions">
           <p class="post-message" :data-state="revokeStatusTone">{{ revokeStatusMessage }}</p>
-          <button type="submit" :disabled="revokeSubmitting || revokeDelegationDraft.trim().length === 0">
-            {{ revokeSubmitting ? "Signing" : "Revoke access" }}
+          <button type="submit" :disabled="revokeSubmitting || revokeIntentSubmitting || revokeDelegationDraft.trim().length === 0">
+            {{ revokeSubmitting || revokeIntentSubmitting ? "Signing" : "Revoke access" }}
           </button>
         </div>
       </form>
@@ -1889,6 +1910,7 @@ function pairingDiscoveryAdvertFromMessage(value: unknown): TownshipPairingDisco
       </div>
       <p v-if="pendingActionIntent.v === 1 || pendingActionIntent.v === 3" class="incoming-action-text">{{ pendingActionIntent.command.text }}</p>
       <p v-if="pendingActionIntent.v === 4" class="incoming-action-text">{{ pendingActionIntent.command.member }}</p>
+      <p v-if="pendingActionIntent.v === 6" class="incoming-action-text">{{ pendingActionIntent.authority.delegation }}</p>
       <div class="incoming-action-controls">
         <button type="button" @click="acceptPendingActionIntent">Use request</button>
         <button type="button" class="secondary-action" @click="dismissPendingActionIntent">Dismiss</button>

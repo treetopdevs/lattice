@@ -2,9 +2,11 @@
 
 ## Status
 
-IN PROGRESS - planning and Claude correction review are complete. Plans 141 and 143 are `DONE`;
-hosted run `29358809212` passed all three jobs and the full 42-step unit chain, closing the hard
-start gate. Implementation now proceeds one pre-agreed RED -> GREEN seam at a time.
+IN PROGRESS - implementation and every required local gate are green. The exact v6 request,
+installed-app ceremony, deterministic Sim oracle, authenticated carrier state report, and packaged
+issuer/recipient proof were built one pre-agreed RED -> GREEN seam at a time. Full local
+`npm run app:convergence`, OTP 28 `mix check`, both Sobelow scans, and Claude's final no-P0-P2
+review are green. The required hosted flagship run is still pending, so this plan is not `DONE`.
 
 ## Objective
 
@@ -219,7 +221,7 @@ These are the public seams for this goal. Work one vertical RED -> GREEN slice a
 - Focused `TownshipWeb.ActionIntent` and connected `InstrumentLive` tests.
 - `TownshipRevocationHandoffScenario` tests.
 - `npm run action-intent:contract`
-- `npm run dispatcher:contract`
+- `npm run deeplink:dispatcher:contract`
 - `npm run intent-ui:contract`
 - `npm run runtime:wiring:contract`
 - `npm run action:contract`
@@ -260,8 +262,9 @@ These are the public seams for this goal. Work one vertical RED -> GREEN slice a
 - No claim that carrier acceptance confirms a specific revocation or removes access globally.
 - No claim that every future command is blocked; the proof covers one causally later command under
   the selected delegation.
-- No general TypeScript-reducer revocation-enforcement claim beyond the exact Sim-conformant
-  scenario; Plan 059 owns live-BEAM authority semantics.
+- No claim that TypeScript independently recomputes delegation revocation. The packaged shell
+  consumes an authenticated carrier BEAM authority report only after independently verifying the
+  exact signed frame set; the deterministic Sim scenario and Plan 059 own the semantic oracle.
 - Revoke creates no delegation evidence and does not remove or rewrite existing frames.
 - No succession, role transfer, production listener, TLS, deployment, cross-device transfer,
   mobile custody change, complete G1/Phase G, or receipt-free W4.
@@ -307,3 +310,8 @@ fresh LiveView preparation, inert Use, native-custody Sign, retained evidence, a
 are proven; an isolated recipient pulls the revoke before an exact later command reduces as
 Sim-derived `revoked_capability` with delegation attribution; the full local and hosted gates are
 green; and Claude's final review has no unresolved P0-P2 finding.
+
+As of 2026-07-14, all listed local evidence is green, including the mandatory v1-v6 packaged
+convergence chain. The hosted artifact, unit/property/static/security, and packaged macOS jobs have
+not yet run against this working-tree implementation; that single gate keeps the status
+`IN PROGRESS`.

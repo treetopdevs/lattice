@@ -8,7 +8,6 @@ import {
 } from "../src/township_deep_link_dispatcher";
 import type {
   TownshipActionIntent,
-  TownshipReviewableActionIntent,
 } from "../src/township_action_intent";
 
 interface ActionIntentFixture {
@@ -41,6 +40,11 @@ interface GrantActionIntentFixture {
   url: string;
 }
 
+interface RevokeActionIntentFixture {
+  payload: Extract<TownshipActionIntent, { v: 6 }>;
+  url: string;
+}
+
 console.log("\n▸ Township participant deep-link dispatcher");
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -65,10 +69,13 @@ const admitFixture = JSON.parse(
 const grantFixture = JSON.parse(
   readFileSync(join(here, "fixtures", "township_grant_action_intent_v5.json"), "utf8"),
 ) as GrantActionIntentFixture;
+const revokeFixture = JSON.parse(
+  readFileSync(join(here, "fixtures", "township_revoke_action_intent_v6.json"), "utf8"),
+) as RevokeActionIntentFixture;
 const pairingUrl = "township://pairing?handoff=township-pairing:v1:not-json";
 const androidPairingUrl = "township://nohost/_pairing/township-pairing_3Av1_3Anot-json";
 const calls: string[] = [];
-const staged: TownshipReviewableActionIntent[] = [];
+const staged: TownshipActionIntent[] = [];
 const rejected: string[] = [];
 const other: string[] = [];
 const traces: TownshipActionIntentTrace[] = [];
@@ -152,6 +159,14 @@ assert.deepEqual(traces.slice(-2), [
   { intentId: grantFixture.payload.id, outcome: "staged" },
   { intentId: grantFixture.payload.id, outcome: "staged" },
 ]);
+
+expectedReplica = revokeFixture.payload.replica;
+const stagedBeforeRevoke = staged.length;
+const rejectedBeforeRevoke = rejected.length;
+opened([revokeFixture.url]);
+assert.deepEqual(staged.slice(stagedBeforeRevoke), [revokeFixture.payload]);
+assert.equal(rejected.length, rejectedBeforeRevoke);
+assert.deepEqual(traces.at(-1), { intentId: revokeFixture.payload.id, outcome: "staged" });
 
 opened(["township://action?intent=not-base64url!"]);
 assert.equal(rejected.at(-1), "invalid_action");

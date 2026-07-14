@@ -26,6 +26,7 @@ defmodule LatticeCarrierServer do
 
     with :ok <- validate_identity(Keyword.get(opts, :identity)),
          :ok <- validate_trusted_peers(trusted_peers),
+         :ok <- validate_state_reporter(Keyword.get(opts, :state_reporter)),
          :ok <- validate_relay_realms(relay_realms, trusted_peers, Keyword.get(opts, :source)) do
       Supervisor.start_link(__MODULE__, opts)
     end
@@ -60,7 +61,12 @@ defmodule LatticeCarrierServer do
     holder = Holder.via(instance)
 
     children = [
-      {Holder, name: holder, identity: identity, source: source, relay_realms: relay_realms},
+      {Holder,
+       name: holder,
+       identity: identity,
+       source: source,
+       relay_realms: relay_realms,
+       state_reporter: Keyword.get(opts, :state_reporter)},
       Listener.child_spec(
         instance: instance,
         holder: holder,
@@ -94,6 +100,22 @@ defmodule LatticeCarrierServer do
   end
 
   defp validate_trusted_peers(_peers), do: {:error, {:invalid_config, :trusted_peers}}
+
+  defp validate_state_reporter(nil), do: :ok
+
+  defp validate_state_reporter(module) when is_atom(module) do
+    case Code.ensure_loaded(module) do
+      {:module, ^module} ->
+        if function_exported?(module, :report, 1),
+          do: :ok,
+          else: {:error, {:invalid_config, :state_reporter}}
+
+      {:error, _reason} ->
+        {:error, {:invalid_config, :state_reporter}}
+    end
+  end
+
+  defp validate_state_reporter(_reporter), do: {:error, {:invalid_config, :state_reporter}}
 
   defp validate_relay_realms([], _trusted_peers, _source), do: :ok
 

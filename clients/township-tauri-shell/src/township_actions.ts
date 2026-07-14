@@ -57,7 +57,8 @@ export type TownshipRevocationFailureReason =
   | "empty_delegation"
   | "missing_delegation"
   | "native_unavailable"
-  | "not_issuer";
+  | "not_issuer"
+  | "replica_mismatch";
 
 interface TownshipCommandOptions extends TownshipNativeWorkflowOptions {
   replica?: string;
@@ -291,6 +292,7 @@ export async function submitTownshipRevocation(
   options: SubmitTownshipRevocationOptions,
 ): Promise<TownshipRevocationSubmission> {
   const delegationId = options.delegationId.trim();
+  const replica = options.replica ?? TOWNSHIP_REPLICA;
   if (delegationId.length === 0) {
     return { ok: false, reason: "empty_delegation", message: "Enter a delegation id before revoking access." };
   }
@@ -317,6 +319,14 @@ export async function submitTownshipRevocation(
       };
     }
 
+    if (delegation.replica !== replica) {
+      return {
+        ok: false,
+        reason: "replica_mismatch",
+        message: "Local delegation evidence belongs to a different replica.",
+      };
+    }
+
     // UX guard only. Replica authority still enforces issuer/root revocation during sync.
     if (delegation.issuer !== bytesBase64(workflow.signer.publicKey)) {
       return {
@@ -329,7 +339,7 @@ export async function submitTownshipRevocation(
     const persisted = await withTownshipPersistenceWrite(workflow, async () => {
       const localOps = await workflow.localLog.load();
       const frame = await authorTownshipRevocation({
-        replica: options.replica ?? TOWNSHIP_REPLICA,
+        replica,
         deps: frontier(localOps),
         delegationId,
         signer: workflow.signer,

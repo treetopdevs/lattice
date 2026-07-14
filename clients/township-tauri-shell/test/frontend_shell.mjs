@@ -170,7 +170,10 @@ test("Vue source mounts a reducer-backed Township matter surface", () => {
   assert.match(indexHtml, /<div id="app"><\/div>/);
   assert.match(main, /createApp\(App\)\.mount\("#app"\)/);
   assert.match(preview, /from "@treetopdevs\/lattice-client"/);
-  assert.match(preview, /materialize\(townshipMatterSchema, ops\)/);
+  assert.match(
+    preview,
+    /materialize\(\s*townshipMatterSchema,\s*ops,\s*undefined,\s*externallyQuarantined,?\s*\)/,
+  );
   assert.match(preview, /export function townshipPreview/);
   assert.match(preview, /export function townshipPreviewFromOps/);
   assert.match(preview, /Zoning Variance #24/);
@@ -303,15 +306,23 @@ test("Vue source exposes a cap grant ceremony", () => {
 test("Vue source exposes a pending-sync revocation ceremony", () => {
   const app = readText("src/App.vue");
   const actions = readText("src/township_actions.ts");
+  const acceptedRevoke = asyncFunctionSource(app, "submitAcceptedRevokeIntent");
+  const manualRevoke = asyncFunctionSource(app, "submitRevoke");
 
   assert.match(actions, /export async function submitTownshipRevocation/);
   assert.match(app, /submitTownshipRevocation/);
+  assert.match(acceptedRevoke, /delegationId: intent\.authority\.delegation/);
+  assert.match(acceptedRevoke, /replica: intent\.replica/);
+  assert.doesNotMatch(acceptedRevoke, /\bsyncTownshipOutbox\s*\(|\bsyncOutbox\s*\(/);
   assert.match(app, /revokeDelegationDraft/);
   assert.match(app, /revokeStatus/);
   assert.match(app, /revokeSubmitting/);
+  assert.match(app, /const revokeIntentSubmitting = actionIntentDescriptorForSlot\("revoke"\)\.submitting/);
+  assert.match(manualRevoke, /if \(revokeSubmitting\.value \|\| revokeIntentSubmitting\.value\) return/);
   assert.match(app, /submitRevoke/);
   assert.match(app, /Delegation id/);
   assert.match(app, /Revoke access/);
+  assert.match(app, /:disabled="revokeSubmitting \|\| revokeIntentSubmitting \|\| revokeDelegationDraft\.trim\(\)\.length === 0"/);
   assert.match(app, /pending carrier sync/);
   assert.doesNotMatch(app, /access revoked/i);
 });
@@ -1222,7 +1233,11 @@ test("Vue persistence entry points guard async re-entry", () => {
     ["submitMatterStatus", "if (statusSubmitting.value !== null) return;", "statusSubmitting.value = command;"],
     ["submitMemberCommand", "if (memberSubmitting.value !== null) return;", "memberSubmitting.value = command;"],
     ["submitGrant", "if (grantSubmitting.value) return;", "grantSubmitting.value = true;"],
-    ["submitRevoke", "if (revokeSubmitting.value) return;", "revokeSubmitting.value = true;"],
+    [
+      "submitRevoke",
+      "if (revokeSubmitting.value || revokeIntentSubmitting.value) return;",
+      "revokeSubmitting.value = true;",
+    ],
     ["syncOutbox", "if (syncSubmitting.value) return;", "syncSubmitting.value = true;"],
     ["submitPairing", "if (pairingSubmitting.value) return;", "pairingSubmitting.value = true;"],
   ];

@@ -1,0 +1,12 @@
+{
+  "payload": {
+    "v": 6,
+    "id": "fedcba9876543210fedcba9876543210",
+    "replica": "replica:matter:one",
+    "authority": {
+      "action": "revoke",
+      "delegation": "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI"
+    }
+  },
+  "url": "township://action?intent=eyJ2Ijo2LCJpZCI6ImZlZGNiYTk4NzY1NDMyMTBmZWRjYmE5ODc2NTQzMjEwIiwicmVwbGljYSI6InJlcGxpY2E6bWF0dGVyOm9uZSIsImF1dGhvcml0eSI6eyJhY3Rpb24iOiJyZXZva2UiLCJkZWxlZ2F0aW9uIjoiUWtKQ1FrSkNRa0pDUWtKQ1FrSkNRa0pDUWtKQ1FrSkNRa0pDUWtKQ1FrSSJ9fQ"
+}

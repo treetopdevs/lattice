@@ -132,8 +132,16 @@ export function townshipPreview(): TownshipMatterPreview {
   return townshipPreviewFromOps(townshipMatterOps);
 }
 
-export function townshipPreviewFromOps(ops: Op[]): TownshipMatterPreview {
-  const materialized = materialize(townshipMatterSchema, ops);
+export function townshipPreviewFromOps(
+  ops: Op[],
+  externallyQuarantined: ReadonlySet<string> = new Set(),
+): TownshipMatterPreview {
+  const materialized = materialize(
+    townshipMatterSchema,
+    ops,
+    undefined,
+    externallyQuarantined,
+  );
   const state = materialized.state;
 
   return {

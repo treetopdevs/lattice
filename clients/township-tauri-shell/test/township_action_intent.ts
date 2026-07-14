@@ -80,6 +80,19 @@ interface GrantActionIntentFixture {
   url: string;
 }
 
+interface RevokeActionIntentFixture {
+  payload: {
+    v: 6;
+    id: string;
+    replica: string;
+    authority: {
+      action: "revoke";
+      delegation: string;
+    };
+  };
+  url: string;
+}
+
 console.log("\n▸ Township action-intent contract");
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -104,6 +117,9 @@ const admitFixture = JSON.parse(
 const grantFixture = JSON.parse(
   readFileSync(join(here, "fixtures", "township_grant_action_intent_v5.json"), "utf8"),
 ) as GrantActionIntentFixture;
+const revokeFixture = JSON.parse(
+  readFileSync(join(here, "fixtures", "township_revoke_action_intent_v6.json"), "utf8"),
+) as RevokeActionIntentFixture;
 
 assert.deepEqual(parseTownshipActionIntentDeepLink(fixture.url), {
   ok: true,
@@ -189,6 +205,46 @@ assert.deepEqual(parseTownshipActionIntentDeepLink(grantFixture.url), {
   ok: true,
   intent: grantFixture.payload,
 });
+assert.deepEqual(parseTownshipActionIntentDeepLink(revokeFixture.url), {
+  ok: true,
+  intent: revokeFixture.payload,
+});
+
+const delegationId = revokeFixture.payload.authority.delegation;
+
+for (const delegation of [
+  "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJ",
+  ` ${delegationId}`,
+  `${delegationId} `,
+  `${delegationId}=`,
+  delegationId.slice(0, -1),
+  Buffer.alloc(31, 0x42).toString("base64url"),
+  Buffer.alloc(33, 0x42).toString("base64url"),
+  Buffer.alloc(32, 0xff).toString("base64").replace(/=+$/, ""),
+  "",
+  42,
+  null,
+]) {
+  assertInvalidPayload({
+    ...revokeFixture.payload,
+    authority: { ...revokeFixture.payload.authority, delegation },
+  });
+}
+
+for (const authority of [
+  { ...revokeFixture.payload.authority, action: "grant" },
+  { ...revokeFixture.payload.authority, cap: "smuggled" },
+]) {
+  assertInvalidPayload({ ...revokeFixture.payload, authority });
+}
+
+for (const payload of [
+  { ...revokeFixture.payload, command: { command: "post", text: "smuggled" } },
+  { ...revokeFixture.payload, deps: [] },
+  { ...revokeFixture.payload, issuer: "smuggled" },
+]) {
+  assertInvalidPayload(payload);
+}
 
 const reopenPayload: StatusActionIntentFixture["payload"] = {
   ...statusFixture.payload,
@@ -233,7 +289,7 @@ assert.deepEqual(
   },
 );
 
-assert.deepEqual(parseTownshipActionIntentDeepLink(actionUrl({ ...fixture.payload, v: 6 })), {
+assert.deepEqual(parseTownshipActionIntentDeepLink(actionUrl({ ...fixture.payload, v: 7 })), {
   ok: false,
   reason: "unsupported_action_version",
   message: "Township action request invalid: unsupported version.",

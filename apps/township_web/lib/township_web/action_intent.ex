@@ -11,6 +11,7 @@ defmodule TownshipWeb.ActionIntent do
   @max_member_bytes 4_096
   @resident_grant_ops ["admit", "post", "set_summary", "set_title"]
   @intent_id_regex ~r/\A[0-9a-f]{32}\z/
+  @delegation_id_regex ~r/\A[A-Za-z0-9_-]{43}\z/
   @ascii_edge_whitespace ~r/\A[\x09-\x0D\x20]+|[\x09-\x0D\x20]+\z/u
 
   @spec post_url(String.t(), String.t(), keyword()) ::
@@ -154,6 +155,32 @@ defmodule TownshipWeb.ActionIntent do
     end
   end
 
+  @spec revoke_url(String.t(), String.t(), keyword()) ::
+          {:ok, String.t()}
+          | {:error, :invalid_replica | :invalid_delegation | :invalid_intent_id}
+  def revoke_url(replica, delegation, opts \\ []) do
+    intent_id = Keyword.get_lazy(opts, :intent_id, &new_intent_id/0)
+
+    with {:ok, replica} <- normalize_replica(replica),
+         {:ok, delegation} <- normalize_delegation(delegation),
+         :ok <- validate_intent_id(intent_id) do
+      payload =
+        Jason.OrderedObject.new([
+          {"v", 6},
+          {"id", intent_id},
+          {"replica", replica},
+          {"authority",
+           Jason.OrderedObject.new([
+             {"action", "revoke"},
+             {"delegation", delegation}
+           ])}
+        ])
+
+      encoded = payload |> Jason.encode!() |> Base.url_encode64(padding: false)
+      {:ok, "township://action?intent=#{encoded}"}
+    end
+  end
+
   defp normalize_replica(replica) when is_binary(replica) do
     if String.valid?(replica) do
       replica = trim_ascii_edges(replica)
@@ -219,6 +246,25 @@ defmodule TownshipWeb.ActionIntent do
   end
 
   defp normalize_audience(_audience), do: {:error, :invalid_audience}
+
+  defp normalize_delegation(delegation) when is_binary(delegation) do
+    if String.valid?(delegation) do
+      delegation = trim_ascii_edges(delegation)
+
+      with true <- Regex.match?(@delegation_id_regex, delegation),
+           {:ok, bytes} <- Base.url_decode64(delegation, padding: false),
+           32 <- byte_size(bytes),
+           ^delegation <- Base.url_encode64(bytes, padding: false) do
+        {:ok, delegation}
+      else
+        _invalid -> {:error, :invalid_delegation}
+      end
+    else
+      {:error, :invalid_delegation}
+    end
+  end
+
+  defp normalize_delegation(_delegation), do: {:error, :invalid_delegation}
 
   defp normalize_status_command(:close_matter), do: {:ok, "close_matter"}
   defp normalize_status_command(:reopen_matter), do: {:ok, "reopen_matter"}

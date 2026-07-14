@@ -48,6 +48,16 @@ defmodule TownshipWeb.InstrumentLive do
       error_replica: :replica,
       fallback: :clear
     },
+    revoke: %{
+      kind: :form,
+      forms: [%{assign: :revoke_intent_form, as: :revoke, field: "delegation"}],
+      url: :revoke_intent_url,
+      replica: :revoke_intent_replica,
+      error: :revoke_intent_error,
+      command: nil,
+      error_replica: :replica,
+      fallback: :clear
+    },
     roster: %{
       kind: :form,
       forms: [
@@ -98,6 +108,12 @@ defmodule TownshipWeb.InstrumentLive do
       param: {"grant", "audience"},
       form: :grant_intent_form,
       builder: :grant
+    },
+    "prepare_revoke" => %{
+      slot: :revoke,
+      param: {"revoke", "delegation"},
+      form: :revoke_intent_form,
+      builder: :revoke
     },
     "prepare_admit" => %{
       slot: :roster,
@@ -190,6 +206,9 @@ defmodule TownshipWeb.InstrumentLive do
 
   defp build_intent_url(:grant, replica, value, _command),
     do: ActionIntent.grant_url(replica, value)
+
+  defp build_intent_url(:revoke, replica, value, _command),
+    do: ActionIntent.revoke_url(replica, value)
 
   defp build_intent_url({:roster, command}, replica, value, _slot_command),
     do: ActionIntent.roster_url(replica, command, value)
@@ -410,6 +429,9 @@ defmodule TownshipWeb.InstrumentLive do
 
   defp action_intent_error(:invalid_audience),
     do: "Enter a canonical recipient public key before opening the app."
+
+  defp action_intent_error(:invalid_delegation),
+    do: "Enter a canonical delegation id before opening the app."
 
   defp action_intent_error(_reason), do: "The participant action could not be prepared."
 

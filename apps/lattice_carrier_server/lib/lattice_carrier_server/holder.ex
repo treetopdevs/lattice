@@ -37,6 +37,9 @@ defmodule LatticeCarrierServer.Holder do
           {:ok, Sync.report()} | {:error, term()}
   def relay(holder, peer_realm, op), do: GenServer.call(holder, {:relay, peer_realm, op})
 
+  @spec state_report(GenServer.server()) :: {:ok, map()} | {:error, :read_only}
+  def state_report(holder), do: GenServer.call(holder, :state_report)
+
   @spec subscribe(GenServer.server(), pid()) :: {:ok, map()}
   def subscribe(holder, subscriber) when is_pid(subscriber) do
     GenServer.call(holder, {:subscribe, subscriber})
@@ -65,6 +68,7 @@ defmodule LatticeCarrierServer.Holder do
            identity: identity,
            log: log,
            source: source,
+           state_reporter: Keyword.get(opts, :state_reporter),
            relay_realms: opts |> Keyword.fetch!(:relay_realms) |> MapSet.new(),
            subscribers: %{}
          }}
@@ -85,6 +89,14 @@ defmodule LatticeCarrierServer.Holder do
 
   def handle_call({:missing_for, have_ids}, _from, state) do
     {:reply, Sync.missing(state.log, MapSet.new(have_ids)), state}
+  end
+
+  def handle_call(:state_report, _from, %{state_reporter: nil} = state) do
+    {:reply, {:error, :read_only}, state}
+  end
+
+  def handle_call(:state_report, _from, %{state_reporter: reporter} = state) do
+    {:reply, {:ok, reporter.report(state.log)}, state}
   end
 
   def handle_call({:subscribe, subscriber}, _from, state) do

@@ -250,10 +250,12 @@ assert.equal(persistedGrantAvailability.commands.post.capId, residentGrantId);
 
 assert.deepEqual(vector.authorityRevocation.revokeOp.deps, vector.expectAfterSync.frontier);
 const clerkRevokeValues = townshipValues(vector.oracleCarrierOps);
+const clerkRevokeEvidence = clerkRevokeValues.get(storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY));
 const clerkRevokeCalls: string[] = [];
 const clerkRevokeSubmitted = await submitTownshipRevocation({
   invoke: nativeInvoke(clerkRevokeValues, clerkIdentity, clerkRevokeCalls),
   delegationId: vector.authorityRevocation.delegationId,
+  replica: vector.replica,
 });
 
 assert.equal(clerkRevokeSubmitted.ok, true);
@@ -272,8 +274,27 @@ assert.deepEqual(
   storedDelegationFrames(clerkRevokeValues).map((frame) => frame.id),
   vector.oracleCarrierOps.map((frame) => frame.id),
 );
+assert.equal(clerkRevokeValues.get(storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY)), clerkRevokeEvidence);
 assert.equal(clerkRevokeCalls.filter((command) => command === "lattice_sign_carrier").length, 1);
 assert.doesNotThrow(() => assertTownshipKvStoresNoSecrets(clerkRevokeValues, secretNeedles(clerkIdentity)));
+
+const mismatchedRevokeValues = townshipValues(vector.oracleCarrierOps);
+const mismatchedRevokeEvidence = mismatchedRevokeValues.get(storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY));
+const mismatchedRevokeCalls: string[] = [];
+const mismatchedRevoke = await submitTownshipRevocation({
+  invoke: nativeInvoke(mismatchedRevokeValues, clerkIdentity, mismatchedRevokeCalls),
+  delegationId: vector.authorityRevocation.delegationId,
+  replica: vector.replica.replace("township-g1", "township-g2"),
+});
+assert.equal(mismatchedRevoke.ok, false);
+if (mismatchedRevoke.ok) throw new Error("cross-replica revoke unexpectedly succeeded");
+assert.equal(mismatchedRevoke.reason, "replica_mismatch");
+assert.equal(mismatchedRevokeCalls.filter((command) => command === "lattice_sign_carrier").length, 0);
+assert.equal(mismatchedRevokeCalls.filter((command) => command === "lattice_kv_set").length, 0);
+assert.equal(
+  mismatchedRevokeValues.get(storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY)),
+  mismatchedRevokeEvidence,
+);
 
 const emptyRevokeCalls: string[] = [];
 const emptyRevoke = await submitTownshipRevocation({
@@ -286,6 +307,7 @@ assert.equal(emptyRevoke.reason, "empty_delegation");
 assert.equal(emptyRevokeCalls.length, 0);
 
 const unknownRevokeValues = townshipValues(vector.oracleCarrierOps);
+const unknownRevokeEvidence = unknownRevokeValues.get(storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY));
 const unknownRevokeCalls: string[] = [];
 const unknownRevoke = await submitTownshipRevocation({
   invoke: nativeInvoke(unknownRevokeValues, clerkIdentity, unknownRevokeCalls),
@@ -295,10 +317,13 @@ assert.equal(unknownRevoke.ok, false);
 if (unknownRevoke.ok) throw new Error("unknown delegation revoke unexpectedly succeeded");
 assert.equal(unknownRevoke.reason, "missing_delegation");
 assert.equal(unknownRevokeCalls.filter((command) => command === "lattice_sign_carrier").length, 0);
+assert.equal(unknownRevokeCalls.filter((command) => command === "lattice_kv_set").length, 0);
 assert.deepEqual(storedCarrierFrames(unknownRevokeValues), []);
 assert.deepEqual(storedLocalOps(unknownRevokeValues).map((op) => op.id), vector.oracleCarrierOps.map((frame) => frame.id));
+assert.equal(unknownRevokeValues.get(storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY)), unknownRevokeEvidence);
 
 const residentBadRevokeValues = townshipValues(vector.oracleCarrierOps);
+const residentBadRevokeEvidence = residentBadRevokeValues.get(storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY));
 const residentBadRevokeCalls: string[] = [];
 const residentBadRevoke = await submitTownshipRevocation({
   invoke: nativeInvoke(residentBadRevokeValues, residentIdentity, residentBadRevokeCalls),
@@ -308,11 +333,16 @@ assert.equal(residentBadRevoke.ok, false);
 if (residentBadRevoke.ok) throw new Error("resident bad revoke unexpectedly succeeded");
 assert.equal(residentBadRevoke.reason, "not_issuer");
 assert.equal(residentBadRevokeCalls.filter((command) => command === "lattice_sign_carrier").length, 0);
+assert.equal(residentBadRevokeCalls.filter((command) => command === "lattice_kv_set").length, 0);
 assert.deepEqual(storedCarrierFrames(residentBadRevokeValues), []);
 assert.deepEqual(storedLocalOps(residentBadRevokeValues).map((op) => op.id), vector.oracleCarrierOps.map((frame) => frame.id));
 assert.deepEqual(
   storedDelegationFrames(residentBadRevokeValues).map((frame) => frame.id),
   vector.oracleCarrierOps.map((frame) => frame.id),
+);
+assert.equal(
+  residentBadRevokeValues.get(storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY)),
+  residentBadRevokeEvidence,
 );
 
 const emptyGrantAudienceCalls: string[] = [];

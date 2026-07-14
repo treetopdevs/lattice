@@ -50,12 +50,23 @@ export interface TownshipGrantActionIntent {
   };
 }
 
+export interface TownshipRevokeActionIntent {
+  v: 6;
+  id: string;
+  replica: string;
+  authority: {
+    action: "revoke";
+    delegation: string;
+  };
+}
+
 export type TownshipReviewableActionIntent =
   | TownshipPostActionIntent
   | TownshipStatusActionIntent
   | TownshipFieldActionIntent
   | TownshipRosterActionIntent
-  | TownshipGrantActionIntent;
+  | TownshipGrantActionIntent
+  | TownshipRevokeActionIntent;
 
 export type TownshipActionIntent = TownshipReviewableActionIntent;
 
@@ -74,6 +85,7 @@ const MAX_URL_BYTES = 8_192;
 const INTENT_ID = /^[0-9a-f]{32}$/;
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
 const PADDED_BASE64_32_BYTES = /^[A-Za-z0-9+/]{43}=$/;
+const UNPADDED_BASE64URL_32_BYTES = /^[A-Za-z0-9_-]{43}$/;
 const RESIDENT_GRANT_OPS = ["admit", "post", "set_summary", "set_title"] as const;
 
 export function parseTownshipActionIntentDeepLink(value: string): TownshipActionIntentParse {
@@ -114,7 +126,7 @@ export function parseTownshipActionIntentDeepLink(value: string): TownshipAction
   }
 
   if (!isRecord(payload)) return payloadError();
-  if (payload.v !== 1 && payload.v !== 2 && payload.v !== 3 && payload.v !== 4 && payload.v !== 5) {
+  if (payload.v !== 1 && payload.v !== 2 && payload.v !== 3 && payload.v !== 4 && payload.v !== 5 && payload.v !== 6) {
     return {
       ok: false,
       reason: "unsupported_action_version",
@@ -122,7 +134,7 @@ export function parseTownshipActionIntentDeepLink(value: string): TownshipAction
     };
   }
 
-  const outerKeys = payload.v === 5 ? ["authority", "id", "replica", "v"] : ["command", "id", "replica", "v"];
+  const outerKeys = payload.v === 5 || payload.v === 6 ? ["authority", "id", "replica", "v"] : ["command", "id", "replica", "v"];
   if (!exactKeys(payload, outerKeys)) return payloadError();
   if (typeof payload.id !== "string" || !INTENT_ID.test(payload.id)) return payloadError();
   if (!canonicalBoundedString(payload.replica, MAX_REPLICA_BYTES)) return payloadError();
@@ -139,6 +151,18 @@ export function parseTownshipActionIntentDeepLink(value: string): TownshipAction
     return {
       ok: true,
       intent: payload as unknown as TownshipGrantActionIntent,
+    };
+  }
+
+  if (payload.v === 6) {
+    if (!isRecord(payload.authority)) return payloadError();
+    if (!exactKeys(payload.authority, ["action", "delegation"])) return payloadError();
+    if (payload.authority.action !== "revoke") return payloadError();
+    if (!canonicalDelegationId(payload.authority.delegation)) return payloadError();
+
+    return {
+      ok: true,
+      intent: payload as unknown as TownshipRevokeActionIntent,
     };
   }
 
@@ -214,6 +238,23 @@ function canonicalPublicKey(value: unknown): value is string {
   try {
     const decoded = globalThis.atob(value);
     return decoded.length === 32 && globalThis.btoa(decoded) === value;
+  } catch {
+    return false;
+  }
+}
+
+function canonicalDelegationId(value: unknown): value is string {
+  if (typeof value !== "string" || !UNPADDED_BASE64URL_32_BYTES.test(value)) return false;
+
+  try {
+    const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+    const decoded = globalThis.atob(`${normalized}=`);
+    const reencoded = globalThis
+      .btoa(decoded)
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+    return decoded.length === 32 && reencoded === value;
   } catch {
     return false;
   }

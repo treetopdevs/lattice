@@ -2,10 +2,11 @@ defmodule LatticeCarrierServerTest do
   use ExUnit.Case, async: false
 
   alias Lattice.Carrier.{Session, Telemetry, WebSocket, Wire}
-  alias Lattice.{Identity, Log, Op}
+  alias Lattice.{Identity, Log, Op, Sim}
   alias Lattice.Transport.WebSocket.Client
   alias LatticeCarrierServer.Holder
   alias LatticeCarrierServer.WebSocket, as: ServerWebSocket
+  alias Township.{CarrierStateReport, Matter}
 
   @replica "replica:carrier-server:test"
 
@@ -44,6 +45,49 @@ defmodule LatticeCarrierServerTest do
 
     assert {:ok, [pulled], connection} = WebSocket.pull(connection, MapSet.new())
     assert pulled == op
+    assert :ok = WebSocket.close(connection)
+  end
+
+  test "an authenticated client reads an opt-in Township state report" do
+    server_identity = Identity.from_seed("town-node", "carrier-server-state-report")
+    client_identity = Identity.from_seed("instrument", "carrier-state-report-client")
+
+    sim =
+      Sim.new(Matter, "replica:matter:stable-state-report", ["clerk"],
+        seed: "stable-state-report"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    log = Sim.log(sim, "clerk")
+    instance = {:test, System.unique_integer([:positive])}
+
+    start_supervised!(
+      {LatticeCarrierServer,
+       instance: instance,
+       identity: server_identity,
+       trusted_peers: %{client_identity.realm_id => client_identity.pub},
+       state_reporter: CarrierStateReport,
+       source: {:log, log},
+       listener: [ip: {127, 0, 0, 1}, port: 0]}
+    )
+
+    assert {:ok, connection} =
+             WebSocket.connect(
+               hostname: "127.0.0.1",
+               port: LatticeCarrierServer.port(instance),
+               identity: client_identity,
+               realm: client_identity.realm_id,
+               peer_realm: server_identity.realm_id,
+               peer_pubkey: server_identity.pub,
+               replica: log.replica
+             )
+
+    assert {:ok, report} = WebSocket.state_report(connection)
+    assert report["op_ids"] == log |> Log.op_ids() |> Enum.sort()
+    assert report["log_size"] == Log.size(log)
+    assert report["authority_quarantine"] == []
+    expected_state_b64 = CarrierStateReport.report(log).state_b64
+    assert Base.decode64!(report["state_b64"]) == Base.decode64!(expected_state_b64)
     assert :ok = WebSocket.close(connection)
   end
 
@@ -1039,6 +1083,16 @@ defmodule LatticeCarrierServerTest do
                instance: {:invalid_trusted_peers, make_ref()},
                identity: identity,
                trusted_peers: %{"instrument" => :not_a_public_key},
+               source: {:log, log},
+               listener: [port: 0]
+             )
+
+    assert {:error, {:invalid_config, :state_reporter}} =
+             LatticeCarrierServer.start_link(
+               instance: {:invalid_state_reporter, make_ref()},
+               identity: identity,
+               trusted_peers: %{"instrument" => Identity.from_seed("instrument", "client").pub},
+               state_reporter: String,
                source: {:log, log},
                listener: [port: 0]
              )

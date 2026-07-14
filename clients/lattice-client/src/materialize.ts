@@ -44,15 +44,16 @@ export interface Materialized {
 
 /**
  * Materialize a replica from ops. `included` optionally bounds the visible set
- * (a frontier); default is all ops. This is a pure function of (schema, ops,
- * frontier) — the same inputs that `Lattice.Sim` reduces in Elixir, which is
- * why Sim can serve as the conformance oracle: for any scenario, this must
- * reproduce Sim's state, quarantine set, and order exactly.
+ * (a frontier); default is all ops. `externallyQuarantined` seeds decisions from
+ * an external authority oracle while retaining those ops in canonical order.
+ * This is a pure function of its inputs, so Sim can remain the conformance
+ * oracle for state, quarantine, and order.
  */
 export function materialize(
   schema: ReplicaSchema,
   ops: Op[],
-  included?: Set<string>,
+  included?: ReadonlySet<string>,
+  externallyQuarantined: ReadonlySet<string> = new Set(),
 ): Materialized {
   const byId = index(ops);
   const inc = included ?? new Set(ops.map((o) => o.id));
@@ -61,20 +62,31 @@ export function materialize(
     ops.filter((o) => inc.has(o.id)),
     byId,
   );
+  const authorityIncluded = new Set(
+    [...inc].filter((id) => !externallyQuarantined.has(id)),
+  );
+  const authorityOrder = order.filter((id) => authorityIncluded.has(id));
   const depthCache = new Map<string, number>();
   const depthOf = (id: string) => depth(id, byId, depthCache);
   const ancCache = new Map<string, Set<string>>();
   let authority;
   try {
-    authority = analyzeAuthority(schema, ops, inc, order, byId);
+    authority = analyzeAuthority(schema, ops, authorityIncluded, authorityOrder, byId);
   } catch (error) {
-    const role = authorityFailureRole(schema, ops, inc);
-    throw new V01UnvalidatedAuthorityError(role, authorityWriteCount(schema, ops, inc), error);
+    const role = authorityFailureRole(schema, ops, authorityIncluded);
+    throw new V01UnvalidatedAuthorityError(
+      role,
+      authorityWriteCount(schema, ops, authorityIncluded),
+      error,
+    );
   }
 
   // 1. quarantine pass (deps-decidable, over the included set)
   const quarantine: string[] = [];
-  const quarantined = new Set(authority.quarantinedWrites);
+  const quarantined = new Set([
+    ...authority.quarantinedWrites,
+    ...externallyQuarantined,
+  ]);
   for (const id of order) {
     const op = byId.get(id)!;
     if (quarantined.has(id)) {

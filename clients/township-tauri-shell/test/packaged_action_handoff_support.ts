@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  appBundleProcessIds,
   createPackagedActionHandoffHarness,
   delay,
   escapeRegex,
@@ -70,6 +71,19 @@ try {
   );
 
   assert.equal(escapeRegex("a+b?."), "a\\+b\\?\\.");
+  assert.deepEqual(
+    appBundleProcessIds(
+      [
+        "  101 /tmp/Township.app/Contents/MacOS/township-tauri-shell",
+        "  102 /usr/bin/open -n -W /tmp/Township.app",
+        "  103 /usr/bin/grep /tmp/Township.app/Contents/MacOS/",
+        "  104 /tmp/Township.app/Contents/Maco",
+        "  105 /tmp/Other.app/Contents/MacOS/township-tauri-shell",
+      ].join("\n"),
+      "/tmp/Township.app",
+    ),
+    [101],
+  );
   await delay(1);
 } finally {
   rmSync(root, { recursive: true, force: true });

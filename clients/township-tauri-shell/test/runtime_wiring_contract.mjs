@@ -39,6 +39,10 @@ test("the shell exposes every packaged action gate in convergence order", () => 
     scripts["tauri:delegation-grant-handoff:smoke"],
     "tsx test/tauri_delegation_grant_handoff_smoke.ts",
   );
+  assert.equal(
+    scripts["tauri:revocation-action-handoff:smoke"],
+    "tsx test/tauri_revoke_access_handoff_smoke.ts",
+  );
 
   const convergence = scripts["app:convergence"];
   const orderedGates = [
@@ -50,6 +54,7 @@ test("the shell exposes every packaged action gate in convergence order", () => 
     "tauri:field-action-handoff:smoke",
     "tauri:roster-action-handoff:smoke",
     "tauri:delegation-grant-handoff:smoke",
+    "tauri:revocation-action-handoff:smoke",
     "tauri:feed:smoke",
   ];
   const offsets = orderedGates.map((gate) => convergence.indexOf(gate));
@@ -82,6 +87,7 @@ test("the release feature and hosted workflow retain the executable gates", () =
     "npm run tauri:field-action-handoff:smoke",
     "npm run tauri:roster-action-handoff:smoke",
     "npm run tauri:delegation-grant-handoff:smoke",
+    "npm run tauri:revocation-action-handoff:smoke",
   ]) {
     assert.ok(workflow.includes(gate), `flagship workflow must run ${gate}`);
   }

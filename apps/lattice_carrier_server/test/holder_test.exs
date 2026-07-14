@@ -6,6 +6,12 @@ defmodule LatticeCarrierServer.HolderTest do
 
   @replica "replica:carrier-holder:test"
 
+  defmodule StateReporter do
+    def report(log) do
+      %{op_ids: log |> Lattice.Log.op_ids() |> Enum.sort(), log_size: Lattice.Log.size(log)}
+    end
+  end
+
   @tag :tmp_dir
   test "startup removes orphaned atomic-dump temp files", %{tmp_dir: tmp_dir} do
     server_identity = Identity.from_seed("town-node", "carrier-holder-orphan-cleanup")
@@ -46,6 +52,39 @@ defmodule LatticeCarrierServer.HolderTest do
     after
       Process.flag(:trap_exit, previous_flag)
     end
+  end
+
+  @tag :tmp_dir
+  test "state reports remain read-only without a configured reporter", %{tmp_dir: tmp_dir} do
+    server_identity = Identity.from_seed("town-node", "carrier-holder-state-read-only")
+    path = Path.join(tmp_dir, "matter.log")
+    assert :ok = @replica |> Log.new() |> Log.dump(path)
+    holder = start_holder(server_identity, path)
+
+    assert {:error, :read_only} = Holder.state_report(holder)
+  end
+
+  @tag :tmp_dir
+  test "configured state reporter receives the current durable log", %{tmp_dir: tmp_dir} do
+    author = Identity.from_seed("author", "carrier-holder-state-reporter-author")
+    server_identity = Identity.from_seed("town-node", "carrier-holder-state-reporter")
+    op = Op.new(author, @replica, [], :command, {:post, "reported"})
+    path = Path.join(tmp_dir, "matter.log")
+    assert :ok = @replica |> Log.new() |> Log.append!(op) |> Log.dump(path)
+
+    holder =
+      start_supervised!(
+        {Holder,
+         name: {:global, {__MODULE__, make_ref()}},
+         identity: server_identity,
+         source: {:path, path},
+         relay_realms: [],
+         state_reporter: StateReporter}
+      )
+
+    assert {:ok, %{op_ids: [op_id], log_size: 1}} = Holder.state_report(holder)
+    assert op_id == op.id
+    assert Holder.op_ids(holder) == [op.id]
   end
 
   @tag :tmp_dir

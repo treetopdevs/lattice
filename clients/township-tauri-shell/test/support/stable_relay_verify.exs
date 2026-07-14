@@ -37,8 +37,12 @@ expected =
     "grant_sound" -> get_in(oracle, ["soundGrant", "after"])
     "grant_recipient_use" -> get_in(oracle, ["recipientUse", "after"])
     "grant_unsound" -> get_in(oracle, ["unsoundUse", "after"])
+    "revocation_pre" -> Map.fetch!(oracle, "source")
+    "revocation_revoke" -> get_in(oracle, ["revoke", "after"])
+    "revocation_final" -> get_in(oracle, ["revokedUse", "after"])
     _mode -> Map.fetch!(oracle, expected_key)
   end
+
 observer = Identity.from_seed(observer_realm, observer_seed)
 server_pubkey = Base.decode64!(server_pubkey_b64)
 port = String.to_integer(port_text)
@@ -146,6 +150,24 @@ if String.starts_with?(mode, "grant_") do
     do: raise("grant source contains an operation by the server or pull-only observer")
 end
 
+if String.starts_with?(mode, "revocation_") do
+  allowed_authors =
+    oracle
+    |> Map.fetch!("sourceAuthorPubkeys")
+    |> Kernel.++([Map.fetch!(oracle, "issuerPubkey"), Map.fetch!(oracle, "recipientPubkey")])
+    |> Enum.map(&Base.decode64!/1)
+    |> MapSet.new()
+
+  unexpected_authors =
+    served_ops
+    |> Enum.map(& &1.author)
+    |> MapSet.new()
+    |> MapSet.difference(allowed_authors)
+
+  if MapSet.size(unexpected_authors) > 0,
+    do: raise("revocation source contains an operation by the server or pull-only observer")
+end
+
 if mode == "authority" do
   denied_id = oracle["authorityInvalidOp"]["id"]
   quarantine = actual["readModel"]["roles"]["quarantine"]
@@ -153,7 +175,6 @@ if mode == "authority" do
   if denied_id not in quarantine, do: raise("authority-invalid operation missing from quarantine")
   if reasons[denied_id] != "no_capability", do: raise("authority-invalid reason mismatch")
 end
-
 
 if mode == "grant_sound" do
   sound_grant_id = get_in(oracle, ["soundGrant", "frame", "id"])
@@ -179,6 +200,28 @@ if mode == "grant_unsound" do
 
   if reasons[unsound_use_id] != "invalid_capability",
     do: raise("unsound grant use reason mismatch")
+end
+
+if mode in ["revocation_pre", "revocation_revoke", "revocation_final"] do
+  pre_revoke_use_id = get_in(oracle, ["preRevokeUse", "frame", "id"])
+
+  if Map.has_key?(actual["readModel"]["roles"]["reasons"], pre_revoke_use_id),
+    do: raise("pre-revoke use unexpectedly quarantined")
+end
+
+if mode in ["revocation_revoke", "revocation_final"] do
+  revoke_id = get_in(oracle, ["revoke", "frame", "id"])
+
+  if Map.has_key?(actual["readModel"]["roles"]["reasons"], revoke_id),
+    do: raise("issuer revoke unexpectedly quarantined")
+end
+
+if mode == "revocation_final" do
+  revoked_use_id = get_in(oracle, ["revokedUse", "frame", "id"])
+  reasons = actual["readModel"]["roles"]["reasons"]
+
+  if reasons[revoked_use_id] != "revoked_capability",
+    do: raise("post-revoke use reason mismatch")
 end
 
 :ok = GenServer.stop(projection, :normal)

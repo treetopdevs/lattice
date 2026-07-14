@@ -38,6 +38,11 @@ defmodule TownshipWeb.ActionIntentTest do
                         __DIR__
                       )
 
+  @revoke_fixture_path Path.expand(
+                         "../../../../clients/township-tauri-shell/test/fixtures/township_revoke_action_intent_v6.json",
+                         __DIR__
+                       )
+
   test "post_url emits the exact custody-free cross-runtime v1 contract" do
     fixture = @fixture_path |> File.read!() |> Jason.decode!()
     payload = fixture["payload"]
@@ -270,6 +275,57 @@ defmodule TownshipWeb.ActionIntentTest do
              ~w(author cap capability delegation deps key local_realm parent private_key pubkey sig signature),
              &contains_key?(payload, &1)
            )
+  end
+
+  test "revoke_url emits the exact custody-free v6 revocation selector" do
+    fixture = @revoke_fixture_path |> File.read!() |> Jason.decode!()
+    payload = fixture["payload"]
+
+    assert {:ok, url} =
+             ActionIntent.revoke_url(
+               payload["replica"],
+               payload["authority"]["delegation"],
+               intent_id: payload["id"]
+             )
+
+    assert url == fixture["url"]
+    assert decoded_payload(url) == payload
+    assert Map.keys(payload) |> Enum.sort() == ["authority", "id", "replica", "v"]
+    assert Map.keys(payload["authority"]) |> Enum.sort() == ["action", "delegation"]
+
+    refute Enum.any?(
+             ~w(author cap capability command deps evidence issuer key private_key pubkey sig signature),
+             &contains_key?(payload, &1)
+           )
+  end
+
+  test "revoke_url trims producer input and rejects noncanonical delegation ids" do
+    id = "fedcba9876543210fedcba9876543210"
+    delegation = "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI"
+
+    assert {:ok, trimmed_url} =
+             ActionIntent.revoke_url(" replica:matter:one ", " #{delegation}\t", intent_id: id)
+
+    assert decoded_payload(trimmed_url)["authority"]["delegation"] == delegation
+
+    invalid_delegations = [
+      "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJ",
+      " #{delegation}\uFEFF",
+      "",
+      " ",
+      delegation <> "=",
+      String.slice(delegation, 0, 42),
+      Base.url_encode64(:binary.copy(<<0>>, 31), padding: false),
+      Base.url_encode64(:binary.copy(<<0>>, 33), padding: false),
+      Base.encode64(:binary.copy(<<255>>, 32), padding: false),
+      <<255>>,
+      nil
+    ]
+
+    for invalid <- invalid_delegations do
+      assert {:error, :invalid_delegation} =
+               ActionIntent.revoke_url("replica:matter:one", invalid, intent_id: id)
+    end
   end
 
   test "grant_url canonicalizes audience input and rejects invalid public keys" do

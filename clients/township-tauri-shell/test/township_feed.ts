@@ -9,6 +9,7 @@ import {
   type CarrierAvailabilitySubscription,
   type CarrierFrameStore,
   type CarrierOpFrame,
+  type CarrierStateReport,
   type LocalOpLogStore,
   type Op,
   type Verifier,
@@ -33,6 +34,15 @@ interface TownshipCarrierVector {
   oracleCarrierOps: CarrierOpFrame[];
   expectAfterSync: {
     state: { posts: string[] };
+    authorityQuarantine: [string, string][];
+    stateB64: string;
+    opIds: string[];
+  };
+  authorityRevocation: {
+    revokeOp: CarrierOpFrame;
+    revokedCommandOp: CarrierOpFrame;
+    authorityQuarantine: [string, string][];
+    stateB64: string;
     opIds: string[];
   };
 }
@@ -100,11 +110,18 @@ class ReadOnlyPullClient {
   pullHave: string[] = [];
   forbiddenCallCount = 0;
 
-  constructor(private readonly frames: CarrierOpFrame[]) {}
+  constructor(
+    private readonly frames: CarrierOpFrame[],
+    private readonly report: CarrierStateReport = baselineStateReport(),
+  ) {}
 
   async pull(have: string[]): Promise<unknown[]> {
     this.pullHave = [...have];
     return structuredClone(this.frames);
+  }
+
+  async stateReport(): Promise<CarrierStateReport> {
+    return structuredClone(this.report);
   }
 
   async advertise(): Promise<never> {
@@ -123,6 +140,12 @@ class ReadOnlyPullClient {
   }
 }
 
+class StateReportingPullClient extends ReadOnlyPullClient {
+  constructor(frames: CarrierOpFrame[], report: CarrierStateReport) {
+    super(frames, report);
+  }
+}
+
 class InterposingPullClient {
   pullHave: string[] = [];
 
@@ -135,6 +158,10 @@ class InterposingPullClient {
     this.pullHave = [...have];
     await this.interpose();
     return structuredClone(this.frames);
+  }
+
+  async stateReport(): Promise<CarrierStateReport> {
+    return baselineStateReport();
   }
 }
 
@@ -215,6 +242,10 @@ class ControlledFeedClient implements TownshipFeedClient {
     return structuredClone(this.frames.filter((frame) => !haveIds.has(frame.id)));
   }
 
+  async stateReport(): Promise<CarrierStateReport> {
+    return baselineStateReport();
+  }
+
   close(): void {
     if (this.closed) return;
     this.closed = true;
@@ -274,6 +305,52 @@ assert.equal(validLocalLog.saveCount, 1);
 assert.equal(validDelegations.saveCount, 1);
 assert.equal(validOutbox.accessCount, 0);
 assert.equal(validClient.forbiddenCallCount, 0);
+
+const revocationFrames = [
+  ...vector.oracleCarrierOps,
+  vector.authorityRevocation.revokeOp,
+  vector.authorityRevocation.revokedCommandOp,
+];
+const revocationLocalLog = new MemoryOpLog(
+  carrierOpsToSemanticOps(vector.oracleCarrierOps, vector.realmByPubkey),
+);
+const revocationDelegations = new MemoryFrameStore(vector.oracleCarrierOps);
+const revocationOutbox = new ForbiddenOutboxStore();
+const revocationWorkflow = workflow(revocationLocalLog, revocationDelegations, revocationOutbox);
+const revocationClient = new StateReportingPullClient(
+  [vector.authorityRevocation.revokeOp, vector.authorityRevocation.revokedCommandOp],
+  {
+    state_b64: vector.authorityRevocation.stateB64,
+    op_ids: vector.authorityRevocation.opIds,
+    frontier: [vector.authorityRevocation.revokedCommandOp.id],
+    structural_quarantine: [],
+    authority_quarantine: vector.authorityRevocation.authorityQuarantine,
+    log_size: vector.authorityRevocation.opIds.length,
+  },
+);
+
+const revocationProjection = await refreshTownshipFromCarrier({
+  client: revocationClient,
+  workflow: revocationWorkflow,
+  verifier,
+  realmByPubkey: vector.realmByPubkey,
+  generation: 8,
+});
+
+assert.deepEqual(revocationProjection.opIds, vector.authorityRevocation.opIds);
+assert.deepEqual(revocationProjection.matter.posts, vector.expectAfterSync.state.posts);
+assert.equal(revocationProjection.matter.opCount, vector.authorityRevocation.opIds.length);
+assert.equal(revocationProjection.matter.appliedCount, vector.authorityRevocation.opIds.length - 2);
+assert.equal(revocationProjection.matter.quarantineCount, 2);
+assert.deepEqual(
+  revocationLocalLog.ops.map((op) => op.id).sort(),
+  vector.authorityRevocation.opIds,
+);
+assert.deepEqual(
+  revocationDelegations.frames.map((frame) => frame.id).sort(),
+  revocationFrames.map((frame) => frame.id).sort(),
+);
+assert.equal(revocationOutbox.accessCount, 0);
 
 const interleavedLocalFrame = vector.clientDivergedCarrierOps.at(-1);
 if (!interleavedLocalFrame) throw new Error("missing interleaved local frame fixture");
@@ -339,6 +416,70 @@ assert.equal(invalidLocalLog.saveCount, 0);
 assert.equal(invalidDelegations.saveCount, 0);
 assert.equal(invalidOutbox.accessCount, 0);
 assert.equal(invalidClient.forbiddenCallCount, 0);
+
+const structuralAttemptId = "structurally-rejected-carrier-attempt";
+const structuralReportLocalLog = new MemoryOpLog(localOps);
+const structuralReportDelegations = new MemoryFrameStore(vector.clientDivergedCarrierOps);
+const structuralReportOutbox = new ForbiddenOutboxStore();
+const structuralReportWorkflow = workflow(
+  structuralReportLocalLog,
+  structuralReportDelegations,
+  structuralReportOutbox,
+);
+const structuralReportClient = new ReadOnlyPullClient(vector.peerDivergedCarrierOps, {
+  ...baselineStateReport(),
+  structural_quarantine: [[structuralAttemptId, "bad_signature"]],
+});
+
+const structuralReportProjection = await refreshTownshipFromCarrier({
+  client: structuralReportClient,
+  workflow: structuralReportWorkflow,
+  verifier,
+  realmByPubkey: vector.realmByPubkey,
+  generation: 9,
+});
+
+assert.deepEqual(structuralReportProjection.opIds, vector.expectAfterSync.opIds);
+assert.deepEqual(structuralReportProjection.matter.posts, vector.expectAfterSync.state.posts);
+assert.equal(structuralReportProjection.matter.opCount, vector.expectAfterSync.opIds.length);
+assert.equal(structuralReportProjection.matter.quarantineCount, 1);
+assert.equal(structuralReportLocalLog.saveCount, 1);
+assert.equal(structuralReportDelegations.saveCount, 1);
+assert.equal(structuralReportOutbox.accessCount, 0);
+
+const mismatchedReportLocalLog = new MemoryOpLog(localOps);
+const mismatchedReportDelegations = new MemoryFrameStore(vector.clientDivergedCarrierOps);
+const mismatchedReportOutbox = new ForbiddenOutboxStore();
+const mismatchedReportWorkflow = workflow(
+  mismatchedReportLocalLog,
+  mismatchedReportDelegations,
+  mismatchedReportOutbox,
+);
+const unknownReportOpId = "unknown-carrier-state-report-op";
+const mismatchedReportClient = new ReadOnlyPullClient(vector.peerDivergedCarrierOps, {
+  ...baselineStateReport(),
+  op_ids: [...vector.expectAfterSync.opIds, unknownReportOpId],
+  authority_quarantine: [[unknownReportOpId, "revoked_capability"]],
+  log_size: vector.expectAfterSync.opIds.length + 1,
+});
+const beforeMismatchedReportLocal = JSON.stringify(mismatchedReportLocalLog.ops);
+const beforeMismatchedReportDelegations = JSON.stringify(mismatchedReportDelegations.frames);
+
+await assert.rejects(
+  refreshTownshipFromCarrier({
+    client: mismatchedReportClient,
+    workflow: mismatchedReportWorkflow,
+    verifier,
+    realmByPubkey: vector.realmByPubkey,
+    generation: 9,
+  }),
+  /carrier state report does not match verified frames/,
+);
+assert.equal(JSON.stringify(mismatchedReportLocalLog.ops), beforeMismatchedReportLocal);
+assert.equal(JSON.stringify(mismatchedReportDelegations.frames), beforeMismatchedReportDelegations);
+assert.equal(mismatchedReportLocalLog.saveCount, 0);
+assert.equal(mismatchedReportDelegations.saveCount, 0);
+assert.equal(mismatchedReportOutbox.accessCount, 0);
 
 const evidenceFreeAuthorityOp: Op = {
   id: "evidence-free-authority-write",
@@ -672,6 +813,18 @@ function testPeer(replica = "replica:test"): TownshipCarrierPeerConfig {
     expectedPeerRealm: "clerk",
     expectedPeerPubkey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
     replica,
+  };
+}
+
+function baselineStateReport(): CarrierStateReport {
+  return {
+    state_b64: vector.expectAfterSync.stateB64,
+    state: structuredClone(vector.expectAfterSync.state),
+    op_ids: [...vector.expectAfterSync.opIds],
+    frontier: [],
+    structural_quarantine: [],
+    authority_quarantine: structuredClone(vector.expectAfterSync.authorityQuarantine),
+    log_size: vector.expectAfterSync.opIds.length,
   };
 }
 

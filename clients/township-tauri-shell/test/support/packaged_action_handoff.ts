@@ -2,6 +2,7 @@ import { createHash, createPrivateKey, createPublicKey } from "node:crypto";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { kill as killProcess } from "node:process";
 import type { Page } from "@playwright/test";
 import type { CarrierOpFrame } from "@treetopdevs/lattice-client";
 import { TOWNSHIP_STORAGE_NAMESPACE } from "../../src/native_workflow";
@@ -94,6 +95,31 @@ export function createPackagedActionHandoffHarness(
     timeoutMs: number,
   ): Promise<void> => waitFor(label, timeoutMs, predicate, diagnostics);
 
+  const runningAppBundleProcessIds = async (): Promise<number[]> =>
+    appBundleProcessIds(
+      await runHarnessCapture("ps", ["-axww", "-o", "pid=,command="]),
+      options.appBundlePath,
+    );
+
+  const waitForAppBundleExit = async (timeoutMs: number): Promise<boolean> => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if ((await runningAppBundleProcessIds()).length === 0) return true;
+      await delay(50);
+    }
+    return (await runningAppBundleProcessIds()).length === 0;
+  };
+
+  const signalAppBundleProcesses = async (signal: NodeJS.Signals): Promise<void> => {
+    for (const pid of await runningAppBundleProcessIds()) {
+      try {
+        killProcess(pid, signal);
+      } catch (error) {
+        if (!isNoSuchProcess(error)) throw error;
+      }
+    }
+  };
+
   return {
     assertAppBundleRegistersTownshipScheme(): void {
       const infoPlist = join(options.appBundlePath, "Contents", "Info.plist");
@@ -135,8 +161,22 @@ export function createPackagedActionHandoffHarness(
     runCapture: runHarnessCapture,
 
     async quitTownshipApp(): Promise<void> {
-      const process = spawnHarnessProcess("osascript", ["-e", `quit app id "${options.appIdentifier}"`]);
-      if (!(await exitsWithin(process.child, 2_000))) process.child.kill("SIGKILL");
+      const quitProcess = spawnHarnessProcess("osascript", [
+        "-e",
+        `quit app id "${options.appIdentifier}"`,
+      ]);
+      if (!(await exitsWithin(quitProcess.child, 2_000))) quitProcess.child.kill("SIGKILL");
+      if (await waitForAppBundleExit(2_000)) return;
+
+      await signalAppBundleProcesses("SIGTERM");
+      if (await waitForAppBundleExit(2_000)) return;
+
+      await signalAppBundleProcesses("SIGKILL");
+      if (await waitForAppBundleExit(2_000)) return;
+
+      throw new Error(
+        `Township app processes did not exit: ${(await runningAppBundleProcessIds()).join(", ")}`,
+      );
     },
 
     readKvValues(): Map<string, string> {
@@ -279,6 +319,22 @@ export function seededEd25519Identity(seed: string): NativeIdentity {
 
 export function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export function appBundleProcessIds(processList: string, appBundlePath: string): number[] {
+  const executablePrefix = `${appBundlePath.replace(/\/+$/, "")}/Contents/MacOS/`;
+  const processIds: number[] = [];
+
+  for (const line of processList.split(/\r?\n/)) {
+    const match = /^\s*(\d+)\s+(.+)$/.exec(line);
+    if (match?.[2].startsWith(executablePrefix)) processIds.push(Number(match[1]));
+  }
+
+  return processIds;
+}
+
+function isNoSuchProcess(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ESRCH";
 }
 
 export function delay(ms: number): Promise<void> {

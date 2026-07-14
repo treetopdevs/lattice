@@ -112,6 +112,31 @@
 
       <.intent_panel
         :if={@source_state == :fresh}
+        id="participant-revoke-panel"
+        intent="revoke"
+        kicker="Authority request"
+        title="Revoke delegated access from your device"
+        url={@revoke_intent_url}
+        error={@revoke_intent_error}
+      >
+        <:body>
+          <form id="participant-revoke-form" phx-submit="prepare_revoke">
+            <label for={@revoke_intent_form[:delegation].id}>Delegation id</label>
+            <input
+              type="text"
+              id={@revoke_intent_form[:delegation].id}
+              name={@revoke_intent_form[:delegation].name}
+              value={@revoke_intent_form[:delegation].value}
+              autocomplete="off"
+            />
+            <button type="submit">Prepare revoke in app</button>
+          </form>
+        </:body>
+        <:prepared>Unsigned revocation request</:prepared>
+      </.intent_panel>
+
+      <.intent_panel
+        :if={@source_state == :fresh}
         id="participant-title-panel"
         intent="title"
         kicker="Participant action"

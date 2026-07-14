@@ -10,6 +10,7 @@ import type {
   TownshipFieldActionIntent,
   TownshipGrantActionIntent,
   TownshipPostActionIntent,
+  TownshipRevokeActionIntent,
   TownshipRosterActionIntent,
   TownshipStatusActionIntent,
 } from "../src/township_action_intent";
@@ -49,6 +50,15 @@ const grantIntent: TownshipGrantActionIntent = {
     ops: ["admit", "post", "set_summary", "set_title"],
     roles: [],
     live: false,
+  },
+};
+const revokeIntent: TownshipRevokeActionIntent = {
+  v: 6,
+  id: "66666666666666666666666666666666",
+  replica,
+  authority: {
+    action: "revoke",
+    delegation: "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI",
   },
 };
 
@@ -202,22 +212,50 @@ describe("useActionIntent", () => {
     expect(post.status.value).toBeNull();
     expect(other.accepted.value).toEqual(postIntent);
   });
+
+  it("keeps v6 Use, mismatch, and dismiss review-only without submitting", () => {
+    const submit = vi.fn(async () => ({ ok: true, message: "saved" }));
+    let currentReplica = replica;
+    const controller = useActionIntent({
+      version: 6,
+      currentReplica: () => currentReplica,
+      submit,
+      acceptMessage: () => "Revoke access request held for local review.",
+      dismissFallback: "Revoke access request",
+    });
+    const syntheticClick = new Event("click");
+
+    expect(controller.accept(revokeIntent, syntheticClick)).toBe("ignored");
+    expect(controller.accept(revokeIntent)).toBe("accepted");
+    expect(controller.accepted.value).toEqual(revokeIntent);
+    expect(submit).not.toHaveBeenCalled();
+    expect(controller.dismiss()).toBe("dismissed");
+    expect(controller.accepted.value).toBeNull();
+    expect(submit).not.toHaveBeenCalled();
+
+    currentReplica = "replica:matter:other";
+    expect(controller.accept(revokeIntent)).toBe("mismatch");
+    expect(controller.accepted.value).toBeNull();
+    expect(submit).not.toHaveBeenCalled();
+  });
 });
 
 describe("action intent descriptors", () => {
-  it("keeps exact labels for every frozen v1-v5 envelope", () => {
+  it("keeps exact labels for frozen v1-v5 and the v6 revocation selector", () => {
     expect([
       actionIntentLabel(postIntent),
       actionIntentLabel(statusIntent),
       actionIntentLabel(fieldIntent),
       actionIntentLabel(rosterIntent),
       actionIntentLabel(grantIntent),
+      actionIntentLabel(revokeIntent),
     ]).toEqual([
       "Post request",
       "Close matter request",
       "Title edit request",
       "Admit member request",
       "Grant access request",
+      "Revoke access request",
     ]);
   });
 
@@ -228,6 +266,7 @@ describe("action intent descriptors", () => {
       { slot: "field", version: 3 },
       { slot: "roster", version: 4 },
       { slot: "grant", version: 5 },
+      { slot: "revoke", version: 6 },
     ]);
 
     for (const { slot, version } of ACTION_INTENT_SLOT_VERSIONS) {

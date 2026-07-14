@@ -4,13 +4,19 @@ import IntentReviewPanel from "../src/components/IntentReviewPanel.vue";
 import type {
   TownshipFieldActionIntent,
   TownshipGrantActionIntent,
+  TownshipRevokeActionIntent,
   TownshipRosterActionIntent,
   TownshipStatusActionIntent,
 } from "../src/township_action_intent";
 
 const replica = "replica:matter:township-g1#root:test";
 const cases: Array<{
-  intent: TownshipStatusActionIntent | TownshipFieldActionIntent | TownshipRosterActionIntent | TownshipGrantActionIntent;
+  intent:
+    | TownshipStatusActionIntent
+    | TownshipFieldActionIntent
+    | TownshipRosterActionIntent
+    | TownshipGrantActionIntent
+    | TownshipRevokeActionIntent;
   id: string;
   heading: string;
   eyebrow: string;
@@ -78,6 +84,22 @@ const cases: Array<{
       "No roles ; Offline",
     ],
     sign: "Sign grant",
+  },
+  {
+    intent: {
+      v: 6,
+      id: "66666666666666666666666666666666",
+      replica,
+      authority: {
+        action: "revoke",
+        delegation: "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI",
+      },
+    },
+    id: "participant-revoke-request",
+    heading: "Revoke access request",
+    eyebrow: "Unsigned local review",
+    details: ["QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI"],
+    sign: "Sign revoke",
   },
 ];
 

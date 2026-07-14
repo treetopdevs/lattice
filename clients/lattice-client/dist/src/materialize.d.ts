@@ -26,9 +26,9 @@ export interface Materialized {
 }
 /**
  * Materialize a replica from ops. `included` optionally bounds the visible set
- * (a frontier); default is all ops. This is a pure function of (schema, ops,
- * frontier) — the same inputs that `Lattice.Sim` reduces in Elixir, which is
- * why Sim can serve as the conformance oracle: for any scenario, this must
- * reproduce Sim's state, quarantine set, and order exactly.
+ * (a frontier); default is all ops. `externallyQuarantined` seeds decisions from
+ * an external authority oracle while retaining those ops in canonical order.
+ * This is a pure function of its inputs, so Sim can remain the conformance
+ * oracle for state, quarantine, and order.
  */
-export declare function materialize(schema: ReplicaSchema, ops: Op[], included?: Set<string>): Materialized;
+export declare function materialize(schema: ReplicaSchema, ops: Op[], included?: ReadonlySet<string>, externallyQuarantined?: ReadonlySet<string>): Materialized;

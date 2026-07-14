@@ -7,6 +7,7 @@ defmodule TownshipWeb.InstrumentLiveTest do
   alias TownshipWeb.{ActionIntent, CarrierProjection}
 
   @grant_audience "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE="
+  @revoke_delegation "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI"
 
   defmodule FailingSource do
     @behaviour TownshipWeb.InstrumentSource
@@ -573,6 +574,112 @@ defmodule TownshipWeb.InstrumentLiveTest do
     refute has_element?(view, "#participant-grant-handoff")
   end
 
+  test "fresh carrier state prepares and clears one exact v6 revocation selector", %{conn: conn} do
+    peer_log = peer_log()
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         carrier: LiveCarrier,
+         connect_opts: [ops: Log.topo_ops(peer_log)],
+         replica: peer_log.replica,
+         peer_realm: "clerk",
+         pubsub: TownshipWeb.PubSub,
+         topic: "township:revoke-intent:#{System.unique_integer([:positive])}",
+         schedule: :manual}
+      )
+
+    put_projection_config(projection)
+    {:ok, view, _html} = live(conn, "/township")
+
+    refute has_element?(view, "#participant-revoke-form")
+    render_hook(view, "prepare_revoke", %{"revoke" => %{"delegation" => @revoke_delegation}})
+    refute has_element?(view, "#participant-revoke-handoff")
+
+    assert {:ok, {:fresh, payload}} = CarrierProjection.refresh(projection)
+    assert has_element?(view, "#participant-revoke-form")
+    op_count = peer_log |> Log.op_ids() |> MapSet.size()
+
+    render_hook(view, "prepare_revoke", %{
+      "revoke" => %{"delegation" => "  #{@revoke_delegation}\t", "issuer" => "smuggled"},
+      "signature" => "smuggled"
+    })
+
+    revoke_url = revoke_action_intent_href(view)
+    revoke_payload = decoded_action_intent(revoke_url)
+
+    assert revoke_payload == %{
+             "v" => 6,
+             "id" => revoke_payload["id"],
+             "replica" => peer_log.replica,
+             "authority" => %{"action" => "revoke", "delegation" => @revoke_delegation}
+           }
+
+    assert revoke_payload["id"] =~ ~r/\A[0-9a-f]{32}\z/
+
+    assert {:ok, expected_url} =
+             ActionIntent.revoke_url(peer_log.replica, @revoke_delegation,
+               intent_id: revoke_payload["id"]
+             )
+
+    assert revoke_url == expected_url
+    assert has_element?(view, "#participant-revoke-prepared", "Unsigned revocation request")
+    assert has_element?(view, "#op-dag-panel [data-op-count='#{op_count}']")
+
+    replacement_delegation = Base.url_encode64(:binary.copy(<<67>>, 32), padding: false)
+
+    view
+    |> form("#participant-revoke-form", %{"revoke" => %{"delegation" => replacement_delegation}})
+    |> render_submit()
+
+    replacement_url = revoke_action_intent_href(view)
+    refute replacement_url == revoke_url
+
+    assert decoded_action_intent(replacement_url)["authority"]["delegation"] ==
+             replacement_delegation
+
+    view
+    |> form("#participant-revoke-form", %{
+      "revoke" => %{
+        "delegation" => "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJ"
+      }
+    })
+    |> render_submit()
+
+    assert has_element?(
+             view,
+             "#participant-revoke-error[aria-live='polite']",
+             "Enter a canonical delegation id before opening the app"
+           )
+
+    refute has_element?(view, "#participant-revoke-handoff")
+
+    send(view.pid, {:township_instrument, {:fresh, payload}})
+    assert has_element?(view, "#participant-revoke-error")
+    refute has_element?(view, "#participant-revoke-handoff")
+
+    view
+    |> form("#participant-revoke-form", %{"revoke" => %{"delegation" => @revoke_delegation}})
+    |> render_submit()
+
+    replacement_payload = put_in(payload.provenance.replica, peer_log.replica <> ":replacement")
+    send(view.pid, {:township_instrument, {:fresh, replacement_payload}})
+
+    assert has_element?(view, "#participant-revoke-form input[value='']")
+    refute has_element?(view, "#participant-revoke-error")
+    refute has_element?(view, "#participant-revoke-handoff")
+
+    send(view.pid, {:township_instrument, {:fresh, payload}})
+
+    view
+    |> form("#participant-revoke-form", %{"revoke" => %{"delegation" => @revoke_delegation}})
+    |> render_submit()
+
+    send(view.pid, {:township_instrument, {:stale, payload}})
+    refute has_element?(view, "#participant-revoke-form")
+    refute has_element?(view, "#participant-revoke-handoff")
+  end
+
   test "fresh carrier state prepares admit in the same single roster-request slot", %{conn: conn} do
     peer_log = peer_log()
 
@@ -1072,6 +1179,15 @@ defmodule TownshipWeb.InstrumentLiveTest do
     |> render()
     |> LazyHTML.from_fragment()
     |> LazyHTML.query_by_id("participant-grant-handoff")
+    |> LazyHTML.attribute("href")
+    |> List.first()
+  end
+
+  defp revoke_action_intent_href(view) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query_by_id("participant-revoke-handoff")
     |> LazyHTML.attribute("href")
     |> List.first()
   end

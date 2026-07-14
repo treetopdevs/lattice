@@ -175,6 +175,13 @@ defmodule LatticeCarrierServer.WebSocket do
     %{type: "ops", ops: ops}
   end
 
+  defp handle_message("state", _message, state) do
+    case Holder.state_report(state.holder) do
+      {:ok, report} -> Map.put(report, :type, "state_result")
+      {:error, :read_only} -> %{type: "error", reason: "read_only"}
+    end
+  end
+
   defp handle_message("relay", %{"op" => encoded_op}, state) do
     with {:ok, op} <- Wire.decode_op(encoded_op),
          {:ok, report} <- Holder.relay(state.holder, state.peer_realm, op) do

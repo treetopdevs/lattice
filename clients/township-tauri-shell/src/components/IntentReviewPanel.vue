@@ -66,6 +66,14 @@ function reviewModel(intent: IntentReview): IntentReviewModel {
       signLabel: "Sign grant",
     };
   }
+  if (intent.v === 6) {
+    return {
+      id: "participant-revoke-request",
+      eyebrow: "Unsigned local review",
+      details: [intent.authority.delegation],
+      signLabel: "Sign revoke",
+    };
+  }
   return assertNeverIntentReview(intent);
 }
 

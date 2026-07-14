@@ -144,6 +144,37 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
         }
     }
 }
+console.log("\n▸ externally determined quarantine");
+{
+    const schema = {
+        name: "ExternalQuarantine",
+        fields: { posts: { merge: "causal_list" } },
+    };
+    const accepted = {
+        id: "accepted",
+        deps: [],
+        kind: "command",
+        author: "resident",
+        field: "posts",
+        mutation: "append",
+        value: "accepted",
+        hash: "accepted",
+    };
+    const quarantined = {
+        id: "quarantined",
+        deps: [accepted.id],
+        kind: "command",
+        author: "resident",
+        field: "posts",
+        mutation: "append",
+        value: "quarantined",
+        hash: "quarantined",
+    };
+    const result = materialize(schema, [accepted, quarantined], undefined, new Set([quarantined.id]));
+    check("externally quarantined mutation is not applied", result.state.posts, ["accepted"]);
+    check("externally quarantined op remains in canonical order", result.order, [accepted.id, quarantined.id]);
+    check("externally quarantined op remains auditable", result.quarantine, [quarantined.id]);
+}
 console.log(`\n${failures === 0 ? "\x1b[32m✓ all conformance checks passed\x1b[0m" : `\x1b[31m✗ ${failures} check(s) failed\x1b[0m`}`);
 process.exit(failures === 0 ? 0 : 1);
 async function verifyEd25519(author, bytes, signature) {

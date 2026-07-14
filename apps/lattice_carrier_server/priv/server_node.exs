@@ -24,6 +24,7 @@ Application.put_env(:lattice_carrier_server, :server_options,
   identity: identity,
   trusted_peers: trusted_peers,
   relay_realms: relay_realms,
+  state_reporter: Township.CarrierStateReport,
   source: {:path, Path.expand(source_path)},
   listener: [ip: {127, 0, 0, 1}, port: port]
 )

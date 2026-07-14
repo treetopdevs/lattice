@@ -6,6 +6,7 @@ import {
   type CarrierAvailability,
   type CarrierAvailabilitySubscription,
   type CarrierOpFrame,
+  type CarrierStateReport,
   type Verifier,
 } from "@treetopdevs/lattice-client";
 import {
@@ -20,6 +21,7 @@ import {
 
 export interface TownshipFeedPullClient {
   pull(have: string[]): Promise<unknown[]>;
+  stateReport(): Promise<CarrierStateReport>;
 }
 
 export interface TownshipFeedClient extends TownshipFeedPullClient {
@@ -83,6 +85,9 @@ export async function refreshTownshipFromCarrier(
     if (!verification.valid) throw new Error(`carrier op verification failed: ${frame.id}`);
   }
 
+  const stateReport = await options.client.stateReport();
+  throwIfRefreshStopped(options.signal);
+
   const pulledOps = carrierOpsToSemanticOps(pulledFrames, options.realmByPubkey);
   const persisted = await withTownshipPersistenceWrite(options.workflow, async () => {
     throwIfRefreshStopped(options.signal);
@@ -92,7 +97,8 @@ export async function refreshTownshipFromCarrier(
     ]);
     const ops = integrate(currentOps, pulledOps);
     const delegationFrames = mergeCarrierFrames([...currentDelegationFrames, ...pulledFrames]);
-    const matter = townshipPreviewFromOps(ops);
+    const externallyQuarantined = validateCarrierStateReport(stateReport, delegationFrames);
+    const matter = townshipPreviewFromOps(ops, externallyQuarantined);
 
     throwIfRefreshStopped(options.signal);
     await Promise.all([
@@ -323,6 +329,30 @@ function createWorker(epoch: number): TownshipFeedWorker {
 
 function mergeCarrierFrames(frames: CarrierOpFrame[]): CarrierOpFrame[] {
   return [...new Map(frames.map((frame) => [frame.id, frame])).values()];
+}
+
+function validateCarrierStateReport(
+  report: CarrierStateReport,
+  frames: CarrierOpFrame[],
+): ReadonlySet<string> {
+  const reportIds = new Set(report.op_ids);
+  const frameIds = new Set(frames.map((frame) => frame.id));
+  const reportMatchesFrames =
+    report.log_size === report.op_ids.length &&
+    reportIds.size === report.op_ids.length &&
+    reportIds.size === frameIds.size &&
+    [...reportIds].every((id) => frameIds.has(id));
+
+  if (!reportMatchesFrames) {
+    throw new Error("carrier state report does not match verified frames");
+  }
+
+  const quarantined = new Set(report.authority_quarantine.map(([id]) => id));
+  if ([...quarantined].some((id) => !reportIds.has(id))) {
+    throw new Error("carrier state report does not match verified frames");
+  }
+
+  return quarantined;
 }
 
 function errorMessage(error: unknown): string {

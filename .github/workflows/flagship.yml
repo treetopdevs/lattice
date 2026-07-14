@@ -298,6 +298,10 @@ jobs:
           TOWNSHIP_SKIP_DELEGATION_GRANT_APP_BUILD: "1"
         run: npm run tauri:delegation-grant-handoff:smoke
 
+      - name: Verify packaged revocation handoff
+        working-directory: clients/township-tauri-shell
+        run: npm run tauri:revocation-action-handoff:smoke
+
       - name: Verify packaged reactive carrier feed
         working-directory: clients/township-tauri-shell
         run: npm run tauri:feed:smoke
