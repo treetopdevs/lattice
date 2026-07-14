@@ -97,18 +97,10 @@ check(
 check("close_matter body", townshipCommandBody({ command: "close_matter" }), commandBody("close_matter"));
 check("reopen_matter body", townshipCommandBody({ command: "reopen_matter" }), commandBody("reopen_matter"));
 
-const capId = "gN9aanNVZeHWsS1vU8KxjyqVrWdC0VwPIzilL_QX2n0";
-check("delegation cap term", townshipCapTerm(capId), ["bin", textBase64(capId)]);
-check("missing cap term", townshipCapTerm(null), ["nil"]);
-
 const residentAuthor = seededEd25519Identity(`${vector.client.sessionSeed}:${vector.client.realm}`);
 const clerkAuthor = seededEd25519Identity(`${vector.client.sessionSeed}:clerk`);
 const evilAuthor = seededEd25519Identity(`${vector.client.sessionSeed}:evil`);
 const delegations = carrierDelegationsFromFrames(vector.clientDivergedCarrierOps);
-check("carrier delegation ids from frames", delegations.map((delegation) => delegation.id), [
-  "ZOb-qhDcOoM0yStgMMBlYY_IHIw6eX1BcvFx5hb_Hs8",
-  capId,
-]);
 
 const genesisFixture = vector.clientBaseCarrierOps.find((frame) => authorityCommandName(frame) === "genesis");
 if (!genesisFixture) throw new Error("missing genesis fixture frame");
@@ -149,6 +141,14 @@ const grantFixture = vector.clientDivergedCarrierOps.find((frame) => authorityCo
 if (!grantFixture) throw new Error("missing resident grant fixture frame");
 const grantDelegation = carrierDelegationsFromFrames([grantFixture])[0];
 if (!grantDelegation) throw new Error("missing resident grant fixture delegation");
+const capId = grantDelegation.id;
+
+check("delegation cap term", townshipCapTerm(capId), ["bin", textBase64(capId)]);
+check("missing cap term", townshipCapTerm(null), ["nil"]);
+check("carrier delegation ids from frames", delegations.map((delegation) => delegation.id), [
+  genesisDelegation.id,
+  grantDelegation.id,
+]);
 
 const authoredResidentDelegation = await authorCarrierDelegation({
   replica: grantDelegation.replica,
@@ -186,14 +186,17 @@ check(
 check(
   "clerk close_matter cap id",
   selectTownshipCapId({ command: "close_matter" }, delegations, clerkAuthor.publicKeyBase64),
-  "ZOb-qhDcOoM0yStgMMBlYY_IHIw6eX1BcvFx5hb_Hs8",
+  genesisDelegation.id,
 );
 
+const residentPostCommand = { command: "post", text: "resident: posted while offline" } as const;
 const postFixture = vector.clientDivergedCarrierOps.find(
-  (frame) => frame.author === residentAuthor.publicKeyBase64 && frame.id === "xmret5C7xMai04EQDm1cEX1dDjeBqxPM7-TcDN8cfhI",
+  (frame) =>
+    frame.kind === "command" &&
+    frame.author === residentAuthor.publicKeyBase64 &&
+    isDeepStrictEqual(frame.body, townshipCommandBody(residentPostCommand)),
 );
 if (!postFixture) throw new Error("missing resident post fixture frame");
-const residentPostCommand = { command: "post", text: "resident: posted while offline" } as const;
 const issuedResidentPostCapId = selectTownshipCapId(
   residentPostCommand,
   carrierDelegationsFromFrames([authoredResidentGrant]),
