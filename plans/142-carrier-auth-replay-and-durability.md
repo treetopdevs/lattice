@@ -2,8 +2,9 @@
 
 ## Status
 
-IN PROGRESS — local TDD, focused carrier suites, TypeScript gates, and the complete packaged
-`app:convergence` chain are green; the hosted flagship gate remains open.
+DONE — local TDD, focused carrier suites, TypeScript gates, and the complete packaged
+`app:convergence` chain are green. Hosted run `29358809212` is green across the complete flagship,
+42-step unit/property, and packaged macOS jobs.
 
 ## Priority
 
@@ -32,7 +33,8 @@ before the stable carrier listener is ever configured beyond `127.0.0.1`.
   stable server/Holder 33; all five TypeScript `carrier:*` gates; client and shell typechecks; and
   one uninterrupted `npm run app:convergence` exit 0. Claude Opus final review found no P0–P2
   issue and returned `PROCEED`.
-- Hosted flagship evidence is unrun. This plan therefore remains `IN PROGRESS` and makes no
+- Hosted run `29358809212` passed the carrier/session TypeScript and live-carrier gates in the full
+  unit job and every packaged macOS convergence step. This closes the plan without making a
   production-deployment, TLS, confidentiality, or power-loss-durability claim.
 
 ## Pre-implementation findings this plan fixes (evidence)
@@ -114,6 +116,5 @@ replay regression test exists.
 
 ## Completion claim
 
-The local implementation meets the scoped completion claim: a byte-replayed challenge is rejected
-and the durability claim is accurate. Plan status remains `IN PROGRESS` until the required hosted
-flagship gate runs green.
+The scoped increment is complete: a byte-replayed challenge is rejected, the durability claim is
+accurate, and hosted run `29358809212` is green across all three jobs.

@@ -2,8 +2,9 @@
 
 ## Status
 
-IN PROGRESS — local TDD, focused contracts, Rust tests, and the full packaged shell
-convergence gate are green; the required hosted flagship gate remains open.
+DONE — local TDD, focused contracts, Rust tests, and the full packaged shell convergence gate are
+green. Hosted run `29358809212` is green across the complete flagship, 42-step unit/property, and
+packaged macOS jobs.
 
 ## Priority
 
@@ -106,10 +107,11 @@ re-entrancy-guarded.
   gates pass. `npm run app:convergence` passes the full local browser, live-peer, packaged
   Tauri, action-handoff, reactive-feed, and installed deep-link chain.
 
-## Remaining gate
+## Hosted evidence (2026-07-14)
 
-- Run the hosted flagship workflow. Until it is green, this plan remains `IN PROGRESS`
-  and Plan 139 remains blocked.
+- Run `29358809212` passed the full unit chain, including regenerated vectors, all shell action
+  contracts, Rust, strict Credo, and Sobelow, plus every packaged v1-v5 handoff and the reactive
+  feed. No required fail-fast step was skipped.
 
 Parent-directory fsync and multi-process locking remain outside this plan. Corrupt state
 now favors availability loss over silent data loss: the app refuses startup until the
@@ -138,6 +140,6 @@ without its carrier frame.
 
 ## Completion claim
 
-Complete for this scoped increment when the interleaving tests pass, a corrupt KV file
-produces a surfaced error rather than an empty store, the packaged convergence suite is
-green locally, and the hosted flagship gate is green.
+This scoped increment is complete: the interleaving tests pass, a corrupt KV file produces a
+surfaced error rather than an empty store, the packaged convergence suite is green locally, and
+hosted run `29358809212` is green.

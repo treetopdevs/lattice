@@ -172,11 +172,11 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 136 | Versioned field-edit action handoff | P1 | XL | 048, 135 | DONE |
 | 137 | Versioned roster action handoff | P1 | XL | 051, 054, 130, 136 | DONE |
 | 138 | Versioned delegation grant handoff | P1 | XL | 053, 054, 058, 130, 137 | DONE |
-| 139 | Versioned revocation action handoff | P1 | XL | 138, **140, 141** | BLOCKED (gated on 141 — see Round 3) |
+| 139 | Versioned revocation action handoff | P1 | XL | 138, 140, 141, 143 | IN PROGRESS (reviewed v6 TDD) |
 | 140 | Restore V-01 guarantee in TS client (authority + ordering) | **P0** | L | 019, 020, 058 | DONE |
-| 141 | Serialize shell persistence (stop silent op loss) | **P0** | M | 029, 030, 032 | IN PROGRESS (local TDD/focused/packaged green; hosted pending) |
-| 142 | Carrier session replay protection + durability honesty | P1 | M | 127, 128 | IN PROGRESS (local TDD/focused/packaged green; hosted pending) |
-| 143 | Consolidate the versioned action ladder (pay down accretion) | P2 | L | 138 | IN PROGRESS (TDD refactor active) |
+| 141 | Serialize shell persistence (stop silent op loss) | **P0** | M | 029, 030, 032 | DONE |
+| 142 | Carrier session replay protection + durability honesty | P1 | M | 127, 128 | DONE |
+| 143 | Consolidate the versioned action ladder (pay down accretion) | P2 | L | 138 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
@@ -197,38 +197,51 @@ counterexamples:
   `township_sync.ts`/`township_feed.ts` save a pre-network snapshot over ops authored during
   the network window → silent permanent op loss. Corrupt KV silently wipes the store.
 
-**Execution order for Round 3: 140 and 141 first (P0, they unblock 139), then 142 (before the
-listener leaves loopback), then 143 (consolidation — the first net-negative plan, do it before
-any v7 action). Plan 139 is BLOCKED until 140 and 141 are DONE:** shipping revocation on a TS
-client that can be lied to about who holds authority would compound the defect. The wire/parser/
-signing core is genuinely converged and is not the target of any Round 3 plan; the targets are
-the adversarial-semantics gap (140), the persistence race (141), the auth replay (142), and the
-duplicated UI/test estate plus the source-text/prose tests that entrench it (143).
+**Execution order for Round 3: 140 and 141 first (P0), then 142 (before the listener leaves
+loopback), then 143 (consolidation - the first net-negative plan, do it before any v7 action).**
+Those four plans are now `DONE`. Hosted run `29358809212` closed the final 141/143 gates, so Plan
+139 is `IN PROGRESS` under its reviewed v6 TDD plan. The wire/parser/signing core is genuinely
+converged and was not the target of any Round 3 plan; the targets were the adversarial-semantics
+gap (140), the persistence race (141), the auth replay (142), and the duplicated UI/test estate
+plus the source-text/prose tests that entrenched it (143).
 
 **Plan 140 is DONE (2026-07-13).** The TS client now validates every authority event
 (genesis/transfer/succeed/heartbeat) against the same trust anchors as the oracle, orders
 `causal_list` by `{height, op_id}`, and uses the oracle's −1 dangling-dependency height base —
 defended by an adversarial Sim-exported corpus (forged/double/unattenuated transfer, same-id
 delegation collision, concurrent-append partition, pruned-log LWW) rather than by review. Hosted
-flagship run `29290474614` is green across all three jobs. Plan 139 remains BLOCKED on Plan 141
-alone.
+flagship run `29290474614` is green across all three jobs. The later shared hosted run
+`29358809212` closes Plans 141 and 143 and unblocks Plan 139.
 
-**Plan 141 is IN PROGRESS (2026-07-14).** A namespace-keyed process-local writer now serializes
+**Plan 141 is DONE (2026-07-14).** A namespace-keyed process-local writer now serializes
 shell action, sync, and feed persistence. Post-network save phases reload and union the current
 stores, sync compacts only frames acknowledged by that sync, submit/sign/sync entry points refuse
 re-entry, and malformed native KV fails startup instead of becoming an empty store; temp files are
 fsynced before rename. RED/GREEN interleavings, focused contracts, Rust tests, and the complete
-local `npm run app:convergence` packaged chain are green. The hosted flagship gate is still open,
-so Plan 139 remains BLOCKED on Plan 141 completion.
+local `npm run app:convergence` packaged chain are green. Hosted run `29358809212` passed the full
+42-step unit chain and all packaged macOS convergence steps.
 
-**Plan 142 is IN PROGRESS (2026-07-14).** Carrier session v2 adds a server-first 32-byte nonce
+**Plan 142 is DONE (2026-07-14).** Carrier session v2 adds a server-first 32-byte nonce
 without changing operation wire v1; both signature directions bind both nonces and both versions,
 and exact challenge bytes fail on a second connection. Re-authentication clears the prior Holder
 subscription and queued availability. Path-backed relays sync the temp file before rename, remove
 startup orphans fail-closed, and explicitly claim process-crash rather than power-loss durability.
 Focused BEAM/TypeScript gates, two deliberate mutations, and the complete local
-`npm run app:convergence` chain are green; Claude returned `PROCEED` with no P0–P2 findings. The
-hosted flagship gate remains open.
+`npm run app:convergence` chain are green; Claude returned `PROCEED` with no P0–P2 findings, and
+hosted run `29358809212` passed the carrier and packaged gates.
+
+**Plan 143 is DONE (2026-07-14).** Phoenix intent slots now share descriptor-driven
+prepare/retain/clear paths and one panel component. The Vue shell now owns per-slot state in one
+composable, renders v2-v5 through one review component, and routes accept/sign/dismiss/status/dev
+behavior through one runtime descriptor list while preserving the native-event trust boundary and
+the bespoke v1 combined-submit path. Five packaged smokes share one process/trace/KV harness, and
+runtime API/config/workflow assertions execute as replacement contracts before the packaged gates.
+RED/GREEN behavior mutations, full OTP 28 verification, and the complete local
+`npm run app:convergence` chain are green; Claude returned `PROCEED` after its correction review.
+Production files and the smoke estate are net negative against the captured Plan 143 live baseline;
+the plan records both that slice baseline and the pre-integration parent comparison. Hosted run
+`29358809212` passed all three jobs, including every v1-v5 packaged handoff and the reactive feed,
+so Plan 139 has begun its reviewed RED -> GREEN implementation.
 
 ## Round 2 (deep audit, 2026-07-07, against commit `6b2cfe5`)
 
