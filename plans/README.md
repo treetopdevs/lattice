@@ -19,8 +19,11 @@ pushing operations or state, Plan 134 closes the packaged reactive Tauri/Vue fee
 Plan 135 closes the first versioned clerk-status handoff slice, and Plan 136 closes the bundled
 `set_title`/`set_summary` field-edit slice. Plan 137 closes the bundled `admit`/`remove_member` roster handoff slice.
 Plan 138 closes the versioned delegation-grant handoff slice through real packaged recipient use
-and Sim-anchored unsound-grant refusal. Revocation remains blocked behind Plans 140 and 141;
-succession, G1 completion, remaining Phase G work, production deployment, and W4 also remain.
+and Sim-anchored unsound-grant refusal. Plans 140-143 are `DONE`; Plan 139 is locally green and
+awaiting its required hosted flagship run. Plan 144 is start-gated behind that hosted result and
+will pin the remaining succession tick-provenance limitation without adding a v7 authoring surface.
+Trustworthy user-facing succession, G1 completion, remaining Phase G work, production deployment,
+and W4 also remain.
 
 **Landing 001–009 as one effort?** Start from the umbrella goal:
 [000-goal-foundation-and-hardening.md](000-goal-foundation-and-hardening.md). It
@@ -172,11 +175,12 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 136 | Versioned field-edit action handoff | P1 | XL | 048, 135 | DONE |
 | 137 | Versioned roster action handoff | P1 | XL | 051, 054, 130, 136 | DONE |
 | 138 | Versioned delegation grant handoff | P1 | XL | 053, 054, 058, 130, 137 | DONE |
-| 139 | Versioned revocation action handoff | P1 | XL | 138, 140, 141, 143 | IN PROGRESS (reviewed v6 TDD) |
+| 139 | Versioned revocation action handoff | P1 | XL | 138, 140, 141, 143 | IN PROGRESS (local green; hosted pending) |
 | 140 | Restore V-01 guarantee in TS client (authority + ordering) | **P0** | L | 019, 020, 058 | DONE |
 | 141 | Serialize shell persistence (stop silent op loss) | **P0** | M | 029, 030, 032 | DONE |
 | 142 | Carrier session replay protection + durability honesty | P1 | M | 127, 128 | DONE |
 | 143 | Consolidate the versioned action ladder (pay down accretion) | P2 | L | 138 | DONE |
+| 144 | Succession tick-provenance boundary | P1 | S | 139, 140 | TODO (start gated on Plan 139 hosted green) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
@@ -199,11 +203,12 @@ counterexamples:
 
 **Execution order for Round 3: 140 and 141 first (P0), then 142 (before the listener leaves
 loopback), then 143 (consolidation - the first net-negative plan, do it before any v7 action).**
-Those four plans are now `DONE`. Hosted run `29358809212` closed the final 141/143 gates, so Plan
-139 is `IN PROGRESS` under its reviewed v6 TDD plan. The wire/parser/signing core is genuinely
-converged and was not the target of any Round 3 plan; the targets were the adversarial-semantics
-gap (140), the persistence race (141), the auth replay (142), and the duplicated UI/test estate
-plus the source-text/prose tests that entrenched it (143).
+Those four plans are now `DONE`. Hosted run `29358809212` closed the final 141/143 gates. Plan 139
+has completed its reviewed v6 TDD implementation locally and remains `IN PROGRESS` only for its
+required hosted run. The wire/parser/signing core is genuinely converged and was not the target of
+any Round 3 plan; the targets were the adversarial-semantics gap (140), the persistence race (141),
+the auth replay (142), and the duplicated UI/test estate plus the source-text/prose tests that
+entrenched it (143).
 
 **Plan 140 is DONE (2026-07-13).** The TS client now validates every authority event
 (genesis/transfer/succeed/heartbeat) against the same trust anchors as the oracle, orders
@@ -242,6 +247,18 @@ Production files and the smoke estate are net negative against the captured Plan
 the plan records both that slice baseline and the pre-integration parent comparison. Hosted run
 `29358809212` passed all three jobs, including every v1-v5 packaged handoff and the reactive feed,
 so Plan 139 has begun its reviewed RED -> GREEN implementation.
+
+**Plan 139 is LOCAL-GREEN / HOSTED-PENDING (2026-07-14).** A fresh carrier-backed LiveView now
+prepares one strict unsigned v6 delegation-revocation request. The installed app keeps ingress and
+Use inert, rechecks local issuer/evidence/replica state before native signing, retains delegation
+evidence, and publishes only through explicit Sync. A deterministic Sim scenario and no-build
+two-identity packaged smoke prove an honored pre-revoke post and revoke followed by one causally
+later `revoked_capability` post that is absent from matter state. The packaged feed consumes an
+authenticated BEAM authority report over an independently signature-verified exact frame set; it
+does not independently recompute delegation revocation in TypeScript. Full local
+`npm run app:convergence`, OTP 28 `mix check`, both Sobelow scans, and Claude's final no-P0-P2
+review are green. The plan remains `IN PROGRESS` until one hosted flagship run passes all three
+jobs against this implementation.
 
 ## Round 2 (deep audit, 2026-07-07, against commit `6b2cfe5`)
 
