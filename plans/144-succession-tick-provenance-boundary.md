@@ -2,15 +2,15 @@
 
 ## Status
 
-TODO - START GATED.
+TODO - START GATE CLEARED; implementation has not begun.
 
-Do not begin implementation until Plan 139 has a green hosted flagship run and its current
-implementation slice has landed or otherwise been isolated. Planning this boundary is safe now;
-interleaving its exporter, vector, or documentation changes with the uncommitted Plan 139 slice is
-not.
+Hosted flagship run `29373501735` passed all three jobs at exact Plan 139 tip
+`0e4d2b0fff8cdac281fd64f2b4e0ed923c8770c5`. That lands and isolates the prerequisite slice, so
+Plan 144 may now begin as a separate TDD increment. This hosted result is prerequisite evidence,
+not Plan 144 implementation or completion evidence.
 
-Planned against commit `020c1f64d706` on `codex/township-build-map`, with the live Plan 139
-worktree intentionally left dirty and preserved.
+Originally planned against commit `020c1f64d706` on `codex/township-build-map`, with the live Plan
+139 worktree intentionally left dirty and preserved at planning time.
 
 ## Objective
 

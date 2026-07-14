@@ -2,11 +2,13 @@
 
 ## Status
 
-IN PROGRESS - implementation and every required local gate are green. The exact v6 request,
+DONE (2026-07-14) - implementation and every required local gate are green. The exact v6 request,
 installed-app ceremony, deterministic Sim oracle, authenticated carrier state report, and packaged
 issuer/recipient proof were built one pre-agreed RED -> GREEN seam at a time. Full local
 `npm run app:convergence`, OTP 28 `mix check`, both Sobelow scans, and Claude's final no-P0-P2
-review are green. The required hosted flagship run is still pending, so this plan is not `DONE`.
+review are green. Hosted flagship run `29373501735` passed all three jobs at exact tip
+`0e4d2b0fff8cdac281fd64f2b4e0ed923c8770c5`, including the v1-v6 packaged action ladder and
+reactive carrier-feed tail.
 
 ## Objective
 
@@ -312,6 +314,6 @@ Sim-derived `revoked_capability` with delegation attribution; the full local and
 green; and Claude's final review has no unresolved P0-P2 finding.
 
 As of 2026-07-14, all listed local evidence is green, including the mandatory v1-v6 packaged
-convergence chain. The hosted artifact, unit/property/static/security, and packaged macOS jobs have
-not yet run against this working-tree implementation; that single gate keeps the status
-`IN PROGRESS`.
+convergence chain. Hosted run `29373501735` passed the flagship artifact,
+unit/property/static/security, and packaged macOS jobs at the exact landed tip. That satisfies the
+last completion gate without broadening the carrier-BEAM authority-oracle claim.
