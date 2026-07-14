@@ -13,6 +13,7 @@ import {
   TOWNSHIP_NATIVE_KEY_ID,
   type TownshipNativeWorkflow,
   type TownshipNativeWorkflowOptions,
+  withTownshipPersistenceWrite,
 } from "./native_workflow";
 import {
   submitTownshipDelegation,
@@ -864,19 +865,21 @@ async function submitReleaseAuthorPost(
 async function authorReleaseBadSummaryFrame(
   options: TownshipReleaseAuthorProbeBadFrameOptions,
 ): Promise<{ frameId: string }> {
-  const localOps = await options.workflow.localLog.load();
-  const frame = await authorTownshipCommand({
-    replica: options.config.peer.replica,
-    deps: frontier(localOps),
-    command: { command: "set_summary", text: options.config.badSummaryText },
-    capId: options.capId,
-    signer: options.workflow.signer,
+  return withTownshipPersistenceWrite(options.workflow, async () => {
+    const localOps = await options.workflow.localLog.load();
+    const frame = await authorTownshipCommand({
+      replica: options.config.peer.replica,
+      deps: frontier(localOps),
+      command: { command: "set_summary", text: options.config.badSummaryText },
+      capId: options.capId,
+      signer: options.workflow.signer,
+    });
+    const op = carrierOpsToSemanticOps([frame], options.realmByPubkey)[0];
+    if (!op) throw new Error(`authored release probe frame ${frame.id} did not produce a semantic op`);
+    await options.workflow.localLog.append(op);
+    await options.workflow.carrierFrames.append(frame);
+    return { frameId: frame.id };
   });
-  const op = carrierOpsToSemanticOps([frame], options.realmByPubkey)[0];
-  if (!op) throw new Error(`authored release probe frame ${frame.id} did not produce a semantic op`);
-  await options.workflow.localLog.append(op);
-  await options.workflow.carrierFrames.append(frame);
-  return { frameId: frame.id };
 }
 
 async function findPostOnlyGrantDelegationId(

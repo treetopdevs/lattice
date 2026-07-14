@@ -13,7 +13,10 @@ import {
   type Op,
   type Verifier,
 } from "@treetopdevs/lattice-client";
-import type { TownshipNativeWorkflow } from "../src/native_workflow";
+import {
+  type TownshipNativeWorkflow,
+  withTownshipPersistenceWrite,
+} from "../src/native_workflow";
 import {
   createTownshipFeedController,
   refreshTownshipFromCarrier,
@@ -117,6 +120,21 @@ class ReadOnlyPullClient {
   async relay(): Promise<never> {
     this.forbiddenCallCount++;
     throw new Error("reactive refresh relayed");
+  }
+}
+
+class InterposingPullClient {
+  pullHave: string[] = [];
+
+  constructor(
+    private readonly frames: CarrierOpFrame[],
+    private readonly interpose: () => Promise<void>,
+  ) {}
+
+  async pull(have: string[]): Promise<unknown[]> {
+    this.pullHave = [...have];
+    await this.interpose();
+    return structuredClone(this.frames);
   }
 }
 
@@ -256,6 +274,42 @@ assert.equal(validLocalLog.saveCount, 1);
 assert.equal(validDelegations.saveCount, 1);
 assert.equal(validOutbox.accessCount, 0);
 assert.equal(validClient.forbiddenCallCount, 0);
+
+const interleavedLocalFrame = vector.clientDivergedCarrierOps.at(-1);
+if (!interleavedLocalFrame) throw new Error("missing interleaved local frame fixture");
+const framesBeforeInterleavedLocal = vector.clientDivergedCarrierOps.filter(
+  (frame) => frame.id !== interleavedLocalFrame.id,
+);
+const interleavedLocalLog = new MemoryOpLog(
+  carrierOpsToSemanticOps(framesBeforeInterleavedLocal, vector.realmByPubkey),
+);
+const interleavedDelegations = new MemoryFrameStore(framesBeforeInterleavedLocal);
+const interleavedOutbox = new ForbiddenOutboxStore();
+const interleavedWorkflow = workflow(interleavedLocalLog, interleavedDelegations, interleavedOutbox);
+const interleavedClient = new InterposingPullClient(vector.peerDivergedCarrierOps, async () => {
+  await withTownshipPersistenceWrite(interleavedWorkflow, async () => {
+    const interleavedOp = carrierOpsToSemanticOps([interleavedLocalFrame], vector.realmByPubkey)[0];
+    if (!interleavedOp) throw new Error("interleaved frame did not produce a semantic op");
+    await interleavedWorkflow.localLog.append(interleavedOp);
+    await interleavedWorkflow.delegationFrames.append(interleavedLocalFrame);
+  });
+});
+
+const interleavedProjection = await refreshTownshipFromCarrier({
+  client: interleavedClient,
+  workflow: interleavedWorkflow,
+  verifier,
+  realmByPubkey: vector.realmByPubkey,
+  generation: 8,
+});
+
+assert.deepEqual(interleavedProjection.opIds, vector.expectAfterSync.opIds);
+assert.deepEqual(interleavedLocalLog.ops.map((op) => op.id).sort(), vector.expectAfterSync.opIds);
+assert.deepEqual(
+  interleavedDelegations.frames.map((frame) => frame.id).sort(),
+  vector.oracleCarrierOps.map((frame) => frame.id).sort(),
+);
+assert.equal(interleavedOutbox.accessCount, 0);
 
 const [firstPeerFrame] = vector.peerDivergedCarrierOps;
 if (!firstPeerFrame) throw new Error("missing peer frame fixture");

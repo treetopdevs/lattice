@@ -124,7 +124,9 @@ async function launchAndProbe(serial: string): Promise<{
       local_realm: vector.client.realm,
       replica: vector.replica,
       nonce: "android-emulator-native-key-smoke",
+      server_nonce: Buffer.alloc(32, 13).toString("base64url"),
       wire_version: 1,
+      session_version: 2,
     } as const;
     const transcript = carrierTranscriptBytes(challenge, vector.client.realm, publicKey);
     const signatureBase64 = await tauriInvoke<string>(cdp, "lattice_sign_carrier", {

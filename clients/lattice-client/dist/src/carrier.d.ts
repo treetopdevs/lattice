@@ -5,7 +5,9 @@ export interface CarrierChallenge {
     local_realm: string;
     replica: string;
     nonce: string;
+    server_nonce: string;
     wire_version: number;
+    session_version: number;
 }
 export interface CarrierSigner {
     publicKey: Uint8Array;
@@ -33,6 +35,7 @@ export interface ConnectCarrierWebSocketOptions {
     expectedPeerPubkey: Uint8Array;
     verifier: CarrierVerifier;
     wireVersion?: number;
+    sessionVersion?: number;
     webSocket?: WebSocketConstructor;
 }
 export interface CarrierPushReport {
@@ -127,14 +130,17 @@ interface WebSocketLike {
 export declare function carrierTranscriptBytes(challenge: CarrierChallenge, realm: string, pubkey: Uint8Array): Uint8Array;
 export declare function carrierTranscriptHex(challenge: CarrierChallenge, realm: string, pubkey: Uint8Array): string;
 export declare function signCarrierChallenge(challenge: CarrierChallenge, signer: CarrierSigner): Promise<SignedCarrierChallenge>;
-export declare function carrierChallenge(localRealm: string, replica: string, opts?: {
+export declare function carrierChallenge(localRealm: string, replica: string, opts: {
+    serverNonce: string;
     wireVersion?: number;
+    sessionVersion?: number;
     nonce?: string;
 }): CarrierChallenge;
 export declare function verifyCarrierHello(challenge: CarrierChallenge, hello: unknown, expectedRealm: string, expectedPubkey: Uint8Array, verifier: CarrierVerifier): Promise<CarrierHello>;
 export declare function connectCarrierWebSocket(opts: ConnectCarrierWebSocketOptions): Promise<CarrierWebSocketClient>;
 export declare class CarrierWebSocketClient {
     private readonly socket;
+    private pendingServerNonce;
     private pendingRequest;
     private availabilityRoute;
     private closed;
@@ -148,9 +154,11 @@ export declare class CarrierWebSocketClient {
     shutdown(): Promise<void>;
     subscribeAvailability(): Promise<CarrierAvailabilitySubscription>;
     close(): void;
+    receiveServerNonce(expectedWireVersion: number, expectedSessionVersion: number): Promise<string>;
     request(envelope: unknown): Promise<unknown>;
     private receive;
     private rejectPending;
+    private rejectServerNonce;
     private failClient;
     private unsubscribeAvailability;
     private closeAvailability;

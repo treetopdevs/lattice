@@ -110,7 +110,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 074 | Tauri installed-app deep-link delivery smoke | P1 | M | 073 | DONE |
 | 075 | Tauri local-network pairing advertise | P1 | M | 074 | DONE |
 | 076 | Tauri mobile target readiness | P1 | M | 075 | DONE |
-| 077 | Tauri iOS simulator build readiness | P1 | S | 076 | BLOCKED (Xcode 27 beta Swift package failure after repo-side fixes) |
+| 077 | Tauri iOS simulator build readiness | P1 | S | 076 | IN PROGRESS (Xcode 26.6 archive + protected-key process-relaunch proof green; reboot, physical-device, BEAM convergence, and CI gates open) |
 | 078 | Tauri Android debug APK readiness | P1 | S | 076 | DONE |
 | 079 | Tauri Android emulator native key reuse | P1 | M | 078 | DONE |
 | 080 | Tauri Android debug APK BEAM convergence | P1 | M | 079 | DONE |
@@ -174,9 +174,9 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 138 | Versioned delegation grant handoff | P1 | XL | 053, 054, 058, 130, 137 | DONE |
 | 139 | Versioned revocation action handoff | P1 | XL | 138, **140, 141** | BLOCKED (gated on 141 — see Round 3) |
 | 140 | Restore V-01 guarantee in TS client (authority + ordering) | **P0** | L | 019, 020, 058 | DONE |
-| 141 | Serialize shell persistence (stop silent op loss) | **P0** | M | 029, 030, 032 | TODO |
-| 142 | Carrier session replay protection + durability honesty | P1 | M | 127, 128 | TODO |
-| 143 | Consolidate the versioned action ladder (pay down accretion) | P2 | L | 138 | TODO |
+| 141 | Serialize shell persistence (stop silent op loss) | **P0** | M | 029, 030, 032 | IN PROGRESS (local TDD/focused/packaged green; hosted pending) |
+| 142 | Carrier session replay protection + durability honesty | P1 | M | 127, 128 | IN PROGRESS (local TDD/focused/packaged green; hosted pending) |
+| 143 | Consolidate the versioned action ladder (pay down accretion) | P2 | L | 138 | IN PROGRESS (TDD refactor active) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
@@ -212,6 +212,23 @@ defended by an adversarial Sim-exported corpus (forged/double/unattenuated trans
 delegation collision, concurrent-append partition, pruned-log LWW) rather than by review. Hosted
 flagship run `29290474614` is green across all three jobs. Plan 139 remains BLOCKED on Plan 141
 alone.
+
+**Plan 141 is IN PROGRESS (2026-07-14).** A namespace-keyed process-local writer now serializes
+shell action, sync, and feed persistence. Post-network save phases reload and union the current
+stores, sync compacts only frames acknowledged by that sync, submit/sign/sync entry points refuse
+re-entry, and malformed native KV fails startup instead of becoming an empty store; temp files are
+fsynced before rename. RED/GREEN interleavings, focused contracts, Rust tests, and the complete
+local `npm run app:convergence` packaged chain are green. The hosted flagship gate is still open,
+so Plan 139 remains BLOCKED on Plan 141 completion.
+
+**Plan 142 is IN PROGRESS (2026-07-14).** Carrier session v2 adds a server-first 32-byte nonce
+without changing operation wire v1; both signature directions bind both nonces and both versions,
+and exact challenge bytes fail on a second connection. Re-authentication clears the prior Holder
+subscription and queued availability. Path-backed relays sync the temp file before rename, remove
+startup orphans fail-closed, and explicitly claim process-crash rather than power-loss durability.
+Focused BEAM/TypeScript gates, two deliberate mutations, and the complete local
+`npm run app:convergence` chain are green; Claude returned `PROCEED` with no P0–P2 findings. The
+hosted flagship gate remains open.
 
 ## Round 2 (deep audit, 2026-07-07, against commit `6b2cfe5`)
 

@@ -21,10 +21,11 @@ defmodule Township.Matter do
 
   ## What is NOT here — on purpose
 
-  There is no `vouch` *field* on this Replica. Vouches are attestation ops handled
-  through `Lattice.Attestation` (the seam for M4), not convergent Replica state.
-  Keeping them off the Replica is what lets the receipt-free primitive drop in at
-  M4 without a schema change here. See `Lattice.Attestation`.
+  There is no `vouch` or ballot field on this Replica. Legacy vouches remain outside
+  convergent Matter state. An election is instead linked by an immutable,
+  capability-gated `link_election` command and runs on its own bulletin-board
+  replica. The link op records the spec digest without selecting a "current"
+  election or changing W0-W3 state.
 
   A real deployment resolves the `:clerk` successor per-matter at grant time; the
   module-level `succession` default below only documents intent, exactly as the
@@ -47,6 +48,13 @@ defmodule Township.Matter do
   command(:post, [:text], do: [{:posts, {:append, text}}])
   command(:admit, [:member], do: [{:members, {:add, member}}])
   command(:remove_member, [:member], do: [{:members, {:remove, member}}])
+
+  command(:link_election, [:spec_digest],
+    do:
+      case spec_digest do
+        _ -> []
+      end
+  )
 
   # Clerk-only, authority-guarded.
   command(:close_matter, [], do: [{:clerk_locked?, {:write, true}}])

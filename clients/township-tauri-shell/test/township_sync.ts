@@ -27,6 +27,7 @@ import {
   TOWNSHIP_REALM_BY_PUBKEY,
   TOWNSHIP_REPLICA,
 } from "../src/township_sync";
+import { submitTownshipDelegation, submitTownshipPost } from "../src/township_actions";
 import { townshipCarrierPeerFromEnv } from "../src/township_carrier_peer";
 import { assertTownshipKvStoresNoSecrets } from "../src/storage_contract";
 
@@ -77,6 +78,33 @@ class RecordingCarrierClient implements CarrierSyncClient {
     this.pushedFrames.push(...ops.map((op) => (op as CarrierOpFrame).id));
     return {
       accepted: [...this.pushedFrames],
+      quarantined: [],
+      rejected: [],
+      pending: [],
+    };
+  }
+}
+
+class InterposingCarrierClient implements CarrierSyncClient {
+  private interposed = false;
+
+  constructor(private readonly interpose: () => Promise<void>) {}
+
+  async advertise(): Promise<string[]> {
+    if (!this.interposed) {
+      this.interposed = true;
+      await this.interpose();
+    }
+    return [];
+  }
+
+  async pull(): Promise<unknown[]> {
+    return [];
+  }
+
+  async push(ops: unknown[]): Promise<CarrierPushReport> {
+    return {
+      accepted: (ops as CarrierOpFrame[]).map((frame) => frame.id),
       quarantined: [],
       rejected: [],
       pending: [],
@@ -274,6 +302,7 @@ class ThrowingStateReportCarrierClient extends StateReportCarrierClient {
 }
 
 type WebSocketConstructor = NonNullable<ConnectCarrierWebSocketOptions["webSocket"]>;
+const syncServerNonce = Buffer.alloc(32, 11).toString("base64url");
 
 class ScriptedCarrierWebSocket {
   static openedUrl = "";
@@ -284,7 +313,17 @@ class ScriptedCarrierWebSocket {
 
   constructor(url: string) {
     ScriptedCarrierWebSocket.openedUrl = url;
-    queueMicrotask(() => this.emit("open"));
+    queueMicrotask(() => {
+      this.emit("open");
+      this.emit("message", {
+        data: JSON.stringify({
+          type: "carrier_nonce",
+          nonce: syncServerNonce,
+          wire_version: 1,
+          session_version: 2,
+        }),
+      });
+    });
   }
 
   static reset(): void {
@@ -301,6 +340,9 @@ class ScriptedCarrierWebSocket {
       case "carrier_challenge": {
         assert.equal(envelope.local_realm, vector.client.realm);
         assert.equal(envelope.replica, vector.replica);
+        assert.equal(envelope.server_nonce, syncServerNonce);
+        assert.equal(envelope.wire_version, 1);
+        assert.equal(envelope.session_version, 2);
         assert.equal(envelope.pubkey, sessionIdentity.publicKeyBase64);
         response = {
           type: "carrier_hello",
@@ -383,6 +425,8 @@ assert.deepEqual(TOWNSHIP_REALM_BY_PUBKEY, vector.realmByPubkey);
 
 const sessionIdentity = seededEd25519Identity(vector.client.sessionSeed);
 const peerIdentity = seededEd25519Identity(vector.peer.sessionSeed);
+const residentIdentity = seededEd25519Identity(`${vector.client.sessionSeed}:${vector.client.realm}`);
+const clerkIdentity = seededEd25519Identity(`${vector.client.sessionSeed}:clerk`);
 assert.equal(sessionIdentity.publicKeyBase64, vector.client.sessionPubkey);
 assert.equal(peerIdentity.publicKeyBase64, vector.peer.sessionPubkey);
 
@@ -406,10 +450,12 @@ assert.equal(synced.localOpCount, vector.expectAfterSync.opIds.length);
 assert.equal(synced.pulledFrameCount, 5);
 assert.equal(synced.pulledOpCount, 5);
 assert.equal(synced.pushedFrameCount, 2);
-assert.deepEqual(synced.pushedFrameIds, [
-  "05op_edpvoZmeWwBMx-mTAtBcoqIcWdUcb2gIoX3Iy4",
-  "xmret5C7xMai04EQDm1cEX1dDjeBqxPM7-TcDN8cfhI",
-]);
+assert.deepEqual(
+  synced.pushedFrameIds,
+  vector.clientDivergedCarrierOps
+    .filter((frame) => ["set_summary", "post"].includes(frameCommandName(frame) ?? ""))
+    .map((frame) => frame.id),
+);
 assert.equal(synced.acceptedCount, 2);
 assert.equal(synced.quarantinedCount, 0);
 assert.equal(synced.rejectedCount, 0);
@@ -427,7 +473,7 @@ assert.deepEqual(
 );
 assert.doesNotThrow(() => assertTownshipKvStoresNoSecrets(values, secretNeedles(sessionIdentity, peerIdentity)));
 assert.equal(commandCount(calls, "lattice_ensure_carrier_key"), 1);
-assert.equal(commandCount(calls, "lattice_kv_get"), 3);
+assert.equal(commandCount(calls, "lattice_kv_get"), 6);
 assert.equal(commandCount(calls, "lattice_kv_set"), 3);
 
 const peerValues = new Map<string, string>([
@@ -468,7 +514,7 @@ assert.deepEqual(
 );
 assert.equal(commandCount(peerCalls, "lattice_ensure_carrier_key"), 1);
 assert.equal(commandCount(peerCalls, "lattice_sign_carrier"), 1);
-assert.equal(commandCount(peerCalls, "lattice_kv_get"), 3);
+assert.equal(commandCount(peerCalls, "lattice_kv_get"), 6);
 assert.equal(commandCount(peerCalls, "lattice_kv_set"), 3);
 
 const coldStartValues = new Map<string, string>([
@@ -495,9 +541,80 @@ assert.deepEqual(storedOutboxIds(coldStartValues), []);
 assert.deepEqual(storedDelegationFrameIds(coldStartValues), vector.peerDivergedCarrierOps.map((frame) => frame.id).sort());
 assert.equal(commandCount(coldStartCalls, "lattice_ensure_carrier_key"), 1);
 assert.equal(commandCount(coldStartCalls, "lattice_sign_carrier"), 0);
-assert.equal(commandCount(coldStartCalls, "lattice_kv_get"), 3);
+assert.equal(commandCount(coldStartCalls, "lattice_kv_get"), 6);
 assert.equal(commandCount(coldStartCalls, "lattice_kv_set"), 3);
 assert.doesNotThrow(() => assertTownshipKvStoresNoSecrets(coldStartValues, secretNeedles(sessionIdentity, peerIdentity)));
+
+const interleavedPostFixture = vector.clientDivergedCarrierOps.find(
+  (frame) => frame.author === residentIdentity.publicKeyBase64 && frameCommandName(frame) === "post",
+);
+if (!interleavedPostFixture) throw new Error("missing interleaved resident post fixture");
+const framesBeforeInterleavedPost = vector.clientDivergedCarrierOps.filter(
+  (frame) => frame.id !== interleavedPostFixture.id,
+);
+const interleavedValues = new Map<string, string>([
+  [
+    storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY),
+    JSON.stringify(carrierOpsToSemanticOps(framesBeforeInterleavedPost, vector.realmByPubkey)),
+  ],
+  [storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY), "[]"],
+  [storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY), JSON.stringify(framesBeforeInterleavedPost)],
+]);
+const interleavedInvoke = nativeInvoke(interleavedValues, residentIdentity, []);
+let interleavedSubmission: Awaited<ReturnType<typeof submitTownshipPost>> | undefined;
+const interleavedSync = await syncTownshipOutbox({
+  invoke: interleavedInvoke,
+  client: new InterposingCarrierClient(async () => {
+    interleavedSubmission = await submitTownshipPost({
+      invoke: interleavedInvoke,
+      text: "resident: posted while sync was in flight",
+    });
+  }),
+});
+assert.equal(interleavedSubmission?.ok, true);
+if (!interleavedSubmission?.ok) throw new Error("interleaved post was not persisted");
+assert.equal(interleavedSync.ok, true);
+if (!interleavedSync.ok) throw new Error(interleavedSync.message);
+assert.deepEqual(
+  storedLocalOpIds(interleavedValues),
+  [...framesBeforeInterleavedPost.map((frame) => frame.id), interleavedSubmission.opId].sort(),
+);
+assert.deepEqual(storedOutboxIds(interleavedValues), [interleavedSubmission.frameId]);
+
+const interleavedGenesisFixture = vector.clientDivergedCarrierOps.at(0);
+if (!interleavedGenesisFixture) throw new Error("missing interleaved delegation genesis fixture");
+const interleavedDelegationValues = new Map<string, string>([
+  [
+    storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY),
+    JSON.stringify(carrierOpsToSemanticOps([interleavedGenesisFixture], vector.realmByPubkey)),
+  ],
+  [storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY), "[]"],
+  [storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY), JSON.stringify([interleavedGenesisFixture])],
+]);
+const interleavedDelegationInvoke = nativeInvoke(interleavedDelegationValues, clerkIdentity, []);
+let interleavedDelegation: Awaited<ReturnType<typeof submitTownshipDelegation>> | undefined;
+const interleavedDelegationSync = await syncTownshipOutbox({
+  invoke: interleavedDelegationInvoke,
+  client: new InterposingCarrierClient(async () => {
+    interleavedDelegation = await submitTownshipDelegation({
+      invoke: interleavedDelegationInvoke,
+      audiencePubkey: residentIdentity.publicKeyBase64,
+    });
+  }),
+});
+assert.equal(interleavedDelegation?.ok, true);
+if (!interleavedDelegation?.ok) throw new Error("interleaved delegation was not persisted");
+assert.equal(interleavedDelegationSync.ok, true);
+if (!interleavedDelegationSync.ok) throw new Error(interleavedDelegationSync.message);
+assert.deepEqual(
+  storedLocalOpIds(interleavedDelegationValues),
+  [interleavedGenesisFixture.id, interleavedDelegation.opId].sort(),
+);
+assert.deepEqual(storedOutboxIds(interleavedDelegationValues), [interleavedDelegation.frameId]);
+assert.deepEqual(
+  storedDelegationFrameIds(interleavedDelegationValues),
+  [interleavedGenesisFixture.id, interleavedDelegation.frameId].sort(),
+);
 
 const grantQuarantineValues = new Map<string, string>([
   [storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY), JSON.stringify(carrierOpsToSemanticOps([grantFixture], vector.realmByPubkey))],

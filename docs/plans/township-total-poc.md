@@ -16,16 +16,23 @@ blocked, and fixes the build order so nothing is attempted before its prerequisi
 > wins — and fixing this map is then a task. A hand-authored test vector is *not* the oracle
 > until it is regenerated from Sim.
 
+> **M4 supersession (2026-07-14).** The M4 portions of this orientation are governed by
+> [`docs/research/m4_interface_redesign_brief.md`](../research/m4_interface_redesign_brief.md)
+> and the live Phase F in [`TOWNSHIP_BUILD_MAP.md`](../../TOWNSHIP_BUILD_MAP.md). The old
+> four-callback attestation swap is retired: keep the legacy Stub false, use the separate
+> `Township.Election` protocol, and migrate W4/read-audit only after every blocking gate clears.
+
 ---
 
 ## 0. The vision in one paragraph
 
 Township is a town-scale (≤10k) civic coordination instance on the Lattice substrate:
 self-certifying identities on residents' own devices deliberate in durable threads, grant and
-revoke real roles, and settle local matters with attestations no one can be forced to prove —
-with **no server to seize**. It is the M5 application pilot that stress-tests the substrate
-end-to-end. The full architecture, adversary model (A1 coercion / A2 faction / A3 state), and
-roadmap live in the program doc below.
+revoke real roles, and may eventually settle local matters through a separately reviewed,
+coercion-resistant election protocol. The current election foundation makes no such security
+claim. It is the M5 application pilot that stress-tests the substrate end-to-end. The full
+architecture, adversary model (A1 coercion / A2 faction / A3 state), and roadmap live in the
+program doc below.
 
 ---
 
@@ -45,8 +52,10 @@ roadmap live in the program doc below.
 | Path | What it is | Status |
 |---|---|---|
 | `apps/lattice_core/lib/township/matter.ex` | `Township.Matter` — the civic Replica (LWW title/summary, causal-list posts, OR-set members, authority-gated `clerk_locked?`). Built only from primitives that exist today. | **Real**, parses; needs `mix compile` against branch. |
-| `apps/lattice_core/lib/lattice/attestation.ex` | `Lattice.Attestation` behaviour + `Stub` + `M4Placeholder`. **The seam** that lets W4 be honest. | Stub **proven-plumbing**; receipt-freeness **stubbed** (M4). |
-| `apps/lattice_core/test/support/attestation_contract.ex` | The contract suite the Stub AND the future M4 primitive must both pass. `flunk`s if a module claims `receipt_free?` without proving it. | **Real guardrail.** |
+| `apps/lattice_core/lib/township/election.ex` + `township/election/` | Separate research-safe election facade, immutable types, pure board projection, close evidence, structured non-claims, and offline replay. | **Foundation implemented; no cryptographic profile or coercion-resistance claim.** |
+| `apps/lattice_core/lib/township/election_board.ex` | Dedicated capability-gated public election board with service-authored commands. | **Real schema; anonymous ingress remains gated.** |
+| `apps/lattice_core/lib/lattice/attestation.ex` | Frozen legacy behaviour + false Stub; `M4Placeholder` is an empty tombstone. | **Legacy demo plumbing only.** |
+| `apps/lattice_core/test/support/attestation_contract.ex` | Legacy Stub contract; not an M4 conformance contract. | **Real legacy guardrail.** |
 | `apps/lattice_core/test/township/workflows_test.exs` | W0–W4 as falsifiable ExUnit tests driving `Sim`, each with its ASSERT line. | **Real**; run against branch — see §4 caveat on quarantine-shape assertions. |
 | `scripts/township_demo.exs` | Narrated end-to-end demo (the §5 storyline) over `Sim`. | **Real**; syntax-checked, not yet run against branch. |
 | `CLAUDE.md` (in the zip; also `CLAUDE.md` standalone) | Agent working notes for the overlay: acceptance criteria, real API signatures, the "do-not-implement" boundary, the parallel-tracks pointer. | **Start here for the app track.** |
@@ -98,8 +107,11 @@ scenario (zoning-variance-24), each with headless-verified logic:
 ## 2. Status legend — what "done" means per layer
 
 - **Proven** — a real mechanism with a passing test/oracle today.
-- **Stubbed** — plumbing works behind an interface; the hard property lands at a named milestone. Honestly labelled (e.g. `receipt_free? = false`).
-- **Blocked** — cannot be built correctly until a prerequisite lands. The only blockers in this program are: **CBOR/ADR-P08** (non-BEAM realms) and **M4 research** (receipt-freeness).
+- **Stubbed** — bounded legacy or test plumbing exists without the hard property; its interface
+  need not be the eventual mechanism. The legacy attestation Stub remains false.
+- **Blocked** — cannot be built correctly until a prerequisite lands. The tracked non-BEAM
+  canonical path has landed; M4's profile, operations, independent-review, conformance, and
+  scale gates remain open.
 
 Nothing here is "assumed done." If it is not a passing gate, it is not done (PD-001 invariant V).
 
@@ -121,11 +133,13 @@ ADR-P08 CBOR ──────────────────────�
                                                                      │
                                                                      ├─▶ Expo shell   (phone)
                                                                      └─▶ Tauri v2 shell (desktop+mobile, Vue 3.5)
-M4 research (JCJ/composition) ──▶ real receipt-free primitive ──▶ Attestation swap (W4 becomes real)
+M4 redesign foundation (Election + board + replay) ──▶ profile/operations/review gates
+                                                           │
+                                                           └─▶ read/audit migration ──▶ W4 switch; retire Stub last
 ```
 
-Two hard blockers gate the endgame: **CBOR/ADR-P08** (everything non-BEAM) and **M4 research**
-(receipt-freeness). Everything else is engineering that can proceed in parallel behind them.
+The original graph had CBOR and M4 as hard blockers. The non-BEAM canonical path has landed;
+M4's remaining gates are the hard endgame blocker.
 
 ---
 
@@ -155,8 +169,9 @@ Two hard blockers gate the endgame: **CBOR/ADR-P08** (everything non-BEAM) and *
    `invoke` bridge, and match the bridge with a Rust native command core; non-BEAM browser/phone
    shells still need secure platform key persistence, builder registration, and app wiring before
    they are user-facing equivalent carrier peers.
-6. **Receipt-freeness is not real** (W4). `Attestation.Stub` is `receipt_free? = false` by
-   design; do not let anything claim otherwise before M4.
+6. **Receipt-freeness is not real** (W4). `Attestation.Stub` remains permanently false, and
+   the implemented `Township.Election` foundation keeps every security claim `:not_claimed`.
+   W4 changes only after every M4 gate and the read/audit migration pass.
 7. **AtomVM has distribution now but no iOS/Android target** — so a phone is a TS client, not a
    BEAM node. Re-check this if AtomVM ships a mobile target (STOP condition in plan 011).
 
@@ -241,12 +256,16 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   custody via secure-store/native keystore. *Gate:* a phone build converges a Township matter.
   *Asset:* the app-shell analysis (this conversation's §Expo-vs-Tauri) — decision deferred, reversible.
 
-### Phase F — Close the coercion gap (M4, the second hard blocker)
-- **F1.** Land the receipt-free primitive per the research verdict (JCJ survival, composition —
-  PD-001 §6 R-02/R-03). *Gate:* the `Attestation.Contract` passes with `receipt_free? = true`
-  (real indistinguishability, not the `flunk` placeholder). *Asset:* `attestation.ex`, contract suite.
-- **F2.** Swap `Stub` → real primitive; W4 becomes real with **no change** to W0–W3.
-  *Gate:* POC W4 receipt-free; Township exit gate fully met.
+### Phase F — Close the coercion gap (M4, the remaining hard blocker)
+- **F1. Foundation — implemented, research-safe.** The frozen legacy boundary, authorized Matter
+  link, immutable types/artifacts, dedicated board, pure projection, close evidence, and offline
+  replay cover migration steps 1–4. They make no coercion-resistance claim.
+- **F2. Profile and operations — open.** Prove anonymous ingress and private registration, pin one
+  exact reviewed construction/profile, and add durable role runners and secret handling.
+- **F3. Assurance and scale — open.** Complete composition, independent cryptographic review,
+  conformance, availability, and measured 100/1,000/10,000-participant gates.
+- **F4. Migrate last.** Move the read model and audit bundle to verified election projection, then
+  switch W4 and retire `M4Placeholder`, the Stub, and its legacy contract.
 
 ### Phase G — The full instrument (UI)
 - **G1.** Build the production UI: Phoenix LiveView 1.1 (state/feeds) + Vue 3.5 islands (canvases),
@@ -262,8 +281,9 @@ and every claim is a passing test with `Sim` as oracle.
 
 ## 6. How to run the two (three) parallel worktrees
 
-- **Substrate worktree** — Elixir engine: Phases A, C, D1, F. Owns `Sim`, the carrier, CBOR, the
-  attestation primitive. Delegated at milestone level via the overlay `CLAUDE.md` + plans 010a/011.
+- **Substrate worktree** — Elixir engine: Phases A, C, D1, F. Owns `Sim`, the carrier, CBOR, and
+  the gated `Township.Election` foundation. `Lattice.Attestation` remains legacy-only.
+  Delegated at milestone level via the overlay `CLAUDE.md` + plans 010a/011.
 - **Client worktree** — TS library: Phases B, C3, D2. Owns the reducer/sync/conformance. Delegated
   via `ts-client-CLAUDE.md` + plan 011. No Elixir changes for Tier A.
 - **Shell/UI worktree** (later) — Phases E, G. Vue 3.5 + LiveView; consumes the client library and
@@ -283,4 +303,4 @@ coordination surface — keep them green and the tracks stay honest.
 - Overlays: `township_poc_overlay.zip`, `ts_client_realm_overlay.zip`
 - UI direction: `duality_canvas.html`, `constellation.html`, `adversary_console.html`
 - Branch of record: `treetopdevs/lattice @ claude/beautiful-gould-6b25d2`
-- Oracle: `Lattice.Sim` · Two hard blockers: **ADR-P08 (CBOR)**, **M4 (receipt-freeness)**
+- Oracle: `Lattice.Sim` · Remaining hard blocker: **M4 profile/operations/review gates**

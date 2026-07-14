@@ -44,7 +44,7 @@ defmodule T do
   def q({flag, _reason}), do: flag
 end
 
-IO.puts("\e[1mTownship — a coercion-resistant civic matter on Lattice\e[0m")
+IO.puts("\e[1mTownship — a civic matter on Lattice with legacy W4 demo plumbing\e[0m")
 
 # --------------------------------------------------------------- W0
 T.h("W0. Join by vouch — clerk admits a resident by capability, not account")
@@ -118,7 +118,7 @@ T.say(
 T.say("same predicate as revocation (V-01); quarantine identical on both realms.")
 
 # --------------------------------------------------------------- W4 (before W3 so we tally a live matter)
-T.h("W4. Attestation (STUBBED) — vouches tally; a coercion demand yields nothing")
+T.h("W4. Legacy attestation demo — caller-held vouches tally; no security claim")
 impl = Lattice.Attestation.Stub
 alice = Identity.from_seed("realm:alice", <<9::256>>)
 bob = Identity.from_seed("realm:bob", <<10::256>>)
@@ -131,13 +131,13 @@ T.say("tally over 3 vouches: outcome=#{inspect(tally.outcome)} counts=#{inspect(
 alt = Attestation.produce_alt(impl, tok_a, :reject)
 
 T.say(
-  "alice is coerced to 'prove' she voted #{inspect(elem(alt, 1).choice)} — she produces a valid alternative."
+  "alice produces an alternate demo body for #{inspect(elem(alt, 1).choice)}; this does not defeat or model a coercer."
 )
 
 T.say("town re-tally is unchanged: #{inspect(Attestation.tally(impl, [v_a, v_b, v_c]).outcome)}.")
 
 T.say(
-  "\e[33mreceipt_free? #{Attestation.receipt_free?(impl)} — the property is STUBBED; M4 makes it real.\e[0m"
+  "\e[33mreceipt_free? #{Attestation.receipt_free?(impl)} — permanently false on this legacy interface; M4 uses the separate gated Township.Election protocol.\e[0m"
 )
 
 # --------------------------------------------------------------- W3
@@ -192,5 +192,5 @@ end
 T.say("verify: mix lattice.township.verify_bundle --dir #{artifacts_dir}")
 
 IO.puts(
-  "\n\e[1m\e[32mTownship POC demo complete — the log was the truth; the coercer got nothing (stubbed).\e[0m"
+  "\n\e[1m\e[32mTownship POC demo complete — W0–W3 replayed; legacy W4 remains explicitly non-receipt-free.\e[0m"
 )

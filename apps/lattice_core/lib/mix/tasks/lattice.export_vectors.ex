@@ -675,7 +675,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
         Matter,
         "replica:matter:authority-double-transfer",
         ["clerk", "resident", "mallory"],
-        seed: "township:authority-double-transfer"
+        seed: "township:authority-double-transfer:v2:0"
       )
 
     {sim, genesis} = Sim.create_replica(sim, "clerk")

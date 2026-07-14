@@ -18,10 +18,10 @@
       "title": "Matter 404.5"
     },
     "winners": {
-      "clerk": "pOus3J70KOBTc8szjtwpQscV-JyO1nxDJ44FuygEChU",
+      "clerk": "DOvOnQ81oEh_sMEBr6IE-6pzJAJEXWcSIoZivB_5_3Q",
       "clerk_locked": null,
       "summary": null,
-      "title": "6mR_IJ_a61fDZlgoCKElAlR1hsQVRPKQ25v2jIRryQE"
+      "title": "r_qza8D0tZ2ucr9Vxdb8bsRX4ctzkrJf38qzijWujos"
     }
   },
   "generatedBy": "Lattice.Sim",
@@ -31,8 +31,8 @@
       "command": "genesis clerk",
       "deps": [],
       "field": "clerk",
-      "hash": "pOus3J70KOBTc8szjtwpQscV-JyO1nxDJ44FuygEChU",
-      "id": "pOus3J70KOBTc8szjtwpQscV-JyO1nxDJ44FuygEChU",
+      "hash": "DOvOnQ81oEh_sMEBr6IE-6pzJAJEXWcSIoZivB_5_3Q",
+      "id": "DOvOnQ81oEh_sMEBr6IE-6pzJAJEXWcSIoZivB_5_3Q",
       "kind": "authority",
       "mutation": "write",
       "value": "clerk"
@@ -41,11 +41,11 @@
       "author": "clerk",
       "command": "grant resident",
       "deps": [
-        "pOus3J70KOBTc8szjtwpQscV-JyO1nxDJ44FuygEChU"
+        "DOvOnQ81oEh_sMEBr6IE-6pzJAJEXWcSIoZivB_5_3Q"
       ],
       "field": "__authority",
-      "hash": "6NacZxY4QSJfrWe8DkaBl8f0EXzatHgrUVnS4E-SGg4",
-      "id": "6NacZxY4QSJfrWe8DkaBl8f0EXzatHgrUVnS4E-SGg4",
+      "hash": "ugtUmFg3EdHnx9r0IggrXJnHvFT7pDFw0rtuZW8OAAM",
+      "id": "ugtUmFg3EdHnx9r0IggrXJnHvFT7pDFw0rtuZW8OAAM",
       "kind": "authority",
       "mutation": "write",
       "value": null
@@ -54,63 +54,50 @@
       "author": "clerk",
       "command": "grant neighbor",
       "deps": [
-        "6NacZxY4QSJfrWe8DkaBl8f0EXzatHgrUVnS4E-SGg4"
+        "ugtUmFg3EdHnx9r0IggrXJnHvFT7pDFw0rtuZW8OAAM"
       ],
       "field": "__authority",
-      "hash": "VEU3Rpqm9RSk4qRQEKOOrqaeCh342F7h9EO0aTRVQNo",
-      "id": "VEU3Rpqm9RSk4qRQEKOOrqaeCh342F7h9EO0aTRVQNo",
+      "hash": "HzY8vkU425eAJxS7kB_xFtRnMYr4lUAS9SzV-5s7vvM",
+      "id": "HzY8vkU425eAJxS7kB_xFtRnMYr4lUAS9SzV-5s7vvM",
       "kind": "authority",
       "mutation": "write",
       "value": null
     },
     {
-      "author": "clerk",
-      "command": "admit",
-      "deps": [
-        "VEU3Rpqm9RSk4qRQEKOOrqaeCh342F7h9EO0aTRVQNo"
-      ],
-      "field": "members",
-      "hash": "1-cYtb8NploK0xTKX6PMfw7t-AQOk3Wtj4wll5uDx1U",
-      "id": "1-cYtb8NploK0xTKX6PMfw7t-AQOk3Wtj4wll5uDx1U",
-      "kind": "command",
-      "mutation": "add",
-      "value": "clerk"
-    },
-    {
       "author": "resident",
       "command": "admit",
       "deps": [
-        "VEU3Rpqm9RSk4qRQEKOOrqaeCh342F7h9EO0aTRVQNo"
+        "HzY8vkU425eAJxS7kB_xFtRnMYr4lUAS9SzV-5s7vvM"
       ],
       "field": "members",
-      "hash": "BOChijbdRJ-qmL_4UgYDSqbzKJLl5hQKb2OqGhHAt8M",
-      "id": "BOChijbdRJ-qmL_4UgYDSqbzKJLl5hQKb2OqGhHAt8M",
+      "hash": "92pVJQennwOSMB4cwRVR68XlW0u8S4lK0tkAOYF-uqI",
+      "id": "92pVJQennwOSMB4cwRVR68XlW0u8S4lK0tkAOYF-uqI",
       "kind": "command",
       "mutation": "add",
       "value": "resident"
     },
     {
-      "author": "clerk",
-      "command": "post",
+      "author": "resident",
+      "command": "set_title",
       "deps": [
-        "1-cYtb8NploK0xTKX6PMfw7t-AQOk3Wtj4wll5uDx1U"
+        "92pVJQennwOSMB4cwRVR68XlW0u8S4lK0tkAOYF-uqI"
       ],
-      "field": "posts",
-      "hash": "EIznW8eLc8OI2_3S_sTMLUXM1r0HjglYVVsFcnRO4lg",
-      "id": "EIznW8eLc8OI2_3S_sTMLUXM1r0HjglYVVsFcnRO4lg",
+      "field": "title",
+      "hash": "5o-Nx_LheciMX2Q9xNyoCAUgapPwcA6Zh9RADZrbBlY",
+      "id": "5o-Nx_LheciMX2Q9xNyoCAUgapPwcA6Zh9RADZrbBlY",
       "kind": "command",
-      "mutation": "append",
-      "value": "p404-2"
+      "mutation": "write",
+      "value": "Matter 404.1"
     },
     {
       "author": "neighbor",
       "command": "admit",
       "deps": [
-        "VEU3Rpqm9RSk4qRQEKOOrqaeCh342F7h9EO0aTRVQNo"
+        "HzY8vkU425eAJxS7kB_xFtRnMYr4lUAS9SzV-5s7vvM"
       ],
       "field": "members",
-      "hash": "fD9KklCBi6zv-fAWSCP5Mxt5tEOieP0Sl9AUxkFh_mc",
-      "id": "fD9KklCBi6zv-fAWSCP5Mxt5tEOieP0Sl9AUxkFh_mc",
+      "hash": "GKDiE33nBQ5U_ufMyEk0QtRBq_QKTpOc66-KuzUsDzA",
+      "id": "GKDiE33nBQ5U_ufMyEk0QtRBq_QKTpOc66-KuzUsDzA",
       "kind": "command",
       "mutation": "add",
       "value": "neighbor"
@@ -119,53 +106,66 @@
       "author": "neighbor",
       "command": "set_title",
       "deps": [
-        "fD9KklCBi6zv-fAWSCP5Mxt5tEOieP0Sl9AUxkFh_mc"
+        "GKDiE33nBQ5U_ufMyEk0QtRBq_QKTpOc66-KuzUsDzA"
       ],
       "field": "title",
-      "hash": "Nt_T4KWN14N4I49AjDctkfvpChmFwivF90hifSUQgUI",
-      "id": "Nt_T4KWN14N4I49AjDctkfvpChmFwivF90hifSUQgUI",
+      "hash": "2G5OLZzVgF7qh3J910AeXaTRr_HipSLk8vXcLwyCcy0",
+      "id": "2G5OLZzVgF7qh3J910AeXaTRr_HipSLk8vXcLwyCcy0",
       "kind": "command",
       "mutation": "write",
       "value": "Matter 404.4"
     },
     {
-      "author": "neighbor",
-      "command": "set_title",
+      "author": "clerk",
+      "command": "admit",
       "deps": [
-        "Nt_T4KWN14N4I49AjDctkfvpChmFwivF90hifSUQgUI"
+        "HzY8vkU425eAJxS7kB_xFtRnMYr4lUAS9SzV-5s7vvM"
       ],
-      "field": "title",
-      "hash": "6mR_IJ_a61fDZlgoCKElAlR1hsQVRPKQ25v2jIRryQE",
-      "id": "6mR_IJ_a61fDZlgoCKElAlR1hsQVRPKQ25v2jIRryQE",
+      "field": "members",
+      "hash": "HCzeT67hduXuQBAsd9SdHiRWBC295mrpL2LlXucNXo8",
+      "id": "HCzeT67hduXuQBAsd9SdHiRWBC295mrpL2LlXucNXo8",
       "kind": "command",
-      "mutation": "write",
-      "value": "Matter 404.5"
+      "mutation": "add",
+      "value": "clerk"
     },
     {
-      "author": "resident",
-      "command": "set_title",
+      "author": "clerk",
+      "command": "post",
       "deps": [
-        "BOChijbdRJ-qmL_4UgYDSqbzKJLl5hQKb2OqGhHAt8M"
+        "HCzeT67hduXuQBAsd9SdHiRWBC295mrpL2LlXucNXo8"
       ],
-      "field": "title",
-      "hash": "rfSItxJFmKWHectHBa2tdVlGJQcSteVAEE82ntbUUyg",
-      "id": "rfSItxJFmKWHectHBa2tdVlGJQcSteVAEE82ntbUUyg",
+      "field": "posts",
+      "hash": "dnB9lBpRatSgNaTQ4pVVUh6hihtfEdjxlhGVu655y4w",
+      "id": "dnB9lBpRatSgNaTQ4pVVUh6hihtfEdjxlhGVu655y4w",
       "kind": "command",
-      "mutation": "write",
-      "value": "Matter 404.1"
+      "mutation": "append",
+      "value": "p404-2"
     },
     {
       "author": "clerk",
       "command": "admit",
       "deps": [
-        "EIznW8eLc8OI2_3S_sTMLUXM1r0HjglYVVsFcnRO4lg"
+        "dnB9lBpRatSgNaTQ4pVVUh6hihtfEdjxlhGVu655y4w"
       ],
       "field": "members",
-      "hash": "swLlJ-wMVG--DvggOfJyQTjYv1eFCBIgMkdVP1ysPns",
-      "id": "swLlJ-wMVG--DvggOfJyQTjYv1eFCBIgMkdVP1ysPns",
+      "hash": "3K3A_EmoQonj7yWDRIT8KWgqjRDAernUHImzW5xwag0",
+      "id": "3K3A_EmoQonj7yWDRIT8KWgqjRDAernUHImzW5xwag0",
       "kind": "command",
       "mutation": "add",
       "value": "guest-404-9"
+    },
+    {
+      "author": "neighbor",
+      "command": "set_title",
+      "deps": [
+        "2G5OLZzVgF7qh3J910AeXaTRr_HipSLk8vXcLwyCcy0"
+      ],
+      "field": "title",
+      "hash": "r_qza8D0tZ2ucr9Vxdb8bsRX4ctzkrJf38qzijWujos",
+      "id": "r_qza8D0tZ2ucr9Vxdb8bsRX4ctzkrJf38qzijWujos",
+      "kind": "command",
+      "mutation": "write",
+      "value": "Matter 404.5"
     }
   ],
   "perspectives": [],

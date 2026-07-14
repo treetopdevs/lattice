@@ -40,14 +40,19 @@ defmodule LatticeNodeSpike.CarrierTelemetryTest do
 
   test "WsHandler emits auth failure telemetry" do
     attach([:lattice, :carrier, :auth_failure])
+    server_nonce = Base.url_encode64(:binary.copy(<<17>>, 32), padding: false)
 
     challenge =
       "node_a"
-      |> Session.challenge(Scenario.replica(), wire_version: Wire.version())
+      |> Session.challenge(Scenario.replica(),
+        server_nonce: server_nonce,
+        wire_version: Wire.version()
+      )
       |> Session.sign_challenge(identity("node_a"))
 
     state = %{
       authenticated?: false,
+      server_nonce: server_nonce,
       trusted_peer_realm: "node_a",
       trusted_peer_pubkey: Lattice.Identity.from_seed("node_a", "wrong-carrier-spike").pub
     }

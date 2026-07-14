@@ -26,7 +26,7 @@ defmodule TownshipWeb.InstrumentSourceTest do
     assert payload.provenance.bundle_dir == Path.expand(@tracked_dir)
 
     assert payload.provenance.matter_sha256 ==
-             "df911bb13013abefab7af103992fd1413eb754989ecf74f26cedb9e8ef6d17d3"
+             "f41566fd3ea93e6394c27e78fda04e7d55fe7a002f18a8cfe8d1cdc5754ce125"
 
     assert payload.causal_replay["schema"] == "township-causal-replay-v1"
     assert length(payload.causal_replay["frames"]) == 13

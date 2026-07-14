@@ -146,6 +146,15 @@ jobs:
       - name: TS Township shell typecheck
         working-directory: clients/township-tauri-shell
         run: npm run typecheck
+      - name: TS Township runtime wiring contract
+        working-directory: clients/township-tauri-shell
+        run: npm run runtime:wiring:contract
+      - name: TS Township intent UI behavior
+        working-directory: clients/township-tauri-shell
+        run: npm run intent-ui:contract
+      - name: TS Township action handoff support contract
+        working-directory: clients/township-tauri-shell
+        run: npm run action-handoff-support:contract
       - name: TS Township action-intent contract
         working-directory: clients/township-tauri-shell
         run: npm run action-intent:contract

@@ -125,7 +125,7 @@ try {
   );
   assert.equal(commandCount(calls, "lattice_ensure_carrier_key"), 1);
   assert.equal(commandCount(calls, "lattice_sign_carrier"), 1);
-  assert.equal(commandCount(calls, "lattice_kv_get"), 3);
+  assert.equal(commandCount(calls, "lattice_kv_get"), 6);
   assert.equal(commandCount(calls, "lattice_kv_set"), 3);
 
   const reportConn = await connectCarrierWebSocket({

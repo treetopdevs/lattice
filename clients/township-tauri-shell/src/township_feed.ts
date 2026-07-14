@@ -8,7 +8,10 @@ import {
   type CarrierOpFrame,
   type Verifier,
 } from "@treetopdevs/lattice-client";
-import type { TownshipNativeWorkflow } from "./native_workflow";
+import {
+  type TownshipNativeWorkflow,
+  withTownshipPersistenceWrite,
+} from "./native_workflow";
 import type { TownshipCarrierPeerConfig } from "./township_carrier_peer";
 import {
   townshipPreviewFromOps,
@@ -69,10 +72,7 @@ export interface TownshipFeedController {
 export async function refreshTownshipFromCarrier(
   options: RefreshTownshipFromCarrierOptions,
 ): Promise<TownshipFeedProjection> {
-  const [localOps, localDelegationFrames] = await Promise.all([
-    options.workflow.localLog.load(),
-    options.workflow.delegationFrames.load(),
-  ]);
+  const localOps = await options.workflow.localLog.load();
   const pulled = await options.client.pull(localOps.map((op) => op.id));
   throwIfRefreshStopped(options.signal);
   const pulledFrames = pulled.map(decodeCarrierOpFrame);
@@ -84,20 +84,28 @@ export async function refreshTownshipFromCarrier(
   }
 
   const pulledOps = carrierOpsToSemanticOps(pulledFrames, options.realmByPubkey);
-  const ops = integrate(localOps, pulledOps);
-  const delegationFrames = mergeCarrierFrames([...localDelegationFrames, ...pulledFrames]);
-  const matter = townshipPreviewFromOps(ops);
+  const persisted = await withTownshipPersistenceWrite(options.workflow, async () => {
+    throwIfRefreshStopped(options.signal);
+    const [currentOps, currentDelegationFrames] = await Promise.all([
+      options.workflow.localLog.load(),
+      options.workflow.delegationFrames.load(),
+    ]);
+    const ops = integrate(currentOps, pulledOps);
+    const delegationFrames = mergeCarrierFrames([...currentDelegationFrames, ...pulledFrames]);
+    const matter = townshipPreviewFromOps(ops);
 
-  throwIfRefreshStopped(options.signal);
-  await Promise.all([
-    options.workflow.localLog.save(ops),
-    options.workflow.delegationFrames.save(delegationFrames),
-  ]);
+    throwIfRefreshStopped(options.signal);
+    await Promise.all([
+      options.workflow.localLog.save(ops),
+      options.workflow.delegationFrames.save(delegationFrames),
+    ]);
+    return { ops, matter };
+  });
 
   return {
     generation: options.generation,
-    opIds: ops.map((op) => op.id).sort(),
-    matter,
+    opIds: persisted.ops.map((op) => op.id).sort(),
+    matter: persisted.matter,
   };
 }
 

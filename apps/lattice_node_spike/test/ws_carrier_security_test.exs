@@ -1,6 +1,7 @@
 defmodule LatticeNodeSpike.WebSocketCarrierSecurityTest do
   use ExUnit.Case, async: false
 
+  alias Lattice.Carrier.{Session, Wire}
   alias Lattice.Carrier.WebSocket, as: WsCarrier
   alias Lattice.{Identity, Log, Op}
   alias Lattice.Transport.WebSocket.Client
@@ -34,6 +35,12 @@ defmodule LatticeNodeSpike.WebSocketCarrierSecurityTest do
     port = start_peer_server()
 
     {:ok, client} = Client.connect(port: port, path: "/carrier")
+
+    assert {:ok, nonce_frame} = Client.recv_envelope(client)
+
+    assert {:ok, _server_nonce} =
+             Session.verify_nonce_frame(nonce_frame, expected_wire_version: Wire.version())
+
     :ok = Client.send_envelope(client, %{type: "status"})
 
     assert {:ok, %{"type" => "error", "reason" => "unauthenticated"}} =
@@ -193,13 +200,16 @@ defmodule LatticeNodeSpike.WebSocketCarrierSecurityTest do
   defmodule BadPushHandler do
     @behaviour :cowboy_websocket
 
-    alias Lattice.Carrier.Session
+    alias Lattice.Carrier.{Session, Wire}
 
     @impl :cowboy_websocket
     def init(req, state), do: {:cowboy_websocket, req, state}
 
     @impl :cowboy_websocket
-    def websocket_init(state), do: {:ok, state}
+    def websocket_init(state) do
+      nonce_frame = Session.nonce_frame(wire_version: Wire.version())
+      {:reply, {:text, Jason.encode!(nonce_frame)}, state}
+    end
 
     @impl :cowboy_websocket
     def websocket_handle({:text, text}, state) do
@@ -229,13 +239,16 @@ defmodule LatticeNodeSpike.WebSocketCarrierSecurityTest do
   defmodule FeedHandler do
     @behaviour :cowboy_websocket
 
-    alias Lattice.Carrier.Session
+    alias Lattice.Carrier.{Session, Wire}
 
     @impl :cowboy_websocket
     def init(req, state), do: {:cowboy_websocket, req, state}
 
     @impl :cowboy_websocket
-    def websocket_init(state), do: {:ok, state}
+    def websocket_init(state) do
+      nonce_frame = Session.nonce_frame(wire_version: Wire.version())
+      {:reply, {:text, Jason.encode!(nonce_frame)}, state}
+    end
 
     @impl :cowboy_websocket
     def websocket_handle({:text, text}, state) do

@@ -5,6 +5,123 @@ defmodule TownshipWeb.InstrumentLive do
 
   alias TownshipWeb.{ActionIntent, CarrierProjection, InstrumentSource}
 
+  @intent_slots [
+    post: %{
+      kind: :form,
+      forms: [%{assign: :post_intent_form, as: :post, field: "text"}],
+      url: :post_intent_url,
+      replica: :post_intent_replica,
+      error: :post_intent_error,
+      command: nil,
+      error_replica: nil,
+      fallback: {:error_message, "A fresh carrier snapshot is required before opening the app."}
+    },
+    summary: %{
+      kind: :form,
+      forms: [%{assign: :summary_intent_form, as: :summary, field: "text"}],
+      url: :summary_intent_url,
+      replica: :summary_intent_replica,
+      error: :summary_intent_error,
+      command: nil,
+      error_replica: nil,
+      sibling: :title,
+      fallback: :clear
+    },
+    title: %{
+      kind: :form,
+      forms: [%{assign: :title_intent_form, as: :title, field: "text"}],
+      url: :title_intent_url,
+      replica: :title_intent_replica,
+      error: :title_intent_error,
+      command: nil,
+      error_replica: nil,
+      sibling: :summary,
+      fallback: :clear
+    },
+    grant: %{
+      kind: :form,
+      forms: [%{assign: :grant_intent_form, as: :grant, field: "audience"}],
+      url: :grant_intent_url,
+      replica: :grant_intent_replica,
+      error: :grant_intent_error,
+      command: nil,
+      error_replica: :replica,
+      fallback: :clear
+    },
+    roster: %{
+      kind: :form,
+      forms: [
+        %{assign: :admit_intent_form, as: :admit, field: "member"},
+        %{assign: :roster_intent_form, as: :roster, field: "member"}
+      ],
+      url: :roster_intent_url,
+      replica: :roster_intent_replica,
+      error: :roster_intent_error,
+      command: :roster_intent_command,
+      error_replica: :replica,
+      fallback: :clear
+    },
+    status: %{
+      kind: :model_status,
+      forms: [],
+      url: :status_intent_url,
+      replica: :status_intent_replica,
+      error: nil,
+      command: :status_intent_command,
+      error_replica: nil,
+      fallback: :clear
+    }
+  ]
+
+  @intent_slots_by_name Map.new(@intent_slots)
+  @intent_events %{
+    "prepare_post" => %{
+      slot: :post,
+      param: {"post", "text"},
+      form: :post_intent_form,
+      builder: :post
+    },
+    "prepare_summary_edit" => %{
+      slot: :summary,
+      param: {"summary", "text"},
+      form: :summary_intent_form,
+      builder: {:field, :set_summary}
+    },
+    "prepare_title_edit" => %{
+      slot: :title,
+      param: {"title", "text"},
+      form: :title_intent_form,
+      builder: {:field, :set_title}
+    },
+    "prepare_grant" => %{
+      slot: :grant,
+      param: {"grant", "audience"},
+      form: :grant_intent_form,
+      builder: :grant
+    },
+    "prepare_admit" => %{
+      slot: :roster,
+      param: {"admit", "member"},
+      form: :admit_intent_form,
+      builder: {:roster, :admit},
+      command: :admit
+    },
+    "prepare_remove_member" => %{
+      slot: :roster,
+      param: {"roster", "member"},
+      form: :roster_intent_form,
+      builder: {:roster, :remove_member},
+      command: :remove_member
+    },
+    "prepare_status_action" => %{
+      slot: :status,
+      param: :none,
+      builder: :status,
+      command: :derived
+    }
+  }
+  @intent_event_names Map.keys(@intent_events)
+
   @impl true
   def mount(_params, _session, socket) do
     socket = initialize_action_intent(socket)
@@ -16,238 +133,118 @@ defmodule TownshipWeb.InstrumentLive do
   end
 
   @impl true
-  def handle_event(
-        "prepare_post",
-        %{"post" => %{"text" => text}},
-        %{assigns: %{source_state: :fresh, provenance: %{replica: replica}}} = socket
-      ) do
-    case ActionIntent.post_url(replica, text) do
-      {:ok, url} ->
-        {:noreply,
-         assign(socket,
-           post_intent_form: post_intent_form(text),
-           post_intent_url: url,
-           post_intent_replica: replica,
-           post_intent_error: nil
-         )}
-
-      {:error, reason} ->
-        {:noreply,
-         assign(socket,
-           post_intent_form: post_intent_form(text),
-           post_intent_url: nil,
-           post_intent_replica: nil,
-           post_intent_error: action_intent_error(reason)
-         )}
-    end
-  end
-
-  def handle_event("prepare_post", _params, socket) do
-    {:noreply,
-     assign(socket,
-       post_intent_url: nil,
-       post_intent_replica: nil,
-       post_intent_error: "A fresh carrier snapshot is required before opening the app."
-     )}
-  end
-
-  def handle_event(
-        "prepare_summary_edit",
-        %{"summary" => %{"text" => text}},
-        %{assigns: %{source_state: :fresh, provenance: %{replica: replica}}} = socket
-      ) do
-    case ActionIntent.field_url(replica, :set_summary, text) do
-      {:ok, url} ->
-        {:noreply,
-         socket
-         |> clear_title_intent()
-         |> assign(
-           summary_intent_form: summary_intent_form(text),
-           summary_intent_url: url,
-           summary_intent_replica: replica,
-           summary_intent_error: nil
-         )}
-
-      {:error, reason} ->
-        {:noreply,
-         socket
-         |> clear_title_intent()
-         |> assign(
-           summary_intent_form: summary_intent_form(text),
-           summary_intent_url: nil,
-           summary_intent_replica: nil,
-           summary_intent_error: action_intent_error(reason)
-         )}
-    end
-  end
-
-  def handle_event("prepare_summary_edit", _params, socket) do
-    {:noreply, clear_summary_intent(socket)}
-  end
-
-  def handle_event(
-        "prepare_title_edit",
-        %{"title" => %{"text" => text}},
-        %{assigns: %{source_state: :fresh, provenance: %{replica: replica}}} = socket
-      ) do
-    case ActionIntent.field_url(replica, :set_title, text) do
-      {:ok, url} ->
-        {:noreply,
-         socket
-         |> clear_summary_intent()
-         |> assign(
-           title_intent_form: title_intent_form(text),
-           title_intent_url: url,
-           title_intent_replica: replica,
-           title_intent_error: nil
-         )}
-
-      {:error, reason} ->
-        {:noreply,
-         socket
-         |> clear_summary_intent()
-         |> assign(
-           title_intent_form: title_intent_form(text),
-           title_intent_url: nil,
-           title_intent_replica: nil,
-           title_intent_error: action_intent_error(reason)
-         )}
-    end
-  end
-
-  def handle_event("prepare_title_edit", _params, socket) do
-    {:noreply, clear_title_intent(socket)}
-  end
-
-  def handle_event(
-        "prepare_grant",
-        %{"grant" => %{"audience" => audience}},
-        %{assigns: %{source_state: :fresh, provenance: %{replica: replica}}} = socket
-      ) do
-    case ActionIntent.grant_url(replica, audience) do
-      {:ok, url} ->
-        {:noreply,
-         assign(socket,
-           grant_intent_form: grant_intent_form(audience),
-           grant_intent_url: url,
-           grant_intent_replica: replica,
-           grant_intent_error: nil
-         )}
-
-      {:error, reason} ->
-        {:noreply,
-         assign(socket,
-           grant_intent_form: grant_intent_form(audience),
-           grant_intent_url: nil,
-           grant_intent_replica: replica,
-           grant_intent_error: action_intent_error(reason)
-         )}
-    end
-  end
-
-  def handle_event("prepare_grant", _params, socket) do
-    {:noreply, clear_grant_intent(socket)}
-  end
-
-  def handle_event(
-        "prepare_admit",
-        %{"admit" => %{"member" => member}},
-        %{assigns: %{source_state: :fresh, provenance: %{replica: replica}}} = socket
-      ) do
-    case ActionIntent.roster_url(replica, :admit, member) do
-      {:ok, url} ->
-        {:noreply,
-         assign(socket,
-           admit_intent_form: admit_intent_form(member),
-           roster_intent_url: url,
-           roster_intent_command: :admit,
-           roster_intent_replica: replica,
-           roster_intent_error: nil
-         )}
-
-      {:error, reason} ->
-        {:noreply,
-         assign(socket,
-           admit_intent_form: admit_intent_form(member),
-           roster_intent_url: nil,
-           roster_intent_command: nil,
-           roster_intent_replica: replica,
-           roster_intent_error: action_intent_error(reason)
-         )}
-    end
-  end
-
-  def handle_event("prepare_admit", _params, socket) do
-    {:noreply, clear_roster_intent(socket)}
-  end
-
-  def handle_event(
-        "prepare_remove_member",
-        %{"roster" => %{"member" => member}},
-        %{assigns: %{source_state: :fresh, provenance: %{replica: replica}}} = socket
-      ) do
-    case ActionIntent.roster_url(replica, :remove_member, member) do
-      {:ok, url} ->
-        {:noreply,
-         assign(socket,
-           roster_intent_form: roster_intent_form(member),
-           roster_intent_url: url,
-           roster_intent_command: :remove_member,
-           roster_intent_replica: replica,
-           roster_intent_error: nil
-         )}
-
-      {:error, reason} ->
-        {:noreply,
-         assign(socket,
-           roster_intent_form: roster_intent_form(member),
-           roster_intent_url: nil,
-           roster_intent_command: nil,
-           roster_intent_replica: replica,
-           roster_intent_error: action_intent_error(reason)
-         )}
-    end
-  end
-
-  def handle_event("prepare_remove_member", _params, socket) do
-    {:noreply, clear_roster_intent(socket)}
-  end
-
-  def handle_event(
-        "prepare_status_action",
-        _params,
-        %{
-          assigns: %{
-            source_state: :fresh,
-            model: model,
-            provenance: %{replica: replica}
-          }
-        } = socket
-      ) do
-    command = status_action_command(model)
-
-    case ActionIntent.status_url(replica, command) do
-      {:ok, url} ->
-        {:noreply,
-         assign(socket,
-           status_intent_url: url,
-           status_intent_command: command,
-           status_intent_replica: replica
-         )}
-
-      {:error, _reason} ->
-        {:noreply, clear_status_intent(socket)}
-    end
-  end
-
-  def handle_event("prepare_status_action", _params, socket) do
-    {:noreply, clear_status_intent(socket)}
+  def handle_event(event, params, socket) when event in @intent_event_names do
+    {:noreply, prepare_intent(socket, Map.fetch!(@intent_events, event), params)}
   end
 
   @impl true
   def handle_info({:township_instrument, projection_state}, socket) do
     {:noreply, apply_projection(socket, projection_state)}
   end
+
+  defp prepare_intent(
+         %{assigns: %{source_state: :fresh, provenance: %{replica: replica}}} = socket,
+         event,
+         params
+       ) do
+    case intent_value(params, event.param) do
+      {:ok, value} -> prepare_fresh_intent(socket, event, replica, value)
+      :error -> apply_intent_fallback(socket, event.slot)
+    end
+  end
+
+  defp prepare_intent(socket, event, _params), do: apply_intent_fallback(socket, event.slot)
+
+  defp prepare_fresh_intent(socket, event, replica, value) do
+    slot = Map.fetch!(@intent_slots_by_name, event.slot)
+    command = intent_command(event, socket.assigns.model)
+
+    socket =
+      socket
+      |> clear_sibling_intent(slot)
+      |> assign_event_form(slot, event, value)
+
+    case build_intent_url(event.builder, replica, value, command) do
+      {:ok, url} -> assign_intent_success(socket, slot, replica, command, url)
+      {:error, reason} -> assign_intent_error(socket, event.slot, slot, replica, reason)
+    end
+  end
+
+  defp intent_value(_params, :none), do: {:ok, nil}
+
+  defp intent_value(params, {group, field}) do
+    case params do
+      %{^group => %{^field => value}} -> {:ok, value}
+      _other -> :error
+    end
+  end
+
+  defp intent_command(%{command: :derived}, model), do: status_action_command(model)
+  defp intent_command(event, _model), do: Map.get(event, :command)
+
+  defp build_intent_url(:post, replica, value, _command),
+    do: ActionIntent.post_url(replica, value)
+
+  defp build_intent_url({:field, command}, replica, value, _slot_command),
+    do: ActionIntent.field_url(replica, command, value)
+
+  defp build_intent_url(:grant, replica, value, _command),
+    do: ActionIntent.grant_url(replica, value)
+
+  defp build_intent_url({:roster, command}, replica, value, _slot_command),
+    do: ActionIntent.roster_url(replica, command, value)
+
+  defp build_intent_url(:status, replica, _value, command),
+    do: ActionIntent.status_url(replica, command)
+
+  defp clear_sibling_intent(socket, %{sibling: sibling}),
+    do: clear_intent_slot(socket, sibling)
+
+  defp clear_sibling_intent(socket, _slot), do: socket
+
+  defp assign_event_form(socket, slot, %{form: form_assign}, value) do
+    form = Enum.find(slot.forms, &(&1.assign == form_assign))
+    assign(socket, form_assign, intent_form(form, value))
+  end
+
+  defp assign_event_form(socket, _slot, _event, _value), do: socket
+
+  defp assign_intent_success(socket, slot, replica, command, url) do
+    assigns =
+      %{slot.url => url, slot.replica => replica}
+      |> maybe_put(slot.error, nil)
+      |> maybe_put(slot.command, command)
+
+    assign(socket, assigns)
+  end
+
+  defp assign_intent_error(socket, slot_name, %{kind: :model_status}, _replica, _reason),
+    do: clear_intent_slot(socket, slot_name)
+
+  defp assign_intent_error(socket, _slot_name, slot, replica, reason) do
+    error_replica = if slot.error_replica == :replica, do: replica, else: nil
+
+    assigns =
+      %{slot.url => nil, slot.replica => error_replica, slot.error => action_intent_error(reason)}
+      |> maybe_put(slot.command, nil)
+
+    assign(socket, assigns)
+  end
+
+  defp apply_intent_fallback(socket, slot_name) do
+    slot = Map.fetch!(@intent_slots_by_name, slot_name)
+
+    case slot.fallback do
+      :clear ->
+        clear_intent_slot(socket, slot_name)
+
+      {:error_message, message} ->
+        assign(socket, %{slot.url => nil, slot.replica => nil, slot.error => message})
+    end
+  end
+
+  defp maybe_put(map, nil, _value), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
   defp configured_projection(socket) do
     with true <- connected?(socket),
@@ -304,12 +301,7 @@ defmodule TownshipWeb.InstrumentLive do
 
   defp assign_payload(socket, source_state, payload) do
     socket
-    |> retain_action_intent(source_state, payload.provenance.replica)
-    |> retain_summary_intent(source_state, payload.provenance.replica)
-    |> retain_title_intent(source_state, payload.provenance.replica)
-    |> retain_grant_intent(source_state, payload.provenance.replica)
-    |> retain_roster_intent(source_state, payload.provenance.replica)
-    |> retain_status_intent(source_state, payload.read_model, payload.provenance.replica)
+    |> retain_action_intents(source_state, payload.read_model, payload.provenance.replica)
     |> assign(
       page_title: "Township Instrument",
       source_state: source_state,
@@ -332,210 +324,84 @@ defmodule TownshipWeb.InstrumentLive do
   end
 
   defp initialize_action_intent(socket) do
-    assign(socket,
-      post_intent_form: post_intent_form(""),
-      post_intent_url: nil,
-      post_intent_replica: nil,
-      post_intent_error: nil,
-      summary_intent_form: summary_intent_form(""),
-      summary_intent_url: nil,
-      summary_intent_replica: nil,
-      summary_intent_error: nil,
-      title_intent_form: title_intent_form(""),
-      title_intent_url: nil,
-      title_intent_replica: nil,
-      title_intent_error: nil,
-      grant_intent_form: grant_intent_form(""),
-      grant_intent_url: nil,
-      grant_intent_replica: nil,
-      grant_intent_error: nil,
-      admit_intent_form: admit_intent_form(""),
-      roster_intent_form: roster_intent_form(""),
-      roster_intent_url: nil,
-      roster_intent_command: nil,
-      roster_intent_replica: nil,
-      roster_intent_error: nil,
-      status_intent_url: nil,
-      status_intent_command: nil,
-      status_intent_replica: nil
-    )
+    assign(socket, action_intent_defaults())
   end
 
-  defp retain_action_intent(socket, :fresh, replica) do
-    case socket.assigns.post_intent_replica do
-      nil -> socket
-      ^replica -> socket
-      _other_replica -> clear_action_intent(socket)
-    end
+  defp retain_action_intents(socket, source_state, model, replica) do
+    Enum.reduce(@intent_slots, socket, fn {slot_name, slot}, socket ->
+      retain_intent_slot(socket, slot_name, slot, source_state, model, replica)
+    end)
   end
 
-  defp retain_action_intent(socket, _source_state, _replica), do: clear_action_intent(socket)
-
-  defp retain_summary_intent(socket, :fresh, replica) do
-    case socket.assigns.summary_intent_replica do
-      nil -> socket
-      ^replica -> socket
-      _other_replica -> clear_summary_intent(socket)
-    end
-  end
-
-  defp retain_summary_intent(socket, _source_state, _replica), do: clear_summary_intent(socket)
-
-  defp retain_title_intent(socket, :fresh, replica) do
-    case socket.assigns.title_intent_replica do
-      nil -> socket
-      ^replica -> socket
-      _other_replica -> clear_title_intent(socket)
-    end
-  end
-
-  defp retain_title_intent(socket, _source_state, _replica), do: clear_title_intent(socket)
-
-  defp retain_grant_intent(socket, :fresh, replica) do
-    case socket.assigns.grant_intent_replica do
-      nil -> socket
-      ^replica -> socket
-      _other_replica -> clear_grant_intent(socket)
-    end
-  end
-
-  defp retain_grant_intent(socket, _source_state, _replica), do: clear_grant_intent(socket)
-
-  defp retain_roster_intent(socket, :fresh, replica) do
-    case socket.assigns.roster_intent_replica do
-      nil -> socket
-      ^replica -> socket
-      _other_replica -> clear_roster_intent(socket)
-    end
-  end
-
-  defp retain_roster_intent(socket, _source_state, _replica), do: clear_roster_intent(socket)
-
-  defp retain_status_intent(socket, :fresh, model, replica) do
+  defp retain_intent_slot(
+         socket,
+         slot_name,
+         %{kind: :model_status} = slot,
+         :fresh,
+         model,
+         replica
+       ) do
     cond do
-      is_nil(socket.assigns.status_intent_url) ->
+      is_nil(socket.assigns[slot.url]) ->
         socket
 
-      socket.assigns.status_intent_replica != replica ->
-        clear_status_intent(socket)
+      socket.assigns[slot.replica] != replica ->
+        clear_intent_slot(socket, slot_name)
 
-      socket.assigns.status_intent_command != status_action_command(model) ->
-        clear_status_intent(socket)
+      socket.assigns[slot.command] != status_action_command(model) ->
+        clear_intent_slot(socket, slot_name)
 
       true ->
         socket
     end
   end
 
-  defp retain_status_intent(socket, _source_state, _model, _replica),
-    do: clear_status_intent(socket)
+  defp retain_intent_slot(socket, slot_name, slot, :fresh, _model, replica) do
+    case socket.assigns[slot.replica] do
+      nil -> socket
+      ^replica -> socket
+      _other_replica -> clear_intent_slot(socket, slot_name)
+    end
+  end
+
+  defp retain_intent_slot(socket, slot_name, _slot, _source_state, _model, _replica),
+    do: clear_intent_slot(socket, slot_name)
 
   defp clear_action_intent(socket) do
-    assign(socket,
-      post_intent_form: post_intent_form(""),
-      post_intent_url: nil,
-      post_intent_replica: nil,
-      post_intent_error: nil,
-      summary_intent_form: summary_intent_form(""),
-      summary_intent_url: nil,
-      summary_intent_replica: nil,
-      summary_intent_error: nil,
-      title_intent_form: title_intent_form(""),
-      title_intent_url: nil,
-      title_intent_replica: nil,
-      title_intent_error: nil,
-      grant_intent_form: grant_intent_form(""),
-      grant_intent_url: nil,
-      grant_intent_replica: nil,
-      grant_intent_error: nil,
-      admit_intent_form: admit_intent_form(""),
-      roster_intent_form: roster_intent_form(""),
-      roster_intent_url: nil,
-      roster_intent_command: nil,
-      roster_intent_replica: nil,
-      roster_intent_error: nil,
-      status_intent_url: nil,
-      status_intent_command: nil,
-      status_intent_replica: nil
-    )
+    assign(socket, action_intent_defaults())
   end
 
-  defp clear_status_intent(socket) do
-    assign(socket,
-      status_intent_url: nil,
-      status_intent_command: nil,
-      status_intent_replica: nil
-    )
+  defp clear_intent_slot(socket, slot_name) do
+    slot_name
+    |> then(&Map.fetch!(@intent_slots_by_name, &1))
+    |> intent_slot_defaults()
+    |> then(&assign(socket, &1))
   end
 
-  defp clear_summary_intent(socket) do
-    assign(socket,
-      summary_intent_form: summary_intent_form(""),
-      summary_intent_url: nil,
-      summary_intent_replica: nil,
-      summary_intent_error: nil
-    )
+  defp action_intent_defaults do
+    Enum.reduce(@intent_slots, %{}, fn {_slot_name, slot}, defaults ->
+      Map.merge(defaults, intent_slot_defaults(slot))
+    end)
   end
 
-  defp clear_title_intent(socket) do
-    assign(socket,
-      title_intent_form: title_intent_form(""),
-      title_intent_url: nil,
-      title_intent_replica: nil,
-      title_intent_error: nil
-    )
+  defp intent_slot_defaults(slot) do
+    defaults =
+      [slot.url, slot.replica, slot.error, slot.command]
+      |> Enum.reject(&is_nil/1)
+      |> Map.new(&{&1, nil})
+
+    Enum.reduce(slot.forms, defaults, fn form, defaults ->
+      Map.put(defaults, form.assign, intent_form(form, ""))
+    end)
   end
 
-  defp clear_grant_intent(socket) do
-    assign(socket,
-      grant_intent_form: grant_intent_form(""),
-      grant_intent_url: nil,
-      grant_intent_replica: nil,
-      grant_intent_error: nil
-    )
-  end
+  defp intent_form(form, value) when is_binary(value),
+    do: to_form(%{form.field => value}, as: form.as)
 
-  defp clear_roster_intent(socket) do
-    assign(socket,
-      admit_intent_form: admit_intent_form(""),
-      roster_intent_form: roster_intent_form(""),
-      roster_intent_url: nil,
-      roster_intent_command: nil,
-      roster_intent_replica: nil,
-      roster_intent_error: nil
-    )
-  end
+  defp intent_form(form, _value), do: intent_form(form, "")
 
   defp status_action_command(%{threads: %{clerk_locked?: true}}), do: :reopen_matter
   defp status_action_command(_model), do: :close_matter
-
-  defp post_intent_form(text) when is_binary(text), do: to_form(%{"text" => text}, as: :post)
-  defp post_intent_form(_text), do: post_intent_form("")
-
-  defp summary_intent_form(text) when is_binary(text),
-    do: to_form(%{"text" => text}, as: :summary)
-
-  defp summary_intent_form(_text), do: summary_intent_form("")
-
-  defp title_intent_form(text) when is_binary(text),
-    do: to_form(%{"text" => text}, as: :title)
-
-  defp title_intent_form(_text), do: title_intent_form("")
-
-  defp grant_intent_form(audience) when is_binary(audience),
-    do: to_form(%{"audience" => audience}, as: :grant)
-
-  defp grant_intent_form(_audience), do: grant_intent_form("")
-
-  defp admit_intent_form(member) when is_binary(member),
-    do: to_form(%{"member" => member}, as: :admit)
-
-  defp admit_intent_form(_member), do: admit_intent_form("")
-
-  defp roster_intent_form(member) when is_binary(member),
-    do: to_form(%{"member" => member}, as: :roster)
-
-  defp roster_intent_form(_member), do: roster_intent_form("")
 
   defp action_intent_error(:invalid_text), do: "Write an update before opening the app."
   defp action_intent_error(:text_too_large), do: "Keep the update within 4096 UTF-8 bytes."
@@ -546,6 +412,45 @@ defmodule TownshipWeb.InstrumentLive do
     do: "Enter a canonical recipient public key before opening the app."
 
   defp action_intent_error(_reason), do: "The participant action could not be prepared."
+
+  attr(:id, :string, required: true)
+  attr(:intent, :string, required: true)
+  attr(:kicker, :string, required: true)
+  attr(:title, :string, required: true)
+  attr(:url, :string, default: nil)
+  attr(:error, :string, default: nil)
+  slot(:body, required: true)
+  slot(:prepared, required: true)
+
+  defp intent_panel(assigns) do
+    ~H"""
+    <section
+      id={@id}
+      class="participant-action"
+      aria-labelledby={"participant-#{@intent}-title"}
+    >
+      <header>
+        <p class="section-kicker">{@kicker}</p>
+        <h2 id={"participant-#{@intent}-title"}>{@title}</h2>
+      </header>
+      {render_slot(@body)}
+      <div :if={@url} class="participant-action__handoff">
+        <p id={"participant-#{@intent}-prepared"} aria-live="polite">
+          {render_slot(@prepared)}
+        </p>
+        <a id={"participant-#{@intent}-handoff"} href={@url}>Open in Township app</a>
+      </div>
+      <p
+        :if={@error}
+        id={"participant-#{@intent}-error"}
+        class="participant-action__error"
+        aria-live="polite"
+      >
+        {@error}
+      </p>
+    </section>
+    """
+  end
 
   defp source_label(:verified), do: "verified snapshot"
   defp source_label(:fresh), do: "carrier fresh"

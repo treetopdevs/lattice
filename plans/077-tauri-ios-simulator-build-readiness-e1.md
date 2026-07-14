@@ -2,14 +2,19 @@
 
 ## Status
 
-BLOCKED: repo-side readiness blockers were fixed, but the selected local Xcode 27.0 beta toolchain
-fails while compiling Tauri's upstream Swift package before a simulator archive can complete.
+IN PROGRESS
+
+Stable Xcode 26.6 (Build 17F113) now completes the Tauri iOS simulator archive. A local iOS 18.6
+simulator smoke creates two independently named protected Keychain keys, verifies that they differ,
+and proves both keys survive process relaunch while returning 64 signature bytes per slot. The smoke
+does not independently verify the returned signature bytes. It does not prove simulator or device
+reboot, does not prove physical-device behavior, does not prove iOS BEAM convergence, and is not
+enforced in CI.
 
 ## Objective
 
-Turn the first real Tauri iOS simulator archive attempt into durable repo contracts: generated iOS
-targets must use an Xcode-supported deployment target, the generated Rust build phase must have the
-package script it invokes, and iOS native key persistence must enable protected Keychain support.
+Turn the first real Tauri iOS simulator archive and protected-key runtime attempt into durable repo
+contracts without overstating the local proof as phone-grade convergence.
 
 ## Scope
 
@@ -18,18 +23,35 @@ package script it invokes, and iOS native key persistence must enable protected 
   `npm run -- tauri ios xcode-script ...`.
 - Enable the iOS `apple-native-keyring-store` `protected` feature through a target-specific
   dependency so the existing `keyring`-backed `CarrierKeySeedStore` can compile for iOS.
-- Extend `mobile:tauri-readiness` to guard those three build-readiness contracts.
-- Retry the simulator archive and document the remaining blocker without claiming phone-grade
-  mobile persistence or convergence.
+- Build the simulator archive with signing identity supplied only through
+  `APPLE_DEVELOPMENT_TEAM`, and restore the generated Xcode signing files after Tauri's build
+  mutation.
+- Add an exact-build-flag runtime probe that logs public proof only: key id, public key, signature
+  byte count, result, store, and probe slot. It must never log seed or private-key material.
+- Use independent primary and control key ids, require their 32-byte public keys to differ, and
+  require both to remain stable across a process terminate/relaunch cycle.
+- Extend `mobile:tauri-readiness` to guard the build, probe, signing, source-restoration, and claim
+  boundaries.
+
+## Out of Scope
+
+- Simulator shutdown/boot or erase/restore behavior.
+- Physical-device install, reboot, Keychain policy, or hardware-backed custody claims.
+- iOS pairing, cap acquisition, op authoring, carrier sync, or BEAM convergence.
+- Hosted CI enforcement and any phone-grade persistence claim.
 
 ## STOP Conditions
 
 - If a fix moves carrier seeds into TypeScript, Vue state, app files, or replayable app storage,
   stop.
 - If the simulator archive fails inside upstream Tauri/Swift/Xcode code before Township code links,
-  do not paper over it with app-level claims.
-- If this slice cannot prove key reuse across a simulator/device restart and BEAM convergence,
-  keep phone-grade mobile persistence marked as future work.
+  keep the failure scoped to the toolchain rather than making an app-level claim.
+- If signing requires a checked-in Apple team id or leaves generated project mutations behind,
+  stop and keep the build local-only.
+- If either probe key is constant, the two independently named keys collapse to the same public key,
+  or either signature is not 64 bytes, fail the smoke.
+- Until reboot, physical-device, persisted-cap, and BEAM convergence gates exist, keep phone-grade
+  mobile persistence marked as future work.
 - If the local toolchain tries to run BEAM through Homebrew or mise shims, stop and use the asdf
   rule from `AGENTS.md`.
 
@@ -50,40 +72,62 @@ package script it invokes, and iOS native key persistence must enable protected 
 - RED/GREEN: `mobile:tauri-readiness` now asserts the target-specific
   `apple-native-keyring-store` dependency enables `features = ["protected"]`, and Cargo config
   matches.
-- BLOCKED: the repo-side blockers cleared, but the simulator archive still fails under
-  `/Applications/Xcode-beta.app` while compiling Tauri's upstream Swift package. Direct Cargo
-  reaches the same Tauri Swift package failure: Swift receives both iPhoneSimulator27.0/iOS target
-  arguments and MacOSX27.0/macOS target arguments, then cannot resolve `UIKit`, `AppKit`, and
-  `WebKit`.
+- SYSTEM RED: a no-sign simulator archive installed and launched, but the first native Keychain
+  operation failed with `NSOSStatusErrorDomain Code=-34018` because the process had neither an
+  application identifier nor Keychain access-group entitlements.
+- RED/GREEN: `ios:key-reuse:contract` failed until the exact-flag TypeScript probe existed and
+  exposed only tokenized public evidence through the existing native log command.
+- GREEN: under stable Xcode 26.6 (Build 17F113), the entitlement-enabled simulator archive builds
+  and reaches the protected Keychain operation without `-34018`.
+- REVISE: Claude's first adversarial review found that Tauri's generated Xcode project retained a
+  local development team and that a single stable key could not rule out a constant fixture.
+- RED/GREEN: `mobile:tauri-readiness` failed until the build moved behind a wrapper that reads
+  `APPLE_DEVELOPMENT_TEAM`, rejects missing or malformed input, and restores the generated Xcode
+  signing files in `finally`. No Apple team id remains in tracked source.
+- RED/GREEN: the probe contract and readiness gate failed until an independent control key and
+  `slot=primary|control` evidence were present.
+- RUNTIME GREEN: the local iOS 18.6 simulator reports two distinct 32-byte public keys, two 64-byte
+  signature results, and the same key for each slot after process terminate/relaunch. The smoke also
+  checks for the executable's embedded simulator entitlement section before launch.
+- REVIEW HARDENING: Claude's full final review returned `PROCEED` with one low-severity false-positive
+  concern: a swallowed between-launch terminate failure could reuse the first process and its logs.
+- RED/GREEN: `mobile:tauri-readiness` failed until the smoke made that terminate strict and required
+  the second `simctl launch` process id to differ from the first. The hardened runtime smoke is green.
 
 ## Second Opinion
 
-Claude Code was asked for review of the iOS simulator blocker and whether a repo fix remained, but
-the CLI prompt produced no output after roughly 60 seconds and was interrupted. This is recorded as
-reviewer unavailability, not as a GO.
+Claude Code's first read-only adversarial review returned `REVISE`. It required environment-only
+team selection, generated-file restoration, and a second independently named key as a negative
+control. A later full final review returned `PROCEED` with the low-severity process-identity concern
+recorded above. After the strict-terminate and changed-process-id hardening, Claude's final focused
+re-review returned `PROCEED` with no findings.
 
 ## Verification
 
+- `xcodebuild -version` -> `Xcode 26.6`, `Build version 17F113`
+- `cd clients/township-tauri-shell && npm run ios:key-reuse:contract`
 - `cd clients/township-tauri-shell && npm run mobile:tauri-readiness`
-- `cd clients/township-tauri-shell/src-tauri && cargo fmt --check`
-- `cd clients/township-tauri-shell && npx tauri ios build --debug --target aarch64-sim --ci --no-sign`
-  - expected current result on this machine: blocked by the selected Xcode 27.0 beta Swift package
-    failure after repo-side readiness blockers clear.
+- `cd clients/township-tauri-shell && npm run typecheck`
+- `cd clients/township-tauri-shell && APPLE_DEVELOPMENT_TEAM=<team-id> npm run tauri:ios:build:key-reuse-probe`
+- `cd clients/township-tauri-shell && TOWNSHIP_IOS_SIMULATOR_UDID=<udid> npm run tauri:ios:key-reuse:smoke`
 
 ## Notes
 
-- `xcode-select -p` is `/Applications/Xcode-beta.app/Contents/Developer`.
-- `/Applications` contains `Xcode-beta.app` and `Xcode.appdownload`; there is no usable stable
-  `/Applications/Xcode.app/Contents/Developer` to select for comparison.
-- `cargo search tauri --limit 3` reports Rust `tauri = "2.11.5"`, matching the repo's Rust Tauri
-  version. `npm view @tauri-apps/cli version` reports `2.11.4`, matching the repo's npm CLI line.
+- `xcode-select -p` is `/Applications/Xcode.app/Contents/Developer`.
+- Tauri mutates generated Apple signing files during a build. The build wrapper snapshots and
+  restores `project.pbxproj`, `Info.plist`, and the generated entitlement file while retaining the
+  archive output.
+- Simulator entitlements are carried in the executable's Mach-O entitlement section; the runtime
+  Keychain call is the functional entitlement proof.
+- The runtime smoke is local-only and opt-in. It is not enforced in CI.
 - This plan did not touch the BEAM toolchain. Elixir/Mix verification must continue to use
   `~/.asdf/shims/mix`.
 
 ## Remaining Work
 
-- Re-run the simulator archive with a stable supported Xcode installation or a Tauri/swift-rs
-  release that supports the local Xcode 27 beta Swift driver behavior.
-- Add the actual simulator/device mobile smoke that proves native-backed carrier key reuse across
-  restarts and BEAM convergence.
+- Prove protected-key reuse across a simulator shutdown/boot cycle, then define the destructive
+  reset control separately.
+- Repeat the key-custody proof on a physical iOS device, including device reboot behavior.
+- Add iOS persisted-cap onboarding and real BEAM carrier convergence through the app path.
+- Decide whether the expensive signed simulator and physical-device gates belong in hosted CI.
 - Run a physical multi-device LAN discovery smoke.

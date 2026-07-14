@@ -84,220 +84,163 @@
         <% end %>
       </section>
 
-      <section
+      <.intent_panel
         :if={@source_state == :fresh}
         id="participant-grant-panel"
-        class="participant-action"
-        aria-labelledby="participant-grant-title"
+        intent="grant"
+        kicker="Authority request"
+        title="Grant resident access from your device"
+        url={@grant_intent_url}
+        error={@grant_intent_error}
       >
-        <header>
-          <p class="section-kicker">Authority request</p>
-          <h2 id="participant-grant-title">Grant resident access from your device</h2>
-        </header>
-        <p>Resident policy: admit, post, set_summary, set_title; no roles; offline.</p>
-        <form id="participant-grant-form" phx-submit="prepare_grant">
-          <label for={@grant_intent_form[:audience].id}>Recipient public key</label>
-          <input
-            type="text"
-            id={@grant_intent_form[:audience].id}
-            name={@grant_intent_form[:audience].name}
-            value={@grant_intent_form[:audience].value}
-            autocomplete="off"
-          />
-          <button type="submit">Prepare grant in app</button>
-        </form>
-        <div :if={@grant_intent_url} class="participant-action__handoff">
-          <p id="participant-grant-prepared" aria-live="polite">Unsigned resident grant</p>
-          <a id="participant-grant-handoff" href={@grant_intent_url}>Open in Township app</a>
-        </div>
-        <p
-          :if={@grant_intent_error}
-          id="participant-grant-error"
-          class="participant-action__error"
-          aria-live="polite"
-        >
-          {@grant_intent_error}
-        </p>
-      </section>
+        <:body>
+          <p>Resident policy: admit, post, set_summary, set_title; no roles; offline.</p>
+          <form id="participant-grant-form" phx-submit="prepare_grant">
+            <label for={@grant_intent_form[:audience].id}>Recipient public key</label>
+            <input
+              type="text"
+              id={@grant_intent_form[:audience].id}
+              name={@grant_intent_form[:audience].name}
+              value={@grant_intent_form[:audience].value}
+              autocomplete="off"
+            />
+            <button type="submit">Prepare grant in app</button>
+          </form>
+        </:body>
+        <:prepared>Unsigned resident grant</:prepared>
+      </.intent_panel>
 
-      <section
+      <.intent_panel
         :if={@source_state == :fresh}
         id="participant-title-panel"
-        class="participant-action"
-        aria-labelledby="participant-title-title"
+        intent="title"
+        kicker="Participant action"
+        title="Edit the matter title from your device"
+        url={@title_intent_url}
+        error={@title_intent_error}
       >
-        <header>
-          <p class="section-kicker">Participant action</p>
-          <h2 id="participant-title-title">Edit the matter title from your device</h2>
-        </header>
-        <form id="participant-title-form" phx-submit="prepare_title_edit">
-          <label for={@title_intent_form[:text].id}>New title</label>
-          <textarea
-            id={@title_intent_form[:text].id}
-            name={@title_intent_form[:text].name}
-            rows="2"
-            autocomplete="off"
-          >{Phoenix.HTML.Form.normalize_value("textarea", @title_intent_form[:text].value)}</textarea>
-          <button type="submit">Prepare title in app</button>
-        </form>
-        <div :if={@title_intent_url} class="participant-action__handoff">
-          <p id="participant-title-prepared" aria-live="polite">
-            Unsigned title edit
-          </p>
-          <a id="participant-title-handoff" href={@title_intent_url}>Open in Township app</a>
-        </div>
-        <p
-          :if={@title_intent_error}
-          id="participant-title-error"
-          class="participant-action__error"
-          aria-live="polite"
-        >
-          {@title_intent_error}
-        </p>
-      </section>
+        <:body>
+          <form id="participant-title-form" phx-submit="prepare_title_edit">
+            <label for={@title_intent_form[:text].id}>New title</label>
+            <textarea
+              id={@title_intent_form[:text].id}
+              name={@title_intent_form[:text].name}
+              rows="2"
+              autocomplete="off"
+            >{Phoenix.HTML.Form.normalize_value("textarea", @title_intent_form[:text].value)}</textarea>
+            <button type="submit">Prepare title in app</button>
+          </form>
+        </:body>
+        <:prepared>Unsigned title edit</:prepared>
+      </.intent_panel>
 
-      <section
+      <.intent_panel
         :if={@source_state == :fresh}
         id="participant-summary-panel"
-        class="participant-action"
-        aria-labelledby="participant-summary-title"
+        intent="summary"
+        kicker="Participant action"
+        title="Edit the matter summary from your device"
+        url={@summary_intent_url}
+        error={@summary_intent_error}
       >
-        <header>
-          <p class="section-kicker">Participant action</p>
-          <h2 id="participant-summary-title">Edit the matter summary from your device</h2>
-        </header>
-        <form id="participant-summary-form" phx-submit="prepare_summary_edit">
-          <label for={@summary_intent_form[:text].id}>New summary</label>
-          <textarea
-            id={@summary_intent_form[:text].id}
-            name={@summary_intent_form[:text].name}
-            rows="2"
-            autocomplete="off"
-          >{Phoenix.HTML.Form.normalize_value("textarea", @summary_intent_form[:text].value)}</textarea>
-          <button type="submit">Prepare summary in app</button>
-        </form>
-        <div :if={@summary_intent_url} class="participant-action__handoff">
-          <p id="participant-summary-prepared" aria-live="polite">
-            Unsigned summary edit
-          </p>
-          <a id="participant-summary-handoff" href={@summary_intent_url}>Open in Township app</a>
-        </div>
-        <p
-          :if={@summary_intent_error}
-          id="participant-summary-error"
-          class="participant-action__error"
-          aria-live="polite"
-        >
-          {@summary_intent_error}
-        </p>
-      </section>
+        <:body>
+          <form id="participant-summary-form" phx-submit="prepare_summary_edit">
+            <label for={@summary_intent_form[:text].id}>New summary</label>
+            <textarea
+              id={@summary_intent_form[:text].id}
+              name={@summary_intent_form[:text].name}
+              rows="2"
+              autocomplete="off"
+            >{Phoenix.HTML.Form.normalize_value("textarea", @summary_intent_form[:text].value)}</textarea>
+            <button type="submit">Prepare summary in app</button>
+          </form>
+        </:body>
+        <:prepared>Unsigned summary edit</:prepared>
+      </.intent_panel>
 
-      <section
+      <.intent_panel
         :if={@source_state == :fresh}
         id="participant-roster-panel"
-        class="participant-action"
-        aria-labelledby="participant-roster-title"
+        intent="roster"
+        kicker="Participant action"
+        title="Manage members from your device"
+        url={@roster_intent_url}
+        error={@roster_intent_error}
       >
-        <header>
-          <p class="section-kicker">Participant action</p>
-          <h2 id="participant-roster-title">Manage members from your device</h2>
-        </header>
-        <form id="participant-admit-form" phx-submit="prepare_admit">
-          <label for={@admit_intent_form[:member].id}>Member id to admit</label>
-          <input
-            type="text"
-            id={@admit_intent_form[:member].id}
-            name={@admit_intent_form[:member].name}
-            value={@admit_intent_form[:member].value}
-            autocomplete="off"
-          />
-          <button type="submit">Prepare admission in app</button>
-        </form>
-        <form id="participant-roster-form" phx-submit="prepare_remove_member">
-          <label for={@roster_intent_form[:member].id}>Member id to remove</label>
-          <input
-            type="text"
-            id={@roster_intent_form[:member].id}
-            name={@roster_intent_form[:member].name}
-            value={@roster_intent_form[:member].value}
-            autocomplete="off"
-          />
-          <button type="submit">Prepare removal in app</button>
-        </form>
-        <div :if={@roster_intent_url} class="participant-action__handoff">
-          <p id="participant-roster-prepared" aria-live="polite">
-            {if @roster_intent_command == :admit,
-              do: "Unsigned member admission",
-              else: "Unsigned member removal"}
-          </p>
-          <a id="participant-roster-handoff" href={@roster_intent_url}>Open in Township app</a>
-        </div>
-        <p
-          :if={@roster_intent_error}
-          id="participant-roster-error"
-          class="participant-action__error"
-          aria-live="polite"
-        >
-          {@roster_intent_error}
-        </p>
-      </section>
+        <:body>
+          <form id="participant-admit-form" phx-submit="prepare_admit">
+            <label for={@admit_intent_form[:member].id}>Member id to admit</label>
+            <input
+              type="text"
+              id={@admit_intent_form[:member].id}
+              name={@admit_intent_form[:member].name}
+              value={@admit_intent_form[:member].value}
+              autocomplete="off"
+            />
+            <button type="submit">Prepare admission in app</button>
+          </form>
+          <form id="participant-roster-form" phx-submit="prepare_remove_member">
+            <label for={@roster_intent_form[:member].id}>Member id to remove</label>
+            <input
+              type="text"
+              id={@roster_intent_form[:member].id}
+              name={@roster_intent_form[:member].name}
+              value={@roster_intent_form[:member].value}
+              autocomplete="off"
+            />
+            <button type="submit">Prepare removal in app</button>
+          </form>
+        </:body>
+        <:prepared>
+          {if @roster_intent_command == :admit,
+            do: "Unsigned member admission",
+            else: "Unsigned member removal"}
+        </:prepared>
+      </.intent_panel>
 
-      <section
+      <.intent_panel
         :if={@source_state == :fresh}
         id="participant-post-panel"
-        class="participant-action"
-        aria-labelledby="participant-post-title"
+        intent="post"
+        kicker="Participant action"
+        title="Post from your device"
+        url={@post_intent_url}
+        error={@post_intent_error}
       >
-        <header>
-          <p class="section-kicker">Participant action</p>
-          <h2 id="participant-post-title">Post from your device</h2>
-        </header>
-        <form id="participant-post-form" phx-submit="prepare_post">
-          <label for={@post_intent_form[:text].id}>Resident update</label>
-          <textarea
-            id={@post_intent_form[:text].id}
-            name={@post_intent_form[:text].name}
-            rows="2"
-            autocomplete="off"
-          >{Phoenix.HTML.Form.normalize_value("textarea", @post_intent_form[:text].value)}</textarea>
-          <button type="submit">Prepare in app</button>
-        </form>
-        <div :if={@post_intent_url} class="participant-action__handoff">
-          <p id="participant-post-prepared" aria-live="polite">Unsigned and unconfirmed</p>
-          <a id="participant-post-handoff" href={@post_intent_url}>Open in Township app</a>
-        </div>
-        <p
-          :if={@post_intent_error}
-          id="participant-post-error"
-          class="participant-action__error"
-          aria-live="polite"
-        >
-          {@post_intent_error}
-        </p>
-      </section>
+        <:body>
+          <form id="participant-post-form" phx-submit="prepare_post">
+            <label for={@post_intent_form[:text].id}>Resident update</label>
+            <textarea
+              id={@post_intent_form[:text].id}
+              name={@post_intent_form[:text].name}
+              rows="2"
+              autocomplete="off"
+            >{Phoenix.HTML.Form.normalize_value("textarea", @post_intent_form[:text].value)}</textarea>
+            <button type="submit">Prepare in app</button>
+          </form>
+        </:body>
+        <:prepared>Unsigned and unconfirmed</:prepared>
+      </.intent_panel>
 
-      <section
+      <.intent_panel
         :if={@source_state == :fresh}
         id="participant-status-action"
-        class="participant-action"
-        aria-labelledby="participant-status-title"
+        intent="status"
+        kicker="Clerk action"
+        title="Matter status from your device"
+        url={@status_intent_url}
       >
-        <header>
-          <p class="section-kicker">Clerk action</p>
-          <h2 id="participant-status-title">Matter status from your device</h2>
-        </header>
-        <button id="participant-status-prepare" type="button" phx-click="prepare_status_action">
-          {if @model.threads.clerk_locked?,
-            do: "Prepare reopen in app",
-            else: "Prepare close in app"}
-        </button>
-        <div :if={@status_intent_url} class="participant-action__handoff">
-          <p id="participant-status-prepared" aria-live="polite">
-            Unsigned {if @status_intent_command == :reopen_matter, do: "reopen", else: "close"} request
-          </p>
-          <a id="participant-status-handoff" href={@status_intent_url}>Open in Township app</a>
-        </div>
-      </section>
+        <:body>
+          <button id="participant-status-prepare" type="button" phx-click="prepare_status_action">
+            {if @model.threads.clerk_locked?,
+              do: "Prepare reopen in app",
+              else: "Prepare close in app"}
+          </button>
+        </:body>
+        <:prepared>
+          Unsigned {if @status_intent_command == :reopen_matter, do: "reopen", else: "close"} request
+        </:prepared>
+      </.intent_panel>
 
       <div class="instrument-grid">
         <section id="threads-panel" class="panel panel--threads">

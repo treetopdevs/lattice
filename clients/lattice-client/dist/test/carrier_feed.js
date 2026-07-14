@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { CarrierWebSocketClient, connectCarrierWebSocket } from "../src/index";
+const serverNonce = Buffer.alloc(32, 7).toString("base64url");
 class ManualCarrierWebSocket {
     sent = [];
     closed = false;
@@ -51,7 +52,15 @@ class BadHelloWebSocket extends ManualCarrierWebSocket {
     constructor(_url) {
         super();
         BadHelloWebSocket.instance = this;
-        queueMicrotask(() => this.open());
+        queueMicrotask(() => {
+            this.open();
+            this.receive({
+                type: "carrier_nonce",
+                nonce: serverNonce,
+                wire_version: 1,
+                session_version: 2,
+            });
+        });
     }
     send(data) {
         super.send(data);
@@ -63,6 +72,34 @@ class BadHelloWebSocket extends ManualCarrierWebSocket {
         }));
     }
 }
+function nonceOnlyWebSocket(envelope) {
+    let instance = null;
+    return class extends ManualCarrierWebSocket {
+        static lastInstance() {
+            return instance;
+        }
+        constructor(_url) {
+            super();
+            instance = this;
+            queueMicrotask(() => {
+                this.open();
+                this.receive(envelope);
+            });
+        }
+    };
+}
+const BadWireNonceWebSocket = nonceOnlyWebSocket({
+    type: "carrier_nonce",
+    nonce: serverNonce,
+    wire_version: 0,
+    session_version: 2,
+});
+const BadSessionNonceWebSocket = nonceOnlyWebSocket({
+    type: "carrier_nonce",
+    nonce: serverNonce,
+    wire_version: 1,
+    session_version: 1,
+});
 console.log("\n▸ TypeScript carrier availability feed");
 {
     const socket = new ManualCarrierWebSocket();
@@ -391,6 +428,41 @@ for (const [envelope, error] of [
     const socket = BadHelloWebSocket.lastInstance();
     assert.ok(socket);
     assert.equal(socket.closed, true, "a failed carrier handshake must close its socket");
+    assert.deepEqual(socket.sent, [
+        {
+            type: "carrier_challenge",
+            local_realm: "resident",
+            replica: "replica:test",
+            nonce: socket.sent[0].nonce,
+            server_nonce: serverNonce,
+            wire_version: 1,
+            session_version: 2,
+            pubkey: Buffer.alloc(32, 1).toString("base64"),
+            signature: Buffer.alloc(64).toString("base64"),
+        },
+    ]);
+}
+for (const [WebSocketImpl, error] of [
+    [BadWireNonceWebSocket, /unsupported carrier operation wire version/],
+    [BadSessionNonceWebSocket, /unsupported carrier session version/],
+]) {
+    await assert.rejects(() => connectCarrierWebSocket({
+        url: "ws://carrier.test/carrier",
+        localRealm: "resident",
+        replica: "replica:test",
+        signer: {
+            publicKey: new Uint8Array(32).fill(1),
+            sign: () => new Uint8Array(64),
+        },
+        expectedPeerRealm: "town-node",
+        expectedPeerPubkey: new Uint8Array(32).fill(2),
+        verifier: { verify: () => true },
+        webSocket: WebSocketImpl,
+    }), error);
+    const socket = WebSocketImpl.lastInstance();
+    assert.ok(socket);
+    assert.equal(socket.closed, true, "a rejected carrier nonce must close its socket");
+    assert.deepEqual(socket.sent, []);
 }
 console.log("\x1b[32m✓ TypeScript carrier availability feed checks passed\x1b[0m");
 async function establishSubscription(client, socket, generation) {

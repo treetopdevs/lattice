@@ -8,13 +8,13 @@ defmodule Township.CausalReplayTest do
   @repo_root Path.expand("../../../..", __DIR__)
   @matter_path Path.join(@repo_root, "artifacts/township/matter.log")
 
-  @genesis_id "3gisahML791TEKkKa56M2GSxknsj60ZgHgEl-GIO9rs"
-  @title_id "DRY-4q7GFxpqrYkTFBCx01euInBkxYgizXDCN04iF5w"
-  @clerk_summary_id "fV5jo4D85m4rdAhRiXIrAikFOyJ4uqMHa-Pu3kAlhrE"
-  @resident_summary_id "oknDOSWoyjrt4GRLkdM7BvMSGlKiVbtblTCMse78zJI"
-  @close_id "ztN26_jxZLEr6daSuCI5RxrMnxscZkEJnbiAXZ03VQY"
-  @transfer_id "VPKcWvKKBA8zJ5xLSpBQg5-Furs32eieQ4k0eRX5jI8"
-  @stale_reopen_id "mVp4COeiXTD__9c6y-OfO406aHuMZFDT3ahLtFZvLag"
+  @genesis_id "alPyLJrTujWnm_cNWbburV2Y4NP3mYdkjAUqIHXxJ9U"
+  @title_id "48FXRLN1gee4FuOaQajNyklcR0mEppAosylCvcdG4ZQ"
+  @clerk_summary_id "OxXIdyqabZIje-nnS_wRb-7FkrWosSPTypufH9jOwAU"
+  @resident_summary_id "mBzANgvpJ_zpcDy-QZP4mjfJCwzeIAD_h5Hq-PguWkg"
+  @close_id "ldVpBaYr7FoydK-PZgzJqCTGsPvrbJCx5AFxh8u3Mec"
+  @transfer_id "3LZ_oVaUTciC5zCH4Dxv4SnPItn-Sy9TEGf_h8nR7DM"
+  @stale_reopen_id "H32KUYuAjLsX6RSoXWwSYKUZSivCavpQ7i38_EInp6k"
 
   setup_all do
     preload_lattice_core()

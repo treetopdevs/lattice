@@ -11,9 +11,9 @@
       "title": ""
     },
     "winners": {
-      "clerk": "0HXaTLH6PJuLhE-_NxW1WhOux31lXPeLhADEVSkN-V0",
+      "clerk": "VWWb1MGstv5SIg-U9Ti7piZm14asHlTdhcX88b36bks",
       "clerk_locked": null,
-      "summary": "81Vz8OFmYcjgXs9V8iRJZJ3cePzkr4oNoniC0ySrT5o",
+      "summary": "zAD0cySlxe1toH6UqB6fWTMzWI3rViKczIJFNzfhTVE",
       "title": null
     }
   },
@@ -24,34 +24,21 @@
       "command": "genesis clerk",
       "deps": [],
       "field": "clerk",
-      "hash": "0HXaTLH6PJuLhE-_NxW1WhOux31lXPeLhADEVSkN-V0",
-      "id": "0HXaTLH6PJuLhE-_NxW1WhOux31lXPeLhADEVSkN-V0",
+      "hash": "VWWb1MGstv5SIg-U9Ti7piZm14asHlTdhcX88b36bks",
+      "id": "VWWb1MGstv5SIg-U9Ti7piZm14asHlTdhcX88b36bks",
       "kind": "authority",
       "mutation": "write",
       "value": "clerk"
     },
     {
       "author": "clerk",
-      "command": "set_summary",
-      "deps": [
-        "0HXaTLH6PJuLhE-_NxW1WhOux31lXPeLhADEVSkN-V0"
-      ],
-      "field": "summary",
-      "hash": "81Vz8OFmYcjgXs9V8iRJZJ3cePzkr4oNoniC0ySrT5o",
-      "id": "81Vz8OFmYcjgXs9V8iRJZJ3cePzkr4oNoniC0ySrT5o",
-      "kind": "command",
-      "mutation": "write",
-      "value": "summary from the surviving root"
-    },
-    {
-      "author": "clerk",
       "command": "inbox",
       "deps": [
-        "NiKA4ATFbNcM2MrJh5ByZjOwLPq4SaVaQgbB7umPePs"
+        "7xO2tlQE74dri8zaWUzvTZDXHHLf-GrOmouqo_8eJIw"
       ],
       "field": "__authority",
-      "hash": "NwmLLZAn0nr5jBssfOwiAcb7FANyVI5wTPibK2ePUEE",
-      "id": "NwmLLZAn0nr5jBssfOwiAcb7FANyVI5wTPibK2ePUEE",
+      "hash": "bwEwaI2iw-nnZ9nH2ckig1ks6h-qzgDc-AHuef844lM",
+      "id": "bwEwaI2iw-nnZ9nH2ckig1ks6h-qzgDc-AHuef844lM",
       "kind": "inbox",
       "mutation": "write",
       "value": null
@@ -60,15 +47,28 @@
       "author": "clerk",
       "command": "set_summary",
       "deps": [
-        "0HXaTLH6PJuLhE-_NxW1WhOux31lXPeLhADEVSkN-V0",
-        "NwmLLZAn0nr5jBssfOwiAcb7FANyVI5wTPibK2ePUEE"
+        "VWWb1MGstv5SIg-U9Ti7piZm14asHlTdhcX88b36bks",
+        "bwEwaI2iw-nnZ9nH2ckig1ks6h-qzgDc-AHuef844lM"
       ],
       "field": "summary",
-      "hash": "7posrCyQux-dpEcxGgBMnUY6LombgmKilT9TqipNaV8",
-      "id": "7posrCyQux-dpEcxGgBMnUY6LombgmKilT9TqipNaV8",
+      "hash": "8SQ9vDv2gWxg8wOzMzrkhageOXVE4wM9lP6taqR9uQY",
+      "id": "8SQ9vDv2gWxg8wOzMzrkhageOXVE4wM9lP6taqR9uQY",
       "kind": "command",
       "mutation": "write",
       "value": "summary reached through the pruned branch"
+    },
+    {
+      "author": "clerk",
+      "command": "set_summary",
+      "deps": [
+        "VWWb1MGstv5SIg-U9Ti7piZm14asHlTdhcX88b36bks"
+      ],
+      "field": "summary",
+      "hash": "zAD0cySlxe1toH6UqB6fWTMzWI3rViKczIJFNzfhTVE",
+      "id": "zAD0cySlxe1toH6UqB6fWTMzWI3rViKczIJFNzfhTVE",
+      "kind": "command",
+      "mutation": "write",
+      "value": "summary from the surviving root"
     }
   ],
   "perspectives": [],

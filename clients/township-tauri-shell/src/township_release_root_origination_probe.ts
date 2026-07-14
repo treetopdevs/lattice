@@ -12,6 +12,7 @@ import {
   TOWNSHIP_NATIVE_KEY_ID,
   type TownshipNativeWorkflow,
   type TownshipNativeWorkflowOptions,
+  withTownshipPersistenceWrite,
 } from "./native_workflow";
 import {
   connectTownshipCarrierPeer,
@@ -560,10 +561,12 @@ async function appendSemanticFrame(
   frame: CarrierOpFrame,
   realmByPubkey: Record<string, string>,
 ): Promise<void> {
-  const op = carrierOpsToSemanticOps([frame], realmByPubkey)[0];
-  if (!op) throw new Error(`authored release root frame ${frame.id} did not produce a semantic op`);
-  await workflow.localLog.append(op);
-  await workflow.carrierFrames.append(frame);
+  await withTownshipPersistenceWrite(workflow, async () => {
+    const op = carrierOpsToSemanticOps([frame], realmByPubkey)[0];
+    if (!op) throw new Error(`authored release root frame ${frame.id} did not produce a semantic op`);
+    await workflow.localLog.append(op);
+    await workflow.carrierFrames.append(frame);
+  });
 }
 
 type RetrySyncResult =

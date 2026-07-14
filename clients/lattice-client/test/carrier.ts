@@ -3,6 +3,7 @@ import { createPrivateKey, createPublicKey, createHash, sign as edSign } from "n
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  carrierChallenge,
   carrierOpsToSemanticOps,
   carrierTranscriptHex,
   integrate,
@@ -55,22 +56,34 @@ console.log(`\n▸ ${vector.scenario} carrier vector`);
 const identity = seededEd25519Identity(vector.client.sessionSeed);
 check("session public key", identity.publicKeyBase64, vector.client.sessionPubkey);
 
+const serverNonce = Buffer.alloc(32, 7).toString("base64url");
+const v2Options = { nonce: "fixed-client-nonce", serverNonce };
+const v2Challenge = carrierChallenge(vector.client.realm, "replica:matter:township-g1", v2Options) as CarrierChallenge & {
+  server_nonce?: string;
+  session_version?: number;
+};
+check("session challenge binds server nonce", v2Challenge.server_nonce, serverNonce);
+check("session challenge version", v2Challenge.session_version, 2);
+check("operation wire version remains v1", v2Challenge.wire_version, 1);
+
 const challenge = {
   type: "carrier_challenge",
   local_realm: vector.client.realm,
   replica: "replica:matter:township-g1",
   nonce: "fixed-nonce",
+  server_nonce: serverNonce,
   wire_version: 1,
+  session_version: 2,
 } satisfies CarrierChallenge;
 
 check(
   "carrier transcript",
   carrierTranscriptHex(challenge, vector.client.realm, identity.publicKey),
-  "8752636172726965722d73657373696f6e2d7631487265736964656e74581a7265706c6963613a6d61747465723a746f776e736869702d67314b66697865642d6e6f6e636501487265736964656e74582065ed56fb80e79cae9aa096391a25280d5c99561ab9fcf08bed4c1000b5d440d9",
+  "8952636172726965722d73657373696f6e2d7632487265736964656e74581a7265706c6963613a6d61747465723a746f776e736869702d67314b66697865642d6e6f6e6365582b427763484277634842776348427763484277634842776348427763484277634842776348427763484277630102487265736964656e74582065ed56fb80e79cae9aa096391a25280d5c99561ab9fcf08bed4c1000b5d440d9",
 );
 
 const signed = await signCarrierChallenge(challenge, identity);
-check("carrier challenge signature", signed.signature, "RbRuwsxr3fAGolrYRigR4MKXJDYoWykgxEvrSsTIzqs0RVN7JRfcDiE6P5Jn4bNpjLi5bSquYLZrlAFa2a5iBg==");
+check("carrier challenge signature", signed.signature, "l2T5s/NuXIiW9o3siFeSOkaZnpfaRLHb7xqtryKORd/gRuF8jxbEa//emnbxUvlDIZEc6nrMZD75o4wiDDtoDQ==");
 
 const clientBase = carrierOpsToSemanticOps(vector.clientBaseCarrierOps, vector.realmByPubkey);
 const clientDiverged = carrierOpsToSemanticOps(vector.clientDivergedCarrierOps, vector.realmByPubkey);

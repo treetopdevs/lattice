@@ -64,8 +64,11 @@ const postFixture = vector.clientDivergedCarrierOps.find((frame) => frame.author
 if (!postFixture)
     throw new Error("missing resident post fixture frame");
 const postCommand = { command: "post", text: "resident: posted while offline" };
+const residentGrantId = carrierDelegationsFromFrames(vector.clientDivergedCarrierOps).find((delegation) => delegation.audience === residentAuthor.publicKeyBase64 && delegation.parent_id !== null)?.id;
+if (!residentGrantId)
+    throw new Error("missing resident delegation fixture");
 const postCapId = selectTownshipCapId(postCommand, carrierDelegationsFromFrames(vector.clientDivergedCarrierOps), residentAuthor.publicKeyBase64);
-check("resident post cap id", postCapId, "gN9aanNVZeHWsS1vU8KxjyqVrWdC0VwPIzilL_QX2n0");
+check("resident post cap id", postCapId, residentGrantId);
 const localOpsBeforePost = carrierOpsToSemanticOps(vector.clientDivergedCarrierOps.filter((frame) => frame.id !== postFixture.id), vector.realmByPubkey);
 const authoredLocalLog = createJsonLocalOpLogStore(new MemoryKeyValueStore(), "township:resident:ops");
 await authoredLocalLog.save(localOpsBeforePost);

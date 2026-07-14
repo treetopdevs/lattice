@@ -63,12 +63,14 @@ const challenge = {
     local_realm: vector.client.realm,
     replica: vector.replica,
     nonce: "fixed-nonce",
+    server_nonce: "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc",
     wire_version: 1,
+    session_version: 2,
 };
 const nativeSessionSigner = await createTauriNativeCarrierSigner(invoke, { keyId: "session" });
 check("native signer public key", bytesBase64(nativeSessionSigner.publicKey), vector.client.sessionPubkey);
 const nativeSigned = await signCarrierChallenge(challenge, nativeSessionSigner);
-check("native signer challenge signature", nativeSigned.signature, "TS9+HPGiV88JMWJw0vm8euvAJEkmMLDxaKnTGz7wBX5vxLYi6wKRuFHLyHgxN3Igu2tFRjPaTIqq4p2RD5CDCg==");
+check("native signer challenge signature", nativeSigned.signature, "Ac2Re1+OPsZQswnGgsJ2+dqxJnr77kFuEhHUsYNVa9a5Puc2Se3mpO/rom/J5qTt9M1fWX+sMHAPhTwHOUk4BA==");
 const ensureCall = calls.find((call) => call.command === "lattice_ensure_carrier_key");
 check("ensure key command key id", ensureCall?.args.keyId, "session");
 const sessionSigner = createTauriCarrierSigner(invoke, {
@@ -76,7 +78,7 @@ const sessionSigner = createTauriCarrierSigner(invoke, {
     publicKey: sessionIdentity.publicKeyBase64,
 });
 const signed = await signCarrierChallenge(challenge, sessionSigner);
-check("async challenge signature", signed.signature, "TS9+HPGiV88JMWJw0vm8euvAJEkmMLDxaKnTGz7wBX5vxLYi6wKRuFHLyHgxN3Igu2tFRjPaTIqq4p2RD5CDCg==");
+check("async challenge signature", signed.signature, "Ac2Re1+OPsZQswnGgsJ2+dqxJnr77kFuEhHUsYNVa9a5Puc2Se3mpO/rom/J5qTt9M1fWX+sMHAPhTwHOUk4BA==");
 const signCall = calls.find((call) => call.command === "lattice_sign_carrier");
 check("sign command key id", signCall?.args.keyId, "session");
 check("sign command transcript bytes", signCall?.args.bytes, bytesBase64(carrierTranscriptBytes(challenge, vector.client.realm, sessionIdentity.publicKey)));
@@ -84,7 +86,10 @@ const keyValue = createTauriKeyValueStore(invoke, { namespace: "township:residen
 await keyValue.setItem("probe", "value");
 check("tauri key-value set", values.get("township:resident:probe"), "value");
 check("tauri key-value get", await keyValue.getItem("probe"), "value");
-const residentPostFixture = vector.clientDivergedCarrierOps.find((frame) => frame.author === residentIdentity.publicKeyBase64 && frame.id === "xmret5C7xMai04EQDm1cEX1dDjeBqxPM7-TcDN8cfhI");
+const residentPostFixture = vector.clientDivergedCarrierOps.find((frame) => frame.author === residentIdentity.publicKeyBase64 &&
+    frame.body[0] === "tuple" &&
+    frame.body[1][0]?.[0] === "atom" &&
+    frame.body[1][0][1] === "post");
 if (!residentPostFixture)
     throw new Error("missing resident post fixture");
 const localOpsBeforePost = carrierOpsToSemanticOps(vector.clientDivergedCarrierOps.filter((frame) => frame.id !== residentPostFixture.id), vector.realmByPubkey);

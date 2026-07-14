@@ -1,24 +1,19 @@
 defmodule Lattice.Attestation.Contract do
   @moduledoc """
-  The seam guarantee, executable.
+  The legacy Stub guarantee, executable.
 
-  A `using` macro that generates the SAME attestation test suite against whatever
-  module you pass as `impl:`. Run it once for the Stub and (later) once for the
-  M4 primitive. Everything except the receipt-freeness property must hold for
-  BOTH; receipt-freeness is asserted only when `impl.receipt_free?/0` is true.
+  A `using` macro that freezes the pre-M4 demo behavior while the application
+  still exposes caller-held vouches. It is intentionally instantiated only for
+  `Lattice.Attestation.Stub`:
 
       defmodule Township.AttestationStubContractTest do
         use Lattice.Attestation.Contract, impl: Lattice.Attestation.Stub
       end
 
-  When M4 lands:
-
-      defmodule Township.AttestationM4ContractTest do
-        use Lattice.Attestation.Contract, impl: Lattice.Attestation.M4Placeholder
-      end
-
-  If the M4 module changes any callback's shape, this file fails to compile or
-  asserts false — loudly, in one place. That is the swap-not-rewrite guarantee.
+  The contract fails closed if a legacy implementation claims receipt-freeness.
+  M4 must not be implemented here: `Township.Election` has separate board,
+  projection, close-policy, offline-replay, and cryptographic conformance
+  contracts.
   """
 
   defmacro __using__(opts) do
@@ -38,7 +33,7 @@ defmodule Lattice.Attestation.Contract do
         }
       end
 
-      test "cast_vouch returns an opaque token and an appendable :vouch body", %{alice: alice} do
+      test "cast_vouch returns an opaque token and a legacy :vouch body", %{alice: alice} do
         {token, body} = Attestation.cast_vouch(@impl_mod, alice, :yes)
         assert {:vouch, _payload} = body
         # The token is opaque; we only require it be usable by produce_alt later.
@@ -72,10 +67,7 @@ defmodule Lattice.Attestation.Contract do
         assert %{counts: %{no: 1}} = Attestation.tally(@impl_mod, [alt])
       end
 
-      # ---- the property that is REAL only at M4 ----
-      test "receipt-freeness: an alternative is indistinguishable from a genuine vouch", %{
-        alice: alice
-      } do
+      test "legacy implementations cannot claim receipt-freeness", %{alice: alice} do
         if @impl_mod.receipt_free?() do
           {token, genuine} = Attestation.cast_vouch(@impl_mod, alice, :yes)
           alt = Attestation.produce_alt(@impl_mod, token, :no)
@@ -84,18 +76,13 @@ defmodule Lattice.Attestation.Contract do
           assert {:vouch, _} = genuine
           assert {:vouch, _} = alt
 
-          # …and the real property — that a coercer seeing only op bodies cannot
-          # distinguish the genuine vouch from the produced alternative — must be
-          # asserted with the chosen primitive's actual indistinguishability
-          # check. Until M4 fills that in, a module that claims receipt_free? =
-          # true has not proven it, so we fail explicitly rather than pass vacuously.
+          # A true value on this retired interface has no sound security meaning.
           flunk("""
-          #{inspect(@impl_mod)} claims receipt_free? == true but the indistinguishability
-          assertion is not implemented. Replace this flunk/1 with the real check for the
-          chosen primitive (e.g. chameleon-hash re-opening indistinguishability).
+          #{inspect(@impl_mod)} claims receipt_free? == true on the retired legacy
+          interface. Keep the Stub false and implement the gated protocol under
+          Township.Election instead.
           """)
         else
-          # Stub honestly declares it is not receipt-free; nothing to prove.
           assert @impl_mod.receipt_free?() == false
         end
       end

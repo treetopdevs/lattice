@@ -2,7 +2,8 @@
 
 ## Status
 
-TODO
+IN PROGRESS — local TDD, focused contracts, Rust tests, and the full packaged shell
+convergence gate are green; the required hosted flagship gate remains open.
 
 ## Priority
 
@@ -79,6 +80,44 @@ re-entrancy-guarded.
 - Full local shell suites and packaged smokes green; hosted flagship green.
 - No change to authored bytes, frame format, or custody boundaries.
 
+## Implemented locally (2026-07-14)
+
+- A namespace-keyed, process-local workflow writer serializes action, delegation,
+  revocation, sync, feed-refresh, and release-probe persistence without changing the
+  `LatticeKvStore` public seam or persisted JSON format.
+- Sync and feed keep network work outside the writer, then reload current stores inside
+  the save phase and union by content-hash id. Sync compacts only current outbox frames
+  acknowledged by that sync; feed refresh never writes the outbox.
+- Every Vue `submit*`, `sign*`, and `sync*` entry point, including dev-trace routes, has
+  an in-function re-entrancy guard and releases its submitting flag in `finally`.
+- Malformed persisted native KV now fails startup with a path-specific decode error and
+  cannot be overwritten by a later memory-only `kv_set`; successful writes fsync the
+  temporary file before rename.
+
+## Local evidence (2026-07-14)
+
+- RED then GREEN interleavings cover a real post during sync advertise, delegation
+  evidence during sync, a local op during feed pull, and two contending public post
+  submissions. Removing the action writer makes the contention test deterministically
+  lose one post.
+- The corrupt-KV Rust regression was RED under silent empty-map recovery and is GREEN
+  under fail-loud loading; the native command and bootstrap Rust suites pass.
+- Focused action, sync, feed, onboarding, frontend, release-probe, typecheck, and build
+  gates pass. `npm run app:convergence` passes the full local browser, live-peer, packaged
+  Tauri, action-handoff, reactive-feed, and installed deep-link chain.
+
+## Remaining gate
+
+- Run the hosted flagship workflow. Until it is green, this plan remains `IN PROGRESS`
+  and Plan 139 remains blocked.
+
+Parent-directory fsync and multi-process locking remain outside this plan. Corrupt state
+now favors availability loss over silent data loss: the app refuses startup until the
+malformed file is repaired or deliberately removed. The process-local writer prevents
+interleaving across the op-log and outbox writes, but the two KV keys are not one
+crash-transactional record; a process failure between those writes can still leave an op
+without its carrier frame.
+
 ## STOP conditions
 
 - If serialization requires changing the `LatticeKvStore` public seam in a way that breaks
@@ -89,13 +128,16 @@ re-entrancy-guarded.
 - No multi-device or multi-process concurrency claim; no new participant controls; no
   G1/Phase G or W4 claim.
 
-## Likely files
+## Implementation files
 
-- `clients/lattice-client/src/{local_log,township,township_sync,township_feed}.ts`
-- `clients/township-tauri-shell/src/App.vue`, `src/township_actions.ts`
+- `clients/township-tauri-shell/src/{native_workflow,township_actions,township_sync,township_feed}.ts`
+- `clients/township-tauri-shell/src/{township_release_author_probe,township_release_root_origination_probe}.ts`
+- `clients/township-tauri-shell/src/App.vue`
 - `clients/township-tauri-shell/src-tauri/src/lib.rs`, `tests/native_commands.rs`
+- Focused shell contracts under `clients/township-tauri-shell/test/`
 
 ## Completion claim
 
-Complete for this scoped increment when the interleaving tests pass and a corrupt KV file
-produces a surfaced error, not an empty store.
+Complete for this scoped increment when the interleaving tests pass, a corrupt KV file
+produces a surfaced error rather than an empty store, the packaged convergence suite is
+green locally, and the hosted flagship gate is green.

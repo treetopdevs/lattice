@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test";
 
 const instrumentUrl = process.env.TOWNSHIP_INSTRUMENT_URL ?? "http://localhost:4113/township";
-const clerkSummaryId = "fV5jo4D85m4rdAhRiXIrAikFOyJ4uqMHa-Pu3kAlhrE";
-const residentSummaryId = "oknDOSWoyjrt4GRLkdM7BvMSGlKiVbtblTCMse78zJI";
-const staleReopenId = "mVp4COeiXTD__9c6y-OfO406aHuMZFDT3ahLtFZvLag";
+const clerkSummaryId = "OxXIdyqabZIje-nnS_wRb-7FkrWosSPTypufH9jOwAU";
+const residentSummaryId = "mBzANgvpJ_zpcDy-QZP4mjfJCwzeIAD_h5Hq-PguWkg";
+const staleReopenId = "H32KUYuAjLsX6RSoXWwSYKUZSivCavpQ7i38_EInp6k";
 const panelSelectors = [
   "#threads-panel",
   "#roles-panel",

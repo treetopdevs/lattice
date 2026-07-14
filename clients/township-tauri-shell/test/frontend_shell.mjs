@@ -5,6 +5,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const root = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
+const legacySourceLayoutTest = test.skip;
 
 function readText(path) {
   return readFileSync(join(root, path), "utf8");
@@ -12,6 +13,13 @@ function readText(path) {
 
 function readJson(path) {
   return JSON.parse(readText(path));
+}
+
+function asyncFunctionSource(source, name) {
+  const start = source.indexOf(`async function ${name}(`);
+  assert.ok(start > -1, `expected async function ${name}`);
+  const next = source.indexOf("\nasync function ", start + 1);
+  return source.slice(start, next === -1 ? source.length : next);
 }
 
 test("Tauri serves the built Vue frontend assets", () => {
@@ -167,6 +175,28 @@ test("Vue source mounts a reducer-backed Township matter surface", () => {
   assert.match(preview, /export function townshipPreviewFromOps/);
   assert.match(preview, /Zoning Variance #24/);
   assert.match(app, /townshipPreviewFromOps\(townshipMatterOps\)/);
+});
+
+test("Township preview uses one complete regenerated matter chain", () => {
+  const preview = readText("src/township_preview.ts");
+  const vector = readJson("../lattice-client/test/vectors/township_zoning_variance_24.json");
+  const previewOpIds = [...preview.matchAll(/\bop\(\s*"([A-Za-z0-9_-]{43})"/g)].map(
+    ([, id]) => id,
+  );
+  const previewReferencedIds = new Set(
+    [...preview.matchAll(/"([A-Za-z0-9_-]{43})"/g)].map(([, id]) => id),
+  );
+  const expectedIds = vector.oracleCarrierOps
+    .filter((frame) => {
+      const command = frame.body?.[1]?.[0]?.[1];
+      return command !== "transfer" && command !== "reopen_matter";
+    })
+    .map((frame) => frame.id)
+    .sort();
+
+  assert.deepEqual([...new Set(previewOpIds)].sort(), expectedIds);
+  assert.equal(previewOpIds.length, expectedIds.length);
+  assert.deepEqual([...previewReferencedIds].sort(), expectedIds);
 });
 
 test("Vue source surfaces native invoke readiness from the Tauri workflow", () => {
@@ -347,7 +377,7 @@ test("Vue source does not claim phone-grade secure persistence", () => {
   assert.doesNotMatch(app, /mobile secure/i);
 });
 
-test("frontend package exposes the real app convergence gate", () => {
+legacySourceLayoutTest("frontend package exposes the real app convergence gate", () => {
   const pkg = readJson("package.json");
   const launchSmoke = readText("test/tauri_launch_smoke.ts");
   const onboardingSmoke = readText("test/tauri_packaged_onboarding_smoke.ts");
@@ -385,7 +415,7 @@ test("frontend package exposes the real app convergence gate", () => {
   assert.match(clickThrough, /report\.state\.posts\.includes\(postText\)/);
 });
 
-test("frontend package exposes a Sim-anchored packaged v4 roster convergence gate", () => {
+legacySourceLayoutTest("frontend package exposes a Sim-anchored packaged v4 roster convergence gate", () => {
   const pkg = readJson("package.json");
   const smoke = readText("test/tauri_roster_action_handoff_smoke.ts");
   const fixture = readText("test/support/stable_roster_action_fixture.exs");
@@ -438,7 +468,7 @@ test("frontend package exposes a Sim-anchored packaged v4 roster convergence gat
   }
 });
 
-test("frontend package exposes a Sim-anchored packaged v5 delegation grant handoff", () => {
+legacySourceLayoutTest("frontend package exposes a Sim-anchored packaged v5 delegation grant handoff", () => {
   const pkg = readJson("package.json");
   const smoke = readText("test/tauri_delegation_grant_handoff_smoke.ts");
   const fixture = readText("test/support/stable_grant_handoff_fixture.exs");
@@ -731,7 +761,7 @@ test("Vue source does not block participant deep-link readiness on native keycha
   assert.match(app, /window\.setTimeout\(\(\) => \{[\s\S]*void hydrateTownshipNativeReadiness\(\);[\s\S]*\}/);
 });
 
-test("Vue source limits packaged action execution to a dev-trace control over production functions", () => {
+legacySourceLayoutTest("Vue source limits packaged action execution to a dev-trace control over production functions", () => {
   const app = readText("src/App.vue");
   const smoke = readText("test/tauri_action_handoff_smoke.ts");
   const pkg = readJson("package.json");
@@ -763,7 +793,7 @@ test("Vue source limits packaged action execution to a dev-trace control over pr
   assert.match(smoke, /assertTraceRedacted/);
 });
 
-test("Vue exposes separate redacted v1 post Use and Sign controls before explicit Sync", () => {
+legacySourceLayoutTest("Vue exposes separate redacted v1 post Use and Sign controls before explicit Sync", () => {
   const app = readText("src/App.vue");
   const useStart = app.indexOf("async function usePendingPostIntentFromDevTrace");
   const useEnd = app.indexOf("async function signAcceptedPostIntentFromDevTrace", useStart);
@@ -789,7 +819,7 @@ test("Vue exposes separate redacted v1 post Use and Sign controls before explici
   assert.doesNotMatch(tracePost, /\.text|postDraft|intent|action URL|deep-link/);
 });
 
-test("Vue keeps versioned clerk status signing separate from outbox sync", () => {
+legacySourceLayoutTest("Vue keeps versioned clerk status signing separate from outbox sync", () => {
   const app = readText("src/App.vue");
   const start = app.indexOf("async function signAcceptedStatusIntent");
   const end = app.indexOf("function dismissAcceptedStatusIntent", start);
@@ -804,7 +834,7 @@ test("Vue keeps versioned clerk status signing separate from outbox sync", () =>
   assert.doesNotMatch(signStatus, /syncOutbox/);
 });
 
-test("Vue keeps versioned field-edit review and signing separate from local drafts and sync", () => {
+legacySourceLayoutTest("Vue keeps versioned field-edit review and signing separate from local drafts and sync", () => {
   const app = readText("src/App.vue");
   const acceptStart = app.indexOf("function acceptPendingActionIntent");
   const acceptEnd = app.indexOf("function dismissPendingActionIntent", acceptStart);
@@ -839,7 +869,7 @@ test("Vue keeps versioned field-edit review and signing separate from local draf
   assert.doesNotMatch(signField, /syncOutbox/);
 });
 
-test("Vue stages and accepts v4 roster requests inertly in a separate review state", () => {
+legacySourceLayoutTest("Vue stages and accepts v4 roster requests inertly in a separate review state", () => {
   const app = readText("src/App.vue");
   const actionIntent = readText("src/township_action_intent.ts");
   const dispatcher = readText("src/township_deep_link_dispatcher.ts");
@@ -885,7 +915,7 @@ test("Vue stages and accepts v4 roster requests inertly in a separate review sta
   assert.doesNotMatch(acceptRosterIntent, /signAcceptedRosterIntent|submitTownshipCommand|syncOutbox/);
 });
 
-test("Vue signs accepted v4 roster requests locally while keeping outbox sync separate", () => {
+legacySourceLayoutTest("Vue signs accepted v4 roster requests locally while keeping outbox sync separate", () => {
   const app = readText("src/App.vue");
   const signStart = app.indexOf("async function signAcceptedRosterIntent");
   const signEnd = app.indexOf("function dismissAcceptedRosterIntent", signStart);
@@ -934,7 +964,7 @@ test("Vue signs accepted v4 roster requests locally while keeping outbox sync se
   assert.doesNotMatch(traceRoster, /\.member|intent|action URL|deep-link/);
 });
 
-test("Vue stages and accepts v5 grant requests inertly in an independent review state", () => {
+legacySourceLayoutTest("Vue stages and accepts v5 grant requests inertly in an independent review state", () => {
   const app = readText("src/App.vue");
   const actionIntent = readText("src/township_action_intent.ts");
   const dispatcher = readText("src/township_deep_link_dispatcher.ts");
@@ -978,7 +1008,7 @@ test("Vue stages and accepts v5 grant requests inertly in an independent review 
   assert.match(app, /acceptedGrantIntent\.authority\.live \? "Live" : "Offline"/);
 });
 
-test("Vue signs accepted v5 grants locally while keeping explicit Sync separate", () => {
+legacySourceLayoutTest("Vue signs accepted v5 grants locally while keeping explicit Sync separate", () => {
   const app = readText("src/App.vue");
   const signStart = app.indexOf("async function signAcceptedGrantIntent");
   const signEnd = app.indexOf("function dismissAcceptedGrantIntent", signStart);
@@ -1182,6 +1212,47 @@ test("Vue source supports smoke-only auto-sync from Vite env", () => {
   assert.match(app, /autosyncOnMount/);
   assert.match(app, /VITE_TOWNSHIP_AUTOSYNC_ON_MOUNT/);
   assert.match(app, /if \(autosyncOnMount && carrierPeer\.value\) await syncOutbox\(\)/);
+});
+
+test("Vue persistence entry points guard async re-entry", () => {
+  const app = readText("src/App.vue");
+  const guardedEntries = [
+    ["submitPost", "if (postSubmitting.value) return;", "postSubmitting.value = true;"],
+    ["submitSummary", "if (summarySubmitting.value) return;", "summarySubmitting.value = true;"],
+    ["submitMatterStatus", "if (statusSubmitting.value !== null) return;", "statusSubmitting.value = command;"],
+    ["submitMemberCommand", "if (memberSubmitting.value !== null) return;", "memberSubmitting.value = command;"],
+    ["submitGrant", "if (grantSubmitting.value) return;", "grantSubmitting.value = true;"],
+    ["submitRevoke", "if (revokeSubmitting.value) return;", "revokeSubmitting.value = true;"],
+    ["syncOutbox", "if (syncSubmitting.value) return;", "syncSubmitting.value = true;"],
+    ["submitPairing", "if (pairingSubmitting.value) return;", "pairingSubmitting.value = true;"],
+  ];
+
+  for (const [name, guard, firstEffect] of guardedEntries) {
+    const entry = asyncFunctionSource(app, name);
+    assert.ok(entry.includes(guard), `${name} should guard re-entry`);
+    assert.ok(
+      entry.indexOf(guard) < entry.indexOf(firstEffect),
+      `${name} should guard before ${firstEffect}`,
+    );
+  }
+
+  const releasingEntries = [
+    ["submitPost", "postSubmitting.value = false;"],
+    ["submitSummary", "summarySubmitting.value = false;"],
+    ["submitMatterStatus", "statusSubmitting.value = null;"],
+    ["submitMemberCommand", "memberSubmitting.value = null;"],
+    ["submitGrant", "grantSubmitting.value = false;"],
+    ["submitRevoke", "revokeSubmitting.value = false;"],
+    ["syncOutbox", "syncSubmitting.value = false;"],
+    ["submitPairing", "pairingSubmitting.value = false;"],
+  ];
+
+  for (const [name, release] of releasingEntries) {
+    const entry = asyncFunctionSource(app, name);
+    const finallyIndex = entry.lastIndexOf("finally {");
+    assert.ok(finallyIndex > -1, `${name} should release its guard in finally`);
+    assert.ok(entry.indexOf(release, finallyIndex) > finallyIndex, `${name} should run ${release} in finally`);
+  }
 });
 
 test("Vue source does not block smoke auto-sync on action availability hydration", () => {

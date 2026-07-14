@@ -1,5 +1,12 @@
 defmodule LatticeCarrierServer.Holder do
-  @moduledoc false
+  @moduledoc """
+  Owns the carrier's served log, durable relay path, and availability subscribers.
+
+  A path-backed relay is acknowledged only after a complete temporary dump has
+  been synced and atomically renamed over the source. This is process-crash
+  durability, not a power-loss guarantee: the parent directory is not synced,
+  and macOS `F_FULLFSYNC` is not requested.
+  """
 
   use GenServer
 
@@ -136,7 +143,10 @@ defmodule LatticeCarrierServer.Holder do
   defp load_source({:log, %Log{} = log}), do: {:ok, log}
 
   defp load_source({:path, path}) when is_binary(path) do
-    with :ok <- preload_lattice_core(), do: Log.restore(path)
+    with :ok <- cleanup_orphaned_temp_files(path),
+         :ok <- preload_lattice_core() do
+      Log.restore(path)
+    end
   end
 
   defp load_source(_source), do: {:error, :invalid_source}
@@ -162,14 +172,45 @@ defmodule LatticeCarrierServer.Holder do
     suffix = System.unique_integer([:monotonic, :positive])
     temp_path = "#{path}.tmp.#{suffix}"
 
-    result =
+    try do
       with :ok <- Log.dump(log, temp_path),
+           :ok <- sync_file(temp_path),
            :ok <- File.rename(temp_path, path) do
         :ok
       end
+    after
+      _ = File.rm(temp_path)
+    end
+  end
 
-    _ = File.rm(temp_path)
-    result
+  defp sync_file(path) do
+    with {:ok, io_device} <- File.open(path, [:read, :binary]) do
+      try do
+        :file.sync(io_device)
+      after
+        _ = File.close(io_device)
+      end
+    end
+  end
+
+  defp cleanup_orphaned_temp_files(path) do
+    directory = Path.dirname(path)
+    prefix = Path.basename(path) <> ".tmp."
+
+    with {:ok, entries} <- File.ls(directory) do
+      entries
+      |> Enum.filter(&String.starts_with?(&1, prefix))
+      |> Enum.sort()
+      |> Enum.reduce_while(:ok, fn entry, :ok ->
+        orphan_path = Path.join(directory, entry)
+
+        case File.rm(orphan_path) do
+          :ok -> {:cont, :ok}
+          {:error, :enoent} -> {:cont, :ok}
+          {:error, reason} -> {:halt, {:error, {:orphan_cleanup_failed, orphan_path, reason}}}
+        end
+      end)
+    end
   end
 
   defp availability(log) do

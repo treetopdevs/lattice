@@ -2,7 +2,7 @@
 
 ## Status
 
-TODO
+IN PROGRESS — coverage migration and descriptor/composable consolidation are active.
 
 ## Priority
 
@@ -20,17 +20,23 @@ line-similarity with its predecessor. The wire/parser/signing **core** is genuin
 converged and is NOT the target here. The target is the duplicated UI and test estate, and
 the tests that pin it in place.
 
-## Prerequisite (do first, in this plan)
+## Coverage-migration prerequisite (do first, in this plan)
 
-The following tests pin the current source layout and must be removed or rewritten **before**
-any extraction, or the extraction breaks dozens of assertions for no behavioral reason:
+Replacement coverage must land **before** any source-layout or prose-pinning assertion is
+removed. The existing tests mix brittle pins with real behavior, API, configuration, and
+non-overclaiming contracts; only the brittle part may be retired:
 
-- `clients/township-tauri-shell/test/frontend_shell.mjs` asserts regexes against `App.vue`
-  **source text** (slices between function-name markers, matches exact `ref<…>(null)`
-  declarations). Replace with behavior tests that drive the component, not its text.
-- `apps/*/test/**/plan_contract_test.exs` (~2,100 lines across three apps) assert exact prose
-  in the markdown plan/README/CLAUDE/AGENTS docs. Delete them or demote them to a single
-  non-suite doc-lint script. They verify no behavior and make every doc edit a test failure.
+- Replace `clients/township-tauri-shell/test/frontend_shell.mjs` source slices, exact
+  `ref<…>(null)` declarations, and function-name regexes with composable/component behavior
+  tests. Preserve rendered non-overclaiming copy, trace redaction, boot ordering, and re-entry
+  refusal as executable behavior assertions. Keep package-script, Tauri config, Cargo feature,
+  and hosted-workflow wiring in one small config-contract test rather than pretending a mounted
+  component covers them.
+- Replace the markdown-prose greps in `apps/*/test/**/plan_contract_test.exs` with a single
+  non-prose contract. Preserve the existing `function_exported?` checks for the WebSocket client,
+  carrier adapter, and Holder APIs; those are runtime API contracts, not documentation pins.
+- Record a green baseline, add each replacement assertion, prove it fails when its behavior or
+  contract is deliberately removed, and only then delete the superseded source/prose assertion.
 
 ## Objective
 
@@ -43,9 +49,10 @@ files. No behavior change; every existing gate stays green.
 ### Included — the extractions
 
 - **Phoenix**: replace the per-version `handle_event`/`retain_*`/`clear_*`/`*_intent_form`
-  clusters in `instrument_live.ex` with one intent-slot descriptor
-  (`%{event, form_key, builder, error_copy}`) and one generic handler/retain/clear driven by
-  it. Collapse the six near-identical `<section :if={@source_state == :fresh}>` panels in
+  clusters in `instrument_live.ex` with intent-slot descriptors and one generic
+  handler/retain/clear path. The descriptor must model form-backed command variants and the
+  model-derived, formless status slot explicitly rather than forcing them into one false shape.
+  Collapse the six near-identical `<section :if={@source_state == :fresh}>` panels in
   `instrument_live.html.heex` into one `<.intent_panel>` function component. Kill the twin
   28-line `initialize_action_intent`/`clear_action_intent` lists (the manual-sync hazard) by
   deriving both from the descriptor list. Rename the fossil `retain_action_intent` (it is the
@@ -69,7 +76,9 @@ files. No behavior change; every existing gate stays green.
 
 - The full behavior suite green **before and after**, proving no regression: LiveView
   instrument tests, TS parser/action/dispatcher tests, all packaged smokes, hosted flagship.
-- A net **negative** diff in `App.vue`, `instrument_live.ex`, the heex, and the smoke estate.
+- A net **negative** production diff in `App.vue`, `instrument_live.ex`, and the heex, measured
+  separately from deleted test lines; and a separately net-negative smoke estate after shared
+  support extraction. Coverage removal cannot be used to satisfy either count.
 - Demonstrate the new marginal cost: a short note in the plan showing the exact sites a
   hypothetical v6 would touch under the new structure (do not implement v6).
 
@@ -84,6 +93,21 @@ files. No behavior change; every existing gate stays green.
 
 - No behavior change, no new capability, no G1/Phase G or W4 movement. This plan's entire
   value is a lower marginal cost for the next real feature.
+
+## Vue preservation constraints
+
+- `IntentReviewPanel` forwards the native click `Event` unchanged. The composable keeps the
+  existing `event && !event.isTrusted` refusal, while calls with no event remain the explicit
+  development-control path.
+- Each controller owns its status, but the shell projects only the most recently written slot
+  into the existing single status line in the Post panel. This removes state clobbering without
+  changing the rendered last-writer-wins location or tone.
+- v1 post and v2 status retain their existing shared submission lifecycles. A controller must
+  observe `postSubmitting` or `statusSubmitting`; it may not create a competing guard that can
+  drift from the standalone Post or Matter status surface.
+- The combined `township://dev/action-intent/submit` v1 path remains bespoke. Generic slot
+  routing covers only `action-{slot}/{use,sign}`, and one carrier sync still emits all five
+  redacted slot trace outcomes.
 
 ## Likely files
 

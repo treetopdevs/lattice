@@ -48,6 +48,7 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   const cargoToml = readText("clients/township-tauri-shell/src-tauri/Cargo.toml");
   const appVue = readText("clients/township-tauri-shell/src/App.vue");
   const nativeWorkflow = readText("clients/township-tauri-shell/src/native_workflow.ts");
+  const iosKeyReuseProbeSource = readText("clients/township-tauri-shell/src/township_ios_key_reuse_probe.ts");
   const canonicalProbeSource = readText("clients/township-tauri-shell/src/township_canonical_probe.ts");
   const releaseTransportProbeSource = readText("clients/township-tauri-shell/src/township_release_transport_probe.ts");
   const releaseBeamProbeSource = readText("clients/township-tauri-shell/src/township_release_beam_probe.ts");
@@ -71,6 +72,13 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   const releasePairingProbeContract = readText("clients/township-tauri-shell/test/township_release_pairing_probe.ts");
   const releaseOnboardingProbeContract = readText("clients/township-tauri-shell/test/township_release_onboarding_probe.ts");
   const onboardingContract = readText("clients/township-tauri-shell/test/township_onboarding.ts");
+  const iosKeyReuseProbeContract = readText(
+    "clients/township-tauri-shell/test/township_ios_key_reuse_probe.ts",
+  );
+  const iosKeyReuseSmoke = readText("clients/township-tauri-shell/test/tauri_ios_key_reuse_smoke.ts");
+  const iosKeyReuseBuildSupport = readText(
+    "clients/township-tauri-shell/test/support/build_tauri_ios_key_reuse_probe.ts",
+  );
   const androidSmoke = readText("clients/township-tauri-shell/test/tauri_android_emulator_smoke.ts");
   const androidBeamSmoke = readText("clients/township-tauri-shell/test/tauri_android_beam_smoke.ts");
   const androidAuthoringSmoke = readText("clients/township-tauri-shell/test/tauri_android_authoring_smoke.ts");
@@ -112,6 +120,7 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   const strategy = readText("docs/township_mobile_secure_store_strategy.md");
   const buildMap = readText("TOWNSHIP_BUILD_MAP.md");
   const plansIndex = readText("plans/README.md");
+  const plan077 = readText("plans/077-tauri-ios-simulator-build-readiness-e1.md");
   const plan054 = readText("plans/054-tauri-onboarding-cap-persistence-e1.md");
   const plan055 = readText("plans/055-mobile-secure-store-strategy-e1.md");
   const plan056 = readText("plans/056-real-app-convergence-gate-e1.md");
@@ -222,7 +231,7 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   );
   assert.equal(
     pkg.scripts["app:convergence"],
-    "npm run action:contract && npm run sync:contract && npm run stable:relay:contract && npm run onboarding:contract && npm run onboarding:click-through && npm run live:contract && npm run tauri:launch:smoke && npm run tauri:onboarding:smoke && npm run tauri:stable-relay:onboarding:smoke && npm run tauri:action-handoff:smoke && npm run tauri:deep-link:smoke",
+    "npm run action:contract && npm run sync:contract && npm run stable:relay:contract && npm run feed:contract && npm run feed:app:contract && npm run onboarding:contract && npm run onboarding:click-through && npm run live:contract && npm run tauri:launch:smoke && npm run tauri:onboarding:smoke && npm run tauri:stable-relay:onboarding:smoke && npm run tauri:action-handoff:smoke && TOWNSHIP_SKIP_CLERK_ACTION_APP_BUILD=1 npm run tauri:clerk-action-handoff:smoke && TOWNSHIP_SKIP_FIELD_ACTION_APP_BUILD=1 npm run tauri:field-action-handoff:smoke && TOWNSHIP_SKIP_ROSTER_ACTION_APP_BUILD=1 npm run tauri:roster-action-handoff:smoke && TOWNSHIP_SKIP_DELEGATION_GRANT_APP_BUILD=1 npm run tauri:delegation-grant-handoff:smoke && npm run tauri:feed:smoke && npm run tauri:deep-link:smoke",
   );
   assert.equal(
     pkg.scripts["tauri:android:release:onboarding:smoke"],
@@ -501,6 +510,26 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   );
   assert.equal(pkg.scripts.tauri, "tauri");
   assert.equal(pkg.scripts["mobile:tauri-readiness"], "node --test test/tauri_mobile_readiness.mjs");
+  assert.equal(pkg.scripts["ios:key-reuse:contract"], "tsx test/township_ios_key_reuse_probe.ts");
+  assert.equal(pkg.scripts["tauri:ios:key-reuse:smoke"], "tsx test/tauri_ios_key_reuse_smoke.ts");
+  assert.equal(
+    pkg.scripts["tauri:ios:key-reuse"],
+    "npm run tauri:ios:build:key-reuse-probe && npm run tauri:ios:key-reuse:smoke",
+  );
+  const iosKeyReuseBuildScript = pkg.scripts["tauri:ios:build:key-reuse-probe"];
+  assert.equal(iosKeyReuseBuildScript, "tsx test/support/build_tauri_ios_key_reuse_probe.ts");
+  assert.doesNotMatch(iosKeyReuseBuildScript, /--no-sign|WTR38SYC38|Q63L49GR8U|V2QRJPFMY9/);
+  assert.match(iosKeyReuseBuildSupport, /APPLE_DEVELOPMENT_TEAM/);
+  assert.match(iosKeyReuseBuildSupport, /VITE_TOWNSHIP_IOS_KEY_REUSE_PROBE: "1"/);
+  assert.match(iosKeyReuseBuildSupport, /ENTITLEMENTS_ALLOWED: "YES"/);
+  assert.match(iosKeyReuseBuildSupport, /"ios", "build", "--debug", "--target", "aarch64-sim", "--ci", "--archive-only"/);
+  assert.match(iosKeyReuseBuildSupport, /readFileSync/);
+  assert.match(iosKeyReuseBuildSupport, /writeFileSync/);
+  assert.match(iosKeyReuseBuildSupport, /finally/);
+  assert.match(iosKeyReuseBuildSupport, /project\.pbxproj/);
+  assert.match(iosKeyReuseBuildSupport, /Info\.plist/);
+  assert.match(iosKeyReuseBuildSupport, /township-tauri-shell_iOS\.entitlements/);
+  assert.doesNotMatch(iosKeyReuseBuildSupport, /WTR38SYC38|Q63L49GR8U|V2QRJPFMY9/);
   assert.equal(shellTsconfig.compilerOptions.resolveJsonModule, true);
 
   assert.equal(config.plugins["deep-link"].mobile[0].scheme[0], "township");
@@ -651,6 +680,12 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(nativeLib, /__android_log_write/);
   assert.match(nativeWorkflow, /export const TOWNSHIP_LOG_PROBE_COMMAND = "lattice_log_probe"/);
   assert.match(nativeWorkflow, /logTownshipProbeEvent/);
+  assert.match(iosKeyReuseProbeSource, /TOWNSHIP_IOS_KEY_REUSE_PROBE_LOG_PREFIX = "township-ios-key-reuse-probe"/);
+  assert.match(iosKeyReuseProbeSource, /VITE_TOWNSHIP_IOS_KEY_REUSE_PROBE/);
+  assert.match(iosKeyReuseProbeSource, /store=ios_protected_keychain/);
+  assert.match(iosKeyReuseProbeSource, /public_key_base64url/);
+  assert.match(iosKeyReuseProbeSource, /TOWNSHIP_IOS_KEY_REUSE_CONTROL_KEY_ID = "township-ios-key-reuse-control"/);
+  assert.doesNotMatch(iosKeyReuseProbeSource, /connectCarrierWebSocket|spawnTownshipPeer|BEAM/);
   assert.match(canonicalProbeSource, /createTownshipCanonicalProbeDeepLinkListener/);
   assert.match(canonicalProbeSource, /logTownshipCanonicalProbe/);
   assert.match(releaseTransportProbeSource, /TOWNSHIP_RELEASE_TRANSPORT_PROBE_LOG_PREFIX = "township-release-transport-probe"/);
@@ -801,6 +836,15 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(appVue, /if \(releaseOnboardingProbeActive\) \{\s+void logTownshipReleaseOnboardingProbeFromEnv\(\)\.catch\(\(\) => \{\}\);\s+\} else \{/);
   assert.match(appVue, /mountCanonicalProbeDeepLinkListener/);
   assert.match(appVue, /parseTownshipCanonicalProbeDeepLink/);
+  assert.match(appVue, /logTownshipIosKeyReuseProbeFromEnv/);
+  assert.match(
+    appVue,
+    /nativeStatus\.value = await loadTownshipNativeStatus\(\);[\s\S]+logTownshipIosKeyReuseProbeFromEnv\(nativeStatus\.value, iosProbeEnv/,
+  );
+  assert.match(
+    appVue,
+    /loadTownshipNativeStatus\(\{\s+keyId: TOWNSHIP_IOS_KEY_REUSE_CONTROL_KEY_ID,\s+\}\)/,
+  );
   assert.match(
     nativeLib,
     /configure_mobile_keyring_store\(\)\?;\n\s+keyring::Entry::new\(&self\.service, key_id\)/,
@@ -812,6 +856,21 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(androidSmoke, /\["shell", "am", "force-stop", appId\]/);
   assert.match(androidSmoke, /publicKeyAfterRestart/);
   assert.match(androidSmoke, /publicKeyAfterClear/);
+  assert.match(iosKeyReuseProbeContract, /outcome=ready/);
+  assert.match(iosKeyReuseProbeContract, /outcome=error/);
+  assert.match(iosKeyReuseProbeContract, /Code_-34018/);
+  assert.match(iosKeyReuseSmoke, /xcrun/);
+  assert.match(iosKeyReuseSmoke, /simctl/);
+  assert.match(iosKeyReuseSmoke, /TOWNSHIP_IOS_SIMULATOR_UDID/);
+  assert.match(iosKeyReuseSmoke, /township-ios-key-reuse-probe/);
+  assert.match(iosKeyReuseSmoke, /publicKeyAfterRelaunch/);
+  assert.match(iosKeyReuseSmoke, /controlPublicKeyAfterRelaunch/);
+  assert.match(iosKeyReuseSmoke, /assert\.notEqual\(\s*second\.pid,\s*first\.pid/);
+  assert.match(iosKeyReuseSmoke, /await terminateApp\(simulator\.udid\);\s+const second/);
+  assert.match(iosKeyReuseSmoke, /assert\.notEqual\([^)]*controlPublicKeyBase64Url/);
+  assert.match(iosKeyReuseSmoke, /Buffer\.from\([^)]*, "base64url"\)/);
+  assert.match(iosKeyReuseSmoke, /terminate/);
+  assert.doesNotMatch(iosKeyReuseSmoke, /spawnTownshipPeer|BEAM|physical.device/i);
   assert.match(androidCdpSupport, /connectToAppWebView/);
   assert.match(androidCdpSupport, /tauriInvoke/);
   assert.match(androidCdpSupport, /clickButtonByText/);
@@ -1310,7 +1369,16 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
 
   assert.match(strategy, /Plan 076 adds generated Tauri iOS and Android target scaffolds/);
   assert.match(strategy, /plan 077 pins the repo-side iOS simulator readiness contracts/);
-  assert.match(strategy, /plan 078 proves\s+the generated Android target can assemble a debug APK/);
+  assert.match(strategy, /Xcode 26\.6 \(Build 17F113\)/);
+  assert.match(strategy, /two independently named protected Keychain keys/);
+  assert.match(strategy, /both survive process relaunch/);
+  assert.match(strategy, /does not independently verify the returned signature\s+bytes/);
+  assert.match(
+    strategy,
+    /does not prove simulator or device reboot, physical-device behavior, iOS BEAM convergence,\s+or CI\s+enforcement/,
+  );
+  assert.doesNotMatch(strategy, /local iOS simulator archive remains\s+blocked/);
+  assert.match(strategy, /[Pp]lan 078 proves\s+the generated Android target can assemble a debug APK/);
   assert.match(strategy, /Plan 079\s+proves an Android emulator native-key smoke/);
   assert.match(strategy, /Plan 084 proves Android release APK canonical\/wire fidelity/);
   assert.match(strategy, /on Android startup in both debug and\s+release APKs/);
@@ -1437,7 +1505,7 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(strategy, /Android emulator now proves native carrier key reuse/);
   assert.match(strategy, /No phone-grade persistence claim is allowed/);
   assert.match(buildMap, /clients\/township-tauri-shell/);
-  assert.match(buildMap, /shell coverage through plan 131/);
+  assert.match(buildMap, /shell coverage through Plan 138/);
   assert.match(
     buildMap,
     /desktop and Android-release convergence, onboarding,\s+and pairing proofs exist through plan 120/,
@@ -1447,8 +1515,15 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
     buildMap,
     /Plan 128 does not change or\s+newly prove Tauri onboarding\/cap persistence,\s+mobile secure-store custody, or real app\s+convergence/,
   );
-  assert.match(buildMap, /plans 023-131/);
-  assert.match(buildMap, /Xcode 27 beta Tauri Swift-package failure/);
+  assert.match(buildMap, /plans 023-138/);
+  assert.match(buildMap, /Xcode 26\.6 \(Build 17F113\)/);
+  assert.match(buildMap, /two\s+independently named protected keys/);
+  assert.match(buildMap, /survive process relaunch/);
+  assert.match(
+    buildMap,
+    /does not prove\s+simulator or device reboot, physical-device behavior, iOS BEAM convergence, or CI enforcement/,
+  );
+  assert.doesNotMatch(buildMap, /archive path blocked by the Xcode 27 beta Tauri Swift-package failure/);
   assert.match(buildMap, /QR camera onboarding/);
   assert.match(buildMap, /LAN discovery/);
   assert.match(buildMap, /Physical-device behavior/);
@@ -1459,6 +1534,24 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(plansIndex, /\| 054 \| Tauri onboarding\/cap persistence ceremony \| P1 \| M \| 053 \| DONE \|/);
   assert.match(plansIndex, /\| 055 \| Mobile secure-store strategy \| P1 \| S \| 054 \| DONE \|/);
   assert.match(plansIndex, /\| 056 \| Real app convergence gate \| P1 \| S \| 055 \| DONE \|/);
+  assert.match(
+    plansIndex,
+    /\| 077 \| Tauri iOS simulator build readiness \| P1 \| S \| 076 \| IN PROGRESS \(Xcode 26\.6 archive \+ protected-key process-relaunch proof green; reboot, physical-device, BEAM convergence, and CI gates open\) \|/,
+  );
+  assert.match(plan077, /## Status\s+IN PROGRESS/);
+  assert.match(plan077, /Xcode 26\.6 \(Build 17F113\)/);
+  assert.match(plan077, /two independently named protected Keychain keys/);
+  assert.match(plan077, /both keys survive process relaunch/);
+  assert.match(plan077, /does not independently verify the returned signature\s+bytes/);
+  assert.match(plan077, /APPLE_DEVELOPMENT_TEAM/);
+  assert.match(plan077, /restore(?:s)? the generated Xcode\s+signing files/);
+  assert.match(plan077, /does not\s+prove simulator or device\s+reboot/);
+  assert.match(plan077, /does not\s+prove physical-device behavior/);
+  assert.match(plan077, /does not\s+prove iOS BEAM convergence/);
+  assert.match(plan077, /not enforced in CI/);
+  assert.match(plan077, /final focused\s+re-review returned `PROCEED` with no findings/);
+  assert.doesNotMatch(plan077, /## Status\s+DONE/);
+  assert.doesNotMatch(plan077, /DEVELOPMENT_TEAM = [A-Z0-9]{10}/);
   assert.match(plan054, /## Status\s+DONE/);
   assert.match(plan054, /persist the grant as local\s+delegation evidence/);
   assert.match(plan054, /Keep mobile secure-store implementation[\s\S]*full\s+Expo\/Tauri app convergence out of scope/);

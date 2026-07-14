@@ -25,10 +25,10 @@ export const townshipMatterSchema: ReplicaSchema = {
 };
 
 export const townshipMatterOps: Op[] = [
-  op("3gisahML791TEKkKa56M2GSxknsj60ZgHgEl-GIO9rs", [], "authority", "clerk", "clerk", "write", "clerk", "genesis clerk"),
+  op("alPyLJrTujWnm_cNWbburV2Y4NP3mYdkjAUqIHXxJ9U", [], "authority", "clerk", "clerk", "write", "clerk", "genesis clerk"),
   op(
-    "-36WpNvm7LCAmZD2R68_MIjqcRusi88snNB_xhQD9aQ",
-    ["3gisahML791TEKkKa56M2GSxknsj60ZgHgEl-GIO9rs"],
+    "wSAxLmQL_laRKD8pa5Lm9gh6hdsFE6ee1BZKkT4yC1I",
+    ["alPyLJrTujWnm_cNWbburV2Y4NP3mYdkjAUqIHXxJ9U"],
     "authority",
     "clerk",
     "__authority",
@@ -37,8 +37,8 @@ export const townshipMatterOps: Op[] = [
     "grant resident",
   ),
   op(
-    "IHBXBz7xJx_JXLmSTZQGw7u7A-BMnAxo6xQ0U-TVTvQ",
-    ["-36WpNvm7LCAmZD2R68_MIjqcRusi88snNB_xhQD9aQ"],
+    "LjyuGoRJNDzsPTVpuW7MlLFuMNsMmVOx_GxGyyjn1rQ",
+    ["wSAxLmQL_laRKD8pa5Lm9gh6hdsFE6ee1BZKkT4yC1I"],
     "command",
     "clerk",
     "members",
@@ -47,8 +47,8 @@ export const townshipMatterOps: Op[] = [
     "admit",
   ),
   op(
-    "RbT2hkJ0AZlrdvGC2KvbgGZY04Yhq7v-PKURGf9oFQE",
-    ["IHBXBz7xJx_JXLmSTZQGw7u7A-BMnAxo6xQ0U-TVTvQ"],
+    "vp4P8uIkZFgcjT6a4qCsSQ-DBTrCSoD8HZNrCQpjMks",
+    ["LjyuGoRJNDzsPTVpuW7MlLFuMNsMmVOx_GxGyyjn1rQ"],
     "command",
     "clerk",
     "members",
@@ -57,8 +57,8 @@ export const townshipMatterOps: Op[] = [
     "admit",
   ),
   op(
-    "fG5WVRkc4rAl6G5i8YYCahuaIr4rwPFFZMjyTdEooNg",
-    ["-36WpNvm7LCAmZD2R68_MIjqcRusi88snNB_xhQD9aQ"],
+    "E5fAT3RYRfxYwcw4h6hXIUrLoDAvgwpvdEHtCRAB4E4",
+    ["wSAxLmQL_laRKD8pa5Lm9gh6hdsFE6ee1BZKkT4yC1I"],
     "command",
     "resident",
     "posts",
@@ -67,8 +67,8 @@ export const townshipMatterOps: Op[] = [
     "post",
   ),
   op(
-    "vEyKbmA4a5ysTnOlTwE3oQrzckUZUVY0peCz3wPbRio",
-    ["fG5WVRkc4rAl6G5i8YYCahuaIr4rwPFFZMjyTdEooNg"],
+    "1xtEPVnYbSxHgVHKayyMdvIuf49NeVSgQqi96Gg-MM8",
+    ["E5fAT3RYRfxYwcw4h6hXIUrLoDAvgwpvdEHtCRAB4E4"],
     "command",
     "resident",
     "summary",
@@ -77,8 +77,8 @@ export const townshipMatterOps: Op[] = [
     "set_summary",
   ),
   op(
-    "j2gcb5LdpWoVY93rKM9nLusQw5Us9VCrbE2aTNQ8Evg",
-    ["vEyKbmA4a5ysTnOlTwE3oQrzckUZUVY0peCz3wPbRio"],
+    "mMpefHRAYHYm3b4zVySAJm-0c4BXo2AgfN_YsODA37g",
+    ["1xtEPVnYbSxHgVHKayyMdvIuf49NeVSgQqi96Gg-MM8"],
     "command",
     "resident",
     "posts",
@@ -87,8 +87,8 @@ export const townshipMatterOps: Op[] = [
     "post",
   ),
   op(
-    "vqf1_jGFwz5mC-dGQf82VFxIRyUD10XLll23af8S-es",
-    ["RbT2hkJ0AZlrdvGC2KvbgGZY04Yhq7v-PKURGf9oFQE"],
+    "L10W2QqXGpkBAsTNlxX3_dfwrEEKV1E5Ji-U6yXQffM",
+    ["vp4P8uIkZFgcjT6a4qCsSQ-DBTrCSoD8HZNrCQpjMks"],
     "command",
     "clerk",
     "title",
@@ -97,8 +97,8 @@ export const townshipMatterOps: Op[] = [
     "set_title",
   ),
   op(
-    "e_17sbyo-dGFCyV2G7z_Fn5St4Clrt9_OKE7YqhX91E",
-    ["vqf1_jGFwz5mC-dGQf82VFxIRyUD10XLll23af8S-es"],
+    "Rr9vJAyKWsSqBQNFgBnQyYGDtlDcbNjLMhtIo0GqvaY",
+    ["L10W2QqXGpkBAsTNlxX3_dfwrEEKV1E5Ji-U6yXQffM"],
     "command",
     "clerk",
     "posts",
@@ -107,8 +107,8 @@ export const townshipMatterOps: Op[] = [
     "post",
   ),
   op(
-    "6kDiSO8qiTfEJy0qudiJ_sk27xT9kaxoofv19HOyj3A",
-    ["e_17sbyo-dGFCyV2G7z_Fn5St4Clrt9_OKE7YqhX91E", "j2gcb5LdpWoVY93rKM9nLusQw5Us9VCrbE2aTNQ8Evg"],
+    "1pyd8r5YGNSMV5op3yPSMKBUwYWRZ_0L5Fne16bq9pA",
+    ["Rr9vJAyKWsSqBQNFgBnQyYGDtlDcbNjLMhtIo0GqvaY", "mMpefHRAYHYm3b4zVySAJm-0c4BXo2AgfN_YsODA37g"],
     "command",
     "clerk",
     "clerk_locked",
@@ -117,8 +117,8 @@ export const townshipMatterOps: Op[] = [
     "close_matter",
   ),
   op(
-    "NTzDm0Y8bZjjbEeGk0iUOqzsyF1eum6v-Yb5ZTAKc_Q",
-    ["e_17sbyo-dGFCyV2G7z_Fn5St4Clrt9_OKE7YqhX91E"],
+    "NZ1Y6_uwlEGNQtbxQ2hFwKTsndAgtQYFBUHu7b_H5pQ",
+    ["Rr9vJAyKWsSqBQNFgBnQyYGDtlDcbNjLMhtIo0GqvaY"],
     "command",
     "clerk",
     "summary",

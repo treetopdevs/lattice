@@ -7,6 +7,48 @@ defmodule LatticeCarrierServer.HolderTest do
   @replica "replica:carrier-holder:test"
 
   @tag :tmp_dir
+  test "startup removes orphaned atomic-dump temp files", %{tmp_dir: tmp_dir} do
+    server_identity = Identity.from_seed("town-node", "carrier-holder-orphan-cleanup")
+    path = Path.join(tmp_dir, "matter.log")
+    orphan_paths = ["#{path}.tmp.1", "#{path}.tmp.2"]
+    assert :ok = @replica |> Log.new() |> Log.dump(path)
+
+    for orphan_path <- orphan_paths do
+      assert :ok = File.write(orphan_path, "stale")
+    end
+
+    holder = start_holder(server_identity, path)
+
+    assert Holder.op_ids(holder) == []
+    assert Path.wildcard("#{path}.tmp.*") == []
+  end
+
+  @tag :tmp_dir
+  test "startup refuses an orphan it cannot remove", %{tmp_dir: tmp_dir} do
+    server_identity = Identity.from_seed("town-node", "carrier-holder-orphan-refusal")
+    path = Path.join(tmp_dir, "matter.log")
+    orphan_path = "#{path}.tmp.blocked"
+    assert :ok = @replica |> Log.new() |> Log.dump(path)
+    assert :ok = File.mkdir(orphan_path)
+    assert :ok = File.write(Path.join(orphan_path, "still-here"), "stale")
+    previous_flag = Process.flag(:trap_exit, true)
+
+    try do
+      assert {:error, {:source_error, {:orphan_cleanup_failed, ^orphan_path, reason}}} =
+               Holder.start_link(
+                 name: {:global, {__MODULE__, make_ref()}},
+                 identity: server_identity,
+                 source: {:path, path},
+                 relay_realms: []
+               )
+
+      assert reason in [:eisdir, :eperm]
+    after
+      Process.flag(:trap_exit, previous_flag)
+    end
+  end
+
+  @tag :tmp_dir
   test "subscription returns a bounded baseline from the durable log", %{tmp_dir: tmp_dir} do
     author = Identity.from_seed("author", "carrier-holder-baseline")
     server_identity = Identity.from_seed("town-node", "carrier-holder-server")

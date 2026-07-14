@@ -510,32 +510,28 @@ fn key_value_store_reloads_from_persistent_file_across_state_instances() {
 }
 
 #[test]
-fn corrupt_persistent_key_value_file_recovers_as_empty_replayable_state() {
+fn corrupt_persistent_key_value_file_is_rejected_without_overwrite() {
     let path = unique_test_kv_path("township-native-kv-corrupt");
-    std::fs::write(&path, "{").unwrap();
+    let corrupt_bytes = b"{\"township:zoning-variance-24:carrier_frames\": [";
+    std::fs::write(&path, corrupt_bytes).unwrap();
 
-    let recovered_state = TownshipNativeState::with_persistent_values_file(&path).unwrap();
-    assert_eq!(
-        recovered_state
-            .kv_get("township:zoning-variance-24:carrier_peer_config")
-            .unwrap(),
-        None
-    );
+    let startup_error = match TownshipNativeState::with_persistent_values_file(&path) {
+        Ok(_) => panic!("corrupt persistent state unexpectedly loaded"),
+        Err(error) => error,
+    };
+    assert!(startup_error.contains("native key-value store decode failed"));
+    assert_eq!(std::fs::read(&path).unwrap(), corrupt_bytes);
 
-    recovered_state
-        .kv_set(
-            "township:zoning-variance-24:carrier_peer_config",
-            "{\"url\":\"ws://10.0.2.2:4111/carrier\"}",
-        )
+    let live_state = TownshipNativeState::default();
+    live_state
+        .kv_set("ephemeral-before-attach", "preserved")
         .unwrap();
-
-    let reloaded_state = TownshipNativeState::with_persistent_values_file(&path).unwrap();
-    assert_eq!(
-        reloaded_state
-            .kv_get("township:zoning-variance-24:carrier_peer_config")
-            .unwrap(),
-        Some("{\"url\":\"ws://10.0.2.2:4111/carrier\"}".to_string())
-    );
+    let attach_error = live_state.attach_persistent_values_file(&path).unwrap_err();
+    assert!(attach_error.contains("native key-value store decode failed"));
+    live_state
+        .kv_set("ephemeral-after-attach", "still-memory-only")
+        .unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), corrupt_bytes);
 
     let _ = std::fs::remove_file(path);
 }

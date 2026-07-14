@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  carrierDelegationsFromFrames,
   type CarrierOpFrame,
   type CarrierPushReport,
   type CarrierSyncClient,
@@ -76,9 +77,13 @@ const vector = JSON.parse(
 ) as TownshipCarrierVector;
 const residentIdentity = seededEd25519Identity(`${vector.client.sessionSeed}:${vector.client.realm}`);
 const postFixture = vector.clientDivergedCarrierOps.find(
-  (frame) => frame.id === "xmret5C7xMai04EQDm1cEX1dDjeBqxPM7-TcDN8cfhI",
+  (frame) => frame.author === residentIdentity.publicKeyBase64 && frameCommandName(frame) === "post",
 );
 if (!postFixture) throw new Error("missing resident post fixture");
+const residentGrantId = carrierDelegationsFromFrames(vector.clientDivergedCarrierOps).find(
+  (delegation) => delegation.audience === residentIdentity.publicKeyBase64 && delegation.parent_id !== null,
+)?.id;
+if (!residentGrantId) throw new Error("missing resident grant fixture");
 const onboardingPeerFrames = vector.clientDivergedCarrierOps.filter((frame) => frame.id !== postFixture.id);
 const carrier = new OnboardingCarrierClient(onboardingPeerFrames);
 const values = new Map<string, string>();
@@ -112,7 +117,7 @@ assert.deepEqual(ceremony.pairing, pairing);
 assert.equal(ceremony.initialSync.pulledFrameCount, onboardingPeerFrames.length);
 assert.equal(ceremony.initialSync.pushedFrameCount, 0);
 assert.equal(ceremony.post.frameId, postFixture.id);
-assert.equal(ceremony.post.capId, "gN9aanNVZeHWsS1vU8KxjyqVrWdC0VwPIzilL_QX2n0");
+assert.equal(ceremony.post.capId, residentGrantId);
 assert.deepEqual(ceremony.finalSync.pushedFrameIds, [postFixture.id]);
 assert.equal(ceremony.finalSync.compactedFrameCount, 1);
 assert.deepEqual(ceremony.localOpIds, vector.clientDivergedCarrierOps.map((frame) => frame.id));
@@ -142,6 +147,11 @@ function storedIds(values: Map<string, string>, key: string): string[] {
 
 function commandCount(calls: string[], command: string): number {
   return calls.filter((call) => call === command).length;
+}
+
+function frameCommandName(frame: CarrierOpFrame | undefined): string | undefined {
+  const body = frame?.body;
+  return body?.[0] === "tuple" && body[1][0]?.[0] === "atom" ? body[1][0][1] : undefined;
 }
 
 function secretNeedles(...identities: NativeIdentity[]): string[] {

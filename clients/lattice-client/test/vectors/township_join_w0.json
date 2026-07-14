@@ -14,7 +14,7 @@
       "title": ""
     },
     "winners": {
-      "clerk": "tyD-kzlycNzcgAE3M9fuclWvcZCs_6a4O1RMF-FP9Lw",
+      "clerk": "Cl15rL6k8Ls4TgOh7wb6L6csbRbfJXIfKZnAPo43TqE",
       "clerk_locked": null,
       "summary": null,
       "title": null
@@ -27,8 +27,8 @@
       "command": "genesis clerk",
       "deps": [],
       "field": "clerk",
-      "hash": "tyD-kzlycNzcgAE3M9fuclWvcZCs_6a4O1RMF-FP9Lw",
-      "id": "tyD-kzlycNzcgAE3M9fuclWvcZCs_6a4O1RMF-FP9Lw",
+      "hash": "Cl15rL6k8Ls4TgOh7wb6L6csbRbfJXIfKZnAPo43TqE",
+      "id": "Cl15rL6k8Ls4TgOh7wb6L6csbRbfJXIfKZnAPo43TqE",
       "kind": "authority",
       "mutation": "write",
       "value": "clerk"
@@ -37,11 +37,11 @@
       "author": "clerk",
       "command": "grant resident",
       "deps": [
-        "tyD-kzlycNzcgAE3M9fuclWvcZCs_6a4O1RMF-FP9Lw"
+        "Cl15rL6k8Ls4TgOh7wb6L6csbRbfJXIfKZnAPo43TqE"
       ],
       "field": "__authority",
-      "hash": "gobxLFkNgB-IP-JQ4-C-QIMsz75-VidSv2Dfbt6FOdI",
-      "id": "gobxLFkNgB-IP-JQ4-C-QIMsz75-VidSv2Dfbt6FOdI",
+      "hash": "DQpWtR-5WaZbI5D-dOxxQqhW0eIwIbriEh1Gvy47SDk",
+      "id": "DQpWtR-5WaZbI5D-dOxxQqhW0eIwIbriEh1Gvy47SDk",
       "kind": "authority",
       "mutation": "write",
       "value": null
@@ -50,11 +50,11 @@
       "author": "clerk",
       "command": "admit",
       "deps": [
-        "gobxLFkNgB-IP-JQ4-C-QIMsz75-VidSv2Dfbt6FOdI"
+        "DQpWtR-5WaZbI5D-dOxxQqhW0eIwIbriEh1Gvy47SDk"
       ],
       "field": "members",
-      "hash": "YsYmJQT2dLcdb1bWneuR1Vs2hLrMglx5PGIxOT9aOX4",
-      "id": "YsYmJQT2dLcdb1bWneuR1Vs2hLrMglx5PGIxOT9aOX4",
+      "hash": "Ywtgm4M-IqLB1k9INz4H4VhjbLSe1c6g3shCcuVH53E",
+      "id": "Ywtgm4M-IqLB1k9INz4H4VhjbLSe1c6g3shCcuVH53E",
       "kind": "command",
       "mutation": "add",
       "value": "clerk"
@@ -63,11 +63,11 @@
       "author": "clerk",
       "command": "admit",
       "deps": [
-        "YsYmJQT2dLcdb1bWneuR1Vs2hLrMglx5PGIxOT9aOX4"
+        "Ywtgm4M-IqLB1k9INz4H4VhjbLSe1c6g3shCcuVH53E"
       ],
       "field": "members",
-      "hash": "ngQ9xY4Q8vGWuOu7y4hbcliGxG1yZC1Ql7FrhCWOUIU",
-      "id": "ngQ9xY4Q8vGWuOu7y4hbcliGxG1yZC1Ql7FrhCWOUIU",
+      "hash": "LY38XjROMzuo8RzZPEcXHp9tNFwttE5S5BEgg60w6dc",
+      "id": "LY38XjROMzuo8RzZPEcXHp9tNFwttE5S5BEgg60w6dc",
       "kind": "command",
       "mutation": "add",
       "value": "resident"

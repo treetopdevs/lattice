@@ -13,6 +13,7 @@ import {
   createTownshipNativeWorkflow,
   type TownshipNativeWorkflow,
   type TownshipNativeWorkflowOptions,
+  withTownshipPersistenceWrite,
 } from "./native_workflow";
 
 export const TOWNSHIP_REPLICA = "replica:matter:township-g1#root:QUB7owpVIsZn3IyoVLJbsFc5HLkozhi2PVBL5Lzhj3w";
@@ -239,35 +240,38 @@ export async function submitTownshipDelegation(
   }
 
   try {
-    const authored = await authorAndPersistTownshipDelegation({
-      replica: options.replica ?? TOWNSHIP_REPLICA,
-      audiencePubkey: audience.value,
-      ops: options.ops ?? TOWNSHIP_DEFAULT_DELEGATION_OPS,
-      roles: options.roles ?? [],
-      live: options.live ?? false,
-      signer: workflow.signer,
-      localLog: workflow.localLog,
-      carrierFrames: workflow.carrierFrames,
-      delegationFrames: workflow.delegationFrames,
-      realmByPubkey: options.realmByPubkey ?? TOWNSHIP_REALM_BY_PUBKEY,
+    const persisted = await withTownshipPersistenceWrite(workflow, async () => {
+      const authored = await authorAndPersistTownshipDelegation({
+        replica: options.replica ?? TOWNSHIP_REPLICA,
+        audiencePubkey: audience.value,
+        ops: options.ops ?? TOWNSHIP_DEFAULT_DELEGATION_OPS,
+        roles: options.roles ?? [],
+        live: options.live ?? false,
+        signer: workflow.signer,
+        localLog: workflow.localLog,
+        carrierFrames: workflow.carrierFrames,
+        delegationFrames: workflow.delegationFrames,
+        realmByPubkey: options.realmByPubkey ?? TOWNSHIP_REALM_BY_PUBKEY,
+      });
+      const [localOps, carrierFrames, delegationFrames] = await Promise.all([
+        workflow.localLog.load(),
+        workflow.carrierFrames.load(),
+        workflow.delegationFrames.load(),
+      ]);
+      return { authored, localOps, carrierFrames, delegationFrames };
     });
-    const [localOps, carrierFrames, delegationFrames] = await Promise.all([
-      workflow.localLog.load(),
-      workflow.carrierFrames.load(),
-      workflow.delegationFrames.load(),
-    ]);
 
     return {
       ok: true,
       audiencePubkey: audience.value,
-      ops: [...authored.delegation.ops],
-      opId: authored.op.id,
-      frameId: authored.frame.id,
-      delegationId: authored.delegation.id,
-      parentId: authored.parentId,
-      localOpCount: localOps.length,
-      carrierFrameCount: carrierFrames.length,
-      delegationFrameCount: delegationFrames.length,
+      ops: [...persisted.authored.delegation.ops],
+      opId: persisted.authored.op.id,
+      frameId: persisted.authored.frame.id,
+      delegationId: persisted.authored.delegation.id,
+      parentId: persisted.authored.parentId,
+      localOpCount: persisted.localOps.length,
+      carrierFrameCount: persisted.carrierFrames.length,
+      delegationFrameCount: persisted.delegationFrames.length,
     };
   } catch (error) {
     const message = errorMessage(error);
@@ -322,31 +326,34 @@ export async function submitTownshipRevocation(
       };
     }
 
-    const localOps = await workflow.localLog.load();
-    const frame = await authorTownshipRevocation({
-      replica: options.replica ?? TOWNSHIP_REPLICA,
-      deps: frontier(localOps),
-      delegationId,
-      signer: workflow.signer,
+    const persisted = await withTownshipPersistenceWrite(workflow, async () => {
+      const localOps = await workflow.localLog.load();
+      const frame = await authorTownshipRevocation({
+        replica: options.replica ?? TOWNSHIP_REPLICA,
+        deps: frontier(localOps),
+        delegationId,
+        signer: workflow.signer,
+      });
+      const op = carrierOpsToSemanticOps([frame], options.realmByPubkey ?? TOWNSHIP_REALM_BY_PUBKEY)[0];
+      if (!op) throw new Error(`authored revocation frame ${frame.id} did not produce a semantic op`);
+
+      await workflow.localLog.append(op);
+      await workflow.carrierFrames.append(frame);
+
+      const [savedLocalOps, carrierFrames] = await Promise.all([
+        workflow.localLog.load(),
+        workflow.carrierFrames.load(),
+      ]);
+      return { op, frame, savedLocalOps, carrierFrames };
     });
-    const op = carrierOpsToSemanticOps([frame], options.realmByPubkey ?? TOWNSHIP_REALM_BY_PUBKEY)[0];
-    if (!op) throw new Error(`authored revocation frame ${frame.id} did not produce a semantic op`);
-
-    await workflow.localLog.append(op);
-    await workflow.carrierFrames.append(frame);
-
-    const [savedLocalOps, carrierFrames] = await Promise.all([
-      workflow.localLog.load(),
-      workflow.carrierFrames.load(),
-    ]);
 
     return {
       ok: true,
       delegationId,
-      opId: op.id,
-      frameId: frame.id,
-      localOpCount: savedLocalOps.length,
-      carrierFrameCount: carrierFrames.length,
+      opId: persisted.op.id,
+      frameId: persisted.frame.id,
+      localOpCount: persisted.savedLocalOps.length,
+      carrierFrameCount: persisted.carrierFrames.length,
     };
   } catch (error) {
     return { ok: false, reason: "author_failed", message: errorMessage(error) };
@@ -373,28 +380,31 @@ export async function submitTownshipCommand(
   }
 
   try {
-    const authored = await authorAndPersistTownshipCommand({
-      replica: options.replica ?? TOWNSHIP_REPLICA,
-      command,
-      signer: workflow.signer,
-      localLog: workflow.localLog,
-      carrierFrames: workflow.carrierFrames,
-      delegationFrames: workflow.delegationFrames,
-      realmByPubkey: options.realmByPubkey ?? TOWNSHIP_REALM_BY_PUBKEY,
+    const persisted = await withTownshipPersistenceWrite(workflow, async () => {
+      const authored = await authorAndPersistTownshipCommand({
+        replica: options.replica ?? TOWNSHIP_REPLICA,
+        command,
+        signer: workflow.signer,
+        localLog: workflow.localLog,
+        carrierFrames: workflow.carrierFrames,
+        delegationFrames: workflow.delegationFrames,
+        realmByPubkey: options.realmByPubkey ?? TOWNSHIP_REALM_BY_PUBKEY,
+      });
+      const [localOps, carrierFrames] = await Promise.all([
+        workflow.localLog.load(),
+        workflow.carrierFrames.load(),
+      ]);
+      return { authored, localOps, carrierFrames };
     });
-    const [localOps, carrierFrames] = await Promise.all([
-      workflow.localLog.load(),
-      workflow.carrierFrames.load(),
-    ]);
 
     return {
       ok: true,
       command,
-      opId: authored.op.id,
-      frameId: authored.frame.id,
-      capId: authored.capId,
-      localOpCount: localOps.length,
-      carrierFrameCount: carrierFrames.length,
+      opId: persisted.authored.op.id,
+      frameId: persisted.authored.frame.id,
+      capId: persisted.authored.capId,
+      localOpCount: persisted.localOps.length,
+      carrierFrameCount: persisted.carrierFrames.length,
     };
   } catch (error) {
     const message = errorMessage(error);

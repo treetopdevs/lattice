@@ -1,3 +1,22 @@
+defmodule Lattice.Canonical.Atom do
+  @moduledoc """
+  Atom-name value for safe cross-process decoding of canonical terms.
+
+  `Lattice.Canonical` encodes this value exactly as an atom with the same name.
+  It lets an untrusted decoder preserve producer-defined atom semantics without
+  creating atoms in the verifier VM.
+  """
+
+  @enforce_keys [:name]
+  defstruct [:name]
+
+  @type t :: %__MODULE__{name: String.t()}
+
+  @spec new(String.t()) :: {:ok, t()} | {:error, :invalid_atom_name}
+  def new(name) when is_binary(name), do: {:ok, %__MODULE__{name: name}}
+  def new(_name), do: {:error, :invalid_atom_name}
+end
+
 defmodule Lattice.Canonical do
   @moduledoc """
   Deterministic canonical bytes for signed Lattice values.
@@ -108,6 +127,10 @@ defmodule Lattice.Canonical do
       |> Enum.map(&encode/1)
       |> Enum.sort()
 
+    if Enum.uniq(elements) != elements do
+      raise ArgumentError, "duplicate canonical mapset element"
+    end
+
     major(6, @mapset_tag) <> encode_array_bytes(elements)
   end
 
@@ -125,6 +148,9 @@ defmodule Lattice.Canonical do
     ])
   end
 
+  defp encode(%Lattice.Canonical.Atom{name: name}) when is_binary(name),
+    do: encode_tagged(@atom_tag, name)
+
   defp encode(%{__struct__: _} = other) do
     raise ArgumentError, "unsupported canonical term: #{inspect(other)}"
   end
@@ -134,6 +160,12 @@ defmodule Lattice.Canonical do
       map
       |> Enum.map(fn {k, v} -> {encode(k), encode(v)} end)
       |> Enum.sort_by(fn {k, _v} -> k end)
+
+    keys = Enum.map(pairs, fn {key, _value} -> key end)
+
+    if Enum.uniq(keys) != keys do
+      raise ArgumentError, "duplicate canonical map key"
+    end
 
     major(5, length(pairs)) <> IO.iodata_to_binary(Enum.map(pairs, fn {k, v} -> k <> v end))
   end

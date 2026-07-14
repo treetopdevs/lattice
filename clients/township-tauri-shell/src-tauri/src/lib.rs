@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 #[cfg(target_os = "android")]
 use std::ffi::CString;
 use std::fs;
-use std::io::ErrorKind;
+use std::io::{ErrorKind, Write};
 use std::net::UdpSocket;
 #[cfg(target_os = "android")]
 use std::os::raw::{c_char, c_int};
@@ -331,7 +331,12 @@ impl TownshipNativeState {
 
 fn load_values_file(path: &Path) -> Result<HashMap<String, String>, String> {
     match fs::read_to_string(path) {
-        Ok(raw) => serde_json::from_str(&raw).or_else(|_| Ok(HashMap::new())),
+        Ok(raw) => serde_json::from_str(&raw).map_err(|error| {
+            format!(
+                "native key-value store decode failed at {}: {error}",
+                path.display()
+            )
+        }),
         Err(error) if error.kind() == ErrorKind::NotFound => Ok(HashMap::new()),
         Err(error) => Err(format!(
             "native key-value store read failed at {}: {error}",
@@ -353,12 +358,25 @@ fn save_values_file(path: &Path, values: &HashMap<String, String>) -> Result<(),
     let encoded = serde_json::to_vec(values)
         .map_err(|error| format!("native key-value store encode failed: {error}"))?;
     let tmp_path = path.with_extension("tmp");
-    fs::write(&tmp_path, encoded).map_err(|error| {
+    let mut tmp_file = fs::File::create(&tmp_path).map_err(|error| {
         format!(
             "native key-value store write failed at {}: {error}",
             tmp_path.display()
         )
     })?;
+    tmp_file.write_all(&encoded).map_err(|error| {
+        format!(
+            "native key-value store write failed at {}: {error}",
+            tmp_path.display()
+        )
+    })?;
+    tmp_file.sync_all().map_err(|error| {
+        format!(
+            "native key-value store sync failed at {}: {error}",
+            tmp_path.display()
+        )
+    })?;
+    drop(tmp_file);
     fs::rename(&tmp_path, path).map_err(|error| {
         format!(
             "native key-value store replace failed at {}: {error}",

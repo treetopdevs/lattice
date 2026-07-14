@@ -26,7 +26,12 @@ defmodule LatticeCarrierServer.WebSocket do
   @impl :cowboy_websocket
   def websocket_init(state) do
     timer = Process.send_after(self(), :authentication_deadline, @authentication_timeout_ms)
-    {:ok, Map.put(state, :authentication_timer, timer)}
+    nonce_frame = Session.nonce_frame(wire_version: Wire.version())
+
+    {:reply, {:text, Jason.encode!(nonce_frame)},
+     state
+     |> Map.put(:authentication_timer, timer)
+     |> Map.put(:server_nonce, nonce_frame["nonce"])}
   end
 
   @impl :cowboy_websocket
@@ -84,20 +89,21 @@ defmodule LatticeCarrierServer.WebSocket do
   def websocket_info(_message, state), do: {:ok, state}
 
   defp authenticate(challenge, state) do
-    with %{"local_realm" => peer_realm, "replica" => replica, "wire_version" => version} <-
-           challenge,
+    with %{"local_realm" => peer_realm, "replica" => replica} <- challenge,
          {:ok, peer_pubkey} <- Map.fetch(state.trusted_peers, peer_realm),
          {identity, ^replica} <- Holder.session_context(state.holder),
-         true <- version == Wire.version(),
          :ok <-
            Session.verify_challenge(challenge,
              expected_realm: peer_realm,
-             expected_pubkey: peer_pubkey
+             expected_pubkey: peer_pubkey,
+             expected_server_nonce: state.server_nonce,
+             expected_wire_version: Wire.version()
            ) do
       response = Session.respond(challenge, identity, identity.realm_id)
 
       {response,
        state
+       |> reset_subscription()
        |> cancel_authentication_deadline()
        |> Map.put(:authenticated?, true)
        |> Map.put(:peer_realm, peer_realm)
@@ -126,7 +132,6 @@ defmodule LatticeCarrierServer.WebSocket do
 
   defp auth_failure_reason({:error, reason}), do: reason
   defp auth_failure_reason(:error), do: :unknown_peer
-  defp auth_failure_reason(false), do: :unsupported_wire_version
   defp auth_failure_reason({_identity, _replica}), do: :wrong_replica
   defp auth_failure_reason(_reason), do: :malformed_session
 
@@ -238,6 +243,17 @@ defmodule LatticeCarrierServer.WebSocket do
     state
     |> Map.delete(:availability_timer)
     |> Map.delete(:pending_availability)
+  end
+
+  defp reset_subscription(state) do
+    if Map.get(state, :subscribed?, false) do
+      :ok = Holder.unsubscribe(state.holder, self())
+    end
+
+    state
+    |> cancel_pending_availability()
+    |> Map.put(:subscribed?, false)
+    |> Map.delete(:subscription_holder)
   end
 
   defp cancel_authentication_deadline(state) do

@@ -1,48 +1,46 @@
 defmodule Lattice.Attestation do
   @moduledoc """
-  The attestation seam — the load-bearing interface of the Township POC.
+  Legacy W4 attestation seam for the Township POC.
 
   Township's minimal cut proves three workloads (W0–W3) on the real substrate
-  and *stubs the fourth* (W4, receipt-free attestation) behind this behaviour.
-  The bet is: if this interface captures exactly what a receipt-free primitive
-  needs, then landing M4 is a **swap** (drop in a new implementing module) rather
-  than a **rewrite** of the workflows. This is the same "does the boundary match
-  what M2 replaces?" discipline PD-001 §6/V-03 applies to the carrier.
+  and stubs the fourth behind this behaviour. The M4 research verdict falsified
+  the original drop-in-swap wager: coercion resistance requires the separate,
+  multi-role `Township.Election` protocol and cannot soundly implement these four
+  callbacks.
+
+  This behaviour now exists only to keep the legacy W4 demo honest while the new
+  election path clears its blocking gates. `Lattice.Attestation.Stub` must keep
+  returning `false` from `receipt_free?/0`; no future election implementation may
+  be placed behind this interface.
 
   ## The three operations
 
-    * `cast_vouch/3` — a member attests support for a matter. Returns an **opaque
-      token** plus the op body to append to the matter's log. The token is opaque
-      so that callers never depend on its internal shape; the Stub makes it a
-      signed tag, M4 makes it a chameleon-hash commitment.
+    * `cast_vouch/3` — a member records a legacy demo vouch. Returns an **opaque
+      token** plus a caller-held demo body. The token is opaque so that callers
+      never depend on its internal shape. Neither value is a declared Matter
+      command.
 
-    * `tally/2` — reduce the set of vouch ops on the DAG into a result. This is
-      the coordinator-free *reconciliation* role the DAG absorbs (per the MACI
-      research note): it is real today. Determinism here is required in both the
-      Stub and M4 regimes.
+    * `tally/2` — reduce caller-held legacy demo bodies into a deterministic
+      result. It does not read, authenticate, or reduce Matter-log operations.
 
-    * `produce_alt/2` — the **equivocation hook**. Given a token and a coercer's
-      demanded value, produce a *valid alternative* that the coercer cannot
-      distinguish from a genuine vouch. This is where receipt-freeness lives:
-        - Stub: returns a valid alternative trivially (the property is faked and
-          honestly labelled `receipt_free?: false`).
-        - M4:   returns it via a real trapdoor re-opening (chameleon hash), and
-          only then is `receipt_free?/0` allowed to be `true`.
+    * `produce_alt/2` — a legacy plumbing hook. The Stub can fabricate another
+      body, but the M4 verdict proves that this is not receipt-freeness and that
+      a counting alternative is the wrong abstraction for fake credentials.
 
-  ## The contract that guards the swap
+  ## The legacy contract
 
-  `Lattice.Attestation.Contract` (see test support) runs the SAME suite against
-  any implementing module. The Stub must pass every part except the
-  receipt-freeness property; M4 must pass ALL of it. A module that changes the
-  *shape* of any callback breaks the contract test loudly — which is the whole
-  point of writing the interface before the workflows.
+  `Lattice.Attestation.Contract` (see test support) freezes the Stub's existing
+  demo behavior and fails if it ever claims receipt-freeness. The new election
+  path has separate board, projection, close, offline-replay, and eventually
+  cryptographic conformance contracts.
 
-  ## Deliberately NOT decided here
+  ## Replacement boundary
 
-  Which receipt-free primitive M4 uses (chameleon hash + DVP, deniable
-  encryption, or an LRS composition) is a §6 R-02/R-03 research verdict, not a
-  choice this behaviour makes. This module only fixes the *interface* so that
-  verdict can arrive without disturbing W0–W3.
+  `Township.Election` links immutable election configuration from a Matter to a
+  dedicated `Township.ElectionBoard`, then performs pure public replay over exact
+  artifacts. Its research profile currently makes no coercion-resistance claim.
+  W4 and the read/audit surface migrate only after every gate clears; this legacy
+  behavior and its contract are retired last.
   """
 
   alias Lattice.Identity
@@ -50,19 +48,18 @@ defmodule Lattice.Attestation do
   @typedoc "An opaque attestation token. Callers must treat this as a black box."
   @opaque token :: {module(), term()}
 
-  @typedoc "The body to append as an Op of kind :command on the matter's log."
+  @typedoc "A legacy caller-held vouch body; it is not a declared Matter command."
   @type vouch_body :: {:vouch, term()}
 
   @typedoc "A tally result: the reduced outcome plus per-choice counts."
   @type tally_result :: %{outcome: term(), counts: %{term() => non_neg_integer()}}
 
-  @doc "True only if this implementation delivers real receipt-freeness."
+  @doc "Legacy flag. The frozen Stub must return false; M4 does not implement this behavior."
   @callback receipt_free?() :: boolean()
 
   @doc """
-  Cast a vouch on `choice` for `matter`, authored by `identity`.
-  Returns `{token, vouch_body}` — append `vouch_body` to the matter log as a
-  `:command` op; keep `token` client-side for a later `produce_alt/2`.
+  Create a legacy caller-held vouch on `choice`, attributed to `identity`.
+  Returns `{token, vouch_body}` for the old demo and read-model plumbing.
   """
   @callback cast_vouch(Identity.t(), choice :: term(), opts :: keyword()) ::
               {token(), vouch_body()}
@@ -71,9 +68,8 @@ defmodule Lattice.Attestation do
   @callback tally([vouch_body()], opts :: keyword()) :: tally_result()
 
   @doc """
-  The equivocation hook. Given a `token` and a coercer's `demanded` value,
-  produce a `vouch_body` that is a valid alternative indistinguishable from a
-  genuine vouch for `demanded`.
+  Legacy plumbing hook. Given a `token` and demanded value, fabricate another
+  tallyable demo body. This callback supplies no indistinguishability property.
   """
   @callback produce_alt(token(), demanded :: term()) :: vouch_body()
 
@@ -99,12 +95,13 @@ defmodule Lattice.Attestation.Stub do
   @moduledoc """
   Pre-M4 attestation: correct plumbing, **no** receipt-freeness.
 
-  A vouch is just the choice tagged and signed by the author. The tally is a real
-  deterministic reduction over the DAG's vouch ops — that part is genuine and
-  survives into M4 unchanged. `produce_alt/2` trivially returns a fresh vouch for
-  the demanded value: a coercer isn't actually defeated, so `receipt_free?/0` is
-  `false`. This module exists to make the POC's W4 loop pass end-to-end while
-  telling the truth about what is and isn't proven.
+  A vouch is just the choice tagged with an identity fingerprint; it is not
+  signed or appended to Matter. The tally is a deterministic legacy reduction
+  over supplied caller-held bodies. `produce_alt/2`
+  trivially returns a fresh vouch for the demanded value: a coercer is not
+  defeated, so `receipt_free?/0` is permanently `false`. This module exists only
+  to keep the legacy POC's W4 loop honest until that surface migrates to verified
+  election projection.
   """
 
   @behaviour Lattice.Attestation
@@ -116,7 +113,7 @@ defmodule Lattice.Attestation.Stub do
 
   @impl true
   def cast_vouch(%Identity{} = id, choice, _opts) do
-    # A real (non-receipt-free) vouch: bind the choice to the author.
+    # Legacy demo attribution only: bind the choice to an identity fingerprint.
     tag = %{choice: choice, by: Identity.fingerprint(id)}
     token = {__MODULE__, tag}
     {token, {:vouch, tag}}
@@ -152,21 +149,12 @@ end
 
 defmodule Lattice.Attestation.M4Placeholder do
   @moduledoc """
-  Reserved slot for the real receipt-free primitive (roadmap R2 / milestone M4).
+  Legacy reserved name retained as an explicit tombstone during M4 migration.
 
-  This module intentionally does not implement the behaviour yet. When the §6
-  R-02/R-03 research verdict lands, implement the four callbacks here with a real
-  trapdoor (chameleon hash + designated-verifier proof, or the primitive that
-  clears JCJ), set `receipt_free?/0` to `true`, and run the SAME
-  `Lattice.Attestation.Contract`. If it passes, Township's W0–W3 are untouched
-  and W4 becomes real. If the contract fails, the interface was wrong — fix it
-  here, in one place, before shipping.
-
-      @behaviour Lattice.Attestation
-      @impl true
-      def receipt_free?, do: true
-      # cast_vouch/3  -> commit to `choice` under an ephemeral trapdoor
-      # tally/2       -> identical reduction to the Stub (DAG-native, unchanged)
-      # produce_alt/2 -> re-open the commitment to `demanded` via the trapdoor
+  Do not implement `Lattice.Attestation` callbacks here. The research verdict
+  retired that interface for M4; the replacement lives under
+  `Township.Election` and has distinct protocol contracts. This empty module is
+  removed only after the read/audit surface and W4 switch to verified election
+  projection.
   """
 end

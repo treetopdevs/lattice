@@ -40,16 +40,16 @@ defmodule Township.ReadModelTest do
     assert model.members == %{current: ["clerk", "resident"], denied: []}
 
     assert model.roles.holders == %{clerk: "xI19LiI0w767"}
-    assert model.roles.quarantine == ["mVp4COeiXTD__9c6y-OfO406aHuMZFDT3ahLtFZvLag"]
+    assert model.roles.quarantine == ["H32KUYuAjLsX6RSoXWwSYKUZSivCavpQ7i38_EInp6k"]
 
     assert model.roles.reasons == %{
-             "mVp4COeiXTD__9c6y-OfO406aHuMZFDT3ahLtFZvLag" => :not_holder
+             "H32KUYuAjLsX6RSoXWwSYKUZSivCavpQ7i38_EInp6k" => :not_holder
            }
 
     assert model.roles.audit == [
              %{
                event: :command_quarantine,
-               op: "mVp4COeiXTD__9c6y-OfO406aHuMZFDT3ahLtFZvLag",
+               op: "H32KUYuAjLsX6RSoXWwSYKUZSivCavpQ7i38_EInp6k",
                reason: :not_holder
              }
            ]

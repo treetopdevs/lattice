@@ -44,6 +44,32 @@ defmodule LatticeWebSocket.ClientTest do
     assert :ok = Task.await(server)
   end
 
+  test "an atomic setup receive consumes a server-first envelope before requests" do
+    {port, server} =
+      start_server(fn socket ->
+        nonce = server_text_frame(Jason.encode!(%{type: "carrier_nonce", nonce: "server-nonce"}))
+        assert :ok = :gen_tcp.send(socket, nonce)
+
+        assert {:ok, request} = recv_client_text(socket)
+        assert Jason.decode!(request) == %{"type" => "frontier"}
+
+        response = server_text_frame(Jason.encode!(%{type: "frontier_result", ids: []}))
+        assert :ok = :gen_tcp.send(socket, response)
+      end)
+
+    assert {:ok, client} = Client.connect(host: "127.0.0.1", port: port, path: "/carrier")
+
+    assert {:ok, %{"type" => "carrier_nonce", "nonce" => "server-nonce"}} =
+             Client.recv_atomic_envelope(client, 500)
+
+    assert {:ok, %{"type" => "frontier_result", "ids" => []}} =
+             Client.request_envelope(client, %{type: "frontier"}, 500)
+
+    assert {:error, :client_mode_conflict} = Client.recv_envelope(client, 50)
+    assert :ok = Client.close(client)
+    assert :ok = Task.await(server)
+  end
+
   test "a typed notification cannot satisfy the pending atomic request" do
     {port, server} =
       start_server(fn socket ->

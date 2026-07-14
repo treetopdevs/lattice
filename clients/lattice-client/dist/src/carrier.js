@@ -29,14 +29,17 @@ const textDecoder = new TextDecoder();
 const uint64Max = 18446744073709551615n;
 const atomTag = 60_000;
 const tupleTag = 60_001;
-const carrierWireVersion = 1;
+const carrierOpWireVersion = 1;
+const carrierSessionVersion = 2;
 export function carrierTranscriptBytes(challenge, realm, pubkey) {
     return canonicalTerm([
-        "carrier-session-v1",
+        "carrier-session-v2",
         challenge.local_realm,
         challenge.replica,
         challenge.nonce,
+        challenge.server_nonce,
         challenge.wire_version,
+        challenge.session_version,
         realm,
         pubkey,
     ]);
@@ -55,13 +58,15 @@ export async function signCarrierChallenge(challenge, signer) {
         signature: bytesToBase64(signature),
     };
 }
-export function carrierChallenge(localRealm, replica, opts = {}) {
+export function carrierChallenge(localRealm, replica, opts) {
     return {
         type: "carrier_challenge",
         local_realm: localRealm,
         replica,
         nonce: opts.nonce ?? randomNonce(),
-        wire_version: opts.wireVersion ?? carrierWireVersion,
+        server_nonce: opts.serverNonce,
+        wire_version: opts.wireVersion ?? carrierOpWireVersion,
+        session_version: opts.sessionVersion ?? carrierSessionVersion,
     };
 }
 export async function verifyCarrierHello(challenge, hello, expectedRealm, expectedPubkey, verifier) {
@@ -92,12 +97,17 @@ export async function verifyCarrierHello(challenge, hello, expectedRealm, expect
 export async function connectCarrierWebSocket(opts) {
     const WebSocketImpl = opts.webSocket ?? defaultWebSocket();
     const socket = new WebSocketImpl(opts.url);
-    await waitForOpen(socket);
     const client = new CarrierWebSocketClient(socket);
+    const wireVersion = opts.wireVersion ?? carrierOpWireVersion;
+    const sessionVersion = opts.sessionVersion ?? carrierSessionVersion;
+    const serverNoncePromise = client.receiveServerNonce(wireVersion, sessionVersion);
     try {
-        const challenge = opts.wireVersion === undefined
-            ? carrierChallenge(opts.localRealm, opts.replica)
-            : carrierChallenge(opts.localRealm, opts.replica, { wireVersion: opts.wireVersion });
+        const [, serverNonce] = await Promise.all([waitForOpen(socket), serverNoncePromise]);
+        const challenge = carrierChallenge(opts.localRealm, opts.replica, {
+            serverNonce,
+            wireVersion,
+            sessionVersion,
+        });
         const hello = await client.request(await signCarrierChallenge(challenge, opts.signer));
         await verifyCarrierHello(challenge, hello, opts.expectedPeerRealm, opts.expectedPeerPubkey, opts.verifier);
         return client;
@@ -185,6 +195,7 @@ class CarrierAvailabilityRoute {
 }
 export class CarrierWebSocketClient {
     socket;
+    pendingServerNonce = null;
     pendingRequest = null;
     availabilityRoute = null;
     closed = false;
@@ -195,6 +206,7 @@ export class CarrierWebSocketClient {
         socket.addEventListener("close", () => {
             this.closed = true;
             const error = new Error("carrier websocket closed");
+            this.rejectServerNonce(error);
             this.rejectPending(error);
             this.closeAvailability(error);
         });
@@ -270,13 +282,32 @@ export class CarrierWebSocketClient {
         if (this.closed)
             return;
         this.closed = true;
+        this.rejectServerNonce(new Error("carrier websocket closed"));
         this.rejectPending(new Error("carrier websocket closed"));
         this.closeAvailability(new Error("carrier websocket closed"));
         this.socket.close();
     }
+    receiveServerNonce(expectedWireVersion, expectedSessionVersion) {
+        if (this.closed)
+            return Promise.reject(new Error("carrier websocket closed"));
+        if (this.pendingServerNonce)
+            return Promise.reject(new Error("carrier nonce receive already in flight"));
+        if (this.pendingRequest)
+            return Promise.reject(new Error("carrier request already in flight"));
+        return new Promise((resolve, reject) => {
+            this.pendingServerNonce = {
+                expectedWireVersion,
+                expectedSessionVersion,
+                resolve,
+                reject,
+            };
+        });
+    }
     async request(envelope) {
         if (this.closed)
             throw new Error("carrier websocket closed");
+        if (this.pendingServerNonce)
+            throw new Error("carrier session setup in flight");
         if (this.pendingRequest)
             throw new Error("carrier request already in flight");
         let pending;
@@ -321,6 +352,18 @@ export class CarrierWebSocketClient {
             }
             return;
         }
+        const pendingServerNonce = this.pendingServerNonce;
+        if (pendingServerNonce) {
+            this.pendingServerNonce = null;
+            try {
+                pendingServerNonce.resolve(decodeCarrierNonce(decoded, pendingServerNonce.expectedWireVersion, pendingServerNonce.expectedSessionVersion));
+            }
+            catch (error) {
+                pendingServerNonce.reject(error);
+                this.failClient(error);
+            }
+            return;
+        }
         const pending = this.pendingRequest;
         if (!pending) {
             this.failClient(new Error("unexpected carrier response"));
@@ -336,7 +379,15 @@ export class CarrierWebSocketClient {
         this.pendingRequest = null;
         pending.reject(reason);
     }
+    rejectServerNonce(reason) {
+        const pending = this.pendingServerNonce;
+        if (!pending)
+            return;
+        this.pendingServerNonce = null;
+        pending.reject(reason);
+    }
     failClient(reason) {
+        this.rejectServerNonce(reason);
         this.rejectPending(reason);
         this.closeAvailability(reason);
         if (this.closed)
@@ -812,6 +863,25 @@ function decodeEnvelope(data) {
         return JSON.parse(data.toString("utf8"));
     throw new Error("unsupported carrier frame data");
 }
+function decodeCarrierNonce(value, expectedWireVersion, expectedSessionVersion) {
+    if (!hasType(value, "carrier_nonce"))
+        throw new Error("malformed carrier nonce");
+    if (value.wire_version !== expectedWireVersion) {
+        throw new Error("unsupported carrier operation wire version");
+    }
+    if (value.session_version !== expectedSessionVersion) {
+        throw new Error("unsupported carrier session version");
+    }
+    const nonce = value.nonce;
+    if (typeof nonce !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(nonce)) {
+        throw new Error("malformed carrier nonce");
+    }
+    const decoded = base64UrlToBytes(nonce);
+    if (decoded.length !== 32 || bytesToBase64Url(decoded) !== nonce) {
+        throw new Error("malformed carrier nonce");
+    }
+    return nonce;
+}
 function hasType(value, type) {
     return !!value && typeof value === "object" && value.type === type;
 }
@@ -930,6 +1000,10 @@ function base64ToBytes(value) {
     if (!atobFn)
         throw new Error("base64 decoding unavailable");
     return Uint8Array.from(atobFn(value), (char) => char.charCodeAt(0));
+}
+function base64UrlToBytes(value) {
+    const base64 = value.replaceAll("-", "+").replaceAll("_", "/");
+    return base64ToBytes(base64.padEnd(Math.ceil(base64.length / 4) * 4, "="));
 }
 function bytesToBase64(value) {
     if (typeof Buffer !== "undefined")

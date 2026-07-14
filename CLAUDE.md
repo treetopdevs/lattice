@@ -7,38 +7,43 @@ an agent what "done" means and what NOT to touch.
 ## What this is
 
 Township is milestone **M5** in `PD-001`: one town-scale civic instance (≤10k participants)
-running deliberation, roles, and receipt-free attestation on the Lattice substrate. This POC
-is the **minimal cut** of it:
+running deliberation and roles on the Lattice substrate, with coercion-resistant election work
+kept behind explicit M4 gates. This POC is the **minimal cut** of it:
 
 - **W0–W3 run on the real 2.0 core.** They drive the genuine `Lattice.Sim` harness against
   `Township.Matter`, a civic `Replica` built only from primitives that already exist
   (`:lww` / `:causal_list` / `:or_set` CRDTs and one `authority:` field).
-- **W4 (attestation) is stubbed behind `Lattice.Attestation`.** Receipt-freeness is
-  research-gated (M4, `PD-001 §6 R-02/R-03`) and could return "no", so the POC must not block
-  on it. The stub proves the plumbing; the real primitive drops in later.
+- **Legacy W4 is stubbed behind `Lattice.Attestation`.** The Stub proves only old demo
+  plumbing and permanently reports `receipt_free? == false`. M4 is now the separate,
+  multi-role `Township.Election` protocol over a dedicated board; its implemented
+  foundation makes no coercion-resistance claim and is not a drop-in replacement.
 
 ## Files in this overlay
 
 | Path | Role |
 |---|---|
 | `apps/lattice_core/lib/township/matter.ex` | The civic Replica (modeled on `Lattice.Demo.Thread`). |
-| `apps/lattice_core/lib/lattice/attestation.ex` | The seam: behaviour + `Stub` + `M4Placeholder`. |
-| `apps/lattice_core/test/support/attestation_contract.ex` | Shared contract the Stub AND M4 must pass. |
+| `apps/lattice_core/lib/lattice/attestation.ex` | Frozen legacy behaviour + non-receipt-free `Stub`; `M4Placeholder` is an empty migration tombstone. |
+| `apps/lattice_core/lib/township/election*.ex` | Research-safe election facade, immutable types, pure projection, close evidence, and offline replay. |
+| `apps/lattice_core/test/support/attestation_contract.ex` | Legacy Stub contract; it is not an M4 conformance contract. |
 | `apps/lattice_core/test/township/workflows_test.exs` | W0–W4 as falsifiable tests. |
 | `scripts/township_demo.exs` | Narrated end-to-end run (`§5` storyline). |
 | `apps/township_web` | Read-oriented LiveView/Vue instrument; its optional Plan 126 projection periodically pulls a real carrier peer and publishes verified snapshots through PubSub, while Plan 130 lets a fresh projection prepare one unsigned post request for app-owned review and authoring. |
 | `apps/lattice_carrier_server` | Plan 127 supervised listener, read-only by default; Plan 128 permits selected trusted realms to relay already-signed operations into a path-backed log without participant custody. |
 
-## The one bet: the seam
+## The retired seam wager and the M4 boundary
 
-`Lattice.Attestation` is the whole minimal-cut wager. If its callbacks (`cast_vouch/3`,
-`tally/2`, `produce_alt/2`, `receipt_free?/0`) capture exactly what a receipt-free primitive
-needs, then **M4 is a swap, not a rewrite**. The guard is `Lattice.Attestation.Contract`: it
-runs the same suite against any implementation. The `Stub` passes everything except the
-receipt-freeness property; a real M4 module must pass *all* of it.
+The M4 research verdict retired the claim that `cast_vouch/3`, `tally/2`,
+`produce_alt/2`, and `receipt_free?/0` can host coercion resistance. Keep
+`Lattice.Attestation.Stub` frozen and false; never implement callbacks in
+`M4Placeholder`. The replacement is `Township.Election`: an authorized immutable Matter
+link, a dedicated capability-gated `Township.ElectionBoard`, exact artifact bytes, pure
+projection, explicit close evidence, offline replay, and structured conditional claims.
 
-**Do not** put vouches on the `Township.Matter` Replica as convergent fields. They are
-attestation ops routed through the behaviour precisely so the schema doesn't change at M4.
+**Do not** put ballots or credentials on `Township.Matter`, and never let a voter author a
+public ballot op with their ordinary Lattice identity. The Matter stores only the authorized
+election-link command. The board stores service-authored public artifacts; anonymous ingress,
+private registration, and the pinned cryptographic construction remain blocking gates.
 
 ## Acceptance criteria (the exit gate, PD-001-A §A5)
 
@@ -47,10 +52,10 @@ Drive these to green under the standard loop (`mix format` → `mix test` → th
 - **G2** — the four M1 properties (convergence, authority soundness, byte-identical replay,
   identical quarantine) hold over `Township.Matter`. `workflows_test.exs` asserts the first
   three directly; reuse the M1 StreamData generators for the property-level versions.
-- **G3** — a real local decision is reached: `Attestation.tally/2` reflects the vouches
-  deterministically.
-- **G4** — the seam contract passes for the `Stub`. Add the `M4` contract module (commented
-  in the contract file) when the primitive exists.
+- **G3** — the legacy demo decision remains deterministic, but is not an M4 or
+  receipt-freeness claim.
+- **G4** — the legacy Stub contract passes with `receipt_free? == false`; the new election
+  path passes its separate board, projection, close, and offline-replay contracts.
 - **G5** — `scripts/township_demo.exs` narrates W0→W4 clean and emits trust-graph + audit
   artifacts an outsider can replay (reuse the V1 `mix lattice.graph.snapshot` exporters).
 
@@ -139,8 +144,9 @@ requirement, not the boundary:
 - **No production compaction** — the first scaling cliff; the feasibility spike and M2
   carrier acknowledgements exist, but snapshot-aware `Authority`/`Reduce` integration and
   GC coordination are not built.
-- **No real receipt-free crypto** — M4 (roadmap R2). The `Stub` stands in; `receipt_free?`
-  stays `false` until the primitive clears JCJ.
+- **No real coercion-resistant election profile** — M4 (roadmap R2). The legacy Stub remains
+  false, and the new election foundation keeps every security claim `:not_claimed` until its
+  profile, operations, independent review, conformance, and scale gates clear.
 
 ## API reality check (verified against branch `claude/beautiful-gould-6b25d2`)
 
@@ -172,8 +178,9 @@ whether the tab realm is implemented as native AtomVM/WASM or a JS/Vue client th
 1. Compile against the 2.0 branch; run `mix test apps/lattice_core/test/township/` — get W0–W4
    green on the simulated substrate.
 2. Run `scripts/township_demo.exs`; confirm the narration and the quarantine/tally beats.
-3. Only then open roadmap R1 (real persistence, KERI rotation). Leave R2's stub-swap until the
-   research track delivers the primitive and the M4 contract module passes.
+3. Keep the legacy Stub frozen. Continue M4 only through the gates in
+   `docs/research/m4_interface_redesign_brief.md`; migrate the read/audit surface and W4 only
+   after the pinned profile, operations, independent review, conformance, and scale gates pass.
 
 ## Parallel tracks — this overlay is the *application* track
 

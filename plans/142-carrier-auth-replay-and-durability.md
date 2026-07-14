@@ -2,14 +2,40 @@
 
 ## Status
 
-TODO
+IN PROGRESS — local TDD, focused carrier suites, TypeScript gates, and the complete packaged
+`app:convergence` chain are green; the hosted flagship gate remains open.
 
 ## Priority
 
 **P1 — design-level gap, mitigated today only by the loopback default bind.** Must land
 before the stable carrier listener is ever configured beyond `127.0.0.1`.
 
-## Findings this plan fixes (evidence)
+## Implementation status (2026-07-14)
+
+- The operation wire remains v1. A distinct carrier session v2 now starts with a server-first
+  32-byte nonce, and both challenge and hello signatures bind the client nonce, server nonce,
+  operation wire version, session version, realms, replica, and signing key.
+- An exact captured challenge authenticates its original connection and is rejected as
+  `unauthenticated` on a new connection with a different server nonce. Stable server, node-spike,
+  BEAM client, TypeScript client, and shell test doubles all use the same handshake.
+- Successful same-connection re-authentication removes the prior Holder subscription and clears
+  queued availability/timer state before replacing the peer identity. Failed re-authentication
+  leaves the existing state untouched.
+- Path-backed relay dumps are synced through an open temp-file descriptor before atomic rename;
+  startup removes `path.tmp.*` orphans and fails loudly when one cannot be removed. This is
+  process-crash durability only: the parent directory is not synced, macOS `F_FULLFSYNC` is not
+  requested, and power-loss durability is not claimed.
+- RED/GREEN evidence includes exact byte replay, atomic BEAM setup receive, TypeScript server
+  nonce/version handling, re-auth cleanup, and orphan cleanup. Deliberate nonce-check and orphan-
+  cleanup mutations each failed at their intended regression assertion before being restored.
+- Green local evidence: core session 12 tests + 1 property; WebSocket client 15; node-spike 11;
+  stable server/Holder 33; all five TypeScript `carrier:*` gates; client and shell typechecks; and
+  one uninterrupted `npm run app:convergence` exit 0. Claude Opus final review found no P0–P2
+  issue and returned `PROCEED`.
+- Hosted flagship evidence is unrun. This plan therefore remains `IN PROGRESS` and makes no
+  production-deployment, TLS, confidentiality, or power-loss-durability claim.
+
+## Pre-implementation findings this plan fixes (evidence)
 
 1. **Client→server authentication is replayable.** The session nonce is chosen by the
    *client* (`apps/lattice_core/lib/lattice/carrier/session.ex:12-29`); the server
@@ -20,7 +46,7 @@ before the stable carrier listener is ever configured beyond `127.0.0.1`.
    plaintext (`ranch_tcp`/`cowboy_clear`, `listener.ex:41`), so capture is trivial for any
    on-path observer once the bind leaves loopback. Server→client is already replay-safe
    (the `carrier_hello` signs over the client's nonce); the asymmetry is one-directional.
-   No test exercises replay today.
+   No test exercised replay before this implementation.
 
 2. **"Persisted before acknowledgement" is process-crash durability, not power-loss
    durability.** `Log.dump` is a bare `File.write`
@@ -70,7 +96,7 @@ replay regression test exists.
 
 ## STOP conditions
 
-- If the wire-version bump breaks the packaged-app gates in a way that requires shipping a
+- If the session-version bump breaks the packaged-app gates in a way that requires shipping a
   dual-version handshake, STOP and surface the compatibility choice.
 
 ## Non-claims
@@ -88,5 +114,6 @@ replay regression test exists.
 
 ## Completion claim
 
-Complete for this scoped increment when a byte-replayed challenge is rejected and the
-durability claim is accurate.
+The local implementation meets the scoped completion claim: a byte-replayed challenge is rejected
+and the durability claim is accurate. Plan status remains `IN PROGRESS` until the required hosted
+flagship gate runs green.

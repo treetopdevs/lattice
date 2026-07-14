@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash, createPrivateKey, createPublicKey } from "node:crypto";
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,7 +10,6 @@ import {
   TOWNSHIP_DELEGATION_FRAMES_KEY,
   TOWNSHIP_LOCAL_OP_LOG_KEY,
   TOWNSHIP_NATIVE_KEY_ID,
-  TOWNSHIP_STORAGE_NAMESPACE,
   TOWNSHIP_TRACE_SYNC_OUTBOX_STARTED,
 } from "../src/native_workflow";
 import {
@@ -29,6 +26,17 @@ import {
   type StableCarrierServerProcess,
   type TownshipActionLiveProjectionProcess,
 } from "./support/beam_peer";
+import {
+  createPackagedActionHandoffHarness,
+  delay,
+  escapeRegex,
+  mixBin,
+  pinnedToolPath,
+  seededEd25519Identity,
+  sortedEntries,
+  storageKey,
+  type ManagedProcess,
+} from "./support/packaged_action_handoff";
 
 interface StableRelayOracle {
   replica: string;
@@ -47,19 +55,6 @@ interface StableRelayProjection {
   causalReplay: { nodes: Array<{ id: string }>; [key: string]: unknown };
 }
 
-interface NativeIdentity {
-  publicKeyBase64: string;
-  privateSeedBase64: string;
-  privateSeedBytesJson: string;
-  privateSeedHex: string;
-}
-
-interface ManagedProcess {
-  child: ChildProcessWithoutNullStreams;
-  lines: string[];
-  stop(): Promise<void>;
-}
-
 interface LiveViewHandoff {
   browser: Browser;
   page: Page;
@@ -73,8 +68,6 @@ const shellRoot = resolve(here, "..");
 const repoRoot = resolve(shellRoot, "../..");
 const appBundlePath = join(shellRoot, "src-tauri", "target", "release", "bundle", "macos", "Township.app");
 const appIdentifier = "dev.treetop.lattice.township";
-const launchServicesRegister =
-  "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister";
 const postText = "resident: posted while offline";
 const relaySeed = "township-g1:resident";
 const observerRealm = "instrument";
@@ -101,6 +94,44 @@ let server: StableCarrierServerProcess | null = null;
 let liveServer: TownshipActionLiveProjectionProcess | null = null;
 let handoff: LiveViewHandoff | null = null;
 let app: ManagedProcess | null = null;
+const toolPath = pinnedToolPath(shellRoot);
+const harness = createPackagedActionHandoffHarness({
+  shellRoot,
+  appBundlePath,
+  appIdentifier,
+  tracePath,
+  kvPath,
+  toolPath,
+  diagnostics: async () =>
+    [
+      `source status:\n${await sourceStatusDiagnostics()}`,
+      `trace:\n${harness.readTrace() || "<empty>"}`,
+      `app exit: ${String(app?.child.exitCode)}`,
+      `app output:\n${app?.lines.join("") || "<empty>"}`,
+      `stable carrier output:\n${server?.output.join("") || "<empty>"}`,
+      `LiveView output:\n${liveServer?.output.join("") || "<empty>"}`,
+    ].join("\n\n"),
+});
+const {
+  assertAppBundleRegistersTownshipScheme,
+  assertLaunchServicesRoutesTownshipSchemeToBundle,
+  deliverDeepLink,
+  quitTownshipApp,
+  readKvValues,
+  readTrace,
+  registerLaunchServicesHandler,
+  run,
+  spawnManaged,
+  storedFrames,
+  storedIds,
+  traceLineCount,
+  traceLines,
+  waitFor,
+  waitForAttribute,
+  waitForStoredIds,
+  waitForTraceLine,
+  writeNativeKv,
+} = harness;
 
 try {
   await prepareBeamAndAssets();
@@ -115,7 +146,7 @@ try {
 
   if (process.env.TOWNSHIP_SKIP_ACTION_APP_BUILD !== "1") await buildDevTraceApp();
   assert.ok(existsSync(appBundlePath), `expected bundled app at ${appBundlePath}`);
-  assertAppBundleRegistersTownshipScheme(appBundlePath);
+  assertAppBundleRegistersTownshipScheme();
   await registerLaunchServicesHandler();
   await assertLaunchServicesRoutesTownshipSchemeToBundle();
   await quitTownshipApp();
@@ -154,7 +185,7 @@ try {
     keyId: TOWNSHIP_NATIVE_KEY_ID,
     submission: "relay",
   };
-  writeNativeKv(kvPath, new Map([[storageKey(TOWNSHIP_CARRIER_PAIRING_KEY), JSON.stringify(pairing)]]));
+  writeNativeKv(new Map([[storageKey(TOWNSHIP_CARRIER_PAIRING_KEY), JSON.stringify(pairing)]]));
 
   app = spawnManaged(
     "open",
@@ -249,10 +280,10 @@ try {
 console.log("\x1b[32m✓ Packaged Tauri action-handoff smoke passed\x1b[0m");
 
 async function prepareBeamAndAssets(): Promise<void> {
-  await run(mixBin(), ["compile"], repoRoot, { MIX_ENV: "test", PATH: pinnedToolPath() });
+  await run(mixBin(), ["compile"], repoRoot, { MIX_ENV: "test", PATH: toolPath });
   await run(mixBin(), ["assets.build"], join(repoRoot, "apps", "township_web"), {
     MIX_ENV: "test",
-    PATH: pinnedToolPath(),
+    PATH: toolPath,
   });
 }
 
@@ -452,205 +483,6 @@ function assertTraceRedacted(url: string, text: string, replica: string): void {
   assert.doesNotMatch(trace, new RegExp(escapeRegex(replica)));
 }
 
-function writeNativeKv(path: string, values: Map<string, string>): void {
-  writeFileSync(path, JSON.stringify(Object.fromEntries(values), null, 2), "utf8");
-}
-
-function readKvValues(): Map<string, string> {
-  assert.ok(existsSync(kvPath), `expected isolated native KV file at ${kvPath}`);
-  return new Map(Object.entries(JSON.parse(readFileSync(kvPath, "utf8")) as Record<string, string>));
-}
-
-function storedFrames(values: Map<string, string>, key: string): CarrierOpFrame[] {
-  return JSON.parse(requiredValue(values, storageKey(key))) as CarrierOpFrame[];
-}
-
-function storedIds(values: Map<string, string>, key: string): string[] {
-  return (JSON.parse(requiredValue(values, storageKey(key))) as { id: string }[])
-    .map((entry) => entry.id)
-    .sort();
-}
-
-async function waitForStoredIds(key: string, expected: string[], timeoutMs: number): Promise<void> {
-  const sortedExpected = [...expected].sort();
-  await waitFor(() => {
-    try {
-      return JSON.stringify(storedIds(readKvValues(), key)) === JSON.stringify(sortedExpected);
-    } catch {
-      return false;
-    }
-  }, `${key} ids`, timeoutMs);
-}
-
-function requiredValue(values: Map<string, string>, key: string): string {
-  const value = values.get(key);
-  assert.notEqual(value, undefined, `missing native KV value ${key}`);
-  return value as string;
-}
-
-function storageKey(key: string): string {
-  return `${TOWNSHIP_STORAGE_NAMESPACE}:${key}`;
-}
-
-function sortedEntries(values: Map<string, string>): [string, string][] {
-  return [...values.entries()].sort(([left], [right]) => left.localeCompare(right));
-}
-
-function assertAppBundleRegistersTownshipScheme(appPath: string): void {
-  const infoPlist = join(appPath, "Contents", "Info.plist");
-  assert.ok(existsSync(infoPlist), `expected Info.plist at ${infoPlist}`);
-  const plist = readFileSync(infoPlist, "utf8");
-  assert.match(plist, /CFBundleIdentifier/);
-  assert.match(plist, new RegExp(appIdentifier.replaceAll(".", "\\.")));
-  assert.match(plist, /CFBundleURLSchemes/);
-  assert.match(plist, /township/);
-}
-
-async function registerLaunchServicesHandler(): Promise<void> {
-  assert.ok(existsSync(launchServicesRegister), `expected lsregister at ${launchServicesRegister}`);
-  await run(launchServicesRegister, ["-f", appBundlePath], shellRoot);
-}
-
-async function assertLaunchServicesRoutesTownshipSchemeToBundle(): Promise<void> {
-  const script = [
-    "import AppKit",
-    'if let url = NSWorkspace.shared.urlForApplication(toOpen: URL(string: "township://action")!) {',
-    "  print(url.path)",
-    "}",
-  ].join("\n");
-  const resolvedPath = (await runCapture("swift", ["-e", script], shellRoot)).trim().replace(/\/+$/, "");
-  assert.equal(resolvedPath, appBundlePath.replace(/\/+$/, ""));
-}
-
-async function deliverDeepLink(url: string): Promise<void> {
-  await run("open", [url], shellRoot);
-}
-
-function spawnManaged(
-  command: string,
-  args: string[],
-  cwd: string,
-  env: Record<string, string> = {},
-): ManagedProcess {
-  const child = spawn(command, args, {
-    cwd,
-    stdio: ["pipe", "pipe", "pipe"],
-    env: { ...process.env, PATH: pinnedToolPath(), ...env },
-  });
-  const lines: string[] = [];
-  child.stdout.on("data", (chunk: Buffer) => lines.push(chunk.toString()));
-  child.stderr.on("data", (chunk: Buffer) => lines.push(chunk.toString()));
-  return {
-    child,
-    lines,
-    async stop() {
-      await stopProcess(child);
-    },
-  };
-}
-
-async function run(
-  command: string,
-  args: string[],
-  cwd: string,
-  env: Record<string, string> = {},
-): Promise<void> {
-  const process = spawnManaged(command, args, cwd, env);
-  const code = await waitForExit(process.child);
-  if (code !== 0) throw new Error(`${command} ${args.join(" ")} failed:\n${process.lines.join("")}`);
-}
-
-async function runCapture(command: string, args: string[], cwd: string): Promise<string> {
-  const process = spawnManaged(command, args, cwd);
-  const code = await waitForExit(process.child);
-  if (code !== 0) throw new Error(`${command} ${args.join(" ")} failed:\n${process.lines.join("")}`);
-  return process.lines.join("");
-}
-
-async function quitTownshipApp(): Promise<void> {
-  const process = spawnManaged("osascript", ["-e", `quit app id "${appIdentifier}"`], shellRoot);
-  if (!(await exitsWithin(process.child, 2_000))) process.child.kill("SIGKILL");
-}
-
-async function stopProcess(child: ChildProcessWithoutNullStreams): Promise<void> {
-  if (child.exitCode !== null || child.signalCode !== null) return;
-  child.kill("SIGTERM");
-  if (!(await exitsWithin(child, 2_000)) && child.exitCode === null && child.signalCode === null) {
-    child.kill("SIGKILL");
-    await exitsWithin(child, 2_000);
-  }
-}
-
-function waitForExit(child: ChildProcessWithoutNullStreams): Promise<number | null> {
-  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(child.exitCode);
-  return new Promise((resolveExit) => child.once("exit", (code) => resolveExit(code)));
-}
-
-async function exitsWithin(child: ChildProcessWithoutNullStreams, timeoutMs: number): Promise<boolean> {
-  if (child.exitCode !== null || child.signalCode !== null) return true;
-  return new Promise((resolveExit) => {
-    const onExit = () => {
-      clearTimeout(timeout);
-      resolveExit(true);
-    };
-    const timeout = setTimeout(() => {
-      child.off("exit", onExit);
-      resolveExit(false);
-    }, timeoutMs);
-    child.once("exit", onExit);
-  });
-}
-
-async function waitForTraceLine(line: string, timeoutMs: number): Promise<void> {
-  await waitFor(() => traceLines().includes(line), `trace ${line}`, timeoutMs);
-}
-
-function readTrace(): string {
-  if (!existsSync(tracePath)) return "";
-  return readFileSync(tracePath, "utf8").trim();
-}
-
-function traceLines(): string[] {
-  return readTrace().split(/\r?\n/).filter(Boolean);
-}
-
-function traceLineCount(line: string): number {
-  return traceLines().filter((entry) => entry === line).length;
-}
-
-async function waitForAttribute(
-  page: Page,
-  selector: string,
-  name: string,
-  expected: string,
-  timeoutMs: number,
-): Promise<void> {
-  await waitFor(async () => (await page.locator(selector).getAttribute(name)) === expected, `${selector} ${name}`, timeoutMs);
-}
-
-async function waitFor(
-  predicate: () => boolean | Promise<boolean>,
-  label: string,
-  timeoutMs: number,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (await predicate()) return;
-    await delay(100);
-  }
-  throw new Error(
-    [
-      `timed out waiting for ${label}`,
-      `source status:\n${await sourceStatusDiagnostics()}`,
-      `trace:\n${readTrace() || "<empty>"}`,
-      `app exit: ${String(app?.child.exitCode)}`,
-      `app output:\n${app?.lines.join("") || "<empty>"}`,
-      `stable carrier output:\n${server?.output.join("") || "<empty>"}`,
-      `LiveView output:\n${liveServer?.output.join("") || "<empty>"}`,
-    ].join("\n\n"),
-  );
-}
-
 async function sourceStatusDiagnostics(): Promise<string> {
   if (!handoff) return "<handoff unavailable>";
   const status = handoff.page.locator("#source-status[data-source='carrier']");
@@ -666,48 +498,4 @@ async function sourceStatusDiagnostics(): Promise<string> {
     null,
     2,
   );
-}
-
-function seededEd25519Identity(seed: string): NativeIdentity {
-  const privateSeed = createHash("sha256").update(seed).digest();
-  const privateKey = createPrivateKey({
-    key: Buffer.concat([Buffer.from("302e020100300506032b657004220420", "hex"), privateSeed]),
-    format: "der",
-    type: "pkcs8",
-  });
-  const publicKeyDer = createPublicKey(privateKey).export({ format: "der", type: "spki" });
-  const publicKey = Buffer.from(publicKeyDer).subarray(12);
-  return {
-    publicKeyBase64: publicKey.toString("base64"),
-    privateSeedBase64: privateSeed.toString("base64"),
-    privateSeedBytesJson: JSON.stringify([...privateSeed]),
-    privateSeedHex: privateSeed.toString("hex"),
-  };
-}
-
-function mixBin(): string {
-  const asdf = join(process.env.HOME ?? "", ".asdf", "shims", "mix");
-  return existsSync(asdf) ? asdf : "mix";
-}
-
-function pinnedToolPath(): string {
-  const home = process.env.HOME ?? "";
-  return [
-    join(home, ".asdf", "installs", "erlang", "28.3.1", "bin"),
-    join(home, ".asdf", "installs", "erlang", "28.3.1", "erts-16.2", "bin"),
-    join(home, ".asdf", "installs", "elixir", "1.19.5-otp-28", "bin"),
-    "/opt/homebrew/opt/rustup/bin",
-    join(shellRoot, "node_modules", ".bin"),
-    process.env.PATH ?? "",
-  ]
-    .filter((path) => path.length > 0 && (path === process.env.PATH || existsSync(path)))
-    .join(":");
-}
-
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
 }

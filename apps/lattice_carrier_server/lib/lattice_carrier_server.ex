@@ -4,9 +4,11 @@ defmodule LatticeCarrierServer do
 
   The server is read-only by default: authenticated transport realms may request
   frontier and pull data. Path-backed instances may opt selected trusted realms
-  into relaying already-signed operations. Relays are persisted before
-  acknowledgement; the server never authors operations or decides their semantic
-  authority.
+  into relaying already-signed operations. Changed relays are acknowledged only
+  after a temporary dump is synced and atomically renamed. This is process-crash
+  durability, not power-loss durability: the parent directory is not synced and
+  macOS `F_FULLFSYNC` is not requested. The server never authors operations or
+  decides their semantic authority.
   """
 
   use Supervisor

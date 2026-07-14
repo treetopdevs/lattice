@@ -74,9 +74,9 @@ const verifier: CarrierVerifier = {
   },
 };
 const carrierSessionTranscriptPrefix = Buffer.from([
-  0x87,
+  0x89,
   0x52,
-  ...Buffer.from("carrier-session-v1", "utf8"),
+  ...Buffer.from("carrier-session-v2", "utf8"),
 ]);
 
 let appServer: StaticAppServer;

@@ -14,13 +14,13 @@
         "p101-3",
         "p101-9"
       ],
-      "summary": "summary 101.5",
+      "summary": "summary 101.6",
       "title": ""
     },
     "winners": {
-      "clerk": "u2-G2S4BPBcRRwjti68wWzpfiN9DBRAd-7W0DjHY7dc",
+      "clerk": "WfKpxPW1eOFHb0s7DxPuLVaVI6p86Lxsn4Wa-Xkw3Zo",
       "clerk_locked": null,
-      "summary": "X8iGS22dXxaXLFFGF9Cy1vWIq526URgORxf24fBfld0",
+      "summary": "b281Vz8QVFFz-3CZ7o8-o1rE-sfw1NlbUx8IQ0UxQz8",
       "title": null
     }
   },
@@ -31,8 +31,8 @@
       "command": "genesis clerk",
       "deps": [],
       "field": "clerk",
-      "hash": "u2-G2S4BPBcRRwjti68wWzpfiN9DBRAd-7W0DjHY7dc",
-      "id": "u2-G2S4BPBcRRwjti68wWzpfiN9DBRAd-7W0DjHY7dc",
+      "hash": "WfKpxPW1eOFHb0s7DxPuLVaVI6p86Lxsn4Wa-Xkw3Zo",
+      "id": "WfKpxPW1eOFHb0s7DxPuLVaVI6p86Lxsn4Wa-Xkw3Zo",
       "kind": "authority",
       "mutation": "write",
       "value": "clerk"
@@ -41,11 +41,11 @@
       "author": "clerk",
       "command": "grant resident",
       "deps": [
-        "u2-G2S4BPBcRRwjti68wWzpfiN9DBRAd-7W0DjHY7dc"
+        "WfKpxPW1eOFHb0s7DxPuLVaVI6p86Lxsn4Wa-Xkw3Zo"
       ],
       "field": "__authority",
-      "hash": "PlUWIqGGKxCcaGkB4IY0Ialu9aua-BP2EvIWMMCaoeo",
-      "id": "PlUWIqGGKxCcaGkB4IY0Ialu9aua-BP2EvIWMMCaoeo",
+      "hash": "j9CIASPU_zC24E-OnTZTyblMW1Iojt6_Bkp5thsrdpI",
+      "id": "j9CIASPU_zC24E-OnTZTyblMW1Iojt6_Bkp5thsrdpI",
       "kind": "authority",
       "mutation": "write",
       "value": null
@@ -54,63 +54,24 @@
       "author": "clerk",
       "command": "grant neighbor",
       "deps": [
-        "PlUWIqGGKxCcaGkB4IY0Ialu9aua-BP2EvIWMMCaoeo"
+        "j9CIASPU_zC24E-OnTZTyblMW1Iojt6_Bkp5thsrdpI"
       ],
       "field": "__authority",
-      "hash": "iuhJchTTSX8BBZYabl7UutfcDYmH_HheLd9uSWy6Bh0",
-      "id": "iuhJchTTSX8BBZYabl7UutfcDYmH_HheLd9uSWy6Bh0",
+      "hash": "NoODVqq54I6Xt1jjs3zMv1VYERLgxyO3rA-KAbULIHA",
+      "id": "NoODVqq54I6Xt1jjs3zMv1VYERLgxyO3rA-KAbULIHA",
       "kind": "authority",
       "mutation": "write",
       "value": null
     },
     {
-      "author": "resident",
-      "command": "admit",
-      "deps": [
-        "iuhJchTTSX8BBZYabl7UutfcDYmH_HheLd9uSWy6Bh0"
-      ],
-      "field": "members",
-      "hash": "hhcm0o5O40HvT2VIIBZMX07vUx-lCkp3a-IADrYDN-A",
-      "id": "hhcm0o5O40HvT2VIIBZMX07vUx-lCkp3a-IADrYDN-A",
-      "kind": "command",
-      "mutation": "add",
-      "value": "resident"
-    },
-    {
-      "author": "resident",
-      "command": "set_summary",
-      "deps": [
-        "hhcm0o5O40HvT2VIIBZMX07vUx-lCkp3a-IADrYDN-A"
-      ],
-      "field": "summary",
-      "hash": "X8iGS22dXxaXLFFGF9Cy1vWIq526URgORxf24fBfld0",
-      "id": "X8iGS22dXxaXLFFGF9Cy1vWIq526URgORxf24fBfld0",
-      "kind": "command",
-      "mutation": "write",
-      "value": "summary 101.5"
-    },
-    {
-      "author": "resident",
-      "command": "remove_member",
-      "deps": [
-        "X8iGS22dXxaXLFFGF9Cy1vWIq526URgORxf24fBfld0"
-      ],
-      "field": "members",
-      "hash": "1GLZImtcnxktudbv8FrIqqeWA1hbEBsmnX883V-Hs2g",
-      "id": "1GLZImtcnxktudbv8FrIqqeWA1hbEBsmnX883V-Hs2g",
-      "kind": "command",
-      "mutation": "remove",
-      "value": "guest-101-2"
-    },
-    {
       "author": "clerk",
       "command": "admit",
       "deps": [
-        "iuhJchTTSX8BBZYabl7UutfcDYmH_HheLd9uSWy6Bh0"
+        "NoODVqq54I6Xt1jjs3zMv1VYERLgxyO3rA-KAbULIHA"
       ],
       "field": "members",
-      "hash": "mxVkbJW3sf0lS8giHuk40NCyr8NkFI4SC3wFFk_oeO4",
-      "id": "mxVkbJW3sf0lS8giHuk40NCyr8NkFI4SC3wFFk_oeO4",
+      "hash": "Avs1zw79BM29rfbQE-NTK26h2rvhZWYaGDk79Avwm70",
+      "id": "Avs1zw79BM29rfbQE-NTK26h2rvhZWYaGDk79Avwm70",
       "kind": "command",
       "mutation": "add",
       "value": "clerk"
@@ -119,11 +80,11 @@
       "author": "clerk",
       "command": "set_summary",
       "deps": [
-        "mxVkbJW3sf0lS8giHuk40NCyr8NkFI4SC3wFFk_oeO4"
+        "Avs1zw79BM29rfbQE-NTK26h2rvhZWYaGDk79Avwm70"
       ],
       "field": "summary",
-      "hash": "3C4IopaQv7qnVAqdmdOFr36eRvgCIi61bAkB-0e17hA",
-      "id": "3C4IopaQv7qnVAqdmdOFr36eRvgCIi61bAkB-0e17hA",
+      "hash": "b281Vz8QVFFz-3CZ7o8-o1rE-sfw1NlbUx8IQ0UxQz8",
+      "id": "b281Vz8QVFFz-3CZ7o8-o1rE-sfw1NlbUx8IQ0UxQz8",
       "kind": "command",
       "mutation": "write",
       "value": "summary 101.6"
@@ -132,11 +93,11 @@
       "author": "neighbor",
       "command": "admit",
       "deps": [
-        "iuhJchTTSX8BBZYabl7UutfcDYmH_HheLd9uSWy6Bh0"
+        "NoODVqq54I6Xt1jjs3zMv1VYERLgxyO3rA-KAbULIHA"
       ],
       "field": "members",
-      "hash": "uVJQK9VzuEFmGcd66ON_nwawj0BmdgVfeAL6zEZvFIo",
-      "id": "uVJQK9VzuEFmGcd66ON_nwawj0BmdgVfeAL6zEZvFIo",
+      "hash": "lzH0COZWdsMhD3-MabD2kwrQGpKSRhZE4ClrZm_vMVA",
+      "id": "lzH0COZWdsMhD3-MabD2kwrQGpKSRhZE4ClrZm_vMVA",
       "kind": "command",
       "mutation": "add",
       "value": "neighbor"
@@ -145,11 +106,11 @@
       "author": "neighbor",
       "command": "post",
       "deps": [
-        "uVJQK9VzuEFmGcd66ON_nwawj0BmdgVfeAL6zEZvFIo"
+        "lzH0COZWdsMhD3-MabD2kwrQGpKSRhZE4ClrZm_vMVA"
       ],
       "field": "posts",
-      "hash": "9AZWWO9haNXNDyDHamXICvKgkMJrwNLXHsFBM1FtRsY",
-      "id": "9AZWWO9haNXNDyDHamXICvKgkMJrwNLXHsFBM1FtRsY",
+      "hash": "1G2kQ9lLcTZ0KFyjeKQRUoqEhTXTPwxBOhU_gq7rLB0",
+      "id": "1G2kQ9lLcTZ0KFyjeKQRUoqEhTXTPwxBOhU_gq7rLB0",
       "kind": "command",
       "mutation": "append",
       "value": "p101-3"
@@ -158,11 +119,11 @@
       "author": "neighbor",
       "command": "remove_member",
       "deps": [
-        "9AZWWO9haNXNDyDHamXICvKgkMJrwNLXHsFBM1FtRsY"
+        "1G2kQ9lLcTZ0KFyjeKQRUoqEhTXTPwxBOhU_gq7rLB0"
       ],
       "field": "members",
-      "hash": "saXyWNqZJnrEknpLPa7-M-I5-QAsG2Zc3g63_VxawOw",
-      "id": "saXyWNqZJnrEknpLPa7-M-I5-QAsG2Zc3g63_VxawOw",
+      "hash": "glcMjSjlVH6nvGAuVHlf6ZSh8llqkXCaAahcbgRGQj4",
+      "id": "glcMjSjlVH6nvGAuVHlf6ZSh8llqkXCaAahcbgRGQj4",
       "kind": "command",
       "mutation": "remove",
       "value": "guest-101-9"
@@ -171,14 +132,53 @@
       "author": "neighbor",
       "command": "post",
       "deps": [
-        "saXyWNqZJnrEknpLPa7-M-I5-QAsG2Zc3g63_VxawOw"
+        "glcMjSjlVH6nvGAuVHlf6ZSh8llqkXCaAahcbgRGQj4"
       ],
       "field": "posts",
-      "hash": "AB2H6SXzew6V-FuYC-lHl2_qauVjEp7Jj5-htY1SCHg",
-      "id": "AB2H6SXzew6V-FuYC-lHl2_qauVjEp7Jj5-htY1SCHg",
+      "hash": "hXJkv9RzJX0NWUtjUaFWuoDffDLn7i5nFh5VglsUd2Y",
+      "id": "hXJkv9RzJX0NWUtjUaFWuoDffDLn7i5nFh5VglsUd2Y",
       "kind": "command",
       "mutation": "append",
       "value": "p101-9"
+    },
+    {
+      "author": "resident",
+      "command": "admit",
+      "deps": [
+        "NoODVqq54I6Xt1jjs3zMv1VYERLgxyO3rA-KAbULIHA"
+      ],
+      "field": "members",
+      "hash": "uwOOenX-oMG-m_oHRxzZAhc1M7eopv_W7oJM2JF3zn8",
+      "id": "uwOOenX-oMG-m_oHRxzZAhc1M7eopv_W7oJM2JF3zn8",
+      "kind": "command",
+      "mutation": "add",
+      "value": "resident"
+    },
+    {
+      "author": "resident",
+      "command": "set_summary",
+      "deps": [
+        "uwOOenX-oMG-m_oHRxzZAhc1M7eopv_W7oJM2JF3zn8"
+      ],
+      "field": "summary",
+      "hash": "5OJ3OeEFCMEK-6D3H2chd4qT2-TpKg3wKWmCLB6pkGk",
+      "id": "5OJ3OeEFCMEK-6D3H2chd4qT2-TpKg3wKWmCLB6pkGk",
+      "kind": "command",
+      "mutation": "write",
+      "value": "summary 101.5"
+    },
+    {
+      "author": "resident",
+      "command": "remove_member",
+      "deps": [
+        "5OJ3OeEFCMEK-6D3H2chd4qT2-TpKg3wKWmCLB6pkGk"
+      ],
+      "field": "members",
+      "hash": "qvCy4sNYxL8vTAiscDGiKuun_m7gYeuGXsQd_sdShWw",
+      "id": "qvCy4sNYxL8vTAiscDGiKuun_m7gYeuGXsQd_sdShWw",
+      "kind": "command",
+      "mutation": "remove",
+      "value": "guest-101-2"
     }
   ],
   "perspectives": [],

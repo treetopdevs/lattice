@@ -67,7 +67,7 @@ defmodule TownshipWeb.InstrumentLiveTest do
     assert rendered =~ "township-audit-bundle-v1"
 
     assert rendered =~
-             "df911bb13013abefab7af103992fd1413eb754989ecf74f26cedb9e8ef6d17d3"
+             "f41566fd3ea93e6394c27e78fda04e7d55fe7a002f18a8cfe8d1cdc5754ce125"
 
     assert has_element?(view, "#threads-panel [data-post]", "resident: posted while offline")
     assert has_element?(view, "#roles-panel [data-reason='not_holder']")
@@ -252,7 +252,29 @@ defmodule TownshipWeb.InstrumentLiveTest do
 
     put_projection_config(projection)
     {:ok, view, _html} = live(conn, "/township")
-    assert {:ok, {:fresh, _payload}} = CarrierProjection.refresh(projection)
+    assert {:ok, {:fresh, payload}} = CarrierProjection.refresh(projection)
+
+    view
+    |> form("#participant-post-form", %{
+      "post" => %{"text" => "draft survives malformed fallback"}
+    })
+    |> render_submit()
+
+    render_hook(view, "prepare_post", %{"post" => %{}})
+
+    assert has_element?(
+             view,
+             "#participant-post-error[aria-live='polite']",
+             "A fresh carrier snapshot is required before opening the app"
+           )
+
+    assert has_element?(
+             view,
+             "#participant-post-form textarea",
+             "draft survives malformed fallback"
+           )
+
+    refute has_element?(view, "#participant-post-handoff")
 
     view
     |> form("#participant-post-form", %{"post" => %{"text" => " "}})
@@ -265,6 +287,15 @@ defmodule TownshipWeb.InstrumentLiveTest do
            )
 
     refute has_element?(view, "#participant-post-handoff")
+
+    replacement_payload = put_in(payload.provenance.replica, peer_log.replica <> ":replacement")
+    send(view.pid, {:township_instrument, {:fresh, replacement_payload}})
+
+    assert has_element?(
+             view,
+             "#participant-post-error[aria-live='polite']",
+             "Write an update before opening the app"
+           )
 
     render_hook(view, "prepare_post", %{"post" => %{"text" => %{"smuggled" => true}}})
 

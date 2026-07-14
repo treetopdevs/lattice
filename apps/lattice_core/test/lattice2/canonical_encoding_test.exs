@@ -4,6 +4,7 @@ defmodule Lattice.CanonicalEncodingTest do
 
   alias Lattice.Authority.Delegation
   alias Lattice.{Canonical, Identity, Op}
+  alias Lattice.Canonical.Atom, as: CanonicalAtom
 
   @atoms [:admit, :clerk, :join, :leave, :moderator, :post, :set_summary, :set_title]
 
@@ -12,6 +13,30 @@ defmodule Lattice.CanonicalEncodingTest do
     right = %{nested: %{a: "a", z: "z"}, a: 1, b: 2}
 
     assert Canonical.term(left) == Canonical.term(right)
+  end
+
+  test "atom-name tokens cannot alias canonical map keys or mapset elements" do
+    token = %CanonicalAtom{name: "collision"}
+
+    refute Canonical.signable?(%{:collision => 1, token => 2})
+    refute Canonical.signable?(MapSet.new([:collision, token]))
+
+    assert_raise ArgumentError, ~r/duplicate canonical map key/, fn ->
+      Canonical.term(%{:collision => 1, token => 2})
+    end
+
+    assert_raise ArgumentError, ~r/duplicate canonical mapset element/, fn ->
+      Canonical.term(MapSet.new([:collision, token]))
+    end
+  end
+
+  test "ops reject bodies whose distinct terms have the same canonical bytes" do
+    identity = Identity.from_seed("alice", "m4-canonical-collision")
+    token = %CanonicalAtom{name: "collision"}
+
+    assert_raise ArgumentError, ~r/duplicate canonical map key/, fn ->
+      Op.new(identity, "replica:m4", [], :command, %{:collision => 1, token => 2})
+    end
   end
 
   test "unsupported local terms are rejected before signing" do

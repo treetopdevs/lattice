@@ -1,4 +1,5 @@
 import {
+  integrate,
   syncCarrierOnce,
   type CarrierOpFrame,
   type CarrierStateReport,
@@ -10,6 +11,7 @@ import {
   createTownshipNativeWorkflow,
   type TownshipNativeWorkflow,
   type TownshipNativeWorkflowOptions,
+  withTownshipPersistenceWrite,
 } from "./native_workflow";
 import {
   TOWNSHIP_REALM_BY_PUBKEY,
@@ -190,23 +192,35 @@ export async function syncTownshipOutbox(
       synced.pushReport.quarantined,
       "revoke",
     );
-    await workflow.localLog.save(synced.ops);
-    const delegationFrames = mergeCarrierFrames([
-      ...localDelegationFrames,
-      ...localCarrierFrames,
-      ...(synced.pulledFrames as CarrierOpFrame[]),
-    ]);
     const acknowledgedFrameIds = new Set(synced.acknowledgedFrameIds);
-    const compactedCarrierFrames = localCarrierFrames.filter((frame) => !acknowledgedFrameIds.has(frameId(frame)));
-    await Promise.all([
-      workflow.delegationFrames.save(delegationFrames),
-      workflow.carrierFrames.save(compactedCarrierFrames),
-    ]);
+    const persisted = await withTownshipPersistenceWrite(workflow, async () => {
+      const [currentOps, currentCarrierFrames, currentDelegationFrames] = await Promise.all([
+        workflow.localLog.load(),
+        workflow.carrierFrames.load(),
+        workflow.delegationFrames.load(),
+      ]);
+      const mergedOps = integrate(currentOps, synced.ops);
+      const delegationFrames = mergeCarrierFrames([
+        ...currentDelegationFrames,
+        ...currentCarrierFrames,
+        ...(synced.pulledFrames as CarrierOpFrame[]),
+      ]);
+      const compactedCarrierFrames = currentCarrierFrames.filter(
+        (frame) => !acknowledgedFrameIds.has(frameId(frame)),
+      );
+      await Promise.all([
+        workflow.localLog.save(mergedOps),
+        workflow.delegationFrames.save(delegationFrames),
+        workflow.carrierFrames.save(compactedCarrierFrames),
+      ]);
+      return { mergedOps, delegationFrames, compactedCarrierFrames };
+    });
+    const { mergedOps, delegationFrames, compactedCarrierFrames } = persisted;
     const authorityRevokedCapabilities = await authorityRevokedCapabilitySummaryFromState(client, delegationFrames);
 
     return {
       ok: true,
-      localOpCount: synced.ops.length,
+      localOpCount: mergedOps.length,
       carrierFrameCount: compactedCarrierFrames.length,
       pulledFrameCount: synced.pulledFrames.length,
       pulledOpCount: synced.pulledOps.length,

@@ -46,11 +46,13 @@ roadmap live in the program doc below.
 |---|---|---|
 | `apps/lattice_core/lib/township/matter.ex` | `Township.Matter` — the civic Replica (LWW title/summary, causal-list posts, OR-set members, authority-gated `clerk_locked?`). Built only from primitives that exist today. | **Real and compiled**; W0–W4 workflow and property suites pass against the branch. |
 | `apps/lattice_core/lib/township/read_model.ex` | `Township.ReadModel` — structured Threads, Roles, Members, Attest, trust-graph, and causal op-DAG inputs for the one-screen instrument boundary. | **Real and tested**; four panels and graph evidence derive from `matter.log`, W4 vouches remain caller-held and stub-labeled, and no renderer is claimed. |
-| `apps/lattice_web_socket` | Dependency-light home of `Lattice.Transport.WebSocket.Client`, the shared JSON envelope codec, and `Lattice.Carrier.WebSocket`. | **Real and carrier-tested**; generic and Township second-process convergence, session security, batching, telemetry, and server transport suites use the promoted client. Plan 132 adds active-once incremental frame parsing, lifetime-exclusive streaming versus atomic request modes, one-envelope streaming prefetch with TCP backpressure, typed owner-preallocated subscriptions, bounded notification-type reservation, and request/notification demultiplexing. Cowboy peer/server fixtures remain in their boundary apps; the Township projection consumes this client without taking listener ownership. |
-| `apps/lattice_carrier_server` | Dedicated supervised Cowboy boundary that serves one configured signed log to trusted carrier realms. | **Real and server-tested**; Plan 127 adds authenticated frontier and pull, fail-closed source reload, fixed-port supervision, second-BEAM projection recovery, and a browser fresh/stale/fresh proof. Plan 128 adds the opt-in durable client-signed relay for selected trusted realms on path-backed sources: changed signed logs are persisted before acknowledgement and survive restart for a distinct observer. Plan 129 proves the actual packaged desktop Tauri app can use that boundary through native key custody, persisted capability evidence, and explicit one-op relay mode, then converge with a fresh pull-only observer after server restart. Plan 130 drives that same boundary from a LiveView-prepared, app-authored post and proves exact Sim convergence before and after restart. Plan 131 makes both packaged macOS convergence proofs CI-enforced on a hosted runner. Plan 132 adds an authenticated bounded `ops_available` hint after durable change, monitored subscribe/unsubscribe, restart-stable generation, and holder-level one-outstanding flow control whose acknowledgment returns the latest durable generation. The server key remains a transport identity, not participant custody or semantic authority; verified pull remains the only materialization path, and no direct pushed operation, production ingress, or deployment is claimed. |
+| `apps/lattice_web_socket` | Dependency-light home of `Lattice.Transport.WebSocket.Client`, the shared JSON envelope codec, and `Lattice.Carrier.WebSocket`. | **Real and carrier-tested**; generic and Township second-process convergence, session security, batching, telemetry, and server transport suites use the promoted client. Plan 132 adds active-once incremental frame parsing, lifetime-exclusive streaming versus atomic request modes, one-envelope streaming prefetch with TCP backpressure, typed owner-preallocated subscriptions, bounded notification-type reservation, and request/notification demultiplexing. Plan 142 adds an atomic server-first nonce receive and carrier session v2 while leaving operation wire v1 unchanged; exact challenge replay on a new connection is rejected. Cowboy peer/server fixtures remain in their boundary apps; the Township projection consumes this client without taking listener ownership. |
+| `apps/lattice_carrier_server` | Dedicated supervised Cowboy boundary that serves one configured signed log to trusted carrier realms. | **Real and server-tested**; Plan 127 adds authenticated frontier and pull, fail-closed source reload, fixed-port supervision, second-BEAM projection recovery, and a browser fresh/stale/fresh proof. Plan 128 adds the opt-in durable client-signed relay for selected trusted realms on path-backed sources: changed signed logs are persisted before acknowledgement and survive restart for a distinct observer. Plan 129 proves the actual packaged desktop Tauri app can use that boundary through native key custody, persisted capability evidence, and explicit one-op relay mode, then converge with a fresh pull-only observer after server restart. Plan 130 drives that same boundary from a LiveView-prepared, app-authored post and proves exact Sim convergence before and after restart. Plan 131 makes both packaged macOS convergence proofs CI-enforced on a hosted runner. Plan 132 adds an authenticated bounded `ops_available` hint after durable change, monitored subscribe/unsubscribe, restart-stable generation, and holder-level one-outstanding flow control whose acknowledgment returns the latest durable generation. Plan 142 adds per-connection server freshness, re-auth subscription reset, temp-file sync before rename, and fail-closed startup orphan cleanup. Here and below, carrier "durable" means process-crash/restart durable only, not power-loss durable: the parent directory is not synced and macOS `F_FULLFSYNC` is not requested. Plan 142 is locally green, with hosted flagship evidence pending. The server key remains a transport identity, not participant custody or semantic authority; verified pull remains the only materialization path, and no direct pushed operation, production ingress, or deployment is claimed. |
 | `apps/township_web` | Dedicated Phoenix 1.8.9 / LiveView 1.1.32 instrument boundary over the shared read model. | **Real and browser-tested**; a connected `/township` LiveView defaults to the verified bundle and, when configured, receives a supervised carrier projection with explicit fresh, stale, connecting, and unavailable states. Plan 132 replaces fast polling as the normal convergence trigger in opt-in `server_push` mode: a newer authenticated generation wakes the existing verified pull and rendered provenance records the trigger/generation. The owner records a secret pending ref before a connect worker starts, so first-connect/reconnect hints queue one trailing pull instead of racing ref installation; stale workers cannot resurrect or orphan their connection. Vue 3.5 progressively enhances server-derived replay frames. Plan 130 lets only a fresh carrier-backed instrument prepare one unsigned post request for explicit review and authoring in the Tauri app. Plan 135 adds a fresh-only, state-derived v2 close/reopen request while clearing prepared status requests on stale state, replica replacement, or the opposing matter state. Plan 136 adds separate fresh-only v3 title and summary requests whose server handlers fix the command and clear prepared field requests on stale state or replica replacement. Plan 137 adds separate fresh-only v4 admit and remove-member requests in one shared roster slot, with server-fixed commands and replica-scoped validation feedback. Plan 138 adds a separate fresh-only v5 resident-grant request whose server handler owns the fixed public policy and accepts only the recipient public key. Phoenix receives no participant key, capability, dependency frontier, or authoring authority; revocation and succession controls remain, and no operation is materialized directly from a pushed hint. |
-| `apps/lattice_core/lib/lattice/attestation.ex` | `Lattice.Attestation` behaviour + `Stub` + `M4Placeholder`. **The seam** that lets W4 be honest. | Stub **proven-plumbing**; receipt-freeness **stubbed** (M4). |
-| `apps/lattice_core/test/support/attestation_contract.ex` | The contract suite the Stub AND the future M4 primitive must both pass. `flunk`s if a module claims `receipt_free?` without proving it. | **Real guardrail.** |
+| `apps/lattice_core/lib/township/election.ex` + `township/election/` | Research-safe `Township.Election` facade, immutable spec/link/artifact types, pure board projection, unanimous-box close evidence, structured non-claims, and deterministic offline replay. | **Foundation implemented (migration steps 3–4); no cryptographic profile or coercion-resistance claim.** |
+| `apps/lattice_core/lib/township/election_board.ex` | Dedicated capability-gated election bulletin-board schema with service-authored public commands and no voter identity field. | **Real schema and role-boundary tests; anonymous ingress remains a gate.** |
+| `apps/lattice_core/lib/lattice/attestation.ex` | Frozen legacy `Lattice.Attestation` behaviour + non-receipt-free `Stub`; `M4Placeholder` is an empty migration tombstone. | Stub **legacy plumbing only**; `receipt_free?` remains `false`. |
+| `apps/lattice_core/test/support/attestation_contract.ex` | Legacy Stub contract. The M4 election path has distinct board, projection, close, replay, and future cryptographic conformance contracts. | **Real legacy guardrail; not an M4 swap contract.** |
 | `apps/lattice_core/test/township/workflows_test.exs` | W0–W4 as falsifiable ExUnit tests driving `Sim`, each with its ASSERT line. | **Real and green** against the branch; quarantine-shape inferences were reconciled. |
 | `scripts/township_demo.exs` | Narrated end-to-end demo (the §5 storyline) over `Sim`. | **Real and replay-gated**; emits the seven-file Plan 121 audit bundle and names its fresh-process verifier. |
 | `apps/lattice_core/lib/township/audit_bundle.ex` | Log-rooted state, authority, causal op-DAG, and delegation-graph projection for the outsider evidence surface. | **Real**; clean bundles verify in a fresh process, authoritative and display-only corruption fail, and `matter.log` is byte-stable across VMs. |
@@ -74,14 +76,14 @@ Framework-agnostic; the shared spine both the Expo and Tauri shells consume.
 
 | Path | What it is | Status |
 |---|---|---|
-| `clients/lattice-client/src/{op,dag,schema,crdt/reducers,quarantine,materialize,sync,carrier}.ts` | **Tier A** — the reducer (DAG, 3 CRDTs, the single V-01 quarantine predicate, materialize, sync) plus the carrier-frame/session adapter and carrier-term delegation extraction. Encoding-independent for op ids; carrier session bytes are signed through an injected shell/key-custody signer. | **Real & verified**: strict typecheck clean, Sim-generated conformance green, carrier W1 vector check green, live TS↔BEAM WebSocket W1 green. |
-| `clients/lattice-client/src/{codec,identity,township,local_log,tauri_bridge}.ts` | **Tier B/E1 bridge** — canonical `lattice-cbor-v1` bytes + Ed25519 signing. `codec.ts` verifies carrier-frame op bytes/hashes/signatures against BEAM and can author/sign frames; `township.ts` builds `Township.Matter` command body/cap terms, selects a matching local delegation cap extracted from carrier frames, derives deps from the local op frontier, and exposes author-and-persist workflows; `local_log.ts` persists semantic ops and pending carrier-frame outbox entries through shell key-value seams; `tauri_bridge.ts` adapts Tauri-style `invoke` commands to storage, async native signing, and native public-key discovery. | **Partially real** — Tier B/E1 custody coverage through Plan 138 is tracked per plan in `plans/README.md` (each plan states its own gate and non-claims); parked gaps are listed in §4a. Plan 129 adds explicit one-op relay transport and causally ordered, acknowledged-only relay draining while preserving generic push as the default; Plan 130 reuses those app-owned authoring seams unchanged; Plan 131 adds CI enforcement without changing runtime behavior; and Plan 132 adds the BEAM feed path. Plan 133 adds the direct typed TypeScript availability subscription. Plan 134 requires canonical hash and Ed25519 verification for every shared-sync pull before conversion or submission. Plan 138 reuses the established delegation authoring and persistence seam for one fixed resident grant and recipient-use proof; Sim/source projection owns the semantic authority oracle, while Plan 140 owns broader TypeScript V-01 remediation. |
-| `clients/township-tauri-shell` | **E1 Tauri shell** — Vue 3.5 frontend plus Rust native command core for shell-side storage/signing/discovery commands (`lattice_kv_get`, `lattice_kv_set`, `lattice_ensure_carrier_key`, `lattice_public_key`, `lattice_sign_carrier`, `lattice_discover_pairing_adverts`, `lattice_advertise_pairing_handoff`, `lattice_log_probe`). | **Partially real** — completed shell coverage through Plan 138 is tracked per plan in `plans/README.md`. Plan 129 connects packaged desktop onboarding to the stable relay; Plan 130 stages a strict unsigned action intent and retains explicit Use request, Post, and Sync controls; Plan 131 makes both packaged proofs mandatory in CI; Plans 132-133 add the authenticated and direct TypeScript hint substrates. Plan 134 adds the packaged Tauri/Vue reactive availability feed. Plan 135 extends the same inert ingress and native-custody path to replica-bound clerk close/reopen requests. Plan 136 extends that fail-closed seam to replica-bound `set_title` and `set_summary`. Plan 137 extends it to replica-bound `admit` and `remove_member`. Plan 138 adds fixed-profile resident-grant review/signing, no-parent refusal before signing or KV writes, separate explicit Sync, and same-bundle recipient pull/use with isolated keys and stores. The mobile secure-store strategy remains unchanged; parked gaps remain in §4a. |
+| `clients/lattice-client/src/{op,dag,schema,crdt/reducers,quarantine,materialize,sync,carrier}.ts` | **Tier A** — the reducer (DAG, 3 CRDTs, the single V-01 quarantine predicate, materialize, sync) plus the carrier-frame/session adapter and carrier-term delegation extraction. Encoding-independent for op ids; carrier session bytes are signed through an injected shell/key-custody signer. | **Real & verified**: strict typecheck clean, Sim-generated conformance green, carrier W1 vector check green, live TS↔BEAM WebSocket W1 green. Plan 142 mirrors server-first carrier session v2 with independent operation-wire/session-version checks and fail-closed nonce validation; all local `carrier:*` gates and packaged convergence are green, with hosted evidence pending. |
+| `clients/lattice-client/src/{codec,identity,township,local_log,tauri_bridge}.ts` | **Tier B/E1 bridge** — canonical `lattice-cbor-v1` bytes + Ed25519 signing. `codec.ts` verifies carrier-frame op bytes/hashes/signatures against BEAM and can author/sign frames; `township.ts` builds `Township.Matter` command body/cap terms, selects a matching local delegation cap extracted from carrier frames, derives deps from the local op frontier, and exposes author-and-persist workflows; `local_log.ts` persists semantic ops and pending carrier-frame outbox entries through shell key-value seams; `tauri_bridge.ts` adapts Tauri-style `invoke` commands to storage, async native signing, and native public-key discovery. | **Partially real** — Tier B/E1 custody coverage through Plan 138 is tracked per plan in `plans/README.md` (each plan states its own gate and non-claims); parked gaps are listed in §4a. Plan 129 adds explicit one-op relay transport and causally ordered, acknowledged-only relay draining while preserving generic push as the default; Plan 130 reuses those app-owned authoring seams unchanged; Plan 131 adds CI enforcement without changing runtime behavior; and Plan 132 adds the BEAM feed path. Plan 133 adds the direct typed TypeScript availability subscription. Plan 134 requires canonical hash and Ed25519 verification for every shared-sync pull before conversion or submission. Plan 138 reuses the established delegation authoring and persistence seam for one fixed resident grant and recipient-use proof; Sim/source projection owns the semantic authority oracle, while Plan 140 owns broader TypeScript V-01 remediation. Plan 141 leaves this public seam and persisted format unchanged while the shell serializes its whole-store workflows. |
+| `clients/township-tauri-shell` | **E1 Tauri shell** — Vue 3.5 frontend plus Rust native command core for shell-side storage/signing/discovery commands (`lattice_kv_get`, `lattice_kv_set`, `lattice_ensure_carrier_key`, `lattice_public_key`, `lattice_sign_carrier`, `lattice_discover_pairing_adverts`, `lattice_advertise_pairing_handoff`, `lattice_log_probe`). | **Partially real** — completed shell coverage through Plan 138 is tracked per plan in `plans/README.md`. Plan 129 connects packaged desktop onboarding to the stable relay; Plan 130 stages a strict unsigned action intent and retains explicit Use request, Post, and Sync controls; Plan 131 makes both packaged proofs mandatory in CI; Plans 132-133 add the authenticated and direct TypeScript hint substrates. Plan 134 adds the packaged Tauri/Vue reactive availability feed. Plan 135 extends the same inert ingress and native-custody path to replica-bound clerk close/reopen requests. Plan 136 extends that fail-closed seam to replica-bound `set_title` and `set_summary`. Plan 137 extends it to replica-bound `admit` and `remove_member`. Plan 138 adds fixed-profile resident-grant review/signing, no-parent refusal before signing or KV writes, separate explicit Sync, and same-bundle recipient pull/use with isolated keys and stores. Plan 141 is locally implemented with a namespace-scoped process writer, post-network reload/union, acknowledged-only outbox compaction, guarded submit/sign/sync entry points, fail-loud corrupt KV loading, and temp-file fsync; its hosted gate remains open. The mobile secure-store strategy remains unchanged; parked gaps remain in §4a. |
 | `clients/lattice-client/test/conformance.ts` + `test/vectors/*.json` | The harness that pins the TS reducer to Sim. | **Real**; W0, W1/W2 + perspectives, W3, and five seeded randomized vectors are generated by `lattice.export_vectors`. |
 | `clients/lattice-client/test/carrier.ts` | The C3 carrier-vector harness: BEAM-compatible session transcript/signature check, full carrier-frame decoding, and W1 merge/materialization against the Sim oracle. | **Real**; `npm run carrier:township` is wired in CI. |
 | `clients/lattice-client/test/carrier_relay*.ts` | One-op relay wire and drain contracts: explicit relay envelope, stable causal order, no push fallback, report aggregation, duplicate re-advertisement, and retry-safe acknowledgement. | **Real**; `carrier:relay` and `carrier:relay-sync` are wired in flagship CI. |
 | `clients/lattice-client/test/live_carrier.ts` | The live C3 harness: spawns the BEAM Township peer process, authenticates over WebSocket, pulls/pushes carrier frames, and compares both TS materialization and BEAM peer state to the Sim oracle. | **Real**; `npm run carrier:township:live` is wired in CI. |
-| `clients/township-tauri-shell/test/{township_stable_relay,township_carrier_feed,township_feed,tauri_stable_relay_onboarding_smoke,tauri_action_handoff_smoke,tauri_clerk_action_handoff_smoke,tauri_field_action_handoff_smoke,tauri_roster_action_handoff_smoke,tauri_delegation_grant_handoff_smoke,tauri_carrier_feed_smoke}.ts` | Production stable-server, direct/reactive TypeScript feed, and packaged-app convergence gates. | **Real locally and hosted through Plan 138** — existing packaged gates remain CI-enforced, including the direct-TypeScript gate CI-enforced by Plan 133. Plan 134 adds the headless verified refresh/controller lifecycle contract and a third fresh-build packaged macOS smoke. The real app authenticates as a read-only observer, renders Sim-derived base/first/restart projections from verified pulls, retains the last projection during same-path reconnect, and never invokes automatic Sync or authors an observer operation. Full local Plan 134 regression is green. Hosted Plan 134 run `29210581826` is green across the flagship artifact, unit/property, and packaged macOS jobs, including all three hard packaged convergence steps. The Plan 135 clerk smoke is green locally and hosted through Sim-equal Open -> Locked -> Open. Plan 136 adds a no-build field smoke that proves explicit-Sync contested-summary and title convergence. Plan 137 adds a no-build roster smoke that proves Sim add-wins and repeats the admit ceremony. Plan 138 adds a no-build two-identity grant smoke: the issuer publishes an exact Sim grant, an isolated recipient pulls it and publishes a Sim-identical post, and a later over-broad grant reduces as `not_attenuated` with no usable authority. Hosted Plan 138 run `29248868666` is green across flagship, unit/property, and packaged macOS. |
+| `clients/township-tauri-shell/test/{township_stable_relay,township_carrier_feed,township_feed,tauri_stable_relay_onboarding_smoke,tauri_action_handoff_smoke,tauri_clerk_action_handoff_smoke,tauri_field_action_handoff_smoke,tauri_roster_action_handoff_smoke,tauri_delegation_grant_handoff_smoke,tauri_carrier_feed_smoke}.ts` | Production stable-server, direct/reactive TypeScript feed, and packaged-app convergence gates. | **Real locally and hosted through Plan 138** — existing packaged gates remain CI-enforced, including the direct-TypeScript gate CI-enforced by Plan 133. Plan 134 adds the headless verified refresh/controller lifecycle contract and a third fresh-build packaged macOS smoke. The real app authenticates as a read-only observer, renders Sim-derived base/first/restart projections from verified pulls, retains the last projection during same-path reconnect, and never invokes automatic Sync or authors an observer operation. Full local Plan 134 regression is green. Hosted Plan 134 run `29210581826` is green across the flagship artifact, unit/property, and packaged macOS jobs, including all three hard packaged convergence steps. The Plan 135 clerk smoke is green locally and hosted through Sim-equal Open -> Locked -> Open. Plan 136 adds a no-build field smoke that proves explicit-Sync contested-summary and title convergence. Plan 137 adds a no-build roster smoke that proves Sim add-wins and repeats the admit ceremony. Plan 138 adds a no-build two-identity grant smoke: the issuer publishes an exact Sim grant, an isolated recipient pulls it and publishes a Sim-identical post, and a later over-broad grant reduces as `not_attenuated` with no usable authority. Hosted Plan 138 run `29248868666` is green across flagship, unit/property, and packaged macOS. Plan 141 adds RED/GREEN sync, feed, contention, re-entrancy, and corrupt-KV regressions; the full local `app:convergence` packaged chain is green, with hosted evidence pending. Plan 142 reruns that complete local chain green with the server-nonce handshake; its hosted flagship gate remains open. |
 | `apps/lattice_core/lib/mix/tasks/lattice.export_vectors.ex` | Elixir task that emits conformance vectors *from Sim* — makes the oracle literal. | **Real** for Phase B1/B2 and C3a; emits fixed, randomized, and carrier W1 vectors with grant-quarantine and revocation lifecycle fixtures. |
 | `ts-client-CLAUDE.md` | Agent working notes for the client library. | **Start here for the client track.** |
 
@@ -105,8 +107,12 @@ scenario (zoning-variance-24), each with headless-verified logic:
 ## 2. Status legend — what "done" means per layer
 
 - **Proven** — a real mechanism with a passing test/oracle today.
-- **Stubbed** — plumbing works behind an interface; the hard property lands at a named milestone. Honestly labelled (e.g. `receipt_free? = false`).
-- **Blocked** — cannot be built correctly until a prerequisite lands. The only blockers in this program are: **CBOR/ADR-P08** (non-BEAM realms) and **M4 research** (receipt-freeness).
+- **Stubbed** — bounded legacy or test plumbing exists without the hard property. A stub does
+  not imply that its interface can host the eventual mechanism (for example, the frozen
+  attestation Stub remains `receipt_free? = false` and M4 uses a different protocol).
+- **Blocked** — cannot be built correctly until a prerequisite lands. The original blockers were
+  **CBOR/ADR-P08** and **M4**; the tracked non-BEAM canonical path has landed, while M4's
+  profile, operational, review, and scale gates remain open.
 
 Nothing here is "assumed done." If it is not a passing gate, it is not done (PD-001 invariant V).
 
@@ -128,11 +134,14 @@ ADR-P08 CBOR ──────────────────────�
                                                                      │
                                                                      ├─▶ Expo shell   (phone)
                                                                      └─▶ Tauri v2 shell (desktop+mobile, Vue 3.5)
-M4 research (JCJ/composition) ──▶ real receipt-free primitive ──▶ Attestation swap (W4 becomes real)
+M4 redesign foundation (Election + dedicated board + pure replay) ──▶ profile/operations/review gates
+                                                                          │
+                                                                          └─▶ read/audit migration ──▶ W4 switch; retire legacy Stub last
 ```
 
-Two hard blockers gate the endgame: **CBOR/ADR-P08** (everything non-BEAM) and **M4 research**
-(receipt-freeness). Everything else is engineering that can proceed in parallel behind them.
+The graph preserves the original two-blocker dependency shape. The tracked non-BEAM plans have
+since landed the canonical client/wire path; **M4's profile, operational, independent-review, and
+scale gates remain the hard endgame blocker**.
 
 ---
 
@@ -272,8 +281,10 @@ Two hard blockers gate the endgame: **CBOR/ADR-P08** (everything non-BEAM) and *
    the plan before trusting a claim repeated anywhere else. Areas parked as
    blocked-on-external-factors are listed in §4a and must not accrete new probe
    variants.
-6. **Receipt-freeness is not real** (W4). `Attestation.Stub` is `receipt_free? = false` by
-   design; do not let anything claim otherwise before M4.
+6. **Receipt-freeness is not real** (W4). `Attestation.Stub` is permanently
+   `receipt_free? = false`; the implemented `Township.Election` foundation is
+   research-only with every security claim `:not_claimed`. Do not describe W4 as real until
+   all Phase F gates pass and the read/audit surface migrates.
 7. **AtomVM has distribution now but no iOS/Android target** — so a phone is a TS client, not a
    BEAM node. Re-check this if AtomVM ships a mobile target (STOP condition in plan 011).
 
@@ -288,8 +299,11 @@ variant" proofs in these areas** — in particular, no new `tauri:android:releas
 probe variants (plans 083–117 exhausted the useful emulator-provable surface). If one
 starts looking necessary, question the requirement, not the boundary (`CLAUDE.md`).
 
-- **iOS** — archive path blocked by the Xcode 27 beta Tauri Swift-package failure
-  (plan 077). Revisit only when the toolchain unblocks.
+- **iOS beyond local process relaunch** — stable Xcode 26.6 (Build 17F113) now builds the
+  entitlement-enabled simulator archive. Plan 077's local iOS 18.6 simulator smoke proves two
+  independently named protected keys differ and both survive process relaunch. It does not prove
+  simulator or device reboot, physical-device behavior, iOS BEAM convergence, or CI enforcement;
+  those remaining iOS gates stay parked.
 - **QR camera onboarding** — capture-to-draft is proven (plan 071); the rest is
   physical-device behavior.
 - **LAN discovery** — bounded UDP receive/advertise with loopback smoke is proven
@@ -308,12 +322,13 @@ that wake verified pull. Plan 133 adds the direct typed TypeScript availability 
 real stable-server feed gate while preserving verified pull as the only materialization path.
 Plan 135 closes the first clerk-status slice, Plan 136 closes the field-edit slice, Plan 137 closes
 the roster slice, and Plan 138 closes delegation issuance toward **complete G1/Phase G**. The
-delegation issuance slice is closed, but revocation remains blocked behind Plans 140 and 141 and
+delegation issuance slice is closed, but revocation remains blocked behind Plan 141's hosted gate and
 succession remains unimplemented. Production deployment and receipt-free W4 are also not supplied
 by the current work. At the milestone level, broader participant controls, production deployment, and receipt-free W4 remain.
 Broader participant controls remain: revocation and succession are unfinished.
 The remaining participant-control work now narrows to capability-lifecycle controls after Plan 138
-closes delegation issuance; Plan 139 remains blocked behind Plans 140 and 141.
+closes delegation issuance; Plan 140 is done, while Plan 139 remains blocked until Plan 141's hosted
+gate closes.
 Per-plan status lives in
 `plans/README.md`.
 
@@ -384,21 +399,39 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   a packaged macOS action handoff into that same explicit native-custody path. Plan 131 makes the
   stable-relay onboarding and action-handoff packaged proofs mandatory in hosted macOS CI. Plan 132
   adds push-triggered LiveView convergence and post-restart subscription recovery without changing
-  the shell's key/capability custody; see `plans/README.md` for per-plan status and non-claims. iOS,
-  QR camera onboarding, LAN discovery,
-  physical-device behavior, and cross-device pairing state exchange are parked (§4a) —
-  do not add new probe variants for them.
+  the shell's key/capability custody. Plan 141 locally serializes shell persistence, reloads and
+  unions current state before post-network saves, guards submit/sign/sync re-entry, and fails loudly
+  on malformed native KV; its hosted flagship gate remains open. See `plans/README.md` for per-plan
+  status and non-claims. Plan
+  077 now has a stable-Xcode iOS simulator archive and bounded native protected-key process-relaunch
+  proof; reboot, physical-device, iOS BEAM convergence, and CI gates remain open. QR camera
+  onboarding, LAN discovery, physical-device behavior, and cross-device pairing state exchange are
+  parked (§4a) — do not add new probe variants for them.
 - **E2.** **Expo shell** (if phone-only is wanted): SDK 56+, RN 0.85, New Arch; same library, key
   custody via secure-store/native keystore. *Gate:* a phone build converges a Township matter.
   *Asset:* `docs/township_mobile_secure_store_strategy.md` plus the app-shell analysis (this
   conversation's §Expo-vs-Tauri) — decision deferred, reversible.
 
-### Phase F — Close the coercion gap (M4, the second hard blocker)
-- **F1.** Land the receipt-free primitive per the research verdict (JCJ survival, composition —
-  PD-001 §6 R-02/R-03). *Gate:* the `Attestation.Contract` passes with `receipt_free? = true`
-  (real indistinguishability, not the `flunk` placeholder). *Asset:* `attestation.ex`, contract suite.
-- **F2.** Swap `Stub` → real primitive; W4 becomes real with **no change** to W0–W3.
-  *Gate:* POC W4 receipt-free; Township exit gate fully met.
+### Phase F — Close the coercion gap (M4, the remaining hard blocker)
+- **F1. Foundation — implemented, research-safe.** Migration steps 1–4 from the M4 interface
+  brief are present: corrected legacy boundaries; a frozen false Stub; authorized Matter link,
+  versioned configuration and artifact references; a dedicated role-gated board; pure projection;
+  unanimous-box close evidence; and deterministic complete offline replay. *Gate:* focused
+  board/projection/close/replay adversary suites pass. This is not a cryptographic-election or
+  coercion-resistance claim.
+- **F2. Profile and operations — open blocker.** Prove anonymous ingress and private registration;
+  pin one exact reviewed construction, revision, parameter set, codecs, and dependencies; then add
+  durable registrar, box, close, and trustee runners with secret/randomness handling. *Gate:* the
+  operational threat model and official conformance vectors pass without any secret-bearing value
+  entering a Lattice or operational transcript.
+- **F3. Independent assurance and scale — open blocker.** Complete the formal composition mapping,
+  independent cryptographic review, artifact-availability design, and measured 100/1,000/10,000
+  participant runs. *Gate:* every blocking gate in the M4 brief is cleared and the structured
+  security manifest names only reviewed conditional claims.
+- **F4. Migrate W4 last.** Change `Township.ReadModel` and the audit bundle from caller-held legacy
+  vouches to verified election projection. Only then switch W4 and retire `M4Placeholder`, the Stub,
+  and the legacy contract. W0–W3 keep their semantics; W4 and its read/audit surface intentionally
+  change.
 
 ### Phase G — The full instrument (UI)
 - **G1.** Build the production UI: Phoenix LiveView 1.1 (state/feeds) + Vue 3.5 islands (canvases),
@@ -441,8 +474,9 @@ and every claim is a passing test with `Sim` as oracle.
 
 ## 6. How to run the two (three) parallel worktrees
 
-- **Substrate worktree** — Elixir engine: Phases A, C, D1, F. Owns `Sim`, the carrier, CBOR, the
-  attestation primitive. Delegated at milestone level via the overlay `CLAUDE.md` + plans 010a/011.
+- **Substrate worktree** — Elixir engine: Phases A, C, D1, F. Owns `Sim`, the carrier, CBOR, and
+  the gated `Township.Election` protocol foundation. `Lattice.Attestation` remains legacy-only.
+  Delegated at milestone level via the overlay `CLAUDE.md` + plans 010a/011.
 - **Client worktree** — TS library: Phases B, C3, D2. Owns the reducer/sync/conformance. Delegated
   via `ts-client-CLAUDE.md` + plan 011. No Elixir changes for Tier A.
 - **Shell/UI worktree** (later) — Phases E, G. Vue 3.5 + LiveView; consumes the client library and
@@ -462,4 +496,4 @@ coordination surface — keep them green and the tracks stay honest.
 - Overlays: `township_poc_overlay.zip`, `ts_client_realm_overlay.zip`
 - UI direction: `duality_canvas.html`, `constellation.html`, `adversary_console.html`
 - Branch of record: `treetopdevs/lattice @ claude/beautiful-gould-6b25d2`
-- Oracle: `Lattice.Sim` · Two hard blockers: **ADR-P08 (CBOR)**, **M4 (receipt-freeness)**
+- Oracle: `Lattice.Sim` · Remaining hard blocker: **M4 profile/operations/review gates**

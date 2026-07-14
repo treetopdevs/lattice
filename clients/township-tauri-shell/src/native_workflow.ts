@@ -67,6 +67,12 @@ export interface TownshipNativeUnavailableStatus {
 
 export type TownshipNativeStatus = TownshipNativeReadyStatus | TownshipNativeUnavailableStatus;
 
+interface TownshipPersistenceWriter {
+  runExclusive<T>(operation: () => Promise<T>): Promise<T>;
+}
+
+const persistenceWriters = new Map<string, TownshipPersistenceWriter>();
+
 export function createTownshipNativeStorage(
   options: TownshipNativeWorkflowOptions = {},
 ): LocalKeyValueStore {
@@ -93,6 +99,13 @@ export async function createTownshipNativeWorkflow(
     delegationFrames: createJsonCarrierFrameStore(storage, TOWNSHIP_DELEGATION_FRAMES_KEY),
     signer,
   };
+}
+
+export async function withTownshipPersistenceWrite<T>(
+  workflow: Pick<TownshipNativeWorkflow, "storageNamespace">,
+  operation: () => Promise<T>,
+): Promise<T> {
+  return persistenceWriter(workflow.storageNamespace).runExclusive(operation);
 }
 
 export async function probeTownshipNativeWorkflow(
@@ -148,6 +161,30 @@ function bytesBase64(bytes: Uint8Array): string {
   const btoaFn = (globalThis as unknown as { btoa?: (decoded: string) => string }).btoa;
   if (!btoaFn) throw new Error("base64 encoding unavailable");
   return btoaFn(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(""));
+}
+
+function persistenceWriter(storageNamespace: string): TownshipPersistenceWriter {
+  const existing = persistenceWriters.get(storageNamespace);
+  if (existing) return existing;
+
+  let tail = Promise.resolve();
+  const writer = {
+    async runExclusive<T>(operation: () => Promise<T>): Promise<T> {
+      const previous = tail;
+      let release = () => {};
+      tail = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      await previous;
+      try {
+        return await operation();
+      } finally {
+        release();
+      }
+    },
+  };
+  persistenceWriters.set(storageNamespace, writer);
+  return writer;
 }
 
 function errorMessage(error: unknown): string {

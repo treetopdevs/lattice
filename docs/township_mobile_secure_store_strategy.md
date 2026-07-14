@@ -3,8 +3,13 @@
 This strategy fixes the storage boundary for phone-grade Township shells before the repo claims
 mobile persistence. Plan 076 adds generated Tauri iOS and Android target scaffolds as mobile-build
 readiness, plan 077 pins the repo-side iOS simulator readiness contracts for deployment target
-15.0, the generated Xcode Rust build entrypoint, and protected Keychain support, and plan 078 proves
-the generated Android target can assemble a debug APK from the real Tauri mobile build. Plan 079
+15.0, the generated Xcode Rust build entrypoint, and protected Keychain support. Under stable
+Xcode 26.6 (Build 17F113), plan 077 now builds the entitlement-enabled simulator archive and proves
+that two independently named protected Keychain keys differ and both survive process relaunch. It
+checks a 64-byte signature result per key but does not independently verify the returned signature
+bytes. It does not prove simulator or device reboot, physical-device behavior, iOS BEAM convergence,
+or CI enforcement. Plan 078 proves the generated Android target can assemble a debug APK from the
+real Tauri mobile build. Plan 079
 proves an Android emulator native-key smoke: the installed app signs a W1 carrier transcript through
 the native command boundary, reuses the same public key after force-stop/relaunch, and produces a
 different key after app data clear. Plan 080 proves Android debug APK host-authored,
@@ -199,9 +204,11 @@ For Tauri mobile, keep the same command boundary. The Android path now configure
 keyring default store through `keyring-core` and `android-native-keyring-store`, initializes the NDK
 context from the generated Android activity, and disables Android backup for the application so
 carrier identity is not restored implicitly across installs. The iOS source path also configures the
-protected Keychain store through `keyring-core`, but the local iOS archive remains blocked before a
-simulator smoke can prove it. These platform-specific stores must not change the TypeScript bridge
-contract.
+protected Keychain store through `keyring-core`. Stable Xcode now completes the local simulator
+archive, and the bounded Plan 077 smoke proves two distinct named keys persist across process
+terminate/relaunch. It does not cover simulator shutdown/boot, device reboot, physical hardware,
+cap persistence, or carrier convergence. These platform-specific stores must not change the
+TypeScript bridge contract.
 
 For Expo, the app may still consume `@treetopdevs/lattice-client`, but production signing must be a
 native module or native-backed `CarrierSigner`. `expo-secure-store` is allowed for small bootstrap
@@ -259,9 +266,14 @@ prove key reuse across app restarts without exposing seed bytes to TypeScript.
 The generated Tauri iOS and Android projects are build targets only. Plan 077 also proves the iOS
 project is configured for an Xcode-supported deployment target, the generated Xcode script has its
 package entrypoint, and the iOS Keychain backend enables the `protected` feature required by
-`apple-native-keyring-store`. Plan 078 proves the Android target assembles a debug APK through the
-real Tauri/Gradle mobile path when rustup is pinned ahead of Homebrew Rust, the Rust crate emits the
-expected mobile library types, and the Tauri entrypoint exports the required mobile symbols. Plan
+`apple-native-keyring-store`. It now adds a local signed simulator archive and a negative-controlled
+runtime proof: primary and control key ids produce different 32-byte public keys, 64-byte signature
+results, and stable identities across process relaunch. It does not independently
+verify the returned signature bytes. The build takes its Apple team only from the environment and
+restores Tauri-mutated generated signing files afterward. Plan 078 proves the
+Android target assembles a debug APK through the real Tauri/Gradle mobile path when rustup is pinned
+ahead of Homebrew Rust, the Rust crate emits the expected mobile library types, and the Tauri
+entrypoint exports the required mobile symbols. Plan
 079 proves the Android emulator can invoke the native carrier signer, verify an Ed25519 signature
 over a W1-shaped carrier transcript, retain the same public key across force-stop/relaunch, and
 change keys after `pm clear`. Plan 080 proves the Android debug APK can reload persisted replayable
@@ -467,11 +479,13 @@ a packaged macOS real-app armed one-shot accept/block proof, proves that link lo
 emit traced Save Pairing, Sync Outbox, Check Carrier, or native KV-write side effects in the packaged
 smoke, proves warm macOS LaunchServices routing to the running packaged app, proves packaged
 macOS cold-start URL delivery into the draft-only blocked path, and proves app-local state binding
-for armed OS pairing-link import. It does not prove iOS cold-start URL delivery,
+for armed OS pairing-link import. The local iOS simulator now proves two-key native protected-store
+reuse across process terminate/relaunch. It does not prove iOS cold-start URL delivery,
 QR camera onboarding,
-LAN discovery, iOS key reuse, Expo, cross-device pairing state exchange,
-full mobile onboarding beyond pull-based cap acquisition, or phone-grade equivalence. The local iOS simulator archive remains
-blocked by the selected Xcode 27 beta Swift package failure in Tauri's upstream mobile build.
+LAN discovery, simulator or device reboot, physical-device iOS key reuse, iOS BEAM convergence,
+Expo, cross-device pairing state exchange, full mobile onboarding beyond pull-based cap acquisition,
+or phone-grade equivalence. The Plan 077 iOS archive and runtime smoke are local-only and are not a
+hosted CI gate.
 
 ### Expo
 
@@ -495,7 +509,11 @@ No phone-grade persistence claim is allowed until all of these are true:
 1. A mobile build has a native-backed carrier signer test that proves public-key reuse across app
    restarts and signatures over the W1 carrier transcript.
    - Android Tauri emulator: met by plan 079.
-   - iOS Tauri and Expo: still unproven.
+   - iOS Tauri simulator: partially met by plan 077 for two independently named protected keys and
+     a process terminate/relaunch cycle. The probe requests signatures and checks their byte lengths,
+     but does not verify a W1 transcript signature. Simulator/device reboot and physical-device
+     behavior remain unproven.
+   - Expo: still unproven.
 2. The app-storage implementation reloads `local_ops`, `carrier_frames`, and `delegation_frames`
    without touching the native key store.
    - Android Tauri debug APK: met for the W1 pre-signed-frame smoke by plan 080.

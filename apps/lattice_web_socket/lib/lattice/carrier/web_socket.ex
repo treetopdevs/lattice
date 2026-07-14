@@ -4,8 +4,8 @@ defmodule Lattice.Carrier.WebSocket do
 
   The connection wraps `Lattice.Transport.WebSocket.Client` — a raw `:gen_tcp`
   client that performs the RFC 6455 handshake and framing against the peer OS
-  process's Cowboy listener. Connection setup starts with a signed
-  challenge/response. Every sync callback after that is one JSON
+  process's Cowboy listener. Connection setup starts with a server nonce and a
+  signed challenge/response that binds it. Every sync callback after that is one JSON
   request/response round trip; ops travel through the shared JSON-safe carrier
   wire frame shape.
 
@@ -320,12 +320,17 @@ defmodule Lattice.Carrier.WebSocket do
   end
 
   defp authenticate(%__MODULE__{} = conn, session) do
-    challenge =
-      session.realm
-      |> Session.challenge(session.replica, wire_version: Wire.version())
-      |> Session.sign_challenge(session.identity)
-
-    with {:ok, %{"type" => "carrier_hello"} = response} <- request(conn, challenge) do
+    with {:ok, nonce_frame} <- Client.recv_atomic_envelope(conn.client, @recv_timeout),
+         {:ok, server_nonce} <-
+           Session.verify_nonce_frame(nonce_frame, expected_wire_version: Wire.version()),
+         challenge <-
+           session.realm
+           |> Session.challenge(session.replica,
+             server_nonce: server_nonce,
+             wire_version: Wire.version()
+           )
+           |> Session.sign_challenge(session.identity),
+         {:ok, %{"type" => "carrier_hello"} = response} <- request(conn, challenge) do
       Session.verify_response(challenge, response,
         expected_realm: session.peer_realm,
         expected_pubkey: session.peer_pubkey

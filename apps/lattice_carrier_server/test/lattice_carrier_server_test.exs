@@ -4,6 +4,8 @@ defmodule LatticeCarrierServerTest do
   alias Lattice.Carrier.{Session, Telemetry, WebSocket, Wire}
   alias Lattice.{Identity, Log, Op}
   alias Lattice.Transport.WebSocket.Client
+  alias LatticeCarrierServer.Holder
+  alias LatticeCarrierServer.WebSocket, as: ServerWebSocket
 
   @replica "replica:carrier-server:test"
 
@@ -91,6 +93,49 @@ defmodule LatticeCarrierServerTest do
     assert metadata.expected_realm == trusted_identity.realm_id
     assert metadata.peer_realm == wrong_identity.realm_id
     assert metadata.side == :server
+  end
+
+  test "a captured signed challenge cannot authenticate a new connection" do
+    server_identity = Identity.from_seed("town-node", "carrier-server-replay")
+    client_identity = Identity.from_seed("instrument", "carrier-replay-client")
+    instance = {:test, System.unique_integer([:positive])}
+
+    start_supervised!(
+      {LatticeCarrierServer,
+       instance: instance,
+       identity: server_identity,
+       trusted_peers: %{client_identity.realm_id => client_identity.pub},
+       source: {:log, Log.new(@replica)},
+       listener: [ip: {127, 0, 0, 1}, port: 0]}
+    )
+
+    port = LatticeCarrierServer.port(instance)
+    assert {:ok, first} = Client.connect(hostname: "127.0.0.1", port: port, path: "/carrier")
+    first_server_nonce = assert_server_nonce(first)
+
+    challenge =
+      client_identity.realm_id
+      |> Session.challenge(@replica,
+        wire_version: Wire.version(),
+        session_version: 2,
+        server_nonce: first_server_nonce
+      )
+      |> Session.sign_challenge(client_identity)
+
+    captured_challenge = Jason.encode!(challenge)
+    assert :ok = Client.send_raw_text(first, captured_challenge)
+    assert {:ok, %{"type" => "carrier_hello"}} = Client.recv_envelope(first)
+    assert :ok = Client.close(first)
+
+    assert {:ok, replay} = Client.connect(hostname: "127.0.0.1", port: port, path: "/carrier")
+    replay_server_nonce = assert_server_nonce(replay)
+    refute replay_server_nonce == first_server_nonce
+    assert :ok = Client.send_raw_text(replay, captured_challenge)
+
+    assert {:ok, %{"type" => "error", "reason" => "unauthenticated"}} =
+             Client.recv_envelope(replay)
+
+    assert :ok = Client.close(replay)
   end
 
   test "an oversized authenticated pull frame is closed before dispatch" do
@@ -231,6 +276,7 @@ defmodule LatticeCarrierServerTest do
                path: "/carrier"
              )
 
+    _server_nonce = assert_server_nonce(client)
     assert :ok = Client.send_envelope(client, %{type: "subscribe"})
 
     assert {:ok, %{"type" => "error", "reason" => "unauthenticated"}} =
@@ -269,6 +315,7 @@ defmodule LatticeCarrierServerTest do
                path: "/carrier"
              )
 
+    _server_nonce = assert_server_nonce(client)
     authenticated = authenticated_client(instance, server_identity, client_identity)
     Process.sleep(5_100)
     assert {:error, :closed} = Client.recv_envelope(client, 500)
@@ -317,6 +364,65 @@ defmodule LatticeCarrierServerTest do
     assert :ok = Client.send_envelope(client, %{type: "unsubscribe"})
     assert {:ok, %{"type" => "unsubscribe_result"}} = Client.recv_envelope(client)
     assert :ok = Client.close(client)
+  end
+
+  test "successful re-authentication clears the prior subscription and queued availability" do
+    server_identity = Identity.from_seed("town-node", "carrier-server-reauth")
+    first_identity = Identity.from_seed("observer-a", "carrier-server-reauth-a")
+    second_identity = Identity.from_seed("observer-b", "carrier-server-reauth-b")
+    instance = {:test, System.unique_integer([:positive])}
+
+    start_supervised!(
+      {LatticeCarrierServer,
+       instance: instance,
+       identity: server_identity,
+       trusted_peers: %{
+         first_identity.realm_id => first_identity.pub,
+         second_identity.realm_id => second_identity.pub
+       },
+       source: {:log, Log.new(@replica)},
+       listener: [ip: {127, 0, 0, 1}, port: 0]}
+    )
+
+    holder = Holder.via(instance)
+    holder_pid = GenServer.whereis(holder)
+    assert {:ok, %{generation: 0}} = Holder.subscribe(holder, self())
+    assert {:process, self()} in elem(Process.info(holder_pid, :monitors), 1)
+
+    server_nonce = Base.url_encode64(:binary.copy(<<23>>, 32), padding: false)
+    availability_timer = Process.send_after(self(), :stale_availability, 5_000)
+
+    state = %{
+      authenticated?: true,
+      holder: holder,
+      trusted_peers: %{
+        first_identity.realm_id => first_identity.pub,
+        second_identity.realm_id => second_identity.pub
+      },
+      server_nonce: server_nonce,
+      subscribed?: true,
+      subscription_holder: holder_pid,
+      pending_availability: %{generation: 1, frontier: [], frontier_truncated: false},
+      availability_timer: availability_timer,
+      peer_realm: first_identity.realm_id,
+      realm: server_identity.realm_id
+    }
+
+    challenge = signed_challenge(second_identity, server_nonce: server_nonce)
+
+    assert {:reply, {:text, response}, reauthenticated_state} =
+             ServerWebSocket.websocket_handle({:text, Jason.encode!(challenge)}, state)
+
+    assert %{"type" => "carrier_hello"} = Jason.decode!(response)
+    assert reauthenticated_state.peer_realm == second_identity.realm_id
+    refute reauthenticated_state.subscribed?
+    refute Map.has_key?(reauthenticated_state, :subscription_holder)
+    refute Map.has_key?(reauthenticated_state, :pending_availability)
+    refute Map.has_key?(reauthenticated_state, :availability_timer)
+    refute {:process, self()} in elem(Process.info(holder_pid, :monitors), 1)
+    assert :sys.get_state(holder_pid).subscribers == %{}
+    assert Process.read_timer(availability_timer) == false
+    refute_receive :stale_availability
   end
 
   @tag :tmp_dir
@@ -484,24 +590,49 @@ defmodule LatticeCarrierServerTest do
     on_exit(fn -> Telemetry.detach(handler_id) end)
     port = LatticeCarrierServer.port(instance)
 
-    assert_auth_rejected(port, signed_challenge(unknown_identity), :unknown_peer)
+    assert_auth_rejected(port, :unknown_peer, fn server_nonce ->
+      signed_challenge(unknown_identity, server_nonce: server_nonce)
+    end)
 
     assert_auth_rejected(
       port,
-      signed_challenge(trusted_identity, replica: "replica:wrong"),
-      :wrong_replica
+      :wrong_replica,
+      fn server_nonce ->
+        signed_challenge(trusted_identity,
+          replica: "replica:wrong",
+          server_nonce: server_nonce
+        )
+      end
     )
 
     assert_auth_rejected(
       port,
-      signed_challenge(trusted_identity, wire_version: Wire.version() + 1),
-      :unsupported_wire_version
+      :unsupported_wire_version,
+      fn server_nonce ->
+        signed_challenge(trusted_identity,
+          wire_version: Wire.version() + 1,
+          server_nonce: server_nonce
+        )
+      end
     )
 
-    malformed =
-      Session.challenge(trusted_identity.realm_id, @replica, wire_version: Wire.version())
+    assert_auth_rejected(
+      port,
+      :unsupported_session_version,
+      fn server_nonce ->
+        signed_challenge(trusted_identity,
+          session_version: Session.session_version() + 1,
+          server_nonce: server_nonce
+        )
+      end
+    )
 
-    assert_auth_rejected(port, malformed, :malformed_session)
+    assert_auth_rejected(port, :malformed_session, fn server_nonce ->
+      Session.challenge(trusted_identity.realm_id, @replica,
+        server_nonce: server_nonce,
+        wire_version: Wire.version()
+      )
+    end)
   end
 
   test "push and live requests are refused without changing the served log" do
@@ -1002,8 +1133,10 @@ defmodule LatticeCarrierServerTest do
     send(receiver, {:telemetry, event, measurements, metadata})
   end
 
-  defp assert_auth_rejected(port, challenge, expected_reason) do
+  defp assert_auth_rejected(port, expected_reason, challenge_builder) do
     assert {:ok, client} = Client.connect(hostname: "127.0.0.1", port: port, path: "/carrier")
+    server_nonce = assert_server_nonce(client)
+    challenge = challenge_builder.(server_nonce)
     assert :ok = Client.send_envelope(client, challenge)
 
     assert {:ok, %{"type" => "error", "reason" => "unauthenticated"}} =
@@ -1015,12 +1148,27 @@ defmodule LatticeCarrierServerTest do
     assert :ok = Client.close(client)
   end
 
-  defp signed_challenge(identity, opts \\ []) do
+  defp assert_server_nonce(client) do
+    assert {:ok, frame} = Client.recv_envelope(client)
+
+    assert {:ok, server_nonce} =
+             Session.verify_nonce_frame(frame, expected_wire_version: Wire.version())
+
+    server_nonce
+  end
+
+  defp signed_challenge(identity, opts) do
     replica = Keyword.get(opts, :replica, @replica)
     wire_version = Keyword.get(opts, :wire_version, Wire.version())
+    session_version = Keyword.get(opts, :session_version, Session.session_version())
+    server_nonce = Keyword.fetch!(opts, :server_nonce)
 
     identity.realm_id
-    |> Session.challenge(replica, wire_version: wire_version)
+    |> Session.challenge(replica,
+      server_nonce: server_nonce,
+      wire_version: wire_version,
+      session_version: session_version
+    )
     |> Session.sign_challenge(identity)
   end
 
@@ -1032,7 +1180,8 @@ defmodule LatticeCarrierServerTest do
                path: "/carrier"
              )
 
-    challenge = signed_challenge(client_identity)
+    server_nonce = assert_server_nonce(client)
+    challenge = signed_challenge(client_identity, server_nonce: server_nonce)
     assert :ok = Client.send_envelope(client, challenge)
     assert {:ok, %{"type" => "carrier_hello"} = response} = Client.recv_envelope(client)
 

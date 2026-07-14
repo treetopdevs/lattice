@@ -37,6 +37,10 @@ defmodule Lattice.Transport.WebSocket.Client do
     GenServer.call(pid, {:recv, timeout}, timeout + @call_timeout_slack)
   end
 
+  def recv_atomic_envelope(pid, timeout \\ 5_000) do
+    GenServer.call(pid, {:recv_atomic, timeout}, timeout + @call_timeout_slack)
+  end
+
   def request_envelope(pid, envelope, timeout \\ 5_000)
       when is_map(envelope) and is_integer(timeout) and timeout > 0 do
     GenServer.call(pid, {:request, envelope, timeout}, timeout + @call_timeout_slack)
@@ -101,21 +105,17 @@ defmodule Lattice.Transport.WebSocket.Client do
   def handle_call({:recv, timeout}, from, state) do
     with {:ok, state} <- enter_mode(state, :stream),
          :ok <- ensure_open(state) do
-      case :queue.out(state.receive_queue) do
-        {{:value, envelope}, queue} ->
-          state = %{state | receive_queue: queue}
-          {:reply, {:ok, envelope}, resume_input(state)}
+      receive_envelope(state, from, timeout)
+    else
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
 
-        {:empty, _queue} when state.receive_waiter == nil ->
-          token = make_ref()
-          timer = Process.send_after(self(), {:receive_timeout, token}, timeout)
-          waiter = %{from: from, timer: timer, token: token}
-          state = %{state | receive_waiter: waiter}
-          {:noreply, resume_input(state)}
-
-        {:empty, _queue} ->
-          {:reply, {:error, :receive_in_progress}, state}
-      end
+  def handle_call({:recv_atomic, timeout}, from, state) do
+    with {:ok, state} <- enter_mode(state, :atomic),
+         :ok <- ensure_open(state),
+         :ok <- ensure_request_available(state) do
+      receive_envelope(state, from, timeout)
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
     end
@@ -293,6 +293,24 @@ defmodule Lattice.Transport.WebSocket.Client do
 
   defp ensure_request_available(%{request_waiter: nil}), do: :ok
   defp ensure_request_available(_state), do: {:error, :request_in_progress}
+
+  defp receive_envelope(state, from, timeout) do
+    case :queue.out(state.receive_queue) do
+      {{:value, envelope}, queue} ->
+        state = %{state | receive_queue: queue}
+        {:reply, {:ok, envelope}, resume_input(state)}
+
+      {:empty, _queue} when state.receive_waiter == nil ->
+        token = make_ref()
+        timer = Process.send_after(self(), {:receive_timeout, token}, timeout)
+        waiter = %{from: from, timer: timer, token: token}
+        state = %{state | receive_waiter: waiter}
+        {:noreply, resume_input(state)}
+
+      {:empty, _queue} ->
+        {:reply, {:error, :receive_in_progress}, state}
+    end
+  end
 
   defp ensure_notification_type_available(state, type) do
     if MapSet.member?(state.notification_types, type) or

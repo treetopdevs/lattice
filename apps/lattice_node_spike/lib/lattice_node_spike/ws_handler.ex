@@ -28,7 +28,12 @@ defmodule LatticeNodeSpike.WsHandler do
   def init(req, state), do: {:cowboy_websocket, req, state}
 
   @impl :cowboy_websocket
-  def websocket_init(state), do: {:ok, state}
+  def websocket_init(state) do
+    nonce_frame = Session.nonce_frame(wire_version: CarrierWire.version())
+
+    {:reply, {:text, Jason.encode!(nonce_frame)},
+     Map.put(state, :server_nonce, nonce_frame["nonce"])}
+  end
 
   @impl :cowboy_websocket
   def websocket_handle({:text, text}, state) do
@@ -70,7 +75,9 @@ defmodule LatticeNodeSpike.WsHandler do
   defp handle_challenge(challenge, state) do
     case Session.verify_challenge(challenge,
            expected_realm: state.trusted_peer_realm,
-           expected_pubkey: state.trusted_peer_pubkey
+           expected_pubkey: state.trusted_peer_pubkey,
+           expected_server_nonce: state.server_nonce,
+           expected_wire_version: CarrierWire.version()
          ) do
       :ok ->
         {realm, identity} = Peer.session_identity(state.peer)

@@ -44,6 +44,7 @@ interface NativeIdentity {
 }
 
 type WebSocketConstructor = NonNullable<ConnectCarrierWebSocketOptions["webSocket"]>;
+const healthServerNonce = Buffer.alloc(32, 9).toString("base64url");
 
 class ScriptedHealthWebSocket {
   static closedCount = 0;
@@ -55,7 +56,17 @@ class ScriptedHealthWebSocket {
 
   constructor(url: string) {
     ScriptedHealthWebSocket.openedUrl = url;
-    queueMicrotask(() => this.emit("open"));
+    queueMicrotask(() => {
+      this.emit("open");
+      this.emit("message", {
+        data: JSON.stringify({
+          type: "carrier_nonce",
+          nonce: healthServerNonce,
+          wire_version: 1,
+          session_version: 2,
+        }),
+      });
+    });
   }
 
   static reset(mode: "ok" | "status_error" | "wrong_peer" = "ok"): void {
@@ -74,6 +85,9 @@ class ScriptedHealthWebSocket {
       case "carrier_challenge": {
         assert.equal(envelope.local_realm, vector.client.realm);
         assert.equal(envelope.replica, vector.replica);
+        assert.equal(envelope.server_nonce, healthServerNonce);
+        assert.equal(envelope.wire_version, 1);
+        assert.equal(envelope.session_version, 2);
         assert.equal(envelope.pubkey, sessionIdentity.publicKeyBase64);
         const identity = ScriptedHealthWebSocket.mode === "wrong_peer" ? wrongIdentity : peerIdentity;
         response = {
@@ -612,7 +626,9 @@ assert.equal(nativeUnavailableHealth.message, "Open in the Tauri shell to check 
 
 const challenge = carrierChallenge(vector.client.realm, vector.replica, {
   nonce: "township-peer-test",
+  serverNonce: healthServerNonce,
   wireVersion: 1,
+  sessionVersion: 2,
 });
 const transcript = carrierTranscriptBytes(challenge, vector.peer.realm, peerIdentity.publicKey);
 const signature = peerIdentity.sign(transcript);

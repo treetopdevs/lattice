@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
 import {
+  carrierDelegationsFromFrames,
   carrierOpsToSemanticOps,
   type CarrierOpFrame,
   type TauriInvoke,
@@ -58,17 +59,25 @@ const vector = JSON.parse(
 const residentIdentity = seededEd25519Identity(`${vector.client.sessionSeed}:${vector.client.realm}`);
 const clerkIdentity = seededEd25519Identity(`${vector.client.sessionSeed}:clerk`);
 const postFixture = vector.clientDivergedCarrierOps.find(
-  (frame) => frame.author === residentIdentity.publicKeyBase64 && frame.id === "xmret5C7xMai04EQDm1cEX1dDjeBqxPM7-TcDN8cfhI",
+  (frame) => frame.author === residentIdentity.publicKeyBase64 && frameCommandName(frame) === "post",
 );
 if (!postFixture) throw new Error("missing resident post fixture");
 const summaryFixture = vector.clientDivergedCarrierOps.find(
-  (frame) => frame.author === residentIdentity.publicKeyBase64 && frame.id === "05op_edpvoZmeWwBMx-mTAtBcoqIcWdUcb2gIoX3Iy4",
+  (frame) => frame.author === residentIdentity.publicKeyBase64 && frameCommandName(frame) === "set_summary",
 );
 if (!summaryFixture) throw new Error("missing resident summary fixture");
 const grantFixture = vector.clientDivergedCarrierOps.find((frame) => frameCommandName(frame) === "grant");
 if (!grantFixture) throw new Error("missing resident grant fixture");
 const genesisFixture = vector.clientDivergedCarrierOps.at(0);
 if (!genesisFixture) throw new Error("missing genesis fixture");
+const fixtureDelegations = carrierDelegationsFromFrames(vector.clientDivergedCarrierOps);
+const residentGrantId = fixtureDelegations.find(
+  (delegation) => delegation.audience === residentIdentity.publicKeyBase64 && delegation.parent_id !== null,
+)?.id;
+const clerkRootDelegationId = fixtureDelegations.find(
+  (delegation) => delegation.audience === clerkIdentity.publicKeyBase64 && delegation.parent_id === null,
+)?.id;
+if (!residentGrantId || !clerkRootDelegationId) throw new Error("missing Township delegation fixtures");
 
 assert.equal(TOWNSHIP_REPLICA, vector.replica);
 assert.deepEqual(TOWNSHIP_REALM_BY_PUBKEY, vector.realmByPubkey);
@@ -93,7 +102,7 @@ if (!submitted.ok) throw new Error(submitted.message);
 assert.equal(submitted.text, "resident: posted while offline");
 assert.equal(submitted.frameId, postFixture.id);
 assert.equal(submitted.opId, postFixture.id);
-assert.equal(submitted.capId, "gN9aanNVZeHWsS1vU8KxjyqVrWdC0VwPIzilL_QX2n0");
+assert.equal(submitted.capId, residentGrantId);
 assert.equal(submitted.localOpCount, vector.clientDivergedCarrierOps.length);
 assert.equal(submitted.carrierFrameCount, 1);
 
@@ -104,6 +113,29 @@ assert.deepEqual(
 assert.deepEqual(JSON.parse(values.get(storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY)) ?? "[]"), [postFixture]);
 assert.equal(calls.filter((command) => command === "lattice_sign_carrier").length, 1);
 assert.equal(calls.at(-1), "lattice_kv_get");
+
+const concurrentValues = townshipValues(framesBeforePost);
+const concurrentInvoke = contendingNativeInvoke(concurrentValues, residentIdentity, []);
+const [firstConcurrentPost, secondConcurrentPost] = await Promise.all([
+  submitTownshipPost({ invoke: concurrentInvoke, text: "resident: first concurrent post" }),
+  submitTownshipPost({ invoke: concurrentInvoke, text: "resident: second concurrent post" }),
+]);
+assert.equal(firstConcurrentPost.ok, true);
+if (!firstConcurrentPost.ok) throw new Error(firstConcurrentPost.message);
+assert.equal(secondConcurrentPost.ok, true);
+if (!secondConcurrentPost.ok) throw new Error(secondConcurrentPost.message);
+assert.deepEqual(
+  storedLocalOps(concurrentValues).map((op) => op.id).sort(),
+  [
+    ...framesBeforePost.map((frame) => frame.id),
+    firstConcurrentPost.opId,
+    secondConcurrentPost.opId,
+  ].sort(),
+);
+assert.deepEqual(
+  storedCarrierFrames(concurrentValues).map((frame) => frame.id).sort(),
+  [firstConcurrentPost.frameId, secondConcurrentPost.frameId].sort(),
+);
 
 const residentAvailabilityValues = new Map<string, string>([
   [storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY), "[]"],
@@ -124,7 +156,7 @@ assert.deepEqual(allowedCommands(residentAvailability.commands), [
 assert.equal(residentAvailability.commands.close_matter.allowed, false);
 assert.equal(residentAvailability.commands.reopen_matter.allowed, false);
 assert.equal(residentAvailability.commands.remove_member.allowed, false);
-assert.equal(residentAvailability.commands.post.capId, "gN9aanNVZeHWsS1vU8KxjyqVrWdC0VwPIzilL_QX2n0");
+assert.equal(residentAvailability.commands.post.capId, residentGrantId);
 
 const legacyAvailabilityValues = new Map<string, string>([
   [storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY), JSON.stringify(vector.clientDivergedCarrierOps)],
@@ -141,7 +173,7 @@ assert.deepEqual(allowedCommands(legacyAvailability.commands), [
   "set_summary",
   "set_title",
 ]);
-assert.equal(legacyAvailability.commands.post.capId, "gN9aanNVZeHWsS1vU8KxjyqVrWdC0VwPIzilL_QX2n0");
+assert.equal(legacyAvailability.commands.post.capId, residentGrantId);
 
 const clerkAvailability = await loadTownshipActionAvailability({
   invoke: nativeInvoke(
@@ -164,11 +196,11 @@ assert.deepEqual(allowedCommands(clerkAvailability.commands), [
   "set_summary",
   "set_title",
 ]);
-assert.equal(clerkAvailability.commands.close_matter.capId, "ZOb-qhDcOoM0yStgMMBlYY_IHIw6eX1BcvFx5hb_Hs8");
+assert.equal(clerkAvailability.commands.close_matter.capId, clerkRootDelegationId);
 assert.equal(clerkAvailability.commands.admit.allowed, true);
-assert.equal(clerkAvailability.commands.admit.capId, "ZOb-qhDcOoM0yStgMMBlYY_IHIw6eX1BcvFx5hb_Hs8");
+assert.equal(clerkAvailability.commands.admit.capId, clerkRootDelegationId);
 assert.equal(clerkAvailability.commands.remove_member.allowed, true);
-assert.equal(clerkAvailability.commands.remove_member.capId, "ZOb-qhDcOoM0yStgMMBlYY_IHIw6eX1BcvFx5hb_Hs8");
+assert.equal(clerkAvailability.commands.remove_member.capId, clerkRootDelegationId);
 
 const clerkGrantValues = townshipValues([genesisFixture]);
 const clerkGrantSubmitted = await submitTownshipDelegation({
@@ -181,8 +213,8 @@ assert.equal(clerkGrantSubmitted.ok, true);
 if (!clerkGrantSubmitted.ok) throw new Error(clerkGrantSubmitted.message);
 assert.equal(clerkGrantSubmitted.frameId, grantFixture.id);
 assert.equal(clerkGrantSubmitted.opId, grantFixture.id);
-assert.equal(clerkGrantSubmitted.delegationId, "gN9aanNVZeHWsS1vU8KxjyqVrWdC0VwPIzilL_QX2n0");
-assert.equal(clerkGrantSubmitted.parentId, "ZOb-qhDcOoM0yStgMMBlYY_IHIw6eX1BcvFx5hb_Hs8");
+assert.equal(clerkGrantSubmitted.delegationId, residentGrantId);
+assert.equal(clerkGrantSubmitted.parentId, clerkRootDelegationId);
 assert.equal(clerkGrantSubmitted.audiencePubkey, residentIdentity.publicKeyBase64);
 assert.deepEqual(clerkGrantSubmitted.ops, ["admit", "post", "set_summary", "set_title"]);
 assert.equal(clerkGrantSubmitted.localOpCount, 2);
@@ -214,7 +246,7 @@ assert.deepEqual(allowedCommands(persistedGrantAvailability.commands), [
   "set_summary",
   "set_title",
 ]);
-assert.equal(persistedGrantAvailability.commands.post.capId, "gN9aanNVZeHWsS1vU8KxjyqVrWdC0VwPIzilL_QX2n0");
+assert.equal(persistedGrantAvailability.commands.post.capId, residentGrantId);
 
 assert.deepEqual(vector.authorityRevocation.revokeOp.deps, vector.expectAfterSync.frontier);
 const clerkRevokeValues = townshipValues(vector.oracleCarrierOps);
@@ -369,7 +401,7 @@ const clerkCloseSubmitted = await submitTownshipCommand({
 assert.equal(clerkCloseSubmitted.ok, true);
 if (!clerkCloseSubmitted.ok) throw new Error(clerkCloseSubmitted.message);
 assert.deepEqual(clerkCloseSubmitted.command, { command: "close_matter" });
-assert.equal(clerkCloseSubmitted.capId, "ZOb-qhDcOoM0yStgMMBlYY_IHIw6eX1BcvFx5hb_Hs8");
+assert.equal(clerkCloseSubmitted.capId, clerkRootDelegationId);
 assert.equal(clerkCloseSubmitted.localOpCount, vector.clientDivergedCarrierOps.length + 1);
 assert.equal(clerkCloseSubmitted.carrierFrameCount, 1);
 assert.equal(storedLocalOps(clerkCloseValues).at(-1)?.command, "close_matter");
@@ -385,7 +417,7 @@ const clerkReopenSubmitted = await submitTownshipCommand({
 assert.equal(clerkReopenSubmitted.ok, true);
 if (!clerkReopenSubmitted.ok) throw new Error(clerkReopenSubmitted.message);
 assert.deepEqual(clerkReopenSubmitted.command, { command: "reopen_matter" });
-assert.equal(clerkReopenSubmitted.capId, "ZOb-qhDcOoM0yStgMMBlYY_IHIw6eX1BcvFx5hb_Hs8");
+assert.equal(clerkReopenSubmitted.capId, clerkRootDelegationId);
 assert.equal(clerkReopenSubmitted.localOpCount, vector.clientDivergedCarrierOps.length + 1);
 assert.equal(clerkReopenSubmitted.carrierFrameCount, 1);
 assert.equal(storedLocalOps(clerkReopenValues).at(-1)?.command, "reopen_matter");
@@ -400,7 +432,7 @@ const residentAdmitSubmitted = await submitTownshipCommand({
 assert.equal(residentAdmitSubmitted.ok, true);
 if (!residentAdmitSubmitted.ok) throw new Error(residentAdmitSubmitted.message);
 assert.deepEqual(residentAdmitSubmitted.command, { command: "admit", member: "neighbor" });
-assert.equal(residentAdmitSubmitted.capId, "gN9aanNVZeHWsS1vU8KxjyqVrWdC0VwPIzilL_QX2n0");
+assert.equal(residentAdmitSubmitted.capId, residentGrantId);
 assert.equal(residentAdmitSubmitted.localOpCount, vector.clientDivergedCarrierOps.length + 1);
 assert.equal(residentAdmitSubmitted.carrierFrameCount, 1);
 assert.equal(storedLocalOps(residentAdmitValues).at(-1)?.command, "admit");
@@ -416,7 +448,7 @@ const clerkAdmitSubmitted = await submitTownshipCommand({
 assert.equal(clerkAdmitSubmitted.ok, true);
 if (!clerkAdmitSubmitted.ok) throw new Error(clerkAdmitSubmitted.message);
 assert.deepEqual(clerkAdmitSubmitted.command, { command: "admit", member: "neighbor" });
-assert.equal(clerkAdmitSubmitted.capId, "ZOb-qhDcOoM0yStgMMBlYY_IHIw6eX1BcvFx5hb_Hs8");
+assert.equal(clerkAdmitSubmitted.capId, clerkRootDelegationId);
 assert.equal(clerkAdmitSubmitted.localOpCount, vector.clientDivergedCarrierOps.length + 1);
 assert.equal(clerkAdmitSubmitted.carrierFrameCount, 1);
 assert.equal(storedLocalOps(clerkAdmitValues).at(-1)?.command, "admit");
@@ -434,7 +466,7 @@ const clerkRemoveSubmitted = await submitTownshipCommand({
 assert.equal(clerkRemoveSubmitted.ok, true);
 if (!clerkRemoveSubmitted.ok) throw new Error(clerkRemoveSubmitted.message);
 assert.deepEqual(clerkRemoveSubmitted.command, { command: "remove_member", member: "resident" });
-assert.equal(clerkRemoveSubmitted.capId, "ZOb-qhDcOoM0yStgMMBlYY_IHIw6eX1BcvFx5hb_Hs8");
+assert.equal(clerkRemoveSubmitted.capId, clerkRootDelegationId);
 assert.equal(clerkRemoveSubmitted.localOpCount, vector.clientDivergedCarrierOps.length + 1);
 assert.equal(clerkRemoveSubmitted.carrierFrameCount, 1);
 assert.equal(storedLocalOps(clerkRemoveValues).at(-1)?.command, "remove_member");
@@ -469,7 +501,7 @@ if (!summarySubmitted.ok) throw new Error(summarySubmitted.message);
 assert.deepEqual(summarySubmitted.command, { command: "set_summary", text: "Needs traffic study" });
 assert.equal(summarySubmitted.frameId, summaryFixture.id);
 assert.equal(summarySubmitted.opId, summaryFixture.id);
-assert.equal(summarySubmitted.capId, "gN9aanNVZeHWsS1vU8KxjyqVrWdC0VwPIzilL_QX2n0");
+assert.equal(summarySubmitted.capId, residentGrantId);
 assert.deepEqual(
   JSON.parse(summaryValues.get(storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY)) ?? "[]").map((op: { id: string }) => op.id),
   [...framesBeforeSummary.map((frame) => frame.id), summaryFixture.id],
@@ -673,6 +705,38 @@ function nativeInvoke(
     }
 
     return result as T;
+  };
+}
+
+function contendingNativeInvoke(
+  values: Map<string, string>,
+  identity: NativeIdentity,
+  calls: string[],
+): TauriInvoke {
+  const invoke = nativeInvoke(values, identity, calls);
+  let localLogSetCount = 0;
+  let releaseSecondLocalLogSet = () => {};
+  const secondLocalLogSet = new Promise<void>((resolve) => {
+    releaseSecondLocalLogSet = resolve;
+  });
+
+  return async <T = unknown>(
+    command: string,
+    args: Record<string, unknown> = {},
+  ): Promise<T> => {
+    if (command === "lattice_kv_set" && args.key === storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY)) {
+      localLogSetCount++;
+      if (localLogSetCount === 1) {
+        await Promise.race([
+          secondLocalLogSet,
+          new Promise<void>((resolve) => setImmediate(resolve)),
+        ]);
+      } else if (localLogSetCount === 2) {
+        releaseSecondLocalLogSet();
+      }
+    }
+
+    return invoke<T>(command, args);
   };
 }
 
