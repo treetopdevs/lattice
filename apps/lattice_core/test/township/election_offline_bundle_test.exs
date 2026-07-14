@@ -147,7 +147,7 @@ defmodule Township.ElectionOfflineBundleTest do
     """
 
     args = Enum.flat_map(code_paths, &["-pa", &1]) ++ ["-e", script]
-    elixir = Path.join([System.fetch_env!("HOME"), ".asdf", "shims", "elixir"])
+    elixir = System.find_executable("elixir") || flunk("no elixir executable available on PATH")
     {output, status} = System.cmd(elixir, args, stderr_to_stdout: true)
 
     assert status == 0, output
