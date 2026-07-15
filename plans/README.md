@@ -20,8 +20,10 @@ Plan 135 closes the first versioned clerk-status handoff slice, and Plan 136 clo
 `set_title`/`set_summary` field-edit slice. Plan 137 closes the bundled `admit`/`remove_member` roster handoff slice.
 Plan 138 closes the versioned delegation-grant handoff slice through real packaged recipient use
 and Sim-anchored unsound-grant refusal. Plans 139-143 are `DONE`; hosted run `29373501735` closes
-Plan 139 across all three jobs. Plan 144 remains `TODO`, with its start gate now cleared, and will
-pin the remaining succession tick-provenance limitation without adding a v7 authoring surface.
+Plan 139 across all three jobs. Plan 144 is `IN PROGRESS`: its focused RED/GREEN and mutation
+evidence pin the remaining succession tick-provenance limitation without adding a v7 authoring
+surface. Full local OTP 28/security gates and Claude's final publication audit are green; hosted CI
+remains open.
 Trustworthy user-facing succession, G1 completion, remaining Phase G work, production deployment,
 and W4 also remain.
 
@@ -180,7 +182,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 141 | Serialize shell persistence (stop silent op loss) | **P0** | M | 029, 030, 032 | DONE |
 | 142 | Carrier session replay protection + durability honesty | P1 | M | 127, 128 | DONE |
 | 143 | Consolidate the versioned action ladder (pay down accretion) | P2 | L | 138 | DONE |
-| 144 | Succession tick-provenance boundary | P1 | S | 139, 140 | TODO (start gate cleared; not implemented) |
+| 144 | Succession tick-provenance boundary | P1 | S | 139, 140 | IN PROGRESS (local + Claude final audit green; hosted gate pending) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
@@ -260,6 +262,15 @@ does not independently recompute delegation revocation in TypeScript. Full local
 review are green. Hosted run `29373501735` passed the flagship artifact,
 unit/property/static/security, and packaged macOS jobs at exact tip
 `0e4d2b0fff8cdac281fd64f2b4e0ed923c8770c5`, including v6 revocation and the reactive-feed tail.
+
+**Plan 144 is IN PROGRESS (2026-07-14).** A new Sim-generated two-frame adversarial vector and
+TypeScript conformance diagnostics pin the current authority result: an immediate designated
+successor's signed `at_tick: 1_000_000` clears the threshold and becomes clerk without a heartbeat
+or `Lattice.Clock` advancement. Temporarily lowering the tick below the threshold fails the focused
+winner assertion, proving the behavior pin is load-bearing. This characterizes an author assertion,
+not trusted elapsed time; it adds no authoring surface or provenance model, and the carrier remains
+transport-only. Full OTP 28/security gates and Claude's exact-worktree claim review are green; the
+final publication audit also found no P0-P2 issue. Hosted flagship CI remains open.
 
 ## Round 2 (deep audit, 2026-07-07, against commit `6b2cfe5`)
 

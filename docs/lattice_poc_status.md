@@ -218,7 +218,11 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
 - **Browser/AtomVM parity is not done** — signed bytes now use `Lattice.Canonical`
   instead of pinned BEAM external-term bytes, but non-BEAM realms still need native
   implementations of the canonical subset and `Lattice.Carrier.Wire` (ADR 0001).
-- **Succession dormancy = absence of heartbeats**, not a true liveness oracle (ADR 0004).
+- **Succession reduction is deterministic, but tick provenance is untrusted** — acquisition,
+  heartbeat, and succession operations carry author-asserted `at_tick` values. The reducer does
+  not consult `Lattice.Clock` or otherwise prove elapsed time or holder unavailability. The
+  `township_succession_unproven_tick` vector makes that accepted-behavior boundary executable;
+  user-facing succession remains blocked on a separately reviewed provenance design (ADR 0004).
 - **Public API name clashes** — v1 already defines `Lattice.call/3`, `Lattice.grant/4`,
   `Lattice.cast/3`. The 2.0 promise-`call`/capability-`grant` are reached via
   `Lattice.Registry` and in-log delegation ops rather than re-binding v1 names; the
@@ -662,3 +666,25 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
   succession handoff, general TypeScript or stable-relay authority enforcement, production
   ingress/TLS deployment, complete G1/Phase G claim, or receipt-free W4. Plan 139 remains blocked
   behind Plans 140 and 141.
+
+## Checkpoint: Succession Tick-Provenance Boundary (in progress)
+
+- Files changed: the Sim vector exporter and focused contract, the checked
+  `township_succession_unproven_tick` vector, TypeScript conformance diagnostics, the W3 test title,
+  ADR 0004, the build map, and Plan 144 status documents.
+- Behaviors: the existing authority semantics are unchanged. A designated successor's immediate,
+  signed `at_tick: 1_000_000` clears a non-zero threshold and becomes clerk without a heartbeat or
+  `Lattice.Clock` advancement. The evidence marker is diagnostic metadata, not reducer input.
+- Oracle: `Lattice.Sim` emits the two exact carrier frames and BEAM authority result; the TypeScript
+  harness independently verifies those frames and pins the same accepted operation, winner, and
+  empty structural/authority quarantine result.
+- Gates: RED failed on the missing vector and missing TypeScript contract; GREEN passes the focused
+  exporter, conformance, and typecheck gates. A temporary below-threshold tick made the focused
+  winner assertion fail and was restored. Full OTP 28 `mix check` and both Sobelow boundary scans
+  are green; Claude's exact-worktree claim and final publication audits found no P0-P2 issue.
+  Hosted flagship CI remains pending.
+- Result: this is an executable characterization of current behavior, not a provenance fix or a
+  user-facing succession surface.
+- Blocker or remaining limitation: no trust anchor advances ticks; fast-forward rejection,
+  monotonicity/restart/rollback, and partition semantics remain undecided. The carrier remains
+  transport-only, and succession authoring stays blocked pending a separately reviewed design.

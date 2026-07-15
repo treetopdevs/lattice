@@ -63,6 +63,42 @@ defmodule Township.ExportVectorsTest do
              vector["perspectives"]
   end
 
+  test "lattice.export_vectors pins an unproven author-asserted succession tick" do
+    out_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "lattice_unproven_tick_vectors_#{System.unique_integer([:positive])}"
+      )
+
+    on_exit(fn -> File.rm_rf(out_dir) end)
+
+    Mix.Task.clear()
+    assert :ok = Mix.Task.run("lattice.export_vectors", ["--out", out_dir])
+
+    vector_path = Path.join(out_dir, "township_succession_unproven_tick.json")
+    assert File.exists?(vector_path)
+
+    vector = vector_path |> File.read!() |> Jason.decode!()
+
+    assert vector["generatedBy"] == "Lattice.Sim"
+    assert vector["scenario"] == "township_succession_unproven_tick"
+    assert vector["scenarioKind"] == "adversarial"
+    assert vector["tickProvenance"] == "author_asserted_untrusted"
+
+    succession_id = vector["successionOperationId"]
+    assert is_binary(succession_id)
+    assert Enum.any?(vector["oracleCarrierOps"], &(&1["id"] == succession_id))
+
+    expected = vector["expectAtFullFrontier"]
+    assert expected["state"]["clerk"] == "resident"
+    assert expected["winners"]["clerk"] == succession_id
+    refute succession_id in expected["quarantine"]
+
+    refute Enum.any?(expected["authorityQuarantine"], fn [id, _reason] ->
+             id == succession_id
+           end)
+  end
+
   test "lattice.export_vectors isolates an impostor genesis that Sim rejects" do
     out_dir =
       Path.join(

@@ -6,11 +6,11 @@ Accepted (POC).
 
 ## Context
 
-A serialized role can be handed on explicitly by its holder (a `:transfer`), but it must
-also recover from a holder that has gone dormant and cannot transfer. Succession lets a
-**designated successor** claim the role after the holder has been silent past a
-threshold — and it must be verifiable from the log alone, deterministically, with no
-wall clocks (invariant 5).
+A serialized role can be handed on explicitly by its holder (a `:transfer`), but a production
+design also needs an honest answer for recovery when a holder is unavailable and cannot transfer.
+The POC represents succession eligibility with explicit ticks in the log so every replica can
+replay the same result without reading a wall clock (invariant 5). The current log proves who
+signed each tick assertion; it does not independently prove that the holder was dormant.
 
 ## Decision
 
@@ -18,8 +18,8 @@ The succession policy is recorded in the log at genesis:
 `policies[role] = %{successor: <pubkey>, dormant_ticks: n}` (the demo/tests resolve a
 realm id to its pubkey at creation time).
 
-Dormancy is measured against the logical `Lattice.Clock`. The holder's liveness is
-expressed in-log:
+The current reducer does not measure dormancy against a live `Lattice.Clock`. It compares explicit,
+author-asserted ticks carried in authority operations:
 
 * acquiring the role (genesis/transfer/succession) sets `last_active` to the
   acquisition's `at_tick`;
@@ -31,9 +31,10 @@ A succession op `{:succeed, role, delegation, at_tick}` authored by realm `S` is
 
 1. `S` is the policy's designated `successor` for `role`;
 2. the delegation is a well-formed self-issued grant of `role` to `S`;
-3. `at_tick ≥ last_active + dormant_ticks` (the holder has been dormant long enough).
+3. `at_tick ≥ last_active + dormant_ticks` (the asserted tick clears the configured threshold).
 
-A valid succession moves the holder to `S`. A succession failing (3) is quarantined
+A succession valid under that deterministic rule moves the holder to `S`. A succession failing
+(3) is quarantined
 `:premature_succession`; failing (1)/(2) is `:unauthorized_succession`/
 `:invalid_succession`. After a valid succession, the original holder's later
 authoritative ops that did not observe it are quarantined `:stale_holder`
@@ -48,10 +49,16 @@ authoritative ops that did not observe it are quarantined `:stale_holder`
 
 ## Caveats (honest limitations)
 
-* **Dormancy = absence of heartbeats**, not a true liveness oracle. A live-but-silent
-  holder that stops heartbeating looks dormant. A production system would derive
-  heartbeats from connection liveness (the carrier), not application calls; this POC
-  emits them explicitly so dormancy windows are controllable and deterministic.
+* **Tick provenance is author-asserted and untrusted.** An operation signature authenticates who
+  asserted `at_tick`; it does not prove elapsed logical time or holder unavailability. The
+  Sim-generated `township_succession_unproven_tick` vector pins the current result: an immediate
+  successor-authored `at_tick: 1_000_000` is honored with no heartbeat and no clock advancement.
+* **`Lattice.Clock` is not an authority input.** It is an in-process test/demo Agent; no heartbeat,
+  succession-authoring, or carrier path reads it when constructing an operation.
+* **The carrier is transport-only.** Connection liveness is not selected as semantic dormancy
+  authority. A remediation must separately select and adversarially review a provenance model,
+  such as a trust anchor, quorum, causal-activity rule, explicit availability tradeoff, or removal
+  of production succession; this ADR does not choose one.
 * **A heartbeat the successor has not yet seen does not block succession.** If the
   holder heartbeats while partitioned from the successor, the successor may succeed on
   its (older) `last_active` view; on heal the holder's subsequent ops are stale per

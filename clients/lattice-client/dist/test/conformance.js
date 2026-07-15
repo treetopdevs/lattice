@@ -136,6 +136,22 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
             check(`winner.${field}`, full.winners[field], want);
         }
     }
+    if (vec.scenario === "township_succession_unproven_tick") {
+        const successionId = vec.successionOperationId ?? "<missing succession operation id>";
+        const verificationResults = carrierFrames === undefined
+            ? null
+            : await Promise.all(carrierFrames.map((frame) => verifyCarrierOp(frame, verifier)));
+        check("unproven-tick carrier hash/signatures", verificationResults, [
+            { hash: true, signature: true, valid: true },
+            { hash: true, signature: true, valid: true },
+        ]);
+        check("unproven-tick succession id in carrier evidence", carrierFrames?.some((frame) => frame.id === successionId) ?? false, true);
+        check("unproven-tick provenance marker", vec.tickProvenance, "author_asserted_untrusted");
+        check("unproven-tick succession absent from TS quarantine", full.quarantine.includes(successionId), false);
+        check("unproven-tick succession absent from BEAM authority quarantine", exp.authorityQuarantine?.some(([id]) => id === successionId) ?? null, false);
+        check("unproven-tick clerk state", full.state.clerk, "resident");
+        check("unproven-tick clerk winner", full.winners.clerk, successionId);
+    }
     // partial-frontier assertions (the LWW flip, perspective, etc.)
     for (const fr of vec.expectAtFrontier ?? []) {
         const m = materialize(vec.schema, ops, new Set(fr.include));

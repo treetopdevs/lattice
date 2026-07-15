@@ -207,7 +207,7 @@ defmodule Township.WorkflowsTest do
   end
 
   # ------------------------------------------------------------------ W3
-  test "W3 — succession & survival: dump/restore preserves state and roles" do
+  test "W3 — dump/restore survival: preserves state and roles" do
     sim = town(["clerk_a", "clerk_b"])
 
     {sim, _} =

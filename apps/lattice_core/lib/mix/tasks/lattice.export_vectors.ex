@@ -20,6 +20,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
   @zoning_replica "replica:matter:zoning-variance-24"
   @join_replica "replica:matter:join-w0"
   @succession_replica "replica:matter:succession-w3"
+  @unproven_succession_replica "replica:matter:succession-unproven-tick"
   @random_realms ["clerk", "resident", "neighbor"]
   @randomized_seeds [101, 202, 303, 404, 505]
   @carrier_replica "replica:matter:township-g1"
@@ -46,6 +47,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_join_w0(),
       township_zoning_variance_24(),
       township_succession_w3(),
+      township_succession_unproven_tick(),
       township_authority_forged_root(),
       township_authority_embedded_replica_bypass(),
       township_authority_forged_delegation_id(),
@@ -180,6 +182,44 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       realmByPubkey: carrier_realm_by_pubkey(realms),
       oracleCarrierOps: carrier_ops(merged),
       authorityQuarantine: authority_quarantine(merged)
+    }
+  end
+
+  defp township_succession_unproven_tick do
+    sim =
+      Sim.new(Matter, @unproven_succession_replica, ["clerk", "resident"],
+        seed: "township:succession-unproven-tick"
+      )
+
+    {sim, _genesis} =
+      Sim.create_replica(sim, "clerk",
+        policies: %{clerk: %{successor: "resident", dormant_ticks: 3}}
+      )
+
+    sim = Sim.sync_all(sim)
+
+    {sim, succession} =
+      Sim.succeed(sim, "resident", :clerk,
+        at_tick: 1_000_000,
+        ops: [:close_matter, :reopen_matter]
+      )
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "resident")
+    realms = realm_index(sim)
+
+    %{
+      name: "township_succession_unproven_tick",
+      kind: "adversarial",
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: Sim.replica(sim),
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      authorityQuarantine: authority_quarantine(log),
+      successionOperationId: succession.id,
+      tickProvenance: "author_asserted_untrusted"
     }
   end
 
@@ -1403,6 +1443,8 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     |> maybe_put("replica", Map.get(scenario, :replica))
     |> maybe_put("realmByPubkey", Map.get(scenario, :realmByPubkey))
     |> maybe_put("oracleCarrierOps", Map.get(scenario, :oracleCarrierOps))
+    |> maybe_put("successionOperationId", Map.get(scenario, :successionOperationId))
+    |> maybe_put("tickProvenance", Map.get(scenario, :tickProvenance))
   end
 
   defp to_vector(%{carrier?: true} = scenario) do
