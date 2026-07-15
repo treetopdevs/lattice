@@ -37,7 +37,7 @@ defmodule Lattice.Authority do
   Quarantined ops stay in the log and are reported in `audit` (design invariant 4).
   """
 
-  alias Lattice.Authority.Delegation
+  alias Lattice.Authority.{Delegation, SuccessionCertificate}
   alias Lattice.{Dag, Identity, Log, Op}
 
   # Separates a replica *name* from the root-key commitment bound into its id.
@@ -47,6 +47,8 @@ defmodule Lattice.Authority do
           quarantine: MapSet.t(Op.id()),
           reasons: %{Op.id() => atom()},
           holders: %{atom() => Identity.pubkey() | nil},
+          holder_epochs: %{atom() => %{holder: Identity.pubkey(), op_id: Op.id()}},
+          policies: %{atom() => map()},
           audit: [map()],
           requests: [map()]
         }
@@ -58,6 +60,12 @@ defmodule Lattice.Authority do
   @doc "Current holder pubkey of `role` in `log` (nil if none / never granted)."
   @spec holder(module(), Log.t(), atom()) :: Identity.pubkey() | nil
   def holder(module, %Log{} = log, role), do: Map.get(analyze(module, log).holders, role)
+
+  @doc "Current holder and acquisition op id for `role` (nil if none)."
+  @spec holder_epoch(module(), Log.t(), atom()) ::
+          %{holder: Identity.pubkey(), op_id: Op.id()} | nil
+  def holder_epoch(module, %Log{} = log, role),
+    do: Map.get(analyze(module, log).holder_epochs, role)
 
   @doc """
   Bind a replica *name* to its root public key, returning the replica id.
@@ -234,6 +242,17 @@ defmodule Lattice.Authority do
 
     holders = Map.new(timelines, fn {role, tl} -> {role, tl.holder} end)
 
+    holder_epochs =
+      Map.new(timelines, fn {role, tl} ->
+        epoch =
+          case List.last(tl.acquires) do
+            nil -> nil
+            %{holder: holder, op_id: op_id} -> %{holder: holder, op_id: op_id}
+          end
+
+        {role, epoch}
+      end)
+
     role_q = Enum.reduce(timelines, %{}, fn {_r, tl}, acc -> Map.merge(acc, tl.quarantine) end)
     role_audit = Enum.flat_map(timelines, fn {_r, tl} -> tl.audit end)
 
@@ -251,6 +270,8 @@ defmodule Lattice.Authority do
       quarantine: reasons |> Map.keys() |> MapSet.new(),
       reasons: reasons,
       holders: holders,
+      holder_epochs: holder_epochs,
+      policies: policies,
       audit: role_audit ++ cmd_audit,
       requests: requests
     }
@@ -484,8 +505,8 @@ defmodule Lattice.Authority do
         {:transfer, d, at_tick} ->
           decide_transfer(st, op, role, d, at_tick, ancestors, deleg_valid)
 
-        {:succeed, d, at_tick} ->
-          decide_succeed(st, op, role, d, at_tick, ancestors, deleg_valid, policies)
+        {:succeed, d, proof} ->
+          decide_succeed(st, op, role, d, proof, ancestors, deleg_valid, policies)
 
         {:heartbeat, at_tick} ->
           decide_heartbeat(st, op, at_tick, ancestors)
@@ -545,9 +566,8 @@ defmodule Lattice.Authority do
     end
   end
 
-  defp decide_succeed(st, op, role, d, at_tick, ancestors, deleg_valid, policies) do
+  defp decide_succeed(st, op, role, d, proof, ancestors, deleg_valid, policies) do
     anc = Map.get(ancestors, op.id, MapSet.new())
-    last_active = last_active_from(st.acquires, st.heartbeats, anc)
     policy = Map.get(policies, role)
 
     cond do
@@ -558,13 +578,64 @@ defmodule Lattice.Authority do
       is_nil(policy) or op.author != policy.successor ->
         reject(st, op, :unauthorized_succession, role)
 
-      at_tick < last_active + policy.dormant_ticks ->
-        reject(st, op, :premature_succession, role)
+      Map.has_key?(policy, :recovery) and Map.has_key?(policy, :dormant_ticks) ->
+        reject(st, op, :invalid_recovery_policy, role)
 
       true ->
-        record_acquire(st, op, d.audience, at_tick)
+        decide_succession_proof(st, op, role, d, proof, anc, policy)
     end
   end
+
+  defp decide_succession_proof(st, op, role, d, at_tick, anc, %{dormant_ticks: dormant_ticks})
+       when is_integer(at_tick) do
+    last_active = last_active_from(st.acquires, st.heartbeats, anc)
+
+    if at_tick < last_active + dormant_ticks,
+      do: reject(st, op, :premature_succession, role),
+      else: record_acquire(st, op, d.audience, at_tick)
+  end
+
+  defp decide_succession_proof(st, op, role, _d, at_tick, _anc, %{recovery: recovery})
+       when is_integer(at_tick) do
+    case SuccessionCertificate.normalize_policy(recovery) do
+      {:ok, _normalized} -> reject(st, op, :recovery_certificate_required, role)
+      {:error, reason} -> reject(st, op, reason, role)
+    end
+  end
+
+  defp decide_succession_proof(
+         st,
+         op,
+         role,
+         d,
+         {:witnessed, certificate},
+         anc,
+         %{recovery: recovery}
+       ) do
+    with %{holder: holder, op_id: holder_epoch} <- holder_acquire_from(st.acquires, anc),
+         true <- st.holder == holder,
+         {:ok, expected_claim} <-
+           SuccessionCertificate.claim(
+             op.replica,
+             role,
+             holder,
+             holder_epoch,
+             op.author,
+             recovery
+           ),
+         :ok <- SuccessionCertificate.verify(certificate, expected_claim, recovery) do
+      record_acquire(st, op, d.audience, 0)
+    else
+      {:error, reason} -> reject(st, op, reason, role)
+      _ -> reject(st, op, :recovery_claim_mismatch, role)
+    end
+  end
+
+  defp decide_succession_proof(st, op, role, _d, {:witnessed, _certificate}, _anc, _policy),
+    do: reject(st, op, :witnessed_recovery_not_configured, role)
+
+  defp decide_succession_proof(st, op, role, _d, _proof, _anc, _policy),
+    do: reject(st, op, :invalid_succession, role)
 
   defp decide_heartbeat(st, op, at_tick, ancestors) do
     anc = Map.get(ancestors, op.id, MapSet.new())
@@ -753,13 +824,16 @@ defmodule Lattice.Authority do
 
   # Holder = the holder set by the latest (canonical order) acquire visible in `anc`.
   defp holder_from_acquires(acquires, anc) do
-    acquires
-    |> Enum.filter(&MapSet.member?(anc, &1.op_id))
-    |> List.last()
-    |> case do
+    case holder_acquire_from(acquires, anc) do
       nil -> nil
       %{holder: h} -> h
     end
+  end
+
+  defp holder_acquire_from(acquires, anc) do
+    acquires
+    |> Enum.filter(&MapSet.member?(anc, &1.op_id))
+    |> List.last()
   end
 
   # Author held the role at its causal position; is it superseded by a holder-change
