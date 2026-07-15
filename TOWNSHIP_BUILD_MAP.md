@@ -163,10 +163,11 @@ scale gates remain the hard endgame blocker**.
    `at_tick` is currently successor-supplied and is not bound to `Lattice.Clock`, carrier evidence,
    or a quorum. Plan 144 now pins that limitation with a Sim-generated, independently
    frame-verified adversarial vector: an immediate successor-authored `at_tick: 1_000_000` is
-   accepted and explicitly labeled `author_asserted_untrusted`. Plan 144 remains `IN PROGRESS`:
-   full local OTP 28/security gates and Claude's final publication audit are green, while the
-   hosted gate remains open. No v7/user-facing succession authoring may start before a separate
-   provenance design is reviewed.
+   accepted and explicitly labeled `author_asserted_untrusted`. Plan 144 is `DONE`: full local OTP
+   28/security gates and Claude's final publication audit are green, and hosted run `29387808442`
+   passed all three jobs at exact implementation tip `2be253eeed7074e39cf1a86c915496794404f170`.
+   No v7/user-facing succession authoring may start before a separate provenance design is
+   reviewed.
 4. **`township_demo.exs` and the overlay now run against the branch.** Plan 121 adds the
    outsider-replayable Township audit bundle: state, authority verdict, op-DAG, and trust graph are
    independently checked through `mix lattice.township.verify_bundle`. Plan 122 adds the Township
@@ -340,10 +341,10 @@ the roster slice, and Plan 138 closes delegation issuance toward **complete G1/P
 `29358809212` closes Plans 141-143, and run `29373501735` closes Plan 139 across all three jobs,
 including full v1-v6 packaged convergence; Claude's final review has no P0-P2 finding. Township
 succession reduction exists for author-asserted ticks, while trustworthy dormancy provenance and
-any user-facing ceremony remain unimplemented. Plan 144 is `IN PROGRESS`: its cross-oracle vector
-and load-bearing mutation proof now make the accepted inflated-tick limitation executable, and its
-full local gates plus Claude final audit are green; the hosted gate remains open. Production
-deployment and receipt-free W4 are also not supplied by the current work. At the
+any user-facing ceremony remain unimplemented. Plan 144 is `DONE`: its cross-oracle vector and
+load-bearing mutation proof make the accepted inflated-tick limitation executable, its full local
+gates plus Claude final audit are green, and hosted run `29387808442` passed all three jobs.
+Production deployment and receipt-free W4 are also not supplied by the current work. At the
 milestone level, trustworthy succession,
 production deployment, and receipt-free W4 remain.
 Per-plan status lives in
@@ -489,10 +490,9 @@ Each milestone lists its **gate** (how you know it's done) and the **asset** tha
   Sim-equal recipient proof; TypeScript consumes the authenticated carrier BEAM authority report
   over independently verified frames rather than independently deciding delegation revocation.
   Hosted run `29373501735` is green across all three jobs. Trustworthy succession tick provenance
-  and user ceremony, production deployment, and the receipt-free W4 blocker remain. Plan 144 is an
-  `IN PROGRESS` adversarial characterization with focused RED/GREEN, mutation, full local, and
-  Claude final-audit evidence green; its hosted gate remains open, and it is not a v7 action
-  handoff.
+  and user ceremony, production deployment, and the receipt-free W4 blocker remain. Plan 144 is a
+  `DONE` adversarial characterization with focused RED/GREEN, mutation, full local, Claude final
+  audit, and hosted run `29387808442` green; it is not a v7 action handoff or a provenance fix.
 
 **Definition of 100% done:** every gate A1→G1 green in CI; the POC exit gate (PD-001-A §A5)
 met with W4 *real*; Township converges across BEAM + browser/phone realms over the real carrier;

@@ -2,8 +2,7 @@
 
 ## Status
 
-IN PROGRESS - executable RED/GREEN, mutation, full local, and Claude final-audit evidence is green;
-the hosted gate remains open.
+DONE - executable RED/GREEN, mutation, full local, Claude final-audit, and hosted evidence is green.
 
 Hosted flagship run `29373501735` passed all three jobs at exact Plan 139 tip
 `0e4d2b0fff8cdac281fd64f2b4e0ed923c8770c5`. That lands and isolates the prerequisite slice, so
@@ -16,7 +15,11 @@ test-only shape was added; and both focused suites now pass. A temporary `at_tic
 changed the clerk winner and failed the exporter assertion, then the intended `at_tick: 1_000_000`
 was restored. Full OTP 28 `mix check`, both Sobelow boundary scans, and Claude's exact-worktree
 claim review are green; its final publication audit also found no P0-P2 issue. This is
-characterization evidence only; the hosted completion gate below is still open.
+characterization evidence only. Hosted flagship run `29387808442` passed all three jobs at exact
+implementation tip `2be253eeed7074e39cf1a86c915496794404f170`: Unit + property suite in 3m58s,
+Verify flagship artifact in 4m01s, and Packaged macOS convergence in 14m50s. The hosted unit job
+regenerated the vector corpus and passed TypeScript conformance; the packaged job passed the full
+v1-v6 handoff and reactive-feed chain.
 
 Originally planned against commit `020c1f64d706` on `codex/township-build-map`, with the live Plan
 139 worktree intentionally left dirty and preserved at planning time.

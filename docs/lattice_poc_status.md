@@ -667,7 +667,7 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
   ingress/TLS deployment, complete G1/Phase G claim, or receipt-free W4. Plan 139 remains blocked
   behind Plans 140 and 141.
 
-## Checkpoint: Succession Tick-Provenance Boundary (in progress)
+## Checkpoint: Succession Tick-Provenance Boundary
 
 - Files changed: the Sim vector exporter and focused contract, the checked
   `township_succession_unproven_tick` vector, TypeScript conformance diagnostics, the W3 test title,
@@ -682,9 +682,11 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
   exporter, conformance, and typecheck gates. A temporary below-threshold tick made the focused
   winner assertion fail and was restored. Full OTP 28 `mix check` and both Sobelow boundary scans
   are green; Claude's exact-worktree claim and final publication audits found no P0-P2 issue.
-  Hosted flagship CI remains pending.
-- Result: this is an executable characterization of current behavior, not a provenance fix or a
-  user-facing succession surface.
+  Hosted run `29387808442` passed the unit/property, flagship artifact, and packaged macOS jobs at
+  exact implementation tip `2be253eeed7074e39cf1a86c915496794404f170`, including vector
+  regeneration, TypeScript conformance, v1-v6 packaged handoffs, and the reactive feed.
+- Result: Plan 144 is `DONE`. This is an executable characterization of current behavior, not a
+  provenance fix or a user-facing succession surface.
 - Blocker or remaining limitation: no trust anchor advances ticks; fast-forward rejection,
   monotonicity/restart/rollback, and partition semantics remain undecided. The carrier remains
   transport-only, and succession authoring stays blocked pending a separately reviewed design.
