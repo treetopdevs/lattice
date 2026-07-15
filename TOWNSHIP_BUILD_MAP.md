@@ -346,13 +346,13 @@ the roster slice, and Plan 138 closes delegation issuance toward **complete G1/P
 `29358809212` closes Plans 141-143, and run `29373501735` closes Plan 139 across all three jobs,
 including full v1-v6 packaged convergence; Claude's final review has no P0-P2 finding. Legacy
 Township succession reduction exists for author-asserted ticks, whose provenance remains untrusted.
-Plan 144 is `DONE`: its cross-oracle vector and
-load-bearing mutation proof make the accepted inflated-tick limitation executable, its full local
-gates plus Claude final audit are green, and hosted run `29387808442` passed all three jobs.
-Plan 145's opt-in genesis-pinned witnessed recovery implementation and BEAM/TypeScript cross-oracle
-are green at hosted run `29399176176`; the claim-boundary documentation exact-tip gate remains in
-progress. It authorizes a configured governance recovery event and does not supply dormancy proof
-or a user-facing ceremony.
+Plan 144 is `DONE`: its cross-oracle vector and load-bearing mutation proof make the accepted
+inflated-tick limitation executable, its full local gates plus Claude final audit are green, and
+hosted run `29387808442` passed all three jobs. Plan 145 is `DONE`: its opt-in genesis-pinned
+witnessed recovery implementation and BEAM/TypeScript cross-oracle are green at hosted run
+`29399176176`, and hosted claim-documentation run `29400665837` passed all three jobs. It authorizes
+a configured governance recovery event and does not supply dormancy proof or a user-facing
+ceremony.
 Production deployment and receipt-free W4 are also not supplied by the current work. At the
 milestone level, a reviewed user-facing succession ceremony,
 production deployment, and receipt-free W4 remain.

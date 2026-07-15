@@ -717,9 +717,11 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
   both Sobelow boundary scans are green. Claude's implementation and exact staged audits found no
   P0-P2 issue. Hosted run `29399176176` passed Unit + property suite, Verify flagship artifact, and
   Packaged macOS convergence at exact implementation tip
-  `e66b46878b3e35b3397bdf5bb0b6278074cca8d2`.
-- Result: the BEAM/TypeScript cross-oracle recovery floor is complete. Plan 145 remains `IN PROGRESS`
-  until this claim-boundary documentation passes its own exact-tip hosted run.
+  `e66b46878b3e35b3397bdf5bb0b6278074cca8d2`. Claude's exact claim-documentation audit found no
+  P0-P2 issue, and hosted run `29400665837` passed all three jobs at exact claim-documentation tip
+  `c8ebf7d17cf969696d0efd1423ffb85dc6454ee8`.
+- Result: Plan 145 is `DONE`; the BEAM/TypeScript cross-oracle governance-recovery floor and its
+  claim boundary are complete.
 - Blocker or remaining limitation: witness signatures authorize governance recovery only. They do
   not prove absence, elapsed time, liveness, witness independence or honesty, non-coercion,
   consensus, or receipt-freeness. Carrier semantic authority, user-facing v7 succession, LiveView,

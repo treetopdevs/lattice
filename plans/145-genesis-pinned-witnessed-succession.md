@@ -2,9 +2,10 @@
 
 ## Status
 
-IN PROGRESS - the BEAM certificate, authority/Sim path, adversarial suite, TypeScript cross-oracle,
-signature mutation, and exact-tip implementation CI are green. Claim-boundary documents still need
-their own exact-tip hosted closure before this plan becomes `DONE`.
+DONE - the BEAM certificate, authority/Sim path, adversarial suite, TypeScript cross-oracle,
+signature mutation, and claim-boundary documents are green. Hosted implementation run
+`29399176176` passed at `e66b46878b3e35b3397bdf5bb0b6278074cca8d2`; hosted claim-documentation
+run `29400665837` passed at `c8ebf7d17cf969696d0efd1423ffb85dc6454ee8`.
 
 Planned against commit `1a086e203b2a8d25fdc6284a219b751625dc6163` on
 `codex/township-build-map`, after Plan 144 and its exact-tip hosted closure are green.

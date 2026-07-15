@@ -19,13 +19,13 @@ pushing operations or state, Plan 134 closes the packaged reactive Tauri/Vue fee
 Plan 135 closes the first versioned clerk-status handoff slice, and Plan 136 closes the bundled
 `set_title`/`set_summary` field-edit slice. Plan 137 closes the bundled `admit`/`remove_member` roster handoff slice.
 Plan 138 closes the versioned delegation-grant handoff slice through real packaged recipient use
-and Sim-anchored unsound-grant refusal. Plans 139-144 are `DONE`; hosted run `29373501735` closes
+and Sim-anchored unsound-grant refusal. Plans 139-145 are `DONE`; hosted run `29373501735` closes
 Plan 139, and run `29387808442` closes Plan 144 across all three jobs. Plan 144's RED/GREEN and
 mutation evidence pin the remaining succession tick-provenance limitation without adding a v7
 authoring surface; full local OTP 28/security gates and Claude's final publication audit are also
-green. Plan 145 is `IN PROGRESS`: its BEAM certificate, authority/Sim path, adversarial suite,
-TypeScript cross-oracle, and exact-tip implementation CI are green; the claim-boundary documents
-still need their own exact-tip hosted closure.
+green. Plan 145's implementation run `29399176176` and claim-documentation run `29400665837` are
+green across all three jobs; its witness authorization non-claims and absent user-facing ceremony
+remain explicit.
 Trustworthy user-facing succession, G1 completion, remaining Phase G work, production deployment,
 and W4 also remain.
 
@@ -185,7 +185,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 142 | Carrier session replay protection + durability honesty | P1 | M | 127, 128 | DONE |
 | 143 | Consolidate the versioned action ladder (pay down accretion) | P2 | L | 138 | DONE |
 | 144 | Succession tick-provenance boundary | P1 | S | 139, 140 | DONE |
-| 145 | Genesis-pinned witnessed succession recovery | P1 | L | 144 | IN PROGRESS (cross-oracle green; claim-doc hosted gate pending) |
+| 145 | Genesis-pinned witnessed succession recovery | P1 | L | 144 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
@@ -278,7 +278,7 @@ suite in 3m58s, Verify flagship artifact in 4m01s, and Packaged macOS convergenc
 implementation tip `2be253eeed7074e39cf1a86c915496794404f170`, including vector regeneration,
 TypeScript conformance, the complete v1-v6 packaged handoff sequence, and reactive feed.
 
-**Plan 145 is IN PROGRESS (2026-07-15).** The adversarial trust-model pass rejected carrier
+**Plan 145 is DONE (2026-07-15).** The adversarial trust-model pass rejected carrier
 liveness, process-local/successor clocks, and distinct-author causal activity as recovery authority.
 The selected opt-in mode pins an m-of-n witness set in valid genesis and binds each recovery
 signature to the replica, role, current holder acquisition epoch, successor, and exact policy.
@@ -289,8 +289,9 @@ TypeScript certificate verification/reduction, and signature mutation are green.
 proves a root-mismatched signed genesis cannot inject its own witness policy. Claude's exact staged
 implementation audit found no P0-P2 issue, and hosted run `29399176176` passed Unit + property suite,
 Verify flagship artifact, and Packaged macOS convergence at exact implementation tip
-`e66b46878b3e35b3397bdf5bb0b6278074cca8d2`. Claim-boundary documents and their exact-tip hosted
-closure remain before Plan 145 can become `DONE`; no v7 or participant authoring surface is added.
+`e66b46878b3e35b3397bdf5bb0b6278074cca8d2`. Claude's exact claim-documentation audit also found no
+P0-P2 issue, and hosted run `29400665837` passed all three jobs at exact claim-documentation tip
+`c8ebf7d17cf969696d0efd1423ffb85dc6454ee8`. No v7 or participant authoring surface is added.
 
 ## Round 2 (deep audit, 2026-07-07, against commit `6b2cfe5`)
 
