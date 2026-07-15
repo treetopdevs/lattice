@@ -218,11 +218,16 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
 - **Browser/AtomVM parity is not done** — signed bytes now use `Lattice.Canonical`
   instead of pinned BEAM external-term bytes, but non-BEAM realms still need native
   implementations of the canonical subset and `Lattice.Carrier.Wire` (ADR 0001).
-- **Succession reduction is deterministic, but tick provenance is untrusted** — acquisition,
-  heartbeat, and succession operations carry author-asserted `at_tick` values. The reducer does
-  not consult `Lattice.Clock` or otherwise prove elapsed time or holder unavailability. The
-  `township_succession_unproven_tick` vector makes that accepted-behavior boundary executable;
-  user-facing succession remains blocked on a separately reviewed provenance design (ADR 0004).
+- **Legacy succession ticks remain untrusted; witnessed recovery is governance authorization** —
+  acquisition, heartbeat, and legacy succession operations carry author-asserted `at_tick` values.
+  The reducer does not consult `Lattice.Clock`, and
+  `township_succession_unproven_tick` keeps that accepted compatibility behavior executable. The
+  opt-in `township_succession_witnessed_recovery` path instead requires a valid-genesis-pinned
+  m-of-n Ed25519 certificate bound to the exact replica, role, holder, acquisition epoch,
+  successor, and policy; BEAM and TypeScript independently verify and reduce its adversarial
+  vector. That proves configured witness authorization, not elapsed time, absence, liveness,
+  independence, honesty, non-coercion, consensus, or receipt-freeness. User-facing succession
+  remains blocked on a separate review, collection, custody, and publication ceremony (ADR 0004).
 - **Public API name clashes** — v1 already defines `Lattice.call/3`, `Lattice.grant/4`,
   `Lattice.cast/3`. The 2.0 promise-`call`/capability-`grant` are reached via
   `Lattice.Registry` and in-log delegation ops rather than re-binding v1 names; the
@@ -690,3 +695,32 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
 - Blocker or remaining limitation: no trust anchor advances ticks; fast-forward rejection,
   monotonicity/restart/rollback, and partition semantics remain undecided. The carrier remains
   transport-only, and succession authoring stays blocked pending a separately reviewed design.
+
+## Checkpoint: Genesis-Pinned Witnessed Succession Recovery
+
+- Files changed: the shared BEAM succession-certificate verifier and authority/Sim consumers,
+  witnessed security matrix, audit-safe snapshot label, Sim vector exporter and focused contract,
+  checked five-frame adversarial vector, TypeScript carrier/codec/authority implementation,
+  conformance mutation, and generated client mirrors.
+- Behaviors: a valid genesis may opt one role into a normalized m-of-n witness policy. A succession
+  certificate binds the replica, role, current holder and acquisition epoch, designated successor,
+  and exact policy id. Unknown, duplicate, out-of-order, invalid, replayed, malformed, or
+  subthreshold evidence stays in the log and is deterministically authority-quarantined. A
+  root-mismatched signed genesis cannot inject its own witness policy.
+- Oracle: `Lattice.Sim` emits five real carrier frames covering legitimate policy genesis, an
+  attacker-controlled root-mismatched policy and cryptographically valid attacker certificate,
+  legitimate subthreshold refusal, and legitimate threshold recovery. TypeScript independently
+  verifies frame and witness signatures, recomputes the policy id and claim, reproduces BEAM state,
+  winners, quarantine, and reasons, and proves one mutated witness signature changes reduction.
+- Gates: focused BEAM tests pass at 41/0; TypeScript build, typecheck, conformance, persistence
+  authoring, canonical, bridge, feed, and carrier contracts are green. Full OTP 28 `mix check` and
+  both Sobelow boundary scans are green. Claude's implementation and exact staged audits found no
+  P0-P2 issue. Hosted run `29399176176` passed Unit + property suite, Verify flagship artifact, and
+  Packaged macOS convergence at exact implementation tip
+  `e66b46878b3e35b3397bdf5bb0b6278074cca8d2`.
+- Result: the BEAM/TypeScript cross-oracle recovery floor is complete. Plan 145 remains `IN PROGRESS`
+  until this claim-boundary documentation passes its own exact-tip hosted run.
+- Blocker or remaining limitation: witness signatures authorize governance recovery only. They do
+  not prove absence, elapsed time, liveness, witness independence or honesty, non-coercion,
+  consensus, or receipt-freeness. Carrier semantic authority, user-facing v7 succession, LiveView,
+  Tauri/mobile authoring, and native witness collection/custody remain absent.

@@ -21,8 +21,11 @@ sends go through the v1 Gateway. To run a realm in a second OS process / a brows
 * **AtomVM browser node.** The "tab" realm becomes an AtomVM instance running the same
   `Lattice.Op`/`Log`/`Reduce`/`Authority` code, persisting its log in browser storage
   and dumping/restoring via the JSON-safe `Lattice.BrowserLogStore` payload contract.
-* **Liveness-driven heartbeats.** Succession dormancy (ADR 0004) should derive its
-  heartbeats from real connection liveness on the carrier rather than explicit ops.
+* **Recovery authority stays above transport.** Carrier connection liveness cannot distinguish a
+  partition from holder failure and must not decide succession. The current opt-in recovery floor
+  is a valid-genesis-pinned m-of-n witness certificate verified from the operation log (ADR 0004);
+  it authorizes a governance recovery event but does not prove dormancy. Legacy explicit ticks
+  remain compatibility behavior with untrusted provenance.
 
 The deterministic-simulation test suite stays valuable as the carrier's conformance
 oracle: a real carrier must produce the same final logs/state as `Lattice.Sim` for the

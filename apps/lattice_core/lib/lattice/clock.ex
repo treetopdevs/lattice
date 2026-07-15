@@ -1,14 +1,13 @@
 defmodule Lattice.Clock do
   @moduledoc """
-  Logical tick source, advanced explicitly (design invariant 5: no wall clocks).
+  Deterministic logical-tick utility for tests and demos.
 
-  Time in Lattice 2.0 is a monotonically increasing integer that only moves when a
-  test or the demo calls `advance/1`. `Process.sleep`-based semantics are never
-  used. The clock matters for exactly one thing: deciding when a dormant authority
-  holder has been silent long enough for succession to fire (behavior 15). Ops that
-  need a tick (succession, dormancy markers) read `now/0` once and embed the value
-  in their body, so reduction stays a pure function of the op set rather than of
-  live clock state.
+  The value moves only when a caller explicitly invokes `advance/1`, `set/1`, or
+  `reset/0`. No operation-authoring, reducer, heartbeat, succession, or carrier path
+  reads `now/0` as authority input. Legacy authority operations instead carry
+  caller-supplied `at_tick` values as replayable body data, while opt-in witnessed
+  succession is authorized by a genesis-pinned certificate and has no clock input.
+  Reduction therefore remains a pure function of the operation set.
   """
 
   use Agent

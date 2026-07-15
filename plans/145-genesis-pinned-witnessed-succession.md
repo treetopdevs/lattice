@@ -2,8 +2,9 @@
 
 ## Status
 
-IN PROGRESS - the BEAM certificate, authority/Sim path, and adversarial suite are green; the
-TypeScript cross-oracle vector, conformance reduction, and claim-boundary documents remain.
+IN PROGRESS - the BEAM certificate, authority/Sim path, adversarial suite, TypeScript cross-oracle,
+signature mutation, and exact-tip implementation CI are green. Claim-boundary documents still need
+their own exact-tip hosted closure before this plan becomes `DONE`.
 
 Planned against commit `1a086e203b2a8d25fdc6284a219b751625dc6163` on
 `codex/township-build-map`, after Plan 144 and its exact-tip hosted closure are green.

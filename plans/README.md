@@ -23,8 +23,9 @@ and Sim-anchored unsound-grant refusal. Plans 139-144 are `DONE`; hosted run `29
 Plan 139, and run `29387808442` closes Plan 144 across all three jobs. Plan 144's RED/GREEN and
 mutation evidence pin the remaining succession tick-provenance limitation without adding a v7
 authoring surface; full local OTP 28/security gates and Claude's final publication audit are also
-green. Plan 145 is `IN PROGRESS`: its BEAM certificate, authority/Sim path, and adversarial suite
-are green; the TypeScript cross-oracle vector and claim-boundary documents remain.
+green. Plan 145 is `IN PROGRESS`: its BEAM certificate, authority/Sim path, adversarial suite,
+TypeScript cross-oracle, and exact-tip implementation CI are green; the claim-boundary documents
+still need their own exact-tip hosted closure.
 Trustworthy user-facing succession, G1 completion, remaining Phase G work, production deployment,
 and W4 also remain.
 
@@ -184,7 +185,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 142 | Carrier session replay protection + durability honesty | P1 | M | 127, 128 | DONE |
 | 143 | Consolidate the versioned action ladder (pay down accretion) | P2 | L | 138 | DONE |
 | 144 | Succession tick-provenance boundary | P1 | S | 139, 140 | DONE |
-| 145 | Genesis-pinned witnessed succession recovery | P1 | L | 144 | IN PROGRESS (BEAM green; cross-oracle RED pending) |
+| 145 | Genesis-pinned witnessed succession recovery | P1 | L | 144 | IN PROGRESS (cross-oracle green; claim-doc hosted gate pending) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
@@ -282,9 +283,14 @@ liveness, process-local/successor clocks, and distinct-author causal activity as
 The selected opt-in mode pins an m-of-n witness set in valid genesis and binds each recovery
 signature to the replica, role, current holder acquisition epoch, successor, and exact policy.
 Witnesses authorize a governance recovery event; they do not prove physical absence, elapsed time,
-independence, honesty, non-coercion, or partition consensus. The BEAM certificate, authority/Sim
-path, and adversarial suite are green; the generated TypeScript cross-oracle vector, conformance
-reduction, and claim-boundary documents remain.
+liveness, independence, honesty, non-coercion, partition consensus, or receipt-freeness. The BEAM
+certificate, authority/Sim path, adversarial suite, generated five-frame vector, independent
+TypeScript certificate verification/reduction, and signature mutation are green. The vector also
+proves a root-mismatched signed genesis cannot inject its own witness policy. Claude's exact staged
+implementation audit found no P0-P2 issue, and hosted run `29399176176` passed Unit + property suite,
+Verify flagship artifact, and Packaged macOS convergence at exact implementation tip
+`e66b46878b3e35b3397bdf5bb0b6278074cca8d2`. Claim-boundary documents and their exact-tip hosted
+closure remain before Plan 145 can become `DONE`; no v7 or participant authoring surface is added.
 
 ## Round 2 (deep audit, 2026-07-07, against commit `6b2cfe5`)
 
