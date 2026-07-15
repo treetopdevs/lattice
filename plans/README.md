@@ -23,7 +23,8 @@ and Sim-anchored unsound-grant refusal. Plans 139-144 are `DONE`; hosted run `29
 Plan 139, and run `29387808442` closes Plan 144 across all three jobs. Plan 144's RED/GREEN and
 mutation evidence pin the remaining succession tick-provenance limitation without adding a v7
 authoring surface; full local OTP 28/security gates and Claude's final publication audit are also
-green.
+green. Plan 145 is `IN PROGRESS`: its BEAM certificate, authority/Sim path, and adversarial suite
+are green; the TypeScript cross-oracle vector and claim-boundary documents remain.
 Trustworthy user-facing succession, G1 completion, remaining Phase G work, production deployment,
 and W4 also remain.
 
@@ -183,6 +184,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 142 | Carrier session replay protection + durability honesty | P1 | M | 127, 128 | DONE |
 | 143 | Consolidate the versioned action ladder (pay down accretion) | P2 | L | 138 | DONE |
 | 144 | Succession tick-provenance boundary | P1 | S | 139, 140 | DONE |
+| 145 | Genesis-pinned witnessed succession recovery | P1 | L | 144 | IN PROGRESS (BEAM green; cross-oracle RED pending) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
@@ -274,6 +276,15 @@ final publication audit also found no P0-P2 issue. Hosted run `29387808442` pass
 suite in 3m58s, Verify flagship artifact in 4m01s, and Packaged macOS convergence in 14m50s at exact
 implementation tip `2be253eeed7074e39cf1a86c915496794404f170`, including vector regeneration,
 TypeScript conformance, the complete v1-v6 packaged handoff sequence, and reactive feed.
+
+**Plan 145 is IN PROGRESS (2026-07-15).** The adversarial trust-model pass rejected carrier
+liveness, process-local/successor clocks, and distinct-author causal activity as recovery authority.
+The selected opt-in mode pins an m-of-n witness set in valid genesis and binds each recovery
+signature to the replica, role, current holder acquisition epoch, successor, and exact policy.
+Witnesses authorize a governance recovery event; they do not prove physical absence, elapsed time,
+independence, honesty, non-coercion, or partition consensus. The BEAM certificate, authority/Sim
+path, and adversarial suite are green; the generated TypeScript cross-oracle vector, conformance
+reduction, and claim-boundary documents remain.
 
 ## Round 2 (deep audit, 2026-07-07, against commit `6b2cfe5`)
 
