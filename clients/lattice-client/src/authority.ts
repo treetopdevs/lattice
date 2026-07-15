@@ -1,12 +1,19 @@
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
-import { canonicalBytesForCarrierDelegation } from "./codec";
+import {
+  canonicalBytesForCarrierDelegation,
+  canonicalBytesForWitnessedRecoveryPolicy,
+  canonicalBytesForWitnessedSuccessionClaim,
+} from "./codec";
 import { ancestors } from "./dag";
 import type {
   AuthorityDelegationEvidence,
   AuthorityEvidence,
   Op,
   SuccessionPolicyEvidence,
+  WitnessedRecoveryPolicyEvidence,
+  WitnessedSuccessionCertificateEvidence,
+  WitnessedSuccessionClaimEvidence,
 } from "./op";
 import { isAuthorityField } from "./schema";
 import type { ReplicaSchema } from "./schema";
@@ -15,7 +22,8 @@ import type { ReplicaSchema } from "./schema";
 export interface HonoredAcquire {
   opId: string;
   holder: string;
-  atTick: number;
+  holderPubkey?: string;
+  atTick?: number;
 }
 
 export interface AuthorityAnalysis {
@@ -107,10 +115,8 @@ export function analyzeAuthority(
 
     if (honored) {
       const holder = evidence.delegation.audienceRealm;
-      const atTick =
-        evidence.type === "transfer" || evidence.type === "succeed" ? evidence.atTick : 0;
       state.holder = holder;
-      state.acquires.push({ opId: op.id, holder, atTick });
+      state.acquires.push(honoredAcquire(op, evidence, holder));
       states.set(op.field, state);
       honoredWrites.add(op.id);
     } else {
@@ -131,6 +137,26 @@ export function analyzeAuthority(
   );
 
   return { honoredWrites, quarantinedWrites, acquiresByRole };
+}
+
+function honoredAcquire(
+  op: Op,
+  evidence: Exclude<AuthorityEvidence, { type: "heartbeat" }>,
+  holder: string,
+): HonoredAcquire {
+  const acquire: HonoredAcquire = {
+    opId: op.id,
+    holder,
+    holderPubkey: evidence.delegation.audience,
+  };
+
+  if (evidence.type === "genesis") acquire.atTick = 0;
+  if (evidence.type === "transfer") acquire.atTick = evidence.atTick;
+  if (evidence.type === "succeed" && evidence.proof.mode === "legacy") {
+    acquire.atTick = evidence.proof.atTick;
+  }
+
+  return acquire;
 }
 
 function authorityRoleWrite(schema: ReplicaSchema, op: Op): boolean {
@@ -195,16 +221,254 @@ function authorityWriteHonored(
     }
 
     const visible = ancestors(op.id, byId as Map<string, Op>);
-    const lastActive = Math.max(
-      0,
-      ...state.acquires.filter((a) => visible.has(a.opId)).map((a) => a.atTick),
-      ...state.heartbeats.filter((h) => visible.has(h.opId)).map((h) => h.atTick),
-    );
+    if (evidence.proof.mode === "legacy") {
+      if (policy.mode !== "legacy") return false;
+      const lastActive = Math.max(
+        0,
+        ...state.acquires.flatMap((acquire) =>
+          visible.has(acquire.opId) && acquire.atTick !== undefined ? [acquire.atTick] : [],
+        ),
+        ...state.heartbeats.filter((heartbeat) => visible.has(heartbeat.opId)).map((heartbeat) => heartbeat.atTick),
+      );
 
-    return evidence.atTick >= lastActive + policy.dormantTicks;
+      return evidence.proof.atTick >= lastActive + policy.dormantTicks;
+    }
+
+    if (evidence.proof.mode === "witnessed") {
+      if (policy.mode !== "witnessed" || op.replica === undefined) return false;
+      const holderAcquire = [...state.acquires]
+        .reverse()
+        .find((acquire) => visible.has(acquire.opId));
+      const holder = canonicalBase64Bytes(holderAcquire?.holderPubkey, 32);
+      const successor = canonicalBase64Bytes(delegation.audience, 32);
+      const policySuccessor = canonicalBase64Bytes(policy.successor, 32);
+      if (
+        holderAcquire?.holderPubkey === undefined ||
+        state.holder !== holderAcquire.holder ||
+        holder === null ||
+        successor === null ||
+        policySuccessor === null ||
+        !equalBytes(policySuccessor, successor)
+      ) {
+        return false;
+      }
+
+      const policyId = witnessedRecoveryPolicyId(policy.recovery);
+      if (policyId === null) return false;
+      const expectedClaim: WitnessedSuccessionClaimEvidence = {
+        version: 1,
+        replica: op.replica,
+        role: evidence.role,
+        holder: holderAcquire.holderPubkey,
+        holderEpoch: holderAcquire.opId,
+        successor: delegation.audience,
+        policyId,
+      };
+
+      return verifyWitnessedSuccessionCertificate(
+        evidence.proof.certificate,
+        expectedClaim,
+        policy.recovery,
+      ).valid;
+    }
+
+    return false;
   }
 
   throw new Error(`unsupported authority event ${evidence.type} for ${op.id}`);
+}
+
+export type WitnessedSuccessionVerificationReason =
+  | "invalid_recovery_policy"
+  | "malformed_recovery_certificate"
+  | "unsupported_recovery_version"
+  | "recovery_claim_mismatch"
+  | "recovery_policy_mismatch"
+  | "unknown_recovery_witness"
+  | "duplicate_recovery_witness"
+  | "noncanonical_recovery_signatures"
+  | "invalid_recovery_signature"
+  | "insufficient_recovery_witnesses";
+
+export type WitnessedSuccessionVerification =
+  | { valid: true }
+  | { valid: false; reason: WitnessedSuccessionVerificationReason };
+
+export function witnessedRecoveryPolicyId(
+  policy: WitnessedRecoveryPolicyEvidence,
+): string | null {
+  const normalized = normalizeWitnessedRecoveryPolicy(policy);
+  if (normalized === null) return null;
+  return bytesToBase64Url(sha256(canonicalBytesForWitnessedRecoveryPolicy(normalized)));
+}
+
+export function verifyWitnessedSuccessionCertificate(
+  certificate: WitnessedSuccessionCertificateEvidence | null,
+  expectedClaim: WitnessedSuccessionClaimEvidence,
+  policy: WitnessedRecoveryPolicyEvidence,
+): WitnessedSuccessionVerification {
+  const normalized = normalizeWitnessedRecoveryPolicy(policy);
+  if (normalized === null) return invalidWitnessed("invalid_recovery_policy");
+  if (!validCertificateShape(certificate)) {
+    return invalidWitnessed("malformed_recovery_certificate");
+  }
+  if (certificate.claim.version !== 1) {
+    return invalidWitnessed("unsupported_recovery_version");
+  }
+  if (!claimBindingMatches(certificate.claim, expectedClaim)) {
+    return invalidWitnessed("recovery_claim_mismatch");
+  }
+  if (certificate.claim.policyId !== expectedClaim.policyId) {
+    return invalidWitnessed("recovery_policy_mismatch");
+  }
+
+  const allowed = new Set(normalized.witnesses);
+  if (!certificate.signatures.every((entry) => allowed.has(entry.witness))) {
+    return invalidWitnessed("unknown_recovery_witness");
+  }
+
+  const witnessIds = certificate.signatures.map((entry) => entry.witness);
+  if (new Set(witnessIds).size !== witnessIds.length) {
+    return invalidWitnessed("duplicate_recovery_witness");
+  }
+  if (!certificate.signatures.every((entry, index, entries) =>
+    index === 0 || compareBase64Evidence(entries[index - 1]!.witness, entry.witness) < 0
+  )) {
+    return invalidWitnessed("noncanonical_recovery_signatures");
+  }
+
+  const payload = canonicalBytesForWitnessedSuccessionClaim(certificate.claim);
+  try {
+    if (!certificate.signatures.every((entry) =>
+      ed25519.verify(
+        canonicalBase64Bytes(entry.signature)!,
+        payload,
+        canonicalBase64Bytes(entry.witness, 32)!,
+        { zip215: false },
+      )
+    )) {
+      return invalidWitnessed("invalid_recovery_signature");
+    }
+  } catch {
+    return invalidWitnessed("invalid_recovery_signature");
+  }
+
+  return certificate.signatures.length >= normalized.threshold
+    ? { valid: true }
+    : invalidWitnessed("insufficient_recovery_witnesses");
+}
+
+function normalizeWitnessedRecoveryPolicy(
+  policy: WitnessedRecoveryPolicyEvidence,
+): WitnessedRecoveryPolicyEvidence | null {
+  const witnessEntries = Array.isArray(policy.witnesses)
+    ? policy.witnesses.map((witness) => ({ witness, bytes: canonicalBase64Bytes(witness, 32) }))
+    : [];
+
+  if (
+    !exactKeys(policy, ["mode", "version", "witnesses", "threshold"]) ||
+    policy.mode !== "witnessed" ||
+    policy.version !== 1 ||
+    !Array.isArray(policy.witnesses) ||
+    !Number.isSafeInteger(policy.threshold) ||
+    policy.threshold < 1 ||
+    policy.threshold > policy.witnesses.length ||
+    witnessEntries.some((entry) => entry.bytes === null)
+  ) {
+    return null;
+  }
+
+  const witnessIds = witnessEntries.map((entry) => entry.witness);
+  if (new Set(witnessIds).size !== witnessIds.length) return null;
+
+  return {
+    mode: "witnessed",
+    version: 1,
+    witnesses: witnessEntries
+      .sort((left, right) => compareBytes(left.bytes!, right.bytes!))
+      .map((entry) => entry.witness),
+    threshold: policy.threshold,
+  };
+}
+
+function validCertificateShape(
+  certificate: WitnessedSuccessionCertificateEvidence | null,
+): certificate is WitnessedSuccessionCertificateEvidence {
+  return (
+    certificate !== null &&
+    exactKeys(certificate, ["claim", "signatures"]) &&
+    validClaimShape(certificate.claim) &&
+    Array.isArray(certificate.signatures) &&
+    certificate.signatures.every((entry) =>
+      exactKeys(entry, ["witness", "signature"]) &&
+      canonicalBase64Bytes(entry.witness, 32) !== null &&
+      canonicalBase64Bytes(entry.signature) !== null
+    )
+  );
+}
+
+function validClaimShape(claim: WitnessedSuccessionClaimEvidence): boolean {
+  return (
+    exactKeys(claim, [
+      "version",
+      "replica",
+      "role",
+      "holder",
+      "holderEpoch",
+      "successor",
+      "policyId",
+    ]) &&
+    Number.isSafeInteger(claim.version) &&
+    claim.version >= 0 &&
+    typeof claim.replica === "string" &&
+    typeof claim.role === "string" &&
+    canonicalBase64Bytes(claim.holder, 32) !== null &&
+    typeof claim.holderEpoch === "string" &&
+    canonicalBase64Bytes(claim.successor, 32) !== null &&
+    typeof claim.policyId === "string"
+  );
+}
+
+function claimBindingMatches(
+  claim: WitnessedSuccessionClaimEvidence,
+  expected: WitnessedSuccessionClaimEvidence,
+): boolean {
+  return (
+    claim.version === expected.version &&
+    claim.replica === expected.replica &&
+    claim.role === expected.role &&
+    claim.holder === expected.holder &&
+    claim.holderEpoch === expected.holderEpoch &&
+    claim.successor === expected.successor
+  );
+}
+
+function invalidWitnessed(
+  reason: WitnessedSuccessionVerificationReason,
+): WitnessedSuccessionVerification {
+  return { valid: false, reason };
+}
+
+function exactKeys(value: object, keys: readonly string[]): boolean {
+  const actual = Object.keys(value).sort();
+  return actual.length === keys.length && actual.every((key, index) => key === [...keys].sort()[index]);
+}
+
+function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function compareBytes(left: Uint8Array, right: Uint8Array): number {
+  const length = Math.min(left.length, right.length);
+  for (let index = 0; index < length; index++) {
+    const difference = left[index]! - right[index]!;
+    if (difference !== 0) return difference;
+  }
+  return left.length - right.length;
+}
+
+function compareBase64Evidence(left: string, right: string): number {
+  return compareBytes(canonicalBase64Bytes(left)!, canonicalBase64Bytes(right)!);
 }
 
 /** Succession policies are conferred only by a genesis whose delegation is valid. */
@@ -218,7 +482,11 @@ function collectPolicies(
   for (const op of ops) {
     const evidence = op.authority;
     if (evidence?.type !== "genesis" || evidence.policies === undefined) continue;
-    if (!validDelegation(evidence.delegation, delegations, delegationValidity, new Set())) {
+    if (
+      !validDelegation(evidence.delegation, delegations, delegationValidity, new Set()) ||
+      op.replica === undefined ||
+      !replicaRootMatches(op.replica, evidence.delegation.audience)
+    ) {
       continue;
     }
     for (const [role, policy] of Object.entries(evidence.policies)) {
@@ -324,7 +592,9 @@ function subset(child: readonly string[], parent: readonly string[]): boolean {
 
 function replicaRootMatches(replica: string, audience: string): boolean {
   const commitment = replicaRootCommitment(replica);
-  return commitment === null || bytesToBase64Url(sha256(base64ToBytes(audience))) === commitment;
+  if (commitment === null) return true;
+  const audienceBytes = canonicalBase64Bytes(audience, 32);
+  return audienceBytes !== null && bytesToBase64Url(sha256(audienceBytes)) === commitment;
 }
 
 function replicaRootCommitment(replica: string): string | null {
@@ -344,13 +614,23 @@ function base64ToBytes(value: string): Uint8Array {
   return Uint8Array.from(atobFn(value), (char) => char.charCodeAt(0));
 }
 
-function bytesToBase64Url(value: Uint8Array): string {
-  const base64 =
-    typeof Buffer !== "undefined"
-      ? Buffer.from(value).toString("base64")
-      : browserBase64(value);
+function canonicalBase64Bytes(value: unknown, length?: number): Uint8Array | null {
+  if (typeof value !== "string") return null;
+  try {
+    const decoded = base64ToBytes(value);
+    if (bytesToBase64(decoded) !== value) return null;
+    return length === undefined || decoded.length === length ? decoded : null;
+  } catch {
+    return null;
+  }
+}
 
-  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+function bytesToBase64(value: Uint8Array): string {
+  return typeof Buffer !== "undefined" ? Buffer.from(value).toString("base64") : browserBase64(value);
+}
+
+function bytesToBase64Url(value: Uint8Array): string {
+  return bytesToBase64(value).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
 function browserBase64(value: Uint8Array): string {

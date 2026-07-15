@@ -25,11 +25,66 @@ export interface AuthorityDelegationEvidence {
   sig?: string;
 }
 
-/** Succession policy conferred by a valid genesis: who may seize a role, and when. */
-export interface SuccessionPolicyEvidence {
+/** Legacy author-asserted tick policy retained for characterized POC compatibility. */
+export interface LegacySuccessionPolicyEvidence {
+  mode: "legacy";
   successorRealm: string;
+  successor: string;
   dormantTicks: number;
 }
+
+/** Genesis-pinned governance keys whose signatures may authorize recovery. */
+export interface WitnessedRecoveryPolicyEvidence {
+  mode: "witnessed";
+  version: number;
+  witnesses: string[];
+  threshold: number;
+}
+
+export interface WitnessedSuccessionPolicyEvidence {
+  mode: "witnessed";
+  successorRealm: string;
+  successor: string;
+  recovery: WitnessedRecoveryPolicyEvidence;
+}
+
+/** A malformed or mixed policy is retained only so reduction can fail closed. */
+export interface InvalidSuccessionPolicyEvidence {
+  mode: "invalid";
+  successorRealm: string;
+  successor: string;
+}
+
+/** Succession policy conferred by a valid genesis. */
+export type SuccessionPolicyEvidence =
+  | LegacySuccessionPolicyEvidence
+  | WitnessedSuccessionPolicyEvidence
+  | InvalidSuccessionPolicyEvidence;
+
+export interface WitnessedSuccessionClaimEvidence {
+  version: number;
+  replica: string;
+  role: string;
+  holder: string;
+  holderEpoch: string;
+  successor: string;
+  policyId: string;
+}
+
+export interface WitnessedSuccessionSignatureEvidence {
+  witness: string;
+  signature: string;
+}
+
+export interface WitnessedSuccessionCertificateEvidence {
+  claim: WitnessedSuccessionClaimEvidence;
+  signatures: WitnessedSuccessionSignatureEvidence[];
+}
+
+export type SuccessionProofEvidence =
+  | { mode: "legacy"; atTick: number }
+  | { mode: "witnessed"; certificate: WitnessedSuccessionCertificateEvidence | null }
+  | { mode: "invalid" };
 
 export type AuthorityEvidence =
   | {
@@ -39,10 +94,16 @@ export type AuthorityEvidence =
     }
   | { type: "grant"; delegation: AuthorityDelegationEvidence }
   | {
-      type: "transfer" | "succeed";
+      type: "transfer";
       role: string;
       delegation: AuthorityDelegationEvidence;
       atTick: number;
+    }
+  | {
+      type: "succeed";
+      role: string;
+      delegation: AuthorityDelegationEvidence;
+      proof: SuccessionProofEvidence;
     }
   | { type: "heartbeat"; role: string; atTick: number };
 

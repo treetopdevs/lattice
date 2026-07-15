@@ -1,6 +1,10 @@
 import type { CarrierDelegation, CarrierOpFrame, CarrierTerm } from "./carrier";
 import type { Verifier } from "./identity";
-import type { Op } from "./op";
+import type {
+  Op,
+  WitnessedRecoveryPolicyEvidence,
+  WitnessedSuccessionClaimEvidence,
+} from "./op";
 
 // ── Tier B: byte-identical canonical encoding ────────────────────────────────
 //
@@ -84,6 +88,8 @@ const mapsetTag = 60_002;
 const delegationTermTag = 60_003;
 const opTag = "lattice-op-v2";
 const delegationPayloadTag = "lattice-delegation-v2";
+const witnessedRecoveryPolicyDomain = "lattice-recovery-policy-v1";
+const witnessedSuccessionClaimDomain = "lattice-succession-witness-v1";
 
 /**
  * Encode the signed/hashable core of a BEAM carrier op frame using the same
@@ -162,6 +168,41 @@ export function canonicalBytesForCarrierDelegation(delegation: CarrierDelegation
   ]);
 }
 
+/** Canonical policy-id preimage shared with `Lattice.Authority.SuccessionCertificate`. */
+export function canonicalBytesForWitnessedRecoveryPolicy(
+  policy: WitnessedRecoveryPolicyEvidence,
+): Uint8Array {
+  const witnesses = policy.witnesses.map(canonicalEvidenceBytes).sort(compareBytes);
+
+  return encodeArray([
+    encodeBinaryString(witnessedRecoveryPolicyDomain),
+    encodeCanonicalMap([
+      ["mode", encodeAtom("witnessed")],
+      ["version", encodeUint(policy.version)],
+      ["witnesses", encodeArray(witnesses.map(encodeBytes))],
+      ["threshold", encodeUint(policy.threshold)],
+    ]),
+  ]);
+}
+
+/** Canonical witness-signature payload shared with the BEAM certificate verifier. */
+export function canonicalBytesForWitnessedSuccessionClaim(
+  claim: WitnessedSuccessionClaimEvidence,
+): Uint8Array {
+  return encodeArray([
+    encodeBinaryString(witnessedSuccessionClaimDomain),
+    encodeCanonicalMap([
+      ["version", encodeUint(claim.version)],
+      ["replica", encodeBinaryString(claim.replica)],
+      ["role", encodeAtom(claim.role)],
+      ["holder", encodeBytes(canonicalEvidenceBytes(claim.holder))],
+      ["holder_epoch", encodeBinaryString(claim.holderEpoch)],
+      ["successor", encodeBytes(canonicalEvidenceBytes(claim.successor))],
+      ["policy_id", encodeBinaryString(claim.policyId)],
+    ]),
+  ]);
+}
+
 export async function authorCarrierDelegation(
   input: AuthorCarrierDelegationInput,
 ): Promise<CarrierDelegation> {
@@ -237,6 +278,14 @@ function encodeDelegation(delegation: CarrierDelegation): Uint8Array {
 function encodeMap(pairs: [CarrierTerm, CarrierTerm][]): Uint8Array {
   const encoded = pairs
     .map(([key, value]) => [encodeCarrierTerm(key), encodeCarrierTerm(value)] as const)
+    .sort(([left], [right]) => compareBytes(left, right));
+
+  return concat(major(5, BigInt(encoded.length)), ...encoded.flatMap(([key, value]) => [key, value]));
+}
+
+function encodeCanonicalMap(pairs: [string, Uint8Array][]): Uint8Array {
+  const encoded = pairs
+    .map(([key, value]) => [encodeAtom(key), value] as const)
     .sort(([left], [right]) => compareBytes(left, right));
 
   return concat(major(5, BigInt(encoded.length)), ...encoded.flatMap(([key, value]) => [key, value]));
@@ -343,6 +392,12 @@ function base64ToBytes(value: string): Uint8Array {
   const atobFn = (globalThis as unknown as { atob?: (encoded: string) => string }).atob;
   if (!atobFn) throw new Error("base64 decoding unavailable");
   return Uint8Array.from(atobFn(value), (char) => char.charCodeAt(0));
+}
+
+function canonicalEvidenceBytes(value: string): Uint8Array {
+  const decoded = base64ToBytes(value);
+  if (bytesToBase64(decoded) !== value) throw new Error("non-canonical base64 evidence");
+  return decoded;
 }
 
 function bytesToBase64Url(value: Uint8Array): string {

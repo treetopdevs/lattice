@@ -10,7 +10,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
   use Mix.Task
 
   alias Lattice.Authority
-  alias Lattice.Authority.Delegation
+  alias Lattice.Authority.{Delegation, SuccessionCertificate}
   alias Lattice.Canonical
   alias Lattice.Carrier.Wire, as: CarrierWire
   alias Lattice.{Identity, Log, Op, Sim, Sync}
@@ -21,6 +21,17 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
   @join_replica "replica:matter:join-w0"
   @succession_replica "replica:matter:succession-w3"
   @unproven_succession_replica "replica:matter:succession-unproven-tick"
+  @witnessed_succession_replica "replica:matter:succession-witnessed-recovery"
+  @witnessed_recovery_realms [
+    "clerk",
+    "resident",
+    "witness_a",
+    "witness_b",
+    "witness_c",
+    "mallory",
+    "mallory_witness_a",
+    "mallory_witness_b"
+  ]
   @random_realms ["clerk", "resident", "neighbor"]
   @randomized_seeds [101, 202, 303, 404, 505]
   @carrier_replica "replica:matter:township-g1"
@@ -48,6 +59,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_zoning_variance_24(),
       township_succession_w3(),
       township_succession_unproven_tick(),
+      township_succession_witnessed_recovery(),
       township_authority_forged_root(),
       township_authority_embedded_replica_bypass(),
       township_authority_forged_delegation_id(),
@@ -220,6 +232,108 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       authorityQuarantine: authority_quarantine(log),
       successionOperationId: succession.id,
       tickProvenance: "author_asserted_untrusted"
+    }
+  end
+
+  defp township_succession_witnessed_recovery do
+    sim =
+      Sim.new(Matter, @witnessed_succession_replica, @witnessed_recovery_realms,
+        seed: "township:succession-witnessed-recovery"
+      )
+
+    {sim, genesis} =
+      Sim.create_replica(sim, "clerk",
+        policies: %{
+          clerk: %{
+            successor: "resident",
+            recovery: %{
+              mode: :witnessed,
+              version: 1,
+              witnesses: ["witness_a", "witness_b", "witness_c"],
+              threshold: 2
+            }
+          }
+        }
+      )
+
+    clerk = Sim.identity(sim, "clerk")
+    mallory = Sim.identity(sim, "mallory")
+    mallory_witness_a = Sim.identity(sim, "mallory_witness_a")
+    mallory_witness_b = Sim.identity(sim, "mallory_witness_b")
+
+    impostor_recovery = %{
+      mode: :witnessed,
+      version: 1,
+      witnesses: [mallory_witness_a.pub, mallory_witness_b.pub],
+      threshold: 2
+    }
+
+    impostor_delegation =
+      Delegation.genesis(mallory, Sim.replica(sim),
+        ops: [:close_matter, :reopen_matter],
+        roles: [:clerk],
+        live: true
+      )
+
+    {sim, impostor_genesis} =
+      Sim.append(
+        sim,
+        "mallory",
+        :authority,
+        {:genesis, impostor_delegation,
+         %{clerk: %{successor: mallory.pub, recovery: impostor_recovery}}}
+      )
+
+    {:ok, impostor_claim} =
+      SuccessionCertificate.claim(
+        Sim.replica(sim),
+        :clerk,
+        clerk.pub,
+        genesis.id,
+        mallory.pub,
+        impostor_recovery
+      )
+
+    impostor_certificate =
+      SuccessionCertificate.new(impostor_claim, [mallory_witness_a, mallory_witness_b])
+
+    {sim, impostor_succession} =
+      Sim.succeed(sim, "mallory", :clerk, certificate: impostor_certificate)
+
+    sim = Sim.sync_all(sim)
+    {sim, denied} = Sim.succeed(sim, "resident", :clerk, witnesses: ["witness_a"])
+
+    {sim, honored} =
+      Sim.succeed(sim, "resident", :clerk, witnesses: ["witness_a", "witness_b"])
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "resident")
+    realms = realm_index(sim)
+    analysis = Authority.analyze(Matter, log)
+    %{recovery: recovery} = Map.fetch!(analysis.policies, :clerk)
+    {:ok, normalized_policy} = SuccessionCertificate.normalize_policy(recovery)
+
+    {:succeed, :clerk, _delegation, {:witnessed, %{claim: claim}}} = honored.body
+
+    %{
+      name: "township_succession_witnessed_recovery",
+      kind: "adversarial",
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: Sim.replica(sim),
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      authorityQuarantine: authority_quarantine(log),
+      witnessedRecovery: %{
+        "deniedOperationId" => denied.id,
+        "honoredOperationId" => honored.id,
+        "impostorPolicyGenesisOperationId" => impostor_genesis.id,
+        "impostorPolicySuccessionOperationId" => impostor_succession.id,
+        "policyId" => claim.policy_id,
+        "claim" => witnessed_claim_json(claim),
+        "policy" => witnessed_policy_json(normalized_policy)
+      }
     }
   end
 
@@ -1445,6 +1559,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     |> maybe_put("oracleCarrierOps", Map.get(scenario, :oracleCarrierOps))
     |> maybe_put("successionOperationId", Map.get(scenario, :successionOperationId))
     |> maybe_put("tickProvenance", Map.get(scenario, :tickProvenance))
+    |> maybe_put("witnessedRecovery", Map.get(scenario, :witnessedRecovery))
   end
 
   defp to_vector(%{carrier?: true} = scenario) do
@@ -1488,6 +1603,27 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
+
+  defp witnessed_claim_json(claim) do
+    %{
+      "version" => claim.version,
+      "replica" => claim.replica,
+      "role" => Atom.to_string(claim.role),
+      "holderPubkey" => Base.encode64(claim.holder),
+      "holderEpoch" => claim.holder_epoch,
+      "successorPubkey" => Base.encode64(claim.successor),
+      "policyId" => claim.policy_id
+    }
+  end
+
+  defp witnessed_policy_json(policy) do
+    %{
+      "mode" => Atom.to_string(policy.mode),
+      "version" => policy.version,
+      "witnessPubkeys" => Enum.map(policy.witnesses, &Base.encode64/1),
+      "threshold" => policy.threshold
+    }
+  end
 
   defp schema_json do
     %{

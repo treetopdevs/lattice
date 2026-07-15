@@ -99,6 +99,106 @@ defmodule Township.ExportVectorsTest do
            end)
   end
 
+  test "lattice.export_vectors pins witnessed recovery to the BEAM oracle" do
+    out_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "lattice_witnessed_recovery_vectors_#{System.unique_integer([:positive])}"
+      )
+
+    on_exit(fn -> File.rm_rf(out_dir) end)
+
+    Mix.Task.clear()
+    assert :ok = Mix.Task.run("lattice.export_vectors", ["--out", out_dir])
+
+    vector_path = Path.join(out_dir, "township_succession_witnessed_recovery.json")
+    assert File.exists?(vector_path)
+
+    vector = vector_path |> File.read!() |> Jason.decode!()
+
+    assert vector["generatedBy"] == "Lattice.Sim"
+    assert vector["scenario"] == "township_succession_witnessed_recovery"
+    assert vector["scenarioKind"] == "adversarial"
+    assert length(vector["oracleCarrierOps"]) == 5
+
+    recovery = vector["witnessedRecovery"]
+    denied_id = recovery["deniedOperationId"]
+    honored_id = recovery["honoredOperationId"]
+    impostor_genesis_id = recovery["impostorPolicyGenesisOperationId"]
+    impostor_succession_id = recovery["impostorPolicySuccessionOperationId"]
+    claim = recovery["claim"]
+    policy = recovery["policy"]
+
+    assert is_binary(denied_id)
+    assert is_binary(honored_id)
+    assert is_binary(impostor_genesis_id)
+    assert is_binary(impostor_succession_id)
+    assert recovery["policyId"] == claim["policyId"]
+
+    assert claim["version"] == 1
+    assert claim["replica"] == vector["replica"]
+    assert claim["role"] == "clerk"
+    assert vector["realmByPubkey"][claim["holderPubkey"]] == "clerk"
+    assert vector["realmByPubkey"][claim["successorPubkey"]] == "resident"
+
+    assert policy["mode"] == "witnessed"
+    assert policy["version"] == 1
+    assert policy["threshold"] == 2
+
+    assert policy["witnessPubkeys"]
+           |> Enum.map(&vector["realmByPubkey"][&1])
+           |> Enum.sort() == ["witness_a", "witness_b", "witness_c"]
+
+    frames = vector["oracleCarrierOps"]
+    genesis = Enum.find(frames, &(&1["id"] == claim["holderEpoch"]))
+    impostor_genesis = Enum.find(frames, &(&1["id"] == impostor_genesis_id))
+    impostor_succession = Enum.find(frames, &(&1["id"] == impostor_succession_id))
+    denied = Enum.find(frames, &(&1["id"] == denied_id))
+    honored = Enum.find(frames, &(&1["id"] == honored_id))
+
+    assert claim["holderEpoch"] == genesis["id"]
+    assert impostor_genesis["deps"] == [genesis["id"]]
+    assert impostor_genesis_id in impostor_succession["deps"]
+    assert impostor_succession_id in denied["deps"]
+    assert denied_id in honored["deps"]
+
+    for frame <- [impostor_succession, denied, honored] do
+      assert [
+               "tuple",
+               [
+                 ["atom", "succeed"],
+                 ["atom", "clerk"],
+                 ["delegation", _delegation],
+                 ["tuple", [["atom", "witnessed"], ["map", certificate_entries]]]
+               ]
+             ] = frame["body"]
+
+      assert Enum.any?(certificate_entries, fn
+               [["atom", "claim"], ["map", _claim_entries]] -> true
+               _entry -> false
+             end)
+
+      assert Enum.any?(certificate_entries, fn
+               [["atom", "signatures"], ["list", _signatures]] -> true
+               _entry -> false
+             end)
+    end
+
+    expected = vector["expectAtFullFrontier"]
+    assert expected["state"]["clerk"] == "resident"
+    assert expected["winners"]["clerk"] == honored_id
+
+    assert MapSet.new(expected["quarantine"]) ==
+             MapSet.new([impostor_genesis_id, impostor_succession_id, denied_id])
+
+    assert MapSet.new(expected["authorityQuarantine"]) ==
+             MapSet.new([
+               [impostor_genesis_id, "impostor_genesis"],
+               [impostor_succession_id, "unauthorized_succession"],
+               [denied_id, "insufficient_recovery_witnesses"]
+             ])
+  end
+
   test "lattice.export_vectors isolates an impostor genesis that Sim rejects" do
     out_dir =
       Path.join(

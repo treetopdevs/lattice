@@ -7,6 +7,8 @@ const mapsetTag = 60_002;
 const delegationTermTag = 60_003;
 const opTag = "lattice-op-v2";
 const delegationPayloadTag = "lattice-delegation-v2";
+const witnessedRecoveryPolicyDomain = "lattice-recovery-policy-v1";
+const witnessedSuccessionClaimDomain = "lattice-succession-witness-v1";
 /**
  * Encode the signed/hashable core of a BEAM carrier op frame using the same
  * narrow CBOR-shaped subset as `Lattice.Canonical.op_payload/1`.
@@ -73,6 +75,34 @@ export function canonicalBytesForCarrierDelegation(delegation) {
         bytes(delegation.live ? 0xf5 : 0xf4),
     ]);
 }
+/** Canonical policy-id preimage shared with `Lattice.Authority.SuccessionCertificate`. */
+export function canonicalBytesForWitnessedRecoveryPolicy(policy) {
+    const witnesses = policy.witnesses.map(canonicalEvidenceBytes).sort(compareBytes);
+    return encodeArray([
+        encodeBinaryString(witnessedRecoveryPolicyDomain),
+        encodeCanonicalMap([
+            ["mode", encodeAtom("witnessed")],
+            ["version", encodeUint(policy.version)],
+            ["witnesses", encodeArray(witnesses.map(encodeBytes))],
+            ["threshold", encodeUint(policy.threshold)],
+        ]),
+    ]);
+}
+/** Canonical witness-signature payload shared with the BEAM certificate verifier. */
+export function canonicalBytesForWitnessedSuccessionClaim(claim) {
+    return encodeArray([
+        encodeBinaryString(witnessedSuccessionClaimDomain),
+        encodeCanonicalMap([
+            ["version", encodeUint(claim.version)],
+            ["replica", encodeBinaryString(claim.replica)],
+            ["role", encodeAtom(claim.role)],
+            ["holder", encodeBytes(canonicalEvidenceBytes(claim.holder))],
+            ["holder_epoch", encodeBinaryString(claim.holderEpoch)],
+            ["successor", encodeBytes(canonicalEvidenceBytes(claim.successor))],
+            ["policy_id", encodeBinaryString(claim.policyId)],
+        ]),
+    ]);
+}
 export async function authorCarrierDelegation(input) {
     const unsignedDelegation = {
         replica: input.replica,
@@ -135,6 +165,12 @@ function encodeDelegation(delegation) {
 function encodeMap(pairs) {
     const encoded = pairs
         .map(([key, value]) => [encodeCarrierTerm(key), encodeCarrierTerm(value)])
+        .sort(([left], [right]) => compareBytes(left, right));
+    return concat(major(5, BigInt(encoded.length)), ...encoded.flatMap(([key, value]) => [key, value]));
+}
+function encodeCanonicalMap(pairs) {
+    const encoded = pairs
+        .map(([key, value]) => [encodeAtom(key), value])
         .sort(([left], [right]) => compareBytes(left, right));
     return concat(major(5, BigInt(encoded.length)), ...encoded.flatMap(([key, value]) => [key, value]));
 }
@@ -212,6 +248,12 @@ function base64ToBytes(value) {
     if (!atobFn)
         throw new Error("base64 decoding unavailable");
     return Uint8Array.from(atobFn(value), (char) => char.charCodeAt(0));
+}
+function canonicalEvidenceBytes(value) {
+    const decoded = base64ToBytes(value);
+    if (bytesToBase64(decoded) !== value)
+        throw new Error("non-canonical base64 evidence");
+    return decoded;
 }
 function bytesToBase64Url(value) {
     return bytesToBase64(value).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");

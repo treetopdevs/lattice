@@ -4,7 +4,12 @@ import type {
   Mutation,
   Op,
   OpKind,
+  SuccessionProofEvidence,
   SuccessionPolicyEvidence,
+  WitnessedRecoveryPolicyEvidence,
+  WitnessedSuccessionCertificateEvidence,
+  WitnessedSuccessionClaimEvidence,
+  WitnessedSuccessionSignatureEvidence,
 } from "./op";
 import { verifyCarrierOp } from "./codec";
 import type { Verifier } from "./identity";
@@ -228,6 +233,7 @@ interface Payload {
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
+const strictTextDecoder = new TextDecoder("utf-8", { fatal: true });
 const uint64Max = 18_446_744_073_709_551_615n;
 const atomTag = 60_000;
 const tupleTag = 60_001;
@@ -1076,7 +1082,7 @@ function payloadFromBody(
             type: "succeed",
             role,
             delegation: delegationEvidence(delegation, realmByPubkey),
-            atTick: integerValue(body.values[3]),
+            proof: successionProof(body.values[3]),
           },
         };
       }
@@ -1186,32 +1192,220 @@ function successionPolicies(
 
   const policies: Record<string, SuccessionPolicyEvidence> = {};
   for (const [roleTerm, policyTerm] of term.pairs) {
-    if (
-      typeof policyTerm !== "object" ||
-      policyTerm === null ||
-      !("type" in policyTerm) ||
-      policyTerm.type !== "map"
-    ) {
+    const role = atomValue(roleTerm);
+    const policy = atomMap(policyTerm);
+    const successorBytes = binaryBytes(policy?.get("successor"), 32);
+    if (role === null || policy === null || successorBytes === null) continue;
+
+    const successor = bytesToBase64(successorBytes);
+    const successorRealm = realmForPubkey(successor, realmByPubkey);
+    const hasDormantTicks = policy.has("dormant_ticks");
+    const hasRecovery = policy.has("recovery");
+
+    if (hasDormantTicks === hasRecovery) {
+      policies[role] = { mode: "invalid", successorRealm, successor };
       continue;
     }
 
-    let successorRealm: string | undefined;
-    let dormantTicks: number | undefined;
-    for (const [keyTerm, valueTerm] of policyTerm.pairs) {
-      const key = atomName(keyTerm);
-      if (key === "successor") {
-        successorRealm = realmForPubkey(binBase64(valueTerm), realmByPubkey);
-      } else if (key === "dormant_ticks") {
-        dormantTicks = integerValue(valueTerm);
-      }
+    if (hasDormantTicks) {
+      const dormantTicks = nonNegativeInteger(policy.get("dormant_ticks"));
+      policies[role] =
+        dormantTicks === null
+          ? { mode: "invalid", successorRealm, successor }
+          : { mode: "legacy", successorRealm, successor, dormantTicks };
+      continue;
     }
 
-    if (successorRealm !== undefined && dormantTicks !== undefined) {
-      policies[atomName(roleTerm)] = { successorRealm, dormantTicks };
-    }
+    const recovery = witnessedRecoveryPolicy(policy.get("recovery"));
+    policies[role] =
+      recovery === null
+        ? { mode: "invalid", successorRealm, successor }
+        : { mode: "witnessed", successorRealm, successor, recovery };
   }
 
   return Object.keys(policies).length > 0 ? policies : undefined;
+}
+
+function successionProof(term: DecodedTerm | undefined): SuccessionProofEvidence {
+  const atTick = nonNegativeInteger(term);
+  if (atTick !== null) return { mode: "legacy", atTick };
+
+  if (
+    term !== undefined &&
+    isTuple(term) &&
+    term.values.length === 2 &&
+    atomValue(term.values[0]) === "witnessed"
+  ) {
+    return { mode: "witnessed", certificate: witnessedCertificate(term.values[1]) };
+  }
+
+  return { mode: "invalid" };
+}
+
+function witnessedRecoveryPolicy(
+  term: DecodedTerm | undefined,
+): WitnessedRecoveryPolicyEvidence | null {
+  const policy = exactAtomMap(term, ["mode", "version", "witnesses", "threshold"]);
+  const mode = atomValue(policy?.get("mode"));
+  const version = nonNegativeInteger(policy?.get("version"));
+  const threshold = nonNegativeInteger(policy?.get("threshold"));
+  const witnessTerms = listValuesOrNull(policy?.get("witnesses"));
+  const witnessBytes = witnessTerms?.map((witness) => binaryBytes(witness, 32));
+
+  if (
+    mode !== "witnessed" ||
+    version === null ||
+    threshold === null ||
+    witnessBytes === undefined ||
+    witnessBytes.some((witness) => witness === null)
+  ) {
+    return null;
+  }
+
+  return {
+    mode: "witnessed",
+    version,
+    witnesses: (witnessBytes as Uint8Array[]).map(bytesToBase64),
+    threshold,
+  };
+}
+
+function witnessedCertificate(
+  term: DecodedTerm | undefined,
+): WitnessedSuccessionCertificateEvidence | null {
+  const certificate = exactAtomMap(term, ["claim", "signatures"]);
+  const claim = witnessedClaim(certificate?.get("claim"));
+  const signatureTerms = listValuesOrNull(certificate?.get("signatures"));
+  const signatures = signatureTerms?.map(witnessedSignature);
+
+  if (
+    claim === null ||
+    signatures === undefined ||
+    signatures.some((signature) => signature === null)
+  ) {
+    return null;
+  }
+
+  return { claim, signatures: signatures as WitnessedSuccessionSignatureEvidence[] };
+}
+
+function witnessedClaim(term: DecodedTerm | undefined): WitnessedSuccessionClaimEvidence | null {
+  const claim = exactAtomMap(term, [
+    "version",
+    "replica",
+    "role",
+    "holder",
+    "holder_epoch",
+    "successor",
+    "policy_id",
+  ]);
+  const version = nonNegativeInteger(claim?.get("version"));
+  const replica = binaryUtf8(claim?.get("replica"));
+  const role = atomValue(claim?.get("role"));
+  const holderBytes = binaryBytes(claim?.get("holder"), 32);
+  const holderEpoch = binaryUtf8(claim?.get("holder_epoch"));
+  const successorBytes = binaryBytes(claim?.get("successor"), 32);
+  const policyId = binaryUtf8(claim?.get("policy_id"));
+
+  if (
+    version === null ||
+    replica === null ||
+    role === null ||
+    holderBytes === null ||
+    holderEpoch === null ||
+    successorBytes === null ||
+    policyId === null
+  ) {
+    return null;
+  }
+
+  return {
+    version,
+    replica,
+    role,
+    holder: bytesToBase64(holderBytes),
+    holderEpoch,
+    successor: bytesToBase64(successorBytes),
+    policyId,
+  };
+}
+
+function witnessedSignature(
+  term: DecodedTerm,
+): WitnessedSuccessionSignatureEvidence | null {
+  const entry = exactAtomMap(term, ["witness", "signature"]);
+  const witness = binaryBytes(entry?.get("witness"), 32);
+  const signature = binaryBytes(entry?.get("signature"));
+  return witness === null || signature === null
+    ? null
+    : { witness: bytesToBase64(witness), signature: bytesToBase64(signature) };
+}
+
+function exactAtomMap(
+  term: DecodedTerm | undefined,
+  expectedKeys: readonly string[],
+): Map<string, DecodedTerm> | null {
+  const map = atomMap(term);
+  if (map === null || map.size !== expectedKeys.length) return null;
+  return expectedKeys.every((key) => map.has(key)) ? map : null;
+}
+
+function atomMap(term: DecodedTerm | undefined): Map<string, DecodedTerm> | null {
+  if (
+    typeof term !== "object" ||
+    term === null ||
+    !("type" in term) ||
+    term.type !== "map"
+  ) {
+    return null;
+  }
+
+  const entries = new Map<string, DecodedTerm>();
+  for (const [keyTerm, valueTerm] of term.pairs) {
+    const key = atomValue(keyTerm);
+    if (key === null || entries.has(key)) return null;
+    entries.set(key, valueTerm);
+  }
+  return entries;
+}
+
+function atomValue(term: DecodedTerm | undefined): string | null {
+  return typeof term === "object" && term !== null && "type" in term && term.type === "atom"
+    ? term.value
+    : null;
+}
+
+function listValuesOrNull(term: DecodedTerm | undefined): DecodedTerm[] | null {
+  return typeof term === "object" && term !== null && "type" in term && term.type === "list"
+    ? term.values
+    : null;
+}
+
+function nonNegativeInteger(term: DecodedTerm | undefined): number | null {
+  return typeof term === "number" && Number.isSafeInteger(term) && term >= 0 ? term : null;
+}
+
+function binaryBytes(term: DecodedTerm | undefined, length?: number): Uint8Array | null {
+  if (
+    typeof term !== "object" ||
+    term === null ||
+    !("type" in term) ||
+    term.type !== "bin" ||
+    (length !== undefined && term.bytes.length !== length)
+  ) {
+    return null;
+  }
+  return new Uint8Array(term.bytes);
+}
+
+function binaryUtf8(term: DecodedTerm | undefined): string | null {
+  const value = binaryBytes(term);
+  if (value === null) return null;
+  try {
+    return strictTextDecoder.decode(value);
+  } catch {
+    return null;
+  }
 }
 
 function binBase64(term: DecodedTerm | undefined): string {

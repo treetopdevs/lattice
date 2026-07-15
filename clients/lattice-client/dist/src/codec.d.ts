@@ -1,6 +1,6 @@
 import type { CarrierDelegation, CarrierOpFrame, CarrierTerm } from "./carrier";
 import type { Verifier } from "./identity";
-import type { Op } from "./op";
+import type { Op, WitnessedRecoveryPolicyEvidence, WitnessedSuccessionClaimEvidence } from "./op";
 export interface CanonicalCodec {
     /** Deterministically encode an op's signed core to bytes. */
     encode(core: OpCore): Uint8Array;
@@ -65,6 +65,10 @@ export declare function verifyCarrierOpHash(frame: CarrierOpFrame): Promise<bool
 export declare function verifyCarrierOp(frame: CarrierOpFrame, verifier: Verifier): Promise<CarrierOpVerification>;
 export declare function authorCarrierOp(input: AuthorCarrierOpInput): Promise<CarrierOpFrame>;
 export declare function canonicalBytesForCarrierDelegation(delegation: CarrierDelegationCore): Uint8Array;
+/** Canonical policy-id preimage shared with `Lattice.Authority.SuccessionCertificate`. */
+export declare function canonicalBytesForWitnessedRecoveryPolicy(policy: WitnessedRecoveryPolicyEvidence): Uint8Array;
+/** Canonical witness-signature payload shared with the BEAM certificate verifier. */
+export declare function canonicalBytesForWitnessedSuccessionClaim(claim: WitnessedSuccessionClaimEvidence): Uint8Array;
 export declare function authorCarrierDelegation(input: AuthorCarrierDelegationInput): Promise<CarrierDelegation>;
 /**
  * Placeholder for semantic op authoring. Carrier-frame canonical byte/hash

@@ -23,6 +23,8 @@ import {
   decodeCarrierOpFrame,
   materialize,
   verifyCarrierOp,
+  verifyWitnessedSuccessionCertificate,
+  witnessedRecoveryPolicyId,
 } from "../src/index";
 import type { Op, ReplicaSchema } from "../src/index";
 
@@ -44,6 +46,10 @@ function check(name: string, got: unknown, want: unknown) {
   }
 }
 
+function sortedPairs(pairs: readonly [string, string][]): [string, string][] {
+  return [...pairs].sort(([left], [right]) => left.localeCompare(right));
+}
+
 interface Vector {
   scenario: string;
   schema: ReplicaSchema;
@@ -52,6 +58,28 @@ interface Vector {
   realmByPubkey?: Record<string, string>;
   successionOperationId?: string;
   tickProvenance?: "author_asserted_untrusted";
+  witnessedRecovery?: {
+    deniedOperationId: string;
+    honoredOperationId: string;
+    impostorPolicyGenesisOperationId: string;
+    impostorPolicySuccessionOperationId: string;
+    policyId: string;
+    claim: {
+      version: number;
+      replica: string;
+      role: string;
+      holderPubkey: string;
+      holderEpoch: string;
+      successorPubkey: string;
+      policyId: string;
+    };
+    policy: {
+      mode: "witnessed";
+      version: number;
+      witnessPubkeys: string[];
+      threshold: number;
+    };
+  };
   expectAtFullFrontier: {
     state: Record<string, unknown>;
     quarantine: string[];
@@ -271,6 +299,216 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
     );
     check("unproven-tick clerk state", full.state.clerk, "resident");
     check("unproven-tick clerk winner", full.winners.clerk, successionId);
+  }
+
+  if (vec.scenario === "township_succession_witnessed_recovery") {
+    const recovery = vec.witnessedRecovery;
+    const genesisFrame = carrierFrames?.find((frame) => frame.id === recovery?.claim.holderEpoch);
+    const impostorGenesisFrame = carrierFrames?.find(
+      (frame) => frame.id === recovery?.impostorPolicyGenesisOperationId,
+    );
+    const impostorSuccessionFrame = carrierFrames?.find(
+      (frame) => frame.id === recovery?.impostorPolicySuccessionOperationId,
+    );
+    const deniedFrame = carrierFrames?.find(
+      (frame) => frame.id === recovery?.deniedOperationId,
+    );
+    const honoredFrame = carrierFrames?.find(
+      (frame) => frame.id === recovery?.honoredOperationId,
+    );
+    const genesisOp = ops.find((op) => op.id === genesisFrame?.id);
+    const impostorGenesisOp = ops.find((op) => op.id === impostorGenesisFrame?.id);
+    const impostorSuccessionOp = ops.find((op) => op.id === impostorSuccessionFrame?.id);
+    const deniedOp = ops.find((op) => op.id === recovery?.deniedOperationId);
+    const honoredOp = ops.find((op) => op.id === recovery?.honoredOperationId);
+    const genesisEvidence =
+      genesisOp?.authority?.type === "genesis" ? genesisOp.authority : undefined;
+    const policy = genesisEvidence?.policies?.clerk;
+    const witnessedPolicy = policy?.mode === "witnessed" ? policy : undefined;
+    const impostorGenesisEvidence =
+      impostorGenesisOp?.authority?.type === "genesis"
+        ? impostorGenesisOp.authority
+        : undefined;
+    const impostorPolicy = impostorGenesisEvidence?.policies?.clerk;
+    const witnessedImpostorPolicy =
+      impostorPolicy?.mode === "witnessed" ? impostorPolicy : undefined;
+    const impostorSuccessionEvidence =
+      impostorSuccessionOp?.authority?.type === "succeed"
+        ? impostorSuccessionOp.authority
+        : undefined;
+    const impostorProof =
+      impostorSuccessionEvidence?.proof.mode === "witnessed"
+        ? impostorSuccessionEvidence.proof
+        : undefined;
+    const deniedProof =
+      deniedOp?.authority?.type === "succeed" && deniedOp.authority.proof.mode === "witnessed"
+        ? deniedOp.authority.proof
+        : undefined;
+    const honoredEvidence =
+      honoredOp?.authority?.type === "succeed" ? honoredOp.authority : undefined;
+    const honoredProof =
+      honoredEvidence?.proof.mode === "witnessed" ? honoredEvidence.proof : undefined;
+
+    check(
+      "witnessed-recovery carrier hash/signatures",
+      carrierFrames === undefined
+        ? null
+        : await Promise.all(carrierFrames.map((frame) => verifyCarrierOp(frame, verifier))),
+      [
+        { hash: true, signature: true, valid: true },
+        { hash: true, signature: true, valid: true },
+        { hash: true, signature: true, valid: true },
+        { hash: true, signature: true, valid: true },
+        { hash: true, signature: true, valid: true },
+      ],
+    );
+
+    const policyId =
+      witnessedPolicy === undefined ? null : witnessedRecoveryPolicyId(witnessedPolicy.recovery);
+    check("witnessed-recovery recomputed policy id", policyId, recovery?.policyId);
+
+    const expectedClaim =
+      genesisEvidence === undefined || honoredEvidence === undefined || honoredOp?.replica === undefined || policyId === null
+        ? undefined
+        : {
+            version: 1,
+            replica: honoredOp.replica,
+            role: honoredEvidence.role,
+            holder: genesisEvidence.delegation.audience,
+            holderEpoch: genesisOp!.id,
+            successor: honoredEvidence.delegation.audience,
+            policyId,
+          };
+
+    check(
+      "witnessed-recovery expected claim is independently bound",
+      expectedClaim === undefined
+        ? null
+        : Object.entries({
+            version: expectedClaim.version,
+            replica: expectedClaim.replica,
+            role: expectedClaim.role,
+            holderPubkey: expectedClaim.holder,
+            holderEpoch: expectedClaim.holderEpoch,
+            successorPubkey: expectedClaim.successor,
+            policyId: expectedClaim.policyId,
+          }).sort(([left], [right]) => left.localeCompare(right)),
+      recovery === undefined
+        ? undefined
+        : Object.entries(recovery.claim).sort(([left], [right]) => left.localeCompare(right)),
+    );
+
+    check(
+      "witnessed-recovery denied certificate",
+      witnessedPolicy === undefined || deniedProof === undefined || expectedClaim === undefined
+        ? null
+        : verifyWitnessedSuccessionCertificate(
+            deniedProof.certificate,
+            expectedClaim,
+            witnessedPolicy.recovery,
+          ),
+      { valid: false, reason: "insufficient_recovery_witnesses" },
+    );
+    check(
+      "witnessed-recovery honored certificate",
+      witnessedPolicy === undefined || honoredProof === undefined || expectedClaim === undefined
+        ? null
+        : verifyWitnessedSuccessionCertificate(
+            honoredProof.certificate,
+            expectedClaim,
+            witnessedPolicy.recovery,
+          ),
+      { valid: true },
+    );
+
+    const impostorPolicyId =
+      witnessedImpostorPolicy === undefined
+        ? null
+        : witnessedRecoveryPolicyId(witnessedImpostorPolicy.recovery);
+    const expectedImpostorClaim =
+      genesisEvidence === undefined ||
+      impostorSuccessionEvidence === undefined ||
+      impostorSuccessionOp?.replica === undefined ||
+      impostorPolicyId === null
+        ? undefined
+        : {
+            version: 1,
+            replica: impostorSuccessionOp.replica,
+            role: impostorSuccessionEvidence.role,
+            holder: genesisEvidence.delegation.audience,
+            holderEpoch: genesisOp!.id,
+            successor: impostorSuccessionEvidence.delegation.audience,
+            policyId: impostorPolicyId,
+          };
+
+    check(
+      "witnessed-recovery impostor certificate is cryptographically valid",
+      witnessedImpostorPolicy === undefined ||
+        impostorProof === undefined ||
+        expectedImpostorClaim === undefined
+        ? null
+        : verifyWitnessedSuccessionCertificate(
+            impostorProof.certificate,
+            expectedImpostorClaim,
+            witnessedImpostorPolicy.recovery,
+          ),
+      { valid: true },
+    );
+    check(
+      "witnessed-recovery BEAM reason",
+      exp.authorityQuarantine === undefined
+        ? undefined
+        : sortedPairs(exp.authorityQuarantine),
+      recovery === undefined
+        ? null
+        : sortedPairs([
+            [recovery.impostorPolicyGenesisOperationId, "impostor_genesis"],
+            [recovery.impostorPolicySuccessionOperationId, "unauthorized_succession"],
+            [recovery.deniedOperationId, "insufficient_recovery_witnesses"],
+          ]),
+    );
+
+    let invalidSignatureResult: ReturnType<typeof materialize> | null = null;
+    const invalidSignatureOps = structuredClone(ops);
+    const invalidSignatureOp = invalidSignatureOps.find(
+      (op) => op.id === recovery?.honoredOperationId,
+    );
+    if (
+      invalidSignatureOp?.authority?.type === "succeed" &&
+      invalidSignatureOp.authority.proof.mode === "witnessed" &&
+      invalidSignatureOp.authority.proof.certificate !== null
+    ) {
+      const [firstSignature] = invalidSignatureOp.authority.proof.certificate.signatures;
+      if (firstSignature !== undefined && firstSignature.signature.length > 0) {
+        const invalidSignature = Buffer.from(firstSignature.signature, "base64");
+        invalidSignature[0] = invalidSignature[0]! ^ 1;
+        firstSignature.signature = invalidSignature.toString("base64");
+        invalidSignatureResult = materialize(vec.schema, invalidSignatureOps);
+      }
+    }
+
+    check(
+      "witnessed-recovery signature is reducer-load-bearing",
+      invalidSignatureResult === null || recovery === undefined || genesisOp === undefined
+        ? null
+        : {
+            clerk: invalidSignatureResult.state.clerk,
+            winner: invalidSignatureResult.winners.clerk,
+            quarantine: [...invalidSignatureResult.quarantine].sort(),
+          },
+      recovery === undefined || genesisOp === undefined
+        ? null
+        : {
+            clerk: "clerk",
+            winner: genesisOp.id,
+            quarantine: [
+              recovery.impostorPolicyGenesisOperationId,
+              recovery.impostorPolicySuccessionOperationId,
+              recovery.deniedOperationId,
+              recovery.honoredOperationId,
+            ].sort(),
+          },
+    );
   }
 
   // partial-frontier assertions (the LWW flip, perspective, etc.)
