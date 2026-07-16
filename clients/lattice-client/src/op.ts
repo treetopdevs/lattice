@@ -105,6 +105,7 @@ export type AuthorityEvidence =
       delegation: AuthorityDelegationEvidence;
       proof: SuccessionProofEvidence;
     }
+  | { type: "revoke"; delegationId: string }
   | { type: "heartbeat"; role: string; atTick: number };
 
 export interface Op {
@@ -132,6 +133,8 @@ export interface Op {
   hash: string;
   /** Optional human label for display/debug (not load-bearing). */
   command?: string;
+  /** Capability id retained from carrier evidence; decoded nil is explicit null. */
+  cap?: string | null;
   /** Semantic authority facts retained from the verified carrier body. */
   authority?: AuthorityEvidence;
 }

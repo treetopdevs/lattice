@@ -54,6 +54,7 @@ interface Vector {
   scenario: string;
   schema: ReplicaSchema;
   ops: Op[];
+  capabilityCase?: unknown;
   oracleCarrierOps?: unknown[];
   realmByPubkey?: Record<string, string>;
   successionOperationId?: string;
@@ -98,6 +99,21 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
     carrierFrames !== undefined && vec.realmByPubkey !== undefined
       ? carrierOpsToSemanticOps(carrierFrames, vec.realmByPubkey)
       : vec.ops;
+
+  if (vec.capabilityCase !== undefined && carrierFrames !== undefined) {
+    for (const frame of carrierFrames.filter((candidate) => candidate.kind === "command")) {
+      const semantic = ops.find((op) => op.id === frame.id) as
+        | (Op & { cap?: string | null })
+        | undefined;
+      const expectedCap =
+        frame.cap[0] === "bin"
+          ? Buffer.from(frame.cap[1], "base64").toString("utf8")
+          : null;
+
+      check(`command ${frame.id} decoded`, semantic !== undefined, true);
+      check(`command ${frame.id} retained capability`, semantic?.cap, expectedCap);
+    }
+  }
 
   if (vec.scenario === "township_authority_forged_root") {
     const [frame] = carrierFrames ?? [];
@@ -264,6 +280,26 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
     check(`state.${field}`, full.state[field], want);
   }
   check("quarantine set", [...full.quarantine].sort(), [...exp.quarantine].sort());
+  if (vec.capabilityCase !== undefined) {
+    const reasoned = full as typeof full & {
+      quarantineReasons?: ReadonlyMap<string, string>;
+    };
+    const reasonPairs =
+      reasoned.quarantineReasons === undefined
+        ? null
+        : sortedPairs([...reasoned.quarantineReasons]);
+
+    check(
+      "quarantine reason pairs",
+      reasonPairs,
+      sortedPairs(exp.authorityQuarantine ?? []),
+    );
+    check(
+      "quarantine reason ids",
+      reasonPairs?.map(([id]) => id) ?? null,
+      [...full.quarantine].sort(),
+    );
+  }
   if (exp.winners) {
     for (const [field, want] of Object.entries(exp.winners)) {
       check(`winner.${field}`, full.winners[field], want);

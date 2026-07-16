@@ -15,6 +15,15 @@ vector files remain byte-for-byte identical; exactly nine new vectors were gener
 returned `PROCEED` on the exact GREEN, then its only P2 (null cap versus the planned present unknown
 id) was corrected test-first and independently re-reviewed `PROCEED`.
 
+Slices 2-4 GREEN evidence: conformance first failed 45 checks (12 dropped-cap evidence checks plus
+33 state/quarantine/reason checks). Retaining decoded command caps made all 12 evidence checks pass
+without changing the 33 semantic failures; the shared authority projection, revoke fact, one-path
+capability validator, and reason map then made the full corpus green. Typecheck, V-01 guard,
+canonical bytes, in-memory carrier, and live OTP 28 carrier gates pass. Mutations that accepted an
+invalid delegation, skipped visibility, or made an unauthorized revoke effective each produced
+three focused conformance failures and were restored. Claude Opus returned `PROCEED` on the exact
+GREEN with no P0-P1 finding.
+
 ## Priority
 
 **P0** — this is the same class as Plan 140's V-01 prime directive. The TS client is

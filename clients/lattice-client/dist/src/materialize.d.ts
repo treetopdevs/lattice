@@ -19,6 +19,8 @@ export interface Materialized {
     state: Record<string, unknown>;
     /** ids of ops rejected by the quarantine predicate (never applied to state) */
     quarantine: string[];
+    /** Locally decided BEAM-compatible reason for each attributed quarantine id. */
+    quarantineReasons: ReadonlyMap<string, string>;
     /** the canonical linear extension actually used */
     order: string[];
     /** field -> winning op id for LWW/authority fields (provenance) */

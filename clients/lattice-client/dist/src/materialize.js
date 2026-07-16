@@ -51,6 +51,7 @@ export function materialize(schema, ops, included, externallyQuarantined = new S
     }
     // 1. quarantine pass (deps-decidable, over the included set)
     const quarantine = [];
+    const quarantineReasons = new Map(authority.quarantineReasons);
     const quarantined = new Set([
         ...authority.quarantinedWrites,
         ...externallyQuarantined,
@@ -61,10 +62,12 @@ export function materialize(schema, ops, included, externallyQuarantined = new S
             quarantine.push(id);
             continue;
         }
-        const q = isQuarantined(op, schema, byId, authority.acquiresByRole, ancCache);
+        const q = isQuarantined(op, schema, byId, authority, ancCache);
         if (q.quarantined) {
             quarantine.push(id);
             quarantined.add(id);
+            if (q.reason !== undefined)
+                quarantineReasons.set(id, q.reason);
         }
     }
     // 2. per-field reduction over included, non-quarantined ops
@@ -96,7 +99,7 @@ export function materialize(schema, ops, included, externallyQuarantined = new S
             state[field] = causalList(fieldOps, depthOf);
         }
     }
-    return { state, quarantine, order, winners };
+    return { state, quarantine, quarantineReasons, order, winners };
 }
 function authorityWriteCount(schema, ops, included) {
     return ops.filter((op) => {

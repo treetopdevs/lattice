@@ -36,6 +36,8 @@ export interface Materialized {
   state: Record<string, unknown>;
   /** ids of ops rejected by the quarantine predicate (never applied to state) */
   quarantine: string[];
+  /** Locally decided BEAM-compatible reason for each attributed quarantine id. */
+  quarantineReasons: ReadonlyMap<string, string>;
   /** the canonical linear extension actually used */
   order: string[];
   /** field -> winning op id for LWW/authority fields (provenance) */
@@ -83,6 +85,7 @@ export function materialize(
 
   // 1. quarantine pass (deps-decidable, over the included set)
   const quarantine: string[] = [];
+  const quarantineReasons = new Map(authority.quarantineReasons);
   const quarantined = new Set([
     ...authority.quarantinedWrites,
     ...externallyQuarantined,
@@ -93,10 +96,11 @@ export function materialize(
       quarantine.push(id);
       continue;
     }
-    const q = isQuarantined(op, schema, byId, authority.acquiresByRole, ancCache);
+    const q = isQuarantined(op, schema, byId, authority, ancCache);
     if (q.quarantined) {
       quarantine.push(id);
       quarantined.add(id);
+      if (q.reason !== undefined) quarantineReasons.set(id, q.reason);
     }
   }
 
@@ -128,7 +132,7 @@ export function materialize(
     }
   }
 
-  return { state, quarantine, order, winners };
+  return { state, quarantine, quarantineReasons, order, winners };
 }
 
 function authorityWriteCount(

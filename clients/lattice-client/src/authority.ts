@@ -26,11 +26,40 @@ export interface HonoredAcquire {
   atTick?: number;
 }
 
+export type DelegationValidation =
+  | { valid: true }
+  | { valid: false; reason: string };
+
+export interface AuthorityDelegationRecord {
+  delegation: AuthorityDelegationEvidence | null;
+  introductionOpIds: readonly string[];
+  invalidIntroductionReasons: ReadonlyMap<string, string>;
+  validation: DelegationValidation;
+}
+
+export interface AuthorityRootEvidence {
+  realm: string;
+  pubkey: string;
+}
+
+export interface EffectiveRevokeEvidence {
+  opId: string;
+  delegationId: string;
+}
+
+export interface AuthoritySecurityProjection {
+  delegations: ReadonlyMap<string, AuthorityDelegationRecord>;
+  root: AuthorityRootEvidence | null;
+  effectiveRevokes: readonly EffectiveRevokeEvidence[];
+}
+
 export interface AuthorityAnalysis {
   honoredWrites: ReadonlySet<string>;
   quarantinedWrites: ReadonlySet<string>;
+  quarantineReasons: ReadonlyMap<string, string>;
   /** Honored acquires per role, in the order they were honored (the oracle's timeline). */
   acquiresByRole: ReadonlyMap<string, readonly HonoredAcquire[]>;
+  security: AuthoritySecurityProjection;
 }
 
 interface RoleState {
@@ -41,6 +70,12 @@ interface RoleState {
 
 function emptyRoleState(): RoleState {
   return { holder: null, acquires: [], heartbeats: [] };
+}
+
+interface CollectedDelegation {
+  delegation: AuthorityDelegationEvidence | null;
+  introductionOpIds: string[];
+  invalidIntroductionReasons: Map<string, string>;
 }
 
 /**
@@ -62,12 +97,22 @@ export function analyzeAuthority(
     writesPerRole.set(op.field, (writesPerRole.get(op.field) ?? 0) + 1);
   }
 
-  const delegations = collectDelegations(visible);
-  const delegationValidity = new Map<string, boolean>();
-  const policies = collectPolicies(visible, delegations, delegationValidity);
+  const collectedDelegations = collectDelegations(visible);
+  const delegations = validateDelegations(visible, collectedDelegations);
+  const policies = collectPolicies(visible, delegations);
+  const root = resolveRoot(visible, delegations);
+  const { effectiveRevokes, unauthorizedRevokes } = collectRevokes(
+    visible,
+    delegations,
+    root,
+  );
   const states = new Map<string, RoleState>();
   const honoredWrites = new Set<string>();
-  const quarantinedWrites = new Set<string>();
+  const quarantineReasons = delegationQuarantineReasons(delegations);
+  for (const [opId, reason] of unauthorizedRevokes) {
+    quarantineReasons.set(opId, reason);
+  }
+  const quarantinedWrites = new Set<string>(quarantineReasons.keys());
 
   for (const op of visible) {
     if (op.authority?.type === "heartbeat") {
@@ -102,13 +147,15 @@ export function analyzeAuthority(
     }
 
     const evidence = op.authority;
+    if (evidence.type === "revoke") {
+      throw new Error(`revoke ${op.id} cannot write authority role ${op.field}`);
+    }
     const state = states.get(op.field) ?? emptyRoleState();
     const honored = authorityWriteHonored(
       op,
       evidence,
       state,
       delegations,
-      delegationValidity,
       policies,
       byId,
     );
@@ -136,12 +183,18 @@ export function analyzeAuthority(
     [...states].map(([role, state]) => [role, state.acquires]),
   );
 
-  return { honoredWrites, quarantinedWrites, acquiresByRole };
+  return {
+    honoredWrites,
+    quarantinedWrites,
+    quarantineReasons,
+    acquiresByRole,
+    security: { delegations, root, effectiveRevokes },
+  };
 }
 
 function honoredAcquire(
   op: Op,
-  evidence: Exclude<AuthorityEvidence, { type: "heartbeat" }>,
+  evidence: Exclude<AuthorityEvidence, { type: "heartbeat" } | { type: "revoke" }>,
   holder: string,
 ): HonoredAcquire {
   const acquire: HonoredAcquire = {
@@ -169,18 +222,17 @@ function authorityWriteHonored(
   op: Op,
   evidence: AuthorityEvidence,
   state: RoleState,
-  delegations: ReadonlyMap<string, AuthorityDelegationEvidence | null>,
-  delegationValidity: Map<string, boolean>,
+  delegations: ReadonlyMap<string, AuthorityDelegationRecord>,
   policies: ReadonlyMap<string, SuccessionPolicyEvidence>,
   byId: ReadonlyMap<string, Op>,
 ): boolean {
-  if (evidence.type === "heartbeat") return false;
+  if (evidence.type === "heartbeat" || evidence.type === "revoke") return false;
 
   const delegation = evidence.delegation;
   if (
     delegation.audienceRealm !== op.value ||
     !delegation.roles.includes(op.field) ||
-    !validDelegation(delegation, delegations, delegationValidity, new Set())
+    !validDelegation(delegation, delegations)
   ) {
     return false;
   }
@@ -474,8 +526,7 @@ function compareBase64Evidence(left: string, right: string): number {
 /** Succession policies are conferred only by a genesis whose delegation is valid. */
 function collectPolicies(
   ops: readonly Op[],
-  delegations: ReadonlyMap<string, AuthorityDelegationEvidence | null>,
-  delegationValidity: Map<string, boolean>,
+  delegations: ReadonlyMap<string, AuthorityDelegationRecord>,
 ): Map<string, SuccessionPolicyEvidence> {
   const policies = new Map<string, SuccessionPolicyEvidence>();
 
@@ -483,7 +534,7 @@ function collectPolicies(
     const evidence = op.authority;
     if (evidence?.type !== "genesis" || evidence.policies === undefined) continue;
     if (
-      !validDelegation(evidence.delegation, delegations, delegationValidity, new Set()) ||
+      !validDelegation(evidence.delegation, delegations) ||
       op.replica === undefined ||
       !replicaRootMatches(op.replica, evidence.delegation.audience)
     ) {
@@ -499,62 +550,247 @@ function collectPolicies(
 
 function collectDelegations(
   ops: readonly Op[],
-): Map<string, AuthorityDelegationEvidence | null> {
-  const delegations = new Map<string, AuthorityDelegationEvidence | null>();
+): Map<string, CollectedDelegation> {
+  const delegations = new Map<string, CollectedDelegation>();
 
   for (const op of ops) {
     const evidence = op.authority;
-    if (evidence === undefined || evidence.type === "heartbeat") continue;
+    if (
+      evidence === undefined ||
+      evidence.type === "heartbeat" ||
+      evidence.type === "revoke"
+    ) {
+      continue;
+    }
+
     const delegation = evidence.delegation;
-    if (!delegationSelfConsistent(delegation)) continue;
     const existing = delegations.get(delegation.id);
+
+    if (!delegationSelfConsistent(delegation)) {
+      const record =
+        existing ??
+        {
+          delegation: null,
+          introductionOpIds: [],
+          invalidIntroductionReasons: new Map<string, string>(),
+        };
+      record.invalidIntroductionReasons.set(op.id, "bad_delegation_sig");
+      delegations.set(delegation.id, record);
+      continue;
+    }
+
     if (existing === undefined) {
-      delegations.set(delegation.id, delegation);
-    } else if (existing === null || delegationKey(existing) !== delegationKey(delegation)) {
-      delegations.set(delegation.id, null);
+      delegations.set(delegation.id, {
+        delegation,
+        introductionOpIds: [op.id],
+        invalidIntroductionReasons: new Map(),
+      });
+    } else if (existing.delegation === null) {
+      existing.delegation = delegation;
+      existing.introductionOpIds.push(op.id);
+    } else if (delegationKey(existing.delegation) === delegationKey(delegation)) {
+      existing.introductionOpIds.push(op.id);
+    } else {
+      existing.delegation = null;
     }
   }
 
   return delegations;
 }
 
-function validDelegation(
-  delegation: AuthorityDelegationEvidence,
-  delegations: ReadonlyMap<string, AuthorityDelegationEvidence | null>,
-  cache: Map<string, boolean>,
-  visiting: Set<string>,
-): boolean {
-  if (!delegationSelfConsistent(delegation)) return false;
+function validateDelegations(
+  ops: readonly Op[],
+  collected: ReadonlyMap<string, CollectedDelegation>,
+): Map<string, AuthorityDelegationRecord> {
+  const genesisIds = new Set(
+    ops.flatMap((op) =>
+      op.authority?.type === "genesis" ? [op.authority.delegation.id] : [],
+    ),
+  );
+  const outerReplica = ops.find((op) => op.replica !== undefined)?.replica;
+  const cache = new Map<string, DelegationValidation>();
+  const delegations = new Map<string, AuthorityDelegationRecord>();
 
-  const cached = cache.get(delegation.id);
-  if (cached !== undefined) return cached;
-  const collected = delegations.get(delegation.id);
-  if (collected === undefined || collected === null || delegationKey(collected) !== delegationKey(delegation)) {
-    cache.set(delegation.id, false);
-    return false;
+  for (const [id, record] of collected) {
+    delegations.set(id, {
+      delegation: record.delegation,
+      introductionOpIds: [...record.introductionOpIds],
+      invalidIntroductionReasons: new Map(record.invalidIntroductionReasons),
+      validation: delegationValidation(
+        id,
+        collected,
+        genesisIds,
+        outerReplica,
+        cache,
+        new Set(),
+      ),
+    });
   }
-  if (visiting.has(delegation.id)) return false;
-  visiting.add(delegation.id);
 
-  let valid: boolean;
+  return delegations;
+}
+
+function delegationValidation(
+  id: string,
+  delegations: ReadonlyMap<string, CollectedDelegation>,
+  genesisIds: ReadonlySet<string>,
+  outerReplica: string | undefined,
+  cache: Map<string, DelegationValidation>,
+  visiting: Set<string>,
+): DelegationValidation {
+  const cached = cache.get(id);
+  if (cached !== undefined) return cached;
+
+  const record = delegations.get(id);
+  const delegation = record?.delegation;
+  if (delegation === undefined || delegation === null) {
+    return { valid: false, reason: "bad_delegation_sig" };
+  }
+  if (visiting.has(id)) return { valid: false, reason: "invalid_parent" };
+  visiting.add(id);
+
+  let validation: DelegationValidation;
   if (delegation.parentId === null) {
-    valid = delegation.issuer === delegation.audience;
+    if (delegation.issuer !== delegation.audience) {
+      validation = { valid: false, reason: "nongenesis_root" };
+    } else if (
+      genesisIds.has(delegation.id) &&
+      outerReplica !== undefined &&
+      !replicaRootMatches(outerReplica, delegation.audience)
+    ) {
+      validation = { valid: false, reason: "impostor_genesis" };
+    } else {
+      validation = { valid: true };
+    }
   } else {
     const parent = delegations.get(delegation.parentId);
-    valid =
-      parent !== undefined &&
-      parent !== null &&
-      validDelegation(parent, delegations, cache, visiting) &&
-      delegation.issuer === parent.audience &&
-      delegation.replica === parent.replica &&
-      subset(delegation.ops, parent.ops) &&
-      subset(delegation.roles, parent.roles) &&
-      (!delegation.live || parent.live);
+    if (parent === undefined) {
+      validation = { valid: false, reason: "missing_parent" };
+    } else if (parent.delegation === null) {
+      validation = { valid: false, reason: "invalid_parent" };
+    } else {
+      const parentValidation = delegationValidation(
+        delegation.parentId,
+        delegations,
+        genesisIds,
+        outerReplica,
+        cache,
+        visiting,
+      );
+      validation =
+        !parentValidation.valid
+          ? { valid: false, reason: "invalid_parent" }
+          : delegationAttenuates(delegation, parent.delegation)
+            ? { valid: true }
+            : { valid: false, reason: "not_attenuated" };
+    }
   }
 
-  visiting.delete(delegation.id);
-  cache.set(delegation.id, valid);
-  return valid;
+  visiting.delete(id);
+  cache.set(id, validation);
+  return validation;
+}
+
+function validDelegation(
+  delegation: AuthorityDelegationEvidence,
+  delegations: ReadonlyMap<string, AuthorityDelegationRecord>,
+): boolean {
+  const record = delegations.get(delegation.id);
+  return (
+    record !== undefined &&
+    record.delegation !== null &&
+    delegationKey(record.delegation) === delegationKey(delegation) &&
+    record.validation.valid
+  );
+}
+
+function resolveRoot(
+  ops: readonly Op[],
+  delegations: ReadonlyMap<string, AuthorityDelegationRecord>,
+): AuthorityRootEvidence | null {
+  for (const op of ops) {
+    const evidence = op.authority;
+    if (evidence?.type !== "genesis") continue;
+    if (!validDelegation(evidence.delegation, delegations)) continue;
+    if (
+      op.replica !== undefined &&
+      !replicaRootMatches(op.replica, evidence.delegation.audience)
+    ) {
+      continue;
+    }
+    return {
+      realm: evidence.delegation.audienceRealm,
+      pubkey: evidence.delegation.audience,
+    };
+  }
+
+  return null;
+}
+
+function collectRevokes(
+  ops: readonly Op[],
+  delegations: ReadonlyMap<string, AuthorityDelegationRecord>,
+  root: AuthorityRootEvidence | null,
+): {
+  effectiveRevokes: EffectiveRevokeEvidence[];
+  unauthorizedRevokes: Map<string, string>;
+} {
+  const effectiveRevokes: EffectiveRevokeEvidence[] = [];
+  const unauthorizedRevokes = new Map<string, string>();
+
+  for (const op of ops) {
+    const evidence = op.authority;
+    if (evidence?.type !== "revoke") continue;
+    const delegation = delegations.get(evidence.delegationId)?.delegation;
+    const authorized =
+      delegation !== undefined &&
+      delegation !== null &&
+      (op.author === delegation.issuerRealm || op.author === root?.realm);
+
+    if (authorized) {
+      effectiveRevokes.push({
+        opId: op.id,
+        delegationId: evidence.delegationId,
+      });
+    } else {
+      unauthorizedRevokes.set(op.id, "unauthorized_revoke");
+    }
+  }
+
+  return { effectiveRevokes, unauthorizedRevokes };
+}
+
+function delegationQuarantineReasons(
+  delegations: ReadonlyMap<string, AuthorityDelegationRecord>,
+): Map<string, string> {
+  const reasons = new Map<string, string>();
+
+  for (const record of delegations.values()) {
+    for (const [opId, reason] of record.invalidIntroductionReasons) {
+      reasons.set(opId, reason);
+    }
+    if (!record.validation.valid && record.delegation !== null) {
+      for (const opId of record.introductionOpIds) {
+        reasons.set(opId, record.validation.reason);
+      }
+    }
+  }
+
+  return reasons;
+}
+
+function delegationAttenuates(
+  child: AuthorityDelegationEvidence,
+  parent: AuthorityDelegationEvidence,
+): boolean {
+  return (
+    child.parentId === parent.id &&
+    child.issuer === parent.audience &&
+    child.replica === parent.replica &&
+    subset(child.ops, parent.ops) &&
+    subset(child.roles, parent.roles) &&
+    (!child.live || parent.live)
+  );
 }
 
 function delegationSelfConsistent(delegation: AuthorityDelegationEvidence): boolean {

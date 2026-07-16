@@ -14,6 +14,7 @@ export * from "./op";
 export * from "./schema";
 export * from "./dag";
 export * from "./quarantine";
+export * from "./capability";
 export * from "./authority";
 export * from "./crdt/reducers";
 export * from "./materialize";

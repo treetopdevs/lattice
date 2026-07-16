@@ -1,4 +1,4 @@
-import type { Op, WitnessedRecoveryPolicyEvidence, WitnessedSuccessionCertificateEvidence, WitnessedSuccessionClaimEvidence } from "./op";
+import type { AuthorityDelegationEvidence, Op, WitnessedRecoveryPolicyEvidence, WitnessedSuccessionCertificateEvidence, WitnessedSuccessionClaimEvidence } from "./op";
 import type { ReplicaSchema } from "./schema";
 /** One honored role acquisition, in processing (canonical) order. */
 export interface HonoredAcquire {
@@ -7,11 +7,38 @@ export interface HonoredAcquire {
     holderPubkey?: string;
     atTick?: number;
 }
+export type DelegationValidation = {
+    valid: true;
+} | {
+    valid: false;
+    reason: string;
+};
+export interface AuthorityDelegationRecord {
+    delegation: AuthorityDelegationEvidence | null;
+    introductionOpIds: readonly string[];
+    invalidIntroductionReasons: ReadonlyMap<string, string>;
+    validation: DelegationValidation;
+}
+export interface AuthorityRootEvidence {
+    realm: string;
+    pubkey: string;
+}
+export interface EffectiveRevokeEvidence {
+    opId: string;
+    delegationId: string;
+}
+export interface AuthoritySecurityProjection {
+    delegations: ReadonlyMap<string, AuthorityDelegationRecord>;
+    root: AuthorityRootEvidence | null;
+    effectiveRevokes: readonly EffectiveRevokeEvidence[];
+}
 export interface AuthorityAnalysis {
     honoredWrites: ReadonlySet<string>;
     quarantinedWrites: ReadonlySet<string>;
+    quarantineReasons: ReadonlyMap<string, string>;
     /** Honored acquires per role, in the order they were honored (the oracle's timeline). */
     acquiresByRole: ReadonlyMap<string, readonly HonoredAcquire[]>;
+    security: AuthoritySecurityProjection;
 }
 /**
  * Decide which role-holder writes are honored from their causal position.

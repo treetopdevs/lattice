@@ -18,12 +18,18 @@ export function analyzeAuthority(schema, ops, included, order, byId) {
             continue;
         writesPerRole.set(op.field, (writesPerRole.get(op.field) ?? 0) + 1);
     }
-    const delegations = collectDelegations(visible);
-    const delegationValidity = new Map();
-    const policies = collectPolicies(visible, delegations, delegationValidity);
+    const collectedDelegations = collectDelegations(visible);
+    const delegations = validateDelegations(visible, collectedDelegations);
+    const policies = collectPolicies(visible, delegations);
+    const root = resolveRoot(visible, delegations);
+    const { effectiveRevokes, unauthorizedRevokes } = collectRevokes(visible, delegations, root);
     const states = new Map();
     const honoredWrites = new Set();
-    const quarantinedWrites = new Set();
+    const quarantineReasons = delegationQuarantineReasons(delegations);
+    for (const [opId, reason] of unauthorizedRevokes) {
+        quarantineReasons.set(opId, reason);
+    }
+    const quarantinedWrites = new Set(quarantineReasons.keys());
     for (const op of visible) {
         if (op.authority?.type === "heartbeat") {
             // Heartbeats never write a field: they only refresh the holder's
@@ -56,8 +62,11 @@ export function analyzeAuthority(schema, ops, included, order, byId) {
             continue;
         }
         const evidence = op.authority;
+        if (evidence.type === "revoke") {
+            throw new Error(`revoke ${op.id} cannot write authority role ${op.field}`);
+        }
         const state = states.get(op.field) ?? emptyRoleState();
-        const honored = authorityWriteHonored(op, evidence, state, delegations, delegationValidity, policies, byId);
+        const honored = authorityWriteHonored(op, evidence, state, delegations, policies, byId);
         if (honored) {
             const holder = evidence.delegation.audienceRealm;
             state.holder = holder;
@@ -79,7 +88,13 @@ export function analyzeAuthority(schema, ops, included, order, byId) {
         }
     }
     const acquiresByRole = new Map([...states].map(([role, state]) => [role, state.acquires]));
-    return { honoredWrites, quarantinedWrites, acquiresByRole };
+    return {
+        honoredWrites,
+        quarantinedWrites,
+        quarantineReasons,
+        acquiresByRole,
+        security: { delegations, root, effectiveRevokes },
+    };
 }
 function honoredAcquire(op, evidence, holder) {
     const acquire = {
@@ -102,13 +117,13 @@ function authorityRoleWrite(schema, op) {
     const spec = schema.fields[op.field];
     return spec !== undefined && isAuthorityField(spec);
 }
-function authorityWriteHonored(op, evidence, state, delegations, delegationValidity, policies, byId) {
-    if (evidence.type === "heartbeat")
+function authorityWriteHonored(op, evidence, state, delegations, policies, byId) {
+    if (evidence.type === "heartbeat" || evidence.type === "revoke")
         return false;
     const delegation = evidence.delegation;
     if (delegation.audienceRealm !== op.value ||
         !delegation.roles.includes(op.field) ||
-        !validDelegation(delegation, delegations, delegationValidity, new Set())) {
+        !validDelegation(delegation, delegations)) {
         return false;
     }
     if (evidence.type === "genesis") {
@@ -309,13 +324,13 @@ function compareBase64Evidence(left, right) {
     return compareBytes(canonicalBase64Bytes(left), canonicalBase64Bytes(right));
 }
 /** Succession policies are conferred only by a genesis whose delegation is valid. */
-function collectPolicies(ops, delegations, delegationValidity) {
+function collectPolicies(ops, delegations) {
     const policies = new Map();
     for (const op of ops) {
         const evidence = op.authority;
         if (evidence?.type !== "genesis" || evidence.policies === undefined)
             continue;
-        if (!validDelegation(evidence.delegation, delegations, delegationValidity, new Set()) ||
+        if (!validDelegation(evidence.delegation, delegations) ||
             op.replica === undefined ||
             !replicaRootMatches(op.replica, evidence.delegation.audience)) {
             continue;
@@ -330,54 +345,176 @@ function collectDelegations(ops) {
     const delegations = new Map();
     for (const op of ops) {
         const evidence = op.authority;
-        if (evidence === undefined || evidence.type === "heartbeat")
+        if (evidence === undefined ||
+            evidence.type === "heartbeat" ||
+            evidence.type === "revoke") {
             continue;
-        const delegation = evidence.delegation;
-        if (!delegationSelfConsistent(delegation))
-            continue;
-        const existing = delegations.get(delegation.id);
-        if (existing === undefined) {
-            delegations.set(delegation.id, delegation);
         }
-        else if (existing === null || delegationKey(existing) !== delegationKey(delegation)) {
-            delegations.set(delegation.id, null);
+        const delegation = evidence.delegation;
+        const existing = delegations.get(delegation.id);
+        if (!delegationSelfConsistent(delegation)) {
+            const record = existing ??
+                {
+                    delegation: null,
+                    introductionOpIds: [],
+                    invalidIntroductionReasons: new Map(),
+                };
+            record.invalidIntroductionReasons.set(op.id, "bad_delegation_sig");
+            delegations.set(delegation.id, record);
+            continue;
+        }
+        if (existing === undefined) {
+            delegations.set(delegation.id, {
+                delegation,
+                introductionOpIds: [op.id],
+                invalidIntroductionReasons: new Map(),
+            });
+        }
+        else if (existing.delegation === null) {
+            existing.delegation = delegation;
+            existing.introductionOpIds.push(op.id);
+        }
+        else if (delegationKey(existing.delegation) === delegationKey(delegation)) {
+            existing.introductionOpIds.push(op.id);
+        }
+        else {
+            existing.delegation = null;
         }
     }
     return delegations;
 }
-function validDelegation(delegation, delegations, cache, visiting) {
-    if (!delegationSelfConsistent(delegation))
-        return false;
-    const cached = cache.get(delegation.id);
+function validateDelegations(ops, collected) {
+    const genesisIds = new Set(ops.flatMap((op) => op.authority?.type === "genesis" ? [op.authority.delegation.id] : []));
+    const outerReplica = ops.find((op) => op.replica !== undefined)?.replica;
+    const cache = new Map();
+    const delegations = new Map();
+    for (const [id, record] of collected) {
+        delegations.set(id, {
+            delegation: record.delegation,
+            introductionOpIds: [...record.introductionOpIds],
+            invalidIntroductionReasons: new Map(record.invalidIntroductionReasons),
+            validation: delegationValidation(id, collected, genesisIds, outerReplica, cache, new Set()),
+        });
+    }
+    return delegations;
+}
+function delegationValidation(id, delegations, genesisIds, outerReplica, cache, visiting) {
+    const cached = cache.get(id);
     if (cached !== undefined)
         return cached;
-    const collected = delegations.get(delegation.id);
-    if (collected === undefined || collected === null || delegationKey(collected) !== delegationKey(delegation)) {
-        cache.set(delegation.id, false);
-        return false;
+    const record = delegations.get(id);
+    const delegation = record?.delegation;
+    if (delegation === undefined || delegation === null) {
+        return { valid: false, reason: "bad_delegation_sig" };
     }
-    if (visiting.has(delegation.id))
-        return false;
-    visiting.add(delegation.id);
-    let valid;
+    if (visiting.has(id))
+        return { valid: false, reason: "invalid_parent" };
+    visiting.add(id);
+    let validation;
     if (delegation.parentId === null) {
-        valid = delegation.issuer === delegation.audience;
+        if (delegation.issuer !== delegation.audience) {
+            validation = { valid: false, reason: "nongenesis_root" };
+        }
+        else if (genesisIds.has(delegation.id) &&
+            outerReplica !== undefined &&
+            !replicaRootMatches(outerReplica, delegation.audience)) {
+            validation = { valid: false, reason: "impostor_genesis" };
+        }
+        else {
+            validation = { valid: true };
+        }
     }
     else {
         const parent = delegations.get(delegation.parentId);
-        valid =
-            parent !== undefined &&
-                parent !== null &&
-                validDelegation(parent, delegations, cache, visiting) &&
-                delegation.issuer === parent.audience &&
-                delegation.replica === parent.replica &&
-                subset(delegation.ops, parent.ops) &&
-                subset(delegation.roles, parent.roles) &&
-                (!delegation.live || parent.live);
+        if (parent === undefined) {
+            validation = { valid: false, reason: "missing_parent" };
+        }
+        else if (parent.delegation === null) {
+            validation = { valid: false, reason: "invalid_parent" };
+        }
+        else {
+            const parentValidation = delegationValidation(delegation.parentId, delegations, genesisIds, outerReplica, cache, visiting);
+            validation =
+                !parentValidation.valid
+                    ? { valid: false, reason: "invalid_parent" }
+                    : delegationAttenuates(delegation, parent.delegation)
+                        ? { valid: true }
+                        : { valid: false, reason: "not_attenuated" };
+        }
     }
-    visiting.delete(delegation.id);
-    cache.set(delegation.id, valid);
-    return valid;
+    visiting.delete(id);
+    cache.set(id, validation);
+    return validation;
+}
+function validDelegation(delegation, delegations) {
+    const record = delegations.get(delegation.id);
+    return (record !== undefined &&
+        record.delegation !== null &&
+        delegationKey(record.delegation) === delegationKey(delegation) &&
+        record.validation.valid);
+}
+function resolveRoot(ops, delegations) {
+    for (const op of ops) {
+        const evidence = op.authority;
+        if (evidence?.type !== "genesis")
+            continue;
+        if (!validDelegation(evidence.delegation, delegations))
+            continue;
+        if (op.replica !== undefined &&
+            !replicaRootMatches(op.replica, evidence.delegation.audience)) {
+            continue;
+        }
+        return {
+            realm: evidence.delegation.audienceRealm,
+            pubkey: evidence.delegation.audience,
+        };
+    }
+    return null;
+}
+function collectRevokes(ops, delegations, root) {
+    const effectiveRevokes = [];
+    const unauthorizedRevokes = new Map();
+    for (const op of ops) {
+        const evidence = op.authority;
+        if (evidence?.type !== "revoke")
+            continue;
+        const delegation = delegations.get(evidence.delegationId)?.delegation;
+        const authorized = delegation !== undefined &&
+            delegation !== null &&
+            (op.author === delegation.issuerRealm || op.author === root?.realm);
+        if (authorized) {
+            effectiveRevokes.push({
+                opId: op.id,
+                delegationId: evidence.delegationId,
+            });
+        }
+        else {
+            unauthorizedRevokes.set(op.id, "unauthorized_revoke");
+        }
+    }
+    return { effectiveRevokes, unauthorizedRevokes };
+}
+function delegationQuarantineReasons(delegations) {
+    const reasons = new Map();
+    for (const record of delegations.values()) {
+        for (const [opId, reason] of record.invalidIntroductionReasons) {
+            reasons.set(opId, reason);
+        }
+        if (!record.validation.valid && record.delegation !== null) {
+            for (const opId of record.introductionOpIds) {
+                reasons.set(opId, record.validation.reason);
+            }
+        }
+    }
+    return reasons;
+}
+function delegationAttenuates(child, parent) {
+    return (child.parentId === parent.id &&
+        child.issuer === parent.audience &&
+        child.replica === parent.replica &&
+        subset(child.ops, parent.ops) &&
+        subset(child.roles, parent.roles) &&
+        (!child.live || parent.live));
 }
 function delegationSelfConsistent(delegation) {
     if (delegation.sig === undefined)

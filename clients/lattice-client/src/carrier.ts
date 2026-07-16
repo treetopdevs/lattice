@@ -890,6 +890,7 @@ export function carrierOpToSemanticOp(
   const op = assertCarrierOpFrame(frame);
   const body = decodeCarrierTerm(op.body);
   const payload = payloadFromBody(op.kind, body, realmByPubkey);
+  const cap = capabilityId(decodeCarrierTerm(op.cap));
 
   return {
     id: op.id,
@@ -902,6 +903,7 @@ export function carrierOpToSemanticOp(
     value: payload.value,
     hash: op.id,
     command: payload.command,
+    cap,
     ...(payload.authority === undefined ? {} : { authority: payload.authority }),
   };
 }
@@ -1096,8 +1098,13 @@ function payloadFromBody(
           },
         };
       }
-      case "revoke":
-        return neutralPayload(`revoke ${binText(body.values[1])}`);
+      case "revoke": {
+        const delegationId = binText(body.values[1]);
+        return {
+          ...neutralPayload(`revoke ${delegationId}`),
+          authority: { type: "revoke", delegationId },
+        };
+      }
     }
   }
 
@@ -1151,6 +1158,13 @@ function listValues(term: DecodedTerm | undefined): DecodedTerm[] {
 function binText(term: DecodedTerm | undefined): string {
   if (typeof term === "object" && term !== null && "type" in term && term.type === "bin") return term.text;
   throw new Error("expected bin term");
+}
+
+function capabilityId(term: DecodedTerm): string | null {
+  if (term === null) return null;
+  const value = binaryUtf8(term);
+  if (value === null) throw new Error("expected capability id");
+  return value;
 }
 
 function delegationTerm(term: DecodedTerm | undefined): DelegationTerm {

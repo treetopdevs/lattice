@@ -1,11 +1,11 @@
 import type { Op } from "./op";
 import type { ReplicaSchema } from "./schema";
-import type { HonoredAcquire } from "./authority";
+import type { AuthorityAnalysis } from "./authority";
 /**
  * The ONE quarantine predicate (V-01).
  *
- * An authority-gated command is quarantined iff, judged against the honored
- * acquire timeline for the gating role (the oracle's `holder_from_acquires`):
+ * A carrier-decoded command first passes capability/revocation validation, then
+ * any authority-gated mutation is judged against the honored acquire timeline:
  *
  *   1. the last acquire visible from the command's deps does not name the
  *      command's author as holder (`:not_holder`), or
@@ -17,7 +17,7 @@ import type { HonoredAcquire } from "./authority";
  * function that answers both "stale holder" and "revocation" — there is no
  * second implementation to drift from it.
  */
-export declare function isQuarantined(op: Op, schema: ReplicaSchema, byId: Map<string, Op>, acquiresByRole: ReadonlyMap<string, readonly HonoredAcquire[]>, ancCache?: Map<string, Set<string>>): {
+export declare function isQuarantined(op: Op, schema: ReplicaSchema, byId: Map<string, Op>, authority: AuthorityAnalysis, ancCache?: Map<string, Set<string>>): {
     quarantined: boolean;
     reason?: string;
 };

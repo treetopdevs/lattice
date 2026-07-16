@@ -2,13 +2,14 @@ import type { Op } from "./op";
 import { ancestors } from "./dag";
 import { gatedBy } from "./schema";
 import type { ReplicaSchema } from "./schema";
-import type { HonoredAcquire } from "./authority";
+import type { AuthorityAnalysis } from "./authority";
+import { capabilityQuarantine } from "./capability";
 
 /**
  * The ONE quarantine predicate (V-01).
  *
- * An authority-gated command is quarantined iff, judged against the honored
- * acquire timeline for the gating role (the oracle's `holder_from_acquires`):
+ * A carrier-decoded command first passes capability/revocation validation, then
+ * any authority-gated mutation is judged against the honored acquire timeline:
  *
  *   1. the last acquire visible from the command's deps does not name the
  *      command's author as holder (`:not_holder`), or
@@ -24,13 +25,16 @@ export function isQuarantined(
   op: Op,
   schema: ReplicaSchema,
   byId: Map<string, Op>,
-  acquiresByRole: ReadonlyMap<string, readonly HonoredAcquire[]>,
+  authority: AuthorityAnalysis,
   ancCache = new Map<string, Set<string>>(),
 ): { quarantined: boolean; reason?: string } {
+  const capability = capabilityQuarantine(op, schema, byId, authority.security, ancCache);
+  if (capability.quarantined) return capability;
+
   const role = gatedBy(schema, op.field);
   if (!role) return { quarantined: false };
 
-  const acquires = acquiresByRole.get(role) ?? [];
+  const acquires = authority.acquiresByRole.get(role) ?? [];
   const visible = ancestors(op.id, byId, ancCache);
 
   let holderAtDeps: string | undefined;
@@ -43,18 +47,12 @@ export function isQuarantined(
   }
 
   if (holderAtDeps !== op.author) {
-    return {
-      quarantined: true,
-      reason: `author ${op.author} is not current ${role} holder (${String(holderAtDeps)})`,
-    };
+    return { quarantined: true, reason: "not_holder" };
   }
 
   const next = lastOwnIndex >= 0 ? acquires[lastOwnIndex + 1] : undefined;
   if (next !== undefined && !ancestors(next.opId, byId, ancCache).has(op.id)) {
-    return {
-      quarantined: true,
-      reason: `author ${op.author} did not observe ${next.opId} — stale ${role} holder (now ${next.holder})`,
-    };
+    return { quarantined: true, reason: "stale_holder" };
   }
 
   return { quarantined: false };
