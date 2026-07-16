@@ -93,6 +93,19 @@ interface RevokeActionIntentFixture {
   url: string;
 }
 
+interface WitnessSuccessionActionIntentFixture {
+  payload: {
+    v: 7;
+    id: string;
+    replica: string;
+    authority: {
+      action: "witness_succession";
+      role: "clerk";
+    };
+  };
+  url: string;
+}
+
 console.log("\n▸ Township action-intent contract");
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -120,6 +133,12 @@ const grantFixture = JSON.parse(
 const revokeFixture = JSON.parse(
   readFileSync(join(here, "fixtures", "township_revoke_action_intent_v6.json"), "utf8"),
 ) as RevokeActionIntentFixture;
+const witnessSuccessionFixture = JSON.parse(
+  readFileSync(
+    join(here, "fixtures", "township_witness_succession_action_intent_v7.json"),
+    "utf8",
+  ),
+) as WitnessSuccessionActionIntentFixture;
 
 assert.deepEqual(parseTownshipActionIntentDeepLink(fixture.url), {
   ok: true,
@@ -209,6 +228,10 @@ assert.deepEqual(parseTownshipActionIntentDeepLink(revokeFixture.url), {
   ok: true,
   intent: revokeFixture.payload,
 });
+assert.deepEqual(parseTownshipActionIntentDeepLink(witnessSuccessionFixture.url), {
+  ok: true,
+  intent: witnessSuccessionFixture.payload,
+});
 
 const delegationId = revokeFixture.payload.authority.delegation;
 
@@ -242,6 +265,41 @@ for (const payload of [
   { ...revokeFixture.payload, command: { command: "post", text: "smuggled" } },
   { ...revokeFixture.payload, deps: [] },
   { ...revokeFixture.payload, issuer: "smuggled" },
+]) {
+  assertInvalidPayload(payload);
+}
+
+for (const authority of [
+  { ...witnessSuccessionFixture.payload.authority, action: "revoke" },
+  { ...witnessSuccessionFixture.payload.authority, role: "resident" },
+  { ...witnessSuccessionFixture.payload.authority, role: 42 },
+  { ...witnessSuccessionFixture.payload.authority, role: null },
+  { action: "witness_succession" },
+  { role: "clerk" },
+  { ...witnessSuccessionFixture.payload.authority, holder: "smuggled" },
+  { ...witnessSuccessionFixture.payload.authority, holderEpoch: "smuggled" },
+  { ...witnessSuccessionFixture.payload.authority, successor: "smuggled" },
+  { ...witnessSuccessionFixture.payload.authority, policyId: "smuggled" },
+  { ...witnessSuccessionFixture.payload.authority, witness: "smuggled" },
+  { ...witnessSuccessionFixture.payload.authority, signature: "smuggled" },
+]) {
+  assertInvalidPayload({ ...witnessSuccessionFixture.payload, authority });
+}
+
+for (const payload of [
+  { ...witnessSuccessionFixture.payload, authority: null },
+  {
+    v: 7,
+    id: witnessSuccessionFixture.payload.id,
+    replica: witnessSuccessionFixture.payload.replica,
+    command: { command: "post", text: "smuggled" },
+  },
+  { ...witnessSuccessionFixture.payload, command: { command: "post", text: "smuggled" } },
+  { ...witnessSuccessionFixture.payload, cap: "smuggled" },
+  { ...witnessSuccessionFixture.payload, deps: [] },
+  { ...witnessSuccessionFixture.payload, threshold: 2 },
+  { ...witnessSuccessionFixture.payload, id: "not-an-id" },
+  { ...witnessSuccessionFixture.payload, replica: " " },
 ]) {
   assertInvalidPayload(payload);
 }
@@ -289,7 +347,7 @@ assert.deepEqual(
   },
 );
 
-assert.deepEqual(parseTownshipActionIntentDeepLink(actionUrl({ ...fixture.payload, v: 7 })), {
+assert.deepEqual(parseTownshipActionIntentDeepLink(actionUrl({ ...fixture.payload, v: 8 })), {
   ok: false,
   reason: "unsupported_action_version",
   message: "Township action request invalid: unsupported version.",

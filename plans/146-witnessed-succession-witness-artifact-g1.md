@@ -2,15 +2,39 @@
 
 ## Status
 
-TODO - council-approved and blocked on predecessor closure. The user selected a distinct governance
-command/key with trusted user presence, and the corrected exact-worktree plan passed final
-Codex, Claude Opus, and Antigravity review with no unresolved P0-P2 finding. Do not write RED or
-change runtime behavior until Plan 147 and Plan 148 are `DONE` and the user explicitly resumes the
-build-map goal.
+IN PROGRESS - the hard start gate is satisfied. The user selected a distinct governance
+command/key with trusted user presence, explicitly resumed the build-map goal, and the fresh
+post-closure Codex, Claude Opus, and Antigravity council pass found no unresolved P0-P2 issue.
 
-Planned against commit `36ceba666590dac096bc5644bb7a498b7c8ec756` on
-`codex/township-build-map`, whose exact-tip hosted run `29407856933` passed Unit + property,
-flagship artifact, and packaged macOS after Plan 145's implementation and claim closures.
+Execution starts from exact documentation tip `61a1a8685af4c119cc327eeee86800fbfb62eaaa` on
+`codex/township-build-map`.
+
+## Predecessor Closure Record (2026-07-16)
+
+- Plan 147 implementation tip `b2ad50629d1867dab71f0de50c038480bb5fe3b7` passed hosted run
+  `29525397708`; exact documentation tip `7e7a0d3e0ff65b461094db3a2c9c9037b3cba4ec` passed manual
+  hosted run `29526830271`. All three jobs were green in both runs.
+- Plan 148 implementation tip `1eb1e4c1ee8e65832064e6c5dd633c4fbb571a3f` passed hosted run
+  `29532242436`; exact documentation tip `61a1a8685af4c119cc327eeee86800fbfb62eaaa` passed manual
+  hosted run `29533793872`. All three jobs were green in both runs.
+- Fresh post-closure Codex, Claude Opus, and Antigravity review confirmed the live Plan 145/148
+  interfaces still satisfy this plan. The first implementation slice is the plan-ordered
+  cross-runtime v7 request seam; no native custody, artifact, or v7 review UI enters that slice.
+
+## Implementation Progress (2026-07-16)
+
+- Seam 1 is locally GREEN. One shared fixture pins the exact custody-free v7 clerk selector;
+  Elixir produces those bytes; TypeScript accepts only the closed selector shape while preserving
+  every v1-v6 contract.
+- A valid v7 request is parseable but not yet reviewable. The installed-app dispatcher rejects it
+  with the existing coarse `invalid_action` outcome until Seam 3 registers the v7 descriptor and
+  review surface. The reviewable v1-v6 union remains exhaustive and compile-checked.
+- The RED gate failed on the absent Elixir producer and unsupported TypeScript version. Claude
+  Opus found the initial GREEN incorrectly widened the reviewable UI union; a second RED proved the
+  typecheck and staging failures, and the corrected GREEN passed focused BEAM, parser, dispatcher,
+  structural frontend, UI, and typecheck gates. Full OTP 28 `mix check` also passed.
+- Plan 146 remains `IN PROGRESS`. Seam 2, connected LiveView preparation and clearing, is next;
+  no governance key, user-presence, claim, signature, artifact, or succession authority exists yet.
 
 ## Objective
 

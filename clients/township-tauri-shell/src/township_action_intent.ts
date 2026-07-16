@@ -60,6 +60,16 @@ export interface TownshipRevokeActionIntent {
   };
 }
 
+export interface TownshipWitnessSuccessionActionIntent {
+  v: 7;
+  id: string;
+  replica: string;
+  authority: {
+    action: "witness_succession";
+    role: "clerk";
+  };
+}
+
 export type TownshipReviewableActionIntent =
   | TownshipPostActionIntent
   | TownshipStatusActionIntent
@@ -68,7 +78,9 @@ export type TownshipReviewableActionIntent =
   | TownshipGrantActionIntent
   | TownshipRevokeActionIntent;
 
-export type TownshipActionIntent = TownshipReviewableActionIntent;
+export type TownshipActionIntent =
+  | TownshipReviewableActionIntent
+  | TownshipWitnessSuccessionActionIntent;
 
 export type TownshipActionIntentParse =
   | { ok: true; intent: TownshipActionIntent }
@@ -126,7 +138,15 @@ export function parseTownshipActionIntentDeepLink(value: string): TownshipAction
   }
 
   if (!isRecord(payload)) return payloadError();
-  if (payload.v !== 1 && payload.v !== 2 && payload.v !== 3 && payload.v !== 4 && payload.v !== 5 && payload.v !== 6) {
+  if (
+    payload.v !== 1 &&
+    payload.v !== 2 &&
+    payload.v !== 3 &&
+    payload.v !== 4 &&
+    payload.v !== 5 &&
+    payload.v !== 6 &&
+    payload.v !== 7
+  ) {
     return {
       ok: false,
       reason: "unsupported_action_version",
@@ -134,7 +154,10 @@ export function parseTownshipActionIntentDeepLink(value: string): TownshipAction
     };
   }
 
-  const outerKeys = payload.v === 5 || payload.v === 6 ? ["authority", "id", "replica", "v"] : ["command", "id", "replica", "v"];
+  const outerKeys =
+    payload.v === 5 || payload.v === 6 || payload.v === 7
+      ? ["authority", "id", "replica", "v"]
+      : ["command", "id", "replica", "v"];
   if (!exactKeys(payload, outerKeys)) return payloadError();
   if (typeof payload.id !== "string" || !INTENT_ID.test(payload.id)) return payloadError();
   if (!canonicalBoundedString(payload.replica, MAX_REPLICA_BYTES)) return payloadError();
@@ -163,6 +186,18 @@ export function parseTownshipActionIntentDeepLink(value: string): TownshipAction
     return {
       ok: true,
       intent: payload as unknown as TownshipRevokeActionIntent,
+    };
+  }
+
+  if (payload.v === 7) {
+    if (!isRecord(payload.authority)) return payloadError();
+    if (!exactKeys(payload.authority, ["action", "role"])) return payloadError();
+    if (payload.authority.action !== "witness_succession") return payloadError();
+    if (payload.authority.role !== "clerk") return payloadError();
+
+    return {
+      ok: true,
+      intent: payload as unknown as TownshipWitnessSuccessionActionIntent,
     };
   }
 

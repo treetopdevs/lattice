@@ -181,6 +181,32 @@ defmodule TownshipWeb.ActionIntent do
     end
   end
 
+  @spec witness_succession_url(String.t(), :clerk, keyword()) ::
+          {:ok, String.t()}
+          | {:error, :invalid_replica | :invalid_role | :invalid_intent_id}
+  def witness_succession_url(replica, role, opts \\ []) do
+    intent_id = Keyword.get_lazy(opts, :intent_id, &new_intent_id/0)
+
+    with {:ok, replica} <- normalize_replica(replica),
+         {:ok, role} <- normalize_witness_succession_role(role),
+         :ok <- validate_intent_id(intent_id) do
+      payload =
+        Jason.OrderedObject.new([
+          {"v", 7},
+          {"id", intent_id},
+          {"replica", replica},
+          {"authority",
+           Jason.OrderedObject.new([
+             {"action", "witness_succession"},
+             {"role", role}
+           ])}
+        ])
+
+      encoded = payload |> Jason.encode!() |> Base.url_encode64(padding: false)
+      {:ok, "township://action?intent=#{encoded}"}
+    end
+  end
+
   defp normalize_replica(replica) when is_binary(replica) do
     if String.valid?(replica) do
       replica = trim_ascii_edges(replica)
@@ -277,6 +303,9 @@ defmodule TownshipWeb.ActionIntent do
   defp normalize_roster_command(:admit), do: {:ok, "admit"}
   defp normalize_roster_command(:remove_member), do: {:ok, "remove_member"}
   defp normalize_roster_command(_command), do: {:error, :invalid_command}
+
+  defp normalize_witness_succession_role(:clerk), do: {:ok, "clerk"}
+  defp normalize_witness_succession_role(_role), do: {:error, :invalid_role}
 
   defp validate_intent_id(intent_id) when is_binary(intent_id) do
     if Regex.match?(@intent_id_regex, intent_id), do: :ok, else: {:error, :invalid_intent_id}

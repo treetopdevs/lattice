@@ -45,6 +45,11 @@ interface RevokeActionIntentFixture {
   url: string;
 }
 
+interface WitnessSuccessionActionIntentFixture {
+  payload: Extract<TownshipActionIntent, { v: 7 }>;
+  url: string;
+}
+
 console.log("\n▸ Township participant deep-link dispatcher");
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -72,6 +77,12 @@ const grantFixture = JSON.parse(
 const revokeFixture = JSON.parse(
   readFileSync(join(here, "fixtures", "township_revoke_action_intent_v6.json"), "utf8"),
 ) as RevokeActionIntentFixture;
+const witnessSuccessionFixture = JSON.parse(
+  readFileSync(
+    join(here, "fixtures", "township_witness_succession_action_intent_v7.json"),
+    "utf8",
+  ),
+) as WitnessSuccessionActionIntentFixture;
 const pairingUrl = "township://pairing?handoff=township-pairing:v1:not-json";
 const androidPairingUrl = "township://nohost/_pairing/township-pairing_3Av1_3Anot-json";
 const calls: string[] = [];
@@ -167,6 +178,16 @@ opened([revokeFixture.url]);
 assert.deepEqual(staged.slice(stagedBeforeRevoke), [revokeFixture.payload]);
 assert.equal(rejected.length, rejectedBeforeRevoke);
 assert.deepEqual(traces.at(-1), { intentId: revokeFixture.payload.id, outcome: "staged" });
+
+expectedReplica = witnessSuccessionFixture.payload.replica;
+const stagedBeforeWitnessSuccession = staged.length;
+opened([witnessSuccessionFixture.url]);
+assert.equal(staged.length, stagedBeforeWitnessSuccession);
+assert.equal(rejected.at(-1), "invalid_action");
+assert.deepEqual(traces.at(-1), {
+  intentId: witnessSuccessionFixture.payload.id,
+  outcome: "invalid_action",
+});
 
 opened(["township://action?intent=not-base64url!"]);
 assert.equal(rejected.at(-1), "invalid_action");

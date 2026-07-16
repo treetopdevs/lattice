@@ -43,6 +43,11 @@ defmodule TownshipWeb.ActionIntentTest do
                          __DIR__
                        )
 
+  @witness_succession_fixture_path Path.expand(
+                                     "../../../../clients/township-tauri-shell/test/fixtures/township_witness_succession_action_intent_v7.json",
+                                     __DIR__
+                                   )
+
   test "post_url emits the exact custody-free cross-runtime v1 contract" do
     fixture = @fixture_path |> File.read!() |> Jason.decode!()
     payload = fixture["payload"]
@@ -326,6 +331,62 @@ defmodule TownshipWeb.ActionIntentTest do
       assert {:error, :invalid_delegation} =
                ActionIntent.revoke_url("replica:matter:one", invalid, intent_id: id)
     end
+  end
+
+  test "witness_succession_url emits the exact custody-free v7 clerk selector" do
+    fixture = @witness_succession_fixture_path |> File.read!() |> Jason.decode!()
+    payload = fixture["payload"]
+
+    assert {:ok, url} =
+             ActionIntent.witness_succession_url(payload["replica"], :clerk,
+               intent_id: payload["id"]
+             )
+
+    assert url == fixture["url"]
+    assert decoded_payload(url) == payload
+    assert Map.keys(payload) |> Enum.sort() == ["authority", "id", "replica", "v"]
+    assert Map.keys(payload["authority"]) |> Enum.sort() == ["action", "role"]
+
+    assert payload["authority"] == %{
+             "action" => "witness_succession",
+             "role" => "clerk"
+           }
+
+    refute Enum.any?(
+             ~w(author cap capability command delegation deps holder holderEpoch key policyId private_key pubkey sig signature successor threshold witness),
+             &contains_key?(payload, &1)
+           )
+  end
+
+  test "witness_succession_url trims replica and rejects unsupported selectors" do
+    id = "fedcba9876543210fedcba9876543210"
+
+    assert {:ok, url} =
+             ActionIntent.witness_succession_url(" replica:matter:one ", :clerk, intent_id: id)
+
+    assert decoded_payload(url) == %{
+             "v" => 7,
+             "id" => id,
+             "replica" => "replica:matter:one",
+             "authority" => %{
+               "action" => "witness_succession",
+               "role" => "clerk"
+             }
+           }
+
+    assert {:error, :invalid_role} =
+             ActionIntent.witness_succession_url("replica:matter:one", :resident, intent_id: id)
+
+    assert {:error, :invalid_role} =
+             ActionIntent.witness_succession_url("replica:matter:one", "clerk", intent_id: id)
+
+    assert {:error, :invalid_replica} =
+             ActionIntent.witness_succession_url(" ", :clerk, intent_id: id)
+
+    assert {:error, :invalid_intent_id} =
+             ActionIntent.witness_succession_url("replica:matter:one", :clerk,
+               intent_id: "not-an-id"
+             )
   end
 
   test "grant_url canonicalizes audience input and rejects invalid public keys" do
