@@ -1,5 +1,7 @@
 import {
+  carrierOpsToSemanticOps,
   integrate,
+  materialize,
   syncCarrierOnce,
   type CarrierOpFrame,
   type CarrierStateReport,
@@ -24,6 +26,7 @@ import {
   type TownshipCarrierPeerConfig,
   type TownshipCarrierWebSocket,
 } from "./township_carrier_peer";
+import { townshipMatterSchema } from "./township_preview";
 
 export { TOWNSHIP_REALM_BY_PUBKEY, TOWNSHIP_REPLICA };
 
@@ -170,11 +173,12 @@ export async function syncTownshipOutbox(
   }
 
   try {
+    const realmByPubkey = options.realmByPubkey ?? TOWNSHIP_REALM_BY_PUBKEY;
     const synced = await syncCarrierOnce(
       client,
       localOps,
       localCarrierFrames,
-      options.realmByPubkey ?? TOWNSHIP_REALM_BY_PUBKEY,
+      realmByPubkey,
       { verifier: operationVerifier, submission: options.peer?.submission ?? "push" },
     );
     const authorityQuarantinedGrantIds = frameIdsForAuthorityQuarantine(
@@ -216,7 +220,11 @@ export async function syncTownshipOutbox(
       return { mergedOps, delegationFrames, compactedCarrierFrames };
     });
     const { mergedOps, delegationFrames, compactedCarrierFrames } = persisted;
-    const authorityRevokedCapabilities = await authorityRevokedCapabilitySummaryFromState(client, delegationFrames);
+    const authorityRevokedCapabilities = await authorityRevokedCapabilitySummaryWithCrossCheck(
+      client,
+      delegationFrames,
+      realmByPubkey,
+    );
 
     return {
       ok: true,
@@ -287,18 +295,41 @@ function frameIdsForAuthorityQuarantine(
     .map(([id]) => id);
 }
 
-async function authorityRevokedCapabilitySummaryFromState(
+async function authorityRevokedCapabilitySummaryWithCrossCheck(
   client: CarrierSyncClient,
   frames: CarrierOpFrame[],
+  realmByPubkey: Record<string, string>,
 ): Promise<AuthorityRevokedCapabilitySummary> {
-  if (!canReportCarrierState(client)) return emptyAuthorityRevokedCapabilitySummary();
+  const localSummary = localAuthorityRevokedCapabilitySummary(frames, realmByPubkey);
+  if (!canReportCarrierState(client)) return localSummary;
 
+  let report: CarrierStateReport;
   try {
-    const report = await client.stateReport();
-    return authorityRevokedCapabilitySummary(report.authority_quarantine, frames);
+    report = await client.stateReport();
   } catch {
-    return emptyAuthorityRevokedCapabilitySummary();
+    return localSummary;
   }
+
+  if (!sameStringSet(report.op_ids, frames.map(frameId))) return localSummary;
+
+  const reportedIds = quarantineIdsForReason(report.authority_quarantine, "revoked_capability");
+  if (!sameStringSet(reportedIds, localSummary.ids)) {
+    throw new Error(
+      `authority_report_divergence: local revoked_capability ids ${JSON.stringify(localSummary.ids)} ` +
+        `do not match carrier ids ${JSON.stringify(reportedIds)}`,
+    );
+  }
+
+  return localSummary;
+}
+
+function localAuthorityRevokedCapabilitySummary(
+  frames: CarrierOpFrame[],
+  realmByPubkey: Record<string, string>,
+): AuthorityRevokedCapabilitySummary {
+  const semanticOps = carrierOpsToSemanticOps(mergeCarrierFrames(frames), realmByPubkey);
+  const local = materialize(townshipMatterSchema, semanticOps);
+  return authorityRevokedCapabilitySummary([...local.quarantineReasons], frames);
 }
 
 function canReportCarrierState(client: CarrierSyncClient): client is CarrierSyncClient & CarrierStateReporter {
@@ -332,8 +363,10 @@ function authorityRevokedCapabilitySummary(
   return { ids, attributions, unattributedIds };
 }
 
-function emptyAuthorityRevokedCapabilitySummary(): AuthorityRevokedCapabilitySummary {
-  return { ids: [], attributions: [], unattributedIds: [] };
+function sameStringSet(left: readonly string[], right: readonly string[]): boolean {
+  const leftSet = new Set(left);
+  const rightSet = new Set(right);
+  return leftSet.size === rightSet.size && [...leftSet].every((value) => rightSet.has(value));
 }
 
 function delegationIdFromCapTerm(cap: CarrierOpFrame["cap"] | undefined): string | null {

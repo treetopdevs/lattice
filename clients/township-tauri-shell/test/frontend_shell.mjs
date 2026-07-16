@@ -343,11 +343,15 @@ test("Vue source exposes carrier-accepted revocation acknowledgement without cla
   assert.doesNotMatch(app, /confirmed by carrier sync/i);
 });
 
-test("Vue source surfaces authority-blocked revoked-cap commands without overclaiming revocation effectiveness", () => {
+test("Vue source surfaces locally verified revoked-cap commands without overclaiming revocation effectiveness", () => {
   const app = readText("src/App.vue");
   const sync = readText("src/township_sync.ts");
 
   assert.match(sync, /stateReport/);
+  assert.match(sync, /materialize/);
+  assert.match(sync, /carrierOpsToSemanticOps/);
+  assert.match(sync, /townshipMatterSchema/);
+  assert.match(sync, /authority_report_divergence/);
   assert.match(sync, /authorityRevokedCapabilityIds/);
   assert.match(sync, /authorityRevokedCapabilityAttributions/);
   assert.match(sync, /authorityRevokedCapabilityUnattributedIds/);
@@ -358,10 +362,10 @@ test("Vue source surfaces authority-blocked revoked-cap commands without overcla
   assert.match(app, /authorityRevokedCapabilityAttributions/);
   assert.match(app, /authorityRevokedCapabilityUnattributedCount/);
   assert.match(app, /cited delegation/);
-  assert.match(app, /carrier reports as revoked/);
-  assert.match(app, /more blocked by carrier authority/);
+  assert.match(app, /local verification/);
   assert.match(app, /revoked-cap command/);
-  assert.match(app, /blocked by carrier authority/);
+  assert.doesNotMatch(app, /carrier reports as revoked/);
+  assert.doesNotMatch(app, /blocked by carrier authority/);
   assert.ok(
     app.indexOf("authorityRevokedCapabilityAttributionCount") < app.indexOf("authorityRevokedCapabilityCount"),
     "attributed revoked-cap message should take priority over carrier-wide fallback",

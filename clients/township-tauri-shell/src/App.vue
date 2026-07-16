@@ -392,7 +392,7 @@ const syncStatusMessage = computed(() => {
       }
     }
     if (syncStatus.value.authorityRevokedCapabilityCount > 0) {
-      return `${revokedCapCommandCount(syncStatus.value.authorityRevokedCapabilityCount)} blocked by carrier authority.`;
+      return `${revokedCapCommandCount(syncStatus.value.authorityRevokedCapabilityCount)} blocked by local verification.`;
     }
     if (syncStatus.value.carrierAcceptedRevocationCount > 0) {
       return `${revokeFrameCount(syncStatus.value.carrierAcceptedRevocationCount)} carrier accepted; pending authority confirmation.`;
@@ -1505,13 +1505,13 @@ function revokedCapabilityAttributionMessage(
   unattributedCount: number,
 ): string {
   const unattributedSuffix =
-    unattributedCount > 0 ? `; ${unattributedCount} more blocked by carrier authority.` : ".";
+    unattributedCount > 0 ? `; ${unattributedCount} more blocked by local verification.` : ".";
 
   if (count === 1) {
-    return `${blockedCommandCount(count)} cited delegation ${shortId(firstDelegationId)} the carrier reports as revoked${unattributedSuffix}`;
+    return `${blockedCommandCount(count)} cited delegation ${shortId(firstDelegationId)}; local verification classified it as revoked-capability${unattributedSuffix}`;
   }
 
-  return `${blockedCommandCount(count)} cited delegations the carrier reports as revoked, including ${shortId(firstDelegationId)}${unattributedSuffix}`;
+  return `${blockedCommandCount(count)} cited delegations; local verification classified them as revoked-capability, including ${shortId(firstDelegationId)}${unattributedSuffix}`;
 }
 
 function shortId(id: string): string {
