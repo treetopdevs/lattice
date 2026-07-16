@@ -1,18 +1,18 @@
 {
+  "quarantine": [
+    "H32KUYuAjLsX6RSoXWwSYKUZSivCavpQ7i38_EInp6k"
+  ],
+  "reasons": {
+    "H32KUYuAjLsX6RSoXWwSYKUZSivCavpQ7i38_EInp6k": "not_holder"
+  },
   "audit": [
     {
       "reason": "not_holder",
-      "op": "mVp4COeiXTD__9c6y-OfO406aHuMZFDT3ahLtFZvLag",
+      "op": "H32KUYuAjLsX6RSoXWwSYKUZSivCavpQ7i38_EInp6k",
       "event": "command_quarantine"
     }
   ],
   "holders": {
     "clerk": "xI19LiI0w767"
-  },
-  "quarantine": [
-    "mVp4COeiXTD__9c6y-OfO406aHuMZFDT3ahLtFZvLag"
-  ],
-  "reasons": {
-    "mVp4COeiXTD__9c6y-OfO406aHuMZFDT3ahLtFZvLag": "not_holder"
   }
 }

@@ -16,7 +16,7 @@ defmodule Lattice.Sim do
   """
 
   alias Lattice.{Authority, Identity, Log, Net, Op, Sync}
-  alias Lattice.Authority.Delegation
+  alias Lattice.Authority.{Delegation, SuccessionCertificate}
 
   defstruct module: nil, replica: nil, realms: %{}, logs: %{}, net: %Net{}, caps: %{}
 
@@ -66,9 +66,7 @@ defmodule Lattice.Sim do
     policies =
       opts
       |> Keyword.get(:policies, %{})
-      |> Map.new(fn {role, %{successor: succ, dormant_ticks: n}} ->
-        {role, %{successor: identity(sim, succ).pub, dormant_ticks: n}}
-      end)
+      |> Map.new(fn {role, policy} -> {role, resolve_policy(sim, policy)} end)
 
     op = Op.new(creator, replica, [], :authority, {:genesis, genesis_deleg, policies})
 
@@ -127,7 +125,6 @@ defmodule Lattice.Sim do
   @spec succeed(t(), String.t(), atom(), keyword()) :: {t(), Op.t()}
   def succeed(%__MODULE__{} = sim, successor_realm, role, opts \\ []) do
     successor = identity(sim, successor_realm)
-    at_tick = Keyword.get(opts, :at_tick, 0)
 
     deleg =
       Delegation.new(successor, sim.replica, successor.pub,
@@ -136,7 +133,8 @@ defmodule Lattice.Sim do
         parent_id: nil
       )
 
-    {sim, op} = append(sim, successor_realm, :authority, {:succeed, role, deleg, at_tick})
+    proof = succession_proof(sim, successor_realm, role, opts)
+    {sim, op} = append(sim, successor_realm, :authority, {:succeed, role, deleg, proof})
     {add_cap(sim, successor_realm, deleg), op}
   end
 
@@ -250,6 +248,94 @@ defmodule Lattice.Sim do
   end
 
   # --- Internals -----------------------------------------------------------
+
+  defp resolve_policy(
+         sim,
+         %{
+           successor: successor,
+           dormant_ticks: dormant_ticks,
+           recovery: %{
+             mode: :witnessed,
+             version: version,
+             witnesses: witnesses,
+             threshold: threshold
+           }
+         }
+       ) do
+    %{
+      successor: identity(sim, successor).pub,
+      dormant_ticks: dormant_ticks,
+      recovery: %{
+        mode: :witnessed,
+        version: version,
+        witnesses: Enum.map(witnesses, &identity(sim, &1).pub),
+        threshold: threshold
+      }
+    }
+  end
+
+  defp resolve_policy(sim, %{successor: successor, dormant_ticks: dormant_ticks}) do
+    %{successor: identity(sim, successor).pub, dormant_ticks: dormant_ticks}
+  end
+
+  defp resolve_policy(
+         sim,
+         %{
+           successor: successor,
+           recovery: %{
+             mode: :witnessed,
+             version: version,
+             witnesses: witnesses,
+             threshold: threshold
+           }
+         }
+       ) do
+    %{
+      successor: identity(sim, successor).pub,
+      recovery: %{
+        mode: :witnessed,
+        version: version,
+        witnesses: Enum.map(witnesses, &identity(sim, &1).pub),
+        threshold: threshold
+      }
+    }
+  end
+
+  defp succession_proof(sim, successor_realm, role, opts) do
+    case Keyword.fetch(opts, :certificate) do
+      {:ok, certificate} ->
+        {:witnessed, certificate}
+
+      :error ->
+        generated_succession_proof(sim, successor_realm, role, opts)
+    end
+  end
+
+  defp generated_succession_proof(sim, successor_realm, role, opts) do
+    case Keyword.fetch(opts, :witnesses) do
+      {:ok, witness_realms} ->
+        analysis = authority(sim, successor_realm)
+        %{holder: holder, op_id: holder_epoch} = Map.fetch!(analysis.holder_epochs, role)
+        %{recovery: recovery} = Map.fetch!(analysis.policies, role)
+        successor = identity(sim, successor_realm)
+
+        {:ok, claim} =
+          SuccessionCertificate.claim(
+            sim.replica,
+            role,
+            holder,
+            holder_epoch,
+            successor.pub,
+            recovery
+          )
+
+        witnesses = Enum.map(witness_realms, &identity(sim, &1))
+        {:witnessed, SuccessionCertificate.new(claim, witnesses)}
+
+      :error ->
+        Keyword.get(opts, :at_tick, 0)
+    end
+  end
 
   defp add_cap(sim, realm, %Delegation{} = deleg) do
     %{sim | caps: Map.update(sim.caps, realm, [deleg], &[deleg | &1])}

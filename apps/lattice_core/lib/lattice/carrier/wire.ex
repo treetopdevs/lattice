@@ -140,7 +140,7 @@ defmodule Lattice.Carrier.Wire do
     Enum.map(pairs, fn {id, reason} -> [id, Atom.to_string(reason)] end)
   end
 
-  defp decode_reason_pairs(pairs) do
+  defp decode_reason_pairs(pairs) when is_list(pairs) do
     Enum.reduce_while(pairs, {:ok, []}, fn
       [id, reason], {:ok, acc} when is_binary(id) and is_binary(reason) ->
         case existing_atom(reason) do
@@ -156,6 +156,8 @@ defmodule Lattice.Carrier.Wire do
       {:error, _reason} = error -> error
     end
   end
+
+  defp decode_reason_pairs(_pairs), do: {:error, :malformed_term}
 
   defp string_list?(values), do: is_list(values) and Enum.all?(values, &is_binary/1)
 
@@ -192,7 +194,13 @@ defmodule Lattice.Carrier.Wire do
   defp encode_term(%Delegation{} = delegation), do: ["delegation", encode_delegation(delegation)]
 
   defp encode_term(value) when is_map(value) do
-    ["map", Enum.map(value, fn {k, v} -> [encode_term(k), encode_term(v)] end)]
+    pairs =
+      value
+      |> Enum.map(fn {k, v} -> {Canonical.term(k), [encode_term(k), encode_term(v)]} end)
+      |> Enum.sort_by(fn {key_bytes, _pair} -> key_bytes end)
+      |> Enum.map(fn {_key_bytes, pair} -> pair end)
+
+    ["map", pairs]
   end
 
   defp encode_term(value) do
@@ -263,8 +271,8 @@ defmodule Lattice.Carrier.Wire do
       "issuer" => Base.encode64(delegation.issuer),
       "audience" => Base.encode64(delegation.audience),
       "parent_id" => delegation.parent_id,
-      "ops" => Enum.map(delegation.ops, &Atom.to_string/1),
-      "roles" => Enum.map(delegation.roles, &Atom.to_string/1),
+      "ops" => delegation.ops |> Enum.sort() |> Enum.map(&Atom.to_string/1),
+      "roles" => delegation.roles |> Enum.sort() |> Enum.map(&Atom.to_string/1),
       "live" => delegation.live,
       "sig" => Base.encode64(delegation.sig)
     }

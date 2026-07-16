@@ -31,7 +31,10 @@ defmodule Lattice.Carrier.Backoff do
     raw =
       min(backoff.max_ms, backoff.base_ms * Integer.pow(2, min(attempt, @max_exponent_attempt)))
 
-    max(0, raw + jitter(backoff.seed, attempt, backoff.jitter_ms))
+    raw
+    |> Kernel.+(jitter(backoff.seed, attempt, backoff.jitter_ms))
+    |> max(0)
+    |> min(backoff.max_ms)
   end
 
   defp jitter(_seed, _attempt, 0), do: 0

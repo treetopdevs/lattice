@@ -35,7 +35,7 @@ defmodule LatticeServer.WebSocketEnvelopeTest do
     websocket_source =
       [
         "apps/lattice_server/lib/lattice/transport/web_socket.ex",
-        "apps/lattice_server/lib/lattice/transport/web_socket/envelope.ex"
+        "apps/lattice_web_socket/lib/lattice/transport/web_socket/envelope.ex"
       ]
       |> Enum.map(&File.read!(Path.join(root, &1)))
       |> Enum.join("\n")

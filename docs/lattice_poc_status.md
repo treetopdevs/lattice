@@ -218,7 +218,16 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
 - **Browser/AtomVM parity is not done** — signed bytes now use `Lattice.Canonical`
   instead of pinned BEAM external-term bytes, but non-BEAM realms still need native
   implementations of the canonical subset and `Lattice.Carrier.Wire` (ADR 0001).
-- **Succession dormancy = absence of heartbeats**, not a true liveness oracle (ADR 0004).
+- **Legacy succession ticks remain untrusted; witnessed recovery is governance authorization** —
+  acquisition, heartbeat, and legacy succession operations carry author-asserted `at_tick` values.
+  The reducer does not consult `Lattice.Clock`, and
+  `township_succession_unproven_tick` keeps that accepted compatibility behavior executable. The
+  opt-in `township_succession_witnessed_recovery` path instead requires a valid-genesis-pinned
+  m-of-n Ed25519 certificate bound to the exact replica, role, holder, acquisition epoch,
+  successor, and policy; BEAM and TypeScript independently verify and reduce its adversarial
+  vector. That proves configured witness authorization, not elapsed time, absence, liveness,
+  independence, honesty, non-coercion, consensus, or receipt-freeness. User-facing succession
+  remains blocked on a separate review, collection, custody, and publication ceremony (ADR 0004).
 - **Public API name clashes** — v1 already defines `Lattice.call/3`, `Lattice.grant/4`,
   `Lattice.cast/3`. The 2.0 promise-`call`/capability-`grant` are reached via
   `Lattice.Registry` and in-log delegation ops rather than re-binding v1 names; the
@@ -265,3 +274,455 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
   productized runtime. Native browser/AtomVM peers still need their own
   `Lattice.Canonical`/`Lattice.Carrier.Wire` implementations and production compaction
   still needs snapshot-aware `Authority`/`Reduce`, GC coordination, and snapshot trust.
+
+## Checkpoint: Township G1 Real Carrier Acceptance
+
+- Files changed: `apps/lattice_node_spike/lib/lattice_node_spike/peer.ex`,
+  `apps/lattice_node_spike/lib/lattice_node_spike/township_scenario.ex`,
+  `apps/lattice_node_spike/priv/peer_node.exs`,
+  `apps/lattice_node_spike/test/township_carrier_test.exs`, Township-facing docs.
+- Behaviors: Township W0-W3 run over two physical BEAM OS processes through the reusable
+  `Lattice.Carrier.WebSocket`, while `Lattice.Sim` remains the oracle. Plan 125 moved the client
+  adapter out of spike ownership without changing this acceptance proof.
+- Command run: `~/.asdf/shims/mix test apps/lattice_node_spike/test/township_carrier_test.exs`.
+- Result: succeeded on 2026-07-07. The G1 test proves deterministic prefix agreement,
+  wrong-key session rejection, partition/diverge/heal convergence, byte-identical
+  materialized state, identical `:not_holder` authority quarantine for the stale clerk
+  action, idempotent re-sync, and clean peer shutdown.
+- Blocker or remaining limitation: G1 is accepted for two BEAM nodes. Non-BEAM
+  browser/phone realms still depend on canonical CBOR/ADR-P08 work, and W4 remains
+  stubbed until the M4 receipt-free primitive exists.
+
+## Checkpoint: Township Read-Only Carrier Projection
+
+- Files changed: `apps/township_web/lib/township_web/carrier_projection.ex`, the
+  instrument LiveView/template and Vue hook, configured supervision, focused tests,
+  `apps/lattice_node_spike/test/township_instrument_projection_test.exs`, and the live
+  Playwright harness.
+- Behaviors: when configured, the connected instrument periodically advertises and
+  pulls from an authenticated real WebSocket peer, validates arrivals with
+  `Lattice.Sync.deliver/2`, derives the shared read model/replay, and publishes explicit
+  fresh, stale, connecting, or unavailable states through `TownshipWeb.PubSub`.
+- Command run: `~/.asdf/shims/mix test
+  apps/lattice_node_spike/test/township_instrument_projection_test.exs` and
+  `npm run township:instrument:live-e2e` alongside the focused web suites.
+- Result: Plan 126 proves the read-only WebSocket-to-PubSub-to-LiveView path against a
+  second BEAM OS process and in a real browser. The observer starts from an empty log,
+  never calls carrier push, and withholds authoritative values on pre-first-pull failure.
+- Blocker or remaining limitation: this is periodic request/response polling, not server
+  push. It adds no participant capability, write control, stable listener ownership,
+  production TLS/deployment, full G1/Phase G completion, or receipt-free W4. It does not
+  change or newly prove Tauri onboarding/cap persistence, mobile secure-store custody,
+  or real app convergence.
+
+## Checkpoint: Stable Read-Only Carrier Server
+
+- Files changed: `apps/lattice_carrier_server`, the Plan 127 second-BEAM and browser
+  harnesses, umbrella boundary docs, and focused contracts.
+- Behaviors: a supervised embedded Ranch/Cowboy listener loads one injected or persisted
+  signed log, authenticates an allowlisted transport realm against the exact replica and wire
+  version, and serves only authenticated frontier and missing-op pull requests. Invalid sources
+  fail closed; disconnect, denied requests, and listener/server restart do not mutate the source.
+- Commands run: the focused `lattice_carrier_server` suite and
+  `npm run township:instrument:server-e2e`, alongside the umbrella verification gates recorded
+  in Plan 127.
+- Result: Plan 127 proves the production carrier client and Plan 126 projection can consume the
+  same source through a non-fixture server. A second BEAM OS process proves loss, stale retention,
+  restart, and fresh recovery. The connected browser proof uses deterministic manual refreshes
+  around an in-process server restart; it does not prove autonomous polling in the browser.
+- Blocker or remaining limitation: the app owns a stable read-only listener boundary, not a
+  production deployment. It has no TLS/public ingress packaging, inbound push, server-push
+  subscription, participant identity/key/capability custody, write controls, or receipt-free W4.
+  It does not complete G1/Phase G or change the established Tauri/mobile/app-convergence gates.
+
+## Checkpoint: Durable Client-Signed Carrier Relay
+
+- Files changed: `apps/lattice_carrier_server`, the reusable
+  `Lattice.Carrier.WebSocket.relay/2` request, focused real-socket and persistence tests, and the
+  second-BEAM Township projection proof recorded in Plan 128.
+- Behaviors: a path-backed server may opt selected trusted transport realms into relaying one
+  already-signed operation. Structural delivery is serialized, a changed log is atomically
+  persisted before acknowledgement, and only then does the holder expose it to frontier and pull
+  requests. Duplicate, rejected, pending, and unchanged quarantined deliveries do not rewrite the
+  source; a failed persistence leaves the old in-memory and restart state observable.
+- Oracle: a distinct authenticated observer pulls a Sim-generated participant operation before and
+  after server OS-process restart and obtains the same op ids and Township read model. A signed but
+  authority-invalid operation is structurally accepted by the relay and remains quarantined by the
+  downstream materializer, proving that semantic authority remains a materialization-time decision.
+- Blocker or remaining limitation: this is an opt-in one-op request/response relay, not a generic
+  push API or server-push feed. It adds no `/township` write control, participant private-key or
+  separate capability custody, production deployment, G1/Phase G completion, or receipt-free W4.
+  Plan 128 does not change or newly prove Tauri onboarding/cap persistence, mobile secure-store
+  custody, or real app convergence.
+
+## Checkpoint: Packaged Tauri Stable-Relay Convergence
+
+- Files changed: the TypeScript carrier relay/drain API, Tauri pairing submission ceremony,
+  production-server subprocess support, Sim fixture and fresh-BEAM projection verifier, and the
+  separate packaged stable-relay onboarding smoke recorded in Plan 129.
+- Behaviors: omitted pairing mode remains generic push; explicit relay mode survives env, native KV,
+  handoff/QR/deep-link ingress, equality, and UI confirmation. Relay drains one causally ordered
+  signed frame at a time, retains quarantine/reject/pending entries, independently confirms empty
+  duplicate responses, and preserves the full local outbox across later request failure.
+- Oracle: the actual packaged macOS Tauri app pulls the Sim prefix and resident delegation from the
+  production eight-argument stable server, authors the exact full Sim-generated post frame through
+  native key custody, relays it, and drains the accepted outbox. After a server OS-process kill and
+  restart from the same path and port, a distinct fresh-BEAM `TownshipWeb.CarrierProjection`
+  matches Sim op ids, read model, and causal replay; the server key is not an operation author.
+- Gates: `carrier:relay`, `carrier:relay-sync`, `stable:relay:contract`, and
+  `tauri:stable-relay:onboarding:smoke`; the older `tauri:onboarding:smoke` remains a separate
+  generic-push regression. The fast socket contract also proves observer relay refusal,
+  relay-realm generic-push refusal, idempotency, and structural acceptance plus downstream
+  authority quarantine.
+- Commands run: the complete TS client and shell contract matrices; `npm run app:convergence`;
+  static/live/stable Township browser gates plus shared browser E2E; bundle verification and
+  immutability; forced test/prod warnings-as-errors compilation; xref cycles; both boundary
+  Sobelow scans; pinned-OTP-28 `mix verify` and `mix check`.
+- Result: succeeded on 2026-07-11. Both packaged carrier modes pass, the five-cycle xref baseline is
+  unchanged, and the complete umbrella passes 331 tests plus 25 properties with strict Credo.
+- Blocker or remaining limitation: Plan 129 reuses the native custody and mobile secure-store
+  strategy unchanged; it adds no mobile relay/device claim, new secure-store implementation,
+  server push, `/township` participant write path, server-held participant key/cap inventory,
+  production TLS/deployment, G1/Phase G completion, or receipt-free W4.
+
+## Checkpoint: LiveView-to-Tauri Participant Post Handoff
+
+- Files changed: the strict Elixir/TypeScript action-intent contract, `/township` preparation form,
+  shared Tauri participant deep-link dispatcher and review state, the Ubuntu cross-surface gate,
+  packaged macOS action-handoff smoke, and flagship workflow wiring recorded in Plan 130.
+- Behaviors: only a fresh carrier-backed LiveView may prepare one bounded, versioned, unsigned
+  `post` request from `provenance.replica`. Deep-link ingress stages it separately from the local
+  draft and performs no signing, KV/log/outbox mutation, pairing save, or carrier connection. The
+  app validates the saved pairing replica and requires separate Use request, Post, and Sync actions;
+  only then do its existing local cap/frontier, native signer, durable outbox, and relay seams run.
+- Oracle: both gates consume a `Lattice.Sim` fixture rather than reconstructing the expected
+  operation in Phoenix or TypeScript. They prove the authored frame is exact, the relay persists it,
+  the outbox drains, the original LiveView/Vue projection equals Sim, and a distinct fresh BEAM
+  observer still equals Sim after a same-path/port server restart. After the app-authored post is
+  proven, the Ubuntu gate also relays the fixture's separately signed authority-invalid control and
+  positively observes its `no_capability` quarantine in LiveView, Vue replay, and the fresh-process
+  verifier; quarantine equality is not an empty-vs-empty assertion.
+- Gates: `npm run township:action-handoff:e2e` is Ubuntu-running and wired into the flagship script
+  and workflow. `npm run tauri:action-handoff:smoke` delivers the real LiveView-produced URL through
+  LaunchServices to a freshly built release-mode app with native key/KV custody. Plan 131 now runs
+  it as a mandatory hosted macOS lane alongside packaged stable-relay onboarding.
+- Result: the focused action/LiveView, dispatcher/frontend/typecheck, Ubuntu Playwright, stable
+  server regression, and freshly rebuilt packaged macOS gates passed on 2026-07-12. The full
+  release matrix passed with 336 tests and 25 properties under pinned OTP 28, complete client and
+  shell contracts, packaged app convergence, all browser/flagship gates, immutable bundle
+  verification, warnings-as-errors compilation, the unchanged five-cycle xref baseline, both
+  Sobelow boundaries, strict Credo, exact lockfile installation, and clean diff whitespace.
+- Blocker or remaining limitation: this is the first participant `post` handoff, not a generic
+  command bus, server push, broader participant controls, signed intent receipt, duplicate-op
+  guarantee, production deployment, full G1/Phase G completion, mobile/device proof, new secure
+  store, or receipt-free W4. Phoenix never receives participant keys, caps, delegations,
+  dependencies, signatures, or authoring authority.
+
+## Checkpoint: Packaged macOS Convergence CI Gate
+
+- Files changed: the flagship workflow, its anti-decay Plan 131 contract, Tauri Linux build
+  prerequisites for the existing native-core job, and cumulative status documentation.
+- Behaviors: a non-optional `macos-15-intel` job installs pinned BEAM/Node/esbuild/Playwright and
+  lockfile dependencies, rebuilds the shared client, then executes both unchanged packaged smokes.
+  It has no `continue-on-error`, platform skip, stale-bundle reuse, or app-build bypass.
+- Oracle: stable-relay onboarding and LiveView action handoff still consume their existing Sim
+  fixtures and prove native signing/KV custody, durable acknowledgement, restart recovery, exact
+  operation/state equality, and redacted evidence through actual app bundles.
+- Gates: the Plan 131 ExUnit contract pins the runner, both smoke commands, real-build posture,
+  root/client/shell setup, and absence of soft failure. Hosted run `29180961767` passed
+  `Packaged macOS convergence`, `Unit + property suite`, and `Verify flagship artifact` on commit
+  `85b2b3bd1b2c2a7b81b06aace61ec3c2b977ea2a`.
+- Result: both real packaged macOS convergence smokes are CI-enforced. The first hosted run exposed
+  missing root Phoenix asset dependencies and longstanding Ubuntu Wry build prerequisites; both
+  were repaired without weakening the smokes or native tests, and the corrected rerun was green.
+- Blocker or remaining limitation: Plan 131 adds no runtime feature, server push, broader
+  participant control, deployment, Linux packaged-app/GUI result, mobile/device proof, secure-store
+  change, G1/Phase G completion, or receipt-free W4.
+
+## Checkpoint: Authenticated Carrier Availability Feed
+
+- Files changed: the durable holder subscription registry, authenticated Cowboy feed protocol,
+  active-once BEAM WebSocket request/notification demultiplexer, carrier subscription wrapper,
+  push-assisted `TownshipWeb.CarrierProjection`, rendered provenance, and the Plan 132 real-socket,
+  second-BEAM, and packaged browser gates.
+- Behaviors: authenticated peers may `subscribe` and `unsubscribe`; a changed path-backed log is
+  persisted before the holder advances its restart-stable generation and emits a bounded,
+  coalesced `ops_available` hint. Each subscriber has at most one outstanding holder message, and
+  acknowledgment returns the latest durable generation before the frame timer flushes. The hint is
+  routed independently of request replies and wakes the existing verified
+  frontier/pull/`Sync.deliver`/read-model path. It never materializes an operation directly. Close
+  events stale the current projection, clear the old subscription reference, and
+  enter bounded reconnect/backoff while the 60-second periodic poll remains a backstop. The owner
+  preallocates a secret pending ref before the worker starts, so an early first-connect/reconnect hint
+  queues one trailing pull; epoch-discarded workers close their private connection.
+- Oracle: the first post converges with `server_push` provenance before the safety poll can run and
+  matches `Lattice.Sim` in op ids, read model, and causal replay. Restarted subscriptions are re-proven by a second pushed generation after persisted reconnect recovery, both in the real
+  second-BEAM test and through the packaged LiveView/Vue browser gate.
+- Gates: focused holder/server/demultiplexer/projection suites; the second-BEAM availability-feed
+  test; TypeScript typecheck; and `npm run tauri:action-handoff:smoke` with a freshly built app for
+  final acceptance. Cumulative build-map contracts now run through plans 023-133.
+- Result: the bounded availability protocol, verified-pull convergence, restart recovery, and
+  post-restart re-subscription proofs are implemented. Hosted implementation run `29188555667` and
+  branch-tip closure run `29189290561` both passed the flagship artifact, unit/property, and real
+  packaged macOS convergence jobs.
+- Blocker or remaining limitation: Plan 132 itself adds no direct TypeScript subscription,
+  pushed-op/state materialization, broader participant controls, participant custody, mobile
+  secure-store change, TLS/public deployment, complete G1/Phase G claim, or receipt-free W4. The
+  subsequent direct-TypeScript substrate is recorded separately below.
+
+## Checkpoint: Direct TypeScript Carrier Availability Feed
+
+- Files changed: `clients/lattice-client/src/carrier.ts`, its deterministic fake-socket feed
+  contract, the headless stable-server feed contract beside the Tauri shell, package scripts,
+  hosted Ubuntu workflow steps, and cumulative Plan 133 documentation contracts.
+- Behaviors: `CarrierWebSocketClient` permits one atomic request in flight and reserves
+  `ops_available` for a pre-registered typed subscription route. The baseline remains exactly the
+  `subscribe_result`; a newer pre-baseline hint survives in a latest-only mailbox. At most one
+  latest availability and one `next()` waiter are retained. Duplicate generations coalesce;
+  regression, malformed input, unsolicited replies, transport failure, and close tear down pending
+  work and the old subscription fail closed. Unsubscribe is idempotent after its reply.
+- Oracle: the real stable server emits the first hint before any test-controlled pull. Every
+  subsequently pulled carrier frame passes canonical hash and Ed25519 signature verification, and
+  sorted ids equal the Sim-derived post oracle. Duplicate relay is silent. Same-path restart
+  preserves the baseline generation, rejects the old subscription, and a replacement subscription
+  observes a second hint whose verified pull equals the restart Sim oracle.
+- Gates: `npm run carrier:feed`, both TypeScript typechecks, and `npm run feed:contract` are the
+  focused local seams. The existing `Unit + property suite` job installs both workspaces, runs the
+  fake contract, rebuilds the shared client, and runs the live stable-server contract as hard steps.
+- Result: implementation and focused fake/live gates are green. Full local regression is green at
+  374 tests plus 25 properties, every shared-client script, both TypeScript typechecks, the complete
+  shell `app:convergence` matrix, warning-free forced test/production compiles, unchanged xref,
+  Sobelow, and workflow lint. Final exact-worktree Claude review is green with no blocker, high, or
+  medium finding. Hosted implementation run `29192642981` is green across the flagship artifact,
+  unit/property suite (including both new TypeScript feed gates), and packaged macOS convergence.
+  Plan 133 status is `DONE`.
+- Blocker or remaining limitation: No reactive Tauri/Vue app feed loop. Plan 133 changes no
+  participant key, capability, pairing, onboarding, outbox, native storage, or mobile secure-store
+  custody; it adds no pushed operation/state materialization, broader participant controls,
+  TLS/public deployment, complete G1/Phase G claim, or receipt-free W4.
+
+## Checkpoint: Reactive Packaged Tauri Availability Feed
+
+- Files changed: the mandatory shared-sync operation verifier, structural frame decoder, reactive
+  read-only Township refresh/controller, dynamic Vue matter projection and redacted DOM-digest
+  trace, full Sim base oracle, headless lifecycle contract, real packaged macOS feed smoke,
+  package/workflow gates, and cumulative Plan 134 documentation contracts.
+- Behaviors: every pulled frame passes canonical hash and Ed25519 verification before conversion,
+  integration, persistence, or shared-sync submission. A saved pairing opens one authenticated
+  observer subscription; its baseline triggers initial convergence, later generations coalesce to
+  one active refresh plus one latest trailing refresh, bounded reconnect retains the last verified
+  matter, concurrent pairing replacements close and await the obsolete epoch, and unmount aborts
+  persistence and later callbacks. Only a `fresh` projection replaces the rendered Vue matter.
+- Oracle: the real packaged `Township.app` runs against the stable path-backed carrier while a
+  separate resident identity relays two Sim-authored posts around a same-path server restart. DOM
+  attributes and ordered SHA-256 commitments to visible proceedings, persisted semantic ids, and
+  raw delegation-frame ids equal the independent `Lattice.Sim` base, `afterPost`, and
+  `afterRestartPost` projections in strict trace order without recording raw proceedings content.
+- Gates: `npm run carrier:relay-sync`, `npm run carrier:township:live`,
+  `npm run feed:app:contract`, both TypeScript typechecks, the existing direct feed contract, and
+  `npm run tauri:feed:smoke` are locally green. Complete `app:convergence`, the browser instrument
+  and action-handoff lanes, Rust native tests, and flagship Worker/video/artifact verification pass.
+  Pinned OTP 28 `mix verify` and `mix check` each pass the full umbrella; warning compiles, xref,
+  both Sobelow boundaries, actionlint, formatting, and diff checks are green. The headless
+  controller and third fresh-build packaged smoke are wired as hard flagship steps.
+- Hosted implementation run `29210581826` is green at
+  `bfe8bcf2c2d3e7276ba92922f6e991922992b1c2`. `Verify flagship artifact` completed in 3m28s,
+  `Unit + property suite` completed in 4m34s, and `Packaged macOS convergence` completed in 8m16s;
+  all three hard packaged stable-relay onboarding, action-handoff, and reactive-feed steps passed.
+- Result: Full local regression is green at 375 tests plus 25 properties. The RED/GREEN
+  implementation and real packaged restart gate pass. Reactive refresh never submits or compacts
+  the authored outbox, no automatic Sync trace appears, raw action/proceedings content stays out of
+  native trace, and no operation is authored by the observer identity. Final exact-worktree Claude
+  review is green with no blocker, high, or medium finding. Plan 134 status is `DONE`.
+- Blocker or remaining limitation: no mobile secure-store implementation change, mobile/device
+  result, automatic participant publication, broader participant controls, production ingress/TLS
+  deployment, complete G1/Phase G claim, or receipt-free W4.
+
+## Checkpoint: Versioned Clerk Status Action Handoff
+
+- Files changed: the exact v2 action-intent producer/decoder fixture, fresh-only LiveView status
+  preparation, shared participant dispatcher, command-specific Tauri review and signing ceremony,
+  Sim clerk fixture, dedicated packaged smoke, fast shell contracts, flagship wiring, and cumulative
+  Plan 135 documentation contracts.
+- Behaviors: v1 stays post-only. A fresh verified open matter prepares close and a locked matter
+  prepares reopen; client parameters cannot choose the command. The app stages and accepts the
+  request without side effects, signs against the validated pairing replica through the existing
+  native-custody path, leaves one frame in the local outbox, and publishes only through a separate
+  explicit Sync. A no-cap resident fails locally before signing, KV writes, or relay.
+- Oracle: the real installed app and a separate LiveView observer converge through Sim-equal
+  Open -> Locked -> Open against the stable path-backed relay. The smoke proves exact frames,
+  explicit outbox drain, fresh reactive projections, redaction, and no server-authored operation.
+- Gates: focused Elixir, TypeScript, Vue, and Plan contracts are green.
+  `npm run tauri:clerk-action-handoff:smoke` is green when run standalone, and hard unit/packaged workflow
+  steps are wired without a second hosted Tauri build. Full local regression is green at 378 tests plus 25 properties,
+  complete shell/browser/flagship convergence, warnings-as-errors, xref, both Sobelow scans,
+  actionlint, formatting, diff hygiene, and 23 Rust tests. Hosted implementation run `29216789652` is green at
+  `6a55a91ad82ccc30cc52ed09142864b8d76c1bb4`: flagship completed in 3m19s, unit/property in
+  4m14s, and packaged macOS in 11m39s with all four packaged steps green.
+- Result: Plan 135 status is `DONE`; local and hosted evidence establish the scoped versioned
+  clerk-status custody seam.
+- Blocker or remaining limitation: no automatic authored-frame publication, mobile secure-store
+  implementation, mobile/device result, member/delegation command bus, production ingress/TLS
+  deployment, complete G1/Phase G claim, or receipt-free W4.
+
+## Checkpoint: Versioned Field-Edit Action Handoff
+
+- Files changed: the exact v3 title/summary action-intent producer and decoder fixtures,
+  fresh-only LiveView field preparation, shared participant dispatcher, command-specific Tauri
+  review and signing ceremony, multi-realm stable-server test harness, Sim field fixture,
+  dedicated packaged smoke, fast shell contracts, workflow gate, and cumulative Plan 136 docs.
+- Behaviors: v1 remains post-only and v2 remains clerk-status-only. A fresh instrument prepares
+  `set_title` or `set_summary`; its server handler fixes the command despite client parameters.
+  The app stages and accepts the request without storage, signing, draft replacement, or network
+  activity, rechecks the saved replica before native-custody signing, leaves the exact frame in
+  the local outbox, and publishes only through a separate explicit Sync. A post-only participant
+  fails both field commands locally before native signing or KV writes.
+- Oracle: the real installed app signs its resident summary from the shared base frontier, keeps
+  that Sim-equal frame byte-identical while a distinct clerk relay publishes a concurrent summary,
+  and then converges the stable source, Tauri feed, and LiveView to Sim's contested LWW result only
+  after explicit Sync. The same app repeats the inert, pending, Sync, and three-surface convergence
+  ceremony for title without server or observer authoring.
+- Gates: focused Elixir, TypeScript, Vue, Plan, and no-cap contracts are green. Full local regression
+  is green at 383 tests plus 25 properties, complete app/browser/flagship convergence,
+  warnings-as-errors, the unchanged five-cycle xref baseline, both Sobelow scans, actionlint,
+  formatting, diff hygiene, and 23 Rust tests. Final exact-worktree Claude review and its focused
+  follow-ups returned `PROCEED` with no blocker, high, or medium finding.
+- Hosted implementation run `29223172342` is green at
+  `0382f96b582b4efd9a751b8b81c76be58f719691`. `Verify flagship artifact` completed in 3m49s,
+  `Unit + property suite` completed in 4m30s, and `Packaged macOS convergence` completed in 11m24s.
+  Stable onboarding, unchanged post, no-build clerk, no-build field edit, and reactive feed all
+  passed in the required order.
+- Result: Plan 136 status is `DONE`; local and hosted evidence establish the scoped versioned
+  field-edit custody seam and contested convergence proof.
+- Blocker or remaining limitation: no automatic authored-frame publication, mobile secure-store
+  implementation, mobile/device result, roster/delegation/revocation/succession command bus,
+  production ingress/TLS deployment, complete G1/Phase G claim, or receipt-free W4.
+
+## Checkpoint: Versioned Roster Action Handoff
+
+- Files changed: the exact v4 roster action-intent producer and decoder fixtures, fresh-only
+  LiveView admit/remove preparation, shared participant dispatcher, command-aware Tauri review and
+  signing ceremony, Sim roster fixture, multi-realm stable-server helpers, dedicated packaged
+  smoke, fast shell contracts, workflow gate, and cumulative Plan 137 documentation contracts.
+- Behaviors: v1 remains post-only, v2 remains clerk-status-only, and v3 remains field-edit-only. A
+  fresh instrument prepares exact `admit` or `remove_member` requests whose server handlers fix the
+  command despite client parameters. The app stages and accepts either request without storage,
+  signing, draft replacement, or network activity; rechecks the saved replica before native-custody
+  signing; leaves the exact frame in the local outbox; and publishes only through a separate
+  explicit Sync. A post-only participant fails both roster commands locally before native signing
+  or KV writes.
+- Oracle: the real installed app signs an observed remove from a shared base while a distinct
+  authorized peer publishes a concurrent admit for the same member. The pending remove remains
+  byte-identical, the source remains peer-only before Sync, and explicit Sync converges the stable
+  source, Tauri feed, and LiveView to the independent `Lattice.Sim` observed-remove add-wins result.
+  The same app then repeats the inert, pending, Sync, and three-surface ceremony for admit, without
+  server or observer authoring.
+- Gates: focused Elixir, TypeScript, Vue, Plan, no-cap, and packaged contracts are green. Full local
+  regression is green at 389 tests plus 25 properties, complete app/browser/flagship convergence,
+  warnings-as-errors, the unchanged five-cycle xref baseline, both Sobelow scans, actionlint,
+  formatting, diff hygiene, and 23 Rust tests. Final exact-worktree Claude review and its focused
+  validation-error follow-ups returned `PROCEED` with no blocker, high, or medium finding.
+- Hosted implementation run `29233959489` is green at
+  `cae78810b7858064a5c4ab07db950057a367df70`. `Verify flagship artifact` completed in 3m40s,
+  `Unit + property suite` completed in 4m51s, and `Packaged macOS convergence` completed in 7m46s.
+  Stable onboarding, post, no-build clerk, no-build field edit, no-build roster, and reactive feed
+  all passed in the required order.
+- Result: Plan 137 status is `DONE`; local and hosted evidence establish the scoped versioned roster
+  custody seam and contested add-wins convergence proof.
+- Blocker or remaining limitation: no automatic authored-frame publication, mobile secure-store
+  implementation or mobile/device result, delegation/revocation/succession handoff or general
+  command bus, authority-role or quarantine proof, production ingress/TLS deployment, complete
+  G1/Phase G claim, or receipt-free W4.
+
+## Checkpoint: Versioned Delegation Grant Handoff
+
+- Files changed: the exact v5 grant-intent producer and decoder fixtures, fresh-only LiveView grant
+  preparation, shared participant dispatcher, fixed-policy Tauri review and signing ceremony, Sim
+  grant/recipient-use/unsound fixture, multi-realm stable-server helpers, dedicated packaged smoke,
+  fast shell contracts, hosted workflow gate, CI path regression guard, and cumulative Plan 138
+  documentation contracts.
+- Behaviors: v1-v4 remain frozen. A fresh instrument accepts only a canonical public recipient key
+  and prepares the server-owned resident profile. The issuer app stages and accepts the request
+  without storage, signing, or network activity; rechecks the paired replica; selects persisted
+  parent evidence; signs through native custody; and publishes only through a separate explicit
+  Sync. A no-parent participant fails as `missing_delegation` before any native signature or KV
+  write.
+- Oracle: the same installed app executable runs with isolated issuer and recipient native keys and
+  KV files. After issuer Sync, the recipient pulls and persists the issued delegation, authors a
+  byte-identical Sim post that cites it, and reaches source/Tauri/LiveView equality only after its
+  own Sync. A later over-broad grant is structurally relayed but reduces as `not_attenuated`; its
+  attempted use is `invalid_capability`, conveys no usable authority, and leaves the matter open.
+  Sim and the source projection own this semantic result, not structural acceptance or a general
+  TypeScript-authority claim.
+- Gates: focused Elixir, TypeScript, Vue, intent, dispatcher, action, fixture, no-parent, and
+  packaged contracts are green. Full local regression is green at 394 tests plus 25 properties,
+  complete app/browser/flagship convergence, warnings-as-errors, the unchanged xref baseline, both
+  Sobelow scans, actionlint, formatting, diff hygiene, and 23 Rust tests. Claude's implementation,
+  CI-failure, and CI-fix reviews returned `PROCEED` with no blocker, high, or medium finding.
+- Hosted implementation run `29248868666` is green at
+  `367eec72a1c7263de2997623bfe83a2bf81ff35b`. `Verify flagship artifact` completed in 3m36s,
+  `Unit + property suite` completed in 4m26s, and `Packaged macOS convergence` completed in 11m55s.
+  Stable onboarding, post, no-build clerk, no-build field edit, no-build roster, no-build delegation
+  grant, and reactive feed all passed in the required order.
+- Result: Plan 138 status is `DONE`; local and hosted evidence establish the scoped delegation-grant
+  custody seam, isolated recipient use, and Sim/source unsound-grant refusal.
+- Blocker or remaining limitation: no automatic authored-frame publication, cross-device key or
+  capability transfer, mobile secure-store implementation or mobile/device result, revocation or
+  succession handoff, general TypeScript or stable-relay authority enforcement, production
+  ingress/TLS deployment, complete G1/Phase G claim, or receipt-free W4. Plan 139 remains blocked
+  behind Plans 140 and 141.
+
+## Checkpoint: Succession Tick-Provenance Boundary
+
+- Files changed: the Sim vector exporter and focused contract, the checked
+  `township_succession_unproven_tick` vector, TypeScript conformance diagnostics, the W3 test title,
+  ADR 0004, the build map, and Plan 144 status documents.
+- Behaviors: the existing authority semantics are unchanged. A designated successor's immediate,
+  signed `at_tick: 1_000_000` clears a non-zero threshold and becomes clerk without a heartbeat or
+  `Lattice.Clock` advancement. The evidence marker is diagnostic metadata, not reducer input.
+- Oracle: `Lattice.Sim` emits the two exact carrier frames and BEAM authority result; the TypeScript
+  harness independently verifies those frames and pins the same accepted operation, winner, and
+  empty structural/authority quarantine result.
+- Gates: RED failed on the missing vector and missing TypeScript contract; GREEN passes the focused
+  exporter, conformance, and typecheck gates. A temporary below-threshold tick made the focused
+  winner assertion fail and was restored. Full OTP 28 `mix check` and both Sobelow boundary scans
+  are green; Claude's exact-worktree claim and final publication audits found no P0-P2 issue.
+  Hosted run `29387808442` passed the unit/property, flagship artifact, and packaged macOS jobs at
+  exact implementation tip `2be253eeed7074e39cf1a86c915496794404f170`, including vector
+  regeneration, TypeScript conformance, v1-v6 packaged handoffs, and the reactive feed.
+- Result: Plan 144 is `DONE`. This is an executable characterization of current behavior, not a
+  provenance fix or a user-facing succession surface.
+- Blocker or remaining limitation: no trust anchor advances ticks; fast-forward rejection,
+  monotonicity/restart/rollback, and partition semantics remain undecided. The carrier remains
+  transport-only, and succession authoring stays blocked pending a separately reviewed design.
+
+## Checkpoint: Genesis-Pinned Witnessed Succession Recovery
+
+- Files changed: the shared BEAM succession-certificate verifier and authority/Sim consumers,
+  witnessed security matrix, audit-safe snapshot label, Sim vector exporter and focused contract,
+  checked five-frame adversarial vector, TypeScript carrier/codec/authority implementation,
+  conformance mutation, and generated client mirrors.
+- Behaviors: a valid genesis may opt one role into a normalized m-of-n witness policy. A succession
+  certificate binds the replica, role, current holder and acquisition epoch, designated successor,
+  and exact policy id. Unknown, duplicate, out-of-order, invalid, replayed, malformed, or
+  subthreshold evidence stays in the log and is deterministically authority-quarantined. A
+  root-mismatched signed genesis cannot inject its own witness policy.
+- Oracle: `Lattice.Sim` emits five real carrier frames covering legitimate policy genesis, an
+  attacker-controlled root-mismatched policy and cryptographically valid attacker certificate,
+  legitimate subthreshold refusal, and legitimate threshold recovery. TypeScript independently
+  verifies frame and witness signatures, recomputes the policy id and claim, reproduces BEAM state,
+  winners, quarantine, and reasons, and proves one mutated witness signature changes reduction.
+- Gates: focused BEAM tests pass at 41/0; TypeScript build, typecheck, conformance, persistence
+  authoring, canonical, bridge, feed, and carrier contracts are green. Full OTP 28 `mix check` and
+  both Sobelow boundary scans are green. Claude's implementation and exact staged audits found no
+  P0-P2 issue. Hosted run `29399176176` passed Unit + property suite, Verify flagship artifact, and
+  Packaged macOS convergence at exact implementation tip
+  `e66b46878b3e35b3397bdf5bb0b6278074cca8d2`. Claude's exact claim-documentation audit found no
+  P0-P2 issue, and hosted run `29400665837` passed all three jobs at exact claim-documentation tip
+  `c8ebf7d17cf969696d0efd1423ffb85dc6454ee8`.
+- Result: Plan 145 is `DONE`; the BEAM/TypeScript cross-oracle governance-recovery floor and its
+  claim boundary are complete.
+- Blocker or remaining limitation: witness signatures authorize governance recovery only. They do
+  not prove absence, elapsed time, liveness, witness independence or honesty, non-coercion,
+  consensus, or receipt-freeness. Carrier semantic authority, user-facing v7 succession, LiveView,
+  Tauri/mobile authoring, and native witness collection/custody remain absent.

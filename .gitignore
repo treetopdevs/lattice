@@ -9,6 +9,11 @@
 
 # JavaScript browser E2E dependencies.
 /node_modules/
+/clients/lattice-client/node_modules/
+/clients/township-tauri-shell/node_modules/
+/clients/township-tauri-shell/dist/
+/clients/township-tauri-shell/src-tauri/gen/schemas/
+/clients/township-tauri-shell/src-tauri/target/
 /output/playwright/
 /output/flagship/
 /output/liveops/

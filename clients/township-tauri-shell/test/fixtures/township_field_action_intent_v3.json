@@ -1,0 +1,12 @@
+{
+  "payload": {
+    "v": 3,
+    "id": "0123456789abcdef0123456789abcdef",
+    "replica": "replica:matter:one",
+    "command": {
+      "command": "set_summary",
+      "text": "Needs traffic study"
+    }
+  },
+  "url": "township://action?intent=eyJ2IjozLCJpZCI6IjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwicmVwbGljYSI6InJlcGxpY2E6bWF0dGVyOm9uZSIsImNvbW1hbmQiOnsiY29tbWFuZCI6InNldF9zdW1tYXJ5IiwidGV4dCI6Ik5lZWRzIHRyYWZmaWMgc3R1ZHkifX0"
+}

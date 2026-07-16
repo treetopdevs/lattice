@@ -1,0 +1,41 @@
+{
+  "name": "@treetopdevs/lattice-client",
+  "version": "0.0.1",
+  "description": "Framework-agnostic TypeScript Lattice realm: op-DAG store, CRDT reduction (conformant to Lattice.Sim), and carrier sync. Consumed by the Tauri (Vue) and Expo (React Native) shells.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "conformance": "tsx test/conformance.ts",
+    "v01:guard": "tsx test/v01_authority_guard.ts",
+    "canonical": "tsx test/canonical.ts",
+    "township:authoring": "tsx test/township_authoring.ts",
+    "tauri:bridge": "tsx test/tauri_bridge.ts",
+    "carrier:township": "tsx test/carrier.ts",
+    "carrier:relay": "tsx test/carrier_relay.ts",
+    "carrier:relay-sync": "tsx test/carrier_relay_sync.ts",
+    "carrier:township:live": "tsx test/live_carrier.ts",
+    "carrier:feed": "tsx test/carrier_feed.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.0",
+    "typescript": "^5.9.3"
+  },
+  "comment:tier-b-deps": "The lattice-cbor-v1 carrier-frame codec is dependency-free; semantic authority reduction pins @noble/hashes and @noble/curves, while signer and key custody remain shell-owned.",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@noble/curves": "2.2.0",
+    "@noble/hashes": "2.2.0",
+    "@types/node": "^26.1.0"
+  }
+}

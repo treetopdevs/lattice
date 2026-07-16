@@ -1,0 +1,12 @@
+{
+  "payload": {
+    "v": 4,
+    "id": "76543210fedcba9876543210fedcba98",
+    "replica": "replica:matter:one",
+    "command": {
+      "command": "admit",
+      "member": "resident:bob"
+    }
+  },
+  "url": "township://action?intent=eyJ2Ijo0LCJpZCI6Ijc2NTQzMjEwZmVkY2JhOTg3NjU0MzIxMGZlZGNiYTk4IiwicmVwbGljYSI6InJlcGxpY2E6bWF0dGVyOm9uZSIsImNvbW1hbmQiOnsiY29tbWFuZCI6ImFkbWl0IiwibWVtYmVyIjoicmVzaWRlbnQ6Ym9iIn19"
+}

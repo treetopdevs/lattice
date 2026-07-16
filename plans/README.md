@@ -5,8 +5,29 @@ Each plan is self-contained: an executor with **zero context from the audit sess
 run it from the plan file + the repo alone. Read the plan fully before starting, honor its
 STOP conditions, and update your row below when done.
 
-**Toolchain reminder for every plan**: run mix locally as `~/.asdf/shims/mix` — the `mix`
-on `PATH` is a broken mise shim (see `.mise.toml`). In GitHub Actions, plain `mix` works.
+**Toolchain reminder for every plan**: run mix locally through `~/.asdf/shims/mix` with the
+OTP 28/Elixir 1.19 bin directories prepended to `PATH` as shown in `AGENTS.md` — `mix` on
+`PATH` is a broken mise shim, and Homebrew Erlang can otherwise leak into spawned VMs. In
+GitHub Actions, plain `mix` works.
+
+**Parked areas — do not plan new work here** (see `TOWNSHIP_BUILD_MAP.md` §4a): iOS,
+QR camera onboarding, LAN discovery, physical-device behavior, cross-device pairing
+state exchange, and any further `tauri:android:release:*` probe permutations. Plan 131 closes the
+packaged macOS CI-enforcement gap, Plan 132 closes the BEAM/LiveView server-push liveness gap, and
+Plan 133 adds the reusable direct-TypeScript subscription plus a real stable-server gate without
+pushing operations or state, Plan 134 closes the packaged reactive Tauri/Vue feed-consumption gap,
+Plan 135 closes the first versioned clerk-status handoff slice, and Plan 136 closes the bundled
+`set_title`/`set_summary` field-edit slice. Plan 137 closes the bundled `admit`/`remove_member` roster handoff slice.
+Plan 138 closes the versioned delegation-grant handoff slice through real packaged recipient use
+and Sim-anchored unsound-grant refusal. Plans 139-145 are `DONE`; hosted run `29373501735` closes
+Plan 139, and run `29387808442` closes Plan 144 across all three jobs. Plan 144's RED/GREEN and
+mutation evidence pin the remaining succession tick-provenance limitation without adding a v7
+authoring surface; full local OTP 28/security gates and Claude's final publication audit are also
+green. Plan 145's implementation run `29399176176` and claim-documentation run `29400665837` are
+green across all three jobs; its witness authorization non-claims and absent user-facing ceremony
+remain explicit.
+Trustworthy user-facing succession, G1 completion, remaining Phase G work, production deployment,
+and W4 also remain.
 
 **Landing 001–009 as one effort?** Start from the umbrella goal:
 [000-goal-foundation-and-hardening.md](000-goal-foundation-and-hardening.md). It
@@ -33,8 +54,275 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 012 | (design) Visualize v2 Replica op-DAGs | P3 | S–M | — | DONE |
 | 013 | (spike) Log compaction (Sedimentree) feasibility | P3 | L–XL | 005, 010 (rec.) | DONE (GATE met — ADR 0006; throwaway prototype in `lattice_core` test/support; production integration not built, gated on carrier ack) |
 | M2 | Real carrier hardening | P1 | XL | 010, 013 | DONE (canonical bytes, auth sessions, checked batching, outbound partial sync; backoff, acks, and browser log-store are tested helpers awaiting production loops) |
+| 014 | Property-test carrier determinism (canonical/wire/batch/session) + fix delegation/map wire sort | P1 | M | — | DONE |
+| 015 | Remove O(n²) `Batch.merge_reports` on the real carrier push path | P2 | S | 014 (rec.) | DONE |
+| 016 | Remove O(n²) `Authority` heartbeat timeline append (per-state-read hot path) | P2 | M | 014 (rec.) | DONE |
+| 017 | (design/spike) Run Township W0–W3 over the real carrier — exit gate **G1** | P1 | M | — | DONE (BEAM carrier G1 accepted; see `docs/township_g1_carrier.md`) |
+| 018 | Carrier observability: structured logging + telemetry on connect/auth/sync | P3 | M | — | DONE |
+| 019 | TS client oracle exporter: Sim-generated vectors for Phase B1 | P1 | M | 017 (rec.) | DONE |
+| 020 | TS client randomized Sim conformance + CI wiring for Phase B2 | P1 | M | 019 | DONE |
+| 021 | TS carrier W1 vector adapter: session bytes, carrier-frame decode, CI check | P1 | M | 020 | DONE (live WebSocket TS process remains C3 follow-up) |
+| 022 | TS live WebSocket carrier W1: real TS↔BEAM sync over `LatticeNodeSpike.WsHandler` | P1 | M | 021 | DONE |
+| 023 | TS canonical op parity: `lattice-cbor-v1` bytes/hash for carrier-frame ops | P1 | M | 022 | DONE |
+| 024 | TS received-op verification: local Ed25519 checks for W1 carrier frames | P1 | S | 023 | DONE |
+| 025 | TS carrier-op authoring primitive: sign a BEAM-accepted W1 command frame | P1 | S | 024 | DONE |
+| 026 | TS Township command authoring: compose Matter command body/cap terms | P1 | S | 025 | DONE |
+| 027 | TS Township cap selection: choose command cap from local delegations | P1 | S | 026 | DONE |
+| 028 | TS Township frontier deps: author command from local op frontier | P1 | S | 027 | DONE |
+| 029 | TS local op-log persistence seam: JSON store for shell storage | P1 | S | 028 | DONE |
+| 030 | TS carrier frame outbox persistence: JSON store for pushable frames | P1 | S | 029 | DONE |
+| 031 | TS carrier delegation extraction: recover caps from persisted frames | P1 | S | 030 | DONE |
+| 032 | TS Township author-and-persist workflow: one shell-facing command path | P1 | S | 031 | DONE |
+| 033 | TS Tauri bridge: async key custody and invoke-backed storage | P1 | S | 032 | DONE |
+| 034 | Tauri native command core: Rust storage and signer commands | P1 | M | 033 | DONE |
+| 035 | Tauri builder command registration | P1 | S | 034 | DONE |
+| 036 | Tauri native carrier key lifecycle | P1 | S | 035 | DONE |
+| 037 | Tauri secure carrier key persistence seam | P1 | M | 036 | DONE |
+| 038 | Tauri platform-secure app builder helper | P1 | S | 037 | DONE |
+| 039 | Tauri platform-secure app construction helper | P1 | S | 038 | DONE |
+| 040 | Tauri runtime config and entrypoint | P1 | M | 039 | DONE |
+| 041 | Tauri Vue frontend asset shell | P1 | M | 040 | DONE |
+| 042 | Tauri Vue native invoke workflow | P1 | S | 041 | DONE |
+| 043 | Tauri Vue author-and-persist post action | P1 | M | 042 | DONE |
+| 044 | Tauri Vue carrier sync outbox | P1 | M | 043 | DONE |
+| 045 | Tauri Vue WebSocket carrier peer config | P1 | M | 044 | DONE |
+| 046 | Tauri shell live BEAM peer sync | P1 | M | 045 | DONE |
+| 047 | Tauri live window peer smoke | P1 | M | 046 | DONE |
+| 048 | Tauri Vue broader author actions | P1 | M | 047 | DONE |
+| 049 | Tauri Vue action availability | P1 | M | 048 | DONE |
+| 050 | Tauri Vue close/reopen actions | P1 | M | 049 | DONE |
+| 051 | Tauri Vue member-management actions | P1 | M | 050 | DONE |
+| 052 | Tauri outbox ack compaction | P1 | M | 051 | DONE |
+| 053 | TS Township delegation issuance primitive | P1 | S | 052 | DONE |
+| 054 | Tauri onboarding/cap persistence ceremony | P1 | M | 053 | DONE |
+| 055 | Mobile secure-store strategy | P1 | S | 054 | DONE |
+| 056 | Real app convergence gate | P1 | S | 055 | DONE |
+| 057 | Township storage and grant quarantine contract | P1 | S | 056 | DONE |
+| 058 | Live BEAM authority-unsound grant proof | P1 | S | 057 | DONE |
+| 059 | Revocation lifecycle proof | P1 | S | 058 | DONE |
+| 060 | Tauri revoke-access pending-sync ceremony | P1 | S | 059 | DONE |
+| 061 | Tauri carrier-accepted revoke acknowledgement UI | P1 | S | 060 | DONE |
+| 062 | Tauri production pairing config UX | P1 | S | 061 | DONE |
+| 063 | Tauri carrier connection-health UI | P1 | S | 062 | DONE |
+| 064 | Authority revoked-capability surfacing | P1 | S | 063 | DONE |
+| 065 | Revoked-capability delegation attribution | P1 | S | 064 | DONE |
+| 066 | Tauri pairing handoff import/export | P1 | S | 065 | DONE |
+| 067 | Tauri pairing handoff QR rendering | P1 | S | 066 | DONE |
+| 068 | Tauri pairing QR image import | P1 | S | 067 | DONE |
+| 069 | Tauri pairing deep-link ingress | P1 | S | 068 | DONE |
+| 070 | Tauri static deep-link wiring | P1 | M | 069 | DONE |
+| 071 | Tauri pairing live camera QR capture | P1 | M | 070 | DONE |
+| 072 | Tauri pairing discovery candidate channel | P1 | S | 071 | DONE |
+| 073 | Tauri local-network pairing advert receive | P1 | M | 072 | DONE |
+| 074 | Tauri installed-app deep-link delivery smoke | P1 | M | 073 | DONE |
+| 075 | Tauri local-network pairing advertise | P1 | M | 074 | DONE |
+| 076 | Tauri mobile target readiness | P1 | M | 075 | DONE |
+| 077 | Tauri iOS simulator build readiness | P1 | S | 076 | IN PROGRESS (Xcode 26.6 archive + protected-key process-relaunch proof green; reboot, physical-device, BEAM convergence, and CI gates open) |
+| 078 | Tauri Android debug APK readiness | P1 | S | 076 | DONE |
+| 079 | Tauri Android emulator native key reuse | P1 | M | 078 | DONE |
+| 080 | Tauri Android debug APK BEAM convergence | P1 | M | 079 | DONE |
+| 081 | Tauri Android debug APK on-device post authoring | P1 | M | 080 | DONE |
+| 082 | Tauri Android debug APK pull-based cap onboarding | P1 | M | 081 | DONE |
+| 083 | Tauri Android release APK build readiness | P1 | S | 082 | DONE |
+| 084 | Tauri Android release APK canonical/wire fidelity | P1 | M | 083 | DONE |
+| 085 | Tauri Android release transport characterization | P1 | M | 084 | DONE |
+| 086 | Tauri Android debug APK positive transport control | P1 | M | 085 | DONE |
+| 087 | Tauri Android release-route reverse-tunnel control | P1 | S | 086 | DONE |
+| 088 | Tauri Android release-shaped cleartext diagnostic | P1 | M | 087 | DONE |
+| 089 | Tauri Android release loopback-scoped network security | P1 | M | 088 | DONE |
+| 090 | Tauri Android release BEAM carrier handshake | P1 | M | 089 | DONE |
+| 091 | Tauri Android release pull-and-reload persistence | P1 | M | 090 | DONE |
+| 092 | Tauri Android release author/push/outbox drain | P1 | M | 091 | DONE |
+| 093 | Tauri Android release deep-link pairing ingress | P1 | M | 092 | DONE |
+| 094 | Tauri imported pairing confirmation policy | P1 | S | 093 | DONE |
+| 095 | Tauri armed deep-link pairing import gate | P1 | S | 094 | DONE |
+| 096 | Tauri installed-app armed deep-link delivery smoke | P1 | S | 095 | DONE |
+| 097 | Tauri pairing link no-side-effect trace guard | P1 | S | 096 | DONE |
+| 098 | Tauri macOS LaunchServices warm routing | P1 | S | 097 | DONE |
+| 099 | Tauri macOS cold-start deep-link delivery | P1 | S | 098 | DONE |
+| 100 | Tauri armed pairing state binding | P1 | S | 095 | DONE |
+| 101 | Tauri dev-trace release hydration and control links | P1 | S | 100 | DONE |
+| 102 | Tauri release app-originated attenuated grant | P1 | M | 092 | DONE |
+| 103 | Tauri Android release armed pairing delivery | P1 | M | 100 | DONE |
+| 104 | Tauri Android release convergence gate | P1 | S | 091, 092, 103 | DONE |
+| 105 | Tauri Android release cold-start pairing delivery | P1 | M | 103, 104 | DONE |
+| 106 | Tauri Android release single-APK onboarding convergence | P1 | M | 093, 092, 105 | DONE |
+| 107 | Tauri Android release browser-backed pairing delivery | P1 | M | 103, 105 | DONE |
+| 108 | Tauri Android release browser-backed onboarding convergence | P1 | M | 106, 107 | DONE |
+| 109 | Tauri Android release browser-backed onboarding child grant | P1 | M | 102, 108 | DONE |
+| 110 | Tauri Android release browser-backed pairing state exchange | P1 | M | 100, 107 | DONE |
+| 111 | Tauri Android release browser-backed onboarding state exchange | P1 | M | 108, 110 | DONE |
+| 112 | Tauri Android release browser-backed onboarding child-grant state exchange | P1 | M | 109, 111 | DONE |
+| 113 | Tauri Android release browser/onboarding regression gate | P1 | S | 107-112 | DONE |
+| 114 | Tauri Android release chooser onboarding state exchange | P1 | M | 111, 113 | DONE |
+| 115 | Township bounded authority origination | P1 | S | 058, 114 | DONE |
+| 116 | Tauri Android release root authority origination | P1 | M | 115 | DONE |
+| 117 | Tauri Android release visible chooser onboarding | P1 | M | 114 | DONE |
+| 118 | Tauri desktop onboarding convergence | P1 | M | 054, 056 | DONE |
+| 119 | Tauri packaged onboarding convergence | P1 | M | 118 | DONE |
+| 120 | Tauri browser onboarding click-through | P1 | M | 119 | DONE |
+| 121 | Township outsider-replay audit bundle | P1 | M | 012, 017 | DONE |
+| 122 | Township instrument read model | P1 | M | 121 | DONE |
+| 123 | Township LiveView instrument | P1 | L | 122 | DONE |
+| 124 | Township Vue causal replay island | P1 | L | 123 | DONE |
+| 125 | Reusable WebSocket carrier boundary | P1 | M | 017, 124 | DONE |
+| 126 | Township read-only carrier projection | P1 | L | 125 | DONE |
+| 127 | Stable read-only carrier server boundary | P1 | L | 125, 126 | DONE |
+| 128 | Durable client-signed carrier relay | P1 | L | 127 | DONE |
+| 129 | Packaged Tauri stable-relay convergence | P1 | L | 128, 118-120 | DONE |
+| 130 | LiveView-to-Tauri participant post handoff | P1 | L | 129, 123, 126 | DONE |
+| 131 | Packaged macOS convergence CI gate | P1 | S | 129, 130 | DONE |
+| 132 | Authenticated carrier availability feed | P1 | XL | 128, 131 | DONE |
+| 133 | Direct TypeScript carrier availability feed | P1 | L | 132 | DONE |
+| 134 | Reactive packaged Tauri availability feed | P1 | XL | 133, 129, 130 | DONE |
+| 135 | Versioned clerk status action handoff | P1 | XL | 050, 054, 130, 131, 134 | DONE |
+| 136 | Versioned field-edit action handoff | P1 | XL | 048, 135 | DONE |
+| 137 | Versioned roster action handoff | P1 | XL | 051, 054, 130, 136 | DONE |
+| 138 | Versioned delegation grant handoff | P1 | XL | 053, 054, 058, 130, 137 | DONE |
+| 139 | Versioned revocation action handoff | P1 | XL | 138, 140, 141, 143 | DONE |
+| 140 | Restore V-01 guarantee in TS client (authority + ordering) | **P0** | L | 019, 020, 058 | DONE |
+| 141 | Serialize shell persistence (stop silent op loss) | **P0** | M | 029, 030, 032 | DONE |
+| 142 | Carrier session replay protection + durability honesty | P1 | M | 127, 128 | DONE |
+| 143 | Consolidate the versioned action ladder (pay down accretion) | P2 | L | 138 | DONE |
+| 144 | Succession tick-provenance boundary | P1 | S | 139, 140 | DONE |
+| 145 | Genesis-pinned witnessed succession recovery | P1 | L | 144 | DONE |
+| 146 | Witnessed succession witness artifact with protected governance presence (toward G1) | P1 | L | 140, 141, 143, 145, 147, 148 | TODO (council-approved; blocked on 147/148 and explicit resume) |
+| 147 | Port capability/revocation validation into TS reduction (close the F1 decision gap) | **P0** | L | 140, 141 | IN PROGRESS (implementation/local/council green; exact-tip hosted CI pending) |
+| 148 | Valid-genesis holder/policy projection parity (F2 prerequisite) | **P0** | S | 145, 147 | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
+
+## Round 3 (external review, 2026-07-13, against `codex/township-build-map` @ `97f250b9`)
+
+A whole-tree review (Phoenix instrument, Tauri/Vue shell, TS client core, Rust custody,
+carrier server, CI, and the in-flight Plan 138 diff) found the loop **converging in process
+and feature terms but violating its own V-01 prime directive at the core**, plus a
+confirmed silent-data-loss race and a linear-accretion habit now producing bugs. Two
+findings are STOP-condition-grade and were confirmed by source inspection and executed
+counterexamples:
+
+- **Plan 140 (P0)** — the TS client honors forged authority ops the Sim oracle rejects
+  (`carrier.ts:944` + `quarantine.ts:20`), and `causal_list` ordering drifts from Sim's
+  `{height, id}` under concurrent appends. Both invisible to the current happy-path
+  conformance corpus. This is the V-01 drift bug the build map calls a STOP condition.
+- **Plan 141 (P0)** — `local_log.ts` stores are non-atomic load→save-whole-array, and
+  `township_sync.ts`/`township_feed.ts` save a pre-network snapshot over ops authored during
+  the network window → silent permanent op loss. Corrupt KV silently wipes the store.
+
+**Execution order for Round 3: 140 and 141 first (P0), then 142 (before the listener leaves
+loopback), then 143 (consolidation - the first net-negative plan, do it before any v7 action).**
+Those four plans are now `DONE`. Hosted run `29358809212` closed the final 141/143 gates, and
+hosted run `29373501735` closes Plan 139's reviewed v6 TDD implementation across all three jobs.
+The wire/parser/signing core is genuinely converged and was not the target of
+any Round 3 plan; the targets were the adversarial-semantics gap (140), the persistence race (141),
+the auth replay (142), and the duplicated UI/test estate plus the source-text/prose tests that
+entrenched it (143).
+
+**Plan 140 is DONE (2026-07-13).** The TS client now validates every authority event
+(genesis/transfer/succeed/heartbeat) against the same trust anchors as the oracle, orders
+`causal_list` by `{height, op_id}`, and uses the oracle's −1 dangling-dependency height base —
+defended by an adversarial Sim-exported corpus (forged/double/unattenuated transfer, same-id
+delegation collision, concurrent-append partition, pruned-log LWW) rather than by review. Hosted
+flagship run `29290474614` is green across all three jobs. The later shared hosted run
+`29358809212` closes Plans 141 and 143 and unblocks Plan 139.
+
+**Plan 141 is DONE (2026-07-14).** A namespace-keyed process-local writer now serializes
+shell action, sync, and feed persistence. Post-network save phases reload and union the current
+stores, sync compacts only frames acknowledged by that sync, submit/sign/sync entry points refuse
+re-entry, and malformed native KV fails startup instead of becoming an empty store; temp files are
+fsynced before rename. RED/GREEN interleavings, focused contracts, Rust tests, and the complete
+local `npm run app:convergence` packaged chain are green. Hosted run `29358809212` passed the full
+42-step unit chain and all packaged macOS convergence steps.
+
+**Plan 142 is DONE (2026-07-14).** Carrier session v2 adds a server-first 32-byte nonce
+without changing operation wire v1; both signature directions bind both nonces and both versions,
+and exact challenge bytes fail on a second connection. Re-authentication clears the prior Holder
+subscription and queued availability. Path-backed relays sync the temp file before rename, remove
+startup orphans fail-closed, and explicitly claim process-crash rather than power-loss durability.
+Focused BEAM/TypeScript gates, two deliberate mutations, and the complete local
+`npm run app:convergence` chain are green; Claude returned `PROCEED` with no P0–P2 findings, and
+hosted run `29358809212` passed the carrier and packaged gates.
+
+**Plan 143 is DONE (2026-07-14).** Phoenix intent slots now share descriptor-driven
+prepare/retain/clear paths and one panel component. The Vue shell now owns per-slot state in one
+composable, renders v2-v5 through one review component, and routes accept/sign/dismiss/status/dev
+behavior through one runtime descriptor list while preserving the native-event trust boundary and
+the bespoke v1 combined-submit path. Five packaged smokes share one process/trace/KV harness, and
+runtime API/config/workflow assertions execute as replacement contracts before the packaged gates.
+RED/GREEN behavior mutations, full OTP 28 verification, and the complete local
+`npm run app:convergence` chain are green; Claude returned `PROCEED` after its correction review.
+Production files and the smoke estate are net negative against the captured Plan 143 live baseline;
+the plan records both that slice baseline and the pre-integration parent comparison. Hosted run
+`29358809212` passed all three jobs, including every v1-v5 packaged handoff and the reactive feed,
+so Plan 139 has begun its reviewed RED -> GREEN implementation.
+
+**Plan 139 is DONE (2026-07-14).** A fresh carrier-backed LiveView now
+prepares one strict unsigned v6 delegation-revocation request. The installed app keeps ingress and
+Use inert, rechecks local issuer/evidence/replica state before native signing, retains delegation
+evidence, and publishes only through explicit Sync. A deterministic Sim scenario and no-build
+two-identity packaged smoke prove an honored pre-revoke post and revoke followed by one causally
+later `revoked_capability` post that is absent from matter state. The packaged feed consumes an
+authenticated BEAM authority report over an independently signature-verified exact frame set; it
+does not independently recompute delegation revocation in TypeScript. Full local
+`npm run app:convergence`, OTP 28 `mix check`, both Sobelow scans, and Claude's final no-P0-P2
+review are green. Hosted run `29373501735` passed the flagship artifact,
+unit/property/static/security, and packaged macOS jobs at exact tip
+`0e4d2b0fff8cdac281fd64f2b4e0ed923c8770c5`, including v6 revocation and the reactive-feed tail.
+
+**Plan 144 is DONE (2026-07-15).** A new Sim-generated two-frame adversarial vector and
+TypeScript conformance diagnostics pin the current authority result: an immediate designated
+successor's signed `at_tick: 1_000_000` clears the threshold and becomes clerk without a heartbeat
+or `Lattice.Clock` advancement. Temporarily lowering the tick below the threshold fails the focused
+winner assertion, proving the behavior pin is load-bearing. This characterizes an author assertion,
+not trusted elapsed time; it adds no authoring surface or provenance model, and the carrier remains
+transport-only. Full OTP 28/security gates and Claude's exact-worktree claim review are green; the
+final publication audit also found no P0-P2 issue. Hosted run `29387808442` passed Unit + property
+suite in 3m58s, Verify flagship artifact in 4m01s, and Packaged macOS convergence in 14m50s at exact
+implementation tip `2be253eeed7074e39cf1a86c915496794404f170`, including vector regeneration,
+TypeScript conformance, the complete v1-v6 packaged handoff sequence, and reactive feed.
+
+**Plan 145 is DONE (2026-07-15).** The adversarial trust-model pass rejected carrier
+liveness, process-local/successor clocks, and distinct-author causal activity as recovery authority.
+The selected opt-in mode pins an m-of-n witness set in valid genesis and binds each recovery
+signature to the replica, role, current holder acquisition epoch, successor, and exact policy.
+Witnesses authorize a governance recovery event; they do not prove physical absence, elapsed time,
+liveness, independence, honesty, non-coercion, partition consensus, or receipt-freeness. The BEAM
+certificate, authority/Sim path, adversarial suite, generated five-frame vector, independent
+TypeScript certificate verification/reduction, and signature mutation are green. The vector also
+proves a root-mismatched signed genesis cannot inject its own witness policy. Claude's exact staged
+implementation audit found no P0-P2 issue, and hosted run `29399176176` passed Unit + property suite,
+Verify flagship artifact, and Packaged macOS convergence at exact implementation tip
+`e66b46878b3e35b3397bdf5bb0b6278074cca8d2`. Claude's exact claim-documentation audit also found no
+P0-P2 issue, and hosted run `29400665837` passed all three jobs at exact claim-documentation tip
+`c8ebf7d17cf969696d0efd1423ffb85dc6454ee8`. No v7 or participant authoring surface is added.
+
+**Plan 147 is IN PROGRESS (2026-07-16).** Sim-exported adversarial vectors now pin all named
+capability/revocation reasons, and TypeScript reduction retains command caps, derives verified
+delegation/root/revoke evidence, and enforces those decisions through its one quarantine path.
+The shell materializes the durably persisted retained-frame set locally; an equal-evidence carrier
+authority report is only a fail-closed revoked-set cross-check and never supplies accepted state,
+IDs, or attributions. RED/GREEN, three deliberate semantic mutations, full client/carrier gates,
+complete packaged `app:convergence`, OTP 28 `mix verify`, both Sobelow scans, and Claude Opus
+reviews are green. Exact-tip hosted CI remains before `DONE`; F2 genesis-holder parity remains
+owned by Plan 148, while F3/F4 remain separate parity gaps.
+
+## Round 2 (deep audit, 2026-07-07, against commit `6b2cfe5`)
+
+A second `improve deep` pass ran after the M2 carrier + Township overlay landed.
+The nine-category audit found the M2 code is well-hardened (the correctness sweep
+turned up only one cosmetic wire-determinism nit, folded into 014). The five new
+plans above target the genuinely load-bearing gaps that opened with the real
+carrier and the civic overlay. Recommended execution order:
+
+1. **014** first — determinism is the crown-jewel invariant and the M2 encode/
+   wire/batch/session layer has only example-based tests. It also hardens 015/016.
+2. **015** — a clean, low-risk linear-time fix on the real push path.
+3. **016** — same class of fix in `Authority`, but delicate (positional readers
+   depend on `acquires` chronological order — the plan documents the trap); MED risk.
+4. **017** — discharges exit gate **G1** (Township on two physical BEAM nodes over
+   the real carrier). Independent of the perf/test plans; completed by
+   `apps/lattice_node_spike/test/township_carrier_test.exs`.
+5. **018** — observability; pairs naturally with 017's multi-node runs.
 
 **Historical execution order**: 001 → 002 → 003 → 004 (the DX/CI foundation; all small,
 low-risk, and they made every later change safer to verify). Then 005, 006 (v2 engine
@@ -94,9 +382,100 @@ as follow-ups (see the config comments for exact suppressions):
   (dev/test only) — umbrella-root deps are not visible as Mix tasks inside child apps,
   so plan 003's "dep is available umbrella-wide" premise did not hold for task discovery.
 
+## Round 2 dependency notes (plans 014–018)
+
+- **014 recommended before 015 and 016** — its batch-order and convergence/
+  quarantine properties are the guard that makes both perf refactors safe to
+  verify. It is now complete; it added the expected delegation sort plus a
+  RED-discovered map-pair sort in the wire frame encoder.
+- **017 (G1) is independent** of 014–016/018 and can run in parallel; it must not
+  modify `Township.Matter`, `Lattice.Attestation`, or `Lattice.Carrier` (that
+  portability is what G1 proves — see the plan's STOP conditions). 017 is now
+  complete for two BEAM nodes; 014 now guards broader carrier determinism claims.
+- **018 pairs with 017** — the sync telemetry from 018 is a natural consumer for
+  017's multi-node GATE test, but neither blocks the other.
+
 ## Findings considered and rejected
 
 Recorded so they are not re-audited next run. Each was opened and read during vetting.
+
+### Round 2 (deep audit, 2026-07-07)
+
+- **"Wire signature verification breaks for map-bodied ops" (audit SECURITY-08)** —
+  REJECTED (false positive, empirically disproven). `Op.valid?/1`
+  (`apps/lattice_core/lib/lattice/op.ex:86-88`) re-derives canonical bytes from the
+  **decoded** Elixir term via `Canonical.op_payload/1`, and the canonical encoder
+  sorts map keys (`canonical.ex:132-139`). Elixir maps are unordered, so the wire
+  frame's map-pair ordering cannot affect verification. A round-trip check
+  (encode → decode → `Op.valid?` + canonical-byte equality) passes for map/mapset/
+  nested bodies. The real, worthwhile item here is the **missing round-trip property
+  test** → captured as plan 014.
+- **`deliver_loop` per-epoch `Enum.reverse` (audit PERF-03)** — REJECTED. This
+  re-reports the already-rejected `deliver_loop` finding from round 1; the per-epoch
+  reverse (`sync.ex:110`) is not the dominant cost and the designed delivery path is
+  dep-respecting. Not worth doing.
+- **Cowboy `~> 2.12` constraint "excludes" locked 2.14.2 (audit DEPS-03)** —
+  REJECTED (auditor error). `~> 2.12` means `>= 2.12.0 and < 3.0.0`; 2.14.2 is in
+  range. No drift; no action.
+- **Wire delegation `ops`/`roles` unsorted (audit CORRECTNESS-01)** — VALID but
+  cosmetic (decode rebuilds a `MapSet`; signature verifies over sorted canonical
+  bytes, so it is functionally harmless today). NOT a standalone plan — folded as a
+  one-line drive-by fix into plan 014.
+- **Unbounded `Log.quarantine` growth from a malicious peer (audit SECURITY-11)** —
+  DEFERRED (POC-scoped, auth-gated). The peer handler rejects all messages before a
+  signed session (`ws_handler.ex:74-80`), so only a *trusted* peer could flood
+  forged-sig ops into the unbounded `log.quarantine` list (`log.ex:34,159`). A real
+  "path to real" hardening item (bounded/evicting quarantine), but out of scope for
+  the single-node in-memory POC per `docs/threat_model_v2.md`. Revisit before any
+  adversarial multi-node deployment.
+- **No WS frame rate limiting (SECURITY-13), unbounded partial-sync closure
+  (SECURITY-12), delegation sig not re-verified at wire decode (SECURITY-14),
+  session challenge missing local-replica binding (SECURITY-15)** — DEFERRED.
+  SECURITY-12 is conditional on shapes being used over the carrier (they are not
+  yet); SECURITY-14 is defense-in-depth (authority quarantines the bad delegation
+  anyway); SECURITY-13/15 are POC-accepted transport hardening. Note for the M3/
+  path-to-real hardening pass, not this round.
+- **`Authority.analyze` re-topo-sorts on the live path (audit PERF-02)** —
+  NOT SELECTED. `delegation_active?/1` and `revoked?/1` (`authority.ex:180,196`)
+  each call `Log.topo_ops/1` per live-path check; real but lower-leverage than the
+  per-state-read timeline quadratic (plan 016). Optimize if live-path profiling
+  shows it matters.
+- **Canonical re-encode caching (PERF-05), Sim `converge` loop (PERF-06)** —
+  NOT SELECTED. PERF-05 needs profiling to justify a cached `canonical_bytes` field
+  (memory tradeoff); PERF-06 is test-harness-only DX cost. Investigate-grade, not
+  planned.
+- **Superseded `lattice_carrier_spike` app (audit TECHDEBT-01 / DEPS-01)** —
+  NOT PLANNED (decision item). It is **not** dead code — it is a leaf umbrella app
+  that still compiles and runs its own `browser_carrier_spike_test.exs` in CI — but
+  it is the plan-010 predecessor to `lattice_node_spike` and still pulls
+  `web_socket_dist` + `tcp_filter_dist` (~5 transitive web deps: bandit, mint,
+  mint_web_socket, websock_adapter). Now that M2/`lattice_node_spike` settled the
+  carrier, decide: keep as the browser-carrier exploration, or delete it and its git
+  deps. Needs an owner decision, not a mechanical plan.
+- **Umbrella siblings in `extra_applications` (audit TECHDEBT-03)** — VALID but
+  trivial. `apps/lattice_demo/mix.exs:21` and `apps/lattice_stress/mix.exs:21` list
+  `:lattice_core`/`:lattice_server`/`:lattice_demo` in `extra_applications` though
+  they are already umbrella `deps` (harmless redundancy; `:logger` should be the only
+  entry). S/LOW-value cleanup; do it opportunistically, not worth a dedicated plan.
+- **Diverged `test_tab_client` copies (TECHDEBT-02), missing Township attestation
+  integration test (TECHDEBT-05), carrier helpers lack production loops
+  (TESTS-01/TECHDEBT-04), WsCarrier lacks chaos/fault injection (TESTS-02)** —
+  DEFERRED. All real but medium-value and partly subsumed by plan 017 (once Township
+  runs over the real carrier, the backoff/membership/ack helpers get their
+  integration loop and the attestation seam gets exercised end-to-end).
+- **Jason → stdlib `JSON` migration (audit DEPS-02)** — NOT SELECTED. Elixir 1.19
+  ships a built-in `JSON`, so Jason is removable (~6 files, `Jason.DecodeError` →
+  error-tuple handling). Mechanical M-effort cleanup with MED risk (error-shape
+  change); no urgency (Jason is stable, no advisories). Optional; not planned.
+- **Doc/DX polish (audit DX-01/DX-02, DOCS-03/DOCS-06)** — NOT PLANNED as standalone
+  work. `AGENTS.md` layout table omits `lattice_node_spike`; `lattice_poc_status.md`
+  has no M2/Township checkpoint; the `township_demo.exs` stale caveat is fixed inside
+  plan 017 (Step 4). Trivial doc updates; fold into whatever change next touches
+  those files.
+- **`npm audit` / `mix hex.audit`** — the security sweep ran these read-only and
+  surfaced no critical/high advisories on the runtime dependency set worth a plan.
+
+### Round 1 (2026-06-20)
 
 - **Static-handler path traversal (audit SECURITY-05)** — REJECTED (false positive).
   `apps/lattice_server/lib/lattice_server/static_handler.ex` resolves the served file via

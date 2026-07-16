@@ -25,6 +25,12 @@ defmodule Lattice.CarrierBackoffTest do
     assert Backoff.delay_ms(b, 0) == 0
   end
 
+  test "jitter never pushes a delay above the configured cap" do
+    b = Backoff.new(base_ms: 1, max_ms: 1, jitter_ms: 100, seed: "cap-probe")
+
+    assert Enum.all?(0..20, &(Backoff.delay_ms(b, &1) <= 1))
+  end
+
   test "large attempts are capped before exponentiation" do
     b = Backoff.new(base_ms: 1, max_ms: Integer.pow(2, 100), jitter_ms: 0, seed: "peer-a")
 

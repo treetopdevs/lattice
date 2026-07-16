@@ -1,0 +1,90 @@
+import type { AuthoritySecurityProjection } from "./authority";
+import { ancestors } from "./dag";
+import type { Op } from "./op";
+import { gatedBy } from "./schema";
+import type { ReplicaSchema } from "./schema";
+
+export type CapabilityQuarantineDecision =
+  | { quarantined: false }
+  | { quarantined: true; reason: string };
+
+/**
+ * Validate one carrier-decoded command against the same delegation and revoke
+ * evidence used by authority analysis. Legacy Tier-A ops without outer-replica
+ * evidence stay on their characterized path; shipping carrier ops fail closed.
+ */
+export function capabilityQuarantine(
+  op: Op,
+  schema: ReplicaSchema,
+  byId: Map<string, Op>,
+  security: AuthoritySecurityProjection,
+  ancCache = new Map<string, Set<string>>(),
+): CapabilityQuarantineDecision {
+  if (op.kind !== "command" || op.replica === undefined) {
+    return { quarantined: false };
+  }
+
+  const record = op.cap === undefined || op.cap === null
+    ? undefined
+    : security.delegations.get(op.cap);
+  if (record === undefined) {
+    return { quarantined: true, reason: "no_capability" };
+  }
+
+  const delegation = record.delegation;
+  if (delegation === null || !record.validation.valid) {
+    return { quarantined: true, reason: "invalid_capability" };
+  }
+  if (op.author !== delegation.audienceRealm) {
+    return { quarantined: true, reason: "capability_wrong_audience" };
+  }
+  if (op.command === undefined || !delegation.ops.includes(op.command)) {
+    return { quarantined: true, reason: "operation_not_granted" };
+  }
+
+  const visible = ancestors(op.id, byId, ancCache);
+  if (!record.introductionOpIds.some((opId) => visible.has(opId))) {
+    return { quarantined: true, reason: "capability_not_visible" };
+  }
+
+  const role = gatedBy(schema, op.field);
+  if (role !== null && !delegation.roles.includes(role)) {
+    return { quarantined: true, reason: "role_not_granted" };
+  }
+  if (revokedAsOf(op, delegation.id, byId, security, ancCache)) {
+    return { quarantined: true, reason: "revoked_capability" };
+  }
+
+  return { quarantined: false };
+}
+
+function revokedAsOf(
+  op: Op,
+  delegationId: string,
+  byId: Map<string, Op>,
+  security: AuthoritySecurityProjection,
+  ancCache: Map<string, Set<string>>,
+): boolean {
+  const chainIds = delegationChainIds(delegationId, security);
+
+  return security.effectiveRevokes.some(
+    (revoke) =>
+      chainIds.has(revoke.delegationId) &&
+      !ancestors(revoke.opId, byId, ancCache).has(op.id),
+  );
+}
+
+function delegationChainIds(
+  delegationId: string,
+  security: AuthoritySecurityProjection,
+): Set<string> {
+  const ids = new Set<string>();
+  let current: string | null = delegationId;
+
+  while (current !== null && !ids.has(current)) {
+    ids.add(current);
+    current = security.delegations.get(current)?.delegation?.parentId ?? null;
+  }
+
+  return ids;
+}

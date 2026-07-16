@@ -10,8 +10,10 @@ defmodule Lattice2.ReplicaSnapshotTest do
   alias Lattice.Demo.Thread
   alias Lattice.Graph.ReplicaSnapshot
   alias Lattice.{Log, Sim}
+  alias Township.Matter
 
   @replica "replica:thread:snapshot"
+  @witnessed_replica "replica:township:witnessed-snapshot"
 
   # Known small log: genesis + grant + two honored posts + one forged lock that
   # authority-quarantines (:no_capability), fully synced onto one log.
@@ -98,5 +100,39 @@ defmodule Lattice2.ReplicaSnapshotTest do
     assert g1 == g2
     assert ReplicaSnapshot.export(g1, :mermaid) == ReplicaSnapshot.export(g2, :mermaid)
     assert ReplicaSnapshot.export(g1, :json) == ReplicaSnapshot.export(g2, :json)
+  end
+
+  test "witnessed succession renders a bounded audit-safe summary" do
+    sim =
+      Sim.new(Matter, @witnessed_replica, ["clerk", "resident", "witness_a", "witness_b"],
+        seed: "witnessed-snapshot"
+      )
+
+    {sim, _genesis} =
+      Sim.create_replica(sim, "clerk",
+        policies: %{
+          clerk: %{
+            successor: "resident",
+            recovery: %{
+              mode: :witnessed,
+              version: 1,
+              witnesses: ["witness_a", "witness_b"],
+              threshold: 2
+            }
+          }
+        }
+      )
+
+    sim = Sim.sync_all(sim)
+
+    {sim, recovery} =
+      Sim.succeed(sim, "resident", :clerk, witnesses: ["witness_a", "witness_b"])
+
+    graph = ReplicaSnapshot.build(Matter, Sim.log(Sim.sync_all(sim), "resident"))
+    node = Enum.find(graph.nodes, &(&1.id == recovery.id))
+
+    assert node.label ==
+             "#{String.slice(recovery.id, 0, 8)} authority " <>
+               "succeed :clerk via witnessed recovery"
   end
 end

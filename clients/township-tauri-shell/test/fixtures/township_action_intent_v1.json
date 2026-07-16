@@ -1,0 +1,12 @@
+{
+  "payload": {
+    "v": 1,
+    "id": "0123456789abcdef0123456789abcdef",
+    "replica": "replica:matter:township-g1",
+    "command": {
+      "command": "post",
+      "text": "resident: from instrument"
+    }
+  },
+  "url": "township://action?intent=eyJ2IjoxLCJpZCI6IjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwicmVwbGljYSI6InJlcGxpY2E6bWF0dGVyOnRvd25zaGlwLWcxIiwiY29tbWFuZCI6eyJjb21tYW5kIjoicG9zdCIsInRleHQiOiJyZXNpZGVudDogZnJvbSBpbnN0cnVtZW50In19"
+}

@@ -1,0 +1,14 @@
+{
+  "clerk_locked": true,
+  "members": [
+    "clerk",
+    "resident"
+  ],
+  "posts": [
+    "resident: I'll attend",
+    "clerk: hearing Tuesday 6pm",
+    "resident: posted while offline"
+  ],
+  "summary": "Leaning approve (clerk edit)",
+  "title": "Zoning variance #24"
+}

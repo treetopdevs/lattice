@@ -16,14 +16,17 @@ defmodule LatticeNodeSpike.MixProject do
   end
 
   def application do
-    [extra_applications: [:logger, :cowboy, :jason]]
+    [
+      extra_applications: [:logger, :cowboy, :jason],
+      mod: {LatticeNodeSpike.Application, []}
+    ]
   end
 
   defp deps do
     [
       {:lattice_core, in_umbrella: true},
-      # For the raw WebSocket client (`Lattice.Transport.WebSocket.Client`).
-      {:lattice_server, in_umbrella: true},
+      {:lattice_web_socket, in_umbrella: true},
+      {:township_web, in_umbrella: true, only: :test, runtime: false},
       {:cowboy, "~> 2.12"},
       {:jason, "~> 1.4"}
     ]

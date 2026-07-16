@@ -13,11 +13,10 @@ defmodule LatticeNodeSpike do
       process; diverges (appends offline commands) when the socket closes.
     * `LatticeNodeSpike.WsHandler` / `PeerServer` — the Cowboy WebSocket
       boundary the peer serves the sync protocol on.
-    * `LatticeNodeSpike.WsCarrier` — the `Lattice.Carrier` implementation the
-      test drives from this OS process, over
-      `Lattice.Transport.WebSocket.Client` (raw `:gen_tcp`, real handshake).
-    * `LatticeNodeSpike.Wire` — delegates to the shared JSON-safe
-      `Lattice.Carrier.Wire` op frame schema from ADR 0005.
+    * `Lattice.Carrier.WebSocket` — the reusable carrier implementation the
+      test drives from this OS process. The `lattice_web_socket` app owns it
+      alongside `Lattice.Transport.WebSocket.Client` (`:gen_tcp`, real
+      handshake); it uses the shared `Lattice.Carrier.Wire` frame schema.
     * `priv/peer_node.exs` — the second OS process's entry point.
 
   The GATE test lives in `test/node_carrier_spike_test.exs`.

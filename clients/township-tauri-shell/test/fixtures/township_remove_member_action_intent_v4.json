@@ -1,0 +1,12 @@
+{
+  "payload": {
+    "v": 4,
+    "id": "89abcdef0123456789abcdef01234567",
+    "replica": "replica:matter:one",
+    "command": {
+      "command": "remove_member",
+      "member": "resident:alice"
+    }
+  },
+  "url": "township://action?intent=eyJ2Ijo0LCJpZCI6Ijg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3IiwicmVwbGljYSI6InJlcGxpY2E6bWF0dGVyOm9uZSIsImNvbW1hbmQiOnsiY29tbWFuZCI6InJlbW92ZV9tZW1iZXIiLCJtZW1iZXIiOiJyZXNpZGVudDphbGljZSJ9fQ"
+}

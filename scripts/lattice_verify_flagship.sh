@@ -11,6 +11,8 @@ mkdir -p "$FLAGSHIP_OUT" "$PLAYWRIGHT_OUT"
 if [[ "${LATTICE_SKIP_DEPS:-0}" != "1" ]]; then
   mix deps.get
   npm ci
+  npm --prefix clients/lattice-client ci
+  npm --prefix clients/township-tauri-shell ci
 fi
 
 if [[ "${LATTICE_SKIP_PLAYWRIGHT_INSTALL:-0}" != "1" ]]; then
@@ -22,6 +24,7 @@ mix test apps/lattice_core/test/lattice_flagship_test.exs apps/lattice_server/te
 mix compile
 npm run browser:worker:e2e
 npm run flagship:e2e
+npm run township:action-handoff:e2e
 
 mix run -e '
 out = System.get_env("LATTICE_FLAGSHIP_OUT") || "output/flagship"

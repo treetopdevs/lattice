@@ -1,9 +1,11 @@
-defmodule LatticeNodeSpike.WsCarrierSecurityTest do
+defmodule LatticeNodeSpike.WebSocketCarrierSecurityTest do
   use ExUnit.Case, async: false
 
-  alias Lattice.Identity
+  alias Lattice.Carrier.{Session, Wire}
+  alias Lattice.Carrier.WebSocket, as: WsCarrier
+  alias Lattice.{Identity, Log, Op}
   alias Lattice.Transport.WebSocket.Client
-  alias LatticeNodeSpike.{Peer, PeerServer, WsCarrier}
+  alias LatticeNodeSpike.{Peer, PeerServer}
 
   @replica "replica:ws-carrier-security"
 
@@ -33,6 +35,12 @@ defmodule LatticeNodeSpike.WsCarrierSecurityTest do
     port = start_peer_server()
 
     {:ok, client} = Client.connect(port: port, path: "/carrier")
+
+    assert {:ok, nonce_frame} = Client.recv_envelope(client)
+
+    assert {:ok, _server_nonce} =
+             Session.verify_nonce_frame(nonce_frame, expected_wire_version: Wire.version())
+
     :ok = Client.send_envelope(client, %{type: "status"})
 
     assert {:ok, %{"type" => "error", "reason" => "unauthenticated"}} =
@@ -83,6 +91,64 @@ defmodule LatticeNodeSpike.WsCarrierSecurityTest do
     :ok = WsCarrier.close(conn)
   end
 
+  test "push batches keep the complete request frame within the byte budget" do
+    port = start_peer_server()
+    node_b = identity("node_b")
+    node_a = identity("node_a")
+
+    assert {:ok, conn} =
+             WsCarrier.connect(
+               port: port,
+               identity: node_b,
+               realm: "node_b",
+               peer_realm: "node_a",
+               peer_pubkey: node_a.pub,
+               replica: @replica
+             )
+
+    ops =
+      for i <- 1..80 do
+        Op.new(node_b, @replica, [], :command, {:post, String.duplicate("x", 542) <> "#{i}"})
+      end
+
+    assert {:ok, _report, conn} = WsCarrier.push(conn, ops)
+    assert Enum.all?(WsCarrier.last_push_batches(conn), &(&1.bytes <= 64_000))
+
+    :ok = WsCarrier.close(conn)
+  end
+
+  test "an availability notification cannot displace a carrier request reply" do
+    port = start_feed_server()
+    node_b = identity("node_b")
+    node_a = identity("node_a")
+
+    assert {:ok, conn} =
+             WsCarrier.connect(
+               port: port,
+               identity: node_b,
+               realm: "node_b",
+               peer_realm: "node_a",
+               peer_pubkey: node_a.pub,
+               replica: @replica
+             )
+
+    subscription = make_ref()
+
+    assert {:ok, %{ref: ^subscription, generation: 1}, conn} =
+             WsCarrier.subscribe(conn, self(), subscription)
+
+    assert {:ok, %{ref: ^subscription, generation: 1}} = WsCarrier.subscription(conn)
+    empty = MapSet.new()
+    assert {:ok, ^empty, conn} = WsCarrier.advertise(conn, Log.new(@replica))
+
+    assert_receive {:lattice_carrier, ^subscription,
+                    %{"type" => "ops_available", "generation" => 2}}
+
+    assert {:ok, conn} = WsCarrier.unsubscribe(conn)
+    assert :none = WsCarrier.subscription(conn)
+    assert :ok = WsCarrier.close(conn)
+  end
+
   defp start_peer_server do
     {:ok, peer} =
       Peer.start_link(
@@ -115,18 +181,35 @@ defmodule LatticeNodeSpike.WsCarrierSecurityTest do
     :ranch.get_port(listener)
   end
 
+  defp start_feed_server do
+    listener = :"feed_#{System.unique_integer([:positive])}"
+    identity = identity("node_a")
+
+    dispatch =
+      :cowboy_router.compile([
+        {:_, [{"/carrier", __MODULE__.FeedHandler, %{realm: "node_a", identity: identity}}]}
+      ])
+
+    {:ok, _pid} = :cowboy.start_clear(listener, [port: 0], %{env: %{dispatch: dispatch}})
+    on_exit(fn -> _ = :cowboy.stop_listener(listener) end)
+    :ranch.get_port(listener)
+  end
+
   defp identity(realm), do: Identity.from_seed(realm, "carrier-spike")
 
   defmodule BadPushHandler do
     @behaviour :cowboy_websocket
 
-    alias Lattice.Carrier.Session
+    alias Lattice.Carrier.{Session, Wire}
 
     @impl :cowboy_websocket
     def init(req, state), do: {:cowboy_websocket, req, state}
 
     @impl :cowboy_websocket
-    def websocket_init(state), do: {:ok, state}
+    def websocket_init(state) do
+      nonce_frame = Session.nonce_frame(wire_version: Wire.version())
+      {:reply, {:text, Jason.encode!(nonce_frame)}, state}
+    end
 
     @impl :cowboy_websocket
     def websocket_handle({:text, text}, state) do
@@ -143,6 +226,64 @@ defmodule LatticeNodeSpike.WsCarrierSecurityTest do
         end
 
       {:reply, {:text, Jason.encode!(reply)}, state}
+    end
+
+    def websocket_handle(_frame, state) do
+      {:reply, {:text, Jason.encode!(%{type: "error", reason: "unsupported_frame"})}, state}
+    end
+
+    @impl :cowboy_websocket
+    def websocket_info(_message, state), do: {:ok, state}
+  end
+
+  defmodule FeedHandler do
+    @behaviour :cowboy_websocket
+
+    alias Lattice.Carrier.{Session, Wire}
+
+    @impl :cowboy_websocket
+    def init(req, state), do: {:cowboy_websocket, req, state}
+
+    @impl :cowboy_websocket
+    def websocket_init(state) do
+      nonce_frame = Session.nonce_frame(wire_version: Wire.version())
+      {:reply, {:text, Jason.encode!(nonce_frame)}, state}
+    end
+
+    @impl :cowboy_websocket
+    def websocket_handle({:text, text}, state) do
+      case Jason.decode(text) do
+        {:ok, %{"type" => "carrier_challenge"} = challenge} ->
+          reply = Session.respond(challenge, state.identity, state.realm)
+          {:reply, {:text, Jason.encode!(reply)}, state}
+
+        {:ok, %{"type" => "subscribe"}} ->
+          reply = %{
+            type: "subscribe_result",
+            generation: 1,
+            frontier: [],
+            frontier_truncated: false
+          }
+
+          {:reply, {:text, Jason.encode!(reply)}, state}
+
+        {:ok, %{"type" => "frontier"}} ->
+          notification = %{type: "ops_available", generation: 2, frontier: []}
+          response = %{type: "frontier_result", ids: []}
+
+          {:reply,
+           [
+             {:text, Jason.encode!(notification)},
+             {:text, Jason.encode!(response)}
+           ], state}
+
+        {:ok, %{"type" => "unsubscribe"}} ->
+          {:reply, {:text, Jason.encode!(%{type: "unsubscribe_result"})}, state}
+
+        _other ->
+          {:reply, {:text, Jason.encode!(%{type: "error", reason: "unexpected_test_message"})},
+           state}
+      end
     end
 
     def websocket_handle(_frame, state) do

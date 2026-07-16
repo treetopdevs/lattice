@@ -24,10 +24,11 @@ defmodule LatticeNodeSpike.NodeCarrierSpikeTest do
 
   alias Lattice.Carrier
   alias Lattice.Carrier.Backoff
+  alias Lattice.Carrier.WebSocket, as: WsCarrier
   alias Lattice.Log
   alias Lattice.Sim
   alias Lattice.Sync
-  alias LatticeNodeSpike.{Scenario, WsCarrier}
+  alias LatticeNodeSpike.Scenario
 
   @moduletag timeout: 120_000
 

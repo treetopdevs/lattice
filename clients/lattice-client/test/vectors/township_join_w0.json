@@ -1,0 +1,105 @@
+{
+  "expectAtFrontier": [],
+  "expectAtFullFrontier": {
+    "quarantine": [],
+    "state": {
+      "clerk": "clerk",
+      "clerk_locked": false,
+      "members": [
+        "clerk",
+        "resident"
+      ],
+      "posts": [],
+      "summary": "",
+      "title": ""
+    },
+    "winners": {
+      "clerk": "Cl15rL6k8Ls4TgOh7wb6L6csbRbfJXIfKZnAPo43TqE",
+      "clerk_locked": null,
+      "summary": null,
+      "title": null
+    }
+  },
+  "generatedBy": "Lattice.Sim",
+  "ops": [
+    {
+      "author": "clerk",
+      "command": "genesis clerk",
+      "deps": [],
+      "field": "clerk",
+      "hash": "Cl15rL6k8Ls4TgOh7wb6L6csbRbfJXIfKZnAPo43TqE",
+      "id": "Cl15rL6k8Ls4TgOh7wb6L6csbRbfJXIfKZnAPo43TqE",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "clerk"
+    },
+    {
+      "author": "clerk",
+      "command": "grant resident",
+      "deps": [
+        "Cl15rL6k8Ls4TgOh7wb6L6csbRbfJXIfKZnAPo43TqE"
+      ],
+      "field": "__authority",
+      "hash": "DQpWtR-5WaZbI5D-dOxxQqhW0eIwIbriEh1Gvy47SDk",
+      "id": "DQpWtR-5WaZbI5D-dOxxQqhW0eIwIbriEh1Gvy47SDk",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "clerk",
+      "command": "admit",
+      "deps": [
+        "DQpWtR-5WaZbI5D-dOxxQqhW0eIwIbriEh1Gvy47SDk"
+      ],
+      "field": "members",
+      "hash": "Ywtgm4M-IqLB1k9INz4H4VhjbLSe1c6g3shCcuVH53E",
+      "id": "Ywtgm4M-IqLB1k9INz4H4VhjbLSe1c6g3shCcuVH53E",
+      "kind": "command",
+      "mutation": "add",
+      "value": "clerk"
+    },
+    {
+      "author": "clerk",
+      "command": "admit",
+      "deps": [
+        "Ywtgm4M-IqLB1k9INz4H4VhjbLSe1c6g3shCcuVH53E"
+      ],
+      "field": "members",
+      "hash": "LY38XjROMzuo8RzZPEcXHp9tNFwttE5S5BEgg60w6dc",
+      "id": "LY38XjROMzuo8RzZPEcXHp9tNFwttE5S5BEgg60w6dc",
+      "kind": "command",
+      "mutation": "add",
+      "value": "resident"
+    }
+  ],
+  "perspectives": [],
+  "scenario": "township_join_w0",
+  "schema": {
+    "fields": {
+      "clerk": {
+        "authority": "clerk"
+      },
+      "clerk_locked": {
+        "default": false,
+        "gatedBy": "clerk",
+        "merge": "lww"
+      },
+      "members": {
+        "merge": "or_set"
+      },
+      "posts": {
+        "merge": "causal_list"
+      },
+      "summary": {
+        "default": "",
+        "merge": "lww"
+      },
+      "title": {
+        "default": "",
+        "merge": "lww"
+      }
+    },
+    "name": "Township.Matter"
+  }
+}

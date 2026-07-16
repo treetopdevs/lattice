@@ -207,7 +207,7 @@ defmodule Township.WorkflowsTest do
   end
 
   # ------------------------------------------------------------------ W3
-  test "W3 — succession & survival: dump/restore preserves state and roles" do
+  test "W3 — dump/restore survival: preserves state and roles" do
     sim = town(["clerk_a", "clerk_b"])
 
     {sim, _} =
@@ -249,8 +249,8 @@ defmodule Township.WorkflowsTest do
     # Coercion beat: alice is forced to "prove" she vouched :reject.
     alt = Attestation.produce_alt(impl, tok_a, :reject)
 
-    # ASSERT: the town's tally over the REAL vouches is unchanged by the
-    # existence of an equivocation; and the interface is the one M4 will fill.
+    # ASSERT: the legacy demo tally is unchanged by the caller-held alternative.
+    # M4 does not implement this interface; Township.Election has separate contracts.
     assert Attestation.tally(impl, [body_a, body_b]).outcome == :approve
     assert {:vouch, _} = alt
 

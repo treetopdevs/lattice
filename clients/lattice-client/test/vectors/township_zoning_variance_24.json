@@ -1,0 +1,807 @@
+{
+  "expectAtFrontier": [
+    {
+      "include": [
+        "L10W2QqXGpkBAsTNlxX3_dfwrEEKV1E5Ji-U6yXQffM",
+        "LjyuGoRJNDzsPTVpuW7MlLFuMNsMmVOx_GxGyyjn1rQ",
+        "NZ1Y6_uwlEGNQtbxQ2hFwKTsndAgtQYFBUHu7b_H5pQ",
+        "Rr9vJAyKWsSqBQNFgBnQyYGDtlDcbNjLMhtIo0GqvaY",
+        "alPyLJrTujWnm_cNWbburV2Y4NP3mYdkjAUqIHXxJ9U",
+        "vp4P8uIkZFgcjT6a4qCsSQ-DBTrCSoD8HZNrCQpjMks",
+        "wSAxLmQL_laRKD8pa5Lm9gh6hdsFE6ee1BZKkT4yC1I"
+      ],
+      "note": "clerk_mid_partition",
+      "state": {
+        "clerk": "clerk",
+        "clerk_locked": false,
+        "members": [
+          "clerk",
+          "resident"
+        ],
+        "posts": [
+          "clerk: hearing Tue 6pm"
+        ],
+        "summary": "Leaning approve",
+        "title": "Zoning Variance #24"
+      }
+    },
+    {
+      "include": [
+        "1xtEPVnYbSxHgVHKayyMdvIuf49NeVSgQqi96Gg-MM8",
+        "E5fAT3RYRfxYwcw4h6hXIUrLoDAvgwpvdEHtCRAB4E4",
+        "alPyLJrTujWnm_cNWbburV2Y4NP3mYdkjAUqIHXxJ9U",
+        "mMpefHRAYHYm3b4zVySAJm-0c4BXo2AgfN_YsODA37g",
+        "wSAxLmQL_laRKD8pa5Lm9gh6hdsFE6ee1BZKkT4yC1I"
+      ],
+      "note": "resident_mid_partition",
+      "state": {
+        "clerk": "clerk",
+        "clerk_locked": false,
+        "members": [],
+        "posts": [
+          "resident: I will attend",
+          "resident: posted while offline"
+        ],
+        "summary": "Needs traffic study",
+        "title": ""
+      }
+    }
+  ],
+  "expectAtFullFrontier": {
+    "authorityQuarantine": [
+      [
+        "gqx-upwBpwJb-bxnhTcXBpSUBVozkFMsx_LYB_UX9-k",
+        "stale_holder"
+      ]
+    ],
+    "quarantine": [
+      "gqx-upwBpwJb-bxnhTcXBpSUBVozkFMsx_LYB_UX9-k"
+    ],
+    "state": {
+      "clerk": "resident",
+      "clerk_locked": true,
+      "members": [
+        "clerk",
+        "resident"
+      ],
+      "posts": [
+        "resident: I will attend",
+        "resident: posted while offline",
+        "clerk: hearing Tue 6pm"
+      ],
+      "summary": "Leaning approve",
+      "title": "Zoning Variance #24"
+    },
+    "winners": {
+      "clerk": "6bJZSSXdaaC9gFze3l3N3mrc2MBBFX7Yvo8IvTv50Ro",
+      "clerk_locked": "1pyd8r5YGNSMV5op3yPSMKBUwYWRZ_0L5Fne16bq9pA",
+      "summary": "NZ1Y6_uwlEGNQtbxQ2hFwKTsndAgtQYFBUHu7b_H5pQ",
+      "title": "L10W2QqXGpkBAsTNlxX3_dfwrEEKV1E5Ji-U6yXQffM"
+    }
+  },
+  "generatedBy": "Lattice.Sim",
+  "ops": [
+    {
+      "author": "clerk",
+      "command": "genesis clerk",
+      "deps": [],
+      "field": "clerk",
+      "hash": "alPyLJrTujWnm_cNWbburV2Y4NP3mYdkjAUqIHXxJ9U",
+      "id": "alPyLJrTujWnm_cNWbburV2Y4NP3mYdkjAUqIHXxJ9U",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "clerk"
+    },
+    {
+      "author": "clerk",
+      "command": "grant resident",
+      "deps": [
+        "alPyLJrTujWnm_cNWbburV2Y4NP3mYdkjAUqIHXxJ9U"
+      ],
+      "field": "__authority",
+      "hash": "wSAxLmQL_laRKD8pa5Lm9gh6hdsFE6ee1BZKkT4yC1I",
+      "id": "wSAxLmQL_laRKD8pa5Lm9gh6hdsFE6ee1BZKkT4yC1I",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "resident",
+      "command": "post",
+      "deps": [
+        "wSAxLmQL_laRKD8pa5Lm9gh6hdsFE6ee1BZKkT4yC1I"
+      ],
+      "field": "posts",
+      "hash": "E5fAT3RYRfxYwcw4h6hXIUrLoDAvgwpvdEHtCRAB4E4",
+      "id": "E5fAT3RYRfxYwcw4h6hXIUrLoDAvgwpvdEHtCRAB4E4",
+      "kind": "command",
+      "mutation": "append",
+      "value": "resident: I will attend"
+    },
+    {
+      "author": "resident",
+      "command": "set_summary",
+      "deps": [
+        "E5fAT3RYRfxYwcw4h6hXIUrLoDAvgwpvdEHtCRAB4E4"
+      ],
+      "field": "summary",
+      "hash": "1xtEPVnYbSxHgVHKayyMdvIuf49NeVSgQqi96Gg-MM8",
+      "id": "1xtEPVnYbSxHgVHKayyMdvIuf49NeVSgQqi96Gg-MM8",
+      "kind": "command",
+      "mutation": "write",
+      "value": "Needs traffic study"
+    },
+    {
+      "author": "clerk",
+      "command": "admit",
+      "deps": [
+        "wSAxLmQL_laRKD8pa5Lm9gh6hdsFE6ee1BZKkT4yC1I"
+      ],
+      "field": "members",
+      "hash": "LjyuGoRJNDzsPTVpuW7MlLFuMNsMmVOx_GxGyyjn1rQ",
+      "id": "LjyuGoRJNDzsPTVpuW7MlLFuMNsMmVOx_GxGyyjn1rQ",
+      "kind": "command",
+      "mutation": "add",
+      "value": "clerk"
+    },
+    {
+      "author": "resident",
+      "command": "post",
+      "deps": [
+        "1xtEPVnYbSxHgVHKayyMdvIuf49NeVSgQqi96Gg-MM8"
+      ],
+      "field": "posts",
+      "hash": "mMpefHRAYHYm3b4zVySAJm-0c4BXo2AgfN_YsODA37g",
+      "id": "mMpefHRAYHYm3b4zVySAJm-0c4BXo2AgfN_YsODA37g",
+      "kind": "command",
+      "mutation": "append",
+      "value": "resident: posted while offline"
+    },
+    {
+      "author": "clerk",
+      "command": "admit",
+      "deps": [
+        "LjyuGoRJNDzsPTVpuW7MlLFuMNsMmVOx_GxGyyjn1rQ"
+      ],
+      "field": "members",
+      "hash": "vp4P8uIkZFgcjT6a4qCsSQ-DBTrCSoD8HZNrCQpjMks",
+      "id": "vp4P8uIkZFgcjT6a4qCsSQ-DBTrCSoD8HZNrCQpjMks",
+      "kind": "command",
+      "mutation": "add",
+      "value": "resident"
+    },
+    {
+      "author": "clerk",
+      "command": "set_title",
+      "deps": [
+        "vp4P8uIkZFgcjT6a4qCsSQ-DBTrCSoD8HZNrCQpjMks"
+      ],
+      "field": "title",
+      "hash": "L10W2QqXGpkBAsTNlxX3_dfwrEEKV1E5Ji-U6yXQffM",
+      "id": "L10W2QqXGpkBAsTNlxX3_dfwrEEKV1E5Ji-U6yXQffM",
+      "kind": "command",
+      "mutation": "write",
+      "value": "Zoning Variance #24"
+    },
+    {
+      "author": "clerk",
+      "command": "post",
+      "deps": [
+        "L10W2QqXGpkBAsTNlxX3_dfwrEEKV1E5Ji-U6yXQffM"
+      ],
+      "field": "posts",
+      "hash": "Rr9vJAyKWsSqBQNFgBnQyYGDtlDcbNjLMhtIo0GqvaY",
+      "id": "Rr9vJAyKWsSqBQNFgBnQyYGDtlDcbNjLMhtIo0GqvaY",
+      "kind": "command",
+      "mutation": "append",
+      "value": "clerk: hearing Tue 6pm"
+    },
+    {
+      "author": "clerk",
+      "command": "close_matter",
+      "deps": [
+        "Rr9vJAyKWsSqBQNFgBnQyYGDtlDcbNjLMhtIo0GqvaY",
+        "mMpefHRAYHYm3b4zVySAJm-0c4BXo2AgfN_YsODA37g"
+      ],
+      "field": "clerk_locked",
+      "hash": "1pyd8r5YGNSMV5op3yPSMKBUwYWRZ_0L5Fne16bq9pA",
+      "id": "1pyd8r5YGNSMV5op3yPSMKBUwYWRZ_0L5Fne16bq9pA",
+      "kind": "command",
+      "mutation": "write",
+      "value": true
+    },
+    {
+      "author": "clerk",
+      "command": "transfer clerk",
+      "deps": [
+        "1pyd8r5YGNSMV5op3yPSMKBUwYWRZ_0L5Fne16bq9pA"
+      ],
+      "field": "clerk",
+      "hash": "6bJZSSXdaaC9gFze3l3N3mrc2MBBFX7Yvo8IvTv50Ro",
+      "id": "6bJZSSXdaaC9gFze3l3N3mrc2MBBFX7Yvo8IvTv50Ro",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "resident"
+    },
+    {
+      "author": "clerk",
+      "command": "set_summary",
+      "deps": [
+        "Rr9vJAyKWsSqBQNFgBnQyYGDtlDcbNjLMhtIo0GqvaY"
+      ],
+      "field": "summary",
+      "hash": "NZ1Y6_uwlEGNQtbxQ2hFwKTsndAgtQYFBUHu7b_H5pQ",
+      "id": "NZ1Y6_uwlEGNQtbxQ2hFwKTsndAgtQYFBUHu7b_H5pQ",
+      "kind": "command",
+      "mutation": "write",
+      "value": "Leaning approve"
+    },
+    {
+      "author": "clerk",
+      "command": "reopen_matter",
+      "deps": [
+        "NZ1Y6_uwlEGNQtbxQ2hFwKTsndAgtQYFBUHu7b_H5pQ"
+      ],
+      "field": "clerk_locked",
+      "hash": "gqx-upwBpwJb-bxnhTcXBpSUBVozkFMsx_LYB_UX9-k",
+      "id": "gqx-upwBpwJb-bxnhTcXBpSUBVozkFMsx_LYB_UX9-k",
+      "kind": "command",
+      "mutation": "write",
+      "value": false
+    }
+  ],
+  "oracleCarrierOps": [
+    {
+      "author": "r9qi1OBHt24bu9+1PIx+7sqZlD3EIGjG5Yq3FUZOZ5c=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "r9qi1OBHt24bu9+1PIx+7sqZlD3EIGjG5Yq3FUZOZ5c=",
+              "id": "BrhLnIfqw3K2WVnru4FQQiv_yGm27zthPcaaShO2vh0",
+              "issuer": "r9qi1OBHt24bu9+1PIx+7sqZlD3EIGjG5Yq3FUZOZ5c=",
+              "live": true,
+              "ops": [
+                "admit",
+                "close_matter",
+                "link_election",
+                "post",
+                "remove_member",
+                "reopen_matter",
+                "set_summary",
+                "set_title"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:zoning-variance-24#root:7E-dyO8KqdJtJxfsMMtgLtSNOS1Vpd23yYZ6E__dsvc",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "Bk2VgHkQj+p5qYBqwFpyqc9BiP1CtOTTm9D7gZ80XPsYfN20hTbbIeEp3Wa3yXAvNeIkiEf+cgA8xTVOuqdvCA=="
+            }
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "clerk"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "successor"
+                      ],
+                      [
+                        "bin",
+                        "xI19LiI0w767nWBOSHbaM1L8uNai5zegqgE97NTzY+w="
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "dormant_ticks"
+                      ],
+                      [
+                        "int",
+                        3
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [],
+      "id": "alPyLJrTujWnm_cNWbburV2Y4NP3mYdkjAUqIHXxJ9U",
+      "kind": "authority",
+      "replica": "replica:matter:zoning-variance-24#root:7E-dyO8KqdJtJxfsMMtgLtSNOS1Vpd23yYZ6E__dsvc",
+      "sig": "JiJSvrTwT4lU/Tbmq6GPeSmCrrmcmDswV7mfB3J6iWa4pjor2ovVMmnSv2dy7b+W7Lz4Ub5iScdhdI9rcCswAw==",
+      "v": 1
+    },
+    {
+      "author": "r9qi1OBHt24bu9+1PIx+7sqZlD3EIGjG5Yq3FUZOZ5c=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "grant"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "xI19LiI0w767nWBOSHbaM1L8uNai5zegqgE97NTzY+w=",
+              "id": "xraf7Z4aGfQuD8dPIn3RhTfJ18TW3yzwt4j1G5gRGgw",
+              "issuer": "r9qi1OBHt24bu9+1PIx+7sqZlD3EIGjG5Yq3FUZOZ5c=",
+              "live": false,
+              "ops": [
+                "admit",
+                "post",
+                "set_summary",
+                "set_title"
+              ],
+              "parent_id": "BrhLnIfqw3K2WVnru4FQQiv_yGm27zthPcaaShO2vh0",
+              "replica": "replica:matter:zoning-variance-24#root:7E-dyO8KqdJtJxfsMMtgLtSNOS1Vpd23yYZ6E__dsvc",
+              "roles": [],
+              "sig": "72UaYK+keon1q2ldWW4vV3yrd87Olr5xclaHRX7fxhz29EgFrwgeA9TRcVM4QdO72MJ4Tm+bXotPkV++Eb5dDA=="
+            }
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "alPyLJrTujWnm_cNWbburV2Y4NP3mYdkjAUqIHXxJ9U"
+      ],
+      "id": "wSAxLmQL_laRKD8pa5Lm9gh6hdsFE6ee1BZKkT4yC1I",
+      "kind": "authority",
+      "replica": "replica:matter:zoning-variance-24#root:7E-dyO8KqdJtJxfsMMtgLtSNOS1Vpd23yYZ6E__dsvc",
+      "sig": "AzSB2qMAXm4Mp7eYguPg78wCgNHTammvtW7IthK0i3RMLB6ApJ/AEj0usBJTPhFoIdWsrMz+K7Li16rJR3mKBg==",
+      "v": 1
+    },
+    {
+      "author": "xI19LiI0w767nWBOSHbaM1L8uNai5zegqgE97NTzY+w=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "post"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "cmVzaWRlbnQ6IEkgd2lsbCBhdHRlbmQ="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "eHJhZjdaNGFHZlF1RDhkUEluM1JoVGZKMThUVzN5end0NGoxRzVnUkdndw=="
+      ],
+      "deps": [
+        "wSAxLmQL_laRKD8pa5Lm9gh6hdsFE6ee1BZKkT4yC1I"
+      ],
+      "id": "E5fAT3RYRfxYwcw4h6hXIUrLoDAvgwpvdEHtCRAB4E4",
+      "kind": "command",
+      "replica": "replica:matter:zoning-variance-24#root:7E-dyO8KqdJtJxfsMMtgLtSNOS1Vpd23yYZ6E__dsvc",
+      "sig": "lMFtBpFybD94H12qVg5psiXe3xTAB8XwyP1u/9r31SNLth4gmIMUiM0oK5bmeO9JhsfiTuBPWM57JGgAluOrDw==",
+      "v": 1
+    },
+    {
+      "author": "xI19LiI0w767nWBOSHbaM1L8uNai5zegqgE97NTzY+w=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "set_summary"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "TmVlZHMgdHJhZmZpYyBzdHVkeQ=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "eHJhZjdaNGFHZlF1RDhkUEluM1JoVGZKMThUVzN5end0NGoxRzVnUkdndw=="
+      ],
+      "deps": [
+        "E5fAT3RYRfxYwcw4h6hXIUrLoDAvgwpvdEHtCRAB4E4"
+      ],
+      "id": "1xtEPVnYbSxHgVHKayyMdvIuf49NeVSgQqi96Gg-MM8",
+      "kind": "command",
+      "replica": "replica:matter:zoning-variance-24#root:7E-dyO8KqdJtJxfsMMtgLtSNOS1Vpd23yYZ6E__dsvc",
+      "sig": "6+rQkoXVgMsuAGNX134AGm3fM03ezUg98GM1ByiLUerqM2jP1E2V5LgDYFA7aDDZDrTq7WrQ8PvtVg5BGPd6Aw==",
+      "v": 1
+    },
+    {
+      "author": "r9qi1OBHt24bu9+1PIx+7sqZlD3EIGjG5Yq3FUZOZ5c=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "admit"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "Y2xlcms="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "QnJoTG5JZnF3M0syV1ZucnU0RlFRaXZfeUdtMjd6dGhQY2FhU2hPMnZoMA=="
+      ],
+      "deps": [
+        "wSAxLmQL_laRKD8pa5Lm9gh6hdsFE6ee1BZKkT4yC1I"
+      ],
+      "id": "LjyuGoRJNDzsPTVpuW7MlLFuMNsMmVOx_GxGyyjn1rQ",
+      "kind": "command",
+      "replica": "replica:matter:zoning-variance-24#root:7E-dyO8KqdJtJxfsMMtgLtSNOS1Vpd23yYZ6E__dsvc",
+      "sig": "QmO97f2ZnjWbdzlIaWJfUtCXmGdVeg8V6vSLIvDWxcJ+QSNvMvAA2nrbxvc+maiaWkj9cLs/RTLqBl/P0BOZBg==",
+      "v": 1
+    },
+    {
+      "author": "xI19LiI0w767nWBOSHbaM1L8uNai5zegqgE97NTzY+w=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "post"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "cmVzaWRlbnQ6IHBvc3RlZCB3aGlsZSBvZmZsaW5l"
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "eHJhZjdaNGFHZlF1RDhkUEluM1JoVGZKMThUVzN5end0NGoxRzVnUkdndw=="
+      ],
+      "deps": [
+        "1xtEPVnYbSxHgVHKayyMdvIuf49NeVSgQqi96Gg-MM8"
+      ],
+      "id": "mMpefHRAYHYm3b4zVySAJm-0c4BXo2AgfN_YsODA37g",
+      "kind": "command",
+      "replica": "replica:matter:zoning-variance-24#root:7E-dyO8KqdJtJxfsMMtgLtSNOS1Vpd23yYZ6E__dsvc",
+      "sig": "KcovXT3fZJz5WcNAP0hQagUd4l7MZwIXwXMV6WZXA/gdamHhJ9pb75jKUa2kMJ69o57BBICUQa81rM0YZWksDw==",
+      "v": 1
+    },
+    {
+      "author": "r9qi1OBHt24bu9+1PIx+7sqZlD3EIGjG5Yq3FUZOZ5c=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "admit"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "cmVzaWRlbnQ="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "QnJoTG5JZnF3M0syV1ZucnU0RlFRaXZfeUdtMjd6dGhQY2FhU2hPMnZoMA=="
+      ],
+      "deps": [
+        "LjyuGoRJNDzsPTVpuW7MlLFuMNsMmVOx_GxGyyjn1rQ"
+      ],
+      "id": "vp4P8uIkZFgcjT6a4qCsSQ-DBTrCSoD8HZNrCQpjMks",
+      "kind": "command",
+      "replica": "replica:matter:zoning-variance-24#root:7E-dyO8KqdJtJxfsMMtgLtSNOS1Vpd23yYZ6E__dsvc",
+      "sig": "Cdv/mCYABAYMFdwVR364Cs4eXs2XOmnHQENd6p6GQ6onIfNGMHi10PIMjEXN1p1facan/WK9mcjHghkYskvrBw==",
+      "v": 1
+    },
+    {
+      "author": "r9qi1OBHt24bu9+1PIx+7sqZlD3EIGjG5Yq3FUZOZ5c=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "set_title"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "Wm9uaW5nIFZhcmlhbmNlICMyNA=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "QnJoTG5JZnF3M0syV1ZucnU0RlFRaXZfeUdtMjd6dGhQY2FhU2hPMnZoMA=="
+      ],
+      "deps": [
+        "vp4P8uIkZFgcjT6a4qCsSQ-DBTrCSoD8HZNrCQpjMks"
+      ],
+      "id": "L10W2QqXGpkBAsTNlxX3_dfwrEEKV1E5Ji-U6yXQffM",
+      "kind": "command",
+      "replica": "replica:matter:zoning-variance-24#root:7E-dyO8KqdJtJxfsMMtgLtSNOS1Vpd23yYZ6E__dsvc",
+      "sig": "lwaN5E4fDIdII3BrolrWOm+91s25UoVmKwuxksG05TwIpnkW5VTspBjedANTK7O3ISfAk8O7JudmygUG8o6LBg==",
+      "v": 1
+    },
+    {
+      "author": "r9qi1OBHt24bu9+1PIx+7sqZlD3EIGjG5Yq3FUZOZ5c=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "post"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "Y2xlcms6IGhlYXJpbmcgVHVlIDZwbQ=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "QnJoTG5JZnF3M0syV1ZucnU0RlFRaXZfeUdtMjd6dGhQY2FhU2hPMnZoMA=="
+      ],
+      "deps": [
+        "L10W2QqXGpkBAsTNlxX3_dfwrEEKV1E5Ji-U6yXQffM"
+      ],
+      "id": "Rr9vJAyKWsSqBQNFgBnQyYGDtlDcbNjLMhtIo0GqvaY",
+      "kind": "command",
+      "replica": "replica:matter:zoning-variance-24#root:7E-dyO8KqdJtJxfsMMtgLtSNOS1Vpd23yYZ6E__dsvc",
+      "sig": "29/cOngkAjdac3iwGVy8wkp2ErTpcf8g1QdcqeBCd7/DKWrUq+oWtHHHEJgwf1YiFD4VXMMsk29MGXIsBdoXCw==",
+      "v": 1
+    },
+    {
+      "author": "r9qi1OBHt24bu9+1PIx+7sqZlD3EIGjG5Yq3FUZOZ5c=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "close_matter"
+          ],
+          [
+            "list",
+            []
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "QnJoTG5JZnF3M0syV1ZucnU0RlFRaXZfeUdtMjd6dGhQY2FhU2hPMnZoMA=="
+      ],
+      "deps": [
+        "Rr9vJAyKWsSqBQNFgBnQyYGDtlDcbNjLMhtIo0GqvaY",
+        "mMpefHRAYHYm3b4zVySAJm-0c4BXo2AgfN_YsODA37g"
+      ],
+      "id": "1pyd8r5YGNSMV5op3yPSMKBUwYWRZ_0L5Fne16bq9pA",
+      "kind": "command",
+      "replica": "replica:matter:zoning-variance-24#root:7E-dyO8KqdJtJxfsMMtgLtSNOS1Vpd23yYZ6E__dsvc",
+      "sig": "SyRGNlGq59y+JtsAu1WE0AXnPK9bXzkl1uCXJVOTMcY5oZSkTktOjrIAg+NSQXoaRAnfKW3Q5olnHHpsNww+Cg==",
+      "v": 1
+    },
+    {
+      "author": "r9qi1OBHt24bu9+1PIx+7sqZlD3EIGjG5Yq3FUZOZ5c=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "transfer"
+          ],
+          [
+            "atom",
+            "clerk"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "xI19LiI0w767nWBOSHbaM1L8uNai5zegqgE97NTzY+w=",
+              "id": "odzVeeFb9YVRmXoU61VAAfDhIlCzoOpBu-lPHRabWHY",
+              "issuer": "r9qi1OBHt24bu9+1PIx+7sqZlD3EIGjG5Yq3FUZOZ5c=",
+              "live": false,
+              "ops": [
+                "close_matter",
+                "reopen_matter"
+              ],
+              "parent_id": "BrhLnIfqw3K2WVnru4FQQiv_yGm27zthPcaaShO2vh0",
+              "replica": "replica:matter:zoning-variance-24#root:7E-dyO8KqdJtJxfsMMtgLtSNOS1Vpd23yYZ6E__dsvc",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "db2lwuRt/llnI4WNXCABMTnZSN/pL7gKshV14Zl8rInHveyTTuwoA5aUMkSYmvzECl9YFHpXlZlvvZ7qvndKBA=="
+            }
+          ],
+          [
+            "int",
+            1
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "1pyd8r5YGNSMV5op3yPSMKBUwYWRZ_0L5Fne16bq9pA"
+      ],
+      "id": "6bJZSSXdaaC9gFze3l3N3mrc2MBBFX7Yvo8IvTv50Ro",
+      "kind": "authority",
+      "replica": "replica:matter:zoning-variance-24#root:7E-dyO8KqdJtJxfsMMtgLtSNOS1Vpd23yYZ6E__dsvc",
+      "sig": "tSY7hSi7bg3wb9Aj0JgKJH1wRaQsbWzuW7t6nJFwKrmOAs8dZmXeSvR5mnHS00o3zOS0Jc6hWEN2SZCufIFTCw==",
+      "v": 1
+    },
+    {
+      "author": "r9qi1OBHt24bu9+1PIx+7sqZlD3EIGjG5Yq3FUZOZ5c=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "set_summary"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "TGVhbmluZyBhcHByb3Zl"
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "QnJoTG5JZnF3M0syV1ZucnU0RlFRaXZfeUdtMjd6dGhQY2FhU2hPMnZoMA=="
+      ],
+      "deps": [
+        "Rr9vJAyKWsSqBQNFgBnQyYGDtlDcbNjLMhtIo0GqvaY"
+      ],
+      "id": "NZ1Y6_uwlEGNQtbxQ2hFwKTsndAgtQYFBUHu7b_H5pQ",
+      "kind": "command",
+      "replica": "replica:matter:zoning-variance-24#root:7E-dyO8KqdJtJxfsMMtgLtSNOS1Vpd23yYZ6E__dsvc",
+      "sig": "v5sMQBO8IUhJLL9f6rxzM78j0GPdW3rOw/Hzkxx6gE8Vda1AILY2d9WFIbJoAGEHXOcgfsVFPehASNsOMCgfCA==",
+      "v": 1
+    },
+    {
+      "author": "r9qi1OBHt24bu9+1PIx+7sqZlD3EIGjG5Yq3FUZOZ5c=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "reopen_matter"
+          ],
+          [
+            "list",
+            []
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "QnJoTG5JZnF3M0syV1ZucnU0RlFRaXZfeUdtMjd6dGhQY2FhU2hPMnZoMA=="
+      ],
+      "deps": [
+        "NZ1Y6_uwlEGNQtbxQ2hFwKTsndAgtQYFBUHu7b_H5pQ"
+      ],
+      "id": "gqx-upwBpwJb-bxnhTcXBpSUBVozkFMsx_LYB_UX9-k",
+      "kind": "command",
+      "replica": "replica:matter:zoning-variance-24#root:7E-dyO8KqdJtJxfsMMtgLtSNOS1Vpd23yYZ6E__dsvc",
+      "sig": "CYgw8n0IKSACz3qFT+AugvF/u3A2ZtldheQ31/jEIPOnRhCqRbZ30od4xG0SkmqfvXjkSSumq4k+VZxz3EGDAg==",
+      "v": 1
+    }
+  ],
+  "perspectives": [
+    {
+      "include": [
+        "L10W2QqXGpkBAsTNlxX3_dfwrEEKV1E5Ji-U6yXQffM",
+        "LjyuGoRJNDzsPTVpuW7MlLFuMNsMmVOx_GxGyyjn1rQ",
+        "NZ1Y6_uwlEGNQtbxQ2hFwKTsndAgtQYFBUHu7b_H5pQ",
+        "Rr9vJAyKWsSqBQNFgBnQyYGDtlDcbNjLMhtIo0GqvaY",
+        "alPyLJrTujWnm_cNWbburV2Y4NP3mYdkjAUqIHXxJ9U",
+        "vp4P8uIkZFgcjT6a4qCsSQ-DBTrCSoD8HZNrCQpjMks",
+        "wSAxLmQL_laRKD8pa5Lm9gh6hdsFE6ee1BZKkT4yC1I"
+      ],
+      "name": "clerk_mid_partition"
+    },
+    {
+      "include": [
+        "1xtEPVnYbSxHgVHKayyMdvIuf49NeVSgQqi96Gg-MM8",
+        "E5fAT3RYRfxYwcw4h6hXIUrLoDAvgwpvdEHtCRAB4E4",
+        "alPyLJrTujWnm_cNWbburV2Y4NP3mYdkjAUqIHXxJ9U",
+        "mMpefHRAYHYm3b4zVySAJm-0c4BXo2AgfN_YsODA37g",
+        "wSAxLmQL_laRKD8pa5Lm9gh6hdsFE6ee1BZKkT4yC1I"
+      ],
+      "name": "resident_mid_partition"
+    }
+  ],
+  "realmByPubkey": {
+    "r9qi1OBHt24bu9+1PIx+7sqZlD3EIGjG5Yq3FUZOZ5c=": "clerk",
+    "xI19LiI0w767nWBOSHbaM1L8uNai5zegqgE97NTzY+w=": "resident"
+  },
+  "replica": "replica:matter:zoning-variance-24#root:7E-dyO8KqdJtJxfsMMtgLtSNOS1Vpd23yYZ6E__dsvc",
+  "scenario": "township_zoning_variance_24",
+  "schema": {
+    "fields": {
+      "clerk": {
+        "authority": "clerk"
+      },
+      "clerk_locked": {
+        "default": false,
+        "gatedBy": "clerk",
+        "merge": "lww"
+      },
+      "members": {
+        "merge": "or_set"
+      },
+      "posts": {
+        "merge": "causal_list"
+      },
+      "summary": {
+        "default": "",
+        "merge": "lww"
+      },
+      "title": {
+        "default": "",
+        "merge": "lww"
+      }
+    },
+    "name": "Township.Matter"
+  }
+}

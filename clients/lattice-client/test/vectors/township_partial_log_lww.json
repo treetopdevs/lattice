@@ -1,0 +1,105 @@
+{
+  "expectAtFrontier": [],
+  "expectAtFullFrontier": {
+    "quarantine": [],
+    "state": {
+      "clerk": "clerk",
+      "clerk_locked": false,
+      "members": [],
+      "posts": [],
+      "summary": "summary from the surviving root",
+      "title": ""
+    },
+    "winners": {
+      "clerk": "VWWb1MGstv5SIg-U9Ti7piZm14asHlTdhcX88b36bks",
+      "clerk_locked": null,
+      "summary": "zAD0cySlxe1toH6UqB6fWTMzWI3rViKczIJFNzfhTVE",
+      "title": null
+    }
+  },
+  "generatedBy": "Lattice.Sim",
+  "ops": [
+    {
+      "author": "clerk",
+      "command": "genesis clerk",
+      "deps": [],
+      "field": "clerk",
+      "hash": "VWWb1MGstv5SIg-U9Ti7piZm14asHlTdhcX88b36bks",
+      "id": "VWWb1MGstv5SIg-U9Ti7piZm14asHlTdhcX88b36bks",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "clerk"
+    },
+    {
+      "author": "clerk",
+      "command": "inbox",
+      "deps": [
+        "7xO2tlQE74dri8zaWUzvTZDXHHLf-GrOmouqo_8eJIw"
+      ],
+      "field": "__authority",
+      "hash": "bwEwaI2iw-nnZ9nH2ckig1ks6h-qzgDc-AHuef844lM",
+      "id": "bwEwaI2iw-nnZ9nH2ckig1ks6h-qzgDc-AHuef844lM",
+      "kind": "inbox",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "clerk",
+      "command": "set_summary",
+      "deps": [
+        "VWWb1MGstv5SIg-U9Ti7piZm14asHlTdhcX88b36bks",
+        "bwEwaI2iw-nnZ9nH2ckig1ks6h-qzgDc-AHuef844lM"
+      ],
+      "field": "summary",
+      "hash": "8SQ9vDv2gWxg8wOzMzrkhageOXVE4wM9lP6taqR9uQY",
+      "id": "8SQ9vDv2gWxg8wOzMzrkhageOXVE4wM9lP6taqR9uQY",
+      "kind": "command",
+      "mutation": "write",
+      "value": "summary reached through the pruned branch"
+    },
+    {
+      "author": "clerk",
+      "command": "set_summary",
+      "deps": [
+        "VWWb1MGstv5SIg-U9Ti7piZm14asHlTdhcX88b36bks"
+      ],
+      "field": "summary",
+      "hash": "zAD0cySlxe1toH6UqB6fWTMzWI3rViKczIJFNzfhTVE",
+      "id": "zAD0cySlxe1toH6UqB6fWTMzWI3rViKczIJFNzfhTVE",
+      "kind": "command",
+      "mutation": "write",
+      "value": "summary from the surviving root"
+    }
+  ],
+  "perspectives": [],
+  "replica": "replica:matter:partial-log-2#root:s1YIoAwW15oGrUMPHY5lVjVmGfp_bpo8VCENpc5f0AE",
+  "scenario": "township_partial_log_lww",
+  "scenarioKind": "adversarial",
+  "schema": {
+    "fields": {
+      "clerk": {
+        "authority": "clerk"
+      },
+      "clerk_locked": {
+        "default": false,
+        "gatedBy": "clerk",
+        "merge": "lww"
+      },
+      "members": {
+        "merge": "or_set"
+      },
+      "posts": {
+        "merge": "causal_list"
+      },
+      "summary": {
+        "default": "",
+        "merge": "lww"
+      },
+      "title": {
+        "default": "",
+        "merge": "lww"
+      }
+    },
+    "name": "Township.Matter"
+  }
+}

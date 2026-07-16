@@ -21,8 +21,11 @@ sends go through the v1 Gateway. To run a realm in a second OS process / a brows
 * **AtomVM browser node.** The "tab" realm becomes an AtomVM instance running the same
   `Lattice.Op`/`Log`/`Reduce`/`Authority` code, persisting its log in browser storage
   and dumping/restoring via the JSON-safe `Lattice.BrowserLogStore` payload contract.
-* **Liveness-driven heartbeats.** Succession dormancy (ADR 0004) should derive its
-  heartbeats from real connection liveness on the carrier rather than explicit ops.
+* **Recovery authority stays above transport.** Carrier connection liveness cannot distinguish a
+  partition from holder failure and must not decide succession. The current opt-in recovery floor
+  is a valid-genesis-pinned m-of-n witness certificate verified from the operation log (ADR 0004);
+  it authorizes a governance recovery event but does not prove dormancy. Legacy explicit ticks
+  remain compatibility behavior with untrusted provenance.
 
 The deterministic-simulation test suite stays valuable as the carrier's conformance
 oracle: a real carrier must produce the same final logs/state as `Lattice.Sim` for the
@@ -48,6 +51,45 @@ that can restrict outbound carrier transfer, bounded push batches, tested member
 acknowledgements for future compaction GC, and a BEAM-side browser log-store payload
 helper that preserves quarantine reports. The browser/AtomVM track still needs to
 consume those schemas and wire persistence in its own runtime.
+
+**Stable write-boundary and app result (Plans 127-131, 2026-07-12).** A dedicated supervised
+`lattice_carrier_server` now serves authenticated pull by default and may opt selected trusted
+realms into relaying one already-signed operation to a path-backed source. The server persists a
+changed log before acknowledgement and keeps only a transport identity. Plan 129 closes the
+packaged desktop write-boundary gap: the actual Tauri app carries explicit relay pairing state,
+uses its existing native key and pulled delegation evidence to author the Sim-identical post,
+drains only acknowledged outbox frames, and converges with a distinct fresh-BEAM observer after an
+OS-process restart. This remains request/response relay, not server push, participant custody,
+mobile relay, TLS/public deployment, or a receipt-free attestation result.
+
+Plan 130 closes the first participant-loop gap without moving that boundary. A fresh carrier-backed
+LiveView prepares an unsigned post request; the paired Tauri app validates it, retains local
+capability/dependency/key custody, and authors and relays only after explicit review, Post, and Sync
+actions. The Ubuntu gate and packaged macOS LaunchServices gate compare the observed operation and
+fresh restarted projection with `Lattice.Sim`. This does not add server push, broader participant
+controls, a mobile/device result, TLS/public deployment, full Phase G, or receipt-free W4.
+
+Plan 131 closes the packaged-proof CI gap without adding runtime capability. A non-optional hosted
+macOS job builds and launches the actual app for both stable-relay onboarding and LiveView action
+handoff; run `29180961767` passed native custody, LaunchServices, restart recovery, and Sim equality.
+The Linux unit runner now installs Tauri's build prerequisites for its real-Wry tests, but this is
+not a Linux package/GUI result. Server push, broader controls, mobile/device behavior, TLS/public
+deployment, full Phase G, and receipt-free W4 remain open.
+
+Plan 132 closes the BEAM/LiveView server-push liveness gap without pushing operations or state. An
+authenticated subscriber receives a bounded generation hint only after durable source change, then
+uses the same verified frontier/pull/materialization path. The packaged gate rules out its 60-second
+poll for changed-log convergence and proves a replacement subscription with a second pushed
+generation after restart.
+
+Plan 133 closes the shared direct-TypeScript feed gap without turning the app into a reactive feed
+consumer. `CarrierWebSocketClient` demultiplexes `ops_available` from one in-flight atomic request,
+decodes a typed baseline/hint, and retains only the latest notification plus one waiter. A real
+stable-server gate proves first hint before pull, canonical hash/signature verification and
+Sim-equal ids, duplicate silence, same-path restart replacement, and a second hint. This is an O(1)
+application-state claim, not a browser/Node WebSocket-buffering or backpressure claim. Reactive
+Tauri/Vue feed consumption, broader controls, mobile/device custody changes, TLS/public deployment,
+full Phase G, and receipt-free W4 remain open.
 
 ## 2. Efficient frontier-diff sync (Beelay)
 

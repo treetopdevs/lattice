@@ -183,12 +183,70 @@ Module docs render via ex_doc: `cd apps/lattice_core && mix docs`.
 - `Lattice.LiveOps` and `Lattice.LiveOps.Device` for the staged LiveOps
   authority demo.
 
+`apps/lattice_web_socket` owns:
+
+- `Lattice.Transport.WebSocket.Client`, the minimal real WebSocket client used by
+  carrier, test, and demo callers.
+- `Lattice.Transport.WebSocket.Envelope`, the safe JSON codec and browser-boundary
+  inbound vocabulary.
+- `Lattice.Carrier.WebSocket`, the reusable real carrier client adapter, including
+  the explicit one-op relay request used by opt-in servers and authenticated
+  availability subscriptions over the atomic request/notification demultiplexer.
+
+`apps/lattice_carrier_server` owns:
+
+- A supervised Cowboy carrier listener for one configured signed log; it is
+  read-only by default.
+- Trusted-transport-realm authentication plus bounded `frontier` and missing-op
+  `pull` requests.
+- Opt-in client-signed relay realms for path-backed sources. The server
+  structurally checks one already-signed operation and atomically persists a
+  changed log before acknowledgement; semantic authority remains downstream.
+- A packaged Tauri client proof that selects relay explicitly, keeps native participant-key
+  custody, and converges with a fresh pull-only observer after server restart.
+- A cross-surface proof that a LiveView-prepared unsigned post request can enter that same
+  client-custody path and become Sim-equal without server-side authoring.
+- Both packaged macOS convergence smokes are mandatory in flagship CI: the hosted job builds and
+  launches the real app for stable-relay onboarding and LiveView action handoff.
+- Authenticated `subscribe` / `unsubscribe` requests register monitored carrier peers. After a
+  changed path-backed log is durably persisted, the server emits one bounded, coalesced
+  `ops_available` generation hint; duplicate, rejected, pending, read-only, and failed-persistence
+  attempts emit nothing. A slow subscriber has at most one outstanding holder hint; acknowledging it
+  atomically recovers the latest durable generation.
+- The shared TypeScript `CarrierWebSocketClient` exposes a typed availability subscription that
+  demultiplexes hints from one in-flight atomic request and retains only the latest hint plus one
+  waiter. A real stable-server gate proves hint-before-pull ordering, verified hashes/signatures,
+  Sim-equal ids, duplicate silence, and subscription replacement after same-path restart. The
+  Tauri/Vue application does not yet consume this feed reactively.
+- Fail-closed path loading and persisted source recovery across supervisor and
+  OS-process restart.
+- A realm transport identity, not a participant identity, capability issuer, or
+  Township operation author.
+- The availability frame contains no operation or semantic result: verified pull remains the only
+  materialization path. There is no direct pushed-op/state materialization, reactive Tauri/Vue feed
+  loop, TLS/public ingress, or deployment packaging. This is a stable server boundary, not a production
+  deployment.
+
 `apps/lattice_server` owns:
 
 - `Lattice.Transport.WebSocket`.
-- `Lattice.Transport.WebSocket.Client`, a minimal real WebSocket client used by tests and the deterministic demo.
-- JSON envelope parsing.
 - A lightweight Cowboy HTTP/WebSocket server.
+
+`apps/township_web` owns:
+
+- The Phoenix LiveView instrument at `/township` and its Vue causal-replay island. A
+  fresh carrier-backed `/township` instrument may prepare one unsigned post request
+  for explicit review in the paired Tauri app; verified/stale/offline views remain
+  observation-only.
+- `TownshipWeb.CarrierProjection`, an optional supervised observer that either polls slowly or
+  subscribes to authenticated availability hints, then validates received operations through the
+  same frontier/pull/log/reducer path and publishes fresh or stale snapshots through PubSub.
+- Startup loads the trusted Township reducer and authority schemas before the first pull so the
+  existing-atom wire guard also works in a fresh BEAM VM.
+- No participant key, capability, delegation frame, dependency frontier, signature, operation
+  authoring, direct pushed operation, or listener ownership. The optional peer is supplied by
+  another boundary such as `lattice_carrier_server`, and authored results appear only after the
+  projection's verified pull.
 
 `apps/lattice_demo` owns:
 

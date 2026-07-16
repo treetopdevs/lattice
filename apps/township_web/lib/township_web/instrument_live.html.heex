@@ -1,0 +1,477 @@
+<div id="instrument-root" class="instrument" data-source-state={@source_state}>
+  <header class="instrument-header">
+    <div class="brand-line">
+      <span>Treetopdevs</span>
+      <span class="brand-separator">/</span>
+      <span class="brand-product">Lattice</span>
+      <span class="brand-separator">·</span>
+      <span>Township instrument</span>
+    </div>
+    <div class="title-line">
+      <h1>Township</h1>
+      <span class={[
+        "source-pill",
+        @source_state in [:verified, :fresh] && "source-pill--verified",
+        @source_state == :stale && "source-pill--stale"
+      ]}>
+        {source_label(@source_state)}
+      </span>
+    </div>
+  </header>
+
+  <%= cond do %>
+    <% @source_state == :connecting -> %>
+      <section id="instrument-connecting" class="unavailable" aria-live="polite">
+        <p class="section-kicker">Carrier · pull-only</p>
+        <h2>Carrier connecting</h2>
+        <p>Waiting for an authenticated peer snapshot.</p>
+      </section>
+    <% @source_state == :unverified -> %>
+      <section id="instrument-unavailable" class="unavailable" aria-live="polite">
+        <p class="section-kicker">Integrity gate · refused</p>
+        <h2>Instrument unavailable</h2>
+        <p>{unavailable_copy(@source_kind)}</p>
+        <ul class="error-list">
+          <li :for={error <- @source_errors}>{error}</li>
+        </ul>
+      </section>
+    <% true -> %>
+      <section
+        id="source-status"
+        class="provenance-strip"
+        data-verified={to_string(@provenance.verified)}
+        data-source={@provenance.source}
+        data-freshness={@provenance.freshness}
+        data-verification={@provenance.verification}
+        data-refresh-trigger={Map.get(@provenance, :refresh_trigger)}
+        data-feed-generation={Map.get(@provenance, :feed_generation)}
+        aria-label="Verified source provenance"
+      >
+        <%= if @provenance.source == :bundle do %>
+          <div>
+            <span class="provenance-label">Source</span>
+            <strong>{@provenance.schema}</strong>
+          </div>
+          <div>
+            <span class="provenance-label">Bundle</span>
+            <span class="path-value">{@provenance.bundle_dir}</span>
+          </div>
+          <div class="provenance-digest">
+            <span class="provenance-label">matter.log · SHA-256</span>
+            <code>{@provenance.matter_sha256}</code>
+          </div>
+        <% else %>
+          <div>
+            <span class="provenance-label">Peer</span>
+            <strong>{@provenance.peer_realm}</strong>
+          </div>
+          <div>
+            <span class="provenance-label">Replica</span>
+            <code>{@provenance.replica}</code>
+          </div>
+          <div class="provenance-digest">
+            <span class="provenance-label">Last successful pull</span>
+            <code>{DateTime.to_iso8601(@provenance.pulled_at)}</code>
+          </div>
+          <div
+            :if={@provenance.freshness == :stale}
+            id="carrier-error"
+            data-last-error={format_last_error(@provenance.last_error)}
+          >
+            <span class="provenance-label">Last pull error</span>
+            <code>{format_last_error(@provenance.last_error)}</code>
+          </div>
+        <% end %>
+      </section>
+
+      <.intent_panel
+        :if={@source_state == :fresh}
+        id="participant-grant-panel"
+        intent="grant"
+        kicker="Authority request"
+        title="Grant resident access from your device"
+        url={@grant_intent_url}
+        error={@grant_intent_error}
+      >
+        <:body>
+          <p>Resident policy: admit, post, set_summary, set_title; no roles; offline.</p>
+          <form id="participant-grant-form" phx-submit="prepare_grant">
+            <label for={@grant_intent_form[:audience].id}>Recipient public key</label>
+            <input
+              type="text"
+              id={@grant_intent_form[:audience].id}
+              name={@grant_intent_form[:audience].name}
+              value={@grant_intent_form[:audience].value}
+              autocomplete="off"
+            />
+            <button type="submit">Prepare grant in app</button>
+          </form>
+        </:body>
+        <:prepared>Unsigned resident grant</:prepared>
+      </.intent_panel>
+
+      <.intent_panel
+        :if={@source_state == :fresh}
+        id="participant-revoke-panel"
+        intent="revoke"
+        kicker="Authority request"
+        title="Revoke delegated access from your device"
+        url={@revoke_intent_url}
+        error={@revoke_intent_error}
+      >
+        <:body>
+          <form id="participant-revoke-form" phx-submit="prepare_revoke">
+            <label for={@revoke_intent_form[:delegation].id}>Delegation id</label>
+            <input
+              type="text"
+              id={@revoke_intent_form[:delegation].id}
+              name={@revoke_intent_form[:delegation].name}
+              value={@revoke_intent_form[:delegation].value}
+              autocomplete="off"
+            />
+            <button type="submit">Prepare revoke in app</button>
+          </form>
+        </:body>
+        <:prepared>Unsigned revocation request</:prepared>
+      </.intent_panel>
+
+      <.intent_panel
+        :if={@source_state == :fresh}
+        id="participant-title-panel"
+        intent="title"
+        kicker="Participant action"
+        title="Edit the matter title from your device"
+        url={@title_intent_url}
+        error={@title_intent_error}
+      >
+        <:body>
+          <form id="participant-title-form" phx-submit="prepare_title_edit">
+            <label for={@title_intent_form[:text].id}>New title</label>
+            <textarea
+              id={@title_intent_form[:text].id}
+              name={@title_intent_form[:text].name}
+              rows="2"
+              autocomplete="off"
+            >{Phoenix.HTML.Form.normalize_value("textarea", @title_intent_form[:text].value)}</textarea>
+            <button type="submit">Prepare title in app</button>
+          </form>
+        </:body>
+        <:prepared>Unsigned title edit</:prepared>
+      </.intent_panel>
+
+      <.intent_panel
+        :if={@source_state == :fresh}
+        id="participant-summary-panel"
+        intent="summary"
+        kicker="Participant action"
+        title="Edit the matter summary from your device"
+        url={@summary_intent_url}
+        error={@summary_intent_error}
+      >
+        <:body>
+          <form id="participant-summary-form" phx-submit="prepare_summary_edit">
+            <label for={@summary_intent_form[:text].id}>New summary</label>
+            <textarea
+              id={@summary_intent_form[:text].id}
+              name={@summary_intent_form[:text].name}
+              rows="2"
+              autocomplete="off"
+            >{Phoenix.HTML.Form.normalize_value("textarea", @summary_intent_form[:text].value)}</textarea>
+            <button type="submit">Prepare summary in app</button>
+          </form>
+        </:body>
+        <:prepared>Unsigned summary edit</:prepared>
+      </.intent_panel>
+
+      <.intent_panel
+        :if={@source_state == :fresh}
+        id="participant-roster-panel"
+        intent="roster"
+        kicker="Participant action"
+        title="Manage members from your device"
+        url={@roster_intent_url}
+        error={@roster_intent_error}
+      >
+        <:body>
+          <form id="participant-admit-form" phx-submit="prepare_admit">
+            <label for={@admit_intent_form[:member].id}>Member id to admit</label>
+            <input
+              type="text"
+              id={@admit_intent_form[:member].id}
+              name={@admit_intent_form[:member].name}
+              value={@admit_intent_form[:member].value}
+              autocomplete="off"
+            />
+            <button type="submit">Prepare admission in app</button>
+          </form>
+          <form id="participant-roster-form" phx-submit="prepare_remove_member">
+            <label for={@roster_intent_form[:member].id}>Member id to remove</label>
+            <input
+              type="text"
+              id={@roster_intent_form[:member].id}
+              name={@roster_intent_form[:member].name}
+              value={@roster_intent_form[:member].value}
+              autocomplete="off"
+            />
+            <button type="submit">Prepare removal in app</button>
+          </form>
+        </:body>
+        <:prepared>
+          {if @roster_intent_command == :admit,
+            do: "Unsigned member admission",
+            else: "Unsigned member removal"}
+        </:prepared>
+      </.intent_panel>
+
+      <.intent_panel
+        :if={@source_state == :fresh}
+        id="participant-post-panel"
+        intent="post"
+        kicker="Participant action"
+        title="Post from your device"
+        url={@post_intent_url}
+        error={@post_intent_error}
+      >
+        <:body>
+          <form id="participant-post-form" phx-submit="prepare_post">
+            <label for={@post_intent_form[:text].id}>Resident update</label>
+            <textarea
+              id={@post_intent_form[:text].id}
+              name={@post_intent_form[:text].name}
+              rows="2"
+              autocomplete="off"
+            >{Phoenix.HTML.Form.normalize_value("textarea", @post_intent_form[:text].value)}</textarea>
+            <button type="submit">Prepare in app</button>
+          </form>
+        </:body>
+        <:prepared>Unsigned and unconfirmed</:prepared>
+      </.intent_panel>
+
+      <.intent_panel
+        :if={@source_state == :fresh}
+        id="participant-status-action"
+        intent="status"
+        kicker="Clerk action"
+        title="Matter status from your device"
+        url={@status_intent_url}
+      >
+        <:body>
+          <button id="participant-status-prepare" type="button" phx-click="prepare_status_action">
+            {if @model.threads.clerk_locked?,
+              do: "Prepare reopen in app",
+              else: "Prepare close in app"}
+          </button>
+        </:body>
+        <:prepared>
+          Unsigned {if @status_intent_command == :reopen_matter, do: "reopen", else: "close"} request
+        </:prepared>
+      </.intent_panel>
+
+      <div class="instrument-grid">
+        <section id="threads-panel" class="panel panel--threads">
+          <header class="panel-header">
+            <div>
+              <p class="section-kicker">Threads · materialized state</p>
+              <h2>{@model.threads.title}</h2>
+            </div>
+            <span class={["status-mark", @model.threads.clerk_locked? && "status-mark--locked"]}>
+              {if @model.threads.clerk_locked?, do: "closed", else: "open"}
+            </span>
+          </header>
+
+          <div class="summary-field">
+            <span class="field-label">Contested summary · LWW register</span>
+            <p>{@model.threads.summary}</p>
+          </div>
+
+          <ol class="post-list" aria-label="Deliberation posts">
+            <li :for={{post, index} <- Enum.with_index(@model.threads.posts, 1)} data-post>
+              <span class="post-index">
+                {String.pad_leading(Integer.to_string(index), 2, "0")}
+              </span>
+              <span>{post}</span>
+            </li>
+          </ol>
+        </section>
+
+        <section id="op-dag-panel" class="panel panel--dag">
+          <header class="panel-header">
+            <div>
+              <p class="section-kicker">Op · DAG</p>
+              <h2>Causal evidence</h2>
+            </div>
+            <span class="metric">{@op_counts.total} ops</span>
+          </header>
+
+          <div
+            class="dag-counts"
+            data-op-count={@op_counts.total}
+            data-honored-count={@op_counts.honored}
+            data-quarantined-count={@op_counts.quarantined}
+          >
+            <span><strong>{@op_counts.honored}</strong> honored</span>
+            <span class="danger"><strong>{@op_counts.quarantined}</strong> quarantined</span>
+            <span><strong>{length(@model.op_dag.frontier)}</strong> frontier</span>
+          </div>
+
+          <div
+            id="causal-replay-island"
+            class="causal-replay-island"
+            phx-hook="TownshipCausalReplay"
+            phx-update="ignore"
+            data-replay-schema={@causal_replay["schema"]}
+            data-replay={Jason.encode!(@causal_replay)}
+          >
+            <noscript>
+              <p class="causal-replay__fallback" data-causal-replay-fallback>
+                Causal replay unavailable. Verified operation evidence follows.
+              </p>
+            </noscript>
+          </div>
+
+          <ol class="op-rail" aria-label="Causal operation rail">
+            <li
+              :for={node <- @model.op_dag.nodes}
+              class={["op-node", node.status == "quarantined" && "op-node--quarantined"]}
+              data-op-node
+              data-status={node.status}
+            >
+              <span class="op-height">h{node.height}</span>
+              <span class="op-kind">{node.kind}</span>
+              <code>{String.slice(node.id, 0, 8)}</code>
+              <span :if={node.reason} class="op-reason">{node.reason}</span>
+            </li>
+          </ol>
+
+          <div class="frontier-line">
+            <span class="field-label">Frontier</span>
+            <code :for={id <- @model.op_dag.frontier} data-frontier>{id}</code>
+          </div>
+        </section>
+
+        <section id="roles-panel" class="panel panel--roles">
+          <header class="panel-header">
+            <div>
+              <p class="section-kicker">Roles · serialized authority</p>
+              <h2>Current holders</h2>
+            </div>
+          </header>
+
+          <dl class="holder-list">
+            <div
+              :for={{role, fingerprint} <- Enum.sort(@model.roles.holders)}
+              data-holder={role}
+              data-fingerprint={fingerprint}
+            >
+              <dt>{role}</dt>
+              <dd>{fingerprint || "unheld"}</dd>
+            </div>
+          </dl>
+
+          <div class="audit-strip">
+            <p class="field-label">Authority quarantine</p>
+            <div
+              :for={op_id <- @model.roles.quarantine}
+              class="audit-event"
+              data-reason={@model.roles.reasons[op_id]}
+            >
+              <span>{Atom.to_string(@model.roles.reasons[op_id])}</span>
+              <code>{String.slice(op_id, 0, 12)}</code>
+            </div>
+          </div>
+        </section>
+
+        <section id="members-panel" class="panel panel--members">
+          <header class="panel-header">
+            <div>
+              <p class="section-kicker">Members · observed remove set</p>
+              <h2>Civic membership</h2>
+            </div>
+            <span class="metric">{length(@model.members.current)} current</span>
+          </header>
+
+          <ul class="member-list">
+            <li :for={member <- @model.members.current} data-member={member}>{member}</li>
+          </ul>
+
+          <div class="denied-list">
+            <p class="field-label">Denied membership mutations</p>
+            <p :if={@model.members.denied == []} class="empty-state" data-empty="denied-members">
+              No denied member mutations in this snapshot.
+            </p>
+            <div :for={denied <- @model.members.denied} class="denied-entry">
+              <span>{denied.command} · {denied.reason}</span>
+              <code>{String.slice(denied.op_id, 0, 12)}</code>
+            </div>
+          </div>
+        </section>
+
+        <section id="attest-panel" class="panel panel--attest">
+          <header class="panel-header">
+            <div>
+              <p class="section-kicker">Attest · local decision</p>
+              <h2>Vouch tally</h2>
+            </div>
+            <span
+              class="stub-mark"
+              data-attestation-status={@model.attest.status}
+            >
+              W4 · stubbed
+            </span>
+          </header>
+
+          <div class="tally-result">
+            <span class="field-label">Outcome</span>
+            <strong>{@model.attest.tally.outcome}</strong>
+          </div>
+          <dl class="tally-counts">
+            <div :for={{choice, count} <- Enum.sort(@model.attest.tally.counts)}>
+              <dt>{choice}</dt>
+              <dd>{count}</dd>
+            </div>
+          </dl>
+          <p
+            class="receipt-status"
+            data-receipt-free={to_string(@model.attest.receipt_free?)}
+          >
+            receipt_free? <strong>{to_string(@model.attest.receipt_free?)}</strong>
+          </p>
+        </section>
+
+        <section id="trust-graph-panel" class="panel panel--trust">
+          <header class="panel-header">
+            <div>
+              <p class="section-kicker">Trust graph · delegation evidence</p>
+              <h2 id="trust-graph-title">Who may act</h2>
+            </div>
+            <span class="metric">
+              {length(@model.trust_graph.nodes)} identities · {length(@model.trust_graph.edges)} grants
+            </span>
+          </header>
+
+          <div class="trust-stage" role="group" aria-labelledby="trust-graph-title">
+            <div class="trust-nodes">
+              <div :for={node <- @model.trust_graph.nodes} class="trust-node" data-trust-node>
+                <span class="trust-node-mark">
+                  {if node.label == node.id,
+                    do: "ID",
+                    else: node.label |> String.first() |> String.upcase()}
+                </span>
+                <strong>{node.label}</strong>
+                <code>{node.id}</code>
+              </div>
+            </div>
+
+            <ol class="trust-edges">
+              <li :for={edge <- @model.trust_graph.edges} data-trust-edge>
+                <code>{edge.from}</code>
+                <span aria-hidden="true">→</span>
+                <code>{edge.to}</code>
+                <span>{edge.kind}</span>
+              </li>
+            </ol>
+          </div>
+        </section>
+      </div>
+  <% end %>
+</div>

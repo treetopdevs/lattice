@@ -1,0 +1,195 @@
+{
+  "edges": [
+    {
+      "from": "3LZ_oVaUTciC5zCH4Dxv4SnPItn-Sy9TEGf_h8nR7DM",
+      "kind": "dep",
+      "to": "H32KUYuAjLsX6RSoXWwSYKUZSivCavpQ7i38_EInp6k"
+    },
+    {
+      "from": "48FXRLN1gee4FuOaQajNyklcR0mEppAosylCvcdG4ZQ",
+      "kind": "dep",
+      "to": "58-wtTn8i269vrhYvo0zLUAqTjcIoB2u8nO9MIrU2QU"
+    },
+    {
+      "from": "58-wtTn8i269vrhYvo0zLUAqTjcIoB2u8nO9MIrU2QU",
+      "kind": "dep",
+      "to": "OxXIdyqabZIje-nnS_wRb-7FkrWosSPTypufH9jOwAU"
+    },
+    {
+      "from": "LjyuGoRJNDzsPTVpuW7MlLFuMNsMmVOx_GxGyyjn1rQ",
+      "kind": "dep",
+      "to": "vp4P8uIkZFgcjT6a4qCsSQ-DBTrCSoD8HZNrCQpjMks"
+    },
+    {
+      "from": "OxXIdyqabZIje-nnS_wRb-7FkrWosSPTypufH9jOwAU",
+      "kind": "dep",
+      "to": "ldVpBaYr7FoydK-PZgzJqCTGsPvrbJCx5AFxh8u3Mec"
+    },
+    {
+      "from": "XaguU4mD5jWHUyii80Kj1E9uGhw1Xh5ELcpSR-7eAgM",
+      "kind": "dep",
+      "to": "mBzANgvpJ_zpcDy-QZP4mjfJCwzeIAD_h5Hq-PguWkg"
+    },
+    {
+      "from": "alPyLJrTujWnm_cNWbburV2Y4NP3mYdkjAUqIHXxJ9U",
+      "kind": "dep",
+      "to": "wSAxLmQL_laRKD8pa5Lm9gh6hdsFE6ee1BZKkT4yC1I"
+    },
+    {
+      "from": "gppa_uyPP-e2hFBVjPvW3awTL55yc96hJJDSnxCy_40",
+      "kind": "dep",
+      "to": "ldVpBaYr7FoydK-PZgzJqCTGsPvrbJCx5AFxh8u3Mec"
+    },
+    {
+      "from": "ldVpBaYr7FoydK-PZgzJqCTGsPvrbJCx5AFxh8u3Mec",
+      "kind": "dep",
+      "to": "3LZ_oVaUTciC5zCH4Dxv4SnPItn-Sy9TEGf_h8nR7DM"
+    },
+    {
+      "from": "mBzANgvpJ_zpcDy-QZP4mjfJCwzeIAD_h5Hq-PguWkg",
+      "kind": "dep",
+      "to": "gppa_uyPP-e2hFBVjPvW3awTL55yc96hJJDSnxCy_40"
+    },
+    {
+      "from": "vp4P8uIkZFgcjT6a4qCsSQ-DBTrCSoD8HZNrCQpjMks",
+      "kind": "dep",
+      "to": "48FXRLN1gee4FuOaQajNyklcR0mEppAosylCvcdG4ZQ"
+    },
+    {
+      "from": "vp4P8uIkZFgcjT6a4qCsSQ-DBTrCSoD8HZNrCQpjMks",
+      "kind": "dep",
+      "to": "XaguU4mD5jWHUyii80Kj1E9uGhw1Xh5ELcpSR-7eAgM"
+    },
+    {
+      "from": "wSAxLmQL_laRKD8pa5Lm9gh6hdsFE6ee1BZKkT4yC1I",
+      "kind": "dep",
+      "to": "LjyuGoRJNDzsPTVpuW7MlLFuMNsMmVOx_GxGyyjn1rQ"
+    }
+  ],
+  "frontier": [
+    "H32KUYuAjLsX6RSoXWwSYKUZSivCavpQ7i38_EInp6k"
+  ],
+  "holders": {
+    "clerk": "xI19LiI0w767"
+  },
+  "nodes": [
+    {
+      "author": "r9qi1OBHt24b",
+      "height": 0,
+      "id": "alPyLJrTujWnm_cNWbburV2Y4NP3mYdkjAUqIHXxJ9U",
+      "kind": "authority",
+      "label": "alPyLJrT authority genesis",
+      "reason": null,
+      "status": "honored"
+    },
+    {
+      "author": "r9qi1OBHt24b",
+      "height": 1,
+      "id": "wSAxLmQL_laRKD8pa5Lm9gh6hdsFE6ee1BZKkT4yC1I",
+      "kind": "authority",
+      "label": "wSAxLmQL authority grant -> xI19LiI0w767",
+      "reason": null,
+      "status": "honored"
+    },
+    {
+      "author": "r9qi1OBHt24b",
+      "height": 2,
+      "id": "LjyuGoRJNDzsPTVpuW7MlLFuMNsMmVOx_GxGyyjn1rQ",
+      "kind": "command",
+      "label": "LjyuGoRJ command :admit [\"clerk\"]",
+      "reason": null,
+      "status": "honored"
+    },
+    {
+      "author": "r9qi1OBHt24b",
+      "height": 3,
+      "id": "vp4P8uIkZFgcjT6a4qCsSQ-DBTrCSoD8HZNrCQpjMks",
+      "kind": "command",
+      "label": "vp4P8uIk command :admit [\"resident\"]",
+      "reason": null,
+      "status": "honored"
+    },
+    {
+      "author": "r9qi1OBHt24b",
+      "height": 4,
+      "id": "48FXRLN1gee4FuOaQajNyklcR0mEppAosylCvcdG4ZQ",
+      "kind": "command",
+      "label": "48FXRLN1 command :set_title [\"Zoning variance #24\"]",
+      "reason": null,
+      "status": "honored"
+    },
+    {
+      "author": "xI19LiI0w767",
+      "height": 4,
+      "id": "XaguU4mD5jWHUyii80Kj1E9uGhw1Xh5ELcpSR-7eAgM",
+      "kind": "command",
+      "label": "XaguU4mD command :post [\"resident: I'll attend\"]",
+      "reason": null,
+      "status": "honored"
+    },
+    {
+      "author": "r9qi1OBHt24b",
+      "height": 5,
+      "id": "58-wtTn8i269vrhYvo0zLUAqTjcIoB2u8nO9MIrU2QU",
+      "kind": "command",
+      "label": "58-wtTn8 command :post [\"clerk: hearing Tuesday 6pm\"]",
+      "reason": null,
+      "status": "honored"
+    },
+    {
+      "author": "xI19LiI0w767",
+      "height": 5,
+      "id": "mBzANgvpJ_zpcDy-QZP4mjfJCwzeIAD_h5Hq-PguWkg",
+      "kind": "command",
+      "label": "mBzANgvp command :set_summary [\"Needs traffic study (resident …",
+      "reason": null,
+      "status": "honored"
+    },
+    {
+      "author": "r9qi1OBHt24b",
+      "height": 6,
+      "id": "OxXIdyqabZIje-nnS_wRb-7FkrWosSPTypufH9jOwAU",
+      "kind": "command",
+      "label": "OxXIdyqa command :set_summary [\"Leaning approve (clerk edit)\"]",
+      "reason": null,
+      "status": "honored"
+    },
+    {
+      "author": "xI19LiI0w767",
+      "height": 6,
+      "id": "gppa_uyPP-e2hFBVjPvW3awTL55yc96hJJDSnxCy_40",
+      "kind": "command",
+      "label": "gppa_uyP command :post [\"resident: posted while offline…",
+      "reason": null,
+      "status": "honored"
+    },
+    {
+      "author": "r9qi1OBHt24b",
+      "height": 7,
+      "id": "ldVpBaYr7FoydK-PZgzJqCTGsPvrbJCx5AFxh8u3Mec",
+      "kind": "command",
+      "label": "ldVpBaYr command :close_matter []",
+      "reason": null,
+      "status": "honored"
+    },
+    {
+      "author": "r9qi1OBHt24b",
+      "height": 8,
+      "id": "3LZ_oVaUTciC5zCH4Dxv4SnPItn-Sy9TEGf_h8nR7DM",
+      "kind": "authority",
+      "label": "3LZ_oVaU authority transfer :clerk -> xI19LiI0w767 @t1",
+      "reason": null,
+      "status": "honored"
+    },
+    {
+      "author": "r9qi1OBHt24b",
+      "height": 9,
+      "id": "H32KUYuAjLsX6RSoXWwSYKUZSivCavpQ7i38_EInp6k",
+      "kind": "command",
+      "label": "H32KUYuA command :reopen_matter [] QUARANTINED(not_holder)",
+      "reason": "not_holder",
+      "status": "quarantined"
+    }
+  ],
+  "replica": "replica:matter:zoning-variance-24#root:7E-dyO8KqdJtJxfsMMtgLtSNOS1Vpd23yYZ6E__dsvc"
+}

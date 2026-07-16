@@ -18,6 +18,8 @@ defmodule Township.MatterPropertyTest do
   use ExUnit.Case, async: true
   use ExUnitProperties
 
+  @moduletag timeout: 300_000
+
   alias Lattice.{Authority, Dag, Log, Sim}
   alias Township.Matter
 

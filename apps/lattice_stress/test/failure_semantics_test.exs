@@ -74,6 +74,7 @@ defmodule LatticeStress.FailureSemanticsTest do
     Process.unlink(tab_pid)
     Process.exit(tab_pid, :kill)
     wait_until(fn -> match?({:ok, %{state: :disconnected}}, Lattice.Topology.get_tab(tab.id)) end)
+    wait_until(fn -> match?({:ok, %{revoked?: true}}, Lattice.CapStore.get(cap.id)) end)
 
     assert {:error, :revoked} = Lattice.call(tab.id, cap, %{after_tab_crash: true})
     assert %{call_count: 0} = ProbeServer.stats(probe)

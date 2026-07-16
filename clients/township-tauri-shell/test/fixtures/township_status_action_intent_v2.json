@@ -1,0 +1,11 @@
+{
+  "payload": {
+    "v": 2,
+    "id": "fedcba9876543210fedcba9876543210",
+    "replica": "replica:matter:township-g1",
+    "command": {
+      "command": "close_matter"
+    }
+  },
+  "url": "township://action?intent=eyJ2IjoyLCJpZCI6ImZlZGNiYTk4NzY1NDMyMTBmZWRjYmE5ODc2NTQzMjEwIiwicmVwbGljYSI6InJlcGxpY2E6bWF0dGVyOnRvd25zaGlwLWcxIiwiY29tbWFuZCI6eyJjb21tYW5kIjoiY2xvc2VfbWF0dGVyIn19"
+}

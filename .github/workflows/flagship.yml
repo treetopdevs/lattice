@@ -34,12 +34,19 @@ jobs:
         with:
           node-version: "22"
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            clients/lattice-client/package-lock.json
+            clients/township-tauri-shell/package-lock.json
 
       - name: Install Elixir dependencies
         run: mix deps.get
 
       - name: Install Node dependencies
-        run: npm ci
+        run: |
+          npm ci
+          npm --prefix clients/lattice-client ci
+          npm --prefix clients/township-tauri-shell ci
 
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
@@ -76,6 +83,14 @@ jobs:
         with:
           otp-version: "28.1"
           elixir-version: "1.19.5"
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            clients/lattice-client/package-lock.json
+            clients/township-tauri-shell/package-lock.json
       - name: Cache deps and _build
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
@@ -90,7 +105,203 @@ jobs:
         run: mix format --check-formatted
       - name: Run full test suite
         run: mix test
+      - name: Regenerate TS oracle vectors
+        # Run in :test env, not the default :dev env. A cache-restored _build/dev can
+        # carry .beam mtimes newer than the freshly checked-out .ex sources, so Mix's
+        # staleness check skips recompiling and this task silently runs stale code —
+        # observed in CI regenerating a pre-session 9-scenario vector set instead of
+        # the current 19. `mix test` (above) just forced a correct :test recompile in
+        # this same job, so reuse that env instead of trusting :dev's staleness check.
+        run: MIX_ENV=test mix lattice.export_vectors --out clients/lattice-client/test/vectors
+      - name: Install TS client dependencies
+        working-directory: clients/lattice-client
+        run: npm ci
+      - name: Typecheck TS client
+        working-directory: clients/lattice-client
+        run: npm run typecheck
+      - name: TS client conformance
+        working-directory: clients/lattice-client
+        run: npm run conformance
+      - name: TS V-01 authority fail-closed guard
+        working-directory: clients/lattice-client
+        run: npm run v01:guard
+      - name: TS canonical op parity
+        working-directory: clients/lattice-client
+        run: npm run canonical
+      - name: TS Township authoring
+        working-directory: clients/lattice-client
+        run: npm run township:authoring
+      - name: TS Tauri bridge
+        working-directory: clients/lattice-client
+        run: npm run tauri:bridge
+      - name: TS carrier availability feed contract
+        working-directory: clients/lattice-client
+        run: npm run carrier:feed
+      - name: Build TS client for shell feed gate
+        working-directory: clients/lattice-client
+        run: npm run build
+      - name: Install Tauri shell dependencies
+        working-directory: clients/township-tauri-shell
+        run: npm ci
+      - name: TS Township shell typecheck
+        working-directory: clients/township-tauri-shell
+        run: npm run typecheck
+      - name: TS Township runtime wiring contract
+        working-directory: clients/township-tauri-shell
+        run: npm run runtime:wiring:contract
+      - name: TS Township intent UI behavior
+        working-directory: clients/township-tauri-shell
+        run: npm run intent-ui:contract
+      - name: TS Township action handoff support contract
+        working-directory: clients/township-tauri-shell
+        run: npm run action-handoff-support:contract
+      - name: TS Township action-intent contract
+        working-directory: clients/township-tauri-shell
+        run: npm run action-intent:contract
+      - name: TS Township deep-link dispatcher contract
+        working-directory: clients/township-tauri-shell
+        run: npm run deeplink:dispatcher:contract
+      - name: TS Township action contract
+        working-directory: clients/township-tauri-shell
+        run: npm run action:contract
+      - name: TS Township delegation-grant fixture
+        working-directory: clients/township-tauri-shell
+        run: npm run grant:fixture:contract
+      - name: TS Township frontend contract
+        working-directory: clients/township-tauri-shell
+        run: npm run frontend:contract
+      - name: TS reactive Township feed controller
+        working-directory: clients/township-tauri-shell
+        run: npm run feed:app:contract
+      - name: TS live stable carrier availability feed
+        working-directory: clients/township-tauri-shell
+        run: npm run feed:contract
+      - name: Install Tauri Linux prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+      - name: Tauri native command core
+        working-directory: clients/township-tauri-shell/src-tauri
+        run: cargo test
+      - name: TS carrier Township check
+        working-directory: clients/lattice-client
+        run: npm run carrier:township
+      - name: TS one-op carrier relay check
+        working-directory: clients/lattice-client
+        run: npm run carrier:relay
+      - name: TS relay-aware carrier sync check
+        working-directory: clients/lattice-client
+        run: npm run carrier:relay-sync
+      - name: TS live carrier Township check
+        working-directory: clients/lattice-client
+        run: npm run carrier:township:live
       - name: Credo (strict)
         run: mix credo --strict
       - name: Sobelow (lattice_server)
         run: cd apps/lattice_server && mix sobelow --exit
+
+  packaged_macos:
+    name: Packaged macOS convergence
+    runs-on: macos-15-intel
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up BEAM
+        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
+        with:
+          otp-version: "28.1"
+          elixir-version: "1.19.5"
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            clients/lattice-client/package-lock.json
+            clients/township-tauri-shell/package-lock.json
+
+      - name: Cache Cargo dependencies and build
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            clients/township-tauri-shell/src-tauri/target
+          key: ${{ runner.os }}-${{ runner.arch }}-township-tauri-${{ hashFiles('clients/township-tauri-shell/src-tauri/Cargo.lock', 'clients/township-tauri-shell/src-tauri/src/**/*.rs') }}
+          restore-keys: ${{ runner.os }}-${{ runner.arch }}-township-tauri-
+
+      - name: Install Elixir dependencies
+        run: env MIX_ENV=test mix deps.get
+
+      - name: Compile BEAM support
+        run: env MIX_ENV=test mix compile
+
+      - name: Install Township esbuild binary
+        run: env MIX_ENV=test mix esbuild.install --if-missing
+
+      - name: Install client and shell dependencies
+        run: |
+          npm ci
+          npm --prefix clients/lattice-client ci
+          npm --prefix clients/lattice-client run build
+          npm --prefix clients/township-tauri-shell ci
+
+      - name: Install shell Playwright browser
+        working-directory: clients/township-tauri-shell
+        run: npx --no-install playwright install chromium
+
+      - name: Verify packaged stable-relay onboarding
+        working-directory: clients/township-tauri-shell
+        run: npm run tauri:stable-relay:onboarding:smoke
+
+      - name: Verify packaged action handoff
+        working-directory: clients/township-tauri-shell
+        run: npm run tauri:action-handoff:smoke
+
+      - name: Verify packaged clerk status handoff
+        working-directory: clients/township-tauri-shell
+        env:
+          TOWNSHIP_SKIP_CLERK_ACTION_APP_BUILD: "1"
+        run: npm run tauri:clerk-action-handoff:smoke
+
+      - name: Verify packaged field edit handoff
+        working-directory: clients/township-tauri-shell
+        env:
+          TOWNSHIP_SKIP_FIELD_ACTION_APP_BUILD: "1"
+        run: npm run tauri:field-action-handoff:smoke
+
+      - name: Verify packaged roster handoff
+        working-directory: clients/township-tauri-shell
+        env:
+          TOWNSHIP_SKIP_ROSTER_ACTION_APP_BUILD: "1"
+        run: npm run tauri:roster-action-handoff:smoke
+
+      - name: Verify packaged delegation grant handoff
+        working-directory: clients/township-tauri-shell
+        env:
+          TOWNSHIP_SKIP_DELEGATION_GRANT_APP_BUILD: "1"
+        run: npm run tauri:delegation-grant-handoff:smoke
+
+      - name: Verify packaged revocation handoff
+        working-directory: clients/township-tauri-shell
+        run: npm run tauri:revocation-action-handoff:smoke
+
+      - name: Verify packaged reactive carrier feed
+        working-directory: clients/township-tauri-shell
+        run: npm run tauri:feed:smoke

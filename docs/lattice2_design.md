@@ -32,10 +32,12 @@ modules it reuses (`Lattice.Cap`, `Lattice.Gateway`, `Lattice.Realm`/`Tab`,
    quarantined in `Lattice.Log`; semantically invalid or stale ops (unauthorized,
    stale-holder, revoked, double-transfer losers) remain in the log but are excluded
    from reduction by `Lattice.Authority` and recorded in its audit trail.
-5. **No wall clocks.** All time is the logical `Lattice.Clock`, advanced explicitly
-   by tests/demo. Ops that need a tick (succession, heartbeats) embed the value in
-   their body, so reduction stays a pure function of the op set, never of live clock
-   state. No `Process.sleep`-based semantics.
+5. **No live-clock authority.** Reduction never reads a wall clock or
+   `Lattice.Clock`. Legacy succession and heartbeat operations carry caller-supplied
+   `at_tick` values as deterministic replay inputs, not as proof of elapsed time or
+   holder absence. Opt-in witnessed succession uses a genesis-pinned authorization
+   certificate and no clock input. `Lattice.Clock` is only an explicitly advanced
+   test/demo utility; no `Process.sleep`-based semantics decide authority.
 
 ## Op model
 
@@ -105,7 +107,9 @@ records the succession policies.
   anomalies and audited.
 * **Revocation** (behavior 10): ops citing a revoked delegation that are not causally
   before the revoke are quarantined (`:revoked_capability`).
-* **Succession** (behavior 15): see [ADR 0004](adr/0004-succession-validation.md).
+* **Succession** (behavior 15): legacy tick mode remains deterministic but untrusted;
+  opt-in witnessed mode requires a threshold certificate under the effective valid
+  genesis policy. See [ADR 0004](adr/0004-succession-validation.md).
 
 Every quarantine decision is deterministic (a pure function of the op DAG), so all
 realms compute identical quarantine sets after full sync (property d).
@@ -153,14 +157,20 @@ processes sync over a real WebSocket and converge to the `Lattice.Sim` oracle. T
 native browser/AtomVM peer still needs its own implementation of `Lattice.Canonical` and
 `Lattice.Carrier.Wire`. See [path_to_real.md](path_to_real.md) and ADR 0005.
 
+Compact proof harnesses are useful only when they exercise this canonical path.
+Avoid parallel proof stacks that reimplement log, authority, attestation, or
+reduction beside `Lattice.Log`, `Lattice.Authority`, `Lattice.Reduce`, and
+`Lattice.Sync`; mergeable proof work should land as scenarios or regression tests
+against the real modules so the evidence cannot drift from runtime semantics.
+
 ## Module map
 
 | Concern | Modules |
 |---|---|
 | Op / encoding / signing | `Lattice.Op`, `Lattice.Identity` |
-| Log / order / sync / transport | `Lattice.Log`, `Lattice.Dag`, `Lattice.Sync`, `Lattice.Net`, `Lattice.Clock` |
+| Log / order / sync / transport | `Lattice.Log`, `Lattice.Dag`, `Lattice.Sync`, `Lattice.Net` |
 | CRDTs / reduction / DSL | `Lattice.Crdt.{Lww,OrSet,CausalList}`, `Lattice.Reduce`, `Lattice.Replica`, `Lattice.Demo.Thread` |
 | Authority | `Lattice.Authority`, `Lattice.Authority.Delegation`, `Lattice.Cap` (evolved), `Lattice.Live` |
 | Lifecycle / messaging | `Lattice.Registry`, `Lattice.Materializer`, `Lattice.Promise` |
-| Simulation harness | `Lattice.Sim` |
+| Test/demo utilities | `Lattice.Sim`, `Lattice.Clock` |
 | Public facade | `Lattice` (2.0 functions added alongside v1) |

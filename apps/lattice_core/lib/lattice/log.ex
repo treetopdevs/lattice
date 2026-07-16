@@ -88,6 +88,37 @@ defmodule Lattice.Log do
   @spec quarantine(t()) :: [quarantine_entry()]
   def quarantine(%__MODULE__{quarantine: q}), do: Enum.reverse(q)
 
+  @doc "Validate and normalize the untrusted structural-quarantine evidence in a log."
+  @spec verified_quarantine(t()) ::
+          {:ok, [%{op_id: Op.id(), reason: :bad_signature}]}
+          | {:error, :invalid_structural_quarantine}
+  def verified_quarantine(%__MODULE__{replica: replica, quarantine: entries})
+      when is_binary(replica) and is_list(entries) do
+    entries
+    |> Enum.reduce_while({[], MapSet.new()}, fn
+      %{op: %Op{} = op, reason: :bad_signature} = entry, {findings, ids}
+      when map_size(entry) == 2 ->
+        if is_binary(op.id) and op.replica == replica and not valid_op?(op) and
+             not MapSet.member?(ids, op.id) do
+          finding = %{op_id: op.id, reason: :bad_signature}
+          {:cont, {[finding | findings], MapSet.put(ids, op.id)}}
+        else
+          {:halt, :error}
+        end
+
+      _entry, _acc ->
+        {:halt, :error}
+    end)
+    |> case do
+      {findings, _ids} -> {:ok, Enum.sort_by(findings, & &1.op_id)}
+      :error -> {:error, :invalid_structural_quarantine}
+    end
+  rescue
+    _ -> {:error, :invalid_structural_quarantine}
+  end
+
+  def verified_quarantine(_log), do: {:error, :invalid_structural_quarantine}
+
   @doc """
   Accept an op into the log.
 
@@ -159,12 +190,18 @@ defmodule Lattice.Log do
     %{log | quarantine: [%{op: op, reason: reason} | log.quarantine]}
   end
 
+  defp valid_op?(op) do
+    Op.valid?(op)
+  rescue
+    _ -> false
+  end
+
   # --- Persistence (behavior 14) -------------------------------------------
 
-  @doc "Serialize the whole log (ops + structural quarantine) to a file on disk."
+  @doc "Serialize the whole log deterministically (ops + structural quarantine) to disk."
   @spec dump(t(), Path.t()) :: :ok | {:error, term()}
   def dump(%__MODULE__{} = log, path) do
-    File.write(path, :erlang.term_to_binary({:lattice_log_dump_v1, log}))
+    File.write(path, :erlang.term_to_binary({:lattice_log_dump_v1, log}, [:deterministic]))
   end
 
   @doc "Restore a log previously written with `dump/2`."

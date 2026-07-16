@@ -169,6 +169,9 @@ defmodule Lattice.Graph.ReplicaSnapshot do
   defp summary({:transfer, role, deleg, tick}),
     do: "transfer #{inspect(role)} -> #{Identity.fingerprint(deleg.audience)} @t#{tick}"
 
+  defp summary({:succeed, role, _deleg, {:witnessed, _certificate}}),
+    do: "succeed #{inspect(role)} via witnessed recovery"
+
   defp summary({:succeed, role, _deleg, tick}), do: "succeed #{inspect(role)} @t#{tick}"
   defp summary({:heartbeat, role, tick}), do: "heartbeat #{inspect(role)} @t#{tick}"
   defp summary({:revoke, deleg_id}), do: "revoke #{short(deleg_id)}"
