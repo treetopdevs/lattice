@@ -186,6 +186,9 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 143 | Consolidate the versioned action ladder (pay down accretion) | P2 | L | 138 | DONE |
 | 144 | Succession tick-provenance boundary | P1 | S | 139, 140 | DONE |
 | 145 | Genesis-pinned witnessed succession recovery | P1 | L | 144 | DONE |
+| 146 | Witnessed succession witness artifact with protected governance presence (toward G1) | P1 | L | 140, 141, 143, 145, 147, 148 | TODO (council-approved; blocked on 147/148 and explicit resume) |
+| 147 | Port capability/revocation validation into TS reduction (close the F1 decision gap) | **P0** | L | 140, 141 | TODO |
+| 148 | Valid-genesis holder/policy projection parity (F2 prerequisite) | **P0** | S | 145, 147 | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
