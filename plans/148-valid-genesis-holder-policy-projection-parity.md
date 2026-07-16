@@ -2,9 +2,10 @@
 
 ## Status
 
-IN PROGRESS - the bounded implementation and all local gates are green. Exact-tip hosted Unit +
-property, flagship artifact, and packaged macOS closure remain pending. Do not add v7, participant
-authoring, Tauri custody, or artifact behavior here.
+DONE - the bounded implementation, all local gates, and exact implementation-tip hosted closure are
+green. Hosted run `29532242436` passed Unit + property, flagship artifact, and packaged macOS at
+`1eb1e4c1ee8e65832064e6c5dd633c4fbb571a3f`. Do not add v7, participant authoring, Tauri
+custody, or artifact behavior here.
 
 Run after Plan 147 reaches exact-tip hosted closure so the two TypeScript authority corrections do
 not overlap.
@@ -30,6 +31,10 @@ not overlap.
 - Client conformance, V-01 guard, carrier vector/live carrier, typecheck/build/generated dist,
   explicit OTP 28 `mix check`, both Sobelow scans, formatting, and diff checks are green. Claude
   Opus returned PROCEED at every RED/GREEN, mutation, independence, and generated-artifact gate.
+- Codex, Claude Opus, and Antigravity exact-worktree/staged reviews found no P0-P2 issue. Hosted run
+  `29532242436` passed all three jobs at exact implementation tip
+  `1eb1e4c1ee8e65832064e6c5dd633c4fbb571a3f`, including regenerated-vector conformance, strict
+  Credo, stable-relay onboarding, every v1-v6 packaged handoff, and reactive feed.
 
 ## Priority
 
@@ -135,4 +140,5 @@ When `DONE`, Plan 148 may claim only:
 > vector.
 
 It does not make the full TypeScript reducer decision-exact, add policy-update semantics, or open a
-participant authoring surface. Plan 146 remains blocked until this plan and Plan 147 both close.
+participant authoring surface. Plan 146's Plan 147/148 dependency is now clear; Plan 146 remains
+TODO until its explicit resumed implementation slice.

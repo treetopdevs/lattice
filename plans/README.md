@@ -186,9 +186,9 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 143 | Consolidate the versioned action ladder (pay down accretion) | P2 | L | 138 | DONE |
 | 144 | Succession tick-provenance boundary | P1 | S | 139, 140 | DONE |
 | 145 | Genesis-pinned witnessed succession recovery | P1 | L | 144 | DONE |
-| 146 | Witnessed succession witness artifact with protected governance presence (toward G1) | P1 | L | 140, 141, 143, 145, 147, 148 | TODO (council-approved; blocked on 147/148 and explicit resume) |
+| 146 | Witnessed succession witness artifact with protected governance presence (toward G1) | P1 | L | 140, 141, 143, 145, 147, 148 | TODO (council-approved; prerequisites DONE; explicit resume next) |
 | 147 | Port capability/revocation validation into TS reduction (close the F1 decision gap) | **P0** | L | 140, 141 | DONE |
-| 148 | Valid-genesis holder/policy projection parity (F2 prerequisite) | **P0** | S | 145, 147 | IN PROGRESS (local implementation/gates green; exact-tip hosted closure pending) |
+| 148 | Valid-genesis holder/policy projection parity (F2 prerequisite) | **P0** | S | 145, 147 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
@@ -309,14 +309,18 @@ and Packaged macOS convergence at exact implementation tip
 every v1-v6 handoff, and reactive feed. F2 genesis-holder parity remains owned by Plan 148, while
 F3/F4 remain separate parity gaps.
 
-**Plan 148 is IN PROGRESS (2026-07-16).** A new causal Sim vector proves that both valid same-root
+**Plan 148 is DONE (2026-07-16).** A new causal Sim vector proves that both valid same-root
 genesis operations contribute clerk acquisitions, the later canonical genesis supplies the current
 holder epoch and effective witnessed recovery policy, and a signed root-mismatched genesis supplies
 neither. TypeScript now reproduces that timeline and exposes witnessed-only policy provenance from
 the existing local authority analysis; the old first-genesis-only mutation is detected. All 30
 pre-existing vector files remain byte-identical, and local client/carrier, generated-dist, OTP 28
-`mix check`, Sobelow, formatting, diff, and Claude Opus gates are green. Status remains IN PROGRESS
-until the exact-tip hosted Unit + property, flagship artifact, and packaged macOS jobs pass.
+`mix check`, Sobelow, formatting, diff, and Codex/Claude Opus/Antigravity gates are green. Hosted
+run `29532242436` passed Unit + property, flagship artifact, and packaged macOS at exact
+implementation tip `1eb1e4c1ee8e65832064e6c5dd633c4fbb571a3f`, including regenerated-vector
+conformance, strict Credo, stable-relay onboarding, every v1-v6 handoff, and reactive feed. Plan
+146's Plan 147/148 prerequisite is now clear; its implementation remains TODO until explicitly
+resumed.
 
 ## Round 2 (deep audit, 2026-07-07, against commit `6b2cfe5`)
 
