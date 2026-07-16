@@ -38,6 +38,18 @@ defmodule TownshipWeb.InstrumentLive do
       sibling: :summary,
       fallback: :clear
     },
+    witness_succession: %{
+      kind: :form,
+      forms: [
+        %{assign: :witness_succession_intent_form, as: :witness_succession, field: "role"}
+      ],
+      url: :witness_succession_intent_url,
+      replica: :witness_succession_intent_replica,
+      error: :witness_succession_intent_error,
+      command: nil,
+      error_replica: :replica,
+      fallback: :clear
+    },
     grant: %{
       kind: :form,
       forms: [%{assign: :grant_intent_form, as: :grant, field: "audience"}],
@@ -102,6 +114,12 @@ defmodule TownshipWeb.InstrumentLive do
       param: {"title", "text"},
       form: :title_intent_form,
       builder: {:field, :set_title}
+    },
+    "prepare_witness_succession" => %{
+      slot: :witness_succession,
+      param: {"witness_succession", "role"},
+      form: :witness_succession_intent_form,
+      builder: :witness_succession
     },
     "prepare_grant" => %{
       slot: :grant,
@@ -203,6 +221,12 @@ defmodule TownshipWeb.InstrumentLive do
 
   defp build_intent_url({:field, command}, replica, value, _slot_command),
     do: ActionIntent.field_url(replica, command, value)
+
+  defp build_intent_url(:witness_succession, replica, "clerk", _command),
+    do: ActionIntent.witness_succession_url(replica, :clerk)
+
+  defp build_intent_url(:witness_succession, _replica, _role, _command),
+    do: {:error, :invalid_role}
 
   defp build_intent_url(:grant, replica, value, _command),
     do: ActionIntent.grant_url(replica, value)
@@ -426,6 +450,7 @@ defmodule TownshipWeb.InstrumentLive do
   defp action_intent_error(:text_too_large), do: "Keep the update within 4096 UTF-8 bytes."
   defp action_intent_error(:invalid_member), do: "Enter a member before opening the app."
   defp action_intent_error(:member_too_large), do: "Keep the member id within 4096 UTF-8 bytes."
+  defp action_intent_error(:invalid_role), do: "Select the clerk role before opening the app."
 
   defp action_intent_error(:invalid_audience),
     do: "Enter a canonical recipient public key before opening the app."

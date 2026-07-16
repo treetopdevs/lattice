@@ -680,6 +680,126 @@ defmodule TownshipWeb.InstrumentLiveTest do
     refute has_element?(view, "#participant-revoke-handoff")
   end
 
+  test "fresh carrier state prepares and clears one exact v7 clerk witness selector", %{
+    conn: conn
+  } do
+    peer_log = peer_log()
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         carrier: LiveCarrier,
+         connect_opts: [ops: Log.topo_ops(peer_log)],
+         replica: peer_log.replica,
+         peer_realm: "clerk",
+         pubsub: TownshipWeb.PubSub,
+         topic: "township:witness-succession-intent:#{System.unique_integer([:positive])}",
+         schedule: :manual}
+      )
+
+    put_projection_config(projection)
+    {:ok, view, _html} = live(conn, "/township")
+
+    refute has_element?(view, "#participant-witness-succession-form")
+
+    render_hook(view, "prepare_witness_succession", %{
+      "witness_succession" => %{"role" => "clerk"}
+    })
+
+    refute has_element?(view, "#participant-witness-succession-handoff")
+
+    assert {:ok, {:fresh, payload}} = CarrierProjection.refresh(projection)
+    assert has_element?(view, "#participant-witness-succession-form")
+
+    render_hook(view, "prepare_witness_succession", %{
+      "witness_succession" => %{"role" => "clerk", "holder" => "smuggled"},
+      "signature" => "smuggled"
+    })
+
+    witness_url = witness_succession_action_intent_href(view)
+    witness_payload = decoded_action_intent(witness_url)
+
+    assert witness_payload == %{
+             "v" => 7,
+             "id" => witness_payload["id"],
+             "replica" => peer_log.replica,
+             "authority" => %{
+               "action" => "witness_succession",
+               "role" => "clerk"
+             }
+           }
+
+    assert witness_payload["id"] =~ ~r/\A[0-9a-f]{32}\z/
+
+    assert {:ok, expected_url} =
+             ActionIntent.witness_succession_url(peer_log.replica, :clerk,
+               intent_id: witness_payload["id"]
+             )
+
+    assert witness_url == expected_url
+
+    assert has_element?(
+             view,
+             "#participant-witness-succession-prepared",
+             "Unsigned clerk recovery witness request"
+           )
+
+    op_count = peer_log |> Log.op_ids() |> MapSet.size()
+    assert has_element?(view, "#op-dag-panel [data-op-count='#{op_count}']")
+
+    send(view.pid, {:township_instrument, {:fresh, payload}})
+    assert witness_succession_action_intent_href(view) == witness_url
+
+    render_hook(view, "prepare_witness_succession", %{
+      "witness_succession" => %{"role" => "resident"}
+    })
+
+    assert has_element?(
+             view,
+             "#participant-witness-succession-error[aria-live='polite']",
+             "Select the clerk role before opening the app"
+           )
+
+    refute has_element?(view, "#participant-witness-succession-handoff")
+
+    view
+    |> form("#participant-witness-succession-form", %{
+      "witness_succession" => %{"role" => "clerk"}
+    })
+    |> render_submit()
+
+    form_payload = view |> witness_succession_action_intent_href() |> decoded_action_intent()
+    assert Map.keys(form_payload) |> Enum.sort() == ["authority", "id", "replica", "v"]
+
+    assert form_payload["authority"] == %{
+             "action" => "witness_succession",
+             "role" => "clerk"
+           }
+
+    replacement_payload = put_in(payload.provenance.replica, peer_log.replica <> ":replacement")
+    send(view.pid, {:township_instrument, {:fresh, replacement_payload}})
+
+    assert has_element?(
+             view,
+             "#participant-witness-succession-form select option[value=''][selected]"
+           )
+
+    refute has_element?(view, "#participant-witness-succession-error")
+    refute has_element?(view, "#participant-witness-succession-handoff")
+
+    send(view.pid, {:township_instrument, {:fresh, payload}})
+
+    view
+    |> form("#participant-witness-succession-form", %{
+      "witness_succession" => %{"role" => "clerk"}
+    })
+    |> render_submit()
+
+    send(view.pid, {:township_instrument, {:stale, payload}})
+    refute has_element?(view, "#participant-witness-succession-form")
+    refute has_element?(view, "#participant-witness-succession-handoff")
+  end
+
   test "fresh carrier state prepares admit in the same single roster-request slot", %{conn: conn} do
     peer_log = peer_log()
 
@@ -1188,6 +1308,15 @@ defmodule TownshipWeb.InstrumentLiveTest do
     |> render()
     |> LazyHTML.from_fragment()
     |> LazyHTML.query_by_id("participant-revoke-handoff")
+    |> LazyHTML.attribute("href")
+    |> List.first()
+  end
+
+  defp witness_succession_action_intent_href(view) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query_by_id("participant-witness-succession-handoff")
     |> LazyHTML.attribute("href")
     |> List.first()
   end

@@ -86,6 +86,44 @@
 
       <.intent_panel
         :if={@source_state == :fresh}
+        id="participant-witness-succession-panel"
+        intent="witness-succession"
+        kicker="Governance request"
+        title="Witness clerk recovery from your device"
+        url={@witness_succession_intent_url}
+        error={@witness_succession_intent_error}
+      >
+        <:body>
+          <form
+            id="participant-witness-succession-form"
+            phx-submit="prepare_witness_succession"
+          >
+            <label for={@witness_succession_intent_form[:role].id}>Recovery role</label>
+            <select
+              id={@witness_succession_intent_form[:role].id}
+              name={@witness_succession_intent_form[:role].name}
+            >
+              <option
+                value=""
+                selected={@witness_succession_intent_form[:role].value in [nil, ""]}
+              >
+                Select role
+              </option>
+              <option
+                value="clerk"
+                selected={@witness_succession_intent_form[:role].value == "clerk"}
+              >
+                Clerk
+              </option>
+            </select>
+            <button type="submit">Prepare witness request in app</button>
+          </form>
+        </:body>
+        <:prepared>Unsigned clerk recovery witness request</:prepared>
+      </.intent_panel>
+
+      <.intent_panel
+        :if={@source_state == :fresh}
         id="participant-grant-panel"
         intent="grant"
         kicker="Authority request"

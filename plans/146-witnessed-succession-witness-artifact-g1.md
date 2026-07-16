@@ -23,9 +23,11 @@ Execution starts from exact documentation tip `61a1a8685af4c119cc327eeee86800fbf
 
 ## Implementation Progress (2026-07-16)
 
-- Seam 1 is locally GREEN. One shared fixture pins the exact custody-free v7 clerk selector;
-  Elixir produces those bytes; TypeScript accepts only the closed selector shape while preserving
-  every v1-v6 contract.
+- Seam 1 is closed at implementation tip `9c20e7b6741ea07e8324142815e51c54d5c10d7b`.
+  Hosted run `29537649815` passed Unit + property, flagship artifact, and packaged macOS
+  convergence. One shared fixture pins the exact custody-free v7 clerk selector; Elixir produces
+  those bytes; TypeScript accepts only the closed selector shape while preserving every v1-v6
+  contract.
 - A valid v7 request is parseable but not yet reviewable. The installed-app dispatcher rejects it
   with the existing coarse `invalid_action` outcome until Seam 3 registers the v7 descriptor and
   review surface. The reviewable v1-v6 union remains exhaustive and compile-checked.
@@ -33,8 +35,13 @@ Execution starts from exact documentation tip `61a1a8685af4c119cc327eeee86800fbf
   Opus found the initial GREEN incorrectly widened the reviewable UI union; a second RED proved the
   typecheck and staging failures, and the corrected GREEN passed focused BEAM, parser, dispatcher,
   structural frontend, UI, and typecheck gates. Full OTP 28 `mix check` also passed.
-- Plan 146 remains `IN PROGRESS`. Seam 2, connected LiveView preparation and clearing, is next;
-  no governance key, user-presence, claim, signature, artifact, or succession authority exists yet.
+- Seam 2 is locally GREEN. A fresh carrier projection exposes one clerk-role form, produces the
+  exact v7 selector, retains it only for the same fresh replica, and clears it on invalid input,
+  replica replacement, or stale state. Its RED failed on the absent LiveView event; corrected GREEN
+  passed the focused 16-test LiveView suite, full OTP 28 `mix check`, and both boundary Sobelow
+  scans with Claude Opus reporting no unresolved P0-P2 finding.
+- Plan 146 remains `IN PROGRESS`. Seam 3, installed-app ingress and review, is next; no governance
+  key, user-presence, claim, signature, artifact, or succession authority exists yet.
 
 ## Objective
 
