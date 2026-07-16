@@ -1,6 +1,165 @@
 defmodule Township.ExportVectorsTest do
   use ExUnit.Case, async: false
 
+  @single_capability_cases [
+    {"township_capability_missing", "no_capability"},
+    {"township_capability_invalid", "invalid_capability"},
+    {"township_capability_wrong_audience", "capability_wrong_audience"},
+    {"township_capability_operation_not_granted", "operation_not_granted"},
+    {"township_capability_not_visible", "capability_not_visible"},
+    {"township_capability_role_not_granted", "role_not_granted"}
+  ]
+
+  test "lattice.export_vectors pins capability and revocation decisions to the BEAM oracle" do
+    out_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "lattice_capability_vectors_#{System.unique_integer([:positive])}"
+      )
+
+    on_exit(fn -> File.rm_rf(out_dir) end)
+
+    Mix.Task.clear()
+    assert :ok = Mix.Task.run("lattice.export_vectors", ["--out", out_dir])
+
+    for {scenario, reason} <- @single_capability_cases do
+      vector = read_vector!(out_dir, scenario)
+
+      assert vector["generatedBy"] == "Lattice.Sim"
+      assert vector["scenario"] == scenario
+      assert vector["scenarioKind"] == "adversarial"
+
+      evidence = vector["capabilityCase"]
+      target_id = evidence["targetOperationId"]
+      expected = vector["expectAtFullFrontier"]
+
+      assert is_binary(target_id)
+      assert evidence["expectedReason"] == reason
+      assert target_id in expected["quarantine"]
+      assert [target_id, reason] in expected["authorityQuarantine"]
+      assert Enum.any?(vector["oracleCarrierOps"], &(&1["id"] == target_id))
+
+      case scenario do
+        "township_capability_role_not_granted" ->
+          setup_id = evidence["setupOperationId"]
+          assert is_binary(setup_id)
+          refute setup_id in expected["quarantine"]
+          assert expected["state"]["clerk_locked"] == true
+
+        "township_capability_not_visible" ->
+          introduction_id = evidence["delegationIntroductionId"]
+          assert is_binary(introduction_id)
+          refute introduction_id in carrier_op!(vector, target_id)["deps"]
+
+          rejected_post = evidence["rejectedPost"]
+          assert is_binary(rejected_post)
+          refute rejected_post in expected["state"]["posts"]
+
+        _ ->
+          rejected_post = evidence["rejectedPost"]
+          assert is_binary(rejected_post)
+          refute rejected_post in expected["state"]["posts"]
+      end
+    end
+
+    missing = read_vector!(out_dir, "township_capability_missing")
+    missing_evidence = missing["capabilityCase"]
+    missing_delegation_id = missing_evidence["missingDelegationId"]
+
+    assert is_binary(missing_delegation_id)
+
+    assert carrier_op!(missing, missing_evidence["targetOperationId"])["cap"] ==
+             ["bin", Base.encode64(missing_delegation_id)]
+
+    invalid = read_vector!(out_dir, "township_capability_invalid")
+    invalid_evidence = invalid["capabilityCase"]
+
+    assert is_binary(invalid_evidence["invalidDelegationIntroductionId"])
+    assert is_binary(invalid_evidence["invalidDelegationId"])
+    assert is_binary(invalid_evidence["missingParentDelegationId"])
+
+    assert Enum.any?(invalid["oracleCarrierOps"], fn
+             %{
+               "id" => introduction_id,
+               "body" => [
+                 "tuple",
+                 [
+                   ["atom", "grant"],
+                   [
+                     "delegation",
+                     %{"id" => delegation_id, "parent_id" => missing_parent_id}
+                   ]
+                 ]
+               ]
+             } ->
+               introduction_id == invalid_evidence["invalidDelegationIntroductionId"] and
+                 delegation_id == invalid_evidence["invalidDelegationId"] and
+                 missing_parent_id == invalid_evidence["missingParentDelegationId"]
+
+             _frame ->
+               false
+           end)
+
+    causal = read_vector!(out_dir, "township_capability_revoked_causal")
+    causal_evidence = causal["capabilityCase"]
+    causal_expected = causal["expectAtFullFrontier"]
+    before_id = causal_evidence["beforeOperationId"]
+    concurrent_id = causal_evidence["concurrentOperationId"]
+    revoke_id = causal_evidence["revokeOperationId"]
+    after_id = causal_evidence["afterOperationId"]
+
+    assert [concurrent_id, "revoked_capability"] in causal_expected["authorityQuarantine"]
+    assert [after_id, "revoked_capability"] in causal_expected["authorityQuarantine"]
+
+    refute Enum.any?(causal_expected["authorityQuarantine"], fn [id, _reason] ->
+             id == before_id
+           end)
+
+    refute before_id in causal_expected["quarantine"]
+    assert concurrent_id in causal_expected["quarantine"]
+    assert after_id in causal_expected["quarantine"]
+
+    carrier_op!(causal, before_id)
+    concurrent = carrier_op!(causal, concurrent_id)
+    revoke = carrier_op!(causal, revoke_id)
+    after_revoke = carrier_op!(causal, after_id)
+
+    assert before_id in revoke["deps"]
+    refute concurrent_id in revoke["deps"]
+    refute revoke_id in concurrent["deps"]
+    assert revoke_id in after_revoke["deps"]
+
+    assert causal_evidence["beforePost"] in causal_expected["state"]["posts"]
+    refute causal_evidence["concurrentPost"] in causal_expected["state"]["posts"]
+    refute causal_evidence["afterPost"] in causal_expected["state"]["posts"]
+
+    chain = read_vector!(out_dir, "township_capability_revoked_chain")
+    chain_evidence = chain["capabilityCase"]
+    chain_expected = chain["expectAtFullFrontier"]
+    chain_target_id = chain_evidence["targetOperationId"]
+    chain_revoke_id = chain_evidence["revokeOperationId"]
+
+    assert chain_evidence["parentDelegationId"] != chain_evidence["childDelegationId"]
+    assert [chain_target_id, "revoked_capability"] in chain_expected["authorityQuarantine"]
+    assert chain_revoke_id in carrier_op!(chain, chain_target_id)["deps"]
+    refute chain_evidence["rejectedPost"] in chain_expected["state"]["posts"]
+
+    unauthorized = read_vector!(out_dir, "township_revoke_unauthorized")
+    unauthorized_evidence = unauthorized["capabilityCase"]
+    unauthorized_expected = unauthorized["expectAtFullFrontier"]
+    bad_revoke_id = unauthorized_evidence["revokeOperationId"]
+    honored_id = unauthorized_evidence["targetOperationId"]
+
+    assert [bad_revoke_id, "unauthorized_revoke"] in unauthorized_expected["authorityQuarantine"]
+
+    refute Enum.any?(unauthorized_expected["authorityQuarantine"], fn [id, _reason] ->
+             id == honored_id
+           end)
+
+    assert bad_revoke_id in carrier_op!(unauthorized, honored_id)["deps"]
+    assert unauthorized_evidence["honoredPost"] in unauthorized_expected["state"]["posts"]
+  end
+
   test "lattice.export_vectors writes a Sim-generated Township conformance vector" do
     out_dir =
       Path.join(System.tmp_dir!(), "lattice_vectors_#{System.unique_integer([:positive])}")
@@ -879,5 +1038,16 @@ defmodule Township.ExportVectorsTest do
     assert workflow =~ "npm run canonical"
     assert workflow =~ "npm run carrier:township"
     assert workflow =~ "npm run carrier:township:live"
+  end
+
+  defp read_vector!(out_dir, scenario) do
+    path = Path.join(out_dir, "#{scenario}.json")
+    assert File.exists?(path), "missing Sim-exported capability vector #{scenario}"
+    path |> File.read!() |> Jason.decode!()
+  end
+
+  defp carrier_op!(vector, id) do
+    assert %{} = op = Enum.find(vector["oracleCarrierOps"], &(&1["id"] == id))
+    op
   end
 end

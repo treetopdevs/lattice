@@ -68,6 +68,15 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_authority_forged_transfer(),
       township_authority_double_transfer(),
       township_authority_unattenuated_transfer(),
+      township_capability_missing(),
+      township_capability_invalid(),
+      township_capability_wrong_audience(),
+      township_capability_operation_not_granted(),
+      township_capability_not_visible(),
+      township_capability_role_not_granted(),
+      township_capability_revoked_causal(),
+      township_capability_revoked_chain(),
+      township_revoke_unauthorized(),
       township_causal_list_partition(),
       township_partial_log_lww(),
       township_carrier_w1()
@@ -963,6 +972,423 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     }
   end
 
+  defp township_capability_missing do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:capability-missing",
+        ["clerk", "resident"],
+        seed: "township:capability-missing"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    sim = Sim.sync_all(sim)
+    rejected_post = "resident: missing capability"
+    missing_delegation_id = String.duplicate("U", 43)
+
+    {sim, target} =
+      Sim.command(sim, "resident", :post, [rejected_post], cap: missing_delegation_id)
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    assert_authority_reason!(log, target.id, :no_capability)
+    assert_post_absent!(log, rejected_post)
+
+    capability_scenario("township_capability_missing", sim, log, %{
+      "targetOperationId" => target.id,
+      "expectedReason" => "no_capability",
+      "rejectedPost" => rejected_post,
+      "missingDelegationId" => missing_delegation_id
+    })
+  end
+
+  defp township_capability_invalid do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:capability-invalid",
+        ["clerk", "resident"],
+        seed: "township:capability-invalid"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    clerk = Sim.identity(sim, "clerk")
+    resident = Sim.identity(sim, "resident")
+    replica = Sim.replica(sim)
+    missing_parent_id = String.duplicate("M", 43)
+
+    invalid_delegation =
+      Delegation.new(clerk, replica, resident.pub,
+        ops: [:post],
+        parent_id: missing_parent_id
+      )
+
+    unless Delegation.valid_sig?(invalid_delegation) do
+      raise "expected missing-parent delegation to remain structurally signed"
+    end
+
+    introduction =
+      Op.new(
+        clerk,
+        replica,
+        Log.frontier(Sim.log(sim, "clerk")),
+        :authority,
+        {:grant, invalid_delegation}
+      )
+
+    log = Sim.log(sim, "clerk") |> Log.append!(introduction)
+    rejected_post = "resident: invalid capability chain"
+
+    target =
+      Op.new(
+        resident,
+        replica,
+        Log.frontier(log),
+        :command,
+        {:post, [rejected_post]},
+        cap: invalid_delegation.id
+      )
+
+    log = Log.append!(log, target)
+
+    assert_authority_reason!(log, introduction.id, :missing_parent)
+    assert_authority_reason!(log, target.id, :invalid_capability)
+    assert_post_absent!(log, rejected_post)
+
+    capability_scenario("township_capability_invalid", sim, log, %{
+      "targetOperationId" => target.id,
+      "expectedReason" => "invalid_capability",
+      "rejectedPost" => rejected_post,
+      "invalidDelegationIntroductionId" => introduction.id,
+      "invalidDelegationId" => invalid_delegation.id,
+      "missingParentDelegationId" => missing_parent_id
+    })
+  end
+
+  defp township_capability_wrong_audience do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:capability-wrong-audience",
+        ["clerk", "resident", "mallory"],
+        seed: "township:capability-wrong-audience"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, delegation} = Sim.grant(sim, "clerk", "resident", ops: [:post])
+    sim = Sim.sync_all(sim)
+    rejected_post = "mallory: borrowed resident capability"
+
+    {sim, target} =
+      Sim.command(sim, "mallory", :post, [rejected_post], cap: delegation.id)
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    assert_authority_reason!(log, target.id, :capability_wrong_audience)
+    assert_post_absent!(log, rejected_post)
+
+    capability_scenario("township_capability_wrong_audience", sim, log, %{
+      "targetOperationId" => target.id,
+      "expectedReason" => "capability_wrong_audience",
+      "rejectedPost" => rejected_post
+    })
+  end
+
+  defp township_capability_operation_not_granted do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:capability-operation-not-granted",
+        ["clerk", "resident"],
+        seed: "township:capability-operation-not-granted"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, delegation} = Sim.grant(sim, "clerk", "resident", ops: [:set_title])
+    sim = Sim.sync_all(sim)
+    rejected_post = "resident: operation outside delegation"
+
+    {sim, target} =
+      Sim.command(sim, "resident", :post, [rejected_post], cap: delegation.id)
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    assert_authority_reason!(log, target.id, :operation_not_granted)
+    assert_post_absent!(log, rejected_post)
+
+    capability_scenario("township_capability_operation_not_granted", sim, log, %{
+      "targetOperationId" => target.id,
+      "expectedReason" => "operation_not_granted",
+      "rejectedPost" => rejected_post
+    })
+  end
+
+  defp township_capability_not_visible do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:capability-not-visible",
+        ["clerk", "resident"],
+        seed: "township:capability-not-visible"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    sim = sim |> Sim.sync_all() |> Sim.partition("clerk", "resident")
+    {sim, delegation} = Sim.grant(sim, "clerk", "resident", ops: [:post])
+
+    introduction =
+      sim
+      |> Sim.log("clerk")
+      |> Log.topo_ops()
+      |> Enum.find(fn
+        %Op{kind: :authority, body: {:grant, %Delegation{id: id}}} ->
+          id == delegation.id
+
+        _op ->
+          false
+      end)
+
+    unless %Op{} = introduction do
+      raise "missing not-visible delegation introduction"
+    end
+
+    rejected_post = "resident: capability was not visible"
+
+    {sim, target} =
+      Sim.command(sim, "resident", :post, [rejected_post], cap: delegation.id)
+
+    sim = sim |> Sim.heal("clerk", "resident") |> Sim.sync_all()
+    log = Sim.log(sim, "clerk")
+
+    if introduction.id in target.deps do
+      raise "expected not-visible command to exclude its grant introduction"
+    end
+
+    assert_authority_reason!(log, target.id, :capability_not_visible)
+    assert_post_absent!(log, rejected_post)
+
+    capability_scenario("township_capability_not_visible", sim, log, %{
+      "targetOperationId" => target.id,
+      "expectedReason" => "capability_not_visible",
+      "rejectedPost" => rejected_post,
+      "delegationIntroductionId" => introduction.id
+    })
+  end
+
+  defp township_capability_role_not_granted do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:capability-role-not-granted",
+        ["clerk", "resident"],
+        seed: "township:capability-role-not-granted"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    sim = Sim.sync_all(sim)
+    {sim, setup} = Sim.command(sim, "clerk", :close_matter, [])
+    sim = Sim.sync_all(sim)
+    {sim, delegation} = Sim.grant(sim, "clerk", "resident", ops: [:reopen_matter])
+    sim = Sim.sync_all(sim)
+
+    {sim, target} =
+      Sim.command(sim, "resident", :reopen_matter, [], cap: delegation.id)
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    assert_authority_honored!(log, setup.id)
+    assert_authority_reason!(log, target.id, :role_not_granted)
+
+    unless Lattice.state(Matter, log).clerk_locked? do
+      raise "expected role-less reopen command to preserve the closed matter"
+    end
+
+    capability_scenario("township_capability_role_not_granted", sim, log, %{
+      "targetOperationId" => target.id,
+      "expectedReason" => "role_not_granted",
+      "setupOperationId" => setup.id
+    })
+  end
+
+  defp township_capability_revoked_causal do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:capability-revoked-causal",
+        ["clerk", "resident"],
+        seed: "township:capability-revoked-causal"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, delegation} = Sim.grant(sim, "clerk", "resident", ops: [:post])
+    sim = Sim.sync_all(sim)
+
+    before_post = "resident: causally before revoke"
+    {sim, before} = Sim.command(sim, "resident", :post, [before_post], cap: delegation.id)
+    sim = Sim.sync_all(sim)
+    sim = Sim.partition(sim, "clerk", "resident")
+
+    concurrent_post = "resident: concurrent with revoke"
+
+    {sim, concurrent} =
+      Sim.command(sim, "resident", :post, [concurrent_post], cap: delegation.id)
+
+    {sim, revoke} = Sim.revoke(sim, "clerk", delegation.id)
+    sim = sim |> Sim.heal("clerk", "resident") |> Sim.sync_all()
+    after_post = "resident: causally after revoke"
+    {sim, after_revoke} = Sim.command(sim, "resident", :post, [after_post], cap: delegation.id)
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    assert_authority_honored!(log, before.id)
+    assert_authority_reason!(log, concurrent.id, :revoked_capability)
+    assert_authority_reason!(log, after_revoke.id, :revoked_capability)
+
+    unless before.id in revoke.deps and concurrent.id not in revoke.deps and
+             revoke.id not in concurrent.deps and revoke.id in after_revoke.deps do
+      raise "expected before/concurrent/after revoke causal relationships"
+    end
+
+    posts = Lattice.state(Matter, log).posts
+
+    unless before_post in posts and concurrent_post not in posts and after_post not in posts do
+      raise "expected only the causally-before command to materialize"
+    end
+
+    capability_scenario("township_capability_revoked_causal", sim, log, %{
+      "delegationId" => delegation.id,
+      "beforeOperationId" => before.id,
+      "beforePost" => before_post,
+      "concurrentOperationId" => concurrent.id,
+      "concurrentPost" => concurrent_post,
+      "revokeOperationId" => revoke.id,
+      "afterOperationId" => after_revoke.id,
+      "afterPost" => after_post
+    })
+  end
+
+  defp township_capability_revoked_chain do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:capability-revoked-chain",
+        ["clerk", "resident", "mallory"],
+        seed: "township:capability-revoked-chain"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, parent} = Sim.grant(sim, "clerk", "resident", ops: [:post])
+    sim = Sim.sync_all(sim)
+    {sim, child} = Sim.grant(sim, "resident", "mallory", ops: [:post])
+    sim = Sim.sync_all(sim)
+    {sim, revoke} = Sim.revoke(sim, "clerk", parent.id)
+    sim = Sim.sync_all(sim)
+    rejected_post = "mallory: child use after parent revoke"
+
+    {sim, target} =
+      Sim.command(sim, "mallory", :post, [rejected_post], cap: child.id)
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    unless child.parent_id == parent.id and revoke.id in target.deps do
+      raise "expected child delegation use to follow its parent revoke"
+    end
+
+    assert_authority_reason!(log, target.id, :revoked_capability)
+    assert_post_absent!(log, rejected_post)
+
+    capability_scenario("township_capability_revoked_chain", sim, log, %{
+      "parentDelegationId" => parent.id,
+      "childDelegationId" => child.id,
+      "revokeOperationId" => revoke.id,
+      "targetOperationId" => target.id,
+      "rejectedPost" => rejected_post
+    })
+  end
+
+  defp township_revoke_unauthorized do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:revoke-unauthorized",
+        ["clerk", "resident", "mallory"],
+        seed: "township:revoke-unauthorized"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, delegation} = Sim.grant(sim, "clerk", "resident", ops: [:post])
+    sim = Sim.sync_all(sim)
+    {sim, bad_revoke} = Sim.revoke(sim, "mallory", delegation.id)
+    sim = Sim.sync_all(sim)
+    honored_post = "resident: honored after unauthorized revoke"
+
+    {sim, target} =
+      Sim.command(sim, "resident", :post, [honored_post], cap: delegation.id)
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    unless bad_revoke.id in target.deps do
+      raise "expected honored control command to be causally after the bad revoke"
+    end
+
+    assert_authority_reason!(log, bad_revoke.id, :unauthorized_revoke)
+    assert_authority_honored!(log, target.id)
+
+    unless honored_post in Lattice.state(Matter, log).posts do
+      raise "expected unauthorized revoke to leave the delegation usable"
+    end
+
+    capability_scenario("township_revoke_unauthorized", sim, log, %{
+      "delegationId" => delegation.id,
+      "revokeOperationId" => bad_revoke.id,
+      "targetOperationId" => target.id,
+      "honoredPost" => honored_post
+    })
+  end
+
+  defp capability_scenario(name, sim, log, evidence) do
+    realms = realm_index(sim)
+
+    %{
+      name: name,
+      kind: "adversarial",
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: log.replica,
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      authorityQuarantine: authority_quarantine(log),
+      capabilityCase: evidence
+    }
+  end
+
+  defp assert_authority_reason!(log, op_id, expected_reason) do
+    actual_reason = Authority.analyze(Matter, log).reasons[op_id]
+
+    unless actual_reason == expected_reason do
+      raise "expected #{op_id} to quarantine as #{expected_reason}, got #{inspect(actual_reason)}"
+    end
+  end
+
+  defp assert_authority_honored!(log, op_id) do
+    if Map.has_key?(Authority.analyze(Matter, log).reasons, op_id) do
+      raise "expected #{op_id} to remain authority-honored"
+    end
+  end
+
+  defp assert_post_absent!(log, post) do
+    if post in Lattice.state(Matter, log).posts do
+      raise "expected quarantined post #{inspect(post)} not to materialize"
+    end
+  end
+
   defp township_causal_list_partition do
     sim =
       Sim.new(
@@ -1560,6 +1986,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     |> maybe_put("successionOperationId", Map.get(scenario, :successionOperationId))
     |> maybe_put("tickProvenance", Map.get(scenario, :tickProvenance))
     |> maybe_put("witnessedRecovery", Map.get(scenario, :witnessedRecovery))
+    |> maybe_put("capabilityCase", Map.get(scenario, :capabilityCase))
   end
 
   defp to_vector(%{carrier?: true} = scenario) do

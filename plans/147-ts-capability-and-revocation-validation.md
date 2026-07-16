@@ -2,7 +2,18 @@
 
 ## Status
 
-TODO
+IN PROGRESS - started 2026-07-16 after the user resumed the build-map goal.
+
+The first Claude Opus RED review found that the draft's "concurrent use is honored" wording
+contradicted `Authority.revoked_as_of?/5`. An explicit OTP 28 Sim probe confirmed that a command
+concurrent with a valid revoke is quarantined `:revoked_capability` at the merged full frontier.
+The corrected oracle contract below is authoritative for Slice 1.
+
+Slice 1 GREEN evidence: the focused RED failed on the first absent vector; the corrected nine-vector
+exporter and its full focused file pass 16 tests with zero failures; all 21 pre-existing checked
+vector files remain byte-for-byte identical; exactly nine new vectors were generated. Claude Opus
+returned `PROCEED` on the exact GREEN, then its only P2 (null cap versus the planned present unknown
+id) was corrected test-first and independently re-reviewed `PROCEED`.
 
 ## Priority
 
@@ -82,8 +93,9 @@ Port these behaviors exactly; where TS behavior is ambiguous, author a Sim probe
    (`mutation_roles/2` — fields declared `authority:` contribute their role); commands
    touching no authority field need no roles but still need every other check.
 5. Revocation is causal, not temporal: a delegation is revoked *as of* op O iff an
-   effective revoke of any id in its parent chain exists with O ∉ ancestors(revoke) —
-   i.e. concurrent use is honored, causally-later use is quarantined.
+   effective revoke of any id in its parent chain exists with O ∉ ancestors(revoke).
+   A use causally before the revoke is honored; concurrent and causally-later uses are
+   quarantined.
 6. Revoke authorization: issuer-or-root. Unauthorized revokes are quarantined
    `:unauthorized_revoke` AND ineffective. Both halves, always together.
 7. Tombstone symmetry sanity: `:unauthorized_tombstone` (root-only) is already handled —
@@ -105,9 +117,13 @@ quarantine reason, final state, and (where relevant) holder result:
 - `township_capability_operation_not_granted` — delegation grants `{post}` only, op is `set_title` → `:operation_not_granted`
 - `township_capability_not_visible` — op's deps exclude every intro of its delegation → `:capability_not_visible`
 - `township_capability_role_not_granted` — role-gated command (`set_status`-class) with role-less delegation → `:role_not_granted`
-- `township_capability_revoked_causal` — issuer revokes; one causally-later use (quarantined `:revoked_capability`) and one concurrent use (honored) in the same vector — pins the causal, not temporal, semantics
+- `township_capability_revoked_causal` — one causally-before use is honored, one concurrent use is
+  quarantined `:revoked_capability`, and one causally-later use is quarantined
+  `:revoked_capability` in the same vector — pins the causal, not temporal, semantics
 - `township_capability_revoked_chain` — revoke of a *parent* delegation quarantines use of the child (`delegation_chain_ids` coverage)
-- `township_revoke_unauthorized` — Mallory revokes Alice's delegation → revoke op quarantined `:unauthorized_revoke` and Alice's later use still honored
+- `township_revoke_unauthorized` — Mallory revokes Alice's delegation → revoke op quarantined
+  `:unauthorized_revoke`; Alice's command explicitly depends on that bad revoke and is still
+  honored, proving the revoke is excluded from effective revokes
 
 Regenerating the corpus (`MIX_ENV=test mix lattice.export_vectors --out
 clients/lattice-client/test/vectors`, as `.github/workflows/flagship.yml:115` does) must
