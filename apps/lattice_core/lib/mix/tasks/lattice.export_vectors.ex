@@ -1151,9 +1151,11 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
           false
       end)
 
-    unless %Op{} = introduction do
-      raise "missing not-visible delegation introduction"
-    end
+    introduction =
+      case introduction do
+        %Op{} = op -> op
+        nil -> raise "missing not-visible delegation introduction"
+      end
 
     rejected_post = "resident: capability was not visible"
 
