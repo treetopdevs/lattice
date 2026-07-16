@@ -1,4 +1,4 @@
-import type { AuthorityDelegationEvidence, Op, WitnessedRecoveryPolicyEvidence, WitnessedSuccessionCertificateEvidence, WitnessedSuccessionClaimEvidence } from "./op";
+import type { AuthorityDelegationEvidence, Op, WitnessedRecoveryPolicyEvidence, WitnessedSuccessionPolicyEvidence, WitnessedSuccessionCertificateEvidence, WitnessedSuccessionClaimEvidence } from "./op";
 import type { ReplicaSchema } from "./schema";
 /** One honored role acquisition, in processing (canonical) order. */
 export interface HonoredAcquire {
@@ -32,12 +32,18 @@ export interface AuthoritySecurityProjection {
     root: AuthorityRootEvidence | null;
     effectiveRevokes: readonly EffectiveRevokeEvidence[];
 }
+export interface RecoveryPolicyProjection {
+    policy: WitnessedSuccessionPolicyEvidence;
+    genesisOperationId: string;
+}
 export interface AuthorityAnalysis {
     honoredWrites: ReadonlySet<string>;
     quarantinedWrites: ReadonlySet<string>;
     quarantineReasons: ReadonlyMap<string, string>;
     /** Honored acquires per role, in the order they were honored (the oracle's timeline). */
     acquiresByRole: ReadonlyMap<string, readonly HonoredAcquire[]>;
+    /** Effective witnessed recovery policy and the valid genesis operation that supplied it. */
+    recoveryPoliciesByRole: ReadonlyMap<string, RecoveryPolicyProjection>;
     security: AuthoritySecurityProjection;
 }
 /**

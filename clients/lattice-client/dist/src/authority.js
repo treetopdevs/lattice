@@ -20,7 +20,7 @@ export function analyzeAuthority(schema, ops, included, order, byId) {
     }
     const collectedDelegations = collectDelegations(visible);
     const delegations = validateDelegations(visible, collectedDelegations);
-    const policies = collectPolicies(visible, delegations);
+    const { policies, recoveryPoliciesByRole } = collectPolicies(visible, delegations);
     const root = resolveRoot(visible, delegations);
     const { effectiveRevokes, unauthorizedRevokes } = collectRevokes(visible, delegations, root);
     const states = new Map();
@@ -93,6 +93,7 @@ export function analyzeAuthority(schema, ops, included, order, byId) {
         quarantinedWrites,
         quarantineReasons,
         acquiresByRole,
+        recoveryPoliciesByRole,
         security: { delegations, root, effectiveRevokes },
     };
 }
@@ -127,8 +128,7 @@ function authorityWriteHonored(op, evidence, state, delegations, policies, byId)
         return false;
     }
     if (evidence.type === "genesis") {
-        return (state.holder === null &&
-            delegation.parentId === null &&
+        return (delegation.parentId === null &&
             delegation.issuer === delegation.audience &&
             delegation.issuerRealm === op.author &&
             op.replica !== undefined &&
@@ -326,6 +326,7 @@ function compareBase64Evidence(left, right) {
 /** Succession policies are conferred only by a genesis whose delegation is valid. */
 function collectPolicies(ops, delegations) {
     const policies = new Map();
+    const recoveryPoliciesByRole = new Map();
     for (const op of ops) {
         const evidence = op.authority;
         if (evidence?.type !== "genesis" || evidence.policies === undefined)
@@ -337,9 +338,18 @@ function collectPolicies(ops, delegations) {
         }
         for (const [role, policy] of Object.entries(evidence.policies)) {
             policies.set(role, policy);
+            if (policy.mode === "witnessed") {
+                recoveryPoliciesByRole.set(role, {
+                    policy,
+                    genesisOperationId: op.id,
+                });
+            }
+            else {
+                recoveryPoliciesByRole.delete(role);
+            }
         }
     }
-    return policies;
+    return { policies, recoveryPoliciesByRole };
 }
 function collectDelegations(ops) {
     const delegations = new Map();

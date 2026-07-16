@@ -2,11 +2,34 @@
 
 ## Status
 
-TODO - bounded predecessor to Plan 146. Do not add v7, participant authoring, Tauri custody, or
-artifact behavior here.
+IN PROGRESS - the bounded implementation and all local gates are green. Exact-tip hosted Unit +
+property, flagship artifact, and packaged macOS closure remain pending. Do not add v7, participant
+authoring, Tauri custody, or artifact behavior here.
 
 Run after Plan 147 reaches exact-tip hosted closure so the two TypeScript authority corrections do
 not overlap.
+
+## Implementation Record (2026-07-16)
+
+- The exporter guard was RED on the missing `township_genesis_projection_parity` scenario, then
+  GREEN with one causal valid-genesis A -> valid-genesis B -> signed root-mismatched impostor Sim
+  probe. Public BEAM prefix/full analyses pin both acquisition endpoints, current holder epoch,
+  distinct effective witnessed policy, inferred winning policy genesis operation, policy id, bound
+  root, and `impostor_genesis` refusal.
+- Exact `MIX_ENV=test` regeneration added one vector; SHA-256 checks kept all 30 pre-existing vector
+  files byte-identical.
+- TypeScript conformance was RED with seven new-scenario failures: B was quarantined, A remained the
+  winner/current epoch, the acquisition timeline omitted B, and the public recovery-policy
+  projection was absent. GREEN removed only the first-genesis-only holder guard and extended the
+  existing policy collector with witnessed-only `{policy, genesisOperationId}` provenance.
+- Restoring the old holder guard caused exactly four load-bearing failures (quarantine, winner,
+  timeline, epoch), while policy provenance/root/impostor checks stayed green; restoring the fix
+  returned the full corpus to GREEN.
+- The public analysis remains a five-input local function, produces the same projection under
+  reversed operation delivery, and has no relay-report parameter or shell-side policy collector.
+- Client conformance, V-01 guard, carrier vector/live carrier, typecheck/build/generated dist,
+  explicit OTP 28 `mix check`, both Sobelow scans, formatting, and diff checks are green. Claude
+  Opus returned PROCEED at every RED/GREEN, mutation, independence, and generated-artifact gate.
 
 ## Priority
 

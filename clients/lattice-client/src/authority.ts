@@ -12,6 +12,7 @@ import type {
   Op,
   SuccessionPolicyEvidence,
   WitnessedRecoveryPolicyEvidence,
+  WitnessedSuccessionPolicyEvidence,
   WitnessedSuccessionCertificateEvidence,
   WitnessedSuccessionClaimEvidence,
 } from "./op";
@@ -53,12 +54,19 @@ export interface AuthoritySecurityProjection {
   effectiveRevokes: readonly EffectiveRevokeEvidence[];
 }
 
+export interface RecoveryPolicyProjection {
+  policy: WitnessedSuccessionPolicyEvidence;
+  genesisOperationId: string;
+}
+
 export interface AuthorityAnalysis {
   honoredWrites: ReadonlySet<string>;
   quarantinedWrites: ReadonlySet<string>;
   quarantineReasons: ReadonlyMap<string, string>;
   /** Honored acquires per role, in the order they were honored (the oracle's timeline). */
   acquiresByRole: ReadonlyMap<string, readonly HonoredAcquire[]>;
+  /** Effective witnessed recovery policy and the valid genesis operation that supplied it. */
+  recoveryPoliciesByRole: ReadonlyMap<string, RecoveryPolicyProjection>;
   security: AuthoritySecurityProjection;
 }
 
@@ -99,7 +107,7 @@ export function analyzeAuthority(
 
   const collectedDelegations = collectDelegations(visible);
   const delegations = validateDelegations(visible, collectedDelegations);
-  const policies = collectPolicies(visible, delegations);
+  const { policies, recoveryPoliciesByRole } = collectPolicies(visible, delegations);
   const root = resolveRoot(visible, delegations);
   const { effectiveRevokes, unauthorizedRevokes } = collectRevokes(
     visible,
@@ -188,6 +196,7 @@ export function analyzeAuthority(
     quarantinedWrites,
     quarantineReasons,
     acquiresByRole,
+    recoveryPoliciesByRole,
     security: { delegations, root, effectiveRevokes },
   };
 }
@@ -239,7 +248,6 @@ function authorityWriteHonored(
 
   if (evidence.type === "genesis") {
     return (
-      state.holder === null &&
       delegation.parentId === null &&
       delegation.issuer === delegation.audience &&
       delegation.issuerRealm === op.author &&
@@ -527,8 +535,12 @@ function compareBase64Evidence(left: string, right: string): number {
 function collectPolicies(
   ops: readonly Op[],
   delegations: ReadonlyMap<string, AuthorityDelegationRecord>,
-): Map<string, SuccessionPolicyEvidence> {
+): {
+  policies: Map<string, SuccessionPolicyEvidence>;
+  recoveryPoliciesByRole: Map<string, RecoveryPolicyProjection>;
+} {
   const policies = new Map<string, SuccessionPolicyEvidence>();
+  const recoveryPoliciesByRole = new Map<string, RecoveryPolicyProjection>();
 
   for (const op of ops) {
     const evidence = op.authority;
@@ -542,10 +554,18 @@ function collectPolicies(
     }
     for (const [role, policy] of Object.entries(evidence.policies)) {
       policies.set(role, policy);
+      if (policy.mode === "witnessed") {
+        recoveryPoliciesByRole.set(role, {
+          policy,
+          genesisOperationId: op.id,
+        });
+      } else {
+        recoveryPoliciesByRole.delete(role);
+      }
     }
   }
 
-  return policies;
+  return { policies, recoveryPoliciesByRole };
 }
 
 function collectDelegations(

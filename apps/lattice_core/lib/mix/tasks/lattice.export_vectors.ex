@@ -22,6 +22,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
   @succession_replica "replica:matter:succession-w3"
   @unproven_succession_replica "replica:matter:succession-unproven-tick"
   @witnessed_succession_replica "replica:matter:succession-witnessed-recovery"
+  @genesis_projection_replica "replica:matter:genesis-projection-parity"
   @witnessed_recovery_realms [
     "clerk",
     "resident",
@@ -31,6 +32,14 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     "mallory",
     "mallory_witness_a",
     "mallory_witness_b"
+  ]
+  @genesis_projection_realms [
+    "clerk",
+    "resident",
+    "witness_a",
+    "witness_b",
+    "witness_c",
+    "mallory"
   ]
   @random_realms ["clerk", "resident", "neighbor"]
   @randomized_seeds [101, 202, 303, 404, 505]
@@ -60,6 +69,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_succession_w3(),
       township_succession_unproven_tick(),
       township_succession_witnessed_recovery(),
+      township_genesis_projection_parity(),
       township_authority_forged_root(),
       township_authority_embedded_replica_bypass(),
       township_authority_forged_delegation_id(),
@@ -342,6 +352,139 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
         "policyId" => claim.policy_id,
         "claim" => witnessed_claim_json(claim),
         "policy" => witnessed_policy_json(normalized_policy)
+      }
+    }
+  end
+
+  defp township_genesis_projection_parity do
+    sim =
+      Sim.new(Matter, @genesis_projection_replica, @genesis_projection_realms,
+        seed: "township:genesis-projection-parity"
+      )
+
+    {sim, first_genesis} =
+      Sim.create_replica(sim, "clerk",
+        policies: %{
+          clerk: %{
+            successor: "resident",
+            recovery: %{
+              mode: :witnessed,
+              version: 1,
+              witnesses: ["witness_a", "witness_b"],
+              threshold: 2
+            }
+          }
+        }
+      )
+
+    first_log = Sim.log(sim, "clerk")
+    first_analysis = Authority.analyze(Matter, first_log)
+    clerk = Sim.identity(sim, "clerk")
+    resident = Sim.identity(sim, "resident")
+    witness_b = Sim.identity(sim, "witness_b")
+    witness_c = Sim.identity(sim, "witness_c")
+
+    second_recovery = %{
+      mode: :witnessed,
+      version: 1,
+      witnesses: [witness_b.pub, witness_c.pub],
+      threshold: 2
+    }
+
+    second_policy = %{successor: resident.pub, recovery: second_recovery}
+
+    second_delegation =
+      Delegation.genesis(clerk, Sim.replica(sim),
+        ops: [:close_matter],
+        roles: [:clerk],
+        live: true
+      )
+
+    {sim, second_genesis} =
+      Sim.append(
+        sim,
+        "clerk",
+        :authority,
+        {:genesis, second_delegation, %{clerk: second_policy}}
+      )
+
+    sim = Sim.sync_all(sim)
+    mallory = Sim.identity(sim, "mallory")
+
+    impostor_delegation =
+      Delegation.genesis(mallory, Sim.replica(sim),
+        ops: [:close_matter, :reopen_matter],
+        roles: [:clerk],
+        live: true
+      )
+
+    impostor_policy = %{
+      successor: mallory.pub,
+      recovery: %{
+        mode: :witnessed,
+        version: 1,
+        witnesses: [mallory.pub],
+        threshold: 1
+      }
+    }
+
+    {sim, impostor_genesis} =
+      Sim.append(
+        sim,
+        "mallory",
+        :authority,
+        {:genesis, impostor_delegation, %{clerk: impostor_policy}}
+      )
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "resident")
+    realms = realm_index(sim)
+    analysis = Authority.analyze(Matter, log)
+
+    first_epoch = Map.fetch!(first_analysis.holder_epochs, :clerk)
+    current_epoch = Map.fetch!(analysis.holder_epochs, :clerk)
+    effective_policy = Map.fetch!(analysis.policies, :clerk)
+
+    unless first_epoch == %{holder: clerk.pub, op_id: first_genesis.id} and
+             current_epoch == %{holder: clerk.pub, op_id: second_genesis.id} and
+             first_analysis.policies.clerk != effective_policy and
+             effective_policy == second_policy and
+             first_genesis.id in second_genesis.deps and
+             second_genesis.id in impostor_genesis.deps and
+             first_genesis.body != second_genesis.body and
+             second_delegation.id != elem(first_genesis.body, 1).id and
+             not Map.has_key?(analysis.reasons, first_genesis.id) and
+             not Map.has_key?(analysis.reasons, second_genesis.id) and
+             Map.get(analysis.reasons, impostor_genesis.id) == :impostor_genesis and
+             Authority.root(log) == clerk.pub do
+      raise "valid-genesis projection probe diverged from the expected BEAM oracle"
+    end
+
+    {:ok, normalized_policy} = SuccessionCertificate.normalize_policy(second_recovery)
+    {:ok, policy_id} = SuccessionCertificate.policy_id(normalized_policy)
+
+    %{
+      name: "township_genesis_projection_parity",
+      kind: "adversarial",
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: Sim.replica(sim),
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      authorityQuarantine: authority_quarantine(log),
+      genesisProjection: %{
+        "role" => "clerk",
+        "acquisitionOperationIds" => [first_epoch.op_id, current_epoch.op_id],
+        "holderPubkey" => Base.encode64(current_epoch.holder),
+        "holderEpochOperationId" => current_epoch.op_id,
+        "effectivePolicy" =>
+          normalized_policy
+          |> witnessed_policy_json()
+          |> Map.put("successorPubkey", Base.encode64(effective_policy.successor)),
+        "winningPolicyGenesisOperationId" => second_genesis.id,
+        "policyId" => policy_id,
+        "impostorGenesisOperationId" => impostor_genesis.id
       }
     }
   end
@@ -1988,6 +2131,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     |> maybe_put("successionOperationId", Map.get(scenario, :successionOperationId))
     |> maybe_put("tickProvenance", Map.get(scenario, :tickProvenance))
     |> maybe_put("witnessedRecovery", Map.get(scenario, :witnessedRecovery))
+    |> maybe_put("genesisProjection", Map.get(scenario, :genesisProjection))
     |> maybe_put("capabilityCase", Map.get(scenario, :capabilityCase))
   end
 
