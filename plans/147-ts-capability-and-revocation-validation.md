@@ -2,7 +2,8 @@
 
 ## Status
 
-IN PROGRESS - started 2026-07-16 after the user resumed the build-map goal.
+IN PROGRESS - implementation, local gates, and council review are complete; exact-tip hosted CI
+is the remaining closure gate.
 
 The first Claude Opus RED review found that the draft's "concurrent use is honored" wording
 contradicted `Authority.revoked_as_of?/5`. An explicit OTP 28 Sim probe confirmed that a command
@@ -23,6 +24,19 @@ canonical bytes, in-memory carrier, and live OTP 28 carrier gates pass. Mutation
 invalid delegation, skipped visibility, or made an unauthorized revoke effective each produced
 three focused conformance failures and were restored. Claude Opus returned `PROCEED` on the exact
 GREEN with no P0-P1 finding.
+
+Slice 5 GREEN evidence: the shell now materializes the just-durably-persisted retained frame set
+locally and returns only that capability/revocation summary. A carrier state report is compared
+only when its op-id set equals the local frame-id set; order and duplicate IDs are normalized,
+non-`revoked_capability` reasons are outside the comparison, unequal evidence is ignored, and an
+equal-evidence revoked-set mismatch fails with labeled `authority_report_divergence` without
+adopting carrier IDs or attributions. RED pinned absent/throwing reports, unequal evidence,
+same-evidence suppression/substitution/injection, duplicate/reordered report IDs, non-revoked
+reason scope, durable persistence, and non-adoption. Focused sync, 42 frontend source checks
+(31 pass, 11 intentional skips), Vue typecheck, and reactive feed pass. The complete local
+`npm run app:convergence` chain passes through stable-relay onboarding, v1-v6 packaged handoffs,
+reactive feed, and installed deep-link delivery. OTP 28 `mix verify` and both Sobelow scans pass.
+Claude Opus returned `PROCEED` on the corrected RED and exact GREEN with no P0-P1 finding.
 
 ## Priority
 

@@ -187,7 +187,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 144 | Succession tick-provenance boundary | P1 | S | 139, 140 | DONE |
 | 145 | Genesis-pinned witnessed succession recovery | P1 | L | 144 | DONE |
 | 146 | Witnessed succession witness artifact with protected governance presence (toward G1) | P1 | L | 140, 141, 143, 145, 147, 148 | TODO (council-approved; blocked on 147/148 and explicit resume) |
-| 147 | Port capability/revocation validation into TS reduction (close the F1 decision gap) | **P0** | L | 140, 141 | IN PROGRESS |
+| 147 | Port capability/revocation validation into TS reduction (close the F1 decision gap) | **P0** | L | 140, 141 | IN PROGRESS (implementation/local/council green; exact-tip hosted CI pending) |
 | 148 | Valid-genesis holder/policy projection parity (F2 prerequisite) | **P0** | S | 145, 147 | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
@@ -295,6 +295,16 @@ Verify flagship artifact, and Packaged macOS convergence at exact implementation
 `e66b46878b3e35b3397bdf5bb0b6278074cca8d2`. Claude's exact claim-documentation audit also found no
 P0-P2 issue, and hosted run `29400665837` passed all three jobs at exact claim-documentation tip
 `c8ebf7d17cf969696d0efd1423ffb85dc6454ee8`. No v7 or participant authoring surface is added.
+
+**Plan 147 is IN PROGRESS (2026-07-16).** Sim-exported adversarial vectors now pin all named
+capability/revocation reasons, and TypeScript reduction retains command caps, derives verified
+delegation/root/revoke evidence, and enforces those decisions through its one quarantine path.
+The shell materializes the durably persisted retained-frame set locally; an equal-evidence carrier
+authority report is only a fail-closed revoked-set cross-check and never supplies accepted state,
+IDs, or attributions. RED/GREEN, three deliberate semantic mutations, full client/carrier gates,
+complete packaged `app:convergence`, OTP 28 `mix verify`, both Sobelow scans, and Claude Opus
+reviews are green. Exact-tip hosted CI remains before `DONE`; F2 genesis-holder parity remains
+owned by Plan 148, while F3/F4 remain separate parity gaps.
 
 ## Round 2 (deep audit, 2026-07-07, against commit `6b2cfe5`)
 
