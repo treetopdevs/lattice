@@ -51,7 +51,9 @@ Execution starts from exact documentation tip `61a1a8685af4c119cc327eeee86800fbf
   dispatcher, typecheck, frontend, runtime-wiring, handoff-support, action, and production-build
   gates. A targeted label mutation failed only the two v7 contracts and restored to 21/21. Fresh
   Claude Opus RED, GREEN, and mutation reviews reported no unresolved P0-P2 finding.
-- Seam 4 is locally GREEN. One public four-input pure client helper derives the exact Plan 145
+- Seam 4 is closed at implementation tip `3fb730fc9a0048dd9fb0adf8b3aff09151d45e9a`.
+  Hosted run `29550692702` passed Unit + property, flagship artifact, and packaged macOS
+  convergence. One public four-input pure client helper derives the exact Plan 145
   claim, winning valid-genesis policy operation, pinned witness, threshold, and deterministic
   verified frontier from the Plan 148 BEAM-pinned local authority projection. It accepts no relay
   authority input and compares every returned field when rechecking a prior review before signing.
@@ -60,10 +62,22 @@ Execution starts from exact documentation tip `61a1a8685af4c119cc327eeee86800fbf
   exposed a missing helper; Claude found and the revised RED removed false-green relay and stale
   checks. Focused GREEN is 14/14, typecheck and full client conformance pass, and removing threshold
   binding caused exactly the intended stale-threshold failure before restoration. Fresh Claude
-  Opus RED, corrected-RED, GREEN, and mutation reviews report no unresolved P0-P2 finding.
-- Plan 146 remains `IN PROGRESS`. Seam 5, native canonical-payload feasibility, is next; no
-  governance key, user-presence, signature, artifact, persistence, export, or succession authority
-  exists yet.
+  Opus RED, corrected-RED, GREEN, mutation, exact-worktree, staged-index, and hosted-result reviews
+  report no unresolved P0-P2 finding.
+- Seam 5 is locally GREEN. BEAM and TypeScript independently produced two exact Plan 145 canonical
+  claim payloads and SHA-256 digests; the primary digest is
+  `534b4fb858a618734c6718d4ae2133bf563787b404f6ccb2442928c72f303f51`.
+  A fixed-schema Rust parser/encoder reproduces both byte oracles, computes each digest from its
+  emitted bytes, accepts reordered JSON object keys, and rejects extra, missing, unsupported, and
+  noncanonical fields plus unrelated JSON terms. It uses only existing base64, serde, and SHA-256
+  dependencies; all encoding helpers are private and no general Lattice term or CBOR API exists.
+  The corrected RED failed only on the absent module after Claude caught one test-constant
+  transcription error. GREEN is 5/5 and the full native suite is green; swapping two canonical map
+  entries failed exactly the two cross-runtime oracle tests before restoration. Fresh Claude Opus
+  RED, corrected-RED, GREEN, and mutation reviews report no unresolved P0-P2 finding.
+- Plan 146 remains `IN PROGRESS`. Seam 6, native governance custody, is next; no governance key,
+  user-presence provider, signature, artifact, persistence, export, or succession authority exists
+  yet.
 
 ## Objective
 

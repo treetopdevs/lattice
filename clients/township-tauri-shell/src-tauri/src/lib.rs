@@ -19,6 +19,8 @@ use rand_core::OsRng;
 use sha2::{Digest, Sha256};
 use tauri::Manager;
 
+pub mod governance_witness;
+
 pub const TOWNSHIP_KEYRING_SERVICE: &str = "dev.treetop.lattice.township.carrier";
 pub const TOWNSHIP_APP_IDENTIFIER: &str = "dev.treetop.lattice.township";
 pub const TOWNSHIP_DEV_CARRIER_KEY_ID_ENV: &str = "TOWNSHIP_DEV_CARRIER_KEY_ID";
