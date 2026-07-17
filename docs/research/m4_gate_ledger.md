@@ -16,7 +16,7 @@ Cross-cutting findings: the 2026-07-16 review register R1–R10 in
 | G3  | buildable            | open            | verify-only Rustler NIF (pending)   | Profile-agnostic scaffolding may start before G2. |
 | G4  | buildable (op parts) | open            | —                                   | Blocked on G2 for credential specifics. |
 | G5  | decision             | **closed**      | `docs/research/m4_g5_channel_threat_model.md` | `channel-onion-clientcover-noreceipt-v1`: Tor onion adapter bound; box-inside-metadata-trust; client-authored cover; no receipt (v1); hybrid batch trigger (accepted-content, k a cover-stream target); abort deferred to G8/G13. Cleared 3-agent review 2026-07-17. Authorizes: v2 spec schema + `channel_manifest_ref`, claim-condition schema, cover-indistinguishability G11 obligation. |
-| G6  | decision             | open            | —                                   | Unanimous-box close accepted for POC vs named BFT close. |
+| G6  | decision             | **closed**      | `docs/research/m4_g6_close_policy.md` | CONFIRM `:unanimous_boxes_v1` for the POC (already implemented/closed; no code change). Liveness sacrifice accepted as v1 constraint; B (BFT) out of scope, brief §9 is the named future path; C not adopted. Cleared 3-agent review 2026-07-17. Named forward obligations: G8 abort validator/lifecycle fold (close-vs-abort precedence), roster/DKG equivalent sealing (G4/G8). |
 | G7  | terminal (DA design) | open            | —                                   | Availability spec; implementation is its own track. |
 | G8  | decision             | **closed**      | `docs/research/m4_g8_trustee_profile.md` | `trustee-ops-r255-v1`: HSM custody; off-board mesh (not Lattice, per closed G2); NIZK-of-invalidity DKG complaints (no live share on board); all-n mix with mix-liveness NOT claimed (fixed q-subset gives no liveness); volatile mix witnesses; frozen deterministic abort — DAG-frontier cut (no clock exists), non-circular quorum cert, in-spec cap pending G13 cover-cost; no resharing v1. Cleared 3-agent review 2026-07-17. Unblocks/feeds G4/G6/G11; authorizes merged v2 spec + profile-aware threshold validator + projector abort validator. |
 | G9  | buildable            | open            | —                                   | Codec/domain-sep extends Lattice.Canonical. May start before G2. |
@@ -120,6 +120,23 @@ Cross-cutting findings: the 2026-07-16 review register R1–R10 in
       `validate_thresholds` dispatched by full ProfileRef; projector abort-cert validator
       + deterministic lifecycle fold (replacing the hard-coded `phase: :setup`).
     - **No G2 reopen** — G8 fixed operations around the pinned crypto, unchanged.
+- **Iteration 4 closure (2026-07-17): G6 CLOSED.** Confirm decision — `:unanimous_boxes_v1`
+  is already implemented + closed (F1); confirming it needs no code change. Codex verified
+  A's property statements against the live verifier (seal completeness, manifest/cert,
+  pending-on-withhold, forked-close halt with no winner-selection resolver, validator,
+  no claim flips — all confirmed). Two reviewer findings arbitrated with corrections:
+  agy #9 selective-tally look-ahead REFUTED (ballots encrypted at close; no tally to
+  condition on; clock-based fix rejected — no trusted clock), agy #5 abort frontier drift
+  (abort idempotent-terminal `:aborted`, no result-fork). Codex corrected two of my
+  overstatements: the G8 abort recovery is a closed DESIGN contract not a today-guarantee
+  (`abort_election` still `no_state`, projector `:setup`), and the close cut ≠ the G8
+  abort cut (different absence predicates, reconciled by the future terminal lifecycle
+  fold). **All four decision gates (G2, G5, G8, G6) now closed.** Cross-gate watch after G6:
+    - **G4/G8-impl inherit:** roster and DKG-result *equivalent sealing* (brief §9) — the
+      ballot-set close does NOT provide config/roster/DKG finality; named forward obligation.
+    - **G8-impl inherits:** the terminal lifecycle fold must define abort-vs-close-progress
+      precedence (the two absence predicates can coexist).
+    - **No G2/G5/G8 reopen** — G6 touches the closed pins only as a consumer.
 - **G13 calibration MEASURED (2026-07-17), worktree commit 08bf1f2d.** Real
   ristretto255 timings via verify-only Rustler NIF (curve25519-dalek 4.1.3):
   scalar-mult ~30µs, point-add ~0.13µs. Pinned-profile `chide_es_r255` at 5/2/3,
