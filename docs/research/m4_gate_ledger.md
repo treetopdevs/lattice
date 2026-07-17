@@ -15,7 +15,7 @@ Cross-cutting findings: the 2026-07-16 review register R1–R10 in
 | G2  | decision             | **closed**      | `docs/research/m4_g2_profile_pin.md` | Pin `chide-es-r255-v1` (ES-CHide 2023/837 rev 2023-06-06, ristretto255, 3-of-5 Shamir q=t+1, box-private admission, cleanse-remove-all). Cleared 3-agent review 2026-07-17; `parameters_digest=mGfBR4aCA8oT5yTTE6MDsZNlt443SsKtFlyKtEzfhNs`. Unblocks G4/G8/G11/G13-calibration. |
 | G3  | buildable            | open            | verify-only Rustler NIF (pending)   | Profile-agnostic scaffolding may start before G2. |
 | G4  | buildable (op parts) | open            | —                                   | Blocked on G2 for credential specifics. |
-| G5  | decision             | **review** (cycle 2) | `docs/research/m4_g5_channel_threat_model.md` | Synthesized Option D `channel-onion-clientcover-noreceipt-v1` (Tor onion adapter bound; box-inside-metadata-trust; client-authored cover; no receipt; abort deferred to G8/G13). Cycle-1 EVALUATE: agy F-01–F-10, codex 1–11; A/B/C all non-viable-as-written, C rejected as deferral. Awaiting cycle-2 confirmation. |
+| G5  | decision             | **closed**      | `docs/research/m4_g5_channel_threat_model.md` | `channel-onion-clientcover-noreceipt-v1`: Tor onion adapter bound; box-inside-metadata-trust; client-authored cover; no receipt (v1); hybrid batch trigger (accepted-content, k a cover-stream target); abort deferred to G8/G13. Cleared 3-agent review 2026-07-17. Authorizes: v2 spec schema + `channel_manifest_ref`, claim-condition schema, cover-indistinguishability G11 obligation. |
 | G6  | decision             | open            | —                                   | Unanimous-box close accepted for POC vs named BFT close. |
 | G7  | terminal (DA design) | open            | —                                   | Availability spec; implementation is its own track. |
 | G8  | decision             | open            | —                                   | Trustee corruption bound / quorum / DKG profile. Blocked on G2. |
@@ -68,6 +68,31 @@ Cross-cutting findings: the 2026-07-16 review register R1–R10 in
   posture. (c) G8 inherits RV-2 (mix liveness), A3 (trustee channels), and the
   profile-aware threshold validator (C2). (d) G13 reopened for calibration — routed
   to the parallel worktree (ristretto255 GroupOps.measure + C12 knobs).
+- **Iteration 2 closure (2026-07-17): G5 CLOSED.** Decision `channel-onion-
+  clientcover-noreceipt-v1` cleared 3-agent review over 3 inner cycles (cycle 1: A/B/C
+  evaluated, all non-viable, C rejected as deferral per codex #11; cycle 2: synthesized
+  Option D, one independently-converged high finding New-01/NEW-1; cycle 3: fixed,
+  agy CLEARS + codex pre-cleared). Invariants intact (codex "no claim-state breach",
+  all `:not_claimed`). Cross-gate regression watch after G5:
+    - **G8 inherits from G5:** overload/abort cap value + authorization (G5 named only
+      the mechanism + fixed-rate throttle; agy F-06/codex #9 defer the cap), plus the
+      pre-existing RV-2 (mix liveness) and A3 (trustee pairwise channels).
+    - **G13 gets a named follow-on:** a cover-cost run (dummy-volume vs tally-cost curve)
+      is the precondition before any overload cap is set. Harness already parameterized
+      (C12) and measured; this is a specific run, not new harness work.
+    - **G12 inherits:** the Tor adapter (`transport-tor-onion-v3-v1`) assessment
+      sign-off obligation and the claim-condition (adapter/observer) composition surface.
+    - **G4 inherits RV-G5-1:** confirm the pinned ballot proofs are NM-CPA non-malleable
+      so remove-all cannot be weaponized for replay-nullification by a non-credential
+      holder (cross-ref to G2 §2; a clarification of an already-assumed property, not a
+      G2 reopen).
+    - **Newly authorized buildable work:** `township-election-v2` spec schema with
+      `channel_manifest_ref` (ArtifactRef, foundation-resolved, offline-bundle-required);
+      `township-election-channel-v1` manifest schema; claim-set schema versioning with
+      adapter/observer conditions; G11 cover-indistinguishability conformance.
+    - **G3 asset noted:** the G13 worktree's verify-only ristretto255 Rustler NIF
+      (curve25519-dalek 4.1.3, timing-only) is a concrete pattern for G3's verify-only
+      NIF scaffolding — profile-agnostic, already builds/loads in this environment.
 - **G13 calibration MEASURED (2026-07-17), worktree commit 08bf1f2d.** Real
   ristretto255 timings via verify-only Rustler NIF (curve25519-dalek 4.1.3):
   scalar-mult ~30µs, point-add ~0.13µs. Pinned-profile `chide_es_r255` at 5/2/3,
