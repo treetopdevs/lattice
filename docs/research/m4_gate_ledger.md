@@ -18,7 +18,7 @@ Cross-cutting findings: the 2026-07-16 review register R1–R10 in
 | G5  | decision             | **closed**      | `docs/research/m4_g5_channel_threat_model.md` | `channel-onion-clientcover-noreceipt-v1`: Tor onion adapter bound; box-inside-metadata-trust; client-authored cover; no receipt (v1); hybrid batch trigger (accepted-content, k a cover-stream target); abort deferred to G8/G13. Cleared 3-agent review 2026-07-17. Authorizes: v2 spec schema + `channel_manifest_ref`, claim-condition schema, cover-indistinguishability G11 obligation. |
 | G6  | decision             | open            | —                                   | Unanimous-box close accepted for POC vs named BFT close. |
 | G7  | terminal (DA design) | open            | —                                   | Availability spec; implementation is its own track. |
-| G8  | decision             | open            | —                                   | Trustee corruption bound / quorum / DKG profile. Blocked on G2. |
+| G8  | decision             | **closed**      | `docs/research/m4_g8_trustee_profile.md` | `trustee-ops-r255-v1`: HSM custody; off-board mesh (not Lattice, per closed G2); NIZK-of-invalidity DKG complaints (no live share on board); all-n mix with mix-liveness NOT claimed (fixed q-subset gives no liveness); volatile mix witnesses; frozen deterministic abort — DAG-frontier cut (no clock exists), non-circular quorum cert, in-spec cap pending G13 cover-cost; no resharing v1. Cleared 3-agent review 2026-07-17. Unblocks/feeds G4/G6/G11; authorizes merged v2 spec + profile-aware threshold validator + projector abort validator. |
 | G9  | buildable            | open            | —                                   | Codec/domain-sep extends Lattice.Canonical. May start before G2. |
 | G10 | buildable            | open            | —                                   | Secret-hygiene contracts incl. AtomVM bridge buffer. |
 | G11 | buildable            | open            | —                                   | Conformance vectors. Blocked on G2. |
@@ -93,6 +93,33 @@ Cross-cutting findings: the 2026-07-16 review register R1–R10 in
     - **G3 asset noted:** the G13 worktree's verify-only ristretto255 Rustler NIF
       (curve25519-dalek 4.1.3, timing-only) is a concrete pattern for G3's verify-only
       NIF scaffolding — profile-agnostic, already builds/loads in this environment.
+- **Iteration 3 closure (2026-07-17): G8 CLOSED.** Decision `trustee-ops-r255-v1`
+  cleared 3-agent review. Cycle-1 killed options B (codex #8: on-board live shares breach
+  G10 + Lattice-carrier trustee channels contradict closed G2 §202; codex #9: fixed
+  q-subset mix gives no liveness) and C (codex #11/agy #6: resharing reopens G2).
+  Synthesis: A's contract-fit posture + agy's NIZK-of-invalidity DKG complaints (verifiable
+  on-board, zero live shares — resolves the G10/auditability tension both flagged) +
+  volatile mix witnesses + codex's deterministic-abort freezes. RV-2 arbitrated: q-subset
+  mix is *sound* (agy) but delivers no *liveness* without proven committee reselection
+  (codex) → all-n mix, mix-liveness a named availability non-claim. Abort redesigned over
+  cycles 2–4 from a (non-existent) tick-window to a DAG-frontier cut using
+  `Lattice.Dag.reachable/2`, non-circular `Canonical.term` certificate, frontier == abort-op
+  deps; converged (each cycle narrower, all reviewer-prescribed). Invariants intact (codex
+  "all :not_claimed"). Cross-gate regression watch after G8:
+    - **G4 inherits:** the NIZK-of-invalidity scheme is a ristretto255 Sigma statement
+      (G3/G11 implement); RV-G5-1 (NM-CPA ballot non-malleability) remains G4's.
+    - **G6 interaction:** abort reason `:close_stalled` couples to the close policy; G6
+      (still the last open decision gate) must be consistent with the G8 abort cut.
+    - **G11 inherits:** conformance vectors for the abort-certificate byte-freeze, the
+      profile-aware threshold validator (q=t+1 ∧ n−t≥q), and the NIZK-of-invalidity.
+    - **G13 hard dependency:** the cover-cost run now blocks `max_admitted_artifacts`
+      *and* thus v2 spec finalization — it is a finalization gate, not just a number.
+    - **Newly authorized buildable (merged with G5's v2 work):** one
+      `township-election-v2` carrying `channel_manifest_ref` (G5) + `abort_policy` +
+      `trustee_channel_manifest_ref` (G8), v1 byte-identical; profile-aware
+      `validate_thresholds` dispatched by full ProfileRef; projector abort-cert validator
+      + deterministic lifecycle fold (replacing the hard-coded `phase: :setup`).
+    - **No G2 reopen** — G8 fixed operations around the pinned crypto, unchanged.
 - **G13 calibration MEASURED (2026-07-17), worktree commit 08bf1f2d.** Real
   ristretto255 timings via verify-only Rustler NIF (curve25519-dalek 4.1.3):
   scalar-mult ~30µs, point-add ~0.13µs. Pinned-profile `chide_es_r255` at 5/2/3,
