@@ -149,6 +149,9 @@ jobs:
       - name: TS Township runtime wiring contract
         working-directory: clients/township-tauri-shell
         run: npm run runtime:wiring:contract
+      - name: TS governance witness native bridge
+        working-directory: clients/township-tauri-shell
+        run: npm run governance:native:contract
       - name: TS Township intent UI behavior
         working-directory: clients/township-tauri-shell
         run: npm run intent-ui:contract
@@ -261,6 +264,10 @@ jobs:
           npm --prefix clients/lattice-client ci
           npm --prefix clients/lattice-client run build
           npm --prefix clients/township-tauri-shell ci
+
+      - name: Verify ordinary macOS governance custody binding
+        working-directory: clients/township-tauri-shell/src-tauri
+        run: cargo test --test governance_release_binding
 
       - name: Install shell Playwright browser
         working-directory: clients/township-tauri-shell

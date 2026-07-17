@@ -26,6 +26,7 @@ test("the shell exposes every packaged action gate in convergence order", () => 
   const scripts = readJson(shellRoot, "package.json").scripts;
 
   assert.equal(scripts["runtime:wiring:contract"], "node --test test/runtime_wiring_contract.mjs");
+  assert.equal(scripts["governance:native:contract"], "tsx test/governance_witness_native.ts");
   assert.equal(scripts["action-handoff-support:contract"], "tsx test/packaged_action_handoff_support.ts");
   assert.equal(
     scripts["intent-ui:contract"],
@@ -47,6 +48,7 @@ test("the shell exposes every packaged action gate in convergence order", () => 
   const convergence = scripts["app:convergence"];
   const orderedGates = [
     "runtime:wiring:contract",
+    "governance:native:contract",
     "intent-ui:contract",
     "action-handoff-support:contract",
     "tauri:action-handoff:smoke",
@@ -76,6 +78,7 @@ test("the release feature and hosted workflow retain the executable gates", () =
   for (const gate of [
     "npm run typecheck",
     "npm run runtime:wiring:contract",
+    "npm run governance:native:contract",
     "npm run intent-ui:contract",
     "npm run action-handoff-support:contract",
     "npm run action-intent:contract",
@@ -91,4 +94,10 @@ test("the release feature and hosted workflow retain the executable gates", () =
   ]) {
     assert.ok(workflow.includes(gate), `flagship workflow must run ${gate}`);
   }
+
+  const packagedMacos = workflow.slice(workflow.indexOf("packaged_macos:"));
+  assert.match(
+    packagedMacos,
+    /^        working-directory: clients\/township-tauri-shell\/src-tauri\n        run: cargo test --test governance_release_binding$/m,
+  );
 });

@@ -64,8 +64,10 @@ Execution starts from exact documentation tip `61a1a8685af4c119cc327eeee86800fbf
   binding caused exactly the intended stale-threshold failure before restoration. Fresh Claude
   Opus RED, corrected-RED, GREEN, mutation, exact-worktree, staged-index, and hosted-result reviews
   report no unresolved P0-P2 finding.
-- Seam 5 is locally GREEN. BEAM and TypeScript independently produced two exact Plan 145 canonical
-  claim payloads and SHA-256 digests; the primary digest is
+- Seam 5 is closed at implementation tip `7cd58baa209960436cf89d0839d5c7f62c5b148e`.
+  Hosted run `29552829885` passed Unit + property, flagship artifact, and packaged macOS
+  convergence. BEAM and TypeScript independently produced two exact Plan 145 canonical claim
+  payloads and SHA-256 digests; the primary digest is
   `534b4fb858a618734c6718d4ae2133bf563787b404f6ccb2442928c72f303f51`.
   A fixed-schema Rust parser/encoder reproduces both byte oracles, computes each digest from its
   emitted bytes, accepts reordered JSON object keys, and rejects extra, missing, unsupported, and
@@ -75,9 +77,30 @@ Execution starts from exact documentation tip `61a1a8685af4c119cc327eeee86800fbf
   transcription error. GREEN is 5/5 and the full native suite is green; swapping two canonical map
   entries failed exactly the two cross-runtime oracle tests before restoration. Fresh Claude Opus
   RED, corrected-RED, GREEN, and mutation reviews report no unresolved P0-P2 finding.
-- Plan 146 remains `IN PROGRESS`. Seam 6, native governance custody, is next; no governance key,
-  user-presence provider, signature, artifact, persistence, export, or succession authority exists
-  yet.
+- Seam 6 is locally GREEN. The shell now registers fixed governance ensure/sign commands backed on
+  ordinary macOS builds by one dedicated data-protection Keychain identity whose protected seed
+  requires fresh user presence per signature. Presence-free seed identity metadata and a separate
+  public sidecar must agree; creation is create-only, race-reconciled, rollback-safe, and never
+  repairs incomplete or mismatched state. Generic carrier key APIs reject the governance alias.
+  Native signing accepts only the exact closed Plan 145 claim and returns witness, signature, and
+  payload digest; the TypeScript bridge independently reconstructs and verifies all three before
+  returning. A trace-loud deterministic packaged provider is compile-time-invalid unless paired
+  with the development-trace feature, and ordinary macOS construction remains pinned to protected
+  custody. Default and paired-feature Rust matrices, the forbidden unpaired-feature compile gate,
+  governance/native TypeScript contracts, and typecheck are green. Codex found one real production
+  error-taxonomy gap after GREEN: real Keychain cancellation and unavailability were collapsed.
+  A focused RED pinned Apple Security statuses; the corrected GREEN carries typed prompt outcomes
+  through the existing coarse refusal mapper without exposing platform detail. Claude Opus approved
+  each RED/GREEN correction, and Antigravity withdrew two unsupported findings after inspecting the
+  exact dependency ownership and canonical-signature behavior. Final Codex review found that the
+  bridge contract and macOS-only ordinary-provider binding were not yet hosted gates. A second TDD
+  correction orders the bridge into convergence and Unit CI, gives the macOS binding assertion its
+  own non-prompting Cargo target, and runs that target in packaged macOS CI. The exact local
+  convergence chain is green after also isolating its launch smoke from shared app-local test state;
+  the smoke passed twice consecutively and now retains peer diagnostics for any later failure.
+- Plan 146 remains `IN PROGRESS`. Seam 7, exact public witness artifact assembly, is next. No
+  artifact persistence/export, review confirmation ceremony, packaged real-prompt evidence, BEAM
+  certificate decoder/oracle convergence, or succession authority exists yet.
 
 ## Objective
 
@@ -225,6 +248,10 @@ The governance witness key is not another caller-selected `keyId` behind
 - Store the corresponding public key as separate non-secret native metadata so review can obtain it
   without authenticating. On every sign, derive the public key again from the authenticated seed
   and reject any mismatch with that metadata before returning.
+- Bind the protected seed item to the same public key through a non-secret, presence-free identity
+  attribute. Ensure compares that attribute with the separate public sidecar to detect seed-only,
+  sidecar-only, and mismatch states without reading secret bytes or prompting for authentication;
+  the separate sidecar remains the public identity returned to the app.
 - `lattice_ensure_governance_witness_key` is strict get-or-create under one native creation mutex:
   when neither item exists it creates the pair once; when both exist it returns the sidecar; seed
   only, sidecar only, or mismatch is a fail-loud incomplete/corrupt state. It never overwrites,
