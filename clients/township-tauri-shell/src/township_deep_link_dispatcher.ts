@@ -68,16 +68,6 @@ function dispatchUrl(url: string, options: TownshipParticipantDeepLinkDispatcher
     return;
   }
 
-  // Plan 146 Seam 3 replaces this refusal when v7 gains an installed-app review runtime.
-  if (parsed.intent.v === 7) {
-    reject(options, {
-      reason: "invalid_action",
-      intentId: parsed.intent.id,
-      message: "Witness succession requests are not available in this app build.",
-    });
-    return;
-  }
-
   const expectedReplica = safeExpectedReplica(options);
   if (expectedReplica === null) {
     reject(options, {

@@ -7,7 +7,7 @@ export type ActionIntentForVersion<Version extends ActionIntentVersion> = Extrac
   TownshipReviewableActionIntent,
   { v: Version }
 >;
-export type ActionIntentSlot = "post" | "status" | "field" | "roster" | "grant" | "revoke";
+export type ActionIntentSlot = "post" | "status" | "field" | "roster" | "grant" | "revoke" | "witness";
 export type ActionIntentDevStep = "use" | "sign";
 export type ActionIntentOutcome =
   | "accepted"
@@ -57,6 +57,7 @@ export const ACTION_INTENT_SLOT_VERSIONS = [
   { slot: "roster", version: 4 },
   { slot: "grant", version: 5 },
   { slot: "revoke", version: 6 },
+  { slot: "witness", version: 7 },
 ] as const satisfies ReadonlyArray<{ slot: ActionIntentSlot; version: ActionIntentVersion }>;
 
 type ActionIntentDescriptorIdentity = (typeof ACTION_INTENT_SLOT_VERSIONS)[number];
@@ -206,6 +207,7 @@ export function actionIntentLabel(intent: TownshipReviewableActionIntent): strin
   }
   if (intent.v === 5) return "Grant access request";
   if (intent.v === 6) return "Revoke access request";
+  if (intent.v === 7) return "Witness recovery request";
   return assertNeverActionIntent(intent);
 }
 

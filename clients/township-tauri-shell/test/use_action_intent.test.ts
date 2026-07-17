@@ -13,6 +13,7 @@ import type {
   TownshipRevokeActionIntent,
   TownshipRosterActionIntent,
   TownshipStatusActionIntent,
+  TownshipWitnessSuccessionActionIntent,
 } from "../src/township_action_intent";
 
 const replica = "replica:matter:township-g1#root:test";
@@ -60,6 +61,12 @@ const revokeIntent: TownshipRevokeActionIntent = {
     action: "revoke",
     delegation: "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI",
   },
+};
+const witnessSuccessionIntent: TownshipWitnessSuccessionActionIntent = {
+  v: 7,
+  id: "77777777777777777777777777777777",
+  replica,
+  authority: { action: "witness_succession", role: "clerk" },
 };
 
 function postController(overrides: Partial<Parameters<typeof useActionIntent<1>>[0]> = {}) {
@@ -241,7 +248,7 @@ describe("useActionIntent", () => {
 });
 
 describe("action intent descriptors", () => {
-  it("keeps exact labels for frozen v1-v5 and the v6 revocation selector", () => {
+  it("keeps exact labels for frozen v1-v6 and the v7 witness selector", () => {
     expect([
       actionIntentLabel(postIntent),
       actionIntentLabel(statusIntent),
@@ -249,6 +256,7 @@ describe("action intent descriptors", () => {
       actionIntentLabel(rosterIntent),
       actionIntentLabel(grantIntent),
       actionIntentLabel(revokeIntent),
+      actionIntentLabel(witnessSuccessionIntent),
     ]).toEqual([
       "Post request",
       "Close matter request",
@@ -256,6 +264,7 @@ describe("action intent descriptors", () => {
       "Admit member request",
       "Grant access request",
       "Revoke access request",
+      "Witness recovery request",
     ]);
   });
 
@@ -267,6 +276,7 @@ describe("action intent descriptors", () => {
       { slot: "roster", version: 4 },
       { slot: "grant", version: 5 },
       { slot: "revoke", version: 6 },
+      { slot: "witness", version: 7 },
     ]);
 
     for (const { slot, version } of ACTION_INTENT_SLOT_VERSIONS) {
@@ -277,6 +287,35 @@ describe("action intent descriptors", () => {
     expect(parseActionIntentDevRoute("action-intent/submit")).toBeNull();
     expect(parseActionIntentDevRoute("action-post/sync")).toBeNull();
     expect(parseActionIntentDevRoute("action-v6/use")).toBeNull();
+  });
+
+  it("keeps witness Use and dismiss inert while refusing untrusted and mismatched requests", async () => {
+    let currentReplica = replica;
+    const submit = vi.fn(async () => ({ ok: true, message: "unexpected" }));
+    const controller = useActionIntent({
+      version: 7,
+      currentReplica: () => currentReplica,
+      submit,
+      acceptMessage: () => "Witness recovery request held for local review.",
+      dismissFallback: "Witness recovery request",
+      allowed: () => false,
+    });
+    const syntheticClick = new Event("click");
+
+    expect(controller.accept(witnessSuccessionIntent, syntheticClick)).toBe("ignored");
+    expect(controller.accept(witnessSuccessionIntent)).toBe("accepted");
+    expect(controller.accepted.value).toEqual(witnessSuccessionIntent);
+    expect(submit).not.toHaveBeenCalled();
+    expect(await controller.sign()).toBe("blocked");
+    expect(submit).not.toHaveBeenCalled();
+    expect(controller.dismiss()).toBe("dismissed");
+    expect(controller.accepted.value).toBeNull();
+    expect(submit).not.toHaveBeenCalled();
+
+    currentReplica = "replica:matter:other";
+    expect(controller.accept(witnessSuccessionIntent)).toBe("mismatch");
+    expect(controller.accepted.value).toBeNull();
+    expect(submit).not.toHaveBeenCalled();
   });
 
   it("builds redacted per-slot trace events without accepting payload data", () => {

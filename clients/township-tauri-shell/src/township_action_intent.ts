@@ -76,11 +76,10 @@ export type TownshipReviewableActionIntent =
   | TownshipFieldActionIntent
   | TownshipRosterActionIntent
   | TownshipGrantActionIntent
-  | TownshipRevokeActionIntent;
-
-export type TownshipActionIntent =
-  | TownshipReviewableActionIntent
+  | TownshipRevokeActionIntent
   | TownshipWitnessSuccessionActionIntent;
+
+export type TownshipActionIntent = TownshipReviewableActionIntent;
 
 export type TownshipActionIntentParse =
   | { ok: true; intent: TownshipActionIntent }

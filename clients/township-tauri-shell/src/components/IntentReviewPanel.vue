@@ -74,6 +74,14 @@ function reviewModel(intent: IntentReview): IntentReviewModel {
       signLabel: "Sign revoke",
     };
   }
+  if (intent.v === 7) {
+    return {
+      id: "participant-witness-request",
+      eyebrow: "Unsigned local review",
+      details: [`Requested role: ${intent.authority.role}`],
+      signLabel: "Sign witness artifact",
+    };
+  }
   return assertNeverIntentReview(intent);
 }
 

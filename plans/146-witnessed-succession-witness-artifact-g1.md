@@ -35,13 +35,22 @@ Execution starts from exact documentation tip `61a1a8685af4c119cc327eeee86800fbf
   Opus found the initial GREEN incorrectly widened the reviewable UI union; a second RED proved the
   typecheck and staging failures, and the corrected GREEN passed focused BEAM, parser, dispatcher,
   structural frontend, UI, and typecheck gates. Full OTP 28 `mix check` also passed.
-- Seam 2 is locally GREEN. A fresh carrier projection exposes one clerk-role form, produces the
-  exact v7 selector, retains it only for the same fresh replica, and clears it on invalid input,
-  replica replacement, or stale state. Its RED failed on the absent LiveView event; corrected GREEN
-  passed the focused 16-test LiveView suite, full OTP 28 `mix check`, and both boundary Sobelow
-  scans with Claude Opus reporting no unresolved P0-P2 finding.
-- Plan 146 remains `IN PROGRESS`. Seam 3, installed-app ingress and review, is next; no governance
-  key, user-presence, claim, signature, artifact, or succession authority exists yet.
+- Seam 2 is closed at implementation tip `b0bcc1c0c7daee30354e752dfe668d4a171fa492`.
+  Hosted run `29546424500` passed Unit + property, flagship artifact, and packaged macOS
+  convergence after one failed packaged attempt was retried for an external npm DNS lookup error.
+  A fresh carrier projection exposes one clerk-role form, produces the exact v7 selector, retains
+  it only for the same fresh replica, and clears it on invalid input, replica replacement, or stale
+  state.
+- Seam 3 is locally GREEN. Matching-replica v7 ingress stages only an unsigned selector; trusted
+  Use moves it into one disabled local review surface; untrusted Use, pairing absence, replica
+  mismatch, and dismiss remain fail-closed and inert. Development routing includes the v7 slot,
+  while Sign has no reachable submission path before verified claim derivation. The RED failed on
+  the temporary dispatcher refusal and absent descriptor/review arms; GREEN passed the focused UI,
+  dispatcher, typecheck, frontend, runtime-wiring, handoff-support, action, and production-build
+  gates. A targeted label mutation failed only the two v7 contracts and restored to 21/21. Fresh
+  Claude Opus RED, GREEN, and mutation reviews reported no unresolved P0-P2 finding.
+- Plan 146 remains `IN PROGRESS`. Seam 4, verified claim derivation, is next; no governance key,
+  user-presence, derived claim, signature, artifact, or succession authority exists yet.
 
 ## Objective
 

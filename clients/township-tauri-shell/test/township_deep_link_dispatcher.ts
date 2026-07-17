@@ -181,13 +181,22 @@ assert.deepEqual(traces.at(-1), { intentId: revokeFixture.payload.id, outcome: "
 
 expectedReplica = witnessSuccessionFixture.payload.replica;
 const stagedBeforeWitnessSuccession = staged.length;
+const rejectedBeforeWitnessSuccession = rejected.length;
 opened([witnessSuccessionFixture.url]);
-assert.equal(staged.length, stagedBeforeWitnessSuccession);
-assert.equal(rejected.at(-1), "invalid_action");
+assert.deepEqual(staged.slice(stagedBeforeWitnessSuccession), [witnessSuccessionFixture.payload]);
+assert.equal(rejected.length, rejectedBeforeWitnessSuccession);
 assert.deepEqual(traces.at(-1), {
   intentId: witnessSuccessionFixture.payload.id,
-  outcome: "invalid_action",
+  outcome: "staged",
 });
+
+expectedReplica = "replica:matter:other";
+opened([witnessSuccessionFixture.url]);
+assert.equal(rejected.at(-1), "replica_mismatch");
+
+expectedReplica = null;
+opened([witnessSuccessionFixture.url]);
+assert.equal(rejected.at(-1), "pairing_missing");
 
 opened(["township://action?intent=not-base64url!"]);
 assert.equal(rejected.at(-1), "invalid_action");

@@ -7,6 +7,7 @@ import type {
   TownshipRevokeActionIntent,
   TownshipRosterActionIntent,
   TownshipStatusActionIntent,
+  TownshipWitnessSuccessionActionIntent,
 } from "../src/township_action_intent";
 
 const replica = "replica:matter:township-g1#root:test";
@@ -16,7 +17,8 @@ const cases: Array<{
     | TownshipFieldActionIntent
     | TownshipRosterActionIntent
     | TownshipGrantActionIntent
-    | TownshipRevokeActionIntent;
+    | TownshipRevokeActionIntent
+    | TownshipWitnessSuccessionActionIntent;
   id: string;
   heading: string;
   eyebrow: string;
@@ -101,6 +103,19 @@ const cases: Array<{
     details: ["QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI"],
     sign: "Sign revoke",
   },
+  {
+    intent: {
+      v: 7,
+      id: "77777777777777777777777777777777",
+      replica,
+      authority: { action: "witness_succession", role: "clerk" },
+    },
+    id: "participant-witness-request",
+    heading: "Witness recovery request",
+    eyebrow: "Unsigned local review",
+    details: ["Requested role: clerk"],
+    sign: "Sign witness artifact",
+  },
 ];
 
 describe("IntentReviewPanel", () => {
@@ -151,5 +166,19 @@ describe("IntentReviewPanel", () => {
     await wrapper.setProps({ submitting: false });
     expect(wrapper.find("button").attributes("disabled")).toBeUndefined();
     expect(wrapper.find("button").text()).toBe("Sign summary edit");
+  });
+
+  it("keeps witness signing disabled before verified claim derivation exists", () => {
+    const intent = cases.find((example) => example.intent.v === 7)?.intent;
+    if (!intent) throw new Error("witness fixture missing");
+    const wrapper = mount(IntentReviewPanel, {
+      props: { intent, busy: false, submitting: false, allowed: false },
+    });
+
+    expect(wrapper.find("button").text()).toBe("Sign witness artifact");
+    expect(wrapper.find("button").attributes("disabled")).toBeDefined();
+    expect(wrapper.text()).not.toContain("holder");
+    expect(wrapper.text()).not.toContain("policy");
+    expect(wrapper.text()).not.toContain("verified");
   });
 });
