@@ -90,6 +90,7 @@ const opTag = "lattice-op-v2";
 const delegationPayloadTag = "lattice-delegation-v2";
 const witnessedRecoveryPolicyDomain = "lattice-recovery-policy-v1";
 const witnessedSuccessionClaimDomain = "lattice-succession-witness-v1";
+const witnessedSuccessionArtifactDomain = "lattice-succession-witness-artifact-v1";
 
 /**
  * Encode the signed/hashable core of a BEAM carrier op frame using the same
@@ -200,6 +201,18 @@ export function canonicalBytesForWitnessedSuccessionClaim(
       ["successor", encodeBytes(canonicalEvidenceBytes(claim.successor))],
       ["policy_id", encodeBinaryString(claim.policyId)],
     ]),
+  ]);
+}
+
+/** Canonical storage-locator preimage for one public succession witness artifact. */
+export function canonicalBytesForWitnessedSuccessionArtifactId(
+  claim: WitnessedSuccessionClaimEvidence,
+  witness: string,
+): Uint8Array {
+  return encodeArray([
+    encodeBinaryString(witnessedSuccessionArtifactDomain),
+    encodeBytes(canonicalBytesForWitnessedSuccessionClaim(claim)),
+    encodeBytes(canonicalEvidenceBytes(witness)),
   ]);
 }
 

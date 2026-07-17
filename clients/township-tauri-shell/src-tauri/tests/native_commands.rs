@@ -173,14 +173,6 @@ fn registered_tauri_commands_roundtrip_through_mock_ipc() {
         serde_json::json!({ "event": "township-canonical-probe digest=test" }),
         Ok(()),
     );
-
-    #[cfg(feature = "township-dev-trace")]
-    assert_ipc_response(
-        &webview,
-        "lattice_trace_dev_event",
-        serde_json::json!({ "event": "deep-link:township://pairing" }),
-        Ok(()),
-    );
 }
 
 #[test]

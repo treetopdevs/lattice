@@ -55,6 +55,13 @@ export interface WitnessedSuccessionSignatureEvidence {
     witness: string;
     signature: string;
 }
+export interface WitnessedSuccessionArtifactEvidence {
+    v: 1;
+    artifactId: string;
+    claim: WitnessedSuccessionClaimEvidence;
+    witness: string;
+    signature: string;
+}
 export interface WitnessedSuccessionCertificateEvidence {
     claim: WitnessedSuccessionClaimEvidence;
     signatures: WitnessedSuccessionSignatureEvidence[];

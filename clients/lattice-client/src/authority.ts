@@ -3,6 +3,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import {
   canonicalBytesForCarrierDelegation,
   canonicalBytesForWitnessedRecoveryPolicy,
+  canonicalBytesForWitnessedSuccessionArtifactId,
   canonicalBytesForWitnessedSuccessionClaim,
 } from "./codec";
 import { ancestors, canonicalOrder, index } from "./dag";
@@ -13,8 +14,10 @@ import type {
   SuccessionPolicyEvidence,
   WitnessedRecoveryPolicyEvidence,
   WitnessedSuccessionPolicyEvidence,
+  WitnessedSuccessionArtifactEvidence,
   WitnessedSuccessionCertificateEvidence,
   WitnessedSuccessionClaimEvidence,
+  WitnessedSuccessionSignatureEvidence,
 } from "./op";
 import { isAuthorityField } from "./schema";
 import type { ReplicaSchema } from "./schema";
@@ -516,6 +519,87 @@ export type WitnessedSuccessionVerificationReason =
 export type WitnessedSuccessionVerification =
   | { valid: true }
   | { valid: false; reason: WitnessedSuccessionVerificationReason };
+
+export function assembleWitnessedSuccessionArtifact(
+  claim: WitnessedSuccessionClaimEvidence,
+  signature: WitnessedSuccessionSignatureEvidence,
+): WitnessedSuccessionArtifactEvidence {
+  if (!validWitnessedSuccessionArtifactInput(claim, signature)) {
+    throw new Error("malformed witnessed succession artifact input");
+  }
+
+  const orderedClaim: WitnessedSuccessionClaimEvidence = {
+    version: claim.version,
+    replica: claim.replica,
+    role: claim.role,
+    holder: claim.holder,
+    holderEpoch: claim.holderEpoch,
+    successor: claim.successor,
+    policyId: claim.policyId,
+  };
+
+  return {
+    v: 1,
+    artifactId: bytesToBase64Url(
+      sha256(canonicalBytesForWitnessedSuccessionArtifactId(orderedClaim, signature.witness)),
+    ),
+    claim: orderedClaim,
+    witness: signature.witness,
+    signature: signature.signature,
+  };
+}
+
+export function exportWitnessedSuccessionArtifactJson(
+  artifact: WitnessedSuccessionArtifactEvidence,
+): string {
+  return JSON.stringify({
+    v: artifact.v,
+    artifactId: artifact.artifactId,
+    claim: {
+      version: artifact.claim.version,
+      replica: artifact.claim.replica,
+      role: artifact.claim.role,
+      holder: artifact.claim.holder,
+      holderEpoch: artifact.claim.holderEpoch,
+      successor: artifact.claim.successor,
+      policyId: artifact.claim.policyId,
+    },
+    witness: artifact.witness,
+    signature: artifact.signature,
+  });
+}
+
+function validWitnessedSuccessionArtifactInput(
+  claim: WitnessedSuccessionClaimEvidence,
+  signature: WitnessedSuccessionSignatureEvidence,
+): boolean {
+  return (
+    typeof claim === "object" &&
+    claim !== null &&
+    exactKeys(claim, [
+      "version",
+      "replica",
+      "role",
+      "holder",
+      "holderEpoch",
+      "successor",
+      "policyId",
+    ]) &&
+    claim.version === 1 &&
+    typeof claim.replica === "string" &&
+    claim.replica.length > 0 &&
+    claim.role === "clerk" &&
+    canonicalBase64Bytes(claim.holder, 32) !== null &&
+    canonicalBase64UrlDigest(claim.holderEpoch) &&
+    canonicalBase64Bytes(claim.successor, 32) !== null &&
+    canonicalBase64UrlDigest(claim.policyId) &&
+    typeof signature === "object" &&
+    signature !== null &&
+    exactKeys(signature, ["witness", "signature"]) &&
+    canonicalBase64Bytes(signature.witness, 32) !== null &&
+    canonicalBase64Bytes(signature.signature, 64) !== null
+  );
+}
 
 export function witnessedRecoveryPolicyId(
   policy: WitnessedRecoveryPolicyEvidence,

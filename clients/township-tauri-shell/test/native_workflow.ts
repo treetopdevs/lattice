@@ -100,6 +100,30 @@ assert.equal(calls[5]?.args.value, "native invoke ready");
 assert.equal(calls[7]?.args.bytes, bytesBase64(new TextEncoder().encode("township-native-probe")));
 assert.equal(calls[8]?.args.event, "deep-link:township://pairing");
 
+let transientTraceAttempts = 0;
+await traceTownshipDevEvent("township-native-hydration-settled", {
+  async invoke(command: string, args: Record<string, unknown>): Promise<unknown> {
+    assert.equal(command, "lattice_trace_dev_event");
+    assert.equal(args.event, "township-native-hydration-settled");
+    transientTraceAttempts += 1;
+    if (transientTraceAttempts === 1) throw new Error("transient trace write failure");
+    return null;
+  },
+});
+assert.equal(transientTraceAttempts, 2);
+
+let persistentTraceAttempts = 0;
+await assert.rejects(
+  traceTownshipDevEvent("township-native-hydration-settled", {
+    async invoke(): Promise<never> {
+      persistentTraceAttempts += 1;
+      throw new Error("persistent trace write failure");
+    },
+  }),
+  /persistent trace write failure/,
+);
+assert.equal(persistentTraceAttempts, 3);
+
 const unavailable = await loadTownshipNativeStatus({
   async invoke(command: string): Promise<never> {
     throw new Error(`no native runtime for ${command}`);

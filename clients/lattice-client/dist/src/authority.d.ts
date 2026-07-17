@@ -1,4 +1,4 @@
-import type { AuthorityDelegationEvidence, Op, WitnessedRecoveryPolicyEvidence, WitnessedSuccessionPolicyEvidence, WitnessedSuccessionCertificateEvidence, WitnessedSuccessionClaimEvidence } from "./op";
+import type { AuthorityDelegationEvidence, Op, WitnessedRecoveryPolicyEvidence, WitnessedSuccessionPolicyEvidence, WitnessedSuccessionArtifactEvidence, WitnessedSuccessionCertificateEvidence, WitnessedSuccessionClaimEvidence, WitnessedSuccessionSignatureEvidence } from "./op";
 import type { ReplicaSchema } from "./schema";
 /** One honored role acquisition, in processing (canonical) order. */
 export interface HonoredAcquire {
@@ -80,5 +80,7 @@ export type WitnessedSuccessionVerification = {
     valid: false;
     reason: WitnessedSuccessionVerificationReason;
 };
+export declare function assembleWitnessedSuccessionArtifact(claim: WitnessedSuccessionClaimEvidence, signature: WitnessedSuccessionSignatureEvidence): WitnessedSuccessionArtifactEvidence;
+export declare function exportWitnessedSuccessionArtifactJson(artifact: WitnessedSuccessionArtifactEvidence): string;
 export declare function witnessedRecoveryPolicyId(policy: WitnessedRecoveryPolicyEvidence): string | null;
 export declare function verifyWitnessedSuccessionCertificate(certificate: WitnessedSuccessionCertificateEvidence | null, expectedClaim: WitnessedSuccessionClaimEvidence, policy: WitnessedRecoveryPolicyEvidence): WitnessedSuccessionVerification;

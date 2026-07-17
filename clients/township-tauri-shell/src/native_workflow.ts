@@ -29,6 +29,8 @@ const TOWNSHIP_NATIVE_PROBE_KEY = "native_probe";
 const TOWNSHIP_NATIVE_PROBE_VALUE = "native invoke ready";
 const TOWNSHIP_NATIVE_PROBE_CHALLENGE = "township-native-probe";
 const TOWNSHIP_TRACE_DEV_EVENT_COMMAND = "lattice_trace_dev_event";
+const TOWNSHIP_TRACE_DEV_MAX_ATTEMPTS = 3;
+const TOWNSHIP_TRACE_DEV_RETRY_DELAY_MS = 25;
 export const TOWNSHIP_LOG_PROBE_COMMAND = "lattice_log_probe";
 export const TOWNSHIP_TRACE_DEV_SHORTCUT_KEYDOWN_PREFIX = "dev-trace-shortcut-keydown:";
 export const TOWNSHIP_TRACE_DEV_RUNTIME_READY = "dev-trace-runtime-ready";
@@ -216,7 +218,15 @@ export async function traceTownshipDevEvent(
   options: Pick<TownshipNativeWorkflowOptions, "invoke"> = {},
 ): Promise<void> {
   const invoke = options.invoke ?? tauriInvoke;
-  await invoke(TOWNSHIP_TRACE_DEV_EVENT_COMMAND, { event });
+  for (let attempt = 1; attempt <= TOWNSHIP_TRACE_DEV_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      await invoke(TOWNSHIP_TRACE_DEV_EVENT_COMMAND, { event });
+      return;
+    } catch (error) {
+      if (attempt === TOWNSHIP_TRACE_DEV_MAX_ATTEMPTS) throw error;
+      await new Promise((resolve) => setTimeout(resolve, TOWNSHIP_TRACE_DEV_RETRY_DELAY_MS));
+    }
+  }
 }
 
 export async function logTownshipProbeEvent(

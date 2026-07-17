@@ -69,6 +69,8 @@ export declare function canonicalBytesForCarrierDelegation(delegation: CarrierDe
 export declare function canonicalBytesForWitnessedRecoveryPolicy(policy: WitnessedRecoveryPolicyEvidence): Uint8Array;
 /** Canonical witness-signature payload shared with the BEAM certificate verifier. */
 export declare function canonicalBytesForWitnessedSuccessionClaim(claim: WitnessedSuccessionClaimEvidence): Uint8Array;
+/** Canonical storage-locator preimage for one public succession witness artifact. */
+export declare function canonicalBytesForWitnessedSuccessionArtifactId(claim: WitnessedSuccessionClaimEvidence, witness: string): Uint8Array;
 export declare function authorCarrierDelegation(input: AuthorCarrierDelegationInput): Promise<CarrierDelegation>;
 /**
  * Placeholder for semantic op authoring. Carrier-frame canonical byte/hash

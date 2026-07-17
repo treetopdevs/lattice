@@ -1289,8 +1289,7 @@ fn lattice_log_probe(event: String) -> Result<(), String> {
 #[cfg(feature = "township-dev-trace")]
 #[tauri::command]
 fn lattice_trace_dev_event(event: String) -> Result<(), String> {
-    trace_dev_command(&event);
-    Ok(())
+    write_trace_dev_event(&event)
 }
 
 #[cfg(target_os = "android")]
@@ -1316,19 +1315,21 @@ fn log_probe_event(event: &str) {
 
 #[cfg(feature = "township-dev-trace")]
 fn trace_dev_command(command: &str) {
-    use std::io::Write as _;
+    let _ = write_trace_dev_event(command);
+}
 
-    let Some(path) = trace_dev_file_path() else {
-        return;
-    };
+#[cfg(feature = "township-dev-trace")]
+fn write_trace_dev_event(command: &str) -> Result<(), String> {
+    let path = trace_dev_file_path()
+        .ok_or_else(|| "unable to write Township development trace".to_string())?;
 
-    if let Ok(mut file) = std::fs::OpenOptions::new()
+    let mut file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(path)
-    {
-        let _ = writeln!(file, "{}", sanitize_trace_dev_event(command));
-    }
+        .map_err(|_| "unable to write Township development trace".to_string())?;
+    writeln!(file, "{}", sanitize_trace_dev_event(command))
+        .map_err(|_| "unable to write Township development trace".to_string())
 }
 
 #[cfg(feature = "township-dev-trace")]

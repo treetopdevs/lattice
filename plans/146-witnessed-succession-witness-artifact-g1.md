@@ -77,7 +77,10 @@ Execution starts from exact documentation tip `61a1a8685af4c119cc327eeee86800fbf
   transcription error. GREEN is 5/5 and the full native suite is green; swapping two canonical map
   entries failed exactly the two cross-runtime oracle tests before restoration. Fresh Claude Opus
   RED, corrected-RED, GREEN, and mutation reviews report no unresolved P0-P2 finding.
-- Seam 6 is locally GREEN. The shell now registers fixed governance ensure/sign commands backed on
+- Seam 6 is closed at implementation tip `50412602aa00228bf66b125e69eb797fb27c022c`.
+  Hosted run `29567069272` passed Unit + property, flagship artifact, and packaged macOS
+  convergence, including the ordinary macOS governance-custody binding and every existing
+  packaged action/feed seam. The shell now registers fixed governance ensure/sign commands backed on
   ordinary macOS builds by one dedicated data-protection Keychain identity whose protected seed
   requires fresh user presence per signature. Presence-free seed identity metadata and a separate
   public sidecar must agree; creation is create-only, race-reconciled, rollback-safe, and never
@@ -98,9 +101,27 @@ Execution starts from exact documentation tip `61a1a8685af4c119cc327eeee86800fbf
   own non-prompting Cargo target, and runs that target in packaged macOS CI. The exact local
   convergence chain is green after also isolating its launch smoke from shared app-local test state;
   the smoke passed twice consecutively and now retains peer diagnostics for any later failure.
-- Plan 146 remains `IN PROGRESS`. Seam 7, exact public witness artifact assembly, is next. No
-  artifact persistence/export, review confirmation ceremony, packaged real-prompt evidence, BEAM
-  certificate decoder/oracle convergence, or succession authority exists yet.
+  Exact-tip HEAD and origin matched with a clean worktree, and the final hosted-result Claude Opus
+  review returned `PROCEED` with no P0-P2 finding.
+- Seam 7 is locally GREEN. TypeScript now assembles one exact public witness artifact, computes its
+  domain-separated storage locator from the Plan 145 signing payload plus witness bytes, enforces
+  exact claim/signature key sets and canonical encodings, and emits compact JSON in the specified
+  stable field order. BEAM independently decodes that literal JSON through a strict string-key
+  normalizer, recomputes the artifact id before converting the flat witness entry into the existing
+  one-signature certificate, and reaches `:insufficient_recovery_witnesses` under the exact
+  threshold-two policy whose id is pinned to the claim. Reordered JSON keys normalize identically;
+  malformed shape/encoding, wrapper version, artifact id, signature, holder, holder epoch,
+  successor, replica, role, policy id, and unpinned-witness mutations preserve the planned error
+  precedence. Focused TypeScript gates are green, and the artifact plus Plan 145 BEAM suites are
+  22/0. Fresh Claude Opus, Codex, and Antigravity reviews report no unresolved P0-P2 finding. Full
+  convergence then reproduced the same missing native-hydration trace in launch and action-handoff
+  smokes. A focused correction makes the explicit development-trace command report sink failures,
+  retries that public command at most three times, and keeps ordinary native command telemetry
+  best-effort. Dedicated TypeScript and isolated Tauri IPC contracts are now hosted Unit gates; both
+  formerly failing smokes and the full local `app:convergence` chain pass with the correction.
+- Plan 146 remains `IN PROGRESS`. Seam 8, durable persistence and witness-comprehension ceremony,
+  is next. No artifact persistence/export action, review confirmation ceremony, packaged
+  real-prompt evidence, imported/assembled certificate, or succession authority exists yet.
 
 ## Objective
 

@@ -152,6 +152,9 @@ jobs:
       - name: TS governance witness native bridge
         working-directory: clients/township-tauri-shell
         run: npm run governance:native:contract
+      - name: TS Township native workflow
+        working-directory: clients/township-tauri-shell
+        run: npm run native:contract
       - name: TS Township intent UI behavior
         working-directory: clients/township-tauri-shell
         run: npm run intent-ui:contract
@@ -195,6 +198,9 @@ jobs:
       - name: Tauri native command core
         working-directory: clients/township-tauri-shell/src-tauri
         run: cargo test
+      - name: Tauri development trace contract
+        working-directory: clients/township-tauri-shell/src-tauri
+        run: cargo test --features township-dev-trace --test dev_trace_commands
       - name: TS carrier Township check
         working-directory: clients/lattice-client
         run: npm run carrier:township
