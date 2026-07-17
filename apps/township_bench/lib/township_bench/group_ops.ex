@@ -16,7 +16,11 @@ defmodule TownshipBench.GroupOps do
   and become truthful later without a rewrite.
   """
 
-  @spec calibrate() :: %{status: :uncalibrated | :measured, unit_seconds: map(), notes: String.t()}
+  @spec calibrate() :: %{
+          status: :uncalibrated | :measured,
+          unit_seconds: map(),
+          notes: String.t()
+        }
   def calibrate do
     %{
       status: :uncalibrated,

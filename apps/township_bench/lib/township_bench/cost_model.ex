@@ -116,6 +116,19 @@ defmodule TownshipBench.CostModel do
     m = effective_ballots(params)
     peak_ciphertext_mb = m * Map.get(unit_b, :ciphertext, 256) / 1_048_576.0
 
+    # Persistent replay transcript: published ballot artifacts (ciphertext + proof)
+    # plus the cleansing and mix/decrypt proof bytes. A subset of bytes_exchanged —
+    # what an offline verifier must hold, not what trustees exchanged to produce it.
+    ballot_artifact_b =
+      m * (Map.get(unit_b, :ciphertext, 256) + Map.get(unit_b, :ballot_proof, 384))
+
+    transcript_b =
+      [:cleansing, :mix_decrypt]
+      |> Enum.map(&Map.get(counts, &1, %{}))
+      |> Enum.reduce(0, fn ops, acc ->
+        acc + Enum.reduce(ops, 0, fn {op, c}, a -> a + c * Map.get(unit_b, op, 0) end)
+      end)
+
     %{
       variant: variant,
       params: params,
@@ -126,6 +139,7 @@ defmodule TownshipBench.CostModel do
       wall_seconds_parallel: parallelize(per_phase_s, cores),
       per_phase_seconds: per_phase_s,
       bytes_exchanged: bytes,
+      artifact_bytes: ballot_artifact_b + transcript_b,
       peak_memory_mb: Float.round(peak_ciphertext_mb, 2),
       unit_seconds: unit_s,
       unit_bytes: unit_b
@@ -147,6 +161,14 @@ defmodule TownshipBench.CostModel do
   end
 
   defp default_unit_bytes do
-    %{exp: 0, pairing: 0, enc: 128, dec_share: 96, eq_test: 256, ciphertext: 256}
+    %{
+      exp: 0,
+      pairing: 0,
+      enc: 128,
+      dec_share: 96,
+      eq_test: 256,
+      ciphertext: 256,
+      ballot_proof: 384
+    }
   end
 end

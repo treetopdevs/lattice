@@ -30,12 +30,16 @@ defmodule TownshipBench.Reporter do
           candidates: params.candidates,
           dummy_ballots: round(n * params.dummy_ratio),
           revotes: round(n * params.revote_ratio),
+          # Single-process simulation: CPU is the single-core serial total by construction.
+          cpu_seconds: Float.round(est.wall_seconds_single_core, 2),
           wall_seconds_single_core: Float.round(est.wall_seconds_single_core, 2),
           wall_seconds_parallel: Float.round(est.wall_seconds_parallel, 2),
           bytes_exchanged: est.bytes_exchanged,
+          artifact_bytes: est.artifact_bytes,
           peak_memory_mb: est.peak_memory_mb,
           # Verification cost is ballot-proof pairings; cold = full replay, warm = cached.
-          verify_cold_seconds: Float.round(Map.get(est.per_phase_seconds, :ballot_verify, 0.0), 2),
+          verify_cold_seconds:
+            Float.round(Map.get(est.per_phase_seconds, :ballot_verify, 0.0), 2),
           verify_warm_seconds:
             Float.round(Map.get(est.per_phase_seconds, :ballot_verify, 0.0) * 0.15, 2)
         }
@@ -81,20 +85,16 @@ defmodule TownshipBench.Reporter do
 
   defp pad(v, w), do: v |> to_string() |> String.pad_leading(w)
 
+  # Anchored to the app source tree so the report lands in
+  # apps/township_bench/priv/reports regardless of the caller's cwd (AGENTS.md contract).
+  @reports_dir Path.expand("../../priv/reports", __DIR__)
+
   @spec write_json(map(), Path.t()) :: :ok
-  def write_json(report, dir \\ "priv/reports") do
+  def write_json(report, dir \\ @reports_dir) do
     File.mkdir_p!(dir)
     path = Path.join(dir, "g13_#{report.variant}_#{System.os_time(:second)}.json")
-    File.write!(path, encode(report))
+    File.write!(path, JSON.encode!(report))
     IO.puts("wrote #{path}")
     :ok
-  end
-
-  # Minimal JSON without a dep — the harness stays dependency-light on purpose.
-  defp encode(term), do: :erlang.term_to_binary(term) |> Base.encode64() |> wrap(term)
-
-  defp wrap(_b64, term) do
-    # Prefer a readable inspect alongside the portable form; a real profile can add jason.
-    inspect(term, limit: :infinity, pretty: true)
   end
 end
