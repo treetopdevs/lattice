@@ -12,7 +12,13 @@ before the other twelve gates' work is sunk into it.
 - Emit the gate-13 metric set verbatim: CPU, wall time, memory, network bytes,
   artifact bytes, cold/warm verification, trustee count, candidate count, dummy
   ballots, revotes.
-- Keep the calibration seam (`GroupOps`) honest: uncalibrated until G2 pins a curve.
+- Keep the calibration seam (`GroupOps`) honest: it was uncalibrated until G2 pinned
+  a curve; since G2 closed on `chide-es-r255-v1` (2026-07-17, ristretto255) it measures
+  real scalar-mult/point-add timings through a verify-only Rustler NIF over
+  curve25519-dalek — and it degrades back to `:uncalibrated`, naming the blocker, in
+  any environment where the NIF cannot build or load.
+- Measured units apply ONLY to the no-pairing `chide_es_r255` variant; the legacy
+  pairing-priced variants always report `:uncalibrated`.
 
 ## Do NOT
 - Run real MPC / DKG / decryption. That is F2/F3 work; this harness decides whether
@@ -34,6 +40,9 @@ before the other twelve gates' work is sunk into it.
 ## Run
     mix township.bench.g13 --json
     mix township.bench.g13 --variant chide_quadratic --scales 100,1000,10000 --json
+    # Pinned profile chide-es-r255-v1 with its pinned committee (C12 knobs):
+    mix township.bench.g13 --variant chide_es_r255 \
+      --trustees 5 --max-corrupt 2 --share-quorum 3 --json
 
 ## Merge discipline
 This worktree stays green independently. It merges to main only to publish reports

@@ -30,7 +30,13 @@ defmodule TownshipBench.MixProject do
   end
 
   # Intentionally dependency-light. The reference-algorithm cost model is pure Elixir
-  # arithmetic over operation counts; a later profile may swap in a Rustler NIF that
-  # times real group operations, but the harness contract stays the same.
-  defp deps, do: []
+  # arithmetic over operation counts. G2 pinned ristretto255 (chide-es-r255-v1), so the
+  # calibration seam now carries a verify-only Rustler NIF over curve25519-dalek that
+  # times real group operations. The harness contract is unchanged; only the numbers
+  # become truthful (AGENTS.md "Contract with the outer loop").
+  defp deps do
+    [
+      {:rustler, "~> 0.38.0", runtime: false}
+    ]
+  end
 end
