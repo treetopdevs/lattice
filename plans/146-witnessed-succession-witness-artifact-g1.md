@@ -41,7 +41,9 @@ Execution starts from exact documentation tip `61a1a8685af4c119cc327eeee86800fbf
   A fresh carrier projection exposes one clerk-role form, produces the exact v7 selector, retains
   it only for the same fresh replica, and clears it on invalid input, replica replacement, or stale
   state.
-- Seam 3 is locally GREEN. Matching-replica v7 ingress stages only an unsigned selector; trusted
+- Seam 3 is closed at implementation tip `579b90786f8ca479ef40e93f75cb9e5625542b4a`.
+  Hosted run `29548446639` passed Unit + property, flagship artifact, and packaged macOS
+  convergence. Matching-replica v7 ingress stages only an unsigned selector; trusted
   Use moves it into one disabled local review surface; untrusted Use, pairing absence, replica
   mismatch, and dismiss remain fail-closed and inert. Development routing includes the v7 slot,
   while Sign has no reachable submission path before verified claim derivation. The RED failed on
@@ -49,8 +51,19 @@ Execution starts from exact documentation tip `61a1a8685af4c119cc327eeee86800fbf
   dispatcher, typecheck, frontend, runtime-wiring, handoff-support, action, and production-build
   gates. A targeted label mutation failed only the two v7 contracts and restored to 21/21. Fresh
   Claude Opus RED, GREEN, and mutation reviews reported no unresolved P0-P2 finding.
-- Plan 146 remains `IN PROGRESS`. Seam 4, verified claim derivation, is next; no governance key,
-  user-presence, derived claim, signature, artifact, or succession authority exists yet.
+- Seam 4 is locally GREEN. One public four-input pure client helper derives the exact Plan 145
+  claim, winning valid-genesis policy operation, pinned witness, threshold, and deterministic
+  verified frontier from the Plan 148 BEAM-pinned local authority projection. It accepts no relay
+  authority input and compares every returned field when rechecking a prior review before signing.
+  Legacy or malformed policy, no holder, unpinned witness, mismatched replica, incomplete operation
+  set, and stale epoch, successor, policy, threshold, or frontier all fail closed. The RED initially
+  exposed a missing helper; Claude found and the revised RED removed false-green relay and stale
+  checks. Focused GREEN is 14/14, typecheck and full client conformance pass, and removing threshold
+  binding caused exactly the intended stale-threshold failure before restoration. Fresh Claude
+  Opus RED, corrected-RED, GREEN, and mutation reviews report no unresolved P0-P2 finding.
+- Plan 146 remains `IN PROGRESS`. Seam 5, native canonical-payload feasibility, is next; no
+  governance key, user-presence, signature, artifact, persistence, export, or succession authority
+  exists yet.
 
 ## Objective
 

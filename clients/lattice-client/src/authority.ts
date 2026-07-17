@@ -5,7 +5,7 @@ import {
   canonicalBytesForWitnessedRecoveryPolicy,
   canonicalBytesForWitnessedSuccessionClaim,
 } from "./codec";
-import { ancestors } from "./dag";
+import { ancestors, canonicalOrder, index } from "./dag";
 import type {
   AuthorityDelegationEvidence,
   AuthorityEvidence,
@@ -18,6 +18,7 @@ import type {
 } from "./op";
 import { isAuthorityField } from "./schema";
 import type { ReplicaSchema } from "./schema";
+import { frontier } from "./sync";
 
 /** One honored role acquisition, in processing (canonical) order. */
 export interface HonoredAcquire {
@@ -69,6 +70,34 @@ export interface AuthorityAnalysis {
   recoveryPoliciesByRole: ReadonlyMap<string, RecoveryPolicyProjection>;
   security: AuthoritySecurityProjection;
 }
+
+export interface WitnessedSuccessionReviewSelector {
+  replica: string;
+  role: "clerk";
+  witness: string;
+}
+
+export interface WitnessedSuccessionReview {
+  claim: WitnessedSuccessionClaimEvidence;
+  policyGenesisOperationId: string;
+  witness: string;
+  threshold: number;
+  verifiedFrontier: readonly string[];
+}
+
+export type WitnessedSuccessionReviewRefusal =
+  | "unsupported_role"
+  | "replica_mismatch"
+  | "no_current_holder"
+  | "recovery_policy_unavailable"
+  | "invalid_recovery_policy"
+  | "witness_not_pinned"
+  | "stale_verified_state"
+  | "authority_analysis_failed";
+
+export type WitnessedSuccessionReviewResult =
+  | { ok: true; review: WitnessedSuccessionReview }
+  | { ok: false; reason: WitnessedSuccessionReviewRefusal };
 
 interface RoleState {
   holder: string | null;
@@ -199,6 +228,140 @@ export function analyzeAuthority(
     recoveryPoliciesByRole,
     security: { delegations, root, effectiveRevokes },
   };
+}
+
+/** Derive a witnessed-succession review solely from a verified local operation set. */
+export function deriveWitnessedSuccessionReview(
+  schema: ReplicaSchema,
+  ops: Op[],
+  selector: WitnessedSuccessionReviewSelector,
+  priorReview: WitnessedSuccessionReview | null,
+): WitnessedSuccessionReviewResult {
+  if (selector.role !== "clerk") return refusedReview("unsupported_role");
+  if (
+    selector.replica.length === 0 ||
+    ops.some((op) => op.replica !== selector.replica)
+  ) {
+    return refusedReview("replica_mismatch");
+  }
+
+  const byId = index(ops);
+  if (
+    byId.size !== ops.length ||
+    ops.some((op) => op.deps.some((dependency) => !byId.has(dependency)))
+  ) {
+    return refusedReview("authority_analysis_failed");
+  }
+
+  let analysis: AuthorityAnalysis;
+  let orderedOps: Op[];
+  try {
+    const order = canonicalOrder(ops, byId);
+    orderedOps = order.map((id) => byId.get(id)!);
+    analysis = analyzeAuthority(schema, ops, new Set(order), order, byId);
+  } catch {
+    return refusedReview("authority_analysis_failed");
+  }
+
+  const currentAcquire = analysis.acquiresByRole.get(selector.role)?.at(-1);
+  if (
+    currentAcquire?.holderPubkey === undefined ||
+    canonicalBase64Bytes(currentAcquire.holderPubkey, 32) === null ||
+    !canonicalBase64UrlDigest(currentAcquire.opId)
+  ) {
+    return refusedReview("no_current_holder");
+  }
+
+  const projection = analysis.recoveryPoliciesByRole.get(selector.role);
+  if (projection === undefined) return refusedReview("recovery_policy_unavailable");
+
+  const policy = normalizeWitnessedSuccessionPolicy(projection.policy);
+  if (policy === null) return refusedReview("invalid_recovery_policy");
+  const policyId = witnessedRecoveryPolicyId(policy.recovery);
+  if (policyId === null) return refusedReview("invalid_recovery_policy");
+  if (
+    canonicalBase64Bytes(selector.witness, 32) === null ||
+    !policy.recovery.witnesses.includes(selector.witness)
+  ) {
+    return refusedReview("witness_not_pinned");
+  }
+
+  const review: WitnessedSuccessionReview = {
+    claim: {
+      version: 1,
+      replica: selector.replica,
+      role: selector.role,
+      holder: currentAcquire.holderPubkey,
+      holderEpoch: currentAcquire.opId,
+      successor: policy.successor,
+      policyId,
+    },
+    policyGenesisOperationId: projection.genesisOperationId,
+    witness: selector.witness,
+    threshold: policy.recovery.threshold,
+    verifiedFrontier: frontier(orderedOps),
+  };
+
+  if (priorReview !== null && !sameWitnessedSuccessionReview(priorReview, review)) {
+    return refusedReview("stale_verified_state");
+  }
+  return { ok: true, review };
+}
+
+function normalizeWitnessedSuccessionPolicy(
+  policy: WitnessedSuccessionPolicyEvidence,
+): WitnessedSuccessionPolicyEvidence | null {
+  const candidate = policy as unknown;
+  if (
+    typeof candidate !== "object" ||
+    candidate === null ||
+    !exactKeys(candidate, ["mode", "successorRealm", "successor", "recovery"])
+  ) {
+    return null;
+  }
+  const record = candidate as Record<string, unknown>;
+  const recoveryCandidate = record.recovery;
+  if (
+    record.mode !== "witnessed" ||
+    typeof record.successorRealm !== "string" ||
+    canonicalBase64Bytes(record.successor, 32) === null ||
+    typeof recoveryCandidate !== "object" ||
+    recoveryCandidate === null
+  ) {
+    return null;
+  }
+  const recovery = normalizeWitnessedRecoveryPolicy(
+    recoveryCandidate as WitnessedRecoveryPolicyEvidence,
+  );
+  return recovery === null
+    ? null
+    : {
+        mode: "witnessed",
+        successorRealm: record.successorRealm,
+        successor: record.successor as string,
+        recovery,
+      };
+}
+
+function sameWitnessedSuccessionReview(
+  left: WitnessedSuccessionReview,
+  right: WitnessedSuccessionReview,
+): boolean {
+  return (
+    claimBindingMatches(left.claim, right.claim) &&
+    left.claim.policyId === right.claim.policyId &&
+    left.policyGenesisOperationId === right.policyGenesisOperationId &&
+    left.witness === right.witness &&
+    left.threshold === right.threshold &&
+    left.verifiedFrontier.length === right.verifiedFrontier.length &&
+    left.verifiedFrontier.every((id, index) => id === right.verifiedFrontier[index])
+  );
+}
+
+function refusedReview(
+  reason: WitnessedSuccessionReviewRefusal,
+): WitnessedSuccessionReviewResult {
+  return { ok: false, reason };
 }
 
 function honoredAcquire(
@@ -878,6 +1041,17 @@ function canonicalBase64Bytes(value: unknown, length?: number): Uint8Array | nul
     return length === undefined || decoded.length === length ? decoded : null;
   } catch {
     return null;
+  }
+}
+
+function canonicalBase64UrlDigest(value: unknown): boolean {
+  if (typeof value !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(value)) return false;
+  try {
+    const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "=";
+    const decoded = base64ToBytes(padded);
+    return decoded.length === 32 && bytesToBase64Url(decoded) === value;
+  } catch {
+    return false;
   }
 }
 
