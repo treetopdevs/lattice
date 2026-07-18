@@ -129,6 +129,23 @@ export interface Op {
     cap?: string | null;
     /** Semantic authority facts retained from the verified carrier body. */
     authority?: AuthorityEvidence;
+    /** ADR 0007 co-signed consent evidence retained from the carrier command body. */
+    consent?: CustodyConsentEvidence;
+}
+/**
+ * ADR 0007 — the co-signed consent facts a `:custody_transfer` command carries
+ * inside its hashed body, retained at carrier decode so the quarantine
+ * predicate can recompute and verify the consent payload.
+ */
+export interface CustodyConsentEvidence {
+    /** base64 pubkey of the declared recipient — the consenting signer. */
+    toPub: string;
+    /** Op id of the durable custody request this consent is bound to (the nonce). */
+    requestOpId: string;
+    /** base64 consent signature, or null when the body carries none. */
+    sig: string | null;
+    /** base64 pubkey of the op author — the consent payload's `from`. */
+    authorPub: string;
 }
 /** Compare two opaque ordering keys. Returns >0 if a>b. */
 export declare function cmpHash(a: string, b: string): number;
