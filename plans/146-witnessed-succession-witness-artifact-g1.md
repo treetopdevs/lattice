@@ -135,7 +135,9 @@ Execution starts from exact documentation tip `61a1a8685af4c119cc327eeee86800fbf
   reverify the stored Ed25519 signature and reject noncanonical index digests. Focused TypeScript,
   Vue, Rust custody/command, typecheck, formatting, and Claude Opus GREEN gates pass with no
   unresolved P0-P2 finding.
-- Seam 9 is locally GREEN and awaits exact-tip hosted closure. One no-build harness step discovers
+- Seam 9 is closed at implementation tip `ef8dd6c8c006bfe46776c18b3e0365c5affae9aa`.
+  Hosted run `29661339348` passed Unit + property, flagship artifact, and packaged macOS
+  convergence at that exact tip. One no-build harness step discovers
   the deterministic governance public key through the feature-gated test-presence provider without
   authorizing presence or rebuilding the packaged app. BEAM constructs and freshly restores one
   clerk-authored valid genesis whose threshold-two policy pins that key plus a distinct control
@@ -143,8 +145,8 @@ Execution starts from exact documentation tip `61a1a8685af4c119cc327eeee86800fbf
   witness order, policy id, claim payload digest, exact holder epoch/frontier, and unpinned-witness
   refusal. Focused Rust, TypeScript, BEAM, formatting, typecheck, and node-spike gates are green.
   Fresh Codex, Claude Opus, and Antigravity exact-worktree reviews found no unresolved P0-P2 issue.
-- Plan 146 remains `IN PROGRESS`. Seam 10 does not start until Seam 9's exact-tip hosted run is
-  green. No packaged real-prompt evidence, imported/assembled certificate, live `App.vue` Use ->
+- Plan 146 remains `IN PROGRESS`. Seam 10, the packaged ceremony, is next. No packaged
+  real-prompt evidence, imported/assembled certificate, live `App.vue` Use ->
   Sign -> Export choreography, hard-wired packaged ceremony, or succession authority exists yet;
   Seam 10 owns that live choreography.
 
