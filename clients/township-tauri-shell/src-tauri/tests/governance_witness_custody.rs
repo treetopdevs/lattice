@@ -60,6 +60,16 @@ fn governance_commands_are_separate_and_fail_closed_without_a_provider() {
     );
     assert_eq!(ensure.unwrap_err(), serde_json::json!(CUSTODY_UNAVAILABLE));
 
+    let public_key: Result<String, serde_json::Value> = ipc_response(
+        &webview,
+        "lattice_governance_witness_public_key",
+        serde_json::json!({}),
+    );
+    assert_eq!(
+        public_key.unwrap_err(),
+        serde_json::json!(CUSTODY_UNAVAILABLE)
+    );
+
     let sign: Result<serde_json::Value, serde_json::Value> = ipc_response(
         &webview,
         "lattice_sign_governance_witness",
@@ -84,6 +94,7 @@ fn governance_ensure_creates_one_paired_identity_and_reuses_it_after_restart() {
         .unwrap();
     assert_eq!(public_key_bytes.len(), 32);
     assert_eq!(first.ensure_governance_witness_key().unwrap(), public_key);
+    assert_eq!(first.governance_witness_public_key().unwrap(), public_key);
     assert_eq!(store.write_counts(), (1, 1));
     assert_eq!(store.secret_read_count(), 0);
 
@@ -93,6 +104,19 @@ fn governance_ensure_creates_one_paired_identity_and_reuses_it_after_restart() {
         public_key
     );
     assert_eq!(store.write_counts(), (1, 1));
+    assert_eq!(store.secret_read_count(), 0);
+}
+
+#[test]
+fn governance_public_key_read_is_presence_free_and_never_creates_custody() {
+    let store = MemoryGovernanceWitnessStore::default();
+    let state = TownshipNativeState::with_governance_witness_key_store(store.clone());
+
+    assert_eq!(
+        state.governance_witness_public_key().unwrap_err(),
+        "governance witness identity is missing"
+    );
+    assert_eq!(store.write_counts(), (0, 0));
     assert_eq!(store.secret_read_count(), 0);
 }
 

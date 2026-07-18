@@ -23,6 +23,8 @@ export const TOWNSHIP_CARRIER_OUTBOX_KEY = "carrier_frames";
 export const TOWNSHIP_DELEGATION_FRAMES_KEY = "delegation_frames";
 export const TOWNSHIP_ENSURE_GOVERNANCE_WITNESS_KEY_COMMAND =
   "lattice_ensure_governance_witness_key";
+export const TOWNSHIP_GOVERNANCE_WITNESS_PUBLIC_KEY_COMMAND =
+  "lattice_governance_witness_public_key";
 export const TOWNSHIP_SIGN_GOVERNANCE_WITNESS_COMMAND = "lattice_sign_governance_witness";
 
 const TOWNSHIP_NATIVE_PROBE_KEY = "native_probe";
@@ -128,6 +130,15 @@ export async function ensureGovernanceWitnessKey(
   return witness as string;
 }
 
+export async function loadGovernanceWitnessPublicKey(
+  options: TownshipGovernanceWitnessNativeOptions = {},
+): Promise<string> {
+  const invoke = options.invoke ?? tauriInvoke;
+  const witness = await invoke<unknown>(TOWNSHIP_GOVERNANCE_WITNESS_PUBLIC_KEY_COMMAND, {});
+  canonicalBase64Bytes(witness, 32, "governance witness public key");
+  return witness as string;
+}
+
 export async function signGovernanceWitnessClaim(
   claim: WitnessedSuccessionClaimEvidence,
   expectedWitness: string,
@@ -171,6 +182,25 @@ export async function signGovernanceWitnessClaim(
   }
 
   return signature;
+}
+
+export function verifyGovernanceWitnessSignature(
+  claim: WitnessedSuccessionClaimEvidence,
+  witness: string,
+  signature: string,
+): boolean {
+  try {
+    const witnessBytes = canonicalBase64Bytes(witness, 32, "governance witness public key");
+    const signatureBytes = canonicalBase64Bytes(signature, 64, "governance witness signature");
+    return ed25519.verify(
+      signatureBytes,
+      canonicalBytesForWitnessedSuccessionClaim(claim),
+      witnessBytes,
+      { zip215: false },
+    );
+  } catch {
+    return false;
+  }
 }
 
 export async function withTownshipPersistenceWrite<T>(

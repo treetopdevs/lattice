@@ -5,9 +5,12 @@ import { canonicalBytesForWitnessedSuccessionClaim } from "@treetopdevs/lattice-
 import type { TauriInvoke, WitnessedSuccessionClaimEvidence } from "@treetopdevs/lattice-client";
 import {
   ensureGovernanceWitnessKey,
+  loadGovernanceWitnessPublicKey,
   signGovernanceWitnessClaim,
   TOWNSHIP_ENSURE_GOVERNANCE_WITNESS_KEY_COMMAND,
+  TOWNSHIP_GOVERNANCE_WITNESS_PUBLIC_KEY_COMMAND,
   TOWNSHIP_SIGN_GOVERNANCE_WITNESS_COMMAND,
+  verifyGovernanceWitnessSignature,
 } from "../src/native_workflow";
 
 console.log("\n▸ Township governance witness native bridge");
@@ -36,6 +39,10 @@ assert.equal(
   "lattice_ensure_governance_witness_key",
 );
 assert.equal(TOWNSHIP_SIGN_GOVERNANCE_WITNESS_COMMAND, "lattice_sign_governance_witness");
+assert.equal(
+  TOWNSHIP_GOVERNANCE_WITNESS_PUBLIC_KEY_COMMAND,
+  "lattice_governance_witness_public_key",
+);
 
 const calls: Array<{ command: string; args: Record<string, unknown> }> = [];
 const invoke: TauriInvoke = async <T = unknown>(
@@ -44,20 +51,32 @@ const invoke: TauriInvoke = async <T = unknown>(
 ): Promise<T> => {
   calls.push({ command, args });
   const result =
-    command === TOWNSHIP_ENSURE_GOVERNANCE_WITNESS_KEY_COMMAND
+    command === TOWNSHIP_ENSURE_GOVERNANCE_WITNESS_KEY_COMMAND ||
+    command === TOWNSHIP_GOVERNANCE_WITNESS_PUBLIC_KEY_COMMAND
       ? witness
       : { witness, signature, payloadDigest };
   return result as T;
 };
 
 assert.equal(await ensureGovernanceWitnessKey({ invoke }), witness);
+assert.equal(await loadGovernanceWitnessPublicKey({ invoke }), witness);
 assert.deepEqual(await signGovernanceWitnessClaim(claim, witness, { invoke }), {
   witness,
   signature,
   payloadDigest,
 });
+assert.equal(verifyGovernanceWitnessSignature(claim, witness, signature), true);
+assert.equal(
+  verifyGovernanceWitnessSignature(
+    claim,
+    witness,
+    Buffer.from(new Uint8Array(64)).toString("base64"),
+  ),
+  false,
+);
 assert.deepEqual(calls, [
   { command: TOWNSHIP_ENSURE_GOVERNANCE_WITNESS_KEY_COMMAND, args: {} },
+  { command: TOWNSHIP_GOVERNANCE_WITNESS_PUBLIC_KEY_COMMAND, args: {} },
   { command: TOWNSHIP_SIGN_GOVERNANCE_WITNESS_COMMAND, args: { claim } },
 ]);
 

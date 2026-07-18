@@ -1,5 +1,6 @@
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
+import type { WitnessedSuccessionReview } from "@treetopdevs/lattice-client";
 import IntentReviewPanel from "../src/components/IntentReviewPanel.vue";
 import type {
   TownshipFieldActionIntent,
@@ -11,6 +12,36 @@ import type {
 } from "../src/township_action_intent";
 
 const replica = "replica:matter:township-g1#root:test";
+const witnessWarning =
+  "This artifact has no expiry and may remain valid indefinitely. " +
+  "Valid until the clerk or recovery policy changes; this app cannot revoke an exported signature.";
+const witnessReview: WitnessedSuccessionReview = {
+  claim: {
+    version: 1,
+    replica,
+    role: "clerk",
+    holder: "aG9sZGVyaG9sZGVyaG9sZGVyaG9sZGVyaG9sZGVyaG8=",
+    holderEpoch: "RVBPQ0hFUE9DSEVQT0NIRVBPQ0hFUE9DSEVQT0NIRVA",
+    successor: "c3VjY2Vzc29yc3VjY2Vzc29yc3VjY2Vzc29yc3VjY2U=",
+    policyId: "UE9MSUNZUE9MSUNZUE9MSUNZUE9MSUNZUE9MSUNZUE9",
+  },
+  policyGenesisOperationId: "R0VORVNJU0dFTkVTSVNHRU5FU0lTR0VORVNJU0dFTkV",
+  witness: "d2l0bmVzc3dpdG5lc3N3aXRuZXNzd2l0bmVzc3dpdG4=",
+  threshold: 2,
+  verifiedFrontier: ["RlJPTlRJRVJGUk9OVElFUkZST05USUVSRlJPTlRJRVJ"],
+};
+const witnessReviewDetails = [
+  `Replica: ${witnessReview.claim.replica}`,
+  "Role: clerk",
+  `Holder: ${witnessReview.claim.holder}`,
+  `Holder epoch: ${witnessReview.claim.holderEpoch}`,
+  `Successor: ${witnessReview.claim.successor}`,
+  `Policy ID: ${witnessReview.claim.policyId}`,
+  `Winning policy genesis operation ID: ${witnessReview.policyGenesisOperationId}`,
+  `Witness key: ${witnessReview.witness}`,
+  "Threshold: 2",
+  `Verified frontier: ${witnessReview.verifiedFrontier.join(", ")}`,
+];
 const cases: Array<{
   intent:
     | TownshipStatusActionIntent
@@ -24,6 +55,8 @@ const cases: Array<{
   eyebrow: string;
   details: string[];
   sign: string;
+  witnessReview?: WitnessedSuccessionReview;
+  warning?: string;
 }> = [
   {
     intent: {
@@ -113,8 +146,10 @@ const cases: Array<{
     id: "participant-witness-request",
     heading: "Witness recovery request",
     eyebrow: "Unsigned local review",
-    details: ["Requested role: clerk"],
+    details: witnessReviewDetails,
     sign: "Sign witness artifact",
+    witnessReview,
+    warning: witnessWarning,
   },
 ];
 
@@ -122,7 +157,13 @@ describe("IntentReviewPanel", () => {
   for (const example of cases) {
     it(`renders and emits the frozen v${example.intent.v} review contract`, async () => {
       const wrapper = mount(IntentReviewPanel, {
-        props: { intent: example.intent, busy: false, submitting: false, allowed: true },
+        props: {
+          intent: example.intent,
+          busy: false,
+          submitting: false,
+          allowed: true,
+          ...(example.witnessReview ? { witnessReview: example.witnessReview } : {}),
+        },
       });
 
       expect(wrapper.attributes("id")).toBe(example.id);
@@ -131,6 +172,12 @@ describe("IntentReviewPanel", () => {
       expect(wrapper.find(".panel-heading span").text()).toBe(example.eyebrow);
       expect(wrapper.findAll(".incoming-action-text").map((node) => node.text())).toEqual(example.details);
       expect(wrapper.text()).not.toContain("Sync");
+      if (example.warning) {
+        expect(wrapper.find(".witness-warning").text()).toBe(example.warning);
+      } else {
+        expect(wrapper.find(".witness-warning").exists()).toBe(false);
+        expect(wrapper.text()).not.toContain("no expiry");
+      }
 
       const [sign, dismiss] = wrapper.findAll("button");
       expect(sign?.text()).toBe(example.sign);
@@ -168,17 +215,32 @@ describe("IntentReviewPanel", () => {
     expect(wrapper.find("button").text()).toBe("Sign summary edit");
   });
 
-  it("keeps witness signing disabled before verified claim derivation exists", () => {
+  it("keeps witness signing disabled while no verified review is derived", () => {
     const intent = cases.find((example) => example.intent.v === 7)?.intent;
     if (!intent) throw new Error("witness fixture missing");
     const wrapper = mount(IntentReviewPanel, {
-      props: { intent, busy: false, submitting: false, allowed: false },
+      props: { intent, busy: false, submitting: false, allowed: true, witnessReview: null },
     });
 
     expect(wrapper.find("button").text()).toBe("Sign witness artifact");
     expect(wrapper.find("button").attributes("disabled")).toBeDefined();
-    expect(wrapper.text()).not.toContain("holder");
-    expect(wrapper.text()).not.toContain("policy");
-    expect(wrapper.text()).not.toContain("verified");
+    expect(wrapper.findAll(".incoming-action-text").map((node) => node.text())).toEqual([
+      "Requested role: clerk",
+    ]);
+    expect(wrapper.text()).not.toContain("Holder");
+    expect(wrapper.text()).not.toContain("Policy ID");
+    expect(wrapper.find(".witness-warning").exists()).toBe(false);
+  });
+
+  it("renders the exact indefinite-validity warning with a derived witness review", () => {
+    const intent = cases.find((example) => example.intent.v === 7)?.intent;
+    if (!intent) throw new Error("witness fixture missing");
+    const wrapper = mount(IntentReviewPanel, {
+      props: { intent, busy: false, submitting: false, allowed: true, witnessReview },
+    });
+
+    expect(wrapper.find(".witness-warning").text()).toBe(witnessWarning);
+    expect(wrapper.find("button").attributes("disabled")).toBeUndefined();
+    expect(wrapper.findAll(".incoming-action-text").map((node) => node.text())).toEqual(witnessReviewDetails);
   });
 });

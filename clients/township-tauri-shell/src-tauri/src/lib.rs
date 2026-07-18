@@ -533,6 +533,20 @@ impl TownshipNativeState {
         Ok(BASE64.encode(public_key))
     }
 
+    pub fn governance_witness_public_key(&self) -> Result<String, String> {
+        let store = self
+            .governance_key_store
+            .as_ref()
+            .ok_or_else(|| "governance witness custody is unavailable".to_string())?;
+
+        match governance_public_identity(store.as_ref())? {
+            GovernancePublicIdentity::Complete(public_key) => Ok(BASE64.encode(public_key)),
+            GovernancePublicIdentity::Missing => {
+                Err("governance witness identity is missing".to_string())
+            }
+        }
+    }
+
     pub fn sign_governance_witness(
         &self,
         claim: &serde_json::Value,
@@ -906,6 +920,7 @@ pub fn township_command_names() -> &'static [&'static str] {
         "lattice_public_key",
         "lattice_sign_carrier",
         "lattice_ensure_governance_witness_key",
+        "lattice_governance_witness_public_key",
         "lattice_sign_governance_witness",
         "lattice_discover_pairing_adverts",
         "lattice_advertise_pairing_handoff",
@@ -924,6 +939,7 @@ pub fn township_command_names() -> &'static [&'static str] {
         "lattice_public_key",
         "lattice_sign_carrier",
         "lattice_ensure_governance_witness_key",
+        "lattice_governance_witness_public_key",
         "lattice_sign_governance_witness",
         "lattice_discover_pairing_adverts",
         "lattice_advertise_pairing_handoff",
@@ -948,6 +964,7 @@ fn configure_township_commands<R: tauri::Runtime>(builder: tauri::Builder<R>) ->
         lattice_public_key,
         lattice_sign_carrier,
         lattice_ensure_governance_witness_key,
+        lattice_governance_witness_public_key,
         lattice_sign_governance_witness,
         lattice_discover_pairing_adverts,
         lattice_advertise_pairing_handoff,
@@ -966,6 +983,7 @@ fn configure_township_commands<R: tauri::Runtime>(builder: tauri::Builder<R>) ->
         lattice_public_key,
         lattice_sign_carrier,
         lattice_ensure_governance_witness_key,
+        lattice_governance_witness_public_key,
         lattice_sign_governance_witness,
         lattice_discover_pairing_adverts,
         lattice_advertise_pairing_handoff,
@@ -1235,6 +1253,14 @@ fn lattice_ensure_governance_witness_key(
 ) -> Result<String, String> {
     trace_dev_command("lattice_ensure_governance_witness_key");
     state.ensure_governance_witness_key()
+}
+
+#[tauri::command]
+fn lattice_governance_witness_public_key(
+    state: tauri::State<'_, TownshipNativeState>,
+) -> Result<String, String> {
+    trace_dev_command("lattice_governance_witness_public_key");
+    state.governance_witness_public_key()
 }
 
 #[tauri::command]

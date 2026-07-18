@@ -103,7 +103,9 @@ Execution starts from exact documentation tip `61a1a8685af4c119cc327eeee86800fbf
   the smoke passed twice consecutively and now retains peer diagnostics for any later failure.
   Exact-tip HEAD and origin matched with a clean worktree, and the final hosted-result Claude Opus
   review returned `PROCEED` with no P0-P2 finding.
-- Seam 7 is locally GREEN. TypeScript now assembles one exact public witness artifact, computes its
+- Seam 7 is closed at implementation tip `3a1502d21de851e03b1e79d3f372d55c1d84d5ab`.
+  Hosted run `29575660090` passed Unit + property, flagship artifact, and packaged macOS
+  convergence. TypeScript now assembles one exact public witness artifact, computes its
   domain-separated storage locator from the Plan 145 signing payload plus witness bytes, enforces
   exact claim/signature key sets and canonical encodings, and emits compact JSON in the specified
   stable field order. BEAM independently decodes that literal JSON through a strict string-key
@@ -119,9 +121,22 @@ Execution starts from exact documentation tip `61a1a8685af4c119cc327eeee86800fbf
   retries that public command at most three times, and keeps ordinary native command telemetry
   best-effort. Dedicated TypeScript and isolated Tauri IPC contracts are now hosted Unit gates; both
   formerly failing smokes and the full local `app:convergence` chain pass with the correction.
-- Plan 146 remains `IN PROGRESS`. Seam 8, durable persistence and witness-comprehension ceremony,
-  is next. No artifact persistence/export action, review confirmation ceremony, packaged
-  real-prompt evidence, imported/assembled certificate, or succession authority exists yet.
+- Seam 8 is locally GREEN and awaits exact-tip hosted closure. The adapter's review path reads the
+  existing governance public sidecar through a new presence-free, create-free native command,
+  derives the full verified review, and the view leaves signing disabled until that review exists.
+  The adapter's sign path rechecks current local operations, requires fresh protected governance
+  presence, persists exact artifact bytes before a versioned public review index, and converges
+  after an interrupted index write. Re-signing the same claim and witness is idempotent even when
+  unrelated operations advance the verified frontier; the index retains the first-signing review.
+  Its trusted-event export boundary returns exact stored bytes with full human-readable confirmation
+  and the indefinite-validity warning, without consulting or contacting the carrier. Reload/export
+  reverify the stored Ed25519 signature and reject noncanonical index digests. Focused TypeScript,
+  Vue, Rust custody/command, typecheck, formatting, and Claude Opus GREEN gates pass with no
+  unresolved P0-P2 finding.
+- Plan 146 remains `IN PROGRESS`. Seam 9, packaged fixture preflight, does not start until Seam 8's
+  exact-tip hosted run is green. No packaged real-prompt evidence, imported/assembled certificate,
+  live `App.vue` Use -> Sign -> Export choreography, hard-wired packaged ceremony, or succession
+  authority exists yet; Seam 10 owns that live choreography.
 
 ## Objective
 
@@ -261,8 +276,10 @@ The exact export artifact is:
 The governance witness key is not another caller-selected `keyId` behind
 `lattice_sign_carrier`.
 
-- Add fixed commands `lattice_ensure_governance_witness_key` and
-  `lattice_sign_governance_witness`. Neither accepts a key id.
+- Add fixed commands `lattice_ensure_governance_witness_key`,
+  `lattice_governance_witness_public_key`, and `lattice_sign_governance_witness`. None accepts a key
+  id. The public-key command reads only the paired public identity metadata; it never creates
+  custody, reads the protected seed, requests presence, or repairs an incomplete identity.
 - Store the Ed25519 seed in a distinct macOS data-protection Keychain service/account using
   `SecAccessControl` user-presence protection and a device-only, unlocked accessibility class.
   Set `kSecUseDataProtectionKeychain` for every macOS query.
@@ -344,9 +361,18 @@ Use request -> Sign witness artifact -> Export artifact
 - Sign calls only `lattice_sign_governance_witness`, verifies its native payload digest, witness key,
   and signature locally, and persists exactly one artifact under the Plan 141 writer at
   `township:witness-artifact:v1:<artifactId>`. It creates no semantic operation or outbox frame.
+- The same serialized write then updates the local discoverability index at
+  `township:witness-artifacts:v1:index`. Its exact versioned entries are
+  `{artifactId, review}`; `review` is public first-signing comprehension metadata containing the
+  claim, winning policy genesis operation id, witness key, threshold, and verified frontier. The
+  canonical artifact remains exact and separate: no review label, frontier, index field, or warning
+  enters its bytes. Artifact bytes are written before the index, so a failed second write reports no
+  success and a retry safely indexes the already durable artifact. An index never points at missing
+  bytes in a successful result.
 - Re-signing the identical claim with the same witness recomputes the same artifact id and is
-  idempotent. A different claim or witness has a different id, requires a new review, and never
-  silently replaces the prior artifact.
+  idempotent even if unrelated local operations changed the later verified frontier; the first
+  signing review remains attached to that artifact id. A different claim or witness has a different
+  id, requires a new review, and never silently replaces the prior artifact.
 - Export requires a separate trusted user event and emits compact UTF-8 JSON with the displayed
   insertion order. It performs no carrier request and does not mark the artifact assembled,
   accepted, or published. Before export, a human-readable confirmation repeats replica, role,
@@ -421,10 +447,10 @@ These seams require explicit user confirmation. Work one vertical RED -> GREEN s
    governance public key through the test-only provider, constructs the threshold-two valid-genesis
    fixture with that pinned key, and proves the source starts with the expected BEAM projection;
    GREEN only fixture/preflight support.
-10. **Packaged ceremony seam.** RED verified pull, inert Use, trace-loud test presence, native
-   governance signing, process-relaunch artifact persistence, explicit export, unchanged source and
-   outbox, and BEAM wrapper-to-subthreshold verification; GREEN only that choreography. Separately
-   record one local real-prompt packaged probe.
+10. **Packaged ceremony seam.** RED the live `App.vue` verified pull, inert Use, trace-loud test
+   presence, native governance signing, process-relaunch artifact persistence, explicit export,
+   unchanged source and outbox, and BEAM wrapper-to-subthreshold verification; GREEN only that live
+   choreography. Separately record one local real-prompt packaged probe.
 11. **Hard wiring seam.** RED absent package/workflow/app-convergence entries; GREEN one focused unit
    gate and one no-build hosted packaged step.
 

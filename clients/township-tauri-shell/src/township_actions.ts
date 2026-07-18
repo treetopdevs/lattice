@@ -1,20 +1,34 @@
 import {
+  assembleWitnessedSuccessionArtifact,
   authorAndPersistTownshipDelegation,
   authorAndPersistTownshipCommand,
   authorTownshipRevocation,
   carrierDelegationsFromFrames,
   carrierOpsToSemanticOps,
+  createJsonLocalOpLogStore,
+  deriveWitnessedSuccessionReview,
+  exportWitnessedSuccessionArtifactJson,
   frontier,
   selectTownshipCapId,
   type CarrierOpFrame,
+  type WitnessedSuccessionArtifactEvidence,
+  type WitnessedSuccessionClaimEvidence,
+  type WitnessedSuccessionReview,
   type TownshipCommand,
 } from "@treetopdevs/lattice-client";
 import {
+  createTownshipNativeStorage,
   createTownshipNativeWorkflow,
+  loadGovernanceWitnessPublicKey,
+  signGovernanceWitnessClaim,
+  TOWNSHIP_LOCAL_OP_LOG_KEY,
+  TOWNSHIP_STORAGE_NAMESPACE,
+  verifyGovernanceWitnessSignature,
   type TownshipNativeWorkflow,
   type TownshipNativeWorkflowOptions,
   withTownshipPersistenceWrite,
 } from "./native_workflow";
+import { townshipMatterSchema } from "./township_preview";
 
 export const TOWNSHIP_REPLICA = "replica:matter:township-g1#root:QUB7owpVIsZn3IyoVLJbsFc5HLkozhi2PVBL5Lzhj3w";
 export const TOWNSHIP_REALM_BY_PUBKEY: Record<string, string> = {
@@ -185,6 +199,225 @@ export type TownshipActionAvailability =
   | TownshipActionAvailabilityUnavailable;
 
 const TOWNSHIP_DEFAULT_DELEGATION_OPS = ["admit", "post", "set_summary", "set_title"] as const;
+
+export const TOWNSHIP_WITNESS_ARTIFACT_KEY_PREFIX = "township:witness-artifact:v1:";
+export const TOWNSHIP_WITNESS_ARTIFACT_INDEX_KEY = "township:witness-artifacts:v1:index";
+export const TOWNSHIP_WITNESS_INDEFINITE_VALIDITY_WARNING =
+  "This artifact has no expiry and may remain valid indefinitely. " +
+  "Valid until the clerk or recovery policy changes; this app cannot revoke an exported signature.";
+
+export type TownshipWitnessArtifactFailureReason =
+  | "native_unavailable"
+  | "replica_mismatch"
+  | "malformed"
+  | "stale"
+  | "unpinned"
+  | "cancelled"
+  | "unavailable";
+
+export interface TownshipWitnessArtifactFailure {
+  ok: false;
+  reason: TownshipWitnessArtifactFailureReason;
+  message: string;
+}
+
+export interface TownshipWitnessReviewSuccess {
+  ok: true;
+  review: WitnessedSuccessionReview;
+  warning: typeof TOWNSHIP_WITNESS_INDEFINITE_VALIDITY_WARNING;
+}
+
+export interface TownshipWitnessArtifactSuccess {
+  ok: true;
+  artifactId: string;
+  storageKey: string;
+  artifactJson: string;
+  review: WitnessedSuccessionReview;
+  warning: typeof TOWNSHIP_WITNESS_INDEFINITE_VALIDITY_WARNING;
+}
+
+export interface TownshipStoredWitnessArtifact {
+  artifactId: string;
+  artifactJson: string;
+  review: WitnessedSuccessionReview;
+}
+
+export interface TownshipWitnessArtifactsLoaded {
+  ok: true;
+  artifacts: TownshipStoredWitnessArtifact[];
+}
+
+export interface TownshipWitnessArtifactExported extends TownshipWitnessArtifactSuccess {
+  fileName: string;
+  confirmation: string[];
+}
+
+interface TownshipWitnessActionOptions extends TownshipNativeWorkflowOptions {
+  replica: string;
+}
+
+interface SubmitTownshipWitnessArtifactOptions extends TownshipWitnessActionOptions {
+  priorReview: WitnessedSuccessionReview;
+}
+
+interface ExportTownshipWitnessArtifactOptions extends TownshipNativeWorkflowOptions {
+  artifactId: string;
+  event: { readonly isTrusted: boolean };
+}
+
+interface TownshipWitnessArtifactIndexEntry {
+  artifactId: string;
+  review: WitnessedSuccessionReview;
+}
+
+interface TownshipWitnessArtifactIndex {
+  v: 1;
+  entries: TownshipWitnessArtifactIndexEntry[];
+}
+
+export async function loadTownshipWitnessReview(
+  options: TownshipWitnessActionOptions,
+): Promise<TownshipWitnessReviewSuccess | TownshipWitnessArtifactFailure> {
+  try {
+    const witness = await loadGovernanceWitnessPublicKey(
+      options.invoke === undefined ? {} : { invoke: options.invoke },
+    );
+    const ops = await loadTownshipWitnessOps(options);
+    const derived = deriveWitnessedSuccessionReview(
+      townshipMatterSchema,
+      ops,
+      { replica: options.replica, role: "clerk", witness },
+      null,
+    );
+    if (!derived.ok) return witnessDerivationFailure(derived.reason);
+    return {
+      ok: true,
+      review: derived.review,
+      warning: TOWNSHIP_WITNESS_INDEFINITE_VALIDITY_WARNING,
+    };
+  } catch (error) {
+    return witnessRuntimeFailure(error);
+  }
+}
+
+export async function submitTownshipWitnessArtifact(
+  options: SubmitTownshipWitnessArtifactOptions,
+): Promise<TownshipWitnessArtifactSuccess | TownshipWitnessArtifactFailure> {
+  if (options.replica !== options.priorReview.claim.replica) {
+    return witnessFailure("replica_mismatch", "The witness review belongs to a different replica.");
+  }
+
+  let review: WitnessedSuccessionReview;
+  try {
+    const witness = await loadGovernanceWitnessPublicKey(
+      options.invoke === undefined ? {} : { invoke: options.invoke },
+    );
+    const ops = await loadTownshipWitnessOps(options);
+    const derived = deriveWitnessedSuccessionReview(
+      townshipMatterSchema,
+      ops,
+      { replica: options.replica, role: "clerk", witness },
+      options.priorReview,
+    );
+    if (!derived.ok) return witnessDerivationFailure(derived.reason);
+    review = derived.review;
+  } catch (error) {
+    return witnessRuntimeFailure(error);
+  }
+
+  let artifact: WitnessedSuccessionArtifactEvidence;
+  try {
+    const signature = await signGovernanceWitnessClaim(
+      review.claim,
+      review.witness,
+      options.invoke === undefined ? {} : { invoke: options.invoke },
+    );
+    artifact = assembleWitnessedSuccessionArtifact(review.claim, {
+      witness: signature.witness,
+      signature: signature.signature,
+    });
+  } catch (error) {
+    return witnessSigningFailure(error);
+  }
+
+  const artifactJson = exportWitnessedSuccessionArtifactJson(artifact);
+  const storage = createTownshipNativeStorage(options);
+  const storageNamespace = options.storageNamespace ?? TOWNSHIP_STORAGE_NAMESPACE;
+  try {
+    await withTownshipPersistenceWrite({ storageNamespace }, async () => {
+      const currentIndex = await loadWitnessArtifactIndex(storage);
+      const nextIndex = addWitnessArtifactIndexEntry(currentIndex, {
+        artifactId: artifact.artifactId,
+        review,
+      });
+      const artifactKey = `${TOWNSHIP_WITNESS_ARTIFACT_KEY_PREFIX}${artifact.artifactId}`;
+      const existing = await storage.getItem(artifactKey);
+      if (existing !== undefined && existing !== null && existing !== artifactJson) {
+        throw new Error("witness artifact storage collision");
+      }
+      if (existing === undefined || existing === null) {
+        await storage.setItem(artifactKey, artifactJson);
+      }
+      if (JSON.stringify(nextIndex) !== JSON.stringify(currentIndex)) {
+        await storage.setItem(TOWNSHIP_WITNESS_ARTIFACT_INDEX_KEY, JSON.stringify(nextIndex));
+      }
+    });
+  } catch (error) {
+    return witnessRuntimeFailure(error, "Witness artifact persistence is unavailable.");
+  }
+
+  return {
+    ok: true,
+    artifactId: artifact.artifactId,
+    storageKey: `${TOWNSHIP_WITNESS_ARTIFACT_KEY_PREFIX}${artifact.artifactId}`,
+    artifactJson,
+    review,
+    warning: TOWNSHIP_WITNESS_INDEFINITE_VALIDITY_WARNING,
+  };
+}
+
+export async function loadTownshipWitnessArtifacts(
+  options: TownshipNativeWorkflowOptions = {},
+): Promise<TownshipWitnessArtifactsLoaded | TownshipWitnessArtifactFailure> {
+  const storage = createTownshipNativeStorage(options);
+  try {
+    const witnessIndex = await loadWitnessArtifactIndex(storage);
+    const artifacts = await Promise.all(
+      witnessIndex.entries.map((entry) => loadStoredWitnessArtifact(storage, entry)),
+    );
+    return { ok: true, artifacts };
+  } catch (error) {
+    return witnessStorageFailure(error, "Stored witness artifacts are unavailable.");
+  }
+}
+
+export async function exportTownshipWitnessArtifact(
+  options: ExportTownshipWitnessArtifactOptions,
+): Promise<TownshipWitnessArtifactExported | TownshipWitnessArtifactFailure> {
+  if (!options.event.isTrusted) {
+    return witnessFailure("unavailable", "Export requires a trusted user action.");
+  }
+
+  const storage = createTownshipNativeStorage(options);
+  try {
+    const witnessIndex = await loadWitnessArtifactIndex(storage);
+    const entry = witnessIndex.entries.find((candidate) => candidate.artifactId === options.artifactId);
+    if (!entry) return witnessFailure("unavailable", "No stored witness artifact is available.");
+    const stored = await loadStoredWitnessArtifact(storage, entry);
+    return {
+      ok: true,
+      artifactId: stored.artifactId,
+      storageKey: `${TOWNSHIP_WITNESS_ARTIFACT_KEY_PREFIX}${stored.artifactId}`,
+      artifactJson: stored.artifactJson,
+      review: stored.review,
+      warning: TOWNSHIP_WITNESS_INDEFINITE_VALIDITY_WARNING,
+      fileName: `township-witness-artifact-v1-${stored.artifactId}.json`,
+      confirmation: witnessArtifactConfirmation(stored.review),
+    };
+  } catch (error) {
+    return witnessStorageFailure(error, "Stored witness artifact is unavailable.");
+  }
+}
 
 export async function loadTownshipActionAvailability(
   options: LoadTownshipActionAvailabilityOptions = {},
@@ -466,6 +699,309 @@ export async function submitTownshipPost(
     localOpCount: submitted.localOpCount,
     carrierFrameCount: submitted.carrierFrameCount,
   };
+}
+
+async function loadTownshipWitnessOps(options: TownshipNativeWorkflowOptions) {
+  const storage = createTownshipNativeStorage(options);
+  return createJsonLocalOpLogStore(storage, TOWNSHIP_LOCAL_OP_LOG_KEY).load();
+}
+
+async function loadWitnessArtifactIndex(
+  storage: ReturnType<typeof createTownshipNativeStorage>,
+): Promise<TownshipWitnessArtifactIndex> {
+  const raw = await storage.getItem(TOWNSHIP_WITNESS_ARTIFACT_INDEX_KEY);
+  if (raw === undefined || raw === null) return { v: 1, entries: [] };
+
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    throw new Error("malformed witness artifact index");
+  }
+  if (!isWitnessArtifactIndex(value)) throw new Error("malformed witness artifact index");
+  return value;
+}
+
+function addWitnessArtifactIndexEntry(
+  current: TownshipWitnessArtifactIndex,
+  entry: TownshipWitnessArtifactIndexEntry,
+): TownshipWitnessArtifactIndex {
+  const existing = current.entries.find((candidate) => candidate.artifactId === entry.artifactId);
+  if (
+    existing &&
+    (existing.review.witness !== entry.review.witness ||
+      !sameWitnessClaim(existing.review.claim, entry.review.claim))
+  ) {
+    throw new Error("witness artifact index collision");
+  }
+  if (existing) return current;
+
+  return {
+    v: 1,
+    entries: [...current.entries, entry].sort(compareWitnessArtifactIndexEntries),
+  };
+}
+
+function compareWitnessArtifactIndexEntries(
+  left: TownshipWitnessArtifactIndexEntry,
+  right: TownshipWitnessArtifactIndexEntry,
+): number {
+  return left.artifactId < right.artifactId ? -1 : left.artifactId > right.artifactId ? 1 : 0;
+}
+
+async function loadStoredWitnessArtifact(
+  storage: ReturnType<typeof createTownshipNativeStorage>,
+  entry: TownshipWitnessArtifactIndexEntry,
+): Promise<TownshipStoredWitnessArtifact> {
+  const raw = await storage.getItem(`${TOWNSHIP_WITNESS_ARTIFACT_KEY_PREFIX}${entry.artifactId}`);
+  if (raw === undefined || raw === null) throw new Error("missing indexed witness artifact");
+  const artifact = parseWitnessArtifact(raw);
+  if (
+    artifact === null ||
+    artifact.artifactId !== entry.artifactId ||
+    artifact.witness !== entry.review.witness ||
+    !sameWitnessClaim(artifact.claim, entry.review.claim) ||
+    !verifyGovernanceWitnessSignature(artifact.claim, artifact.witness, artifact.signature)
+  ) {
+    throw new Error("malformed indexed witness artifact");
+  }
+  return { artifactId: entry.artifactId, artifactJson: raw, review: entry.review };
+}
+
+function parseWitnessArtifact(raw: string): WitnessedSuccessionArtifactEvidence | null {
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !exactObjectKeys(value, ["v", "artifactId", "claim", "witness", "signature"])
+  ) {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  if (
+    record.v !== 1 ||
+    typeof record.artifactId !== "string" ||
+    typeof record.witness !== "string" ||
+    typeof record.signature !== "string"
+  ) {
+    return null;
+  }
+  try {
+    const artifact = assembleWitnessedSuccessionArtifact(
+      record.claim as WitnessedSuccessionClaimEvidence,
+      { witness: record.witness, signature: record.signature },
+    );
+    return artifact.artifactId === record.artifactId ? artifact : null;
+  } catch {
+    return null;
+  }
+}
+
+function isWitnessArtifactIndex(value: unknown): value is TownshipWitnessArtifactIndex {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !exactObjectKeys(value, ["v", "entries"])
+  ) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  if (record.v !== 1 || !Array.isArray(record.entries)) return false;
+
+  let priorId = "";
+  for (const entryValue of record.entries) {
+    if (
+      typeof entryValue !== "object" ||
+      entryValue === null ||
+      !exactObjectKeys(entryValue, ["artifactId", "review"])
+    ) {
+      return false;
+    }
+    const entry = entryValue as Record<string, unknown>;
+    if (
+      typeof entry.artifactId !== "string" ||
+      !canonicalDigest(entry.artifactId) ||
+      entry.artifactId <= priorId ||
+      !isWitnessReview(entry.review)
+    ) {
+      return false;
+    }
+    priorId = entry.artifactId;
+  }
+  return true;
+}
+
+function isWitnessReview(value: unknown): value is WitnessedSuccessionReview {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !exactObjectKeys(value, [
+      "claim",
+      "policyGenesisOperationId",
+      "witness",
+      "threshold",
+      "verifiedFrontier",
+    ])
+  ) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    isWitnessClaim(record.claim) &&
+    typeof record.policyGenesisOperationId === "string" &&
+    canonicalDigest(record.policyGenesisOperationId) &&
+    typeof record.witness === "string" &&
+    canonicalBase64Key(record.witness) &&
+    Number.isSafeInteger(record.threshold) &&
+    (record.threshold as number) > 0 &&
+    Array.isArray(record.verifiedFrontier) &&
+    record.verifiedFrontier.every(
+      (operationId) => typeof operationId === "string" && canonicalDigest(operationId),
+    )
+  );
+}
+
+function isWitnessClaim(value: unknown): value is WitnessedSuccessionClaimEvidence {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !exactObjectKeys(value, [
+      "version",
+      "replica",
+      "role",
+      "holder",
+      "holderEpoch",
+      "successor",
+      "policyId",
+    ])
+  ) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    record.version === 1 &&
+    typeof record.replica === "string" &&
+    record.replica.length > 0 &&
+    record.role === "clerk" &&
+    typeof record.holder === "string" &&
+    canonicalBase64Key(record.holder) &&
+    typeof record.holderEpoch === "string" &&
+    canonicalDigest(record.holderEpoch) &&
+    typeof record.successor === "string" &&
+    canonicalBase64Key(record.successor) &&
+    typeof record.policyId === "string" &&
+    canonicalDigest(record.policyId)
+  );
+}
+
+function canonicalBase64Key(value: string): boolean {
+  const bytes = base64Bytes(value);
+  return bytes !== null && bytes.byteLength === 32 && bytesBase64(bytes) === value;
+}
+
+function canonicalDigest(value: string): boolean {
+  if (!/^[A-Za-z0-9_-]{43}$/.test(value)) return false;
+  const encoded = value.replaceAll("-", "+").replaceAll("_", "/") + "=";
+  const bytes = base64Bytes(encoded);
+  return (
+    bytes !== null &&
+    bytes.byteLength === 32 &&
+    bytesBase64(bytes).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "") === value
+  );
+}
+
+function exactObjectKeys(value: object, expected: readonly string[]): boolean {
+  const actual = Object.keys(value).sort();
+  const wanted = [...expected].sort();
+  return actual.length === wanted.length && actual.every((key, index) => key === wanted[index]);
+}
+
+function sameWitnessClaim(
+  left: WitnessedSuccessionClaimEvidence,
+  right: WitnessedSuccessionClaimEvidence,
+): boolean {
+  return (
+    left.version === right.version &&
+    left.replica === right.replica &&
+    left.role === right.role &&
+    left.holder === right.holder &&
+    left.holderEpoch === right.holderEpoch &&
+    left.successor === right.successor &&
+    left.policyId === right.policyId
+  );
+}
+
+function witnessArtifactConfirmation(review: WitnessedSuccessionReview): string[] {
+  return [
+    `Replica: ${review.claim.replica}`,
+    `Role: ${review.claim.role}`,
+    `Holder: ${review.claim.holder}`,
+    `Holder epoch: ${review.claim.holderEpoch}`,
+    `Successor: ${review.claim.successor}`,
+    `Policy ID: ${review.claim.policyId}`,
+    `Winning policy genesis operation ID: ${review.policyGenesisOperationId}`,
+    `Witness key: ${review.witness}`,
+    `Threshold: ${review.threshold}`,
+    TOWNSHIP_WITNESS_INDEFINITE_VALIDITY_WARNING,
+  ];
+}
+
+function witnessDerivationFailure(reason: string): TownshipWitnessArtifactFailure {
+  if (reason === "replica_mismatch") {
+    return witnessFailure("replica_mismatch", "Verified operations belong to a different replica.");
+  }
+  if (reason === "witness_not_pinned") {
+    return witnessFailure("unpinned", "This governance witness is not pinned by the recovery policy.");
+  }
+  if (reason === "stale_verified_state") {
+    return witnessFailure("stale", "Verified holder or recovery policy details changed before signing.");
+  }
+  return witnessFailure("malformed", "Verified recovery details cannot produce a witness artifact.");
+}
+
+function witnessSigningFailure(error: unknown): TownshipWitnessArtifactFailure {
+  const message = errorMessage(error);
+  if (message.includes("cancelled")) return witnessFailure("cancelled", "Witness signing was cancelled.");
+  if (message.includes("native shell")) return witnessFailure("native_unavailable", "Native witness custody is unavailable.");
+  if (message.includes("unavailable")) return witnessFailure("unavailable", "Witness signing is unavailable.");
+  return witnessFailure("malformed", "The native witness response failed local verification.");
+}
+
+function witnessRuntimeFailure(
+  error: unknown,
+  fallback = "Witness recovery details are unavailable.",
+): TownshipWitnessArtifactFailure {
+  const message = errorMessage(error);
+  if (message.includes("native shell")) return witnessFailure("native_unavailable", fallback);
+  return witnessFailure("unavailable", fallback);
+}
+
+function witnessStorageFailure(
+  error: unknown,
+  fallback: string,
+): TownshipWitnessArtifactFailure {
+  const message = errorMessage(error);
+  if (
+    message.includes("malformed") ||
+    message.includes("missing indexed") ||
+    message.includes("collision")
+  ) {
+    return witnessFailure("malformed", "Stored witness evidence is malformed.");
+  }
+  if (message.includes("native shell")) return witnessFailure("native_unavailable", fallback);
+  return witnessFailure("unavailable", fallback);
+}
+
+function witnessFailure(
+  reason: TownshipWitnessArtifactFailureReason,
+  message: string,
+): TownshipWitnessArtifactFailure {
+  return { ok: false, reason, message };
 }
 
 async function loadDelegationFrames(workflow: TownshipNativeWorkflow): Promise<CarrierOpFrame[]> {
