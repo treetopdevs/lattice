@@ -121,7 +121,9 @@ Execution starts from exact documentation tip `61a1a8685af4c119cc327eeee86800fbf
   retries that public command at most three times, and keeps ordinary native command telemetry
   best-effort. Dedicated TypeScript and isolated Tauri IPC contracts are now hosted Unit gates; both
   formerly failing smokes and the full local `app:convergence` chain pass with the correction.
-- Seam 8 is locally GREEN and awaits exact-tip hosted closure. The adapter's review path reads the
+- Seam 8 is closed at implementation tip `3e84fe8031cec5f98049503a081d0e7ffc53c56d`.
+  Hosted run `29653223560` passed Unit + property, flagship artifact, and packaged macOS
+  convergence. The adapter's review path reads the
   existing governance public sidecar through a new presence-free, create-free native command,
   derives the full verified review, and the view leaves signing disabled until that review exists.
   The adapter's sign path rechecks current local operations, requires fresh protected governance
@@ -133,10 +135,10 @@ Execution starts from exact documentation tip `61a1a8685af4c119cc327eeee86800fbf
   reverify the stored Ed25519 signature and reject noncanonical index digests. Focused TypeScript,
   Vue, Rust custody/command, typecheck, formatting, and Claude Opus GREEN gates pass with no
   unresolved P0-P2 finding.
-- Plan 146 remains `IN PROGRESS`. Seam 9, packaged fixture preflight, does not start until Seam 8's
-  exact-tip hosted run is green. No packaged real-prompt evidence, imported/assembled certificate,
-  live `App.vue` Use -> Sign -> Export choreography, hard-wired packaged ceremony, or succession
-  authority exists yet; Seam 10 owns that live choreography.
+- Plan 146 remains `IN PROGRESS`. Seam 9, packaged fixture preflight, is next. No packaged
+  real-prompt evidence, imported/assembled certificate, live `App.vue` Use -> Sign -> Export
+  choreography, hard-wired packaged ceremony, or succession authority exists yet; Seam 10 owns that
+  live choreography.
 
 ## Objective
 
