@@ -9,6 +9,11 @@ PD-003 code. Reconciled against `main` @ a96b3c4; re-verified on
 `{ zip215: false }` verify sites all present as cited). Styled twin:
 `adr-cosign-01.html` (Rev 2).
 
+Implemented @ 2765413b; hosted closure: flagship run `29661633474` green across all
+three jobs (unit + property suite, packaged macOS convergence, flagship artifact) at
+the exact implementation tip. V-05–V-07, V-09, V-10 land in full; V-08 has a directed
+race test (generator-scheduled churn left open).
+
 ## Context
 
 The op model has exactly one signer: the `author`, whose Ed25519 signature over the
