@@ -108,8 +108,9 @@ Framework-agnostic; the shared spine both the Expo and Tauri shells consume.
 > local client/carrier, OTP 28, security, generated-dist, formatting, diff, and council gates are
 > green. Hosted run `29532242436` passed Unit + property, flagship artifact, and packaged macOS at
 > exact implementation tip `1eb1e4c1ee8e65832064e6c5dd633c4fbb571a3f`; no v7, shell custody,
-> artifact, participant authoring, or user-facing ceremony is claimed. Plan 146's prerequisite is
-> clear and remains TODO until explicitly resumed.
+> artifact, participant authoring, or user-facing ceremony is claimed. Plan 146 is now `IN PROGRESS`:
+> Seams 1-8 are hosted green and the Seam 9 packaged-fixture preflight is locally green pending its
+> exact-tip hosted run; live packaged ceremony and succession authority remain unclaimed.
 
 ### 1.5 Observability & design prototypes (the UI direction, verified logic)
 
