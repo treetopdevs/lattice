@@ -61,6 +61,18 @@ defmodule Lattice.Replica do
       Module.register_attribute(__MODULE__, :lattice_ephemeral, accumulate: true)
       Module.register_attribute(__MODULE__, :lattice_succession, accumulate: true)
       @before_compile Lattice.Replica
+
+      @doc """
+      Op-aware command validity hook (ADR 0007). Consulted by
+      `Lattice.Authority.validate_command/7` after the `cap_ok` and
+      `authority_ok` gates, with the command op and the set of op ids in its
+      causal past. Return `:ok` to honor or `{:error, reason}` to quarantine
+      (semantic, deps-decidable — the reason must depend only on the op and
+      `visible`). Overriding replaces the default entirely, so an override
+      must supply its own catch-all `:ok` clause.
+      """
+      def command_op_status(_op, _visible), do: :ok
+      defoverridable command_op_status: 2
     end
   end
 

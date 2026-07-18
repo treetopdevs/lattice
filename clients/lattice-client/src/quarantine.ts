@@ -4,6 +4,7 @@ import { gatedBy } from "./schema";
 import type { ReplicaSchema } from "./schema";
 import type { AuthorityAnalysis } from "./authority";
 import { capabilityQuarantine } from "./capability";
+import { consentQuarantine } from "./consent";
 
 /**
  * The ONE quarantine predicate (V-01).
@@ -32,28 +33,30 @@ export function isQuarantined(
   if (capability.quarantined) return capability;
 
   const role = gatedBy(schema, op.field);
-  if (!role) return { quarantined: false };
+  if (role) {
+    const acquires = authority.acquiresByRole.get(role) ?? [];
+    const visible = ancestors(op.id, byId, ancCache);
 
-  const acquires = authority.acquiresByRole.get(role) ?? [];
-  const visible = ancestors(op.id, byId, ancCache);
+    let holderAtDeps: string | undefined;
+    let lastOwnIndex = -1;
+    for (let i = 0; i < acquires.length; i++) {
+      const acquire = acquires[i]!;
+      if (!visible.has(acquire.opId)) continue;
+      holderAtDeps = acquire.holder;
+      if (acquire.holder === op.author) lastOwnIndex = i;
+    }
 
-  let holderAtDeps: string | undefined;
-  let lastOwnIndex = -1;
-  for (let i = 0; i < acquires.length; i++) {
-    const acquire = acquires[i]!;
-    if (!visible.has(acquire.opId)) continue;
-    holderAtDeps = acquire.holder;
-    if (acquire.holder === op.author) lastOwnIndex = i;
+    if (holderAtDeps !== op.author) {
+      return { quarantined: true, reason: "not_holder" };
+    }
+
+    const next = lastOwnIndex >= 0 ? acquires[lastOwnIndex + 1] : undefined;
+    if (next !== undefined && !ancestors(next.opId, byId, ancCache).has(op.id)) {
+      return { quarantined: true, reason: "stale_holder" };
+    }
   }
 
-  if (holderAtDeps !== op.author) {
-    return { quarantined: true, reason: "not_holder" };
-  }
-
-  const next = lastOwnIndex >= 0 ? acquires[lastOwnIndex + 1] : undefined;
-  if (next !== undefined && !ancestors(next.opId, byId, ancCache).has(op.id)) {
-    return { quarantined: true, reason: "stale_holder" };
-  }
-
-  return { quarantined: false };
+  // ADR 0007: the replica's op-aware validity conjunct, judged last — consent
+  // never rescues an op the capability or holder gates already rejected.
+  return consentQuarantine(op, schema, byId, ancCache);
 }

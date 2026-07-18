@@ -724,7 +724,9 @@ defmodule Lattice.Authority do
             with :ok <-
                    cap_ok(op, cmd, delegations, deleg_valid, ancestors, revokes, roles_needed),
                  :ok <- authority_ok(op, roles_needed, ancestors, timelines) do
-              :ok
+              # ADR 0007: the replica's op-aware validity conjunct (e.g. the
+              # co-signed consent check), judged over the op and its causal past.
+              module.command_op_status(op, Map.get(ancestors, op.id, MapSet.new()))
             end
 
           {:error, reason} ->
