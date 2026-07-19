@@ -239,7 +239,8 @@ defmodule Lattice.Log do
   @doc "Restore a log previously written with `dump/2`."
   @spec restore(Path.t()) :: {:ok, t()} | {:error, term()}
   def restore(path) do
-    with {:ok, bin} <- File.read(path),
+    with :ok <- ensure_dump_vocabulary(),
+         {:ok, bin} <- File.read(path),
          {:ok, term} <- safe_binary_to_term(bin),
          {:lattice_log_dump_v1, %__MODULE__{} = log} <- term do
       {:ok, upgrade_structs(log)}
@@ -255,6 +256,49 @@ defmodule Lattice.Log do
     {:ok, :erlang.binary_to_term(bin, [:safe])}
   rescue
     _ -> {:error, :unsafe_dump}
+  end
+
+  # `:safe` restore refuses atoms the running VM has not interned, and a freshly
+  # booted server VM loads modules lazily — so the decoder must bring the dump
+  # format's substrate vocabulary with it before decoding: the struct modules a
+  # dump embeds intern their own atom chunks when loaded, and the policy-map
+  # keys below belong to no single module. App-level atoms (roles, command
+  # names) remain the responsibility of the application modules the host loads.
+  defp ensure_dump_vocabulary do
+    Enum.each([Op, Lattice.Authority.Delegation, MapSet], fn module ->
+      {:module, ^module} = Code.ensure_loaded(module)
+    end)
+
+    _ = known_dump_policy_atoms()
+    :ok
+  end
+
+  @doc false
+  def known_dump_policy_atoms do
+    [
+      :command,
+      :authority,
+      :inbox,
+      :tombstone,
+      :mode,
+      :witnessed,
+      :recovery,
+      :witnesses,
+      :threshold,
+      :successor,
+      :version,
+      :dormant_ticks,
+      :claim,
+      :signatures,
+      :witness,
+      :signature,
+      :holder,
+      :holder_epoch,
+      :policy_id,
+      :role,
+      :replica,
+      :beacon
+    ]
   end
 
   # A dump written before a struct gained a field carries maps missing that key
