@@ -95,7 +95,9 @@ defmodule LatticeStress.FailureSemanticsTest do
     is_pid(pid) and pid != old_pid and Process.alive?(pid)
   end
 
-  defp wait_until(fun, timeout \\ 1_000) do
+  # Hosted runners can take longer than one second to reschedule a supervised
+  # process after an intentional `:kill`, especially in the full umbrella suite.
+  defp wait_until(fun, timeout \\ 5_000) do
     deadline = System.monotonic_time(:millisecond) + timeout
     do_wait_until(fun, deadline)
   end
