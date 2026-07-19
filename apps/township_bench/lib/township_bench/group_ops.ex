@@ -43,14 +43,14 @@ defmodule TownshipBench.GroupOps do
   def measure(op, samples) when op in [:scalar_mult, :point_add] and samples > 0 do
     {:ok, Native.measure_op(Atom.to_string(op), samples)}
   rescue
+    _ in [UndefinedFunctionError] ->
+      {:error, :nif_module_unavailable}
+
     e in [ErlangError] ->
       case e do
         %ErlangError{original: :nif_not_loaded} -> {:error, :nif_not_loaded}
         _ -> {:error, e.original}
       end
-
-    _ in [UndefinedFunctionError] ->
-      {:error, :nif_module_unavailable}
   end
 
   def measure(_op, _samples), do: {:error, :badarg}
