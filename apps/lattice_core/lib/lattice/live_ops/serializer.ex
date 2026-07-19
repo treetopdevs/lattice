@@ -6,13 +6,17 @@ defmodule Lattice.LiveOps.Serializer do
   `Lattice.CapStore` (the authority) at serialization time, so the rendered
   status can never drift from the store's actual allow/deny decision. The wire
   keeps emitting `"active"` for a live cap to honor the existing browser/proof
-  contract.
+  contract. If the authority process is unavailable, serialization treats the
+  store as empty so every projected capability fails closed as `"revoked"`
+  without crashing LiveOps.
   """
 
   alias Lattice.{Audit, Cap, CapStore}
 
+  @empty_cap_store_snapshot %{caps: %{}, active_caps: %{}}
+
   def snapshot(state) do
-    store = CapStore.snapshot()
+    store = safe_cap_store_snapshot()
     now = System.monotonic_time(:millisecond)
 
     %{
@@ -52,7 +56,7 @@ defmodule Lattice.LiveOps.Serializer do
   end
 
   def actor_view(state, actor) do
-    public_actor(actor, state, CapStore.snapshot(), System.monotonic_time(:millisecond))
+    public_actor(actor, state, safe_cap_store_snapshot(), System.monotonic_time(:millisecond))
   end
 
   def mermaid(state) do
@@ -140,6 +144,12 @@ defmodule Lattice.LiveOps.Serializer do
     approval
     |> stringify_atom_values()
     |> Map.put(:expires_in_ms, expires_in(Map.get(approval, :expires_at), now))
+  end
+
+  defp safe_cap_store_snapshot do
+    CapStore.snapshot()
+  catch
+    :exit, _reason -> @empty_cap_store_snapshot
   end
 
   defp wire_status(nil), do: "revoked"
