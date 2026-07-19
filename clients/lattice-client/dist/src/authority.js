@@ -1,8 +1,9 @@
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
-import { canonicalBytesForCarrierDelegation, canonicalBytesForWitnessedRecoveryPolicy, canonicalBytesForWitnessedSuccessionClaim, } from "./codec";
-import { ancestors } from "./dag";
+import { canonicalBytesForCarrierDelegation, canonicalBytesForWitnessedRecoveryPolicy, canonicalBytesForWitnessedSuccessionArtifactId, canonicalBytesForWitnessedSuccessionClaim, } from "./codec";
+import { ancestors, canonicalOrder, index } from "./dag";
 import { isAuthorityField } from "./schema";
+import { frontier } from "./sync";
 function emptyRoleState() {
     return { holder: null, acquires: [], heartbeats: [] };
 }
@@ -20,7 +21,7 @@ export function analyzeAuthority(schema, ops, included, order, byId) {
     }
     const collectedDelegations = collectDelegations(visible);
     const delegations = validateDelegations(visible, collectedDelegations);
-    const policies = collectPolicies(visible, delegations);
+    const { policies, recoveryPoliciesByRole } = collectPolicies(visible, delegations);
     const root = resolveRoot(visible, delegations);
     const { effectiveRevokes, unauthorizedRevokes } = collectRevokes(visible, delegations, root);
     const states = new Map();
@@ -93,8 +94,109 @@ export function analyzeAuthority(schema, ops, included, order, byId) {
         quarantinedWrites,
         quarantineReasons,
         acquiresByRole,
+        recoveryPoliciesByRole,
         security: { delegations, root, effectiveRevokes },
     };
+}
+/** Derive a witnessed-succession review solely from a verified local operation set. */
+export function deriveWitnessedSuccessionReview(schema, ops, selector, priorReview) {
+    if (selector.role !== "clerk")
+        return refusedReview("unsupported_role");
+    if (selector.replica.length === 0 ||
+        ops.some((op) => op.replica !== selector.replica)) {
+        return refusedReview("replica_mismatch");
+    }
+    const byId = index(ops);
+    if (byId.size !== ops.length ||
+        ops.some((op) => op.deps.some((dependency) => !byId.has(dependency)))) {
+        return refusedReview("authority_analysis_failed");
+    }
+    let analysis;
+    let orderedOps;
+    try {
+        const order = canonicalOrder(ops, byId);
+        orderedOps = order.map((id) => byId.get(id));
+        analysis = analyzeAuthority(schema, ops, new Set(order), order, byId);
+    }
+    catch {
+        return refusedReview("authority_analysis_failed");
+    }
+    const currentAcquire = analysis.acquiresByRole.get(selector.role)?.at(-1);
+    if (currentAcquire?.holderPubkey === undefined ||
+        canonicalBase64Bytes(currentAcquire.holderPubkey, 32) === null ||
+        !canonicalBase64UrlDigest(currentAcquire.opId)) {
+        return refusedReview("no_current_holder");
+    }
+    const projection = analysis.recoveryPoliciesByRole.get(selector.role);
+    if (projection === undefined)
+        return refusedReview("recovery_policy_unavailable");
+    const policy = normalizeWitnessedSuccessionPolicy(projection.policy);
+    if (policy === null)
+        return refusedReview("invalid_recovery_policy");
+    const policyId = witnessedRecoveryPolicyId(policy.recovery);
+    if (policyId === null)
+        return refusedReview("invalid_recovery_policy");
+    if (canonicalBase64Bytes(selector.witness, 32) === null ||
+        !policy.recovery.witnesses.includes(selector.witness)) {
+        return refusedReview("witness_not_pinned");
+    }
+    const review = {
+        claim: {
+            version: 1,
+            replica: selector.replica,
+            role: selector.role,
+            holder: currentAcquire.holderPubkey,
+            holderEpoch: currentAcquire.opId,
+            successor: policy.successor,
+            policyId,
+        },
+        policyGenesisOperationId: projection.genesisOperationId,
+        witness: selector.witness,
+        threshold: policy.recovery.threshold,
+        verifiedFrontier: frontier(orderedOps),
+    };
+    if (priorReview !== null && !sameWitnessedSuccessionReview(priorReview, review)) {
+        return refusedReview("stale_verified_state");
+    }
+    return { ok: true, review };
+}
+function normalizeWitnessedSuccessionPolicy(policy) {
+    const candidate = policy;
+    if (typeof candidate !== "object" ||
+        candidate === null ||
+        !exactKeys(candidate, ["mode", "successorRealm", "successor", "recovery"])) {
+        return null;
+    }
+    const record = candidate;
+    const recoveryCandidate = record.recovery;
+    if (record.mode !== "witnessed" ||
+        typeof record.successorRealm !== "string" ||
+        canonicalBase64Bytes(record.successor, 32) === null ||
+        typeof recoveryCandidate !== "object" ||
+        recoveryCandidate === null) {
+        return null;
+    }
+    const recovery = normalizeWitnessedRecoveryPolicy(recoveryCandidate);
+    return recovery === null
+        ? null
+        : {
+            mode: "witnessed",
+            successorRealm: record.successorRealm,
+            successor: record.successor,
+            recovery,
+        };
+}
+function sameWitnessedSuccessionReview(left, right) {
+    return (claimBindingMatches(left.claim, right.claim) &&
+        left.claim.policyId === right.claim.policyId &&
+        left.policyGenesisOperationId === right.policyGenesisOperationId &&
+        left.witness === right.witness &&
+        left.threshold === right.threshold &&
+        left.verifiedFrontier.length === right.verifiedFrontier.length &&
+        left.verifiedFrontier.every((id, index) => id === right.verifiedFrontier[index]));
+}
+function refusedReview(reason) {
+    return { ok: false, reason };
 }
 function honoredAcquire(op, evidence, holder) {
     const acquire = {
@@ -127,8 +229,7 @@ function authorityWriteHonored(op, evidence, state, delegations, policies, byId)
         return false;
     }
     if (evidence.type === "genesis") {
-        return (state.holder === null &&
-            delegation.parentId === null &&
+        return (delegation.parentId === null &&
             delegation.issuer === delegation.audience &&
             delegation.issuerRealm === op.author &&
             op.replica !== undefined &&
@@ -192,6 +293,70 @@ function authorityWriteHonored(op, evidence, state, delegations, policies, byId)
         return false;
     }
     throw new Error(`unsupported authority event ${evidence.type} for ${op.id}`);
+}
+export function assembleWitnessedSuccessionArtifact(claim, signature) {
+    if (!validWitnessedSuccessionArtifactInput(claim, signature)) {
+        throw new Error("malformed witnessed succession artifact input");
+    }
+    const orderedClaim = {
+        version: claim.version,
+        replica: claim.replica,
+        role: claim.role,
+        holder: claim.holder,
+        holderEpoch: claim.holderEpoch,
+        successor: claim.successor,
+        policyId: claim.policyId,
+    };
+    return {
+        v: 1,
+        artifactId: bytesToBase64Url(sha256(canonicalBytesForWitnessedSuccessionArtifactId(orderedClaim, signature.witness))),
+        claim: orderedClaim,
+        witness: signature.witness,
+        signature: signature.signature,
+    };
+}
+export function exportWitnessedSuccessionArtifactJson(artifact) {
+    return JSON.stringify({
+        v: artifact.v,
+        artifactId: artifact.artifactId,
+        claim: {
+            version: artifact.claim.version,
+            replica: artifact.claim.replica,
+            role: artifact.claim.role,
+            holder: artifact.claim.holder,
+            holderEpoch: artifact.claim.holderEpoch,
+            successor: artifact.claim.successor,
+            policyId: artifact.claim.policyId,
+        },
+        witness: artifact.witness,
+        signature: artifact.signature,
+    });
+}
+function validWitnessedSuccessionArtifactInput(claim, signature) {
+    return (typeof claim === "object" &&
+        claim !== null &&
+        exactKeys(claim, [
+            "version",
+            "replica",
+            "role",
+            "holder",
+            "holderEpoch",
+            "successor",
+            "policyId",
+        ]) &&
+        claim.version === 1 &&
+        typeof claim.replica === "string" &&
+        claim.replica.length > 0 &&
+        claim.role === "clerk" &&
+        canonicalBase64Bytes(claim.holder, 32) !== null &&
+        canonicalBase64UrlDigest(claim.holderEpoch) &&
+        canonicalBase64Bytes(claim.successor, 32) !== null &&
+        canonicalBase64UrlDigest(claim.policyId) &&
+        typeof signature === "object" &&
+        signature !== null &&
+        exactKeys(signature, ["witness", "signature"]) &&
+        canonicalBase64Bytes(signature.witness, 32) !== null &&
+        canonicalBase64Bytes(signature.signature, 64) !== null);
 }
 export function witnessedRecoveryPolicyId(policy) {
     const normalized = normalizeWitnessedRecoveryPolicy(policy);
@@ -326,6 +491,7 @@ function compareBase64Evidence(left, right) {
 /** Succession policies are conferred only by a genesis whose delegation is valid. */
 function collectPolicies(ops, delegations) {
     const policies = new Map();
+    const recoveryPoliciesByRole = new Map();
     for (const op of ops) {
         const evidence = op.authority;
         if (evidence?.type !== "genesis" || evidence.policies === undefined)
@@ -337,9 +503,18 @@ function collectPolicies(ops, delegations) {
         }
         for (const [role, policy] of Object.entries(evidence.policies)) {
             policies.set(role, policy);
+            if (policy.mode === "witnessed") {
+                recoveryPoliciesByRole.set(role, {
+                    policy,
+                    genesisOperationId: op.id,
+                });
+            }
+            else {
+                recoveryPoliciesByRole.delete(role);
+            }
         }
     }
-    return policies;
+    return { policies, recoveryPoliciesByRole };
 }
 function collectDelegations(ops) {
     const delegations = new Map();
@@ -574,6 +749,18 @@ function canonicalBase64Bytes(value, length) {
     }
     catch {
         return null;
+    }
+}
+function canonicalBase64UrlDigest(value) {
+    if (typeof value !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(value))
+        return false;
+    try {
+        const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "=";
+        const decoded = base64ToBytes(padded);
+        return decoded.length === 32 && bytesToBase64Url(decoded) === value;
+    }
+    catch {
+        return false;
     }
 }
 function bytesToBase64(value) {

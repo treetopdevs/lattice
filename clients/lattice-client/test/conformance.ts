@@ -16,11 +16,14 @@ import { createPublicKey, verify as edVerify } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import {
+  analyzeAuthority,
   canonicalBytesForCarrierDelegation,
   canonicalHash,
+  canonicalOrder,
   carrierDelegationsFromFrames,
   carrierOpsToSemanticOps,
   decodeCarrierOpFrame,
+  index,
   materialize,
   verifyCarrierOp,
   verifyWitnessedSuccessionCertificate,
@@ -59,6 +62,22 @@ interface Vector {
   realmByPubkey?: Record<string, string>;
   successionOperationId?: string;
   tickProvenance?: "author_asserted_untrusted";
+  genesisProjection?: {
+    role: string;
+    acquisitionOperationIds: string[];
+    holderPubkey: string;
+    holderEpochOperationId: string;
+    effectivePolicy: {
+      mode: "witnessed";
+      version: number;
+      successorPubkey: string;
+      witnessPubkeys: string[];
+      threshold: number;
+    };
+    winningPolicyGenesisOperationId: string;
+    policyId: string;
+    impostorGenesisOperationId: string;
+  };
   witnessedRecovery?: {
     deniedOperationId: string;
     honoredOperationId: string;
@@ -335,6 +354,136 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
     );
     check("unproven-tick clerk state", full.state.clerk, "resident");
     check("unproven-tick clerk winner", full.winners.clerk, successionId);
+  }
+
+  if (vec.scenario === "township_genesis_projection_parity") {
+    const projection = vec.genesisProjection;
+    const byId = index(ops);
+    const included = new Set(ops.map((op) => op.id));
+    const authority = analyzeAuthority(
+      vec.schema,
+      ops,
+      included,
+      canonicalOrder(ops, byId),
+      byId,
+    );
+    const reversedOps = [...ops].reverse();
+    const reversedById = index(reversedOps);
+    const reversedAuthority = analyzeAuthority(
+      vec.schema,
+      reversedOps,
+      included,
+      canonicalOrder(reversedOps, reversedById),
+      reversedById,
+    );
+    const acquisitions = authority.acquiresByRole.get(projection?.role ?? "") ?? [];
+    const currentAcquire = acquisitions.at(-1);
+    const policyProjection = authority.recoveryPoliciesByRole.get(projection?.role ?? "");
+    const witnessedPolicy =
+      policyProjection?.policy.mode === "witnessed" ? policyProjection.policy : undefined;
+
+    check(
+      "genesis-projection carrier hash/signatures",
+      carrierFrames === undefined
+        ? null
+        : await Promise.all(carrierFrames.map((frame) => verifyCarrierOp(frame, verifier))),
+      [
+        { hash: true, signature: true, valid: true },
+        { hash: true, signature: true, valid: true },
+        { hash: true, signature: true, valid: true },
+      ],
+    );
+    check(
+      "genesis-projection local authority input boundary",
+      analyzeAuthority.length,
+      5,
+    );
+    check(
+      "genesis-projection delivery-order independence",
+      {
+        acquisitions: reversedAuthority.acquiresByRole
+          .get(projection?.role ?? "")
+          ?.map((acquire) => acquire.opId),
+        policyGenesisOperationId: reversedAuthority.recoveryPoliciesByRole.get(
+          projection?.role ?? "",
+        )?.genesisOperationId,
+      },
+      {
+        acquisitions: authority.acquiresByRole
+          .get(projection?.role ?? "")
+          ?.map((acquire) => acquire.opId),
+        policyGenesisOperationId: authority.recoveryPoliciesByRole.get(
+          projection?.role ?? "",
+        )?.genesisOperationId,
+      },
+    );
+    check(
+      "genesis-projection acquisition timeline",
+      acquisitions.map((acquire) => ({
+        opId: acquire.opId,
+        holder: acquire.holder,
+        holderPubkey: acquire.holderPubkey,
+        atTick: acquire.atTick,
+      })),
+      projection?.acquisitionOperationIds.map((opId) => ({
+        opId,
+        holder: "clerk",
+        holderPubkey: projection.holderPubkey,
+        atTick: 0,
+      })),
+    );
+    check(
+      "genesis-projection current holder epoch",
+      currentAcquire === undefined
+        ? null
+        : { opId: currentAcquire.opId, holderPubkey: currentAcquire.holderPubkey },
+      projection === undefined
+        ? undefined
+        : {
+            opId: projection.holderEpochOperationId,
+            holderPubkey: projection.holderPubkey,
+          },
+    );
+    check(
+      "genesis-projection recovery policy source",
+      policyProjection?.genesisOperationId,
+      projection?.winningPolicyGenesisOperationId,
+    );
+    check(
+      "genesis-projection effective witnessed policy",
+      witnessedPolicy === undefined
+        ? null
+        : Object.entries({
+            mode: witnessedPolicy.mode,
+            version: witnessedPolicy.recovery.version,
+            successorPubkey: witnessedPolicy.successor,
+            witnessPubkeys: [...witnessedPolicy.recovery.witnesses].sort(),
+            threshold: witnessedPolicy.recovery.threshold,
+          }).sort(([left], [right]) => left.localeCompare(right)),
+      projection === undefined
+        ? undefined
+        : Object.entries({
+            ...projection.effectivePolicy,
+            witnessPubkeys: [...projection.effectivePolicy.witnessPubkeys].sort(),
+          }).sort(([left], [right]) => left.localeCompare(right)),
+    );
+    check(
+      "genesis-projection recomputed policy id",
+      witnessedPolicy === undefined
+        ? null
+        : witnessedRecoveryPolicyId(witnessedPolicy.recovery),
+      projection?.policyId,
+    );
+    check(
+      "genesis-projection bound root",
+      authority.security.root?.pubkey,
+      projection?.holderPubkey,
+    );
+    check(
+      "genesis-projection impostor reason",
+      authority.quarantineReasons.get(projection?.impostorGenesisOperationId ?? ""),
+      "impostor_genesis",
+    );
   }
 
   if (vec.scenario === "township_succession_witnessed_recovery") {

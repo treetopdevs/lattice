@@ -19,6 +19,8 @@
     "conformance": "tsx test/conformance.ts",
     "v01:guard": "tsx test/v01_authority_guard.ts",
     "canonical": "tsx test/canonical.ts",
+    "succession:review": "tsx test/witnessed_succession_review.ts",
+    "succession:artifact": "tsx test/witnessed_succession_artifact.ts",
     "township:authoring": "tsx test/township_authoring.ts",
     "tauri:bridge": "tsx test/tauri_bridge.ts",
     "carrier:township": "tsx test/carrier.ts",

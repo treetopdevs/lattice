@@ -1,0 +1,374 @@
+{
+  "capabilityCase": {
+    "case": "lease_renewed",
+    "expiredOperationId": "BGWJn1K-DIazNvpY2FvqXbO0CXG7993u8mF0Wov5e6M",
+    "renewedOperationId": "TT1p39n0UvN8OvWi3fLebFAoVnsuPbA5u1iMjYyC1Bg"
+  },
+  "expectAtFrontier": [],
+  "expectAtFullFrontier": {
+    "authorityQuarantine": [
+      [
+        "BGWJn1K-DIazNvpY2FvqXbO0CXG7993u8mF0Wov5e6M",
+        "lease_expired"
+      ]
+    ],
+    "quarantine": [
+      "BGWJn1K-DIazNvpY2FvqXbO0CXG7993u8mF0Wov5e6M"
+    ],
+    "state": {
+      "clerk": "clerk",
+      "clerk_locked": false,
+      "members": [],
+      "posts": [
+        "via the renewed cap"
+      ],
+      "summary": "",
+      "title": ""
+    },
+    "winners": {
+      "clerk": "lMcPgIkfPV_3nrAhr0FbqNo13oLYGn2PlC3gQMsPoAw",
+      "clerk_locked": null,
+      "summary": null,
+      "title": null
+    }
+  },
+  "generatedBy": "Lattice.Sim",
+  "ops": [
+    {
+      "author": "clerk",
+      "command": "genesis clerk",
+      "deps": [],
+      "field": "clerk",
+      "hash": "lMcPgIkfPV_3nrAhr0FbqNo13oLYGn2PlC3gQMsPoAw",
+      "id": "lMcPgIkfPV_3nrAhr0FbqNo13oLYGn2PlC3gQMsPoAw",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "clerk"
+    },
+    {
+      "author": "clerk",
+      "command": "grant resident",
+      "deps": [
+        "lMcPgIkfPV_3nrAhr0FbqNo13oLYGn2PlC3gQMsPoAw"
+      ],
+      "field": "__authority",
+      "hash": "uhrszE9Q3YLQiJ0iS5pRcJCXwqIhRuo5qIsnS6DS-Rk",
+      "id": "uhrszE9Q3YLQiJ0iS5pRcJCXwqIhRuo5qIsnS6DS-Rk",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "clerk",
+      "command": "authority",
+      "deps": [
+        "uhrszE9Q3YLQiJ0iS5pRcJCXwqIhRuo5qIsnS6DS-Rk"
+      ],
+      "field": "__authority",
+      "hash": "I4t2kLO82U3AXvZFPA_kKoGls_chFomkxlxY8fVO5oE",
+      "id": "I4t2kLO82U3AXvZFPA_kKoGls_chFomkxlxY8fVO5oE",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "resident",
+      "command": "post",
+      "deps": [
+        "I4t2kLO82U3AXvZFPA_kKoGls_chFomkxlxY8fVO5oE"
+      ],
+      "field": "posts",
+      "hash": "BGWJn1K-DIazNvpY2FvqXbO0CXG7993u8mF0Wov5e6M",
+      "id": "BGWJn1K-DIazNvpY2FvqXbO0CXG7993u8mF0Wov5e6M",
+      "kind": "command",
+      "mutation": "append",
+      "value": "via the lapsed cap"
+    },
+    {
+      "author": "clerk",
+      "command": "grant resident",
+      "deps": [
+        "BGWJn1K-DIazNvpY2FvqXbO0CXG7993u8mF0Wov5e6M"
+      ],
+      "field": "__authority",
+      "hash": "XcKFI3Dz4T2d8IbnIJbole4XVjOyLivr1Pq9OCBPJPM",
+      "id": "XcKFI3Dz4T2d8IbnIJbole4XVjOyLivr1Pq9OCBPJPM",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "resident",
+      "command": "post",
+      "deps": [
+        "XcKFI3Dz4T2d8IbnIJbole4XVjOyLivr1Pq9OCBPJPM"
+      ],
+      "field": "posts",
+      "hash": "TT1p39n0UvN8OvWi3fLebFAoVnsuPbA5u1iMjYyC1Bg",
+      "id": "TT1p39n0UvN8OvWi3fLebFAoVnsuPbA5u1iMjYyC1Bg",
+      "kind": "command",
+      "mutation": "append",
+      "value": "via the renewed cap"
+    }
+  ],
+  "oracleCarrierOps": [
+    {
+      "author": "FPtjifbvw/fiE3LAzmsctDFdZ3ddQHMlPsfCxduwaxI=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "FPtjifbvw/fiE3LAzmsctDFdZ3ddQHMlPsfCxduwaxI=",
+              "id": "B3aO9mmZGG2Pd4E58bxA_4sq_8vBJgLAgTJIsCa36Qk",
+              "issuer": "FPtjifbvw/fiE3LAzmsctDFdZ3ddQHMlPsfCxduwaxI=",
+              "live": true,
+              "ops": [
+                "admit",
+                "close_matter",
+                "link_election",
+                "post",
+                "remove_member",
+                "reopen_matter",
+                "set_summary",
+                "set_title"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:lease-renewed#root:Zvhmp4Uvn5mbeN1oHvYSTIXv-HQUX7JzdhniYLXcluA",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "9zl3igzwIHCYUKGFd349u7huj2JBAYNFQ3TNZRkNw0g7V6U+J+sPu8NpjE8E5TjccVyYEhy1eF3BMJnPpC1BCw=="
+            }
+          ],
+          [
+            "map",
+            []
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [],
+      "id": "lMcPgIkfPV_3nrAhr0FbqNo13oLYGn2PlC3gQMsPoAw",
+      "kind": "authority",
+      "replica": "replica:matter:lease-renewed#root:Zvhmp4Uvn5mbeN1oHvYSTIXv-HQUX7JzdhniYLXcluA",
+      "sig": "fiYfEcAbAmL3v4ts0YJMDBBR9t6W2JWhWgO/yWXQBwnHQ3Klc/QMSybeGEs0HaNx8tfibuo6CSRSxFLnvLowBw==",
+      "v": 1
+    },
+    {
+      "author": "FPtjifbvw/fiE3LAzmsctDFdZ3ddQHMlPsfCxduwaxI=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "grant"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "OwlMD16w9pXjS4ReNRXwlfTTHQLXt5Fb/P2JrfUiJcQ=",
+              "expires_epoch": 3,
+              "id": "8c0xyhlvoV8Q8TNlIwc6IkG9aZhzoOfS9TkPf0gqmvQ",
+              "issuer": "FPtjifbvw/fiE3LAzmsctDFdZ3ddQHMlPsfCxduwaxI=",
+              "live": false,
+              "ops": [
+                "post"
+              ],
+              "parent_id": "B3aO9mmZGG2Pd4E58bxA_4sq_8vBJgLAgTJIsCa36Qk",
+              "replica": "replica:matter:lease-renewed#root:Zvhmp4Uvn5mbeN1oHvYSTIXv-HQUX7JzdhniYLXcluA",
+              "roles": [],
+              "sig": "hw0T6mRwGa7zxNC2WRJ932w8+tSBgkWY6RAHReMMuc4hSeDAzZ351tcFYirawlGxjbJ/TXyuDNybuZ52B3N+Bw=="
+            }
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "lMcPgIkfPV_3nrAhr0FbqNo13oLYGn2PlC3gQMsPoAw"
+      ],
+      "id": "uhrszE9Q3YLQiJ0iS5pRcJCXwqIhRuo5qIsnS6DS-Rk",
+      "kind": "authority",
+      "replica": "replica:matter:lease-renewed#root:Zvhmp4Uvn5mbeN1oHvYSTIXv-HQUX7JzdhniYLXcluA",
+      "sig": "4iy8YS3J7J9DfhjeUdxs0BVT0qJSQQtlfLPKR8pN+BNTOGnNK11mfm3LES8uIFdWBu96vr2CK7nPpTOntOC6Cw==",
+      "v": 1
+    },
+    {
+      "author": "FPtjifbvw/fiE3LAzmsctDFdZ3ddQHMlPsfCxduwaxI=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "beacon"
+          ],
+          [
+            "int",
+            4
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "uhrszE9Q3YLQiJ0iS5pRcJCXwqIhRuo5qIsnS6DS-Rk"
+      ],
+      "id": "I4t2kLO82U3AXvZFPA_kKoGls_chFomkxlxY8fVO5oE",
+      "kind": "authority",
+      "replica": "replica:matter:lease-renewed#root:Zvhmp4Uvn5mbeN1oHvYSTIXv-HQUX7JzdhniYLXcluA",
+      "sig": "iNnaf6fRAeEwdfR4HqRAMRPZbxG2GUVsBnOe1gpSRu/FlUb1znF+o3cKmiKFj67Hb0dIBEvTo8SYeMXiGzEkAw==",
+      "v": 1
+    },
+    {
+      "author": "OwlMD16w9pXjS4ReNRXwlfTTHQLXt5Fb/P2JrfUiJcQ=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "post"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "dmlhIHRoZSBsYXBzZWQgY2Fw"
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "OGMweHlobHZvVjhROFRObEl3YzZJa0c5YVpoem9PZlM5VGtQZjBncW12UQ=="
+      ],
+      "deps": [
+        "I4t2kLO82U3AXvZFPA_kKoGls_chFomkxlxY8fVO5oE"
+      ],
+      "id": "BGWJn1K-DIazNvpY2FvqXbO0CXG7993u8mF0Wov5e6M",
+      "kind": "command",
+      "replica": "replica:matter:lease-renewed#root:Zvhmp4Uvn5mbeN1oHvYSTIXv-HQUX7JzdhniYLXcluA",
+      "sig": "RZ7/oo9vRu8F/+5edJHNmKUc7OAglKQaREPpzcNkyPvMl90gyZXQnmpv13SPwGVKNR28zpplbaYvTBXwy767BA==",
+      "v": 1
+    },
+    {
+      "author": "FPtjifbvw/fiE3LAzmsctDFdZ3ddQHMlPsfCxduwaxI=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "grant"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "OwlMD16w9pXjS4ReNRXwlfTTHQLXt5Fb/P2JrfUiJcQ=",
+              "expires_epoch": 9,
+              "id": "yrz-CoWsY89B93zem9gMc5O-exOP0HLYC2UMQrdWa1Y",
+              "issuer": "FPtjifbvw/fiE3LAzmsctDFdZ3ddQHMlPsfCxduwaxI=",
+              "live": false,
+              "ops": [
+                "post"
+              ],
+              "parent_id": "B3aO9mmZGG2Pd4E58bxA_4sq_8vBJgLAgTJIsCa36Qk",
+              "replica": "replica:matter:lease-renewed#root:Zvhmp4Uvn5mbeN1oHvYSTIXv-HQUX7JzdhniYLXcluA",
+              "roles": [],
+              "sig": "LXCZ0Gv9LUBkCexFJaUVnQ9M77Pkf5fEnX9fq8SMKcH545e3Ykwg8Zdendp1mDB0O7LrLm/20vn0dUStb7knDQ=="
+            }
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "BGWJn1K-DIazNvpY2FvqXbO0CXG7993u8mF0Wov5e6M"
+      ],
+      "id": "XcKFI3Dz4T2d8IbnIJbole4XVjOyLivr1Pq9OCBPJPM",
+      "kind": "authority",
+      "replica": "replica:matter:lease-renewed#root:Zvhmp4Uvn5mbeN1oHvYSTIXv-HQUX7JzdhniYLXcluA",
+      "sig": "1Yk3Bim6ubbZ1eDcny3C5iCa8dV/EVuQC6aue17EzxDLuesW+ZvMaifegcmIbEU6tUpvrfwZIDsbp6oh++omCw==",
+      "v": 1
+    },
+    {
+      "author": "OwlMD16w9pXjS4ReNRXwlfTTHQLXt5Fb/P2JrfUiJcQ=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "post"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "dmlhIHRoZSByZW5ld2VkIGNhcA=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "eXJ6LUNvV3NZODlCOTN6ZW05Z01jNU8tZXhPUDBITFlDMlVNUXJkV2ExWQ=="
+      ],
+      "deps": [
+        "XcKFI3Dz4T2d8IbnIJbole4XVjOyLivr1Pq9OCBPJPM"
+      ],
+      "id": "TT1p39n0UvN8OvWi3fLebFAoVnsuPbA5u1iMjYyC1Bg",
+      "kind": "command",
+      "replica": "replica:matter:lease-renewed#root:Zvhmp4Uvn5mbeN1oHvYSTIXv-HQUX7JzdhniYLXcluA",
+      "sig": "7WCmFfeC9nLsRsTgF7kcK2Rlkw0ZIggt/10Eim3fk1h9vsj+tGjd3LgboTfZ/W9dsoHazMil5Nfbb7QewVLUCg==",
+      "v": 1
+    }
+  ],
+  "perspectives": [],
+  "realmByPubkey": {
+    "FPtjifbvw/fiE3LAzmsctDFdZ3ddQHMlPsfCxduwaxI=": "clerk",
+    "OwlMD16w9pXjS4ReNRXwlfTTHQLXt5Fb/P2JrfUiJcQ=": "resident"
+  },
+  "replica": "replica:matter:lease-renewed#root:Zvhmp4Uvn5mbeN1oHvYSTIXv-HQUX7JzdhniYLXcluA",
+  "scenario": "township_lease_renewed",
+  "scenarioKind": "adversarial",
+  "schema": {
+    "fields": {
+      "clerk": {
+        "authority": "clerk"
+      },
+      "clerk_locked": {
+        "default": false,
+        "gatedBy": "clerk",
+        "merge": "lww"
+      },
+      "members": {
+        "merge": "or_set"
+      },
+      "posts": {
+        "merge": "causal_list"
+      },
+      "summary": {
+        "default": "",
+        "merge": "lww"
+      },
+      "title": {
+        "default": "",
+        "merge": "lww"
+      }
+    },
+    "name": "Township.Matter"
+  }
+}

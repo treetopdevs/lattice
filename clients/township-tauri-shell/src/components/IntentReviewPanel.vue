@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import type { WitnessedSuccessionReview } from "@treetopdevs/lattice-client";
 import { townshipCarrierPeerFingerprint } from "../township_carrier_peer";
 import type {
   TownshipPostActionIntent,
@@ -20,15 +21,25 @@ const props = defineProps<{
   busy: boolean;
   submitting: boolean;
   allowed: boolean;
+  witnessReview?: WitnessedSuccessionReview | null;
 }>();
 const emit = defineEmits<{
   sign: [event: Event];
   dismiss: [event: Event];
 }>();
 
-const model = computed<IntentReviewModel>(() => reviewModel(props.intent));
+const model = computed<IntentReviewModel>(() => reviewModel(props.intent, props.witnessReview));
+const witnessWarning =
+  "This artifact has no expiry and may remain valid indefinitely. " +
+  "Valid until the clerk or recovery policy changes; this app cannot revoke an exported signature.";
+const signAllowed = computed(
+  () => props.allowed && (props.intent.v !== 7 || props.witnessReview != null),
+);
 
-function reviewModel(intent: IntentReview): IntentReviewModel {
+function reviewModel(
+  intent: IntentReview,
+  witnessReview: WitnessedSuccessionReview | null | undefined,
+): IntentReviewModel {
   if (intent.v === 2) {
     return {
       id: "participant-status-request",
@@ -74,6 +85,28 @@ function reviewModel(intent: IntentReview): IntentReviewModel {
       signLabel: "Sign revoke",
     };
   }
+  if (intent.v === 7) {
+    const details = witnessReview
+      ? [
+          `Replica: ${witnessReview.claim.replica}`,
+          `Role: ${witnessReview.claim.role}`,
+          `Holder: ${witnessReview.claim.holder}`,
+          `Holder epoch: ${witnessReview.claim.holderEpoch}`,
+          `Successor: ${witnessReview.claim.successor}`,
+          `Policy ID: ${witnessReview.claim.policyId}`,
+          `Winning policy genesis operation ID: ${witnessReview.policyGenesisOperationId}`,
+          `Witness key: ${witnessReview.witness}`,
+          `Threshold: ${witnessReview.threshold}`,
+          `Verified frontier: ${witnessReview.verifiedFrontier.join(", ")}`,
+        ]
+      : [`Requested role: ${intent.authority.role}`];
+    return {
+      id: "participant-witness-request",
+      eyebrow: "Unsigned local review",
+      details,
+      signLabel: "Sign witness artifact",
+    };
+  }
   return assertNeverIntentReview(intent);
 }
 
@@ -89,8 +122,9 @@ function assertNeverIntentReview(_intent: never): never {
       <span>{{ model.eyebrow }}</span>
     </div>
     <p v-for="detail in model.details" :key="detail" class="incoming-action-text">{{ detail }}</p>
+    <p v-if="intent.v === 7 && witnessReview" class="witness-warning">{{ witnessWarning }}</p>
     <div class="incoming-action-controls">
-      <button type="button" :disabled="busy || submitting || !allowed" @click="emit('sign', $event)">
+      <button type="button" :disabled="busy || submitting || !signAllowed" @click="emit('sign', $event)">
         {{ submitting ? "Signing" : model.signLabel }}
       </button>
       <button type="button" class="secondary-action" @click="emit('dismiss', $event)">Dismiss request</button>

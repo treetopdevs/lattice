@@ -23,6 +23,8 @@ export interface AuthorityDelegationEvidence {
   live: boolean;
   /** Embedded delegation signature retained from carrier evidence when available. */
   sig?: string;
+  /** Plan 149 lease — present only on leased (v3-encoded) delegations. */
+  expiresEpoch?: number;
 }
 
 /** Legacy author-asserted tick policy retained for characterized POC compatibility. */
@@ -76,6 +78,14 @@ export interface WitnessedSuccessionSignatureEvidence {
   signature: string;
 }
 
+export interface WitnessedSuccessionArtifactEvidence {
+  v: 1;
+  artifactId: string;
+  claim: WitnessedSuccessionClaimEvidence;
+  witness: string;
+  signature: string;
+}
+
 export interface WitnessedSuccessionCertificateEvidence {
   claim: WitnessedSuccessionClaimEvidence;
   signatures: WitnessedSuccessionSignatureEvidence[];
@@ -106,7 +116,8 @@ export type AuthorityEvidence =
       proof: SuccessionProofEvidence;
     }
   | { type: "revoke"; delegationId: string }
-  | { type: "heartbeat"; role: string; atTick: number };
+  | { type: "heartbeat"; role: string; atTick: number }
+  | { type: "beacon"; epoch: number | null };
 
 export interface Op {
   /** Content-address id from Elixir. In Tier A this is an opaque handle. */
@@ -137,6 +148,24 @@ export interface Op {
   cap?: string | null;
   /** Semantic authority facts retained from the verified carrier body. */
   authority?: AuthorityEvidence;
+  /** ADR 0007 co-signed consent evidence retained from the carrier command body. */
+  consent?: CustodyConsentEvidence;
+}
+
+/**
+ * ADR 0007 — the co-signed consent facts a `:custody_transfer` command carries
+ * inside its hashed body, retained at carrier decode so the quarantine
+ * predicate can recompute and verify the consent payload.
+ */
+export interface CustodyConsentEvidence {
+  /** base64 pubkey of the declared recipient — the consenting signer. */
+  toPub: string;
+  /** Op id of the durable custody request this consent is bound to (the nonce). */
+  requestOpId: string;
+  /** base64 consent signature, or null when the body carries none. */
+  sig: string | null;
+  /** base64 pubkey of the op author — the consent payload's `from`. */
+  authorPub: string;
 }
 
 /** Compare two opaque ordering keys. Returns >0 if a>b. */

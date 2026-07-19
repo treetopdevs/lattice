@@ -92,7 +92,8 @@ defmodule Lattice.Sim do
         ops: Keyword.get(opts, :ops, []),
         roles: Keyword.get(opts, :roles, []),
         live: Keyword.get(opts, :live, false),
-        parent_id: parent && parent.id
+        parent_id: parent && parent.id,
+        expires_epoch: Keyword.get(opts, :expires_epoch)
       )
 
     {sim, _op} = append(sim, issuer_realm, :authority, {:grant, deleg})
@@ -111,7 +112,8 @@ defmodule Lattice.Sim do
       Delegation.new(from, sim.replica, to.pub,
         ops: Keyword.get(opts, :ops, [:lock, :unlock]),
         roles: [role],
-        parent_id: parent && parent.id
+        parent_id: parent && parent.id,
+        expires_epoch: Keyword.get(opts, :expires_epoch)
       )
 
     {sim, _op} = append(sim, from_realm, :authority, {:transfer, role, deleg, at_tick})
@@ -148,6 +150,16 @@ defmodule Lattice.Sim do
   @spec heartbeat(t(), String.t(), atom(), non_neg_integer()) :: {t(), Op.t()}
   def heartbeat(%__MODULE__{} = sim, holder_realm, role, at_tick) do
     append(sim, holder_realm, :authority, {:heartbeat, role, at_tick})
+  end
+
+  @doc """
+  Epoch beacon (plan 149): a root-signed logical tick on the log. Valid only
+  from the replica root and only when strictly monotonic in its causal
+  ancestry; leases lapse when a valid beacon passes their `expires_epoch`.
+  """
+  @spec beacon(t(), String.t(), non_neg_integer()) :: {t(), Op.t()}
+  def beacon(%__MODULE__{} = sim, realm, epoch) do
+    append(sim, realm, :authority, {:beacon, epoch})
   end
 
   @doc "Queue an authoritative request through the holder (behavior 6)."

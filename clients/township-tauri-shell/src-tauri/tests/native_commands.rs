@@ -39,6 +39,9 @@ fn command_names_match_the_tauri_bridge_contract() {
             "lattice_ensure_carrier_key",
             "lattice_public_key",
             "lattice_sign_carrier",
+            "lattice_ensure_governance_witness_key",
+            "lattice_governance_witness_public_key",
+            "lattice_sign_governance_witness",
             "lattice_discover_pairing_adverts",
             "lattice_advertise_pairing_handoff",
             "lattice_android_current_pairing_handoff_b64",
@@ -56,6 +59,9 @@ fn command_names_match_the_tauri_bridge_contract() {
             "lattice_ensure_carrier_key",
             "lattice_public_key",
             "lattice_sign_carrier",
+            "lattice_ensure_governance_witness_key",
+            "lattice_governance_witness_public_key",
+            "lattice_sign_governance_witness",
             "lattice_discover_pairing_adverts",
             "lattice_advertise_pairing_handoff",
             "lattice_android_current_pairing_handoff_b64",
@@ -167,14 +173,6 @@ fn registered_tauri_commands_roundtrip_through_mock_ipc() {
         &webview,
         "lattice_log_probe",
         serde_json::json!({ "event": "township-canonical-probe digest=test" }),
-        Ok(()),
-    );
-
-    #[cfg(feature = "township-dev-trace")]
-    assert_ipc_response(
-        &webview,
-        "lattice_trace_dev_event",
-        serde_json::json!({ "event": "deep-link:township://pairing" }),
         Ok(()),
     );
 }
@@ -343,6 +341,47 @@ fn platform_secure_builder_uses_stable_keyring_service_and_registers_commands() 
         "lattice_kv_get",
         serde_json::json!({ "key": "township:bootstrap:probe" }),
         Ok(None::<String>),
+    );
+}
+
+#[cfg(all(
+    feature = "township-dev-trace",
+    feature = "township-governance-test-presence"
+))]
+#[test]
+fn packaged_test_presence_feature_binds_a_trace_loud_deterministic_provider() {
+    assert_eq!(
+        township_tauri_shell::TOWNSHIP_GOVERNANCE_TEST_PRESENCE_TRACE,
+        "governance-test-presence:authorized"
+    );
+    let first = TownshipNativeState::platform_secure(TOWNSHIP_KEYRING_SERVICE);
+    let second = TownshipNativeState::platform_secure(TOWNSHIP_KEYRING_SERVICE);
+
+    assert_eq!(
+        first.governance_witness_provider_kind(),
+        township_tauri_shell::GovernanceWitnessProviderKind::TestPresence
+    );
+    assert!(first.governance_witness_custody_is_bound());
+    assert_eq!(
+        first.ensure_governance_witness_key().unwrap(),
+        second.ensure_governance_witness_key().unwrap()
+    );
+
+    let before = township_tauri_shell::governance_test_presence_authorization_count();
+    first
+        .sign_governance_witness(&serde_json::json!({
+            "version": 1,
+            "replica": "replica:matter:succession-witnessed-recovery#root:lc9GuxZMwEl99X0zNhDLAa6jR9n8pBX-2zFS3ghRwWo",
+            "role": "clerk",
+            "holder": "mCaZpMJ0SU2lf3v2ljw0D05Px4pmoY1jUIIVv19hmZ4=",
+            "holderEpoch": "SJMi-K8IUPUvtk3zYRUVMeska-KcUvNT_8oPWTlKDAI",
+            "successor": "DBY121cVb1O+BdK+NucwFZyZtUTdrPpxhnZ2Wg41jjY=",
+            "policyId": "APOtJzZqq0XmqxkCRK2sl4L--O-nrZ5QhxUOHpZhJ30"
+        }))
+        .unwrap();
+    assert_eq!(
+        township_tauri_shell::governance_test_presence_authorization_count(),
+        before + 1
     );
 }
 

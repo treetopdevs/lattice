@@ -1,0 +1,12 @@
+{
+  "payload": {
+    "v": 7,
+    "id": "0123456789abcdef0123456789abcdef",
+    "replica": "replica:matter:one",
+    "authority": {
+      "action": "witness_succession",
+      "role": "clerk"
+    }
+  },
+  "url": "township://action?intent=eyJ2Ijo3LCJpZCI6IjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwicmVwbGljYSI6InJlcGxpY2E6bWF0dGVyOm9uZSIsImF1dGhvcml0eSI6eyJhY3Rpb24iOiJ3aXRuZXNzX3N1Y2Nlc3Npb24iLCJyb2xlIjoiY2xlcmsifX0"
+}

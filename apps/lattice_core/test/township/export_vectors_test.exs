@@ -358,6 +358,77 @@ defmodule Township.ExportVectorsTest do
              ])
   end
 
+  test "lattice.export_vectors pins valid-genesis holder and policy projection to the BEAM oracle" do
+    out_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "lattice_genesis_projection_vectors_#{System.unique_integer([:positive])}"
+      )
+
+    on_exit(fn -> File.rm_rf(out_dir) end)
+
+    Mix.Task.clear()
+    assert :ok = Mix.Task.run("lattice.export_vectors", ["--out", out_dir])
+
+    vector = read_vector!(out_dir, "township_genesis_projection_parity")
+
+    assert vector["generatedBy"] == "Lattice.Sim"
+    assert vector["scenarioKind"] == "adversarial"
+
+    projection = vector["genesisProjection"]
+    [first_genesis_id, second_genesis_id] = projection["acquisitionOperationIds"]
+    impostor_genesis_id = projection["impostorGenesisOperationId"]
+
+    assert projection["role"] == "clerk"
+    assert is_binary(first_genesis_id)
+    assert is_binary(second_genesis_id)
+    assert first_genesis_id != second_genesis_id
+    assert projection["holderEpochOperationId"] == second_genesis_id
+    assert projection["winningPolicyGenesisOperationId"] == second_genesis_id
+    assert is_binary(projection["holderPubkey"])
+    assert vector["realmByPubkey"][projection["holderPubkey"]] == "clerk"
+    assert is_binary(projection["policyId"])
+    assert is_binary(impostor_genesis_id)
+
+    policy = projection["effectivePolicy"]
+    assert policy["mode"] == "witnessed"
+    assert policy["version"] == 1
+    assert policy["threshold"] == 2
+    assert vector["realmByPubkey"][policy["successorPubkey"]] == "resident"
+
+    assert policy["witnessPubkeys"]
+           |> Enum.map(&vector["realmByPubkey"][&1])
+           |> Enum.sort() == ["witness_b", "witness_c"]
+
+    frames = vector["oracleCarrierOps"]
+    first_genesis = Enum.find(frames, &(&1["id"] == first_genesis_id))
+    second_genesis = Enum.find(frames, &(&1["id"] == second_genesis_id))
+    impostor_genesis = Enum.find(frames, &(&1["id"] == impostor_genesis_id))
+
+    assert first_genesis["deps"] == []
+    assert second_genesis["deps"] == [first_genesis_id]
+    assert impostor_genesis["deps"] == [second_genesis_id]
+
+    for frame <- [first_genesis, second_genesis, impostor_genesis] do
+      assert [
+               "tuple",
+               [
+                 ["atom", "genesis"],
+                 ["delegation", _delegation],
+                 ["map", _policies]
+               ]
+             ] = frame["body"]
+    end
+
+    assert [impostor_genesis_id, "impostor_genesis"] in vector["expectAtFullFrontier"][
+             "authorityQuarantine"
+           ]
+
+    refute impostor_genesis_id in projection["acquisitionOperationIds"]
+    assert vector["expectAtFullFrontier"]["state"]["clerk"] == "clerk"
+    assert vector["expectAtFullFrontier"]["winners"]["clerk"] == second_genesis_id
+  end
+
   test "lattice.export_vectors isolates an impostor genesis that Sim rejects" do
     out_dir =
       Path.join(

@@ -2,15 +2,153 @@
 
 ## Status
 
-TODO - council-approved and blocked on predecessor closure. The user selected a distinct governance
-command/key with trusted user presence, and the corrected exact-worktree plan passed final
-Codex, Claude Opus, and Antigravity review with no unresolved P0-P2 finding. Do not write RED or
-change runtime behavior until Plan 147 and Plan 148 are `DONE` and the user explicitly resumes the
-build-map goal.
+IN PROGRESS - the hard start gate is satisfied. The user selected a distinct governance
+command/key with trusted user presence, explicitly resumed the build-map goal, and the fresh
+post-closure Codex, Claude Opus, and Antigravity council pass found no unresolved P0-P2 issue.
 
-Planned against commit `36ceba666590dac096bc5644bb7a498b7c8ec756` on
-`codex/township-build-map`, whose exact-tip hosted run `29407856933` passed Unit + property,
-flagship artifact, and packaged macOS after Plan 145's implementation and claim closures.
+Execution starts from exact documentation tip `61a1a8685af4c119cc327eeee86800fbfb62eaaa` on
+`codex/township-build-map`.
+
+## Predecessor Closure Record (2026-07-16)
+
+- Plan 147 implementation tip `b2ad50629d1867dab71f0de50c038480bb5fe3b7` passed hosted run
+  `29525397708`; exact documentation tip `7e7a0d3e0ff65b461094db3a2c9c9037b3cba4ec` passed manual
+  hosted run `29526830271`. All three jobs were green in both runs.
+- Plan 148 implementation tip `1eb1e4c1ee8e65832064e6c5dd633c4fbb571a3f` passed hosted run
+  `29532242436`; exact documentation tip `61a1a8685af4c119cc327eeee86800fbfb62eaaa` passed manual
+  hosted run `29533793872`. All three jobs were green in both runs.
+- Fresh post-closure Codex, Claude Opus, and Antigravity review confirmed the live Plan 145/148
+  interfaces still satisfy this plan. The first implementation slice is the plan-ordered
+  cross-runtime v7 request seam; no native custody, artifact, or v7 review UI enters that slice.
+
+## Implementation Progress (2026-07-16)
+
+- Seam 1 is closed at implementation tip `9c20e7b6741ea07e8324142815e51c54d5c10d7b`.
+  Hosted run `29537649815` passed Unit + property, flagship artifact, and packaged macOS
+  convergence. One shared fixture pins the exact custody-free v7 clerk selector; Elixir produces
+  those bytes; TypeScript accepts only the closed selector shape while preserving every v1-v6
+  contract.
+- A valid v7 request is parseable but not yet reviewable. The installed-app dispatcher rejects it
+  with the existing coarse `invalid_action` outcome until Seam 3 registers the v7 descriptor and
+  review surface. The reviewable v1-v6 union remains exhaustive and compile-checked.
+- The RED gate failed on the absent Elixir producer and unsupported TypeScript version. Claude
+  Opus found the initial GREEN incorrectly widened the reviewable UI union; a second RED proved the
+  typecheck and staging failures, and the corrected GREEN passed focused BEAM, parser, dispatcher,
+  structural frontend, UI, and typecheck gates. Full OTP 28 `mix check` also passed.
+- Seam 2 is closed at implementation tip `b0bcc1c0c7daee30354e752dfe668d4a171fa492`.
+  Hosted run `29546424500` passed Unit + property, flagship artifact, and packaged macOS
+  convergence after one failed packaged attempt was retried for an external npm DNS lookup error.
+  A fresh carrier projection exposes one clerk-role form, produces the exact v7 selector, retains
+  it only for the same fresh replica, and clears it on invalid input, replica replacement, or stale
+  state.
+- Seam 3 is closed at implementation tip `579b90786f8ca479ef40e93f75cb9e5625542b4a`.
+  Hosted run `29548446639` passed Unit + property, flagship artifact, and packaged macOS
+  convergence. Matching-replica v7 ingress stages only an unsigned selector; trusted
+  Use moves it into one disabled local review surface; untrusted Use, pairing absence, replica
+  mismatch, and dismiss remain fail-closed and inert. Development routing includes the v7 slot,
+  while Sign has no reachable submission path before verified claim derivation. The RED failed on
+  the temporary dispatcher refusal and absent descriptor/review arms; GREEN passed the focused UI,
+  dispatcher, typecheck, frontend, runtime-wiring, handoff-support, action, and production-build
+  gates. A targeted label mutation failed only the two v7 contracts and restored to 21/21. Fresh
+  Claude Opus RED, GREEN, and mutation reviews reported no unresolved P0-P2 finding.
+- Seam 4 is closed at implementation tip `3fb730fc9a0048dd9fb0adf8b3aff09151d45e9a`.
+  Hosted run `29550692702` passed Unit + property, flagship artifact, and packaged macOS
+  convergence. One public four-input pure client helper derives the exact Plan 145
+  claim, winning valid-genesis policy operation, pinned witness, threshold, and deterministic
+  verified frontier from the Plan 148 BEAM-pinned local authority projection. It accepts no relay
+  authority input and compares every returned field when rechecking a prior review before signing.
+  Legacy or malformed policy, no holder, unpinned witness, mismatched replica, incomplete operation
+  set, and stale epoch, successor, policy, threshold, or frontier all fail closed. The RED initially
+  exposed a missing helper; Claude found and the revised RED removed false-green relay and stale
+  checks. Focused GREEN is 14/14, typecheck and full client conformance pass, and removing threshold
+  binding caused exactly the intended stale-threshold failure before restoration. Fresh Claude
+  Opus RED, corrected-RED, GREEN, mutation, exact-worktree, staged-index, and hosted-result reviews
+  report no unresolved P0-P2 finding.
+- Seam 5 is closed at implementation tip `7cd58baa209960436cf89d0839d5c7f62c5b148e`.
+  Hosted run `29552829885` passed Unit + property, flagship artifact, and packaged macOS
+  convergence. BEAM and TypeScript independently produced two exact Plan 145 canonical claim
+  payloads and SHA-256 digests; the primary digest is
+  `534b4fb858a618734c6718d4ae2133bf563787b404f6ccb2442928c72f303f51`.
+  A fixed-schema Rust parser/encoder reproduces both byte oracles, computes each digest from its
+  emitted bytes, accepts reordered JSON object keys, and rejects extra, missing, unsupported, and
+  noncanonical fields plus unrelated JSON terms. It uses only existing base64, serde, and SHA-256
+  dependencies; all encoding helpers are private and no general Lattice term or CBOR API exists.
+  The corrected RED failed only on the absent module after Claude caught one test-constant
+  transcription error. GREEN is 5/5 and the full native suite is green; swapping two canonical map
+  entries failed exactly the two cross-runtime oracle tests before restoration. Fresh Claude Opus
+  RED, corrected-RED, GREEN, and mutation reviews report no unresolved P0-P2 finding.
+- Seam 6 is closed at implementation tip `50412602aa00228bf66b125e69eb797fb27c022c`.
+  Hosted run `29567069272` passed Unit + property, flagship artifact, and packaged macOS
+  convergence, including the ordinary macOS governance-custody binding and every existing
+  packaged action/feed seam. The shell now registers fixed governance ensure/sign commands backed on
+  ordinary macOS builds by one dedicated data-protection Keychain identity whose protected seed
+  requires fresh user presence per signature. Presence-free seed identity metadata and a separate
+  public sidecar must agree; creation is create-only, race-reconciled, rollback-safe, and never
+  repairs incomplete or mismatched state. Generic carrier key APIs reject the governance alias.
+  Native signing accepts only the exact closed Plan 145 claim and returns witness, signature, and
+  payload digest; the TypeScript bridge independently reconstructs and verifies all three before
+  returning. A trace-loud deterministic packaged provider is compile-time-invalid unless paired
+  with the development-trace feature, and ordinary macOS construction remains pinned to protected
+  custody. Default and paired-feature Rust matrices, the forbidden unpaired-feature compile gate,
+  governance/native TypeScript contracts, and typecheck are green. Codex found one real production
+  error-taxonomy gap after GREEN: real Keychain cancellation and unavailability were collapsed.
+  A focused RED pinned Apple Security statuses; the corrected GREEN carries typed prompt outcomes
+  through the existing coarse refusal mapper without exposing platform detail. Claude Opus approved
+  each RED/GREEN correction, and Antigravity withdrew two unsupported findings after inspecting the
+  exact dependency ownership and canonical-signature behavior. Final Codex review found that the
+  bridge contract and macOS-only ordinary-provider binding were not yet hosted gates. A second TDD
+  correction orders the bridge into convergence and Unit CI, gives the macOS binding assertion its
+  own non-prompting Cargo target, and runs that target in packaged macOS CI. The exact local
+  convergence chain is green after also isolating its launch smoke from shared app-local test state;
+  the smoke passed twice consecutively and now retains peer diagnostics for any later failure.
+  Exact-tip HEAD and origin matched with a clean worktree, and the final hosted-result Claude Opus
+  review returned `PROCEED` with no P0-P2 finding.
+- Seam 7 is closed at implementation tip `3a1502d21de851e03b1e79d3f372d55c1d84d5ab`.
+  Hosted run `29575660090` passed Unit + property, flagship artifact, and packaged macOS
+  convergence. TypeScript now assembles one exact public witness artifact, computes its
+  domain-separated storage locator from the Plan 145 signing payload plus witness bytes, enforces
+  exact claim/signature key sets and canonical encodings, and emits compact JSON in the specified
+  stable field order. BEAM independently decodes that literal JSON through a strict string-key
+  normalizer, recomputes the artifact id before converting the flat witness entry into the existing
+  one-signature certificate, and reaches `:insufficient_recovery_witnesses` under the exact
+  threshold-two policy whose id is pinned to the claim. Reordered JSON keys normalize identically;
+  malformed shape/encoding, wrapper version, artifact id, signature, holder, holder epoch,
+  successor, replica, role, policy id, and unpinned-witness mutations preserve the planned error
+  precedence. Focused TypeScript gates are green, and the artifact plus Plan 145 BEAM suites are
+  22/0. Fresh Claude Opus, Codex, and Antigravity reviews report no unresolved P0-P2 finding. Full
+  convergence then reproduced the same missing native-hydration trace in launch and action-handoff
+  smokes. A focused correction makes the explicit development-trace command report sink failures,
+  retries that public command at most three times, and keeps ordinary native command telemetry
+  best-effort. Dedicated TypeScript and isolated Tauri IPC contracts are now hosted Unit gates; both
+  formerly failing smokes and the full local `app:convergence` chain pass with the correction.
+- Seam 8 is closed at implementation tip `3e84fe8031cec5f98049503a081d0e7ffc53c56d`.
+  Hosted run `29653223560` passed Unit + property, flagship artifact, and packaged macOS
+  convergence. The adapter's review path reads the
+  existing governance public sidecar through a new presence-free, create-free native command,
+  derives the full verified review, and the view leaves signing disabled until that review exists.
+  The adapter's sign path rechecks current local operations, requires fresh protected governance
+  presence, persists exact artifact bytes before a versioned public review index, and converges
+  after an interrupted index write. Re-signing the same claim and witness is idempotent even when
+  unrelated operations advance the verified frontier; the index retains the first-signing review.
+  Its trusted-event export boundary returns exact stored bytes with full human-readable confirmation
+  and the indefinite-validity warning, without consulting or contacting the carrier. Reload/export
+  reverify the stored Ed25519 signature and reject noncanonical index digests. Focused TypeScript,
+  Vue, Rust custody/command, typecheck, formatting, and Claude Opus GREEN gates pass with no
+  unresolved P0-P2 finding.
+- Seam 9 is closed at implementation tip `ef8dd6c8c006bfe46776c18b3e0365c5affae9aa`.
+  Hosted run `29661339348` passed Unit + property, flagship artifact, and packaged macOS
+  convergence at that exact tip. One no-build harness step discovers
+  the deterministic governance public key through the feature-gated test-presence provider without
+  authorizing presence or rebuilding the packaged app. BEAM constructs and freshly restores one
+  clerk-authored valid genesis whose threshold-two policy pins that key plus a distinct control
+  witness; neither witness authors source state. TypeScript independently reproduces the raw-key
+  witness order, policy id, claim payload digest, exact holder epoch/frontier, and unpinned-witness
+  refusal. Focused Rust, TypeScript, BEAM, formatting, typecheck, and node-spike gates are green.
+  Fresh Codex, Claude Opus, and Antigravity exact-worktree reviews found no unresolved P0-P2 issue.
+- Plan 146 remains `IN PROGRESS`. Seam 10, the packaged ceremony, is next. No packaged
+  real-prompt evidence, imported/assembled certificate, live `App.vue` Use ->
+  Sign -> Export choreography, hard-wired packaged ceremony, or succession authority exists yet;
+  Seam 10 owns that live choreography.
 
 ## Objective
 
@@ -150,14 +288,20 @@ The exact export artifact is:
 The governance witness key is not another caller-selected `keyId` behind
 `lattice_sign_carrier`.
 
-- Add fixed commands `lattice_ensure_governance_witness_key` and
-  `lattice_sign_governance_witness`. Neither accepts a key id.
+- Add fixed commands `lattice_ensure_governance_witness_key`,
+  `lattice_governance_witness_public_key`, and `lattice_sign_governance_witness`. None accepts a key
+  id. The public-key command reads only the paired public identity metadata; it never creates
+  custody, reads the protected seed, requests presence, or repairs an incomplete identity.
 - Store the Ed25519 seed in a distinct macOS data-protection Keychain service/account using
   `SecAccessControl` user-presence protection and a device-only, unlocked accessibility class.
   Set `kSecUseDataProtectionKeychain` for every macOS query.
 - Store the corresponding public key as separate non-secret native metadata so review can obtain it
   without authenticating. On every sign, derive the public key again from the authenticated seed
   and reject any mismatch with that metadata before returning.
+- Bind the protected seed item to the same public key through a non-secret, presence-free identity
+  attribute. Ensure compares that attribute with the separate public sidecar to detect seed-only,
+  sidecar-only, and mismatch states without reading secret bytes or prompting for authentication;
+  the separate sidecar remains the public identity returned to the app.
 - `lattice_ensure_governance_witness_key` is strict get-or-create under one native creation mutex:
   when neither item exists it creates the pair once; when both exist it returns the sidecar; seed
   only, sidecar only, or mismatch is a fail-loud incomplete/corrupt state. It never overwrites,
@@ -229,9 +373,18 @@ Use request -> Sign witness artifact -> Export artifact
 - Sign calls only `lattice_sign_governance_witness`, verifies its native payload digest, witness key,
   and signature locally, and persists exactly one artifact under the Plan 141 writer at
   `township:witness-artifact:v1:<artifactId>`. It creates no semantic operation or outbox frame.
+- The same serialized write then updates the local discoverability index at
+  `township:witness-artifacts:v1:index`. Its exact versioned entries are
+  `{artifactId, review}`; `review` is public first-signing comprehension metadata containing the
+  claim, winning policy genesis operation id, witness key, threshold, and verified frontier. The
+  canonical artifact remains exact and separate: no review label, frontier, index field, or warning
+  enters its bytes. Artifact bytes are written before the index, so a failed second write reports no
+  success and a retry safely indexes the already durable artifact. An index never points at missing
+  bytes in a successful result.
 - Re-signing the identical claim with the same witness recomputes the same artifact id and is
-  idempotent. A different claim or witness has a different id, requires a new review, and never
-  silently replaces the prior artifact.
+  idempotent even if unrelated local operations changed the later verified frontier; the first
+  signing review remains attached to that artifact id. A different claim or witness has a different
+  id, requires a new review, and never silently replaces the prior artifact.
 - Export requires a separate trusted user event and emits compact UTF-8 JSON with the displayed
   insertion order. It performs no carrier request and does not mark the artifact assembled,
   accepted, or published. Before export, a human-readable confirmation repeats replica, role,
@@ -306,10 +459,10 @@ These seams require explicit user confirmation. Work one vertical RED -> GREEN s
    governance public key through the test-only provider, constructs the threshold-two valid-genesis
    fixture with that pinned key, and proves the source starts with the expected BEAM projection;
    GREEN only fixture/preflight support.
-10. **Packaged ceremony seam.** RED verified pull, inert Use, trace-loud test presence, native
-   governance signing, process-relaunch artifact persistence, explicit export, unchanged source and
-   outbox, and BEAM wrapper-to-subthreshold verification; GREEN only that choreography. Separately
-   record one local real-prompt packaged probe.
+10. **Packaged ceremony seam.** RED the live `App.vue` verified pull, inert Use, trace-loud test
+   presence, native governance signing, process-relaunch artifact persistence, explicit export,
+   unchanged source and outbox, and BEAM wrapper-to-subthreshold verification; GREEN only that live
+   choreography. Separately record one local real-prompt packaged probe.
 11. **Hard wiring seam.** RED absent package/workflow/app-convergence entries; GREEN one focused unit
    gate and one no-build hosted packaged step.
 

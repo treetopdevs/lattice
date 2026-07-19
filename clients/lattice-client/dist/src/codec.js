@@ -9,6 +9,7 @@ const opTag = "lattice-op-v2";
 const delegationPayloadTag = "lattice-delegation-v2";
 const witnessedRecoveryPolicyDomain = "lattice-recovery-policy-v1";
 const witnessedSuccessionClaimDomain = "lattice-succession-witness-v1";
+const witnessedSuccessionArtifactDomain = "lattice-succession-witness-artifact-v1";
 /**
  * Encode the signed/hashable core of a BEAM carrier op frame using the same
  * narrow CBOR-shaped subset as `Lattice.Canonical.op_payload/1`.
@@ -101,6 +102,14 @@ export function canonicalBytesForWitnessedSuccessionClaim(claim) {
             ["successor", encodeBytes(canonicalEvidenceBytes(claim.successor))],
             ["policy_id", encodeBinaryString(claim.policyId)],
         ]),
+    ]);
+}
+/** Canonical storage-locator preimage for one public succession witness artifact. */
+export function canonicalBytesForWitnessedSuccessionArtifactId(claim, witness) {
+    return encodeArray([
+        encodeBinaryString(witnessedSuccessionArtifactDomain),
+        encodeBytes(canonicalBytesForWitnessedSuccessionClaim(claim)),
+        encodeBytes(canonicalEvidenceBytes(witness)),
     ]);
 }
 export async function authorCarrierDelegation(input) {

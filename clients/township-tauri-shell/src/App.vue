@@ -275,6 +275,20 @@ const actionIntentDescriptors = [
     busy: () => revokeSubmitting.value,
     onStatus: () => selectActionIntentStatus("revoke"),
   }),
+  defineActionIntentRuntime({
+    slot: "witness",
+    version: 7,
+    reviewOrder: 5,
+    currentReplica: currentActionIntentReplica,
+    submit: async () => ({
+      ok: false,
+      message: "Witness signing is unavailable until verified recovery details are ready.",
+    }),
+    acceptMessage: () => "Witness recovery request held for local review.",
+    dismissFallback: "Witness recovery request",
+    allowed: () => false,
+    onStatus: () => selectActionIntentStatus("witness"),
+  }),
 ] as const;
 const postActionIntent = actionIntentDescriptorForSlot("post");
 const postSubmitting = postActionIntent.submitting;
@@ -1911,6 +1925,7 @@ function pairingDiscoveryAdvertFromMessage(value: unknown): TownshipPairingDisco
       <p v-if="pendingActionIntent.v === 1 || pendingActionIntent.v === 3" class="incoming-action-text">{{ pendingActionIntent.command.text }}</p>
       <p v-if="pendingActionIntent.v === 4" class="incoming-action-text">{{ pendingActionIntent.command.member }}</p>
       <p v-if="pendingActionIntent.v === 6" class="incoming-action-text">{{ pendingActionIntent.authority.delegation }}</p>
+      <p v-if="pendingActionIntent.v === 7" class="incoming-action-text">Requested role: {{ pendingActionIntent.authority.role }}</p>
       <div class="incoming-action-controls">
         <button type="button" @click="acceptPendingActionIntent">Use request</button>
         <button type="button" class="secondary-action" @click="dismissPendingActionIntent">Dismiss</button>

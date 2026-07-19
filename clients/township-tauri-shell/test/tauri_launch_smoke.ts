@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash, createPrivateKey, createPublicKey, sign as edSign, verify as edVerify } from "node:crypto";
 import { tmpdir } from "node:os";
-import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
@@ -41,7 +41,6 @@ const vector = JSON.parse(
 ) as CarrierVector;
 
 const smokeKeyId = "township-resident";
-const tracePath = join(tmpdir(), `township-tauri-smoke-${process.pid}.log`);
 const appBundlePath = join(shellRoot, "src-tauri", "target", "release", "bundle", "macos", "Township.app");
 const appIdentifier = "dev.treetop.lattice.township";
 
@@ -51,6 +50,10 @@ if (process.platform !== "darwin") {
   console.log("\x1b[33m- Tauri live window peer smoke is macOS-only; skipped on this OS\x1b[0m");
   process.exit(0);
 }
+
+const tempRoot = mkdtempSync(join(tmpdir(), "township-packaged-launch-"));
+const tracePath = join(tempRoot, "trace.log");
+const kvPath = join(tempRoot, "township-native-kv.json");
 
 const identity = seededEd25519Identity(vector.client.sessionSeed);
 assert.equal(identity.publicKeyBase64, vector.client.sessionPubkey);
@@ -77,6 +80,8 @@ try {
       "--env",
       `TOWNSHIP_DEV_TRACE_FILE=${tracePath}`,
       "--env",
+      `TOWNSHIP_NATIVE_KV_FILE=${kvPath}`,
+      "--env",
       `TOWNSHIP_DEV_CARRIER_KEY_ID=${smokeKeyId}`,
       "--env",
       `TOWNSHIP_DEV_CARRIER_KEY_SEED=${vector.client.sessionSeed}`,
@@ -85,10 +90,10 @@ try {
     shellRoot,
   );
 
-  await waitForTraceCount("dev-trace-runtime-ready", 1, 60_000, () => launchDiagnostics(app));
-  await waitForTraceCount("township-native-hydration-settled", 1, 60_000, () => launchDiagnostics(app));
-  await waitForTraceCount("lattice_kv_set", 2, 60_000, () => launchDiagnostics(app));
-  await waitForTraceCount("lattice_ensure_carrier_key", 3, 60_000, () => launchDiagnostics(app));
+  await waitForTraceCount("dev-trace-runtime-ready", 1, 60_000, () => launchDiagnostics(app, peer.output));
+  await waitForTraceCount("township-native-hydration-settled", 1, 60_000, () => launchDiagnostics(app, peer.output));
+  await waitForTraceCount("lattice_kv_set", 2, 60_000, () => launchDiagnostics(app, peer.output));
+  await waitForTraceCount("lattice_ensure_carrier_key", 3, 60_000, () => launchDiagnostics(app, peer.output));
   await delay(500);
   assert.equal(app.child.exitCode, null, app.lines.join(""));
 
@@ -121,6 +126,7 @@ try {
   peer.kill();
   await quitTownshipApp();
   await app?.stop();
+  rmSync(tempRoot, { recursive: true, force: true });
 }
 
 console.log("\x1b[32m✓ Township Tauri live window peer smoke passed\x1b[0m");
@@ -185,6 +191,7 @@ async function spawnTownshipPeer(vector: CarrierVector) {
 
   return {
     port,
+    output: lines,
     awaitExit: () => awaitExit(child, lines),
     kill: () => {
       if (!child.killed && child.exitCode === null) child.kill("SIGKILL");
@@ -309,10 +316,11 @@ async function waitForTraceCount(
   throw new Error(`timed out waiting for ${count} ${command} trace entries:\n${readTrace()}\n\n${diagnostics()}`);
 }
 
-function launchDiagnostics(app: ManagedProcess | null): string {
+function launchDiagnostics(app: ManagedProcess | null, peerOutput: string[]): string {
   return [
     `app exitCode: ${String(app?.child.exitCode ?? null)}`,
     `app output:\n${app?.lines.join("") || "<empty>"}`,
+    `peer output:\n${peerOutput.join("") || "<empty>"}`,
   ].join("\n\n");
 }
 

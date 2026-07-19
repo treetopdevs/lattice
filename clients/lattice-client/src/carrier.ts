@@ -1,6 +1,7 @@
 import type {
   AuthorityDelegationEvidence,
   AuthorityEvidence,
+  CustodyConsentEvidence,
   Mutation,
   Op,
   OpKind,
@@ -148,6 +149,8 @@ export interface CarrierDelegation {
   roles: string[];
   live: boolean;
   sig: string;
+  /** Plan 149 lease — on the wire only when set. */
+  expires_epoch?: number;
 }
 
 export function carrierDelegationsFromFrames(frames: readonly CarrierOpFrame[]): CarrierDelegation[] {
@@ -229,6 +232,7 @@ interface Payload {
   value: unknown;
   command: string;
   authority?: AuthorityEvidence;
+  consent?: Omit<CustodyConsentEvidence, "authorPub">;
 }
 
 const textEncoder = new TextEncoder();
@@ -905,10 +909,18 @@ export function carrierOpToSemanticOp(
     command: payload.command,
     cap,
     ...(payload.authority === undefined ? {} : { authority: payload.authority }),
+    ...(payload.consent === undefined
+      ? {}
+      : { consent: { ...payload.consent, authorPub: op.author } }),
   };
 }
 
-function canonicalTerm(value: unknown): Uint8Array {
+/**
+ * Deterministic `Lattice.Canonical` bytes for the JS value subset the client
+ * signs over (nil/bool/uint/string/bytes/array). Strings and byte arrays both
+ * encode as CBOR major-2, exactly like Elixir binaries.
+ */
+export function canonicalTerm(value: unknown): Uint8Array {
   if (value === null) return bytes(0xf6);
   if (value === false) return bytes(0xf4);
   if (value === true) return bytes(0xf5);
@@ -1024,6 +1036,28 @@ function payloadFromBody(
         return { field: "clerk_locked", mutation: "write", value: true, command };
       case "reopen_matter":
         return { field: "clerk_locked", mutation: "write", value: false, command };
+      case "describe":
+        return { field: "description", mutation: "write", value: binText(args[0]), command };
+      case "note_condition":
+        return { field: "condition_notes", mutation: "append", value: binText(args[0]), command };
+      case "custody_transfer": {
+        // ADR 0007: the holder write projects the recipient's realm; the
+        // request id and consent signature ride as validity evidence for the
+        // consent conjunct (src/consent.ts), never as state.
+        const toPub = bytesToBase64(binBytes(args[0]));
+        const sigTerm = args[2];
+        return {
+          field: "holder",
+          mutation: "write",
+          value: realmForPubkey(toPub, realmByPubkey),
+          command,
+          consent: {
+            toPub,
+            requestOpId: binText(args[1]),
+            sig: sigTerm === null || sigTerm === undefined ? null : bytesToBase64(binBytes(sigTerm)),
+          },
+        };
+      }
     }
   }
 
@@ -1034,20 +1068,27 @@ function payloadFromBody(
       case "genesis": {
         const delegation = delegationTerm(body.values[1]);
         const policies = successionPolicies(body.values[2], realmByPubkey);
-        if (delegation.roles.includes("clerk")) {
+        // A Sim genesis self-grant carries exactly the replica's authority
+        // roles (canonically sorted), so the first role names the authority
+        // field this genesis writes — "clerk" for Township.Matter, "custody"
+        // for Toolshed.Tool. The delegation evidence must be retained either
+        // way, or the whole capability chain collapses to no_capability.
+        const role = delegation.roles[0];
+        const authority = {
+          type: "genesis" as const,
+          delegation: delegationEvidence(delegation, realmByPubkey),
+          ...(policies === undefined ? {} : { policies }),
+        };
+        if (role !== undefined) {
           return {
-            field: "clerk",
+            field: role,
             mutation: "write",
             value: realmForPubkey(delegation.issuer, realmByPubkey),
-            command: "genesis clerk",
-            authority: {
-              type: "genesis",
-              delegation: delegationEvidence(delegation, realmByPubkey),
-              ...(policies === undefined ? {} : { policies }),
-            },
+            command: `genesis ${role}`,
+            authority,
           };
         }
-        return neutralPayload("genesis");
+        return { ...neutralPayload("genesis"), authority };
       }
       case "heartbeat": {
         const role = atomName(body.values[1]);
@@ -1105,6 +1146,18 @@ function payloadFromBody(
           authority: { type: "revoke", delegationId },
         };
       }
+      case "beacon": {
+        // Plan 149: retain the epoch as evidence even when malformed — a
+        // non-integer epoch quarantines :stale_beacon in the oracle, so the
+        // decode must not throw before the reducer can reach that verdict.
+        const epochTerm = body.values[1];
+        const epoch =
+          typeof epochTerm === "number" && Number.isSafeInteger(epochTerm) ? epochTerm : null;
+        return {
+          ...neutralPayload(`beacon ${epoch ?? "malformed"}`),
+          authority: { type: "beacon", epoch },
+        };
+      }
     }
   }
 
@@ -1160,6 +1213,11 @@ function binText(term: DecodedTerm | undefined): string {
   throw new Error("expected bin term");
 }
 
+function binBytes(term: DecodedTerm | undefined): Uint8Array {
+  if (typeof term === "object" && term !== null && "type" in term && term.type === "bin") return term.bytes;
+  throw new Error("expected bin term");
+}
+
 function capabilityId(term: DecodedTerm): string | null {
   if (term === null) return null;
   const value = binaryUtf8(term);
@@ -1193,6 +1251,9 @@ function delegationEvidence(
     roles: [...delegation.roles],
     live: delegation.live,
     sig: delegation.sig,
+    ...(delegation.expires_epoch === undefined
+      ? {}
+      : { expiresEpoch: delegation.expires_epoch }),
   };
 }
 
@@ -1614,7 +1675,7 @@ function concat(...chunks: Uint8Array[]): Uint8Array {
   return out;
 }
 
-function base64ToBytes(value: string): Uint8Array {
+export function base64ToBytes(value: string): Uint8Array {
   if (typeof Buffer !== "undefined") return new Uint8Array(Buffer.from(value, "base64"));
 
   const atobFn = (globalThis as unknown as { atob?: (encoded: string) => string }).atob;

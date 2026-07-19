@@ -186,9 +186,10 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 143 | Consolidate the versioned action ladder (pay down accretion) | P2 | L | 138 | DONE |
 | 144 | Succession tick-provenance boundary | P1 | S | 139, 140 | DONE |
 | 145 | Genesis-pinned witnessed succession recovery | P1 | L | 144 | DONE |
-| 146 | Witnessed succession witness artifact with protected governance presence (toward G1) | P1 | L | 140, 141, 143, 145, 147, 148 | TODO (council-approved; blocked on 147/148 and explicit resume) |
-| 147 | Port capability/revocation validation into TS reduction (close the F1 decision gap) | **P0** | L | 140, 141 | IN PROGRESS (implementation/local/council green; exact-tip hosted CI pending) |
-| 148 | Valid-genesis holder/policy projection parity (F2 prerequisite) | **P0** | S | 145, 147 | TODO |
+| 146 | Witnessed succession witness artifact with protected governance presence (toward G1) | P1 | L | 140, 141, 143, 145, 147, 148 | IN PROGRESS (Seams 1-9 hosted green; Seam 9 closed at run `29661339348`; Seam 10 packaged ceremony next) |
+| 147 | Port capability/revocation validation into TS reduction (close the F1 decision gap) | **P0** | L | 140, 141 | DONE |
+| 148 | Valid-genesis holder/policy projection parity (F2 prerequisite) | **P0** | S | 145, 147 | DONE |
+| 149 | Delegation leases via epoch beacons (`expires_epoch`, `{:beacon, epoch}`, `:lease_expired`) | P1 | L | 144–148 | DONE — V1–V9 green; hosted flagship run `29667002069` (all three jobs) at implementation tip on `pd003/toolshed` |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
@@ -296,15 +297,31 @@ Verify flagship artifact, and Packaged macOS convergence at exact implementation
 P0-P2 issue, and hosted run `29400665837` passed all three jobs at exact claim-documentation tip
 `c8ebf7d17cf969696d0efd1423ffb85dc6454ee8`. No v7 or participant authoring surface is added.
 
-**Plan 147 is IN PROGRESS (2026-07-16).** Sim-exported adversarial vectors now pin all named
+**Plan 147 is DONE (2026-07-16).** Sim-exported adversarial vectors now pin all named
 capability/revocation reasons, and TypeScript reduction retains command caps, derives verified
 delegation/root/revoke evidence, and enforces those decisions through its one quarantine path.
 The shell materializes the durably persisted retained-frame set locally; an equal-evidence carrier
 authority report is only a fail-closed revoked-set cross-check and never supplies accepted state,
 IDs, or attributions. RED/GREEN, three deliberate semantic mutations, full client/carrier gates,
 complete packaged `app:convergence`, OTP 28 `mix verify`, both Sobelow scans, and Claude Opus
-reviews are green. Exact-tip hosted CI remains before `DONE`; F2 genesis-holder parity remains
-owned by Plan 148, while F3/F4 remain separate parity gaps.
+reviews are green. Hosted run `29525397708` passed Unit + property suite, Verify flagship artifact,
+and Packaged macOS convergence at exact implementation tip
+`b2ad50629d1867dab71f0de50c038480bb5fe3b7`, including strict Credo, stable-relay onboarding,
+every v1-v6 handoff, and reactive feed. F2 genesis-holder parity remains owned by Plan 148, while
+F3/F4 remain separate parity gaps.
+
+**Plan 148 is DONE (2026-07-16).** A new causal Sim vector proves that both valid same-root
+genesis operations contribute clerk acquisitions, the later canonical genesis supplies the current
+holder epoch and effective witnessed recovery policy, and a signed root-mismatched genesis supplies
+neither. TypeScript now reproduces that timeline and exposes witnessed-only policy provenance from
+the existing local authority analysis; the old first-genesis-only mutation is detected. All 30
+pre-existing vector files remain byte-identical, and local client/carrier, generated-dist, OTP 28
+`mix check`, Sobelow, formatting, diff, and Codex/Claude Opus/Antigravity gates are green. Hosted
+run `29532242436` passed Unit + property, flagship artifact, and packaged macOS at exact
+implementation tip `1eb1e4c1ee8e65832064e6c5dd633c4fbb571a3f`, including regenerated-vector
+conformance, strict Credo, stable-relay onboarding, every v1-v6 handoff, and reactive feed. Plan
+146's Plan 147/148 prerequisite is now clear; its implementation remains TODO until explicitly
+resumed.
 
 ## Round 2 (deep audit, 2026-07-07, against commit `6b2cfe5`)
 

@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plan 149 — Delegation Leases via Epoch Beacons (Lattice.Authority)</title>
+<style>
+  :root {
+    --ink: #1a1d23;
+    --muted: #5b6472;
+    --paper: #ffffff;
+    --card: #f6f7f9;
+    --line: #d9dde3;
+    --accent: #2f5fa8;
+    --accent-soft: #e8eef8;
+    --warn: #a8552f;
+    --warn-soft: #f8efe8;
+    --ok: #2f7a4d;
+    --ok-soft: #e9f4ed;
+    --code-bg: #f2f3f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e6e8ec;
+      --muted: #9aa3b0;
+      --paper: #14161a;
+      --card: #1c1f25;
+      --line: #333842;
+      --accent: #7ba3dd;
+      --accent-soft: #1e2836;
+      --warn: #dd9a7b;
+      --warn-soft: #362a1e;
+      --ok: #7fc79c;
+      --ok-soft: #1e3628;
+      --code-bg: #1e2127;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0;
+    background: var(--paper); color: var(--ink);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  main { max-width: 880px; margin: 0 auto; padding: 3rem 1.5rem 6rem; }
+  h1 { font-size: 1.7rem; line-height: 1.25; margin: 0 0 .3rem; }
+  h2 { font-size: 1.25rem; margin: 2.8rem 0 .8rem; padding-top: 1.2rem; border-top: 1px solid var(--line); }
+  h3 { font-size: 1.02rem; margin: 1.6rem 0 .5rem; }
+  p, li { color: var(--ink); }
+  .sub { color: var(--muted); margin: 0 0 1.2rem; }
+  .meta { font-size: .85rem; color: var(--muted); margin-bottom: 2rem; }
+  .meta code { font-size: .8rem; }
+  code {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: .85em; background: var(--code-bg);
+    padding: .1em .35em; border-radius: 4px;
+  }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px;
+    padding: .9rem 1.1rem; overflow-x: auto; font-size: .82rem; line-height: 1.55;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; margin: 1rem 0; }
+  th, td { text-align: left; padding: .5rem .7rem; border: 1px solid var(--line); vertical-align: top; }
+  th { background: var(--card); font-weight: 600; }
+  .callout {
+    border-left: 4px solid var(--accent); background: var(--accent-soft);
+    border-radius: 0 8px 8px 0; padding: .8rem 1.1rem; margin: 1.2rem 0;
+  }
+  .callout.warn { border-color: var(--warn); background: var(--warn-soft); }
+  .callout.decision { border-color: var(--ok); background: var(--ok-soft); }
+  .callout .tag {
+    display: inline-block; font-size: .7rem; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: .25rem;
+  }
+  .fig {
+    border: 1px solid var(--line); border-radius: 10px; background: var(--card);
+    padding: 1.2rem; margin: 1.4rem 0; overflow-x: auto;
+  }
+  .fig figcaption { font-size: .82rem; color: var(--muted); margin-top: .8rem; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1.2rem 0; }
+  @media (max-width: 700px) { .cols { grid-template-columns: 1fr; } }
+  .col { border: 1px solid var(--line); border-radius: 8px; padding: .9rem 1.1rem; background: var(--card); }
+  .col h4 { margin: 0 0 .5rem; font-size: .9rem; }
+  ol.steps > li { margin-bottom: 1.1rem; }
+  ol.steps > li > strong { display: block; margin-bottom: .15rem; }
+  .q { border: 1px solid var(--line); border-radius: 8px; padding: .9rem 1.1rem; margin: .8rem 0; background: var(--card); }
+  .q .rec { color: var(--ok); font-weight: 600; }
+  .small { font-size: .85rem; color: var(--muted); }
+  svg text { font-family: inherit; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Plan 149 — Delegation Leases via Epoch Beacons</h1>
+<p class="sub">Bounded-lifetime capabilities for <code>Lattice.Authority</code> — classical, deterministic, log-native. No wall clocks, no new cryptography.</p>
+<p class="meta">
+  Track: substrate (<code>plans/</code>) &nbsp;·&nbsp; Extends: <code>Lattice.Authority</code> / <code>Lattice.Authority.Delegation</code> &nbsp;·&nbsp;
+  Follows: 147 (TS capability &amp; revocation validation), 144–146 (succession hardening) &nbsp;·&nbsp; Status: DONE (2026-07-18) — V1–V9 green; hosted flagship run 29667002069 passed all three jobs at the implementation tip
+</p>
+
+<h2>Objective</h2>
+<p>
+Today a 2.0 delegation is immortal. The <code>Lattice.Authority.Delegation</code> struct carries
+<code>{id, replica, issuer, audience, parent_id, ops, roles, live, sig}</code> and nothing else — the only way
+authorization ever ends is an explicit <code>{:revoke, delegation_id}</code> op, and revocation only bites where the
+news propagates. A holder who takes a grant and never syncs again holds it forever, and any partition that never
+receives the revoke keeps accepting their ops indefinitely.
+</p>
+<p>
+This plan adds <strong>leases</strong>: a delegation may carry an expiry expressed in <strong>epochs</strong>, and the
+replica root publishes signed <strong>beacon ops</strong> that advance the epoch on the log itself. When a beacon
+passes a delegation's expiry, ops citing that delegation are quarantined — by exactly the same causal judgment the
+codebase already uses for revocation. The burden of liveness inverts: today the <em>issuer</em> must be online to
+revoke; with leases the <em>holder</em> must reconnect to renew, which is the right default for a civic instance.
+</p>
+<p><strong>Done means:</strong> a delegation granted with <code>expires_epoch: 3</code> stops authorizing new ops once
+a valid beacon with epoch <code>&gt; 3</code> exists in the log, deterministically on every replica, with byte-identical
+replay preserved (G2), the TypeScript client reaching the same verdicts from the same pinned oracle vectors, and every
+existing delegation, vector, and signature still valid untouched.</p>
+
+<div class="callout">
+  <span class="tag">Scope honesty</span>
+  Expiry bounds <em>acceptance of new ops by others</em> — the only thing the authority model ever controlled. It cannot
+  retract data a holder already replicated, and it cannot stop them writing to their own local log. Both are inherent to
+  local-first, not defects of this design.
+</div>
+
+<h2>Design in one picture</h2>
+<figure class="fig">
+<svg viewBox="0 0 820 330" width="820" height="330" role="img" aria-label="Causal DAG showing a beacon chain, a leased delegation, an accepted op causally before the expiring beacon, and a quarantined op that is not">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/>
+    </marker>
+  </defs>
+  <!-- lane labels -->
+  <text x="10" y="52" fill="var(--muted)" font-size="12">root realm</text>
+  <text x="10" y="160" fill="var(--muted)" font-size="12">issuer</text>
+  <text x="10" y="268" fill="var(--muted)" font-size="12">holder (clerk)</text>
+  <!-- lane separators -->
+  <line x1="0" y1="100" x2="820" y2="100" stroke="var(--line)" stroke-dasharray="4 4"/>
+  <line x1="0" y1="210" x2="820" y2="210" stroke="var(--line)" stroke-dasharray="4 4"/>
+
+  <!-- beacon chain -->
+  <g>
+    <rect x="110" y="28" width="120" height="40" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/>
+    <text x="170" y="52" text-anchor="middle" fill="var(--ink)" font-size="13">{:beacon, 2}</text>
+    <rect x="330" y="28" width="120" height="40" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/>
+    <text x="390" y="52" text-anchor="middle" fill="var(--ink)" font-size="13">{:beacon, 3}</text>
+    <rect x="580" y="28" width="130" height="40" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/>
+    <text x="645" y="46" text-anchor="middle" fill="var(--ink)" font-size="13">{:beacon, 4}</text>
+    <text x="645" y="61" text-anchor="middle" fill="var(--warn)" font-size="10">epoch &gt; lease → lapse</text>
+    <line x1="230" y1="48" x2="322" y2="48" stroke="var(--muted)" marker-end="url(#arr)"/>
+    <line x1="450" y1="48" x2="572" y2="48" stroke="var(--muted)" marker-end="url(#arr)"/>
+  </g>
+
+  <!-- grant -->
+  <g>
+    <rect x="110" y="138" width="230" height="44" rx="8" fill="var(--card)" stroke="var(--ink)"/>
+    <text x="225" y="156" text-anchor="middle" fill="var(--ink)" font-size="13">{:grant, deleg}</text>
+    <text x="225" y="172" text-anchor="middle" fill="var(--muted)" font-size="11">expires_epoch: 3</text>
+  </g>
+
+  <!-- ops -->
+  <g>
+    <rect x="330" y="246" width="150" height="44" rx="8" fill="var(--ok-soft)" stroke="var(--ok)"/>
+    <text x="405" y="264" text-anchor="middle" fill="var(--ink)" font-size="13">op A (cites deleg)</text>
+    <text x="405" y="280" text-anchor="middle" fill="var(--ok)" font-size="11">valid — before beacon 4</text>
+    <rect x="600" y="246" width="180" height="44" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/>
+    <text x="690" y="264" text-anchor="middle" fill="var(--ink)" font-size="13">op B (cites deleg)</text>
+    <text x="690" y="280" text-anchor="middle" fill="var(--warn)" font-size="11">quarantined :lease_expired</text>
+  </g>
+
+  <!-- causal edges -->
+  <line x1="270" y1="182" x2="380" y2="242" stroke="var(--muted)" marker-end="url(#arr)"/>
+  <line x1="290" y1="170" x2="640" y2="244" stroke="var(--muted)" marker-end="url(#arr)"/>
+  <line x1="440" y1="242" x2="620" y2="72" stroke="var(--ok)" stroke-dasharray="5 3" marker-end="url(#arr)"/>
+  <text x="500" y="150" fill="var(--ok)" font-size="11">A is causally before beacon 4</text>
+  <text x="612" y="318" fill="var(--warn)" font-size="11">B is concurrent with / after beacon 4 — offline author</text>
+</svg>
+<figcaption>
+A lease lapses the way a revocation bites: op A, causally before <code>{:beacon, 4}</code>, stays valid forever
+(replay-stable). Op B, authored offline and not causally before the beacon that passed the lease, is quarantined
+<code>:lease_expired</code> on every replica that has the beacon. The judgment is a pure function of log contents —
+no replica consults a clock.
+</figcaption>
+</figure>
+
+<h2>Why this shape</h2>
+<p>
+The G2 exit gate requires convergence and <em>byte-identical replay</em>: materialization must be a deterministic
+function of log content. That rules out wall-clock expiry outright — two replicas reading the same log at different
+times must not disagree. The only admissible notion of "now" is something on the log, and the codebase already has
+two such devices:
+</p>
+<ul>
+  <li><strong>Causal revocation</strong> — <code>revoked_as_of?/5</code> (<code>authority.ex:784</code>): an op is
+  quarantined <code>:revoked_capability</code> iff a valid revoke of its cited delegation (or any link of its chain)
+  exists that the op is not causally before.</li>
+  <li><strong>Logical ticks</strong> — role timelines already carry <code>at_tick</code> heartbeats and dormancy-based
+  succession (<code>decide_heartbeat/4</code>, <code>last_active_from/3</code>).</li>
+</ul>
+<p>
+Leases compose the two: a beacon op is a root-signed tick that is <em>content on the log</em>, and lease lapse is a
+<em>derived revocation</em> triggered by it. Because the judgment mirrors <code>revoked_as_of?</code> exactly, the
+convergence argument is the one already proven for revocation — replicas with different logs may disagree transiently
+and converge as logs converge, and quarantine is recomputed per materialization, never stored.
+</p>
+
+<div class="callout decision">
+  <span class="tag">Decision — division of labor with succession</span>
+  Leases govern <strong>delegation-cited command capability</strong> (the <code>cap_ok/7</code> path). Serialized-authority
+  <strong>roles</strong> already have a liveness mechanism — heartbeats, dormancy, and <code>succession ... after:
+  {:dormant_ticks, n}</code> — and this plan does not duplicate it. One liveness story per authority kind.
+</div>
+
+<div class="callout warn">
+  <span class="tag">Accepted trade — fail-open toward availability</span>
+  Nothing lapses until the root actually publishes a beacon past the expiry epoch. If the root goes silent, leases
+  outlive their intent. The alternative — lapse by local clock — breaks determinism and is rejected. Root beacon
+  cadence is an operational concern (see Open Questions); a partitioned clique that includes the root keeps advancing,
+  and one that doesn't degrades exactly as it does today, no worse.
+</div>
+
+<h2>Hard-to-reverse decisions (pinned now)</h2>
+<table>
+  <tr><th>Decision</th><th>Choice</th><th>Rationale</th></tr>
+  <tr>
+    <td>Wire format</td>
+    <td>New canonical arm <code>"lattice-delegation-v3"</code> used <em>only when</em> <code>expires_epoch</code> is set;
+    unleased delegations keep the existing <code>"lattice-delegation-v2"</code> bytes verbatim.</td>
+    <td>Delegation ids are content hashes and signatures cover the encoding
+    (<code>Lattice.Canonical.delegation_bytes/7</code>, mirrored by <code>canonicalBytesForCarrierDelegation</code> in
+    <code>clients/lattice-client/src/codec.ts</code>). Reusing v2 for the nil case means every existing id, signature,
+    persisted log, and pinned oracle vector remains byte-identical — the back-compat proof is "regenerate vectors,
+    diff is empty".</td>
+  </tr>
+  <tr>
+    <td>Expiry unit</td>
+    <td><code>expires_epoch :: non_neg_integer | nil</code> — the last epoch in which the delegation authorizes ops.
+    <code>nil</code> = no lease (today's behavior).</td>
+    <td>Epochs are log-native and coarse by design. Fine-grained lifetimes are the issuer's cadence choice, not a new
+    time base.</td>
+  </tr>
+  <tr>
+    <td>Beacon op</td>
+    <td><code>:authority</code> kind, body <code>{:beacon, epoch}</code>, valid only from the <strong>replica root</strong>
+    (resolved by the existing <code>resolve_root/4</code>), and only when <code>epoch</code> is strictly greater than every
+    valid beacon epoch in the op's causal ancestry.</td>
+    <td>Mirrors revoke authorization ("issuer or replica root") in its strictest form; monotonicity-in-ancestry makes
+    beacon validity itself a pure causal judgment. Violations quarantine as <code>:unauthorized_beacon</code> /
+    <code>:stale_beacon</code>, modeled on <code>unauthorized_revokes/3</code>.</td>
+  </tr>
+  <tr>
+    <td>Lapse judgment</td>
+    <td>Op O citing delegation chain C is quarantined <code>:lease_expired</code> iff some link d ∈ C has
+    <code>expires_epoch = E ≠ nil</code> and a valid beacon B with <code>B.epoch &gt; E</code> exists that O is not
+    causally before.</td>
+    <td>Character-for-character the <code>revoked_as_of?</code> shape: same ancestor sets, same chain walk, same
+    convergence proof, same replay stability (an op accepted before the beacon stays accepted — it is causally before it).</td>
+  </tr>
+  <tr>
+    <td>Attenuation</td>
+    <td><code>attenuates?/2</code> gains: child's effective expiry must not exceed the parent's
+    (<code>nil</code> = unbounded; a child of a leased parent must carry <code>expires_epoch ≤ parent's</code>).</td>
+    <td>Otherwise delegation launders a lease away. Checked per-link, like the existing subset rules for
+    <code>ops</code>/<code>roles</code>/<code>live</code>.</td>
+  </tr>
+  <tr>
+    <td>Renewal</td>
+    <td>No new op type. Renewal = issuer signs a <em>fresh</em> delegation with a later <code>expires_epoch</code>
+    (new content-addressed id); the holder cites the new id going forward.</td>
+    <td>Delegations stay immutable and content-addressed; an in-place <code>{:renew, id, epoch}</code> op would break
+    the id ≡ hash(encoding) invariant that <code>valid_sig?/1</code> and the TS client both rely on.</td>
+  </tr>
+</table>
+
+<h2>Where it plugs into <code>analyze/2</code></h2>
+<figure class="fig">
+<svg viewBox="0 0 820 240" width="820" height="240" role="img" aria-label="Authority analyze pipeline with the two inserted stages highlighted">
+  <defs>
+    <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/>
+    </marker>
+  </defs>
+  <!-- existing row -->
+  <text x="10" y="30" fill="var(--muted)" font-size="12">existing pipeline (authority.ex analyze/2)</text>
+  <g font-size="12">
+    <rect x="10" y="45" width="150" height="38" rx="7" fill="var(--card)" stroke="var(--line)"/>
+    <text x="85" y="68" text-anchor="middle" fill="var(--ink)">collect_delegations</text>
+    <rect x="185" y="45" width="150" height="38" rx="7" fill="var(--card)" stroke="var(--line)"/>
+    <text x="260" y="68" text-anchor="middle" fill="var(--ink)">validate_delegations</text>
+    <rect x="360" y="45" width="130" height="38" rx="7" fill="var(--card)" stroke="var(--line)"/>
+    <text x="425" y="68" text-anchor="middle" fill="var(--ink)">collect_revokes</text>
+    <rect x="515" y="45" width="130" height="38" rx="7" fill="var(--card)" stroke="var(--line)"/>
+    <text x="580" y="68" text-anchor="middle" fill="var(--ink)">role timelines</text>
+    <rect x="670" y="45" width="140" height="38" rx="7" fill="var(--card)" stroke="var(--line)"/>
+    <text x="740" y="68" text-anchor="middle" fill="var(--ink)">validate_commands</text>
+    <line x1="160" y1="64" x2="180" y2="64" stroke="var(--muted)" marker-end="url(#arr2)"/>
+    <line x1="335" y1="64" x2="355" y2="64" stroke="var(--muted)" marker-end="url(#arr2)"/>
+    <line x1="490" y1="64" x2="510" y2="64" stroke="var(--muted)" marker-end="url(#arr2)"/>
+    <line x1="645" y1="64" x2="665" y2="64" stroke="var(--muted)" marker-end="url(#arr2)"/>
+  </g>
+  <!-- new row -->
+  <text x="10" y="140" fill="var(--accent)" font-size="12">new stages (this plan)</text>
+  <g font-size="12">
+    <rect x="360" y="155" width="180" height="52" rx="7" fill="var(--accent-soft)" stroke="var(--accent)"/>
+    <text x="450" y="176" text-anchor="middle" fill="var(--ink)">collect_beacons</text>
+    <text x="450" y="193" text-anchor="middle" fill="var(--muted)" font-size="10">+ unauthorized/stale quarantine</text>
+    <rect x="600" y="155" width="210" height="52" rx="7" fill="var(--accent-soft)" stroke="var(--accent)"/>
+    <text x="705" y="176" text-anchor="middle" fill="var(--ink)">expired_as_of? in cap_ok/8</text>
+    <text x="705" y="193" text-anchor="middle" fill="var(--muted)" font-size="10">→ :lease_expired, beside :revoked_capability</text>
+  </g>
+  <line x1="450" y1="153" x2="440" y2="88" stroke="var(--accent)" stroke-dasharray="4 3" marker-end="url(#arr2)"/>
+  <line x1="705" y1="153" x2="735" y2="88" stroke="var(--accent)" stroke-dasharray="4 3" marker-end="url(#arr2)"/>
+  <text x="470" y="120" fill="var(--accent)" font-size="11">runs beside collect_revokes</text>
+  <text x="640" y="128" fill="var(--accent)" font-size="11">threads into command validation</text>
+</svg>
+<figcaption>
+No pipeline stage is reordered. <code>collect_beacons</code> is a sibling of <code>collect_revokes/3</code>;
+the lapse check rides the existing <code>cap_ok</code> chain walk one clause after
+<code>revoked_as_of?</code> (<code>authority.ex:773</code>). Quarantine reasons merge into <code>analysis.reasons</code>
+exactly like every existing class.
+</figcaption>
+</figure>
+
+<h3>The core judgment, next to its template</h3>
+<div class="cols">
+  <div class="col">
+    <h4>Existing — <code>revoked_as_of?/5</code> (authority.ex:784)</h4>
+<pre><code># Op O is revoked-as-of iff a valid revoke of
+# its delegation (or its chain) exists that O
+# is not causally before.
+defp revoked_as_of?(op, deleg, delegations,
+                    revokes, ancestors) do
+  chain_ids(deleg, delegations)
+  |> Enum.any?(fn id ->
+    case Map.get(revokes, id) do
+      nil -> false
+      revoke_op ->
+        not MapSet.member?(
+          Map.get(ancestors, revoke_op, MapSet.new()),
+          op.id)
+    end
+  end)
+end</code></pre>
+  </div>
+  <div class="col">
+    <h4>New — <code>expired_as_of?/5</code> (planned shape)</h4>
+<pre><code># Op O is lease-expired iff some chain link has
+# expires_epoch E and a valid beacon with
+# epoch &gt; E exists that O is not causally before.
+defp expired_as_of?(op, deleg, delegations,
+                    beacons, ancestors) do
+  chain_links(deleg, delegations)
+  |> Enum.any?(fn %Delegation{expires_epoch: e} ->
+    e != nil and
+      Enum.any?(beacons, fn %{epoch: be, op_id: bid} ->
+        be &gt; e and
+          not MapSet.member?(
+            Map.get(ancestors, bid, MapSet.new()),
+            op.id)
+      end)
+  end)
+end</code></pre>
+  </div>
+</div>
+
+<h2>File-by-file work plan</h2>
+<p class="small">Each step names what it reuses before what it adds. Steps 1–4 are the substrate change; 5–7 are the
+proof surface; 8 is documentation. Order is dependency order; 5–7 can fan out once 1–4 are green.</p>
+
+<ol class="steps">
+  <li>
+    <strong>1. Canonical encoding — <code>apps/lattice_core/lib/lattice/canonical.ex</code></strong>
+    Reuses: the tagged-term scheme of <code>delegation_bytes/7</code>. Adds: a <code>delegation_bytes/8</code> arm that,
+    when <code>expires_epoch</code> is non-nil, emits the <code>"lattice-delegation-v3"</code> tag with the epoch as the
+    final element; the 7-arity arm and v2 tag remain untouched and are what nil-lease delegations continue to hash and sign.
+  </li>
+  <li>
+    <strong>2. Struct + validity — <code>apps/lattice_core/lib/lattice/authority/delegation.ex</code></strong>
+    Reuses: <code>new/4</code> opts, <code>valid_sig?/1</code>, <code>attenuates?/2</code>. Adds: <code>expires_epoch</code>
+    field (default <code>nil</code>, deliberately not in <code>@enforce_keys</code>); <code>new/4</code> accepts
+    <code>expires_epoch:</code>; <code>valid_sig?/1</code> selects the v2/v3 encoding by field presence, so legacy structs
+    verify byte-for-byte as before; <code>attenuates?/2</code> gains the expiry-narrowing clause
+    (<code>expiry_within?(child, parent)</code> with <code>nil</code> as unbounded).
+  </li>
+  <li>
+    <strong>3. Authority analysis — <code>apps/lattice_core/lib/lattice/authority.ex</code></strong>
+    Reuses: <code>analyze/2</code> pipeline, <code>resolve_root/4</code>, <code>unauthorized_revokes/3</code> as the
+    quarantine template, <code>cap_ok/7</code>, ancestor sets from <code>Dag.all_ancestors/1</code>. Adds:
+    <ul>
+      <li><code>collect_beacons/3</code> — valid beacons (root-authored, strictly greater than all valid beacon epochs in
+      ancestry) as <code>[%{epoch, op_id}]</code>; violators land in reasons as <code>:unauthorized_beacon</code> /
+      <code>:stale_beacon</code>.</li>
+      <li><code>expired_as_of?/5</code> and a <code>:lease_expired</code> clause in <code>cap_ok</code> (now /8, taking
+      <code>beacons</code>), evaluated after visibility and revocation so reason precedence stays stable.</li>
+      <li>Live-path companions: <code>expired?/2</code> beside <code>revoked?/2</code>, and a beacon-aware check in
+      <code>delegation_active?/2</code> so the Gateway path can never accept a chain the append path would lapse
+      (design invariant 2: one delegation chain, two uses).</li>
+      <li>Moduledoc: document the new op body and reasons in the behavior list (items to sit beside behavior 10).</li>
+    </ul>
+  </li>
+  <li>
+    <strong>4. Sim harness — <code>apps/lattice_core/lib/lattice/sim.ex</code></strong>
+    Reuses: <code>append/4</code>, <code>grant/4</code>'s delegation construction. Adds: <code>expires_epoch:</code>
+    passthrough on <code>grant/4</code> (and <code>transfer/5</code>); <code>beacon(sim, root_realm, epoch)</code>
+    appending <code>{:beacon, epoch}</code>, modeled on <code>heartbeat/4</code>.
+  </li>
+  <li>
+    <strong>5. Core + property tests — <code>apps/lattice_core/test/lattice2/authority_test.exs</code>,
+    <code>apps/lattice_stress/test/property_authority_invariant_test.exs</code></strong>
+    Reuses: existing revocation/succession test scaffolding and the M1 StreamData generators (the same ones G2 leans on).
+    Adds the falsifiable cases in the verification table below, plus two property extensions: (a) convergence — random
+    partition/heal schedules with interleaved beacons and leased grants materialize identically on all replicas;
+    (b) replay — <code>Log.dump/2 → restore/1</code> reproduces byte-identical state and identical
+    <code>:lease_expired</code> quarantine sets.
+  </li>
+  <li>
+    <strong>6. Oracle vectors — <code>apps/lattice_core/lib/mix/tasks/lattice.export_vectors.ex</code> →
+    <code>clients/lattice-client/test/vectors/</code></strong>
+    Reuses: the plan-147 vector pipeline that pinned <code>township_capability_revoked_causal.json</code> /
+    <code>_revoked_chain.json</code>. Adds five vectors: <code>lease_expired</code> (op concurrent with the lapsing
+    beacon → quarantined), <code>lease_valid_causal</code> (op causally before it → valid), <code>lease_expired_chain</code>
+    (lapse via a parent link), <code>lease_renewed</code> (fresh delegation restores authoring),
+    <code>beacon_unauthorized</code> (non-root beacon quarantined, confers no lapse). Regenerating must leave every
+    existing vector file byte-identical — that diff is the wire-compat proof.
+  </li>
+  <li>
+    <strong>7. TypeScript parity — <code>clients/lattice-client/src/codec.ts</code>, <code>capability.ts</code>,
+    <code>authority.ts</code>, <code>quarantine.ts</code>, <code>test/conformance.ts</code></strong>
+    Reuses: <code>canonicalBytesForCarrierDelegation</code> and the <code>revokedAsOf</code> mirror landed in commit
+    <code>8df1619e</code>. Adds: the v3 byte arm keyed on <code>expires_epoch</code> presence; <code>expiredAsOf</code>
+    beside <code>revokedAsOf</code> in <code>capability.ts</code>; beacon collection and the two beacon quarantine reasons;
+    conformance entries for the five new vectors. The Tauri shell's local verdict path
+    (<code>clients/township-tauri-shell/src/township_sync.ts</code>, commit <code>ed3ee78e</code>) inherits this through
+    the shared client and needs assertions only, no new logic.
+  </li>
+  <li>
+    <strong>8. Documentation — <code>CLAUDE.md</code> API reality check, <code>plans/README.md</code></strong>
+    Record the new signatures (<code>Sim.beacon/3</code>, <code>grant ... expires_epoch:</code>), the two new quarantine
+    reasons, and the v3 canonical tag, so downstream agents don't invent parallel APIs.
+  </li>
+</ol>
+
+<h2>Explicitly out of scope</h2>
+<ul>
+  <li><strong>No wall-clock anywhere in the judgment.</strong> The v1 runtime <code>Lattice.Cap</code>
+  <code>ttl_ms/expires_at</code> fields stay as they are (Gateway session hygiene); bridging them onto epochs is a
+  possible follow-up, not this plan.</li>
+  <li><strong>No beacon scheduler.</strong> Cadence is driven by tests/Sim/operators for now; a supervised periodic
+  beacon process is an app-layer follow-up.</li>
+  <li><strong>No role-timeline expiry.</strong> Roles keep dormancy + succession (plans 144–146) as their liveness story.</li>
+  <li><strong>No grace-period policy.</strong> Grace is folded into the issuer's choice of <code>expires_epoch</code>;
+  a per-replica <code>policies:</code> hook can come later without wire changes.</li>
+  <li><strong>No quorum beacons, no ZK, no election changes.</strong> Multi-signer beacons belong with M6 federation
+  questions; privacy of chains and non-revocation proofs are the separate ZK track; <code>Township.Election</code> and
+  the frozen <code>Lattice.Attestation.Stub</code> are untouched.</li>
+</ul>
+
+<h2>Risks</h2>
+<table>
+  <tr><th>Risk</th><th>Mitigation</th></tr>
+  <tr>
+    <td>Elixir/TS canonical drift on the v3 bytes — the classic cross-realm failure mode.</td>
+    <td>The five new pinned vectors are generated by the Elixir oracle and asserted by TS conformance; the v2 path is
+    proven unchanged by the empty regeneration diff.</td>
+  </tr>
+  <tr>
+    <td>Accidental invalidation of existing logs/vectors via the encoding change.</td>
+    <td>Nil-lease delegations never touch the v3 arm; step 6's byte-identical regeneration check is a hard gate.</td>
+  </tr>
+  <tr>
+    <td>Quarantine-reason precedence churn (an op both revoked and lease-expired flapping between reasons across
+    replicas).</td>
+    <td>Fixed evaluation order inside <code>cap_ok</code> (visibility → grant scope → revoked → expired), asserted by a
+    dedicated test with an op that is both.</td>
+  </tr>
+  <tr>
+    <td>Beacon spam or forged epochs distorting lapse.</td>
+    <td>Root-only authorship + strict monotonicity-in-ancestry; invalid beacons are quarantined for audit and confer no
+    lapse (mirrors forged-authority handling from the Round-3 V-01 remediation).</td>
+  </tr>
+  <tr>
+    <td>Interaction with witnessed succession (plans 145/146).</td>
+    <td>Leases never touch role timelines by design; the adversarial suite in
+    <code>apps/lattice_stress/test/adversarial_authority_test.exs</code> runs unmodified as a regression gate.</td>
+  </tr>
+</table>
+
+<h2>Verification</h2>
+<p>Standard loop — <code>mix format</code> → <code>mix test</code> → demo — with these specific gates:</p>
+<table>
+  <tr><th>#</th><th>Check</th><th>How</th></tr>
+  <tr><td>V1</td><td>Lease lapses causally: op concurrent with the lapsing beacon quarantines <code>:lease_expired</code>; op causally before it stays valid.</td><td><code>mix test apps/lattice_core/test/lattice2/authority_test.exs</code></td></tr>
+  <tr><td>V2</td><td>Chain enforcement: lapse via parent link; attenuation rejects a child extending past its parent.</td><td>same suite</td></tr>
+  <tr><td>V3</td><td>Beacon authority: non-root beacon → <code>:unauthorized_beacon</code>, no lapse; non-monotonic → <code>:stale_beacon</code>.</td><td>same suite</td></tr>
+  <tr><td>V4</td><td>Renewal restores authoring under the new delegation id only.</td><td>same suite</td></tr>
+  <tr><td>V5</td><td>G2 holds: convergence + byte-identical replay under random beacon/lease/partition schedules; identical quarantine sets.</td><td><code>mix test apps/lattice_stress/test/property_authority_invariant_test.exs</code></td></tr>
+  <tr><td>V6</td><td>Wire back-compat: vector regeneration leaves all existing vector files byte-identical.</td><td><code>mix lattice.export_vectors</code> + <code>git diff --exit-code</code> on pre-existing vectors</td></tr>
+  <tr><td>V7</td><td>Cross-realm parity: TS client reaches identical verdicts on all five new vectors.</td><td><code>clients/lattice-client</code> test suite (run tools from <code>node_modules/.bin</code> directly)</td></tr>
+  <tr><td>V8</td><td>End-to-end smoke: Township scenario — clerk granted with <code>expires_epoch</code>, goes offline, root beacons past it, clerk's late op quarantines identically on both sides of a partition/heal, Sim as oracle.</td><td>new case in <code>apps/lattice_core/test/township/workflows_test.exs</code></td></tr>
+  <tr><td>V9</td><td>No regression: full existing suites, including adversarial authority and witnessed-succession tests, green.</td><td><code>mix test</code></td></tr>
+</table>
+
+<h2>Open Questions</h2>
+<p class="small">Defaults are marked; the plan proceeds on them unless overridden.</p>
+
+<div class="q">
+  <strong>Q1 — Who may author beacons?</strong>
+  <p>a) <span class="rec">Replica root only (recommended)</span> — strictest, mirrors revoke authority, smallest surface for the first cut.<br>
+  b) Root or a designated role holder (e.g. a <code>:steward</code> role) — more operationally flexible, but couples leases to role timelines on day one.</p>
+</div>
+<div class="q">
+  <strong>Q2 — Beacon cadence ownership?</strong>
+  <p>a) <span class="rec">Manual / test-driven for this plan (recommended)</span> — cadence is Sim- and operator-driven; the substrate stays policy-free.<br>
+  b) Ship a supervised beacon GenServer now — convenient, but it drags scheduling policy into the substrate track prematurely.</p>
+</div>
+<div class="q">
+  <strong>Q3 — Should <code>delegation_active?/2</code> lapse the live Gateway path in this plan, or append-path only first?</strong>
+  <p>a) <span class="rec">Both paths together (recommended)</span> — design invariant 2 says one chain, two uses; splitting them invites a window where live messaging outlives append authority.<br>
+  b) Append path first, live path as follow-up — smaller diff, temporary inconsistency accepted.</p>
+</div>
+<div class="q">
+  <strong>Q4 — Default lease on new grants?</strong>
+  <p>a) <span class="rec">No default — leases are opt-in per grant (recommended)</span> — zero behavior change for existing callers; Township chooses leases explicitly where the scenario wants them.<br>
+  b) Default all new grants to a lease — safer posture eventually, but a breaking behavior change for every existing test and caller, better taken as its own migration plan.</p>
+</div>
+
+</main>
+</body>
+</html>

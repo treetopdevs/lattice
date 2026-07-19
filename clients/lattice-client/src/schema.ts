@@ -12,6 +12,11 @@ export interface ReplicaSchema {
   /** e.g. "Township.Matter" — provenance of the schema, matched against the oracle. */
   name: string;
   fields: Record<string, FieldSpec>;
+  /**
+   * ADR 0007: commands whose validity carries the co-signed consent conjunct —
+   * the TS mirror of the replica module's `command_op_status/2` callback.
+   */
+  consentCommands?: readonly string[];
 }
 
 export function isAuthorityField(spec: FieldSpec): spec is { authority: string } {

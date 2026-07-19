@@ -561,9 +561,17 @@ export function carrierOpToSemanticOp(frame, realmByPubkey = {}) {
         command: payload.command,
         cap,
         ...(payload.authority === undefined ? {} : { authority: payload.authority }),
+        ...(payload.consent === undefined
+            ? {}
+            : { consent: { ...payload.consent, authorPub: op.author } }),
     };
 }
-function canonicalTerm(value) {
+/**
+ * Deterministic `Lattice.Canonical` bytes for the JS value subset the client
+ * signs over (nil/bool/uint/string/bytes/array). Strings and byte arrays both
+ * encode as CBOR major-2, exactly like Elixir binaries.
+ */
+export function canonicalTerm(value) {
     if (value === null)
         return bytes(0xf6);
     if (value === false)
@@ -655,6 +663,28 @@ function payloadFromBody(kind, body, realmByPubkey) {
                 return { field: "clerk_locked", mutation: "write", value: true, command };
             case "reopen_matter":
                 return { field: "clerk_locked", mutation: "write", value: false, command };
+            case "describe":
+                return { field: "description", mutation: "write", value: binText(args[0]), command };
+            case "note_condition":
+                return { field: "condition_notes", mutation: "append", value: binText(args[0]), command };
+            case "custody_transfer": {
+                // ADR 0007: the holder write projects the recipient's realm; the
+                // request id and consent signature ride as validity evidence for the
+                // consent conjunct (src/consent.ts), never as state.
+                const toPub = bytesToBase64(binBytes(args[0]));
+                const sigTerm = args[2];
+                return {
+                    field: "holder",
+                    mutation: "write",
+                    value: realmForPubkey(toPub, realmByPubkey),
+                    command,
+                    consent: {
+                        toPub,
+                        requestOpId: binText(args[1]),
+                        sig: sigTerm === null || sigTerm === undefined ? null : bytesToBase64(binBytes(sigTerm)),
+                    },
+                };
+            }
         }
     }
     if (kind === "authority" && isTuple(body)) {
@@ -663,20 +693,27 @@ function payloadFromBody(kind, body, realmByPubkey) {
             case "genesis": {
                 const delegation = delegationTerm(body.values[1]);
                 const policies = successionPolicies(body.values[2], realmByPubkey);
-                if (delegation.roles.includes("clerk")) {
+                // A Sim genesis self-grant carries exactly the replica's authority
+                // roles (canonically sorted), so the first role names the authority
+                // field this genesis writes — "clerk" for Township.Matter, "custody"
+                // for Toolshed.Tool. The delegation evidence must be retained either
+                // way, or the whole capability chain collapses to no_capability.
+                const role = delegation.roles[0];
+                const authority = {
+                    type: "genesis",
+                    delegation: delegationEvidence(delegation, realmByPubkey),
+                    ...(policies === undefined ? {} : { policies }),
+                };
+                if (role !== undefined) {
                     return {
-                        field: "clerk",
+                        field: role,
                         mutation: "write",
                         value: realmForPubkey(delegation.issuer, realmByPubkey),
-                        command: "genesis clerk",
-                        authority: {
-                            type: "genesis",
-                            delegation: delegationEvidence(delegation, realmByPubkey),
-                            ...(policies === undefined ? {} : { policies }),
-                        },
+                        command: `genesis ${role}`,
+                        authority,
                     };
                 }
-                return neutralPayload("genesis");
+                return { ...neutralPayload("genesis"), authority };
             }
             case "heartbeat": {
                 const role = atomName(body.values[1]);
@@ -778,6 +815,11 @@ function listValues(term) {
 function binText(term) {
     if (typeof term === "object" && term !== null && "type" in term && term.type === "bin")
         return term.text;
+    throw new Error("expected bin term");
+}
+function binBytes(term) {
+    if (typeof term === "object" && term !== null && "type" in term && term.type === "bin")
+        return term.bytes;
     throw new Error("expected bin term");
 }
 function capabilityId(term) {
@@ -1160,7 +1202,7 @@ function concat(...chunks) {
     }
     return out;
 }
-function base64ToBytes(value) {
+export function base64ToBytes(value) {
     if (typeof Buffer !== "undefined")
         return new Uint8Array(Buffer.from(value, "base64"));
     const atobFn = globalThis.atob;

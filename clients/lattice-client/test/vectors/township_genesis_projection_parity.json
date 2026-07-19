@@ -1,0 +1,514 @@
+{
+  "expectAtFrontier": [],
+  "expectAtFullFrontier": {
+    "authorityQuarantine": [
+      [
+        "7WOW4fC6rb4EjyF4-yScKtqHy4jZyeLjpiGO5OIQv7o",
+        "impostor_genesis"
+      ]
+    ],
+    "quarantine": [
+      "7WOW4fC6rb4EjyF4-yScKtqHy4jZyeLjpiGO5OIQv7o"
+    ],
+    "state": {
+      "clerk": "clerk",
+      "clerk_locked": false,
+      "members": [],
+      "posts": [],
+      "summary": "",
+      "title": ""
+    },
+    "winners": {
+      "clerk": "tVAXYf71m9CdPs_iY_pI-_ZuvC2apET7hdtQ4lfy6so",
+      "clerk_locked": null,
+      "summary": null,
+      "title": null
+    }
+  },
+  "generatedBy": "Lattice.Sim",
+  "genesisProjection": {
+    "acquisitionOperationIds": [
+      "PLdI5rYM-HwsPSiyUtXILKbonqDXoZPcc3J0BMNJCzQ",
+      "tVAXYf71m9CdPs_iY_pI-_ZuvC2apET7hdtQ4lfy6so"
+    ],
+    "effectivePolicy": {
+      "mode": "witnessed",
+      "successorPubkey": "ubrPfrN6UH+L4t6IgDSNoJs+Js1svKMBjN3o3iMiXek=",
+      "threshold": 2,
+      "version": 1,
+      "witnessPubkeys": [
+        "PTx/DBH4vdeqIwYjuHvj/0uLg3qE2crqtMdO/XkGCio=",
+        "dE47dPpf4dEOdPeQ+5jGQQ+Ip6cBig8SOM8Q8t4RmVc="
+      ]
+    },
+    "holderEpochOperationId": "tVAXYf71m9CdPs_iY_pI-_ZuvC2apET7hdtQ4lfy6so",
+    "holderPubkey": "eWiZb2sykmxfU0EGsYBc/l91Bgk7xkthtT9oZPHiBsk=",
+    "impostorGenesisOperationId": "7WOW4fC6rb4EjyF4-yScKtqHy4jZyeLjpiGO5OIQv7o",
+    "policyId": "JSJ-ihq5Lc2xGbQiQp1NEfbbXfBWcrWJ07gFleLGkeI",
+    "role": "clerk",
+    "winningPolicyGenesisOperationId": "tVAXYf71m9CdPs_iY_pI-_ZuvC2apET7hdtQ4lfy6so"
+  },
+  "ops": [
+    {
+      "author": "clerk",
+      "command": "genesis clerk",
+      "deps": [],
+      "field": "clerk",
+      "hash": "PLdI5rYM-HwsPSiyUtXILKbonqDXoZPcc3J0BMNJCzQ",
+      "id": "PLdI5rYM-HwsPSiyUtXILKbonqDXoZPcc3J0BMNJCzQ",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "clerk"
+    },
+    {
+      "author": "clerk",
+      "command": "genesis clerk",
+      "deps": [
+        "PLdI5rYM-HwsPSiyUtXILKbonqDXoZPcc3J0BMNJCzQ"
+      ],
+      "field": "clerk",
+      "hash": "tVAXYf71m9CdPs_iY_pI-_ZuvC2apET7hdtQ4lfy6so",
+      "id": "tVAXYf71m9CdPs_iY_pI-_ZuvC2apET7hdtQ4lfy6so",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "clerk"
+    },
+    {
+      "author": "mallory",
+      "command": "genesis clerk",
+      "deps": [
+        "tVAXYf71m9CdPs_iY_pI-_ZuvC2apET7hdtQ4lfy6so"
+      ],
+      "field": "clerk",
+      "hash": "7WOW4fC6rb4EjyF4-yScKtqHy4jZyeLjpiGO5OIQv7o",
+      "id": "7WOW4fC6rb4EjyF4-yScKtqHy4jZyeLjpiGO5OIQv7o",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "mallory"
+    }
+  ],
+  "oracleCarrierOps": [
+    {
+      "author": "eWiZb2sykmxfU0EGsYBc/l91Bgk7xkthtT9oZPHiBsk=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "eWiZb2sykmxfU0EGsYBc/l91Bgk7xkthtT9oZPHiBsk=",
+              "id": "2N9J2ZRzCXbH1NY349teQ4DYWWoXcmpZ2GHdjwh483A",
+              "issuer": "eWiZb2sykmxfU0EGsYBc/l91Bgk7xkthtT9oZPHiBsk=",
+              "live": true,
+              "ops": [
+                "admit",
+                "close_matter",
+                "link_election",
+                "post",
+                "remove_member",
+                "reopen_matter",
+                "set_summary",
+                "set_title"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:genesis-projection-parity#root:1FfidZPpR18GPGM-QR_GFZxeFoubtmZIypViEwWGs98",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "bLLA5GEOCs0HritjGePG3TgLoi9YoDnPXn2cKfcykqJltcF1OivJeCrKoU2mwxwxp7Z2FaHAfXKztrhCHoTlBA=="
+            }
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "clerk"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "recovery"
+                      ],
+                      [
+                        "map",
+                        [
+                          [
+                            [
+                              "atom",
+                              "mode"
+                            ],
+                            [
+                              "atom",
+                              "witnessed"
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "version"
+                            ],
+                            [
+                              "int",
+                              1
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "threshold"
+                            ],
+                            [
+                              "int",
+                              2
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "witnesses"
+                            ],
+                            [
+                              "list",
+                              [
+                                [
+                                  "bin",
+                                  "kq3LyaPD4/m6QNzaGsAICG1e/aBlAxXYP9np0fEn02I="
+                                ],
+                                [
+                                  "bin",
+                                  "dE47dPpf4dEOdPeQ+5jGQQ+Ip6cBig8SOM8Q8t4RmVc="
+                                ]
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "successor"
+                      ],
+                      [
+                        "bin",
+                        "ubrPfrN6UH+L4t6IgDSNoJs+Js1svKMBjN3o3iMiXek="
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [],
+      "id": "PLdI5rYM-HwsPSiyUtXILKbonqDXoZPcc3J0BMNJCzQ",
+      "kind": "authority",
+      "replica": "replica:matter:genesis-projection-parity#root:1FfidZPpR18GPGM-QR_GFZxeFoubtmZIypViEwWGs98",
+      "sig": "S1US4M5/wFcOOmRUgta0PViqketrMKf5pT6QzlOjibNnWKyPObNNhBcEQkVZZjaMHIYncHiwapOiMshWtOotAA==",
+      "v": 1
+    },
+    {
+      "author": "eWiZb2sykmxfU0EGsYBc/l91Bgk7xkthtT9oZPHiBsk=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "eWiZb2sykmxfU0EGsYBc/l91Bgk7xkthtT9oZPHiBsk=",
+              "id": "yiU0G3CsTTYG7Fks74ZjB1iA4o4lCUKuoiU9ZM26lTA",
+              "issuer": "eWiZb2sykmxfU0EGsYBc/l91Bgk7xkthtT9oZPHiBsk=",
+              "live": true,
+              "ops": [
+                "close_matter"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:genesis-projection-parity#root:1FfidZPpR18GPGM-QR_GFZxeFoubtmZIypViEwWGs98",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "t8MuGXmA3spjs+6YRI08hTNyLHaI4MGM8XQsxuE4+Lu4czVTcyf66/PH5mSFXRypf4LuRoKaiXYbFsvKbv9SBQ=="
+            }
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "clerk"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "recovery"
+                      ],
+                      [
+                        "map",
+                        [
+                          [
+                            [
+                              "atom",
+                              "mode"
+                            ],
+                            [
+                              "atom",
+                              "witnessed"
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "version"
+                            ],
+                            [
+                              "int",
+                              1
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "threshold"
+                            ],
+                            [
+                              "int",
+                              2
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "witnesses"
+                            ],
+                            [
+                              "list",
+                              [
+                                [
+                                  "bin",
+                                  "dE47dPpf4dEOdPeQ+5jGQQ+Ip6cBig8SOM8Q8t4RmVc="
+                                ],
+                                [
+                                  "bin",
+                                  "PTx/DBH4vdeqIwYjuHvj/0uLg3qE2crqtMdO/XkGCio="
+                                ]
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "successor"
+                      ],
+                      [
+                        "bin",
+                        "ubrPfrN6UH+L4t6IgDSNoJs+Js1svKMBjN3o3iMiXek="
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "PLdI5rYM-HwsPSiyUtXILKbonqDXoZPcc3J0BMNJCzQ"
+      ],
+      "id": "tVAXYf71m9CdPs_iY_pI-_ZuvC2apET7hdtQ4lfy6so",
+      "kind": "authority",
+      "replica": "replica:matter:genesis-projection-parity#root:1FfidZPpR18GPGM-QR_GFZxeFoubtmZIypViEwWGs98",
+      "sig": "02mcTHfd/NThSBoxYd6o1T3UQIZe2lkgZdZ+Dei4Nu5wjW4O7zbXBzgaHanTp4am9pbFh+kfghDUD+D4iMoWDA==",
+      "v": 1
+    },
+    {
+      "author": "8KYiDKk2EWUj4K2jBxUv/VxBriN02Rhm3f3yX5hYmXk=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "8KYiDKk2EWUj4K2jBxUv/VxBriN02Rhm3f3yX5hYmXk=",
+              "id": "dKofBVoTZ36Yynrr_dRNEu1fxDbf9vEXUv7Zjhl7MPw",
+              "issuer": "8KYiDKk2EWUj4K2jBxUv/VxBriN02Rhm3f3yX5hYmXk=",
+              "live": true,
+              "ops": [
+                "close_matter",
+                "reopen_matter"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:genesis-projection-parity#root:1FfidZPpR18GPGM-QR_GFZxeFoubtmZIypViEwWGs98",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "JexjNGhsdCZXEXkmKXIPt5qgp5vVpQgiQeGRXeUpjDXYgxhrJSEAKX9XK4f3EUi9dZQTmaHWPTFk7Cr2HB2CAw=="
+            }
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "clerk"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "recovery"
+                      ],
+                      [
+                        "map",
+                        [
+                          [
+                            [
+                              "atom",
+                              "mode"
+                            ],
+                            [
+                              "atom",
+                              "witnessed"
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "version"
+                            ],
+                            [
+                              "int",
+                              1
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "threshold"
+                            ],
+                            [
+                              "int",
+                              1
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "witnesses"
+                            ],
+                            [
+                              "list",
+                              [
+                                [
+                                  "bin",
+                                  "8KYiDKk2EWUj4K2jBxUv/VxBriN02Rhm3f3yX5hYmXk="
+                                ]
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "successor"
+                      ],
+                      [
+                        "bin",
+                        "8KYiDKk2EWUj4K2jBxUv/VxBriN02Rhm3f3yX5hYmXk="
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "tVAXYf71m9CdPs_iY_pI-_ZuvC2apET7hdtQ4lfy6so"
+      ],
+      "id": "7WOW4fC6rb4EjyF4-yScKtqHy4jZyeLjpiGO5OIQv7o",
+      "kind": "authority",
+      "replica": "replica:matter:genesis-projection-parity#root:1FfidZPpR18GPGM-QR_GFZxeFoubtmZIypViEwWGs98",
+      "sig": "UZHqOoWEoKHU1ukSSUj0UovT87fLeYuMJvSuDCvFeqBd146wf9CWWnOT3b/FovZMMb4rwe3r+uE8rugGELBPAw==",
+      "v": 1
+    }
+  ],
+  "perspectives": [],
+  "realmByPubkey": {
+    "8KYiDKk2EWUj4K2jBxUv/VxBriN02Rhm3f3yX5hYmXk=": "mallory",
+    "PTx/DBH4vdeqIwYjuHvj/0uLg3qE2crqtMdO/XkGCio=": "witness_c",
+    "dE47dPpf4dEOdPeQ+5jGQQ+Ip6cBig8SOM8Q8t4RmVc=": "witness_b",
+    "eWiZb2sykmxfU0EGsYBc/l91Bgk7xkthtT9oZPHiBsk=": "clerk",
+    "kq3LyaPD4/m6QNzaGsAICG1e/aBlAxXYP9np0fEn02I=": "witness_a",
+    "ubrPfrN6UH+L4t6IgDSNoJs+Js1svKMBjN3o3iMiXek=": "resident"
+  },
+  "replica": "replica:matter:genesis-projection-parity#root:1FfidZPpR18GPGM-QR_GFZxeFoubtmZIypViEwWGs98",
+  "scenario": "township_genesis_projection_parity",
+  "scenarioKind": "adversarial",
+  "schema": {
+    "fields": {
+      "clerk": {
+        "authority": "clerk"
+      },
+      "clerk_locked": {
+        "default": false,
+        "gatedBy": "clerk",
+        "merge": "lww"
+      },
+      "members": {
+        "merge": "or_set"
+      },
+      "posts": {
+        "merge": "causal_list"
+      },
+      "summary": {
+        "default": "",
+        "merge": "lww"
+      },
+      "title": {
+        "default": "",
+        "merge": "lww"
+      }
+    },
+    "name": "Township.Matter"
+  }
+}

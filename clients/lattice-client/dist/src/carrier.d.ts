@@ -167,4 +167,11 @@ export declare function syncCarrierOnce(client: CarrierSyncClient, localOps: Op[
 export declare function carrierOpsToSemanticOps(frames: unknown[], realmByPubkey?: Record<string, string>): Op[];
 export declare function decodeCarrierOpFrame(frame: unknown): CarrierOpFrame;
 export declare function carrierOpToSemanticOp(frame: unknown, realmByPubkey?: Record<string, string>): Op;
+/**
+ * Deterministic `Lattice.Canonical` bytes for the JS value subset the client
+ * signs over (nil/bool/uint/string/bytes/array). Strings and byte arrays both
+ * encode as CBOR major-2, exactly like Elixir binaries.
+ */
+export declare function canonicalTerm(value: unknown): Uint8Array;
+export declare function base64ToBytes(value: string): Uint8Array;
 export {};

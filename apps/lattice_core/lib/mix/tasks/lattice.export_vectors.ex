@@ -10,10 +10,11 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
   use Mix.Task
 
   alias Lattice.Authority
-  alias Lattice.Authority.{Delegation, SuccessionCertificate}
+  alias Lattice.Authority.{Consent, Delegation, SuccessionCertificate}
   alias Lattice.Canonical
   alias Lattice.Carrier.Wire, as: CarrierWire
   alias Lattice.{Identity, Log, Op, Sim, Sync}
+  alias Toolshed.Tool
   alias Township.Matter
 
   @shortdoc "Export Lattice.Sim conformance vectors for the TS client"
@@ -22,6 +23,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
   @succession_replica "replica:matter:succession-w3"
   @unproven_succession_replica "replica:matter:succession-unproven-tick"
   @witnessed_succession_replica "replica:matter:succession-witnessed-recovery"
+  @genesis_projection_replica "replica:matter:genesis-projection-parity"
   @witnessed_recovery_realms [
     "clerk",
     "resident",
@@ -31,6 +33,14 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     "mallory",
     "mallory_witness_a",
     "mallory_witness_b"
+  ]
+  @genesis_projection_realms [
+    "clerk",
+    "resident",
+    "witness_a",
+    "witness_b",
+    "witness_c",
+    "mallory"
   ]
   @random_realms ["clerk", "resident", "neighbor"]
   @randomized_seeds [101, 202, 303, 404, 505]
@@ -60,6 +70,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_succession_w3(),
       township_succession_unproven_tick(),
       township_succession_witnessed_recovery(),
+      township_genesis_projection_parity(),
       township_authority_forged_root(),
       township_authority_embedded_replica_bypass(),
       township_authority_forged_delegation_id(),
@@ -77,8 +88,14 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_capability_revoked_causal(),
       township_capability_revoked_chain(),
       township_revoke_unauthorized(),
+      township_lease_valid_causal(),
+      township_lease_expired(),
+      township_lease_expired_chain(),
+      township_lease_renewed(),
+      township_beacon_unauthorized(),
       township_causal_list_partition(),
       township_partial_log_lww(),
+      toolshed_custody_consent(),
       township_carrier_w1()
     ]
 
@@ -342,6 +359,139 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
         "policyId" => claim.policy_id,
         "claim" => witnessed_claim_json(claim),
         "policy" => witnessed_policy_json(normalized_policy)
+      }
+    }
+  end
+
+  defp township_genesis_projection_parity do
+    sim =
+      Sim.new(Matter, @genesis_projection_replica, @genesis_projection_realms,
+        seed: "township:genesis-projection-parity"
+      )
+
+    {sim, first_genesis} =
+      Sim.create_replica(sim, "clerk",
+        policies: %{
+          clerk: %{
+            successor: "resident",
+            recovery: %{
+              mode: :witnessed,
+              version: 1,
+              witnesses: ["witness_a", "witness_b"],
+              threshold: 2
+            }
+          }
+        }
+      )
+
+    first_log = Sim.log(sim, "clerk")
+    first_analysis = Authority.analyze(Matter, first_log)
+    clerk = Sim.identity(sim, "clerk")
+    resident = Sim.identity(sim, "resident")
+    witness_b = Sim.identity(sim, "witness_b")
+    witness_c = Sim.identity(sim, "witness_c")
+
+    second_recovery = %{
+      mode: :witnessed,
+      version: 1,
+      witnesses: [witness_b.pub, witness_c.pub],
+      threshold: 2
+    }
+
+    second_policy = %{successor: resident.pub, recovery: second_recovery}
+
+    second_delegation =
+      Delegation.genesis(clerk, Sim.replica(sim),
+        ops: [:close_matter],
+        roles: [:clerk],
+        live: true
+      )
+
+    {sim, second_genesis} =
+      Sim.append(
+        sim,
+        "clerk",
+        :authority,
+        {:genesis, second_delegation, %{clerk: second_policy}}
+      )
+
+    sim = Sim.sync_all(sim)
+    mallory = Sim.identity(sim, "mallory")
+
+    impostor_delegation =
+      Delegation.genesis(mallory, Sim.replica(sim),
+        ops: [:close_matter, :reopen_matter],
+        roles: [:clerk],
+        live: true
+      )
+
+    impostor_policy = %{
+      successor: mallory.pub,
+      recovery: %{
+        mode: :witnessed,
+        version: 1,
+        witnesses: [mallory.pub],
+        threshold: 1
+      }
+    }
+
+    {sim, impostor_genesis} =
+      Sim.append(
+        sim,
+        "mallory",
+        :authority,
+        {:genesis, impostor_delegation, %{clerk: impostor_policy}}
+      )
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "resident")
+    realms = realm_index(sim)
+    analysis = Authority.analyze(Matter, log)
+
+    first_epoch = Map.fetch!(first_analysis.holder_epochs, :clerk)
+    current_epoch = Map.fetch!(analysis.holder_epochs, :clerk)
+    effective_policy = Map.fetch!(analysis.policies, :clerk)
+
+    unless first_epoch == %{holder: clerk.pub, op_id: first_genesis.id} and
+             current_epoch == %{holder: clerk.pub, op_id: second_genesis.id} and
+             first_analysis.policies.clerk != effective_policy and
+             effective_policy == second_policy and
+             first_genesis.id in second_genesis.deps and
+             second_genesis.id in impostor_genesis.deps and
+             first_genesis.body != second_genesis.body and
+             second_delegation.id != elem(first_genesis.body, 1).id and
+             not Map.has_key?(analysis.reasons, first_genesis.id) and
+             not Map.has_key?(analysis.reasons, second_genesis.id) and
+             Map.get(analysis.reasons, impostor_genesis.id) == :impostor_genesis and
+             Authority.root(log) == clerk.pub do
+      raise "valid-genesis projection probe diverged from the expected BEAM oracle"
+    end
+
+    {:ok, normalized_policy} = SuccessionCertificate.normalize_policy(second_recovery)
+    {:ok, policy_id} = SuccessionCertificate.policy_id(normalized_policy)
+
+    %{
+      name: "township_genesis_projection_parity",
+      kind: "adversarial",
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: Sim.replica(sim),
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      authorityQuarantine: authority_quarantine(log),
+      genesisProjection: %{
+        "role" => "clerk",
+        "acquisitionOperationIds" => [first_epoch.op_id, current_epoch.op_id],
+        "holderPubkey" => Base.encode64(current_epoch.holder),
+        "holderEpochOperationId" => current_epoch.op_id,
+        "effectivePolicy" =>
+          normalized_policy
+          |> witnessed_policy_json()
+          |> Map.put("successorPubkey", Base.encode64(effective_policy.successor)),
+        "winningPolicyGenesisOperationId" => second_genesis.id,
+        "policyId" => policy_id,
+        "impostorGenesisOperationId" => impostor_genesis.id
       }
     }
   end
@@ -1354,6 +1504,164 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     })
   end
 
+  # --- Plan 149 lease vectors (V6) -----------------------------------------
+
+  defp township_lease_valid_causal do
+    sim =
+      Sim.new(Matter, "replica:matter:lease-valid-causal", ["clerk", "resident"],
+        seed: "township:lease-valid-causal"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, delegation} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 3)
+    sim = Sim.sync_all(sim)
+
+    {sim, early} = Sim.command(sim, "resident", :post, ["within the lease"], cap: delegation.id)
+    sim = Sim.sync_all(sim)
+
+    {sim, _beacon} = Sim.beacon(sim, "clerk", 4)
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    assert_authority_honored!(log, early.id)
+
+    capability_scenario("township_lease_valid_causal", sim, log, %{
+      "case" => "lease_valid_causal",
+      "honoredOperationId" => early.id
+    })
+  end
+
+  defp township_lease_expired do
+    sim =
+      Sim.new(Matter, "replica:matter:lease-expired", ["clerk", "resident"],
+        seed: "township:lease-expired"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, delegation} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 3)
+    sim = Sim.sync_all(sim)
+    sim = Sim.partition(sim, "clerk", "resident")
+
+    {sim, concurrent} =
+      Sim.command(sim, "resident", :post, ["concurrent with the beacon"], cap: delegation.id)
+
+    {sim, _beacon} = Sim.beacon(sim, "clerk", 4)
+    sim = sim |> Sim.heal("clerk", "resident") |> Sim.sync_all()
+
+    {sim, later} =
+      Sim.command(sim, "resident", :post, ["causally after the beacon"], cap: delegation.id)
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    assert_authority_reason!(log, concurrent.id, :lease_expired)
+    assert_authority_reason!(log, later.id, :lease_expired)
+    assert_post_absent!(log, "concurrent with the beacon")
+
+    capability_scenario("township_lease_expired", sim, log, %{
+      "case" => "lease_expired",
+      "concurrentOperationId" => concurrent.id,
+      "afterOperationId" => later.id
+    })
+  end
+
+  defp township_lease_expired_chain do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:lease-expired-chain",
+        ["clerk", "resident", "neighbor"],
+        seed: "township:lease-expired-chain"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, _parent} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 3)
+    sim = Sim.sync_all(sim)
+    {sim, child} = Sim.grant(sim, "resident", "neighbor", ops: [:post], expires_epoch: 3)
+    sim = Sim.sync_all(sim)
+
+    {sim, _beacon} = Sim.beacon(sim, "clerk", 4)
+    sim = Sim.sync_all(sim)
+
+    {sim, late} = Sim.command(sim, "neighbor", :post, ["late via the chain"], cap: child.id)
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    assert_authority_reason!(log, late.id, :lease_expired)
+
+    capability_scenario("township_lease_expired_chain", sim, log, %{
+      "case" => "lease_expired_chain",
+      "expiredOperationId" => late.id
+    })
+  end
+
+  defp township_lease_renewed do
+    sim =
+      Sim.new(Matter, "replica:matter:lease-renewed", ["clerk", "resident"],
+        seed: "township:lease-renewed"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, old} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 3)
+    sim = Sim.sync_all(sim)
+    {sim, _beacon} = Sim.beacon(sim, "clerk", 4)
+    sim = Sim.sync_all(sim)
+
+    {sim, dead} = Sim.command(sim, "resident", :post, ["via the lapsed cap"], cap: old.id)
+    sim = Sim.sync_all(sim)
+
+    {sim, renewed} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 9)
+    sim = Sim.sync_all(sim)
+
+    {sim, alive} = Sim.command(sim, "resident", :post, ["via the renewed cap"], cap: renewed.id)
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    assert_authority_reason!(log, dead.id, :lease_expired)
+    assert_authority_honored!(log, alive.id)
+
+    capability_scenario("township_lease_renewed", sim, log, %{
+      "case" => "lease_renewed",
+      "expiredOperationId" => dead.id,
+      "renewedOperationId" => alive.id
+    })
+  end
+
+  defp township_beacon_unauthorized do
+    sim =
+      Sim.new(Matter, "replica:matter:beacon-unauthorized", ["clerk", "resident"],
+        seed: "township:beacon-unauthorized"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, delegation} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 3)
+    sim = Sim.sync_all(sim)
+
+    # A non-root beacon and a non-monotonic root beacon: both quarantine, and
+    # neither confers a lapse — the leased post afterwards stays honored.
+    {sim, forged} = Sim.beacon(sim, "resident", 9)
+    sim = Sim.sync_all(sim)
+    {sim, _first} = Sim.beacon(sim, "clerk", 2)
+    sim = Sim.sync_all(sim)
+    {sim, stale} = Sim.beacon(sim, "clerk", 2)
+    sim = Sim.sync_all(sim)
+
+    {sim, post} = Sim.command(sim, "resident", :post, ["still leased"], cap: delegation.id)
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    assert_authority_reason!(log, forged.id, :unauthorized_beacon)
+    assert_authority_reason!(log, stale.id, :stale_beacon)
+    assert_authority_honored!(log, post.id)
+
+    capability_scenario("township_beacon_unauthorized", sim, log, %{
+      "case" => "beacon_unauthorized",
+      "unauthorizedBeaconOperationId" => forged.id,
+      "staleBeaconOperationId" => stale.id,
+      "honoredOperationId" => post.id
+    })
+  end
+
   defp capability_scenario(name, sim, log, evidence) do
     realms = realm_index(sim)
 
@@ -1531,6 +1839,73 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       realms: realms,
       perspectives: [],
       replica: replica
+    }
+  end
+
+  # ADR 0007 (V-06) — the custody-consent reference vector. One Toolshed log
+  # carrying all five conjunct cases: missing consent, invalid signer, wrong
+  # request id, a valid dual-signed transfer, and a replayed consent. The
+  # (former) owner stays the :custody ROLE holder throughout (honored transfers
+  # write the holder FIELD, not the acquire timeline), so every case reaches the
+  # consent conjunct instead of dying earlier at authority_ok.
+  defp toolshed_custody_consent do
+    sim = Sim.new(Tool, "replica:tool:ladder-6ft", ["owner", "borrower"], seed: "toolshed")
+    {sim, _genesis} = Sim.create_replica(sim, "owner")
+    {sim, _grant} = Sim.grant(sim, "owner", "borrower", ops: [:note_condition])
+    sim = Sim.sync_all(sim)
+
+    {sim, _} = Sim.command(sim, "owner", :describe, ["6ft aluminum ladder"])
+    {sim, _} = Sim.command(sim, "borrower", :note_condition, ["left foot pad worn"])
+    {sim, request1} = Sim.request(sim, "borrower", "custody", {:custody_transfer, []})
+    sim = Sim.sync_all(sim)
+
+    owner = Sim.identity(sim, "owner")
+    borrower = Sim.identity(sim, "borrower")
+    replica = Sim.replica(sim)
+
+    # 1. missing consent → :missing_consent
+    {sim, _} = Sim.command(sim, "owner", :custody_transfer, [borrower.pub, request1.id, nil])
+
+    # 2. wrong signer (owner self-consent) → :invalid_consent
+    self_signed = Consent.sign_custody(owner, replica, request1.id, owner.pub)
+
+    {sim, _} =
+      Sim.command(sim, "owner", :custody_transfer, [borrower.pub, request1.id, self_signed])
+
+    # 3. request id outside the causal past → :invalid_consent
+    phantom = "phantom-request-op"
+    phantom_consent = Consent.sign_custody(borrower, replica, phantom, owner.pub)
+
+    {sim, _} =
+      Sim.command(sim, "owner", :custody_transfer, [borrower.pub, phantom, phantom_consent])
+
+    # 4. the dual-signed handoff → honored; the holder field converges
+    consent1 = Consent.sign_custody(borrower, replica, request1.id, owner.pub)
+
+    {sim, _} =
+      Sim.command(sim, "owner", :custody_transfer, [borrower.pub, request1.id, consent1])
+
+    # 5. consent replayed against a second request → :invalid_consent (V-09)
+    {sim, request2} = Sim.request(sim, "borrower", "custody", {:custody_transfer, []})
+    sim = Sim.sync_all(sim)
+
+    {sim, _} =
+      Sim.command(sim, "owner", :custody_transfer, [borrower.pub, request2.id, consent1])
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "owner")
+    realms = realm_index(sim)
+
+    %{
+      name: "toolshed_custody_consent",
+      module: Tool,
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: replica,
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      authorityQuarantine: authority_quarantine(Tool, log)
     }
   end
 
@@ -1939,20 +2314,21 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
   end
 
   defp to_vector(%{name: name, log: log, realms: realms, perspectives: perspectives} = scenario) do
-    ops = Enum.map(Log.topo_ops(log), &op_json(&1, realms))
+    module = Map.get(scenario, :module, Matter)
+    ops = Enum.map(Log.topo_ops(log), &op_json(module, &1, realms))
 
     quarantine =
-      Matter
+      module
       |> Authority.analyze(log)
       |> Map.fetch!(:quarantine)
       |> MapSet.to_list()
       |> Enum.sort()
 
-    winners = winners(ops, MapSet.new(quarantine))
+    winners = winners(module, ops, MapSet.new(quarantine))
 
     expected =
       %{
-        "state" => state_json(log, realms),
+        "state" => state_json(module, log, realms),
         "quarantine" => quarantine,
         "winners" => winners
       }
@@ -1961,14 +2337,14 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     %{
       "generatedBy" => "Lattice.Sim",
       "scenario" => name,
-      "schema" => schema_json(),
+      "schema" => schema_json(module),
       "ops" => ops,
       "expectAtFullFrontier" => expected,
       "expectAtFrontier" =>
         Enum.map(perspectives, fn perspective ->
           %{
             "include" => perspective.log |> Log.op_ids() |> MapSet.to_list() |> Enum.sort(),
-            "state" => state_json(perspective.log, realms),
+            "state" => state_json(module, perspective.log, realms),
             "note" => perspective.name
           }
         end),
@@ -1988,11 +2364,12 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     |> maybe_put("successionOperationId", Map.get(scenario, :successionOperationId))
     |> maybe_put("tickProvenance", Map.get(scenario, :tickProvenance))
     |> maybe_put("witnessedRecovery", Map.get(scenario, :witnessedRecovery))
+    |> maybe_put("genesisProjection", Map.get(scenario, :genesisProjection))
     |> maybe_put("capabilityCase", Map.get(scenario, :capabilityCase))
   end
 
   defp to_vector(%{carrier?: true} = scenario) do
-    ops = Enum.map(Log.topo_ops(scenario.oracleLog), &op_json(&1, scenario.realms))
+    ops = Enum.map(Log.topo_ops(scenario.oracleLog), &op_json(Matter, &1, scenario.realms))
 
     quarantine =
       Matter
@@ -2010,7 +2387,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       "expectAtFullFrontier" => %{
         "state" => state_json(scenario.oracleLog, scenario.realms),
         "quarantine" => quarantine,
-        "winners" => winners(ops, MapSet.new(quarantine))
+        "winners" => winners(Matter, ops, MapSet.new(quarantine))
       },
       "expectAtFrontier" => [],
       "perspectives" => [],
@@ -2054,7 +2431,9 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     }
   end
 
-  defp schema_json do
+  defp schema_json, do: schema_json(Matter)
+
+  defp schema_json(Matter) do
     %{
       "name" => "Township.Matter",
       "fields" => %{
@@ -2068,8 +2447,22 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     }
   end
 
-  defp op_json(%Lattice.Op{} = op, realms) do
-    payload = payload_json(op, realms)
+  defp schema_json(Tool) do
+    %{
+      "name" => "Toolshed.Tool",
+      "fields" => %{
+        "description" => %{"merge" => "lww", "default" => ""},
+        "condition_notes" => %{"merge" => "causal_list"},
+        "custody" => %{"authority" => "custody"},
+        "holder" => %{"merge" => "lww", "gatedBy" => "custody", "default" => nil}
+      },
+      # ADR 0007: commands whose validity carries the co-signed consent conjunct.
+      "consentCommands" => ["custody_transfer"]
+    }
+  end
+
+  defp op_json(module, %Lattice.Op{} = op, realms) do
+    payload = payload_json(module, op, realms)
 
     %{
       "id" => op.id,
@@ -2084,8 +2477,23 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     }
   end
 
-  defp payload_json(%Lattice.Op{kind: :command, body: {cmd, args}}, _realms) do
-    [{field, mutation} | _] = Matter.__apply_command__(cmd, args)
+  # ADR 0007: the transfer's holder write projects the recipient's realm name;
+  # the request id and consent signature are validity evidence, not state.
+  defp payload_json(
+         _module,
+         %Lattice.Op{kind: :command, body: {:custody_transfer, [to_pub, _request, _consent]}},
+         realms
+       ) do
+    %{
+      field: "holder",
+      mutation: "write",
+      value: realm_for_pub(realms, to_pub),
+      command: "custody_transfer"
+    }
+  end
+
+  defp payload_json(module, %Lattice.Op{kind: :command, body: {cmd, args}}, _realms) do
+    [{field, mutation} | _] = module.__apply_command__(cmd, args)
 
     %{
       field: field_name(field),
@@ -2098,22 +2506,26 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
   end
 
   defp payload_json(
+         module,
          %Lattice.Op{kind: :authority, body: {:genesis, %Delegation{} = deleg, _policies}},
          realms
        ) do
-    if MapSet.member?(deleg.roles, :clerk) do
-      %{
-        field: "clerk",
-        mutation: "write",
-        value: realm_for_pub(realms, deleg.issuer),
-        command: "genesis clerk"
-      }
-    else
-      neutral_payload("genesis")
+    case Enum.find(authority_roles(module), &MapSet.member?(deleg.roles, &1)) do
+      nil ->
+        neutral_payload("genesis")
+
+      role ->
+        %{
+          field: Atom.to_string(role),
+          mutation: "write",
+          value: realm_for_pub(realms, deleg.issuer),
+          command: "genesis #{role}"
+        }
     end
   end
 
   defp payload_json(
+         _module,
          %Lattice.Op{kind: :authority, body: {:transfer, role, %Delegation{} = deleg, _tick}},
          realms
        ) do
@@ -2126,6 +2538,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
   end
 
   defp payload_json(
+         _module,
          %Lattice.Op{kind: :authority, body: {:succeed, role, %Delegation{} = deleg, _tick}},
          realms
        ) do
@@ -2137,15 +2550,24 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     }
   end
 
-  defp payload_json(%Lattice.Op{kind: :authority, body: {:grant, %Delegation{} = deleg}}, realms) do
+  defp payload_json(
+         _module,
+         %Lattice.Op{kind: :authority, body: {:grant, %Delegation{} = deleg}},
+         realms
+       ) do
     neutral_payload("grant #{realm_for_pub(realms, deleg.audience)}")
   end
 
-  defp payload_json(%Lattice.Op{kind: :authority, body: {:revoke, id}}, _realms) do
+  defp payload_json(_module, %Lattice.Op{kind: :authority, body: {:revoke, id}}, _realms) do
     neutral_payload("revoke #{id}")
   end
 
-  defp payload_json(%Lattice.Op{kind: kind}, _realms), do: neutral_payload(Atom.to_string(kind))
+  defp payload_json(_module, %Lattice.Op{kind: kind}, _realms),
+    do: neutral_payload(Atom.to_string(kind))
+
+  defp authority_roles(module) do
+    for {_field, %{kind: :authority, role: role}} <- module.__lattice_fields__(), do: role
+  end
 
   defp neutral_payload(command) do
     %{field: "__authority", mutation: "write", value: nil, command: command}
@@ -2157,7 +2579,9 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
   defp field_name(:clerk_locked?), do: "clerk_locked"
   defp field_name(field), do: Atom.to_string(field)
 
-  defp state_json(log, realms) do
+  defp state_json(log, realms), do: state_json(Matter, log, realms)
+
+  defp state_json(Matter, log, realms) do
     state = Lattice.state(Matter, log)
 
     %{
@@ -2170,6 +2594,17 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     }
   end
 
+  defp state_json(Tool, log, realms) do
+    state = Lattice.state(Tool, log)
+
+    %{
+      "description" => state.description,
+      "condition_notes" => state.condition_notes,
+      "custody" => Tool |> Authority.holder(log, :custody) |> then(&realm_for_pub(realms, &1)),
+      "holder" => realm_for_pub(realms, state.holder)
+    }
+  end
+
   defp state_bytes_b64(%Log{} = log) do
     Matter
     |> Lattice.state(log)
@@ -2177,18 +2612,23 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     |> Base.encode64()
   end
 
-  defp authority_quarantine(%Log{} = log) do
-    Matter
+  defp authority_quarantine(%Log{} = log), do: authority_quarantine(Matter, log)
+
+  defp authority_quarantine(module, %Log{} = log) do
+    module
     |> Authority.analyze(log)
     |> Map.fetch!(:reasons)
     |> Enum.map(fn {id, reason} -> [id, Atom.to_string(reason)] end)
     |> Enum.sort()
   end
 
-  defp winners(ops, quarantine) do
+  defp winner_fields(Matter), do: ["title", "summary", "clerk", "clerk_locked"]
+  defp winner_fields(Tool), do: ["description", "custody", "holder"]
+
+  defp winners(module, ops, quarantine) do
     by_id = Map.new(ops, &{&1["id"], &1})
 
-    for field <- ["title", "summary", "clerk", "clerk_locked"], into: %{} do
+    for field <- winner_fields(module), into: %{} do
       winner =
         ops
         |> Enum.reject(&MapSet.member?(quarantine, &1["id"]))

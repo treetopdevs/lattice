@@ -12,14 +12,34 @@ use std::sync::OnceLock;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::engine::general_purpose::{STANDARD as BASE64, URL_SAFE_NO_PAD};
 use base64::Engine as _;
 use ed25519_dalek::{Signer, SigningKey};
 use rand_core::OsRng;
 use sha2::{Digest, Sha256};
 use tauri::Manager;
 
+pub mod governance_witness;
+#[cfg(all(
+    target_os = "macos",
+    not(feature = "township-governance-test-presence")
+))]
+mod macos_governance;
+#[cfg(feature = "township-governance-test-presence")]
+mod test_governance;
+
+#[cfg(all(
+    feature = "township-governance-test-presence",
+    not(feature = "township-dev-trace")
+))]
+compile_error!("township-governance-test-presence requires the township-dev-trace feature");
+
 pub const TOWNSHIP_KEYRING_SERVICE: &str = "dev.treetop.lattice.township.carrier";
+pub const TOWNSHIP_GOVERNANCE_KEYRING_SERVICE: &str =
+    "dev.treetop.lattice.township.governance-witness";
+#[cfg(feature = "township-governance-test-presence")]
+pub const TOWNSHIP_GOVERNANCE_TEST_PRESENCE_TRACE: &str = "governance-test-presence:authorized";
+pub const TOWNSHIP_GOVERNANCE_KEY_ALIAS: &str = "governance-witness-v1";
 pub const TOWNSHIP_APP_IDENTIFIER: &str = "dev.treetop.lattice.township";
 pub const TOWNSHIP_DEV_CARRIER_KEY_ID_ENV: &str = "TOWNSHIP_DEV_CARRIER_KEY_ID";
 pub const TOWNSHIP_DEV_CARRIER_KEY_SEED_ENV: &str = "TOWNSHIP_DEV_CARRIER_KEY_SEED";
@@ -33,6 +53,10 @@ pub const TOWNSHIP_PAIRING_DISCOVERY_BIND_ADDR: &str = "0.0.0.0:45721";
 pub const TOWNSHIP_PAIRING_DISCOVERY_BROADCAST_ADDR: &str = "255.255.255.255:45721";
 pub const TOWNSHIP_PAIRING_DISCOVERY_DEFAULT_TIMEOUT_MS: u64 = 750;
 pub const TOWNSHIP_PAIRING_DISCOVERY_MAX_TIMEOUT_MS: u64 = 5_000;
+const GOVERNANCE_DUPLICATE_RECONCILIATION_TIMEOUT: Duration = Duration::from_millis(500);
+const GOVERNANCE_DUPLICATE_RECONCILIATION_INTERVAL: Duration = Duration::from_millis(10);
+const GOVERNANCE_PUBLIC_SIDECAR_MISSING: &str =
+    "governance witness identity is incomplete: public sidecar is missing";
 #[cfg(feature = "township-dev-trace")]
 const TOWNSHIP_DEV_TRACE_EVENT_MAX_CHARS: usize = 4_096;
 const TOWNSHIP_PAIRING_DISCOVERY_MAX_PACKET_BYTES: usize = 16 * 1024;
@@ -66,6 +90,56 @@ struct TownshipPairingDiscoveryPacket {
 pub trait CarrierKeySeedStore: Send + Sync {
     fn load_seed(&self, key_id: &str) -> Result<Option<[u8; 32]>, String>;
     fn save_seed(&self, key_id: &str, seed: [u8; 32]) -> Result<(), String>;
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum GovernanceWitnessCreateError {
+    Duplicate,
+    Backend(String),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GovernanceWitnessProviderKind {
+    Unavailable,
+    Injected,
+    MacosProtectedKeychain,
+    TestPresence,
+}
+
+pub trait GovernanceWitnessKeyStore: Send + Sync {
+    fn provider_kind(&self) -> GovernanceWitnessProviderKind {
+        GovernanceWitnessProviderKind::Injected
+    }
+
+    fn load_seed_public_key(&self) -> Result<Option<[u8; 32]>, String>;
+    fn load_seed(&self) -> Result<Option<[u8; 32]>, GovernanceWitnessPresenceError>;
+    fn load_public_key(&self) -> Result<Option<[u8; 32]>, String>;
+    fn create_seed(&self, seed: [u8; 32]) -> Result<(), GovernanceWitnessCreateError>;
+    fn create_public_key(&self, public_key: [u8; 32]) -> Result<(), GovernanceWitnessCreateError>;
+    fn delete_seed(&self) -> Result<(), String>;
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum GovernanceWitnessPresenceError {
+    Cancelled,
+    Unavailable,
+    Failed(String),
+}
+
+pub trait GovernanceWitnessPresence: Send + Sync {
+    fn provider_kind(&self) -> GovernanceWitnessProviderKind {
+        GovernanceWitnessProviderKind::Injected
+    }
+
+    fn authorize(&self, reason: &str) -> Result<(), GovernanceWitnessPresenceError>;
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GovernanceWitnessSignature {
+    pub witness: String,
+    pub signature: String,
+    pub payload_digest: String,
 }
 
 #[derive(Clone, Default)]
@@ -137,6 +211,10 @@ pub struct TownshipNativeState {
     values_path: Mutex<Option<PathBuf>>,
     signing_keys: Mutex<HashMap<String, SigningKey>>,
     key_store: Arc<dyn CarrierKeySeedStore>,
+    governance_key_store: Option<Arc<dyn GovernanceWitnessKeyStore>>,
+    governance_presence: Option<Arc<dyn GovernanceWitnessPresence>>,
+    governance_creation: Mutex<()>,
+    governance_signing: Mutex<()>,
 }
 
 impl Default for TownshipNativeState {
@@ -154,7 +232,37 @@ impl TownshipNativeState {
     where
         S: CarrierKeySeedStore + 'static,
     {
-        Self::with_values_and_key_store(HashMap::new(), None, key_store)
+        Self::with_values_and_key_stores(HashMap::new(), None, key_store, None, None)
+    }
+
+    pub fn with_governance_witness_key_store<S>(governance_key_store: S) -> Self
+    where
+        S: GovernanceWitnessKeyStore + 'static,
+    {
+        Self::with_values_and_key_stores(
+            HashMap::new(),
+            None,
+            InMemoryCarrierKeySeedStore::default(),
+            Some(Arc::new(governance_key_store)),
+            None,
+        )
+    }
+
+    pub fn with_governance_witness_custody<S, P>(
+        governance_key_store: S,
+        governance_presence: P,
+    ) -> Self
+    where
+        S: GovernanceWitnessKeyStore + 'static,
+        P: GovernanceWitnessPresence + 'static,
+    {
+        Self::with_values_and_key_stores(
+            HashMap::new(),
+            None,
+            InMemoryCarrierKeySeedStore::default(),
+            Some(Arc::new(governance_key_store)),
+            Some(Arc::new(governance_presence)),
+        )
     }
 
     pub fn with_persistent_values_file<P>(path: P) -> Result<Self, String>
@@ -171,17 +279,21 @@ impl TownshipNativeState {
     {
         let path = path.as_ref().to_path_buf();
         let values = load_values_file(&path)?;
-        Ok(Self::with_values_and_key_store(
+        Ok(Self::with_values_and_key_stores(
             values,
             Some(path),
             key_store,
+            None,
+            None,
         ))
     }
 
-    fn with_values_and_key_store<S>(
+    fn with_values_and_key_stores<S>(
         values: HashMap<String, String>,
         values_path: Option<PathBuf>,
         key_store: S,
+        governance_key_store: Option<Arc<dyn GovernanceWitnessKeyStore>>,
+        governance_presence: Option<Arc<dyn GovernanceWitnessPresence>>,
     ) -> Self
     where
         S: CarrierKeySeedStore + 'static,
@@ -191,10 +303,47 @@ impl TownshipNativeState {
             values_path: Mutex::new(values_path),
             signing_keys: Mutex::new(HashMap::new()),
             key_store: Arc::new(key_store),
+            governance_key_store,
+            governance_presence,
+            governance_creation: Mutex::new(()),
+            governance_signing: Mutex::new(()),
         }
     }
 
     pub fn platform_secure(service: &str) -> Self {
+        #[cfg(feature = "township-governance-test-presence")]
+        {
+            let custody = Arc::new(test_governance::TestGovernanceWitnessCustody);
+            return Self::with_values_and_key_stores(
+                HashMap::new(),
+                None,
+                KeyringCarrierKeySeedStore::new(service),
+                Some(custody.clone()),
+                Some(custody),
+            );
+        }
+
+        #[cfg(all(
+            not(feature = "township-governance-test-presence"),
+            target_os = "macos"
+        ))]
+        {
+            let custody = Arc::new(macos_governance::MacosGovernanceWitnessCustody::new(
+                TOWNSHIP_GOVERNANCE_KEYRING_SERVICE,
+            ));
+            return Self::with_values_and_key_stores(
+                HashMap::new(),
+                None,
+                KeyringCarrierKeySeedStore::new(service),
+                Some(custody.clone()),
+                Some(custody),
+            );
+        }
+
+        #[cfg(all(
+            not(feature = "township-governance-test-presence"),
+            not(target_os = "macos")
+        ))]
         Self::with_key_store(KeyringCarrierKeySeedStore::new(service))
     }
 
@@ -202,7 +351,22 @@ impl TownshipNativeState {
     where
         P: AsRef<Path>,
     {
-        Self::with_key_store_and_values_file(KeyringCarrierKeySeedStore::new(service), path)
+        let state = Self::platform_secure(service);
+        state.attach_persistent_values_file(path)?;
+        Ok(state)
+    }
+
+    pub fn governance_witness_provider_kind(&self) -> GovernanceWitnessProviderKind {
+        match (&self.governance_key_store, &self.governance_presence) {
+            (Some(store), Some(presence)) if store.provider_kind() == presence.provider_kind() => {
+                store.provider_kind()
+            }
+            _ => GovernanceWitnessProviderKind::Unavailable,
+        }
+    }
+
+    pub fn governance_witness_custody_is_bound(&self) -> bool {
+        self.governance_witness_provider_kind() != GovernanceWitnessProviderKind::Unavailable
     }
 
     pub fn kv_get(&self, key: &str) -> Result<Option<String>, String> {
@@ -265,6 +429,7 @@ impl TownshipNativeState {
     }
 
     pub fn insert_seeded_dev_key(&self, key_id: &str, seed: &str) -> Result<(), String> {
+        reject_governance_carrier_alias(key_id)?;
         let digest = Sha256::digest(seed.as_bytes());
         let mut seed_bytes = [0u8; 32];
         seed_bytes.copy_from_slice(&digest);
@@ -278,6 +443,7 @@ impl TownshipNativeState {
     }
 
     pub fn ensure_carrier_key(&self, key_id: &str) -> Result<String, String> {
+        reject_governance_carrier_alias(key_id)?;
         let mut signing_keys = self
             .signing_keys
             .lock()
@@ -302,6 +468,7 @@ impl TownshipNativeState {
     }
 
     pub fn public_key(&self, key_id: &str) -> Result<String, String> {
+        reject_governance_carrier_alias(key_id)?;
         let signing_keys = self
             .signing_keys
             .lock()
@@ -314,6 +481,7 @@ impl TownshipNativeState {
     }
 
     pub fn sign_carrier(&self, key_id: &str, bytes_base64: &str) -> Result<String, String> {
+        reject_governance_carrier_alias(key_id)?;
         let bytes = BASE64
             .decode(bytes_base64)
             .map_err(|error| format!("invalid carrier bytes: {error}"))?;
@@ -327,6 +495,204 @@ impl TownshipNativeState {
 
         Ok(BASE64.encode(signing_key.sign(&bytes).to_bytes()))
     }
+
+    pub fn ensure_governance_witness_key(&self) -> Result<String, String> {
+        let store = self
+            .governance_key_store
+            .as_ref()
+            .ok_or_else(|| "governance witness custody is unavailable".to_string())?;
+        let _creation = self
+            .governance_creation
+            .lock()
+            .map_err(|_| "governance witness creation lock poisoned".to_string())?;
+        if let Some(public_key) = existing_governance_public_key(store.as_ref())? {
+            return Ok(public_key);
+        }
+
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let public_key = signing_key.verifying_key().to_bytes();
+        match store.create_seed(signing_key.to_bytes()) {
+            Ok(()) => {}
+            Err(GovernanceWitnessCreateError::Duplicate) => {
+                return reconcile_duplicate_governance_identity(store.as_ref());
+            }
+            Err(error) => return Err(governance_create_error(error)),
+        }
+        if let Err(error) = store.create_public_key(public_key) {
+            let create_error = governance_create_error(error);
+            store.delete_seed().map_err(|rollback_error| {
+                format!(
+                    "governance witness public metadata creation failed: {create_error}; seed rollback failed: {rollback_error}"
+                )
+            })?;
+            return Err(format!(
+                "governance witness public metadata creation failed: {create_error}"
+            ));
+        }
+
+        Ok(BASE64.encode(public_key))
+    }
+
+    pub fn governance_witness_public_key(&self) -> Result<String, String> {
+        let store = self
+            .governance_key_store
+            .as_ref()
+            .ok_or_else(|| "governance witness custody is unavailable".to_string())?;
+
+        match governance_public_identity(store.as_ref())? {
+            GovernancePublicIdentity::Complete(public_key) => Ok(BASE64.encode(public_key)),
+            GovernancePublicIdentity::Missing => {
+                Err("governance witness identity is missing".to_string())
+            }
+        }
+    }
+
+    pub fn sign_governance_witness(
+        &self,
+        claim: &serde_json::Value,
+    ) -> Result<GovernanceWitnessSignature, String> {
+        let payload = governance_witness::canonical_governance_witness_payload(claim)?;
+        let replica = claim
+            .get("replica")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| "malformed governance witness claim: missing replica".to_string())?;
+        let store = self
+            .governance_key_store
+            .as_ref()
+            .ok_or_else(|| "governance witness custody is unavailable".to_string())?;
+        let presence = self
+            .governance_presence
+            .as_ref()
+            .ok_or_else(|| "governance witness presence is unavailable".to_string())?;
+        let _signing = self
+            .governance_signing
+            .lock()
+            .map_err(|_| "governance witness signing lock poisoned".to_string())?;
+        let reason = format!("Sign clerk recovery witness for {replica}");
+        presence
+            .authorize(&reason)
+            .map_err(governance_presence_error)?;
+
+        let seed = store
+            .load_seed()
+            .map_err(governance_presence_error)?
+            .ok_or_else(|| "governance witness protected seed is missing".to_string())?;
+        let signing_key = SigningKey::from_bytes(&seed);
+        let public_key = signing_key.verifying_key().to_bytes();
+        let stored_public_key = match governance_public_identity(store.as_ref())? {
+            GovernancePublicIdentity::Complete(public_key) => public_key,
+            GovernancePublicIdentity::Missing => {
+                return Err(
+                    "governance witness identity is incomplete: public identity metadata is missing"
+                        .to_string(),
+                );
+            }
+        };
+        if stored_public_key != public_key {
+            return Err("governance witness identity is corrupt: public key mismatch".to_string());
+        }
+
+        Ok(GovernanceWitnessSignature {
+            witness: BASE64.encode(public_key),
+            signature: BASE64.encode(signing_key.sign(&payload.bytes).to_bytes()),
+            payload_digest: URL_SAFE_NO_PAD.encode(payload.sha256),
+        })
+    }
+}
+
+#[cfg(feature = "township-governance-test-presence")]
+pub fn governance_test_presence_authorization_count() -> usize {
+    test_governance::authorization_count()
+}
+
+fn governance_presence_error(error: GovernanceWitnessPresenceError) -> String {
+    match error {
+        GovernanceWitnessPresenceError::Cancelled => {
+            "governance witness authentication cancelled".to_string()
+        }
+        GovernanceWitnessPresenceError::Unavailable => {
+            "governance witness authentication unavailable".to_string()
+        }
+        GovernanceWitnessPresenceError::Failed(_) => {
+            "governance witness authentication failed".to_string()
+        }
+    }
+}
+
+fn existing_governance_public_key(
+    store: &dyn GovernanceWitnessKeyStore,
+) -> Result<Option<String>, String> {
+    match governance_public_identity(store)? {
+        GovernancePublicIdentity::Complete(public_key) => Ok(Some(BASE64.encode(public_key))),
+        GovernancePublicIdentity::Missing => Ok(None),
+    }
+}
+
+fn reconcile_duplicate_governance_identity(
+    store: &dyn GovernanceWitnessKeyStore,
+) -> Result<String, String> {
+    let deadline = Instant::now() + GOVERNANCE_DUPLICATE_RECONCILIATION_TIMEOUT;
+    loop {
+        match existing_governance_public_key(store) {
+            Ok(Some(public_key)) => return Ok(public_key),
+            Ok(None) => {
+                return Err(
+                    "governance witness concurrent identity creation disappeared before completion"
+                        .to_string(),
+                );
+            }
+            Err(error) if error == GOVERNANCE_PUBLIC_SIDECAR_MISSING => {
+                if Instant::now() >= deadline {
+                    return Err(
+                        "governance witness concurrent identity creation timed out before public sidecar"
+                            .to_string(),
+                    );
+                }
+                std::thread::sleep(GOVERNANCE_DUPLICATE_RECONCILIATION_INTERVAL);
+            }
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+enum GovernancePublicIdentity {
+    Missing,
+    Complete([u8; 32]),
+}
+
+fn governance_public_identity(
+    store: &dyn GovernanceWitnessKeyStore,
+) -> Result<GovernancePublicIdentity, String> {
+    match (store.load_seed_public_key()?, store.load_public_key()?) {
+        (Some(seed_public_key), Some(public_key)) if seed_public_key == public_key => {
+            Ok(GovernancePublicIdentity::Complete(public_key))
+        }
+        (Some(_), Some(_)) => {
+            Err("governance witness identity is corrupt: public key mismatch".to_string())
+        }
+        (Some(_), None) => Err(GOVERNANCE_PUBLIC_SIDECAR_MISSING.to_string()),
+        (None, Some(_)) => Err(
+            "governance witness identity is incomplete: protected-seed identity metadata is missing"
+                .to_string(),
+        ),
+        (None, None) => Ok(GovernancePublicIdentity::Missing),
+    }
+}
+
+fn governance_create_error(error: GovernanceWitnessCreateError) -> String {
+    match error {
+        GovernanceWitnessCreateError::Duplicate => {
+            "governance witness identity already exists".to_string()
+        }
+        GovernanceWitnessCreateError::Backend(error) => error,
+    }
+}
+
+fn reject_governance_carrier_alias(key_id: &str) -> Result<(), String> {
+    if key_id == TOWNSHIP_GOVERNANCE_KEY_ALIAS {
+        return Err("governance witness key is unavailable through carrier custody".to_string());
+    }
+    Ok(())
 }
 
 fn load_values_file(path: &Path) -> Result<HashMap<String, String>, String> {
@@ -553,6 +919,9 @@ pub fn township_command_names() -> &'static [&'static str] {
         "lattice_ensure_carrier_key",
         "lattice_public_key",
         "lattice_sign_carrier",
+        "lattice_ensure_governance_witness_key",
+        "lattice_governance_witness_public_key",
+        "lattice_sign_governance_witness",
         "lattice_discover_pairing_adverts",
         "lattice_advertise_pairing_handoff",
         "lattice_android_current_pairing_handoff_b64",
@@ -569,6 +938,9 @@ pub fn township_command_names() -> &'static [&'static str] {
         "lattice_ensure_carrier_key",
         "lattice_public_key",
         "lattice_sign_carrier",
+        "lattice_ensure_governance_witness_key",
+        "lattice_governance_witness_public_key",
+        "lattice_sign_governance_witness",
         "lattice_discover_pairing_adverts",
         "lattice_advertise_pairing_handoff",
         "lattice_android_current_pairing_handoff_b64",
@@ -591,6 +963,9 @@ fn configure_township_commands<R: tauri::Runtime>(builder: tauri::Builder<R>) ->
         lattice_ensure_carrier_key,
         lattice_public_key,
         lattice_sign_carrier,
+        lattice_ensure_governance_witness_key,
+        lattice_governance_witness_public_key,
+        lattice_sign_governance_witness,
         lattice_discover_pairing_adverts,
         lattice_advertise_pairing_handoff,
         lattice_android_current_pairing_handoff_b64,
@@ -607,6 +982,9 @@ fn configure_township_commands<R: tauri::Runtime>(builder: tauri::Builder<R>) ->
         lattice_ensure_carrier_key,
         lattice_public_key,
         lattice_sign_carrier,
+        lattice_ensure_governance_witness_key,
+        lattice_governance_witness_public_key,
+        lattice_sign_governance_witness,
         lattice_discover_pairing_adverts,
         lattice_advertise_pairing_handoff,
         lattice_android_current_pairing_handoff_b64,
@@ -647,8 +1025,10 @@ mod android_intent {
     pub fn init<R: Runtime>() -> TauriPlugin<R> {
         Builder::new("township-intent")
             .setup(|app, api| {
-                let handle =
-                    api.register_android_plugin(TOWNSHIP_INTENT_PLUGIN_IDENTIFIER, "TownshipIntentPlugin")?;
+                let handle = api.register_android_plugin(
+                    TOWNSHIP_INTENT_PLUGIN_IDENTIFIER,
+                    "TownshipIntentPlugin",
+                )?;
                 app.manage(TownshipIntentPlugin(handle));
                 Ok(())
             })
@@ -868,6 +1248,31 @@ fn lattice_sign_carrier(
 }
 
 #[tauri::command]
+fn lattice_ensure_governance_witness_key(
+    state: tauri::State<'_, TownshipNativeState>,
+) -> Result<String, String> {
+    trace_dev_command("lattice_ensure_governance_witness_key");
+    state.ensure_governance_witness_key()
+}
+
+#[tauri::command]
+fn lattice_governance_witness_public_key(
+    state: tauri::State<'_, TownshipNativeState>,
+) -> Result<String, String> {
+    trace_dev_command("lattice_governance_witness_public_key");
+    state.governance_witness_public_key()
+}
+
+#[tauri::command]
+fn lattice_sign_governance_witness(
+    state: tauri::State<'_, TownshipNativeState>,
+    claim: serde_json::Value,
+) -> Result<GovernanceWitnessSignature, String> {
+    trace_dev_command("lattice_sign_governance_witness");
+    state.sign_governance_witness(&claim)
+}
+
+#[tauri::command]
 fn lattice_discover_pairing_adverts(
     timeout_ms: Option<u64>,
 ) -> Result<Vec<TownshipPairingDiscoveryAdvert>, String> {
@@ -910,8 +1315,7 @@ fn lattice_log_probe(event: String) -> Result<(), String> {
 #[cfg(feature = "township-dev-trace")]
 #[tauri::command]
 fn lattice_trace_dev_event(event: String) -> Result<(), String> {
-    trace_dev_command(&event);
-    Ok(())
+    write_trace_dev_event(&event)
 }
 
 #[cfg(target_os = "android")]
@@ -937,19 +1341,21 @@ fn log_probe_event(event: &str) {
 
 #[cfg(feature = "township-dev-trace")]
 fn trace_dev_command(command: &str) {
-    use std::io::Write as _;
+    let _ = write_trace_dev_event(command);
+}
 
-    let Some(path) = trace_dev_file_path() else {
-        return;
-    };
+#[cfg(feature = "township-dev-trace")]
+fn write_trace_dev_event(command: &str) -> Result<(), String> {
+    let path = trace_dev_file_path()
+        .ok_or_else(|| "unable to write Township development trace".to_string())?;
 
-    if let Ok(mut file) = std::fs::OpenOptions::new()
+    let mut file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(path)
-    {
-        let _ = writeln!(file, "{}", sanitize_trace_dev_event(command));
-    }
+        .map_err(|_| "unable to write Township development trace".to_string())?;
+    writeln!(file, "{}", sanitize_trace_dev_event(command))
+        .map_err(|_| "unable to write Township development trace".to_string())
 }
 
 #[cfg(feature = "township-dev-trace")]

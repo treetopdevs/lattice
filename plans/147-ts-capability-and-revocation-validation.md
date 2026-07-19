@@ -2,8 +2,8 @@
 
 ## Status
 
-IN PROGRESS - implementation, local gates, and council review are complete; exact-tip hosted CI
-is the remaining closure gate.
+DONE - 2026-07-16. Hosted run `29525397708` passed all three jobs at exact implementation
+tip `b2ad50629d1867dab71f0de50c038480bb5fe3b7`.
 
 The first Claude Opus RED review found that the draft's "concurrent use is honored" wording
 contradicted `Authority.revoked_as_of?/5`. An explicit OTP 28 Sim probe confirmed that a command
@@ -37,6 +37,13 @@ reason scope, durable persistence, and non-adoption. Focused sync, 42 frontend s
 `npm run app:convergence` chain passes through stable-relay onboarding, v1-v6 packaged handoffs,
 reactive feed, and installed deep-link delivery. OTP 28 `mix verify` and both Sobelow scans pass.
 Claude Opus returned `PROCEED` on the corrected RED and exact GREEN with no P0-P1 finding.
+The first hosted closure candidate (`29524737866`) passed every functional/client/carrier step
+through the live carrier but exposed one branch-owned strict Credo finding in the exporter.
+Replacing the match-in-`unless` with an explicit `%Op{} | nil` case preserved vector semantics,
+made the intended missing-introduction error reachable, passed the 16-test exporter file and local
+strict Credo, and received a no-finding Claude Opus review. Replacement hosted run `29525397708`
+then passed Unit + property suite, Verify flagship artifact, and Packaged macOS convergence,
+including stable-relay onboarding, every v1-v6 handoff, and reactive feed.
 
 ## Priority
 

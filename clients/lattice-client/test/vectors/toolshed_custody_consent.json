@@ -1,0 +1,658 @@
+{
+  "expectAtFrontier": [],
+  "expectAtFullFrontier": {
+    "authorityQuarantine": [
+      [
+        "CPJMTIOSwZ6u1AqX8aV9Hdt_kBmRcpDQkpDin3O3J_8",
+        "invalid_consent"
+      ],
+      [
+        "TSlLm0Xkna6-4pVZPEcLBB04hHLop6Nbvu6OwCJFkQ0",
+        "invalid_consent"
+      ],
+      [
+        "pDw-amReNzSl5ZvQvh_mdjBi0EckEPYW3YaAU8d02Dc",
+        "missing_consent"
+      ],
+      [
+        "rkw73yza8dcOtj5Tkywf3Ut23Z9T3TZC_eAMilcJ10A",
+        "invalid_consent"
+      ]
+    ],
+    "quarantine": [
+      "CPJMTIOSwZ6u1AqX8aV9Hdt_kBmRcpDQkpDin3O3J_8",
+      "TSlLm0Xkna6-4pVZPEcLBB04hHLop6Nbvu6OwCJFkQ0",
+      "pDw-amReNzSl5ZvQvh_mdjBi0EckEPYW3YaAU8d02Dc",
+      "rkw73yza8dcOtj5Tkywf3Ut23Z9T3TZC_eAMilcJ10A"
+    ],
+    "state": {
+      "condition_notes": [
+        "left foot pad worn"
+      ],
+      "custody": "owner",
+      "description": "6ft aluminum ladder",
+      "holder": "borrower"
+    },
+    "winners": {
+      "custody": "U4SAdFlIopgNeOS0ah_Wi7PrPwtNouJAlk6WvXoR2-c",
+      "description": "bGLLqPFyzYQwJwQYd_b8kjgy2CTCdCIbZA7ON5c0u-w",
+      "holder": "ydGJMepmcVeXGssJ-5h4lTa-8yXzqnJAEcLLCwRWSGc"
+    }
+  },
+  "generatedBy": "Lattice.Sim",
+  "ops": [
+    {
+      "author": "owner",
+      "command": "genesis custody",
+      "deps": [],
+      "field": "custody",
+      "hash": "U4SAdFlIopgNeOS0ah_Wi7PrPwtNouJAlk6WvXoR2-c",
+      "id": "U4SAdFlIopgNeOS0ah_Wi7PrPwtNouJAlk6WvXoR2-c",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "owner"
+    },
+    {
+      "author": "owner",
+      "command": "grant borrower",
+      "deps": [
+        "U4SAdFlIopgNeOS0ah_Wi7PrPwtNouJAlk6WvXoR2-c"
+      ],
+      "field": "__authority",
+      "hash": "D5NG4IARf-Iw6D536lYx5S0OA7oc6Nvl-cpBUwHMNH0",
+      "id": "D5NG4IARf-Iw6D536lYx5S0OA7oc6Nvl-cpBUwHMNH0",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "borrower",
+      "command": "note_condition",
+      "deps": [
+        "D5NG4IARf-Iw6D536lYx5S0OA7oc6Nvl-cpBUwHMNH0"
+      ],
+      "field": "condition_notes",
+      "hash": "SQBXovhR_d5OOP_5xzyX9bZe5aSw82ZM0p5JI7dvU8U",
+      "id": "SQBXovhR_d5OOP_5xzyX9bZe5aSw82ZM0p5JI7dvU8U",
+      "kind": "command",
+      "mutation": "append",
+      "value": "left foot pad worn"
+    },
+    {
+      "author": "owner",
+      "command": "describe",
+      "deps": [
+        "D5NG4IARf-Iw6D536lYx5S0OA7oc6Nvl-cpBUwHMNH0"
+      ],
+      "field": "description",
+      "hash": "bGLLqPFyzYQwJwQYd_b8kjgy2CTCdCIbZA7ON5c0u-w",
+      "id": "bGLLqPFyzYQwJwQYd_b8kjgy2CTCdCIbZA7ON5c0u-w",
+      "kind": "command",
+      "mutation": "write",
+      "value": "6ft aluminum ladder"
+    },
+    {
+      "author": "borrower",
+      "command": "inbox",
+      "deps": [
+        "SQBXovhR_d5OOP_5xzyX9bZe5aSw82ZM0p5JI7dvU8U"
+      ],
+      "field": "__authority",
+      "hash": "t-VPflaL9heKrVtjmpkkVXl15L0kG7zGPYQcb-go04I",
+      "id": "t-VPflaL9heKrVtjmpkkVXl15L0kG7zGPYQcb-go04I",
+      "kind": "inbox",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "borrower",
+      "command": "inbox",
+      "deps": [
+        "bGLLqPFyzYQwJwQYd_b8kjgy2CTCdCIbZA7ON5c0u-w",
+        "t-VPflaL9heKrVtjmpkkVXl15L0kG7zGPYQcb-go04I"
+      ],
+      "field": "__authority",
+      "hash": "m7kaGxegWkzrStIpoMBoSHu2LfEBn--COnfHTsgzrRY",
+      "id": "m7kaGxegWkzrStIpoMBoSHu2LfEBn--COnfHTsgzrRY",
+      "kind": "inbox",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "owner",
+      "command": "custody_transfer",
+      "deps": [
+        "bGLLqPFyzYQwJwQYd_b8kjgy2CTCdCIbZA7ON5c0u-w",
+        "t-VPflaL9heKrVtjmpkkVXl15L0kG7zGPYQcb-go04I"
+      ],
+      "field": "holder",
+      "hash": "pDw-amReNzSl5ZvQvh_mdjBi0EckEPYW3YaAU8d02Dc",
+      "id": "pDw-amReNzSl5ZvQvh_mdjBi0EckEPYW3YaAU8d02Dc",
+      "kind": "command",
+      "mutation": "write",
+      "value": "borrower"
+    },
+    {
+      "author": "owner",
+      "command": "custody_transfer",
+      "deps": [
+        "pDw-amReNzSl5ZvQvh_mdjBi0EckEPYW3YaAU8d02Dc"
+      ],
+      "field": "holder",
+      "hash": "CPJMTIOSwZ6u1AqX8aV9Hdt_kBmRcpDQkpDin3O3J_8",
+      "id": "CPJMTIOSwZ6u1AqX8aV9Hdt_kBmRcpDQkpDin3O3J_8",
+      "kind": "command",
+      "mutation": "write",
+      "value": "borrower"
+    },
+    {
+      "author": "owner",
+      "command": "custody_transfer",
+      "deps": [
+        "CPJMTIOSwZ6u1AqX8aV9Hdt_kBmRcpDQkpDin3O3J_8"
+      ],
+      "field": "holder",
+      "hash": "TSlLm0Xkna6-4pVZPEcLBB04hHLop6Nbvu6OwCJFkQ0",
+      "id": "TSlLm0Xkna6-4pVZPEcLBB04hHLop6Nbvu6OwCJFkQ0",
+      "kind": "command",
+      "mutation": "write",
+      "value": "borrower"
+    },
+    {
+      "author": "owner",
+      "command": "custody_transfer",
+      "deps": [
+        "TSlLm0Xkna6-4pVZPEcLBB04hHLop6Nbvu6OwCJFkQ0"
+      ],
+      "field": "holder",
+      "hash": "ydGJMepmcVeXGssJ-5h4lTa-8yXzqnJAEcLLCwRWSGc",
+      "id": "ydGJMepmcVeXGssJ-5h4lTa-8yXzqnJAEcLLCwRWSGc",
+      "kind": "command",
+      "mutation": "write",
+      "value": "borrower"
+    },
+    {
+      "author": "owner",
+      "command": "custody_transfer",
+      "deps": [
+        "m7kaGxegWkzrStIpoMBoSHu2LfEBn--COnfHTsgzrRY",
+        "ydGJMepmcVeXGssJ-5h4lTa-8yXzqnJAEcLLCwRWSGc"
+      ],
+      "field": "holder",
+      "hash": "rkw73yza8dcOtj5Tkywf3Ut23Z9T3TZC_eAMilcJ10A",
+      "id": "rkw73yza8dcOtj5Tkywf3Ut23Z9T3TZC_eAMilcJ10A",
+      "kind": "command",
+      "mutation": "write",
+      "value": "borrower"
+    }
+  ],
+  "oracleCarrierOps": [
+    {
+      "author": "RyoqX2/cpdKRULwb/9rSmE4FxxmnpR0GlOfJ8GB6NHU=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "RyoqX2/cpdKRULwb/9rSmE4FxxmnpR0GlOfJ8GB6NHU=",
+              "id": "C0lVWlJzr4YJpJ79SgjjeFqJUy78GTcHM_JXkqjf3QM",
+              "issuer": "RyoqX2/cpdKRULwb/9rSmE4FxxmnpR0GlOfJ8GB6NHU=",
+              "live": true,
+              "ops": [
+                "custody_transfer",
+                "describe",
+                "note_condition"
+              ],
+              "parent_id": null,
+              "replica": "replica:tool:ladder-6ft#root:r9JGQh-CUgWaOt5KvtHMqyWi4XKrCyiIf3Iq6yjYaKc",
+              "roles": [
+                "custody"
+              ],
+              "sig": "dMn7Vg9UNGXGZTt+nDJsT/+RXDvg4SDXauPdQtfYxsfXyMjPT7nKUfvDI7/0+pqkdOq+Z/dYzRhS5f69+9RjDA=="
+            }
+          ],
+          [
+            "map",
+            []
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [],
+      "id": "U4SAdFlIopgNeOS0ah_Wi7PrPwtNouJAlk6WvXoR2-c",
+      "kind": "authority",
+      "replica": "replica:tool:ladder-6ft#root:r9JGQh-CUgWaOt5KvtHMqyWi4XKrCyiIf3Iq6yjYaKc",
+      "sig": "fYCqPnDwP98wD1fLFLPI0dPMpflzIFZor1t3zRrjLCvARh3W0VFAQBisBS26HlovPhlApdU7x7Bju3CODVFHDg==",
+      "v": 1
+    },
+    {
+      "author": "RyoqX2/cpdKRULwb/9rSmE4FxxmnpR0GlOfJ8GB6NHU=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "grant"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "rAWEQ+6vOB4h45DklgQInASyGcUdwWvOiwAxpsF4eak=",
+              "id": "HZCWE4yeZfyCeePUoTxt6MDye7wmsen7UVRqOq1pDFI",
+              "issuer": "RyoqX2/cpdKRULwb/9rSmE4FxxmnpR0GlOfJ8GB6NHU=",
+              "live": false,
+              "ops": [
+                "note_condition"
+              ],
+              "parent_id": "C0lVWlJzr4YJpJ79SgjjeFqJUy78GTcHM_JXkqjf3QM",
+              "replica": "replica:tool:ladder-6ft#root:r9JGQh-CUgWaOt5KvtHMqyWi4XKrCyiIf3Iq6yjYaKc",
+              "roles": [],
+              "sig": "rju0EFF0tAt9FSUp+ZGDYmekITGDv6qgnnGJqLXCd7qp/6muFR4tWo3emAnnG1xjBVwLzQbCKrmrZrBDWSw/DQ=="
+            }
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "U4SAdFlIopgNeOS0ah_Wi7PrPwtNouJAlk6WvXoR2-c"
+      ],
+      "id": "D5NG4IARf-Iw6D536lYx5S0OA7oc6Nvl-cpBUwHMNH0",
+      "kind": "authority",
+      "replica": "replica:tool:ladder-6ft#root:r9JGQh-CUgWaOt5KvtHMqyWi4XKrCyiIf3Iq6yjYaKc",
+      "sig": "f4pcrhsUxroHTCAg9oU1dEEmUf9h/ahb5wP4lNkq5PEI5gli+tBUj9o/jJq4jZSnC+tTcMqF6q3PBawn2mBSDg==",
+      "v": 1
+    },
+    {
+      "author": "rAWEQ+6vOB4h45DklgQInASyGcUdwWvOiwAxpsF4eak=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "note_condition"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "bGVmdCBmb290IHBhZCB3b3Ju"
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "SFpDV0U0eWVaZnlDZWVQVW9UeHQ2TUR5ZTd3bXNlbjdVVlJxT3ExcERGSQ=="
+      ],
+      "deps": [
+        "D5NG4IARf-Iw6D536lYx5S0OA7oc6Nvl-cpBUwHMNH0"
+      ],
+      "id": "SQBXovhR_d5OOP_5xzyX9bZe5aSw82ZM0p5JI7dvU8U",
+      "kind": "command",
+      "replica": "replica:tool:ladder-6ft#root:r9JGQh-CUgWaOt5KvtHMqyWi4XKrCyiIf3Iq6yjYaKc",
+      "sig": "8ywfjbw+z8RpKrQa1aWQbrcHdlIlSifBvmz2s4ALsBYrPDIK5aEZm5G6Bx9yJDjq0j+3j/EsxUK7cQVo8s1AAg==",
+      "v": 1
+    },
+    {
+      "author": "RyoqX2/cpdKRULwb/9rSmE4FxxmnpR0GlOfJ8GB6NHU=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "describe"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "NmZ0IGFsdW1pbnVtIGxhZGRlcg=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "QzBsVldsSnpyNFlKcEo3OVNnamplRnFKVXk3OEdUY0hNX0pYa3FqZjNRTQ=="
+      ],
+      "deps": [
+        "D5NG4IARf-Iw6D536lYx5S0OA7oc6Nvl-cpBUwHMNH0"
+      ],
+      "id": "bGLLqPFyzYQwJwQYd_b8kjgy2CTCdCIbZA7ON5c0u-w",
+      "kind": "command",
+      "replica": "replica:tool:ladder-6ft#root:r9JGQh-CUgWaOt5KvtHMqyWi4XKrCyiIf3Iq6yjYaKc",
+      "sig": "076pSShnGu0BKJrD2LZbaIFGFMWYQwNAgD3GjPvM7Nrf1dQp3Lj/iJPkWgS3GzzJp0mYsF33XBVTQMtiTJUiDA==",
+      "v": 1
+    },
+    {
+      "author": "rAWEQ+6vOB4h45DklgQInASyGcUdwWvOiwAxpsF4eak=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "request"
+          ],
+          [
+            "bin",
+            "Y3VzdG9keQ=="
+          ],
+          [
+            "tuple",
+            [
+              [
+                "atom",
+                "custody_transfer"
+              ],
+              [
+                "list",
+                []
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "SQBXovhR_d5OOP_5xzyX9bZe5aSw82ZM0p5JI7dvU8U"
+      ],
+      "id": "t-VPflaL9heKrVtjmpkkVXl15L0kG7zGPYQcb-go04I",
+      "kind": "inbox",
+      "replica": "replica:tool:ladder-6ft#root:r9JGQh-CUgWaOt5KvtHMqyWi4XKrCyiIf3Iq6yjYaKc",
+      "sig": "O9OjdP9UPL2p62IBKsg+xMB+pRp5N347dIr5Ct76W+RBUAYHt0c8AHHfJKDyYH80FgnvpeurcijUshEY+y0DAA==",
+      "v": 1
+    },
+    {
+      "author": "rAWEQ+6vOB4h45DklgQInASyGcUdwWvOiwAxpsF4eak=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "request"
+          ],
+          [
+            "bin",
+            "Y3VzdG9keQ=="
+          ],
+          [
+            "tuple",
+            [
+              [
+                "atom",
+                "custody_transfer"
+              ],
+              [
+                "list",
+                []
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "bGLLqPFyzYQwJwQYd_b8kjgy2CTCdCIbZA7ON5c0u-w",
+        "t-VPflaL9heKrVtjmpkkVXl15L0kG7zGPYQcb-go04I"
+      ],
+      "id": "m7kaGxegWkzrStIpoMBoSHu2LfEBn--COnfHTsgzrRY",
+      "kind": "inbox",
+      "replica": "replica:tool:ladder-6ft#root:r9JGQh-CUgWaOt5KvtHMqyWi4XKrCyiIf3Iq6yjYaKc",
+      "sig": "YCEEJW7mdvJM+gCVmyBQB7gatgaGy2nA6BbAZqK5MNeE8obV+FKOrw0elkJ4OGdHaDDygcFhGu2zA/NVMJEHCA==",
+      "v": 1
+    },
+    {
+      "author": "RyoqX2/cpdKRULwb/9rSmE4FxxmnpR0GlOfJ8GB6NHU=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "custody_transfer"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "rAWEQ+6vOB4h45DklgQInASyGcUdwWvOiwAxpsF4eak="
+              ],
+              [
+                "bin",
+                "dC1WUGZsYUw5aGVLclZ0am1wa2tWWGwxNUwwa0c3ekdQWVFjYi1nbzA0SQ=="
+              ],
+              [
+                "nil"
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "QzBsVldsSnpyNFlKcEo3OVNnamplRnFKVXk3OEdUY0hNX0pYa3FqZjNRTQ=="
+      ],
+      "deps": [
+        "bGLLqPFyzYQwJwQYd_b8kjgy2CTCdCIbZA7ON5c0u-w",
+        "t-VPflaL9heKrVtjmpkkVXl15L0kG7zGPYQcb-go04I"
+      ],
+      "id": "pDw-amReNzSl5ZvQvh_mdjBi0EckEPYW3YaAU8d02Dc",
+      "kind": "command",
+      "replica": "replica:tool:ladder-6ft#root:r9JGQh-CUgWaOt5KvtHMqyWi4XKrCyiIf3Iq6yjYaKc",
+      "sig": "h//81dize5bkXqol3FszRQhen1OmR1EDOGK2YguFYCzDmdjmzHok2LDm2dl8n+PTHjVOAf6dS+ADuTM/fGUADw==",
+      "v": 1
+    },
+    {
+      "author": "RyoqX2/cpdKRULwb/9rSmE4FxxmnpR0GlOfJ8GB6NHU=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "custody_transfer"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "rAWEQ+6vOB4h45DklgQInASyGcUdwWvOiwAxpsF4eak="
+              ],
+              [
+                "bin",
+                "dC1WUGZsYUw5aGVLclZ0am1wa2tWWGwxNUwwa0c3ekdQWVFjYi1nbzA0SQ=="
+              ],
+              [
+                "bin",
+                "uRysIJu+yTGuTQ5ql4xEeKhFMAIlPEia31AlsK593SHwAMGgfY0EQT5mM8W5+khCFlHYag3i0YSARGa8B8YHCw=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "QzBsVldsSnpyNFlKcEo3OVNnamplRnFKVXk3OEdUY0hNX0pYa3FqZjNRTQ=="
+      ],
+      "deps": [
+        "pDw-amReNzSl5ZvQvh_mdjBi0EckEPYW3YaAU8d02Dc"
+      ],
+      "id": "CPJMTIOSwZ6u1AqX8aV9Hdt_kBmRcpDQkpDin3O3J_8",
+      "kind": "command",
+      "replica": "replica:tool:ladder-6ft#root:r9JGQh-CUgWaOt5KvtHMqyWi4XKrCyiIf3Iq6yjYaKc",
+      "sig": "aoUdYlk7EJw6pGMPb8xaStBb/4muKFp+YU6et3uEq8Ec+JP+uvib+1Bg2qki0gHBKTmXY481MROydVvj6EZ/Cw==",
+      "v": 1
+    },
+    {
+      "author": "RyoqX2/cpdKRULwb/9rSmE4FxxmnpR0GlOfJ8GB6NHU=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "custody_transfer"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "rAWEQ+6vOB4h45DklgQInASyGcUdwWvOiwAxpsF4eak="
+              ],
+              [
+                "bin",
+                "cGhhbnRvbS1yZXF1ZXN0LW9w"
+              ],
+              [
+                "bin",
+                "oXnoneNwI2gOQC21UMjHguN9MaPpdNQNMF8yI20EhnRHRkzeoKvEWgd8h2Rj0WGfXsdOTQbTod+cafNYlR4FBA=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "QzBsVldsSnpyNFlKcEo3OVNnamplRnFKVXk3OEdUY0hNX0pYa3FqZjNRTQ=="
+      ],
+      "deps": [
+        "CPJMTIOSwZ6u1AqX8aV9Hdt_kBmRcpDQkpDin3O3J_8"
+      ],
+      "id": "TSlLm0Xkna6-4pVZPEcLBB04hHLop6Nbvu6OwCJFkQ0",
+      "kind": "command",
+      "replica": "replica:tool:ladder-6ft#root:r9JGQh-CUgWaOt5KvtHMqyWi4XKrCyiIf3Iq6yjYaKc",
+      "sig": "F2OOVnJQpkr3nJpWLW7WTJFbxSMqrgUD1dvixb3eAQGdyIf8FWqTB5yuKmnbEfFhLQh87YuwCUlr0fG+ew39Aw==",
+      "v": 1
+    },
+    {
+      "author": "RyoqX2/cpdKRULwb/9rSmE4FxxmnpR0GlOfJ8GB6NHU=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "custody_transfer"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "rAWEQ+6vOB4h45DklgQInASyGcUdwWvOiwAxpsF4eak="
+              ],
+              [
+                "bin",
+                "dC1WUGZsYUw5aGVLclZ0am1wa2tWWGwxNUwwa0c3ekdQWVFjYi1nbzA0SQ=="
+              ],
+              [
+                "bin",
+                "FPXyzXz13vQvCKAKZ0J1BMKx37jPutSV4mAm9ndXNyClzNVlhNJosBFWOPXR1ENnku4kW5He0DXF1MmFnL8xDA=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "QzBsVldsSnpyNFlKcEo3OVNnamplRnFKVXk3OEdUY0hNX0pYa3FqZjNRTQ=="
+      ],
+      "deps": [
+        "TSlLm0Xkna6-4pVZPEcLBB04hHLop6Nbvu6OwCJFkQ0"
+      ],
+      "id": "ydGJMepmcVeXGssJ-5h4lTa-8yXzqnJAEcLLCwRWSGc",
+      "kind": "command",
+      "replica": "replica:tool:ladder-6ft#root:r9JGQh-CUgWaOt5KvtHMqyWi4XKrCyiIf3Iq6yjYaKc",
+      "sig": "R73XxkC1KJAJze6/Kwdy2w74q2U6WFo0pS/TQ/zR7YOMcbr3xVYOuIMxwHfobej6U61uQlHFeKuqLIO+q2KdAw==",
+      "v": 1
+    },
+    {
+      "author": "RyoqX2/cpdKRULwb/9rSmE4FxxmnpR0GlOfJ8GB6NHU=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "custody_transfer"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "rAWEQ+6vOB4h45DklgQInASyGcUdwWvOiwAxpsF4eak="
+              ],
+              [
+                "bin",
+                "bTdrYUd4ZWdXa3pyU3RJcG9NQm9TSHUyTGZFQm4tLUNPbmZIVHNnenJSWQ=="
+              ],
+              [
+                "bin",
+                "FPXyzXz13vQvCKAKZ0J1BMKx37jPutSV4mAm9ndXNyClzNVlhNJosBFWOPXR1ENnku4kW5He0DXF1MmFnL8xDA=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "QzBsVldsSnpyNFlKcEo3OVNnamplRnFKVXk3OEdUY0hNX0pYa3FqZjNRTQ=="
+      ],
+      "deps": [
+        "m7kaGxegWkzrStIpoMBoSHu2LfEBn--COnfHTsgzrRY",
+        "ydGJMepmcVeXGssJ-5h4lTa-8yXzqnJAEcLLCwRWSGc"
+      ],
+      "id": "rkw73yza8dcOtj5Tkywf3Ut23Z9T3TZC_eAMilcJ10A",
+      "kind": "command",
+      "replica": "replica:tool:ladder-6ft#root:r9JGQh-CUgWaOt5KvtHMqyWi4XKrCyiIf3Iq6yjYaKc",
+      "sig": "D3gr3OdiqJPLY6/ktRark9oVf7Gw/pOt9WXA1IWjqYGUxDuyZNVLFeLlIwHnSbQO/jjFsEpFdCfoaqCt6ezwAA==",
+      "v": 1
+    }
+  ],
+  "perspectives": [],
+  "realmByPubkey": {
+    "RyoqX2/cpdKRULwb/9rSmE4FxxmnpR0GlOfJ8GB6NHU=": "owner",
+    "rAWEQ+6vOB4h45DklgQInASyGcUdwWvOiwAxpsF4eak=": "borrower"
+  },
+  "replica": "replica:tool:ladder-6ft#root:r9JGQh-CUgWaOt5KvtHMqyWi4XKrCyiIf3Iq6yjYaKc",
+  "scenario": "toolshed_custody_consent",
+  "schema": {
+    "consentCommands": [
+      "custody_transfer"
+    ],
+    "fields": {
+      "condition_notes": {
+        "merge": "causal_list"
+      },
+      "custody": {
+        "authority": "custody"
+      },
+      "description": {
+        "default": "",
+        "merge": "lww"
+      },
+      "holder": {
+        "default": null,
+        "gatedBy": "custody",
+        "merge": "lww"
+      }
+    },
+    "name": "Toolshed.Tool"
+  }
+}
