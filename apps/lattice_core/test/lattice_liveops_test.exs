@@ -133,6 +133,31 @@ defmodule LatticeCore.LiveOpsTest do
     assert_audit(:liveops_cleanup, tab_id: camera.id, reason: :test_disconnect)
   end
 
+  test "snapshot fails closed while CapStore is unavailable" do
+    %{actor: observer_actor} = connect_role(:observer)
+    observe_cap = cap_id(observer_actor, :observe)
+    supervisor = Process.whereis(LatticeCore.Supervisor)
+
+    assert :ok = Supervisor.terminate_child(supervisor, Lattice.CapStore)
+
+    try do
+      snapshot = Lattice.LiveOps.snapshot()
+
+      assert %{id: ^observe_cap, status: "revoked"} =
+               Enum.find(snapshot.caps, &(&1.id == observe_cap))
+
+      assert Process.alive?(supervisor)
+    after
+      assert {:ok, _pid} = Supervisor.restart_child(supervisor, Lattice.CapStore)
+    end
+
+    assert %{caps: %{}, active_caps: %{}} = Lattice.CapStore.snapshot()
+
+    assert %{id: ^observe_cap, status: "revoked"} =
+             Lattice.LiveOps.snapshot().caps
+             |> Enum.find(&(&1.id == observe_cap))
+  end
+
   defp connect_role(role) do
     {:ok, _pid, tab} =
       TestTabClient.connect(identity: %{surface: "liveops-demo", role: Atom.to_string(role)})
