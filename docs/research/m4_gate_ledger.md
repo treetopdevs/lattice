@@ -6,8 +6,9 @@ authoritative merge. Status vocabulary: `open` · `in-progress` · `review` · `
 `terminal-emitted` · `human-flagged`.
 
 Gates are the thirteen blocking gates of `m4_interface_redesign_brief.md` §15.
-Cross-cutting findings: the 2026-07-16 review register R1–R10 in
-`docs/zk-m4-election-path-findings_1.html`.
+The 2026-07-16 R1–R10 cross-cutting review informed this loop; the committed
+gate-specific dispositions and residual assumptions are recorded in the evidence
+artifacts linked below.
 
 | Gate | Type | Status | Evidence artifact | Notes |
 |------|------|--------|-------------------|-------|
