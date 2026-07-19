@@ -324,11 +324,11 @@ defmodule Lattice.Carrier.Wire do
     end
   end
 
+  defp decode_delegation(_), do: {:error, :malformed_term}
+
   defp decode_expires_epoch(nil), do: {:ok, nil}
   defp decode_expires_epoch(epoch) when is_integer(epoch) and epoch >= 0, do: {:ok, epoch}
   defp decode_expires_epoch(_), do: {:error, :malformed_term}
-
-  defp decode_delegation(_), do: {:error, :malformed_term}
 
   defp existing_atoms(values), do: reduce_atoms(values, [])
 
