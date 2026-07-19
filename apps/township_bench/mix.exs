@@ -1,0 +1,42 @@
+defmodule TownshipBench.MixProject do
+  use Mix.Project
+
+  # G13 measurement harness.
+  #
+  # PURPOSE: price the dominant cost of the pinned coercion-resistance construction
+  # (encrypted-sorting CHide, candidate profile — see zk-m4-election-path-findings.html
+  # §07/§08) against its REFERENCE ALGORITHMS in single-process simulation, at
+  # 100 / 1,000 / 10,000 participants, BEFORE any production role runner exists.
+  #
+  # This app makes NO coercion-resistance claim. It flips no SecurityProfile claim.
+  # It touches neither Township.Matter nor Lattice.Attestation. It is a cost oracle.
+
+  def project do
+    [
+      app: :township_bench,
+      version: "0.1.0",
+      build_path: "../../_build",
+      config_path: "../../config/config.exs",
+      deps_path: "../../deps",
+      lockfile: "../../mix.lock",
+      elixir: "~> 1.18",
+      start_permanent: false,
+      deps: deps()
+    ]
+  end
+
+  def application do
+    [extra_applications: [:logger, :crypto]]
+  end
+
+  # Intentionally dependency-light. The reference-algorithm cost model is pure Elixir
+  # arithmetic over operation counts. G2 pinned ristretto255 (chide-es-r255-v1), so the
+  # calibration seam now carries a verify-only Rustler NIF over curve25519-dalek that
+  # times real group operations. The harness contract is unchanged; only the numbers
+  # become truthful (AGENTS.md "Contract with the outer loop").
+  defp deps do
+    [
+      {:rustler, "~> 0.38.0", runtime: false}
+    ]
+  end
+end
