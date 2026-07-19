@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZK for the M4 Election Path — Lattice Research Findings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..800&family=STIX+Two+Text:ital,wght@0,400..700;1,400..700&family=IBM+Plex+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F1F3EF;
+  --paper-deep:#E7EAE4;
+  --ink:#1B2521;
+  --ink-soft:#4A554F;
+  --line:#C6CCC4;
+  --line-strong:#9AA49B;
+  --seal:#8A1E2D;
+  --seal-soft:#F3E2E4;
+  --verify:#1E6B4F;
+  --verify-soft:#DFEBE4;
+  --pending:#8A651B;
+  --pending-soft:#F1E8D3;
+  --mono-bg:#222B26;
+  --mono-ink:#D9E2DB;
+  --mono-accent:#A7C4B2;
+  --maxw:74ch;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:"STIX Two Text",Georgia,serif;font-size:17.5px;line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:inherit;text-decoration-color:var(--line-strong);text-underline-offset:3px}
+a:hover{text-decoration-color:var(--seal)}
+a:focus-visible,button:focus-visible{outline:2px solid var(--seal);outline-offset:2px}
+::selection{background:var(--seal);color:#fff}
+
+/* ---------- dossier layout ---------- */
+.frame{display:grid;grid-template-columns:270px minmax(0,1fr);min-height:100vh}
+.rail{
+  border-right:1px solid var(--line);background:var(--paper-deep);
+  padding:2.2rem 1.4rem;position:sticky;top:0;height:100vh;overflow-y:auto;
+}
+.rail .mark{font-family:Archivo,sans-serif;font-stretch:118%;font-weight:700;font-size:.82rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.35rem}
+.rail .mark small{display:block;font-weight:400;letter-spacing:.08em;color:var(--ink-soft);margin-top:.3rem;font-size:.68rem}
+.rail nav{margin-top:1.6rem}
+.rail nav a{
+  display:block;padding:.34rem 0;font-family:Archivo,sans-serif;font-size:.78rem;
+  letter-spacing:.02em;color:var(--ink-soft);text-decoration:none;border-bottom:1px solid transparent;
+}
+.rail nav a:hover{color:var(--ink)}
+.rail nav a .n{display:inline-block;width:2.1em;font-family:"IBM Plex Mono",monospace;font-size:.72rem;color:var(--line-strong)}
+main{padding:0 clamp(1.2rem,4vw,4.5rem) 6rem;max-width:calc(var(--maxw) + 9rem)}
+@media (max-width:960px){
+  .frame{grid-template-columns:1fr}
+  .rail{position:static;height:auto;border-right:none;border-bottom:1px solid var(--line)}
+  .rail nav{columns:2;column-gap:2rem}
+}
+
+/* ---------- header block ---------- */
+header.dossier{border-bottom:2px solid var(--ink);padding:3.4rem 0 1.6rem;margin-bottom:.4rem}
+.eyebrow{font-family:Archivo,sans-serif;font-stretch:120%;font-weight:600;font-size:.72rem;letter-spacing:.22em;text-transform:uppercase;color:var(--seal);margin:0 0 1rem}
+h1{
+  font-family:Archivo,sans-serif;font-stretch:75%;font-weight:750;line-height:1.02;
+  font-size:clamp(2.3rem,5.2vw,3.7rem);letter-spacing:-.015em;margin:0 0 1.1rem;text-wrap:balance;
+}
+h1 em{font-style:normal;color:var(--seal)}
+.subtitle{font-size:1.12rem;font-style:italic;color:var(--ink-soft);max-width:var(--maxw);margin:0 0 1.8rem}
+.meta{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:0;
+  border:1px solid var(--line-strong);font-family:Archivo,sans-serif;font-size:.78rem;
+}
+.meta div{padding:.55rem .8rem;border-right:1px solid var(--line)}
+.meta div:last-child{border-right:none}
+.meta dt{font-stretch:115%;font-weight:600;letter-spacing:.12em;text-transform:uppercase;font-size:.62rem;color:var(--ink-soft);margin-bottom:.15rem}
+.meta dd{margin:0;font-family:"IBM Plex Mono",monospace;font-size:.74rem}
+@media (max-width:700px){.meta div{border-right:none;border-bottom:1px solid var(--line)}}
+
+/* ---------- sections ---------- */
+section{padding-top:3.2rem}
+h2{
+  font-family:Archivo,sans-serif;font-stretch:80%;font-weight:720;font-size:1.75rem;
+  letter-spacing:-.01em;margin:0 0 1.1rem;line-height:1.12;
+}
+h2 .sn{font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:.85rem;color:var(--seal);display:block;margin-bottom:.45rem;letter-spacing:.08em}
+h3{font-family:Archivo,sans-serif;font-stretch:92%;font-weight:650;font-size:1.12rem;margin:2rem 0 .6rem}
+p,ul,ol{max-width:var(--maxw)}
+ul,ol{padding-left:1.3rem}
+li{margin:.35rem 0}
+strong{font-weight:700}
+hr{border:none;border-top:1px solid var(--line);margin:2.4rem 0}
+.lead{font-size:1.16rem;line-height:1.58}
+.aside{
+  border-left:3px solid var(--line-strong);background:var(--paper-deep);
+  padding:.9rem 1.1rem;margin:1.4rem 0;max-width:var(--maxw);font-size:.94em;
+}
+.aside.seal{border-left-color:var(--seal);background:var(--seal-soft)}
+.aside .k{font-family:Archivo,sans-serif;font-stretch:115%;font-weight:700;font-size:.66rem;letter-spacing:.18em;text-transform:uppercase;display:block;margin-bottom:.35rem}
+.aside.seal .k{color:var(--seal)}
+
+/* ---------- claim stamps (signature element) ---------- */
+.stamp{
+  display:inline-block;font-family:Archivo,sans-serif;font-stretch:110%;font-weight:700;
+  font-size:.62rem;letter-spacing:.16em;text-transform:uppercase;
+  padding:.18rem .55rem .14rem;border:1.5px solid currentColor;border-radius:2px;
+  transform:rotate(-1deg);vertical-align:middle;white-space:nowrap;
+}
+.stamp.nc{color:var(--seal);background:var(--seal-soft)}
+.stamp.cond{color:var(--pending);background:var(--pending-soft)}
+.stamp.cov{color:var(--verify);background:var(--verify-soft)}
+.stamp.na{color:var(--ink-soft);background:var(--paper-deep)}
+
+/* ---------- code ---------- */
+pre{
+  background:var(--mono-bg);color:var(--mono-ink);border-radius:4px;
+  padding:1.05rem 1.2rem;overflow-x:auto;font-size:.8rem;line-height:1.6;
+  max-width:calc(var(--maxw) + 4rem);
+}
+code{font-family:"IBM Plex Mono",monospace}
+p code,li code,td code{
+  background:var(--paper-deep);border:1px solid var(--line);border-radius:3px;
+  padding:.04em .32em;font-size:.82em;white-space:nowrap;
+}
+pre code{background:none;border:none;padding:0;white-space:pre}
+pre .c{color:#8B9A90;font-style:italic}
+pre .h{color:var(--mono-accent);font-weight:500}
+pre .r{color:#E0A6AE}
+
+/* ---------- tables ---------- */
+.tablewrap{overflow-x:auto;margin:1.4rem 0;max-width:calc(var(--maxw) + 8rem)}
+table{border-collapse:collapse;width:100%;font-size:.87rem;line-height:1.45}
+caption{caption-side:top;text-align:left;font-family:Archivo,sans-serif;font-stretch:115%;font-weight:700;font-size:.68rem;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-soft);padding-bottom:.55rem}
+th{
+  font-family:Archivo,sans-serif;font-stretch:105%;font-weight:650;font-size:.72rem;
+  letter-spacing:.09em;text-transform:uppercase;text-align:left;
+  border-bottom:2px solid var(--ink);padding:.5rem .7rem .4rem;vertical-align:bottom;
+}
+td{border-bottom:1px solid var(--line);padding:.55rem .7rem;vertical-align:top}
+tr:hover td{background:var(--paper-deep)}
+td.mono,th.mono{font-family:"IBM Plex Mono",monospace;font-size:.76rem;white-space:nowrap}
+
+/* ---------- gate board ---------- */
+.gate{display:grid;grid-template-columns:3.2rem minmax(0,1fr) auto;gap:.9rem;padding:.85rem 0;border-bottom:1px solid var(--line);align-items:baseline;max-width:calc(var(--maxw) + 8rem)}
+.gate:last-child{border-bottom:none}
+.gate .gn{font-family:"IBM Plex Mono",monospace;font-size:.95rem;color:var(--seal);font-weight:500}
+.gate .gt{font-size:.94rem}
+.gate .gt b{font-family:Archivo,sans-serif;font-stretch:95%;font-weight:650;font-size:.92rem;display:block;margin-bottom:.15rem}
+@media (max-width:640px){.gate{grid-template-columns:2.4rem 1fr}.gate .stamp{grid-column:2}}
+
+/* ---------- lifecycle svg ---------- */
+figure{margin:1.8rem 0;max-width:calc(var(--maxw) + 8rem)}
+figure svg{width:100%;height:auto;display:block}
+figcaption{font-family:Archivo,sans-serif;font-size:.74rem;letter-spacing:.06em;color:var(--ink-soft);margin-top:.55rem}
+
+.footer-note{margin-top:4.5rem;border-top:2px solid var(--ink);padding-top:1.1rem;font-family:Archivo,sans-serif;font-size:.74rem;color:var(--ink-soft);letter-spacing:.03em}
+sup{font-size:.7em}
+.src{font-size:.9rem}
+.src li{margin:.5rem 0}
+</style>
+</head>
+<body>
+<div class="frame">
+<aside class="rail" aria-label="Document navigation">
+  <div class="mark">Lattice Research<small>docs/research · applied ZK · M4 track</small></div>
+  <nav>
+    <a href="#thesis"><span class="n">01</span>Thesis</a>
+    <a href="#state"><span class="n">02</span>State of the path</a>
+    <a href="#verdict"><span class="n">03</span>Why the old seam died</a>
+    <a href="#arch"><span class="n">04</span>The redesigned protocol</a>
+    <a href="#registration"><span class="n">05</span>Private registration</a>
+    <a href="#ingress"><span class="n">06</span>Anonymous ingress</a>
+    <a href="#construction"><span class="n">07</span>The pinned construction</a>
+    <a href="#profile"><span class="n">08</span>Candidate profile stack</a>
+    <a href="#client"><span class="n">09</span>Client-side proving</a>
+    <a href="#beam"><span class="n">10</span>BEAM integration</a>
+    <a href="#gates"><span class="n">11</span>The thirteen gates</a>
+    <a href="#limits"><span class="n">12</span>What ZK does not solve</a>
+    <a href="#sequence"><span class="n">13</span>Recommended sequence</a>
+    <a href="#review"><span class="n">14</span>Adversarial review</a>
+    <a href="#sources"><span class="n">15</span>Sources</a>
+  </nav>
+</aside>
+<main>
+<header class="dossier">
+  <p class="eyebrow">Research Investigation · Township / PD-001</p>
+  <h1>The M4 Election Path is where ZK becomes <em>load-bearing</em></h1>
+  <p class="subtitle">Applying the 2024–2026 zero-knowledge toolchain — nullifier protocols, anonymous credentials, and JCJ-family coercion resistance — to the one place in the Lattice roadmap where cryptography converts a <code>:not_claimed</code> security property into a candidate pinned profile.</p>
+  <dl class="meta">
+    <div><dt>Status</dt><dd>findings / not authorization</dd></div>
+    <div><dt>Date</dt><dd>2026-07-16</dd></div>
+    <div><dt>Repo</dt><dd>treetopdevs/lattice @ main</dd></div>
+    <div><dt>Scope</dt><dd>M4 · Phase F2–F3 gates</dd></div>
+    <div><dt>Claim posture</dt><dd>research · not_claimed</dd></div>
+  </dl>
+</header>
+
+<section id="thesis">
+  <h2><span class="sn">§ 01</span>Thesis</h2>
+  <p class="lead">Everywhere else in Lattice, zero-knowledge proofs are an optimization: they compress a delegation-chain lookup, they make an audit log verifiable, they shrink a state sync. In the M4 election path, ZK is not an optimization. It is the only known mechanism that can deliver the properties the roadmap demands — eligibility without identity, one vote per election without linkability, and a tally whose correctness anyone can check without anyone being able to prove how they voted.</p>
+  <p>The repo already knows this. <code>CLAUDE.md</code> names three blocking conditions for <code>Township.Election</code>: <strong>anonymous ingress</strong>, <strong>private registration</strong>, and <strong>the pinned cryptographic construction</strong>. Every security claim in the implemented foundation is frozen at <span class="stamp nc">not claimed</span> until those gates clear. Nothing else on the Lattice ZK menu — capability SNARKs, MMR log commitments, verifiable state sync — changes a claim state. This path does. That is the argument for spending the deep-study budget here.</p>
+  <p>The finding of this investigation is that the 2024–2026 toolchain covers the gates unevenly, and the unevenness is the useful result. Semaphore-style membership nullifiers and IETF-track BBS credentials are mature enough to prototype the eligibility and registration layers now, behind the existing <code>Township.Election.Protocol</code> seam. The tally layer — CHide-family encrypted cleansing — is specified, peer-reviewed, and implementable, but its measured cost at town scale is the open question that gate 13 exists to answer. And a specific class of problems (close finality, artifact availability, transport metadata) is not a ZK problem at all, and no amount of proving will move it.</p>
+</section>
+
+<section id="state">
+  <h2><span class="sn">§ 02</span>State of the path in the repo</h2>
+  <p>M4 has already been through one full research cycle, and the artifacts of that cycle define what "done" means. Three documents and one code tree matter:</p>
+  <div class="tablewrap"><table>
+    <caption>The M4 paper trail</caption>
+    <thead><tr><th>Artifact</th><th>Role</th><th>Verdict it carries</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">docs/research/m4_receipt_freeness_verdict.md</td><td>Concluded research gate (2026-07-13). Three independent reviewers — Codex, Claude, Antigravity — converged adversarially.</td><td><strong>DO NOT LAND</strong> behind the legacy four-callback <code>Lattice.Attestation</code> seam. The failure is construction-independent.</td></tr>
+      <tr><td class="mono">docs/research/m4_interface_redesign_brief.md</td><td>Council conclusion replacing the retired seam with a phased <code>Township.Election</code> protocol over a dedicated bulletin board.</td><td>Direction adopted; thirteen blocking gates enumerated; no implementation authorization.</td></tr>
+      <tr><td class="mono">TOWNSHIP_BUILD_MAP.md · Phase F</td><td>Sequencing. F1 foundation implemented and research-safe; F2 (profile + operations) and F3 (review + scale) are the open blockers; F4 migrates W4 last.</td><td>F1 <span class="stamp cov">landed</span> · F2/F3 <span class="stamp nc">open</span></td></tr>
+      <tr><td class="mono">apps/lattice_core/lib/township/election*</td><td>The implemented foundation: verified Matter link, versioned <code>Spec</code>, canonical artifact refs, role-gated board, pure projection, unanimous-box close evidence, offline replay.</td><td>Makes no coercion-resistance claim; <code>SecurityProfile</code> claims stay <code>:not_claimed</code>.</td></tr>
+    </tbody>
+  </table></div>
+  <p>The shape of what already exists is worth being precise about, because it is exactly the substrate a ZK profile plugs into. <code>Township.Election.verify_link/3</code> binds an immutable <code>ElectionSpec</code> digest to an authorized Matter-side <code>{:link_election, [spec_digest]}</code> op, then derives the election ID as a domain-separated hash of both — so any change to choices, roles, keys, thresholds, or profile produces a new election. <code>Township.ElectionBoard</code> is a separate capability-gated replica whose command surface (<code>:submit_ballot</code>, <code>:publish_box_seal</code>, <code>:certify_close</code>, <code>:publish_protocol_artifact</code>, <code>:publish_tally</code>…) lets <code>Lattice.Authority</code> validate the outer publisher while a pure projector validates the inner protocol. Phase is derived from verified certificates, never from an LWW field. Projection is total, set-based, and byte-identical across arrival permutations.</p>
+  <p>What is deliberately absent is everything cryptographic: no credential scheme, no anonymous channel, no DKG, no proof system, no trustee runners. Those are gates 2–8. This document maps the current toolchain onto them.</p>
+</section>
+
+<section id="verdict">
+  <h2><span class="sn">§ 03</span>Why the old seam died — and what it teaches the ZK design</h2>
+  <p>The retired interface asked for four callbacks: <code>cast_vouch/3</code>, <code>tally/2</code>, <code>produce_alt/2</code>, <code>receipt_free?/0</code>. The verdict's core argument is short enough to restate whole, because every design decision downstream inherits from it. The interface required a public deterministic singleton tally, an immutable signed logged body, and an "alternative" body that counts for a different choice. Those three requirements hand the coercer a perfect distinguisher:</p>
+  <ol>
+    <li>Read the target's logged body. Run the public <code>tally/2</code> on it — the choice is revealed with probability 1.</li>
+    <li>When shown an alternative body, byte-compare it against the log. If it differs, <code>Lattice.Op</code>'s content hash and Ed25519 signature expose the substitution; if it is identical, determinism forces the same tally.</li>
+  </ol>
+  <p>The second lesson is the one that matters most for the ZK layer: <strong>JCJ-family coercion resistance has inverted semantics from what the old API assumed.</strong> The coerced artifact is not a second body that counts differently — it is a ballot cast under a <em>fake credential</em> that looks perfectly valid on the public board and is silently excluded during encrypted cleansing. The coerced vote must <em>not</em> count, and no observer — including the coercer holding everything the voter surrendered — may be able to tell which ballots were removed. The legacy contract literally asserted the opposite (<code>tally([alt])</code> counting the demanded choice), which would let a coercer change election results.</p>
+  <p>Five falsifying properties from the verdict become standing constraints on any ZK profile:</p>
+  <ul>
+    <li>A public deterministic plaintext tally is a choice oracle — the deterministic Lattice operation must be <code>verify_finalized_tally(transcript)</code>, never <code>decrypt_and_tally(bodies)</code>.</li>
+    <li>Content-addressed ops make byte-different alternatives detectable — deniability must live <em>inside</em> the ciphertext, not in the log.</li>
+    <li>Byte-identical alternatives cannot tally differently — same reason.</li>
+    <li>Fake evidence must be excluded, not counted — encrypted cleansing, not body substitution.</li>
+    <li>Outer <code>author</code>/<code>cap</code>/<code>deps</code> metadata makes participation observable — the voter must never author the public ballot op with an ordinary <code>Lattice.Identity</code>. An anonymous box or relay authors the outer op; the encrypted inner ballot carries no Lattice identity.</li>
+  </ul>
+  <div class="aside seal"><span class="k">Standing rule</span>Ballots and credentials never touch <code>Township.Matter</code>. The Matter log stores only the authorized election-link command; the board stores service-authored public artifacts. Constraint five is why the "anonymous ingress" gate exists at all.</div>
+</section>
+
+<section id="arch">
+  <h2><span class="sn">§ 04</span>The redesigned protocol surface</h2>
+  <p>The replacement architecture is a multi-role, multi-phase election protocol in which Lattice supplies exactly four things: an immutable bulletin board, capability-gated service publication, replication, and deterministic replay. Everything cryptographic hides behind one deliberately small facade:</p>
+<pre><code><span class="h">Township.Election</span>
+  → client ballot and decoy preparation          <span class="c"># prepare_ballot/4, make_decoy/3</span>
+  → role-state advancement                       <span class="c"># advance/3 — registrar, box, close, trustees</span>
+  → pure board projection and verification       <span class="c"># verify/3 — total, set-based, non-networked</span>
+  → structured security claims                   <span class="c"># claims/1 — reviewed static manifest</span>
+
+<span class="h">Township.ElectionBoard</span>
+  → capability-gated append-only artifacts
+  → no voter identities, no materialized plaintext tally</code></pre>
+  <p>Four private seams sit behind the facade — <code>Protocol</code> (the one pinned construction), <code>AnonymousTransport</code> (with a deterministic test adapter and a separately assessed real adapter), <code>ArtifactStore</code> (content-addressed bytes and offline bundles), and the role runners. The brief is explicit that construction internals — CHide's <code>Setup</code>, <code>Vote</code>, <code>Check</code>, <code>isVal</code>, <code>Fakecred</code>, <code>Ptally</code>, <code>Verify</code> — must not leak upward as a growing pile of application callbacks. This is the seam every ZK library evaluated below must fit behind.</p>
+
+  <figure>
+    <svg viewBox="0 0 980 132" role="img" aria-label="Election lifecycle: setup, registration, ready, open, closing, closed, tallying, finalized; any phase may abort or fork">
+      <defs><marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#4A554F"/></marker></defs>
+      <g font-family="Archivo, sans-serif" font-size="12.5" font-weight="600">
+      <!-- phase boxes -->
+      <g>
+        <rect x="8"   y="26" width="96" height="34" fill="#E7EAE4" stroke="#9AA49B"/><text x="56"  y="47" text-anchor="middle" fill="#1B2521">setup</text>
+        <rect x="128" y="26" width="112" height="34" fill="#E7EAE4" stroke="#9AA49B"/><text x="184" y="47" text-anchor="middle" fill="#1B2521">registration</text>
+        <rect x="264" y="26" width="86" height="34" fill="#E7EAE4" stroke="#9AA49B"/><text x="307" y="47" text-anchor="middle" fill="#1B2521">ready</text>
+        <rect x="374" y="26" width="86" height="34" fill="#DFEBE4" stroke="#1E6B4F"/><text x="417" y="47" text-anchor="middle" fill="#1E6B4F">open</text>
+        <rect x="484" y="26" width="92" height="34" fill="#E7EAE4" stroke="#9AA49B"/><text x="530" y="47" text-anchor="middle" fill="#1B2521">closing</text>
+        <rect x="600" y="26" width="86" height="34" fill="#E7EAE4" stroke="#9AA49B"/><text x="643" y="47" text-anchor="middle" fill="#1B2521">closed</text>
+        <rect x="710" y="26" width="92" height="34" fill="#E7EAE4" stroke="#9AA49B"/><text x="756" y="47" text-anchor="middle" fill="#1B2521">tallying</text>
+        <rect x="826" y="26" width="104" height="34" fill="#1B2521" stroke="#1B2521"/><text x="878" y="47" text-anchor="middle" fill="#F1F3EF">finalized</text>
+      </g>
+      <!-- arrows -->
+      <g stroke="#4A554F" stroke-width="1.4" marker-end="url(#ar)">
+        <line x1="104" y1="43" x2="124" y2="43"/><line x1="240" y1="43" x2="260" y2="43"/>
+        <line x1="350" y1="43" x2="370" y2="43"/><line x1="460" y1="43" x2="480" y2="43"/>
+        <line x1="576" y1="43" x2="596" y2="43"/><line x1="686" y1="43" x2="706" y2="43"/>
+        <line x1="802" y1="43" x2="822" y2="43"/>
+      </g>
+      <!-- escape states -->
+      <g font-weight="700" font-size="11.5">
+        <rect x="290" y="88" width="110" height="28" fill="#F3E2E4" stroke="#8A1E2D"/><text x="345" y="106" text-anchor="middle" fill="#8A1E2D">:aborted</text>
+        <rect x="560" y="88" width="110" height="28" fill="#F3E2E4" stroke="#8A1E2D"/><text x="615" y="106" text-anchor="middle" fill="#8A1E2D">:forked</text>
+      </g>
+      <g font-family="STIX Two Text, serif" font-style="italic" font-size="11" fill="#4A554F" font-weight="400">
+        <text x="228" y="106" text-anchor="end">any non-final phase, under pinned abort policy →</text>
+        <text x="688" y="106">← any conflicting valid phase certificate</text>
+      </g>
+      </g>
+    </svg>
+    <figcaption>Fig. 1 — Lifecycle derived from verified certificates, never from an LWW phase field. No reopen transition exists; a rerun is a new election ID.</figcaption>
+  </figure>
+
+  <h3>Roles, and what a capability does not prove</h3>
+  <p>Nine roles are frozen into the election configuration: matter sponsor, supervisor, registration tellers, voter client, ballot boxes, close committee, tally trustees, auditors, and the Lattice replica/carrier itself. The trust boundary the brief draws is the sharpest sentence in it: a Lattice capability proves that a <em>service may publish an artifact family</em>. It does not prove credential validity, anonymous eligibility, private delivery, honest thresholds, correct client behavior, complete delivery, or a non-equivocating close. Those are exactly the properties the ZK layer and the operational design must supply — which is why capabilities and proofs are complements here, not substitutes.</p>
+
+  <h3>Close finality: the deliberately conservative choice</h3>
+  <p>A CRDT frontier cannot fix a canonical ballot set — eventual delivery has no globally complete view. The POC policy is <code>:unanimous_boxes_v1</code>: every configured ballot box signs exactly one seal naming every wrapper it accepted, all boxes co-sign one union manifest, and the close certificate carries every signature. Uniqueness holds if a single box is honest; the price is liveness — one withholding box leaves the election <code>:pending</code>. Competing valid certificates mean <code>:forked_close</code>, and the projector must never break the tie by hash, topology, author, or arrival time. If unanimity proves operationally unacceptable, the named replacement is a separately proven BFT close service — not Lattice ordering. Keep this section in mind at §12: no proof system fixes it.</p>
+</section>
+
+<section id="registration">
+  <h2><span class="sn">§ 05</span>Gate: private registration → anonymous credentials</h2>
+  <p><span class="stamp cond">conditional — toolchain mature</span></p>
+  <p>Registration must deliver each eligible voter a private credential, publish only encrypted credential material to the roster, and satisfy an honest-party assumption over the registration tellers. Two credential families from the 2024–2026 toolchain apply, at two different layers:</p>
+  <h3>BBS signatures for the issuance layer</h3>
+  <p>BBS is the anonymous-credential workhorse: a constant-size multi-message signature whose holder can generate unlinkable zero-knowledge proofs of knowledge while selectively disclosing any subset of signed attributes. It is now deep in IETF standardization — <a href="https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-bbs-signatures-10">draft-irtf-cfrg-bbs-signatures-10</a> landed in January 2026, based on the Tessaro–Zhu 2023 security treatment — which matters for gate 12 (independent review) because a reviewed RFC-track primitive is a far smaller audit surface than a bespoke scheme. For Township, a BBS credential lets a registration teller sign <code>(roster_epoch, eligibility_attributes, credential_commitment)</code> once, and lets the voter later prove possession without the teller or anyone else linking the proof back to issuance. Notably, BBS proofs' hiding properties hold even against a future quantum adversary, though unforgeability does not — a reasonable posture for a civic roster.</p>
+  <h3>JCJ/CHide credentials for the coercion layer</h3>
+  <p>BBS alone is not coercion-resistant: a coerced voter can surrender a BBS credential, and the coercer can then vote or verify with it. The JCJ line adds the property that makes M4 hard: <strong>fake credentials indistinguishable from real ones</strong>. CHide's <code>Fakecred(c)</code> derives decoy material from the voter's real private credential; a ballot cast with it is publicly well-formed, survives every relay check, and is removed only inside the encrypted cleansing phase — invisibly. This is what <code>make_decoy/3</code> in the <code>Protocol</code> behaviour encodes, and why it receives the real credential: fakes are derived, not minted independently. The registration ceremony must therefore give each voter an <em>untappable moment</em> — one opportunity to receive the real credential unobserved — and the designated-verifier proofs used during issuance must convince the voter without producing evidence transferable to a coercer.</p>
+  <div class="aside"><span class="k">Layering</span>BBS answers "is this holder on the roster?" unlinkably. JCJ/CHide credentials answer "does this ballot count?" deniably. The candidate profile in §08 uses both, at different points in the envelope.</div>
+</section>
+
+<section id="ingress">
+  <h2><span class="sn">§ 06</span>Gate: anonymous ingress → nullifiers, scoped precisely</h2>
+  <p><span class="stamp cond">conditional — with one sharp caveat</span></p>
+  <p>The prompt's framing — "registered voter proves membership plus one-vote-per-election without linkability" — is exactly the Semaphore contract, and Semaphore is the most production-hardened way to get it. Semaphore v4 (PSE) is a Groth16/BN254 protocol over a Poseidon-hashed <em>Lean Incremental Merkle Tree</em> of identity commitments; identities are EdDSA keypairs, which makes them reusable across systems rather than trapped inside one circuit. A proof demonstrates three statements simultaneously: the prover controls a commitment in the group tree; the message (ballot-wrapper digest, here) is bound into the proof; and a <strong>nullifier</strong> — deterministically derived from the identity secret and a public <em>scope</em> — is well-formed. Set the scope to the <code>election_id</code> and the nullifier becomes a one-per-voter-per-election token that reveals nothing about which roster member produced it.</p>
+  <p>Mapped onto the board, this closes real gaps immediately:</p>
+  <ul>
+    <li><strong>Eligibility at the box.</strong> A relay accepting a <code>:submit_ballot</code> can require a Semaphore proof against the sealed roster tree before authoring the wrapper op — spam and non-member submissions die at ingress without the box learning who submitted. This directly serves the brief's denial-of-service boundary requirement (gate 5).</li>
+    <li><strong>Roster commitment.</strong> The <code>ElectionSpec</code> roster commitment becomes the LeanIMT root, sealed by the registration certificate at <code>:ready</code>.</li>
+    <li><strong>Participation privacy.</strong> The outer op author is the box; the inner proof is anonymous; nothing on the board links a ballot to a roster entry — which is the property whose absence made forced abstention observable under the old seam.</li>
+  </ul>
+  <h3>The caveat that decides the architecture</h3>
+  <p>A Semaphore nullifier is <em>publicly linkable within its scope</em>: two submissions from the same identity under the same <code>election_id</code> expose the duplicate by nullifier equality. That is the feature when the policy is "strictly one signal." It is a hazard for coercion resistance, where CHide's semantics require duplicate and fake-credential ballots to remain <strong>publicly unclassified</strong>, their fate hidden inside encrypted cleansing. Two consequences:</p>
+  <ul>
+    <li>If revoting is part of the evasion strategy (vote under coercion, revote freely later — the classic JCJ pattern), a naive per-election nullifier would publicly flag the revote and hand the coercer a compliance check. The nullifier scope must then be per-submission-window or omitted at the ballot layer entirely, with all duplicate resolution deferred to encrypted cleansing.</li>
+    <li>If the pinned profile forbids revoting, the per-election nullifier is safe <em>for exact-duplicate suppression only</em> — and note the board already deduplicates exact retransmissions by inner artifact digest, so the nullifier's marginal job is stopping <em>distinct</em> double ballots, which is precisely the case where public linkability leaks.</li>
+  </ul>
+  <p>The honest resolution: <strong>Semaphore-style nullifiers belong at the eligibility/anti-DoS layer; the count-integrity layer's duplicate policy must live inside the pinned construction's cleansing phase.</strong> Which duplicate policy matches the security game is already logged as an open research decision in the brief (§17) — this analysis gives it a concrete shape: the nullifier scope is a profile parameter that must be pinned together with the revote policy, not chosen independently.</p>
+
+  <h3>The surrendered-secret attack — found in adversarial review</h3>
+  <p>A nullifier is <em>deterministic</em> from <code>(identity_secret, scope)</code>. If the Semaphore proof is published to the board alongside the ballot wrapper, the board's nullifier set becomes a <strong>participation registry keyed by identity secrets</strong>: a coercer who demands the voter's EdDSA identity secret — the JCJ credential-surrender scenario, squarely in scope — recomputes the election-scope nullifier locally and scans the board. Participation becomes provable, resurrecting the forced-abstention channel the redesign eliminated at the op-author layer. A second cost compounds it: gating ingress on roster membership removes <em>non-member</em> dummy ballots, and the brief's own gate 5 and benchmark requirements name a cover/dummy policy explicitly — JCJ-family evasion leans on background traffic that anyone can generate. Three dispositions, escalating in fidelity to the theorem:</p>
+  <ul>
+    <li><strong>Box-private admission.</strong> The box verifies the proof and discards it; nothing nullifier-shaped reaches the board. This keeps DoS protection and forfeits public auditability of admission — acceptable, because ballot stuffing with fake credentials cannot change the tally, only its size. The box already sits inside the metadata trust boundary; learning a scope-pseudonym adds little to what a malicious box could already correlate.</li>
+    <li><strong>Ephemeral scopes.</strong> If any nullifier must be public, scope it per submission epoch, not per election — rate limiting without an election-lifetime pseudonym. This weakens dedup to per-epoch, which is fine, because dedup was never this layer's job (§06 above).</li>
+    <li><strong>No admission control at all.</strong> Vanilla CHide assumes an open-posting board. Every admission extension — including this one — is a deviation the composition argument (gate 12) must carry. Whether admission control exists, and on which side of the theorem's board model it lives, is therefore a <strong>gate 2 profile decision</strong>, not an architecture default. §14 records this as the review's highest-severity finding.</li>
+  </ul>
+</section>
+
+<section id="construction">
+  <h2><span class="sn">§ 07</span>Gate: the pinned construction — CHide, priced honestly</h2>
+  <p><span class="stamp nc">open — cost is the blocker, not existence</span></p>
+  <p>The brief's target profile is a single version-pinned <strong>CHide</strong> or <strong>encrypted-sorting CHide</strong> construction (Cortier–Gaudry–Yang, ePrint 2022/430; encrypted-sorting treatment, ePrint 2023/837). The semantic shape fits the redesigned architecture exactly: trustees run a DKG for exponential ElGamal; registrars issue private credentials and publish encrypted material; voters submit encrypted <code>(choice, credential)</code> pairs with well-formedness proofs over an anonymous channel; encrypted equality tests, conditional zeroing, and an oblivious sort hide which fake or duplicate ballots were cleansed; anyone verifies the transcript. The coercion-resistance theorem holds under DDH with SUC-secure DKG and mixnet components in the programmable random-oracle model.</p>
+  <p>The verdict document imported the numbers that make this a gate rather than a checkbox, and they deserve to be stated plainly:</p>
+  <div class="tablewrap"><table>
+    <caption>CHide tally cost at scale — figures cited in the M4 verdict</caption>
+    <thead><tr><th>Variant</th><th>Asymptotics</th><th>Estimated cost at 10,000 voters</th><th>Implication for gate 13</th></tr></thead>
+    <tbody>
+      <tr><td>CHide (original preprint)</td><td class="mono">O(n²)</td><td>≈ 48 single-core CPU-days; ≈ 668 GB exchanged (3 trustees, t = 2)</td><td>Outside any town-scale comfort zone without heavy parallelism</td></tr>
+      <tr><td>Encrypted-sorting CHide</td><td class="mono">O(n log n)</td><td>Materially lower; unmeasured in this environment</td><td>The candidate to pin — but gate 13's 100 / 1,000 / 10,000-participant benchmark is mandatory before product accepts the cost</td></tr>
+    </tbody>
+  </table></div>
+  <p>Two readings of those numbers. Pessimistic: quadratic CHide at 10k is effectively unusable on civic hardware. Realistic: the tally is trustee-side batch work, not client work — 48 CPU-days is embarrassingly parallel MPC across a trustee committee, and the encrypted-sorting variant plus 2024–2026 GPU acceleration (MSM/NTT kernels of the kind ICICLE ships) attack exactly the dominant cost. The client's cost — one ballot encryption plus proofs — is milliseconds-to-seconds and is the part §09 moves into the browser. The correct posture is the brief's: pin the encrypted-sorting profile as the candidate, then let measurement, not optimism, clear gate 13.</p>
+  <p>One alternative deserves its standing rejection restated: <strong>MACI</strong> gets invoked whenever "anti-collusion voting" comes up, and the verdict already dispatched it — the MACI coordinator holds the decryption key and processes messages off-chain, producing a ZK proof of the result. That is a trusted-coordinator model, weaker than CHide's threshold-trustee model, and it does not fit a facade whose whole point is that no single party can decrypt. The same table retired chameleon-hash commitments, Hirt–Sako channels, deniable encryption, and linkable ring signatures, each for a specific reduction failure.</p>
+</section>
+
+<section id="profile">
+  <h2><span class="sn">§ 08</span>A candidate profile stack for <code>township-election-v1</code></h2>
+  <p>Gate 2 demands that paper revision, algorithms, parameters, transcript encoding, DKG, mixnet/MPC, proof system, and implementation library be pinned <em>together as one profile</em>. The stack below is a candidate for that decision package — findings-grade, not the pin itself. Each layer is chosen so it can hide behind an existing seam in <code>Township.Election</code>.</p>
+  <div class="tablewrap"><table>
+    <caption>Candidate layers · maturity as of mid-2026</caption>
+    <thead><tr><th>Layer</th><th>Primitive / protocol</th><th>Implementation candidates</th><th>Seam it hides behind</th><th>Maturity</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Roster + eligibility</strong></td><td>Semaphore v4: EdDSA identities, Poseidon LeanIMT, Groth16 on BN254, scope-bound nullifiers</td><td class="mono">@semaphore-protocol/core, semaphore-rs</td><td><code>Protocol</code> ballot-envelope checks; roster commitment in <code>ElectionSpec</code></td><td><span class="stamp cov">production-hardened</span></td></tr>
+      <tr><td><strong>Registration credentials</strong></td><td>BBS multi-message signatures + unlinkable selective-disclosure proofs (BLS12-381)</td><td class="mono">draft-irtf-cfrg-bbs-signatures-10; DIF reference impls; arkworks-based ports</td><td>Registration teller role runner; issuance transcript</td><td><span class="stamp cond">IETF-track, pre-RFC</span></td></tr>
+      <tr><td><strong>Coercion layer</strong></td><td>Encrypted-sorting CHide: exp-ElGamal, threshold DKG, encrypted equality tests, oblivious sort, threshold decryption</td><td class="mono">ePrint 2023/837 reference algorithms; no maintained production library — gate 3's real work</td><td><code>Protocol</code> internals: <code>prepare_ballot</code>, <code>make_decoy</code>, trustee <code>advance</code> rounds, <code>verify</code></td><td><span class="stamp nc">specified, unproductized</span></td></tr>
+      <tr><td><strong>Ballot proofs</strong></td><td>Well-formedness + knowledge proofs bound to spec/roster/close digests, domain-separated</td><td class="mono">Groth16 (per-circuit ceremony) or Halo2/Plonky3 (transparent) — profile decision</td><td>Inner ballot envelope; relay public checks</td><td><span class="stamp cond">system choice open</span></td></tr>
+      <tr><td><strong>Board verification IVC</strong> <em>(optional)</em></td><td>Folding-scheme accumulation (Nova / CycleFold / Protostar) over projection steps, MMR-committed board log</td><td class="mono">sonobe (EF PSE)</td><td>Light-client replay in the tab realm; not on the coercion-critical path</td><td><span class="stamp cond">research-grade libs</span></td></tr>
+      <tr><td><strong>Anonymous transport</strong></td><td>Mixnet or onion routing with an explicit traffic-observer model, cover policy, and DoS boundary</td><td class="mono">Nym, Tor — names, not claims (brief §16)</td><td><code>AnonymousTransport</code> adapter pair: deterministic test adapter now, assessed real adapter later</td><td><span class="stamp nc">explicitly not claimed</span></td></tr>
+    </tbody>
+  </table></div>
+  <h3>How a ballot moves through the stack</h3>
+<pre><code><span class="c"># voter client — never touches Lattice.Identity, never authors a board op</span>
+{:ok, verified}          = Township.Election.verify_link(spec, matter_log, link_op_id)
+{:ok, envelope, check}   = Protocol.prepare_ballot(verified, credential_secret, choice, entropy)
+<span class="c">#   envelope = ExpElGamal.enc(election_pk, {choice, jcj_credential})</span>
+<span class="c">#            ++ well-formedness proofs (domain-separated to election_id)</span>
+<span class="c">#            ++ semaphore_proof(roster_root, scope: profile-pinned, message: envelope_digest)</span>
+<span class="c">#               — whether this proof is board-published, box-private, or absent is a G2 decision (§06, §14)</span>
+
+<span class="c"># anonymous channel — the transport adapter, not a WebSocket to the box</span>
+AnonymousTransport.submit(box_endpoints, envelope)
+
+<span class="c"># ballot box — checks only PUBLIC form: size bounds, proof validity, roster root.</span>
+<span class="c"># It must not — and cannot — test whether the credential is real. (verdict §3)</span>
+<span class="r">box</span> authors {:submit_ballot, [election_id, ballot_ref]}   <span class="c"># outer op: box identity + box capability</span>
+
+<span class="c"># under coercion — the decoy path; the coerced ballot is well-formed and will not count</span>
+{:ok, decoy} = Protocol.make_decoy(verified, real_credential, entropy)</code></pre>
+  <p>The <code>check</code> token is the voter's opaque inclusion evidence — it verifies presence on the board without opening the choice, and it is never logged. The brief's open question about acceptance evidence creating new coercion surface (§17) applies to it directly. One structural advantage surfaced in review deserves stating: because Lattice is local-first, every participant replicates the full board, so the inclusion check is a <em>local</em> lookup — no distinguishing "is my ballot there?" query ever leaves the device. Centralized bulletin boards need private information retrieval to get this; Lattice gets it from its replication model for free.</p>
+  <div class="aside"><span class="k">Curve independence</span>The stack spans three curve regimes — BN254 (Semaphore/Groth16), BLS12-381 (BBS), and the pinned profile's ElGamal group — and it works only because the layers <strong>verify independently</strong>; no cross-curve recursion is assumed anywhere. If the pinned profile ever requires binding the JCJ credential to roster membership <em>inside one proof</em>, non-native field arithmetic makes that binding brutally expensive, and curve unification becomes a hard gate-2 constraint. Pin the independence assumption explicitly so nobody violates it casually.</div>
+</section>
+
+<section id="client">
+  <h2><span class="sn">§ 09</span>Client-side proving in the split-execution architecture</h2>
+  <p>The companion Lattice ZK study already established the pattern for the constrained realm, and the election path inherits it unchanged: <strong>AtomVM computes, the host browser proves.</strong> AtomVM's WASM build has no big-integer support and no parallelism; running MSM inside it is a non-starter. The hybrid keeps the BEAM code in charge of state and protocol logic while proof generation crosses the bridge:</p>
+  <ol>
+    <li>The AtomVM realm assembles the witness — verified election context, credential secret, choice, entropy — into a shared buffer via the JS bridge.</li>
+    <li>The host context runs a WebGPU-accelerated prover (ICICLE-class MSM/NTT kernels; Plonky3-class vectorized proving) and returns the proof. Semaphore's Groth16 circuit is small — browser proving is sub-second on 2026 consumer GPUs, and single-digit seconds on CPU-WASM fallback.</li>
+    <li>Verification stays cheap everywhere: pairing checks in tens of milliseconds, so relays, peers, and the Elixir server all verify without hardware assumptions.</li>
+  </ol>
+  <p>Three election-specific rules tighten the generic pattern:</p>
+  <ul>
+    <li><strong>Entropy discipline splits into two opposite regimes — corrected in adversarial review.</strong> <em>Role runners</em> persist randomized contribution bytes before publication, so a restart republishes identical bytes for the same <code>(election, role, phase, round)</code>. The first draft of this document extended that rule to the voter client. That was wrong, and dangerously so: persisted ballot randomness plus the known plaintext <em>is</em> a transferable receipt — exactly the artifact a coercer demands. The voter regime is inverted: <strong>persist the ciphertext, securely erase the randomness</strong> the moment the envelope is constructed. A retry resubmits the persisted bytes; it never regenerates. The receipt-freeness of an ElGamal ballot depends on the encryption randomness being unrecoverable, including from the device.</li>
+    <li><strong>The witness crosses into the host realm — trust accordingly.</strong> The split architecture hands the JS host context the full witness: credential secret, choice, entropy. A compromised host page, a hostile extension, or bridge diagnostics that log payloads all see it. Minimum posture: prove inside a dedicated cross-origin-isolated worker, zero the shared buffer after handoff, and keep the bridge's debug surface witness-blind. The stronger answer already exists in this repo: Plans 129–131 built native key custody and secure-store handling into the packaged Tauri app, with Phoenix structurally unable to receive keys or signatures. <strong>The Tauri app is the correct high-assurance voter client; the browser tab realm is the low-assurance fallback</strong> — the election profile should say so rather than treating the two as equivalent.</li>
+    <li><strong>Prover delegation is nearly closed here.</strong> The generic architecture allows outsourcing proving to a coprocessor network under encryption. For ballots, the witness <em>is</em> the credential and the choice — delegating it means trusting the delegate with exactly what the protocol exists to protect. Low-end devices should fall back to slow local CPU proving, not to a remote prover, unless a future profile pins a construction with a proven blind-proving mode.</li>
+    <li><strong>Secret hygiene is a test contract, not a habit.</strong> The brief's secret-handling suite requires that no credential, ballot randomness, real/decoy label, or trustee share ever appears in logs, wire frames, dumps, telemetry, exceptions, or audit bundles (gate 10). The bridge buffer is in scope: zero it after witness handoff, and keep bridge diagnostics away from witness payloads.</li>
+  </ul>
+</section>
+
+<section id="beam">
+  <h2><span class="sn">§ 10</span>BEAM-side integration</h2>
+  <p>The server and peer replicas need verification, canonicalization, and role-runner orchestration — not proving. That division keeps the Elixir surface small:</p>
+  <ul>
+    <li><strong>Verify-only NIFs.</strong> <code>:crypto</code> binds OpenSSL, which has no pairing-friendly curves. A Rustler NIF wrapping arkworks (<code>ark-groth16</code>/BN254 for Semaphore proofs, <code>ark-bls12-381</code> for BBS) exposes <code>verify(vk, proof, public_inputs)</code> and nothing else. Verification runs in tens of milliseconds — safe on dirty schedulers, no port program needed. Proving stays out of the BEAM entirely.</li>
+    <li><strong>Canonical bytes are a cross-runtime gate.</strong> Gate 9 pins artifact codecs, bounds, and domain separation, and the conformance suite requires BEAM, native, and browser runtimes to agree on canonical bytes and verifier results. The board already restricts public artifacts to <code>Lattice.Canonical</code>-supported primitive terms encoded through a pinned byte codec before hashing — the ZK layer's proofs, ciphertexts, and verification keys enter the same <code>ArtifactRef</code> discipline: digest, byte size, codec, profile.</li>
+    <li><strong>Role runners are OTP-shaped.</strong> Registrar, box, close, and trustee runners are the durable processes behind <code>advance/3</code> — persisted role state, explicit effects, idempotent redelivery. This is where Lattice's actual strengths (supervision, replay, capability-gated publication) carry the protocol's operational load. Trustee replacement, however, is a construction-defined resharing ceremony; ordinary Lattice succession explicitly cannot substitute for it.</li>
+    <li><strong>Toolchain.</strong> Latest-stable Elixir/OTP and Phoenix LiveView per the repo's own preference; the read-oriented <code>township_web</code> instrument observes projections and claim manifests, and never touches a secret — the five-panel LiveView surface renders phase, verification status, claim-set ID, and explicit non-claims, replacing the retired <code>receipt_free?</code> boolean.</li>
+  </ul>
+</section>
+
+<section id="gates">
+  <h2><span class="sn">§ 11</span>The thirteen blocking gates, mapped</h2>
+  <p>Every gate below is mandatory before W4 may be described as conditionally coercion-resistant. The stamps grade what the 2024–2026 ZK toolchain contributes — not what has been done. Nothing here is cleared.</p>
+  <div class="gateboard">
+    <div class="gate"><span class="gn">G1</span><span class="gt"><b>Product accepts a multi-role, multi-phase election</b>Organizational, not cryptographic. The foundation code already embodies the shape; product sign-off is the gate.</span><span class="stamp na">not a ZK problem</span></div>
+    <div class="gate"><span class="gn">G2</span><span class="gt"><b>One exact profile pinned — paper, algorithms, parameters, theorem mapping</b>Encrypted-sorting CHide is the clear candidate; §08 is a draft of the decision package. The pin itself is the next authorized work per the brief.</span><span class="stamp cond">candidate identified</span></div>
+    <div class="gate"><span class="gn">G3</span><span class="gt"><b>Reviewed implementation strategy — constant-time, side channels, key handling, isolation</b>Semaphore and BBS bring maintained, scrutinized code. The CHide tally layer has reference algorithms but no maintained production library; building or hardening one is the largest engineering line item on the path.</span><span class="stamp cond">split by layer</span></div>
+    <div class="gate"><span class="gn">G4</span><span class="gt"><b>Registration and private credential delivery satisfy the construction</b>BBS covers unlinkable issuance; JCJ fake-credential mechanics and the untappable registration moment are operational design plus designated-verifier proofs (§05).</span><span class="stamp cond">toolchain mature</span></div>
+    <div class="gate"><span class="gn">G5</span><span class="gt"><b>Anonymous-channel threat model, traffic observer, DoS boundary, inclusion-check behavior</b>Nullifier-gated ingress solves the DoS boundary elegantly (§06). The channel itself — metadata, cover traffic, composition proof — is a transport problem ZK does not touch.</span><span class="stamp nc">partially — transport open</span></div>
+    <div class="gate"><span class="gn">G6</span><span class="gt"><b>Unanimous-box close accepted, or a named BFT close protocol proven</b>Consensus territory. No proof system substitutes for a non-equivocation assumption or a quorum-intersection argument.</span><span class="stamp na">not a ZK problem</span></div>
+    <div class="gate"><span class="gn">G7</span><span class="gt"><b>Artifact availability and complete offline replay package</b>The foundation's <code>ArtifactStore</code> and offline bundles exist; availability certification is data-availability engineering. A digest proves identity, never presence.</span><span class="stamp na">not a ZK problem</span></div>
+    <div class="gate"><span class="gn">G8</span><span class="gt"><b>Trustee corruption bound, share quorum, DKG, custody, restart, resharing — one validated profile</b>The construction supplies the theorems (<code>max_corrupt_trustees</code> is a corruption bound, not a synonym for shares required); operations supply custody and randomness persistence. Both must be pinned together.</span><span class="stamp cond">construction-defined</span></div>
+    <div class="gate"><span class="gn">G9</span><span class="gt"><b>Codecs, bounds, domain separation, cross-runtime canonical bytes pinned</b><code>Lattice.Canonical</code> plus the artifact codec discipline already carries this for the board; the ZK layer adds its proof and key encodings to the same regime (§10).</span><span class="stamp cond">substrate ready</span></div>
+    <div class="gate"><span class="gn">G10</span><span class="gt"><b>No secret-bearing value in any Lattice or operational transcript</b>A test contract across every layer, including the AtomVM bridge buffer (§09). ZK makes it achievable — proofs replace the secrets — but hygiene enforcement is engineering.</span><span class="stamp cond">enabled by ZK</span></div>
+    <div class="gate"><span class="gn">G11</span><span class="gt"><b>Official vectors and adversarial contracts pass</b>Semaphore and BBS ship test vectors today; the pinned CHide profile needs a vector suite generated against the reference algorithms. The board/close/state-machine adversary suites already exist in the foundation.</span><span class="stamp cond">partial vectors exist</span></div>
+    <div class="gate"><span class="gn">G12</span><span class="gt"><b>Independent cryptographic review of implementation and composition</b>The composition argument — that Lattice-plus-close-policy realizes CHide's honest same-view board assumption — is the novel claim requiring outside eyes. The theorem does not transfer automatically, and every extension to the paper's board model — nullifier-gated admission included (§06) — widens what this review must carry.</span><span class="stamp nc">open</span></div>
+    <div class="gate"><span class="gn">G13</span><span class="gt"><b>Measured 100 / 1,000 / 10,000-participant runs; product accepts observed cost</b>The decisive gate for CHide. §07's figures say why: measurement, not asymptotics, decides whether the encrypted-sorting variant is town-feasible.</span><span class="stamp nc">open — build the harness</span></div>
+  </div>
+  <p style="margin-top:1.2rem">The distribution is the finding: ZK fully or substantially serves gates 2–4, 8–11; it contributes one mechanism to gate 5; and gates 1, 6, 7, 12, 13 are product, consensus, availability, review, and measurement problems that no circuit will close.</p>
+</section>
+
+<section id="limits">
+  <h2><span class="sn">§ 12</span>What ZK does not solve — the honest residue</h2>
+  <p>The brief's non-goals section is the best defense the project has against overclaiming, and the ZK layer changes none of it:</p>
+  <ul>
+    <li><strong>Close finality.</strong> Lattice has no global finality; the unanimous-box certificate buys uniqueness by sacrificing liveness, and its replacement is a proven BFT service. Proofs verify a fixed ballot set; they cannot fix one.</li>
+    <li><strong>Transport metadata — on both legs.</strong> Naming Tor or Nym is not an anonymity claim. Forced-abstention resistance stays <span class="stamp nc">not claimed</span> until a concrete transport, metadata model, cover policy, and composition proof exist. And the second leg is a channel too: the box publishes wrappers onto the carrier, and op arrival timing on a replicated board correlates with submission timing for an observer watching both the voter and the board. Boxes must publish in randomized, fixed-interval batches — a mitigation the traffic-observer model of gate 5 has to cover explicitly.</li>
+    <li><strong>Everlasting privacy is not provided — and Lattice makes the failure permanent.</strong> Exponential-ElGamal ballot ciphertexts sit on an immutable, replicated board forever. A future adversary who breaks the discrete log — or simply runs a cryptographically relevant quantum computer — decrypts every ballot of every past election retroactively. BBS proofs are quantum-hiding; the ballot ciphertexts are not. On a deletable centralized board this is harvest-now-decrypt-later; on a local-first replicated log it is harvest-by-design, because deletion is structurally impossible. Everlasting privacy (perfectly hiding commitments with computationally binding openings) is a known e-voting research axis the pinned profile must at least take a position on, even if the position is an explicit non-claim.</li>
+    <li><strong>The deterministic transport adapter can manufacture false confidence.</strong> A seeded test adapter makes every downstream contract green while the property that matters — unlinkability — is untested and untestable in ExUnit. The claim manifest must bind transport-dependent claims to the <em>adapter identity</em>, not to the <code>AnonymousTransport</code> seam: green with the test adapter proves protocol correctness, never anonymity.</li>
+    <li><strong>Ideal-result leakage.</strong> A small or unanimous electorate reveals individual choices through the tally itself, with zero transcript leakage. At town scale — school-board wards, single-street questions — this is not an edge case, and product language must not hide it.</li>
+    <li><strong>Availability and censorship.</strong> A withholding box, a vanished artifact host, a selectively dropped submission — all outside every theorem in the stack. The claims stay <code>:not_claimed</code>.</li>
+    <li><strong>Compromised endpoints and physical surveillance.</strong> No protocol survives a coercer watching the screen or owning the client. The evasion strategy needs an unobserved moment; that is an assumption, stated as one.</li>
+    <li><strong>Trusted setup residue.</strong> Groth16 (Semaphore's system) requires a per-circuit ceremony; Semaphore's is done and public, but any custom ballot circuit on Groth16 inherits a new ceremony obligation. A transparent system (Halo2/Plonky3-class) trades that for larger proofs — a profile decision to make once, at gate 2, with eyes open.</li>
+  </ul>
+</section>
+
+<section id="sequence">
+  <h2><span class="sn">§ 13</span>Recommended sequence</h2>
+  <p>The brief's closing line already names the next authorized work: a decision/spike package for gates 2–7 — not an implementation, not a <code>receipt_free? == true</code> test. Concretely, in order:</p>
+  <ol>
+    <li><strong>Write the profile pin proposal (G2).</strong> Encrypted-sorting CHide, exact revision, parameter set, transcript codec, DKG and mixnet component choices, proof-system decision (ceremony vs. transparent), and the nullifier-scope / revote-policy pairing from §06 resolved as one decision.</li>
+    <li><strong>Land the deterministic <code>AnonymousTransport</code> test adapter.</strong> It is already a named seam; a seeded, replayable adapter lets every downstream contract run before any real channel is assessed, and keeps the real-adapter assessment (G5) from blocking protocol work.</li>
+    <li><strong>Spike Semaphore v4 behind the <code>Protocol</code> seam — as a substrate rehearsal, not an architecture commitment.</strong> Roster tree as the spec's roster commitment; proof verification through the Rustler NIF; box-private admission checking (never board-published nullifiers, per the §06 surrendered-secret finding); browser proving over the existing bridge. This exercises G4/G5/G9/G10 machinery with production-hardened crypto while claiming nothing. Whether admission control survives into the pinned profile at all — and on which side of CHide's open-posting board model — is decided at step 1, informed by this spike, not preempted by it.</li>
+    <li><strong>Stand up the conformance-vector harness (G11).</strong> Semaphore and BBS vectors first; structure it so CHide vectors drop in when the profile pins.</li>
+    <li><strong>Build the G13 benchmark harness early — against the reference algorithms.</strong> Production role runners do not exist yet and are not needed: a single-process simulation of the trustee rounds from the pinned paper's reference algorithms prices the dominant cost. 100 / 1,000 / 10,000 synthetic-participant runs reporting CPU, wall time, memory, network and artifact bytes, cold/warm verification — parameterized by trustee count, candidates, dummies, revotes. If encrypted-sorting CHide fails the town-scale test in simulation, it fails cheaper there than after the runners exist.</li>
+    <li><strong>Only then: role runners, review, migration (F2 → F3 → F4).</strong> Registrar/box/close/trustee runners with durable randomness; independent review of implementation and composition; and W4 switches last, retiring <code>M4Placeholder</code>, the frozen Stub, and the legacy contract in the final commit of the path.</li>
+  </ol>
+  <div class="aside"><span class="k">Posture</span>Every step above is compatible with the standing rule that the runtime claim set remains <code>:research</code> / <code>:not_claimed</code>. The work converts an unpriceable property into a priced one; the claims flip only when gates 1–13 say so.</div>
+</section>
+
+<section id="review">
+  <h2><span class="sn">§ 14</span>Adversarial review — simulated council run</h2>
+  <p>Per the repo's own council methodology (the M4 verdict was reached through independent adversarial passes by Codex, Claude, and Antigravity), this document was subjected to two adversarial passes before finalization. <strong>Disclosure: the external agents were not invocable from this environment; both passes were simulated internally</strong> — one in a Codex posture (repo-grounded contract and implementation attacks, cross-checked against the brief and foundation code) and one in an agy posture (cryptographic-composition and threat-model attacks). Simulated review is weaker than three genuinely independent toolchains, and this table is an input to — not a substitute for — the real council pass the verdict process established. Findings, severity, and disposition:</p>
+  <div class="tablewrap"><table>
+    <caption>Review findings register · 2026-07-16</caption>
+    <thead><tr><th>#</th><th>Pass</th><th>Attack</th><th>Severity</th><th>Disposition</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">R1</td><td>agy</td><td><strong>Surrendered-secret nullifier scan.</strong> Board-published nullifiers are deterministic from <code>(secret, scope)</code>; credential surrender lets a coercer prove participation — forced abstention returns through the layer added to prevent DoS.</td><td><span class="stamp nc">high</span></td><td><strong>Integrated</strong> — §06 rewritten: box-private admission, ephemeral scopes, or no admission at all; escalated to a gate-2 profile decision.</td></tr>
+      <tr><td class="mono">R2</td><td>agy</td><td><strong>Membership gating kills cover traffic.</strong> Vanilla CHide has an open-posting board; non-member dummy ballots are part of the evasion toolkit the brief's own gate 5 and gate 13 name. Eligibility-gated ingress deletes them, and deviates from the proven board model, widening gate 12.</td><td><span class="stamp nc">high</span></td><td><strong>Integrated</strong> — §06, §11 (G12), §13 step 3 reframed as substrate rehearsal.</td></tr>
+      <tr><td class="mono">R3</td><td>codex</td><td><strong>Client entropy rule was a receipt factory.</strong> The draft extended the role-runner rule (persist randomness, republish identical bytes) to voter clients. Persisted ballot randomness plus known plaintext is a transferable receipt.</td><td><span class="stamp nc">high</span></td><td><strong>Integrated as a correction</strong> — §09: persist ciphertext, securely erase randomness; retries resubmit bytes, never regenerate.</td></tr>
+      <tr><td class="mono">R4</td><td>agy</td><td><strong>Everlasting privacy absent, permanently.</strong> ElGamal ciphertexts on an immutable replicated log are harvest-by-design against a future discrete-log or quantum adversary; deletion is structurally impossible in Lattice.</td><td><span class="stamp cond">medium</span></td><td><strong>Integrated</strong> — §12: the profile must take an explicit position, even if it is a non-claim.</td></tr>
+      <tr><td class="mono">R5</td><td>agy</td><td><strong>Board-side timing channel.</strong> Box→carrier publication timing correlates with submission timing for a two-point observer; the anonymous channel covers only the first leg.</td><td><span class="stamp cond">medium</span></td><td><strong>Integrated</strong> — §12: randomized fixed-interval batch publication enters the gate-5 traffic-observer model.</td></tr>
+      <tr><td class="mono">R6</td><td>codex</td><td><strong>Witness exposure to the host realm; Tauri custody ignored.</strong> The split architecture hands the JS host the credential and choice, while Plans 129–131 already built native key custody the document never connected to the voter client.</td><td><span class="stamp cond">medium</span></td><td><strong>Integrated</strong> — §09: sealed-worker minimum; Tauri app named the high-assurance client, tab realm the fallback.</td></tr>
+      <tr><td class="mono">R7</td><td>codex</td><td><strong>Deterministic transport adapter as false confidence.</strong> Green contracts under a seeded adapter prove protocol correctness, not anonymity; the claim manifest could silently launder the difference.</td><td><span class="stamp cond">medium</span></td><td><strong>Integrated</strong> — §12: transport-dependent claims bind to adapter identity, not the seam.</td></tr>
+      <tr><td class="mono">R8</td><td>agy</td><td><strong>Cross-curve composition assumed silently.</strong> BN254, BLS12-381, and the profile's ElGamal group only coexist because layers verify independently; any in-circuit credential↔roster binding hits non-native field arithmetic.</td><td><span class="stamp cond">medium</span></td><td><strong>Integrated</strong> — §08: independence pinned as an explicit assumption with a named breaking condition.</td></tr>
+      <tr><td class="mono">R9</td><td>codex</td><td><strong>G13 harness sequenced before the code it measures.</strong> Step 5 preceded the role runners it appeared to depend on.</td><td><span class="stamp na">low</span></td><td><strong>Integrated</strong> — §13 step 5: harness targets the reference algorithms in single-process simulation.</td></tr>
+      <tr><td class="mono">R10</td><td>codex</td><td><strong>Replay verification cost.</strong> A 10k-ballot cold replay implies tens of thousands of pairing checks inside the pure projector.</td><td><span class="stamp na">low</span></td><td><strong>Absorbed</strong> — already a mandated gate-13 metric (cold/warm verification); batch Groth16 verification noted as the lever. No text change beyond this row.</td></tr>
+      <tr><td class="mono">R11</td><td>agy</td><td><strong>Groth16 message binding.</strong> Challenged whether binding the envelope digest as the Semaphore message requires a new ceremony.</td><td><span class="stamp cov">withstood</span></td><td><strong>Rejected</strong> — the message is a public input to the standard circuit; the existing ceremony covers it. No change.</td></tr>
+      <tr><td class="mono">R12</td><td>codex</td><td><strong>Strength surfaced, not a flaw:</strong> local-first replication makes inclusion checks private by construction — no distinguishing query leaves the device, a property centralized boards need PIR to approximate.</td><td><span class="stamp cov">strength</span></td><td><strong>Integrated</strong> — §08 check-token paragraph.</td></tr>
+    </tbody>
+  </table></div>
+  <p>Net effect on the plan: the candidate stack survives, but demoted in one place — nullifier-gated ingress moved from an architecture default to a gate-2 decision with a box-private default posture — and corrected in one place, the client entropy rule, which was the review's only outright error found. The rest of the findings tighten threat-model coverage without changing the sequencing.</p>
+</section>
+
+<section id="sources">
+  <h2><span class="sn">§ 15</span>Sources</h2>
+  <h3>Repository artifacts</h3>
+  <ul class="src">
+    <li><code>docs/research/m4_receipt_freeness_verdict.md</code> — concluded research gate; distinguisher argument, candidate-construction table, CHide cost citations.</li>
+    <li><code>docs/research/m4_interface_redesign_brief.md</code> — council conclusion; architecture, roles, lifecycle, close policy, claim contract, thirteen gates.</li>
+    <li><code>docs/research/zero_knowledge_lattice_research.md</code> — companion study; split-execution proving architecture, authenticated data structures.</li>
+    <li><code>CLAUDE.md</code>, <code>TOWNSHIP_BUILD_MAP.md</code> (Phase F) — working boundaries and sequencing.</li>
+    <li><code>apps/lattice_core/lib/township/election*</code> — the implemented F1 foundation.</li>
+  </ul>
+  <h3>Constructions and primitives</h3>
+  <ul class="src">
+    <li>Juels, Catalano, Jakobsson — <em>Coercion-Resistant Electronic Elections</em> (JCJ). <a href="https://eprint.iacr.org/2002/165.pdf">ePrint 2002/165</a>.</li>
+    <li>Clarkson, Chong, Myers — <em>Civitas</em>. <a href="https://www.cs.cornell.edu/Projects/civitas/papers/clarkson_civitas.pdf">Cornell</a>.</li>
+    <li>Cortier, Gaudry, Yang — <em>Is the JCJ voting system really coercion-resistant?</em> (CHide). <a href="https://eprint.iacr.org/2022/430.pdf">ePrint 2022/430</a>.</li>
+    <li>Encrypted-sorting CHide treatment. <a href="https://eprint.iacr.org/2023/837.pdf">ePrint 2023/837</a>.</li>
+    <li>Semaphore v4 — protocol, LeanIMT, EdDSA identities. <a href="https://docs.semaphore.pse.dev/">docs.semaphore.pse.dev</a>; <a href="https://github.com/semaphore-protocol/semaphore/releases/tag/v4.0.0">v4.0.0 release notes</a>.</li>
+    <li>BBS Signature Scheme. <a href="https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-bbs-signatures-10">draft-irtf-cfrg-bbs-signatures-10</a> (IRTF CFRG, Jan 2026).</li>
+    <li>Nova / CycleFold / Protostar folding schemes — <a href="https://eprint.iacr.org/2021/370">2021/370</a>, <a href="https://eprint.iacr.org/2023/1192">2023/1192</a>, <a href="https://eprint.iacr.org/2023/620">2023/620</a>; <a href="https://github.com/privacy-scaling-explorations/sonobe">sonobe</a>.</li>
+    <li>ICICLE GPU acceleration — <a href="https://github.com/ingonyama-zk/icicle">Ingonyama</a>; Plonky3 — <a href="https://github.com/Plonky3/Plonky3">Polygon Zero</a>.</li>
+    <li>Delaune, Kremer, Ryan — receipt-freeness vs. coercion-resistance hierarchy. <a href="https://members.loria.fr/SKremer/files/Publications/b2hd-DKR-csfw06.html">CSFW'06</a>.</li>
+  </ul>
+  <p class="footer-note">Prepared against <code>treetopdevs/lattice @ main</code>, 2026-07-16. This document is findings, not authorization: it changes no claim state, and the frozen Stub remains the only W4 implementation until the gates say otherwise.</p>
+</section>
+</main>
+</div>
+</body>
+</html>

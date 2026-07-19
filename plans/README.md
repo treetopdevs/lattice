@@ -190,8 +190,76 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 147 | Port capability/revocation validation into TS reduction (close the F1 decision gap) | **P0** | L | 140, 141 | DONE |
 | 148 | Valid-genesis holder/policy projection parity (F2 prerequisite) | **P0** | S | 145, 147 | DONE |
 | 149 | Delegation leases via epoch beacons (`expires_epoch`, `{:beacon, epoch}`, `:lease_expired`) | P1 | L | 144–148 | DONE — V1–V9 green; hosted flagship run `29667002069` (all three jobs) at implementation tip on `pd003/toolshed` |
+| 150 | Device-hosted carrier boundary (packaged app hosts the sidecar server) | P1 | L | 127, 128, 129, 132, 142, 143 | TODO (proposed draft; CD1 track) |
+| 151 | App-owned instrument (Phoenix leaves the demo loop) | P1 | L | 134, 138, 139, 143, 147, 148 | TODO (proposed draft; CD1 track) |
+| 152 | Serverless two-device onboarding (discharges CD1) | P1 | L | 150, 151, 066-075, 094-100, 110-116 | BLOCKED (needs 150+151 and the §4a un-parking sign-off recorded in the plan) |
+| 154 | Self-contained HTML auditor report from the Township audit bundle (`mix lattice.township.report`) | P1 | M | — | TODO (direction round 2026-07-18) |
+| 155 | Instrument renders computed evidence: authority ledger panel + replay frame holders/state | P1 | S–M | — (before 157) | TODO (direction round 2026-07-18) |
+| 156 | Election evidence report: projection + close evidence + the 12-scope non-claim manifest | P2 | M | — (154 rec. for style) | TODO (direction round 2026-07-18) |
+| 157 | Public `Authority.observe/2` (role chronology, leases, beacon frontier) + instrument panel | P2 | M–L | 155 | TODO (direction round 2026-07-18) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
+
+## Direction round (features/visualizations audit, 2026-07-18, against `codex/township-build-map` @ `c9a05b40`)
+
+A focused direction audit ("new visualizations, reports, or other features") surveyed the
+existing visualization/report surfaces, the governance evidence data, and the
+carrier/telemetry side. Recurring shape: **the system computes rich verified evidence and
+renders almost none of it.** Plans 154–157 are the top selections by leverage (session was
+non-interactive; the top-4 default was applied). Numbering note: `153` is an existing
+Township-track plan file (`153-packaged-bundle-variant-classifier.md`) recorded outside
+this table, so this round starts at 154. Recommended order: 155 (pure presentation,
+smallest) → 154 (the flagship HTML deliverable) → 156 → 157 (touches the judge; land 155
+first — same panel file).
+
+Vetted findings **not planned this round** (real, grounded, available for a future pick):
+
+- **Carrier server status surface** — `lattice_carrier_server`'s `Holder` holds
+  subscriber/log/relay-realm state and computes `availability/1`
+  (`holder.ex:66-74,228-236`), but `listener.ex:16-23` routes only the authenticated
+  `/carrier` WS: no `/status`, no health, no counts. A read-only status route (counts +
+  generation only, never log contents) would make the stable server operable. M effort,
+  LOW–MED risk.
+- **Telemetry has almost no consumers** — six `[:lattice, :carrier, *]` events are
+  emitted (`lattice/carrier/telemetry.ex` + call sites in the carrier server, WS client,
+  and node spike), but only a debug-log bridge in `lattice_node_spike/carrier_telemetry.ex`
+  attaches — and `relay_failure` has zero non-test consumers. S–M to add a metrics
+  reporter and attach the missing event.
+- **Tauri shell sync detail panel** — `TownshipSyncSuccess`
+  (`clients/township-tauri-shell/src/township_sync.ts:48-79`) carries pending/quarantined/
+  rejected/compacted detail that `App.vue` collapses into one sentence. Real feature, but
+  App.vue is 2167 lines with heavy packaged-smoke contracts; lower leverage per unit risk
+  than 154–157.
+- **CI proof-artifact trend history** — `output/flagship/claims.json` and
+  `output/liveops/liveops-summary.json` are structured and versioned but overwritten
+  every run; archiving keyed by commit + a diff view would give a claims-over-time
+  report. MED confidence; needs a design pass on retention/keying before it's plannable.
+- **Unified quarantine-reason dictionary** — reason atoms span three namespaces
+  (structural in `log.ex`, ~31 authority atoms in `authority.ex`, election-side reasons in
+  `projector.ex`/`unanimous_boxes_v1.ex`); election reasons surface nowhere human-readable
+  today. Partially addressed by 154 (authority gloss) and 156 (election reasons rendered);
+  a full cross-subsystem dictionary is deferred until those two land.
+
+Considered and rejected this round: none (all surveyed findings were either planned,
+deferred with reasons above, or folded into a plan). One correction made during vetting:
+`Authority.analyze/2`'s `audit` list contains **only quarantine events** — the full
+acquisition chronology is internal timeline state, which is why 157 adds `observe/2`
+instead of a template-only change.
+
+## Centerless demo track (CD1) — proposed 2026-07-18
+
+Plans 150-152 are drafted proposals for the **centerless demo** goal: two packaged Township
+apps on one LAN converge W0-W3 with no Phoenix process and no operator-hosted carrier server —
+one participant's device hosts the rendezvous. Plan 150 turns the packaged desktop app into a
+supervisor of a `lattice_carrier_server` BEAM sidecar (reusing the proven server, not
+reimplementing it); Plan 151 moves v1-v6 intent preparation and the read/replay/audit surface
+in-app behind the unchanged custody ceremony; Plan 152 composes the existing QR/deep-link/LAN
+pairing and state-exchange pieces into a founder-and-guest join and owns the CD1 exit gate.
+CD1 is a demo gate: no TLS/public ingress, mobile hosting, E2EE, compaction, availability,
+G1/Phase G-completion, or receipt-free-W4 claim. Plan 152 narrowly un-parks LAN discovery and
+cross-device pairing state exchange for the desktop composition only and requires explicit
+operator sign-off of that §4a edit before execution; iOS, physical devices, and new Android
+probes stay parked.
 
 ## Round 3 (external review, 2026-07-13, against `codex/township-build-map` @ `97f250b9`)
 

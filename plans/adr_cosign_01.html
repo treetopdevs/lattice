@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADR-COSIGN-01 — Co-Signed Consent: Reconciled Against Main</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders:opsz,wght@10..72,500;10..72,700;10..72,800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F3F5F3; --panel:#FCFDFC; --ink:#182420; --ink-soft:#41504B;
+    --teal:#0E6B5B; --teal-soft:#E0EEEA;
+    --amber:#B4551F; --amber-soft:#F6E8DE;
+    --violet:#584A93; --violet-soft:#E9E5F4;
+    --done:#3E7A3E; --done-soft:#E4EFE2;
+    --line:#CBD5CF; --grid:rgba(14,107,91,.075);
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --serif:'Source Serif 4',Georgia,serif;
+    --disp:'Big Shoulders','Arial Narrow',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation:none!important;transition:none!important}}
+  body{
+    background:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px),var(--paper);
+    background-size:28px 28px,28px 28px,auto;
+    color:var(--ink);font-family:var(--serif);font-size:17px;line-height:1.65;
+  }
+  a{color:var(--teal)}
+  .wrap{max-width:1020px;margin:0 auto;padding:0 24px}
+
+  header.mast{border-bottom:3px solid var(--ink);padding:40px 0 28px}
+  .doc-id{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);display:flex;flex-wrap:wrap;gap:8px 20px;margin-bottom:22px}
+  .doc-id b{color:var(--teal);font-weight:600}
+  h1.title{font-family:var(--disp);font-weight:800;font-size:clamp(42px,7vw,84px);line-height:.94;letter-spacing:.005em;text-transform:uppercase}
+  h1 .thin{font-weight:500;color:var(--teal)}
+  .subtitle{font-size:clamp(18px,2.4vw,22px);max-width:62ch;margin-top:18px;color:var(--ink-soft);font-style:italic}
+  .chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:26px}
+  .chip{font-family:var(--mono);font-size:12.5px;padding:5px 12px;border:1.5px solid var(--ink);background:var(--panel)}
+  .chip.done{border-color:var(--done);color:var(--done);background:var(--done-soft)}
+  .chip.live{border-color:var(--teal);color:var(--teal);background:var(--teal-soft)}
+  .chip.date{border-style:dashed;color:var(--ink-soft)}
+  .chip.warn{border-color:var(--amber);color:var(--amber);background:var(--amber-soft)}
+
+  section{padding:46px 0 6px}
+  .sec-head{display:flex;align-items:baseline;gap:18px;border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:24px}
+  .sec-num{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--teal);letter-spacing:.1em;white-space:nowrap}
+  h2{font-family:var(--disp);font-weight:700;font-size:clamp(28px,4.2vw,42px);text-transform:uppercase;letter-spacing:.01em;line-height:1}
+  h3{font-family:var(--disp);font-weight:700;font-size:22px;text-transform:uppercase;letter-spacing:.02em;margin:28px 0 12px}
+  h4{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--teal);margin:24px 0 10px}
+  p{margin:0 0 16px;max-width:74ch}
+  p.lede{font-size:20px;line-height:1.6}
+  .mono{font-family:var(--mono);font-size:.86em;background:var(--teal-soft);padding:1px 5px;border-radius:2px}
+  em.term{font-style:normal;font-weight:600;color:var(--teal)}
+  .footnote{font-size:14.5px;color:var(--ink-soft)}
+
+  .thesis{border-left:5px solid var(--teal);background:var(--panel);padding:22px 26px;margin:26px 0;max-width:78ch;font-size:20px;line-height:1.55}
+  .thesis .who{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);display:block;margin-top:12px}
+
+  .warnbox{border:1.5px solid var(--amber);background:var(--amber-soft);padding:18px 22px;margin:22px 0;max-width:78ch}
+  .warnbox .lbl{font-family:var(--mono);font-size:11.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);margin-bottom:6px}
+  .warnbox p{font-size:15.5px;margin-bottom:8px}
+  .warnbox p:last-child{margin-bottom:0}
+
+  .opfig{border:2px solid var(--ink);background:var(--panel);margin:22px 0;padding:20px 24px;max-width:82ch}
+  .opfig .fl{font-family:var(--mono);font-size:11.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);margin-bottom:12px}
+  .opfig pre{font-family:var(--mono);font-size:12.5px;line-height:1.7;overflow-x:auto;color:var(--ink)}
+  .opfig pre b{color:var(--teal);font-weight:600}
+  .opfig pre i{color:var(--amber);font-style:normal}
+  .opfig .cap{font-size:13.5px;color:var(--ink-soft);margin-top:10px;font-style:italic}
+
+  .disp{border:1.5px solid var(--line);border-left:6px solid var(--teal);background:var(--panel);margin:14px 0;padding:18px 22px}
+  .disp .dh{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 16px;margin-bottom:8px}
+  .disp .did{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--teal)}
+  .disp b.dt{font-family:var(--disp);font-size:21px;text-transform:uppercase;letter-spacing:.02em}
+  .disp p{font-size:15.5px;margin-bottom:8px}
+  .disp .tax{font-family:var(--mono);font-size:12.5px;background:var(--paper);border:1px dashed var(--line);padding:8px 12px;margin-top:10px}
+  .disp .tax b{color:var(--amber);font-weight:600;font-family:inherit;font-size:inherit;text-transform:none;letter-spacing:0}
+  .disp .rej{font-family:var(--mono);font-size:12.5px;color:var(--ink-soft);margin-top:8px;display:block}
+  .disp .rej b{font:inherit;font-weight:600;color:var(--violet)}
+
+  table{width:100%;border-collapse:collapse;margin:18px 0;background:var(--panel);font-size:14px}
+  th{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;text-align:left;background:var(--ink);color:var(--paper);padding:9px 12px}
+  td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  td.ph{font-family:var(--mono);font-weight:600;color:var(--teal);white-space:nowrap}
+  td.ph.ok{color:var(--done)}
+  td.ph.flip{color:var(--amber)}
+  td .g{font-family:var(--mono);font-size:12px;color:var(--amber)}
+  td .loc{font-family:var(--mono);font-size:11.5px;color:var(--violet);display:block;margin-top:4px}
+
+  .fence{border:2.5px solid var(--ink);background:var(--panel);padding:24px 28px;margin:26px 0;position:relative}
+  .fence::before{content:"SCOPE FENCE — DO NOT IMPLEMENT";position:absolute;top:-13px;left:24px;background:var(--ink);color:var(--paper);font-family:var(--mono);font-size:11.5px;font-weight:600;letter-spacing:.16em;padding:4px 12px}
+  .fence ul{list-style:none;margin-top:8px;max-width:78ch}
+  .fence li{padding:9px 0 9px 26px;position:relative;border-bottom:1px dotted var(--line);font-size:15px}
+  .fence li:last-child{border-bottom:0}
+  .fence li::before{content:"✕";position:absolute;left:2px;color:var(--amber);font-family:var(--mono);font-weight:600}
+  .fence li b{font-family:var(--disp);font-size:17px;text-transform:uppercase;letter-spacing:.02em}
+  .fence li .when{font-family:var(--mono);font-size:12px;color:var(--violet)}
+
+  .vgrid{margin:18px 0}
+  .v{border:1.5px solid var(--line);border-left:5px solid var(--teal);background:var(--panel);margin:10px 0;padding:14px 18px;display:grid;grid-template-columns:64px 1fr;gap:0 16px}
+  .v .vid{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--ink-soft);padding-top:2px}
+  .v b.vt{font-family:var(--disp);font-size:18px;text-transform:uppercase;letter-spacing:.02em;display:block}
+  .v p{font-size:14.5px;margin:5px 0 0}
+  .v p code{font-family:var(--mono);font-size:12px;background:var(--violet-soft);padding:1px 5px;border-radius:2px}
+
+  .caveats{border:1.5px dashed var(--amber);padding:16px 20px;margin:16px 0;background:var(--panel);max-width:80ch}
+  .caveats .lbl{font-family:var(--mono);font-size:11.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);margin-bottom:8px}
+  .caveats p{font-size:14px;margin-bottom:8px}
+
+  footer{border-top:3px solid var(--ink);margin-top:60px;padding:28px 0 56px}
+  footer p{font-size:14px;color:var(--ink-soft)}
+
+  @media(max-width:640px){
+    .v{grid-template-columns:1fr}
+    .v .vid{padding-bottom:4px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ============ MASTHEAD ============ -->
+<header class="mast">
+  <div class="doc-id">
+    <span>TREETOPDEVS / <b>LATTICE</b></span>
+    <span>ADR · <b>ADR-COSIGN-01 · REV 2</b></span>
+    <span>REPO TARGET · docs/adr/<b>0007-co-signed-consent.md</b></span>
+  </div>
+  <h1 class="title">Co-Signed <span class="thin">Consent</span></h1>
+  <p class="subtitle">Consent as a domain-tagged signature carried <em>inside</em> the command body — the repo-native shape. Rev 2 is reconciled against main @ a96b3c4; the reconciliation flipped the core decision and dissolved two of the four risks Rev 1 hedged against.</p>
+  <div class="chips">
+    <span class="chip done">RECONCILED · MAIN @ a96b3c4</span>
+    <span class="chip live">EXTENDS · AUTHORITY.VALIDATE_COMMAND</span>
+    <span class="chip">FIRST CONSUMER · PD-003 :CUSTODY_TRANSFER</span>
+    <span class="chip warn">NO OP-STRUCT CHANGE · REV 1 SHAPE REJECTED</span>
+    <span class="chip date">JULY 2026 · PROPOSED</span>
+  </div>
+</header>
+
+<!-- ============ §1 RECONCILIATION ============ -->
+<section id="s1">
+  <div class="sec-head"><span class="sec-num">§1</span><h2>Reconciliation Verdict</h2></div>
+  <p class="lede">Rev 1 was drafted blind and carried a checklist (C1–C4) to falsify its assumptions. All four are now answered against main, and the honest summary is: the substrate is further along than the ADR assumed, the house already has a pattern for exactly this problem, and Rev 1's op-struct extension is <em class="term">rejected by evidence</em> — it would lose co-signatures at the door of the real accept path.</p>
+
+  <table>
+    <thead><tr><th style="width:90px">Check</th><th>Finding in main</th><th style="width:230px">Consequence</th></tr></thead>
+    <tbody>
+      <tr><td class="ph ok">C1 ✓</td><td>Signed/hashed region is <span class="mono">Canonical.term(["lattice-op-v2", replica, author, deps, kind, body, cap])</span> — both <span class="mono">id</span> and <span class="mono">sig</span> excluded. And the ADR-P08 assumption is stale in the good direction: canonical CBOR already shipped as <span class="mono">Lattice.Canonical</span> (suite <span class="mono">lattice-cbor-v1</span>), with domain/version tags built in.<span class="loc">apps/lattice_core/lib/lattice/canonical.ex · lattice/op.ex · docs/adr/0001-canonical-encoding.md</span></td><td><span class="g">Consent payloads use Canonical.term with a domain tag — the versioned-envelope fallback Rev 1 feared is already the house mechanism</span></td></tr>
+      <tr><td class="ph ok">C2 ✓</td><td>Validity is a two-tier system, sharper than Rev 1's model. Structural (<span class="mono">Log.accept/3</span>): sig+hash integrity, idempotency, deps availability — tampered ops are <em>retained</em> in structural quarantine ("nothing is dropped", design invariant 4). Semantic (<span class="mono">Authority.analyze/2</span>): deps-decidable reduction over the whole op set, with a per-command hook — <span class="mono">validate_command/7</span> dispatches on the replica module and quarantines with a reason + audit event.<span class="loc">lattice/log.ex:126–152 · lattice/authority.ex:260, 674+</span></td><td><span class="g">The consent check has a natural home: a semantic quarantine reason inside validate_command — not a new predicate</span></td></tr>
+      <tr><td class="ph ok">C3 ✓</td><td>Both realms already pin strict verification: BEAM via OTP <span class="mono">:crypto</span> eddsa (OpenSSL, RFC 8032, deterministic sig bytes); the TS client via <span class="mono">@noble/curves</span> with <span class="mono">{ zip215: false }</span> passed explicitly at both verify sites. The cross-realm divergence Rev 1 flagged as a risk is already closed — the ADR's job is to keep it closed.<span class="loc">lattice/identity.ex:44–58 · clients/lattice-client/src/authority.ts:399, 816</span></td><td><span class="g">DISP-4 becomes "preserve the existing pin," and V-07 becomes a regression guard</span></td></tr>
+      <tr><td class="ph flip">C4 ✗→flip</td><td>The struct is <span class="mono">defstruct [:id, :replica, :author, :deps, :kind, :body, :cap, :sig]</span> — but the disqualifying finding is in <span class="mono">accept</span>: it is idempotent by id, and the id excludes signatures. Under Rev 1's shape (co-sigs outside the hash), a single-signed variant arriving first is accepted as <em>the</em> op; the completed one arriving later is a no-op and <b>the co-signatures are silently dropped</b>. The comment at log.ex:144–147 shows the codebase already reasoned about same-id/different-sig forgeries — Rev 1's shape fails exactly that reasoning.<span class="loc">lattice/op.ex:34 · lattice/log.ex:126, 144–147</span></td><td><span class="g">FATAL to Rev 1's parallel-sigs field. Decision flips to consent-in-body (§2)</span></td></tr>
+      <tr><td class="ph">F5 +</td><td>Two findings Rev 1 didn't anticipate. <b>(a)</b> The request surface already exists in full: <span class="mono">:inbox</span> ops with body <span class="mono">{:request, ref, payload}</span> are collected by the analyzer into a durable, visible requests list — the Q-06 queue mechanism is running code, and PD-003's <span class="mono">:custody_request</span> is an instance of it, not a new kind. <b>(b)</b> There are three shipped precedents for side-signatures over domain-tagged canonical payloads: succession certificates, election close certificates (<span class="mono">UnanimousBoxesV1</span> — already multi-signer), and carrier session challenges.<span class="loc">lattice/authority.ex:677–683 · authority/succession_certificate.ex:111 · township/election/close_policy/unanimous_boxes_v1.ex:61 · lattice/carrier/session.ex:69</span></td><td><span class="g">This ADR is the fourth instance of an established pattern, promoted to a first-class validity conjunct</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ §2 DECISION ============ -->
+<section id="s2">
+  <div class="sec-head"><span class="sec-num">§2</span><h2>Decision: Consent in the Body</h2></div>
+
+  <div class="thesis">
+    The co-signature is a <em>consent signature</em> over a domain-tagged canonical payload, carried inside the command body — so it is inside the hashed content. The op cannot exist without the consent, the id changes if the consent changes, and the accept path needs no modification because there is nothing outside the hash to merge.
+    <span class="who">The shape the repo chose for us — Rev 2's core decision</span>
+  </div>
+
+  <div class="opfig">
+    <div class="fl">Surface 1 — the request · existing inbox mechanism, zero new code</div>
+    <pre>%Op{kind: :inbox,
+    author: <b>borrower_pub</b>,
+    body: {:request, <i>"custody"</i>, %{tool: field_ref, action: :borrow}},
+    ...}</pre>
+    <div class="cap">Collected by Authority.analyze into the durable requests list; resolved by the current validated holder per Q-06. An unresolved or refused request is visible and timestamped — refusal-legibility lives here, exactly as PD-003 claimed, and it turns out to require nothing at all.</div>
+  </div>
+
+  <div class="opfig">
+    <div class="fl">Surface 2 — the transfer · one new command, consent embedded</div>
+    <pre>consent_payload = Canonical.term([
+  <i>"lattice-custody-consent-v1"</i>,   <i>// domain tag, versioned like @op_tag</i>
+  replica,
+  request_op_id,                    <i>// the nonce: binds consent to ONE request</i>
+  from_pub,                         <i>// current holder (the op's author)</i>
+  to_pub                            <i>// recipient (the consenting signer)</i>
+])
+consent_sig = Identity.sign(recipient, consent_payload)
+
+%Op{kind: :command,
+    author: <b>from_pub</b>,               <i>// authority unchanged: author must pass</i>
+                                      <i>// cap_ok + authority_ok as holder</i>
+    body: {:custody_transfer,
+           [to_pub, request_op_id, consent_sig]},   <i>// {cmd, args} house shape</i>
+    cap: ...,
+    ...}                              <i>// consent is INSIDE canonical bytes →</i>
+                                      <i>// inside the id → inside the sig</i></pre>
+    <div class="cap">The ceremony is therefore ordered by construction: the recipient signs the consent payload first (QR/NFC round-trip at the handoff — app layer, above the carrier); the holder embeds it, builds the op, appends. A body missing or carrying an invalid consent produces a different op id than a valid transfer ever would — the same-id hazard from C4 cannot arise.</div>
+  </div>
+
+  <h4>The validity extension — one conjunct in the existing hook</h4>
+  <p style="max-width:78ch"><span class="mono">validate_command/7</span> already quarantines commands per replica-module rules with reasoned audit events. The extension: for commands whose module declares required consent, verify <span class="mono">consent_sig</span> against the recomputed payload — checking the signer is the declared recipient, the <span class="mono">from</span> in the payload equals <span class="mono">op.author</span>, and <span class="mono">request_op_id</span> is present in the op's causal past. Failures quarantine as <span class="mono">:missing_consent</span> / <span class="mono">:invalid_consent</span> — semantic, deps-decidable, visible, and covered by property (d) like every other quarantine reason. Because the current <span class="mono">command_status/3</span> callback sees only <span class="mono">{cmd, args}</span> and the consent check needs the op (author, causal position), the hook is a new <em>optional</em> module callback — op-aware, defaulting to <span class="mono">:ok</span> — consulted inside <span class="mono">validate_command</span>. That callback is the only substrate code this ADR adds.</p>
+</section>
+
+<!-- ============ §3 DISPOSITIONS ============ -->
+<section id="s3">
+  <div class="sec-head"><span class="sec-num">§3</span><h2>Dispositions &amp; Adversary Tax</h2></div>
+
+  <div class="disp">
+    <div class="dh"><span class="did">DISP-1</span><b class="dt">Consent in the body, not a signature field on the op</b></div>
+    <p>The consent signature is data inside the hashed content, following the succession-certificate / election-close precedent, promoted to a validity conjunct.</p>
+    <span class="rej"><b>REJECTED (was Rev 1's decision):</b> an op-struct <span class="mono">co_sigs</span> field excluded from the hash. Fatal against the real accept path — idempotent-by-id acceptance drops late-arriving signatures (C4) — and it would additionally cost a dump-format bump (<span class="mono">:lattice_log_dump_v1</span>), a carrier wire change, and a TS codec change. The repo shape costs none of these.</span>
+    <div class="tax"><b>TAX:</b> the ceremony is ordered — consent must exist before the op can. The log therefore proves consent preceded append, and Rev 1's "cannot prove signing order" tax inverts into a small guarantee. Disclosed cost: the recipient signs a payload describing a transfer that does not yet exist as an op; the request-id binding (DISP-3) is what keeps that safe. A1/A2/A3: neutral.</div>
+  </div>
+
+  <div class="disp">
+    <div class="dh"><span class="did">DISP-2</span><b class="dt">Consent is not authority — cap_ok and authority_ok untouched</b></div>
+    <p>The transfer's author must independently clear the existing <span class="mono">cap_ok</span> + <span class="mono">authority_ok</span> gates as the validated holder at the op's causal position. The consent conjunct is additive; the recipient's signature confers nothing, and no delegation, revocation, or holder-timeline code changes.</p>
+    <div class="tax"><b>TAX:</b> A2 strengthened — no self-serve custody, no consent-as-backdoor-authority. Disclosed cost unchanged from Rev 1: a dead or unresponsive holder cannot author a transfer; recovery of a tool from a vanished neighbor flows through the steward role and the existing succession machinery (ADR-0004), on purpose.</div>
+  </div>
+
+  <div class="disp">
+    <div class="dh"><span class="did">DISP-3</span><b class="dt">Invalid consent is semantic quarantine — visible, reasoned, property-(d) covered</b></div>
+    <p>Rev 1 claimed malformed transfers should be "rejected pre-integration, invisible." That was wrong against design invariant 4 — <em>nothing is dropped</em> — and Rev 2 corrects it: a transfer with missing/invalid consent is a well-formed op that fails a semantic rule, so it quarantines with a reason and an audit event like <span class="mono">:stale_holder</span> or <span class="mono">:double_transfer</span> do today. Deps-decidable: the check is a pure function of the op bytes plus the causal presence of <span class="mono">request_op_id</span>.</p>
+    <span class="rej"><b>REJECTED:</b> structural-tier rejection in <span class="mono">Log.accept</span> — consent validity depends on the DAG (the request op's causal presence), which is precisely what the structural tier is documented not to decide.</span>
+    <div class="tax"><b>TAX:</b> a forged or coerced-looking transfer attempt is <em>on the record</em> — quarantined, reasoned, auditable. For the legibility corner this is the point: the failed attempt is evidence. A1 note: it is also a receipt of the attempt, which is fine for custody and must stay fenced from vouch-shaped surfaces (DISP-5).</div>
+  </div>
+
+  <div class="disp">
+    <div class="dh"><span class="did">DISP-4</span><b class="dt">Determinism inherited; the strict-verify pin becomes a guarded invariant</b></div>
+    <p>Consent bytes sit inside the canonical body, so property (c) covers them with no new mechanism — provided signature bytes are deterministic and verification strictness matches across realms. Both are already true in main: RFC 8032 deterministic Ed25519 signing on both sides, OpenSSL strict verify on BEAM, <span class="mono">{ zip215: false }</span> explicit in the TS client. This ADR promotes that from happenstance to invariant: any new verify site must pass the strict flag, enforced by V-07.</p>
+    <div class="tax"><b>TAX:</b> the PQC tripwire (gap D-A1) is sharper in Rev 2, not softer: with consent bytes inside the hash, a randomized-signature scheme (Dilithium) would make the op id itself nondeterministic per signing. Any Q-02 primitive swap must re-derive the entire property-(c) claim for consent-carrying commands — written here so the agility ADR inherits it.</div>
+  </div>
+
+  <div class="disp">
+    <div class="dh"><span class="did">DISP-5</span><b class="dt">Generalized as a domain-tag registry + one optional callback; consumed narrowly</b></div>
+    <p>The mechanism is: a versioned consent domain tag, a payload schema, and the op-aware module callback. Rev 2 registers exactly one domain — <span class="mono">lattice-custody-consent-v1</span> — and one command. <span class="mono">UnanimousBoxesV1</span> demonstrates the multi-signer generalization already works at the app layer; ADR-MANDATE-01's dual-gate remains the named prospective beneficiary and adopts this via its own addendum or not at all.</p>
+    <div class="tax"><b>TAX:</b> unchanged live wire — every consent signature is a receipt by design. Correct for custody and treasury; any proposal to point this at vouch-shaped surfaces loses by default to the M4 findings — which main has since made concrete: the election work falsified the drop-in attestation swap and lives as a separate protocol precisely because coercion-facing signals cannot ride legible machinery like this.</div>
+  </div>
+</section>
+
+<!-- ============ §4 VERIFICATION ============ -->
+<section id="s4">
+  <div class="sec-head"><span class="sec-num">§4</span><h2>Verification — Falsify the Paper</h2></div>
+  <div class="vgrid">
+    <div class="v"><span class="vid">V-05</span><div>
+      <b class="vt">One hook, one predicate — still</b>
+      <p>The consent conjunct lives inside <code>validate_command</code>'s dispatch in <code>Lattice.Authority</code> and nowhere else on the BEAM side. Grep-enforced: no consent verification in Log, Sync, Materializer, or app modules outside the declared callback.</p>
+    </div></div>
+    <div class="v"><span class="vid">V-06</span><div>
+      <b class="vt">Cross-language quarantine parity — the sharpest risk in Rev 2</b>
+      <p>The TS client independently reimplements semantic reduction (<code>clients/lattice-client/src/authority.ts</code>). The consent conjunct must land there in lockstep or property (d) diverges <em>by realm type</em> — a BEAM realm and a phone disagreeing about a quarantine set. Gate: a custody-consent reference vector added to the conformance harness (<code>mix lattice.export_vectors</code>) covering valid consent, missing consent, invalid signer, wrong request id, and replayed consent — green on both implementations.</p>
+    </div></div>
+    <div class="v"><span class="vid">V-07</span><div>
+      <b class="vt">Strict-verify pin is a regression guard</b>
+      <p>Property (c) extended over consent-carrying commands: same seed ⇒ byte-identical logs including consent bytes. Plus a static check that every <code>ed25519.verify</code> call in the TS client passes <code>{ zip215: false }</code> — the pin exists today at both sites; this test is what notices the third site that forgets.</p>
+    </div></div>
+    <div class="v"><span class="vid">V-08</span><div>
+      <b class="vt">Ceremony window races authority churn</b>
+      <p>Extend the V-04 generators: holder transfer/revocation scheduled between the request op, the consent signing, and the transfer append. Assert the existing <code>authority_ok</code> timeline check quarantines a transfer whose author lost holdership in its own causal past — the window must add no loophole the timeline machinery doesn't already close.</p>
+    </div></div>
+    <div class="v"><span class="vid">V-09</span><div>
+      <b class="vt">Replay is dead by request-id binding</b>
+      <p>Property test: a consent signature extracted from one integrated transfer, replayed inside a second transfer op (same parties, different request id — and same request id, second transfer), quarantines as <code>:invalid_consent</code> in every realm. This is the test DISP-1's disclosed cost hangs on.</p>
+    </div></div>
+    <div class="v"><span class="vid">V-10</span><div>
+      <b class="vt">The request surface carries refusal evidence — demonstrated, not asserted</b>
+      <p>Scenario test of the PD-003 dispute story on the existing inbox mechanism: an unresolved <code>{:request, "custody", ...}</code> is visible and timestamped in the analyzer's requests output and the read model; a refused one shows the holder's refusal op.</p>
+    </div></div>
+  </div>
+</section>
+
+<!-- ============ §5 FENCE ============ -->
+<section id="s5">
+  <div class="sec-head"><span class="sec-num">§5</span><h2>Scope Fence</h2></div>
+
+  <div class="fence">
+    <ul>
+      <li><b>Op-struct signature fields</b> — Rev 1's shape, rejected by C4. Do not reintroduce co-signatures outside the hashed content in any form. <span class="when">→ ∅ · rejected by evidence</span></li>
+      <li><b>n-of-m threshold consent</b> — the payload schema names one consenting signer. Quorum semantics (any 2 of 5 stewards) are a different validity question with partition edge cases; UnanimousBoxesV1-style unanimity at the app layer is the interim pattern if ever needed. <span class="when">→ own ADR, on a real consumer</span></li>
+      <li><b>Signature aggregation (BLS-class)</b> — one extra Ed25519 sig costs 64 bytes inside a body; nobody is short of them. <span class="when">→ ∅ until compaction-scale evidence (ADR-0006)</span></li>
+      <li><b>Proximity binding of the ceremony</b> — the QR/NFC exchange proves nothing cryptographic about physical presence and this ADR claims nothing. <span class="mono">Lattice.Proximity</span> remains unregistered; note the seam-naming caution below given the Attestation seam's history. <span class="when">→ stubbed at app layer · own ADR on evidence</span></li>
+      <li><b>Blind or deniable consent</b> — a consent that can't be shown is the election protocol's problem space, and main now proves that path needs its own multi-role machinery. This mechanism is the legible corner and must not grow toward the other one. <span class="when">→ Township.Election lineage, if ever</span></li>
+      <li><b>Cross-replica atomic consented transactions</b> — one op, one replica, one command. Multi-replica atomicity is consensus-shaped and the substrate deliberately does not have it. <span class="when">→ questioned before built</span></li>
+      <li><b>Registering Mandate commands</b> — named beneficiary, not a consumer. <span class="when">→ ADR-MANDATE-01 addendum</span></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="caveats">
+    <div class="lbl">Honesty caveats — read before believing the ADR</div>
+    <p>Rev 2's load-bearing risk moved: it is no longer "the paper doesn't match the repo" (it now does, at main @ a96b3c4) but the dual-implementation seam — semantic reduction exists twice, in Elixir and TypeScript, and the consent conjunct must ship in both with a conformance vector or property (d) fails silently across realm types; V-06 is the gate that matters most. The optional op-aware callback is a real (if small) change to the Authority behaviour surface and should be reviewed against every existing replica module, not just Township.Matter. The consent payload schema (five fields, one domain tag) is deliberately minimal; anything anyone wants to add to it — timestamps, terms, due-backs — belongs in the command args or the Cap caveats, not the signed consent, or the schema starts accreting. Reconciliation was against <span class="mono">main</span>, which has merged past the older working branch; if PD-003 work lands on a feature branch, re-run the greps there before trusting line references. And the Attestation seam's history is this ADR's cautionary tale: a behaviour named before its research verdict had to be frozen and routed around — which is why <span class="mono">Lattice.Proximity</span> stays an unregistered name in a fence, not a stub in the tree, until there is evidence.</p>
+  </div>
+  <p>Sources: main @ a96b3c4 — lattice/op.ex · lattice/canonical.ex · lattice/log.ex · lattice/authority.ex · lattice/identity.ex · authority/succession_certificate.ex · township/election/close_policy/unanimous_boxes_v1.ex · clients/lattice-client (authority.ts, package.json) · docs/adr/0001–0006, 0010, adr-mandate-01 · PD-001 (Q-06, V-01, V-04, properties a–d) · PD-003 (first consumer) · RFC 8032.</p>
+  <p style="margin-top:10px;font-family:var(--mono);font-size:12px;letter-spacing:.1em">LATTICE · ADR-COSIGN-01 · REV 2 · JULY 2026 — THE REPO ALREADY KNEW THE SHAPE.</p>
+</footer>
+
+</div>
+</body>
+</html>

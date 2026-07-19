@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Treehouse — The W0–W3 Cut: One-Pager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders:opsz,wght@10..72,500;10..72,700;10..72,800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F3F5F3; --panel:#FCFDFC; --ink:#182420; --ink-soft:#41504B;
+    --teal:#0E6B5B; --teal-soft:#E0EEEA;
+    --amber:#B4551F; --amber-soft:#F6E8DE;
+    --violet:#584A93; --violet-soft:#E9E5F4;
+    --done:#3E7A3E; --done-soft:#E4EFE2;
+    --line:#CBD5CF; --grid:rgba(14,107,91,.075);
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --serif:'Source Serif 4',Georgia,serif;
+    --disp:'Big Shoulders','Arial Narrow',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation:none!important;transition:none!important}}
+  body{
+    background:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px),var(--paper);
+    background-size:28px 28px,28px 28px,auto;
+    color:var(--ink);font-family:var(--serif);font-size:17px;line-height:1.65;
+  }
+  a{color:var(--teal)}
+  .wrap{max-width:1020px;margin:0 auto;padding:0 24px}
+
+  header.mast{border-bottom:3px solid var(--ink);padding:40px 0 28px}
+  .doc-id{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);display:flex;flex-wrap:wrap;gap:8px 20px;margin-bottom:22px}
+  .doc-id b{color:var(--teal);font-weight:600}
+  h1.title{font-family:var(--disp);font-weight:800;font-size:clamp(52px,9vw,104px);line-height:.92;letter-spacing:.005em;text-transform:uppercase}
+  h1 .thin{font-weight:500;color:var(--teal)}
+  .subtitle{font-size:clamp(18px,2.4vw,22px);max-width:58ch;margin-top:18px;color:var(--ink-soft);font-style:italic}
+  .chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:26px}
+  .chip{font-family:var(--mono);font-size:12.5px;padding:5px 12px;border:1.5px solid var(--ink);background:var(--panel)}
+  .chip.live{border-color:var(--teal);color:var(--teal);background:var(--teal-soft)}
+  .chip.date{border-style:dashed;color:var(--ink-soft)}
+  .chip.warn{border-color:var(--amber);color:var(--amber);background:var(--amber-soft)}
+
+  section{padding:48px 0 6px}
+  .sec-head{display:flex;align-items:baseline;gap:18px;border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:24px}
+  .sec-num{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--teal);letter-spacing:.1em;white-space:nowrap}
+  h2{font-family:var(--disp);font-weight:700;font-size:clamp(28px,4.2vw,42px);text-transform:uppercase;letter-spacing:.01em;line-height:1}
+  h3{font-family:var(--disp);font-weight:700;font-size:23px;text-transform:uppercase;letter-spacing:.02em;margin:30px 0 12px}
+  h4{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--teal);margin:24px 0 10px}
+  p{margin:0 0 16px;max-width:74ch}
+  p.lede{font-size:20px;line-height:1.6}
+  .mono{font-family:var(--mono);font-size:.86em;background:var(--teal-soft);padding:1px 5px;border-radius:2px}
+  em.term{font-style:normal;font-weight:600;color:var(--teal)}
+  .footnote{font-size:14.5px;color:var(--ink-soft)}
+
+  .thesis{border-left:5px solid var(--teal);background:var(--panel);padding:22px 26px;margin:26px 0;max-width:78ch;font-size:20px;line-height:1.55}
+  .thesis .who{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);display:block;margin-top:12px}
+
+  .trio{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin:24px 0}
+  .adv{background:var(--panel);border:1.5px solid var(--line);border-top:4px solid var(--ink);padding:18px 20px}
+  .adv .tag{font-family:var(--mono);font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft)}
+  .adv h5{font-family:var(--disp);font-size:23px;font-weight:700;text-transform:uppercase;margin:6px 0 8px}
+  .adv p{font-size:15px;margin-bottom:8px}
+  .adv .def{font-family:var(--mono);font-size:12.5px;color:var(--teal);border-top:1px dashed var(--line);padding-top:8px;margin-top:4px}
+  .adv.na{opacity:.85;border-top-color:var(--line)}
+  .adv.na .def{color:var(--amber)}
+
+  .warnbox{border:1.5px solid var(--amber);background:var(--amber-soft);padding:18px 22px;margin:22px 0;max-width:78ch}
+  .warnbox .lbl{font-family:var(--mono);font-size:11.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);margin-bottom:6px}
+  .warnbox p{font-size:15.5px;margin-bottom:8px}
+  .warnbox p:last-child{margin-bottom:0}
+
+  .work{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;margin:18px 0}
+  .work .w{border:1.5px dashed var(--line);padding:14px 16px;background:var(--panel)}
+  .work .w .wl{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--teal);margin-bottom:6px}
+  .work .w b{font-family:var(--disp);font-size:19px;text-transform:uppercase}
+  .work .w p{font-size:14px;margin:5px 0 0}
+
+  .aud{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin:22px 0}
+  .aud .a{background:var(--panel);border:1.5px solid var(--line);border-left:5px solid var(--teal);padding:16px 18px}
+  .aud .a .al{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:6px}
+  .aud .a b{font-family:var(--disp);font-size:20px;text-transform:uppercase;letter-spacing:.02em;display:block}
+  .aud .a p{font-size:14.5px;margin:6px 0 0}
+  .aud .a .pain{font-family:var(--mono);font-size:12.5px;color:var(--amber);border-top:1px dashed var(--line);padding-top:8px;margin-top:10px;display:block}
+
+  table{width:100%;border-collapse:collapse;margin:18px 0;background:var(--panel);font-size:14.5px}
+  th{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;text-align:left;background:var(--ink);color:var(--paper);padding:9px 12px}
+  td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  td.ph{font-family:var(--mono);font-weight:600;color:var(--teal);white-space:nowrap}
+  td.ph.ok{color:var(--done)}
+  td.ph.no{color:var(--amber)}
+  td .g{font-family:var(--mono);font-size:12px;color:var(--amber)}
+
+  .storyline{counter-reset:s;list-style:none;margin:14px 0;max-width:76ch}
+  .storyline li{counter-increment:s;padding:9px 0 9px 44px;position:relative;border-bottom:1px dotted var(--line);font-size:15px}
+  .storyline li::before{content:counter(s,decimal-leading-zero);position:absolute;left:0;top:9px;font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--amber)}
+
+  .fence{border:2.5px solid var(--ink);background:var(--panel);padding:24px 28px;margin:26px 0;position:relative}
+  .fence::before{content:"SCOPE FENCE — DO NOT IMPLEMENT";position:absolute;top:-13px;left:24px;background:var(--ink);color:var(--paper);font-family:var(--mono);font-size:11.5px;font-weight:600;letter-spacing:.16em;padding:4px 12px}
+  .fence ul{list-style:none;margin-top:8px;max-width:78ch}
+  .fence li{padding:9px 0 9px 26px;position:relative;border-bottom:1px dotted var(--line);font-size:15px}
+  .fence li:last-child{border-bottom:0}
+  .fence li::before{content:"✕";position:absolute;left:2px;color:var(--amber);font-family:var(--mono);font-weight:600}
+  .fence li b{font-family:var(--disp);font-size:17px;text-transform:uppercase;letter-spacing:.02em}
+  .fence li .when{font-family:var(--mono);font-size:12px;color:var(--violet)}
+
+  .caveats{border:1.5px dashed var(--amber);padding:16px 20px;margin:16px 0;background:var(--panel);max-width:80ch}
+  .caveats .lbl{font-family:var(--mono);font-size:11.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);margin-bottom:8px}
+  .caveats p{font-size:14px;margin-bottom:8px}
+
+  footer{border-top:3px solid var(--ink);margin-top:60px;padding:28px 0 56px}
+  footer p{font-size:14px;color:var(--ink-soft)}
+
+  @media(max-width:640px){
+    .storyline li{padding-left:38px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ============ MASTHEAD ============ -->
+<header class="mast">
+  <div class="doc-id">
+    <span>TREETOPDEVS / <b>LATTICE</b></span>
+    <span>ONE-PAGER · <b>PD-002</b></span>
+    <span>THE W0–W3 CUT</span>
+  </div>
+  <h1 class="title">Tree<span class="thin">house</span></h1>
+  <p class="subtitle">The low-stakes product hiding inside the Township stack: durable, uncapturable community spaces for people already burned by platforms — shipped on M1+M2 alone, with every research-gated milestone fenced out. Working name; the seam matters more than the sign.</p>
+  <div class="chips">
+    <span class="chip live">DEPENDS · M1 ✓ + M2</span>
+    <span class="chip warn">EXCLUDES · M4 / M6 ENTIRELY</span>
+    <span class="chip">CADENCE-ADJACENT · NOT CADENCE</span>
+    <span class="chip date">JULY 2026 · ONE-PAGER</span>
+  </div>
+</header>
+
+<!-- ============ §1 WHAT IT IS ============ -->
+<section id="s1">
+  <div class="sec-head"><span class="sec-num">§1</span><h2>What It Is</h2></div>
+  <p class="lede">A Discord-shaped space whose record cannot be deleted, paywalled, orphaned, or seized — because there is no server to do any of those things to. Threads are Replicas; roles are Caps; the community's history lives on its members' devices and converges when they do. Everything user-facing runs on behaviors that are already green (M1) plus the carrier and persistence M2 was going to build anyway.</p>
+  <div class="thesis">
+    Treehouse sells exactly what the substrate already proves: durability precedes liveness, and authority is a revocable capability, not a role in someone's database. It sells nothing that is gated on open research.
+    <span class="who">The honesty constraint that defines this cut</span>
+  </div>
+  <p>It is <em class="term">not</em> Township. Township is civic, coercion-facing, and gated on M4. Treehouse is social, platform-facing, and gated on nothing but engineering and product labor. The two share a substrate and a scope discipline; they do not share a threat model.</p>
+</section>
+
+<!-- ============ §2 WHO IT'S FOR ============ -->
+<section id="s2">
+  <div class="sec-head"><span class="sec-num">§2</span><h2>Who It's For</h2></div>
+  <p>Not "communities" in general — free incumbents win that fight on polish. The wedge is people who have already paid the platform tax and self-selected into caring. They tolerate rough UX, they evangelize, and they actually exercise the behaviors (succession, revocation, partition-heal) that need real-world soak.</p>
+  <div class="aud">
+    <div class="a">
+      <div class="al">Audience · 01</div>
+      <b>Open-Source Projects</b>
+      <p>Maintainer teams and contributor communities coordinating in Discord servers and free Slack workspaces they don't control. Governance disputes, maintainer burnout, and ownership handoffs are routine events here — succession is a feature they already need, not a hypothetical.</p>
+      <span class="pain">PAIN: history behind Slack's retention wall · server owned by a departed founder · mod account compromise</span>
+    </div>
+    <div class="a">
+      <div class="al">Audience · 02</div>
+      <b>The Fediverse Diaspora</b>
+      <p>Mastodon and Bluesky users chose decentralization once already and then watched instances shut down, defederate, or change hands. They are ideologically pre-sold on "no one can take this from you" and fluent in the tradeoffs.</p>
+      <span class="pain">PAIN: instance shutdowns orphaning communities · admin unilateralism · migration losing history and graph</span>
+    </div>
+    <div class="a">
+      <div class="al">Audience · 03</div>
+      <b>The Platform-Burned</b>
+      <p>Communities that survived a Discord ban wave, a subreddit closure, or an ownership coup. Small population, maximal motivation — and the only users who will honestly stress-test "the record survives every device dying but one."</p>
+      <span class="pain">PAIN: one moderation decision by a platform erased years of community record and structure</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ §3 WHAT SHIPS ============ -->
+<section id="s3">
+  <div class="sec-head"><span class="sec-num">§3</span><h2>What Ships</h2></div>
+  <p>The Township workloads, minus the one that needs research. Same seams, same modules, lower stakes.</p>
+  <div class="work">
+    <div class="w">
+      <div class="wl">Ships · exercises M1 + M2 (≈ Township W1)</div>
+      <b>Durable Threads</b>
+      <p>Channels and threads as Replicas: convergent posts and edits, offline authorship, partition-and-heal with no coordinator and no conflict dialog. The 90-day retention wall does not exist because there is no landlord.</p>
+    </div>
+    <div class="w">
+      <div class="wl">Ships · exercises M0 + M1 (≈ Township W2)</div>
+      <b>Roles as Caps</b>
+      <p>Moderator and admin authority as transferable per-field Caps with succession. Handing off a community is one op. A founder who ghosts, rage-quits, or loses their device does not orphan the space — succession fires and the record continues.</p>
+    </div>
+    <div class="w">
+      <div class="wl">Ships · exercises M1 (≈ Township W2)</div>
+      <b>Bounded Blast Radius</b>
+      <p>Zero implicit authority as the anti-takeover story: a phished mod account holds only its explicit, attenuated, revocable Caps — no silent webhook powers, no ambient admin. One revoke severs the credential and the live path; the quarantine of stale-holder ops is visible in the trust graph.</p>
+    </div>
+    <div class="w">
+      <div class="wl">Ships · exercises M1 (≈ Township W0)</div>
+      <b>Invite by Capability</b>
+      <p>Admission is a Cap granted by existing members — invite links as attenuated, TTL'd, use-limited capabilities (the V1 macaroon model doing product work). No account creation ceremony, no registry to scrape or capture.</p>
+    </div>
+  </div>
+
+  <h4>The demo storyline — Treehouse edition</h4>
+  <ol class="storyline">
+    <li>An OSS project spins up a space; contributors join by invite Cap generated on-device. No signup, no email harvest, nothing hosted.</li>
+    <li>A design thread accumulates posts from laptops that are mostly offline; two maintainers edit the RFC summary during a partition; the heal converges silently.</li>
+    <li>The founding maintainer steps away. The admin Cap transfers in one op; their later stale moderation op is quarantined and audited, visibly.</li>
+    <li>A mod account is phished. The attacker holds exactly one scoped Cap; revocation is one op; the trust graph shows precisely what the compromised account touched and when. The audit is the incident report.</li>
+    <li>Slack's free tier would have eaten this history eight months ago. Every device but one is wiped; the community's record and role structure survive intact on the last phone.</li>
+  </ol>
+</section>
+
+<!-- ============ §4 HONEST ADVERSARY MODEL ============ -->
+<section id="s4">
+  <div class="sec-head"><span class="sec-num">§4</span><h2>The Honest Adversary Model</h2></div>
+  <p>Per house rule, this cut states which adversaries it faces and which defense it taxes. The pattern is deliberate: Treehouse faces <em>weakened</em> versions of A2 and A3, and faces A1 not at all.</p>
+  <div class="trio">
+    <div class="adv na">
+      <span class="tag">Adversary · A1</span>
+      <h5>The Individual — N/A</h5>
+      <p>No one coerces a knitting circle or a maintainer team over vouches. Coercion resistance buys nothing here and its cost (legibility, M4 machinery) buys negative value.</p>
+      <div class="def">POSTURE → out of scope. The Lattice.Attestation seam stays stubbed. Treehouse makes no receipt-freeness claim, ever, in any copy.</div>
+    </div>
+    <div class="adv">
+      <span class="tag">Adversary · A2-lite</span>
+      <h5>The Insider &amp; The Phisher</h5>
+      <p>Not entryism at civic stakes — mod drama, ownership coups, compromised accounts, scam-wave takeovers. Discord's actual daily failure mode.</p>
+      <div class="def">DEFENSE → zero implicit authority, one-op revocation, deps-decidable quarantine (V-01), legible authority chains. Honest limit: Lattice bounds what a compromised identity can do; it does not detect the phish or filter the scam link.</div>
+    </div>
+    <div class="adv">
+      <span class="tag">Adversary · A3-lite</span>
+      <h5>The Platform</h5>
+      <p>Not the state with a subpoena — the landlord with a retention policy. Slack's 90-day wall, Discord's ban lever, an instance admin's shutdown notice: A3 events that happen to ordinary communities on schedule.</p>
+      <div class="def">DEFENSE → the full A3 defense, inherited for free: local-first, coordinator-free, nothing hosted, nothing to seize. This is the substrate's strongest claim and it is true today.</div>
+    </div>
+  </div>
+  <div class="warnbox">
+    <div class="lbl">Adversary tax — what this cut costs the program</div>
+    <p><b>A1:</b> untouched — the stub seam means nothing here forecloses M4. <b>A2:</b> mildly strengthened — real-world soak of quarantine, revocation, and succession hardens the exact mechanisms Township's civic roles depend on. <b>A3:</b> strengthened — M2's carrier and persistence get production pressure early. The real tax is <b>attention</b>: product labor (UX, notifications, mobile, media) that does not advance any milestone gate, and a public artifact whose rough edges will be read as the substrate's rough edges. Priced, not hidden.</p>
+  </div>
+</section>
+
+<!-- ============ §5 DEPENDS / EXCLUDED ============ -->
+<section id="s5">
+  <div class="sec-head"><span class="sec-num">§5</span><h2>Depends On · Fenced Out</h2></div>
+
+  <table>
+    <thead><tr><th style="width:130px">Milestone</th><th>What Treehouse takes from it</th><th style="width:250px">Status for this cut</th></tr></thead>
+    <tbody>
+      <tr><td class="ph ok">M1 ✓</td><td>Everything: Replica, three CRDTs, per-field authority with delegation/transfer/revocation/quarantine, durable inbox, lifecycle + succession, the property suite as the correctness warranty.</td><td><span class="g">GREEN — the product is a skin over behaviors 1–19</span></td></tr>
+      <tr><td class="ph">M2</td><td>The JS/TypeScript WebSocket client as the phone/browser realm (per plan 011 and the AtomVM constraints), disk-backed logs with the stated durability contract, canonical CBOR (ADR-P08) as the hard prerequisite for the non-BEAM realm.</td><td><span class="g">BLOCKING — Treehouse is M2's application oracle, alongside 010a</span></td></tr>
+      <tr><td class="ph no">M3</td><td>Almost nothing. At these stakes, key loss resolves socially: re-invite, new identity, old identity tombstoned. KERI pre-rotation is not on this critical path.</td><td><span class="g">DEFERRED — social recovery is the M1-era answer, stated in copy</span></td></tr>
+      <tr><td class="ph no">M4 / M6</td><td>Nothing. No receipt-freeness, no federation, no claim that implies either.</td><td><span class="g">EXCLUDED — by fence, below</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="fence">
+    <ul>
+      <li><b>Receipt-free anything</b> — the <span class="mono">Lattice.Attestation</span> stub stays a stub. Reactions, votes, and polls in Treehouse are plain convergent ops and say so. <span class="when">→ M4 / Township</span></li>
+      <li><b>KERI rotation &amp; recovery ceremony</b> — social re-admission is the documented answer; anything fancier waits. <span class="when">→ M3</span></li>
+      <li><b>Federation, cross-space identity portability</b> — one space, one shared context. The clubhouse works without the town. <span class="when">→ M6</span></li>
+      <li><b>Integrations &amp; bots</b> — per program decision: not until the core is strong. Named as the eventual killer surface (an integration is a Cap-holding realm — the security story writes itself) and deliberately not started. <span class="when">→ post-soak, own ADR</span></li>
+      <li><b>E2EE confidentiality</b> — content is readable by every replica-holding member; fine for OSS and semi-public communities, stated plainly in copy. <span class="when">→ M3 Keyhive track</span></li>
+      <li><b>Content moderation tooling beyond Caps</b> — no filters, no scanners, no trust-and-safety machinery. Small invite-gated spaces moderate socially; the Cap model is the enforcement surface. <span class="when">→ questioned before built</span></li>
+      <li><b>Tokens, funding mechanics, quadratic anything</b> — never on this branch. <span class="when">→ ∅</span></li>
+    </ul>
+  </div>
+
+  <h4>Exit gate — when Treehouse counts as real</h4>
+  <p class="footnote" style="max-width:78ch"><b>①</b> Three unaffiliated communities (≥1 OSS project) run their primary coordination on it for 60 consecutive days with zero server dependency in the core loop. <b>②</b> At least one real succession event and one real revocation event occur in the wild and audit cleanly in the trust graph. <b>③</b> A full-partition week (member devices offline, no rendezvous) heals to convergence with no data loss and no conflict dialog. <b>④</b> A skeptical outsider can verify the durability claim from the exported audit evidence alone.</p>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="caveats">
+    <div class="lbl">Honesty caveats — read before believing the one-pager</div>
+    <p>The gap between this substrate and a usable product is UX labor, not cryptography — notifications, mobile ergonomics, media handling, and onboarding are where the effort actually goes, and none of it advances a milestone gate. Competing with free, polished incumbents on convenience is a losing frame; the only viable pitch is the one the incumbents structurally cannot make. "Bounded blast radius" is an authority claim, not an anti-phishing claim — Treehouse does not detect scams, and copy must never imply it does. Unbounded log growth (D-03) arrives faster in a chatty social space than in civic deliberation; the compaction cliff should be assumed closer, not farther. And the working name is a placeholder — what is load-bearing is the fence, not the label.</p>
+  </div>
+  <p>Sources: PD-001 (program doc, §4–§6) · the Lattice 2.0 plan and M1 gate evidence · plan 011 (TypeScript client) · plan 010a (carrier spike seam) · ADR-P08 (canonical CBOR prerequisite) · the Township workload definitions (W0–W4).</p>
+  <p style="margin-top:10px;font-family:var(--mono);font-size:12px;letter-spacing:.1em">LATTICE · PD-002 · JULY 2026 — THE CLUBHOUSE WORKS WITHOUT THE TOWN.</p>
+</footer>
+
+</div>
+</body>
+</html>
