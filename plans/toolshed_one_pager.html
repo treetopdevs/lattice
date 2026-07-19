@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Toolshed — Custody as Capability: One-Pager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders:opsz,wght@10..72,500;10..72,700;10..72,800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F3F5F3; --panel:#FCFDFC; --ink:#182420; --ink-soft:#41504B;
+    --teal:#0E6B5B; --teal-soft:#E0EEEA;
+    --amber:#B4551F; --amber-soft:#F6E8DE;
+    --violet:#584A93; --violet-soft:#E9E5F4;
+    --done:#3E7A3E; --done-soft:#E4EFE2;
+    --line:#CBD5CF; --grid:rgba(14,107,91,.075);
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --serif:'Source Serif 4',Georgia,serif;
+    --disp:'Big Shoulders','Arial Narrow',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation:none!important;transition:none!important}}
+  body{
+    background:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px),var(--paper);
+    background-size:28px 28px,28px 28px,auto;
+    color:var(--ink);font-family:var(--serif);font-size:17px;line-height:1.65;
+  }
+  a{color:var(--teal)}
+  .wrap{max-width:1020px;margin:0 auto;padding:0 24px}
+
+  header.mast{border-bottom:3px solid var(--ink);padding:40px 0 28px}
+  .doc-id{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);display:flex;flex-wrap:wrap;gap:8px 20px;margin-bottom:22px}
+  .doc-id b{color:var(--teal);font-weight:600}
+  h1.title{font-family:var(--disp);font-weight:800;font-size:clamp(52px,9vw,104px);line-height:.92;letter-spacing:.005em;text-transform:uppercase}
+  h1 .thin{font-weight:500;color:var(--teal)}
+  .subtitle{font-size:clamp(18px,2.4vw,22px);max-width:58ch;margin-top:18px;color:var(--ink-soft);font-style:italic}
+  .chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:26px}
+  .chip{font-family:var(--mono);font-size:12.5px;padding:5px 12px;border:1.5px solid var(--ink);background:var(--panel)}
+  .chip.live{border-color:var(--teal);color:var(--teal);background:var(--teal-soft)}
+  .chip.date{border-style:dashed;color:var(--ink-soft)}
+  .chip.warn{border-color:var(--amber);color:var(--amber);background:var(--amber-soft)}
+
+  section{padding:48px 0 6px}
+  .sec-head{display:flex;align-items:baseline;gap:18px;border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:24px}
+  .sec-num{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--teal);letter-spacing:.1em;white-space:nowrap}
+  h2{font-family:var(--disp);font-weight:700;font-size:clamp(28px,4.2vw,42px);text-transform:uppercase;letter-spacing:.01em;line-height:1}
+  h3{font-family:var(--disp);font-weight:700;font-size:23px;text-transform:uppercase;letter-spacing:.02em;margin:30px 0 12px}
+  h4{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--teal);margin:24px 0 10px}
+  p{margin:0 0 16px;max-width:74ch}
+  p.lede{font-size:20px;line-height:1.6}
+  .mono{font-family:var(--mono);font-size:.86em;background:var(--teal-soft);padding:1px 5px;border-radius:2px}
+  em.term{font-style:normal;font-weight:600;color:var(--teal)}
+  .footnote{font-size:14.5px;color:var(--ink-soft)}
+
+  .thesis{border-left:5px solid var(--teal);background:var(--panel);padding:22px 26px;margin:26px 0;max-width:78ch;font-size:20px;line-height:1.55}
+  .thesis .who{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);display:block;margin-top:12px}
+
+  .trio{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin:24px 0}
+  .adv{background:var(--panel);border:1.5px solid var(--line);border-top:4px solid var(--ink);padding:18px 20px}
+  .adv .tag{font-family:var(--mono);font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft)}
+  .adv h5{font-family:var(--disp);font-size:23px;font-weight:700;text-transform:uppercase;margin:6px 0 8px}
+  .adv p{font-size:15px;margin-bottom:8px}
+  .adv .def{font-family:var(--mono);font-size:12.5px;color:var(--teal);border-top:1px dashed var(--line);padding-top:8px;margin-top:4px}
+  .adv.na{opacity:.85;border-top-color:var(--line)}
+  .adv.na .def{color:var(--amber)}
+
+  .warnbox{border:1.5px solid var(--amber);background:var(--amber-soft);padding:18px 22px;margin:22px 0;max-width:78ch}
+  .warnbox .lbl{font-family:var(--mono);font-size:11.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);margin-bottom:6px}
+  .warnbox p{font-size:15.5px;margin-bottom:8px}
+  .warnbox p:last-child{margin-bottom:0}
+
+  .work{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;margin:18px 0}
+  .work .w{border:1.5px dashed var(--line);padding:14px 16px;background:var(--panel)}
+  .work .w .wl{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--teal);margin-bottom:6px}
+  .work .w b{font-family:var(--disp);font-size:19px;text-transform:uppercase}
+  .work .w p{font-size:14px;margin:5px 0 0}
+
+  table{width:100%;border-collapse:collapse;margin:18px 0;background:var(--panel);font-size:14.5px}
+  th{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;text-align:left;background:var(--ink);color:var(--paper);padding:9px 12px}
+  td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  td.ph{font-family:var(--mono);font-weight:600;color:var(--teal);white-space:nowrap}
+  td.ph.ok{color:var(--done)}
+  td.ph.no{color:var(--amber)}
+  td .g{font-family:var(--mono);font-size:12px;color:var(--amber)}
+
+  .storyline{counter-reset:s;list-style:none;margin:14px 0;max-width:76ch}
+  .storyline li{counter-increment:s;padding:9px 0 9px 44px;position:relative;border-bottom:1px dotted var(--line);font-size:15px}
+  .storyline li::before{content:counter(s,decimal-leading-zero);position:absolute;left:0;top:9px;font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--amber)}
+
+  .fence{border:2.5px solid var(--ink);background:var(--panel);padding:24px 28px;margin:26px 0;position:relative}
+  .fence::before{content:"SCOPE FENCE — DO NOT IMPLEMENT";position:absolute;top:-13px;left:24px;background:var(--ink);color:var(--paper);font-family:var(--mono);font-size:11.5px;font-weight:600;letter-spacing:.16em;padding:4px 12px}
+  .fence ul{list-style:none;margin-top:8px;max-width:78ch}
+  .fence li{padding:9px 0 9px 26px;position:relative;border-bottom:1px dotted var(--line);font-size:15px}
+  .fence li:last-child{border-bottom:0}
+  .fence li::before{content:"✕";position:absolute;left:2px;color:var(--amber);font-family:var(--mono);font-weight:600}
+  .fence li b{font-family:var(--disp);font-size:17px;text-transform:uppercase;letter-spacing:.02em}
+  .fence li .when{font-family:var(--mono);font-size:12px;color:var(--violet)}
+
+  /* handoff op figure */
+  .opfig{border:2px solid var(--ink);background:var(--panel);margin:22px 0;padding:20px 24px;max-width:78ch}
+  .opfig .fl{font-family:var(--mono);font-size:11.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);margin-bottom:12px}
+  .opfig pre{font-family:var(--mono);font-size:13px;line-height:1.7;overflow-x:auto;color:var(--ink)}
+  .opfig pre b{color:var(--teal);font-weight:600}
+  .opfig pre i{color:var(--amber);font-style:normal}
+  .opfig .cap{font-size:13.5px;color:var(--ink-soft);margin-top:10px;font-style:italic}
+
+  .caveats{border:1.5px dashed var(--amber);padding:16px 20px;margin:16px 0;background:var(--panel);max-width:80ch}
+  .caveats .lbl{font-family:var(--mono);font-size:11.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);margin-bottom:8px}
+  .caveats p{font-size:14px;margin-bottom:8px}
+
+  footer{border-top:3px solid var(--ink);margin-top:60px;padding:28px 0 56px}
+  footer p{font-size:14px;color:var(--ink-soft)}
+
+  @media(max-width:640px){
+    .storyline li{padding-left:38px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ============ MASTHEAD ============ -->
+<header class="mast">
+  <div class="doc-id">
+    <span>TREETOPDEVS / <b>LATTICE</b></span>
+    <span>ONE-PAGER · <b>PD-003</b></span>
+    <span>SIBLING OF PD-002 · CUSTODY AS CAPABILITY</span>
+  </div>
+  <h1 class="title">Tool<span class="thin">shed</span></h1>
+  <p class="subtitle">Neighbors lending tools with an unambiguous custody record — custody as a per-field Cap, handoffs as dual-signed ops, physical presence as the Sybil cost. No GPS, no platform attestation roots, nothing hosted. Working name; arboreal register maintained.</p>
+  <div class="chips">
+    <span class="chip live">DEPENDS · M1 ✓ + M2</span>
+    <span class="chip warn">FENCED · GPS / PLATFORM ATTESTATION / M4 / M6</span>
+    <span class="chip">TOWNSHIP ON-RAMP · SAME NEIGHBORS</span>
+    <span class="chip date">JULY 2026 · ONE-PAGER</span>
+  </div>
+</header>
+
+<!-- ============ §1 WHAT IT IS ============ -->
+<section id="s1">
+  <div class="sec-head"><span class="sec-num">§1</span><h2>What It Is</h2></div>
+  <p class="lede">A neighborhood tool-lending ledger where the record cannot be ambiguous, altered, or hosted away. Each tool is a Replica; <em class="term">who holds it</em> is an authoritative per-field Cap; a borrow is a Cap transfer co-signed by both parties at the physical handoff. Custody is computed from op presence in the DAG — never stored, never asserted, never a matter of memory or he-said-she-said.</p>
+  <div class="thesis">
+    The ledger does not prevent theft. It makes accountability unambiguous — every custody change is a dual-signed, causally ordered, auditable op that both parties consented to at the moment of handoff. That is the entire claim, and the substrate already proves it.
+    <span class="who">The honesty constraint that defines this cut</span>
+  </div>
+  <p>Toolshed is a <em class="term">sibling</em> of Treehouse (PD-002), not a replacement: same M1+M2 dependency line, same fence discipline, different wedge. Treehouse sells durable communication; Toolshed sells unambiguous custody. They share a substrate, an audience overlap (the platform-burned), and an endgame — the neighbors who share a ladder are the residents who later deliberate a local matter. Toolshed → Township is the adoption story.</p>
+</section>
+
+<!-- ============ §2 THE CORE MOVE ============ -->
+<section id="s2">
+  <div class="sec-head"><span class="sec-num">§2</span><h2>The Core Move: Proximity, Not Location</h2></div>
+  <p>The naive design reaches for GPS to "prove" where a tool is. That primitive is rejected here, twice over: GPS is spoofable at the API layer and at the radio layer (commodity SDR), and the only fix — hardware attestation via Play Integrity / App Attest — roots trust in Google and Apple certificate authorities. Building A3 resistance on the two largest platform landlords is not an adversary tax; it is the substrate contradicting itself. It also excludes de-Googled devices — precisely the hardware the target audience carries.</p>
+  <p>The reframe: custody transfer never needed to know <em>where</em> the tool is. It needs to know <em class="term">both parties were present at the handoff</em>. Presence is a co-signature problem, and co-signatures are pure M1 machinery.</p>
+
+  <div class="opfig">
+    <div class="fl">The dual-signed handoff op — schematic</div>
+    <pre>op :custody_transfer
+  replica:   <b>tool:ladder-6ft</b>
+  field:     <b>:holder</b>            <i>// authoritative per-field Cap</i>
+  from:      did:key:lender      <i>// current validated holder</i>
+  to:        did:key:borrower
+  deps:      [ ...causal frontier ]
+  sig_from:  ed25519(lender)     <i>// exchanged in person:</i>
+  sig_to:    ed25519(borrower)   <i>// QR scan or NFC tap at the door</i></pre>
+    <div class="cap">Neither party can unilaterally claim a transfer happened or didn't. The return is the same op in reverse — and by the Q-06 rule, a return request is a durable op resolved by the current validated holder, so a lender who won't acknowledge a genuine return leaves a visible, timestamped refusal in the record. The audit trail is the dispute resolution.</div>
+  </div>
+
+  <div class="warnbox">
+    <div class="lbl">The R-04 field note — physical handoff as Sybil cost</div>
+    <p>Sybil-resistant admission is the program's registered open question (R-04). Toolshed contributes an empirical data point: at neighborhood scale, admission cost is denominated in <b>physical presence</b> — a fleet of fake identities cannot take possession of a ladder, because a human must hand it over at a door. Vouch-gated admission here collapses to "a neighbor physically vouched," and the scammer's two real attacks — fake identity at admission, ambiguity at handoff — are dissolved by the vouch and the co-signature respectively, before any exotic machinery is reached. This observation feeds the R-04 register regardless of whether the product ships.</p>
+  </div>
+</section>
+
+<!-- ============ §3 WHAT SHIPS ============ -->
+<section id="s3">
+  <div class="sec-head"><span class="sec-num">§3</span><h2>What Ships</h2></div>
+  <div class="work">
+    <div class="w">
+      <div class="wl">Ships · exercises M1 (≈ Township W0)</div>
+      <b>Join by Vouch</b>
+      <p>Admission is a Cap granted by an existing neighbor — invite as an attenuated, TTL'd capability, generated on-device, typically handed over in person. No signup, no registry, no address harvest.</p>
+    </div>
+    <div class="w">
+      <div class="wl">Ships · exercises M1 + M2 (≈ Township W1)</div>
+      <b>The Shed Inventory</b>
+      <p>Each listed tool is a Replica: convergent description, condition notes, and availability, offline-editable, partition-and-heal without a coordinator. The neighborhood's inventory survives every device dying but one.</p>
+    </div>
+    <div class="w">
+      <div class="wl">Ships · exercises M1 (≈ Township W2, sharpened)</div>
+      <b>Dual-Signed Custody</b>
+      <p>Borrow and return as co-signed <span class="mono">:custody_transfer</span> ops via QR/NFC at the handoff. Due-back as a caveat on the borrow Cap (TTL, the V1 macaroon model doing product work). Overdue is computed, not nagged into existence.</p>
+    </div>
+    <div class="w">
+      <div class="wl">Ships · exercises M1 (≈ Township W2)</div>
+      <b>Stewardship &amp; Succession</b>
+      <p>A shed steward role as a transferable Cap. The neighbor who started the shed moves away; the steward Cap transfers in one op; their later stale op quarantines visibly. The shed outlives its founder — the exact succession machinery Township needs, soaked at garden-fence stakes.</p>
+    </div>
+  </div>
+
+  <h4>The demo storyline — Toolshed edition</h4>
+  <ol class="storyline">
+    <li>A block starts a shed; neighbors join by vouch Cap handed over literally across a fence. Identities generate on-device; nothing is hosted.</li>
+    <li>A resident lists a tile saw with photos and a condition note, from a phone, offline; the listing converges when devices next meet.</li>
+    <li>A borrow: two phones tap at the door, both parties sign one op, a due-back caveat rides the Cap. The custody record is unambiguous from the instant of handoff.</li>
+    <li>A dispute: "I returned it." The DAG answers — either the dual-signed return op exists or it doesn't, and if a return request sits unresolved, the refusal is visible and timestamped. No ambiguity survives contact with the audit trail.</li>
+    <li>The founder moves to another state. Stewardship transfers by Cap; the inventory, custody history, and every open loan continue from the remaining devices. Nothing was hosted, so nothing was lost.</li>
+  </ol>
+</section>
+
+<!-- ============ §4 HONEST ADVERSARY MODEL ============ -->
+<section id="s4">
+  <div class="sec-head"><span class="sec-num">§4</span><h2>The Honest Adversary Model</h2></div>
+  <div class="trio">
+    <div class="adv na">
+      <span class="tag">Adversary · A1</span>
+      <h5>The Individual — N/A</h5>
+      <p>No one coerces a neighbor over a hedge trimmer. Custody records are deliberately <em>legible</em> — unambiguity is the product. Receipt-freeness would be actively wrong here.</p>
+      <div class="def">POSTURE → out of scope, and inverted: Toolshed is the legibility end of the A1 spectrum, the honest opposite corner from Cadence's unprovable vouches. The Lattice.Attestation seam stays stubbed.</div>
+    </div>
+    <div class="adv">
+      <span class="tag">Adversary · A2-lite</span>
+      <h5>The Scammer</h5>
+      <p>The real neighborhood threat: fake identities joining to walk off with tools, and handoff ambiguity exploited in disputes. Not entryism — opportunism.</p>
+      <div class="def">DEFENSE → vouch-gated admission priced in physical presence · dual-signed handoffs · deps-decidable quarantine of stale-holder ops · legible authority chains. Honest limit: a vouched-in neighbor can still steal a ladder; the ledger makes them unambiguously accountable, not honest.</div>
+    </div>
+    <div class="adv">
+      <span class="tag">Adversary · A3-lite</span>
+      <h5>The Platform</h5>
+      <p>The incumbent is a Facebook group and a text thread — records that vanish with an account ban, a group deletion, or a policy change. The Buy Nothing app migration burned this exact population once already.</p>
+      <div class="def">DEFENSE → the full A3 defense, inherited for free: local-first, coordinator-free, nothing hosted. Strengthened here by the explicit refusal of platform attestation roots — the trust anchor is the neighbors' own keys, not Mountain View's CA.</div>
+    </div>
+  </div>
+  <div class="warnbox">
+    <div class="lbl">Adversary tax — what this cut costs the program</div>
+    <p><b>A1:</b> untouched; if anything, clarifying — Toolshed plants a flag at the legibility corner of the surface, sharpening the ADR-RW-001 "same surface, opposite corner" framing with an in-house example. <b>A2:</b> strengthened — the physical-presence admission cost is a live R-04 experiment. <b>A3:</b> strengthened — refusing GPS/attestation keeps the trust-anchor claim clean and forces M2's carrier to be honest about what a phone realm can verify without a platform's blessing. The real tax, as with PD-002, is <b>attention</b>: QR/NFC handoff UX, photos and listings, reminder ergonomics — product labor that advances no milestone gate. Priced, not hidden.</p>
+  </div>
+</section>
+
+<!-- ============ §5 DEPENDS / FENCED ============ -->
+<section id="s5">
+  <div class="sec-head"><span class="sec-num">§5</span><h2>Depends On · Fenced Out</h2></div>
+
+  <table>
+    <thead><tr><th style="width:130px">Milestone</th><th>What Toolshed takes from it</th><th style="width:250px">Status for this cut</th></tr></thead>
+    <tbody>
+      <tr><td class="ph ok">M1 ✓</td><td>Everything load-bearing: Replica, per-field authority with transfer/revocation/quarantine, Cap caveats (due-back as TTL), durable inbox, queue-through-holder (Q-06) as the return-flow rule, succession, the property suite as the correctness warranty. One extension: the dual-signature op shape — two sigs over one canonical encoding, a small ADR, not a research item.</td><td><span class="g">GREEN + ONE SMALL ADR — dual-sig op shape</span></td></tr>
+      <tr><td class="ph">M2</td><td>The TypeScript client as the phone realm (plan 011), canonical CBOR (ADR-P08) as the hard prerequisite, disk persistence, and the QR/NFC exchange as an app-layer transport for co-signing — notably <em>not</em> a carrier concern; the handoff exchange rides above the sync protocol.</td><td><span class="g">BLOCKING — a second application oracle for M2, alongside 010a and PD-002</span></td></tr>
+      <tr><td class="ph no">M3</td><td>Almost nothing. Key loss at these stakes resolves socially: re-vouch, new identity, steward reassigns open loans by Cap, old identity tombstoned. Stated plainly in copy.</td><td><span class="g">DEFERRED — social recovery is the answer</span></td></tr>
+      <tr><td class="ph no">M4 / M6</td><td>Nothing. Legibility is the product; receipt-freeness and federation have no role here.</td><td><span class="g">EXCLUDED — by fence, below</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="fence">
+    <ul>
+      <li><b>GPS, geofencing, location proofs</b> — spoofable without platform attestation, and attestation roots in Google/Apple CAs, which contradicts the trust model. Location never enters an op. <span class="when">→ ∅ · rejected, not deferred</span></li>
+      <li><b>Play Integrity / App Attest / any platform attestation root</b> — the trust anchor is member keys, full stop. <span class="when">→ ∅ · rejected on creed I</span></li>
+      <li><b>Cryptographic proximity ranging</b> — UWB secure ranging (FiRa-class time-of-flight) is the honest hardware if co-signature ever needs a cryptographic presence binding. Named seam, throwing stub: <span class="mono">Lattice.Proximity</span>. Dual-sig plus social reality carries the launch. <span class="when">→ stubbed · own ADR when evidence demands it</span></li>
+      <li><b>Receipt-free anything</b> — actively wrong here; custody must be legible. <span class="when">→ M4 / Township, where it belongs</span></li>
+      <li><b>Reputation scores, lending karma, deposit/collateral mechanics</b> — the audit trail is the reputation; a computed score is a capture surface and a Cadence-layer question. <span class="when">→ L4, if ever</span></li>
+      <li><b>Payments, deposits, insurance, tokens</b> — never on this branch. <span class="when">→ ∅</span></li>
+      <li><b>Cross-neighborhood federation, tool-library-scale inventory</b> — one shed, one shared context. The shed works without the town. <span class="when">→ M6</span></li>
+      <li><b>KERI rotation ceremony</b> — social re-vouch is the documented key-loss answer. <span class="when">→ M3</span></li>
+    </ul>
+  </div>
+
+  <h4>Exit gate — when Toolshed counts as real</h4>
+  <p class="footnote" style="max-width:78ch"><b>①</b> Two unaffiliated neighborhoods (≥8 households each) run real lending on it for 90 days with zero server dependency in the core loop. <b>②</b> ≥50 dual-signed custody transfers occur in the wild, including at least one full borrow→overdue→return cycle resolved by the record alone. <b>③</b> One real dispute is settled by audit trail without either party being able to contest what the DAG shows. <b>④</b> One steward succession fires in the wild and the inventory plus all open loans continue cleanly. <b>⑤</b> The handoff interaction is measured under ten seconds phone-to-phone — the friction constraint is a gate, not a wish.</p>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="caveats">
+    <div class="lbl">Honesty caveats — read before believing the one-pager</div>
+    <p>The competition is a text message and existing trust: if logging a borrow costs more effort than remembering it, the ledger dies of friction — which is why gate ⑤ is a hard gate and the tap must be the entire UX. The ledger makes accountability unambiguous; it does not make neighbors honest, and copy must never imply theft prevention. The dual-signature op shape is a small but real extension to the M1 op model and needs its ADR before any code. NFC/QR co-signing UX across iOS and Android has platform quirks (iOS NFC entitlements in particular) that belong to product labor, not the substrate — but they are real labor. The low op cadence that keeps D-03's compaction cliff distant also means organic soak is slow: 90 days of a quiet shed exercises fewer edge cases than a week of a chatty Treehouse, so the two siblings stress different things and neither substitutes for the other. And the working name is a placeholder; the fence is load-bearing, not the label.</p>
+  </div>
+  <p>Sources: PD-001 (program doc, §4–§6, Q-06, R-04) · PD-002 (Treehouse, sibling cut) · the Lattice 2.0 plan and M1 gate evidence · plan 011 (TypeScript client) · ADR-P08 (canonical CBOR prerequisite) · ADR-RW-001 ("same surface, opposite corner") · the Township workload definitions (W0–W4).</p>
+  <p style="margin-top:10px;font-family:var(--mono);font-size:12px;letter-spacing:.1em">LATTICE · PD-003 · JULY 2026 — THE SHED WORKS WITHOUT THE TOWN.</p>
+</footer>
+
+</div>
+</body>
+</html>
