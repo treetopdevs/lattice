@@ -151,7 +151,11 @@ defmodule LatticeCore.LiveOpsTest do
       assert {:ok, _pid} = Supervisor.restart_child(supervisor, Lattice.CapStore)
     end
 
-    assert is_map(Lattice.LiveOps.snapshot())
+    assert %{caps: %{}, active_caps: %{}} = Lattice.CapStore.snapshot()
+
+    assert %{id: ^observe_cap, status: "revoked"} =
+             Lattice.LiveOps.snapshot().caps
+             |> Enum.find(&(&1.id == observe_cap))
   end
 
   defp connect_role(role) do
