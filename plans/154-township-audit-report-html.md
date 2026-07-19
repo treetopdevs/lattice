@@ -90,7 +90,8 @@ Relevant files:
 
 Repo conventions that apply:
 
-- All Elixir code is `mix format`-clean; `mix verify` enforces formatting + full tests.
+- All Elixir code is `~/.asdf/shims/mix format`-clean; `~/.asdf/shims/mix verify`
+  enforces formatting + full tests.
 - Quarantine reason atoms rendered to humans today are shown verbatim (e.g.
   `not_holder` at `instrument_live.html.heex:416`); this plan adds a plain-English
   gloss beside — never instead of — the exact atom.
@@ -277,7 +278,7 @@ this plan's files.
 
 Covered by Step 4 (six named cases). Structural pattern:
 `apps/lattice_core/test/township/audit_bundle_test.exs`. Full-suite regression via
-`mix verify`.
+`PATH="$HOME/.asdf/installs/erlang/28.3.1/bin:$HOME/.asdf/installs/elixir/1.19.5-otp-28/bin:$PATH" ~/.asdf/shims/mix verify`.
 
 ## Done criteria
 

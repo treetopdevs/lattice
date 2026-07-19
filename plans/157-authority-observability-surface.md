@@ -301,7 +301,8 @@ Machine-checkable. ALL must hold:
 - [ ] `~/.asdf/shims/mix test apps/lattice_core/test/township/` exits 0 with zero modified existing assertions (`git diff --stat` on existing test files shows additions only)
 - [ ] `git diff apps/lattice_core/lib/lattice/authority.ex` contains no `-` lines on existing code (pure addition)
 - [ ] Vector regeneration produces no diff
-- [ ] `~/.asdf/shims/mix verify`, `mix check`, and township_web sobelow all exit 0
+- [ ] `PATH="$HOME/.asdf/installs/erlang/28.3.1/bin:$HOME/.asdf/installs/elixir/1.19.5-otp-28/bin:$PATH" ~/.asdf/shims/mix verify`,
+      the corresponding `~/.asdf/shims/mix check`, and township_web sobelow all exit 0
 - [ ] `git status` shows no files outside the in-scope list
 - [ ] `plans/README.md` status row for 157 updated
 

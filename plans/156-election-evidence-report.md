@@ -236,7 +236,8 @@ a bundle, get a verified projection) and, for close evidence, the fixture from
 ## Test plan
 
 Steps 3's six named cases; regression via the untouched election suite
-(`mix test apps/lattice_core/test/township/`) and `mix verify`. Structural patterns:
+(`PATH="$HOME/.asdf/installs/erlang/28.3.1/bin:$HOME/.asdf/installs/elixir/1.19.5-otp-28/bin:$PATH" ~/.asdf/shims/mix test apps/lattice_core/test/township/`)
+and the corresponding `~/.asdf/shims/mix verify`. Structural patterns:
 `election_offline_bundle_test.exs` (fixtures), `audit_bundle_test.exs` (report-style
 assertions, if plan 154 landed).
 

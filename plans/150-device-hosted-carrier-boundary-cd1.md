@@ -196,7 +196,9 @@ authenticated pulls and Sim/read-model equality, as in Plan 127.
    harness; wire it as a hard step in the packaged macOS CI job.
 5. DOCS RED/GREEN: CD1 track section, plan index row, build-map and status updates retaining
    every TLS/mobile/availability/W4 non-claim above.
-6. VERIFY: focused suites, full `npm run app:convergence`, OTP 28 `mix verify`/`mix check`,
+6. VERIFY: focused suites, full `npm run app:convergence`,
+   `PATH="$HOME/.asdf/installs/erlang/28.3.1/bin:$HOME/.asdf/installs/elixir/1.19.5-otp-28/bin:$PATH" ~/.asdf/shims/mix verify`,
+   the corresponding `~/.asdf/shims/mix check`,
    both Sobelow boundaries, xref baseline, formatting/diff checks, and hosted three-job green
    at the exact implementation tip.
 7. REVIEW: written-plan, per-seam RED/GREEN, packaged, docs, and release-diff reviews with

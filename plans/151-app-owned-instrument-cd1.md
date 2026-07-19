@@ -160,8 +160,9 @@ Planned at commit `ba4d4eff` on `codex/township-build-map`.
 4. STORYLINE RED/GREEN: the packaged two-identity no-Phoenix W0-W3 smoke with mid-storyline
    server restart, wired as a hard CI step through the Plan 143 harness.
 5. DOCS RED/GREEN: CD1 track, index row, build map, non-claims.
-6. VERIFY: focused suites, both typechecks, full `npm run app:convergence`, OTP 28
-   `mix verify`/`mix check`, Sobelow boundaries, xref baseline, formatting/diff, hosted
+6. VERIFY: focused suites, both typechecks, full `npm run app:convergence`,
+   `PATH="$HOME/.asdf/installs/erlang/28.3.1/bin:$HOME/.asdf/installs/elixir/1.19.5-otp-28/bin:$PATH" ~/.asdf/shims/mix verify`,
+   the corresponding `~/.asdf/shims/mix check`, Sobelow boundaries, xref baseline, formatting/diff, hosted
    three-job green at the exact tip.
 7. REVIEW: written-plan, per-seam, packaged, docs, and release-diff reviews with no
    unresolved P0-P2 finding.
