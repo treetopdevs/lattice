@@ -265,7 +265,7 @@ defmodule Lattice.Carrier.Wire do
   end
 
   defp encode_delegation(%Delegation{} = delegation) do
-    %{
+    frame = %{
       "id" => delegation.id,
       "replica" => delegation.replica,
       "issuer" => Base.encode64(delegation.issuer),
@@ -276,6 +276,13 @@ defmodule Lattice.Carrier.Wire do
       "live" => delegation.live,
       "sig" => Base.encode64(delegation.sig)
     }
+
+    # Plan 149: the lease rides the wire only when set, so every unleased
+    # delegation frame keeps its existing shape byte-for-byte.
+    case delegation.expires_epoch do
+      nil -> frame
+      epoch -> Map.put(frame, "expires_epoch", epoch)
+    end
   end
 
   defp decode_delegation(
@@ -297,7 +304,8 @@ defmodule Lattice.Carrier.Wire do
          {:ok, audience} <- Base.decode64(audience_b64),
          {:ok, sig} <- Base.decode64(sig_b64),
          {:ok, ops} <- existing_atoms(ops),
-         {:ok, roles} <- existing_atoms(roles) do
+         {:ok, roles} <- existing_atoms(roles),
+         {:ok, expires_epoch} <- decode_expires_epoch(Map.get(frame, "expires_epoch")) do
       {:ok,
        %Delegation{
          id: id,
@@ -308,12 +316,17 @@ defmodule Lattice.Carrier.Wire do
          ops: MapSet.new(ops),
          roles: MapSet.new(roles),
          live: live,
-         sig: sig
+         sig: sig,
+         expires_epoch: expires_epoch
        }}
     else
       _ -> {:error, :malformed_term}
     end
   end
+
+  defp decode_expires_epoch(nil), do: {:ok, nil}
+  defp decode_expires_epoch(epoch) when is_integer(epoch) and epoch >= 0, do: {:ok, epoch}
+  defp decode_expires_epoch(_), do: {:error, :malformed_term}
 
   defp decode_delegation(_), do: {:error, :malformed_term}
 

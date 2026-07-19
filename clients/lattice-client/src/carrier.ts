@@ -149,6 +149,8 @@ export interface CarrierDelegation {
   roles: string[];
   live: boolean;
   sig: string;
+  /** Plan 149 lease — on the wire only when set. */
+  expires_epoch?: number;
 }
 
 export function carrierDelegationsFromFrames(frames: readonly CarrierOpFrame[]): CarrierDelegation[] {
@@ -1144,6 +1146,18 @@ function payloadFromBody(
           authority: { type: "revoke", delegationId },
         };
       }
+      case "beacon": {
+        // Plan 149: retain the epoch as evidence even when malformed — a
+        // non-integer epoch quarantines :stale_beacon in the oracle, so the
+        // decode must not throw before the reducer can reach that verdict.
+        const epochTerm = body.values[1];
+        const epoch =
+          typeof epochTerm === "number" && Number.isSafeInteger(epochTerm) ? epochTerm : null;
+        return {
+          ...neutralPayload(`beacon ${epoch ?? "malformed"}`),
+          authority: { type: "beacon", epoch },
+        };
+      }
     }
   }
 
@@ -1237,6 +1251,9 @@ function delegationEvidence(
     roles: [...delegation.roles],
     live: delegation.live,
     sig: delegation.sig,
+    ...(delegation.expires_epoch === undefined
+      ? {}
+      : { expiresEpoch: delegation.expires_epoch }),
   };
 }
 

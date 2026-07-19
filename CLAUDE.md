@@ -158,9 +158,13 @@ Use these real signatures — do not invent parallel APIs:
   (mutually exclusive); `command :name, [:args], do: [{field, mutation}]`; mutations are
   `{:write, v} | {:add, e} | {:remove, e} | {:append, v} | {:delete, id}` (absolute, never
   relative); `ephemeral` never logs; `succession :role, to:, after: {:dormant_ticks, n}`.
-- `Lattice.Sim`: `new/4`, `create_replica/2` (`policies:`), `grant/4` (`ops:`), `transfer/5`,
-  `succeed/4`, `request/4`, `command/5`, `partition/3`, `heal/3`, `sync_all/1`, `state/2`,
-  `log/2`, `holder/3`, `identity/2`, `quarantined/3` (returns `false` or `{true, reason}`).
+- `Lattice.Sim`: `new/4`, `create_replica/2` (`policies:`), `grant/4` (`ops:`, and plan 149's
+  `expires_epoch:` lease), `transfer/5` (also takes `expires_epoch:`), `succeed/4`, `request/4`,
+  `command/5`, `beacon/3` (root-signed `{:beacon, epoch}` logical tick), `partition/3`, `heal/3`,
+  `sync_all/1`, `state/2`, `log/2`, `holder/3`, `identity/2`, `quarantined/3` (returns `false`
+  or `{true, reason}`). Lease lapse quarantines `:lease_expired`; invalid beacons quarantine
+  `:unauthorized_beacon` / `:stale_beacon`. A leased delegation hashes/signs the
+  `lattice-delegation-v3` canonical arm; unleased delegations keep v2 bytes verbatim.
 - `Lattice.Log`: `dump/2`, `restore/1`, `op_ids/1`, `frontier/1`, `topo_ops/1`.
 - `Lattice.state/2`, `Lattice.state_at/3` for materialization and time travel.
 

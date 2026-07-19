@@ -88,6 +88,11 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_capability_revoked_causal(),
       township_capability_revoked_chain(),
       township_revoke_unauthorized(),
+      township_lease_valid_causal(),
+      township_lease_expired(),
+      township_lease_expired_chain(),
+      township_lease_renewed(),
+      township_beacon_unauthorized(),
       township_causal_list_partition(),
       township_partial_log_lww(),
       toolshed_custody_consent(),
@@ -1496,6 +1501,164 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       "revokeOperationId" => bad_revoke.id,
       "targetOperationId" => target.id,
       "honoredPost" => honored_post
+    })
+  end
+
+  # --- Plan 149 lease vectors (V6) -----------------------------------------
+
+  defp township_lease_valid_causal do
+    sim =
+      Sim.new(Matter, "replica:matter:lease-valid-causal", ["clerk", "resident"],
+        seed: "township:lease-valid-causal"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, delegation} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 3)
+    sim = Sim.sync_all(sim)
+
+    {sim, early} = Sim.command(sim, "resident", :post, ["within the lease"], cap: delegation.id)
+    sim = Sim.sync_all(sim)
+
+    {sim, _beacon} = Sim.beacon(sim, "clerk", 4)
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    assert_authority_honored!(log, early.id)
+
+    capability_scenario("township_lease_valid_causal", sim, log, %{
+      "case" => "lease_valid_causal",
+      "honoredOperationId" => early.id
+    })
+  end
+
+  defp township_lease_expired do
+    sim =
+      Sim.new(Matter, "replica:matter:lease-expired", ["clerk", "resident"],
+        seed: "township:lease-expired"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, delegation} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 3)
+    sim = Sim.sync_all(sim)
+    sim = Sim.partition(sim, "clerk", "resident")
+
+    {sim, concurrent} =
+      Sim.command(sim, "resident", :post, ["concurrent with the beacon"], cap: delegation.id)
+
+    {sim, _beacon} = Sim.beacon(sim, "clerk", 4)
+    sim = sim |> Sim.heal("clerk", "resident") |> Sim.sync_all()
+
+    {sim, later} =
+      Sim.command(sim, "resident", :post, ["causally after the beacon"], cap: delegation.id)
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    assert_authority_reason!(log, concurrent.id, :lease_expired)
+    assert_authority_reason!(log, later.id, :lease_expired)
+    assert_post_absent!(log, "concurrent with the beacon")
+
+    capability_scenario("township_lease_expired", sim, log, %{
+      "case" => "lease_expired",
+      "concurrentOperationId" => concurrent.id,
+      "afterOperationId" => later.id
+    })
+  end
+
+  defp township_lease_expired_chain do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:lease-expired-chain",
+        ["clerk", "resident", "neighbor"],
+        seed: "township:lease-expired-chain"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, _parent} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 3)
+    sim = Sim.sync_all(sim)
+    {sim, child} = Sim.grant(sim, "resident", "neighbor", ops: [:post], expires_epoch: 3)
+    sim = Sim.sync_all(sim)
+
+    {sim, _beacon} = Sim.beacon(sim, "clerk", 4)
+    sim = Sim.sync_all(sim)
+
+    {sim, late} = Sim.command(sim, "neighbor", :post, ["late via the chain"], cap: child.id)
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    assert_authority_reason!(log, late.id, :lease_expired)
+
+    capability_scenario("township_lease_expired_chain", sim, log, %{
+      "case" => "lease_expired_chain",
+      "expiredOperationId" => late.id
+    })
+  end
+
+  defp township_lease_renewed do
+    sim =
+      Sim.new(Matter, "replica:matter:lease-renewed", ["clerk", "resident"],
+        seed: "township:lease-renewed"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, old} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 3)
+    sim = Sim.sync_all(sim)
+    {sim, _beacon} = Sim.beacon(sim, "clerk", 4)
+    sim = Sim.sync_all(sim)
+
+    {sim, dead} = Sim.command(sim, "resident", :post, ["via the lapsed cap"], cap: old.id)
+    sim = Sim.sync_all(sim)
+
+    {sim, renewed} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 9)
+    sim = Sim.sync_all(sim)
+
+    {sim, alive} = Sim.command(sim, "resident", :post, ["via the renewed cap"], cap: renewed.id)
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    assert_authority_reason!(log, dead.id, :lease_expired)
+    assert_authority_honored!(log, alive.id)
+
+    capability_scenario("township_lease_renewed", sim, log, %{
+      "case" => "lease_renewed",
+      "expiredOperationId" => dead.id,
+      "renewedOperationId" => alive.id
+    })
+  end
+
+  defp township_beacon_unauthorized do
+    sim =
+      Sim.new(Matter, "replica:matter:beacon-unauthorized", ["clerk", "resident"],
+        seed: "township:beacon-unauthorized"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, delegation} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 3)
+    sim = Sim.sync_all(sim)
+
+    # A non-root beacon and a non-monotonic root beacon: both quarantine, and
+    # neither confers a lapse — the leased post afterwards stays honored.
+    {sim, forged} = Sim.beacon(sim, "resident", 9)
+    sim = Sim.sync_all(sim)
+    {sim, _first} = Sim.beacon(sim, "clerk", 2)
+    sim = Sim.sync_all(sim)
+    {sim, stale} = Sim.beacon(sim, "clerk", 2)
+    sim = Sim.sync_all(sim)
+
+    {sim, post} = Sim.command(sim, "resident", :post, ["still leased"], cap: delegation.id)
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    assert_authority_reason!(log, forged.id, :unauthorized_beacon)
+    assert_authority_reason!(log, stale.id, :stale_beacon)
+    assert_authority_honored!(log, post.id)
+
+    capability_scenario("township_beacon_unauthorized", sim, log, %{
+      "case" => "beacon_unauthorized",
+      "unauthorizedBeaconOperationId" => forged.id,
+      "staleBeaconOperationId" => stale.id,
+      "honoredOperationId" => post.id
     })
   end
 
