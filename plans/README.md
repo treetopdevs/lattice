@@ -197,6 +197,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 155 | Instrument renders computed evidence: authority ledger panel + replay frame holders/state | P1 | S–M | — (before 157) | TODO (direction round 2026-07-18) |
 | 156 | Election evidence report: projection + close evidence + the 12-scope non-claim manifest | P2 | M | — (154 rec. for style) | TODO (direction round 2026-07-18) |
 | 157 | Public `Authority.observe/2` (role chronology, leases, beacon frontier) + instrument panel | P2 | M–L | 155 | TODO (direction round 2026-07-18) |
+| 158 | Real-device beta POC program map: shared carrier/distribution foundation, then Township, Toolshed, Treehouse | **P0** | XL | 029, 037, 128, 132, 141, 142 | TODO (execution map ready; LiveOps/CapStore prerequisite is DONE) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
