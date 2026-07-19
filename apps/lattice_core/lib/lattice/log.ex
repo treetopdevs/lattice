@@ -201,8 +201,40 @@ defmodule Lattice.Log do
   @doc "Serialize the whole log deterministically (ops + structural quarantine) to disk."
   @spec dump(t(), Path.t()) :: :ok | {:error, term()}
   def dump(%__MODULE__{} = log, path) do
-    File.write(path, :erlang.term_to_binary({:lattice_log_dump_v1, log}, [:deterministic]))
+    File.write(
+      path,
+      :erlang.term_to_binary({:lattice_log_dump_v1, downgrade_structs(log)}, [:deterministic])
+    )
   end
+
+  # The dump-side mirror of `upgrade_structs/1`: a nil-lease delegation dumps in
+  # the pre-149 nine-key shape verbatim, so lease-free logs keep byte-identical
+  # dump artifacts (and dump ∘ restore is the identity on old dumps). Only a
+  # delegation that actually carries a lease serializes the new key.
+  defp downgrade_structs(%__MODULE__{ops: ops} = log) do
+    %{log | ops: Map.new(ops, fn {id, op} -> {id, downgrade_op(op)} end)}
+  end
+
+  defp downgrade_op(%Op{body: body} = op), do: %{op | body: downgrade_body(body)}
+
+  defp downgrade_body({:genesis, delegation, policies}),
+    do: {:genesis, downgrade_delegation(delegation), policies}
+
+  defp downgrade_body({:grant, delegation}), do: {:grant, downgrade_delegation(delegation)}
+
+  defp downgrade_body({:transfer, role, delegation, tick}),
+    do: {:transfer, role, downgrade_delegation(delegation), tick}
+
+  defp downgrade_body({:succeed, role, delegation, proof}),
+    do: {:succeed, role, downgrade_delegation(delegation), proof}
+
+  defp downgrade_body(body), do: body
+
+  defp downgrade_delegation(%Lattice.Authority.Delegation{expires_epoch: nil} = delegation) do
+    Map.delete(delegation, :expires_epoch)
+  end
+
+  defp downgrade_delegation(other), do: other
 
   @doc "Restore a log previously written with `dump/2`."
   @spec restore(Path.t()) :: {:ok, t()} | {:error, term()}
@@ -210,7 +242,7 @@ defmodule Lattice.Log do
     with {:ok, bin} <- File.read(path),
          {:ok, term} <- safe_binary_to_term(bin),
          {:lattice_log_dump_v1, %__MODULE__{} = log} <- term do
-      {:ok, log}
+      {:ok, upgrade_structs(log)}
     else
       {:error, _} = err -> err
       _ -> {:error, :corrupt_dump}
@@ -224,4 +256,34 @@ defmodule Lattice.Log do
   rescue
     _ -> {:error, :unsafe_dump}
   end
+
+  # A dump written before a struct gained a field carries maps missing that key
+  # (e.g. `Delegation.expires_epoch`, plan 149). Rebuilding through `struct/2`
+  # fills new keys with their defaults without touching any persisted value, so
+  # an old dump restores to exactly the delegation a nil-lease `new/4` builds
+  # today — same bytes, same id, same signature.
+  defp upgrade_structs(%__MODULE__{ops: ops} = log) do
+    %{log | ops: Map.new(ops, fn {id, op} -> {id, upgrade_op(op)} end)}
+  end
+
+  defp upgrade_op(%Op{body: body} = op), do: %{op | body: upgrade_body(body)}
+
+  defp upgrade_body({:genesis, delegation, policies}),
+    do: {:genesis, upgrade_delegation(delegation), policies}
+
+  defp upgrade_body({:grant, delegation}), do: {:grant, upgrade_delegation(delegation)}
+
+  defp upgrade_body({:transfer, role, delegation, tick}),
+    do: {:transfer, role, upgrade_delegation(delegation), tick}
+
+  defp upgrade_body({:succeed, role, delegation, proof}),
+    do: {:succeed, role, upgrade_delegation(delegation), proof}
+
+  defp upgrade_body(body), do: body
+
+  defp upgrade_delegation(%{__struct__: Lattice.Authority.Delegation} = delegation) do
+    struct(Lattice.Authority.Delegation, Map.delete(delegation, :__struct__))
+  end
+
+  defp upgrade_delegation(other), do: other
 end

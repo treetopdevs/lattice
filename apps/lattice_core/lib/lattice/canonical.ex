@@ -31,6 +31,7 @@ defmodule Lattice.Canonical do
   @suite "lattice-cbor-v1"
   @op_tag "lattice-op-v2"
   @delegation_tag "lattice-delegation-v2"
+  @delegation_v3_tag "lattice-delegation-v3"
   @uint64_max 18_446_744_073_709_551_615
   @atom_tag 60_000
   @tuple_tag 60_001
@@ -63,7 +64,16 @@ defmodule Lattice.Canonical do
 
   @spec delegation_payload(Lattice.Authority.Delegation.t()) :: binary()
   def delegation_payload(%Lattice.Authority.Delegation{} = d) do
-    delegation_bytes(d.replica, d.issuer, d.audience, d.parent_id, d.ops, d.roles, d.live)
+    delegation_bytes(
+      d.replica,
+      d.issuer,
+      d.audience,
+      d.parent_id,
+      d.ops,
+      d.roles,
+      d.live,
+      Map.get(d, :expires_epoch)
+    )
   end
 
   @spec delegation_bytes(
@@ -85,6 +95,41 @@ defmodule Lattice.Canonical do
       Enum.sort(ops),
       Enum.sort(roles),
       live
+    ])
+  end
+
+  @doc """
+  Delegation bytes with an optional lease (plan 149). A `nil` lease delegates to
+  the 7-arity v2 arm, so every unleased delegation keeps its existing bytes,
+  id, and signature verbatim; a set `expires_epoch` emits the
+  `lattice-delegation-v3` tag with the epoch as the final element.
+  """
+  @spec delegation_bytes(
+          String.t(),
+          Lattice.Identity.pubkey(),
+          Lattice.Identity.pubkey(),
+          String.t() | nil,
+          Enumerable.t(),
+          Enumerable.t(),
+          boolean(),
+          non_neg_integer() | nil
+        ) :: binary()
+  def delegation_bytes(replica, issuer, audience, parent_id, ops, roles, live, nil) do
+    delegation_bytes(replica, issuer, audience, parent_id, ops, roles, live)
+  end
+
+  def delegation_bytes(replica, issuer, audience, parent_id, ops, roles, live, expires_epoch)
+      when is_integer(expires_epoch) and expires_epoch >= 0 do
+    term([
+      @delegation_v3_tag,
+      replica,
+      issuer,
+      audience,
+      parent_id,
+      Enum.sort(ops),
+      Enum.sort(roles),
+      live,
+      expires_epoch
     ])
   end
 

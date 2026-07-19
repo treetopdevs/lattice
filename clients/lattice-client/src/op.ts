@@ -23,6 +23,8 @@ export interface AuthorityDelegationEvidence {
   live: boolean;
   /** Embedded delegation signature retained from carrier evidence when available. */
   sig?: string;
+  /** Plan 149 lease — present only on leased (v3-encoded) delegations. */
+  expiresEpoch?: number;
 }
 
 /** Legacy author-asserted tick policy retained for characterized POC compatibility. */
@@ -114,7 +116,8 @@ export type AuthorityEvidence =
       proof: SuccessionProofEvidence;
     }
   | { type: "revoke"; delegationId: string }
-  | { type: "heartbeat"; role: string; atTick: number };
+  | { type: "heartbeat"; role: string; atTick: number }
+  | { type: "beacon"; epoch: number | null };
 
 export interface Op {
   /** Content-address id from Elixir. In Tier A this is an opaque handle. */

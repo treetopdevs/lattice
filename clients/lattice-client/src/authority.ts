@@ -47,6 +47,11 @@ export interface AuthorityRootEvidence {
   pubkey: string;
 }
 
+export interface EffectiveBeaconEvidence {
+  opId: string;
+  epoch: number;
+}
+
 export interface EffectiveRevokeEvidence {
   opId: string;
   delegationId: string;
@@ -56,6 +61,8 @@ export interface AuthoritySecurityProjection {
   delegations: ReadonlyMap<string, AuthorityDelegationRecord>;
   root: AuthorityRootEvidence | null;
   effectiveRevokes: readonly EffectiveRevokeEvidence[];
+  /** Plan 149: valid (root-authored, ancestry-monotonic) epoch beacons. */
+  validBeacons: readonly EffectiveBeaconEvidence[];
 }
 
 export interface RecoveryPolicyProjection {
@@ -146,10 +153,18 @@ export function analyzeAuthority(
     delegations,
     root,
   );
+  const { validBeacons, invalidBeacons } = collectBeacons(
+    visible,
+    byId as Map<string, Op>,
+    root,
+  );
   const states = new Map<string, RoleState>();
   const honoredWrites = new Set<string>();
   const quarantineReasons = delegationQuarantineReasons(delegations);
   for (const [opId, reason] of unauthorizedRevokes) {
+    quarantineReasons.set(opId, reason);
+  }
+  for (const [opId, reason] of invalidBeacons) {
     quarantineReasons.set(opId, reason);
   }
   const quarantinedWrites = new Set<string>(quarantineReasons.keys());
@@ -187,6 +202,9 @@ export function analyzeAuthority(
     }
 
     const evidence = op.authority;
+    if (evidence.type === "beacon") {
+      throw new Error(`beacon ${op.id} cannot write authority role ${op.field}`);
+    }
     if (evidence.type === "revoke") {
       throw new Error(`revoke ${op.id} cannot write authority role ${op.field}`);
     }
@@ -229,7 +247,7 @@ export function analyzeAuthority(
     quarantineReasons,
     acquiresByRole,
     recoveryPoliciesByRole,
-    security: { delegations, root, effectiveRevokes },
+    security: { delegations, root, effectiveRevokes, validBeacons },
   };
 }
 
@@ -369,7 +387,10 @@ function refusedReview(
 
 function honoredAcquire(
   op: Op,
-  evidence: Exclude<AuthorityEvidence, { type: "heartbeat" } | { type: "revoke" }>,
+  evidence: Exclude<
+    AuthorityEvidence,
+    { type: "heartbeat" } | { type: "revoke" } | { type: "beacon" }
+  >,
   holder: string,
 ): HonoredAcquire {
   const acquire: HonoredAcquire = {
@@ -401,7 +422,13 @@ function authorityWriteHonored(
   policies: ReadonlyMap<string, SuccessionPolicyEvidence>,
   byId: ReadonlyMap<string, Op>,
 ): boolean {
-  if (evidence.type === "heartbeat" || evidence.type === "revoke") return false;
+  if (
+    evidence.type === "heartbeat" ||
+    evidence.type === "revoke" ||
+    evidence.type === "beacon"
+  ) {
+    return false;
+  }
 
   const delegation = evidence.delegation;
   if (
@@ -825,7 +852,8 @@ function collectDelegations(
     if (
       evidence === undefined ||
       evidence.type === "heartbeat" ||
-      evidence.type === "revoke"
+      evidence.type === "revoke" ||
+      evidence.type === "beacon"
     ) {
       continue;
     }
@@ -1027,6 +1055,49 @@ function collectRevokes(
   return { effectiveRevokes, unauthorizedRevokes };
 }
 
+// Plan 149: beacons in topo order — valid iff root-authored with an integer
+// epoch strictly greater than every valid beacon epoch in the op's causal
+// ancestry; violators quarantine (:unauthorized_beacon / :stale_beacon) and
+// confer no lapse. Mirrors Lattice.Authority.collect_beacons/3.
+function collectBeacons(
+  visible: readonly Op[],
+  byId: Map<string, Op>,
+  root: AuthorityRootEvidence | null,
+  ancCache = new Map<string, Set<string>>(),
+): {
+  validBeacons: EffectiveBeaconEvidence[];
+  invalidBeacons: Map<string, string>;
+} {
+  const validBeacons: EffectiveBeaconEvidence[] = [];
+  const invalidBeacons = new Map<string, string>();
+
+  for (const op of visible) {
+    const evidence = op.authority;
+    if (evidence?.type !== "beacon") continue;
+
+    const anc = ancestors(op.id, byId, ancCache);
+    let priorMax = -1;
+    for (const beacon of validBeacons) {
+      if (anc.has(beacon.opId) && beacon.epoch > priorMax) priorMax = beacon.epoch;
+    }
+
+    if (op.author !== root?.realm) {
+      invalidBeacons.set(op.id, "unauthorized_beacon");
+    } else if (
+      evidence.epoch === null ||
+      !Number.isSafeInteger(evidence.epoch) ||
+      evidence.epoch < 0 ||
+      evidence.epoch <= priorMax
+    ) {
+      invalidBeacons.set(op.id, "stale_beacon");
+    } else {
+      validBeacons.push({ opId: op.id, epoch: evidence.epoch });
+    }
+  }
+
+  return { validBeacons, invalidBeacons };
+}
+
 function delegationQuarantineReasons(
   delegations: ReadonlyMap<string, AuthorityDelegationRecord>,
 ): Map<string, string> {
@@ -1056,8 +1127,21 @@ function delegationAttenuates(
     child.replica === parent.replica &&
     subset(child.ops, parent.ops) &&
     subset(child.roles, parent.roles) &&
-    (!child.live || parent.live)
+    (!child.live || parent.live) &&
+    expiryWithin(child, parent)
   );
+}
+
+// Plan 149: undefined = unbounded. An unbounded parent accepts anything; a
+// leased parent accepts only a child leased at or before its own expiry —
+// otherwise delegation launders the lease away.
+function expiryWithin(
+  child: AuthorityDelegationEvidence,
+  parent: AuthorityDelegationEvidence,
+): boolean {
+  if (parent.expiresEpoch === undefined) return true;
+  if (child.expiresEpoch === undefined) return false;
+  return child.expiresEpoch <= parent.expiresEpoch;
 }
 
 function delegationSelfConsistent(delegation: AuthorityDelegationEvidence): boolean {
@@ -1072,6 +1156,9 @@ function delegationSelfConsistent(delegation: AuthorityDelegationEvidence): bool
       ops: delegation.ops,
       roles: delegation.roles,
       live: delegation.live,
+      ...(delegation.expiresEpoch === undefined
+        ? {}
+        : { expires_epoch: delegation.expiresEpoch }),
     });
 
     return (

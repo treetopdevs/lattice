@@ -59,6 +59,8 @@ export interface CarrierDelegationCore {
   ops: readonly string[];
   roles: readonly string[];
   live: boolean;
+  /** Plan 149 lease — present only on leased (v3) delegations. */
+  expires_epoch?: number;
 }
 
 export interface AuthorCarrierDelegationInput {
@@ -88,6 +90,7 @@ const mapsetTag = 60_002;
 const delegationTermTag = 60_003;
 const opTag = "lattice-op-v2";
 const delegationPayloadTag = "lattice-delegation-v2";
+const delegationV3PayloadTag = "lattice-delegation-v3";
 const witnessedRecoveryPolicyDomain = "lattice-recovery-policy-v1";
 const witnessedSuccessionClaimDomain = "lattice-succession-witness-v1";
 const witnessedSuccessionArtifactDomain = "lattice-succession-witness-artifact-v1";
@@ -157,8 +160,9 @@ export async function authorCarrierOp(input: AuthorCarrierOpInput): Promise<Carr
 }
 
 export function canonicalBytesForCarrierDelegation(delegation: CarrierDelegationCore): Uint8Array {
-  return encodeArray([
-    encodeBinaryString(delegationPayloadTag),
+  const expiresEpoch = delegation.expires_epoch;
+  const leased = expiresEpoch !== undefined;
+  const shared = [
     encodeBinaryString(delegation.replica),
     encodeBytes(base64ToBytes(delegation.issuer)),
     encodeBytes(base64ToBytes(delegation.audience)),
@@ -166,6 +170,18 @@ export function canonicalBytesForCarrierDelegation(delegation: CarrierDelegation
     encodeArray(uniqueSorted(delegation.ops).map(encodeAtom)),
     encodeArray(uniqueSorted(delegation.roles).map(encodeAtom)),
     bytes(delegation.live ? 0xf5 : 0xf4),
+  ];
+
+  // Plan 149: unleased delegations keep the v2 bytes verbatim; a lease selects
+  // the v3 tag with the epoch as the final element — mirroring
+  // Lattice.Canonical.delegation_bytes/8.
+  if (!leased) {
+    return encodeArray([encodeBinaryString(delegationPayloadTag), ...shared]);
+  }
+  return encodeArray([
+    encodeBinaryString(delegationV3PayloadTag),
+    ...shared,
+    major(0, BigInt(expiresEpoch)),
   ]);
 }
 

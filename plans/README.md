@@ -189,6 +189,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 146 | Witnessed succession witness artifact with protected governance presence (toward G1) | P1 | L | 140, 141, 143, 145, 147, 148 | IN PROGRESS (Seams 1-9 hosted green; Seam 9 closed at run `29661339348`; Seam 10 packaged ceremony next) |
 | 147 | Port capability/revocation validation into TS reduction (close the F1 decision gap) | **P0** | L | 140, 141 | DONE |
 | 148 | Valid-genesis holder/policy projection parity (F2 prerequisite) | **P0** | S | 145, 147 | DONE |
+| 149 | Delegation leases via epoch beacons (`expires_epoch`, `{:beacon, epoch}`, `:lease_expired`) | P1 | L | 144–148 | IN PROGRESS — steps 1–7 green on `pd003/toolshed` (V1–V7, V9 local); hosted closure + merge pending |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

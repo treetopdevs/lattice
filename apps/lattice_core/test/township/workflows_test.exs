@@ -58,6 +58,40 @@ defmodule Township.WorkflowsTest do
     refute "intruder" in Sim.state(sim, "resident").members
   end
 
+  # ------------------------------------------------------------------ V8 (plan 149)
+  test "V8 — a leased clerk grant lapses identically across a partition/heal" do
+    sim = town(["clerk", "resident"])
+
+    {sim, _genesis} =
+      Sim.create_replica(sim, "clerk",
+        policies: %{clerk: %{successor: "resident", dormant_ticks: 3}}
+      )
+
+    {sim, deleg} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 2)
+    sim = Sim.sync_all(sim)
+
+    # While authorized, the resident posts — honored, and it stays honored.
+    {sim, early} = Sim.command(sim, "resident", :post, ["posted within the lease"], cap: deleg.id)
+    sim = Sim.sync_all(sim)
+
+    # The resident goes offline; the root beacons past the lease meanwhile.
+    sim = Sim.partition(sim, "clerk", "resident")
+    {sim, _beacon} = Sim.beacon(sim, "clerk", 3)
+    {sim, late} = Sim.command(sim, "resident", :post, ["posted after lapse"], cap: deleg.id)
+
+    sim = sim |> Sim.heal("clerk", "resident") |> Sim.sync_all()
+
+    # ASSERT (property d): both realms reach the identical lease verdicts.
+    assert Sim.quarantined(sim, "clerk", early.id) == false
+    assert Sim.quarantined(sim, "resident", early.id) == false
+    assert {true, :lease_expired} = Sim.quarantined(sim, "clerk", late.id)
+    assert {true, :lease_expired} = Sim.quarantined(sim, "resident", late.id)
+
+    assert Sim.state(sim, "clerk") == Sim.state(sim, "resident")
+    assert "posted within the lease" in Sim.state(sim, "clerk").posts
+    refute "posted after lapse" in Sim.state(sim, "clerk").posts
+  end
+
   # ------------------------------------------------------------------ W1
   test "W1 — durable deliberation: partition + heal converges the summary" do
     sim = town(["clerk", "resident"])

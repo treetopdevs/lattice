@@ -15,6 +15,8 @@ defmodule Lattice.Authority do
       role after the holder has been dormant past the threshold
     * `{:revoke, delegation_id}`         — revoke a delegation (and citations of it)
     * `{:heartbeat, role, at_tick}`      — holder liveness signal (resets dormancy)
+    * `{:beacon, epoch}`                 — root-signed logical tick (plan 149); leases
+      lapse when a valid beacon passes their `expires_epoch`
 
   ## Rules enforced
 
@@ -33,6 +35,13 @@ defmodule Lattice.Authority do
     * **Revocation authority**: a revoke op is honored only from the delegation
       issuer or replica root; other revoke ops are quarantined as
       `:unauthorized_revoke` and do not revoke the delegation.
+    * **Delegation leases** (plan 149): a delegation may carry `expires_epoch`; an
+      op citing a chain with a lapsed lease — a valid beacon with a greater epoch
+      exists that the op is not causally before — is quarantined `:lease_expired`.
+      Beacons are honored only from the replica root and only strictly monotonic
+      in their causal ancestry; violators quarantine as `:unauthorized_beacon` /
+      `:stale_beacon` and confer no lapse. Renewal is a fresh delegation with a
+      later lease, never an in-place mutation.
 
   Quarantined ops stay in the log and are reported in `audit` (design invariant 4).
   """
@@ -194,7 +203,37 @@ defmodule Lattice.Authority do
 
     case Map.fetch(delegations, delegation_id) do
       {:ok, %{deleg: %Delegation{} = d}} ->
-        validate_delegation(d, delegations, commitment, genesis_ids) == :ok
+        validate_delegation(d, delegations, commitment, genesis_ids) == :ok and
+          not expired?(log, delegation_id)
+
+      _ ->
+        false
+    end
+  end
+
+  @doc """
+  True if a valid beacon past a lease on `delegation_id`'s chain exists in
+  `log` (plan 149, live-path check beside `revoked?/2`). Everything already on
+  the log is "now" for the live path, so this ignores causal position — it asks
+  whether the lease has lapsed at the current frontier.
+  """
+  @spec expired?(Log.t(), String.t()) :: boolean()
+  def expired?(%Log{} = log, delegation_id) do
+    ordered = Log.topo_ops(log)
+    ancestors = Dag.all_ancestors(Log.ops(log))
+    {commitment, genesis_ids} = deleg_context(log, ordered)
+    delegations = collect_delegations(ordered)
+    deleg_valid = validate_delegations(delegations, commitment, genesis_ids)
+    root = resolve_root(ordered, delegations, deleg_valid, commitment)
+    {beacons, _beacon_q} = collect_beacons(ordered, ancestors, root)
+
+    case Map.fetch(delegations, delegation_id) do
+      {:ok, %{deleg: %Delegation{} = d}} ->
+        d
+        |> delegation_chain_links(delegations)
+        |> Enum.any?(fn %Delegation{expires_epoch: expires} ->
+          expires != nil and Enum.any?(beacons, fn %{epoch: epoch} -> epoch > expires end)
+        end)
 
       _ ->
         false
@@ -229,6 +268,7 @@ defmodule Lattice.Authority do
     policies = collect_policies(ordered, delegations, deleg_valid)
     root = resolve_root(ordered, delegations, deleg_valid, commitment)
     revokes = collect_revokes(ordered, delegations, root)
+    {beacons, beacon_q} = collect_beacons(ordered, ancestors, root)
 
     invalid_deleg = invalid_delegation_ops(delegations, deleg_valid)
     tombstone_q = unauthorized_tombstones(ordered, root)
@@ -257,7 +297,16 @@ defmodule Lattice.Authority do
     role_audit = Enum.flat_map(timelines, fn {_r, tl} -> tl.audit end)
 
     {cmd_q, cmd_audit, requests} =
-      validate_commands(module, ordered, ancestors, delegations, deleg_valid, revokes, timelines)
+      validate_commands(
+        module,
+        ordered,
+        ancestors,
+        delegations,
+        deleg_valid,
+        revokes,
+        beacons,
+        timelines
+      )
 
     reasons =
       invalid_deleg
@@ -265,6 +314,7 @@ defmodule Lattice.Authority do
       |> Map.merge(cmd_q)
       |> Map.merge(tombstone_q)
       |> Map.merge(revoke_q)
+      |> Map.merge(beacon_q)
 
     %{
       quarantine: reasons |> Map.keys() |> MapSet.new(),
@@ -471,6 +521,48 @@ defmodule Lattice.Authority do
     end
   end
 
+  # --- Epoch beacons (plan 149) -------------------------------------------
+
+  # A beacon `{:beacon, epoch}` is a root-signed logical tick ON the log. Valid
+  # iff root-authored with a non-negative integer epoch strictly greater than
+  # every valid beacon epoch in the op's causal ancestry (processed in topo
+  # order, so validity is itself a pure causal judgment). Violators quarantine
+  # (:unauthorized_beacon / :stale_beacon) for audit and confer no lapse —
+  # mirroring unauthorized_revokes and the Round-3 forged-authority handling.
+  defp collect_beacons(ordered, ancestors, root) do
+    {valid, quarantine} =
+      Enum.reduce(ordered, {%{}, %{}}, fn op, {valid, q} ->
+        case op do
+          %Op{kind: :authority, body: {:beacon, epoch}} ->
+            classify_beacon(op, epoch, valid, q, ancestors, root)
+
+          _ ->
+            {valid, q}
+        end
+      end)
+
+    {Enum.map(valid, fn {op_id, epoch} -> %{op_id: op_id, epoch: epoch} end), quarantine}
+  end
+
+  defp classify_beacon(op, epoch, valid, q, ancestors, root) do
+    anc = Map.get(ancestors, op.id, MapSet.new())
+
+    prior_max =
+      valid
+      |> Enum.filter(fn {op_id, _epoch} -> MapSet.member?(anc, op_id) end)
+      |> Enum.map(&elem(&1, 1))
+      |> Enum.max(fn -> -1 end)
+
+    cond do
+      op.author != root -> {valid, Map.put(q, op.id, :unauthorized_beacon)}
+      not valid_epoch?(epoch, prior_max) -> {valid, Map.put(q, op.id, :stale_beacon)}
+      true -> {Map.put(valid, op.id, epoch), q}
+    end
+  end
+
+  defp valid_epoch?(epoch, prior_max),
+    do: is_integer(epoch) and epoch >= 0 and epoch > prior_max
+
   defp valid_delegation_intro?(delegations, %Delegation{id: id}, op_id) do
     case Map.fetch(delegations, id) do
       {:ok, %{op_ids: op_ids}} -> op_id in op_ids
@@ -671,7 +763,16 @@ defmodule Lattice.Authority do
 
   # --- Command validation -------------------------------------------------
 
-  defp validate_commands(module, ordered, ancestors, delegations, deleg_valid, revokes, timelines) do
+  defp validate_commands(
+         module,
+         ordered,
+         ancestors,
+         delegations,
+         deleg_valid,
+         revokes,
+         beacons,
+         timelines
+       ) do
     Enum.reduce(ordered, {%{}, [], []}, fn op, {quarantine, audit, requests} ->
       cond do
         op.kind == :inbox and match?({:request, _ref, _payload}, op.body) ->
@@ -688,6 +789,7 @@ defmodule Lattice.Authority do
                  delegations,
                  deleg_valid,
                  revokes,
+                 beacons,
                  timelines
                ) do
             :ok ->
@@ -704,7 +806,16 @@ defmodule Lattice.Authority do
     end)
   end
 
-  defp validate_command(module, op, ancestors, delegations, deleg_valid, revokes, timelines) do
+  defp validate_command(
+         module,
+         op,
+         ancestors,
+         delegations,
+         deleg_valid,
+         revokes,
+         beacons,
+         timelines
+       ) do
     {cmd, args} =
       case op.body do
         {cmd, args} when is_list(args) -> {cmd, args}
@@ -722,7 +833,16 @@ defmodule Lattice.Authority do
             roles_needed = mutation_roles(module, mutations)
 
             with :ok <-
-                   cap_ok(op, cmd, delegations, deleg_valid, ancestors, revokes, roles_needed),
+                   cap_ok(
+                     op,
+                     cmd,
+                     delegations,
+                     deleg_valid,
+                     ancestors,
+                     revokes,
+                     beacons,
+                     roles_needed
+                   ),
                  :ok <- authority_ok(op, roles_needed, ancestors, timelines) do
               # ADR 0007: the replica's op-aware validity conjunct (e.g. the
               # co-signed consent check), judged over the op and its causal past.
@@ -758,7 +878,10 @@ defmodule Lattice.Authority do
     |> Enum.uniq()
   end
 
-  defp cap_ok(op, cmd, delegations, deleg_valid, ancestors, revokes, roles_needed) do
+  # Clause order is pinned (visibility → grant scope → revoked → expired) so an
+  # op that is both revoked and lease-expired reports :revoked_capability on
+  # every realm — reason precedence must not flap across replicas.
+  defp cap_ok(op, cmd, delegations, deleg_valid, ancestors, revokes, beacons, roles_needed) do
     anc = Map.get(ancestors, op.id, MapSet.new())
 
     case Map.fetch(delegations, op.cap) do
@@ -773,6 +896,7 @@ defmodule Lattice.Authority do
           not Enum.any?(deleg_ops, &MapSet.member?(anc, &1)) -> {:error, :capability_not_visible}
           not Enum.all?(roles_needed, &MapSet.member?(d.roles, &1)) -> {:error, :role_not_granted}
           revoked_as_of?(op, d, delegations, revokes, ancestors) -> {:error, :revoked_capability}
+          expired_as_of?(op, d, delegations, beacons, ancestors) -> {:error, :lease_expired}
           true -> :ok
         end
 
@@ -792,6 +916,23 @@ defmodule Lattice.Authority do
     end)
   end
 
+  # A delegation is lease-expired-as-of op O (plan 149) if some link of its
+  # chain carries expires_epoch E and a valid beacon with epoch > E exists that
+  # O is not causally before — character-for-character the revoked_as_of? shape,
+  # so the convergence and replay-stability arguments are the ones already
+  # proven for revocation.
+  defp expired_as_of?(op, deleg, delegations, beacons, ancestors) do
+    deleg
+    |> delegation_chain_links(delegations)
+    |> Enum.any?(fn %Delegation{expires_epoch: expires} ->
+      expires != nil and
+        Enum.any?(beacons, fn %{epoch: epoch, op_id: beacon_op} ->
+          epoch > expires and
+            not MapSet.member?(Map.get(ancestors, beacon_op, MapSet.new()), op.id)
+        end)
+    end)
+  end
+
   defp delegation_chain_ids(%Delegation{} = d, delegations) do
     case d.parent_id && Map.fetch(delegations, d.parent_id) do
       {:ok, %{deleg: %Delegation{} = parent}} ->
@@ -799,6 +940,16 @@ defmodule Lattice.Authority do
 
       _ ->
         [d.id]
+    end
+  end
+
+  defp delegation_chain_links(%Delegation{} = d, delegations) do
+    case d.parent_id && Map.fetch(delegations, d.parent_id) do
+      {:ok, %{deleg: %Delegation{} = parent}} ->
+        [d | delegation_chain_links(parent, delegations)]
+
+      _ ->
+        [d]
     end
   end
 

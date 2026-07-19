@@ -54,6 +54,9 @@ export function capabilityQuarantine(
   if (revokedAsOf(op, delegation.id, byId, security, ancCache)) {
     return { quarantined: true, reason: "revoked_capability" };
   }
+  if (expiredAsOf(op, delegation.id, byId, security, ancCache)) {
+    return { quarantined: true, reason: "lease_expired" };
+  }
 
   return { quarantined: false };
 }
@@ -87,4 +90,28 @@ function delegationChainIds(
   }
 
   return ids;
+}
+
+// Plan 149: op O is lease-expired iff some chain link carries expiresEpoch E
+// and a valid beacon with epoch > E exists that O is not causally before —
+// character-for-character the revokedAsOf shape, mirroring
+// Lattice.Authority.expired_as_of?/5.
+function expiredAsOf(
+  op: Op,
+  delegationId: string,
+  byId: Map<string, Op>,
+  security: AuthoritySecurityProjection,
+  ancCache: Map<string, Set<string>>,
+): boolean {
+  for (const id of delegationChainIds(delegationId, security)) {
+    const expires = security.delegations.get(id)?.delegation?.expiresEpoch;
+    if (expires === undefined) continue;
+    const lapsed = security.validBeacons.some(
+      (beacon) =>
+        beacon.epoch > expires && !ancestors(beacon.opId, byId, ancCache).has(op.id),
+    );
+    if (lapsed) return true;
+  }
+
+  return false;
 }
