@@ -1,0 +1,6 @@
+# Rust build artifacts for the calibration NIF. Cargo.toml/Cargo.lock/src ARE
+# tracked (the NIF source is part of the harness); only build output is not.
+/native/townshipbench_groupops/target/
+
+# Rustler-compiled shared library (rebuilt by `mix compile`).
+/priv/native/

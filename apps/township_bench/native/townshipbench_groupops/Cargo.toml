@@ -1,0 +1,19 @@
+[package]
+name = "townshipbench_groupops"
+# Verify-only calibration NIF for the G13 cost harness. Times real ristretto255
+# group operations (curve25519-dalek) so TownshipBench.GroupOps can report
+# :measured unit costs for the pinned profile chide-es-r255-v1
+# (docs/research/m4_g2_profile_pin.md §2: single curve, no pairings).
+# It performs NO protocol work: no keys, no ballots, no proofs — timing only.
+version = "0.1.0"
+edition = "2021"
+authors = []
+publish = false
+
+[lib]
+name = "townshipbench_groupops"
+crate-type = ["cdylib"]
+
+[dependencies]
+rustler = "0.38"
+curve25519-dalek = "4.1.3"
