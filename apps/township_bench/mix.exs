@@ -4,8 +4,9 @@ defmodule TownshipBench.MixProject do
   # G13 measurement harness.
   #
   # PURPOSE: price the dominant cost of the pinned coercion-resistance construction
-  # (encrypted-sorting CHide, candidate profile — see zk-m4-election-path-findings.html
-  # §07/§08) against its REFERENCE ALGORITHMS in single-process simulation, at
+  # (encrypted-sorting CHide, pinned profile — see
+  # docs/research/m4_g2_profile_pin.md §2) against its REFERENCE ALGORITHMS in
+  # single-process simulation, at
   # 100 / 1,000 / 10,000 participants, BEFORE any production role runner exists.
   #
   # This app makes NO coercion-resistance claim. It flips no SecurityProfile claim.
