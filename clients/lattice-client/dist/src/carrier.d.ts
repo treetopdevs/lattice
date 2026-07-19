@@ -106,6 +106,8 @@ export interface CarrierDelegation {
     roles: string[];
     live: boolean;
     sig: string;
+    /** Plan 149 lease — on the wire only when set. */
+    expires_epoch?: number;
 }
 export declare function carrierDelegationsFromFrames(frames: readonly CarrierOpFrame[]): CarrierDelegation[];
 interface WebSocketConstructor {

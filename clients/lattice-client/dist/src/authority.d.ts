@@ -23,6 +23,10 @@ export interface AuthorityRootEvidence {
     realm: string;
     pubkey: string;
 }
+export interface EffectiveBeaconEvidence {
+    opId: string;
+    epoch: number;
+}
 export interface EffectiveRevokeEvidence {
     opId: string;
     delegationId: string;
@@ -31,6 +35,8 @@ export interface AuthoritySecurityProjection {
     delegations: ReadonlyMap<string, AuthorityDelegationRecord>;
     root: AuthorityRootEvidence | null;
     effectiveRevokes: readonly EffectiveRevokeEvidence[];
+    /** Plan 149: valid (root-authored, ancestry-monotonic) epoch beacons. */
+    validBeacons: readonly EffectiveBeaconEvidence[];
 }
 export interface RecoveryPolicyProjection {
     policy: WitnessedSuccessionPolicyEvidence;

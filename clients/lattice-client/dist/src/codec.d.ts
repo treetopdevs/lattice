@@ -36,6 +36,8 @@ export interface CarrierDelegationCore {
     ops: readonly string[];
     roles: readonly string[];
     live: boolean;
+    /** Plan 149 lease — present only on leased (v3) delegations. */
+    expires_epoch?: number;
 }
 export interface AuthorCarrierDelegationInput {
     replica: string;
