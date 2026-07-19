@@ -771,6 +771,17 @@ function payloadFromBody(kind, body, realmByPubkey) {
                     authority: { type: "revoke", delegationId },
                 };
             }
+            case "beacon": {
+                // Plan 149: retain the epoch as evidence even when malformed — a
+                // non-integer epoch quarantines :stale_beacon in the oracle, so the
+                // decode must not throw before the reducer can reach that verdict.
+                const epochTerm = body.values[1];
+                const epoch = typeof epochTerm === "number" && Number.isSafeInteger(epochTerm) ? epochTerm : null;
+                return {
+                    ...neutralPayload(`beacon ${epoch ?? "malformed"}`),
+                    authority: { type: "beacon", epoch },
+                };
+            }
         }
     }
     return neutralPayload(kind);
@@ -853,6 +864,9 @@ function delegationEvidence(delegation, realmByPubkey) {
         roles: [...delegation.roles],
         live: delegation.live,
         sig: delegation.sig,
+        ...(delegation.expires_epoch === undefined
+            ? {}
+            : { expiresEpoch: delegation.expires_epoch }),
     };
 }
 function successionPolicies(term, realmByPubkey) {

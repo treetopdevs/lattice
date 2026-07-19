@@ -46,7 +46,10 @@ defmodule TownshipWeb.CarrierProjection do
   @impl GenServer
   def init(opts) do
     # Carrier wire decoding permits only existing atoms, so load the trusted schema before pulling.
+    # SuccessionCertificate owns the witnessed-recovery policy vocabulary
+    # (:witnesses, :threshold, :version, :successor) carried by valid-genesis ops.
     Code.ensure_loaded!(Authority)
+    Code.ensure_loaded!(Authority.SuccessionCertificate)
     Code.ensure_loaded!(Matter)
 
     replica = Keyword.fetch!(opts, :replica)
