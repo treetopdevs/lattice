@@ -72,6 +72,13 @@ defmodule TownshipWeb.InstrumentLiveTest do
 
     assert has_element?(view, "#threads-panel [data-post]", "resident: posted while offline")
     assert has_element?(view, "#roles-panel [data-reason='not_holder']")
+    assert has_element?(view, "#roles-panel [data-audit-ledger]")
+
+    assert has_element?(
+             view,
+             "#roles-panel [data-ledger-event='command_quarantine'][data-ledger-reason='not_holder']",
+             "command_quarantine not_holder"
+           )
 
     assert has_element?(
              view,
@@ -105,6 +112,10 @@ defmodule TownshipWeb.InstrumentLiveTest do
 
     assert replay["schema"] == "township-causal-replay-v1"
     assert length(replay["frames"]) == 13
+
+    first_frame = hd(replay["frames"])
+    assert is_map(first_frame["holders"])
+    assert is_list(first_frame["frontier"])
 
     assert has_element?(
              view,
@@ -175,6 +186,7 @@ defmodule TownshipWeb.InstrumentLiveTest do
     assert rendered =~ payload.read_model.threads.title
     assert rendered =~ "Projection matter"
     assert rendered =~ "clerk: live update"
+    assert has_element?(view, "#roles-panel [data-audit-ledger]", "No quarantine events.")
     assert has_element?(view, "#causal-replay-island")
     refute rendered =~ "township-audit-bundle-v1"
     refute rendered =~ "df911bb13013abef"
