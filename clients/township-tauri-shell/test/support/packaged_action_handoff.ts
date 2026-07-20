@@ -95,6 +95,17 @@ export function createPackagedActionHandoffHarness(
     timeoutMs: number,
   ): Promise<void> => waitFor(label, timeoutMs, predicate, diagnostics);
 
+  const townshipLaunchServicesHandlerPath = async (): Promise<string> => {
+    const script = [
+      "import AppKit",
+      'if let url = NSWorkspace.shared.urlForApplication(toOpen: URL(string: "township://action")!) {',
+      "  print(url.path)",
+      "}",
+    ].join("\n");
+
+    return (await runHarnessCapture("swift", ["-e", script])).trim().replace(/\/+$/, "");
+  };
+
   const runningAppBundleProcessIds = async (): Promise<number[]> =>
     appBundleProcessIds(
       await runHarnessCapture("ps", ["-axww", "-o", "pid=,command="]),
@@ -136,17 +147,15 @@ export function createPackagedActionHandoffHarness(
 
     async registerLaunchServicesHandler(): Promise<void> {
       if (!existsSync(launchServicesRegister)) throw new Error(`expected lsregister at ${launchServicesRegister}`);
+      const registeredPath = await townshipLaunchServicesHandlerPath();
+      if (registeredPath !== "" && registeredPath !== options.appBundlePath.replace(/\/+$/, "")) {
+        await runHarnessProcess(launchServicesRegister, ["-u", registeredPath]);
+      }
       await runHarnessProcess(launchServicesRegister, ["-f", options.appBundlePath]);
     },
 
     async assertLaunchServicesRoutesTownshipSchemeToBundle(): Promise<void> {
-      const script = [
-        "import AppKit",
-        'if let url = NSWorkspace.shared.urlForApplication(toOpen: URL(string: "township://action")!) {',
-        "  print(url.path)",
-        "}",
-      ].join("\n");
-      const resolvedPath = (await runHarnessCapture("swift", ["-e", script])).trim().replace(/\/+$/, "");
+      const resolvedPath = await townshipLaunchServicesHandlerPath();
       if (resolvedPath !== options.appBundlePath.replace(/\/+$/, "")) {
         throw new Error(`township URL routes to ${resolvedPath}, expected ${options.appBundlePath}`);
       }
