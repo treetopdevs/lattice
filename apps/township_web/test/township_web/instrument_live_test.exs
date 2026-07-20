@@ -161,7 +161,6 @@ defmodule TownshipWeb.InstrumentLiveTest do
     refute has_element?(view, "#causal-replay-island")
 
     assert {:ok, {:fresh, payload}} = CarrierProjection.refresh(projection)
-    rendered = render(view)
 
     assert has_element?(
              view,
@@ -182,6 +181,8 @@ defmodule TownshipWeb.InstrumentLiveTest do
              view,
              "#source-status[data-refresh-trigger='server_push'][data-feed-generation='4']"
            )
+
+    rendered = render(view)
 
     assert rendered =~ payload.read_model.threads.title
     assert rendered =~ "Projection matter"
