@@ -145,6 +145,44 @@ export const TownshipCausalReplay = {
                 { "data-replay-summary": "" },
                 frame.value.state.summary || "—",
               ),
+              h("span", { class: "field-label" }, "Holders at frame"),
+              h(
+                "dl",
+                { class: "holder-list" },
+                Object.entries(frame.value.holders || {})
+                  .sort(([left], [right]) => left.localeCompare(right))
+                  .map(([role, fingerprint]) =>
+                    h("div", { "data-replay-holder": role }, [
+                      h("dt", role),
+                      h("dd", fingerprint || "unheld"),
+                    ]),
+                  ),
+              ),
+              h("span", { class: "field-label" }, "State at frame"),
+              h("dl", { class: "holder-list" }, [
+                detail("Title", frame.value.state.title || "—", "data-replay-state-title"),
+                detail(
+                  "Members",
+                  (frame.value.state.members || []).length,
+                  "data-replay-members-count",
+                ),
+                detail(
+                  "Posts",
+                  (frame.value.state.posts || []).length,
+                  "data-replay-posts-count",
+                ),
+                detail(
+                  "Clerk locked",
+                  String(frame.value.state.clerk_locked),
+                  "data-replay-clerk-locked",
+                ),
+              ]),
+              h("span", { class: "field-label" }, "Frontier"),
+              h(
+                "div",
+                { "data-replay-frontier": "" },
+                (frame.value.frontier || []).map((id) => h("code", truncate(id, 12))),
+              ),
             ]),
             h("div", { class: "causal-replay__controls" }, [
               h(
