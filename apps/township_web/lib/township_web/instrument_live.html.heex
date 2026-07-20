@@ -420,20 +420,39 @@
 
           <div class="audit-ledger" data-audit-ledger>
             <p class="field-label">Authority ledger · ordered quarantine events</p>
+            <% audit_by_op = Map.new(@model.roles.audit, &{&1.op, &1})
+
+            ledger_entries =
+              @model.op_dag.nodes
+              |> Enum.filter(&(&1.status == "quarantined"))
+              |> Enum.map(fn node ->
+                audit_entry = audit_by_op[node.id]
+
+                %{
+                  event:
+                    if(audit_entry,
+                      do: Atom.to_string(audit_entry.event),
+                      else: "structural_quarantine"
+                    ),
+                  role: audit_entry && Map.get(audit_entry, :role),
+                  reason: node.reason,
+                  op: node.id
+                }
+              end) %>
             <ol>
               <li
-                :for={entry <- @model.roles.audit}
+                :for={entry <- ledger_entries}
                 class="audit-event"
-                data-ledger-event={Atom.to_string(entry.event)}
-                data-ledger-reason={Atom.to_string(entry.reason)}
+                data-ledger-event={entry.event}
+                data-ledger-reason={entry.reason}
               >
-                <span>{Atom.to_string(entry.event)}</span>
-                <span :if={Map.has_key?(entry, :role)}>{Atom.to_string(entry.role)}</span>
-                <span>{Atom.to_string(entry.reason)}</span>
+                <span>{entry.event}</span>
+                <span :if={entry.role}>{Atom.to_string(entry.role)}</span>
+                <span>{entry.reason}</span>
                 <code>{String.slice(entry.op, 0, 12)}</code>
               </li>
             </ol>
-            <p :if={@model.roles.audit == []} class="field-label">No quarantine events.</p>
+            <p :if={ledger_entries == []} class="field-label">No quarantine events.</p>
           </div>
         </section>
 
