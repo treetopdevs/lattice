@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": ["node"]
+  },
+  "include": [
+    "test/support/build_tauri_ios_device_key_reuse_probe.ts",
+    "test/tauri_ios_device_key_reuse_smoke.ts"
+  ]
+}

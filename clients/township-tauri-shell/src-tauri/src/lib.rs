@@ -1336,7 +1336,10 @@ fn log_probe_event(event: &str) {
 
 #[cfg(not(target_os = "android"))]
 fn log_probe_event(event: &str) {
-    println!("{TOWNSHIP_PROBE_LOG_TAG}: {event}");
+    println!(
+        "{TOWNSHIP_PROBE_LOG_TAG}: {event} process_id={}",
+        std::process::id()
+    );
 }
 
 #[cfg(feature = "township-dev-trace")]
