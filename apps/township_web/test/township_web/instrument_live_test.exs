@@ -72,6 +72,13 @@ defmodule TownshipWeb.InstrumentLiveTest do
 
     assert has_element?(view, "#threads-panel [data-post]", "resident: posted while offline")
     assert has_element?(view, "#roles-panel [data-reason='not_holder']")
+    assert has_element?(view, "#roles-panel [data-audit-ledger]")
+
+    assert has_element?(
+             view,
+             "#roles-panel [data-ledger-event='command_quarantine'][data-ledger-reason='not_holder']",
+             "command_quarantine not_holder"
+           )
 
     assert has_element?(
              view,
@@ -105,6 +112,10 @@ defmodule TownshipWeb.InstrumentLiveTest do
 
     assert replay["schema"] == "township-causal-replay-v1"
     assert length(replay["frames"]) == 13
+
+    first_frame = hd(replay["frames"])
+    assert is_map(first_frame["holders"])
+    assert is_list(first_frame["frontier"])
 
     assert has_element?(
              view,
@@ -150,7 +161,6 @@ defmodule TownshipWeb.InstrumentLiveTest do
     refute has_element?(view, "#causal-replay-island")
 
     assert {:ok, {:fresh, payload}} = CarrierProjection.refresh(projection)
-    rendered = render(view)
 
     assert has_element?(
              view,
@@ -172,12 +182,46 @@ defmodule TownshipWeb.InstrumentLiveTest do
              "#source-status[data-refresh-trigger='server_push'][data-feed-generation='4']"
            )
 
+    rendered = render(view)
+
     assert rendered =~ payload.read_model.threads.title
     assert rendered =~ "Projection matter"
     assert rendered =~ "clerk: live update"
+    assert has_element?(view, "#roles-panel [data-audit-ledger]", "No quarantine events.")
     assert has_element?(view, "#causal-replay-island")
     refute rendered =~ "township-audit-bundle-v1"
     refute rendered =~ "df911bb13013abef"
+  end
+
+  test "authority ledger includes structural quarantines omitted from authority audit", %{
+    conn: conn
+  } do
+    {peer_log, revoke_id} = structural_quarantine_log()
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         carrier: LiveCarrier,
+         connect_opts: [ops: Log.topo_ops(peer_log)],
+         replica: peer_log.replica,
+         peer_realm: "clerk",
+         pubsub: TownshipWeb.PubSub,
+         topic: "township:structural-ledger:#{System.unique_integer([:positive])}",
+         schedule: :manual}
+      )
+
+    put_projection_config(projection)
+    {:ok, view, _html} = live(conn, "/township")
+
+    assert {:ok, {:fresh, _payload}} = CarrierProjection.refresh(projection)
+
+    assert has_element?(
+             view,
+             "#roles-panel [data-ledger-event='structural_quarantine'][data-ledger-reason='unauthorized_revoke']",
+             "structural_quarantine unauthorized_revoke #{String.slice(revoke_id, 0, 12)}"
+           )
+
+    refute has_element?(view, "#roles-panel [data-audit-ledger]", "No quarantine events.")
   end
 
   test "fresh carrier state prepares one unsigned participant post without changing the model", %{
@@ -1227,6 +1271,24 @@ defmodule TownshipWeb.InstrumentLiveTest do
     {sim, _title} = Sim.command(sim, "clerk", :set_title, ["Projection matter"])
     {sim, _post} = Sim.command(sim, "clerk", :post, ["clerk: live update"])
     Sim.log(sim, "clerk")
+  end
+
+  defp structural_quarantine_log do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:structural-quarantine",
+        ["clerk", "resident"],
+        seed: "structural-quarantine"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, delegation} = Sim.grant(sim, "clerk", "resident", ops: [:post])
+    sim = Sim.sync_all(sim)
+    {sim, unauthorized_revoke} = Sim.revoke(sim, "resident", delegation.id)
+    sim = Sim.sync_all(sim)
+
+    {Sim.log(sim, "clerk"), unauthorized_revoke.id}
   end
 
   defp peer_status_logs do
