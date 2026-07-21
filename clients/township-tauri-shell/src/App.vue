@@ -210,6 +210,7 @@ type AcceptedIntentReview = Exclude<TownshipReviewableActionIntent, { v: 1 }>;
 const pendingActionIntentStatus = ref<ActionIntentStatus | null>(null);
 const activeActionIntentStatusSlot = ref<ActionIntentStatusSlot | null>(null);
 const witnessReview = shallowRef<WitnessedSuccessionReview | null>(null);
+const witnessReviewStatus = ref<ActionIntentStatus | null>(null);
 const storedWitnessArtifacts = shallowRef<TownshipStoredWitnessArtifact[]>([]);
 const selectedWitnessArtifactId = ref<string | null>(null);
 const witnessExportStatus = ref<ActionIntentStatus | null>(null);
@@ -1082,7 +1083,6 @@ function handleBlockedPairingDeepLink(blocked: TownshipPairingDeepLinkBlocked) {
 }
 
 function stageActionIntent(intent: TownshipReviewableActionIntent) {
-  if (intent.v === 7) witnessReview.value = null;
   pendingActionIntent.value = intent;
   setPendingActionIntentStatus({ ok: true, message: `${actionIntentLabel(intent)} ready for review.` });
 }
@@ -1119,7 +1119,10 @@ async function signAcceptedIntent(intent: AcceptedIntentReview, event?: Event) {
 
 function dismissAcceptedIntent(intent: AcceptedIntentReview, event?: Event) {
   actionIntentDescriptorForVersion(intent.v).dismiss(event);
-  if (intent.v === 7) witnessReview.value = null;
+  if (intent.v === 7) {
+    witnessReview.value = null;
+    witnessReviewStatus.value = null;
+  }
 }
 
 function reviewIntentBusy(intent: AcceptedIntentReview): boolean {
@@ -1138,21 +1141,22 @@ function clearActionIntents() {
   pendingActionIntent.value = null;
   pendingActionIntentStatus.value = null;
   witnessReview.value = null;
+  witnessReviewStatus.value = null;
   for (const descriptor of actionIntentDescriptors) descriptor.clear();
   activeActionIntentStatusSlot.value = null;
 }
 
 async function prepareAcceptedWitnessIntent(intent: ActionIntentForVersion<7>) {
   witnessReview.value = null;
+  witnessReviewStatus.value = null;
   const loaded = await loadTownshipWitnessReview({ replica: intent.replica });
   if (actionIntentDescriptorForSlot("witness").accepted()?.id !== intent.id) return;
   if (!loaded.ok) {
-    witnessExportStatus.value = { ok: false, message: loaded.message };
+    witnessReviewStatus.value = { ok: false, message: loaded.message };
     return;
   }
 
   witnessReview.value = loaded.review;
-  witnessExportStatus.value = null;
   await nextTick();
   await traceWitnessReviewDom(intent.id, loaded.review);
 }
@@ -2103,6 +2107,16 @@ function pairingDiscoveryAdvertFromMessage(value: unknown): TownshipPairingDisco
       @dismiss="dismissAcceptedIntent(intent, $event)"
     />
 
+    <p
+      v-if="witnessReviewStatus"
+      id="witness-review-status"
+      class="post-message"
+      :data-state="witnessReviewStatus.ok ? 'success' : 'author_failed'"
+      aria-live="polite"
+    >
+      {{ witnessReviewStatus.message }}
+    </p>
+
     <section
       v-if="selectedWitnessArtifact"
       id="participant-witness-artifact"
@@ -2113,6 +2127,21 @@ function pairingDiscoveryAdvertFromMessage(value: unknown): TownshipPairingDisco
         <p>Witness artifact ready to export</p>
         <span>{{ storedWitnessArtifacts.length }} retained on this device</span>
       </div>
+      <label for="witness-artifact-selection">Retained artifact</label>
+      <select
+        id="witness-artifact-selection"
+        v-model="selectedWitnessArtifactId"
+        aria-label="Retained witness artifact"
+        @change="witnessExportStatus = null"
+      >
+        <option
+          v-for="artifact in storedWitnessArtifacts"
+          :key="artifact.artifactId"
+          :value="artifact.artifactId"
+        >
+          {{ artifact.artifactId }}
+        </option>
+      </select>
       <p
         v-for="confirmation in witnessArtifactConfirmation"
         :key="confirmation"

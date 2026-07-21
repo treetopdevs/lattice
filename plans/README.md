@@ -186,7 +186,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 143 | Consolidate the versioned action ladder (pay down accretion) | P2 | L | 138 | DONE |
 | 144 | Succession tick-provenance boundary | P1 | S | 139, 140 | DONE |
 | 145 | Genesis-pinned witnessed succession recovery | P1 | L | 144 | DONE |
-| 146 | Witnessed succession witness artifact with protected governance presence (toward G1) | P1 | L | 140, 141, 143, 145, 147, 148 | IN PROGRESS (Seams 1-9 hosted green; Seam 9 closed at run `29661339348`; Seam 10 packaged ceremony next) |
+| 146 | Witnessed succession witness artifact with protected governance presence (toward G1) | P1 | L | 140, 141, 143, 145, 147, 148 | IN PROGRESS (Seam 10 automated choreography hosted green at run `29741409769`; local real-user-presence probe is blocked on macOS codesigning, then Seam 11 remains) |
 | 147 | Port capability/revocation validation into TS reduction (close the F1 decision gap) | **P0** | L | 140, 141 | DONE |
 | 148 | Valid-genesis holder/policy projection parity (F2 prerequisite) | **P0** | S | 145, 147 | DONE |
 | 149 | Delegation leases via epoch beacons (`expires_epoch`, `{:beacon, epoch}`, `:lease_expired`) | P1 | L | 144–148 | DONE — V1–V9 green; hosted flagship run `29667002069` (all three jobs) at implementation tip on `pd003/toolshed` |
@@ -194,7 +194,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 151 | App-owned instrument (Phoenix leaves the demo loop) | P1 | L | 134, 138, 139, 143, 147, 148 | TODO (proposed draft; CD1 track) |
 | 152 | Serverless two-device onboarding (discharges CD1) | P1 | L | 150, 151, 066-075, 094-100, 110-116 | BLOCKED (needs 150+151 and the §4a un-parking sign-off recorded in the plan) |
 | 154 | Self-contained HTML auditor report from the Township audit bundle (`mix lattice.township.report`) | P1 | M | — | TODO (direction round 2026-07-18) |
-| 155 | Instrument renders computed evidence: authority ledger panel + replay frame holders/state | P1 | S–M | — (before 157) | TODO (direction round 2026-07-18) |
+| 155 | Instrument renders computed evidence: authority ledger panel + replay frame holders/state | P1 | S–M | — (before 157) | DONE (PR #32; hosted run `29755770936` green across all three jobs) |
 | 156 | Election evidence report: projection + close evidence + the 12-scope non-claim manifest | P2 | M | — (154 rec. for style) | TODO (direction round 2026-07-18) |
 | 157 | Public `Authority.observe/2` (role chronology, leases, beacon frontier) + instrument panel | P2 | M–L | 155 | TODO (direction round 2026-07-18) |
 | 158 | Real-device beta POC program map: shared carrier/distribution foundation, then Township, Toolshed, Treehouse | **P0** | XL | 029, 037, 128, 132, 141, 142 | TODO (execution map ready; LiveOps/CapStore prerequisite is DONE) |

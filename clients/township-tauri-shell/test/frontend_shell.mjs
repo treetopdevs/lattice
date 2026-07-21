@@ -1292,3 +1292,33 @@ test("Vue source does not block smoke auto-sync on action availability hydration
   );
   assert.match(app, /actionAvailability\.value = await loadTownshipActionAvailability\(\)/);
 });
+
+test("witness review failures stay visible without invalidating an accepted review", () => {
+  const app = readText("src/App.vue");
+  const stageStart = app.indexOf("function stageActionIntent(");
+  const stageEnd = app.indexOf("\nfunction rejectActionIntent", stageStart);
+  const stage = app.slice(stageStart, stageEnd);
+  const prepare = asyncFunctionSource(app, "prepareAcceptedWitnessIntent");
+
+  assert.ok(stageStart > -1 && stageEnd > stageStart);
+  assert.doesNotMatch(stage, /witnessReview\.value = null/);
+  assert.match(app, /const witnessReviewStatus = ref<ActionIntentStatus \| null>\(null\)/);
+  assert.match(prepare, /witnessReviewStatus\.value = \{ ok: false, message: loaded\.message \}/);
+  assert.match(app, /v-if="witnessReviewStatus"/);
+  assert.match(app, /\{\{ witnessReviewStatus\.message \}\}/);
+});
+
+test("every retained witness artifact can be selected for explicit export", () => {
+  const app = readText("src/App.vue");
+  const panelStart = app.indexOf('id="participant-witness-artifact"');
+  const panelEnd = app.indexOf('<section class="compose-panel">', panelStart);
+  const panel = app.slice(panelStart, panelEnd);
+
+  assert.ok(panelStart > -1 && panelEnd > panelStart);
+  assert.match(panel, /<select[\s\S]*v-model="selectedWitnessArtifactId"/);
+  assert.match(panel, /@change="witnessExportStatus = null"/);
+  assert.match(panel, /v-for="artifact in storedWitnessArtifacts"/);
+  assert.match(panel, /:value="artifact\.artifactId"/);
+  assert.match(panel, /\{\{ artifact\.artifactId \}\}/);
+  assert.match(panel, /@click="exportSelectedWitnessArtifact"/);
+});
