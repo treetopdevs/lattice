@@ -2132,6 +2132,7 @@ function pairingDiscoveryAdvertFromMessage(value: unknown): TownshipPairingDisco
         id="witness-artifact-selection"
         v-model="selectedWitnessArtifactId"
         aria-label="Retained witness artifact"
+        @change="witnessExportStatus = null"
       >
         <option
           v-for="artifact in storedWitnessArtifacts"

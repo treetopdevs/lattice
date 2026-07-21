@@ -1316,6 +1316,7 @@ test("every retained witness artifact can be selected for explicit export", () =
 
   assert.ok(panelStart > -1 && panelEnd > panelStart);
   assert.match(panel, /<select[\s\S]*v-model="selectedWitnessArtifactId"/);
+  assert.match(panel, /@change="witnessExportStatus = null"/);
   assert.match(panel, /v-for="artifact in storedWitnessArtifacts"/);
   assert.match(panel, /:value="artifact\.artifactId"/);
   assert.match(panel, /\{\{ artifact\.artifactId \}\}/);
