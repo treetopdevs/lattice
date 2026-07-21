@@ -1310,10 +1310,14 @@ test("witness review failures stay visible without invalidating an accepted revi
 
 test("every retained witness artifact can be selected for explicit export", () => {
   const app = readText("src/App.vue");
+  const panelStart = app.indexOf('id="participant-witness-artifact"');
+  const panelEnd = app.indexOf('<section class="compose-panel">', panelStart);
+  const panel = app.slice(panelStart, panelEnd);
 
-  assert.match(app, /<select[\s\S]*v-model="selectedWitnessArtifactId"/);
-  assert.match(app, /v-for="artifact in storedWitnessArtifacts"/);
-  assert.match(app, /:value="artifact\.artifactId"/);
-  assert.match(app, /\{\{ artifact\.artifactId \}\}/);
-  assert.match(app, /@click="exportSelectedWitnessArtifact"/);
+  assert.ok(panelStart > -1 && panelEnd > panelStart);
+  assert.match(panel, /<select[\s\S]*v-model="selectedWitnessArtifactId"/);
+  assert.match(panel, /v-for="artifact in storedWitnessArtifacts"/);
+  assert.match(panel, /:value="artifact\.artifactId"/);
+  assert.match(panel, /\{\{ artifact\.artifactId \}\}/);
+  assert.match(panel, /@click="exportSelectedWitnessArtifact"/);
 });
