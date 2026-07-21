@@ -145,7 +145,9 @@ Execution starts from exact documentation tip `61a1a8685af4c119cc327eeee86800fbf
   witness order, policy id, claim payload digest, exact holder epoch/frontier, and unpinned-witness
   refusal. Focused Rust, TypeScript, BEAM, formatting, typecheck, and node-spike gates are green.
   Fresh Codex, Claude Opus, and Antigravity exact-worktree reviews found no unresolved P0-P2 issue.
-- Seam 10 is locally GREEN and awaits exact-tip hosted closure. `App.vue` now
+- Seam 10 choreography is closed at implementation tip `363ef2c914e0187f57ae881b38e6bf84bcb43f0e`.
+  Hosted run `29793243491` passed Unit + property, flagship artifact, and packaged macOS
+  convergence on branch `codex/wip-witness-ceremony-seam10`. `App.vue` now
   derives the witness review on Use (rendering byte-free `witness-review-dom` digests), signs
   through the existing descriptor into `submitTownshipWitnessArtifact`, renders a stored-artifact
   confirmation panel that rehydrates after relaunch (`witness-artifact-dom` digests), and exports
@@ -168,10 +170,11 @@ Execution starts from exact documentation tip `61a1a8685af4c119cc327eeee86800fbf
   entitlement wired into the macOS bundle config), not a defect in the Seam 6/10 implementation,
   which already passes every automated custody, refusal, and choreography gate under the injected
   test-presence and hosted-CI-only providers.
-- Plan 146 remains `IN PROGRESS`. Seam 10's exact-tip hosted closure and the local real-user-presence
-  probe (blocked on macOS codesigning, see above) are next, then Seam 11 hard-wires the ceremony into
-  package/workflow/app-convergence. No imported/assembled certificate or succession authority exists
-  yet.
+- Plan 146 remains `IN PROGRESS`. Seam 10's choreography has exact-tip hosted closure; the local
+  real-user-presence probe remains blocked on macOS codesigning (see above) and must still be
+  recorded before Seam 10 as a whole can close per the plan's Completion Gate. Seam 11 then
+  hard-wires the ceremony into package/workflow/app-convergence. No imported/assembled certificate
+  or succession authority exists yet.
 
 ## Objective
 

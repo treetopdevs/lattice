@@ -186,7 +186,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 143 | Consolidate the versioned action ladder (pay down accretion) | P2 | L | 138 | DONE |
 | 144 | Succession tick-provenance boundary | P1 | S | 139, 140 | DONE |
 | 145 | Genesis-pinned witnessed succession recovery | P1 | L | 144 | DONE |
-| 146 | Witnessed succession witness artifact with protected governance presence (toward G1) | P1 | L | 140, 141, 143, 145, 147, 148 | IN PROGRESS (Seams 1-9 hosted green at run `29661339348`; Seam 10 locally green, exact-tip hosted closure and macOS-codesigning-blocked real-prompt probe next) |
+| 146 | Witnessed succession witness artifact with protected governance presence (toward G1) | P1 | L | 140, 141, 143, 145, 147, 148 | IN PROGRESS (Seams 1-10 choreography hosted green at run `29793243491`; local real-user-presence probe blocked on macOS codesigning, Seam 11 next) |
 | 147 | Port capability/revocation validation into TS reduction (close the F1 decision gap) | **P0** | L | 140, 141 | DONE |
 | 148 | Valid-genesis holder/policy projection parity (F2 prerequisite) | **P0** | S | 145, 147 | DONE |
 | 149 | Delegation leases via epoch beacons (`expires_epoch`, `{:beacon, epoch}`, `:lease_expired`) | P1 | L | 144–148 | DONE — V1–V9 green; hosted flagship run `29667002069` (all three jobs) at implementation tip on `pd003/toolshed` |
