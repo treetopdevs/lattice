@@ -15,6 +15,8 @@
 
 ## Status
 
+- **Implementation status**: DONE — PR #32 merged at `949d13ab`; hosted run `29755770936`
+  passed Unit + property, flagship artifact, and packaged macOS convergence.
 - **Priority**: P1
 - **Effort**: S–M
 - **Risk**: LOW

@@ -145,10 +145,20 @@ Execution starts from exact documentation tip `61a1a8685af4c119cc327eeee86800fbf
   witness order, policy id, claim payload digest, exact holder epoch/frontier, and unpinned-witness
   refusal. Focused Rust, TypeScript, BEAM, formatting, typecheck, and node-spike gates are green.
   Fresh Codex, Claude Opus, and Antigravity exact-worktree reviews found no unresolved P0-P2 issue.
-- Plan 146 remains `IN PROGRESS`. Seam 10, the packaged ceremony, is next. No packaged
-  real-prompt evidence, imported/assembled certificate, live `App.vue` Use ->
-  Sign -> Export choreography, hard-wired packaged ceremony, or succession authority exists yet;
-  Seam 10 owns that live choreography.
+- Seam 10's automated packaged choreography is closed at implementation tip
+  `6b73ca9a8970c88ef19312a11a39d09687b67b7d`; hosted run `29741409769` passed Unit +
+  property, flagship artifact, and packaged macOS convergence before PR #33 merged. The app derives
+  the witness review on Use, signs through dedicated governance custody, retains and rehydrates the
+  artifact, exports exact stored bytes only through a trusted event, and independently verifies the
+  subthreshold artifact through BEAM.
+- A parallel local probe on `codex/wip-witness-ceremony-seam10` found the remaining manual
+  real-user-presence gate blocked by macOS codesigning: the ad-hoc-signed bundle has no team or
+  required data-protection Keychain entitlement, so the real provider fails closed before it can
+  display the prompt. That is a provisioning/evidence blocker, not automated choreography evidence.
+- Plan 146 remains `IN PROGRESS`. The local real-user-presence probe must be recorded after the
+  bundle is signed with the required entitlement, then Seam 11 must hard-wire the ceremony into the
+  package/workflow/app-convergence gate. No imported/assembled certificate or succession authority
+  exists yet.
 
 ## Objective
 
