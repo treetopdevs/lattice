@@ -936,7 +936,7 @@ function sameWitnessClaim(
   );
 }
 
-function witnessArtifactConfirmation(review: WitnessedSuccessionReview): string[] {
+export function witnessArtifactConfirmation(review: WitnessedSuccessionReview): string[] {
   return [
     `Replica: ${review.claim.replica}`,
     `Role: ${review.claim.role}`,

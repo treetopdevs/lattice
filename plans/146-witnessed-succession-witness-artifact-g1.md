@@ -145,10 +145,33 @@ Execution starts from exact documentation tip `61a1a8685af4c119cc327eeee86800fbf
   witness order, policy id, claim payload digest, exact holder epoch/frontier, and unpinned-witness
   refusal. Focused Rust, TypeScript, BEAM, formatting, typecheck, and node-spike gates are green.
   Fresh Codex, Claude Opus, and Antigravity exact-worktree reviews found no unresolved P0-P2 issue.
-- Plan 146 remains `IN PROGRESS`. Seam 10, the packaged ceremony, is next. No packaged
-  real-prompt evidence, imported/assembled certificate, live `App.vue` Use ->
-  Sign -> Export choreography, hard-wired packaged ceremony, or succession authority exists yet;
-  Seam 10 owns that live choreography.
+- Seam 10 is locally GREEN and awaits exact-tip hosted closure. `App.vue` now
+  derives the witness review on Use (rendering byte-free `witness-review-dom` digests), signs
+  through the existing descriptor into `submitTownshipWitnessArtifact`, renders a stored-artifact
+  confirmation panel that rehydrates after relaunch (`witness-artifact-dom` digests), and exports
+  the exact stored bytes to the system clipboard through a trusted button or the Cmd+Shift+E dev
+  shortcut, tracing `witness-artifact-export:succeeded`. The full 13-phase packaged smoke passes
+  locally: fixture, projection, inert ingress, derived review, exactly one presence-gated
+  governance signature persisting one artifact plus its index entry, zero authored ops/outbox/source
+  mutation, relaunch rehydration, trusted export with an unchanged carrier session, and independent
+  BEAM verification of both the restored source and the exported artifact reaching
+  `:insufficient_recovery_witnesses`. Full local `app:convergence` and `mix check` are green.
+  Two non-implementation findings surfaced while proving this locally: (1) `TownshipWeb.CarrierProjection`
+  needed `Code.ensure_loaded!(Authority.SuccessionCertificate)` before pulling, or a witnessed-policy
+  op fails carrier-wire decode in a freshly booted server VM (fixed, one line); (2) the local
+  packaged macOS real-user-presence probe cannot yet run on this machine — the packaged bundle is
+  only ad-hoc signed (`codesign -dvvv` shows `Signature=adhoc`, `TeamIdentifier=not set`, no
+  entitlements), and the real `kSecUseDataProtectionKeychain` provider fails closed with "a required
+  entitlement is not present" for both a bare native probe and the full packaged app. This blocks
+  only the one manual real-prompt observation the plan requires as positive platform evidence; it is
+  a codesigning/provisioning gap (a Developer ID certificate and Keychain-sharing/data-protection
+  entitlement wired into the macOS bundle config), not a defect in the Seam 6/10 implementation,
+  which already passes every automated custody, refusal, and choreography gate under the injected
+  test-presence and hosted-CI-only providers.
+- Plan 146 remains `IN PROGRESS`. Seam 10's exact-tip hosted closure and the local real-user-presence
+  probe (blocked on macOS codesigning, see above) are next, then Seam 11 hard-wires the ceremony into
+  package/workflow/app-convergence. No imported/assembled certificate or succession authority exists
+  yet.
 
 ## Objective
 

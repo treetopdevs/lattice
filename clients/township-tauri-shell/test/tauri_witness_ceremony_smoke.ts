@@ -437,6 +437,17 @@ try {
       JSON.stringify(trace.confirmationDigests) === JSON.stringify(expectedConfirmationDigests)
     );
   }, "relaunched stored witness-artifact confirmation UI", 60_000);
+  await waitFor(() => {
+    const trace = latestFeedDomTrace();
+    return trace?.phase === "fresh" && trace.opCount === String(oracle.source.opIds.length);
+  }, "relaunched fresh witness-source projection", 60_000);
+  // The reactive feed reconnects after relaunch; baseline the carrier-quiet
+  // export assertions only once session signing has stopped moving.
+  await waitFor(async () => {
+    const settled = traceLineCount(tracePath, "lattice_sign_carrier");
+    await delay(2_000);
+    return traceLineCount(tracePath, "lattice_sign_carrier") === settled;
+  }, "relaunched carrier session activity settled", 60_000);
   const kvAfterRelaunch = sortedEntries(readKvValues(kvPath));
 
   // Phase 11 — Cmd+Shift+E dev shortcut drives the same trusted export

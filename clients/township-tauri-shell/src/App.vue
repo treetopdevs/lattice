@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { isTauri } from "@tauri-apps/api/core";
-import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watchEffect } from "vue";
+import type { WitnessedSuccessionReview } from "@treetopdevs/lattice-client";
 import {
   createTownshipNativeWorkflow,
   createTownshipNativeStorage,
@@ -19,17 +20,23 @@ import {
   type TownshipNativeStatus,
 } from "./native_workflow";
 import {
+  exportTownshipWitnessArtifact,
   loadTownshipActionAvailability,
+  loadTownshipWitnessArtifacts,
+  loadTownshipWitnessReview,
   submitTownshipDelegation,
   submitTownshipRevocation,
   submitTownshipCommand,
   submitTownshipPost,
+  submitTownshipWitnessArtifact,
+  witnessArtifactConfirmation,
   type TownshipActionAvailability,
   type TownshipCommandName,
   type TownshipDelegationSubmission,
   type TownshipRevocationSubmission,
   type TownshipCommandSubmission,
   type TownshipPostSubmission,
+  type TownshipStoredWitnessArtifact,
 } from "./township_actions";
 import { townshipMatterOps, townshipPreviewFromOps } from "./township_preview";
 import {
@@ -197,6 +204,11 @@ const revokeStatus = ref<TownshipRevocationSubmission | null>(null);
 const revokeSubmitting = ref(false);
 const postDraft = ref("");
 const postStatus = ref<TownshipPostSubmission | null>(null);
+const witnessReview = shallowRef<WitnessedSuccessionReview | null>(null);
+const witnessReviewIntent = shallowRef<ActionIntentForVersion<7> | null>(null);
+const witnessReviewStatus = ref<ActionIntentStatus | null>(null);
+const storedWitnessArtifacts = shallowRef<TownshipStoredWitnessArtifact[]>([]);
+const witnessArtifactStatus = ref<ActionIntentStatus | null>(null);
 const pendingActionIntent = ref<TownshipReviewableActionIntent | null>(null);
 type ActionIntentStatusSlot = "pending" | ActionIntentSlot;
 type AcceptedIntentReview = Exclude<TownshipReviewableActionIntent, { v: 1 }>;
@@ -280,18 +292,32 @@ const actionIntentDescriptors = [
     version: 7,
     reviewOrder: 5,
     currentReplica: currentActionIntentReplica,
-    submit: async () => ({
-      ok: false,
-      message: "Witness signing is unavailable until verified recovery details are ready.",
-    }),
+    submit: submitAcceptedWitnessIntent,
     acceptMessage: () => "Witness recovery request held for local review.",
     dismissFallback: "Witness recovery request",
-    allowed: () => false,
+    successMessage: () => "Witness artifact signed and stored on this device.",
+    allowed: () => witnessReview.value !== null,
+    onAccept: (intent) => {
+      void deriveWitnessReviewForIntent(intent);
+    },
     onStatus: () => selectActionIntentStatus("witness"),
   }),
 ] as const;
 const postActionIntent = actionIntentDescriptorForSlot("post");
 const postSubmitting = postActionIntent.submitting;
+const witnessActionIntent = actionIntentDescriptorForSlot("witness");
+const latestStoredWitnessArtifact = computed(() => storedWitnessArtifacts.value.at(-1) ?? null);
+const latestWitnessConfirmationLines = computed(() => {
+  const artifact = latestStoredWitnessArtifact.value;
+  return artifact ? witnessArtifactConfirmation(artifact.review) : [];
+});
+watchEffect(() => {
+  if (witnessActionIntent.accepted() === null) {
+    witnessReview.value = null;
+    witnessReviewIntent.value = null;
+    witnessReviewStatus.value = null;
+  }
+});
 const revokeIntentSubmitting = actionIntentDescriptorForSlot("revoke").submitting;
 const actionIntentStatus = computed(() => statusForActionIntentSlot(activeActionIntentStatusSlot.value));
 const acceptedIntentReviews = computed<AcceptedIntentReview[]>(() => {
@@ -638,6 +664,136 @@ async function submitAcceptedRevokeIntent(intent: ActionIntentForVersion<6>) {
   return submission.ok ? { ok: true, message: "" } : { ok: false, message: submission.message };
 }
 
+async function deriveWitnessReviewForIntent(intent: ActionIntentForVersion<7>) {
+  witnessReview.value = null;
+  witnessReviewStatus.value = null;
+  witnessReviewIntent.value = intent;
+  const result = await loadTownshipWitnessReview({ replica: intent.replica });
+  if (appUnmounted || witnessReviewIntent.value !== intent) return;
+
+  if (!result.ok) {
+    witnessReviewStatus.value = { ok: false, message: result.message };
+    return;
+  }
+
+  witnessReview.value = result.review;
+  if (devTraceRuntime) {
+    void traceRenderedWitnessReview(intent).catch(() => {
+      void traceTownshipDevEvent("witness-review-dom-error").catch(() => {});
+    });
+  }
+}
+
+async function submitAcceptedWitnessIntent(intent: ActionIntentForVersion<7>) {
+  const review = witnessReview.value;
+  if (!review) {
+    return { ok: false, message: "Witness signing is unavailable until verified recovery details are ready." };
+  }
+
+  const result = await submitTownshipWitnessArtifact({ replica: intent.replica, priorReview: review });
+  if (!result.ok) return { ok: false, message: result.message };
+
+  witnessReview.value = null;
+  witnessReviewIntent.value = null;
+  await refreshStoredWitnessArtifacts();
+  return { ok: true, message: "Witness artifact signed and stored on this device." };
+}
+
+async function refreshStoredWitnessArtifacts() {
+  const loaded = await loadTownshipWitnessArtifacts();
+  if (appUnmounted) return;
+
+  if (!loaded.ok) {
+    storedWitnessArtifacts.value = [];
+    witnessArtifactStatus.value = { ok: false, message: loaded.message };
+    return;
+  }
+
+  storedWitnessArtifacts.value = loaded.artifacts;
+  if (devTraceRuntime && loaded.artifacts.length > 0) {
+    void traceRenderedWitnessArtifact().catch(() => {
+      void traceTownshipDevEvent("witness-artifact-dom-error").catch(() => {});
+    });
+  }
+}
+
+async function exportLatestWitnessArtifact(event: Event) {
+  const artifact = latestStoredWitnessArtifact.value;
+  if (!artifact) return;
+
+  const result = await exportTownshipWitnessArtifact({ artifactId: artifact.artifactId, event });
+  if (!result.ok) {
+    witnessArtifactStatus.value = { ok: false, message: result.message };
+    return;
+  }
+
+  try {
+    await writeWitnessExportClipboard(result.artifactJson);
+  } catch {
+    witnessArtifactStatus.value = { ok: false, message: "Export could not reach the system clipboard." };
+    return;
+  }
+
+  witnessArtifactStatus.value = {
+    ok: true,
+    message: `Artifact copied as ${result.fileName} for out-of-band delivery.`,
+  };
+  void traceTownshipDevEvent("witness-artifact-export:succeeded").catch(() => {});
+}
+
+async function writeWitnessExportClipboard(text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return;
+  } catch {
+    // WKWebView may withhold the async clipboard; fall through to the selection path.
+  }
+
+  const area = document.createElement("textarea");
+  area.value = text;
+  document.body.append(area);
+  area.select();
+  const copied = document.execCommand("copy");
+  area.remove();
+  if (!copied) throw new Error("clipboard write rejected");
+}
+
+async function traceRenderedWitnessReview(intent: ActionIntentForVersion<7>) {
+  await nextTick();
+  if (appUnmounted || witnessReviewIntent.value !== intent || witnessReview.value === null) return;
+
+  const lines = Array.from(
+    document.querySelectorAll("#participant-witness-request .incoming-action-text"),
+    (node) => node.textContent?.trim() ?? "",
+  );
+  if (lines.length === 0) return;
+  const detailDigests = await Promise.all(lines.map(digestTownshipTraceText));
+  if (appUnmounted || witnessReviewIntent.value !== intent) return;
+
+  await traceTownshipDevEvent(`witness-review-dom:${JSON.stringify({ intentId: intent.id, detailDigests })}`);
+}
+
+async function traceRenderedWitnessArtifact() {
+  await nextTick();
+  if (appUnmounted) return;
+
+  const panel = document.querySelector("#witness-artifact-panel");
+  if (!panel) return;
+  const lines = Array.from(
+    panel.querySelectorAll(".witness-confirmation-line"),
+    (node) => node.textContent?.trim() ?? "",
+  );
+  const confirmationDigests = await Promise.all(lines.map(digestTownshipTraceText));
+  if (appUnmounted) return;
+
+  const rendered = {
+    artifactId: panel.getAttribute("data-artifact-id"),
+    storedCount: Number(panel.getAttribute("data-stored-count")),
+    confirmationDigests,
+  };
+  await traceTownshipDevEvent(`witness-artifact-dom:${JSON.stringify(rendered)}`);
+}
+
 async function submitSummary() {
   if (summarySubmitting.value) return;
 
@@ -856,6 +1012,7 @@ async function hydrateTownshipNativeReadiness() {
     await logTownshipIosKeyReuseProbeFromEnv(controlStatus, iosProbeEnv, { slot: "control" }).catch(() => false);
   }
   actionAvailability.value = await loadTownshipActionAvailability();
+  await refreshStoredWitnessArtifacts();
   if (devTraceRuntime) void traceTownshipDevEvent("township-native-hydration-settled").catch(() => {});
 }
 
@@ -1005,13 +1162,15 @@ function handleDevTraceShortcut(event: KeyboardEvent) {
 
   if (!event.isTrusted || !event.metaKey || !event.shiftKey || event.repeat) return;
 
-  if (key !== "l" && key !== "h") return;
+  if (key !== "l" && key !== "h" && key !== "e") return;
 
   event.preventDefault();
   if (key === "l") {
     armPairingDeepLinkImport(event);
-  } else {
+  } else if (key === "h") {
     void checkCarrierHealth();
+  } else {
+    void exportLatestWitnessArtifact(event);
   }
 }
 
@@ -1939,9 +2098,52 @@ function pairingDiscoveryAdvertFromMessage(value: unknown): TownshipPairingDisco
       :busy="reviewIntentBusy(intent)"
       :submitting="reviewIntentSubmitting(intent)"
       :allowed="reviewIntentAllowed(intent)"
+      :witness-review="intent.v === 7 ? witnessReview : null"
       @sign="signAcceptedIntent(intent, $event)"
       @dismiss="dismissAcceptedIntent(intent, $event)"
     />
+
+    <p
+      v-if="witnessReviewStatus"
+      id="witness-review-status"
+      class="post-message"
+      data-state="author_failed"
+      aria-live="polite"
+    >
+      {{ witnessReviewStatus.message }}
+    </p>
+
+    <section
+      v-if="latestStoredWitnessArtifact"
+      id="witness-artifact-panel"
+      class="incoming-action-panel"
+      aria-live="polite"
+      :data-artifact-id="latestStoredWitnessArtifact.artifactId"
+      :data-stored-count="storedWitnessArtifacts.length"
+    >
+      <div class="panel-heading">
+        <p>Stored witness artifact</p>
+        <span>Public evidence held on this device</span>
+      </div>
+      <p
+        v-for="line in latestWitnessConfirmationLines"
+        :key="line"
+        class="witness-confirmation-line"
+      >
+        {{ line }}
+      </p>
+      <p
+        v-if="witnessArtifactStatus"
+        class="post-message"
+        :data-state="witnessArtifactStatus.ok ? 'success' : 'author_failed'"
+        aria-live="polite"
+      >
+        {{ witnessArtifactStatus.message }}
+      </p>
+      <div class="incoming-action-controls">
+        <button type="button" @click="exportLatestWitnessArtifact($event)">Export artifact</button>
+      </div>
+    </section>
 
     <section class="compose-panel">
       <div class="panel-heading">
