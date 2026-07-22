@@ -286,9 +286,16 @@ defmodule LatticeCarrierServer.Manifest do
       |> Enum.map(&Keyword.fetch!(&1.listener, :port))
       |> Enum.reject(&(&1 == 0))
 
+    # Two instances sharing one log_file would each independently restore
+    # from and atomic_dump to that shared path, so an acknowledged relay
+    # accepted by one instance could be silently overwritten and lost by the
+    # other's next dump — refuse regardless of distinct names/ports.
+    log_files = Enum.map(instances, & &1.log_file)
+
     cond do
       Enum.uniq(names) != names -> {:error, :duplicate_instance_names}
       Enum.uniq(ports) != ports -> {:error, :duplicate_listener_ports}
+      Enum.uniq(log_files) != log_files -> {:error, :duplicate_log_file}
       true -> :ok
     end
   end
