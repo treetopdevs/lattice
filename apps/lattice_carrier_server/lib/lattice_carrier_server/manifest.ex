@@ -271,12 +271,19 @@ defmodule LatticeCarrierServer.Manifest do
 
   defp parse_state_reporter(nil, _name), do: {:ok, nil}
 
-  defp parse_state_reporter(reporter, name) do
+  # The raw supplied value is never embedded in the refusal reason: an
+  # operator could accidentally paste a copied seed/secret into this field,
+  # and pilot_node.exs inspects the whole refusal reason to stderr, so any
+  # value included here would break the no-secret-echo property this
+  # loader exists to guarantee. A symbolic reason only.
+  defp parse_state_reporter(reporter, name) when is_binary(reporter) do
     case Map.fetch(@state_reporters, reporter) do
       {:ok, module} -> {:ok, module}
-      :error -> {:error, {:unknown_state_reporter, name, reporter}}
+      :error -> {:error, {:unknown_state_reporter, name}}
     end
   end
+
+  defp parse_state_reporter(_reporter, name), do: {:error, {:unknown_state_reporter, name}}
 
   defp validate_unique(instances) do
     names = Enum.map(instances, & &1.name)

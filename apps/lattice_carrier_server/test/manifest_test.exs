@@ -208,9 +208,19 @@ defmodule LatticeCarrierServer.ManifestTest do
 
     unknown_reporter = Map.put(instance, "state_reporter", "Elixir.System")
 
-    assert {:error,
-            {:invalid_manifest, {:unknown_state_reporter, "township-pilot", "Elixir.System"}}} =
+    # The refusal reason is symbolic only: it must never embed the raw
+    # supplied value, because pilot_node.exs inspects the whole refusal
+    # reason to stderr and an operator could accidentally paste a copied
+    # seed/secret into this field.
+    assert {:error, {:invalid_manifest, {:unknown_state_reporter, "township-pilot"} = detail}} =
              tmp_dir |> manifest_with(unknown_reporter) |> Manifest.load()
+
+    refute inspect(detail) =~ "Elixir.System"
+
+    non_string_reporter = Map.put(instance, "state_reporter", %{"nested" => "value"})
+
+    assert {:error, {:invalid_manifest, {:unknown_state_reporter, "township-pilot"}}} =
+             tmp_dir |> manifest_with(non_string_reporter) |> Manifest.load()
   end
 
   @tag :tmp_dir
