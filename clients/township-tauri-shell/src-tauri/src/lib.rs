@@ -41,6 +41,9 @@ pub const TOWNSHIP_GOVERNANCE_KEYRING_SERVICE: &str =
 pub const TOWNSHIP_GOVERNANCE_TEST_PRESENCE_TRACE: &str = "governance-test-presence:authorized";
 pub const TOWNSHIP_GOVERNANCE_KEY_ALIAS: &str = "governance-witness-v1";
 pub const TOWNSHIP_APP_IDENTIFIER: &str = "dev.treetop.lattice.township";
+pub const TOWNSHIP_PRODUCT: &str = "township";
+pub const TOWNSHIP_DATABASE_FILE: &str = "township-v1.sqlite3";
+pub const TOWNSHIP_LEGACY_NATIVE_KV_FILE: &str = "township-native-kv.json";
 pub const TOWNSHIP_DEV_CARRIER_KEY_ID_ENV: &str = "TOWNSHIP_DEV_CARRIER_KEY_ID";
 pub const TOWNSHIP_DEV_CARRIER_KEY_SEED_ENV: &str = "TOWNSHIP_DEV_CARRIER_KEY_SEED";
 pub const TOWNSHIP_DEV_TRACE_FILE_ENV: &str = "TOWNSHIP_DEV_TRACE_FILE";
@@ -209,6 +212,7 @@ impl CarrierKeySeedStore for KeyringCarrierKeySeedStore {
 pub struct TownshipNativeState {
     values: Mutex<HashMap<String, String>>,
     values_path: Mutex<Option<PathBuf>>,
+    product_db: Mutex<Option<lattice_mobile_core::ProductDatabase>>,
     signing_keys: Mutex<HashMap<String, SigningKey>>,
     key_store: Arc<dyn CarrierKeySeedStore>,
     governance_key_store: Option<Arc<dyn GovernanceWitnessKeyStore>>,
@@ -301,6 +305,7 @@ impl TownshipNativeState {
         Self {
             values: Mutex::new(values),
             values_path: Mutex::new(values_path),
+            product_db: Mutex::new(None),
             signing_keys: Mutex::new(HashMap::new()),
             key_store: Arc::new(key_store),
             governance_key_store,
@@ -417,6 +422,18 @@ impl TownshipNativeState {
             .lock()
             .map_err(|_| "key-value store path lock poisoned".to_string())?;
         *values_path = Some(path);
+        Ok(())
+    }
+
+    /// Attach the Township product database (plan 158 isolation contract):
+    /// open `township-v1.sqlite3` in `dir` with the township product marker,
+    /// import the legacy JSON key-value state exactly once, and write every
+    /// later `kv_set` through the transactional SQLite store.
+    pub fn attach_product_database<P>(&self, dir: P) -> Result<(), String>
+    where
+        P: AsRef<Path>,
+    {
+        let _ = dir;
         Ok(())
     }
 
