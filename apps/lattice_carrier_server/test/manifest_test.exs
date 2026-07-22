@@ -232,4 +232,43 @@ defmodule LatticeCarrierServer.ManifestTest do
     assert {:error, {:invalid_manifest, :duplicate_listener_ports}} =
              Manifest.load(duplicate_ports)
   end
+
+  @tag :tmp_dir
+  test "two instances sharing one log_file refuse even with distinct names and ports", %{
+    tmp_dir: tmp_dir,
+    instance: instance,
+    observer: observer
+  } do
+    # Different name, different port, same durable log path: each Holder
+    # would independently restore from and atomic_dump to that shared file,
+    # so an acknowledged relay accepted by one instance can be silently
+    # overwritten and lost by the other instance's next dump — the plan 158
+    # stop condition "an acknowledged operation is lost across ordinary
+    # carrier/host restart."
+    second_identity_path = Path.join(tmp_dir, "second.identity")
+
+    File.write!(
+      second_identity_path,
+      Base.encode16(:crypto.hash(:sha256, "second"), case: :lower)
+    )
+
+    File.chmod!(second_identity_path, 0o600)
+
+    second = %{
+      "name" => "township-pilot-2",
+      "realm" => "town-node-2",
+      "identity_file" => second_identity_path,
+      "log_file" => instance["log_file"],
+      "listener" => %{"ip" => "127.0.0.1", "port" => 0},
+      "trusted_peers" => [
+        %{"realm" => observer.realm_id, "pubkey" => Base.encode64(observer.pub)}
+      ]
+    }
+
+    duplicate_log_file =
+      write_manifest(tmp_dir, %{"version" => 1, "instances" => [instance, second]})
+
+    assert {:error, {:invalid_manifest, :duplicate_log_file}} =
+             Manifest.load(duplicate_log_file)
+  end
 end
