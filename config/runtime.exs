@@ -1,5 +1,12 @@
 import Config
 
+# Pilot carrier runtime (plan 158): the release selects its deployment
+# manifest through this environment variable. The manifest names secret
+# identity files; no identity material passes through the environment itself.
+if carrier_manifest = System.get_env("LATTICE_CARRIER_MANIFEST") do
+  config :lattice_carrier_server, manifest: carrier_manifest
+end
+
 if System.get_env("PHX_SERVER") do
   port = String.to_integer(System.get_env("PORT", "4100"))
 

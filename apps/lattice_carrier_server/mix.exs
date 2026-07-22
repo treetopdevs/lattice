@@ -11,7 +11,21 @@ defmodule LatticeCarrierServer.MixProject do
       lockfile: "../../mix.lock",
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      releases: releases()
+    ]
+  end
+
+  # Production pilot release (plan 158, Pilot Carrier Runtime). The runtime
+  # boots from the manifest named by LATTICE_CARRIER_MANIFEST (see
+  # config/runtime.exs); identity material loads only from the secret files
+  # the manifest names — never from argv or inline configuration.
+  defp releases do
+    [
+      lattice_carrier_pilot: [
+        include_executables_for: [:unix],
+        applications: [lattice_carrier_server: :permanent]
+      ]
     ]
   end
 

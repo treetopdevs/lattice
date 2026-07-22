@@ -11,6 +11,7 @@ defmodule LatticeCarrierServer.Holder do
   use GenServer
 
   alias Lattice.{Identity, Log, Sync}
+  alias LatticeCarrierServer.Secret
 
   @frontier_limit 64
 
@@ -58,7 +59,7 @@ defmodule LatticeCarrierServer.Holder do
 
   @impl GenServer
   def init(opts) do
-    identity = Keyword.fetch!(opts, :identity)
+    identity = opts |> Keyword.fetch!(:identity) |> unwrap_identity()
     source = Keyword.fetch!(opts, :source)
 
     case load_source(source) do
@@ -76,6 +77,19 @@ defmodule LatticeCarrierServer.Holder do
       {:error, reason} ->
         {:stop, {:source_error, reason}}
     end
+  end
+
+  # Crash reports and `:sys.get_status/1` must never render the private key:
+  # replace the identity's priv bytes in any formatted state.
+  @impl GenServer
+  def format_status(status) do
+    Map.new(status, fn
+      {:state, %{identity: %Identity{} = identity} = state} ->
+        {:state, %{state | identity: %{identity | priv: :redacted}}}
+
+      other ->
+        other
+    end)
   end
 
   @impl GenServer
@@ -151,6 +165,9 @@ defmodule LatticeCarrierServer.Holder do
 
     {:noreply, %{state | subscribers: subscribers}}
   end
+
+  defp unwrap_identity(%Secret{} = secret), do: Secret.unwrap(secret)
+  defp unwrap_identity(identity), do: identity
 
   defp load_source({:log, %Log{} = log}), do: {:ok, log}
 

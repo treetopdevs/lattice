@@ -14,7 +14,7 @@ defmodule LatticeCarrierServer do
   use Supervisor
 
   alias Lattice.Identity
-  alias LatticeCarrierServer.{Holder, Listener}
+  alias LatticeCarrierServer.{Holder, Listener, Secret}
 
   @type instance :: term()
 
@@ -76,6 +76,13 @@ defmodule LatticeCarrierServer do
     ]
 
     Supervisor.init(children, strategy: :rest_for_one)
+  end
+
+  defp validate_identity(%Secret{} = secret) do
+    case Secret.unwrap(secret) do
+      %Identity{} = identity -> validate_identity(identity)
+      _other -> {:error, {:invalid_config, :identity}}
+    end
   end
 
   defp validate_identity(%Identity{realm_id: realm, pub: pub, priv: priv})
