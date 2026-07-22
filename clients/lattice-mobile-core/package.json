@@ -23,6 +23,7 @@
     "test": "npm run manifest:contract && npm run handoff:contract && npm run deeplink:contract"
   },
   "dependencies": {
+    "@noble/curves": "^2.2.0",
     "@treetopdevs/lattice-client": "file:../lattice-client",
     "jsqr": "^1.4.0",
     "qrcode": "^1.5.4"
