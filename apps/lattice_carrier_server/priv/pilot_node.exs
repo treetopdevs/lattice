@@ -23,6 +23,16 @@ manifest_path =
 
 Application.put_env(:lattice_carrier_server, :manifest, Path.expand(manifest_path))
 
+# This script is a dev/test-only entrypoint — never the production release
+# boot path (that goes through the standard release `Application.start`
+# callback with no such override). Explicitly opt this dev fixture into the
+# macOS directory-sync approximation so it can rehearse and relay locally;
+# the actual lattice_carrier_pilot release keeps the default refusal on a
+# non-Linux host (see LatticeCarrierServer.Durability.Posix).
+if :os.type() == {:unix, :darwin} do
+  Application.put_env(:lattice_carrier_server, :allow_approximate_darwin_sync, true)
+end
+
 case Application.ensure_all_started(:lattice_carrier_server) do
   {:ok, _apps} ->
     deployment = LatticeCarrierServer.Runtime.deployment()
