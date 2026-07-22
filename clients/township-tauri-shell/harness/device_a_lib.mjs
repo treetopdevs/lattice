@@ -95,6 +95,15 @@ export async function runDeviceAHarness(options, deps) {
   const steps = [];
   const record = (name, ok, detail = null) => steps.push({ name, ok, ...(detail ? { detail } : {}) });
   const redact = (text) => redactEvidenceText(text, { serial });
+  // Query commands like `pm path` and `pidof` exit nonzero when the package
+  // or process is absent; treat that as an empty answer, never a crash.
+  const tryAdb = (args) => {
+    try {
+      return String(deps.adb(args));
+    } catch {
+      return "";
+    }
+  };
 
   const gitSha = deps.gitSha();
   const apkBytes = deps.readFileBytes(apkPath);
@@ -166,7 +175,7 @@ export async function runDeviceAHarness(options, deps) {
   }
   record("adb-reverse-clean", true);
 
-  const pmPath = String(deps.adb(["shell", "pm", "path", packageId]));
+  const pmPath = tryAdb(["shell", "pm", "path", packageId]);
   const packagePresent = pmPath.includes("package:");
   let installedCertSha256 = null;
   let installedDn = null;
@@ -207,7 +216,7 @@ export async function runDeviceAHarness(options, deps) {
   record("install", installed, redact(installOut.trim()));
   if (!installed) return finish({ ok: false, failure: "install-failed" });
 
-  deps.adb(["shell", "monkey", "-p", packageId, "-c", "android.intent.category.LAUNCHER", "1"]);
+  deps.adb(["shell", "am", "start", "-W", "-n", `${packageId}/.MainActivity`]);
   await deps.sleep(4000);
   const screen = deps.adb(["exec-out", "screencap", "-p"]);
   deps.writeFile(`${bundleDir}/launch-screen.png`, screen);
@@ -215,7 +224,7 @@ export async function runDeviceAHarness(options, deps) {
 
   deps.adb(["shell", "am", "force-stop", packageId]);
   await deps.sleep(1000);
-  const pid = String(deps.adb(["shell", "pidof", packageId])).trim();
+  const pid = tryAdb(["shell", "pidof", packageId]).trim();
   record("force-stop", pid.length === 0, pid.length === 0 ? null : "process still alive");
 
   deps.writeFile(`${bundleDir}/logcat.redacted.txt`, redact(String(deps.adb(["logcat", "-d", "-t", "400"]))));

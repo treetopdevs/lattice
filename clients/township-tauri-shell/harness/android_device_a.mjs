@@ -10,8 +10,14 @@
 
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { adbPath, parseApksignerCerts, runApksignerPrintCerts } from "../scripts/android-pilot/sdk.mjs";
 import { runDeviceAHarness } from "./device_a_lib.mjs";
+
+// Resolve the git SHA of the checkout that contains this harness, never the
+// caller's working directory.
+const harnessRepoDir = dirname(fileURLToPath(import.meta.url));
 
 function parseArgs(argv) {
   const args = { out: "output/device-a", mode: "release" };
@@ -41,7 +47,7 @@ const deps = {
   readFileBytes: (path) => readFileSync(path),
   writeFile: (path, data) => writeFileSync(path, data),
   mkdir: (path) => mkdirSync(path, { recursive: true }),
-  gitSha: () => execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(),
+  gitSha: () => execFileSync("git", ["-C", harnessRepoDir, "rev-parse", "HEAD"], { encoding: "utf8" }).trim(),
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   log: (line) => console.error(line),
 };

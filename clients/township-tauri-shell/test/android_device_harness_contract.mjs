@@ -37,7 +37,7 @@ function fakeDeps({ reverseLines = [], installedCert = null, extraResponses = {}
     }
     if (key.startsWith("pull ")) return "1 file pulled\n";
     if (key.startsWith("install")) return "Success\n";
-    if (key.startsWith("shell monkey")) return "Events injected: 1\n";
+    if (key.startsWith("shell am start")) return "Status: ok\n";
     if (key.startsWith("shell am force-stop")) return "";
     if (key.startsWith("shell pidof")) return "";
     if (key.startsWith("logcat")) return `serial ${SERIAL} saw township://pair?cap=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVphYmNkZWZnaGlqa2xtbm9w\n`;
