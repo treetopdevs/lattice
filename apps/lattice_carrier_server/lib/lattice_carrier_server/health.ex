@@ -10,11 +10,21 @@ defmodule LatticeCarrierServer.Health do
   responses carry an empty body — readiness detail never leaks content.
   `/carrier` application authentication is a separate listener and is
   unchanged.
+
+  The durability rehearsal (fsync, subprocess spawn, file churn in the live
+  log directory) is not repeated on every single `/readyz` poll: its result
+  is cached per instance for a configurable TTL
+  (`:lattice_carrier_server, :storage_check_ttl_ms`, default 5000ms; tests
+  set it to 0 for determinism). The first check after boot is always
+  authoritative (no cached value exists yet), and any unexpected raise
+  inside the rehearsal is caught and treated as not writable, so a poll can
+  never fail open.
   """
 
   alias LatticeCarrierServer.{Durability, Holder, Listener, Runtime}
 
   @listener_ref {__MODULE__, :listener}
+  @default_storage_check_ttl_ms 5_000
 
   @spec child_spec(keyword()) :: Supervisor.child_spec()
   def child_spec(health_opts) do
@@ -91,7 +101,38 @@ defmodule LatticeCarrierServer.Health do
     _kind, _reason -> false
   end
 
+  # TTL-cached: the first read after boot (or after the cache goes stale)
+  # runs the real rehearsal and is authoritative; reads within the TTL reuse
+  # that result instead of re-running fsync/subprocess/file-churn work on
+  # every poll. Any raise is caught and cached as "not writable", so a
+  # transient failure fails closed rather than crashing the request.
   defp storage_writable?(log_file) do
+    key = {__MODULE__, :storage_writable, log_file}
+    now = System.monotonic_time(:millisecond)
+    ttl_ms = storage_check_ttl_ms()
+
+    case :persistent_term.get(key, nil) do
+      {checked_at, result} when now - checked_at < ttl_ms ->
+        result
+
+      _stale_or_absent ->
+        result = rehearse_storage(log_file)
+        :persistent_term.put(key, {now, result})
+        result
+    end
+  end
+
+  defp storage_check_ttl_ms do
+    Application.get_env(
+      :lattice_carrier_server,
+      :storage_check_ttl_ms,
+      @default_storage_check_ttl_ms
+    )
+  end
+
+  defp rehearse_storage(log_file) do
     Durability.rehearse(Durability.Posix, Path.dirname(log_file)) == :ok
+  catch
+    _kind, _reason -> false
   end
 end
