@@ -338,7 +338,11 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   );
   assert.equal(
     pkg.scripts["tauri:android:build:release"],
-    "PATH=/opt/homebrew/opt/rustup/bin:$PATH tauri android build --apk --ci",
+    "TOWNSHIP_ANDROID_SIGNING=pilot PATH=/opt/homebrew/opt/rustup/bin:$PATH tauri android build --apk --ci --config src-tauri/tauri.pilot.conf.json",
+  );
+  assert.equal(
+    pkg.scripts["tauri:android:build:release:dev-smoke"],
+    "TOWNSHIP_ANDROID_SIGNING=dev-smoke PATH=/opt/homebrew/opt/rustup/bin:$PATH tauri android build --apk --ci",
   );
   assert.doesNotMatch(
     pkg.scripts["tauri:android:build:release"],
@@ -536,7 +540,7 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   );
   assert.equal(
     pkg.scripts["tauri:android:build:release:chooser-competitor"],
-    "TOWNSHIP_ANDROID_RELEASE_CLEAR_TEXT_DIAGNOSTIC=1 PATH=/opt/homebrew/opt/rustup/bin:$PATH tauri android build --apk --ci && mkdir -p src-tauri/target && cp src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk src-tauri/target/app-universal-release-cleartextdiag.apk",
+    "TOWNSHIP_ANDROID_RELEASE_CLEAR_TEXT_DIAGNOSTIC=1 TOWNSHIP_ANDROID_SIGNING=dev-smoke PATH=/opt/homebrew/opt/rustup/bin:$PATH tauri android build --apk --ci && mkdir -p src-tauri/target && cp src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk src-tauri/target/app-universal-release-cleartextdiag.apk",
   );
   assert.equal(
     pkg.scripts["tauri:android:release:browser-onboarding-grant"],
@@ -739,7 +743,7 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   );
   assert.equal(
     pkg.scripts["tauri:android:build:release:transport-probe"],
-    "VITE_TOWNSHIP_RELEASE_TRANSPORT_PROBE_URLS=ws://127.0.0.1:43185/carrier,ws://10.0.2.2:43185/carrier PATH=/opt/homebrew/opt/rustup/bin:$PATH tauri android build --apk --ci",
+    "VITE_TOWNSHIP_RELEASE_TRANSPORT_PROBE_URLS=ws://127.0.0.1:43185/carrier,ws://10.0.2.2:43185/carrier TOWNSHIP_ANDROID_SIGNING=dev-smoke PATH=/opt/homebrew/opt/rustup/bin:$PATH tauri android build --apk --ci",
   );
   const releaseCleartextDiagnosticBuildScript =
     pkg.scripts[
@@ -907,11 +911,17 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
     androidGradle,
     'getByName("debug")',
   );
-  assert.match(androidReleaseBuildType, /local installability smoke only/i);
-  assert.match(
+  assert.match(androidReleaseBuildType, /fail-closed \(plan 158\)/i);
+  assert.doesNotMatch(
     androidReleaseBuildType,
     /signingConfig = signingConfigs\.getByName\("debug"\)/,
   );
+  assert.match(
+    androidReleaseBuildType,
+    /signingConfigs\.getByName\("townshipPilot"\)/,
+  );
+  assert.match(androidGradle, /TOWNSHIP_ANDROID_SIGNING/);
+  assert.match(androidGradle, /township-pilot-v1/);
   assert.match(androidReleaseBuildType, /isMinifyEnabled = true/);
   assert.match(
     androidReleaseBuildType,
