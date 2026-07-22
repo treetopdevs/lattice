@@ -46,6 +46,7 @@ fn command_names_match_the_tauri_bridge_contract() {
             "lattice_advertise_pairing_handoff",
             "lattice_android_current_pairing_handoff_b64",
             "lattice_log_probe",
+            "lattice_log_ios_key_reuse_probe",
             "lattice_trace_dev_event"
         ]
     );
@@ -65,7 +66,8 @@ fn command_names_match_the_tauri_bridge_contract() {
             "lattice_discover_pairing_adverts",
             "lattice_advertise_pairing_handoff",
             "lattice_android_current_pairing_handoff_b64",
-            "lattice_log_probe"
+            "lattice_log_probe",
+            "lattice_log_ios_key_reuse_probe"
         ]
     );
 }
@@ -173,6 +175,12 @@ fn registered_tauri_commands_roundtrip_through_mock_ipc() {
         &webview,
         "lattice_log_probe",
         serde_json::json!({ "event": "township-canonical-probe digest=test" }),
+        Ok(()),
+    );
+    assert_ipc_response(
+        &webview,
+        "lattice_log_ios_key_reuse_probe",
+        serde_json::json!({ "event": "township-ios-key-reuse-probe slot=primary" }),
         Ok(()),
     );
 }

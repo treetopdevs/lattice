@@ -1,10 +1,39 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { classifyDeveloperToolchainReferences } from "./support/ios_toolchain_evidence.mjs";
+import {
+  developmentProfileErrors,
+  duplicateProfileEntitlementKeys,
+  profileDateTimeMs,
+} from "./support/ios_development_profile.mjs";
+import {
+  assessInstalledIosDevelopmentProfiles,
+  installedIosDevelopmentProfileDiagnostic,
+} from "./support/ios_installed_development_profiles.mjs";
 import { developmentEntitlementErrors } from "./support/ios_entitlement_scope.mjs";
+import { redactIosSigningOutput } from "./support/ios_signing_output.mjs";
+import {
+  completeProbeLines,
+  createIosProbeCopyDestination,
+  iosDeviceLaunchProcessId,
+  iosDeviceProbeProgress,
+  redactIosDeviceCommandOutput,
+  secureIosProbeCopy,
+} from "./support/ios_device_probe_output.mjs";
 
 const shellRoot = dirname(
   fileURLToPath(new URL("../package.json", import.meta.url)),
@@ -45,6 +74,290 @@ function extractBlock(source, marker) {
   assert.fail(`${marker} should close its block`);
 }
 
+test("Xcode build phase resolves npm outside the GUI login shell", () => {
+  const wrapper = join(
+    shellRoot,
+    "src-tauri",
+    "scripts",
+    "tauri-ios-xcode-script.sh",
+  );
+  const iosProject = readText(
+    "clients/township-tauri-shell/src-tauri/gen/apple/project.yml",
+  );
+  const iosPbxproj = readText(
+    "clients/township-tauri-shell/src-tauri/gen/apple/township-tauri-shell.xcodeproj/project.pbxproj",
+  );
+
+  assert.ok(existsSync(wrapper), "the iOS Xcode npm wrapper should exist");
+  assert.notEqual(
+    statSync(wrapper).mode & 0o111,
+    0,
+    "the iOS Xcode npm wrapper should be executable",
+  );
+  const wrapperSource = readFileSync(wrapper, "utf8");
+  const inheritedPathLookup = wrapperSource.indexOf("command -v npm");
+  const homebrewFallback = wrapperSource.indexOf("/opt/homebrew/bin/npm");
+  const localFallback = wrapperSource.indexOf("/usr/local/bin/npm");
+  assert.notEqual(inheritedPathLookup, -1);
+  assert.ok(homebrewFallback > inheritedPathLookup);
+  assert.ok(localFallback > inheritedPathLookup);
+  assert.match(wrapperSource, /\/opt\/homebrew\/opt\/rustup\/bin/);
+
+  const expectedInvocation =
+    '"${SRCROOT}/../../scripts/tauri-ios-xcode-script.sh" -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths "${FRAMEWORK_SEARCH_PATHS:?}" --header-search-paths "${HEADER_SEARCH_PATHS:?}" --gcc-preprocessor-definitions "${GCC_PREPROCESSOR_DEFINITIONS:-}" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}';
+  assert.ok(iosProject.includes(`- script: '${expectedInvocation}'`));
+  assert.ok(
+    iosPbxproj.includes(
+      `shellScript = "${expectedInvocation.replaceAll('"', '\\"')}";`,
+    ),
+  );
+  assert.doesNotMatch(iosProject, /script: npm run -- tauri ios xcode-script/);
+  assert.doesNotMatch(
+    iosPbxproj,
+    /shellScript = "npm run -- tauri ios xcode-script/,
+  );
+
+  const root = mkdtempSync(join(tmpdir(), "township-ios-xcode-npm-"));
+  const fallbackDir = join(root, "fallback");
+  const inheritedDir = join(root, "inherited");
+  const overrideDir = join(root, "override");
+  const cwdEvidence = join(root, "cwd");
+  const argsEvidence = join(root, "args");
+  const pathEvidence = join(root, "path");
+  const selectedEvidence = join(root, "selected");
+
+  function writeFakeNpm(directory) {
+    mkdirSync(directory);
+    const npm = join(directory, "npm");
+    const node = join(directory, "node");
+    writeFileSync(npm, "#!/usr/bin/env node\n", { mode: 0o700 });
+    writeFileSync(
+      node,
+      '#!/bin/sh\nprintf "%s" "$1" > "$FAKE_NPM_SELECTED"\nshift\nprintf "%s" "$PWD" > "$FAKE_NPM_CWD"\nprintf "%s" "$PATH" > "$FAKE_NPM_PATH"\nprintf "%s\\0" "$@" > "$FAKE_NPM_ARGS"\n',
+      { mode: 0o700 },
+    );
+    chmodSync(npm, 0o700);
+    chmodSync(node, 0o700);
+    return npm;
+  }
+
+  try {
+    const fallbackNpm = writeFakeNpm(fallbackDir);
+    const inheritedNpm = writeFakeNpm(inheritedDir);
+    const overrideNpm = writeFakeNpm(overrideDir);
+
+    const result = spawnSync(wrapper, ["", "value with spaces", "arm64"], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        FAKE_NPM_ARGS: argsEvidence,
+        FAKE_NPM_CWD: cwdEvidence,
+        FAKE_NPM_PATH: pathEvidence,
+        FAKE_NPM_SELECTED: selectedEvidence,
+        PATH: "/usr/bin:/bin",
+        TOWNSHIP_NPM_BIN: "",
+        TOWNSHIP_NPM_FALLBACK_PATHS: fallbackNpm,
+      },
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(readFileSync(selectedEvidence, "utf8"), fallbackNpm);
+    const forwardedPath = readFileSync(pathEvidence, "utf8").split(":");
+    assert.deepEqual(forwardedPath.slice(0, 2), [
+      fallbackDir,
+      "/opt/homebrew/opt/rustup/bin",
+    ]);
+    assert.deepEqual(forwardedPath.slice(-2), ["/usr/bin", "/bin"]);
+    assert.ok(
+      forwardedPath.includes(join(process.env.HOME ?? "", ".cargo", "bin")),
+    );
+    assert.equal(readFileSync(cwdEvidence, "utf8"), shellRoot);
+    assert.deepEqual(
+      readFileSync(argsEvidence, "utf8").split("\u0000").slice(0, -1),
+      [
+        "run",
+        "--",
+        "tauri",
+        "ios",
+        "xcode-script",
+        "",
+        "value with spaces",
+        "arm64",
+      ],
+    );
+
+    const inherited = spawnSync(wrapper, [], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        FAKE_NPM_ARGS: argsEvidence,
+        FAKE_NPM_CWD: cwdEvidence,
+        FAKE_NPM_PATH: pathEvidence,
+        FAKE_NPM_SELECTED: selectedEvidence,
+        PATH: `${inheritedDir}:/usr/bin:/bin`,
+        TOWNSHIP_NPM_BIN: "",
+        TOWNSHIP_NPM_FALLBACK_PATHS: fallbackNpm,
+      },
+    });
+    assert.equal(inherited.status, 0, inherited.stderr);
+    assert.equal(readFileSync(selectedEvidence, "utf8"), inheritedNpm);
+
+    const overridden = spawnSync(wrapper, [], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        FAKE_NPM_ARGS: argsEvidence,
+        FAKE_NPM_CWD: cwdEvidence,
+        FAKE_NPM_PATH: pathEvidence,
+        FAKE_NPM_SELECTED: selectedEvidence,
+        PATH: `${inheritedDir}:/usr/bin:/bin`,
+        TOWNSHIP_NPM_BIN: overrideNpm,
+        TOWNSHIP_NPM_FALLBACK_PATHS: fallbackNpm,
+      },
+    });
+    assert.equal(overridden.status, 0, overridden.stderr);
+    assert.equal(readFileSync(selectedEvidence, "utf8"), overrideNpm);
+
+    const missing = spawnSync(wrapper, [], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PATH: "/usr/bin:/bin",
+        TOWNSHIP_NPM_BIN: "",
+        TOWNSHIP_NPM_FALLBACK_PATHS: join(root, "missing-npm"),
+      },
+    });
+    assert.equal(missing.status, 127);
+    assert.match(missing.stderr, /set TOWNSHIP_NPM_BIN/);
+
+    const nonExecutableNpm = join(root, "non-executable-npm");
+    writeFileSync(nonExecutableNpm, "not executable", { mode: 0o600 });
+    const nonExecutable = spawnSync(wrapper, [], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PATH: "/usr/bin:/bin",
+        TOWNSHIP_NPM_BIN: nonExecutableNpm,
+      },
+    });
+    assert.equal(nonExecutable.status, 127);
+    assert.match(nonExecutable.stderr, /set TOWNSHIP_NPM_BIN/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("iOS device launch evidence uses fresh private copies", () => {
+  const root = mkdtempSync(join(tmpdir(), "township-ios-probe-files-"));
+  try {
+    assert.equal(statSync(root).mode & 0o777, 0o700);
+    const first = createIosProbeCopyDestination(root, 1, 1);
+    const second = createIosProbeCopyDestination(root, 1, 2);
+
+    assert.notEqual(first, second);
+    assert.equal(existsSync(first), false);
+    assert.equal(existsSync(second), false);
+    writeFileSync(first, "private evidence", { mode: 0o644 });
+    secureIosProbeCopy(first);
+    assert.equal(statSync(first).mode & 0o777, 0o600);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("iOS device launch JSON binds exactly one process id", () => {
+  assert.equal(
+    iosDeviceLaunchProcessId({
+      result: { launchResult: { processIdentifier: 123 } },
+    }),
+    "123",
+  );
+  assert.throws(() => iosDeviceLaunchProcessId({ result: {} }), /process id/);
+  assert.throws(
+    () =>
+      iosDeviceLaunchProcessId({
+        processIdentifier: 123,
+        result: { launchResult: { processIdentifier: 456 } },
+      }),
+    /process id/,
+  );
+});
+
+test("iOS archive preflight requires an exact installed development profile", () => {
+  const nowMs = Date.parse("2026-07-22T12:00:00Z");
+  const options = {
+    bundleIdentifier: "dev.treetop.lattice.township",
+    deviceUdid: "00000000-0000000000000000",
+    expectedTeamIdentifier: "TEAMID0001",
+    minimumRemainingMs: 24 * 60 * 60_000,
+    nowMs,
+  };
+  const validProfile = {
+    teamIdentifiers: ["TEAMID0001"],
+    applicationIdentifierPrefixes: ["APPPREFIX01"],
+    duplicateEntitlementKeys: [],
+    entitlements: {
+      applicationIdentifier: "APPPREFIX01.dev.treetop.lattice.township",
+      teamIdentifier: "TEAMID0001",
+      getTaskAllow: true,
+      keychainAccessGroups: ["APPPREFIX01.dev.treetop.lattice.township"],
+    },
+    provisionedDevices: [options.deviceUdid],
+    provisionsAllDevices: false,
+    creationTimeMs: nowMs - 60_000,
+    expirationTimeMs: nowMs + 48 * 60 * 60_000,
+  };
+  const wildcardProfile = {
+    ...validProfile,
+    entitlements: {
+      ...validProfile.entitlements,
+      applicationIdentifier: "APPPREFIX01.*",
+      keychainAccessGroups: ["APPPREFIX01.*"],
+    },
+  };
+  const wrongTeamProfile = {
+    ...validProfile,
+    teamIdentifiers: ["OTHERTEAM1"],
+    entitlements: {
+      ...validProfile.entitlements,
+      teamIdentifier: "OTHERTEAM1",
+    },
+  };
+
+  const assessment = assessInstalledIosDevelopmentProfiles(
+    [
+      { identity: "valid", profile: validProfile },
+      { identity: "valid", profile: validProfile },
+      { identity: "wildcard", profile: wildcardProfile },
+      { identity: "wrong-team", profile: wrongTeamProfile },
+      { identity: undefined, profile: undefined },
+    ],
+    options,
+  );
+  assert.deepEqual(assessment, {
+    decodedUniqueProfileCount: 3,
+    errorCounts: {
+      "profile-application-identifier-does-not-match-bundle": 1,
+      "profile-team-does-not-match-expected-team": 1,
+      "wildcard-profile-application-identifier": 1,
+    },
+    invalidProfileCount: 2,
+    undecodableProfileCount: 1,
+    validProfileCount: 1,
+  });
+  assert.equal(
+    installedIosDevelopmentProfileDiagnostic(assessment),
+    "decoded=3 valid=1 invalid=2 undecodable=1 errors=profile-application-identifier-does-not-match-bundle:1,profile-team-does-not-match-expected-team:1,wildcard-profile-application-identifier:1",
+  );
+  assert.equal(
+    assessInstalledIosDevelopmentProfiles(
+      [{ identity: "wildcard", profile: wildcardProfile }],
+      options,
+    ).validProfileCount,
+    0,
+  );
+});
+
 test("Tauri mobile targets are scaffolded without claiming phone-grade convergence", () => {
   const pkg = readJson("clients/township-tauri-shell/package.json");
   const shellTsconfig = readJson("clients/township-tauri-shell/tsconfig.json");
@@ -60,6 +373,9 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   );
   const iosKeyReuseProbeSource = readText(
     "clients/township-tauri-shell/src/township_ios_key_reuse_probe.ts",
+  );
+  const iosInstalledDevelopmentProfilesSupport = readText(
+    "clients/township-tauri-shell/test/support/ios_installed_development_profiles.mjs",
   );
   const canonicalProbeSource = readText(
     "clients/township-tauri-shell/src/township_canonical_probe.ts",
@@ -90,6 +406,9 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   );
   const nativeLib = readText(
     "clients/township-tauri-shell/src-tauri/src/lib.rs",
+  );
+  const nativeBuild = readText(
+    "clients/township-tauri-shell/src-tauri/build.rs",
   );
   const canonicalProbeContract = readText(
     "clients/township-tauri-shell/test/township_canonical_probe.ts",
@@ -133,8 +452,17 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   const iosDeviceKeyReuseBuildSupport = readText(
     "clients/township-tauri-shell/test/support/build_tauri_ios_device_key_reuse_probe.ts",
   );
+  const iosNativeProbeFeatureContract = readText(
+    "clients/township-tauri-shell/test/support/ios_native_probe_feature_contract.ts",
+  );
   const iosEntitlementScopeSupport = readText(
     "clients/township-tauri-shell/test/support/ios_entitlement_scope.mjs",
+  );
+  const iosDeviceProbeOutputSupport = readText(
+    "clients/township-tauri-shell/test/support/ios_device_probe_output.mjs",
+  );
+  const iosSigningOutputSupport = readText(
+    "clients/township-tauri-shell/test/support/ios_signing_output.mjs",
   );
   const iosDeviceProbeTsconfig = readJson(
     "clients/township-tauri-shell/tsconfig.ios-device-probe.json",
@@ -789,6 +1117,10 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
     iosKeyReuseBuildSupport,
     /VITE_TOWNSHIP_IOS_KEY_REUSE_PROBE: "1"/,
   );
+  assert.match(
+    iosKeyReuseBuildSupport,
+    /delete buildEnv\.TOWNSHIP_NPM_BIN;\s*delete buildEnv\.TOWNSHIP_NPM_FALLBACK_PATHS;[\s\S]*assert\.equal\(buildEnv\.TOWNSHIP_NPM_BIN, undefined\);\s*assert\.equal\(buildEnv\.TOWNSHIP_NPM_FALLBACK_PATHS, undefined\)/,
+  );
   assert.match(iosKeyReuseBuildSupport, /ENTITLEMENTS_ALLOWED: "YES"/);
   assert.match(
     iosKeyReuseBuildSupport,
@@ -802,6 +1134,14 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(
     iosKeyReuseBuildSupport,
     /township-tauri-shell_iOS\.entitlements/,
+  );
+  assert.match(
+    iosKeyReuseBuildSupport,
+    /xcshareddata.*xcschemes.*township-tauri-shell_iOS\.xcscheme/s,
+  );
+  assert.match(
+    iosDeviceKeyReuseBuildSupport,
+    /xcshareddata.*xcschemes.*township-tauri-shell_iOS\.xcscheme/s,
   );
   assert.doesNotMatch(
     iosKeyReuseBuildSupport,
@@ -1087,6 +1427,10 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   );
   assert.match(
     cargoToml,
+    /objc2-foundation = \{ version = "0\.3", features = \["NSPathUtilities", "NSString"\] \}/,
+  );
+  assert.match(
+    cargoToml,
     /\[target\.'cfg\(target_os = "ios"\)'\.dependencies\.apple-native-keyring-store\]\nversion = "1\.0\.0"\nfeatures = \["protected"\]/,
   );
   assert.match(
@@ -1113,14 +1457,46 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
     /pub const TOWNSHIP_PROBE_LOG_TAG: &str = "LATTICE_PROBE"/,
   );
   assert.match(nativeLib, /fn lattice_log_probe/);
+  assert.match(nativeLib, /fn lattice_log_ios_key_reuse_probe/);
   assert.match(nativeLib, /__android_log_write/);
   assert.match(
     nativeLib,
-    /println!\(\s*"\{TOWNSHIP_PROBE_LOG_TAG\}: \{event\} process_id=\{\}",\s*std::process::id\(\)\s*\)/,
+    /const TOWNSHIP_IOS_KEY_REUSE_PROBE_EVENT_MAX_BYTES: usize = 4_096/,
+  );
+  assert.match(nativeLib, /fn sanitize_probe_event/);
+  assert.match(
+    nativeLib,
+    /#\[cfg\(not\(target_os = "android"\)\)\]\s*fn format_probe_event/,
+  );
+  assert.match(
+    nativeLib,
+    /#\[cfg\(not\(target_os = "android"\)\)\]\s*fn log_probe_event[\s\S]*?println!\("\{line\}"\)/,
+  );
+  assert.match(nativeLib, /std::io::stderr\(\)\.lock\(\)/);
+  assert.match(nativeLib, /maybe_log_ios_key_reuse_startup_probe\(\);/);
+  assert.match(nativeLib, /stage=native_startup/);
+  assert.match(nativeLib, /TOWNSHIP_IOS_PROBE_LAUNCH_NONCE/);
+  assert.match(nativeLib, /validate_ios_probe_launch_nonce/);
+  assert.match(nativeLib, /NSHomeDirectory/);
+  assert.match(nativeLib, /\.join\("Library"\)[\s\S]*\.join\("Caches"\)/);
+  assert.match(nativeLib, /OpenOptions::new\(\)/);
+  assert.match(nativeLib, /sync_all\(\)/);
+  assert.match(nativeLib, /fn reset_ios_probe_artifact_in/);
+  assert.match(nativeLib, /fn append_ios_probe_artifact_in/);
+  assert.match(nativeLib, /fs::read_dir/);
+  assert.match(nativeLib, /township-ios-key-reuse-probe-.*\.log/);
+  assert.match(cargoToml, /township-ios-key-reuse-native-probe\s*=\s*\[\]/);
+  assert.match(
+    nativeLib,
+    /all\(target_os = "ios", feature = "township-ios-key-reuse-native-probe"\)/,
+  );
+  assert.doesNotMatch(
+    nativeBuild,
+    /township_ios_key_reuse_native_probe|TOWNSHIP_IOS_KEY_REUSE_NATIVE_PROBE/,
   );
   assert.doesNotMatch(
     nativeLib,
-    /println!\("\{TOWNSHIP_PROBE_LOG_TAG\}: \{event\}"\)/,
+    /township_ios_key_reuse_native_probe|TOWNSHIP_IOS_KEY_REUSE_NATIVE_PROBE/,
   );
   assert.match(
     nativeWorkflow,
@@ -1129,14 +1505,18 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(nativeWorkflow, /logTownshipProbeEvent/);
   assert.match(
     iosKeyReuseProbeSource,
-    /TOWNSHIP_IOS_KEY_REUSE_PROBE_LOG_PREFIX = "township-ios-key-reuse-probe"/,
+    /TOWNSHIP_IOS_KEY_REUSE_PROBE_LOG_PREFIX =\s*"township-ios-key-reuse-probe"/,
   );
   assert.match(iosKeyReuseProbeSource, /VITE_TOWNSHIP_IOS_KEY_REUSE_PROBE/);
+  assert.match(
+    iosKeyReuseProbeSource,
+    /TOWNSHIP_IOS_KEY_REUSE_PROBE_COMMAND =\s*"lattice_log_ios_key_reuse_probe"/,
+  );
   assert.match(iosKeyReuseProbeSource, /store=ios_protected_keychain/);
   assert.match(iosKeyReuseProbeSource, /public_key_base64url/);
   assert.match(
     iosKeyReuseProbeSource,
-    /TOWNSHIP_IOS_KEY_REUSE_CONTROL_KEY_ID = "township-ios-key-reuse-control"/,
+    /TOWNSHIP_IOS_KEY_REUSE_CONTROL_KEY_ID =\s*"township-ios-key-reuse-control"/,
   );
   assert.doesNotMatch(
     iosKeyReuseProbeSource,
@@ -1488,7 +1868,8 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(androidSmoke, /publicKeyAfterClear/);
   assert.match(iosKeyReuseProbeContract, /outcome=ready/);
   assert.match(iosKeyReuseProbeContract, /outcome=error/);
-  assert.match(iosKeyReuseProbeContract, /Code_-34018/);
+  assert.match(iosKeyReuseProbeContract, /error=unavailable/);
+  assert.doesNotMatch(iosKeyReuseProbeContract, /Code_-34018/);
   assert.match(iosKeyReuseSmoke, /xcrun/);
   assert.match(iosKeyReuseSmoke, /simctl/);
   assert.match(iosKeyReuseSmoke, /TOWNSHIP_IOS_SIMULATOR_UDID/);
@@ -1515,7 +1896,11 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   );
   assert.equal(
     pkg.scripts["tauri:ios:build:device-key-reuse-probe"],
-    "tsx test/support/build_tauri_ios_device_key_reuse_probe.ts",
+    "npm run ios:native-probe-feature:contract && tsx test/support/build_tauri_ios_device_key_reuse_probe.ts",
+  );
+  assert.equal(
+    pkg.scripts["tauri:ios:xcode:device-key-reuse-probe"],
+    "npm run ios:native-probe-feature:contract && tauri ios build --debug --open --features township-ios-key-reuse-native-probe",
   );
   assert.equal(
     pkg.scripts["tauri:ios:device-key-reuse:smoke"],
@@ -1541,6 +1926,61 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(iosDeviceKeyReuseBuildSupport, /TOWNSHIP_IOS_DEVICE_UDID/);
   assert.match(
     iosDeviceKeyReuseBuildSupport,
+    /inspectInstalledIosDevelopmentProfiles/,
+  );
+  assert.match(
+    iosDeviceKeyReuseBuildSupport,
+    /installedProfileAssessment\.validProfileCount > 0/,
+  );
+  assert.match(
+    iosDeviceKeyReuseBuildSupport,
+    /installedIosDevelopmentProfileDiagnostic\(installedProfileAssessment\)/,
+  );
+  const installedProfileGateIndex = iosDeviceKeyReuseBuildSupport.indexOf(
+    "installedProfileAssessment.validProfileCount > 0",
+  );
+  assert.notEqual(installedProfileGateIndex, -1);
+  assert.ok(
+    installedProfileGateIndex <
+      iosDeviceKeyReuseBuildSupport.indexOf("rmSync(appleBuildRoot"),
+    "installed profile validation must precede generated-build deletion",
+  );
+  assert.ok(
+    installedProfileGateIndex <
+      iosDeviceKeyReuseBuildSupport.indexOf("rmSync(cargoTargetDir"),
+    "installed profile validation must precede cargo-target deletion",
+  );
+  assert.match(
+    iosInstalledDevelopmentProfilesSupport,
+    /Library\/Developer\/Xcode\/UserData\/Provisioning Profiles/,
+  );
+  assert.match(
+    iosInstalledDevelopmentProfilesSupport,
+    /Library\/MobileDevice\/Provisioning Profiles/,
+  );
+  assert.match(
+    iosInstalledDevelopmentProfilesSupport,
+    /\/usr\/bin\/openssl[\s\S]*"cms", "-verify", "-noverify", "-inform", "DER"/,
+  );
+  assert.doesNotMatch(
+    iosInstalledDevelopmentProfilesSupport,
+    /\/usr\/bin\/security/,
+  );
+  assert.match(
+    iosInstalledDevelopmentProfilesSupport,
+    /duplicateProfileEntitlementKeys/,
+  );
+  assert.doesNotMatch(
+    iosInstalledDevelopmentProfilesSupport,
+    /mkdtempSync|writeFileSync/,
+  );
+  assert.match(iosInstalledDevelopmentProfilesSupport, /input: plistXml/);
+  assert.match(
+    iosInstalledDevelopmentProfilesSupport,
+    /\.mobileprovision|\.provisionprofile/,
+  );
+  assert.match(
+    iosDeviceKeyReuseBuildSupport,
     /TOWNSHIP_IOS_BUILD_DEVELOPER_DIR/,
   );
   assert.match(iosDeviceKeyReuseBuildSupport, /createAppleToolchainShim/);
@@ -1560,7 +2000,8 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(iosDeviceKeyReuseBuildSupport, /toolchain\.trace/);
   assert.match(iosDeviceKeyReuseBuildSupport, /0o600/);
   assert.match(iosDeviceKeyReuseBuildSupport, /readToolchainMarkers/);
-  assert.match(iosDeviceKeyReuseBuildSupport, /assertToolchainMarkers/);
+  assert.match(iosDeviceKeyReuseBuildSupport, /assertDeepXcrunSelectionMarker/);
+  assert.doesNotMatch(iosDeviceKeyReuseBuildSupport, /assertToolchainMarkers/);
   assert.match(
     iosDeviceKeyReuseBuildSupport,
     /assertFreshSwiftToolchainReferences/,
@@ -1714,12 +2155,76 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   );
   assert.match(
     iosDeviceKeyReuseBuildSupport,
-    /\[\s*"ios",\s*"build",\s*"--debug",\s*"--target",\s*"aarch64",\s*"--ci",\s*"--archive-only",?\s*\]/,
+    /\[\s*"ios",\s*"build",\s*"--debug",\s*"--target",\s*"aarch64",\s*"--features",\s*TOWNSHIP_IOS_KEY_REUSE_NATIVE_PROBE_FEATURE,\s*"--ci",\s*"--archive-only",?\s*\]/,
+  );
+  assert.match(
+    iosDeviceKeyReuseBuildSupport,
+    /const TOWNSHIP_IOS_KEY_REUSE_NATIVE_PROBE_FEATURE =\s*"township-ios-key-reuse-native-probe"/,
   );
   assert.match(
     iosDeviceKeyReuseBuildSupport,
     /VITE_TOWNSHIP_IOS_KEY_REUSE_PROBE: "1"/,
   );
+  assert.doesNotMatch(
+    iosDeviceKeyReuseBuildSupport,
+    /TOWNSHIP_IOS_KEY_REUSE_NATIVE_PROBE: "1"/,
+  );
+  assert.match(
+    iosDeviceKeyReuseBuildSupport,
+    /assertNativeProbeFeatureIsOptIn\(buildEnv\)/,
+  );
+  assert.match(
+    iosDeviceKeyReuseBuildSupport,
+    /"metadata",\s*"--no-deps",\s*"--format-version",\s*"1"/,
+  );
+  assert.match(
+    iosDeviceKeyReuseBuildSupport,
+    /defaultFeatures\.includes\(TOWNSHIP_IOS_KEY_REUSE_NATIVE_PROBE_FEATURE\)/,
+  );
+  assert.match(
+    iosDeviceKeyReuseBuildSupport,
+    /"--manifest-path",\s*join\(shellRoot, "src-tauri", "Cargo\.toml"\)/,
+  );
+  assert.equal(
+    pkg.scripts["ios:native-probe-feature:contract"],
+    "tsx test/support/ios_native_probe_feature_contract.ts",
+  );
+  assert.match(
+    pkg.scripts["tauri:ios:build:device-key-reuse-probe"],
+    /^npm run ios:native-probe-feature:contract && /,
+  );
+  assert.match(
+    iosNativeProbeFeatureContract,
+    /cargo[\s\S]*build[\s\S]*--target[\s\S]*aarch64-apple-ios/,
+  );
+  assert.match(
+    iosNativeProbeFeatureContract,
+    /const feature = "township-ios-key-reuse-native-probe"/,
+  );
+  assert.match(
+    iosNativeProbeFeatureContract,
+    /build\(\["--features", feature\]\)/,
+  );
+  assert.match(
+    iosNativeProbeFeatureContract,
+    /ordinary iOS binary unexpectedly contains the native probe marker/,
+  );
+  assert.match(
+    iosNativeProbeFeatureContract,
+    /feature-enabled iOS binary omitted the native probe marker/,
+  );
+  assert.match(
+    iosNativeProbeFeatureContract,
+    /TOWNSHIP_IOS_BUILD_DEVELOPER_DIR[\s\S]*selectedDeveloperDir/,
+  );
+  assert.match(iosNativeProbeFeatureContract, /SWIFT_RS_CLANG/);
+  assert.match(
+    iosNativeProbeFeatureContract,
+    /execFileSync\("\/usr\/bin\/xcode-select", \["-p"\]/,
+  );
+  assert.match(iosNativeProbeFeatureContract, /--show-sdk-version/);
+  assert.match(iosNativeProbeFeatureContract, /sdkMajor < 27/);
+  assert.match(iosNativeProbeFeatureContract, /existsSync\(swiftRsClang\)/);
   assert.match(iosDeviceKeyReuseBuildSupport, /ENTITLEMENTS_ALLOWED: "YES"/);
   assert.match(iosDeviceKeyReuseBuildSupport, /generatedSourceSnapshots/);
   assert.match(iosDeviceKeyReuseBuildSupport, /readFileSync/);
@@ -1746,6 +2251,10 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(iosDeviceKeyReuseBuildSupport, /BUILD_TIMEOUT_MS/);
   assert.match(iosDeviceKeyReuseBuildSupport, /detached: true/);
   assert.match(iosDeviceKeyReuseBuildSupport, /killBuildProcessGroup/);
+  assert.match(
+    iosDeviceKeyReuseBuildSupport,
+    /readFileSync\([\s\S]*Township[\s\S]*\)\.includes\([\s\S]*township-ios-key-reuse-probe-/,
+  );
   assert.match(iosDeviceKeyReuseBuildSupport, /process\.on\("SIGINT"/);
   assert.match(iosDeviceKeyReuseBuildSupport, /process\.on\("SIGTERM"/);
   assert.match(iosDeviceKeyReuseBuildSupport, /process\.removeListener/);
@@ -1763,7 +2272,8 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(iosDeviceKeyReuseBuildSupport, /classifyBuildFailure/);
   assert.match(iosDeviceKeyReuseBuildSupport, /redactBuildOutput/);
   assert.match(iosDeviceKeyReuseBuildSupport, /process\.env\.HOME/);
-  assert.match(iosDeviceKeyReuseBuildSupport, /Apple Development:/);
+  assert.match(iosDeviceKeyReuseBuildSupport, /redactIosSigningOutput/);
+  assert.match(iosSigningOutputSupport, /Apple Development/);
   assert.match(
     iosDeviceKeyReuseBuildSupport,
     /catch \(error\)[\s\S]*console\.error\(redactBuildOutput\([\s\S]*if \(process\.exitCode === undefined\) process\.exitCode = 1/,
@@ -1793,17 +2303,48 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   );
   assert.match(iosDeviceKeyReuseBuildSupport, /terminationConfirmationTimer/);
   assert.match(iosDeviceKeyReuseBuildSupport, /BUILD_EXIT_CONFIRMATION_MS/);
-  assert.match(
-    iosDeviceKeyReuseBuildSupport,
-    /provisioning profile\(\?: name\)\?/i,
-  );
+  assert.match(iosSigningOutputSupport, /provisioning profile\(\?: name\)\?/i);
   assert.doesNotMatch(
     iosDeviceKeyReuseBuildSupport,
     /filter\([\s\S]{0,100}signing certificate\|signing identity\|provisioning profile/,
   );
+  const redactedSigningOutput = redactIosSigningOutput(
+    "build remains classifiable\n" +
+      "device=DEVICE-SECRET team=TEAMID0001 home=/private/home\n" +
+      "account='private.person@example.test' " +
+      "temporary=/var/folders/aa/private-hash/T/township-ios-provision-log-private/xcodebuild.log\n" +
+      "Apple ID=private.person%40example.test\n" +
+      "<key>TeamName</key><string>Private Team</string>\n" +
+      '"TeamName" => "Private Plutil Team"\n' +
+      '{"TeamName":"Private JSON Team"}\n' +
+      "OU=TEAMID0001, O=Private Organization\n" +
+      "subject= /O=Private Slash Organization/OU=TEAMID0001/C=US\n" +
+      "<key>DeveloperCertificates</key><array><data>MIIFPrivateMaterial</data></array>\n" +
+      "Apple Development: Private Person\n" +
+      'Provisioning profile "Private Profile" is not valid\n' +
+      "certificate=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    {
+      developmentTeam: "TEAMID0001",
+      deviceUdid: "DEVICE-SECRET",
+      home: "/private/home",
+    },
+  );
+  assert.doesNotMatch(
+    redactedSigningOutput,
+    /DEVICE-SECRET|TEAMID0001|\/private\/home|private\.person(?:@|%40)example\.test|\/var\/folders\/aa\/private-hash|Private (?:Person|(?:Plutil |JSON )?Team|(?:Slash )?Organization)|MIIFPrivateMaterial|Private Profile|A{40}/,
+  );
+  assert.match(redactedSigningOutput, /build remains classifiable/);
+  assert.match(
+    redactedSigningOutput,
+    /\$TMPDIR\/township-ios-provision-log-private\/xcodebuild\.log/,
+  );
   assert.match(
     iosDeviceKeyReuseBuildSupport,
     /stdio: \["ignore", logFd, logFd\]/,
+  );
+  assert.match(
+    iosDeviceKeyReuseBuildSupport,
+    /delete buildEnv\.TOWNSHIP_NPM_BIN;\s*delete buildEnv\.TOWNSHIP_NPM_FALLBACK_PATHS;[\s\S]*assert\.equal\(buildEnv\.TOWNSHIP_NPM_BIN, undefined\);\s*assert\.equal\(buildEnv\.TOWNSHIP_NPM_FALLBACK_PATHS, undefined\)/,
   );
   assert.doesNotMatch(iosDeviceKeyReuseBuildSupport, /stdio: "inherit"/);
   assert.doesNotMatch(
@@ -1812,9 +2353,14 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   );
   assert.doesNotMatch(
     iosDeviceKeyReuseBuildSupport,
-    /WTR38SYC38|Q63L49GR8U|V2QRJPFMY9|--no-sign/,
+    /(?:developmentTeam|expectedTeamIdentifier)\s*=\s*["'][A-Z0-9]{10}["']|--no-sign/,
   );
   assert.match(iosDeviceKeyReuseSmoke, /TOWNSHIP_IOS_DEVICE_UDID/);
+  assert.match(iosDeviceKeyReuseSmoke, /APPLE_DEVELOPMENT_TEAM/);
+  assert.match(
+    iosDeviceKeyReuseSmoke,
+    /\/\^\[A-Z0-9\]\{10\}\$\/\.test\(expectedDevelopmentTeam\)/,
+  );
   assert.match(iosDeviceKeyReuseSmoke, /TOWNSHIP_IOS_DEVICE_DEVELOPER_DIR/);
   assert.doesNotMatch(
     iosDeviceKeyReuseSmoke,
@@ -1850,7 +2396,7 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   );
   assert.match(
     iosDeviceKeyReuseSmoke,
-    /const entitlements = await run\(\s*"codesign",\s*\["--display", "--entitlements", ":-"/,
+    /const entitlements = await runStdout\(\s*"codesign",\s*\["--display", "--entitlements", ":-"/,
   );
   assert.match(iosEntitlementScopeSupport, /get-task-allow/);
   assert.match(iosDeviceKeyReuseSmoke, /Authority=Apple Development:/);
@@ -1859,23 +2405,560 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
     iosDeviceKeyReuseSmoke,
     /import \{ developmentEntitlementErrors \} from "\.\/support\/ios_entitlement_scope\.mjs"/,
   );
+  assert.match(
+    iosDeviceKeyReuseSmoke,
+    /import \{ developmentProfileErrors \} from "\.\/support\/ios_development_profile\.mjs"/,
+  );
+  assert.match(iosDeviceKeyReuseSmoke, /security[\s\S]*cms[\s\S]*-D/);
+  assert.match(
+    iosDeviceKeyReuseSmoke,
+    /readFileSync\(decodedProfilePath, "utf8"\)/,
+  );
+  assert.doesNotMatch(iosDeviceKeyReuseSmoke, /readPlistXml/);
+  assert.match(iosDeviceKeyReuseSmoke, /ApplicationIdentifierPrefix/);
+  assert.match(iosDeviceKeyReuseSmoke, /CFBundleIdentifier/);
+  assert.match(
+    iosDeviceKeyReuseSmoke,
+    /expectedApplicationIdentifier:\s*profile[\s\S]*applicationIdentifier/,
+  );
+  assert.match(
+    iosDeviceKeyReuseSmoke,
+    /expectedTeamIdentifier:\s*profile[\s\S]*teamIdentifier/,
+  );
+  assert.match(
+    iosDeviceKeyReuseSmoke,
+    /expectedTeamIdentifier:\s*expectedDevelopmentTeam/,
+  );
+  assert.match(
+    iosDeviceKeyReuseSmoke,
+    /const entitlements = await runStdout\([\s\S]*"codesign"/,
+  );
+  assert.match(iosDeviceKeyReuseSmoke, /readPlistJson[\s\S]*runStdout\(/);
+  assert.match(iosDeviceKeyReuseSmoke, /readPlistRaw[\s\S]*runStdout\(/);
+  assert.match(
+    iosDeviceKeyReuseSmoke,
+    /const signingDetails = await run\(\s*"codesign"/,
+  );
+  assert.match(iosDeviceKeyReuseSmoke, /profileDateTimeMs\(/);
+  assert.doesNotMatch(iosDeviceKeyReuseSmoke, /Date\.parse/);
   assert.doesNotMatch(iosDeviceKeyReuseSmoke, /assert\.\w+\(\s*entitlements/);
   assert.doesNotMatch(
     iosDeviceKeyReuseSmoke,
     /(?:console\.\w+|new Error)\([^;]*\bentitlements\b/s,
   );
-  assert.equal(
-    [...iosDeviceKeyReuseSmoke.matchAll(/\bentitlements\b/g)].length,
-    5,
+  assert.doesNotMatch(
+    iosDeviceKeyReuseSmoke,
+    /(?:console\.\w+|new Error)\([^;]*\bprofile\b/s,
   );
   const defaultScopeEntitlements =
     "<dict><key>application-identifier</key><string>TEAMID0001.dev.treetop.lattice.township</string>" +
     "<key>com.apple.developer.team-identifier</key><string>TEAMID0001</string>" +
     "<key>get-task-allow</key><true/></dict>";
+  const defaultEntitlementOptions = {
+    bundleIdentifier: "dev.treetop.lattice.township",
+    expectedApplicationIdentifier: "TEAMID0001.dev.treetop.lattice.township",
+    expectedTeamIdentifier: "TEAMID0001",
+  };
+  const divergentPrefixEntitlements =
+    "<dict><key>application-identifier</key><string>APPPREFIX01.dev.treetop.lattice.township</string>" +
+    "<key>com.apple.developer.team-identifier</key><string>TEAMID0001</string>" +
+    "<key>get-task-allow</key><true/></dict>";
+  assert.deepEqual(
+    developmentEntitlementErrors(divergentPrefixEntitlements, {
+      bundleIdentifier: "dev.treetop.lattice.township",
+      expectedApplicationIdentifier: "APPPREFIX01.dev.treetop.lattice.township",
+      expectedTeamIdentifier: "TEAMID0001",
+    }),
+    [],
+  );
+  assert.deepEqual(
+    developmentEntitlementErrors(
+      divergentPrefixEntitlements.replace(
+        "APPPREFIX01.dev.treetop.lattice.township",
+        "APPPREFIX01.*",
+      ),
+      {
+        bundleIdentifier: "dev.treetop.lattice.township",
+        expectedApplicationIdentifier: "APPPREFIX01.*",
+        expectedTeamIdentifier: "TEAMID0001",
+      },
+    ),
+    ["wildcard-application-identifier"],
+  );
+
+  const profileNow = Date.parse("2026-07-22T12:00:00Z");
+  const validDevelopmentProfile = {
+    teamIdentifiers: ["TEAMID0001"],
+    applicationIdentifierPrefixes: ["APPPREFIX01"],
+    duplicateEntitlementKeys: [],
+    entitlements: {
+      applicationIdentifier: "APPPREFIX01.dev.treetop.lattice.township",
+      teamIdentifier: "TEAMID0001",
+      getTaskAllow: true,
+      keychainAccessGroups: ["APPPREFIX01.*"],
+    },
+    provisionedDevices: ["device-abc"],
+    provisionsAllDevices: false,
+    creationTimeMs: profileNow - 60_000,
+    expirationTimeMs: profileNow + 48 * 60 * 60_000,
+  };
+  const profileOptions = {
+    bundleIdentifier: "dev.treetop.lattice.township",
+    deviceUdid: "DEVICE-ABC",
+    minimumRemainingMs: 24 * 60 * 60_000,
+    nowMs: profileNow,
+    expectedTeamIdentifier: "TEAMID0001",
+  };
+  assert.deepEqual(
+    developmentProfileErrors(validDevelopmentProfile, profileOptions),
+    [],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(validDevelopmentProfile, {
+      ...profileOptions,
+      expectedTeamIdentifier: undefined,
+    }),
+    ["missing-expected-team"],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(validDevelopmentProfile, {
+      ...profileOptions,
+      expectedTeamIdentifier: "",
+    }),
+    ["missing-expected-team"],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      { ...validDevelopmentProfile, teamIdentifiers: ["ONE", "TWO"] },
+      profileOptions,
+    ),
+    ["ambiguous-profile-team"],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      {
+        ...validDevelopmentProfile,
+        applicationIdentifierPrefixes: ["ONE", "TWO"],
+      },
+      profileOptions,
+    ),
+    ["ambiguous-application-identifier-prefix"],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      {
+        ...validDevelopmentProfile,
+        entitlements: {
+          ...validDevelopmentProfile.entitlements,
+          applicationIdentifier: "APPPREFIX01.*",
+        },
+      },
+      profileOptions,
+    ),
+    [
+      "wildcard-profile-application-identifier",
+      "profile-application-identifier-does-not-match-bundle",
+    ],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      { ...validDevelopmentProfile, provisionsAllDevices: true },
+      profileOptions,
+    ),
+    ["enterprise-profile-not-supported"],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      { ...validDevelopmentProfile, provisionedDevices: undefined },
+      profileOptions,
+    ),
+    ["missing-provisioned-devices"],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      { ...validDevelopmentProfile, provisionedDevices: [] },
+      profileOptions,
+    ),
+    ["device-not-provisioned"],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      { ...validDevelopmentProfile, provisionedDevices: ["OTHER-DEVICE"] },
+      profileOptions,
+    ),
+    ["device-not-provisioned"],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      {
+        ...validDevelopmentProfile,
+        duplicateEntitlementKeys: ["application-identifier"],
+      },
+      profileOptions,
+    ),
+    ["duplicate-profile-entitlement"],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      { ...validDevelopmentProfile, duplicateEntitlementKeys: undefined },
+      profileOptions,
+    ),
+    ["invalid-profile-entitlement-evidence"],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      { ...validDevelopmentProfile, duplicateEntitlementKeys: "none" },
+      profileOptions,
+    ),
+    ["invalid-profile-entitlement-evidence"],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(validDevelopmentProfile, {
+      ...profileOptions,
+      expectedTeamIdentifier: "OTHERTEAM1",
+    }),
+    ["profile-team-does-not-match-expected-team"],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      {
+        ...validDevelopmentProfile,
+        entitlements: {
+          ...validDevelopmentProfile.entitlements,
+          getTaskAllow: false,
+        },
+      },
+      profileOptions,
+    ),
+    ["not-development-profile"],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      {
+        ...validDevelopmentProfile,
+        entitlements: {
+          ...validDevelopmentProfile.entitlements,
+          applicationIdentifier:
+            "APPPREFIX01.dev.treetop.lattice.township.extension",
+        },
+      },
+      profileOptions,
+    ),
+    ["profile-application-identifier-does-not-match-bundle"],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      {
+        ...validDevelopmentProfile,
+        entitlements: {
+          ...validDevelopmentProfile.entitlements,
+          applicationIdentifier: "APPPREFIX01.dev.treetop.lattice",
+        },
+      },
+      profileOptions,
+    ),
+    ["profile-application-identifier-does-not-match-bundle"],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      {
+        ...validDevelopmentProfile,
+        entitlements: {
+          ...validDevelopmentProfile.entitlements,
+          teamIdentifier: "OTHERTEAM1",
+        },
+      },
+      profileOptions,
+    ),
+    ["profile-entitlement-team-not-authorized"],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      {
+        ...validDevelopmentProfile,
+        entitlements: {
+          ...validDevelopmentProfile.entitlements,
+          keychainAccessGroups: [
+            "$(AppIdentifierPrefix)dev.treetop.lattice.township",
+          ],
+        },
+      },
+      profileOptions,
+    ),
+    ["invalid-profile-keychain-scope"],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      {
+        ...validDevelopmentProfile,
+        entitlements: undefined,
+      },
+      profileOptions,
+    ),
+    [
+      "missing-profile-application-identifier",
+      "missing-profile-team-identifier",
+      "not-development-profile",
+    ],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      {
+        ...validDevelopmentProfile,
+        entitlements: {
+          ...validDevelopmentProfile.entitlements,
+          applicationIdentifier: 42,
+          teamIdentifier: false,
+        },
+      },
+      profileOptions,
+    ),
+    [
+      "missing-profile-application-identifier",
+      "missing-profile-team-identifier",
+    ],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      {
+        ...validDevelopmentProfile,
+        entitlements: {
+          ...validDevelopmentProfile.entitlements,
+          keychainAccessGroups: ["APPPREFIX01.dev.treetop.lattice.township"],
+        },
+      },
+      profileOptions,
+    ),
+    [],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      {
+        ...validDevelopmentProfile,
+        entitlements: {
+          ...validDevelopmentProfile.entitlements,
+          keychainAccessGroups: undefined,
+        },
+      },
+      profileOptions,
+    ),
+    [],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      {
+        ...validDevelopmentProfile,
+        entitlements: {
+          ...validDevelopmentProfile.entitlements,
+          keychainAccessGroups: ["FOREIGNPFX1.*"],
+        },
+      },
+      profileOptions,
+    ),
+    ["invalid-profile-keychain-scope"],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      {
+        ...validDevelopmentProfile,
+        entitlements: {
+          ...validDevelopmentProfile.entitlements,
+          keychainAccessGroups: ["APPPREFIX01.*", "FOREIGNPFX1.*"],
+        },
+      },
+      profileOptions,
+    ),
+    [],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      {
+        ...validDevelopmentProfile,
+        entitlements: {
+          ...validDevelopmentProfile.entitlements,
+          keychainAccessGroups: ["APPPREFIX01.*", "APPPREFIX01.shared-service"],
+        },
+      },
+      profileOptions,
+    ),
+    [],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      { ...validDevelopmentProfile, creationTimeMs: profileNow + 1 },
+      profileOptions,
+    ),
+    ["profile-creation-date-in-future"],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      { ...validDevelopmentProfile, teamIdentifiers: [""] },
+      profileOptions,
+    ),
+    ["ambiguous-profile-team"],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      { ...validDevelopmentProfile, applicationIdentifierPrefixes: [""] },
+      profileOptions,
+    ),
+    ["ambiguous-application-identifier-prefix"],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      { ...validDevelopmentProfile, creationTimeMs: Number.NaN },
+      profileOptions,
+    ),
+    ["invalid-profile-creation-date"],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      { ...validDevelopmentProfile, expirationTimeMs: Number.NaN },
+      profileOptions,
+    ),
+    ["invalid-profile-expiration-date"],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      { ...validDevelopmentProfile, expirationTimeMs: profileNow + 1_000 },
+      profileOptions,
+    ),
+    ["profile-lifetime-too-short"],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      {
+        ...validDevelopmentProfile,
+        expirationTimeMs: profileNow + profileOptions.minimumRemainingMs,
+      },
+      profileOptions,
+    ),
+    [],
+  );
+  assert.deepEqual(
+    developmentProfileErrors(
+      {
+        ...validDevelopmentProfile,
+        provisionsAllDevices: true,
+        provisionedDevices: undefined,
+      },
+      profileOptions,
+    ),
+    ["enterprise-profile-not-supported", "missing-provisioned-devices"],
+  );
+  const alternatePrefixProfile = {
+    ...validDevelopmentProfile,
+    applicationIdentifierPrefixes: ["ALTPREFIX01"],
+    entitlements: {
+      ...validDevelopmentProfile.entitlements,
+      applicationIdentifier: "ALTPREFIX01.dev.treetop.lattice.township",
+      keychainAccessGroups: ["ALTPREFIX01.*"],
+    },
+  };
+  assert.deepEqual(
+    developmentProfileErrors(alternatePrefixProfile, profileOptions),
+    [],
+  );
+  const rawProfile = `<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0"><dict>
+<key>Unrelated</key><dict><key>application-identifier</key><string>decoy</string></dict>
+<key>Entitlements</key><dict>
+<key>application-identifier</key><string>APPPREFIX01.dev.treetop.lattice.township</string>
+<key>get-task-allow</key><true/>
+<key>com.apple.developer.team-identifier</key><string>TEAMID0001</string>
+</dict></dict></plist>`;
+  assert.deepEqual(duplicateProfileEntitlementKeys(rawProfile), []);
+  assert.deepEqual(
+    duplicateProfileEntitlementKeys(
+      rawProfile.replace(
+        "<key>get-task-allow</key><true/>",
+        "<key>get-task-allow</key><true/><key>get-task-allow</key><false/>",
+      ),
+    ),
+    ["get-task-allow"],
+  );
+  assert.deepEqual(
+    duplicateProfileEntitlementKeys(
+      rawProfile.replace(
+        "<key>get-task-allow</key><true/>",
+        "<key>empty-dict</key><dict/><key>get-task-allow</key><true/><key>get-task-allow</key><false/>",
+      ),
+    ),
+    ["get-task-allow"],
+  );
+  assert.deepEqual(
+    duplicateProfileEntitlementKeys(
+      rawProfile.replace(
+        "<key>get-task-allow</key><true/>",
+        "<!-- <dict><key>get-task-allow</key></dict> --><key>get-task-allow</key><true/>",
+      ),
+    ),
+    [],
+  );
+  assert.deepEqual(
+    duplicateProfileEntitlementKeys(
+      rawProfile.replace(
+        "<key>get-task-allow</key><true/>",
+        "<!-- <dict><key>decoy</key></dict> --><key>get-task-allow</key><true/><key>get-task-allow</key><false/>",
+      ),
+    ),
+    ["get-task-allow"],
+  );
+  assert.deepEqual(
+    duplicateProfileEntitlementKeys(
+      rawProfile.replace(
+        "</dict></dict></plist>",
+        "</dict><key>Trailing</key><dict><key>get-task-allow</key><true/><key>get-task-allow</key><false/></dict></dict></plist>",
+      ),
+    ),
+    [],
+  );
+  assert.deepEqual(
+    duplicateProfileEntitlementKeys(
+      rawProfile.replace(
+        "</dict></dict></plist>",
+        "</dict><key>Entitlements</key><dict></dict></dict></plist>",
+      ),
+    ),
+    ["Entitlements"],
+  );
+  assert.equal(
+    duplicateProfileEntitlementKeys(
+      rawProfile.replace("<key>Entitlements</key>", ""),
+    ),
+    undefined,
+  );
+  assert.equal(
+    duplicateProfileEntitlementKeys(
+      rawProfile.replace(
+        "<key>Entitlements</key><dict>",
+        "<key>Entitlements</key><array>",
+      ),
+    ),
+    undefined,
+  );
+  const plutilCfDateRawFixture = "2026-07-22T12:00:00Z";
+  assert.equal(profileDateTimeMs(plutilCfDateRawFixture), profileNow);
+  assert.ok(Number.isNaN(profileDateTimeMs("2026-07-22 12:00:00Z")));
+  assert.ok(Number.isNaN(profileDateTimeMs("2026-02-30T12:00:00Z")));
+  assert.ok(Number.isNaN(profileDateTimeMs(undefined)));
+  assert.deepEqual(
+    developmentEntitlementErrors(
+      divergentPrefixEntitlements.replaceAll("APPPREFIX01", "ALTPREFIX01"),
+      {
+        bundleIdentifier: profileOptions.bundleIdentifier,
+        expectedApplicationIdentifier:
+          alternatePrefixProfile.entitlements.applicationIdentifier,
+        expectedTeamIdentifier:
+          alternatePrefixProfile.entitlements.teamIdentifier,
+      },
+    ),
+    [],
+  );
   assert.deepEqual(
     developmentEntitlementErrors(
       defaultScopeEntitlements,
-      "dev.treetop.lattice.township",
+      defaultEntitlementOptions,
     ),
     [],
   );
@@ -1885,7 +2968,7 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
         "<key>get-task-allow</key>",
         "<key>keychain-access-groups</key><array><string>TEAMID0001.dev.treetop.lattice.township</string></array><key>get-task-allow</key>",
       ),
-      "dev.treetop.lattice.township",
+      defaultEntitlementOptions,
     ),
     [],
   );
@@ -1895,7 +2978,17 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
         "<key>get-task-allow</key>",
         "<key>keychain-access-groups</key><array><string>TEAMID0001.foreign.app</string></array><key>get-task-allow</key>",
       ),
-      "dev.treetop.lattice.township",
+      defaultEntitlementOptions,
+    ),
+    ["explicit-keychain-scope-is-not-app-exclusive"],
+  );
+  assert.deepEqual(
+    developmentEntitlementErrors(
+      defaultScopeEntitlements.replace(
+        "<key>get-task-allow</key>",
+        "<key>keychain-access-groups</key><array><string>TEAMID0001.*</string></array><key>get-task-allow</key>",
+      ),
+      defaultEntitlementOptions,
     ),
     ["explicit-keychain-scope-is-not-app-exclusive"],
   );
@@ -1905,9 +2998,9 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
         "TEAMID0001.dev.treetop.lattice.township",
         "TEAMID0001.*",
       ),
-      "dev.treetop.lattice.township",
+      defaultEntitlementOptions,
     ),
-    ["application-identifier-does-not-match-team-and-bundle"],
+    ["wildcard-application-identifier"],
   );
   assert.deepEqual(
     developmentEntitlementErrors(
@@ -1917,7 +3010,7 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
           "<string>TEAMID0001.dev.treetop.lattice.township</string>" +
           "<string>TEAMID0001.shared</string></array><key>get-task-allow</key>",
       ),
-      "dev.treetop.lattice.township",
+      defaultEntitlementOptions,
     ),
     ["explicit-keychain-scope-is-not-app-exclusive"],
   );
@@ -1930,7 +3023,7 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
           "<string>TEAMID0001.dev.treetop.lattice.township</string></array>" +
           "<key>get-task-allow</key>",
       ),
-      "dev.treetop.lattice.township",
+      defaultEntitlementOptions,
     ),
     ["duplicate-keychain-scope-entitlement"],
   );
@@ -1941,7 +3034,7 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
         "<key>application-identifier</key><string>TEAMID0001.dev.treetop.lattice.township</string>" +
           "<key>application-identifier</key>",
       ),
-      "dev.treetop.lattice.township",
+      defaultEntitlementOptions,
     ),
     ["duplicate-application-identifier-entitlement"],
   );
@@ -1952,7 +3045,7 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
         "<key>com.apple.developer.team-identifier</key><string>TEAMID0001</string>" +
           "<key>com.apple.developer.team-identifier</key>",
       ),
-      "dev.treetop.lattice.township",
+      defaultEntitlementOptions,
     ),
     ["duplicate-team-identifier-entitlement"],
   );
@@ -1962,9 +3055,16 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
         "<key>get-task-allow</key>",
         "<key>get-task-allow</key><false/><key>get-task-allow</key>",
       ),
-      "dev.treetop.lattice.township",
+      defaultEntitlementOptions,
     ),
     ["duplicate-get-task-allow-entitlement"],
+  );
+  assert.deepEqual(
+    developmentEntitlementErrors(
+      defaultScopeEntitlements.replace("<true/>", "<false/>"),
+      defaultEntitlementOptions,
+    ),
+    ["not-development-entitled"],
   );
   assert.deepEqual(
     developmentEntitlementErrors(
@@ -1975,10 +3075,10 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
           "<key>keychain-access-groups</key><array><string>TEAMID0001.*</string></array>" +
             "<key>get-task-allow</key>",
         ),
-      "dev.treetop.lattice.township",
+      defaultEntitlementOptions,
     ),
     [
-      "application-identifier-does-not-match-team-and-bundle",
+      "wildcard-application-identifier",
       "explicit-keychain-scope-is-not-app-exclusive",
     ],
   );
@@ -1987,21 +3087,38 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(iosDeviceKeyReuseSmoke, /"device",\s*"process",\s*"launch"/);
   assert.match(iosDeviceKeyReuseSmoke, /"device", "process", "terminate"/);
   assert.match(iosDeviceKeyReuseSmoke, /"device", "info", "processes"/);
-  assert.match(iosDeviceKeyReuseSmoke, /"--console"/);
+  assert.match(iosDeviceKeyReuseSmoke, /"device",\s*"copy",\s*"from"/);
+  assert.match(iosDeviceKeyReuseSmoke, /"appDataContainer"/);
+  assert.match(
+    iosDeviceKeyReuseSmoke,
+    /probeArtifactDirectory = "Library\/Caches"/,
+  );
+  assert.match(
+    iosDeviceKeyReuseSmoke,
+    /probeArtifactPrefix = "township-ios-key-reuse-probe-"/,
+  );
+  assert.match(iosDeviceKeyReuseSmoke, /randomBytes\(16\)\.toString\("hex"\)/);
+  assert.match(iosDeviceKeyReuseSmoke, /"--environment-variables"/);
+  assert.match(iosDeviceKeyReuseSmoke, /TOWNSHIP_IOS_PROBE_LAUNCH_NONCE/);
+  assert.match(iosDeviceKeyReuseSmoke, /iosDeviceLaunchProcessId/);
+  assert.match(iosDeviceKeyReuseSmoke, /createIosProbeCopyDestination/);
+  assert.match(iosDeviceKeyReuseSmoke, /secureIosProbeCopy/);
+  assert.match(iosDeviceKeyReuseSmoke, /ARTIFACT_POLL_INTERVAL_MS = 1_000/);
+  assert.match(iosDeviceKeyReuseSmoke, /assertProcessAbsentEventually/);
+  assert.doesNotMatch(
+    iosDeviceKeyReuseSmoke,
+    /--console|\/usr\/bin\/expect|\/usr\/bin\/script|\/dev\/tty/,
+  );
   assert.match(iosDeviceKeyReuseSmoke, /"--json-output"/);
   assert.match(iosDeviceKeyReuseSmoke, /JSON\.parse/);
-  assert.match(iosDeviceKeyReuseSmoke, /const launch = launchWithConsole/);
+  assert.doesNotMatch(iosDeviceKeyReuseSmoke, /\bspawn\(/);
   assert.match(
     iosDeviceKeyReuseSmoke,
-    /spawn\(\s*"xcrun",[\s\S]*?env: deviceToolEnv[\s\S]*?stdio: \["ignore", "pipe", "pipe"\]/,
+    /const first = await launchAndReadArtifact\(deviceUdid/,
   );
-  assert.match(
-    iosDeviceKeyReuseSmoke,
-    /const consoleOutput = await launch\.probeOutput/,
-  );
-  assert.match(iosDeviceKeyReuseSmoke, /waitForExit/);
-  assert.match(iosDeviceKeyReuseSmoke, /parseProbeLines\(consoleOutput\)/);
+  assert.match(iosDeviceProbeOutputSupport, /iosDeviceProbeProgress/);
   assert.match(iosDeviceKeyReuseSmoke, /fields\.process_id,\s*pid/);
+  assert.match(iosDeviceKeyReuseSmoke, /evidence\.launchNonce,\s*nonce/);
   assert.match(iosDeviceKeyReuseSmoke, /township-ios-key-reuse-probe/);
   assert.match(iosDeviceKeyReuseSmoke, /fields\.outcome,\s*"ready"/);
   assert.match(
@@ -2012,41 +3129,69 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(iosDeviceKeyReuseSmoke, /"township-ios-key-reuse-control"/);
   assert.match(
     iosDeviceKeyReuseSmoke,
-    /assertReadyKeyProbe\(\s*probes\.get\("primary"\),\s*"township-resident",\s*pid,?\s*\)/,
+    /assertReadyKeyProbe\(\s*evidence\.primary,\s*"township-resident",\s*pid,?\s*\)/,
   );
   assert.match(
     iosDeviceKeyReuseSmoke,
-    /assertReadyKeyProbe\(\s*probes\.get\("control"\),\s*"township-ios-key-reuse-control",\s*pid,?\s*\)/,
+    /assertReadyKeyProbe\(\s*evidence\.control,\s*"township-ios-key-reuse-control",\s*pid,?\s*\)/,
+  );
+  assert.match(iosDeviceKeyReuseSmoke, /ARTIFACT_TIMEOUT_MS/);
+  assert.match(
+    iosDeviceKeyReuseSmoke,
+    /const entitlementErrors = developmentEntitlementErrors\(\s*entitlements,\s*options/,
   );
   assert.match(
     iosDeviceKeyReuseSmoke,
-    /activeLaunches\.add\(launch\);\s+const consoleOutput = await launch\.probeOutput/,
-  );
-  assert.match(iosDeviceKeyReuseSmoke, /EXIT_TIMEOUT_MS/);
-  assert.match(iosDeviceKeyReuseSmoke, /stopConsoleLaunch/);
-  assert.match(iosDeviceKeyReuseSmoke, /child\.once\("close"/);
-  assert.doesNotMatch(iosDeviceKeyReuseSmoke, /child\.once\("exit"/);
-  assert.match(
-    iosDeviceKeyReuseSmoke,
-    /assert\.deepEqual\(\s*developmentEntitlementErrors\(entitlements, appId\),\s*\[\]/,
+    /assert\.deepEqual\(\s*entitlementErrors,\s*\[\]/,
   );
   assert.match(iosDeviceKeyReuseSmoke, /readFileSync/);
   assert.match(iosDeviceKeyReuseSmoke, /mkdtempSync/);
   assert.match(iosDeviceKeyReuseSmoke, /redactCommandOutput/);
+  assert.match(iosDeviceProbeOutputSupport, /completeProbeLines/);
+  assert.match(iosDeviceKeyReuseSmoke, /iosDeviceProbeProgress/);
+  assert.match(iosDeviceKeyReuseSmoke, /redactIosDeviceCommandOutput/);
+  assert.match(iosDeviceKeyReuseSmoke, /process\.on\("uncaughtException"/);
+  assert.match(iosDeviceKeyReuseSmoke, /process\.on\("unhandledRejection"/);
+  assert.match(
+    iosDeviceKeyReuseSmoke,
+    /console\.error\(redactCommandOutput\(message, deviceUdid \?\? ""\)\)/,
+  );
+  assert.match(iosDeviceKeyReuseSmoke, /process\.exit\(1\)/);
+  assert.doesNotMatch(iosDeviceKeyReuseSmoke, /process\.exitCode = 1/);
   assert.match(
     iosDeviceKeyReuseSmoke,
     /throw new Error\(\s*redactCommandOutput\(/,
   );
-  assert.match(iosDeviceKeyReuseSmoke, /replaceAll\(deviceUdid/);
-  assert.match(iosDeviceKeyReuseSmoke, /if \(!deviceUdid\) return/);
+  assert.doesNotMatch(iosDeviceKeyReuseSmoke, /failed\.stderr \?\?/);
+  assert.match(
+    iosDeviceKeyReuseSmoke,
+    /\[failed\.stderr, failed\.stdout, failed\.message\][\s\S]*\.find\(Boolean\)/,
+  );
+  assert.match(iosDeviceKeyReuseSmoke, /lastCopyError/);
+  assert.match(
+    iosDeviceKeyReuseSmoke,
+    /physical iOS probe artifact never appeared on device: \$\{/,
+  );
+  assert.match(iosDeviceProbeOutputSupport, /replaceAll\(deviceUdid/);
+  assert.match(iosDeviceProbeOutputSupport, /if \(deviceUdid\)/);
   assert.match(iosDeviceKeyReuseSmoke, /process\.env\.HOME/);
-  assert.match(iosDeviceKeyReuseSmoke, /Apple Development:/);
-  assert.match(iosDeviceKeyReuseSmoke, /finally\s*\{[\s\S]*rmSync\(tempRoot/);
+  assert.match(iosDeviceProbeOutputSupport, /Apple Development/);
+  assert.match(
+    iosDeviceKeyReuseSmoke,
+    /process\.on\("exit", cleanupPhysicalProbeResources\)/,
+  );
+  assert.match(
+    iosDeviceKeyReuseSmoke,
+    /finally\s*\{[\s\S]*cleanupPhysicalProbeResources\(\)/,
+  );
   assert.doesNotMatch(
     iosDeviceKeyReuseSmoke,
     /WTR38SYC38|Q63L49GR8U|V2QRJPFMY9/,
   );
-  assert.doesNotMatch(iosDeviceKeyReuseSmoke, /console\.\w+\([^)]*deviceUdid/s);
+  assert.doesNotMatch(
+    iosDeviceKeyReuseSmoke,
+    /console\.\w+\((?!\s*redactCommandOutput\()[^)]*deviceUdid/s,
+  );
   assert.doesNotMatch(
     iosDeviceKeyReuseSmoke,
     /process\.(?:stdout|stderr)\.write\([^)]*deviceUdid/s,
@@ -2055,11 +3200,11 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(iosDeviceKeyReuseSmoke, /controlPublicKeyAfterRelaunch/);
   assert.match(
     iosDeviceKeyReuseSmoke,
-    /const first = await launchAndProbe\(deviceUdid/,
+    /const first = await launchAndReadArtifact\(deviceUdid/,
   );
   assert.match(
     iosDeviceKeyReuseSmoke,
-    /await assertProcessPresent\(deviceUdid, first\.pid\);\s+await terminateApp\(deviceUdid, first\.pid\);\s+await first\.waitForExit\(\);\s+await assertProcessAbsent\(deviceUdid, first\.pid\);\s+const second = await launchAndProbe\(deviceUdid/,
+    /await assertProcessPresent\(deviceUdid, first\.pid\);\s+await terminateApp\(deviceUdid, first\.pid\);\s+await assertProcessAbsentEventually\(deviceUdid, first\.pid\);\s+activeProcessIds\.delete\(first\.pid\);\s+const second = await launchAndReadArtifact\(deviceUdid/,
   );
   assert.match(
     iosDeviceKeyReuseSmoke,
@@ -2089,6 +3234,150 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.match(iosDeviceKeyReuseSmoke, /byteLength,\s*32/);
   assert.match(iosDeviceKeyReuseSmoke, /signature_bytes, "64"/);
   assert.doesNotMatch(iosDeviceKeyReuseSmoke, /spawnTownshipPeer|BEAM|reboot/i);
+
+  const completePrimaryProbe =
+    "township-ios-key-reuse-probe slot=primary outcome=ready public_key_base64url=primary-secret";
+  const partialControlProbe =
+    "township-ios-key-reuse-probe slot=control outcome=ready public_key_base64url=partial-secret";
+  const bareProbeKey = "Z".repeat(43);
+  const segmentedProbeKey = `${"a".repeat(15)}-ABCDEFGHIJ-${"b".repeat(16)}`;
+  assert.deepEqual(
+    completeProbeLines(
+      `${completePrimaryProbe}\n${partialControlProbe}`,
+      "township-ios-key-reuse-probe",
+    ),
+    [completePrimaryProbe],
+    "an unterminated control probe must not complete physical evidence",
+  );
+  const redactedProbeOutput = redactIosDeviceCommandOutput(
+    `Device Witness’s iPad DEVICE-SECRET at /private/home TEAMID0001\nApple Distribution: Private Person\nDeveloper ID Application: Private Person\nProvisioning profile "Private Profile" is not valid\n${completePrimaryProbe} key_id=private-key error=private-error ${bareProbeKey} ${segmentedProbeKey}`,
+    "DEVICE-SECRET",
+    "/private/home",
+    "Witness's iPad",
+  );
+  assert.doesNotMatch(
+    redactedProbeOutput,
+    new RegExp(
+      `Witness|DEVICE-SECRET|/private/home|TEAMID0001|Private Person|Private Profile|primary-secret|private-key|private-error|${bareProbeKey}|${segmentedProbeKey}`,
+    ),
+  );
+  assert.match(redactedProbeOutput, /public_key_base64url=<redacted>/);
+  assert.match(redactedProbeOutput, /<redacted-key>/);
+  assert.match(redactedProbeOutput, /township-ios-key-reuse-probe/);
+  assert.equal(
+    redactIosDeviceCommandOutput(
+      "physical iOS probe artifact never appeared on device",
+      "",
+      "",
+      "",
+    ),
+    "physical iOS probe artifact never appeared on device",
+  );
+
+  const probePrefix = "township-ios-key-reuse-probe";
+  const firstNonce = "a".repeat(32);
+  const secondNonce = "b".repeat(32);
+  const startupProbe =
+    `LATTICE_PROBE: ${probePrefix} stage=native_startup ` +
+    `launch_nonce=${firstNonce} process_id=101`;
+  const primaryProbe =
+    `LATTICE_PROBE: ${probePrefix} store=ios_protected_keychain slot=primary outcome=ready ` +
+    `key_id=township-resident public_key_base64url=${"A".repeat(43)} signature_bytes=64 ` +
+    `launch_nonce=${firstNonce} process_id=101`;
+  const controlProbe =
+    `LATTICE_PROBE: ${probePrefix} store=ios_protected_keychain slot=control outcome=ready ` +
+    `key_id=township-ios-key-reuse-control public_key_base64url=${"B".repeat(43)} signature_bytes=64 ` +
+    `launch_nonce=${firstNonce} process_id=101`;
+  const completeProgress = iosDeviceProbeProgress(
+    `${startupProbe}\n${primaryProbe}\n${controlProbe}\n`,
+    probePrefix,
+    firstNonce,
+    "101",
+  );
+  assert.equal(completeProgress.processId, "101");
+  assert.equal(completeProgress.launchNonce, firstNonce);
+  assert.equal(completeProgress.evidence?.primary.fields.slot, "primary");
+  assert.equal(completeProgress.evidence?.control.fields.slot, "control");
+  assert.equal(
+    iosDeviceProbeProgress(
+      startupProbe.slice(0, -2),
+      probePrefix,
+      firstNonce,
+      "101",
+    ).processId,
+    undefined,
+    "an incomplete startup PID must not be used for cleanup",
+  );
+  assert.equal(
+    iosDeviceProbeProgress(
+      `${primaryProbe}\n${controlProbe}\n`,
+      probePrefix,
+      firstNonce,
+      "101",
+    ).evidence,
+    undefined,
+    "slot records without the native startup discriminator must not pass",
+  );
+  assert.throws(
+    () =>
+      iosDeviceProbeProgress(
+        `${startupProbe}\n${primaryProbe}\n${primaryProbe}\n${controlProbe}\n`,
+        probePrefix,
+        firstNonce,
+        "101",
+      ),
+    /duplicate primary probe/,
+  );
+  assert.throws(
+    () =>
+      iosDeviceProbeProgress(
+        `${startupProbe}\n${primaryProbe.replace("process_id=101", "process_id=202")}\n${controlProbe}\n`,
+        probePrefix,
+        firstNonce,
+        "101",
+      ),
+    /probe process id mismatch/,
+  );
+  assert.throws(
+    () =>
+      iosDeviceProbeProgress(
+        `${startupProbe}\nLATTICE_PROBE: ${probePrefix} slot=primary forged=yes process_id=101\n`,
+        probePrefix,
+        firstNonce,
+        "101",
+      ),
+    /malformed physical iOS probe record/,
+  );
+  assert.throws(
+    () =>
+      iosDeviceProbeProgress(
+        `${startupProbe}\n${primaryProbe.replace(firstNonce, secondNonce)}\n${controlProbe}\n`,
+        probePrefix,
+        firstNonce,
+        "101",
+      ),
+    /probe launch nonce mismatch/,
+  );
+  assert.throws(
+    () =>
+      iosDeviceProbeProgress(
+        `${startupProbe}\n${primaryProbe}\n${controlProbe}\n`,
+        probePrefix,
+        firstNonce,
+        "202",
+      ),
+    /probe process id mismatch/,
+  );
+  assert.throws(
+    () =>
+      iosDeviceProbeProgress(
+        `${startupProbe.replace(firstNonce, firstNonce.toUpperCase())}\n`,
+        probePrefix,
+        firstNonce,
+        "101",
+      ),
+    /malformed physical iOS probe record/,
+  );
   assert.doesNotMatch(pkg.scripts["app:convergence"], /device-key-reuse/);
   assert.match(androidCdpSupport, /connectToAppWebView/);
   assert.match(androidCdpSupport, /tauriInvoke/);
