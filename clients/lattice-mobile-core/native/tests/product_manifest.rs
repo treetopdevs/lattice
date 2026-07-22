@@ -34,7 +34,10 @@ fn all_three_product_manifests_exist_and_match_the_plan_158_table() {
     let treehouse = ProductManifest::for_product("treehouse").expect("treehouse manifest");
     assert_eq!(treehouse.app_id, "dev.treetop.lattice.treehouse");
     assert_eq!(treehouse.deep_link_scheme, "treehouse");
-    assert_eq!(treehouse.key_service, "dev.treetop.lattice.treehouse.carrier");
+    assert_eq!(
+        treehouse.key_service,
+        "dev.treetop.lattice.treehouse.carrier"
+    );
     assert_eq!(treehouse.database_file, "treehouse-v1.sqlite3");
     assert_eq!(treehouse.android_signing_alias, "treehouse-pilot-v1");
 }
@@ -42,7 +45,11 @@ fn all_three_product_manifests_exist_and_match_the_plan_158_table() {
 #[test]
 fn product_manifest_identifiers_never_collide() {
     let manifests = ProductManifest::all();
-    assert_eq!(manifests.len(), 3, "collision test needs all three products");
+    assert_eq!(
+        manifests.len(),
+        3,
+        "collision test needs all three products"
+    );
 
     assert_all_unique(manifests.iter().map(|manifest| manifest.product.clone()));
     assert_all_unique(manifests.iter().map(|manifest| manifest.app_id.clone()));
@@ -51,7 +58,11 @@ fn product_manifest_identifiers_never_collide() {
             .iter()
             .map(|manifest| manifest.deep_link_scheme.clone()),
     );
-    assert_all_unique(manifests.iter().map(|manifest| manifest.key_service.clone()));
+    assert_all_unique(
+        manifests
+            .iter()
+            .map(|manifest| manifest.key_service.clone()),
+    );
     assert_all_unique(
         manifests
             .iter()
@@ -67,7 +78,11 @@ fn product_manifest_identifiers_never_collide() {
 #[test]
 fn cross_product_scheme_dispatch_refuses() {
     let manifests = ProductManifest::all();
-    assert_eq!(manifests.len(), 3, "scheme dispatch test needs all three products");
+    assert_eq!(
+        manifests.len(),
+        3,
+        "scheme dispatch test needs all three products"
+    );
 
     for manifest in &manifests {
         assert!(

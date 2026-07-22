@@ -76,13 +76,19 @@ fn fresh_install_creates_marked_current_schema_database() {
 
     let db = ProductDatabase::open_path("township", &path).expect("fresh install opens");
 
-    assert!(path.exists(), "database file must exist after fresh install");
+    assert!(
+        path.exists(),
+        "database file must exist after fresh install"
+    );
     assert_eq!(db.product(), "township");
     assert_eq!(
         db.schema_version().expect("schema version"),
         PRODUCT_DATABASE_SCHEMA_VERSION
     );
-    assert_eq!(db.migration_ledger().expect("ledger"), expected_full_ledger());
+    assert_eq!(
+        db.migration_ledger().expect("ledger"),
+        expected_full_ledger()
+    );
     assert!(db.kv_entries().expect("kv entries").is_empty());
 }
 
@@ -93,7 +99,8 @@ fn current_schema_reopen_preserves_state_without_new_migrations() {
 
     {
         let db = ProductDatabase::open_path("township", &path).expect("first open");
-        db.kv_set("township:matter:local_ops", "[\"op-1\"]").expect("kv set");
+        db.kv_set("township:matter:local_ops", "[\"op-1\"]")
+            .expect("kv set");
     }
 
     let db = ProductDatabase::open_path("township", &path).expect("reopen");
@@ -105,7 +112,10 @@ fn current_schema_reopen_preserves_state_without_new_migrations() {
         db.schema_version().expect("schema version"),
         PRODUCT_DATABASE_SCHEMA_VERSION
     );
-    assert_eq!(db.migration_ledger().expect("ledger"), expected_full_ledger());
+    assert_eq!(
+        db.migration_ledger().expect("ledger"),
+        expected_full_ledger()
+    );
 }
 
 #[test]
@@ -115,7 +125,8 @@ fn product_marker_mismatch_fails_closed() {
 
     {
         let db = ProductDatabase::open_path("township", &path).expect("township creates");
-        db.kv_set("township:matter:profile", "resident").expect("kv set");
+        db.kv_set("township:matter:profile", "resident")
+            .expect("kv set");
     }
 
     let refusal = ProductDatabase::open_path("toolshed", &path);
@@ -191,7 +202,9 @@ fn interrupted_migration_rolls_back_and_fails_closed() {
             "the interrupted migration body must roll back"
         );
         let kept: String = conn
-            .query_row("SELECT value FROM kv WHERE key = 'kept'", [], |row| row.get(0))
+            .query_row("SELECT value FROM kv WHERE key = 'kept'", [], |row| {
+                row.get(0)
+            })
             .expect("kv row survives rollback");
         assert_eq!(kept, "value");
     }
@@ -223,7 +236,10 @@ fn n_minus_1_to_n_upgrade_preserves_state_and_extends_ledger() {
         db.schema_version().expect("schema version"),
         PRODUCT_DATABASE_SCHEMA_VERSION
     );
-    assert_eq!(db.migration_ledger().expect("ledger"), expected_full_ledger());
+    assert_eq!(
+        db.migration_ledger().expect("ledger"),
+        expected_full_ledger()
+    );
     assert_eq!(
         db.kv_get("township:matter:local_ops").expect("kv get"),
         Some("[\"op-1\",\"op-2\"]".to_string()),
@@ -238,7 +254,10 @@ fn n_minus_1_to_n_upgrade_preserves_state_and_extends_ledger() {
             |row| row.get(0),
         )
         .expect("query sqlite_master");
-    assert_eq!(frames_table, 1, "the v2 migration must create the frames table");
+    assert_eq!(
+        frames_table, 1,
+        "the v2 migration must create the frames table"
+    );
 }
 
 #[test]
