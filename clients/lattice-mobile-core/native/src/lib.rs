@@ -13,10 +13,17 @@
 //! Private signing seeds never enter this crate's database: they stay behind
 //! the platform key-store command boundary owned by each shell.
 
+pub mod discovery;
 pub mod product;
+pub mod signer;
 pub mod storage;
 
+pub use discovery::{
+    collect_pairing_discovery_adverts, decode_pairing_discovery_packet,
+    encode_pairing_discovery_packet, PairingDiscoveryAdvert, PAIRING_DISCOVERY_MAX_PACKET_BYTES,
+};
 pub use product::{ProductManifest, ProductManifestError};
+pub use signer::{CarrierKeySeedStore, InMemoryCarrierKeySeedStore, NativeCarrierSigner};
 pub use storage::{
     LegacyJsonImport, MigrationFault, MigrationLedgerEntry, ProductDatabase, ProductDatabaseError,
     PRODUCT_DATABASE_SCHEMA_VERSION,

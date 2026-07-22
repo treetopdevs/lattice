@@ -46,7 +46,13 @@ test("mobile secure-store strategy keeps secrets behind native signers", () => {
   assert.match(strategy, /does not prove human click-through/);
   assert.match(strategy, /does\s+not prove iOS,\s+Expo,\s+cross-device pairing state\s+exchange, or full mobile onboarding/);
 
-  assert.match(tauriLib, /trait CarrierKeySeedStore/);
+  // Plan 158 seam extraction: the seed-store trait and signing cache are
+  // product-neutral and live in lattice-mobile-core; platform keyring
+  // custody stays in the Township shell.
+  const mobileCoreSigner = readText("clients/lattice-mobile-core/native/src/signer.rs");
+  assert.match(mobileCoreSigner, /trait CarrierKeySeedStore/);
+  assert.match(mobileCoreSigner, /struct NativeCarrierSigner/);
+  assert.match(tauriLib, /CarrierKeySeedStore, InMemoryCarrierKeySeedStore/);
   assert.match(tauriLib, /struct KeyringCarrierKeySeedStore/);
   assert.match(tauriLib, /TownshipNativeState::platform_secure/);
   assert.match(tauriLib, /fn lattice_sign_carrier/);
