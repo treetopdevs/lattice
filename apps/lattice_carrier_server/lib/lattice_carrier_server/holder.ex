@@ -2,16 +2,19 @@ defmodule LatticeCarrierServer.Holder do
   @moduledoc """
   Owns the carrier's served log, durable relay path, and availability subscribers.
 
-  A path-backed relay is acknowledged only after a complete temporary dump has
-  been synced and atomically renamed over the source. This is process-crash
-  durability, not a power-loss guarantee: the parent directory is not synced,
-  and macOS `F_FULLFSYNC` is not requested.
+  A path-backed relay is acknowledged only after the complete durability
+  sequence (`LatticeCarrierServer.Durability`): temporary dump written,
+  file synced, atomically renamed over the source, and the containing
+  directory synced. A relay-enabled path holder rehearses that sequence at
+  startup and refuses to serve on a platform that cannot prove it. The
+  supported pilot platform is Linux; macOS `F_FULLFSYNC` is not requested,
+  so macOS remains a development-only substrate.
   """
 
   use GenServer
 
   alias Lattice.{Identity, Log, Sync}
-  alias LatticeCarrierServer.Secret
+  alias LatticeCarrierServer.{Durability, Secret}
 
   @frontier_limit 64
 
@@ -27,6 +30,13 @@ defmodule LatticeCarrierServer.Holder do
 
   @spec session_context(GenServer.server()) :: {Identity.t(), String.t()}
   def session_context(holder), do: GenServer.call(holder, :session_context)
+
+  @doc """
+  Readiness probe: a reply proves the identity is loaded and the source
+  restore completed, because `init/1` refuses otherwise.
+  """
+  @spec ready?(GenServer.server()) :: :ok
+  def ready?(holder), do: GenServer.call(holder, :ready?)
 
   @spec op_ids(GenServer.server()) :: [Lattice.Op.id()]
   def op_ids(holder), do: GenServer.call(holder, :op_ids)
@@ -61,21 +71,24 @@ defmodule LatticeCarrierServer.Holder do
   def init(opts) do
     identity = opts |> Keyword.fetch!(:identity) |> unwrap_identity()
     source = Keyword.fetch!(opts, :source)
+    relay_realms = Keyword.fetch!(opts, :relay_realms)
+    durability = Keyword.get(opts, :durability) || Durability.Posix
 
-    case load_source(source) do
-      {:ok, log} ->
-        {:ok,
-         %{
-           identity: identity,
-           log: log,
-           source: source,
-           state_reporter: Keyword.get(opts, :state_reporter),
-           relay_realms: opts |> Keyword.fetch!(:relay_realms) |> MapSet.new(),
-           subscribers: %{}
-         }}
-
-      {:error, reason} ->
-        {:stop, {:source_error, reason}}
+    with {:ok, log} <- load_source(source),
+         :ok <- rehearse_durability(source, relay_realms, durability) do
+      {:ok,
+       %{
+         identity: identity,
+         log: log,
+         source: source,
+         durability: durability,
+         state_reporter: Keyword.get(opts, :state_reporter),
+         relay_realms: MapSet.new(relay_realms),
+         subscribers: %{}
+       }}
+    else
+      {:error, {:durability_unsupported, _reason} = refusal} -> {:stop, refusal}
+      {:error, reason} -> {:stop, {:source_error, reason}}
     end
   end
 
@@ -95,6 +108,10 @@ defmodule LatticeCarrierServer.Holder do
   @impl GenServer
   def handle_call(:session_context, _from, state) do
     {:reply, {state.identity, state.log.replica}, state}
+  end
+
+  def handle_call(:ready?, _from, state) do
+    {:reply, :ok, state}
   end
 
   def handle_call(:op_ids, _from, state) do
@@ -185,7 +202,7 @@ defmodule LatticeCarrierServer.Holder do
   end
 
   defp persist_relay(log, report, %{source: {:path, path}} = state) do
-    case atomic_dump(log, path) do
+    case atomic_dump(log, path, state.durability) do
       :ok ->
         availability = availability(log)
         subscribers = notify_subscribers(state.subscribers, availability)
@@ -197,14 +214,17 @@ defmodule LatticeCarrierServer.Holder do
     end
   end
 
-  defp atomic_dump(log, path) do
+  # Persist-before-ack: write, sync the file, atomically rename, then sync
+  # the containing directory. Only a fully synced sequence acknowledges.
+  defp atomic_dump(log, path, durability) do
     suffix = System.unique_integer([:monotonic, :positive])
     temp_path = "#{path}.tmp.#{suffix}"
 
     try do
       with :ok <- Log.dump(log, temp_path),
-           :ok <- sync_file(temp_path),
-           :ok <- File.rename(temp_path, path) do
+           :ok <- durability.sync_file(temp_path),
+           :ok <- durability.rename(temp_path, path),
+           :ok <- durability.sync_directory(Path.dirname(path)) do
         :ok
       end
     after
@@ -212,15 +232,16 @@ defmodule LatticeCarrierServer.Holder do
     end
   end
 
-  defp sync_file(path) do
-    with {:ok, io_device} <- File.open(path, [:read, :binary]) do
-      try do
-        :file.sync(io_device)
-      after
-        _ = File.close(io_device)
-      end
+  # Only relay-enabled path holders persist, so only they must prove the
+  # durability sequence before serving.
+  defp rehearse_durability({:path, path}, [_realm | _realms], durability) do
+    case Durability.rehearse(durability, Path.dirname(path)) do
+      :ok -> :ok
+      {:error, reason} -> {:error, {:durability_unsupported, reason}}
     end
   end
+
+  defp rehearse_durability(_source, _relay_realms, _durability), do: :ok
 
   defp cleanup_orphaned_temp_files(path) do
     directory = Path.dirname(path)

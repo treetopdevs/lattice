@@ -117,7 +117,7 @@ defmodule LatticeCarrierServer.DurabilityTest do
       assert reason in [:injected_sync_file, :injected_rename]
       assert Holder.op_ids(holder) == [base.id]
       assert {:ok, persisted} = Log.restore(path)
-      assert Log.op_ids(persisted) == [base.id]
+      assert persisted |> Log.op_ids() |> Enum.sort() == [base.id]
       assert Path.wildcard("#{path}.tmp.*") == []
     end
   end

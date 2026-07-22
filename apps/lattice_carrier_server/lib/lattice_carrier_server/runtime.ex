@@ -13,7 +13,7 @@ defmodule LatticeCarrierServer.Runtime do
   semantic-authority claim.
   """
 
-  alias LatticeCarrierServer.Manifest
+  alias LatticeCarrierServer.{Health, Manifest}
 
   @deployment_key {__MODULE__, :deployment}
 
@@ -35,7 +35,9 @@ defmodule LatticeCarrierServer.Runtime do
             end)
         })
 
-        {:ok, Enum.map(manifest.instances, &instance_child_spec/1)}
+        {:ok,
+         Enum.map(manifest.instances, &instance_child_spec/1) ++
+           health_children(manifest.health)}
 
       {:error, _reason} = error ->
         error
@@ -69,6 +71,11 @@ defmodule LatticeCarrierServer.Runtime do
       type: :supervisor
     }
   end
+
+  # The health listener starts after every instance, so readiness can only
+  # be probed once the instances it reports on exist.
+  defp health_children(nil), do: []
+  defp health_children(health), do: [Health.child_spec(health)]
 
   defp instance_key(name), do: {__MODULE__, {:instance, name}}
 end

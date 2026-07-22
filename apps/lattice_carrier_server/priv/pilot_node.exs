@@ -32,7 +32,7 @@ case Application.ensure_all_started(:lattice_carrier_server) do
       IO.puts("INSTANCE #{instance.name} #{port} #{Base.encode64(instance.pub)}")
     end)
 
-    IO.puts("PILOT_READY 0")
+    IO.puts("PILOT_READY #{LatticeCarrierServer.Health.port() || 0}")
 
     spawn(fn ->
       _ = IO.gets("")
