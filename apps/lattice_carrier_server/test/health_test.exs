@@ -1,0 +1,116 @@
+defmodule LatticeCarrierServer.HealthTest do
+  @moduledoc """
+  Health endpoints for the pilot carrier runtime (plan 158).
+
+  `/livez` is unauthenticated and answers 200 whenever the VM serves HTTP.
+  `/readyz` is content-free: it requires identity load, complete source
+  restore, listener availability, and writable durable storage across every
+  manifest instance, answering 204 or 503 with an empty body either way.
+  `/carrier` application authentication is unchanged and covered elsewhere.
+  """
+
+  use ExUnit.Case, async: false
+
+  alias Lattice.{Identity, Log}
+
+  # Referenced dynamically so this file stays RED-runnable before the
+  # health listener exists.
+  @health_mod LatticeCarrierServer.Health
+
+  @moduletag timeout: 120_000
+
+  setup %{tmp_dir: tmp_dir} do
+    {:ok, _inets} = Application.ensure_all_started(:inets)
+
+    replica = "replica:carrier-health:test"
+    log_dir = Path.join(tmp_dir, "data")
+    File.mkdir_p!(log_dir)
+    log_path = Path.join(log_dir, "matter.log")
+    assert :ok = replica |> Log.new() |> Log.dump(log_path)
+
+    seed = :crypto.hash(:sha256, "carrier-health-#{Path.basename(tmp_dir)}")
+    identity_path = Path.join(tmp_dir, "town-node.identity")
+    File.write!(identity_path, Base.encode16(seed, case: :lower))
+    File.chmod!(identity_path, 0o600)
+
+    observer = Identity.from_seed("instrument", "carrier-health-observer")
+
+    manifest = %{
+      "version" => 1,
+      "health" => %{"ip" => "127.0.0.1", "port" => 0},
+      "instances" => [
+        %{
+          "name" => "health-pilot",
+          "realm" => "town-node",
+          "identity_file" => identity_path,
+          "log_file" => log_path,
+          "listener" => %{"ip" => "127.0.0.1", "port" => 0},
+          "trusted_peers" => [
+            %{"realm" => observer.realm_id, "pubkey" => Base.encode64(observer.pub)}
+          ]
+        }
+      ]
+    }
+
+    manifest_path = Path.join(tmp_dir, "manifest.json")
+    File.write!(manifest_path, Jason.encode!(manifest))
+
+    previous = Application.get_env(:lattice_carrier_server, :manifest, :missing)
+
+    on_exit(fn ->
+      File.chmod(log_dir, 0o700)
+      :ok = Application.stop(:lattice_carrier_server)
+      restore_manifest_config(previous)
+      {:ok, _apps} = Application.ensure_all_started(:lattice_carrier_server)
+    end)
+
+    :ok = Application.stop(:lattice_carrier_server)
+    Application.put_env(:lattice_carrier_server, :manifest, manifest_path)
+    {:ok, _apps} = Application.ensure_all_started(:lattice_carrier_server)
+
+    {:ok, log_dir: log_dir}
+  end
+
+  @tag :tmp_dir
+  test "livez answers unauthenticated while readyz is content-free", _context do
+    health_port = apply(@health_mod, :port, [])
+    assert is_integer(health_port)
+
+    assert {200, _body} = get("http://127.0.0.1:#{health_port}/livez")
+    assert {204, ""} = get("http://127.0.0.1:#{health_port}/readyz")
+  end
+
+  @tag :tmp_dir
+  test "readyz fails closed while durable storage is unwritable and recovers", %{
+    log_dir: log_dir
+  } do
+    health_port = apply(@health_mod, :port, [])
+
+    assert {204, ""} = get("http://127.0.0.1:#{health_port}/readyz")
+
+    File.chmod!(log_dir, 0o500)
+    assert {503, ""} = get("http://127.0.0.1:#{health_port}/readyz")
+    # Liveness is unaffected by readiness.
+    assert {200, _body} = get("http://127.0.0.1:#{health_port}/livez")
+
+    File.chmod!(log_dir, 0o700)
+    assert {204, ""} = get("http://127.0.0.1:#{health_port}/readyz")
+  end
+
+  defp get(url) do
+    request = {String.to_charlist(url), []}
+
+    assert {:ok, {{_http, status, _reason}, _headers, body}} =
+             :httpc.request(:get, request, [], body_format: :binary)
+
+    {status, body}
+  end
+
+  defp restore_manifest_config(:missing) do
+    Application.delete_env(:lattice_carrier_server, :manifest)
+  end
+
+  defp restore_manifest_config(value) do
+    Application.put_env(:lattice_carrier_server, :manifest, value)
+  end
+end
