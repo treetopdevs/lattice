@@ -1,0 +1,46 @@
+defmodule LatticeCarrierServer.ReleaseTest do
+  @moduledoc """
+  The `lattice_carrier_pilot` release must actually build the way production
+  builds it: `MIX_ENV=prod mix release lattice_carrier_pilot` invoked from
+  the umbrella root (plan 158/159). A release definition that only lives in
+  a child app's `mix.exs` is invisible to `mix release` at the umbrella
+  root — Mix umbrella releases must be declared in the root project's
+  `releases:` keyword list. This regression actually shells out to `mix
+  release` rather than asserting the release atom exists in a keyword list,
+  so it fails for the same reason a real deploy would fail.
+  """
+
+  use ExUnit.Case, async: false
+
+  @moduletag timeout: 300_000
+
+  test "MIX_ENV=prod mix release lattice_carrier_pilot succeeds from the umbrella root" do
+    release_dir = Path.join([repo_root(), "_build", "prod", "rel", "lattice_carrier_pilot"])
+    File.rm_rf!(release_dir)
+
+    {output, status} =
+      System.cmd(mix_bin(), ["release", "lattice_carrier_pilot", "--overwrite"],
+        cd: repo_root(),
+        stderr_to_stdout: true,
+        env: [{"MIX_ENV", "prod"}]
+      )
+
+    assert status == 0, "mix release lattice_carrier_pilot failed:\n#{output}"
+    refute output =~ "Unknown release"
+
+    release_bin = Path.join(release_dir, "bin/lattice_carrier_pilot")
+    assert File.exists?(release_bin), "expected a built release executable at #{release_bin}"
+  end
+
+  defp repo_root, do: Path.expand("../../..", __DIR__)
+
+  defp mix_bin do
+    shim = Path.expand("~/.asdf/shims/mix")
+
+    cond do
+      File.exists?(shim) -> shim
+      path = System.find_executable("mix") -> path
+      true -> flunk("no mix executable available to build the release")
+    end
+  end
+end
