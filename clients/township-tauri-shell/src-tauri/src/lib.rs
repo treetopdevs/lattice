@@ -383,6 +383,16 @@ impl TownshipNativeState {
     }
 
     pub fn kv_set(&self, key: &str, value: &str) -> Result<(), String> {
+        {
+            let product_db = self
+                .product_db
+                .lock()
+                .map_err(|_| "product database lock poisoned".to_string())?;
+            if let Some(db) = product_db.as_ref() {
+                db.kv_set(key, value)
+                    .map_err(|error| format!("township product database write failed: {error}"))?;
+            }
+        }
         let values_path = self
             .values_path
             .lock()
@@ -433,7 +443,51 @@ impl TownshipNativeState {
     where
         P: AsRef<Path>,
     {
-        let _ = dir;
+        let manifest = lattice_mobile_core::ProductManifest::for_product(TOWNSHIP_PRODUCT)
+            .map_err(|error| format!("township product manifest unavailable: {error}"))?;
+        if manifest.app_id != TOWNSHIP_APP_IDENTIFIER
+            || manifest.key_service != TOWNSHIP_KEYRING_SERVICE
+            || manifest.database_file != TOWNSHIP_DATABASE_FILE
+        {
+            return Err(
+                "township identifiers diverge from the shared isolation manifest".to_string(),
+            );
+        }
+
+        let dir = dir.as_ref();
+        let mut db = lattice_mobile_core::ProductDatabase::open_path(
+            TOWNSHIP_PRODUCT,
+            &dir.join(&manifest.database_file),
+        )
+        .map_err(|error| format!("township product database unavailable: {error}"))?;
+        db.import_legacy_json_values(&dir.join(TOWNSHIP_LEGACY_NATIVE_KV_FILE))
+            .map_err(|error| format!("township legacy state migration failed: {error}"))?;
+
+        let loaded_values = db
+            .kv_entries()
+            .map_err(|error| format!("township product database read failed: {error}"))?;
+        let mut values = self
+            .values
+            .lock()
+            .map_err(|_| "key-value store lock poisoned".to_string())?;
+        if values.is_empty() {
+            *values = loaded_values.into_iter().collect();
+        } else {
+            for (key, value) in values.iter() {
+                db.kv_set(key, value)
+                    .map_err(|error| format!("township product database write failed: {error}"))?;
+            }
+            let merged = db
+                .kv_entries()
+                .map_err(|error| format!("township product database read failed: {error}"))?;
+            *values = merged.into_iter().collect();
+        }
+
+        let mut product_db = self
+            .product_db
+            .lock()
+            .map_err(|_| "product database lock poisoned".to_string())?;
+        *product_db = Some(db);
         Ok(())
     }
 
@@ -1081,14 +1135,13 @@ pub fn configure_platform_secure_township_builder<R: tauri::Runtime>(
     configure_township_commands(builder)
         .manage(state)
         .setup(|app| {
-            let values_path = app
+            let data_dir = app
                 .path()
                 .app_local_data_dir()
-                .map_err(|error| tauri::Error::Io(std::io::Error::other(error)))?
-                .join("township-native-kv.json");
+                .map_err(|error| tauri::Error::Io(std::io::Error::other(error)))?;
             let state = app.state::<TownshipNativeState>();
             state
-                .attach_persistent_values_file(values_path)
+                .attach_product_database(&data_dir)
                 .map_err(|error| tauri::Error::Io(std::io::Error::other(error)))?;
             seed_dev_carrier_key_from_env(&state)
                 .map_err(|error| tauri::Error::Io(std::io::Error::other(error)))?;

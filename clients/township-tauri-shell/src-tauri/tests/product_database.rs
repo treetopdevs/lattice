@@ -10,8 +10,8 @@ use std::fs;
 use std::path::PathBuf;
 
 use township_tauri_shell::{
-    TownshipNativeState, TOWNSHIP_APP_IDENTIFIER, TOWNSHIP_DATABASE_FILE,
-    TOWNSHIP_KEYRING_SERVICE, TOWNSHIP_LEGACY_NATIVE_KV_FILE, TOWNSHIP_PRODUCT,
+    TownshipNativeState, TOWNSHIP_APP_IDENTIFIER, TOWNSHIP_DATABASE_FILE, TOWNSHIP_KEYRING_SERVICE,
+    TOWNSHIP_LEGACY_NATIVE_KV_FILE, TOWNSHIP_PRODUCT,
 };
 
 fn temp_dir(label: &str) -> PathBuf {
@@ -61,7 +61,10 @@ fn kv_state_persists_through_the_product_database() {
             .attach_product_database(&dir)
             .expect("attach product database");
         state
-            .kv_set("township:matter:carrier_peer_config", "{\"url\":\"wss://x\"}")
+            .kv_set(
+                "township:matter:carrier_peer_config",
+                "{\"url\":\"wss://x\"}",
+            )
             .expect("kv set");
     }
 
@@ -122,11 +125,8 @@ fn legacy_json_state_migrates_exactly_once() {
 fn attach_product_database_refuses_a_cross_product_file() {
     let dir = temp_dir("cross-product");
     // A toolshed shell left its database under the township file name.
-    lattice_mobile_core::ProductDatabase::open_path(
-        "toolshed",
-        &dir.join(TOWNSHIP_DATABASE_FILE),
-    )
-    .expect("fabricate toolshed database");
+    lattice_mobile_core::ProductDatabase::open_path("toolshed", &dir.join(TOWNSHIP_DATABASE_FILE))
+        .expect("fabricate toolshed database");
 
     let state = TownshipNativeState::ephemeral();
     let refusal = state.attach_product_database(&dir);
