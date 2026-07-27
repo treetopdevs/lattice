@@ -404,6 +404,25 @@ defmodule LatticeCarrierServer.ManifestTest do
   end
 
   @tag :tmp_dir
+  test "a symlinked directory alias cannot hide an identity in a log temp namespace", %{
+    tmp_dir: tmp_dir,
+    instance: instance
+  } do
+    alias_dir = Path.join(tmp_dir, "alias")
+    File.ln_s!(tmp_dir, alias_dir)
+
+    identity_path = instance["log_file"] <> ".tmp.identity"
+    File.cp!(instance["identity_file"], identity_path)
+    File.chmod!(identity_path, 0o600)
+
+    aliased_identity = Path.join(alias_dir, Path.basename(identity_path))
+    colliding = Map.put(instance, "identity_file", aliased_identity)
+
+    assert {:error, {:invalid_manifest, :identity_log_temp_namespace_collision}} =
+             tmp_dir |> manifest_with(colliding) |> Manifest.load()
+  end
+
+  @tag :tmp_dir
   test "a pilot manifest refuses a 65th replica route", %{
     tmp_dir: tmp_dir,
     instance: instance

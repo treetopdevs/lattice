@@ -236,6 +236,39 @@ defmodule LatticeCarrierServer.DurabilityTest do
     assert Bitwise.band(mode, 0o777) == 0o600
   end
 
+  @tag :tmp_dir
+  test "a target rehearsal serializes with relay persistence", %{tmp_dir: tmp_dir} do
+    %{holder: holder, path: path, relay_identity: relay_identity, relayed: relayed} =
+      durable_holder(tmp_dir)
+
+    parent = self()
+
+    rehearsal =
+      Task.async(fn ->
+        Durability.with_target_lock(path, fn ->
+          send(parent, :rehearsal_locked)
+
+          receive do
+            :release_rehearsal -> :ok
+          end
+        end)
+      end)
+
+    assert_receive :rehearsal_locked
+
+    relay =
+      Task.async(fn ->
+        Holder.relay(holder, relay_identity.realm_id, relayed)
+      end)
+
+    refute Task.yield(relay, 50)
+    send(rehearsal.pid, :release_rehearsal)
+    assert :ok = Task.await(rehearsal)
+    assert {:ok, _report} = Task.await(relay)
+    assert {:ok, persisted} = Log.restore(path)
+    assert relayed.id in Log.op_ids(persisted)
+  end
+
   defp durable_holder(tmp_dir) do
     server_identity = Identity.from_seed("town-node", "carrier-durability-server")
     relay_identity = Identity.from_seed("resident", "carrier-durability-client")
