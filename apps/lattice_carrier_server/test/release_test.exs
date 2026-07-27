@@ -48,12 +48,16 @@ defmodule LatticeCarrierServer.ReleaseTest do
   defp repo_root, do: Path.expand("../../..", __DIR__)
 
   defp mix_bin do
-    shim = Path.expand("~/.asdf/shims/mix")
-
-    if File.exists?(shim) do
-      shim
+    if System.get_env("CI") == "true" do
+      System.find_executable("mix") || flunk("CI-provided mix executable is unavailable")
     else
-      flunk("required asdf mix shim is unavailable at #{shim}")
+      shim = Path.expand("~/.asdf/shims/mix")
+
+      if File.exists?(shim) do
+        shim
+      else
+        flunk("required asdf mix shim is unavailable at #{shim}")
+      end
     end
   end
 end
