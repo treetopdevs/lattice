@@ -30,6 +30,19 @@ defmodule LatticeCarrierServer.ReleaseTest do
 
     release_bin = Path.join(release_dir, "bin/lattice_carrier_pilot")
     assert File.exists?(release_bin), "expected a built release executable at #{release_bin}"
+
+    {renamed_output, renamed_status} =
+      System.cmd(release_bin, ["eval", ~s|IO.puts("SHOULD_NOT_BOOT")|],
+        stderr_to_stdout: true,
+        env: [
+          {"RELEASE_NAME", "renamed_pilot"},
+          {"SECRET_KEY_BASE", String.duplicate("s", 64)}
+        ]
+      )
+
+    assert renamed_status != 0
+    assert renamed_output =~ "LATTICE_CARRIER_MANIFEST is required"
+    refute renamed_output =~ "SHOULD_NOT_BOOT"
   end
 
   defp repo_root, do: Path.expand("../../..", __DIR__)

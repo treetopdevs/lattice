@@ -97,6 +97,47 @@ defmodule LatticeCarrierServer.HealthTest do
     assert {204, ""} = get("http://127.0.0.1:#{health_port}/readyz")
   end
 
+  @tag :tmp_dir
+  test "readyz rejects a non-numeric cache TTL instead of caching forever", %{
+    log_dir: log_dir
+  } do
+    previous_ttl = Application.get_env(:lattice_carrier_server, :storage_check_ttl_ms)
+
+    on_exit(fn ->
+      Application.put_env(:lattice_carrier_server, :storage_check_ttl_ms, previous_ttl)
+    end)
+
+    Application.put_env(:lattice_carrier_server, :storage_check_ttl_ms, "5000")
+    health_port = apply(@health_mod, :port, [])
+
+    assert {204, ""} = get("http://127.0.0.1:#{health_port}/readyz")
+
+    File.chmod!(log_dir, 0o500)
+    assert {503, ""} = get("http://127.0.0.1:#{health_port}/readyz")
+  end
+
+  @tag :tmp_dir
+  test "an application restart cannot reuse a prior readiness rehearsal", %{
+    log_dir: log_dir
+  } do
+    previous_ttl = Application.get_env(:lattice_carrier_server, :storage_check_ttl_ms)
+
+    on_exit(fn ->
+      Application.put_env(:lattice_carrier_server, :storage_check_ttl_ms, previous_ttl)
+    end)
+
+    Application.put_env(:lattice_carrier_server, :storage_check_ttl_ms, 5_000)
+    health_port = apply(@health_mod, :port, [])
+    assert {204, ""} = get("http://127.0.0.1:#{health_port}/readyz")
+
+    :ok = Application.stop(:lattice_carrier_server)
+    File.chmod!(log_dir, 0o500)
+    {:ok, _apps} = Application.ensure_all_started(:lattice_carrier_server)
+
+    restarted_health_port = apply(@health_mod, :port, [])
+    assert {503, ""} = get("http://127.0.0.1:#{restarted_health_port}/readyz")
+  end
+
   defp get(url) do
     request = {String.to_charlist(url), []}
 

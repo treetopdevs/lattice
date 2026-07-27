@@ -103,7 +103,17 @@ defmodule LatticeCarrierServer.ManifestTest do
     assert {:error, {:invalid_manifest, :manifest_corrupt}} = Manifest.load(corrupt)
 
     versioned = write_manifest(tmp_dir, %{"version" => 2, "instances" => [instance]})
-    assert {:error, {:invalid_manifest, {:unsupported_version, 2}}} = Manifest.load(versioned)
+    assert {:error, {:invalid_manifest, :unsupported_version}} = Manifest.load(versioned)
+
+    smuggled_version = "copied-secret-version"
+
+    secret_versioned =
+      write_manifest(tmp_dir, %{"version" => smuggled_version, "instances" => [instance]})
+
+    assert {:error, {:invalid_manifest, :unsupported_version} = refusal} =
+             Manifest.load(secret_versioned)
+
+    refute inspect(refusal) =~ smuggled_version
 
     empty = write_manifest(tmp_dir, %{"version" => 1, "instances" => []})
     assert {:error, {:invalid_manifest, :manifest_corrupt}} = Manifest.load(empty)
@@ -206,20 +216,26 @@ defmodule LatticeCarrierServer.ManifestTest do
     assert {:error, {:invalid_manifest, {:invalid_relay_realms, "township-pilot"}}} =
              tmp_dir |> manifest_with(untrusted_relay) |> Manifest.load()
 
-    unknown_reporter = Map.put(instance, "state_reporter", "Elixir.System")
+    smuggled_name = "copied-secret-instance-name"
+
+    unknown_reporter =
+      instance
+      |> Map.put("name", smuggled_name)
+      |> Map.put("state_reporter", "Elixir.System")
 
     # The refusal reason is symbolic only: it must never embed the raw
     # supplied value, because pilot_node.exs inspects the whole refusal
     # reason to stderr and an operator could accidentally paste a copied
     # seed/secret into this field.
-    assert {:error, {:invalid_manifest, {:unknown_state_reporter, "township-pilot"} = detail}} =
+    assert {:error, {:invalid_manifest, :unknown_state_reporter} = detail} =
              tmp_dir |> manifest_with(unknown_reporter) |> Manifest.load()
 
     refute inspect(detail) =~ "Elixir.System"
+    refute inspect(detail) =~ smuggled_name
 
     non_string_reporter = Map.put(instance, "state_reporter", %{"nested" => "value"})
 
-    assert {:error, {:invalid_manifest, {:unknown_state_reporter, "township-pilot"}}} =
+    assert {:error, {:invalid_manifest, :unknown_state_reporter}} =
              tmp_dir |> manifest_with(non_string_reporter) |> Manifest.load()
   end
 
@@ -280,5 +296,62 @@ defmodule LatticeCarrierServer.ManifestTest do
 
     assert {:error, {:invalid_manifest, :duplicate_log_file}} =
              Manifest.load(duplicate_log_file)
+  end
+
+  @tag :tmp_dir
+  test "symlink and hard-link aliases of one durable log refuse", %{
+    tmp_dir: tmp_dir,
+    instance: instance
+  } do
+    for {kind, create_alias} <- [
+          {:symlink, &File.ln_s!/2},
+          {:hard_link, &File.ln!/2}
+        ] do
+      alias_path = Path.join(tmp_dir, "#{kind}.log")
+      create_alias.(instance["log_file"], alias_path)
+
+      second =
+        instance
+        |> Map.put("name", "township-pilot-#{kind}")
+        |> Map.put("log_file", alias_path)
+
+      path = write_manifest(tmp_dir, %{"version" => 1, "instances" => [instance, second]})
+
+      assert {:error, {:invalid_manifest, :duplicate_log_file}} = Manifest.load(path)
+    end
+  end
+
+  @tag :tmp_dir
+  test "a log path inside another log's temporary-file namespace refuses", %{
+    tmp_dir: tmp_dir,
+    instance: instance
+  } do
+    colliding_path = instance["log_file"] <> ".tmp.1"
+    File.cp!(instance["log_file"], colliding_path)
+
+    second =
+      instance
+      |> Map.put("name", "township-pilot-temp-collision")
+      |> Map.put("log_file", colliding_path)
+
+    path = write_manifest(tmp_dir, %{"version" => 1, "instances" => [instance, second]})
+
+    assert {:error, {:invalid_manifest, :log_temp_namespace_collision}} =
+             Manifest.load(path)
+  end
+
+  @tag :tmp_dir
+  test "a pilot manifest refuses a 65th replica route", %{
+    tmp_dir: tmp_dir,
+    instance: instance
+  } do
+    instances =
+      for index <- 1..65 do
+        Map.put(instance, "name", "pilot-#{index}")
+      end
+
+    path = write_manifest(tmp_dir, %{"version" => 1, "instances" => instances})
+
+    assert {:error, {:invalid_manifest, :too_many_instances}} = Manifest.load(path)
   end
 end
