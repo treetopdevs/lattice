@@ -139,7 +139,13 @@ defmodule LatticeCarrierServer.RuntimeIsolationTest do
     alpha_supervisor = runtime_child_pid({LatticeCarrierServer, alpha.name})
     Process.exit(alpha_supervisor, :kill)
 
-    wait_until(fn -> not Process.alive?(alpha_supervisor) end)
+    wait_until(fn ->
+      case runtime_child_pid({LatticeCarrierServer, alpha.name}) do
+        pid when is_pid(pid) -> pid != alpha_supervisor and Process.alive?(pid)
+        _other -> false
+      end
+    end)
+
     assert GenServer.whereis(Holder.via(beta.name)) == beta_holder
   end
 
@@ -158,6 +164,32 @@ defmodule LatticeCarrierServer.RuntimeIsolationTest do
 
     assert {:ok, _children} = Runtime.prepare(beta_manifest)
     assert :persistent_term.get(alpha_key, :missing) == :missing
+  end
+
+  @tag :tmp_dir
+  test "stopping the application erases prepared secret-bearing instances", %{tmp_dir: tmp_dir} do
+    alpha = instance_fixture(tmp_dir, "shutdown-alpha")
+    manifest = write_manifest(tmp_dir, %{"version" => 1, "instances" => [alpha.entry]})
+    alpha_key = {Runtime, {:instance, alpha.name}}
+
+    boot!(manifest)
+    refute :persistent_term.get(alpha_key, :missing) == :missing
+
+    :ok = Application.stop(:lattice_carrier_server)
+    assert :persistent_term.get(alpha_key, :missing) == :missing
+    assert Runtime.deployment() == nil
+  end
+
+  @tag :tmp_dir
+  test "a structurally invalid tagged log refuses startup", %{tmp_dir: tmp_dir} do
+    alpha = instance_fixture(tmp_dir, "invalid-structure")
+    invalid = %Log{replica: nil, ops: %{}, referenced: :not_a_set, quarantine: []}
+    bytes = :erlang.term_to_binary({:lattice_log_dump_v1, invalid}, [:deterministic])
+    File.write!(alpha.log_path, bytes)
+    manifest = write_manifest(tmp_dir, %{"version" => 1, "instances" => [alpha.entry]})
+
+    assert {:error, {:source_restore_failed, "pilot-invalid-structure"}} =
+             Runtime.prepare(manifest)
   end
 
   defp instance_fixture(tmp_dir, name) do
@@ -202,6 +234,7 @@ defmodule LatticeCarrierServer.RuntimeIsolationTest do
       observer: observer,
       server_identity: server_identity,
       seed_hex: seed_hex,
+      identity_path: identity_path,
       log_path: log_path,
       entry: entry
     }

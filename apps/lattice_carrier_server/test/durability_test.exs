@@ -197,6 +197,44 @@ defmodule LatticeCarrierServer.DurabilityTest do
     assert tmp_dir |> File.ls!() |> Enum.sort() == ["matter.log"]
   end
 
+  @tag :tmp_dir
+  test "startup rehearsal exercises replacement of the configured log", %{tmp_dir: tmp_dir} do
+    server_identity = Identity.from_seed("town-node", "carrier-target-rehearsal")
+    relay_identity = Identity.from_seed("resident", "carrier-target-rehearsal-client")
+    path = Path.join(tmp_dir, "matter.log")
+    assert :ok = @replica |> Log.new() |> Log.dump(path)
+
+    InjectedDurability.arm_failure(tmp_dir, :rename)
+    on_exit(fn -> InjectedDurability.disarm(tmp_dir) end)
+    previous_flag = Process.flag(:trap_exit, true)
+
+    try do
+      assert {:error, {:durability_unsupported, :injected_rename}} =
+               Holder.start_link(
+                 name: {:global, {__MODULE__, make_ref()}},
+                 identity: server_identity,
+                 source: {:path, path},
+                 relay_realms: [relay_identity.realm_id],
+                 durability: InjectedDurability
+               )
+    after
+      Process.flag(:trap_exit, previous_flag)
+    end
+
+    assert_received {:durability, {:rename, _temp_path, ^path}}
+  end
+
+  @tag :tmp_dir
+  test "atomic relay persistence preserves restrictive log permissions", %{tmp_dir: tmp_dir} do
+    %{holder: holder, path: path, relay_identity: relay_identity, relayed: relayed} =
+      durable_holder(tmp_dir)
+
+    File.chmod!(path, 0o600)
+    assert {:ok, _report} = Holder.relay(holder, relay_identity.realm_id, relayed)
+    assert {:ok, %File.Stat{mode: mode}} = File.stat(path)
+    assert Bitwise.band(mode, 0o777) == 0o600
+  end
+
   defp durable_holder(tmp_dir) do
     server_identity = Identity.from_seed("town-node", "carrier-durability-server")
     relay_identity = Identity.from_seed("resident", "carrier-durability-client")

@@ -81,7 +81,7 @@ defmodule LatticeCarrierServer.HealthTest do
     Application.put_env(:lattice_carrier_server, :manifest, manifest_path)
     {:ok, _apps} = Application.ensure_all_started(:lattice_carrier_server)
 
-    {:ok, log_dir: log_dir, log_path: log_path}
+    {:ok, identity_path: identity_path, log_dir: log_dir, log_path: log_path}
   end
 
   @tag :tmp_dir
@@ -181,6 +181,24 @@ defmodule LatticeCarrierServer.HealthTest do
     health_port = apply(@health_mod, :port, [])
     assert {503, ""} = get("http://127.0.0.1:#{health_port}/readyz")
     assert System.monotonic_time(:millisecond) - started_at < 200
+
+    assert Path.wildcard(Path.join(Path.dirname(log_path), ".lattice-durability-rehearsal.*")) ==
+             []
+
+    assert Path.wildcard("#{log_path}.rehearsal.*") == []
+  end
+
+  @tag :tmp_dir
+  test "readyz fails closed when the durable identity disappears", %{
+    identity_path: identity_path,
+    log_path: log_path
+  } do
+    health_port = apply(@health_mod, :port, [])
+    assert {204, ""} = get("http://127.0.0.1:#{health_port}/readyz")
+
+    File.rm!(identity_path)
+    :ok = apply(@health_mod, :reset_storage_cache, [[log_path]])
+    assert {503, ""} = get("http://127.0.0.1:#{health_port}/readyz")
   end
 
   @tag :tmp_dir

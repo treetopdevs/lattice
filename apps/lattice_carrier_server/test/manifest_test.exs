@@ -245,13 +245,19 @@ defmodule LatticeCarrierServer.ManifestTest do
     tmp_dir: tmp_dir,
     instance: instance
   } do
+    copied_secret_realm = "copied-secret-trusted-peer-realm"
+
     bad_peer = %{
       instance
-      | "trusted_peers" => [%{"realm" => "instrument", "pubkey" => "definitely-not-a-key"}]
+      | "trusted_peers" => [
+          %{"realm" => copied_secret_realm, "pubkey" => "definitely-not-a-key"}
+        ]
     }
 
-    assert {:error, {:invalid_manifest, {:invalid_trusted_peer, {:instance, 1}, "instrument"}}} =
+    assert {:error, {:invalid_manifest, {:invalid_trusted_peer, {:instance, 1}}} = refusal} =
              tmp_dir |> manifest_with(bad_peer) |> Manifest.load()
+
+    refute inspect(refusal) =~ copied_secret_realm
 
     untrusted_relay = Map.put(instance, "relay_realms", ["stranger"])
 
