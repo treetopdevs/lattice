@@ -21,11 +21,13 @@ defmodule LatticeCarrierServer.Health do
   never fail open.
   """
 
+  alias Lattice.Log
   alias LatticeCarrierServer.{Durability, Holder, Listener, Runtime}
 
   @listener_ref {__MODULE__, :listener}
   @storage_cache __MODULE__.StorageCache
   @default_storage_check_ttl_ms 5_000
+  @default_storage_check_timeout_ms 4_000
 
   @spec child_spec(keyword()) :: Supervisor.child_spec()
   def child_spec(health_opts) do
@@ -41,7 +43,7 @@ defmodule LatticeCarrierServer.Health do
          ]}
       ])
 
-    transport_opts = %{socket_opts: [ip: ip, port: port]}
+    transport_opts = %{socket_opts: socket_opts(ip, port)}
 
     protocol_opts = %{
       env: %{dispatch: dispatch},
@@ -153,10 +155,51 @@ defmodule LatticeCarrierServer.Health do
   end
 
   defp rehearse_storage(log_file) do
-    Durability.rehearse(Durability.Posix, Path.dirname(log_file)) == :ok
+    task =
+      Task.async(fn ->
+        try do
+          with {:ok, %Log{}} <- Log.restore(log_file),
+               :ok <- Durability.rehearse(health_durability_impl(), Path.dirname(log_file)) do
+            true
+          else
+            _error -> false
+          end
+        catch
+          _kind, _reason -> false
+        end
+      end)
+
+    case Task.yield(task, storage_check_timeout_ms()) ||
+           Task.shutdown(task, :brutal_kill) do
+      {:ok, true} -> true
+      _timeout_or_error -> false
+    end
   catch
     _kind, _reason -> false
   end
+
+  defp health_durability_impl do
+    case Application.get_env(:lattice_carrier_server, :health_durability_impl) do
+      module when is_atom(module) and not is_nil(module) -> module
+      _invalid_or_missing -> Durability.Posix
+    end
+  end
+
+  defp storage_check_timeout_ms do
+    case Application.get_env(
+           :lattice_carrier_server,
+           :storage_check_timeout_ms,
+           @default_storage_check_timeout_ms
+         ) do
+      timeout when is_integer(timeout) and timeout > 0 -> timeout
+      _invalid -> @default_storage_check_timeout_ms
+    end
+  end
+
+  defp socket_opts({_a, _b, _c, _d, _e, _f, _g, _h} = ip, port),
+    do: [:inet6, ip: ip, port: port]
+
+  defp socket_opts(ip, port), do: [ip: ip, port: port]
 end
 
 defmodule LatticeCarrierServer.Health.StorageCache do

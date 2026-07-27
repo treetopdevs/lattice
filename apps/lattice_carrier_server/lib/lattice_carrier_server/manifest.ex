@@ -26,6 +26,7 @@ defmodule LatticeCarrierServer.Manifest do
           name: String.t(),
           realm: String.t(),
           identity: Secret.t(),
+          identity_file: Path.t(),
           pub: binary(),
           log_file: Path.t(),
           log_identity: {non_neg_integer(), non_neg_integer(), non_neg_integer()},
@@ -124,9 +125,9 @@ defmodule LatticeCarrierServer.Manifest do
     name = Map.get(instance, "name")
 
     with :ok <- reject_inline_secrets(instance, name),
-         :ok <- require_string(name, {:invalid_instance_name, name}),
+         :ok <- require_string(name, :invalid_instance_name),
          :ok <- require_string(Map.get(instance, "realm"), {:invalid_realm, name}),
-         {:ok, identity, pub} <-
+         {:ok, identity, pub, identity_file} <-
            load_identity(Map.get(instance, "identity_file"), Map.get(instance, "realm"), base_dir),
          {:ok, log_file, log_identity} <-
            require_log(Map.get(instance, "log_file"), base_dir, name),
@@ -140,6 +141,7 @@ defmodule LatticeCarrierServer.Manifest do
          name: name,
          realm: Map.fetch!(instance, "realm"),
          identity: identity,
+         identity_file: identity_file,
          pub: pub,
          log_file: log_file,
          log_identity: log_identity,
@@ -172,7 +174,7 @@ defmodule LatticeCarrierServer.Manifest do
          {:ok, seed} <- identity_seed(path) do
       {pub, priv} = :crypto.generate_key(:eddsa, :ed25519, seed)
       identity = %Identity{realm_id: realm, pub: pub, priv: priv}
-      {:ok, Secret.wrap(identity), pub}
+      {:ok, Secret.wrap(identity), pub, path}
     end
   end
 
@@ -244,6 +246,7 @@ defmodule LatticeCarrierServer.Manifest do
   defp parse_loopback_ip(ip, name) when is_binary(ip) do
     case :inet.parse_address(String.to_charlist(ip)) do
       {:ok, {127, _b, _c, _d} = address} -> {:ok, address}
+      {:ok, {0, 0, 0, 0, 0, 0, 0, 1} = address} -> {:ok, address}
       {:ok, _address} -> {:error, {:listener_not_loopback, name}}
       {:error, _reason} -> {:error, {:invalid_listener, name}}
     end
@@ -316,14 +319,29 @@ defmodule LatticeCarrierServer.Manifest do
     # other's next dump — refuse regardless of distinct names/ports.
     log_files = Enum.map(instances, & &1.log_file)
     log_identities = Enum.map(instances, & &1.log_identity)
+    identity_files = Enum.map(instances, & &1.identity_file)
 
     cond do
-      Enum.uniq(names) != names -> {:error, :duplicate_instance_names}
-      Enum.uniq(ports) != ports -> {:error, :duplicate_listener_ports}
-      Enum.uniq(log_files) != log_files -> {:error, :duplicate_log_file}
-      Enum.uniq(log_identities) != log_identities -> {:error, :duplicate_log_file}
-      log_temp_namespace_collision?(log_files) -> {:error, :log_temp_namespace_collision}
-      true -> :ok
+      Enum.uniq(names) != names ->
+        {:error, :duplicate_instance_names}
+
+      Enum.uniq(ports) != ports ->
+        {:error, :duplicate_listener_ports}
+
+      Enum.uniq(log_files) != log_files ->
+        {:error, :duplicate_log_file}
+
+      Enum.uniq(log_identities) != log_identities ->
+        {:error, :duplicate_log_file}
+
+      log_temp_namespace_collision?(log_files) ->
+        {:error, :log_temp_namespace_collision}
+
+      identity_log_temp_namespace_collision?(identity_files, log_files) ->
+        {:error, :identity_log_temp_namespace_collision}
+
+      true ->
+        :ok
     end
   end
 
@@ -331,6 +349,13 @@ defmodule LatticeCarrierServer.Manifest do
     Enum.any?(log_files, fn log_file ->
       prefix = log_file <> ".tmp."
       Enum.any?(log_files, &(&1 != log_file and String.starts_with?(&1, prefix)))
+    end)
+  end
+
+  defp identity_log_temp_namespace_collision?(identity_files, log_files) do
+    Enum.any?(log_files, fn log_file ->
+      prefix = log_file <> ".tmp."
+      Enum.any?(identity_files, &String.starts_with?(&1, prefix))
     end)
   end
 

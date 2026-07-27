@@ -24,7 +24,7 @@ defmodule LatticeCarrierServer.Listener do
 
     transport_opts = %{
       connection_type: :supervisor,
-      socket_opts: [ip: ip, port: port]
+      socket_opts: socket_opts(ip, port)
     }
 
     protocol_opts = %{
@@ -40,4 +40,9 @@ defmodule LatticeCarrierServer.Listener do
 
     :ranch.child_spec(ref(instance), :ranch_tcp, transport_opts, :cowboy_clear, protocol_opts)
   end
+
+  defp socket_opts({_a, _b, _c, _d, _e, _f, _g, _h} = ip, port),
+    do: [:inet6, ip: ip, port: port]
+
+  defp socket_opts(ip, port), do: [ip: ip, port: port]
 end

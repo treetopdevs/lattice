@@ -13,7 +13,8 @@ defmodule LatticeCarrierServer.Runtime do
   semantic-authority claim.
   """
 
-  alias LatticeCarrierServer.{Health, Manifest}
+  alias Lattice.Log
+  alias LatticeCarrierServer.{Durability, Health, Holder, Manifest}
 
   @deployment_key {__MODULE__, :deployment}
 
@@ -23,23 +24,25 @@ defmodule LatticeCarrierServer.Runtime do
   def prepare(manifest_path) when is_binary(manifest_path) do
     case Manifest.load(manifest_path) do
       {:ok, manifest} ->
-        :ok = Health.reset_storage_cache(Enum.map(manifest.instances, & &1.log_file))
+        with :ok <- preflight_instances(manifest.instances) do
+          :ok = Health.reset_storage_cache(Enum.map(manifest.instances, & &1.log_file))
 
-        Enum.each(manifest.instances, fn instance ->
-          :persistent_term.put(instance_key(instance.name), instance)
-        end)
+          Enum.each(manifest.instances, fn instance ->
+            :persistent_term.put(instance_key(instance.name), instance)
+          end)
 
-        :persistent_term.put(@deployment_key, %{
-          health: manifest.health,
-          instances:
-            Enum.map(manifest.instances, fn instance ->
-              %{name: instance.name, pub: instance.pub, log_file: instance.log_file}
-            end)
-        })
+          :persistent_term.put(@deployment_key, %{
+            health: manifest.health,
+            instances:
+              Enum.map(manifest.instances, fn instance ->
+                %{name: instance.name, pub: instance.pub, log_file: instance.log_file}
+              end)
+          })
 
-        {:ok,
-         Enum.map(manifest.instances, &instance_child_spec/1) ++
-           health_children(manifest.health)}
+          {:ok,
+           Enum.map(manifest.instances, &instance_child_spec/1) ++
+             health_children(manifest.health)}
+        end
 
       {:error, _reason} = error ->
         error
@@ -70,6 +73,7 @@ defmodule LatticeCarrierServer.Runtime do
     %{
       id: {LatticeCarrierServer, instance.name},
       start: {__MODULE__, :start_instance, [instance.name]},
+      restart: :temporary,
       type: :supervisor
     }
   end
@@ -80,4 +84,26 @@ defmodule LatticeCarrierServer.Runtime do
   defp health_children(health), do: [Health.child_spec(health)]
 
   defp instance_key(name), do: {__MODULE__, {:instance, name}}
+
+  defp preflight_instances(instances) do
+    Enum.reduce_while(instances, :ok, fn instance, :ok ->
+      case preflight_instance(instance) do
+        :ok -> {:cont, :ok}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp preflight_instance(instance) do
+    case Holder.restore_path(instance.log_file) do
+      {:ok, %Log{}} ->
+        case Durability.rehearse(Durability.Posix, Path.dirname(instance.log_file)) do
+          :ok -> :ok
+          {:error, _reason} -> {:error, {:durability_unsupported, instance.name}}
+        end
+
+      {:error, _reason} ->
+        {:error, {:source_restore_failed, instance.name}}
+    end
+  end
 end

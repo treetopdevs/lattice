@@ -199,10 +199,10 @@ defmodule LatticeCarrierServer.HealthTest do
 
     :ok = Application.stop(:lattice_carrier_server)
     File.chmod!(log_dir, 0o500)
-    {:ok, _apps} = Application.ensure_all_started(:lattice_carrier_server)
+    assert {:error, _reason} = Application.ensure_all_started(:lattice_carrier_server)
 
-    restarted_health_port = apply(@health_mod, :port, [])
-    assert {503, ""} = get("http://127.0.0.1:#{restarted_health_port}/readyz")
+    File.chmod!(log_dir, 0o700)
+    {:ok, _apps} = Application.ensure_all_started(:lattice_carrier_server)
   end
 
   defp get(url) do

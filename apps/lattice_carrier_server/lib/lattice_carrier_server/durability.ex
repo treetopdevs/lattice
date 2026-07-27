@@ -21,21 +21,57 @@ defmodule LatticeCarrierServer.Durability do
   `directory`, cleaning up all rehearsal residue.
   """
   @spec rehearse(module(), Path.t()) :: :ok | {:error, term()}
-  def rehearse(impl, directory) do
-    unique = System.unique_integer([:monotonic, :positive])
-    temp_path = Path.join(directory, "#{@rehearsal_prefix}.tmp.#{unique}")
-    target_path = Path.join(directory, "#{@rehearsal_prefix}.#{unique}")
+  def rehearse(impl, directory), do: rehearse(impl, directory, [])
 
-    try do
-      with :ok <- write_probe(temp_path),
-           :ok <- impl.sync_file(temp_path),
-           :ok <- impl.rename(temp_path, target_path),
-           :ok <- impl.sync_directory(directory) do
-        :ok
-      end
-    after
-      _ = File.rm(temp_path)
-      _ = File.rm(target_path)
+  @doc false
+  @spec rehearse(module(), Path.t(), keyword()) :: :ok | {:error, term()}
+  def rehearse(impl, directory, opts) do
+    unique = Keyword.get(opts, :unique, fn -> System.unique_integer([:monotonic, :positive]) end)
+
+    case allocate_namespace(directory, unique, 16) do
+      {:ok, namespace} ->
+        temp_path = Path.join(namespace, "probe.tmp")
+        target_path = Path.join(namespace, "probe")
+
+        try do
+          with :ok <- write_probe(temp_path),
+               :ok <- impl.sync_file(temp_path),
+               :ok <- impl.rename(temp_path, target_path),
+               :ok <- impl.sync_directory(namespace),
+               :ok <- impl.sync_directory(directory) do
+            :ok
+          end
+        after
+          _ = File.rm_rf(namespace)
+        end
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
+  defp allocate_namespace(_directory, _unique, 0),
+    do: {:error, :rehearsal_namespace_unavailable}
+
+  defp allocate_namespace(directory, unique, attempts) do
+    namespace = Path.join(directory, "#{@rehearsal_prefix}.#{unique.()}")
+
+    case File.mkdir(namespace) do
+      :ok ->
+        case File.chmod(namespace, 0o700) do
+          :ok ->
+            {:ok, namespace}
+
+          {:error, reason} ->
+            _ = File.rmdir(namespace)
+            {:error, {:rehearsal_namespace_permissions, reason}}
+        end
+
+      {:error, :eexist} ->
+        allocate_namespace(directory, unique, attempts - 1)
+
+      {:error, reason} ->
+        {:error, {:rehearsal_namespace_failed, reason}}
     end
   end
 

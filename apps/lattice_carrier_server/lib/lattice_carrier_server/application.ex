@@ -14,11 +14,14 @@ defmodule LatticeCarrierServer.Application do
     # or minting a fresh community.
     case Runtime.prepare(manifest_path) do
       {:ok, manifest_children} ->
+        runtime_children = configured_server() ++ manifest_children
+
         children =
           [
             {Health.StorageCache, []},
-            {Registry, keys: :unique, name: LatticeCarrierServer.Registry}
-          ] ++ configured_server() ++ manifest_children
+            {Registry, keys: :unique, name: LatticeCarrierServer.Registry},
+            {LatticeCarrierServer.RuntimeSupervisor, runtime_children}
+          ]
 
         Supervisor.start_link(children,
           strategy: :rest_for_one,
@@ -36,4 +39,16 @@ defmodule LatticeCarrierServer.Application do
       opts when is_list(opts) -> [{LatticeCarrierServer, opts}]
     end
   end
+end
+
+defmodule LatticeCarrierServer.RuntimeSupervisor do
+  @moduledoc false
+
+  use Supervisor
+
+  @spec start_link([Supervisor.child_spec() | {module(), term()}]) :: Supervisor.on_start()
+  def start_link(children), do: Supervisor.start_link(__MODULE__, children, name: __MODULE__)
+
+  @impl Supervisor
+  def init(children), do: Supervisor.init(children, strategy: :one_for_one)
 end

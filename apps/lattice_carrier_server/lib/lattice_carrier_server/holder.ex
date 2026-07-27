@@ -187,15 +187,17 @@ defmodule LatticeCarrierServer.Holder do
   defp unwrap_identity(identity), do: identity
 
   defp load_source({:log, %Log{} = log}), do: {:ok, log}
+  defp load_source({:path, path}) when is_binary(path), do: restore_path(path)
+  defp load_source(_source), do: {:error, :invalid_source}
 
-  defp load_source({:path, path}) when is_binary(path) do
+  @doc false
+  @spec restore_path(Path.t()) :: {:ok, Log.t()} | {:error, term()}
+  def restore_path(path) when is_binary(path) do
     with :ok <- cleanup_orphaned_temp_files(path),
          :ok <- preload_lattice_core() do
       Log.restore(path)
     end
   end
-
-  defp load_source(_source), do: {:error, :invalid_source}
 
   defp persist_relay(log, report, %{log: log} = state) do
     {:reply, {:ok, report}, state}
