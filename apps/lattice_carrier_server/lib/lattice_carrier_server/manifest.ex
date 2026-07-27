@@ -28,6 +28,7 @@ defmodule LatticeCarrierServer.Manifest do
           identity: Secret.t(),
           pub: binary(),
           log_file: Path.t(),
+          log_identity: {non_neg_integer(), non_neg_integer(), non_neg_integer()},
           listener: [ip: :inet.ip_address(), port: :inet.port_number()],
           trusted_peers: %{String.t() => binary()},
           relay_realms: [String.t()],
@@ -42,6 +43,7 @@ defmodule LatticeCarrierServer.Manifest do
   # Inline secret material is rejected outright: identity comes from
   # `identity_file` and nothing else. Argv/env seeds are unsupported.
   @forbidden_instance_keys ~w(seed identity_seed identity priv private_key secret)
+  @max_instances 64
 
   # State reporters are named symbolically and resolved through this
   # whitelist; a manifest cannot inject an arbitrary module.
@@ -75,6 +77,10 @@ defmodule LatticeCarrierServer.Manifest do
     end
   end
 
+  defp parse(%{"version" => 1, "instances" => instances}, _base_dir)
+       when is_list(instances) and length(instances) > @max_instances,
+       do: {:error, :too_many_instances}
+
   defp parse(%{"version" => 1, "instances" => instances} = decoded, base_dir)
        when is_list(instances) and instances != [] do
     with {:ok, health} <- parse_health(Map.get(decoded, "health")),
@@ -85,7 +91,7 @@ defmodule LatticeCarrierServer.Manifest do
   end
 
   defp parse(%{"version" => version}, _base_dir) when version != 1,
-    do: {:error, {:unsupported_version, version}}
+    do: {:error, :unsupported_version}
 
   defp parse(_decoded, _base_dir), do: {:error, :manifest_corrupt}
 
@@ -122,7 +128,8 @@ defmodule LatticeCarrierServer.Manifest do
          :ok <- require_string(Map.get(instance, "realm"), {:invalid_realm, name}),
          {:ok, identity, pub} <-
            load_identity(Map.get(instance, "identity_file"), Map.get(instance, "realm"), base_dir),
-         {:ok, log_file} <- require_log(Map.get(instance, "log_file"), base_dir, name),
+         {:ok, log_file, log_identity} <-
+           require_log(Map.get(instance, "log_file"), base_dir, name),
          {:ok, listener} <- parse_listener(Map.get(instance, "listener"), name),
          {:ok, trusted_peers} <- parse_trusted_peers(Map.get(instance, "trusted_peers"), name),
          {:ok, relay_realms} <-
@@ -135,6 +142,7 @@ defmodule LatticeCarrierServer.Manifest do
          identity: identity,
          pub: pub,
          log_file: log_file,
+         log_identity: log_identity,
          listener: listener,
          trusted_peers: trusted_peers,
          relay_realms: relay_realms,
@@ -206,8 +214,17 @@ defmodule LatticeCarrierServer.Manifest do
     path = resolve(log_file, base_dir)
 
     case File.stat(path) do
-      {:ok, %File.Stat{type: :regular}} -> {:ok, path}
-      _other -> {:error, {:log_missing, name, path}}
+      {:ok,
+       %File.Stat{
+         type: :regular,
+         major_device: major_device,
+         minor_device: minor_device,
+         inode: inode
+       }} ->
+        {:ok, path, {major_device, minor_device, inode}}
+
+      _other ->
+        {:error, {:log_missing, name, path}}
     end
   end
 
@@ -276,14 +293,14 @@ defmodule LatticeCarrierServer.Manifest do
   # and pilot_node.exs inspects the whole refusal reason to stderr, so any
   # value included here would break the no-secret-echo property this
   # loader exists to guarantee. A symbolic reason only.
-  defp parse_state_reporter(reporter, name) when is_binary(reporter) do
+  defp parse_state_reporter(reporter, _name) when is_binary(reporter) do
     case Map.fetch(@state_reporters, reporter) do
       {:ok, module} -> {:ok, module}
-      :error -> {:error, {:unknown_state_reporter, name}}
+      :error -> {:error, :unknown_state_reporter}
     end
   end
 
-  defp parse_state_reporter(_reporter, name), do: {:error, {:unknown_state_reporter, name}}
+  defp parse_state_reporter(_reporter, _name), do: {:error, :unknown_state_reporter}
 
   defp validate_unique(instances) do
     names = Enum.map(instances, & &1.name)
@@ -298,13 +315,23 @@ defmodule LatticeCarrierServer.Manifest do
     # accepted by one instance could be silently overwritten and lost by the
     # other's next dump — refuse regardless of distinct names/ports.
     log_files = Enum.map(instances, & &1.log_file)
+    log_identities = Enum.map(instances, & &1.log_identity)
 
     cond do
       Enum.uniq(names) != names -> {:error, :duplicate_instance_names}
       Enum.uniq(ports) != ports -> {:error, :duplicate_listener_ports}
       Enum.uniq(log_files) != log_files -> {:error, :duplicate_log_file}
+      Enum.uniq(log_identities) != log_identities -> {:error, :duplicate_log_file}
+      log_temp_namespace_collision?(log_files) -> {:error, :log_temp_namespace_collision}
       true -> :ok
     end
+  end
+
+  defp log_temp_namespace_collision?(log_files) do
+    Enum.any?(log_files, fn log_file ->
+      prefix = log_file <> ".tmp."
+      Enum.any?(log_files, &(&1 != log_file and String.starts_with?(&1, prefix)))
+    end)
   end
 
   defp resolve(path, base_dir), do: Path.expand(path, base_dir)

@@ -63,6 +63,16 @@ defmodule LatticeCarrierServer.Health do
   end
 
   @doc false
+  @spec reset_storage_cache([Path.t()]) :: :ok
+  def reset_storage_cache(log_files) do
+    Enum.each(log_files, fn log_file ->
+      :persistent_term.erase({__MODULE__, :storage_writable, log_file})
+    end)
+
+    :ok
+  end
+
+  @doc false
   def init(req, :livez) do
     {:ok, :cowboy_req.reply(200, %{}, "", req), :livez}
   end
@@ -123,11 +133,14 @@ defmodule LatticeCarrierServer.Health do
   end
 
   defp storage_check_ttl_ms do
-    Application.get_env(
-      :lattice_carrier_server,
-      :storage_check_ttl_ms,
-      @default_storage_check_ttl_ms
-    )
+    case Application.get_env(
+           :lattice_carrier_server,
+           :storage_check_ttl_ms,
+           @default_storage_check_ttl_ms
+         ) do
+      ttl_ms when is_integer(ttl_ms) and ttl_ms >= 0 -> ttl_ms
+      _invalid -> @default_storage_check_ttl_ms
+    end
   end
 
   defp rehearse_storage(log_file) do

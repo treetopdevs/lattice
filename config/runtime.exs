@@ -4,8 +4,10 @@ import Config
 # manifest through this environment variable. The manifest names secret
 # identity files; no identity material passes through the environment itself.
 # Inside the pilot release the manifest is mandatory — a missing manifest
-# refuses startup rather than booting an instanceless carrier.
-carrier_release? = System.get_env("RELEASE_NAME") == "lattice_carrier_pilot"
+# refuses startup rather than booting an instanceless carrier. The umbrella
+# defines only this release, so RELEASE_ROOT is the stable release marker;
+# RELEASE_NAME is operator-overridable and cannot identify the pilot safely.
+carrier_release? = is_binary(System.get_env("RELEASE_ROOT"))
 
 case System.get_env("LATTICE_CARRIER_MANIFEST") do
   nil when carrier_release? ->

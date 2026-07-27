@@ -68,7 +68,7 @@ defmodule LatticeCarrierServer.HealthTest do
     Application.put_env(:lattice_carrier_server, :manifest, manifest_path)
     {:ok, _apps} = Application.ensure_all_started(:lattice_carrier_server)
 
-    {:ok, log_dir: log_dir}
+    {:ok, log_dir: log_dir, log_path: log_path}
   end
 
   @tag :tmp_dir
@@ -99,7 +99,8 @@ defmodule LatticeCarrierServer.HealthTest do
 
   @tag :tmp_dir
   test "readyz rejects a non-numeric cache TTL instead of caching forever", %{
-    log_dir: log_dir
+    log_dir: log_dir,
+    log_path: log_path
   } do
     previous_ttl = Application.get_env(:lattice_carrier_server, :storage_check_ttl_ms)
 
@@ -111,6 +112,10 @@ defmodule LatticeCarrierServer.HealthTest do
     health_port = apply(@health_mod, :port, [])
 
     assert {204, ""} = get("http://127.0.0.1:#{health_port}/readyz")
+
+    cache_key = {@health_mod, :storage_writable, log_path}
+    stale_at = System.monotonic_time(:millisecond) - 5_001
+    :persistent_term.put(cache_key, {stale_at, true})
 
     File.chmod!(log_dir, 0o500)
     assert {503, ""} = get("http://127.0.0.1:#{health_port}/readyz")

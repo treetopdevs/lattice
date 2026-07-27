@@ -23,6 +23,8 @@ defmodule LatticeCarrierServer.Runtime do
   def prepare(manifest_path) when is_binary(manifest_path) do
     case Manifest.load(manifest_path) do
       {:ok, manifest} ->
+        :ok = Health.reset_storage_cache(Enum.map(manifest.instances, & &1.log_file))
+
         Enum.each(manifest.instances, fn instance ->
           :persistent_term.put(instance_key(instance.name), instance)
         end)

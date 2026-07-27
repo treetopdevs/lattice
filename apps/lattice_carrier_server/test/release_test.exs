@@ -50,10 +50,10 @@ defmodule LatticeCarrierServer.ReleaseTest do
   defp mix_bin do
     shim = Path.expand("~/.asdf/shims/mix")
 
-    cond do
-      File.exists?(shim) -> shim
-      path = System.find_executable("mix") -> path
-      true -> flunk("no mix executable available to build the release")
+    if File.exists?(shim) do
+      shim
+    else
+      flunk("required asdf mix shim is unavailable at #{shim}")
     end
   end
 end
