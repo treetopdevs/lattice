@@ -20,6 +20,18 @@ defmodule LatticeCarrierServer.HealthTest do
 
   @moduletag timeout: 120_000
 
+  defmodule SlowDurability do
+    @moduledoc false
+
+    def sync_file(_path) do
+      Process.sleep(250)
+      :ok
+    end
+
+    def rename(temp_path, path), do: File.rename(temp_path, path)
+    def sync_directory(_path), do: :ok
+  end
+
   setup %{tmp_dir: tmp_dir} do
     {:ok, _inets} = Application.ensure_all_started(:inets)
 
@@ -133,6 +145,42 @@ defmodule LatticeCarrierServer.HealthTest do
     assert [{^log_path, checked_at, true}] = :ets.lookup(@storage_cache, log_path)
     assert is_integer(checked_at)
     assert :persistent_term.get(persistent_key, :missing) == :missing
+  end
+
+  @tag :tmp_dir
+  test "readyz fails closed when the configured durable log disappears or is corrupt", %{
+    log_path: log_path
+  } do
+    health_port = apply(@health_mod, :port, [])
+    assert {204, ""} = get("http://127.0.0.1:#{health_port}/readyz")
+
+    File.rm!(log_path)
+    :ok = apply(@health_mod, :reset_storage_cache, [[log_path]])
+    assert {503, ""} = get("http://127.0.0.1:#{health_port}/readyz")
+
+    File.write!(log_path, "corrupt")
+    :ok = apply(@health_mod, :reset_storage_cache, [[log_path]])
+    assert {503, ""} = get("http://127.0.0.1:#{health_port}/readyz")
+  end
+
+  @tag :tmp_dir
+  test "readyz bounds a stalled durability rehearsal", %{log_path: log_path} do
+    previous_impl = Application.get_env(:lattice_carrier_server, :health_durability_impl)
+    previous_timeout = Application.get_env(:lattice_carrier_server, :storage_check_timeout_ms)
+
+    on_exit(fn ->
+      Application.put_env(:lattice_carrier_server, :health_durability_impl, previous_impl)
+      Application.put_env(:lattice_carrier_server, :storage_check_timeout_ms, previous_timeout)
+    end)
+
+    Application.put_env(:lattice_carrier_server, :health_durability_impl, SlowDurability)
+    Application.put_env(:lattice_carrier_server, :storage_check_timeout_ms, 25)
+    :ok = apply(@health_mod, :reset_storage_cache, [[log_path]])
+
+    started_at = System.monotonic_time(:millisecond)
+    health_port = apply(@health_mod, :port, [])
+    assert {503, ""} = get("http://127.0.0.1:#{health_port}/readyz")
+    assert System.monotonic_time(:millisecond) - started_at < 200
   end
 
   @tag :tmp_dir

@@ -13,7 +13,7 @@ defmodule LatticeCarrierServer.DurabilityTest do
   use ExUnit.Case, async: true
 
   alias Lattice.{Identity, Log, Op}
-  alias LatticeCarrierServer.Holder
+  alias LatticeCarrierServer.{Durability, Holder}
 
   @replica "replica:carrier-durability:test"
 
@@ -72,6 +72,22 @@ defmodule LatticeCarrierServer.DurabilityTest do
     end
 
     defp armed(dir), do: :persistent_term.get({__MODULE__, :fail, dir}, nil)
+  end
+
+  @tag :tmp_dir
+  test "a pre-existing rehearsal namespace is never overwritten or removed", %{tmp_dir: tmp_dir} do
+    collision = Path.join(tmp_dir, ".lattice-durability-rehearsal.42")
+    File.write!(collision, "live deployment data")
+    Process.put({__MODULE__, :suffix}, 41)
+
+    next_suffix = fn ->
+      suffix = Process.get({__MODULE__, :suffix}) + 1
+      Process.put({__MODULE__, :suffix}, suffix)
+      suffix
+    end
+
+    assert :ok = Durability.rehearse(InjectedDurability, tmp_dir, unique: next_suffix)
+    assert File.read!(collision) == "live deployment data"
   end
 
   @tag :tmp_dir

@@ -135,6 +135,20 @@ defmodule LatticeCarrierServer.ManifestTest do
   end
 
   @tag :tmp_dir
+  test "an invalid instance name is rejected without echoing its contents", %{
+    tmp_dir: tmp_dir,
+    instance: instance
+  } do
+    smuggled = %{"copied_private_key" => "super-secret-value"}
+    path = manifest_with(tmp_dir, Map.put(instance, "name", smuggled))
+
+    assert {:error, {:invalid_manifest, :invalid_instance_name} = refusal} =
+             Manifest.load(path)
+
+    refute inspect(refusal) =~ "super-secret-value"
+  end
+
+  @tag :tmp_dir
   test "identity files that are missing, open, or corrupt refuse", %{
     tmp_dir: tmp_dir,
     instance: instance,
@@ -196,6 +210,13 @@ defmodule LatticeCarrierServer.ManifestTest do
 
     assert {:error, {:invalid_manifest, {:invalid_listener, "township-pilot"}}} =
              tmp_dir |> manifest_with(malformed) |> Manifest.load()
+
+    ipv6 = %{instance | "listener" => %{"ip" => "::1", "port" => 0}}
+
+    assert {:ok, %Manifest{instances: [%{listener: listener}]}} =
+             tmp_dir |> manifest_with(ipv6) |> Manifest.load()
+
+    assert listener == [ip: {0, 0, 0, 0, 0, 0, 0, 1}, port: 0]
   end
 
   @tag :tmp_dir
@@ -337,6 +358,21 @@ defmodule LatticeCarrierServer.ManifestTest do
     path = write_manifest(tmp_dir, %{"version" => 1, "instances" => [instance, second]})
 
     assert {:error, {:invalid_manifest, :log_temp_namespace_collision}} =
+             Manifest.load(path)
+  end
+
+  @tag :tmp_dir
+  test "an identity path inside a log temporary-file namespace refuses", %{
+    tmp_dir: tmp_dir,
+    instance: instance
+  } do
+    identity_path = instance["log_file"] <> ".tmp.identity"
+    File.cp!(instance["identity_file"], identity_path)
+
+    colliding = Map.put(instance, "identity_file", identity_path)
+    path = manifest_with(tmp_dir, colliding)
+
+    assert {:error, {:invalid_manifest, :identity_log_temp_namespace_collision}} =
              Manifest.load(path)
   end
 

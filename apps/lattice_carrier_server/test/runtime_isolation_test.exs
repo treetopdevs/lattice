@@ -11,6 +11,7 @@ defmodule LatticeCarrierServer.RuntimeIsolationTest do
 
   alias Lattice.Carrier.WebSocket
   alias Lattice.{Identity, Log, Op}
+  alias LatticeCarrierServer.{Holder, Runtime}
 
   @moduletag timeout: 120_000
 
@@ -41,7 +42,13 @@ defmodule LatticeCarrierServer.RuntimeIsolationTest do
     boot!(manifest_path)
 
     relayed =
-      Op.new(alpha.relay_identity, alpha.replica, [alpha.base.id], :command, {:post, "alpha only"})
+      Op.new(
+        alpha.relay_identity,
+        alpha.replica,
+        [alpha.base.id],
+        :command,
+        {:post, "alpha only"}
+      )
 
     assert {:ok, connection} = connect(alpha)
     assert {:ok, %{accepted: [relayed_id]}, connection} = WebSocket.relay(connection, relayed)
@@ -97,6 +104,43 @@ defmodule LatticeCarrierServer.RuntimeIsolationTest do
     assert File.read!(fixture.log_path) == "not a lattice log dump"
     refute log_output =~ fixture.seed_hex
     refute log_output =~ Base.encode64(fixture.server_identity.priv)
+  end
+
+  @tag :tmp_dir
+  test "all manifest logs preflight before any instance can start", %{tmp_dir: tmp_dir} do
+    alpha = instance_fixture(tmp_dir, "preflight-alpha")
+    beta = instance_fixture(tmp_dir, "preflight-beta")
+    File.write!(beta.log_path, "corrupt")
+
+    manifest_path =
+      write_manifest(tmp_dir, %{
+        "version" => 1,
+        "instances" => [alpha.entry, beta.entry]
+      })
+
+    assert {:error, {:source_restore_failed, "pilot-preflight-beta"}} =
+             Runtime.prepare(manifest_path)
+  end
+
+  @tag :tmp_dir
+  test "one exhausted instance does not restart a healthy sibling", %{tmp_dir: tmp_dir} do
+    alpha = instance_fixture(tmp_dir, "restart-alpha")
+    beta = instance_fixture(tmp_dir, "restart-beta")
+
+    manifest_path =
+      write_manifest(tmp_dir, %{
+        "version" => 1,
+        "instances" => [alpha.entry, beta.entry]
+      })
+
+    boot!(manifest_path)
+
+    beta_holder = GenServer.whereis(Holder.via(beta.name))
+    alpha_supervisor = runtime_child_pid({LatticeCarrierServer, alpha.name})
+    Process.exit(alpha_supervisor, :kill)
+
+    wait_until(fn -> not Process.alive?(alpha_supervisor) end)
+    assert GenServer.whereis(Holder.via(beta.name)) == beta_holder
   end
 
   defp instance_fixture(tmp_dir, name) do
@@ -184,4 +228,26 @@ defmodule LatticeCarrierServer.RuntimeIsolationTest do
   defp restore_manifest_config(value) do
     Application.put_env(:lattice_carrier_server, :manifest, value)
   end
+
+  defp runtime_child_pid(id) do
+    LatticeCarrierServer.RuntimeSupervisor
+    |> Supervisor.which_children()
+    |> Enum.find_value(fn
+      {^id, pid, _type, _modules} -> pid
+      _child -> nil
+    end)
+  end
+
+  defp wait_until(fun, attempts \\ 50)
+
+  defp wait_until(fun, attempts) when attempts > 0 do
+    if fun.() do
+      :ok
+    else
+      Process.sleep(10)
+      wait_until(fun, attempts - 1)
+    end
+  end
+
+  defp wait_until(_fun, 0), do: flunk("condition did not become true")
 end
