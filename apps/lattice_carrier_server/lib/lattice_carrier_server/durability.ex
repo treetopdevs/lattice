@@ -68,16 +68,17 @@ defmodule LatticeCarrierServer.Durability do
   """
   @spec rehearse_target(module(), Path.t(), keyword()) :: :ok | {:error, term()}
   def rehearse_target(impl, path, opts \\ []) do
-    unique = Keyword.get(opts, :unique, fn -> System.unique_integer([:monotonic, :positive]) end)
     allocated = Keyword.get(opts, :allocated, fn _path -> :ok end)
 
     with {:ok, bytes} <- File.read(path),
          {:ok, %File.Stat{type: :regular, mode: mode}} <- File.stat(path),
-         {:ok, temp_path} <- allocate_target(path, unique, bytes, mode, 16) do
+         {:ok, temp_path} <- secure_temp(path) do
       allocated.(temp_path)
 
       try do
-        with :ok <- impl.sync_file(temp_path),
+        with :ok <- File.write(temp_path, bytes),
+             :ok <- File.chmod(temp_path, Bitwise.band(mode, 0o777)),
+             :ok <- impl.sync_file(temp_path),
              :ok <- impl.rename(temp_path, path),
              :ok <- impl.sync_directory(Path.dirname(path)) do
           :ok
@@ -91,38 +92,55 @@ defmodule LatticeCarrierServer.Durability do
     end
   end
 
-  defp allocate_target(_path, _unique, _bytes, _mode, 0),
-    do: {:error, :rehearsal_target_unavailable}
+  @doc false
+  @spec secure_temp(Path.t()) :: {:ok, Path.t()} | {:error, term()}
+  def secure_temp(path) when is_binary(path) do
+    template = "#{path}.tmp.XXXXXXXX"
 
-  defp allocate_target(path, unique, bytes, mode, attempts) do
-    temp_path = "#{path}.tmp.rehearsal-#{unique.()}"
+    with :ok <- secure_parent(path) do
+      case System.cmd("mktemp", [template], stderr_to_stdout: true) do
+        {output, 0} ->
+          temp_path = String.trim(output)
 
-    case File.open(temp_path, [:write, :binary, :exclusive]) do
-      {:ok, io_device} ->
-        result =
-          try do
-            with :ok <- IO.binwrite(io_device, bytes),
-                 :ok <- File.chmod(temp_path, Bitwise.band(mode, 0o777)) do
-              :ok
-            end
-          after
-            _ = File.close(io_device)
+          with true <- String.starts_with?(temp_path, path <> ".tmp."),
+               {:ok, %File.Stat{type: :regular, mode: mode}} <- File.lstat(temp_path),
+               true <- Bitwise.band(mode, 0o077) == 0 do
+            {:ok, temp_path}
+          else
+            _invalid ->
+              _ = File.rm(temp_path)
+              {:error, :secure_temp_invalid}
           end
 
-        case result do
-          :ok ->
-            {:ok, temp_path}
+        {_output, status} ->
+          {:error, {:secure_temp_failed, status}}
+      end
+    end
+  rescue
+    error in [ErlangError] -> {:error, {:secure_temp_unavailable, error.original}}
+  end
 
-          {:error, reason} ->
-            _ = File.rm(temp_path)
-            {:error, {:rehearsal_target_write_failed, reason}}
+  defp secure_parent(path) do
+    with {:ok, %File.Stat{type: :directory, mode: mode, uid: uid}} <-
+           File.stat(Path.dirname(path)),
+         true <- Bitwise.band(mode, 0o022) == 0,
+         {:ok, ^uid} <- effective_uid() do
+      :ok
+    else
+      _invalid -> {:error, :insecure_target_directory}
+    end
+  end
+
+  defp effective_uid do
+    case System.cmd("id", ["-u"], stderr_to_stdout: true) do
+      {output, 0} ->
+        case Integer.parse(String.trim(output)) do
+          {uid, ""} when uid >= 0 -> {:ok, uid}
+          _invalid -> {:error, :invalid_uid}
         end
 
-      {:error, :eexist} ->
-        allocate_target(path, unique, bytes, mode, attempts - 1)
-
-      {:error, reason} ->
-        {:error, {:rehearsal_target_write_failed, reason}}
+      {_output, _status} ->
+        {:error, :uid_unavailable}
     end
   end
 

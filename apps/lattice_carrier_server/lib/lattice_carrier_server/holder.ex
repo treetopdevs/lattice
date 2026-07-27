@@ -17,6 +17,7 @@ defmodule LatticeCarrierServer.Holder do
   alias LatticeCarrierServer.{Durability, Secret}
 
   @frontier_limit 64
+  @default_persistence_timeout_ms 4_000
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts) do
@@ -206,7 +207,7 @@ defmodule LatticeCarrierServer.Holder do
   end
 
   defp persist_relay(log, report, %{source: {:path, path}} = state) do
-    case atomic_dump(log, path, state.durability) do
+    case bounded_atomic_dump(log, path, state.durability) do
       :ok ->
         availability = availability(log)
         subscribers = notify_subscribers(state.subscribers, availability)
@@ -218,24 +219,40 @@ defmodule LatticeCarrierServer.Holder do
     end
   end
 
+  defp bounded_atomic_dump(log, path, durability) do
+    with {:ok, temp_path} <- Durability.secure_temp(path) do
+      task =
+        Task.async(fn ->
+          try do
+            atomic_dump(log, path, temp_path, durability)
+          catch
+            kind, reason -> {:error, {:persistence_exception, kind, reason}}
+          end
+        end)
+
+      result =
+        case Task.yield(task, persistence_timeout_ms()) ||
+               Task.shutdown(task, :brutal_kill) do
+          {:ok, task_result} -> task_result
+          _timeout_or_error -> {:error, :persistence_timeout}
+        end
+
+      _ = File.rm(temp_path)
+      result
+    end
+  end
+
   # Persist-before-ack: write, sync the file, atomically rename, then sync
   # the containing directory. Only a fully synced sequence acknowledges.
-  defp atomic_dump(log, path, durability) do
+  defp atomic_dump(log, path, temp_path, durability) do
     Durability.with_target_lock(path, fn ->
-      suffix = System.unique_integer([:monotonic, :positive])
-      temp_path = "#{path}.tmp.#{suffix}"
-
-      try do
-        with {:ok, %File.Stat{mode: mode}} <- File.stat(path),
-             :ok <- Log.dump(log, temp_path),
-             :ok <- File.chmod(temp_path, Bitwise.band(mode, 0o777)),
-             :ok <- durability.sync_file(temp_path),
-             :ok <- durability.rename(temp_path, path),
-             :ok <- durability.sync_directory(Path.dirname(path)) do
-          :ok
-        end
-      after
-        _ = File.rm(temp_path)
+      with {:ok, %File.Stat{mode: mode}} <- File.stat(path),
+           :ok <- Log.dump(log, temp_path),
+           :ok <- File.chmod(temp_path, Bitwise.band(mode, 0o777)),
+           :ok <- durability.sync_file(temp_path),
+           :ok <- durability.rename(temp_path, path),
+           :ok <- durability.sync_directory(Path.dirname(path)) do
+        :ok
       end
     end)
   end
@@ -304,6 +321,17 @@ defmodule LatticeCarrierServer.Holder do
         {:error, reason} -> {:halt, {:error, {:module_load_failed, module, reason}}}
       end
     end)
+  end
+
+  defp persistence_timeout_ms do
+    case Application.get_env(
+           :lattice_carrier_server,
+           :persistence_timeout_ms,
+           @default_persistence_timeout_ms
+         ) do
+      timeout when is_integer(timeout) and timeout > 0 -> timeout
+      _invalid -> @default_persistence_timeout_ms
+    end
   end
 
   @doc false

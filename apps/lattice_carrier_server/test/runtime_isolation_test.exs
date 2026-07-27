@@ -150,6 +150,60 @@ defmodule LatticeCarrierServer.RuntimeIsolationTest do
   end
 
   @tag :tmp_dir
+  test "a persistently broken route remains contained without exhausting the shared supervisor",
+       %{
+         tmp_dir: tmp_dir
+       } do
+    alpha = instance_fixture(tmp_dir, "contained-alpha")
+    beta = instance_fixture(tmp_dir, "contained-beta")
+
+    manifest_path =
+      write_manifest(tmp_dir, %{
+        "version" => 1,
+        "instances" => [alpha.entry, beta.entry]
+      })
+
+    boot!(manifest_path)
+
+    owner = runtime_child_pid({LatticeCarrierServer, alpha.name})
+    %{route: route} = :sys.get_state(owner)
+    beta_holder = GenServer.whereis(Holder.via(beta.name))
+    application_supervisor = Process.whereis(LatticeCarrierServer.ApplicationSupervisor)
+    File.rm!(alpha.log_path)
+    Process.exit(route, :kill)
+    Process.sleep(500)
+
+    assert Process.alive?(owner)
+    assert Process.alive?(application_supervisor)
+    assert GenServer.whereis(Holder.via(beta.name)) == beta_holder
+  end
+
+  @tag :tmp_dir
+  test "a supervisor startup failure erases prepared secret-bearing instances", %{
+    tmp_dir: tmp_dir
+  } do
+    alpha = instance_fixture(tmp_dir, "failed-start-alpha")
+    alpha_key = {Runtime, {:instance, alpha.name}}
+    {:ok, occupied} = :gen_tcp.listen(0, [:binary, active: false, ip: {127, 0, 0, 1}])
+    {:ok, health_port} = :inet.port(occupied)
+
+    manifest =
+      write_manifest(tmp_dir, %{
+        "version" => 1,
+        "health" => %{"ip" => "127.0.0.1", "port" => health_port},
+        "instances" => [alpha.entry]
+      })
+
+    :ok = safe_stop()
+    Application.put_env(:lattice_carrier_server, :manifest, manifest)
+
+    assert {:error, _reason} = Application.ensure_all_started(:lattice_carrier_server)
+    assert :persistent_term.get(alpha_key, :missing) == :missing
+    assert Runtime.deployment() == nil
+    :gen_tcp.close(occupied)
+  end
+
+  @tag :tmp_dir
   test "preparing a replacement manifest erases removed secret-bearing instances", %{
     tmp_dir: tmp_dir
   } do

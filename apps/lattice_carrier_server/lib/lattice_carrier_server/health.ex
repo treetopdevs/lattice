@@ -28,6 +28,7 @@ defmodule LatticeCarrierServer.Health do
   @storage_cache __MODULE__.StorageCache
   @default_storage_check_ttl_ms 5_000
   @default_storage_check_timeout_ms 4_000
+  @default_readiness_timeout_ms 4_500
 
   @spec child_spec(keyword()) :: Supervisor.child_spec()
   def child_spec(health_opts) do
@@ -94,8 +95,19 @@ defmodule LatticeCarrierServer.Health do
   def ready? do
     case Runtime.deployment() do
       nil -> false
-      %{instances: instances} -> Enum.all?(instances, &instance_ready?/1)
+      %{instances: instances} -> instances_ready?(instances)
     end
+  end
+
+  defp instances_ready?(instances) do
+    instances
+    |> Task.async_stream(&instance_ready?/1,
+      max_concurrency: max(length(instances), 1),
+      ordered: false,
+      timeout: readiness_timeout_ms(),
+      on_timeout: :kill_task
+    )
+    |> Enum.all?(&match?({:ok, true}, &1))
   end
 
   defp instance_ready?(%{
@@ -231,6 +243,17 @@ defmodule LatticeCarrierServer.Health do
          ) do
       timeout when is_integer(timeout) and timeout > 0 -> timeout
       _invalid -> @default_storage_check_timeout_ms
+    end
+  end
+
+  defp readiness_timeout_ms do
+    case Application.get_env(
+           :lattice_carrier_server,
+           :readiness_timeout_ms,
+           @default_readiness_timeout_ms
+         ) do
+      timeout when is_integer(timeout) and timeout > 0 -> timeout
+      _invalid -> @default_readiness_timeout_ms
     end
   end
 end

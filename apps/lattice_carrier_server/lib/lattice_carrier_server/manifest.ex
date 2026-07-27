@@ -57,7 +57,7 @@ defmodule LatticeCarrierServer.Manifest do
 
     with {:ok, bytes} <- read_manifest(path),
          {:ok, decoded} <- decode_manifest(bytes),
-         {:ok, manifest} <- parse(decoded, base_dir) do
+         {:ok, manifest} <- parse(decoded, base_dir, Path.expand(path)) do
       {:ok, manifest}
     else
       {:error, {:invalid_manifest, _detail} = reason} -> {:error, reason}
@@ -79,23 +79,23 @@ defmodule LatticeCarrierServer.Manifest do
     end
   end
 
-  defp parse(%{"version" => 1, "instances" => instances}, _base_dir)
+  defp parse(%{"version" => 1, "instances" => instances}, _base_dir, _manifest_path)
        when is_list(instances) and length(instances) > @max_instances,
        do: {:error, :too_many_instances}
 
-  defp parse(%{"version" => 1, "instances" => instances} = decoded, base_dir)
+  defp parse(%{"version" => 1, "instances" => instances} = decoded, base_dir, manifest_path)
        when is_list(instances) and instances != [] do
     with {:ok, health} <- parse_health(Map.get(decoded, "health")),
          {:ok, parsed} <- parse_instances(instances, base_dir),
-         :ok <- validate_unique(parsed) do
+         :ok <- validate_unique(parsed, manifest_path) do
       {:ok, %__MODULE__{health: health, instances: parsed}}
     end
   end
 
-  defp parse(%{"version" => version}, _base_dir) when version != 1,
+  defp parse(%{"version" => version}, _base_dir, _manifest_path) when version != 1,
     do: {:error, :unsupported_version}
 
-  defp parse(_decoded, _base_dir), do: {:error, :manifest_corrupt}
+  defp parse(_decoded, _base_dir, _manifest_path), do: {:error, :manifest_corrupt}
 
   defp parse_health(nil), do: {:ok, nil}
 
@@ -200,12 +200,28 @@ defmodule LatticeCarrierServer.Manifest do
 
   # The identity file must be private to the service user: any group/other
   # permission bit refuses startup.
-  defp identity_permissions(%File.Stat{mode: mode}, path) do
-    if (mode &&& 0o077) == 0 do
+  defp identity_permissions(%File.Stat{mode: mode, uid: uid}, path) do
+    with true <- (mode &&& 0o077) == 0,
+         {:ok, ^uid} <- effective_uid() do
       :ok
     else
-      {:error, {:identity_file_permissions, path}}
+      _invalid -> {:error, {:identity_file_permissions, path}}
     end
+  end
+
+  defp effective_uid do
+    case System.cmd("id", ["-u"], stderr_to_stdout: true) do
+      {output, 0} ->
+        case Integer.parse(String.trim(output)) do
+          {uid, ""} when uid >= 0 -> {:ok, uid}
+          _invalid -> {:error, :invalid_uid}
+        end
+
+      {_output, _status} ->
+        {:error, :uid_unavailable}
+    end
+  rescue
+    error in [ErlangError] -> {:error, {:uid_unavailable, error.original}}
   end
 
   defp identity_seed(path) do
@@ -314,7 +330,7 @@ defmodule LatticeCarrierServer.Manifest do
 
   defp parse_state_reporter(_reporter, _name), do: {:error, :unknown_state_reporter}
 
-  defp validate_unique(instances) do
+  defp validate_unique(instances, manifest_path) do
     names = Enum.map(instances, & &1.name)
 
     ports =
@@ -339,7 +355,8 @@ defmodule LatticeCarrierServer.Manifest do
         log_identities,
         identity_files,
         canonical_log_files,
-        canonical_identity_files
+        canonical_identity_files,
+        manifest_path
       )
     end
   end
@@ -351,8 +368,15 @@ defmodule LatticeCarrierServer.Manifest do
          log_identities,
          identity_files,
          canonical_log_files,
-         canonical_identity_files
+         canonical_identity_files,
+         manifest_path
        ) do
+    canonical_manifest =
+      case canonicalize_existing_path(manifest_path, 64) do
+        {:ok, path} -> path
+        {:error, _reason} -> manifest_path
+      end
+
     cond do
       Enum.uniq(names) != names ->
         {:error, :duplicate_instance_names}
@@ -369,8 +393,17 @@ defmodule LatticeCarrierServer.Manifest do
       log_temp_namespace_collision?(log_files) ->
         {:error, :log_temp_namespace_collision}
 
+      log_temp_namespace_collision?(canonical_log_files) ->
+        {:error, :log_temp_namespace_collision}
+
       identity_log_temp_namespace_collision?(identity_files, log_files) ->
         {:error, :identity_log_temp_namespace_collision}
+
+      identity_log_temp_namespace_collision?([manifest_path], log_files) ->
+        {:error, :manifest_log_temp_namespace_collision}
+
+      identity_log_temp_namespace_collision?([canonical_manifest], canonical_log_files) ->
+        {:error, :manifest_log_temp_namespace_collision}
 
       identity_log_temp_namespace_collision?(
         canonical_identity_files,

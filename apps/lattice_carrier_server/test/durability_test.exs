@@ -41,6 +41,7 @@ defmodule LatticeCarrierServer.DurabilityTest do
 
       case armed(dir) do
         :sync_file -> {:error, :injected_sync_file}
+        :slow_sync_file -> Process.sleep(250)
         _other -> :ok
       end
     end
@@ -110,6 +111,47 @@ defmodule LatticeCarrierServer.DurabilityTest do
     dir = tmp_dir
     assert_received {:durability, {:sync_directory, ^dir}}
     refute_received {:durability, _event}
+  end
+
+  @tag :tmp_dir
+  test "secure target allocation is exclusive and private", %{tmp_dir: tmp_dir} do
+    path = Path.join(tmp_dir, "matter.log")
+
+    assert {:ok, temp_path} = Durability.secure_temp(path)
+    assert String.starts_with?(temp_path, path <> ".tmp.")
+    assert {:ok, %File.Stat{type: :regular, mode: mode}} = File.lstat(temp_path)
+    assert Bitwise.band(mode, 0o077) == 0
+
+    File.rm!(temp_path)
+  end
+
+  @tag :tmp_dir
+  test "a stalled durable relay is refused within a bounded time and the holder survives", %{
+    tmp_dir: tmp_dir
+  } do
+    previous_timeout =
+      Application.get_env(:lattice_carrier_server, :persistence_timeout_ms, :missing)
+
+    on_exit(fn ->
+      case previous_timeout do
+        :missing -> Application.delete_env(:lattice_carrier_server, :persistence_timeout_ms)
+        value -> Application.put_env(:lattice_carrier_server, :persistence_timeout_ms, value)
+      end
+    end)
+
+    %{holder: holder, relay_identity: relay_identity, relayed: relayed} =
+      durable_holder(tmp_dir)
+
+    Application.put_env(:lattice_carrier_server, :persistence_timeout_ms, 25)
+    InjectedDurability.arm_failure(tmp_dir, :slow_sync_file)
+
+    started_at = System.monotonic_time(:millisecond)
+
+    assert {:error, {:persistence_failed, :persistence_timeout}} =
+             Holder.relay(holder, relay_identity.realm_id, relayed)
+
+    assert System.monotonic_time(:millisecond) - started_at < 200
+    assert Process.alive?(holder)
   end
 
   @tag :tmp_dir

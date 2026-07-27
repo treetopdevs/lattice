@@ -23,10 +23,17 @@ defmodule LatticeCarrierServer.Application do
             {LatticeCarrierServer.RuntimeSupervisor, runtime_children}
           ]
 
-        Supervisor.start_link(children,
-          strategy: :rest_for_one,
-          name: LatticeCarrierServer.ApplicationSupervisor
-        )
+        case Supervisor.start_link(children,
+               strategy: :rest_for_one,
+               name: LatticeCarrierServer.ApplicationSupervisor
+             ) do
+          {:ok, _pid} = started ->
+            started
+
+          {:error, _reason} = error ->
+            Runtime.clear()
+            error
+        end
 
       {:error, reason} ->
         {:error, reason}

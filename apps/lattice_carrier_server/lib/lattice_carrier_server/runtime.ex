@@ -96,9 +96,9 @@ defmodule LatticeCarrierServer.Runtime do
   defp instance_child_spec(instance) do
     %{
       id: {LatticeCarrierServer, instance.name},
-      start: {__MODULE__, :start_instance, [instance.name]},
+      start: {__MODULE__.RouteOwner, :start_link, [instance.name]},
       restart: :permanent,
-      type: :supervisor
+      type: :worker
     }
   end
 
@@ -141,5 +141,55 @@ defmodule LatticeCarrierServer.Runtime do
       {:error, _reason} ->
         {:error, {:source_restore_failed, instance.ref}}
     end
+  end
+end
+
+defmodule LatticeCarrierServer.Runtime.RouteOwner do
+  @moduledoc false
+
+  use GenServer
+
+  alias LatticeCarrierServer.Runtime
+
+  @initial_backoff_ms 100
+  @max_backoff_ms 5_000
+
+  @spec start_link(String.t()) :: GenServer.on_start()
+  def start_link(name), do: GenServer.start_link(__MODULE__, name)
+
+  @impl GenServer
+  def init(name) do
+    Process.flag(:trap_exit, true)
+
+    case Runtime.start_instance(name) do
+      {:ok, route} ->
+        {:ok, %{name: name, route: route, backoff_ms: @initial_backoff_ms}}
+
+      {:error, _reason} ->
+        state = %{name: name, route: nil, backoff_ms: @initial_backoff_ms}
+        {:ok, schedule_restart(state)}
+    end
+  end
+
+  @impl GenServer
+  def handle_info(:start_route, state) do
+    case Runtime.start_instance(state.name) do
+      {:ok, route} ->
+        {:noreply, %{state | route: route, backoff_ms: @initial_backoff_ms}}
+
+      {:error, _reason} ->
+        {:noreply, schedule_restart(state)}
+    end
+  end
+
+  def handle_info({:EXIT, route, _reason}, %{route: route} = state) do
+    {:noreply, state |> Map.put(:route, nil) |> schedule_restart()}
+  end
+
+  def handle_info({:EXIT, _other, _reason}, state), do: {:noreply, state}
+
+  defp schedule_restart(state) do
+    Process.send_after(self(), :start_route, state.backoff_ms)
+    %{state | backoff_ms: min(state.backoff_ms * 2, @max_backoff_ms)}
   end
 end

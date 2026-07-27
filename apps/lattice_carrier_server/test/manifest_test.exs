@@ -389,6 +389,38 @@ defmodule LatticeCarrierServer.ManifestTest do
   end
 
   @tag :tmp_dir
+  test "canonical aliases cannot hide a log in another log's temporary-file namespace", %{
+    tmp_dir: tmp_dir,
+    instance: instance
+  } do
+    colliding_path = instance["log_file"] <> ".tmp.alias"
+    File.cp!(instance["log_file"], colliding_path)
+    alias_dir = Path.join(tmp_dir, "alias")
+    File.ln_s!(tmp_dir, alias_dir)
+
+    second =
+      instance
+      |> Map.put("name", "township-pilot-canonical-temp-collision")
+      |> Map.put("log_file", Path.join(alias_dir, Path.basename(colliding_path)))
+
+    path = write_manifest(tmp_dir, %{"version" => 1, "instances" => [instance, second]})
+
+    assert {:error, {:invalid_manifest, :log_temp_namespace_collision}} =
+             Manifest.load(path)
+  end
+
+  @tag :tmp_dir
+  test "the manifest itself cannot occupy a log temporary-file namespace", %{
+    instance: instance
+  } do
+    path = instance["log_file"] <> ".tmp.manifest"
+    File.write!(path, Jason.encode!(%{"version" => 1, "instances" => [instance]}))
+
+    assert {:error, {:invalid_manifest, :manifest_log_temp_namespace_collision}} =
+             Manifest.load(path)
+  end
+
+  @tag :tmp_dir
   test "an identity path inside a log temporary-file namespace refuses", %{
     tmp_dir: tmp_dir,
     instance: instance
