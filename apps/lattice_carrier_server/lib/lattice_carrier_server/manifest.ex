@@ -330,6 +330,29 @@ defmodule LatticeCarrierServer.Manifest do
     log_identities = Enum.map(instances, & &1.log_identity)
     identity_files = Enum.map(instances, & &1.identity_file)
 
+    with {:ok, canonical_log_files} <- canonicalize_paths(log_files),
+         {:ok, canonical_identity_files} <- canonicalize_paths(identity_files) do
+      validate_unique_paths(
+        names,
+        ports,
+        log_files,
+        log_identities,
+        identity_files,
+        canonical_log_files,
+        canonical_identity_files
+      )
+    end
+  end
+
+  defp validate_unique_paths(
+         names,
+         ports,
+         log_files,
+         log_identities,
+         identity_files,
+         canonical_log_files,
+         canonical_identity_files
+       ) do
     cond do
       Enum.uniq(names) != names ->
         {:error, :duplicate_instance_names}
@@ -349,6 +372,12 @@ defmodule LatticeCarrierServer.Manifest do
       identity_log_temp_namespace_collision?(identity_files, log_files) ->
         {:error, :identity_log_temp_namespace_collision}
 
+      identity_log_temp_namespace_collision?(
+        canonical_identity_files,
+        canonical_log_files
+      ) ->
+        {:error, :identity_log_temp_namespace_collision}
+
       true ->
         :ok
     end
@@ -365,6 +394,58 @@ defmodule LatticeCarrierServer.Manifest do
     Enum.any?(log_files, fn log_file ->
       prefix = log_file <> ".tmp."
       Enum.any?(identity_files, &String.starts_with?(&1, prefix))
+    end)
+  end
+
+  defp canonicalize_paths(paths) do
+    Enum.reduce_while(paths, {:ok, []}, fn path, {:ok, acc} ->
+      case canonicalize_existing_path(path, 64) do
+        {:ok, canonical} -> {:cont, {:ok, [canonical | acc]}}
+        {:error, _reason} -> {:halt, {:error, :path_resolution_failed}}
+      end
+    end)
+    |> case do
+      {:ok, canonical} -> {:ok, Enum.reverse(canonical)}
+      error -> error
+    end
+  end
+
+  defp canonicalize_existing_path(_path, 0), do: {:error, :too_many_symbolic_links}
+
+  defp canonicalize_existing_path(path, remaining_links) do
+    expanded = Path.expand(path)
+    parts = Path.split(expanded)
+
+    case first_symbolic_link(parts) do
+      nil ->
+        {:ok, expanded}
+
+      {link_path, index} ->
+        with {:ok, target} <- File.read_link(link_path) do
+          resolved_target =
+            if Path.type(target) == :absolute do
+              target
+            else
+              Path.expand(target, Path.dirname(link_path))
+            end
+
+          suffix = Enum.drop(parts, index + 1)
+          next_path = Enum.reduce(suffix, resolved_target, &Path.join(&2, &1))
+          canonicalize_existing_path(next_path, remaining_links - 1)
+        end
+    end
+  end
+
+  defp first_symbolic_link(parts) do
+    parts
+    |> Enum.with_index()
+    |> Enum.find_value(fn {_part, index} ->
+      candidate = parts |> Enum.take(index + 1) |> Path.join()
+
+      case File.lstat(candidate) do
+        {:ok, %File.Stat{type: :symlink}} -> {candidate, index}
+        _not_a_link -> nil
+      end
     end)
   end
 

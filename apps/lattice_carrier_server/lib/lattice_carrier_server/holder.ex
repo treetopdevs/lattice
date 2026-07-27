@@ -221,21 +221,23 @@ defmodule LatticeCarrierServer.Holder do
   # Persist-before-ack: write, sync the file, atomically rename, then sync
   # the containing directory. Only a fully synced sequence acknowledges.
   defp atomic_dump(log, path, durability) do
-    suffix = System.unique_integer([:monotonic, :positive])
-    temp_path = "#{path}.tmp.#{suffix}"
+    Durability.with_target_lock(path, fn ->
+      suffix = System.unique_integer([:monotonic, :positive])
+      temp_path = "#{path}.tmp.#{suffix}"
 
-    try do
-      with {:ok, %File.Stat{mode: mode}} <- File.stat(path),
-           :ok <- Log.dump(log, temp_path),
-           :ok <- File.chmod(temp_path, Bitwise.band(mode, 0o777)),
-           :ok <- durability.sync_file(temp_path),
-           :ok <- durability.rename(temp_path, path),
-           :ok <- durability.sync_directory(Path.dirname(path)) do
-        :ok
+      try do
+        with {:ok, %File.Stat{mode: mode}} <- File.stat(path),
+             :ok <- Log.dump(log, temp_path),
+             :ok <- File.chmod(temp_path, Bitwise.band(mode, 0o777)),
+             :ok <- durability.sync_file(temp_path),
+             :ok <- durability.rename(temp_path, path),
+             :ok <- durability.sync_directory(Path.dirname(path)) do
+          :ok
+        end
+      after
+        _ = File.rm(temp_path)
       end
-    after
-      _ = File.rm(temp_path)
-    end
+    end)
   end
 
   # Only relay-enabled path holders persist, so only they must prove the

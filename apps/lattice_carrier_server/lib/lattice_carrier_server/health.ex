@@ -177,11 +177,13 @@ defmodule LatticeCarrierServer.Health do
           with {:ok, %Log{} = log} <- Log.restore(log_file),
                :ok <- Holder.validate_log(log),
                :ok <-
-                 Durability.rehearse_target(health_durability_impl(), log_file,
-                   allocated: fn path ->
-                     send(parent, {:durability_rehearsal_allocated, rehearsal_ref, path})
-                   end
-                 ) do
+                 Durability.with_target_lock(log_file, fn ->
+                   Durability.rehearse_target(health_durability_impl(), log_file,
+                     allocated: fn path ->
+                       send(parent, {:durability_rehearsal_allocated, rehearsal_ref, path})
+                     end
+                   )
+                 end) do
             true
           else
             _error -> false

@@ -16,6 +16,17 @@ defmodule LatticeCarrierServer.Durability do
 
   @rehearsal_prefix ".lattice-durability-rehearsal"
 
+  @doc false
+  @spec with_target_lock(Path.t(), (-> result)) :: result | {:error, term()} when result: term()
+  def with_target_lock(path, fun) when is_binary(path) and is_function(fun, 0) do
+    lock = {{__MODULE__, :target, Path.expand(path)}, self()}
+
+    case :global.trans(lock, fun, [node()]) do
+      {:aborted, reason} -> {:error, {:target_lock_failed, reason}}
+      result -> result
+    end
+  end
+
   @doc """
   Prove the write -> fsync -> rename -> directory-fsync sequence in
   `directory`, cleaning up all rehearsal residue.
