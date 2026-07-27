@@ -114,9 +114,8 @@ defmodule LatticeCarrierServer.HealthTest do
 
     assert {204, ""} = get("http://127.0.0.1:#{health_port}/readyz")
 
-    cache_key = {@health_mod, :storage_writable, log_path}
     stale_at = System.monotonic_time(:millisecond) - 5_001
-    :persistent_term.put(cache_key, {stale_at, true})
+    true = :ets.insert(@storage_cache, {log_path, stale_at, true})
 
     File.chmod!(log_dir, 0o500)
     assert {503, ""} = get("http://127.0.0.1:#{health_port}/readyz")

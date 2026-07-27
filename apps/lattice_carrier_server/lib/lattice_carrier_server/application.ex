@@ -3,7 +3,7 @@ defmodule LatticeCarrierServer.Application do
 
   use Application
 
-  alias LatticeCarrierServer.Runtime
+  alias LatticeCarrierServer.{Health, Runtime}
 
   @impl Application
   def start(_type, _args) do
@@ -16,6 +16,7 @@ defmodule LatticeCarrierServer.Application do
       {:ok, manifest_children} ->
         children =
           [
+            {Health.StorageCache, []},
             {Registry, keys: :unique, name: LatticeCarrierServer.Registry}
           ] ++ configured_server() ++ manifest_children
 

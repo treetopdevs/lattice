@@ -24,6 +24,7 @@ defmodule LatticeCarrierServer.Health do
   alias LatticeCarrierServer.{Durability, Holder, Listener, Runtime}
 
   @listener_ref {__MODULE__, :listener}
+  @storage_cache __MODULE__.StorageCache
   @default_storage_check_ttl_ms 5_000
 
   @spec child_spec(keyword()) :: Supervisor.child_spec()
@@ -65,9 +66,9 @@ defmodule LatticeCarrierServer.Health do
   @doc false
   @spec reset_storage_cache([Path.t()]) :: :ok
   def reset_storage_cache(log_files) do
-    Enum.each(log_files, fn log_file ->
-      :persistent_term.erase({__MODULE__, :storage_writable, log_file})
-    end)
+    if :ets.whereis(@storage_cache) != :undefined do
+      Enum.each(log_files, &:ets.delete(@storage_cache, &1))
+    end
 
     :ok
   end
@@ -117,17 +118,25 @@ defmodule LatticeCarrierServer.Health do
   # every poll. Any raise is caught and cached as "not writable", so a
   # transient failure fails closed rather than crashing the request.
   defp storage_writable?(log_file) do
-    key = {__MODULE__, :storage_writable, log_file}
+    if :ets.whereis(@storage_cache) == :undefined do
+      false
+    else
+      cached_storage_writable?(log_file)
+    end
+  end
+
+  defp cached_storage_writable?(log_file) do
     now = System.monotonic_time(:millisecond)
     ttl_ms = storage_check_ttl_ms()
 
-    case :persistent_term.get(key, nil) do
-      {checked_at, result} when now - checked_at < ttl_ms ->
+    case :ets.lookup(@storage_cache, log_file) do
+      [{^log_file, checked_at, result}]
+      when now - checked_at < ttl_ms ->
         result
 
       _stale_or_absent ->
         result = rehearse_storage(log_file)
-        :persistent_term.put(key, {now, result})
+        true = :ets.insert(@storage_cache, {log_file, now, result})
         result
     end
   end
@@ -148,4 +157,27 @@ defmodule LatticeCarrierServer.Health do
   catch
     _kind, _reason -> false
   end
+end
+
+defmodule LatticeCarrierServer.Health.StorageCache do
+  @moduledoc false
+
+  use GenServer
+
+  @impl GenServer
+  def init(_opts) do
+    __MODULE__ =
+      :ets.new(__MODULE__, [
+        :named_table,
+        :set,
+        :public,
+        read_concurrency: true,
+        write_concurrency: true
+      ])
+
+    {:ok, nil}
+  end
+
+  @spec start_link(keyword()) :: GenServer.on_start()
+  def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 end
