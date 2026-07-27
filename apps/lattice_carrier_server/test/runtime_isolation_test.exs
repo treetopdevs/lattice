@@ -143,6 +143,23 @@ defmodule LatticeCarrierServer.RuntimeIsolationTest do
     assert GenServer.whereis(Holder.via(beta.name)) == beta_holder
   end
 
+  @tag :tmp_dir
+  test "preparing a replacement manifest erases removed secret-bearing instances", %{
+    tmp_dir: tmp_dir
+  } do
+    alpha = instance_fixture(tmp_dir, "stale-alpha")
+    beta = instance_fixture(tmp_dir, "stale-beta")
+    alpha_manifest = write_manifest(tmp_dir, %{"version" => 1, "instances" => [alpha.entry]})
+    beta_manifest = write_manifest(tmp_dir, %{"version" => 1, "instances" => [beta.entry]})
+    alpha_key = {Runtime, {:instance, alpha.name}}
+
+    assert {:ok, _children} = Runtime.prepare(alpha_manifest)
+    refute :persistent_term.get(alpha_key, :missing) == :missing
+
+    assert {:ok, _children} = Runtime.prepare(beta_manifest)
+    assert :persistent_term.get(alpha_key, :missing) == :missing
+  end
+
   defp instance_fixture(tmp_dir, name) do
     replica = "replica:carrier-isolation:#{name}"
     author = Identity.from_seed("author", "carrier-isolation-author-#{name}")

@@ -149,6 +149,27 @@ defmodule LatticeCarrierServer.ManifestTest do
   end
 
   @tag :tmp_dir
+  test "later refusal details identify an instance symbolically, not by its supplied name", %{
+    tmp_dir: tmp_dir,
+    instance: instance
+  } do
+    smuggled_name = String.duplicate("a", 64)
+    missing_log = Path.join(tmp_dir, "missing.log")
+
+    supplied =
+      instance
+      |> Map.put("name", smuggled_name)
+      |> Map.put("log_file", missing_log)
+
+    path = manifest_with(tmp_dir, supplied)
+
+    assert {:error, {:invalid_manifest, {:log_missing, {:instance, 1}, ^missing_log}} = refusal} =
+             Manifest.load(path)
+
+    refute inspect(refusal) =~ smuggled_name
+  end
+
+  @tag :tmp_dir
   test "identity files that are missing, open, or corrupt refuse", %{
     tmp_dir: tmp_dir,
     instance: instance,
