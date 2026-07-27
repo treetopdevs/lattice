@@ -5,7 +5,7 @@ defmodule LatticeCarrierServer.ManifestTest do
   secret-free error details.
   """
 
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Lattice.Identity
   alias LatticeCarrierServer.{Manifest, Secret}
@@ -117,6 +117,55 @@ defmodule LatticeCarrierServer.ManifestTest do
 
     empty = write_manifest(tmp_dir, %{"version" => 1, "instances" => []})
     assert {:error, {:invalid_manifest, :manifest_corrupt}} = Manifest.load(empty)
+  end
+
+  @tag :tmp_dir
+  test "a manifest or parent directory writable by another account refuses", %{
+    tmp_dir: tmp_dir,
+    instance: instance
+  } do
+    writable_dir = Path.join(tmp_dir, "writable-policy")
+    File.mkdir!(writable_dir)
+    File.chmod!(writable_dir, 0o777)
+    path = write_manifest(writable_dir, %{"version" => 1, "instances" => [instance]})
+
+    assert {:error, {:invalid_manifest, {:manifest_path_permissions, ^writable_dir}}} =
+             Manifest.load(path)
+
+    File.chmod!(writable_dir, 0o700)
+    File.chmod!(path, 0o666)
+
+    assert {:error, {:invalid_manifest, {:manifest_file_permissions, ^path}}} =
+             Manifest.load(path)
+  end
+
+  @tag :tmp_dir
+  test "production manifests require fixed carrier and health ports", %{
+    tmp_dir: tmp_dir,
+    instance: instance
+  } do
+    Application.put_env(:lattice_carrier_server, :allow_ephemeral_manifest_ports, false)
+
+    on_exit(fn ->
+      Application.put_env(:lattice_carrier_server, :allow_ephemeral_manifest_ports, true)
+    end)
+
+    carrier_path = manifest_with(tmp_dir, instance)
+
+    assert {:error, {:invalid_manifest, {:ephemeral_listener_port, "township-pilot"}}} =
+             Manifest.load(carrier_path)
+
+    fixed_instance = put_in(instance, ["listener", "port"], 4_109)
+
+    health_path =
+      write_manifest(tmp_dir, %{
+        "version" => 1,
+        "health" => %{"ip" => "127.0.0.1", "port" => 0},
+        "instances" => [fixed_instance]
+      })
+
+    assert {:error, {:invalid_manifest, {:ephemeral_listener_port, :health}}} =
+             Manifest.load(health_path)
   end
 
   @tag :tmp_dir
