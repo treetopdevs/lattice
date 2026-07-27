@@ -16,6 +16,7 @@ defmodule LatticeCarrierServer.HealthTest do
   # Referenced dynamically so this file stays RED-runnable before the
   # health listener exists.
   @health_mod LatticeCarrierServer.Health
+  @storage_cache LatticeCarrierServer.Health.StorageCache
 
   @moduletag timeout: 120_000
 
@@ -119,6 +120,20 @@ defmodule LatticeCarrierServer.HealthTest do
 
     File.chmod!(log_dir, 0o500)
     assert {503, ""} = get("http://127.0.0.1:#{health_port}/readyz")
+  end
+
+  @tag :tmp_dir
+  test "readiness cache uses ETS instead of persistent_term", %{log_path: log_path} do
+    persistent_key = {@health_mod, :storage_writable, log_path}
+    :persistent_term.erase(persistent_key)
+
+    health_port = apply(@health_mod, :port, [])
+    assert {204, ""} = get("http://127.0.0.1:#{health_port}/readyz")
+
+    assert :ets.whereis(@storage_cache) != :undefined
+    assert [{^log_path, checked_at, true}] = :ets.lookup(@storage_cache, log_path)
+    assert is_integer(checked_at)
+    assert :persistent_term.get(persistent_key, :missing) == :missing
   end
 
   @tag :tmp_dir
