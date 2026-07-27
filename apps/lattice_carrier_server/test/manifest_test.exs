@@ -152,7 +152,7 @@ defmodule LatticeCarrierServer.ManifestTest do
 
     carrier_path = manifest_with(tmp_dir, instance)
 
-    assert {:error, {:invalid_manifest, {:ephemeral_listener_port, "township-pilot"}}} =
+    assert {:error, {:invalid_manifest, {:ephemeral_listener_port, {:instance, 1}}}} =
              Manifest.load(carrier_path)
 
     fixed_instance = put_in(instance, ["listener", "port"], 4_109)

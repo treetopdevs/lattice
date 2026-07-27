@@ -22,6 +22,7 @@ manifest_path =
   end
 
 Application.put_env(:lattice_carrier_server, :manifest, Path.expand(manifest_path))
+Application.put_env(:lattice_carrier_server, :allow_ephemeral_manifest_ports, true)
 
 # This script is a dev/test-only entrypoint — never the production release
 # boot path (that goes through the standard release `Application.start`

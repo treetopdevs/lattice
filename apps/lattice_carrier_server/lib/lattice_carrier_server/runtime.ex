@@ -35,6 +35,7 @@ defmodule LatticeCarrierServer.Runtime do
 
           Enum.each(manifest.instances, fn instance ->
             :persistent_term.put(instance_key(instance.name), instance)
+            :persistent_term.erase(route_started_key(instance.name))
           end)
 
           :persistent_term.put(@deployment_key, %{
@@ -83,10 +84,24 @@ defmodule LatticeCarrierServer.Runtime do
   end
 
   @doc false
+  @spec route_started?(String.t()) :: boolean()
+  def route_started?(name), do: :persistent_term.get(route_started_key(name), false)
+
+  @doc false
+  @spec mark_route_started(String.t()) :: :ok
+  def mark_route_started(name) do
+    :persistent_term.put(route_started_key(name), true)
+    :ok
+  end
+
+  @doc false
   @spec clear() :: :ok
   def clear do
     :persistent_term.get(@instance_names_key, MapSet.new())
-    |> Enum.each(&:persistent_term.erase(instance_key(&1)))
+    |> Enum.each(fn name ->
+      :persistent_term.erase(instance_key(name))
+      :persistent_term.erase(route_started_key(name))
+    end)
 
     :persistent_term.erase(@instance_names_key)
     :persistent_term.erase(@deployment_key)
@@ -108,6 +123,7 @@ defmodule LatticeCarrierServer.Runtime do
   defp health_children(health), do: [Health.child_spec(health)]
 
   defp instance_key(name), do: {__MODULE__, {:instance, name}}
+  defp route_started_key(name), do: {__MODULE__, {:route_started, name}}
 
   defp clear_stale_instances(instances) do
     current_names = MapSet.new(instances, & &1.name)
@@ -115,7 +131,10 @@ defmodule LatticeCarrierServer.Runtime do
 
     previous_names
     |> MapSet.difference(current_names)
-    |> Enum.each(&:persistent_term.erase(instance_key(&1)))
+    |> Enum.each(fn name ->
+      :persistent_term.erase(instance_key(name))
+      :persistent_term.erase(route_started_key(name))
+    end)
 
     :persistent_term.put(@instance_names_key, current_names)
     :ok
@@ -163,11 +182,16 @@ defmodule LatticeCarrierServer.Runtime.RouteOwner do
 
     case Runtime.start_instance(name) do
       {:ok, route} ->
+        :ok = Runtime.mark_route_started(name)
         {:ok, %{name: name, route: route, backoff_ms: @initial_backoff_ms}}
 
-      {:error, _reason} ->
-        state = %{name: name, route: nil, backoff_ms: @initial_backoff_ms}
-        {:ok, schedule_restart(state)}
+      {:error, reason} ->
+        if Runtime.route_started?(name) do
+          state = %{name: name, route: nil, backoff_ms: @initial_backoff_ms}
+          {:ok, schedule_restart(state)}
+        else
+          {:stop, reason}
+        end
     end
   end
 
@@ -175,6 +199,7 @@ defmodule LatticeCarrierServer.Runtime.RouteOwner do
   def handle_info(:start_route, state) do
     case Runtime.start_instance(state.name) do
       {:ok, route} ->
+        :ok = Runtime.mark_route_started(state.name)
         {:noreply, %{state | route: route, backoff_ms: @initial_backoff_ms}}
 
       {:error, _reason} ->
