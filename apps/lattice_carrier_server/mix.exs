@@ -15,6 +15,10 @@ defmodule LatticeCarrierServer.MixProject do
     ]
   end
 
+  # The lattice_carrier_pilot release is declared in the umbrella root's
+  # mix.exs (Mix umbrella releases must live at the root to be visible to
+  # `mix release` run there), not here.
+
   def application do
     [
       extra_applications: [:logger, :crypto, :cowboy, :jason],
