@@ -22,7 +22,7 @@ defmodule LatticeCarrierServer.Health do
   """
 
   alias Lattice.Log
-  alias LatticeCarrierServer.{Durability, Holder, Listener, Runtime}
+  alias LatticeCarrierServer.{Durability, Holder, Listener, Runtime, SocketOpts}
 
   @listener_ref {__MODULE__, :listener}
   @storage_cache __MODULE__.StorageCache
@@ -43,7 +43,7 @@ defmodule LatticeCarrierServer.Health do
          ]}
       ])
 
-    transport_opts = %{socket_opts: socket_opts(ip, port)}
+    transport_opts = %{socket_opts: SocketOpts.build(ip, port)}
 
     protocol_opts = %{
       env: %{dispatch: dispatch},
@@ -195,11 +195,6 @@ defmodule LatticeCarrierServer.Health do
       _invalid -> @default_storage_check_timeout_ms
     end
   end
-
-  defp socket_opts({_a, _b, _c, _d, _e, _f, _g, _h} = ip, port),
-    do: [:inet6, ip: ip, port: port]
-
-  defp socket_opts(ip, port), do: [ip: ip, port: port]
 end
 
 defmodule LatticeCarrierServer.Health.StorageCache do

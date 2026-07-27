@@ -109,8 +109,9 @@ defmodule LatticeCarrierServer.Manifest do
 
   defp parse_instances(instances, base_dir) do
     instances
-    |> Enum.reduce_while({:ok, []}, fn instance, {:ok, acc} ->
-      case parse_instance(instance, base_dir) do
+    |> Enum.with_index(1)
+    |> Enum.reduce_while({:ok, []}, fn {instance, index}, {:ok, acc} ->
+      case parse_instance(instance, base_dir, {:instance, index}) do
         {:ok, parsed} -> {:cont, {:ok, [parsed | acc]}}
         {:error, _detail} = error -> {:halt, error}
       end
@@ -121,21 +122,27 @@ defmodule LatticeCarrierServer.Manifest do
     end
   end
 
-  defp parse_instance(instance, base_dir) when is_map(instance) do
+  defp parse_instance(instance, base_dir, instance_ref) when is_map(instance) do
     name = Map.get(instance, "name")
 
-    with :ok <- reject_inline_secrets(instance, name),
+    with :ok <- reject_inline_secrets(instance, instance_ref),
          :ok <- require_string(name, :invalid_instance_name),
-         :ok <- require_string(Map.get(instance, "realm"), {:invalid_realm, name}),
+         :ok <- require_string(Map.get(instance, "realm"), {:invalid_realm, instance_ref}),
          {:ok, identity, pub, identity_file} <-
            load_identity(Map.get(instance, "identity_file"), Map.get(instance, "realm"), base_dir),
          {:ok, log_file, log_identity} <-
-           require_log(Map.get(instance, "log_file"), base_dir, name),
-         {:ok, listener} <- parse_listener(Map.get(instance, "listener"), name),
-         {:ok, trusted_peers} <- parse_trusted_peers(Map.get(instance, "trusted_peers"), name),
+           require_log(Map.get(instance, "log_file"), base_dir, instance_ref),
+         {:ok, listener} <- parse_listener(Map.get(instance, "listener"), instance_ref),
+         {:ok, trusted_peers} <-
+           parse_trusted_peers(Map.get(instance, "trusted_peers"), instance_ref),
          {:ok, relay_realms} <-
-           parse_relay_realms(Map.get(instance, "relay_realms", []), trusted_peers, name),
-         {:ok, state_reporter} <- parse_state_reporter(Map.get(instance, "state_reporter"), name) do
+           parse_relay_realms(
+             Map.get(instance, "relay_realms", []),
+             trusted_peers,
+             instance_ref
+           ),
+         {:ok, state_reporter} <-
+           parse_state_reporter(Map.get(instance, "state_reporter"), instance_ref) do
       {:ok,
        %{
          name: name,
@@ -153,7 +160,7 @@ defmodule LatticeCarrierServer.Manifest do
     end
   end
 
-  defp parse_instance(_instance, _base_dir), do: {:error, :manifest_corrupt}
+  defp parse_instance(_instance, _base_dir, _instance_ref), do: {:error, :manifest_corrupt}
 
   defp reject_inline_secrets(instance, name) do
     case Enum.find(@forbidden_instance_keys, &Map.has_key?(instance, &1)) do

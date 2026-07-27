@@ -129,7 +129,7 @@ defmodule LatticeCarrierServer.ManifestTest do
       path = manifest_with(tmp_dir, smuggled)
 
       assert {:error, {:invalid_manifest, detail}} = Manifest.load(path)
-      assert detail == {:inline_secret_rejected, "township-pilot", key}
+      assert detail == {:inline_secret_rejected, {:instance, 1}, key}
       refute inspect(detail) =~ "super-secret-value"
     end
   end
@@ -211,7 +211,7 @@ defmodule LatticeCarrierServer.ManifestTest do
     File.rm!(log_path)
     path = manifest_with(tmp_dir, instance)
 
-    assert {:error, {:invalid_manifest, {:log_missing, "township-pilot", ^log_path}}} =
+    assert {:error, {:invalid_manifest, {:log_missing, {:instance, 1}, ^log_path}}} =
              Manifest.load(path)
 
     refute File.exists?(log_path)
@@ -224,12 +224,12 @@ defmodule LatticeCarrierServer.ManifestTest do
   } do
     public = %{instance | "listener" => %{"ip" => "0.0.0.0", "port" => 0}}
 
-    assert {:error, {:invalid_manifest, {:listener_not_loopback, "township-pilot"}}} =
+    assert {:error, {:invalid_manifest, {:listener_not_loopback, {:instance, 1}}}} =
              tmp_dir |> manifest_with(public) |> Manifest.load()
 
     malformed = %{instance | "listener" => %{"ip" => "127.0.0.1"}}
 
-    assert {:error, {:invalid_manifest, {:invalid_listener, "township-pilot"}}} =
+    assert {:error, {:invalid_manifest, {:invalid_listener, {:instance, 1}}}} =
              tmp_dir |> manifest_with(malformed) |> Manifest.load()
 
     ipv6 = %{instance | "listener" => %{"ip" => "::1", "port" => 0}}
@@ -250,12 +250,12 @@ defmodule LatticeCarrierServer.ManifestTest do
       | "trusted_peers" => [%{"realm" => "instrument", "pubkey" => "definitely-not-a-key"}]
     }
 
-    assert {:error, {:invalid_manifest, {:invalid_trusted_peer, "township-pilot", "instrument"}}} =
+    assert {:error, {:invalid_manifest, {:invalid_trusted_peer, {:instance, 1}, "instrument"}}} =
              tmp_dir |> manifest_with(bad_peer) |> Manifest.load()
 
     untrusted_relay = Map.put(instance, "relay_realms", ["stranger"])
 
-    assert {:error, {:invalid_manifest, {:invalid_relay_realms, "township-pilot"}}} =
+    assert {:error, {:invalid_manifest, {:invalid_relay_realms, {:instance, 1}}}} =
              tmp_dir |> manifest_with(untrusted_relay) |> Manifest.load()
 
     smuggled_name = "copied-secret-instance-name"
