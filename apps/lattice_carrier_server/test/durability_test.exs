@@ -204,6 +204,7 @@ defmodule LatticeCarrierServer.DurabilityTest do
     path = Path.join(tmp_dir, "matter.log")
     assert :ok = @replica |> Log.new() |> Log.dump(path)
 
+    InjectedDurability.listen(tmp_dir)
     InjectedDurability.arm_failure(tmp_dir, :rename)
     on_exit(fn -> InjectedDurability.disarm(tmp_dir) end)
     previous_flag = Process.flag(:trap_exit, true)

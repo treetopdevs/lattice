@@ -50,6 +50,71 @@ defmodule LatticeCarrierServer.Durability do
     end
   end
 
+  @doc """
+  Prove the real configured log can be replaced through the same durable
+  sequence used by relay persistence. The replacement contains identical
+  bytes and preserves the log's permission bits.
+  """
+  @spec rehearse_target(module(), Path.t(), keyword()) :: :ok | {:error, term()}
+  def rehearse_target(impl, path, opts \\ []) do
+    unique = Keyword.get(opts, :unique, fn -> System.unique_integer([:monotonic, :positive]) end)
+    allocated = Keyword.get(opts, :allocated, fn _path -> :ok end)
+
+    with {:ok, bytes} <- File.read(path),
+         {:ok, %File.Stat{type: :regular, mode: mode}} <- File.stat(path),
+         {:ok, temp_path} <- allocate_target(path, unique, bytes, mode, 16) do
+      allocated.(temp_path)
+
+      try do
+        with :ok <- impl.sync_file(temp_path),
+             :ok <- impl.rename(temp_path, path),
+             :ok <- impl.sync_directory(Path.dirname(path)) do
+          :ok
+        end
+      after
+        _ = File.rm(temp_path)
+      end
+    else
+      {:ok, %File.Stat{}} -> {:error, :invalid_rehearsal_target}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp allocate_target(_path, _unique, _bytes, _mode, 0),
+    do: {:error, :rehearsal_target_unavailable}
+
+  defp allocate_target(path, unique, bytes, mode, attempts) do
+    temp_path = "#{path}.tmp.rehearsal-#{unique.()}"
+
+    case File.open(temp_path, [:write, :binary, :exclusive]) do
+      {:ok, io_device} ->
+        result =
+          try do
+            with :ok <- IO.binwrite(io_device, bytes),
+                 :ok <- File.chmod(temp_path, Bitwise.band(mode, 0o777)) do
+              :ok
+            end
+          after
+            _ = File.close(io_device)
+          end
+
+        case result do
+          :ok ->
+            {:ok, temp_path}
+
+          {:error, reason} ->
+            _ = File.rm(temp_path)
+            {:error, {:rehearsal_target_write_failed, reason}}
+        end
+
+      {:error, :eexist} ->
+        allocate_target(path, unique, bytes, mode, attempts - 1)
+
+      {:error, reason} ->
+        {:error, {:rehearsal_target_write_failed, reason}}
+    end
+  end
+
   defp allocate_namespace(_directory, _unique, 0),
     do: {:error, :rehearsal_namespace_unavailable}
 

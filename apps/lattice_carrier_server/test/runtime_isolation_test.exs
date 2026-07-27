@@ -118,7 +118,7 @@ defmodule LatticeCarrierServer.RuntimeIsolationTest do
         "instances" => [alpha.entry, beta.entry]
       })
 
-    assert {:error, {:source_restore_failed, "pilot-preflight-beta"}} =
+    assert {:error, {:source_restore_failed, {:instance, 2}}} =
              Runtime.prepare(manifest_path)
   end
 
@@ -188,7 +188,7 @@ defmodule LatticeCarrierServer.RuntimeIsolationTest do
     File.write!(alpha.log_path, bytes)
     manifest = write_manifest(tmp_dir, %{"version" => 1, "instances" => [alpha.entry]})
 
-    assert {:error, {:source_restore_failed, "pilot-invalid-structure"}} =
+    assert {:error, {:source_restore_failed, {:instance, 1}}} =
              Runtime.prepare(manifest)
   end
 

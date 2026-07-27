@@ -23,6 +23,7 @@ defmodule LatticeCarrierServer.Manifest do
   defstruct [:health, :instances]
 
   @type instance :: %{
+          ref: {:instance, pos_integer()},
           name: String.t(),
           realm: String.t(),
           identity: Secret.t(),
@@ -145,6 +146,7 @@ defmodule LatticeCarrierServer.Manifest do
            parse_state_reporter(Map.get(instance, "state_reporter"), instance_ref) do
       {:ok,
        %{
+         ref: instance_ref,
          name: name,
          realm: Map.fetch!(instance, "realm"),
          identity: identity,
@@ -275,7 +277,7 @@ defmodule LatticeCarrierServer.Manifest do
              false <- Map.has_key?(acc, realm) do
           {:cont, {:ok, Map.put(acc, realm, decoded)}}
         else
-          _other -> {:halt, {:error, {:invalid_trusted_peer, name, realm}}}
+          _other -> {:halt, {:error, {:invalid_trusted_peer, name}}}
         end
 
       _peer, {:ok, _acc} ->
@@ -367,4 +369,16 @@ defmodule LatticeCarrierServer.Manifest do
   end
 
   defp resolve(path, base_dir), do: Path.expand(path, base_dir)
+
+  @doc false
+  @spec verify_identity(Path.t(), binary(), binary()) :: :ok | {:error, :identity_invalid}
+  def verify_identity(path, realm, expected_pub)
+      when is_binary(path) and is_binary(realm) and is_binary(expected_pub) do
+    case load_identity(path, realm, Path.dirname(path)) do
+      {:ok, _identity, ^expected_pub, ^path} -> :ok
+      _invalid -> {:error, :identity_invalid}
+    end
+  end
+
+  def verify_identity(_path, _realm, _expected_pub), do: {:error, :identity_invalid}
 end

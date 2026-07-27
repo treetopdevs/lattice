@@ -41,7 +41,13 @@ defmodule LatticeCarrierServer.Runtime do
             health: manifest.health,
             instances:
               Enum.map(manifest.instances, fn instance ->
-                %{name: instance.name, pub: instance.pub, log_file: instance.log_file}
+                %{
+                  name: instance.name,
+                  realm: instance.realm,
+                  identity_file: instance.identity_file,
+                  pub: instance.pub,
+                  log_file: instance.log_file
+                }
               end)
           })
 
@@ -51,6 +57,7 @@ defmodule LatticeCarrierServer.Runtime do
         end
 
       {:error, _reason} = error ->
+        clear()
         error
     end
   end
@@ -75,11 +82,22 @@ defmodule LatticeCarrierServer.Runtime do
     )
   end
 
+  @doc false
+  @spec clear() :: :ok
+  def clear do
+    :persistent_term.get(@instance_names_key, MapSet.new())
+    |> Enum.each(&:persistent_term.erase(instance_key(&1)))
+
+    :persistent_term.erase(@instance_names_key)
+    :persistent_term.erase(@deployment_key)
+    :ok
+  end
+
   defp instance_child_spec(instance) do
     %{
       id: {LatticeCarrierServer, instance.name},
       start: {__MODULE__, :start_instance, [instance.name]},
-      restart: :temporary,
+      restart: :permanent,
       type: :supervisor
     }
   end
@@ -115,13 +133,13 @@ defmodule LatticeCarrierServer.Runtime do
   defp preflight_instance(instance) do
     case Holder.restore_path(instance.log_file) do
       {:ok, %Log{}} ->
-        case Durability.rehearse(Durability.Posix, Path.dirname(instance.log_file)) do
+        case Durability.rehearse_target(Durability.Posix, instance.log_file) do
           :ok -> :ok
-          {:error, _reason} -> {:error, {:durability_unsupported, instance.name}}
+          {:error, _reason} -> {:error, {:durability_unsupported, instance.ref}}
         end
 
       {:error, _reason} ->
-        {:error, {:source_restore_failed, instance.name}}
+        {:error, {:source_restore_failed, instance.ref}}
     end
   end
 end

@@ -161,6 +161,12 @@ defmodule LatticeCarrierServer.HealthTest do
     File.write!(log_path, "corrupt")
     :ok = apply(@health_mod, :reset_storage_cache, [[log_path]])
     assert {503, ""} = get("http://127.0.0.1:#{health_port}/readyz")
+
+    invalid = %Log{replica: nil, ops: %{}, referenced: :not_a_set, quarantine: []}
+    bytes = :erlang.term_to_binary({:lattice_log_dump_v1, invalid}, [:deterministic])
+    File.write!(log_path, bytes)
+    :ok = apply(@health_mod, :reset_storage_cache, [[log_path]])
+    assert {503, ""} = get("http://127.0.0.1:#{health_port}/readyz")
   end
 
   @tag :tmp_dir
@@ -185,7 +191,7 @@ defmodule LatticeCarrierServer.HealthTest do
     assert Path.wildcard(Path.join(Path.dirname(log_path), ".lattice-durability-rehearsal.*")) ==
              []
 
-    assert Path.wildcard("#{log_path}.rehearsal.*") == []
+    assert Path.wildcard("#{log_path}.tmp.*") == []
   end
 
   @tag :tmp_dir

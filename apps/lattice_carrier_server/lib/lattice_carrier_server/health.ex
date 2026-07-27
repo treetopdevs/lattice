@@ -22,7 +22,7 @@ defmodule LatticeCarrierServer.Health do
   """
 
   alias Lattice.Log
-  alias LatticeCarrierServer.{Durability, Holder, Listener, Runtime, SocketOpts}
+  alias LatticeCarrierServer.{Durability, Holder, Listener, Manifest, Runtime, SocketOpts}
 
   @listener_ref {__MODULE__, :listener}
   @storage_cache __MODULE__.StorageCache
@@ -98,8 +98,21 @@ defmodule LatticeCarrierServer.Health do
     end
   end
 
-  defp instance_ready?(%{name: name, log_file: log_file}) do
-    holder_ready?(name) and listener_bound?(name) and storage_writable?(log_file)
+  defp instance_ready?(%{
+         name: name,
+         realm: realm,
+         identity_file: identity_file,
+         pub: pub,
+         log_file: log_file
+       }) do
+    identity_ready?(identity_file, realm, pub) and holder_ready?(name) and listener_bound?(name) and
+      storage_writable?(log_file)
+  end
+
+  defp identity_ready?(identity_file, realm, pub) do
+    Manifest.verify_identity(identity_file, realm, pub) == :ok
+  catch
+    _kind, _reason -> false
   end
 
   defp holder_ready?(name) do
@@ -155,11 +168,20 @@ defmodule LatticeCarrierServer.Health do
   end
 
   defp rehearse_storage(log_file) do
+    parent = self()
+    rehearsal_ref = make_ref()
+
     task =
       Task.async(fn ->
         try do
-          with {:ok, %Log{}} <- Log.restore(log_file),
-               :ok <- Durability.rehearse(health_durability_impl(), Path.dirname(log_file)) do
+          with {:ok, %Log{} = log} <- Log.restore(log_file),
+               :ok <- Holder.validate_log(log),
+               :ok <-
+                 Durability.rehearse_target(health_durability_impl(), log_file,
+                   allocated: fn path ->
+                     send(parent, {:durability_rehearsal_allocated, rehearsal_ref, path})
+                   end
+                 ) do
             true
           else
             _error -> false
@@ -169,13 +191,27 @@ defmodule LatticeCarrierServer.Health do
         end
       end)
 
-    case Task.yield(task, storage_check_timeout_ms()) ||
-           Task.shutdown(task, :brutal_kill) do
-      {:ok, true} -> true
-      _timeout_or_error -> false
-    end
+    result =
+      case Task.yield(task, storage_check_timeout_ms()) ||
+             Task.shutdown(task, :brutal_kill) do
+        {:ok, true} -> true
+        _timeout_or_error -> false
+      end
+
+    cleanup_allocated_rehearsal(rehearsal_ref)
+    result
   catch
     _kind, _reason -> false
+  end
+
+  defp cleanup_allocated_rehearsal(rehearsal_ref) do
+    receive do
+      {:durability_rehearsal_allocated, ^rehearsal_ref, path} ->
+        _ = File.rm(path)
+        :ok
+    after
+      0 -> :ok
+    end
   end
 
   defp health_durability_impl do

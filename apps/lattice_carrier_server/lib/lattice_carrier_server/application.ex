@@ -33,6 +33,9 @@ defmodule LatticeCarrierServer.Application do
     end
   end
 
+  @impl Application
+  def stop(_state), do: Runtime.clear()
+
   defp configured_server do
     case Application.get_env(:lattice_carrier_server, :server_options) do
       nil -> []

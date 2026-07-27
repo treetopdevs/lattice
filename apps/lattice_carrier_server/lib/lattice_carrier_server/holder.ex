@@ -13,7 +13,7 @@ defmodule LatticeCarrierServer.Holder do
 
   use GenServer
 
-  alias Lattice.{Identity, Log, Sync}
+  alias Lattice.{Identity, Log, Op, Sync}
   alias LatticeCarrierServer.{Durability, Secret}
 
   @frontier_limit 64
@@ -194,8 +194,10 @@ defmodule LatticeCarrierServer.Holder do
   @spec restore_path(Path.t()) :: {:ok, Log.t()} | {:error, term()}
   def restore_path(path) when is_binary(path) do
     with :ok <- cleanup_orphaned_temp_files(path),
-         :ok <- preload_lattice_core() do
-      Log.restore(path)
+         :ok <- preload_lattice_core(),
+         {:ok, %Log{} = log} <- Log.restore(path),
+         :ok <- validate_log(log) do
+      {:ok, log}
     end
   end
 
@@ -223,7 +225,9 @@ defmodule LatticeCarrierServer.Holder do
     temp_path = "#{path}.tmp.#{suffix}"
 
     try do
-      with :ok <- Log.dump(log, temp_path),
+      with {:ok, %File.Stat{mode: mode}} <- File.stat(path),
+           :ok <- Log.dump(log, temp_path),
+           :ok <- File.chmod(temp_path, Bitwise.band(mode, 0o777)),
            :ok <- durability.sync_file(temp_path),
            :ok <- durability.rename(temp_path, path),
            :ok <- durability.sync_directory(Path.dirname(path)) do
@@ -237,7 +241,7 @@ defmodule LatticeCarrierServer.Holder do
   # Only relay-enabled path holders persist, so only they must prove the
   # durability sequence before serving.
   defp rehearse_durability({:path, path}, [_realm | _realms], durability) do
-    case Durability.rehearse(durability, Path.dirname(path)) do
+    case Durability.rehearse_target(durability, path) do
       :ok -> :ok
       {:error, reason} -> {:error, {:durability_unsupported, reason}}
     end
@@ -299,4 +303,47 @@ defmodule LatticeCarrierServer.Holder do
       end
     end)
   end
+
+  @doc false
+  @spec validate_log(Log.t()) :: :ok | {:error, :invalid_log_structure}
+  def validate_log(%Log{
+        replica: replica,
+        ops: ops,
+        referenced: %MapSet{} = referenced,
+        quarantine: quarantine
+      })
+      when is_binary(replica) and byte_size(replica) > 0 and is_map(ops) and is_list(quarantine) do
+    expected_referenced =
+      Enum.reduce(ops, MapSet.new(), fn {_id, op}, acc ->
+        MapSet.union(acc, MapSet.new(op.deps))
+      end)
+
+    valid_ops? =
+      Enum.all?(ops, fn
+        {id, %Op{id: op_id, replica: ^replica, deps: deps} = op} when is_binary(id) ->
+          op_id == id and is_list(deps) and Enum.all?(deps, &Map.has_key?(ops, &1)) and
+            Op.valid?(op)
+
+        _invalid ->
+          false
+      end)
+
+    with true <- valid_ops?,
+         true <- MapSet.equal?(referenced, expected_referenced),
+         {:ok, _verified} <-
+           Log.verified_quarantine(%Log{
+             replica: replica,
+             ops: ops,
+             referenced: referenced,
+             quarantine: quarantine
+           }) do
+      :ok
+    else
+      _invalid -> {:error, :invalid_log_structure}
+    end
+  rescue
+    _error -> {:error, :invalid_log_structure}
+  end
+
+  def validate_log(_invalid), do: {:error, :invalid_log_structure}
 end
