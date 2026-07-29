@@ -5,16 +5,19 @@ defmodule LatticeCarrierServer do
   The server is read-only by default: authenticated transport realms may request
   frontier and pull data. Path-backed instances may opt selected trusted realms
   into relaying already-signed operations. Changed relays are acknowledged only
-  after a temporary dump is synced and atomically renamed. This is process-crash
-  durability, not power-loss durability: the parent directory is not synced and
-  macOS `F_FULLFSYNC` is not requested. The server never authors operations or
-  decides their semantic authority.
+  after the full durability sequence: temporary dump written, file synced,
+  atomically renamed, and the containing directory synced (see
+  `LatticeCarrierServer.Durability`). The supported pilot platform is Linux;
+  macOS `F_FULLFSYNC` is not requested, so macOS remains development-only.
+  The server never authors operations or decides their semantic authority,
+  and it claims no high availability, multiplexed protocol, E2EE, or server
+  push.
   """
 
   use Supervisor
 
   alias Lattice.Identity
-  alias LatticeCarrierServer.{Holder, Listener}
+  alias LatticeCarrierServer.{Holder, Listener, Secret}
 
   @type instance :: term()
 
@@ -76,6 +79,13 @@ defmodule LatticeCarrierServer do
     ]
 
     Supervisor.init(children, strategy: :rest_for_one)
+  end
+
+  defp validate_identity(%Secret{} = secret) do
+    case Secret.unwrap(secret) do
+      %Identity{} = identity -> validate_identity(identity)
+      _other -> {:error, {:invalid_config, :identity}}
+    end
   end
 
   defp validate_identity(%Identity{realm_id: realm, pub: pub, priv: priv})

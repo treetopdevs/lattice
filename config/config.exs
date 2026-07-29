@@ -30,6 +30,24 @@ if config_env() == :dev do
     ]
 end
 
+# LatticeCarrierServer.Durability.Posix refuses macOS's directory sync by
+# default (no F_FULLFSYNC, and global `sync` is not a directory fsync), so a
+# production pilot release on macOS cannot silently report readiness. This
+# is the one explicit, source-visible opt-in that lets the real Posix
+# durability path (and the tests that exercise it) run on a macOS
+# development machine; it never applies to config_env() == :prod, so the
+# lattice_carrier_pilot release keeps the default refusal.
+if config_env() == :test do
+  config :lattice_carrier_server, allow_approximate_darwin_sync: true
+
+  # LatticeCarrierServer.Health caches its storage-writable rehearsal for a
+  # short TTL (default 5s in prod) so /readyz does not repeat the full
+  # fsync/subprocess rehearsal on every poll. Tests that flip a directory's
+  # writability mid-test need to observe the change immediately, so the test
+  # environment disables the cache rather than sleeping past the TTL.
+  config :lattice_carrier_server, storage_check_ttl_ms: 0
+end
+
 config :esbuild,
   version: "0.25.5",
   township_web: [

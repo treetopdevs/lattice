@@ -2,17 +2,22 @@ defmodule LatticeCarrierServer.Holder do
   @moduledoc """
   Owns the carrier's served log, durable relay path, and availability subscribers.
 
-  A path-backed relay is acknowledged only after a complete temporary dump has
-  been synced and atomically renamed over the source. This is process-crash
-  durability, not a power-loss guarantee: the parent directory is not synced,
-  and macOS `F_FULLFSYNC` is not requested.
+  A path-backed relay is acknowledged only after the complete durability
+  sequence (`LatticeCarrierServer.Durability`): temporary dump written,
+  file synced, atomically renamed over the source, and the containing
+  directory synced. A relay-enabled path holder rehearses that sequence at
+  startup and refuses to serve on a platform that cannot prove it. The
+  supported pilot platform is Linux; macOS `F_FULLFSYNC` is not requested,
+  so macOS remains a development-only substrate.
   """
 
   use GenServer
 
-  alias Lattice.{Identity, Log, Sync}
+  alias Lattice.{Identity, Log, Op, Sync}
+  alias LatticeCarrierServer.{Durability, Secret}
 
   @frontier_limit 64
+  @default_persistence_timeout_ms 4_000
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts) do
@@ -26,6 +31,13 @@ defmodule LatticeCarrierServer.Holder do
 
   @spec session_context(GenServer.server()) :: {Identity.t(), String.t()}
   def session_context(holder), do: GenServer.call(holder, :session_context)
+
+  @doc """
+  Readiness probe: a reply proves the identity is loaded and the source
+  restore completed, because `init/1` refuses otherwise.
+  """
+  @spec ready?(GenServer.server()) :: :ok
+  def ready?(holder), do: GenServer.call(holder, :ready?)
 
   @spec op_ids(GenServer.server()) :: [Lattice.Op.id()]
   def op_ids(holder), do: GenServer.call(holder, :op_ids)
@@ -58,29 +70,49 @@ defmodule LatticeCarrierServer.Holder do
 
   @impl GenServer
   def init(opts) do
-    identity = Keyword.fetch!(opts, :identity)
+    identity = opts |> Keyword.fetch!(:identity) |> unwrap_identity()
     source = Keyword.fetch!(opts, :source)
+    relay_realms = Keyword.fetch!(opts, :relay_realms)
+    durability = Keyword.get(opts, :durability) || Durability.Posix
 
-    case load_source(source) do
-      {:ok, log} ->
-        {:ok,
-         %{
-           identity: identity,
-           log: log,
-           source: source,
-           state_reporter: Keyword.get(opts, :state_reporter),
-           relay_realms: opts |> Keyword.fetch!(:relay_realms) |> MapSet.new(),
-           subscribers: %{}
-         }}
-
-      {:error, reason} ->
-        {:stop, {:source_error, reason}}
+    with {:ok, log} <- load_source(source),
+         :ok <- rehearse_durability(source, relay_realms, durability) do
+      {:ok,
+       %{
+         identity: identity,
+         log: log,
+         source: source,
+         durability: durability,
+         state_reporter: Keyword.get(opts, :state_reporter),
+         relay_realms: MapSet.new(relay_realms),
+         subscribers: %{}
+       }}
+    else
+      {:error, {:durability_unsupported, _reason} = refusal} -> {:stop, refusal}
+      {:error, reason} -> {:stop, {:source_error, reason}}
     end
+  end
+
+  # Crash reports and `:sys.get_status/1` must never render the private key:
+  # replace the identity's priv bytes in any formatted state.
+  @impl GenServer
+  def format_status(status) do
+    Map.new(status, fn
+      {:state, %{identity: %Identity{} = identity} = state} ->
+        {:state, %{state | identity: %{identity | priv: :redacted}}}
+
+      other ->
+        other
+    end)
   end
 
   @impl GenServer
   def handle_call(:session_context, _from, state) do
     {:reply, {state.identity, state.log.replica}, state}
+  end
+
+  def handle_call(:ready?, _from, state) do
+    {:reply, :ok, state}
   end
 
   def handle_call(:op_ids, _from, state) do
@@ -152,23 +184,30 @@ defmodule LatticeCarrierServer.Holder do
     {:noreply, %{state | subscribers: subscribers}}
   end
 
-  defp load_source({:log, %Log{} = log}), do: {:ok, log}
+  defp unwrap_identity(%Secret{} = secret), do: Secret.unwrap(secret)
+  defp unwrap_identity(identity), do: identity
 
-  defp load_source({:path, path}) when is_binary(path) do
+  defp load_source({:log, %Log{} = log}), do: {:ok, log}
+  defp load_source({:path, path}) when is_binary(path), do: restore_path(path)
+  defp load_source(_source), do: {:error, :invalid_source}
+
+  @doc false
+  @spec restore_path(Path.t()) :: {:ok, Log.t()} | {:error, term()}
+  def restore_path(path) when is_binary(path) do
     with :ok <- cleanup_orphaned_temp_files(path),
-         :ok <- preload_lattice_core() do
-      Log.restore(path)
+         :ok <- preload_lattice_core(),
+         {:ok, %Log{} = log} <- Log.restore(path),
+         :ok <- validate_log(log) do
+      {:ok, log}
     end
   end
-
-  defp load_source(_source), do: {:error, :invalid_source}
 
   defp persist_relay(log, report, %{log: log} = state) do
     {:reply, {:ok, report}, state}
   end
 
   defp persist_relay(log, report, %{source: {:path, path}} = state) do
-    case atomic_dump(log, path) do
+    case bounded_atomic_dump(log, path, state.durability) do
       :ok ->
         availability = availability(log)
         subscribers = notify_subscribers(state.subscribers, availability)
@@ -180,30 +219,54 @@ defmodule LatticeCarrierServer.Holder do
     end
   end
 
-  defp atomic_dump(log, path) do
-    suffix = System.unique_integer([:monotonic, :positive])
-    temp_path = "#{path}.tmp.#{suffix}"
+  defp bounded_atomic_dump(log, path, durability) do
+    with {:ok, temp_path} <- Durability.secure_temp(path) do
+      task =
+        Task.async(fn ->
+          try do
+            atomic_dump(log, path, temp_path, durability)
+          catch
+            kind, reason -> {:error, {:persistence_exception, kind, reason}}
+          end
+        end)
 
-    try do
-      with :ok <- Log.dump(log, temp_path),
-           :ok <- sync_file(temp_path),
-           :ok <- File.rename(temp_path, path) do
+      result =
+        case Task.yield(task, persistence_timeout_ms()) ||
+               Task.shutdown(task, :brutal_kill) do
+          {:ok, task_result} -> task_result
+          _timeout_or_error -> {:error, :persistence_timeout}
+        end
+
+      _ = File.rm(temp_path)
+      result
+    end
+  end
+
+  # Persist-before-ack: write, sync the file, atomically rename, then sync
+  # the containing directory. Only a fully synced sequence acknowledges.
+  defp atomic_dump(log, path, temp_path, durability) do
+    Durability.with_target_lock(path, fn ->
+      with {:ok, %File.Stat{mode: mode}} <- File.stat(path),
+           :ok <- Log.dump(log, temp_path),
+           :ok <- File.chmod(temp_path, Bitwise.band(mode, 0o777)),
+           :ok <- durability.sync_file(temp_path),
+           :ok <- durability.rename(temp_path, path),
+           :ok <- durability.sync_directory(Path.dirname(path)) do
         :ok
       end
-    after
-      _ = File.rm(temp_path)
+    end)
+  end
+
+  # Only relay-enabled path holders persist, so only they must prove the
+  # durability sequence before serving.
+  defp rehearse_durability({:path, path}, [_realm | _realms], durability) do
+    case Durability.rehearse_target(durability, path) do
+      :ok -> :ok
+      {:error, reason} -> {:error, {:durability_unsupported, reason}}
     end
   end
 
-  defp sync_file(path) do
-    with {:ok, io_device} <- File.open(path, [:read, :binary]) do
-      try do
-        :file.sync(io_device)
-      after
-        _ = File.close(io_device)
-      end
-    end
-  end
+  defp rehearse_durability(_source, _relay_realms, _durability), do: :ok
 
   defp cleanup_orphaned_temp_files(path) do
     directory = Path.dirname(path)
@@ -259,4 +322,58 @@ defmodule LatticeCarrierServer.Holder do
       end
     end)
   end
+
+  defp persistence_timeout_ms do
+    case Application.get_env(
+           :lattice_carrier_server,
+           :persistence_timeout_ms,
+           @default_persistence_timeout_ms
+         ) do
+      timeout when is_integer(timeout) and timeout > 0 -> timeout
+      _invalid -> @default_persistence_timeout_ms
+    end
+  end
+
+  @doc false
+  @spec validate_log(Log.t()) :: :ok | {:error, :invalid_log_structure}
+  def validate_log(%Log{
+        replica: replica,
+        ops: ops,
+        referenced: %MapSet{} = referenced,
+        quarantine: quarantine
+      })
+      when is_binary(replica) and byte_size(replica) > 0 and is_map(ops) and is_list(quarantine) do
+    expected_referenced =
+      Enum.reduce(ops, MapSet.new(), fn {_id, op}, acc ->
+        MapSet.union(acc, MapSet.new(op.deps))
+      end)
+
+    valid_ops? =
+      Enum.all?(ops, fn
+        {id, %Op{id: op_id, replica: ^replica, deps: deps} = op} when is_binary(id) ->
+          op_id == id and is_list(deps) and Enum.all?(deps, &Map.has_key?(ops, &1)) and
+            Op.valid?(op)
+
+        _invalid ->
+          false
+      end)
+
+    with true <- valid_ops?,
+         true <- MapSet.equal?(referenced, expected_referenced),
+         {:ok, _verified} <-
+           Log.verified_quarantine(%Log{
+             replica: replica,
+             ops: ops,
+             referenced: referenced,
+             quarantine: quarantine
+           }) do
+      :ok
+    else
+      _invalid -> {:error, :invalid_log_structure}
+    end
+  rescue
+    _error -> {:error, :invalid_log_structure}
+  end
+
+  def validate_log(_invalid), do: {:error, :invalid_log_structure}
 end
