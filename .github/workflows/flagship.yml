@@ -215,9 +215,6 @@ jobs:
       - name: TS Township witness artifact contract
         working-directory: clients/township-tauri-shell
         run: npm run witness:artifact:contract
-      - name: TS Township witness fixture preflight
-        working-directory: clients/township-tauri-shell
-        run: npm run witness:preflight:contract
       - name: TS Township revocation fixture contract
         working-directory: clients/township-tauri-shell
         run: npm run revocation:fixture:contract
@@ -237,6 +234,9 @@ jobs:
       - name: Tauri native command core
         working-directory: clients/township-tauri-shell/src-tauri
         run: cargo test
+      - name: TS Township witness fixture preflight
+        working-directory: clients/township-tauri-shell
+        run: npm run witness:preflight:contract
       - name: Tauri development trace contract
         working-directory: clients/township-tauri-shell/src-tauri
         run: cargo test --features township-dev-trace --test dev_trace_commands
