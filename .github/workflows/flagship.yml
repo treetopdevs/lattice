@@ -217,6 +217,8 @@ jobs:
         run: mix credo --strict
       - name: Sobelow (lattice_server)
         run: cd apps/lattice_server && mix sobelow --exit
+      - name: Sobelow (township_web)
+        run: cd apps/township_web && mix sobelow --exit
 
   packaged_macos:
     name: Packaged macOS convergence

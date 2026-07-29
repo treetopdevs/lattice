@@ -1,0 +1,19 @@
+# Sobelow config for apps/township_web (plan 161).
+#
+# ignore_files: bundle.ex triggers Traversal.FileModule (low confidence) for
+# manifest.json and matter.log. The filenames are fixed literals, and bundle_dir
+# comes from application configuration in production (or explicit test setup);
+# no request parameter or other user-controlled path reaches File.read.
+[
+  exit: false,
+  format: "txt",
+  ignore_files: ["lib/township_web/instrument_source/bundle.ex"],
+  ignore: [],
+  out: nil,
+  private: false,
+  router: nil,
+  skip: false,
+  threshold: :low,
+  verbose: false,
+  version: false
+]
