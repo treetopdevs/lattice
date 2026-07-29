@@ -225,6 +225,14 @@ export function analyzeAuthority(
       states.set(op.field, state);
       honoredWrites.add(op.id);
     } else {
+      const reason = authorityWriteRejectionReason(
+        op,
+        evidence,
+        state,
+        delegations,
+        byId,
+      );
+      if (reason !== undefined) quarantineReasons.set(op.id, reason);
       quarantinedWrites.add(op.id);
     }
   }
@@ -531,6 +539,58 @@ function authorityWriteHonored(
   throw new Error(`unsupported authority event ${evidence.type} for ${op.id}`);
 }
 
+function authorityWriteRejectionReason(
+  op: Op,
+  evidence: AuthorityEvidence,
+  state: RoleState,
+  delegations: ReadonlyMap<string, AuthorityDelegationRecord>,
+  byId: ReadonlyMap<string, Op>,
+): string | undefined {
+  if (
+    evidence.type === "heartbeat" ||
+    evidence.type === "revoke" ||
+    evidence.type === "beacon"
+  ) {
+    return undefined;
+  }
+
+  const delegation = evidence.delegation;
+
+  if (evidence.type === "genesis") {
+    if (
+      delegation.audienceRealm === op.value &&
+      delegation.roles.includes(op.field) &&
+      validDelegation(delegation, delegations) &&
+      delegation.issuerRealm !== op.author
+    ) {
+      return "unauthorized_genesis";
+    }
+    return undefined;
+  }
+
+  if (evidence.type !== "transfer" || evidence.role !== op.field) {
+    return undefined;
+  }
+
+  if (
+    delegation.audienceRealm !== op.value ||
+    !delegation.roles.includes(op.field) ||
+    !validDelegation(delegation, delegations) ||
+    delegation.issuerRealm !== op.author
+  ) {
+    return "invalid_transfer";
+  }
+
+  const visible = ancestors(op.id, byId as Map<string, Op>);
+  const holderAtDeps = [...state.acquires]
+    .reverse()
+    .find((acquire) => visible.has(acquire.opId))?.holder;
+
+  if (holderAtDeps !== op.author) return "transfer_not_holder";
+  if (state.holder !== op.author) return "double_transfer";
+  return undefined;
+}
+
 export type WitnessedSuccessionVerificationReason =
   | "invalid_recovery_policy"
   | "malformed_recovery_certificate"
@@ -822,7 +882,8 @@ function collectPolicies(
     if (
       !validDelegation(evidence.delegation, delegations) ||
       op.replica === undefined ||
-      !replicaRootMatches(op.replica, evidence.delegation.audience)
+      !replicaRootMatches(op.replica, evidence.delegation.audience) ||
+      evidence.delegation.issuerRealm !== op.author
     ) {
       continue;
     }
@@ -902,6 +963,11 @@ function validateDelegations(
       op.authority?.type === "genesis" ? [op.authority.delegation.id] : [],
     ),
   );
+  const successionIds = new Set(
+    ops.flatMap((op) =>
+      op.authority?.type === "succeed" ? [op.authority.delegation.id] : [],
+    ),
+  );
   const outerReplica = ops.find((op) => op.replica !== undefined)?.replica;
   const cache = new Map<string, DelegationValidation>();
   const delegations = new Map<string, AuthorityDelegationRecord>();
@@ -915,6 +981,7 @@ function validateDelegations(
         id,
         collected,
         genesisIds,
+        successionIds,
         outerReplica,
         cache,
         new Set(),
@@ -929,6 +996,7 @@ function delegationValidation(
   id: string,
   delegations: ReadonlyMap<string, CollectedDelegation>,
   genesisIds: ReadonlySet<string>,
+  successionIds: ReadonlySet<string>,
   outerReplica: string | undefined,
   cache: Map<string, DelegationValidation>,
   visiting: Set<string>,
@@ -954,8 +1022,13 @@ function delegationValidation(
       !replicaRootMatches(outerReplica, delegation.audience)
     ) {
       validation = { valid: false, reason: "impostor_genesis" };
-    } else {
+    } else if (
+      genesisIds.has(delegation.id) ||
+      successionIds.has(delegation.id)
+    ) {
       validation = { valid: true };
+    } else {
+      validation = { valid: false, reason: "unrooted_delegation" };
     }
   } else {
     const parent = delegations.get(delegation.parentId);
@@ -968,6 +1041,7 @@ function delegationValidation(
         delegation.parentId,
         delegations,
         genesisIds,
+        successionIds,
         outerReplica,
         cache,
         visiting,

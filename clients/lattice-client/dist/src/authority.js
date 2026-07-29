@@ -83,6 +83,9 @@ export function analyzeAuthority(schema, ops, included, order, byId) {
             honoredWrites.add(op.id);
         }
         else {
+            const reason = authorityWriteRejectionReason(op, evidence, state, delegations, byId);
+            if (reason !== undefined)
+                quarantineReasons.set(op.id, reason);
             quarantinedWrites.add(op.id);
         }
     }
@@ -304,6 +307,41 @@ function authorityWriteHonored(op, evidence, state, delegations, policies, byId)
     }
     throw new Error(`unsupported authority event ${evidence.type} for ${op.id}`);
 }
+function authorityWriteRejectionReason(op, evidence, state, delegations, byId) {
+    if (evidence.type === "heartbeat" ||
+        evidence.type === "revoke" ||
+        evidence.type === "beacon") {
+        return undefined;
+    }
+    const delegation = evidence.delegation;
+    if (evidence.type === "genesis") {
+        if (delegation.audienceRealm === op.value &&
+            delegation.roles.includes(op.field) &&
+            validDelegation(delegation, delegations) &&
+            delegation.issuerRealm !== op.author) {
+            return "unauthorized_genesis";
+        }
+        return undefined;
+    }
+    if (evidence.type !== "transfer" || evidence.role !== op.field) {
+        return undefined;
+    }
+    if (delegation.audienceRealm !== op.value ||
+        !delegation.roles.includes(op.field) ||
+        !validDelegation(delegation, delegations) ||
+        delegation.issuerRealm !== op.author) {
+        return "invalid_transfer";
+    }
+    const visible = ancestors(op.id, byId);
+    const holderAtDeps = [...state.acquires]
+        .reverse()
+        .find((acquire) => visible.has(acquire.opId))?.holder;
+    if (holderAtDeps !== op.author)
+        return "transfer_not_holder";
+    if (state.holder !== op.author)
+        return "double_transfer";
+    return undefined;
+}
 export function assembleWitnessedSuccessionArtifact(claim, signature) {
     if (!validWitnessedSuccessionArtifactInput(claim, signature)) {
         throw new Error("malformed witnessed succession artifact input");
@@ -508,7 +546,8 @@ function collectPolicies(ops, delegations) {
             continue;
         if (!validDelegation(evidence.delegation, delegations) ||
             op.replica === undefined ||
-            !replicaRootMatches(op.replica, evidence.delegation.audience)) {
+            !replicaRootMatches(op.replica, evidence.delegation.audience) ||
+            evidence.delegation.issuerRealm !== op.author) {
             continue;
         }
         for (const [role, policy] of Object.entries(evidence.policies)) {
@@ -571,6 +610,7 @@ function collectDelegations(ops) {
 }
 function validateDelegations(ops, collected) {
     const genesisIds = new Set(ops.flatMap((op) => op.authority?.type === "genesis" ? [op.authority.delegation.id] : []));
+    const successionIds = new Set(ops.flatMap((op) => op.authority?.type === "succeed" ? [op.authority.delegation.id] : []));
     const outerReplica = ops.find((op) => op.replica !== undefined)?.replica;
     const cache = new Map();
     const delegations = new Map();
@@ -579,12 +619,12 @@ function validateDelegations(ops, collected) {
             delegation: record.delegation,
             introductionOpIds: [...record.introductionOpIds],
             invalidIntroductionReasons: new Map(record.invalidIntroductionReasons),
-            validation: delegationValidation(id, collected, genesisIds, outerReplica, cache, new Set()),
+            validation: delegationValidation(id, collected, genesisIds, successionIds, outerReplica, cache, new Set()),
         });
     }
     return delegations;
 }
-function delegationValidation(id, delegations, genesisIds, outerReplica, cache, visiting) {
+function delegationValidation(id, delegations, genesisIds, successionIds, outerReplica, cache, visiting) {
     const cached = cache.get(id);
     if (cached !== undefined)
         return cached;
@@ -606,8 +646,12 @@ function delegationValidation(id, delegations, genesisIds, outerReplica, cache, 
             !replicaRootMatches(outerReplica, delegation.audience)) {
             validation = { valid: false, reason: "impostor_genesis" };
         }
-        else {
+        else if (genesisIds.has(delegation.id) ||
+            successionIds.has(delegation.id)) {
             validation = { valid: true };
+        }
+        else {
+            validation = { valid: false, reason: "unrooted_delegation" };
         }
     }
     else {
@@ -619,7 +663,7 @@ function delegationValidation(id, delegations, genesisIds, outerReplica, cache, 
             validation = { valid: false, reason: "invalid_parent" };
         }
         else {
-            const parentValidation = delegationValidation(delegation.parentId, delegations, genesisIds, outerReplica, cache, visiting);
+            const parentValidation = delegationValidation(delegation.parentId, delegations, genesisIds, successionIds, outerReplica, cache, visiting);
             validation =
                 !parentValidation.valid
                     ? { valid: false, reason: "invalid_parent" }
