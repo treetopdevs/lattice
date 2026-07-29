@@ -57,7 +57,10 @@ interface Vector {
   scenario: string;
   schema: ReplicaSchema;
   ops: Op[];
-  capabilityCase?: unknown;
+  capabilityCase?: {
+    expectedSuccessorPubkey?: string;
+    [key: string]: unknown;
+  };
   oracleCarrierOps?: unknown[];
   realmByPubkey?: Record<string, string>;
   successionOperationId?: string;
@@ -483,6 +486,23 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
       "genesis-projection impostor reason",
       authority.quarantineReasons.get(projection?.impostorGenesisOperationId ?? ""),
       "impostor_genesis",
+    );
+  }
+
+  if (vec.scenario === "township_authority_replayed_genesis") {
+    const byId = index(ops);
+    const authority = analyzeAuthority(
+      vec.schema,
+      ops,
+      new Set(ops.map((op) => op.id)),
+      canonicalOrder(ops, byId),
+      byId,
+    );
+
+    check(
+      "replayed genesis cannot replace the root-authored succession policy",
+      authority.policiesByRole.get("clerk")?.successor,
+      vec.capabilityCase?.expectedSuccessorPubkey,
     );
   }
 

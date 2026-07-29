@@ -1,4 +1,4 @@
-import type { AuthorityDelegationEvidence, Op, WitnessedRecoveryPolicyEvidence, WitnessedSuccessionPolicyEvidence, WitnessedSuccessionArtifactEvidence, WitnessedSuccessionCertificateEvidence, WitnessedSuccessionClaimEvidence, WitnessedSuccessionSignatureEvidence } from "./op";
+import type { AuthorityDelegationEvidence, Op, SuccessionPolicyEvidence, WitnessedRecoveryPolicyEvidence, WitnessedSuccessionPolicyEvidence, WitnessedSuccessionArtifactEvidence, WitnessedSuccessionCertificateEvidence, WitnessedSuccessionClaimEvidence, WitnessedSuccessionSignatureEvidence } from "./op";
 import type { ReplicaSchema } from "./schema";
 /** One honored role acquisition, in processing (canonical) order. */
 export interface HonoredAcquire {
@@ -50,6 +50,8 @@ export interface AuthorityAnalysis {
     acquiresByRole: ReadonlyMap<string, readonly HonoredAcquire[]>;
     /** Effective witnessed recovery policy and the valid genesis operation that supplied it. */
     recoveryPoliciesByRole: ReadonlyMap<string, RecoveryPolicyProjection>;
+    /** Effective succession policy per role, after genesis author and root validation. */
+    policiesByRole: ReadonlyMap<string, SuccessionPolicyEvidence>;
     security: AuthoritySecurityProjection;
 }
 export interface WitnessedSuccessionReviewSelector {

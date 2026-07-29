@@ -244,6 +244,11 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
         check("genesis-projection bound root", authority.security.root?.pubkey, projection?.holderPubkey);
         check("genesis-projection impostor reason", authority.quarantineReasons.get(projection?.impostorGenesisOperationId ?? ""), "impostor_genesis");
     }
+    if (vec.scenario === "township_authority_replayed_genesis") {
+        const byId = index(ops);
+        const authority = analyzeAuthority(vec.schema, ops, new Set(ops.map((op) => op.id)), canonicalOrder(ops, byId), byId);
+        check("replayed genesis cannot replace the root-authored succession policy", authority.policiesByRole.get("clerk")?.successor, vec.capabilityCase?.expectedSuccessorPubkey);
+    }
     if (vec.scenario === "township_succession_witnessed_recovery") {
         const recovery = vec.witnessedRecovery;
         const genesisFrame = carrierFrames?.find((frame) => frame.id === recovery?.claim.holderEpoch);

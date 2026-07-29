@@ -78,6 +78,8 @@ export interface AuthorityAnalysis {
   acquiresByRole: ReadonlyMap<string, readonly HonoredAcquire[]>;
   /** Effective witnessed recovery policy and the valid genesis operation that supplied it. */
   recoveryPoliciesByRole: ReadonlyMap<string, RecoveryPolicyProjection>;
+  /** Effective succession policy per role, after genesis author and root validation. */
+  policiesByRole: ReadonlyMap<string, SuccessionPolicyEvidence>;
   security: AuthoritySecurityProjection;
 }
 
@@ -255,6 +257,7 @@ export function analyzeAuthority(
     quarantineReasons,
     acquiresByRole,
     recoveryPoliciesByRole,
+    policiesByRole: policies,
     security: { delegations, root, effectiveRevokes, validBeacons },
   };
 }

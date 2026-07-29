@@ -105,6 +105,7 @@ export function analyzeAuthority(schema, ops, included, order, byId) {
         quarantineReasons,
         acquiresByRole,
         recoveryPoliciesByRole,
+        policiesByRole: policies,
         security: { delegations, root, effectiveRevokes, validBeacons },
     };
 }
