@@ -27,6 +27,29 @@
 - **Planned at**: commit `764a1945`, 2026-07-29
 - **Reconciled at**: commit `91bb6ca6`, 2026-07-29
 
+## Authorized execution amendment (2026-07-29)
+
+The first implementation review exposed three incorrect planning assumptions. The operator
+authorized this scope amendment before execution resumed:
+
+1. `witness:preflight:contract` is not a pure Node contract. It launches a feature-gated Rust
+   `cargo test` probe and two BEAM support processes. Keep it in the `unit` job, but run it only
+   after the Linux Tauri prerequisites and the existing native Rust gate.
+2. The no-build witness ceremony requires a bundle built with both `township-dev-trace` and
+   `township-governance-test-presence`. In `packaged_macos`, build that paired variant and run the
+   ceremony before the existing stable-relay smoke rebuilds the ordinary dev-trace-only bundle for
+   the remaining packaged chain. Never run the ceremony against whichever bundle happens to be
+   left by an earlier smoke.
+3. Per-app Sobelow roots cannot see the umbrella `config/`, and Sobelow itself intentionally skips
+   exact `secret_key_base` checks in `config.exs`. Add a focused Township test that uses Sobelow's
+   config parser to reject hard-coded `secret_key_base`, password-like, and secret-like values in
+   every shared non-dev/test config. Prove the guard against a temporary hard-coded fixture. Also
+   enable the existing function-scoped `sobelow_skip` in `bundle.ex` instead of excluding that
+   entire source file.
+
+These instructions supersede the original device-free classification, packaged-smoke placement,
+whole-file Sobelow suppression, and "no new tests" statements below.
+
 ## Why this matters
 
 Three gates that the repo *documents* as mandatory are not actually enforced, and nothing surfaces
@@ -218,6 +241,7 @@ workflow file.
 - `apps/lattice_web_socket/.formatter.exs` (create)
 - `apps/township_bench/.formatter.exs` (create)
 - `apps/township_web/.sobelow-conf` (create — only if step 3 requires it)
+- `apps/township_web/test/township_web/shared_config_security_test.exs` (authorized amendment)
 - `apps/township_web/mix.exs` (only the sobelow version constraint, only if step 3 requires it)
 - `clients/township-tauri-shell/package.json` (add scripts only)
 - `.github/workflows/flagship.yml` (add steps only)
@@ -230,8 +254,8 @@ workflow file.
 - **Any `.ex`, `.ts`, or `.vue` source file.** If a newly-enabled suite fails because production code
   is wrong, that is a STOP condition — report it, do not fix it here. Fixing a real bug inside a
   CI-wiring plan makes the diff unreviewable and hides the regression signal.
-- **The content of any test file.** You are wiring existing suites up, not editing them. If a suite
-  is red, report it.
+- **The content of any existing test file.** The authorized shared-config regression test is the
+  only new test in scope. If an existing suite is red, report it.
 - `clients/lattice-client/package.json` — `succession:review` and `succession:artifact` already
   exist as scripts; only the workflow needs to call them.
 - `apps/lattice_server/.sobelow-conf` — its existing false-positive suppression is confirmed correct
@@ -325,10 +349,9 @@ Three possible outcomes:
 - **exit non-zero with a finding that looks like a real vulnerability** — STOP and report it. Do not
   suppress it and do not fix it in this plan.
 
-Expect `Config.Secrets` to fire on `config/config.exs` (a literal `secret_key_base` and
-`signing_salt` are committed at `config/config.exs:22-23`). **That one is a real finding and is
-owned by plan 165 — do not suppress it and do not fix it here.** If it blocks this step, record the
-exact finding text in your report and STOP; plan 165 must land first.
+Do not claim this per-app scan covers the umbrella `config/`; the authorized shared-config
+regression test supplies that missing gate. It must reject the retired Part B literal if
+reintroduced into `config/config.exs`.
 
 **Verify**: whichever outcome, record the exact command output in your final report.
 
@@ -391,7 +414,8 @@ the file's existing alphabetical-ish grouping and its `tsx test/<file>.ts` shape
     "tauri:witness-ceremony:smoke": "tsx test/tauri_witness_ceremony_smoke.ts",
 ```
 
-Run the three device-free ones and record pass/fail:
+Run all three and record pass/fail. `witness:preflight:contract` is locally runnable but is a native
+Rust/BEAM integration, not a pure Node contract:
 
 ```sh
 for s in witness:artifact:contract witness:preflight:contract revocation:fixture:contract; do
@@ -422,7 +446,7 @@ operator decides whether to fix it, quarantine it, or delete it.
 
 ### Step 6: Wire the green suites into CI
 
-For every suite that PASSED in step 5, add a step to the `unit` job in
+For every pure Node suite that PASSED in step 5, add a step to the `unit` job in
 `.github/workflows/flagship.yml`. Place the shell ones immediately after the existing
 `- name: TS live stable carrier availability feed` step (which runs `npm run feed:contract`,
 `working-directory: clients/township-tauri-shell`), and the two client ones immediately after
@@ -443,18 +467,25 @@ Use the established shape, one step per script, with a human-readable name:
 …and so on for each green script. For the client package use
 `working-directory: clients/lattice-client`.
 
-Add `tauri:witness-ceremony:smoke` to the **`packaged_macos`** job, after the existing
-`- name: Verify packaged reactive carrier feed` step:
+Place `witness:preflight:contract` after the Linux prerequisites and the existing
+`Tauri native command core` step. It must not run in the earlier pure-Node block.
+
+Add a paired-feature package script and place its build plus
+`tauri:witness-ceremony:smoke` in **`packaged_macos`** before
+`Verify packaged stable-relay onboarding`:
 
 ```yaml
+      - name: Build packaged governance test-presence variant
+        working-directory: clients/township-tauri-shell
+        run: npm run tauri:build:governance-test-presence
+
       - name: Verify packaged witness ceremony
         working-directory: clients/township-tauri-shell
         run: npm run tauri:witness-ceremony:smoke
 ```
 
-Note: `packaged_macos` has `timeout-minutes: 90` and already runs eight packaged smokes. If the
-operator would rather not spend that budget, this one step may be deferred — say so explicitly in
-your report rather than dropping it silently.
+The following stable-relay smoke rebuilds a dev-trace-only app before the existing no-build
+packaged chain consumes it. Preserve that ordering.
 
 **Verify**:
 
@@ -501,10 +532,13 @@ grep -c '^| `apps/' AGENTS.md
 
 ## Test plan
 
-This plan writes no new tests. Its deliverable is that existing tests execute. Verification is:
+This plan adds one regression test for the umbrella-config gap and otherwise makes existing tests
+execute. Verification is:
 
 - The format gate demonstrably widens (step 2's deliberate-break check).
 - Sobelow runs on both boundary apps (step 4's grep returns 2).
+- The shared-config regression test proves a hard-coded fixture is detected and the real umbrella
+  config is clean.
 - Every previously-orphaned green suite appears in the workflow (step 6's check).
 - The full local gate still passes:
 
@@ -523,6 +557,10 @@ Machine-checkable. ALL must hold:
 - [ ] The step-2 deliberate-break check fails the root format gate, and passes again after restore
 - [ ] `grep -c 'mix sobelow --exit' .github/workflows/flagship.yml` → `2`
 - [ ] `cd apps/township_web && ~/.asdf/shims/mix sobelow --exit` exits 0 (with `.sobelow-conf` justifications if any)
+- [ ] The Township Sobelow config enables the existing function-scoped skip and excludes no whole source file
+- [ ] The shared-config security test detects a hard-coded fixture and passes against the real umbrella config
+- [ ] `witness:preflight:contract` runs after Linux/native prerequisites, not in the pure-Node block
+- [ ] The paired test-presence bundle is built immediately before the packaged witness ceremony, and the ordinary dev-trace rebuild remains before the remaining no-build smoke chain
 - [ ] Step 6's Python check reports no missing scripts, except any explicitly reported as FAIL
 - [ ] `grep -c '^| `apps/' AGENTS.md` → `10`
 - [ ] `~/.asdf/shims/mix check` exits 0
