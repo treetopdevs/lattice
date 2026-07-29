@@ -28,6 +28,7 @@
     "revocation:fixture:contract": "tsx test/township_revocation_handoff_fixture.ts",
     "witness:artifact:contract": "tsx test/township_witness_artifact.ts",
     "witness:preflight:contract": "tsx test/township_witness_fixture_preflight.ts",
+    "bundle:variant:contract": "tsx test/packaged_bundle_variant.ts",
     "canonical:probe:contract": "tsx test/township_canonical_probe.ts",
     "release:transport:contract": "tsx test/township_release_transport_probe.ts",
     "release:beam:contract": "tsx test/township_release_beam_probe.ts",

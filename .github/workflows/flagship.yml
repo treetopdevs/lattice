@@ -99,6 +99,15 @@ jobs:
             _build
           key: ${{ runner.os }}-mix-${{ hashFiles('mix.lock') }}
           restore-keys: ${{ runner.os }}-mix-
+      - name: Cache Cargo dependencies and build
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            clients/township-tauri-shell/src-tauri/target
+          key: ${{ runner.os }}-${{ runner.arch }}-township-tauri-${{ hashFiles('clients/township-tauri-shell/src-tauri/Cargo.lock', 'clients/township-tauri-shell/src-tauri/src/**/*.rs') }}
+          restore-keys: ${{ runner.os }}-${{ runner.arch }}-township-tauri-
       - name: Install dependencies
         run: mix deps.get
       - name: Check formatting
@@ -215,6 +224,9 @@ jobs:
       - name: TS Township witness artifact contract
         working-directory: clients/township-tauri-shell
         run: npm run witness:artifact:contract
+      - name: TS Township packaged bundle variant contract
+        working-directory: clients/township-tauri-shell
+        run: npm run bundle:variant:contract
       - name: TS Township revocation fixture contract
         working-directory: clients/township-tauri-shell
         run: npm run revocation:fixture:contract
