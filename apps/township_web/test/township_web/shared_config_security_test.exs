@@ -40,6 +40,20 @@ defmodule TownshipWeb.SharedConfigSecurityTest do
                :signing_salt
              ])
   end
+
+  @tag :tmp_dir
+  test "allows benign literal values in three-argument config", %{tmp_dir: tmp_dir} do
+    fixture = Path.join(tmp_dir, "runtime.exs")
+
+    File.write!(fixture, """
+    import Config
+
+    config :township_web, :carrier_url, "wss://carrier.example.test/socket"
+    config :township_web, :instrument_title, "Township"
+    """)
+
+    assert SharedConfigSecurity.hardcoded_secrets(fixture) == []
+  end
 end
 
 defmodule TownshipWeb.SharedConfigSecurity do
@@ -73,7 +87,7 @@ defmodule TownshipWeb.SharedConfigSecurity do
     direct_findings =
       case args do
         [_, key, value] when is_atom(key) ->
-          literal_finding(file, ast, key, value)
+          if sensitive_key?(key), do: literal_finding(file, ast, key, value), else: []
 
         _other ->
           []

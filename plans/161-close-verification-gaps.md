@@ -46,6 +46,9 @@ authorized this scope amendment before execution resumed:
    every shared non-dev/test config. Prove the guard against a temporary hard-coded fixture. Also
    enable the existing function-scoped `sobelow_skip` in `bundle.ex` instead of excluding that
    entire source file.
+4. The first completed-plan review proved `test/packaged_bundle_variant.ts` was an unregistered
+   contract runner for `test/support/packaged_bundle_variant.ts`, not a duplicate implementation.
+   Preserve it, add `bundle:variant:contract`, and gate it in the `unit` job.
 
 These instructions supersede the original device-free classification, packaged-smoke placement,
 whole-file Sobelow suppression, and "no new tests" statements below.
@@ -160,10 +163,9 @@ a script never existed for any of them):
 | `clients/township-tauri-shell/test/township_witness_fixture_preflight.ts` | ~8.8 KB | device-free |
 | `clients/township-tauri-shell/test/township_revocation_handoff_fixture.ts` | ~4.0 KB | device-free; its sibling `township_grant_handoff_fixture.ts` **is** gated as `grant:fixture:contract` (line 26) |
 
-There is also a suspected stale duplicate: `clients/township-tauri-shell/test/packaged_bundle_variant.ts`
-(~7.0 KB). The only known importer, `tauri_witness_ceremony_smoke.ts:51`, imports
-`./support/packaged_bundle_variant` — a *different*, smaller file. Step 5 verifies this before
-deleting anything.
+`clients/township-tauri-shell/test/packaged_bundle_variant.ts` (~7.0 KB) is the contract runner
+for the smaller `test/support/packaged_bundle_variant.ts` implementation. It is intentionally an
+entry point rather than an importer, so preserve it and register it in step 5.
 
 The existing script style to copy (`clients/township-tauri-shell/package.json`):
 
@@ -245,7 +247,7 @@ workflow file.
 - `apps/township_web/mix.exs` (only the sobelow version constraint, only if step 3 requires it)
 - `clients/township-tauri-shell/package.json` (add scripts only)
 - `.github/workflows/flagship.yml` (add steps only)
-- `clients/township-tauri-shell/test/packaged_bundle_variant.ts` (delete — only if step 5's grep confirms zero importers)
+- `clients/township-tauri-shell/test/packaged_bundle_variant.ts` (preserve and gate as a contract)
 - `AGENTS.md` (the two doc corrections in step 7)
 - `plans/README.md` (status row)
 
@@ -427,18 +429,18 @@ Do **not** run `tauri:witness-ceremony:smoke` locally unless you have a built
 `src-tauri/target/release/bundle/macos/Township.app` — it is a packaged macOS smoke and will fail
 for environmental reasons that are not a code signal.
 
-Finally, resolve the suspected stale duplicate:
+Finally, register the packaged bundle classifier contract:
 
-```sh
-grep -rn 'packaged_bundle_variant' clients/township-tauri-shell --include=*.ts --include=*.mjs --include=*.json | grep -v '/support/'
+```json
+"bundle:variant:contract": "tsx test/packaged_bundle_variant.ts"
 ```
 
-- If this returns **only** the file's own path (no importer), delete
-  `clients/township-tauri-shell/test/packaged_bundle_variant.ts` and note it in the commit message.
-- If anything imports it, leave it alone and say so in your report.
+Run it individually and add it to the `unit` job beside the other device-free Township contracts.
+It is an entry-point test for `test/support/packaged_bundle_variant.ts`; zero importers is expected
+and is not evidence that the runner is stale.
 
-**Verify**: you have a written PASS/FAIL line for all thirteen device-free suites, and a decision on
-`packaged_bundle_variant.ts`.
+**Verify**: you have a written PASS/FAIL line for all fourteen device-free suites, and a decision on
+`packaged_bundle_variant.ts` (the expected decision is preserve, register, and gate).
 
 **If any suite is FAIL**: STOP and report which ones, with their output. Do not fix them and do not
 wire a red suite into CI. A red suite is a genuine finding this plan exists to surface — the
