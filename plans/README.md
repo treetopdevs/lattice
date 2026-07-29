@@ -198,8 +198,254 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 156 | Election evidence report: projection + close evidence + the 12-scope non-claim manifest | P2 | M | — (154 rec. for style) | TODO (direction round 2026-07-18) |
 | 157 | Public `Authority.observe/2` (role chronology, leases, beacon frontier) + instrument panel | P2 | M–L | 155 | TODO (direction round 2026-07-18) |
 | 158 | Real-device beta POC program map: shared carrier/distribution foundation, then Township, Toolshed, Treehouse | **P0** | XL | 029, 037, 128, 132, 141, 142 | TODO (execution map ready; LiveOps/CapStore prerequisite is DONE) |
+| 159 | Wave A1 kickoff — shared beta foundation | P1 | — | 158 | DRAFT (parallel session, untracked at time of Round 4) |
+| 160 | PD-003-B Toolshed QR ceremony physics spike | P1 | M | 158 | PROPOSED (parallel session, untracked at time of Round 4) |
+| 161 | Close the three silent verification gaps (Sobelow, orphaned suites, format scope) | P1 | S–M | — | TODO (Round 4) |
+| 162 | Bind root-less delegations and genesis authorship to the replica root | **P0** | M | 161 (rec.) | TODO (Round 4) |
+| 163 | Pin TypeScript ingest to the paired replica + fail-closed command decode | P1 | S–M | 162 (rec.) | TODO (Round 4) |
+| 164 | One local command mirroring CI, and stop `dist/` from lying | P2 | S | 161 (rec.) | TODO (Round 4) |
+| 165 | Boundary hardening: WebView signing oracle + CSP, committed dev secret, relay growth | P1 | M | — | TODO (Round 4) |
+| 166 | Typecheck the shell test tree and retire the prose-pinning suite | P2 | M | — | TODO (Round 4) |
+| 167 | Divergence explainer (`Township.Divergence.explain/2` + mix task) | P2 | M | — | TODO (Round 4, direction) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
+
+## Round 4 (deep audit, 2026-07-29, against `codex/plan077-ios-hardware` @ `764a1945`)
+
+A nine-category `improve deep` pass with eight parallel read-only auditors, every load-bearing
+finding re-opened and confirmed against source before it reached the table. Headline: **the
+authority judge has a root-binding hole reachable by any realm that can land two ops in a log**,
+and both runtimes agree on the wrong answer, so the conformance corpus cannot see it.
+
+Numbering note: `159` and `160` were untracked drafts from a parallel session when this round ran;
+they are recorded above for numbering coherence and are not Round 4 output. `153` remains an
+existing Township-track plan recorded outside this table.
+
+**Execution order: 161 first (verification baseline), then 162 (P0), then 163. 164–167 are
+independent and may run in any order or in parallel.**
+
+The three defects behind plan 162, all confirmed by reading `apps/lattice_core/lib/lattice/authority.ex`:
+
+- **`validate_delegation/4` (`authority.ex:412-435`)** — the root-commitment check only fires when
+  the delegation id is in `genesis_ids`, i.e. when a `{:genesis, d, policies}` op introduced it.
+  A self-issued delegation introduced by `{:grant, d}` falls through to `true -> :ok`. `cap_ok/8`
+  then accepts it, and because `Township.Matter`'s convergent fields carry no `authority:` role,
+  `roles_needed == []` and `authority_ok/4`'s first clause (`authority.ex:956`) short-circuits.
+  Any realm can forge `post` / `set_title` / `set_summary` / `admit` / `remove_member`. The existing
+  `township_authority_forged_transfer` vector already documents the delegation staying "structurally
+  valid" and being stopped **only** by the role gate — which does not exist for convergent commands.
+- **The genesis role-acquire arm (`authority.ex:590`)** has no `op.author` binding, unlike its
+  siblings `decide_succeed/8` (`:661-663`) and `decide_transfer/7` (`:640-643`). Replaying the real
+  root's public genesis delegation resets the holder; the same op's unsigned `policies` body is
+  merged by `collect_policies/3` (`:388-400`), naming the attacker's successor.
+- **TypeScript already has the check Elixir lacks** (`authority.ts:442-450` requires
+  `delegation.issuerRealm === op.author`), so for that exact op Sim honors and `materialize()`
+  quarantines — the V-01 STOP-condition class. TS is separately self-inconsistent: `collectPolicies`
+  (`authority.ts:809-830`) has no author check, so an op it quarantines still names the successor.
+
+Plan 162 **will change at least one existing vector**: `township_authority_forged_transfer` moves
+from `transfer_not_holder` / `not_holder` to `invalid_transfer` / `invalid_capability`, because the
+forgery is now refused one gate earlier. The plan requires enumerating and justifying every changed
+vector, and adds a replacement scenario so `transfer_not_holder` keeps coverage.
+
+### Round 4 findings vetted but NOT planned
+
+Real, confirmed, available for a future pick:
+
+- **`ReadModel.replay/1` is Θ(N²) per projection refresh** — `read_model.ex:110-128` does
+  `Enum.take` + `Log.from_ops` + `Authority.analyze` + `Lattice.state_at` **per op**, and
+  `state_at/3` (`lattice.ex:169-175`) runs a second `analyze` plus two more topo sorts. Two cheaper
+  companions: `carrier_projection.ex:363-375` calls `project/2` unconditionally on every poll tick
+  even when the log is unchanged (the `state.log == pulled_state.log` guard exists at `:239` but runs
+  *after* projecting and only suppresses the broadcast — an S-effort fix), and `observe/2` computes
+  `Authority.analyze/2` **four times** on identical inputs (`read_model.ex:53,55,81,89`, the last two
+  via `ReplicaSnapshot.build/2`). The two S-effort fixes are the high-leverage pair; the incremental
+  prefix fold is L and constrained by byte-pinned replay contracts.
+- **Quadratic list appends left in `Authority.analyze`** — `authority.ex:799`, `:780-781`, `:748-749`,
+  `:633-634` all do `list ++ [x]` inside a fold over every op. Same defect class plan 016 fixed for
+  the heartbeat timeline, left behind at the sibling accumulators. S-effort mechanical fix; `audit`
+  is the one that reaches Θ(N) on an adversarial log.
+- **Election close verification walks the full DAG once per evidence op** —
+  `unanimous_boxes_v1.ex:173`, `:333`, `:355`, `:488` each call `Dag.ancestors(Log.ops(log), op.id)`
+  inside a fold, while `Dag.all_ancestors/1` (`dag.ex:133-147`) already computes every op's ancestor
+  set in one pass and is documented as "much cheaper than walking deps per query". S-effort
+  substitution; matters because the G13 harness prices this construction at 10⁴ participants.
+- **4,340 lines of parked-platform probes are statically bundled into the production shell** —
+  ten `*_probe` modules imported at module scope in `App.vue:96-143` (37% of the shell's TS/Vue
+  source), confirmed present in the emitted `dist/assets/index-*.js`. Three of them author signed ops
+  and open carrier sockets. A probe-flavoured APK is indistinguishable from a real release APK by
+  path — the same axis `test/support/packaged_bundle_variant.ts` already hardened for macOS `.app`
+  bundles. M effort: route them through one lazily-imported `probes/` entry behind the existing
+  runtime guard.
+- **The versioned action ladder is still a ~15-file lockstep change** after plan 143. Seven
+  near-identical `*_url/3` builders (`action_intent.ex:20,46,73,105,132,161,187`), five per-version
+  sites in `township_action_intent.ts` (`:1-71`, `:73-80`, `:141-148`, `:156-159`, `:164-252`), plus
+  version switches in `use_action_intent.ts:198-210` and `IntentReviewPanel.vue`. Plan 143
+  consolidated one of six discriminator sites; measured per-rung churn fell from 26 files/+2,617 (v5)
+  to 15 files/+1,403 (v7). Plans 150–151 queue more rungs. L effort.
+- **Seven per-action packaged smokes, 4,717 lines, with a copy-pasted harness** — `buildDevTraceApp()`
+  ×3, `prepareBeamAndAssets()` ×3, `verifyStableRelay()` ×3, plus per-file clones. A structural diff
+  of the two smallest shows 533 changed lines out of ~500 — the same file re-typed. The intended home
+  (`test/support/packaged_action_handoff.ts`) exists and is barely used. M–L; this is the dominant
+  term in the ladder's per-rung cost.
+- **`lattice.export_vectors.ex` is a 2,671-line test-oracle generator compiled into the production
+  app** — 15% of `lattice_core`'s lib, 5× the next-largest module, 18 commits/90d, no test of its own
+  (the vectors *are* the output). `test/support/compaction_spike.ex` (904 lines) correctly lives under
+  `test/`. Verification story is unusually clean: 37 byte-pinned vectors plus CI conformance.
+- **`carrier.ts` hides a ~750-line canonical CBOR codec** at `:923-1500` that `consent.ts:2` reaches
+  into and that duplicates `codec.ts`'s role (`codec.ts:1` type-imports back — a type-only cycle,
+  verified harmless in the emitted `dist/src/codec.js`). Pure move, M effort, LOW risk.
+- **`browser:e2e` and `browser:resume:e2e` run nowhere** — `apps/lattice_stress/test/test_helper.exs:5`
+  excludes `browser_e2e: true` and no `--include` exists anywhere; `scripts/lattice_verify_flagship.sh`
+  runs the worker, flagship, and action-handoff E2Es but not these. The plain two-tab browser
+  authority/resume flow — the demo the v1 project exists to prove — has no automated execution path.
+  Secondary: the `load: true` half of that exclusion is dead (no test carries a `:load` tag).
+- **`test/frontend_shell.mjs` asserts on `App.vue` source text** — 1,294 lines, 737 assertions,
+  reads `src/App.vue` 35 times, tests literally named `Vue source exposes …`, assertions pinning exact
+  identifier names. `plans/143:31-34` named this file and it was not done. It is the one CI-gated
+  frontend suite, and the tooling to fix it is already installed. Deferred out of plan 166 as its own
+  M/L plan.
+- **`@noble/curves` is pinned exact in `lattice-client` and caret in the shell** — `2.2.0` vs
+  `^2.2.0`, with the shell consuming the client via `file:`. They agree today (one hoisted `2.2.0`);
+  the first `npm install` that picks up `2.3.x` gives two independently-versioned Ed25519
+  implementations in one process, in a codebase whose premise is byte-exact agreement. One-character
+  fix, latent not live.
+- **Two Playwright versions** — root lockfile 1.59.1, shell lockfile 1.61.1, both manifests floating on
+  `^1.53.0`. CI installs chromium twice; `onboarding:click-through` deliberately runs the root
+  Playwright from the shell. Local-dev and future-drift cost, not a broken pipeline.
+- **`township_web`'s npm deps are declared only in the repo-root `package.json`** —
+  `assets/js/causal_replay.js:1-2` imports `vue` and `@dagrejs/dagre`, which resolve only by esbuild's
+  directory walk up to the root `node_modules`. `cd apps/township_web && mix setup` on a fresh clone
+  fails at `assets.build`, and the fix (`npm ci` two directories up, in a package with no other
+  relationship to this app) is undiscoverable. Vue also ships to production assets from a
+  `devDependencies` block.
+- **`tcp_filter_dist` floats on upstream `main`** — `deps/web_socket_dist/mix.exs` declares it as a
+  branch dep; the build is reproducible only because `apps/lattice_carrier_spike/mix.exs:31-34`
+  re-declares it with `ref:` + `override: true`, and Mix records no content hash for git deps.
+  Quantified for the standing owner decision: `lattice_carrier_spike` owns exactly **4 of 39**
+  `mix.lock` entries (`web_socket_dist`, `tcp_filter_dist`, `mint`, `mint_web_socket`) and both git
+  deps. `bandit`, `websock_adapter`, `plug`, and the rest are *not* attributable to it.
+- **`TOWNSHIP_BUILD_MAP.md`'s grounding rule points at a branch that does not exist** — `:14` and
+  `:568` name `claude/beautiful-gould-6b25d2` as the "branch of record" to verify every claim against;
+  `git branch -r` lists only `origin/main` and five `origin/codex/*`. Its §7 "paste targets"
+  (`:563-567`) lists 9 files of which **8 are absent** from the repo. This is the first instruction a
+  Township agent follows in a document that declares itself the single entry point.
+- **`README.md`'s Dependencies section describes a repo that no longer exists** — `:283-289` says
+  "the core app is plain OTP" and lists cowboy/jason/stream_data/playwright, omitting Phoenix 1.8.9,
+  LiveView 1.1.32, bandit, esbuild, rustler, Vue, Tauri, and two GitHub git deps. Separately,
+  `README.md:278` points at `docs/acceptance_checklist.md` as the "requirement-by-requirement status
+  map"; that file asserts it reflects "current repository state" and has **zero rows** for Lattice
+  2.0, Township, the carrier server, the TS client, or the packaged apps — while
+  `docs/lattice_poc_status.md` (which `AGENTS.md` points at, and which is maintained through 2026-07)
+  says otherwise. An agent asked "is the carrier server done?" gets two different answers depending
+  on which root doc it followed.
+- **CI cold-compiles the umbrella in two of three jobs** — neither `verify` nor `packaged_macos`
+  caches `deps`/`_build`, and the latter runs on `macos-15-intel` at 10× Linux billing with a 90-minute
+  timeout. The `unit` job's cache key (`hashFiles('mix.lock')`) never changes with source, so it saves
+  once and thereafter restores a stale `_build` — the exact hazard its own workaround comment at
+  `flagship.yml:118-125` documents. Also: three packaged smokes run a full `tauri build` while five
+  siblings correctly set a `TOWNSHIP_SKIP_*_APP_BUILD` flag.
+- **`Log.dump/2` is the trusted root of the "outsider-replayable" audit bundle, and it is
+  `:erlang.term_to_binary`** (`log.ex:203-206`). The only verifier is
+  `mix lattice.township.verify_bundle`, so an outsider needs the 10-app umbrella and pinned OTP 28.
+  The TS client already has every primitive a verifier needs (canonical bytes, hashes, Ed25519,
+  `analyzeAuthority`) and no bundle entry point — and `plans/158:474,481` puts the *TypeScript* app on
+  the hook for an export that must pass outsider replay. Must be a v2 bundle beside v1 with
+  Elixir↔TS verdict equality as a CI gate, or it manufactures the drift class plan 140 killed.
+- **The live/ephemeral half of "one chain, two uses" reaches no shipped surface** — `README.md:143-144`
+  sells it as a headline guarantee, `live.ex:3` calls it "the keystone of the 2.0 thesis",
+  `matter.ex:63-64` already declares `ephemeral(:drafting, [:who])`, and
+  `node_carrier_spike_test.exs:175-179` proves it over a real socket between two OS processes. But
+  `LatticeCarrierServer.WebSocket` handles exactly four kinds (`subscribe`/`frontier`/`pull`/`relay`),
+  and `ephemeral|drafting|presence` matches **zero** times across the TS client, the Tauri shell, the
+  LiveView, and the carrier server. Honest costs: presence is a real metadata leak for a civic tool
+  (needs opt-in and an explicit non-claim), and server-mediated fan-out cuts against the CD1
+  centerless goal.
+- **The code-owned claims registry stops at v1** — `flagship/claims.ex:1-8` already exists with
+  exactly the right justification ("one executable source of truth") and holds 6 flagship claims, CI
+  already emits it. The 2.0/Township honesty burden is hand-duplicated prose instead: "receipt-free
+  W4" appears 6× in `CLAUDE.md`, 10× in `TOWNSHIP_BUILD_MAP.md`, 3× in `docs/path_to_real.md`,
+  restated per plan. The predicted drift is already present — `CLAUDE.md` narration stops at Plan 133
+  while this table tracks 158+. Generate the structured status table; never the prose.
+- **`Township.Election` has no producer outside ExUnit** — 1,892 lines across `township/election*.ex`,
+  and grepping for non-test references returns only the election modules themselves. `link_election`
+  reduces to `[]` so no read model can surface it, and `read_model.ex:75-79` still wires the attest
+  panel to the legacy `Attestation.Stub` (`status: :stubbed`). Plan 156 will ship a report whose only
+  input source is a test fixture. **Scope risk is HIGH** even though mechanical risk is LOW: a runnable
+  election demo invites exactly the misreading this project works hardest to prevent. Research harness
+  only, `:not_claimed` stays, Stub stays frozen — and if that boundary can't be held cleanly in a
+  plan, don't do it.
+
+### Round 4 findings considered and rejected
+
+Each was opened and read during vetting. Recorded so they are not re-audited next round.
+
+- **`erl_crash.dump` (5.1 MB) in the working tree** — REJECTED. Untracked and correctly gitignored
+  (`.gitignore:30`). Working-tree clutter only.
+- **`.DS_Store` files** — NOT PLANNED. Ten present, none tracked, but they are ignored only via the
+  developer's `~/.gitignore_global`, so another mac's `git add -A` would commit them. One line; fold
+  into whatever change next touches `.gitignore`.
+- **`persist_relay/3` `FunctionClauseError` on an in-memory carrier source** (`holder.ex:166`) —
+  REJECTED as reachable. `validate_relay_realms/3` (`lattice_carrier_server.ex:120-136`) requires a
+  `{:path, _}` source for any non-empty `relay_realms`, so the unmatched clause cannot be reached
+  through a valid config. The invariant living in a different module from the code that depends on it
+  is a mild smell; an explicit `{:error, :read_only}` clause would be defensive tidying, not a fix.
+- **Carrier integers above 2^53 lose precision on TS decode** — REJECTED as not worth doing yet.
+  Real: `wire.ex:171` encodes large ints as `["int", string]` precisely so JSON does not round them,
+  and `carrier.ts:992` coerces straight back to `Number`, after which `collectBeacons`
+  (`authority.ts:1086`) rejects them as `stale_beacon` while `valid_epoch?/2` (`authority.ex:563`)
+  accepts. But epochs and ticks are small monotonic counters in every scenario in the repo. The op
+  hash still verifies (the raw frame term is re-encoded), so this would surface as a semantic
+  divergence with no signature failure — worth remembering if epochs ever become large.
+- **`jason` → Elixir 1.19 stdlib `JSON`** — REJECTED again, and the earlier blast-radius estimate was
+  low by ~7×. `Jason.` appears in **44 files** across nine of ten umbrella apps, not ~6. And `jason`
+  is a hard transitive dep of `credo`, `sobelow`, `rustler`, and `esbuild`, so the migration removes
+  zero dependencies from the lock. Nothing is blocking on it.
+- **npm audit high-severity advisories** — REJECTED as the noise floor. Seven high in the shell
+  (`brace-expansion`/`minimatch`/`glob` → `editorconfig` → `js-beautify` → `@vue/test-utils`, plus
+  `postcss` GHSA-r28c-9q8g-f849) and one at the root, all devDependency build/test tooling with no
+  path into the shipped app. `mix hex.audit` → "No retired packages found."
+- **"Carrier telemetry has no consumers"** — REJECTED as stated; no longer true.
+  `lattice_node_spike/carrier_telemetry.ex:12-16` is a real non-test consumer attached to 5 of the 6
+  events. Only `[:lattice, :carrier, :relay_failure]` (emitted at
+  `lattice_carrier_server/web_socket.ex:198`) still has zero non-test consumers — a single-event gap
+  in one spike app, below the bar.
+- **Missing `.env.example` / undocumented env vars** — REJECTED. No `.env*` exists and none is needed:
+  every `System.get_env` read is defaulted or raises with a clear message, the `PHX_SERVER`/`PORT`
+  pair is documented at `AGENTS.md:84`, the `scripts/township_*_server.exs` vars are set by their own
+  wrapper scripts, and every `VITE_TOWNSHIP_*` / `TOWNSHIP_*` var is set inline in the `package.json`
+  script that consumes it.
+- **`carrier_projection.ex:157-167`'s stale-`connection_epoch` branch skipping `schedule_next_refresh`**
+  — REJECTED. Traced every `disconnect/1` caller: unreachable in `:poll` mode and recovered by
+  `maybe_queue_trailing/1` in `:server_push` mode. `carrier_projection_test.exs` (903 lines against a
+  529-line module) explicitly covers epoch fencing at `:404`, `:468`, `:529`.
+- **`v-html` in the Vue shell (`App.vue:2236`)** — REJECTED (false positive). Renders only a
+  locally-generated QR SVG built from a boolean module matrix (`township_pairing_qr.ts:94-113`). No
+  untrusted interpolation.
+- **`Canonical.encode/1` omitting `expires_epoch` for an embedded `%Delegation{}`** (`canonical.ex:182-194`)
+  — REJECTED. The omission is real, but the embedded `delegation.id` **is** encoded, and
+  `Delegation.valid_sig?/1` checks `d.id == hash(encoding)` over bytes that *do* include
+  `expires_epoch`. Lease tampering is caught, in both runtimes.
+- **Deep-link / pairing / LiveView ingress acting before confirmation** — REJECTED. The dispatcher and
+  action-intent parsers validate exhaustively (exact key sets, canonical base64 round-trips, byte
+  caps, replica match), both accept and sign require `event.isTrusted` (`use_action_intent.ts:229-231`),
+  and LAN/QR discovery only stages a candidate the user must explicitly load and save. The single
+  LiveView `handle_event` (`instrument_live.ex:170`) dispatches through a compile-time event map into
+  `TownshipWeb.ActionIntent`, which validates every field.
+- **Untested Rust custody commands / thin `authority.ex` coverage / weak property coverage** —
+  REJECTED as coverage gaps. Every `#[tauri::command]` is exercised by `tests/native_commands.rs` or
+  `tests/governance_witness_custody.rs`; `Lattice.Authority` is referenced from 20 other suites; and
+  convergence, identical-quarantine, byte-identical replay (including through dump/restore), and
+  canonical round-trip/injectivity are already asserted as properties.
+- **`plan_contract_test.exs` prose pinning** — RESOLVED, not a finding. The file no longer exists
+  anywhere at HEAD; plan 143 removed it. The habit survives only in the two Node/TS files captured as
+  Round 4 findings (plan 166 and the deferred `frontend_shell.mjs` item).
+
+### Round 4 coverage note
+
+Not audited: `plans/*.md` as code (169 files), `deps/`, `node_modules/`, `_build/`, `output/`,
+generated `dist/` internals beyond git-tracking status, and the *behavior* of the parked Android/iOS
+probe estate (its presence in the production bundle was audited; its correctness was not).
 
 ## Direction round (features/visualizations audit, 2026-07-18, against `codex/township-build-map` @ `c9a05b40`)
 
