@@ -10,7 +10,7 @@ renders an unavailable state rather than unverified civic data.
 ~/.asdf/shims/mix deps.get
 cd apps/township_web
 ~/.asdf/shims/mix setup
-PHX_SERVER=true ~/.asdf/shims/mix run --no-halt
+SECRET_KEY_BASE="$(~/.asdf/shims/mix phx.gen.secret)" PHX_SERVER=true ~/.asdf/shims/mix run --no-halt
 ```
 
 The instrument is available at `http://localhost:4100/township`.

@@ -81,7 +81,7 @@ All tests must pass and formatting must be clean before considering any change d
 - `~/.asdf/shims/mix test`
 - `~/.asdf/shims/mix format`
 - `~/.asdf/shims/mix run scripts/lattice2_demo.exs`
-- `PHX_SERVER=true PORT=4100 ~/.asdf/shims/mix run --no-halt`
+- `SECRET_KEY_BASE="$(~/.asdf/shims/mix phx.gen.secret)" PHX_SERVER=true PORT=4100 ~/.asdf/shims/mix run --no-halt`
 
 **Heavy / external dependencies** (need Node + Playwright, bind a port; run only when asked):
 

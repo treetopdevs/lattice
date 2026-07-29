@@ -19,8 +19,6 @@ config :township_web, TownshipWeb.Endpoint,
   adapter: Bandit.PhoenixAdapter,
   render_errors: [formats: [html: TownshipWeb.ErrorHTML], layout: false],
   pubsub_server: TownshipWeb.PubSub,
-  live_view: [signing_salt: "township-live-view"],
-  secret_key_base: "township-dev-test-secret-key-base-change-for-production-000000000000000000",
   server: false
 
 if config_env() == :dev do
@@ -68,3 +66,7 @@ config :phoenix, :json_library, Jason
 #       format: "$date $time [$level] $metadata$message\n",
 #       metadata: [:user_id]
 #
+
+if config_env() in [:dev, :test] do
+  import_config "#{config_env()}.exs"
+end
