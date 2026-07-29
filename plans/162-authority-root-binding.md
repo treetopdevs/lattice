@@ -35,6 +35,49 @@ from `transfer_not_holder` / `not_holder` to `invalid_transfer` / `invalid_capab
 file was accidentally omitted from the strict in-scope list. The operator authorized adding that
 file to scope solely for the predicted expectation update and its explanatory assertion text.
 
+## Execution evidence (2026-07-29)
+
+Implementation is complete locally and awaiting the required Claude/Agy checkpoint reviews.
+
+- RED: `township_authority_unrooted_grant` initially materialized the forged post; the replayed
+  genesis initially lacked the required `unauthorized_genesis` refusal. TypeScript conformance then
+  failed seven checks across the two attacks and the rooted non-holder replacement scenario.
+- GREEN: the direct root-binding suite passes 11 tests; `mix check` passes 26 properties and 320
+  lattice-core tests plus every umbrella app; TypeScript typecheck, conformance, V-01, canonical,
+  authoring, carrier, and tracked build gates all pass. The lattice-server Sobelow scan exits 0.
+- An earlier full-suite run exposed the pre-existing carrier Holder timeout under load; the exact
+  focused test passed immediately, and the final `mix check` completed with all 94 carrier-server
+  tests green. No carrier durability behavior was changed.
+
+Changed vector corpus, exhaustively:
+
+- `township_authority_forged_transfer.json`: the forged root-less transfer now fails at delegation
+  validation, moving `transfer_not_holder` / `not_holder` to the stronger
+  `invalid_transfer` / `invalid_capability` reasons.
+- `township_authority_unrooted_grant.json` (new): pins rejection of a self-issued delegation
+  introduced by a grant.
+- `township_authority_replayed_genesis.json` (new): pins genesis author binding, holder stability,
+  and the root-authored succession policy.
+- `township_authority_rooted_transfer_not_holder.json` (new): restores direct
+  `transfer_not_holder` coverage with a valid rooted delegation.
+
+The succession W3, unproven-tick, witnessed-recovery, genesis-projection parity, forged-root, and
+embedded-replica-bypass vectors remained byte-identical.
+
+All five mutation checks produced a named failure:
+
+1. Replacing the Elixir unrooted rejection with `:ok` failed
+   `an unrooted grant confers no capability` at its `:unrooted_delegation` assertion.
+2. Removing the Elixir genesis-author rejection failed the exporter because the replayed genesis
+   no longer quarantined as `unauthorized_genesis`.
+3. Removing the Elixir policy-author predicate failed the exporter assertion that a replay cannot
+   replace the root-authored succession policy.
+4. Restoring TypeScript's old root-less acceptance failed conformance on the forged post,
+   quarantine set, and quarantine reason pairs.
+5. Removing TypeScript's policy-author predicate failed the added cross-runtime effective-policy
+   assertion. This mutation originally exposed a test gap; the effective policy projection and
+   assertion were added before rerunning it.
+
 ## Why this matters
 
 `Lattice.Authority` is the deterministic judge every realm runs to decide which operations count.
