@@ -39,6 +39,9 @@ end
 defmodule TownshipWeb.SharedConfigSecurity do
   @moduledoc false
 
+  alias Sobelow.{Config, Parse}
+  alias Sobelow.Config.Secrets
+
   @skipped_config_files ~w(dev.exs test.exs dev.secret.exs test.secret.exs)
 
   def config_files(config_dir) do
@@ -52,7 +55,7 @@ defmodule TownshipWeb.SharedConfigSecurity do
   def hardcoded_secrets(config_file) do
     exact_findings =
       :secret_key_base
-      |> Sobelow.Config.get_configs(config_file)
+      |> Config.get_configs(config_file)
       |> Enum.flat_map(fn {ast, key, value} ->
         literal_finding(config_file, ast, key, value)
       end)
@@ -61,7 +64,7 @@ defmodule TownshipWeb.SharedConfigSecurity do
       ["password", "secret"]
       |> Enum.flat_map(fn key_fragment ->
         key_fragment
-        |> Sobelow.Config.get_fuzzy_configs(config_file)
+        |> Config.get_fuzzy_configs(config_file)
         |> Enum.flat_map(fn {ast, values} ->
           Enum.flat_map(values, fn {key, value} ->
             literal_finding(config_file, ast, key, value)
@@ -76,10 +79,10 @@ defmodule TownshipWeb.SharedConfigSecurity do
 
   defp literal_finding(file, ast, key, value)
        when is_binary(value) and byte_size(value) > 0 do
-    if Sobelow.Config.Secrets.env_var?(value) do
+    if Secrets.env_var?(value) do
       []
     else
-      [%{file: file, key: key, line: Sobelow.Parse.get_fun_line(ast)}]
+      [%{file: file, key: key, line: Parse.get_fun_line(ast)}]
     end
   end
 
