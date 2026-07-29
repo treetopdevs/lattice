@@ -62,6 +62,7 @@ All tests must pass and formatting must be clean before considering any change d
 | `apps/lattice_stress` | Adversarial stress lab: races, WS abuse, load/soak, property tests, `mix lattice.stress` |
 | `apps/lattice_carrier_spike` | Spike code for a real (non-simulated) carrier |
 | `apps/lattice_node_spike` | Real second-process Cowboy peer fixtures and Township/Thread convergence scenarios |
+| `apps/township_bench` | M4/G13 election cost-model benchmark harness; builds a Rustler NIF, so `cargo` must be on `PATH` |
 
 ## Where the docs are
 
@@ -75,7 +76,7 @@ All tests must pass and formatting must be clean before considering any change d
 
 ## Safe vs. heavy commands
 
-**Safe / local-only** (no network, no extra tooling):
+**Safe / local-only** (no network; requires `cargo` on `PATH` for the `township_bench` NIF):
 
 - `~/.asdf/shims/mix compile`
 - `~/.asdf/shims/mix test`
