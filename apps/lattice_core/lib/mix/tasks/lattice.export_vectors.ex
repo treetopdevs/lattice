@@ -79,6 +79,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_authority_forged_transfer(),
       township_authority_double_transfer(),
       township_authority_unattenuated_transfer(),
+      township_authority_rooted_transfer_not_holder(),
       township_authority_unrooted_grant(),
       township_authority_replayed_genesis(),
       township_capability_missing(),
@@ -951,10 +952,12 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
     authority_quarantine = authority_quarantine(log)
 
+    # The forged self-issued delegation is now refused at the root-binding gate,
+    # before the role-holder checks that previously produced the weaker reasons.
     expected_quarantine =
       Enum.sort([
-        [forged_transfer.id, "transfer_not_holder"],
-        [mallory_command.id, "not_holder"]
+        [forged_transfer.id, "invalid_transfer"],
+        [mallory_command.id, "invalid_capability"]
       ])
 
     unless authority_quarantine == expected_quarantine do
@@ -1214,6 +1217,67 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       "rejectedPost" => rejected_post,
       "unrootedDelegationId" => unrooted.id,
       "unrootedDelegationIntroductionId" => introduction.id
+    })
+  end
+
+  defp township_authority_rooted_transfer_not_holder do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:rooted-transfer-not-holder",
+        ["clerk", "resident", "mallory"],
+        seed: "township:rooted-transfer-not-holder"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+
+    {sim, resident_grant} =
+      Sim.grant(sim, "clerk", "resident",
+        ops: [:close_matter, :reopen_matter],
+        roles: [:clerk]
+      )
+
+    sim = Sim.sync_all(sim)
+    resident = Sim.identity(sim, "resident")
+    mallory = Sim.identity(sim, "mallory")
+    clerk = Sim.identity(sim, "clerk")
+    replica = Sim.replica(sim)
+
+    rooted_transfer_delegation =
+      Delegation.new(resident, replica, mallory.pub,
+        ops: [:close_matter, :reopen_matter],
+        roles: [:clerk],
+        parent_id: resident_grant.id
+      )
+
+    unless Delegation.attenuates?(rooted_transfer_delegation, resident_grant) do
+      raise "expected the non-holder transfer delegation to remain properly rooted"
+    end
+
+    log = Sim.log(sim, "clerk")
+
+    transfer =
+      Op.new(
+        resident,
+        replica,
+        Log.frontier(log),
+        :authority,
+        {:transfer, :clerk, rooted_transfer_delegation, 0}
+      )
+
+    log = Log.append!(log, transfer)
+
+    assert_authority_reason!(log, transfer.id, :transfer_not_holder)
+
+    unless Authority.holder(Matter, log, :clerk) == clerk.pub do
+      raise "expected the rooted non-holder transfer not to move clerk authority"
+    end
+
+    capability_scenario("township_authority_rooted_transfer_not_holder", sim, log, %{
+      "targetOperationId" => transfer.id,
+      "expectedReason" => "transfer_not_holder",
+      "rootedDelegationId" => rooted_transfer_delegation.id,
+      "parentDelegationId" => resident_grant.id
     })
   end
 
