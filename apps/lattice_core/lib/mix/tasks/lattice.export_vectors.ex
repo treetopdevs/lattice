@@ -81,6 +81,9 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_authority_unattenuated_transfer(),
       township_authority_rooted_transfer_not_holder(),
       township_authority_unrooted_grant(),
+      township_authority_succession_capability_laundering(),
+      township_authority_rooted_grant_as_genesis(),
+      township_authority_succession_genesis_poisoning(),
       township_authority_replayed_genesis(),
       township_capability_missing(),
       township_capability_invalid(),
@@ -1217,6 +1220,137 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       "rejectedPost" => rejected_post,
       "unrootedDelegationId" => unrooted.id,
       "unrootedDelegationIntroductionId" => introduction.id
+    })
+  end
+
+  defp township_authority_succession_capability_laundering do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:succession-capability-laundering",
+        ["clerk", "resident", "mallory"],
+        seed: "township:succession-capability-laundering"
+      )
+
+    {sim, _genesis} =
+      Sim.create_replica(sim, "clerk",
+        policies: %{clerk: %{successor: "resident", dormant_ticks: 3}}
+      )
+
+    sim = Sim.sync_all(sim)
+    mallory = Sim.identity(sim, "mallory")
+
+    unrooted =
+      Delegation.genesis(mallory, Sim.replica(sim),
+        ops: [:post],
+        roles: [:clerk],
+        live: true
+      )
+
+    {sim, succession} =
+      Sim.append(sim, "mallory", :authority, {:succeed, :clerk, unrooted, 0})
+
+    rejected_post = "mallory: succession-laundered capability"
+
+    {sim, post} =
+      Sim.command(sim, "mallory", :post, [rejected_post], cap: unrooted.id)
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    assert_authority_reason!(log, succession.id, :unauthorized_succession)
+    assert_authority_reason!(log, post.id, :invalid_capability)
+    assert_post_absent!(log, rejected_post)
+
+    capability_scenario("township_authority_succession_capability_laundering", sim, log, %{
+      "targetOperationId" => post.id,
+      "expectedReason" => "invalid_capability",
+      "successionOperationId" => succession.id,
+      "unrootedDelegationId" => unrooted.id
+    })
+  end
+
+  defp township_authority_rooted_grant_as_genesis do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:rooted-grant-as-genesis",
+        ["clerk", "mallory"],
+        seed: "township:rooted-grant-as-genesis"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+
+    {sim, rooted} =
+      Sim.grant(sim, "clerk", "mallory",
+        ops: [:close_matter],
+        roles: [:clerk]
+      )
+
+    sim = Sim.sync_all(sim)
+    {sim, forged_genesis} = Sim.append(sim, "mallory", :authority, {:genesis, rooted, %{}})
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    assert_authority_reason!(log, forged_genesis.id, :invalid_genesis)
+
+    unless Authority.holder(Matter, log, :clerk) == Sim.identity(sim, "clerk").pub do
+      raise "expected a rooted grant reintroduced as genesis not to move clerk authority"
+    end
+
+    capability_scenario("township_authority_rooted_grant_as_genesis", sim, log, %{
+      "targetOperationId" => forged_genesis.id,
+      "expectedReason" => "invalid_genesis",
+      "rootedDelegationId" => rooted.id
+    })
+  end
+
+  defp township_authority_succession_genesis_poisoning do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:succession-genesis-poisoning",
+        ["clerk", "resident", "mallory"],
+        seed: "township:succession-genesis-poisoning"
+      )
+
+    {sim, _genesis} =
+      Sim.create_replica(sim, "clerk",
+        policies: %{clerk: %{successor: "resident", dormant_ticks: 3}}
+      )
+
+    sim = Sim.sync_all(sim)
+
+    {sim, succession} =
+      Sim.succeed(sim, "resident", :clerk,
+        at_tick: 3,
+        ops: [:close_matter, :reopen_matter]
+      )
+
+    {:succeed, :clerk, successor_delegation, 3} = succession.body
+    sim = Sim.sync_all(sim)
+
+    {sim, poisoned_genesis} =
+      Sim.append(sim, "mallory", :authority, {:genesis, successor_delegation, %{}})
+
+    sim = Sim.sync_all(sim)
+
+    {sim, close} =
+      Sim.command(sim, "resident", :close_matter, [], cap: successor_delegation.id)
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    assert_authority_honored!(log, succession.id)
+    assert_authority_reason!(log, poisoned_genesis.id, :impostor_genesis)
+    assert_authority_honored!(log, close.id)
+
+    capability_scenario("township_authority_succession_genesis_poisoning", sim, log, %{
+      "targetOperationId" => poisoned_genesis.id,
+      "expectedReason" => "impostor_genesis",
+      "successionOperationId" => succession.id,
+      "honoredCommandOperationId" => close.id,
+      "successorDelegationId" => successor_delegation.id
     })
   end
 

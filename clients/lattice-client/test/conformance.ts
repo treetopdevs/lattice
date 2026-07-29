@@ -673,6 +673,14 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
           ]),
     );
 
+    check(
+      "witnessed-recovery TS reason parity",
+      sortedPairs([...full.quarantineReasons]),
+      exp.authorityQuarantine === undefined
+        ? undefined
+        : sortedPairs(exp.authorityQuarantine),
+    );
+
     let invalidSignatureResult: ReturnType<typeof materialize> | null = null;
     const invalidSignatureOps = structuredClone(ops);
     const invalidSignatureOp = invalidSignatureOps.find(

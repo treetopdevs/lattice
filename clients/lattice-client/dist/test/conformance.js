@@ -352,6 +352,9 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
                 [recovery.impostorPolicySuccessionOperationId, "unauthorized_succession"],
                 [recovery.deniedOperationId, "insufficient_recovery_witnesses"],
             ]));
+        check("witnessed-recovery TS reason parity", sortedPairs([...full.quarantineReasons]), exp.authorityQuarantine === undefined
+            ? undefined
+            : sortedPairs(exp.authorityQuarantine));
         let invalidSignatureResult = null;
         const invalidSignatureOps = structuredClone(ops);
         const invalidSignatureOp = invalidSignatureOps.find((op) => op.id === recovery?.honoredOperationId);

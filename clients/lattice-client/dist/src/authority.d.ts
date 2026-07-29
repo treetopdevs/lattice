@@ -35,6 +35,7 @@ export interface AuthoritySecurityProjection {
     delegations: ReadonlyMap<string, AuthorityDelegationRecord>;
     root: AuthorityRootEvidence | null;
     effectiveRevokes: readonly EffectiveRevokeEvidence[];
+    honoredSuccessionIntroductions: ReadonlyMap<string, readonly string[]>;
     /** Plan 149: valid (root-authored, ancestry-monotonic) epoch beacons. */
     validBeacons: readonly EffectiveBeaconEvidence[];
 }

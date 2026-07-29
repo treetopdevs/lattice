@@ -32,7 +32,17 @@ export function capabilityQuarantine(
   }
 
   const delegation = record.delegation;
-  if (delegation === null || !record.validation.valid) {
+  if (delegation === null) {
+    return { quarantined: true, reason: "invalid_capability" };
+  }
+
+  const visible = ancestors(op.id, byId, ancCache);
+  const honoredSuccessionVisible =
+    !record.validation.valid &&
+    record.validation.reason === "succession_candidate" &&
+    (security.honoredSuccessionIntroductions.get(delegation.id) ?? [])
+      .some((opId) => visible.has(opId));
+  if (!record.validation.valid && !honoredSuccessionVisible) {
     return { quarantined: true, reason: "invalid_capability" };
   }
   if (op.author !== delegation.audienceRealm) {
@@ -42,7 +52,6 @@ export function capabilityQuarantine(
     return { quarantined: true, reason: "operation_not_granted" };
   }
 
-  const visible = ancestors(op.id, byId, ancCache);
   if (!record.introductionOpIds.some((opId) => visible.has(opId))) {
     return { quarantined: true, reason: "capability_not_visible" };
   }

@@ -134,6 +134,44 @@ defmodule Lattice2.RootBindingTest do
     refute "unrooted propaganda" in Sim.state(sim, "server").messages
   end
 
+  test "an unauthorized succession op cannot launder an unrooted capability" do
+    sim = founded()
+    evil = Sim.identity(sim, "evil")
+
+    unrooted =
+      Delegation.genesis(evil, Sim.replica(sim),
+        ops: [:post],
+        roles: [:moderator],
+        live: true
+      )
+
+    {sim, succession} =
+      Sim.append(sim, "evil", :authority, {:succeed, :moderator, unrooted, 0})
+
+    {sim, post} =
+      Sim.command(sim, "evil", :post, ["succession-laundered propaganda"], cap: unrooted.id)
+
+    sim = Sim.sync_all(sim)
+
+    assert {true, :unauthorized_succession} = Sim.quarantined(sim, "server", succession.id)
+    assert {true, :invalid_capability} = Sim.quarantined(sim, "server", post.id)
+    refute "succession-laundered propaganda" in Sim.state(sim, "server").messages
+  end
+
+  test "a rooted grant reintroduced as genesis cannot seize its role" do
+    sim = founded()
+    {sim, rooted} = Sim.grant(sim, "server", "evil", ops: [:lock], roles: [:moderator])
+    sim = Sim.sync_all(sim)
+
+    {sim, forged_genesis} =
+      Sim.append(sim, "evil", :authority, {:genesis, rooted, %{}})
+
+    sim = Sim.sync_all(sim)
+
+    assert {true, :invalid_genesis} = Sim.quarantined(sim, "server", forged_genesis.id)
+    assert Sim.holder(sim, "server", :moderator) == Sim.identity(sim, "server").pub
+  end
+
   test "replaying the genuine genesis from another author does not move the holder" do
     sim = founded()
     genesis_delegation = root_genesis_delegation(sim)
@@ -181,6 +219,25 @@ defmodule Lattice2.RootBindingTest do
 
     assert false == Sim.quarantined(sim, "server", succession.id)
     assert Sim.holder(sim, "server", :moderator) == Sim.identity(sim, "tab").pub
+  end
+
+  test "replaying a legitimate successor delegation as genesis cannot poison it" do
+    sim = founded()
+    {sim, succession} = Sim.succeed(sim, "tab", :moderator, at_tick: 3)
+    {:succeed, :moderator, successor_delegation, 3} = succession.body
+    sim = Sim.sync_all(sim)
+
+    {sim, poisoned_genesis} =
+      Sim.append(sim, "evil", :authority, {:genesis, successor_delegation, %{}})
+
+    sim = Sim.sync_all(sim)
+    {sim, lock} = Sim.command(sim, "tab", :lock, [], cap: successor_delegation.id)
+    sim = Sim.sync_all(sim)
+
+    assert false == Sim.quarantined(sim, "server", succession.id)
+    assert {true, :impostor_genesis} = Sim.quarantined(sim, "server", poisoned_genesis.id)
+    assert false == Sim.quarantined(sim, "server", lock.id)
+    assert Sim.state(sim, "server").locked?
   end
 
   # --- Tombstone gate ------------------------------------------------------
