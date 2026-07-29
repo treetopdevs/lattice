@@ -137,6 +137,12 @@ jobs:
       - name: TS carrier availability feed contract
         working-directory: clients/lattice-client
         run: npm run carrier:feed
+      - name: TS witnessed succession review
+        working-directory: clients/lattice-client
+        run: npm run succession:review
+      - name: TS witnessed succession artifact
+        working-directory: clients/lattice-client
+        run: npm run succession:artifact
       - name: Build TS client for shell feed gate
         working-directory: clients/lattice-client
         run: npm run build
@@ -182,6 +188,39 @@ jobs:
       - name: TS live stable carrier availability feed
         working-directory: clients/township-tauri-shell
         run: npm run feed:contract
+      - name: TS Township carrier peer contract
+        working-directory: clients/township-tauri-shell
+        run: npm run peer:contract
+      - name: TS Township pairing deep-link contract
+        working-directory: clients/township-tauri-shell
+        run: npm run deeplink:contract
+      - name: TS Township pairing deep-link source contract
+        working-directory: clients/township-tauri-shell
+        run: npm run deeplink:source:contract
+      - name: TS Township pairing QR contract
+        working-directory: clients/township-tauri-shell
+        run: npm run qr:contract
+      - name: TS Township pairing QR camera contract
+        working-directory: clients/township-tauri-shell
+        run: npm run qr:camera:contract
+      - name: TS Township pairing discovery contract
+        working-directory: clients/township-tauri-shell
+        run: npm run discovery:contract
+      - name: TS Township canonical probe contract
+        working-directory: clients/township-tauri-shell
+        run: npm run canonical:probe:contract
+      - name: TS mobile secure-store strategy
+        working-directory: clients/township-tauri-shell
+        run: npm run mobile:strategy
+      - name: TS Township witness artifact contract
+        working-directory: clients/township-tauri-shell
+        run: npm run witness:artifact:contract
+      - name: TS Township witness fixture preflight
+        working-directory: clients/township-tauri-shell
+        run: npm run witness:preflight:contract
+      - name: TS Township revocation fixture contract
+        working-directory: clients/township-tauri-shell
+        run: npm run revocation:fixture:contract
       - name: Install Tauri Linux prerequisites
         run: |
           sudo apt-get update
@@ -320,3 +359,7 @@ jobs:
       - name: Verify packaged reactive carrier feed
         working-directory: clients/township-tauri-shell
         run: npm run tauri:feed:smoke
+
+      - name: Verify packaged witness ceremony
+        working-directory: clients/township-tauri-shell
+        run: npm run tauri:witness-ceremony:smoke
