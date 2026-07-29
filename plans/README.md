@@ -201,7 +201,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 159 | Wave A1 kickoff — shared beta foundation | P1 | — | 158 | DRAFT (parallel session, untracked at time of Round 4) |
 | 160 | PD-003-B Toolshed QR ceremony physics spike | P1 | M | 158 | PROPOSED (parallel session, untracked at time of Round 4) |
 | 161 | Close the three silent verification gaps (Sobelow, orphaned suites, format scope) | P1 | S–M | 165 Part B (rec.) | DONE (scope amendment authorized; Claude review fixes landed) |
-| 162 | Bind root-less delegations and genesis authorship to the replica root | **P0** | M | 161 (rec.) | TODO (Round 4) |
+| 162 | Bind root-less delegations and genesis authorship to the replica root | **P0** | M | 161 (rec.) | IN PROGRESS (scope amendment authorized) |
 | 163 | Pin TypeScript ingest to the paired replica + fail-closed command decode | P1 | S–M | 162 (rec.) | TODO (Round 4) |
 | 164 | One local command mirroring CI, and stop `dist/` from lying | P2 | S | 161, 166 (rec.) | TODO (Round 4; run last) |
 | 165 | Boundary hardening: WebView signing oracle + CSP, committed dev secret, relay rate | P1 | M | — | TODO (Round 4; quarantine cap deferred to durable archive design) |
