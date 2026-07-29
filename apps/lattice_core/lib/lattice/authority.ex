@@ -105,9 +105,9 @@ defmodule Lattice.Authority do
   @spec root(Log.t()) :: Identity.pubkey() | nil
   def root(%Log{} = log) do
     ordered = Log.topo_ops(log)
-    {commitment, genesis_ids} = deleg_context(log, ordered)
+    {commitment, genesis_ids, succession_ids} = deleg_context(log, ordered)
     delegations = collect_delegations(ordered)
-    deleg_valid = validate_delegations(delegations, commitment, genesis_ids)
+    deleg_valid = validate_delegations(delegations, commitment, genesis_ids, succession_ids)
     resolve_root(ordered, delegations, deleg_valid, commitment)
   end
 
@@ -143,14 +143,22 @@ defmodule Lattice.Authority do
   defp root_matches?(nil, _audience), do: true
   defp root_matches?(commitment, audience), do: root_tag(audience) == commitment
 
-  # {replica root commitment, set of delegation ids introduced by :genesis ops}.
+  # Replica root commitment plus delegation ids introduced by the two operations
+  # that deliberately carry root-less self-issues.
   defp deleg_context(%Log{} = log, ordered) do
-    {replica_commitment(log.replica), genesis_deleg_ids(ordered)}
+    {replica_commitment(log.replica), genesis_deleg_ids(ordered), succession_deleg_ids(ordered)}
   end
 
   defp genesis_deleg_ids(ordered) do
     for op <- ordered, match?({:genesis, %Delegation{}, _}, op.body), into: MapSet.new() do
       {:genesis, %Delegation{id: id}, _} = op.body
+      id
+    end
+  end
+
+  defp succession_deleg_ids(ordered) do
+    for op <- ordered, match?({:succeed, _, %Delegation{}, _}, op.body), into: MapSet.new() do
+      {:succeed, _role, %Delegation{id: id}, _proof} = op.body
       id
     end
   end
@@ -198,12 +206,12 @@ defmodule Lattice.Authority do
   @spec delegation_active?(Log.t(), String.t()) :: boolean()
   def delegation_active?(%Log{} = log, delegation_id) do
     ordered = Log.topo_ops(log)
-    {commitment, genesis_ids} = deleg_context(log, ordered)
+    {commitment, genesis_ids, succession_ids} = deleg_context(log, ordered)
     delegations = collect_delegations(ordered)
 
     case Map.fetch(delegations, delegation_id) do
       {:ok, %{deleg: %Delegation{} = d}} ->
-        validate_delegation(d, delegations, commitment, genesis_ids) == :ok and
+        validate_delegation(d, delegations, commitment, genesis_ids, succession_ids) == :ok and
           not expired?(log, delegation_id)
 
       _ ->
@@ -221,9 +229,9 @@ defmodule Lattice.Authority do
   def expired?(%Log{} = log, delegation_id) do
     ordered = Log.topo_ops(log)
     ancestors = Dag.all_ancestors(Log.ops(log))
-    {commitment, genesis_ids} = deleg_context(log, ordered)
+    {commitment, genesis_ids, succession_ids} = deleg_context(log, ordered)
     delegations = collect_delegations(ordered)
-    deleg_valid = validate_delegations(delegations, commitment, genesis_ids)
+    deleg_valid = validate_delegations(delegations, commitment, genesis_ids, succession_ids)
     root = resolve_root(ordered, delegations, deleg_valid, commitment)
     {beacons, _beacon_q} = collect_beacons(ordered, ancestors, root)
 
@@ -244,9 +252,9 @@ defmodule Lattice.Authority do
   @spec revoked?(Log.t(), String.t()) :: boolean()
   def revoked?(%Log{} = log, delegation_id) do
     ordered = Log.topo_ops(log)
-    {commitment, genesis_ids} = deleg_context(log, ordered)
+    {commitment, genesis_ids, succession_ids} = deleg_context(log, ordered)
     delegations = collect_delegations(ordered)
-    deleg_valid = validate_delegations(delegations, commitment, genesis_ids)
+    deleg_valid = validate_delegations(delegations, commitment, genesis_ids, succession_ids)
     root = resolve_root(ordered, delegations, deleg_valid, commitment)
 
     Enum.any?(ordered, fn op ->
@@ -262,9 +270,9 @@ defmodule Lattice.Authority do
     ordered = Dag.topo_sort(ops)
     ancestors = Dag.all_ancestors(ops)
 
-    {commitment, genesis_ids} = deleg_context(log, ordered)
+    {commitment, genesis_ids, succession_ids} = deleg_context(log, ordered)
     delegations = collect_delegations(ordered)
-    deleg_valid = validate_delegations(delegations, commitment, genesis_ids)
+    deleg_valid = validate_delegations(delegations, commitment, genesis_ids, succession_ids)
     policies = collect_policies(ordered, delegations, deleg_valid)
     root = resolve_root(ordered, delegations, deleg_valid, commitment)
     revokes = collect_revokes(ordered, delegations, root)
@@ -388,10 +396,12 @@ defmodule Lattice.Authority do
   defp collect_policies(ordered, delegations, deleg_valid) do
     Enum.reduce(ordered, %{}, fn op, acc ->
       case op.body do
-        {:genesis, %Delegation{id: id} = d, policies} when is_map(policies) ->
-          if Map.get(deleg_valid, id) == :ok and valid_delegation_intro?(delegations, d, op.id),
-            do: Map.merge(acc, policies),
-            else: acc
+        {:genesis, %Delegation{id: id, audience: audience} = d, policies}
+        when is_map(policies) ->
+          if Map.get(deleg_valid, id) == :ok and
+               valid_delegation_intro?(delegations, d, op.id) and op.author == audience,
+             do: Map.merge(acc, policies),
+             else: acc
 
         _ ->
           acc
@@ -399,17 +409,23 @@ defmodule Lattice.Authority do
     end)
   end
 
-  defp validate_delegations(delegations, commitment, genesis_ids) do
+  defp validate_delegations(delegations, commitment, genesis_ids, succession_ids) do
     Map.new(delegations, fn
       {id, %{deleg: %Delegation{} = d}} ->
-        {id, validate_delegation(d, delegations, commitment, genesis_ids)}
+        {id, validate_delegation(d, delegations, commitment, genesis_ids, succession_ids)}
 
       {id, %{deleg: nil}} ->
         {id, {:error, :bad_delegation_sig}}
     end)
   end
 
-  defp validate_delegation(%Delegation{} = d, delegations, commitment, genesis_ids) do
+  defp validate_delegation(
+         %Delegation{} = d,
+         delegations,
+         commitment,
+         genesis_ids,
+         succession_ids
+       ) do
     cond do
       not Delegation.valid_sig?(d) ->
         {:error, :bad_delegation_sig}
@@ -425,15 +441,29 @@ defmodule Lattice.Authority do
           MapSet.member?(genesis_ids, d.id) and not root_matches?(commitment, d.audience) ->
             {:error, :impostor_genesis}
 
-          true ->
+          MapSet.member?(genesis_ids, d.id) ->
             :ok
+
+          # Successor self-issues are deliberately root-less. Their introducing
+          # :succeed op is separately bound to author, issuer, audience, and policy.
+          MapSet.member?(succession_ids, d.id) ->
+            :ok
+
+          true ->
+            {:error, :unrooted_delegation}
         end
 
       true ->
         case Map.fetch(delegations, d.parent_id) do
           {:ok, %{deleg: %Delegation{} = parent}} ->
             cond do
-              validate_delegation(parent, delegations, commitment, genesis_ids) != :ok ->
+              validate_delegation(
+                parent,
+                delegations,
+                commitment,
+                genesis_ids,
+                succession_ids
+              ) != :ok ->
                 {:error, :invalid_parent}
 
               not Delegation.attenuates?(d, parent) ->
@@ -588,10 +618,15 @@ defmodule Lattice.Authority do
           st
 
         {:genesis, d} ->
-          if deleg_valid[d.id] == :ok and MapSet.member?(d.roles, role) do
-            record_acquire(st, op, d.audience, 0)
-          else
-            st
+          cond do
+            deleg_valid[d.id] != :ok or not MapSet.member?(d.roles, role) ->
+              st
+
+            op.author != d.audience ->
+              reject(st, op, :unauthorized_genesis, role)
+
+            true ->
+              record_acquire(st, op, d.audience, 0)
           end
 
         {:transfer, d, at_tick} ->
