@@ -79,6 +79,8 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_authority_forged_transfer(),
       township_authority_double_transfer(),
       township_authority_unattenuated_transfer(),
+      township_authority_unrooted_grant(),
+      township_authority_replayed_genesis(),
       township_capability_missing(),
       township_capability_invalid(),
       township_capability_wrong_audience(),
@@ -1150,6 +1152,123 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       "expectedReason" => "no_capability",
       "rejectedPost" => rejected_post,
       "missingDelegationId" => missing_delegation_id
+    })
+  end
+
+  defp township_authority_unrooted_grant do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:unrooted-grant",
+        ["clerk", "mallory"],
+        seed: "township:unrooted-grant"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    sim = Sim.sync_all(sim)
+    mallory = Sim.identity(sim, "mallory")
+    replica = Sim.replica(sim)
+
+    unrooted =
+      Delegation.genesis(mallory, replica,
+        ops: [:post],
+        roles: [],
+        live: true
+      )
+
+    unless Delegation.valid_sig?(unrooted) do
+      raise "expected the unrooted self-issued delegation to stay structurally valid"
+    end
+
+    introduction =
+      Op.new(
+        mallory,
+        replica,
+        Log.frontier(Sim.log(sim, "clerk")),
+        :authority,
+        {:grant, unrooted}
+      )
+
+    log = Sim.log(sim, "clerk") |> Log.append!(introduction)
+    rejected_post = "mallory: forged unrooted capability"
+
+    target =
+      Op.new(
+        mallory,
+        replica,
+        Log.frontier(log),
+        :command,
+        {:post, [rejected_post]},
+        cap: unrooted.id
+      )
+
+    log = Log.append!(log, target)
+
+    assert_authority_reason!(log, introduction.id, :unrooted_delegation)
+    assert_authority_reason!(log, target.id, :invalid_capability)
+    assert_post_absent!(log, rejected_post)
+
+    capability_scenario("township_authority_unrooted_grant", sim, log, %{
+      "targetOperationId" => target.id,
+      "expectedReason" => "invalid_capability",
+      "rejectedPost" => rejected_post,
+      "unrootedDelegationId" => unrooted.id,
+      "unrootedDelegationIntroductionId" => introduction.id
+    })
+  end
+
+  defp township_authority_replayed_genesis do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:replayed-genesis",
+        ["clerk", "resident", "mallory"],
+        seed: "township:replayed-genesis"
+      )
+
+    {sim, genesis} =
+      Sim.create_replica(sim, "clerk",
+        policies: %{clerk: %{successor: "resident", dormant_ticks: 3}}
+      )
+
+    {:genesis, genesis_delegation, _policies} = genesis.body
+    sim = Sim.sync_all(sim)
+    clerk = Sim.identity(sim, "clerk")
+    resident = Sim.identity(sim, "resident")
+    mallory = Sim.identity(sim, "mallory")
+    replica = Sim.replica(sim)
+
+    {sim, replayed_genesis} =
+      Sim.append(
+        sim,
+        "mallory",
+        :authority,
+        {:genesis, genesis_delegation, %{clerk: %{successor: mallory.pub, dormant_ticks: 0}}}
+      )
+
+    sim = Sim.sync_all(sim)
+    {sim, clerk_command} = Sim.command(sim, "clerk", :close_matter, [])
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+    analysis = Authority.analyze(Matter, log)
+
+    assert_authority_honored!(log, clerk_command.id)
+    assert_authority_reason!(log, replayed_genesis.id, :unauthorized_genesis)
+
+    unless analysis.holders[:clerk] == clerk.pub do
+      raise "expected replayed genesis not to move the clerk holder"
+    end
+
+    unless analysis.policies.clerk.successor == resident.pub do
+      raise "expected replayed genesis not to replace the root-authored succession policy"
+    end
+
+    capability_scenario("township_authority_replayed_genesis", sim, log, %{
+      "targetOperationId" => replayed_genesis.id,
+      "expectedReason" => "unauthorized_genesis",
+      "honoredClerkOperationId" => clerk_command.id,
+      "expectedSuccessorPubkey" => Base.encode64(resident.pub),
+      "replica" => replica
     })
   end
 
