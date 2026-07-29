@@ -7,7 +7,7 @@
 >
 > **Drift check (run first)**:
 > ```sh
-> git diff --stat 764a1945..HEAD -- apps/lattice_core/lib/township apps/lattice_core/lib/lattice/log.ex apps/lattice_core/lib/lattice/authority.ex apps/lattice_node_spike/lib apps/lattice_core/lib/mix/tasks
+> git diff --stat 91bb6ca6..HEAD -- apps/lattice_core/lib/township apps/lattice_core/lib/lattice/log.ex apps/lattice_core/lib/lattice/authority.ex apps/lattice_node_spike/lib apps/lattice_core/lib/mix/tasks
 > ```
 > If any in-scope file changed since this plan was written, compare the "Current state"
 > excerpts against the live code before proceeding; on a mismatch, treat it as a STOP condition.
@@ -19,9 +19,11 @@
 - **Effort**: M (coarse — this is a direction plan, so the estimate is looser than a fix plan's)
 - **Risk**: LOW — a pure function over data both replicas already hold. It changes no runtime path,
   adds no custody surface, and runs only on failure.
-- **Depends on**: none.
+- **Depends on**: `plans/162-authority-root-binding.md` (plan 167 consumes
+  `Authority.analyze/2` and must describe the post-root-binding verdicts).
 - **Category**: direction
 - **Planned at**: commit `764a1945`, 2026-07-29
+- **Reconciled at**: commit `91bb6ca6`, 2026-07-29
 
 ## Why this matters
 

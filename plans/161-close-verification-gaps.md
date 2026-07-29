@@ -7,7 +7,7 @@
 >
 > **Drift check (run first)**:
 > ```sh
-> git diff --stat 764a1945..HEAD -- .github/workflows/flagship.yml clients/township-tauri-shell/package.json clients/lattice-client/package.json .formatter.exs apps/township_web
+> git diff --stat 91bb6ca6..HEAD -- .github/workflows/flagship.yml clients/township-tauri-shell/package.json clients/lattice-client/package.json .formatter.exs apps/township_web config/config.exs config/runtime.exs
 > ```
 > If any in-scope file changed since this plan was written, compare the "Current state"
 > excerpts against the live code before proceeding; on a mismatch, treat it as a STOP condition.
@@ -19,9 +19,13 @@
 - **Effort**: S–M (the code change is small; triaging the first Sobelow run and the rotted suites is the work)
 - **Risk**: MED — enabling a scanner and ten never-executed suites will likely surface pre-existing
   failures. That is the point, but it means this plan can turn red before it turns green.
-- **Depends on**: none. Run this first.
+- **Depends on**: `plans/165-boundary-hardening.md` Part B in the Round 4 execution sequence.
+- **Execution note**: Round 4 runs plan 165 Part B before this plan. The tracked endpoint secret is
+  therefore expected to be absent when the Township Sobelow baseline is established; that is the
+  planned removal of a genuine finding, not unexplained drift.
 - **Category**: tests / dx / security
 - **Planned at**: commit `764a1945`, 2026-07-29
+- **Reconciled at**: commit `91bb6ca6`, 2026-07-29
 
 ## Why this matters
 

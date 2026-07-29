@@ -200,13 +200,13 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 158 | Real-device beta POC program map: shared carrier/distribution foundation, then Township, Toolshed, Treehouse | **P0** | XL | 029, 037, 128, 132, 141, 142 | TODO (execution map ready; LiveOps/CapStore prerequisite is DONE) |
 | 159 | Wave A1 kickoff — shared beta foundation | P1 | — | 158 | DRAFT (parallel session, untracked at time of Round 4) |
 | 160 | PD-003-B Toolshed QR ceremony physics spike | P1 | M | 158 | PROPOSED (parallel session, untracked at time of Round 4) |
-| 161 | Close the three silent verification gaps (Sobelow, orphaned suites, format scope) | P1 | S–M | — | TODO (Round 4) |
+| 161 | Close the three silent verification gaps (Sobelow, orphaned suites, format scope) | P1 | S–M | 165 Part B (rec.) | TODO (Round 4) |
 | 162 | Bind root-less delegations and genesis authorship to the replica root | **P0** | M | 161 (rec.) | TODO (Round 4) |
 | 163 | Pin TypeScript ingest to the paired replica + fail-closed command decode | P1 | S–M | 162 (rec.) | TODO (Round 4) |
-| 164 | One local command mirroring CI, and stop `dist/` from lying | P2 | S | 161 (rec.) | TODO (Round 4) |
-| 165 | Boundary hardening: WebView signing oracle + CSP, committed dev secret, relay growth | P1 | M | — | TODO (Round 4) |
+| 164 | One local command mirroring CI, and stop `dist/` from lying | P2 | S | 161, 166 (rec.) | TODO (Round 4; run last) |
+| 165 | Boundary hardening: WebView signing oracle + CSP, committed dev secret, relay rate | P1 | M | — | TODO (Round 4; quarantine cap deferred to durable archive design) |
 | 166 | Typecheck the shell test tree and retire the prose-pinning suite | P2 | M | — | TODO (Round 4) |
-| 167 | Divergence explainer (`Township.Divergence.explain/2` + mix task) | P2 | M | — | TODO (Round 4, direction) |
+| 167 | Divergence explainer (`Township.Divergence.explain/2` + mix task) | P2 | M | 162 (rec.) | TODO (Round 4, direction) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
@@ -221,8 +221,9 @@ Numbering note: `159` and `160` were untracked drafts from a parallel session wh
 they are recorded above for numbering coherence and are not Round 4 output. `153` remains an
 existing Township-track plan recorded outside this table.
 
-**Execution order: 161 first (verification baseline), then 162 (P0), then 163. 164–167 are
-independent and may run in any order or in parallel.**
+**Execution order after the Wave A1 merge: 165 Part B first (remove the real Sobelow secret
+finding), then 161 (verification baseline), 162 (P0), 163, 165 Parts A/C, 166, 167, and 164 last.
+Plan 164 now follows every CI-mutating plan so its parity script models the final `unit` job.**
 
 The three defects behind plan 162, all confirmed by reading `apps/lattice_core/lib/lattice/authority.ex`:
 
@@ -300,8 +301,8 @@ Real, confirmed, available for a future pick:
   runs the worker, flagship, and action-handoff E2Es but not these. The plain two-tab browser
   authority/resume flow — the demo the v1 project exists to prove — has no automated execution path.
   Secondary: the `load: true` half of that exclusion is dead (no test carries a `:load` tag).
-- **`test/frontend_shell.mjs` asserts on `App.vue` source text** — 1,294 lines, 737 assertions,
-  reads `src/App.vue` 35 times, tests literally named `Vue source exposes …`, assertions pinning exact
+- **`test/frontend_shell.mjs` asserts on `App.vue` source text** — 1,324 lines, 750 assertions,
+  reads `src/App.vue` 37 times, tests literally named `Vue source exposes …`, assertions pinning exact
   identifier names. `plans/143:31-34` named this file and it was not done. It is the one CI-gated
   frontend suite, and the tooling to fix it is already installed. Deferred out of plan 166 as its own
   M/L plan.

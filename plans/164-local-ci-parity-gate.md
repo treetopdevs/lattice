@@ -7,7 +7,7 @@
 >
 > **Drift check (run first)**:
 > ```sh
-> git diff --stat 764a1945..HEAD -- .github/workflows/flagship.yml AGENTS.md scripts clients/lattice-client/package.json clients/township-tauri-shell/package.json .gitignore
+> git diff --stat 91bb6ca6..HEAD -- .github/workflows/flagship.yml AGENTS.md scripts clients/lattice-client/package.json clients/township-tauri-shell/package.json .gitignore
 > ```
 > If any in-scope file changed since this plan was written, compare the "Current state"
 > excerpts against the live code before proceeding; on a mismatch, treat it as a STOP condition.
@@ -18,11 +18,13 @@
   cycles in this repo, and it directly causes wrong local results.
 - **Effort**: S
 - **Risk**: LOW — additive tooling plus a build-hook change. Nothing in production changes.
-- **Depends on**: `plans/161-close-verification-gaps.md` (recommended — 161 adds CI steps, and the
-  parity checker in step 3 should be written against the post-161 workflow so it does not
-  immediately need updating)
+- **Depends on**: `plans/161-close-verification-gaps.md` and
+  `plans/166-shell-test-suite-honesty.md` (recommended — both add CI steps, and the parity checker
+  must be written against the final `unit` job so it does not immediately fail on plan 166's
+  `typecheck:test` and `mobile:tauri-readiness` additions)
 - **Category**: dx
 - **Planned at**: commit `764a1945`, 2026-07-29
+- **Reconciled at**: commit `91bb6ca6`, 2026-07-29
 
 ## Why this matters
 
