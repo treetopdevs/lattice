@@ -9,6 +9,7 @@
     "tauri": "tauri",
     "tauri:build": "tauri build --bundles app",
     "tauri:build:dev-trace": "VITE_TOWNSHIP_DEV_TRACE=1 VITE_TOWNSHIP_AUTOSYNC_ON_MOUNT=0 tauri build --features township-dev-trace --bundles app",
+    "tauri:build:governance-test-presence": "VITE_TOWNSHIP_DEV_TRACE=1 VITE_TOWNSHIP_AUTOSYNC_ON_MOUNT=0 tauri build --features township-dev-trace,township-governance-test-presence --bundles app",
     "dev": "vite --host 127.0.0.1",
     "typecheck": "vue-tsc --noEmit",
     "typecheck:ios-device-probe": "tsc --noEmit -p tsconfig.ios-device-probe.json",

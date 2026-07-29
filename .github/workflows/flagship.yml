@@ -320,6 +320,14 @@ jobs:
         working-directory: clients/township-tauri-shell
         run: npx --no-install playwright install chromium
 
+      - name: Build packaged governance test-presence variant
+        working-directory: clients/township-tauri-shell
+        run: npm run tauri:build:governance-test-presence
+
+      - name: Verify packaged witness ceremony
+        working-directory: clients/township-tauri-shell
+        run: npm run tauri:witness-ceremony:smoke
+
       - name: Verify packaged stable-relay onboarding
         working-directory: clients/township-tauri-shell
         run: npm run tauri:stable-relay:onboarding:smoke
@@ -359,7 +367,3 @@ jobs:
       - name: Verify packaged reactive carrier feed
         working-directory: clients/township-tauri-shell
         run: npm run tauri:feed:smoke
-
-      - name: Verify packaged witness ceremony
-        working-directory: clients/township-tauri-shell
-        run: npm run tauri:witness-ceremony:smoke
