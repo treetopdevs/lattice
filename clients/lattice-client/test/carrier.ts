@@ -156,6 +156,12 @@ const commandFrame = vector.clientDivergedCarrierOps.find(
 );
 if (commandFrame === undefined) throw new Error("missing command frame fixture");
 const commandFrameFixture = commandFrame;
+const authorityFrameFixture = vector.clientBaseCarrierOps.find(
+  (frame) => frame.kind === "authority",
+);
+if (authorityFrameFixture === undefined) {
+  throw new Error("missing authority frame fixture");
+}
 
 function commandError(op: Op | undefined): unknown {
   return op === undefined ? undefined : Reflect.get(op, "commandError");
@@ -489,6 +495,114 @@ check(
   },
 );
 
+function coerceAtomPayload(term: CarrierTerm): boolean {
+  switch (term[0]) {
+    case "atom":
+      Reflect.set(term, 1, [term[1]]);
+      return true;
+    case "list":
+    case "tuple":
+    case "mapset":
+      return term[1].some(coerceAtomPayload);
+    case "map":
+      return term[1].some(
+        ([key, value]) =>
+          coerceAtomPayload(key) || coerceAtomPayload(value),
+      );
+    case "nil":
+    case "bool":
+    case "int":
+    case "bin":
+    case "delegation":
+      return false;
+  }
+}
+
+const coercedAtomFrame = structuredClone(commandFrameFixture);
+if (!coerceAtomPayload(coercedAtomFrame.body)) {
+  throw new Error("missing atom term fixture");
+}
+let coercedAtomFailure = "";
+try {
+  decodeCarrierOpFrame(coercedAtomFrame);
+} catch (error) {
+  coercedAtomFailure =
+    error instanceof Error ? error.message : String(error);
+}
+check(
+  "hash-preserving atom coercion is rejected before verification",
+  {
+    hashStillMatches: await verifyCarrierOpHash(coercedAtomFrame),
+    frameFailure: coercedAtomFailure,
+  },
+  {
+    hashStillMatches: true,
+    frameFailure: "malformed carrier op",
+  },
+);
+
+function coerceDelegationOp(term: CarrierTerm): boolean {
+  switch (term[0]) {
+    case "delegation":
+      if (term[1].ops.length === 0) return false;
+      Reflect.set(term[1].ops, 0, [term[1].ops[0]]);
+      return true;
+    case "list":
+    case "tuple":
+    case "mapset":
+      return term[1].some(coerceDelegationOp);
+    case "map":
+      return term[1].some(
+        ([key, value]) =>
+          coerceDelegationOp(key) || coerceDelegationOp(value),
+      );
+    case "nil":
+    case "bool":
+    case "int":
+    case "bin":
+    case "atom":
+      return false;
+  }
+}
+
+const coercedDelegationFrame = structuredClone(authorityFrameFixture);
+if (!coerceDelegationOp(coercedDelegationFrame.body)) {
+  throw new Error("missing delegation op fixture");
+}
+let coercedDelegationFailure = "";
+try {
+  decodeCarrierOpFrame(coercedDelegationFrame);
+} catch (error) {
+  coercedDelegationFailure =
+    error instanceof Error ? error.message : String(error);
+}
+check(
+  "hash-preserving delegation coercion is rejected before verification",
+  {
+    hashStillMatches: await verifyCarrierOpHash(coercedDelegationFrame),
+    frameFailure: coercedDelegationFailure,
+  },
+  {
+    hashStillMatches: true,
+    frameFailure: "malformed carrier op",
+  },
+);
+
+const unknownTagFrame: object = structuredClone(commandFrameFixture);
+Reflect.set(unknownTagFrame, "body", ["future_tag", 1]);
+let unknownTagFailure = "";
+try {
+  decodeCarrierOpFrame(unknownTagFrame);
+} catch (error) {
+  unknownTagFailure =
+    error instanceof Error ? error.message : String(error);
+}
+check(
+  "unknown carrier term tags reject cleanly before verification",
+  unknownTagFailure,
+  "malformed carrier op",
+);
+
 const malformedDelegationFrames = [
   ["tuple", 5],
   ["map", [7]],
@@ -540,13 +654,7 @@ function injectDelegationType(term: CarrierTerm): boolean {
   }
 }
 
-const authorityFrame = vector.clientBaseCarrierOps.find(
-  (frame) => frame.kind === "authority",
-);
-if (authorityFrame === undefined) {
-  throw new Error("missing authority frame fixture");
-}
-const poisonedDelegationFrame = structuredClone(authorityFrame);
+const poisonedDelegationFrame = structuredClone(authorityFrameFixture);
 if (!injectDelegationType(poisonedDelegationFrame.body)) {
   throw new Error("missing delegation term fixture");
 }
@@ -577,11 +685,11 @@ check(
   },
 );
 
-const malformedAuthorityFrame: object = structuredClone(authorityFrame);
+const malformedAuthorityFrame: object = structuredClone(authorityFrameFixture);
 Reflect.set(
   malformedAuthorityFrame,
   "id",
-  `${authorityFrame.id}-malformed-authority`,
+  `${authorityFrameFixture.id}-malformed-authority`,
 );
 Reflect.set(malformedAuthorityFrame, "body", ["tuple", 5]);
 let malformedAuthorityOps: Op[] = [];

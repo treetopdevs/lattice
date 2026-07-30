@@ -196,6 +196,7 @@ function isCarrierDelegation(value: unknown): value is CarrierDelegation {
     return false;
   }
   const field = (key: string): unknown => Reflect.get(value, key);
+  const expiresEpoch = field("expires_epoch");
   return (
     typeof field("id") === "string" &&
     typeof field("replica") === "string" &&
@@ -206,7 +207,11 @@ function isCarrierDelegation(value: unknown): value is CarrierDelegation {
     isStringArray(field("ops")) &&
     isStringArray(field("roles")) &&
     typeof field("live") === "boolean" &&
-    typeof field("sig") === "string"
+    typeof field("sig") === "string" &&
+    (expiresEpoch === undefined ||
+      (typeof expiresEpoch === "number" &&
+        Number.isSafeInteger(expiresEpoch) &&
+        expiresEpoch >= 0))
   );
 }
 
@@ -1021,7 +1026,7 @@ function canRelay(client: CarrierSyncClient): client is CarrierSyncClient & Carr
 }
 
 function stableCausalCarrierFrames(frames: unknown[]): CarrierOpFrame[] {
-  const ops = frames.map(assertCarrierOpFrame);
+  const ops = frames.map(decodeCarrierOpFrame);
   const firstIndexById = new Map<string, number>();
   for (const [index, op] of ops.entries()) {
     if (!firstIndexById.has(op.id)) firstIndexById.set(op.id, index);
@@ -1089,14 +1094,14 @@ export function carrierOpsToSemanticOps(
 }
 
 export function decodeCarrierOpFrame(frame: unknown): CarrierOpFrame {
-  return assertCarrierOpFrame(frame);
+  return assertCarrierOpFrame(frame, true);
 }
 
 export function carrierOpToSemanticOp(
   frame: unknown,
   realmByPubkey: Record<string, string> = {},
 ): Op {
-  const op = assertCarrierOpFrame(frame);
+  const op = assertCarrierOpFrame(frame, false);
   let payload: Payload;
   let cap: string | null;
   let structuralError: "malformed_term" | undefined;
@@ -1248,13 +1253,12 @@ function decodeCarrierTerm(term: CarrierTerm): DecodedTerm {
       return { type: "mapset", values: term[1].map(decodeCarrierTerm) };
     }
     case "delegation": {
-      if (
-        typeof term[1] !== "object" ||
-        term[1] === null ||
-        Array.isArray(term[1])
-      ) {
+      if (!isCarrierDelegation(term[1])) {
         throw new Error("malformed delegation term");
       }
+      base64ToBytes(term[1].issuer);
+      base64ToBytes(term[1].audience);
+      base64ToBytes(term[1].sig);
       return { ...term[1], type: "delegation" };
     }
   }
@@ -1413,7 +1417,10 @@ function neutralPayload(command: string, commandError?: CommandError): Payload {
   };
 }
 
-function assertCarrierOpFrame(frame: unknown): CarrierOpFrame {
+function assertCarrierOpFrame(
+  frame: unknown,
+  validateTerms: boolean,
+): CarrierOpFrame {
   if (!frame || typeof frame !== "object") throw new Error("malformed carrier op");
   const op = frame as Record<string, unknown>;
 
@@ -1432,59 +1439,19 @@ function assertCarrierOpFrame(frame: unknown): CarrierOpFrame {
     throw new Error("malformed carrier op");
   }
 
+  const carrierFrame = op as unknown as CarrierOpFrame;
   try {
-    base64ToBytes(op.author);
-    base64ToBytes(op.sig);
-    assertCanonicalTermBase64(op.body);
-    assertCanonicalTermBase64(op.cap);
+    base64ToBytes(carrierFrame.author);
+    base64ToBytes(carrierFrame.sig);
+    if (validateTerms) {
+      decodeCarrierTerm(carrierFrame.body);
+      decodeCarrierTerm(carrierFrame.cap);
+    }
   } catch {
     throw new Error("malformed carrier op");
   }
 
-  return op as unknown as CarrierOpFrame;
-}
-
-function assertCanonicalTermBase64(term: unknown): void {
-  if (!Array.isArray(term) || typeof term[0] !== "string") return;
-
-  switch (term[0]) {
-    case "bin":
-      if (typeof term[1] === "string") base64ToBytes(term[1]);
-      return;
-    case "list":
-    case "tuple":
-    case "mapset":
-      if (Array.isArray(term[1])) {
-        for (const child of term[1]) assertCanonicalTermBase64(child);
-      }
-      return;
-    case "map":
-      if (Array.isArray(term[1])) {
-        for (const pair of term[1]) {
-          if (!Array.isArray(pair) || pair.length !== 2) continue;
-          assertCanonicalTermBase64(pair[0]);
-          assertCanonicalTermBase64(pair[1]);
-        }
-      }
-      return;
-    case "delegation": {
-      const delegation = term[1];
-      if (
-        typeof delegation !== "object" ||
-        delegation === null ||
-        Array.isArray(delegation)
-      ) {
-        return;
-      }
-      for (const key of ["issuer", "audience", "sig"]) {
-        const value = Reflect.get(delegation, key);
-        if (typeof value === "string") base64ToBytes(value);
-      }
-      return;
-    }
-    default:
-      return;
-  }
+  return carrierFrame;
 }
 
 function isOpKind(value: unknown): value is OpKind {

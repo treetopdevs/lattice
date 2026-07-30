@@ -202,7 +202,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 160 | PD-003-B Toolshed QR ceremony physics spike | P1 | M | 158 | PROPOSED (parallel session, untracked at time of Round 4) |
 | 161 | Close the three silent verification gaps (Sobelow, orphaned suites, format scope) | P1 | S–M | 165 Part B (rec.) | DONE (scope amendment authorized; Claude review fixes landed) |
 | 162 | Bind root-less delegations and genesis authorship to the replica root | **P0** | M | 161 (rec.) | DONE (two-reviewer security loop and mutation gates complete) |
-| 163 | Pin TypeScript ingest to the paired replica + fail-closed command decode | P1 | S–M | 162 (rec.) | TODO (Round 4) |
+| 163 | Pin TypeScript ingest to the paired replica + fail-closed command decode | P1 | S–M | 162 (rec.) | DONE (Round 4; dual-reviewed, format denial deferred) |
 | 164 | One local command mirroring CI, and stop `dist/` from lying | P2 | S | 161, 166 (rec.) | TODO (Round 4; run last) |
 | 165 | Boundary hardening: WebView signing oracle + CSP, committed dev secret, relay rate | P1 | M | — | TODO (Round 4; quarantine cap deferred to durable archive design) |
 | 166 | Typecheck the shell test tree and retire the prose-pinning suite | P2 | M | — | TODO (Round 4) |
