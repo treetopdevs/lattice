@@ -10,6 +10,16 @@ defmodule LatticeCarrierServer.WebSocket do
   @availability_coalesce_ms 50
   @authentication_timeout_ms 5_000
   @authenticated_idle_timeout_ms 120_000
+  # Match the existing 120-per-10-second server budget: a participant may drain a
+  # 120-op outbox immediately, while a sustained flood is held to 12 relay frames/s.
+  @relay_burst_capacity 120
+  @relay_refill_tokens_per_second 12
+  @relay_token_units 1_000
+  @relay_capacity_units @relay_burst_capacity * @relay_token_units
+  @relay_refill_units_per_millisecond div(
+                                        @relay_refill_tokens_per_second * @relay_token_units,
+                                        1_000
+                                      )
 
   @spec authentication_timeout_ms() :: pos_integer()
   def authentication_timeout_ms, do: @authentication_timeout_ms
@@ -31,7 +41,9 @@ defmodule LatticeCarrierServer.WebSocket do
     {:reply, {:text, Jason.encode!(nonce_frame)},
      state
      |> Map.put(:authentication_timer, timer)
-     |> Map.put(:server_nonce, nonce_frame["nonce"])}
+     |> Map.put(:server_nonce, nonce_frame["nonce"])
+     |> Map.put(:relay_token_units, @relay_capacity_units)
+     |> Map.put(:relay_refilled_at_ms, System.monotonic_time(:millisecond))}
   end
 
   @impl :cowboy_websocket
@@ -162,8 +174,37 @@ defmodule LatticeCarrierServer.WebSocket do
      |> Map.delete(:subscription_holder)}
   end
 
+  defp authenticated_request("relay", message, state) do
+    case take_relay_token(state) do
+      {:ok, state} -> {handle_message("relay", message, state), state}
+      {:error, state} -> {%{type: "error", reason: "rate_limited"}, state}
+    end
+  end
+
   defp authenticated_request(type, message, state) do
     {handle_message(type, message, state), state}
+  end
+
+  defp take_relay_token(state) do
+    now_ms = System.monotonic_time(:millisecond)
+    elapsed_ms = max(now_ms - state.relay_refilled_at_ms, 0)
+
+    available_units =
+      min(
+        @relay_capacity_units,
+        state.relay_token_units + elapsed_ms * @relay_refill_units_per_millisecond
+      )
+
+    state =
+      state
+      |> Map.put(:relay_token_units, available_units)
+      |> Map.put(:relay_refilled_at_ms, now_ms)
+
+    if available_units >= @relay_token_units do
+      {:ok, Map.put(state, :relay_token_units, available_units - @relay_token_units)}
+    else
+      {:error, state}
+    end
   end
 
   defp handle_message("frontier", _message, state) do

@@ -36,6 +36,17 @@ Recorded on `codex/round4-security-reliability` during the reviewed execution:
 - **Part B** landed first. Township development/test secrets now live only in environment-specific
   config, and every `PHX_SERVER` start requires `SECRET_KEY_BASE` without weakening the carrier-only
   release or mandatory manifest contract. The previously committed secret is treated as burned.
+- **Part C** installs a per-connection token bucket on relay frames only: a 120-frame burst and
+  12-frame-per-second refill match the existing server budget, allow a participant to drain a
+  120-operation outbox immediately, and bound a sustained flood. A 121-frame burst test proves the
+  refusal is `rate_limited`; reads remain available, and a fresh connection drains three dependent
+  operations normally. The existing `relay_failure` telemetry event describes persistence failure,
+  so no misleading telemetry event is reused for rate refusal.
+- Part C does not edit `Lattice.Log`, `Township.AuditBundle`, `Holder`, or the persistence path.
+  Structural quarantine remains complete inside `matter.log`, which remains the audit bundle's only
+  trusted root. Holder's persist-before-ack, locking, timeout, durability rehearsal, and moduledoc
+  are unchanged. Bounded structural-quarantine storage remains explicitly deferred to a durable
+  archive/journal design rather than represented as complete.
 - **Part A signing survey** found five live shapes:
   - `carrier-session-v2`: the fixed nine-element carrier handshake transcript, signed by
     `signCarrierChallenge/2`;
