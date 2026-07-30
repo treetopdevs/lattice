@@ -150,14 +150,18 @@ defmodule Lattice.Authority do
   end
 
   defp genesis_deleg_ids(ordered) do
-    for op <- ordered, match?({:genesis, %Delegation{}, _}, op.body), into: MapSet.new() do
+    for %Op{kind: :authority} = op <- ordered,
+        match?({:genesis, %Delegation{}, _}, op.body),
+        into: MapSet.new() do
       {:genesis, %Delegation{id: id}, _} = op.body
       id
     end
   end
 
   defp succession_deleg_ids(ordered) do
-    for op <- ordered, match?({:succeed, _, %Delegation{}, _}, op.body), into: MapSet.new() do
+    for %Op{kind: :authority} = op <- ordered,
+        match?({:succeed, _, %Delegation{}, _}, op.body),
+        into: MapSet.new() do
       {:succeed, _role, %Delegation{id: id}, _proof} = op.body
       id
     end
@@ -399,7 +403,8 @@ defmodule Lattice.Authority do
         {:genesis, %Delegation{id: id, audience: audience} = d, policies}
         when is_map(policies) ->
           if Map.get(deleg_valid, id) == :ok and
-               valid_delegation_intro?(delegations, d, op.id) and op.author == audience,
+               is_nil(d.parent_id) and valid_delegation_intro?(delegations, d, op.id) and
+               op.author == audience,
              do: Map.merge(acc, policies),
              else: acc
 
@@ -513,7 +518,7 @@ defmodule Lattice.Authority do
       for %Op{id: op_id, body: {:genesis, %Delegation{} = d, _policies}} <- ordered,
           Delegation.valid_sig?(d),
           valid_delegation_intro?(delegations, d, op_id),
-          reason = invalid_genesis_reason(d, commitment),
+          reason = invalid_genesis_reason(d, deleg_valid[d.id], commitment),
           not is_nil(reason),
           into: %{} do
         {op_id, reason}
@@ -524,13 +529,19 @@ defmodule Lattice.Authority do
     |> Map.merge(invalid_genesis)
   end
 
-  defp invalid_genesis_reason(%Delegation{parent_id: parent_id}, _commitment)
+  defp invalid_genesis_reason(%Delegation{parent_id: parent_id}, _validation, _commitment)
        when not is_nil(parent_id),
        do: :invalid_genesis
 
-  defp invalid_genesis_reason(%Delegation{audience: audience}, commitment) do
+  defp invalid_genesis_reason(
+         %Delegation{audience: audience},
+         {:candidate, _succession_root_id},
+         commitment
+       ) do
     if root_matches?(commitment, audience), do: nil, else: :impostor_genesis
   end
+
+  defp invalid_genesis_reason(_delegation, _validation, _commitment), do: nil
 
   # The single legitimate root: the audience of the *valid* genesis. On a bound
   # replica exactly one genesis can be valid (the one matching the commitment); on a

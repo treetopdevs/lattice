@@ -252,7 +252,7 @@ function authorityWriteHonored(op, evidence, state, delegations, policies, honor
     const delegation = evidence.delegation;
     const validForEvent = validDelegation(delegation, delegations) ||
         (evidence.type === "transfer" &&
-            candidateDelegationActivated(delegation, delegations, honoredSuccessionIntroductions, ancestors(op.id, byId))) ||
+            candidateDelegationActivated(delegation, delegations, honoredSuccessionIntroductions, ancestors(op.id, byId), op.field, byId)) ||
         (evidence.type === "succeed" &&
             successionCandidate(delegation, delegations));
     if (delegation.audienceRealm !== op.value ||
@@ -310,7 +310,7 @@ function authorityWriteRejectionReason(op, evidence, state, delegations, policie
     if (delegation.audienceRealm !== op.value ||
         !delegation.roles.includes(op.field) ||
         (!validDelegation(delegation, delegations) &&
-            !candidateDelegationActivated(delegation, delegations, honoredSuccessionIntroductions, ancestors(op.id, byId))) ||
+            !candidateDelegationActivated(delegation, delegations, honoredSuccessionIntroductions, ancestors(op.id, byId), op.field, byId)) ||
         delegation.issuerRealm !== op.author) {
         return "invalid_transfer";
     }
@@ -755,7 +755,7 @@ function successionCandidate(delegation, delegations) {
         record.validation.reason === "succession_candidate" &&
         record.validation.successionRootId === delegation.id);
 }
-function candidateDelegationActivated(delegation, delegations, honoredSuccessionIntroductions, visible) {
+function candidateDelegationActivated(delegation, delegations, honoredSuccessionIntroductions, visible, role, byId) {
     const record = delegations.get(delegation.id);
     if (record === undefined ||
         record.delegation === null ||
@@ -765,7 +765,7 @@ function candidateDelegationActivated(delegation, delegations, honoredSuccession
         record.validation.successionRootId === undefined) {
         return false;
     }
-    return (honoredSuccessionIntroductions.get(record.validation.successionRootId) ?? []).some((opId) => visible.has(opId));
+    return (honoredSuccessionIntroductions.get(record.validation.successionRootId) ?? []).some((opId) => visible.has(opId) && byId.get(opId)?.field === role);
 }
 function resolveRoot(ops, delegations) {
     for (const op of ops) {

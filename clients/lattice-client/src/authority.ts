@@ -468,6 +468,8 @@ function authorityWriteHonored(
         delegations,
         honoredSuccessionIntroductions,
         ancestors(op.id, byId as Map<string, Op>),
+        op.field,
+        byId,
       )) ||
     (evidence.type === "succeed" &&
       successionCandidate(delegation, delegations));
@@ -564,6 +566,8 @@ function authorityWriteRejectionReason(
         delegations,
         honoredSuccessionIntroductions,
         ancestors(op.id, byId as Map<string, Op>),
+        op.field,
+        byId,
       )) ||
     delegation.issuerRealm !== op.author
   ) {
@@ -1183,6 +1187,8 @@ function candidateDelegationActivated(
   delegations: ReadonlyMap<string, AuthorityDelegationRecord>,
   honoredSuccessionIntroductions: ReadonlyMap<string, readonly string[]>,
   visible: ReadonlySet<string>,
+  role: string,
+  byId: ReadonlyMap<string, Op>,
 ): boolean {
   const record = delegations.get(delegation.id);
   if (
@@ -1198,7 +1204,7 @@ function candidateDelegationActivated(
 
   return (
     honoredSuccessionIntroductions.get(record.validation.successionRootId) ?? []
-  ).some((opId) => visible.has(opId));
+  ).some((opId) => visible.has(opId) && byId.get(opId)?.field === role);
 }
 
 function resolveRoot(

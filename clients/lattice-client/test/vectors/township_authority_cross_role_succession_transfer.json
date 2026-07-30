@@ -1,0 +1,395 @@
+{
+  "expectAtFrontier": [],
+  "expectAtFullFrontier": {
+    "authorityQuarantine": [
+      [
+        "-cDxnHY0PK_Z5ZnFFL4tYmAoUKw-SVvL5kTZC_jDhLE",
+        "invalid_transfer"
+      ]
+    ],
+    "quarantine": [
+      "-cDxnHY0PK_Z5ZnFFL4tYmAoUKw-SVvL5kTZC_jDhLE"
+    ],
+    "state": {
+      "clerk": "successor",
+      "clerk_locked": false,
+      "mayor": "successor",
+      "mayor_locked": false
+    },
+    "winners": {
+      "clerk": "5AdIKuip-919u8seGW-8MxluteWdgx-qqyZ0kXMghVs",
+      "clerk_locked": null,
+      "mayor": "AyKptRG0fieOuodcaE-v1DdhSdmJ1WrPOOk4_B4JPkU",
+      "mayor_locked": null
+    }
+  },
+  "generatedBy": "Lattice.Sim",
+  "ops": [
+    {
+      "author": "root",
+      "command": "genesis clerk",
+      "deps": [],
+      "field": "clerk",
+      "hash": "zfqGqUjaJ79m1gU4NxN1HRiHdUpjCZwM6m3Y3zVaVVA",
+      "id": "zfqGqUjaJ79m1gU4NxN1HRiHdUpjCZwM6m3Y3zVaVVA",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "root"
+    },
+    {
+      "author": "root",
+      "command": "genesis mayor",
+      "deps": [
+        "zfqGqUjaJ79m1gU4NxN1HRiHdUpjCZwM6m3Y3zVaVVA"
+      ],
+      "field": "mayor",
+      "hash": "DZfmv83CAJn2GtKr324gh0FohvLyOVuPgd5k179Wh4s",
+      "id": "DZfmv83CAJn2GtKr324gh0FohvLyOVuPgd5k179Wh4s",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "root"
+    },
+    {
+      "author": "root",
+      "command": "transfer mayor",
+      "deps": [
+        "DZfmv83CAJn2GtKr324gh0FohvLyOVuPgd5k179Wh4s"
+      ],
+      "field": "mayor",
+      "hash": "AyKptRG0fieOuodcaE-v1DdhSdmJ1WrPOOk4_B4JPkU",
+      "id": "AyKptRG0fieOuodcaE-v1DdhSdmJ1WrPOOk4_B4JPkU",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "successor"
+    },
+    {
+      "author": "successor",
+      "command": "succeed clerk",
+      "deps": [
+        "AyKptRG0fieOuodcaE-v1DdhSdmJ1WrPOOk4_B4JPkU"
+      ],
+      "field": "clerk",
+      "hash": "5AdIKuip-919u8seGW-8MxluteWdgx-qqyZ0kXMghVs",
+      "id": "5AdIKuip-919u8seGW-8MxluteWdgx-qqyZ0kXMghVs",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "successor"
+    },
+    {
+      "author": "successor",
+      "command": "transfer mayor",
+      "deps": [
+        "5AdIKuip-919u8seGW-8MxluteWdgx-qqyZ0kXMghVs"
+      ],
+      "field": "mayor",
+      "hash": "-cDxnHY0PK_Z5ZnFFL4tYmAoUKw-SVvL5kTZC_jDhLE",
+      "id": "-cDxnHY0PK_Z5ZnFFL4tYmAoUKw-SVvL5kTZC_jDhLE",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "target"
+    }
+  ],
+  "oracleCarrierOps": [
+    {
+      "author": "9f6jyX53rxMPTcFriwqbITj3Rghrv8LKleuKROI9778=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "9f6jyX53rxMPTcFriwqbITj3Rghrv8LKleuKROI9778=",
+              "id": "BtRxasmb-YCyoXiFbR46r6vH6UjfbkUe4OBUs_RpBRY",
+              "issuer": "9f6jyX53rxMPTcFriwqbITj3Rghrv8LKleuKROI9778=",
+              "live": true,
+              "ops": [
+                "close_clerk",
+                "close_mayor"
+              ],
+              "parent_id": null,
+              "replica": "replica:dual-authority:cross-role-succession-transfer#root:EPvLspVASNfkVqrAMYROSirAC2hsuQsdXZ46SH2c2LU",
+              "roles": [
+                "clerk",
+                "mayor"
+              ],
+              "sig": "H5Iz2H+axa6ERleAcBTkir628g1GPanURQUYyPqVyV1zL3AYEQJ4Q+InnN9tXeh8D7QHuWk8b0XwnbFJzrY9Dg=="
+            }
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "clerk"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "successor"
+                      ],
+                      [
+                        "bin",
+                        "hcdtqydEK3kVdmyITGSd23dVioXlArVO7Uoss0CsJEw="
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "dormant_ticks"
+                      ],
+                      [
+                        "int",
+                        3
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [],
+      "id": "zfqGqUjaJ79m1gU4NxN1HRiHdUpjCZwM6m3Y3zVaVVA",
+      "kind": "authority",
+      "replica": "replica:dual-authority:cross-role-succession-transfer#root:EPvLspVASNfkVqrAMYROSirAC2hsuQsdXZ46SH2c2LU",
+      "sig": "pKy+1wvU92tsTGzH9tBW1NVrIIeK+WkeE8EKm+6SrXMeqt1QuSKeErr8ajOR3UBSxVVtYxRu87vyxfFGJin+Cw==",
+      "v": 1
+    },
+    {
+      "author": "9f6jyX53rxMPTcFriwqbITj3Rghrv8LKleuKROI9778=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "9f6jyX53rxMPTcFriwqbITj3Rghrv8LKleuKROI9778=",
+              "id": "t5aeSMGdNYhvYiNkHZPttlbdpyiZeobfsJwHXt9lm18",
+              "issuer": "9f6jyX53rxMPTcFriwqbITj3Rghrv8LKleuKROI9778=",
+              "live": true,
+              "ops": [
+                "close_mayor"
+              ],
+              "parent_id": null,
+              "replica": "replica:dual-authority:cross-role-succession-transfer#root:EPvLspVASNfkVqrAMYROSirAC2hsuQsdXZ46SH2c2LU",
+              "roles": [
+                "mayor"
+              ],
+              "sig": "wzWwoE5q6tQCHShOAR33Xl8JaWvfnZCpANArN3R8giHxqrG3FoHyjAk+9whcOu7jUJ7t8+aoFybM1wa+pBaHDA=="
+            }
+          ],
+          [
+            "map",
+            []
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "zfqGqUjaJ79m1gU4NxN1HRiHdUpjCZwM6m3Y3zVaVVA"
+      ],
+      "id": "DZfmv83CAJn2GtKr324gh0FohvLyOVuPgd5k179Wh4s",
+      "kind": "authority",
+      "replica": "replica:dual-authority:cross-role-succession-transfer#root:EPvLspVASNfkVqrAMYROSirAC2hsuQsdXZ46SH2c2LU",
+      "sig": "Xxrqtp4aFdLxgo/L6fSSm6BUFNiYtxXowroaw3YT5amTPGg1bGZGGJ4Vq65PdgEVw5owD0sEynpsspUc9MmbAg==",
+      "v": 1
+    },
+    {
+      "author": "9f6jyX53rxMPTcFriwqbITj3Rghrv8LKleuKROI9778=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "transfer"
+          ],
+          [
+            "atom",
+            "mayor"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "hcdtqydEK3kVdmyITGSd23dVioXlArVO7Uoss0CsJEw=",
+              "id": "QsmHiJY31bBD5-wWQDMgLBOQq16U6xqm4ibaXTiN1z8",
+              "issuer": "9f6jyX53rxMPTcFriwqbITj3Rghrv8LKleuKROI9778=",
+              "live": false,
+              "ops": [
+                "close_mayor"
+              ],
+              "parent_id": "BtRxasmb-YCyoXiFbR46r6vH6UjfbkUe4OBUs_RpBRY",
+              "replica": "replica:dual-authority:cross-role-succession-transfer#root:EPvLspVASNfkVqrAMYROSirAC2hsuQsdXZ46SH2c2LU",
+              "roles": [
+                "mayor"
+              ],
+              "sig": "DZ4E4TwIgdSZflj/mJSqXkbj5b6iaDJntlW3bBb6geFufEV0KQKFmd6tjG6PpFt//LajtmPRBd4ZCl0lCCDDAA=="
+            }
+          ],
+          [
+            "int",
+            0
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "DZfmv83CAJn2GtKr324gh0FohvLyOVuPgd5k179Wh4s"
+      ],
+      "id": "AyKptRG0fieOuodcaE-v1DdhSdmJ1WrPOOk4_B4JPkU",
+      "kind": "authority",
+      "replica": "replica:dual-authority:cross-role-succession-transfer#root:EPvLspVASNfkVqrAMYROSirAC2hsuQsdXZ46SH2c2LU",
+      "sig": "7UeE3HqSqN7nXeNZ+rB+/uW+estRb5fwSzHITxowi14/e7VjTfOrwAKnTt5JJqCIitTuEWptT2h6LVMSaUdgCA==",
+      "v": 1
+    },
+    {
+      "author": "hcdtqydEK3kVdmyITGSd23dVioXlArVO7Uoss0CsJEw=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "succeed"
+          ],
+          [
+            "atom",
+            "clerk"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "hcdtqydEK3kVdmyITGSd23dVioXlArVO7Uoss0CsJEw=",
+              "id": "0692nYwi7wVgLtASQS5717Dpt2Nz_KgwkHnBKfeLN0w",
+              "issuer": "hcdtqydEK3kVdmyITGSd23dVioXlArVO7Uoss0CsJEw=",
+              "live": false,
+              "ops": [
+                "close_clerk",
+                "close_mayor"
+              ],
+              "parent_id": null,
+              "replica": "replica:dual-authority:cross-role-succession-transfer#root:EPvLspVASNfkVqrAMYROSirAC2hsuQsdXZ46SH2c2LU",
+              "roles": [
+                "clerk",
+                "mayor"
+              ],
+              "sig": "eJCoBmEUr2UBfZMIYZvXvyyvKvKOhu/8S7LVFbATAUv+Pn7qoQtYClhXs5e4QS2i5Pr7NcVl3I+zB7jg8D2wAw=="
+            }
+          ],
+          [
+            "int",
+            3
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "AyKptRG0fieOuodcaE-v1DdhSdmJ1WrPOOk4_B4JPkU"
+      ],
+      "id": "5AdIKuip-919u8seGW-8MxluteWdgx-qqyZ0kXMghVs",
+      "kind": "authority",
+      "replica": "replica:dual-authority:cross-role-succession-transfer#root:EPvLspVASNfkVqrAMYROSirAC2hsuQsdXZ46SH2c2LU",
+      "sig": "fSz1CrPit6Gt6rd1CRuU9TJ15mMxYmAYK/h1K6JbVJNSt6l3CV0e3bRCA94tlrdZW1CRSu83SekHWH0eq8ImCg==",
+      "v": 1
+    },
+    {
+      "author": "hcdtqydEK3kVdmyITGSd23dVioXlArVO7Uoss0CsJEw=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "transfer"
+          ],
+          [
+            "atom",
+            "mayor"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "b1iCVSMtH+4TiI1lPVj9LpLByC6NBAn3WUwWxCSzOao=",
+              "id": "h9t_eed5w355knM2K3PDbCah4vniIW0q7GGFqXbQLjQ",
+              "issuer": "hcdtqydEK3kVdmyITGSd23dVioXlArVO7Uoss0CsJEw=",
+              "live": false,
+              "ops": [
+                "close_mayor"
+              ],
+              "parent_id": "0692nYwi7wVgLtASQS5717Dpt2Nz_KgwkHnBKfeLN0w",
+              "replica": "replica:dual-authority:cross-role-succession-transfer#root:EPvLspVASNfkVqrAMYROSirAC2hsuQsdXZ46SH2c2LU",
+              "roles": [
+                "mayor"
+              ],
+              "sig": "Up9LEbwtOywhHd2SzrG5sNymgEkiB/Vw/jhNUb/uFHtGEsZxWrz1RmDFX88h7FPzyrZe8PPbbP97EahIexa1AQ=="
+            }
+          ],
+          [
+            "int",
+            4
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "5AdIKuip-919u8seGW-8MxluteWdgx-qqyZ0kXMghVs"
+      ],
+      "id": "-cDxnHY0PK_Z5ZnFFL4tYmAoUKw-SVvL5kTZC_jDhLE",
+      "kind": "authority",
+      "replica": "replica:dual-authority:cross-role-succession-transfer#root:EPvLspVASNfkVqrAMYROSirAC2hsuQsdXZ46SH2c2LU",
+      "sig": "SE2WGQbd8TyEfcQERKwcXoG3dAMdC5CKf/cUjkc/hfdjWQ6LgTz1NgS5h4EecMmt8slWyMadedK8bUdALwkGBw==",
+      "v": 1
+    }
+  ],
+  "perspectives": [],
+  "realmByPubkey": {
+    "9f6jyX53rxMPTcFriwqbITj3Rghrv8LKleuKROI9778=": "root",
+    "b1iCVSMtH+4TiI1lPVj9LpLByC6NBAn3WUwWxCSzOao=": "target",
+    "hcdtqydEK3kVdmyITGSd23dVioXlArVO7Uoss0CsJEw=": "successor"
+  },
+  "replica": "replica:dual-authority:cross-role-succession-transfer#root:EPvLspVASNfkVqrAMYROSirAC2hsuQsdXZ46SH2c2LU",
+  "scenario": "township_authority_cross_role_succession_transfer",
+  "scenarioKind": "adversarial",
+  "schema": {
+    "fields": {
+      "clerk": {
+        "authority": "clerk"
+      },
+      "clerk_locked": {
+        "default": false,
+        "gatedBy": "clerk",
+        "merge": "lww"
+      },
+      "mayor": {
+        "authority": "mayor"
+      },
+      "mayor_locked": {
+        "default": false,
+        "gatedBy": "mayor",
+        "merge": "lww"
+      }
+    },
+    "name": "DualAuthorityFixture"
+  }
+}

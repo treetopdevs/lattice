@@ -1,3 +1,20 @@
+defmodule Mix.Tasks.Lattice.ExportVectors.DualAuthorityFixture do
+  @moduledoc false
+
+  use Lattice.Replica
+
+  state do
+    field(:clerk_locked?, authority: :clerk, default: false)
+    field(:mayor_locked?, authority: :mayor, default: false)
+  end
+
+  command(:close_clerk, [], do: [{:clerk_locked?, {:write, true}}])
+  command(:close_mayor, [], do: [{:mayor_locked?, {:write, true}}])
+
+  succession(:clerk, to: "realm:successor", after: {:dormant_ticks, 3})
+  succession(:mayor, to: "realm:successor", after: {:dormant_ticks, 3})
+end
+
 defmodule Mix.Tasks.Lattice.ExportVectors do
   @moduledoc """
   Export TypeScript client conformance vectors from `Lattice.Sim`.
@@ -14,6 +31,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
   alias Lattice.Canonical
   alias Lattice.Carrier.Wire, as: CarrierWire
   alias Lattice.{Identity, Log, Op, Sim, Sync}
+  alias Mix.Tasks.Lattice.ExportVectors.DualAuthorityFixture
   alias Toolshed.Tool
   alias Township.Matter
 
@@ -83,6 +101,8 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_authority_unrooted_grant(),
       township_authority_succession_capability_laundering(),
       township_authority_rooted_grant_as_genesis(),
+      township_authority_nongenesis_root(),
+      township_authority_cross_role_succession_transfer(),
       township_authority_succession_genesis_poisoning(),
       township_authority_replayed_genesis(),
       township_capability_missing(),
@@ -1308,21 +1328,171 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       )
 
     sim = Sim.sync_all(sim)
-    {sim, forged_genesis} = Sim.append(sim, "mallory", :authority, {:genesis, rooted, %{}})
+    mallory = Sim.identity(sim, "mallory")
+
+    injected_policy = %{
+      clerk: %{successor: mallory.pub, dormant_ticks: 0}
+    }
+
+    {sim, forged_genesis} =
+      Sim.append(sim, "mallory", :authority, {:genesis, rooted, injected_policy})
+
+    {sim, forged_succession} =
+      Sim.succeed(sim, "mallory", :clerk,
+        at_tick: 0,
+        ops: [:close_matter]
+      )
+
     sim = Sim.sync_all(sim)
     log = Sim.log(sim, "clerk")
 
     assert_authority_reason!(log, forged_genesis.id, :invalid_genesis)
+    assert_authority_reason!(log, forged_succession.id, :unauthorized_succession)
 
     unless Authority.holder(Matter, log, :clerk) == Sim.identity(sim, "clerk").pub do
-      raise "expected a rooted grant reintroduced as genesis not to move clerk authority"
+      raise "expected a rooted grant reintroduced as genesis not to inject succession policy"
     end
 
     capability_scenario("township_authority_rooted_grant_as_genesis", sim, log, %{
       "targetOperationId" => forged_genesis.id,
       "expectedReason" => "invalid_genesis",
-      "rootedDelegationId" => rooted.id
+      "rootedDelegationId" => rooted.id,
+      "forgedSuccessionOperationId" => forged_succession.id
     })
+  end
+
+  defp township_authority_nongenesis_root do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:nongenesis-root",
+        ["clerk", "mallory", "resident"],
+        seed: "township:nongenesis-root"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    mallory = Sim.identity(sim, "mallory")
+    resident = Sim.identity(sim, "resident")
+
+    malformed =
+      Delegation.new(mallory, Sim.replica(sim), resident.pub,
+        ops: [:close_matter],
+        roles: [:clerk],
+        parent_id: nil
+      )
+
+    {sim, malformed_genesis} =
+      Sim.append(sim, "mallory", :authority, {:genesis, malformed, %{}})
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    assert_authority_reason!(log, malformed_genesis.id, :nongenesis_root)
+
+    capability_scenario("township_authority_nongenesis_root", sim, log, %{
+      "targetOperationId" => malformed_genesis.id,
+      "expectedReason" => "nongenesis_root",
+      "malformedDelegationId" => malformed.id
+    })
+  end
+
+  defp township_authority_cross_role_succession_transfer do
+    sim =
+      Sim.new(
+        DualAuthorityFixture,
+        "replica:dual-authority:cross-role-succession-transfer",
+        ["root", "successor", "target"],
+        seed: "dual-authority:cross-role-succession-transfer"
+      )
+
+    {sim, _genesis} =
+      Sim.create_replica(sim, "root",
+        policies: %{clerk: %{successor: "successor", dormant_ticks: 3}}
+      )
+
+    root = Sim.identity(sim, "root")
+
+    mayor_genesis =
+      Delegation.genesis(root, Sim.replica(sim),
+        ops: [:close_mayor],
+        roles: [:mayor],
+        live: true
+      )
+
+    {sim, _mayor_genesis} =
+      Sim.append(sim, "root", :authority, {:genesis, mayor_genesis, %{}})
+
+    {sim, _mayor_delegation} =
+      Sim.transfer(sim, "root", "successor", :mayor,
+        at_tick: 0,
+        ops: [:close_mayor]
+      )
+
+    sim = Sim.sync_all(sim)
+    successor = Sim.identity(sim, "successor")
+    target = Sim.identity(sim, "target")
+
+    succession_root =
+      Delegation.new(successor, Sim.replica(sim), successor.pub,
+        ops: [:close_clerk, :close_mayor],
+        roles: [:clerk, :mayor],
+        parent_id: nil
+      )
+
+    {sim, succession} =
+      Sim.append(sim, "successor", :authority, {:succeed, :clerk, succession_root, 3})
+
+    cross_role_child =
+      Delegation.new(successor, Sim.replica(sim), target.pub,
+        ops: [:close_mayor],
+        roles: [:mayor],
+        parent_id: succession_root.id
+      )
+
+    {sim, cross_role_transfer} =
+      Sim.append(
+        sim,
+        "successor",
+        :authority,
+        {:transfer, :mayor, cross_role_child, 4}
+      )
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "root")
+
+    analysis = Authority.analyze(DualAuthorityFixture, log)
+
+    unless is_nil(analysis.reasons[succession.id]) do
+      raise "expected clerk succession to be honored"
+    end
+
+    unless analysis.reasons[cross_role_transfer.id] == :invalid_transfer do
+      raise "expected cross-role candidate transfer to quarantine as invalid_transfer"
+    end
+
+    unless Authority.holder(DualAuthorityFixture, log, :mayor) == successor.pub do
+      raise "expected clerk succession not to activate candidate authority for mayor"
+    end
+
+    realms = realm_index(sim)
+
+    %{
+      name: "township_authority_cross_role_succession_transfer",
+      kind: "adversarial",
+      module: DualAuthorityFixture,
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: Sim.replica(sim),
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      authorityQuarantine: authority_quarantine(DualAuthorityFixture, log),
+      capabilityCase: %{
+        "targetOperationId" => cross_role_transfer.id,
+        "expectedReason" => "invalid_transfer",
+        "successionOperationId" => succession.id
+      }
+    }
   end
 
   defp township_authority_succession_genesis_poisoning do
@@ -2807,6 +2977,18 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     }
   end
 
+  defp schema_json(DualAuthorityFixture) do
+    %{
+      "name" => "DualAuthorityFixture",
+      "fields" => %{
+        "clerk" => %{"authority" => "clerk"},
+        "clerk_locked" => %{"merge" => "lww", "gatedBy" => "clerk", "default" => false},
+        "mayor" => %{"authority" => "mayor"},
+        "mayor_locked" => %{"merge" => "lww", "gatedBy" => "mayor", "default" => false}
+      }
+    }
+  end
+
   defp op_json(module, %Lattice.Op{} = op, realms) do
     payload = payload_json(module, op, realms)
 
@@ -2951,6 +3133,23 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     }
   end
 
+  defp state_json(DualAuthorityFixture, log, realms) do
+    state = Lattice.state(DualAuthorityFixture, log)
+
+    %{
+      "clerk" =>
+        DualAuthorityFixture
+        |> Authority.holder(log, :clerk)
+        |> then(&realm_for_pub(realms, &1)),
+      "clerk_locked" => state.clerk_locked?,
+      "mayor" =>
+        DualAuthorityFixture
+        |> Authority.holder(log, :mayor)
+        |> then(&realm_for_pub(realms, &1)),
+      "mayor_locked" => state.mayor_locked?
+    }
+  end
+
   defp state_bytes_b64(%Log{} = log) do
     Matter
     |> Lattice.state(log)
@@ -2970,6 +3169,9 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
   defp winner_fields(Matter), do: ["title", "summary", "clerk", "clerk_locked"]
   defp winner_fields(Tool), do: ["description", "custody", "holder"]
+
+  defp winner_fields(DualAuthorityFixture),
+    do: ["clerk", "clerk_locked", "mayor", "mayor_locked"]
 
   defp winners(module, ops, quarantine) do
     by_id = Map.new(ops, &{&1["id"], &1})

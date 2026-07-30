@@ -114,6 +114,25 @@ defmodule Lattice2.RootBindingTest do
     refute Sim.holder(sim, "evil", :moderator) == evil.pub
   end
 
+  test "a parented genesis cannot inject a succession policy" do
+    sim = founded()
+    evil = Sim.identity(sim, "evil")
+    {sim, rooted} = Sim.grant(sim, "server", "evil", ops: [:lock], roles: [:moderator])
+    sim = Sim.sync_all(sim)
+
+    injected_policy = %{moderator: %{successor: evil.pub, dormant_ticks: 0}}
+
+    {sim, forged_genesis} =
+      Sim.append(sim, "evil", :authority, {:genesis, rooted, injected_policy})
+
+    {sim, succession} = Sim.succeed(sim, "evil", :moderator, at_tick: 0)
+    sim = Sim.sync_all(sim)
+
+    assert {true, :invalid_genesis} = Sim.quarantined(sim, "server", forged_genesis.id)
+    assert {true, :unauthorized_succession} = Sim.quarantined(sim, "server", succession.id)
+    assert Sim.holder(sim, "server", :moderator) == Sim.identity(sim, "server").pub
+  end
+
   test "an unrooted grant confers no capability" do
     sim = founded()
     evil = Sim.identity(sim, "evil")
@@ -172,6 +191,45 @@ defmodule Lattice2.RootBindingTest do
     assert {true, :invalid_capability} = Sim.quarantined(sim, "server", child_post.id)
     refute "succession-laundered propaganda" in Sim.state(sim, "server").messages
     refute "child-laundered propaganda" in Sim.state(sim, "server").messages
+  end
+
+  test "a non-authority body cannot promote an unrooted delegation" do
+    sim = founded()
+    evil = Sim.identity(sim, "evil")
+
+    unrooted =
+      Delegation.genesis(evil, Sim.replica(sim),
+        ops: [:post],
+        roles: [:moderator]
+      )
+
+    {sim, disguised} =
+      Sim.append(sim, "evil", :command, {:succeed, :moderator, unrooted, 0})
+
+    {sim, grant} = Sim.append(sim, "evil", :authority, {:grant, unrooted})
+    sim = Sim.sync_all(sim)
+
+    assert {true, :malformed_command} = Sim.quarantined(sim, "server", disguised.id)
+    assert {true, :unrooted_delegation} = Sim.quarantined(sim, "server", grant.id)
+  end
+
+  test "a malformed self-issue keeps its structural reason when offered as genesis" do
+    sim = founded()
+    evil = Sim.identity(sim, "evil")
+    tab = Sim.identity(sim, "tab")
+
+    malformed =
+      Delegation.new(evil, Sim.replica(sim), tab.pub,
+        ops: [:post],
+        parent_id: nil
+      )
+
+    {sim, forged_genesis} =
+      Sim.append(sim, "evil", :authority, {:genesis, malformed, %{}})
+
+    sim = Sim.sync_all(sim)
+
+    assert {true, :nongenesis_root} = Sim.quarantined(sim, "server", forged_genesis.id)
   end
 
   test "a rooted grant reintroduced as genesis cannot seize its role" do
