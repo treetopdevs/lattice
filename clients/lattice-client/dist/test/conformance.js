@@ -14,7 +14,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { createPublicKey, verify as edVerify } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { analyzeAuthority, canonicalBytesForCarrierDelegation, canonicalHash, canonicalOrder, carrierDelegationsFromFrames, carrierOpsToSemanticOps, decodeCarrierOpFrame, index, materialize, toolshedCarrierCommandNames, townshipCarrierCommandNames, verifyCarrierOp, verifyWitnessedSuccessionCertificate, witnessedRecoveryPolicyId, } from "../src/index";
+import { analyzeAuthority, canonicalBytesForCarrierDelegation, canonicalHash, canonicalOrder, carrierDelegationsFromFrames, carrierOpsToSemanticOps, decodeCarrierOpFrame, index, materialize, toolshedCarrierCommandTable, toolshedCarrierCommandNames, townshipCarrierCommandTable, townshipCarrierCommandNames, verifyCarrierOp, verifyWitnessedSuccessionCertificate, witnessedRecoveryPolicyId, } from "../src/index";
 const here = dirname(fileURLToPath(import.meta.url));
 const vecDir = join(here, "vectors");
 const verifier = { verify: verifyEd25519 };
@@ -40,6 +40,16 @@ function sortedStringArray(value) {
         return null;
     }
     return [...value].sort();
+}
+function sortedCommandTable(value) {
+    if (!Array.isArray(value) ||
+        !value.every((item) => Array.isArray(item) &&
+            item.length === 2 &&
+            typeof item[0] === "string" &&
+            typeof item[1] === "number")) {
+        return null;
+    }
+    return [...value].sort(([left], [right]) => left.localeCompare(right));
 }
 function stableComparisonValue(value) {
     if (value instanceof Map) {
@@ -103,10 +113,12 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
         testedTownshipCommandDrift = true;
         const commandNames = vec.capabilityCase?.commandNames;
         check("Township command decoder table matches the BEAM DSL", townshipCarrierCommandNames(), sortedStringArray(commandNames));
+        check("Township command decoder arities match the BEAM DSL", townshipCarrierCommandTable(), sortedCommandTable(vec.capabilityCase?.commandTable));
     }
     if (vec.scenario === "toolshed_custody_consent") {
         testedToolshedCommandDrift = true;
         check("Toolshed command decoder table matches the BEAM DSL", toolshedCarrierCommandNames(), sortedStringArray(vec.commandNames));
+        check("Toolshed command decoder arities match the BEAM DSL", toolshedCarrierCommandTable(), sortedCommandTable(vec.commandTable));
     }
     if (vec.scenario === "township_authority_forged_root") {
         const [frame] = carrierFrames ?? [];

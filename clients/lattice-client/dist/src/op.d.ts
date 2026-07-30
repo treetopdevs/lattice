@@ -1,6 +1,6 @@
 export type OpKind = "command" | "authority" | "inbox" | "tombstone";
 export type Mutation = "write" | "append" | "add" | "remove" | "delete";
-export type CommandError = "unknown_command" | "bad_command_arity";
+export type CommandError = "unknown_command" | "bad_command_arity" | "malformed_command";
 export interface AuthorityDelegationEvidence {
     id: string;
     replica: string;

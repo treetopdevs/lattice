@@ -63,10 +63,13 @@ function commandError(op) {
     return op === undefined ? undefined : Reflect.get(op, "commandError");
 }
 function commandFrameNamed(name, args, suffix) {
+    return commandFrameWithBody(["tuple", [["atom", name], ["list", args]]], suffix);
+}
+function commandFrameWithBody(body, suffix) {
     return {
         ...structuredClone(commandFrameFixture),
         id: `${commandFrameFixture.id}-${suffix}`,
-        body: ["tuple", [["atom", name], ["list", args]]],
+        body,
     };
 }
 const unknownCommandFrame = commandFrameNamed("future_unmapped_command", [], "unknown");
@@ -124,6 +127,72 @@ const badLinkArityOps = [
     commandFrameNamed("link_election", [["nil"], ["nil"]], "link-extra-arg"),
 ].flatMap((frame) => carrierOpsToSemanticOps([frame], vector.realmByPubkey));
 check("link_election rejects every non-DSL arity", badLinkArityOps.map(commandError), ["bad_command_arity", "bad_command_arity"]);
+const malformedCommandFrames = [
+    commandFrameWithBody(["bin", Buffer.from("post").toString("base64")], "body-not-tuple"),
+    commandFrameWithBody(["tuple", [["atom", "post"], ["atom", "not_a_list"]]], "args-not-list"),
+];
+let malformedCommandOps = [];
+let malformedCommandFailure = "";
+try {
+    malformedCommandOps = carrierOpsToSemanticOps(malformedCommandFrames, vector.realmByPubkey);
+}
+catch (error) {
+    malformedCommandFailure =
+        error instanceof Error ? error.message : String(error);
+}
+check("malformed command shapes do not abort the ingest batch", {
+    failure: malformedCommandFailure,
+    reasons: malformedCommandOps.map(commandError),
+}, {
+    failure: "",
+    reasons: ["malformed_command", "malformed_command"],
+});
+const nonAtomCommandFrames = [
+    commandFrameWithBody(["tuple", [["int", 42], ["list", []]]], "integer-command-name"),
+    commandFrameWithBody([
+        "tuple",
+        [
+            ["bin", Buffer.from("post").toString("base64")],
+            ["list", []],
+        ],
+    ], "binary-command-name"),
+];
+let nonAtomCommandOps = [];
+let nonAtomCommandFailure = "";
+try {
+    nonAtomCommandOps = carrierOpsToSemanticOps(nonAtomCommandFrames, vector.realmByPubkey);
+}
+catch (error) {
+    nonAtomCommandFailure =
+        error instanceof Error ? error.message : String(error);
+}
+check("non-atom command names quarantine without aborting ingest", {
+    failure: nonAtomCommandFailure,
+    reasons: nonAtomCommandOps.map(commandError),
+}, {
+    failure: "",
+    reasons: ["unknown_command", "unknown_command"],
+});
+let scalarPost;
+let scalarPostFailure = "";
+try {
+    [scalarPost] = carrierOpsToSemanticOps([commandFrameNamed("post", [["int", 42]], "integer-post")], vector.realmByPubkey);
+}
+catch (error) {
+    scalarPostFailure = error instanceof Error ? error.message : String(error);
+}
+check("BEAM-accepted scalar command arguments remain ingestible", {
+    failure: scalarPostFailure,
+    reason: commandError(scalarPost),
+    value: scalarPost?.value,
+}, { failure: "", value: 42 });
+const inheritedRealmFrame = {
+    ...structuredClone(commandFrameFixture),
+    id: `${commandFrameFixture.id}-inherited-realm`,
+    author: "toString",
+};
+const [inheritedRealmOp] = carrierOpsToSemanticOps([inheritedRealmFrame], {});
+check("inherited realm-map keys cannot replace an unmapped pubkey", inheritedRealmOp?.author, "toString");
 check("Township decoder table includes link_election", townshipCarrierCommandNames().includes("link_election"), true);
 console.log(`\n▸ ${foreignReplicaVector.scenario} carrier ingest`);
 const emptyPushReport = () => ({

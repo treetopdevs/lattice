@@ -41,7 +41,7 @@ const townshipCommandDecoders = new Map([
         commandDecoder(1, (args) => ({
             field: "title",
             mutation: "write",
-            value: binText(args[0]),
+            value: commandValue(args[0]),
             command: "set_title",
         })),
     ],
@@ -50,7 +50,7 @@ const townshipCommandDecoders = new Map([
         commandDecoder(1, (args) => ({
             field: "summary",
             mutation: "write",
-            value: binText(args[0]),
+            value: commandValue(args[0]),
             command: "set_summary",
         })),
     ],
@@ -59,7 +59,7 @@ const townshipCommandDecoders = new Map([
         commandDecoder(1, (args) => ({
             field: "posts",
             mutation: "append",
-            value: binText(args[0]),
+            value: commandValue(args[0]),
             command: "post",
         })),
     ],
@@ -68,7 +68,7 @@ const townshipCommandDecoders = new Map([
         commandDecoder(1, (args) => ({
             field: "members",
             mutation: "add",
-            value: binText(args[0]),
+            value: commandValue(args[0]),
             command: "admit",
         })),
     ],
@@ -77,7 +77,7 @@ const townshipCommandDecoders = new Map([
         commandDecoder(1, (args) => ({
             field: "members",
             mutation: "remove",
-            value: binText(args[0]),
+            value: commandValue(args[0]),
             command: "remove_member",
         })),
     ],
@@ -107,7 +107,7 @@ const toolshedCommandDecoders = new Map([
         commandDecoder(1, (args) => ({
             field: "description",
             mutation: "write",
-            value: binText(args[0]),
+            value: commandValue(args[0]),
             command: "describe",
         })),
     ],
@@ -116,7 +116,7 @@ const toolshedCommandDecoders = new Map([
         commandDecoder(1, (args) => ({
             field: "condition_notes",
             mutation: "append",
-            value: binText(args[0]),
+            value: commandValue(args[0]),
             command: "note_condition",
         })),
     ],
@@ -148,9 +148,22 @@ const toolshedCommandDecoders = new Map([
 export function townshipCarrierCommandNames() {
     return [...townshipCommandDecoders.keys()].sort();
 }
+/** Command names and arities decoded for the Township matter carrier boundary. */
+export function townshipCarrierCommandTable() {
+    return commandTable(townshipCommandDecoders);
+}
 /** Command names decoded for the Toolshed tool carrier boundary. */
 export function toolshedCarrierCommandNames() {
     return [...toolshedCommandDecoders.keys()].sort();
+}
+/** Command names and arities decoded for the Toolshed tool carrier boundary. */
+export function toolshedCarrierCommandTable() {
+    return commandTable(toolshedCommandDecoders);
+}
+function commandTable(decoders) {
+    return [...decoders]
+        .map(([name, decoder]) => [name, decoder.arity])
+        .sort(([left], [right]) => left.localeCompare(right));
 }
 export function carrierTranscriptBytes(challenge, realm, pubkey) {
     return canonicalTerm([
@@ -771,9 +784,20 @@ function decodeCarrierTerm(term) {
     }
 }
 function payloadFromBody(kind, body, realmByPubkey) {
-    if (kind === "command" && isTuple(body)) {
-        const command = atomName(body.values[0]);
-        const args = listValues(body.values[1]);
+    if (kind === "command") {
+        if (!isTuple(body) || body.values.length !== 2) {
+            return neutralPayload("command", "malformed_command");
+        }
+        const args = listValuesOrNull(body.values[1]);
+        if (args === null) {
+            return neutralPayload("command", "malformed_command");
+        }
+        const command = atomNameOrNull(body.values[0]);
+        if (command === null) {
+            return body.values[0] === null
+                ? neutralPayload("command", "malformed_command")
+                : neutralPayload("unknown_command", "unknown_command");
+        }
         const decoder = townshipCommandDecoders.get(command) ??
             toolshedCommandDecoders.get(command);
         if (decoder === undefined) {
@@ -782,7 +806,12 @@ function payloadFromBody(kind, body, realmByPubkey) {
         if (args.length !== decoder.arity) {
             return neutralPayload(command, "bad_command_arity");
         }
-        return decoder.decode(args, realmByPubkey);
+        try {
+            return decoder.decode(args, realmByPubkey);
+        }
+        catch {
+            return neutralPayload(command, "malformed_command");
+        }
     }
     if (kind === "authority" && isTuple(body)) {
         const command = atomName(body.values[0]);
@@ -921,6 +950,12 @@ function atomName(term) {
         return term.value;
     throw new Error("expected atom term");
 }
+function atomNameOrNull(term) {
+    if (typeof term === "object" && term !== null && "type" in term && term.type === "atom") {
+        return term.value;
+    }
+    return null;
+}
 function listValues(term) {
     if (typeof term === "object" && term !== null && "type" in term && term.type === "list")
         return term.values;
@@ -930,6 +965,33 @@ function binText(term) {
     if (typeof term === "object" && term !== null && "type" in term && term.type === "bin")
         return term.text;
     throw new Error("expected bin term");
+}
+function commandValue(term) {
+    if (term === undefined)
+        throw new Error("missing command value");
+    if (term === null || typeof term === "boolean" || typeof term === "number") {
+        return term;
+    }
+    if (term.type === "bin")
+        return term.text;
+    if (term.type === "atom")
+        return term.value;
+    if (term.type === "list" || term.type === "tuple") {
+        return term.values.map(commandValue);
+    }
+    if (term.type === "mapset") {
+        return term.values.map(commandValue);
+    }
+    if (term.type === "map") {
+        return Object.fromEntries(term.pairs.map(([key, value]) => [
+            String(commandValue(key)),
+            commandValue(value),
+        ]));
+    }
+    if (term.type === "delegation") {
+        const { type: _type, ...delegation } = term;
+        return delegation;
+    }
 }
 function binBytes(term) {
     if (typeof term === "object" && term !== null && "type" in term && term.type === "bin")
@@ -1164,7 +1226,10 @@ function binBase64(term) {
     return btoaFn(String.fromCharCode(...term.bytes));
 }
 function realmForPubkey(pubkeyBase64, realmByPubkey) {
-    return realmByPubkey[pubkeyBase64] ?? pubkeyBase64;
+    const mapped = Object.hasOwn(realmByPubkey, pubkeyBase64)
+        ? realmByPubkey[pubkeyBase64]
+        : undefined;
+    return mapped ?? pubkeyBase64;
 }
 function defaultWebSocket() {
     const WebSocketImpl = globalThis.WebSocket;

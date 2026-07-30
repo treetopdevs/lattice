@@ -25,7 +25,9 @@ import {
   decodeCarrierOpFrame,
   index,
   materialize,
+  toolshedCarrierCommandTable,
   toolshedCarrierCommandNames,
+  townshipCarrierCommandTable,
   townshipCarrierCommandNames,
   verifyCarrierOp,
   verifyWitnessedSuccessionCertificate,
@@ -65,6 +67,22 @@ function sortedStringArray(value: unknown): string[] | null {
   return [...value].sort();
 }
 
+function sortedCommandTable(value: unknown): [string, number][] | null {
+  if (
+    !Array.isArray(value) ||
+    !value.every(
+      (item): item is [string, number] =>
+        Array.isArray(item) &&
+        item.length === 2 &&
+        typeof item[0] === "string" &&
+        typeof item[1] === "number",
+    )
+  ) {
+    return null;
+  }
+  return [...value].sort(([left], [right]) => left.localeCompare(right));
+}
+
 function stableComparisonValue(value: unknown): unknown {
   if (value instanceof Map) {
     return [...value.entries()]
@@ -96,6 +114,7 @@ interface Vector {
     [key: string]: unknown;
   };
   commandNames?: unknown;
+  commandTable?: unknown;
   oracleCarrierOps?: unknown[];
   realmByPubkey?: Record<string, string>;
   successionOperationId?: string;
@@ -222,6 +241,11 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
       townshipCarrierCommandNames(),
       sortedStringArray(commandNames),
     );
+    check(
+      "Township command decoder arities match the BEAM DSL",
+      townshipCarrierCommandTable(),
+      sortedCommandTable(vec.capabilityCase?.commandTable),
+    );
   }
   if (vec.scenario === "toolshed_custody_consent") {
     testedToolshedCommandDrift = true;
@@ -229,6 +253,11 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
       "Toolshed command decoder table matches the BEAM DSL",
       toolshedCarrierCommandNames(),
       sortedStringArray(vec.commandNames),
+    );
+    check(
+      "Toolshed command decoder arities match the BEAM DSL",
+      toolshedCarrierCommandTable(),
+      sortedCommandTable(vec.commandTable),
     );
   }
 

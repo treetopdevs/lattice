@@ -11,6 +11,40 @@
       "close_matter",
       "reopen_matter"
     ],
+    "commandTable": [
+      [
+        "set_title",
+        1
+      ],
+      [
+        "set_summary",
+        1
+      ],
+      [
+        "post",
+        1
+      ],
+      [
+        "admit",
+        1
+      ],
+      [
+        "remove_member",
+        1
+      ],
+      [
+        "link_election",
+        1
+      ],
+      [
+        "close_matter",
+        0
+      ],
+      [
+        "reopen_matter",
+        0
+      ]
+    ],
     "linkOperationId": "PpPRV1FW9vo4TBX1OWe16B8-hq7DSdRgTyYqIqQ6AE0",
     "specDigest": "EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE"
   },

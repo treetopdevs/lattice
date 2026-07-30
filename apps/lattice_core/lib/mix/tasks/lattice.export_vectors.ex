@@ -1765,6 +1765,10 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       "commandNames" =>
         Enum.map(Matter.__lattice_commands__(), fn {name, _arity, _args} ->
           Atom.to_string(name)
+        end),
+      "commandTable" =>
+        Enum.map(Matter.__lattice_commands__(), fn {name, arity, _args} ->
+          [Atom.to_string(name), arity]
         end)
     })
   end
@@ -2525,6 +2529,10 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       commandNames:
         Enum.map(Tool.__lattice_commands__(), fn {name, _arity, _args} ->
           Atom.to_string(name)
+        end),
+      commandTable:
+        Enum.map(Tool.__lattice_commands__(), fn {name, arity, _args} ->
+          [Atom.to_string(name), arity]
         end)
     }
   end
@@ -2987,6 +2995,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     |> maybe_put("genesisProjection", Map.get(scenario, :genesisProjection))
     |> maybe_put("capabilityCase", Map.get(scenario, :capabilityCase))
     |> maybe_put("commandNames", Map.get(scenario, :commandNames))
+    |> maybe_put("commandTable", Map.get(scenario, :commandTable))
   end
 
   defp to_vector(%{carrier?: true} = scenario) do
