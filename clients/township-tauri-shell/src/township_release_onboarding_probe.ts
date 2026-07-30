@@ -325,9 +325,8 @@ function validPublicKey(value: string): boolean {
 function validStateExchangeUrl(value: string): boolean {
   try {
     const parsed = new URL(value);
-    if (parsed.protocol === "https:") return true;
     if (parsed.protocol !== "http:") return false;
-    return ["127.0.0.1", "localhost", "[::1]"].includes(parsed.hostname);
+    return ["127.0.0.1", "localhost"].includes(parsed.hostname);
   } catch {
     return false;
   }

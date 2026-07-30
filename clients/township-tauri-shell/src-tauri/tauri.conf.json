@@ -29,6 +29,7 @@
         "script-src": "'self'",
         "object-src": "'none'",
         "base-uri": "'self'",
+        "form-action": "'none'",
         "frame-ancestors": "'none'"
       },
       "devCsp": {
@@ -40,6 +41,7 @@
         "script-src": "'self' http://localhost:5173",
         "object-src": "'none'",
         "base-uri": "'self'",
+        "form-action": "'none'",
         "frame-ancestors": "'none'"
       }
     }

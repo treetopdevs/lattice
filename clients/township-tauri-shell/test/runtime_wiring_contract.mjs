@@ -32,7 +32,15 @@ test("the packaged and development CSPs admit only the loopback HTTP state-excha
     assert.ok(connectSources.includes("http://localhost:*"));
     assert.ok(!connectSources.includes("http:"));
     assert.ok(!connectSources.includes("https:"));
+    assert.ok(!policy["script-src"].includes("'unsafe-eval'"));
+    assert.equal(policy["object-src"], "'none'");
+    assert.equal(policy["base-uri"], "'self'");
+    assert.equal(policy["form-action"], "'none'");
+    assert.equal(policy["frame-ancestors"], "'none'");
   }
+
+  assert.equal(security.csp["script-src"], "'self'");
+  assert.equal(security.devCsp["script-src"], "'self' http://localhost:5173");
 });
 
 test("the shell exposes every packaged action gate in convergence order", () => {

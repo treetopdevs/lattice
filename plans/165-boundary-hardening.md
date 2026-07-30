@@ -55,11 +55,14 @@ Recorded on `codex/round4-security-reliability` during the reviewed execution:
   admit only the loopback HTTP origins required by the build-time state-exchange probe seam, keeping
   Plans 110–112 functional without a scheme-wide `http:` source. Carrier endpoints remain runtime
   configurable, so `ws:` and `wss:` are intentionally scheme sources; origin pinning requires a
-  fixed endpoint and remains a documented residual. Both packaged macOS smokes passed functionally
-  under the rebuilt CSP. The harness does not capture the WebView console, so absence of CSP
-  violation reports is not evidenced. This macOS host has no attached Android device or emulator,
-  so the on-device `tauri:android:release:browser-state-exchange` gate remains explicitly unrun; the
-  loopback-only CSP contract is pinned statically here and must be reverified on an Android host.
+  fixed endpoint and remains a documented residual. The signing prefix allowlist constrains which
+  protocol may be signed, not the semantics of a valid delegation or carrier-session transcript; a
+  WebView compromise could still request authority-bearing signatures inside those allowed domains.
+  Both packaged macOS smokes passed functionally under the rebuilt CSP. The harness does not capture
+  the WebView console, so absence of CSP violation reports is not evidenced. This macOS host has no
+  attached Android device or emulator, so the on-device
+  `tauri:android:release:browser-state-exchange` gate remains explicitly unrun; the loopback-only
+  CSP contract is pinned statically here and must be reverified on an Android host.
 
 ## Why this matters
 
