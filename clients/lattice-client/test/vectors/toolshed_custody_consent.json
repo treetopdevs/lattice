@@ -1,4 +1,9 @@
 {
+  "commandNames": [
+    "describe",
+    "note_condition",
+    "custody_transfer"
+  ],
   "expectAtFrontier": [],
   "expectAtFullFrontier": {
     "authorityQuarantine": [

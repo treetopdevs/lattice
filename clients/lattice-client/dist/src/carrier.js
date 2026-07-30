@@ -32,54 +32,125 @@ const atomTag = 60_000;
 const tupleTag = 60_001;
 const carrierOpWireVersion = 1;
 const carrierSessionVersion = 2;
-const townshipCommandDecoders = {
-    set_title: (args) => ({
-        field: "title",
-        mutation: "write",
-        value: binText(args[0]),
-        command: "set_title",
-    }),
-    set_summary: (args) => ({
-        field: "summary",
-        mutation: "write",
-        value: binText(args[0]),
-        command: "set_summary",
-    }),
-    post: (args) => ({
-        field: "posts",
-        mutation: "append",
-        value: binText(args[0]),
-        command: "post",
-    }),
-    admit: (args) => ({
-        field: "members",
-        mutation: "add",
-        value: binText(args[0]),
-        command: "admit",
-    }),
-    remove_member: (args) => ({
-        field: "members",
-        mutation: "remove",
-        value: binText(args[0]),
-        command: "remove_member",
-    }),
-    link_election: () => neutralPayload("link_election"),
-    close_matter: () => ({
-        field: "clerk_locked",
-        mutation: "write",
-        value: true,
-        command: "close_matter",
-    }),
-    reopen_matter: () => ({
-        field: "clerk_locked",
-        mutation: "write",
-        value: false,
-        command: "reopen_matter",
-    }),
-};
+function commandDecoder(arity, decode) {
+    return { arity, decode };
+}
+const townshipCommandDecoders = new Map([
+    [
+        "set_title",
+        commandDecoder(1, (args) => ({
+            field: "title",
+            mutation: "write",
+            value: binText(args[0]),
+            command: "set_title",
+        })),
+    ],
+    [
+        "set_summary",
+        commandDecoder(1, (args) => ({
+            field: "summary",
+            mutation: "write",
+            value: binText(args[0]),
+            command: "set_summary",
+        })),
+    ],
+    [
+        "post",
+        commandDecoder(1, (args) => ({
+            field: "posts",
+            mutation: "append",
+            value: binText(args[0]),
+            command: "post",
+        })),
+    ],
+    [
+        "admit",
+        commandDecoder(1, (args) => ({
+            field: "members",
+            mutation: "add",
+            value: binText(args[0]),
+            command: "admit",
+        })),
+    ],
+    [
+        "remove_member",
+        commandDecoder(1, (args) => ({
+            field: "members",
+            mutation: "remove",
+            value: binText(args[0]),
+            command: "remove_member",
+        })),
+    ],
+    ["link_election", commandDecoder(1, () => neutralPayload("link_election"))],
+    [
+        "close_matter",
+        commandDecoder(0, () => ({
+            field: "clerk_locked",
+            mutation: "write",
+            value: true,
+            command: "close_matter",
+        })),
+    ],
+    [
+        "reopen_matter",
+        commandDecoder(0, () => ({
+            field: "clerk_locked",
+            mutation: "write",
+            value: false,
+            command: "reopen_matter",
+        })),
+    ],
+]);
+const toolshedCommandDecoders = new Map([
+    [
+        "describe",
+        commandDecoder(1, (args) => ({
+            field: "description",
+            mutation: "write",
+            value: binText(args[0]),
+            command: "describe",
+        })),
+    ],
+    [
+        "note_condition",
+        commandDecoder(1, (args) => ({
+            field: "condition_notes",
+            mutation: "append",
+            value: binText(args[0]),
+            command: "note_condition",
+        })),
+    ],
+    [
+        "custody_transfer",
+        commandDecoder(3, (args, realmByPubkey) => {
+            // ADR 0007: the holder write projects the recipient's realm; the
+            // request id and consent signature ride as validity evidence for the
+            // consent conjunct (src/consent.ts), never as state.
+            const toPub = bytesToBase64(binBytes(args[0]));
+            const sigTerm = args[2];
+            return {
+                field: "holder",
+                mutation: "write",
+                value: realmForPubkey(toPub, realmByPubkey),
+                command: "custody_transfer",
+                consent: {
+                    toPub,
+                    requestOpId: binText(args[1]),
+                    sig: sigTerm === null || sigTerm === undefined
+                        ? null
+                        : bytesToBase64(binBytes(sigTerm)),
+                },
+            };
+        }),
+    ],
+]);
 /** Command names decoded for the Township matter carrier boundary. */
 export function townshipCarrierCommandNames() {
-    return Object.keys(townshipCommandDecoders).sort();
+    return [...townshipCommandDecoders.keys()].sort();
+}
+/** Command names decoded for the Toolshed tool carrier boundary. */
+export function toolshedCarrierCommandNames() {
+    return [...toolshedCommandDecoders.keys()].sort();
 }
 export function carrierTranscriptBytes(challenge, realm, pubkey) {
     return canonicalTerm([
@@ -611,6 +682,9 @@ export function carrierOpToSemanticOp(frame, realmByPubkey = {}) {
         value: payload.value,
         hash: op.id,
         command: payload.command,
+        ...(payload.commandError === undefined
+            ? {}
+            : { commandError: payload.commandError }),
         cap,
         ...(payload.authority === undefined ? {} : { authority: payload.authority }),
         ...(payload.consent === undefined
@@ -700,34 +774,15 @@ function payloadFromBody(kind, body, realmByPubkey) {
     if (kind === "command" && isTuple(body)) {
         const command = atomName(body.values[0]);
         const args = listValues(body.values[1]);
-        const townshipDecoder = townshipCommandDecoders[command];
-        if (townshipDecoder !== undefined)
-            return townshipDecoder(args);
-        switch (command) {
-            case "describe":
-                return { field: "description", mutation: "write", value: binText(args[0]), command };
-            case "note_condition":
-                return { field: "condition_notes", mutation: "append", value: binText(args[0]), command };
-            case "custody_transfer": {
-                // ADR 0007: the holder write projects the recipient's realm; the
-                // request id and consent signature ride as validity evidence for the
-                // consent conjunct (src/consent.ts), never as state.
-                const toPub = bytesToBase64(binBytes(args[0]));
-                const sigTerm = args[2];
-                return {
-                    field: "holder",
-                    mutation: "write",
-                    value: realmForPubkey(toPub, realmByPubkey),
-                    command,
-                    consent: {
-                        toPub,
-                        requestOpId: binText(args[1]),
-                        sig: sigTerm === null || sigTerm === undefined ? null : bytesToBase64(binBytes(sigTerm)),
-                    },
-                };
-            }
+        const decoder = townshipCommandDecoders.get(command) ??
+            toolshedCommandDecoders.get(command);
+        if (decoder === undefined) {
+            return neutralPayload(command, "unknown_command");
         }
-        throw new Error(`unknown carrier command: ${command}`);
+        if (args.length !== decoder.arity) {
+            return neutralPayload(command, "bad_command_arity");
+        }
+        return decoder.decode(args, realmByPubkey);
     }
     if (kind === "authority" && isTuple(body)) {
         const command = atomName(body.values[0]);
@@ -828,8 +883,14 @@ function payloadFromBody(kind, body, realmByPubkey) {
     }
     return neutralPayload(kind);
 }
-function neutralPayload(command) {
-    return { field: "__authority", mutation: "write", value: null, command };
+function neutralPayload(command, commandError) {
+    return {
+        field: "__authority",
+        mutation: "write",
+        value: null,
+        command,
+        ...(commandError === undefined ? {} : { commandError }),
+    };
 }
 function assertCarrierOpFrame(frame) {
     if (!frame || typeof frame !== "object")

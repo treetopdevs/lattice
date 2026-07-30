@@ -14,7 +14,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { createPublicKey, verify as edVerify } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { analyzeAuthority, canonicalBytesForCarrierDelegation, canonicalHash, canonicalOrder, carrierDelegationsFromFrames, carrierOpsToSemanticOps, decodeCarrierOpFrame, index, materialize, townshipCarrierCommandNames, verifyCarrierOp, verifyWitnessedSuccessionCertificate, witnessedRecoveryPolicyId, } from "../src/index";
+import { analyzeAuthority, canonicalBytesForCarrierDelegation, canonicalHash, canonicalOrder, carrierDelegationsFromFrames, carrierOpsToSemanticOps, decodeCarrierOpFrame, index, materialize, toolshedCarrierCommandNames, townshipCarrierCommandNames, verifyCarrierOp, verifyWitnessedSuccessionCertificate, witnessedRecoveryPolicyId, } from "../src/index";
 const here = dirname(fileURLToPath(import.meta.url));
 const vecDir = join(here, "vectors");
 const verifier = { verify: verifyEd25519 };
@@ -61,6 +61,8 @@ function stableComparisonValue(value) {
 }
 const testedDisguisedEvidenceTypes = new Set();
 let testedBoundaryHeartbeat = false;
+let testedTownshipCommandDrift = false;
+let testedToolshedCommandDrift = false;
 for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
     const vec = JSON.parse(readFileSync(join(vecDir, file), "utf8"));
     console.log(`\n▸ ${vec.scenario}  (${file})`);
@@ -98,8 +100,13 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
         }
     }
     if (vec.scenario === "township_link_election") {
+        testedTownshipCommandDrift = true;
         const commandNames = vec.capabilityCase?.commandNames;
         check("Township command decoder table matches the BEAM DSL", townshipCarrierCommandNames(), sortedStringArray(commandNames));
+    }
+    if (vec.scenario === "toolshed_custody_consent") {
+        testedToolshedCommandDrift = true;
+        check("Toolshed command decoder table matches the BEAM DSL", toolshedCarrierCommandNames(), sortedStringArray(vec.commandNames));
     }
     if (vec.scenario === "township_authority_forged_root") {
         const [frame] = carrierFrames ?? [];
@@ -500,6 +507,8 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
 }
 check("non-authority evidence coverage includes every authority evidence type", [...testedDisguisedEvidenceTypes].sort(), ["beacon", "genesis", "grant", "heartbeat", "revoke", "succeed", "transfer"]);
 check("boundary heartbeat mutation coverage executed", testedBoundaryHeartbeat, true);
+check("Township command decoder drift coverage executed", testedTownshipCommandDrift, true);
+check("Toolshed command decoder drift coverage executed", testedToolshedCommandDrift, true);
 console.log("\n▸ externally determined quarantine");
 {
     const schema = {

@@ -9,6 +9,7 @@ export type OpKind = "command" | "authority" | "inbox" | "tombstone";
 
 // Mutations mirror the Elixir Replica DSL's absolute mutations.
 export type Mutation = "write" | "append" | "add" | "remove" | "delete";
+export type CommandError = "unknown_command" | "bad_command_arity";
 
 export interface AuthorityDelegationEvidence {
   id: string;
@@ -144,6 +145,8 @@ export interface Op {
   hash: string;
   /** Optional human label for display/debug (not load-bearing). */
   command?: string;
+  /** BEAM-compatible command decode error, quarantined before capability checks. */
+  commandError?: CommandError;
   /** Capability id retained from carrier evidence; decoded nil is explicit null. */
   cap?: string | null;
   /** Semantic authority facts retained from the verified carrier body. */

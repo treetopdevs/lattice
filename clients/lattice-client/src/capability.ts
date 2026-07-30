@@ -20,6 +20,10 @@ export function capabilityQuarantine(
   security: AuthoritySecurityProjection,
   ancCache = new Map<string, Set<string>>(),
 ): CapabilityQuarantineDecision {
+  if (op.kind === "command" && op.commandError !== undefined) {
+    return { quarantined: true, reason: op.commandError };
+  }
+
   if (op.kind !== "command" || op.replica === undefined) {
     return { quarantined: false };
   }

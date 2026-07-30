@@ -113,6 +113,8 @@ export interface CarrierDelegation {
 export declare function carrierDelegationsFromFrames(frames: readonly CarrierOpFrame[]): CarrierDelegation[];
 /** Command names decoded for the Township matter carrier boundary. */
 export declare function townshipCarrierCommandNames(): string[];
+/** Command names decoded for the Toolshed tool carrier boundary. */
+export declare function toolshedCarrierCommandNames(): string[];
 interface WebSocketConstructor {
     new (url: string): WebSocketLike;
 }

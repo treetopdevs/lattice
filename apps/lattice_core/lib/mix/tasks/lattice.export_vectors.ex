@@ -2521,7 +2521,11 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       replica: replica,
       realmByPubkey: carrier_realm_by_pubkey(realms),
       oracleCarrierOps: carrier_ops(log),
-      authorityQuarantine: authority_quarantine(Tool, log)
+      authorityQuarantine: authority_quarantine(Tool, log),
+      commandNames:
+        Enum.map(Tool.__lattice_commands__(), fn {name, _arity, _args} ->
+          Atom.to_string(name)
+        end)
     }
   end
 
@@ -2982,6 +2986,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     |> maybe_put("witnessedRecovery", Map.get(scenario, :witnessedRecovery))
     |> maybe_put("genesisProjection", Map.get(scenario, :genesisProjection))
     |> maybe_put("capabilityCase", Map.get(scenario, :capabilityCase))
+    |> maybe_put("commandNames", Map.get(scenario, :commandNames))
   end
 
   defp to_vector(%{carrier?: true} = scenario) do

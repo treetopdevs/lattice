@@ -25,6 +25,7 @@ import {
   decodeCarrierOpFrame,
   index,
   materialize,
+  toolshedCarrierCommandNames,
   townshipCarrierCommandNames,
   verifyCarrierOp,
   verifyWitnessedSuccessionCertificate,
@@ -94,6 +95,7 @@ interface Vector {
     expectedSuccessorPubkey?: string;
     [key: string]: unknown;
   };
+  commandNames?: unknown;
   oracleCarrierOps?: unknown[];
   realmByPubkey?: Record<string, string>;
   successionOperationId?: string;
@@ -147,6 +149,8 @@ interface Vector {
 
 const testedDisguisedEvidenceTypes = new Set<string>();
 let testedBoundaryHeartbeat = false;
+let testedTownshipCommandDrift = false;
+let testedToolshedCommandDrift = false;
 
 for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
   const vec = JSON.parse(readFileSync(join(vecDir, file), "utf8")) as Vector;
@@ -211,11 +215,20 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
   }
 
   if (vec.scenario === "township_link_election") {
+    testedTownshipCommandDrift = true;
     const commandNames = vec.capabilityCase?.commandNames;
     check(
       "Township command decoder table matches the BEAM DSL",
       townshipCarrierCommandNames(),
       sortedStringArray(commandNames),
+    );
+  }
+  if (vec.scenario === "toolshed_custody_consent") {
+    testedToolshedCommandDrift = true;
+    check(
+      "Toolshed command decoder table matches the BEAM DSL",
+      toolshedCarrierCommandNames(),
+      sortedStringArray(vec.commandNames),
     );
   }
 
@@ -939,6 +952,16 @@ check(
   ["beacon", "genesis", "grant", "heartbeat", "revoke", "succeed", "transfer"],
 );
 check("boundary heartbeat mutation coverage executed", testedBoundaryHeartbeat, true);
+check(
+  "Township command decoder drift coverage executed",
+  testedTownshipCommandDrift,
+  true,
+);
+check(
+  "Toolshed command decoder drift coverage executed",
+  testedToolshedCommandDrift,
+  true,
+);
 
 console.log("\n▸ externally determined quarantine");
 {

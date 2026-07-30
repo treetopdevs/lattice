@@ -6,6 +6,9 @@ import { gatedBy } from "./schema";
  * evidence stay on their characterized path; shipping carrier ops fail closed.
  */
 export function capabilityQuarantine(op, schema, byId, security, ancCache = new Map()) {
+    if (op.kind === "command" && op.commandError !== undefined) {
+        return { quarantined: true, reason: op.commandError };
+    }
     if (op.kind !== "command" || op.replica === undefined) {
         return { quarantined: false };
     }

@@ -58,23 +58,72 @@ check("authority quarantine", materialized.quarantine.sort(), vector.expectAfter
 const commandFrame = vector.clientDivergedCarrierOps.find((candidate) => candidate.kind === "command");
 if (commandFrame === undefined)
     throw new Error("missing command frame fixture");
-const unknownCommandBody = [
-    "tuple",
-    [["atom", "future_unmapped_command"], ["list", []]],
-];
-const unknownCommandFrame = {
-    ...structuredClone(commandFrame),
-    body: unknownCommandBody,
-};
+const commandFrameFixture = commandFrame;
+function commandError(op) {
+    return op === undefined ? undefined : Reflect.get(op, "commandError");
+}
+function commandFrameNamed(name, args, suffix) {
+    return {
+        ...structuredClone(commandFrameFixture),
+        id: `${commandFrameFixture.id}-${suffix}`,
+        body: ["tuple", [["atom", name], ["list", args]]],
+    };
+}
+const unknownCommandFrame = commandFrameNamed("future_unmapped_command", [], "unknown");
+let unknownCommandOps = [];
 let unknownCommandFailure = "";
 try {
-    carrierOpsToSemanticOps([unknownCommandFrame], vector.realmByPubkey);
+    unknownCommandOps = carrierOpsToSemanticOps([unknownCommandFrame, commandFrameFixture], vector.realmByPubkey);
 }
 catch (error) {
     unknownCommandFailure =
         error instanceof Error ? error.message : String(error);
 }
-check("unknown command fails loudly", unknownCommandFailure, "unknown carrier command: future_unmapped_command");
+check("unknown command does not abort the ingest batch", unknownCommandFailure, "");
+check("unknown command carries the BEAM-compatible quarantine reason", commandError(unknownCommandOps[0]), "unknown_command");
+const unknownCommandOp = unknownCommandOps[0];
+if (unknownCommandOp !== undefined) {
+    const withUnknown = materialize(vector.schema, [...clientDiverged, unknownCommandOp]);
+    const withoutUnknown = materialize(vector.schema, clientDiverged);
+    check("unknown command is quarantined without changing valid state", {
+        quarantined: withUnknown.quarantine.includes(unknownCommandOp.id),
+        reason: withUnknown.quarantineReasons.get(unknownCommandOp.id),
+        state: withUnknown.state,
+    }, {
+        quarantined: true,
+        reason: "unknown_command",
+        state: withoutUnknown.state,
+    });
+}
+const prototypeCommandOps = [];
+const prototypeCommandFailures = [];
+for (const name of ["constructor", "toString", "__proto__", "valueOf"]) {
+    try {
+        const [op] = carrierOpsToSemanticOps([commandFrameNamed(name, [], `prototype-${name}`)], vector.realmByPubkey);
+        if (op !== undefined)
+            prototypeCommandOps.push(op);
+    }
+    catch (error) {
+        prototypeCommandFailures.push(error instanceof Error ? error.message : String(error));
+    }
+}
+check("prototype command names cannot bypass fail-closed decode", {
+    failures: prototypeCommandFailures,
+    reasons: prototypeCommandOps.map(commandError),
+}, {
+    failures: [],
+    reasons: [
+        "unknown_command",
+        "unknown_command",
+        "unknown_command",
+        "unknown_command",
+    ],
+});
+const badLinkArityOps = [
+    commandFrameNamed("link_election", [], "link-no-args"),
+    commandFrameNamed("link_election", [["nil"], ["nil"]], "link-extra-arg"),
+].flatMap((frame) => carrierOpsToSemanticOps([frame], vector.realmByPubkey));
+check("link_election rejects every non-DSL arity", badLinkArityOps.map(commandError), ["bad_command_arity", "bad_command_arity"]);
 check("Township decoder table includes link_election", townshipCarrierCommandNames().includes("link_election"), true);
 console.log(`\n▸ ${foreignReplicaVector.scenario} carrier ingest`);
 const emptyPushReport = () => ({
