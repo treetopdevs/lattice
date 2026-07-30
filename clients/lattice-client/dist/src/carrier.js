@@ -6,16 +6,22 @@ export function carrierDelegationsFromFrames(frames) {
 function carrierDelegationsFromTerm(term) {
     switch (term[0]) {
         case "delegation":
-            return [term[1]];
+            return isCarrierDelegation(term[1]) ? [term[1]] : [];
         case "list":
         case "tuple":
         case "mapset":
-            return term[1].flatMap(carrierDelegationsFromTerm);
+            return Array.isArray(term[1])
+                ? term[1].flatMap(carrierDelegationsFromTerm)
+                : [];
         case "map":
-            return term[1].flatMap(([key, value]) => [
-                ...carrierDelegationsFromTerm(key),
-                ...carrierDelegationsFromTerm(value),
-            ]);
+            return Array.isArray(term[1])
+                ? term[1].flatMap((pair) => Array.isArray(pair) && pair.length === 2
+                    ? [
+                        ...carrierDelegationsFromTerm(pair[0]),
+                        ...carrierDelegationsFromTerm(pair[1]),
+                    ]
+                    : [])
+                : [];
         case "nil":
         case "bool":
         case "int":
@@ -24,6 +30,26 @@ function carrierDelegationsFromTerm(term) {
             return [];
     }
     return [];
+}
+function isCarrierDelegation(value) {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+        return false;
+    }
+    const field = (key) => Reflect.get(value, key);
+    return (typeof field("id") === "string" &&
+        typeof field("replica") === "string" &&
+        typeof field("issuer") === "string" &&
+        typeof field("audience") === "string" &&
+        (field("parent_id") === null ||
+            typeof field("parent_id") === "string") &&
+        isStringArray(field("ops")) &&
+        isStringArray(field("roles")) &&
+        typeof field("live") === "boolean" &&
+        typeof field("sig") === "string");
+}
+function isStringArray(value) {
+    return (Array.isArray(value) &&
+        value.every((item) => typeof item === "string"));
 }
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
@@ -990,7 +1016,60 @@ function assertCarrierOpFrame(frame) {
         typeof op.sig !== "string") {
         throw new Error("malformed carrier op");
     }
+    try {
+        base64ToBytes(op.author);
+        base64ToBytes(op.sig);
+        assertCanonicalTermBase64(op.body);
+        assertCanonicalTermBase64(op.cap);
+    }
+    catch {
+        throw new Error("malformed carrier op");
+    }
     return op;
+}
+function assertCanonicalTermBase64(term) {
+    if (!Array.isArray(term) || typeof term[0] !== "string")
+        return;
+    switch (term[0]) {
+        case "bin":
+            if (typeof term[1] === "string")
+                base64ToBytes(term[1]);
+            return;
+        case "list":
+        case "tuple":
+        case "mapset":
+            if (Array.isArray(term[1])) {
+                for (const child of term[1])
+                    assertCanonicalTermBase64(child);
+            }
+            return;
+        case "map":
+            if (Array.isArray(term[1])) {
+                for (const pair of term[1]) {
+                    if (!Array.isArray(pair) || pair.length !== 2)
+                        continue;
+                    assertCanonicalTermBase64(pair[0]);
+                    assertCanonicalTermBase64(pair[1]);
+                }
+            }
+            return;
+        case "delegation": {
+            const delegation = term[1];
+            if (typeof delegation !== "object" ||
+                delegation === null ||
+                Array.isArray(delegation)) {
+                return;
+            }
+            for (const key of ["issuer", "audience", "sig"]) {
+                const value = Reflect.get(delegation, key);
+                if (typeof value === "string")
+                    base64ToBytes(value);
+            }
+            return;
+        }
+        default:
+            return;
+    }
 }
 function isOpKind(value) {
     return value === "command" || value === "authority" || value === "inbox" || value === "tombstone";

@@ -424,9 +424,11 @@ Each was opened and read during vetting. Recorded so they are not re-audited nex
   locally-generated QR SVG built from a boolean module matrix (`township_pairing_qr.ts:94-113`). No
   untrusted interpolation.
 - **`Canonical.encode/1` omitting `expires_epoch` for an embedded `%Delegation{}`** (`canonical.ex:182-194`)
-  — REJECTED. The omission is real, but the embedded `delegation.id` **is** encoded, and
-  `Delegation.valid_sig?/1` checks `d.id == hash(encoding)` over bytes that *do* include
-  `expires_epoch`. Lease tampering is caught, in both runtimes.
+  — REVISED after Plan 163 adversarial review. The embedded id/signature prevents lease laundering,
+  so the original privilege-escalation claim remains rejected. However, injecting a hash-ignored
+  expiry can invalidate the delegation and its descendants, producing a denial while the outer op
+  hash still verifies. The durable fix is a versioned canonical delegation-term change in both
+  runtimes; deferred for a dedicated format plan rather than represented as completed in Round 4.
 - **Deep-link / pairing / LiveView ingress acting before confirmation** — REJECTED. The dispatcher and
   action-intent parsers validate exhaustively (exact key sets, canonical base64 round-trips, byte
   caps, replica match), both accept and sign require `event.isTrusted` (`use_action_intent.ts:229-231`),

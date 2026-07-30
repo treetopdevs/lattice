@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { createPrivateKey, createPublicKey, createHash, sign as edSign } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { carrierChallenge, carrierDelegationsFromFrames, carrierOpsToSemanticOps, carrierTranscriptHex, integrate, materialize, signCarrierChallenge, syncCarrierOnce, townshipCarrierCommandNames, toRequest, toSend, } from "../src/index";
+import { carrierChallenge, carrierDelegationsFromFrames, carrierOpsToSemanticOps, carrierTranscriptHex, decodeCarrierOpFrame, integrate, materialize, signCarrierChallenge, syncCarrierOnce, townshipCarrierCommandNames, toRequest, toSend, verifyCarrierOpHash, } from "../src/index";
 const here = dirname(fileURLToPath(import.meta.url));
 const vecDir = join(here, "vectors");
 let failures = 0;
@@ -204,7 +204,6 @@ const malformedTermFrames = [
     ["tuple", 5],
     ["map", [7]],
     ["bin", 5],
-    ["bin", "%%%"],
     ["int", "5abc"],
     ["int", "18446744073709551616"],
 ].map((body, index) => {
@@ -240,6 +239,69 @@ check("malformed raw command terms cannot wedge direct ingest", {
     failure: "",
     reasons: Array.from({ length: malformedTermFrames.length }, () => "malformed_term"),
 });
+function injectBinaryWhitespace(term) {
+    switch (term[0]) {
+        case "bin":
+            term[1] = `${term[1].slice(0, 2)}\n${term[1].slice(2)}`;
+            return true;
+        case "list":
+        case "tuple":
+        case "mapset":
+            return term[1].some(injectBinaryWhitespace);
+        case "map":
+            return term[1].some(([key, value]) => injectBinaryWhitespace(key) || injectBinaryWhitespace(value));
+        case "delegation":
+            term[1].issuer =
+                `${term[1].issuer.slice(0, 2)}\n${term[1].issuer.slice(2)}`;
+            return true;
+        case "nil":
+        case "bool":
+        case "int":
+        case "atom":
+            return false;
+    }
+}
+const nonCanonicalBase64Frame = structuredClone(commandFrameFixture);
+if (!injectBinaryWhitespace(nonCanonicalBase64Frame.body)) {
+    throw new Error("missing binary term fixture");
+}
+let nonCanonicalBase64Failure = "";
+try {
+    decodeCarrierOpFrame(nonCanonicalBase64Frame);
+}
+catch (error) {
+    nonCanonicalBase64Failure =
+        error instanceof Error ? error.message : String(error);
+}
+check("hash-preserving base64 text drift is rejected before verification", {
+    hashStillMatches: await verifyCarrierOpHash(nonCanonicalBase64Frame),
+    frameFailure: nonCanonicalBase64Failure,
+}, {
+    hashStillMatches: true,
+    frameFailure: "malformed carrier op",
+});
+const malformedDelegationFrames = [
+    ["tuple", 5],
+    ["map", [7]],
+    ["delegation", 5],
+].map((body) => {
+    const frame = structuredClone(commandFrameFixture);
+    Reflect.set(frame, "body", body);
+    return frame;
+});
+let malformedDelegationFailure = "";
+let extractedMalformedDelegations = [];
+try {
+    extractedMalformedDelegations = carrierDelegationsFromFrames(malformedDelegationFrames);
+}
+catch (error) {
+    malformedDelegationFailure =
+        error instanceof Error ? error.message : String(error);
+}
+check("malformed known tags cannot wedge delegation extraction", {
+    failure: malformedDelegationFailure,
+    delegations: extractedMalformedDelegations,
+}, { failure: "", delegations: [] });
 function injectDelegationType(term) {
     switch (term[0]) {
         case "delegation":

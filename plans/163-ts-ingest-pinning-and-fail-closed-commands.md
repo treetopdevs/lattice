@@ -556,3 +556,9 @@ Stop and report back (do not improvise) if:
   protocol level — the session challenge carries a replica but the `pull` response is not bound to
   it. Server-side binding would be defense-in-depth on the transport-only boundary; it needs a
   design decision about whether the carrier may reject on semantic grounds.
+- **Two-runtime format deferral discovered during review**: the outer op hash does not directly
+  commit to an embedded delegation's `expires_epoch`. Delegation id/signature self-consistency
+  prevents lease laundering, but adding a hash-ignored expiry can still turn the delegation into a
+  denial (`bad_delegation_sig` and descendant quarantine). Closing that denial requires a versioned
+  canonical delegation-term change in both BEAM and TypeScript; it is recorded as deferred, not
+  completed by this client-ingest plan.
