@@ -34,8 +34,9 @@
 Recorded on `codex/round4-security-reliability` during the reviewed execution:
 
 - **Part B** landed first. Township development/test secrets now live only in environment-specific
-  config, and every `PHX_SERVER` start requires `SECRET_KEY_BASE` without weakening the carrier-only
-  release or mandatory manifest contract. The previously committed secret is treated as burned.
+  tracked config rather than shared config, and every `PHX_SERVER` start requires
+  `SECRET_KEY_BASE` without weakening the carrier-only release or mandatory manifest contract. The
+  previously committed values were rotated and remain treated as burned.
 - **Part C** installs a per-connection token bucket on relay frames only: a 120-frame burst and
   12-frame-per-second refill match the existing server budget, allow a participant to drain a
   120-operation outbox immediately, and bound a sustained flood on one socket. A 240-frame burst
@@ -45,6 +46,10 @@ Recorded on `codex/round4-security-reliability` during the reviewed execution:
   `[:lattice, :carrier, :rate_limited]` event rather than overloading persistence-failure telemetry.
   Reviewer feedback also makes relay sync stop cleanly on that refusal, return the acknowledged
   partial report, and leave the unattempted outbox frames for the next connection.
+- The relay bucket does not rate-limit authenticated `frontier`/`pull`/`state`/`subscribe` requests.
+  In particular, a pull from an empty frontier and frontier sorting scale with the served log and
+  remain unbounded ingress on a connection. Read availability was preserved deliberately; a
+  read-cost/peer-level admission design is deferred and this plan makes no read-DoS claim.
 - Part C does not edit `Lattice.Log`, `Township.AuditBundle`, `Holder`, or the persistence path.
   Structural quarantine remains complete inside `matter.log`, which remains the audit bundle's only
   trusted root. Holder's persist-before-ack, locking, timeout, durability rehearsal, and moduledoc
@@ -115,8 +120,9 @@ instances, but an authenticated relay realm can still submit relay frames contin
 rate limit.
 
 After this plan: the WebView can only ask for signatures over recognized payload shapes and runs
-under a CSP; the committed secret is rotated out of the tracked config and cannot be the default for
-a running server; and a relay peer cannot submit an unbounded burst on one connection.
+under a CSP; the shared-config secret is rotated into environment-specific tracked config and cannot
+be the default for a running server; and a relay peer cannot submit an unbounded burst on one
+connection.
 
 ## Current state
 
@@ -286,6 +292,13 @@ deferred to a separate append-only archive/journal design; this plan does not ch
   above only makes the build-time state-exchange validators match the CSP. If a native constraint
   breaks any other legitimate JS caller, that remains a STOP condition to report, not a JS change
   to make.
+- **Bounding `lattice_kv_set`.** The command still accepts arbitrary keys and unbounded values from
+  the WebView and persists them. A key namespace and value-size policy needs its own storage
+  compatibility design; Part A constrains signing authority and does not claim to constrain this
+  write surface.
+- **Rate-limiting authenticated reads or enforcing a peer/IP-wide relay budget.** Full-log pulls and
+  frontier sorting can be expensive, and reconnects receive a fresh relay budget. This plan keeps
+  reads available and bounds relay frames only for the lifetime of one socket.
 - **Any change to canonical encoding or the wire format.** The domain tags are read-only inputs to
   Part A's allowlist.
 - **Replacing the Wave A1 persistence path with an append-only journal or bounding
@@ -301,7 +314,7 @@ deferred to a separate append-only archive/journal design; this plan does not ch
 - Branch: `advisor/165-boundary-hardening`
 - **Three separate commits, one per part.** They are independent and a reviewer should be able to
   take them separately: `fix(shell): constrain the native signing oracle and set a CSP`,
-  `fix(config): move the dev secret out of tracked config and fail closed on PHX_SERVER`,
+  `fix(config): move the dev secret out of shared config and fail closed on PHX_SERVER`,
   `fix(carrier): bound the per-connection relay rate`.
 - Do NOT push or open a PR unless the operator instructed it.
 
@@ -394,7 +407,7 @@ that A4 needs a macOS run — do not land an unverified CSP.)
 
 ## Part B — rotate the committed secret and fail closed on `PHX_SERVER`
 
-### Step B1: Move the dev values out of tracked config into env-specific config
+### Step B1: Move the dev values out of shared config into env-specific tracked config
 
 Remove the `secret_key_base` and `signing_salt` literals from `config/config.exs:22-23`. Put
 freshly-generated development values in `config/dev.exs` and `config/test.exs` (creating them and the
@@ -480,7 +493,9 @@ grep -n 'secret_key_base\|signing_salt' config/config.exs
 
 Read `apps/lattice_server/lib/lattice_server/rate_limiter.ex` and follow its shape. Add a per-connection
 token bucket to `LatticeCarrierServer.WebSocket`, applied to `"relay"` frames specifically (not to
-`frontier`/`pull`/`subscribe`, which are cheap reads).
+`frontier`/`pull`/`state`/`subscribe`, to preserve read availability). Do not call those reads
+cheap: full-log pulls and frontier sorting remain unbounded per-connection ingress, explicitly
+deferred to a read-cost or peer-level admission design.
 
 Add the limit as a module attribute next to the existing ones at `web_socket.ex:9-12`, with a comment
 giving the reasoning for the number chosen. Pick a rate that is generous for a real participant
@@ -598,6 +613,8 @@ Stop and report back (do not improvise) if:
   That is a UX change and is deliberately out of this plan — flag it for the roadmap.
 - **Deferred out of this plan, all real**: replacing the Wave A1 full-log persistence with an
   append-only journal plus periodic snapshot, including durable preservation of every structural
-  quarantine entry and a replay-compatible on-disk format; the seven high-severity npm
-  advisories in the shell's devDependencies (all build/test tooling — `js-beautify`, `@vue/test-utils`,
-  `postcss` — with no path into the shipped app); and per-signature user presence as described above.
+  quarantine entry and a replay-compatible on-disk format; bounding authenticated full-log reads
+  and adding a peer/IP-level relay budget across reconnects; constraining `lattice_kv_set` keys and
+  value sizes under a storage-compatible policy; the seven high-severity npm advisories in the
+  shell's devDependencies (all build/test tooling — `js-beautify`, `@vue/test-utils`, `postcss` —
+  with no path into the shipped app); and per-signature user presence as described above.

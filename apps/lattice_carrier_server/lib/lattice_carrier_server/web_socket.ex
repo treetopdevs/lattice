@@ -10,8 +10,9 @@ defmodule LatticeCarrierServer.WebSocket do
   @availability_coalesce_ms 50
   @authentication_timeout_ms 5_000
   @authenticated_idle_timeout_ms 120_000
-  # Match the existing 120-per-10-second server budget: a participant may drain a
-  # 120-op outbox immediately, while a sustained flood is held to 12 relay frames/s.
+  # Match the existing 120-per-10-second server budget: one connection may drain a
+  # 120-op outbox immediately, then is held to 12 relay frames/s. Reconnects receive
+  # a fresh budget; this is not a peer-level or IP-level cap.
   @relay_burst_capacity 120
   @relay_refill_tokens_per_second 12
   @relay_token_units 1_000
