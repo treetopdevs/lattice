@@ -49,6 +49,10 @@ Recorded on `codex/round4-security-reliability` during the reviewed execution:
   `malformed_command`; prototype-name lookup; malformed raw terms; scalar arguments accepted by
   BEAM; custody-consent reason precedence; and explicit coverage sentinels for both Township and
   Toolshed command tables.
+- A later review caught an unpinned local-relay contract. The new regression sends a frame that is
+  shallow-valid but deliberately strict-invalid and proves `stableCausalCarrierFrames/1` relays it
+  unchanged. Replacing shallow validation with `decodeCarrierOpFrame` reproduces the named
+  `malformed carrier op` failure before any relay call.
 
 ## Why this matters
 
@@ -562,3 +566,10 @@ Stop and report back (do not improvise) if:
   denial (`bad_delegation_sig` and descendant quarantine). Closing that denial requires a versioned
   canonical delegation-term change in both BEAM and TypeScript; it is recorded as deferred, not
   completed by this client-ingest plan.
+- **Canonical wire-text mismatch discovered during review**: the TypeScript trust boundary requires
+  canonical decimal/base64 spellings, while `Lattice.Carrier.Wire.decode_term/1` currently accepts
+  alternate text that decodes to the same signed bytes. This is not a signature bypass and an
+  untrusted relay already has equivalent availability power by withholding an op, but the
+  cross-runtime acceptance mismatch is real. Fixing it belongs in the BEAM wire substrate plus the
+  explicitly out-of-scope `codec.ts` encoder, with two-runtime vectors; it is deferred rather than
+  weakening this plan's fail-closed client boundary or representing substrate work as complete.

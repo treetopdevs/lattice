@@ -202,7 +202,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 160 | PD-003-B Toolshed QR ceremony physics spike | P1 | M | 158 | PROPOSED (parallel session, untracked at time of Round 4) |
 | 161 | Close the three silent verification gaps (Sobelow, orphaned suites, format scope) | P1 | S–M | 165 Part B (rec.) | DONE (scope amendment authorized; Claude review fixes landed) |
 | 162 | Bind root-less delegations and genesis authorship to the replica root | **P0** | M | 161 (rec.) | DONE (two-reviewer security loop and mutation gates complete) |
-| 163 | Pin TypeScript ingest to the paired replica + fail-closed command decode | P1 | S–M | 162 (rec.) | DONE (Round 4; dual-reviewed, format denial deferred) |
+| 163 | Pin TypeScript ingest to the paired replica + fail-closed command decode | P1 | S–M | 162 (rec.) | DONE (Round 4; dual-reviewed, format denials deferred) |
 | 164 | One local command mirroring CI, and stop `dist/` from lying | P2 | S | 161, 166 (rec.) | TODO (Round 4; run last) |
 | 165 | Boundary hardening: WebView signing oracle + CSP, committed dev secret, relay rate | P1 | M | — | TODO (Round 4; quarantine cap deferred to durable archive design) |
 | 166 | Typecheck the shell test tree and retire the prose-pinning suite | P2 | M | — | TODO (Round 4) |
@@ -429,6 +429,13 @@ Each was opened and read during vetting. Recorded so they are not re-audited nex
   expiry can invalidate the delegation and its descendants, producing a denial while the outer op
   hash still verifies. The durable fix is a versioned canonical delegation-term change in both
   runtimes; deferred for a dedicated format plan rather than represented as completed in Round 4.
+- **Carrier wire canonical-text mismatch** (`wire.ex:216-223`, `carrier.ts:1988-2029`) — DEFERRED
+  after Plan 163 review. TypeScript rejects alternate decimal/base64 spellings that the BEAM wire
+  decoder currently accepts for the same canonical signed bytes. This is not a signature bypass,
+  and an untrusted relay can already withhold the affected operation, but the two runtimes should
+  share one acceptance rule. The durable change spans the BEAM wire substrate, TypeScript
+  `codec.ts`, and cross-runtime vectors, all outside Plan 163's declared scope; Round 4 keeps the
+  client's fail-closed boundary and records the format work rather than claiming it complete.
 - **Deep-link / pairing / LiveView ingress acting before confirmation** — REJECTED. The dispatcher and
   action-intent parsers validate exhaustively (exact key sets, canonical base64 round-trips, byte
   caps, replica match), both accept and sign require `event.isTrusted` (`use_action_intent.ts:229-231`),

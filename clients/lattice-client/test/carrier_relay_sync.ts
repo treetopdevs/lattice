@@ -113,6 +113,38 @@ const defaultSynced = await syncCarrierOnce(defaultPush, localOps, defaultFrames
 assert.deepEqual(defaultPush.pushedIds, defaultFrames.map((frame) => frame.id));
 assert.deepEqual(defaultSynced.pushedFrames, defaultFrames);
 
+const shallowRelayFrame = structuredClone(post);
+Reflect.set(
+  shallowRelayFrame.body,
+  shallowRelayFrame.body.length,
+  "relay-preserves-authored-frame",
+);
+const shallowRelayClient = new ScriptedRelaySyncClient(
+  [[]],
+  new Map([
+    [
+      shallowRelayFrame.id,
+      { ...emptyReport(), accepted: [shallowRelayFrame.id] },
+    ],
+  ]),
+);
+const shallowRelaySynced = await syncCarrierOnce(
+  shallowRelayClient,
+  localOps,
+  [shallowRelayFrame],
+  vector.realmByPubkey,
+  {
+    verifier: operationVerifier,
+    submission: "relay",
+    expectedReplica: vector.replica,
+  },
+);
+assert.deepEqual(shallowRelayClient.relayedIds, [shallowRelayFrame.id]);
+assert.deepEqual(shallowRelaySynced.pushedFrames, [shallowRelayFrame]);
+assert.deepEqual(shallowRelaySynced.acknowledgedFrameIds, [
+  shallowRelayFrame.id,
+]);
+
 const relayFrames = [post, grant, genesis, summary];
 const relayReports = new Map<string, RelayOutcome>([
   [genesis.id, { ...emptyReport(), accepted: [genesis.id] }],
