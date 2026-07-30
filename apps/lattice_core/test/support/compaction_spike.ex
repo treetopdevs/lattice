@@ -451,12 +451,14 @@ defmodule Lattice.CompactionSpike do
   end
 
   defp seeded_transfer(tl, op, role, d, tick, anc, deleg_valid) do
+    op_anc = Map.get(anc, op.id, MapSet.new())
+
     cond do
-      not seeded_delegation_valid_at?(deleg_valid[d.id], tl, anc) or
+      not seeded_delegation_valid_at?(deleg_valid[d.id], tl, op_anc) or
         op.author != d.issuer or not MapSet.member?(d.roles, role) ->
         seeded_reject(tl, op, :invalid_transfer)
 
-      seeded_holder_at(tl, Map.get(anc, op.id, MapSet.new())) != op.author ->
+      seeded_holder_at(tl, op_anc) != op.author ->
         seeded_reject(tl, op, :transfer_not_holder)
 
       tl.holder != op.author ->

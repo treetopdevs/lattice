@@ -138,6 +138,26 @@ defmodule Lattice2.CompactionSpikeTest do
     assert Log.size(retained) > 0
   end
 
+  test "retained honored succession activates its descendant transfer after compaction" do
+    {sim, _grants} = setup_sim("compaction-retained-succession-transfer")
+    frontier = Log.frontier(Sim.log(sim, "r0"))
+
+    {sim, succession} = Sim.succeed(sim, "r1", :moderator, at_tick: 2)
+    sim = Sim.sync_all(sim)
+    {sim, transfer_delegation} = Sim.transfer(sim, "r1", "r2", :moderator, at_tick: 3)
+    sim = Sim.sync_all(sim)
+    {sim, lock} = Sim.command(sim, "r2", :lock, [], cap: transfer_delegation.id)
+    sim = Sim.sync_all(sim)
+
+    {_snapshot, _retained, res} =
+      assert_compaction_equivalence(Sim.log(sim, "r0"), frontier)
+
+    refute Map.has_key?(res.reasons, succession.id)
+    refute Map.has_key?(res.reasons, lock.id)
+    assert res.holders.moderator == Sim.identity(sim, "r2").pub
+    assert res.state.locked?
+  end
+
   test "verification: a snapshot is valid iff re-reducing the covered ops reproduces it" do
     %{log: log, frontier: frontier} = straddle_scenario()
     {:ok, snapshot, _retained} = CompactionSpike.compact(Thread, log, frontier)
