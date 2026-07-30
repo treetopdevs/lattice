@@ -23,9 +23,9 @@ use township_tauri_shell::{
 
 const W1_SESSION_SEED: &str = "township-g1";
 const W1_SESSION_PUBKEY: &str = "Ze1W+4DnnK6aoJY5GiUoDVyZVhq5/PCL7UwQALXUQNk=";
-const W1_TRANSCRIPT_B64: &str = "h1JjYXJyaWVyLXNlc3Npb24tdjFIcmVzaWRlbnRYS3JlcGxpY2E6bWF0dGVyOnRvd25zaGlwLWcxI3Jvb3Q6UVVCN293cFZJc1puM0l5b1ZMSmJzRmM1SExrb3poaTJQVkJMNUx6aGozd0tmaXhlZC1ub25jZQFIcmVzaWRlbnRYIGXtVvuA55yumqCWORolKA1cmVYaufzwi+1MEAC11EDZ";
+const W1_TRANSCRIPT_B64: &str = "iVJjYXJyaWVyLXNlc3Npb24tdjJIcmVzaWRlbnRYGnJlcGxpY2E6bWF0dGVyOnRvd25zaGlwLWcxS2ZpeGVkLW5vbmNlWCtCd2NIQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIQndjAQJIcmVzaWRlbnRYIGXtVvuA55yumqCWORolKA1cmVYaufzwi+1MEAC11EDZ";
 const W1_SIGNATURE_B64: &str =
-    "TS9+HPGiV88JMWJw0vm8euvAJEkmMLDxaKnTGz7wBX5vxLYi6wKRuFHLyHgxN3Igu2tFRjPaTIqq4p2RD5CDCg==";
+    "l2T5s/NuXIiW9o3siFeSOkaZnpfaRLHb7xqtryKORd/gRuF8jxbEa//emnbxUvlDIZEc6nrMZD75o4wiDDtoDQ==";
 const PAIRING_HANDOFF: &str = "township-pairing:v1:eyJ2IjoxfQ==";
 
 #[test]
@@ -290,6 +290,18 @@ fn udp_pairing_discovery_advertise_sends_loopback_public_handoff_only() {
             handoff: PAIRING_HANDOFF.to_string()
         }
     );
+}
+
+#[test]
+fn udp_pairing_discovery_advertise_rejects_public_internet_targets() {
+    let error = advertise_township_pairing_handoff(
+        PAIRING_HANDOFF.to_string(),
+        None,
+        Some("8.8.8.8:53".to_string()),
+    )
+    .unwrap_err();
+
+    assert_eq!(error, "pairing discovery target is not local");
 }
 
 #[test]
@@ -653,6 +665,46 @@ fn ensure_carrier_key_creates_and_reuses_native_signing_keys() {
 
     let signature = state.sign_carrier("resident", W1_TRANSCRIPT_B64).unwrap();
     assert_signature(&public_key, W1_TRANSCRIPT_B64, &signature);
+}
+
+#[test]
+fn signing_accepts_each_live_carrier_domain_and_the_exact_native_probe() {
+    let state = TownshipNativeState::default();
+    let public_key = state.ensure_carrier_key("resident").unwrap();
+
+    for payload in [
+        b"\x89\x52carrier-session-v2".as_slice(),
+        b"\x87\x4dlattice-op-v2".as_slice(),
+        b"\x88\x55lattice-delegation-v2".as_slice(),
+        b"\x89\x55lattice-delegation-v3".as_slice(),
+        b"township-native-probe".as_slice(),
+    ] {
+        let payload_base64 = base64_string(payload);
+        let signature = state.sign_carrier("resident", &payload_base64).unwrap();
+        assert_signature(&public_key, &payload_base64, &signature);
+    }
+}
+
+#[test]
+fn signing_rejects_unrecognized_and_oversized_payloads_without_echoing_them() {
+    let state = TownshipNativeState::default();
+    state.ensure_carrier_key("resident").unwrap();
+
+    let unrecognized = base64_string(b"not-a-lattice-signing-domain");
+    assert_eq!(
+        state.sign_carrier("resident", &unrecognized).unwrap_err(),
+        "unrecognized signing payload"
+    );
+
+    let mut oversized = b"\x87\x4dlattice-op-v2".to_vec();
+    oversized.resize(64_001, 0);
+    let oversized_base64 = base64_string(&oversized);
+    assert_eq!(
+        state
+            .sign_carrier("resident", &oversized_base64)
+            .unwrap_err(),
+        "signing payload too large"
+    );
 }
 
 #[test]

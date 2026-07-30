@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::ffi::CString;
 use std::fs;
 use std::io::{ErrorKind, Write};
-use std::net::UdpSocket;
+use std::net::{IpAddr, SocketAddr, UdpSocket};
 #[cfg(target_os = "android")]
 use std::os::raw::{c_char, c_int};
 #[cfg(any(
@@ -73,6 +73,7 @@ pub const TOWNSHIP_PAIRING_DISCOVERY_BIND_ADDR: &str = "0.0.0.0:45721";
 pub const TOWNSHIP_PAIRING_DISCOVERY_BROADCAST_ADDR: &str = "255.255.255.255:45721";
 pub const TOWNSHIP_PAIRING_DISCOVERY_DEFAULT_TIMEOUT_MS: u64 = 750;
 pub const TOWNSHIP_PAIRING_DISCOVERY_MAX_TIMEOUT_MS: u64 = 5_000;
+pub const TOWNSHIP_CARRIER_SIGNING_PAYLOAD_MAX_BYTES: usize = 64_000;
 const GOVERNANCE_DUPLICATE_RECONCILIATION_TIMEOUT: Duration = Duration::from_millis(500);
 const GOVERNANCE_DUPLICATE_RECONCILIATION_INTERVAL: Duration = Duration::from_millis(10);
 const GOVERNANCE_PUBLIC_SIDECAR_MISSING: &str =
@@ -80,6 +81,13 @@ const GOVERNANCE_PUBLIC_SIDECAR_MISSING: &str =
 #[cfg(feature = "township-dev-trace")]
 const TOWNSHIP_DEV_TRACE_EVENT_MAX_CHARS: usize = 4_096;
 const TOWNSHIP_PAIRING_DISCOVERY_MAX_PACKET_BYTES: usize = 16 * 1024;
+const TOWNSHIP_NATIVE_PROBE_SIGNING_PAYLOAD: &[u8] = b"township-native-probe";
+const TOWNSHIP_CARRIER_SIGNING_PREFIXES: [&[u8]; 4] = [
+    b"\x89\x52carrier-session-v2",
+    b"\x87\x4dlattice-op-v2",
+    b"\x88\x55lattice-delegation-v2",
+    b"\x89\x55lattice-delegation-v3",
+];
 #[cfg(target_os = "android")]
 const TOWNSHIP_INTENT_PLUGIN_IDENTIFIER: &str = "dev.treetop.lattice.township.intent";
 #[cfg(any(target_os = "android", target_os = "ios"))]
@@ -505,6 +513,12 @@ impl TownshipNativeState {
         let bytes = BASE64
             .decode(bytes_base64)
             .map_err(|error| format!("invalid carrier bytes: {error}"))?;
+        if bytes.len() > TOWNSHIP_CARRIER_SIGNING_PAYLOAD_MAX_BYTES {
+            return Err("signing payload too large".to_string());
+        }
+        if !recognized_carrier_signing_payload(&bytes) {
+            return Err("unrecognized signing payload".to_string());
+        }
         let signing_keys = self
             .signing_keys
             .lock()
@@ -844,8 +858,7 @@ pub fn advertise_township_pairing_handoff(
         label,
         handoff,
     })?;
-    let target_addr = present_string(target_addr)
-        .unwrap_or_else(|| TOWNSHIP_PAIRING_DISCOVERY_BROADCAST_ADDR.to_string());
+    let target_addr = pairing_discovery_target(target_addr)?;
     let socket = UdpSocket::bind("0.0.0.0:0")
         .map_err(|error| format!("pairing discovery advertise bind failed: {error}"))?;
     socket
@@ -856,6 +869,31 @@ pub fn advertise_township_pairing_handoff(
         .map_err(|error| format!("pairing discovery advertise send failed: {error}"))?;
 
     Ok(())
+}
+
+fn recognized_carrier_signing_payload(bytes: &[u8]) -> bool {
+    bytes == TOWNSHIP_NATIVE_PROBE_SIGNING_PAYLOAD
+        || TOWNSHIP_CARRIER_SIGNING_PREFIXES
+            .iter()
+            .any(|prefix| bytes.starts_with(prefix))
+}
+
+fn pairing_discovery_target(target_addr: Option<String>) -> Result<SocketAddr, String> {
+    let target = present_string(target_addr)
+        .unwrap_or_else(|| TOWNSHIP_PAIRING_DISCOVERY_BROADCAST_ADDR.to_string());
+    let address: SocketAddr = target
+        .parse()
+        .map_err(|_| "pairing discovery target is invalid".to_string())?;
+
+    match address.ip() {
+        IpAddr::V4(ip)
+            if ip.is_broadcast() || ip.is_loopback() || ip.is_private() || ip.is_link_local() =>
+        {
+            Ok(address)
+        }
+
+        _other => Err("pairing discovery target is not local".to_string()),
+    }
 }
 
 pub fn discover_township_pairing_adverts(

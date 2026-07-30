@@ -29,6 +29,31 @@
   secret boundary. Land Parts A and C after plans 162–163. Keep the three commits independently
   reviewable on the shared Round 4 integration branch.
 
+## Execution evidence
+
+Recorded on `codex/round4-security-reliability` during the reviewed execution:
+
+- **Part B** landed first. Township development/test secrets now live only in environment-specific
+  config, and every `PHX_SERVER` start requires `SECRET_KEY_BASE` without weakening the carrier-only
+  release or mandatory manifest contract. The previously committed secret is treated as burned.
+- **Part A signing survey** found five live shapes:
+  - `carrier-session-v2`: the fixed nine-element carrier handshake transcript, signed by
+    `signCarrierChallenge/2`;
+  - `lattice-op-v2`: the seven-element canonical operation payload, signed by
+    `authorCarrierOp/1`;
+  - `lattice-delegation-v2` and `lattice-delegation-v3`: the unleased and leased delegation
+    payloads, signed by `authorCarrierDelegation/1`;
+  - the exact 21-byte `township-native-probe` readiness challenge from
+    `probeTownshipNativeWorkflow/1`.
+  Governance succession witnesses use the separate `lattice_sign_governance_witness` command and
+  protected governance key, so they are not carrier-signing permissions. The signing ceiling is
+  64,000 decoded bytes, matching the carrier connection's complete frame cap; every signable object
+  must fit inside such a frame, while session/probe payloads are much smaller.
+- Part A also restricts pairing adverts to IPv4 broadcast, private, loopback, or link-local
+  destinations. The shipped CSP keeps scripts self-only without `unsafe-eval`; a separate dev CSP
+  admits Vite's localhost origin and HMR websocket without weakening the packaged policy. Both
+  packaged macOS smokes passed under the rebuilt CSP with no CSP violation output.
+
 ## Why this matters
 
 Three independent boundary weaknesses, one per part. They are grouped because each is small and each
