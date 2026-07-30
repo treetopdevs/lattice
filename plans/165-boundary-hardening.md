@@ -38,10 +38,13 @@ Recorded on `codex/round4-security-reliability` during the reviewed execution:
   release or mandatory manifest contract. The previously committed secret is treated as burned.
 - **Part C** installs a per-connection token bucket on relay frames only: a 120-frame burst and
   12-frame-per-second refill match the existing server budget, allow a participant to drain a
-  120-operation outbox immediately, and bound a sustained flood. A 121-frame burst test proves the
-  refusal is `rate_limited`; reads remain available, and a fresh connection drains three dependent
-  operations normally. The existing `relay_failure` telemetry event describes persistence failure,
-  so no misleading telemetry event is reused for rate refusal.
+  120-operation outbox immediately, and bound a sustained flood on one socket. A 240-frame burst
+  test proves the refusal is `rate_limited`; reads remain available, and a fresh connection drains
+  three dependent operations normally. Reconnects intentionally receive a fresh per-connection
+  budget; this is not a peer-level or IP-level limiter. Rate refusals emit a distinct
+  `[:lattice, :carrier, :rate_limited]` event rather than overloading persistence-failure telemetry.
+  Reviewer feedback also makes relay sync stop cleanly on that refusal, return the acknowledged
+  partial report, and leave the unattempted outbox frames for the next connection.
 - Part C does not edit `Lattice.Log`, `Township.AuditBundle`, `Holder`, or the persistence path.
   Structural quarantine remains complete inside `matter.log`, which remains the audit bundle's only
   trusted root. Holder's persist-before-ack, locking, timeout, durability rehearsal, and moduledoc
@@ -271,7 +274,8 @@ deferred to a separate append-only archive/journal design; this plan does not ch
 - **Part B**: `config/config.exs`, `config/dev.exs` and `config/test.exs` (create if absent),
   `config/runtime.exs`
 - **Part C**: `apps/lattice_carrier_server/lib/lattice_carrier_server/web_socket.ex`,
-  `apps/lattice_carrier_server/test/**`
+  `apps/lattice_carrier_server/test/**`, plus the reviewer-driven partial-progress handling in
+  `clients/lattice-client/src/carrier.ts` and its relay-sync contract
 - `plans/README.md` (status row)
 
 **Out of scope**:

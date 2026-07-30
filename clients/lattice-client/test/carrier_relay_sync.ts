@@ -176,6 +176,46 @@ assert.deepEqual(relaySynced.pushReport, {
 });
 assert.deepEqual(relaySynced.acknowledgedFrameIds, [genesis.id]);
 
+const rateLimitedClient = new ScriptedRelaySyncClient(
+  [[]],
+  new Map<string, RelayOutcome>([
+    [genesis.id, { ...emptyReport(), accepted: [genesis.id] }],
+    [grant.id, new Error("carrier peer error: rate_limited")],
+  ]),
+);
+const partiallySynced = await syncCarrierOnce(
+  rateLimitedClient,
+  localOps,
+  [grant, genesis],
+  vector.realmByPubkey,
+  {
+    verifier: operationVerifier,
+    submission: "relay",
+    expectedReplica: vector.replica,
+  },
+);
+assert.deepEqual(rateLimitedClient.relayedIds, [genesis.id, grant.id]);
+assert.deepEqual(partiallySynced.pushedFrames.map(frameId), [genesis.id]);
+assert.deepEqual(partiallySynced.pushReport, {
+  ...emptyReport(),
+  accepted: [genesis.id],
+});
+assert.deepEqual(partiallySynced.acknowledgedFrameIds, [genesis.id]);
+
+const unavailableClient = new ScriptedRelaySyncClient(
+  [[]],
+  new Map([[genesis.id, new Error("carrier peer error: unavailable")]]),
+);
+await assert.rejects(
+  () =>
+    syncCarrierOnce(unavailableClient, localOps, [genesis], vector.realmByPubkey, {
+      verifier: operationVerifier,
+      submission: "relay",
+      expectedReplica: vector.replica,
+    }),
+  /carrier peer error: unavailable/,
+);
+
 const confirmedDuplicateClient = new ScriptedRelaySyncClient([[], [post.id]], new Map());
 const confirmedDuplicate = await syncCarrierOnce(
   confirmedDuplicateClient,

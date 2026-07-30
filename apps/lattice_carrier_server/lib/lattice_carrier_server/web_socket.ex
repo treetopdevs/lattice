@@ -176,8 +176,17 @@ defmodule LatticeCarrierServer.WebSocket do
 
   defp authenticated_request("relay", message, state) do
     case take_relay_token(state) do
-      {:ok, state} -> {handle_message("relay", message, state), state}
-      {:error, state} -> {%{type: "error", reason: "rate_limited"}, state}
+      {:ok, state} ->
+        {handle_message("relay", message, state), state}
+
+      {:error, state} ->
+        Telemetry.execute(
+          [:lattice, :carrier, :rate_limited],
+          %{},
+          %{peer_realm: state.peer_realm, side: :server}
+        )
+
+        {%{type: "error", reason: "rate_limited"}, state}
     end
   end
 

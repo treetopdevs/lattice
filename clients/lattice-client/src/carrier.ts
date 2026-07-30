@@ -1004,12 +1004,21 @@ async function submitCarrierFrames(
 
   if (!canRelay(client)) throw new Error("carrier sync client does not support relay");
 
-  const pushedFrames = stableCausalCarrierFrames(frames);
+  const orderedFrames = stableCausalCarrierFrames(frames);
+  const pushedFrames: CarrierOpFrame[] = [];
   const pushReport = emptyPushReport();
   const confirmedDuplicateIds: string[] = [];
 
-  for (const frame of pushedFrames) {
-    const report = await client.relay(frame);
+  for (const frame of orderedFrames) {
+    let report: CarrierPushReport;
+    try {
+      report = await client.relay(frame);
+    } catch (error) {
+      if (carrierRateLimited(error)) break;
+      throw error;
+    }
+
+    pushedFrames.push(frame);
     appendPushReport(pushReport, report);
 
     if (pushReportEmpty(report)) {
@@ -1019,6 +1028,10 @@ async function submitCarrierFrames(
   }
 
   return { pushedFrames, pushReport, confirmedDuplicateIds };
+}
+
+function carrierRateLimited(error: unknown): boolean {
+  return error instanceof Error && error.message === "carrier peer error: rate_limited";
 }
 
 function canRelay(client: CarrierSyncClient): client is CarrierSyncClient & CarrierRelayClient {

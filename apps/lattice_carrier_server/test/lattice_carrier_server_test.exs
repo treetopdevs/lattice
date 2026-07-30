@@ -758,20 +758,37 @@ defmodule LatticeCarrierServerTest do
     )
 
     client = authenticated_client(instance, server_identity, relay_identity)
+    handler_id = {__MODULE__, make_ref()}
 
-    for _request <- 1..121 do
+    assert :ok =
+             Telemetry.attach(
+               handler_id,
+               [:lattice, :carrier, :rate_limited],
+               &__MODULE__.handle_telemetry/4,
+               self()
+             )
+
+    on_exit(fn -> Telemetry.detach(handler_id) end)
+
+    for _request <- 1..240 do
       assert :ok = Client.send_envelope(client, %{type: "relay"})
     end
 
     reasons =
-      for _response <- 1..121 do
+      for _response <- 1..240 do
         assert {:ok, %{"type" => "error", "reason" => reason}} =
                  Client.recv_envelope(client)
 
         reason
       end
 
-    assert Enum.frequencies(reasons) == %{"malformed" => 120, "rate_limited" => 1}
+    assert Enum.take(reasons, 120) == List.duplicate("malformed", 120)
+    assert Enum.any?(reasons, &(&1 == "rate_limited"))
+
+    assert_receive {:telemetry, [:lattice, :carrier, :rate_limited], %{},
+                    %{peer_realm: peer_realm, side: :server}}
+
+    assert peer_realm == relay_identity.realm_id
     assert :ok = Client.send_envelope(client, %{type: "frontier"})
 
     assert {:ok, %{"type" => "frontier_result", "ids" => [base_id]}} =
