@@ -140,8 +140,8 @@ const foreignPeer = {
   },
   async pull(): Promise<unknown[]> {
     return [
-      ...foreignReplicaVector.oracleCarrierOps,
       foreignReplicaVector.capabilityCase.foreignCarrierOp,
+      ...foreignReplicaVector.oracleCarrierOps,
     ];
   },
   async push(): Promise<CarrierPushReport> {
@@ -151,7 +151,7 @@ const foreignPeer = {
 const foreignSyncOptions = {
   verifier: {
     async verify(): Promise<boolean> {
-      return true;
+      throw new Error("foreign replica frame reached signature verification");
     },
   },
   expectedReplica: foreignReplicaVector.replica,

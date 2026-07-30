@@ -463,6 +463,7 @@ const carrier = new RecordingCarrierClient(vector.peerDivergedCarrierOps);
 const synced = await syncTownshipOutbox({
   invoke: nativeInvoke(values, vector.client.sessionPubkey, calls),
   client: carrier,
+  expectedReplica: vector.replica,
 });
 
 assert.equal(synced.ok, true);
@@ -505,6 +506,7 @@ const foreignReplicaSync = await syncTownshipOutbox({
   client: new RecordingCarrierClient([
     foreignReplicaVector.capabilityCase.foreignCarrierOp,
   ]),
+  expectedReplica: vector.replica,
 });
 assert.equal(foreignReplicaSync.ok, false);
 if (foreignReplicaSync.ok) {
@@ -515,6 +517,37 @@ assert.match(foreignReplicaSync.message, /carrier served foreign replica/);
 assert.deepEqual(
   Object.fromEntries(foreignReplicaValues),
   foreignReplicaBefore,
+);
+
+const missingAnchorValues = new Map<string, string>([
+  [storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY), "[]"],
+  [storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY), "[]"],
+  [storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY), "[]"],
+]);
+const missingAnchorSync = await syncTownshipOutbox({
+  invoke: nativeInvoke(
+    missingAnchorValues,
+    vector.client.sessionPubkey,
+    [],
+  ),
+  client: new RecordingCarrierClient([]),
+});
+assert.equal(missingAnchorSync.ok, false);
+if (missingAnchorSync.ok) {
+  throw new Error("anchor-less direct carrier sync unexpectedly succeeded");
+}
+assert.equal(missingAnchorSync.reason, "sync_failed");
+assert.equal(
+  missingAnchorSync.message,
+  "Expected replica is required for a direct carrier client.",
+);
+assert.deepEqual(
+  Object.fromEntries(missingAnchorValues),
+  {
+    [storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY)]: "[]",
+    [storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY)]: "[]",
+    [storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY)]: "[]",
+  },
 );
 assert.deepEqual(JSON.parse(values.get(storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY)) ?? "[]"), []);
 assert.deepEqual(
@@ -577,6 +610,7 @@ const coldStartCarrier = new RecordingCarrierClient(vector.peerDivergedCarrierOp
 const coldStartSynced = await syncTownshipOutbox({
   invoke: nativeInvoke(coldStartValues, vector.client.sessionPubkey, coldStartCalls),
   client: coldStartCarrier,
+  expectedReplica: vector.replica,
 });
 assert.equal(coldStartSynced.ok, true);
 if (!coldStartSynced.ok) throw new Error(coldStartSynced.message);
@@ -614,6 +648,7 @@ const interleavedInvoke = nativeInvoke(interleavedValues, residentIdentity, []);
 let interleavedSubmission: Awaited<ReturnType<typeof submitTownshipPost>> | undefined;
 const interleavedSync = await syncTownshipOutbox({
   invoke: interleavedInvoke,
+  expectedReplica: vector.replica,
   client: new InterposingCarrierClient(async () => {
     interleavedSubmission = await submitTownshipPost({
       invoke: interleavedInvoke,
@@ -645,6 +680,7 @@ const interleavedDelegationInvoke = nativeInvoke(interleavedDelegationValues, cl
 let interleavedDelegation: Awaited<ReturnType<typeof submitTownshipDelegation>> | undefined;
 const interleavedDelegationSync = await syncTownshipOutbox({
   invoke: interleavedDelegationInvoke,
+  expectedReplica: vector.replica,
   client: new InterposingCarrierClient(async () => {
     interleavedDelegation = await submitTownshipDelegation({
       invoke: interleavedDelegationInvoke,
@@ -674,6 +710,7 @@ const grantQuarantineValues = new Map<string, string>([
 const grantQuarantineSynced = await syncTownshipOutbox({
   invoke: nativeInvoke(grantQuarantineValues, vector.client.sessionPubkey, []),
   client: new GrantAuthorityQuarantineClient(),
+  expectedReplica: vector.replica,
 });
 assert.equal(grantQuarantineSynced.ok, true);
 if (!grantQuarantineSynced.ok) throw new Error(grantQuarantineSynced.message);
@@ -704,6 +741,7 @@ const acceptedRevocationValues = new Map<string, string>([
 const acceptedRevocationSynced = await syncTownshipOutbox({
   invoke: nativeInvoke(acceptedRevocationValues, vector.client.sessionPubkey, []),
   client: new RecordingCarrierClient([]),
+  expectedReplica: vector.replica,
 });
 assert.equal(acceptedRevocationSynced.ok, true);
 if (!acceptedRevocationSynced.ok) throw new Error(acceptedRevocationSynced.message);
@@ -724,12 +762,14 @@ const localAuthorityRevocationValues = authorityRevocationValues();
 const localAuthorityRevocationSynced = await syncTownshipOutbox({
   invoke: nativeInvoke(localAuthorityRevocationValues, vector.client.sessionPubkey, []),
   client: new RecordingCarrierClient([]),
+  expectedReplica: vector.replica,
 });
 assertLocalRevokedCapabilitySummary(localAuthorityRevocationSynced);
 
 const authorityConfirmedRevocationValues = authorityRevocationValues();
 const authorityConfirmedSynced = await syncTownshipOutbox({
   invoke: nativeInvoke(authorityConfirmedRevocationValues, vector.client.sessionPubkey, []),
+  expectedReplica: vector.replica,
   client: new StateReportCarrierClient(
     [
       [revokedCommandFixture.id, "revoked_capability"],
@@ -744,12 +784,14 @@ const stateReportFailureValues = authorityRevocationValues();
 const stateReportFailureSynced = await syncTownshipOutbox({
   invoke: nativeInvoke(stateReportFailureValues, vector.client.sessionPubkey, []),
   client: new ThrowingStateReportCarrierClient([]),
+  expectedReplica: vector.replica,
 });
 assertLocalRevokedCapabilitySummary(stateReportFailureSynced);
 
 const incomparableAuthorityReportValues = authorityRevocationValues();
 const incomparableAuthorityReportSynced = await syncTownshipOutbox({
   invoke: nativeInvoke(incomparableAuthorityReportValues, vector.client.sessionPubkey, []),
+  expectedReplica: vector.replica,
   client: new StateReportCarrierClient(
     [[nonRevokedSharedFrameId, "revoked_capability"]],
     authorityRevocationFrameIds.slice(1),
@@ -782,6 +824,7 @@ const peerKnownRevocationValues = new Map<string, string>([
 const peerKnownRevocationSynced = await syncTownshipOutbox({
   invoke: nativeInvoke(peerKnownRevocationValues, vector.client.sessionPubkey, []),
   client: new MixedAckCarrierClient([revokeFixture.id]),
+  expectedReplica: vector.replica,
 });
 assert.equal(peerKnownRevocationSynced.ok, true);
 if (!peerKnownRevocationSynced.ok) throw new Error(peerKnownRevocationSynced.message);
@@ -805,6 +848,7 @@ const badRevocationValues = new Map<string, string>([
 const badRevocationSynced = await syncTownshipOutbox({
   invoke: nativeInvoke(badRevocationValues, vector.client.sessionPubkey, []),
   client: new RevocationAuthorityQuarantineClient(),
+  expectedReplica: vector.replica,
 });
 assert.equal(badRevocationSynced.ok, true);
 if (!badRevocationSynced.ok) throw new Error(badRevocationSynced.message);
@@ -828,6 +872,7 @@ const partialAckClient = new PartialAckCarrierClient();
 const partialAckSynced = await syncTownshipOutbox({
   invoke: nativeInvoke(partialAckValues, vector.client.sessionPubkey, []),
   client: partialAckClient,
+  expectedReplica: vector.replica,
 });
 assert.equal(partialAckSynced.ok, true);
 if (!partialAckSynced.ok) throw new Error(partialAckSynced.message);
@@ -846,6 +891,7 @@ const mixedAckClient = new MixedAckCarrierClient([mixedKnownId]);
 const mixedAckSynced = await syncTownshipOutbox({
   invoke: nativeInvoke(mixedAckValues, vector.client.sessionPubkey, []),
   client: mixedAckClient,
+  expectedReplica: vector.replica,
 });
 assert.equal(mixedAckSynced.ok, true);
 if (!mixedAckSynced.ok) throw new Error(mixedAckSynced.message);
@@ -959,6 +1005,7 @@ assert.equal(unconfigured.message, "Connect a carrier peer before syncing.");
 
 const nativeUnavailable = await syncTownshipOutbox({
   client: carrier,
+  expectedReplica: vector.replica,
   async invoke(command: string): Promise<never> {
     throw new Error(`no native runtime for ${command}`);
   },
@@ -1028,6 +1075,7 @@ async function assertAuthorityReportDivergence(
   const diverged = await syncTownshipOutbox({
     invoke: nativeInvoke(values, vector.client.sessionPubkey, []),
     client: new StateReportCarrierClient(authorityQuarantine, reportOpIds),
+    expectedReplica: vector.replica,
   });
   assert.equal(diverged.ok, false, label);
   if (diverged.ok) throw new Error(`${label} unexpectedly succeeded`);
@@ -1038,6 +1086,7 @@ async function assertAuthorityReportDivergence(
   const localRerun = await syncTownshipOutbox({
     invoke: nativeInvoke(values, vector.client.sessionPubkey, []),
     client: new RecordingCarrierClient([]),
+    expectedReplica: vector.replica,
   });
   assertLocalRevokedCapabilitySummary(localRerun);
 }

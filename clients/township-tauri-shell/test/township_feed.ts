@@ -342,7 +342,11 @@ await assert.rejects(
       foreignReplicaVector.capabilityCase.foreignCarrierOp,
     ]),
     workflow: foreignReplicaWorkflow,
-    verifier,
+    verifier: {
+      async verify(): Promise<boolean> {
+        throw new Error("foreign replica frame reached signature verification");
+      },
+    },
     realmByPubkey: vector.realmByPubkey,
     expectedReplica: vector.replica,
     generation: 8,

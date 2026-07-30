@@ -14,6 +14,7 @@ import {
 } from "../src/index";
 
 interface CarrierVector {
+  replica: string;
   realmByPubkey: Record<string, string>;
   clientDivergedCarrierOps: CarrierOpFrame[];
 }
@@ -93,6 +94,7 @@ for (const { label, frame } of [
   try {
     await syncCarrierOnce(invalidPullClient, [], [post], vector.realmByPubkey, {
       verifier: operationVerifier,
+      expectedReplica: vector.replica,
     });
   } catch (error) {
     invalidPullError = error;
@@ -106,6 +108,7 @@ const defaultPush = new PushRecordingClient();
 const defaultFrames = [post, summary];
 const defaultSynced = await syncCarrierOnce(defaultPush, localOps, defaultFrames, vector.realmByPubkey, {
   verifier: operationVerifier,
+  expectedReplica: vector.replica,
 });
 assert.deepEqual(defaultPush.pushedIds, defaultFrames.map((frame) => frame.id));
 assert.deepEqual(defaultSynced.pushedFrames, defaultFrames);
@@ -123,7 +126,11 @@ const relaySynced = await syncCarrierOnce(
   localOps,
   relayFrames,
   vector.realmByPubkey,
-  { verifier: operationVerifier, submission: "relay" },
+  {
+    verifier: operationVerifier,
+    submission: "relay",
+    expectedReplica: vector.replica,
+  },
 );
 const causalOrder = [genesis.id, grant.id, summary.id, post.id];
 assert.deepEqual(relayClient.relayedIds, causalOrder);
@@ -143,7 +150,11 @@ const confirmedDuplicate = await syncCarrierOnce(
   localOps,
   [post],
   vector.realmByPubkey,
-  { verifier: operationVerifier, submission: "relay" },
+  {
+    verifier: operationVerifier,
+    submission: "relay",
+    expectedReplica: vector.replica,
+  },
 );
 assert.equal(confirmedDuplicateClient.advertiseCalls, 2);
 assert.deepEqual(confirmedDuplicateClient.relayedIds, [post.id]);
@@ -156,7 +167,11 @@ const unconfirmedDuplicate = await syncCarrierOnce(
   localOps,
   [post],
   vector.realmByPubkey,
-  { verifier: operationVerifier, submission: "relay" },
+  {
+    verifier: operationVerifier,
+    submission: "relay",
+    expectedReplica: vector.replica,
+  },
 );
 assert.equal(unconfirmedDuplicateClient.advertiseCalls, 2);
 assert.deepEqual(unconfirmedDuplicate.acknowledgedFrameIds, []);
@@ -179,6 +194,7 @@ await assert.rejects(
     syncCarrierOnce(pushOnlyClient, localOps, [post], vector.realmByPubkey, {
       verifier: operationVerifier,
       submission: "relay",
+      expectedReplica: vector.replica,
     }),
   /does not support relay/,
 );

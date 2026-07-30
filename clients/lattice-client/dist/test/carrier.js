@@ -68,8 +68,8 @@ const foreignPeer = {
     },
     async pull() {
         return [
-            ...foreignReplicaVector.oracleCarrierOps,
             foreignReplicaVector.capabilityCase.foreignCarrierOp,
+            ...foreignReplicaVector.oracleCarrierOps,
         ];
     },
     async push() {
@@ -79,7 +79,7 @@ const foreignPeer = {
 const foreignSyncOptions = {
     verifier: {
         async verify() {
-            return true;
+            throw new Error("foreign replica frame reached signature verification");
         },
     },
     expectedReplica: foreignReplicaVector.replica,

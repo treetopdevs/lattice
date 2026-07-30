@@ -94,7 +94,7 @@ export type CarrierSubmission = "push" | "relay";
 export interface SyncCarrierOptions {
   verifier: Verifier;
   submission?: CarrierSubmission;
-  expectedReplica?: string;
+  expectedReplica: string;
 }
 
 export interface CarrierStateReport {
@@ -740,10 +740,7 @@ export async function syncCarrierOnce(
   const pulledCarrierFrames = pulledFrames.map(decodeCarrierOpFrame);
 
   for (const frame of pulledCarrierFrames) {
-    if (
-      options.expectedReplica !== undefined &&
-      frame.replica !== options.expectedReplica
-    ) {
+    if (frame.replica !== options.expectedReplica) {
       throw new Error(
         `carrier served foreign replica ${frame.replica}; expected ${options.expectedReplica}`,
       );

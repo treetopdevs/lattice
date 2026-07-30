@@ -38,6 +38,7 @@ export type TownshipSyncFailureReason =
 export interface SyncTownshipOutboxOptions extends TownshipNativeWorkflowOptions {
   client?: CarrierSyncClient;
   peer?: TownshipCarrierPeerConfig;
+  expectedReplica?: string;
   operationVerifier?: Verifier;
   verifier?: CarrierVerifier;
   webSocket?: TownshipCarrierWebSocket;
@@ -174,7 +175,14 @@ export async function syncTownshipOutbox(
 
   try {
     const realmByPubkey = options.realmByPubkey ?? TOWNSHIP_REALM_BY_PUBKEY;
-    const expectedReplica = options.peer?.replica ?? TOWNSHIP_REPLICA;
+    const expectedReplica = options.peer?.replica ?? options.expectedReplica;
+    if (expectedReplica === undefined) {
+      return {
+        ok: false,
+        reason: "sync_failed",
+        message: "Expected replica is required for a direct carrier client.",
+      };
+    }
     const synced = await syncCarrierOnce(
       client,
       localOps,

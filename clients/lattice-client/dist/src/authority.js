@@ -142,7 +142,7 @@ export function deriveWitnessedSuccessionReview(schema, ops, selector, priorRevi
     try {
         const order = canonicalOrder(ops, byId);
         orderedOps = order.map((id) => byId.get(id));
-        analysis = analyzeAuthority(schema, ops, new Set(order), order, byId);
+        analysis = analyzeAuthority(schema, ops, new Set(order), order, byId, selector.replica);
     }
     catch {
         return refusedReview("authority_analysis_failed");
