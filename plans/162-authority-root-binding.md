@@ -35,19 +35,59 @@ from `transfer_not_holder` / `not_holder` to `invalid_transfer` / `invalid_capab
 file was accidentally omitted from the strict in-scope list. The operator authorized adding that
 file to scope solely for the predicted expectation update and its explanatory assertion text.
 
+The checkpoint reviews then showed that the same succession-candidate classification must survive
+the existing compaction spike or a compacted log can disagree with the full authority analyzer.
+The operator authorized the narrow addition of
+`apps/lattice_core/test/support/compaction_spike.ex` and its existing test file to Plan 162 scope.
+
 ## Execution evidence (2026-07-29)
 
-Implementation is complete locally and awaiting the required Claude/Agy checkpoint reviews.
+**DONE.** The prescribed RED/GREEN boundaries, mutation checks, two-reviewer feedback loop, and
+completion gate are complete on `codex/round4-security-reliability`.
 
-- RED: `township_authority_unrooted_grant` initially materialized the forged post; the replayed
-  genesis initially lacked the required `unauthorized_genesis` refusal. TypeScript conformance then
-  failed seven checks across the two attacks and the rooted non-holder replacement scenario.
-- GREEN: the direct root-binding suite passes 11 tests; `mix check` passes 26 properties and 320
-  lattice-core tests plus every umbrella app; TypeScript typecheck, conformance, V-01, canonical,
-  authoring, carrier, and tracked build gates all pass. The lattice-server Sobelow scan exits 0.
-- An earlier full-suite run exposed the pre-existing carrier Holder timeout under load; the exact
-  focused test passed immediately, and the final `mix check` completed with all 94 carrier-server
-  tests green. No carrier durability behavior was changed.
+Prescribed implementation commits:
+
+1. `7d5e0c06` — RED root-binding probes.
+2. `5828f7cd` — Elixir root binding.
+3. `995a295e` — authorized vector-test scope amendment.
+4. `014dca84` — regenerated and enumerated vectors.
+5. `1e2273cd` — TypeScript root binding.
+6. `d5dd5ccf` — policy-binding mutation evidence.
+7. `61354274` — initial execution record.
+
+Immediate review-fix commits:
+
+1. `65cdc61f` — succession candidates remain root-bound without becoming ordinary genesis roots;
+   descendant capability laundering and genesis poisoning fail closed in both runtimes.
+2. `a8c94759` — succession candidate chains survive compaction without becoming globally valid.
+3. `9a0b0905` — retained succession-transfer compaction regression.
+4. `9ef38b8c` — non-genesis root reasons, rooted-grant-as-genesis rejection, and cross-role
+   succession-transfer isolation.
+5. `ac6a17e4` — TypeScript authority-kind gating plus declared-role and role-scoped compaction
+   invariants.
+6. `ea0b8717` — positive covered-succession activation and all-evidence kind-guard regressions.
+7. `7145fe65` — every evidence-bearing operation is checked; the heartbeat dormancy boundary and
+   the previously shadowed policy/succession/invalid-genesis guards are mutation-detectable.
+8. `bed149e1` — the sole heartbeat boundary fixture now fails loud if its preconditions drift.
+
+RED evidence included the original forged post and replayed-policy attacks; descendant capability
+laundering; succession-candidate genesis poisoning; a parented delegation presented as genesis;
+cross-role candidate transfer; undeclared-role and cross-role compaction leakage; covered
+capability/transfer activation; command-kind authority evidence; and the heartbeat dormancy
+boundary. Each behavioral reviewer finding received a focused failing regression or a named
+mutation failure before its smallest correction.
+
+Final GREEN:
+
+- `mix check`: 26 properties and 331 lattice-core tests, every umbrella app, 94
+  lattice-carrier-server tests, and strict Credo all pass.
+- TypeScript build, typecheck, conformance, V-01 guard, canonical bytes, Township authoring, and
+  carrier/Township suites all pass.
+- The compaction GATE passes one property and seven focused tests, including byte-identical state,
+  quarantine reasons, holders, and requests across the new succession cases.
+- An earlier full-suite run exposed the pre-existing carrier Holder timeout under load; its focused
+  test passed immediately, and every subsequent full gate completed with all 94 carrier tests
+  green. No carrier durability behavior changed.
 
 Changed vector corpus, exhaustively:
 
@@ -60,23 +100,24 @@ Changed vector corpus, exhaustively:
   and the root-authored succession policy.
 - `township_authority_rooted_transfer_not_holder.json` (new): restores direct
   `transfer_not_holder` coverage with a valid rooted delegation.
+- `township_authority_succession_capability_laundering.json` (new): an unhonored candidate and its
+  descendants cannot authorize commands.
+- `township_authority_rooted_grant_as_genesis.json` (new): a valid parented delegation cannot be
+  repackaged as genesis or inject policy.
+- `township_authority_succession_genesis_poisoning.json` (new): a succession candidate cannot be
+  replayed as genesis while its legitimate succession path still works.
+- `township_authority_nongenesis_root.json` (new): a root-less self-issued delegation introduced
+  outside genesis/succession stays invalid with the cross-runtime reason pair pinned.
+- `township_authority_cross_role_succession_transfer.json` (new): a candidate activated for one
+  role cannot authorize a transfer for another role.
 
-The succession W3, unproven-tick, witnessed-recovery, genesis-projection parity, forged-root, and
-embedded-replica-bypass vectors remained byte-identical.
+No other vector changed.
 
-All five mutation checks produced a named failure:
-
-1. Replacing the Elixir unrooted rejection with `:ok` failed
-   `an unrooted grant confers no capability` at its `:unrooted_delegation` assertion.
-2. Removing the Elixir genesis-author rejection failed the exporter because the replayed genesis
-   no longer quarantined as `unauthorized_genesis`.
-3. Removing the Elixir policy-author predicate failed the exporter assertion that a replay cannot
-   replace the root-authored succession policy.
-4. Restoring TypeScript's old root-less acceptance failed conformance on the forged post,
-   quarantine set, and quarantine reason pairs.
-5. Removing TypeScript's policy-author predicate failed the added cross-runtime effective-policy
-   assertion. This mutation originally exposed a test gap; the effective policy projection and
-   assertion were added before rerunning it.
+Claude and Agy both reviewed the implementation and every security review-fix range. All verified
+findings were corrected and rechecked. Their terminal reviews report no actionable findings; Agy
+withdrew one stale mutation-coverage claim after the exact poisoning-vector failure was reproduced.
+Claude's generated-vector drift observation is intentionally **not** represented as complete here:
+Plan 164 owns the required generated-output drift detector and remains scheduled last.
 
 ## Why this matters
 
