@@ -53,6 +53,7 @@ function stableComparisonValue(value) {
     return value;
 }
 const testedDisguisedEvidenceTypes = new Set();
+let testedBoundaryHeartbeat = false;
 for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
     const vec = JSON.parse(readFileSync(join(vecDir, file), "utf8"));
     console.log(`\n▸ ${vec.scenario}  (${file})`);
@@ -313,6 +314,7 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
             boundarySuccession?.authority?.type === "succeed" &&
             boundarySuccession.authority.proof.mode === "legacy" &&
             boundaryPolicy?.mode === "legacy") {
+            testedBoundaryHeartbeat = true;
             boundaryHeartbeat.kind = "command";
             boundaryHeartbeat.authority.atTick =
                 boundarySuccession.authority.proof.atTick - boundaryPolicy.dormantTicks + 1;
@@ -475,6 +477,7 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
     }
 }
 check("non-authority evidence coverage includes every authority evidence type", [...testedDisguisedEvidenceTypes].sort(), ["beacon", "genesis", "grant", "heartbeat", "revoke", "succeed", "transfer"]);
+check("boundary heartbeat mutation coverage executed", testedBoundaryHeartbeat, true);
 console.log("\n▸ externally determined quarantine");
 {
     const schema = {

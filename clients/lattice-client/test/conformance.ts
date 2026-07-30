@@ -135,6 +135,7 @@ interface Vector {
 }
 
 const testedDisguisedEvidenceTypes = new Set<string>();
+let testedBoundaryHeartbeat = false;
 
 for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
   const vec = JSON.parse(readFileSync(join(vecDir, file), "utf8")) as Vector;
@@ -624,6 +625,7 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
       boundarySuccession.authority.proof.mode === "legacy" &&
       boundaryPolicy?.mode === "legacy"
     ) {
+      testedBoundaryHeartbeat = true;
       boundaryHeartbeat.kind = "command";
       boundaryHeartbeat.authority.atTick =
         boundarySuccession.authority.proof.atTick - boundaryPolicy.dormantTicks + 1;
@@ -891,6 +893,7 @@ check(
   [...testedDisguisedEvidenceTypes].sort(),
   ["beacon", "genesis", "grant", "heartbeat", "revoke", "succeed", "transfer"],
 );
+check("boundary heartbeat mutation coverage executed", testedBoundaryHeartbeat, true);
 
 console.log("\n▸ externally determined quarantine");
 {
