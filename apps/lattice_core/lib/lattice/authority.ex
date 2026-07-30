@@ -431,54 +431,65 @@ defmodule Lattice.Authority do
         {:error, :bad_delegation_sig}
 
       is_nil(d.parent_id) ->
-        cond do
-          d.issuer != d.audience ->
-            {:error, :nongenesis_root}
-
-          # A self-issued delegation offered *as a genesis* (in a `:genesis` op) is the
-          # replica's root claim: on a bound replica it is honored only if its audience
-          # matches the committed root key, so a forged genesis confers nothing.
-          MapSet.member?(genesis_ids, d.id) and root_matches?(commitment, d.audience) ->
-            :ok
-
-          # Successor self-issues are deliberately root-less. Their introducing
-          # :succeed op must be honored before the delegation can confer a capability.
-          MapSet.member?(succession_ids, d.id) ->
-            {:candidate, :succession}
-
-          MapSet.member?(genesis_ids, d.id) ->
-            {:error, :impostor_genesis}
-
-          true ->
-            {:error, :unrooted_delegation}
-        end
+        validate_rootless_delegation(d, commitment, genesis_ids, succession_ids)
 
       true ->
-        case Map.fetch(delegations, d.parent_id) do
-          {:ok, %{deleg: %Delegation{} = parent}} ->
-            cond do
-              validate_delegation(
-                parent,
-                delegations,
-                commitment,
-                genesis_ids,
-                succession_ids
-              ) != :ok ->
-                {:error, :invalid_parent}
+        validate_child_delegation(d, delegations, commitment, genesis_ids, succession_ids)
+    end
+  end
 
-              not Delegation.attenuates?(d, parent) ->
-                {:error, :not_attenuated}
+  defp validate_rootless_delegation(d, commitment, genesis_ids, succession_ids) do
+    cond do
+      d.issuer != d.audience ->
+        {:error, :nongenesis_root}
 
-              true ->
-                :ok
-            end
+      # A self-issued delegation offered *as a genesis* (in a `:genesis` op) is the
+      # replica's root claim: on a bound replica it is honored only if its audience
+      # matches the committed root key, so a forged genesis confers nothing.
+      MapSet.member?(genesis_ids, d.id) and root_matches?(commitment, d.audience) ->
+        :ok
 
-          {:ok, %{deleg: nil}} ->
-            {:error, :invalid_parent}
+      # Successor self-issues are deliberately root-less. Their introducing
+      # :succeed op must be honored before the delegation can confer a capability.
+      MapSet.member?(succession_ids, d.id) ->
+        {:candidate, d.id}
 
-          :error ->
-            {:error, :missing_parent}
-        end
+      MapSet.member?(genesis_ids, d.id) ->
+        {:error, :impostor_genesis}
+
+      true ->
+        {:error, :unrooted_delegation}
+    end
+  end
+
+  defp validate_child_delegation(d, delegations, commitment, genesis_ids, succession_ids) do
+    case Map.fetch(delegations, d.parent_id) do
+      {:ok, %{deleg: %Delegation{} = parent}} ->
+        parent_validation =
+          validate_delegation(
+            parent,
+            delegations,
+            commitment,
+            genesis_ids,
+            succession_ids
+          )
+
+        validate_attenuation(d, parent, parent_validation)
+
+      {:ok, %{deleg: nil}} ->
+        {:error, :invalid_parent}
+
+      :error ->
+        {:error, :missing_parent}
+    end
+  end
+
+  defp validate_attenuation(d, parent, parent_validation) do
+    cond do
+      not Delegation.attenuates?(d, parent) -> {:error, :not_attenuated}
+      parent_validation == :ok -> :ok
+      match?({:candidate, _root_id}, parent_validation) -> parent_validation
+      true -> {:error, :invalid_parent}
     end
   end
 
@@ -649,7 +660,7 @@ defmodule Lattice.Authority do
               reject(st, op, :unauthorized_genesis, role)
 
             true ->
-              record_acquire(st, op, d.audience, 0)
+              record_acquire(st, op, d, 0)
           end
 
         {:transfer, d, at_tick} ->
@@ -686,13 +697,26 @@ defmodule Lattice.Authority do
 
   defp role_event(_op, _role, _delegations), do: nil
 
-  defp record_acquire(st, op, new_holder, at_tick) do
+  defp record_acquire(st, op, %Delegation{} = delegation, at_tick) do
     %{
       st
-      | holder: new_holder,
-        acquires: st.acquires ++ [%{op_id: op.id, holder: new_holder, at_tick: at_tick}],
+      | holder: delegation.audience,
+        acquires:
+          st.acquires ++
+            [
+              %{
+                op_id: op.id,
+                holder: delegation.audience,
+                delegation_id: delegation.id,
+                at_tick: at_tick
+              }
+            ],
         decided:
-          Map.put(st.decided, op.id, %{type: :acquire, holder: new_holder, at_tick: at_tick})
+          Map.put(st.decided, op.id, %{
+            type: :acquire,
+            holder: delegation.audience,
+            at_tick: at_tick
+          })
     }
   end
 
@@ -701,7 +725,8 @@ defmodule Lattice.Authority do
     holder_at_deps = holder_from_acquires(st.acquires, anc)
 
     cond do
-      deleg_valid[d.id] != :ok or op.author != d.issuer or not MapSet.member?(d.roles, role) ->
+      not delegation_valid_at?(deleg_valid[d.id], st.acquires, anc) or
+        op.author != d.issuer or not MapSet.member?(d.roles, role) ->
         reject(st, op, :invalid_transfer, role)
 
       holder_at_deps != op.author ->
@@ -712,7 +737,7 @@ defmodule Lattice.Authority do
         reject(st, op, :double_transfer, role)
 
       true ->
-        record_acquire(st, op, d.audience, at_tick)
+        record_acquire(st, op, d, at_tick)
     end
   end
 
@@ -721,7 +746,7 @@ defmodule Lattice.Authority do
     policy = Map.get(policies, role)
 
     cond do
-      deleg_valid[d.id] not in [:ok, {:candidate, :succession}] or
+      not succession_delegation?(deleg_valid[d.id], d.id) or
         op.author != d.audience or op.author != d.issuer or
           not MapSet.member?(d.roles, role) ->
         reject(st, op, :invalid_succession, role)
@@ -743,7 +768,7 @@ defmodule Lattice.Authority do
 
     if at_tick < last_active + dormant_ticks,
       do: reject(st, op, :premature_succession, role),
-      else: record_acquire(st, op, d.audience, at_tick)
+      else: record_acquire(st, op, d, at_tick)
   end
 
   defp decide_succession_proof(st, op, role, _d, at_tick, _anc, %{recovery: recovery})
@@ -775,7 +800,7 @@ defmodule Lattice.Authority do
              recovery
            ),
          :ok <- SuccessionCertificate.verify(certificate, expected_claim, recovery) do
-      record_acquire(st, op, d.audience, 0)
+      record_acquire(st, op, d, 0)
     else
       {:error, reason} -> reject(st, op, reason, role)
       _ -> reject(st, op, :recovery_claim_mismatch, role)
@@ -1000,18 +1025,15 @@ defmodule Lattice.Authority do
     do: true
 
   defp capability_delegation_valid?(
-         {:candidate, :succession},
-         %Delegation{audience: audience},
-         intro_ops,
+         {:candidate, root_id},
+         %Delegation{},
+         _intro_ops,
          ancestors,
          timelines
        ) do
-    Enum.any?(timelines, fn {_role, timeline} ->
-      Enum.any?(timeline.acquires, fn acquire ->
-        acquire.holder == audience and acquire.op_id in intro_ops and
-          MapSet.member?(ancestors, acquire.op_id)
-      end)
-    end)
+    timelines
+    |> Enum.flat_map(fn {_role, timeline} -> timeline.acquires end)
+    |> delegation_candidate_activated?(root_id, ancestors)
   end
 
   defp capability_delegation_valid?(
@@ -1022,6 +1044,23 @@ defmodule Lattice.Authority do
          _timelines
        ),
        do: false
+
+  defp succession_delegation?(:ok, _delegation_id), do: true
+  defp succession_delegation?({:candidate, delegation_id}, delegation_id), do: true
+  defp succession_delegation?(_validation, _delegation_id), do: false
+
+  defp delegation_valid_at?(:ok, _acquires, _ancestors), do: true
+
+  defp delegation_valid_at?({:candidate, root_id}, acquires, ancestors),
+    do: delegation_candidate_activated?(acquires, root_id, ancestors)
+
+  defp delegation_valid_at?(_validation, _acquires, _ancestors), do: false
+
+  defp delegation_candidate_activated?(acquires, root_id, ancestors) do
+    Enum.any?(acquires, fn acquire ->
+      acquire.delegation_id == root_id and MapSet.member?(ancestors, acquire.op_id)
+    end)
+  end
 
   # A delegation is revoked-as-of op O if a valid revoke of it (or an ancestor in
   # its chain) exists that O is not causally before.

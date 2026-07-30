@@ -151,11 +151,27 @@ defmodule Lattice2.RootBindingTest do
     {sim, post} =
       Sim.command(sim, "evil", :post, ["succession-laundered propaganda"], cap: unrooted.id)
 
+    tab = Sim.identity(sim, "tab")
+
+    child =
+      Delegation.new(evil, Sim.replica(sim), tab.pub,
+        ops: [:post],
+        parent_id: unrooted.id
+      )
+
+    {sim, child_grant} = Sim.append(sim, "evil", :authority, {:grant, child})
+
+    {sim, child_post} =
+      Sim.command(sim, "tab", :post, ["child-laundered propaganda"], cap: child.id)
+
     sim = Sim.sync_all(sim)
 
     assert {true, :unauthorized_succession} = Sim.quarantined(sim, "server", succession.id)
     assert {true, :invalid_capability} = Sim.quarantined(sim, "server", post.id)
+    assert false == Sim.quarantined(sim, "server", child_grant.id)
+    assert {true, :invalid_capability} = Sim.quarantined(sim, "server", child_post.id)
     refute "succession-laundered propaganda" in Sim.state(sim, "server").messages
+    refute "child-laundered propaganda" in Sim.state(sim, "server").messages
   end
 
   test "a rooted grant reintroduced as genesis cannot seize its role" do
@@ -219,6 +235,22 @@ defmodule Lattice2.RootBindingTest do
 
     assert false == Sim.quarantined(sim, "server", succession.id)
     assert Sim.holder(sim, "server", :moderator) == Sim.identity(sim, "tab").pub
+  end
+
+  test "an honored successor can attenuate its capability and transfer the role" do
+    sim = founded()
+    {sim, succession} = Sim.succeed(sim, "tab", :moderator, at_tick: 3)
+    sim = Sim.sync_all(sim)
+
+    {sim, transfer_delegation} = Sim.transfer(sim, "tab", "evil", :moderator, at_tick: 4)
+    sim = Sim.sync_all(sim)
+    {sim, lock} = Sim.command(sim, "evil", :lock, [], cap: transfer_delegation.id)
+    sim = Sim.sync_all(sim)
+
+    assert false == Sim.quarantined(sim, "server", succession.id)
+    assert Sim.holder(sim, "server", :moderator) == Sim.identity(sim, "evil").pub
+    assert false == Sim.quarantined(sim, "server", lock.id)
+    assert Sim.state(sim, "server").locked?
   end
 
   test "replaying a legitimate successor delegation as genesis cannot poison it" do

@@ -33,7 +33,7 @@ export interface HonoredAcquire {
 
 export type DelegationValidation =
   | { valid: true }
-  | { valid: false; reason: string };
+  | { valid: false; reason: string; successionRootId?: string };
 
 export interface AuthorityDelegationRecord {
   delegation: AuthorityDelegationEvidence | null;
@@ -220,6 +220,7 @@ export function analyzeAuthority(
       state,
       delegations,
       policies,
+      honoredSuccessionIntroductions,
       byId,
     );
 
@@ -241,6 +242,7 @@ export function analyzeAuthority(
         state,
         delegations,
         policies,
+        honoredSuccessionIntroductions,
         byId,
       );
       if (reason !== undefined) quarantineReasons.set(op.id, reason);
@@ -446,6 +448,7 @@ function authorityWriteHonored(
   state: RoleState,
   delegations: ReadonlyMap<string, AuthorityDelegationRecord>,
   policies: ReadonlyMap<string, SuccessionPolicyEvidence>,
+  honoredSuccessionIntroductions: ReadonlyMap<string, readonly string[]>,
   byId: ReadonlyMap<string, Op>,
 ): boolean {
   if (
@@ -459,6 +462,13 @@ function authorityWriteHonored(
   const delegation = evidence.delegation;
   const validForEvent =
     validDelegation(delegation, delegations) ||
+    (evidence.type === "transfer" &&
+      candidateDelegationActivated(
+        delegation,
+        delegations,
+        honoredSuccessionIntroductions,
+        ancestors(op.id, byId as Map<string, Op>),
+      )) ||
     (evidence.type === "succeed" &&
       successionCandidate(delegation, delegations));
   if (
@@ -508,6 +518,7 @@ function authorityWriteRejectionReason(
   state: RoleState,
   delegations: ReadonlyMap<string, AuthorityDelegationRecord>,
   policies: ReadonlyMap<string, SuccessionPolicyEvidence>,
+  honoredSuccessionIntroductions: ReadonlyMap<string, readonly string[]>,
   byId: ReadonlyMap<string, Op>,
 ): string | undefined {
   if (
@@ -547,7 +558,13 @@ function authorityWriteRejectionReason(
   if (
     delegation.audienceRealm !== op.value ||
     !delegation.roles.includes(op.field) ||
-    !validDelegation(delegation, delegations) ||
+    (!validDelegation(delegation, delegations) &&
+      !candidateDelegationActivated(
+        delegation,
+        delegations,
+        honoredSuccessionIntroductions,
+        ancestors(op.id, byId as Map<string, Op>),
+      )) ||
     delegation.issuerRealm !== op.author
   ) {
     return "invalid_transfer";
@@ -1083,7 +1100,11 @@ function delegationValidation(
     ) {
       validation = { valid: true };
     } else if (successionIds.has(delegation.id)) {
-      validation = { valid: false, reason: "succession_candidate" };
+      validation = {
+        valid: false,
+        reason: "succession_candidate",
+        successionRootId: delegation.id,
+      };
     } else if (genesisIds.has(delegation.id)) {
       validation = { valid: false, reason: "impostor_genesis" };
     } else {
@@ -1105,12 +1126,22 @@ function delegationValidation(
         cache,
         visiting,
       );
-      validation =
-        !parentValidation.valid
-          ? { valid: false, reason: "invalid_parent" }
-          : delegationAttenuates(delegation, parent.delegation)
-            ? { valid: true }
-            : { valid: false, reason: "not_attenuated" };
+      if (!delegationAttenuates(delegation, parent.delegation)) {
+        validation = { valid: false, reason: "not_attenuated" };
+      } else if (parentValidation.valid) {
+        validation = { valid: true };
+      } else if (
+        parentValidation.reason === "succession_candidate" &&
+        parentValidation.successionRootId !== undefined
+      ) {
+        validation = {
+          valid: false,
+          reason: "succession_candidate",
+          successionRootId: parentValidation.successionRootId,
+        };
+      } else {
+        validation = { valid: false, reason: "invalid_parent" };
+      }
     }
   }
 
@@ -1142,8 +1173,32 @@ function successionCandidate(
     record.delegation !== null &&
     delegationKey(record.delegation) === delegationKey(delegation) &&
     !record.validation.valid &&
-    record.validation.reason === "succession_candidate"
+    record.validation.reason === "succession_candidate" &&
+    record.validation.successionRootId === delegation.id
   );
+}
+
+function candidateDelegationActivated(
+  delegation: AuthorityDelegationEvidence,
+  delegations: ReadonlyMap<string, AuthorityDelegationRecord>,
+  honoredSuccessionIntroductions: ReadonlyMap<string, readonly string[]>,
+  visible: ReadonlySet<string>,
+): boolean {
+  const record = delegations.get(delegation.id);
+  if (
+    record === undefined ||
+    record.delegation === null ||
+    delegationKey(record.delegation) !== delegationKey(delegation) ||
+    record.validation.valid ||
+    record.validation.reason !== "succession_candidate" ||
+    record.validation.successionRootId === undefined
+  ) {
+    return false;
+  }
+
+  return (
+    honoredSuccessionIntroductions.get(record.validation.successionRootId) ?? []
+  ).some((opId) => visible.has(opId));
 }
 
 function resolveRoot(

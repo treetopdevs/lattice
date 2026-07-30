@@ -57,6 +57,9 @@ defmodule Lattice.CompactionSpike do
               delegations: %{},
               # Deleg ids introduced by covered ops: visible to all retained ops.
               covered_intros: MapSet.new(),
+              covered_genesis_ids: MapSet.new(),
+              covered_succession_ids: MapSet.new(),
+              covered_honored_succession_ids: MapSet.new(),
               policies: %{},
               root: nil,
               # Raw covered revoke refs (re-judged against the merged delegation
@@ -131,7 +134,10 @@ defmodule Lattice.CompactionSpike do
 
     ordered = Log.topo_ops(covered_log)
     delegations = collect_delegations(ordered)
-    deleg_valid = validate_delegations(delegations)
+    root = Authority.root(covered_log)
+    genesis_ids = genesis_delegation_ids(ordered)
+    succession_ids = succession_delegation_ids(ordered)
+    deleg_valid = validate_delegations(delegations, root, genesis_ids, succession_ids)
 
     snapshot = %Snapshot{
       replica: replica,
@@ -143,8 +149,12 @@ defmodule Lattice.CompactionSpike do
       frozen_requests: analysis.requests,
       delegations: Map.new(delegations, fn {id, %{deleg: d}} -> {id, d} end),
       covered_intros: delegations |> Map.keys() |> MapSet.new(),
-      policies: collect_policies(ordered),
-      root: root_creator(ordered),
+      covered_genesis_ids: genesis_ids,
+      covered_succession_ids: succession_ids,
+      covered_honored_succession_ids:
+        honored_succession_delegation_ids(ordered, analysis.reasons),
+      policies: analysis.policies,
+      root: root,
       covered_revokes: collect_raw_revokes(ordered),
       roles: summarize_roles(module, covered_ops, ordered, analysis, deleg_valid)
     }
@@ -210,15 +220,15 @@ defmodule Lattice.CompactionSpike do
     case op.body do
       {:genesis, %Delegation{} = d, _policies} ->
         if op.kind == :authority and deleg_valid[d.id] == :ok and MapSet.member?(d.roles, role),
-          do: %{op_id: op.id, holder: d.audience, at_tick: 0}
+          do: %{op_id: op.id, holder: d.audience, delegation_id: d.id, at_tick: 0}
 
       {:transfer, ^role, %Delegation{} = d, tick} ->
         if op.kind == :authority and not Map.has_key?(reasons, op.id),
-          do: %{op_id: op.id, holder: d.audience, at_tick: tick}
+          do: %{op_id: op.id, holder: d.audience, delegation_id: d.id, at_tick: tick}
 
       {:succeed, ^role, %Delegation{} = d, tick} ->
         if op.kind == :authority and not Map.has_key?(reasons, op.id),
-          do: %{op_id: op.id, holder: d.audience, at_tick: tick}
+          do: %{op_id: op.id, holder: d.audience, delegation_id: d.id, at_tick: tick}
 
       _ ->
         nil
@@ -278,11 +288,23 @@ defmodule Lattice.CompactionSpike do
     anc = Dag.all_ancestors(ops)
 
     {delegations, retained_intros} = merge_delegations(snapshot, ordered)
-    deleg_valid = validate_delegations_merged(delegations)
-    policies = Map.merge(snapshot.policies, collect_policies(ordered))
     root = snapshot.root || root_creator(ordered)
+
+    genesis_ids =
+      MapSet.union(snapshot.covered_genesis_ids, genesis_delegation_ids(ordered))
+
+    succession_ids =
+      MapSet.union(snapshot.covered_succession_ids, succession_delegation_ids(ordered))
+
+    deleg_valid =
+      validate_delegations_merged(delegations, root, genesis_ids, succession_ids)
+
+    policies =
+      Map.merge(snapshot.policies, collect_valid_policies(ordered, deleg_valid, root))
+
     revokes = merged_revokes(snapshot, ordered, delegations, root)
     invalid_intros = invalid_intro_reasons(retained_intros, deleg_valid)
+    invalid_genesis = invalid_genesis_reasons(ordered, deleg_valid, root)
 
     ctx = %{
       module: module,
@@ -291,6 +313,7 @@ defmodule Lattice.CompactionSpike do
       deleg_valid: deleg_valid,
       retained_intros: retained_intros,
       covered_intros: snapshot.covered_intros,
+      covered_honored_succession_ids: snapshot.covered_honored_succession_ids,
       revokes: revokes
     }
 
@@ -304,7 +327,12 @@ defmodule Lattice.CompactionSpike do
 
     {cmd_reasons, requests} = validate_retained_commands(ordered, timelines, ctx)
 
-    new_reasons = invalid_intros |> Map.merge(role_reasons) |> Map.merge(cmd_reasons)
+    new_reasons =
+      invalid_intros
+      |> Map.merge(invalid_genesis)
+      |> Map.merge(role_reasons)
+      |> Map.merge(cmd_reasons)
+
     reasons = Map.merge(snapshot.frozen_reasons, new_reasons)
 
     %{
@@ -327,8 +355,10 @@ defmodule Lattice.CompactionSpike do
     end)
   end
 
-  defp validate_delegations_merged(delegations) do
-    Map.new(delegations, fn {id, d} -> {id, validate_delegation(d, delegations)} end)
+  defp validate_delegations_merged(delegations, root, genesis_ids, succession_ids) do
+    Map.new(delegations, fn {id, d} ->
+      {id, validate_delegation(d, delegations, root, genesis_ids, succession_ids)}
+    end)
   end
 
   defp merged_revokes(%Snapshot{} = snapshot, ordered, delegations, root) do
@@ -347,10 +377,10 @@ defmodule Lattice.CompactionSpike do
 
   defp invalid_intro_reasons(retained_intros, deleg_valid) do
     for {id, op_ids} <- retained_intros,
-        deleg_valid[id] != :ok,
+        {:error, reason} <- [deleg_valid[id]],
         op_id <- op_ids,
         into: %{},
-        do: {op_id, elem(deleg_valid[id], 1)}
+        do: {op_id, reason}
   end
 
   # --- Seeded role timelines -------------------------------------------------
@@ -368,6 +398,7 @@ defmodule Lattice.CompactionSpike do
       holder: Map.get(snapshot.frozen_holders, role),
       acquires: [],
       heartbeats: [],
+      covered_honored_succession_ids: snapshot.covered_honored_succession_ids,
       quarantine: %{}
     }
 
@@ -404,16 +435,25 @@ defmodule Lattice.CompactionSpike do
   defp role_event(_op, _role), do: nil
 
   defp seeded_genesis(tl, op, role, d, deleg_valid) do
-    if deleg_valid[d.id] == :ok and MapSet.member?(d.roles, role) do
-      seeded_acquire(tl, op, d.audience, 0)
-    else
-      tl
+    cond do
+      deleg_valid[d.id] != :ok or not MapSet.member?(d.roles, role) ->
+        tl
+
+      not is_nil(d.parent_id) ->
+        seeded_reject(tl, op, :invalid_genesis)
+
+      op.author != d.audience ->
+        seeded_reject(tl, op, :unauthorized_genesis)
+
+      true ->
+        seeded_acquire(tl, op, d, 0)
     end
   end
 
   defp seeded_transfer(tl, op, role, d, tick, anc, deleg_valid) do
     cond do
-      deleg_valid[d.id] != :ok or op.author != d.issuer or not MapSet.member?(d.roles, role) ->
+      not seeded_delegation_valid_at?(deleg_valid[d.id], tl, anc) or
+        op.author != d.issuer or not MapSet.member?(d.roles, role) ->
         seeded_reject(tl, op, :invalid_transfer)
 
       seeded_holder_at(tl, Map.get(anc, op.id, MapSet.new())) != op.author ->
@@ -423,7 +463,7 @@ defmodule Lattice.CompactionSpike do
         seeded_reject(tl, op, :double_transfer)
 
       true ->
-        seeded_acquire(tl, op, d.audience, tick)
+        seeded_acquire(tl, op, d, tick)
     end
   end
 
@@ -433,7 +473,8 @@ defmodule Lattice.CompactionSpike do
     policy = Map.get(policies, role)
 
     cond do
-      deleg_valid[d.id] != :ok or op.author != d.audience or op.author != d.issuer or
+      not seeded_succession_delegation?(deleg_valid[d.id], d.id) or
+        op.author != d.audience or op.author != d.issuer or
           not MapSet.member?(d.roles, role) ->
         seeded_reject(tl, op, :invalid_succession)
 
@@ -444,7 +485,7 @@ defmodule Lattice.CompactionSpike do
         seeded_reject(tl, op, :premature_succession)
 
       true ->
-        seeded_acquire(tl, op, d.audience, tick)
+        seeded_acquire(tl, op, d, tick)
     end
   end
 
@@ -456,11 +497,20 @@ defmodule Lattice.CompactionSpike do
     end
   end
 
-  defp seeded_acquire(tl, op, holder, tick) do
+  defp seeded_acquire(tl, op, %Delegation{} = delegation, tick) do
     %{
       tl
-      | holder: holder,
-        acquires: tl.acquires ++ [%{op_id: op.id, holder: holder, at_tick: tick}]
+      | holder: delegation.audience,
+        acquires:
+          tl.acquires ++
+            [
+              %{
+                op_id: op.id,
+                holder: delegation.audience,
+                delegation_id: delegation.id,
+                at_tick: tick
+              }
+            ]
     }
   end
 
@@ -530,22 +580,30 @@ defmodule Lattice.CompactionSpike do
         mutations = command_mutations(ctx.module, cmd, args)
         roles_needed = mutation_roles(ctx.module, mutations)
 
-        with :ok <- seeded_cap_ok(op, cmd, roles_needed, ctx) do
+        with :ok <- seeded_cap_ok(op, cmd, roles_needed, timelines, ctx) do
           seeded_authority_ok(op, roles_needed, timelines, ctx.anc)
         end
     end
   end
 
-  defp seeded_cap_ok(op, cmd, roles_needed, ctx) do
+  defp seeded_cap_ok(op, cmd, roles_needed, timelines, ctx) do
     case Map.fetch(ctx.delegations, op.cap) do
-      :error -> {:error, :no_capability}
-      {:ok, %Delegation{} = d} -> seeded_cap_checks(op, cmd, d, roles_needed, ctx)
+      :error ->
+        {:error, :no_capability}
+
+      {:ok, %Delegation{} = d} ->
+        seeded_cap_checks(op, cmd, d, roles_needed, timelines, ctx)
     end
   end
 
-  defp seeded_cap_checks(op, cmd, d, roles_needed, ctx) do
+  defp seeded_cap_checks(op, cmd, d, roles_needed, timelines, ctx) do
     cond do
-      ctx.deleg_valid[d.id] != :ok ->
+      not compacted_delegation_valid_at?(
+        ctx.deleg_valid[d.id],
+        op,
+        timelines,
+        ctx
+      ) ->
         {:error, :invalid_capability}
 
       op.author != d.audience ->
@@ -576,6 +634,36 @@ defmodule Lattice.CompactionSpike do
     MapSet.member?(ctx.covered_intros, deleg_id) or
       ctx.retained_intros |> Map.get(deleg_id, []) |> Enum.any?(&MapSet.member?(op_anc, &1))
   end
+
+  defp seeded_succession_delegation?(:ok, _delegation_id), do: true
+  defp seeded_succession_delegation?({:candidate, delegation_id}, delegation_id), do: true
+  defp seeded_succession_delegation?(_validation, _delegation_id), do: false
+
+  defp seeded_delegation_valid_at?(:ok, _timeline, _ancestors), do: true
+
+  defp seeded_delegation_valid_at?({:candidate, root_id}, timeline, ancestors) do
+    MapSet.member?(timeline.covered_honored_succession_ids, root_id) or
+      Enum.any?(timeline.acquires, fn acquire ->
+        acquire.delegation_id == root_id and MapSet.member?(ancestors, acquire.op_id)
+      end)
+  end
+
+  defp seeded_delegation_valid_at?(_validation, _timeline, _ancestors), do: false
+
+  defp compacted_delegation_valid_at?(:ok, _op, _timelines, _ctx), do: true
+
+  defp compacted_delegation_valid_at?({:candidate, root_id}, op, timelines, ctx) do
+    op_anc = Map.get(ctx.anc, op.id, MapSet.new())
+
+    MapSet.member?(ctx.covered_honored_succession_ids, root_id) or
+      Enum.any?(timelines, fn {_role, timeline} ->
+        Enum.any?(timeline.acquires, fn acquire ->
+          acquire.delegation_id == root_id and MapSet.member?(op_anc, acquire.op_id)
+        end)
+      end)
+  end
+
+  defp compacted_delegation_valid_at?(_validation, _op, _timelines, _ctx), do: false
 
   # A covered revoke can never be causally after a retained op, so it always
   # applies; a retained revoke applies unless the op is causally before it.
@@ -802,31 +890,59 @@ defmodule Lattice.CompactionSpike do
 
   defp delegation_in(_), do: nil
 
-  defp validate_delegations(delegations) do
+  defp validate_delegations(delegations, root, genesis_ids, succession_ids) do
     structs = Map.new(delegations, fn {id, %{deleg: d}} -> {id, d} end)
-    Map.new(structs, fn {id, d} -> {id, validate_delegation(d, structs)} end)
+
+    Map.new(structs, fn {id, d} ->
+      {id, validate_delegation(d, structs, root, genesis_ids, succession_ids)}
+    end)
   end
 
-  defp validate_delegation(%Delegation{} = d, delegations) do
+  defp validate_delegation(%Delegation{} = d, delegations, root, genesis_ids, succession_ids) do
     cond do
       not Delegation.valid_sig?(d) ->
         {:error, :bad_delegation_sig}
 
       is_nil(d.parent_id) ->
-        if d.issuer == d.audience, do: :ok, else: {:error, :nongenesis_root}
+        cond do
+          d.issuer != d.audience ->
+            {:error, :nongenesis_root}
+
+          MapSet.member?(genesis_ids, d.id) and (is_nil(root) or d.audience == root) ->
+            :ok
+
+          MapSet.member?(succession_ids, d.id) ->
+            {:candidate, d.id}
+
+          MapSet.member?(genesis_ids, d.id) ->
+            {:error, :impostor_genesis}
+
+          true ->
+            {:error, :unrooted_delegation}
+        end
 
       true ->
-        validate_delegation_parent(d, delegations)
+        validate_delegation_parent(d, delegations, root, genesis_ids, succession_ids)
     end
   end
 
-  defp validate_delegation_parent(%Delegation{} = d, delegations) do
+  defp validate_delegation_parent(
+         %Delegation{} = d,
+         delegations,
+         root,
+         genesis_ids,
+         succession_ids
+       ) do
     case Map.fetch(delegations, d.parent_id) do
       {:ok, %Delegation{} = parent} ->
+        parent_validation =
+          validate_delegation(parent, delegations, root, genesis_ids, succession_ids)
+
         cond do
-          validate_delegation(parent, delegations) != :ok -> {:error, :invalid_parent}
           not Delegation.attenuates?(d, parent) -> {:error, :not_attenuated}
-          true -> :ok
+          parent_validation == :ok -> :ok
+          match?({:candidate, _root_id}, parent_validation) -> parent_validation
+          true -> {:error, :invalid_parent}
         end
 
       :error ->
@@ -841,11 +957,58 @@ defmodule Lattice.CompactionSpike do
     end
   end
 
-  defp collect_policies(ordered) do
+  defp genesis_delegation_ids(ordered) do
+    for %Op{kind: :authority, body: {:genesis, %Delegation{id: id}, _policies}} <- ordered,
+        into: MapSet.new(),
+        do: id
+  end
+
+  defp succession_delegation_ids(ordered) do
+    for %Op{kind: :authority, body: {:succeed, _role, %Delegation{id: id}, _proof}} <- ordered,
+        into: MapSet.new(),
+        do: id
+  end
+
+  defp honored_succession_delegation_ids(ordered, reasons) do
+    for %Op{id: op_id, kind: :authority, body: {:succeed, _role, %Delegation{id: id}, _proof}} <-
+          ordered,
+        not Map.has_key?(reasons, op_id),
+        into: MapSet.new(),
+        do: id
+  end
+
+  defp invalid_genesis_reasons(ordered, deleg_valid, root) do
+    for %Op{id: op_id, kind: :authority, body: {:genesis, %Delegation{} = d, _policies}} <-
+          ordered,
+        Delegation.valid_sig?(d),
+        reason = invalid_genesis_reason(d, deleg_valid[d.id], root),
+        not is_nil(reason),
+        into: %{},
+        do: {op_id, reason}
+  end
+
+  defp invalid_genesis_reason(%Delegation{parent_id: parent_id}, _validation, _root)
+       when not is_nil(parent_id),
+       do: :invalid_genesis
+
+  defp invalid_genesis_reason(%Delegation{audience: audience}, {:candidate, _root_id}, root)
+       when not is_nil(root) and audience != root,
+       do: :impostor_genesis
+
+  defp invalid_genesis_reason(_delegation, _validation, _root), do: nil
+
+  defp collect_valid_policies(ordered, deleg_valid, root) do
     Enum.reduce(ordered, %{}, fn op, acc ->
       case op.body do
-        {:genesis, _d, policies} when is_map(policies) -> Map.merge(acc, policies)
-        _ -> acc
+        {:genesis, %Delegation{} = d, policies}
+        when is_map(policies) ->
+          if deleg_valid[d.id] == :ok and is_nil(d.parent_id) and op.author == d.audience and
+               (is_nil(root) or d.audience == root),
+             do: Map.merge(acc, policies),
+             else: acc
+
+        _ ->
+          acc
       end
     end)
   end

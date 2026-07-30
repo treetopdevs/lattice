@@ -76,7 +76,7 @@ export function analyzeAuthority(schema, ops, included, order, byId) {
             throw new Error(`revoke ${op.id} cannot write authority role ${op.field}`);
         }
         const state = states.get(op.field) ?? emptyRoleState();
-        const honored = authorityWriteHonored(op, evidence, state, delegations, policies, byId);
+        const honored = authorityWriteHonored(op, evidence, state, delegations, policies, honoredSuccessionIntroductions, byId);
         if (honored) {
             const holder = evidence.delegation.audienceRealm;
             state.holder = holder;
@@ -90,7 +90,7 @@ export function analyzeAuthority(schema, ops, included, order, byId) {
             }
         }
         else {
-            const reason = authorityWriteRejectionReason(op, evidence, state, delegations, policies, byId);
+            const reason = authorityWriteRejectionReason(op, evidence, state, delegations, policies, honoredSuccessionIntroductions, byId);
             if (reason !== undefined)
                 quarantineReasons.set(op.id, reason);
             quarantinedWrites.add(op.id);
@@ -243,7 +243,7 @@ function authorityRoleWrite(schema, op) {
     const spec = schema.fields[op.field];
     return spec !== undefined && isAuthorityField(spec);
 }
-function authorityWriteHonored(op, evidence, state, delegations, policies, byId) {
+function authorityWriteHonored(op, evidence, state, delegations, policies, honoredSuccessionIntroductions, byId) {
     if (evidence.type === "heartbeat" ||
         evidence.type === "revoke" ||
         evidence.type === "beacon") {
@@ -251,6 +251,8 @@ function authorityWriteHonored(op, evidence, state, delegations, policies, byId)
     }
     const delegation = evidence.delegation;
     const validForEvent = validDelegation(delegation, delegations) ||
+        (evidence.type === "transfer" &&
+            candidateDelegationActivated(delegation, delegations, honoredSuccessionIntroductions, ancestors(op.id, byId))) ||
         (evidence.type === "succeed" &&
             successionCandidate(delegation, delegations));
     if (delegation.audienceRealm !== op.value ||
@@ -280,7 +282,7 @@ function authorityWriteHonored(op, evidence, state, delegations, policies, byId)
     }
     throw new Error(`unsupported authority event ${evidence.type} for ${op.id}`);
 }
-function authorityWriteRejectionReason(op, evidence, state, delegations, policies, byId) {
+function authorityWriteRejectionReason(op, evidence, state, delegations, policies, honoredSuccessionIntroductions, byId) {
     if (evidence.type === "heartbeat" ||
         evidence.type === "revoke" ||
         evidence.type === "beacon") {
@@ -307,7 +309,8 @@ function authorityWriteRejectionReason(op, evidence, state, delegations, policie
     }
     if (delegation.audienceRealm !== op.value ||
         !delegation.roles.includes(op.field) ||
-        !validDelegation(delegation, delegations) ||
+        (!validDelegation(delegation, delegations) &&
+            !candidateDelegationActivated(delegation, delegations, honoredSuccessionIntroductions, ancestors(op.id, byId))) ||
         delegation.issuerRealm !== op.author) {
         return "invalid_transfer";
     }
@@ -690,7 +693,11 @@ function delegationValidation(id, delegations, genesisIds, successionIds, outerR
             validation = { valid: true };
         }
         else if (successionIds.has(delegation.id)) {
-            validation = { valid: false, reason: "succession_candidate" };
+            validation = {
+                valid: false,
+                reason: "succession_candidate",
+                successionRootId: delegation.id,
+            };
         }
         else if (genesisIds.has(delegation.id)) {
             validation = { valid: false, reason: "impostor_genesis" };
@@ -709,12 +716,23 @@ function delegationValidation(id, delegations, genesisIds, successionIds, outerR
         }
         else {
             const parentValidation = delegationValidation(delegation.parentId, delegations, genesisIds, successionIds, outerReplica, cache, visiting);
-            validation =
-                !parentValidation.valid
-                    ? { valid: false, reason: "invalid_parent" }
-                    : delegationAttenuates(delegation, parent.delegation)
-                        ? { valid: true }
-                        : { valid: false, reason: "not_attenuated" };
+            if (!delegationAttenuates(delegation, parent.delegation)) {
+                validation = { valid: false, reason: "not_attenuated" };
+            }
+            else if (parentValidation.valid) {
+                validation = { valid: true };
+            }
+            else if (parentValidation.reason === "succession_candidate" &&
+                parentValidation.successionRootId !== undefined) {
+                validation = {
+                    valid: false,
+                    reason: "succession_candidate",
+                    successionRootId: parentValidation.successionRootId,
+                };
+            }
+            else {
+                validation = { valid: false, reason: "invalid_parent" };
+            }
         }
     }
     visiting.delete(id);
@@ -734,7 +752,20 @@ function successionCandidate(delegation, delegations) {
         record.delegation !== null &&
         delegationKey(record.delegation) === delegationKey(delegation) &&
         !record.validation.valid &&
-        record.validation.reason === "succession_candidate");
+        record.validation.reason === "succession_candidate" &&
+        record.validation.successionRootId === delegation.id);
+}
+function candidateDelegationActivated(delegation, delegations, honoredSuccessionIntroductions, visible) {
+    const record = delegations.get(delegation.id);
+    if (record === undefined ||
+        record.delegation === null ||
+        delegationKey(record.delegation) !== delegationKey(delegation) ||
+        record.validation.valid ||
+        record.validation.reason !== "succession_candidate" ||
+        record.validation.successionRootId === undefined) {
+        return false;
+    }
+    return (honoredSuccessionIntroductions.get(record.validation.successionRootId) ?? []).some((opId) => visible.has(opId));
 }
 function resolveRoot(ops, delegations) {
     for (const op of ops) {

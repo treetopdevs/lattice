@@ -12,6 +12,7 @@ export type DelegationValidation = {
 } | {
     valid: false;
     reason: string;
+    successionRootId?: string;
 };
 export interface AuthorityDelegationRecord {
     delegation: AuthorityDelegationEvidence | null;

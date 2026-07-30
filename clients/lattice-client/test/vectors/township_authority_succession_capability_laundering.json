@@ -1,5 +1,8 @@
 {
   "capabilityCase": {
+    "childCommandOperationId": "sPWZxika1uVMKOZixEJbvwChVsWMq-X2rlMWQUQd4eM",
+    "childDelegationId": "Vm0retLWRril88dHTKL0g0PiF4za3Xe72e6xUGVYeEI",
+    "childGrantOperationId": "dlBW5Fq3NHdo77sByXQPhMzi6ZZ2csEPWPzS-Wvy7us",
     "expectedReason": "invalid_capability",
     "successionOperationId": "F8NelgsFKeyiC8CWwa4egzjvQCxh0Llci6GtNHK5Z9I",
     "targetOperationId": "iDujORekG69L5BU8xcMBOm0UptOz4eahS2riOkkkbKc",
@@ -15,11 +18,16 @@
       [
         "iDujORekG69L5BU8xcMBOm0UptOz4eahS2riOkkkbKc",
         "invalid_capability"
+      ],
+      [
+        "sPWZxika1uVMKOZixEJbvwChVsWMq-X2rlMWQUQd4eM",
+        "invalid_capability"
       ]
     ],
     "quarantine": [
       "F8NelgsFKeyiC8CWwa4egzjvQCxh0Llci6GtNHK5Z9I",
-      "iDujORekG69L5BU8xcMBOm0UptOz4eahS2riOkkkbKc"
+      "iDujORekG69L5BU8xcMBOm0UptOz4eahS2riOkkkbKc",
+      "sPWZxika1uVMKOZixEJbvwChVsWMq-X2rlMWQUQd4eM"
     ],
     "state": {
       "clerk": "clerk",
@@ -74,6 +82,32 @@
       "kind": "command",
       "mutation": "append",
       "value": "mallory: succession-laundered capability"
+    },
+    {
+      "author": "mallory",
+      "command": "grant resident",
+      "deps": [
+        "iDujORekG69L5BU8xcMBOm0UptOz4eahS2riOkkkbKc"
+      ],
+      "field": "__authority",
+      "hash": "dlBW5Fq3NHdo77sByXQPhMzi6ZZ2csEPWPzS-Wvy7us",
+      "id": "dlBW5Fq3NHdo77sByXQPhMzi6ZZ2csEPWPzS-Wvy7us",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "resident",
+      "command": "post",
+      "deps": [
+        "Dg-dAtwAi7Iwz5pjqUpqUCbUF-uwFAEAIvJaZCDL3Zw"
+      ],
+      "field": "posts",
+      "hash": "sPWZxika1uVMKOZixEJbvwChVsWMq-X2rlMWQUQd4eM",
+      "id": "sPWZxika1uVMKOZixEJbvwChVsWMq-X2rlMWQUQd4eM",
+      "kind": "command",
+      "mutation": "append",
+      "value": "resident: child of rejected succession capability"
     }
   ],
   "oracleCarrierOps": [
@@ -239,6 +273,78 @@
       "kind": "command",
       "replica": "replica:matter:succession-capability-laundering#root:hqfGwZ5Ds-9OwtTy8q2nhkGrcYA541l7R7avt1QC1Cc",
       "sig": "MZaImvsyrizukoqi4ZfMh+qAH4ndV3/bajBbRHnaCfBQkNgcnHIN/vBlZLrMDO6pjxQ5HEaiOVxbMJygFaCaCg==",
+      "v": 1
+    },
+    {
+      "author": "/DvUseCbgYWwx3DorJbjtX3NfeSWe/iWrF0m0Xb+tE8=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "grant"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "N+iG3NVYVNz8sHzzs+uNSo3cD83GfKi9pigNCvX7JFI=",
+              "id": "Vm0retLWRril88dHTKL0g0PiF4za3Xe72e6xUGVYeEI",
+              "issuer": "/DvUseCbgYWwx3DorJbjtX3NfeSWe/iWrF0m0Xb+tE8=",
+              "live": false,
+              "ops": [
+                "post"
+              ],
+              "parent_id": "2z3FrFlCMg8M0xdpqlqDbkdA6JimIiwyHWgcVKOfY8k",
+              "replica": "replica:matter:succession-capability-laundering#root:hqfGwZ5Ds-9OwtTy8q2nhkGrcYA541l7R7avt1QC1Cc",
+              "roles": [],
+              "sig": "YKhz1yG6ElMfNkUEhgQeDtzb81ImwWjEm0Oh1RKG/3JRgMSDSwYTiTahO/naClLUci6PkxaZwTlON4CglXJZDA=="
+            }
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "iDujORekG69L5BU8xcMBOm0UptOz4eahS2riOkkkbKc"
+      ],
+      "id": "dlBW5Fq3NHdo77sByXQPhMzi6ZZ2csEPWPzS-Wvy7us",
+      "kind": "authority",
+      "replica": "replica:matter:succession-capability-laundering#root:hqfGwZ5Ds-9OwtTy8q2nhkGrcYA541l7R7avt1QC1Cc",
+      "sig": "DRCw3JnT/D2sKa/pT4G0MpCujaEsV+bSPv2enhGGXVnrlj3EgCqiFGRdJX3QEZL6ymQfjwVUom3hOs1PF1+7DQ==",
+      "v": 1
+    },
+    {
+      "author": "N+iG3NVYVNz8sHzzs+uNSo3cD83GfKi9pigNCvX7JFI=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "post"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "cmVzaWRlbnQ6IGNoaWxkIG9mIHJlamVjdGVkIHN1Y2Nlc3Npb24gY2FwYWJpbGl0eQ=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "Vm0wcmV0TFdScmlsODhkSFRLTDBnMFBpRjR6YTNYZTcyZTZ4VUdWWWVFSQ=="
+      ],
+      "deps": [
+        "Dg-dAtwAi7Iwz5pjqUpqUCbUF-uwFAEAIvJaZCDL3Zw"
+      ],
+      "id": "sPWZxika1uVMKOZixEJbvwChVsWMq-X2rlMWQUQd4eM",
+      "kind": "command",
+      "replica": "replica:matter:succession-capability-laundering#root:hqfGwZ5Ds-9OwtTy8q2nhkGrcYA541l7R7avt1QC1Cc",
+      "sig": "gmHTy/0u2KGfHrP8TjtfoWVUrU1PdMJU95kDBHQARHvs0+aN+Rle40RxeWHMx3n2lopPOMID/uEYw5x4g6P+AQ==",
       "v": 1
     }
   ],

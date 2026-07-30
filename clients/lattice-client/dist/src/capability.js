@@ -22,7 +22,8 @@ export function capabilityQuarantine(op, schema, byId, security, ancCache = new 
     const visible = ancestors(op.id, byId, ancCache);
     const honoredSuccessionVisible = !record.validation.valid &&
         record.validation.reason === "succession_candidate" &&
-        (security.honoredSuccessionIntroductions.get(delegation.id) ?? [])
+        record.validation.successionRootId !== undefined &&
+        (security.honoredSuccessionIntroductions.get(record.validation.successionRootId) ?? [])
             .some((opId) => visible.has(opId));
     if (!record.validation.valid && !honoredSuccessionVisible) {
         return { quarantined: true, reason: "invalid_capability" };

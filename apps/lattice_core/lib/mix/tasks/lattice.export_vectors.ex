@@ -1255,18 +1255,38 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     {sim, post} =
       Sim.command(sim, "mallory", :post, [rejected_post], cap: unrooted.id)
 
+    resident = Sim.identity(sim, "resident")
+
+    child =
+      Delegation.new(mallory, Sim.replica(sim), resident.pub,
+        ops: [:post],
+        parent_id: unrooted.id
+      )
+
+    {sim, child_grant} = Sim.append(sim, "mallory", :authority, {:grant, child})
+    rejected_child_post = "resident: child of rejected succession capability"
+
+    {sim, child_post} =
+      Sim.command(sim, "resident", :post, [rejected_child_post], cap: child.id)
+
     sim = Sim.sync_all(sim)
     log = Sim.log(sim, "clerk")
 
     assert_authority_reason!(log, succession.id, :unauthorized_succession)
     assert_authority_reason!(log, post.id, :invalid_capability)
+    assert_authority_honored!(log, child_grant.id)
+    assert_authority_reason!(log, child_post.id, :invalid_capability)
     assert_post_absent!(log, rejected_post)
+    assert_post_absent!(log, rejected_child_post)
 
     capability_scenario("township_authority_succession_capability_laundering", sim, log, %{
       "targetOperationId" => post.id,
       "expectedReason" => "invalid_capability",
       "successionOperationId" => succession.id,
-      "unrootedDelegationId" => unrooted.id
+      "unrootedDelegationId" => unrooted.id,
+      "childGrantOperationId" => child_grant.id,
+      "childCommandOperationId" => child_post.id,
+      "childDelegationId" => child.id
     })
   end
 
@@ -1335,8 +1355,16 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
     sim = Sim.sync_all(sim)
 
+    {sim, transfer_delegation} =
+      Sim.transfer(sim, "resident", "mallory", :clerk,
+        at_tick: 4,
+        ops: [:close_matter]
+      )
+
+    sim = Sim.sync_all(sim)
+
     {sim, close} =
-      Sim.command(sim, "resident", :close_matter, [], cap: successor_delegation.id)
+      Sim.command(sim, "mallory", :close_matter, [], cap: transfer_delegation.id)
 
     sim = Sim.sync_all(sim)
     log = Sim.log(sim, "clerk")
@@ -1350,7 +1378,8 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       "expectedReason" => "impostor_genesis",
       "successionOperationId" => succession.id,
       "honoredCommandOperationId" => close.id,
-      "successorDelegationId" => successor_delegation.id
+      "successorDelegationId" => successor_delegation.id,
+      "transferDelegationId" => transfer_delegation.id
     })
   end
 

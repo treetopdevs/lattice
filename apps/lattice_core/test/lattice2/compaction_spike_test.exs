@@ -15,6 +15,7 @@ defmodule Lattice2.CompactionSpikeTest do
   @moduletag timeout: 300_000
 
   alias Lattice.{Authority, CompactionSpike, Dag, Log, Reduce, Sim, Sync}
+  alias Lattice.Authority.Delegation
   alias Lattice.Demo.Thread
 
   @replica "replica:thread:compaction"
@@ -87,11 +88,17 @@ defmodule Lattice2.CompactionSpikeTest do
 
     # Double transfer above F: r2, on one frontier, hands the role to both r0
     # and r1 without either branch seeing the other.
-    {branch_a, _da} = Sim.transfer(sim, "r2", "r0", :moderator, at_tick: 4)
-    {branch_b, _db} = Sim.transfer(sim, "r2", "r1", :moderator, at_tick: 4)
+    {branch_a, da} = Sim.transfer(sim, "r2", "r0", :moderator, at_tick: 4)
+    {branch_b, db} = Sim.transfer(sim, "r2", "r1", :moderator, at_tick: 4)
 
     {m1, _, _} = Sync.reconcile(Sim.log(branch_a, "r2"), Sim.log(branch_b, "r2"))
     {full_log, _, _} = Sync.reconcile(m1, Sim.log(branch, "r1"))
+
+    rejected_descendant_transfers =
+      for {op_id, %{body: {:transfer, :moderator, %Delegation{id: delegation_id}, 4}}} <-
+            Log.ops(full_log),
+          delegation_id in [da.id, db.id],
+          do: op_id
 
     %{
       log: full_log,
@@ -100,7 +107,8 @@ defmodule Lattice2.CompactionSpikeTest do
       r2_lock: r2_lock,
       revoked_post: revoked_post,
       no_cap: no_cap,
-      premature: premature
+      premature: premature,
+      rejected_descendant_transfers: rejected_descendant_transfers
     }
   end
 
@@ -115,7 +123,10 @@ defmodule Lattice2.CompactionSpikeTest do
     assert res.reasons[ctx.revoked_post.id] == :revoked_capability
     assert res.reasons[ctx.no_cap.id] == :no_capability
     assert res.reasons[ctx.premature.id] == :premature_succession
-    assert :double_transfer in Map.values(res.reasons)
+
+    assert Enum.sort(for {id, :invalid_transfer} <- res.reasons, do: id) ==
+             Enum.sort(ctx.rejected_descendant_transfers)
+
     refute Map.has_key?(res.reasons, ctx.r2_lock.id)
 
     # The straddle ops are genuinely above F (retained), and compaction
