@@ -133,6 +133,8 @@ export interface Op {
     command?: string;
     /** BEAM-compatible command decode error, quarantined before capability checks. */
     commandError?: CommandError;
+    /** Structurally malformed carrier term retained only for local audit/quarantine. */
+    structuralError?: "malformed_term";
     /** Capability id retained from carrier evidence; decoded nil is explicit null. */
     cap?: string | null;
     /** Semantic authority facts retained from the verified carrier body. */

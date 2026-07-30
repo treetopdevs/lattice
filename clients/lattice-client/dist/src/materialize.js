@@ -38,7 +38,12 @@ export function materialize(schema, ops, included, externallyQuarantined = new S
     const byId = index(ops);
     const inc = included ?? new Set(ops.map((o) => o.id));
     const order = canonicalOrder(ops.filter((o) => inc.has(o.id)), byId);
-    const authorityIncluded = new Set([...inc].filter((id) => !externallyQuarantined.has(id)));
+    const structurallyQuarantined = new Set(ops
+        .filter((op) => inc.has(op.id) &&
+        op.structuralError !== undefined)
+        .map((op) => op.id));
+    const authorityIncluded = new Set([...inc].filter((id) => !externallyQuarantined.has(id) &&
+        !structurallyQuarantined.has(id)));
     const authorityOrder = order.filter((id) => authorityIncluded.has(id));
     const depthCache = new Map();
     const depthOf = (id) => depth(id, byId, depthCache);
@@ -54,9 +59,13 @@ export function materialize(schema, ops, included, externallyQuarantined = new S
     // 1. quarantine pass (deps-decidable, over the included set)
     const quarantine = [];
     const quarantineReasons = new Map(authority.quarantineReasons);
+    for (const id of structurallyQuarantined) {
+        quarantineReasons.set(id, "malformed_term");
+    }
     const quarantined = new Set([
         ...authority.quarantinedWrites,
         ...externallyQuarantined,
+        ...structurallyQuarantined,
     ]);
     for (const id of order) {
         const op = byId.get(id);

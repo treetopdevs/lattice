@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { createPrivateKey, createPublicKey, createHash, sign as edSign } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { carrierChallenge, carrierOpsToSemanticOps, carrierTranscriptHex, integrate, materialize, signCarrierChallenge, syncCarrierOnce, townshipCarrierCommandNames, toRequest, toSend, } from "../src/index";
+import { carrierChallenge, carrierDelegationsFromFrames, carrierOpsToSemanticOps, carrierTranscriptHex, integrate, materialize, signCarrierChallenge, syncCarrierOnce, townshipCarrierCommandNames, toRequest, toSend, } from "../src/index";
 const here = dirname(fileURLToPath(import.meta.url));
 const vecDir = join(here, "vectors");
 let failures = 0;
@@ -62,6 +62,11 @@ if (commandFrame === undefined)
 const commandFrameFixture = commandFrame;
 function commandError(op) {
     return op === undefined ? undefined : Reflect.get(op, "commandError");
+}
+function decodeError(op) {
+    return op === undefined
+        ? undefined
+        : Reflect.get(op, "structuralError") ?? commandError(op);
 }
 function commandFrameNamed(name, args, suffix) {
     return commandFrameWithBody(["tuple", [["atom", name], ["list", args]]], suffix);
@@ -199,6 +204,9 @@ const malformedTermFrames = [
     ["tuple", 5],
     ["map", [7]],
     ["bin", 5],
+    ["bin", "%%%"],
+    ["int", "5abc"],
+    ["int", "18446744073709551616"],
 ].map((body, index) => {
     const frame = structuredClone(commandFrameFixture);
     Reflect.set(frame, "id", `${commandFrameFixture.id}-malformed-term-${index}`);
@@ -227,11 +235,93 @@ catch (error) {
 }
 check("malformed raw command terms cannot wedge direct ingest", {
     failure: malformedTermFailure,
-    reasons: malformedTermOps.map(commandError),
+    reasons: malformedTermOps.map(decodeError),
 }, {
     failure: "",
-    reasons: Array.from({ length: malformedTermFrames.length }, () => "malformed_command"),
+    reasons: Array.from({ length: malformedTermFrames.length }, () => "malformed_term"),
 });
+function injectDelegationType(term) {
+    switch (term[0]) {
+        case "delegation":
+            Reflect.set(term[1], "type", "poisoned-discriminant");
+            return true;
+        case "list":
+        case "tuple":
+        case "mapset":
+            return term[1].some(injectDelegationType);
+        case "map":
+            return term[1].some(([key, value]) => injectDelegationType(key) || injectDelegationType(value));
+        case "nil":
+        case "bool":
+        case "int":
+        case "bin":
+        case "atom":
+            return false;
+    }
+}
+const authorityFrame = vector.clientBaseCarrierOps.find((frame) => frame.kind === "authority");
+if (authorityFrame === undefined) {
+    throw new Error("missing authority frame fixture");
+}
+const poisonedDelegationFrame = structuredClone(authorityFrame);
+if (!injectDelegationType(poisonedDelegationFrame.body)) {
+    throw new Error("missing delegation term fixture");
+}
+let poisonedDelegationOps = [];
+let poisonedDelegationFailure = "";
+try {
+    poisonedDelegationOps = carrierOpsToSemanticOps([poisonedDelegationFrame, commandFrameFixture], vector.realmByPubkey);
+}
+catch (error) {
+    poisonedDelegationFailure =
+        error instanceof Error ? error.message : String(error);
+}
+check("hash-ignored delegation keys cannot override the decoded discriminant", {
+    failure: poisonedDelegationFailure,
+    delegationCount: carrierDelegationsFromFrames([
+        poisonedDelegationFrame,
+    ]).length,
+    authorityType: poisonedDelegationOps[0]?.authority?.type,
+}, {
+    failure: "",
+    delegationCount: 1,
+    authorityType: "genesis",
+});
+const malformedAuthorityFrame = structuredClone(authorityFrame);
+Reflect.set(malformedAuthorityFrame, "id", `${authorityFrame.id}-malformed-authority`);
+Reflect.set(malformedAuthorityFrame, "body", ["tuple", 5]);
+let malformedAuthorityOps = [];
+let malformedAuthorityFailure = "";
+try {
+    malformedAuthorityOps = carrierOpsToSemanticOps([malformedAuthorityFrame, commandFrameFixture], vector.realmByPubkey);
+}
+catch (error) {
+    malformedAuthorityFailure =
+        error instanceof Error ? error.message : String(error);
+}
+check("malformed authority terms cannot wedge neighboring operations", {
+    failure: malformedAuthorityFailure,
+    opCount: malformedAuthorityOps.length,
+    reason: decodeError(malformedAuthorityOps[0]),
+}, {
+    failure: "",
+    opCount: 2,
+    reason: "malformed_term",
+});
+const malformedAuthorityOp = malformedAuthorityOps[0];
+if (malformedAuthorityOp !== undefined) {
+    const withMalformedAuthority = materialize(vector.schema, [...clientDiverged, malformedAuthorityOp]);
+    const withoutMalformedAuthority = materialize(vector.schema, clientDiverged);
+    check("structural quarantine excludes malformed authority from analysis", {
+        quarantined: withMalformedAuthority.quarantine.includes(malformedAuthorityOp.id),
+        reason: withMalformedAuthority.quarantineReasons.get(malformedAuthorityOp.id),
+        state: withMalformedAuthority.state,
+    }, {
+        quarantined: true,
+        reason: "malformed_term",
+        state: withoutMalformedAuthority.state,
+    });
+}
 const validCustodyFrame = toolshedVector.oracleCarrierOps.find((frame) => frame.id === toolshedVector.expectAtFullFrontier.winners.holder);
 if (validCustodyFrame === undefined) {
     throw new Error("missing honored custody transfer fixture");

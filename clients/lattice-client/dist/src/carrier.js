@@ -23,6 +23,7 @@ function carrierDelegationsFromTerm(term) {
         case "atom":
             return [];
     }
+    return [];
 }
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
@@ -688,16 +689,16 @@ export function carrierOpToSemanticOp(frame, realmByPubkey = {}) {
     const op = assertCarrierOpFrame(frame);
     let payload;
     let cap;
+    let structuralError;
     try {
         const body = decodeCarrierTerm(op.body);
         payload = payloadFromBody(op.kind, body, realmByPubkey);
         cap = capabilityId(decodeCarrierTerm(op.cap));
     }
-    catch (error) {
-        if (op.kind !== "command")
-            throw error;
-        payload = neutralPayload("malformed_command", "malformed_command");
+    catch {
+        payload = neutralPayload("malformed_term");
         cap = null;
+        structuralError = "malformed_term";
     }
     return {
         id: op.id,
@@ -713,6 +714,7 @@ export function carrierOpToSemanticOp(frame, realmByPubkey = {}) {
         ...(payload.commandError === undefined
             ? {}
             : { commandError: payload.commandError }),
+        ...(structuralError === undefined ? {} : { structuralError }),
         cap,
         ...(payload.authority === undefined ? {} : { authority: payload.authority }),
         ...(payload.consent === undefined
@@ -779,12 +781,7 @@ function decodeCarrierTerm(term) {
                 throw new Error("malformed bool term");
             return term[1];
         case "int": {
-            const value = term[1];
-            const parsed = typeof value === "number" ? value : Number.parseInt(value, 10);
-            if (!Number.isInteger(parsed) || parsed < 0) {
-                throw new Error("malformed integer term");
-            }
-            return parsed;
+            return parseCarrierInteger(term[1]);
         }
         case "bin": {
             if (typeof term[1] !== "string")
@@ -834,7 +831,7 @@ function decodeCarrierTerm(term) {
                 Array.isArray(term[1])) {
                 throw new Error("malformed delegation term");
             }
-            return { type: "delegation", ...term[1] };
+            return { ...term[1], type: "delegation" };
         }
     }
     throw new Error("malformed carrier term");
@@ -1447,12 +1444,38 @@ function concat(...chunks) {
     return out;
 }
 export function base64ToBytes(value) {
-    if (typeof Buffer !== "undefined")
-        return new Uint8Array(Buffer.from(value, "base64"));
+    if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) {
+        throw new Error("malformed base64");
+    }
+    const decoded = typeof Buffer !== "undefined"
+        ? new Uint8Array(Buffer.from(value, "base64"))
+        : decodeBase64WithAtob(value);
+    if (bytesToBase64(decoded) !== value) {
+        throw new Error("non-canonical base64");
+    }
+    return decoded;
+}
+function decodeBase64WithAtob(value) {
     const atobFn = globalThis.atob;
     if (!atobFn)
         throw new Error("base64 decoding unavailable");
     return Uint8Array.from(atobFn(value), (char) => char.charCodeAt(0));
+}
+function parseCarrierInteger(value) {
+    if (typeof value === "number") {
+        if (!Number.isSafeInteger(value) || value < 0) {
+            throw new Error("malformed integer term");
+        }
+        return value;
+    }
+    if (!/^(0|[1-9][0-9]*)$/.test(value)) {
+        throw new Error("malformed integer term");
+    }
+    const parsed = BigInt(value);
+    if (parsed > uint64Max || parsed > BigInt(Number.MAX_SAFE_INTEGER)) {
+        throw new Error("unsupported integer precision");
+    }
+    return Number(parsed);
 }
 function base64UrlToBytes(value) {
     const base64 = value.replaceAll("-", "+").replaceAll("_", "/");
