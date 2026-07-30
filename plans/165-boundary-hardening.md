@@ -58,9 +58,12 @@ Recorded on `codex/round4-security-reliability` during the reviewed execution:
   fixed endpoint and remains a documented residual. The signing prefix allowlist constrains which
   protocol may be signed, not the semantics of a valid delegation or carrier-session transcript; a
   WebView compromise could still request authority-bearing signatures inside those allowed domains.
-  Both packaged macOS smokes passed functionally under the rebuilt CSP. The harness does not capture
-  the WebView console, so absence of CSP violation reports is not evidenced. This macOS host has no
-  attached Android device or emulator, so the on-device
+  Reviewer feedback narrowed both build-time state-exchange validators to the same loopback-only
+  HTTP origins as the CSP; `https:` and IPv6 loopback now fail at configuration instead of later at
+  WebView fetch time. After that validator alignment and `form-action 'none'` landed, both packaged
+  macOS smokes were rebuilt, rerun, and passed functionally. The harness does not capture the WebView
+  console, so absence of CSP violation reports is not evidenced. This macOS host has no attached
+  Android device or emulator, so the on-device
   `tauri:android:release:browser-state-exchange` gate remains explicitly unrun; the loopback-only
   CSP contract is pinned statically here and must be reverified on an Android host.
 
@@ -250,7 +253,10 @@ deferred to a separate append-only archive/journal design; this plan does not ch
 
 - **Part A**: `clients/township-tauri-shell/src-tauri/tauri.conf.json`,
   `clients/township-tauri-shell/src-tauri/src/lib.rs`,
-  `clients/township-tauri-shell/src-tauri/tests/native_commands.rs`
+  `clients/township-tauri-shell/src-tauri/tests/native_commands.rs`,
+  `clients/township-tauri-shell/test/runtime_wiring_contract.mjs`, and the reviewer-driven
+  CSP-alignment changes in `src/township_release_pairing_probe.ts`,
+  `src/township_release_onboarding_probe.ts`, and their focused contract tests
 - **Part B**: `config/config.exs`, `config/dev.exs` and `config/test.exs` (create if absent),
   `config/runtime.exs`
 - **Part C**: `apps/lattice_carrier_server/lib/lattice_carrier_server/web_socket.ex`,
@@ -261,9 +267,10 @@ deferred to a separate append-only archive/journal design; this plan does not ch
 
 - **The key-custody implementation itself.** Custody is correct — no command returns key material,
   the governance/carrier alias fence works, probe writers are sanitized. Do not restructure it.
-- **`clients/township-tauri-shell/src/**` (the JS/Vue side).** Part A adds a native-side constraint.
-  If the constraint breaks a legitimate JS caller, that is a STOP condition to report, not a JS
-  change to make.
+- **Other `clients/township-tauri-shell/src/**` JS/Vue behavior.** The reviewer-driven exception
+  above only makes the build-time state-exchange validators match the CSP. If a native constraint
+  breaks any other legitimate JS caller, that remains a STOP condition to report, not a JS change
+  to make.
 - **Any change to canonical encoding or the wire format.** The domain tags are read-only inputs to
   Part A's allowlist.
 - **Replacing the Wave A1 persistence path with an append-only journal or bounding

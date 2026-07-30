@@ -25,6 +25,20 @@ test("Tauri serves the Vue build and registers the Township deep-link scheme", (
 test("the packaged and development CSPs admit only the loopback HTTP state-exchange seam", () => {
   const security = readJson(shellRoot, "src-tauri/tauri.conf.json").app.security;
 
+  assert.equal(security.csp["default-src"], "'self' customprotocol: asset:");
+  assert.equal(
+    security.csp["connect-src"],
+    "'self' ipc: http://ipc.localhost http://127.0.0.1:* http://localhost:* ws: wss:",
+  );
+  assert.equal(
+    security.devCsp["default-src"],
+    "'self' customprotocol: asset: http://localhost:5173",
+  );
+  assert.equal(
+    security.devCsp["connect-src"],
+    "'self' ipc: http://ipc.localhost http://127.0.0.1:* http://localhost:* http://localhost:5173 ws://localhost:5173 ws: wss:",
+  );
+
   for (const policy of [security.csp, security.devCsp]) {
     const connectSources = policy["connect-src"].split(/\s+/);
 
