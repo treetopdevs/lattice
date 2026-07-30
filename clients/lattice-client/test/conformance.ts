@@ -25,6 +25,7 @@ import {
   decodeCarrierOpFrame,
   index,
   materialize,
+  townshipCarrierCommandNames,
   verifyCarrierOp,
   verifyWitnessedSuccessionCertificate,
   witnessedRecoveryPolicyId,
@@ -51,6 +52,16 @@ function check(name: string, got: unknown, want: unknown) {
 
 function sortedPairs(pairs: readonly [string, string][]): [string, string][] {
   return [...pairs].sort(([left], [right]) => left.localeCompare(right));
+}
+
+function sortedStringArray(value: unknown): string[] | null {
+  if (
+    !Array.isArray(value) ||
+    !value.every((item): item is string => typeof item === "string")
+  ) {
+    return null;
+  }
+  return [...value].sort();
 }
 
 function stableComparisonValue(value: unknown): unknown {
@@ -197,6 +208,15 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
       check(`command ${frame.id} decoded`, semantic !== undefined, true);
       check(`command ${frame.id} retained capability`, semantic?.cap, expectedCap);
     }
+  }
+
+  if (vec.scenario === "township_link_election") {
+    const commandNames = vec.capabilityCase?.commandNames;
+    check(
+      "Township command decoder table matches the BEAM DSL",
+      townshipCarrierCommandNames(),
+      sortedStringArray(commandNames),
+    );
   }
 
   if (vec.scenario === "township_authority_forged_root") {
@@ -364,6 +384,31 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
     check(`state.${field}`, full.state[field], want);
   }
   check("quarantine set", [...full.quarantine].sort(), [...exp.quarantine].sort());
+  if (vec.scenario === "township_link_election") {
+    const linkOperationId = vec.capabilityCase?.linkOperationId;
+    const withoutLink =
+      typeof linkOperationId === "string"
+        ? materialize(
+            vec.schema,
+            ops.filter((op) => op.id !== linkOperationId),
+          )
+        : null;
+    const linkOperation =
+      typeof linkOperationId === "string"
+        ? ops.find((op) => op.id === linkOperationId)
+        : undefined;
+
+    check(
+      "link_election carries its real command name",
+      linkOperation?.command,
+      "link_election",
+    );
+    check(
+      "link_election zero-mutation state is byte-identical",
+      JSON.stringify(full.state),
+      withoutLink === null ? null : JSON.stringify(withoutLink.state),
+    );
+  }
   if (vec.capabilityCase !== undefined) {
     const reasoned = full as typeof full & {
       quarantineReasons?: ReadonlyMap<string, string>;

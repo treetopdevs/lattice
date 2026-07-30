@@ -106,6 +106,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_authority_succession_genesis_poisoning(),
       township_authority_replayed_genesis(),
       township_foreign_replica_injection(),
+      township_link_election(),
       township_capability_missing(),
       township_capability_invalid(),
       township_capability_wrong_audience(),
@@ -1727,6 +1728,47 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     })
   end
 
+  defp township_link_election do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:link-election",
+        ["clerk", "resident"],
+        seed: "township:link-election"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+
+    {sim, delegation} =
+      Sim.grant(sim, "clerk", "resident", ops: [:link_election])
+
+    sim = Sim.sync_all(sim)
+    spec_digest = String.duplicate("E", 43)
+
+    {sim, link} =
+      Sim.command(
+        sim,
+        "resident",
+        :link_election,
+        [spec_digest],
+        cap: delegation.id
+      )
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+    assert_authority_honored!(log, link.id)
+
+    capability_scenario("township_link_election", sim, log, %{
+      "case" => "link_election",
+      "linkOperationId" => link.id,
+      "specDigest" => spec_digest,
+      "commandNames" =>
+        Enum.map(Matter.__lattice_commands__(), fn {name, _arity, _args} ->
+          Atom.to_string(name)
+        end)
+    })
+  end
+
   defp township_capability_invalid do
     sim =
       Sim.new(
@@ -3079,14 +3121,18 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
   end
 
   defp payload_json(module, %Lattice.Op{kind: :command, body: {cmd, args}}, _realms) do
-    [{field, mutation} | _] = module.__apply_command__(cmd, args)
+    case module.__apply_command__(cmd, args) do
+      [{field, mutation} | _] ->
+        %{
+          field: field_name(field),
+          mutation: mutation_name(mutation),
+          value: mutation_value(mutation),
+          command: Atom.to_string(cmd)
+        }
 
-    %{
-      field: field_name(field),
-      mutation: mutation_name(mutation),
-      value: mutation_value(mutation),
-      command: Atom.to_string(cmd)
-    }
+      [] ->
+        neutral_payload(Atom.to_string(cmd))
+    end
   rescue
     ArgumentError -> neutral_payload("malformed_command")
   end

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { createPrivateKey, createPublicKey, createHash, sign as edSign } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { carrierChallenge, carrierOpsToSemanticOps, carrierTranscriptHex, integrate, materialize, signCarrierChallenge, syncCarrierOnce, toRequest, toSend, } from "../src/index";
+import { carrierChallenge, carrierOpsToSemanticOps, carrierTranscriptHex, integrate, materialize, signCarrierChallenge, syncCarrierOnce, townshipCarrierCommandNames, toRequest, toSend, } from "../src/index";
 const here = dirname(fileURLToPath(import.meta.url));
 const vecDir = join(here, "vectors");
 let failures = 0;
@@ -55,6 +55,27 @@ for (const [field, want] of Object.entries(vector.expectAfterSync.state)) {
 }
 check("merged op ids", merged.map((o) => o.id).sort(), vector.expectAfterSync.opIds);
 check("authority quarantine", materialized.quarantine.sort(), vector.expectAfterSync.authorityQuarantine.map(([id]) => id).sort());
+const commandFrame = vector.clientDivergedCarrierOps.find((candidate) => candidate.kind === "command");
+if (commandFrame === undefined)
+    throw new Error("missing command frame fixture");
+const unknownCommandBody = [
+    "tuple",
+    [["atom", "future_unmapped_command"], ["list", []]],
+];
+const unknownCommandFrame = {
+    ...structuredClone(commandFrame),
+    body: unknownCommandBody,
+};
+let unknownCommandFailure = "";
+try {
+    carrierOpsToSemanticOps([unknownCommandFrame], vector.realmByPubkey);
+}
+catch (error) {
+    unknownCommandFailure =
+        error instanceof Error ? error.message : String(error);
+}
+check("unknown command fails loudly", unknownCommandFailure, "unknown carrier command: future_unmapped_command");
+check("Township decoder table includes link_election", townshipCarrierCommandNames().includes("link_election"), true);
 console.log(`\n▸ ${foreignReplicaVector.scenario} carrier ingest`);
 const emptyPushReport = () => ({
     accepted: [],

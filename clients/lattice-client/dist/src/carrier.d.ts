@@ -111,6 +111,8 @@ export interface CarrierDelegation {
     expires_epoch?: number;
 }
 export declare function carrierDelegationsFromFrames(frames: readonly CarrierOpFrame[]): CarrierDelegation[];
+/** Command names decoded for the Township matter carrier boundary. */
+export declare function townshipCarrierCommandNames(): string[];
 interface WebSocketConstructor {
     new (url: string): WebSocketLike;
 }

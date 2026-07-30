@@ -32,6 +32,55 @@ const atomTag = 60_000;
 const tupleTag = 60_001;
 const carrierOpWireVersion = 1;
 const carrierSessionVersion = 2;
+const townshipCommandDecoders = {
+    set_title: (args) => ({
+        field: "title",
+        mutation: "write",
+        value: binText(args[0]),
+        command: "set_title",
+    }),
+    set_summary: (args) => ({
+        field: "summary",
+        mutation: "write",
+        value: binText(args[0]),
+        command: "set_summary",
+    }),
+    post: (args) => ({
+        field: "posts",
+        mutation: "append",
+        value: binText(args[0]),
+        command: "post",
+    }),
+    admit: (args) => ({
+        field: "members",
+        mutation: "add",
+        value: binText(args[0]),
+        command: "admit",
+    }),
+    remove_member: (args) => ({
+        field: "members",
+        mutation: "remove",
+        value: binText(args[0]),
+        command: "remove_member",
+    }),
+    link_election: () => neutralPayload("link_election"),
+    close_matter: () => ({
+        field: "clerk_locked",
+        mutation: "write",
+        value: true,
+        command: "close_matter",
+    }),
+    reopen_matter: () => ({
+        field: "clerk_locked",
+        mutation: "write",
+        value: false,
+        command: "reopen_matter",
+    }),
+};
+/** Command names decoded for the Township matter carrier boundary. */
+export function townshipCarrierCommandNames() {
+    return Object.keys(townshipCommandDecoders).sort();
+}
 export function carrierTranscriptBytes(challenge, realm, pubkey) {
     return canonicalTerm([
         "carrier-session-v2",
@@ -651,21 +700,10 @@ function payloadFromBody(kind, body, realmByPubkey) {
     if (kind === "command" && isTuple(body)) {
         const command = atomName(body.values[0]);
         const args = listValues(body.values[1]);
+        const townshipDecoder = townshipCommandDecoders[command];
+        if (townshipDecoder !== undefined)
+            return townshipDecoder(args);
         switch (command) {
-            case "set_title":
-                return { field: "title", mutation: "write", value: binText(args[0]), command };
-            case "set_summary":
-                return { field: "summary", mutation: "write", value: binText(args[0]), command };
-            case "post":
-                return { field: "posts", mutation: "append", value: binText(args[0]), command };
-            case "admit":
-                return { field: "members", mutation: "add", value: binText(args[0]), command };
-            case "remove_member":
-                return { field: "members", mutation: "remove", value: binText(args[0]), command };
-            case "close_matter":
-                return { field: "clerk_locked", mutation: "write", value: true, command };
-            case "reopen_matter":
-                return { field: "clerk_locked", mutation: "write", value: false, command };
             case "describe":
                 return { field: "description", mutation: "write", value: binText(args[0]), command };
             case "note_condition":
@@ -689,6 +727,7 @@ function payloadFromBody(kind, body, realmByPubkey) {
                 };
             }
         }
+        throw new Error(`unknown carrier command: ${command}`);
     }
     if (kind === "authority" && isTuple(body)) {
         const command = atomName(body.values[0]);

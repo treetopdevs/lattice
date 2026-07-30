@@ -10,11 +10,18 @@ import {
   materialize,
   signCarrierChallenge,
   syncCarrierOnce,
+  townshipCarrierCommandNames,
   toRequest,
   toSend,
 } from "../src/index";
-import type { CarrierPushReport, Op, ReplicaSchema } from "../src/index";
-import type { CarrierChallenge } from "../src/index";
+import type {
+  CarrierChallenge,
+  CarrierOpFrame,
+  CarrierPushReport,
+  CarrierTerm,
+  Op,
+  ReplicaSchema,
+} from "../src/index";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const vecDir = join(here, "vectors");
@@ -41,7 +48,7 @@ interface CarrierVector {
   client: { realm: string; sessionSeed: string; sessionPubkey: string };
   peer: { realm: string; sessionPubkey: string };
   clientBaseCarrierOps: unknown[];
-  clientDivergedCarrierOps: unknown[];
+  clientDivergedCarrierOps: CarrierOpFrame[];
   peerDivergedCarrierOps: unknown[];
   expectAfterSync: {
     state: Record<string, unknown>;
@@ -124,6 +131,36 @@ check(
   "authority quarantine",
   materialized.quarantine.sort(),
   vector.expectAfterSync.authorityQuarantine.map(([id]) => id).sort(),
+);
+
+const commandFrame = vector.clientDivergedCarrierOps.find(
+  (candidate) => candidate.kind === "command",
+);
+if (commandFrame === undefined) throw new Error("missing command frame fixture");
+const unknownCommandBody = [
+  "tuple",
+  [["atom", "future_unmapped_command"], ["list", []]],
+] satisfies CarrierTerm;
+const unknownCommandFrame: CarrierOpFrame = {
+  ...structuredClone(commandFrame),
+  body: unknownCommandBody,
+};
+let unknownCommandFailure = "";
+try {
+  carrierOpsToSemanticOps([unknownCommandFrame], vector.realmByPubkey);
+} catch (error) {
+  unknownCommandFailure =
+    error instanceof Error ? error.message : String(error);
+}
+check(
+  "unknown command fails loudly",
+  unknownCommandFailure,
+  "unknown carrier command: future_unmapped_command",
+);
+check(
+  "Township decoder table includes link_election",
+  townshipCarrierCommandNames().includes("link_election"),
+  true,
 );
 
 console.log(`\n▸ ${foreignReplicaVector.scenario} carrier ingest`);
