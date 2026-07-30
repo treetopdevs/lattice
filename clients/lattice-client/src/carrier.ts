@@ -1026,7 +1026,7 @@ function canRelay(client: CarrierSyncClient): client is CarrierSyncClient & Carr
 }
 
 function stableCausalCarrierFrames(frames: unknown[]): CarrierOpFrame[] {
-  const ops = frames.map(decodeCarrierOpFrame);
+  const ops = frames.map((frame) => assertCarrierOpFrame(frame, false));
   const firstIndexById = new Map<string, number>();
   for (const [index, op] of ops.entries()) {
     if (!firstIndexById.has(op.id)) firstIndexById.set(op.id, index);
@@ -1206,6 +1206,10 @@ function canonicalTuple(values: unknown[]): Uint8Array {
 
 function decodeCarrierTerm(term: CarrierTerm): DecodedTerm {
   const [tag] = term;
+  const expectedLength = tag === "nil" ? 1 : 2;
+  if (term.length !== expectedLength) {
+    throw new Error("malformed carrier term arity");
+  }
 
   switch (tag) {
     case "nil":
@@ -2012,6 +2016,9 @@ function parseCarrierInteger(value: number | string): number {
       throw new Error("malformed integer term");
     }
     return value;
+  }
+  if (typeof value !== "string") {
+    throw new Error("malformed integer term");
   }
   if (!/^(0|[1-9][0-9]*)$/.test(value)) {
     throw new Error("malformed integer term");

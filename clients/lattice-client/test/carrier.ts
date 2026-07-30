@@ -53,7 +53,7 @@ interface CarrierVector {
   peer: { realm: string; sessionPubkey: string };
   clientBaseCarrierOps: CarrierOpFrame[];
   clientDivergedCarrierOps: CarrierOpFrame[];
-  peerDivergedCarrierOps: unknown[];
+  peerDivergedCarrierOps: CarrierOpFrame[];
   expectAfterSync: {
     state: Record<string, unknown>;
     opIds: string[];
@@ -534,6 +534,86 @@ check(
   {
     hashStillMatches: await verifyCarrierOpHash(coercedAtomFrame),
     frameFailure: coercedAtomFailure,
+  },
+  {
+    hashStillMatches: true,
+    frameFailure: "malformed carrier op",
+  },
+);
+
+function coerceIntegerPayload(term: CarrierTerm): boolean {
+  switch (term[0]) {
+    case "int":
+      Reflect.set(term, 1, [term[1]]);
+      return true;
+    case "list":
+    case "tuple":
+    case "mapset":
+      return term[1].some(coerceIntegerPayload);
+    case "map":
+      return term[1].some(
+        ([key, value]) =>
+          coerceIntegerPayload(key) || coerceIntegerPayload(value),
+      );
+    case "nil":
+    case "bool":
+    case "bin":
+    case "atom":
+    case "delegation":
+      return false;
+  }
+}
+
+function integerCoercionFixture(): CarrierOpFrame {
+  for (const source of [
+    ...vector.clientBaseCarrierOps,
+    ...vector.clientDivergedCarrierOps,
+    ...vector.peerDivergedCarrierOps,
+  ]) {
+    const candidate = structuredClone(source);
+    if (coerceIntegerPayload(candidate.body)) return candidate;
+  }
+  throw new Error("missing integer term fixture");
+}
+
+const coercedIntegerFrame = integerCoercionFixture();
+let coercedIntegerFailure = "";
+try {
+  decodeCarrierOpFrame(coercedIntegerFrame);
+} catch (error) {
+  coercedIntegerFailure =
+    error instanceof Error ? error.message : String(error);
+}
+check(
+  "hash-preserving integer coercion is rejected before verification",
+  {
+    hashStillMatches: await verifyCarrierOpHash(coercedIntegerFrame),
+    frameFailure: coercedIntegerFailure,
+  },
+  {
+    hashStillMatches: true,
+    frameFailure: "malformed carrier op",
+  },
+);
+
+const trailingTermFrame = structuredClone(commandFrameFixture);
+Reflect.set(
+  trailingTermFrame.body,
+  trailingTermFrame.body.length,
+  "hash-ignored-trailer",
+);
+let trailingTermFailure = "";
+try {
+  decodeCarrierOpFrame(trailingTermFrame);
+} catch (error) {
+  trailingTermFailure =
+    error instanceof Error ? error.message : String(error);
+}
+check(
+  "hash-preserving term trailers are rejected before verification",
+  {
+    hashStillMatches: await verifyCarrierOpHash(trailingTermFrame),
+    frameFailure: trailingTermFailure,
   },
   {
     hashStillMatches: true,

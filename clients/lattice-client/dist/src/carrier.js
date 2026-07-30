@@ -655,7 +655,7 @@ function canRelay(client) {
     return typeof client.relay === "function";
 }
 function stableCausalCarrierFrames(frames) {
-    const ops = frames.map(decodeCarrierOpFrame);
+    const ops = frames.map((frame) => assertCarrierOpFrame(frame, false));
     const firstIndexById = new Map();
     for (const [index, op] of ops.entries()) {
         if (!firstIndexById.has(op.id))
@@ -804,6 +804,10 @@ function canonicalTuple(values) {
 }
 function decodeCarrierTerm(term) {
     const [tag] = term;
+    const expectedLength = tag === "nil" ? 1 : 2;
+    if (term.length !== expectedLength) {
+        throw new Error("malformed carrier term arity");
+    }
     switch (tag) {
         case "nil":
             return null;
@@ -1511,6 +1515,9 @@ function parseCarrierInteger(value) {
             throw new Error("malformed integer term");
         }
         return value;
+    }
+    if (typeof value !== "string") {
+        throw new Error("malformed integer term");
     }
     if (!/^(0|[1-9][0-9]*)$/.test(value)) {
         throw new Error("malformed integer term");
