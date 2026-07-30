@@ -51,8 +51,15 @@ Recorded on `codex/round4-security-reliability` during the reviewed execution:
   must fit inside such a frame, while session/probe payloads are much smaller.
 - Part A also restricts pairing adverts to IPv4 broadcast, private, loopback, or link-local
   destinations. The shipped CSP keeps scripts self-only without `unsafe-eval`; a separate dev CSP
-  admits Vite's localhost origin and HMR websocket without weakening the packaged policy. Both
-  packaged macOS smokes passed under the rebuilt CSP with no CSP violation output.
+  admits Vite's localhost origin and HMR websocket without weakening the packaged policy. Both CSPs
+  admit only the loopback HTTP origins required by the build-time state-exchange probe seam, keeping
+  Plans 110–112 functional without a scheme-wide `http:` source. Carrier endpoints remain runtime
+  configurable, so `ws:` and `wss:` are intentionally scheme sources; origin pinning requires a
+  fixed endpoint and remains a documented residual. Both packaged macOS smokes passed functionally
+  under the rebuilt CSP. The harness does not capture the WebView console, so absence of CSP
+  violation reports is not evidenced. This macOS host has no attached Android device or emulator,
+  so the on-device `tauri:android:release:browser-state-exchange` gate remains explicitly unrun; the
+  loopback-only CSP contract is pinned statically here and must be reverified on an Android host.
 
 ## Why this matters
 

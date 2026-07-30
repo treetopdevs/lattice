@@ -14,11 +14,12 @@ use township_tauri_shell::{
     collect_township_pairing_discovery_adverts, configure_platform_secure_township_builder,
     configure_platform_secure_township_builder_with_values_file, configure_township_builder,
     decode_township_pairing_discovery_packet, encode_township_pairing_discovery_packet,
-    seed_dev_carrier_key_from_vars, township_command_names, CarrierKeySeedStore,
-    InMemoryCarrierKeySeedStore, KeyringCarrierKeySeedStore, TownshipNativeState,
-    TownshipPairingDiscoveryAdvert, TOWNSHIP_DEV_CARRIER_KEY_ID_ENV,
+    pairing_discovery_target, seed_dev_carrier_key_from_vars, township_command_names,
+    CarrierKeySeedStore, InMemoryCarrierKeySeedStore, KeyringCarrierKeySeedStore,
+    TownshipNativeState, TownshipPairingDiscoveryAdvert,
+    TOWNSHIP_CARRIER_SIGNING_PAYLOAD_MAX_BYTES, TOWNSHIP_DEV_CARRIER_KEY_ID_ENV,
     TOWNSHIP_DEV_CARRIER_KEY_SEED_ENV, TOWNSHIP_KEYRING_SERVICE,
-    TOWNSHIP_PAIRING_DISCOVERY_PACKET_TYPE,
+    TOWNSHIP_PAIRING_DISCOVERY_BROADCAST_ADDR, TOWNSHIP_PAIRING_DISCOVERY_PACKET_TYPE,
 };
 
 const W1_SESSION_SEED: &str = "township-g1";
@@ -302,6 +303,14 @@ fn udp_pairing_discovery_advertise_rejects_public_internet_targets() {
     .unwrap_err();
 
     assert_eq!(error, "pairing discovery target is not local");
+}
+
+#[test]
+fn udp_pairing_discovery_default_target_is_the_shipped_broadcast_address() {
+    assert_eq!(
+        pairing_discovery_target(None).unwrap().to_string(),
+        TOWNSHIP_PAIRING_DISCOVERY_BROADCAST_ADDR
+    );
 }
 
 #[test]
@@ -696,8 +705,23 @@ fn signing_rejects_unrecognized_and_oversized_payloads_without_echoing_them() {
         "unrecognized signing payload"
     );
 
+    let succession_witness = base64_string(b"\x82\x5dlattice-succession-witness-v1");
+    assert_eq!(
+        state
+            .sign_carrier("resident", &succession_witness)
+            .unwrap_err(),
+        "unrecognized signing payload"
+    );
+
+    let mut maximum = b"\x87\x4dlattice-op-v2".to_vec();
+    maximum.resize(TOWNSHIP_CARRIER_SIGNING_PAYLOAD_MAX_BYTES, 0);
+    let maximum_base64 = base64_string(&maximum);
+    let maximum_signature = state.sign_carrier("resident", &maximum_base64).unwrap();
+    let public_key = state.public_key("resident").unwrap();
+    assert_signature(&public_key, &maximum_base64, &maximum_signature);
+
     let mut oversized = b"\x87\x4dlattice-op-v2".to_vec();
-    oversized.resize(64_001, 0);
+    oversized.resize(TOWNSHIP_CARRIER_SIGNING_PAYLOAD_MAX_BYTES + 1, 0);
     let oversized_base64 = base64_string(&oversized);
     assert_eq!(
         state

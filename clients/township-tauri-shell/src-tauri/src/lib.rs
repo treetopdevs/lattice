@@ -878,7 +878,7 @@ fn recognized_carrier_signing_payload(bytes: &[u8]) -> bool {
             .any(|prefix| bytes.starts_with(prefix))
 }
 
-fn pairing_discovery_target(target_addr: Option<String>) -> Result<SocketAddr, String> {
+pub fn pairing_discovery_target(target_addr: Option<String>) -> Result<SocketAddr, String> {
     let target = present_string(target_addr)
         .unwrap_or_else(|| TOWNSHIP_PAIRING_DISCOVERY_BROADCAST_ADDR.to_string());
     let address: SocketAddr = target

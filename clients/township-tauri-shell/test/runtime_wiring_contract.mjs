@@ -22,6 +22,19 @@ test("Tauri serves the Vue build and registers the Township deep-link scheme", (
   assert.deepEqual(config.plugins["deep-link"].mobile, [{ scheme: ["township"], appLink: false }]);
 });
 
+test("the packaged and development CSPs admit only the loopback HTTP state-exchange seam", () => {
+  const security = readJson(shellRoot, "src-tauri/tauri.conf.json").app.security;
+
+  for (const policy of [security.csp, security.devCsp]) {
+    const connectSources = policy["connect-src"].split(/\s+/);
+
+    assert.ok(connectSources.includes("http://127.0.0.1:*"));
+    assert.ok(connectSources.includes("http://localhost:*"));
+    assert.ok(!connectSources.includes("http:"));
+    assert.ok(!connectSources.includes("https:"));
+  }
+});
+
 test("the shell exposes every packaged action gate in convergence order", () => {
   const scripts = readJson(shellRoot, "package.json").scripts;
 
