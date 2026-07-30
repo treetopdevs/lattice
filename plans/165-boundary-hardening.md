@@ -25,6 +25,8 @@
 - **Category**: security
 - **Planned at**: commit `764a1945`, 2026-07-29
 - **Reconciled at**: commit `91bb6ca6`, 2026-07-29, after Wave A1 carrier runtime merged
+- **Execution**: COMPLETE on `codex/round4-security-reliability`; Parts A/B/C and all review fixes
+  passed their focused and full gates and received clean Claude and Agy reviews.
 - **Round 4 execution split**: land Part B before plan 161 so Sobelow starts from the corrected
   secret boundary. Land Parts A and C after plans 162–163. Keep the three commits independently
   reviewable on the shared Round 4 integration branch.
