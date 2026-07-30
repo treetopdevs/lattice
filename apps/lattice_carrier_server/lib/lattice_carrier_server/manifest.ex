@@ -53,15 +53,56 @@ defmodule LatticeCarrierServer.Manifest do
 
   @spec load(Path.t()) :: {:ok, t()} | {:error, {:invalid_manifest, term()}}
   def load(path) when is_binary(path) do
-    base_dir = path |> Path.expand() |> Path.dirname()
+    expanded_path = Path.expand(path)
+    base_dir = Path.dirname(expanded_path)
 
-    with {:ok, bytes} <- read_manifest(path),
+    with :ok <- validate_manifest_integrity(expanded_path),
+         {:ok, bytes} <- read_manifest(path),
          {:ok, decoded} <- decode_manifest(bytes),
-         {:ok, manifest} <- parse(decoded, base_dir, Path.expand(path)) do
+         {:ok, manifest} <- parse(decoded, base_dir, expanded_path) do
       {:ok, manifest}
     else
       {:error, {:invalid_manifest, _detail} = reason} -> {:error, reason}
       {:error, detail} -> {:error, {:invalid_manifest, detail}}
+    end
+  end
+
+  defp validate_manifest_integrity(path) do
+    with {:ok, effective_uid} <- effective_uid(),
+         :ok <- manifest_file_permissions(path, effective_uid),
+         :ok <- manifest_path_permissions(Path.dirname(path), effective_uid) do
+      :ok
+    end
+  end
+
+  defp manifest_file_permissions(path, effective_uid) do
+    case File.lstat(path) do
+      {:ok, %File.Stat{type: :regular, mode: mode, uid: uid}}
+      when uid in [0, effective_uid] and (mode &&& 0o022) == 0 ->
+        :ok
+
+      {:ok, _stat} ->
+        {:error, {:manifest_file_permissions, path}}
+
+      {:error, reason} ->
+        {:error, {:manifest_unreadable, path, reason}}
+    end
+  end
+
+  defp manifest_path_permissions(path, effective_uid) do
+    case File.lstat(path) do
+      {:ok, %File.Stat{type: :directory, mode: mode, uid: uid}}
+      when uid in [0, effective_uid] and (mode &&& 0o022) == 0 ->
+        parent = Path.dirname(path)
+
+        if parent == path do
+          :ok
+        else
+          manifest_path_permissions(parent, effective_uid)
+        end
+
+      _untrusted ->
+        {:error, {:manifest_path_permissions, path}}
     end
   end
 
@@ -279,7 +320,15 @@ defmodule LatticeCarrierServer.Manifest do
 
   defp parse_loopback_ip(_ip, name), do: {:error, {:invalid_listener, name}}
 
-  defp parse_port(port, _name) when is_integer(port) and port >= 0 and port <= 65_535,
+  defp parse_port(0, name) do
+    if Application.get_env(:lattice_carrier_server, :allow_ephemeral_manifest_ports, false) do
+      {:ok, 0}
+    else
+      {:error, {:ephemeral_listener_port, name}}
+    end
+  end
+
+  defp parse_port(port, _name) when is_integer(port) and port > 0 and port <= 65_535,
     do: {:ok, port}
 
   defp parse_port(_port, name), do: {:error, {:invalid_listener, name}}
