@@ -506,6 +506,43 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
     );
   }
 
+  if (vec.scenario === "township_succession_w3") {
+    const disguisedOps = structuredClone(ops);
+    const disguisedSuccession = disguisedOps.find(
+      (op) => op.authority?.type === "succeed",
+    );
+
+    if (disguisedSuccession !== undefined) {
+      disguisedSuccession.kind = "command";
+    }
+
+    const disguisedById = index(disguisedOps);
+    const disguisedAuthority = analyzeAuthority(
+      vec.schema,
+      disguisedOps,
+      new Set(disguisedOps.map((op) => op.id)),
+      canonicalOrder(disguisedOps, disguisedById),
+      disguisedById,
+    );
+    const disguisedDelegationId =
+      disguisedSuccession?.authority?.type === "succeed"
+        ? disguisedSuccession.authority.delegation.id
+        : "";
+
+    check(
+      "non-authority evidence cannot introduce a succession delegation",
+      disguisedAuthority.security.delegations.has(disguisedDelegationId),
+      false,
+    );
+    check(
+      "non-authority succession evidence cannot acquire a role",
+      disguisedSuccession === undefined
+        ? null
+        : disguisedAuthority.honoredWrites.has(disguisedSuccession.id),
+      false,
+    );
+  }
+
   if (vec.scenario === "township_succession_witnessed_recovery") {
     const recovery = vec.witnessedRecovery;
     const genesisFrame = carrierFrames?.find((frame) => frame.id === recovery?.claim.holderEpoch);

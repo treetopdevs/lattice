@@ -17,6 +17,7 @@ defmodule Lattice2.CompactionSpikeTest do
   alias Lattice.{Authority, CompactionSpike, Dag, Log, Reduce, Sim, Sync}
   alias Lattice.Authority.Delegation
   alias Lattice.Demo.Thread
+  alias Mix.Tasks.Lattice.ExportVectors.DualAuthorityFixture
 
   @replica "replica:thread:compaction"
   @realms ["r0", "r1", "r2"]
@@ -26,11 +27,15 @@ defmodule Lattice2.CompactionSpikeTest do
   # The GATE oracle: compact at `frontier`, re-reduce, compare byte-for-byte
   # against the full-log pipeline. Returns the pieces for extra assertions.
   defp assert_compaction_equivalence(%Log{} = log, frontier) do
-    full = Authority.analyze(Thread, log)
-    full_state = Reduce.reduce(Thread, log, quarantine: full.quarantine)
+    assert_compaction_equivalence(Thread, log, frontier)
+  end
 
-    assert {:ok, snapshot, retained} = CompactionSpike.compact(Thread, log, frontier)
-    res = CompactionSpike.reduce_compacted(Thread, snapshot, retained)
+  defp assert_compaction_equivalence(module, %Log{} = log, frontier) do
+    full = Authority.analyze(module, log)
+    full_state = Reduce.reduce(module, log, quarantine: full.quarantine)
+
+    assert {:ok, snapshot, retained} = CompactionSpike.compact(module, log, frontier)
+    res = CompactionSpike.reduce_compacted(module, snapshot, retained)
 
     assert t2b(res.state) == t2b(full_state), "state diverged: #{inspect(res.state)}"
     assert res.quarantine == full.quarantine, "quarantine set diverged"
@@ -156,6 +161,116 @@ defmodule Lattice2.CompactionSpikeTest do
     refute Map.has_key?(res.reasons, lock.id)
     assert res.holders.moderator == Sim.identity(sim, "r2").pub
     assert res.state.locked?
+  end
+
+  test "covered succession for an undeclared role cannot activate a retained capability" do
+    sim =
+      Sim.new(Thread, @replica, ["root", "attacker"], seed: "compaction-undeclared-succession")
+
+    {sim, _genesis} = Sim.create_replica(sim, "root")
+    attacker = Sim.identity(sim, "attacker")
+
+    candidate =
+      Delegation.genesis(attacker, Sim.replica(sim),
+        ops: [:post],
+        roles: [:ghost]
+      )
+
+    {sim, disguised_succession} =
+      Sim.append(sim, "attacker", :authority, {:succeed, :ghost, candidate, 0})
+
+    sim = Sim.sync_all(sim)
+    frontier = Log.frontier(Sim.log(sim, "root"))
+
+    {sim, retained_post} =
+      Sim.command(sim, "attacker", :post, ["not authorized"], cap: candidate.id)
+
+    sim = Sim.sync_all(sim)
+
+    {_snapshot, _retained, res} =
+      assert_compaction_equivalence(Sim.log(sim, "root"), frontier)
+
+    refute Map.has_key?(res.reasons, disguised_succession.id)
+    assert res.reasons[retained_post.id] == :invalid_capability
+    refute "not authorized" in res.state.messages
+  end
+
+  test "covered succession activates candidate descendants only for its own role" do
+    sim =
+      Sim.new(
+        DualAuthorityFixture,
+        "replica:dual-authority:compaction-cross-role",
+        ["root", "successor", "target"],
+        seed: "compaction-cross-role"
+      )
+
+    {sim, _genesis} =
+      Sim.create_replica(sim, "root",
+        policies: %{clerk: %{successor: "successor", dormant_ticks: 3}}
+      )
+
+    root = Sim.identity(sim, "root")
+
+    mayor_genesis =
+      Delegation.genesis(root, Sim.replica(sim),
+        ops: [:close_mayor],
+        roles: [:mayor],
+        live: true
+      )
+
+    {sim, _mayor_genesis} =
+      Sim.append(sim, "root", :authority, {:genesis, mayor_genesis, %{}})
+
+    {sim, _mayor_delegation} =
+      Sim.transfer(sim, "root", "successor", :mayor,
+        at_tick: 0,
+        ops: [:close_mayor]
+      )
+
+    sim = Sim.sync_all(sim)
+    successor = Sim.identity(sim, "successor")
+    target = Sim.identity(sim, "target")
+
+    succession_root =
+      Delegation.new(successor, Sim.replica(sim), successor.pub,
+        ops: [:close_clerk, :close_mayor],
+        roles: [:clerk, :mayor],
+        parent_id: nil
+      )
+
+    {sim, succession} =
+      Sim.append(sim, "successor", :authority, {:succeed, :clerk, succession_root, 3})
+
+    sim = Sim.sync_all(sim)
+    frontier = Log.frontier(Sim.log(sim, "root"))
+
+    cross_role_child =
+      Delegation.new(successor, Sim.replica(sim), target.pub,
+        ops: [:close_mayor],
+        roles: [:mayor],
+        parent_id: succession_root.id
+      )
+
+    {sim, cross_role_transfer} =
+      Sim.append(
+        sim,
+        "successor",
+        :authority,
+        {:transfer, :mayor, cross_role_child, 4}
+      )
+
+    sim = Sim.sync_all(sim)
+
+    {_snapshot, _retained, res} =
+      assert_compaction_equivalence(
+        DualAuthorityFixture,
+        Sim.log(sim, "root"),
+        frontier
+      )
+
+    refute Map.has_key?(res.reasons, succession.id)
+    assert res.reasons[cross_role_transfer.id] == :invalid_transfer
+    assert res.holders.mayor == successor.pub
   end
 
   test "verification: a snapshot is valid iff re-reducing the covered ops reproduces it" do

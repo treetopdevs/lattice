@@ -59,7 +59,9 @@ defmodule Lattice.CompactionSpike do
               covered_intros: MapSet.new(),
               covered_genesis_ids: MapSet.new(),
               covered_succession_ids: MapSet.new(),
-              covered_honored_succession_ids: MapSet.new(),
+              # role => delegation ids introduced by covered, honored
+              # succession ops for that exact role.
+              covered_honored_succession_ids: %{},
               policies: %{},
               root: nil,
               # Raw covered revoke refs (re-judged against the merged delegation
@@ -152,7 +154,7 @@ defmodule Lattice.CompactionSpike do
       covered_genesis_ids: genesis_ids,
       covered_succession_ids: succession_ids,
       covered_honored_succession_ids:
-        honored_succession_delegation_ids(ordered, analysis.reasons),
+        honored_succession_delegation_ids(module, ordered, analysis.reasons),
       policies: analysis.policies,
       root: root,
       covered_revokes: collect_raw_revokes(ordered),
@@ -398,7 +400,8 @@ defmodule Lattice.CompactionSpike do
       holder: Map.get(snapshot.frozen_holders, role),
       acquires: [],
       heartbeats: [],
-      covered_honored_succession_ids: snapshot.covered_honored_succession_ids,
+      covered_honored_succession_ids:
+        Map.get(snapshot.covered_honored_succession_ids, role, MapSet.new()),
       quarantine: %{}
     }
 
@@ -657,7 +660,9 @@ defmodule Lattice.CompactionSpike do
   defp compacted_delegation_valid_at?({:candidate, root_id}, op, timelines, ctx) do
     op_anc = Map.get(ctx.anc, op.id, MapSet.new())
 
-    MapSet.member?(ctx.covered_honored_succession_ids, root_id) or
+    Enum.any?(ctx.covered_honored_succession_ids, fn {_role, ids} ->
+      MapSet.member?(ids, root_id)
+    end) or
       Enum.any?(timelines, fn {_role, timeline} ->
         Enum.any?(timeline.acquires, fn acquire ->
           acquire.delegation_id == root_id and MapSet.member?(op_anc, acquire.op_id)
@@ -971,12 +976,24 @@ defmodule Lattice.CompactionSpike do
         do: id
   end
 
-  defp honored_succession_delegation_ids(ordered, reasons) do
-    for %Op{id: op_id, kind: :authority, body: {:succeed, _role, %Delegation{id: id}, _proof}} <-
-          ordered,
-        not Map.has_key?(reasons, op_id),
-        into: MapSet.new(),
-        do: id
+  defp honored_succession_delegation_ids(module, ordered, reasons) do
+    roles = all_roles(module)
+    initial = Map.new(roles, &{&1, MapSet.new()})
+
+    Enum.reduce(ordered, initial, fn
+      %Op{
+        id: op_id,
+        kind: :authority,
+        body: {:succeed, role, %Delegation{id: id}, _proof}
+      },
+      acc ->
+        if Map.has_key?(acc, role) and not Map.has_key?(reasons, op_id),
+          do: Map.update!(acc, role, &MapSet.put(&1, id)),
+          else: acc
+
+      _op, acc ->
+        acc
+    end)
   end
 
   defp invalid_genesis_reasons(ordered, deleg_valid, root) do

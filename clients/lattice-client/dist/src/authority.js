@@ -39,6 +39,8 @@ export function analyzeAuthority(schema, ops, included, order, byId) {
     const quarantinedWrites = new Set(quarantineReasons.keys());
     for (const op of visible) {
         if (op.authority?.type === "heartbeat") {
+            if (op.kind !== "authority")
+                continue;
             // Heartbeats never write a field: they only refresh the holder's
             // last-active tick, and only when the author holds the role at its deps.
             const heartbeat = op.authority;
@@ -588,9 +590,13 @@ function collectPolicies(ops, delegations) {
     const recoveryPoliciesByRole = new Map();
     for (const op of ops) {
         const evidence = op.authority;
-        if (evidence?.type !== "genesis" || evidence.policies === undefined)
+        if (op.kind !== "authority" ||
+            evidence?.type !== "genesis" ||
+            evidence.policies === undefined) {
             continue;
+        }
         if (!validDelegation(evidence.delegation, delegations) ||
+            evidence.delegation.parentId !== null ||
             op.replica === undefined ||
             !replicaRootMatches(op.replica, evidence.delegation.audience) ||
             evidence.delegation.issuerRealm !== op.author) {
@@ -615,7 +621,8 @@ function collectDelegations(ops) {
     const delegations = new Map();
     for (const op of ops) {
         const evidence = op.authority;
-        if (evidence === undefined ||
+        if (op.kind !== "authority" ||
+            evidence === undefined ||
             evidence.type === "heartbeat" ||
             evidence.type === "revoke" ||
             evidence.type === "beacon") {
@@ -655,8 +662,12 @@ function collectDelegations(ops) {
     return delegations;
 }
 function validateDelegations(ops, collected) {
-    const genesisIds = new Set(ops.flatMap((op) => op.authority?.type === "genesis" ? [op.authority.delegation.id] : []));
-    const successionIds = new Set(ops.flatMap((op) => op.authority?.type === "succeed" ? [op.authority.delegation.id] : []));
+    const genesisIds = new Set(ops.flatMap((op) => op.kind === "authority" && op.authority?.type === "genesis"
+        ? [op.authority.delegation.id]
+        : []));
+    const successionIds = new Set(ops.flatMap((op) => op.kind === "authority" && op.authority?.type === "succeed"
+        ? [op.authority.delegation.id]
+        : []));
     const outerReplica = ops.find((op) => op.replica !== undefined)?.replica;
     const cache = new Map();
     const delegations = new Map();
@@ -770,7 +781,7 @@ function candidateDelegationActivated(delegation, delegations, honoredSuccession
 function resolveRoot(ops, delegations) {
     for (const op of ops) {
         const evidence = op.authority;
-        if (evidence?.type !== "genesis")
+        if (op.kind !== "authority" || evidence?.type !== "genesis")
             continue;
         if (!validDelegation(evidence.delegation, delegations))
             continue;
@@ -790,7 +801,7 @@ function collectRevokes(ops, delegations, root) {
     const unauthorizedRevokes = new Map();
     for (const op of ops) {
         const evidence = op.authority;
-        if (evidence?.type !== "revoke")
+        if (op.kind !== "authority" || evidence?.type !== "revoke")
             continue;
         const delegation = delegations.get(evidence.delegationId)?.delegation;
         const authorized = delegation !== undefined &&
@@ -817,7 +828,7 @@ function collectBeacons(visible, byId, root, ancCache = new Map()) {
     const invalidBeacons = new Map();
     for (const op of visible) {
         const evidence = op.authority;
-        if (evidence?.type !== "beacon")
+        if (op.kind !== "authority" || evidence?.type !== "beacon")
             continue;
         const anc = ancestors(op.id, byId, ancCache);
         let priorMax = -1;
@@ -859,7 +870,7 @@ function delegationQuarantineReasons(delegations) {
 function collectInvalidGenesisReasons(ops, delegations, reasons) {
     for (const op of ops) {
         const evidence = op.authority;
-        if (evidence?.type !== "genesis")
+        if (op.kind !== "authority" || evidence?.type !== "genesis")
             continue;
         const record = delegations.get(evidence.delegation.id);
         if (record === undefined ||

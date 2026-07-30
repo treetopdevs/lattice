@@ -1328,14 +1328,22 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       )
 
     sim = Sim.sync_all(sim)
+    clerk = Sim.identity(sim, "clerk")
     mallory = Sim.identity(sim, "mallory")
+
+    rooted_child =
+      Delegation.new(mallory, Sim.replica(sim), clerk.pub,
+        ops: [:close_matter],
+        roles: [:clerk],
+        parent_id: rooted.id
+      )
 
     injected_policy = %{
       clerk: %{successor: mallory.pub, dormant_ticks: 0}
     }
 
     {sim, forged_genesis} =
-      Sim.append(sim, "mallory", :authority, {:genesis, rooted, injected_policy})
+      Sim.append(sim, "mallory", :authority, {:genesis, rooted_child, injected_policy})
 
     {sim, forged_succession} =
       Sim.succeed(sim, "mallory", :clerk,
@@ -1357,6 +1365,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       "targetOperationId" => forged_genesis.id,
       "expectedReason" => "invalid_genesis",
       "rootedDelegationId" => rooted.id,
+      "rootedChildDelegationId" => rooted_child.id,
       "forgedSuccessionOperationId" => forged_succession.id
     })
   end

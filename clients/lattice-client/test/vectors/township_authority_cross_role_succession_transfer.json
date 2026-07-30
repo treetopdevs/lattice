@@ -1,4 +1,9 @@
 {
+  "capabilityCase": {
+    "expectedReason": "invalid_transfer",
+    "successionOperationId": "5AdIKuip-919u8seGW-8MxluteWdgx-qqyZ0kXMghVs",
+    "targetOperationId": "-cDxnHY0PK_Z5ZnFFL4tYmAoUKw-SVvL5kTZC_jDhLE"
+  },
   "expectAtFrontier": [],
   "expectAtFullFrontier": {
     "authorityQuarantine": [

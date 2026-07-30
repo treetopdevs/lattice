@@ -1,25 +1,26 @@
 {
   "capabilityCase": {
     "expectedReason": "invalid_genesis",
-    "forgedSuccessionOperationId": "Q9r7IfDVS89r3CcDLD228rJRFqksA4Z3gKoBFwhTdgY",
+    "forgedSuccessionOperationId": "ivimyClC0wI9YXTsjqQGN4jBbzLCz4lGUtat9mOsGCQ",
+    "rootedChildDelegationId": "AosIuyx0sNHJahv5-w7Ep84iF4KPcz6lqbpYjtOEOaE",
     "rootedDelegationId": "gonwu-IgpRzoisJ75qUKfYK2dJkQa99tykTzAfyaUWg",
-    "targetOperationId": "FZkmIuTcTtKEIRhoxnst3lWrikINa2gaQYCrgUUUKHo"
+    "targetOperationId": "kuzZK0B-3pwNPYTD651kyvC0JQtM16K8hg8hvYi8fEw"
   },
   "expectAtFrontier": [],
   "expectAtFullFrontier": {
     "authorityQuarantine": [
       [
-        "FZkmIuTcTtKEIRhoxnst3lWrikINa2gaQYCrgUUUKHo",
-        "invalid_genesis"
+        "ivimyClC0wI9YXTsjqQGN4jBbzLCz4lGUtat9mOsGCQ",
+        "unauthorized_succession"
       ],
       [
-        "Q9r7IfDVS89r3CcDLD228rJRFqksA4Z3gKoBFwhTdgY",
-        "unauthorized_succession"
+        "kuzZK0B-3pwNPYTD651kyvC0JQtM16K8hg8hvYi8fEw",
+        "invalid_genesis"
       ]
     ],
     "quarantine": [
-      "FZkmIuTcTtKEIRhoxnst3lWrikINa2gaQYCrgUUUKHo",
-      "Q9r7IfDVS89r3CcDLD228rJRFqksA4Z3gKoBFwhTdgY"
+      "ivimyClC0wI9YXTsjqQGN4jBbzLCz4lGUtat9mOsGCQ",
+      "kuzZK0B-3pwNPYTD651kyvC0JQtM16K8hg8hvYi8fEw"
     ],
     "state": {
       "clerk": "clerk",
@@ -69,21 +70,21 @@
         "rzCX5uKoW1ThHPDdi4U0yP2Hofbsb6XGnbLGmU_Rxgk"
       ],
       "field": "clerk",
-      "hash": "FZkmIuTcTtKEIRhoxnst3lWrikINa2gaQYCrgUUUKHo",
-      "id": "FZkmIuTcTtKEIRhoxnst3lWrikINa2gaQYCrgUUUKHo",
+      "hash": "kuzZK0B-3pwNPYTD651kyvC0JQtM16K8hg8hvYi8fEw",
+      "id": "kuzZK0B-3pwNPYTD651kyvC0JQtM16K8hg8hvYi8fEw",
       "kind": "authority",
       "mutation": "write",
-      "value": "clerk"
+      "value": "mallory"
     },
     {
       "author": "mallory",
       "command": "succeed clerk",
       "deps": [
-        "FZkmIuTcTtKEIRhoxnst3lWrikINa2gaQYCrgUUUKHo"
+        "kuzZK0B-3pwNPYTD651kyvC0JQtM16K8hg8hvYi8fEw"
       ],
       "field": "clerk",
-      "hash": "Q9r7IfDVS89r3CcDLD228rJRFqksA4Z3gKoBFwhTdgY",
-      "id": "Q9r7IfDVS89r3CcDLD228rJRFqksA4Z3gKoBFwhTdgY",
+      "hash": "ivimyClC0wI9YXTsjqQGN4jBbzLCz4lGUtat9mOsGCQ",
+      "id": "ivimyClC0wI9YXTsjqQGN4jBbzLCz4lGUtat9mOsGCQ",
       "kind": "authority",
       "mutation": "write",
       "value": "mallory"
@@ -193,19 +194,19 @@
           [
             "delegation",
             {
-              "audience": "gN3QnndKv5GoJcojrgH4zYaj7yqbErbSmvuKrVs9R/g=",
-              "id": "gonwu-IgpRzoisJ75qUKfYK2dJkQa99tykTzAfyaUWg",
-              "issuer": "V9wqCW7NCwBhAQmRKjVc1pqLMk6qXYpkDGN/XKEj1T8=",
+              "audience": "V9wqCW7NCwBhAQmRKjVc1pqLMk6qXYpkDGN/XKEj1T8=",
+              "id": "AosIuyx0sNHJahv5-w7Ep84iF4KPcz6lqbpYjtOEOaE",
+              "issuer": "gN3QnndKv5GoJcojrgH4zYaj7yqbErbSmvuKrVs9R/g=",
               "live": false,
               "ops": [
                 "close_matter"
               ],
-              "parent_id": "ExI61zzY54ru0Ire9HFC_jULpSfDNgc8YlP1YI3cz14",
+              "parent_id": "gonwu-IgpRzoisJ75qUKfYK2dJkQa99tykTzAfyaUWg",
               "replica": "replica:matter:rooted-grant-as-genesis#root:E4_vkjw26bCiJqI3rfkgkIV_0Z9aJmKsDfAi7Bgjjx4",
               "roles": [
                 "clerk"
               ],
-              "sig": "UTw6Qj8mG9gOrMGGd857CR3y6UZlELVhKatUPDHRUQ/iMQ0I/HEShlnoSYRnyBTUamaTDKaG6ETVDYPPyyqODA=="
+              "sig": "4GRsiTjbOLRvgaXlQXSCSU67er1kcb7/IPIuPAjE+slGAdCA4B0GbRNROmgMYqNpEQwtXYc9hqK56+Pw2BYSAA=="
             }
           ],
           [
@@ -252,10 +253,10 @@
       "deps": [
         "rzCX5uKoW1ThHPDdi4U0yP2Hofbsb6XGnbLGmU_Rxgk"
       ],
-      "id": "FZkmIuTcTtKEIRhoxnst3lWrikINa2gaQYCrgUUUKHo",
+      "id": "kuzZK0B-3pwNPYTD651kyvC0JQtM16K8hg8hvYi8fEw",
       "kind": "authority",
       "replica": "replica:matter:rooted-grant-as-genesis#root:E4_vkjw26bCiJqI3rfkgkIV_0Z9aJmKsDfAi7Bgjjx4",
-      "sig": "J/RnRySntzKxTzlfeX7Q25wj+iKGaFfx2JN1UlYVkfTP1tMteHY0Z8d/d0huagx9tCvCYfUzf9c4NTQaxSBlAg==",
+      "sig": "6Z1p78AT/bEwbWnh7hoVLfBF9yfBBr5ERaGPboX0Q98nwDm74U4raB5/9WtAsaXrRIbBCisE5TvhD1FJrr0xCQ==",
       "v": 1
     },
     {
@@ -299,12 +300,12 @@
         "nil"
       ],
       "deps": [
-        "FZkmIuTcTtKEIRhoxnst3lWrikINa2gaQYCrgUUUKHo"
+        "kuzZK0B-3pwNPYTD651kyvC0JQtM16K8hg8hvYi8fEw"
       ],
-      "id": "Q9r7IfDVS89r3CcDLD228rJRFqksA4Z3gKoBFwhTdgY",
+      "id": "ivimyClC0wI9YXTsjqQGN4jBbzLCz4lGUtat9mOsGCQ",
       "kind": "authority",
       "replica": "replica:matter:rooted-grant-as-genesis#root:E4_vkjw26bCiJqI3rfkgkIV_0Z9aJmKsDfAi7Bgjjx4",
-      "sig": "mFUOKGqN9WtUMQsDXEmlD5iPx+lgHTK1FtOIH8mYdDBPqlKTPBzEKzz2QuZzC7nZyZmdOUt2PpOOWA534D4KBw==",
+      "sig": "cZRBb6NqGu2R+VW5uA9XzOTzju+uNaGbraBXxtVQETXwilI7q5aWwIOurmSL8CppuXID3CRQSqTA7YsOLMfJBw==",
       "v": 1
     }
   ],
