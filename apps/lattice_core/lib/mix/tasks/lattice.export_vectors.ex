@@ -105,6 +105,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_authority_cross_role_succession_transfer(),
       township_authority_succession_genesis_poisoning(),
       township_authority_replayed_genesis(),
+      township_foreign_replica_injection(),
       township_capability_missing(),
       township_capability_invalid(),
       township_capability_wrong_audience(),
@@ -1675,6 +1676,54 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       "honoredClerkOperationId" => clerk_command.id,
       "expectedSuccessorPubkey" => Base.encode64(resident.pub),
       "replica" => replica
+    })
+  end
+
+  defp township_foreign_replica_injection do
+    sim = carrier_base_sim()
+    log = Sim.log(sim, "resident")
+
+    genuine_genesis_id =
+      log
+      |> Log.topo_ops()
+      |> Enum.find(&(&1.kind == :authority and match?({:genesis, _, _}, &1.body)))
+      |> Map.fetch!(:id)
+
+    {foreign_replica, foreign_op} =
+      Enum.find_value(0..10_000, fn attempt ->
+        attacker =
+          Identity.from_seed(
+            "foreign-attacker",
+            "township:foreign-replica-injection:#{attempt}"
+          )
+
+        replica =
+          Authority.bind_replica(
+            "replica:matter:foreign-replica-injection",
+            attacker.pub
+          )
+
+        delegation =
+          Delegation.genesis(attacker, replica,
+            ops: [:close_matter, :reopen_matter],
+            roles: [:clerk],
+            live: true
+          )
+
+        op = Op.new(attacker, replica, [], :authority, {:genesis, delegation, %{}})
+        if op.id < genuine_genesis_id, do: {replica, op}
+      end) ||
+        raise "could not deterministically grind a foreign root op before the genuine genesis"
+
+    unless Op.valid?(foreign_op) do
+      raise "expected foreign-replica injection evidence to carry a validly signed op"
+    end
+
+    capability_scenario("township_foreign_replica_injection", sim, log, %{
+      "case" => "foreign_replica_injection",
+      "foreignReplica" => foreign_replica,
+      "foreignCarrierOp" => CarrierWire.encode_op(foreign_op),
+      "genuineGenesisOperationId" => genuine_genesis_id
     })
   end
 

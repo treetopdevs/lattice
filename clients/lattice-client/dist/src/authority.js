@@ -11,7 +11,7 @@ function emptyRoleState() {
  * Decide which role-holder writes are honored from their causal position.
  * Multi-write histories without complete authority evidence remain fail-closed.
  */
-export function analyzeAuthority(schema, ops, included, order, byId) {
+export function analyzeAuthority(schema, ops, included, order, byId, expectedReplica = undefined) {
     const visible = order.map((id) => byId.get(id));
     const writesPerRole = new Map();
     for (const op of visible) {
@@ -20,7 +20,7 @@ export function analyzeAuthority(schema, ops, included, order, byId) {
         writesPerRole.set(op.field, (writesPerRole.get(op.field) ?? 0) + 1);
     }
     const collectedDelegations = collectDelegations(visible);
-    const delegations = validateDelegations(visible, collectedDelegations);
+    const delegations = validateDelegations(visible, collectedDelegations, expectedReplica);
     const { policies, recoveryPoliciesByRole } = collectPolicies(visible, delegations);
     const root = resolveRoot(visible, delegations);
     const { effectiveRevokes, unauthorizedRevokes } = collectRevokes(visible, delegations, root);
@@ -661,14 +661,16 @@ function collectDelegations(ops) {
     }
     return delegations;
 }
-function validateDelegations(ops, collected) {
+function validateDelegations(ops, collected, expectedReplica) {
     const genesisIds = new Set(ops.flatMap((op) => op.kind === "authority" && op.authority?.type === "genesis"
         ? [op.authority.delegation.id]
         : []));
     const successionIds = new Set(ops.flatMap((op) => op.kind === "authority" && op.authority?.type === "succeed"
         ? [op.authority.delegation.id]
         : []));
-    const outerReplica = ops.find((op) => op.replica !== undefined)?.replica;
+    // Replica-less Tier-A vectors predate the carrier contract. Only those
+    // legacy callers may infer an anchor; paired carrier callers supply it.
+    const outerReplica = expectedReplica ?? ops.find((op) => op.replica !== undefined)?.replica;
     const cache = new Map();
     const delegations = new Map();
     for (const [id, record] of collected) {

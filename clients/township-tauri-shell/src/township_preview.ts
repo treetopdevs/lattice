@@ -135,12 +135,14 @@ export function townshipPreview(): TownshipMatterPreview {
 export function townshipPreviewFromOps(
   ops: Op[],
   externallyQuarantined: ReadonlySet<string> = new Set(),
+  expectedReplica?: string,
 ): TownshipMatterPreview {
   const materialized = materialize(
     townshipMatterSchema,
     ops,
     undefined,
     externallyQuarantined,
+    expectedReplica,
   );
   const state = materialized.state;
 

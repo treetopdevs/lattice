@@ -423,6 +423,10 @@ export async function syncCarrierOnce(client, localOps, localCarrierFrames, real
     const pulledFrames = await client.pull(localOps.map((op) => op.id));
     const pulledCarrierFrames = pulledFrames.map(decodeCarrierOpFrame);
     for (const frame of pulledCarrierFrames) {
+        if (options.expectedReplica !== undefined &&
+            frame.replica !== options.expectedReplica) {
+            throw new Error(`carrier served foreign replica ${frame.replica}; expected ${options.expectedReplica}`);
+        }
         const verification = await verifyCarrierOp(frame, options.verifier);
         if (!verification.valid)
             throw new Error(`carrier op verification failed: ${frame.id}`);

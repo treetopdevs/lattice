@@ -9,10 +9,11 @@ import {
   integrate,
   materialize,
   signCarrierChallenge,
+  syncCarrierOnce,
   toRequest,
   toSend,
 } from "../src/index";
-import type { Op, ReplicaSchema } from "../src/index";
+import type { CarrierPushReport, Op, ReplicaSchema } from "../src/index";
 import type { CarrierChallenge } from "../src/index";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -50,6 +51,23 @@ interface CarrierVector {
 }
 
 const vector = JSON.parse(readFileSync(join(vecDir, "township_carrier_w1.json"), "utf8")) as CarrierVector;
+
+interface ForeignReplicaVector {
+  scenario: string;
+  replica: string;
+  schema: ReplicaSchema;
+  realmByPubkey: Record<string, string>;
+  oracleCarrierOps: unknown[];
+  capabilityCase: {
+    foreignReplica: string;
+    foreignCarrierOp: unknown;
+    genuineGenesisOperationId: string;
+  };
+}
+
+const foreignReplicaVector = JSON.parse(
+  readFileSync(join(vecDir, "township_foreign_replica_injection.json"), "utf8"),
+) as ForeignReplicaVector;
 
 console.log(`\n▸ ${vector.scenario} carrier vector`);
 
@@ -106,6 +124,94 @@ check(
   "authority quarantine",
   materialized.quarantine.sort(),
   vector.expectAfterSync.authorityQuarantine.map(([id]) => id).sort(),
+);
+
+console.log(`\n▸ ${foreignReplicaVector.scenario} carrier ingest`);
+
+const emptyPushReport = (): CarrierPushReport => ({
+  accepted: [],
+  quarantined: [],
+  rejected: [],
+  pending: [],
+});
+const foreignPeer = {
+  async advertise(): Promise<string[]> {
+    return [];
+  },
+  async pull(): Promise<unknown[]> {
+    return [
+      ...foreignReplicaVector.oracleCarrierOps,
+      foreignReplicaVector.capabilityCase.foreignCarrierOp,
+    ];
+  },
+  async push(): Promise<CarrierPushReport> {
+    return emptyPushReport();
+  },
+};
+const foreignSyncOptions = {
+  verifier: {
+    async verify(): Promise<boolean> {
+      return true;
+    },
+  },
+  expectedReplica: foreignReplicaVector.replica,
+};
+const legitimateOps = carrierOpsToSemanticOps(
+  foreignReplicaVector.oracleCarrierOps,
+  foreignReplicaVector.realmByPubkey,
+);
+const legitimateMaterialized = materialize(foreignReplicaVector.schema, legitimateOps);
+let foreignReplicaFailure = "";
+try {
+  await syncCarrierOnce(
+    foreignPeer,
+    [],
+    [],
+    foreignReplicaVector.realmByPubkey,
+    foreignSyncOptions,
+  );
+} catch (error) {
+  foreignReplicaFailure = error instanceof Error ? error.message : String(error);
+}
+
+check(
+  "foreign replica frame hard-fails before semantic ingest",
+  foreignReplicaFailure,
+  `carrier served foreign replica ${foreignReplicaVector.capabilityCase.foreignReplica}; expected ${foreignReplicaVector.replica}`,
+);
+
+const foreignOp = carrierOpsToSemanticOps(
+  [foreignReplicaVector.capabilityCase.foreignCarrierOp],
+  foreignReplicaVector.realmByPubkey,
+);
+const explicitlyAnchored = materialize(
+  foreignReplicaVector.schema,
+  [...legitimateOps, ...foreignOp],
+  undefined,
+  new Set(),
+  foreignReplicaVector.replica,
+);
+check(
+  "explicit replica anchor ignores a foreign root claim",
+  explicitlyAnchored.state,
+  legitimateMaterialized.state,
+);
+check(
+  "explicit replica anchor preserves legitimate quarantine",
+  explicitlyAnchored.quarantine
+    .filter((id) => id !== foreignOp[0]?.id)
+    .sort(),
+  [...legitimateMaterialized.quarantine].sort(),
+);
+check(
+  "explicit replica anchor quarantines the foreign root claim",
+  explicitlyAnchored.quarantine.includes(foreignOp[0]?.id ?? ""),
+  true,
+);
+check(
+  "foreign frame remains foreign under semantic decode",
+  foreignOp[0]?.replica === foreignReplicaVector.replica,
+  false,
 );
 
 console.log(`\n${failures === 0 ? "\x1b[32m✓ carrier checks passed\x1b[0m" : `\x1b[31m✗ ${failures} check(s) failed\x1b[0m`}`);

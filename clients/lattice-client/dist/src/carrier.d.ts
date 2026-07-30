@@ -66,6 +66,7 @@ export type CarrierSubmission = "push" | "relay";
 export interface SyncCarrierOptions {
     verifier: Verifier;
     submission?: CarrierSubmission;
+    expectedReplica?: string;
 }
 export interface CarrierStateReport {
     state_b64: string;

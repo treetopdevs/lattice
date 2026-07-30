@@ -138,6 +138,7 @@ export function analyzeAuthority(
   included: ReadonlySet<string>,
   order: readonly string[],
   byId: ReadonlyMap<string, Op>,
+  expectedReplica: string | undefined = undefined,
 ): AuthorityAnalysis {
   const visible = order.map((id) => byId.get(id)!);
   const writesPerRole = new Map<string, number>();
@@ -148,7 +149,11 @@ export function analyzeAuthority(
   }
 
   const collectedDelegations = collectDelegations(visible);
-  const delegations = validateDelegations(visible, collectedDelegations);
+  const delegations = validateDelegations(
+    visible,
+    collectedDelegations,
+    expectedReplica,
+  );
   const { policies, recoveryPoliciesByRole } = collectPolicies(visible, delegations);
   const root = resolveRoot(visible, delegations);
   const { effectiveRevokes, unauthorizedRevokes } = collectRevokes(
@@ -1047,6 +1052,7 @@ function collectDelegations(
 function validateDelegations(
   ops: readonly Op[],
   collected: ReadonlyMap<string, CollectedDelegation>,
+  expectedReplica: string | undefined,
 ): Map<string, AuthorityDelegationRecord> {
   const genesisIds = new Set(
     ops.flatMap((op) =>
@@ -1062,7 +1068,10 @@ function validateDelegations(
         : [],
     ),
   );
-  const outerReplica = ops.find((op) => op.replica !== undefined)?.replica;
+  // Replica-less Tier-A vectors predate the carrier contract. Only those
+  // legacy callers may infer an anchor; paired carrier callers supply it.
+  const outerReplica =
+    expectedReplica ?? ops.find((op) => op.replica !== undefined)?.replica;
   const cache = new Map<string, DelegationValidation>();
   const delegations = new Map<string, AuthorityDelegationRecord>();
 

@@ -29,10 +29,12 @@ export class V01UnvalidatedAuthorityError extends Error {
  * Materialize a replica from ops. `included` optionally bounds the visible set
  * (a frontier); default is all ops. `externallyQuarantined` seeds decisions from
  * an external authority oracle while retaining those ops in canonical order.
+ * `expectedReplica` pins authority analysis to a caller-established replica;
+ * omitted values retain the legacy vector fallback.
  * This is a pure function of its inputs, so Sim can remain the conformance
  * oracle for state, quarantine, and order.
  */
-export function materialize(schema, ops, included, externallyQuarantined = new Set()) {
+export function materialize(schema, ops, included, externallyQuarantined = new Set(), expectedReplica) {
     const byId = index(ops);
     const inc = included ?? new Set(ops.map((o) => o.id));
     const order = canonicalOrder(ops.filter((o) => inc.has(o.id)), byId);
@@ -43,7 +45,7 @@ export function materialize(schema, ops, included, externallyQuarantined = new S
     const ancCache = new Map();
     let authority;
     try {
-        authority = analyzeAuthority(schema, ops, authorityIncluded, authorityOrder, byId);
+        authority = analyzeAuthority(schema, ops, authorityIncluded, authorityOrder, byId, expectedReplica);
     }
     catch (error) {
         const role = authorityFailureRole(schema, ops, authorityIncluded);

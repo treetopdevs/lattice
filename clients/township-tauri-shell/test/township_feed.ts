@@ -28,6 +28,7 @@ import {
 import type { TownshipCarrierPeerConfig } from "../src/township_carrier_peer";
 
 interface TownshipCarrierVector {
+  replica: string;
   realmByPubkey: Record<string, string>;
   clientDivergedCarrierOps: CarrierOpFrame[];
   peerDivergedCarrierOps: CarrierOpFrame[];
@@ -45,6 +46,10 @@ interface TownshipCarrierVector {
     stateB64: string;
     opIds: string[];
   };
+}
+
+interface ForeignReplicaVector {
+  capabilityCase: { foreignCarrierOp: CarrierOpFrame };
 }
 
 class MemoryOpLog implements LocalOpLogStore {
@@ -277,6 +282,20 @@ const here = dirname(fileURLToPath(import.meta.url));
 const vector = JSON.parse(
   readFileSync(join(here, "..", "..", "lattice-client", "test", "vectors", "township_carrier_w1.json"), "utf8"),
 ) as TownshipCarrierVector;
+const foreignReplicaVector = JSON.parse(
+  readFileSync(
+    join(
+      here,
+      "..",
+      "..",
+      "lattice-client",
+      "test",
+      "vectors",
+      "township_foreign_replica_injection.json",
+    ),
+    "utf8",
+  ),
+) as ForeignReplicaVector;
 const verifier: Verifier = { verify: verifyEd25519 };
 const localOps = carrierOpsToSemanticOps(vector.clientDivergedCarrierOps, vector.realmByPubkey);
 
@@ -291,6 +310,7 @@ const projection = await refreshTownshipFromCarrier({
   workflow: validWorkflow,
   verifier,
   realmByPubkey: vector.realmByPubkey,
+  expectedReplica: vector.replica,
   generation: 7,
 });
 
@@ -305,6 +325,33 @@ assert.equal(validLocalLog.saveCount, 1);
 assert.equal(validDelegations.saveCount, 1);
 assert.equal(validOutbox.accessCount, 0);
 assert.equal(validClient.forbiddenCallCount, 0);
+
+const foreignReplicaLocalLog = new MemoryOpLog(localOps);
+const foreignReplicaDelegations = new MemoryFrameStore(
+  vector.clientDivergedCarrierOps,
+);
+const foreignReplicaOutbox = new ForbiddenOutboxStore();
+const foreignReplicaWorkflow = workflow(
+  foreignReplicaLocalLog,
+  foreignReplicaDelegations,
+  foreignReplicaOutbox,
+);
+await assert.rejects(
+  refreshTownshipFromCarrier({
+    client: new ReadOnlyPullClient([
+      foreignReplicaVector.capabilityCase.foreignCarrierOp,
+    ]),
+    workflow: foreignReplicaWorkflow,
+    verifier,
+    realmByPubkey: vector.realmByPubkey,
+    expectedReplica: vector.replica,
+    generation: 8,
+  }),
+  /carrier served foreign replica/,
+);
+assert.equal(foreignReplicaLocalLog.saveCount, 0);
+assert.equal(foreignReplicaDelegations.saveCount, 0);
+assert.equal(foreignReplicaOutbox.accessCount, 0);
 
 const revocationFrames = [
   ...vector.oracleCarrierOps,
@@ -334,6 +381,7 @@ const revocationProjection = await refreshTownshipFromCarrier({
   workflow: revocationWorkflow,
   verifier,
   realmByPubkey: vector.realmByPubkey,
+  expectedReplica: vector.replica,
   generation: 8,
 });
 
@@ -377,6 +425,7 @@ const interleavedProjection = await refreshTownshipFromCarrier({
   workflow: interleavedWorkflow,
   verifier,
   realmByPubkey: vector.realmByPubkey,
+  expectedReplica: vector.replica,
   generation: 8,
 });
 
@@ -406,6 +455,7 @@ await assert.rejects(
     workflow: invalidWorkflow,
     verifier,
     realmByPubkey: vector.realmByPubkey,
+    expectedReplica: vector.replica,
     generation: 8,
   }),
   /verification failed/,
@@ -436,6 +486,7 @@ const structuralReportProjection = await refreshTownshipFromCarrier({
   workflow: structuralReportWorkflow,
   verifier,
   realmByPubkey: vector.realmByPubkey,
+  expectedReplica: vector.replica,
   generation: 9,
 });
 
@@ -471,6 +522,7 @@ await assert.rejects(
     workflow: mismatchedReportWorkflow,
     verifier,
     realmByPubkey: vector.realmByPubkey,
+    expectedReplica: vector.replica,
     generation: 9,
   }),
   /carrier state report does not match verified frames/,
@@ -509,6 +561,7 @@ await assert.rejects(
     workflow: refusedWorkflow,
     verifier,
     realmByPubkey: vector.realmByPubkey,
+    expectedReplica: vector.replica,
     generation: 9,
   }),
   /V-01 fail-closed/,
@@ -634,12 +687,12 @@ const replacementConnects: string[] = [];
 const replacementStates: TownshipFeedState[] = [];
 const replacementController = createTownshipFeedController({
   async connect(peer) {
-    replacementConnects.push(peer.replica);
-    if (peer.replica === "replica:a") return lateSession.promise;
-    if (peer.replica === "replica:c") {
+    replacementConnects.push(peer.url);
+    if (peer.url.endsWith("/a")) return lateSession.promise;
+    if (peer.url.endsWith("/c")) {
       return { client: finalClient, workflow: replacementWorkflow, verifier };
     }
-    throw new Error(`obsolete pairing connected: ${peer.replica}`);
+    throw new Error(`obsolete pairing connected: ${peer.url}`);
   },
   onState(state) {
     replacementStates.push(structuredClone(state));
@@ -647,12 +700,12 @@ const replacementController = createTownshipFeedController({
   realmByPubkey: vector.realmByPubkey,
 });
 
-await replacementController.replacePeer(testPeer("replica:a"));
+await replacementController.replacePeer(testPeerAt("a"));
 await waitFor(() => replacementConnects.length === 1);
-const replaceWithB = replacementController.replacePeer(testPeer("replica:b"));
-const replaceWithC = replacementController.replacePeer(testPeer("replica:c"));
+const replaceWithB = replacementController.replacePeer(testPeerAt("b"));
+const replaceWithC = replacementController.replacePeer(testPeerAt("c"));
 await tick();
-assert.deepEqual(replacementConnects, ["replica:a"]);
+assert.deepEqual(replacementConnects, ["ws://127.0.0.1:4111/a"]);
 
 lateSession.resolve({ client: lateClient, workflow: replacementWorkflow, verifier });
 await Promise.all([replaceWithB, replaceWithC]);
@@ -660,7 +713,10 @@ await waitFor(() => finalClient.pullGates.length === 1);
 finalClient.pullGates[0]?.resolve();
 await waitFor(() => freshGenerations(replacementStates).at(-1) === 30);
 
-assert.deepEqual(replacementConnects, ["replica:a", "replica:c"]);
+assert.deepEqual(replacementConnects, [
+  "ws://127.0.0.1:4111/a",
+  "ws://127.0.0.1:4111/c",
+]);
 assert.equal(lateClient.closed, true);
 assert.equal(lateClient.subscribeCalls, 0);
 assert.equal(finalClient.subscribeCalls, 1);
@@ -695,7 +751,7 @@ const failureController = createTownshipFeedController({
   realmByPubkey: vector.realmByPubkey,
 });
 
-await failureController.replacePeer(testPeer("replica:failure"));
+await failureController.replacePeer(testPeer());
 await waitFor(() => failingRefreshClient.pullGates.length === 1);
 failingRefreshClient.pullGates[0]?.resolve();
 await waitFor(() => freshGenerations(failureStates).includes(40));
@@ -736,7 +792,7 @@ const inFlightStopController = createTownshipFeedController({
   realmByPubkey: vector.realmByPubkey,
 });
 
-await inFlightStopController.replacePeer(testPeer("replica:stop"));
+await inFlightStopController.replacePeer(testPeer());
 await waitFor(() => stopClient.pullGates.length === 1);
 stopClient.subscription.offer(availability(51));
 await tick();
@@ -806,13 +862,20 @@ function workflow(
   };
 }
 
-function testPeer(replica = "replica:test"): TownshipCarrierPeerConfig {
+function testPeer(): TownshipCarrierPeerConfig {
   return {
     url: "ws://127.0.0.1:4111/carrier",
     localRealm: "resident",
     expectedPeerRealm: "clerk",
     expectedPeerPubkey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-    replica,
+    replica: vector.replica,
+  };
+}
+
+function testPeerAt(label: string): TownshipCarrierPeerConfig {
+  return {
+    ...testPeer(),
+    url: `ws://127.0.0.1:4111/${label}`,
   };
 }
 

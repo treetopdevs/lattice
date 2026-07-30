@@ -80,7 +80,7 @@ export type WitnessedSuccessionReviewResult = {
  * Decide which role-holder writes are honored from their causal position.
  * Multi-write histories without complete authority evidence remain fail-closed.
  */
-export declare function analyzeAuthority(schema: ReplicaSchema, ops: Op[], included: ReadonlySet<string>, order: readonly string[], byId: ReadonlyMap<string, Op>): AuthorityAnalysis;
+export declare function analyzeAuthority(schema: ReplicaSchema, ops: Op[], included: ReadonlySet<string>, order: readonly string[], byId: ReadonlyMap<string, Op>, expectedReplica?: string | undefined): AuthorityAnalysis;
 /** Derive a witnessed-succession review solely from a verified local operation set. */
 export declare function deriveWitnessedSuccessionReview(schema: ReplicaSchema, ops: Op[], selector: WitnessedSuccessionReviewSelector, priorReview: WitnessedSuccessionReview | null): WitnessedSuccessionReviewResult;
 export type WitnessedSuccessionVerificationReason = "invalid_recovery_policy" | "malformed_recovery_certificate" | "unsupported_recovery_version" | "recovery_claim_mismatch" | "recovery_policy_mismatch" | "unknown_recovery_witness" | "duplicate_recovery_witness" | "noncanonical_recovery_signatures" | "invalid_recovery_signature" | "insufficient_recovery_witnesses";

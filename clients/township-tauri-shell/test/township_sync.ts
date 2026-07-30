@@ -50,6 +50,10 @@ interface TownshipCarrierVector {
   };
 }
 
+interface ForeignReplicaVector {
+  capabilityCase: { foreignCarrierOp: CarrierOpFrame };
+}
+
 interface NativeIdentity {
   publicKey: Uint8Array;
   publicKeyBase64: string;
@@ -420,6 +424,20 @@ const here = dirname(fileURLToPath(import.meta.url));
 const vector = JSON.parse(
   readFileSync(join(here, "..", "..", "lattice-client", "test", "vectors", "township_carrier_w1.json"), "utf8"),
 ) as TownshipCarrierVector;
+const foreignReplicaVector = JSON.parse(
+  readFileSync(
+    join(
+      here,
+      "..",
+      "..",
+      "lattice-client",
+      "test",
+      "vectors",
+      "township_foreign_replica_injection.json",
+    ),
+    "utf8",
+  ),
+) as ForeignReplicaVector;
 const grantFixture = vector.clientDivergedCarrierOps.find((frame) => frameCommandName(frame) === "grant");
 if (!grantFixture) throw new Error("missing resident grant fixture");
 
@@ -468,6 +486,35 @@ assert.deepEqual(carrier.pushedFrames, synced.pushedFrameIds);
 assert.deepEqual(
   JSON.parse(values.get(storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY)) ?? "[]").map((op: { id: string }) => op.id).sort(),
   vector.expectAfterSync.opIds,
+);
+
+const foreignReplicaValues = new Map<string, string>([
+  [storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY), "[]"],
+  [storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY), "[]"],
+  [storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY), "[]"],
+]);
+const foreignReplicaBefore = structuredClone(
+  Object.fromEntries(foreignReplicaValues),
+);
+const foreignReplicaSync = await syncTownshipOutbox({
+  invoke: nativeInvoke(
+    foreignReplicaValues,
+    vector.client.sessionPubkey,
+    [],
+  ),
+  client: new RecordingCarrierClient([
+    foreignReplicaVector.capabilityCase.foreignCarrierOp,
+  ]),
+});
+assert.equal(foreignReplicaSync.ok, false);
+if (foreignReplicaSync.ok) {
+  throw new Error("foreign-replica Township sync unexpectedly succeeded");
+}
+assert.equal(foreignReplicaSync.reason, "sync_failed");
+assert.match(foreignReplicaSync.message, /carrier served foreign replica/);
+assert.deepEqual(
+  Object.fromEntries(foreignReplicaValues),
+  foreignReplicaBefore,
 );
 assert.deepEqual(JSON.parse(values.get(storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY)) ?? "[]"), []);
 assert.deepEqual(

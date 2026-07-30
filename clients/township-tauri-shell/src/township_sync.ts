@@ -174,12 +174,17 @@ export async function syncTownshipOutbox(
 
   try {
     const realmByPubkey = options.realmByPubkey ?? TOWNSHIP_REALM_BY_PUBKEY;
+    const expectedReplica = options.peer?.replica ?? TOWNSHIP_REPLICA;
     const synced = await syncCarrierOnce(
       client,
       localOps,
       localCarrierFrames,
       realmByPubkey,
-      { verifier: operationVerifier, submission: options.peer?.submission ?? "push" },
+      {
+        verifier: operationVerifier,
+        submission: options.peer?.submission ?? "push",
+        expectedReplica,
+      },
     );
     const authorityQuarantinedGrantIds = frameIdsForAuthorityQuarantine(
       localCarrierFrames,
@@ -224,6 +229,7 @@ export async function syncTownshipOutbox(
       client,
       delegationFrames,
       realmByPubkey,
+      expectedReplica,
     );
 
     return {
@@ -299,8 +305,13 @@ async function authorityRevokedCapabilitySummaryWithCrossCheck(
   client: CarrierSyncClient,
   frames: CarrierOpFrame[],
   realmByPubkey: Record<string, string>,
+  expectedReplica: string,
 ): Promise<AuthorityRevokedCapabilitySummary> {
-  const localSummary = localAuthorityRevokedCapabilitySummary(frames, realmByPubkey);
+  const localSummary = localAuthorityRevokedCapabilitySummary(
+    frames,
+    realmByPubkey,
+    expectedReplica,
+  );
   if (!canReportCarrierState(client)) return localSummary;
 
   let report: CarrierStateReport;
@@ -326,9 +337,16 @@ async function authorityRevokedCapabilitySummaryWithCrossCheck(
 function localAuthorityRevokedCapabilitySummary(
   frames: CarrierOpFrame[],
   realmByPubkey: Record<string, string>,
+  expectedReplica: string,
 ): AuthorityRevokedCapabilitySummary {
   const semanticOps = carrierOpsToSemanticOps(mergeCarrierFrames(frames), realmByPubkey);
-  const local = materialize(townshipMatterSchema, semanticOps);
+  const local = materialize(
+    townshipMatterSchema,
+    semanticOps,
+    undefined,
+    new Set(),
+    expectedReplica,
+  );
   return authorityRevokedCapabilitySummary([...local.quarantineReasons], frames);
 }
 

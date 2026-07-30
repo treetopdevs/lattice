@@ -30,7 +30,9 @@ export interface Materialized {
  * Materialize a replica from ops. `included` optionally bounds the visible set
  * (a frontier); default is all ops. `externallyQuarantined` seeds decisions from
  * an external authority oracle while retaining those ops in canonical order.
+ * `expectedReplica` pins authority analysis to a caller-established replica;
+ * omitted values retain the legacy vector fallback.
  * This is a pure function of its inputs, so Sim can remain the conformance
  * oracle for state, quarantine, and order.
  */
-export declare function materialize(schema: ReplicaSchema, ops: Op[], included?: ReadonlySet<string>, externallyQuarantined?: ReadonlySet<string>): Materialized;
+export declare function materialize(schema: ReplicaSchema, ops: Op[], included?: ReadonlySet<string>, externallyQuarantined?: ReadonlySet<string>, expectedReplica?: string): Materialized;
