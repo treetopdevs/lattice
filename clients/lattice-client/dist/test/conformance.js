@@ -62,7 +62,7 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
         : vec.ops;
     for (const op of ops) {
         const evidenceType = op.authority?.type;
-        if (evidenceType === undefined || testedDisguisedEvidenceTypes.has(evidenceType))
+        if (evidenceType === undefined)
             continue;
         testedDisguisedEvidenceTypes.add(evidenceType);
         const disguisedOps = structuredClone(ops);
@@ -77,7 +77,7 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
         const scrubbedById = index(scrubbedOps);
         const disguisedAnalysis = analyzeAuthority(vec.schema, disguisedOps, new Set(disguisedOps.map((candidate) => candidate.id)), canonicalOrder(disguisedOps, disguisedById), disguisedById);
         const scrubbedAnalysis = analyzeAuthority(vec.schema, scrubbedOps, new Set(scrubbedOps.map((candidate) => candidate.id)), canonicalOrder(scrubbedOps, scrubbedById), scrubbedById);
-        check(`non-authority ${evidenceType} evidence is inert`, stableComparisonValue(disguisedAnalysis), stableComparisonValue(scrubbedAnalysis));
+        check(`non-authority ${evidenceType} evidence is inert (${op.id})`, stableComparisonValue(disguisedAnalysis), stableComparisonValue(scrubbedAnalysis));
     }
     if (vec.capabilityCase !== undefined && carrierFrames !== undefined) {
         for (const frame of carrierFrames.filter((candidate) => candidate.kind === "command")) {
@@ -302,6 +302,30 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
         check("non-authority succession evidence cannot acquire a role", disguisedSuccession === undefined
             ? null
             : disguisedAuthority.honoredWrites.has(disguisedSuccession.id), false);
+        const boundaryOps = structuredClone(ops);
+        const boundaryHeartbeat = boundaryOps.find((op) => op.authority?.type === "heartbeat");
+        const boundarySuccession = boundaryOps.find((op) => op.authority?.type === "succeed");
+        const boundaryGenesis = boundaryOps.find((op) => op.authority?.type === "genesis");
+        const boundaryPolicy = boundaryGenesis?.authority?.type === "genesis"
+            ? boundaryGenesis.authority.policies?.clerk
+            : undefined;
+        if (boundaryHeartbeat?.authority?.type === "heartbeat" &&
+            boundarySuccession?.authority?.type === "succeed" &&
+            boundarySuccession.authority.proof.mode === "legacy" &&
+            boundaryPolicy?.mode === "legacy") {
+            boundaryHeartbeat.kind = "command";
+            boundaryHeartbeat.authority.atTick =
+                boundarySuccession.authority.proof.atTick - boundaryPolicy.dormantTicks + 1;
+            const scrubbedBoundaryOps = structuredClone(boundaryOps);
+            const scrubbedHeartbeat = scrubbedBoundaryOps.find((op) => op.id === boundaryHeartbeat.id);
+            if (scrubbedHeartbeat !== undefined)
+                delete scrubbedHeartbeat.authority;
+            const boundaryById = index(boundaryOps);
+            const scrubbedBoundaryById = index(scrubbedBoundaryOps);
+            const boundaryAuthority = analyzeAuthority(vec.schema, boundaryOps, new Set(boundaryOps.map((op) => op.id)), canonicalOrder(boundaryOps, boundaryById), boundaryById);
+            const scrubbedBoundaryAuthority = analyzeAuthority(vec.schema, scrubbedBoundaryOps, new Set(scrubbedBoundaryOps.map((op) => op.id)), canonicalOrder(scrubbedBoundaryOps, scrubbedBoundaryById), scrubbedBoundaryById);
+            check("non-authority heartbeat cannot postpone a boundary succession", stableComparisonValue(boundaryAuthority), stableComparisonValue(scrubbedBoundaryAuthority));
+        }
     }
     if (vec.scenario === "township_succession_witnessed_recovery") {
         const recovery = vec.witnessedRecovery;
