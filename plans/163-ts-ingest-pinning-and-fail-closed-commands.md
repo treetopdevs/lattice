@@ -18,8 +18,10 @@
   this lands, a hostile carrier peer can move the trust anchor out from under plan 162's new
   predicate.
 - **Effort**: S–M (two independent changes, each small; the fail-closed conversion needs care)
-- **Risk**: LOW — both changes make the client stricter in ways the BEAM already is. The risk is
-  breaking legacy vectors whose ops carry no `replica` field.
+- **Risk**: LOW — both ingest defenses make the client stricter in ways the BEAM already is. A
+  review fix separately restored the pre-plan shallow validation used for locally-authored relay
+  egress; that path is now mutation-pinned. The ingest risk is breaking legacy vectors whose ops
+  carry no `replica` field.
 - **Depends on**: `plans/162-authority-root-binding.md` (recommended — 162 touches
   `clients/lattice-client/src/authority.ts` too; landing them in sequence keeps each diff reviewable)
 - **Category**: security / bug
@@ -49,10 +51,12 @@ Recorded on `codex/round4-security-reliability` during the reviewed execution:
   `malformed_command`; prototype-name lookup; malformed raw terms; scalar arguments accepted by
   BEAM; custody-consent reason precedence; and explicit coverage sentinels for both Township and
   Toolshed command tables.
-- A later review caught an unpinned local-relay contract. The new regression sends a frame that is
-  shallow-valid but deliberately strict-invalid and proves `stableCausalCarrierFrames/1` relays it
-  unchanged. Replacing shallow validation with `decodeCarrierOpFrame` reproduces the named
-  `malformed carrier op` failure before any relay call.
+- A later review caught that this branch's trust-boundary hardening had accidentally replaced the
+  pre-plan shallow local-relay check with strict ingress decoding. The correction restores the
+  original egress behavior. Its new regression sends a frame that is shallow-valid but deliberately
+  strict-invalid and proves `stableCausalCarrierFrames/1` relays it unchanged; replacing shallow
+  validation with `decodeCarrierOpFrame` reproduces the named `malformed carrier op` failure before
+  any relay call.
 
 ## Why this matters
 

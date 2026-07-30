@@ -391,13 +391,14 @@ Each was opened and read during vetting. Recorded so they are not re-audited nex
   `{:path, _}` source for any non-empty `relay_realms`, so the unmatched clause cannot be reached
   through a valid config. The invariant living in a different module from the code that depends on it
   is a mild smell; an explicit `{:error, :read_only}` clause would be defensive tidying, not a fix.
-- **Carrier integers above 2^53 lose precision on TS decode** — REJECTED as not worth doing yet.
-  Real: `wire.ex:171` encodes large ints as `["int", string]` precisely so JSON does not round them,
-  and `carrier.ts:992` coerces straight back to `Number`, after which `collectBeacons`
-  (`authority.ts:1086`) rejects them as `stale_beacon` while `valid_epoch?/2` (`authority.ex:563`)
-  accepts. But epochs and ticks are small monotonic counters in every scenario in the repo. The op
-  hash still verifies (the raw frame term is re-encoded), so this would surface as a semantic
-  divergence with no signature failure — worth remembering if epochs ever become large.
+- **Carrier integers above 2^53 are unsupported by the TS semantic runtime** — DEFERRED as a format
+  limit. `wire.ex` encodes larger integers as decimal strings, but Plan 163's
+  `parseCarrierInteger/1` now rejects values above `Number.MAX_SAFE_INTEGER` rather than rounding
+  them. A pulled frame therefore fails closed as `malformed carrier op` and can stop that sync
+  batch; there is no longer silent precision loss or a signature-only divergence. Every current
+  epoch and tick is a small monotonic counter. Supporting the full BEAM range requires an explicit
+  cross-runtime bound or carrying `bigint` through authority semantics, so it remains separate
+  format work.
 - **`jason` → Elixir 1.19 stdlib `JSON`** — REJECTED again, and the earlier blast-radius estimate was
   low by ~7×. `Jason.` appears in **44 files** across nine of ten umbrella apps, not ~6. And `jason`
   is a hard transitive dep of `credo`, `sobelow`, `rustler`, and `esbuild`, so the migration removes
