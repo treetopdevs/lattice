@@ -34,6 +34,25 @@ function check(name, got, want) {
 function sortedPairs(pairs) {
     return [...pairs].sort(([left], [right]) => left.localeCompare(right));
 }
+function stableComparisonValue(value) {
+    if (value instanceof Map) {
+        return [...value.entries()]
+            .map(([key, item]) => [stableComparisonValue(key), stableComparisonValue(item)])
+            .sort(([left], [right]) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+    }
+    if (value instanceof Set) {
+        return [...value].map(stableComparisonValue).sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+    }
+    if (Array.isArray(value))
+        return value.map(stableComparisonValue);
+    if (typeof value === "object" && value !== null) {
+        return Object.fromEntries(Object.entries(value)
+            .sort(([left], [right]) => left.localeCompare(right))
+            .map(([key, item]) => [key, stableComparisonValue(item)]));
+    }
+    return value;
+}
+const testedDisguisedEvidenceTypes = new Set();
 for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
     const vec = JSON.parse(readFileSync(join(vecDir, file), "utf8"));
     console.log(`\n▸ ${vec.scenario}  (${file})`);
@@ -41,6 +60,25 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
     const ops = carrierFrames !== undefined && vec.realmByPubkey !== undefined
         ? carrierOpsToSemanticOps(carrierFrames, vec.realmByPubkey)
         : vec.ops;
+    for (const op of ops) {
+        const evidenceType = op.authority?.type;
+        if (evidenceType === undefined || testedDisguisedEvidenceTypes.has(evidenceType))
+            continue;
+        testedDisguisedEvidenceTypes.add(evidenceType);
+        const disguisedOps = structuredClone(ops);
+        const disguisedOp = disguisedOps.find((candidate) => candidate.id === op.id);
+        if (disguisedOp !== undefined)
+            disguisedOp.kind = "command";
+        const scrubbedOps = structuredClone(disguisedOps);
+        const scrubbedOp = scrubbedOps.find((candidate) => candidate.id === op.id);
+        if (scrubbedOp !== undefined)
+            delete scrubbedOp.authority;
+        const disguisedById = index(disguisedOps);
+        const scrubbedById = index(scrubbedOps);
+        const disguisedAnalysis = analyzeAuthority(vec.schema, disguisedOps, new Set(disguisedOps.map((candidate) => candidate.id)), canonicalOrder(disguisedOps, disguisedById), disguisedById);
+        const scrubbedAnalysis = analyzeAuthority(vec.schema, scrubbedOps, new Set(scrubbedOps.map((candidate) => candidate.id)), canonicalOrder(scrubbedOps, scrubbedById), scrubbedById);
+        check(`non-authority ${evidenceType} evidence is inert`, stableComparisonValue(disguisedAnalysis), stableComparisonValue(scrubbedAnalysis));
+    }
     if (vec.capabilityCase !== undefined && carrierFrames !== undefined) {
         for (const frame of carrierFrames.filter((candidate) => candidate.kind === "command")) {
             const semantic = ops.find((op) => op.id === frame.id);
@@ -412,6 +450,7 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
         }
     }
 }
+check("non-authority evidence coverage includes every authority evidence type", [...testedDisguisedEvidenceTypes].sort(), ["beacon", "genesis", "grant", "heartbeat", "revoke", "succeed", "transfer"]);
 console.log("\n▸ externally determined quarantine");
 {
     const schema = {

@@ -163,6 +163,29 @@ defmodule Lattice2.CompactionSpikeTest do
     assert res.state.locked?
   end
 
+  test "covered honored succession activates retained capability use and same-role transfer" do
+    {sim, _grants} = setup_sim("compaction-covered-succession-activation")
+
+    {sim, succession} = Sim.succeed(sim, "r1", :moderator, at_tick: 2)
+    sim = Sim.sync_all(sim)
+    {:succeed, :moderator, succession_root, _proof} = succession.body
+    frontier = Log.frontier(Sim.log(sim, "r0"))
+
+    {sim, lock} = Sim.command(sim, "r1", :lock, [], cap: succession_root.id)
+    {sim, transfer_delegation} = Sim.transfer(sim, "r1", "r2", :moderator, at_tick: 3)
+    sim = Sim.sync_all(sim)
+
+    {_snapshot, retained, res} =
+      assert_compaction_equivalence(Sim.log(sim, "r0"), frontier)
+
+    refute Log.has?(retained, succession.id)
+    assert Log.has?(retained, lock.id)
+    refute Map.has_key?(res.reasons, lock.id)
+    assert res.holders.moderator == Sim.identity(sim, "r2").pub
+    assert res.state.locked?
+    assert transfer_delegation.parent_id == succession_root.id
+  end
+
   test "covered succession for an undeclared role cannot activate a retained capability" do
     sim =
       Sim.new(Thread, @replica, ["root", "attacker"], seed: "compaction-undeclared-succession")
