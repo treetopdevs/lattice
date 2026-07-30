@@ -20,6 +20,7 @@ function check(name, got, want) {
 }
 const vector = JSON.parse(readFileSync(join(vecDir, "township_carrier_w1.json"), "utf8"));
 const foreignReplicaVector = JSON.parse(readFileSync(join(vecDir, "township_foreign_replica_injection.json"), "utf8"));
+const toolshedVector = JSON.parse(readFileSync(join(vecDir, "toolshed_custody_consent.json"), "utf8"));
 console.log(`\n▸ ${vector.scenario} carrier vector`);
 const identity = seededEd25519Identity(vector.client.sessionSeed);
 check("session public key", identity.publicKeyBase64, vector.client.sessionPubkey);
@@ -193,6 +194,81 @@ const inheritedRealmFrame = {
 };
 const [inheritedRealmOp] = carrierOpsToSemanticOps([inheritedRealmFrame], {});
 check("inherited realm-map keys cannot replace an unmapped pubkey", inheritedRealmOp?.author, "toString");
+const malformedTermFrames = [
+    ["list", 0],
+    ["tuple", 5],
+    ["map", [7]],
+    ["bin", 5],
+].map((body, index) => {
+    const frame = structuredClone(commandFrameFixture);
+    Reflect.set(frame, "id", `${commandFrameFixture.id}-malformed-term-${index}`);
+    Reflect.set(frame, "body", body);
+    return frame;
+});
+const malformedCapFrame = structuredClone(commandFrameFixture);
+Reflect.set(malformedCapFrame, "id", `${commandFrameFixture.id}-malformed-cap`);
+Reflect.set(malformedCapFrame, "cap", ["zzz", 1]);
+malformedTermFrames.push(malformedCapFrame);
+const malformedAtomFrame = structuredClone(commandFrameFixture);
+Reflect.set(malformedAtomFrame, "id", `${commandFrameFixture.id}-malformed-atom`);
+Reflect.set(malformedAtomFrame, "body", [
+    "tuple",
+    [["atom", 5], ["list", []]],
+]);
+malformedTermFrames.push(malformedAtomFrame);
+let malformedTermOps = [];
+let malformedTermFailure = "";
+try {
+    malformedTermOps = carrierOpsToSemanticOps(malformedTermFrames, vector.realmByPubkey);
+}
+catch (error) {
+    malformedTermFailure =
+        error instanceof Error ? error.message : String(error);
+}
+check("malformed raw command terms cannot wedge direct ingest", {
+    failure: malformedTermFailure,
+    reasons: malformedTermOps.map(commandError),
+}, {
+    failure: "",
+    reasons: Array.from({ length: malformedTermFrames.length }, () => "malformed_command"),
+});
+const validCustodyFrame = toolshedVector.oracleCarrierOps.find((frame) => frame.id === toolshedVector.expectAtFullFrontier.winners.holder);
+if (validCustodyFrame === undefined) {
+    throw new Error("missing honored custody transfer fixture");
+}
+const invalidCustodyFrame = {
+    ...structuredClone(validCustodyFrame),
+    body: [
+        "tuple",
+        [
+            ["atom", "custody_transfer"],
+            [
+                "list",
+                [
+                    ["int", 42],
+                    ["bin", Buffer.from("missing-request").toString("base64")],
+                    ["bin", Buffer.alloc(64).toString("base64")],
+                ],
+            ],
+        ],
+    ],
+};
+const invalidCustodyFrames = toolshedVector.oracleCarrierOps.map((frame) => frame.id === invalidCustodyFrame.id ? invalidCustodyFrame : frame);
+const invalidCustodyOps = carrierOpsToSemanticOps(invalidCustodyFrames, toolshedVector.realmByPubkey);
+const invalidCustody = materialize(toolshedVector.schema, invalidCustodyOps, undefined, new Set(), toolshedVector.replica);
+check("ill-typed custody recipient reaches consent validation", {
+    decodeReason: commandError(invalidCustodyOps.find((op) => op.id === invalidCustodyFrame.id)),
+    quarantineReason: invalidCustody.quarantineReasons.get(invalidCustodyFrame.id),
+}, { quarantineReason: "invalid_consent" });
+const noCapabilityCustodyFrame = {
+    ...invalidCustodyFrame,
+    cap: ["nil"],
+};
+const noCapabilityCustodyOps = carrierOpsToSemanticOps(toolshedVector.oracleCarrierOps.map((frame) => frame.id === noCapabilityCustodyFrame.id
+    ? noCapabilityCustodyFrame
+    : frame), toolshedVector.realmByPubkey);
+const noCapabilityCustody = materialize(toolshedVector.schema, noCapabilityCustodyOps, undefined, new Set(), toolshedVector.replica);
+check("ill-typed custody recipient preserves capability reason precedence", noCapabilityCustody.quarantineReasons.get(noCapabilityCustodyFrame.id), "no_capability");
 check("Township decoder table includes link_election", townshipCarrierCommandNames().includes("link_election"), true);
 console.log(`\n▸ ${foreignReplicaVector.scenario} carrier ingest`);
 const emptyPushReport = () => ({

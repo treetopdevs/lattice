@@ -25,6 +25,31 @@
 - **Category**: security / bug
 - **Planned at**: commit `764a1945`, 2026-07-29
 
+## Execution evidence
+
+Recorded on `codex/round4-security-reliability` during the reviewed execution:
+
+- The foreign-replica RED admitted the signed foreign frame, emptied Township state, and produced
+  four quarantines. Removing the ingest comparison reproduced that named failure; reverting the
+  explicit anchor separately failed the direct anchor assertions.
+- The `link_election` RED quarantined operation
+  `PpPRV1FW9vo4TBX1OWe16B8-hq7DSdRgTyYqIqQ6AE0` as
+  `operation_not_granted`. The green path retains the real command name, produces zero state
+  mutations, and remains absent from the quarantine set.
+- Adding temporary BEAM command `:plan163_drift_probe` made
+  `Township command decoder table matches the BEAM DSL` fail. A second temporary mutation added a
+  two-argument `link_election` overload; conformance exited 1 at
+  `Township command decoder arities match the BEAM DSL`, with runtime
+  `[["link_election", 1]]` versus BEAM
+  `[["link_election", 1], ["link_election", 2]]`. Both mutations and their temporary export
+  support were removed, the test environment was recompiled, and the complete vector corpus was
+  regenerated.
+- Security review changed the initial unknown-command throw to per-operation BEAM-compatible
+  quarantine. Regression coverage now pins `unknown_command`, `bad_command_arity`, and
+  `malformed_command`; prototype-name lookup; malformed raw terms; scalar arguments accepted by
+  BEAM; custody-consent reason precedence; and explicit coverage sentinels for both Township and
+  Toolshed command tables.
+
 ## Why this matters
 
 Two independent holes in the TypeScript client's ingest path:

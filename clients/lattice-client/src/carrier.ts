@@ -354,20 +354,26 @@ const toolshedCommandDecoders: ReadonlyMap<string, CommandDecoder> = new Map([
       // ADR 0007: the holder write projects the recipient's realm; the
       // request id and consent signature ride as validity evidence for the
       // consent conjunct (src/consent.ts), never as state.
-      const toPub = bytesToBase64(binBytes(args[0]));
-      const sigTerm = args[2];
+      const toBytes = binaryBytes(args[0]);
+      const toPub = toBytes === null ? "" : bytesToBase64(toBytes);
+      const requestOpId = binaryUtf8(args[1]) ?? "";
+      const signatureBytes = binaryBytes(args[2]);
+      const signatureMissing = args[2] === null || signatureBytes === null;
       return {
         field: "holder",
         mutation: "write",
-        value: realmForPubkey(toPub, realmByPubkey),
+        value:
+          toBytes === null
+            ? commandValue(args[0])
+            : realmForPubkey(toPub, realmByPubkey),
         command: "custody_transfer",
         consent: {
           toPub,
-          requestOpId: binText(args[1]),
+          requestOpId,
           sig:
-            sigTerm === null || sigTerm === undefined
+            signatureMissing
               ? null
-              : bytesToBase64(binBytes(sigTerm)),
+              : bytesToBase64(signatureBytes),
         },
       };
     }),
@@ -1055,9 +1061,17 @@ export function carrierOpToSemanticOp(
   realmByPubkey: Record<string, string> = {},
 ): Op {
   const op = assertCarrierOpFrame(frame);
-  const body = decodeCarrierTerm(op.body);
-  const payload = payloadFromBody(op.kind, body, realmByPubkey);
-  const cap = capabilityId(decodeCarrierTerm(op.cap));
+  let payload: Payload;
+  let cap: string | null;
+  try {
+    const body = decodeCarrierTerm(op.body);
+    payload = payloadFromBody(op.kind, body, realmByPubkey);
+    cap = capabilityId(decodeCarrierTerm(op.cap));
+  } catch (error) {
+    if (op.kind !== "command") throw error;
+    payload = neutralPayload("malformed_command", "malformed_command");
+    cap = null;
+  }
 
   return {
     id: op.id,
@@ -1154,28 +1168,66 @@ function decodeCarrierTerm(term: CarrierTerm): DecodedTerm {
     case "nil":
       return null;
     case "bool":
+      if (typeof term[1] !== "boolean") throw new Error("malformed bool term");
       return term[1];
     case "int": {
       const value = term[1];
-      return typeof value === "number" ? value : Number.parseInt(value, 10);
+      const parsed =
+        typeof value === "number" ? value : Number.parseInt(value, 10);
+      if (!Number.isInteger(parsed) || parsed < 0) {
+        throw new Error("malformed integer term");
+      }
+      return parsed;
     }
     case "bin": {
+      if (typeof term[1] !== "string") throw new Error("malformed binary term");
       const bytes = base64ToBytes(term[1]);
       return { type: "bin", bytes, text: textDecoder.decode(bytes) };
     }
-    case "atom":
+    case "atom": {
+      if (typeof term[1] !== "string") throw new Error("malformed atom term");
       return { type: "atom", value: term[1] };
-    case "list":
+    }
+    case "list": {
+      if (!Array.isArray(term[1])) throw new Error("malformed list term");
       return { type: "list", values: term[1].map(decodeCarrierTerm) };
-    case "tuple":
+    }
+    case "tuple": {
+      if (!Array.isArray(term[1])) throw new Error("malformed tuple term");
       return { type: "tuple", values: term[1].map(decodeCarrierTerm) };
-    case "map":
-      return { type: "map", pairs: term[1].map(([key, value]) => [decodeCarrierTerm(key), decodeCarrierTerm(value)]) };
-    case "mapset":
+    }
+    case "map": {
+      if (!Array.isArray(term[1])) throw new Error("malformed map term");
+      return {
+        type: "map",
+        pairs: term[1].map((pair) => {
+          if (!Array.isArray(pair) || pair.length !== 2) {
+            throw new Error("malformed map pair");
+          }
+          return [
+            decodeCarrierTerm(pair[0]),
+            decodeCarrierTerm(pair[1]),
+          ];
+        }),
+      };
+    }
+    case "mapset": {
+      if (!Array.isArray(term[1])) throw new Error("malformed mapset term");
       return { type: "mapset", values: term[1].map(decodeCarrierTerm) };
-    case "delegation":
+    }
+    case "delegation": {
+      if (
+        typeof term[1] !== "object" ||
+        term[1] === null ||
+        Array.isArray(term[1])
+      ) {
+        throw new Error("malformed delegation term");
+      }
       return { type: "delegation", ...term[1] };
+    }
   }
+
+  throw new Error("malformed carrier term");
 }
 
 function payloadFromBody(
@@ -1193,11 +1245,11 @@ function payloadFromBody(
       return neutralPayload("command", "malformed_command");
     }
 
-    const command = atomNameOrNull(body.values[0]);
+    const command = atomValue(body.values[0]);
     if (command === null) {
       return body.values[0] === null
-        ? neutralPayload("command", "malformed_command")
-        : neutralPayload("unknown_command", "unknown_command");
+        ? neutralPayload("malformed_command", "malformed_command")
+        : neutralPayload(commandAuditLabel(body.values[0]), "unknown_command");
     }
 
     const decoder =
@@ -1364,13 +1416,6 @@ function atomName(term: DecodedTerm | undefined): string {
   throw new Error("expected atom term");
 }
 
-function atomNameOrNull(term: DecodedTerm | undefined): string | null {
-  if (typeof term === "object" && term !== null && "type" in term && term.type === "atom") {
-    return term.value;
-  }
-  return null;
-}
-
 function listValues(term: DecodedTerm | undefined): DecodedTerm[] {
   if (typeof term === "object" && term !== null && "type" in term && term.type === "list") return term.values;
   throw new Error("expected list term");
@@ -1405,6 +1450,14 @@ function commandValue(term: DecodedTerm | undefined): unknown {
   if (term.type === "delegation") {
     const { type: _type, ...delegation } = term;
     return delegation;
+  }
+}
+
+function commandAuditLabel(term: DecodedTerm | undefined): string {
+  try {
+    return String(commandValue(term));
+  } catch {
+    return "unknown_command";
   }
 }
 
@@ -1640,7 +1693,11 @@ function atomMap(term: DecodedTerm | undefined): Map<string, DecodedTerm> | null
 }
 
 function atomValue(term: DecodedTerm | undefined): string | null {
-  return typeof term === "object" && term !== null && "type" in term && term.type === "atom"
+  return typeof term === "object" &&
+    term !== null &&
+    "type" in term &&
+    term.type === "atom" &&
+    typeof term.value === "string"
     ? term.value
     : null;
 }
