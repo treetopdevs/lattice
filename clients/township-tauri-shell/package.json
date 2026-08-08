@@ -6,7 +6,7 @@
   "scripts": {
     "prebuild": "npm --prefix ../lattice-client run build && npm --prefix ../lattice-mobile-core run build",
     "build": "vite build",
-    "prebuild:pilot": "npm --prefix ../lattice-client run build",
+    "prebuild:pilot": "npm --prefix ../lattice-client run build && npm --prefix ../lattice-mobile-core run build",
     "build:pilot": "vite build --config vite.pilot.config.ts",
     "tauri": "tauri",
     "tauri:build": "tauri build --bundles app",
