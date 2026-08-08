@@ -53,8 +53,12 @@ function check(name: string, got: unknown, want: unknown) {
   }
 }
 
+function compareCodePoints(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function sortedPairs(pairs: readonly [string, string][]): [string, string][] {
-  return [...pairs].sort(([left], [right]) => left.localeCompare(right));
+  return [...pairs].sort(([left], [right]) => compareCodePoints(left, right));
 }
 
 function sortedStringArray(value: unknown): string[] | null {
@@ -80,25 +84,29 @@ function sortedCommandTable(value: unknown): [string, number][] | null {
   ) {
     return null;
   }
-  return [...value].sort(([left], [right]) => left.localeCompare(right));
+  return [...value].sort(([left], [right]) => compareCodePoints(left, right));
 }
 
 function stableComparisonValue(value: unknown): unknown {
   if (value instanceof Map) {
     return [...value.entries()]
       .map(([key, item]) => [stableComparisonValue(key), stableComparisonValue(item)])
-      .sort(([left], [right]) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+      .sort(([left], [right]) =>
+        compareCodePoints(JSON.stringify(left), JSON.stringify(right)),
+      );
   }
   if (value instanceof Set) {
-    return [...value].map(stableComparisonValue).sort((left, right) =>
-      JSON.stringify(left).localeCompare(JSON.stringify(right)),
-    );
+    return [...value]
+      .map(stableComparisonValue)
+      .sort((left, right) =>
+        compareCodePoints(JSON.stringify(left), JSON.stringify(right)),
+      );
   }
   if (Array.isArray(value)) return value.map(stableComparisonValue);
   if (typeof value === "object" && value !== null) {
     return Object.fromEntries(
       Object.entries(value)
-        .sort(([left], [right]) => left.localeCompare(right))
+        .sort(([left], [right]) => compareCodePoints(left, right))
         .map(([key, item]) => [key, stableComparisonValue(item)]),
     );
   }
@@ -611,13 +619,13 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
             successorPubkey: witnessedPolicy.successor,
             witnessPubkeys: [...witnessedPolicy.recovery.witnesses].sort(),
             threshold: witnessedPolicy.recovery.threshold,
-          }).sort(([left], [right]) => left.localeCompare(right)),
+          }).sort(([left], [right]) => compareCodePoints(left, right)),
       projection === undefined
         ? undefined
         : Object.entries({
             ...projection.effectivePolicy,
             witnessPubkeys: [...projection.effectivePolicy.witnessPubkeys].sort(),
-          }).sort(([left], [right]) => left.localeCompare(right)),
+          }).sort(([left], [right]) => compareCodePoints(left, right)),
     );
     check(
       "genesis-projection recomputed policy id",
@@ -839,10 +847,12 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
             holderEpoch: expectedClaim.holderEpoch,
             successorPubkey: expectedClaim.successor,
             policyId: expectedClaim.policyId,
-          }).sort(([left], [right]) => left.localeCompare(right)),
+          }).sort(([left], [right]) => compareCodePoints(left, right)),
       recovery === undefined
         ? undefined
-        : Object.entries(recovery.claim).sort(([left], [right]) => left.localeCompare(right)),
+        : Object.entries(recovery.claim).sort(([left], [right]) =>
+            compareCodePoints(left, right),
+          ),
     );
 
     check(

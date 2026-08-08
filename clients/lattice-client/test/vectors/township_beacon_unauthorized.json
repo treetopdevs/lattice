@@ -1,25 +1,63 @@
 {
+  "canonicalOps": [
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258537265706c6963613a6d61747465723a626561636f6e2d756e617574686f72697a656423726f6f743a6d72535470726d62595974535479535a4f4d4b37304e34314f62625a5a4e454950593135715a505f687a6758205584304f3b6118d9f639c9c1ce3ce607a5d47cabcd57d76cbef44c5935e93d0880d9ea6049617574686f72697479d9ea6183d9ea604767656e65736973d9ea6389582b4c513336484569536a4a57627762546434584764336763436551324e6b324d67496b344a5261505531325158537265706c6963613a6d61747465723a626561636f6e2d756e617574686f72697a656423726f6f743a6d72535470726d62595974535479535a4f4d4b37304e34314f62625a5a4e454950593135715a505f687a6758205584304f3b6118d9f639c9c1ce3ce607a5d47cabcd57d76cbef44c5935e93d0858205584304f3b6118d9f639c9c1ce3ce607a5d47cabcd57d76cbef44c5935e93d08f688d9ea604561646d6974d9ea604c636c6f73655f6d6174746572d9ea604d6c696e6b5f656c656374696f6ed9ea6044706f7374d9ea604d72656d6f76655f6d656d626572d9ea604d72656f70656e5f6d6174746572d9ea604b7365745f73756d6d617279d9ea60497365745f7469746c6581d9ea6045636c65726bf55840cc2cd9fa57964b395acb9cd211161b6526c4d1d09c72e2f8628e1709352e55829e31755bdfe08952cddc339d4b82acc33511fefe4a7a2eeefbf4b595f934cb02a0f6",
+      "hash": "ELgBlXVzxCxhHMyia0EypA6Ggl2gni5zEWC-X_eBnH4",
+      "id": "ELgBlXVzxCxhHMyia0EypA6Ggl2gni5zEWC-X_eBnH4",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258537265706c6963613a6d61747465723a626561636f6e2d756e617574686f72697a656423726f6f743a6d72535470726d62595974535479535a4f4d4b37304e34314f62625a5a4e454950593135715a505f687a6758205584304f3b6118d9f639c9c1ce3ce607a5d47cabcd57d76cbef44c5935e93d0881582b454c67426c58567a78437868484d79696130457970413647676c32676e69357a4557432d585f65426e4834d9ea6049617574686f72697479d9ea6182d9ea60456772616e74d9ea638a582b5f594376645434787a5949663851696e67424164457067635f674e666f71755853315f72556631366d763458537265706c6963613a6d61747465723a626561636f6e2d756e617574686f72697a656423726f6f743a6d72535470726d62595974535479535a4f4d4b37304e34314f62625a5a4e454950593135715a505f687a6758205584304f3b6118d9f639c9c1ce3ce607a5d47cabcd57d76cbef44c5935e93d085820991b9c4e57e6a272c217e0332660fc157f804ba354184f4886e9d052e804f698582b4c513336484569536a4a57627762546434584764336763436551324e6b324d67496b344a5261505531325181d9ea6044706f737480f45840fc89665f8673c0ba656e3ebc171fc4c8fd823337b13652862d4cf0f0c455ab20b2e2d6c16ec4a47fd9ba77445fecdf401c11d628e34f5b1b861af75f25428f0403f6",
+      "hash": "ZG-a7X5ecYsmswOTJa3mTcwfkJ3GsP_dcvvskkTT-6Q",
+      "id": "ZG-a7X5ecYsmswOTJa3mTcwfkJ3GsP_dcvvskkTT-6Q",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258537265706c6963613a6d61747465723a626561636f6e2d756e617574686f72697a656423726f6f743a6d72535470726d62595974535479535a4f4d4b37304e34314f62625a5a4e454950593135715a505f687a675820991b9c4e57e6a272c217e0332660fc157f804ba354184f4886e9d052e804f69881582b5a472d61375835656359736d73774f544a61336d546377666b4a334773505f64637676736b6b54542d3651d9ea6049617574686f72697479d9ea6182d9ea6046626561636f6e09f6",
+      "hash": "A8Pips4Bk-2pPwLzF6jVgYs_ao9eXFfiykV8hEQV7ts",
+      "id": "A8Pips4Bk-2pPwLzF6jVgYs_ao9eXFfiykV8hEQV7ts",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258537265706c6963613a6d61747465723a626561636f6e2d756e617574686f72697a656423726f6f743a6d72535470726d62595974535479535a4f4d4b37304e34314f62625a5a4e454950593135715a505f687a6758205584304f3b6118d9f639c9c1ce3ce607a5d47cabcd57d76cbef44c5935e93d0881582b41385069707334426b2d327050774c7a46366a566759735f616f396558466669796b563868455156377473d9ea6049617574686f72697479d9ea6182d9ea6046626561636f6e02f6",
+      "hash": "Qx2tuAqpIDP7KnqcMZkEtFZELf1ysT_m3ZigwZrRjXE",
+      "id": "Qx2tuAqpIDP7KnqcMZkEtFZELf1ysT_m3ZigwZrRjXE",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258537265706c6963613a6d61747465723a626561636f6e2d756e617574686f72697a656423726f6f743a6d72535470726d62595974535479535a4f4d4b37304e34314f62625a5a4e454950593135715a505f687a6758205584304f3b6118d9f639c9c1ce3ce607a5d47cabcd57d76cbef44c5935e93d0881582b5178327475417170494450374b6e71634d5a6b4574465a454c66317973545f6d335a6967775a72526a5845d9ea6049617574686f72697479d9ea6182d9ea6046626561636f6e02f6",
+      "hash": "GAdRdhLNaTQHY90TwusbLD_DwPyt55xR0yCm0YyACpQ",
+      "id": "GAdRdhLNaTQHY90TwusbLD_DwPyt55xR0yCm0YyACpQ",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258537265706c6963613a6d61747465723a626561636f6e2d756e617574686f72697a656423726f6f743a6d72535470726d62595974535479535a4f4d4b37304e34314f62625a5a4e454950593135715a505f687a675820991b9c4e57e6a272c217e0332660fc157f804ba354184f4886e9d052e804f69881582b4741645264684c4e6154514859393054777573624c445f4477507974353578523079436d30597941437051d9ea6047636f6d6d616e64d9ea6182d9ea6044706f7374814c7374696c6c206c6561736564582b5f594376645434787a5949663851696e67424164457067635f674e666f71755853315f72556631366d7634",
+      "hash": "_w11c2jNIeSXZ0MsvdFt_FCJJmdPlIRrkRNdAwrTQgc",
+      "id": "_w11c2jNIeSXZ0MsvdFt_FCJJmdPlIRrkRNdAwrTQgc",
+      "suite": "lattice-cbor-v1"
+    }
+  ],
   "capabilityCase": {
     "case": "beacon_unauthorized",
-    "honoredOperationId": "JsamKdlkMJrVoTtxBKdO6lg6FzyrOgTVQ3CqwK9YFnY",
-    "staleBeaconOperationId": "pjaV4XXuvQAHGSNKPqukkxM4vP7fNd30gBoKVb4B6gQ",
-    "unauthorizedBeaconOperationId": "sdnEJroOGFO9Z3qn669F86Ku0WTLdwLh0CJDQY7gZGY"
+    "honoredOperationId": "_w11c2jNIeSXZ0MsvdFt_FCJJmdPlIRrkRNdAwrTQgc",
+    "staleBeaconOperationId": "GAdRdhLNaTQHY90TwusbLD_DwPyt55xR0yCm0YyACpQ",
+    "unauthorizedBeaconOperationId": "A8Pips4Bk-2pPwLzF6jVgYs_ao9eXFfiykV8hEQV7ts"
   },
   "expectAtFrontier": [],
   "expectAtFullFrontier": {
     "authorityQuarantine": [
       [
-        "pjaV4XXuvQAHGSNKPqukkxM4vP7fNd30gBoKVb4B6gQ",
-        "stale_beacon"
+        "A8Pips4Bk-2pPwLzF6jVgYs_ao9eXFfiykV8hEQV7ts",
+        "unauthorized_beacon"
       ],
       [
-        "sdnEJroOGFO9Z3qn669F86Ku0WTLdwLh0CJDQY7gZGY",
-        "unauthorized_beacon"
+        "GAdRdhLNaTQHY90TwusbLD_DwPyt55xR0yCm0YyACpQ",
+        "stale_beacon"
       ]
     ],
     "quarantine": [
-      "pjaV4XXuvQAHGSNKPqukkxM4vP7fNd30gBoKVb4B6gQ",
-      "sdnEJroOGFO9Z3qn669F86Ku0WTLdwLh0CJDQY7gZGY"
+      "A8Pips4Bk-2pPwLzF6jVgYs_ao9eXFfiykV8hEQV7ts",
+      "GAdRdhLNaTQHY90TwusbLD_DwPyt55xR0yCm0YyACpQ"
     ],
     "state": {
       "clerk": "clerk",
@@ -58,8 +96,8 @@
         "ELgBlXVzxCxhHMyia0EypA6Ggl2gni5zEWC-X_eBnH4"
       ],
       "field": "__authority",
-      "hash": "SzPq7KQYHcYc8MW_pw1KgMWowK3bgotv8bzMpg-vsPs",
-      "id": "SzPq7KQYHcYc8MW_pw1KgMWowK3bgotv8bzMpg-vsPs",
+      "hash": "ZG-a7X5ecYsmswOTJa3mTcwfkJ3GsP_dcvvskkTT-6Q",
+      "id": "ZG-a7X5ecYsmswOTJa3mTcwfkJ3GsP_dcvvskkTT-6Q",
       "kind": "authority",
       "mutation": "write",
       "value": null
@@ -68,11 +106,11 @@
       "author": "resident",
       "command": "authority",
       "deps": [
-        "SzPq7KQYHcYc8MW_pw1KgMWowK3bgotv8bzMpg-vsPs"
+        "ZG-a7X5ecYsmswOTJa3mTcwfkJ3GsP_dcvvskkTT-6Q"
       ],
       "field": "__authority",
-      "hash": "sdnEJroOGFO9Z3qn669F86Ku0WTLdwLh0CJDQY7gZGY",
-      "id": "sdnEJroOGFO9Z3qn669F86Ku0WTLdwLh0CJDQY7gZGY",
+      "hash": "A8Pips4Bk-2pPwLzF6jVgYs_ao9eXFfiykV8hEQV7ts",
+      "id": "A8Pips4Bk-2pPwLzF6jVgYs_ao9eXFfiykV8hEQV7ts",
       "kind": "authority",
       "mutation": "write",
       "value": null
@@ -81,11 +119,11 @@
       "author": "clerk",
       "command": "authority",
       "deps": [
-        "sdnEJroOGFO9Z3qn669F86Ku0WTLdwLh0CJDQY7gZGY"
+        "A8Pips4Bk-2pPwLzF6jVgYs_ao9eXFfiykV8hEQV7ts"
       ],
       "field": "__authority",
-      "hash": "M-2MRE252kx-ew98qamiFGJghCsCDL3ra-mAK-P6_jY",
-      "id": "M-2MRE252kx-ew98qamiFGJghCsCDL3ra-mAK-P6_jY",
+      "hash": "Qx2tuAqpIDP7KnqcMZkEtFZELf1ysT_m3ZigwZrRjXE",
+      "id": "Qx2tuAqpIDP7KnqcMZkEtFZELf1ysT_m3ZigwZrRjXE",
       "kind": "authority",
       "mutation": "write",
       "value": null
@@ -94,11 +132,11 @@
       "author": "clerk",
       "command": "authority",
       "deps": [
-        "M-2MRE252kx-ew98qamiFGJghCsCDL3ra-mAK-P6_jY"
+        "Qx2tuAqpIDP7KnqcMZkEtFZELf1ysT_m3ZigwZrRjXE"
       ],
       "field": "__authority",
-      "hash": "pjaV4XXuvQAHGSNKPqukkxM4vP7fNd30gBoKVb4B6gQ",
-      "id": "pjaV4XXuvQAHGSNKPqukkxM4vP7fNd30gBoKVb4B6gQ",
+      "hash": "GAdRdhLNaTQHY90TwusbLD_DwPyt55xR0yCm0YyACpQ",
+      "id": "GAdRdhLNaTQHY90TwusbLD_DwPyt55xR0yCm0YyACpQ",
       "kind": "authority",
       "mutation": "write",
       "value": null
@@ -107,11 +145,11 @@
       "author": "resident",
       "command": "post",
       "deps": [
-        "pjaV4XXuvQAHGSNKPqukkxM4vP7fNd30gBoKVb4B6gQ"
+        "GAdRdhLNaTQHY90TwusbLD_DwPyt55xR0yCm0YyACpQ"
       ],
       "field": "posts",
-      "hash": "JsamKdlkMJrVoTtxBKdO6lg6FzyrOgTVQ3CqwK9YFnY",
-      "id": "JsamKdlkMJrVoTtxBKdO6lg6FzyrOgTVQ3CqwK9YFnY",
+      "hash": "_w11c2jNIeSXZ0MsvdFt_FCJJmdPlIRrkRNdAwrTQgc",
+      "id": "_w11c2jNIeSXZ0MsvdFt_FCJJmdPlIRrkRNdAwrTQgc",
       "kind": "command",
       "mutation": "append",
       "value": "still leased"
@@ -202,10 +240,10 @@
       "deps": [
         "ELgBlXVzxCxhHMyia0EypA6Ggl2gni5zEWC-X_eBnH4"
       ],
-      "id": "SzPq7KQYHcYc8MW_pw1KgMWowK3bgotv8bzMpg-vsPs",
+      "id": "ZG-a7X5ecYsmswOTJa3mTcwfkJ3GsP_dcvvskkTT-6Q",
       "kind": "authority",
       "replica": "replica:matter:beacon-unauthorized#root:mrSTprmbYYtSTySZOMK70N41ObbZZNEIPY15qZP_hzg",
-      "sig": "KzaxdRiP+2N/vT9WVBRr+wUlQMa2XRZanNsss7qRRlrHKj3Wfed28Uu4dVgidIgrA0awKJIDDLQDwSUJse04Cg==",
+      "sig": "nhWpqh4sbwxPMhA74yo+YfFXt2ZvFviUTUR0zTzcPOdlCM4gtkeV31yt5bwaV+L/W0q1FYdeamgfvza+1S1BCA==",
       "v": 1
     },
     {
@@ -227,12 +265,12 @@
         "nil"
       ],
       "deps": [
-        "SzPq7KQYHcYc8MW_pw1KgMWowK3bgotv8bzMpg-vsPs"
+        "ZG-a7X5ecYsmswOTJa3mTcwfkJ3GsP_dcvvskkTT-6Q"
       ],
-      "id": "sdnEJroOGFO9Z3qn669F86Ku0WTLdwLh0CJDQY7gZGY",
+      "id": "A8Pips4Bk-2pPwLzF6jVgYs_ao9eXFfiykV8hEQV7ts",
       "kind": "authority",
       "replica": "replica:matter:beacon-unauthorized#root:mrSTprmbYYtSTySZOMK70N41ObbZZNEIPY15qZP_hzg",
-      "sig": "72MZzQ+NfBS6xSo44dXyJ5CDrYT5lw7GBA+2hev1jL6dPr9iIE5+2XYIhuWLvKxnt0GPjCIPCbxEq1BPGC4hCA==",
+      "sig": "mmSoPWKW98MYTvrOyMWOBlazwLMbl7WlrDKMykQWjwO3ERZiTObnr8R/ZnI3VUnaKSBdI+Fds2OQKcYxjoEbBw==",
       "v": 1
     },
     {
@@ -254,12 +292,12 @@
         "nil"
       ],
       "deps": [
-        "sdnEJroOGFO9Z3qn669F86Ku0WTLdwLh0CJDQY7gZGY"
+        "A8Pips4Bk-2pPwLzF6jVgYs_ao9eXFfiykV8hEQV7ts"
       ],
-      "id": "M-2MRE252kx-ew98qamiFGJghCsCDL3ra-mAK-P6_jY",
+      "id": "Qx2tuAqpIDP7KnqcMZkEtFZELf1ysT_m3ZigwZrRjXE",
       "kind": "authority",
       "replica": "replica:matter:beacon-unauthorized#root:mrSTprmbYYtSTySZOMK70N41ObbZZNEIPY15qZP_hzg",
-      "sig": "GZzrFUymLlm3t+uxbU3w40/zblaj3kzdgb9ou6g0IG6hHLqR0lf+YvUecdHEmX0hDuiXOeAyZG3Tp1xHw/3fCA==",
+      "sig": "dGpjSH7DmT0IDBAqQ+5sGqpRWEER9nZUPCuCg6UE8Kkcuq9avK/hPM/+FmTnLmudyjvLN8WsBioaelUqmpEJCQ==",
       "v": 1
     },
     {
@@ -281,12 +319,12 @@
         "nil"
       ],
       "deps": [
-        "M-2MRE252kx-ew98qamiFGJghCsCDL3ra-mAK-P6_jY"
+        "Qx2tuAqpIDP7KnqcMZkEtFZELf1ysT_m3ZigwZrRjXE"
       ],
-      "id": "pjaV4XXuvQAHGSNKPqukkxM4vP7fNd30gBoKVb4B6gQ",
+      "id": "GAdRdhLNaTQHY90TwusbLD_DwPyt55xR0yCm0YyACpQ",
       "kind": "authority",
       "replica": "replica:matter:beacon-unauthorized#root:mrSTprmbYYtSTySZOMK70N41ObbZZNEIPY15qZP_hzg",
-      "sig": "ty+/rhsHdETlWAkCzp9N0LI/V4SEzbwvWRIel124pfi8/l5A4lMDs/dN/3BatLULeamfF2xwzjYrQK5sqHJ9Cw==",
+      "sig": "XbR4CykDvKiGYoKHIXctS8l1GW2HPrK09lwq6lD5Gbl1tj3udgLXYW6pUDBohyjCRlExnqTimuC5K7vgvrnyBg==",
       "v": 1
     },
     {
@@ -314,12 +352,12 @@
         "X1lDdmRUNHh6WUlmOFFpbmdCQWRFcGdjX2dOZm9xdVhTMV9yVWYxNm12NA=="
       ],
       "deps": [
-        "pjaV4XXuvQAHGSNKPqukkxM4vP7fNd30gBoKVb4B6gQ"
+        "GAdRdhLNaTQHY90TwusbLD_DwPyt55xR0yCm0YyACpQ"
       ],
-      "id": "JsamKdlkMJrVoTtxBKdO6lg6FzyrOgTVQ3CqwK9YFnY",
+      "id": "_w11c2jNIeSXZ0MsvdFt_FCJJmdPlIRrkRNdAwrTQgc",
       "kind": "command",
       "replica": "replica:matter:beacon-unauthorized#root:mrSTprmbYYtSTySZOMK70N41ObbZZNEIPY15qZP_hzg",
-      "sig": "c6Tzc/M5v3M7eXPopXwNi+v4N1eXDd4Nhpils4wdTPs/Rd42uhq2VWHLu88mRfcZBX5nwXKRfK9KM+od1RJLBg==",
+      "sig": "HaF7ivXwJuvGq9c05bw2GTx/yq/jXAcHbHFnlpKLM8/sFUVGp5iPKbaH/kikGUqRGhe9kUSqzWPUgsTIABloAA==",
       "v": 1
     }
   ],
