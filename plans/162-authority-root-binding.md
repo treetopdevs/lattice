@@ -1,4 +1,4 @@
-# Plan 162: Bind root-less delegations and genesis authorship to the replica root
+# Plan 162: Close the five authority-judge binding gaps (root, genesis authorship, replica, tick shape)
 
 > **Executor instructions**: Follow this plan step by step. Run every verification command
 > and confirm the expected result before moving to the next step. If anything in the
@@ -17,8 +17,14 @@
 - **Priority**: **P0** — this is the V-01 / prime-directive class. Two of the three defects let a
   participant escalate their own authority; the third is a BEAM↔TypeScript divergence, which the
   build map names a STOP condition.
-- **Effort**: M — the production change is ~20 lines across two files. The work is the adversarial
+- **Effort**: M — the production change is ~30 lines across two files. The work is the adversarial
   vectors, the vector-regeneration diff, and proving each predicate is load-bearing.
+- **Amended 2026-08-06 (Round 5)**: two further guards added as step 2b — `cap_ok/8` replica
+  binding and malformed-tick rejection. Both are predicates that reject more; neither changes
+  succession semantics, so the effort and risk grades below are unchanged and the
+  "succession vectors stay byte-identical" STOP condition still holds. The **provenance** of
+  `at_tick` is explicitly **not** in this plan — see `plans/175-succession-tick-provenance-spike.md`.
+  **Executed 2026-08-08** — see "Execution evidence — step 2b amendments" below.
 - **Risk**: MED — the change makes previously-`:ok` delegations invalid, which **will** change the
   quarantine reason recorded in at least one existing exported vector. Step 5 makes that explicit
   and enumerable rather than a surprise.
@@ -118,6 +124,62 @@ findings were corrected and rechecked. Their terminal reviews report no actionab
 withdrew one stale mutation-coverage claim after the exact poisoning-vector failure was reproduced.
 Claude's generated-vector drift observation is intentionally **not** represented as complete here:
 Plan 164 owns the required generated-output drift detector and remains scheduled last.
+
+## Execution evidence — step 2b amendments (2026-08-08)
+
+**DONE.** The two Round 5 guards are implemented with their prescribed tests and mutation
+evidence; the earlier Round 4 record above is unchanged.
+
+- **2b(d)** — `cap_ok/8` binds the cited delegation's replica to the op's replica
+  (`:wrong_replica`, between the audience and grant-scope clauses). The same comparison was added
+  to `validate_delegation` (now /6, threading `log.replica`), placed **below** the
+  genesis/succession/impostor arms so the pinned `:impostor_genesis` reason and succession
+  candidacy are unchanged — a same-root *sibling* chain still validates through the genesis arm
+  and is refused at use time by `cap_ok/8`. Mirrored in TypeScript in
+  `capabilityQuarantine` (`capability.ts`) and `delegationValidation` (`authority.ts`).
+- **2b(e)** — `role_event/3` admits a tick into a role timeline only when
+  `is_integer(tick) and tick >= 0 and tick <= Lattice.Canonical.max_integer()`
+  (`portable_tick?/1`); a malformed tick returns `nil` (the existing "not a role event" signal).
+  Non-integer succession proofs (e.g. `{:witnessed, certificate}`) still flow to
+  `decide_succession_proof/7` unchanged. TypeScript already refused these — no TS change.
+
+Mutation evidence (each guard reverted one at a time, then restored):
+
+1. Reverting the `cap_ok/8` replica arm: the cross-replica replayed post is **honored**
+   (`Sim.quarantined/3` returns `false`) — the vulnerability reproduced exactly as described.
+2. Reverting the `validate_delegation` arm: the foreign root-less introduction falls back to
+   `:unrooted_delegation` instead of `:wrong_replica`.
+3. Reverting the `role_event/3` heartbeat guard: the second tick case raises
+   `** (ArithmeticError) bad argument in arithmetic expression: "9" + 3` from
+   `decide_succession_proof/7`, exactly the predicted failure.
+4. Reverting the TypeScript `capabilityQuarantine` arm: conformance fails on
+   `township_authority_cross_replica_replay` with `state.posts`, `quarantine set`, and
+   `quarantine reason pairs` — the forged post materializes in the TS state.
+
+Tests added (all green):
+
+- `root_binding_test.exs`: same-root sibling-replica capability replay quarantines
+  `:wrong_replica` and the replayed genesis quarantines `:unauthorized_genesis`; a foreign-replica
+  root-less grant quarantines `:wrong_replica`; a signed `{:heartbeat, role, "9"}` is ignored
+  without mutating the timeline; a succession after that malformed heartbeat returns normally and
+  is honored (the ArithmeticError case).
+- New exported vector `township_authority_cross_replica_replay.json` (the 2b(d) scenario **is**
+  expressible in the exporter). **No existing vector changed** — both guards are no-ops for every
+  honest log, and the three succession vectors are byte-identical.
+
+Authorized scope notes for this amendment run:
+
+- `clients/lattice-client/src/capability.ts` carries the TS use-time mirror (the file where
+  `capabilityQuarantine` lives; the original in-scope list predates the 2b amendment).
+- `clients/lattice-client/test/conformance.ts`: one comparator fix — the "quarantine reason ids"
+  check compared a `localeCompare`-sorted list against a codepoint-`sort()`ed list; the new
+  vector's quarantined ids (`h57…`/`Uiyx…`) are the first pair the two comparators order
+  differently. The expectation now uses the same comparator as `sortedPairs`.
+
+Final GREEN: full umbrella `mix check` (format, every app's tests, strict Credo) exit 0; TS
+typecheck, conformance, v01:guard, canonical, township:authoring, carrier:township all pass;
+regenerated `dist/**` committed; `mix sobelow --exit` clean. The plan-175 boundary grep
+(`beacon` never coupled to succeed/heartbeat/transfer) returns nothing.
 
 ## Why this matters
 
@@ -591,6 +653,85 @@ Since a genesis delegation is self-issued (`d.issuer == d.audience`, enforced by
 fails, read the failure carefully — it may be a legitimate expectation that must move (record it), or
 it may mean the succession path broke (a STOP condition; see below).
 
+### Step 2b (GREEN): Bind the two remaining authority sites
+
+Two further guards were found in the 2026-08-06 security round. They belong in this plan because
+they share `authority.ex`, `authority.ts`, the vector exporter, and the same regenerated
+fixtures — running them as a separate concurrent plan would produce a diff nobody can review.
+
+Both are **guards**: they add a predicate and reject more. Neither changes succession semantics,
+so this plan's "succession vectors stay byte-identical" STOP condition still holds. (The
+*provenance* of `at_tick` — that it is claimant-asserted rather than derived from the root-signed
+beacon clock — is a semantic redesign and is deliberately **not** here. It is
+`plans/175-succession-tick-provenance-spike.md`. If you find yourself changing what a valid
+succession op means, STOP: you are in the wrong plan.)
+
+**(d) `cap_ok/8` never binds a cited delegation's replica to the op's replica.**
+
+`authority.ex:884-905` checks validity, audience, granted ops, causal visibility, roles,
+revocation, and lease — but never compares `d.replica` to `op.replica`:
+
+```elixir
+        cond do
+          deleg_valid[d.id] != :ok -> {:error, :invalid_capability}
+          op.author != d.audience -> {:error, :capability_wrong_audience}
+          not MapSet.member?(d.ops, cmd) -> {:error, :operation_not_granted}
+```
+
+So a capability scoped to matter X is honored on matter Y: an attacker replays X's public
+delegation chain into Y's log via `{:grant, ...}` and authors there. Note the asymmetry this
+closes — `verify_chain/2` (`authority.ex:168-169`) and `Live.authorize/2` (`live.ex:44-52`)
+**both** already reject `:wrong_replica`, so today the live ephemeral path is strictly stricter
+than the durable-state path, inverting the "one delegation chain, two uses" invariant.
+
+Add to the `cond`, before the ops check:
+
+```elixir
+          d.replica != op.replica -> {:error, :wrong_replica}
+```
+
+Reuse the existing `:wrong_replica` atom (`log.ex:138-139`) rather than minting a new one.
+Also add the same comparison to `validate_delegation/4` against the log's replica.
+
+This must be a no-op for honest logs: `Sim.grant/4` (`sim.ex:91`) and `transfer/5` (`:112`) both
+pass `sim.replica`. If any existing vector changes, that is a finding — report it in step 5.
+
+**(e) Malformed and non-portable ticks enter authority timelines unguarded.**
+
+`role_event/3` at `authority.ex:614-621` pattern-matches `tick` with **no guard at all** on the
+transfer and heartbeat arms:
+
+```elixir
+      {:transfer, ^role, %Delegation{} = d, tick} ->
+        if valid_delegation_intro?(delegations, d, op.id), do: {:transfer, d, tick}
+
+      {:succeed, ^role, %Delegation{} = d, tick} ->
+        if valid_delegation_intro?(delegations, d, op.id), do: {:succeed, d, tick}
+
+      {:heartbeat, ^role, tick} ->
+        {:heartbeat, tick}
+```
+
+`decide_succession_proof/7` *is* guarded `when is_integer(at_tick)`, but nothing guards the path
+into `record_acquire/4`, so a non-integer tick is written into `st.acquires`. Later,
+`last_active_from/3` (`:756-762`) computes `Enum.max([0 | ticks])` — which succeeds on any term,
+because Erlang orders all terms — and `decide_succession_proof` then evaluates
+`at_tick < last_active + dormant_ticks`, raising `ArithmeticError` on the `+`.
+
+A holder can therefore author a **validly signed** heartbeat carrying `tick: "9"` and
+permanently break every later authority analysis of that replica. `Canonical.signable?/1`
+accepts a binary there and `Wire.decode_term/1` transports it, so it is reachable over the
+carrier. TypeScript already refuses these, so this is also a live BEAM↔TS divergence.
+
+Reject before the timeline is mutated, in `role_event/3`, returning `nil` (the existing
+"not a role event" signal) for a malformed tick — or, if you prefer an explicit quarantine
+reason, add one and mirror it in TypeScript. Whichever you choose, the tick must satisfy
+`is_integer(tick) and tick >= 0 and tick <= Lattice.Canonical.max_integer()` before it reaches
+`record_acquire/4` or `decide_heartbeat/4`.
+
+**Verify**: `$MIXCMD test apps/lattice_core/test/lattice2/` → exit 0. No succession vector
+changes yet (step 5 confirms this formally).
+
 ### Step 3 (GREEN): Confirm the exporter scenarios now pass
 
 ```sh
@@ -775,6 +916,16 @@ testing stale compiled code.
 - **Cross-runtime**: `npm run conformance` is the gate that the two implementations agree. It must be
   RED before step 7 and GREEN after.
 - **Mutation**: step 8's five reverts, each with a named failing assertion.
+- **Step 2b (d) — cross-replica capability replay**: a new Elixir case in
+  `root_binding_test.exs` that grants on replica X, replays the delegation into replica Y via
+  `{:grant, ...}`, authors a command there, and asserts `:wrong_replica`. Add the mirrored
+  assertion to `authority.ts` and one exported vector if the scenario is expressible in the
+  exporter; a unit test alone is acceptable if it is not.
+- **Step 2b (e) — malformed tick**: two Elixir cases. First, a signed `{:heartbeat, role, "9"}`
+  op does not mutate the role timeline and does not raise. Second — the one that proves the
+  guard is load-bearing — construct the same op, then run a succession that would evaluate
+  `at_tick < last_active + dormant_ticks`, and assert `Authority.analyze/2` returns normally
+  rather than raising `ArithmeticError`. Revert the guard and confirm the second case raises.
 
 ## Done criteria
 
@@ -794,6 +945,10 @@ Machine-checkable. ALL must hold:
 - [ ] All five step-8 mutations produce a named failure, recorded in your report
 - [ ] Your report lists every changed vector file with a one-sentence justification
 - [ ] The three succession vectors are byte-identical to their pre-change versions
+- [ ] `grep -n 'wrong_replica' apps/lattice_core/lib/lattice/authority.ex clients/lattice-client/src/authority.ts` returns hits in both files (step 2b(d))
+- [ ] The step 2b(d) cross-replica case and both step 2b(e) tick cases exist and pass
+- [ ] Reverting the step 2b(e) guard makes the second tick case raise `ArithmeticError`, recorded in your report
+- [ ] `grep -rn 'beacon' apps/lattice_core/lib/lattice/authority.ex | grep -i 'succe\|heartbeat\|transfer'` returns **nothing** — confirming this plan did not begin the tick-provenance redesign that belongs to plan 175
 - [ ] `git status` shows no modified file outside the In-scope list
 - [ ] `plans/README.md` status row for 162 updated
 

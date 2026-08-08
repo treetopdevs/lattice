@@ -47,7 +47,7 @@ defmodule Lattice.Authority do
   """
 
   alias Lattice.Authority.{Delegation, SuccessionCertificate}
-  alias Lattice.{Dag, Identity, Log, Op}
+  alias Lattice.{Canonical, Dag, Identity, Log, Op}
 
   # Separates a replica *name* from the root-key commitment bound into its id.
   @root_marker "#root:"
@@ -107,7 +107,10 @@ defmodule Lattice.Authority do
     ordered = Log.topo_ops(log)
     {commitment, genesis_ids, succession_ids} = deleg_context(log, ordered)
     delegations = collect_delegations(ordered)
-    deleg_valid = validate_delegations(delegations, commitment, genesis_ids, succession_ids)
+
+    deleg_valid =
+      validate_delegations(delegations, log.replica, commitment, genesis_ids, succession_ids)
+
     resolve_root(ordered, delegations, deleg_valid, commitment)
   end
 
@@ -215,7 +218,8 @@ defmodule Lattice.Authority do
 
     case Map.fetch(delegations, delegation_id) do
       {:ok, %{deleg: %Delegation{} = d}} ->
-        validate_delegation(d, delegations, commitment, genesis_ids, succession_ids) == :ok and
+        validate_delegation(d, delegations, log.replica, commitment, genesis_ids, succession_ids) ==
+          :ok and
           not expired?(log, delegation_id)
 
       _ ->
@@ -235,7 +239,10 @@ defmodule Lattice.Authority do
     ancestors = Dag.all_ancestors(Log.ops(log))
     {commitment, genesis_ids, succession_ids} = deleg_context(log, ordered)
     delegations = collect_delegations(ordered)
-    deleg_valid = validate_delegations(delegations, commitment, genesis_ids, succession_ids)
+
+    deleg_valid =
+      validate_delegations(delegations, log.replica, commitment, genesis_ids, succession_ids)
+
     root = resolve_root(ordered, delegations, deleg_valid, commitment)
     {beacons, _beacon_q} = collect_beacons(ordered, ancestors, root)
 
@@ -258,7 +265,10 @@ defmodule Lattice.Authority do
     ordered = Log.topo_ops(log)
     {commitment, genesis_ids, succession_ids} = deleg_context(log, ordered)
     delegations = collect_delegations(ordered)
-    deleg_valid = validate_delegations(delegations, commitment, genesis_ids, succession_ids)
+
+    deleg_valid =
+      validate_delegations(delegations, log.replica, commitment, genesis_ids, succession_ids)
+
     root = resolve_root(ordered, delegations, deleg_valid, commitment)
 
     Enum.any?(ordered, fn op ->
@@ -276,7 +286,10 @@ defmodule Lattice.Authority do
 
     {commitment, genesis_ids, succession_ids} = deleg_context(log, ordered)
     delegations = collect_delegations(ordered)
-    deleg_valid = validate_delegations(delegations, commitment, genesis_ids, succession_ids)
+
+    deleg_valid =
+      validate_delegations(delegations, log.replica, commitment, genesis_ids, succession_ids)
+
     policies = collect_policies(ordered, delegations, deleg_valid)
     root = resolve_root(ordered, delegations, deleg_valid, commitment)
     revokes = collect_revokes(ordered, delegations, root)
@@ -414,10 +427,11 @@ defmodule Lattice.Authority do
     end)
   end
 
-  defp validate_delegations(delegations, commitment, genesis_ids, succession_ids) do
+  defp validate_delegations(delegations, replica, commitment, genesis_ids, succession_ids) do
     Map.new(delegations, fn
       {id, %{deleg: %Delegation{} = d}} ->
-        {id, validate_delegation(d, delegations, commitment, genesis_ids, succession_ids)}
+        {id,
+         validate_delegation(d, delegations, replica, commitment, genesis_ids, succession_ids)}
 
       {id, %{deleg: nil}} ->
         {id, {:error, :bad_delegation_sig}}
@@ -427,6 +441,7 @@ defmodule Lattice.Authority do
   defp validate_delegation(
          %Delegation{} = d,
          delegations,
+         replica,
          commitment,
          genesis_ids,
          succession_ids
@@ -436,14 +451,21 @@ defmodule Lattice.Authority do
         {:error, :bad_delegation_sig}
 
       is_nil(d.parent_id) ->
-        validate_rootless_delegation(d, commitment, genesis_ids, succession_ids)
+        validate_rootless_delegation(d, replica, commitment, genesis_ids, succession_ids)
 
       true ->
-        validate_child_delegation(d, delegations, commitment, genesis_ids, succession_ids)
+        validate_child_delegation(
+          d,
+          delegations,
+          replica,
+          commitment,
+          genesis_ids,
+          succession_ids
+        )
     end
   end
 
-  defp validate_rootless_delegation(d, commitment, genesis_ids, succession_ids) do
+  defp validate_rootless_delegation(d, replica, commitment, genesis_ids, succession_ids) do
     cond do
       d.issuer != d.audience ->
         {:error, :nongenesis_root}
@@ -462,18 +484,28 @@ defmodule Lattice.Authority do
       MapSet.member?(genesis_ids, d.id) ->
         {:error, :impostor_genesis}
 
+      # Step 2b(d): a root-less delegation minted for another replica gets the
+      # structural :wrong_replica reason, mirroring verify_chain/2. Kept below
+      # the genesis/succession arms so the pinned :impostor_genesis reason and
+      # the succession candidacy judgment are unchanged; a same-root sibling
+      # chain that validates through those arms is still refused at use time by
+      # cap_ok/8's replica binding.
+      d.replica != replica ->
+        {:error, :wrong_replica}
+
       true ->
         {:error, :unrooted_delegation}
     end
   end
 
-  defp validate_child_delegation(d, delegations, commitment, genesis_ids, succession_ids) do
+  defp validate_child_delegation(d, delegations, replica, commitment, genesis_ids, succession_ids) do
     case Map.fetch(delegations, d.parent_id) do
       {:ok, %{deleg: %Delegation{} = parent}} ->
         parent_validation =
           validate_delegation(
             parent,
             delegations,
+            replica,
             commitment,
             genesis_ids,
             succession_ids
@@ -693,13 +725,15 @@ defmodule Lattice.Authority do
           do: {:genesis, d}
 
       {:transfer, ^role, %Delegation{} = d, tick} ->
-        if valid_delegation_intro?(delegations, d, op.id), do: {:transfer, d, tick}
+        if valid_delegation_intro?(delegations, d, op.id) and portable_tick?(tick),
+          do: {:transfer, d, tick}
 
-      {:succeed, ^role, %Delegation{} = d, tick} ->
-        if valid_delegation_intro?(delegations, d, op.id), do: {:succeed, d, tick}
+      {:succeed, ^role, %Delegation{} = d, proof} ->
+        if valid_delegation_intro?(delegations, d, op.id) and portable_proof?(proof),
+          do: {:succeed, d, proof}
 
       {:heartbeat, ^role, tick} ->
-        {:heartbeat, tick}
+        if portable_tick?(tick), do: {:heartbeat, tick}
 
       _ ->
         nil
@@ -707,6 +741,20 @@ defmodule Lattice.Authority do
   end
 
   defp role_event(_op, _role, _delegations), do: nil
+
+  # Step 2b(e): a tick may enter a role timeline only as a canonical
+  # non-negative integer within the wire's uint64 range. Erlang orders all
+  # terms, so an unguarded non-integer tick would be recorded, win
+  # `last_active_from/3`'s max, and raise ArithmeticError in every later
+  # dormancy evaluation — a validly signed heartbeat could permanently break
+  # authority analysis of its replica. Anything else is not a role event.
+  defp portable_tick?(tick),
+    do: is_integer(tick) and tick >= 0 and tick <= Canonical.max_integer()
+
+  # A succession proof may also be a non-integer witness term (e.g.
+  # `{:witnessed, certificate}`), judged downstream by
+  # `decide_succession_proof/7`; only integer ticks must be portable here.
+  defp portable_proof?(proof), do: not is_integer(proof) or portable_tick?(proof)
 
   defp record_acquire(st, op, %Delegation{} = delegation, at_tick) do
     %{
@@ -974,9 +1022,10 @@ defmodule Lattice.Authority do
     |> Enum.uniq()
   end
 
-  # Clause order is pinned (visibility → grant scope → revoked → expired) so an
-  # op that is both revoked and lease-expired reports :revoked_capability on
-  # every realm — reason precedence must not flap across replicas.
+  # Clause order is pinned (validity → audience → replica → grant scope →
+  # visibility → roles → revoked → expired) so an op that is both revoked and
+  # lease-expired reports :revoked_capability on every realm — reason
+  # precedence must not flap across replicas.
   defp cap_ok(
          op,
          cmd,
@@ -1007,6 +1056,12 @@ defmodule Lattice.Authority do
 
           op.author != d.audience ->
             {:error, :capability_wrong_audience}
+
+          # Step 2b(d): a capability is scoped to one replica — a delegation
+          # chain replayed from a sibling matter (even one sharing this root)
+          # confers nothing here.
+          d.replica != op.replica ->
+            {:error, :wrong_replica}
 
           not MapSet.member?(d.ops, cmd) ->
             {:error, :operation_not_granted}

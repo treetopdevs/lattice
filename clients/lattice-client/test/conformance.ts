@@ -468,7 +468,9 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
     check(
       "quarantine reason ids",
       reasonPairs?.map(([id]) => id) ?? null,
-      [...full.quarantine].sort(),
+      // Same comparator as sortedPairs — codepoint sort() orders mixed-case
+      // ids differently and would flap on id-dependent vectors.
+      [...full.quarantine].sort((left, right) => left.localeCompare(right)),
     );
   }
   if (exp.winners) {

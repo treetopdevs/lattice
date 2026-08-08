@@ -201,7 +201,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 159 | Wave A1 kickoff — shared beta foundation | P1 | — | 158 | DRAFT (parallel session, untracked at time of Round 4) |
 | 160 | PD-003-B Toolshed QR ceremony physics spike | P1 | M | 158 | PROPOSED (parallel session, untracked at time of Round 4) |
 | 161 | Close the three silent verification gaps (Sobelow, orphaned suites, format scope) | P1 | S–M | 165 Part B (rec.) | DONE (scope amendment authorized; Claude review fixes landed) |
-| 162 | Bind root-less delegations and genesis authorship to the replica root | **P0** | M | 161 (rec.) | DONE (two-reviewer security loop and mutation gates complete) |
+| 162 | Close the five authority-judge binding gaps (root, genesis authorship, replica, tick shape) | **P0** | M | 161 (rec.) | DONE (Round 4 two-reviewer security loop and mutation gates complete; Round 5 step 2b amendments — `cap_ok/8` replica binding and the malformed-tick guard — executed 2026-08-08 with mutation evidence) |
 | 163 | Pin TypeScript ingest to the paired replica + fail-closed command decode | P1 | S–M | 162 (rec.) | DONE (Round 4; dual-reviewed, format denials deferred) |
 | 164 | One local command mirroring CI, and stop `dist/` from lying | P2 | S | 161, 166 (rec.) | TODO (Round 4; run last) |
 | 165 | Boundary hardening: WebView signing oracle + CSP, committed dev secret, relay rate | P1 | M | — | DONE (Parts A/B/C dual-reviewed; quarantine journal, read/peer admission, and KV bounds deferred) |

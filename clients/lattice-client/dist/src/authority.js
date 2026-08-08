@@ -715,6 +715,16 @@ function delegationValidation(id, delegations, genesisIds, successionIds, outerR
         else if (genesisIds.has(delegation.id)) {
             validation = { valid: false, reason: "impostor_genesis" };
         }
+        else if (outerReplica !== undefined &&
+            delegation.replica !== outerReplica) {
+            // Plan 162 step 2b(d): a root-less delegation minted for another replica
+            // gets the structural wrong_replica reason, mirroring
+            // Lattice.Authority.validate_rootless_delegation/5. Kept below the
+            // genesis/succession arms so impostor_genesis and succession candidacy
+            // are unchanged; same-root sibling chains that validate through those
+            // arms are refused at use time by capabilityQuarantine's replica binding.
+            validation = { valid: false, reason: "wrong_replica" };
+        }
         else {
             validation = { valid: false, reason: "unrooted_delegation" };
         }

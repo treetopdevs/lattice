@@ -106,6 +106,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_authority_succession_genesis_poisoning(),
       township_authority_replayed_genesis(),
       township_foreign_replica_injection(),
+      township_authority_cross_replica_replay(),
       township_link_election(),
       township_capability_missing(),
       township_capability_invalid(),
@@ -1725,6 +1726,87 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       "foreignReplica" => foreign_replica,
       "foreignCarrierOp" => CarrierWire.encode_op(foreign_op),
       "genuineGenesisOperationId" => genuine_genesis_id
+    })
+  end
+
+  # Plan 162 step 2b(d): a delegation chain minted for a same-root *sibling*
+  # replica validates through the genesis/attenuation arms here too (same root
+  # commitment), so only cap_ok/8's replica binding refuses the replayed
+  # capability at use time.
+  defp township_authority_cross_replica_replay do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:cross-replica-replay",
+        ["clerk", "mallory"],
+        seed: "township:cross-replica-replay"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    sim = Sim.sync_all(sim)
+    clerk = Sim.identity(sim, "clerk")
+    mallory = Sim.identity(sim, "mallory")
+    replica = Sim.replica(sim)
+
+    sibling_replica =
+      Authority.bind_replica("replica:matter:cross-replica-sibling", clerk.pub)
+
+    sibling_genesis =
+      Delegation.genesis(clerk, sibling_replica,
+        ops: [:post],
+        roles: [:clerk],
+        live: true
+      )
+
+    sibling_grant =
+      Delegation.new(clerk, sibling_replica, mallory.pub,
+        ops: [:post],
+        parent_id: sibling_genesis.id
+      )
+
+    log = Sim.log(sim, "clerk")
+
+    replayed_genesis =
+      Op.new(
+        mallory,
+        replica,
+        Log.frontier(log),
+        :authority,
+        {:genesis, sibling_genesis, %{}}
+      )
+
+    log = Log.append!(log, replayed_genesis)
+
+    replayed_grant =
+      Op.new(mallory, replica, Log.frontier(log), :authority, {:grant, sibling_grant})
+
+    log = Log.append!(log, replayed_grant)
+    rejected_post = "mallory: cross-replica replayed capability"
+
+    target =
+      Op.new(
+        mallory,
+        replica,
+        Log.frontier(log),
+        :command,
+        {:post, [rejected_post]},
+        cap: sibling_grant.id
+      )
+
+    log = Log.append!(log, target)
+
+    assert_authority_reason!(log, replayed_genesis.id, :unauthorized_genesis)
+    assert_authority_reason!(log, target.id, :wrong_replica)
+    assert_post_absent!(log, rejected_post)
+
+    capability_scenario("township_authority_cross_replica_replay", sim, log, %{
+      "case" => "cross_replica_replay",
+      "targetOperationId" => target.id,
+      "expectedReason" => "wrong_replica",
+      "rejectedPost" => rejected_post,
+      "siblingReplica" => sibling_replica,
+      "siblingGrantDelegationId" => sibling_grant.id,
+      "replayedGenesisOperationId" => replayed_genesis.id
     })
   end
 
