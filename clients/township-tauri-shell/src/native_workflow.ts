@@ -27,6 +27,8 @@ export const TOWNSHIP_GOVERNANCE_WITNESS_PUBLIC_KEY_COMMAND =
   "lattice_governance_witness_public_key";
 export const TOWNSHIP_SIGN_GOVERNANCE_WITNESS_COMMAND =
   "lattice_sign_governance_witness";
+export const TOWNSHIP_COPY_WITNESS_ARTIFACT_COMMAND =
+  "lattice_copy_witness_artifact";
 
 const TOWNSHIP_NATIVE_PROBE_KEY = "native_probe";
 const TOWNSHIP_NATIVE_PROBE_VALUE = "native invoke ready";
@@ -310,6 +312,22 @@ export async function traceTownshipDevEvent(
       );
     }
   }
+}
+
+/**
+ * Copy an already-persisted witness artifact to the system clipboard through
+ * the constrained native command. The native side re-reads the stored
+ * artifact bytes by id (it never accepts clipboard payload bytes from the
+ * webview), so this sink can only export what the shell already retained.
+ * Used as the fallback when WebKit rejects `navigator.clipboard.writeText`
+ * under the packaged CSP.
+ */
+export async function copyTownshipWitnessArtifactNative(
+  artifactId: string,
+  options: Pick<TownshipNativeWorkflowOptions, "invoke"> = {},
+): Promise<void> {
+  const invoke = options.invoke ?? tauriInvoke;
+  await invoke(TOWNSHIP_COPY_WITNESS_ARTIFACT_COMMAND, { artifactId });
 }
 
 export async function logTownshipProbeEvent(

@@ -57,6 +57,32 @@ test("the packaged and development CSPs admit only the loopback HTTP state-excha
   assert.equal(security.devCsp["script-src"], "'self' http://localhost:5173");
 });
 
+test("the native witness export sink reads the exact TS artifact storage key", () => {
+  const lib = readText(shellRoot, "src-tauri/src/lib.rs");
+  const nativeWorkflow = readText(shellRoot, "src/native_workflow.ts");
+  const actions = readText(shellRoot, "src/township_actions.ts");
+
+  const namespace = /TOWNSHIP_STORAGE_NAMESPACE = "([^"]+)"/.exec(nativeWorkflow)?.[1];
+  const artifactPrefix = /TOWNSHIP_WITNESS_ARTIFACT_KEY_PREFIX = "([^"]+)"/.exec(actions)?.[1];
+  assert.ok(namespace, "TS storage namespace must be pinned");
+  assert.ok(artifactPrefix, "TS witness artifact key prefix must be pinned");
+
+  // The Rust command derives the KV key itself from the artifact id; its
+  // baked-in prefix must equal the TS namespace + artifact-key composition so
+  // the constrained native sink can only read what the shell persisted.
+  assert.ok(
+    lib.includes(
+      `pub const TOWNSHIP_WITNESS_ARTIFACT_EXPORT_KV_PREFIX: &str =\n    "${namespace}:${artifactPrefix}";`,
+    ),
+    "Rust witness export KV prefix must match the TS storage key composition",
+  );
+  assert.match(
+    nativeWorkflow,
+    /TOWNSHIP_COPY_WITNESS_ARTIFACT_COMMAND =\s*"lattice_copy_witness_artifact"/,
+  );
+  assert.match(lib, /fn lattice_copy_witness_artifact\(/);
+});
+
 test("the shell exposes every packaged action gate in convergence order", () => {
   const scripts = readJson(shellRoot, "package.json").scripts;
 

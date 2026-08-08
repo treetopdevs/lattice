@@ -74,6 +74,13 @@ pub const TOWNSHIP_PAIRING_DISCOVERY_BROADCAST_ADDR: &str = "255.255.255.255:457
 pub const TOWNSHIP_PAIRING_DISCOVERY_DEFAULT_TIMEOUT_MS: u64 = 750;
 pub const TOWNSHIP_PAIRING_DISCOVERY_MAX_TIMEOUT_MS: u64 = 5_000;
 pub const TOWNSHIP_CARRIER_SIGNING_PAYLOAD_MAX_BYTES: usize = 64_000;
+/// Exact key-value key prefix the TS shell uses to persist witness artifacts
+/// (`TOWNSHIP_STORAGE_NAMESPACE` + `TOWNSHIP_WITNESS_ARTIFACT_KEY_PREFIX`);
+/// pinned by `test/runtime_wiring_contract.mjs`.
+pub const TOWNSHIP_WITNESS_ARTIFACT_EXPORT_KV_PREFIX: &str =
+    "township:zoning-variance-24:township:witness-artifact:v1:";
+/// Witness artifact ids are unpadded base64url sha256 digests: exactly 43 chars.
+pub const TOWNSHIP_WITNESS_ARTIFACT_ID_CHARS: usize = 43;
 const GOVERNANCE_DUPLICATE_RECONCILIATION_TIMEOUT: Duration = Duration::from_millis(500);
 const GOVERNANCE_DUPLICATE_RECONCILIATION_INTERVAL: Duration = Duration::from_millis(10);
 const GOVERNANCE_PUBLIC_SIDECAR_MISSING: &str =
@@ -403,6 +410,24 @@ impl TownshipNativeState {
             .lock()
             .map_err(|_| "key-value store lock poisoned".to_string())?;
         Ok(values.get(key).cloned())
+    }
+
+    /// Resolve the stored witness artifact bytes for a native clipboard
+    /// export. Fail-closed: the id must be an exact unpadded base64url
+    /// sha256 digest, so this command can only ever read (never write) the
+    /// single witness-artifact key the TS shell persisted — it is not a
+    /// generic clipboard or key-value primitive.
+    pub fn witness_artifact_export_payload(&self, artifact_id: &str) -> Result<String, String> {
+        if artifact_id.len() != TOWNSHIP_WITNESS_ARTIFACT_ID_CHARS
+            || !artifact_id
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+        {
+            return Err("invalid witness artifact id".to_string());
+        }
+        let key = format!("{TOWNSHIP_WITNESS_ARTIFACT_EXPORT_KV_PREFIX}{artifact_id}");
+        self.kv_get(&key)?
+            .ok_or_else(|| "witness artifact not found".to_string())
     }
 
     pub fn kv_set(&self, key: &str, value: &str) -> Result<(), String> {
@@ -980,6 +1005,7 @@ pub fn township_command_names() -> &'static [&'static str] {
         "lattice_ensure_governance_witness_key",
         "lattice_governance_witness_public_key",
         "lattice_sign_governance_witness",
+        "lattice_copy_witness_artifact",
         "lattice_discover_pairing_adverts",
         "lattice_advertise_pairing_handoff",
         "lattice_android_current_pairing_handoff_b64",
@@ -1000,6 +1026,7 @@ pub fn township_command_names() -> &'static [&'static str] {
         "lattice_ensure_governance_witness_key",
         "lattice_governance_witness_public_key",
         "lattice_sign_governance_witness",
+        "lattice_copy_witness_artifact",
         "lattice_discover_pairing_adverts",
         "lattice_advertise_pairing_handoff",
         "lattice_android_current_pairing_handoff_b64",
@@ -1026,6 +1053,7 @@ fn configure_township_commands<R: tauri::Runtime>(builder: tauri::Builder<R>) ->
         lattice_ensure_governance_witness_key,
         lattice_governance_witness_public_key,
         lattice_sign_governance_witness,
+        lattice_copy_witness_artifact,
         lattice_discover_pairing_adverts,
         lattice_advertise_pairing_handoff,
         lattice_android_current_pairing_handoff_b64,
@@ -1046,6 +1074,7 @@ fn configure_township_commands<R: tauri::Runtime>(builder: tauri::Builder<R>) ->
         lattice_ensure_governance_witness_key,
         lattice_governance_witness_public_key,
         lattice_sign_governance_witness,
+        lattice_copy_witness_artifact,
         lattice_discover_pairing_adverts,
         lattice_advertise_pairing_handoff,
         lattice_android_current_pairing_handoff_b64,
@@ -1367,6 +1396,44 @@ fn lattice_android_current_pairing_handoff_b64(
 fn lattice_android_current_pairing_handoff_b64() -> Result<Option<String>, String> {
     trace_dev_command("lattice_android_current_pairing_handoff_b64");
     Ok(None)
+}
+
+#[tauri::command]
+fn lattice_copy_witness_artifact(
+    state: tauri::State<'_, TownshipNativeState>,
+    artifact_id: String,
+) -> Result<(), String> {
+    trace_dev_command("lattice_copy_witness_artifact");
+    let payload = state.witness_artifact_export_payload(&artifact_id)?;
+    write_township_export_clipboard(&payload)
+}
+
+/// Copy already-persisted witness artifact bytes to the system clipboard from
+/// the native side. The WebKit `navigator.clipboard.writeText` path rejects
+/// with `NotAllowedError` on older WebKit builds once the strict CSP is
+/// applied, so the packaged export routes through this native sink instead of
+/// loosening the CSP.
+#[cfg(target_os = "macos")]
+fn write_township_export_clipboard(text: &str) -> Result<(), String> {
+    use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString};
+    use objc2_foundation::NSString;
+
+    // Tauri runs synchronous commands on the main thread, which is where
+    // AppKit expects pasteboard mutation to happen.
+    unsafe {
+        let pasteboard = NSPasteboard::generalPasteboard();
+        pasteboard.clearContents();
+        if pasteboard.setString_forType(&NSString::from_str(text), NSPasteboardTypeString) {
+            Ok(())
+        } else {
+            Err("clipboard export failed".to_string())
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn write_township_export_clipboard(_text: &str) -> Result<(), String> {
+    Err("native clipboard export is unavailable on this platform".to_string())
 }
 
 #[tauri::command]

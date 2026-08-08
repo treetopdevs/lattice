@@ -3,6 +3,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import type { WitnessedSuccessionReview } from "@treetopdevs/lattice-client";
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef } from "vue";
 import {
+  copyTownshipWitnessArtifactNative,
   createTownshipNativeWorkflow,
   createTownshipNativeStorage,
   loadTownshipNativeStatus,
@@ -1199,14 +1200,21 @@ async function exportSelectedWitnessArtifact(event: Event) {
     return;
   }
 
+  // Older WebKit builds reject the async clipboard API with NotAllowedError
+  // once the packaged CSP applies, so fall back to the constrained native
+  // clipboard sink (which re-reads the stored artifact by id) before failing.
   try {
     await navigator.clipboard.writeText(exported.artifactJson);
-  } catch (error) {
-    witnessExportStatus.value = { ok: false, message: "The witness artifact could not be copied." };
-    traceWitnessExportFailure(
-      `clipboard:${error instanceof Error ? error.name : typeof error}`,
-    );
-    return;
+  } catch (clipboardError) {
+    try {
+      await copyTownshipWitnessArtifactNative(artifact.artifactId);
+    } catch {
+      witnessExportStatus.value = { ok: false, message: "The witness artifact could not be copied." };
+      traceWitnessExportFailure(
+        `clipboard:${clipboardError instanceof Error ? clipboardError.name : typeof clipboardError}`,
+      );
+      return;
+    }
   }
 
   witnessExportStatus.value = {

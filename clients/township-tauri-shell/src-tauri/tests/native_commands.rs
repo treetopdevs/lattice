@@ -20,6 +20,7 @@ use township_tauri_shell::{
     TOWNSHIP_CARRIER_SIGNING_PAYLOAD_MAX_BYTES, TOWNSHIP_DEV_CARRIER_KEY_ID_ENV,
     TOWNSHIP_DEV_CARRIER_KEY_SEED_ENV, TOWNSHIP_KEYRING_SERVICE,
     TOWNSHIP_PAIRING_DISCOVERY_BROADCAST_ADDR, TOWNSHIP_PAIRING_DISCOVERY_PACKET_TYPE,
+    TOWNSHIP_WITNESS_ARTIFACT_EXPORT_KV_PREFIX, TOWNSHIP_WITNESS_ARTIFACT_ID_CHARS,
 };
 
 const W1_SESSION_SEED: &str = "township-g1";
@@ -43,6 +44,7 @@ fn command_names_match_the_tauri_bridge_contract() {
             "lattice_ensure_governance_witness_key",
             "lattice_governance_witness_public_key",
             "lattice_sign_governance_witness",
+            "lattice_copy_witness_artifact",
             "lattice_discover_pairing_adverts",
             "lattice_advertise_pairing_handoff",
             "lattice_android_current_pairing_handoff_b64",
@@ -64,6 +66,7 @@ fn command_names_match_the_tauri_bridge_contract() {
             "lattice_ensure_governance_witness_key",
             "lattice_governance_witness_public_key",
             "lattice_sign_governance_witness",
+            "lattice_copy_witness_artifact",
             "lattice_discover_pairing_adverts",
             "lattice_advertise_pairing_handoff",
             "lattice_android_current_pairing_handoff_b64",
@@ -170,6 +173,16 @@ fn registered_tauri_commands_roundtrip_through_mock_ipc() {
         "lattice_android_current_pairing_handoff_b64",
         serde_json::json!({}),
         Ok(None::<String>),
+    );
+
+    // The native clipboard export command validates its artifact id before it
+    // reads storage or touches the pasteboard, so its fail-closed path is
+    // observable on every platform without mutating the system clipboard.
+    assert_ipc_response(
+        &webview,
+        "lattice_copy_witness_artifact",
+        serde_json::json!({ "artifactId": "not-an-artifact-id" }),
+        Err::<String, String>("invalid witness artifact id".to_string()),
     );
 
     assert_ipc_response(
@@ -729,6 +742,40 @@ fn signing_rejects_unrecognized_and_oversized_payloads_without_echoing_them() {
             .unwrap_err(),
         "signing payload too large"
     );
+}
+
+#[test]
+fn witness_artifact_export_payload_reads_only_the_exact_stored_artifact() {
+    let state = TownshipNativeState::default();
+    let artifact_id = "A".repeat(TOWNSHIP_WITNESS_ARTIFACT_ID_CHARS);
+    let key = format!("{TOWNSHIP_WITNESS_ARTIFACT_EXPORT_KV_PREFIX}{artifact_id}");
+    state.kv_set(&key, "{\"v\":1}").unwrap();
+
+    assert_eq!(
+        state.witness_artifact_export_payload(&artifact_id).unwrap(),
+        "{\"v\":1}"
+    );
+    assert_eq!(
+        state
+            .witness_artifact_export_payload(&"B".repeat(TOWNSHIP_WITNESS_ARTIFACT_ID_CHARS))
+            .unwrap_err(),
+        "witness artifact not found"
+    );
+
+    let wrong_char = format!("{}/", "A".repeat(TOWNSHIP_WITNESS_ARTIFACT_ID_CHARS - 1));
+    let traversal = format!("../{}", "A".repeat(TOWNSHIP_WITNESS_ARTIFACT_ID_CHARS - 3));
+    for invalid in [
+        "",
+        "short",
+        &"A".repeat(TOWNSHIP_WITNESS_ARTIFACT_ID_CHARS + 1),
+        wrong_char.as_str(),
+        traversal.as_str(),
+    ] {
+        assert_eq!(
+            state.witness_artifact_export_payload(invalid).unwrap_err(),
+            "invalid witness artifact id"
+        );
+    }
 }
 
 #[test]
