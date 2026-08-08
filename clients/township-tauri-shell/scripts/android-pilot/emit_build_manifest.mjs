@@ -1,0 +1,98 @@
+#!/usr/bin/env node
+// Emits the machine-readable build manifest that accompanies every Township
+// Android artifact: APK SHA-256, signing certificate fingerprint, git SHA,
+// version identifiers, and lineage. Never includes secrets or keystore paths.
+//
+// Usage:
+//   node scripts/android-pilot/emit_build_manifest.mjs --apk <path> \
+//     --lineage pilot|dev-smoke|ephemeral-ci-throwaway --out <dir>
+
+import { execFileSync } from "node:child_process";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, join } from "node:path";
+import { buildToolPath, parseApksignerCerts, runApksignerPrintCerts } from "./sdk.mjs";
+import { sha256Hex, TOWNSHIP_PACKAGE_ID, TOWNSHIP_PILOT_KEY_ALIAS } from "./pilot_policy.mjs";
+
+function parseArgs(argv) {
+  const args = {};
+  for (let i = 0; i < argv.length; i += 1) {
+    if (argv[i] === "--apk") args.apk = argv[++i];
+    else if (argv[i] === "--lineage") args.lineage = argv[++i];
+    else if (argv[i] === "--out") args.out = argv[++i];
+    else throw new Error(`unknown argument ${argv[i]}`);
+  }
+  if (!args.apk || !args.lineage || !args.out) {
+    throw new Error("--apk, --lineage, and --out are required");
+  }
+  if (!["pilot", "dev-smoke", "ephemeral-ci-throwaway"].includes(args.lineage)) {
+    throw new Error(`unknown lineage ${args.lineage}`);
+  }
+  return args;
+}
+
+function badging(apkPath) {
+  const output = execFileSync(buildToolPath("aapt2"), ["dump", "badging", apkPath], {
+    encoding: "utf8",
+    maxBuffer: 32 * 1024 * 1024,
+  });
+  const header = output.match(
+    /package: name='([^']+)' versionCode='(\d+)' versionName='([^']*)'/,
+  );
+  return header
+    ? { packageId: header[1], versionCode: Number(header[2]), versionName: header[3] }
+    : { packageId: null, versionCode: null, versionName: null };
+}
+
+const args = parseArgs(process.argv.slice(2));
+const apkBytes = readFileSync(args.apk);
+const certs = parseApksignerCerts(runApksignerPrintCerts(args.apk));
+const badge = badging(args.apk);
+const gitSha = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+
+const manifest = {
+  product: "township",
+  packageId: badge.packageId,
+  expectedPackageId: TOWNSHIP_PACKAGE_ID,
+  lineage: args.lineage,
+  signingAlias: args.lineage === "pilot" ? TOWNSHIP_PILOT_KEY_ALIAS : null,
+  apk: basename(args.apk),
+  apkSha256: sha256Hex(apkBytes),
+  apkSizeBytes: apkBytes.length,
+  signerDn: certs.dn,
+  signerCertSha256: certs.sha256,
+  versionCode: badge.versionCode,
+  versionName: badge.versionName,
+  gitSha,
+  builtAt: new Date().toISOString(),
+};
+
+const failures = [];
+if (badge.packageId !== TOWNSHIP_PACKAGE_ID) {
+  failures.push(`packageId ${badge.packageId} is not ${TOWNSHIP_PACKAGE_ID}`);
+}
+if (args.lineage === "pilot" && certs.dn?.includes("CN=Android Debug")) {
+  failures.push("pilot lineage refuses a debug-signed artifact");
+}
+
+mkdirSync(args.out, { recursive: true });
+writeFileSync(join(args.out, "build-manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+writeFileSync(
+  join(args.out, "build-manifest.md"),
+  [
+    "# Township Android build manifest",
+    "",
+    `- Lineage: ${manifest.lineage}`,
+    `- Package: ${manifest.packageId} v${manifest.versionName} (versionCode ${manifest.versionCode})`,
+    `- Git SHA: ${manifest.gitSha}`,
+    `- APK SHA-256: ${manifest.apkSha256}`,
+    `- Signer cert SHA-256: ${manifest.signerCertSha256}`,
+    `- Signer DN: ${manifest.signerDn}`,
+    `- Built at: ${manifest.builtAt}`,
+    "",
+  ].join("\n"),
+);
+console.log(JSON.stringify(manifest, null, 2));
+if (failures.length > 0) {
+  console.error(`REFUSED: ${failures.join("; ")}`);
+  process.exit(1);
+}
