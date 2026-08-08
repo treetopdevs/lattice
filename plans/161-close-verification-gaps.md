@@ -372,7 +372,7 @@ cd apps/township_web && ~/.asdf/shims/mix sobelow --exit ; echo "exit=$?" ; cd .
 exactly two low-confidence findings, both in
 `apps/township_web/lib/township_web/instrument_source/bundle.ex`:
 
-```
+```text
 Traversal.FileModule: Directory Traversal in `File.read` - Low Confidence
 File: lib/township_web/instrument_source/bundle.ex
 Line: 31   Function: load_verified:25   Variable: matter_path

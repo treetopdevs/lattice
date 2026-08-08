@@ -102,16 +102,19 @@ controls.
 # apps/lattice_core/lib/lattice/authority.ex:15
 @root_marker "#root:"
 
-# :88-93
-@spec bind_replica(String.t()) :: String.t()
-def bind_replica(name) when is_binary(name) do
-  name <> @root_marker <> root_tag(:crypto.strong_rand_bytes(32))
+# :87-93
+@spec bind_replica(String.t(), Identity.pubkey()) :: String.t()
+def bind_replica(name, root_pub) when is_binary(name) and is_binary(root_pub) do
+  case replica_commitment(name) do
+    nil -> name <> @root_marker <> root_tag(root_pub)
+    _already_bound -> name
+  end
 end
 
-# :96-102
+# :96-101
 def replica_commitment(replica) when is_binary(replica) do
   case String.split(replica, @root_marker, parts: 2) do
-    [_name, tag] when tag != "" -> tag
+    [_name, tag] when byte_size(tag) > 0 -> tag
     _ -> nil
   end
 end
@@ -222,7 +225,7 @@ Verify: `~/.asdf/shims/mix test apps/lattice_core/test/lattice2/carrier_wire_tes
 ### Step 3 — replica marker (CRYPTO-02)
 
 RED: add to `root_binding_test.exs`:
-- `assert_raise ArgumentError, fn -> Authority.bind_replica("town#root:x") end`.
+- `assert_raise ArgumentError, fn -> Authority.bind_replica("town#root:x", root_pub) end`.
 - `Authority.replica_commitment("town#root:attacker") == nil` and
   `replica_commitment("town#root:short") == nil`.
 - valid-shaped bound name still yields its 43-char tag (existing tests cover the happy path).
@@ -238,7 +241,7 @@ caller passes an already-bound name (relying on double-append), STOP (see below)
 
 Verify: `~/.asdf/shims/mix test apps/lattice_core/test/lattice2/root_binding_test.exs` then `mix verify`
 (`replica_commitment` feeds `deleg_context` — run the full suite to catch any fixture that
-uses a short fake tag; if fixtures break, fix the fixtures to use `Authority.bind_replica/1`).
+uses a short fake tag; if fixtures break, fix the fixtures to use `Authority.bind_replica/2`).
 
 ### Step 4 — op kind allowlist (CRYPTO-03)
 
@@ -303,11 +306,13 @@ loop and the TS conformance trio after vector regeneration.
 
 - A Sim-exported vector flips outcome/reason after any step and you cannot write the
   adversarial justification — STOP and report the diff before proceeding.
-- Any legitimate op in the corpus or apps nests deeper than 32 levels — STOP; the cap choice
-  needs a maintainer decision rather than silent rejection.
-- A `bind_replica/1` caller passes an already-bound name (depends on double-append), or a
+- Any legitimate op in the corpus or apps nests deeper than 64 levels — STOP; the cap choice
+  needs a maintainer decision rather than silent rejection. (`@max_decode_depth` is 64;
+  legitimate terms through that depth must be accepted, and composite terms beyond it return
+  `{:error, :malformed_term}`.)
+- A `bind_replica/2` caller passes an already-bound name (depends on double-append), or a
   test fixture relies on a short fake commitment tag in a way that can't move to
-  `Authority.bind_replica/1` — STOP and report.
+  `Authority.bind_replica/2` — STOP and report.
 
 ## Done criteria
 

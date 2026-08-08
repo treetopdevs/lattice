@@ -125,7 +125,8 @@ Baseline at the planned-at commit: `$MIXCMD test` exits 0.
 
 **In scope**:
 
-- `apps/lattice_core/lib/lattice/identity.ex` — the `@derive` attribute only
+- `apps/lattice_core/lib/lattice/identity.ex` — the `@derive` attribute **and** the one-sentence
+  `@moduledoc` extension recording the inspect-redaction (required by step 3)
 - `apps/township_web/lib/township_web/carrier_projection.ex` — add `format_status/1` only
 - `apps/lattice_core/test/lattice2/` — one new test file or an added case (see test plan)
 - `apps/township_web/test/township_web/` — one added case
@@ -308,6 +309,7 @@ Machine-checkable. ALL must hold:
 - [ ] `$MIXCMD test` exits 0, 0 failures
 - [ ] `$MIXCMD credo --strict` exits 0
 - [ ] `grep -n "@derive {Inspect, except: \[:priv\]}" apps/lattice_core/lib/lattice/identity.ex` returns a match
+- [ ] `grep -n "inspect-redacted\|redacted" apps/lattice_core/lib/lattice/identity.ex` returns a match in the `@moduledoc` (step 3's documentation requirement)
 - [ ] `grep -n "format_status" apps/township_web/lib/township_web/carrier_projection.ex` returns a match
 - [ ] The 3 tests named in the test plan exist and pass
 - [ ] `git status --porcelain` lists no file outside the in-scope list

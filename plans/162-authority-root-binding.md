@@ -863,7 +863,13 @@ testing stale compiled code.
   `root_binding_test.exs` that grants on replica X, replays the delegation into replica Y via
   `{:grant, ...}`, authors a command there, and asserts `:wrong_replica`. Add the mirrored
   assertion to `authority.ts` and one exported vector if the scenario is expressible in the
-  exporter; a unit test alone is acceptable if it is not.
+  exporter; a unit test alone is acceptable if it is not. Both replica guards must be
+  independently verified: revert (or disable) the `d.replica != op.replica` clause in `cap_ok/8`
+  alone and confirm the test fails, then restore it and revert the same comparison in
+  `validate_delegation/4` alone and confirm the test still fails — so each guard is load-bearing
+  on its own, not just the pair. (Alternatively, extract the shared replica check into one
+  predicate and test that predicate directly.) Keep the existing `:wrong_replica` assertion as
+  the green-path expectation.
 - **Step 2b (e) — malformed tick**: two Elixir cases. First, a signed `{:heartbeat, role, "9"}`
   op does not mutate the role timeline and does not raise. Second — the one that proves the
   guard is load-bearing — construct the same op, then run a succession that would evaluate
@@ -877,7 +883,7 @@ Machine-checkable. ALL must hold:
 - [ ] `~/.asdf/shims/mix check` exits 0
 - [ ] `~/.asdf/shims/mix test apps/lattice_core/test/lattice2/root_binding_test.exs` passes with 4 new cases
 - [ ] `MIX_ENV=test ~/.asdf/shims/mix lattice.export_vectors --out clients/lattice-client/test/vectors` exits 0
-- [ ] `clients/lattice-client/test/vectors/township_authority_unrooted_grant.json` and `…_replayed_genesis.json` and `…_rooted_transfer_not_holder.json` exist
+- [ ] `clients/lattice-client/test/vectors/township_authority_unrooted_grant.json` and `township_authority_replayed_genesis.json` and `township_authority_rooted_transfer_not_holder.json` exist
 - [ ] `npm --prefix clients/lattice-client run typecheck` exits 0
 - [ ] `npm --prefix clients/lattice-client run conformance` exits 0, all PASS
 - [ ] `npm --prefix clients/lattice-client run v01:guard` exits 0
@@ -890,6 +896,7 @@ Machine-checkable. ALL must hold:
 - [ ] The three succession vectors are byte-identical to their pre-change versions
 - [ ] `grep -n 'wrong_replica' apps/lattice_core/lib/lattice/authority.ex clients/lattice-client/src/authority.ts` returns hits in both files (step 2b(d))
 - [ ] The step 2b(d) cross-replica case and both step 2b(e) tick cases exist and pass
+- [ ] Reverting each step 2b(d) replica guard independently (the `cap_ok/8` clause, then the `validate_delegation/4` clause) makes the cross-replica case fail, recorded in your report
 - [ ] Reverting the step 2b(e) guard makes the second tick case raise `ArithmeticError`, recorded in your report
 - [ ] `grep -rn 'beacon' apps/lattice_core/lib/lattice/authority.ex | grep -i 'succe\|heartbeat\|transfer'` returns **nothing** — confirming this plan did not begin the tick-provenance redesign that belongs to plan 175
 - [ ] `git status` shows no modified file outside the In-scope list

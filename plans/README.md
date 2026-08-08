@@ -215,7 +215,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 173 | Bounded carrier transport: connect deadlines + paged pulls | P1 | M–L | 169 | TODO (Round 5b) |
 | 174 | **(spike)** What the governance-witness ceremony must prove natively | P1 | M (build: L) | — | TODO (Round 5b) |
 | 175 | **(spike)** How succession gets a trustworthy clock | P1 | M (build: L) | 162 step 2b (pending) | TODO (Round 5b) |
-| 176 | Fail closed at the wire/authority boundary: lease range, decode depth, replica marker, op kinds | P1 | M | 161 (rec.) | TODO (Round 5; renumbered from 168 — AUTHZ-02 ceded to plan 162 step 2b(e)) |
+| 176 | Fail closed at the wire/authority boundary: lease range, decode depth, replica marker, op kinds | P1 | M | 161 (rec.), 168 | TODO (Round 5; renumbered from 168 — AUTHZ-02 ceded to plan 162 step 2b(e)) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
@@ -306,7 +306,10 @@ with 162's execution. No new plan files were written this round (operator decisi
 the findings are recorded here so the next plan-162 execution picks them up.
 
 **Dependency audits (Round 5 had skipped these as "touch the network")**:
-- `mix hex.audit` → "No retired packages found" (clean).
+- `mix hex.audit` → "No retired packages found". This command is a **retired-package check**
+  only — it reports packages Hex has marked retired, not a general security audit. Hex
+  vulnerability-advisory coverage is a separate surface not exercised by this command; it
+  remains unverified here and is not implied clean by this result.
 - `npm audit` (repo root + `clients/township-tauri-shell`) → only devDependency build-tooling
   advisories: `postcss` (high, path traversal, GHSA-r28c-9q8g-f849 / GHSA-fxqj-rqcc-2cmp),
   `brace-expansion` (high, DoS, GHSA-mh99-v99m-4gvg / GHSA-rgw5-rvv9-x895), `undici` (moderate,
@@ -398,7 +401,7 @@ Recorded so they are not re-audited. Each was opened and read during vetting.
   untrusted remote input reaches it through this app alone.
 - **npm audit advisories** — REJECTED as the noise floor (re-confirms Round 4). All devDependency
   build/test tooling with no path into the shipped Tauri app.
-- **`mix hex.audit`** — clean ("No retired packages found").
+- **`mix hex.audit`** — "No retired packages found" (retired-package check only; not a general security audit).
 
 ### Round 5c coverage note
 

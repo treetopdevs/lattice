@@ -32,7 +32,7 @@ Merge-tree checks: all four unmerged branches merge cleanly against `origin/main
 2. **`dev` branch does not exist** (locally or on origin). **Default:** create it from final `main` and push, since the request says keep `dev` and `main`.
 3. **plan165-partb-work dirty config draft** (`config/config.exs`, `config/runtime.exs`) — a competing draft of the secret-key hardening that round4 already carries in reviewed, committed form (round4's version validates key sizes and covers PHX_SERVER; the draft's dev/test ephemeral-mint idea is unnecessary given round4's per-env `import_config`). **Default:** discard.
 4. **Untracked `clients/township-tauri-shell/tsconfig.test.json` in `lattice-round4`** — referenced by nothing in the tree; looks like a stub for still-TODO plan 166. **Default:** discard (trivially recreatable; noted in plan 166).
-5. **Parked iOS WIP commit `764a1945`** on plan077 — intentional "park" of the device key-reuse probe (plan 158 says iOS resumes after the Android candidate). **Default:** merge as-is; it's additive probe/test scaffolding, and deleting the branch without merging would lose it.
+5. **iOS WIP commit `764a1945`** on plan077 — already in `origin/main` (verified: `git merge-base --is-ancestor 764a1945 origin/main` succeeds); the plan077 diff vs `origin/main` contains only plan documents. **Default:** no probe scaffolding needs merging — the branch carries only the Wave A1 / Round 5 plan docs, so it merges last after docs reconciliation.
 
 ---
 
@@ -45,6 +45,7 @@ The branch has no upstream — it exists only on this machine. Push before anyth
 ```bash
 git -C /Users/nicholas/develop/lattice-round4 status --short
 ```
+
 Expected: only `?? clients/township-tauri-shell/tsconfig.test.json` (discard per Decision 4):
 
 ```bash
@@ -56,6 +57,7 @@ rm /Users/nicholas/develop/lattice-round4/clients/township-tauri-shell/tsconfig.
 ```bash
 cd /Users/nicholas/develop/lattice-round4 && ~/.asdf/shims/mix format --check-formatted && ~/.asdf/shims/mix test
 ```
+
 Expected: clean format, green tests. (Run `mix compile` first if `_build` is stale — known quirk.)
 
 **Step 3: Push and open the PR**
@@ -63,6 +65,7 @@ Expected: clean format, green tests. (Run `mix compile` first if `_build` is sta
 ```bash
 git -C /Users/nicholas/develop/lattice-round4 push -u origin codex/round4-security-reliability
 ```
+
 ```bash
 gh pr create --head codex/round4-security-reliability --title "Round 4: security & reliability hardening (Plans 159–165)" --body "55 commits: client term validation/quarantine, CSP + signing-oracle constraints, relay rate bounding + throttle progress, committed-dev-secret removal (Plan 165), plan records. Supersedes the plan165-partb-work draft."
 ```
@@ -72,11 +75,13 @@ gh pr create --head codex/round4-security-reliability --title "Round 4: security
 ```bash
 gh pr checks codex/round4-security-reliability --watch
 ```
+
 Expected: all checks pass. Then merge (merge commit, matching repo history style):
 
 ```bash
 gh pr merge codex/round4-security-reliability --merge --delete-branch
 ```
+
 `--delete-branch` removes the remote branch; local deletion happens in Task 6.
 
 ---
@@ -88,6 +93,7 @@ gh pr merge codex/round4-security-reliability --merge --delete-branch
 ```bash
 git fetch origin && git merge-tree --write-tree origin/main codex/beta-android-distribution
 ```
+
 Expected: exits 0 (clean). If conflicts appeared (round4 touched the shell client too), merge main into the branch in its worktree and resolve:
 
 ```bash
@@ -105,9 +111,11 @@ cd /Users/nicholas/develop/lattice-beta-android && ~/.asdf/shims/mix format --ch
 ```bash
 git -C /Users/nicholas/develop/lattice-beta-android push origin codex/beta-android-distribution
 ```
+
 ```bash
 gh pr create --head codex/beta-android-distribution --title "Android pilot: fail-closed release signing + non-destructive Device A harness" --body "6 commits: RED contracts then pilot signing hardening, hosted pilot distribution job in flagship.yml, adb-behavior hardening."
 ```
+
 ```bash
 gh pr checks codex/beta-android-distribution --watch && gh pr merge codex/beta-android-distribution --merge --delete-branch
 ```
@@ -123,6 +131,7 @@ Same shape as Task 2. This branch and android both touch `clients/` — re-check
 ```bash
 git fetch origin && git merge-tree --write-tree origin/main codex/beta-product-isolation
 ```
+
 If dirty, `cd /Users/nicholas/develop/lattice-beta-isolation && git merge origin/main` and resolve (prefer the branch's seam moves; the android branch shouldn't touch the moved signer/codec files, but verify with `git log origin/main -- clients/lattice-mobile-core`).
 
 **Step 2: Loop**
@@ -136,9 +145,11 @@ cd /Users/nicholas/develop/lattice-beta-isolation && ~/.asdf/shims/mix format --
 ```bash
 git -C /Users/nicholas/develop/lattice-beta-isolation push origin codex/beta-product-isolation
 ```
+
 ```bash
 gh pr create --head codex/beta-product-isolation --title "Township: extract product-isolation seams into lattice-mobile-core" --body "8 commits: RED isolation/migration contracts, fail-closed SQLite product storage + manifest, native/pairing/deep-link/QR and signer/discovery-codec seams moved to lattice-mobile-core."
 ```
+
 ```bash
 gh pr checks codex/beta-product-isolation --watch && gh pr merge codex/beta-product-isolation --merge --delete-branch
 ```
@@ -154,6 +165,7 @@ This checkout (`/Users/nicholas/develop/lattice`, branch `codex/plan077-ios-hard
 ```bash
 git mv --force plans/168-fail-closed-input-validation.md plans/176-fail-closed-input-validation.md 2>/dev/null || mv plans/168-fail-closed-input-validation.md plans/176-fail-closed-input-validation.md
 ```
+
 Then edit `plans/176-fail-closed-input-validation.md` frontmatter: retitle to 176, fix `depends_on` (it no longer precedes 169/170), and remove its AUTHZ-02 item if plan 162 step 2b(e) already owns it. Edit `plans/README.md`: delete the "🔴 UNRESOLVED: plan-number collision" section, add a 176 row to the table.
 
 **Step 2: Merge the post-Task-3 main and reconcile the plan-doc conflict**
@@ -161,13 +173,15 @@ Then edit `plans/176-fail-closed-input-validation.md` frontmatter: retitle to 17
 ```bash
 git fetch origin && git merge origin/main
 ```
-Expected: conflicts in `plans/162-authority-root-binding.md`, `plans/165-boundary-hardening.md`, `plans/README.md` (round4 recorded Plan 163/165 completion; this side adds Round-5 mapping). Resolution rule: **union** — keep round4's completion/status records AND this side's Round-5/Wave-A1 additions. In the README status table, round4's `DONE (Round 4)` statuses win over this side's `TODO (Round 4)` for plans 159–165.
+
+Expected: conflicts in `plans/162-authority-root-binding.md`, `plans/165-boundary-hardening.md`, `plans/README.md` (round4 recorded Plan 163/165 completion; this side adds Round-5 mapping). Resolution rule: **union** — keep round4's completion/status records AND this side's Round-5/Wave-A1 additions. Resolve statuses per plan and step, not blanketly: round4's `DONE (Round 4)` wins for plans 161, 163, and 165 where it recorded completion, but preserve Plan 162's `DONE (Round 4; step 2b amendments PENDING re-execution)` status and its Round-5 `cap_ok/8` replica-binding / malformed-tick mapping, and leave 159 (DRAFT), 160 (PROPOSED), and 164 (TODO) at their non-DONE statuses.
 
 **Step 3: Loop, then commit**
 
 ```bash
 ~/.asdf/shims/mix format --check-formatted && ~/.asdf/shims/mix test
 ```
+
 ```bash
 git add plans/ && git commit -m "docs(plans): map Round 5 hardening work and reconcile Round 4 records"
 ```
@@ -181,6 +195,7 @@ git add plans/ && git commit -m "docs(plans): map Round 5 hardening work and rec
 ```bash
 git push origin codex/plan077-ios-hardware
 ```
+
 ```bash
 gh pr create --head codex/plan077-ios-hardware --title "Park plan 077 iOS probe work; map Round 5 hardening plans" --body "Parked device key-reuse probe scaffolding (iOS resumes after the Android candidate per plan 158) plus the Wave A1 / Round 5 plan docs (168–176), with the 168 numbering collision resolved."
 ```
@@ -200,15 +215,17 @@ gh pr checks codex/plan077-ios-hardware --watch && gh pr merge codex/plan077-ios
 ```bash
 git -C /Users/nicholas/develop/lattice/.claude/worktrees/plan165-partb-work checkout -- config/config.exs config/runtime.exs
 ```
+
 ```bash
 git worktree remove /Users/nicholas/develop/lattice/.claude/worktrees/plan165-partb-work && git worktree remove /Users/nicholas/develop/lattice-beta-carrier && git worktree remove /Users/nicholas/develop/lattice-beta-android && git worktree remove /Users/nicholas/develop/lattice-beta-isolation && git worktree remove /Users/nicholas/develop/lattice-round4
 ```
+
 If a removal complains about untracked files, inspect (`git -C <wt> status --short`); only escalate to `--force` for files already covered by Decisions 3–4.
 
 **Step 2: Switch the main checkout to main and prune**
 
 ```bash
-git checkout main && git pull && git fetch --prune
+git checkout main && git pull --ff-only && git fetch --prune
 ```
 
 **Step 3: Delete local branches (verify merged first)**
@@ -216,6 +233,7 @@ git checkout main && git pull && git fetch --prune
 ```bash
 for b in codex/plan077-ios-hardware codex/beta-android-distribution codex/beta-carrier-runtime codex/beta-carrier-runtime-followup codex/beta-product-isolation codex/round4-security-reliability plan165-partb-work; do git branch -d "$b"; done
 ```
+
 Expected: every deletion succeeds with `-d` (all merged). A `-d` refusal means something didn't actually land — **stop and investigate, do not use `-D`.**
 
 **Step 4: Delete any surviving remote branches**
@@ -223,8 +241,15 @@ Expected: every deletion succeeds with `-d` (all merged). A `-d` refusal means s
 `gh pr merge --delete-branch` should have removed them; sweep the stragglers:
 
 ```bash
-git branch -r | grep 'origin/codex/' && git push origin --delete $(git branch -r | grep 'origin/codex/' | sed 's|origin/||') || echo "no remote codex branches left"
+matching=$(git branch -r | grep 'origin/codex/' | sed 's|^[[:space:]]*origin/||')
+if [ -n "$matching" ]; then
+  git push origin --delete $matching
+else
+  echo "no remote codex branches left"
+fi
 ```
+
+If `git push origin --delete` fails, the script exits nonzero — do not mask a deletion failure with the no-branches message. That message is printed only when no matching remote branches exist.
 
 ---
 
@@ -241,6 +266,7 @@ git checkout -b dev main && git push -u origin dev && git checkout main
 ```bash
 git worktree list && git branch -a -vv
 ```
+
 Expected: one worktree (`/Users/nicholas/develop/lattice` on `main`), local branches exactly `main` + `dev`, remotes exactly `origin/main` + `origin/dev`.
 
 **Step 3 (optional hygiene): review the 4 stale stashes**
@@ -248,6 +274,7 @@ Expected: one worktree (`/Users/nicholas/develop/lattice` on `main`), local bran
 ```bash
 git stash list
 ```
+
 All four predate 2026-07-12 and reference dead branches (`claude/beautiful-gould-6b25d2`, `codex/m2-real-carrier-hardening`). Show each (`git stash show -p stash@{N}`); drop what's superseded. Leave them if in doubt — stashes don't block anything.
 
 **Step 4: Final loop on main**
@@ -255,4 +282,5 @@ All four predate 2026-07-12 and reference dead branches (`claude/beautiful-gould
 ```bash
 ~/.asdf/shims/mix format --check-formatted && ~/.asdf/shims/mix test
 ```
+
 Expected: green — main now carries all four merged branches.

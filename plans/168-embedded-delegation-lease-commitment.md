@@ -227,7 +227,8 @@ STOP — you have unrelated breakage and cannot attribute failures to this chang
 
 **In scope** (the only files you may modify):
 
-- `apps/lattice_core/lib/lattice/canonical.ex` — the `%Delegation{}` `encode/1` clause only
+- `apps/lattice_core/lib/lattice/canonical.ex` — the `%Delegation{}` `encode/1` clause **and** the
+  `signable?/1` rescue-block broadening required by step 5 (fail-closed for malformed leases)
 - `clients/lattice-client/src/codec.ts` — `encodeDelegation` only
 - `apps/lattice_core/test/lattice2/delegation_lease_test.exs` — add cases
 - `clients/lattice-client/test/canonical.ts` — add the TS-side parity case
@@ -519,6 +520,8 @@ Machine-checkable. ALL must hold:
 - [ ] `$MIXCMD credo --strict` exits 0
 - [ ] `$MIXCMD test apps/lattice_core/test/lattice2/delegation_lease_test.exs` passes, and the
       file contains the three new tests named in the test plan
+- [ ] Step 5's fail-closed `signable?/1` rescue is in place: `Canonical.signable?/1` returns `false`
+      (not raises) for a malformed embedded lease, per the step-5 test case
 - [ ] `cd clients/lattice-client && npm run typecheck && npm run conformance && npm run canonical && npm run township:authoring` — all exit 0
 - [ ] `git diff --stat clients/lattice-client/test/vectors` matches the step-2 expectation
       (empty if step 2 reported `NO LEASED VECTORS`)

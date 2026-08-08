@@ -228,9 +228,12 @@ Baseline at the planned-at commit: `$MIXCMD test` exits 0.
 
 Add to `clients/lattice-client/test/carrier_feed.ts` a case proving path 1: build an op set
 containing a valid `{:revoke, ...}` authority op, materialize it twice — once with an empty
-`externallyQuarantined` set and once with a set naming the revoke op's id — and assert the
-**materialized authority result is identical**. Today it differs, because the second call hides
-the revoke from `analyzeAuthority`.
+`externallyQuarantined` set and once with a set naming the revoke op's id — and assert the second
+call throws `carrier_authority_report_divergence` (carrying both the local and reported authority
+sets) rather than returning identical authority results. Today it instead silently hides the revoke
+from `analyzeAuthority` and returns a differing (non-divergence) result, so the RED case fails.
+This matches Step 3's planned divergence behavior — do not assert identical authority results for
+this case.
 
 Add to `clients/lattice-client/test/carrier_relay_sync.ts` a case proving path 2: drive
 `syncCarrierOnce` against a stub client whose `advertise()` returns an id the client holds in
@@ -291,9 +294,28 @@ sensible bandwidth optimisation and is safe on its own. What must change is that
 `submitted.pushReport.accepted` and `submitted.confirmedDuplicateIds` — both of which are
 responses to frames this session actually submitted — may acknowledge.
 
+**Address the permanent-suppression gap.** With `candidateFrames` still excluding peer-known
+frames, a frame the peer claims to hold but never genuinely acknowledged is never re-offered
+(excluded by `candidateFrames`) and never acknowledged (no longer in `acknowledgedFrameIds`) —
+so it is permanently stuck in the outbox. Peer-advertised frame IDs must not be able to
+permanently suppress unacknowledged outbox frames. Pick one of the two approaches and implement
+it alongside the acknowledgement fix:
+
+1. **Bounded forced re-offer** — add a bounded forced re-offer path for frames excluded by
+   `candidateFrames`: track how many consecutive syncs a frame has been excluded, and once it
+   exceeds a bounded threshold, re-include it in `candidateFrames` so it is re-offered. The bound
+   must be finite and recorded; keep acknowledgement limited to actual submission responses.
+2. **Remove `peerKnownFrameIds` from the submission filter** — drop the `candidateFrames`
+   exclusion entirely so every unacknowledged outbox frame is re-offered on every sync. This
+   trades bandwidth for correctness; acknowledgement stays limited to actual submission
+   responses.
+
+Either way, `acknowledgedFrameIds` must contain only `submitted.pushReport.accepted` and
+`submitted.confirmedDuplicateIds`.
+
 The consequence is intended: a frame the peer claims to hold but never acknowledged stays in
-the outbox and is re-offered on a later sync. That is the correct trade — retention over silent
-loss.
+the outbox and is re-offered (bounded, or on every sync depending on the chosen approach). That
+is the correct trade — retention over silent loss.
 
 **Verify**: `cd clients/lattice-client && npm run typecheck` → exit 0, and
 `npm run carrier:relay-sync` → the step-1 case now passes.

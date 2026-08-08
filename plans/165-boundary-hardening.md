@@ -51,7 +51,8 @@ Recorded on `codex/round4-security-reliability` during the reviewed execution:
 - **Part B** landed first. Township development/test secrets now live only in environment-specific
   tracked config rather than shared config, and every `PHX_SERVER` start requires
   `SECRET_KEY_BASE` without weakening the carrier-only release or mandatory manifest contract. The
-  previously committed values were rotated and remain treated as burned.
+  previously committed values were predictable placeholders (not generated credentials) and have been
+  removed; no rotation or re-keying is required.
 - **Part C** installs a per-connection token bucket on relay frames only: a 120-frame burst and
   12-frame-per-second refill match the existing server budget, allow a participant to drain a
   120-operation outbox immediately, and bound a sustained flood on one socket. A 240-frame burst
@@ -133,8 +134,8 @@ env.** `config/config.exs:22-23` holds literal `signing_salt` and `secret_key_ba
 `PHX_SERVER` branch at `config/runtime.exs:3-9` — the one that flips `server: true` — runs in **every**
 env. So `MIX_ENV=dev PHX_SERVER=1` starts a live endpoint signing LiveView sessions and tokens with a
 value that is public in git history. The endpoint binds loopback, which limits blast radius to local
-processes and anything fronting it. Because the value is committed, deleting it is insufficient — it
-is burned and must be rotated.
+processes and anything fronting it. Because the value is a predictable public constant, deleting it
+is insufficient — the live endpoint must be gated so it cannot sign sessions with a known constant.
 
 **C. Relay has no per-connection rate limit.** Wave A1 replaced the old direct dump path with
 `bounded_atomic_dump/3`, a persistence timeout, target locking, durability rehearsal, and explicit
@@ -144,7 +145,7 @@ instances, but an authenticated relay realm can still submit relay frames contin
 rate limit.
 
 After this plan: the WebView can only ask for signatures over recognized payload shapes and runs
-under a CSP; the shared-config secret is rotated into environment-specific tracked config and cannot
+under a CSP; the shared-config predictable constant is removed into environment-specific tracked config and cannot
 be the default for a running server; and a relay peer cannot submit an unbounded burst on one
 connection.
 
@@ -270,9 +271,14 @@ The unbounded-quarantine detail (still true after Part C, which deliberately did
 persisted struct; `quarantine_op/3` prepends with no cap; a bad-signature op is quarantined
 (mutating the log) unless an op with the **same id** is already quarantined
 (`structurally_quarantined?/2` is an `Enum.any?` scan). The dedup keys on the
-**attacker-supplied** `op.id`, and an op that fails `Op.valid?` is by definition one whose id does
-not match its content — so varying the claimed id yields a fresh entry every time and defeats the
-guard entirely, with the linear scan making growth quadratic in CPU as well as unbounded on disk.
+**attacker-supplied** `op.id`. `Op.valid?/1` fails for two distinct reasons: (1) the op's id does
+not match its content hash (`op.id != hash(encoding)`), or (2) the signature does not verify
+against the declared author. Only the first case lets the attacker freely vary the claimed id to
+yield a fresh quarantine entry every time and defeat the dedup guard — an invalid-signature op
+whose id *does* match its content is deduplicated normally. So attacker-controlled variation of
+`op.id` defeats `Lattice.Log`'s id-based deduplication for the content-hash-mismatch class, but
+not every invalid operation has an id/content mismatch. The linear scan makes growth quadratic in
+CPU as well as unbounded on disk.
 This is the defect deferred to the archive/journal design noted below.
 
 **An existing rate limiter to reuse rather than reinvent**:
@@ -451,7 +457,7 @@ that A4 needs a macOS run — do not land an unverified CSP.)
 
 ---
 
-## Part B — rotate the committed secret and stop shipping signing material in tracked config
+## Part B — remove the committed predictable constant and stop shipping signing material in tracked config
 
 ### Step B1: Move the dev values out of shared config into env-specific tracked config
 
@@ -465,9 +471,11 @@ re-add the values behind a `config_env()` guard — a guarded literal is still a
 still trips Sobelow's `Config.Secrets` check, and it would leave plan 161 step 3 blocked. Step B2
 supplies the values instead.
 
-Treat the previously-committed values as compromised: they are in git history and cannot be removed
-by deletion. Note in your report that rotation has happened and that any deployment which ever used
-them must be re-keyed. Do not attempt to rewrite git history. **Never copy the old values anywhere.**
+The previously-committed values were predictable placeholders (not generated credentials): they carry
+an explicit change-for-production marker and zero padding, and the salt is a short constant word.
+Note in your report that **no rotation or re-keying is required** — the defect is that a predictable
+public constant signed live sessions, not that credentials leaked. Do not attempt to rewrite git
+history. **Never copy the old values anywhere.**
 
 ### Step B2: Supply the signing material at boot — env first, ephemeral in dev/test, raise otherwise
 
@@ -489,10 +497,10 @@ Add a block, placed **after** the `carrier_release?`/manifest section and **befo
 
 ```elixir
 # Signing material for the Township endpoint. Nothing is committed: production
-# supplies SECRET_KEY_BASE from the environment, and dev/test mint an ephemeral
-# value at boot. Ephemeral is correct for dev/test — the instrument is a
-# loopback-bound read-only surface with no login, so the only consequence of a
-# fresh key per boot is that a stale browser session is re-established.
+# supplies SECRET_KEY_BASE and LIVE_VIEW_SIGNING_SALT from the environment, and
+# dev/test mint an ephemeral value at boot. Ephemeral is correct for dev/test —
+# the instrument is a loopback-bound read-only surface with no login, so the only
+# consequence of a fresh key per boot is that a stale browser session is re-established.
 # The carrier-only pilot release does not include :township_web.
 if not carrier_release? do
   secret_key_base =
@@ -509,11 +517,20 @@ if not carrier_release? do
         _ -> nil
       end
 
-  if secret_key_base && signing_salt do
-    config :township_web, TownshipWeb.Endpoint,
-      secret_key_base: secret_key_base,
-      live_view: [signing_salt: signing_salt]
+  # Fail closed independently for each missing variable — do not silently skip
+  # configuration when either is absent. A silently-nil secret_key_base is a worse
+  # outcome than the bug this plan is fixing.
+  if is_nil(secret_key_base) do
+    raise "SECRET_KEY_BASE is required for the Township web endpoint in #{config_env()}"
   end
+
+  if is_nil(signing_salt) do
+    raise "LIVE_VIEW_SIGNING_SALT is required for the Township web endpoint in #{config_env()}"
+  end
+
+  config :township_web, TownshipWeb.Endpoint,
+    secret_key_base: secret_key_base,
+    live_view: [signing_salt: signing_salt]
 end
 ```
 
@@ -523,14 +540,17 @@ Two things to get right, and to **verify rather than assume**:
   should merge into (not replace) any `live_view:` list from `config.exs`. After step B1 there is no
   base `live_view:` key left, so this is the only source — but confirm the endpoint boots and a
   LiveView actually mounts, which is what the B3 verification does.
-- **`:prod` still raises.** With the literals gone, a `:prod` non-carrier boot without
-  `SECRET_KEY_BASE` must still fail loudly via the existing block at the bottom of the file. If the
-  shape above would let a `:prod` boot proceed with `nil`, fix it so it cannot — a silently-`nil`
-  `secret_key_base` is a worse outcome than the bug this plan is fixing.
+- **Fail closed independently for each variable.** With the literals gone, a non-carrier boot
+  missing `SECRET_KEY_BASE` must raise a distinct named failure for `SECRET_KEY_BASE`, and a boot
+  missing `LIVE_VIEW_SIGNING_SALT` must raise a distinct named failure for `LIVE_VIEW_SIGNING_SALT`
+  — do not silently skip configuration when either is absent. The two raises must be independent:
+  setting only one variable must still fail on the other, so each missing-variable path is
+  exercised separately.
 
 You may restructure the block if a cleaner formulation gives the same three-way behavior. What must
-hold: no literal in tracked config; dev/test boot with no environment variable; `:prod` non-carrier
-without `SECRET_KEY_BASE` raises.
+hold: no literal in tracked config; dev/test boot with no environment variable; a non-carrier boot
+missing either `SECRET_KEY_BASE` or `LIVE_VIEW_SIGNING_SALT` raises a distinct named failure for
+that variable.
 
 **Known `PHX_SERVER` call sites — surveyed 2026-08-07, no action needed.** The ephemeral-key
 approach was chosen precisely so that adding a `SECRET_KEY_BASE` requirement does not break the
@@ -690,7 +710,7 @@ Machine-checkable. ALL must hold:
 - [ ] Your report contains the complete step-A1 domain-tag survey
 - [ ] Your report states whether `Holder`'s durability moduledoc changed and why
 - [ ] Your report characterizes the removed values without reproducing them, and does **not** claim rotation or re-keying is required (they were placeholders — see the severity correction in "Why this matters")
-- [ ] `:prod` non-carrier raises by name for a missing `SECRET_KEY_BASE` **and** for a missing LiveView signing salt; neither can be `nil` at boot (verified with actual command output, not by reading the code)
+- [ ] A non-carrier boot missing `SECRET_KEY_BASE` raises a distinct named failure naming `SECRET_KEY_BASE`, and a boot missing `LIVE_VIEW_SIGNING_SALT` raises a distinct named failure naming `LIVE_VIEW_SIGNING_SALT` — each tested separately with actual command output (not by reading the code), so neither can be `nil` at boot
 - [ ] `git status` shows no modified file outside the In-scope list
 - [ ] `plans/README.md` status row for 165 updated
 

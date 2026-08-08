@@ -9,9 +9,11 @@
 > build plan the spike recommends.
 >
 > **Drift check (run first)**:
+>
 > ```sh
 > git diff --stat 91bb6ca6..HEAD -- clients/township-tauri-shell/src-tauri/src clients/lattice-client/src/local_log.ts plans/146-witnessed-succession-witness-artifact-g1.md
 > ```
+>
 > If any of those changed since this plan was written, compare the "Current state" excerpts
 > against the live code before proceeding.
 
@@ -154,11 +156,19 @@ is not an answer; "we accept X because Y, and here is the non-claim we will publ
 5. **What must the OS prompt display?** It is the only human control. Decide the exact template,
    the sanitisation rule, the length bound, and which fields are shown (a truncated key
    fingerprint is more meaningful to a user than a full replica string, and is not attacker-
-   shaped). Assume the user reads one line.
+   shaped). Assume the user reads one line. Every displayed identity field must be derived from
+   verified replica or policy state the native side already holds — never from submitted claim
+   fields such as `claim.successor`. If verified native state cannot supply an identity field
+   the prompt needs, the claim must be rejected before `presence.authorize` rather than
+   displaying the unverified submitted value.
 6. **Which direct IPC requests must be refused?** Today any webview-reachable caller can invoke
    the command with any syntactically valid claim. Decide what the native side requires beyond a
    well-formed claim — an origin binding, a challenge issued by the native side itself, a
    one-shot token, or a requirement that the claim reference state the native side already holds.
+   Each `lattice_sign_governance_witness` request must require native authorization: bind a
+   native-held claim or challenge/token to the canonical claim bytes and the caller/session,
+   enforce expiry, and consume it atomically exactly once before signing. Do not treat
+   presence approval or a signing mutex as sufficient authorization.
 
 ## Steps
 
@@ -227,13 +237,15 @@ If — and only if — the recommendation hinges on a feasibility question you c
 reading (for example, whether Rust can verify a delegation chain within an acceptable prompt
 latency), build the smallest throwaway that answers it.
 
-Prototypes go under
-`/private/tmp/claude-501/-Users-nicholas-develop-lattice/*/scratchpad/` or a git-ignored path —
-**never** in `clients/` or `apps/`. Record the measurement in the deliverable and delete the
-prototype.
+Prototypes go under a fresh directory from a portable temporary-directory command — e.g.
+`PROTOTYPE_PATH="$(mktemp -d)/scratchpad"` — or another git-ignored path — **never** in
+`clients/` or `apps/`. Record the resolved `PROTOTYPE_PATH` in the deliverable, record the
+measurement, and delete the prototype directory afterward.
 
-**Verify**: either no prototype was needed (say so), or the measurement is recorded and the
-prototype is gone. `git status --porcelain` shows only `docs/` and `plans/` changes.
+**Verify**: either no prototype was needed (say so), or the measurement is recorded, the
+prototype path is recorded in the deliverable, and the prototype directory no longer exists
+after cleanup (`test ! -d "$PROTOTYPE_PATH"` succeeds). `git status --porcelain` shows only
+`docs/` and `plans/` changes.
 
 ### Step 6: Write the deliverable and the follow-on plan
 

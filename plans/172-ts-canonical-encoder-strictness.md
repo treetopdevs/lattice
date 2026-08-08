@@ -223,12 +223,17 @@ style:
 4. Decoding an op frame whose `author` carries a trailing newline must be rejected.
 5. Decoding an op frame whose `author` contains a character outside the base64 alphabet must be
    rejected.
+6. Decoding an op frame whose `sig` is non-canonical base64 must be rejected.
+7. Decoding a delegation whose `issuer` is non-canonical base64 must be rejected.
+8. Decoding a delegation whose `audience` is non-canonical base64 must be rejected.
+9. Decoding a delegation whose `sig` is non-canonical base64 must be rejected.
+10. Decoding a `"bin"` term whose bytes are non-canonical base64 must be rejected.
 
-For 3–5, the assertion that matters is that the frame is **rejected**, not merely that it
-decodes to different bytes — today all three decode to the *same* 32 bytes and verify clean,
+For 3–10, the assertion that matters is that the frame/term is **rejected**, not merely that it
+decodes to different bytes — today all of them decode to the *same* bytes and verify clean,
 which is the defect.
 
-**Verify**: `cd clients/lattice-client && npm run canonical` → **all five new cases FAIL**,
+**Verify**: `cd clients/lattice-client && npm run canonical` → **all ten new negative cases FAIL**,
 every pre-existing check still passes. If any passes before you change source, note which and
 narrow the plan accordingly.
 
@@ -239,7 +244,6 @@ vector, or persisted-state sample carries non-canonical base64:
 
 ```bash
 cd clients/lattice-client
-grep -roh '"author": *"[^"]*"' test/vectors | sort -u | head -20
 node -e '
 const fs=require("fs"),path=require("path");
 const bad=[];
@@ -247,9 +251,16 @@ const walk=d=>fs.readdirSync(d,{withFileTypes:true}).forEach(e=>{
   const p=path.join(d,e.name);
   if(e.isDirectory())return walk(p);
   if(!p.endsWith(".json"))return;
-  const check=v=>{ if(typeof v!=="string")return;
-    if(!/^[A-Za-z0-9+/]+={0,2}$/.test(v))return;
-    if(Buffer.from(v,"base64").toString("base64")!==v) bad.push([p,v.slice(0,12)+"..."]); };
+  // Classify every candidate string, not just canonical-looking ones: a value is a
+  // candidate if it could plausibly be base64 — any string of length >= 8 over the
+  // base64 alphabet plus whitespace, base64url chars (-_), invalid symbols, and
+  // malformed padding. Strict decoding rejects all of these except exact canonical
+  // base64, so report every value the strict round-trip would reject.
+  const isCandidate=v=>typeof v==="string" && v.length>=8 &&
+    /^[A-Za-z0-9+/_\-=\s]+$/.test(v);
+  const check=v=>{ if(!isCandidate(v))return;
+    const trimmed=v.replace(/\s/g,"");
+    if(Buffer.from(trimmed,"base64").toString("base64")!==trimmed) bad.push([p,v.slice(0,12)+"..."]); };
   const walkv=v=>{ if(Array.isArray(v))v.forEach(walkv);
     else if(v&&typeof v==="object")Object.values(v).forEach(walkv); else check(v); };
   walkv(JSON.parse(fs.readFileSync(p,"utf8")));
@@ -325,7 +336,7 @@ cd ../township-tauri-shell && npm run typecheck
 ### Step 6: Full green
 
 ```bash
-cd /Users/nicholas/develop/lattice && $MIXCMD test
+$MIXCMD test
 ```
 
 **Verify**: exit 0.
@@ -339,11 +350,16 @@ New cases in `clients/lattice-client/test/canonical.ts`, following its existing 
 3. Op frame with unpadded-base64 `author` → rejected.
 4. Op frame with whitespace in `author` → rejected.
 5. Op frame with an out-of-alphabet character in `author` → rejected.
-6. A **positive** control: a well-formed frame with canonical base64 still verifies and produces
-   the same op id as before the change. This is the guard against over-rejection and it matters
-   as much as the five negatives.
+6. Op frame with non-canonical base64 in `sig` → rejected (exercises the `frame.sig` strict-decoding sink).
+7. Delegation with non-canonical base64 in `issuer` → rejected (exercises the delegation `issuer` sink).
+8. Delegation with non-canonical base64 in `audience` → rejected (exercises the delegation `audience` sink).
+9. Delegation with non-canonical base64 in `sig` → rejected (exercises the delegation `sig` sink).
+10. A `"bin"` term whose bytes are non-canonical base64 → rejected (exercises the `"bin"` term sink).
+11. A **positive** control: a well-formed frame with canonical base64 still verifies and produces
+    the same op id as before the change. This is the guard against over-rejection and it matters
+    as much as the ten negatives.
 
-Verification: `npm run canonical` → exit 0 with 6 new checks reported.
+Verification: `npm run canonical` → exit 0 with 11 new checks reported.
 
 ## Done criteria
 
@@ -356,7 +372,7 @@ Machine-checkable. ALL must hold:
 - [ ] `$MIXCMD test` exits 0
 - [ ] `git diff --stat clients/lattice-client/test/vectors` is empty
 - [ ] `grep -c 'Buffer.from(value, "base64")' clients/lattice-client/src/*.ts` totals 1
-- [ ] The 6 checks named in the test plan exist and pass
+- [ ] The 11 checks named in the test plan exist and pass
 - [ ] `git status --porcelain` lists no file outside the in-scope list
 - [ ] `plans/README.md` status row for 172 updated
 

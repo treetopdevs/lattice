@@ -6,9 +6,11 @@
 > left the spike. When done, update the status row in `plans/README.md`.
 >
 > **Drift check (run first)**:
+>
 > ```sh
 > git diff --stat 91bb6ca6..HEAD -- apps/lattice_core/lib/lattice/authority.ex docs/adr/0004-succession-validation.md plans/162-authority-root-binding.md
 > ```
+>
 
 ## Status
 
@@ -55,11 +57,13 @@ self-asserted by earlier acquire and heartbeat ops. So:
 - **Seizure.** The designated successor takes the role from a fully active holder at will by
   choosing `at_tick = last_active + dormant_ticks`. No elapsed time is required or proved; the
   dormancy threshold is decorative.
-- **Irreversible lockout.** A holder who self-transfers with
+- **Irreversible lockout (when no recovery policy is configured).** A holder who self-transfers with
   `at_tick: 18_446_744_073_709_551_615` pins `last_active` at `Lattice.Canonical`'s integer
   ceiling (`canonical.ex:35`). No larger tick can ever be canonically encoded, so no future
   succession op can satisfy the comparison. Succession for that role is dead for the life of the
-  replica, with no recovery path.
+  replica via the legacy succession path — **unless** a recovery policy is configured, in which
+  case the witnessed certificate path can recover via `record_acquire` without `at_tick`. The
+  permanent lockout applies only to configurations with no recovery policy.
 
 A root-signed logical clock already exists — the `{:beacon, epoch}` op from plan 149, with
 monotonicity and authorization enforced in `classify_beacon/6`. It is consulted **only** for
@@ -181,7 +185,11 @@ Write a scratch script (under the scratchpad path, **not** in the repo) that dem
 1. **Seizure** — a designated successor acquiring a role against an active holder by choosing a
    large `at_tick`.
 2. **Lockout** — a self-transfer at `18_446_744_073_709_551_615` after which no valid succession
-   op can be constructed.
+   op can be constructed via the legacy path. Distinguish the two configurations: with
+   `%{recovery: recovery}` policy, the witnessed certificate path can recover via
+   `record_acquire` without `at_tick`, so the lockout is not permanent; without a recovery
+   policy, the maximum tick blocks the legacy succession path permanently for the life of the
+   replica. Demonstrate both if both are reachable.
 
 Model it on `apps/lattice_core/test/lattice2/witnessed_succession_test.exs:182`, which already
 uses `Sim.succeed(..., at_tick: 1_000_000)` and shows the shape.

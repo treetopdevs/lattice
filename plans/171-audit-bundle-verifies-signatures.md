@@ -286,13 +286,12 @@ prove the log is *complete*, and it cannot detect an op that was never included.
 
 Do **not** change `restore/1`.
 
-Then, in `apps/lattice_carrier_server/lib/lattice_carrier_server/holder.ex`, you may optionally
-delegate `validate_log/1` to the new function to remove the duplication — but only if the
-carrier server's full suite stays green, and only as a separate commit. If there is any
-divergence in behaviour, leave the holder alone and note it.
+Do **not** edit `apps/lattice_carrier_server/lib/lattice_carrier_server/holder.ex` — it is out of
+scope (see the Out-of-scope list). Its `validate_log/1` is the reference shape for the new
+function; leave it alone even after the extraction, and note any residual duplication as a
+follow-up in your final report rather than weakening the exclusion.
 
-**Verify**: `$MIXCMD test apps/lattice_core/` and `$MIXCMD test apps/lattice_carrier_server/`
-→ both exit 0.
+**Verify**: `$MIXCMD test apps/lattice_core/` → exit 0.
 
 ### Step 3: Call it from `AuditBundle.verify/1`
 
