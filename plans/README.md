@@ -200,15 +200,464 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 158 | Real-device beta POC program map: shared carrier/distribution foundation, then Township, Toolshed, Treehouse | **P0** | XL | 029, 037, 128, 132, 141, 142 | TODO (execution map ready; LiveOps/CapStore prerequisite is DONE) |
 | 159 | Wave A1 kickoff — shared beta foundation | P1 | — | 158 | DRAFT (parallel session, untracked at time of Round 4) |
 | 160 | PD-003-B Toolshed QR ceremony physics spike | P1 | M | 158 | PROPOSED (parallel session, untracked at time of Round 4) |
-| 161 | Close the three silent verification gaps (Sobelow, orphaned suites, format scope) | P1 | S–M | — | TODO (Round 4) |
+| 161 | Close the three silent verification gaps (Sobelow, orphaned suites, format scope) | P1 | S–M | — | **DONE** 2026-08-08 (6 commits `cc56d133..2b2ae207` on `advisor/161-close-verification-gaps`, unmerged) |
 | 162 | Bind root-less delegations and genesis authorship to the replica root | **P0** | M | 161 (rec.) | TODO (Round 4) |
 | 163 | Pin TypeScript ingest to the paired replica + fail-closed command decode | P1 | S–M | 162 (rec.) | TODO (Round 4) |
 | 164 | One local command mirroring CI, and stop `dist/` from lying | P2 | S | 161 (rec.) | TODO (Round 4) |
-| 165 | Boundary hardening: WebView signing oracle + CSP, committed dev secret, relay growth | P1 | M | — | TODO (Round 4) |
+| 165 | Boundary hardening: WebView signing oracle + CSP, committed dev secret, relay growth | P1 | M | — | **Part B DONE** 2026-08-08 (`8ab09e9e` on `plan165-partb-work`, unmerged); Parts A + C TODO |
 | 166 | Typecheck the shell test tree and retire the prose-pinning suite | P2 | M | — | TODO (Round 4) |
 | 167 | Divergence explainer (`Township.Divergence.explain/2` + mix task) | P2 | M | — | TODO (Round 4, direction) |
+| 168 | Commit the embedded delegation lease to the op hash (key-free divergence primitive) | **P0** | S–M | — | TODO (Round 5) |
+| 169 | Carrier control frames carry no authority (verdict gating + false acks) | **P0** | M | — | TODO (Round 5) |
+| 170 | Redact Ed25519 private keys from `inspect/1` and crash reports | P1 | S | — | TODO (Round 5) |
+| 171 | Give every unverified `Log.restore/1` consumer a policy (audit bundle + Registry) | P1 | M | 168 (rec.) | TODO (Round 5) |
+| 172 | TypeScript canonical-encoder strictness (duplicate terms, non-canonical base64) | P1 | S–M | — | TODO (Round 5) |
+| 173 | Bounded carrier transport: connect deadlines + paged pulls | P1 | M–L | 169 | TODO (Round 5b) |
+| 174 | **(spike)** What the governance-witness ceremony must prove natively | P1 | M (build: L) | — | TODO (Round 5b) |
+| 175 | **(spike)** How succession gets a trustworthy clock | P1 | M (build: L) | 162 | TODO (Round 5b) |
+| 176 | Fail closed at the wire/authority boundary: lease range, decode depth, replica marker, op kinds | P1 | M | 161 (rec.) | TODO (Round 5; renumbered from 168 — AUTHZ-02 ceded to plan 162 step 2b(e)) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
+
+## ⚠️ Promotion blocker — `apps/lattice_server`
+
+**Do not deploy or expose `apps/lattice_server` beyond isolated local demo use** until Origin/peer
+authentication, identity binding, capability issuance, session-token binding, and frame limits are
+repaired. The gaps compose into a single path: `/ws` performs no Origin or peer check
+(`transport/web_socket.ex:44-57`) while both sibling HTTP handlers on the same listener do, so any
+visited web page can drive the gateway; `hello` accepts a client-declared `identity` from which
+LiveOps derives the role (`live_ops.ex:56`, `:207-211`), so a caller self-elects to `producer` and
+receives `approve_publish`/`revoke_publish`; `/api/session-token` mints a valid one-shot JWT for any
+caller-named subject (`session_token_handler.ex:23-28`) whose `epk` channel-binding claim is written
+and never read; and the WebSocket handler returns the 3-tuple from `init/2`, so Cowboy's
+`max_frame_size` defaults to `infinity`.
+
+This app is the **v1 demo boundary** — it is not in the `lattice_carrier_pilot` release and is not
+on the Township path, which is why it ranks below the pilot-release findings and has no plan in the
+current queue. It is recorded as a blocker rather than a plan because the correct action today is a
+deployment constraint, not code. Promote it to a plan the moment anyone proposes exposing it.
+
+## Execution order (resolved 2026-08-06, after two independent security reviews)
+
+Two audits ran against this tree — the Round 5 `improve deep security cryptography` pass that
+produced plans 168–172, and a second independent review whose plan reconciliation was stale
+because it predated those files. The merged, agreed sequence:
+
+1. **161** — verification baseline. Land the CI gates first so the suites that would catch a
+   mistake in everything below actually run.
+2. **168** — key-free canonical divergence (P0).
+3. **169** — unsigned carrier control values deciding client authority and outbox retention (P0).
+4. **170** — private-key redaction (cheap, independent).
+5. **171** — restore-consumer policies. **After 168**, so bundle fixtures regenerate against the
+   final canonical encoding.
+6. **172** — TypeScript encoder strictness. Placed here deliberately: it touches `authority.ts`,
+   so it must not split the 162 → 163 authority sequence.
+7. **162** — the five authority-judge guards.
+8. **163** — TypeScript ingest pinning, immediately after 162.
+9. **173** — bounded carrier transport. **After 169** (both edit `syncCarrierOnce`) and **before**
+   165 Part C (both edit the carrier server).
+10. **165** — boundary hardening, with Part C refreshed against `91bb6ca6`.
+11. **174** and **175** — the two spikes, which produce their own build plans.
+
+### Where the two reviews disagreed, and how it resolved
+
+The second review proposed folding succession **tick provenance** into a rewritten, regraded plan
+162. It is not there. Plan 162 carries a hard STOP condition — "Any succession test or succession
+vector changes" — and a done criterion requiring the three succession vectors to stay
+byte-identical, and it declares at `plans/162:270-272` that the successor's root-less self-issue
+"must keep working". Repairing provenance necessarily changes all of those. A plan cannot both
+depend on succession behaving as it does today and redesign it, so provenance became **plan 175**,
+a spike. What *did* fold into 162 (as step 2b) are the two compatible **guards**: `cap_ok/8`
+replica binding and malformed-tick rejection. Both reject more without changing what a valid
+succession op means, so 162's grade and STOP conditions are unchanged.
+
+The second review also caught two things this one got wrong, both incorporated: plan 169 was
+missing from the proposed sequence despite being P0, and the Registry half of the restore gap
+needs a **second** assertion — `log.replica == the replica the caller requested` — which
+authenticity alone does not imply. Both are now in the plans.
+
+## Round 5c (deep security + cryptography re-pass, 2026-08-07, against `codex/plan077-ios-hardware` @ `91bb6ca6`)
+
+A second `improve deep security cryptography` pass against the **same commit** Round 5 audited
+(`91bb6ca6` — zero drift since Round 5, so plans 168–175 are still valid as written). This pass
+deliberately targeted the surface Round 5 explicitly skipped — `apps/lattice_stress`,
+`apps/lattice_demo`, `apps/lattice_carrier_spike`, `apps/township_bench` — ran the dependency
+audits Round 5 declined (`mix hex.audit`, `npm audit`), and took a targeted second look at the
+crypto areas Round 5 flagged but did not fully resolve (election close evidence, governance
+witness ceremony, succession provenance edges). Three parallel read-only Explore auditors,
+every load-bearing finding re-opened against source before it reached this list.
+
+**Headline**: two production-core authority-soundness gaps in `apps/lattice_core/lib/lattice/authority.ex`
+that Round 5 did not surface — a dormant-succession stale-holder gap and incomplete revocation
+enforcement on `:transfer`/`:succeed`. Both are "add a guard" class in the **same file** plan 162
+edits, so per this index's own collision guidance (see the `cap_ok/8` replica-binding note above)
+they should **fold into plan 162's step 2b** rather than become standalone plans that would collide
+with 162's execution. No new plan files were written this round (operator decision 2026-08-07);
+the findings are recorded here so the next plan-162 execution picks them up.
+
+**Dependency audits (Round 5 had skipped these as "touch the network")**:
+- `mix hex.audit` → "No retired packages found" (clean).
+- `npm audit` (repo root + `clients/township-tauri-shell`) → only devDependency build-tooling
+  advisories: `postcss` (high, path traversal, GHSA-r28c-9q8g-f849 / GHSA-fxqj-rqcc-2cmp),
+  `brace-expansion` (high, DoS, GHSA-mh99-v99m-4gvg / GHSA-rgw5-rvv9-x895), `undici` (moderate,
+  desync). All transitive through devDeps with no path into the shipped Tauri app — re-confirms
+  Round 4's "noise floor" rejection. Not planned.
+
+### Round 5c findings vetted but NOT planned (operator: record only)
+
+Real, evidenced, re-opened against source. Listed so they are not re-audited from scratch and so
+the next plan-162 execution can absorb the two authority guards.
+
+**Production core (`apps/lattice_core`)**:
+
+- **CRYPTO-01 — dormant succession has no holder-consistency guard**
+  (`authority.ex:681-688`). `decide_succession_proof`'s dormant-ticks arm checks only
+  `at_tick >= last_active + dormant_ticks` then `record_acquire/4`; it never compares `st.holder`
+  to the ancestor-visible holder. The witnessed arm (`:707-708`) requires `st.holder == holder` from
+  `holder_acquire_from/2`, and `decide_transfer` (`:649-654`) checks both `holder_at_deps !=
+  op.author` and `st.holder != op.author`. A designated successor on a branch that does not
+  include an already-processed `:transfer` can satisfy dormancy against ancestor-visible heartbeats
+  and seize the role from the transfer recipient — the succession analogue of `:stale_holder` for
+  commands (`stale_holder?/4` is enforced for commands via `authority_ok/4` at `:969` but
+  `decide_succeed/8` never calls it). **Recommend folding into plan 162 step 2b**: same file, same
+  vector-regeneration cost, rejects more without changing what a valid succession op means —
+  exactly the class plan 162's existing 2b guards belong to. MED risk (may quarantine edge cases
+  that currently converge; enumerate succession vectors per plan 162's STOP conditions).
+- **SEC-01 — revocation is not enforced for `:transfer` / `:succeed` authority ops**
+  (`authority.ex:641-657`, `:661-678`). `decide_transfer/8` and `decide_succeed/8` check
+  `deleg_valid[d.id]` (delegation-chain validity) but never consult `revokes`.
+  `revoked_as_of?/5` (`:910-917`) is called only inside `cap_ok/8` (`:898`), i.e. only for `:command`
+  ops via `op.cap`. The moduledoc (`:33-34`) states behavior 10 quarantines ops citing a revoked
+  delegation; that is implemented for cap-gated commands (`authority_test.exs:144-164`) but not
+  for authority-body mutations. After a valid revoke, a holder can still `:transfer` or `:succeed`
+  citing that delegation id. **Recommend folding into plan 162 step 2b**: same file, same class
+  (thread `revokes` into the role-timeline reducers and reject with `:revoked_capability` when
+  `revoked_as_of?/5` fires). MED risk (may change quarantine outcomes on logs that currently
+  honor post-revoke authority ops; enumerate vectors).
+
+**Spike surface (`apps/lattice_carrier_spike`)** — real but low-leverage; this app is a predecessor
+to `apps/lattice_node_spike` and Round 2 left it as an open delete-vs-keep decision (TECHDEBT-01 /
+DEPS-01). Resolving that decision may be higher-leverage than hardening a spike that could be
+deleted. If the app is kept, the cookie/broadcast pair compose into one small hardening plan and
+the rest are drive-by fixes:
+
+- **SEC-02 — hardcoded default distribution cookie, logged at startup**
+  (`runtime.ex:44`, `browser_carrier.server.ex:36`, `:53-58`). Default `:lattice_carrier_cookie` /
+  env fallback `"lattice_carrier_cookie"`; cookie printed in startup JSON. Any process reaching the
+  dist port with the public default can join the cluster. Fix: require a random cookie from env
+  with no committed default, fail startup if unset; omit cookie from startup output.
+- **SEC-03 — gateway replies broadcast to all hidden nodes; sender not bound to cap**
+  (`browser_gateway.ex:27,89-93`, `filter.ex:18-19`). Every reply is sent to `Node.list(:hidden)`;
+  `_sender` is ignored in the filter; `Lattice.call/3` trusts frame fields only. Any
+  cookie-authenticated peer receives all results (including for calls it did not originate) and
+  can invoke any `tab_id`/`cap_id` it learns. Fix: route replies only to the originating hidden
+  node and bind each hidden node to a tab at connect time. MED risk (reply-routing design).
+- **SEC-04 — `String.to_atom/1` on the cookie env var** (`runtime.ex:69`). Violates the repo
+  fail-closed convention; `Node.set_cookie/2` accepts charlists so atomization is unnecessary.
+- **SEC-05 — internal denial reasons leaked in replies** (`browser_gateway.ex:84`
+  `error: inspect(reason)`). Raw `Lattice.call/3` failure terms broadcast to reply nodes —
+  capability enumeration / internal-state probing. Fix: map to a small stable public error set.
+- **SEC-06 — JSON decode without depth bound** (`message.ex:21-22`). `Jason.decode(text)` with
+  only a 16 KiB byte cap; same class as plan 176 WIRE-01. Fix: add an explicit decode depth limit.
+
+**Bench surface (`apps/township_bench`)**:
+
+- **CRYPTO-02 — `verify_warm_seconds` is synthetic arithmetic labeled as "cached"**
+  (`reporter.ex:56-59`). Computed as `cold * 0.15` with a comment calling it "cached"; no
+  warm-cache measurement. G13 reports can show plausible warm numbers with no warm-cache run.
+  Fix: rename to `estimated_verify_warm_seconds` or drop until measured; do not use as
+  gate-closure evidence for crypto correctness. (The harness's cost-only scope and calibration
+  status are otherwise by-design per `apps/township_bench/AGENTS.md`.)
+
+### Round 5c findings considered and rejected
+
+Recorded so they are not re-audited. Each was opened and read during vetting.
+
+- **`township_bench` "harness never exercises election verification" / "cost model assumes
+  well-formed inputs only"** — REJECTED as by-design. `apps/township_bench/AGENTS.md` explicitly
+  scopes the harness to cost-only ("Do NOT touch `Township.Matter`, `Lattice.Attestation`, or any
+  SecurityProfile claim"; "Read an uncalibrated estimate as measured cost. Every report prints
+  its calibration status"). The one genuinely misleading label (warm = cold × 0.15) is filed as
+  CRYPTO-02 above; the rest is the documented contract.
+- **`lattice_carrier_spike` unbounded call/reply history** (`echo_target.ex:28`,
+  `browser_gateway.ex:96`) — REJECTED. Spike-only; tests use short-lived processes. Below the bar.
+- **`apps/lattice_stress` and `apps/lattice_demo`** — REJECTED (no findings). Neither app
+  implements its own HTTP/WebSocket boundary or cryptographic operations; they are in-process
+  demo/stress helpers and mix tasks that delegate to `LatticeServer`. The `String.to_atom/1` on
+  payload `"op"` at `probe_tab.ex:109` is in an in-process stress transport with no evidence
+  untrusted remote input reaches it through this app alone.
+- **npm audit advisories** — REJECTED as the noise floor (re-confirms Round 4). All devDependency
+  build/test tooling with no path into the shipped Tauri app.
+- **`mix hex.audit`** — clean ("No retired packages found").
+
+### Round 5c coverage note
+
+Audited (new this round): `apps/lattice_stress`, `apps/lattice_demo`, `apps/lattice_carrier_spike`,
+`apps/township_bench` (the four apps Round 5 explicitly skipped); dependency audits (`mix hex.audit`,
+`npm audit` at root and shell); targeted crypto second look at election close evidence
+(`unanimous_boxes_v1.ex`, `offline_bundle.ex`), governance witness ceremony, and succession
+provenance edges. The targeted second look found the two authority guards above and **no
+additional** defects in election close evidence or the witness ceremony beyond Round 5 / plan 174
+coverage (close-evidence binds signatures to `signature_payload(election_id, manifest_digest)`,
+detects box/manifest equivocation and forked closes, and the 12-scope manifest is honestly
+`:not_claimed`; witness m-of-n threshold, distinct-witness, and holder-epoch replay are enforced
+at `SuccessionCertificate.verify/3` with adversarial tests).
+
+Not audited this round: all surface Round 5 already covered (canonical encoding/signing,
+capability/delegation/authority main paths, carrier transport/session, carrier server/relay, TS
+client crypto, Rust/Tauri custody, Phoenix boundary) — by design, since HEAD == Round 5 planned-at
+and there is no drift to re-find. `deps/`, `node_modules/`, `_build/`, generated `dist/` internals,
+and the behavior of the parked Android/iOS probe estate remain out of scope.
+
+### Plan-number collision at 168 — RESOLVED 2026-08-08
+
+Two untracked files had claimed number 168 (the embedded-delegation-lease plan vs. the
+fail-closed-input-validation plan), with the second also reserving 169/170. Operator decision:
+`168-embedded-delegation-lease-commitment.md` keeps 168; the input-validation plan is renumbered
+to **176**, its 169/170 reservation is withdrawn, and its AUTHZ-02 section is ceded to plan 162
+step 2b(e). One overlap remains to reconcile at execution time: plan 176's CRYPTO-01
+(out-of-range `expires_epoch`) is adjacent to plan 168's step 5, which broadens
+`Canonical.signable?/1`'s rescue for the same class of raise — whichever plan executes second
+should re-read the other so only one touches `signable?/1`. The two authority guards recorded
+above remain additional reason to settle plan 162's final scope before its next execution, since
+they belong in 162 step 2b.
+
+## Round 5 (deep security + cryptography audit, 2026-08-06, against `codex/plan077-ios-hardware` @ `91bb6ca6`)
+
+A `improve deep security cryptography` pass with eight parallel read-only auditors, scoped by
+surface rather than by category: canonical encoding and signing primitives, the capability and
+authority model, carrier transport and session auth, the carrier server and its relay, the
+TypeScript client's independent crypto implementation, the Rust/Tauri key custody layer, the
+Phoenix boundary, and cross-cutting protocol design. Every finding below was re-opened against
+source before it reached the table; one was settled by **executing** the code rather than
+reading it.
+
+**Headline**: the op hash does not cover an embedded delegation's `expires_epoch`. Flipping that
+one optional JSON key on a relayed carrier frame produces an op with an unchanged id and a still-
+valid signature, which is accepted into the log and then permanently blocks the honest op via the
+`has?` short-circuit. It requires **no key material** and it falsifies two of the four M1
+properties — identical quarantine and byte-identical replay. Plan 168.
+
+**Second headline**: the client hands authority back to the carrier in two places. The desktop
+feed subtracts the server's `authority_quarantine` verdict from the input to its *own*
+`analyzeAuthority`, so the carrier chooses which ops the client's judge may see — naming a
+`{:revoke, ...}` op's id makes a revoked capability materialize as live. Separately,
+`syncCarrierOnce` treats a peer's *advertised* possession as an acknowledgement and compacts
+those frames out of the outbox without ever transmitting them, so a lying carrier makes the
+client delete its own un-relayed work. Both contradict the server's "structural delivery only,
+never decides semantic authority" contract. Plan 169.
+
+Baseline at the planned-at commit, verified before auditing: `mix test` exits 0, Sobelow is clean
+on `apps/township_web`, and `apps/lattice_server` has no Phoenix router for Sobelow to inspect.
+
+### Round 5 findings vetted but NOT planned this round
+
+Real, evidenced, and worth doing — not selected only because the five plans above have higher
+leverage. Listed so they are not re-audited from scratch.
+
+> **Reconciled 2026-08-06 (Round 5b).** Five items below were promoted into plans after a second
+> independent review: `cap_ok/8` replica binding and malformed-tick rejection folded into
+> **plan 162** as step 2b; the unpaged-pull cliff and the missing connect deadline became
+> **plan 173**; the governance-witness ceremony became spike **174**; succession tick *provenance*
+> became spike **175**; and the `/ws` cluster became the promotion blocker recorded above. The
+> remaining entries are still unplanned.
+
+- **`cap_ok/8` never binds a cited delegation's `replica` to the op's replica** — **now plan 162
+  step 2b(d)**.
+  (`apps/lattice_core/lib/lattice/authority.ex:884-905`). A capability scoped to matter X is
+  honored on matter Y; an attacker replays the public delegation chain from X into Y via
+  `{:grant, ...}` and authors there. `verify_chain/2` (`:168-169`) and `Live.authorize/2`
+  (`live.ex:44-52`) both *do* reject `:wrong_replica`, so the live path is strictly stricter than
+  the durable-state path — inverting the "one delegation chain, two uses" invariant. **Not
+  covered by plan 162**, whose root-commitment fix still passes when two replicas share a root
+  key. Fold into plan 162's execution rather than writing a separate plan: same file, same
+  vector-regeneration cost, and two concurrent plans editing `authority.ex` would collide.
+- **Succession dormancy is enforced against a self-asserted tick**
+  (`authority.ex:681-688`, `last_active_from/3` at `:756-762`). `at_tick` is lifted from the
+  succeed op body, signed only by the claimant, and never bounded from above. A designated
+  successor seizes a role against a fully active holder by choosing
+  `at_tick = last_active + dormant_ticks`. The inverse is permanent: a holder who self-transfers
+  with `at_tick: 18_446_744_073_709_551_615` pins `last_active` at the canonical integer ceiling
+  (`canonical.ex:35`), after which no larger tick can be encoded and succession for that role is
+  irreversibly dead. `docs/adr/0004-succession-validation.md:102-105` documents the provenance
+  limit honestly, but neither `CLAUDE.md` nor `README.md` carries the caveat, and
+  `Township.Matter:65` still ships `after: {:dormant_ticks, 3}` on that path. The root-signed
+  `{:beacon, epoch}` clock that would fix it already exists and is consulted only for lease lapse.
+  Also `authority.ex`, so same collision consideration as above.
+- **`/readyz` is unauthenticated and rewrites the live production log on every uncached probe**
+  (`health.ex:85-86` → `:189-198` → `durability.ex:73-88`). The rehearsal reads the whole log,
+  runs `Op.valid?` over every op, writes a temp copy, fsyncs, and **renames it over the live
+  log** — correctly under `with_target_lock`, but it is still the only path where a read-only
+  health check mutates the artifact the server exists to protect. Compounding it,
+  `identity_ready?` is **not** TTL-cached (only `storage_writable?` is), so every probe re-reads
+  the Ed25519 seed off disk, re-derives the key, and spawns `id -u`. Loopback-bound by the
+  manifest, which bounds but does not eliminate the exposure. Fix shape: rehearse against a
+  sibling probe file (as `Durability.rehearse/3` already does), serve readiness from a cached
+  holder signal, and TTL-cache the identity check as metadata-only.
+- **Carrier-server egress and per-message work are unbounded** while ingress is well bounded.
+  A `"pull"` with `have: []` materializes and JSON-encodes the entire log into one frame
+  (`web_socket.ex:173-176`); neither listener sets `max_connections` (`listener.ex:27-43`,
+  `health.ex:47-58`); `"relay"` has no per-realm rate limit. Plan 165 Part C bounds relay
+  *growth* — this is the complementary egress half.
+- **`Attenuation.caveats_monotonic?/2` compares the parent against `parent ++ child`**
+  (`cap/attenuation.ex:191-201`), making `:caveat_escalation` unreachable for five of six caveat
+  types: `min(P ∪ C) <= min(P)` and `first(P ++ C) == first(P)` are tautologies. `:allowed_realm`
+  is additionally never enforced at use time (`cap/caveat.ex:166` returns `:ok` unconditionally)
+  while `graph/policy.ex:74-95` treats it as a containment control. Runtime enforcement survives
+  by accident because `derive/3` stores the concatenated caveats and `CapStore.check_cap/5`
+  re-enforces the whole ancestor chain — a broken invariant with defence in depth still standing.
+  No test asserts `:caveat_escalation` is ever returned.
+- **The v1 demo gateway (`apps/lattice_server`) has three compounding boundary gaps.**
+  `/ws` performs no Origin or peer check (`transport/web_socket.ex:44-57`) while both sibling
+  HTTP handlers on the same listener implement `loopback_peer?` + strict origin checks — so any
+  visited web page can drive the gateway. `hello` accepts a client-declared `identity`, and
+  `LiveOps` derives the role from it (`live_ops.ex:56`, `:207-211`), so a caller self-elects to
+  `producer` and legitimately receives `approve_publish`/`revoke_publish` capabilities —
+  contradicting `live_ops.ex:4-6` ("tabs … do not grant, infer, or mutate authority").
+  `/api/session-token` mints a valid one-shot JWT for any caller-named subject
+  (`session_token_handler.ex:23-28`), and the `epk` channel-binding claim it carries is written
+  into the token and **never read** anywhere. Scored below the plans above because this app is
+  the v1 demo boundary — it is not in the `lattice_carrier_pilot` release and is not on the
+  Township path — but all three are HIGH confidence and cheap to fix.
+- **Tauri dev-trace deep links drive Use → Sign → Sync with no user interaction.**
+  `trustedActionEvent(event?: Event) { return !event || event.isTrusted; }`
+  (`use_action_intent.ts:229`) — the `!event` branch makes the trusted-event gate a no-op for any
+  programmatic call, and `township://dev/action-intent/submit` (`App.vue:1354`) chains accept →
+  `submitPost()` → `syncOutbox()`. `package.json`'s `tauri:build:dev-trace` is a **release**
+  `tauri build`, and per the build map that bundle is what the mandatory macOS CI gate launches.
+  This is the mechanism Plan 130's "separate Use request, Post, and Sync actions" contract rests
+  on. Fix shape: require a real trusted event (no `!event` escape) and gate the dev routes on
+  `debug_assertions` so no release-profile binary carries them.
+- **`claim.replica` is interpolated into the biometric prompt** — `lib.rs:591`
+  `format!("Sign clerk recovery witness for {replica}")` → `LAContext::setLocalizedReason`
+  (`macos_governance.rs:131`), with only an `is_empty()` check on the way
+  (`governance_witness.rs:38`). The presence prompt is the sole human control on the governance
+  witness key; its text should not be attacker-influenced. `sanitize_probe_event` (`lib.rs:1380`)
+  already does exactly this sanitisation for log lines.
+- **`lattice_advertise_pairing_handoff` is an arbitrary-destination UDP and DNS egress
+  primitive** (`lib.rs:838`, registered at `:1308`): caller-supplied `target_addr: String` goes
+  straight to `send_to`, so `String: ToSocketAddrs` triggers DNS resolution for any hostname, and
+  up to 16 KiB of caller-chosen bytes reach any host:port. Intended use is a local broadcast;
+  nothing enforces it.
+- **`or_set` members sort by JS string order, Elixir sorts bytewise** (`crdt/reducers.ts:78` vs
+  `crdt/or_set.ex:69`). The orderings invert for any set mixing an astral-plane character with
+  one in U+E000–U+FFFF, so a single emoji in a member name makes TS `materialize()` disagree with
+  `Lattice.Sim` — no adversary required. Existing vectors are ASCII-only, so CI cannot catch it.
+  Noted in plan 172's maintenance section.
+- **Ed25519 acceptance criteria differ across the three verification paths.** Op and session
+  signatures use an **injected** verifier whose interface pins no criteria (`identity.ts:27`),
+  delegation/consent/witness signatures use `ed25519.verify(..., { zip215: false })`
+  (RFC-8032 strict), and BEAM uses OpenSSL via `:crypto.verify` — which is more permissive on
+  non-canonical point encodings. One authority decision can be reached under two different rules,
+  neither matching BEAM. `clients/lattice-client/CLAUDE.md` already declines to claim parity here;
+  the gap is that op signatures have no asserted criterion at all.
+- **Unbounded frame size and no pre-auth deadline on `apps/lattice_node_spike`'s carrier
+  handler** (`ws_handler.ex:28` returns the 3-tuple, so Cowboy's `max_frame_size` defaults to
+  `infinity`), plus a plan-007-style auth-reason leak at `:102` that the sibling
+  `LatticeCarrierServer.WebSocket:131` correctly avoids. Same 3-tuple gap in
+  `apps/lattice_server/lib/lattice/transport/web_socket.ex:46`. Test-fixture and demo surfaces
+  respectively, hence the low ranking, but the correct pattern already exists two files away.
+- **No structural bounds on the op DAG, and `Sync.deliver_loop` re-verifies pending ops every
+  round.** `deps` is bounded only by `is_list` (`wire.ex:47-49`), `decode_term/1` recurses with
+  no depth or node budget while `election/offline_bundle.ex:23-24` defines exactly those
+  constants, and `Log.accept/2` runs `Op.valid?` *before* the dep check (`log.ex:148` vs `:156`),
+  so a reverse-ordered batch of n ops costs ~n²/2 Ed25519 verifications.
+
+### Round 5 findings considered and rejected
+
+Recorded so they are not re-audited. Each was investigated and closed.
+
+- **"The embedded delegation encoder omits `expires_epoch`, so a newly issued lease is
+  unsigned"** — REJECTED as stated, and this rejection is the reason plan 168 is framed the way
+  it is. A *legitimately issued* leased delegation and its unleased twin **do** encode
+  differently, because the struct encoder includes `id` and `sig` and both are computed over
+  lease-inclusive bytes; `delegation_lease_test.exs:95` pins exactly that. The real defect is the
+  **tamper** case — keeping `id`/`sig` and flipping only `expires_epoch` — which that test never
+  exercises. Two of the eight auditors reached opposite conclusions here; it was settled by
+  running the code, not by reading it. Do not re-litigate the issuance case.
+- **Committed `secret_key_base` needing rotation** (`config/config.exs:23`) — DOWNGRADED, and
+  the "rotate it" framing is wrong. The value is a self-labelled dev placeholder
+  (`...change-for-production-000...`), not a live credential, so there is nothing to rotate. The
+  genuine and much narrower issue is that `config/runtime.exs:33-38` only overrides it when
+  `config_env() == :prod`, while `runtime.exs:23-29` will start the endpoint in **any** env — so
+  a non-prod deployment signs with a public key. The two `signing_salt` constants are never
+  overridden in any env, prod included. Already inside plan 165's Part B scope; noted here only
+  to correct the severity and the recommended action.
+- **`erl_crash.dump` leaking key material** — REJECTED. Both dumps (repo root, 10 MB; carrier
+  server, 2.5 MB) are matched by `.gitignore:30` and confirmed **untracked**, and both are from
+  boot failures that occurred before any identity was loaded. Worth deleting as hygiene; not a
+  repo security finding. Separately worth noting: `.gitignore` covers `erl_crash.dump` but not
+  the operator-chosen identity/log paths a manifest may name, so a manifest pointing inside the
+  repo would commit a seed. `*.identity` guards would be cheap insurance.
+- **Non-constant-time comparison of authentication values** — REJECTED across the whole tree.
+  There is no secret comparison to make constant-time: carrier authentication is
+  signature-based, and every `==` in the auth path (`session.ex:101`, `:152`, `manifest.ex:492`)
+  compares **public** keys, public realm ids, or the server's own cleartext nonce. Where real
+  secrets are compared, the code already XOR-reduces without early exit
+  (`resume_token.ex:177-185`, `flagship.ex:93-101`).
+- **Transport/semantic trust conflation on the BEAM ingest path** — REJECTED; this is built
+  correctly. Tracing one op from socket to log — `Wire.decode_ops/1` (structural + `signable?`
+  gates) → `Peer.deliver/2` → `Sync.deliver/2` → `Log.accept/2` → `Op.valid?/1` (recomputes the
+  content hash *and* verifies the signature) — no op ever becomes authoritative because of where
+  it arrived from. Semantic authority is correctly deferred to `Authority.analyze/2` at reduce
+  time. This is the property most worth protecting and it holds. (Plan 169 is about the *client*
+  giving authority away, which is a different direction.)
+- **Deserialization gadgets / atom exhaustion from the wire** — REJECTED. No `binary_to_term` on
+  any carrier or browser input; the two uses in the tree (`log.ex:256`,
+  `election/offline_bundle.ex:234`) are on local files and both pass `[:safe]` with a pre-interned
+  vocabulary. Atom creation goes exclusively through `String.to_existing_atom` (`wire.ex:341-347`).
+- **Participant private key crossing the Tauri `invoke` boundary** — REJECTED after tracing every
+  command that touches a key. `ensure_carrier_key`/`public_key` return only the verifying key,
+  `sign_carrier` returns only a signature, and no seed reaches a return value, error string, log
+  line, probe event, or pairing payload. Entropy is `OsRng`; the one deterministic-seed path is
+  env-driven and `cfg`-gated to `debug_assertions`/`township-dev-trace`. Crate provenance is good
+  (`ed25519-dalek` 2.2.0, `keyring` 4.1.4, `tauri` 2.11.5). The headline custody claim holds.
+  (The *signing oracle* concern — that the command signs arbitrary caller-supplied bytes — is
+  real and is plan 165 Part A; it is a different claim from custody.)
+- **XSS in the Township instrument** — REJECTED. Zero hits for `raw/1`, `Phoenix.HTML.raw`,
+  `{:safe, …}`, `innerHTML`, `v-html`, or `dangerouslySetInnerHTML` across `apps/township_web`;
+  the Vue island uses `h()` render functions with text children only, and the large
+  `data-replay` attribute is HEEx-attribute-escaped. CSP, CSRF, and `check_origin` are all
+  correctly configured on the Phoenix side (`router.ex:4-17`). The one live raw-HTML sink in the
+  desktop shell (`App.vue:2265` `v-html="pairingQrSvg"`) is fed only by a locally generated SVG
+  built from booleans — latent, and already inside plan 165's CSP scope.
+- **Equivocation / fork detection and revocation censorship** — NOT FILED as defects. Both are
+  explicitly and accurately acknowledged in `docs/threat_model_v2.md` ("can equivocate (fork its
+  own history)", "do not … prevent forks", carrier "can withhold or reorder delivery"). No
+  mechanism exists — there is no per-author sequence number or hash chain, so no fork evidence
+  can be produced — but honest documentation of a known gap is not a finding. The one part worth
+  carrying forward is documentation drift, below.
+- **No TLS on the carrier listener** (`listener.ex:43` `:ranch_tcp` + `:cowboy_clear`) — NOT
+  FILED as a code defect. The manifest forces loopback (`manifest.ex:271-280`) and declares TLS
+  out of scope, consistent with the POC-deployment non-goal. It is the reason plan 169 removes
+  *authority weight* from control frames rather than trying to authenticate them: with no channel
+  protection, an active network attacker can relay the handshake verbatim and then modify every
+  unsigned control value. Worth stating plainly in the threat model rather than fixing in code
+  at this stage.
+- **Documentation drift** — recorded, not planned. Seven statements the code does not currently
+  support, the load-bearing ones being: `live.ex:36-37` claims the live and append paths share an
+  admission rule (the live path is strictly stricter — plan 162's territory);
+  `lattice_carrier_server.ex:12-14` claims no server push, stale since plan 132 added
+  `ops_available`; and `docs/threat_model_v2.md:78-80` claims the carrier "cannot forge or tamper"
+  — true for op bodies, false for every control frame, which plans 169 and 172 make much closer to
+  true. Neither threat model covers the boundaries added by plans 128–139 (the client-signed relay
+  write path, deep-link/QR pairing ingress, the unsigned action-intent handoff). Sequence the doc
+  corrections *after* plans 162 and 169 land, since two of them only become honest then.
+
+### Round 5 coverage note
+
+Audited: canonical encoding and signing primitives; the capability, delegation, authority and
+succession model; carrier transport, session auth, and wire codec; the carrier server, its relay,
+durability, manifest and secret handling; the TypeScript client's canonical/verification/authority
+implementation; the Rust/Tauri key custody, command surface, and untrusted ingress parsing; the
+Phoenix/LiveView and Cowboy HTTP boundaries; and cross-cutting protocol properties.
+
+**Not audited this round**: performance beyond the algorithmic hazards noted above, test coverage
+as its own category, dependency currency beyond crypto-library provenance, DX/tooling, docs
+(except where a claim contradicted code), and product direction. `apps/lattice_stress`,
+`apps/township_bench`, `apps/lattice_demo`, and `apps/lattice_carrier_spike` were not swept.
+`npm audit` and `mix hex.audit` were not run — the instruction was a read-only pass and those
+touch the network.
 
 ## Round 4 (deep audit, 2026-07-29, against `codex/plan077-ios-hardware` @ `764a1945`)
 
@@ -223,6 +672,67 @@ existing Township-track plan recorded outside this table.
 
 **Execution order: 161 first (verification baseline), then 162 (P0), then 163. 164–167 are
 independent and may run in any order or in parallel.**
+
+### Round 4 execution log
+
+**165 Part B — DONE 2026-08-08**, committed `8ab09e9e` on branch `plan165-partb-work` (worktree
+based on `origin/main` @ `b1e6b88a`), **unmerged — merging is the operator's call**. No literal
+signing material remains in `config/`; dev/test mint ephemeral values at boot; `:prod` and any
+unrecognized `MIX_ENV` raise by name for `SECRET_KEY_BASE` and `LIVE_VIEW_SIGNING_SALT`
+independently. Reviewer-verified: `mix check` exit 0, 0 failures (~600 tests, 27 properties).
+
+Three corrections came out of executing it, all of which change what the plans say:
+
+1. **The committed secrets were placeholders, not credentials.** The `secret_key_base` carried an
+   explicit change-for-production marker and zero padding; the salt was a short constant word. The
+   original Round 4 framing ("burned, must be rotated") was wrong — **no rotation or re-keying is
+   required**. The defect was real but is better stated as *a predictable public constant signed
+   live sessions in every environment, gated only by `config_env() == :prod`*.
+2. **Sobelow's `Config.*` checks are structurally dead in this repo.** Sobelow scans one Mix project.
+   Neither `apps/township_web/` nor `apps/lattice_server/` has its own `config/` — all config is at
+   the umbrella root — so `Config.Secrets`, `Config.CSRF`, `Config.CSP`, and `Config.HTTPS` can never
+   fire from either prescribed invocation. Verified: scan output was byte-identical before and after
+   the secrets were removed. This means `AGENTS.md:38-49` prescribes a security gate with a blind
+   spot over the entire configuration surface, and it means **plan 161 was never blocked on 165**.
+   Fix candidate (unplanned, needs a scoping decision): an additional Sobelow invocation from the
+   umbrella root, or `--root`, so the config family actually runs.
+3. **New finding, unplanned**: `apps/township_web/lib/township_web/endpoint.ex:7` hardcodes
+   `signing_salt: "township-session"` in `@session_options` — a third piece of predictable signing
+   material, in a `.ex` file, signing the **session cookie** (distinct from the LiveView salt that
+   165 Part B moved to runtime). Same finding class, same fix shape. Note that the `Config.*` blind
+   spot above means no Sobelow invocation would flag it either.
+
+**161 — DONE 2026-08-08**, six commits `cc56d133..2b2ae207` on branch
+`advisor/161-close-verification-gaps` (worktree based on `origin/main` @ `b1e6b88a`), **unmerged**.
+Three `.formatter.exs` files added; `apps/township_web/.sobelow-conf` created with a written
+false-positive justification; the `township_web` Sobelow scan and thirteen previously-unexecuted
+device-free suites wired into the `unit` job; `tauri:witness-ceremony:smoke` wired into
+`packaged_macos`; the orphaned duplicate `test/packaged_bundle_variant.ts` deleted; two `AGENTS.md`
+corrections. Reviewer-verified: scope is exactly the 8 in-scope files; `mix check` exit 0 with 595
+tests / 27 properties / 0 failures; both Sobelow scans exit 0; all thirteen suites present in CI and
+all sequenced *after* `mix test` (they need `_build/test/lib`); the widened format gate demonstrably
+fails on an unformatted file in `apps/lattice_web_socket`, which was outside the gate before.
+
+Two notes from that execution:
+
+- **Sobelow flag drift is now load-bearing.** `AGENTS.md:41-43` prescribes `mix sobelow --exit --skip`;
+  CI runs `mix sobelow --exit` for both apps. Verified 2026-08-08: the in-source
+  `# sobelow_skip ["Traversal.FileModule"]` annotation already present above `load_verified/1` in
+  `apps/township_web/lib/township_web/instrument_source/bundle.ex` **only takes effect with `--skip`**
+  (without the flag: exit 1; with it: exit 0). So the repo now carries two suppression mechanisms for
+  the same finding, one of which is silently inert under CI's invocation. Cleanup, not a defect:
+  either add `--skip` to both CI steps and drop `apps/township_web/.sobelow-conf`, or keep the conf
+  and delete the now-inert annotation. Do not leave both indefinitely.
+- **One addition is unverified**: `tauri:witness-ceremony:smoke` is wired into `packaged_macos` but
+  could not be run locally (it needs a built `src-tauri/target/release/bundle/macos/Township.app`).
+  It will execute for the first time on the next hosted run. Expect the possibility of a first-run
+  failure there and treat it as triage, not regression.
+
+Also observed while executing: `apps/lattice_carrier_server/test/holder_test.exs` is **flaky** under
+load — `{:error, {:persistence_failed, :persistence_timeout}}`, sometimes accompanied by
+`erl_child_setup: failed with error 32`. It failed two of three full-suite runs on unrelated changes
+and passed 3/3 in isolation both with and without those changes. Not caused by 165; worth its own
+investigation before it erodes trust in the gate.
 
 The three defects behind plan 162, all confirmed by reading `apps/lattice_core/lib/lattice/authority.ex`:
 
