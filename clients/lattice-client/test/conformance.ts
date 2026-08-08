@@ -1002,7 +1002,7 @@ check(
   true,
 );
 
-console.log("\n▸ externally determined quarantine");
+console.log("\n▸ carrier authority report is diagnostic only");
 {
   const schema: ReplicaSchema = {
     name: "ExternalQuarantine",
@@ -1028,16 +1028,49 @@ console.log("\n▸ externally determined quarantine");
     value: "quarantined",
     hash: "quarantined",
   };
-  const result = materialize(
-    schema,
-    [accepted, quarantined],
-    undefined,
-    new Set([quarantined.id]),
-  );
+  const localResult = materialize(schema, [accepted, quarantined]);
+  check("omitting a carrier report preserves locally honored state", localResult.state.posts, [
+    "accepted",
+    "quarantined",
+  ]);
+  check("omitting a carrier report preserves local quarantine", localResult.quarantine, []);
+  check("omitting a carrier report preserves canonical order", localResult.order, [
+    accepted.id,
+    quarantined.id,
+  ]);
 
-  check("externally quarantined mutation is not applied", result.state.posts, ["accepted"]);
-  check("externally quarantined op remains in canonical order", result.order, [accepted.id, quarantined.id]);
-  check("externally quarantined op remains auditable", result.quarantine, [quarantined.id]);
+  let divergence: unknown;
+  try {
+    materialize(
+      schema,
+      [accepted, quarantined],
+      undefined,
+      new Set([quarantined.id]),
+    );
+  } catch (error) {
+    divergence = error;
+  }
+
+  check(
+    "carrier report divergence has a stable error class name",
+    divergence instanceof Error && divergence.name === "CarrierAuthorityReportDivergenceError",
+    true,
+  );
+  check(
+    "carrier report divergence has a stable machine-readable name",
+    divergence instanceof Error && divergence.message.includes("carrier_authority_report_divergence"),
+    true,
+  );
+  check(
+    "carrier report divergence carries sorted local ids",
+    divergence instanceof Error && "localIds" in divergence ? divergence.localIds : null,
+    [],
+  );
+  check(
+    "carrier report divergence carries sorted reported ids",
+    divergence instanceof Error && "reportedIds" in divergence ? divergence.reportedIds : null,
+    [quarantined.id],
+  );
 }
 
 console.log(`\n${failures === 0 ? "\x1b[32m✓ all conformance checks passed\x1b[0m" : `\x1b[31m✗ ${failures} check(s) failed\x1b[0m`}`);

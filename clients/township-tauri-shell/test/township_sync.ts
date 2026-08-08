@@ -1015,6 +1015,86 @@ if (nativeUnavailable.ok) throw new Error("native-unavailable sync unexpectedly 
 assert.equal(nativeUnavailable.reason, "native_unavailable");
 assert.equal(nativeUnavailable.message, "Open in the Tauri shell to load local logs before syncing.");
 
+const path2RegressionFailures: string[] = [];
+const recoveryValues = new Map<string, string>([
+  [
+    storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY),
+    JSON.stringify(carrierOpsToSemanticOps([grantFixture, revokeFixture], vector.realmByPubkey)),
+  ],
+  [storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY), JSON.stringify([grantFixture, revokeFixture])],
+  [storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY), JSON.stringify(vector.oracleCarrierOps)],
+]);
+const firstRecoverySync = await syncTownshipOutbox({
+  invoke: nativeInvoke(recoveryValues, vector.client.sessionPubkey, []),
+  client: new MixedAckCarrierClient([grantFixture.id, revokeFixture.id]),
+  expectedReplica: vector.replica,
+});
+assert.equal(firstRecoverySync.ok, true);
+if (!firstRecoverySync.ok) throw new Error(firstRecoverySync.message);
+assert.deepEqual(storedOutboxIds(recoveryValues), []);
+assertIncludesAll(storedDelegationFrameIds(recoveryValues), [grantFixture.id, revokeFixture.id]);
+
+await capturePath2RegressionFailure(
+  path2RegressionFailures,
+  "second_peer_recovery",
+  async () => {
+    const honestPeer = new RecordingCarrierClient([]);
+    const recoverySync = await syncTownshipOutbox({
+      invoke: nativeInvoke(recoveryValues, vector.client.sessionPubkey, []),
+      client: honestPeer,
+      expectedReplica: vector.replica,
+    });
+    assert.equal(recoverySync.ok, true);
+    if (!recoverySync.ok) throw new Error(recoverySync.message);
+    assert.equal(honestPeer.pushedFrames.includes(revokeFixture.id), true);
+  },
+);
+
+const failureFrame = vector.clientDivergedCarrierOps[0];
+if (!failureFrame) throw new Error("missing archive failure frame fixture");
+const failureValues = new Map<string, string>([
+  [
+    storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY),
+    JSON.stringify(carrierOpsToSemanticOps([failureFrame], vector.realmByPubkey)),
+  ],
+  [storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY), JSON.stringify([failureFrame])],
+  [storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY), "[]"],
+]);
+const baseFailureInvoke = nativeInvoke(failureValues, vector.client.sessionPubkey, []);
+let queueSaveStarted = false;
+const failingArchiveInvoke: TauriInvoke = async <T = unknown>(
+  command: string,
+  args: Record<string, unknown> = {},
+): Promise<T> => {
+  if (command === "lattice_kv_set") {
+    const key = String(args.key);
+    if (key === storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY)) {
+      throw new Error("scripted delegation archive save failure");
+    }
+    if (key === storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY)) queueSaveStarted = true;
+  }
+  return baseFailureInvoke<T>(command, args);
+};
+const failedArchiveSync = await syncTownshipOutbox({
+  invoke: failingArchiveInvoke,
+  client: new RecordingCarrierClient([]),
+  expectedReplica: vector.replica,
+});
+assert.equal(failedArchiveSync.ok, false);
+if (failedArchiveSync.ok) throw new Error("archive-failure sync unexpectedly succeeded");
+assert.equal(failedArchiveSync.message, "scripted delegation archive save failure");
+
+await capturePath2RegressionFailure(
+  path2RegressionFailures,
+  "archive_save_before_queue_compaction",
+  async () => {
+    assert.equal(queueSaveStarted, false);
+    assert.deepEqual(storedOutboxIds(failureValues), [failureFrame.id]);
+  },
+);
+
+assert.deepEqual(path2RegressionFailures, []);
+
 console.log("\x1b[32m✓ Township sync action checks passed\x1b[0m");
 
 function storageKey(key: string): string {
@@ -1037,6 +1117,18 @@ function storedLocalOpIds(values: Map<string, string>): string[] {
   return (JSON.parse(values.get(storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY)) ?? "[]") as { id: string }[])
     .map((op) => op.id)
     .sort();
+}
+
+async function capturePath2RegressionFailure(
+  failures: string[],
+  label: string,
+  test: () => Promise<void>,
+): Promise<void> {
+  try {
+    await test();
+  } catch (error) {
+    failures.push(`${label}: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 function authorityRevocationValues(): Map<string, string> {
