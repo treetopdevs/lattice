@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 #[cfg(target_os = "android")]
 use std::ffi::CString;
 use std::fs;
@@ -21,7 +21,6 @@ use base64::engine::general_purpose::{STANDARD as BASE64, URL_SAFE_NO_PAD};
 use base64::Engine as _;
 use ed25519_dalek::{Signer, SigningKey};
 use rand_core::OsRng;
-use sha2::{Digest, Sha256};
 use tauri::Manager;
 
 #[cfg(all(target_os = "ios", feature = "township-ios-key-reuse-native-probe"))]
@@ -49,6 +48,9 @@ pub const TOWNSHIP_GOVERNANCE_KEYRING_SERVICE: &str =
 pub const TOWNSHIP_GOVERNANCE_TEST_PRESENCE_TRACE: &str = "governance-test-presence:authorized";
 pub const TOWNSHIP_GOVERNANCE_KEY_ALIAS: &str = "governance-witness-v1";
 pub const TOWNSHIP_APP_IDENTIFIER: &str = "dev.treetop.lattice.township";
+pub const TOWNSHIP_PRODUCT: &str = "township";
+pub const TOWNSHIP_DATABASE_FILE: &str = "township-v1.sqlite3";
+pub const TOWNSHIP_LEGACY_NATIVE_KV_FILE: &str = "township-native-kv.json";
 pub const TOWNSHIP_DEV_CARRIER_KEY_ID_ENV: &str = "TOWNSHIP_DEV_CARRIER_KEY_ID";
 pub const TOWNSHIP_DEV_CARRIER_KEY_SEED_ENV: &str = "TOWNSHIP_DEV_CARRIER_KEY_SEED";
 pub const TOWNSHIP_DEV_TRACE_FILE_ENV: &str = "TOWNSHIP_DEV_TRACE_FILE";
@@ -87,7 +89,6 @@ const GOVERNANCE_PUBLIC_SIDECAR_MISSING: &str =
     "governance witness identity is incomplete: public sidecar is missing";
 #[cfg(feature = "township-dev-trace")]
 const TOWNSHIP_DEV_TRACE_EVENT_MAX_CHARS: usize = 4_096;
-const TOWNSHIP_PAIRING_DISCOVERY_MAX_PACKET_BYTES: usize = 16 * 1024;
 const TOWNSHIP_NATIVE_PROBE_SIGNING_PAYLOAD: &[u8] = b"township-native-probe";
 const TOWNSHIP_CARRIER_SIGNING_PREFIXES: [&[u8]; 4] = [
     b"\x89\x52carrier-session-v2",
@@ -105,27 +106,11 @@ unsafe extern "C" {
     fn __android_log_write(prio: c_int, tag: *const c_char, text: *const c_char) -> c_int;
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TownshipPairingDiscoveryAdvert {
-    pub label: Option<String>,
-    pub handoff: String,
-}
-
-#[derive(serde::Deserialize, serde::Serialize)]
-struct TownshipPairingDiscoveryPacket {
-    #[serde(rename = "type")]
-    packet_type: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    label: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    handoff: Option<String>,
-}
-
-pub trait CarrierKeySeedStore: Send + Sync {
-    fn load_seed(&self, key_id: &str) -> Result<Option<[u8; 32]>, String>;
-    fn save_seed(&self, key_id: &str, seed: [u8; 32]) -> Result<(), String>;
-}
+// Plan 158 seam extraction: the discovery packet codec and the carrier
+// signer seam are product-neutral and live in lattice-mobile-core; the
+// Township shell binds them to its packet type and keyring service.
+pub use lattice_mobile_core::PairingDiscoveryAdvert as TownshipPairingDiscoveryAdvert;
+pub use lattice_mobile_core::{CarrierKeySeedStore, InMemoryCarrierKeySeedStore};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GovernanceWitnessCreateError {
@@ -177,30 +162,6 @@ pub struct GovernanceWitnessSignature {
     pub payload_digest: String,
 }
 
-#[derive(Clone, Default)]
-pub struct InMemoryCarrierKeySeedStore {
-    seeds: Arc<Mutex<HashMap<String, [u8; 32]>>>,
-}
-
-impl CarrierKeySeedStore for InMemoryCarrierKeySeedStore {
-    fn load_seed(&self, key_id: &str) -> Result<Option<[u8; 32]>, String> {
-        let seeds = self
-            .seeds
-            .lock()
-            .map_err(|_| "carrier key seed store lock poisoned".to_string())?;
-        Ok(seeds.get(key_id).copied())
-    }
-
-    fn save_seed(&self, key_id: &str, seed: [u8; 32]) -> Result<(), String> {
-        let mut seeds = self
-            .seeds
-            .lock()
-            .map_err(|_| "carrier key seed store lock poisoned".to_string())?;
-        seeds.insert(key_id.to_string(), seed);
-        Ok(())
-    }
-}
-
 pub struct KeyringCarrierKeySeedStore {
     service: String,
 }
@@ -244,8 +205,8 @@ impl CarrierKeySeedStore for KeyringCarrierKeySeedStore {
 pub struct TownshipNativeState {
     values: Mutex<HashMap<String, String>>,
     values_path: Mutex<Option<PathBuf>>,
-    signing_keys: Mutex<HashMap<String, SigningKey>>,
-    key_store: Arc<dyn CarrierKeySeedStore>,
+    product_db: Mutex<Option<lattice_mobile_core::ProductDatabase>>,
+    signer: lattice_mobile_core::NativeCarrierSigner,
     governance_key_store: Option<Arc<dyn GovernanceWitnessKeyStore>>,
     governance_presence: Option<Arc<dyn GovernanceWitnessPresence>>,
     governance_creation: Mutex<()>,
@@ -336,8 +297,8 @@ impl TownshipNativeState {
         Self {
             values: Mutex::new(values),
             values_path: Mutex::new(values_path),
-            signing_keys: Mutex::new(HashMap::new()),
-            key_store: Arc::new(key_store),
+            product_db: Mutex::new(None),
+            signer: lattice_mobile_core::NativeCarrierSigner::new(Arc::new(key_store)),
             governance_key_store,
             governance_presence,
             governance_creation: Mutex::new(()),
@@ -431,6 +392,16 @@ impl TownshipNativeState {
     }
 
     pub fn kv_set(&self, key: &str, value: &str) -> Result<(), String> {
+        {
+            let product_db = self
+                .product_db
+                .lock()
+                .map_err(|_| "product database lock poisoned".to_string())?;
+            if let Some(db) = product_db.as_ref() {
+                db.kv_set(key, value)
+                    .map_err(|error| format!("township product database write failed: {error}"))?;
+            }
+        }
         let values_path = self
             .values_path
             .lock()
@@ -473,6 +444,62 @@ impl TownshipNativeState {
         Ok(())
     }
 
+    /// Attach the Township product database (plan 158 isolation contract):
+    /// open `township-v1.sqlite3` in `dir` with the township product marker,
+    /// import the legacy JSON key-value state exactly once, and write every
+    /// later `kv_set` through the transactional SQLite store.
+    pub fn attach_product_database<P>(&self, dir: P) -> Result<(), String>
+    where
+        P: AsRef<Path>,
+    {
+        let manifest = lattice_mobile_core::ProductManifest::for_product(TOWNSHIP_PRODUCT)
+            .map_err(|error| format!("township product manifest unavailable: {error}"))?;
+        if manifest.app_id != TOWNSHIP_APP_IDENTIFIER
+            || manifest.key_service != TOWNSHIP_KEYRING_SERVICE
+            || manifest.database_file != TOWNSHIP_DATABASE_FILE
+        {
+            return Err(
+                "township identifiers diverge from the shared isolation manifest".to_string(),
+            );
+        }
+
+        let dir = dir.as_ref();
+        let mut db = lattice_mobile_core::ProductDatabase::open_path(
+            TOWNSHIP_PRODUCT,
+            &dir.join(&manifest.database_file),
+        )
+        .map_err(|error| format!("township product database unavailable: {error}"))?;
+        db.import_legacy_json_values(&dir.join(TOWNSHIP_LEGACY_NATIVE_KV_FILE))
+            .map_err(|error| format!("township legacy state migration failed: {error}"))?;
+
+        let loaded_values = db
+            .kv_entries()
+            .map_err(|error| format!("township product database read failed: {error}"))?;
+        let mut values = self
+            .values
+            .lock()
+            .map_err(|_| "key-value store lock poisoned".to_string())?;
+        if values.is_empty() {
+            *values = loaded_values.into_iter().collect();
+        } else {
+            for (key, value) in values.iter() {
+                db.kv_set(key, value)
+                    .map_err(|error| format!("township product database write failed: {error}"))?;
+            }
+            let merged = db
+                .kv_entries()
+                .map_err(|error| format!("township product database read failed: {error}"))?;
+            *values = merged.into_iter().collect();
+        }
+
+        let mut product_db = self
+            .product_db
+            .lock()
+            .map_err(|_| "product database lock poisoned".to_string())?;
+        *product_db = Some(db);
+        Ok(())
+    }
+
     pub fn kv_snapshot(&self) -> Result<HashMap<String, String>, String> {
         let values = self
             .values
@@ -483,54 +510,17 @@ impl TownshipNativeState {
 
     pub fn insert_seeded_dev_key(&self, key_id: &str, seed: &str) -> Result<(), String> {
         reject_governance_carrier_alias(key_id)?;
-        let digest = Sha256::digest(seed.as_bytes());
-        let mut seed_bytes = [0u8; 32];
-        seed_bytes.copy_from_slice(&digest);
-
-        let mut signing_keys = self
-            .signing_keys
-            .lock()
-            .map_err(|_| "signing key store lock poisoned".to_string())?;
-        signing_keys.insert(key_id.to_string(), SigningKey::from_bytes(&seed_bytes));
-        Ok(())
+        self.signer.insert_seeded_dev_key(key_id, seed)
     }
 
     pub fn ensure_carrier_key(&self, key_id: &str) -> Result<String, String> {
         reject_governance_carrier_alias(key_id)?;
-        let mut signing_keys = self
-            .signing_keys
-            .lock()
-            .map_err(|_| "signing key store lock poisoned".to_string())?;
-        if let Some(signing_key) = signing_keys.get(key_id) {
-            return Ok(BASE64.encode(signing_key.verifying_key().as_bytes()));
-        }
-
-        if let Some(seed) = self.key_store.load_seed(key_id)? {
-            let signing_key = SigningKey::from_bytes(&seed);
-            let public_key = BASE64.encode(signing_key.verifying_key().as_bytes());
-            signing_keys.insert(key_id.to_string(), signing_key);
-            return Ok(public_key);
-        }
-
-        let signing_key = SigningKey::generate(&mut OsRng);
-        let public_key = BASE64.encode(signing_key.verifying_key().as_bytes());
-        self.key_store.save_seed(key_id, signing_key.to_bytes())?;
-
-        signing_keys.insert(key_id.to_string(), signing_key);
-        Ok(public_key)
+        self.signer.ensure_key(key_id)
     }
 
     pub fn public_key(&self, key_id: &str) -> Result<String, String> {
         reject_governance_carrier_alias(key_id)?;
-        let signing_keys = self
-            .signing_keys
-            .lock()
-            .map_err(|_| "signing key store lock poisoned".to_string())?;
-        let signing_key = signing_keys
-            .get(key_id)
-            .ok_or_else(|| format!("missing signing key: {key_id}"))?;
-
-        Ok(BASE64.encode(signing_key.verifying_key().as_bytes()))
+        self.signer.public_key(key_id)
     }
 
     pub fn sign_carrier(&self, key_id: &str, bytes_base64: &str) -> Result<String, String> {
@@ -544,15 +534,7 @@ impl TownshipNativeState {
         if !recognized_carrier_signing_payload(&bytes) {
             return Err("unrecognized signing payload".to_string());
         }
-        let signing_keys = self
-            .signing_keys
-            .lock()
-            .map_err(|_| "signing key store lock poisoned".to_string())?;
-        let signing_key = signing_keys
-            .get(key_id)
-            .ok_or_else(|| format!("missing signing key: {key_id}"))?;
-
-        Ok(BASE64.encode(signing_key.sign(&bytes).to_bytes()))
+        self.signer.sign(key_id, bytes_base64)
     }
 
     pub fn ensure_governance_witness_key(&self) -> Result<String, String> {
@@ -838,40 +820,19 @@ fn township_native_kv_path_from_env() -> Result<Option<PathBuf>, String> {
 pub fn decode_township_pairing_discovery_packet(
     bytes: &[u8],
 ) -> Result<Option<TownshipPairingDiscoveryAdvert>, String> {
-    let packet: TownshipPairingDiscoveryPacket = serde_json::from_slice(bytes)
-        .map_err(|error| format!("invalid discovery packet: {error}"))?;
-
-    if packet.packet_type != TOWNSHIP_PAIRING_DISCOVERY_PACKET_TYPE {
-        return Ok(None);
-    }
-
-    let handoff = present_string(packet.handoff)
-        .ok_or_else(|| "discovery packet handoff cannot be empty".to_string())?;
-
-    Ok(Some(TownshipPairingDiscoveryAdvert {
-        label: present_string(packet.label),
-        handoff,
-    }))
+    lattice_mobile_core::decode_pairing_discovery_packet(
+        bytes,
+        TOWNSHIP_PAIRING_DISCOVERY_PACKET_TYPE,
+    )
 }
 
 pub fn encode_township_pairing_discovery_packet(
     advert: &TownshipPairingDiscoveryAdvert,
 ) -> Result<Vec<u8>, String> {
-    let handoff = present_string(Some(advert.handoff.clone()))
-        .ok_or_else(|| "discovery packet handoff cannot be empty".to_string())?;
-    let packet = TownshipPairingDiscoveryPacket {
-        packet_type: TOWNSHIP_PAIRING_DISCOVERY_PACKET_TYPE.to_string(),
-        label: present_string(advert.label.clone()),
-        handoff: Some(handoff),
-    };
-    let bytes = serde_json::to_vec(&packet)
-        .map_err(|error| format!("discovery packet encode failed: {error}"))?;
-
-    if bytes.len() > TOWNSHIP_PAIRING_DISCOVERY_MAX_PACKET_BYTES {
-        return Err(format!("discovery packet too large: {} bytes", bytes.len()));
-    }
-
-    Ok(bytes)
+    lattice_mobile_core::encode_pairing_discovery_packet(
+        advert,
+        TOWNSHIP_PAIRING_DISCOVERY_PACKET_TYPE,
+    )
 }
 
 pub fn advertise_township_pairing_handoff(
@@ -937,44 +898,11 @@ pub fn collect_township_pairing_discovery_adverts(
     socket: UdpSocket,
     timeout: Duration,
 ) -> Result<Vec<TownshipPairingDiscoveryAdvert>, String> {
-    let deadline = Instant::now()
-        .checked_add(timeout)
-        .unwrap_or_else(Instant::now);
-    let mut buffer = [0u8; TOWNSHIP_PAIRING_DISCOVERY_MAX_PACKET_BYTES];
-    let mut adverts = Vec::new();
-    let mut seen_handoffs = HashSet::new();
-
-    while Instant::now() < deadline {
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        if remaining.is_zero() {
-            break;
-        }
-
-        socket
-            .set_read_timeout(Some(remaining))
-            .map_err(|error| format!("pairing discovery timeout setup failed: {error}"))?;
-
-        match socket.recv_from(&mut buffer) {
-            Ok((len, _)) => {
-                if let Ok(Some(advert)) = decode_township_pairing_discovery_packet(&buffer[..len]) {
-                    if seen_handoffs.insert(advert.handoff.clone()) {
-                        adverts.push(advert);
-                    }
-                }
-            }
-            Err(error)
-                if matches!(
-                    error.kind(),
-                    ErrorKind::WouldBlock | ErrorKind::TimedOut | ErrorKind::Interrupted
-                ) =>
-            {
-                break;
-            }
-            Err(error) => return Err(format!("pairing discovery receive failed: {error}")),
-        }
-    }
-
-    Ok(adverts)
+    lattice_mobile_core::collect_pairing_discovery_adverts(
+        socket,
+        timeout,
+        TOWNSHIP_PAIRING_DISCOVERY_PACKET_TYPE,
+    )
 }
 
 fn pairing_discovery_timeout(timeout_ms: Option<u64>) -> Duration {
@@ -1155,14 +1083,13 @@ pub fn configure_platform_secure_township_builder<R: tauri::Runtime>(
     configure_township_commands(builder)
         .manage(state)
         .setup(|app| {
-            let values_path = app
+            let data_dir = app
                 .path()
                 .app_local_data_dir()
-                .map_err(|error| tauri::Error::Io(std::io::Error::other(error)))?
-                .join("township-native-kv.json");
+                .map_err(|error| tauri::Error::Io(std::io::Error::other(error)))?;
             let state = app.state::<TownshipNativeState>();
             state
-                .attach_persistent_values_file(values_path)
+                .attach_product_database(&data_dir)
                 .map_err(|error| tauri::Error::Io(std::io::Error::other(error)))?;
             seed_dev_carrier_key_from_env(&state)
                 .map_err(|error| tauri::Error::Io(std::io::Error::other(error)))?;

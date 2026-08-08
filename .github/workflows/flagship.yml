@@ -37,6 +37,7 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             clients/lattice-client/package-lock.json
+            clients/lattice-mobile-core/package-lock.json
             clients/township-tauri-shell/package-lock.json
 
       - name: Install Elixir dependencies
@@ -46,6 +47,7 @@ jobs:
         run: |
           npm ci
           npm --prefix clients/lattice-client ci
+          npm --prefix clients/lattice-mobile-core ci
           npm --prefix clients/township-tauri-shell ci
 
       - name: Install Playwright browser
@@ -90,6 +92,7 @@ jobs:
           cache: npm
           cache-dependency-path: |
             clients/lattice-client/package-lock.json
+            clients/lattice-mobile-core/package-lock.json
             clients/township-tauri-shell/package-lock.json
       - name: Cache deps and _build
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -154,6 +157,12 @@ jobs:
         run: npm run succession:artifact
       - name: Build TS client for shell feed gate
         working-directory: clients/lattice-client
+        run: npm run build
+      - name: Install TS mobile core dependencies
+        working-directory: clients/lattice-mobile-core
+        run: npm ci
+      - name: Build TS mobile core
+        working-directory: clients/lattice-mobile-core
         run: npm run build
       - name: Install Tauri shell dependencies
         working-directory: clients/township-tauri-shell
@@ -296,6 +305,7 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             clients/lattice-client/package-lock.json
+            clients/lattice-mobile-core/package-lock.json
             clients/township-tauri-shell/package-lock.json
 
       - name: Cache Cargo dependencies and build
@@ -322,6 +332,8 @@ jobs:
           npm ci
           npm --prefix clients/lattice-client ci
           npm --prefix clients/lattice-client run build
+          npm --prefix clients/lattice-mobile-core ci
+          npm --prefix clients/lattice-mobile-core run build
           npm --prefix clients/township-tauri-shell ci
 
       - name: Verify ordinary macOS governance custody binding
@@ -419,6 +431,7 @@ jobs:
           cache: npm
           cache-dependency-path: |
             clients/lattice-client/package-lock.json
+            clients/lattice-mobile-core/package-lock.json
             clients/township-tauri-shell/package-lock.json
 
       - name: Cache Cargo dependencies and Android build
@@ -442,6 +455,7 @@ jobs:
       - name: Install client and shell dependencies
         run: |
           npm --prefix clients/lattice-client ci
+          npm --prefix clients/lattice-mobile-core ci
           npm --prefix clients/township-tauri-shell ci
 
       - name: Android pilot + harness contracts

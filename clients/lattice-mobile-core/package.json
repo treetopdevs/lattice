@@ -1,0 +1,38 @@
+{
+  "name": "@treetopdevs/lattice-mobile-core",
+  "version": "0.0.1",
+  "description": "Product-neutral mobile shell seams shared by the Lattice product shells: the plan-158 product isolation manifest, pairing handoff/deep-link/QR cores, and the manifest-driven native workflow factory. The Rust twin (native/) owns the per-product SQLite storage and migration ledger.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "products.json"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "manifest:contract": "tsx test/product_manifest.ts",
+    "handoff:contract": "tsx test/pairing_handoff.ts",
+    "deeplink:contract": "tsx test/pairing_deeplink.ts",
+    "test": "npm run manifest:contract && npm run handoff:contract && npm run deeplink:contract"
+  },
+  "dependencies": {
+    "@noble/curves": "^2.2.0",
+    "@treetopdevs/lattice-client": "file:../lattice-client",
+    "jsqr": "^1.4.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/qrcode": "^1.5.6",
+    "tsx": "^4.23.0",
+    "typescript": "^5.9.3"
+  },
+  "license": "Apache-2.0"
+}

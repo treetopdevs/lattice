@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "prebuild": "npm --prefix ../lattice-client run build",
+    "prebuild": "npm --prefix ../lattice-client run build && npm --prefix ../lattice-mobile-core run build",
     "build": "vite build",
-    "prebuild:pilot": "npm --prefix ../lattice-client run build",
+    "prebuild:pilot": "npm --prefix ../lattice-client run build && npm --prefix ../lattice-mobile-core run build",
     "build:pilot": "vite build --config vite.pilot.config.ts",
     "tauri": "tauri",
     "tauri:build": "tauri build --bundles app",
@@ -142,6 +142,7 @@
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-deep-link": "^2.4.9",
     "@treetopdevs/lattice-client": "file:../lattice-client",
+    "@treetopdevs/lattice-mobile-core": "file:../lattice-mobile-core",
     "jsqr": "^1.4.0",
     "qrcode": "^1.5.4",
     "vue": "^3.5.39"
