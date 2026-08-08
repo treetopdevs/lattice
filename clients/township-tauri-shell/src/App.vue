@@ -1188,19 +1188,24 @@ async function exportSelectedWitnessArtifact(event: Event) {
   const artifact = selectedWitnessArtifact.value;
   if (!artifact) {
     witnessExportStatus.value = { ok: false, message: "No stored witness artifact is available." };
+    traceWitnessExportFailure("no-artifact");
     return;
   }
 
   const exported = await exportTownshipWitnessArtifact({ artifactId: artifact.artifactId, event });
   if (!exported.ok) {
     witnessExportStatus.value = { ok: false, message: exported.message };
+    traceWitnessExportFailure(`load:${exported.reason}`);
     return;
   }
 
   try {
     await navigator.clipboard.writeText(exported.artifactJson);
-  } catch {
+  } catch (error) {
     witnessExportStatus.value = { ok: false, message: "The witness artifact could not be copied." };
+    traceWitnessExportFailure(
+      `clipboard:${error instanceof Error ? error.name : typeof error}`,
+    );
     return;
   }
 
@@ -1209,6 +1214,14 @@ async function exportSelectedWitnessArtifact(event: Event) {
     message: `${exported.fileName} copied. Keep it with the full confirmation below.`,
   };
   if (devTraceRuntime) void traceTownshipDevEvent("witness-artifact-export:succeeded").catch(() => {});
+}
+
+// Byte-free export failure evidence: reason codes and error names only, so a
+// blocked export fails closed and loudly instead of silently timing out.
+function traceWitnessExportFailure(code: string) {
+  if (devTraceRuntime) {
+    void traceTownshipDevEvent(`witness-artifact-export:failed:${code}`).catch(() => {});
+  }
 }
 
 async function traceWitnessReviewDom(intentId: string, review: WitnessedSuccessionReview) {
