@@ -48,7 +48,14 @@ if (invokedDirectly) {
   const args = parseArgs(process.argv.slice(2));
   const expected = args.expected ?? process.env.TOWNSHIP_PILOT_CERT_SHA256;
   const apkBytes = readFileSync(args.apk);
-  const certs = parseApksignerCerts(runApksignerPrintCerts(args.apk));
+  const rawApksignerOutput = runApksignerPrintCerts(args.apk);
+  const certs = parseApksignerCerts(rawApksignerOutput);
+  if (!certs.dn || !certs.sha256) {
+    // Fail-closed either way, but make the next failure diagnosable: dump the
+    // exact apksigner stdout the parser could not match instead of bare nulls.
+    console.error("apksigner verify --print-certs output (no signer line matched the parser):");
+    console.error(rawApksignerOutput);
+  }
   const failures = evaluateSignature(certs, { expected, allowUnpinned: args.allowUnpinned });
   const result = {
     apk: args.apk,

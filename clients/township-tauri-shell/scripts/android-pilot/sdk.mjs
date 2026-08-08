@@ -19,21 +19,32 @@ export function androidSdkRoot() {
   throw new Error("Android SDK not found; set ANDROID_HOME");
 }
 
-export function latestBuildToolsDir(sdkRoot = androidSdkRoot()) {
+// The flagship workflow installs exactly this build-tools version. Tool
+// selection is pinned and fail-closed: newest-wins selection on a runner with
+// preinstalled SDK images can silently pick a different (or incomplete)
+// apksigner whose output the verification pipeline has never seen.
+export const PINNED_BUILD_TOOLS_VERSION = "36.0.0";
+
+export function pinnedBuildToolsDir(sdkRoot = androidSdkRoot()) {
   const buildTools = join(sdkRoot, "build-tools");
-  const versions = readdirSync(buildTools)
-    .filter((entry) => /^\d+\.\d+\.\d+$/.test(entry))
-    .sort((a, b) => {
-      const pa = a.split(".").map(Number);
-      const pb = b.split(".").map(Number);
-      return pa[0] - pb[0] || pa[1] - pb[1] || pa[2] - pb[2];
-    });
-  if (versions.length === 0) throw new Error(`no build-tools under ${buildTools}`);
-  return join(buildTools, versions[versions.length - 1]);
+  const pinned = join(buildTools, PINNED_BUILD_TOOLS_VERSION);
+  if (!existsSync(pinned)) {
+    const found = existsSync(buildTools) ? readdirSync(buildTools).sort().join(", ") : "(none)";
+    throw new Error(
+      `pinned Android build-tools ${PINNED_BUILD_TOOLS_VERSION} not found under ${buildTools}; ` +
+        `installed versions: ${found}. Install it with: ` +
+        `sdkmanager --install "build-tools;${PINNED_BUILD_TOOLS_VERSION}"`,
+    );
+  }
+  return pinned;
 }
 
 export function buildToolPath(tool) {
-  return join(latestBuildToolsDir(), tool);
+  const path = join(pinnedBuildToolsDir(), tool);
+  if (!existsSync(path)) {
+    throw new Error(`${tool} missing from pinned build-tools ${PINNED_BUILD_TOOLS_VERSION} at ${path}`);
+  }
+  return path;
 }
 
 export function adbPath() {
@@ -41,16 +52,24 @@ export function adbPath() {
 }
 
 export function runApksignerPrintCerts(apkPath) {
+  // stderr is inherited so apksigner warnings/errors land in the job log
+  // instead of vanishing; stdout is returned for parsing.
   return execFileSync(buildToolPath("apksigner"), ["verify", "--print-certs", apkPath], {
     encoding: "utf8",
     maxBuffer: 16 * 1024 * 1024,
+    stdio: ["ignore", "pipe", "inherit"],
   });
 }
 
+// apksigner prints the first signer either as "Signer #1 certificate ..." or,
+// for SDK-ranged (v3/v3.1) signers, as "Signer (minSdkVersion=24, ...)
+// certificate ...". Accept both; anything else stays null so the caller's
+// fail-closed check refuses the artifact.
+const SIGNER_DN_LINE = /Signer (?:#1|\([^)]+\)) certificate DN: (.+)/;
+const SIGNER_SHA256_LINE = /Signer (?:#1|\([^)]+\)) certificate SHA-256 digest: ([0-9a-fA-F]+)/;
+
 export function parseApksignerCerts(output) {
-  const dn = output.match(/Signer #1 certificate DN: (.+)/)?.[1]?.trim() ?? null;
-  const sha256 = output
-    .match(/Signer #1 certificate SHA-256 digest: ([0-9a-f]+)/)?.[1]
-    ?.toLowerCase() ?? null;
+  const dn = output.match(SIGNER_DN_LINE)?.[1]?.trim() ?? null;
+  const sha256 = output.match(SIGNER_SHA256_LINE)?.[1]?.toLowerCase() ?? null;
   return { dn, sha256 };
 }
