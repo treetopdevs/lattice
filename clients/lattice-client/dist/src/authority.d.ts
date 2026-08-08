@@ -1,4 +1,4 @@
-import type { AuthorityDelegationEvidence, Op, WitnessedRecoveryPolicyEvidence, WitnessedSuccessionPolicyEvidence, WitnessedSuccessionArtifactEvidence, WitnessedSuccessionCertificateEvidence, WitnessedSuccessionClaimEvidence, WitnessedSuccessionSignatureEvidence } from "./op";
+import type { AuthorityDelegationEvidence, Op, SuccessionPolicyEvidence, WitnessedRecoveryPolicyEvidence, WitnessedSuccessionPolicyEvidence, WitnessedSuccessionArtifactEvidence, WitnessedSuccessionCertificateEvidence, WitnessedSuccessionClaimEvidence, WitnessedSuccessionSignatureEvidence } from "./op";
 import type { ReplicaSchema } from "./schema";
 /** One honored role acquisition, in processing (canonical) order. */
 export interface HonoredAcquire {
@@ -12,6 +12,7 @@ export type DelegationValidation = {
 } | {
     valid: false;
     reason: string;
+    successionRootId?: string;
 };
 export interface AuthorityDelegationRecord {
     delegation: AuthorityDelegationEvidence | null;
@@ -35,6 +36,7 @@ export interface AuthoritySecurityProjection {
     delegations: ReadonlyMap<string, AuthorityDelegationRecord>;
     root: AuthorityRootEvidence | null;
     effectiveRevokes: readonly EffectiveRevokeEvidence[];
+    honoredSuccessionIntroductions: ReadonlyMap<string, readonly string[]>;
     /** Plan 149: valid (root-authored, ancestry-monotonic) epoch beacons. */
     validBeacons: readonly EffectiveBeaconEvidence[];
 }
@@ -50,6 +52,8 @@ export interface AuthorityAnalysis {
     acquiresByRole: ReadonlyMap<string, readonly HonoredAcquire[]>;
     /** Effective witnessed recovery policy and the valid genesis operation that supplied it. */
     recoveryPoliciesByRole: ReadonlyMap<string, RecoveryPolicyProjection>;
+    /** Effective succession policy per role, after genesis author and root validation. */
+    policiesByRole: ReadonlyMap<string, SuccessionPolicyEvidence>;
     security: AuthoritySecurityProjection;
 }
 export interface WitnessedSuccessionReviewSelector {
@@ -76,7 +80,7 @@ export type WitnessedSuccessionReviewResult = {
  * Decide which role-holder writes are honored from their causal position.
  * Multi-write histories without complete authority evidence remain fail-closed.
  */
-export declare function analyzeAuthority(schema: ReplicaSchema, ops: Op[], included: ReadonlySet<string>, order: readonly string[], byId: ReadonlyMap<string, Op>): AuthorityAnalysis;
+export declare function analyzeAuthority(schema: ReplicaSchema, ops: Op[], included: ReadonlySet<string>, order: readonly string[], byId: ReadonlyMap<string, Op>, expectedReplica?: string | undefined): AuthorityAnalysis;
 /** Derive a witnessed-succession review solely from a verified local operation set. */
 export declare function deriveWitnessedSuccessionReview(schema: ReplicaSchema, ops: Op[], selector: WitnessedSuccessionReviewSelector, priorReview: WitnessedSuccessionReview | null): WitnessedSuccessionReviewResult;
 export type WitnessedSuccessionVerificationReason = "invalid_recovery_policy" | "malformed_recovery_certificate" | "unsupported_recovery_version" | "recovery_claim_mismatch" | "recovery_policy_mismatch" | "unknown_recovery_witness" | "duplicate_recovery_witness" | "noncanonical_recovery_signatures" | "invalid_recovery_signature" | "insufficient_recovery_witnesses";

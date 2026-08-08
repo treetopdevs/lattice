@@ -1,16 +1,33 @@
 import assert from "node:assert/strict";
+import { execFile as execFileCallback, execFileSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import {
-  execFile as execFileCallback,
-  execFileSync,
-  spawn,
-  type ChildProcess,
-} from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { developmentEntitlementErrors } from "./support/ios_entitlement_scope.mjs";
+import { developmentProfileErrors } from "./support/ios_development_profile.mjs";
+import {
+  duplicateProfileEntitlementKeys,
+  profileDateTimeMs,
+  type NormalizedIosDevelopmentProfile,
+} from "./support/ios_development_profile.mjs";
+import {
+  type IosDeviceProbeEvidence,
+  type IosDeviceProbeRecord,
+  createIosProbeCopyDestination,
+  iosDeviceLaunchProcessId,
+  iosDeviceProbeProgress,
+  redactIosDeviceCommandOutput,
+  secureIosProbeCopy,
+} from "./support/ios_device_probe_output.mjs";
 
 interface DeviceProcess {
   processIdentifier?: number;
@@ -22,23 +39,20 @@ interface DeviceProcessResult {
   };
 }
 
+interface ListedDevice {
+  deviceProperties?: { name?: string };
+  hardwareProperties?: { udid?: string };
+}
+
+interface DeviceListResult {
+  result?: { devices?: ListedDevice[] };
+}
+
 interface LaunchProbe {
   controlPublicKeyBase64Url: string;
+  nonce: string;
   pid: string;
   primaryPublicKeyBase64Url: string;
-  waitForExit(): Promise<void>;
-}
-
-interface ProbeLine {
-  fields: Record<string, string>;
-  line: string;
-}
-
-interface StreamingLaunch {
-  child: Pick<ChildProcess, "exitCode" | "kill" | "signalCode">;
-  exit: Promise<void>;
-  processId?: string;
-  probeOutput: Promise<string>;
 }
 
 const execFile = promisify(execFileCallback);
@@ -46,8 +60,13 @@ const here = dirname(fileURLToPath(import.meta.url));
 const shellRoot = resolve(here, "..");
 const appId = "dev.treetop.lattice.township";
 const probePrefix = "township-ios-key-reuse-probe";
-const EXIT_TIMEOUT_MS = 20_000;
-const EXIT_KILL_GRACE_MS = 3_000;
+const probeArtifactDirectory = "Library/Caches";
+const probeArtifactPrefix = "township-ios-key-reuse-probe-";
+const ARTIFACT_TIMEOUT_MS = 60_000;
+const ARTIFACT_POLL_INTERVAL_MS = 1_000;
+const PROCESS_ABSENCE_TIMEOUT_MS = 20_000;
+const PROCESS_POLL_INTERVAL_MS = 250;
+const MINIMUM_PROFILE_REMAINING_MS = 24 * 60 * 60_000;
 const appPath = join(
   shellRoot,
   "src-tauri",
@@ -58,6 +77,18 @@ const appPath = join(
   "Township.app",
 );
 const deviceUdid = process.env.TOWNSHIP_IOS_DEVICE_UDID?.trim();
+const expectedDevelopmentTeam =
+  process.env.APPLE_DEVELOPMENT_TEAM?.trim() ?? "";
+let physicalDeviceName = "";
+
+function reportFatalError(error: unknown): never {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(redactCommandOutput(message, deviceUdid ?? ""));
+  process.exit(1);
+}
+
+process.on("uncaughtException", reportFatalError);
+process.on("unhandledRejection", reportFatalError);
 
 console.log("\nTownship iOS physical-device protected-key relaunch smoke");
 
@@ -69,12 +100,17 @@ assert.equal(
 assert.match(
   deviceUdid ?? "",
   /^[0-9A-F]{8}-[0-9A-F]{16}$/i,
-  "set TOWNSHIP_IOS_DEVICE_UDID to the attached physical iPhone UDID",
+  "set TOWNSHIP_IOS_DEVICE_UDID to the attached physical iOS device UDID",
 );
 assert.ok(deviceUdid);
+assert.equal(
+  /^[A-Z0-9]{10}$/.test(expectedDevelopmentTeam),
+  true,
+  "set APPLE_DEVELOPMENT_TEAM to the selected Apple development team",
+);
 assert.ok(
   existsSync(appPath),
-  `missing iOS device app; run npm run tauri:ios:build:device-key-reuse-probe first`,
+  "missing iOS device app; run npm run tauri:ios:build:device-key-reuse-probe first",
 );
 
 const selectedDeviceDeveloperDir = runPreflight(
@@ -96,27 +132,46 @@ const deviceToolEnv: NodeJS.ProcessEnv = {
 runPreflight("xcrun", ["devicectl", "--version"], deviceToolEnv);
 
 const tempRoot = mkdtempSync(join(tmpdir(), "township-ios-device-probe-"));
-const activeLaunches = new Set<StreamingLaunch>();
+assert.equal(
+  statSync(tempRoot).mode & 0o777,
+  0o700,
+  "physical iOS probe directory is not private",
+);
+const activeProcessIds = new Set<string>();
 let jsonSequence = 0;
+let launchSequence = 0;
+let copySequence = 0;
+process.on("exit", cleanupPhysicalProbeResources);
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.once(signal, () => terminateForSignal(signal));
+}
 
 try {
+  physicalDeviceName = await selectedPhysicalDeviceName(deviceUdid);
   await assertSignedDeviceApp();
   await runDeviceJson(
-    ["device", "install", "app", "--device", deviceUdid, appPath],
+    ["device", "install", "app", "--device", deviceUdid],
     "install",
+    [appPath],
   );
 
-  const first = await launchAndProbe(deviceUdid);
+  const first = await launchAndReadArtifact(deviceUdid);
   await assertProcessPresent(deviceUdid, first.pid);
   await terminateApp(deviceUdid, first.pid);
-  await first.waitForExit();
-  await assertProcessAbsent(deviceUdid, first.pid);
-  const second = await launchAndProbe(deviceUdid);
+  await assertProcessAbsentEventually(deviceUdid, first.pid);
+  activeProcessIds.delete(first.pid);
+
+  const second = await launchAndReadArtifact(deviceUdid);
   await assertProcessPresent(deviceUdid, second.pid);
 
   const publicKeyAfterRelaunch = second.primaryPublicKeyBase64Url;
   const controlPublicKeyAfterRelaunch = second.controlPublicKeyBase64Url;
 
+  assert.notEqual(
+    second.nonce,
+    first.nonce,
+    "iOS probe launch nonce was reused",
+  );
   assert.notEqual(
     second.pid,
     first.pid,
@@ -139,17 +194,13 @@ try {
   );
 
   await terminateApp(deviceUdid, second.pid);
-  await second.waitForExit();
-  await assertProcessAbsent(deviceUdid, second.pid);
+  await assertProcessAbsentEventually(deviceUdid, second.pid);
+  activeProcessIds.delete(second.pid);
 } finally {
-  for (const launch of activeLaunches) {
-    if (launch.processId) {
-      await terminateApp(deviceUdid, launch.processId).catch(() => undefined);
-    }
-    stopConsoleLaunch(launch);
-    await waitForConsoleExit(launch).catch(() => undefined);
+  for (const pid of activeProcessIds) {
+    await terminateApp(deviceUdid, pid).catch(() => undefined);
   }
-  rmSync(tempRoot, { recursive: true, force: true });
+  cleanupPhysicalProbeResources();
 }
 
 console.log(
@@ -157,10 +208,90 @@ console.log(
 );
 
 async function assertSignedDeviceApp(): Promise<void> {
+  const targetDeviceUdid = deviceUdid;
+  assert.ok(targetDeviceUdid);
+  const archivedBundleIdentifier = await readPlistRaw(
+    join(appPath, "Info.plist"),
+    "CFBundleIdentifier",
+  );
+  assert.equal(
+    archivedBundleIdentifier,
+    appId,
+    "archived iOS app bundle identifier is not the Township app",
+  );
+
   assert.ok(
     existsSync(join(appPath, "embedded.mobileprovision")),
     "device app lacks an embedded provisioning profile",
   );
+  const embeddedProfilePath = join(appPath, "embedded.mobileprovision");
+  const decodedProfilePath = join(tempRoot, "embedded-development-profile.plist");
+  await run(
+    "/usr/bin/security",
+    ["cms", "-D", "-i", embeddedProfilePath, "-o", decodedProfilePath],
+    30_000,
+  );
+  secureIosProbeCopy(decodedProfilePath);
+  try {
+    await run("/usr/bin/plutil", ["-lint", decodedProfilePath], 30_000);
+  } catch {
+    assert.fail("embedded iOS development profile is not a valid plist");
+  }
+
+  const profileEntitlementsValue = await readOptionalPlistJson(
+    decodedProfilePath,
+    "Entitlements",
+  );
+  const profileEntitlements = normalizeProfileEntitlements(
+    profileEntitlementsValue,
+  );
+  const profile: NormalizedIosDevelopmentProfile = {
+    teamIdentifiers: await readOptionalPlistJson(
+      decodedProfilePath,
+      "TeamIdentifier",
+    ),
+    applicationIdentifierPrefixes: await readOptionalPlistJson(
+      decodedProfilePath,
+      "ApplicationIdentifierPrefix",
+    ),
+    duplicateEntitlementKeys: duplicateProfileEntitlementKeys(
+      readFileSync(decodedProfilePath, "utf8"),
+    ),
+    entitlements: profileEntitlements,
+    provisionedDevices: await readOptionalPlistJson(
+      decodedProfilePath,
+      "ProvisionedDevices",
+    ),
+    provisionsAllDevices: await readOptionalPlistJson(
+      decodedProfilePath,
+      "ProvisionsAllDevices",
+    ),
+    creationTimeMs: profileDateTimeMs(
+      await readOptionalPlistRaw(decodedProfilePath, "CreationDate"),
+    ),
+    expirationTimeMs: profileDateTimeMs(
+      await readOptionalPlistRaw(decodedProfilePath, "ExpirationDate"),
+    ),
+  };
+  const profileErrors = developmentProfileErrors(profile, {
+    bundleIdentifier: archivedBundleIdentifier,
+    deviceUdid: targetDeviceUdid,
+    expectedTeamIdentifier: expectedDevelopmentTeam,
+    minimumRemainingMs: MINIMUM_PROFILE_REMAINING_MS,
+    nowMs: Date.now(),
+  });
+  assert.deepEqual(
+    profileErrors,
+    [],
+    `embedded iOS development profile is invalid: ${profileErrors.join(", ")}`,
+  );
+  if (
+    typeof profileEntitlements.applicationIdentifier !== "string" ||
+    typeof profileEntitlements.teamIdentifier !== "string"
+  ) {
+    assert.fail("validated signing scope is not string-valued");
+  }
+
   await run("codesign", ["--verify", "--deep", "--strict", appPath], 30_000);
   const signingDetails = await run(
     "codesign",
@@ -171,175 +302,219 @@ async function assertSignedDeviceApp(): Promise<void> {
     signingDetails.includes("Authority=Apple Development:"),
     "device app was not signed by an Apple Development identity",
   );
-  const entitlements = await run(
+  const entitlements = await runStdout(
     "codesign",
     ["--display", "--entitlements", ":-", appPath],
     30_000,
   );
-  assertDevelopmentEntitlementScope(entitlements);
+  assertDevelopmentEntitlementScope(entitlements, {
+    bundleIdentifier: archivedBundleIdentifier,
+    expectedApplicationIdentifier: profileEntitlements.applicationIdentifier,
+    expectedTeamIdentifier: profileEntitlements.teamIdentifier,
+  });
 }
 
-async function launchAndProbe(target: string): Promise<LaunchProbe> {
-  const launch = launchWithConsole(target);
-  activeLaunches.add(launch);
-  const consoleOutput = await launch.probeOutput;
-  const probes = parseProbeLines(consoleOutput);
-  const primary = probes.get("primary");
-  const pid = primary?.fields.process_id ?? "";
-  assert.match(pid, /^\d+$/, "physical iOS probe omitted its process id");
-  launch.processId = pid;
-  const primaryPublicKeyBase64Url = assertReadyKeyProbe(
-    probes.get("primary"),
-    "township-resident",
-    pid,
+function assertDevelopmentEntitlementScope(
+  entitlements: string,
+  options: {
+    bundleIdentifier: string;
+    expectedApplicationIdentifier: string;
+    expectedTeamIdentifier: string;
+  },
+): void {
+  const entitlementErrors = developmentEntitlementErrors(
+    entitlements,
+    options,
   );
-  const controlPublicKeyBase64Url = assertReadyKeyProbe(
-    probes.get("control"),
-    "township-ios-key-reuse-control",
-    pid,
+  assert.deepEqual(
+    entitlementErrors,
+    [],
+    `device app lacks a valid development-signing keychain scope: ${entitlementErrors.join(", ")}`,
   );
+}
+
+function normalizeProfileEntitlements(
+  value: unknown,
+): NormalizedIosDevelopmentProfile["entitlements"] {
+  const entitlements =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
   return {
-    controlPublicKeyBase64Url,
-    pid,
-    primaryPublicKeyBase64Url,
-    async waitForExit() {
-      try {
-        await waitForConsoleExit(launch);
-      } finally {
-        activeLaunches.delete(launch);
-      }
-    },
+    applicationIdentifier: entitlements["application-identifier"],
+    teamIdentifier: entitlements["com.apple.developer.team-identifier"],
+    getTaskAllow: entitlements["get-task-allow"],
+    keychainAccessGroups: entitlements["keychain-access-groups"],
   };
 }
 
-function launchWithConsole(target: string): StreamingLaunch {
-  const child = spawn(
-    "xcrun",
+async function readPlistJson(path: string, key: string): Promise<unknown> {
+  return JSON.parse(
+    await runStdout(
+      "/usr/bin/plutil",
+      ["-extract", key, "json", "-o", "-", path],
+      30_000,
+    ),
+  ) as unknown;
+}
+
+async function readOptionalPlistJson(
+  path: string,
+  key: string,
+): Promise<unknown> {
+  try {
+    return await readPlistJson(path, key);
+  } catch {
+    return undefined;
+  }
+}
+
+async function readPlistRaw(path: string, key: string): Promise<string> {
+  return (
+    await runStdout(
+      "/usr/bin/plutil",
+      ["-extract", key, "raw", "-o", "-", path],
+      30_000,
+    )
+  ).trim();
+}
+
+async function readOptionalPlistRaw(
+  path: string,
+  key: string,
+): Promise<string | undefined> {
+  try {
+    return await readPlistRaw(path, key);
+  } catch {
+    return undefined;
+  }
+}
+
+async function launchAndReadArtifact(target: string): Promise<LaunchProbe> {
+  launchSequence += 1;
+  const launch = launchSequence;
+  const nonce = randomBytes(16).toString("hex");
+  const launchResult = await runDeviceJson<unknown>(
     [
-      "devicectl",
       "device",
       "process",
       "launch",
       "--device",
       target,
       "--terminate-existing",
-      "--console",
-      appId,
+      "--environment-variables",
+      JSON.stringify({ TOWNSHIP_IOS_PROBE_LAUNCH_NONCE: nonce }),
     ],
-    { cwd: shellRoot, env: deviceToolEnv, stdio: ["ignore", "pipe", "pipe"] },
+    `launch-${launch}`,
+    [appId],
   );
-  let output = "";
-  let probeSettled = false;
-  let exitSettled = false;
-  let resolveExit!: () => void;
-  const exit = new Promise<void>((resolvePromise) => {
-    resolveExit = resolvePromise;
-  });
-  const probeOutput = new Promise<string>((resolveProbe, rejectProbe) => {
-    const timeout = setTimeout(() => {
-      if (probeSettled) return;
-      probeSettled = true;
-      const pid = parseProbeProcessId(output);
-      if (pid) void terminateApp(target, pid).catch(() => undefined);
-      child.kill("SIGINT");
-      rejectProbe(
-        new Error(
-          redactCommandOutput(
-            `timed out waiting for physical iOS probe: ${output}`,
-            target,
-          ),
-        ),
+  const pid = iosDeviceLaunchProcessId(launchResult);
+  activeProcessIds.add(pid);
+  const evidence = await waitForProbeArtifact(target, launch, nonce, pid);
+  assert.equal(evidence.processId, pid);
+  assert.equal(evidence.launchNonce, nonce);
+  const primaryPublicKeyBase64Url = assertReadyKeyProbe(
+    evidence.primary,
+    "township-resident",
+    pid,
+  );
+  const controlPublicKeyBase64Url = assertReadyKeyProbe(
+    evidence.control,
+    "township-ios-key-reuse-control",
+    pid,
+  );
+  return {
+    controlPublicKeyBase64Url,
+    nonce,
+    pid,
+    primaryPublicKeyBase64Url,
+  };
+}
+
+async function waitForProbeArtifact(
+  target: string,
+  launch: number,
+  nonce: string,
+  pid: string,
+): Promise<IosDeviceProbeEvidence> {
+  const deadline = Date.now() + ARTIFACT_TIMEOUT_MS;
+  const source = `${probeArtifactDirectory}/${probeArtifactPrefix}${nonce}.log`;
+  let artifactAppeared = false;
+  let lastCopyError: string | undefined;
+
+  while (Date.now() < deadline) {
+    copySequence += 1;
+    const destination = createIosProbeCopyDestination(
+      tempRoot,
+      launch,
+      copySequence,
+    );
+    const copy = await copyProbeArtifactOnce(target, source, destination);
+    if (copy.error) lastCopyError = copy.error;
+    const copiedPath = copy.path;
+    if (copiedPath) {
+      artifactAppeared = true;
+      secureIosProbeCopy(copiedPath);
+      const progress = iosDeviceProbeProgress(
+        readFileSync(copiedPath, "utf8"),
+        probePrefix,
+        nonce,
+        pid,
       );
-    }, 60_000);
+      if (progress.evidence) return progress.evidence;
+    }
+    await sleep(ARTIFACT_POLL_INTERVAL_MS);
+  }
 
-    const collect = (chunk: Buffer) => {
-      output += chunk.toString("utf8");
-      if (probeSettled || !hasBothProbeSlots(output)) return;
-      probeSettled = true;
-      clearTimeout(timeout);
-      resolveProbe(output);
-    };
-
-    child.stdout.on("data", collect);
-    child.stderr.on("data", collect);
-    child.once("error", (error) => {
-      clearTimeout(timeout);
-      if (!probeSettled) {
-        probeSettled = true;
-        rejectProbe(
-          new Error(
-            redactCommandOutput(
-              `unable to launch physical iOS probe: ${error.message}`,
-              target,
-            ),
-          ),
-        );
-      }
-      if (!exitSettled) {
-        exitSettled = true;
-        resolveExit();
-      }
-    });
-    child.once("close", (code, signal) => {
-      clearTimeout(timeout);
-      if (!probeSettled) {
-        probeSettled = true;
-        rejectProbe(
-          new Error(
-            redactCommandOutput(
-              `physical iOS probe exited before evidence (${code ?? signal}): ${output}`,
-              target,
-            ),
-          ),
-        );
-      }
-      if (!exitSettled) {
-        exitSettled = true;
-        resolveExit();
-      }
-    });
-  });
-
-  return { child, exit, probeOutput };
-}
-
-function hasBothProbeSlots(output: string): boolean {
-  const probes = parseProbeLines(output);
-  return probes.has("primary") && probes.has("control");
-}
-
-function parseProbeProcessId(output: string): string | undefined {
-  return [...parseProbeLines(output).values()]
-    .map((probe) => probe.fields.process_id)
-    .find((pid) => /^\d+$/.test(pid ?? ""));
-}
-
-function parseProbeLines(output: string): Map<string, ProbeLine> {
-  return new Map(
-    output
-      .split(/\r?\n/)
-      .filter((line) => line.includes(probePrefix))
-      .map((line) => {
-        const event = line.slice(line.indexOf(probePrefix));
-        const fields = Object.fromEntries(
-          event
-            .trim()
-            .split(/\s+/)
-            .slice(1)
-            .map((field) => {
-              const separator = field.indexOf("=");
-              return separator === -1
-                ? [field, ""]
-                : [field.slice(0, separator), field.slice(separator + 1)];
-            }),
-        );
-        return [fields.slot ?? "", { fields, line: event }] as const;
-      }),
+  throw new Error(
+    artifactAppeared
+      ? "physical iOS probe artifact remained incomplete"
+      : `physical iOS probe artifact never appeared on device: ${lastCopyError ?? "no copy attempt error"}`,
   );
+}
+
+async function copyProbeArtifactOnce(
+  target: string,
+  source: string,
+  destination: string,
+): Promise<{ error?: string; path?: string }> {
+  try {
+    await runDeviceJson(
+      [
+        "device",
+        "copy",
+        "from",
+        "--device",
+        target,
+        "--domain-type",
+        "appDataContainer",
+        "--domain-identifier",
+        appId,
+        "--source",
+        source,
+        "--destination",
+        destination,
+      ],
+      "copy",
+    );
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+
+  if (existsSync(destination) && statSync(destination).isFile()) {
+    return { path: destination };
+  }
+  const nested = join(destination, basename(source));
+  if (existsSync(nested) && statSync(nested).isFile()) {
+    return { path: nested };
+  }
+  throw new Error("physical iOS probe copy command omitted its destination");
 }
 
 function assertReadyKeyProbe(
-  probe: ProbeLine | undefined,
+  probe: IosDeviceProbeRecord | undefined,
   expectedKeyId: string,
   pid: string,
 ): string {
@@ -364,55 +539,27 @@ function assertReadyKeyProbe(
   return publicKeyBase64Url;
 }
 
-function assertDevelopmentEntitlementScope(entitlements: string): void {
-  assert.deepEqual(
-    developmentEntitlementErrors(entitlements, appId),
-    [],
-    "device app lacks a valid development-signing keychain scope",
-  );
-}
-
-async function waitForConsoleExit(launch: StreamingLaunch): Promise<void> {
-  let timeout: NodeJS.Timeout | undefined;
+async function selectedPhysicalDeviceName(target: string): Promise<string> {
+  let result: DeviceListResult;
   try {
-    await Promise.race([
-      launch.exit,
-      new Promise<never>((_resolve, reject) => {
-        timeout = setTimeout(
-          () =>
-            reject(
-              new Error(
-                "physical iOS console launch did not exit after app termination",
-              ),
-            ),
-          EXIT_TIMEOUT_MS,
-        );
-      }),
-    ]);
-  } catch (error) {
-    stopConsoleLaunch(launch);
-    await Promise.race([
-      launch.exit,
-      new Promise<void>((resolvePromise) =>
-        setTimeout(resolvePromise, EXIT_KILL_GRACE_MS),
-      ),
-    ]);
-    throw error;
-  } finally {
-    if (timeout) clearTimeout(timeout);
+    result = await runDeviceJson<DeviceListResult>(
+      ["list", "devices"],
+      "devices",
+    );
+  } catch {
+    throw new Error("unable to resolve selected physical iOS device");
   }
-}
-
-function stopConsoleLaunch(launch: StreamingLaunch): void {
-  if (launch.child.exitCode !== null || launch.child.signalCode !== null)
-    return;
-  launch.child.kill("SIGINT");
-  const killTimer = setTimeout(() => {
-    if (launch.child.exitCode === null && launch.child.signalCode === null) {
-      launch.child.kill("SIGKILL");
-    }
-  }, EXIT_KILL_GRACE_MS);
-  killTimer.unref();
+  const matches = (result.result?.devices ?? []).filter(
+    (device) => device.hardwareProperties?.udid === target,
+  );
+  assert.equal(
+    matches.length,
+    1,
+    "selected physical iOS device was not unique",
+  );
+  const name = matches[0]?.deviceProperties?.name?.trim() ?? "";
+  assert.notEqual(name, "", "selected physical iOS device omitted its name");
+  return name;
 }
 
 async function terminateApp(target: string, pid: string): Promise<void> {
@@ -433,12 +580,16 @@ async function assertProcessPresent(
   );
 }
 
-async function assertProcessAbsent(target: string, pid: string): Promise<void> {
-  assert.equal(
-    await processIsPresent(target, pid),
-    false,
-    "physical iOS app process remained after termination",
-  );
+async function assertProcessAbsentEventually(
+  target: string,
+  pid: string,
+): Promise<void> {
+  const deadline = Date.now() + PROCESS_ABSENCE_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    if (!(await processIsPresent(target, pid))) return;
+    await sleep(PROCESS_POLL_INTERVAL_MS);
+  }
+  assert.fail("physical iOS app process remained after termination");
 }
 
 async function processIsPresent(target: string, pid: string): Promise<boolean> {
@@ -451,12 +602,16 @@ async function processIsPresent(target: string, pid: string): Promise<boolean> {
   );
 }
 
-async function runDeviceJson<T>(args: string[], label: string): Promise<T> {
+async function runDeviceJson<T>(
+  args: string[],
+  label: string,
+  positional: string[] = [],
+): Promise<T> {
   jsonSequence += 1;
   const outputPath = join(tempRoot, `${jsonSequence}-${label}.json`);
   await run(
     "xcrun",
-    ["devicectl", ...args, "--json-output", outputPath],
+    ["devicectl", ...args, "--json-output", outputPath, ...positional],
     60_000,
   );
   return JSON.parse(readFileSync(outputPath, "utf8")) as T;
@@ -467,6 +622,23 @@ async function run(
   args: string[],
   timeoutMs: number,
 ): Promise<string> {
+  const { stdout, stderr } = await runCommand(file, args, timeoutMs);
+  return `${stdout}${stderr}`;
+}
+
+async function runStdout(
+  file: string,
+  args: string[],
+  timeoutMs: number,
+): Promise<string> {
+  return (await runCommand(file, args, timeoutMs)).stdout;
+}
+
+async function runCommand(
+  file: string,
+  args: string[],
+  timeoutMs: number,
+): Promise<{ stderr: string; stdout: string }> {
   try {
     const { stdout, stderr } = await execFile(file, args, {
       cwd: shellRoot,
@@ -475,37 +647,41 @@ async function run(
       timeout: timeoutMs,
       env: file === "xcrun" ? deviceToolEnv : process.env,
     });
-    return `${stdout}${stderr}`;
+    return { stderr, stdout };
   } catch (error) {
     const failed = error as Error & { stdout?: string; stderr?: string };
-    throw new Error(
-      redactCommandOutput(
-        failed.stderr ?? failed.stdout ?? failed.message,
-        deviceUdid ?? "",
-      ),
-    );
+    const detail =
+      [failed.stderr, failed.stdout, failed.message]
+        .map((part) => (part ?? "").trim())
+        .find(Boolean) ?? "unknown iOS device-tool failure";
+    throw new Error(redactCommandOutput(detail, deviceUdid ?? ""));
   }
 }
 
 function redactCommandOutput(value: string, deviceUdid: string): string {
-  if (!deviceUdid) return redactGenericCommandOutput(value);
-  return redactGenericCommandOutput(
-    value.replaceAll(deviceUdid, "<physical-device>"),
+  return redactIosDeviceCommandOutput(
+    value,
+    deviceUdid,
+    process.env.HOME ?? "",
+    physicalDeviceName,
   );
 }
 
-function redactGenericCommandOutput(value: string): string {
-  let redacted = value;
-  if (process.env.HOME) redacted = redacted.replaceAll(process.env.HOME, "~");
-  return redacted
-    .replace(/Apple Development:[^\r\n"]+/g, "Apple Development: <redacted>")
-    .replace(/\b[0-9A-F]{8}-[0-9A-F]{16}\b/gi, "<physical-device>")
-    .replace(/\b[0-9A-F]{8}(?:-[0-9A-F]{4}){3}-[0-9A-F]{12}\b/gi, "<uuid>")
-    .replace(/\b[0-9A-F]{40}\b/gi, "<certificate>")
-    .replace(
-      /\b[A-Z0-9]{10}(?=\.dev\.treetop\.lattice\.township\b)/g,
-      "<apple-team>",
-    );
+function cleanupPhysicalProbeResources(): void {
+  rmSync(tempRoot, { recursive: true, force: true });
+}
+
+function terminateForSignal(signal: NodeJS.Signals): never {
+  cleanupPhysicalProbeResources();
+  process.removeAllListeners(signal);
+  process.kill(process.pid, signal);
+  throw new Error("physical iOS probe signal termination failed");
+}
+
+function sleep(durationMs: number): Promise<void> {
+  return new Promise((resolvePromise) =>
+    setTimeout(resolvePromise, durationMs),
+  );
 }
 
 function runPreflight(

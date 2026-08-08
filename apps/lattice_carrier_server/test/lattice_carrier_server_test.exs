@@ -733,6 +733,86 @@ defmodule LatticeCarrierServerTest do
   end
 
   @tag :tmp_dir
+  test "a relay burst is limited per connection without blocking reads or a fresh drain", %{
+    tmp_dir: tmp_dir
+  } do
+    author = Identity.from_seed("author", "carrier-server-rate-author")
+    server_identity = Identity.from_seed("town-node", "carrier-server-rate")
+    relay_identity = Identity.from_seed("resident", "carrier-rate-client")
+    base = Op.new(author, @replica, [], :command, {:post, "base"})
+    first = Op.new(relay_identity, @replica, [base.id], :command, {:post, "drain one"})
+    second = Op.new(relay_identity, @replica, [first.id], :command, {:post, "drain two"})
+    third = Op.new(relay_identity, @replica, [second.id], :command, {:post, "drain three"})
+    path = Path.join(tmp_dir, "matter.log")
+    instance = {:test, System.unique_integer([:positive])}
+    assert :ok = @replica |> Log.new() |> Log.append!(base) |> Log.dump(path)
+
+    start_supervised!(
+      {LatticeCarrierServer,
+       instance: instance,
+       identity: server_identity,
+       trusted_peers: %{relay_identity.realm_id => relay_identity.pub},
+       relay_realms: [relay_identity.realm_id],
+       source: {:path, path},
+       listener: [ip: {127, 0, 0, 1}, port: 0]}
+    )
+
+    client = authenticated_client(instance, server_identity, relay_identity)
+    handler_id = {__MODULE__, make_ref()}
+
+    assert :ok =
+             Telemetry.attach(
+               handler_id,
+               [:lattice, :carrier, :rate_limited],
+               &__MODULE__.handle_telemetry/4,
+               self()
+             )
+
+    on_exit(fn -> Telemetry.detach(handler_id) end)
+
+    for _request <- 1..240 do
+      assert :ok = Client.send_envelope(client, %{type: "relay"})
+    end
+
+    reasons =
+      for _response <- 1..240 do
+        assert {:ok, %{"type" => "error", "reason" => reason}} =
+                 Client.recv_envelope(client)
+
+        reason
+      end
+
+    assert Enum.take(reasons, 120) == List.duplicate("malformed", 120)
+    assert Enum.any?(reasons, &(&1 == "rate_limited"))
+
+    assert_receive {:telemetry, [:lattice, :carrier, :rate_limited], %{},
+                    %{peer_realm: peer_realm, side: :server}}
+
+    assert peer_realm == relay_identity.realm_id
+    assert :ok = Client.send_envelope(client, %{type: "frontier"})
+
+    assert {:ok, %{"type" => "frontier_result", "ids" => [base_id]}} =
+             Client.recv_envelope(client)
+
+    assert base_id == base.id
+    assert :ok = Client.close(client)
+
+    assert {:ok, connection} =
+             WebSocket.connect(connect_opts(instance, server_identity, relay_identity))
+
+    connection =
+      Enum.reduce([first, second, third], connection, fn op, connection ->
+        assert {:ok, %{accepted: [relayed_id]}, connection} =
+                 WebSocket.relay(connection, op)
+
+        assert relayed_id == op.id
+        connection
+      end)
+
+    assert :ok = WebSocket.close(connection)
+  end
+
+  @tag :tmp_dir
   test "an authorized realm relays one persisted op for a second observer", %{tmp_dir: tmp_dir} do
     author = Identity.from_seed("author", "carrier-server-author")
     server_identity = Identity.from_seed("town-node", "carrier-server-relay")

@@ -1,4 +1,4 @@
-export function developmentEntitlementErrors(entitlements, bundleIdentifier) {
+export function developmentEntitlementErrors(entitlements, options) {
   const duplicateErrors = [
     ["application-identifier", "duplicate-application-identifier-entitlement"],
     [
@@ -21,20 +21,38 @@ export function developmentEntitlementErrors(entitlements, bundleIdentifier) {
     entitlements,
     "com.apple.developer.team-identifier",
   );
+  const expectedApplicationIdentifier = options.expectedApplicationIdentifier;
+  const expectedTeamIdentifier = options.expectedTeamIdentifier;
 
   if (!applicationIdentifier) errors.push("missing-application-identifier");
   if (!teamIdentifier) errors.push("missing-team-identifier");
-  if (
-    applicationIdentifier &&
-    teamIdentifier &&
-    applicationIdentifier !== `${teamIdentifier}.${bundleIdentifier}`
-  ) {
-    errors.push("application-identifier-does-not-match-team-and-bundle");
+  if (!expectedApplicationIdentifier) {
+    errors.push("missing-expected-application-identifier");
+  } else {
+    if (
+      expectedApplicationIdentifier.endsWith(".*") ||
+      applicationIdentifier?.endsWith(".*")
+    ) {
+      errors.push("wildcard-application-identifier");
+    } else {
+      if (!expectedApplicationIdentifier.endsWith(`.${options.bundleIdentifier}`)) {
+        errors.push("profile-application-identifier-does-not-match-bundle");
+      }
+      if (applicationIdentifier !== expectedApplicationIdentifier) {
+        errors.push("application-identifier-does-not-match-profile");
+      }
+    }
+  }
+  if (!expectedTeamIdentifier) {
+    errors.push("missing-expected-team-identifier");
+  } else if (teamIdentifier !== expectedTeamIdentifier) {
+    errors.push("team-identifier-does-not-match-profile");
   }
   if (!/<key>get-task-allow<\/key>\s*<true\s*\/>/.test(entitlements)) {
     errors.push("not-development-entitled");
   }
 
+  // When this key is absent, iOS uses the exact application identifier validated above.
   const keychainScopeKey = "<key>keychain-access-groups</key>";
   const keychainScopeCount = countOccurrences(entitlements, keychainScopeKey);
   if (keychainScopeCount === 1) {

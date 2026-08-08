@@ -722,7 +722,7 @@ defmodule Township.ExportVectorsTest do
     assert expected["winners"]["clerk"] == pristine_genesis_id
   end
 
-  test "lattice.export_vectors pins a forged non-holder transfer to the Sim oracle" do
+  test "lattice.export_vectors refuses a forged transfer at the delegation gate" do
     out_dir =
       Path.join(
         System.tmp_dir!(),
@@ -763,8 +763,8 @@ defmodule Township.ExportVectorsTest do
 
     assert expected["authorityQuarantine"] ==
              Enum.sort([
-               [forged_transfer["id"], "transfer_not_holder"],
-               [mallory_command["id"], "not_holder"]
+               [forged_transfer["id"], "invalid_transfer"],
+               [mallory_command["id"], "invalid_capability"]
              ])
 
     assert Enum.sort(expected["quarantine"]) ==

@@ -99,6 +99,15 @@ jobs:
             _build
           key: ${{ runner.os }}-mix-${{ hashFiles('mix.lock') }}
           restore-keys: ${{ runner.os }}-mix-
+      - name: Cache Cargo dependencies and build
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            clients/township-tauri-shell/src-tauri/target
+          key: ${{ runner.os }}-${{ runner.arch }}-township-tauri-${{ hashFiles('clients/township-tauri-shell/src-tauri/Cargo.lock', 'clients/township-tauri-shell/src-tauri/src/**/*.rs') }}
+          restore-keys: ${{ runner.os }}-${{ runner.arch }}-township-tauri-
       - name: Install dependencies
         run: mix deps.get
       - name: Check formatting
@@ -137,6 +146,12 @@ jobs:
       - name: TS carrier availability feed contract
         working-directory: clients/lattice-client
         run: npm run carrier:feed
+      - name: TS witnessed succession review
+        working-directory: clients/lattice-client
+        run: npm run succession:review
+      - name: TS witnessed succession artifact
+        working-directory: clients/lattice-client
+        run: npm run succession:artifact
       - name: Build TS client for shell feed gate
         working-directory: clients/lattice-client
         run: npm run build
@@ -182,6 +197,39 @@ jobs:
       - name: TS live stable carrier availability feed
         working-directory: clients/township-tauri-shell
         run: npm run feed:contract
+      - name: TS Township carrier peer contract
+        working-directory: clients/township-tauri-shell
+        run: npm run peer:contract
+      - name: TS Township pairing deep-link contract
+        working-directory: clients/township-tauri-shell
+        run: npm run deeplink:contract
+      - name: TS Township pairing deep-link source contract
+        working-directory: clients/township-tauri-shell
+        run: npm run deeplink:source:contract
+      - name: TS Township pairing QR contract
+        working-directory: clients/township-tauri-shell
+        run: npm run qr:contract
+      - name: TS Township pairing QR camera contract
+        working-directory: clients/township-tauri-shell
+        run: npm run qr:camera:contract
+      - name: TS Township pairing discovery contract
+        working-directory: clients/township-tauri-shell
+        run: npm run discovery:contract
+      - name: TS Township canonical probe contract
+        working-directory: clients/township-tauri-shell
+        run: npm run canonical:probe:contract
+      - name: TS mobile secure-store strategy
+        working-directory: clients/township-tauri-shell
+        run: npm run mobile:strategy
+      - name: TS Township witness artifact contract
+        working-directory: clients/township-tauri-shell
+        run: npm run witness:artifact:contract
+      - name: TS Township packaged bundle variant contract
+        working-directory: clients/township-tauri-shell
+        run: npm run bundle:variant:contract
+      - name: TS Township revocation fixture contract
+        working-directory: clients/township-tauri-shell
+        run: npm run revocation:fixture:contract
       - name: Install Tauri Linux prerequisites
         run: |
           sudo apt-get update
@@ -198,6 +246,9 @@ jobs:
       - name: Tauri native command core
         working-directory: clients/township-tauri-shell/src-tauri
         run: cargo test
+      - name: TS Township witness fixture preflight
+        working-directory: clients/township-tauri-shell
+        run: npm run witness:preflight:contract
       - name: Tauri development trace contract
         working-directory: clients/township-tauri-shell/src-tauri
         run: cargo test --features township-dev-trace --test dev_trace_commands
@@ -217,6 +268,8 @@ jobs:
         run: mix credo --strict
       - name: Sobelow (lattice_server)
         run: cd apps/lattice_server && mix sobelow --exit
+      - name: Sobelow (township_web)
+        run: cd apps/township_web && mix sobelow --exit
 
   packaged_macos:
     name: Packaged macOS convergence
@@ -278,6 +331,14 @@ jobs:
       - name: Install shell Playwright browser
         working-directory: clients/township-tauri-shell
         run: npx --no-install playwright install chromium
+
+      - name: Build packaged governance test-presence variant
+        working-directory: clients/township-tauri-shell
+        run: npm run tauri:build:governance-test-presence
+
+      - name: Verify packaged witness ceremony
+        working-directory: clients/township-tauri-shell
+        run: npm run tauri:witness-ceremony:smoke
 
       - name: Verify packaged stable-relay onboarding
         working-directory: clients/township-tauri-shell

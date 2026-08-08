@@ -40,6 +40,7 @@ export interface RefreshTownshipFromCarrierOptions {
   workflow: TownshipNativeWorkflow;
   verifier: Verifier;
   realmByPubkey?: Record<string, string>;
+  expectedReplica: string;
   generation: number;
   signal?: AbortSignal;
 }
@@ -80,6 +81,11 @@ export async function refreshTownshipFromCarrier(
   const pulledFrames = pulled.map(decodeCarrierOpFrame);
 
   for (const frame of pulledFrames) {
+    if (frame.replica !== options.expectedReplica) {
+      throw new Error(
+        `carrier served foreign replica ${frame.replica}; expected ${options.expectedReplica}`,
+      );
+    }
     const verification = await verifyCarrierOp(frame, options.verifier);
     throwIfRefreshStopped(options.signal);
     if (!verification.valid) throw new Error(`carrier op verification failed: ${frame.id}`);
@@ -98,7 +104,11 @@ export async function refreshTownshipFromCarrier(
     const ops = integrate(currentOps, pulledOps);
     const delegationFrames = mergeCarrierFrames([...currentDelegationFrames, ...pulledFrames]);
     const externallyQuarantined = validateCarrierStateReport(stateReport, delegationFrames);
-    const matter = townshipPreviewFromOps(ops, externallyQuarantined);
+    const matter = townshipPreviewFromOps(
+      ops,
+      externallyQuarantined,
+      options.expectedReplica,
+    );
 
     throwIfRefreshStopped(options.signal);
     await Promise.all([
@@ -194,7 +204,7 @@ export function createTownshipFeedController(
         }
 
         reconnectAttempt = 0;
-        await runFeedSession(candidate, session, subscription);
+        await runFeedSession(candidate, session, subscription, peer);
       } catch (error) {
         if (!active(candidate)) return;
 
@@ -227,6 +237,7 @@ export function createTownshipFeedController(
     candidate: TownshipFeedWorker,
     session: TownshipFeedSession,
     subscription: CarrierAvailabilitySubscription,
+    peer: TownshipCarrierPeerConfig,
   ): Promise<void> => {
     let sessionActive = true;
     let trailing: CarrierAvailability | null = null;
@@ -250,6 +261,7 @@ export function createTownshipFeedController(
           workflow: session.workflow,
           verifier: session.verifier,
           ...(options.realmByPubkey ? { realmByPubkey: options.realmByPubkey } : {}),
+          expectedReplica: peer.replica,
           generation: availability.generation,
           signal: candidate.abortController.signal,
         });

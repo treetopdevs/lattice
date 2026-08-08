@@ -33,7 +33,7 @@ export interface HonoredAcquire {
 
 export type DelegationValidation =
   | { valid: true }
-  | { valid: false; reason: string };
+  | { valid: false; reason: string; successionRootId?: string };
 
 export interface AuthorityDelegationRecord {
   delegation: AuthorityDelegationEvidence | null;
@@ -61,6 +61,7 @@ export interface AuthoritySecurityProjection {
   delegations: ReadonlyMap<string, AuthorityDelegationRecord>;
   root: AuthorityRootEvidence | null;
   effectiveRevokes: readonly EffectiveRevokeEvidence[];
+  honoredSuccessionIntroductions: ReadonlyMap<string, readonly string[]>;
   /** Plan 149: valid (root-authored, ancestry-monotonic) epoch beacons. */
   validBeacons: readonly EffectiveBeaconEvidence[];
 }
@@ -78,6 +79,8 @@ export interface AuthorityAnalysis {
   acquiresByRole: ReadonlyMap<string, readonly HonoredAcquire[]>;
   /** Effective witnessed recovery policy and the valid genesis operation that supplied it. */
   recoveryPoliciesByRole: ReadonlyMap<string, RecoveryPolicyProjection>;
+  /** Effective succession policy per role, after genesis author and root validation. */
+  policiesByRole: ReadonlyMap<string, SuccessionPolicyEvidence>;
   security: AuthoritySecurityProjection;
 }
 
@@ -135,6 +138,7 @@ export function analyzeAuthority(
   included: ReadonlySet<string>,
   order: readonly string[],
   byId: ReadonlyMap<string, Op>,
+  expectedReplica: string | undefined = undefined,
 ): AuthorityAnalysis {
   const visible = order.map((id) => byId.get(id)!);
   const writesPerRole = new Map<string, number>();
@@ -145,7 +149,11 @@ export function analyzeAuthority(
   }
 
   const collectedDelegations = collectDelegations(visible);
-  const delegations = validateDelegations(visible, collectedDelegations);
+  const delegations = validateDelegations(
+    visible,
+    collectedDelegations,
+    expectedReplica,
+  );
   const { policies, recoveryPoliciesByRole } = collectPolicies(visible, delegations);
   const root = resolveRoot(visible, delegations);
   const { effectiveRevokes, unauthorizedRevokes } = collectRevokes(
@@ -160,7 +168,9 @@ export function analyzeAuthority(
   );
   const states = new Map<string, RoleState>();
   const honoredWrites = new Set<string>();
+  const honoredSuccessionIntroductions = new Map<string, string[]>();
   const quarantineReasons = delegationQuarantineReasons(delegations);
+  collectInvalidGenesisReasons(visible, delegations, quarantineReasons);
   for (const [opId, reason] of unauthorizedRevokes) {
     quarantineReasons.set(opId, reason);
   }
@@ -171,6 +181,7 @@ export function analyzeAuthority(
 
   for (const op of visible) {
     if (op.authority?.type === "heartbeat") {
+      if (op.kind !== "authority") continue;
       // Heartbeats never write a field: they only refresh the holder's
       // last-active tick, and only when the author holds the role at its deps.
       const heartbeat = op.authority;
@@ -215,6 +226,7 @@ export function analyzeAuthority(
       state,
       delegations,
       policies,
+      honoredSuccessionIntroductions,
       byId,
     );
 
@@ -224,7 +236,22 @@ export function analyzeAuthority(
       state.acquires.push(honoredAcquire(op, evidence, holder));
       states.set(op.field, state);
       honoredWrites.add(op.id);
+      if (evidence.type === "succeed") {
+        const ids = honoredSuccessionIntroductions.get(evidence.delegation.id) ?? [];
+        ids.push(op.id);
+        honoredSuccessionIntroductions.set(evidence.delegation.id, ids);
+      }
     } else {
+      const reason = authorityWriteRejectionReason(
+        op,
+        evidence,
+        state,
+        delegations,
+        policies,
+        honoredSuccessionIntroductions,
+        byId,
+      );
+      if (reason !== undefined) quarantineReasons.set(op.id, reason);
       quarantinedWrites.add(op.id);
     }
   }
@@ -247,7 +274,14 @@ export function analyzeAuthority(
     quarantineReasons,
     acquiresByRole,
     recoveryPoliciesByRole,
-    security: { delegations, root, effectiveRevokes, validBeacons },
+    policiesByRole: policies,
+    security: {
+      delegations,
+      root,
+      effectiveRevokes,
+      honoredSuccessionIntroductions,
+      validBeacons,
+    },
   };
 }
 
@@ -279,7 +313,14 @@ export function deriveWitnessedSuccessionReview(
   try {
     const order = canonicalOrder(ops, byId);
     orderedOps = order.map((id) => byId.get(id)!);
-    analysis = analyzeAuthority(schema, ops, new Set(order), order, byId);
+    analysis = analyzeAuthority(
+      schema,
+      ops,
+      new Set(order),
+      order,
+      byId,
+      selector.replica,
+    );
   } catch {
     return refusedReview("authority_analysis_failed");
   }
@@ -420,6 +461,7 @@ function authorityWriteHonored(
   state: RoleState,
   delegations: ReadonlyMap<string, AuthorityDelegationRecord>,
   policies: ReadonlyMap<string, SuccessionPolicyEvidence>,
+  honoredSuccessionIntroductions: ReadonlyMap<string, readonly string[]>,
   byId: ReadonlyMap<string, Op>,
 ): boolean {
   if (
@@ -431,10 +473,23 @@ function authorityWriteHonored(
   }
 
   const delegation = evidence.delegation;
+  const validForEvent =
+    validDelegation(delegation, delegations) ||
+    (evidence.type === "transfer" &&
+      candidateDelegationActivated(
+        delegation,
+        delegations,
+        honoredSuccessionIntroductions,
+        ancestors(op.id, byId as Map<string, Op>),
+        op.field,
+        byId,
+      )) ||
+    (evidence.type === "succeed" &&
+      successionCandidate(delegation, delegations));
   if (
     delegation.audienceRealm !== op.value ||
     !delegation.roles.includes(op.field) ||
-    !validDelegation(delegation, delegations)
+    !validForEvent
   ) {
     return false;
   }
@@ -463,72 +518,171 @@ function authorityWriteHonored(
   }
 
   if (evidence.type === "succeed" && evidence.role === op.field) {
-    const policy = policies.get(op.field);
-    if (
-      delegation.issuerRealm !== op.author ||
-      delegation.audienceRealm !== op.author ||
-      policy === undefined ||
-      policy.successorRealm !== op.author
-    ) {
-      return false;
-    }
-
-    const visible = ancestors(op.id, byId as Map<string, Op>);
-    if (evidence.proof.mode === "legacy") {
-      if (policy.mode !== "legacy") return false;
-      const lastActive = Math.max(
-        0,
-        ...state.acquires.flatMap((acquire) =>
-          visible.has(acquire.opId) && acquire.atTick !== undefined ? [acquire.atTick] : [],
-        ),
-        ...state.heartbeats.filter((heartbeat) => visible.has(heartbeat.opId)).map((heartbeat) => heartbeat.atTick),
-      );
-
-      return evidence.proof.atTick >= lastActive + policy.dormantTicks;
-    }
-
-    if (evidence.proof.mode === "witnessed") {
-      if (policy.mode !== "witnessed" || op.replica === undefined) return false;
-      const holderAcquire = [...state.acquires]
-        .reverse()
-        .find((acquire) => visible.has(acquire.opId));
-      const holder = canonicalBase64Bytes(holderAcquire?.holderPubkey, 32);
-      const successor = canonicalBase64Bytes(delegation.audience, 32);
-      const policySuccessor = canonicalBase64Bytes(policy.successor, 32);
-      if (
-        holderAcquire?.holderPubkey === undefined ||
-        state.holder !== holderAcquire.holder ||
-        holder === null ||
-        successor === null ||
-        policySuccessor === null ||
-        !equalBytes(policySuccessor, successor)
-      ) {
-        return false;
-      }
-
-      const policyId = witnessedRecoveryPolicyId(policy.recovery);
-      if (policyId === null) return false;
-      const expectedClaim: WitnessedSuccessionClaimEvidence = {
-        version: 1,
-        replica: op.replica,
-        role: evidence.role,
-        holder: holderAcquire.holderPubkey,
-        holderEpoch: holderAcquire.opId,
-        successor: delegation.audience,
-        policyId,
-      };
-
-      return verifyWitnessedSuccessionCertificate(
-        evidence.proof.certificate,
-        expectedClaim,
-        policy.recovery,
-      ).valid;
-    }
-
-    return false;
+    return (
+      successionRejectionReason(op, evidence, state, delegations, policies, byId) ===
+      undefined
+    );
   }
 
   throw new Error(`unsupported authority event ${evidence.type} for ${op.id}`);
+}
+
+function authorityWriteRejectionReason(
+  op: Op,
+  evidence: AuthorityEvidence,
+  state: RoleState,
+  delegations: ReadonlyMap<string, AuthorityDelegationRecord>,
+  policies: ReadonlyMap<string, SuccessionPolicyEvidence>,
+  honoredSuccessionIntroductions: ReadonlyMap<string, readonly string[]>,
+  byId: ReadonlyMap<string, Op>,
+): string | undefined {
+  if (
+    evidence.type === "heartbeat" ||
+    evidence.type === "revoke" ||
+    evidence.type === "beacon"
+  ) {
+    return undefined;
+  }
+
+  const delegation = evidence.delegation;
+
+  if (evidence.type === "genesis") {
+    if (
+      delegation.parentId !== null &&
+      validDelegation(delegation, delegations)
+    ) {
+      return "invalid_genesis";
+    }
+    if (
+      delegation.audienceRealm === op.value &&
+      delegation.roles.includes(op.field) &&
+      validDelegation(delegation, delegations) &&
+      delegation.issuerRealm !== op.author
+    ) {
+      return "unauthorized_genesis";
+    }
+    return undefined;
+  }
+
+  if (evidence.type !== "transfer" || evidence.role !== op.field) {
+    return evidence.type === "succeed"
+      ? successionRejectionReason(op, evidence, state, delegations, policies, byId)
+      : undefined;
+  }
+
+  if (
+    delegation.audienceRealm !== op.value ||
+    !delegation.roles.includes(op.field) ||
+    (!validDelegation(delegation, delegations) &&
+      !candidateDelegationActivated(
+        delegation,
+        delegations,
+        honoredSuccessionIntroductions,
+        ancestors(op.id, byId as Map<string, Op>),
+        op.field,
+        byId,
+      )) ||
+    delegation.issuerRealm !== op.author
+  ) {
+    return "invalid_transfer";
+  }
+
+  const visible = ancestors(op.id, byId as Map<string, Op>);
+  const holderAtDeps = [...state.acquires]
+    .reverse()
+    .find((acquire) => visible.has(acquire.opId))?.holder;
+
+  if (holderAtDeps !== op.author) return "transfer_not_holder";
+  if (state.holder !== op.author) return "double_transfer";
+  return undefined;
+}
+
+function successionRejectionReason(
+  op: Op,
+  evidence: Extract<AuthorityEvidence, { type: "succeed" }>,
+  state: RoleState,
+  delegations: ReadonlyMap<string, AuthorityDelegationRecord>,
+  policies: ReadonlyMap<string, SuccessionPolicyEvidence>,
+  byId: ReadonlyMap<string, Op>,
+): string | undefined {
+  const delegation = evidence.delegation;
+  if (
+    evidence.role !== op.field ||
+    delegation.audienceRealm !== op.value ||
+    !delegation.roles.includes(op.field) ||
+    (!validDelegation(delegation, delegations) &&
+      !successionCandidate(delegation, delegations)) ||
+    delegation.issuerRealm !== op.author ||
+    delegation.audienceRealm !== op.author
+  ) {
+    return "invalid_succession";
+  }
+
+  const policy = policies.get(op.field);
+  if (policy === undefined || policy.successorRealm !== op.author) {
+    return "unauthorized_succession";
+  }
+
+  const visible = ancestors(op.id, byId as Map<string, Op>);
+  if (evidence.proof.mode === "legacy") {
+    if (policy.mode !== "legacy") return "recovery_certificate_required";
+    const lastActive = Math.max(
+      0,
+      ...state.acquires.flatMap((acquire) =>
+        visible.has(acquire.opId) && acquire.atTick !== undefined
+          ? [acquire.atTick]
+          : [],
+      ),
+      ...state.heartbeats
+        .filter((heartbeat) => visible.has(heartbeat.opId))
+        .map((heartbeat) => heartbeat.atTick),
+    );
+
+    return evidence.proof.atTick < lastActive + policy.dormantTicks
+      ? "premature_succession"
+      : undefined;
+  }
+
+  if (evidence.proof.mode !== "witnessed") return "invalid_succession";
+  if (policy.mode !== "witnessed") {
+    return "witnessed_recovery_not_configured";
+  }
+  if (op.replica === undefined) return "recovery_claim_mismatch";
+
+  const holderAcquire = [...state.acquires]
+    .reverse()
+    .find((acquire) => visible.has(acquire.opId));
+  const holder = canonicalBase64Bytes(holderAcquire?.holderPubkey, 32);
+  const successor = canonicalBase64Bytes(delegation.audience, 32);
+  const policySuccessor = canonicalBase64Bytes(policy.successor, 32);
+  if (
+    holderAcquire?.holderPubkey === undefined ||
+    state.holder !== holderAcquire.holder ||
+    holder === null ||
+    successor === null ||
+    policySuccessor === null ||
+    !equalBytes(policySuccessor, successor)
+  ) {
+    return "recovery_claim_mismatch";
+  }
+
+  const policyId = witnessedRecoveryPolicyId(policy.recovery);
+  if (policyId === null) return "invalid_recovery_policy";
+  const expectedClaim: WitnessedSuccessionClaimEvidence = {
+    version: 1,
+    replica: op.replica,
+    role: evidence.role,
+    holder: holderAcquire.holderPubkey,
+    holderEpoch: holderAcquire.opId,
+    successor: delegation.audience,
+    policyId,
+  };
+  const verification = verifyWitnessedSuccessionCertificate(
+    evidence.proof.certificate,
+    expectedClaim,
+    policy.recovery,
+  );
+  return verification.valid ? undefined : verification.reason;
 }
 
 export type WitnessedSuccessionVerificationReason =
@@ -818,11 +972,19 @@ function collectPolicies(
 
   for (const op of ops) {
     const evidence = op.authority;
-    if (evidence?.type !== "genesis" || evidence.policies === undefined) continue;
+    if (
+      op.kind !== "authority" ||
+      evidence?.type !== "genesis" ||
+      evidence.policies === undefined
+    ) {
+      continue;
+    }
     if (
       !validDelegation(evidence.delegation, delegations) ||
+      evidence.delegation.parentId !== null ||
       op.replica === undefined ||
-      !replicaRootMatches(op.replica, evidence.delegation.audience)
+      !replicaRootMatches(op.replica, evidence.delegation.audience) ||
+      evidence.delegation.issuerRealm !== op.author
     ) {
       continue;
     }
@@ -850,6 +1012,7 @@ function collectDelegations(
   for (const op of ops) {
     const evidence = op.authority;
     if (
+      op.kind !== "authority" ||
       evidence === undefined ||
       evidence.type === "heartbeat" ||
       evidence.type === "revoke" ||
@@ -896,13 +1059,26 @@ function collectDelegations(
 function validateDelegations(
   ops: readonly Op[],
   collected: ReadonlyMap<string, CollectedDelegation>,
+  expectedReplica: string | undefined,
 ): Map<string, AuthorityDelegationRecord> {
   const genesisIds = new Set(
     ops.flatMap((op) =>
-      op.authority?.type === "genesis" ? [op.authority.delegation.id] : [],
+      op.kind === "authority" && op.authority?.type === "genesis"
+        ? [op.authority.delegation.id]
+        : [],
     ),
   );
-  const outerReplica = ops.find((op) => op.replica !== undefined)?.replica;
+  const successionIds = new Set(
+    ops.flatMap((op) =>
+      op.kind === "authority" && op.authority?.type === "succeed"
+        ? [op.authority.delegation.id]
+        : [],
+    ),
+  );
+  // Replica-less Tier-A vectors predate the carrier contract. Only those
+  // legacy callers may infer an anchor; paired carrier callers supply it.
+  const outerReplica =
+    expectedReplica ?? ops.find((op) => op.replica !== undefined)?.replica;
   const cache = new Map<string, DelegationValidation>();
   const delegations = new Map<string, AuthorityDelegationRecord>();
 
@@ -915,6 +1091,7 @@ function validateDelegations(
         id,
         collected,
         genesisIds,
+        successionIds,
         outerReplica,
         cache,
         new Set(),
@@ -929,6 +1106,7 @@ function delegationValidation(
   id: string,
   delegations: ReadonlyMap<string, CollectedDelegation>,
   genesisIds: ReadonlySet<string>,
+  successionIds: ReadonlySet<string>,
   outerReplica: string | undefined,
   cache: Map<string, DelegationValidation>,
   visiting: Set<string>,
@@ -950,12 +1128,20 @@ function delegationValidation(
       validation = { valid: false, reason: "nongenesis_root" };
     } else if (
       genesisIds.has(delegation.id) &&
-      outerReplica !== undefined &&
-      !replicaRootMatches(outerReplica, delegation.audience)
+      (outerReplica === undefined ||
+        replicaRootMatches(outerReplica, delegation.audience))
     ) {
+      validation = { valid: true };
+    } else if (successionIds.has(delegation.id)) {
+      validation = {
+        valid: false,
+        reason: "succession_candidate",
+        successionRootId: delegation.id,
+      };
+    } else if (genesisIds.has(delegation.id)) {
       validation = { valid: false, reason: "impostor_genesis" };
     } else {
-      validation = { valid: true };
+      validation = { valid: false, reason: "unrooted_delegation" };
     }
   } else {
     const parent = delegations.get(delegation.parentId);
@@ -968,16 +1154,27 @@ function delegationValidation(
         delegation.parentId,
         delegations,
         genesisIds,
+        successionIds,
         outerReplica,
         cache,
         visiting,
       );
-      validation =
-        !parentValidation.valid
-          ? { valid: false, reason: "invalid_parent" }
-          : delegationAttenuates(delegation, parent.delegation)
-            ? { valid: true }
-            : { valid: false, reason: "not_attenuated" };
+      if (!delegationAttenuates(delegation, parent.delegation)) {
+        validation = { valid: false, reason: "not_attenuated" };
+      } else if (parentValidation.valid) {
+        validation = { valid: true };
+      } else if (
+        parentValidation.reason === "succession_candidate" &&
+        parentValidation.successionRootId !== undefined
+      ) {
+        validation = {
+          valid: false,
+          reason: "succession_candidate",
+          successionRootId: parentValidation.successionRootId,
+        };
+      } else {
+        validation = { valid: false, reason: "invalid_parent" };
+      }
     }
   }
 
@@ -999,13 +1196,53 @@ function validDelegation(
   );
 }
 
+function successionCandidate(
+  delegation: AuthorityDelegationEvidence,
+  delegations: ReadonlyMap<string, AuthorityDelegationRecord>,
+): boolean {
+  const record = delegations.get(delegation.id);
+  return (
+    record !== undefined &&
+    record.delegation !== null &&
+    delegationKey(record.delegation) === delegationKey(delegation) &&
+    !record.validation.valid &&
+    record.validation.reason === "succession_candidate" &&
+    record.validation.successionRootId === delegation.id
+  );
+}
+
+function candidateDelegationActivated(
+  delegation: AuthorityDelegationEvidence,
+  delegations: ReadonlyMap<string, AuthorityDelegationRecord>,
+  honoredSuccessionIntroductions: ReadonlyMap<string, readonly string[]>,
+  visible: ReadonlySet<string>,
+  role: string,
+  byId: ReadonlyMap<string, Op>,
+): boolean {
+  const record = delegations.get(delegation.id);
+  if (
+    record === undefined ||
+    record.delegation === null ||
+    delegationKey(record.delegation) !== delegationKey(delegation) ||
+    record.validation.valid ||
+    record.validation.reason !== "succession_candidate" ||
+    record.validation.successionRootId === undefined
+  ) {
+    return false;
+  }
+
+  return (
+    honoredSuccessionIntroductions.get(record.validation.successionRootId) ?? []
+  ).some((opId) => visible.has(opId) && byId.get(opId)?.field === role);
+}
+
 function resolveRoot(
   ops: readonly Op[],
   delegations: ReadonlyMap<string, AuthorityDelegationRecord>,
 ): AuthorityRootEvidence | null {
   for (const op of ops) {
     const evidence = op.authority;
-    if (evidence?.type !== "genesis") continue;
+    if (op.kind !== "authority" || evidence?.type !== "genesis") continue;
     if (!validDelegation(evidence.delegation, delegations)) continue;
     if (
       op.replica !== undefined &&
@@ -1035,7 +1272,7 @@ function collectRevokes(
 
   for (const op of ops) {
     const evidence = op.authority;
-    if (evidence?.type !== "revoke") continue;
+    if (op.kind !== "authority" || evidence?.type !== "revoke") continue;
     const delegation = delegations.get(evidence.delegationId)?.delegation;
     const authorized =
       delegation !== undefined &&
@@ -1073,7 +1310,7 @@ function collectBeacons(
 
   for (const op of visible) {
     const evidence = op.authority;
-    if (evidence?.type !== "beacon") continue;
+    if (op.kind !== "authority" || evidence?.type !== "beacon") continue;
 
     const anc = ancestors(op.id, byId, ancCache);
     let priorMax = -1;
@@ -1107,7 +1344,11 @@ function delegationQuarantineReasons(
     for (const [opId, reason] of record.invalidIntroductionReasons) {
       reasons.set(opId, reason);
     }
-    if (!record.validation.valid && record.delegation !== null) {
+    if (
+      !record.validation.valid &&
+      record.validation.reason !== "succession_candidate" &&
+      record.delegation !== null
+    ) {
       for (const opId of record.introductionOpIds) {
         reasons.set(opId, record.validation.reason);
       }
@@ -1115,6 +1356,36 @@ function delegationQuarantineReasons(
   }
 
   return reasons;
+}
+
+function collectInvalidGenesisReasons(
+  ops: readonly Op[],
+  delegations: ReadonlyMap<string, AuthorityDelegationRecord>,
+  reasons: Map<string, string>,
+): void {
+  for (const op of ops) {
+    const evidence = op.authority;
+    if (op.kind !== "authority" || evidence?.type !== "genesis") continue;
+    const record = delegations.get(evidence.delegation.id);
+    if (
+      record === undefined ||
+      record.delegation === null ||
+      delegationKey(record.delegation) !== delegationKey(evidence.delegation) ||
+      record.invalidIntroductionReasons.has(op.id)
+    ) {
+      continue;
+    }
+
+    if (evidence.delegation.parentId !== null) {
+      reasons.set(op.id, "invalid_genesis");
+    } else if (
+      successionCandidate(evidence.delegation, delegations) &&
+      op.replica !== undefined &&
+      !replicaRootMatches(op.replica, evidence.delegation.audience)
+    ) {
+      reasons.set(op.id, "impostor_genesis");
+    }
+  }
 }
 
 function delegationAttenuates(
