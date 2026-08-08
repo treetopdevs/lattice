@@ -200,8 +200,8 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 158 | Real-device beta POC program map: shared carrier/distribution foundation, then Township, Toolshed, Treehouse | **P0** | XL | 029, 037, 128, 132, 141, 142 | TODO (execution map ready; LiveOps/CapStore prerequisite is DONE) |
 | 159 | Wave A1 kickoff — shared beta foundation | P1 | — | 158 | DRAFT (parallel session, untracked at time of Round 4) |
 | 160 | PD-003-B Toolshed QR ceremony physics spike | P1 | M | 158 | PROPOSED (parallel session, untracked at time of Round 4) |
-| 161 | Close the three silent verification gaps (Sobelow, orphaned suites, format scope) | P1 | S–M | 165 Part B (rec.) | DONE (scope amendment authorized; Claude review fixes landed; a parallel advisor-branch run `cc56d133..2b2ae207` remains unmerged and superseded) |
-| 162 | Bind root-less delegations and genesis authorship to the replica root | **P0** | M | 161 (rec.) | DONE (two-reviewer security loop and mutation gates complete) — the Round 5 step 2b amendments (`cap_ok/8` replica binding, malformed-tick rejection) postdate that execution and are still unimplemented |
+| 161 | Close the three silent verification gaps (Sobelow, orphaned suites, format scope) | P1 | S–M | 165 Part B (sequencing only — refuted as a real dependency; Sobelow cannot see umbrella `config/`, see plan 161 step 3 correction) | DONE (scope amendment authorized; Claude review fixes landed; a parallel advisor-branch run `cc56d133..2b2ae207` remains unmerged and superseded) |
+| 162 | Bind root-less delegations and genesis authorship to the replica root | **P0** | M | 161 (rec.) | DONE (Round 4; step 2b amendments PENDING re-execution — the Round 5 `cap_ok/8` replica-binding and malformed-tick guards postdate the executed run and are still unimplemented) |
 | 163 | Pin TypeScript ingest to the paired replica + fail-closed command decode | P1 | S–M | 162 (rec.) | DONE (Round 4; dual-reviewed, format denials deferred) |
 | 164 | One local command mirroring CI, and stop `dist/` from lying | P2 | S | 161, 166 (rec.) | TODO (Round 4; run last) |
 | 165 | Boundary hardening: WebView signing oracle + CSP, committed dev secret, relay rate | P1 | M | — | DONE (Parts A/B/C dual-reviewed; quarantine journal, read/peer admission, and KV bounds deferred; a parallel Part B run `8ab09e9e` remains unmerged and superseded) |
@@ -214,7 +214,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 172 | TypeScript canonical-encoder strictness (duplicate terms, non-canonical base64) | P1 | S–M | — | TODO (Round 5) |
 | 173 | Bounded carrier transport: connect deadlines + paged pulls | P1 | M–L | 169 | TODO (Round 5b) |
 | 174 | **(spike)** What the governance-witness ceremony must prove natively | P1 | M (build: L) | — | TODO (Round 5b) |
-| 175 | **(spike)** How succession gets a trustworthy clock | P1 | M (build: L) | 162 | TODO (Round 5b) |
+| 175 | **(spike)** How succession gets a trustworthy clock | P1 | M (build: L) | 162 step 2b (pending) | TODO (Round 5b) |
 | 176 | Fail closed at the wire/authority boundary: lease range, decode depth, replica marker, op kinds | P1 | M | 161 (rec.) | TODO (Round 5; renumbered from 168 — AUTHZ-02 ceded to plan 162 step 2b(e)) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
@@ -238,6 +238,16 @@ current queue. It is recorded as a blocker rather than a plan because the correc
 deployment constraint, not code. Promote it to a plan the moment anyone proposes exposing it.
 
 ## Execution order (resolved 2026-08-06, after two independent security reviews)
+
+> **Updated 2026-08-08, after the Round 4 merge landed on main.** Steps 1 (161), 7 (162), 8 (163),
+> and 10 (165) below have since been executed and merged via `codex/round4-security-reliability` —
+> see their DONE rows in the table. The numbered sequence is retained as the agreed record. The
+> **live remainder**, re-verified against the table's dependency column, is:
+> **168 → 169 → 170 → 171 (after 168) → 172 → 162 step-2b re-execution (the Round 5 amendments,
+> still unimplemented) → 173 (after 169) → 174 / 175 (175 after the 162 step-2b tick guard) → 176.**
+> Plan 176's only hard ordering constraint is running after 168 (or reconciling with it — whichever
+> of the two executes second must re-read the other, since 176's CRYPTO-01 and 168's step 5 both
+> touch `Canonical.signable?/1`; see the collision-resolution note below).
 
 Two audits ran against this tree — the Round 5 `improve deep security cryptography` pass that
 produced plans 168–172, and a second independent review whose plan reconciliation was stale
@@ -677,7 +687,8 @@ Plan 164 now follows every CI-mutating plan so its parity script models the fina
 ### Round 4 execution log
 
 **165 Part B — DONE 2026-08-08**, committed `8ab09e9e` on branch `plan165-partb-work` (worktree
-based on `origin/main` @ `b1e6b88a`), **unmerged — merging is the operator's call**. No literal
+based on `origin/main` @ `b1e6b88a`). **Superseded by the Round 4 landing on main, which executed
+all of Parts A/B/C — reconcile or discard `plan165-partb-work`, do not merge it blind.** No literal
 signing material remains in `config/`; dev/test mint ephemeral values at boot; `:prod` and any
 unrecognized `MIX_ENV` raise by name for `SECRET_KEY_BASE` and `LIVE_VIEW_SIGNING_SALT`
 independently. Reviewer-verified: `mix check` exit 0, 0 failures (~600 tests, 27 properties).
@@ -704,8 +715,10 @@ Three corrections came out of executing it, all of which change what the plans s
    spot above means no Sobelow invocation would flag it either.
 
 **161 — DONE 2026-08-08**, six commits `cc56d133..2b2ae207` on branch
-`advisor/161-close-verification-gaps` (worktree based on `origin/main` @ `b1e6b88a`), **unmerged**.
-Three `.formatter.exs` files added; `apps/township_web/.sobelow-conf` created with a written
+`advisor/161-close-verification-gaps` (worktree based on `origin/main` @ `b1e6b88a`).
+**Superseded by the Round 4 landing on main, which executed 161 with an authorized scope
+amendment; `cc56d133..2b2ae207` is not an ancestor of main — reconcile or discard the advisor
+branch, do not merge it blind.** Three `.formatter.exs` files added; `apps/township_web/.sobelow-conf` created with a written
 false-positive justification; the `township_web` Sobelow scan and thirteen previously-unexecuted
 device-free suites wired into the `unit` job; `tauri:witness-ceremony:smoke` wired into
 `packaged_macos`; the orphaned duplicate `test/packaged_bundle_variant.ts` deleted; two `AGENTS.md`

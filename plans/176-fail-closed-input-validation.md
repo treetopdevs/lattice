@@ -274,7 +274,8 @@ Verify: `~/.asdf/shims/mix test apps/lattice_core/test/lattice2/carrier_wire_tes
 - Do **not** touch `Township.Election*`, `Lattice.Attestation.*`, or any M4 surface.
 - Do **not** add server-side rate limiting, frame-size caps, or auth hardening — that is the
   separate boundary-sweep cluster (not planned in this round).
-- Do not change the `nil`-tick skip semantics for heartbeats/transfers.
+- Do not touch heartbeat/transfer tick handling at all, including the `nil`-tick skip
+  semantics — tick validation left this plan with AUTHZ-02 and is plan 162 step 2b(e) territory.
 
 ## Test plan
 

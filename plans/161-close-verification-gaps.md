@@ -14,9 +14,11 @@
 
 ## Status
 
-- **DONE 2026-08-08.** Six commits `cc56d133..2b2ae207` on branch
-  `advisor/161-close-verification-gaps` (worktree based on `origin/main` @ `b1e6b88a`).
-  **Not merged — merging is the operator's call.** Reviewer-verified: scope is exactly the 8
+- **DONE.** Executed and merged to main via `codex/round4-security-reliability` (with the
+  authorized scope amendment below). A parallel advisor-branch run — six commits
+  `cc56d133..2b2ae207` on `advisor/161-close-verification-gaps` (worktree based on `origin/main`
+  @ `b1e6b88a`) — is **superseded by that landing and not an ancestor of main; reconcile or
+  discard it, do not merge it blind**. That run's reviewer record: scope is exactly the 8
   in-scope files; `mix check` exit 0 (595 tests, 27 properties, 0 failures); both Sobelow scans exit
   0; all thirteen device-free suites wired into CI and sequenced after `mix test`; the widened format
   gate demonstrably fails on an unformatted file in `apps/lattice_web_socket`. Two follow-ups recorded
