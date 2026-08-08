@@ -1,6 +1,8 @@
 defmodule LatticeCarrierServer.Listener do
   @moduledoc false
 
+  alias LatticeCarrierServer.SocketOpts
+
   @spec ref(term()) :: term()
   def ref(instance), do: {__MODULE__, instance}
 
@@ -24,7 +26,7 @@ defmodule LatticeCarrierServer.Listener do
 
     transport_opts = %{
       connection_type: :supervisor,
-      socket_opts: [ip: ip, port: port]
+      socket_opts: SocketOpts.build(ip, port)
     }
 
     protocol_opts = %{

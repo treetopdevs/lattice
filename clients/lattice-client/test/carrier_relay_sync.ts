@@ -14,6 +14,7 @@ import {
 } from "../src/index";
 
 interface CarrierVector {
+  replica: string;
   realmByPubkey: Record<string, string>;
   clientDivergedCarrierOps: CarrierOpFrame[];
 }
@@ -93,6 +94,7 @@ for (const { label, frame } of [
   try {
     await syncCarrierOnce(invalidPullClient, [], [post], vector.realmByPubkey, {
       verifier: operationVerifier,
+      expectedReplica: vector.replica,
     });
   } catch (error) {
     invalidPullError = error;
@@ -106,9 +108,42 @@ const defaultPush = new PushRecordingClient();
 const defaultFrames = [post, summary];
 const defaultSynced = await syncCarrierOnce(defaultPush, localOps, defaultFrames, vector.realmByPubkey, {
   verifier: operationVerifier,
+  expectedReplica: vector.replica,
 });
 assert.deepEqual(defaultPush.pushedIds, defaultFrames.map((frame) => frame.id));
 assert.deepEqual(defaultSynced.pushedFrames, defaultFrames);
+
+const shallowRelayFrame = structuredClone(post);
+Reflect.set(
+  shallowRelayFrame.body,
+  shallowRelayFrame.body.length,
+  "relay-preserves-authored-frame",
+);
+const shallowRelayClient = new ScriptedRelaySyncClient(
+  [[]],
+  new Map([
+    [
+      shallowRelayFrame.id,
+      { ...emptyReport(), accepted: [shallowRelayFrame.id] },
+    ],
+  ]),
+);
+const shallowRelaySynced = await syncCarrierOnce(
+  shallowRelayClient,
+  localOps,
+  [shallowRelayFrame],
+  vector.realmByPubkey,
+  {
+    verifier: operationVerifier,
+    submission: "relay",
+    expectedReplica: vector.replica,
+  },
+);
+assert.deepEqual(shallowRelayClient.relayedIds, [shallowRelayFrame.id]);
+assert.deepEqual(shallowRelaySynced.pushedFrames, [shallowRelayFrame]);
+assert.deepEqual(shallowRelaySynced.acknowledgedFrameIds, [
+  shallowRelayFrame.id,
+]);
 
 const relayFrames = [post, grant, genesis, summary];
 const relayReports = new Map<string, RelayOutcome>([
@@ -123,7 +158,11 @@ const relaySynced = await syncCarrierOnce(
   localOps,
   relayFrames,
   vector.realmByPubkey,
-  { verifier: operationVerifier, submission: "relay" },
+  {
+    verifier: operationVerifier,
+    submission: "relay",
+    expectedReplica: vector.replica,
+  },
 );
 const causalOrder = [genesis.id, grant.id, summary.id, post.id];
 assert.deepEqual(relayClient.relayedIds, causalOrder);
@@ -137,13 +176,57 @@ assert.deepEqual(relaySynced.pushReport, {
 });
 assert.deepEqual(relaySynced.acknowledgedFrameIds, [genesis.id]);
 
+const rateLimitedClient = new ScriptedRelaySyncClient(
+  [[]],
+  new Map<string, RelayOutcome>([
+    [genesis.id, { ...emptyReport(), accepted: [genesis.id] }],
+    [grant.id, new Error("carrier peer error: rate_limited")],
+  ]),
+);
+const partiallySynced = await syncCarrierOnce(
+  rateLimitedClient,
+  localOps,
+  [grant, genesis],
+  vector.realmByPubkey,
+  {
+    verifier: operationVerifier,
+    submission: "relay",
+    expectedReplica: vector.replica,
+  },
+);
+assert.deepEqual(rateLimitedClient.relayedIds, [genesis.id, grant.id]);
+assert.deepEqual(partiallySynced.pushedFrames.map(frameId), [genesis.id]);
+assert.deepEqual(partiallySynced.pushReport, {
+  ...emptyReport(),
+  accepted: [genesis.id],
+});
+assert.deepEqual(partiallySynced.acknowledgedFrameIds, [genesis.id]);
+
+const unavailableClient = new ScriptedRelaySyncClient(
+  [[]],
+  new Map([[genesis.id, new Error("carrier peer error: unavailable")]]),
+);
+await assert.rejects(
+  () =>
+    syncCarrierOnce(unavailableClient, localOps, [genesis], vector.realmByPubkey, {
+      verifier: operationVerifier,
+      submission: "relay",
+      expectedReplica: vector.replica,
+    }),
+  /carrier peer error: unavailable/,
+);
+
 const confirmedDuplicateClient = new ScriptedRelaySyncClient([[], [post.id]], new Map());
 const confirmedDuplicate = await syncCarrierOnce(
   confirmedDuplicateClient,
   localOps,
   [post],
   vector.realmByPubkey,
-  { verifier: operationVerifier, submission: "relay" },
+  {
+    verifier: operationVerifier,
+    submission: "relay",
+    expectedReplica: vector.replica,
+  },
 );
 assert.equal(confirmedDuplicateClient.advertiseCalls, 2);
 assert.deepEqual(confirmedDuplicateClient.relayedIds, [post.id]);
@@ -156,7 +239,11 @@ const unconfirmedDuplicate = await syncCarrierOnce(
   localOps,
   [post],
   vector.realmByPubkey,
-  { verifier: operationVerifier, submission: "relay" },
+  {
+    verifier: operationVerifier,
+    submission: "relay",
+    expectedReplica: vector.replica,
+  },
 );
 assert.equal(unconfirmedDuplicateClient.advertiseCalls, 2);
 assert.deepEqual(unconfirmedDuplicate.acknowledgedFrameIds, []);
@@ -179,6 +266,7 @@ await assert.rejects(
     syncCarrierOnce(pushOnlyClient, localOps, [post], vector.realmByPubkey, {
       verifier: operationVerifier,
       submission: "relay",
+      expectedReplica: vector.replica,
     }),
   /does not support relay/,
 );

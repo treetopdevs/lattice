@@ -1,4 +1,10 @@
+export interface DevelopmentEntitlementOptions {
+  bundleIdentifier: string;
+  expectedApplicationIdentifier: string;
+  expectedTeamIdentifier: string;
+}
+
 export function developmentEntitlementErrors(
   entitlements: string,
-  bundleIdentifier: string,
+  options: DevelopmentEntitlementOptions,
 ): string[];

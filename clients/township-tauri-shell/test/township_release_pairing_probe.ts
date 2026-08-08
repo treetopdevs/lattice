@@ -86,6 +86,22 @@ assert.equal(
   null,
   "runtime state exchange must reject non-loopback cleartext callback URLs",
 );
+for (const stateExchangeUrl of [
+  "https://example.test/pairing-state",
+  "http://[::1]:43196/pairing-state",
+]) {
+  assert.equal(
+    townshipReleasePairingProbeConfigFromEnv({
+      VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_LOCAL_REALM: "resident",
+      VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_KEY_ID: "township-release-pairing-state-resident",
+      VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_STORAGE_NAMESPACE:
+        "township:release-pairing-state-probe",
+      VITE_TOWNSHIP_RELEASE_PAIRING_PROBE_STATE_EXCHANGE_URL: stateExchangeUrl,
+    }),
+    null,
+    "runtime state exchange must reject callback URLs excluded by the packaged CSP",
+  );
+}
 assert.equal(townshipReleasePairingProbeConfigFromEnv({}), null);
 assert.equal(
   townshipReleasePairingProbeConfigFromEnv({

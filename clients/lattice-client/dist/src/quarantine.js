@@ -19,6 +19,9 @@ import { consentQuarantine } from "./consent";
  * second implementation to drift from it.
  */
 export function isQuarantined(op, schema, byId, authority, ancCache = new Map()) {
+    if (op.structuralError !== undefined) {
+        return { quarantined: true, reason: op.structuralError };
+    }
     const capability = capabilityQuarantine(op, schema, byId, authority.security, ancCache);
     if (capability.quarantined)
         return capability;

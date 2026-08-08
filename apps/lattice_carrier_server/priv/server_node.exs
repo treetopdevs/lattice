@@ -1,4 +1,13 @@
 # Test/deployment entrypoint for one configured carrier server.
+#
+# This is a dev/test-only fixture, never the production release boot path.
+# Explicitly opt into the macOS directory-sync approximation so it can
+# rehearse and relay locally; the actual lattice_carrier_pilot release keeps
+# the default refusal on a non-Linux host (see
+# LatticeCarrierServer.Durability.Posix).
+if :os.type() == {:unix, :darwin} do
+  Application.put_env(:lattice_carrier_server, :allow_approximate_darwin_sync, true)
+end
 
 {port_text, realm, identity_seed, trusted_peers, relay_realms, source_path} =
   case System.argv() do

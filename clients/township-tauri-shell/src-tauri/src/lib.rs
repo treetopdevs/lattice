@@ -3,9 +3,14 @@ use std::collections::HashMap;
 use std::ffi::CString;
 use std::fs;
 use std::io::{ErrorKind, Write};
-use std::net::UdpSocket;
+use std::net::{IpAddr, SocketAddr, UdpSocket};
 #[cfg(target_os = "android")]
 use std::os::raw::{c_char, c_int};
+#[cfg(any(
+    all(test, unix),
+    all(target_os = "ios", feature = "township-ios-key-reuse-native-probe")
+))]
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 #[cfg(any(target_os = "android", target_os = "ios"))]
 use std::sync::OnceLock;
@@ -17,6 +22,9 @@ use base64::Engine as _;
 use ed25519_dalek::{Signer, SigningKey};
 use rand_core::OsRng;
 use tauri::Manager;
+
+#[cfg(all(target_os = "ios", feature = "township-ios-key-reuse-native-probe"))]
+use objc2_foundation::NSHomeDirectory;
 
 pub mod governance_witness;
 #[cfg(all(
@@ -50,17 +58,44 @@ pub const TOWNSHIP_DEV_TRACE_FILE_ENV: &str = "TOWNSHIP_DEV_TRACE_FILE";
 pub const TOWNSHIP_DEV_TRACE_FILE_DEFAULTS_KEY: &str = "TownshipDevTraceFile";
 pub const TOWNSHIP_NATIVE_KV_FILE_ENV: &str = "TOWNSHIP_NATIVE_KV_FILE";
 pub const TOWNSHIP_PROBE_LOG_TAG: &str = "LATTICE_PROBE";
+#[cfg(any(
+    test,
+    all(target_os = "ios", feature = "township-ios-key-reuse-native-probe")
+))]
+const TOWNSHIP_IOS_KEY_REUSE_PROBE_EVENT_MAX_BYTES: usize = 4_096;
+#[cfg(all(target_os = "ios", feature = "township-ios-key-reuse-native-probe"))]
+const TOWNSHIP_IOS_PROBE_LAUNCH_NONCE_ENV: &str = "TOWNSHIP_IOS_PROBE_LAUNCH_NONCE";
+#[cfg(any(
+    test,
+    all(target_os = "ios", feature = "township-ios-key-reuse-native-probe")
+))]
+const TOWNSHIP_IOS_KEY_REUSE_PROBE_ARTIFACT_PREFIX: &str = "township-ios-key-reuse-probe-";
 pub const TOWNSHIP_PAIRING_DISCOVERY_PACKET_TYPE: &str = "township-pairing-discovery";
 pub const TOWNSHIP_PAIRING_DISCOVERY_BIND_ADDR: &str = "0.0.0.0:45721";
 pub const TOWNSHIP_PAIRING_DISCOVERY_BROADCAST_ADDR: &str = "255.255.255.255:45721";
 pub const TOWNSHIP_PAIRING_DISCOVERY_DEFAULT_TIMEOUT_MS: u64 = 750;
 pub const TOWNSHIP_PAIRING_DISCOVERY_MAX_TIMEOUT_MS: u64 = 5_000;
+pub const TOWNSHIP_CARRIER_SIGNING_PAYLOAD_MAX_BYTES: usize = 64_000;
+/// Exact key-value key prefix the TS shell uses to persist witness artifacts
+/// (`TOWNSHIP_STORAGE_NAMESPACE` + `TOWNSHIP_WITNESS_ARTIFACT_KEY_PREFIX`);
+/// pinned by `test/runtime_wiring_contract.mjs`.
+pub const TOWNSHIP_WITNESS_ARTIFACT_EXPORT_KV_PREFIX: &str =
+    "township:zoning-variance-24:township:witness-artifact:v1:";
+/// Witness artifact ids are unpadded base64url sha256 digests: exactly 43 chars.
+pub const TOWNSHIP_WITNESS_ARTIFACT_ID_CHARS: usize = 43;
 const GOVERNANCE_DUPLICATE_RECONCILIATION_TIMEOUT: Duration = Duration::from_millis(500);
 const GOVERNANCE_DUPLICATE_RECONCILIATION_INTERVAL: Duration = Duration::from_millis(10);
 const GOVERNANCE_PUBLIC_SIDECAR_MISSING: &str =
     "governance witness identity is incomplete: public sidecar is missing";
 #[cfg(feature = "township-dev-trace")]
 const TOWNSHIP_DEV_TRACE_EVENT_MAX_CHARS: usize = 4_096;
+const TOWNSHIP_NATIVE_PROBE_SIGNING_PAYLOAD: &[u8] = b"township-native-probe";
+const TOWNSHIP_CARRIER_SIGNING_PREFIXES: [&[u8]; 4] = [
+    b"\x89\x52carrier-session-v2",
+    b"\x87\x4dlattice-op-v2",
+    b"\x88\x55lattice-delegation-v2",
+    b"\x89\x55lattice-delegation-v3",
+];
 #[cfg(target_os = "android")]
 const TOWNSHIP_INTENT_PLUGIN_IDENTIFIER: &str = "dev.treetop.lattice.township.intent";
 #[cfg(any(target_os = "android", target_os = "ios"))]
@@ -338,6 +373,24 @@ impl TownshipNativeState {
         Ok(values.get(key).cloned())
     }
 
+    /// Resolve the stored witness artifact bytes for a native clipboard
+    /// export. Fail-closed: the id must be an exact unpadded base64url
+    /// sha256 digest, so this command can only ever read (never write) the
+    /// single witness-artifact key the TS shell persisted — it is not a
+    /// generic clipboard or key-value primitive.
+    pub fn witness_artifact_export_payload(&self, artifact_id: &str) -> Result<String, String> {
+        if artifact_id.len() != TOWNSHIP_WITNESS_ARTIFACT_ID_CHARS
+            || !artifact_id
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+        {
+            return Err("invalid witness artifact id".to_string());
+        }
+        let key = format!("{TOWNSHIP_WITNESS_ARTIFACT_EXPORT_KV_PREFIX}{artifact_id}");
+        self.kv_get(&key)?
+            .ok_or_else(|| "witness artifact not found".to_string())
+    }
+
     pub fn kv_set(&self, key: &str, value: &str) -> Result<(), String> {
         {
             let product_db = self
@@ -472,6 +525,15 @@ impl TownshipNativeState {
 
     pub fn sign_carrier(&self, key_id: &str, bytes_base64: &str) -> Result<String, String> {
         reject_governance_carrier_alias(key_id)?;
+        let bytes = BASE64
+            .decode(bytes_base64)
+            .map_err(|error| format!("invalid carrier bytes: {error}"))?;
+        if bytes.len() > TOWNSHIP_CARRIER_SIGNING_PAYLOAD_MAX_BYTES {
+            return Err("signing payload too large".to_string());
+        }
+        if !recognized_carrier_signing_payload(&bytes) {
+            return Err("unrecognized signing payload".to_string());
+        }
         self.signer.sign(key_id, bytes_base64)
     }
 
@@ -782,8 +844,7 @@ pub fn advertise_township_pairing_handoff(
         label,
         handoff,
     })?;
-    let target_addr = present_string(target_addr)
-        .unwrap_or_else(|| TOWNSHIP_PAIRING_DISCOVERY_BROADCAST_ADDR.to_string());
+    let target_addr = pairing_discovery_target(target_addr)?;
     let socket = UdpSocket::bind("0.0.0.0:0")
         .map_err(|error| format!("pairing discovery advertise bind failed: {error}"))?;
     socket
@@ -794,6 +855,31 @@ pub fn advertise_township_pairing_handoff(
         .map_err(|error| format!("pairing discovery advertise send failed: {error}"))?;
 
     Ok(())
+}
+
+fn recognized_carrier_signing_payload(bytes: &[u8]) -> bool {
+    bytes == TOWNSHIP_NATIVE_PROBE_SIGNING_PAYLOAD
+        || TOWNSHIP_CARRIER_SIGNING_PREFIXES
+            .iter()
+            .any(|prefix| bytes.starts_with(prefix))
+}
+
+pub fn pairing_discovery_target(target_addr: Option<String>) -> Result<SocketAddr, String> {
+    let target = present_string(target_addr)
+        .unwrap_or_else(|| TOWNSHIP_PAIRING_DISCOVERY_BROADCAST_ADDR.to_string());
+    let address: SocketAddr = target
+        .parse()
+        .map_err(|_| "pairing discovery target is invalid".to_string())?;
+
+    match address.ip() {
+        IpAddr::V4(ip)
+            if ip.is_broadcast() || ip.is_loopback() || ip.is_private() || ip.is_link_local() =>
+        {
+            Ok(address)
+        }
+
+        _other => Err("pairing discovery target is not local".to_string()),
+    }
 }
 
 pub fn discover_township_pairing_adverts(
@@ -847,10 +933,12 @@ pub fn township_command_names() -> &'static [&'static str] {
         "lattice_ensure_governance_witness_key",
         "lattice_governance_witness_public_key",
         "lattice_sign_governance_witness",
+        "lattice_copy_witness_artifact",
         "lattice_discover_pairing_adverts",
         "lattice_advertise_pairing_handoff",
         "lattice_android_current_pairing_handoff_b64",
         "lattice_log_probe",
+        "lattice_log_ios_key_reuse_probe",
         "lattice_trace_dev_event",
     ]
 }
@@ -866,10 +954,12 @@ pub fn township_command_names() -> &'static [&'static str] {
         "lattice_ensure_governance_witness_key",
         "lattice_governance_witness_public_key",
         "lattice_sign_governance_witness",
+        "lattice_copy_witness_artifact",
         "lattice_discover_pairing_adverts",
         "lattice_advertise_pairing_handoff",
         "lattice_android_current_pairing_handoff_b64",
         "lattice_log_probe",
+        "lattice_log_ios_key_reuse_probe",
     ]
 }
 
@@ -891,10 +981,12 @@ fn configure_township_commands<R: tauri::Runtime>(builder: tauri::Builder<R>) ->
         lattice_ensure_governance_witness_key,
         lattice_governance_witness_public_key,
         lattice_sign_governance_witness,
+        lattice_copy_witness_artifact,
         lattice_discover_pairing_adverts,
         lattice_advertise_pairing_handoff,
         lattice_android_current_pairing_handoff_b64,
         lattice_log_probe,
+        lattice_log_ios_key_reuse_probe,
         lattice_trace_dev_event
     ])
 }
@@ -910,10 +1002,12 @@ fn configure_township_commands<R: tauri::Runtime>(builder: tauri::Builder<R>) ->
         lattice_ensure_governance_witness_key,
         lattice_governance_witness_public_key,
         lattice_sign_governance_witness,
+        lattice_copy_witness_artifact,
         lattice_discover_pairing_adverts,
         lattice_advertise_pairing_handoff,
         lattice_android_current_pairing_handoff_b64,
-        lattice_log_probe
+        lattice_log_probe,
+        lattice_log_ios_key_reuse_probe
     ])
 }
 
@@ -1061,6 +1155,7 @@ pub fn build_platform_secure_township_app<R: tauri::Runtime>(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    maybe_log_ios_key_reuse_startup_probe();
     configure_platform_secure_township_builder(tauri::Builder::default())
         .run(tauri::generate_context!())
         .expect("error while running Township Tauri shell");
@@ -1231,9 +1326,52 @@ fn lattice_android_current_pairing_handoff_b64() -> Result<Option<String>, Strin
 }
 
 #[tauri::command]
+fn lattice_copy_witness_artifact(
+    state: tauri::State<'_, TownshipNativeState>,
+    artifact_id: String,
+) -> Result<(), String> {
+    trace_dev_command("lattice_copy_witness_artifact");
+    let payload = state.witness_artifact_export_payload(&artifact_id)?;
+    write_township_export_clipboard(&payload)
+}
+
+/// Copy already-persisted witness artifact bytes to the system clipboard from
+/// the native side. The WebKit `navigator.clipboard.writeText` path rejects
+/// with `NotAllowedError` on older WebKit builds once the strict CSP is
+/// applied, so the packaged export routes through this native sink instead of
+/// loosening the CSP.
+#[cfg(target_os = "macos")]
+fn write_township_export_clipboard(text: &str) -> Result<(), String> {
+    use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString};
+    use objc2_foundation::NSString;
+
+    // Tauri runs synchronous commands on the main thread, which is where
+    // AppKit expects pasteboard mutation to happen.
+    unsafe {
+        let pasteboard = NSPasteboard::generalPasteboard();
+        pasteboard.clearContents();
+        if pasteboard.setString_forType(&NSString::from_str(text), NSPasteboardTypeString) {
+            Ok(())
+        } else {
+            Err("clipboard export failed".to_string())
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn write_township_export_clipboard(_text: &str) -> Result<(), String> {
+    Err("native clipboard export is unavailable on this platform".to_string())
+}
+
+#[tauri::command]
 fn lattice_log_probe(event: String) -> Result<(), String> {
     log_probe_event(&event);
     Ok(())
+}
+
+#[tauri::command]
+fn lattice_log_ios_key_reuse_probe(event: String) -> Result<(), String> {
+    log_ios_key_reuse_probe_event(&event)
 }
 
 #[cfg(feature = "township-dev-trace")]
@@ -1249,7 +1387,7 @@ fn log_probe_event(event: &str) {
     let Ok(tag) = CString::new(TOWNSHIP_PROBE_LOG_TAG) else {
         return;
     };
-    let Ok(message) = CString::new(event.replace('\0', " ")) else {
+    let Ok(message) = CString::new(sanitize_probe_event(event, None)) else {
         return;
     };
 
@@ -1260,11 +1398,212 @@ fn log_probe_event(event: &str) {
 
 #[cfg(not(target_os = "android"))]
 fn log_probe_event(event: &str) {
-    println!(
-        "{TOWNSHIP_PROBE_LOG_TAG}: {event} process_id={}",
-        std::process::id()
-    );
+    let line = format_probe_event(event, std::process::id(), None, None);
+    println!("{line}");
 }
+
+#[cfg(all(target_os = "ios", feature = "township-ios-key-reuse-native-probe"))]
+fn log_probe_line_to_stderr(line: &str) {
+    let mut stderr = std::io::stderr().lock();
+    let _ = writeln!(stderr, "{line}");
+    let _ = stderr.flush();
+}
+
+fn sanitize_probe_event(event: &str, max_bytes: Option<usize>) -> String {
+    let capacity = max_bytes.map_or(event.len(), |limit| event.len().min(limit));
+    let mut sanitized = String::with_capacity(capacity);
+    for character in event.chars() {
+        let character = if (' '..='~').contains(&character) {
+            character
+        } else {
+            ' '
+        };
+        if max_bytes.is_some_and(|limit| sanitized.len() + character.len_utf8() > limit) {
+            break;
+        }
+        sanitized.push(character);
+    }
+    sanitized
+}
+
+#[cfg(not(target_os = "android"))]
+fn format_probe_event(
+    event: &str,
+    process_id: u32,
+    max_bytes: Option<usize>,
+    launch_nonce: Option<&str>,
+) -> String {
+    let event = sanitize_probe_event(event, max_bytes);
+    match launch_nonce {
+        Some(nonce) => format!(
+            "{TOWNSHIP_PROBE_LOG_TAG}: {event} launch_nonce={nonce} process_id={process_id}"
+        ),
+        None => format!("{TOWNSHIP_PROBE_LOG_TAG}: {event} process_id={process_id}"),
+    }
+}
+
+#[cfg(any(
+    test,
+    all(target_os = "ios", feature = "township-ios-key-reuse-native-probe")
+))]
+fn validate_ios_probe_launch_nonce(nonce: Option<&str>) -> Result<&str, &'static str> {
+    let nonce = nonce.ok_or("missing iOS probe launch nonce")?;
+    if nonce.len() == 32
+        && nonce
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        Ok(nonce)
+    } else {
+        Err("invalid iOS probe launch nonce")
+    }
+}
+
+#[cfg(any(
+    test,
+    all(target_os = "ios", feature = "township-ios-key-reuse-native-probe")
+))]
+fn ios_probe_artifact_file_name(nonce: &str) -> String {
+    format!("{TOWNSHIP_IOS_KEY_REUSE_PROBE_ARTIFACT_PREFIX}{nonce}.log")
+}
+
+#[cfg(all(target_os = "ios", feature = "township-ios-key-reuse-native-probe"))]
+fn log_ios_key_reuse_probe_event(event: &str) -> Result<(), String> {
+    let nonce = std::env::var(TOWNSHIP_IOS_PROBE_LAUNCH_NONCE_ENV)
+        .map_err(|_| "missing iOS probe launch nonce".to_string())?;
+    let nonce = validate_ios_probe_launch_nonce(Some(&nonce)).map_err(str::to_string)?;
+    let line = format_probe_event(
+        event,
+        std::process::id(),
+        Some(TOWNSHIP_IOS_KEY_REUSE_PROBE_EVENT_MAX_BYTES),
+        Some(nonce),
+    );
+    log_probe_line_to_stderr(&line);
+    append_ios_probe_artifact(nonce, &line)
+}
+
+#[cfg(not(all(target_os = "ios", feature = "township-ios-key-reuse-native-probe")))]
+fn log_ios_key_reuse_probe_event(event: &str) -> Result<(), String> {
+    log_probe_event(event);
+    Ok(())
+}
+
+#[cfg(all(target_os = "ios", feature = "township-ios-key-reuse-native-probe"))]
+fn ios_probe_artifact_path(nonce: &str) -> PathBuf {
+    let cache_directory = PathBuf::from(NSHomeDirectory().to_string())
+        .join("Library")
+        .join("Caches");
+    ios_probe_artifact_path_in(&cache_directory, nonce)
+}
+
+#[cfg(all(target_os = "ios", feature = "township-ios-key-reuse-native-probe"))]
+fn reset_ios_probe_artifact(nonce: &str) -> Result<(), String> {
+    let path = ios_probe_artifact_path(nonce);
+    let cache_directory = path
+        .parent()
+        .ok_or_else(|| "iOS probe artifact path has no parent".to_string())?;
+    reset_ios_probe_artifact_in(cache_directory, nonce)
+}
+
+#[cfg(any(
+    test,
+    all(target_os = "ios", feature = "township-ios-key-reuse-native-probe")
+))]
+fn ios_probe_artifact_path_in(cache_directory: &Path, nonce: &str) -> PathBuf {
+    cache_directory.join(ios_probe_artifact_file_name(nonce))
+}
+
+#[cfg(any(
+    all(test, unix),
+    all(target_os = "ios", feature = "township-ios-key-reuse-native-probe")
+))]
+fn reset_ios_probe_artifact_in(cache_directory: &Path, nonce: &str) -> Result<(), String> {
+    fs::create_dir_all(cache_directory)
+        .map_err(|_| "unable to create iOS probe artifact directory")?;
+    let path = ios_probe_artifact_path_in(cache_directory, nonce);
+    for entry in
+        fs::read_dir(cache_directory).map_err(|_| "unable to inspect iOS probe artifacts")?
+    {
+        let entry = entry.map_err(|_| "unable to inspect iOS probe artifact")?;
+        let file_type = entry
+            .file_type()
+            .map_err(|_| "unable to inspect iOS probe artifact type")?;
+        let file_name = entry.file_name();
+        let file_name = file_name.to_string_lossy();
+        if file_type.is_file()
+            && entry.path() != path
+            && file_name.starts_with(TOWNSHIP_IOS_KEY_REUSE_PROBE_ARTIFACT_PREFIX)
+            && file_name.ends_with(".log")
+        {
+            fs::remove_file(entry.path())
+                .map_err(|_| "unable to remove stale iOS probe artifact")?;
+        }
+    }
+    let file = fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&path)
+        .map_err(|_| "unable to reset iOS probe artifact")?;
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o600))
+        .map_err(|_| "unable to protect iOS probe artifact")?;
+    file.sync_all()
+        .map_err(|_| "unable to sync iOS probe artifact".to_string())
+}
+
+#[cfg(all(target_os = "ios", feature = "township-ios-key-reuse-native-probe"))]
+fn append_ios_probe_artifact(nonce: &str, line: &str) -> Result<(), String> {
+    let path = ios_probe_artifact_path(nonce);
+    let cache_directory = path
+        .parent()
+        .ok_or_else(|| "iOS probe artifact path has no parent".to_string())?;
+    append_ios_probe_artifact_in(cache_directory, nonce, line)
+}
+
+#[cfg(any(
+    all(test, unix),
+    all(target_os = "ios", feature = "township-ios-key-reuse-native-probe")
+))]
+fn append_ios_probe_artifact_in(
+    cache_directory: &Path,
+    nonce: &str,
+    line: &str,
+) -> Result<(), String> {
+    let path = ios_probe_artifact_path_in(cache_directory, nonce);
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .map_err(|_| "unable to append iOS probe artifact")?;
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o600))
+        .map_err(|_| "unable to protect iOS probe artifact")?;
+    writeln!(file, "{line}").map_err(|_| "unable to write iOS probe artifact")?;
+    file.flush()
+        .map_err(|_| "unable to flush iOS probe artifact")?;
+    file.sync_all()
+        .map_err(|_| "unable to sync iOS probe artifact".to_string())
+}
+
+#[cfg(all(target_os = "ios", feature = "township-ios-key-reuse-native-probe"))]
+fn maybe_log_ios_key_reuse_startup_probe() {
+    let nonce = std::env::var(TOWNSHIP_IOS_PROBE_LAUNCH_NONCE_ENV).ok();
+    let Ok(nonce) = validate_ios_probe_launch_nonce(nonce.as_deref()) else {
+        log_probe_event(
+            "township-ios-key-reuse-probe stage=native_startup error=invalid_launch_nonce",
+        );
+        return;
+    };
+    if reset_ios_probe_artifact(nonce).is_ok() {
+        let _ = log_ios_key_reuse_probe_event("township-ios-key-reuse-probe stage=native_startup");
+    } else {
+        log_probe_event(
+            "township-ios-key-reuse-probe stage=native_startup error=artifact_unavailable",
+        );
+    }
+}
+
+#[cfg(not(all(target_os = "ios", feature = "township-ios-key-reuse-native-probe")))]
+fn maybe_log_ios_key_reuse_startup_probe() {}
 
 #[cfg(feature = "township-dev-trace")]
 fn trace_dev_command(command: &str) {
@@ -1334,4 +1673,123 @@ fn sanitize_trace_dev_event(command: &str) -> String {
         .chars()
         .take(TOWNSHIP_DEV_TRACE_EVENT_MAX_CHARS)
         .collect()
+}
+
+#[cfg(test)]
+mod probe_event_tests {
+    use super::{
+        format_probe_event, ios_probe_artifact_file_name, sanitize_probe_event,
+        validate_ios_probe_launch_nonce, TOWNSHIP_IOS_KEY_REUSE_PROBE_EVENT_MAX_BYTES,
+    };
+
+    #[cfg(unix)]
+    use super::{append_ios_probe_artifact_in, reset_ios_probe_artifact_in};
+    #[cfg(unix)]
+    use std::fs;
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
+    #[cfg(unix)]
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn probe_events_are_single_line_and_only_ios_key_reuse_is_bounded() {
+        assert_eq!(
+            sanitize_probe_event("ready\r\nforged\0", None),
+            "ready  forged "
+        );
+        assert_eq!(
+            sanitize_probe_event("ready\u{2028}\u{202e}", None),
+            "ready  "
+        );
+        assert_eq!(
+            format_probe_event("ready\nforged", 42, None, None),
+            "LATTICE_PROBE: ready forged process_id=42"
+        );
+
+        let oversized = "x".repeat(TOWNSHIP_IOS_KEY_REUSE_PROBE_EVENT_MAX_BYTES + 100);
+        assert_eq!(
+            sanitize_probe_event(&oversized, None).len(),
+            oversized.len()
+        );
+        assert_eq!(
+            sanitize_probe_event(
+                &oversized,
+                Some(TOWNSHIP_IOS_KEY_REUSE_PROBE_EVENT_MAX_BYTES)
+            )
+            .len(),
+            TOWNSHIP_IOS_KEY_REUSE_PROBE_EVENT_MAX_BYTES
+        );
+    }
+
+    #[test]
+    fn ios_probe_records_bind_valid_launch_nonce_and_artifact_name() {
+        let nonce = "0123456789abcdef0123456789abcdef";
+        assert_eq!(validate_ios_probe_launch_nonce(Some(nonce)), Ok(nonce));
+        assert!(validate_ios_probe_launch_nonce(None).is_err());
+        assert!(validate_ios_probe_launch_nonce(Some("A123456789abcdef0123456789abcdef")).is_err());
+        assert!(validate_ios_probe_launch_nonce(Some("0123456789abcdef")).is_err());
+        assert_eq!(
+            ios_probe_artifact_file_name(nonce),
+            "township-ios-key-reuse-probe-0123456789abcdef0123456789abcdef.log"
+        );
+        assert_eq!(
+            format_probe_event(
+                "township-ios-key-reuse-probe stage=native_startup",
+                42,
+                Some(TOWNSHIP_IOS_KEY_REUSE_PROBE_EVENT_MAX_BYTES),
+                Some(nonce)
+            ),
+            "LATTICE_PROBE: township-ios-key-reuse-probe stage=native_startup launch_nonce=0123456789abcdef0123456789abcdef process_id=42"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ios_probe_artifact_writer_resets_appends_protects_and_removes_stale_files() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should follow the Unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "township-ios-probe-writer-{}-{unique}",
+            std::process::id()
+        ));
+        let cache = root.join("nested").join("Library").join("Caches");
+        let nonce = "0123456789abcdef0123456789abcdef";
+
+        reset_ios_probe_artifact_in(&cache, nonce).expect("reset should create the cache path");
+        let current = cache.join(ios_probe_artifact_file_name(nonce));
+        assert_eq!(fs::read_to_string(&current).unwrap(), "");
+        assert_eq!(
+            fs::metadata(&current).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+
+        fs::write(&current, "obsolete current content\n").unwrap();
+        let stale = cache.join(ios_probe_artifact_file_name(
+            "fedcba9876543210fedcba9876543210",
+        ));
+        fs::write(&stale, "stale probe content\n").unwrap();
+        let unrelated = cache.join("unrelated-cache-file");
+        fs::write(&unrelated, "keep me\n").unwrap();
+
+        reset_ios_probe_artifact_in(&cache, nonce).expect("reset should truncate and sweep");
+        assert_eq!(fs::read_to_string(&current).unwrap(), "");
+        assert!(!stale.exists());
+        assert!(unrelated.exists());
+        assert_eq!(
+            fs::metadata(&current).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+
+        append_ios_probe_artifact_in(&cache, nonce, "first").expect("first append should work");
+        append_ios_probe_artifact_in(&cache, nonce, "second").expect("second append should work");
+        assert_eq!(fs::read_to_string(&current).unwrap(), "first\nsecond\n");
+        assert_eq!(
+            fs::metadata(&current).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+
+        fs::remove_dir_all(root).unwrap();
+    }
 }

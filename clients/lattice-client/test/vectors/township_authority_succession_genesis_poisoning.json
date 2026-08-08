@@ -1,0 +1,395 @@
+{
+  "capabilityCase": {
+    "expectedReason": "impostor_genesis",
+    "honoredCommandOperationId": "SFC84jTFV4OJMTiUKewZVEjGa1rn_MQhL3c6k8Dwiko",
+    "successionOperationId": "qDdSBdTj-oudxzpH_ScrJ5LS0Z6ko8jVPmTeYOM7uT0",
+    "successorDelegationId": "Jehw8G-FbxA6NYzGpqBpmJzbW3VHog2DtcbRG8eLi3g",
+    "targetOperationId": "9sSDHaL_JuTofO04gxFKl6aGFqryqD3WEk5n_2WOKnc",
+    "transferDelegationId": "y7Wq9OfN_hbs4YY6r9nwdbRShomvlGG2n9n4GvxDz4s"
+  },
+  "expectAtFrontier": [],
+  "expectAtFullFrontier": {
+    "authorityQuarantine": [
+      [
+        "9sSDHaL_JuTofO04gxFKl6aGFqryqD3WEk5n_2WOKnc",
+        "impostor_genesis"
+      ]
+    ],
+    "quarantine": [
+      "9sSDHaL_JuTofO04gxFKl6aGFqryqD3WEk5n_2WOKnc"
+    ],
+    "state": {
+      "clerk": "mallory",
+      "clerk_locked": true,
+      "members": [],
+      "posts": [],
+      "summary": "",
+      "title": ""
+    },
+    "winners": {
+      "clerk": "mDX1L8WpdRVivNTLOML8eVzGbWRiqvGABsSwE_9h_8Y",
+      "clerk_locked": "SFC84jTFV4OJMTiUKewZVEjGa1rn_MQhL3c6k8Dwiko",
+      "summary": null,
+      "title": null
+    }
+  },
+  "generatedBy": "Lattice.Sim",
+  "ops": [
+    {
+      "author": "clerk",
+      "command": "genesis clerk",
+      "deps": [],
+      "field": "clerk",
+      "hash": "g_gEHoyd4Xbl8-MZW44kwpqsX1HQjYwb69praPAoNd4",
+      "id": "g_gEHoyd4Xbl8-MZW44kwpqsX1HQjYwb69praPAoNd4",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "clerk"
+    },
+    {
+      "author": "resident",
+      "command": "succeed clerk",
+      "deps": [
+        "g_gEHoyd4Xbl8-MZW44kwpqsX1HQjYwb69praPAoNd4"
+      ],
+      "field": "clerk",
+      "hash": "qDdSBdTj-oudxzpH_ScrJ5LS0Z6ko8jVPmTeYOM7uT0",
+      "id": "qDdSBdTj-oudxzpH_ScrJ5LS0Z6ko8jVPmTeYOM7uT0",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "resident"
+    },
+    {
+      "author": "mallory",
+      "command": "genesis clerk",
+      "deps": [
+        "qDdSBdTj-oudxzpH_ScrJ5LS0Z6ko8jVPmTeYOM7uT0"
+      ],
+      "field": "clerk",
+      "hash": "9sSDHaL_JuTofO04gxFKl6aGFqryqD3WEk5n_2WOKnc",
+      "id": "9sSDHaL_JuTofO04gxFKl6aGFqryqD3WEk5n_2WOKnc",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "resident"
+    },
+    {
+      "author": "resident",
+      "command": "transfer clerk",
+      "deps": [
+        "9sSDHaL_JuTofO04gxFKl6aGFqryqD3WEk5n_2WOKnc"
+      ],
+      "field": "clerk",
+      "hash": "mDX1L8WpdRVivNTLOML8eVzGbWRiqvGABsSwE_9h_8Y",
+      "id": "mDX1L8WpdRVivNTLOML8eVzGbWRiqvGABsSwE_9h_8Y",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "mallory"
+    },
+    {
+      "author": "mallory",
+      "command": "close_matter",
+      "deps": [
+        "mDX1L8WpdRVivNTLOML8eVzGbWRiqvGABsSwE_9h_8Y"
+      ],
+      "field": "clerk_locked",
+      "hash": "SFC84jTFV4OJMTiUKewZVEjGa1rn_MQhL3c6k8Dwiko",
+      "id": "SFC84jTFV4OJMTiUKewZVEjGa1rn_MQhL3c6k8Dwiko",
+      "kind": "command",
+      "mutation": "write",
+      "value": true
+    }
+  ],
+  "oracleCarrierOps": [
+    {
+      "author": "CrUrTpQPBGtdzCzO0s30oIWZ1WneSWQg8YygN24vfHc=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "CrUrTpQPBGtdzCzO0s30oIWZ1WneSWQg8YygN24vfHc=",
+              "id": "kp7kJwZuM9yldZq_8tqlKAuNEaDJlxuCksxYwLOscRs",
+              "issuer": "CrUrTpQPBGtdzCzO0s30oIWZ1WneSWQg8YygN24vfHc=",
+              "live": true,
+              "ops": [
+                "admit",
+                "close_matter",
+                "link_election",
+                "post",
+                "remove_member",
+                "reopen_matter",
+                "set_summary",
+                "set_title"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:succession-genesis-poisoning#root:zqdDsBr7OCb79RADtbch6MjKTeRYGIiTXrWacJ86zIs",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "lcl0Zdkj8BNU7sGTHf4NtVqo+U41jGnSF54/LyVC0c2iaovN2JaVwxs2blHSC0tup90b1dWmuaE0rqguL5foAw=="
+            }
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "clerk"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "successor"
+                      ],
+                      [
+                        "bin",
+                        "82oqKsPtcXRp8tR7aPlCZscZQsc9ORoAsHoU8VOHjHA="
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "dormant_ticks"
+                      ],
+                      [
+                        "int",
+                        3
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [],
+      "id": "g_gEHoyd4Xbl8-MZW44kwpqsX1HQjYwb69praPAoNd4",
+      "kind": "authority",
+      "replica": "replica:matter:succession-genesis-poisoning#root:zqdDsBr7OCb79RADtbch6MjKTeRYGIiTXrWacJ86zIs",
+      "sig": "rvjPiGV68oKoYP1F9ZOUgzGULYy4X9r+6UF9qyBgVxX0VKqG0lQCpXz3ysKndXvK49kk6RB31z8kLWqjTr3XCw==",
+      "v": 1
+    },
+    {
+      "author": "82oqKsPtcXRp8tR7aPlCZscZQsc9ORoAsHoU8VOHjHA=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "succeed"
+          ],
+          [
+            "atom",
+            "clerk"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "82oqKsPtcXRp8tR7aPlCZscZQsc9ORoAsHoU8VOHjHA=",
+              "id": "Jehw8G-FbxA6NYzGpqBpmJzbW3VHog2DtcbRG8eLi3g",
+              "issuer": "82oqKsPtcXRp8tR7aPlCZscZQsc9ORoAsHoU8VOHjHA=",
+              "live": false,
+              "ops": [
+                "close_matter",
+                "reopen_matter"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:succession-genesis-poisoning#root:zqdDsBr7OCb79RADtbch6MjKTeRYGIiTXrWacJ86zIs",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "bRhAomMidv4sUs8+46WB0L1KLWSKA1t/o0fIh3RKdXS8PM4gSoMKRIp+vZJ2xe2pVi1EKXmyyY4ZpAfkzSIaAw=="
+            }
+          ],
+          [
+            "int",
+            3
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "g_gEHoyd4Xbl8-MZW44kwpqsX1HQjYwb69praPAoNd4"
+      ],
+      "id": "qDdSBdTj-oudxzpH_ScrJ5LS0Z6ko8jVPmTeYOM7uT0",
+      "kind": "authority",
+      "replica": "replica:matter:succession-genesis-poisoning#root:zqdDsBr7OCb79RADtbch6MjKTeRYGIiTXrWacJ86zIs",
+      "sig": "s5+r4JZzCFl26mLjQADkuTit3wzBnUIUoEKUgevDM+bjKBc/SD7UMF7DXp38m7w9pGJN408JrRpDAbM4MKUPBg==",
+      "v": 1
+    },
+    {
+      "author": "5jbuWGVjtJ8otuh0pBT3RmylQHPOy93KviA8gM9YWuY=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "82oqKsPtcXRp8tR7aPlCZscZQsc9ORoAsHoU8VOHjHA=",
+              "id": "Jehw8G-FbxA6NYzGpqBpmJzbW3VHog2DtcbRG8eLi3g",
+              "issuer": "82oqKsPtcXRp8tR7aPlCZscZQsc9ORoAsHoU8VOHjHA=",
+              "live": false,
+              "ops": [
+                "close_matter",
+                "reopen_matter"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:succession-genesis-poisoning#root:zqdDsBr7OCb79RADtbch6MjKTeRYGIiTXrWacJ86zIs",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "bRhAomMidv4sUs8+46WB0L1KLWSKA1t/o0fIh3RKdXS8PM4gSoMKRIp+vZJ2xe2pVi1EKXmyyY4ZpAfkzSIaAw=="
+            }
+          ],
+          [
+            "map",
+            []
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "qDdSBdTj-oudxzpH_ScrJ5LS0Z6ko8jVPmTeYOM7uT0"
+      ],
+      "id": "9sSDHaL_JuTofO04gxFKl6aGFqryqD3WEk5n_2WOKnc",
+      "kind": "authority",
+      "replica": "replica:matter:succession-genesis-poisoning#root:zqdDsBr7OCb79RADtbch6MjKTeRYGIiTXrWacJ86zIs",
+      "sig": "/nmsANDSKgmdUizYbSy7t332r7JX/5cQzKC219H36xu86/oQ88puF8eM3lEw88fvGOaeLNHhezF0jTcAjlNFDw==",
+      "v": 1
+    },
+    {
+      "author": "82oqKsPtcXRp8tR7aPlCZscZQsc9ORoAsHoU8VOHjHA=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "transfer"
+          ],
+          [
+            "atom",
+            "clerk"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "5jbuWGVjtJ8otuh0pBT3RmylQHPOy93KviA8gM9YWuY=",
+              "id": "y7Wq9OfN_hbs4YY6r9nwdbRShomvlGG2n9n4GvxDz4s",
+              "issuer": "82oqKsPtcXRp8tR7aPlCZscZQsc9ORoAsHoU8VOHjHA=",
+              "live": false,
+              "ops": [
+                "close_matter"
+              ],
+              "parent_id": "Jehw8G-FbxA6NYzGpqBpmJzbW3VHog2DtcbRG8eLi3g",
+              "replica": "replica:matter:succession-genesis-poisoning#root:zqdDsBr7OCb79RADtbch6MjKTeRYGIiTXrWacJ86zIs",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "MQun2N4ceR2kZNc+qKHw76m6kJe3VvJavWCB5Vfy/WnZSUbyD9mU7LYvSQZLdheHO0nHUF0wp8DJvhOO4T+pAg=="
+            }
+          ],
+          [
+            "int",
+            4
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "9sSDHaL_JuTofO04gxFKl6aGFqryqD3WEk5n_2WOKnc"
+      ],
+      "id": "mDX1L8WpdRVivNTLOML8eVzGbWRiqvGABsSwE_9h_8Y",
+      "kind": "authority",
+      "replica": "replica:matter:succession-genesis-poisoning#root:zqdDsBr7OCb79RADtbch6MjKTeRYGIiTXrWacJ86zIs",
+      "sig": "lSJrCDbGWGeUgjlUvYb/VCROkQgDCLnTi/nk7K9BeaF9z4COV/dvxQ6UOKBNhh1F00+KkbU2jsz6GcKmAzK4DQ==",
+      "v": 1
+    },
+    {
+      "author": "5jbuWGVjtJ8otuh0pBT3RmylQHPOy93KviA8gM9YWuY=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "close_matter"
+          ],
+          [
+            "list",
+            []
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "eTdXcTlPZk5faGJzNFlZNnI5bndkYlJTaG9tdmxHRzJuOW40R3Z4RHo0cw=="
+      ],
+      "deps": [
+        "mDX1L8WpdRVivNTLOML8eVzGbWRiqvGABsSwE_9h_8Y"
+      ],
+      "id": "SFC84jTFV4OJMTiUKewZVEjGa1rn_MQhL3c6k8Dwiko",
+      "kind": "command",
+      "replica": "replica:matter:succession-genesis-poisoning#root:zqdDsBr7OCb79RADtbch6MjKTeRYGIiTXrWacJ86zIs",
+      "sig": "Hvt0u8IgAKpZyuJFHI0RoDrnZQc0c579ZXro7WHbG209L7nYetr1CzglJR36U4evpcDkzHad2eg8+22MEeNBBQ==",
+      "v": 1
+    }
+  ],
+  "perspectives": [],
+  "realmByPubkey": {
+    "5jbuWGVjtJ8otuh0pBT3RmylQHPOy93KviA8gM9YWuY=": "mallory",
+    "82oqKsPtcXRp8tR7aPlCZscZQsc9ORoAsHoU8VOHjHA=": "resident",
+    "CrUrTpQPBGtdzCzO0s30oIWZ1WneSWQg8YygN24vfHc=": "clerk"
+  },
+  "replica": "replica:matter:succession-genesis-poisoning#root:zqdDsBr7OCb79RADtbch6MjKTeRYGIiTXrWacJ86zIs",
+  "scenario": "township_authority_succession_genesis_poisoning",
+  "scenarioKind": "adversarial",
+  "schema": {
+    "fields": {
+      "clerk": {
+        "authority": "clerk"
+      },
+      "clerk_locked": {
+        "default": false,
+        "gatedBy": "clerk",
+        "merge": "lww"
+      },
+      "members": {
+        "merge": "or_set"
+      },
+      "posts": {
+        "merge": "causal_list"
+      },
+      "summary": {
+        "default": "",
+        "merge": "lww"
+      },
+      "title": {
+        "default": "",
+        "merge": "lww"
+      }
+    },
+    "name": "Township.Matter"
+  }
+}

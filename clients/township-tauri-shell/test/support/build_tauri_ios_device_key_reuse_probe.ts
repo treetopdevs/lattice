@@ -16,6 +16,11 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  inspectInstalledIosDevelopmentProfiles,
+  installedIosDevelopmentProfileDiagnostic,
+} from "./ios_installed_development_profiles.mjs";
+import { redactIosSigningOutput } from "./ios_signing_output.mjs";
 import { classifyDeveloperToolchainReferences } from "./ios_toolchain_evidence.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -34,6 +39,13 @@ const deviceArchive = join(
 );
 const generatedSourcePaths = [
   join(appleRoot, "township-tauri-shell.xcodeproj", "project.pbxproj"),
+  join(
+    appleRoot,
+    "township-tauri-shell.xcodeproj",
+    "xcshareddata",
+    "xcschemes",
+    "township-tauri-shell_iOS.xcscheme",
+  ),
   join(appleRoot, "township-tauri-shell_iOS", "Info.plist"),
   join(
     appleRoot,
@@ -49,6 +61,9 @@ const BUILD_EXIT_CONFIRMATION_MS = 3_000;
 const FAILED_LOG_RETENTION_MS = 7 * 24 * 60 * 60_000;
 const FAILED_LOG_PREFIX = "township-ios-device-build-";
 const APPLE_TOOLCHAIN_SHIM_PREFIX = "township-ios-apple-toolchain-";
+const TOWNSHIP_IOS_KEY_REUSE_NATIVE_PROBE_FEATURE =
+  "township-ios-key-reuse-native-probe";
+const MINIMUM_PROFILE_REMAINING_MS = 24 * 60 * 60_000;
 
 try {
   await buildDeviceArchive();
@@ -93,6 +108,10 @@ async function buildDeviceArchive(): Promise<void> {
     PATH: `/opt/homebrew/opt/rustup/bin:${process.env.PATH ?? ""}`,
     VITE_TOWNSHIP_IOS_KEY_REUSE_PROBE: "1",
   };
+  delete buildEnv.TOWNSHIP_NPM_BIN;
+  delete buildEnv.TOWNSHIP_NPM_FALLBACK_PATHS;
+  assert.equal(buildEnv.TOWNSHIP_NPM_BIN, undefined);
+  assert.equal(buildEnv.TOWNSHIP_NPM_FALLBACK_PATHS, undefined);
   const xcodeVersion = runPreflight("xcodebuild", ["-version"], buildEnv);
   const iphoneOsSdkVersion = runPreflight(
     "xcrun",
@@ -129,6 +148,28 @@ async function buildDeviceArchive(): Promise<void> {
     `ios-device-sdk-${iphoneOsSdkVersion.replace(/[^0-9A-Za-z.-]/g, "-")}`,
   );
   buildEnv.CARGO_TARGET_DIR = cargoTargetDir;
+  assertNativeProbeFeatureIsOptIn(buildEnv);
+
+  const tauriConfig = JSON.parse(
+    readFileSync(join(shellRoot, "src-tauri", "tauri.conf.json"), "utf8"),
+  ) as { identifier?: unknown };
+  if (typeof tauriConfig.identifier !== "string") {
+    throw new Error("Tauri configuration omitted the app identifier");
+  }
+  const home = process.env.HOME ?? "";
+  const installedProfileAssessment = inspectInstalledIosDevelopmentProfiles({
+    bundleIdentifier: tauriConfig.identifier,
+    deviceUdid,
+    expectedTeamIdentifier: developmentTeam,
+    home,
+    minimumRemainingMs: MINIMUM_PROFILE_REMAINING_MS,
+    nowMs: Date.now(),
+  });
+  assert.ok(
+    installedProfileAssessment.validProfileCount > 0,
+    "no installed exact Township iOS development profile covers the selected team and device; register the explicit App ID and install its development profile before the cold archive " +
+      `(${installedIosDevelopmentProfileDiagnostic(installedProfileAssessment)})`,
+  );
 
   const generatedSourceSnapshots = new Map(
     generatedSourcePaths.map((path) => [path, readFileSync(path)] as const),
@@ -266,7 +307,7 @@ async function buildDeviceArchive(): Promise<void> {
       );
     }
 
-    assertToolchainMarkers(toolchainMarkers);
+    assertDeepXcrunSelectionMarker(toolchainMarkers);
     assertFreshSwiftToolchainReferences(
       cargoTargetDir,
       developerDir,
@@ -275,6 +316,18 @@ async function buildDeviceArchive(): Promise<void> {
     assert.ok(
       existsSync(sourceArchive),
       "Tauri iOS device build did not produce its archive",
+    );
+    assert.ok(
+      readFileSync(
+        join(
+          sourceArchive,
+          "Products",
+          "Applications",
+          "Township.app",
+          "Township",
+        ),
+      ).includes("township-ios-key-reuse-probe-"),
+      "device archive was not built with the native key-reuse probe",
     );
     const archiveToolchain = readArchiveToolchainMetadata(buildEnv);
     assert.equal(archiveToolchain.sdkName, `iphoneos${iphoneOsSdkVersion}`);
@@ -460,7 +513,7 @@ function readToolchainMarkers(path: string): Set<string> {
   );
 }
 
-function assertToolchainMarkers(markers: Set<string>): void {
+function assertDeepXcrunSelectionMarker(markers: Set<string>): void {
   assert.ok(
     markers.has("xcrun"),
     "deep iOS build did not use the private xcrun selector",
@@ -600,6 +653,8 @@ function runArchiveBuild(
         "--debug",
         "--target",
         "aarch64",
+        "--features",
+        TOWNSHIP_IOS_KEY_REUSE_NATIVE_PROBE_FEATURE,
         "--ci",
         "--archive-only",
       ],
@@ -707,6 +762,43 @@ function runArchiveBuild(
   });
 }
 
+function assertNativeProbeFeatureIsOptIn(env: NodeJS.ProcessEnv): void {
+  const metadata = JSON.parse(
+    runPreflight(
+      "cargo",
+      [
+        "metadata",
+        "--no-deps",
+        "--format-version",
+        "1",
+        "--manifest-path",
+        join(shellRoot, "src-tauri", "Cargo.toml"),
+      ],
+      env,
+    ),
+  ) as {
+    packages?: Array<{
+      features?: Record<string, string[]>;
+      name?: string;
+    }>;
+  };
+  const packageMetadata = metadata.packages?.find(
+    (entry) => entry.name === "township-tauri-shell",
+  );
+  assert.ok(packageMetadata, "Cargo metadata omitted the Township shell");
+  const features = packageMetadata.features ?? {};
+  assert.ok(
+    Object.hasOwn(features, TOWNSHIP_IOS_KEY_REUSE_NATIVE_PROBE_FEATURE),
+    "Cargo metadata omitted the iOS native probe feature",
+  );
+  const defaultFeatures = features.default ?? [];
+  assert.equal(
+    defaultFeatures.includes(TOWNSHIP_IOS_KEY_REUSE_NATIVE_PROBE_FEATURE),
+    false,
+    "the iOS native probe feature must remain opt-in",
+  );
+}
+
 function killBuildProcessGroup(
   pid: number | undefined,
   signal: NodeJS.Signals,
@@ -798,24 +890,9 @@ function redactedBuildTail(output: string): string {
 }
 
 function redactBuildOutput(output: string): string {
-  let redacted = output;
-  if (deviceUdid)
-    redacted = redacted.replaceAll(deviceUdid, "<physical-device>");
-  if (developmentTeam)
-    redacted = redacted.replaceAll(developmentTeam, "<apple-team>");
-  if (process.env.HOME) redacted = redacted.replaceAll(process.env.HOME, "~");
-  return redacted
-    .replace(/Apple Development:[^\r\n"]+/g, "Apple Development: <redacted>")
-    .replace(
-      /\b(signing (?:certificate|identity))\s*[:=][^\r\n]+/gi,
-      "$1: <redacted>",
-    )
-    .replace(
-      /\b(provisioning profile(?: name)?)\s*[:=][^\r\n]+/gi,
-      "$1: <redacted>",
-    )
-    .replace(/\b[0-9A-F]{8}-[0-9A-F]{16}\b/gi, "<physical-device>")
-    .replace(/\b[0-9A-F]{8}(?:-[0-9A-F]{4}){3}-[0-9A-F]{12}\b/gi, "<uuid>")
-    .replace(/\b[0-9A-F]{40}\b/gi, "<certificate>")
-    .replace(/\b[A-Z0-9]{10}\b/g, "<apple-team>");
+  return redactIosSigningOutput(output, {
+    developmentTeam,
+    deviceUdid,
+    home: process.env.HOME ?? "",
+  });
 }

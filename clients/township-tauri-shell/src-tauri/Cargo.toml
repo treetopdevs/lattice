@@ -12,6 +12,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [features]
 township-dev-trace = []
 township-governance-test-presence = []
+township-ios-key-reuse-native-probe = []
 
 [dependencies]
 base64 = "0.22"
@@ -28,6 +29,10 @@ tauri-plugin-deep-link = "2.4.9"
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "0.10"
 objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+  "std",
+  "NSPasteboard",
+] }
 objc2-foundation = { version = "0.3", features = ["NSError", "NSString"] }
 objc2-local-authentication = { version = "0.3", default-features = false, features = ["LAContext"] }
 security-framework = { version = "3.7", features = ["OSX_10_15"] }
@@ -35,6 +40,7 @@ security-framework-sys = "2.17"
 
 [target.'cfg(target_os = "ios")'.dependencies]
 keyring-core = "1.0.0"
+objc2-foundation = { version = "0.3", features = ["NSPathUtilities", "NSString"] }
 
 [target.'cfg(target_os = "ios")'.dependencies.apple-native-keyring-store]
 version = "1.0.0"

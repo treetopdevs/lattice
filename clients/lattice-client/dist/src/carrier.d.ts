@@ -66,6 +66,7 @@ export type CarrierSubmission = "push" | "relay";
 export interface SyncCarrierOptions {
     verifier: Verifier;
     submission?: CarrierSubmission;
+    expectedReplica: string;
 }
 export interface CarrierStateReport {
     state_b64: string;
@@ -110,6 +111,14 @@ export interface CarrierDelegation {
     expires_epoch?: number;
 }
 export declare function carrierDelegationsFromFrames(frames: readonly CarrierOpFrame[]): CarrierDelegation[];
+/** Command names decoded for the Township matter carrier boundary. */
+export declare function townshipCarrierCommandNames(): string[];
+/** Command names and arities decoded for the Township matter carrier boundary. */
+export declare function townshipCarrierCommandTable(): [string, number][];
+/** Command names decoded for the Toolshed tool carrier boundary. */
+export declare function toolshedCarrierCommandNames(): string[];
+/** Command names and arities decoded for the Toolshed tool carrier boundary. */
+export declare function toolshedCarrierCommandTable(): [string, number][];
 interface WebSocketConstructor {
     new (url: string): WebSocketLike;
 }

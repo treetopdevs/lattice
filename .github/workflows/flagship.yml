@@ -99,6 +99,15 @@ jobs:
             _build
           key: ${{ runner.os }}-mix-${{ hashFiles('mix.lock') }}
           restore-keys: ${{ runner.os }}-mix-
+      - name: Cache Cargo dependencies and build
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            clients/township-tauri-shell/src-tauri/target
+          key: ${{ runner.os }}-${{ runner.arch }}-township-tauri-${{ hashFiles('clients/township-tauri-shell/src-tauri/Cargo.lock', 'clients/township-tauri-shell/src-tauri/src/**/*.rs') }}
+          restore-keys: ${{ runner.os }}-${{ runner.arch }}-township-tauri-
       - name: Install dependencies
         run: mix deps.get
       - name: Check formatting
@@ -137,6 +146,12 @@ jobs:
       - name: TS carrier availability feed contract
         working-directory: clients/lattice-client
         run: npm run carrier:feed
+      - name: TS witnessed succession review
+        working-directory: clients/lattice-client
+        run: npm run succession:review
+      - name: TS witnessed succession artifact
+        working-directory: clients/lattice-client
+        run: npm run succession:artifact
       - name: Build TS client for shell feed gate
         working-directory: clients/lattice-client
         run: npm run build
@@ -182,6 +197,39 @@ jobs:
       - name: TS live stable carrier availability feed
         working-directory: clients/township-tauri-shell
         run: npm run feed:contract
+      - name: TS Township carrier peer contract
+        working-directory: clients/township-tauri-shell
+        run: npm run peer:contract
+      - name: TS Township pairing deep-link contract
+        working-directory: clients/township-tauri-shell
+        run: npm run deeplink:contract
+      - name: TS Township pairing deep-link source contract
+        working-directory: clients/township-tauri-shell
+        run: npm run deeplink:source:contract
+      - name: TS Township pairing QR contract
+        working-directory: clients/township-tauri-shell
+        run: npm run qr:contract
+      - name: TS Township pairing QR camera contract
+        working-directory: clients/township-tauri-shell
+        run: npm run qr:camera:contract
+      - name: TS Township pairing discovery contract
+        working-directory: clients/township-tauri-shell
+        run: npm run discovery:contract
+      - name: TS Township canonical probe contract
+        working-directory: clients/township-tauri-shell
+        run: npm run canonical:probe:contract
+      - name: TS mobile secure-store strategy
+        working-directory: clients/township-tauri-shell
+        run: npm run mobile:strategy
+      - name: TS Township witness artifact contract
+        working-directory: clients/township-tauri-shell
+        run: npm run witness:artifact:contract
+      - name: TS Township packaged bundle variant contract
+        working-directory: clients/township-tauri-shell
+        run: npm run bundle:variant:contract
+      - name: TS Township revocation fixture contract
+        working-directory: clients/township-tauri-shell
+        run: npm run revocation:fixture:contract
       - name: Install Tauri Linux prerequisites
         run: |
           sudo apt-get update
@@ -198,6 +246,9 @@ jobs:
       - name: Tauri native command core
         working-directory: clients/township-tauri-shell/src-tauri
         run: cargo test
+      - name: TS Township witness fixture preflight
+        working-directory: clients/township-tauri-shell
+        run: npm run witness:preflight:contract
       - name: Tauri development trace contract
         working-directory: clients/township-tauri-shell/src-tauri
         run: cargo test --features township-dev-trace --test dev_trace_commands
@@ -217,6 +268,8 @@ jobs:
         run: mix credo --strict
       - name: Sobelow (lattice_server)
         run: cd apps/lattice_server && mix sobelow --exit
+      - name: Sobelow (township_web)
+        run: cd apps/township_web && mix sobelow --exit
 
   packaged_macos:
     name: Packaged macOS convergence
@@ -279,6 +332,14 @@ jobs:
         working-directory: clients/township-tauri-shell
         run: npx --no-install playwright install chromium
 
+      - name: Build packaged governance test-presence variant
+        working-directory: clients/township-tauri-shell
+        run: npm run tauri:build:governance-test-presence
+
+      - name: Verify packaged witness ceremony
+        working-directory: clients/township-tauri-shell
+        run: npm run tauri:witness-ceremony:smoke
+
       - name: Verify packaged stable-relay onboarding
         working-directory: clients/township-tauri-shell
         run: npm run tauri:stable-relay:onboarding:smoke
@@ -318,3 +379,223 @@ jobs:
       - name: Verify packaged reactive carrier feed
         working-directory: clients/township-tauri-shell
         run: npm run tauri:feed:smoke
+
+  android_pilot:
+    # Plan 158 "Signed Android Internal Distribution" (Wave A1).
+    #
+    # What this job proves on a hosted runner: the pilot signing path builds a
+    # release APK through the fail-closed gradle gate, the signature verifies
+    # against the pinned pilot certificate, the artifact carries the real CSP
+    # and zero probe/env-seed markers, a build manifest is emitted, and the
+    # fail-closed default refuses packaging without signing secrets.
+    #
+    # What it does NOT prove (explicitly): device install/upgrade behavior.
+    # The APK is ARM64; hosted Linux emulators are x86_64, so install and
+    # signed N->N+1 upgrade smoke are verification-only here and belong to the
+    # Device A harness (clients/township-tauri-shell/harness/).
+    #
+    # Secrets/variables live in the `android-pilot` environment (see
+    # docs/android_pilot_signing_custody.md). While the external pilot
+    # keystore prerequisite is outstanding, the job proves the same path with
+    # an ephemeral throwaway key generated on the runner; that lineage is
+    # marked ephemeral-ci-throwaway, is never labeled pilot, and its APK is
+    # never uploaded.
+    name: Android pilot distribution
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: android-pilot
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            clients/lattice-client/package-lock.json
+            clients/township-tauri-shell/package-lock.json
+
+      - name: Cache Cargo dependencies and Android build
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            clients/township-tauri-shell/src-tauri/target
+          key: ${{ runner.os }}-${{ runner.arch }}-township-android-${{ hashFiles('clients/township-tauri-shell/src-tauri/Cargo.lock', 'clients/township-tauri-shell/src-tauri/src/**/*.rs') }}
+          restore-keys: ${{ runner.os }}-${{ runner.arch }}-township-android-
+
+      - name: Install Android NDK and Rust target
+        run: |
+          echo "y" | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            "ndk;27.1.12297006" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+          rustup target add aarch64-linux-android
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.1.12297006" >> "$GITHUB_ENV"
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+
+      - name: Install client and shell dependencies
+        run: |
+          npm --prefix clients/lattice-client ci
+          npm --prefix clients/township-tauri-shell ci
+
+      - name: Android pilot + harness contracts
+        working-directory: clients/township-tauri-shell
+        run: npm run android:pilot:contract
+
+      - name: Detect pilot signing secrets
+        id: pilot
+        env:
+          KEYSTORE_B64: ${{ secrets.TOWNSHIP_PILOT_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Pilot keystore secrets absent (external prerequisite): building with an ephemeral throwaway key; artifact is NOT distribution-eligible."
+          fi
+
+      - name: Materialize signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.TOWNSHIP_PILOT_KEYSTORE_B64 }}
+          PILOT_PRESENT: ${{ steps.pilot.outputs.present }}
+        run: |
+          set -eu
+          KS="$RUNNER_TEMP/township-signing.jks"
+          if [ "$PILOT_PRESENT" = "true" ]; then
+            printf '%s' "$KEYSTORE_B64" | base64 -d > "$KS"
+          else
+            STOREPASS="ephemeral-ci-$(head -c16 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+            keytool -genkeypair -keystore "$KS" -alias township-pilot-v1 \
+              -keyalg RSA -keysize 2048 -validity 2 \
+              -storepass "$STOREPASS" -keypass "$STOREPASS" \
+              -dname "CN=Township CI Ephemeral Throwaway - NOT PILOT, O=CI Test Only"
+            echo "::add-mask::$STOREPASS"
+            echo "EPHEMERAL_STOREPASS=$STOREPASS" >> "$GITHUB_ENV"
+            keytool -exportcert -keystore "$KS" -alias township-pilot-v1 \
+              -storepass "$STOREPASS" -rfc > "$RUNNER_TEMP/ephemeral-cert.pem"
+            EPHEMERAL_SHA=$(openssl x509 -in "$RUNNER_TEMP/ephemeral-cert.pem" -outform DER | sha256sum | cut -d' ' -f1)
+            echo "EPHEMERAL_CERT_SHA256=$EPHEMERAL_SHA" >> "$GITHUB_ENV"
+          fi
+          echo "TOWNSHIP_PILOT_KEYSTORE_PATH=$KS" >> "$GITHUB_ENV"
+
+      - name: Build signed release APK (pilot path)
+        working-directory: clients/township-tauri-shell
+        env:
+          TOWNSHIP_PILOT_KEYSTORE_PASSWORD: ${{ steps.pilot.outputs.present == 'true' && secrets.TOWNSHIP_PILOT_KEYSTORE_PASSWORD || env.EPHEMERAL_STOREPASS }}
+          TOWNSHIP_PILOT_KEY_PASSWORD: ${{ steps.pilot.outputs.present == 'true' && secrets.TOWNSHIP_PILOT_KEY_PASSWORD || env.EPHEMERAL_STOREPASS }}
+          TOWNSHIP_PILOT_KEY_ALIAS: ${{ steps.pilot.outputs.present == 'true' && vars.TOWNSHIP_PILOT_KEY_ALIAS || 'township-pilot-v1' }}
+        run: |
+          set -eu
+          TOWNSHIP_ANDROID_VERSION_CODE="$(node scripts/android-pilot/version_code.mjs)"
+          export TOWNSHIP_ANDROID_VERSION_CODE
+          echo "versionCode=$TOWNSHIP_ANDROID_VERSION_CODE"
+          npm run tauri:android:build:release -- --target aarch64
+
+      - name: Verify pinned signing certificate
+        working-directory: clients/township-tauri-shell
+        env:
+          PILOT_PRESENT: ${{ steps.pilot.outputs.present }}
+          PINNED_CERT: ${{ vars.TOWNSHIP_PILOT_CERT_SHA256 }}
+        run: |
+          set -eu
+          APK=src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
+          if [ "$PILOT_PRESENT" = "true" ]; then
+            if [ -z "$PINNED_CERT" ]; then
+              echo "TOWNSHIP_PILOT_CERT_SHA256 variable is required when pilot secrets are present" >&2
+              exit 1
+            fi
+            EXPECTED="$PINNED_CERT"
+          else
+            EXPECTED="$EPHEMERAL_CERT_SHA256"
+          fi
+          mkdir -p ../../output/android-pilot
+          node scripts/android-pilot/verify_apk_signature.mjs --apk "$APK" \
+            --expected-cert-sha256 "$EXPECTED" --json ../../output/android-pilot/signature.json
+
+      - name: Scan artifact for probe/env-seed markers and CSP
+        working-directory: clients/township-tauri-shell
+        run: |
+          set -eu
+          APK=src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
+          node scripts/android-pilot/scan_pilot_artifact.mjs --apk "$APK" --dist dist \
+            --json ../../output/android-pilot/scan.json
+
+      - name: Emit build manifest
+        working-directory: clients/township-tauri-shell
+        env:
+          PILOT_PRESENT: ${{ steps.pilot.outputs.present }}
+          TOWNSHIP_PILOT_KEY_ALIAS: ${{ steps.pilot.outputs.present == 'true' && vars.TOWNSHIP_PILOT_KEY_ALIAS || 'township-pilot-v1' }}
+        run: |
+          set -eu
+          APK=src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
+          if [ "$PILOT_PRESENT" = "true" ]; then LINEAGE=pilot; else LINEAGE=ephemeral-ci-throwaway; fi
+          node scripts/android-pilot/emit_build_manifest.mjs --apk "$APK" \
+            --lineage "$LINEAGE" --out ../../output/android-pilot
+
+      - name: Prove fail-closed refusal without signing secrets
+        working-directory: clients/township-tauri-shell/src-tauri/gen/android
+        env:
+          TOWNSHIP_PILOT_KEYSTORE_PATH: ""
+          TOWNSHIP_PILOT_KEYSTORE_PASSWORD: ""
+          TOWNSHIP_PILOT_KEY_PASSWORD: ""
+        run: |
+          set -eu
+          # The rust build tasks are excluded because the Tauri CLI's
+          # android-studio-script only works inside a live `tauri android build`
+          # orchestration (it reads a CLI-managed server-addr temp file); the
+          # jniLibs from the real signed build above are already in place. The
+          # packageUniversalRelease fail-closed gate itself still runs and must
+          # refuse with the real gradle refusal message.
+          if ./gradlew --no-daemon -q packageUniversalRelease \
+              -x rustBuildArm64Release -x rustBuildArmRelease \
+              -x rustBuildX86Release -x rustBuildX86_64Release \
+              -x rustBuildUniversalRelease > refusal.log 2>&1; then
+            echo "release packaging must refuse without signing secrets" >&2
+            exit 1
+          fi
+          if ! grep -q "release signing is fail-closed" refusal.log; then
+            echo "expected the fail-closed refusal message; gradle output was:" >&2
+            cat refusal.log >&2
+            exit 1
+          fi
+
+      - name: Upload pilot artifact and manifest
+        if: steps.pilot.outputs.present == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: township-android-pilot
+          if-no-files-found: error
+          path: |
+            clients/township-tauri-shell/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
+            output/android-pilot/
+
+      - name: Upload verification evidence (no distribution artifact)
+        if: steps.pilot.outputs.present != 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: township-android-pilot-evidence
+          if-no-files-found: error
+          path: output/android-pilot/
+
+      - name: Job summary
+        env:
+          PILOT_PRESENT: ${{ steps.pilot.outputs.present }}
+        run: |
+          {
+            echo "## Android pilot distribution"
+            if [ "$PILOT_PRESENT" = "true" ]; then
+              echo "- Lineage: **pilot** (external keystore via android-pilot environment)"
+              echo "- Signed APK + build manifest uploaded as township-android-pilot"
+            else
+              echo "- Lineage: **ephemeral-ci-throwaway** (pilot keystore secrets absent — external prerequisite)"
+              echo "- The signing path, pinned-cert verification, marker scan, CSP check, and fail-closed refusal were proven; NO distribution artifact was uploaded."
+            fi
+            echo "- Proven here: fail-closed signing gate, pinned certificate, zero probe/env-seed markers, embedded CSP, build manifest."
+            echo "- Not proven here: device install / signed N->N+1 upgrade (ARM64 APK, x86_64-only hosted emulators) — Device A harness territory."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -9,6 +9,13 @@ const shellRoot = resolve(here, "..", "..");
 const appleRoot = join(shellRoot, "src-tauri", "gen", "apple");
 const generatedSourcePaths = [
   join(appleRoot, "township-tauri-shell.xcodeproj", "project.pbxproj"),
+  join(
+    appleRoot,
+    "township-tauri-shell.xcodeproj",
+    "xcshareddata",
+    "xcschemes",
+    "township-tauri-shell_iOS.xcscheme",
+  ),
   join(appleRoot, "township-tauri-shell_iOS", "Info.plist"),
   join(appleRoot, "township-tauri-shell_iOS", "township-tauri-shell_iOS.entitlements"),
 ];
@@ -23,6 +30,18 @@ assert.match(
   "set APPLE_DEVELOPMENT_TEAM to the 10-character Apple team ID used for this local simulator build",
 );
 
+const buildEnv: NodeJS.ProcessEnv = {
+  ...process.env,
+  APPLE_DEVELOPMENT_TEAM: developmentTeam,
+  ENTITLEMENTS_ALLOWED: "YES",
+  PATH: `/opt/homebrew/opt/rustup/bin:${process.env.PATH ?? ""}`,
+  VITE_TOWNSHIP_IOS_KEY_REUSE_PROBE: "1",
+};
+delete buildEnv.TOWNSHIP_NPM_BIN;
+delete buildEnv.TOWNSHIP_NPM_FALLBACK_PATHS;
+assert.equal(buildEnv.TOWNSHIP_NPM_BIN, undefined);
+assert.equal(buildEnv.TOWNSHIP_NPM_FALLBACK_PATHS, undefined);
+
 let exitStatus = 1;
 try {
   const result = spawnSync(
@@ -30,13 +49,7 @@ try {
     ["ios", "build", "--debug", "--target", "aarch64-sim", "--ci", "--archive-only"],
     {
       cwd: shellRoot,
-      env: {
-        ...process.env,
-        APPLE_DEVELOPMENT_TEAM: developmentTeam,
-        ENTITLEMENTS_ALLOWED: "YES",
-        PATH: `/opt/homebrew/opt/rustup/bin:${process.env.PATH ?? ""}`,
-        VITE_TOWNSHIP_IOS_KEY_REUSE_PROBE: "1",
-      },
+      env: buildEnv,
       stdio: "inherit",
     },
   );

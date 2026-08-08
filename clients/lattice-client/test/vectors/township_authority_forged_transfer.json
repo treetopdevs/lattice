@@ -4,11 +4,11 @@
     "authorityQuarantine": [
       [
         "_pvothRfGEe9SS9EmYAecF-9tNDsrd175yhWZSjCtZ4",
-        "transfer_not_holder"
+        "invalid_transfer"
       ],
       [
         "b1qw0DhFZ9d0hTEgKW5nmH6ecmC2aRQWEuA8ObQLBT8",
-        "not_holder"
+        "invalid_capability"
       ]
     ],
     "quarantine": [
