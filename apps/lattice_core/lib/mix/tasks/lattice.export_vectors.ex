@@ -2145,7 +2145,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
     assert_authority_honored!(log, early.id)
 
-    capability_scenario("township_lease_valid_causal", sim, log, %{
+    leased_capability_scenario("township_lease_valid_causal", sim, log, %{
       "case" => "lease_valid_causal",
       "honoredOperationId" => early.id
     })
@@ -2178,7 +2178,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     assert_authority_reason!(log, later.id, :lease_expired)
     assert_post_absent!(log, "concurrent with the beacon")
 
-    capability_scenario("township_lease_expired", sim, log, %{
+    leased_capability_scenario("township_lease_expired", sim, log, %{
       "case" => "lease_expired",
       "concurrentOperationId" => concurrent.id,
       "afterOperationId" => later.id
@@ -2209,7 +2209,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
     assert_authority_reason!(log, late.id, :lease_expired)
 
-    capability_scenario("township_lease_expired_chain", sim, log, %{
+    leased_capability_scenario("township_lease_expired_chain", sim, log, %{
       "case" => "lease_expired_chain",
       "expiredOperationId" => late.id
     })
@@ -2240,7 +2240,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     assert_authority_reason!(log, dead.id, :lease_expired)
     assert_authority_honored!(log, alive.id)
 
-    capability_scenario("township_lease_renewed", sim, log, %{
+    leased_capability_scenario("township_lease_renewed", sim, log, %{
       "case" => "lease_renewed",
       "expiredOperationId" => dead.id,
       "renewedOperationId" => alive.id
@@ -2274,7 +2274,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     assert_authority_reason!(log, stale.id, :stale_beacon)
     assert_authority_honored!(log, post.id)
 
-    capability_scenario("township_beacon_unauthorized", sim, log, %{
+    leased_capability_scenario("township_beacon_unauthorized", sim, log, %{
       "case" => "beacon_unauthorized",
       "unauthorizedBeaconOperationId" => forged.id,
       "staleBeaconOperationId" => stale.id,
@@ -2297,6 +2297,12 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       authorityQuarantine: authority_quarantine(log),
       capabilityCase: evidence
     }
+  end
+
+  defp leased_capability_scenario(name, sim, log, evidence) do
+    name
+    |> capability_scenario(sim, log, evidence)
+    |> Map.put(:canonicalOps, canonical_ops(log))
   end
 
   defp assert_authority_reason!(log, op_id, expected_reason) do
@@ -2989,6 +2995,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     |> maybe_put("replica", Map.get(scenario, :replica))
     |> maybe_put("realmByPubkey", Map.get(scenario, :realmByPubkey))
     |> maybe_put("oracleCarrierOps", Map.get(scenario, :oracleCarrierOps))
+    |> maybe_put("canonicalOps", Map.get(scenario, :canonicalOps))
     |> maybe_put("successionOperationId", Map.get(scenario, :successionOperationId))
     |> maybe_put("tickProvenance", Map.get(scenario, :tickProvenance))
     |> maybe_put("witnessedRecovery", Map.get(scenario, :witnessedRecovery))

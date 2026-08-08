@@ -446,7 +446,7 @@ function commandTable(
 ): [string, number][] {
   return [...decoders]
     .map(([name, decoder]): [string, number] => [name, decoder.arity])
-    .sort(([left], [right]) => left.localeCompare(right));
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
 }
 
 interface WebSocketConstructor {

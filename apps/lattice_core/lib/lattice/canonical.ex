@@ -179,18 +179,26 @@ defmodule Lattice.Canonical do
     major(6, @mapset_tag) <> encode_array_bytes(elements)
   end
 
-  defp encode(%Lattice.Authority.Delegation{} = delegation) do
-    encode_tagged(@delegation_term_tag, [
-      delegation.id,
-      delegation.replica,
-      delegation.issuer,
-      delegation.audience,
-      delegation.parent_id,
-      Enum.sort(delegation.ops),
-      Enum.sort(delegation.roles),
-      delegation.live,
-      delegation.sig
-    ])
+  defp encode(%{__struct__: Lattice.Authority.Delegation} = delegation)
+       when not is_map_key(delegation, :expires_epoch) do
+    encode_tagged(@delegation_term_tag, delegation_term_fields(delegation))
+  end
+
+  defp encode(%Lattice.Authority.Delegation{expires_epoch: nil} = delegation) do
+    encode_tagged(@delegation_term_tag, delegation_term_fields(delegation))
+  end
+
+  defp encode(%Lattice.Authority.Delegation{expires_epoch: expires_epoch} = delegation)
+       when is_integer(expires_epoch) and expires_epoch >= 0 do
+    encode_tagged(
+      @delegation_term_tag,
+      delegation_term_fields(delegation) ++ [expires_epoch]
+    )
+  end
+
+  defp encode(%Lattice.Authority.Delegation{expires_epoch: expires_epoch}) do
+    raise ArgumentError,
+          "delegation expires_epoch must be a non-negative integer or nil, got: #{inspect(expires_epoch)}"
   end
 
   defp encode(%Lattice.Canonical.Atom{name: name}) when is_binary(name),
@@ -220,6 +228,20 @@ defmodule Lattice.Canonical do
   end
 
   defp encode_tagged(tag, value), do: major(6, tag) <> encode(value)
+
+  defp delegation_term_fields(delegation) do
+    [
+      delegation.id,
+      delegation.replica,
+      delegation.issuer,
+      delegation.audience,
+      delegation.parent_id,
+      Enum.sort(delegation.ops),
+      Enum.sort(delegation.roles),
+      delegation.live,
+      delegation.sig
+    ]
+  end
 
   defp encode_array_bytes(elements) do
     major(4, length(elements)) <> IO.iodata_to_binary(elements)

@@ -200,7 +200,7 @@ export function toolshedCarrierCommandTable() {
 function commandTable(decoders) {
     return [...decoders]
         .map(([name, decoder]) => [name, decoder.arity])
-        .sort(([left], [right]) => left.localeCompare(right));
+        .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
 }
 export function carrierTranscriptBytes(challenge, realm, pubkey) {
     return canonicalTerm([
