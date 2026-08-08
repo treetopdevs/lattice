@@ -14,7 +14,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { createPublicKey, verify as edVerify } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { analyzeAuthority, canonicalBytesForCarrierDelegation, canonicalHash, canonicalOrder, carrierDelegationsFromFrames, carrierOpsToSemanticOps, decodeCarrierOpFrame, index, materialize, verifyCarrierOp, verifyWitnessedSuccessionCertificate, witnessedRecoveryPolicyId, } from "../src/index";
+import { analyzeAuthority, canonicalBytesForCarrierDelegation, canonicalHash, canonicalOrder, carrierDelegationsFromFrames, carrierOpsToSemanticOps, decodeCarrierOpFrame, index, materialize, toolshedCarrierCommandTable, toolshedCarrierCommandNames, townshipCarrierCommandTable, townshipCarrierCommandNames, verifyCarrierOp, verifyWitnessedSuccessionCertificate, witnessedRecoveryPolicyId, } from "../src/index";
 const here = dirname(fileURLToPath(import.meta.url));
 const vecDir = join(here, "vectors");
 const verifier = { verify: verifyEd25519 };
@@ -34,6 +34,45 @@ function check(name, got, want) {
 function sortedPairs(pairs) {
     return [...pairs].sort(([left], [right]) => left.localeCompare(right));
 }
+function sortedStringArray(value) {
+    if (!Array.isArray(value) ||
+        !value.every((item) => typeof item === "string")) {
+        return null;
+    }
+    return [...value].sort();
+}
+function sortedCommandTable(value) {
+    if (!Array.isArray(value) ||
+        !value.every((item) => Array.isArray(item) &&
+            item.length === 2 &&
+            typeof item[0] === "string" &&
+            typeof item[1] === "number")) {
+        return null;
+    }
+    return [...value].sort(([left], [right]) => left.localeCompare(right));
+}
+function stableComparisonValue(value) {
+    if (value instanceof Map) {
+        return [...value.entries()]
+            .map(([key, item]) => [stableComparisonValue(key), stableComparisonValue(item)])
+            .sort(([left], [right]) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+    }
+    if (value instanceof Set) {
+        return [...value].map(stableComparisonValue).sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+    }
+    if (Array.isArray(value))
+        return value.map(stableComparisonValue);
+    if (typeof value === "object" && value !== null) {
+        return Object.fromEntries(Object.entries(value)
+            .sort(([left], [right]) => left.localeCompare(right))
+            .map(([key, item]) => [key, stableComparisonValue(item)]));
+    }
+    return value;
+}
+const testedDisguisedEvidenceTypes = new Set();
+let testedBoundaryHeartbeat = false;
+let testedTownshipCommandDrift = false;
+let testedToolshedCommandDrift = false;
 for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
     const vec = JSON.parse(readFileSync(join(vecDir, file), "utf8"));
     console.log(`\n▸ ${vec.scenario}  (${file})`);
@@ -41,6 +80,25 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
     const ops = carrierFrames !== undefined && vec.realmByPubkey !== undefined
         ? carrierOpsToSemanticOps(carrierFrames, vec.realmByPubkey)
         : vec.ops;
+    for (const op of ops) {
+        const evidenceType = op.authority?.type;
+        if (evidenceType === undefined)
+            continue;
+        testedDisguisedEvidenceTypes.add(evidenceType);
+        const disguisedOps = structuredClone(ops);
+        const disguisedOp = disguisedOps.find((candidate) => candidate.id === op.id);
+        if (disguisedOp !== undefined)
+            disguisedOp.kind = "command";
+        const scrubbedOps = structuredClone(disguisedOps);
+        const scrubbedOp = scrubbedOps.find((candidate) => candidate.id === op.id);
+        if (scrubbedOp !== undefined)
+            delete scrubbedOp.authority;
+        const disguisedById = index(disguisedOps);
+        const scrubbedById = index(scrubbedOps);
+        const disguisedAnalysis = analyzeAuthority(vec.schema, disguisedOps, new Set(disguisedOps.map((candidate) => candidate.id)), canonicalOrder(disguisedOps, disguisedById), disguisedById);
+        const scrubbedAnalysis = analyzeAuthority(vec.schema, scrubbedOps, new Set(scrubbedOps.map((candidate) => candidate.id)), canonicalOrder(scrubbedOps, scrubbedById), scrubbedById);
+        check(`non-authority ${evidenceType} evidence is inert (${op.id})`, stableComparisonValue(disguisedAnalysis), stableComparisonValue(scrubbedAnalysis));
+    }
     if (vec.capabilityCase !== undefined && carrierFrames !== undefined) {
         for (const frame of carrierFrames.filter((candidate) => candidate.kind === "command")) {
             const semantic = ops.find((op) => op.id === frame.id);
@@ -50,6 +108,17 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
             check(`command ${frame.id} decoded`, semantic !== undefined, true);
             check(`command ${frame.id} retained capability`, semantic?.cap, expectedCap);
         }
+    }
+    if (vec.scenario === "township_link_election") {
+        testedTownshipCommandDrift = true;
+        const commandNames = vec.capabilityCase?.commandNames;
+        check("Township command decoder table matches the BEAM DSL", townshipCarrierCommandNames(), sortedStringArray(commandNames));
+        check("Township command decoder arities match the BEAM DSL", townshipCarrierCommandTable(), sortedCommandTable(vec.capabilityCase?.commandTable));
+    }
+    if (vec.scenario === "toolshed_custody_consent") {
+        testedToolshedCommandDrift = true;
+        check("Toolshed command decoder table matches the BEAM DSL", toolshedCarrierCommandNames(), sortedStringArray(vec.commandNames));
+        check("Toolshed command decoder arities match the BEAM DSL", toolshedCarrierCommandTable(), sortedCommandTable(vec.commandTable));
     }
     if (vec.scenario === "township_authority_forged_root") {
         const [frame] = carrierFrames ?? [];
@@ -144,6 +213,17 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
         check(`state.${field}`, full.state[field], want);
     }
     check("quarantine set", [...full.quarantine].sort(), [...exp.quarantine].sort());
+    if (vec.scenario === "township_link_election") {
+        const linkOperationId = vec.capabilityCase?.linkOperationId;
+        const withoutLink = typeof linkOperationId === "string"
+            ? materialize(vec.schema, ops.filter((op) => op.id !== linkOperationId))
+            : null;
+        const linkOperation = typeof linkOperationId === "string"
+            ? ops.find((op) => op.id === linkOperationId)
+            : undefined;
+        check("link_election carries its real command name", linkOperation?.command, "link_election");
+        check("link_election zero-mutation state is byte-identical", JSON.stringify(full.state), withoutLink === null ? null : JSON.stringify(withoutLink.state));
+    }
     if (vec.capabilityCase !== undefined) {
         const reasoned = full;
         const reasonPairs = reasoned.quarantineReasons === undefined
@@ -243,6 +323,52 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
             : witnessedRecoveryPolicyId(witnessedPolicy.recovery), projection?.policyId);
         check("genesis-projection bound root", authority.security.root?.pubkey, projection?.holderPubkey);
         check("genesis-projection impostor reason", authority.quarantineReasons.get(projection?.impostorGenesisOperationId ?? ""), "impostor_genesis");
+    }
+    if (vec.scenario === "township_authority_replayed_genesis") {
+        const byId = index(ops);
+        const authority = analyzeAuthority(vec.schema, ops, new Set(ops.map((op) => op.id)), canonicalOrder(ops, byId), byId);
+        check("replayed genesis cannot replace the root-authored succession policy", authority.policiesByRole.get("clerk")?.successor, vec.capabilityCase?.expectedSuccessorPubkey);
+    }
+    if (vec.scenario === "township_succession_w3") {
+        const disguisedOps = structuredClone(ops);
+        const disguisedSuccession = disguisedOps.find((op) => op.authority?.type === "succeed");
+        if (disguisedSuccession !== undefined) {
+            disguisedSuccession.kind = "command";
+        }
+        const disguisedById = index(disguisedOps);
+        const disguisedAuthority = analyzeAuthority(vec.schema, disguisedOps, new Set(disguisedOps.map((op) => op.id)), canonicalOrder(disguisedOps, disguisedById), disguisedById);
+        const disguisedDelegationId = disguisedSuccession?.authority?.type === "succeed"
+            ? disguisedSuccession.authority.delegation.id
+            : "";
+        check("non-authority evidence cannot introduce a succession delegation", disguisedAuthority.security.delegations.has(disguisedDelegationId), false);
+        check("non-authority succession evidence cannot acquire a role", disguisedSuccession === undefined
+            ? null
+            : disguisedAuthority.honoredWrites.has(disguisedSuccession.id), false);
+        const boundaryOps = structuredClone(ops);
+        const boundaryHeartbeat = boundaryOps.find((op) => op.authority?.type === "heartbeat");
+        const boundarySuccession = boundaryOps.find((op) => op.authority?.type === "succeed");
+        const boundaryGenesis = boundaryOps.find((op) => op.authority?.type === "genesis");
+        const boundaryPolicy = boundaryGenesis?.authority?.type === "genesis"
+            ? boundaryGenesis.authority.policies?.clerk
+            : undefined;
+        if (boundaryHeartbeat?.authority?.type === "heartbeat" &&
+            boundarySuccession?.authority?.type === "succeed" &&
+            boundarySuccession.authority.proof.mode === "legacy" &&
+            boundaryPolicy?.mode === "legacy") {
+            testedBoundaryHeartbeat = true;
+            boundaryHeartbeat.kind = "command";
+            boundaryHeartbeat.authority.atTick =
+                boundarySuccession.authority.proof.atTick - boundaryPolicy.dormantTicks + 1;
+            const scrubbedBoundaryOps = structuredClone(boundaryOps);
+            const scrubbedHeartbeat = scrubbedBoundaryOps.find((op) => op.id === boundaryHeartbeat.id);
+            if (scrubbedHeartbeat !== undefined)
+                delete scrubbedHeartbeat.authority;
+            const boundaryById = index(boundaryOps);
+            const scrubbedBoundaryById = index(scrubbedBoundaryOps);
+            const boundaryAuthority = analyzeAuthority(vec.schema, boundaryOps, new Set(boundaryOps.map((op) => op.id)), canonicalOrder(boundaryOps, boundaryById), boundaryById);
+            const scrubbedBoundaryAuthority = analyzeAuthority(vec.schema, scrubbedBoundaryOps, new Set(scrubbedBoundaryOps.map((op) => op.id)), canonicalOrder(scrubbedBoundaryOps, scrubbedBoundaryById), scrubbedBoundaryById);
+            check("non-authority heartbeat cannot postpone a boundary succession", stableComparisonValue(boundaryAuthority), stableComparisonValue(scrubbedBoundaryAuthority));
+        }
     }
     if (vec.scenario === "township_succession_witnessed_recovery") {
         const recovery = vec.witnessedRecovery;
@@ -347,6 +473,9 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
                 [recovery.impostorPolicySuccessionOperationId, "unauthorized_succession"],
                 [recovery.deniedOperationId, "insufficient_recovery_witnesses"],
             ]));
+        check("witnessed-recovery TS reason parity", sortedPairs([...full.quarantineReasons]), exp.authorityQuarantine === undefined
+            ? undefined
+            : sortedPairs(exp.authorityQuarantine));
         let invalidSignatureResult = null;
         const invalidSignatureOps = structuredClone(ops);
         const invalidSignatureOp = invalidSignatureOps.find((op) => op.id === recovery?.honoredOperationId);
@@ -388,6 +517,10 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
         }
     }
 }
+check("non-authority evidence coverage includes every authority evidence type", [...testedDisguisedEvidenceTypes].sort(), ["beacon", "genesis", "grant", "heartbeat", "revoke", "succeed", "transfer"]);
+check("boundary heartbeat mutation coverage executed", testedBoundaryHeartbeat, true);
+check("Township command decoder drift coverage executed", testedTownshipCommandDrift, true);
+check("Toolshed command decoder drift coverage executed", testedToolshedCommandDrift, true);
 console.log("\n▸ externally determined quarantine");
 {
     const schema = {

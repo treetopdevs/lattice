@@ -204,6 +204,26 @@ defmodule LatticeCarrierServer.RuntimeIsolationTest do
   end
 
   @tag :tmp_dir
+  test "an initially unavailable route refuses the whole manifest deployment", %{
+    tmp_dir: tmp_dir
+  } do
+    alpha = instance_fixture(tmp_dir, "failed-route-alpha")
+    alpha_key = {Runtime, {:instance, alpha.name}}
+    {:ok, occupied} = :gen_tcp.listen(0, [:binary, active: false, ip: {127, 0, 0, 1}])
+    {:ok, carrier_port} = :inet.port(occupied)
+    entry = put_in(alpha.entry, ["listener", "port"], carrier_port)
+    manifest = write_manifest(tmp_dir, %{"version" => 1, "instances" => [entry]})
+
+    :ok = safe_stop()
+    Application.put_env(:lattice_carrier_server, :manifest, manifest)
+
+    assert {:error, _reason} = Application.ensure_all_started(:lattice_carrier_server)
+    assert :persistent_term.get(alpha_key, :missing) == :missing
+    assert Runtime.deployment() == nil
+    :gen_tcp.close(occupied)
+  end
+
+  @tag :tmp_dir
   test "preparing a replacement manifest erases removed secret-bearing instances", %{
     tmp_dir: tmp_dir
   } do

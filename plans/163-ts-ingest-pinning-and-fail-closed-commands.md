@@ -18,12 +18,45 @@
   this lands, a hostile carrier peer can move the trust anchor out from under plan 162's new
   predicate.
 - **Effort**: S–M (two independent changes, each small; the fail-closed conversion needs care)
-- **Risk**: LOW — both changes make the client stricter in ways the BEAM already is. The risk is
-  breaking legacy vectors whose ops carry no `replica` field.
+- **Risk**: LOW — both ingest defenses make the client stricter in ways the BEAM already is. A
+  review fix separately restored the pre-plan shallow validation used for locally-authored relay
+  egress; that path is now mutation-pinned. The ingest risk is breaking legacy vectors whose ops
+  carry no `replica` field.
 - **Depends on**: `plans/162-authority-root-binding.md` (recommended — 162 touches
   `clients/lattice-client/src/authority.ts` too; landing them in sequence keeps each diff reviewable)
 - **Category**: security / bug
 - **Planned at**: commit `764a1945`, 2026-07-29
+
+## Execution evidence
+
+Recorded on `codex/round4-security-reliability` during the reviewed execution:
+
+- The foreign-replica RED admitted the signed foreign frame, emptied Township state, and produced
+  four quarantines. Removing the ingest comparison reproduced that named failure; reverting the
+  explicit anchor separately failed the direct anchor assertions.
+- The `link_election` RED quarantined operation
+  `PpPRV1FW9vo4TBX1OWe16B8-hq7DSdRgTyYqIqQ6AE0` as
+  `operation_not_granted`. The green path retains the real command name, produces zero state
+  mutations, and remains absent from the quarantine set.
+- Adding temporary BEAM command `:plan163_drift_probe` made
+  `Township command decoder table matches the BEAM DSL` fail. A second temporary mutation added a
+  two-argument `link_election` overload; conformance exited 1 at
+  `Township command decoder arities match the BEAM DSL`, with runtime
+  `[["link_election", 1]]` versus BEAM
+  `[["link_election", 1], ["link_election", 2]]`. Both mutations and their temporary export
+  support were removed, the test environment was recompiled, and the complete vector corpus was
+  regenerated.
+- Security review changed the initial unknown-command throw to per-operation BEAM-compatible
+  quarantine. Regression coverage now pins `unknown_command`, `bad_command_arity`, and
+  `malformed_command`; prototype-name lookup; malformed raw terms; scalar arguments accepted by
+  BEAM; custody-consent reason precedence; and explicit coverage sentinels for both Township and
+  Toolshed command tables.
+- A later review caught that this branch's trust-boundary hardening had accidentally replaced the
+  pre-plan shallow local-relay check with strict ingress decoding. The correction restores the
+  original egress behavior. Its new regression sends a frame that is shallow-valid but deliberately
+  strict-invalid and proves `stableCausalCarrierFrames/1` relays it unchanged; replacing shallow
+  validation with `decodeCarrierOpFrame` reproduces the named `malformed carrier op` failure before
+  any relay call.
 
 ## Why this matters
 
@@ -531,3 +564,16 @@ Stop and report back (do not improvise) if:
   protocol level — the session challenge carries a replica but the `pull` response is not bound to
   it. Server-side binding would be defense-in-depth on the transport-only boundary; it needs a
   design decision about whether the carrier may reject on semantic grounds.
+- **Two-runtime format deferral discovered during review**: the outer op hash does not directly
+  commit to an embedded delegation's `expires_epoch`. Delegation id/signature self-consistency
+  prevents lease laundering, but adding a hash-ignored expiry can still turn the delegation into a
+  denial (`bad_delegation_sig` and descendant quarantine). Closing that denial requires a versioned
+  canonical delegation-term change in both BEAM and TypeScript; it is recorded as deferred, not
+  completed by this client-ingest plan.
+- **Canonical wire-text mismatch discovered during review**: the TypeScript trust boundary requires
+  canonical decimal/base64 spellings, while `Lattice.Carrier.Wire.decode_term/1` currently accepts
+  alternate text that decodes to the same signed bytes. This is not a signature bypass and an
+  untrusted relay already has equivalent availability power by withholding an op, but the
+  cross-runtime acceptance mismatch is real. Fixing it belongs in the BEAM wire substrate plus the
+  explicitly out-of-scope `codec.ts` encoder, with two-runtime vectors; it is deferred rather than
+  weakening this plan's fail-closed client boundary or representing substrate work as complete.

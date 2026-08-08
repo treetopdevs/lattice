@@ -14,18 +14,20 @@ use township_tauri_shell::{
     collect_township_pairing_discovery_adverts, configure_platform_secure_township_builder,
     configure_platform_secure_township_builder_with_values_file, configure_township_builder,
     decode_township_pairing_discovery_packet, encode_township_pairing_discovery_packet,
-    seed_dev_carrier_key_from_vars, township_command_names, CarrierKeySeedStore,
-    InMemoryCarrierKeySeedStore, KeyringCarrierKeySeedStore, TownshipNativeState,
-    TownshipPairingDiscoveryAdvert, TOWNSHIP_DEV_CARRIER_KEY_ID_ENV,
+    pairing_discovery_target, seed_dev_carrier_key_from_vars, township_command_names,
+    CarrierKeySeedStore, InMemoryCarrierKeySeedStore, KeyringCarrierKeySeedStore,
+    TownshipNativeState, TownshipPairingDiscoveryAdvert,
+    TOWNSHIP_CARRIER_SIGNING_PAYLOAD_MAX_BYTES, TOWNSHIP_DEV_CARRIER_KEY_ID_ENV,
     TOWNSHIP_DEV_CARRIER_KEY_SEED_ENV, TOWNSHIP_KEYRING_SERVICE,
-    TOWNSHIP_PAIRING_DISCOVERY_PACKET_TYPE,
+    TOWNSHIP_PAIRING_DISCOVERY_BROADCAST_ADDR, TOWNSHIP_PAIRING_DISCOVERY_PACKET_TYPE,
+    TOWNSHIP_WITNESS_ARTIFACT_EXPORT_KV_PREFIX, TOWNSHIP_WITNESS_ARTIFACT_ID_CHARS,
 };
 
 const W1_SESSION_SEED: &str = "township-g1";
 const W1_SESSION_PUBKEY: &str = "Ze1W+4DnnK6aoJY5GiUoDVyZVhq5/PCL7UwQALXUQNk=";
-const W1_TRANSCRIPT_B64: &str = "h1JjYXJyaWVyLXNlc3Npb24tdjFIcmVzaWRlbnRYS3JlcGxpY2E6bWF0dGVyOnRvd25zaGlwLWcxI3Jvb3Q6UVVCN293cFZJc1puM0l5b1ZMSmJzRmM1SExrb3poaTJQVkJMNUx6aGozd0tmaXhlZC1ub25jZQFIcmVzaWRlbnRYIGXtVvuA55yumqCWORolKA1cmVYaufzwi+1MEAC11EDZ";
+const W1_TRANSCRIPT_B64: &str = "iVJjYXJyaWVyLXNlc3Npb24tdjJIcmVzaWRlbnRYGnJlcGxpY2E6bWF0dGVyOnRvd25zaGlwLWcxS2ZpeGVkLW5vbmNlWCtCd2NIQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIQndjAQJIcmVzaWRlbnRYIGXtVvuA55yumqCWORolKA1cmVYaufzwi+1MEAC11EDZ";
 const W1_SIGNATURE_B64: &str =
-    "TS9+HPGiV88JMWJw0vm8euvAJEkmMLDxaKnTGz7wBX5vxLYi6wKRuFHLyHgxN3Igu2tFRjPaTIqq4p2RD5CDCg==";
+    "l2T5s/NuXIiW9o3siFeSOkaZnpfaRLHb7xqtryKORd/gRuF8jxbEa//emnbxUvlDIZEc6nrMZD75o4wiDDtoDQ==";
 const PAIRING_HANDOFF: &str = "township-pairing:v1:eyJ2IjoxfQ==";
 
 #[test]
@@ -42,6 +44,7 @@ fn command_names_match_the_tauri_bridge_contract() {
             "lattice_ensure_governance_witness_key",
             "lattice_governance_witness_public_key",
             "lattice_sign_governance_witness",
+            "lattice_copy_witness_artifact",
             "lattice_discover_pairing_adverts",
             "lattice_advertise_pairing_handoff",
             "lattice_android_current_pairing_handoff_b64",
@@ -63,6 +66,7 @@ fn command_names_match_the_tauri_bridge_contract() {
             "lattice_ensure_governance_witness_key",
             "lattice_governance_witness_public_key",
             "lattice_sign_governance_witness",
+            "lattice_copy_witness_artifact",
             "lattice_discover_pairing_adverts",
             "lattice_advertise_pairing_handoff",
             "lattice_android_current_pairing_handoff_b64",
@@ -169,6 +173,16 @@ fn registered_tauri_commands_roundtrip_through_mock_ipc() {
         "lattice_android_current_pairing_handoff_b64",
         serde_json::json!({}),
         Ok(None::<String>),
+    );
+
+    // The native clipboard export command validates its artifact id before it
+    // reads storage or touches the pasteboard, so its fail-closed path is
+    // observable on every platform without mutating the system clipboard.
+    assert_ipc_response(
+        &webview,
+        "lattice_copy_witness_artifact",
+        serde_json::json!({ "artifactId": "not-an-artifact-id" }),
+        Err::<String, String>("invalid witness artifact id".to_string()),
     );
 
     assert_ipc_response(
@@ -289,6 +303,26 @@ fn udp_pairing_discovery_advertise_sends_loopback_public_handoff_only() {
             label: Some("Town hall carrier".to_string()),
             handoff: PAIRING_HANDOFF.to_string()
         }
+    );
+}
+
+#[test]
+fn udp_pairing_discovery_advertise_rejects_public_internet_targets() {
+    let error = advertise_township_pairing_handoff(
+        PAIRING_HANDOFF.to_string(),
+        None,
+        Some("8.8.8.8:53".to_string()),
+    )
+    .unwrap_err();
+
+    assert_eq!(error, "pairing discovery target is not local");
+}
+
+#[test]
+fn udp_pairing_discovery_default_target_is_the_shipped_broadcast_address() {
+    assert_eq!(
+        pairing_discovery_target(None).unwrap().to_string(),
+        TOWNSHIP_PAIRING_DISCOVERY_BROADCAST_ADDR
     );
 }
 
@@ -653,6 +687,95 @@ fn ensure_carrier_key_creates_and_reuses_native_signing_keys() {
 
     let signature = state.sign_carrier("resident", W1_TRANSCRIPT_B64).unwrap();
     assert_signature(&public_key, W1_TRANSCRIPT_B64, &signature);
+}
+
+#[test]
+fn signing_accepts_each_live_carrier_domain_and_the_exact_native_probe() {
+    let state = TownshipNativeState::default();
+    let public_key = state.ensure_carrier_key("resident").unwrap();
+
+    for payload in [
+        b"\x89\x52carrier-session-v2".as_slice(),
+        b"\x87\x4dlattice-op-v2".as_slice(),
+        b"\x88\x55lattice-delegation-v2".as_slice(),
+        b"\x89\x55lattice-delegation-v3".as_slice(),
+        b"township-native-probe".as_slice(),
+    ] {
+        let payload_base64 = base64_string(payload);
+        let signature = state.sign_carrier("resident", &payload_base64).unwrap();
+        assert_signature(&public_key, &payload_base64, &signature);
+    }
+}
+
+#[test]
+fn signing_rejects_unrecognized_and_oversized_payloads_without_echoing_them() {
+    let state = TownshipNativeState::default();
+    state.ensure_carrier_key("resident").unwrap();
+
+    let unrecognized = base64_string(b"not-a-lattice-signing-domain");
+    assert_eq!(
+        state.sign_carrier("resident", &unrecognized).unwrap_err(),
+        "unrecognized signing payload"
+    );
+
+    let succession_witness = base64_string(b"\x82\x5dlattice-succession-witness-v1");
+    assert_eq!(
+        state
+            .sign_carrier("resident", &succession_witness)
+            .unwrap_err(),
+        "unrecognized signing payload"
+    );
+
+    let mut maximum = b"\x87\x4dlattice-op-v2".to_vec();
+    maximum.resize(TOWNSHIP_CARRIER_SIGNING_PAYLOAD_MAX_BYTES, 0);
+    let maximum_base64 = base64_string(&maximum);
+    let maximum_signature = state.sign_carrier("resident", &maximum_base64).unwrap();
+    let public_key = state.public_key("resident").unwrap();
+    assert_signature(&public_key, &maximum_base64, &maximum_signature);
+
+    let mut oversized = b"\x87\x4dlattice-op-v2".to_vec();
+    oversized.resize(TOWNSHIP_CARRIER_SIGNING_PAYLOAD_MAX_BYTES + 1, 0);
+    let oversized_base64 = base64_string(&oversized);
+    assert_eq!(
+        state
+            .sign_carrier("resident", &oversized_base64)
+            .unwrap_err(),
+        "signing payload too large"
+    );
+}
+
+#[test]
+fn witness_artifact_export_payload_reads_only_the_exact_stored_artifact() {
+    let state = TownshipNativeState::default();
+    let artifact_id = "A".repeat(TOWNSHIP_WITNESS_ARTIFACT_ID_CHARS);
+    let key = format!("{TOWNSHIP_WITNESS_ARTIFACT_EXPORT_KV_PREFIX}{artifact_id}");
+    state.kv_set(&key, "{\"v\":1}").unwrap();
+
+    assert_eq!(
+        state.witness_artifact_export_payload(&artifact_id).unwrap(),
+        "{\"v\":1}"
+    );
+    assert_eq!(
+        state
+            .witness_artifact_export_payload(&"B".repeat(TOWNSHIP_WITNESS_ARTIFACT_ID_CHARS))
+            .unwrap_err(),
+        "witness artifact not found"
+    );
+
+    let wrong_char = format!("{}/", "A".repeat(TOWNSHIP_WITNESS_ARTIFACT_ID_CHARS - 1));
+    let traversal = format!("../{}", "A".repeat(TOWNSHIP_WITNESS_ARTIFACT_ID_CHARS - 3));
+    for invalid in [
+        "",
+        "short",
+        &"A".repeat(TOWNSHIP_WITNESS_ARTIFACT_ID_CHARS + 1),
+        wrong_char.as_str(),
+        traversal.as_str(),
+    ] {
+        assert_eq!(
+            state.witness_artifact_export_payload(invalid).unwrap_err(),
+            "invalid witness artifact id"
+        );
+    }
 }
 
 #[test]

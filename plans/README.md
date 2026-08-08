@@ -200,13 +200,13 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 158 | Real-device beta POC program map: shared carrier/distribution foundation, then Township, Toolshed, Treehouse | **P0** | XL | 029, 037, 128, 132, 141, 142 | TODO (execution map ready; LiveOps/CapStore prerequisite is DONE) |
 | 159 | Wave A1 kickoff — shared beta foundation | P1 | — | 158 | DRAFT (parallel session, untracked at time of Round 4) |
 | 160 | PD-003-B Toolshed QR ceremony physics spike | P1 | M | 158 | PROPOSED (parallel session, untracked at time of Round 4) |
-| 161 | Close the three silent verification gaps (Sobelow, orphaned suites, format scope) | P1 | S–M | — | **DONE** 2026-08-08 (6 commits `cc56d133..2b2ae207` on `advisor/161-close-verification-gaps`, unmerged) |
-| 162 | Bind root-less delegations and genesis authorship to the replica root | **P0** | M | 161 (rec.) | TODO (Round 4) |
-| 163 | Pin TypeScript ingest to the paired replica + fail-closed command decode | P1 | S–M | 162 (rec.) | TODO (Round 4) |
-| 164 | One local command mirroring CI, and stop `dist/` from lying | P2 | S | 161 (rec.) | TODO (Round 4) |
-| 165 | Boundary hardening: WebView signing oracle + CSP, committed dev secret, relay growth | P1 | M | — | **Part B DONE** 2026-08-08 (`8ab09e9e` on `plan165-partb-work`, unmerged); Parts A + C TODO |
+| 161 | Close the three silent verification gaps (Sobelow, orphaned suites, format scope) | P1 | S–M | 165 Part B (rec.) | DONE (scope amendment authorized; Claude review fixes landed; a parallel advisor-branch run `cc56d133..2b2ae207` remains unmerged and superseded) |
+| 162 | Bind root-less delegations and genesis authorship to the replica root | **P0** | M | 161 (rec.) | DONE (two-reviewer security loop and mutation gates complete) — the Round 5 step 2b amendments (`cap_ok/8` replica binding, malformed-tick rejection) postdate that execution and are still unimplemented |
+| 163 | Pin TypeScript ingest to the paired replica + fail-closed command decode | P1 | S–M | 162 (rec.) | DONE (Round 4; dual-reviewed, format denials deferred) |
+| 164 | One local command mirroring CI, and stop `dist/` from lying | P2 | S | 161, 166 (rec.) | TODO (Round 4; run last) |
+| 165 | Boundary hardening: WebView signing oracle + CSP, committed dev secret, relay rate | P1 | M | — | DONE (Parts A/B/C dual-reviewed; quarantine journal, read/peer admission, and KV bounds deferred; a parallel Part B run `8ab09e9e` remains unmerged and superseded) |
 | 166 | Typecheck the shell test tree and retire the prose-pinning suite | P2 | M | — | TODO (Round 4) |
-| 167 | Divergence explainer (`Township.Divergence.explain/2` + mix task) | P2 | M | — | TODO (Round 4, direction) |
+| 167 | Divergence explainer (`Township.Divergence.explain/2` + mix task) | P2 | M | 162 (rec.) | TODO (Round 4, direction) |
 | 168 | Commit the embedded delegation lease to the op hash (key-free divergence primitive) | **P0** | S–M | — | TODO (Round 5) |
 | 169 | Carrier control frames carry no authority (verdict gating + false acks) | **P0** | M | — | TODO (Round 5) |
 | 170 | Redact Ed25519 private keys from `inspect/1` and crash reports | P1 | S | — | TODO (Round 5) |
@@ -670,8 +670,9 @@ Numbering note: `159` and `160` were untracked drafts from a parallel session wh
 they are recorded above for numbering coherence and are not Round 4 output. `153` remains an
 existing Township-track plan recorded outside this table.
 
-**Execution order: 161 first (verification baseline), then 162 (P0), then 163. 164–167 are
-independent and may run in any order or in parallel.**
+**Execution order after the Wave A1 merge: 165 Part B first (remove the real Sobelow secret
+finding), then 161 (verification baseline), 162 (P0), 163, 165 Parts A/C, 166, 167, and 164 last.
+Plan 164 now follows every CI-mutating plan so its parity script models the final `unit` job.**
 
 ### Round 4 execution log
 
@@ -810,8 +811,8 @@ Real, confirmed, available for a future pick:
   runs the worker, flagship, and action-handoff E2Es but not these. The plain two-tab browser
   authority/resume flow — the demo the v1 project exists to prove — has no automated execution path.
   Secondary: the `load: true` half of that exclusion is dead (no test carries a `:load` tag).
-- **`test/frontend_shell.mjs` asserts on `App.vue` source text** — 1,294 lines, 737 assertions,
-  reads `src/App.vue` 35 times, tests literally named `Vue source exposes …`, assertions pinning exact
+- **`test/frontend_shell.mjs` asserts on `App.vue` source text** — 1,324 lines, 750 assertions,
+  reads `src/App.vue` 37 times, tests literally named `Vue source exposes …`, assertions pinning exact
   identifier names. `plans/143:31-34` named this file and it was not done. It is the one CI-gated
   frontend suite, and the tooling to fix it is already installed. Deferred out of plan 166 as its own
   M/L plan.
@@ -900,13 +901,14 @@ Each was opened and read during vetting. Recorded so they are not re-audited nex
   `{:path, _}` source for any non-empty `relay_realms`, so the unmatched clause cannot be reached
   through a valid config. The invariant living in a different module from the code that depends on it
   is a mild smell; an explicit `{:error, :read_only}` clause would be defensive tidying, not a fix.
-- **Carrier integers above 2^53 lose precision on TS decode** — REJECTED as not worth doing yet.
-  Real: `wire.ex:171` encodes large ints as `["int", string]` precisely so JSON does not round them,
-  and `carrier.ts:992` coerces straight back to `Number`, after which `collectBeacons`
-  (`authority.ts:1086`) rejects them as `stale_beacon` while `valid_epoch?/2` (`authority.ex:563`)
-  accepts. But epochs and ticks are small monotonic counters in every scenario in the repo. The op
-  hash still verifies (the raw frame term is re-encoded), so this would surface as a semantic
-  divergence with no signature failure — worth remembering if epochs ever become large.
+- **Carrier integers above 2^53 are unsupported by the TS semantic runtime** — DEFERRED as a format
+  limit. `wire.ex` encodes larger integers as decimal strings, but Plan 163's
+  `parseCarrierInteger/1` now rejects values above `Number.MAX_SAFE_INTEGER` rather than rounding
+  them. A pulled frame therefore fails closed as `malformed carrier op` and can stop that sync
+  batch; there is no longer silent precision loss or a signature-only divergence. Every current
+  epoch and tick is a small monotonic counter. Supporting the full BEAM range requires an explicit
+  cross-runtime bound or carrying `bigint` through authority semantics, so it remains separate
+  format work.
 - **`jason` → Elixir 1.19 stdlib `JSON`** — REJECTED again, and the earlier blast-radius estimate was
   low by ~7×. `Jason.` appears in **44 files** across nine of ten umbrella apps, not ~6. And `jason`
   is a hard transitive dep of `credo`, `sobelow`, `rustler`, and `esbuild`, so the migration removes
@@ -933,9 +935,18 @@ Each was opened and read during vetting. Recorded so they are not re-audited nex
   locally-generated QR SVG built from a boolean module matrix (`township_pairing_qr.ts:94-113`). No
   untrusted interpolation.
 - **`Canonical.encode/1` omitting `expires_epoch` for an embedded `%Delegation{}`** (`canonical.ex:182-194`)
-  — REJECTED. The omission is real, but the embedded `delegation.id` **is** encoded, and
-  `Delegation.valid_sig?/1` checks `d.id == hash(encoding)` over bytes that *do* include
-  `expires_epoch`. Lease tampering is caught, in both runtimes.
+  — REVISED after Plan 163 adversarial review. The embedded id/signature prevents lease laundering,
+  so the original privilege-escalation claim remains rejected. However, injecting a hash-ignored
+  expiry can invalidate the delegation and its descendants, producing a denial while the outer op
+  hash still verifies. The durable fix is a versioned canonical delegation-term change in both
+  runtimes; deferred for a dedicated format plan rather than represented as completed in Round 4.
+- **Carrier wire canonical-text mismatch** (`wire.ex:216-223`, `carrier.ts:1988-2029`) — DEFERRED
+  after Plan 163 review. TypeScript rejects alternate decimal/base64 spellings that the BEAM wire
+  decoder currently accepts for the same canonical signed bytes. This is not a signature bypass,
+  and an untrusted relay can already withhold the affected operation, but the two runtimes should
+  share one acceptance rule. The durable change spans the BEAM wire substrate, TypeScript
+  `codec.ts`, and cross-runtime vectors, all outside Plan 163's declared scope; Round 4 keeps the
+  client's fail-closed boundary and records the format work rather than claiming it complete.
 - **Deep-link / pairing / LiveView ingress acting before confirmation** — REJECTED. The dispatcher and
   action-intent parsers validate exhaustively (exact key sets, canonical base64 round-trips, byte
   caps, replica match), both accept and sign require `event.isTrusted` (`use_action_intent.ts:229-231`),

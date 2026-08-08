@@ -22,6 +22,67 @@ test("Tauri serves the Vue build and registers the Township deep-link scheme", (
   assert.deepEqual(config.plugins["deep-link"].mobile, [{ scheme: ["township"], appLink: false }]);
 });
 
+test("the packaged and development CSPs admit only the loopback HTTP state-exchange seam", () => {
+  const security = readJson(shellRoot, "src-tauri/tauri.conf.json").app.security;
+
+  assert.equal(security.csp["default-src"], "'self' customprotocol: asset:");
+  assert.equal(
+    security.csp["connect-src"],
+    "'self' ipc: http://ipc.localhost http://127.0.0.1:* http://localhost:* ws: wss:",
+  );
+  assert.equal(
+    security.devCsp["default-src"],
+    "'self' customprotocol: asset: http://localhost:5173",
+  );
+  assert.equal(
+    security.devCsp["connect-src"],
+    "'self' ipc: http://ipc.localhost http://127.0.0.1:* http://localhost:* http://localhost:5173 ws://localhost:5173 ws: wss:",
+  );
+
+  for (const policy of [security.csp, security.devCsp]) {
+    const connectSources = policy["connect-src"].split(/\s+/);
+
+    assert.ok(connectSources.includes("http://127.0.0.1:*"));
+    assert.ok(connectSources.includes("http://localhost:*"));
+    assert.ok(!connectSources.includes("http:"));
+    assert.ok(!connectSources.includes("https:"));
+    assert.ok(!policy["script-src"].includes("'unsafe-eval'"));
+    assert.equal(policy["object-src"], "'none'");
+    assert.equal(policy["base-uri"], "'self'");
+    assert.equal(policy["form-action"], "'none'");
+    assert.equal(policy["frame-ancestors"], "'none'");
+  }
+
+  assert.equal(security.csp["script-src"], "'self'");
+  assert.equal(security.devCsp["script-src"], "'self' http://localhost:5173");
+});
+
+test("the native witness export sink reads the exact TS artifact storage key", () => {
+  const lib = readText(shellRoot, "src-tauri/src/lib.rs");
+  const nativeWorkflow = readText(shellRoot, "src/native_workflow.ts");
+  const actions = readText(shellRoot, "src/township_actions.ts");
+
+  const namespace = /TOWNSHIP_STORAGE_NAMESPACE = "([^"]+)"/.exec(nativeWorkflow)?.[1];
+  const artifactPrefix = /TOWNSHIP_WITNESS_ARTIFACT_KEY_PREFIX = "([^"]+)"/.exec(actions)?.[1];
+  assert.ok(namespace, "TS storage namespace must be pinned");
+  assert.ok(artifactPrefix, "TS witness artifact key prefix must be pinned");
+
+  // The Rust command derives the KV key itself from the artifact id; its
+  // baked-in prefix must equal the TS namespace + artifact-key composition so
+  // the constrained native sink can only read what the shell persisted.
+  assert.ok(
+    lib.includes(
+      `pub const TOWNSHIP_WITNESS_ARTIFACT_EXPORT_KV_PREFIX: &str =\n    "${namespace}:${artifactPrefix}";`,
+    ),
+    "Rust witness export KV prefix must match the TS storage key composition",
+  );
+  assert.match(
+    nativeWorkflow,
+    /TOWNSHIP_COPY_WITNESS_ARTIFACT_COMMAND =\s*"lattice_copy_witness_artifact"/,
+  );
+  assert.match(lib, /fn lattice_copy_witness_artifact\(/);
+});
+
 test("the shell exposes every packaged action gate in convergence order", () => {
   const scripts = readJson(shellRoot, "package.json").scripts;
 

@@ -135,9 +135,9 @@ test("frontend package exposes installed-app armed deep-link delivery smoke", ()
   assert.match(app, /event\.metaKey/);
   assert.match(app, /event\.shiftKey/);
   assert.match(app, /event\.key\.toLowerCase\(\)/);
-  assert.match(workflow, /TOWNSHIP_TRACE_DEV_SHORTCUT_KEYDOWN_PREFIX = "dev-trace-shortcut-keydown:"/);
+  assert.match(workflow, /TOWNSHIP_TRACE_DEV_SHORTCUT_KEYDOWN_PREFIX =\s*"dev-trace-shortcut-keydown:"/);
   assert.match(workflow, /TOWNSHIP_TRACE_DEV_RUNTIME_READY = "dev-trace-runtime-ready"/);
-  assert.match(workflow, /TOWNSHIP_TRACE_PAIRING_LINK_LOAD_SETTLED = "pairing-link-load-settled"/);
+  assert.match(workflow, /TOWNSHIP_TRACE_PAIRING_LINK_LOAD_SETTLED =\s*"pairing-link-load-settled"/);
   assert.match(app, /TOWNSHIP_TRACE_DEV_SHORTCUT_KEYDOWN_PREFIX/);
   assert.match(app, /TOWNSHIP_TRACE_PAIRING_LINK_LOAD_SETTLED/);
   assert.match(smoke, /township:\/\/dev\/carrier-health\/check/);
@@ -172,7 +172,7 @@ test("Vue source mounts a reducer-backed Township matter surface", () => {
   assert.match(preview, /from "@treetopdevs\/lattice-client"/);
   assert.match(
     preview,
-    /materialize\(\s*townshipMatterSchema,\s*ops,\s*undefined,\s*externallyQuarantined,?\s*\)/,
+    /materialize\(\s*townshipMatterSchema,\s*ops,\s*undefined,\s*externallyQuarantined,\s*expectedReplica,?\s*\)/,
   );
   assert.match(preview, /export function townshipPreview/);
   assert.match(preview, /export function townshipPreviewFromOps/);
@@ -210,8 +210,14 @@ test("Vue source surfaces native invoke readiness from the Tauri workflow", () =
   assert.equal(pkg.dependencies["@tauri-apps/api"], "^2.11.1");
   assert.equal(pkg.scripts["native:contract"], "tsx test/native_workflow.ts");
   assert.match(nativeWorkflow, /from "@tauri-apps\/api\/core"/);
-  assert.match(nativeWorkflow, /createTauriKeyValueStore/);
-  assert.match(nativeWorkflow, /createTauriNativeCarrierSigner/);
+  // Plan 158 seam extraction: the neutral workflow composition lives in
+  // @treetopdevs/lattice-mobile-core and the Township module binds it.
+  const mobileCoreWorkflow = readText("../lattice-mobile-core/src/native_workflow.ts");
+  assert.match(nativeWorkflow, /@treetopdevs\/lattice-mobile-core/);
+  assert.match(nativeWorkflow, /createProductNativeStorage/);
+  assert.match(nativeWorkflow, /createProductNativeWorkflow/);
+  assert.match(mobileCoreWorkflow, /createTauriKeyValueStore/);
+  assert.match(mobileCoreWorkflow, /createTauriNativeCarrierSigner/);
   assert.match(app, /loadTownshipNativeStatus\(\)/);
   assert.match(app, /Device key/);
   assert.match(app, /nativeStatus\.ready/);
@@ -660,7 +666,11 @@ test("Vue source preserves gated pairing import through the shared participant d
   assert.match(link, /createPairingImportState/);
   assert.match(link, /getRandomValues/);
   assert.match(link, /state_mismatch/);
-  assert.match(link, /importTownshipCarrierPairingHandoff/);
+  // Plan 158 seam extraction: parsing/validation delegates to the neutral
+  // deep-link core bound to the Township scheme and handoff prefix.
+  assert.match(link, /parseCarrierPairingDeepLink/);
+  assert.match(link, /@treetopdevs\/lattice-mobile-core/);
+  assert.match(link, /TOWNSHIP_CARRIER_PAIRING_HANDOFF_PREFIX/);
   assert.doesNotMatch(link, /@tauri-apps\/plugin-deep-link/);
   assert.match(source, /createTauriPairingDeepLinkSource/);
   assert.match(source, /import\("@tauri-apps\/plugin-deep-link"\)/);
@@ -1094,9 +1104,14 @@ test("Vue source renders pairing handoff QR without trust claims", () => {
 
   assert.match(pkg.scripts["qr:contract"], /test\/township_pairing_qr\.ts/);
   assert.match(qr, /renderTownshipPairingQrSvg/);
-  assert.match(qr, /importTownshipCarrierPairingHandoff/);
-  assert.match(qr, /role="img"/);
-  assert.match(qr, /aria-label="Township pairing QR"/);
+  // Plan 158 seam extraction: QR render/decode delegates to the neutral core
+  // bound to the Township handoff prefix and display label.
+  assert.match(qr, /renderPairingQrSvg/);
+  assert.match(qr, /@treetopdevs\/lattice-mobile-core/);
+  assert.match(qr, /productLabel: "Township"/);
+  const mobileCoreQr = readText("../lattice-mobile-core/src/pairing_qr.ts");
+  assert.match(mobileCoreQr, /role="img"/);
+  assert.match(mobileCoreQr, /aria-label="\$\{options\.productLabel\} pairing QR"/);
   assert.match(app, /renderTownshipPairingQrSvg/);
   assert.match(app, /pairingQrSvg/);
   assert.match(app, /v-html="pairingQrSvg"/);

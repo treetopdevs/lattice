@@ -1,0 +1,387 @@
+{
+  "capabilityCase": {
+    "childCommandOperationId": "sPWZxika1uVMKOZixEJbvwChVsWMq-X2rlMWQUQd4eM",
+    "childDelegationId": "Vm0retLWRril88dHTKL0g0PiF4za3Xe72e6xUGVYeEI",
+    "childGrantOperationId": "dlBW5Fq3NHdo77sByXQPhMzi6ZZ2csEPWPzS-Wvy7us",
+    "expectedReason": "invalid_capability",
+    "successionOperationId": "F8NelgsFKeyiC8CWwa4egzjvQCxh0Llci6GtNHK5Z9I",
+    "targetOperationId": "iDujORekG69L5BU8xcMBOm0UptOz4eahS2riOkkkbKc",
+    "unrootedDelegationId": "2z3FrFlCMg8M0xdpqlqDbkdA6JimIiwyHWgcVKOfY8k"
+  },
+  "expectAtFrontier": [],
+  "expectAtFullFrontier": {
+    "authorityQuarantine": [
+      [
+        "F8NelgsFKeyiC8CWwa4egzjvQCxh0Llci6GtNHK5Z9I",
+        "unauthorized_succession"
+      ],
+      [
+        "iDujORekG69L5BU8xcMBOm0UptOz4eahS2riOkkkbKc",
+        "invalid_capability"
+      ],
+      [
+        "sPWZxika1uVMKOZixEJbvwChVsWMq-X2rlMWQUQd4eM",
+        "invalid_capability"
+      ]
+    ],
+    "quarantine": [
+      "F8NelgsFKeyiC8CWwa4egzjvQCxh0Llci6GtNHK5Z9I",
+      "iDujORekG69L5BU8xcMBOm0UptOz4eahS2riOkkkbKc",
+      "sPWZxika1uVMKOZixEJbvwChVsWMq-X2rlMWQUQd4eM"
+    ],
+    "state": {
+      "clerk": "clerk",
+      "clerk_locked": false,
+      "members": [],
+      "posts": [],
+      "summary": "",
+      "title": ""
+    },
+    "winners": {
+      "clerk": "Dg-dAtwAi7Iwz5pjqUpqUCbUF-uwFAEAIvJaZCDL3Zw",
+      "clerk_locked": null,
+      "summary": null,
+      "title": null
+    }
+  },
+  "generatedBy": "Lattice.Sim",
+  "ops": [
+    {
+      "author": "clerk",
+      "command": "genesis clerk",
+      "deps": [],
+      "field": "clerk",
+      "hash": "Dg-dAtwAi7Iwz5pjqUpqUCbUF-uwFAEAIvJaZCDL3Zw",
+      "id": "Dg-dAtwAi7Iwz5pjqUpqUCbUF-uwFAEAIvJaZCDL3Zw",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "clerk"
+    },
+    {
+      "author": "mallory",
+      "command": "succeed clerk",
+      "deps": [
+        "Dg-dAtwAi7Iwz5pjqUpqUCbUF-uwFAEAIvJaZCDL3Zw"
+      ],
+      "field": "clerk",
+      "hash": "F8NelgsFKeyiC8CWwa4egzjvQCxh0Llci6GtNHK5Z9I",
+      "id": "F8NelgsFKeyiC8CWwa4egzjvQCxh0Llci6GtNHK5Z9I",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "mallory"
+    },
+    {
+      "author": "mallory",
+      "command": "post",
+      "deps": [
+        "F8NelgsFKeyiC8CWwa4egzjvQCxh0Llci6GtNHK5Z9I"
+      ],
+      "field": "posts",
+      "hash": "iDujORekG69L5BU8xcMBOm0UptOz4eahS2riOkkkbKc",
+      "id": "iDujORekG69L5BU8xcMBOm0UptOz4eahS2riOkkkbKc",
+      "kind": "command",
+      "mutation": "append",
+      "value": "mallory: succession-laundered capability"
+    },
+    {
+      "author": "mallory",
+      "command": "grant resident",
+      "deps": [
+        "iDujORekG69L5BU8xcMBOm0UptOz4eahS2riOkkkbKc"
+      ],
+      "field": "__authority",
+      "hash": "dlBW5Fq3NHdo77sByXQPhMzi6ZZ2csEPWPzS-Wvy7us",
+      "id": "dlBW5Fq3NHdo77sByXQPhMzi6ZZ2csEPWPzS-Wvy7us",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "resident",
+      "command": "post",
+      "deps": [
+        "Dg-dAtwAi7Iwz5pjqUpqUCbUF-uwFAEAIvJaZCDL3Zw"
+      ],
+      "field": "posts",
+      "hash": "sPWZxika1uVMKOZixEJbvwChVsWMq-X2rlMWQUQd4eM",
+      "id": "sPWZxika1uVMKOZixEJbvwChVsWMq-X2rlMWQUQd4eM",
+      "kind": "command",
+      "mutation": "append",
+      "value": "resident: child of rejected succession capability"
+    }
+  ],
+  "oracleCarrierOps": [
+    {
+      "author": "xy5aZQqe5L4oTNECCe6LH3G+LJ7cf1CY7ya0kn/fSoc=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "xy5aZQqe5L4oTNECCe6LH3G+LJ7cf1CY7ya0kn/fSoc=",
+              "id": "lfV4WegaBWc5npAdhhhg8p_PhtZPiX_qco9J4RxGzfA",
+              "issuer": "xy5aZQqe5L4oTNECCe6LH3G+LJ7cf1CY7ya0kn/fSoc=",
+              "live": true,
+              "ops": [
+                "admit",
+                "close_matter",
+                "link_election",
+                "post",
+                "remove_member",
+                "reopen_matter",
+                "set_summary",
+                "set_title"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:succession-capability-laundering#root:hqfGwZ5Ds-9OwtTy8q2nhkGrcYA541l7R7avt1QC1Cc",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "aUE5N6XYr3tYswDYUcyYP7UR3YbA4OSxgM70wA6IPXFKNLBA/fEVQkrp8Csf6A9SqosXSG2X8XAvrGjX6XvPBQ=="
+            }
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "clerk"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "successor"
+                      ],
+                      [
+                        "bin",
+                        "N+iG3NVYVNz8sHzzs+uNSo3cD83GfKi9pigNCvX7JFI="
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "dormant_ticks"
+                      ],
+                      [
+                        "int",
+                        3
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [],
+      "id": "Dg-dAtwAi7Iwz5pjqUpqUCbUF-uwFAEAIvJaZCDL3Zw",
+      "kind": "authority",
+      "replica": "replica:matter:succession-capability-laundering#root:hqfGwZ5Ds-9OwtTy8q2nhkGrcYA541l7R7avt1QC1Cc",
+      "sig": "YFE0ZBlRtQsVg6hhVCyoJuXD+lVC23IT2rwRGqFAQwlB7XPL2QZz/apkQjpt1VEWbP/HgIVTeC09OYsZJqdQDA==",
+      "v": 1
+    },
+    {
+      "author": "/DvUseCbgYWwx3DorJbjtX3NfeSWe/iWrF0m0Xb+tE8=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "succeed"
+          ],
+          [
+            "atom",
+            "clerk"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "/DvUseCbgYWwx3DorJbjtX3NfeSWe/iWrF0m0Xb+tE8=",
+              "id": "2z3FrFlCMg8M0xdpqlqDbkdA6JimIiwyHWgcVKOfY8k",
+              "issuer": "/DvUseCbgYWwx3DorJbjtX3NfeSWe/iWrF0m0Xb+tE8=",
+              "live": true,
+              "ops": [
+                "post"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:succession-capability-laundering#root:hqfGwZ5Ds-9OwtTy8q2nhkGrcYA541l7R7avt1QC1Cc",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "r9zh9ZLwm1UNY5kd3nG31nMNON6YkqjzCAF+z9zyJU6h2HsQWGJTGjTHYqXubOK18WsgLgG1wqUiYOL21OlfAw=="
+            }
+          ],
+          [
+            "int",
+            0
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "Dg-dAtwAi7Iwz5pjqUpqUCbUF-uwFAEAIvJaZCDL3Zw"
+      ],
+      "id": "F8NelgsFKeyiC8CWwa4egzjvQCxh0Llci6GtNHK5Z9I",
+      "kind": "authority",
+      "replica": "replica:matter:succession-capability-laundering#root:hqfGwZ5Ds-9OwtTy8q2nhkGrcYA541l7R7avt1QC1Cc",
+      "sig": "YIiR5W90/+2k8jmr2UW602gJa2XvSPFzikXZJCLIP80BoqVmo8L657Pd1XzM3JMaST+F5KqKiUA0lAzhryFFBg==",
+      "v": 1
+    },
+    {
+      "author": "/DvUseCbgYWwx3DorJbjtX3NfeSWe/iWrF0m0Xb+tE8=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "post"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "bWFsbG9yeTogc3VjY2Vzc2lvbi1sYXVuZGVyZWQgY2FwYWJpbGl0eQ=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "MnozRnJGbENNZzhNMHhkcHFscURia2RBNkppbUlpd3lIV2djVktPZlk4aw=="
+      ],
+      "deps": [
+        "F8NelgsFKeyiC8CWwa4egzjvQCxh0Llci6GtNHK5Z9I"
+      ],
+      "id": "iDujORekG69L5BU8xcMBOm0UptOz4eahS2riOkkkbKc",
+      "kind": "command",
+      "replica": "replica:matter:succession-capability-laundering#root:hqfGwZ5Ds-9OwtTy8q2nhkGrcYA541l7R7avt1QC1Cc",
+      "sig": "MZaImvsyrizukoqi4ZfMh+qAH4ndV3/bajBbRHnaCfBQkNgcnHIN/vBlZLrMDO6pjxQ5HEaiOVxbMJygFaCaCg==",
+      "v": 1
+    },
+    {
+      "author": "/DvUseCbgYWwx3DorJbjtX3NfeSWe/iWrF0m0Xb+tE8=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "grant"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "N+iG3NVYVNz8sHzzs+uNSo3cD83GfKi9pigNCvX7JFI=",
+              "id": "Vm0retLWRril88dHTKL0g0PiF4za3Xe72e6xUGVYeEI",
+              "issuer": "/DvUseCbgYWwx3DorJbjtX3NfeSWe/iWrF0m0Xb+tE8=",
+              "live": false,
+              "ops": [
+                "post"
+              ],
+              "parent_id": "2z3FrFlCMg8M0xdpqlqDbkdA6JimIiwyHWgcVKOfY8k",
+              "replica": "replica:matter:succession-capability-laundering#root:hqfGwZ5Ds-9OwtTy8q2nhkGrcYA541l7R7avt1QC1Cc",
+              "roles": [],
+              "sig": "YKhz1yG6ElMfNkUEhgQeDtzb81ImwWjEm0Oh1RKG/3JRgMSDSwYTiTahO/naClLUci6PkxaZwTlON4CglXJZDA=="
+            }
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "iDujORekG69L5BU8xcMBOm0UptOz4eahS2riOkkkbKc"
+      ],
+      "id": "dlBW5Fq3NHdo77sByXQPhMzi6ZZ2csEPWPzS-Wvy7us",
+      "kind": "authority",
+      "replica": "replica:matter:succession-capability-laundering#root:hqfGwZ5Ds-9OwtTy8q2nhkGrcYA541l7R7avt1QC1Cc",
+      "sig": "DRCw3JnT/D2sKa/pT4G0MpCujaEsV+bSPv2enhGGXVnrlj3EgCqiFGRdJX3QEZL6ymQfjwVUom3hOs1PF1+7DQ==",
+      "v": 1
+    },
+    {
+      "author": "N+iG3NVYVNz8sHzzs+uNSo3cD83GfKi9pigNCvX7JFI=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "post"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "cmVzaWRlbnQ6IGNoaWxkIG9mIHJlamVjdGVkIHN1Y2Nlc3Npb24gY2FwYWJpbGl0eQ=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "Vm0wcmV0TFdScmlsODhkSFRLTDBnMFBpRjR6YTNYZTcyZTZ4VUdWWWVFSQ=="
+      ],
+      "deps": [
+        "Dg-dAtwAi7Iwz5pjqUpqUCbUF-uwFAEAIvJaZCDL3Zw"
+      ],
+      "id": "sPWZxika1uVMKOZixEJbvwChVsWMq-X2rlMWQUQd4eM",
+      "kind": "command",
+      "replica": "replica:matter:succession-capability-laundering#root:hqfGwZ5Ds-9OwtTy8q2nhkGrcYA541l7R7avt1QC1Cc",
+      "sig": "gmHTy/0u2KGfHrP8TjtfoWVUrU1PdMJU95kDBHQARHvs0+aN+Rle40RxeWHMx3n2lopPOMID/uEYw5x4g6P+AQ==",
+      "v": 1
+    }
+  ],
+  "perspectives": [],
+  "realmByPubkey": {
+    "/DvUseCbgYWwx3DorJbjtX3NfeSWe/iWrF0m0Xb+tE8=": "mallory",
+    "N+iG3NVYVNz8sHzzs+uNSo3cD83GfKi9pigNCvX7JFI=": "resident",
+    "xy5aZQqe5L4oTNECCe6LH3G+LJ7cf1CY7ya0kn/fSoc=": "clerk"
+  },
+  "replica": "replica:matter:succession-capability-laundering#root:hqfGwZ5Ds-9OwtTy8q2nhkGrcYA541l7R7avt1QC1Cc",
+  "scenario": "township_authority_succession_capability_laundering",
+  "scenarioKind": "adversarial",
+  "schema": {
+    "fields": {
+      "clerk": {
+        "authority": "clerk"
+      },
+      "clerk_locked": {
+        "default": false,
+        "gatedBy": "clerk",
+        "merge": "lww"
+      },
+      "members": {
+        "merge": "or_set"
+      },
+      "posts": {
+        "merge": "causal_list"
+      },
+      "summary": {
+        "default": "",
+        "merge": "lww"
+      },
+      "title": {
+        "default": "",
+        "merge": "lww"
+      }
+    },
+    "name": "Township.Matter"
+  }
+}

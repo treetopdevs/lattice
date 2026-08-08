@@ -29,6 +29,10 @@ export function isQuarantined(
   authority: AuthorityAnalysis,
   ancCache = new Map<string, Set<string>>(),
 ): { quarantined: boolean; reason?: string } {
+  if (op.structuralError !== undefined) {
+    return { quarantined: true, reason: op.structuralError };
+  }
+
   const capability = capabilityQuarantine(op, schema, byId, authority.security, ancCache);
   if (capability.quarantined) return capability;
 

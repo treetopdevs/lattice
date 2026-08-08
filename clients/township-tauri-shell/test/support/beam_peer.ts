@@ -1,4 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { existsSync, readdirSync } from "node:fs";
 import { createServer } from "node:net";
 import { dirname, join, resolve } from "node:path";
@@ -226,6 +227,7 @@ export async function spawnTownshipActionLiveProjection(
         ...process.env,
         MIX_ENV: "test",
         PHX_SERVER: "true",
+        SECRET_KEY_BASE: randomBytes(64).toString("base64"),
         PORT: String(options.webPort),
         PATH: pinnedBeamPath(),
       },

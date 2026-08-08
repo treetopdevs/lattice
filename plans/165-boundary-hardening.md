@@ -1,4 +1,4 @@
-# Plan 165: Harden three boundaries — the WebView signing oracle, the committed dev secret, and relay growth
+# Plan 165: Harden three boundaries — the WebView signing oracle, the committed dev secret, and relay rate
 
 > **Executor instructions**: Follow this plan step by step. Run every verification command
 > and confirm the expected result before moving to the next step. If anything in the
@@ -7,7 +7,7 @@
 >
 > **Drift check (run first)**:
 > ```sh
-> git diff --stat 764a1945..HEAD -- clients/township-tauri-shell/src-tauri config apps/lattice_carrier_server apps/lattice_core/lib/lattice/log.ex
+> git diff --stat 91bb6ca6..HEAD -- clients/township-tauri-shell/src-tauri config apps/lattice_carrier_server
 > ```
 > If any in-scope file changed since this plan was written, compare the "Current state"
 > excerpts against the live code before proceeding; on a mismatch, treat it as a STOP condition.
@@ -18,27 +18,88 @@
   change away from mattering, and two of them contradict claims the repo makes about itself.
 - **Effort**: M total (Part B is S; Parts A and C are each S–M)
 - **Risk**: MED — a strict CSP can break the Vite dev server; domain-tag gating the signing oracle
-  requires enumerating every payload the shell legitimately signs; debouncing relay persistence
-  touches the crash-durability contract.
+  requires enumerating every payload the shell legitimately signs; rate limiting must not break a
+  legitimate outbox drain.
 - **Depends on**: none technically. `plans/161-close-verification-gaps.md` will surface Part B's
   finding through Sobelow and is blocked on it — land this first if 161 stops there.
 - **Category**: security
 - **Planned at**: commit `764a1945`, 2026-07-29
-- **Part B: DONE 2026-08-08.** Committed as `8ab09e9e` on branch `plan165-partb-work`
-  (worktree `.claude/worktrees/plan165-partb-work`, based on `origin/main` @ `b1e6b88a`).
-  **Not merged — merging is the operator's call.** Reviewer re-verified in the worktree:
-  `mix check` exit 0 with 0 failures across all apps (27 properties, ~600 tests); prod raises by
-  name for a missing `SECRET_KEY_BASE` and for a missing `LIVE_VIEW_SIGNING_SALT` independently;
-  dev/test/unknown-env paths all resolve correctly; no literal remains in `config/`. The executor
-  additionally verified `scripts/township_instrument_server.sh` boots and serves 200 under
-  `MIX_ENV=test`, and `npm run township:instrument:e2e` passed 6/6.
-  **Parts A and C remain TODO** and are unaffected by this.
-- **Part C refreshed**: 2026-08-06 against `91bb6ca6` — six commits moved `holder.ex` line
-  references after the original planned-at commit. Defects unchanged, locations corrected.
-- **Sequencing**: land `plans/173-bounded-carrier-transport.md` **before** Part C. 173 bounds
-  carrier *reads* (paged pulls, connect deadlines) on the same two files; Part C bounds *writes*
-  (relay rate, quarantine growth). Rate limiting is easier to reason about once reads are bounded,
-  and the two would otherwise collide in `web_socket.ex`.
+- **Reconciled at**: commit `91bb6ca6`, 2026-07-29, after Wave A1 carrier runtime merged
+- **Execution**: COMPLETE on `codex/round4-security-reliability`; Parts A/B/C and all review fixes
+  passed their focused and full gates and received clean Claude and Agy reviews.
+- **Round 4 execution split**: land Part B before plan 161 so Sobelow starts from the corrected
+  secret boundary. Land Parts A and C after plans 162–163. Keep the three commits independently
+  reviewable on the shared Round 4 integration branch.
+- **Parallel Part B execution (2026-08-08, superseded by the Round 4 landing)**: a concurrent
+  session independently landed Part B as `8ab09e9e` on branch `plan165-partb-work` (worktree
+  based on `origin/main` @ `b1e6b88a`), reviewer re-verified (`mix check` exit 0 across all apps;
+  prod raises by name for a missing `SECRET_KEY_BASE` and for a missing `LIVE_VIEW_SIGNING_SALT`
+  independently; no literal remains in `config/`; instrument server boots and
+  `npm run township:instrument:e2e` passed 6/6). The Round 4 execution on main covers the same
+  ground — reconcile or discard that branch rather than merging it blind.
+- **Part C refresh note (2026-08-06, pre-execution)**: six commits had moved `holder.ex` line
+  references after the original planned-at commit — defects unchanged, locations corrected. The
+  companion sequencing advice (land `plans/173-bounded-carrier-transport.md` before Part C, since
+  173 bounds carrier *reads* and Part C bounds *writes* on the same two files) is moot for Part C
+  now that it has landed; plan 173 should instead re-verify its `web_socket.ex` assumptions
+  against the landed relay rate limiter.
+
+## Execution evidence
+
+Recorded on `codex/round4-security-reliability` during the reviewed execution:
+
+- **Part B** landed first. Township development/test secrets now live only in environment-specific
+  tracked config rather than shared config, and every `PHX_SERVER` start requires
+  `SECRET_KEY_BASE` without weakening the carrier-only release or mandatory manifest contract. The
+  previously committed values were rotated and remain treated as burned.
+- **Part C** installs a per-connection token bucket on relay frames only: a 120-frame burst and
+  12-frame-per-second refill match the existing server budget, allow a participant to drain a
+  120-operation outbox immediately, and bound a sustained flood on one socket. A 240-frame burst
+  test proves the refusal is `rate_limited`; reads remain available, and a fresh connection drains
+  three dependent operations normally. Reconnects intentionally receive a fresh per-connection
+  budget; this is not a peer-level or IP-level limiter. Rate refusals emit a distinct
+  `[:lattice, :carrier, :rate_limited]` event rather than overloading persistence-failure telemetry.
+  Reviewer feedback also makes relay sync stop cleanly on that refusal, return the acknowledged
+  partial report, and leave the unattempted outbox frames for the next connection.
+- The relay bucket does not rate-limit authenticated `frontier`/`pull`/`state`/`subscribe` requests.
+  In particular, a pull from an empty frontier and frontier sorting scale with the served log and
+  remain unbounded ingress on a connection. Read availability was preserved deliberately; a
+  read-cost/peer-level admission design is deferred and this plan makes no read-DoS claim.
+- Part C does not edit `Lattice.Log`, `Township.AuditBundle`, `Holder`, or the persistence path.
+  Structural quarantine remains complete inside `matter.log`, which remains the audit bundle's only
+  trusted root. Holder's persist-before-ack, locking, timeout, durability rehearsal, and moduledoc
+  are unchanged. Bounded structural-quarantine storage remains explicitly deferred to a durable
+  archive/journal design rather than represented as complete.
+- **Part A signing survey** found five live shapes:
+  - `carrier-session-v2`: the fixed nine-element carrier handshake transcript, signed by
+    `signCarrierChallenge/2`;
+  - `lattice-op-v2`: the seven-element canonical operation payload, signed by
+    `authorCarrierOp/1`;
+  - `lattice-delegation-v2` and `lattice-delegation-v3`: the unleased and leased delegation
+    payloads, signed by `authorCarrierDelegation/1`;
+  - the exact 21-byte `township-native-probe` readiness challenge from
+    `probeTownshipNativeWorkflow/1`.
+  Governance succession witnesses use the separate `lattice_sign_governance_witness` command and
+  protected governance key, so they are not carrier-signing permissions. The signing ceiling is
+  64,000 decoded bytes, matching the carrier connection's complete frame cap; every signable object
+  must fit inside such a frame, while session/probe payloads are much smaller.
+- Part A also restricts pairing adverts to IPv4 broadcast, private, loopback, or link-local
+  destinations. The shipped CSP keeps scripts self-only without `unsafe-eval`; a separate dev CSP
+  admits Vite's localhost origin and HMR websocket without weakening the packaged policy. Both CSPs
+  admit only the loopback HTTP origins required by the build-time state-exchange probe seam, keeping
+  Plans 110–112 functional without a scheme-wide `http:` source. Carrier endpoints remain runtime
+  configurable, so `ws:` and `wss:` are intentionally scheme sources; origin pinning requires a
+  fixed endpoint and remains a documented residual. The signing prefix allowlist constrains which
+  protocol may be signed, not the semantics of a valid delegation or carrier-session transcript; a
+  WebView compromise could still request authority-bearing signatures inside those allowed domains.
+  Reviewer feedback narrowed both build-time state-exchange validators to the same loopback-only
+  HTTP origins as the CSP; `https:` and IPv6 loopback now fail at configuration instead of later at
+  WebView fetch time. After that validator alignment and `form-action 'none'` landed, both packaged
+  macOS smokes were rebuilt, rerun, and passed functionally. The harness does not capture the WebView
+  console, so absence of CSP violation reports is not evidenced. This macOS host has no attached
+  Android device or emulator, so the on-device
+  `tauri:android:release:browser-state-exchange` gate remains explicitly unrun; the loopback-only
+  CSP contract is pinned statically here and must be reverified on an Android host.
 
 ## Why this matters
 
@@ -75,19 +136,17 @@ value that is public in git history. The endpoint binds loopback, which limits b
 processes and anything fronting it. Because the value is committed, deleting it is insufficient — it
 is burned and must be rotated.
 
-**C. Relay has no rate limit and rewrites the entire log on every relayed op.**
-`Holder.handle_call({:relay, ...})` accepts one op, then `persist_relay/3` calls `atomic_dump/2`,
-which does a full `Log.dump` (serializing the whole op map) plus `:file.sync` plus rename — inside
-the GenServer call, blocking every concurrent `frontier`/`pull`/`subscribe`. Appending op *k* writes
-O(k) bytes, so relaying N ops writes Θ(N²) total: roughly 200 MB of writes and 1,000 fsyncs to build
-a 400 KB log. Meanwhile `Log.quarantine` is an uncapped list that survives restart, and its same-id
-idempotency guard is defeated by varying one byte of the body. An authenticated relay realm — trusted
-for transport, not for behavior — can fill the disk and stall the server. `LatticeCarrierServer.WebSocket`
-has a 64 KB frame cap and a 120 s idle timeout, but no message rate limit.
+**C. Relay has no per-connection rate limit.** Wave A1 replaced the old direct dump path with
+`bounded_atomic_dump/3`, a persistence timeout, target locking, durability rehearsal, and explicit
+persist-before-ack sequencing. Those controls bound one persistence attempt and protect concurrent
+instances, but an authenticated relay realm can still submit relay frames continuously.
+`LatticeCarrierServer.WebSocket` has a 64 KB frame cap and a 120 s idle timeout, but no message
+rate limit.
 
 After this plan: the WebView can only ask for signatures over recognized payload shapes and runs
-under a CSP; the committed secret is rotated out of the tracked config and cannot be the default for
-a running server; and a relay peer cannot drive unbounded disk growth.
+under a CSP; the shared-config secret is rotated into environment-specific tracked config and cannot
+be the default for a running server; and a relay peer cannot submit an unbounded burst on one
+connection.
 
 ## Current state
 
@@ -162,93 +221,27 @@ requires `event.isTrusted` before accept and before sign.
 > `config.exs` and `runtime.exs` exist), and `runtime.exs` now carries a `carrier_release?` guard
 > that must be preserved verbatim.
 
-`config/config.exs` — the base endpoint block, with the two literals at lines 22–23 (a LiveView
-`signing_salt` and an endpoint `secret_key_base`). **Do not copy either value into any file, commit
-message, or report.**
+`config/runtime.exs` now also contains the Wave A1 carrier-release contract:
 
 ```elixir
-config :township_web, TownshipWeb.Endpoint,
-  url: [host: "localhost"],
-  http: [ip: {127, 0, 0, 1}, port: 4100],
-  adapter: Bandit.PhoenixAdapter,
-  render_errors: [formats: [html: TownshipWeb.ErrorHTML], layout: false],
-  pubsub_server: TownshipWeb.PubSub,
-  live_view: [signing_salt: "<REDACTED — line 22>"],
-  secret_key_base: "<REDACTED — line 23>",
-  server: false
-```
-
-**The repo's env-scoping convention is inline `config_env()` guards inside `config.exs`, not separate
-env files.** Two already exist and are the pattern to match:
-
-```elixir
-if config_env() == :dev do
-  config :township_web, TownshipWeb.Endpoint,
-    watchers: [
-      esbuild: {Esbuild, :install_and_run, [:township_web, ~w(--sourcemap=inline --watch)]}
-    ]
-end
-
-# ... (a long comment block explaining the darwin-sync opt-in) ...
-if config_env() == :test do
-  config :lattice_carrier_server, allow_approximate_darwin_sync: true
-  config :lattice_carrier_server, storage_check_ttl_ms: 0
-end
-```
-
-Note both carry a comment explaining *why* the value is env-scoped. Match that.
-
-`config/runtime.exs` in full, as it exists now:
-
-```elixir
-import Config
-
-# Pilot carrier runtime (plan 158): the release selects its deployment
-# manifest through this environment variable. The manifest names secret
-# identity files; no identity material passes through the environment itself.
-# Inside the pilot release the manifest is mandatory — a missing manifest
-# refuses startup rather than booting an instanceless carrier. The umbrella
-# defines only this release, so RELEASE_ROOT is the stable release marker;
-# RELEASE_NAME is operator-overridable and cannot identify the pilot safely.
 carrier_release? = is_binary(System.get_env("RELEASE_ROOT"))
 
 case System.get_env("LATTICE_CARRIER_MANIFEST") do
-  nil when carrier_release? ->
-    raise "LATTICE_CARRIER_MANIFEST is required for the pilot carrier release"
-
-  nil ->
-    :ok
-
-  carrier_manifest ->
-    config :lattice_carrier_server, manifest: carrier_manifest
-end
-
-if System.get_env("PHX_SERVER") do
-  port = String.to_integer(System.get_env("PORT", "4100"))
-
-  config :township_web, TownshipWeb.Endpoint,
-    http: [ip: {127, 0, 0, 1}, port: port],
-    server: true
-end
-
-# The Township web requirement does not apply inside the carrier-only
-# release, which does not include :township_web.
-if config_env() == :prod and not carrier_release? do
-  secret_key_base =
-    System.get_env("SECRET_KEY_BASE") ||
-      raise "SECRET_KEY_BASE is required for the Township web endpoint"
-
-  config :township_web, TownshipWeb.Endpoint, secret_key_base: secret_key_base
+  nil when carrier_release? -> raise "LATTICE_CARRIER_MANIFEST is required for the pilot carrier release"
+  nil -> :ok
+  carrier_manifest -> config :lattice_carrier_server, manifest: carrier_manifest
 end
 ```
 
-The `PHX_SERVER` branch is still env-independent and still does not require a key; the
-`SECRET_KEY_BASE` requirement is still bound to `config_env()`. That is the defect.
+The Part B edit must merge with this live structure. It must not delete or weaken
+`carrier_release?`, the mandatory manifest check, or the carrier-only release exemption from
+Township configuration. Attach the `SECRET_KEY_BASE` requirement directly to the `PHX_SERVER`
+branch in every environment.
 
 `AGENTS.md:84` documents `PHX_SERVER=true PORT=4100 ~/.asdf/shims/mix run --no-halt` as a safe local
 command — so the dev path genuinely is used and must keep working.
 
-### Part C — relay growth
+### Part C — relay rate
 
 > **REFRESHED 2026-08-06 (Round 5).** The line references below were re-verified against
 > `91bb6ca6`. Six commits touched these files after this plan's original planned-at commit
@@ -267,61 +260,31 @@ command — so the dev path genuinely is used and must keep working.
 
 No rate limit. The relay handler at `web_socket.ex:185-205` calls `Holder.relay/3` per frame.
 
-`apps/lattice_carrier_server/lib/lattice_carrier_server/holder.ex:167-174` is the relay entry
-point, which gates on `relay_realms` and then delivers unconditionally:
+`Holder.handle_call({:relay, ...})` still accepts one op per frame, but Wave A1 now persists a
+changed path-backed log through `bounded_atomic_dump/3`. That path uses `Durability.secure_temp/1`,
+`Durability.with_target_lock/2`, a four-second task timeout, file sync, atomic rename, directory
+sync, and startup durability rehearsal. Preserve that entire contract.
 
-```elixir
-  def handle_call({:relay, peer_realm, op}, _from, state) do
-    if MapSet.member?(state.relay_realms, peer_realm) do
-      {log, report} = Sync.deliver(state.log, [op])
-      persist_relay(log, report, state)
-    else
-      {:reply, {:error, :read_only}, state}
-    end
-  end
-```
-
-`holder.ex:205-220` is `persist_relay/3`. Its no-op fast path matches only when the log struct is
-**unchanged**:
-
-```elixir
-  defp persist_relay(log, report, %{log: log} = state) do
-    {:reply, {:ok, report}, state}
-  end
-
-  defp persist_relay(log, report, %{source: {:path, path}} = state) do
-```
-
-A quarantine append changes the struct, so every invalidly-signed relayed op falls through to the
-full dump → `:file.sync` → rename → directory sync. That is the write-amplification path Part C
-bounds.
-
-`apps/lattice_core/lib/lattice/log.ex:203-215` — `dump/2` serializes the entire op map via
-`:erlang.term_to_binary(..., [:deterministic])`, and `downgrade_structs/1` rebuilds every op with
-`Map.new/2` on each call.
-
-`apps/lattice_core/lib/lattice/log.ex:34` — `quarantine` is a plain list on the persisted struct.
-`:189` — `quarantine_op/3` prepends with no cap. `:141-153` — a bad-signature op is quarantined
-(mutating the log) unless an op with the **same id** is already quarantined:
-
-```elixir
-  @spec structurally_quarantined?(t(), Op.id()) :: boolean()
-  def structurally_quarantined?(%__MODULE__{quarantine: q}, id),
-    do: Enum.any?(q, &(&1.op.id == id))
-```
-
-Two things follow, and Part C must address both. The dedup keys on the **attacker-supplied**
-`op.id`, and an op that fails `Op.valid?` is by definition one whose id does not match its
-content — so varying the claimed id yields a fresh entry every time and defeats the guard
-entirely. And `Enum.any?` is a linear scan run per admitted invalid op, making the growth
-quadratic in CPU as well as unbounded on disk.
+The unbounded-quarantine detail (still true after Part C, which deliberately did not edit
+`Lattice.Log`): `apps/lattice_core/lib/lattice/log.ex:34` — `quarantine` is a plain list on the
+persisted struct; `quarantine_op/3` prepends with no cap; a bad-signature op is quarantined
+(mutating the log) unless an op with the **same id** is already quarantined
+(`structurally_quarantined?/2` is an `Enum.any?` scan). The dedup keys on the
+**attacker-supplied** `op.id`, and an op that fails `Op.valid?` is by definition one whose id does
+not match its content — so varying the claimed id yields a fresh entry every time and defeats the
+guard entirely, with the linear scan making growth quadratic in CPU as well as unbounded on disk.
+This is the defect deferred to the archive/journal design noted below.
 
 **An existing rate limiter to reuse rather than reinvent**:
 `apps/lattice_server/lib/lattice_server/rate_limiter.ex`. Read it first and follow its shape.
 
-`Holder`'s moduledoc (`holder.ex:5-9`) states the durability contract: acknowledged only after a
-complete temporary dump has been synced and atomically renamed. Any batching weakens that claim, so
-it must be **restated honestly**, not silently dropped.
+`Holder`'s moduledoc states that acknowledgement follows the complete persist-before-ack sequence.
+This plan does not debounce, batch, or otherwise weaken that claim.
+
+`Lattice.Log` also promises that structurally rejected operations are retained and auditable, while
+`Township.AuditBundle` treats `matter.log` as its only trusted root. A bounded in-memory quarantine
+window would violate that complete-evidence invariant. The earlier cap proposal is therefore
+deferred to a separate append-only archive/journal design; this plan does not change `Lattice.Log`.
 
 ### Repo conventions to follow
 
@@ -356,30 +319,38 @@ it must be **restated honestly**, not silently dropped.
 
 - **Part A**: `clients/township-tauri-shell/src-tauri/tauri.conf.json`,
   `clients/township-tauri-shell/src-tauri/src/lib.rs`,
-  `clients/township-tauri-shell/src-tauri/tests/native_commands.rs`
-- **Part B**: `config/config.exs`, `config/runtime.exs` — **those two files only**. Do **not** create
-  `config/dev.exs` or `config/test.exs` (this repo scopes config with inline `config_env()` guards
-  and has no `import_config`), and do **not** edit `AGENTS.md:84` or `apps/township_web/README.md:13`:
-  with the ephemeral-key approach in B2 the documented `PHX_SERVER` command keeps working verbatim.
+  `clients/township-tauri-shell/src-tauri/tests/native_commands.rs`,
+  `clients/township-tauri-shell/test/runtime_wiring_contract.mjs`, and the reviewer-driven
+  CSP-alignment changes in `src/township_release_pairing_probe.ts`,
+  `src/township_release_onboarding_probe.ts`, and their focused contract tests
+- **Part B**: `config/config.exs`, `config/dev.exs` and `config/test.exs` (create if absent),
+  `config/runtime.exs`
 - **Part C**: `apps/lattice_carrier_server/lib/lattice_carrier_server/web_socket.ex`,
-  `apps/lattice_carrier_server/lib/lattice_carrier_server/holder.ex`,
-  `apps/lattice_core/lib/lattice/log.ex` (quarantine cap only),
-  `apps/lattice_carrier_server/test/**`
+  `apps/lattice_carrier_server/test/**`, plus the reviewer-driven partial-progress handling in
+  `clients/lattice-client/src/carrier.ts` and its relay-sync contract
 - `plans/README.md` (status row)
 
 **Out of scope**:
 
 - **The key-custody implementation itself.** Custody is correct — no command returns key material,
   the governance/carrier alias fence works, probe writers are sanitized. Do not restructure it.
-- **`clients/township-tauri-shell/src/**` (the JS/Vue side).** Part A adds a native-side constraint.
-  If the constraint breaks a legitimate JS caller, that is a STOP condition to report, not a JS
-  change to make.
+- **Other `clients/township-tauri-shell/src/**` JS/Vue behavior.** The reviewer-driven exception
+  above only makes the build-time state-exchange validators match the CSP. If a native constraint
+  breaks any other legitimate JS caller, that remains a STOP condition to report, not a JS change
+  to make.
+- **Bounding `lattice_kv_set`.** The command still accepts arbitrary keys and unbounded values from
+  the WebView and persists them. A key namespace and value-size policy needs its own storage
+  compatibility design; Part A constrains signing authority and does not claim to constrain this
+  write surface.
+- **Rate-limiting authenticated reads or enforcing a peer/IP-wide relay budget.** Full-log pulls and
+  frontier sorting can be expensive, and reconnects receive a fresh relay budget. This plan keeps
+  reads available and bounds relay frames only for the lifetime of one socket.
 - **Any change to canonical encoding or the wire format.** The domain tags are read-only inputs to
   Part A's allowlist.
-- **Replacing `atomic_dump` with an append-only journal.** That is the right long-term fix for Part
-  C's Θ(N²) and it is explicitly deferred — it changes the on-disk format and needs `Log.restore/1`
-  to grow a replay path. This plan bounds the *growth* and the *rate*; it does not redesign
-  persistence.
+- **Replacing the Wave A1 persistence path with an append-only journal or bounding
+  `Lattice.Log.quarantine`.** Preserving complete audit evidence requires a durable archive design,
+  an on-disk format decision, and a replay path. This plan bounds the per-connection relay rate; it
+  does not redesign persistence or truncate evidence.
 - **`apps/lattice_server/lib/lattice_server/rate_limiter.ex`** — read it, reuse its shape, do not
   modify it.
 - Any change to `Lattice.Op`, `Lattice.Authority`, or the TypeScript client.
@@ -389,8 +360,8 @@ it must be **restated honestly**, not silently dropped.
 - Branch: `advisor/165-boundary-hardening`
 - **Three separate commits, one per part.** They are independent and a reviewer should be able to
   take them separately: `fix(shell): constrain the native signing oracle and set a CSP`,
-  `fix(config): stop shipping signing material in tracked config`,
-  `fix(carrier): bound relay rate and quarantine growth`.
+  `fix(config): move the dev secret out of shared config and fail closed on PHX_SERVER`,
+  `fix(carrier): bound the per-connection relay rate`.
 - Do NOT push or open a PR unless the operator instructed it.
 
 ---
@@ -482,7 +453,7 @@ that A4 needs a macOS run — do not land an unverified CSP.)
 
 ## Part B — rotate the committed secret and stop shipping signing material in tracked config
 
-### Step B1: Delete both literals from tracked config
+### Step B1: Move the dev values out of shared config into env-specific tracked config
 
 In `config/config.exs`, remove the `secret_key_base:` entry and the `live_view: [signing_salt: ...]`
 entry from the base `config :township_web, TownshipWeb.Endpoint` block (lines 22–23). Leave every
@@ -629,13 +600,15 @@ Part B worked, and it is what unblocks plan 161 step 3.
 
 ---
 
-## Part C — bound relay rate and quarantine growth
+## Part C — bound the per-connection relay rate
 
 ### Step C1: Add a per-connection relay rate limit
 
 Read `apps/lattice_server/lib/lattice_server/rate_limiter.ex` and follow its shape. Add a per-connection
 token bucket to `LatticeCarrierServer.WebSocket`, applied to `"relay"` frames specifically (not to
-`frontier`/`pull`/`subscribe`, which are cheap reads).
+`frontier`/`pull`/`state`/`subscribe`, to preserve read availability). Do not call those reads
+cheap: full-log pulls and frontier sorting remain unbounded per-connection ingress, explicitly
+deferred to a read-cost or peer-level admission design.
 
 Add the limit as a module attribute next to the existing ones at `web_socket.ex:9-12`, with a comment
 giving the reasoning for the number chosen. Pick a rate that is generous for a real participant
@@ -655,46 +628,17 @@ telemetry event if one fits.
 
 → all pass, including the new cases.
 
-### Step C2: Cap `Log.quarantine` growth
+### Step C2: Record the complete-evidence boundary
 
-In `apps/lattice_core/lib/lattice/log.ex`, bound the quarantine list. The current structure
-(`:34` a plain list, `:189-190` unbounded prepend) grows without limit from forged-signature ops whose
-ids differ by one body byte.
-
-Choose a bounded policy and document it in the `@moduledoc`:
-
-- keep the most recent N entries (N as a module attribute with a stated rationale), and
-- keep a monotonic **count** of total quarantined ops so the evidence surface does not lie about how
-  many were seen — dropping entries silently would corrupt an audit claim.
-
-**This is the highest-risk edit in the plan.** `Log.quarantine/1` and `verified_quarantine/1` feed the
-audit bundle, the instrument's ledger, and the structural-quarantine assertions in the Township
-tests. Before changing anything, find every consumer:
-
-```sh
-grep -rn 'Log.quarantine\|verified_quarantine\|structurally_quarantined' apps clients --include=*.ex --include=*.exs --include=*.ts | grep -v '_build'
-```
-
-If any consumer requires the *complete* list rather than a bounded window, STOP and report — the
-correct fix may be an eviction policy with an explicit "truncated" marker in the evidence surface,
-which is a bigger design decision than this plan should make alone.
-
-**Verify**:
-
-```sh
-~/.asdf/shims/mix test
-```
-
-→ all pass. Plus a new test asserting: N+K forged ops leave exactly N entries and a count of N+K.
+Do not edit `Lattice.Log`. Confirm that `Log` still retains structural quarantine in `matter.log`
+and that `Township.AuditBundle` still names that file as its only trusted root. Record in the
+execution report that bounded structural-quarantine storage needs a durable archive/journal design
+and remains deferred rather than falsely completed.
 
 ### Step C3: Restate the durability contract honestly
 
-If — and only if — you also debounce or batch `atomic_dump` (optional in this plan; the rate limit
-alone may be sufficient), you **must** update `Holder`'s moduledoc at `holder.ex:5-9` to state
-precisely what is now guaranteed: what an acknowledgement means, and what window of relayed ops can
-be lost on an unclean shutdown.
-
-If you do not change the persistence timing, leave the moduledoc alone and say so in your report.
+Do not debounce or batch persistence. Leave `Holder`'s persist-before-ack moduledoc unchanged and
+state in the execution report that Wave A1's durability contract remains intact.
 
 **Do not silently weaken the durability claim.** This repo's distinguishing discipline is that its
 claims match its code.
@@ -722,11 +666,8 @@ npm --prefix clients/lattice-client run carrier:township:live
 - **Packaged smokes** (macOS): `tauri:stable-relay:onboarding:smoke` and `tauri:action-handoff:smoke`
   green under the new CSP — this is the only real proof the CSP does not break the app.
 - **Elixir** (`apps/lattice_carrier_server/test/`): a relay burst beyond the limit is refused with
-  `rate_limited`; a normal drain is unaffected; N+K forged ops leave N quarantine entries and a count
-  of N+K.
-- **Config**: dev boots with no environment variable and `/township` responds; an explicit
-  `SECRET_KEY_BASE` is honored; `:prod` non-carrier without one still raises; the `:test`-env
-  `scripts/township_instrument_server.sh` still boots and serves.
+  `rate_limited`; a normal drain is unaffected; Wave A1 durability tests remain green.
+- **Config**: `PHX_SERVER=true` without `SECRET_KEY_BASE` raises; with it, the endpoint starts.
 - **Sobelow**: `apps/township_web` scan result recorded before and after Part B.
 
 ## Done criteria
@@ -743,7 +684,7 @@ Machine-checkable. ALL must hold:
 - [ ] `MIX_ENV=prod` config evaluation without `SECRET_KEY_BASE` still raises
 - [ ] `cd apps/township_web && ~/.asdf/shims/mix sobelow --exit` exits 0, and the report states whether `Config.Secrets` stopped firing
 - [ ] `~/.asdf/shims/mix check` exits 0
-- [ ] `~/.asdf/shims/mix test apps/lattice_carrier_server/` passes, including the rate-limit and quarantine-cap cases
+- [ ] `~/.asdf/shims/mix test apps/lattice_carrier_server/` passes, including the rate-limit and Wave A1 durability cases
 - [ ] Both Sobelow scans exit 0
 - [ ] `npm --prefix clients/lattice-client run carrier:relay`, `carrier:relay-sync`, `carrier:township:live` exit 0
 - [ ] Your report contains the complete step-A1 domain-tag survey
@@ -765,9 +706,6 @@ Stop and report back (do not improvise) if:
   than a documented gap, because it reads as protection.
 - **You are not on macOS** and therefore cannot verify A4. Land A1–A3, report that A4 is unverified,
   and do not commit the CSP change.
-- **Any `Log.quarantine` consumer needs the complete, unbounded list.** The audit bundle and the
-  instrument ledger both read it; if either requires completeness, the bounded-window design is wrong
-  and needs the operator's decision.
 - **The relay rate limit breaks `carrier:relay-sync` or a packaged smoke.** That means a legitimate
   outbox drain exceeds your limit — report the observed rate rather than raising the limit blindly.
 - **You find yourself editing `clients/township-tauri-shell/src/**`** to satisfy the native
@@ -780,29 +718,26 @@ Stop and report back (do not improvise) if:
 - **Reviewer focus, Part A**: the domain-tag allowlist. Every entry should trace to a call site in
   the step-A1 survey. An allowlist entry with no caller is dead permission; a caller with no entry is
   a runtime break waiting for the packaged smoke.
-- **Reviewer focus, Part B**: that no literal signing material survives anywhere in `config/`, in any
-  environment — a value scoped behind `config_env()` is still a committed secret and still trips
-  Sobelow. And that `:prod` cannot boot with a `nil` `secret_key_base`: check the fallback shape, not
-  just the happy path. A silently-`nil` key would be worse than the bug being fixed.
-  (History note: the first draft of this step required `SECRET_KEY_BASE` whenever `PHX_SERVER` was
-  set. That would have broken four existing `MIX_ENV=test` callers. Ephemeral-in-dev/test removes the
-  public key at its root *and* leaves every documented workflow working — prefer it.)
-- **Reviewer focus, Part C**: whether the quarantine count is preserved separately from the bounded
-  window. Silently truncating an evidence surface is a claim violation, not an optimization.
+- **Reviewer focus, Part B**: that the `SECRET_KEY_BASE` requirement is attached to `PHX_SERVER`
+  rather than to `config_env()`. Env-based gates are exactly how the original hole appeared.
+- **Reviewer focus, Part C**: the rate limit must be per connection and must not weaken Wave A1's
+  persist-before-ack, timeout, locking, or durability-rehearsal behavior.
 - **The signing oracle remains powerful even after A2.** A domain-tag allowlist stops signing
   *arbitrary* bytes; it does not stop signing a *well-formed but attacker-chosen* delegation. The
   durable fix is per-signature user presence for high-authority payload shapes (delegation issuance,
   revocation), mirroring what `use_action_intent.ts:229-231` already does with `event.isTrusted`.
   That is a UX change and is deliberately out of this plan — flag it for the roadmap.
-- **Found during Part B execution review, NOT fixed here** (out of scope — Part B is `config/` only):
+- **Found during the parallel Part B execution review, NOT fixed here**:
   `apps/township_web/lib/township_web/endpoint.ex:7` hardcodes `signing_salt: "township-session"` in
   the `@session_options` — a third piece of predictable signing material, this one in a `.ex` source
   file and therefore untouched by Part B. It signs the **session cookie**, distinct from the LiveView
   salt this plan moves to runtime. Same finding class, same fix shape (read from runtime config,
-  ephemeral in dev/test, required in prod). Worth a small follow-up plan; note that a Sobelow
+  required in prod). Worth a small follow-up plan; note that a Sobelow
   `Config.Secrets` scan will not flag it because it is not in `config/`.
-- **Deferred out of this plan, all real**: replacing `atomic_dump` with an append-only journal plus
-  periodic snapshot, which is the actual fix for the Θ(N²) relay write amplification (`holder.ex:170-196`
-  + `log.ex:203-215`) and needs `Log.restore/1` to grow a replay path; the seven high-severity npm
-  advisories in the shell's devDependencies (all build/test tooling — `js-beautify`, `@vue/test-utils`,
-  `postcss` — with no path into the shipped app); and per-signature user presence as described above.
+- **Deferred out of this plan, all real**: replacing the Wave A1 full-log persistence with an
+  append-only journal plus periodic snapshot, including durable preservation of every structural
+  quarantine entry and a replay-compatible on-disk format; bounding authenticated full-log reads
+  and adding a peer/IP-level relay budget across reconnects; constraining `lattice_kv_set` keys and
+  value sizes under a storage-compatible policy; the seven high-severity npm advisories in the
+  shell's devDependencies (all build/test tooling — `js-beautify`, `@vue/test-utils`, `postcss` —
+  with no path into the shipped app); and per-signature user presence as described above.

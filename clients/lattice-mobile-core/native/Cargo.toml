@@ -1,0 +1,23 @@
+[package]
+name = "lattice-mobile-core"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.90"
+description = "Product-neutral native seams for Lattice mobile shells: product isolation manifest, transactional per-product SQLite storage with a migration ledger, and the one-time legacy JSON state import."
+license = "Apache-2.0"
+
+[lib]
+name = "lattice_mobile_core"
+path = "src/lib.rs"
+
+[dependencies]
+base64 = "0.22"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
+rusqlite = { version = "0.37", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+
+[dev-dependencies]
+tempfile = "3"

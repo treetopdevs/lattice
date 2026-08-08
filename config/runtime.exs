@@ -23,9 +23,41 @@ end
 if System.get_env("PHX_SERVER") do
   port = String.to_integer(System.get_env("PORT", "4100"))
 
+  endpoint_config = Application.get_env(:township_web, TownshipWeb.Endpoint, [])
+  live_view_config = Keyword.get(endpoint_config, :live_view, [])
+
+  secret_key_base =
+    case System.get_env("SECRET_KEY_BASE") do
+      secret when is_binary(secret) and byte_size(secret) >= 64 ->
+        secret
+
+      _ ->
+        raise """
+        SECRET_KEY_BASE must be at least 64 bytes whenever PHX_SERVER is set — the
+        endpoint is live and signs session cookies and LiveView tokens. Generate one
+        with `mix phx.gen.secret`.
+        """
+    end
+
+  live_view_signing_salt =
+    case System.get_env("LIVE_VIEW_SIGNING_SALT") ||
+           Keyword.get(live_view_config, :signing_salt) do
+      salt when is_binary(salt) and byte_size(salt) >= 8 ->
+        salt
+
+      _ ->
+        raise """
+        LIVE_VIEW_SIGNING_SALT must be at least 8 bytes whenever PHX_SERVER is set
+        without an environment-specific LiveView salt. Generate one with
+        `mix phx.gen.secret`.
+        """
+    end
+
   config :township_web, TownshipWeb.Endpoint,
     http: [ip: {127, 0, 0, 1}, port: port],
-    server: true
+    live_view: [signing_salt: live_view_signing_salt],
+    server: true,
+    secret_key_base: secret_key_base
 end
 
 # The Township web requirement does not apply inside the carrier-only

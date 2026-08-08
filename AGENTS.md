@@ -55,13 +55,14 @@ All tests must pass and formatting must be clean before considering any change d
 |------|------------|
 | `apps/lattice_core` | v1 capability plane (caps, gateway, topology, audit) + the Lattice 2.0 replica-on-op-log engine |
 | `apps/lattice_web_socket` | Reusable WebSocket client and real carrier adapter; no listener or supervision tree |
-| `apps/lattice_carrier_server` | Supervised read-only Cowboy carrier server by default, with an opt-in durable client-signed relay for path-backed logs; no participant custody, semantic authority, server-push, or deployment claim |
+| `apps/lattice_carrier_server` | Supervised read-only Cowboy carrier server by default, with an opt-in durable client-signed relay for path-backed logs and the `lattice_carrier_pilot` manifest-driven release; no participant custody, semantic authority, or server-push |
 | `apps/lattice_server` | Cowboy WebSocket/HTTP boundary over the shared JSON envelope codec |
 | `apps/township_web` | Phoenix/LiveView read-only Township instrument with a Vue 3.5 causal-replay island over the verified bundle or optional pull-only carrier projection |
 | `apps/lattice_demo` | Demo servers, tab workers, and the deterministic/browser demo mix tasks |
 | `apps/lattice_stress` | Adversarial stress lab: races, WS abuse, load/soak, property tests, `mix lattice.stress` |
 | `apps/lattice_carrier_spike` | Spike code for a real (non-simulated) carrier |
 | `apps/lattice_node_spike` | Real second-process Cowboy peer fixtures and Township/Thread convergence scenarios |
+| `apps/township_bench` | M4/G13 election cost-model benchmark harness; builds a Rustler NIF, so `cargo` must be on `PATH` |
 
 ## Where the docs are
 
@@ -75,13 +76,13 @@ All tests must pass and formatting must be clean before considering any change d
 
 ## Safe vs. heavy commands
 
-**Safe / local-only** (no network, no extra tooling):
+**Safe / local-only** (no network; requires `cargo` on `PATH` for the `township_bench` NIF):
 
 - `~/.asdf/shims/mix compile`
 - `~/.asdf/shims/mix test`
 - `~/.asdf/shims/mix format`
 - `~/.asdf/shims/mix run scripts/lattice2_demo.exs`
-- `PHX_SERVER=true PORT=4100 ~/.asdf/shims/mix run --no-halt`
+- `SECRET_KEY_BASE="$(~/.asdf/shims/mix phx.gen.secret)" PHX_SERVER=true PORT=4100 ~/.asdf/shims/mix run --no-halt`
 
 **Heavy / external dependencies** (need Node + Playwright, bind a port; run only when asked):
 

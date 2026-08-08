@@ -839,9 +839,8 @@ function validArmState(value: string): boolean {
 function validStateExchangeUrl(value: string): boolean {
   try {
     const parsed = new URL(value);
-    if (parsed.protocol === "https:") return true;
     if (parsed.protocol !== "http:") return false;
-    return parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost" || parsed.hostname === "[::1]";
+    return parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost";
   } catch {
     return false;
   }

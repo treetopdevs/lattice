@@ -1,12 +1,6 @@
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import { ed25519 } from "@noble/curves/ed25519.js";
-import {
-  canonicalBytesForWitnessedSuccessionClaim,
-  createJsonCarrierFrameStore,
-  createJsonLocalOpLogStore,
-  createTauriKeyValueStore,
-  createTauriNativeCarrierSigner,
-} from "@treetopdevs/lattice-client";
+import { canonicalBytesForWitnessedSuccessionClaim } from "@treetopdevs/lattice-client";
 import type {
   CarrierFrameStore,
   CarrierSigner,
@@ -15,7 +9,15 @@ import type {
   TauriInvoke,
   WitnessedSuccessionClaimEvidence,
 } from "@treetopdevs/lattice-client";
+import {
+  createProductNativeStorage,
+  createProductNativeWorkflow,
+  withProductPersistenceWrite,
+} from "@treetopdevs/lattice-mobile-core";
 
+// The product-neutral workflow composition lives in
+// @treetopdevs/lattice-mobile-core (plan 158 seam extraction); this module
+// binds it to the Township key ID, storage namespace, and Tauri invoke.
 export const TOWNSHIP_NATIVE_KEY_ID = "township-resident";
 export const TOWNSHIP_STORAGE_NAMESPACE = "township:zoning-variance-24";
 export const TOWNSHIP_LOCAL_OP_LOG_KEY = "local_ops";
@@ -27,6 +29,8 @@ export const TOWNSHIP_GOVERNANCE_WITNESS_PUBLIC_KEY_COMMAND =
   "lattice_governance_witness_public_key";
 export const TOWNSHIP_SIGN_GOVERNANCE_WITNESS_COMMAND =
   "lattice_sign_governance_witness";
+export const TOWNSHIP_COPY_WITNESS_ARTIFACT_COMMAND =
+  "lattice_copy_witness_artifact";
 
 const TOWNSHIP_NATIVE_PROBE_KEY = "native_probe";
 const TOWNSHIP_NATIVE_PROBE_VALUE = "native invoke ready";
@@ -99,46 +103,23 @@ export interface TownshipNativeUnavailableStatus {
 export type TownshipNativeStatus =
   TownshipNativeReadyStatus | TownshipNativeUnavailableStatus;
 
-interface TownshipPersistenceWriter {
-  runExclusive<T>(operation: () => Promise<T>): Promise<T>;
-}
-
-const persistenceWriters = new Map<string, TownshipPersistenceWriter>();
-
 export function createTownshipNativeStorage(
   options: TownshipNativeWorkflowOptions = {},
 ): LocalKeyValueStore {
-  const invoke = options.invoke ?? tauriInvoke;
-  const storageNamespace =
-    options.storageNamespace ?? TOWNSHIP_STORAGE_NAMESPACE;
-  return createTauriKeyValueStore(invoke, { namespace: storageNamespace });
+  return createProductNativeStorage({
+    invoke: options.invoke ?? tauriInvoke,
+    storageNamespace: options.storageNamespace ?? TOWNSHIP_STORAGE_NAMESPACE,
+  });
 }
 
 export async function createTownshipNativeWorkflow(
   options: TownshipNativeWorkflowOptions = {},
 ): Promise<TownshipNativeWorkflow> {
-  const invoke = options.invoke ?? tauriInvoke;
-  const keyId = options.keyId ?? TOWNSHIP_NATIVE_KEY_ID;
-  const storageNamespace =
-    options.storageNamespace ?? TOWNSHIP_STORAGE_NAMESPACE;
-  const storage = createTownshipNativeStorage({ invoke, storageNamespace });
-  const signer = await createTauriNativeCarrierSigner(invoke, { keyId });
-
-  return {
-    keyId,
-    storageNamespace,
-    storage,
-    localLog: createJsonLocalOpLogStore(storage, TOWNSHIP_LOCAL_OP_LOG_KEY),
-    carrierFrames: createJsonCarrierFrameStore(
-      storage,
-      TOWNSHIP_CARRIER_OUTBOX_KEY,
-    ),
-    delegationFrames: createJsonCarrierFrameStore(
-      storage,
-      TOWNSHIP_DELEGATION_FRAMES_KEY,
-    ),
-    signer,
-  };
+  return createProductNativeWorkflow({
+    invoke: options.invoke ?? tauriInvoke,
+    keyId: options.keyId ?? TOWNSHIP_NATIVE_KEY_ID,
+    storageNamespace: options.storageNamespace ?? TOWNSHIP_STORAGE_NAMESPACE,
+  });
 }
 
 export async function ensureGovernanceWitnessKey(
@@ -248,7 +229,7 @@ export async function withTownshipPersistenceWrite<T>(
   workflow: Pick<TownshipNativeWorkflow, "storageNamespace">,
   operation: () => Promise<T>,
 ): Promise<T> {
-  return persistenceWriter(workflow.storageNamespace).runExclusive(operation);
+  return withProductPersistenceWrite(workflow, operation);
 }
 
 export async function probeTownshipNativeWorkflow(
@@ -310,6 +291,22 @@ export async function traceTownshipDevEvent(
       );
     }
   }
+}
+
+/**
+ * Copy an already-persisted witness artifact to the system clipboard through
+ * the constrained native command. The native side re-reads the stored
+ * artifact bytes by id (it never accepts clipboard payload bytes from the
+ * webview), so this sink can only export what the shell already retained.
+ * Used as the fallback when WebKit rejects `navigator.clipboard.writeText`
+ * under the packaged CSP.
+ */
+export async function copyTownshipWitnessArtifactNative(
+  artifactId: string,
+  options: Pick<TownshipNativeWorkflowOptions, "invoke"> = {},
+): Promise<void> {
+  const invoke = options.invoke ?? tauriInvoke;
+  await invoke(TOWNSHIP_COPY_WITNESS_ARTIFACT_COMMAND, { artifactId });
 }
 
 export async function logTownshipProbeEvent(
@@ -420,32 +417,6 @@ function bytesEqual(left: Uint8Array, right: Uint8Array): boolean {
     left.byteLength === right.byteLength &&
     left.every((byte, index) => byte === right[index])
   );
-}
-
-function persistenceWriter(
-  storageNamespace: string,
-): TownshipPersistenceWriter {
-  const existing = persistenceWriters.get(storageNamespace);
-  if (existing) return existing;
-
-  let tail = Promise.resolve();
-  const writer = {
-    async runExclusive<T>(operation: () => Promise<T>): Promise<T> {
-      const previous = tail;
-      let release = () => {};
-      tail = new Promise<void>((resolve) => {
-        release = resolve;
-      });
-      await previous;
-      try {
-        return await operation();
-      } finally {
-        release();
-      }
-    },
-  };
-  persistenceWriters.set(storageNamespace, writer);
-  return writer;
 }
 
 function errorMessage(error: unknown): string {

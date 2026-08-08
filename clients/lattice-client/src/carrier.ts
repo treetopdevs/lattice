@@ -1,6 +1,7 @@
 import type {
   AuthorityDelegationEvidence,
   AuthorityEvidence,
+  CommandError,
   CustodyConsentEvidence,
   Mutation,
   Op,
@@ -94,6 +95,7 @@ export type CarrierSubmission = "push" | "relay";
 export interface SyncCarrierOptions {
   verifier: Verifier;
   submission?: CarrierSubmission;
+  expectedReplica: string;
 }
 
 export interface CarrierStateReport {
@@ -160,16 +162,24 @@ export function carrierDelegationsFromFrames(frames: readonly CarrierOpFrame[]):
 function carrierDelegationsFromTerm(term: CarrierTerm): CarrierDelegation[] {
   switch (term[0]) {
     case "delegation":
-      return [term[1]];
+      return isCarrierDelegation(term[1]) ? [term[1]] : [];
     case "list":
     case "tuple":
     case "mapset":
-      return term[1].flatMap(carrierDelegationsFromTerm);
+      return Array.isArray(term[1])
+        ? term[1].flatMap(carrierDelegationsFromTerm)
+        : [];
     case "map":
-      return term[1].flatMap(([key, value]) => [
-        ...carrierDelegationsFromTerm(key),
-        ...carrierDelegationsFromTerm(value),
-      ]);
+      return Array.isArray(term[1])
+        ? term[1].flatMap((pair) =>
+            Array.isArray(pair) && pair.length === 2
+              ? [
+                  ...carrierDelegationsFromTerm(pair[0]),
+                  ...carrierDelegationsFromTerm(pair[1]),
+                ]
+              : []
+          )
+        : [];
     case "nil":
     case "bool":
     case "int":
@@ -177,6 +187,39 @@ function carrierDelegationsFromTerm(term: CarrierTerm): CarrierDelegation[] {
     case "atom":
       return [];
   }
+
+  return [];
+}
+
+function isCarrierDelegation(value: unknown): value is CarrierDelegation {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const field = (key: string): unknown => Reflect.get(value, key);
+  const expiresEpoch = field("expires_epoch");
+  return (
+    typeof field("id") === "string" &&
+    typeof field("replica") === "string" &&
+    typeof field("issuer") === "string" &&
+    typeof field("audience") === "string" &&
+    (field("parent_id") === null ||
+      typeof field("parent_id") === "string") &&
+    isStringArray(field("ops")) &&
+    isStringArray(field("roles")) &&
+    typeof field("live") === "boolean" &&
+    typeof field("sig") === "string" &&
+    (expiresEpoch === undefined ||
+      (typeof expiresEpoch === "number" &&
+        Number.isSafeInteger(expiresEpoch) &&
+        expiresEpoch >= 0))
+  );
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.every((item) => typeof item === "string")
+  );
 }
 
 type DecodedTerm =
@@ -231,6 +274,7 @@ interface Payload {
   mutation: Mutation;
   value: unknown;
   command: string;
+  commandError?: CommandError;
   authority?: AuthorityEvidence;
   consent?: Omit<CustodyConsentEvidence, "authorPub">;
 }
@@ -243,6 +287,167 @@ const atomTag = 60_000;
 const tupleTag = 60_001;
 const carrierOpWireVersion = 1;
 const carrierSessionVersion = 2;
+
+interface CommandDecoder {
+  arity: number;
+  decode: (
+    args: DecodedTerm[],
+    realmByPubkey: Record<string, string>,
+  ) => Payload;
+}
+
+function commandDecoder(
+  arity: number,
+  decode: CommandDecoder["decode"],
+): CommandDecoder {
+  return { arity, decode };
+}
+
+const townshipCommandDecoders: ReadonlyMap<string, CommandDecoder> = new Map([
+  [
+    "set_title",
+    commandDecoder(1, (args) => ({
+      field: "title",
+      mutation: "write",
+      value: commandValue(args[0]),
+      command: "set_title",
+    })),
+  ],
+  [
+    "set_summary",
+    commandDecoder(1, (args) => ({
+      field: "summary",
+      mutation: "write",
+      value: commandValue(args[0]),
+      command: "set_summary",
+    })),
+  ],
+  [
+    "post",
+    commandDecoder(1, (args) => ({
+      field: "posts",
+      mutation: "append",
+      value: commandValue(args[0]),
+      command: "post",
+    })),
+  ],
+  [
+    "admit",
+    commandDecoder(1, (args) => ({
+      field: "members",
+      mutation: "add",
+      value: commandValue(args[0]),
+      command: "admit",
+    })),
+  ],
+  [
+    "remove_member",
+    commandDecoder(1, (args) => ({
+      field: "members",
+      mutation: "remove",
+      value: commandValue(args[0]),
+      command: "remove_member",
+    })),
+  ],
+  ["link_election", commandDecoder(1, () => neutralPayload("link_election"))],
+  [
+    "close_matter",
+    commandDecoder(0, () => ({
+      field: "clerk_locked",
+      mutation: "write",
+      value: true,
+      command: "close_matter",
+    })),
+  ],
+  [
+    "reopen_matter",
+    commandDecoder(0, () => ({
+      field: "clerk_locked",
+      mutation: "write",
+      value: false,
+      command: "reopen_matter",
+    })),
+  ],
+]);
+
+const toolshedCommandDecoders: ReadonlyMap<string, CommandDecoder> = new Map([
+  [
+    "describe",
+    commandDecoder(1, (args) => ({
+      field: "description",
+      mutation: "write",
+      value: commandValue(args[0]),
+      command: "describe",
+    })),
+  ],
+  [
+    "note_condition",
+    commandDecoder(1, (args) => ({
+      field: "condition_notes",
+      mutation: "append",
+      value: commandValue(args[0]),
+      command: "note_condition",
+    })),
+  ],
+  [
+    "custody_transfer",
+    commandDecoder(3, (args, realmByPubkey) => {
+      // ADR 0007: the holder write projects the recipient's realm; the
+      // request id and consent signature ride as validity evidence for the
+      // consent conjunct (src/consent.ts), never as state.
+      const toBytes = binaryBytes(args[0]);
+      const toPub = toBytes === null ? "" : bytesToBase64(toBytes);
+      const requestOpId = binaryUtf8(args[1]) ?? "";
+      const signatureBytes = binaryBytes(args[2]);
+      const signatureMissing = args[2] === null || signatureBytes === null;
+      return {
+        field: "holder",
+        mutation: "write",
+        value:
+          toBytes === null
+            ? commandValue(args[0])
+            : realmForPubkey(toPub, realmByPubkey),
+        command: "custody_transfer",
+        consent: {
+          toPub,
+          requestOpId,
+          sig:
+            signatureMissing
+              ? null
+              : bytesToBase64(signatureBytes),
+        },
+      };
+    }),
+  ],
+]);
+
+/** Command names decoded for the Township matter carrier boundary. */
+export function townshipCarrierCommandNames(): string[] {
+  return [...townshipCommandDecoders.keys()].sort();
+}
+
+/** Command names and arities decoded for the Township matter carrier boundary. */
+export function townshipCarrierCommandTable(): [string, number][] {
+  return commandTable(townshipCommandDecoders);
+}
+
+/** Command names decoded for the Toolshed tool carrier boundary. */
+export function toolshedCarrierCommandNames(): string[] {
+  return [...toolshedCommandDecoders.keys()].sort();
+}
+
+/** Command names and arities decoded for the Toolshed tool carrier boundary. */
+export function toolshedCarrierCommandTable(): [string, number][] {
+  return commandTable(toolshedCommandDecoders);
+}
+
+function commandTable(
+  decoders: ReadonlyMap<string, CommandDecoder>,
+): [string, number][] {
+  return [...decoders]
+    .map(([name, decoder]): [string, number] => [name, decoder.arity])
+    .sort(([left], [right]) => left.localeCompare(right));
+}
 
 interface WebSocketConstructor {
   new (url: string): WebSocketLike;
@@ -739,6 +944,11 @@ export async function syncCarrierOnce(
   const pulledCarrierFrames = pulledFrames.map(decodeCarrierOpFrame);
 
   for (const frame of pulledCarrierFrames) {
+    if (frame.replica !== options.expectedReplica) {
+      throw new Error(
+        `carrier served foreign replica ${frame.replica}; expected ${options.expectedReplica}`,
+      );
+    }
     const verification = await verifyCarrierOp(frame, options.verifier);
     if (!verification.valid) throw new Error(`carrier op verification failed: ${frame.id}`);
   }
@@ -794,12 +1004,21 @@ async function submitCarrierFrames(
 
   if (!canRelay(client)) throw new Error("carrier sync client does not support relay");
 
-  const pushedFrames = stableCausalCarrierFrames(frames);
+  const orderedFrames = stableCausalCarrierFrames(frames);
+  const pushedFrames: CarrierOpFrame[] = [];
   const pushReport = emptyPushReport();
   const confirmedDuplicateIds: string[] = [];
 
-  for (const frame of pushedFrames) {
-    const report = await client.relay(frame);
+  for (const frame of orderedFrames) {
+    let report: CarrierPushReport;
+    try {
+      report = await client.relay(frame);
+    } catch (error) {
+      if (carrierRateLimited(error)) break;
+      throw error;
+    }
+
+    pushedFrames.push(frame);
     appendPushReport(pushReport, report);
 
     if (pushReportEmpty(report)) {
@@ -811,12 +1030,16 @@ async function submitCarrierFrames(
   return { pushedFrames, pushReport, confirmedDuplicateIds };
 }
 
+function carrierRateLimited(error: unknown): boolean {
+  return error instanceof Error && error.message === "carrier peer error: rate_limited";
+}
+
 function canRelay(client: CarrierSyncClient): client is CarrierSyncClient & CarrierRelayClient {
   return typeof (client as Partial<CarrierRelayClient>).relay === "function";
 }
 
 function stableCausalCarrierFrames(frames: unknown[]): CarrierOpFrame[] {
-  const ops = frames.map(assertCarrierOpFrame);
+  const ops = frames.map((frame) => assertCarrierOpFrame(frame, false));
   const firstIndexById = new Map<string, number>();
   for (const [index, op] of ops.entries()) {
     if (!firstIndexById.has(op.id)) firstIndexById.set(op.id, index);
@@ -884,17 +1107,26 @@ export function carrierOpsToSemanticOps(
 }
 
 export function decodeCarrierOpFrame(frame: unknown): CarrierOpFrame {
-  return assertCarrierOpFrame(frame);
+  return assertCarrierOpFrame(frame, true);
 }
 
 export function carrierOpToSemanticOp(
   frame: unknown,
   realmByPubkey: Record<string, string> = {},
 ): Op {
-  const op = assertCarrierOpFrame(frame);
-  const body = decodeCarrierTerm(op.body);
-  const payload = payloadFromBody(op.kind, body, realmByPubkey);
-  const cap = capabilityId(decodeCarrierTerm(op.cap));
+  const op = assertCarrierOpFrame(frame, false);
+  let payload: Payload;
+  let cap: string | null;
+  let structuralError: "malformed_term" | undefined;
+  try {
+    const body = decodeCarrierTerm(op.body);
+    payload = payloadFromBody(op.kind, body, realmByPubkey);
+    cap = capabilityId(decodeCarrierTerm(op.cap));
+  } catch {
+    payload = neutralPayload("malformed_term");
+    cap = null;
+    structuralError = "malformed_term";
+  }
 
   return {
     id: op.id,
@@ -907,6 +1139,10 @@ export function carrierOpToSemanticOp(
     value: payload.value,
     hash: op.id,
     command: payload.command,
+    ...(payload.commandError === undefined
+      ? {}
+      : { commandError: payload.commandError }),
+    ...(structuralError === undefined ? {} : { structuralError }),
     cap,
     ...(payload.authority === undefined ? {} : { authority: payload.authority }),
     ...(payload.consent === undefined
@@ -983,33 +1219,68 @@ function canonicalTuple(values: unknown[]): Uint8Array {
 
 function decodeCarrierTerm(term: CarrierTerm): DecodedTerm {
   const [tag] = term;
+  const expectedLength = tag === "nil" ? 1 : 2;
+  if (term.length !== expectedLength) {
+    throw new Error("malformed carrier term arity");
+  }
 
   switch (tag) {
     case "nil":
       return null;
     case "bool":
+      if (typeof term[1] !== "boolean") throw new Error("malformed bool term");
       return term[1];
     case "int": {
-      const value = term[1];
-      return typeof value === "number" ? value : Number.parseInt(value, 10);
+      return parseCarrierInteger(term[1]);
     }
     case "bin": {
+      if (typeof term[1] !== "string") throw new Error("malformed binary term");
       const bytes = base64ToBytes(term[1]);
       return { type: "bin", bytes, text: textDecoder.decode(bytes) };
     }
-    case "atom":
+    case "atom": {
+      if (typeof term[1] !== "string") throw new Error("malformed atom term");
       return { type: "atom", value: term[1] };
-    case "list":
+    }
+    case "list": {
+      if (!Array.isArray(term[1])) throw new Error("malformed list term");
       return { type: "list", values: term[1].map(decodeCarrierTerm) };
-    case "tuple":
+    }
+    case "tuple": {
+      if (!Array.isArray(term[1])) throw new Error("malformed tuple term");
       return { type: "tuple", values: term[1].map(decodeCarrierTerm) };
-    case "map":
-      return { type: "map", pairs: term[1].map(([key, value]) => [decodeCarrierTerm(key), decodeCarrierTerm(value)]) };
-    case "mapset":
+    }
+    case "map": {
+      if (!Array.isArray(term[1])) throw new Error("malformed map term");
+      return {
+        type: "map",
+        pairs: term[1].map((pair) => {
+          if (!Array.isArray(pair) || pair.length !== 2) {
+            throw new Error("malformed map pair");
+          }
+          return [
+            decodeCarrierTerm(pair[0]),
+            decodeCarrierTerm(pair[1]),
+          ];
+        }),
+      };
+    }
+    case "mapset": {
+      if (!Array.isArray(term[1])) throw new Error("malformed mapset term");
       return { type: "mapset", values: term[1].map(decodeCarrierTerm) };
-    case "delegation":
-      return { type: "delegation", ...term[1] };
+    }
+    case "delegation": {
+      if (!isCarrierDelegation(term[1])) {
+        throw new Error("malformed delegation term");
+      }
+      base64ToBytes(term[1].issuer);
+      base64ToBytes(term[1].audience);
+      base64ToBytes(term[1].sig);
+      return { ...term[1], type: "delegation" };
+    }
   }
+
+  throw new Error("malformed carrier term");
 }
 
 function payloadFromBody(
@@ -1017,47 +1288,36 @@ function payloadFromBody(
   body: DecodedTerm,
   realmByPubkey: Record<string, string>,
 ): Payload {
-  if (kind === "command" && isTuple(body)) {
-    const command = atomName(body.values[0]);
-    const args = listValues(body.values[1]);
+  if (kind === "command") {
+    if (!isTuple(body) || body.values.length !== 2) {
+      return neutralPayload("command", "malformed_command");
+    }
 
-    switch (command) {
-      case "set_title":
-        return { field: "title", mutation: "write", value: binText(args[0]), command };
-      case "set_summary":
-        return { field: "summary", mutation: "write", value: binText(args[0]), command };
-      case "post":
-        return { field: "posts", mutation: "append", value: binText(args[0]), command };
-      case "admit":
-        return { field: "members", mutation: "add", value: binText(args[0]), command };
-      case "remove_member":
-        return { field: "members", mutation: "remove", value: binText(args[0]), command };
-      case "close_matter":
-        return { field: "clerk_locked", mutation: "write", value: true, command };
-      case "reopen_matter":
-        return { field: "clerk_locked", mutation: "write", value: false, command };
-      case "describe":
-        return { field: "description", mutation: "write", value: binText(args[0]), command };
-      case "note_condition":
-        return { field: "condition_notes", mutation: "append", value: binText(args[0]), command };
-      case "custody_transfer": {
-        // ADR 0007: the holder write projects the recipient's realm; the
-        // request id and consent signature ride as validity evidence for the
-        // consent conjunct (src/consent.ts), never as state.
-        const toPub = bytesToBase64(binBytes(args[0]));
-        const sigTerm = args[2];
-        return {
-          field: "holder",
-          mutation: "write",
-          value: realmForPubkey(toPub, realmByPubkey),
-          command,
-          consent: {
-            toPub,
-            requestOpId: binText(args[1]),
-            sig: sigTerm === null || sigTerm === undefined ? null : bytesToBase64(binBytes(sigTerm)),
-          },
-        };
-      }
+    const args = listValuesOrNull(body.values[1]);
+    if (args === null) {
+      return neutralPayload("command", "malformed_command");
+    }
+
+    const command = atomValue(body.values[0]);
+    if (command === null) {
+      return body.values[0] === null
+        ? neutralPayload("malformed_command", "malformed_command")
+        : neutralPayload(commandAuditLabel(body.values[0]), "unknown_command");
+    }
+
+    const decoder =
+      townshipCommandDecoders.get(command) ??
+      toolshedCommandDecoders.get(command);
+    if (decoder === undefined) {
+      return neutralPayload(command, "unknown_command");
+    }
+    if (args.length !== decoder.arity) {
+      return neutralPayload(command, "bad_command_arity");
+    }
+    try {
+      return decoder.decode(args, realmByPubkey);
+    } catch {
+      return neutralPayload(command, "malformed_command");
     }
   }
 
@@ -1164,11 +1424,20 @@ function payloadFromBody(
   return neutralPayload(kind);
 }
 
-function neutralPayload(command: string): Payload {
-  return { field: "__authority", mutation: "write", value: null, command };
+function neutralPayload(command: string, commandError?: CommandError): Payload {
+  return {
+    field: "__authority",
+    mutation: "write",
+    value: null,
+    command,
+    ...(commandError === undefined ? {} : { commandError }),
+  };
 }
 
-function assertCarrierOpFrame(frame: unknown): CarrierOpFrame {
+function assertCarrierOpFrame(
+  frame: unknown,
+  validateTerms: boolean,
+): CarrierOpFrame {
   if (!frame || typeof frame !== "object") throw new Error("malformed carrier op");
   const op = frame as Record<string, unknown>;
 
@@ -1187,7 +1456,19 @@ function assertCarrierOpFrame(frame: unknown): CarrierOpFrame {
     throw new Error("malformed carrier op");
   }
 
-  return op as unknown as CarrierOpFrame;
+  const carrierFrame = op as unknown as CarrierOpFrame;
+  try {
+    base64ToBytes(carrierFrame.author);
+    base64ToBytes(carrierFrame.sig);
+    if (validateTerms) {
+      decodeCarrierTerm(carrierFrame.body);
+      decodeCarrierTerm(carrierFrame.cap);
+    }
+  } catch {
+    throw new Error("malformed carrier op");
+  }
+
+  return carrierFrame;
 }
 
 function isOpKind(value: unknown): value is OpKind {
@@ -1211,6 +1492,41 @@ function listValues(term: DecodedTerm | undefined): DecodedTerm[] {
 function binText(term: DecodedTerm | undefined): string {
   if (typeof term === "object" && term !== null && "type" in term && term.type === "bin") return term.text;
   throw new Error("expected bin term");
+}
+
+function commandValue(term: DecodedTerm | undefined): unknown {
+  if (term === undefined) throw new Error("missing command value");
+  if (term === null || typeof term === "boolean" || typeof term === "number") {
+    return term;
+  }
+  if (term.type === "bin") return term.text;
+  if (term.type === "atom") return term.value;
+  if (term.type === "list" || term.type === "tuple") {
+    return term.values.map(commandValue);
+  }
+  if (term.type === "mapset") {
+    return term.values.map(commandValue);
+  }
+  if (term.type === "map") {
+    return Object.fromEntries(
+      term.pairs.map(([key, value]) => [
+        String(commandValue(key)),
+        commandValue(value),
+      ]),
+    );
+  }
+  if (term.type === "delegation") {
+    const { type: _type, ...delegation } = term;
+    return delegation;
+  }
+}
+
+function commandAuditLabel(term: DecodedTerm | undefined): string {
+  try {
+    return String(commandValue(term));
+  } catch {
+    return "unknown_command";
+  }
 }
 
 function binBytes(term: DecodedTerm | undefined): Uint8Array {
@@ -1445,7 +1761,11 @@ function atomMap(term: DecodedTerm | undefined): Map<string, DecodedTerm> | null
 }
 
 function atomValue(term: DecodedTerm | undefined): string | null {
-  return typeof term === "object" && term !== null && "type" in term && term.type === "atom"
+  return typeof term === "object" &&
+    term !== null &&
+    "type" in term &&
+    term.type === "atom" &&
+    typeof term.value === "string"
     ? term.value
     : null;
 }
@@ -1495,7 +1815,10 @@ function binBase64(term: DecodedTerm | undefined): string {
 }
 
 function realmForPubkey(pubkeyBase64: string, realmByPubkey: Record<string, string>): string {
-  return realmByPubkey[pubkeyBase64] ?? pubkeyBase64;
+  const mapped = Object.hasOwn(realmByPubkey, pubkeyBase64)
+    ? realmByPubkey[pubkeyBase64]
+    : undefined;
+  return mapped ?? pubkeyBase64;
 }
 
 function defaultWebSocket(): WebSocketConstructor {
@@ -1676,11 +1999,48 @@ function concat(...chunks: Uint8Array[]): Uint8Array {
 }
 
 export function base64ToBytes(value: string): Uint8Array {
-  if (typeof Buffer !== "undefined") return new Uint8Array(Buffer.from(value, "base64"));
+  if (
+    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
+      value,
+    )
+  ) {
+    throw new Error("malformed base64");
+  }
 
+  const decoded =
+    typeof Buffer !== "undefined"
+      ? new Uint8Array(Buffer.from(value, "base64"))
+      : decodeBase64WithAtob(value);
+  if (bytesToBase64(decoded) !== value) {
+    throw new Error("non-canonical base64");
+  }
+  return decoded;
+}
+
+function decodeBase64WithAtob(value: string): Uint8Array {
   const atobFn = (globalThis as unknown as { atob?: (encoded: string) => string }).atob;
   if (!atobFn) throw new Error("base64 decoding unavailable");
   return Uint8Array.from(atobFn(value), (char) => char.charCodeAt(0));
+}
+
+function parseCarrierInteger(value: number | string): number {
+  if (typeof value === "number") {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new Error("malformed integer term");
+    }
+    return value;
+  }
+  if (typeof value !== "string") {
+    throw new Error("malformed integer term");
+  }
+  if (!/^(0|[1-9][0-9]*)$/.test(value)) {
+    throw new Error("malformed integer term");
+  }
+  const parsed = BigInt(value);
+  if (parsed > uint64Max || parsed > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error("unsupported integer precision");
+  }
+  return Number(parsed);
 }
 
 function base64UrlToBytes(value: string): Uint8Array {

@@ -7,7 +7,7 @@
 >
 > **Drift check (run first)**:
 > ```sh
-> git diff --stat 764a1945..HEAD -- clients/township-tauri-shell/tsconfig.json clients/township-tauri-shell/package.json clients/township-tauri-shell/test .github/workflows/flagship.yml
+> git diff --stat 91bb6ca6..HEAD -- clients/township-tauri-shell/tsconfig.json clients/township-tauri-shell/package.json clients/township-tauri-shell/test .github/workflows/flagship.yml
 > ```
 > If any in-scope file changed since this plan was written, compare the "Current state"
 > excerpts against the live code before proceeding; on a mismatch, treat it as a STOP condition.
@@ -20,9 +20,12 @@
   large deletion that needs care about what it takes with it.
 - **Risk**: MED — some of the type errors are dead guards whose removal changes what a harness is
   understood to prove, and Part B deletes ~4,900 lines.
-- **Depends on**: none. Independent of 161–165.
+- **Depends on**: none. Independent of 161–165; execute before plan 164 so its new CI steps are
+  included in the final local-parity gate.
 - **Category**: tests / tech-debt
 - **Planned at**: commit `764a1945`, 2026-07-29
+- **Reconciled at**: commit `91bb6ca6`, 2026-07-29. Wave A1 appended two
+  `frontend_shell.mjs` tests but did not change this plan's `tauri_mobile_readiness.mjs` work.
 
 ## Why this matters
 
@@ -210,7 +213,7 @@ STOP and report that file.
 - **Any file under `clients/township-tauri-shell/src/`.** If a type error reveals a genuine source
   bug, report it — do not fix it here.
 - **`clients/lattice-client/**`** — its test tree is already typechecked.
-- **`test/frontend_shell.mjs`.** It is 1,294 lines with 737 assertions that read `src/App.vue` 35
+- **`test/frontend_shell.mjs`.** It is 1,324 lines with 750 assertions that read `src/App.vue` 37
   times and pin exact source text (test names literally read `Vue source exposes a cap-gated
   author-and-persist post action`). Plan 143 named it and it was not done. It is a real and closely
   related problem — but it is CI-gated today, and converting 35 source-slice sites to mounted-component
@@ -500,8 +503,8 @@ Stop and report back (do not improvise) if:
 - **Part B removes a maintenance tax, not coverage.** Nothing that asserted `/Claude Code was asked
   twice/` against `plans/100` was detecting a regression. Note in the commit message that ~4,900 lines
   were deleted and that the four behavioral tests are preserved and now, for the first time, run in CI.
-- **Deferred out of this plan, and the natural next step**: `test/frontend_shell.mjs` — 1,294 lines,
-  737 assertions, reads `src/App.vue` 35 times, with tests literally named
+- **Deferred out of this plan, and the natural next step**: `test/frontend_shell.mjs` — 1,324 lines,
+  750 assertions, reads `src/App.vue` 37 times, with tests literally named
   `Vue source exposes a cap-gated author-and-persist post action` and assertions that pin exact source
   lines including identifier names (e.g.
   `assert.match(app, /if \(devTraceShortcutMounted\) window\.removeEventListener\("keydown", handleDevTraceShortcut\)/)`).

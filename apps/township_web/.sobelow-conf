@@ -1,0 +1,19 @@
+# Sobelow config for apps/township_web (plan 161).
+#
+# bundle.ex carries a function-scoped Traversal.FileModule skip for load_verified/1.
+# Its manifest.json and matter.log filenames are fixed literals, and bundle_dir
+# comes from application configuration in production (or explicit test setup);
+# no request parameter or other user-controlled path reaches either File.read.
+[
+  exit: false,
+  format: "txt",
+  ignore_files: [],
+  ignore: [],
+  out: nil,
+  private: false,
+  router: nil,
+  skip: true,
+  threshold: :low,
+  verbose: false,
+  version: false
+]

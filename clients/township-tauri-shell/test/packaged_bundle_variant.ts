@@ -187,4 +187,4 @@ try {
   rmSync(tempRoot, { recursive: true, force: true });
 }
 
-console.log("✓ Township packaged bundle variant classifier checks passed");
+console.log("✓ Township packaged bundle variant classifier checks passed");
