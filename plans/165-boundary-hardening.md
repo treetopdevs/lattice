@@ -30,15 +30,29 @@
 - **Round 4 execution split**: land Part B before plan 161 so Sobelow starts from the corrected
   secret boundary. Land Parts A and C after plans 162–163. Keep the three commits independently
   reviewable on the shared Round 4 integration branch.
+- **Parallel Part B execution (2026-08-08, superseded by the Round 4 landing)**: a concurrent
+  session independently landed Part B as `8ab09e9e` on branch `plan165-partb-work` (worktree
+  based on `origin/main` @ `b1e6b88a`), reviewer re-verified (`mix check` exit 0 across all apps;
+  prod raises by name for a missing `SECRET_KEY_BASE` and for a missing `LIVE_VIEW_SIGNING_SALT`
+  independently; no literal remains in `config/`; instrument server boots and
+  `npm run township:instrument:e2e` passed 6/6). The Round 4 execution on main covers the same
+  ground — reconcile or discard that branch rather than merging it blind.
+- **Part C refresh note (2026-08-06, pre-execution)**: six commits had moved `holder.ex` line
+  references after the original planned-at commit — defects unchanged, locations corrected. The
+  companion sequencing advice (land `plans/173-bounded-carrier-transport.md` before Part C, since
+  173 bounds carrier *reads* and Part C bounds *writes* on the same two files) is moot for Part C
+  now that it has landed; plan 173 should instead re-verify its `web_socket.ex` assumptions
+  against the landed relay rate limiter.
 
 ## Execution evidence
 
 Recorded on `codex/round4-security-reliability` during the reviewed execution:
 
-- **Part B** landed first. Township development/test secrets now live only in environment-specific
-  tracked config rather than shared config, and every `PHX_SERVER` start requires
-  `SECRET_KEY_BASE` without weakening the carrier-only release or mandatory manifest contract. The
-  previously committed values were rotated and remain treated as burned.
+- **Part B** landed first. Township development/test signing values were removed from tracked
+  configuration and are now supplied at runtime or minted ephemerally at boot. Every `PHX_SERVER`
+  start requires the live signing configuration without weakening the carrier-only release or
+  mandatory manifest contract. The previously committed values were predictable placeholders (not
+  generated credentials); no rotation or re-keying is required.
 - **Part C** installs a per-connection token bucket on relay frames only: a 120-frame burst and
   12-frame-per-second refill match the existing server budget, allow a participant to drain a
   120-operation outbox immediately, and bound a sustained flood on one socket. A 240-frame burst
@@ -105,14 +119,23 @@ with no user gesture, unlike the action-intent path, which correctly requires `e
 There is no reachable injection sink in the shell today (the one `v-html` renders a locally-generated
 QR SVG built from a boolean matrix). This is defense-in-depth. The cost if one appears is total.
 
-**B. A dev `secret_key_base` is committed, and `PHX_SERVER` starts a live endpoint in every env.**
-`config/config.exs:22-23` holds literal `signing_salt` and `secret_key_base` values.
+**B. A predictable `secret_key_base` is committed, and `PHX_SERVER` starts a live endpoint in every
+env.** `config/config.exs:22-23` holds literal `signing_salt` and `secret_key_base` values.
+
+> **Severity corrected 2026-08-08 during execution review.** Both committed values are *placeholders*,
+> not generated credentials — the `secret_key_base` carries an explicit change-for-production marker
+> and zero padding, and the salt is a short constant word. **No rotation and no re-keying of any
+> deployment is required**, and the original "treat it as burned" framing in this plan was wrong.
+> The defect that is real: a *predictable, publicly-known constant* signs LiveView sessions and
+> tokens on a live endpoint in **every** environment, and `config_env() == :prod` is the only gate. A
+> known constant is as forgeable as a leaked secret, so the fix stands — only the incident-response
+> advice changes.
 `config/runtime.exs:11-17` requires `SECRET_KEY_BASE` only under `config_env() == :prod`, but the
 `PHX_SERVER` branch at `config/runtime.exs:3-9` — the one that flips `server: true` — runs in **every**
 env. So `MIX_ENV=dev PHX_SERVER=1` starts a live endpoint signing LiveView sessions and tokens with a
 value that is public in git history. The endpoint binds loopback, which limits blast radius to local
-processes and anything fronting it. Because the value is committed, deleting it is insufficient — it
-is burned and must be rotated.
+processes and anything fronting it. Because the value is a predictable public constant, deleting it
+is insufficient — the live endpoint must be gated so it cannot sign sessions with a known constant.
 
 **C. Relay has no per-connection rate limit.** Wave A1 replaced the old direct dump path with
 `bounded_atomic_dump/3`, a persistence timeout, target locking, durability rehearsal, and explicit
@@ -122,7 +145,7 @@ instances, but an authenticated relay realm can still submit relay frames contin
 rate limit.
 
 After this plan: the WebView can only ask for signatures over recognized payload shapes and runs
-under a CSP; the shared-config secret is rotated into environment-specific tracked config and cannot
+under a CSP; the shared-config predictable constant is removed into environment-specific tracked config and cannot
 be the default for a running server; and a relay peer cannot submit an unbounded burst on one
 connection.
 
@@ -190,8 +213,14 @@ requires `event.isTrusted` before accept and before sign.
 
 ### Part B — the committed dev secret
 
-`config/config.exs:22-23` — two literal values (a LiveView `signing_salt` and an endpoint
-`secret_key_base`). **Do not copy either value into any file, commit message, or report.**
+> **Refreshed 2026-08-07 against `91bb6ca6`.** `config/` drifted since the original planned-at
+> commit (`764a1945`): the Round 5 pilot-carrier work added +18 lines to `config.exs` and +24 to
+> `runtime.exs`. **The defect is unchanged** — the literals are still in the base endpoint block and
+> the `PHX_SERVER` branch still sets `server: true` without requiring a key — but the excerpts and
+> the target code below are the *current* content. Two consequences for the fix:
+> the repo has **no `config/dev.exs` or `config/test.exs`** and does not use `import_config` (only
+> `config.exs` and `runtime.exs` exist), and `runtime.exs` now carries a `carrier_release?` guard
+> that must be preserved verbatim.
 
 `config/runtime.exs` now also contains the Wave A1 carrier-release contract:
 
@@ -215,7 +244,13 @@ command — so the dev path genuinely is used and must keep working.
 
 ### Part C — relay rate
 
-`apps/lattice_carrier_server/lib/lattice_carrier_server/web_socket.ex:1-13`:
+> **REFRESHED 2026-08-06 (Round 5).** The line references below were re-verified against
+> `91bb6ca6`. Six commits touched these files after this plan's original planned-at commit
+> `764a1945` — `369b58bc`, `e592274f`, `51ea0b60`, `adfa06c8`, `b05741f8`, `c8466216` — and
+> `holder.ex`'s line numbers moved by roughly 35–70 lines. The **defects are unchanged**; only
+> the locations moved. Re-run the drift check before starting and compare these excerpts.
+
+`apps/lattice_carrier_server/lib/lattice_carrier_server/web_socket.ex:9-12`:
 
 ```elixir
   @max_frame_size 64_000
@@ -230,6 +265,21 @@ No rate limit. The relay handler at `web_socket.ex:185-205` calls `Holder.relay/
 changed path-backed log through `bounded_atomic_dump/3`. That path uses `Durability.secure_temp/1`,
 `Durability.with_target_lock/2`, a four-second task timeout, file sync, atomic rename, directory
 sync, and startup durability rehearsal. Preserve that entire contract.
+
+The unbounded-quarantine detail (still true after Part C, which deliberately did not edit
+`Lattice.Log`): `apps/lattice_core/lib/lattice/log.ex:34` — `quarantine` is a plain list on the
+persisted struct; `quarantine_op/3` prepends with no cap; a bad-signature op is quarantined
+(mutating the log) unless an op with the **same id** is already quarantined
+(`structurally_quarantined?/2` is an `Enum.any?` scan). The dedup keys on the
+**attacker-supplied** `op.id`. `Op.valid?/1` fails for two distinct reasons: (1) the op's id does
+not match its content hash (`op.id != hash(encoding)`), or (2) the signature does not verify
+against the declared author. Only the first case lets the attacker freely vary the claimed id to
+yield a fresh quarantine entry every time and defeat the dedup guard — an invalid-signature op
+whose id *does* match its content is deduplicated normally. So attacker-controlled variation of
+`op.id` defeats `Lattice.Log`'s id-based deduplication for the content-hash-mismatch class, but
+not every invalid operation has an id/content mismatch. The linear scan makes growth quadratic in
+CPU as well as unbounded on disk.
+This is the defect deferred to the archive/journal design noted below.
 
 **An existing rate limiter to reuse rather than reinvent**:
 `apps/lattice_server/lib/lattice_server/rate_limiter.ex`. Read it first and follow its shape.
@@ -407,85 +457,166 @@ that A4 needs a macOS run — do not land an unverified CSP.)
 
 ---
 
-## Part B — rotate the committed secret and fail closed on `PHX_SERVER`
+## Part B — remove the committed predictable constant and stop shipping signing material in tracked config
 
 ### Step B1: Move the dev values out of shared config into env-specific tracked config
 
-Remove the `secret_key_base` and `signing_salt` literals from `config/config.exs:22-23`. Put
-freshly-generated development values in `config/dev.exs` and `config/test.exs` (creating them and the
-`import_config "#{config_env()}.exs"` line if the repo does not already have them — check
-`config/config.exs`'s tail first).
+In `config/config.exs`, remove the `secret_key_base:` entry and the `live_view: [signing_salt: ...]`
+entry from the base `config :township_web, TownshipWeb.Endpoint` block (lines 22–23). Leave every
+other key in that block (`url`, `http`, `adapter`, `render_errors`, `pubsub_server`, `server: false`)
+exactly as it is.
 
-Generate new values with `~/.asdf/shims/mix phx.gen.secret`. **Never copy the old values anywhere.**
+**No literal signing material may remain in any tracked config file, in any environment.** Do not
+re-add the values behind a `config_env()` guard — a guarded literal is still a committed secret, it
+still trips Sobelow's `Config.Secrets` check, and it would leave plan 161 step 3 blocked. Step B2
+supplies the values instead.
 
-Treat the previously-committed values as compromised: they are in git history and cannot be removed
-by deletion. Note in your report that rotation has happened and that any deployment which ever used
-them must be re-keyed. Do not attempt to rewrite git history.
+The previously-committed values were predictable placeholders (not generated credentials): they carry
+an explicit change-for-production marker and zero padding, and the salt is a short constant word.
+Note in your report that **no rotation or re-keying is required** — the defect is that a predictable
+public constant signed live sessions, not that credentials leaked. Do not attempt to rewrite git
+history. **Never copy the old values anywhere.**
 
-### Step B2: Require `SECRET_KEY_BASE` whenever a server is actually started
+### Step B2: Supply the signing material at boot — env first, ephemeral in dev/test, raise otherwise
 
-In `config/runtime.exs`, make the requirement follow the server, not the env. The `PHX_SERVER` branch
-at `:3-9` is what makes the endpoint live, so that is where the key must be mandatory:
+The endpoint still needs a `secret_key_base` and a `signing_salt`. Supply both from
+`config/runtime.exs`, which is evaluated at boot rather than compile time.
+
+The rule, in one sentence: **use `SECRET_KEY_BASE` when it is set; in `:dev` and `:test` generate an
+ephemeral one per boot; otherwise raise.** That removes the public-key problem at its root (there is
+no longer a known key to abuse) while keeping the documented developer workflow working with no new
+environment variable.
+
+**Preserve the `carrier_release?` assignment and the `LATTICE_CARRIER_MANIFEST` case statement above
+verbatim** — they are Round 5 pilot-carrier work and are out of this plan's scope. Also leave the
+`if config_env() == :prod and not carrier_release? do` block at the bottom as it is: it is the
+existing production requirement and it stays.
+
+Add a block, placed **after** the `carrier_release?`/manifest section and **before** the
+`PHX_SERVER` branch, along these lines:
 
 ```elixir
-import Config
-
-if System.get_env("PHX_SERVER") do
-  port = String.to_integer(System.get_env("PORT", "4100"))
-
+# Signing material for the Township endpoint. Nothing is committed: production
+# supplies SECRET_KEY_BASE and LIVE_VIEW_SIGNING_SALT from the environment, and
+# dev/test mint an ephemeral value at boot. Ephemeral is correct for dev/test —
+# the instrument is a loopback-bound read-only surface with no login, so the only
+# consequence of a fresh key per boot is that a stale browser session is re-established.
+# The carrier-only pilot release does not include :township_web.
+if not carrier_release? do
   secret_key_base =
     System.get_env("SECRET_KEY_BASE") ||
-      raise """
-      SECRET_KEY_BASE is required whenever PHX_SERVER is set — the endpoint is live and
-      signs session cookies and LiveView tokens. Generate one with `mix phx.gen.secret`.
-      """
+      case config_env() do
+        env when env in [:dev, :test] -> Base.encode64(:crypto.strong_rand_bytes(48))
+        _ -> nil
+      end
+
+  signing_salt =
+    System.get_env("LIVE_VIEW_SIGNING_SALT") ||
+      case config_env() do
+        env when env in [:dev, :test] -> Base.encode64(:crypto.strong_rand_bytes(16))
+        _ -> nil
+      end
+
+  # Fail closed independently for each missing variable — do not silently skip
+  # configuration when either is absent. A silently-nil secret_key_base is a worse
+  # outcome than the bug this plan is fixing.
+  if is_nil(secret_key_base) do
+    raise "SECRET_KEY_BASE is required for the Township web endpoint in #{config_env()}"
+  end
+
+  if is_nil(signing_salt) do
+    raise "LIVE_VIEW_SIGNING_SALT is required for the Township web endpoint in #{config_env()}"
+  end
 
   config :township_web, TownshipWeb.Endpoint,
-    http: [ip: {127, 0, 0, 1}, port: port],
-    server: true,
-    secret_key_base: secret_key_base
-end
-
-if config_env() == :prod do
-  # ... keep the existing :prod requirement
+    secret_key_base: secret_key_base,
+    live_view: [signing_salt: signing_salt]
 end
 ```
 
-This changes a documented developer workflow: `AGENTS.md:84`'s
-`PHX_SERVER=true PORT=4100 ~/.asdf/shims/mix run --no-halt` now needs `SECRET_KEY_BASE` set. Update
-that line in `AGENTS.md` to show the variable, and make the raise message tell the developer exactly
-how to generate one (as above).
+Two things to get right, and to **verify rather than assume**:
 
-**Verify**:
+- **Keyword deep-merge.** Elixir's `Config` deep-merges keyword lists, so setting `live_view:` here
+  should merge into (not replace) any `live_view:` list from `config.exs`. After step B1 there is no
+  base `live_view:` key left, so this is the only source — but confirm the endpoint boots and a
+  LiveView actually mounts, which is what the B3 verification does.
+- **Fail closed independently for each variable.** With the literals gone, a non-carrier boot
+  missing `SECRET_KEY_BASE` must raise a distinct named failure for `SECRET_KEY_BASE`, and a boot
+  missing `LIVE_VIEW_SIGNING_SALT` must raise a distinct named failure for `LIVE_VIEW_SIGNING_SALT`
+  — do not silently skip configuration when either is absent. The two raises must be independent:
+  setting only one variable must still fail on the other, so each missing-variable path is
+  exercised separately.
+
+You may restructure the block if a cleaner formulation gives the same three-way behavior. What must
+hold: no literal in tracked config; dev/test boot with no environment variable; a non-carrier boot
+missing either `SECRET_KEY_BASE` or `LIVE_VIEW_SIGNING_SALT` raises a distinct named failure for
+that variable.
+
+**Known `PHX_SERVER` call sites — surveyed 2026-08-07, no action needed.** The ephemeral-key
+approach was chosen precisely so that adding a `SECRET_KEY_BASE` requirement does not break the
+existing callers. All four executable ones run under `MIX_ENV=test` and therefore take the ephemeral
+branch with no environment variable:
+
+- `scripts/township_instrument_server.sh:11`
+- `scripts/township_stable_server_live.sh:16`
+- `scripts/township_live_instrument_server.sh:16`
+- `clients/township-tauri-shell/test/support/beam_peer.ts:228`
+
+plus two documentation references (`AGENTS.md:84`, `apps/township_web/README.md:13`) that stay
+correct as written. None sets `RELEASE_ROOT`, so `carrier_release?` is `false` in every case.
+
+If a **new** call site appears that runs under `MIX_ENV=prod`, it will hit the existing `:prod`
+requirement and raise — which is the intended behavior, not a regression.
+
+### Step B3: Verify the three behaviors
+
+**Dev boots with no environment variable** (this is `AGENTS.md:84`'s documented workflow, and it must
+keep working unchanged):
 
 ```sh
 PHX_SERVER=true PORT=4100 ~/.asdf/shims/mix run --no-halt
 ```
 
-→ raises with the new message. Then:
+→ the endpoint starts. Confirm it serves: in another shell,
+`curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4100/township` → a 2xx or 3xx, not a
+connection error. Then stop it with Ctrl-C.
+
+**An explicit key is honored**:
 
 ```sh
 SECRET_KEY_BASE="$(~/.asdf/shims/mix phx.gen.secret)" PHX_SERVER=true PORT=4100 ~/.asdf/shims/mix run --no-halt
 ```
 
-→ starts the endpoint. (Stop it with Ctrl-C.)
+→ starts. Stop with Ctrl-C.
+
+**Prod without a key still raises**:
+
+```sh
+MIX_ENV=prod ~/.asdf/shims/mix loadconfig 2>&1 | tail -5
+```
+
+→ raises `SECRET_KEY_BASE is required for the Township web endpoint`. (If `loadconfig` is not the
+right vehicle in this umbrella, use whatever minimal command evaluates `runtime.exs` under
+`MIX_ENV=prod` and say which you used.)
+
+**No literal remains**:
+
+```sh
+grep -rn 'secret_key_base\|signing_salt' config/
+```
+
+→ the only hits are the variable names in `runtime.exs`, never a literal value.
+
+**Full gate**:
 
 ```sh
 ~/.asdf/shims/mix check
 cd apps/township_web && ~/.asdf/shims/mix sobelow --exit ; echo "exit=$?" ; cd ../..
 ```
 
-→ `mix check` exits 0; record the Sobelow result. If Sobelow's `Config.Secrets` check was firing on
-`config/config.exs` before this change and no longer is, say so — that is the evidence Part B worked,
-and it unblocks plan 161's step 3.
-
-**Verify no literal remains**:
-
-```sh
-grep -n 'secret_key_base\|signing_salt' config/config.exs
-```
-
-→ no output.
+→ `mix check` exits 0. Record the Sobelow result. **If Sobelow's `Config.Secrets` check was firing on
+`config/config.exs` before this change and no longer is, say so explicitly** — that is the evidence
+Part B worked, and it is what unblocks plan 161 step 3.
 
 ---
 
@@ -568,15 +699,18 @@ Machine-checkable. ALL must hold:
 - [ ] `cd clients/township-tauri-shell/src-tauri && cargo test --features township-dev-trace --test dev_trace_commands` passes
 - [ ] `npm --prefix clients/township-tauri-shell run native:contract` exits 0
 - [ ] The two packaged macOS smokes exit 0 under the new CSP (or the plan is reported as stopping at A3 with a stated reason)
-- [ ] `grep -n 'secret_key_base\|signing_salt' config/config.exs` → no output
-- [ ] `PHX_SERVER=true PORT=4100 ~/.asdf/shims/mix run --no-halt` raises without `SECRET_KEY_BASE`, and starts with it
+- [ ] `grep -rn 'secret_key_base\|signing_salt' config/` returns only variable names in `runtime.exs`, never a literal value
+- [ ] `PHX_SERVER=true PORT=4100 ~/.asdf/shims/mix run --no-halt` starts the endpoint with **no** environment variable set, and `/township` responds
+- [ ] `MIX_ENV=prod` config evaluation without `SECRET_KEY_BASE` still raises
+- [ ] `cd apps/township_web && ~/.asdf/shims/mix sobelow --exit` exits 0, and the report states whether `Config.Secrets` stopped firing
 - [ ] `~/.asdf/shims/mix check` exits 0
 - [ ] `~/.asdf/shims/mix test apps/lattice_carrier_server/` passes, including the rate-limit and Wave A1 durability cases
 - [ ] Both Sobelow scans exit 0
 - [ ] `npm --prefix clients/lattice-client run carrier:relay`, `carrier:relay-sync`, `carrier:township:live` exit 0
 - [ ] Your report contains the complete step-A1 domain-tag survey
 - [ ] Your report states whether `Holder`'s durability moduledoc changed and why
-- [ ] Your report notes that the previously-committed secret is rotated and must be treated as burned
+- [ ] Your report characterizes the removed values without reproducing them, and does **not** claim rotation or re-keying is required (they were placeholders — see the severity correction in "Why this matters")
+- [ ] A non-carrier boot missing `SECRET_KEY_BASE` raises a distinct named failure naming `SECRET_KEY_BASE`, and a boot missing `LIVE_VIEW_SIGNING_SALT` raises a distinct named failure naming `LIVE_VIEW_SIGNING_SALT` — each tested separately with actual command output (not by reading the code), so neither can be `nil` at boot
 - [ ] `git status` shows no modified file outside the In-scope list
 - [ ] `plans/README.md` status row for 165 updated
 
@@ -613,6 +747,13 @@ Stop and report back (do not improvise) if:
   durable fix is per-signature user presence for high-authority payload shapes (delegation issuance,
   revocation), mirroring what `use_action_intent.ts:229-231` already does with `event.isTrusted`.
   That is a UX change and is deliberately out of this plan — flag it for the roadmap.
+- **Found during the parallel Part B execution review, NOT fixed here**:
+  `apps/township_web/lib/township_web/endpoint.ex:7` hardcodes `signing_salt: "township-session"` in
+  the `@session_options` — a third piece of predictable signing material, this one in a `.ex` source
+  file and therefore untouched by Part B. It signs the **session cookie**, distinct from the LiveView
+  salt this plan moves to runtime. Same finding class, same fix shape (read from runtime config,
+  required in prod). Worth a small follow-up plan; note that a Sobelow
+  `Config.Secrets` scan will not flag it because it is not in `config/`.
 - **Deferred out of this plan, all real**: replacing the Wave A1 full-log persistence with an
   append-only journal plus periodic snapshot, including durable preservation of every structural
   quarantine entry and a replay-compatible on-disk format; bounding authenticated full-log reads

@@ -14,15 +14,28 @@
 
 ## Status
 
+- **DONE.** Executed and merged to main via `codex/round4-security-reliability` (with the
+  authorized scope amendment below). A parallel advisor-branch run — six commits
+  `cc56d133..2b2ae207` on `advisor/161-close-verification-gaps` (worktree based on `origin/main`
+  @ `b1e6b88a`) — is **superseded by that landing and not an ancestor of main; reconcile or
+  discard it, do not merge it blind**. That run's reviewer record: scope is exactly the 8
+  in-scope files; `mix check` exit 0 (595 tests, 27 properties, 0 failures); both Sobelow scans exit
+  0; all thirteen device-free suites wired into CI and sequenced after `mix test`; the widened format
+  gate demonstrably fails on an unformatted file in `apps/lattice_web_socket`. Two follow-ups recorded
+  in `plans/README.md`: the Sobelow `--skip` flag drift (two suppression mechanisms now coexist, one
+  inert under CI's invocation), and `tauri:witness-ceremony:smoke` being wired but unverified until
+  the next hosted macOS run.
 - **Priority**: P1 — this is the verification baseline. Plans 162 and 163 change security-critical
   code; they should land on top of a CI that actually runs the suites that would catch a mistake.
 - **Effort**: S–M (the code change is small; triaging the first Sobelow run and the rotted suites is the work)
 - **Risk**: MED — enabling a scanner and ten never-executed suites will likely surface pre-existing
   failures. That is the point, but it means this plan can turn red before it turns green.
-- **Depends on**: `plans/165-boundary-hardening.md` Part B in the Round 4 execution sequence.
-- **Execution note**: Round 4 runs plan 165 Part B before this plan. The tracked endpoint secret is
-  therefore expected to be absent when the Township Sobelow baseline is established; that is the
-  planned removal of a genuine finding, not unexplained drift.
+- **Depends on**: none, strictly. (An earlier draft said plan 165 Part B had to land first, on the
+  assumption that Sobelow would flag the committed secrets. It cannot — see the correction in
+  step 3. 165 Part B landed 2026-08-08 regardless, at `8ab09e9e`.)
+- **Execution note**: the Round 4 sequence still ran plan 165 Part B before this plan. The tracked
+  endpoint secret is therefore expected to be absent when the Township Sobelow baseline is
+  established; that is the planned removal of a genuine finding, not unexplained drift.
 - **Category**: tests / dx / security
 - **Planned at**: commit `764a1945`, 2026-07-29
 - **Reconciled at**: commit `91bb6ca6`, 2026-07-29
@@ -340,22 +353,67 @@ Run it and capture the full output:
 cd apps/township_web && ~/.asdf/shims/mix sobelow --exit ; echo "exit=$?" ; cd ../..
 ```
 
-Three possible outcomes:
+> **Corrected 2026-08-08, after executing plan 165 Part B.** An earlier draft of this step said to
+> expect a `Config.Secrets` finding on the committed secrets in `config/config.exs`, and that plan
+> 165 had to land first. **Both were wrong**, and the reason is a standing gap worth understanding:
+>
+> **Sobelow's config checks are structurally dead in this repo.** Sobelow scans one Mix project.
+> Neither `apps/township_web/` nor `apps/lattice_server/` has a `config/` directory of its own — all
+> configuration lives at the umbrella root. A scan invoked from inside either app never sees
+> `config/config.exs` or `config/runtime.exs`, so the whole `Config.*` family (`Config.Secrets`,
+> `Config.CSRF`, `Config.CSP`, `Config.HTTPS`) can never fire from either invocation. Verified
+> 2026-08-08: neither app directory contains `config/`, and the scan output was identical before and
+> after the committed secrets were removed.
+>
+> So **this step is not blocked on plan 165**, and the findings you should actually expect are the
+> `Traversal.FileModule` pair below.
+
+**Expected as of 2026-08-08** (verified on `91bb6ca6` and again after 165 Part B): `exit=1`, with
+exactly two low-confidence findings, both in
+`apps/township_web/lib/township_web/instrument_source/bundle.ex`:
+
+```text
+Traversal.FileModule: Directory Traversal in `File.read` - Low Confidence
+File: lib/township_web/instrument_source/bundle.ex
+Line: 31   Function: load_verified:25   Variable: matter_path
+
+Traversal.FileModule: Directory Traversal in `File.read` - Low Confidence
+File: lib/township_web/instrument_source/bundle.ex
+Line: 29   Function: load_verified:25   Variable: manifest_path
+```
+
+Triage those two. Read `load_verified/1` in that file and establish where `manifest_path` and
+`matter_path` come from. If they derive from an operator-supplied bundle directory rather than from
+peer or request input, that is the same shape as the confirmed false positive already suppressed in
+`apps/lattice_server/.sobelow-conf` — create `apps/township_web/.sobelow-conf` modeled exactly on it,
+with a comment block giving the **specific reason** the suppression is correct, naming the guard that
+makes it safe.
+
+**If either path can be influenced by untrusted input, STOP and report it.** That is a real finding
+and fixing it is not this plan's job.
+
+Generally, three outcomes:
 
 - **exit 0** — nothing to suppress. Skip creating `.sobelow-conf` and go to step 4.
-- **exit non-zero with findings you can justify as false positives** — create
-  `apps/township_web/.sobelow-conf` modeled exactly on `apps/lattice_server/.sobelow-conf`
-  (shown in "Current state"), with a comment block above the list giving the **specific reason each
-  suppression is correct**, naming the file and the guard that makes it safe. Never suppress a
-  finding you cannot justify in one sentence of concrete reasoning about the code.
-- **exit non-zero with a finding that looks like a real vulnerability** — STOP and report it. Do not
-  suppress it and do not fix it in this plan.
+- **exit non-zero, findings justifiable as false positives** — suppress with written reasoning, as
+  above (create `apps/township_web/.sobelow-conf` modeled exactly on
+  `apps/lattice_server/.sobelow-conf`, with a comment block giving the **specific reason each
+  suppression is correct**, naming the file and the guard that makes it safe).
+- **exit non-zero with a plausible real vulnerability** — STOP and report it. Do not suppress it and
+  do not fix it in this plan. Never suppress a finding you cannot justify in one sentence of
+  concrete reasoning about the code.
 
 Do not claim this per-app scan covers the umbrella `config/`; the authorized shared-config
 regression test supplies that missing gate. It must reject the retired Part B literal if
 reintroduced into `config/config.exs`.
 
 **Verify**: whichever outcome, record the exact command output in your final report.
+
+**Also record for the operator, but do not fix here** (it needs a scoping decision): the `Config.*`
+blind spot above means `AGENTS.md:38-49` prescribes a security gate that cannot inspect any
+configuration in this repo. The likely fix is an additional Sobelow invocation from the umbrella
+root (or `--root`) so the config family actually runs. Note it in your report; it is a follow-up
+plan, not a step here.
 
 ### Step 4: Wire the `township_web` Sobelow scan into CI
 
@@ -582,8 +640,9 @@ Stop and report back (do not improvise) if:
   rot or a production bug. Do not fix production code in this plan.
 - **Sobelow on `township_web` reports a finding you cannot justify suppressing in one concrete
   sentence** — especially anything in the `XSS`, `Traversal`, or `CSRF` families. Report it.
-- Sobelow flags the committed `secret_key_base` / `signing_salt` at `config/config.exs:22-23`. That
-  is a genuine finding owned by **plan 165**; report it and stop rather than suppressing it.
+- Sobelow reports a `Config.*`-family finding at all. It structurally cannot (see the correction in
+  step 3) — if one appears, the premise of that correction is wrong and the operator needs to know
+  before you suppress anything.
 - Adding a `.formatter.exs` reformats more than ~20 files in any single app — that suggests the app
   was never formatted and the churn deserves the operator's attention before it lands.
 - You discover that a "device-free" suite actually spawns a device, an emulator, or a Tauri build
