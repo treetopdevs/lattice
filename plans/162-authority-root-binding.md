@@ -898,7 +898,7 @@ Machine-checkable. ALL must hold:
 - [ ] The step 2b(d) cross-replica case and both step 2b(e) tick cases exist and pass
 - [ ] Reverting each step 2b(d) replica guard independently (the `cap_ok/8` clause, then the `validate_delegation/4` clause) makes the cross-replica case fail, recorded in your report
 - [ ] Reverting the step 2b(e) guard makes the second tick case raise `ArithmeticError`, recorded in your report
-- [ ] `grep -rn 'beacon' apps/lattice_core/lib/lattice/authority.ex | grep -i 'succe\|heartbeat\|transfer'` returns **nothing** — confirming this plan did not begin the tick-provenance redesign that belongs to plan 175
+- [ ] Review the complete `git diff --function-context 91bb6ca6 -- apps/lattice_core/lib/lattice/authority.ex` and record that the beacon/tick-provenance code is unchanged. The diff may contain step 2b(e)'s malformed-tick shape guard, but it must not thread beacon state into succession, transfer, or heartbeat decisions or alter their tick source; that redesign belongs to plan 175.
 - [ ] `git status` shows no modified file outside the In-scope list
 - [ ] `plans/README.md` status row for 162 updated
 

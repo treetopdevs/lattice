@@ -91,14 +91,14 @@ gh pr merge codex/round4-security-reliability --merge --delete-branch
 **Step 1: Refresh against the new main and re-check for conflicts**
 
 ```bash
-git fetch origin && git merge-tree --write-tree origin/main codex/beta-android-distribution
+git fetch origin
+git merge-tree --write-tree origin/main codex/beta-android-distribution
+git -C /Users/nicholas/develop/lattice-beta-android merge origin/main
 ```
 
-Expected: exits 0 (clean). If conflicts appeared (round4 touched the shell client too), merge main into the branch in its worktree and resolve:
-
-```bash
-cd /Users/nicholas/develop/lattice-beta-android && git merge origin/main
-```
+Expected: the preview exits 0, then the actual merge updates the feature branch before tests run.
+If the actual merge nevertheless reports conflicts (round4 touched the shell client too), resolve
+them in the worktree before continuing.
 
 **Step 2: Run the loop**
 
@@ -129,10 +129,14 @@ Same shape as Task 2. This branch and android both touch `clients/` — re-check
 **Step 1: Refresh and conflict-check**
 
 ```bash
-git fetch origin && git merge-tree --write-tree origin/main codex/beta-product-isolation
+git fetch origin
+git merge-tree --write-tree origin/main codex/beta-product-isolation
+git -C /Users/nicholas/develop/lattice-beta-isolation merge origin/main
 ```
 
-If dirty, `cd /Users/nicholas/develop/lattice-beta-isolation && git merge origin/main` and resolve (prefer the branch's seam moves; the android branch shouldn't touch the moved signer/codec files, but verify with `git log origin/main -- clients/lattice-mobile-core`).
+If the actual merge reports conflicts, resolve them in the worktree (prefer the branch's seam
+moves; the android branch shouldn't touch the moved signer/codec files, but verify with
+`git log origin/main -- clients/lattice-mobile-core`).
 
 **Step 2: Loop**
 
@@ -171,10 +175,22 @@ Then edit `plans/176-fail-closed-input-validation.md` frontmatter: retitle to 17
 **Step 2: Merge the post-Task-3 main and reconcile the plan-doc conflict**
 
 ```bash
-git fetch origin && git merge origin/main
+git status --short
+git stash push --include-untracked -m "plan077 docs before main merge" -- plans docs/plans/2026-08-08-branch-reconciliation.md
+git fetch origin
+git merge origin/main
+git stash pop
 ```
 
-Expected: conflicts in `plans/162-authority-root-binding.md`, `plans/165-boundary-hardening.md`, `plans/README.md` (round4 recorded Plan 163/165 completion; this side adds Round-5 mapping). Resolution rule: **union** — keep round4's completion/status records AND this side's Round-5/Wave-A1 additions. Resolve statuses per plan and step, not blanketly: round4's `DONE (Round 4)` wins for plans 161, 163, and 165 where it recorded completion, but preserve Plan 162's `DONE (Round 4; step 2b amendments PENDING re-execution)` status and its Round-5 `cap_ok/8` replica-binding / malformed-tick mapping, and leave 159 (DRAFT), 160 (PROPOSED), and 164 (TODO) at their non-DONE statuses.
+The stash must contain the local plan WIP before the merge starts. After `git stash pop`, expect
+conflicts in `plans/162-authority-root-binding.md`, `plans/165-boundary-hardening.md`, and
+`plans/README.md` (round4 recorded Plan 163/165 completion; this side adds Round-5 mapping).
+Resolution rule: **union** — keep round4's completion/status records AND this side's
+Round-5/Wave-A1 additions. Resolve statuses per plan and step, not as a blanket rule: round4's
+`DONE (Round 4)` wins for plans 161, 163, and 165 where it recorded completion, but preserve Plan
+162's `DONE (Round 4; step 2b amendments PENDING re-execution)` status and its Round-5 `cap_ok/8`
+replica-binding / malformed-tick mapping, and leave 159 (DRAFT), 160 (PROPOSED), and 164 (TODO) at
+their non-DONE statuses. Add the resolved files before committing the restored plan changes.
 
 **Step 3: Loop, then commit**
 
@@ -183,7 +199,8 @@ Expected: conflicts in `plans/162-authority-root-binding.md`, `plans/165-boundar
 ```
 
 ```bash
-git add plans/ && git commit -m "docs(plans): map Round 5 hardening work and reconcile Round 4 records"
+git add docs/plans/2026-08-08-branch-reconciliation.md plans/
+git commit -m "docs(plans): map Round 5 hardening work and reconcile Round 4 records"
 ```
 
 ---

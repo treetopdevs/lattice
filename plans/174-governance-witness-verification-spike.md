@@ -11,11 +11,24 @@
 > **Drift check (run first)**:
 >
 > ```sh
-> git diff --stat 91bb6ca6..HEAD -- clients/township-tauri-shell/src-tauri/src clients/lattice-client/src/local_log.ts plans/146-witnessed-succession-witness-artifact-g1.md
+> changed_paths="$(
+>   {
+>     git diff --name-only 91bb6ca6..HEAD
+>     git diff --cached --name-only
+>     git diff --name-only
+>     git ls-files --others --exclude-standard
+>   } | sed '/^$/d' | sort -u
+> )"
+> unexpected="$(printf '%s\n' "$changed_paths" | grep -Ev '^(docs/|plans/)' || true)"
+> if [ -n "$unexpected" ]; then
+>   printf 'production paths changed outside the spike boundary:\n%s\n' "$unexpected" >&2
+>   exit 1
+> fi
 > ```
 >
-> If any of those changed since this plan was written, compare the "Current state" excerpts
-> against the live code before proceeding.
+> This repository-wide allowlist covers committed, staged, working-tree, and untracked paths.
+> If it reports any production path, compare the "Current state" excerpts against the live code
+> and reconcile the plan before proceeding.
 
 ## Status
 
@@ -238,13 +251,13 @@ reading (for example, whether Rust can verify a delegation chain within an accep
 latency), build the smallest throwaway that answers it.
 
 Prototypes go under a fresh directory from a portable temporary-directory command — e.g.
-`PROTOTYPE_PATH="$(mktemp -d)/scratchpad"` — or another git-ignored path — **never** in
+`PROTOTYPE_PATH="$(mktemp -d)"` — or another git-ignored path — **never** in
 `clients/` or `apps/`. Record the resolved `PROTOTYPE_PATH` in the deliverable, record the
 measurement, and delete the prototype directory afterward.
 
 **Verify**: either no prototype was needed (say so), or the measurement is recorded, the
 prototype path is recorded in the deliverable, and the prototype directory no longer exists
-after cleanup (`test ! -d "$PROTOTYPE_PATH"` succeeds). `git status --porcelain` shows only
+after cleanup (`test ! -e "$PROTOTYPE_PATH"` succeeds). `git status --porcelain` shows only
 `docs/` and `plans/` changes.
 
 ### Step 6: Write the deliverable and the follow-on plan

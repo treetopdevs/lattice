@@ -8,9 +8,23 @@
 > **Drift check (run first)**:
 >
 > ```sh
-> git diff --stat 91bb6ca6..HEAD -- apps/lattice_core/lib/lattice/authority.ex docs/adr/0004-succession-validation.md plans/162-authority-root-binding.md
+> changed_paths="$(
+>   {
+>     git diff --name-only 91bb6ca6..HEAD
+>     git diff --cached --name-only
+>     git diff --name-only
+>     git ls-files --others --exclude-standard
+>   } | sed '/^$/d' | sort -u
+> )"
+> unexpected="$(printf '%s\n' "$changed_paths" | grep -Ev '^(docs/|plans/)' || true)"
+> if [ -n "$unexpected" ]; then
+>   printf 'production paths changed outside the spike boundary:\n%s\n' "$unexpected" >&2
+>   exit 1
+> fi
 > ```
 >
+> This repository-wide allowlist covers committed, staged, working-tree, and untracked paths.
+> If it reports any production path, reconcile the plan with the live code before proceeding.
 
 ## Status
 
