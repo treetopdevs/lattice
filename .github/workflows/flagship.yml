@@ -485,11 +485,24 @@ jobs:
           TOWNSHIP_PILOT_KEY_PASSWORD: ""
         run: |
           set -eu
-          if ./gradlew --no-daemon -q packageUniversalRelease > refusal.log 2>&1; then
+          # The rust build tasks are excluded because the Tauri CLI's
+          # android-studio-script only works inside a live `tauri android build`
+          # orchestration (it reads a CLI-managed server-addr temp file); the
+          # jniLibs from the real signed build above are already in place. The
+          # packageUniversalRelease fail-closed gate itself still runs and must
+          # refuse with the real gradle refusal message.
+          if ./gradlew --no-daemon -q packageUniversalRelease \
+              -x rustBuildArm64Release -x rustBuildArmRelease \
+              -x rustBuildX86Release -x rustBuildX86_64Release \
+              -x rustBuildUniversalRelease > refusal.log 2>&1; then
             echo "release packaging must refuse without signing secrets" >&2
             exit 1
           fi
-          grep -q "release signing is fail-closed" refusal.log
+          if ! grep -q "release signing is fail-closed" refusal.log; then
+            echo "expected the fail-closed refusal message; gradle output was:" >&2
+            cat refusal.log >&2
+            exit 1
+          fi
 
       - name: Upload pilot artifact and manifest
         if: steps.pilot.outputs.present == 'true'
