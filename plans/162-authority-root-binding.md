@@ -129,16 +129,19 @@ Plan 164 owns the required generated-output drift detector and remains scheduled
 **DONE.** Step 2b (d) cross-replica guard and (e) malformed-tick guard implemented in Elixir
 (`authority.ex`), mirrored in `compaction_spike.ex`, and mirrored in TypeScript
 (`authority.ts` + `capability.ts`). Vectors regenerated; all Elixir tests, TS typecheck/conformance/
-canonical/authoring/tauri-bridge gates, and Sobelow all pass.
+canonical/authoring/tauri-bridge gates, and Sobelow all pass. Round 5 adversarial review
+follow-up: mutation evidence corrected; Scope authorizes `capability.ts` for 2b(d);
+`validate_delegation` always rejects replica mismatch (no unbound skip), matching
+`cap_ok` / `verify_chain`.
 
 ### Step 2b (d) — cross-replica capability replay
 
 - `cap_ok/9` now rejects a command citing a delegation whose `replica` differs from the op's
   `replica` with `:wrong_replica`, before delegation-validity and ops checks.
-- `validate_delegation/6` now rejects a delegation whose `replica` differs from the log's bound
-  replica with `:wrong_replica`, before root/chain validation. The guard is skipped for legacy
-  unbound logs (no root commitment), mirroring `root_matches?(nil, _) -> true`, so honest slices
-  built on the unbound replica name keep working.
+- `validate_delegation/6` now rejects a delegation whose `replica` differs from the log's
+  replica with `:wrong_replica`, before root/chain validation. The guard always fires on
+  replica mismatch (including legacy unbound log names), matching `cap_ok/9` and
+  `verify_chain/2`.
 - `compaction_spike.ex` mirrors the `validate_delegation` guard.
 - `capability.ts` adds `delegation.replica !== op.replica` → `wrong_replica` before the
   validation check; `authority.ts` `delegationValidation` adds the same comparison before
@@ -162,10 +165,26 @@ canonical/authoring/tauri-bridge gates, and Sobelow all pass.
 | Guard reverted | Failing test |
 |---|---|
 | `cap_ok/9` `d.replica != op.replica` | `a capability signed for another replica cannot authorize this replica` — `forged_post` no longer `:wrong_replica` |
-| `validate_delegation/6` `d.replica != log_replica` | same test — `foreign_genesis_op` falls back to `:impostor_genesis` |
+| `validate_delegation/6` `d.replica != log_replica` | same test — `foreign_genesis_op` and `foreign_grant_op` quarantine as `false` (honored); same-root foreign name validates `:ok` / genesis laundering. `forged_post` still `:wrong_replica` via `cap_ok/9` |
 | `role_event/3` heartbeat `valid_tick?` | `a malformed heartbeat tick is quarantined…` raises `ArithmeticError` (`"9" + 3`) |
 | `role_event/3` transfer `valid_tick?` + `delegation_in/1` skip | `malformed transfer and succession ticks…` — transfer no longer `:malformed_term` |
 | `compaction_spike.ex` heartbeat `valid_tick?` | `malformed retained heartbeat cannot crash…` raises `ArithmeticError` |
+
+Round 5 adversarial review correction (2026-08-09): the prior claim that reverting only
+`validate_delegation`'s `wrong_replica` made `foreign_genesis_op` fall back to
+`:impostor_genesis` was **false**. The fixture binds the foreign replica with the same
+`server.pub`, so without the validate guard `root_matches?` succeeds and validation returns
+`:ok` — observed assert failure:
+
+```
+assert {true, :wrong_replica} = Sim.quarantined(sim, "server", foreign_genesis_op.id)
+left:  {true, :wrong_replica}
+right: false
+```
+
+Inspected outcomes with only that guard removed: `foreign_genesis: false`,
+`foreign_grant: false`, `forged_post: {true, :wrong_replica}`, `message_present: false`.
+Both guards remain independently load-bearing.
 
 ### Changed vectors
 
@@ -472,6 +491,8 @@ same session to force a correct `:test` recompile.
 
 - `apps/lattice_core/lib/lattice/authority.ex`
 - `clients/lattice-client/src/authority.ts`
+- `clients/lattice-client/src/capability.ts` (authorized for step 2b(d) cross-replica guard;
+  regenerated `dist` only)
 - `apps/lattice_core/lib/mix/tasks/lattice.export_vectors.ex` (new scenarios + the one expectation
   update step 5 identifies)
 - `clients/lattice-client/test/vectors/*.json` (regenerated output — never hand-edited)
