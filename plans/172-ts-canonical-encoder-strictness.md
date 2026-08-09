@@ -247,23 +247,36 @@ cd clients/lattice-client
 node -e '
 const fs=require("fs"),path=require("path");
 const bad=[];
+const check=(file,field,value)=>{
+  if(typeof value!=="string"||Buffer.from(value,"base64").toString("base64")!==value)
+    bad.push([file,field,JSON.stringify(value).slice(0,40)]);
+};
+const isFrame=v=>["v","id","replica","author","kind","body","sig"].every(k=>Object.hasOwn(v,k));
+const isDelegation=v=>["issuer","audience","sig"].every(k=>Object.hasOwn(v,k));
+const walkv=(file,v,at="$")=>{
+  if(Array.isArray(v)){
+    if(v.length===2&&v[0]==="bin")check(file,`${at}[1]`,v[1]);
+    return v.forEach((item,i)=>walkv(file,item,`${at}[${i}]`));
+  }
+  if(!v||typeof v!=="object")return;
+  if(isFrame(v)){
+    check(file,`${at}.author`,v.author);
+    check(file,`${at}.sig`,v.sig);
+  }
+  if(isDelegation(v)){
+    check(file,`${at}.issuer`,v.issuer);
+    check(file,`${at}.audience`,v.audience);
+    check(file,`${at}.sig`,v.sig);
+  }
+  Object.entries(v).forEach(([k,item])=>walkv(file,item,`${at}.${k}`));
+};
 const walk=d=>fs.readdirSync(d,{withFileTypes:true}).forEach(e=>{
   const p=path.join(d,e.name);
   if(e.isDirectory())return walk(p);
   if(!p.endsWith(".json"))return;
-  // Classify every candidate string, not just canonical-looking ones: a value is a
-  // candidate if it could plausibly be base64 — any string of length >= 8 over the
-  // base64 alphabet plus whitespace, base64url chars (-_), invalid symbols, and
-  // malformed padding. Strict decoding rejects all of these except exact canonical
-  // base64, so report every value the strict round-trip would reject.
-  const isCandidate=v=>typeof v==="string" && v.length>=8 &&
-    /^[A-Za-z0-9+/_\-=\s]+$/.test(v);
-  const check=v=>{ if(!isCandidate(v))return;
-    const trimmed=v.replace(/\s/g,"");
-    if(Buffer.from(trimmed,"base64").toString("base64")!==trimmed) bad.push([p,v.slice(0,12)+"..."]); };
-  const walkv=v=>{ if(Array.isArray(v))v.forEach(walkv);
-    else if(v&&typeof v==="object")Object.values(v).forEach(walkv); else check(v); };
-  walkv(JSON.parse(fs.readFileSync(p,"utf8")));
+  // Check only the known strict-decoding sinks, using each original value verbatim.
+  // Do not normalize whitespace or pre-filter malformed characters/padding.
+  walkv(p,JSON.parse(fs.readFileSync(p,"utf8")));
 });
 walk("test/vectors");
 console.log(bad.length?bad:"ALL VECTOR BASE64 IS CANONICAL");

@@ -48,11 +48,11 @@
 
 Recorded on `codex/round4-security-reliability` during the reviewed execution:
 
-- **Part B** landed first. Township development/test secrets now live only in environment-specific
-  tracked config rather than shared config, and every `PHX_SERVER` start requires
-  `SECRET_KEY_BASE` without weakening the carrier-only release or mandatory manifest contract. The
-  previously committed values were predictable placeholders (not generated credentials) and have been
-  removed; no rotation or re-keying is required.
+- **Part B** landed first. Township development/test signing values were removed from tracked
+  configuration and are now supplied at runtime or minted ephemerally at boot. Every `PHX_SERVER`
+  start requires the live signing configuration without weakening the carrier-only release or
+  mandatory manifest contract. The previously committed values were predictable placeholders (not
+  generated credentials); no rotation or re-keying is required.
 - **Part C** installs a per-connection token bucket on relay frames only: a 120-frame burst and
   12-frame-per-second refill match the existing server budget, allow a participant to drain a
   120-operation outbox immediately, and bound a sustained flood on one socket. A 240-frame burst

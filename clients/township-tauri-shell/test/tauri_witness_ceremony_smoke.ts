@@ -155,8 +155,11 @@ const witnessSignControlUrl = "township://dev/action-witness/sign";
 const witnessUseAcceptedTrace = "action-witness-dev-use:accepted";
 const witnessSignSignedTrace = "action-witness-dev-sign:signed";
 // GREEN export outcome trace: byte-free, emitted only after the export sink
-// (system clipboard) holds the exact stored artifact JSON.
-const witnessExportSucceededTrace = "witness-artifact-export:succeeded";
+// (system clipboard) holds the exact stored artifact JSON. The suffix names
+// which sink ran (webview clipboard API vs the constrained native command),
+// so a CI log shows which clipboard path this run actually exercised.
+const witnessExportSucceededTracePrefix = "witness-artifact-export:succeeded:";
+const witnessExportSinks = ["webview", "native"] as const;
 const witnessReviewDomPrefix = "witness-review-dom:";
 const witnessArtifactDomPrefix = "witness-artifact-dom:";
 const exportShortcutKeydownTrace = `${TOWNSHIP_TRACE_DEV_SHORTCUT_KEYDOWN_PREFIX}e`;
@@ -465,7 +468,20 @@ try {
   await writeClipboard(clipboardSentinel);
   assert.equal(await readClipboard(), clipboardSentinel);
   await sendExportShortcut();
-  await waitForTraceLine(witnessExportSucceededTrace, 30_000);
+  await waitFor(
+    () =>
+      traceLines(tracePath).some((line) => line.startsWith(witnessExportSucceededTracePrefix)),
+    `trace ${witnessExportSucceededTracePrefix}<sink>`,
+    30_000,
+  );
+  const witnessExportSink = traceLines(tracePath)
+    .find((line) => line.startsWith(witnessExportSucceededTracePrefix))
+    ?.slice(witnessExportSucceededTracePrefix.length);
+  assert.ok(
+    witnessExportSinks.includes(witnessExportSink as (typeof witnessExportSinks)[number]),
+    `witness export sink must be one of ${witnessExportSinks.join("/")}, got ${witnessExportSink}`,
+  );
+  console.log(`  witness export clipboard sink: ${witnessExportSink}`);
   assert.deepEqual(sortedEntries(readKvValues(kvPath)), kvAfterRelaunch);
   assertSourceUnchanged(sourceBeforeExport, "export");
   assert.equal(traceLineCount(tracePath, TOWNSHIP_TRACE_SYNC_OUTBOX_STARTED), syncCountBeforeExport);

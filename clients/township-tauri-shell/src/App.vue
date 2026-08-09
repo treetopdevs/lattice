@@ -1236,16 +1236,19 @@ async function exportSelectedWitnessArtifact(event: Event) {
   // Older WebKit builds reject the async clipboard API with NotAllowedError
   // once the packaged CSP applies, so fall back to the constrained native
   // clipboard sink (which re-reads the stored artifact by id) before failing.
+  // A native-sink failure is traced distinctly from the webview rejection so
+  // "fallback failed" never looks byte-identical to "no fallback attempted".
+  let clipboardSink: "webview" | "native" = "webview";
   try {
     await navigator.clipboard.writeText(exported.artifactJson);
   } catch (clipboardError) {
     try {
       await copyTownshipWitnessArtifactNative(artifact.artifactId);
-    } catch {
+      clipboardSink = "native";
+    } catch (nativeError) {
       witnessExportStatus.value = { ok: false, message: "The witness artifact could not be copied." };
-      traceWitnessExportFailure(
-        `clipboard:${clipboardError instanceof Error ? clipboardError.name : typeof clipboardError}`,
-      );
+      traceWitnessExportFailure(`clipboard:${witnessExportErrorCode(clipboardError)}`);
+      traceWitnessExportFailure(`clipboard-native:${witnessExportErrorCode(nativeError)}`);
       return;
     }
   }
@@ -1254,15 +1257,27 @@ async function exportSelectedWitnessArtifact(event: Event) {
     ok: true,
     message: `${exported.fileName} copied. Keep it with the full confirmation below.`,
   };
-  if (devTraceRuntime) void traceTownshipDevEvent("witness-artifact-export:succeeded").catch(() => {});
+  // The success trace names the sink that ran so the packaged smoke can tell
+  // which clipboard path CI actually exercised.
+  if (devTraceRuntime) {
+    void traceTownshipDevEvent(`witness-artifact-export:succeeded:${clipboardSink}`).catch(() => {});
+  }
 }
 
-// Byte-free export failure evidence: reason codes and error names only, so a
-// blocked export fails closed and loudly instead of silently timing out.
+// Byte-free export failure evidence: reason codes, error names, and the
+// native sink's constant error strings only, so a blocked export fails
+// closed and loudly instead of silently timing out.
 function traceWitnessExportFailure(code: string) {
   if (devTraceRuntime) {
     void traceTownshipDevEvent(`witness-artifact-export:failed:${code}`).catch(() => {});
   }
+}
+
+// Webview clipboard rejections are DOMExceptions (trace the name); native
+// sink rejections surface the Rust command's byte-free constant strings.
+function witnessExportErrorCode(error: unknown): string {
+  if (typeof error === "string") return error;
+  return error instanceof Error ? error.name : typeof error;
 }
 
 async function traceWitnessReviewDom(intentId: string, review: WitnessedSuccessionReview) {

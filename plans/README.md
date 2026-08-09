@@ -215,7 +215,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 173 | Bounded carrier transport: connect deadlines + paged pulls | P1 | M–L | 169 | TODO (Round 5b) |
 | 174 | **(spike)** What the governance-witness ceremony must prove natively | P1 | M (build: L) | — | TODO (Round 5b) |
 | 175 | **(spike)** How succession gets a trustworthy clock | P1 | M (build: L) | 162 step 2b (pending) | TODO (Round 5b) |
-| 176 | Fail closed at the wire/authority boundary: lease range, decode depth, replica marker, op kinds | P1 | M | 161 (rec.), 168 | TODO (Round 5; renumbered from 168 — AUTHZ-02 ceded to plan 162 step 2b(e)) |
+| 176 | Fail closed at the wire/authority boundary: lease range, decode depth, replica marker, op kinds | P1 | M | 161 (rec.), 168, 172, 173 | TODO (Round 5; renumbered from 168 — AUTHZ-02 ceded to plan 162 step 2b(e)) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
@@ -245,9 +245,9 @@ deployment constraint, not code. Promote it to a plan the moment anyone proposes
 > **live remainder**, re-verified against the table's dependency column, is:
 > **168 → 169 → 170 → 171 (after 168) → 172 → 162 step-2b re-execution (the Round 5 amendments,
 > still unimplemented) → 173 (after 169) → 174 / 175 (175 after the 162 step-2b tick guard) → 176.**
-> Plan 176's only hard ordering constraint is running after 168 (or reconciling with it — whichever
-> of the two executes second must re-read the other, since 176's CRYPTO-01 and 168's step 5 both
-> touch `Canonical.signable?/1`; see the collision-resolution note below).
+> Plan 176 runs after 168, 172, and 173. It must reconcile with 168 — whichever plan executes
+> second must re-read the other, since 176's CRYPTO-01 and 168's step 5 both touch
+> `Canonical.signable?/1`; see the collision-resolution note below.
 
 Two audits ran against this tree — the Round 5 `improve deep security cryptography` pass that
 produced plans 168–172, and a second independent review whose plan reconciliation was stale
@@ -268,6 +268,7 @@ because it predated those files. The merged, agreed sequence:
    165 Part C (both edit the carrier server).
 10. **165** — boundary hardening, with Part C refreshed against `91bb6ca6`.
 11. **174** and **175** — the two spikes, which produce their own build plans.
+12. **176** — fail-closed wire/authority validation, after 168, 172, and 173.
 
 ### Where the two reviews disagreed, and how it resolved
 
