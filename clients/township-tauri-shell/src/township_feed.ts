@@ -10,6 +10,7 @@ import {
   type CarrierStateReport,
   type Verifier,
 } from "@treetopdevs/lattice-client";
+import { mergeCarrierFrameTiers } from "./carrier_frame_merge";
 import {
   type TownshipNativeWorkflow,
   withTownshipPersistenceWrite,
@@ -103,7 +104,12 @@ export async function refreshTownshipFromCarrier(
       options.workflow.delegationFrames.load(),
     ]);
     const ops = integrate(currentOps, pulledOps);
-    const delegationFrames = mergeCarrierFrames([...currentDelegationFrames, ...pulledFrames]);
+    // A frame pulled and verified this refresh outranks the archived copy on
+    // byte-differing same-id collisions, healing a corrupted archive entry.
+    const delegationFrames = mergeCarrierFrameTiers([
+      { frames: currentDelegationFrames, trust: 1 },
+      { frames: pulledFrames, trust: 0 },
+    ]).frames;
     const carrierAuthorityReport = validateCarrierStateReport(stateReport, delegationFrames);
     const matter = townshipPreviewFromOps(
       ops,
@@ -338,10 +344,6 @@ function createWorker(epoch: number): TownshipFeedWorker {
     },
   };
   return worker;
-}
-
-function mergeCarrierFrames(frames: CarrierOpFrame[]): CarrierOpFrame[] {
-  return [...new Map(frames.map((frame) => [frame.id, frame])).values()];
 }
 
 function validateCarrierStateReport(

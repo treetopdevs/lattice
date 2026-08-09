@@ -298,6 +298,7 @@ defmodule Lattice.Authority do
     invalid_deleg = invalid_delegation_ops(ordered, delegations, deleg_valid, commitment)
     tombstone_q = unauthorized_tombstones(ordered, root)
     revoke_q = unauthorized_revokes(ordered, delegations, root)
+    tick_q = malformed_tick_ops(ordered)
     roles = all_roles(module)
 
     timelines =
@@ -340,6 +341,7 @@ defmodule Lattice.Authority do
       |> Map.merge(tombstone_q)
       |> Map.merge(revoke_q)
       |> Map.merge(beacon_q)
+      |> Map.merge(tick_q)
 
     %{
       quarantine: reasons |> Map.keys() |> MapSet.new(),
@@ -421,6 +423,21 @@ defmodule Lattice.Authority do
   def valid_tick?(tick) do
     is_integer(tick) and tick >= 0 and tick <= Lattice.Canonical.max_integer()
   end
+
+  # Tick shape is a structural property, not a role-timeline property: the
+  # TypeScript decoder rejects a non-canonical tick before it ever consults
+  # the schema, so a transfer/heartbeat naming an undeclared role must still
+  # quarantine :malformed_term here or the two runtimes diverge.
+  defp malformed_tick_ops(ordered) do
+    for %Op{kind: :authority, body: body} = op <- ordered,
+        malformed_tick_body?(body),
+        into: %{},
+        do: {op.id, :malformed_term}
+  end
+
+  defp malformed_tick_body?({:transfer, _role, %Delegation{}, tick}), do: not valid_tick?(tick)
+  defp malformed_tick_body?({:heartbeat, _role, tick}), do: not valid_tick?(tick)
+  defp malformed_tick_body?(_), do: false
 
   # Succession policies are conferred only by a *valid* genesis — an impostor genesis
   # (one whose audience does not match the replica's root commitment) is quarantined

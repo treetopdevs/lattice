@@ -1,4 +1,5 @@
 import { bytesBase64 } from "./base64";
+import { mergeCarrierFrames, mergeCarrierFrameTiers } from "./carrier_frame_merge";
 import {
   carrierOpsToSemanticOps,
   integrate,
@@ -58,6 +59,8 @@ export interface TownshipSyncSuccess {
   pushedFrameIds: string[];
   strandedReplicaFrameIds: string[];
   unboundReplicaFrameIds: string[];
+  conflictingFrameCount: number;
+  conflictingFrameIds: string[];
   unverifiableFrameIds: string[];
   unverifiableArchiveFrameIds: string[];
   compactedFrameCount: number;
@@ -189,10 +192,14 @@ export async function syncTownshipOutbox(
         message: "Expected replica is required for a direct carrier client.",
       };
     }
-    const localSyncFrames = mergeCarrierFrames([
-      ...localDelegationFrames,
-      ...localCarrierFrames,
+    // The archive outranks the outbox: when the same id carries differing
+    // bytes, egress must offer the archived recovery copy, never a corrupt
+    // queue entry that would fail verification and suppress the push.
+    const egressMerge = mergeCarrierFrameTiers([
+      { frames: localDelegationFrames, trust: 0 },
+      { frames: localCarrierFrames, trust: 1 },
     ]);
+    const localSyncFrames = egressMerge.frames;
     const syncCandidateFrames = localSyncFrames.filter(
       (frame) => frame.replica === expectedReplica,
     );
@@ -237,11 +244,16 @@ export async function syncTownshipOutbox(
         workflow.delegationFrames.load(),
       ]);
       const mergedOps = integrate(currentOps, synced.ops);
-      const delegationFrames = mergeCarrierFrames([
-        ...currentDelegationFrames,
-        ...currentCarrierFrames,
-        ...(synced.pulledFrames as CarrierOpFrame[]),
+      // Same-id collisions resolve by trust, never by list position: a frame
+      // pulled and verified this sync outranks the archive, and the archive
+      // outranks the unverified outbox — a corrupt outbox entry must not
+      // overwrite the valid recovery copy an honest second peer depends on.
+      const archiveMerge = mergeCarrierFrameTiers([
+        { frames: currentDelegationFrames, trust: 1 },
+        { frames: currentCarrierFrames, trust: 2 },
+        { frames: synced.pulledFrames as CarrierOpFrame[], trust: 0 },
       ]);
+      const delegationFrames = archiveMerge.frames;
       const compactedFrameIds = [
         ...new Set(
           currentCarrierFrames
@@ -282,6 +294,7 @@ export async function syncTownshipOutbox(
         compactedFrameIds,
         strandedReplicaFrameIds,
         unboundReplicaFrameIds,
+        archiveConflictingFrameIds: archiveMerge.conflictingFrameIds,
       };
     });
     const {
@@ -291,7 +304,11 @@ export async function syncTownshipOutbox(
       compactedFrameIds,
       strandedReplicaFrameIds,
       unboundReplicaFrameIds,
+      archiveConflictingFrameIds,
     } = persisted;
+    const conflictingFrameIds = [
+      ...new Set([...egressMerge.conflictingFrameIds, ...archiveConflictingFrameIds]),
+    ].sort();
     const authorityFrameVerification = await partitionVerifiedCarrierFrames(
       delegationFrames.filter((frame) => frame.replica === expectedReplica),
       operationVerifier,
@@ -313,6 +330,8 @@ export async function syncTownshipOutbox(
       pushedFrameIds: synced.pushedFrames.map(frameId),
       strandedReplicaFrameIds,
       unboundReplicaFrameIds,
+      conflictingFrameCount: conflictingFrameIds.length,
+      conflictingFrameIds,
       unverifiableFrameIds: synced.unverifiableFrameIds,
       unverifiableArchiveFrameIds:
         authorityFrameVerification.unverifiableFrameIds,
@@ -349,10 +368,6 @@ export async function syncTownshipOutbox(
   } finally {
     connectedClient?.close();
   }
-}
-
-function mergeCarrierFrames(frames: CarrierOpFrame[]): CarrierOpFrame[] {
-  return [...new Map(frames.map((frame) => [frame.id, frame])).values()];
 }
 
 async function partitionVerifiedCarrierFrames(

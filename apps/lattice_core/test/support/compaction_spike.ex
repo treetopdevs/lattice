@@ -207,7 +207,9 @@ defmodule Lattice.CompactionSpike do
         |> Enum.map(&classify_acquire(&1, role, analysis.reasons, deleg_valid))
         |> Enum.reject(&is_nil/1)
 
-      heartbeat_ticks = recorded_heartbeat_ticks(ordered, role, acquires, covered_anc)
+      heartbeat_ticks =
+        recorded_heartbeat_ticks(ordered, role, acquires, covered_anc, analysis.reasons)
+
       ticks = Enum.map(acquires, & &1.at_tick) ++ heartbeat_ticks
 
       {role,
@@ -237,11 +239,16 @@ defmodule Lattice.CompactionSpike do
     end
   end
 
-  defp recorded_heartbeat_ticks(ordered, role, acquires, covered_anc) do
+  # A quarantined or malformed-tick heartbeat must not seed the summary: a
+  # covered string tick would otherwise become `last_active_tick` and crash
+  # succession replay arithmetic after compaction.
+  defp recorded_heartbeat_ticks(ordered, role, acquires, covered_anc, reasons) do
     for op <- ordered,
         op.kind == :authority,
         match?({:heartbeat, ^role, _}, op.body),
         {:heartbeat, ^role, tick} = op.body,
+        Authority.valid_tick?(tick),
+        not Map.has_key?(reasons, op.id),
         heartbeat_recorded?(op, acquires, covered_anc),
         do: tick
   end

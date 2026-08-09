@@ -632,11 +632,19 @@ export async function syncCarrierOnce(client, localOps, localCarrierFrames, real
     const unverifiableFrameIds = candidateVerification.flatMap(({ id, valid }) => !valid && id !== null ? [id] : []);
     const submission = options.submission ?? "push";
     const submitted = await submitCarrierFrames(client, candidateFrames, submission);
+    // A carrier response only ever confirms possession of frames submitted in
+    // THIS call: an id it names without having received the frame (a foreign,
+    // unbound, or locally unverifiable frame filtered from egress) must not
+    // become compactable, or a malicious carrier could silently destroy the
+    // frame's persistent retry/warning behavior.
+    const submittedFrameIds = new Set(submitted.pushedFrames.flatMap((frame) => {
+        const id = maybeCarrierFrameId(frame);
+        return id === null ? [] : [id];
+    }));
     const peerReportedFrameIds = [
         ...new Set([
             ...peerKnownFrameIds,
-            ...submitted.pushReport.accepted,
-            ...submitted.confirmedDuplicateIds,
+            ...[...submitted.pushReport.accepted, ...submitted.confirmedDuplicateIds].filter((id) => submittedFrameIds.has(id)),
         ]),
     ];
     return {

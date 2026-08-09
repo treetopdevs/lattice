@@ -107,6 +107,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_authority_replayed_genesis(),
       township_authority_malformed_heartbeat(),
       township_authority_malformed_transfer(),
+      township_authority_undeclared_role_tick(),
       township_foreign_replica_injection(),
       township_link_election(),
       township_capability_missing(),
@@ -1805,6 +1806,54 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       "rejectedPost" => rejected_post,
       "malformedTransferOperationId" => transfer.id,
       "malformedTransferDelegationId" => delegation.id
+    })
+  end
+
+  # Tick shape must quarantine independently of the role timeline: a signed
+  # heartbeat or transfer naming a role the schema never declared still
+  # carries a malformed tick, and both runtimes must report :malformed_term
+  # rather than silently ignoring the op on the BEAM side only.
+  defp township_authority_undeclared_role_tick do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:undeclared-role-tick",
+        ["clerk", "resident"],
+        seed: "township:undeclared-role-tick"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, heartbeat} = Sim.append(sim, "clerk", :authority, {:heartbeat, :ghost, "9"})
+
+    {sim, delegation} =
+      Sim.transfer(sim, "clerk", "resident", :ghost, at_tick: "9", ops: [:post])
+
+    transfer =
+      sim
+      |> Sim.log("clerk")
+      |> Log.topo_ops()
+      |> Enum.find(fn
+        %{body: {:transfer, :ghost, %Delegation{id: id}, "9"}} -> id == delegation.id
+        _other -> false
+      end)
+
+    unless match?(%Op{}, transfer), do: raise("missing undeclared-role transfer operation")
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    assert_authority_reason!(log, heartbeat.id, :malformed_term)
+    assert_authority_reason!(log, transfer.id, :malformed_term)
+
+    unless Authority.analyze(Matter, log).holders.clerk == Sim.identity(sim, "clerk").pub do
+      raise "expected undeclared-role ticks not to disturb the clerk holder"
+    end
+
+    capability_scenario("township_authority_undeclared_role_tick", sim, log, %{
+      "targetOperationId" => heartbeat.id,
+      "expectedReason" => "malformed_term",
+      "undeclaredTransferOperationId" => transfer.id,
+      "undeclaredTransferDelegationId" => delegation.id
     })
   end
 

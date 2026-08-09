@@ -1290,6 +1290,131 @@ if (!peerKnownCorruptSync.ok) throw new Error(peerKnownCorruptSync.message);
 assert.deepEqual(peerKnownCorruptSync.unverifiableFrameIds, []);
 assert.deepEqual(peerKnownCorruptSync.unverifiableArchiveFrameIds, [corruptArchiveFrame.id]);
 
+// A malicious carrier forging accepted ids for frames filtered from egress
+// (foreign-replica, unbound, locally unverifiable) must not compact them:
+// each class stays queued with its persistent warning intact.
+class ForgedAcceptCarrierClient extends RecordingCarrierClient {
+  constructor(private readonly forgedAcceptedIds: string[]) {
+    super([]);
+  }
+
+  override async push(ops: unknown[]): Promise<CarrierPushReport> {
+    const report = await super.push(ops);
+    return { ...report, accepted: [...report.accepted, ...this.forgedAcceptedIds] };
+  }
+}
+
+const corruptEgressFrame = {
+  ...grantFixture,
+  sig: Buffer.alloc(64).toString("base64"),
+};
+const forgedFilteredValues = new Map<string, string>([
+  [
+    storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY),
+    JSON.stringify(carrierOpsToSemanticOps([expectedReplicaArchiveFrame], vector.realmByPubkey)),
+  ],
+  [
+    storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY),
+    JSON.stringify([
+      expectedReplicaArchiveFrame,
+      foreignReplicaVector.capabilityCase.foreignCarrierOp,
+      unboundReplicaFrame,
+      corruptEgressFrame,
+    ]),
+  ],
+  [storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY), "[]"],
+]);
+const forgedFilteredClient = new ForgedAcceptCarrierClient([
+  foreignReplicaVector.capabilityCase.foreignCarrierOp.id,
+  postFixture.id,
+  corruptEgressFrame.id,
+]);
+const forgedFilteredSync = await syncTownshipOutbox({
+  invoke: nativeInvoke(forgedFilteredValues, vector.client.sessionPubkey, []),
+  client: forgedFilteredClient,
+  expectedReplica: vector.replica,
+});
+assert.equal(forgedFilteredSync.ok, true);
+if (!forgedFilteredSync.ok) throw new Error(forgedFilteredSync.message);
+assert.deepEqual(forgedFilteredClient.pushedFrames, [expectedReplicaArchiveFrame.id]);
+assert.deepEqual(forgedFilteredSync.compactedFrameIds, [expectedReplicaArchiveFrame.id]);
+assert.deepEqual(forgedFilteredSync.strandedReplicaFrameIds, [
+  foreignReplicaVector.capabilityCase.foreignCarrierOp.id,
+]);
+assert.deepEqual(forgedFilteredSync.unboundReplicaFrameIds, [postFixture.id]);
+assert.deepEqual(forgedFilteredSync.unverifiableFrameIds, [corruptEgressFrame.id]);
+assert.deepEqual(
+  storedOutboxIds(forgedFilteredValues),
+  frameIds([
+    foreignReplicaVector.capabilityCase.foreignCarrierOp,
+    unboundReplicaFrame as CarrierOpFrame,
+    corruptEgressFrame,
+  ]),
+);
+
+// Valid-archive / corrupt-outbox / peer-known / second-honest-peer: a corrupt
+// outbox frame sharing an id with the archived valid frame must not replace
+// the recovery copy. After the first peer advertises the id and the queue
+// compacts, a later honest peer still receives the valid bytes.
+class FrameCapturingCarrierClient extends RecordingCarrierClient {
+  readonly pushedRawFrames: CarrierOpFrame[] = [];
+
+  override async push(ops: unknown[]): Promise<CarrierPushReport> {
+    this.pushedRawFrames.push(...(ops as CarrierOpFrame[]));
+    return super.push(ops);
+  }
+}
+
+const corruptOutboxTwin = {
+  ...expectedReplicaArchiveFrame,
+  sig: Buffer.alloc(64).toString("base64"),
+};
+const twinValues = new Map<string, string>([
+  [
+    storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY),
+    JSON.stringify(carrierOpsToSemanticOps([expectedReplicaArchiveFrame], vector.realmByPubkey)),
+  ],
+  [storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY), JSON.stringify([corruptOutboxTwin])],
+  [
+    storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY),
+    JSON.stringify([expectedReplicaArchiveFrame]),
+  ],
+]);
+const twinFirstSync = await syncTownshipOutbox({
+  invoke: nativeInvoke(twinValues, vector.client.sessionPubkey, []),
+  client: new RecordingCarrierClient([expectedReplicaArchiveFrame]),
+  expectedReplica: vector.replica,
+});
+assert.equal(twinFirstSync.ok, true);
+if (!twinFirstSync.ok) throw new Error(twinFirstSync.message);
+assert.deepEqual(twinFirstSync.conflictingFrameIds, [expectedReplicaArchiveFrame.id]);
+assert.equal(twinFirstSync.conflictingFrameCount, 1);
+assert.deepEqual(twinFirstSync.compactedFrameIds, [expectedReplicaArchiveFrame.id]);
+assert.deepEqual(twinFirstSync.unverifiableFrameIds, []);
+assert.deepEqual(storedOutboxIds(twinValues), []);
+const archivedTwin = (
+  JSON.parse(
+    twinValues.get(storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY)) ?? "[]",
+  ) as CarrierOpFrame[]
+).filter((frame) => frame.id === expectedReplicaArchiveFrame.id);
+assert.equal(archivedTwin.length, 1);
+assert.equal(archivedTwin[0]?.sig, expectedReplicaArchiveFrame.sig);
+
+const honestSecondPeer = new FrameCapturingCarrierClient([]);
+const twinSecondSync = await syncTownshipOutbox({
+  invoke: nativeInvoke(twinValues, vector.client.sessionPubkey, []),
+  client: honestSecondPeer,
+  expectedReplica: vector.replica,
+});
+assert.equal(twinSecondSync.ok, true);
+if (!twinSecondSync.ok) throw new Error(twinSecondSync.message);
+assert.deepEqual(twinSecondSync.conflictingFrameIds, []);
+assert.deepEqual(
+  honestSecondPeer.pushedRawFrames.map((frame) => frame.id),
+  [expectedReplicaArchiveFrame.id],
+);
+assert.equal(honestSecondPeer.pushedRawFrames[0]?.sig, expectedReplicaArchiveFrame.sig);
+
 console.log("\x1b[32m✓ Township sync action checks passed\x1b[0m");
 
 function storageKey(key: string): string {
