@@ -695,6 +695,12 @@ function delegationValidation(id, delegations, genesisIds, successionIds, outerR
     if (visiting.has(id))
         return { valid: false, reason: "invalid_parent" };
     visiting.add(id);
+    // A capability scoped to one replica is honored only on that replica's log.
+    // Matches Elixir validate_delegation/cap_ok/verify_chain: replica mismatch
+    // always rejects, including on legacy unbound log names.
+    if (outerReplica !== undefined && delegation.replica !== outerReplica) {
+        return { valid: false, reason: "wrong_replica" };
+    }
     let validation;
     if (delegation.parentId === null) {
         if (delegation.issuer !== delegation.audience) {

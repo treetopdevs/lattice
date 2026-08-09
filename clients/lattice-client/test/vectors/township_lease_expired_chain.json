@@ -1,18 +1,50 @@
 {
+  "canonicalOps": [
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258537265706c6963613a6d61747465723a6c656173652d657870697265642d636861696e23726f6f743a5f7134775851485751516935365f33524265346e6369626f5f576761786f5f5a4964533168716b6264716358208ed4f4e4f8b75d3d8068f6fdde11ef39948d55bcde16bbc1aaa9b8dc0cfe885780d9ea6049617574686f72697479d9ea6183d9ea604767656e65736973d9ea6389582b4d6d514142386e7335346876442d4b597569397a616e39596d4d74613858657131364172716f5f48464b4d58537265706c6963613a6d61747465723a6c656173652d657870697265642d636861696e23726f6f743a5f7134775851485751516935365f33524265346e6369626f5f576761786f5f5a4964533168716b6264716358208ed4f4e4f8b75d3d8068f6fdde11ef39948d55bcde16bbc1aaa9b8dc0cfe885758208ed4f4e4f8b75d3d8068f6fdde11ef39948d55bcde16bbc1aaa9b8dc0cfe8857f688d9ea604561646d6974d9ea604c636c6f73655f6d6174746572d9ea604d6c696e6b5f656c656374696f6ed9ea6044706f7374d9ea604d72656d6f76655f6d656d626572d9ea604d72656f70656e5f6d6174746572d9ea604b7365745f73756d6d617279d9ea60497365745f7469746c6581d9ea6045636c65726bf55840a632564dcb2f44f421e3bfcb00835c13e07957a3d05300fcd3b058e3a4cec357a5f44c85ba449276bc7187f63a8aa2a2ce687b3e9d0c270e2b35922a442b690ba0f6",
+      "hash": "UqqYeIKqJW8lL6Sbh1leYpyBNsjVeqMNTx-j51al7lM",
+      "id": "UqqYeIKqJW8lL6Sbh1leYpyBNsjVeqMNTx-j51al7lM",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258537265706c6963613a6d61747465723a6c656173652d657870697265642d636861696e23726f6f743a5f7134775851485751516935365f33524265346e6369626f5f576761786f5f5a4964533168716b6264716358208ed4f4e4f8b75d3d8068f6fdde11ef39948d55bcde16bbc1aaa9b8dc0cfe885781582b5571715965494b714a57386c4c36536268316c65597079424e736a5665714d4e54782d6a3531616c376c4dd9ea6049617574686f72697479d9ea6182d9ea60456772616e74d9ea638a582b476f6a336c664e5f62693544376179765851645f4566415a452d6b2d385a4578334c76433655464f34495558537265706c6963613a6d61747465723a6c656173652d657870697265642d636861696e23726f6f743a5f7134775851485751516935365f33524265346e6369626f5f576761786f5f5a4964533168716b6264716358208ed4f4e4f8b75d3d8068f6fdde11ef39948d55bcde16bbc1aaa9b8dc0cfe885758209cd35628b62b977f9e911b30e21dea5100af4b7279a444545c7b0facf7547831582b4d6d514142386e7335346876442d4b597569397a616e39596d4d74613858657131364172716f5f48464b4d81d9ea6044706f737480f458403cfe408ea5543d9ecbd225fc75e2fb616e12af09efbe26d00c80992b4e35f10be98d628051d97be033012b6b6f9f14e61a79b50c6c37ecd59d8b18701ba8ca0003f6",
+      "hash": "QYDd7DmSsXWkFNQH7LeJRe0b6dRE0Bh_SxophDj6Q24",
+      "id": "QYDd7DmSsXWkFNQH7LeJRe0b6dRE0Bh_SxophDj6Q24",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258537265706c6963613a6d61747465723a6c656173652d657870697265642d636861696e23726f6f743a5f7134775851485751516935365f33524265346e6369626f5f576761786f5f5a4964533168716b6264716358209cd35628b62b977f9e911b30e21dea5100af4b7279a444545c7b0facf754783181582b5159446437446d537358576b464e5148374c654a52653062366452453042685f53786f7068446a36513234d9ea6049617574686f72697479d9ea6182d9ea60456772616e74d9ea638a582b725a544b434c513759656461534a6447532d45424879586e447446534d4c665456426e73692d39674a526f58537265706c6963613a6d61747465723a6c656173652d657870697265642d636861696e23726f6f743a5f7134775851485751516935365f33524265346e6369626f5f576761786f5f5a4964533168716b6264716358209cd35628b62b977f9e911b30e21dea5100af4b7279a444545c7b0facf754783158208a9ff8978073b09a5686ebcdf825905de14a2480cdc60c258f61352377a4ad5b582b476f6a336c664e5f62693544376179765851645f4566415a452d6b2d385a4578334c76433655464f34495581d9ea6044706f737480f45840a619559979351d354cf19f402f06dc9c78ca32aca32e125abb2a4d8657b0513f90e830da9866bb46e92f4292060125e0a1d9ec6a75a26bbcdebe5d7ad992fb0e03f6",
+      "hash": "A8_DK-FVvDaZRNInJRDWp2kjB8dWHa7KmzpluZIkXQU",
+      "id": "A8_DK-FVvDaZRNInJRDWp2kjB8dWHa7KmzpluZIkXQU",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258537265706c6963613a6d61747465723a6c656173652d657870697265642d636861696e23726f6f743a5f7134775851485751516935365f33524265346e6369626f5f576761786f5f5a4964533168716b6264716358208ed4f4e4f8b75d3d8068f6fdde11ef39948d55bcde16bbc1aaa9b8dc0cfe885781582b41385f444b2d46567644615a524e496e4a52445770326b6a423864574861374b6d7a706c755a496b585155d9ea6049617574686f72697479d9ea6182d9ea6046626561636f6e04f6",
+      "hash": "p-npkXqkJEq_G2FV3Yp49XKcy02sXK2JvCZ2pSVd_SA",
+      "id": "p-npkXqkJEq_G2FV3Yp49XKcy02sXK2JvCZ2pSVd_SA",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258537265706c6963613a6d61747465723a6c656173652d657870697265642d636861696e23726f6f743a5f7134775851485751516935365f33524265346e6369626f5f576761786f5f5a4964533168716b6264716358208a9ff8978073b09a5686ebcdf825905de14a2480cdc60c258f61352377a4ad5b81582b702d6e706b58716b4a45715f473246563359703439584b6379303273584b324a76435a32705356645f5341d9ea6047636f6d6d616e64d9ea6182d9ea6044706f737481526c617465207669612074686520636861696e582b725a544b434c513759656461534a6447532d45424879586e447446534d4c665456426e73692d39674a526f",
+      "hash": "eyv5Isf37Ah0zj5aAR68w4Ry7xFd3tStJmkC1wd6ZUI",
+      "id": "eyv5Isf37Ah0zj5aAR68w4Ry7xFd3tStJmkC1wd6ZUI",
+      "suite": "lattice-cbor-v1"
+    }
+  ],
   "capabilityCase": {
     "case": "lease_expired_chain",
-    "expiredOperationId": "nC9e-KILIloKSbVzOjKKsUfd8YT2vDo5IvRr0Aq9SXY"
+    "expiredOperationId": "eyv5Isf37Ah0zj5aAR68w4Ry7xFd3tStJmkC1wd6ZUI"
   },
   "expectAtFrontier": [],
   "expectAtFullFrontier": {
     "authorityQuarantine": [
       [
-        "nC9e-KILIloKSbVzOjKKsUfd8YT2vDo5IvRr0Aq9SXY",
+        "eyv5Isf37Ah0zj5aAR68w4Ry7xFd3tStJmkC1wd6ZUI",
         "lease_expired"
       ]
     ],
     "quarantine": [
-      "nC9e-KILIloKSbVzOjKKsUfd8YT2vDo5IvRr0Aq9SXY"
+      "eyv5Isf37Ah0zj5aAR68w4Ry7xFd3tStJmkC1wd6ZUI"
     ],
     "state": {
       "clerk": "clerk",
@@ -49,8 +81,8 @@
         "UqqYeIKqJW8lL6Sbh1leYpyBNsjVeqMNTx-j51al7lM"
       ],
       "field": "__authority",
-      "hash": "WRqVMOKXPH_M7cAT0Lp3tBrUHBQn6l7WJLqk8pOBcco",
-      "id": "WRqVMOKXPH_M7cAT0Lp3tBrUHBQn6l7WJLqk8pOBcco",
+      "hash": "QYDd7DmSsXWkFNQH7LeJRe0b6dRE0Bh_SxophDj6Q24",
+      "id": "QYDd7DmSsXWkFNQH7LeJRe0b6dRE0Bh_SxophDj6Q24",
       "kind": "authority",
       "mutation": "write",
       "value": null
@@ -59,11 +91,11 @@
       "author": "resident",
       "command": "grant neighbor",
       "deps": [
-        "WRqVMOKXPH_M7cAT0Lp3tBrUHBQn6l7WJLqk8pOBcco"
+        "QYDd7DmSsXWkFNQH7LeJRe0b6dRE0Bh_SxophDj6Q24"
       ],
       "field": "__authority",
-      "hash": "AS7X84Y9IPSreG9_l_cG6x_q9GXwQoKA85q4JAngIVc",
-      "id": "AS7X84Y9IPSreG9_l_cG6x_q9GXwQoKA85q4JAngIVc",
+      "hash": "A8_DK-FVvDaZRNInJRDWp2kjB8dWHa7KmzpluZIkXQU",
+      "id": "A8_DK-FVvDaZRNInJRDWp2kjB8dWHa7KmzpluZIkXQU",
       "kind": "authority",
       "mutation": "write",
       "value": null
@@ -72,11 +104,11 @@
       "author": "clerk",
       "command": "authority",
       "deps": [
-        "AS7X84Y9IPSreG9_l_cG6x_q9GXwQoKA85q4JAngIVc"
+        "A8_DK-FVvDaZRNInJRDWp2kjB8dWHa7KmzpluZIkXQU"
       ],
       "field": "__authority",
-      "hash": "mSOXs082FdcxeexPuXSagWS0_CkPUDXTwUE1yskZONc",
-      "id": "mSOXs082FdcxeexPuXSagWS0_CkPUDXTwUE1yskZONc",
+      "hash": "p-npkXqkJEq_G2FV3Yp49XKcy02sXK2JvCZ2pSVd_SA",
+      "id": "p-npkXqkJEq_G2FV3Yp49XKcy02sXK2JvCZ2pSVd_SA",
       "kind": "authority",
       "mutation": "write",
       "value": null
@@ -85,11 +117,11 @@
       "author": "neighbor",
       "command": "post",
       "deps": [
-        "mSOXs082FdcxeexPuXSagWS0_CkPUDXTwUE1yskZONc"
+        "p-npkXqkJEq_G2FV3Yp49XKcy02sXK2JvCZ2pSVd_SA"
       ],
       "field": "posts",
-      "hash": "nC9e-KILIloKSbVzOjKKsUfd8YT2vDo5IvRr0Aq9SXY",
-      "id": "nC9e-KILIloKSbVzOjKKsUfd8YT2vDo5IvRr0Aq9SXY",
+      "hash": "eyv5Isf37Ah0zj5aAR68w4Ry7xFd3tStJmkC1wd6ZUI",
+      "id": "eyv5Isf37Ah0zj5aAR68w4Ry7xFd3tStJmkC1wd6ZUI",
       "kind": "command",
       "mutation": "append",
       "value": "late via the chain"
@@ -180,10 +212,10 @@
       "deps": [
         "UqqYeIKqJW8lL6Sbh1leYpyBNsjVeqMNTx-j51al7lM"
       ],
-      "id": "WRqVMOKXPH_M7cAT0Lp3tBrUHBQn6l7WJLqk8pOBcco",
+      "id": "QYDd7DmSsXWkFNQH7LeJRe0b6dRE0Bh_SxophDj6Q24",
       "kind": "authority",
       "replica": "replica:matter:lease-expired-chain#root:_q4wXQHWQQi56_3RBe4ncibo_Wgaxo_ZIdS1hqkbdqc",
-      "sig": "7rV5JkJj6HYWl5zYBIMRox23f/3fF0owc+gj3Eq47CowGhaImSTHuc2k+lV5275F2T6gWxDN5esHmpGbXYZPCA==",
+      "sig": "3rx/ywThMOkDNMtCHWDWttHmOA8QknUg+eDizDAcmn8pqH0Cn6zacMD5otWYs3qWc9ngFSnbSoMxAuie/M7hAw==",
       "v": 1
     },
     {
@@ -218,12 +250,12 @@
         "nil"
       ],
       "deps": [
-        "WRqVMOKXPH_M7cAT0Lp3tBrUHBQn6l7WJLqk8pOBcco"
+        "QYDd7DmSsXWkFNQH7LeJRe0b6dRE0Bh_SxophDj6Q24"
       ],
-      "id": "AS7X84Y9IPSreG9_l_cG6x_q9GXwQoKA85q4JAngIVc",
+      "id": "A8_DK-FVvDaZRNInJRDWp2kjB8dWHa7KmzpluZIkXQU",
       "kind": "authority",
       "replica": "replica:matter:lease-expired-chain#root:_q4wXQHWQQi56_3RBe4ncibo_Wgaxo_ZIdS1hqkbdqc",
-      "sig": "Sr5CUhw9zpyxe183Z24xrbaZ2WoFD4DZwdl2avwhoG9K+g2rticD/3MgY4xYcPuEvS2te040SZa7/L2mcvGlAg==",
+      "sig": "1Bgrdx3JO23C2zOh3hf1Gb7/Ew3as506hsk5TTTqA36lVJY8m2arpCvQAxmdpEPRkE/KCZX585gp6xUnYkkUDQ==",
       "v": 1
     },
     {
@@ -245,12 +277,12 @@
         "nil"
       ],
       "deps": [
-        "AS7X84Y9IPSreG9_l_cG6x_q9GXwQoKA85q4JAngIVc"
+        "A8_DK-FVvDaZRNInJRDWp2kjB8dWHa7KmzpluZIkXQU"
       ],
-      "id": "mSOXs082FdcxeexPuXSagWS0_CkPUDXTwUE1yskZONc",
+      "id": "p-npkXqkJEq_G2FV3Yp49XKcy02sXK2JvCZ2pSVd_SA",
       "kind": "authority",
       "replica": "replica:matter:lease-expired-chain#root:_q4wXQHWQQi56_3RBe4ncibo_Wgaxo_ZIdS1hqkbdqc",
-      "sig": "PZ1FR3H2D3/xotJzoqQHyEiE1rnjhBcAN36zMvj8H/UNi37z/lHWcj+pqYAWBSxnU+tyqRPG0QXK3eQOsMfqBQ==",
+      "sig": "pWuVm/6Pm/0nmyoyTAwuS07krgYs8Am1yr1SyyZhN6Tj+Y6v9MqYzjbTuUcdeivWVOCxJerEP3sVs5ldpc78BQ==",
       "v": 1
     },
     {
@@ -278,12 +310,12 @@
         "clpUS0NMUTdZZWRhU0pkR1MtRUJIeVhuRHRGU01MZlRWQm5zaS05Z0pSbw=="
       ],
       "deps": [
-        "mSOXs082FdcxeexPuXSagWS0_CkPUDXTwUE1yskZONc"
+        "p-npkXqkJEq_G2FV3Yp49XKcy02sXK2JvCZ2pSVd_SA"
       ],
-      "id": "nC9e-KILIloKSbVzOjKKsUfd8YT2vDo5IvRr0Aq9SXY",
+      "id": "eyv5Isf37Ah0zj5aAR68w4Ry7xFd3tStJmkC1wd6ZUI",
       "kind": "command",
       "replica": "replica:matter:lease-expired-chain#root:_q4wXQHWQQi56_3RBe4ncibo_Wgaxo_ZIdS1hqkbdqc",
-      "sig": "eWY2EdamhyNtkBm4tlzWV8HQalj1pF6zUQykCqp4GMaJxwQ00IWCam1zC4piFGbGsGnfjxpO0zUvPSG75eCMDw==",
+      "sig": "S1pvn1LYHE2+ao3YfxUv83cMaeRwNc2Z0bKjn8r48V7e2tYQ8aXq67UIQc6X5r+OgoETKDMN9vq6vRw0c83dAA==",
       "v": 1
     }
   ],

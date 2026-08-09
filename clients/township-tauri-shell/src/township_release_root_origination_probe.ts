@@ -1,3 +1,4 @@
+import { bytesBase64 } from "./base64";
 import {
   authorTownshipGenesis,
   bindTownshipReplica,
@@ -810,10 +811,6 @@ function positiveInteger(value: string | null | undefined): number | null {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
-}
-
-function bytesBase64(bytes: Uint8Array): string {
-  return btoa(String.fromCharCode(...bytes));
 }
 
 function base64Bytes(value: string): Uint8Array {

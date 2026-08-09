@@ -5,10 +5,12 @@ import {
   verifyCarrierOp,
   type CarrierAvailability,
   type CarrierAvailabilitySubscription,
+  type CarrierAuthorityReportDiagnostic,
   type CarrierOpFrame,
   type CarrierStateReport,
   type Verifier,
 } from "@treetopdevs/lattice-client";
+import { mergeCarrierFrameTiers } from "./carrier_frame_merge";
 import {
   type TownshipNativeWorkflow,
   withTownshipPersistenceWrite,
@@ -102,11 +104,16 @@ export async function refreshTownshipFromCarrier(
       options.workflow.delegationFrames.load(),
     ]);
     const ops = integrate(currentOps, pulledOps);
-    const delegationFrames = mergeCarrierFrames([...currentDelegationFrames, ...pulledFrames]);
-    const externallyQuarantined = validateCarrierStateReport(stateReport, delegationFrames);
+    // A frame pulled and verified this refresh outranks the archived copy on
+    // byte-differing same-id collisions, healing a corrupted archive entry.
+    const delegationFrames = mergeCarrierFrameTiers([
+      { frames: currentDelegationFrames, trust: 1 },
+      { frames: pulledFrames, trust: 0 },
+    ]).frames;
+    const carrierAuthorityReport = validateCarrierStateReport(stateReport, delegationFrames);
     const matter = townshipPreviewFromOps(
       ops,
-      externallyQuarantined,
+      carrierAuthorityReport,
       options.expectedReplica,
     );
 
@@ -339,14 +346,10 @@ function createWorker(epoch: number): TownshipFeedWorker {
   return worker;
 }
 
-function mergeCarrierFrames(frames: CarrierOpFrame[]): CarrierOpFrame[] {
-  return [...new Map(frames.map((frame) => [frame.id, frame])).values()];
-}
-
 function validateCarrierStateReport(
   report: CarrierStateReport,
   frames: CarrierOpFrame[],
-): ReadonlySet<string> {
+): CarrierAuthorityReportDiagnostic {
   const reportIds = new Set(report.op_ids);
   const frameIds = new Set(frames.map((frame) => frame.id));
   const reportMatchesFrames =
@@ -364,7 +367,7 @@ function validateCarrierStateReport(
     throw new Error("carrier state report does not match verified frames");
   }
 
-  return quarantined;
+  return { opIds: reportIds, quarantinedIds: quarantined };
 }
 
 function errorMessage(error: unknown): string {

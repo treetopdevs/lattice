@@ -1,3 +1,4 @@
+import { bytesBase64 } from "./base64";
 import type { CarrierOpFrame, CarrierVerifier, Op } from "@treetopdevs/lattice-client";
 import {
   createTownshipNativeWorkflow,
@@ -848,10 +849,6 @@ function validStateExchangeUrl(value: string): boolean {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
-}
-
-function bytesBase64(bytes: Uint8Array): string {
-  return btoa(String.fromCharCode(...bytes));
 }
 
 function base64UrlEncode(value: string): string {

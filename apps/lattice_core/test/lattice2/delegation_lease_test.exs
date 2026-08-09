@@ -110,6 +110,40 @@ defmodule Lattice2.DelegationLeaseTest do
              )
   end
 
+  test "mutating an embedded delegation's lease changes the op id" do
+    leased = Delegation.new(issuer(), @replica, audience().pub, ops: [:post], expires_epoch: 5)
+    op = Lattice.Op.new(issuer(), @replica, [], :authority, {:grant, leased})
+
+    tampered = %{op | body: {:grant, %{leased | expires_epoch: 99}}}
+
+    refute Lattice.Op.canonical_encoding(tampered) == Lattice.Op.canonical_encoding(op),
+           "the embedded lease must be inside the op's hashed content"
+
+    refute Lattice.Op.valid?(tampered),
+           "a lease-tampered op must fail the sync-path tamper check"
+  end
+
+  test "a lease-tampered op cannot poison the honest op's id in a log" do
+    leased = Delegation.new(issuer(), @replica, audience().pub, ops: [:post], expires_epoch: 5)
+    op = Lattice.Op.new(issuer(), @replica, [], :authority, {:grant, leased})
+    tampered = %{op | body: {:grant, %{leased | expires_epoch: 99}}}
+
+    log = Lattice.Log.new(@replica)
+
+    assert {:quarantined, log, :bad_signature} = Lattice.Log.accept(log, tampered)
+    assert {:ok, log} = Lattice.Log.accept(log, op)
+
+    assert {:ok, stored} = Lattice.Log.fetch(log, op.id)
+    assert {:grant, %Delegation{expires_epoch: 5}} = stored.body
+  end
+
+  test "a malformed embedded lease is unsignable rather than raising" do
+    leased = Delegation.new(issuer(), @replica, audience().pub, ops: [:post], expires_epoch: 5)
+
+    refute Canonical.signable?({:grant, %{leased | expires_epoch: -1}})
+    refute Canonical.signable?({:grant, %{leased | expires_epoch: "5"}})
+  end
+
   test "carrier wire round-trips the lease and omits it when nil" do
     alias Lattice.Carrier.Wire
 

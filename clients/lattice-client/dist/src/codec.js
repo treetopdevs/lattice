@@ -67,7 +67,7 @@ export async function authorCarrierOp(input) {
 }
 export function canonicalBytesForCarrierDelegation(delegation) {
     const expiresEpoch = delegation.expires_epoch;
-    const leased = expiresEpoch !== undefined;
+    const leased = expiresEpoch !== undefined && expiresEpoch !== null;
     const shared = [
         encodeBinaryString(delegation.replica),
         encodeBytes(base64ToBytes(delegation.issuer)),
@@ -86,7 +86,7 @@ export function canonicalBytesForCarrierDelegation(delegation) {
     return encodeArray([
         encodeBinaryString(delegationV3PayloadTag),
         ...shared,
-        major(0, BigInt(expiresEpoch)),
+        encodeUint(expiresEpoch),
     ]);
 }
 /** Canonical policy-id preimage shared with `Lattice.Authority.SuccessionCertificate`. */
@@ -172,7 +172,7 @@ function encodeCarrierTerm(term) {
     }
 }
 function encodeDelegation(delegation) {
-    return encodeTagged(delegationTermTag, encodeArray([
+    const fields = [
         encodeBinaryString(delegation.id),
         encodeBinaryString(delegation.replica),
         encodeBytes(base64ToBytes(delegation.issuer)),
@@ -182,7 +182,11 @@ function encodeDelegation(delegation) {
         encodeArray(uniqueSorted(delegation.roles).map(encodeAtom)),
         bytes(delegation.live ? 0xf5 : 0xf4),
         encodeBytes(base64ToBytes(delegation.sig)),
-    ]));
+    ];
+    if (delegation.expires_epoch !== undefined && delegation.expires_epoch !== null) {
+        fields.push(encodeUint(delegation.expires_epoch));
+    }
+    return encodeTagged(delegationTermTag, encodeArray(fields));
 }
 function encodeMap(pairs) {
     const encoded = pairs

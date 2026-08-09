@@ -1,4 +1,9 @@
-import { materialize, type Op, type ReplicaSchema } from "@treetopdevs/lattice-client";
+import {
+  materialize,
+  type CarrierAuthorityReportDiagnostic,
+  type Op,
+  type ReplicaSchema,
+} from "@treetopdevs/lattice-client";
 
 export interface TownshipMatterPreview {
   title: string;
@@ -134,14 +139,14 @@ export function townshipPreview(): TownshipMatterPreview {
 
 export function townshipPreviewFromOps(
   ops: Op[],
-  externallyQuarantined: ReadonlySet<string> = new Set(),
+  carrierAuthorityReport: CarrierAuthorityReportDiagnostic | null = null,
   expectedReplica?: string,
 ): TownshipMatterPreview {
   const materialized = materialize(
     townshipMatterSchema,
     ops,
     undefined,
-    externallyQuarantined,
+    carrierAuthorityReport,
     expectedReplica,
   );
   const state = materialized.state;

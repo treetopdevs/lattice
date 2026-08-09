@@ -56,6 +56,17 @@ for (const [field, want] of Object.entries(vector.expectAfterSync.state)) {
 }
 check("merged op ids", merged.map((o) => o.id).sort(), vector.expectAfterSync.opIds);
 check("authority quarantine", materialized.quarantine.sort(), vector.expectAfterSync.authorityQuarantine.map(([id]) => id).sort());
+const reportConfirmedMaterialized = materialize(vector.schema, merged, undefined, {
+    opIds: new Set(vector.expectAfterSync.opIds),
+    quarantinedIds: new Set(vector.expectAfterSync.authorityQuarantine.map(([id]) => id)),
+});
+check("matching non-empty carrier authority report is diagnostic only", {
+    state: reportConfirmedMaterialized.state,
+    quarantine: reportConfirmedMaterialized.quarantine.sort(),
+}, {
+    state: materialized.state,
+    quarantine: materialized.quarantine.sort(),
+});
 const commandFrame = vector.clientDivergedCarrierOps.find((candidate) => candidate.kind === "command");
 if (commandFrame === undefined)
     throw new Error("missing command frame fixture");
@@ -536,6 +547,23 @@ if (malformedAuthorityOp !== undefined) {
         reason: "malformed_term",
         state: withoutMalformedAuthority.state,
     });
+    const structuralReport = materialize(vector.schema, [...clientDiverged, malformedAuthorityOp], undefined, {
+        opIds: new Set([...clientDiverged.map((op) => op.id), malformedAuthorityOp.id]),
+        quarantinedIds: new Set([malformedAuthorityOp.id]),
+    });
+    check("structural quarantine is excluded from both diagnostic sides", structuralReport.state, withoutMalformedAuthority.state);
+    const reportWithoutLocalOnlyStructuralOp = materialize(vector.schema, [...clientDiverged, malformedAuthorityOp], undefined, {
+        opIds: new Set(clientDiverged.map((op) => op.id)),
+        quarantinedIds: new Set(),
+    });
+    check("local-only structural quarantine outside the report domain does not diverge", reportWithoutLocalOnlyStructuralOp.quarantine.includes(malformedAuthorityOp.id), true);
+}
+if (unknownCommandOp !== undefined) {
+    const reportWithoutLocalOnlyUnknownCommand = materialize(vector.schema, [...clientDiverged, unknownCommandOp], undefined, {
+        opIds: new Set(clientDiverged.map((op) => op.id)),
+        quarantinedIds: new Set(),
+    });
+    check("local-only non-structural quarantine outside the report domain does not diverge", reportWithoutLocalOnlyUnknownCommand.quarantine.includes(unknownCommandOp.id), true);
 }
 const validCustodyFrame = toolshedVector.oracleCarrierOps.find((frame) => frame.id === toolshedVector.expectAtFullFrontier.winners.holder);
 if (validCustodyFrame === undefined) {
@@ -560,7 +588,7 @@ const invalidCustodyFrame = {
 };
 const invalidCustodyFrames = toolshedVector.oracleCarrierOps.map((frame) => frame.id === invalidCustodyFrame.id ? invalidCustodyFrame : frame);
 const invalidCustodyOps = carrierOpsToSemanticOps(invalidCustodyFrames, toolshedVector.realmByPubkey);
-const invalidCustody = materialize(toolshedVector.schema, invalidCustodyOps, undefined, new Set(), toolshedVector.replica);
+const invalidCustody = materialize(toolshedVector.schema, invalidCustodyOps, undefined, null, toolshedVector.replica);
 check("ill-typed custody recipient reaches consent validation", {
     decodeReason: commandError(invalidCustodyOps.find((op) => op.id === invalidCustodyFrame.id)),
     quarantineReason: invalidCustody.quarantineReasons.get(invalidCustodyFrame.id),
@@ -572,7 +600,7 @@ const noCapabilityCustodyFrame = {
 const noCapabilityCustodyOps = carrierOpsToSemanticOps(toolshedVector.oracleCarrierOps.map((frame) => frame.id === noCapabilityCustodyFrame.id
     ? noCapabilityCustodyFrame
     : frame), toolshedVector.realmByPubkey);
-const noCapabilityCustody = materialize(toolshedVector.schema, noCapabilityCustodyOps, undefined, new Set(), toolshedVector.replica);
+const noCapabilityCustody = materialize(toolshedVector.schema, noCapabilityCustodyOps, undefined, null, toolshedVector.replica);
 check("ill-typed custody recipient preserves capability reason precedence", noCapabilityCustody.quarantineReasons.get(noCapabilityCustodyFrame.id), "no_capability");
 check("Township decoder table includes link_election", townshipCarrierCommandNames().includes("link_election"), true);
 console.log(`\n▸ ${foreignReplicaVector.scenario} carrier ingest`);
@@ -615,7 +643,7 @@ catch (error) {
 }
 check("foreign replica frame hard-fails before semantic ingest", foreignReplicaFailure, `carrier served foreign replica ${foreignReplicaVector.capabilityCase.foreignReplica}; expected ${foreignReplicaVector.replica}`);
 const foreignOp = carrierOpsToSemanticOps([foreignReplicaVector.capabilityCase.foreignCarrierOp], foreignReplicaVector.realmByPubkey);
-const explicitlyAnchored = materialize(foreignReplicaVector.schema, [...legitimateOps, ...foreignOp], undefined, new Set(), foreignReplicaVector.replica);
+const explicitlyAnchored = materialize(foreignReplicaVector.schema, [...legitimateOps, ...foreignOp], undefined, null, foreignReplicaVector.replica);
 check("explicit replica anchor ignores a foreign root claim", explicitlyAnchored.state, legitimateMaterialized.state);
 check("explicit replica anchor preserves legitimate quarantine", explicitlyAnchored.quarantine
     .filter((id) => id !== foreignOp[0]?.id)
