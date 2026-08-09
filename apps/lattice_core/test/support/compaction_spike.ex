@@ -341,12 +341,14 @@ defmodule Lattice.CompactionSpike do
       Enum.reduce(timelines, %{}, fn {_r, tl}, acc -> Map.merge(acc, tl.quarantine) end)
 
     {cmd_reasons, requests} = validate_retained_commands(ordered, timelines, ctx)
+    tick_reasons = malformed_tick_reasons(ordered)
 
     new_reasons =
       invalid_intros
       |> Map.merge(invalid_genesis)
       |> Map.merge(role_reasons)
       |> Map.merge(cmd_reasons)
+      |> Map.merge(tick_reasons)
 
     reasons = Map.merge(snapshot.frozen_reasons, new_reasons)
 
@@ -398,6 +400,24 @@ defmodule Lattice.CompactionSpike do
         do: {op_id, reason}
   end
 
+  defp malformed_tick_reasons(ordered) do
+    for %Op{kind: :authority, body: body} = op <- ordered,
+        malformed_tick_body?(body),
+        into: %{},
+        do: {op.id, :malformed_term}
+  end
+
+  defp malformed_tick_body?({:transfer, _role, %Delegation{}, tick}),
+    do: not Authority.valid_tick?(tick)
+
+  defp malformed_tick_body?({:succeed, _role, %Delegation{}, proof}) when is_integer(proof),
+    do: not Authority.valid_tick?(proof)
+
+  defp malformed_tick_body?({:heartbeat, _role, tick}),
+    do: not Authority.valid_tick?(tick)
+
+  defp malformed_tick_body?(_), do: false
+
   # --- Seeded role timelines -------------------------------------------------
 
   # The timeline seed is the covered summary: `seed_acquire` stands in for the
@@ -438,8 +458,10 @@ defmodule Lattice.CompactionSpike do
       {:transfer, ^role, %Delegation{} = d, tick} ->
         if Authority.valid_tick?(tick), do: {:transfer, d, tick}, else: {:malformed_tick, op}
 
-      {:succeed, ^role, %Delegation{} = d, tick} ->
-        {:succeed, d, tick}
+      {:succeed, ^role, %Delegation{} = d, proof} ->
+        if is_integer(proof) and not Authority.valid_tick?(proof),
+          do: {:malformed_tick, op},
+          else: {:succeed, d, proof}
 
       {:heartbeat, ^role, tick} ->
         if Authority.valid_tick?(tick), do: {:heartbeat, tick}, else: {:malformed_tick, op}
@@ -617,6 +639,9 @@ defmodule Lattice.CompactionSpike do
 
   defp seeded_cap_checks(op, cmd, d, roles_needed, timelines, ctx) do
     cond do
+      d.replica != op.replica ->
+        {:error, :wrong_replica}
+
       not compacted_delegation_valid_at?(
         ctx.deleg_valid[d.id],
         op,

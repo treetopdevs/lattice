@@ -267,7 +267,6 @@ function authorityWriteHonored(op, evidence, state, delegations, policies, honor
             delegation.issuer === delegation.audience &&
             delegation.issuerRealm === op.author &&
             op.replica !== undefined &&
-            delegation.replica === op.replica &&
             replicaRootMatches(op.replica, delegation.audience));
     }
     if (evidence.type === "transfer" && evidence.role === op.field) {
@@ -275,9 +274,7 @@ function authorityWriteHonored(op, evidence, state, delegations, policies, honor
         const holderAtDeps = [...state.acquires]
             .reverse()
             .find((acquire) => visible.has(acquire.opId))?.holder;
-        return (op.replica !== undefined &&
-            delegation.replica === op.replica &&
-            delegation.issuerRealm === op.author &&
+        return (delegation.issuerRealm === op.author &&
             holderAtDeps === op.author &&
             state.holder === op.author);
     }
@@ -305,27 +302,12 @@ function authorityWriteRejectionReason(op, evidence, state, delegations, policie
             delegation.issuerRealm !== op.author) {
             return "unauthorized_genesis";
         }
-        if (delegation.audienceRealm === op.value &&
-            delegation.roles.includes(op.field) &&
-            validDelegation(delegation, delegations) &&
-            op.replica !== undefined &&
-            delegation.replica !== op.replica) {
-            return "wrong_replica";
-        }
         return undefined;
     }
     if (evidence.type !== "transfer" || evidence.role !== op.field) {
         return evidence.type === "succeed"
             ? successionRejectionReason(op, evidence, state, delegations, policies, byId)
             : undefined;
-    }
-    // Mirrors `decide_transfer`'s clause order exactly: the replica binding is
-    // the FIRST clause, checked unconditionally. Gating it behind the
-    // invalid-transfer predicates would report `invalid_transfer` for a
-    // same-root sibling replay whose delegation is itself replica-invalid,
-    // diverging from the Sim oracle.
-    if (op.replica !== undefined && delegation.replica !== op.replica) {
-        return "wrong_replica";
     }
     if (delegation.audienceRealm !== op.value ||
         !delegation.roles.includes(op.field) ||
@@ -354,9 +336,6 @@ function successionRejectionReason(op, evidence, state, delegations, policies, b
         delegation.issuerRealm !== op.author ||
         delegation.audienceRealm !== op.author) {
         return "invalid_succession";
-    }
-    if (op.replica !== undefined && delegation.replica !== op.replica) {
-        return "wrong_replica";
     }
     const policy = policies.get(op.field);
     if (policy === undefined || policy.successorRealm !== op.author) {
@@ -741,16 +720,6 @@ function delegationValidation(id, delegations, genesisIds, successionIds, outerR
         }
         else if (genesisIds.has(delegation.id)) {
             validation = { valid: false, reason: "impostor_genesis" };
-        }
-        else if (outerReplica !== undefined &&
-            delegation.replica !== outerReplica) {
-            // Plan 162 step 2b(d): a root-less delegation minted for another replica
-            // gets the structural wrong_replica reason, mirroring
-            // Lattice.Authority.validate_rootless_delegation/5. Kept below the
-            // genesis/succession arms so impostor_genesis and succession candidacy
-            // are unchanged; same-root sibling chains that validate through those
-            // arms are refused at use time by capabilityQuarantine's replica binding.
-            validation = { valid: false, reason: "wrong_replica" };
         }
         else {
             validation = { valid: false, reason: "unrooted_delegation" };

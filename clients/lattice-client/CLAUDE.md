@@ -111,9 +111,9 @@ recomputes the root commitment from that outer id, quarantines both impostor sha
 an unassigned authority holder as `null`. Do not add a blanket equality between the outer and
 embedded replica at decode/retention time: Sim's reduction does not require it — foreign-replica
 delegation evidence is retained and judged, not dropped. (Plan 162 step 2b(d) later added two
-*judgment-time* replica bindings that Sim does require: `capabilityQuarantine` refuses a cited
-delegation whose `replica` differs from the op's as `wrong_replica`, and `delegationValidation`'s
-root-less catch-all reports foreign-replica self-issues the same way. Do not remove those.)
+*judgment-time* replica bindings that Sim does require: `delegationValidation` rejects foreign
+delegations before root/chain validation, and `capabilityQuarantine` refuses a cited delegation
+whose `replica` differs from the op's as `wrong_replica`. Do not remove those.)
 Evidence persisted before outer-replica retention fails closed until re-decoded from carrier
 evidence.
 

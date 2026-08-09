@@ -476,10 +476,7 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
     check(
       "quarantine reason ids",
       reasonPairs?.map(([id]) => id) ?? null,
-      // Must be the SAME comparator as sortedPairs: `localeCompare` folds case
-      // (ICU orders "h" before "U") while `compareCodePoints` does not, so the
-      // two sides of this assertion disagreed on any vector whose ids mix case.
-      [...full.quarantine].sort(compareCodePoints),
+      [...full.quarantine].sort(),
     );
   }
   if (exp.winners) {

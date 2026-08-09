@@ -8,7 +8,8 @@
     "siblingGrantDelegationId": "93DE2vkpfsq2lRHc8lp78qrxQbWmHQgYF4A86EWqMQs",
     "siblingReplica": "replica:matter:cross-replica-sibling#root:QmLCmUcXZFZMGAS7lCgcMl6BndemmKZoiRlPDnzkBa8",
     "siblingTransferDelegationId": "I38YmeQrpII90sWOzIJcYBdslDAQ9GCc2fBP1ixOZ0U",
-    "targetOperationId": "h57Gk96l229Ucnx_fq8louP11JtTrg-LzeNBaCPk9p0"
+    "targetOperationId": "h57Gk96l229Ucnx_fq8louP11JtTrg-LzeNBaCPk9p0",
+    "transferExpectedReason": "invalid_transfer"
   },
   "expectAtFrontier": [],
   "expectAtFullFrontier": {
@@ -27,7 +28,7 @@
       ],
       [
         "wfDOcmPgAZDsP3Q1zpSVSLdeUf1BYXzCJkTjqaGdrOY",
-        "wrong_replica"
+        "invalid_transfer"
       ]
     ],
     "quarantine": [

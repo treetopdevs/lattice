@@ -409,6 +409,22 @@ defmodule Lattice2.RootBindingTest do
     end
   end
 
+  test "out-of-range integer succession proofs in a reconstructed log are quarantined" do
+    sim = founded()
+    {sim, succession} = Sim.succeed(sim, "tab", :moderator, at_tick: 3)
+    {:succeed, :moderator, delegation, 3} = succession.body
+    log = Sim.log(sim, "server")
+
+    for proof <- [-1, Canonical.max_integer() + 1] do
+      malformed = %{succession | body: {:succeed, :moderator, delegation, proof}}
+      malformed_log = Log.from_ops(log.replica, Map.put(log.ops, succession.id, malformed))
+      analysis = Authority.analyze(Thread, malformed_log)
+
+      assert analysis.reasons[succession.id] == :malformed_term
+      assert analysis.holders.moderator == Sim.identity(sim, "server").pub
+    end
+  end
+
   test "replaying a legitimate successor delegation as genesis cannot poison it" do
     sim = founded()
     {sim, succession} = Sim.succeed(sim, "tab", :moderator, at_tick: 3)
@@ -428,49 +444,7 @@ defmodule Lattice2.RootBindingTest do
     assert Sim.state(sim, "server").locked?
   end
 
-  # --- Replica binding (plan 162 step 2b(d)) -------------------------------
-
-  test "a capability chain replayed from a same-root sibling replica confers nothing" do
-    sim = founded()
-    server = Sim.identity(sim, "server")
-    evil = Sim.identity(sim, "evil")
-
-    # A sibling matter run by the same root key: its genesis validates here too
-    # (same commitment), so only the replica binding stands between an attacker
-    # and cross-matter capability replay.
-    sibling_replica = Authority.bind_replica("replica:thread:sibling", server.pub)
-
-    sibling_genesis =
-      Delegation.genesis(server, sibling_replica,
-        ops: [:post],
-        roles: [:moderator],
-        live: true
-      )
-
-    sibling_grant =
-      Delegation.new(server, sibling_replica, evil.pub,
-        ops: [:post],
-        parent_id: sibling_genesis.id
-      )
-
-    {sim, replayed_genesis} =
-      Sim.append(sim, "evil", :authority, {:genesis, sibling_genesis, %{}})
-
-    {sim, _replayed_grant} = Sim.append(sim, "evil", :authority, {:grant, sibling_grant})
-
-    {sim, post} =
-      Sim.command(sim, "evil", :post, ["cross-replica propaganda"], cap: sibling_grant.id)
-
-    sim = Sim.sync_all(sim)
-
-    # `validate_delegation/6`'s replica arm fires ahead of the genesis arms, so
-    # the sibling genesis is refused as :wrong_replica rather than reaching the
-    # :unauthorized_genesis judgment. Strictly more specific; still refused.
-    assert {true, :wrong_replica} = Sim.quarantined(sim, "server", replayed_genesis.id)
-    assert {true, :wrong_replica} = Sim.quarantined(sim, "server", post.id)
-    refute "cross-replica propaganda" in Sim.state(sim, "server").messages
-    assert Sim.holder(sim, "server", :moderator) == Sim.identity(sim, "server").pub
-  end
+  # --- Same-root sibling replay (plan 162 step 2b(d)) ----------------------
 
   test "a transfer replayed from a same-root sibling replica cannot move the holder" do
     sim = founded()
@@ -492,8 +466,8 @@ defmodule Lattice2.RootBindingTest do
         parent_id: sibling_genesis.id
       )
 
-    # Same-root sibling genesis validates through the root arms; the timeline
-    # guard must still refuse it before record_acquire/4.
+    # The delegation validator rejects the sibling chain before it can become
+    # valid timeline evidence.
     {sim, replayed_genesis} =
       Sim.append(sim, "server", :authority, {:genesis, sibling_genesis, %{}})
 
@@ -503,69 +477,8 @@ defmodule Lattice2.RootBindingTest do
     sim = Sim.sync_all(sim)
 
     assert {true, :wrong_replica} = Sim.quarantined(sim, "server", replayed_genesis.id)
-    assert {true, :wrong_replica} = Sim.quarantined(sim, "server", replayed_transfer.id)
+    assert {true, :invalid_transfer} = Sim.quarantined(sim, "server", replayed_transfer.id)
     assert Sim.holder(sim, "server", :moderator) == server.pub
-  end
-
-  test "a root-less delegation minted for another replica is refused as wrong_replica" do
-    sim = founded()
-    evil = Sim.identity(sim, "evil")
-    foreign_replica = Authority.bind_replica("replica:thread:foreign", evil.pub)
-
-    foreign =
-      Delegation.genesis(evil, foreign_replica,
-        ops: [:post],
-        roles: [],
-        live: true
-      )
-
-    {sim, introduction} = Sim.append(sim, "evil", :authority, {:grant, foreign})
-    {sim, post} = Sim.command(sim, "evil", :post, ["foreign propaganda"], cap: foreign.id)
-    sim = Sim.sync_all(sim)
-
-    assert {true, :wrong_replica} = Sim.quarantined(sim, "server", introduction.id)
-    # `cap_ok/9` binds the cited delegation's replica before the validity check,
-    # so the command reports :wrong_replica rather than :invalid_capability.
-    assert {true, :wrong_replica} = Sim.quarantined(sim, "server", post.id)
-    refute "foreign propaganda" in Sim.state(sim, "server").messages
-  end
-
-  # --- Tick portability (plan 162 step 2b(e)) ------------------------------
-
-  test "a validly signed heartbeat with a non-integer tick does not enter the timeline" do
-    sim = founded()
-
-    {sim, heartbeat} =
-      Sim.append(sim, "server", :authority, {:heartbeat, :moderator, "9"})
-
-    sim = Sim.sync_all(sim)
-    analysis = Sim.authority(sim, "server")
-
-    # Plan 162 step 2b(e): a malformed tick is quarantined with an attributable
-    # :malformed_term reason — mirroring the TypeScript decoder, which rejects a
-    # non-canonical tick structurally — rather than being silently dropped. It
-    # still never enters the role timeline.
-    assert {true, :malformed_term} = Sim.quarantined(sim, "server", heartbeat.id)
-    assert Map.has_key?(analysis.reasons, heartbeat.id)
-    assert Sim.holder(sim, "server", :moderator) == Sim.identity(sim, "server").pub
-  end
-
-  test "a malformed heartbeat tick cannot poison later dormancy arithmetic" do
-    sim = founded()
-
-    # Before the 2b(e) guard, "9" was recorded, won last_active_from/3's max
-    # (Erlang orders binaries above integers), and every later succession
-    # raised ArithmeticError on `at_tick < last_active + dormant_ticks` —
-    # permanently breaking authority analysis of the replica.
-    {sim, _heartbeat} =
-      Sim.append(sim, "server", :authority, {:heartbeat, :moderator, "9"})
-
-    sim = Sim.sync_all(sim)
-    {sim, succession} = Sim.succeed(sim, "tab", :moderator, at_tick: 5)
-    sim = Sim.sync_all(sim)
-
-    assert false == Sim.quarantined(sim, "server", succession.id)
-    assert Sim.holder(sim, "server", :moderator) == Sim.identity(sim, "tab").pub
   end
 
   # --- Tombstone gate ------------------------------------------------------

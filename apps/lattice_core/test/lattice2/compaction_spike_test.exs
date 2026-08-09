@@ -14,7 +14,7 @@ defmodule Lattice2.CompactionSpikeTest do
 
   @moduletag timeout: 300_000
 
-  alias Lattice.{Authority, CompactionSpike, Dag, Log, Reduce, Sim, Sync}
+  alias Lattice.{Authority, Canonical, CompactionSpike, Dag, Log, Reduce, Sim, Sync}
   alias Lattice.Authority.Delegation
   alias Lattice.Demo.Thread
   alias Mix.Tasks.Lattice.ExportVectors.DualAuthorityFixture
@@ -189,6 +189,127 @@ defmodule Lattice2.CompactionSpikeTest do
     assert res.reasons[heartbeat.id] == :malformed_term
     refute Map.has_key?(res.reasons, succession.id)
     assert res.holders.moderator == Sim.identity(sim, "r1").pub
+  end
+
+  test "out-of-range retained succession proof stays quarantined after compaction" do
+    sim = Sim.new(Thread, @replica, @realms, seed: "compaction-malformed-succession")
+
+    {sim, _genesis} =
+      Sim.create_replica(sim, "r0", policies: %{moderator: %{successor: "r1", dormant_ticks: 3}})
+
+    sim = Sim.sync_all(sim)
+    frontier = Log.frontier(Sim.log(sim, "r0"))
+    {sim, succession} = Sim.succeed(sim, "r1", :moderator, at_tick: 3)
+    {:succeed, :moderator, delegation, 3} = succession.body
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "r0")
+
+    malformed = %{
+      succession
+      | body: {:succeed, :moderator, delegation, Canonical.max_integer() + 1}
+    }
+
+    malformed_log = Log.from_ops(log.replica, Map.put(log.ops, succession.id, malformed))
+    {_snapshot, retained, res} = assert_compaction_equivalence(malformed_log, frontier)
+
+    assert Log.has?(retained, succession.id)
+    assert res.reasons[succession.id] == :malformed_term
+    assert res.holders.moderator == Sim.identity(sim, "r0").pub
+  end
+
+  test "undeclared-role malformed succession remains structurally quarantined after compaction" do
+    sim = Sim.new(Thread, @replica, @realms, seed: "compaction-undeclared-succession")
+
+    {sim, _genesis} =
+      Sim.create_replica(sim, "r0", policies: %{moderator: %{successor: "r1", dormant_ticks: 3}})
+
+    sim = Sim.sync_all(sim)
+    frontier = Log.frontier(Sim.log(sim, "r0"))
+    {sim, succession} = Sim.succeed(sim, "r1", :moderator, at_tick: 3)
+    {:succeed, :moderator, delegation, 3} = succession.body
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "r0")
+
+    malformed = %{
+      succession
+      | body: {:succeed, :not_a_role, delegation, Canonical.max_integer() + 1}
+    }
+
+    malformed_log = Log.from_ops(log.replica, Map.put(log.ops, succession.id, malformed))
+    {_snapshot, retained, res} = assert_compaction_equivalence(malformed_log, frontier)
+
+    assert Log.has?(retained, succession.id)
+    assert res.reasons[succession.id] == :malformed_term
+    assert res.holders.moderator == Sim.identity(sim, "r0").pub
+  end
+
+  test "undeclared-role malformed transfer remains structurally quarantined after compaction" do
+    sim = Sim.new(Thread, @replica, @realms, seed: "compaction-undeclared-transfer")
+    {sim, _genesis} = Sim.create_replica(sim, "r0")
+    sim = Sim.sync_all(sim)
+    frontier = Log.frontier(Sim.log(sim, "r0"))
+    {sim, delegation} = Sim.transfer(sim, "r0", "r1", :moderator, at_tick: 1)
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "r0")
+
+    transfer =
+      log
+      |> Log.topo_ops()
+      |> Enum.find(fn
+        %{body: {:transfer, :moderator, %Delegation{id: id}, 1}} -> id == delegation.id
+        _op -> false
+      end)
+
+    malformed = %{
+      transfer
+      | body: {:transfer, :not_a_role, delegation, Canonical.max_integer() + 1}
+    }
+
+    malformed_log = Log.from_ops(log.replica, Map.put(log.ops, transfer.id, malformed))
+    {_snapshot, retained, res} = assert_compaction_equivalence(malformed_log, frontier)
+
+    assert Log.has?(retained, transfer.id)
+    assert res.reasons[transfer.id] == :malformed_term
+    assert res.holders.moderator == Sim.identity(sim, "r0").pub
+  end
+
+  test "retained foreign-replica capability keeps its wrong-replica reason after compaction" do
+    sim = Sim.new(Thread, @replica, @realms, seed: "compaction-foreign-replica-capability")
+    {sim, _genesis} = Sim.create_replica(sim, "r0")
+    sim = Sim.sync_all(sim)
+    frontier = Log.frontier(Sim.log(sim, "r0"))
+    root = Sim.identity(sim, "r0")
+    resident = Sim.identity(sim, "r1")
+    foreign_replica = Authority.bind_replica("replica:thread:foreign", root.pub)
+
+    foreign_genesis =
+      Delegation.genesis(root, foreign_replica,
+        ops: [:post],
+        roles: [:moderator],
+        live: true
+      )
+
+    foreign_grant =
+      Delegation.new(root, foreign_replica, resident.pub,
+        ops: [:post],
+        roles: [],
+        parent_id: foreign_genesis.id
+      )
+
+    {sim, _foreign_genesis_op} =
+      Sim.append(sim, "r0", :authority, {:genesis, foreign_genesis, %{}})
+
+    {sim, _foreign_grant_op} = Sim.append(sim, "r0", :authority, {:grant, foreign_grant})
+    sim = Sim.sync_all(sim)
+
+    {sim, command} =
+      Sim.command(sim, "r1", :post, ["foreign capability"], cap: foreign_grant.id)
+
+    sim = Sim.sync_all(sim)
+    {_snapshot, retained, res} = assert_compaction_equivalence(Sim.log(sim, "r0"), frontier)
+
+    assert Log.has?(retained, command.id)
+    assert res.reasons[command.id] == :wrong_replica
   end
 
   test "retained honored succession activates its descendant transfer after compaction" do
