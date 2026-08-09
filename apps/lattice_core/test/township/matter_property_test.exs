@@ -154,7 +154,10 @@ defmodule Township.MatterPropertyTest do
         # Holder as of this op's causal deps — recomputed on the slice — must be the
         # op's author. An honored authoritative op by a non-holder is impossible.
         slice_ids = Dag.reachable(ops, op.deps)
-        slice = Log.from_ops(@replica, Map.take(ops, MapSet.to_list(slice_ids)))
+        # Slice under the log's own (root-bound) replica name: capabilities are
+        # replica-scoped, so an unbound slice name would quarantine every
+        # delegation as :wrong_replica rather than test holder soundness.
+        slice = Log.from_ops(log.replica, Map.take(ops, MapSet.to_list(slice_ids)))
         assert Authority.holder(Matter, slice, :clerk) == op.author
       end
 
