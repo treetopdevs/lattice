@@ -172,7 +172,7 @@ test("Vue source mounts a reducer-backed Township matter surface", () => {
   assert.match(preview, /from "@treetopdevs\/lattice-client"/);
   assert.match(
     preview,
-    /materialize\(\s*townshipMatterSchema,\s*ops,\s*undefined,\s*externallyQuarantined,\s*expectedReplica,?\s*\)/,
+    /materialize\(\s*townshipMatterSchema,\s*ops,\s*undefined,\s*carrierAuthorityReport,\s*expectedReplica,?\s*\)/,
   );
   assert.match(preview, /export function townshipPreview/);
   assert.match(preview, /export function townshipPreviewFromOps/);
@@ -343,6 +343,20 @@ test("Vue source exposes carrier-accepted revocation acknowledgement without cla
   assert.match(app, /carrier accepted/);
   assert.match(app, /revoke frame/);
   assert.match(app, /pending authority confirmation/);
+  assert.match(app, /strandedReplicaFrameIds/);
+  assert.match(app, /unboundReplicaFrameIds/);
+  assert.match(app, /unverifiableFrameIds/);
+  assert.match(app, /unverifiableArchiveFrameIds/);
+  assert.match(app, /different replica/);
+  assert.match(app, /no replica binding/);
+  assert.match(app, /excluded from the local authority summary/);
+  assert.match(app, /unverifiableArchiveOnly/);
+  assert.match(app, /syncQueueWarningCount/);
+  assert.match(app, /\? "warning" : "success"/);
+  const style = readText("src/style.css");
+  assert.match(style, /\.sync-message\[data-state="warning"\]/);
+  assert.match(app, /withQueueWarnings/);
+  assert.equal(app.match(/return withQueueWarnings\(/g)?.length, 5);
   assert.doesNotMatch(app, /access revoked/i);
   assert.doesNotMatch(app, /access removed/i);
   assert.doesNotMatch(app, /revocation confirmed/i);

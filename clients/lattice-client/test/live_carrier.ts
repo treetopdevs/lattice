@@ -200,7 +200,7 @@ try {
   check("pulled peer op count", synced.pulledOps.length, 5);
   check("push frame count", synced.pushedFrames.length, 2);
   check("push accepted count", synced.pushReport.accepted.length, 2);
-  check("acknowledged outbox ids", synced.acknowledgedFrameIds, authoredClientFrames.map((frame) => frame.id));
+  check("peer-reported outbox ids", synced.peerReportedFrameIds, authoredClientFrames.map((frame) => frame.id));
   check("push quarantined", synced.pushReport.quarantined, []);
 
   const merged = synced.ops;

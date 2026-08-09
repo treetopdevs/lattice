@@ -1,3 +1,4 @@
+import { bytesBase64 } from "./base64";
 import {
   connectCarrierWebSocket,
   type CarrierStateReport,
@@ -253,10 +254,6 @@ function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof (error as { message?: unknown })?.message === "string") return (error as { message: string }).message;
   return "carrier probe failed";
-}
-
-function bytesBase64(bytes: Uint8Array): string {
-  return btoa(String.fromCharCode(...bytes));
 }
 
 function base64Bytes(value: string): Uint8Array {

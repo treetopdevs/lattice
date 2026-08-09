@@ -98,11 +98,21 @@ const shallowRelaySynced = await syncCarrierOnce(shallowRelayClient, localOps, [
     submission: "relay",
     expectedReplica: vector.replica,
 });
-assert.deepEqual(shallowRelayClient.relayedIds, [shallowRelayFrame.id]);
-assert.deepEqual(shallowRelaySynced.pushedFrames, [shallowRelayFrame]);
-assert.deepEqual(shallowRelaySynced.acknowledgedFrameIds, [
-    shallowRelayFrame.id,
-]);
+assert.deepEqual(shallowRelayClient.relayedIds, []);
+assert.deepEqual(shallowRelaySynced.pushedFrames, []);
+assert.deepEqual(shallowRelaySynced.peerReportedFrameIds, []);
+assert.deepEqual(shallowRelaySynced.unverifiableFrameIds, [shallowRelayFrame.id]);
+const anonymousMalformedFrame = structuredClone(post);
+Reflect.deleteProperty(anonymousMalformedFrame, "id");
+const anonymousMalformedClient = new ScriptedRelaySyncClient([[]], new Map());
+const anonymousMalformedSynced = await syncCarrierOnce(anonymousMalformedClient, localOps, [anonymousMalformedFrame], vector.realmByPubkey, {
+    verifier: operationVerifier,
+    submission: "relay",
+    expectedReplica: vector.replica,
+});
+assert.deepEqual(anonymousMalformedClient.relayedIds, []);
+assert.deepEqual(anonymousMalformedSynced.pushedFrames, []);
+assert.deepEqual(anonymousMalformedSynced.unverifiableFrameIds, []);
 const relayFrames = [post, grant, genesis, summary];
 const relayReports = new Map([
     [genesis.id, { ...emptyReport(), accepted: [genesis.id] }],
@@ -126,7 +136,57 @@ assert.deepEqual(relaySynced.pushReport, {
     rejected: [[summary.id, "invalid"]],
     pending: [post.id],
 });
-assert.deepEqual(relaySynced.acknowledgedFrameIds, [genesis.id]);
+assert.deepEqual(relaySynced.peerReportedFrameIds, [genesis.id]);
+// A malicious carrier naming ids it never received must not make them
+// compactable: accepted ids are trusted only for frames submitted this call.
+const forgedAcceptClient = new ScriptedRelaySyncClient([[]], new Map([
+    [genesis.id, { ...emptyReport(), accepted: [genesis.id, post.id, grant.id] }],
+]));
+const forgedAcceptSynced = await syncCarrierOnce(forgedAcceptClient, localOps, [genesis], vector.realmByPubkey, {
+    verifier: operationVerifier,
+    submission: "relay",
+    expectedReplica: vector.replica,
+});
+assert.deepEqual(forgedAcceptClient.relayedIds, [genesis.id]);
+assert.deepEqual(forgedAcceptSynced.peerReportedFrameIds, [genesis.id]);
+// Same forgery naming a locally unverifiable frame filtered from egress:
+// the corrupt frame must stay out of the compactable set and remain flagged.
+const forgedUnverifiableFrame = structuredClone(post);
+Reflect.set(forgedUnverifiableFrame.body, forgedUnverifiableFrame.body.length, "forged-accept-preserves-warning");
+const forgedUnverifiableClient = new ScriptedRelaySyncClient([[]], new Map([
+    [
+        genesis.id,
+        { ...emptyReport(), accepted: [genesis.id, forgedUnverifiableFrame.id] },
+    ],
+]));
+const forgedUnverifiableSynced = await syncCarrierOnce(forgedUnverifiableClient, localOps, [forgedUnverifiableFrame, genesis], vector.realmByPubkey, {
+    verifier: operationVerifier,
+    submission: "relay",
+    expectedReplica: vector.replica,
+});
+assert.deepEqual(forgedUnverifiableClient.relayedIds, [genesis.id]);
+assert.deepEqual(forgedUnverifiableSynced.peerReportedFrameIds, [genesis.id]);
+assert.deepEqual(forgedUnverifiableSynced.unverifiableFrameIds, [
+    forgedUnverifiableFrame.id,
+]);
+// Push mode: a forged accepted id outside the pushed set is discarded too.
+const forgedWithheldId = grant.id;
+class ForgedPushClient extends PushRecordingClient {
+    async push(ops) {
+        const report = await super.push(ops);
+        return {
+            ...report,
+            accepted: [...report.accepted, forgedWithheldId, "carrier-invented-id"],
+        };
+    }
+}
+const forgedPushClient = new ForgedPushClient();
+const forgedPushSynced = await syncCarrierOnce(forgedPushClient, localOps, [post], vector.realmByPubkey, {
+    verifier: operationVerifier,
+    expectedReplica: vector.replica,
+});
+assert.deepEqual(forgedPushClient.pushedIds, [post.id]);
+assert.deepEqual(forgedPushSynced.peerReportedFrameIds, [post.id]);
 const rateLimitedClient = new ScriptedRelaySyncClient([[]], new Map([
     [genesis.id, { ...emptyReport(), accepted: [genesis.id] }],
     [grant.id, new Error("carrier peer error: rate_limited")],
@@ -142,7 +202,7 @@ assert.deepEqual(partiallySynced.pushReport, {
     ...emptyReport(),
     accepted: [genesis.id],
 });
-assert.deepEqual(partiallySynced.acknowledgedFrameIds, [genesis.id]);
+assert.deepEqual(partiallySynced.peerReportedFrameIds, [genesis.id]);
 const unavailableClient = new ScriptedRelaySyncClient([[]], new Map([[genesis.id, new Error("carrier peer error: unavailable")]]));
 await assert.rejects(() => syncCarrierOnce(unavailableClient, localOps, [genesis], vector.realmByPubkey, {
     verifier: operationVerifier,
@@ -158,7 +218,7 @@ const confirmedDuplicate = await syncCarrierOnce(confirmedDuplicateClient, local
 assert.equal(confirmedDuplicateClient.advertiseCalls, 2);
 assert.deepEqual(confirmedDuplicateClient.relayedIds, [post.id]);
 assert.deepEqual(confirmedDuplicate.pushReport, emptyReport());
-assert.deepEqual(confirmedDuplicate.acknowledgedFrameIds, [post.id]);
+assert.deepEqual(confirmedDuplicate.peerReportedFrameIds, [post.id]);
 const unconfirmedDuplicateClient = new ScriptedRelaySyncClient([[], []], new Map());
 const unconfirmedDuplicate = await syncCarrierOnce(unconfirmedDuplicateClient, localOps, [post], vector.realmByPubkey, {
     verifier: operationVerifier,
@@ -166,7 +226,7 @@ const unconfirmedDuplicate = await syncCarrierOnce(unconfirmedDuplicateClient, l
     expectedReplica: vector.replica,
 });
 assert.equal(unconfirmedDuplicateClient.advertiseCalls, 2);
-assert.deepEqual(unconfirmedDuplicate.acknowledgedFrameIds, []);
+assert.deepEqual(unconfirmedDuplicate.peerReportedFrameIds, []);
 let pushFallbackCalls = 0;
 const pushOnlyClient = {
     async advertise() {

@@ -14,8 +14,12 @@
   "expectAtFullFrontier": {
     "authorityQuarantine": [
       [
+        "4C2tz40sM1oEL30YrTujbW4tgxYS5_qqm5zZwTRD-30",
+        "wrong_replica"
+      ],
+      [
         "UiyxOlR_VPszLe6iU-jl7S8zHyT3Xmas6PZBemHcP98",
-        "unauthorized_genesis"
+        "wrong_replica"
       ],
       [
         "h57Gk96l229Ucnx_fq8louP11JtTrg-LzeNBaCPk9p0",
@@ -27,6 +31,7 @@
       ]
     ],
     "quarantine": [
+      "4C2tz40sM1oEL30YrTujbW4tgxYS5_qqm5zZwTRD-30",
       "UiyxOlR_VPszLe6iU-jl7S8zHyT3Xmas6PZBemHcP98",
       "h57Gk96l229Ucnx_fq8louP11JtTrg-LzeNBaCPk9p0",
       "wfDOcmPgAZDsP3Q1zpSVSLdeUf1BYXzCJkTjqaGdrOY"

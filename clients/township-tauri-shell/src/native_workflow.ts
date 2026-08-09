@@ -1,3 +1,4 @@
+import { bytesBase64 } from "./base64";
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { canonicalBytesForWitnessedSuccessionClaim } from "@treetopdevs/lattice-client";
@@ -315,16 +316,6 @@ export async function logTownshipProbeEvent(
 ): Promise<void> {
   const invoke = options.invoke ?? tauriInvoke;
   await invoke(options.command ?? TOWNSHIP_LOG_PROBE_COMMAND, { event });
-}
-
-function bytesBase64(bytes: Uint8Array): string {
-  const btoaFn = (
-    globalThis as unknown as { btoa?: (decoded: string) => string }
-  ).btoa;
-  if (!btoaFn) throw new Error("base64 encoding unavailable");
-  return btoaFn(
-    Array.from(bytes, (byte) => String.fromCharCode(byte)).join(""),
-  );
 }
 
 function parseGovernanceWitnessSignature(

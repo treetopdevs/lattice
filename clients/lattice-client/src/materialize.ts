@@ -1,3 +1,4 @@
+import { cmpHash } from "./op";
 import type { Op } from "./op";
 import { isAuthorityField } from "./schema";
 import type { ReplicaSchema } from "./schema";
@@ -31,6 +32,31 @@ export class V01UnvalidatedAuthorityError extends Error {
   }
 }
 
+export interface CarrierAuthorityReportDiagnostic {
+  /** Complete carrier report domain after frame verification. */
+  opIds: ReadonlySet<string>;
+  /** Carrier-reported authority quarantine, used only for comparison. */
+  quarantinedIds: ReadonlySet<string>;
+}
+
+export class CarrierAuthorityReportDivergenceError extends Error {
+  readonly localIds: string[];
+  readonly reportedIds: string[];
+
+  constructor(localIds: readonly string[], reportedIds: readonly string[]) {
+    const sortedLocalIds = sortedIds(localIds);
+    const sortedReportedIds = sortedIds(reportedIds);
+    super(
+      "carrier_authority_report_divergence: locally computed authority quarantine " +
+        `${JSON.stringify(sortedLocalIds)} does not match carrier report ` +
+        JSON.stringify(sortedReportedIds),
+    );
+    this.name = "CarrierAuthorityReportDivergenceError";
+    this.localIds = sortedLocalIds;
+    this.reportedIds = sortedReportedIds;
+  }
+}
+
 export interface Materialized {
   /** field -> materialized value */
   state: Record<string, unknown>;
@@ -46,10 +72,11 @@ export interface Materialized {
 
 /**
  * Materialize a replica from ops. `included` optionally bounds the visible set
- * (a frontier); default is all ops. `externallyQuarantined` seeds decisions from
- * an external authority oracle while retaining those ops in canonical order.
- * `expectedReplica` pins authority analysis to a caller-established replica;
- * omitted values retain the legacy vector fallback.
+ * (a frontier); default is all ops. `carrierAuthorityReport` is an optional,
+ * domain-bounded diagnostic: local analysis always decides authority and applied
+ * quarantine, then a mismatched carrier report fails closed. `expectedReplica`
+ * pins authority analysis to a caller-established replica; omitted values retain
+ * the legacy vector fallback.
  * This is a pure function of its inputs, so Sim can remain the conformance
  * oracle for state, quarantine, and order.
  */
@@ -57,7 +84,7 @@ export function materialize(
   schema: ReplicaSchema,
   ops: Op[],
   included?: ReadonlySet<string>,
-  externallyQuarantined: ReadonlySet<string> = new Set(),
+  carrierAuthorityReport: CarrierAuthorityReportDiagnostic | null = null,
   expectedReplica?: string,
 ): Materialized {
   const byId = index(ops);
@@ -77,11 +104,7 @@ export function materialize(
       .map((op) => op.id),
   );
   const authorityIncluded = new Set(
-    [...inc].filter(
-      (id) =>
-        !externallyQuarantined.has(id) &&
-        !structurallyQuarantined.has(id),
-    ),
+    [...inc].filter((id) => !structurallyQuarantined.has(id)),
   );
   const authorityOrder = order.filter((id) => authorityIncluded.has(id));
   const depthCache = new Map<string, number>();
@@ -114,7 +137,6 @@ export function materialize(
   }
   const quarantined = new Set([
     ...authority.quarantinedWrites,
-    ...externallyQuarantined,
     ...structurallyQuarantined,
   ]);
   for (const id of order) {
@@ -128,6 +150,20 @@ export function materialize(
       quarantine.push(id);
       quarantined.add(id);
       if (q.reason !== undefined) quarantineReasons.set(id, q.reason);
+    }
+  }
+
+  if (carrierAuthorityReport !== null) {
+    const localIds = quarantine.filter(
+      (id) =>
+        carrierAuthorityReport.opIds.has(id) &&
+        !structurallyQuarantined.has(id),
+    );
+    const reportedIds = [...carrierAuthorityReport.quarantinedIds].filter(
+      (id) => !structurallyQuarantined.has(id),
+    );
+    if (!sameIds(localIds, reportedIds)) {
+      throw new CarrierAuthorityReportDivergenceError(localIds, reportedIds);
     }
   }
 
@@ -160,6 +196,19 @@ export function materialize(
   }
 
   return { state, quarantine, quarantineReasons, order, winners };
+}
+
+function sortedIds(ids: readonly string[]): string[] {
+  return [...ids].sort(cmpHash);
+}
+
+function sameIds(left: readonly string[], right: readonly string[]): boolean {
+  const sortedLeft = sortedIds(left);
+  const sortedRight = sortedIds(right);
+  return (
+    sortedLeft.length === sortedRight.length &&
+    sortedLeft.every((id, index) => id === sortedRight[index])
+  );
 }
 
 function authorityWriteCount(

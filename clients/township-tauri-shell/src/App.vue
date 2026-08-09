@@ -420,35 +420,68 @@ const revokeStatusTone = computed(() => {
   if (revokeStatus.value === null) return "idle";
   return revokeStatus.value.ok ? "success" : revokeStatus.value.reason;
 });
+const syncQueueWarningCount = computed(() => {
+  if (syncStatus.value === null || !syncStatus.value.ok) return 0;
+  return new Set([
+    ...syncStatus.value.strandedReplicaFrameIds,
+    ...syncStatus.value.unboundReplicaFrameIds,
+    ...syncStatus.value.unverifiableFrameIds,
+    ...syncStatus.value.unverifiableArchiveFrameIds,
+  ]).size;
+});
 const syncStatusMessage = computed(() => {
   if (syncStatus.value === null) return carrierPeer.value === null ? "Save a carrier pairing before syncing." : "Ready to sync outbox.";
   if (syncStatus.value.ok) {
+    const queueWarnings: string[] = [];
+    const unboundCount = syncStatus.value.unboundReplicaFrameIds.length;
+    if (unboundCount > 0) {
+      queueWarnings.push(`${unboundCount} legacy local ${unboundCount === 1 ? "frame has" : "frames have"} no replica binding and ${unboundCount === 1 ? "was" : "were"} not sent.`);
+    }
+    const strandedCount = syncStatus.value.strandedReplicaFrameIds.length;
+    if (strandedCount > 0) {
+      queueWarnings.push(`${strandedCount} local ${strandedCount === 1 ? "frame targets" : "frames target"} a different replica and ${strandedCount === 1 ? "was" : "were"} not sent.`);
+    }
+    const unverifiableCount = syncStatus.value.unverifiableFrameIds.length;
+    if (unverifiableCount > 0) {
+      queueWarnings.push(`${unverifiableCount} outbound ${unverifiableCount === 1 ? "frame failed" : "frames failed"} local verification and ${unverifiableCount === 1 ? "was" : "were"} not sent.`);
+    }
+    const outboundUnverifiableIds = new Set(syncStatus.value.unverifiableFrameIds);
+    const unverifiableArchiveOnly = syncStatus.value.unverifiableArchiveFrameIds.filter(
+      (id) => !outboundUnverifiableIds.has(id),
+    );
+    const unverifiableArchiveCount = unverifiableArchiveOnly.length;
+    if (unverifiableArchiveCount > 0) {
+      queueWarnings.push(`${unverifiableArchiveCount} additional archived ${unverifiableArchiveCount === 1 ? "frame failed" : "frames failed"} local verification and ${unverifiableArchiveCount === 1 ? "was" : "were"} excluded from the local authority summary.`);
+    }
+    const withQueueWarnings = (message: string) => [message, ...queueWarnings].join(" ");
     if (syncStatus.value.authorityRevokedCapabilityAttributionCount > 0) {
       const first = syncStatus.value.authorityRevokedCapabilityAttributions[0];
       if (first) {
-        return revokedCapabilityAttributionMessage(
+        return withQueueWarnings(revokedCapabilityAttributionMessage(
           syncStatus.value.authorityRevokedCapabilityAttributionCount,
           first.delegationId,
           syncStatus.value.authorityRevokedCapabilityUnattributedCount,
-        );
+        ));
       }
     }
     if (syncStatus.value.authorityRevokedCapabilityCount > 0) {
-      return `${revokedCapCommandCount(syncStatus.value.authorityRevokedCapabilityCount)} blocked by local verification.`;
+      return withQueueWarnings(`${revokedCapCommandCount(syncStatus.value.authorityRevokedCapabilityCount)} blocked by local verification.`);
     }
     if (syncStatus.value.carrierAcceptedRevocationCount > 0) {
-      return `${revokeFrameCount(syncStatus.value.carrierAcceptedRevocationCount)} carrier accepted; pending authority confirmation.`;
+      return withQueueWarnings(`${revokeFrameCount(syncStatus.value.carrierAcceptedRevocationCount)} carrier accepted; pending authority confirmation.`);
     }
     if (syncStatus.value.authorityQuarantinedRevocationCount > 0) {
-      return `${revokeFrameCount(syncStatus.value.authorityQuarantinedRevocationCount)} authority-quarantined by carrier.`;
+      return withQueueWarnings(`${revokeFrameCount(syncStatus.value.authorityQuarantinedRevocationCount)} authority-quarantined by carrier.`);
     }
-    return `Pushed ${syncStatus.value.pushedFrameCount}, pulled ${syncStatus.value.pulledOpCount}, accepted ${syncStatus.value.acceptedCount}.`;
+    const baseMessage = `Pushed ${syncStatus.value.pushedFrameCount}, pulled ${syncStatus.value.pulledOpCount}, accepted ${syncStatus.value.acceptedCount}.`;
+    return withQueueWarnings(baseMessage);
   }
   return syncStatus.value.message;
 });
 const syncStatusTone = computed(() => {
   if (syncStatus.value === null) return "idle";
-  return syncStatus.value.ok ? "success" : syncStatus.value.reason;
+  if (!syncStatus.value.ok) return syncStatus.value.reason;
+  return syncQueueWarningCount.value > 0 ? "warning" : "success";
 });
 const pairingStatusMessage = computed(() => {
   if (pairingStatus.value === null) {
@@ -1203,16 +1236,19 @@ async function exportSelectedWitnessArtifact(event: Event) {
   // Older WebKit builds reject the async clipboard API with NotAllowedError
   // once the packaged CSP applies, so fall back to the constrained native
   // clipboard sink (which re-reads the stored artifact by id) before failing.
+  // A native-sink failure is traced distinctly from the webview rejection so
+  // "fallback failed" never looks byte-identical to "no fallback attempted".
+  let clipboardSink: "webview" | "native" = "webview";
   try {
     await navigator.clipboard.writeText(exported.artifactJson);
   } catch (clipboardError) {
     try {
       await copyTownshipWitnessArtifactNative(artifact.artifactId);
-    } catch {
+      clipboardSink = "native";
+    } catch (nativeError) {
       witnessExportStatus.value = { ok: false, message: "The witness artifact could not be copied." };
-      traceWitnessExportFailure(
-        `clipboard:${clipboardError instanceof Error ? clipboardError.name : typeof clipboardError}`,
-      );
+      traceWitnessExportFailure(`clipboard:${witnessExportErrorCode(clipboardError)}`);
+      traceWitnessExportFailure(`clipboard-native:${witnessExportErrorCode(nativeError)}`);
       return;
     }
   }
@@ -1221,15 +1257,27 @@ async function exportSelectedWitnessArtifact(event: Event) {
     ok: true,
     message: `${exported.fileName} copied. Keep it with the full confirmation below.`,
   };
-  if (devTraceRuntime) void traceTownshipDevEvent("witness-artifact-export:succeeded").catch(() => {});
+  // The success trace names the sink that ran so the packaged smoke can tell
+  // which clipboard path CI actually exercised.
+  if (devTraceRuntime) {
+    void traceTownshipDevEvent(`witness-artifact-export:succeeded:${clipboardSink}`).catch(() => {});
+  }
 }
 
-// Byte-free export failure evidence: reason codes and error names only, so a
-// blocked export fails closed and loudly instead of silently timing out.
+// Byte-free export failure evidence: reason codes, error names, and the
+// native sink's constant error strings only, so a blocked export fails
+// closed and loudly instead of silently timing out.
 function traceWitnessExportFailure(code: string) {
   if (devTraceRuntime) {
     void traceTownshipDevEvent(`witness-artifact-export:failed:${code}`).catch(() => {});
   }
+}
+
+// Webview clipboard rejections are DOMExceptions (trace the name); native
+// sink rejections surface the Rust command's byte-free constant strings.
+function witnessExportErrorCode(error: unknown): string {
+  if (typeof error === "string") return error;
+  return error instanceof Error ? error.name : typeof error;
 }
 
 async function traceWitnessReviewDom(intentId: string, review: WitnessedSuccessionReview) {

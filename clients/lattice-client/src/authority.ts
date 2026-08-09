@@ -582,22 +582,12 @@ function authorityWriteRejectionReason(
       : undefined;
   }
 
-  if (
-    op.replica !== undefined &&
-    delegation.replica !== op.replica &&
-    delegation.audienceRealm === op.value &&
-    delegation.roles.includes(op.field) &&
-    (validDelegation(delegation, delegations) ||
-      candidateDelegationActivated(
-        delegation,
-        delegations,
-        honoredSuccessionIntroductions,
-        ancestors(op.id, byId as Map<string, Op>),
-        op.field,
-        byId,
-      )) &&
-    delegation.issuerRealm === op.author
-  ) {
+  // Mirrors `decide_transfer`'s clause order exactly: the replica binding is
+  // the FIRST clause, checked unconditionally. Gating it behind the
+  // invalid-transfer predicates would report `invalid_transfer` for a
+  // same-root sibling replay whose delegation is itself replica-invalid,
+  // diverging from the Sim oracle.
+  if (op.replica !== undefined && delegation.replica !== op.replica) {
     return "wrong_replica";
   }
 
@@ -1156,6 +1146,13 @@ function delegationValidation(
   }
   if (visiting.has(id)) return { valid: false, reason: "invalid_parent" };
   visiting.add(id);
+
+  // A capability scoped to one replica is honored only on that replica's log.
+  // Matches Elixir validate_delegation/cap_ok/verify_chain: replica mismatch
+  // always rejects, including on legacy unbound log names.
+  if (outerReplica !== undefined && delegation.replica !== outerReplica) {
+    return { valid: false, reason: "wrong_replica" };
+  }
 
   let validation: DelegationValidation;
   if (delegation.parentId === null) {

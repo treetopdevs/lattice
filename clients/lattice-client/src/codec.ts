@@ -161,7 +161,7 @@ export async function authorCarrierOp(input: AuthorCarrierOpInput): Promise<Carr
 
 export function canonicalBytesForCarrierDelegation(delegation: CarrierDelegationCore): Uint8Array {
   const expiresEpoch = delegation.expires_epoch;
-  const leased = expiresEpoch !== undefined;
+  const leased = expiresEpoch !== undefined && expiresEpoch !== null;
   const shared = [
     encodeBinaryString(delegation.replica),
     encodeBytes(base64ToBytes(delegation.issuer)),
@@ -181,7 +181,7 @@ export function canonicalBytesForCarrierDelegation(delegation: CarrierDelegation
   return encodeArray([
     encodeBinaryString(delegationV3PayloadTag),
     ...shared,
-    major(0, BigInt(expiresEpoch)),
+    encodeUint(expiresEpoch),
   ]);
 }
 
@@ -288,20 +288,23 @@ function encodeCarrierTerm(term: CarrierTerm): Uint8Array {
 }
 
 function encodeDelegation(delegation: CarrierDelegation): Uint8Array {
-  return encodeTagged(
-    delegationTermTag,
-    encodeArray([
-      encodeBinaryString(delegation.id),
-      encodeBinaryString(delegation.replica),
-      encodeBytes(base64ToBytes(delegation.issuer)),
-      encodeBytes(base64ToBytes(delegation.audience)),
-      delegation.parent_id === null ? bytes(0xf6) : encodeBinaryString(delegation.parent_id),
-      encodeArray(uniqueSorted(delegation.ops).map(encodeAtom)),
-      encodeArray(uniqueSorted(delegation.roles).map(encodeAtom)),
-      bytes(delegation.live ? 0xf5 : 0xf4),
-      encodeBytes(base64ToBytes(delegation.sig)),
-    ]),
-  );
+  const fields = [
+    encodeBinaryString(delegation.id),
+    encodeBinaryString(delegation.replica),
+    encodeBytes(base64ToBytes(delegation.issuer)),
+    encodeBytes(base64ToBytes(delegation.audience)),
+    delegation.parent_id === null ? bytes(0xf6) : encodeBinaryString(delegation.parent_id),
+    encodeArray(uniqueSorted(delegation.ops).map(encodeAtom)),
+    encodeArray(uniqueSorted(delegation.roles).map(encodeAtom)),
+    bytes(delegation.live ? 0xf5 : 0xf4),
+    encodeBytes(base64ToBytes(delegation.sig)),
+  ];
+
+  if (delegation.expires_epoch !== undefined && delegation.expires_epoch !== null) {
+    fields.push(encodeUint(delegation.expires_epoch));
+  }
+
+  return encodeTagged(delegationTermTag, encodeArray(fields));
 }
 
 function encodeMap(pairs: [CarrierTerm, CarrierTerm][]): Uint8Array {

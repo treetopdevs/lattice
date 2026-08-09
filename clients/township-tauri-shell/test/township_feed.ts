@@ -817,6 +817,63 @@ assert.equal(stopDelegations.saveCount, 0);
 assert.equal(stopOutbox.accessCount, 0);
 assert.equal(stopStates.length, stoppedStateCount);
 
+const forgedRevocationLocalLog = new MemoryOpLog(
+  carrierOpsToSemanticOps(vector.oracleCarrierOps, vector.realmByPubkey),
+);
+const forgedRevocationDelegations = new MemoryFrameStore(vector.oracleCarrierOps);
+const forgedRevocationOutbox = new ForbiddenOutboxStore();
+const forgedRevocationWorkflow = workflow(
+  forgedRevocationLocalLog,
+  forgedRevocationDelegations,
+  forgedRevocationOutbox,
+);
+const forgedRevocationClient = new StateReportingPullClient(
+  [vector.authorityRevocation.revokeOp, vector.authorityRevocation.revokedCommandOp],
+  {
+    state_b64: vector.authorityRevocation.stateB64,
+    op_ids: vector.authorityRevocation.opIds,
+    frontier: [vector.authorityRevocation.revokedCommandOp.id],
+    structural_quarantine: [],
+    authority_quarantine: [[vector.authorityRevocation.revokeOp.id, "forged"]],
+    log_size: vector.authorityRevocation.opIds.length,
+  },
+);
+const beforeForgedRevocationLocal = JSON.stringify(forgedRevocationLocalLog.ops);
+const beforeForgedRevocationDelegations = JSON.stringify(forgedRevocationDelegations.frames);
+
+await assert.rejects(
+  refreshTownshipFromCarrier({
+    client: forgedRevocationClient,
+    workflow: forgedRevocationWorkflow,
+    verifier,
+    realmByPubkey: vector.realmByPubkey,
+    expectedReplica: vector.replica,
+    generation: 8,
+  }),
+  (error: unknown) => {
+    assert.ok(error instanceof Error);
+    assert.equal(error.name, "CarrierAuthorityReportDivergenceError");
+    assert.match(error.message, /carrier_authority_report_divergence/);
+    assert.equal("localIds" in error, true);
+    assert.equal("reportedIds" in error, true);
+    if (!("localIds" in error) || !("reportedIds" in error)) return false;
+    assert.deepEqual(
+      error.localIds,
+      vector.authorityRevocation.authorityQuarantine.map(([id]) => id).sort(),
+    );
+    assert.deepEqual(error.reportedIds, [vector.authorityRevocation.revokeOp.id]);
+    return true;
+  },
+);
+assert.equal(JSON.stringify(forgedRevocationLocalLog.ops), beforeForgedRevocationLocal);
+assert.equal(
+  JSON.stringify(forgedRevocationDelegations.frames),
+  beforeForgedRevocationDelegations,
+);
+assert.equal(forgedRevocationLocalLog.saveCount, 0);
+assert.equal(forgedRevocationDelegations.saveCount, 0);
+assert.equal(forgedRevocationOutbox.accessCount, 0);
+
 const appSource = readFileSync(join(here, "..", "src", "App.vue"), "utf8");
 assert.match(appSource, /createTownshipFeedController/);
 assert.match(appSource, /townshipPreviewFromOps/);

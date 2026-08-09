@@ -20,7 +20,7 @@ use township_tauri_shell::{
     TOWNSHIP_CARRIER_SIGNING_PAYLOAD_MAX_BYTES, TOWNSHIP_DEV_CARRIER_KEY_ID_ENV,
     TOWNSHIP_DEV_CARRIER_KEY_SEED_ENV, TOWNSHIP_KEYRING_SERVICE,
     TOWNSHIP_PAIRING_DISCOVERY_BROADCAST_ADDR, TOWNSHIP_PAIRING_DISCOVERY_PACKET_TYPE,
-    TOWNSHIP_WITNESS_ARTIFACT_EXPORT_KV_PREFIX, TOWNSHIP_WITNESS_ARTIFACT_ID_CHARS,
+    TOWNSHIP_WITNESS_ARTIFACT_EXPORT_KV_PREFIX, TOWNSHIP_WITNESS_ARTIFACT_ID_BYTES,
 };
 
 const W1_SESSION_SEED: &str = "township-g1";
@@ -183,6 +183,29 @@ fn registered_tauri_commands_roundtrip_through_mock_ipc() {
         "lattice_copy_witness_artifact",
         serde_json::json!({ "artifactId": "not-an-artifact-id" }),
         Err::<String, String>("invalid witness artifact id".to_string()),
+    );
+
+    // Composing the two ungated IPC calls — a `lattice_kv_set` under the
+    // pinned witness-artifact prefix followed by the copy command — must not
+    // reach the pasteboard: the stored bytes fail the v1 artifact check
+    // before any clipboard write.
+    let smuggled_id = "C".repeat(TOWNSHIP_WITNESS_ARTIFACT_ID_BYTES);
+    assert_ipc_response(
+        &webview,
+        "lattice_kv_set",
+        serde_json::json!({
+            "key": format!("{TOWNSHIP_WITNESS_ARTIFACT_EXPORT_KV_PREFIX}{smuggled_id}"),
+            "value": "arbitrary webview-chosen clipboard bytes"
+        }),
+        Ok(()),
+    );
+    assert_ipc_response(
+        &webview,
+        "lattice_copy_witness_artifact",
+        serde_json::json!({ "artifactId": smuggled_id }),
+        Err::<String, String>(
+            "stored witness artifact is malformed for the requested id".to_string(),
+        ),
     );
 
     assert_ipc_response(
@@ -747,35 +770,101 @@ fn signing_rejects_unrecognized_and_oversized_payloads_without_echoing_them() {
 #[test]
 fn witness_artifact_export_payload_reads_only_the_exact_stored_artifact() {
     let state = TownshipNativeState::default();
-    let artifact_id = "A".repeat(TOWNSHIP_WITNESS_ARTIFACT_ID_CHARS);
+    let artifact_id = "A".repeat(TOWNSHIP_WITNESS_ARTIFACT_ID_BYTES);
+    let artifact_json = v1_witness_artifact_json(&artifact_id);
     let key = format!("{TOWNSHIP_WITNESS_ARTIFACT_EXPORT_KV_PREFIX}{artifact_id}");
-    state.kv_set(&key, "{\"v\":1}").unwrap();
+    state.kv_set(&key, &artifact_json).unwrap();
 
     assert_eq!(
         state.witness_artifact_export_payload(&artifact_id).unwrap(),
-        "{\"v\":1}"
+        artifact_json
     );
     assert_eq!(
         state
-            .witness_artifact_export_payload(&"B".repeat(TOWNSHIP_WITNESS_ARTIFACT_ID_CHARS))
+            .witness_artifact_export_payload(&"B".repeat(TOWNSHIP_WITNESS_ARTIFACT_ID_BYTES))
             .unwrap_err(),
         "witness artifact not found"
     );
 
-    let wrong_char = format!("{}/", "A".repeat(TOWNSHIP_WITNESS_ARTIFACT_ID_CHARS - 1));
-    let traversal = format!("../{}", "A".repeat(TOWNSHIP_WITNESS_ARTIFACT_ID_CHARS - 3));
+    let wrong_char = format!("{}/", "A".repeat(TOWNSHIP_WITNESS_ARTIFACT_ID_BYTES - 1));
+    let traversal = format!("../{}", "A".repeat(TOWNSHIP_WITNESS_ARTIFACT_ID_BYTES - 3));
+    let colon = format!("{}:", "A".repeat(TOWNSHIP_WITNESS_ARTIFACT_ID_BYTES - 1));
+    // 43 characters but 44 bytes: the length gate counts bytes, and the
+    // base64url alphabet check rejects multi-byte code points regardless.
+    let multibyte = format!(
+        "{}\u{00e9}",
+        "A".repeat(TOWNSHIP_WITNESS_ARTIFACT_ID_BYTES - 1)
+    );
+    assert_eq!(
+        multibyte.chars().count(),
+        TOWNSHIP_WITNESS_ARTIFACT_ID_BYTES
+    );
     for invalid in [
         "",
         "short",
-        &"A".repeat(TOWNSHIP_WITNESS_ARTIFACT_ID_CHARS + 1),
+        &"A".repeat(TOWNSHIP_WITNESS_ARTIFACT_ID_BYTES + 1),
         wrong_char.as_str(),
         traversal.as_str(),
+        colon.as_str(),
+        multibyte.as_str(),
     ] {
         assert_eq!(
             state.witness_artifact_export_payload(invalid).unwrap_err(),
             "invalid witness artifact id"
         );
     }
+}
+
+#[test]
+fn witness_artifact_export_payload_requires_id_bound_v1_artifact_bytes() {
+    let state = TownshipNativeState::default();
+    let artifact_id = "A".repeat(TOWNSHIP_WITNESS_ARTIFACT_ID_BYTES);
+    let other_id = "B".repeat(TOWNSHIP_WITNESS_ARTIFACT_ID_BYTES);
+    let key = format!("{TOWNSHIP_WITNESS_ARTIFACT_EXPORT_KV_PREFIX}{artifact_id}");
+
+    // Arbitrary bytes, truncated artifact JSON, and a well-formed artifact
+    // stored under a key whose id does not match its artifactId field must
+    // all fail before any clipboard write.
+    for stored in [
+        "arbitrary webview-chosen clipboard bytes",
+        "{\"v\":1}",
+        v1_witness_artifact_json(&other_id).as_str(),
+    ] {
+        state.kv_set(&key, stored).unwrap();
+        assert_eq!(
+            state
+                .witness_artifact_export_payload(&artifact_id)
+                .unwrap_err(),
+            "stored witness artifact is malformed for the requested id"
+        );
+    }
+
+    state
+        .kv_set(&key, &v1_witness_artifact_json(&artifact_id))
+        .unwrap();
+    assert_eq!(
+        state.witness_artifact_export_payload(&artifact_id).unwrap(),
+        v1_witness_artifact_json(&artifact_id)
+    );
+}
+
+fn v1_witness_artifact_json(artifact_id: &str) -> String {
+    serde_json::json!({
+        "v": 1,
+        "artifactId": artifact_id,
+        "claim": {
+            "version": 1,
+            "replica": "replica:matter:succession-witnessed-recovery#root:lc9GuxZMwEl99X0zNhDLAa6jR9n8pBX-2zFS3ghRwWo",
+            "role": "clerk",
+            "holder": "aG9sZGVyLWtleS1ieXRlcy1wbGFjZWhvbGRlci0zMmI=",
+            "holderEpoch": "ZXBvY2gtZGlnZXN0",
+            "successor": "c3VjY2Vzc29yLWtleS1ieXRlcy1wbGFjZWhvbGRlcg==",
+            "policyId": "cG9saWN5LWRpZ2VzdA"
+        },
+        "witness": "d2l0bmVzcy1rZXktYnl0ZXMtcGxhY2Vob2xkZXItMzI=",
+        "signature": "c2lnbmF0dXJlLWJ5dGVzLXBsYWNlaG9sZGVy"
+    })
+    .to_string()
 }
 
 #[test]

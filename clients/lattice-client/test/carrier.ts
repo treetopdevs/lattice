@@ -150,6 +150,28 @@ check(
   materialized.quarantine.sort(),
   vector.expectAfterSync.authorityQuarantine.map(([id]) => id).sort(),
 );
+const reportConfirmedMaterialized = materialize(
+  vector.schema,
+  merged,
+  undefined,
+  {
+    opIds: new Set(vector.expectAfterSync.opIds),
+    quarantinedIds: new Set(
+      vector.expectAfterSync.authorityQuarantine.map(([id]) => id),
+    ),
+  },
+);
+check(
+  "matching non-empty carrier authority report is diagnostic only",
+  {
+    state: reportConfirmedMaterialized.state,
+    quarantine: reportConfirmedMaterialized.quarantine.sort(),
+  },
+  {
+    state: materialized.state,
+    quarantine: materialized.quarantine.sort(),
+  },
+);
 
 const commandFrame = vector.clientDivergedCarrierOps.find(
   (candidate) => candidate.kind === "command",
@@ -823,6 +845,51 @@ if (malformedAuthorityOp !== undefined) {
       state: withoutMalformedAuthority.state,
     },
   );
+  const structuralReport = materialize(
+    vector.schema,
+    [...clientDiverged, malformedAuthorityOp],
+    undefined,
+    {
+      opIds: new Set([...clientDiverged.map((op) => op.id), malformedAuthorityOp.id]),
+      quarantinedIds: new Set([malformedAuthorityOp.id]),
+    },
+  );
+  check(
+    "structural quarantine is excluded from both diagnostic sides",
+    structuralReport.state,
+    withoutMalformedAuthority.state,
+  );
+  const reportWithoutLocalOnlyStructuralOp = materialize(
+    vector.schema,
+    [...clientDiverged, malformedAuthorityOp],
+    undefined,
+    {
+      opIds: new Set(clientDiverged.map((op) => op.id)),
+      quarantinedIds: new Set(),
+    },
+  );
+  check(
+    "local-only structural quarantine outside the report domain does not diverge",
+    reportWithoutLocalOnlyStructuralOp.quarantine.includes(malformedAuthorityOp.id),
+    true,
+  );
+}
+
+if (unknownCommandOp !== undefined) {
+  const reportWithoutLocalOnlyUnknownCommand = materialize(
+    vector.schema,
+    [...clientDiverged, unknownCommandOp],
+    undefined,
+    {
+      opIds: new Set(clientDiverged.map((op) => op.id)),
+      quarantinedIds: new Set(),
+    },
+  );
+  check(
+    "local-only non-structural quarantine outside the report domain does not diverge",
+    reportWithoutLocalOnlyUnknownCommand.quarantine.includes(unknownCommandOp.id),
+    true,
+  );
 }
 
 const validCustodyFrame = toolshedVector.oracleCarrierOps.find(
@@ -859,7 +926,7 @@ const invalidCustody = materialize(
   toolshedVector.schema,
   invalidCustodyOps,
   undefined,
-  new Set(),
+  null,
   toolshedVector.replica,
 );
 check(
@@ -891,7 +958,7 @@ const noCapabilityCustody = materialize(
   toolshedVector.schema,
   noCapabilityCustodyOps,
   undefined,
-  new Set(),
+  null,
   toolshedVector.replica,
 );
 check(
@@ -967,7 +1034,7 @@ const explicitlyAnchored = materialize(
   foreignReplicaVector.schema,
   [...legitimateOps, ...foreignOp],
   undefined,
-  new Set(),
+  null,
   foreignReplicaVector.replica,
 );
 check(

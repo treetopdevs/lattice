@@ -105,6 +105,9 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_authority_cross_role_succession_transfer(),
       township_authority_succession_genesis_poisoning(),
       township_authority_replayed_genesis(),
+      township_authority_malformed_heartbeat(),
+      township_authority_malformed_transfer(),
+      township_authority_undeclared_role_tick(),
       township_foreign_replica_injection(),
       township_authority_cross_replica_replay(),
       township_link_election(),
@@ -619,7 +622,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     log = Log.append!(Log.new(replica), impostor_genesis)
     authority_quarantine = authority_quarantine(log)
 
-    unless [impostor_genesis.id, "impostor_genesis"] in authority_quarantine do
+    unless [impostor_genesis.id, "wrong_replica"] in authority_quarantine do
       raise "expected embedded-replica bypass #{impostor_genesis.id} to quarantine"
     end
 
@@ -1815,7 +1818,9 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
     log = Log.append!(log, replayed_transfer)
 
-    assert_authority_reason!(log, replayed_genesis.id, :unauthorized_genesis)
+    # `validate_delegation/6`'s replica arm fires ahead of the genesis arms, so
+    # a same-root sibling genesis is refused as :wrong_replica.
+    assert_authority_reason!(log, replayed_genesis.id, :wrong_replica)
     assert_authority_reason!(log, target.id, :wrong_replica)
     assert_authority_reason!(log, replayed_transfer.id, :wrong_replica)
     assert_post_absent!(log, rejected_post)
@@ -1834,6 +1839,132 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       "siblingTransferDelegationId" => sibling_transfer.id,
       "replayedGenesisOperationId" => replayed_genesis.id,
       "replayedTransferOperationId" => replayed_transfer.id
+    })
+  end
+
+  defp township_authority_malformed_heartbeat do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:malformed-heartbeat",
+        ["clerk", "resident"],
+        seed: "township:malformed-heartbeat"
+      )
+
+    {sim, _genesis} =
+      Sim.create_replica(sim, "clerk",
+        policies: %{clerk: %{successor: "resident", dormant_ticks: 3}}
+      )
+
+    {sim, heartbeat} = Sim.append(sim, "clerk", :authority, {:heartbeat, :clerk, "9"})
+    sim = Sim.sync_all(sim)
+    {sim, succession} = Sim.succeed(sim, "resident", :clerk, at_tick: 3)
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    assert_authority_reason!(log, heartbeat.id, :malformed_term)
+    assert_authority_honored!(log, succession.id)
+
+    unless Authority.analyze(Matter, log).holders.clerk == Sim.identity(sim, "resident").pub do
+      raise "expected malformed heartbeat not to block the legitimate succession"
+    end
+
+    capability_scenario("township_authority_malformed_heartbeat", sim, log, %{
+      "targetOperationId" => heartbeat.id,
+      "expectedReason" => "malformed_term",
+      "honoredSuccessionOperationId" => succession.id
+    })
+  end
+
+  defp township_authority_malformed_transfer do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:malformed-transfer",
+        ["clerk", "mallory"],
+        seed: "township:malformed-transfer"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+
+    {sim, delegation} =
+      Sim.transfer(sim, "clerk", "mallory", :clerk, at_tick: "9", ops: [:post])
+
+    transfer =
+      sim
+      |> Sim.log("clerk")
+      |> Log.topo_ops()
+      |> Enum.find(fn
+        %{body: {:transfer, :clerk, %Delegation{id: id}, "9"}} -> id == delegation.id
+        _other -> false
+      end)
+
+    unless match?(%Op{}, transfer), do: raise("missing malformed transfer operation")
+
+    sim = Sim.sync_all(sim)
+    rejected_post = "mallory: malformed transfer capability"
+    {sim, target} = Sim.command(sim, "mallory", :post, [rejected_post], cap: delegation.id)
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    assert_authority_reason!(log, transfer.id, :malformed_term)
+    assert_authority_reason!(log, target.id, :no_capability)
+    assert_post_absent!(log, rejected_post)
+
+    capability_scenario("township_authority_malformed_transfer", sim, log, %{
+      "targetOperationId" => target.id,
+      "expectedReason" => "no_capability",
+      "rejectedPost" => rejected_post,
+      "malformedTransferOperationId" => transfer.id,
+      "malformedTransferDelegationId" => delegation.id
+    })
+  end
+
+  # Tick shape must quarantine independently of the role timeline: a signed
+  # heartbeat or transfer naming a role the schema never declared still
+  # carries a malformed tick, and both runtimes must report :malformed_term
+  # rather than silently ignoring the op on the BEAM side only.
+  defp township_authority_undeclared_role_tick do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:undeclared-role-tick",
+        ["clerk", "resident"],
+        seed: "township:undeclared-role-tick"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, heartbeat} = Sim.append(sim, "clerk", :authority, {:heartbeat, :ghost, "9"})
+
+    {sim, delegation} =
+      Sim.transfer(sim, "clerk", "resident", :ghost, at_tick: "9", ops: [:post])
+
+    transfer =
+      sim
+      |> Sim.log("clerk")
+      |> Log.topo_ops()
+      |> Enum.find(fn
+        %{body: {:transfer, :ghost, %Delegation{id: id}, "9"}} -> id == delegation.id
+        _other -> false
+      end)
+
+    unless match?(%Op{}, transfer), do: raise("missing undeclared-role transfer operation")
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    assert_authority_reason!(log, heartbeat.id, :malformed_term)
+    assert_authority_reason!(log, transfer.id, :malformed_term)
+
+    unless Authority.analyze(Matter, log).holders.clerk == Sim.identity(sim, "clerk").pub do
+      raise "expected undeclared-role ticks not to disturb the clerk holder"
+    end
+
+    capability_scenario("township_authority_undeclared_role_tick", sim, log, %{
+      "targetOperationId" => heartbeat.id,
+      "expectedReason" => "malformed_term",
+      "undeclaredTransferOperationId" => transfer.id,
+      "undeclaredTransferDelegationId" => delegation.id
     })
   end
 
@@ -2254,7 +2385,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
     assert_authority_honored!(log, early.id)
 
-    capability_scenario("township_lease_valid_causal", sim, log, %{
+    capability_scenario_with_canonical_ops("township_lease_valid_causal", sim, log, %{
       "case" => "lease_valid_causal",
       "honoredOperationId" => early.id
     })
@@ -2287,7 +2418,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     assert_authority_reason!(log, later.id, :lease_expired)
     assert_post_absent!(log, "concurrent with the beacon")
 
-    capability_scenario("township_lease_expired", sim, log, %{
+    capability_scenario_with_canonical_ops("township_lease_expired", sim, log, %{
       "case" => "lease_expired",
       "concurrentOperationId" => concurrent.id,
       "afterOperationId" => later.id
@@ -2318,7 +2449,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
     assert_authority_reason!(log, late.id, :lease_expired)
 
-    capability_scenario("township_lease_expired_chain", sim, log, %{
+    capability_scenario_with_canonical_ops("township_lease_expired_chain", sim, log, %{
       "case" => "lease_expired_chain",
       "expiredOperationId" => late.id
     })
@@ -2349,7 +2480,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     assert_authority_reason!(log, dead.id, :lease_expired)
     assert_authority_honored!(log, alive.id)
 
-    capability_scenario("township_lease_renewed", sim, log, %{
+    capability_scenario_with_canonical_ops("township_lease_renewed", sim, log, %{
       "case" => "lease_renewed",
       "expiredOperationId" => dead.id,
       "renewedOperationId" => alive.id
@@ -2383,7 +2514,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     assert_authority_reason!(log, stale.id, :stale_beacon)
     assert_authority_honored!(log, post.id)
 
-    capability_scenario("township_beacon_unauthorized", sim, log, %{
+    capability_scenario_with_canonical_ops("township_beacon_unauthorized", sim, log, %{
       "case" => "beacon_unauthorized",
       "unauthorizedBeaconOperationId" => forged.id,
       "staleBeaconOperationId" => stale.id,
@@ -2406,6 +2537,12 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       authorityQuarantine: authority_quarantine(log),
       capabilityCase: evidence
     }
+  end
+
+  defp capability_scenario_with_canonical_ops(name, sim, log, evidence) do
+    name
+    |> capability_scenario(sim, log, evidence)
+    |> Map.put(:canonicalOps, canonical_ops(log))
   end
 
   defp assert_authority_reason!(log, op_id, expected_reason) do
@@ -3098,6 +3235,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     |> maybe_put("replica", Map.get(scenario, :replica))
     |> maybe_put("realmByPubkey", Map.get(scenario, :realmByPubkey))
     |> maybe_put("oracleCarrierOps", Map.get(scenario, :oracleCarrierOps))
+    |> maybe_put("canonicalOps", Map.get(scenario, :canonicalOps))
     |> maybe_put("successionOperationId", Map.get(scenario, :successionOperationId))
     |> maybe_put("tickProvenance", Map.get(scenario, :tickProvenance))
     |> maybe_put("witnessedRecovery", Map.get(scenario, :witnessedRecovery))
