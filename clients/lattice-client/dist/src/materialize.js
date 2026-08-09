@@ -1,3 +1,4 @@
+import { cmpHash } from "./op";
 import { isAuthorityField } from "./schema";
 import { index, depth, canonicalOrder } from "./dag";
 import { isQuarantined } from "./quarantine";
@@ -134,7 +135,7 @@ export function materialize(schema, ops, included, carrierAuthorityReport = null
     return { state, quarantine, quarantineReasons, order, winners };
 }
 function sortedIds(ids) {
-    return [...ids].sort((left, right) => left < right ? -1 : left > right ? 1 : 0);
+    return [...ids].sort(cmpHash);
 }
 function sameIds(left, right) {
     const sortedLeft = sortedIds(left);

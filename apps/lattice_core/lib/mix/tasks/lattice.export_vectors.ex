@@ -2225,7 +2225,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
     assert_authority_honored!(log, early.id)
 
-    leased_capability_scenario("township_lease_valid_causal", sim, log, %{
+    capability_scenario_with_canonical_ops("township_lease_valid_causal", sim, log, %{
       "case" => "lease_valid_causal",
       "honoredOperationId" => early.id
     })
@@ -2258,7 +2258,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     assert_authority_reason!(log, later.id, :lease_expired)
     assert_post_absent!(log, "concurrent with the beacon")
 
-    leased_capability_scenario("township_lease_expired", sim, log, %{
+    capability_scenario_with_canonical_ops("township_lease_expired", sim, log, %{
       "case" => "lease_expired",
       "concurrentOperationId" => concurrent.id,
       "afterOperationId" => later.id
@@ -2289,7 +2289,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
     assert_authority_reason!(log, late.id, :lease_expired)
 
-    leased_capability_scenario("township_lease_expired_chain", sim, log, %{
+    capability_scenario_with_canonical_ops("township_lease_expired_chain", sim, log, %{
       "case" => "lease_expired_chain",
       "expiredOperationId" => late.id
     })
@@ -2320,7 +2320,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     assert_authority_reason!(log, dead.id, :lease_expired)
     assert_authority_honored!(log, alive.id)
 
-    leased_capability_scenario("township_lease_renewed", sim, log, %{
+    capability_scenario_with_canonical_ops("township_lease_renewed", sim, log, %{
       "case" => "lease_renewed",
       "expiredOperationId" => dead.id,
       "renewedOperationId" => alive.id
@@ -2354,7 +2354,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     assert_authority_reason!(log, stale.id, :stale_beacon)
     assert_authority_honored!(log, post.id)
 
-    leased_capability_scenario("township_beacon_unauthorized", sim, log, %{
+    capability_scenario_with_canonical_ops("township_beacon_unauthorized", sim, log, %{
       "case" => "beacon_unauthorized",
       "unauthorizedBeaconOperationId" => forged.id,
       "staleBeaconOperationId" => stale.id,
@@ -2379,7 +2379,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     }
   end
 
-  defp leased_capability_scenario(name, sim, log, evidence) do
+  defp capability_scenario_with_canonical_ops(name, sim, log, evidence) do
     name
     |> capability_scenario(sim, log, evidence)
     |> Map.put(:canonicalOps, canonical_ops(log))

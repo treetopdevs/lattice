@@ -1,3 +1,4 @@
+import { cmpHash } from "./op";
 import type { Op } from "./op";
 import { isAuthorityField } from "./schema";
 import type { ReplicaSchema } from "./schema";
@@ -198,9 +199,7 @@ export function materialize(
 }
 
 function sortedIds(ids: readonly string[]): string[] {
-  return [...ids].sort((left, right) =>
-    left < right ? -1 : left > right ? 1 : 0
-  );
+  return [...ids].sort(cmpHash);
 }
 
 function sameIds(left: readonly string[], right: readonly string[]): boolean {

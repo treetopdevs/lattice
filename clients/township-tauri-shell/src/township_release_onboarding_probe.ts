@@ -1,3 +1,4 @@
+import { bytesBase64 } from "./base64";
 import {
   createTownshipNativeWorkflow,
   logTownshipProbeEvent,
@@ -330,10 +331,6 @@ function validStateExchangeUrl(value: string): boolean {
   } catch {
     return false;
   }
-}
-
-function bytesBase64(bytes: Uint8Array): string {
-  return btoa(String.fromCharCode(...bytes));
 }
 
 function base64UrlEncode(value: string): string {

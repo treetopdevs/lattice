@@ -429,13 +429,13 @@ defmodule Lattice.CompactionSpike do
         if MapSet.member?(d.roles, role), do: {:genesis, d}
 
       {:transfer, ^role, %Delegation{} = d, tick} ->
-        if valid_tick?(tick), do: {:transfer, d, tick}, else: {:malformed_tick, op}
+        if Authority.valid_tick?(tick), do: {:transfer, d, tick}, else: {:malformed_tick, op}
 
       {:succeed, ^role, %Delegation{} = d, tick} ->
         {:succeed, d, tick}
 
       {:heartbeat, ^role, tick} ->
-        if valid_tick?(tick), do: {:heartbeat, tick}, else: {:malformed_tick, op}
+        if Authority.valid_tick?(tick), do: {:heartbeat, tick}, else: {:malformed_tick, op}
 
       _ ->
         nil
@@ -896,21 +896,13 @@ defmodule Lattice.CompactionSpike do
     case body do
       {:genesis, %Delegation{} = d, _policies} -> d
       {:grant, %Delegation{} = d} -> d
-      {:transfer, _role, %Delegation{} = d, tick} -> if valid_tick?(tick), do: d
+      {:transfer, _role, %Delegation{} = d, tick} -> if Authority.valid_tick?(tick), do: d
       {:succeed, _role, %Delegation{} = d, _tick} -> d
       _ -> nil
     end
   end
 
   defp delegation_in(_), do: nil
-
-  # Mirrors Lattice.Authority.valid_tick?/1: a malformed transfer tick must not
-  # introduce its delegation (a later command citing it reports :no_capability),
-  # and a malformed heartbeat never mutates the role timeline. The :succeed arm
-  # is exempt — its proof may be a legacy integer or a {:witnessed, certificate}.
-  defp valid_tick?(tick) do
-    is_integer(tick) and tick >= 0 and tick <= Lattice.Canonical.max_integer()
-  end
 
   defp validate_delegations(delegations, root, genesis_ids, succession_ids, log_replica) do
     structs = Map.new(delegations, fn {id, %{deleg: d}} -> {id, d} end)

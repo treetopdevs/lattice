@@ -407,13 +407,18 @@ defmodule Lattice.Authority do
 
   defp delegation_in(_), do: nil
 
-  # A transfer carrying a malformed tick is quarantined as :malformed_term and
-  # must not introduce its delegation — a later command citing it then reports
-  # :no_capability, mirroring the TypeScript carrier's structural decode failure
-  # that drops the delegation evidence. The :succeed arm is exempt: its proof
-  # may be a legacy integer tick or a {:witnessed, certificate}, and malformed
-  # legacy proofs stay on the existing :invalid_succession path.
-  defp valid_tick?(tick) do
+  @doc """
+  True when `tick` is a canonically encodable logical tick.
+
+  A transfer carrying a malformed tick is quarantined as :malformed_term and
+  must not introduce its delegation — a later command citing it then reports
+  :no_capability, mirroring the TypeScript carrier's structural decode failure
+  that drops the delegation evidence. The :succeed arm is exempt: its proof
+  may be a legacy integer tick or a {:witnessed, certificate}, and malformed
+  legacy proofs stay on the existing :invalid_succession path.
+  """
+  @spec valid_tick?(term()) :: boolean()
+  def valid_tick?(tick) do
     is_integer(tick) and tick >= 0 and tick <= Lattice.Canonical.max_integer()
   end
 

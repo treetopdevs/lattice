@@ -13,6 +13,7 @@ import type {
   WitnessedSuccessionClaimEvidence,
   WitnessedSuccessionSignatureEvidence,
 } from "./op";
+import { cmpHash } from "./op";
 import { verifyCarrierOp } from "./codec";
 import type { Verifier } from "./identity";
 import { integrate } from "./sync";
@@ -449,7 +450,7 @@ function commandTable(
 ): [string, number][] {
   return [...decoders]
     .map(([name, decoder]): [string, number] => [name, decoder.arity])
-    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
+    .sort(([left], [right]) => cmpHash(left, right));
 }
 
 interface WebSocketConstructor {

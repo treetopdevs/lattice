@@ -1,3 +1,4 @@
+import { cmpHash } from "./op";
 import { verifyCarrierOp } from "./codec";
 import { integrate } from "./sync";
 export function carrierDelegationsFromFrames(frames) {
@@ -200,7 +201,7 @@ export function toolshedCarrierCommandTable() {
 function commandTable(decoders) {
     return [...decoders]
         .map(([name, decoder]) => [name, decoder.arity])
-        .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
+        .sort(([left], [right]) => cmpHash(left, right));
 }
 export function carrierTranscriptBytes(challenge, realm, pubkey) {
     return canonicalTerm([

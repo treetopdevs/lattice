@@ -1,3 +1,4 @@
+import { bytesBase64 } from "./base64";
 import {
   carrierOpsToSemanticOps,
   integrate,
@@ -352,10 +353,6 @@ export async function syncTownshipOutbox(
 
 function mergeCarrierFrames(frames: CarrierOpFrame[]): CarrierOpFrame[] {
   return [...new Map(frames.map((frame) => [frame.id, frame])).values()];
-}
-
-function bytesBase64(bytes: Uint8Array): string {
-  return globalThis.btoa(String.fromCharCode(...bytes));
 }
 
 async function partitionVerifiedCarrierFrames(

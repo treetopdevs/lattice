@@ -1,3 +1,4 @@
+import { bytesBase64 } from "./base64";
 import {
   assembleWitnessedSuccessionArtifact,
   authorAndPersistTownshipDelegation,
@@ -1101,12 +1102,6 @@ function base64Bytes(value: string): Uint8Array | null {
   } catch {
     return null;
   }
-}
-
-function bytesBase64(bytes: Uint8Array): string {
-  const btoaFn = (globalThis as unknown as { btoa?: (decoded: string) => string }).btoa;
-  if (!btoaFn) throw new Error("base64 encoding unavailable");
-  return btoaFn(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(""));
 }
 
 function errorMessage(error: unknown): string {
