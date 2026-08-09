@@ -81,8 +81,10 @@ pub const TOWNSHIP_CARRIER_SIGNING_PAYLOAD_MAX_BYTES: usize = 64_000;
 /// pinned by `test/runtime_wiring_contract.mjs`.
 pub const TOWNSHIP_WITNESS_ARTIFACT_EXPORT_KV_PREFIX: &str =
     "township:zoning-variance-24:township:witness-artifact:v1:";
-/// Witness artifact ids are unpadded base64url sha256 digests: exactly 43 chars.
-pub const TOWNSHIP_WITNESS_ARTIFACT_ID_CHARS: usize = 43;
+/// Witness artifact ids are unpadded base64url sha256 digests: exactly 43
+/// ASCII bytes (`len()` below is a byte count, which for this alphabet is
+/// also the character count).
+pub const TOWNSHIP_WITNESS_ARTIFACT_ID_BYTES: usize = 43;
 const GOVERNANCE_DUPLICATE_RECONCILIATION_TIMEOUT: Duration = Duration::from_millis(500);
 const GOVERNANCE_DUPLICATE_RECONCILIATION_INTERVAL: Duration = Duration::from_millis(10);
 const GOVERNANCE_PUBLIC_SIDECAR_MISSING: &str =
@@ -376,10 +378,21 @@ impl TownshipNativeState {
     /// Resolve the stored witness artifact bytes for a native clipboard
     /// export. Fail-closed: the id must be an exact unpadded base64url
     /// sha256 digest, so this command can only ever read (never write) the
-    /// single witness-artifact key the TS shell persisted — it is not a
-    /// generic clipboard or key-value primitive.
+    /// single witness-artifact key the TS shell persisted.
+    ///
+    /// The prefix pin alone is NOT a "no generic clipboard primitive"
+    /// guarantee: `lattice_kv_set` is webview-exposed with arbitrary keys,
+    /// so two ungated IPC calls (a `kv_set` under this prefix followed by
+    /// the copy command) would otherwise place arbitrary webview-chosen
+    /// bytes on the pasteboard. To close that composition, the stored
+    /// bytes must structurally parse as a v1 witness artifact whose
+    /// `artifactId` field equals the requested id before they are
+    /// returned. The binding is structural (field equality plus the TS
+    /// shape checks) — this command does not recompute the artifact-id
+    /// hash from canonical bytes; the shell verifies signatures and the
+    /// id commitment before persisting.
     pub fn witness_artifact_export_payload(&self, artifact_id: &str) -> Result<String, String> {
-        if artifact_id.len() != TOWNSHIP_WITNESS_ARTIFACT_ID_CHARS
+        if artifact_id.len() != TOWNSHIP_WITNESS_ARTIFACT_ID_BYTES
             || !artifact_id
                 .bytes()
                 .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
@@ -387,8 +400,13 @@ impl TownshipNativeState {
             return Err("invalid witness artifact id".to_string());
         }
         let key = format!("{TOWNSHIP_WITNESS_ARTIFACT_EXPORT_KV_PREFIX}{artifact_id}");
-        self.kv_get(&key)?
-            .ok_or_else(|| "witness artifact not found".to_string())
+        let payload = self
+            .kv_get(&key)?
+            .ok_or_else(|| "witness artifact not found".to_string())?;
+        if !stored_v1_witness_artifact_matches_id(&payload, artifact_id) {
+            return Err("stored witness artifact is malformed for the requested id".to_string());
+        }
+        Ok(payload)
     }
 
     pub fn kv_set(&self, key: &str, value: &str) -> Result<(), String> {
@@ -1323,6 +1341,50 @@ fn lattice_android_current_pairing_handoff_b64(
 fn lattice_android_current_pairing_handoff_b64() -> Result<Option<String>, String> {
     trace_dev_command("lattice_android_current_pairing_handoff_b64");
     Ok(None)
+}
+
+/// Structural id↔content check for the native clipboard sink, mirroring the
+/// TS shell's `parseWitnessArtifact` shape checks: exact top-level keys,
+/// `v == 1`, a `claim` with the exact witnessed-succession fields, and an
+/// `artifactId` field equal to the requested id. Deliberately no base64
+/// decoding, signature verification, or artifact-id hash recomputation —
+/// duplicating the canonical encoding here would create cross-language
+/// drift; the shell already verifies those commitments before persisting.
+fn stored_v1_witness_artifact_matches_id(payload: &str, artifact_id: &str) -> bool {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(payload) else {
+        return false;
+    };
+    let Some(artifact) = value.as_object() else {
+        return false;
+    };
+    let claim_is_valid = |claim: &serde_json::Value| {
+        let Some(claim) = claim.as_object() else {
+            return false;
+        };
+        claim.len() == 7
+            && claim.get("version").and_then(serde_json::Value::as_u64) == Some(1)
+            && claim
+                .get("replica")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|replica| !replica.is_empty())
+            && claim.get("role").and_then(serde_json::Value::as_str) == Some("clerk")
+            && ["holder", "holderEpoch", "successor", "policyId"]
+                .iter()
+                .all(|field| claim.get(*field).is_some_and(serde_json::Value::is_string))
+    };
+    artifact.len() == 5
+        && artifact.get("v").and_then(serde_json::Value::as_u64) == Some(1)
+        && artifact
+            .get("artifactId")
+            .and_then(serde_json::Value::as_str)
+            == Some(artifact_id)
+        && artifact.get("claim").is_some_and(claim_is_valid)
+        && artifact
+            .get("witness")
+            .is_some_and(serde_json::Value::is_string)
+        && artifact
+            .get("signature")
+            .is_some_and(serde_json::Value::is_string)
 }
 
 #[tauri::command]

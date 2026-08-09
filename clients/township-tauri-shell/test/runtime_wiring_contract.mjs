@@ -61,18 +61,29 @@ test("the native witness export sink reads the exact TS artifact storage key", (
   const lib = readText(shellRoot, "src-tauri/src/lib.rs");
   const nativeWorkflow = readText(shellRoot, "src/native_workflow.ts");
   const actions = readText(shellRoot, "src/township_actions.ts");
+  const tauriBridge = readText(repoRoot, "clients/lattice-client/src/tauri_bridge.ts");
 
   const namespace = /TOWNSHIP_STORAGE_NAMESPACE = "([^"]+)"/.exec(nativeWorkflow)?.[1];
   const artifactPrefix = /TOWNSHIP_WITNESS_ARTIFACT_KEY_PREFIX = "([^"]+)"/.exec(actions)?.[1];
   assert.ok(namespace, "TS storage namespace must be pinned");
   assert.ok(artifactPrefix, "TS witness artifact key prefix must be pinned");
 
+  // The namespace separator is extracted from the bridge's storageKey()
+  // template itself, so this pin follows the code that actually composes
+  // the persisted keys instead of hardcoding ":".
+  const separator = /`\$\{namespace\}([^`$]*)\$\{key\}`/.exec(tauriBridge)?.[1];
+  assert.ok(separator, "tauri_bridge storageKey() composition must be extractable");
+
   // The Rust command derives the KV key itself from the artifact id; its
-  // baked-in prefix must equal the TS namespace + artifact-key composition so
-  // the constrained native sink can only read what the shell persisted.
-  assert.ok(
-    lib.includes(
-      `pub const TOWNSHIP_WITNESS_ARTIFACT_EXPORT_KV_PREFIX: &str =\n    "${namespace}:${artifactPrefix}";`,
+  // baked-in prefix must equal the TS namespace + separator + artifact-key
+  // composition so the constrained native sink can only read what the shell
+  // persisted. Whitespace-flexible so rustfmt line-breaking cannot break the
+  // pin.
+  const expectedPrefix = `${namespace}${separator}${artifactPrefix}`;
+  assert.match(
+    lib,
+    new RegExp(
+      `pub const TOWNSHIP_WITNESS_ARTIFACT_EXPORT_KV_PREFIX:\\s*&str\\s*=\\s*"${expectedPrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"\\s*;`,
     ),
     "Rust witness export KV prefix must match the TS storage key composition",
   );
