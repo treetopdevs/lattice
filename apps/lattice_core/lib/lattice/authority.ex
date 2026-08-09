@@ -146,10 +146,6 @@ defmodule Lattice.Authority do
   defp root_matches?(nil, _audience), do: true
   defp root_matches?(commitment, audience), do: root_tag(audience) == commitment
 
-  # True when `replica` carries a root-key commitment (i.e. has been bound by
-  # `bind_replica/2`). Legacy unbound replicas stay nil here.
-  defp bound_replica?(replica), do: replica_commitment(replica) != nil
-
   # Replica root commitment plus delegation ids introduced by the two operations
   # that deliberately carry root-less self-issues.
   defp deleg_context(%Log{} = log, ordered) do
@@ -465,10 +461,9 @@ defmodule Lattice.Authority do
         {:error, :bad_delegation_sig}
 
       # A capability scoped to one replica is honored only on that replica's log.
-      # The guard is skipped for legacy unbound logs (no root commitment), mirroring
-      # root_matches?(nil, _) -> true, so honest slices built on the unbound name
-      # keep working.
-      d.replica != log_replica and bound_replica?(log_replica) ->
+      # Matches `cap_ok/9` and `verify_chain/2`: replica mismatch always rejects,
+      # including on legacy unbound log names.
+      d.replica != log_replica ->
         {:error, :wrong_replica}
 
       is_nil(d.parent_id) ->

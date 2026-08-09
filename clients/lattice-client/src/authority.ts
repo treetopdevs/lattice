@@ -1123,13 +1123,9 @@ function delegationValidation(
   visiting.add(id);
 
   // A capability scoped to one replica is honored only on that replica's log.
-  // The guard is skipped for legacy unbound logs (no root commitment), mirroring
-  // replicaRootMatches returning true when the commitment is null.
-  if (
-    outerReplica !== undefined &&
-    delegation.replica !== outerReplica &&
-    replicaRootCommitment(outerReplica) !== null
-  ) {
+  // Matches Elixir validate_delegation/cap_ok/verify_chain: replica mismatch
+  // always rejects, including on legacy unbound log names.
+  if (outerReplica !== undefined && delegation.replica !== outerReplica) {
     return { valid: false, reason: "wrong_replica" };
   }
 

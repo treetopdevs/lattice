@@ -932,7 +932,7 @@ defmodule Lattice.CompactionSpike do
       not Delegation.valid_sig?(d) ->
         {:error, :bad_delegation_sig}
 
-      d.replica != log_replica and not is_nil(Authority.replica_commitment(log_replica)) ->
+      d.replica != log_replica ->
         {:error, :wrong_replica}
 
       is_nil(d.parent_id) ->
