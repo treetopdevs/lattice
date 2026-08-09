@@ -25,6 +25,7 @@ pub use discovery::{
 pub use product::{ProductManifest, ProductManifestError};
 pub use signer::{CarrierKeySeedStore, InMemoryCarrierKeySeedStore, NativeCarrierSigner};
 pub use storage::{
-    LegacyJsonImport, MigrationFault, MigrationLedgerEntry, ProductDatabase, ProductDatabaseError,
-    PRODUCT_DATABASE_SCHEMA_VERSION,
+    validate_replayable_storage_key, InvalidEntryRecovery, LegacyJsonImport, MigrationFault,
+    MigrationLedgerEntry, ProductDatabase, ProductDatabaseError, PRODUCT_DATABASE_SCHEMA_VERSION,
+    SHA256_BASE64URL_ID_BYTES,
 };
