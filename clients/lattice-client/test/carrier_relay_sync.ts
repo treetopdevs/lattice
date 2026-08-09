@@ -139,11 +139,28 @@ const shallowRelaySynced = await syncCarrierOnce(
     expectedReplica: vector.replica,
   },
 );
-assert.deepEqual(shallowRelayClient.relayedIds, [shallowRelayFrame.id]);
-assert.deepEqual(shallowRelaySynced.pushedFrames, [shallowRelayFrame]);
-assert.deepEqual(shallowRelaySynced.acknowledgedFrameIds, [
-  shallowRelayFrame.id,
-]);
+assert.deepEqual(shallowRelayClient.relayedIds, []);
+assert.deepEqual(shallowRelaySynced.pushedFrames, []);
+assert.deepEqual(shallowRelaySynced.peerReportedFrameIds, []);
+assert.deepEqual(shallowRelaySynced.unverifiableFrameIds, [shallowRelayFrame.id]);
+
+const anonymousMalformedFrame = structuredClone(post);
+Reflect.deleteProperty(anonymousMalformedFrame, "id");
+const anonymousMalformedClient = new ScriptedRelaySyncClient([[]], new Map());
+const anonymousMalformedSynced = await syncCarrierOnce(
+  anonymousMalformedClient,
+  localOps,
+  [anonymousMalformedFrame],
+  vector.realmByPubkey,
+  {
+    verifier: operationVerifier,
+    submission: "relay",
+    expectedReplica: vector.replica,
+  },
+);
+assert.deepEqual(anonymousMalformedClient.relayedIds, []);
+assert.deepEqual(anonymousMalformedSynced.pushedFrames, []);
+assert.deepEqual(anonymousMalformedSynced.unverifiableFrameIds, []);
 
 const relayFrames = [post, grant, genesis, summary];
 const relayReports = new Map<string, RelayOutcome>([
@@ -174,7 +191,7 @@ assert.deepEqual(relaySynced.pushReport, {
   rejected: [[summary.id, "invalid"]],
   pending: [post.id],
 });
-assert.deepEqual(relaySynced.acknowledgedFrameIds, [genesis.id]);
+assert.deepEqual(relaySynced.peerReportedFrameIds, [genesis.id]);
 
 const rateLimitedClient = new ScriptedRelaySyncClient(
   [[]],
@@ -200,7 +217,7 @@ assert.deepEqual(partiallySynced.pushReport, {
   ...emptyReport(),
   accepted: [genesis.id],
 });
-assert.deepEqual(partiallySynced.acknowledgedFrameIds, [genesis.id]);
+assert.deepEqual(partiallySynced.peerReportedFrameIds, [genesis.id]);
 
 const unavailableClient = new ScriptedRelaySyncClient(
   [[]],
@@ -231,7 +248,7 @@ const confirmedDuplicate = await syncCarrierOnce(
 assert.equal(confirmedDuplicateClient.advertiseCalls, 2);
 assert.deepEqual(confirmedDuplicateClient.relayedIds, [post.id]);
 assert.deepEqual(confirmedDuplicate.pushReport, emptyReport());
-assert.deepEqual(confirmedDuplicate.acknowledgedFrameIds, [post.id]);
+assert.deepEqual(confirmedDuplicate.peerReportedFrameIds, [post.id]);
 
 const unconfirmedDuplicateClient = new ScriptedRelaySyncClient([[], []], new Map());
 const unconfirmedDuplicate = await syncCarrierOnce(
@@ -246,7 +263,7 @@ const unconfirmedDuplicate = await syncCarrierOnce(
   },
 );
 assert.equal(unconfirmedDuplicateClient.advertiseCalls, 2);
-assert.deepEqual(unconfirmedDuplicate.acknowledgedFrameIds, []);
+assert.deepEqual(unconfirmedDuplicate.peerReportedFrameIds, []);
 
 let pushFallbackCalls = 0;
 const pushOnlyClient: CarrierSyncClient = {

@@ -95,6 +95,54 @@ current baseline vector exercises that gap. If the amended diagnostic exposes it
 gate, preserve the divergence evidence and STOP rather than teaching the carrier report to the
 judge or editing `authority.ts` in this plan.
 
+## Execution evidence — 2026-08-08
+
+- The pre-fix regressions failed for the intended reasons: the forged carrier diagnostic changed
+  local authority, while the sync aggregate named both `second_peer_recovery` and
+  `archive_save_before_queue_compaction`. The reviewed RED evidence is commit `5b39b047`.
+- Carrier authority reports now compare against the complete local quarantine result only within
+  the verified report domain. Matching empty/non-empty reports pass; forged reports throw the
+  named divergence error before projection or persistence; structural quarantine remains local.
+- Peer-reported frame ids are advisory queue telemetry. Every compacted outbox frame is saved to
+  the append-only signed-frame archive first, and that archive is filtered to the expected replica
+  and re-offered to later peers. The failure-injection and second-peer recovery cases pass.
+- Replica-mismatched and legacy unbound outbox frames remain queued and are surfaced separately as
+  `strandedReplicaFrameIds` / `unboundReplicaFrameIds` in the sync result and Township UI. Candidate
+  frames that the peer does not already report are hash/signature verified locally before they
+  become an egress path; failed candidates are omitted without blocking ingress and surfaced as
+  `unverifiableFrameIds`.
+- Carrier grant/revoke attribution is limited to frames both authored by the current device key and
+  actually present in `pushedFrames`; forged peer ids and other participants' archived frames cannot
+  produce local accepted/quarantined UI classifications.
+- The local revoked-capability summary consumes only a locally verified, expected-replica allowlist
+  independent of peer advertisement. Archive verification failures are excluded from that summary
+  and surfaced separately as `unverifiableArchiveFrameIds`.
+- Candidate verification runs concurrently while retaining candidate order. Queue/archive warning
+  ids are deduplicated in the UI and change the sync tone from success to warning.
+- Archive verification for the local revoked-capability summary is O(archive) on every sync with
+  unbounded `Promise.all` fan-out and re-verifies frames pulled earlier in the same call. A durable
+  verified-id cache and concurrency bound belong with the deferred cursoring/retention design.
+- No retention cap exists for either `carrierFrames` or `delegationFrames` at the persistence block
+  in `clients/township-tauri-shell/src/township_sync.ts`. This execution intentionally adds none:
+  cursoring, batching, retention, and backoff must be designed together so the 120-burst/12-per-
+  second relay limit cannot repeatedly starve a large archive's causal tail.
+- A forged authority report intentionally fails closed before persistence. The controller resets
+  its retry attempt after connecting, so the current 100 ms first-delay behavior can create a
+  roughly 10 Hz reconnect/resubscribe storm. Circuit breaking and operator-visible backoff remain
+  follow-on work.
+- `delegationFrames` now has two roles that can conflict after a pending, rejected, foreign, or
+  unbound local frame: it is the durable re-offer archive, while feed refresh currently requires
+  its complete id set to equal the carrier report's log. Feed refresh therefore fails closed. The
+  parallel exact-set check in `township_sync.ts` instead returns the local revocation summary and
+  silently skips its carrier divergence assertion, failing open. A permanently rejected frame is
+  also re-offered on every sync because it can never enter the peer advertisement. These couplings
+  predate this implementation, but durable archival makes them persistent. A follow-on must compare
+  reports only with verified carrier-held frames and define rejected-frame progress without
+  weakening local re-offer durability or authority diagnostics.
+- All library and shell gates listed below passed, including the live 2-pushed/2-accepted
+  invariant and all onboarding/release probes. `mix verify`, `mix check`, and both boundary-app
+  Sobelow scans also exited 0 under the required OTP 28 toolchain.
+
 ## Why this matters
 
 `apps/lattice_carrier_server` states its contract in `lattice_carrier_server.ex:12-14` and in
@@ -274,6 +322,10 @@ Baseline at the planned-at commit: `$MIXCMD test` exits 0.
   materialization call, re-offer the durable frame archive, and archive the current outbox before
   advisory compaction; filter all egress candidates to `expectedReplica`; do not change its
   independent `revoked_capability` cross-check
+- `clients/township-tauri-shell/src/App.vue` — surface foreign-replica and legacy-unbound outbox
+  warnings after every higher-priority authority, revocation, and per-sync status message
+- `clients/township-tauri-shell/src/style.css` — render successful syncs with retained queue/archive
+  warnings as warnings rather than success
 - `clients/lattice-client/test/conformance.ts` — replace the unsafe externally-determined
   quarantine regression with local-judge/diagnostic cases
 - `clients/lattice-client/test/carrier_relay_sync.ts` — rename result assertions and keep
@@ -589,22 +641,22 @@ New/amended cases, following the existing harness style in each file:
 
 Machine-checkable. ALL must hold:
 
-- [ ] `cd clients/lattice-client && npm run typecheck` exits 0
-- [ ] `cd clients/lattice-client && npm run conformance` exits 0
-- [ ] `cd clients/lattice-client && npm run carrier:relay && npm run carrier:relay-sync && npm run carrier:feed && npm run carrier:township && npm run carrier:township:live` — all exit 0
-- [ ] `cd clients/township-tauri-shell && npm run typecheck && npm run frontend:contract && npm run feed:app:contract && npm run sync:contract && npm run live:contract && npm run onboarding:contract && npm run release:sync:contract && npm run release:author:contract && npm run release:root-origination:contract && npm run release:pairing:contract` — all exit 0
-- [ ] `$MIXCMD test` exits 0
-- [ ] `rg -n "acknowledgedFrameIds" clients/lattice-client clients/township-tauri-shell` returns no
+- [x] `cd clients/lattice-client && npm run typecheck` exits 0
+- [x] `cd clients/lattice-client && npm run conformance` exits 0
+- [x] `cd clients/lattice-client && npm run carrier:relay && npm run carrier:relay-sync && npm run carrier:feed && npm run carrier:township && npm run carrier:township:live` — all exit 0
+- [x] `cd clients/township-tauri-shell && npm run typecheck && npm run frontend:contract && npm run feed:app:contract && npm run sync:contract && npm run live:contract && npm run onboarding:contract && npm run release:sync:contract && npm run release:author:contract && npm run release:root-origination:contract && npm run release:pairing:contract` — all exit 0
+- [x] `$MIXCMD test` exits 0
+- [x] `rg -n "acknowledgedFrameIds" clients/lattice-client clients/township-tauri-shell` returns no
       match in source, tests, or regenerated `dist/`
-- [ ] `grep -n "authorityIncluded" clients/lattice-client/src/materialize.ts` shows it is no
+- [x] `grep -n "authorityIncluded" clients/lattice-client/src/materialize.ts` shows it is no
       longer derived by subtracting a carrier report and still excludes structural quarantine
-- [ ] The diagnostic object carries both report op ids and quarantine ids; carrier ids never
+- [x] The diagnostic object carries both report op ids and quarantine ids; carrier ids never
       enter the local applied-quarantine set
-- [ ] Every id removed from `carrierFrames` has first been merged into `delegationFrames`, and
+- [x] Every id removed from `carrierFrames` has first been merged into `delegationFrames`, and
       the next sync candidate set includes that durable archive
-- [ ] All six test groups from the amended test plan exist and pass
-- [ ] `git status --porcelain` lists no file outside the in-scope list
-- [ ] `plans/README.md` status row for 169 updated
+- [x] All six test groups from the amended test plan exist and pass
+- [x] `git status --porcelain` lists no file outside the in-scope list
+- [x] `plans/README.md` status row for 169 updated
 
 ## STOP conditions
 

@@ -208,7 +208,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 166 | Typecheck the shell test tree and retire the prose-pinning suite | P2 | M | — | TODO (Round 4) |
 | 167 | Divergence explainer (`Township.Divergence.explain/2` + mix task) | P2 | M | 162 (rec.) | TODO (Round 4, direction) |
 | 168 | Commit the embedded delegation lease to the op hash (key-free divergence primitive) | **P0** | S–M | — | DONE (2026-08-08; dual Opus review; leased BEAM↔TS byte oracle added) |
-| 169 | Carrier control frames carry no authority (verdict gating + false acks) | **P0** | M | — | TODO (Round 5) |
+| 169 | Carrier control frames carry no authority (verdict gating + false acks) | **P0** | M | — | DONE (2026-08-08; diagnostic-only authority reports + durable peer re-offer; Opus-reviewed) |
 | 170 | Redact Ed25519 private keys from `inspect/1` and crash reports | P1 | S | — | TODO (Round 5) |
 | 171 | Give every unverified `Log.restore/1` consumer a policy (audit bundle + Registry) | P1 | M | 168 (rec.) | TODO (Round 5) |
 | 172 | TypeScript canonical-encoder strictness (duplicate terms, non-canonical base64) | P1 | S–M | — | TODO (Round 5) |

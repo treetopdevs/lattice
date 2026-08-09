@@ -5,6 +5,7 @@ import {
   verifyCarrierOp,
   type CarrierAvailability,
   type CarrierAvailabilitySubscription,
+  type CarrierAuthorityReportDiagnostic,
   type CarrierOpFrame,
   type CarrierStateReport,
   type Verifier,
@@ -103,10 +104,10 @@ export async function refreshTownshipFromCarrier(
     ]);
     const ops = integrate(currentOps, pulledOps);
     const delegationFrames = mergeCarrierFrames([...currentDelegationFrames, ...pulledFrames]);
-    const externallyQuarantined = validateCarrierStateReport(stateReport, delegationFrames);
+    const carrierAuthorityReport = validateCarrierStateReport(stateReport, delegationFrames);
     const matter = townshipPreviewFromOps(
       ops,
-      externallyQuarantined,
+      carrierAuthorityReport,
       options.expectedReplica,
     );
 
@@ -346,7 +347,7 @@ function mergeCarrierFrames(frames: CarrierOpFrame[]): CarrierOpFrame[] {
 function validateCarrierStateReport(
   report: CarrierStateReport,
   frames: CarrierOpFrame[],
-): ReadonlySet<string> {
+): CarrierAuthorityReportDiagnostic {
   const reportIds = new Set(report.op_ids);
   const frameIds = new Set(frames.map((frame) => frame.id));
   const reportMatchesFrames =
@@ -364,7 +365,7 @@ function validateCarrierStateReport(
     throw new Error("carrier state report does not match verified frames");
   }
 
-  return quarantined;
+  return { opIds: reportIds, quarantinedIds: quarantined };
 }
 
 function errorMessage(error: unknown): string {

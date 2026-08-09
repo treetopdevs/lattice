@@ -3,6 +3,7 @@ import {
   integrate,
   materialize,
   syncCarrierOnce,
+  verifyCarrierOp,
   type CarrierOpFrame,
   type CarrierStateReport,
   type CarrierVerifier,
@@ -54,6 +55,10 @@ export interface TownshipSyncSuccess {
   pulledOpCount: number;
   pushedFrameCount: number;
   pushedFrameIds: string[];
+  strandedReplicaFrameIds: string[];
+  unboundReplicaFrameIds: string[];
+  unverifiableFrameIds: string[];
+  unverifiableArchiveFrameIds: string[];
   compactedFrameCount: number;
   compactedFrameIds: string[];
   delegationFrameCount: number;
@@ -183,10 +188,17 @@ export async function syncTownshipOutbox(
         message: "Expected replica is required for a direct carrier client.",
       };
     }
+    const localSyncFrames = mergeCarrierFrames([
+      ...localDelegationFrames,
+      ...localCarrierFrames,
+    ]);
+    const syncCandidateFrames = localSyncFrames.filter(
+      (frame) => frame.replica === expectedReplica,
+    );
     const synced = await syncCarrierOnce(
       client,
       localOps,
-      localCarrierFrames,
+      syncCandidateFrames,
       realmByPubkey,
       {
         verifier: operationVerifier,
@@ -194,22 +206,29 @@ export async function syncTownshipOutbox(
         expectedReplica,
       },
     );
+    const submittedFrameIds = new Set(synced.pushedFrames.map(frameId));
+    const devicePublicKey = bytesBase64(workflow.signer.publicKey);
+    const locallyAuthoredCandidates = syncCandidateFrames.filter(
+      (frame) =>
+        submittedFrameIds.has(frame.id) &&
+        frame.author === devicePublicKey,
+    );
     const authorityQuarantinedGrantIds = frameIdsForAuthorityQuarantine(
-      localCarrierFrames,
+      locallyAuthoredCandidates,
       synced.pushReport.quarantined,
       "grant",
     );
     const carrierAcceptedRevocationIds = frameIdsForAcceptedCommand(
-      localCarrierFrames,
+      locallyAuthoredCandidates,
       synced.pushReport.accepted,
       "revoke",
     );
     const authorityQuarantinedRevocationIds = frameIdsForAuthorityQuarantine(
-      localCarrierFrames,
+      locallyAuthoredCandidates,
       synced.pushReport.quarantined,
       "revoke",
     );
-    const acknowledgedFrameIds = new Set(synced.acknowledgedFrameIds);
+    const peerReportedFrameIds = new Set(synced.peerReportedFrameIds);
     const persisted = await withTownshipPersistenceWrite(workflow, async () => {
       const [currentOps, currentCarrierFrames, currentDelegationFrames] = await Promise.all([
         workflow.localLog.load(),
@@ -222,20 +241,63 @@ export async function syncTownshipOutbox(
         ...currentCarrierFrames,
         ...(synced.pulledFrames as CarrierOpFrame[]),
       ]);
+      const compactedFrameIds = [
+        ...new Set(
+          currentCarrierFrames
+            .filter((frame) => peerReportedFrameIds.has(frameId(frame)))
+            .map(frameId),
+        ),
+      ];
       const compactedCarrierFrames = currentCarrierFrames.filter(
-        (frame) => !acknowledgedFrameIds.has(frameId(frame)),
+        (frame) => !peerReportedFrameIds.has(frameId(frame)),
       );
+      const strandedReplicaFrameIds = [
+        ...new Set(
+          currentCarrierFrames
+            .filter(
+              (frame) =>
+                typeof frame.replica === "string" &&
+                frame.replica !== expectedReplica,
+            )
+            .map(frameId),
+        ),
+      ];
+      const unboundReplicaFrameIds = [
+        ...new Set(
+          currentCarrierFrames
+            .filter((frame) => typeof frame.replica !== "string")
+            .map(frameId),
+        ),
+      ];
       await Promise.all([
         workflow.localLog.save(mergedOps),
         workflow.delegationFrames.save(delegationFrames),
-        workflow.carrierFrames.save(compactedCarrierFrames),
       ]);
-      return { mergedOps, delegationFrames, compactedCarrierFrames };
+      await workflow.carrierFrames.save(compactedCarrierFrames);
+      return {
+        mergedOps,
+        delegationFrames,
+        compactedCarrierFrames,
+        compactedFrameIds,
+        strandedReplicaFrameIds,
+        unboundReplicaFrameIds,
+      };
     });
-    const { mergedOps, delegationFrames, compactedCarrierFrames } = persisted;
+    const {
+      mergedOps,
+      delegationFrames,
+      compactedCarrierFrames,
+      compactedFrameIds,
+      strandedReplicaFrameIds,
+      unboundReplicaFrameIds,
+    } = persisted;
+    const authorityFrameVerification = await partitionVerifiedCarrierFrames(
+      delegationFrames.filter((frame) => frame.replica === expectedReplica),
+      operationVerifier,
+    );
     const authorityRevokedCapabilities = await authorityRevokedCapabilitySummaryWithCrossCheck(
       client,
-      delegationFrames,
+      authorityFrameVerification.verifiedFrames,
       realmByPubkey,
       expectedReplica,
     );
@@ -248,8 +310,13 @@ export async function syncTownshipOutbox(
       pulledOpCount: synced.pulledOps.length,
       pushedFrameCount: synced.pushedFrames.length,
       pushedFrameIds: synced.pushedFrames.map(frameId),
-      compactedFrameCount: synced.acknowledgedFrameIds.length,
-      compactedFrameIds: synced.acknowledgedFrameIds,
+      strandedReplicaFrameIds,
+      unboundReplicaFrameIds,
+      unverifiableFrameIds: synced.unverifiableFrameIds,
+      unverifiableArchiveFrameIds:
+        authorityFrameVerification.unverifiableFrameIds,
+      compactedFrameCount: compactedFrameIds.length,
+      compactedFrameIds,
       delegationFrameCount: delegationFrames.length,
       acceptedCount: synced.pushReport.accepted.length,
       acceptedIds: synced.pushReport.accepted,
@@ -285,6 +352,34 @@ export async function syncTownshipOutbox(
 
 function mergeCarrierFrames(frames: CarrierOpFrame[]): CarrierOpFrame[] {
   return [...new Map(frames.map((frame) => [frame.id, frame])).values()];
+}
+
+function bytesBase64(bytes: Uint8Array): string {
+  return globalThis.btoa(String.fromCharCode(...bytes));
+}
+
+async function partitionVerifiedCarrierFrames(
+  frames: CarrierOpFrame[],
+  verifier: Verifier,
+): Promise<{
+  verifiedFrames: CarrierOpFrame[];
+  unverifiableFrameIds: string[];
+}> {
+  const results = await Promise.all(
+    frames.map(async (frame): Promise<boolean> => {
+      try {
+        const verification = await verifyCarrierOp(frame, verifier);
+        return verification.valid;
+      } catch {
+        return false;
+      }
+    }),
+  );
+  const verifiedFrames = frames.filter((_frame, index) => results[index] === true);
+  const unverifiableFrameIds = frames
+    .filter((_frame, index) => results[index] !== true)
+    .map(frameId);
+  return { verifiedFrames, unverifiableFrameIds };
 }
 
 function frameIdsForAcceptedCommand(
@@ -352,7 +447,7 @@ function localAuthorityRevokedCapabilitySummary(
     townshipMatterSchema,
     semanticOps,
     undefined,
-    new Set(),
+    null,
     expectedReplica,
   );
   return authorityRevokedCapabilitySummary([...local.quarantineReasons], frames);

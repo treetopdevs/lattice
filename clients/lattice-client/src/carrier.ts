@@ -114,7 +114,10 @@ export interface SyncCarrierResult {
   pulledOps: Op[];
   pushedFrames: unknown[];
   pushReport: CarrierPushReport;
-  acknowledgedFrameIds: string[];
+  /** Unsigned peer-reported presence; callers must not treat this as a durable receipt. */
+  peerReportedFrameIds: string[];
+  /** Locally unverifiable push candidates omitted from egress. */
+  unverifiableFrameIds: string[];
 }
 
 export interface CarrierOpFrame {
@@ -956,16 +959,38 @@ export async function syncCarrierOnce(
   const pulledOps = carrierOpsToSemanticOps(pulledCarrierFrames, realmByPubkey);
   const peerKnownFrameIds: string[] = [];
 
-  const candidateFrames = localCarrierFrames.filter((frame) => {
-    const op = carrierOpToSemanticOp(frame, realmByPubkey);
+  const unverifiedCandidateFrames = localCarrierFrames.filter((frame) => {
+    let op: Op;
+    try {
+      op = carrierOpToSemanticOp(frame, realmByPubkey);
+    } catch {
+      return true;
+    }
     if (!peerIds.has(op.id)) return true;
     peerKnownFrameIds.push(carrierFrameId(frame));
     return false;
   });
+  const candidateVerification = await Promise.all(
+    unverifiedCandidateFrames.map(async (candidate) => {
+      try {
+        const frame = decodeCarrierOpFrame(candidate);
+        const verification = await verifyCarrierOp(frame, options.verifier);
+        return { candidate, id: frame.id, valid: verification.valid };
+      } catch {
+        return { candidate, id: maybeCarrierFrameId(candidate), valid: false };
+      }
+    }),
+  );
+  const candidateFrames = candidateVerification
+    .filter(({ valid }) => valid)
+    .map(({ candidate }) => candidate);
+  const unverifiableFrameIds = candidateVerification.flatMap(({ id, valid }) =>
+    !valid && id !== null ? [id] : []
+  );
 
   const submission = options.submission ?? "push";
   const submitted = await submitCarrierFrames(client, candidateFrames, submission);
-  const acknowledgedFrameIds = [
+  const peerReportedFrameIds = [
     ...new Set([
       ...peerKnownFrameIds,
       ...submitted.pushReport.accepted,
@@ -979,7 +1004,8 @@ export async function syncCarrierOnce(
     pulledOps,
     pushedFrames: submitted.pushedFrames,
     pushReport: submitted.pushReport,
-    acknowledgedFrameIds,
+    peerReportedFrameIds,
+    unverifiableFrameIds,
   };
 }
 
@@ -1097,6 +1123,13 @@ function carrierFrameId(frame: unknown): string {
   }
 
   throw new Error("carrier frame missing id");
+}
+
+function maybeCarrierFrameId(frame: unknown): string | null {
+  if (frame && typeof frame === "object" && typeof (frame as { id?: unknown }).id === "string") {
+    return (frame as { id: string }).id;
+  }
+  return null;
 }
 
 export function carrierOpsToSemanticOps(

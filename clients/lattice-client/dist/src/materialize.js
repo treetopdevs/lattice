@@ -25,16 +25,31 @@ export class V01UnvalidatedAuthorityError extends Error {
         this.cause = cause;
     }
 }
+export class CarrierAuthorityReportDivergenceError extends Error {
+    localIds;
+    reportedIds;
+    constructor(localIds, reportedIds) {
+        const sortedLocalIds = sortedIds(localIds);
+        const sortedReportedIds = sortedIds(reportedIds);
+        super("carrier_authority_report_divergence: locally computed authority quarantine " +
+            `${JSON.stringify(sortedLocalIds)} does not match carrier report ` +
+            JSON.stringify(sortedReportedIds));
+        this.name = "CarrierAuthorityReportDivergenceError";
+        this.localIds = sortedLocalIds;
+        this.reportedIds = sortedReportedIds;
+    }
+}
 /**
  * Materialize a replica from ops. `included` optionally bounds the visible set
- * (a frontier); default is all ops. `externallyQuarantined` seeds decisions from
- * an external authority oracle while retaining those ops in canonical order.
- * `expectedReplica` pins authority analysis to a caller-established replica;
- * omitted values retain the legacy vector fallback.
+ * (a frontier); default is all ops. `carrierAuthorityReport` is an optional,
+ * domain-bounded diagnostic: local analysis always decides authority and applied
+ * quarantine, then a mismatched carrier report fails closed. `expectedReplica`
+ * pins authority analysis to a caller-established replica; omitted values retain
+ * the legacy vector fallback.
  * This is a pure function of its inputs, so Sim can remain the conformance
  * oracle for state, quarantine, and order.
  */
-export function materialize(schema, ops, included, externallyQuarantined = new Set(), expectedReplica) {
+export function materialize(schema, ops, included, carrierAuthorityReport = null, expectedReplica) {
     const byId = index(ops);
     const inc = included ?? new Set(ops.map((o) => o.id));
     const order = canonicalOrder(ops.filter((o) => inc.has(o.id)), byId);
@@ -42,8 +57,7 @@ export function materialize(schema, ops, included, externallyQuarantined = new S
         .filter((op) => inc.has(op.id) &&
         op.structuralError !== undefined)
         .map((op) => op.id));
-    const authorityIncluded = new Set([...inc].filter((id) => !externallyQuarantined.has(id) &&
-        !structurallyQuarantined.has(id)));
+    const authorityIncluded = new Set([...inc].filter((id) => !structurallyQuarantined.has(id)));
     const authorityOrder = order.filter((id) => authorityIncluded.has(id));
     const depthCache = new Map();
     const depthOf = (id) => depth(id, byId, depthCache);
@@ -64,7 +78,6 @@ export function materialize(schema, ops, included, externallyQuarantined = new S
     }
     const quarantined = new Set([
         ...authority.quarantinedWrites,
-        ...externallyQuarantined,
         ...structurallyQuarantined,
     ]);
     for (const id of order) {
@@ -79,6 +92,14 @@ export function materialize(schema, ops, included, externallyQuarantined = new S
             quarantined.add(id);
             if (q.reason !== undefined)
                 quarantineReasons.set(id, q.reason);
+        }
+    }
+    if (carrierAuthorityReport !== null) {
+        const localIds = quarantine.filter((id) => carrierAuthorityReport.opIds.has(id) &&
+            !structurallyQuarantined.has(id));
+        const reportedIds = [...carrierAuthorityReport.quarantinedIds].filter((id) => !structurallyQuarantined.has(id));
+        if (!sameIds(localIds, reportedIds)) {
+            throw new CarrierAuthorityReportDivergenceError(localIds, reportedIds);
         }
     }
     // 2. per-field reduction over included, non-quarantined ops
@@ -111,6 +132,15 @@ export function materialize(schema, ops, included, externallyQuarantined = new S
         }
     }
     return { state, quarantine, quarantineReasons, order, winners };
+}
+function sortedIds(ids) {
+    return [...ids].sort((left, right) => left < right ? -1 : left > right ? 1 : 0);
+}
+function sameIds(left, right) {
+    const sortedLeft = sortedIds(left);
+    const sortedRight = sortedIds(right);
+    return (sortedLeft.length === sortedRight.length &&
+        sortedLeft.every((id, index) => id === sortedRight[index]));
 }
 function authorityWriteCount(schema, ops, included) {
     return ops.filter((op) => {

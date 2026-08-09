@@ -14,6 +14,17 @@ export declare class V01UnvalidatedAuthorityError extends Error {
     readonly cause: unknown;
     constructor(role: string, writes: number, cause?: unknown);
 }
+export interface CarrierAuthorityReportDiagnostic {
+    /** Complete carrier report domain after frame verification. */
+    opIds: ReadonlySet<string>;
+    /** Carrier-reported authority quarantine, used only for comparison. */
+    quarantinedIds: ReadonlySet<string>;
+}
+export declare class CarrierAuthorityReportDivergenceError extends Error {
+    readonly localIds: string[];
+    readonly reportedIds: string[];
+    constructor(localIds: readonly string[], reportedIds: readonly string[]);
+}
 export interface Materialized {
     /** field -> materialized value */
     state: Record<string, unknown>;
@@ -28,11 +39,12 @@ export interface Materialized {
 }
 /**
  * Materialize a replica from ops. `included` optionally bounds the visible set
- * (a frontier); default is all ops. `externallyQuarantined` seeds decisions from
- * an external authority oracle while retaining those ops in canonical order.
- * `expectedReplica` pins authority analysis to a caller-established replica;
- * omitted values retain the legacy vector fallback.
+ * (a frontier); default is all ops. `carrierAuthorityReport` is an optional,
+ * domain-bounded diagnostic: local analysis always decides authority and applied
+ * quarantine, then a mismatched carrier report fails closed. `expectedReplica`
+ * pins authority analysis to a caller-established replica; omitted values retain
+ * the legacy vector fallback.
  * This is a pure function of its inputs, so Sim can remain the conformance
  * oracle for state, quarantine, and order.
  */
-export declare function materialize(schema: ReplicaSchema, ops: Op[], included?: ReadonlySet<string>, externallyQuarantined?: ReadonlySet<string>, expectedReplica?: string): Materialized;
+export declare function materialize(schema: ReplicaSchema, ops: Op[], included?: ReadonlySet<string>, carrierAuthorityReport?: CarrierAuthorityReportDiagnostic | null, expectedReplica?: string): Materialized;

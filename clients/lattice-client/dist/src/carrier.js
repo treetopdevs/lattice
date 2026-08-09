@@ -602,16 +602,36 @@ export async function syncCarrierOnce(client, localOps, localCarrierFrames, real
     }
     const pulledOps = carrierOpsToSemanticOps(pulledCarrierFrames, realmByPubkey);
     const peerKnownFrameIds = [];
-    const candidateFrames = localCarrierFrames.filter((frame) => {
-        const op = carrierOpToSemanticOp(frame, realmByPubkey);
+    const unverifiedCandidateFrames = localCarrierFrames.filter((frame) => {
+        let op;
+        try {
+            op = carrierOpToSemanticOp(frame, realmByPubkey);
+        }
+        catch {
+            return true;
+        }
         if (!peerIds.has(op.id))
             return true;
         peerKnownFrameIds.push(carrierFrameId(frame));
         return false;
     });
+    const candidateVerification = await Promise.all(unverifiedCandidateFrames.map(async (candidate) => {
+        try {
+            const frame = decodeCarrierOpFrame(candidate);
+            const verification = await verifyCarrierOp(frame, options.verifier);
+            return { candidate, id: frame.id, valid: verification.valid };
+        }
+        catch {
+            return { candidate, id: maybeCarrierFrameId(candidate), valid: false };
+        }
+    }));
+    const candidateFrames = candidateVerification
+        .filter(({ valid }) => valid)
+        .map(({ candidate }) => candidate);
+    const unverifiableFrameIds = candidateVerification.flatMap(({ id, valid }) => !valid && id !== null ? [id] : []);
     const submission = options.submission ?? "push";
     const submitted = await submitCarrierFrames(client, candidateFrames, submission);
-    const acknowledgedFrameIds = [
+    const peerReportedFrameIds = [
         ...new Set([
             ...peerKnownFrameIds,
             ...submitted.pushReport.accepted,
@@ -624,7 +644,8 @@ export async function syncCarrierOnce(client, localOps, localCarrierFrames, real
         pulledOps,
         pushedFrames: submitted.pushedFrames,
         pushReport: submitted.pushReport,
-        acknowledgedFrameIds,
+        peerReportedFrameIds,
+        unverifiableFrameIds,
     };
 }
 async function submitCarrierFrames(client, frames, submission) {
@@ -722,6 +743,12 @@ function carrierFrameId(frame) {
         return frame.id;
     }
     throw new Error("carrier frame missing id");
+}
+function maybeCarrierFrameId(frame) {
+    if (frame && typeof frame === "object" && typeof frame.id === "string") {
+        return frame.id;
+    }
+    return null;
 }
 export function carrierOpsToSemanticOps(frames, realmByPubkey = {}) {
     return frames.map((frame) => carrierOpToSemanticOp(frame, realmByPubkey));

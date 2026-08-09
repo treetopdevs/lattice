@@ -1038,6 +1038,20 @@ console.log("\n▸ carrier authority report is diagnostic only");
     accepted.id,
     quarantined.id,
   ]);
+  const matchingEmptyReport = materialize(
+    schema,
+    [accepted, quarantined],
+    undefined,
+    {
+      opIds: new Set([accepted.id, quarantined.id]),
+      quarantinedIds: new Set(),
+    },
+  );
+  check(
+    "an honest empty carrier report preserves locally honored state",
+    matchingEmptyReport.state.posts,
+    ["accepted", "quarantined"],
+  );
 
   let divergence: unknown;
   try {
@@ -1045,7 +1059,10 @@ console.log("\n▸ carrier authority report is diagnostic only");
       schema,
       [accepted, quarantined],
       undefined,
-      new Set([quarantined.id]),
+      {
+        opIds: new Set([accepted.id, quarantined.id]),
+        quarantinedIds: new Set([quarantined.id]),
+      },
     );
   } catch (error) {
     divergence = error;

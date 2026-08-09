@@ -83,7 +83,10 @@ export interface SyncCarrierResult {
     pulledOps: Op[];
     pushedFrames: unknown[];
     pushReport: CarrierPushReport;
-    acknowledgedFrameIds: string[];
+    /** Unsigned peer-reported presence; callers must not treat this as a durable receipt. */
+    peerReportedFrameIds: string[];
+    /** Locally unverifiable push candidates omitted from egress. */
+    unverifiableFrameIds: string[];
 }
 export interface CarrierOpFrame {
     v: number;

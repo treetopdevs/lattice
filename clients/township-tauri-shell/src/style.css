@@ -510,6 +510,7 @@ dd {
 .post-message[data-state="empty_post"],
 .post-message[data-state="empty_audience"],
 .post-message[data-state="invalid_audience"],
+.sync-message[data-state="warning"],
 .sync-message[data-state="carrier_unconfigured"],
 .sync-message[data-state="native_unavailable"],
 .sync-message[data-state="sync_failed"] {

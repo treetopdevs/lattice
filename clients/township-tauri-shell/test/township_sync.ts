@@ -225,6 +225,55 @@ class MixedAckCarrierClient implements CarrierSyncClient {
   }
 }
 
+class IdKeyedAckCarrierClient implements CarrierSyncClient {
+  constructor(
+    private readonly peerKnownIds: string[],
+    private readonly acceptedIds: string[],
+  ) {}
+
+  async advertise(): Promise<string[]> {
+    return this.peerKnownIds;
+  }
+
+  async pull(): Promise<unknown[]> {
+    return [];
+  }
+
+  async push(ops: unknown[]): Promise<CarrierPushReport> {
+    const submittedIds = new Set((ops as CarrierOpFrame[]).map((frame) => frame.id));
+    return {
+      accepted: this.acceptedIds.filter((id) => submittedIds.has(id)),
+      quarantined: [],
+      rejected: [],
+      pending: [],
+    };
+  }
+}
+
+class ForgedAcceptedCarrierClient implements CarrierSyncClient {
+  constructor(
+    private readonly peerKnownIds: string[],
+    private readonly forgedAcceptedIds: string[],
+  ) {}
+
+  async advertise(): Promise<string[]> {
+    return this.peerKnownIds;
+  }
+
+  async pull(): Promise<unknown[]> {
+    return [];
+  }
+
+  async push(): Promise<CarrierPushReport> {
+    return {
+      accepted: this.forgedAcceptedIds,
+      quarantined: [],
+      rejected: [],
+      pending: [],
+    };
+  }
+}
+
 class GrantAuthorityQuarantineClient implements CarrierSyncClient {
   async advertise(): Promise<string[]> {
     return [];
@@ -708,7 +757,7 @@ const grantQuarantineValues = new Map<string, string>([
   [storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY), JSON.stringify([grantFixture])],
 ]);
 const grantQuarantineSynced = await syncTownshipOutbox({
-  invoke: nativeInvoke(grantQuarantineValues, vector.client.sessionPubkey, []),
+  invoke: nativeInvoke(grantQuarantineValues, clerkIdentity, []),
   client: new GrantAuthorityQuarantineClient(),
   expectedReplica: vector.replica,
 });
@@ -720,6 +769,18 @@ assert.deepEqual(grantQuarantineSynced.authorityQuarantinedGrantIds, [grantFixtu
 assert.deepEqual(storedOutboxIds(grantQuarantineValues), [grantFixture.id]);
 assert.deepEqual(storedDelegationFrameIds(grantQuarantineValues), [grantFixture.id]);
 assert.doesNotThrow(() => assertTownshipKvStoresNoSecrets(grantQuarantineValues, secretNeedles(sessionIdentity)));
+
+const foreignGrantQuarantineValues = new Map<string, string>(grantQuarantineValues);
+const foreignGrantQuarantineSynced = await syncTownshipOutbox({
+  invoke: nativeInvoke(foreignGrantQuarantineValues, residentIdentity, []),
+  client: new GrantAuthorityQuarantineClient(),
+  expectedReplica: vector.replica,
+});
+assert.equal(foreignGrantQuarantineSynced.ok, true);
+if (!foreignGrantQuarantineSynced.ok) throw new Error(foreignGrantQuarantineSynced.message);
+assert.deepEqual(foreignGrantQuarantineSynced.quarantined, [[grantFixture.id, "authority"]]);
+assert.equal(foreignGrantQuarantineSynced.authorityQuarantinedGrantCount, 0);
+assert.deepEqual(foreignGrantQuarantineSynced.authorityQuarantinedGrantIds, []);
 
 const revokeFixture = vector.authorityRevocation.revokeOp;
 const badRevokeFixture = vector.authorityBadRevocation.revokeOp;
@@ -739,13 +800,22 @@ const acceptedRevocationValues = new Map<string, string>([
   [storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY), JSON.stringify(vector.oracleCarrierOps)],
 ]);
 const acceptedRevocationSynced = await syncTownshipOutbox({
-  invoke: nativeInvoke(acceptedRevocationValues, vector.client.sessionPubkey, []),
+  invoke: nativeInvoke(acceptedRevocationValues, clerkIdentity, []),
   client: new RecordingCarrierClient([]),
   expectedReplica: vector.replica,
 });
 assert.equal(acceptedRevocationSynced.ok, true);
 if (!acceptedRevocationSynced.ok) throw new Error(acceptedRevocationSynced.message);
-assert.deepEqual(acceptedRevocationSynced.acceptedIds.sort(), [grantFixture.id, revokeFixture.id].sort());
+assert.deepEqual(
+  acceptedRevocationSynced.acceptedIds.sort(),
+  [
+    ...new Set([
+      ...vector.oracleCarrierOps.map((frame) => frame.id),
+      grantFixture.id,
+      revokeFixture.id,
+    ]),
+  ].sort(),
+);
 assert.equal(acceptedRevocationSynced.carrierAcceptedRevocationCount, 1);
 assert.deepEqual(acceptedRevocationSynced.carrierAcceptedRevocationIds, [revokeFixture.id]);
 assert.equal(acceptedRevocationSynced.authorityQuarantinedRevocationCount, 0);
@@ -823,7 +893,7 @@ const peerKnownRevocationValues = new Map<string, string>([
 ]);
 const peerKnownRevocationSynced = await syncTownshipOutbox({
   invoke: nativeInvoke(peerKnownRevocationValues, vector.client.sessionPubkey, []),
-  client: new MixedAckCarrierClient([revokeFixture.id]),
+  client: new IdKeyedAckCarrierClient([revokeFixture.id], [grantFixture.id]),
   expectedReplica: vector.replica,
 });
 assert.equal(peerKnownRevocationSynced.ok, true);
@@ -837,6 +907,25 @@ assertIncludesAll(
   vector.oracleCarrierOps.map((frame) => frame.id),
 );
 
+const forgedAcceptedValues = new Map<string, string>([
+  [
+    storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY),
+    JSON.stringify(carrierOpsToSemanticOps([grantFixture, revokeFixture], vector.realmByPubkey)),
+  ],
+  [storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY), JSON.stringify([grantFixture, revokeFixture])],
+  [storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY), JSON.stringify([grantFixture, revokeFixture])],
+]);
+const forgedAcceptedSync = await syncTownshipOutbox({
+  invoke: nativeInvoke(forgedAcceptedValues, clerkIdentity, []),
+  client: new ForgedAcceptedCarrierClient([revokeFixture.id], [revokeFixture.id]),
+  expectedReplica: vector.replica,
+});
+assert.equal(forgedAcceptedSync.ok, true);
+if (!forgedAcceptedSync.ok) throw new Error(forgedAcceptedSync.message);
+assert.equal(forgedAcceptedSync.pushedFrameIds.includes(revokeFixture.id), false);
+assert.equal(forgedAcceptedSync.carrierAcceptedRevocationCount, 0);
+assert.deepEqual(forgedAcceptedSync.carrierAcceptedRevocationIds, []);
+
 const badRevocationValues = new Map<string, string>([
   [
     storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY),
@@ -846,7 +935,7 @@ const badRevocationValues = new Map<string, string>([
   [storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY), JSON.stringify(vector.oracleCarrierOps)],
 ]);
 const badRevocationSynced = await syncTownshipOutbox({
-  invoke: nativeInvoke(badRevocationValues, vector.client.sessionPubkey, []),
+  invoke: nativeInvoke(badRevocationValues, residentIdentity, []),
   client: new RevocationAuthorityQuarantineClient(),
   expectedReplica: vector.replica,
 });
@@ -1025,7 +1114,7 @@ const recoveryValues = new Map<string, string>([
   [storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY), JSON.stringify(vector.oracleCarrierOps)],
 ]);
 const firstRecoverySync = await syncTownshipOutbox({
-  invoke: nativeInvoke(recoveryValues, vector.client.sessionPubkey, []),
+  invoke: nativeInvoke(recoveryValues, clerkIdentity, []),
   client: new MixedAckCarrierClient([grantFixture.id, revokeFixture.id]),
   expectedReplica: vector.replica,
 });
@@ -1040,13 +1129,14 @@ await capturePath2RegressionFailure(
   async () => {
     const honestPeer = new RecordingCarrierClient([]);
     const recoverySync = await syncTownshipOutbox({
-      invoke: nativeInvoke(recoveryValues, vector.client.sessionPubkey, []),
+      invoke: nativeInvoke(recoveryValues, clerkIdentity, []),
       client: honestPeer,
       expectedReplica: vector.replica,
     });
     assert.equal(recoverySync.ok, true);
     if (!recoverySync.ok) throw new Error(recoverySync.message);
     assert.equal(honestPeer.pushedFrames.includes(revokeFixture.id), true);
+    assert.deepEqual(recoverySync.carrierAcceptedRevocationIds, [revokeFixture.id]);
   },
 );
 
@@ -1094,6 +1184,111 @@ await capturePath2RegressionFailure(
 );
 
 assert.deepEqual(path2RegressionFailures, []);
+
+const expectedReplicaArchiveFrame = vector.clientDivergedCarrierOps[0];
+if (!expectedReplicaArchiveFrame) throw new Error("missing expected-replica archive fixture");
+const replicaFilteredValues = new Map<string, string>([
+  [
+    storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY),
+    JSON.stringify(carrierOpsToSemanticOps([expectedReplicaArchiveFrame], vector.realmByPubkey)),
+  ],
+  [
+    storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY),
+    JSON.stringify([foreignReplicaVector.capabilityCase.foreignCarrierOp]),
+  ],
+  [
+    storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY),
+    JSON.stringify([
+      expectedReplicaArchiveFrame,
+      foreignReplicaVector.capabilityCase.foreignCarrierOp,
+    ]),
+  ],
+]);
+const replicaFilteredClient = new RecordingCarrierClient([]);
+const replicaFilteredSync = await syncTownshipOutbox({
+  invoke: nativeInvoke(replicaFilteredValues, vector.client.sessionPubkey, []),
+  client: replicaFilteredClient,
+  expectedReplica: vector.replica,
+});
+assert.equal(replicaFilteredSync.ok, true);
+if (!replicaFilteredSync.ok) throw new Error(replicaFilteredSync.message);
+assert.deepEqual(replicaFilteredClient.pushedFrames, [expectedReplicaArchiveFrame.id]);
+assert.deepEqual(replicaFilteredSync.strandedReplicaFrameIds, [
+  foreignReplicaVector.capabilityCase.foreignCarrierOp.id,
+]);
+assert.deepEqual(storedOutboxIds(replicaFilteredValues), [
+  foreignReplicaVector.capabilityCase.foreignCarrierOp.id,
+]);
+assert.equal(
+  replicaFilteredClient.pushedFrames.includes(
+    foreignReplicaVector.capabilityCase.foreignCarrierOp.id,
+  ),
+  false,
+);
+
+const { replica: _legacyReplica, ...unboundReplicaFrame } = postFixture;
+const unboundReplicaValues = new Map<string, string>([
+  [storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY), "[]"],
+  [storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY), JSON.stringify([unboundReplicaFrame])],
+  [storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY), "[]"],
+]);
+const unboundReplicaClient = new RecordingCarrierClient([]);
+const unboundReplicaSync = await syncTownshipOutbox({
+  invoke: nativeInvoke(unboundReplicaValues, vector.client.sessionPubkey, []),
+  client: unboundReplicaClient,
+  expectedReplica: vector.replica,
+});
+assert.equal(unboundReplicaSync.ok, true);
+if (!unboundReplicaSync.ok) throw new Error(unboundReplicaSync.message);
+assert.deepEqual(unboundReplicaSync.unboundReplicaFrameIds, [postFixture.id]);
+assert.deepEqual(unboundReplicaSync.strandedReplicaFrameIds, []);
+assert.deepEqual(storedOutboxIds(unboundReplicaValues), [postFixture.id]);
+assert.deepEqual(unboundReplicaClient.pushedFrames, []);
+
+const corruptArchiveFrame = {
+  ...expectedReplicaArchiveFrame,
+  sig: Buffer.alloc(64).toString("base64"),
+};
+const corruptArchiveClient = new RecordingCarrierClient([]);
+const corruptArchiveSync = await syncTownshipOutbox({
+  invoke: nativeInvoke(
+    new Map<string, string>([
+      [storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY), "[]"],
+      [storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY), "[]"],
+      [
+        storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY),
+        JSON.stringify([corruptArchiveFrame]),
+      ],
+    ]),
+    vector.client.sessionPubkey,
+    [],
+  ),
+  client: corruptArchiveClient,
+  expectedReplica: vector.replica,
+});
+assert.equal(corruptArchiveSync.ok, true);
+if (!corruptArchiveSync.ok) throw new Error(corruptArchiveSync.message);
+assert.deepEqual(corruptArchiveSync.unverifiableFrameIds, [corruptArchiveFrame.id]);
+assert.deepEqual(corruptArchiveSync.unverifiableArchiveFrameIds, [corruptArchiveFrame.id]);
+assert.deepEqual(corruptArchiveClient.pushedFrames, []);
+
+const peerKnownCorruptValues = new Map<string, string>([
+  [
+    storageKey(TOWNSHIP_LOCAL_OP_LOG_KEY),
+    JSON.stringify(carrierOpsToSemanticOps([expectedReplicaArchiveFrame], vector.realmByPubkey)),
+  ],
+  [storageKey(TOWNSHIP_CARRIER_OUTBOX_KEY), "[]"],
+  [storageKey(TOWNSHIP_DELEGATION_FRAMES_KEY), JSON.stringify([corruptArchiveFrame])],
+]);
+const peerKnownCorruptSync = await syncTownshipOutbox({
+  invoke: nativeInvoke(peerKnownCorruptValues, vector.client.sessionPubkey, []),
+  client: new RecordingCarrierClient([corruptArchiveFrame]),
+  expectedReplica: vector.replica,
+});
+assert.equal(peerKnownCorruptSync.ok, true);
+if (!peerKnownCorruptSync.ok) throw new Error(peerKnownCorruptSync.message);
+assert.deepEqual(peerKnownCorruptSync.unverifiableFrameIds, []);
+assert.deepEqual(peerKnownCorruptSync.unverifiableArchiveFrameIds, [corruptArchiveFrame.id]);
 
 console.log("\x1b[32m✓ Township sync action checks passed\x1b[0m");
 
