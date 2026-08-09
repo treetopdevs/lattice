@@ -105,6 +105,8 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_authority_cross_role_succession_transfer(),
       township_authority_succession_genesis_poisoning(),
       township_authority_replayed_genesis(),
+      township_authority_malformed_heartbeat(),
+      township_authority_malformed_transfer(),
       township_foreign_replica_injection(),
       township_link_election(),
       township_capability_missing(),
@@ -618,7 +620,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     log = Log.append!(Log.new(replica), impostor_genesis)
     authority_quarantine = authority_quarantine(log)
 
-    unless [impostor_genesis.id, "impostor_genesis"] in authority_quarantine do
+    unless [impostor_genesis.id, "wrong_replica"] in authority_quarantine do
       raise "expected embedded-replica bypass #{impostor_genesis.id} to quarantine"
     end
 
@@ -1725,6 +1727,84 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       "foreignReplica" => foreign_replica,
       "foreignCarrierOp" => CarrierWire.encode_op(foreign_op),
       "genuineGenesisOperationId" => genuine_genesis_id
+    })
+  end
+
+  defp township_authority_malformed_heartbeat do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:malformed-heartbeat",
+        ["clerk", "resident"],
+        seed: "township:malformed-heartbeat"
+      )
+
+    {sim, _genesis} =
+      Sim.create_replica(sim, "clerk",
+        policies: %{clerk: %{successor: "resident", dormant_ticks: 3}}
+      )
+
+    {sim, heartbeat} = Sim.append(sim, "clerk", :authority, {:heartbeat, :clerk, "9"})
+    sim = Sim.sync_all(sim)
+    {sim, succession} = Sim.succeed(sim, "resident", :clerk, at_tick: 3)
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    assert_authority_reason!(log, heartbeat.id, :malformed_term)
+    assert_authority_honored!(log, succession.id)
+
+    unless Authority.analyze(Matter, log).holders.clerk == Sim.identity(sim, "resident").pub do
+      raise "expected malformed heartbeat not to block the legitimate succession"
+    end
+
+    capability_scenario("township_authority_malformed_heartbeat", sim, log, %{
+      "targetOperationId" => heartbeat.id,
+      "expectedReason" => "malformed_term",
+      "honoredSuccessionOperationId" => succession.id
+    })
+  end
+
+  defp township_authority_malformed_transfer do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:malformed-transfer",
+        ["clerk", "mallory"],
+        seed: "township:malformed-transfer"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+
+    {sim, delegation} =
+      Sim.transfer(sim, "clerk", "mallory", :clerk, at_tick: "9", ops: [:post])
+
+    transfer =
+      sim
+      |> Sim.log("clerk")
+      |> Log.topo_ops()
+      |> Enum.find(fn
+        %{body: {:transfer, :clerk, %Delegation{id: id}, "9"}} -> id == delegation.id
+        _other -> false
+      end)
+
+    unless match?(%Op{}, transfer), do: raise("missing malformed transfer operation")
+
+    sim = Sim.sync_all(sim)
+    rejected_post = "mallory: malformed transfer capability"
+    {sim, target} = Sim.command(sim, "mallory", :post, [rejected_post], cap: delegation.id)
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    assert_authority_reason!(log, transfer.id, :malformed_term)
+    assert_authority_reason!(log, target.id, :no_capability)
+    assert_post_absent!(log, rejected_post)
+
+    capability_scenario("township_authority_malformed_transfer", sim, log, %{
+      "targetOperationId" => target.id,
+      "expectedReason" => "no_capability",
+      "rejectedPost" => rejected_post,
+      "malformedTransferOperationId" => transfer.id,
+      "malformedTransferDelegationId" => delegation.id
     })
   end
 

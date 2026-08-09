@@ -13,7 +13,7 @@ defmodule Lattice2.RootBindingTest do
   """
   use ExUnit.Case, async: false
 
-  alias Lattice.{Authority, Log, Registry, Sim}
+  alias Lattice.{Authority, Canonical, Log, Registry, Sim}
   alias Lattice.Authority.Delegation
   alias Lattice.Demo.Thread
 
@@ -309,6 +309,104 @@ defmodule Lattice2.RootBindingTest do
     assert Sim.holder(sim, "server", :moderator) == Sim.identity(sim, "evil").pub
     assert false == Sim.quarantined(sim, "server", lock.id)
     assert Sim.state(sim, "server").locked?
+  end
+
+  test "a capability signed for another replica cannot authorize this replica" do
+    sim = founded()
+    server = Sim.identity(sim, "server")
+    evil = Sim.identity(sim, "evil")
+    foreign_replica = Authority.bind_replica("replica:thread:foreign", server.pub)
+
+    foreign_genesis =
+      Delegation.genesis(server, foreign_replica,
+        ops: [:post],
+        roles: [:moderator],
+        live: true
+      )
+
+    foreign_grant =
+      Delegation.new(server, foreign_replica, evil.pub,
+        ops: [:post],
+        roles: [],
+        parent_id: foreign_genesis.id
+      )
+
+    {sim, foreign_genesis_op} =
+      Sim.append(sim, "server", :authority, {:genesis, foreign_genesis, %{}})
+
+    {sim, foreign_grant_op} = Sim.append(sim, "server", :authority, {:grant, foreign_grant})
+    sim = Sim.sync_all(sim)
+
+    {sim, forged_post} =
+      Sim.command(sim, "evil", :post, ["foreign capability"], cap: foreign_grant.id)
+
+    sim = Sim.sync_all(sim)
+
+    assert {true, :wrong_replica} = Sim.quarantined(sim, "server", foreign_genesis_op.id)
+    assert {true, :wrong_replica} = Sim.quarantined(sim, "server", foreign_grant_op.id)
+    assert {true, :wrong_replica} = Sim.quarantined(sim, "server", forged_post.id)
+    refute "foreign capability" in Sim.state(sim, "server").messages
+  end
+
+  test "a malformed heartbeat tick is quarantined and cannot crash later succession" do
+    sim = founded()
+    {sim, heartbeat} = Sim.append(sim, "server", :authority, {:heartbeat, :moderator, "9"})
+    sim = Sim.sync_all(sim)
+    {sim, succession} = Sim.succeed(sim, "tab", :moderator, at_tick: 3)
+    sim = Sim.sync_all(sim)
+
+    assert {true, :malformed_term} = Sim.quarantined(sim, "server", heartbeat.id)
+    assert false == Sim.quarantined(sim, "server", succession.id)
+    assert Sim.holder(sim, "server", :moderator) == Sim.identity(sim, "tab").pub
+  end
+
+  test "malformed transfer and succession ticks do not mutate the role timeline" do
+    sim = founded()
+
+    {sim, transfer_delegation} =
+      Sim.transfer(sim, "server", "evil", :moderator, at_tick: "9", ops: [:post])
+
+    sim = Sim.sync_all(sim)
+
+    {sim, forged_post} =
+      Sim.command(sim, "evil", :post, ["malformed transfer capability"],
+        cap: transfer_delegation.id
+      )
+
+    {sim, malformed_succession} = Sim.succeed(sim, "tab", :moderator, at_tick: "9")
+    sim = Sim.sync_all(sim)
+
+    transfer =
+      sim
+      |> Sim.log("server")
+      |> Log.topo_ops()
+      |> Enum.find(fn
+        %{body: {:transfer, :moderator, %Delegation{id: id}, "9"}} ->
+          id == transfer_delegation.id
+
+        _other ->
+          false
+      end)
+
+    assert %Lattice.Op{} = transfer
+    assert {true, :malformed_term} = Sim.quarantined(sim, "server", transfer.id)
+
+    assert {true, :invalid_succession} =
+             Sim.quarantined(sim, "server", malformed_succession.id)
+
+    assert {true, :no_capability} = Sim.quarantined(sim, "server", forged_post.id)
+    assert Sim.holder(sim, "server", :moderator) == Sim.identity(sim, "server").pub
+    refute "malformed transfer capability" in Sim.state(sim, "server").messages
+  end
+
+  test "canonical signing rejects negative and over-range authority ticks" do
+    sim = founded()
+
+    for tick <- [-1, Canonical.max_integer() + 1] do
+      assert_raise ArgumentError, fn ->
+        Sim.append(sim, "server", :authority, {:heartbeat, :moderator, tick})
+      end
+    end
   end
 
   test "replaying a legitimate successor delegation as genesis cannot poison it" do

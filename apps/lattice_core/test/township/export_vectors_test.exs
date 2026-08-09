@@ -534,7 +534,7 @@ defmodule Township.ExportVectorsTest do
 
     expected = vector["expectAtFullFrontier"]
     assert expected["state"]["clerk"] == nil
-    assert [impostor_genesis_id, "impostor_genesis"] in expected["authorityQuarantine"]
+    assert [impostor_genesis_id, "wrong_replica"] in expected["authorityQuarantine"]
   end
 
   test "lattice.export_vectors isolates a forged delegation id that Sim rejects" do

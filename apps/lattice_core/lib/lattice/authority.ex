@@ -107,7 +107,10 @@ defmodule Lattice.Authority do
     ordered = Log.topo_ops(log)
     {commitment, genesis_ids, succession_ids} = deleg_context(log, ordered)
     delegations = collect_delegations(ordered)
-    deleg_valid = validate_delegations(delegations, commitment, genesis_ids, succession_ids)
+
+    deleg_valid =
+      validate_delegations(delegations, commitment, genesis_ids, succession_ids, log.replica)
+
     resolve_root(ordered, delegations, deleg_valid, commitment)
   end
 
@@ -142,6 +145,10 @@ defmodule Lattice.Authority do
   # matches the replica's root commitment.
   defp root_matches?(nil, _audience), do: true
   defp root_matches?(commitment, audience), do: root_tag(audience) == commitment
+
+  # True when `replica` carries a root-key commitment (i.e. has been bound by
+  # `bind_replica/2`). Legacy unbound replicas stay nil here.
+  defp bound_replica?(replica), do: replica_commitment(replica) != nil
 
   # Replica root commitment plus delegation ids introduced by the two operations
   # that deliberately carry root-less self-issues.
@@ -215,7 +222,8 @@ defmodule Lattice.Authority do
 
     case Map.fetch(delegations, delegation_id) do
       {:ok, %{deleg: %Delegation{} = d}} ->
-        validate_delegation(d, delegations, commitment, genesis_ids, succession_ids) == :ok and
+        validate_delegation(d, delegations, commitment, genesis_ids, succession_ids, log.replica) ==
+          :ok and
           not expired?(log, delegation_id)
 
       _ ->
@@ -235,7 +243,10 @@ defmodule Lattice.Authority do
     ancestors = Dag.all_ancestors(Log.ops(log))
     {commitment, genesis_ids, succession_ids} = deleg_context(log, ordered)
     delegations = collect_delegations(ordered)
-    deleg_valid = validate_delegations(delegations, commitment, genesis_ids, succession_ids)
+
+    deleg_valid =
+      validate_delegations(delegations, commitment, genesis_ids, succession_ids, log.replica)
+
     root = resolve_root(ordered, delegations, deleg_valid, commitment)
     {beacons, _beacon_q} = collect_beacons(ordered, ancestors, root)
 
@@ -258,7 +269,10 @@ defmodule Lattice.Authority do
     ordered = Log.topo_ops(log)
     {commitment, genesis_ids, succession_ids} = deleg_context(log, ordered)
     delegations = collect_delegations(ordered)
-    deleg_valid = validate_delegations(delegations, commitment, genesis_ids, succession_ids)
+
+    deleg_valid =
+      validate_delegations(delegations, commitment, genesis_ids, succession_ids, log.replica)
+
     root = resolve_root(ordered, delegations, deleg_valid, commitment)
 
     Enum.any?(ordered, fn op ->
@@ -276,7 +290,10 @@ defmodule Lattice.Authority do
 
     {commitment, genesis_ids, succession_ids} = deleg_context(log, ordered)
     delegations = collect_delegations(ordered)
-    deleg_valid = validate_delegations(delegations, commitment, genesis_ids, succession_ids)
+
+    deleg_valid =
+      validate_delegations(delegations, commitment, genesis_ids, succession_ids, log.replica)
+
     policies = collect_policies(ordered, delegations, deleg_valid)
     root = resolve_root(ordered, delegations, deleg_valid, commitment)
     revokes = collect_revokes(ordered, delegations, root)
@@ -386,13 +403,23 @@ defmodule Lattice.Authority do
     case body do
       {:genesis, %Delegation{} = d, _policies} -> d
       {:grant, %Delegation{} = d} -> d
-      {:transfer, _role, %Delegation{} = d, _tick} -> d
+      {:transfer, _role, %Delegation{} = d, tick} -> if valid_tick?(tick), do: d
       {:succeed, _role, %Delegation{} = d, _tick} -> d
       _ -> nil
     end
   end
 
   defp delegation_in(_), do: nil
+
+  # A transfer carrying a malformed tick is quarantined as :malformed_term and
+  # must not introduce its delegation — a later command citing it then reports
+  # :no_capability, mirroring the TypeScript carrier's structural decode failure
+  # that drops the delegation evidence. The :succeed arm is exempt: its proof
+  # may be a legacy integer tick or a {:witnessed, certificate}, and malformed
+  # legacy proofs stay on the existing :invalid_succession path.
+  defp valid_tick?(tick) do
+    is_integer(tick) and tick >= 0 and tick <= Lattice.Canonical.max_integer()
+  end
 
   # Succession policies are conferred only by a *valid* genesis — an impostor genesis
   # (one whose audience does not match the replica's root commitment) is quarantined
@@ -414,10 +441,11 @@ defmodule Lattice.Authority do
     end)
   end
 
-  defp validate_delegations(delegations, commitment, genesis_ids, succession_ids) do
+  defp validate_delegations(delegations, commitment, genesis_ids, succession_ids, log_replica) do
     Map.new(delegations, fn
       {id, %{deleg: %Delegation{} = d}} ->
-        {id, validate_delegation(d, delegations, commitment, genesis_ids, succession_ids)}
+        {id,
+         validate_delegation(d, delegations, commitment, genesis_ids, succession_ids, log_replica)}
 
       {id, %{deleg: nil}} ->
         {id, {:error, :bad_delegation_sig}}
@@ -429,17 +457,32 @@ defmodule Lattice.Authority do
          delegations,
          commitment,
          genesis_ids,
-         succession_ids
+         succession_ids,
+         log_replica
        ) do
     cond do
       not Delegation.valid_sig?(d) ->
         {:error, :bad_delegation_sig}
 
+      # A capability scoped to one replica is honored only on that replica's log.
+      # The guard is skipped for legacy unbound logs (no root commitment), mirroring
+      # root_matches?(nil, _) -> true, so honest slices built on the unbound name
+      # keep working.
+      d.replica != log_replica and bound_replica?(log_replica) ->
+        {:error, :wrong_replica}
+
       is_nil(d.parent_id) ->
         validate_rootless_delegation(d, commitment, genesis_ids, succession_ids)
 
       true ->
-        validate_child_delegation(d, delegations, commitment, genesis_ids, succession_ids)
+        validate_child_delegation(
+          d,
+          delegations,
+          commitment,
+          genesis_ids,
+          succession_ids,
+          log_replica
+        )
     end
   end
 
@@ -467,7 +510,14 @@ defmodule Lattice.Authority do
     end
   end
 
-  defp validate_child_delegation(d, delegations, commitment, genesis_ids, succession_ids) do
+  defp validate_child_delegation(
+         d,
+         delegations,
+         commitment,
+         genesis_ids,
+         succession_ids,
+         log_replica
+       ) do
     case Map.fetch(delegations, d.parent_id) do
       {:ok, %{deleg: %Delegation{} = parent}} ->
         parent_validation =
@@ -476,7 +526,8 @@ defmodule Lattice.Authority do
             delegations,
             commitment,
             genesis_ids,
-            succession_ids
+            succession_ids,
+            log_replica
           )
 
         validate_attenuation(d, parent, parent_validation)
@@ -659,6 +710,9 @@ defmodule Lattice.Authority do
         nil ->
           st
 
+        {:malformed_tick, op} ->
+          reject(st, op, :malformed_term, role)
+
         {:genesis, d} ->
           cond do
             deleg_valid[d.id] != :ok or not MapSet.member?(d.roles, role) ->
@@ -693,13 +747,17 @@ defmodule Lattice.Authority do
           do: {:genesis, d}
 
       {:transfer, ^role, %Delegation{} = d, tick} ->
-        if valid_delegation_intro?(delegations, d, op.id), do: {:transfer, d, tick}
+        cond do
+          not valid_tick?(tick) -> {:malformed_tick, op}
+          not valid_delegation_intro?(delegations, d, op.id) -> nil
+          true -> {:transfer, d, tick}
+        end
 
       {:succeed, ^role, %Delegation{} = d, tick} ->
         if valid_delegation_intro?(delegations, d, op.id), do: {:succeed, d, tick}
 
       {:heartbeat, ^role, tick} ->
-        {:heartbeat, tick}
+        if valid_tick?(tick), do: {:heartbeat, tick}, else: {:malformed_tick, op}
 
       _ ->
         nil
@@ -996,6 +1054,9 @@ defmodule Lattice.Authority do
 
       {:ok, %{deleg: %Delegation{} = d, op_ids: deleg_ops}} ->
         cond do
+          d.replica != op.replica ->
+            {:error, :wrong_replica}
+
           not capability_delegation_valid?(
             deleg_valid[d.id],
             d,

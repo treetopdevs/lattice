@@ -143,6 +143,27 @@ defmodule Lattice2.CompactionSpikeTest do
     assert Log.size(retained) > 0
   end
 
+  test "malformed retained heartbeat cannot crash full or compacted succession replay" do
+    sim =
+      Sim.new(Thread, @replica, @realms, seed: "compaction-malformed-heartbeat")
+
+    {sim, _genesis} =
+      Sim.create_replica(sim, "r0", policies: %{moderator: %{successor: "r1", dormant_ticks: 3}})
+
+    frontier = Log.frontier(Sim.log(sim, "r0"))
+    {sim, heartbeat} = Sim.append(sim, "r0", :authority, {:heartbeat, :moderator, "9"})
+    sim = Sim.sync_all(sim)
+    {sim, succession} = Sim.succeed(sim, "r1", :moderator, at_tick: 3)
+    sim = Sim.sync_all(sim)
+
+    {_snapshot, _retained, res} =
+      assert_compaction_equivalence(Sim.log(sim, "r0"), frontier)
+
+    assert res.reasons[heartbeat.id] == :malformed_term
+    refute Map.has_key?(res.reasons, succession.id)
+    assert res.holders.moderator == Sim.identity(sim, "r1").pub
+  end
+
   test "retained honored succession activates its descendant transfer after compaction" do
     {sim, _grants} = setup_sim("compaction-retained-succession-transfer")
     frontier = Log.frontier(Sim.log(sim, "r0"))

@@ -139,7 +139,7 @@ defmodule Lattice.CompactionSpike do
     root = Authority.root(covered_log)
     genesis_ids = genesis_delegation_ids(ordered)
     succession_ids = succession_delegation_ids(ordered)
-    deleg_valid = validate_delegations(delegations, root, genesis_ids, succession_ids)
+    deleg_valid = validate_delegations(delegations, root, genesis_ids, succession_ids, replica)
 
     snapshot = %Snapshot{
       replica: replica,
@@ -299,7 +299,13 @@ defmodule Lattice.CompactionSpike do
       MapSet.union(snapshot.covered_succession_ids, succession_delegation_ids(ordered))
 
     deleg_valid =
-      validate_delegations_merged(delegations, root, genesis_ids, succession_ids)
+      validate_delegations_merged(
+        delegations,
+        root,
+        genesis_ids,
+        succession_ids,
+        retained_log.replica
+      )
 
     policies =
       Map.merge(snapshot.policies, collect_valid_policies(ordered, deleg_valid, root))
@@ -357,9 +363,9 @@ defmodule Lattice.CompactionSpike do
     end)
   end
 
-  defp validate_delegations_merged(delegations, root, genesis_ids, succession_ids) do
+  defp validate_delegations_merged(delegations, root, genesis_ids, succession_ids, log_replica) do
     Map.new(delegations, fn {id, d} ->
-      {id, validate_delegation(d, delegations, root, genesis_ids, succession_ids)}
+      {id, validate_delegation(d, delegations, root, genesis_ids, succession_ids, log_replica)}
     end)
   end
 
@@ -408,6 +414,7 @@ defmodule Lattice.CompactionSpike do
     Enum.reduce(ordered, init, fn op, tl ->
       case role_event(op, role) do
         nil -> tl
+        {:malformed_tick, op} -> seeded_reject(tl, op, :malformed_term)
         {:genesis, d} -> seeded_genesis(tl, op, role, d, deleg_valid)
         {:transfer, d, tick} -> seeded_transfer(tl, op, role, d, tick, anc, deleg_valid)
         {:succeed, d, tick} -> seeded_succeed(tl, op, role, d, tick, anc, deleg_valid, policies)
@@ -416,19 +423,19 @@ defmodule Lattice.CompactionSpike do
     end)
   end
 
-  defp role_event(%Op{kind: :authority, body: body}, role) do
+  defp role_event(%Op{kind: :authority, body: body} = op, role) do
     case body do
       {:genesis, %Delegation{} = d, _policies} ->
         if MapSet.member?(d.roles, role), do: {:genesis, d}
 
       {:transfer, ^role, %Delegation{} = d, tick} ->
-        {:transfer, d, tick}
+        if valid_tick?(tick), do: {:transfer, d, tick}, else: {:malformed_tick, op}
 
       {:succeed, ^role, %Delegation{} = d, tick} ->
         {:succeed, d, tick}
 
       {:heartbeat, ^role, tick} ->
-        {:heartbeat, tick}
+        if valid_tick?(tick), do: {:heartbeat, tick}, else: {:malformed_tick, op}
 
       _ ->
         nil
@@ -889,7 +896,7 @@ defmodule Lattice.CompactionSpike do
     case body do
       {:genesis, %Delegation{} = d, _policies} -> d
       {:grant, %Delegation{} = d} -> d
-      {:transfer, _role, %Delegation{} = d, _tick} -> d
+      {:transfer, _role, %Delegation{} = d, tick} -> if valid_tick?(tick), do: d
       {:succeed, _role, %Delegation{} = d, _tick} -> d
       _ -> nil
     end
@@ -897,18 +904,36 @@ defmodule Lattice.CompactionSpike do
 
   defp delegation_in(_), do: nil
 
-  defp validate_delegations(delegations, root, genesis_ids, succession_ids) do
+  # Mirrors Lattice.Authority.valid_tick?/1: a malformed transfer tick must not
+  # introduce its delegation (a later command citing it reports :no_capability),
+  # and a malformed heartbeat never mutates the role timeline. The :succeed arm
+  # is exempt — its proof may be a legacy integer or a {:witnessed, certificate}.
+  defp valid_tick?(tick) do
+    is_integer(tick) and tick >= 0 and tick <= Lattice.Canonical.max_integer()
+  end
+
+  defp validate_delegations(delegations, root, genesis_ids, succession_ids, log_replica) do
     structs = Map.new(delegations, fn {id, %{deleg: d}} -> {id, d} end)
 
     Map.new(structs, fn {id, d} ->
-      {id, validate_delegation(d, structs, root, genesis_ids, succession_ids)}
+      {id, validate_delegation(d, structs, root, genesis_ids, succession_ids, log_replica)}
     end)
   end
 
-  defp validate_delegation(%Delegation{} = d, delegations, root, genesis_ids, succession_ids) do
+  defp validate_delegation(
+         %Delegation{} = d,
+         delegations,
+         root,
+         genesis_ids,
+         succession_ids,
+         log_replica
+       ) do
     cond do
       not Delegation.valid_sig?(d) ->
         {:error, :bad_delegation_sig}
+
+      d.replica != log_replica and not is_nil(Authority.replica_commitment(log_replica)) ->
+        {:error, :wrong_replica}
 
       is_nil(d.parent_id) ->
         cond do
@@ -929,7 +954,7 @@ defmodule Lattice.CompactionSpike do
         end
 
       true ->
-        validate_delegation_parent(d, delegations, root, genesis_ids, succession_ids)
+        validate_delegation_parent(d, delegations, root, genesis_ids, succession_ids, log_replica)
     end
   end
 
@@ -938,12 +963,13 @@ defmodule Lattice.CompactionSpike do
          delegations,
          root,
          genesis_ids,
-         succession_ids
+         succession_ids,
+         log_replica
        ) do
     case Map.fetch(delegations, d.parent_id) do
       {:ok, %Delegation{} = parent} ->
         parent_validation =
-          validate_delegation(parent, delegations, root, genesis_ids, succession_ids)
+          validate_delegation(parent, delegations, root, genesis_ids, succession_ids, log_replica)
 
         cond do
           not Delegation.attenuates?(d, parent) -> {:error, :not_attenuated}

@@ -1122,6 +1122,17 @@ function delegationValidation(
   if (visiting.has(id)) return { valid: false, reason: "invalid_parent" };
   visiting.add(id);
 
+  // A capability scoped to one replica is honored only on that replica's log.
+  // The guard is skipped for legacy unbound logs (no root commitment), mirroring
+  // replicaRootMatches returning true when the commitment is null.
+  if (
+    outerReplica !== undefined &&
+    delegation.replica !== outerReplica &&
+    replicaRootCommitment(outerReplica) !== null
+  ) {
+    return { valid: false, reason: "wrong_replica" };
+  }
+
   let validation: DelegationValidation;
   if (delegation.parentId === null) {
     if (delegation.issuer !== delegation.audience) {

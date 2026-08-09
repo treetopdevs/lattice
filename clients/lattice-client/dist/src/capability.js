@@ -22,6 +22,10 @@ export function capabilityQuarantine(op, schema, byId, security, ancCache = new 
     if (delegation === null) {
         return { quarantined: true, reason: "invalid_capability" };
     }
+    // A capability scoped to one replica is honored only on that replica's log.
+    if (delegation.replica !== op.replica) {
+        return { quarantined: true, reason: "wrong_replica" };
+    }
     const visible = ancestors(op.id, byId, ancCache);
     const honoredSuccessionVisible = !record.validation.valid &&
         record.validation.reason === "succession_candidate" &&
