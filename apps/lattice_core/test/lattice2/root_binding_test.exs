@@ -371,6 +371,41 @@ defmodule Lattice2.RootBindingTest do
     assert Sim.holder(sim, "server", :moderator) == Sim.identity(sim, "server").pub
   end
 
+  test "a transfer replayed from a same-root sibling replica cannot move the holder" do
+    sim = founded()
+    server = Sim.identity(sim, "server")
+    evil = Sim.identity(sim, "evil")
+    sibling_replica = Authority.bind_replica("replica:thread:sibling", server.pub)
+
+    sibling_genesis =
+      Delegation.genesis(server, sibling_replica,
+        ops: [:post],
+        roles: [:moderator],
+        live: true
+      )
+
+    sibling_transfer =
+      Delegation.new(server, sibling_replica, evil.pub,
+        ops: [:post],
+        roles: [:moderator],
+        parent_id: sibling_genesis.id
+      )
+
+    # Same-root sibling genesis validates through the root arms; the timeline
+    # guard must still refuse it before record_acquire/4.
+    {sim, replayed_genesis} =
+      Sim.append(sim, "server", :authority, {:genesis, sibling_genesis, %{}})
+
+    {sim, replayed_transfer} =
+      Sim.append(sim, "server", :authority, {:transfer, :moderator, sibling_transfer, 1})
+
+    sim = Sim.sync_all(sim)
+
+    assert {true, :wrong_replica} = Sim.quarantined(sim, "server", replayed_genesis.id)
+    assert {true, :wrong_replica} = Sim.quarantined(sim, "server", replayed_transfer.id)
+    assert Sim.holder(sim, "server", :moderator) == server.pub
+  end
+
   test "a root-less delegation minted for another replica is refused as wrong_replica" do
     sim = founded()
     evil = Sim.identity(sim, "evil")

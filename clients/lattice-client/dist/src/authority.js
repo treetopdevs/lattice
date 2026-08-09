@@ -267,6 +267,7 @@ function authorityWriteHonored(op, evidence, state, delegations, policies, honor
             delegation.issuer === delegation.audience &&
             delegation.issuerRealm === op.author &&
             op.replica !== undefined &&
+            delegation.replica === op.replica &&
             replicaRootMatches(op.replica, delegation.audience));
     }
     if (evidence.type === "transfer" && evidence.role === op.field) {
@@ -274,7 +275,9 @@ function authorityWriteHonored(op, evidence, state, delegations, policies, honor
         const holderAtDeps = [...state.acquires]
             .reverse()
             .find((acquire) => visible.has(acquire.opId))?.holder;
-        return (delegation.issuerRealm === op.author &&
+        return (op.replica !== undefined &&
+            delegation.replica === op.replica &&
+            delegation.issuerRealm === op.author &&
             holderAtDeps === op.author &&
             state.holder === op.author);
     }
@@ -302,12 +305,28 @@ function authorityWriteRejectionReason(op, evidence, state, delegations, policie
             delegation.issuerRealm !== op.author) {
             return "unauthorized_genesis";
         }
+        if (delegation.audienceRealm === op.value &&
+            delegation.roles.includes(op.field) &&
+            validDelegation(delegation, delegations) &&
+            op.replica !== undefined &&
+            delegation.replica !== op.replica) {
+            return "wrong_replica";
+        }
         return undefined;
     }
     if (evidence.type !== "transfer" || evidence.role !== op.field) {
         return evidence.type === "succeed"
             ? successionRejectionReason(op, evidence, state, delegations, policies, byId)
             : undefined;
+    }
+    if (op.replica !== undefined &&
+        delegation.replica !== op.replica &&
+        delegation.audienceRealm === op.value &&
+        delegation.roles.includes(op.field) &&
+        (validDelegation(delegation, delegations) ||
+            candidateDelegationActivated(delegation, delegations, honoredSuccessionIntroductions, ancestors(op.id, byId), op.field, byId)) &&
+        delegation.issuerRealm === op.author) {
+        return "wrong_replica";
     }
     if (delegation.audienceRealm !== op.value ||
         !delegation.roles.includes(op.field) ||
@@ -336,6 +355,9 @@ function successionRejectionReason(op, evidence, state, delegations, policies, b
         delegation.issuerRealm !== op.author ||
         delegation.audienceRealm !== op.author) {
         return "invalid_succession";
+    }
+    if (op.replica !== undefined && delegation.replica !== op.replica) {
+        return "wrong_replica";
     }
     const policy = policies.get(op.field);
     if (policy === undefined || policy.successorRealm !== op.author) {

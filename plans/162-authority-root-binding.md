@@ -17,8 +17,10 @@
 - **Priority**: **P0** — this is the V-01 / prime-directive class. Two of the three defects let a
   participant escalate their own authority; the third is a BEAM↔TypeScript divergence, which the
   build map names a STOP condition.
-- **Effort**: M — the production change is ~30 lines across two files. The work is the adversarial
-  vectors, the vector-regeneration diff, and proving each predicate is load-bearing.
+- **Effort**: M — pre-Round-5 estimate was ~30 lines across two files; Round 5 step 2b
+  expands the production change across `authority.ex`, `authority.ts`, and `capability.ts`,
+  plus exporter/tests/vectors. The work remains the adversarial vectors, the vector-
+  regeneration diff, and proving each predicate is load-bearing.
 - **Amended 2026-08-06 (Round 5)**: two further guards added as step 2b — `cap_ok/8` replica
   binding and malformed-tick rejection. Both are predicates that reject more; neither changes
   succession semantics, so the effort and risk grades below are unchanged and the
@@ -691,7 +693,8 @@ Add to the `cond`, before the ops check:
 ```
 
 Reuse the existing `:wrong_replica` atom (`log.ex:138-139`) rather than minting a new one.
-Also add the same comparison to `validate_delegation/4` against the log's replica.
+Also add the same comparison to `validate_delegation/6` against the threaded `log.replica`
+value (the pre-change arity was `/4` before `succession_ids` and `log.replica` were threaded).
 
 This must be a no-op for honest logs: `Sim.grant/4` (`sim.ex:91`) and `transfer/5` (`:112`) both
 pass `sim.replica`. If any existing vector changes, that is a finding — report it in step 5.
@@ -918,9 +921,11 @@ testing stale compiled code.
 - **Mutation**: step 8's five reverts, each with a named failing assertion.
 - **Step 2b (d) — cross-replica capability replay**: a new Elixir case in
   `root_binding_test.exs` that grants on replica X, replays the delegation into replica Y via
-  `{:grant, ...}`, authors a command there, and asserts `:wrong_replica`. Add the mirrored
-  assertion to `authority.ts` and one exported vector if the scenario is expressible in the
-  exporter; a unit test alone is acceptable if it is not.
+  `{:grant, ...}`, authors a command there, and asserts `:wrong_replica`. Require the generated
+  vector at `clients/lattice-client/test/vectors/township_authority_cross_replica_replay.json`
+  and a passing TypeScript conformance assertion that mirrors the Elixir quarantine reasons in
+  `authority.ts` (including sibling `:transfer` replay coverage). Do not treat a unit test alone
+  as sufficient.
 - **Step 2b (e) — malformed tick**: two Elixir cases. First, a signed `{:heartbeat, role, "9"}`
   op does not mutate the role timeline and does not raise. Second — the one that proves the
   guard is load-bearing — construct the same op, then run a succession that would evaluate
@@ -947,6 +952,7 @@ Machine-checkable. ALL must hold:
 - [ ] The three succession vectors are byte-identical to their pre-change versions
 - [ ] `grep -n 'wrong_replica' apps/lattice_core/lib/lattice/authority.ex clients/lattice-client/src/authority.ts` returns hits in both files (step 2b(d))
 - [ ] The step 2b(d) cross-replica case and both step 2b(e) tick cases exist and pass
+- [ ] `clients/lattice-client/test/vectors/township_authority_cross_replica_replay.json` exists and `npm --prefix clients/lattice-client run conformance` asserts it against `authority.ts`
 - [ ] Reverting the step 2b(e) guard makes the second tick case raise `ArithmeticError`, recorded in your report
 - [ ] `grep -rn 'beacon' apps/lattice_core/lib/lattice/authority.ex | grep -i 'succe\|heartbeat\|transfer'` returns **nothing** — confirming this plan did not begin the tick-provenance redesign that belongs to plan 175
 - [ ] `git status` shows no modified file outside the In-scope list

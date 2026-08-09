@@ -1731,8 +1731,8 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
   # Plan 162 step 2b(d): a delegation chain minted for a same-root *sibling*
   # replica validates through the genesis/attenuation arms here too (same root
-  # commitment), so only cap_ok/8's replica binding refuses the replayed
-  # capability at use time.
+  # commitment), so use-time cap_ok/8 and timeline-time replica guards must
+  # both refuse the replayed capability / transfer before any holder update.
   defp township_authority_cross_replica_replay do
     sim =
       Sim.new(
@@ -1761,6 +1761,13 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     sibling_grant =
       Delegation.new(clerk, sibling_replica, mallory.pub,
         ops: [:post],
+        parent_id: sibling_genesis.id
+      )
+
+    sibling_transfer =
+      Delegation.new(clerk, sibling_replica, mallory.pub,
+        ops: [:post],
+        roles: [:clerk],
         parent_id: sibling_genesis.id
       )
 
@@ -1795,9 +1802,27 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
     log = Log.append!(log, target)
 
+    # Sibling transfer authored by the current holder: validates through the
+    # same-root arms, so only the timeline replica guard stops the holder move.
+    replayed_transfer =
+      Op.new(
+        clerk,
+        replica,
+        Log.frontier(log),
+        :authority,
+        {:transfer, :clerk, sibling_transfer, 1}
+      )
+
+    log = Log.append!(log, replayed_transfer)
+
     assert_authority_reason!(log, replayed_genesis.id, :unauthorized_genesis)
     assert_authority_reason!(log, target.id, :wrong_replica)
+    assert_authority_reason!(log, replayed_transfer.id, :wrong_replica)
     assert_post_absent!(log, rejected_post)
+
+    unless Authority.analyze(Matter, log).holders.clerk == clerk.pub do
+      raise "expected sibling transfer replay not to move the clerk holder"
+    end
 
     capability_scenario("township_authority_cross_replica_replay", sim, log, %{
       "case" => "cross_replica_replay",
@@ -1806,7 +1831,9 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       "rejectedPost" => rejected_post,
       "siblingReplica" => sibling_replica,
       "siblingGrantDelegationId" => sibling_grant.id,
-      "replayedGenesisOperationId" => replayed_genesis.id
+      "siblingTransferDelegationId" => sibling_transfer.id,
+      "replayedGenesisOperationId" => replayed_genesis.id,
+      "replayedTransferOperationId" => replayed_transfer.id
     })
   end
 

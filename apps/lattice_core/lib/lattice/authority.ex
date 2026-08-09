@@ -702,6 +702,11 @@ defmodule Lattice.Authority do
             op.author != d.audience ->
               reject(st, op, :unauthorized_genesis, role)
 
+            # Same-root sibling genesis still validates through the root arms;
+            # refuse it here so it cannot rewrite this replica's role timeline.
+            d.replica != op.replica ->
+              reject(st, op, :wrong_replica, role)
+
             true ->
               record_acquire(st, op, d, 0)
           end
@@ -784,6 +789,11 @@ defmodule Lattice.Authority do
     holder_at_deps = holder_from_acquires(st.acquires, anc)
 
     cond do
+      # A same-root sibling transfer validates through genesis/attenuation, so
+      # refuse foreign-replica events before any holder update.
+      d.replica != op.replica ->
+        reject(st, op, :wrong_replica, role)
+
       not delegation_valid_at?(deleg_valid[d.id], st.acquires, anc) or
         op.author != d.issuer or not MapSet.member?(d.roles, role) ->
         reject(st, op, :invalid_transfer, role)
@@ -809,6 +819,11 @@ defmodule Lattice.Authority do
         op.author != d.audience or op.author != d.issuer or
           not MapSet.member?(d.roles, role) ->
         reject(st, op, :invalid_succession, role)
+
+      # Preserve succession candidacy judgments above; still refuse a foreign-
+      # replica succeed before record_acquire/4.
+      d.replica != op.replica ->
+        reject(st, op, :wrong_replica, role)
 
       is_nil(policy) or op.author != policy.successor ->
         reject(st, op, :unauthorized_succession, role)
