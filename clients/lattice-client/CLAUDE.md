@@ -108,9 +108,14 @@ Authority trust-anchor slices in progress (plan 140): conformance includes both 
 forged genesis on a clerk-bound replica and a bypass whose embedded delegation names a separate
 attacker-bound replica. Carrier decoding retains the outer replica on semantic ops, and the reducer
 recomputes the root commitment from that outer id, quarantines both impostor shapes, and materializes
-an unassigned authority holder as `null`. Do not add equality between the outer and embedded replica:
-Sim's reduction does not require it. Evidence persisted before outer-replica retention fails closed
-until re-decoded from carrier evidence.
+an unassigned authority holder as `null`. Do not add a blanket equality between the outer and
+embedded replica at decode/retention time: Sim's reduction does not require it — foreign-replica
+delegation evidence is retained and judged, not dropped. (Plan 162 step 2b(d) later added two
+*judgment-time* replica bindings that Sim does require: `capabilityQuarantine` refuses a cited
+delegation whose `replica` differs from the op's as `wrong_replica`, and `delegationValidation`'s
+root-less catch-all reports foreign-replica self-issues the same way. Do not remove those.)
+Evidence persisted before outer-replica retention fails closed until re-decoded from carrier
+evidence.
 
 The delegation-id tracer bullet changes only a valid genesis delegation's declared id. Sim reports
 `bad_delegation_sig`; TS now recomputes unpadded base64url SHA-256 over the shared canonical

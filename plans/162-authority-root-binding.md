@@ -17,8 +17,10 @@
 - **Priority**: **P0** — this is the V-01 / prime-directive class. Two of the three defects let a
   participant escalate their own authority; the third is a BEAM↔TypeScript divergence, which the
   build map names a STOP condition.
-- **Effort**: M — the production change is ~30 lines across two files. The work is the adversarial
-  vectors, the vector-regeneration diff, and proving each predicate is load-bearing.
+- **Effort**: M — pre-Round-5 estimate was ~30 lines across two files; Round 5 step 2b
+  expands the production change across `authority.ex`, `authority.ts`, and `capability.ts`,
+  plus exporter/tests/vectors. The work remains the adversarial vectors, the vector-
+  regeneration diff, and proving each predicate is load-bearing.
 - **Amended 2026-08-06 (Round 5)**: two further guards added as step 2b — `cap_ok/9` replica
   binding and malformed-tick rejection. Both are predicates that reject more; neither changes
   succession semantics, so the effort and risk grades below are unchanged and the
@@ -146,6 +148,16 @@ follow-up: mutation evidence corrected; Scope authorizes `capability.ts` for 2b(
 - `capability.ts` adds `delegation.replica !== op.replica` → `wrong_replica` before the
   validation check; `authority.ts` `delegationValidation` adds the same comparison before
   root/chain validation.
+- **Timeline-time guard (reconciled from the parallel PR #45 branch, 2026-08-09).** Use-time
+  `cap_ok/9` alone does not stop a same-root *sibling* delegation from moving the role token:
+  a sibling chain validates through the genesis/attenuation arms, so `role_event/3`'s consumers
+  now refuse `d.replica != op.replica` on all three acquiring paths — genesis, transfer
+  (`decide_transfer`), and succeed — **before** `record_acquire/4` runs. The succeed guard sits
+  after the succession-candidacy arms so those pinned judgments are unchanged. Mirrored in
+  `authority.ts` in both the honoring path (genesis/transfer require
+  `delegation.replica === op.replica`) and the rejection-reason path. Covered by
+  `township_authority_cross_replica_replay.json` (which carries `replayedTransferOperationId`)
+  and the sibling-transfer case in `root_binding_test.exs`.
 
 ### Step 2b (e) — malformed tick
 
@@ -960,9 +972,11 @@ testing stale compiled code.
 - **Mutation**: step 8's five reverts, each with a named failing assertion.
 - **Step 2b (d) — cross-replica capability replay**: a new Elixir case in
   `root_binding_test.exs` that grants on replica X, replays the delegation into replica Y via
-  `{:grant, ...}`, authors a command there, and asserts `:wrong_replica`. Add the mirrored
-  assertion to `authority.ts` and one exported vector if the scenario is expressible in the
-  exporter; a unit test alone is acceptable if it is not. Both replica guards must be
+  `{:grant, ...}`, authors a command there, and asserts `:wrong_replica`. Require the generated
+  vector at `clients/lattice-client/test/vectors/township_authority_cross_replica_replay.json`
+  and a passing TypeScript conformance assertion that mirrors the Elixir quarantine reasons in
+  `authority.ts` (including sibling `:transfer` replay coverage). Do not treat a unit test alone
+  as sufficient. Both replica guards must be
   independently verified: revert (or disable) the `d.replica != op.replica` clause in `cap_ok/9`
   alone and confirm the test fails, then restore it and revert the same comparison in
   `validate_delegation/6` alone and confirm the test still fails — so each guard is load-bearing

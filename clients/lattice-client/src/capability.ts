@@ -60,6 +60,13 @@ export function capabilityQuarantine(
   if (op.author !== delegation.audienceRealm) {
     return { quarantined: true, reason: "capability_wrong_audience" };
   }
+  // Plan 162 step 2b(d): a capability is scoped to one replica — a delegation
+  // chain replayed from a sibling matter (even one sharing this root) confers
+  // nothing here. Mirrors Lattice.Authority.cap_ok/8's clause order
+  // (validity → audience → replica → grant scope).
+  if (delegation.replica !== op.replica) {
+    return { quarantined: true, reason: "wrong_replica" };
+  }
   if (op.command === undefined || !delegation.ops.includes(op.command)) {
     return { quarantined: true, reason: "operation_not_granted" };
   }
