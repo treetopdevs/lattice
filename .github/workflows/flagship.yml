@@ -200,6 +200,9 @@ jobs:
       - name: TS Township frontend contract
         working-directory: clients/township-tauri-shell
         run: npm run frontend:contract
+      - name: TS Township carrier sync contract
+        working-directory: clients/township-tauri-shell
+        run: npm run sync:contract
       - name: TS reactive Township feed controller
         working-directory: clients/township-tauri-shell
         run: npm run feed:app:contract
