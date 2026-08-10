@@ -61,15 +61,46 @@ export function runApksignerPrintCerts(apkPath) {
   });
 }
 
-// apksigner prints the first signer either as "Signer #1 certificate ..." or,
-// for SDK-ranged (v3/v3.1) signers, as "Signer (minSdkVersion=24, ...)
-// certificate ...". Accept both; anything else stays null so the caller's
-// fail-closed check refuses the artifact.
-const SIGNER_DN_LINE = /Signer (?:#1|\([^)]+\)) certificate DN: (.+)/;
-const SIGNER_SHA256_LINE = /Signer (?:#1|\([^)]+\)) certificate SHA-256 digest: ([0-9a-fA-F]+)/;
+export function runAapt2Badging(apkPath) {
+  return execFileSync(buildToolPath("aapt2"), ["dump", "badging", apkPath], {
+    encoding: "utf8",
+    maxBuffer: 32 * 1024 * 1024,
+  });
+}
+
+export function parseAapt2PackageId(output) {
+  return String(output).match(/^package: name='([^']+)'/m)?.[1] ?? null;
+}
+
+// apksigner prints ordinary signers as "Signer #N certificate ..." and may
+// print SDK-ranged v3/v3.1 signers as "Signer (minSdkVersion=..., ...) ...".
+// Preserve every signer block. Pilot callers fail closed unless exactly one
+// complete, distinct signer is present; rotation requires an explicit policy
+// change instead of silently trusting the first lineage node.
+const SIGNER_LINE = /^Signer (#[0-9]+|\([^)]+\)) certificate (DN|SHA-256 digest): (.+)$/gm;
 
 export function parseApksignerCerts(output) {
-  const dn = output.match(SIGNER_DN_LINE)?.[1]?.trim() ?? null;
-  const sha256 = output.match(SIGNER_SHA256_LINE)?.[1]?.toLowerCase() ?? null;
-  return { dn, sha256 };
+  const byLabel = new Map();
+  for (const match of String(output).matchAll(SIGNER_LINE)) {
+    const [, label, field, rawValue] = match;
+    const signer = byLabel.get(label) ?? { label, dn: null, sha256: null };
+    if (field === "DN") signer.dn = rawValue.trim();
+    if (field === "SHA-256 digest") signer.sha256 = rawValue.trim().toLowerCase();
+    byLabel.set(label, signer);
+  }
+  const signers = [...byLabel.values()];
+  const completeSigners = signers.filter(({ dn, sha256 }) => dn && sha256);
+  const distinctSha256 = [...new Set(completeSigners.map(({ sha256 }) => sha256))];
+  const soleSigner =
+    signers.length > 0 && completeSigners.length === signers.length && distinctSha256.length === 1
+      ? completeSigners[0]
+      : null;
+  return {
+    dn: soleSigner?.dn ?? null,
+    sha256: soleSigner?.sha256 ?? null,
+    signerCount: signers.length,
+    completeSignerCount: completeSigners.length,
+    distinctSignerCount: distinctSha256.length,
+    signers,
+  };
 }

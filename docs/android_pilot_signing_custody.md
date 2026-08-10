@@ -114,9 +114,25 @@ On a machine other than the one that generated the key:
 
 ## 7. CI secrets (GitHub Actions)
 
-Use a protected **environment** (suggested name `android-pilot`) so only the release job on
-approved branches can read the secrets; plain repo secrets are the fallback if environment
-protection is not configured.
+Use the protected **environment** named `android-pilot`. Before any pilot secret is added, it
+**MUST** have a deployment branch rule allowing `main` only (and required reviewers where the
+repository plan supports them). This server-side rule is the security boundary; workflow `if:`
+guards are defense in depth because pull requests can edit their own workflow text. Plain
+repository secrets are prohibited for pilot signing. If the environment cannot enforce the
+`main`-only rule, do not configure the secrets and do not distribute a pilot artifact.
+
+The distribution worker runs only for a push to `main` or an explicit `workflow_dispatch` whose ref
+is `main`; both enter the protected environment. Pull requests and feature branches run the separate
+secret-free contract and ephemeral verification jobs. The exact workflow path exceptions are
+`docs/android_pilot_*`, `docs/android_pilot_*/**`, and `plans/15[89]-*`; documentation-only changes
+matching those globs trigger normally while unrelated Markdown remains ignored. For security Markdown outside those globs, run
+the workflow manually against the frozen branch tip and verify its `headSha`. Every push to `main`
+becomes a fail-closed distribution attempt once the reviewed repository certificate pin is
+provisioned: the separate result job then turns absent signing input, a skipped worker, or a failed
+artifact into a red workflow. Before that external prerequisite lands, ordinary main pushes remain
+green and report distribution as not yet required; `require_android_pilot: true` always fails closed.
+A manual main-branch dispatch remains available for a deliberate rebuild or rerun; set
+`require_android_pilot: true` when that manual run must also fail unless it distributes an artifact.
 
 | Secret / variable | Kind | Content |
 |---|---|---|
@@ -124,9 +140,15 @@ protection is not configured.
 | `TOWNSHIP_PILOT_KEYSTORE_PASSWORD` | secret | store password |
 | `TOWNSHIP_PILOT_KEY_PASSWORD` | secret | key password |
 | `TOWNSHIP_PILOT_KEY_ALIAS` | variable | `township-pilot-v1` |
-| `TOWNSHIP_PILOT_CERT_SHA256` | variable | pinned fingerprint (public; CI verifies the built APK against it) |
+| `TOWNSHIP_PILOT_CERT_SHA256` | variable | copy of the reviewed in-repo fingerprint (public; it cannot establish or rotate trust by itself) |
 
-Upload without touching shell history or chat:
+Before uploading any secret, merge the reviewed PR that replaces the `null`
+`TOWNSHIP_PILOT_CERT_SHA256` constant in
+`clients/township-tauri-shell/scripts/android-pilot/pilot_policy.mjs` with the lowercase 64-hex
+fingerprint. Uploading secrets first makes every subsequent `main` push fail closed because the
+worker refuses an unreviewed trust anchor.
+
+After that pin PR is merged, upload without touching shell history or chat:
 
 ```bash
 base64 -i township-pilot-v1.jks | gh secret set TOWNSHIP_PILOT_KEYSTORE_B64 --env android-pilot
@@ -135,6 +157,12 @@ gh secret set TOWNSHIP_PILOT_KEY_PASSWORD --env android-pilot        # paste at 
 gh variable set TOWNSHIP_PILOT_KEY_ALIAS --env android-pilot --body "township-pilot-v1"
 gh variable set TOWNSHIP_PILOT_CERT_SHA256 --env android-pilot --body "<pinned fingerprint>"
 ```
+
+The environment fingerprint may use `keytool`'s colon-separated uppercase form or lowercase
+64-hex; CI normalizes it before comparing it with the reviewed lowercase repository constant.
+
+CI refuses distribution unless the environment copy exactly matches that reviewed trust anchor.
+Until it is committed, signed pilot distribution remains intentionally blocked.
 
 The signing path must fail closed when these are absent — absence of secrets can never produce a
 debug-signed artifact labeled release-pilot (see Plan 158 stop conditions).
@@ -145,8 +173,10 @@ Android in-place upgrades require the same signer. With internal distribution th
 Play-style key upgrade, so **any certificate change forces pilot users to uninstall/reinstall**
 (losing local app data unless exported first). Plan rotation accordingly:
 
-- **Planned rotation:** generate `township-pilot-v2` via §3–§7, pin the new fingerprint by PR,
-  announce a reinstall window to pilot users, retire the old secrets after the last v1 build.
+- **Planned rotation:** generate `township-pilot-v2` via §3–§7. The same reviewed PR must update
+  the pinned alias constants and signing contract as well as the certificate fingerprint; changing
+  only the environment variable is intentionally refused. Announce a reinstall window to pilot
+  users, then retire the old secrets after the last v1 build.
 - **Keystore lost, backup intact:** restore per §6, re-upload secrets. No user impact.
 - **Keystore and backup both lost:** treat as rotation — new key, reinstall ceremony. Record the
   incident.
@@ -158,7 +188,9 @@ Play-style key upgrade, so **any certificate change forces pilot users to uninst
 
 - Debug keys never enter the pilot lineage; `CN=Android Debug` on a distributed artifact is a
   program stop condition.
-- The keystore is never committed, never generated on CI, never printed to logs, and never
-  handled in plaintext by AI agents or chat.
+- The pilot-lineage keystore is never committed, never generated on CI, never printed to logs, and
+  never handled in plaintext by AI agents or chat. The secret-free verification job generates a
+  short-lived `ephemeral-ci-throwaway` key whose DN is marked `NOT PILOT`; its APK is never
+  distributed.
 - Cross-product signing (a Township artifact signed by a Toolshed/Treehouse alias or vice versa)
   is refused in CI.

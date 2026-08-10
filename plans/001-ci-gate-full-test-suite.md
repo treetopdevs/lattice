@@ -121,9 +121,11 @@ Target shape (place after the `verify` job, same indentation level):
         run: mix test
 ```
 
-Note: the workflow's top-level `on.push`/`on.pull_request` already use
-`paths-ignore: ['docs/**', '**/*.md']`. That is fine — keep it; doc-only changes need
-neither job.
+Historical note: the workflow no longer uses `paths-ignore`. Its ordered `paths` rules exclude
+unrelated Markdown but re-include the Android pilot security contracts under
+`docs/android_pilot_*`, `docs/android_pilot_*/**`, and `plans/15[89]-*`. Keep those exceptions in
+sync with the structural workflow contract; other documentation-only changes can use manual
+dispatch when flagship evidence is required.
 
 **Verify**: Re-read the file. Confirm: (a) `verify` job is byte-for-byte unchanged
 except indentation context; (b) the new `unit` job exists with the cache step and a
