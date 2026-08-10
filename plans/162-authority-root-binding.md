@@ -86,12 +86,13 @@ mutation failure before its smallest correction.
 
 Final GREEN:
 
-- `mix check`: 26 properties and 346 lattice-core tests, every umbrella app, 98
+- `mix check`: 26 properties and 353 lattice-core tests, every umbrella app, 98
   lattice-carrier-server tests, and strict Credo all pass.
 - TypeScript build, typecheck, conformance, V-01 guard, canonical bytes, Township authoring, and
   carrier/Township suites all pass.
-- The compaction GATE passes one property and 13 tests, including byte-identical state,
-  quarantine reasons, holders, and requests across the new succession cases.
+- The compaction GATE passes one property and 19 tests, including byte-identical state,
+  quarantine reasons, holders, and requests across malformed-tick, cross-replica, witnessed
+  recovery, and replayed-genesis holder-epoch cases.
 - An earlier full-suite run exposed the pre-existing carrier Holder timeout under load; its focused
   test passed immediately, and every subsequent full gate completed with all 98 carrier tests
   green. No carrier durability behavior changed.
@@ -169,9 +170,14 @@ follow-up: mutation evidence corrected; Scope authorizes `capability.ts` for 2b(
   transfer `delegation_in` skip, and the structural malformed-tick reason pass. Its retained and
   undeclared-role transfer/succession regressions pin compacted/full parity even when no declared
   role timeline sees the malformed operation.
+- Its seeded succession reducer also mirrors legacy/witnessed proof-mode dispatch, verifies
+  recovery certificates against the causal holder epoch, records honored witnessed recovery at
+  tick zero, and excludes quarantined covered genesis replays from the holder-epoch summary.
 - The TypeScript carrier already maps non-integer transfer and heartbeat bodies to
-  `structuralError: "malformed_term"` via the `integerValue` decode throw, so no additional
-  TS change is needed for 2b(e).
+  `structuralError: "malformed_term"` via the `integerValue` decode throw. Negative or over-range
+  integer succession proofs cannot cross the canonical signing/wire boundary; reconstructed BEAM
+  logs quarantine them structurally, while TS classifies such unsanctioned input as
+  `invalid_succession`. No portable carrier vector can contain that case.
 
 ### Mutation evidence
 
@@ -185,6 +191,9 @@ follow-up: mutation evidence corrected; Scope authorizes `capability.ts` for 2b(
 | Structural `malformed_tick_body?/1` transfer/succession clauses | undeclared-role malformed transfer/succession compaction regressions — the compacted quarantine entry disappears because no declared role timeline observes the operation |
 | `compaction_spike.ex` heartbeat `valid_tick?` | `malformed retained heartbeat cannot crash…` raises `ArithmeticError` |
 | `compaction_spike.ex` replica-first seeded capability check | `retained foreign-replica capability keeps its wrong-replica reason after compaction` — compacted replay reports `:invalid_capability` instead of full analysis's `:wrong_replica` |
+| Legacy-only `seeded_succeed/8` proof handling | `retained witnessed succession remains honored after compaction` raises `KeyError` on missing `policy.dormant_ticks`; a witnessed proof under a dormancy policy is incorrectly honored through Erlang term ordering |
+| Covered succession proof copied into `at_tick` | `covered witnessed succession seeds a zero-tick acquire after compaction` records the certificate tuple as both acquire and activity tick |
+| Covered genesis classification ignores its frozen reason | `covered replayed genesis cannot replace the witnessed holder epoch` rejects a valid retained certificate against the quarantined replay op id instead of the honored genesis epoch |
 
 Round 5 adversarial review correction (2026-08-09): the prior claim that reverting only
 `validate_delegation`'s `wrong_replica` made `foreign_genesis_op` fall back to

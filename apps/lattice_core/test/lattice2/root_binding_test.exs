@@ -481,6 +481,27 @@ defmodule Lattice2.RootBindingTest do
     assert Sim.holder(sim, "server", :moderator) == server.pub
   end
 
+  test "a root-less delegation minted for another replica is refused as wrong_replica" do
+    sim = founded()
+    evil = Sim.identity(sim, "evil")
+    foreign_replica = Authority.bind_replica("replica:thread:foreign", evil.pub)
+
+    foreign =
+      Delegation.genesis(evil, foreign_replica,
+        ops: [:post],
+        roles: [],
+        live: true
+      )
+
+    {sim, introduction} = Sim.append(sim, "evil", :authority, {:grant, foreign})
+    {sim, post} = Sim.command(sim, "evil", :post, ["foreign propaganda"], cap: foreign.id)
+    sim = Sim.sync_all(sim)
+
+    assert {true, :wrong_replica} = Sim.quarantined(sim, "server", introduction.id)
+    assert {true, :wrong_replica} = Sim.quarantined(sim, "server", post.id)
+    refute "foreign propaganda" in Sim.state(sim, "server").messages
+  end
+
   # --- Tombstone gate ------------------------------------------------------
 
   defp hosted_registry do

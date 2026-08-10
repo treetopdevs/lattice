@@ -27,7 +27,7 @@ defmodule Lattice.CompactionSpike do
   """
 
   alias Lattice.{Authority, Dag, Log, Op, Reduce}
-  alias Lattice.Authority.Delegation
+  alias Lattice.Authority.{Delegation, SuccessionCertificate}
   alias Lattice.Crdt.{CausalList, Lww, OrSet}
 
   defmodule Snapshot do
@@ -223,16 +223,22 @@ defmodule Lattice.CompactionSpike do
   defp classify_acquire(%Op{} = op, role, reasons, deleg_valid) do
     case op.body do
       {:genesis, %Delegation{} = d, _policies} ->
-        if op.kind == :authority and deleg_valid[d.id] == :ok and MapSet.member?(d.roles, role),
-          do: %{op_id: op.id, holder: d.audience, delegation_id: d.id, at_tick: 0}
+        if op.kind == :authority and deleg_valid[d.id] == :ok and
+             not Map.has_key?(reasons, op.id) and MapSet.member?(d.roles, role),
+           do: %{op_id: op.id, holder: d.audience, delegation_id: d.id, at_tick: 0}
 
       {:transfer, ^role, %Delegation{} = d, tick} ->
         if op.kind == :authority and not Map.has_key?(reasons, op.id),
           do: %{op_id: op.id, holder: d.audience, delegation_id: d.id, at_tick: tick}
 
-      {:succeed, ^role, %Delegation{} = d, tick} ->
+      {:succeed, ^role, %Delegation{} = d, proof} ->
         if op.kind == :authority and not Map.has_key?(reasons, op.id),
-          do: %{op_id: op.id, holder: d.audience, delegation_id: d.id, at_tick: tick}
+          do: %{
+            op_id: op.id,
+            holder: d.audience,
+            delegation_id: d.id,
+            at_tick: if(match?({:witnessed, _certificate}, proof), do: 0, else: proof)
+          }
 
       _ ->
         nil
@@ -508,9 +514,8 @@ defmodule Lattice.CompactionSpike do
     end
   end
 
-  defp seeded_succeed(tl, op, role, d, tick, anc, deleg_valid, policies) do
+  defp seeded_succeed(tl, op, role, d, proof, anc, deleg_valid, policies) do
     op_anc = Map.get(anc, op.id, MapSet.new())
-    last_active = seeded_last_active(tl, op_anc)
     policy = Map.get(policies, role)
 
     cond do
@@ -522,13 +527,72 @@ defmodule Lattice.CompactionSpike do
       is_nil(policy) or op.author != policy.successor ->
         seeded_reject(tl, op, :unauthorized_succession)
 
-      tick < last_active + policy.dormant_ticks ->
-        seeded_reject(tl, op, :premature_succession)
+      Map.has_key?(policy, :recovery) and Map.has_key?(policy, :dormant_ticks) ->
+        seeded_reject(tl, op, :invalid_recovery_policy)
 
       true ->
-        seeded_acquire(tl, op, d, tick)
+        seeded_succession_proof(tl, op, role, d, proof, op_anc, policy)
     end
   end
+
+  defp seeded_succession_proof(tl, op, _role, d, at_tick, op_anc, %{
+         dormant_ticks: dormant_ticks
+       })
+       when is_integer(at_tick) do
+    if at_tick < seeded_last_active(tl, op_anc) + dormant_ticks,
+      do: seeded_reject(tl, op, :premature_succession),
+      else: seeded_acquire(tl, op, d, at_tick)
+  end
+
+  defp seeded_succession_proof(tl, op, _role, _d, at_tick, _op_anc, %{recovery: recovery})
+       when is_integer(at_tick) do
+    case SuccessionCertificate.normalize_policy(recovery) do
+      {:ok, _normalized} -> seeded_reject(tl, op, :recovery_certificate_required)
+      {:error, reason} -> seeded_reject(tl, op, reason)
+    end
+  end
+
+  defp seeded_succession_proof(
+         tl,
+         op,
+         role,
+         d,
+         {:witnessed, certificate},
+         op_anc,
+         %{recovery: recovery}
+       ) do
+    with %{holder: holder, op_id: holder_epoch} <- seeded_holder_acquire_at(tl, op_anc),
+         true <- tl.holder == holder,
+         {:ok, expected_claim} <-
+           SuccessionCertificate.claim(
+             op.replica,
+             role,
+             holder,
+             holder_epoch,
+             op.author,
+             recovery
+           ),
+         :ok <- SuccessionCertificate.verify(certificate, expected_claim, recovery) do
+      seeded_acquire(tl, op, d, 0)
+    else
+      {:error, reason} -> seeded_reject(tl, op, reason)
+      _ -> seeded_reject(tl, op, :recovery_claim_mismatch)
+    end
+  end
+
+  defp seeded_succession_proof(
+         tl,
+         op,
+         _role,
+         _d,
+         {:witnessed, _certificate},
+         _op_anc,
+         _policy
+       ),
+       do: seeded_reject(tl, op, :witnessed_recovery_not_configured)
+
+  defp seeded_succession_proof(tl, op, _role, _d, _proof, _op_anc, _policy),
+    do: seeded_reject(tl, op, :invalid_succession)
 
   defp seeded_heartbeat(tl, op, tick, anc) do
     if op.author == seeded_holder_at(tl, Map.get(anc, op.id, MapSet.new())) do
@@ -562,12 +626,19 @@ defmodule Lattice.CompactionSpike do
   # Holder at a retained op's causal position: the last retained acquire visible
   # to it, else the seed (all covered acquires are visible under stability).
   defp seeded_holder_at(tl, op_anc) do
+    case seeded_holder_acquire_at(tl, op_anc) do
+      nil -> nil
+      %{holder: holder} -> holder
+    end
+  end
+
+  defp seeded_holder_acquire_at(tl, op_anc) do
     tl.acquires
     |> Enum.filter(&MapSet.member?(op_anc, &1.op_id))
     |> List.last()
     |> case do
-      nil -> tl.seed_acquire && tl.seed_acquire.holder
-      %{holder: h} -> h
+      nil -> tl.seed_acquire
+      acquire -> acquire
     end
   end
 

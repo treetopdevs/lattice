@@ -21,6 +21,7 @@ defmodule Lattice2.CompactionSpikeTest do
 
   @replica "replica:thread:compaction"
   @realms ["r0", "r1", "r2"]
+  @witness_realms ["r0", "r1", "w0", "w1", "w2"]
 
   defp t2b(term), do: :erlang.term_to_binary(term, [:deterministic])
 
@@ -332,6 +333,144 @@ defmodule Lattice2.CompactionSpikeTest do
     assert res.state.locked?
   end
 
+  test "retained witnessed succession remains honored after compaction" do
+    sim = setup_witnessed_sim("compaction-retained-witnessed-succession")
+    frontier = Log.frontier(Sim.log(sim, "r0"))
+
+    {sim, succession} =
+      Sim.succeed(sim, "r1", :moderator, witnesses: ["w0", "w1"])
+
+    sim = Sim.sync_all(sim)
+    {_snapshot, retained, res} = assert_compaction_equivalence(Sim.log(sim, "r0"), frontier)
+
+    assert Log.has?(retained, succession.id)
+    refute Map.has_key?(res.reasons, succession.id)
+    assert res.holders.moderator == Sim.identity(sim, "r1").pub
+  end
+
+  test "covered replayed genesis cannot replace the witnessed holder epoch" do
+    sim = setup_witnessed_sim("compaction-replayed-genesis-witnessed-epoch")
+
+    genesis_delegation =
+      sim
+      |> Sim.log("r0")
+      |> Log.topo_ops()
+      |> Enum.find_value(fn
+        %{body: {:genesis, %Delegation{} = delegation, _policies}} -> delegation
+        _op -> nil
+      end)
+
+    {sim, replayed_genesis} =
+      Sim.append(sim, "r1", :authority, {:genesis, genesis_delegation, %{}})
+
+    sim = Sim.sync_all(sim)
+    frontier = Log.frontier(Sim.log(sim, "r0"))
+
+    {sim, succession} =
+      Sim.succeed(sim, "r1", :moderator, witnesses: ["w0", "w1"])
+
+    sim = Sim.sync_all(sim)
+    {_snapshot, retained, res} = assert_compaction_equivalence(Sim.log(sim, "r0"), frontier)
+
+    refute Log.has?(retained, replayed_genesis.id)
+    assert Log.has?(retained, succession.id)
+    assert res.reasons[replayed_genesis.id] == :unauthorized_genesis
+    refute Map.has_key?(res.reasons, succession.id)
+    assert res.holders.moderator == Sim.identity(sim, "r1").pub
+  end
+
+  test "retained witnessed succession stays rejected when recovery is not configured" do
+    source = setup_witnessed_sim("compaction-witnessed-certificate-source")
+
+    {_source, source_succession} =
+      Sim.succeed(source, "r1", :moderator, witnesses: ["w0", "w1"])
+
+    {:succeed, :moderator, _delegation, {:witnessed, certificate}} = source_succession.body
+
+    sim = Sim.new(Thread, @replica, @witness_realms, seed: "compaction-legacy-witnessed-proof")
+
+    {sim, _genesis} =
+      Sim.create_replica(sim, "r0", policies: %{moderator: %{successor: "r1", dormant_ticks: 3}})
+
+    sim = Sim.sync_all(sim)
+    frontier = Log.frontier(Sim.log(sim, "r0"))
+    {sim, succession} = Sim.succeed(sim, "r1", :moderator, certificate: certificate)
+    sim = Sim.sync_all(sim)
+
+    {_snapshot, retained, res} = assert_compaction_equivalence(Sim.log(sim, "r0"), frontier)
+
+    assert Log.has?(retained, succession.id)
+    assert res.reasons[succession.id] == :witnessed_recovery_not_configured
+    assert res.holders.moderator == Sim.identity(sim, "r0").pub
+  end
+
+  test "retained integer succession requires a certificate under witnessed recovery" do
+    sim = setup_witnessed_sim("compaction-witnessed-policy-integer-proof")
+    frontier = Log.frontier(Sim.log(sim, "r0"))
+    {sim, succession} = Sim.succeed(sim, "r1", :moderator, at_tick: 1_000_000)
+    sim = Sim.sync_all(sim)
+
+    {_snapshot, retained, res} = assert_compaction_equivalence(Sim.log(sim, "r0"), frontier)
+
+    assert Log.has?(retained, succession.id)
+    assert res.reasons[succession.id] == :recovery_certificate_required
+    assert res.holders.moderator == Sim.identity(sim, "r0").pub
+  end
+
+  test "retained succession rejects a hybrid recovery and dormancy policy" do
+    sim =
+      Sim.new(Thread, @replica, @witness_realms, seed: "compaction-hybrid-recovery-policy")
+
+    {sim, _genesis} =
+      Sim.create_replica(sim, "r0",
+        policies: %{
+          moderator: %{
+            successor: "r1",
+            dormant_ticks: 3,
+            recovery: %{
+              mode: :witnessed,
+              version: 1,
+              witnesses: ["w0", "w1", "w2"],
+              threshold: 2
+            }
+          }
+        }
+      )
+
+    sim = Sim.sync_all(sim)
+    frontier = Log.frontier(Sim.log(sim, "r0"))
+    {sim, succession} = Sim.succeed(sim, "r1", :moderator, at_tick: 3)
+    sim = Sim.sync_all(sim)
+
+    {_snapshot, retained, res} = assert_compaction_equivalence(Sim.log(sim, "r0"), frontier)
+
+    assert Log.has?(retained, succession.id)
+    assert res.reasons[succession.id] == :invalid_recovery_policy
+    assert res.holders.moderator == Sim.identity(sim, "r0").pub
+  end
+
+  test "covered witnessed succession seeds a zero-tick acquire after compaction" do
+    sim = setup_witnessed_sim("compaction-covered-witnessed-succession")
+
+    {sim, succession} =
+      Sim.succeed(sim, "r1", :moderator, witnesses: ["w0", "w1"])
+
+    sim = Sim.sync_all(sim)
+    frontier = Log.frontier(Sim.log(sim, "r0"))
+    {sim, lock} = Sim.command(sim, "r1", :lock, [])
+    sim = Sim.sync_all(sim)
+
+    {snapshot, retained, res} = assert_compaction_equivalence(Sim.log(sim, "r0"), frontier)
+
+    refute Log.has?(retained, succession.id)
+    assert Log.has?(retained, lock.id)
+    assert snapshot.roles.moderator.last_acquire.at_tick == 0
+    assert snapshot.roles.moderator.last_active_tick == 0
+    refute Map.has_key?(res.reasons, lock.id)
+    assert res.holders.moderator == Sim.identity(sim, "r1").pub
+    assert res.state.locked?
+  end
+
   test "covered honored succession activates retained capability use and same-role transfer" do
     {sim, _grants} = setup_sim("compaction-covered-succession-activation")
 
@@ -541,6 +680,27 @@ defmodule Lattice2.CompactionSpikeTest do
     {sim, g1} = Sim.grant(sim, "r0", "r1", ops: [:post, :set_title, :join, :leave])
     {sim, g2} = Sim.grant(sim, "r0", "r2", ops: [:post, :set_title, :join, :leave])
     {Sim.sync_all(sim), %{1 => g1, 2 => g2}}
+  end
+
+  defp setup_witnessed_sim(seed) do
+    sim = Sim.new(Thread, @replica, @witness_realms, seed: seed)
+
+    {sim, _genesis} =
+      Sim.create_replica(sim, "r0",
+        policies: %{
+          moderator: %{
+            successor: "r1",
+            recovery: %{
+              mode: :witnessed,
+              version: 1,
+              witnesses: ["w0", "w1", "w2"],
+              threshold: 2
+            }
+          }
+        }
+      )
+
+    Sim.sync_all(sim)
   end
 
   defp heal_all(sim) do
