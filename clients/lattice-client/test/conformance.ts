@@ -53,6 +53,58 @@ function check(name: string, got: unknown, want: unknown) {
   }
 }
 
+function authorityFor(
+  schema: ReplicaSchema,
+  ops: Op[],
+  expectedReplica?: string,
+) {
+  const byId = index(ops);
+  return analyzeAuthority(
+    schema,
+    ops,
+    new Set(ops.map((op) => op.id)),
+    canonicalOrder(ops, byId),
+    byId,
+    expectedReplica,
+  );
+}
+
+type AuthorityProjection = ReturnType<typeof authorityFor>;
+
+function checkForeignReplicaEvidence(
+  label: string,
+  schema: ReplicaSchema,
+  ops: Op[],
+  isTarget: (op: Op) => boolean,
+  isEffective: (analysis: AuthorityProjection, target: Op | null) => boolean,
+) {
+  const target = ops.find(isTarget) ?? null;
+  const expectedReplica = ops.find((op) => op.replica !== undefined)?.replica;
+  const control = authorityFor(schema, ops, expectedReplica);
+  const mutatedOps = structuredClone(ops);
+  const mutatedTarget = mutatedOps.find((op) => op.id === target?.id);
+  if (mutatedTarget !== undefined) {
+    mutatedTarget.replica = `${mutatedTarget.replica}:sibling`;
+  }
+  const mutated = authorityFor(schema, mutatedOps, expectedReplica);
+
+  check(
+    `local outer replica ${label} is effective control`,
+    target === null ? null : isEffective(control, target),
+    true,
+  );
+  check(
+    `foreign outer replica ${label} is ineffective`,
+    target === null ? null : isEffective(mutated, target),
+    false,
+  );
+  check(
+    `foreign outer replica ${label} reason`,
+    target === null ? null : mutated.quarantineReasons.get(target.id),
+    "wrong_replica",
+  );
+}
+
 function compareCodePoints(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
@@ -430,6 +482,198 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
   const full = materialize(vec.schema, ops);
   const exp = vec.expectAtFullFrontier;
 
+  if (vec.scenario === "township_authority_double_transfer") {
+    const genesis = ops.find((op) => op.authority?.type === "genesis");
+    const honoredTransfer = ops.find(
+      (op) =>
+        op.authority?.type === "transfer" &&
+        !exp.quarantine.includes(op.id),
+    );
+    const controlOps = [genesis, honoredTransfer].filter(
+      (op): op is Op => op !== undefined,
+    );
+    const control = materialize(vec.schema, controlOps);
+
+    check(
+      "outer replica transfer mutation control moves holder",
+      control.state.clerk,
+      "resident",
+    );
+    check(
+      "outer replica transfer mutation control remains honored",
+      honoredTransfer === undefined
+        ? null
+        : control.quarantine.includes(honoredTransfer.id),
+      false,
+    );
+
+    if (genesis !== undefined) {
+      const forgedReplica = `${genesis.replica}:foreign`;
+      const evidenceFreeWrite = structuredClone(genesis);
+      evidenceFreeWrite.id = "0000000000000000000000000000000000000000000";
+      evidenceFreeWrite.hash = "0000000000000000000000000000000000000000000";
+      evidenceFreeWrite.replica = forgedReplica;
+      evidenceFreeWrite.deps = [];
+      evidenceFreeWrite.author = "mallory";
+      evidenceFreeWrite.value = "mallory";
+      delete evidenceFreeWrite.authority;
+      const mixedReplicaOps = [genesis, evidenceFreeWrite];
+      let unpinnedError = "";
+      try {
+        materialize(vec.schema, mixedReplicaOps);
+      } catch (error) {
+        unpinnedError = error instanceof Error ? error.name : String(error);
+      }
+      const pinned = materialize(
+        vec.schema,
+        mixedReplicaOps,
+        undefined,
+        null,
+        genesis.replica,
+      );
+
+      check(
+        "unpinned mixed-replica authority history fails closed",
+        unpinnedError,
+        "V01UnvalidatedAuthorityError",
+      );
+      check(
+        "pinned mixed-replica authority history keeps genuine holder",
+        pinned.state.clerk,
+        "clerk",
+      );
+      check(
+        "pinned mixed-replica authority history quarantines foreign write",
+        pinned.quarantineReasons.get(evidenceFreeWrite.id),
+        "wrong_replica",
+      );
+    }
+
+    for (const replicaMutation of ["missing", "mismatched"] as const) {
+      const mutatedOps = structuredClone(controlOps);
+      const transfer = mutatedOps.find((op) => op.authority?.type === "transfer");
+      if (transfer !== undefined) {
+        if (replicaMutation === "missing") delete transfer.replica;
+        else transfer.replica = `${transfer.replica}:sibling`;
+      }
+      const mutated = materialize(
+        vec.schema,
+        mutatedOps,
+        undefined,
+        null,
+        genesis?.replica,
+      );
+
+      check(
+        `${replicaMutation} outer replica cannot move holder by transfer`,
+        mutated.state.clerk,
+        "clerk",
+      );
+      check(
+        `${replicaMutation} outer replica transfer is quarantined`,
+        honoredTransfer === undefined
+          ? null
+          : mutated.quarantine.includes(honoredTransfer.id),
+        true,
+      );
+      check(
+        `${replicaMutation} outer replica transfer reason`,
+        honoredTransfer === undefined
+          ? null
+          : mutated.quarantineReasons.get(honoredTransfer.id),
+        "wrong_replica",
+      );
+    }
+  }
+
+  if (vec.scenario === "township_succession_unproven_tick") {
+    const genesis = ops.find((op) => op.authority?.type === "genesis");
+    const succession = ops.find((op) => op.authority?.type === "succeed");
+    const expectedReplica = genesis?.replica;
+
+    check(
+      "outer replica succession mutation control moves holder",
+      full.state.clerk,
+      "resident",
+    );
+    check(
+      "outer replica succession mutation control remains honored",
+      succession === undefined ? null : full.quarantine.includes(succession.id),
+      false,
+    );
+
+    for (const replicaMutation of ["missing", "mismatched"] as const) {
+      const mutatedOps = structuredClone(ops);
+      const mutatedSuccession = mutatedOps.find(
+        (op) => op.authority?.type === "succeed",
+      );
+      if (mutatedSuccession !== undefined) {
+        if (replicaMutation === "missing") delete mutatedSuccession.replica;
+        else mutatedSuccession.replica = `${mutatedSuccession.replica}:sibling`;
+      }
+      const mutated = materialize(
+        vec.schema,
+        mutatedOps,
+        undefined,
+        null,
+        expectedReplica,
+      );
+
+      check(
+        `${replicaMutation} outer replica cannot move holder by succession`,
+        mutated.state.clerk,
+        "clerk",
+      );
+      check(
+        `${replicaMutation} outer replica succession is quarantined`,
+        succession === undefined ? null : mutated.quarantine.includes(succession.id),
+        true,
+      );
+      check(
+        `${replicaMutation} outer replica succession reason`,
+        succession === undefined
+          ? null
+          : mutated.quarantineReasons.get(succession.id),
+        "wrong_replica",
+      );
+    }
+
+    for (const replicaMutation of ["missing", "mismatched"] as const) {
+      const mutatedOps = structuredClone(ops);
+      const mutatedGenesis = mutatedOps.find(
+        (op) => op.authority?.type === "genesis",
+      );
+      if (mutatedGenesis !== undefined) {
+        if (replicaMutation === "missing") delete mutatedGenesis.replica;
+        else mutatedGenesis.replica = "replica:matter:unbound-policy-poison";
+      }
+      const mutated = materialize(
+        vec.schema,
+        mutatedOps,
+        undefined,
+        null,
+        expectedReplica,
+      );
+      const authority = authorityFor(vec.schema, mutatedOps, expectedReplica);
+
+      check(
+        `${replicaMutation} outer replica genesis cannot install succession policy`,
+        authority.policiesByRole.has("clerk"),
+        false,
+      );
+      check(
+        `${replicaMutation} outer replica genesis cannot enable succession`,
+        mutated.state.clerk === "resident",
+        false,
+      );
+      check(
+        `${replicaMutation} outer replica genesis reason`,
+        genesis === undefined ? null : mutated.quarantineReasons.get(genesis.id),
+        "wrong_replica",
+      );
+    }
+  }
+
   for (const [field, want] of Object.entries(exp.state)) {
     check(`state.${field}`, full.state[field], want);
   }
@@ -476,10 +720,7 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
     check(
       "quarantine reason ids",
       reasonPairs?.map(([id]) => id) ?? null,
-      // Must be the SAME comparator as sortedPairs: `localeCompare` folds case
-      // (ICU orders "h" before "U") while `compareCodePoints` does not, so the
-      // two sides of this assertion disagreed on any vector whose ids mix case.
-      [...full.quarantine].sort(compareCodePoints),
+      [...full.quarantine].sort(),
     );
   }
   if (exp.winners) {
@@ -720,6 +961,7 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
     if (
       boundaryHeartbeat?.authority?.type === "heartbeat" &&
       boundarySuccession?.authority?.type === "succeed" &&
+      boundaryGenesis !== undefined &&
       boundarySuccession.authority.proof.mode === "legacy" &&
       boundaryPolicy?.mode === "legacy"
     ) {
@@ -756,7 +998,95 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
         stableComparisonValue(boundaryAuthority),
         stableComparisonValue(scrubbedBoundaryAuthority),
       );
+
+      const localBoundaryOps = structuredClone(ops);
+      const localBoundaryHeartbeat = localBoundaryOps.find(
+        (op) => op.authority?.type === "heartbeat",
+      );
+      const localBoundarySuccession = localBoundaryOps.find(
+        (op) => op.authority?.type === "succeed",
+      );
+      if (
+        localBoundaryHeartbeat?.authority?.type === "heartbeat" &&
+        localBoundarySuccession !== undefined
+      ) {
+        localBoundaryHeartbeat.authority.atTick =
+          boundarySuccession.authority.proof.atTick - boundaryPolicy.dormantTicks + 1;
+        const localBoundaryAuthority = authorityFor(
+          vec.schema,
+          localBoundaryOps,
+          boundaryGenesis.replica,
+        );
+        const foreignHeartbeatOps = structuredClone(localBoundaryOps);
+        const foreignHeartbeat = foreignHeartbeatOps.find(
+          (op) => op.authority?.type === "heartbeat",
+        );
+        if (foreignHeartbeat !== undefined) {
+          foreignHeartbeat.replica = `${foreignHeartbeat.replica}:sibling`;
+        }
+        const foreignHeartbeatAuthority = authorityFor(
+          vec.schema,
+          foreignHeartbeatOps,
+          boundaryGenesis.replica,
+        );
+
+        check(
+          "local boundary heartbeat postpones succession control",
+          localBoundaryAuthority.quarantineReasons.get(localBoundarySuccession.id),
+          "premature_succession",
+        );
+        check(
+          "foreign outer replica heartbeat cannot postpone succession",
+          foreignHeartbeatAuthority.honoredWrites.has(localBoundarySuccession.id),
+          true,
+        );
+        check(
+          "foreign outer replica heartbeat reason",
+          foreignHeartbeat === undefined
+            ? null
+            : foreignHeartbeatAuthority.quarantineReasons.get(foreignHeartbeat.id),
+          "wrong_replica",
+        );
+      }
     }
+  }
+
+  if (vec.scenario === "township_carrier_w1") {
+    checkForeignReplicaEvidence(
+      "grant",
+      vec.schema,
+      ops,
+      (op) => op.authority?.type === "grant",
+      (analysis, target) => {
+        const delegationId =
+          target?.authority?.type === "grant" ? target.authority.delegation.id : null;
+        return delegationId === null
+          ? false
+          : analysis.security.delegations.has(delegationId);
+      },
+    );
+  }
+
+  if (vec.scenario === "township_capability_revoked_causal") {
+    checkForeignReplicaEvidence(
+      "revoke",
+      vec.schema,
+      ops,
+      (op) => op.authority?.type === "revoke",
+      (analysis, target) =>
+        analysis.security.effectiveRevokes.some((item) => item.opId === target?.id),
+    );
+  }
+
+  if (vec.scenario === "township_lease_expired") {
+    checkForeignReplicaEvidence(
+      "beacon",
+      vec.schema,
+      ops,
+      (op) => op.authority?.type === "beacon",
+      (analysis, target) =>
+        analysis.security.validBeacons.some((item) => item.opId === target?.id),
+    );
   }
 
   if (vec.scenario === "township_succession_witnessed_recovery") {

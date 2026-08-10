@@ -1733,9 +1733,9 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
   end
 
   # Plan 162 step 2b(d): a delegation chain minted for a same-root *sibling*
-  # replica validates through the genesis/attenuation arms here too (same root
-  # commitment), so use-time cap_ok/8 and timeline-time replica guards must
-  # both refuse the replayed capability / transfer before any holder update.
+  # replica is retained as evidence but rejected by `validate_delegation/6`.
+  # Commands report the structural `:wrong_replica` reason; a transfer citing
+  # the invalid chain reports `:invalid_transfer` and cannot move the holder.
   defp township_authority_cross_replica_replay do
     sim =
       Sim.new(
@@ -1805,8 +1805,8 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
     log = Log.append!(log, target)
 
-    # Sibling transfer authored by the current holder: validates through the
-    # same-root arms, so only the timeline replica guard stops the holder move.
+    # Sibling transfer authored by the current holder. It reaches the role
+    # timeline but its foreign delegation is refused as :invalid_transfer.
     replayed_transfer =
       Op.new(
         clerk,
@@ -1822,7 +1822,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     # a same-root sibling genesis is refused as :wrong_replica.
     assert_authority_reason!(log, replayed_genesis.id, :wrong_replica)
     assert_authority_reason!(log, target.id, :wrong_replica)
-    assert_authority_reason!(log, replayed_transfer.id, :wrong_replica)
+    assert_authority_reason!(log, replayed_transfer.id, :invalid_transfer)
     assert_post_absent!(log, rejected_post)
 
     unless Authority.analyze(Matter, log).holders.clerk == clerk.pub do
@@ -1833,6 +1833,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       "case" => "cross_replica_replay",
       "targetOperationId" => target.id,
       "expectedReason" => "wrong_replica",
+      "transferExpectedReason" => "invalid_transfer",
       "rejectedPost" => rejected_post,
       "siblingReplica" => sibling_replica,
       "siblingGrantDelegationId" => sibling_grant.id,
