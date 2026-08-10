@@ -26,13 +26,14 @@ checklist so three subagents can start without touching each other's seams.
 - Root owns: dependency decisions, shared-interface freezes, PR publication, review closure,
   merges, hosted CI evidence, and the stale Toolshed/Treehouse M2 language update from the
   Shared Beta Contract ticket.
-- **One agent per hot file:** `.github/workflows/flagship.yml` (Worktree 3), lockfiles
+- **One agent per hot file:** `.github/workflows/flagship.yml` (serialized through root; Worktree 3
+  owned the now-landed Android job, and the carrier closure owns only `carrier_release`), lockfiles
   (`package-lock.json`, `mix.lock` — coordinate through root), generated mobile projects
   (`src-tauri/gen/android`, `src-tauri/gen/apple` — Worktree 2), `carrier.ts` / vector exporters
   (frozen this wave; nobody edits), `src-tauri/src/lib.rs` native state (Worktree 2).
-- Merge order: Worktrees 1 and 2 are independent and may merge in either order. Worktree 3's CI
-  job addition to `flagship.yml` merges last in the wave, after root review, to keep the workflow
-  file serialized.
+- Merge order: the original Worktrees 1–3 have landed. Closure work touching `flagship.yml` merges
+  one branch at a time through root; land the carrier `carrier_release` job before any later Android
+  closure edit so the workflow file remains serialized.
 - Every PR follows Plan 158's ten-step merge protocol verbatim, including RED evidence
   preservation and exact merge-SHA green on `main`.
 
@@ -61,14 +62,17 @@ git -C /Users/nicholas/develop/lattice worktree add ../lattice-beta-carrier -b c
    instances (`apps/lattice_carrier_server/lib/…/{application,holder,listener,web_socket}.ex`).
 2. Replace the seed-in-command-line entrypoint with fail-closed secret-file loading. No identity
    material in argv, env dumps, or logs.
-3. Unauthenticated `/livez`; content-free `/readyz` requiring identity load, complete source
-   restore, listener availability, writable durable storage. `/carrier` auth unchanged.
+3. Unauthenticated `/livez`; content-free `/readyz` requiring identity load, recurring on-disk
+   source restore/validation, and listener availability for every instance, plus writable durable
+   storage for relay-enabled instances. `/carrier` auth unchanged.
 4. Persist-before-ack durability on the supported Linux path: write temp file, `fsync` file,
    atomic rename, `fsync` containing directory, only then acknowledge a relay.
 5. Missing/corrupt identity, manifest, or log ⇒ refuse startup; never create a new community.
 
 **File ownership:** `apps/lattice_carrier_server/**`, its `mix.exs` release definition, new
-`rel/` + runtime config. Touches nothing under `clients/` or workflow YAML.
+`rel/` + runtime config, plus the serialized dedicated `carrier_release` job in
+`.github/workflows/flagship.yml`. Touches nothing under `clients/`; later workflow additions must
+rebase after this closure lands.
 
 **First RED tests (write before implementation, preserve RED evidence):**
 

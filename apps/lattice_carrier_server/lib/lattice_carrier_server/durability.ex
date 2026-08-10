@@ -4,60 +4,70 @@ defmodule LatticeCarrierServer.Durability do
 
   A path-backed relay is acknowledged only after the complete sequence:
   write the temporary file, `fsync` the file, atomically rename it over the
-  served log, then `fsync` the containing directory. `rehearse/2` proves the
-  full sequence executes in a durable directory; a platform or filesystem
-  that cannot prove the sequence is unsupported for the pilot and refuses at
-  startup instead of serving.
+  served log, then `fsync` the containing directory. `rehearse_target/2`
+  proves that exact replacement sequence at startup; a platform or filesystem
+  that cannot prove it is unsupported for the pilot and refuses to serve.
+
+  Target locks coordinate tasks only inside this BEAM node. They do not guard
+  two OS processes or separate nodes pointed at the same custody path; pilot
+  deployment must retain single-process ownership of each log directory.
   """
 
   @callback sync_file(Path.t()) :: :ok | {:error, term()}
   @callback rename(Path.t(), Path.t()) :: :ok | {:error, term()}
   @callback sync_directory(Path.t()) :: :ok | {:error, term()}
 
-  @rehearsal_prefix ".lattice-durability-rehearsal"
-
   @doc false
-  @spec with_target_lock(Path.t(), (-> result)) :: result | {:error, term()} when result: term()
-  def with_target_lock(path, fun) when is_binary(path) and is_function(fun, 0) do
+  @spec with_target_lock(Path.t(), (-> result), keyword()) :: result | {:error, term()}
+        when result: term()
+  def with_target_lock(path, fun, opts \\ [])
+      when is_binary(path) and is_function(fun, 0) and is_list(opts) do
     lock = {{__MODULE__, :target, Path.expand(path)}, self()}
+    retries = Keyword.get(opts, :retries, :infinity)
+    wrapped_fun = fn -> {:target_lock_result, fun.()} end
 
-    case :global.trans(lock, fun, [node()]) do
-      {:aborted, reason} -> {:error, {:target_lock_failed, reason}}
-      result -> result
+    case :global.trans(lock, wrapped_fun, [node()], retries) do
+      :aborted -> {:error, {__MODULE__, :target_lock_aborted}}
+      {:target_lock_result, result} -> result
     end
   end
 
   @doc """
-  Prove the write -> fsync -> rename -> directory-fsync sequence in
-  `directory`, cleaning up all rehearsal residue.
+  Prove the configured target's real persistence sequence without replacing it.
+
+  Two private sibling files stand in for the live target. The rehearsal reads
+  and writes the target's current byte size, exercises the same secure
+  allocation used by relay persistence, renames over an existing sibling, and
+  syncs the containing directory. The configured target is read but never
+  opened for writing or renamed. Startup separately rehearses replacement of
+  each relay-enabled target itself; this isolated recurring check cannot
+  detect a target-specific immutable-file attribute added after boot.
   """
-  @spec rehearse(module(), Path.t()) :: :ok | {:error, term()}
-  def rehearse(impl, directory), do: rehearse(impl, directory, [])
-
-  @doc false
-  @spec rehearse(module(), Path.t(), keyword()) :: :ok | {:error, term()}
-  def rehearse(impl, directory, opts) do
-    unique = Keyword.get(opts, :unique, fn -> System.unique_integer([:monotonic, :positive]) end)
-
-    case allocate_namespace(directory, unique, 16) do
-      {:ok, namespace} ->
-        temp_path = Path.join(namespace, "probe.tmp")
-        target_path = Path.join(namespace, "probe")
-
-        try do
-          with :ok <- write_probe(temp_path),
-               :ok <- impl.sync_file(temp_path),
-               :ok <- impl.rename(temp_path, target_path),
-               :ok <- impl.sync_directory(namespace),
-               :ok <- impl.sync_directory(directory) do
-            :ok
+  @spec rehearse_target_isolated(module(), Path.t()) :: :ok | {:error, term()}
+  def rehearse_target_isolated(impl, path) do
+    with {:ok, bytes} <- File.read(path),
+         {:ok, %File.Stat{type: :regular, mode: mode}} <- File.stat(path),
+         {:ok, temp_path} <- secure_temp(path) do
+      try do
+        with {:ok, target_path} <- secure_temp(path) do
+          try do
+            with :ok <- File.write(temp_path, bytes),
+                 :ok <- File.chmod(temp_path, Bitwise.band(mode, 0o777)),
+                 :ok <- impl.sync_file(temp_path),
+                 :ok <- impl.rename(temp_path, target_path),
+                 :ok <- impl.sync_directory(Path.dirname(path)) do
+              :ok
+            end
+          after
+            _ = File.rm(target_path)
           end
-        after
-          _ = File.rm_rf(namespace)
         end
-
-      {:error, _reason} = error ->
-        error
+      after
+        _ = File.rm(temp_path)
+      end
+    else
+      {:ok, %File.Stat{}} -> {:error, :invalid_rehearsal_target}
+      {:error, _reason} = error -> error
     end
   end
 
@@ -66,15 +76,11 @@ defmodule LatticeCarrierServer.Durability do
   sequence used by relay persistence. The replacement contains identical
   bytes and preserves the log's permission bits.
   """
-  @spec rehearse_target(module(), Path.t(), keyword()) :: :ok | {:error, term()}
-  def rehearse_target(impl, path, opts \\ []) do
-    allocated = Keyword.get(opts, :allocated, fn _path -> :ok end)
-
+  @spec rehearse_target(module(), Path.t()) :: :ok | {:error, term()}
+  def rehearse_target(impl, path) do
     with {:ok, bytes} <- File.read(path),
          {:ok, %File.Stat{type: :regular, mode: mode}} <- File.stat(path),
          {:ok, temp_path} <- secure_temp(path) do
-      allocated.(temp_path)
-
       try do
         with :ok <- File.write(temp_path, bytes),
              :ok <- File.chmod(temp_path, Bitwise.band(mode, 0o777)),
@@ -120,6 +126,85 @@ defmodule LatticeCarrierServer.Durability do
     error in [ErlangError] -> {:error, {:secure_temp_unavailable, error.original}}
   end
 
+  @doc false
+  @spec cleanup_orphaned_temps(Path.t()) :: :ok | {:error, term()}
+  def cleanup_orphaned_temps(path) when is_binary(path) do
+    directory = Path.dirname(path)
+    prefix = Path.basename(path) <> ".tmp."
+
+    with {:ok, entries} <- File.ls(directory) do
+      entries
+      |> Enum.filter(&String.starts_with?(&1, prefix))
+      |> Enum.sort()
+      |> Enum.reduce_while(:ok, fn entry, :ok ->
+        orphan_path = Path.join(directory, entry)
+
+        case File.rm(orphan_path) do
+          :ok -> {:cont, :ok}
+          {:error, :enoent} -> {:cont, :ok}
+          {:error, reason} -> {:halt, {:error, {:orphan_cleanup_failed, orphan_path, reason}}}
+        end
+      end)
+    end
+  end
+
+  @doc false
+  @spec bounded_cleanup_orphaned_temps(Path.t(), pos_integer()) :: :ok | {:error, term()}
+  def bounded_cleanup_orphaned_temps(path, timeout_ms \\ 250)
+      when is_binary(path) and is_integer(timeout_ms) and timeout_ms > 0 do
+    deadline = System.monotonic_time(:millisecond) + timeout_ms
+
+    task =
+      Task.async(fn ->
+        try do
+          cleanup_with_short_lock_retry(path, deadline)
+        catch
+          kind, reason -> {:error, {:orphan_cleanup_exception, kind, reason}}
+        end
+      end)
+
+    case Task.yield(task, timeout_ms) || Task.shutdown(task, :brutal_kill) do
+      {:ok, result} -> result
+      _timeout_or_exit -> {:error, :orphan_cleanup_timeout}
+    end
+  end
+
+  defp cleanup_with_short_lock_retry(path, deadline) do
+    result =
+      with_target_lock(
+        path,
+        fn ->
+          with :ok <- cleanup_orphaned_temps(path) do
+            # A killed task can leave its `mktemp` subprocess just enough
+            # time to create a sibling after the first sweep. This short,
+            # lock-protected second sweep is best-effort crash cleanup.
+            Process.sleep(10)
+            cleanup_orphaned_temps(path)
+          end
+        end,
+        retries: 0
+      )
+
+    case result do
+      {:error, {__MODULE__, :target_lock_aborted}} ->
+        retry_cleanup_before_deadline(path, deadline)
+
+      other ->
+        other
+    end
+  end
+
+  defp retry_cleanup_before_deadline(path, deadline) do
+    remaining_ms = deadline - System.monotonic_time(:millisecond)
+
+    if remaining_ms > 10 do
+      Process.sleep(min(5, remaining_ms - 10))
+      cleanup_with_short_lock_retry(path, deadline)
+    else
+      {:error, :orphan_cleanup_timeout}
+    end
+  end
+
   defp secure_parent(path) do
     with {:ok, %File.Stat{type: :directory, mode: mode, uid: uid}} <-
            File.stat(Path.dirname(path)),
@@ -141,38 +226,6 @@ defmodule LatticeCarrierServer.Durability do
 
       {_output, _status} ->
         {:error, :uid_unavailable}
-    end
-  end
-
-  defp allocate_namespace(_directory, _unique, 0),
-    do: {:error, :rehearsal_namespace_unavailable}
-
-  defp allocate_namespace(directory, unique, attempts) do
-    namespace = Path.join(directory, "#{@rehearsal_prefix}.#{unique.()}")
-
-    case File.mkdir(namespace) do
-      :ok ->
-        case File.chmod(namespace, 0o700) do
-          :ok ->
-            {:ok, namespace}
-
-          {:error, reason} ->
-            _ = File.rmdir(namespace)
-            {:error, {:rehearsal_namespace_permissions, reason}}
-        end
-
-      {:error, :eexist} ->
-        allocate_namespace(directory, unique, attempts - 1)
-
-      {:error, reason} ->
-        {:error, {:rehearsal_namespace_failed, reason}}
-    end
-  end
-
-  defp write_probe(path) do
-    case File.write(path, "lattice-durability-rehearsal") do
-      :ok -> :ok
-      {:error, reason} -> {:error, {:probe_write_failed, reason}}
     end
   end
 end

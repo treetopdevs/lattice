@@ -210,8 +210,9 @@ trusted time, bearer use limits, or a two-phone result based on an emulator/desk
 Create a production Mix release and manifest-driven supervisor around the existing
 `LatticeCarrierServer` instances. Replace the current seed-in-command-line entrypoint with
 fail-closed secret-file loading. Add unauthenticated `/livez` and content-free `/readyz`; readiness
-requires identity load, complete source restore, listener availability and writable durable storage.
-Keep `/carrier` application authentication unchanged.
+requires identity load, recurring on-disk source restore/validation, and listener availability for
+every instance, plus writable durable storage for relay-enabled instances. Keep `/carrier`
+application authentication unchanged.
 
 Strengthen the path-backed acknowledgement boundary for the supported Linux host so an accepted
 relay survives process restart and host reboot. Require the supported filesystem path to flush the
