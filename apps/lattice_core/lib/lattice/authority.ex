@@ -47,7 +47,7 @@ defmodule Lattice.Authority do
   """
 
   alias Lattice.Authority.{Delegation, SuccessionCertificate}
-  alias Lattice.{Dag, Identity, Log, Op}
+  alias Lattice.{Canonical, Dag, Identity, Log, Op}
 
   # Separates a replica *name* from the root-key commitment bound into its id.
   @root_marker "#root:"
@@ -489,7 +489,7 @@ defmodule Lattice.Authority do
         {:error, :wrong_replica}
 
       is_nil(d.parent_id) ->
-        validate_rootless_delegation(d, commitment, genesis_ids, succession_ids)
+        validate_rootless_delegation(d, log_replica, commitment, genesis_ids, succession_ids)
 
       true ->
         validate_child_delegation(
@@ -503,7 +503,7 @@ defmodule Lattice.Authority do
     end
   end
 
-  defp validate_rootless_delegation(d, commitment, genesis_ids, succession_ids) do
+  defp validate_rootless_delegation(d, replica, commitment, genesis_ids, succession_ids) do
     cond do
       d.issuer != d.audience ->
         {:error, :nongenesis_root}
@@ -521,6 +521,15 @@ defmodule Lattice.Authority do
 
       MapSet.member?(genesis_ids, d.id) ->
         {:error, :impostor_genesis}
+
+      # Step 2b(d): a root-less delegation minted for another replica gets the
+      # structural :wrong_replica reason, mirroring verify_chain/2. Kept below
+      # the genesis/succession arms so the pinned :impostor_genesis reason and
+      # the succession candidacy judgment are unchanged; a same-root sibling
+      # chain that validates through those arms is still refused at use time by
+      # cap_ok/8's replica binding.
+      d.replica != replica ->
+        {:error, :wrong_replica}
 
       true ->
         {:error, :unrooted_delegation}
@@ -741,6 +750,11 @@ defmodule Lattice.Authority do
             op.author != d.audience ->
               reject(st, op, :unauthorized_genesis, role)
 
+            # Same-root sibling genesis still validates through the root arms;
+            # refuse it here so it cannot rewrite this replica's role timeline.
+            d.replica != op.replica ->
+              reject(st, op, :wrong_replica, role)
+
             true ->
               record_acquire(st, op, d, 0)
           end
@@ -764,14 +778,18 @@ defmodule Lattice.Authority do
           do: {:genesis, d}
 
       {:transfer, ^role, %Delegation{} = d, tick} ->
+        # Plan 162 step 2b(e) routes a malformed tick to explicit quarantine
+        # rather than dropping it silently, so the reason is attributable and
+        # the TypeScript decoder's :malformed_term verdict stays mirrored.
         cond do
           not valid_tick?(tick) -> {:malformed_tick, op}
           not valid_delegation_intro?(delegations, d, op.id) -> nil
           true -> {:transfer, d, tick}
         end
 
-      {:succeed, ^role, %Delegation{} = d, tick} ->
-        if valid_delegation_intro?(delegations, d, op.id), do: {:succeed, d, tick}
+      {:succeed, ^role, %Delegation{} = d, proof} ->
+        if valid_delegation_intro?(delegations, d, op.id) and portable_proof?(proof),
+          do: {:succeed, d, proof}
 
       {:heartbeat, ^role, tick} ->
         if valid_tick?(tick), do: {:heartbeat, tick}, else: {:malformed_tick, op}
@@ -782,6 +800,19 @@ defmodule Lattice.Authority do
   end
 
   defp role_event(_op, _role, _delegations), do: nil
+
+  # Step 2b(e): a tick may enter a role timeline only as a canonical
+  # non-negative integer within the wire's uint64 range. Erlang orders all
+  # terms, so an unguarded non-integer tick would be recorded, win
+  # `last_active_from/3`'s max, and raise ArithmeticError in every later
+  # dormancy evaluation — a validly signed heartbeat could permanently break
+  # authority analysis of its replica. Anything else is not a role event.
+  # A succession proof may also be a non-integer witness term (e.g.
+  # `{:witnessed, certificate}`), judged downstream by
+  # `decide_succession_proof/7`; only integer ticks must be portable here.
+  # The tick predicate itself is `valid_tick?/1` — public, because
+  # `compaction_spike.ex` mirrors these decisions and must share it.
+  defp portable_proof?(proof), do: not is_integer(proof) or valid_tick?(proof)
 
   defp record_acquire(st, op, %Delegation{} = delegation, at_tick) do
     %{
@@ -811,6 +842,11 @@ defmodule Lattice.Authority do
     holder_at_deps = holder_from_acquires(st.acquires, anc)
 
     cond do
+      # A same-root sibling transfer validates through genesis/attenuation, so
+      # refuse foreign-replica events before any holder update.
+      d.replica != op.replica ->
+        reject(st, op, :wrong_replica, role)
+
       not delegation_valid_at?(deleg_valid[d.id], st.acquires, anc) or
         op.author != d.issuer or not MapSet.member?(d.roles, role) ->
         reject(st, op, :invalid_transfer, role)
@@ -836,6 +872,11 @@ defmodule Lattice.Authority do
         op.author != d.audience or op.author != d.issuer or
           not MapSet.member?(d.roles, role) ->
         reject(st, op, :invalid_succession, role)
+
+      # Preserve succession candidacy judgments above; still refuse a foreign-
+      # replica succeed before record_acquire/4.
+      d.replica != op.replica ->
+        reject(st, op, :wrong_replica, role)
 
       is_nil(policy) or op.author != policy.successor ->
         reject(st, op, :unauthorized_succession, role)
@@ -1049,9 +1090,10 @@ defmodule Lattice.Authority do
     |> Enum.uniq()
   end
 
-  # Clause order is pinned (visibility → grant scope → revoked → expired) so an
-  # op that is both revoked and lease-expired reports :revoked_capability on
-  # every realm — reason precedence must not flap across replicas.
+  # Clause order is pinned (validity → audience → replica → grant scope →
+  # visibility → roles → revoked → expired) so an op that is both revoked and
+  # lease-expired reports :revoked_capability on every realm — reason
+  # precedence must not flap across replicas.
   defp cap_ok(
          op,
          cmd,
@@ -1085,6 +1127,12 @@ defmodule Lattice.Authority do
 
           op.author != d.audience ->
             {:error, :capability_wrong_audience}
+
+          # Step 2b(d): a capability is scoped to one replica — a delegation
+          # chain replayed from a sibling matter (even one sharing this root)
+          # confers nothing here.
+          d.replica != op.replica ->
+            {:error, :wrong_replica}
 
           not MapSet.member?(d.ops, cmd) ->
             {:error, :operation_not_granted}
