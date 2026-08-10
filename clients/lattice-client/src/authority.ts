@@ -141,28 +141,41 @@ export function analyzeAuthority(
   expectedReplica: string | undefined = undefined,
 ): AuthorityAnalysis {
   const visible = order.map((id) => byId.get(id)!);
+  const replica = authorityReplicaAnchor(visible, expectedReplica);
+  const wrongReplicaAuthority = new Map<string, string>();
+  const admitted = visible.filter((op) => {
+    if (
+      op.kind === "authority" &&
+      replica !== undefined &&
+      op.replica !== replica
+    ) {
+      wrongReplicaAuthority.set(op.id, "wrong_replica");
+      return false;
+    }
+    return true;
+  });
   const writesPerRole = new Map<string, number>();
 
-  for (const op of visible) {
+  for (const op of admitted) {
     if (!authorityRoleWrite(schema, op)) continue;
     writesPerRole.set(op.field, (writesPerRole.get(op.field) ?? 0) + 1);
   }
 
-  const collectedDelegations = collectDelegations(visible);
+  const collectedDelegations = collectDelegations(admitted);
   const delegations = validateDelegations(
-    visible,
+    admitted,
     collectedDelegations,
-    expectedReplica,
+    replica,
   );
-  const { policies, recoveryPoliciesByRole } = collectPolicies(visible, delegations);
-  const root = resolveRoot(visible, delegations);
+  const { policies, recoveryPoliciesByRole } = collectPolicies(admitted, delegations);
+  const root = resolveRoot(admitted, delegations);
   const { effectiveRevokes, unauthorizedRevokes } = collectRevokes(
-    visible,
+    admitted,
     delegations,
     root,
   );
   const { validBeacons, invalidBeacons } = collectBeacons(
-    visible,
+    admitted,
     byId as Map<string, Op>,
     root,
   );
@@ -170,16 +183,19 @@ export function analyzeAuthority(
   const honoredWrites = new Set<string>();
   const honoredSuccessionIntroductions = new Map<string, string[]>();
   const quarantineReasons = delegationQuarantineReasons(delegations);
-  collectInvalidGenesisReasons(visible, delegations, quarantineReasons);
+  collectInvalidGenesisReasons(admitted, delegations, quarantineReasons);
   for (const [opId, reason] of unauthorizedRevokes) {
     quarantineReasons.set(opId, reason);
   }
   for (const [opId, reason] of invalidBeacons) {
     quarantineReasons.set(opId, reason);
   }
+  for (const [opId, reason] of wrongReplicaAuthority) {
+    quarantineReasons.set(opId, reason);
+  }
   const quarantinedWrites = new Set<string>(quarantineReasons.keys());
 
-  for (const op of visible) {
+  for (const op of admitted) {
     if (op.authority?.type === "heartbeat") {
       if (op.kind !== "authority") continue;
       // Heartbeats never write a field: they only refresh the holder's
@@ -283,6 +299,19 @@ export function analyzeAuthority(
       validBeacons,
     },
   };
+}
+
+function authorityReplicaAnchor(
+  ops: readonly Op[],
+  expectedReplica: string | undefined,
+): string | undefined {
+  if (expectedReplica !== undefined) return expectedReplica;
+
+  const replicas = new Set(ops.map((op) => op.replica));
+  if (replicas.size === 0) return undefined;
+  if (replicas.size === 1) return replicas.values().next().value;
+
+  throw new Error("mixed outer replica evidence");
 }
 
 /** Derive a witnessed-succession review solely from a verified local operation set. */

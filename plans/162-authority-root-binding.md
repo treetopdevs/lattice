@@ -149,12 +149,19 @@ follow-up: mutation evidence corrected; Scope authorizes `capability.ts` for 2b(
 - `capability.ts` adds `delegation.replica !== op.replica` → `wrong_replica` before the
   validation check; `authority.ts` `delegationValidation` adds the same comparison before
   root/chain validation.
-- **PR #45 reconciliation (2026-08-09).** A follow-up review proved that proposed
-  timeline-time replica clauses were redundant: `validate_delegation/6` already marks a sibling
-  delegation `:wrong_replica` before the genesis/succession arms, so it cannot satisfy the
-  existing transfer/succession validity predicates or reach `record_acquire/4`. The redundant
-  clauses were removed. `township_authority_cross_replica_replay.json` and the focused Elixir
-  case retain the useful regression: the genesis and command report `:wrong_replica`, the
+- **PR #45/#47 reconciliation (2026-08-09).** The proposed BEAM timeline-time clauses were
+  redundant because `validate_delegation/6` checks every delegation against `log.replica` before
+  a role acquire. TypeScript still needs an operation-level admission check because direct
+  semantic replay can receive an authority op whose optional outer replica is missing or differs
+  even though embedded delegation evidence validates against the inferred or caller-pinned
+  replica. `analyzeAuthority` now derives that single anchor, quarantines every mismatched
+  authority op as `wrong_replica`, and excludes it before delegation, policy, root, revocation,
+  beacon, heartbeat, or role-timeline collection. Without an explicit caller anchor, fallback is
+  permitted only for a homogeneous history: every visible op carries the same replica, or every
+  visible op is replica-less Tier A. Mixed histories fail closed before write-count reduction, so
+  a low-sorting foreign op cannot choose the anchor and turn an evidence-free write into the sole
+  accepted authority write. `township_authority_cross_replica_replay.json` and the focused Elixir
+  case retain their established reasons: the genesis and command report `:wrong_replica`, the
   transfer reports `:invalid_transfer`, and the holder does not move.
 
 ### Step 2b (e) — malformed tick
@@ -191,6 +198,8 @@ follow-up: mutation evidence corrected; Scope authorizes `capability.ts` for 2b(
 | Structural `malformed_tick_body?/1` transfer/succession clauses | undeclared-role malformed transfer/succession compaction regressions — the compacted quarantine entry disappears because no declared role timeline observes the operation |
 | `compaction_spike.ex` heartbeat `valid_tick?` | `malformed retained heartbeat cannot crash…` raises `ArithmeticError` |
 | `compaction_spike.ex` replica-first seeded capability check | `retained foreign-replica capability keeps its wrong-replica reason after compaction` — compacted replay reports `:invalid_capability` instead of full analysis's `:wrong_replica` |
+| TypeScript anchored authority-op admission | the initial transfer/succession-only RED had 8 failures; the expanded RED had 17 failures across genesis policy, grant, heartbeat, revoke, beacon, transfer, and succession mutations. Reverting the admission filter restores those effects or loses their `wrong_replica` quarantine |
+| TypeScript homogeneous fallback anchor | an unpinned low-sorting foreign evidence-free write makes the pre-fix reducer return `clerk = "mallory"`; the corrected path raises `V01UnvalidatedAuthorityError`, while an explicit genuine anchor keeps `clerk` and quarantines the foreign write as `wrong_replica` |
 | Legacy-only `seeded_succeed/8` proof handling | `retained witnessed succession remains honored after compaction` raises `KeyError` on missing `policy.dormant_ticks`; a witnessed proof under a dormancy policy is incorrectly honored through Erlang term ordering |
 | Covered succession proof copied into `at_tick` | `covered witnessed succession seeds a zero-tick acquire after compaction` records the certificate tuple as both acquire and activity tick |
 | Covered genesis classification ignores its frozen reason | `covered replayed genesis cannot replace the witnessed holder epoch` rejects a valid retained certificate against the quarantined replay op id instead of the honored genesis epoch |
@@ -210,6 +219,19 @@ right: false
 Inspected outcomes with only that guard removed: `foreign_genesis: false`,
 `foreign_grant: false`, `forged_post: {true, :wrong_replica}`, `message_present: false`.
 Both guards remain independently load-bearing.
+
+PR #47's final automated review found that a transfer/succession-only TypeScript correction left
+policy collection and non-role authority events outside the same semantic-replay boundary. The
+replacement admission filter is mutation-pinned for all seven authority evidence classes. The
+transfer and succession cases also include honored positive controls, and the genesis mutation
+proves that a replica-mismatched wrapper cannot install a succession policy before its role write
+is rejected. Existing generated vectors remain unchanged; the tests mutate decoded semantic ops
+only to exercise the post-verification reducer boundary.
+
+A final Opus reconsideration then found a V-01 fail-open in the first-anchor fallback: a
+low-sorting foreign evidence-free authority write could choose the inferred anchor, exclude the
+genuine genesis, reduce `writesPerRole` to one, and become honored. The homogeneous-fallback rule
+closes that path without changing explicitly pinned replay or all-replica-less Tier-A fixtures.
 
 ### Changed vectors
 
