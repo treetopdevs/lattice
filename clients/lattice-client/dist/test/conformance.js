@@ -35,6 +35,20 @@ function authorityFor(schema, ops, expectedReplica) {
     const byId = index(ops);
     return analyzeAuthority(schema, ops, new Set(ops.map((op) => op.id)), canonicalOrder(ops, byId), byId, expectedReplica);
 }
+function checkForeignReplicaEvidence(label, schema, ops, isTarget, isEffective) {
+    const target = ops.find(isTarget) ?? null;
+    const expectedReplica = ops.find((op) => op.replica !== undefined)?.replica;
+    const control = authorityFor(schema, ops, expectedReplica);
+    const mutatedOps = structuredClone(ops);
+    const mutatedTarget = mutatedOps.find((op) => op.id === target?.id);
+    if (mutatedTarget !== undefined) {
+        mutatedTarget.replica = `${mutatedTarget.replica}:sibling`;
+    }
+    const mutated = authorityFor(schema, mutatedOps, expectedReplica);
+    check(`local outer replica ${label} is effective control`, target === null ? null : isEffective(control, target), true);
+    check(`foreign outer replica ${label} is ineffective`, target === null ? null : isEffective(mutated, target), false);
+    check(`foreign outer replica ${label} reason`, target === null ? null : mutated.quarantineReasons.get(target.id), "wrong_replica");
+}
 function compareCodePoints(left, right) {
     return left < right ? -1 : left > right ? 1 : 0;
 }
@@ -491,47 +505,18 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
         }
     }
     if (vec.scenario === "township_carrier_w1") {
-        const grant = ops.find((op) => op.authority?.type === "grant");
-        const expectedReplica = ops.find((op) => op.replica !== undefined)?.replica;
-        const control = authorityFor(vec.schema, ops, expectedReplica);
-        const delegationId = grant?.authority?.type === "grant" ? grant.authority.delegation.id : "";
-        const mutatedOps = structuredClone(ops);
-        const mutatedGrant = mutatedOps.find((op) => op.id === grant?.id);
-        if (mutatedGrant !== undefined) {
-            mutatedGrant.replica = `${mutatedGrant.replica}:sibling`;
-        }
-        const mutated = authorityFor(vec.schema, mutatedOps, expectedReplica);
-        check("local outer replica grant introduces delegation control", control.security.delegations.has(delegationId), true);
-        check("foreign outer replica grant cannot introduce delegation", mutated.security.delegations.has(delegationId), false);
-        check("foreign outer replica grant reason", grant === undefined ? null : mutated.quarantineReasons.get(grant.id), "wrong_replica");
+        checkForeignReplicaEvidence("grant", vec.schema, ops, (op) => op.authority?.type === "grant", (analysis, target) => {
+            const delegationId = target?.authority?.type === "grant" ? target.authority.delegation.id : null;
+            return delegationId === null
+                ? false
+                : analysis.security.delegations.has(delegationId);
+        });
     }
     if (vec.scenario === "township_capability_revoked_causal") {
-        const revoke = ops.find((op) => op.authority?.type === "revoke");
-        const expectedReplica = ops.find((op) => op.replica !== undefined)?.replica;
-        const control = authorityFor(vec.schema, ops, expectedReplica);
-        const mutatedOps = structuredClone(ops);
-        const mutatedRevoke = mutatedOps.find((op) => op.id === revoke?.id);
-        if (mutatedRevoke !== undefined) {
-            mutatedRevoke.replica = `${mutatedRevoke.replica}:sibling`;
-        }
-        const mutated = authorityFor(vec.schema, mutatedOps, expectedReplica);
-        check("local outer replica revoke is effective control", control.security.effectiveRevokes.some((item) => item.opId === revoke?.id), true);
-        check("foreign outer replica revoke is ineffective", mutated.security.effectiveRevokes.some((item) => item.opId === revoke?.id), false);
-        check("foreign outer replica revoke reason", revoke === undefined ? null : mutated.quarantineReasons.get(revoke.id), "wrong_replica");
+        checkForeignReplicaEvidence("revoke", vec.schema, ops, (op) => op.authority?.type === "revoke", (analysis, target) => analysis.security.effectiveRevokes.some((item) => item.opId === target?.id));
     }
     if (vec.scenario === "township_lease_expired") {
-        const beacon = ops.find((op) => op.authority?.type === "beacon");
-        const expectedReplica = ops.find((op) => op.replica !== undefined)?.replica;
-        const control = authorityFor(vec.schema, ops, expectedReplica);
-        const mutatedOps = structuredClone(ops);
-        const mutatedBeacon = mutatedOps.find((op) => op.id === beacon?.id);
-        if (mutatedBeacon !== undefined) {
-            mutatedBeacon.replica = `${mutatedBeacon.replica}:sibling`;
-        }
-        const mutated = authorityFor(vec.schema, mutatedOps, expectedReplica);
-        check("local outer replica beacon is effective control", control.security.validBeacons.some((item) => item.opId === beacon?.id), true);
-        check("foreign outer replica beacon is ineffective", mutated.security.validBeacons.some((item) => item.opId === beacon?.id), false);
-        check("foreign outer replica beacon reason", beacon === undefined ? null : mutated.quarantineReasons.get(beacon.id), "wrong_replica");
+        checkForeignReplicaEvidence("beacon", vec.schema, ops, (op) => op.authority?.type === "beacon", (analysis, target) => analysis.security.validBeacons.some((item) => item.opId === target?.id));
     }
     if (vec.scenario === "township_succession_witnessed_recovery") {
         const recovery = vec.witnessedRecovery;
