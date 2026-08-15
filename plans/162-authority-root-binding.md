@@ -233,6 +233,20 @@ low-sorting foreign evidence-free authority write could choose the inferred anch
 genuine genesis, reduce `writesPerRole` to one, and become honored. The homogeneous-fallback rule
 closes that path without changing explicitly pinned replay or all-replica-less Tier-A fixtures.
 
+- **Anchored admission reconciliation (2026-08-15).** The admission filter above overreached in
+  the opposite direction on the *anchored* path: with a caller-pinned replica, an evidence-free
+  authority write carrying **no** outer replica was quarantined as `wrong_replica` and excluded
+  before `writesPerRole` accounting, so the plan-140 V-01 refusal it must route into never fired —
+  `refreshTownshipFromCarrier` resolved where the shell contract requires rejection
+  (`township_feed.ts:562`, red from this commit through the `784eb947` merge). The filter now
+  admits by evidence shape: a structured authority event (embedded evidence) is judgeable foreign
+  evidence on a missing or mismatched outer replica and stays `wrong_replica`; an evidence-free
+  write is judgeable only when it names a present foreign replica, and with no replica it remains
+  admitted so write-count reduction refuses (`V01UnvalidatedAuthorityError`). All seven
+  mutation-pinned evidence classes, the homogeneous-fallback rule, and the explicit-anchor
+  foreign-write quarantine keep their pinned outcomes; `v01_authority_guard.ts` adds the
+  anchor-less-refusal and foreign-string-quarantine regression pins.
+
 ### Changed vectors
 
 - `township_authority_embedded_replica_bypass.json`: the cross-replica guard now fires before the
