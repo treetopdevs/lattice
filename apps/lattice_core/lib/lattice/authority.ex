@@ -415,9 +415,9 @@ defmodule Lattice.Authority do
   A transfer carrying a malformed tick is quarantined as :malformed_term and
   must not introduce its delegation — a later command citing it then reports
   :no_capability, mirroring the TypeScript carrier's structural decode failure
-  that drops the delegation evidence. The :succeed arm is exempt: its proof
-  may be a legacy integer tick or a {:witnessed, certificate}, and malformed
-  legacy proofs stay on the existing :invalid_succession path.
+  that drops the delegation evidence. A succession proof may instead be a
+  non-integer witness term; malformed non-integer proofs stay on the existing
+  :invalid_succession path, while integer proofs must satisfy this predicate.
   """
   @spec valid_tick?(term()) :: boolean()
   def valid_tick?(tick) do
@@ -436,6 +436,10 @@ defmodule Lattice.Authority do
   end
 
   defp malformed_tick_body?({:transfer, _role, %Delegation{}, tick}), do: not valid_tick?(tick)
+
+  defp malformed_tick_body?({:succeed, _role, %Delegation{}, proof}) when is_integer(proof),
+    do: not valid_tick?(proof)
+
   defp malformed_tick_body?({:heartbeat, _role, tick}), do: not valid_tick?(tick)
   defp malformed_tick_body?(_), do: false
 
@@ -757,6 +761,14 @@ defmodule Lattice.Authority do
     end)
   end
 
+  # Step 2b(e): a tick may enter a role timeline only as a canonical
+  # non-negative integer within the wire's uint64 range. Erlang orders all
+  # terms, so an unguarded non-integer tick would be recorded, win
+  # `last_active_from/3`'s max, and raise ArithmeticError in every later
+  # dormancy evaluation. A succession proof may instead be a non-integer
+  # witness term, judged downstream by `decide_succession_proof/7`; integer
+  # proofs must be portable before entering that path. The tick predicate is
+  # public because `compaction_spike.ex` mirrors these decisions.
   defp role_event(%Op{kind: :authority, body: body} = op, role, delegations) do
     case body do
       {:genesis, %Delegation{} = d, _policies} ->
@@ -764,14 +776,21 @@ defmodule Lattice.Authority do
           do: {:genesis, d}
 
       {:transfer, ^role, %Delegation{} = d, tick} ->
+        # Plan 162 step 2b(e) routes a malformed tick to explicit quarantine
+        # rather than dropping it silently, so the reason is attributable and
+        # the TypeScript decoder's :malformed_term verdict stays mirrored.
         cond do
           not valid_tick?(tick) -> {:malformed_tick, op}
           not valid_delegation_intro?(delegations, d, op.id) -> nil
           true -> {:transfer, d, tick}
         end
 
-      {:succeed, ^role, %Delegation{} = d, tick} ->
-        if valid_delegation_intro?(delegations, d, op.id), do: {:succeed, d, tick}
+      {:succeed, ^role, %Delegation{} = d, proof} ->
+        cond do
+          is_integer(proof) and not valid_tick?(proof) -> {:malformed_tick, op}
+          not valid_delegation_intro?(delegations, d, op.id) -> nil
+          true -> {:succeed, d, proof}
+        end
 
       {:heartbeat, ^role, tick} ->
         if valid_tick?(tick), do: {:heartbeat, tick}, else: {:malformed_tick, op}
@@ -1049,9 +1068,10 @@ defmodule Lattice.Authority do
     |> Enum.uniq()
   end
 
-  # Clause order is pinned (visibility → grant scope → revoked → expired) so an
-  # op that is both revoked and lease-expired reports :revoked_capability on
-  # every realm — reason precedence must not flap across replicas.
+  # Clause order is pinned (replica → validity → audience → grant scope →
+  # visibility → roles → revoked → expired) so an op that is both revoked and
+  # lease-expired reports :revoked_capability on every realm — reason
+  # precedence must not flap across replicas.
   defp cap_ok(
          op,
          cmd,

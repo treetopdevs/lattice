@@ -409,6 +409,22 @@ defmodule Lattice2.RootBindingTest do
     end
   end
 
+  test "out-of-range integer succession proofs in a reconstructed log are quarantined" do
+    sim = founded()
+    {sim, succession} = Sim.succeed(sim, "tab", :moderator, at_tick: 3)
+    {:succeed, :moderator, delegation, 3} = succession.body
+    log = Sim.log(sim, "server")
+
+    for proof <- [-1, Canonical.max_integer() + 1] do
+      malformed = %{succession | body: {:succeed, :moderator, delegation, proof}}
+      malformed_log = Log.from_ops(log.replica, Map.put(log.ops, succession.id, malformed))
+      analysis = Authority.analyze(Thread, malformed_log)
+
+      assert analysis.reasons[succession.id] == :malformed_term
+      assert analysis.holders.moderator == Sim.identity(sim, "server").pub
+    end
+  end
+
   test "replaying a legitimate successor delegation as genesis cannot poison it" do
     sim = founded()
     {sim, succession} = Sim.succeed(sim, "tab", :moderator, at_tick: 3)
@@ -426,6 +442,64 @@ defmodule Lattice2.RootBindingTest do
     assert {true, :impostor_genesis} = Sim.quarantined(sim, "server", poisoned_genesis.id)
     assert false == Sim.quarantined(sim, "server", lock.id)
     assert Sim.state(sim, "server").locked?
+  end
+
+  # --- Same-root sibling replay (plan 162 step 2b(d)) ----------------------
+
+  test "a transfer replayed from a same-root sibling replica cannot move the holder" do
+    sim = founded()
+    server = Sim.identity(sim, "server")
+    evil = Sim.identity(sim, "evil")
+    sibling_replica = Authority.bind_replica("replica:thread:sibling", server.pub)
+
+    sibling_genesis =
+      Delegation.genesis(server, sibling_replica,
+        ops: [:post],
+        roles: [:moderator],
+        live: true
+      )
+
+    sibling_transfer =
+      Delegation.new(server, sibling_replica, evil.pub,
+        ops: [:post],
+        roles: [:moderator],
+        parent_id: sibling_genesis.id
+      )
+
+    # The delegation validator rejects the sibling chain before it can become
+    # valid timeline evidence.
+    {sim, replayed_genesis} =
+      Sim.append(sim, "server", :authority, {:genesis, sibling_genesis, %{}})
+
+    {sim, replayed_transfer} =
+      Sim.append(sim, "server", :authority, {:transfer, :moderator, sibling_transfer, 1})
+
+    sim = Sim.sync_all(sim)
+
+    assert {true, :wrong_replica} = Sim.quarantined(sim, "server", replayed_genesis.id)
+    assert {true, :invalid_transfer} = Sim.quarantined(sim, "server", replayed_transfer.id)
+    assert Sim.holder(sim, "server", :moderator) == server.pub
+  end
+
+  test "a root-less delegation minted for another replica is refused as wrong_replica" do
+    sim = founded()
+    evil = Sim.identity(sim, "evil")
+    foreign_replica = Authority.bind_replica("replica:thread:foreign", evil.pub)
+
+    foreign =
+      Delegation.genesis(evil, foreign_replica,
+        ops: [:post],
+        roles: [],
+        live: true
+      )
+
+    {sim, introduction} = Sim.append(sim, "evil", :authority, {:grant, foreign})
+    {sim, post} = Sim.command(sim, "evil", :post, ["foreign propaganda"], cap: foreign.id)
+    sim = Sim.sync_all(sim)
+
+    assert {true, :wrong_replica} = Sim.quarantined(sim, "server", introduction.id)
+    assert {true, :wrong_replica} = Sim.quarantined(sim, "server", post.id)
+    refute "foreign propaganda" in Sim.state(sim, "server").messages
   end
 
   # --- Tombstone gate ------------------------------------------------------

@@ -17,8 +17,10 @@
 - **Priority**: **P0** — this is the V-01 / prime-directive class. Two of the three defects let a
   participant escalate their own authority; the third is a BEAM↔TypeScript divergence, which the
   build map names a STOP condition.
-- **Effort**: M — the production change is ~30 lines across two files. The work is the adversarial
-  vectors, the vector-regeneration diff, and proving each predicate is load-bearing.
+- **Effort**: M — pre-Round-5 estimate was ~30 lines across two files; Round 5 step 2b
+  expands the production change across `authority.ex`, `authority.ts`, and `capability.ts`,
+  plus exporter/tests/vectors. The work remains the adversarial vectors, the vector-
+  regeneration diff, and proving each predicate is load-bearing.
 - **Amended 2026-08-06 (Round 5)**: two further guards added as step 2b — `cap_ok/9` replica
   binding and malformed-tick rejection. Both are predicates that reject more; neither changes
   succession semantics, so the effort and risk grades below are unchanged and the
@@ -84,14 +86,15 @@ mutation failure before its smallest correction.
 
 Final GREEN:
 
-- `mix check`: 26 properties and 331 lattice-core tests, every umbrella app, 94
+- `mix check`: 26 properties and 353 lattice-core tests, every umbrella app, 98
   lattice-carrier-server tests, and strict Credo all pass.
 - TypeScript build, typecheck, conformance, V-01 guard, canonical bytes, Township authoring, and
   carrier/Township suites all pass.
-- The compaction GATE passes one property and seven focused tests, including byte-identical state,
-  quarantine reasons, holders, and requests across the new succession cases.
+- The compaction GATE passes one property and 19 tests, including byte-identical state,
+  quarantine reasons, holders, and requests across malformed-tick, cross-replica, witnessed
+  recovery, and replayed-genesis holder-epoch cases.
 - An earlier full-suite run exposed the pre-existing carrier Holder timeout under load; its focused
-  test passed immediately, and every subsequent full gate completed with all 94 carrier tests
+  test passed immediately, and every subsequent full gate completed with all 98 carrier tests
   green. No carrier durability behavior changed.
 
 Changed vector corpus, exhaustively:
@@ -146,19 +149,42 @@ follow-up: mutation evidence corrected; Scope authorizes `capability.ts` for 2b(
 - `capability.ts` adds `delegation.replica !== op.replica` → `wrong_replica` before the
   validation check; `authority.ts` `delegationValidation` adds the same comparison before
   root/chain validation.
+- **PR #45/#47 reconciliation (2026-08-09).** The proposed BEAM timeline-time clauses were
+  redundant because `validate_delegation/6` checks every delegation against `log.replica` before
+  a role acquire. TypeScript still needs an operation-level admission check because direct
+  semantic replay can receive an authority op whose optional outer replica is missing or differs
+  even though embedded delegation evidence validates against the inferred or caller-pinned
+  replica. `analyzeAuthority` now derives that single anchor, quarantines every mismatched
+  authority op as `wrong_replica`, and excludes it before delegation, policy, root, revocation,
+  beacon, heartbeat, or role-timeline collection. Without an explicit caller anchor, fallback is
+  permitted only for a homogeneous history: every visible op carries the same replica, or every
+  visible op is replica-less Tier A. Mixed histories fail closed before write-count reduction, so
+  a low-sorting foreign op cannot choose the anchor and turn an evidence-free write into the sole
+  accepted authority write. `township_authority_cross_replica_replay.json` and the focused Elixir
+  case retain their established reasons: the genesis and command report `:wrong_replica`, the
+  transfer reports `:invalid_transfer`, and the holder does not move.
 
 ### Step 2b (e) — malformed tick
 
 - `role_event/3` now returns `{:malformed_tick, op}` for `:transfer` and `:heartbeat` bodies
   carrying a non-integer or out-of-range tick, routed to `reject(st, op, :malformed_term, role)`.
-  The `:succeed` arm is exempt — its proof may be a legacy integer or a `{:witnessed, certificate}`,
-  and malformed legacy proofs stay on the existing `:invalid_succession` path.
+  A `:succeed` proof may be a non-integer witness term, but an integer proof must be canonical;
+  negative or over-range integers in a reconstructed log also quarantine as `:malformed_term`.
+  Malformed non-integer legacy proofs retain the existing `:invalid_succession` path.
 - `delegation_in/1` skips collecting a malformed transfer's delegation, so a later command
   citing it reports `:no_capability` (the delegation is absent from the map).
-- `compaction_spike.ex` mirrors both the `role_event` guard and the `delegation_in` skip.
+- `compaction_spike.ex` mirrors the transfer/heartbeat/succession `role_event` guards, the
+  transfer `delegation_in` skip, and the structural malformed-tick reason pass. Its retained and
+  undeclared-role transfer/succession regressions pin compacted/full parity even when no declared
+  role timeline sees the malformed operation.
+- Its seeded succession reducer also mirrors legacy/witnessed proof-mode dispatch, verifies
+  recovery certificates against the causal holder epoch, records honored witnessed recovery at
+  tick zero, and excludes quarantined covered genesis replays from the holder-epoch summary.
 - The TypeScript carrier already maps non-integer transfer and heartbeat bodies to
-  `structuralError: "malformed_term"` via the `integerValue` decode throw, so no additional
-  TS change is needed for 2b(e).
+  `structuralError: "malformed_term"` via the `integerValue` decode throw. Negative or over-range
+  integer succession proofs cannot cross the canonical signing/wire boundary; reconstructed BEAM
+  logs quarantine them structurally, while TS classifies such unsanctioned input as
+  `invalid_succession`. No portable carrier vector can contain that case.
 
 ### Mutation evidence
 
@@ -168,7 +194,15 @@ follow-up: mutation evidence corrected; Scope authorizes `capability.ts` for 2b(
 | `validate_delegation/6` `d.replica != log_replica` | same test — `foreign_genesis_op` and `foreign_grant_op` quarantine as `false` (honored); same-root foreign name validates `:ok` / genesis laundering. `forged_post` still `:wrong_replica` via `cap_ok/9` |
 | `role_event/3` heartbeat `valid_tick?` | `a malformed heartbeat tick is quarantined…` raises `ArithmeticError` (`"9" + 3`) |
 | `role_event/3` transfer `valid_tick?` + `delegation_in/1` skip | `malformed transfer and succession ticks…` — transfer no longer `:malformed_term` |
+| `role_event/3` succession integer guard | `out-of-range integer succession proofs in a reconstructed log are quarantined` — the structural reason remains, but the over-range proof incorrectly changes the holder |
+| Structural `malformed_tick_body?/1` transfer/succession clauses | undeclared-role malformed transfer/succession compaction regressions — the compacted quarantine entry disappears because no declared role timeline observes the operation |
 | `compaction_spike.ex` heartbeat `valid_tick?` | `malformed retained heartbeat cannot crash…` raises `ArithmeticError` |
+| `compaction_spike.ex` replica-first seeded capability check | `retained foreign-replica capability keeps its wrong-replica reason after compaction` — compacted replay reports `:invalid_capability` instead of full analysis's `:wrong_replica` |
+| TypeScript anchored authority-op admission | the initial transfer/succession-only RED had 8 failures; the expanded RED had 17 failures across genesis policy, grant, heartbeat, revoke, beacon, transfer, and succession mutations. Reverting the admission filter restores those effects or loses their `wrong_replica` quarantine |
+| TypeScript homogeneous fallback anchor | an unpinned low-sorting foreign evidence-free write makes the pre-fix reducer return `clerk = "mallory"`; the corrected path raises `V01UnvalidatedAuthorityError`, while an explicit genuine anchor keeps `clerk` and quarantines the foreign write as `wrong_replica` |
+| Legacy-only `seeded_succeed/8` proof handling | `retained witnessed succession remains honored after compaction` raises `KeyError` on missing `policy.dormant_ticks`; a witnessed proof under a dormancy policy is incorrectly honored through Erlang term ordering |
+| Covered succession proof copied into `at_tick` | `covered witnessed succession seeds a zero-tick acquire after compaction` records the certificate tuple as both acquire and activity tick |
+| Covered genesis classification ignores its frozen reason | `covered replayed genesis cannot replace the witnessed holder epoch` rejects a valid retained certificate against the quarantined replay op id instead of the honored genesis epoch |
 
 Round 5 adversarial review correction (2026-08-09): the prior claim that reverting only
 `validate_delegation`'s `wrong_replica` made `foreign_genesis_op` fall back to
@@ -186,6 +220,19 @@ Inspected outcomes with only that guard removed: `foreign_genesis: false`,
 `foreign_grant: false`, `forged_post: {true, :wrong_replica}`, `message_present: false`.
 Both guards remain independently load-bearing.
 
+PR #47's final automated review found that a transfer/succession-only TypeScript correction left
+policy collection and non-role authority events outside the same semantic-replay boundary. The
+replacement admission filter is mutation-pinned for all seven authority evidence classes. The
+transfer and succession cases also include honored positive controls, and the genesis mutation
+proves that a replica-mismatched wrapper cannot install a succession policy before its role write
+is rejected. Existing generated vectors remain unchanged; the tests mutate decoded semantic ops
+only to exercise the post-verification reducer boundary.
+
+A final Opus reconsideration then found a V-01 fail-open in the first-anchor fallback: a
+low-sorting foreign evidence-free authority write could choose the inferred anchor, exclude the
+genuine genesis, reduce `writesPerRole` to one, and become honored. The homogeneous-fallback rule
+closes that path without changing explicitly pinned replay or all-replica-less Tier-A fixtures.
+
 ### Changed vectors
 
 - `township_authority_embedded_replica_bypass.json`: the cross-replica guard now fires before the
@@ -194,9 +241,11 @@ Both guards remain independently load-bearing.
   and a honored succession.
 - `township_authority_malformed_transfer.json` (new): pins `:malformed_term` transfer quarantine
   and `:no_capability` for a command citing the dropped delegation.
+- `township_authority_cross_replica_replay.json` (new): pins same-root sibling genesis/command
+  `:wrong_replica`, transfer `:invalid_transfer`, and an unchanged holder across BEAM and TS.
 
-No other vector changed. The three succession vectors are byte-identical to their pre-change
-versions (the `:succeed` arm is exempt from the malformed-tick guard).
+No other existing vector changed. The three succession vectors are byte-identical to their
+pre-change versions because each carries a canonical proof.
 
 ## Why this matters
 
@@ -767,9 +816,10 @@ Lattice.Canonical.max_integer()` before they reach `record_acquire/4` or `decide
 Negative and above-canonical integers cannot be signed by `Op.new/6`; direct tests pin that
 structural boundary while semantic tests pin the signed binary case.
 
-Mirror the transfer/heartbeat guard in `apps/lattice_core/test/support/compaction_spike.ex`; its
-seeded reducer is a second executable authority oracle and must remain byte-identical to the full
-analyzer.
+Mirror the transfer/heartbeat/succession guards and structural malformed-tick reason pass in
+`apps/lattice_core/test/support/compaction_spike.ex`; its seeded reducer is a second executable
+authority oracle and must remain byte-identical to the full analyzer, including for undeclared
+roles that never enter a configured timeline.
 
 **Verify**: `$MIXCMD test apps/lattice_core/test/lattice2/` → exit 0. No succession vector
 changes yet (step 5 confirms this formally).
@@ -960,9 +1010,12 @@ testing stale compiled code.
 - **Mutation**: step 8's five reverts, each with a named failing assertion.
 - **Step 2b (d) — cross-replica capability replay**: a new Elixir case in
   `root_binding_test.exs` that grants on replica X, replays the delegation into replica Y via
-  `{:grant, ...}`, authors a command there, and asserts `:wrong_replica`. Add the mirrored
-  assertion to `authority.ts` and one exported vector if the scenario is expressible in the
-  exporter; a unit test alone is acceptable if it is not. Both replica guards must be
+  `{:grant, ...}`, authors a command there, and asserts `:wrong_replica`. Require the generated
+  vector at `clients/lattice-client/test/vectors/township_authority_cross_replica_replay.json`
+  and a passing TypeScript conformance assertion that mirrors the Elixir quarantine reasons in
+  `authority.ts` (including a sibling `:transfer` refused as `:invalid_transfer` without moving
+  the holder). Do not treat a unit test alone
+  as sufficient. Both replica guards must be
   independently verified: revert (or disable) the `d.replica != op.replica` clause in `cap_ok/9`
   alone and confirm the test fails, then restore it and revert the same comparison in
   `validate_delegation/6` alone and confirm the test still fails — so each guard is load-bearing
@@ -971,9 +1024,10 @@ testing stale compiled code.
   the green-path expectation.
 - **Step 2b (e) — malformed tick**: Elixir cases cover heartbeat, transfer, and succession. Signed
   binary heartbeat/transfer ticks quarantine as `:malformed_term`, never mutate the timeline, and
-  a later succession returns normally rather than raising `ArithmeticError`; a malformed legacy
-  succession proof retains `:invalid_succession`, while witnessed recovery remains valid. A
-  separate structural case pins rejection of negative and above-canonical integers during signing.
+  a later succession returns normally rather than raising `ArithmeticError`; a malformed
+  non-integer legacy succession proof retains `:invalid_succession`, while witnessed recovery
+  remains valid. Boundary tests pin rejection of negative and above-canonical integers during
+  signing, and a reconstructed-log case pins `:malformed_term` if either reaches authority analysis.
   Revert the semantic guard and confirm the heartbeat case raises, the malformed transfer moves the
   holder, and its delegation launders a capability. Two exported vectors pin the same reasons and
   materialized state in TypeScript conformance. The compaction GATE pins byte-identical replay.

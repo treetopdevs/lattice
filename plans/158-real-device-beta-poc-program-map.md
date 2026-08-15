@@ -351,10 +351,13 @@ Generate monotonic version codes, a signed universal or ARM64 APK, SHA-256, sign
 git SHA and machine-readable build manifest. Add hosted Android build, signature verification,
 artifact upload and install/upgrade smoke. Set a real CSP and enforce WSS-only non-loopback peers in
 release builds. Compile out dev traces, environment probes and seeded-key paths.
+Official main builds occupy a disjoint high version-code band. Secret-free/branch builds occupy a
+low band that is monotonic along each first-parent branch; different branches may share a code, so
+git SHA plus APK SHA-256—not versionCode alone—identify the exact build.
 
 Device A currently has the exact-main debug-signed baseline installed. Android will not accept a
 pilot certificate as an in-place update for that package ID. The harness must detect the signer
-mismatch, capture the disposable baseline evidence, stop, and request explicit operator approval to
+mismatch, capture only baseline signing/device metadata, stop, and request explicit operator approval to
 uninstall only `dev.treetop.lattice.township`; that one-time reset intentionally discards the dev key
 and fixture state. The first pilot certificate is then a clean install. Only later pilot-signed
 N-to-N+1 builds count as identity/database-preserving upgrade evidence.
@@ -368,11 +371,16 @@ no secret appears in logs or artifacts.
 **Type:** task. **Owner:** device-QA agent; this agent alone controls ADB while a run is active.
 
 Build a small harness that takes `ANDROID_SERIAL` locally, installs an exact artifact, checks reverse
-rules, launches, force-stops, captures redacted logs/screens, records network class and versions, and
-emits a JSON/Markdown evidence bundle keyed by git SHA and APK hash. A release run fails if any ADB
+rules, launches, confirms pre-stop process liveness, force-stops, and records only allowlisted structured outcomes,
+network class and versions, and emits an immutable JSON/Markdown evidence bundle keyed by git SHA,
+APK hash, capture time, and run identity.
+Raw screenshots and general logcat are never persisted. A release run fails before contacting ADB
+unless the artifact matches an explicitly supplied non-debug pilot-certificate pin, and fails if any ADB
 reverse mapping exists; it never deletes a mapping it did not create. If a dedicated dev subtest
 creates a mapping, the harness records and removes only that exact owned mapping. It may use ADB for
 install, observation, force-stop and reboot; the app's data or carrier path may not use ADB.
+After install, the harness pulls signed `base.apk` and requires its signer and SHA-256 to match the
+pre-install artifact exactly; an OEM-denied pull is recorded as unreadable, not as a byte mismatch.
 
 Destructive `pm clear` or uninstall is a separate clean-install/signing-lineage case and requires
 explicit operator approval for the exact package. Upgrade/reboot tests preserve app data. The harness
@@ -885,12 +893,12 @@ Elixir and TypeScript changes that define one semantic truth, especially Townshi
 Toolshed custody v2 and Treehouse effect parity, must merge atomically even if separate subagents
 prepare the commits.
 
-The current flagship workflow ignores Markdown-only PR/push events but supports manual dispatch.
-For any docs-only slice, push the frozen branch tip, dispatch `flagship.yml` on that branch, record the
-run ID, and verify the run's `headSha` is exactly the PR SHA before merge. After merge, dispatch it on
-`main` and verify the new run's `headSha` is exactly the merge SHA. A run at an ancestor, a branch that
-moved after dispatch, or a merely local check does not satisfy either gate. This Plan 158 PR uses that
-manual exact-tip/exact-merge procedure.
+The flagship workflow ignores unrelated Markdown-only changes but re-includes the exact globs
+`plans/15[89]-*`, `docs/android_pilot_*`, and `docs/android_pilot_*/**`, so matching security-contract edits receive normal PR-tip
+and merge-result runs. For Markdown outside those globs, manually dispatch against the frozen tip.
+Manual dispatch also remains available for deliberate reruns. In every case verify the
+run's `headSha` is exactly the frozen PR or merge SHA; an ancestor run, a branch that moved after
+dispatch, or a merely local check does not satisfy either gate.
 
 ## Common physical acceptance record
 
