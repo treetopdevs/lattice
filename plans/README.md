@@ -498,20 +498,35 @@ leverage. Listed so they are not re-audited from scratch.
   `Township.Matter:65` still ships `after: {:dormant_ticks, 3}` on that path. The root-signed
   `{:beacon, epoch}` clock that would fix it already exists and is consulted only for lease lapse.
   Also `authority.ex`, so same collision consideration as above.
-- **`/readyz` is unauthenticated and rewrites the live production log on every uncached probe**
-  (`health.ex:85-86` → `:189-198` → `durability.ex:73-88`). The rehearsal reads the whole log,
-  runs `Op.valid?` over every op, writes a temp copy, fsyncs, and **renames it over the live
-  log** — correctly under `with_target_lock`, but it is still the only path where a read-only
-  health check mutates the artifact the server exists to protect. Compounding it,
-  `identity_ready?` is **not** TTL-cached (only `storage_writable?` is), so every probe re-reads
-  the Ed25519 seed off disk, re-derives the key, and spawns `id -u`. Loopback-bound by the
-  manifest, which bounds but does not eliminate the exposure. Fix shape: rehearse against a
-  sibling probe file (as `Durability.rehearse/3` already does), serve readiness from a cached
-  holder signal, and TTL-cache the identity check as metadata-only.
+- **Unauthenticated `/readyz` no longer rewrites the live production log, but identity
+  verification remains uncached.** The Plan 158 A1 closure restores and validates the log
+  outside the target lock, then performs a full-size sibling write, fsync, replacement rename,
+  and directory fsync under the lock. The code preserves the live log's inode, mtime, and bytes,
+  as asserted by regression coverage. An uncached rehearsal requires transient disk space for a
+  full second copy of the custody log; a process or host crash can leave that complete sibling,
+  with the log's own mode bits, until the next best-effort sweep. Read-only instances skip this
+  write-custody proof but retain the TTL-cached restore and structural validation of the on-disk
+  log. Holder, listener, and identity gates run first, so an already unavailable instance does
+  not pay the full restore, signature verification, and copy cost, although the holder gate can
+  wait up to 5 seconds. Concurrent misses for one log share a single-flight storage check, whose
+  cache sequence and TTL timestamp are allocated only after completion; waiters accept only the
+  result newer than the claim they observed. Failures expose only reason atoms through Telemetry.
+  `identity_ready` is still
+  **not** TTL-cached, so every probe re-reads the Ed25519 seed off disk, re-derives the key, and
+  spawns `id -u`. The isolated rehearsal also holds the same node-local target lock as durable
+  relay persistence, so a slow uncached probe can consume a concurrent relay's persistence
+  deadline and cause a refused acknowledgement with `:persistence_timeout`; operators must size
+  both deadlines for the largest custody log. The health listener does not override Ranch's
+  default 1024-connection cap or Cowboy's 60-second idle timeout; before that idle period, a
+  request can spend up to 5 seconds being read and 9.75 seconds in readiness by default. Lower
+  `:readiness_timeout_ms` settings are raised to the storage deadline plus the holder,
+  orphan-cleanup, identity, and scheduler budget. Loopback binding bounds but does not eliminate
+  these exposures. The remaining fix shape is a cached holder identity signal or TTL-cached
+  metadata-only identity check.
 - **Carrier-server egress and per-message work are unbounded** while ingress is well bounded.
   A `"pull"` with `have: []` materializes and JSON-encodes the entire log into one frame
   (`web_socket.ex:173-176`); neither listener sets `max_connections` (`listener.ex:27-43`,
-  `health.ex:47-58`); `"relay"` has no per-realm rate limit. Plan 165 Part C bounds relay
+  `health.ex:69-94`); `"relay"` has no per-realm rate limit. Plan 165 Part C bounds relay
   *growth* — this is the complementary egress half.
 - **`Attenuation.caveats_monotonic?/2` compares the parent against `parent ++ child`**
   (`cap/attenuation.ex:191-201`), making `:caveat_escalation` unreachable for five of six caveat

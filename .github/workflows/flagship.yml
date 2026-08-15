@@ -415,6 +415,32 @@ jobs:
         working-directory: clients/township-tauri-shell
         run: npm run tauri:feed:smoke
 
+  carrier_release:
+    name: Packaged carrier restart durability
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - name: Set up BEAM
+        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
+        with:
+          otp-version: "28.1"
+          elixir-version: "1.19.5"
+      - name: Cache carrier release dependencies
+        # Cache dependencies only. A restored _build could let the packaged
+        # restart test execute stale BEAM artifacts instead of this checkout.
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: deps
+          key: ${{ runner.os }}-carrier-release-${{ hashFiles('mix.lock') }}
+          restore-keys: ${{ runner.os }}-carrier-release-
+      - name: Install dependencies
+        run: mix deps.get
+      - name: Build, crash, restart, and verify the packaged pilot
+        run: mix test apps/lattice_carrier_server/test/release_test.exs --include packaged_release
+
   android_pilot_contract:
     name: Android pilot security contract
     runs-on: ubuntu-latest

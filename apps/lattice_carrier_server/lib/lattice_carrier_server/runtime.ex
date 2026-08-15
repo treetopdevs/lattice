@@ -47,7 +47,8 @@ defmodule LatticeCarrierServer.Runtime do
                   realm: instance.realm,
                   identity_file: instance.identity_file,
                   pub: instance.pub,
-                  log_file: instance.log_file
+                  log_file: instance.log_file,
+                  relay_enabled?: instance.relay_realms != []
                 }
               end)
           })
@@ -151,11 +152,32 @@ defmodule LatticeCarrierServer.Runtime do
 
   defp preflight_instance(instance) do
     case Holder.restore_path(instance.log_file) do
+      {:ok, %Log{}} when instance.relay_realms == [] ->
+        :ok
+
       {:ok, %Log{}} ->
-        case Durability.rehearse_target(Durability.Posix, instance.log_file) do
-          :ok -> :ok
-          {:error, _reason} -> {:error, {:durability_unsupported, instance.ref}}
+        case Durability.with_target_lock(
+               instance.log_file,
+               fn ->
+                 Durability.rehearse_target(Durability.Posix, instance.log_file)
+               end,
+               retries: 3
+             ) do
+          :ok ->
+            :ok
+
+          {:error, {Durability, :target_lock_aborted}} ->
+            {:error, {:target_lock_unavailable, instance.ref}}
+
+          {:error, _reason} ->
+            {:error, {:durability_unsupported, instance.ref}}
         end
+
+      {:error, :target_lock_unavailable} ->
+        {:error, {:target_lock_unavailable, instance.ref}}
+
+      {:error, :orphan_cleanup_failed} ->
+        {:error, {:source_cleanup_failed, instance.ref}}
 
       {:error, _reason} ->
         {:error, {:source_restore_failed, instance.ref}}
@@ -167,6 +189,8 @@ defmodule LatticeCarrierServer.Runtime.RouteOwner do
   @moduledoc false
 
   use GenServer
+
+  require Logger
 
   alias LatticeCarrierServer.Runtime
 
@@ -183,6 +207,7 @@ defmodule LatticeCarrierServer.Runtime.RouteOwner do
     case Runtime.start_instance(name) do
       {:ok, route} ->
         :ok = Runtime.mark_route_started(name)
+        Logger.info("carrier pilot instance route started name=#{inspect(name)}")
         {:ok, %{name: name, route: route, backoff_ms: @initial_backoff_ms}}
 
       {:error, reason} ->
@@ -200,6 +225,7 @@ defmodule LatticeCarrierServer.Runtime.RouteOwner do
     case Runtime.start_instance(state.name) do
       {:ok, route} ->
         :ok = Runtime.mark_route_started(state.name)
+        Logger.info("carrier pilot instance route started name=#{inspect(state.name)}")
         {:noreply, %{state | route: route, backoff_ms: @initial_backoff_ms}}
 
       {:error, _reason} ->

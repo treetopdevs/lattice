@@ -18,6 +18,8 @@ defmodule LatticeCarrierServer.Holder do
 
   @frontier_limit 64
   @default_persistence_timeout_ms 4_000
+  @orphan_cleanup_timeout_ms 250
+  @relay_call_slack_ms 750
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts) do
@@ -36,8 +38,8 @@ defmodule LatticeCarrierServer.Holder do
   Readiness probe: a reply proves the identity is loaded and the source
   restore completed, because `init/1` refuses otherwise.
   """
-  @spec ready?(GenServer.server()) :: :ok
-  def ready?(holder), do: GenServer.call(holder, :ready?)
+  @spec ready?(GenServer.server(), timeout()) :: :ok
+  def ready?(holder, timeout \\ 5_000), do: GenServer.call(holder, :ready?, timeout)
 
   @spec op_ids(GenServer.server()) :: [Lattice.Op.id()]
   def op_ids(holder), do: GenServer.call(holder, :op_ids)
@@ -47,7 +49,9 @@ defmodule LatticeCarrierServer.Holder do
 
   @spec relay(GenServer.server(), String.t(), Lattice.Op.t()) ::
           {:ok, Sync.report()} | {:error, term()}
-  def relay(holder, peer_realm, op), do: GenServer.call(holder, {:relay, peer_realm, op})
+  def relay(holder, peer_realm, op) do
+    GenServer.call(holder, {:relay, peer_realm, op}, relay_call_timeout_ms())
+  end
 
   @spec state_report(GenServer.server()) :: {:ok, map()} | {:error, :read_only}
   def state_report(holder), do: GenServer.call(holder, :state_report)
@@ -89,6 +93,8 @@ defmodule LatticeCarrierServer.Holder do
        }}
     else
       {:error, {:durability_unsupported, _reason} = refusal} -> {:stop, refusal}
+      {:error, :target_lock_unavailable} -> {:stop, :target_lock_unavailable}
+      {:error, :orphan_cleanup_failed} -> {:stop, :orphan_cleanup_failed}
       {:error, reason} -> {:stop, {:source_error, reason}}
     end
   end
@@ -194,11 +200,23 @@ defmodule LatticeCarrierServer.Holder do
   @doc false
   @spec restore_path(Path.t()) :: {:ok, Log.t()} | {:error, term()}
   def restore_path(path) when is_binary(path) do
-    with :ok <- cleanup_orphaned_temp_files(path),
+    with :ok <- cleanup_startup_temps(path),
          :ok <- preload_lattice_core(),
          {:ok, %Log{} = log} <- Log.restore(path),
          :ok <- validate_log(log) do
       {:ok, log}
+    end
+  end
+
+  defp cleanup_startup_temps(path) do
+    case Durability.with_target_lock(
+           path,
+           fn -> Durability.cleanup_orphaned_temps(path) end,
+           retries: 3
+         ) do
+      {:error, {Durability, :target_lock_aborted}} -> {:error, :target_lock_unavailable}
+      {:error, {:orphan_cleanup_failed, _path, _reason}} -> {:error, :orphan_cleanup_failed}
+      result -> result
     end
   end
 
@@ -220,73 +238,67 @@ defmodule LatticeCarrierServer.Holder do
   end
 
   defp bounded_atomic_dump(log, path, durability) do
-    with {:ok, temp_path} <- Durability.secure_temp(path) do
-      task =
-        Task.async(fn ->
-          try do
-            atomic_dump(log, path, temp_path, durability)
-          catch
-            kind, reason -> {:error, {:persistence_exception, kind, reason}}
-          end
-        end)
-
-      result =
-        case Task.yield(task, persistence_timeout_ms()) ||
-               Task.shutdown(task, :brutal_kill) do
-          {:ok, task_result} -> task_result
-          _timeout_or_error -> {:error, :persistence_timeout}
+    task =
+      Task.async(fn ->
+        try do
+          Durability.with_target_lock(path, fn ->
+            with {:ok, temp_path} <- Durability.secure_temp(path) do
+              try do
+                atomic_dump(log, path, temp_path, durability)
+              after
+                _ = File.rm(temp_path)
+              end
+            end
+          end)
+        catch
+          kind, reason -> {:error, {:persistence_exception, kind, reason}}
         end
+      end)
 
-      _ = File.rm(temp_path)
-      result
+    {result, timed_out?} =
+      case Task.yield(task, persistence_timeout_ms()) ||
+             Task.shutdown(task, :brutal_kill) do
+        {:ok, task_result} -> {task_result, false}
+        _timeout_or_error -> {{:error, :persistence_timeout}, true}
+      end
+
+    if timed_out? do
+      _ = Durability.bounded_cleanup_orphaned_temps(path, @orphan_cleanup_timeout_ms)
     end
+
+    result
+  catch
+    kind, reason -> {:error, {:persistence_exception, kind, reason}}
   end
 
   # Persist-before-ack: write, sync the file, atomically rename, then sync
   # the containing directory. Only a fully synced sequence acknowledges.
   defp atomic_dump(log, path, temp_path, durability) do
-    Durability.with_target_lock(path, fn ->
-      with {:ok, %File.Stat{mode: mode}} <- File.stat(path),
-           :ok <- Log.dump(log, temp_path),
-           :ok <- File.chmod(temp_path, Bitwise.band(mode, 0o777)),
-           :ok <- durability.sync_file(temp_path),
-           :ok <- durability.rename(temp_path, path),
-           :ok <- durability.sync_directory(Path.dirname(path)) do
-        :ok
-      end
-    end)
+    with {:ok, %File.Stat{mode: mode}} <- File.stat(path),
+         :ok <- Log.dump(log, temp_path),
+         :ok <- File.chmod(temp_path, Bitwise.band(mode, 0o777)),
+         :ok <- durability.sync_file(temp_path),
+         :ok <- durability.rename(temp_path, path),
+         :ok <- durability.sync_directory(Path.dirname(path)) do
+      :ok
+    end
   end
 
   # Only relay-enabled path holders persist, so only they must prove the
   # durability sequence before serving.
   defp rehearse_durability({:path, path}, [_realm | _realms], durability) do
-    case Durability.rehearse_target(durability, path) do
+    case Durability.with_target_lock(
+           path,
+           fn -> Durability.rehearse_target(durability, path) end,
+           retries: 3
+         ) do
       :ok -> :ok
+      {:error, {Durability, :target_lock_aborted}} -> {:error, :target_lock_unavailable}
       {:error, reason} -> {:error, {:durability_unsupported, reason}}
     end
   end
 
   defp rehearse_durability(_source, _relay_realms, _durability), do: :ok
-
-  defp cleanup_orphaned_temp_files(path) do
-    directory = Path.dirname(path)
-    prefix = Path.basename(path) <> ".tmp."
-
-    with {:ok, entries} <- File.ls(directory) do
-      entries
-      |> Enum.filter(&String.starts_with?(&1, prefix))
-      |> Enum.sort()
-      |> Enum.reduce_while(:ok, fn entry, :ok ->
-        orphan_path = Path.join(directory, entry)
-
-        case File.rm(orphan_path) do
-          :ok -> {:cont, :ok}
-          {:error, :enoent} -> {:cont, :ok}
-          {:error, reason} -> {:halt, {:error, {:orphan_cleanup_failed, orphan_path, reason}}}
-        end
-      end)
-    end
-  end
 
   defp availability(log) do
     frontier = log |> Log.frontier() |> Enum.sort()
@@ -332,6 +344,12 @@ defmodule LatticeCarrierServer.Holder do
       timeout when is_integer(timeout) and timeout > 0 -> timeout
       _invalid -> @default_persistence_timeout_ms
     end
+  end
+
+  @doc false
+  @spec relay_call_timeout_ms() :: pos_integer()
+  def relay_call_timeout_ms do
+    persistence_timeout_ms() + @orphan_cleanup_timeout_ms + @relay_call_slack_ms
   end
 
   @doc false

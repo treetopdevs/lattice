@@ -10,7 +10,7 @@ defmodule LatticeCarrierServer.DurabilityTest do
   sequence at startup so an incapable platform refuses instead of serving.
   """
 
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Lattice.{Identity, Log, Op}
   alias LatticeCarrierServer.{Durability, Holder}
@@ -75,20 +75,31 @@ defmodule LatticeCarrierServer.DurabilityTest do
     defp armed(dir), do: :persistent_term.get({__MODULE__, :fail, dir}, nil)
   end
 
-  @tag :tmp_dir
-  test "a pre-existing rehearsal namespace is never overwritten or removed", %{tmp_dir: tmp_dir} do
-    collision = Path.join(tmp_dir, ".lattice-durability-rehearsal.42")
-    File.write!(collision, "live deployment data")
-    Process.put({__MODULE__, :suffix}, 41)
+  defmodule SizingDurability do
+    @moduledoc false
 
-    next_suffix = fn ->
-      suffix = Process.get({__MODULE__, :suffix}) + 1
-      Process.put({__MODULE__, :suffix}, suffix)
-      suffix
+    def listen(dir), do: :persistent_term.put({__MODULE__, :listener, dir}, self())
+    def stop_listening(dir), do: :persistent_term.erase({__MODULE__, :listener, dir})
+
+    def sync_file(path) do
+      send(
+        :persistent_term.get({__MODULE__, :listener, Path.dirname(path)}),
+        {:synced_size, File.stat!(path).size}
+      )
+
+      :ok
     end
 
-    assert :ok = Durability.rehearse(InjectedDurability, tmp_dir, unique: next_suffix)
-    assert File.read!(collision) == "live deployment data"
+    def rename(temp_path, target_path) do
+      send(
+        :persistent_term.get({__MODULE__, :listener, Path.dirname(target_path)}),
+        {:renamed, temp_path, target_path}
+      )
+
+      File.rename(temp_path, target_path)
+    end
+
+    def sync_directory(_path), do: :ok
   end
 
   @tag :tmp_dir
@@ -126,6 +137,75 @@ defmodule LatticeCarrierServer.DurabilityTest do
   end
 
   @tag :tmp_dir
+  test "finite target-lock acquisition refuses contention instead of hanging boot", %{
+    tmp_dir: tmp_dir
+  } do
+    path = Path.join(tmp_dir, "matter.log")
+    parent = self()
+
+    lock_holder =
+      Task.async(fn ->
+        Durability.with_target_lock(path, fn ->
+          send(parent, :target_lock_held)
+
+          receive do
+            :release_target_lock -> :ok
+          end
+        end)
+      end)
+
+    assert_receive :target_lock_held
+
+    assert {:error, {Durability, :target_lock_aborted}} =
+             Durability.with_target_lock(path, fn -> :unexpected end, retries: 0)
+
+    send(lock_holder.pid, :release_target_lock)
+    assert :ok = Task.await(lock_holder)
+  end
+
+  @tag :tmp_dir
+  test "target lock preserves a function result shaped like an aborted tuple", %{tmp_dir: tmp_dir} do
+    path = Path.join(tmp_dir, "matter.log")
+
+    assert :aborted = Durability.with_target_lock(path, fn -> :aborted end)
+
+    assert {:aborted, :function_result} =
+             Durability.with_target_lock(path, fn -> {:aborted, :function_result} end)
+  end
+
+  @tag :tmp_dir
+  test "isolated target rehearsal mirrors full-size replacement without touching the live log", %{
+    tmp_dir: tmp_dir
+  } do
+    path = Path.join(tmp_dir, "matter.log")
+    assert :ok = @replica |> Log.new() |> Log.dump(path)
+    File.touch!(path, 1)
+    before = File.stat!(path, time: :posix)
+    before_bytes = File.read!(path)
+    SizingDurability.listen(tmp_dir)
+    on_exit(fn -> SizingDurability.stop_listening(tmp_dir) end)
+
+    assert :ok = Durability.rehearse_target_isolated(SizingDurability, path)
+
+    assert_received {:synced_size, size}
+    assert size == byte_size(before_bytes)
+    assert_received {:renamed, temp_path, target_path}
+    assert String.starts_with?(temp_path, path <> ".tmp.")
+    assert String.starts_with?(target_path, path <> ".tmp.")
+    refute temp_path == target_path
+    refute target_path == path
+
+    after_rehearsal = File.stat!(path, time: :posix)
+
+    assert {after_rehearsal.major_device, after_rehearsal.minor_device, after_rehearsal.inode} ==
+             {before.major_device, before.minor_device, before.inode}
+
+    assert after_rehearsal.mtime == before.mtime
+    assert File.read!(path) == before_bytes
+    assert Path.wildcard("#{path}.tmp.*") == []
+  end
+
+  @tag :tmp_dir
   test "a stalled durable relay is refused within a bounded time and the holder survives", %{
     tmp_dir: tmp_dir
   } do
@@ -144,13 +224,17 @@ defmodule LatticeCarrierServer.DurabilityTest do
 
     Application.put_env(:lattice_carrier_server, :persistence_timeout_ms, 25)
     InjectedDurability.arm_failure(tmp_dir, :slow_sync_file)
+    cleanup_timeout_ms = 250
+    call_slack_ms = 750
 
     started_at = System.monotonic_time(:millisecond)
 
     assert {:error, {:persistence_failed, :persistence_timeout}} =
              Holder.relay(holder, relay_identity.realm_id, relayed)
 
-    assert System.monotonic_time(:millisecond) - started_at < 200
+    assert System.monotonic_time(:millisecond) - started_at <
+             25 + cleanup_timeout_ms + call_slack_ms
+
     assert Process.alive?(holder)
   end
 

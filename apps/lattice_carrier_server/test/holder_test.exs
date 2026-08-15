@@ -40,15 +40,13 @@ defmodule LatticeCarrierServer.HolderTest do
     previous_flag = Process.flag(:trap_exit, true)
 
     try do
-      assert {:error, {:source_error, {:orphan_cleanup_failed, ^orphan_path, reason}}} =
+      assert {:error, :orphan_cleanup_failed} =
                Holder.start_link(
                  name: {:global, {__MODULE__, make_ref()}},
                  identity: server_identity,
                  source: {:path, path},
                  relay_realms: []
                )
-
-      assert reason in [:eisdir, :eperm]
     after
       Process.flag(:trap_exit, previous_flag)
     end
