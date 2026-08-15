@@ -16,9 +16,19 @@ export function analyzeAuthority(schema, ops, included, order, byId, expectedRep
     const replica = authorityReplicaAnchor(visible, expectedReplica);
     const wrongReplicaAuthority = new Map();
     const admitted = visible.filter((op) => {
-        if (op.kind === "authority" &&
-            replica !== undefined &&
-            op.replica !== replica) {
+        if (op.kind !== "authority" || replica === undefined)
+            return true;
+        // Structured authority events carry embedded evidence naming their
+        // replica, so a missing OR mismatched outer replica is judgeable foreign
+        // evidence: quarantine as wrong_replica. An evidence-free write is only
+        // judgeable when it names a foreign replica outright; one with NO outer
+        // replica cannot be judged at all and must stay admitted so the
+        // writesPerRole accounting routes it into the V-01 fail-closed refusal
+        // (plan 140 vocabulary) instead of a silent quarantine-and-proceed.
+        const judgeableForeign = op.authority?.type !== undefined
+            ? op.replica !== replica
+            : typeof op.replica === "string" && op.replica !== replica;
+        if (judgeableForeign) {
             wrongReplicaAuthority.set(op.id, "wrong_replica");
             return false;
         }
