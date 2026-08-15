@@ -109,6 +109,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_authority_malformed_transfer(),
       township_authority_undeclared_role_tick(),
       township_foreign_replica_injection(),
+      township_authority_cross_replica_replay(),
       township_link_election(),
       township_capability_missing(),
       township_capability_invalid(),
@@ -1728,6 +1729,117 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       "foreignReplica" => foreign_replica,
       "foreignCarrierOp" => CarrierWire.encode_op(foreign_op),
       "genuineGenesisOperationId" => genuine_genesis_id
+    })
+  end
+
+  # Plan 162 step 2b(d): a delegation chain minted for a same-root *sibling*
+  # replica is retained as evidence but rejected by `validate_delegation/6`.
+  # Commands report the structural `:wrong_replica` reason; a transfer citing
+  # the invalid chain reports `:invalid_transfer` and cannot move the holder.
+  defp township_authority_cross_replica_replay do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:cross-replica-replay",
+        ["clerk", "mallory"],
+        seed: "township:cross-replica-replay"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    sim = Sim.sync_all(sim)
+    clerk = Sim.identity(sim, "clerk")
+    mallory = Sim.identity(sim, "mallory")
+    replica = Sim.replica(sim)
+
+    sibling_replica =
+      Authority.bind_replica("replica:matter:cross-replica-sibling", clerk.pub)
+
+    sibling_genesis =
+      Delegation.genesis(clerk, sibling_replica,
+        ops: [:post],
+        roles: [:clerk],
+        live: true
+      )
+
+    sibling_grant =
+      Delegation.new(clerk, sibling_replica, mallory.pub,
+        ops: [:post],
+        parent_id: sibling_genesis.id
+      )
+
+    sibling_transfer =
+      Delegation.new(clerk, sibling_replica, mallory.pub,
+        ops: [:post],
+        roles: [:clerk],
+        parent_id: sibling_genesis.id
+      )
+
+    log = Sim.log(sim, "clerk")
+
+    replayed_genesis =
+      Op.new(
+        mallory,
+        replica,
+        Log.frontier(log),
+        :authority,
+        {:genesis, sibling_genesis, %{}}
+      )
+
+    log = Log.append!(log, replayed_genesis)
+
+    replayed_grant =
+      Op.new(mallory, replica, Log.frontier(log), :authority, {:grant, sibling_grant})
+
+    log = Log.append!(log, replayed_grant)
+    rejected_post = "mallory: cross-replica replayed capability"
+
+    target =
+      Op.new(
+        mallory,
+        replica,
+        Log.frontier(log),
+        :command,
+        {:post, [rejected_post]},
+        cap: sibling_grant.id
+      )
+
+    log = Log.append!(log, target)
+
+    # Sibling transfer authored by the current holder. It reaches the role
+    # timeline but its foreign delegation is refused as :invalid_transfer.
+    replayed_transfer =
+      Op.new(
+        clerk,
+        replica,
+        Log.frontier(log),
+        :authority,
+        {:transfer, :clerk, sibling_transfer, 1}
+      )
+
+    log = Log.append!(log, replayed_transfer)
+
+    # `validate_delegation/6`'s replica arm fires ahead of the genesis arms, so
+    # a same-root sibling genesis is refused as :wrong_replica.
+    assert_authority_reason!(log, replayed_genesis.id, :wrong_replica)
+    assert_authority_reason!(log, target.id, :wrong_replica)
+    assert_authority_reason!(log, replayed_transfer.id, :invalid_transfer)
+    assert_post_absent!(log, rejected_post)
+
+    unless Authority.analyze(Matter, log).holders.clerk == clerk.pub do
+      raise "expected sibling transfer replay not to move the clerk holder"
+    end
+
+    capability_scenario("township_authority_cross_replica_replay", sim, log, %{
+      "case" => "cross_replica_replay",
+      "targetOperationId" => target.id,
+      "expectedReason" => "wrong_replica",
+      "transferExpectedReason" => "invalid_transfer",
+      "rejectedPost" => rejected_post,
+      "siblingReplica" => sibling_replica,
+      "siblingGrantDelegationId" => sibling_grant.id,
+      "siblingTransferDelegationId" => sibling_transfer.id,
+      "replayedGenesisOperationId" => replayed_genesis.id,
+      "replayedTransferOperationId" => replayed_transfer.id
     })
   end
 

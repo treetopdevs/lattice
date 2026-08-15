@@ -13,8 +13,19 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 export const TOWNSHIP_PILOT_KEY_ALIAS = "township-pilot-v1";
+// Provisioning is intentionally incomplete until the externally generated
+// pilot certificate fingerprint is committed by reviewed PR. Distribution
+// refuses while this remains null; an environment variable cannot establish
+// or rotate the trust anchor by itself.
+export const TOWNSHIP_PILOT_CERT_SHA256 = null;
 export const TOWNSHIP_PACKAGE_ID = "dev.treetop.lattice.township";
 export const ANDROID_DEBUG_CERT_DN_MARKER = "CN=Android Debug";
+
+export function pilotPinStatus(suppliedPin, repositoryPin = TOWNSHIP_PILOT_CERT_SHA256) {
+  const normalize = (pin) => String(pin ?? "").replaceAll(":", "").trim().toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(normalize(repositoryPin))) return "unprovisioned";
+  return normalize(suppliedPin) === normalize(repositoryPin) ? "matched" : "mismatched";
+}
 
 // Forbidden in a pilot artifact: probe surfaces, env-seeded configuration, and
 // the Android-emulator host-loopback address. Kept in sync with the

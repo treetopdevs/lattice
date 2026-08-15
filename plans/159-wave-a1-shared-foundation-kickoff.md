@@ -130,18 +130,24 @@ git -C /Users/nicholas/develop/lattice worktree add ../lattice-beta-android -b c
    supplied only through CI secrets; alias `township-pilot-v1`; cross-product signing refused.
 2. Monotonic version codes; signed universal-or-ARM64 APK; emit SHA-256, signing fingerprint,
    git SHA, machine-readable build manifest.
+   Main distribution uses a disjoint high band; branch/throwaway builds use a low band monotonic
+   along each first-parent branch, with git SHA + APK SHA-256 as the exact build identity.
 3. Hosted Android build + signature verification + artifact upload + install/upgrade smoke as a
    new `flagship.yml` job (hot file — root reviews the YAML diff before merge).
 4. Release hardening: real CSP; WSS-only non-loopback peers; compile out dev traces, environment
    probes, seeded-key paths (the existing `*:release:*probe*` script family stays dev-only).
 5. Harness baseline (non-destructive only this wave): `ANDROID_SERIAL`-selected install, launch,
-   force-stop, redacted logs/screens, network class, JSON/Markdown evidence bundle keyed by git
-   SHA + APK hash; release run fails if any `adb reverse` mapping exists; never delete a mapping
-   it did not create; never log serials, keys, capability payloads, QR contents, user content.
+   force-stop, structured launch/process outcomes, network class, and a JSON/Markdown
+   evidence bundle keyed by git SHA + APK hash + capture/run identity; release run requires an explicit non-debug pilot-cert
+   pin and fails if any `adb reverse` mapping exists; never persist raw screenshots/general logcat,
+   delete a mapping it did not create, or retain serials, keys, capability payloads, QR contents, or
+   user content. Post-install evidence requires the signed `base.apk` signer and exact SHA-256 to
+   match the pre-install artifact; unreadable OEM app paths are a distinct result.
 
 **Device A signer-mismatch protocol (verbatim constraint):** Device A carries the exact-main
-debug-signed baseline. The harness must detect the signer mismatch, capture the disposable
-baseline evidence, **stop**, and request explicit operator approval before uninstalling only
+debug-signed baseline. The harness must detect the signer mismatch, capture only the
+baseline signing/device metadata without capturing user-visible pixels or general logcat, **stop**,
+and request explicit operator approval before uninstalling only
 `dev.treetop.lattice.township`. Uninstall/`pm clear` is never automatic.
 
 **First RED tests:** `apksigner` on the release artifact must report the pinned pilot
