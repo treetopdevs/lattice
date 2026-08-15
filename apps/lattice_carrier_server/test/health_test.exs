@@ -283,7 +283,8 @@ defmodule LatticeCarrierServer.HealthTest do
     health_port = apply(@health_mod, :port, [])
     assert {503, ""} = get("http://127.0.0.1:#{health_port}/readyz")
 
-    assert_receive {:readiness_failure, ^event, %{}, %{reason: :log_restore_failed}}
+    assert_receive {:readiness_failure, ^event, %{}, metadata}
+    assert metadata == %{reason: :log_restore_failed}
   end
 
   @tag :tmp_dir
