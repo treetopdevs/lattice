@@ -84,7 +84,8 @@ pub const TOWNSHIP_WITNESS_ARTIFACT_EXPORT_KV_PREFIX: &str =
 /// Witness artifact ids are unpadded base64url sha256 digests: exactly 43
 /// ASCII bytes (`len()` below is a byte count, which for this alphabet is
 /// also the character count).
-pub const TOWNSHIP_WITNESS_ARTIFACT_ID_BYTES: usize = 43;
+pub const TOWNSHIP_WITNESS_ARTIFACT_ID_BYTES: usize =
+    lattice_mobile_core::SHA256_BASE64URL_ID_BYTES;
 const GOVERNANCE_DUPLICATE_RECONCILIATION_TIMEOUT: Duration = Duration::from_millis(500);
 const GOVERNANCE_DUPLICATE_RECONCILIATION_INTERVAL: Duration = Duration::from_millis(10);
 const GOVERNANCE_PUBLIC_SIDECAR_MISSING: &str =
@@ -169,7 +170,24 @@ pub struct KeyringCarrierKeySeedStore {
 }
 
 impl KeyringCarrierKeySeedStore {
-    pub fn new(service: impl Into<String>) -> Self {
+    /// Product shells must not select another product's platform key service.
+    /// The production constructor is manifest-bound rather than caller-selected.
+    ///
+    /// ```compile_fail,E0624
+    /// use township_tauri_shell::KeyringCarrierKeySeedStore;
+    ///
+    /// let _ = KeyringCarrierKeySeedStore::new("dev.treetop.lattice.toolshed.carrier");
+    /// ```
+    /// ```
+    /// use township_tauri_shell::KeyringCarrierKeySeedStore;
+    ///
+    /// let _ = KeyringCarrierKeySeedStore::township();
+    /// ```
+    pub fn township() -> Self {
+        Self::new(TOWNSHIP_KEYRING_SERVICE)
+    }
+
+    fn new(service: impl Into<String>) -> Self {
         Self {
             service: service.into(),
         }
@@ -205,6 +223,7 @@ impl CarrierKeySeedStore for KeyringCarrierKeySeedStore {
 }
 
 pub struct TownshipNativeState {
+    kv_writes: Mutex<()>,
     values: Mutex<HashMap<String, String>>,
     values_path: Mutex<Option<PathBuf>>,
     product_db: Mutex<Option<lattice_mobile_core::ProductDatabase>>,
@@ -226,6 +245,8 @@ impl TownshipNativeState {
         Self::with_key_store(InMemoryCarrierKeySeedStore::default())
     }
 
+    /// Dependency-injection seam for tests and non-production adapters.
+    /// Packaged Township custody is constructed only by [`Self::platform_secure`].
     pub fn with_key_store<S>(key_store: S) -> Self
     where
         S: CarrierKeySeedStore + 'static,
@@ -263,6 +284,10 @@ impl TownshipNativeState {
         )
     }
 
+    /// Load legacy key-value state. If contamination is found, this rewrites
+    /// `path` in place without secret or cross-product rows and preserves
+    /// cross-product rows in `<path>.cross-product-quarantine.json`; the
+    /// containing directory must therefore be writable.
     pub fn with_persistent_values_file<P>(path: P) -> Result<Self, String>
     where
         P: AsRef<Path>,
@@ -270,6 +295,10 @@ impl TownshipNativeState {
         Self::with_key_store_and_values_file(InMemoryCarrierKeySeedStore::default(), path)
     }
 
+    /// Dependency-injection seam for tests with a legacy values file.
+    /// Packaged Township custody is constructed only by [`Self::platform_secure`].
+    /// Contaminated input is rewritten and quarantined as documented by
+    /// [`Self::with_persistent_values_file`].
     pub fn with_key_store_and_values_file<S, P>(key_store: S, path: P) -> Result<Self, String>
     where
         S: CarrierKeySeedStore + 'static,
@@ -297,6 +326,7 @@ impl TownshipNativeState {
         S: CarrierKeySeedStore + 'static,
     {
         Self {
+            kv_writes: Mutex::new(()),
             values: Mutex::new(values),
             values_path: Mutex::new(values_path),
             product_db: Mutex::new(None),
@@ -308,14 +338,27 @@ impl TownshipNativeState {
         }
     }
 
-    pub fn platform_secure(service: &str) -> Self {
+    /// Construct production Township custody from the Township manifest.
+    /// Supplying another product's service is not part of the production API.
+    ///
+    /// ```compile_fail,E0061
+    /// use township_tauri_shell::TownshipNativeState;
+    ///
+    /// let _ = TownshipNativeState::platform_secure("dev.treetop.lattice.toolshed.carrier");
+    /// ```
+    /// ```
+    /// use township_tauri_shell::TownshipNativeState;
+    ///
+    /// let _ = TownshipNativeState::platform_secure();
+    /// ```
+    pub fn platform_secure() -> Self {
         #[cfg(feature = "township-governance-test-presence")]
         {
             let custody = Arc::new(test_governance::TestGovernanceWitnessCustody);
             return Self::with_values_and_key_stores(
                 HashMap::new(),
                 None,
-                KeyringCarrierKeySeedStore::new(service),
+                KeyringCarrierKeySeedStore::township(),
                 Some(custody.clone()),
                 Some(custody),
             );
@@ -332,7 +375,7 @@ impl TownshipNativeState {
             return Self::with_values_and_key_stores(
                 HashMap::new(),
                 None,
-                KeyringCarrierKeySeedStore::new(service),
+                KeyringCarrierKeySeedStore::township(),
                 Some(custody.clone()),
                 Some(custody),
             );
@@ -342,14 +385,17 @@ impl TownshipNativeState {
             not(feature = "township-governance-test-presence"),
             not(target_os = "macos")
         ))]
-        Self::with_key_store(KeyringCarrierKeySeedStore::new(service))
+        Self::with_key_store(KeyringCarrierKeySeedStore::township())
     }
 
-    pub fn platform_secure_with_values_file<P>(service: &str, path: P) -> Result<Self, String>
+    /// Construct production custody with legacy values state. Contaminated
+    /// input is rewritten in place and cross-product rows are preserved in a
+    /// sibling `.cross-product-quarantine.json` file, requiring write access.
+    pub fn platform_secure_with_values_file<P>(path: P) -> Result<Self, String>
     where
         P: AsRef<Path>,
     {
-        let state = Self::platform_secure(service);
+        let state = Self::platform_secure();
         state.attach_persistent_values_file(path)?;
         Ok(state)
     }
@@ -410,6 +456,18 @@ impl TownshipNativeState {
     }
 
     pub fn kv_set(&self, key: &str, value: &str) -> Result<(), String> {
+        let _write = self
+            .kv_writes
+            .lock()
+            .map_err(|_| "key-value write lock poisoned".to_string())?;
+        lattice_mobile_core::validate_replayable_storage_key(TOWNSHIP_PRODUCT, key).map_err(
+            |error| match error {
+                lattice_mobile_core::ProductDatabaseError::NonReplayableStorageKey(_) => {
+                    format!("township key-value write contains secret material at {key}")
+                }
+                other => format!("township key-value write refused: {other}"),
+            },
+        )?;
         {
             let product_db = self
                 .product_db
@@ -436,10 +494,18 @@ impl TownshipNativeState {
         Ok(())
     }
 
+    /// Attach legacy key-value state. If contamination is found, this rewrites
+    /// `path` in place without secret or cross-product rows and preserves
+    /// cross-product rows in `<path>.cross-product-quarantine.json`; the
+    /// containing directory must therefore be writable.
     pub fn attach_persistent_values_file<P>(&self, path: P) -> Result<(), String>
     where
         P: AsRef<Path>,
     {
+        let _write = self
+            .kv_writes
+            .lock()
+            .map_err(|_| "key-value write lock poisoned".to_string())?;
         let path = path.as_ref().to_path_buf();
         let loaded_values = load_values_file(&path)?;
         let mut values = self
@@ -465,11 +531,18 @@ impl TownshipNativeState {
     /// Attach the Township product database (plan 158 isolation contract):
     /// open `township-v1.sqlite3` in `dir` with the township product marker,
     /// import the legacy JSON key-value state exactly once, and write every
-    /// later `kv_set` through the transactional SQLite store.
+    /// later `kv_set` through the transactional SQLite store. Recovery may
+    /// rewrite `township-native-kv.json`, removes secret-shaped active rows,
+    /// and moves cross-product rows into `quarantined_kv`; `dir` must be
+    /// writable.
     pub fn attach_product_database<P>(&self, dir: P) -> Result<(), String>
     where
         P: AsRef<Path>,
     {
+        let _write = self
+            .kv_writes
+            .lock()
+            .map_err(|_| "key-value write lock poisoned".to_string())?;
         let manifest = lattice_mobile_core::ProductManifest::for_product(TOWNSHIP_PRODUCT)
             .map_err(|error| format!("township product manifest unavailable: {error}"))?;
         if manifest.app_id != TOWNSHIP_APP_IDENTIFIER
@@ -487,9 +560,58 @@ impl TownshipNativeState {
             &dir.join(&manifest.database_file),
         )
         .map_err(|error| format!("township product database unavailable: {error}"))?;
-        db.import_legacy_json_values(&dir.join(TOWNSHIP_LEGACY_NATIVE_KV_FILE))
+        let legacy_import = db
+            .import_legacy_json_values(&dir.join(TOWNSHIP_LEGACY_NATIVE_KV_FILE))
             .map_err(|error| format!("township legacy state migration failed: {error}"))?;
+        if let lattice_mobile_core::LegacyJsonImport::Recovered {
+            purged_secret_keys,
+            retained_secret_keys,
+            quarantined_cross_product_keys,
+            skipped_non_string_keys,
+            legacy_cleanup_error,
+            ..
+        } = legacy_import
+        {
+            if !purged_secret_keys.is_empty() {
+                eprintln!(
+                    "township_storage_recovery purged_legacy_secret_keys={purged_secret_keys:?}"
+                );
+            }
+            if !quarantined_cross_product_keys.is_empty() {
+                eprintln!(
+                    "township_storage_recovery quarantined_legacy_cross_product_keys={quarantined_cross_product_keys:?}"
+                );
+            }
+            if !retained_secret_keys.is_empty() {
+                eprintln!(
+                    "township_storage_recovery legacy_secret_cleanup_failed_keys={retained_secret_keys:?}"
+                );
+            }
+            if let Some(error) = legacy_cleanup_error {
+                eprintln!("township_storage_recovery legacy_cleanup_error={error}");
+            }
+            if !skipped_non_string_keys.is_empty() {
+                eprintln!(
+                    "township_storage_recovery skipped_legacy_non_string_keys={skipped_non_string_keys:?}"
+                );
+            }
+        }
 
+        let recovery = db
+            .recover_invalid_entries()
+            .map_err(|error| format!("township product database recovery failed: {error}"))?;
+        if !recovery.purged_secret_keys.is_empty() {
+            eprintln!(
+                "township_storage_recovery purged_secret_keys={:?}",
+                recovery.purged_secret_keys
+            );
+        }
+        if !recovery.quarantined_cross_product_keys.is_empty() {
+            eprintln!(
+                "township_storage_recovery quarantined_cross_product_keys={:?}",
+                recovery.quarantined_cross_product_keys
+            );
+        }
         let loaded_values = db
             .kv_entries()
             .map_err(|error| format!("township product database read failed: {error}"))?;
@@ -500,10 +622,8 @@ impl TownshipNativeState {
         if values.is_empty() {
             *values = loaded_values.into_iter().collect();
         } else {
-            for (key, value) in values.iter() {
-                db.kv_set(key, value)
-                    .map_err(|error| format!("township product database write failed: {error}"))?;
-            }
+            db.kv_set_batch(&values)
+                .map_err(|error| format!("township product database write failed: {error}"))?;
             let merged = db
                 .kv_entries()
                 .map_err(|error| format!("township product database read failed: {error}"))?;
@@ -756,18 +876,98 @@ fn reject_governance_carrier_alias(key_id: &str) -> Result<(), String> {
 
 fn load_values_file(path: &Path) -> Result<HashMap<String, String>, String> {
     match fs::read_to_string(path) {
-        Ok(raw) => serde_json::from_str(&raw).map_err(|error| {
-            format!(
-                "native key-value store decode failed at {}: {error}",
-                path.display()
-            )
-        }),
+        Ok(raw) => {
+            let mut values: HashMap<String, String> =
+                serde_json::from_str(&raw).map_err(|error| {
+                    format!(
+                        "native key-value store decode failed at {}: {error}",
+                        path.display()
+                    )
+                })?;
+            let mut secret_keys = Vec::new();
+            let mut cross_product_keys = Vec::new();
+            for key in values.keys() {
+                match lattice_mobile_core::validate_replayable_storage_key(TOWNSHIP_PRODUCT, key) {
+                    Ok(()) => {}
+                    Err(lattice_mobile_core::ProductDatabaseError::NonReplayableStorageKey(_)) => {
+                        secret_keys.push(key.clone());
+                    }
+                    Err(lattice_mobile_core::ProductDatabaseError::ProductKeyMismatch {
+                        ..
+                    }) => {
+                        cross_product_keys.push(key.clone());
+                    }
+                    Err(error) => {
+                        return Err(format!(
+                            "native key-value store refused at {}: {error}",
+                            path.display()
+                        ));
+                    }
+                }
+            }
+            if !secret_keys.is_empty() || !cross_product_keys.is_empty() {
+                let quarantined = cross_product_keys
+                    .iter()
+                    .filter_map(|key| values.get(key).map(|value| (key.clone(), value.clone())))
+                    .collect::<HashMap<_, _>>();
+                for key in secret_keys.iter().chain(&cross_product_keys) {
+                    values.remove(key);
+                }
+                if !quarantined.is_empty() {
+                    merge_values_file_quarantine(path, quarantined)?;
+                }
+                save_values_file(path, &values)?;
+                if !secret_keys.is_empty() {
+                    eprintln!(
+                        "township_storage_recovery purged_values_file_secret_keys={secret_keys:?}"
+                    );
+                }
+                if !cross_product_keys.is_empty() {
+                    eprintln!(
+                        "township_storage_recovery quarantined_values_file_cross_product_keys={cross_product_keys:?}"
+                    );
+                }
+            }
+            Ok(values)
+        }
         Err(error) if error.kind() == ErrorKind::NotFound => Ok(HashMap::new()),
         Err(error) => Err(format!(
             "native key-value store read failed at {}: {error}",
             path.display()
         )),
     }
+}
+
+fn values_file_quarantine_path(path: &Path) -> PathBuf {
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("township-native-kv.json");
+    path.with_file_name(format!("{file_name}.cross-product-quarantine.json"))
+}
+
+fn merge_values_file_quarantine(
+    values_path: &Path,
+    additions: HashMap<String, String>,
+) -> Result<(), String> {
+    let quarantine_path = values_file_quarantine_path(values_path);
+    let mut quarantined = match fs::read_to_string(&quarantine_path) {
+        Ok(raw) => serde_json::from_str(&raw).map_err(|error| {
+            format!(
+                "native key-value quarantine decode failed at {}: {error}",
+                quarantine_path.display()
+            )
+        })?,
+        Err(error) if error.kind() == ErrorKind::NotFound => HashMap::new(),
+        Err(error) => {
+            return Err(format!(
+                "native key-value quarantine read failed at {}: {error}",
+                quarantine_path.display()
+            ));
+        }
+    };
+    quarantined.extend(additions);
+    save_values_file(&quarantine_path, &quarantined)
 }
 
 fn save_values_file(path: &Path, values: &HashMap<String, String>) -> Result<(), String> {
@@ -1083,53 +1283,67 @@ mod android_intent {
     }
 }
 
+/// Configure the production builder. When `TOWNSHIP_NATIVE_KV_FILE` selects a
+/// legacy values file, contamination recovery rewrites that file and may
+/// create its sibling quarantine file, so the containing directory must be
+/// writable.
 pub fn configure_platform_secure_township_builder<R: tauri::Runtime>(
     builder: tauri::Builder<R>,
 ) -> tauri::Builder<R> {
-    let state = TownshipNativeState::platform_secure(TOWNSHIP_KEYRING_SERVICE);
-    if let Some(values_path) = township_native_kv_path_from_env()
-        .expect("invalid Township native key-value store path env")
-    {
-        state
-            .attach_persistent_values_file(values_path)
-            .expect("invalid Township native key-value store file");
-        seed_dev_carrier_key_from_env(&state).expect("invalid Township dev carrier key seed env");
-
-        return configure_township_commands(builder).manage(state);
+    let state = TownshipNativeState::platform_secure();
+    match township_native_kv_path_from_env() {
+        Err(error) => configure_township_commands(builder)
+            .manage(state)
+            .setup(move |_app| {
+                Err(Box::<dyn std::error::Error>::from(std::io::Error::other(
+                    error.clone(),
+                )))
+            }),
+        Ok(Some(values_path)) => {
+            configure_township_commands(builder)
+                .manage(state)
+                .setup(move |app| {
+                    let state = app.state::<TownshipNativeState>();
+                    state
+                        .attach_persistent_values_file(&values_path)
+                        .map_err(|error| tauri::Error::Io(std::io::Error::other(error)))?;
+                    seed_dev_carrier_key_from_env(&state)
+                        .map_err(|error| tauri::Error::Io(std::io::Error::other(error)))?;
+                    Ok(())
+                })
+        }
+        Ok(None) => configure_township_commands(builder)
+            .manage(state)
+            .setup(|app| {
+                let data_dir = app
+                    .path()
+                    .app_local_data_dir()
+                    .map_err(|error| tauri::Error::Io(std::io::Error::other(error)))?;
+                let state = app.state::<TownshipNativeState>();
+                state
+                    .attach_product_database(&data_dir)
+                    .map_err(|error| tauri::Error::Io(std::io::Error::other(error)))?;
+                seed_dev_carrier_key_from_env(&state)
+                    .map_err(|error| tauri::Error::Io(std::io::Error::other(error)))?;
+                Ok(())
+            }),
     }
-
-    configure_township_commands(builder)
-        .manage(state)
-        .setup(|app| {
-            let data_dir = app
-                .path()
-                .app_local_data_dir()
-                .map_err(|error| tauri::Error::Io(std::io::Error::other(error)))?;
-            let state = app.state::<TownshipNativeState>();
-            state
-                .attach_product_database(&data_dir)
-                .map_err(|error| tauri::Error::Io(std::io::Error::other(error)))?;
-            seed_dev_carrier_key_from_env(&state)
-                .map_err(|error| tauri::Error::Io(std::io::Error::other(error)))?;
-            Ok(())
-        })
 }
 
+/// Configure the production builder with legacy values state. Contaminated
+/// input is rewritten in place and cross-product rows are preserved in a
+/// sibling `.cross-product-quarantine.json` file, requiring write access.
 pub fn configure_platform_secure_township_builder_with_values_file<R, P>(
     builder: tauri::Builder<R>,
     values_path: P,
-) -> tauri::Builder<R>
+) -> Result<tauri::Builder<R>, String>
 where
     R: tauri::Runtime,
     P: AsRef<Path>,
 {
-    let state = TownshipNativeState::platform_secure(TOWNSHIP_KEYRING_SERVICE);
-    state
-        .attach_persistent_values_file(values_path)
-        .expect("invalid Township native key-value store file");
-    seed_dev_carrier_key_from_env(&state).expect("invalid Township dev carrier key seed env");
-
-    configure_township_commands(builder).manage(state)
+    let state = TownshipNativeState::platform_secure_with_values_file(values_path)?;
+    seed_dev_carrier_key_from_env(&state)?;
+    Ok(configure_township_commands(builder).manage(state))
 }
 
 #[cfg(target_os = "android")]

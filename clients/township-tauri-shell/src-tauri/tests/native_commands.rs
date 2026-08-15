@@ -419,8 +419,8 @@ fn packaged_test_presence_feature_binds_a_trace_loud_deterministic_provider() {
         township_tauri_shell::TOWNSHIP_GOVERNANCE_TEST_PRESENCE_TRACE,
         "governance-test-presence:authorized"
     );
-    let first = TownshipNativeState::platform_secure(TOWNSHIP_KEYRING_SERVICE);
-    let second = TownshipNativeState::platform_secure(TOWNSHIP_KEYRING_SERVICE);
+    let first = TownshipNativeState::platform_secure();
+    let second = TownshipNativeState::platform_secure();
 
     assert_eq!(
         first.governance_witness_provider_kind(),
@@ -479,6 +479,7 @@ fn platform_secure_builder_persists_native_kv_across_app_restarts_when_file_is_c
             tauri::test::mock_builder(),
             &path,
         )
+        .expect("configure platform builder")
         .build(tauri::test::mock_context(tauri::test::noop_assets()))
         .unwrap();
         let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
@@ -500,6 +501,7 @@ fn platform_secure_builder_persists_native_kv_across_app_restarts_when_file_is_c
         tauri::test::mock_builder(),
         &path,
     )
+    .expect("configure platform builder after restart")
     .build(tauri::test::mock_context(tauri::test::noop_assets()))
     .unwrap();
     let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
@@ -635,6 +637,16 @@ fn corrupt_persistent_key_value_file_is_rejected_without_overwrite() {
     live_state
         .kv_set("ephemeral-after-attach", "still-memory-only")
         .unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), corrupt_bytes);
+
+    let builder_error = match configure_platform_secure_township_builder_with_values_file(
+        tauri::test::mock_builder(),
+        &path,
+    ) {
+        Ok(_) => panic!("corrupt builder values file unexpectedly configured"),
+        Err(error) => error,
+    };
+    assert!(builder_error.contains("native key-value store decode failed"));
     assert_eq!(std::fs::read(&path).unwrap(), corrupt_bytes);
 
     let _ = std::fs::remove_file(path);
@@ -914,9 +926,13 @@ fn concurrent_ensure_carrier_key_returns_one_public_key_per_id() {
 }
 
 #[test]
-fn platform_secure_constructor_exposes_keyring_backed_seed_store() {
-    let _store = KeyringCarrierKeySeedStore::new("dev.treetop.lattice.test");
-    let _state = TownshipNativeState::platform_secure("dev.treetop.lattice.test");
+fn platform_secure_constructor_is_manifest_bound() {
+    let manifest =
+        lattice_mobile_core::ProductManifest::for_product("township").expect("township manifest");
+    assert_eq!(manifest.key_service, TOWNSHIP_KEYRING_SERVICE);
+
+    let _store = KeyringCarrierKeySeedStore::township();
+    let _state = TownshipNativeState::platform_secure();
 }
 
 #[test]

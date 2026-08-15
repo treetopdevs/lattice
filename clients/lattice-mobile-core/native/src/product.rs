@@ -66,6 +66,14 @@ impl ProductManifest {
             .ok_or_else(|| ProductManifestError::UnknownProduct(product.to_string()))
     }
 
+    /// Whether `product` appears in the normative isolation table, without
+    /// cloning any manifest data.
+    pub fn is_known_product(product: &str) -> bool {
+        PRODUCT_MANIFESTS
+            .iter()
+            .any(|manifest| manifest.product == product)
+    }
+
     /// Whether a deep link scheme belongs to this product. Cross-product
     /// scheme dispatch must refuse.
     pub fn accepts_scheme(&self, scheme: &str) -> bool {

@@ -44,7 +44,22 @@ test("frontend package builds and tests the Township Vue shell", () => {
     "VITE_TOWNSHIP_DEV_TRACE=1 VITE_TOWNSHIP_AUTOSYNC_ON_MOUNT=0 tauri build --features township-dev-trace --bundles app",
   );
   assert.equal(pkg.scripts.typecheck, "vue-tsc --noEmit");
-  assert.equal(pkg.scripts["frontend:contract"], "node --test test/frontend_shell.mjs");
+  const frontendContracts = pkg.scripts["frontend:contract"].split(/\s+/);
+  assert.equal(frontendContracts[0], "node");
+  assert.ok(frontendContracts.includes("--test"), "frontend contracts must execute with node --test");
+  assert.equal(
+    frontendContracts.some((token) => token.startsWith("--test-") && token !== "--test"),
+    false,
+    "frontend contracts must not be filtered, skipped, or restricted to test-only cases",
+  );
+  assert.ok(
+    frontendContracts.includes("test/frontend_shell.mjs"),
+    "the frontend shell contract must remain registered",
+  );
+  assert.ok(
+    frontendContracts.includes("test/mobile_core_native_ci_contract.mjs"),
+    "the mobile-core native CI contract must be registered",
+  );
   assert.equal(pkg.scripts["mobile:tauri-readiness"], "node --test test/tauri_mobile_readiness.mjs");
   assert.equal(pkg.scripts["tauri:deep-link:smoke"], "tsx test/tauri_installed_deeplink_smoke.ts");
   assert.equal(pkg.scripts["tauri:cold-deep-link:smoke"], "tsx test/tauri_installed_cold_deeplink_smoke.ts");

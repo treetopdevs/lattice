@@ -8,13 +8,13 @@ use std::io::Write;
 
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine as _;
-use township_tauri_shell::{TownshipNativeState, TOWNSHIP_KEYRING_SERVICE};
+use township_tauri_shell::TownshipNativeState;
 
 #[test]
 fn exports_the_deterministic_test_presence_public_key_for_fixture_preflight() {
     let out_path = std::env::var("TOWNSHIP_GOVERNANCE_TEST_PRESENCE_KEY_FILE").ok();
 
-    let state = TownshipNativeState::platform_secure(TOWNSHIP_KEYRING_SERVICE);
+    let state = TownshipNativeState::platform_secure();
     assert_eq!(
         state.governance_witness_provider_kind(),
         township_tauri_shell::GovernanceWitnessProviderKind::TestPresence

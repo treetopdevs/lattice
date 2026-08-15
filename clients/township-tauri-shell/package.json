@@ -15,7 +15,7 @@
     "dev": "vite --host 127.0.0.1",
     "typecheck": "vue-tsc --noEmit",
     "typecheck:ios-device-probe": "tsc --noEmit -p tsconfig.ios-device-probe.json",
-    "frontend:contract": "node --test test/frontend_shell.mjs",
+    "frontend:contract": "node --test test/frontend_shell.mjs test/mobile_core_native_ci_contract.mjs",
     "intent-ui:contract": "vitest run test/use_action_intent.test.ts test/IntentReviewPanel.test.ts",
     "native:contract": "tsx test/native_workflow.ts",
     "pregovernance:native:contract": "npm --prefix ../lattice-client run build",

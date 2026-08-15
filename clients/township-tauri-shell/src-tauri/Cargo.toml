@@ -54,4 +54,5 @@ keyring-core = "1.0.0"
 tauri-build = { version = "2.6.3", features = [] }
 
 [dev-dependencies]
+rusqlite = { version = "0.37", features = ["bundled"] }
 tauri = { version = "2.11.5", default-features = false, features = ["test"] }

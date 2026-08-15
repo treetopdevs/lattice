@@ -95,7 +95,7 @@ jobs:
   unit:
     name: Unit + property suite
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -129,7 +129,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             clients/township-tauri-shell/src-tauri/target
-          key: ${{ runner.os }}-${{ runner.arch }}-township-tauri-${{ hashFiles('clients/township-tauri-shell/src-tauri/Cargo.lock', 'clients/township-tauri-shell/src-tauri/src/**/*.rs') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-township-tauri-${{ hashFiles('clients/lattice-mobile-core/native/Cargo.lock', 'clients/lattice-mobile-core/native/src/**/*.rs', 'clients/lattice-mobile-core/native/tests/**/*.rs', 'clients/township-tauri-shell/src-tauri/Cargo.lock', 'clients/township-tauri-shell/src-tauri/src/**/*.rs', 'clients/township-tauri-shell/src-tauri/tests/**/*.rs') }}
           restore-keys: ${{ runner.os }}-${{ runner.arch }}-township-tauri-
       - name: Install dependencies
         run: mix deps.get
@@ -277,6 +277,11 @@ jobs:
             librsvg2-dev
       - name: Tauri native command core
         working-directory: clients/township-tauri-shell/src-tauri
+        run: cargo test
+      - name: Mobile core native migration matrix
+        working-directory: clients/lattice-mobile-core/native
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/clients/township-tauri-shell/src-tauri/target
         run: cargo test
       - name: TS Township witness fixture preflight
         working-directory: clients/township-tauri-shell
