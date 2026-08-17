@@ -182,6 +182,49 @@ const toolshedCommandDecoders = new Map([
         }),
     ],
 ]);
+// Plan 158 Wave A2: command decoders for `PolicyFixture`, the causal
+// application-policy adversarial corpus fixture (mirrors
+// Mix.Tasks.Lattice.ExportVectors.PolicyFixture). Event payload key order
+// matches the exported vectors' canonical (alphabetically sorted) JSON
+// exactly, since conformance compares materialized state by serialization.
+const policyCommandDecoders = new Map([
+    [
+        "source",
+        commandDecoder(1, (args) => ({
+            field: "events",
+            mutation: "append",
+            value: { kind: "source", label: commandValue(args[0]) },
+            command: "source",
+        })),
+    ],
+    [
+        "reference",
+        commandDecoder(1, (args) => ({
+            field: "events",
+            mutation: "append",
+            value: { kind: "reference", target: commandValue(args[0]) },
+            command: "reference",
+        })),
+    ],
+    [
+        "deny",
+        commandDecoder(1, (args) => ({
+            field: "events",
+            mutation: "append",
+            value: { kind: "denied", label: commandValue(args[0]) },
+            command: "deny",
+        })),
+    ],
+    [
+        "claim",
+        commandDecoder(2, (args) => ({
+            field: "events",
+            mutation: "append",
+            value: { key: commandValue(args[0]), kind: "claim", label: commandValue(args[1]) },
+            command: "claim",
+        })),
+    ],
+]);
 /** Command names decoded for the Township matter carrier boundary. */
 export function townshipCarrierCommandNames() {
     return [...townshipCommandDecoders.keys()].sort();
@@ -937,7 +980,8 @@ function payloadFromBody(kind, body, realmByPubkey) {
                 : neutralPayload(commandAuditLabel(body.values[0]), "unknown_command");
         }
         const decoder = townshipCommandDecoders.get(command) ??
-            toolshedCommandDecoders.get(command);
+            toolshedCommandDecoders.get(command) ??
+            policyCommandDecoders.get(command);
         if (decoder === undefined) {
             return neutralPayload(command, "unknown_command");
         }

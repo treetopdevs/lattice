@@ -15,6 +15,7 @@ export * from "./dag";
 export * from "./quarantine";
 export * from "./capability";
 export * from "./consent";
+export * from "./policy";
 export * from "./authority";
 export * from "./crdt/reducers";
 export * from "./materialize";
