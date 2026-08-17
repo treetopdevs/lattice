@@ -351,19 +351,16 @@ defmodule Lattice.Authority do
       |> Map.merge(beacon_q)
       |> Map.merge(tick_q)
 
+    cap_evidence = %{
+      delegations: delegations,
+      deleg_valid: deleg_valid,
+      revokes: revokes,
+      beacons: beacons,
+      timelines: timelines
+    }
+
     {cmd_q, cmd_audit, requests} =
-      validate_commands(
-        module,
-        ops,
-        ordered,
-        ancestors,
-        delegations,
-        deleg_valid,
-        revokes,
-        beacons,
-        timelines,
-        base_reasons
-      )
+      validate_commands(module, ops, ordered, ancestors, cap_evidence, base_reasons)
 
     individual_reasons = Map.merge(base_reasons, cmd_q)
 
@@ -998,18 +995,7 @@ defmodule Lattice.Authority do
 
   # --- Command validation -------------------------------------------------
 
-  defp validate_commands(
-         module,
-         ops,
-         ordered,
-         ancestors,
-         delegations,
-         deleg_valid,
-         revokes,
-         beacons,
-         timelines,
-         base_reasons
-       ) do
+  defp validate_commands(module, ops, ordered, ancestors, cap_evidence, base_reasons) do
     Enum.reduce(ordered, {%{}, [], []}, fn op, {quarantine, audit, requests} ->
       cond do
         op.kind == :inbox and match?({:request, _ref, _payload}, op.body) ->
@@ -1021,17 +1007,7 @@ defmodule Lattice.Authority do
         op.kind == :command ->
           context = causal_context(op, ops, ancestors, base_reasons, quarantine)
 
-          case validate_command(
-                 module,
-                 op,
-                 ancestors,
-                 delegations,
-                 deleg_valid,
-                 revokes,
-                 beacons,
-                 timelines,
-                 context
-               ) do
+          case validate_command(module, op, ancestors, cap_evidence, context) do
             :ok ->
               {quarantine, audit, requests}
 
@@ -1066,17 +1042,15 @@ defmodule Lattice.Authority do
     %{visible_ops: visible_ops, verdicts: verdicts}
   end
 
-  defp validate_command(
-         module,
-         op,
-         ancestors,
-         delegations,
-         deleg_valid,
-         revokes,
-         beacons,
-         timelines,
-         context
-       ) do
+  defp validate_command(module, op, ancestors, cap_evidence, context) do
+    %{
+      delegations: delegations,
+      deleg_valid: deleg_valid,
+      revokes: revokes,
+      beacons: beacons,
+      timelines: timelines
+    } = cap_evidence
+
     {cmd, args} =
       case op.body do
         {cmd, args} when is_list(args) -> {cmd, args}
