@@ -174,6 +174,12 @@ defmodule Lattice2.ApplicationPolicyContextTest do
   end
 
   test "legacy /2 callbacks remain the compatibility adapter" do
+    # `function_exported?/3` never loads a module -- it only inspects one
+    # already loaded. On a warm `_build` with this file run alone, nothing
+    # else has referenced `Toolshed.Tool` yet, so the check below would
+    # silently see an unloaded module and report false. Force the load first
+    # so the assertions are deterministic regardless of what else has run.
+    assert Code.ensure_loaded?(Toolshed.Tool)
     assert function_exported?(Toolshed.Tool, :command_op_status, 2)
     assert function_exported?(Toolshed.Tool, :command_op_status, 3)
 
