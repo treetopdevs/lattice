@@ -1,0 +1,254 @@
+{
+  "applicationPolicyCase": {
+    "expectedReason": "application_target_not_visible",
+    "referenceOperationId": "bCsrgWYCONKACODHwWYYp9UcK93MHMUtUcGoQ7KurX8",
+    "targetOperationId": "WzYef6vlGkWS3caI4SIK4f_lvZ75MizjRn-jlbqgxBQ"
+  },
+  "expectAtFrontier": [],
+  "expectAtFullFrontier": {
+    "authorityQuarantine": [
+      [
+        "bCsrgWYCONKACODHwWYYp9UcK93MHMUtUcGoQ7KurX8",
+        "application_target_not_visible"
+      ]
+    ],
+    "quarantine": [
+      "bCsrgWYCONKACODHwWYYp9UcK93MHMUtUcGoQ7KurX8"
+    ],
+    "state": {
+      "events": [
+        {
+          "kind": "source",
+          "label": "concurrent record"
+        }
+      ]
+    },
+    "winners": {}
+  },
+  "generatedBy": "Lattice.Sim",
+  "ops": [
+    {
+      "author": "root",
+      "command": "genesis",
+      "deps": [],
+      "field": "__authority",
+      "hash": "qJ3Elfn18cjSD1Cqrad3P21AE9-AARpoQJ6HkDX7EFE",
+      "id": "qJ3Elfn18cjSD1Cqrad3P21AE9-AARpoQJ6HkDX7EFE",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "root",
+      "command": "grant peer",
+      "deps": [
+        "qJ3Elfn18cjSD1Cqrad3P21AE9-AARpoQJ6HkDX7EFE"
+      ],
+      "field": "__authority",
+      "hash": "q3lj7iMMmfQib5yxRTRrWNVD4sHt0TgGzpUjnoJv2ug",
+      "id": "q3lj7iMMmfQib5yxRTRrWNVD4sHt0TgGzpUjnoJv2ug",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "peer",
+      "command": "source",
+      "deps": [
+        "q3lj7iMMmfQib5yxRTRrWNVD4sHt0TgGzpUjnoJv2ug"
+      ],
+      "field": "events",
+      "hash": "WzYef6vlGkWS3caI4SIK4f_lvZ75MizjRn-jlbqgxBQ",
+      "id": "WzYef6vlGkWS3caI4SIK4f_lvZ75MizjRn-jlbqgxBQ",
+      "kind": "command",
+      "mutation": "append",
+      "value": {
+        "kind": "source",
+        "label": "concurrent record"
+      }
+    },
+    {
+      "author": "root",
+      "command": "reference",
+      "deps": [
+        "q3lj7iMMmfQib5yxRTRrWNVD4sHt0TgGzpUjnoJv2ug"
+      ],
+      "field": "events",
+      "hash": "bCsrgWYCONKACODHwWYYp9UcK93MHMUtUcGoQ7KurX8",
+      "id": "bCsrgWYCONKACODHwWYYp9UcK93MHMUtUcGoQ7KurX8",
+      "kind": "command",
+      "mutation": "append",
+      "value": {
+        "kind": "reference",
+        "target": "WzYef6vlGkWS3caI4SIK4f_lvZ75MizjRn-jlbqgxBQ"
+      }
+    }
+  ],
+  "oracleCarrierOps": [
+    {
+      "author": "Iv1dRzUhgZ24PC147gf1sa1NU9flnV7/t5hIkopcFrI=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "Iv1dRzUhgZ24PC147gf1sa1NU9flnV7/t5hIkopcFrI=",
+              "id": "v7-FhVtDvad2zaEFSgsRGY5qLQSXqpJMk7hDbjczYA8",
+              "issuer": "Iv1dRzUhgZ24PC147gf1sa1NU9flnV7/t5hIkopcFrI=",
+              "live": true,
+              "ops": [
+                "claim",
+                "deny",
+                "reference",
+                "source"
+              ],
+              "parent_id": null,
+              "replica": "replica:policy:concurrent-target-not-visible#root:GgsBip9_QixDzduGHrKoQNMgb4sUTeZU2lG7nqsbJNI",
+              "roles": [],
+              "sig": "+ozKBiyJbkzhXVF4b5a2nlZvKqR2gMwv7rHOVwd3kKera86ANgC4dS49thhPfvEIje58LF4V615H34ACuOsxBQ=="
+            }
+          ],
+          [
+            "map",
+            []
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [],
+      "id": "qJ3Elfn18cjSD1Cqrad3P21AE9-AARpoQJ6HkDX7EFE",
+      "kind": "authority",
+      "replica": "replica:policy:concurrent-target-not-visible#root:GgsBip9_QixDzduGHrKoQNMgb4sUTeZU2lG7nqsbJNI",
+      "sig": "Anp1MjqXwkxrtTWObd7FITi+hqp8hZ7d3EfYD0BdJLI6MoDOZRGkpKYCMM4H3OC0kNUvn9LwpivctNUN3ah9DQ==",
+      "v": 1
+    },
+    {
+      "author": "Iv1dRzUhgZ24PC147gf1sa1NU9flnV7/t5hIkopcFrI=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "grant"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "jQ8jOrIkr5+PvOu0EzrvsYBo8c3el7b/fozRattHAO4=",
+              "id": "z0N4DDKO8qlvR3ZHo6uJ7MwUssxk5LuEbyCqc7vReYY",
+              "issuer": "Iv1dRzUhgZ24PC147gf1sa1NU9flnV7/t5hIkopcFrI=",
+              "live": false,
+              "ops": [
+                "source"
+              ],
+              "parent_id": "v7-FhVtDvad2zaEFSgsRGY5qLQSXqpJMk7hDbjczYA8",
+              "replica": "replica:policy:concurrent-target-not-visible#root:GgsBip9_QixDzduGHrKoQNMgb4sUTeZU2lG7nqsbJNI",
+              "roles": [],
+              "sig": "kaHqW2M9v/bX7+6MGQDD2JEZy0tQl55qZx/KLFx5UoDAH3NgoyHPmpjc608TQMfcOAXt5d0HPG5h6kZ5oo49Cw=="
+            }
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "qJ3Elfn18cjSD1Cqrad3P21AE9-AARpoQJ6HkDX7EFE"
+      ],
+      "id": "q3lj7iMMmfQib5yxRTRrWNVD4sHt0TgGzpUjnoJv2ug",
+      "kind": "authority",
+      "replica": "replica:policy:concurrent-target-not-visible#root:GgsBip9_QixDzduGHrKoQNMgb4sUTeZU2lG7nqsbJNI",
+      "sig": "tmEmdZLlwz7XhAH4PADfAKahgtnE+aHPh9OCwXkc3Kq6boHB1LGABqQQVVnvZCWpJLjO2843DvLsdbr8XfjnAQ==",
+      "v": 1
+    },
+    {
+      "author": "jQ8jOrIkr5+PvOu0EzrvsYBo8c3el7b/fozRattHAO4=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "source"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "Y29uY3VycmVudCByZWNvcmQ="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "ejBONERES084cWx2UjNaSG82dUo3TXdVc3N4azVMdUVieUNxYzd2UmVZWQ=="
+      ],
+      "deps": [
+        "q3lj7iMMmfQib5yxRTRrWNVD4sHt0TgGzpUjnoJv2ug"
+      ],
+      "id": "WzYef6vlGkWS3caI4SIK4f_lvZ75MizjRn-jlbqgxBQ",
+      "kind": "command",
+      "replica": "replica:policy:concurrent-target-not-visible#root:GgsBip9_QixDzduGHrKoQNMgb4sUTeZU2lG7nqsbJNI",
+      "sig": "nHDOMV07yz4nY29nbr+8v44J3wPwL1yZgroJKIaC5YDkCrXhuXleAvg355PUvUsp3n1/d8U9FWlMUS+rB6sdDA==",
+      "v": 1
+    },
+    {
+      "author": "Iv1dRzUhgZ24PC147gf1sa1NU9flnV7/t5hIkopcFrI=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "reference"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "V3pZZWY2dmxHa1dTM2NhSTRTSUs0Zl9sdlo3NU1pempSbi1qbGJxZ3hCUQ=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "djctRmhWdER2YWQyemFFRlNnc1JHWTVxTFFTWHFwSk1rN2hEYmpjellBOA=="
+      ],
+      "deps": [
+        "q3lj7iMMmfQib5yxRTRrWNVD4sHt0TgGzpUjnoJv2ug"
+      ],
+      "id": "bCsrgWYCONKACODHwWYYp9UcK93MHMUtUcGoQ7KurX8",
+      "kind": "command",
+      "replica": "replica:policy:concurrent-target-not-visible#root:GgsBip9_QixDzduGHrKoQNMgb4sUTeZU2lG7nqsbJNI",
+      "sig": "QrDPWeHvUam2ONBhf36HjHOSDDKNmyDKSt1S6aUxM9P/wrtjDG4/KctkWZgKiYxZBkBiX0mZIKuGUL0bkab5Cg==",
+      "v": 1
+    }
+  ],
+  "perspectives": [],
+  "realmByPubkey": {
+    "Iv1dRzUhgZ24PC147gf1sa1NU9flnV7/t5hIkopcFrI=": "root",
+    "jQ8jOrIkr5+PvOu0EzrvsYBo8c3el7b/fozRattHAO4=": "peer"
+  },
+  "replica": "replica:policy:concurrent-target-not-visible#root:GgsBip9_QixDzduGHrKoQNMgb4sUTeZU2lG7nqsbJNI",
+  "scenario": "township_policy_concurrent_target_not_visible",
+  "scenarioKind": "adversarial",
+  "schema": {
+    "fields": {
+      "events": {
+        "merge": "causal_list"
+      }
+    },
+    "name": "PolicyFixture"
+  }
+}
