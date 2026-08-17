@@ -1,0 +1,277 @@
+{
+  "applicationPolicyCase": {
+    "canonicalWinnerOperationId": "LFeSPtu0FopEo71pZ-wTtMmGOEnRzBtQQ8lJs4PvxNk",
+    "conflictKey": "seat",
+    "peerPartialFrontierOperationIds": [
+      "WksvSWNiBBpYi-3QQZO-S0E9K3rE_v9I--2vg4-p3Qk",
+      "bWXmeNpjVLUaOQ99zcQ7H643bEqpArz_oc39u1gxQsg",
+      "tn00c4WeVtVKilKKI6oHAO5uu-bXHjlBy8yOZmgkAc0"
+    ],
+    "provisionallyHonoredOperationId": "tn00c4WeVtVKilKKI6oHAO5uu-bXHjlBy8yOZmgkAc0",
+    "provisionallyHonoredRealm": "peer",
+    "reclassifiedReason": "application_conflict",
+    "rootPartialFrontierOperationIds": [
+      "LFeSPtu0FopEo71pZ-wTtMmGOEnRzBtQQ8lJs4PvxNk",
+      "WksvSWNiBBpYi-3QQZO-S0E9K3rE_v9I--2vg4-p3Qk",
+      "bWXmeNpjVLUaOQ99zcQ7H643bEqpArz_oc39u1gxQsg"
+    ]
+  },
+  "expectAtFrontier": [],
+  "expectAtFullFrontier": {
+    "authorityQuarantine": [
+      [
+        "tn00c4WeVtVKilKKI6oHAO5uu-bXHjlBy8yOZmgkAc0",
+        "application_conflict"
+      ]
+    ],
+    "quarantine": [
+      "tn00c4WeVtVKilKKI6oHAO5uu-bXHjlBy8yOZmgkAc0"
+    ],
+    "state": {
+      "events": [
+        {
+          "key": "seat",
+          "kind": "claim",
+          "label": "root"
+        }
+      ]
+    },
+    "winners": {}
+  },
+  "generatedBy": "Lattice.Sim",
+  "ops": [
+    {
+      "author": "root",
+      "command": "genesis",
+      "deps": [],
+      "field": "__authority",
+      "hash": "WksvSWNiBBpYi-3QQZO-S0E9K3rE_v9I--2vg4-p3Qk",
+      "id": "WksvSWNiBBpYi-3QQZO-S0E9K3rE_v9I--2vg4-p3Qk",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "root",
+      "command": "grant peer",
+      "deps": [
+        "WksvSWNiBBpYi-3QQZO-S0E9K3rE_v9I--2vg4-p3Qk"
+      ],
+      "field": "__authority",
+      "hash": "bWXmeNpjVLUaOQ99zcQ7H643bEqpArz_oc39u1gxQsg",
+      "id": "bWXmeNpjVLUaOQ99zcQ7H643bEqpArz_oc39u1gxQsg",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "root",
+      "command": "claim",
+      "deps": [
+        "bWXmeNpjVLUaOQ99zcQ7H643bEqpArz_oc39u1gxQsg"
+      ],
+      "field": "events",
+      "hash": "LFeSPtu0FopEo71pZ-wTtMmGOEnRzBtQQ8lJs4PvxNk",
+      "id": "LFeSPtu0FopEo71pZ-wTtMmGOEnRzBtQQ8lJs4PvxNk",
+      "kind": "command",
+      "mutation": "append",
+      "value": {
+        "key": "seat",
+        "kind": "claim",
+        "label": "root"
+      }
+    },
+    {
+      "author": "peer",
+      "command": "claim",
+      "deps": [
+        "bWXmeNpjVLUaOQ99zcQ7H643bEqpArz_oc39u1gxQsg"
+      ],
+      "field": "events",
+      "hash": "tn00c4WeVtVKilKKI6oHAO5uu-bXHjlBy8yOZmgkAc0",
+      "id": "tn00c4WeVtVKilKKI6oHAO5uu-bXHjlBy8yOZmgkAc0",
+      "kind": "command",
+      "mutation": "append",
+      "value": {
+        "key": "seat",
+        "kind": "claim",
+        "label": "peer"
+      }
+    }
+  ],
+  "oracleCarrierOps": [
+    {
+      "author": "M2WopaLbY1+uWg/IKBKpDChSpY5aY6yNA72JoP69SWU=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "M2WopaLbY1+uWg/IKBKpDChSpY5aY6yNA72JoP69SWU=",
+              "id": "M3IvOkzyGNObr22U4eeTsnYbtQm-kRLg-zldDosZAqY",
+              "issuer": "M2WopaLbY1+uWg/IKBKpDChSpY5aY6yNA72JoP69SWU=",
+              "live": true,
+              "ops": [
+                "claim",
+                "deny",
+                "reference",
+                "source"
+              ],
+              "parent_id": null,
+              "replica": "replica:policy:partial-frontier-reclassification#root:c5CvX_oaiYPBNA5x_ziG6kADh30fkhp65yns-dPlK5A",
+              "roles": [],
+              "sig": "0QRprcvu5VP2cJvlhYBL2SIx5TV06iPIlLEJh2FzizOJz63/OkB8Zfdj18D75RisqU5z1V6ibM1t1ngbC/EqCg=="
+            }
+          ],
+          [
+            "map",
+            []
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [],
+      "id": "WksvSWNiBBpYi-3QQZO-S0E9K3rE_v9I--2vg4-p3Qk",
+      "kind": "authority",
+      "replica": "replica:policy:partial-frontier-reclassification#root:c5CvX_oaiYPBNA5x_ziG6kADh30fkhp65yns-dPlK5A",
+      "sig": "+SW69ZknDm85DtIqE2pAjh705ACxWvKVtlZalWTDxqeRkq155NAHAMLitW6KZ0Nflh1/YyL0EIPP7+rU+nwvCA==",
+      "v": 1
+    },
+    {
+      "author": "M2WopaLbY1+uWg/IKBKpDChSpY5aY6yNA72JoP69SWU=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "grant"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "IBy48vp3oMrULpb/QQP1c3tPv8SZ7brgaAsYiDj8hqk=",
+              "id": "jv4DrOVNwrcRnYwc4KjzlfguQZ1tdT3t8A_l7z9xqUg",
+              "issuer": "M2WopaLbY1+uWg/IKBKpDChSpY5aY6yNA72JoP69SWU=",
+              "live": false,
+              "ops": [
+                "claim"
+              ],
+              "parent_id": "M3IvOkzyGNObr22U4eeTsnYbtQm-kRLg-zldDosZAqY",
+              "replica": "replica:policy:partial-frontier-reclassification#root:c5CvX_oaiYPBNA5x_ziG6kADh30fkhp65yns-dPlK5A",
+              "roles": [],
+              "sig": "MmTRJxV4wVAuOoMyVBpOutwIyOih1nSZK9Qx22YlDnyUGyAI+/GEvXLmK8wz4xqa4zdOSPkz2fE0fIhMNfRYAA=="
+            }
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "WksvSWNiBBpYi-3QQZO-S0E9K3rE_v9I--2vg4-p3Qk"
+      ],
+      "id": "bWXmeNpjVLUaOQ99zcQ7H643bEqpArz_oc39u1gxQsg",
+      "kind": "authority",
+      "replica": "replica:policy:partial-frontier-reclassification#root:c5CvX_oaiYPBNA5x_ziG6kADh30fkhp65yns-dPlK5A",
+      "sig": "TAjyjvfa1EYXiBrehvy9LQ7SrPJiGK7xKhT1P3nlWOLks2sB6J6ARuwlA8kLNgKHLc9ivZo2y/9bNTKBPl5jDQ==",
+      "v": 1
+    },
+    {
+      "author": "M2WopaLbY1+uWg/IKBKpDChSpY5aY6yNA72JoP69SWU=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "claim"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "c2VhdA=="
+              ],
+              [
+                "bin",
+                "cm9vdA=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "TTNJdk9renlHTk9icjIyVTRlZVRzbllidFFtLWtSTGctemxkRG9zWkFxWQ=="
+      ],
+      "deps": [
+        "bWXmeNpjVLUaOQ99zcQ7H643bEqpArz_oc39u1gxQsg"
+      ],
+      "id": "LFeSPtu0FopEo71pZ-wTtMmGOEnRzBtQQ8lJs4PvxNk",
+      "kind": "command",
+      "replica": "replica:policy:partial-frontier-reclassification#root:c5CvX_oaiYPBNA5x_ziG6kADh30fkhp65yns-dPlK5A",
+      "sig": "8j3/5WHQ1UtY4f/7fx43HCIBG9fAZT+ZU15vzlEYhdH6N0quWLb0B/kT7tRf0GA0z9f7RaHhw0tLJEhijrXnBA==",
+      "v": 1
+    },
+    {
+      "author": "IBy48vp3oMrULpb/QQP1c3tPv8SZ7brgaAsYiDj8hqk=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "claim"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "c2VhdA=="
+              ],
+              [
+                "bin",
+                "cGVlcg=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "anY0RHJPVk53cmNSbll3YzRLanpsZmd1UVoxdGRUM3Q4QV9sN3o5eHFVZw=="
+      ],
+      "deps": [
+        "bWXmeNpjVLUaOQ99zcQ7H643bEqpArz_oc39u1gxQsg"
+      ],
+      "id": "tn00c4WeVtVKilKKI6oHAO5uu-bXHjlBy8yOZmgkAc0",
+      "kind": "command",
+      "replica": "replica:policy:partial-frontier-reclassification#root:c5CvX_oaiYPBNA5x_ziG6kADh30fkhp65yns-dPlK5A",
+      "sig": "o3mTyltJi2NXxJW/Zky3Irnt+4EBlZU/unfXZZ3QvT50CqDVmZXLW6SHQjdc1Vk/yg38Xd2FQ0u4dh9f3cADCg==",
+      "v": 1
+    }
+  ],
+  "perspectives": [],
+  "realmByPubkey": {
+    "IBy48vp3oMrULpb/QQP1c3tPv8SZ7brgaAsYiDj8hqk=": "peer",
+    "M2WopaLbY1+uWg/IKBKpDChSpY5aY6yNA72JoP69SWU=": "root"
+  },
+  "replica": "replica:policy:partial-frontier-reclassification#root:c5CvX_oaiYPBNA5x_ziG6kADh30fkhp65yns-dPlK5A",
+  "scenario": "township_policy_partial_frontier_reclassification",
+  "scenarioKind": "adversarial",
+  "schema": {
+    "fields": {
+      "events": {
+        "merge": "causal_list"
+      }
+    },
+    "name": "PolicyFixture"
+  }
+}

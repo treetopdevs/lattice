@@ -1,0 +1,209 @@
+{
+  "applicationPolicyCase": {
+    "deniedEvent": {
+      "kind": "denied",
+      "label": "blocked record"
+    },
+    "expectedReason": "application_denied",
+    "honoredEvent": {
+      "kind": "source",
+      "label": "kept record"
+    },
+    "honoredOperationId": "Y3ZIOmx6tMBjtywfPYezCgwg0M1CFGL6t1OCmm78Oyk",
+    "targetOperationId": "hM3yzj15J6la-O67oGacj9JrENu6NQa2wCOiUgcTwJo"
+  },
+  "expectAtFrontier": [],
+  "expectAtFullFrontier": {
+    "authorityQuarantine": [
+      [
+        "hM3yzj15J6la-O67oGacj9JrENu6NQa2wCOiUgcTwJo",
+        "application_denied"
+      ]
+    ],
+    "quarantine": [
+      "hM3yzj15J6la-O67oGacj9JrENu6NQa2wCOiUgcTwJo"
+    ],
+    "state": {
+      "events": [
+        {
+          "kind": "source",
+          "label": "kept record"
+        }
+      ]
+    },
+    "winners": {}
+  },
+  "generatedBy": "Lattice.Sim",
+  "ops": [
+    {
+      "author": "root",
+      "command": "genesis",
+      "deps": [],
+      "field": "__authority",
+      "hash": "-n8QcjBae5Dh4fQJkiYqH2HWsbU19p_-0lOsjtg3sHU",
+      "id": "-n8QcjBae5Dh4fQJkiYqH2HWsbU19p_-0lOsjtg3sHU",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "root",
+      "command": "source",
+      "deps": [
+        "-n8QcjBae5Dh4fQJkiYqH2HWsbU19p_-0lOsjtg3sHU"
+      ],
+      "field": "events",
+      "hash": "Y3ZIOmx6tMBjtywfPYezCgwg0M1CFGL6t1OCmm78Oyk",
+      "id": "Y3ZIOmx6tMBjtywfPYezCgwg0M1CFGL6t1OCmm78Oyk",
+      "kind": "command",
+      "mutation": "append",
+      "value": {
+        "kind": "source",
+        "label": "kept record"
+      }
+    },
+    {
+      "author": "root",
+      "command": "deny",
+      "deps": [
+        "Y3ZIOmx6tMBjtywfPYezCgwg0M1CFGL6t1OCmm78Oyk"
+      ],
+      "field": "events",
+      "hash": "hM3yzj15J6la-O67oGacj9JrENu6NQa2wCOiUgcTwJo",
+      "id": "hM3yzj15J6la-O67oGacj9JrENu6NQa2wCOiUgcTwJo",
+      "kind": "command",
+      "mutation": "append",
+      "value": {
+        "kind": "denied",
+        "label": "blocked record"
+      }
+    }
+  ],
+  "oracleCarrierOps": [
+    {
+      "author": "iBxVni2St0SMppDHUwtvB7u+nEfJzSue+x090YmhuL4=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "iBxVni2St0SMppDHUwtvB7u+nEfJzSue+x090YmhuL4=",
+              "id": "0afb3_0aS27V3dztIF43Lkwzt84igaEvymN80m7pVyI",
+              "issuer": "iBxVni2St0SMppDHUwtvB7u+nEfJzSue+x090YmhuL4=",
+              "live": true,
+              "ops": [
+                "claim",
+                "deny",
+                "reference",
+                "source"
+              ],
+              "parent_id": null,
+              "replica": "replica:policy:application-denied-excluded-from-state#root:v214_lMdr-Pp3sqgvFxk7tBDvvzH4Es0p_0xbyfvDBo",
+              "roles": [],
+              "sig": "3StvLm5Sgq5GJpFNr+0ULk6bZ4ZPfHU4LOeXudaVDFyBFdiNynKYIn/L6iXvc54+DWG//dXiDNJGRCC7ehtbAw=="
+            }
+          ],
+          [
+            "map",
+            []
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [],
+      "id": "-n8QcjBae5Dh4fQJkiYqH2HWsbU19p_-0lOsjtg3sHU",
+      "kind": "authority",
+      "replica": "replica:policy:application-denied-excluded-from-state#root:v214_lMdr-Pp3sqgvFxk7tBDvvzH4Es0p_0xbyfvDBo",
+      "sig": "S3xwuS6rTqS2hWt6HMHqfynDKREdDioDB+M5pjMJDad3B1djTa2JP8tzfMXxGSytABs95CbxWtaz0Dyl64yRBg==",
+      "v": 1
+    },
+    {
+      "author": "iBxVni2St0SMppDHUwtvB7u+nEfJzSue+x090YmhuL4=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "source"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "a2VwdCByZWNvcmQ="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "MGFmYjNfMGFTMjdWM2R6dElGNDNMa3d6dDg0aWdhRXZ5bU44MG03cFZ5SQ=="
+      ],
+      "deps": [
+        "-n8QcjBae5Dh4fQJkiYqH2HWsbU19p_-0lOsjtg3sHU"
+      ],
+      "id": "Y3ZIOmx6tMBjtywfPYezCgwg0M1CFGL6t1OCmm78Oyk",
+      "kind": "command",
+      "replica": "replica:policy:application-denied-excluded-from-state#root:v214_lMdr-Pp3sqgvFxk7tBDvvzH4Es0p_0xbyfvDBo",
+      "sig": "Utl4FjQc3ZX9Gw4k1iN0wX1YUL46tOwjHsWxYfKPTygIdaaszi1LkShC9jPakdk6hztaMEXtwvT5AuRQr5OjCA==",
+      "v": 1
+    },
+    {
+      "author": "iBxVni2St0SMppDHUwtvB7u+nEfJzSue+x090YmhuL4=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "deny"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "YmxvY2tlZCByZWNvcmQ="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "MGFmYjNfMGFTMjdWM2R6dElGNDNMa3d6dDg0aWdhRXZ5bU44MG03cFZ5SQ=="
+      ],
+      "deps": [
+        "Y3ZIOmx6tMBjtywfPYezCgwg0M1CFGL6t1OCmm78Oyk"
+      ],
+      "id": "hM3yzj15J6la-O67oGacj9JrENu6NQa2wCOiUgcTwJo",
+      "kind": "command",
+      "replica": "replica:policy:application-denied-excluded-from-state#root:v214_lMdr-Pp3sqgvFxk7tBDvvzH4Es0p_0xbyfvDBo",
+      "sig": "ZHRUA5NvCLWvwCeAcYDYZpohe3W9fN/eX2ED3NmovWI9JfJSqbx/xsM1W6tYW9OiQj986l8KqcUW2NYOaIQuCA==",
+      "v": 1
+    }
+  ],
+  "perspectives": [],
+  "realmByPubkey": {
+    "iBxVni2St0SMppDHUwtvB7u+nEfJzSue+x090YmhuL4=": "root"
+  },
+  "replica": "replica:policy:application-denied-excluded-from-state#root:v214_lMdr-Pp3sqgvFxk7tBDvvzH4Es0p_0xbyfvDBo",
+  "scenario": "township_policy_application_denied_excluded_from_state",
+  "scenarioKind": "adversarial",
+  "schema": {
+    "fields": {
+      "events": {
+        "merge": "causal_list"
+      }
+    },
+    "name": "PolicyFixture"
+  }
+}

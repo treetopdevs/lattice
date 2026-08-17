@@ -72,6 +72,21 @@ function sortedCommandTable(value) {
     }
     return [...value].sort(([left], [right]) => compareCodePoints(left, right));
 }
+/** All `items.length!` orderings, used to prove delivery-order independence. */
+function permutations(items) {
+    if (items.length <= 1)
+        return [[...items]];
+    const [head, ...rest] = items;
+    if (head === undefined)
+        return [[]];
+    const out = [];
+    for (const sub of permutations(rest)) {
+        for (let i = 0; i <= sub.length; i++) {
+            out.push([...sub.slice(0, i), head, ...sub.slice(i)]);
+        }
+    }
+    return out;
+}
 function stableComparisonValue(value) {
     if (value instanceof Map) {
         return [...value.entries()]
@@ -348,6 +363,77 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
     if (exp.winners) {
         for (const [field, want] of Object.entries(exp.winners)) {
             check(`winner.${field}`, full.winners[field], want);
+        }
+    }
+    // Plan 158 Wave A2: causal application-policy context + full-frontier
+    // conflicts. Mirrors the `capabilityCase` reason-pairs check above, then
+    // pins each `township_policy_*` scenario's specific mechanism.
+    if (vec.applicationPolicyCase !== undefined) {
+        const reasonPairs = sortedPairs([...full.quarantineReasons]);
+        check("application policy quarantine reason pairs", reasonPairs, sortedPairs(exp.authorityQuarantine ?? []));
+        check("application policy quarantine reason ids", reasonPairs.map(([id]) => id), [...full.quarantine].sort());
+        const policyCase = vec.applicationPolicyCase;
+        if (policyCase.referenceOperationId !== undefined) {
+            check("application policy reference verdict", full.quarantineReasons.get(policyCase.referenceOperationId) ?? null, policyCase.expectedReason ?? null);
+        }
+        if (vec.scenario === "township_policy_application_denied_excluded_from_state") {
+            check("application-denied command verdict", policyCase.targetOperationId === undefined
+                ? null
+                : (full.quarantineReasons.get(policyCase.targetOperationId) ?? null), policyCase.expectedReason ?? null);
+            check("application-denied command excluded from state", full.state.events, policyCase.honoredEvent === undefined ? null : [policyCase.honoredEvent]);
+        }
+        if (vec.scenario === "township_policy_target_reason_taxonomy") {
+            const tiers = [
+                ["honored", policyCase.honored],
+                ["structural", policyCase.structural],
+                ["authority", policyCase.authority],
+                ["application", policyCase.application],
+            ];
+            for (const [tier, entry] of tiers) {
+                if (entry === undefined)
+                    continue;
+                check(`target-reason-taxonomy[${tier}] target verdict`, full.quarantineReasons.get(entry.targetOperationId) ?? null, entry.targetReason);
+                check(`target-reason-taxonomy[${tier}] reference verdict`, full.quarantineReasons.get(entry.referenceOperationId) ?? null, entry.referenceReason);
+            }
+        }
+        if (vec.scenario === "township_policy_full_frontier_conflict_delivery_order") {
+            const candidateIds = policyCase.candidateOperationIds ?? [];
+            const conflictWinnerId = policyCase.winnerOperationId;
+            const conflictLoserIds = policyCase.loserOperationIds ?? [];
+            const expectedLoserReason = policyCase.expectedLoserReason ?? null;
+            const fixedOps = ops.filter((op) => !candidateIds.includes(op.id));
+            const candidateOps = candidateIds
+                .map((id) => ops.find((op) => op.id === id))
+                .filter((op) => op !== undefined);
+            let permutationsChecked = 0;
+            for (const permutation of permutations(candidateOps)) {
+                permutationsChecked++;
+                const permuted = materialize(vec.schema, [...fixedOps, ...permutation]);
+                check(`delivery-order permutation ${permutationsChecked} winner honored`, conflictWinnerId === undefined
+                    ? null
+                    : (permuted.quarantineReasons.get(conflictWinnerId) ?? null), null);
+                check(`delivery-order permutation ${permutationsChecked} loser reasons`, conflictLoserIds.map((id) => permuted.quarantineReasons.get(id) ?? null), conflictLoserIds.map(() => expectedLoserReason));
+                check(`delivery-order permutation ${permutationsChecked} state is delivery-order independent`, JSON.stringify(permuted.state), JSON.stringify(full.state));
+            }
+            check("delivery-order permutations checked matches vector", permutationsChecked, policyCase.deliveryOrderPermutationsChecked);
+        }
+        if (vec.scenario === "township_policy_partial_frontier_reclassification") {
+            const partialPeerIds = policyCase.peerPartialFrontierOperationIds;
+            const partialRootIds = policyCase.rootPartialFrontierOperationIds;
+            const provisionalId = policyCase.provisionallyHonoredOperationId;
+            const canonicalWinnerId = policyCase.canonicalWinnerOperationId;
+            const peerPartial = partialPeerIds === undefined ? null : materialize(vec.schema, ops, new Set(partialPeerIds));
+            const rootPartial = partialRootIds === undefined ? null : materialize(vec.schema, ops, new Set(partialRootIds));
+            check("peer partial frontier provisionally honors its own claim", peerPartial === null || provisionalId === undefined
+                ? null
+                : (peerPartial.quarantineReasons.get(provisionalId) ?? null), null);
+            check("root partial frontier provisionally honors the canonical winner", rootPartial === null || canonicalWinnerId === undefined
+                ? null
+                : (rootPartial.quarantineReasons.get(canonicalWinnerId) ?? null), null);
+            check("full frontier reclassifies the provisionally honored claim", provisionalId === undefined ? null : (full.quarantineReasons.get(provisionalId) ?? null), policyCase.reclassifiedReason ?? null);
+            check("full frontier keeps the canonical winner honored", canonicalWinnerId === undefined
+                ? null
+                : (full.quarantineReasons.get(canonicalWinnerId) ?? null), null);
         }
     }
     if (vec.scenario === "township_succession_unproven_tick") {

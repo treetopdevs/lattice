@@ -64,7 +64,7 @@ defmodule Lattice.Replica do
 
       @doc """
       Op-aware command validity hook (ADR 0007). Consulted by
-      `Lattice.Authority.validate_command/7` after the `cap_ok` and
+      `Lattice.Authority.validate_command/9` after the `cap_ok` and
       `authority_ok` gates, with the command op and the set of op ids in its
       causal past. Return `:ok` to honor or `{:error, reason}` to quarantine
       (semantic, deps-decidable — the reason must depend only on the op and
@@ -72,7 +72,35 @@ defmodule Lattice.Replica do
       must supply its own catch-all `:ok` clause.
       """
       def command_op_status(_op, _visible), do: :ok
-      defoverridable command_op_status: 2
+
+      @doc """
+      Causal-context command validity hook (Plan 158 Wave A2). The same gate
+      as `command_op_status/2`, additionally given `context`: `%{visible_ops:
+      %{Op.id() => Op.t()}, verdicts: %{Op.id() => :honored | atom()}}` —
+      both restricted to exactly `op`'s causal past and built in
+      causal/canonical order, so a policy can require an honored target
+      without ever seeing a concurrent or future op (or its own
+      not-yet-decided verdict). The default is a compatibility adapter that
+      calls the module's `command_op_status/2`. Overriding replaces the
+      default entirely, so an override must supply its own catch-all clause.
+      """
+      def command_op_status(op, visible_ids, _context), do: command_op_status(op, visible_ids)
+
+      @doc """
+      Full-frontier command-conflict phase (Plan 158 Wave A2). Runs once per
+      analysis, after every op's individual causal verdict is decided, over
+      the complete structurally accepted DAG: `ops` (`Op.id() => Op.t()`),
+      `verdicts` (`Op.id() => :honored | atom()` — every op's individual
+      verdict), and `ancestors` (`Op.id() => MapSet.t(Op.id())`). Returns
+      `%{loser_id => reason}`. This is the one phase allowed to compare
+      concurrent ops; a returned loser is honored only if this analysis
+      individually honored it first — an individually denied op is never
+      resurrected into a conflict loser instead. The default declares no
+      conflicts.
+      """
+      def command_conflicts(_ops, _verdicts, _ancestors), do: %{}
+
+      defoverridable command_op_status: 2, command_op_status: 3, command_conflicts: 3
     end
   end
 

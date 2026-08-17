@@ -15,6 +15,110 @@ defmodule Mix.Tasks.Lattice.ExportVectors.DualAuthorityFixture do
   succession(:mayor, to: "realm:successor", after: {:dormant_ticks, 3})
 end
 
+defmodule Mix.Tasks.Lattice.ExportVectors.PolicyFixture do
+  @moduledoc false
+
+  # Plan 158 Wave A2 export fixture: mirrors the shape of
+  # `Lattice2.ApplicationPolicyContextTest.PolicyReplica` (the RED regression
+  # this corpus builds on) so the exported vectors prove the EXIT wording
+  # against the same policy the BEAM tests already pin, rather than a
+  # divergent stand-in. Event payloads are plain string-keyed maps (not
+  # tuples) so `Jason.encode!/1` can serialize materialized state directly.
+
+  use Lattice.Replica
+
+  alias Lattice.Op
+
+  state do
+    field(:events, merge: :causal_list, default: [])
+  end
+
+  command(:source, [:label], do: [{:events, {:append, %{"kind" => "source", "label" => label}}}])
+
+  command(:reference, [:target_id],
+    do: [{:events, {:append, %{"kind" => "reference", "target" => target_id}}}]
+  )
+
+  command(:deny, [:label], do: [{:events, {:append, %{"kind" => "denied", "label" => label}}}])
+
+  command(:claim, [:key, :label],
+    do: [{:events, {:append, %{"kind" => "claim", "key" => key, "label" => label}}}]
+  )
+
+  # `deny` is unconditionally application-denied -- a minimal, unambiguous
+  # source of the `:application_denied` reason for the target-reason-taxonomy
+  # and state-exclusion vectors.
+  def command_op_status(%Op{body: {:deny, [_label]}}, _visible_ids, _context),
+    do: {:error, :application_denied}
+
+  # `reference` requires its `target_id` to be a causally-visible, honored
+  # `source` op -- exactly the causal-context contract Plan 158 Wave A2 adds:
+  # a concurrent/future op (present in the log but outside `visible_ids`) is
+  # `:application_target_not_visible`; a causally-visible but quarantined
+  # target (regardless of which precedence tier denied it) is
+  # `:application_target_quarantined`; a causally-visible, honored, wrong-kind
+  # target is `:application_wrong_target`.
+  def command_op_status(
+        %Op{body: {:reference, [target_id]}},
+        visible_ids,
+        %{visible_ops: visible_ops, verdicts: verdicts}
+      ) do
+    cond do
+      not MapSet.member?(visible_ids, target_id) ->
+        {:error, :application_target_not_visible}
+
+      not Map.has_key?(visible_ops, target_id) ->
+        {:error, :application_target_not_visible}
+
+      Map.get(verdicts, target_id) != :honored ->
+        {:error, :application_target_quarantined}
+
+      not match?(%Op{kind: :command, body: {:source, [_]}}, visible_ops[target_id]) ->
+        {:error, :application_wrong_target}
+
+      true ->
+        :ok
+    end
+  end
+
+  def command_op_status(_op, _visible_ids, _context), do: :ok
+
+  # Full-frontier: concurrently `claim`ed keys resolve to exactly one
+  # canonical (smallest-id) winner; every other individually-honored claim on
+  # that key loses as `:application_conflict`. This is the one phase allowed
+  # to compare concurrent ops (Plan 158 Wave A2).
+  def command_conflicts(ops, verdicts, ancestors) do
+    ops
+    |> Map.values()
+    |> Enum.filter(fn
+      %Op{id: id, kind: :command, body: {:claim, [_key, _label]}} ->
+        Map.get(verdicts, id) == :honored
+
+      _other ->
+        false
+    end)
+    |> Enum.group_by(fn %Op{body: {:claim, [key, _label]}} -> key end)
+    |> Enum.reduce(%{}, fn {_key, claims}, conflicts ->
+      claims
+      |> Enum.sort_by(& &1.id)
+      |> conflict_losers(ancestors)
+      |> Enum.reduce(conflicts, &Map.put(&2, &1.id, :application_conflict))
+    end)
+  end
+
+  defp conflict_losers([], _ancestors), do: []
+
+  defp conflict_losers([winner | rest], ancestors) do
+    Enum.filter(rest, fn candidate ->
+      winner_visible = Map.get(ancestors, candidate.id, MapSet.new())
+      candidate_visible = Map.get(ancestors, winner.id, MapSet.new())
+
+      not MapSet.member?(winner_visible, winner.id) and
+        not MapSet.member?(candidate_visible, candidate.id)
+    end)
+  end
+end
+
 defmodule Mix.Tasks.Lattice.ExportVectors do
   @moduledoc """
   Export TypeScript client conformance vectors from `Lattice.Sim`.
@@ -32,6 +136,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
   alias Lattice.Carrier.Wire, as: CarrierWire
   alias Lattice.{Identity, Log, Op, Sim, Sync}
   alias Mix.Tasks.Lattice.ExportVectors.DualAuthorityFixture
+  alias Mix.Tasks.Lattice.ExportVectors.PolicyFixture
   alias Toolshed.Tool
   alias Township.Matter
 
@@ -125,6 +230,12 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_lease_expired_chain(),
       township_lease_renewed(),
       township_beacon_unauthorized(),
+      township_policy_honored_target(),
+      township_policy_target_reason_taxonomy(),
+      township_policy_concurrent_target_not_visible(),
+      township_policy_application_denied_excluded_from_state(),
+      township_policy_full_frontier_conflict_delivery_order(),
+      township_policy_partial_frontier_reclassification(),
       township_causal_list_partition(),
       township_partial_log_lww(),
       toolshed_custody_consent(),
@@ -2523,6 +2634,521 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     })
   end
 
+  # --- Plan 158 Wave A2: causal application-policy context vectors --------
+  #
+  # These exercise `PolicyFixture` (defined at the top of this file), the
+  # export-corpus mirror of `Lattice2.ApplicationPolicyContextTest.PolicyReplica`.
+  # Each scenario proves one clause of the Plan 158 EXIT wording against the
+  # real `Lattice.Sim` oracle: a policy sees only its causal past with each
+  # prior op's deterministic verdict, distinguishes an honored target from
+  # every precedence tier that can quarantine one, excludes denied effects
+  # from materialized state, and the full-frontier conflict phase agrees on
+  # one winner regardless of delivery order -- including reclassification
+  # across a partial-frontier boundary, surviving Log dump/restore.
+
+  defp township_policy_honored_target do
+    sim =
+      Sim.new(
+        PolicyFixture,
+        "replica:policy:honored-target",
+        ["root"],
+        seed: "township:policy-honored-target"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "root")
+    sim = Sim.sync_all(sim)
+
+    {sim, source} = Sim.command(sim, "root", :source, ["founding record"])
+    {sim, reference} = Sim.command(sim, "root", :reference, [source.id])
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "root")
+
+    unless source.id in reference.deps do
+      raise "expected the reference to directly cite its honored causal-past target"
+    end
+
+    analysis = Authority.analyze(PolicyFixture, log)
+
+    unless is_nil(analysis.reasons[source.id]) do
+      raise "expected the source target to stay honored"
+    end
+
+    unless is_nil(analysis.reasons[reference.id]) do
+      raise "expected a reference to an honored causal-past target to stay honored"
+    end
+
+    policy_scenario("township_policy_honored_target", sim, log, %{
+      "targetOperationId" => source.id,
+      "referenceOperationId" => reference.id,
+      "expectedReason" => nil
+    })
+  end
+
+  defp township_policy_target_reason_taxonomy do
+    sim =
+      Sim.new(
+        PolicyFixture,
+        "replica:policy:target-reason-taxonomy",
+        ["root"],
+        seed: "township:policy-target-reason-taxonomy"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "root")
+    sim = Sim.sync_all(sim)
+
+    {sim, honored_target} = Sim.command(sim, "root", :source, ["honored record"])
+    {sim, structural_target} = Sim.append(sim, "root", :command, :malformed)
+
+    {sim, authority_target} =
+      Sim.command(sim, "root", :source, ["uncapacitated record"], cap: :none)
+
+    {sim, application_target} = Sim.command(sim, "root", :deny, ["blocked record"])
+
+    # A single op that fails BOTH the capability gate (no attached capability)
+    # AND, were it ever reached, the application-policy gate (`deny` is
+    # unconditionally denied) -- the only way to pin that the tier order is
+    # capability -> application policy rather than merely coincidental.
+    # `authority_target` alone cannot prove this: it is a plain `source`, so
+    # it never carries an application-policy opinion to be pre-empted.
+    {sim, capability_and_application_target} =
+      Sim.command(sim, "root", :deny, ["blocked and uncapacitated record"], cap: :none)
+
+    # An honored, causally-visible target of the WRONG kind (a `claim`, not a
+    # `source`) -- the negative proof that `reference`'s content inspection is
+    # live, not a no-op that would also pass if any honored target sufficed.
+    {sim, wrong_kind_target} =
+      Sim.command(sim, "root", :claim, ["taxonomy", "wrong-kind record"])
+
+    sim = Sim.sync_all(sim)
+
+    {sim, honored_reference} = Sim.command(sim, "root", :reference, [honored_target.id])
+    {sim, structural_reference} = Sim.command(sim, "root", :reference, [structural_target.id])
+    {sim, authority_reference} = Sim.command(sim, "root", :reference, [authority_target.id])
+
+    {sim, application_reference} =
+      Sim.command(sim, "root", :reference, [application_target.id])
+
+    {sim, capability_and_application_reference} =
+      Sim.command(sim, "root", :reference, [capability_and_application_target.id])
+
+    {sim, wrong_kind_reference} =
+      Sim.command(sim, "root", :reference, [wrong_kind_target.id])
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "root")
+    analysis = Authority.analyze(PolicyFixture, log)
+
+    # Each precedence tier that can quarantine a target pins its OWN distinct
+    # reason on the target -- proof the causal context threads the specific
+    # verdict (not just an honored/quarantined flag) to the referencing op.
+    unless is_nil(analysis.reasons[honored_target.id]) do
+      raise "expected the honored target to remain honored"
+    end
+
+    unless analysis.reasons[structural_target.id] == :malformed_command do
+      raise "expected the malformed target to quarantine structurally as :malformed_command"
+    end
+
+    unless analysis.reasons[authority_target.id] == :no_capability do
+      raise "expected the uncapacitated target to quarantine at the authority gate as :no_capability"
+    end
+
+    unless analysis.reasons[application_target.id] == :application_denied do
+      raise "expected the deny target to quarantine at the application-policy gate as :application_denied"
+    end
+
+    unless analysis.reasons[capability_and_application_target.id] == :no_capability do
+      raise "expected the deny-without-capability target to quarantine as :no_capability " <>
+              "(not :application_denied) -- capability must precede application policy"
+    end
+
+    unless is_nil(analysis.reasons[wrong_kind_target.id]) do
+      raise "expected the claim target to remain honored (it carries no individual policy check)"
+    end
+
+    # Downstream, the referencing policy uniformly denies any non-honored
+    # target with the same reason, regardless of which tier produced the
+    # underlying quarantine -- it never needs to special-case why.
+    unless is_nil(analysis.reasons[honored_reference.id]) do
+      raise "expected the reference to an honored target to stay honored"
+    end
+
+    for reference <- [
+          structural_reference,
+          authority_reference,
+          application_reference,
+          capability_and_application_reference
+        ] do
+      unless analysis.reasons[reference.id] == :application_target_quarantined do
+        raise "expected reference #{reference.id} to a quarantined target to deny as " <>
+                ":application_target_quarantined"
+      end
+    end
+
+    # An honored-but-wrong-kind target is a DIFFERENT reason than a
+    # quarantined one -- proof the content inspection (not just the
+    # honored/quarantined check above it) actually runs.
+    unless analysis.reasons[wrong_kind_reference.id] == :application_wrong_target do
+      raise "expected a reference to an honored non-source target to deny as " <>
+              ":application_wrong_target"
+    end
+
+    policy_scenario("township_policy_target_reason_taxonomy", sim, log, %{
+      "honored" => %{
+        "targetOperationId" => honored_target.id,
+        "referenceOperationId" => honored_reference.id,
+        "targetReason" => nil,
+        "referenceReason" => nil
+      },
+      "structural" => %{
+        "targetOperationId" => structural_target.id,
+        "referenceOperationId" => structural_reference.id,
+        "targetReason" => "malformed_command",
+        "referenceReason" => "application_target_quarantined"
+      },
+      "authority" => %{
+        "targetOperationId" => authority_target.id,
+        "referenceOperationId" => authority_reference.id,
+        "targetReason" => "no_capability",
+        "referenceReason" => "application_target_quarantined"
+      },
+      "application" => %{
+        "targetOperationId" => application_target.id,
+        "referenceOperationId" => application_reference.id,
+        "targetReason" => "application_denied",
+        "referenceReason" => "application_target_quarantined"
+      },
+      "capabilityBeforeApplication" => %{
+        "targetOperationId" => capability_and_application_target.id,
+        "referenceOperationId" => capability_and_application_reference.id,
+        "targetReason" => "no_capability",
+        "referenceReason" => "application_target_quarantined"
+      },
+      "wrongKind" => %{
+        "targetOperationId" => wrong_kind_target.id,
+        "referenceOperationId" => wrong_kind_reference.id,
+        "targetReason" => nil,
+        "referenceReason" => "application_wrong_target"
+      }
+    })
+  end
+
+  defp township_policy_concurrent_target_not_visible do
+    sim =
+      Sim.new(
+        PolicyFixture,
+        "replica:policy:concurrent-target-not-visible",
+        ["root", "peer"],
+        seed: "township:policy-concurrent-target-not-visible"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "root")
+    {sim, _grant} = Sim.grant(sim, "root", "peer", ops: [:source])
+    sim = sim |> Sim.sync_all() |> Sim.partition("root", "peer")
+
+    {sim, concurrent_source} = Sim.command(sim, "peer", :source, ["concurrent record"])
+    {sim, reference} = Sim.command(sim, "root", :reference, [concurrent_source.id])
+    sim = sim |> Sim.heal("root", "peer") |> Sim.sync_all()
+    log = Sim.log(sim, "root")
+
+    if concurrent_source.id in reference.deps do
+      raise "expected the reference not to causally depend on the concurrent source"
+    end
+
+    # The whole point: the concurrent op is genuinely IN the merged log --
+    # this is not a missing-dependency case, it is a visibility one.
+    unless MapSet.member?(Log.op_ids(log), concurrent_source.id) do
+      raise "expected the concurrent source to exist in the merged log"
+    end
+
+    analysis = Authority.analyze(PolicyFixture, log)
+
+    unless is_nil(analysis.reasons[concurrent_source.id]) do
+      raise "expected the concurrent source to be individually honored on its own branch"
+    end
+
+    unless analysis.reasons[reference.id] == :application_target_not_visible do
+      raise "expected the reference to a concurrent target to deny as " <>
+              ":application_target_not_visible"
+    end
+
+    reference_effect = %{"kind" => "reference", "target" => concurrent_source.id}
+
+    if reference_effect in Lattice.state(PolicyFixture, log).events do
+      raise "expected the not-visible reference not to materialize its effect"
+    end
+
+    policy_scenario("township_policy_concurrent_target_not_visible", sim, log, %{
+      "targetOperationId" => concurrent_source.id,
+      "referenceOperationId" => reference.id,
+      "expectedReason" => "application_target_not_visible"
+    })
+  end
+
+  defp township_policy_application_denied_excluded_from_state do
+    sim =
+      Sim.new(
+        PolicyFixture,
+        "replica:policy:application-denied-excluded-from-state",
+        ["root"],
+        seed: "township:policy-application-denied-excluded-from-state"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "root")
+    sim = Sim.sync_all(sim)
+
+    {sim, honored} = Sim.command(sim, "root", :source, ["kept record"])
+    {sim, denied} = Sim.command(sim, "root", :deny, ["blocked record"])
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "root")
+    analysis = Authority.analyze(PolicyFixture, log)
+
+    unless is_nil(analysis.reasons[honored.id]) do
+      raise "expected the honored source to stay honored"
+    end
+
+    unless analysis.reasons[denied.id] == :application_denied do
+      raise "expected the deny command to quarantine as :application_denied"
+    end
+
+    honored_event = %{"kind" => "source", "label" => "kept record"}
+    denied_event = %{"kind" => "denied", "label" => "blocked record"}
+    events = Lattice.state(PolicyFixture, log).events
+
+    unless honored_event in events do
+      raise "expected the honored source event to materialize"
+    end
+
+    if denied_event in events do
+      raise "expected the application-denied event to be excluded from materialized state"
+    end
+
+    policy_scenario("township_policy_application_denied_excluded_from_state", sim, log, %{
+      "targetOperationId" => denied.id,
+      "expectedReason" => "application_denied",
+      "honoredOperationId" => honored.id,
+      "deniedEvent" => denied_event,
+      "honoredEvent" => honored_event
+    })
+  end
+
+  defp township_policy_full_frontier_conflict_delivery_order do
+    sim =
+      Sim.new(
+        PolicyFixture,
+        "replica:policy:full-frontier-conflict-delivery-order",
+        ["root", "east", "west"],
+        seed: "township:policy-full-frontier-conflict-delivery-order"
+      )
+
+    {sim, genesis} = Sim.create_replica(sim, "root")
+    {sim, east_delegation} = Sim.grant(sim, "root", "east", ops: [:claim])
+    {sim, west_delegation} = Sim.grant(sim, "root", "west", ops: [:claim])
+    sim = Sim.sync_all(sim)
+
+    replica = Sim.replica(sim)
+    synced_ops = sim |> Sim.log("root") |> Log.topo_ops()
+    grant_east_op = find_grant_op!(synced_ops, east_delegation.id)
+    grant_west_op = find_grant_op!(synced_ops, west_delegation.id)
+
+    sim =
+      sim
+      |> Sim.partition("root", "east")
+      |> Sim.partition("root", "west")
+      |> Sim.partition("east", "west")
+
+    {sim, root_claim} = Sim.command(sim, "root", :claim, ["seat", "root"])
+    {sim, east_claim} = Sim.command(sim, "east", :claim, ["seat", "east"])
+    {sim, west_claim} = Sim.command(sim, "west", :claim, ["seat", "west"])
+    claims = [root_claim, east_claim, west_claim]
+
+    unless Enum.all?(claims, &(&1.deps == [grant_west_op.id])) do
+      raise "expected all three claims to share one parent dep (mutually concurrent)"
+    end
+
+    sim =
+      sim
+      |> Sim.heal("root", "east")
+      |> Sim.heal("root", "west")
+      |> Sim.heal("east", "west")
+      |> Sim.sync_all()
+
+    log = Sim.log(sim, "root")
+    [winner_id, loser_a_id, loser_b_id] = Enum.sort(Enum.map(claims, & &1.id))
+    analysis = Authority.analyze(PolicyFixture, log)
+
+    unless is_nil(analysis.reasons[winner_id]) do
+      raise "expected the canonically-smallest concurrent claim to win"
+    end
+
+    for loser_id <- [loser_a_id, loser_b_id] do
+      unless analysis.reasons[loser_id] == :application_conflict do
+        raise "expected concurrent claim #{loser_id} to lose as :application_conflict"
+      end
+    end
+
+    surviving_claims =
+      for %{"kind" => "claim", "key" => "seat"} <- Lattice.state(PolicyFixture, log).events,
+          do: :claim
+
+    unless length(surviving_claims) == 1 do
+      raise "expected exactly one surviving claim on the contested key"
+    end
+
+    base =
+      Log.new(replica)
+      |> Log.append!(genesis)
+      |> Log.append!(grant_east_op)
+      |> Log.append!(grant_west_op)
+
+    orderings = permutations(claims)
+
+    unless length(orderings) == 6 do
+      raise "expected all six delivery-order permutations of three mutually-concurrent claims"
+    end
+
+    # The whole proof: build the identical merged log via every possible
+    # insertion order of the three concurrent claims and confirm the winner
+    # and loser reasons never move -- delivery order is not part of the
+    # canonical result.
+    order_invariant_reasons =
+      Enum.map(orderings, fn ordering ->
+        ordering
+        |> Enum.reduce(base, &Log.append!(&2, &1))
+        |> then(&Authority.analyze(PolicyFixture, &1))
+        |> Map.fetch!(:reasons)
+      end)
+
+    unless Enum.all?(order_invariant_reasons, &(&1 == analysis.reasons)) do
+      raise "expected every delivery order to converge to the identical winner and loser reasons"
+    end
+
+    policy_scenario("township_policy_full_frontier_conflict_delivery_order", sim, log, %{
+      "conflictKey" => "seat",
+      "candidateOperationIds" => Enum.sort(Enum.map(claims, & &1.id)),
+      "winnerOperationId" => winner_id,
+      "loserOperationIds" => Enum.sort([loser_a_id, loser_b_id]),
+      "expectedLoserReason" => "application_conflict",
+      "deliveryOrderPermutationsChecked" => length(orderings)
+    })
+  end
+
+  defp township_policy_partial_frontier_reclassification do
+    sim =
+      Sim.new(
+        PolicyFixture,
+        "replica:policy:partial-frontier-reclassification",
+        ["root", "peer"],
+        seed: "township:policy-partial-frontier-reclassification"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "root")
+    {sim, _grant} = Sim.grant(sim, "root", "peer", ops: [:claim])
+    sim = sim |> Sim.sync_all() |> Sim.partition("root", "peer")
+
+    {sim, root_claim} = Sim.command(sim, "root", :claim, ["seat", "root"])
+    {sim, peer_claim} = Sim.command(sim, "peer", :claim, ["seat", "peer"])
+
+    root_partial_log = Sim.log(sim, "root")
+    peer_partial_log = Sim.log(sim, "peer")
+    root_partial_reasons = Authority.analyze(PolicyFixture, root_partial_log).reasons
+    peer_partial_reasons = Authority.analyze(PolicyFixture, peer_partial_log).reasons
+
+    # On its own partial frontier, each realm sees only its own claim -- no
+    # concurrent-conflict evidence exists yet, so the individual-verdict phase
+    # provisionally honors it.
+    unless is_nil(root_partial_reasons[root_claim.id]) do
+      raise "expected root's partial-frontier view to provisionally honor its own claim"
+    end
+
+    unless is_nil(peer_partial_reasons[peer_claim.id]) do
+      raise "expected peer's partial-frontier view to provisionally honor its own claim"
+    end
+
+    [winner_id, loser_id] = Enum.sort([root_claim.id, peer_claim.id])
+
+    {loser_realm, loser_partial_view_honored?} =
+      if loser_id == root_claim.id,
+        do: {"root", is_nil(root_partial_reasons[loser_id])},
+        else: {"peer", is_nil(peer_partial_reasons[loser_id])}
+
+    unless loser_partial_view_honored? do
+      raise "expected #{loser_realm}'s partial-frontier view to have provisionally honored " <>
+              "the claim that full-frontier sync later reclassifies"
+    end
+
+    sim = sim |> Sim.heal("root", "peer") |> Sim.sync_all()
+    log = Sim.log(sim, "root")
+    full_analysis = Authority.analyze(PolicyFixture, log)
+
+    unless is_nil(full_analysis.reasons[winner_id]) do
+      raise "expected the canonically-earlier concurrent claim to win at full frontier"
+    end
+
+    unless full_analysis.reasons[loser_id] == :application_conflict do
+      raise "expected the provisionally-honored claim to be reclassified as " <>
+              ":application_conflict once the concurrent winner is visible"
+    end
+
+    dump_path =
+      Path.join(
+        System.tmp_dir!(),
+        "lattice_policy_partial_frontier_#{System.unique_integer([:positive])}.dump"
+      )
+
+    :ok = Log.dump(log, dump_path)
+    {:ok, restored_log} = Log.restore(dump_path)
+    File.rm(dump_path)
+    restored_reasons = Authority.analyze(PolicyFixture, restored_log).reasons
+
+    unless restored_reasons == full_analysis.reasons do
+      raise "expected the full-frontier reclassification to survive Log dump/restore"
+    end
+
+    policy_scenario("township_policy_partial_frontier_reclassification", sim, log, %{
+      "conflictKey" => "seat",
+      "provisionallyHonoredOperationId" => loser_id,
+      "provisionallyHonoredRealm" => loser_realm,
+      "reclassifiedReason" => "application_conflict",
+      "canonicalWinnerOperationId" => winner_id,
+      "rootPartialFrontierOperationIds" =>
+        root_partial_log |> Log.op_ids() |> MapSet.to_list() |> Enum.sort(),
+      "peerPartialFrontierOperationIds" =>
+        peer_partial_log |> Log.op_ids() |> MapSet.to_list() |> Enum.sort()
+    })
+  end
+
+  defp policy_scenario(name, sim, log, evidence) do
+    realms = realm_index(sim)
+
+    %{
+      name: name,
+      kind: "adversarial",
+      module: PolicyFixture,
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: log.replica,
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      authorityQuarantine: authority_quarantine(PolicyFixture, log),
+      applicationPolicyCase: evidence
+    }
+  end
+
+  defp find_grant_op!(ops, delegation_id) do
+    Enum.find(ops, fn
+      %Op{kind: :authority, body: {:grant, %Delegation{id: id}}} -> id == delegation_id
+      _ -> false
+    end) || raise "missing grant introduction for delegation #{delegation_id}"
+  end
+
+  defp permutations([]), do: [[]]
+
+  defp permutations(list) do
+    for elem <- list, rest <- permutations(list -- [elem]), do: [elem | rest]
+  end
+
   defp capability_scenario(name, sim, log, evidence) do
     realms = realm_index(sim)
 
@@ -3242,6 +3868,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     |> maybe_put("witnessedRecovery", Map.get(scenario, :witnessedRecovery))
     |> maybe_put("genesisProjection", Map.get(scenario, :genesisProjection))
     |> maybe_put("capabilityCase", Map.get(scenario, :capabilityCase))
+    |> maybe_put("applicationPolicyCase", Map.get(scenario, :applicationPolicyCase))
     |> maybe_put("commandNames", Map.get(scenario, :commandNames))
     |> maybe_put("commandTable", Map.get(scenario, :commandTable))
   end
@@ -3347,6 +3974,15 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
         "clerk_locked" => %{"merge" => "lww", "gatedBy" => "clerk", "default" => false},
         "mayor" => %{"authority" => "mayor"},
         "mayor_locked" => %{"merge" => "lww", "gatedBy" => "mayor", "default" => false}
+      }
+    }
+  end
+
+  defp schema_json(PolicyFixture) do
+    %{
+      "name" => "PolicyFixture",
+      "fields" => %{
+        "events" => %{"merge" => "causal_list"}
       }
     }
   end
@@ -3516,6 +4152,11 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     }
   end
 
+  defp state_json(PolicyFixture, log, _realms) do
+    state = Lattice.state(PolicyFixture, log)
+    %{"events" => state.events}
+  end
+
   defp state_bytes_b64(%Log{} = log) do
     Matter
     |> Lattice.state(log)
@@ -3538,6 +4179,11 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
   defp winner_fields(DualAuthorityFixture),
     do: ["clerk", "clerk_locked", "mayor", "mayor_locked"]
+
+  # `events` is causal_list-only (no lww/authority field), so there is no
+  # single "winning" write to report -- matches how `posts`/`condition_notes`
+  # are excluded from `winner_fields(Matter)`/`winner_fields(Tool)`.
+  defp winner_fields(PolicyFixture), do: []
 
   defp winners(module, ops, quarantine) do
     by_id = Map.new(ops, &{&1["id"], &1})

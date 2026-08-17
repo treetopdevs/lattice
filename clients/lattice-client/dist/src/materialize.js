@@ -4,6 +4,7 @@ import { index, depth, canonicalOrder } from "./dag";
 import { isQuarantined } from "./quarantine";
 import { lww, orSet, causalList } from "./crdt/reducers";
 import { analyzeAuthority } from "./authority";
+import { commandConflicts } from "./policy";
 /**
  * Thrown by {@link materialize} when a log changes an authority role but the
  * reducer cannot fully validate that history — evidence is missing for a
@@ -87,13 +88,35 @@ export function materialize(schema, ops, included, carrierAuthorityReport = null
             quarantine.push(id);
             continue;
         }
-        const q = isQuarantined(op, schema, byId, authority, ancCache);
+        const q = isQuarantined(op, schema, byId, authority, ancCache, {
+            included: authorityIncluded,
+            reasonsSoFar: quarantineReasons,
+        });
         if (q.quarantined) {
             quarantine.push(id);
             quarantined.add(id);
             if (q.reason !== undefined)
                 quarantineReasons.set(id, q.reason);
         }
+    }
+    // Plan 158 Wave A2: the full-frontier command-conflict phase, run once
+    // after every op's individual causal verdict above is final, over the
+    // complete structurally accepted DAG — the one phase allowed to compare
+    // concurrent ops. A loser reason applies only to an op this walk
+    // individually honored (the `quarantined.has(id)` guard below), so an
+    // individually denied op can never be "resurrected" into a conflict loser.
+    // Because materialize() recomputes from the current `included` set on
+    // every call, a loser provisionally honored under a partial frontier is
+    // naturally reclassified once a canonically earlier concurrent winner
+    // syncs into a later, fuller materialization.
+    const finalVerdicts = new Map([...authorityIncluded].map((id) => [id, quarantineReasons.get(id) ?? "honored"]));
+    const conflictLosers = commandConflicts(schema, authorityIncluded, byId, finalVerdicts, ancCache);
+    for (const [id, reason] of conflictLosers) {
+        if (quarantined.has(id))
+            continue;
+        quarantine.push(id);
+        quarantined.add(id);
+        quarantineReasons.set(id, reason);
     }
     if (carrierAuthorityReport !== null) {
         const localIds = quarantine.filter((id) => carrierAuthorityReport.opIds.has(id) &&
