@@ -2703,6 +2703,22 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       Sim.command(sim, "root", :source, ["uncapacitated record"], cap: :none)
 
     {sim, application_target} = Sim.command(sim, "root", :deny, ["blocked record"])
+
+    # A single op that fails BOTH the capability gate (no attached capability)
+    # AND, were it ever reached, the application-policy gate (`deny` is
+    # unconditionally denied) -- the only way to pin that the tier order is
+    # capability -> application policy rather than merely coincidental.
+    # `authority_target` alone cannot prove this: it is a plain `source`, so
+    # it never carries an application-policy opinion to be pre-empted.
+    {sim, capability_and_application_target} =
+      Sim.command(sim, "root", :deny, ["blocked and uncapacitated record"], cap: :none)
+
+    # An honored, causally-visible target of the WRONG kind (a `claim`, not a
+    # `source`) -- the negative proof that `reference`'s content inspection is
+    # live, not a no-op that would also pass if any honored target sufficed.
+    {sim, wrong_kind_target} =
+      Sim.command(sim, "root", :claim, ["taxonomy", "wrong-kind record"])
+
     sim = Sim.sync_all(sim)
 
     {sim, honored_reference} = Sim.command(sim, "root", :reference, [honored_target.id])
@@ -2711,6 +2727,12 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
     {sim, application_reference} =
       Sim.command(sim, "root", :reference, [application_target.id])
+
+    {sim, capability_and_application_reference} =
+      Sim.command(sim, "root", :reference, [capability_and_application_target.id])
+
+    {sim, wrong_kind_reference} =
+      Sim.command(sim, "root", :reference, [wrong_kind_target.id])
 
     sim = Sim.sync_all(sim)
     log = Sim.log(sim, "root")
@@ -2735,6 +2757,15 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       raise "expected the deny target to quarantine at the application-policy gate as :application_denied"
     end
 
+    unless analysis.reasons[capability_and_application_target.id] == :no_capability do
+      raise "expected the deny-without-capability target to quarantine as :no_capability " <>
+              "(not :application_denied) -- capability must precede application policy"
+    end
+
+    unless is_nil(analysis.reasons[wrong_kind_target.id]) do
+      raise "expected the claim target to remain honored (it carries no individual policy check)"
+    end
+
     # Downstream, the referencing policy uniformly denies any non-honored
     # target with the same reason, regardless of which tier produced the
     # underlying quarantine -- it never needs to special-case why.
@@ -2742,11 +2773,24 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       raise "expected the reference to an honored target to stay honored"
     end
 
-    for reference <- [structural_reference, authority_reference, application_reference] do
+    for reference <- [
+          structural_reference,
+          authority_reference,
+          application_reference,
+          capability_and_application_reference
+        ] do
       unless analysis.reasons[reference.id] == :application_target_quarantined do
         raise "expected reference #{reference.id} to a quarantined target to deny as " <>
                 ":application_target_quarantined"
       end
+    end
+
+    # An honored-but-wrong-kind target is a DIFFERENT reason than a
+    # quarantined one -- proof the content inspection (not just the
+    # honored/quarantined check above it) actually runs.
+    unless analysis.reasons[wrong_kind_reference.id] == :application_wrong_target do
+      raise "expected a reference to an honored non-source target to deny as " <>
+              ":application_wrong_target"
     end
 
     policy_scenario("township_policy_target_reason_taxonomy", sim, log, %{
@@ -2773,6 +2817,18 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
         "referenceOperationId" => application_reference.id,
         "targetReason" => "application_denied",
         "referenceReason" => "application_target_quarantined"
+      },
+      "capabilityBeforeApplication" => %{
+        "targetOperationId" => capability_and_application_target.id,
+        "referenceOperationId" => capability_and_application_reference.id,
+        "targetReason" => "no_capability",
+        "referenceReason" => "application_target_quarantined"
+      },
+      "wrongKind" => %{
+        "targetOperationId" => wrong_kind_target.id,
+        "referenceOperationId" => wrong_kind_reference.id,
+        "targetReason" => nil,
+        "referenceReason" => "application_wrong_target"
       }
     })
   end
