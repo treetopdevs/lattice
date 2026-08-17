@@ -42,6 +42,23 @@ defmodule Lattice.Authority do
       in their causal ancestry; violators quarantine as `:unauthorized_beacon` /
       `:stale_beacon` and confer no lapse. Renewal is a fresh delegation with a
       later lease, never an in-place mutation.
+    * **Application-policy causal context** (plan 158): after `cap_ok` and
+      `authority_ok`, a command op is judged by the replica's
+      `command_op_status/3`, given `visible_ids` plus a `context` of
+      `visible_ops`/`verdicts` restricted to exactly the op's causal past and
+      built in causal/canonical order — so the callback can require an
+      honored target without ever seeing a concurrent/future op or its own
+      not-yet-decided verdict. `command_op_status/2` remains a legacy
+      compatibility target: the default `/3` calls it with `visible_ids`.
+    * **Full-frontier command conflicts** (plan 158): once every op's
+      individual verdict is final, `command_conflicts/3` runs one pass over
+      the complete structurally accepted DAG and may declare deterministic
+      losers among ops this analysis individually honored (e.g. two
+      concurrent claims on the same key). Loser reasons apply last and can
+      never resurrect an individually denied op; because analysis is
+      recomputed from the current log on every call, a loser provisionally
+      honored under a partial frontier is naturally reclassified once a
+      canonically earlier concurrent winner syncs in.
 
   Quarantined ops stay in the log and are reported in `audit` (design invariant 4).
   """
@@ -322,26 +339,55 @@ defmodule Lattice.Authority do
     role_q = Enum.reduce(timelines, %{}, fn {_r, tl}, acc -> Map.merge(acc, tl.quarantine) end)
     role_audit = Enum.flat_map(timelines, fn {_r, tl} -> tl.audit end)
 
+    # Plan 158 Wave A2: every reason above is decided independently of any
+    # application-policy verdict (none of them consult command_op_status), so
+    # folding them first gives the per-command causal-context walk below a
+    # complete, order-independent base for every prior op's verdict.
+    base_reasons =
+      invalid_deleg
+      |> Map.merge(role_q)
+      |> Map.merge(tombstone_q)
+      |> Map.merge(revoke_q)
+      |> Map.merge(beacon_q)
+      |> Map.merge(tick_q)
+
     {cmd_q, cmd_audit, requests} =
       validate_commands(
         module,
+        ops,
         ordered,
         ancestors,
         delegations,
         deleg_valid,
         revokes,
         beacons,
-        timelines
+        timelines,
+        base_reasons
       )
 
-    reasons =
-      invalid_deleg
-      |> Map.merge(role_q)
-      |> Map.merge(cmd_q)
-      |> Map.merge(tombstone_q)
-      |> Map.merge(revoke_q)
-      |> Map.merge(beacon_q)
-      |> Map.merge(tick_q)
+    individual_reasons = Map.merge(base_reasons, cmd_q)
+
+    # Full-frontier command-conflict phase (Plan 158 Wave A2): one
+    # deterministic pass over the complete structurally accepted DAG, run
+    # only after every op's individual causal verdict is final. It is the
+    # one phase allowed to compare concurrent ops. A loser reason is applied
+    # only to an op this analysis individually honored — filtering here
+    # (rather than trusting the callback) means an individually denied op
+    # can never be "resurrected" into a conflict loser instead, even by a
+    # misbehaving `command_conflicts/3` implementation.
+    full_verdicts =
+      Map.new(ops, fn {id, _op} -> {id, Map.get(individual_reasons, id, :honored)} end)
+
+    conflict_losers =
+      module.command_conflicts(ops, full_verdicts, ancestors)
+      |> Enum.filter(fn {id, _reason} -> Map.get(full_verdicts, id) == :honored end)
+      |> Map.new()
+
+    reasons = Map.merge(individual_reasons, conflict_losers)
+
+    conflict_audit =
+      for {id, reason} <- conflict_losers,
+          do: %{event: :command_conflict, op: id, reason: reason}
 
     %{
       quarantine: reasons |> Map.keys() |> MapSet.new(),
@@ -349,7 +395,7 @@ defmodule Lattice.Authority do
       holders: holders,
       holder_epochs: holder_epochs,
       policies: policies,
-      audit: role_audit ++ cmd_audit,
+      audit: role_audit ++ cmd_audit ++ conflict_audit,
       requests: requests
     }
   end
@@ -954,13 +1000,15 @@ defmodule Lattice.Authority do
 
   defp validate_commands(
          module,
+         ops,
          ordered,
          ancestors,
          delegations,
          deleg_valid,
          revokes,
          beacons,
-         timelines
+         timelines,
+         base_reasons
        ) do
     Enum.reduce(ordered, {%{}, [], []}, fn op, {quarantine, audit, requests} ->
       cond do
@@ -971,6 +1019,8 @@ defmodule Lattice.Authority do
            requests ++ [%{op: op.id, author: op.author, ref: ref, payload: payload}]}
 
         op.kind == :command ->
+          context = causal_context(op, ops, ancestors, base_reasons, quarantine)
+
           case validate_command(
                  module,
                  op,
@@ -979,7 +1029,8 @@ defmodule Lattice.Authority do
                  deleg_valid,
                  revokes,
                  beacons,
-                 timelines
+                 timelines,
+                 context
                ) do
             :ok ->
               {quarantine, audit, requests}
@@ -995,6 +1046,26 @@ defmodule Lattice.Authority do
     end)
   end
 
+  # Plan 158 Wave A2: the causal context handed to `command_op_status/3` —
+  # `visible_ops` and `verdicts` restricted to exactly `op`'s causal past
+  # (never `op` itself, never a concurrent or future op). Topo order
+  # guarantees every ancestor was already folded into `quarantine_so_far`
+  # (if it was itself a command op) or is independently decided in
+  # `base_reasons` (every other reason never depends on command_op_status),
+  # so every id's verdict here is final by the time `op` consults it.
+  defp causal_context(op, ops, ancestors, base_reasons, quarantine_so_far) do
+    anc = Map.get(ancestors, op.id, MapSet.new())
+    visible_ops = Map.take(ops, MapSet.to_list(anc))
+
+    verdicts =
+      Map.new(anc, fn id ->
+        reason = Map.get(base_reasons, id) || Map.get(quarantine_so_far, id)
+        {id, reason || :honored}
+      end)
+
+    %{visible_ops: visible_ops, verdicts: verdicts}
+  end
+
   defp validate_command(
          module,
          op,
@@ -1003,7 +1074,8 @@ defmodule Lattice.Authority do
          deleg_valid,
          revokes,
          beacons,
-         timelines
+         timelines,
+         context
        ) do
     {cmd, args} =
       case op.body do
@@ -1034,9 +1106,11 @@ defmodule Lattice.Authority do
                      roles_needed
                    ),
                  :ok <- authority_ok(op, roles_needed, ancestors, timelines) do
-              # ADR 0007: the replica's op-aware validity conjunct (e.g. the
-              # co-signed consent check), judged over the op and its causal past.
-              module.command_op_status(op, Map.get(ancestors, op.id, MapSet.new()))
+              # ADR 0007 / Plan 158 Wave A2: the replica's op-aware validity
+              # conjunct (e.g. the co-signed consent check, or a causal-context
+              # policy), judged over the op, its causal-past id set, and the
+              # causal context (visible ops + their deterministic verdicts).
+              module.command_op_status(op, Map.get(ancestors, op.id, MapSet.new()), context)
             end
 
           {:error, reason} ->
