@@ -7,7 +7,7 @@ import {
   canonicalHash,
   verifyCarrierOp,
 } from "../src/index";
-import type { CarrierOpFrame, CarrierTerm } from "../src/index";
+import type { CarrierDelegation, CarrierOpFrame, CarrierTerm } from "../src/index";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const vectorDirectory = join(here, "vectors");
@@ -106,6 +106,113 @@ if (!vector) {
     failures++;
     console.log("  \x1b[31mFAIL\x1b[0m township_carrier_w1 has no negative-control frame");
   } else {
+    const duplicateMap: CarrierTerm = [
+      "map",
+      [
+        [
+          ["atom", "duplicate"],
+          ["int", 1],
+        ],
+        [
+          ["atom", "duplicate"],
+          ["int", 2],
+        ],
+      ],
+    ];
+    const duplicateMapset: CarrierTerm = [
+      "mapset",
+      [
+        ["atom", "duplicate"],
+        ["atom", "duplicate"],
+      ],
+    ];
+    const delegation: CarrierDelegation = {
+      id: "delegation-id",
+      replica: firstFrame.replica,
+      issuer: firstFrame.author,
+      audience: firstFrame.author,
+      parent_id: null,
+      ops: [],
+      roles: [],
+      live: true,
+      sig: firstFrame.sig,
+    };
+    const permissiveVerifier = { verify: async () => true };
+
+    await checkThrows(
+      "duplicate canonical map key is rejected",
+      () => canonicalBytesForCarrierOp({ ...firstFrame, body: duplicateMap }),
+      "duplicate canonical map key",
+    );
+    await checkThrows(
+      "duplicate canonical mapset element is rejected",
+      () => canonicalBytesForCarrierOp({ ...firstFrame, body: duplicateMapset }),
+      "duplicate canonical mapset element",
+    );
+    await checkThrows("unpadded base64 author is rejected", () =>
+      verifyCarrierOp(
+        { ...firstFrame, author: withoutPadding(firstFrame.author) },
+        permissiveVerifier,
+      ),
+    );
+    await checkThrows("base64 author with trailing newline is rejected", () =>
+      verifyCarrierOp({ ...firstFrame, author: `${firstFrame.author}\n` }, permissiveVerifier),
+    );
+    await checkThrows("base64 author with out-of-alphabet character is rejected", () =>
+      verifyCarrierOp(
+        { ...firstFrame, author: withOutOfAlphabetCharacter(firstFrame.author) },
+        permissiveVerifier,
+      ),
+    );
+    await checkThrows("non-canonical base64 frame signature is rejected", () =>
+      verifyCarrierOp({ ...firstFrame, sig: withoutPadding(firstFrame.sig) }, permissiveVerifier),
+    );
+    await checkThrows("non-canonical base64 delegation issuer is rejected", () =>
+      canonicalBytesForCarrierOp({
+        ...firstFrame,
+        body: [
+          "delegation",
+          { ...delegation, issuer: withoutPadding(delegation.issuer) },
+        ],
+      }),
+    );
+    await checkThrows("non-canonical base64 delegation audience is rejected", () =>
+      canonicalBytesForCarrierOp({
+        ...firstFrame,
+        body: [
+          "delegation",
+          { ...delegation, audience: `${delegation.audience}\n` },
+        ],
+      }),
+    );
+    await checkThrows("non-canonical base64 delegation signature is rejected", () =>
+      canonicalBytesForCarrierOp({
+        ...firstFrame,
+        body: [
+          "delegation",
+          { ...delegation, sig: withOutOfAlphabetCharacter(delegation.sig) },
+        ],
+      }),
+    );
+    await checkThrows("non-canonical base64 bin term is rejected", () =>
+      canonicalBytesForCarrierOp({
+        ...firstFrame,
+        body: ["bin", withoutPadding(firstFrame.author)],
+      }),
+    );
+
+    check(
+      "canonical base64 frame preserves op id and verification",
+      {
+        id: await canonicalHash(canonicalBytesForCarrierOp(firstFrame)),
+        verification: await verifyCarrierOp(firstFrame, verifier),
+      },
+      {
+        id: firstFrame.id,
+        verification: { hash: true, signature: true, valid: true },
+      },
+    );
+
     check(
       "tampered signature fails verification",
       await verifyCarrierOp({ ...firstFrame, sig: tamperBase64(firstFrame.sig) }, verifier),
@@ -165,6 +272,33 @@ function tamperBase64(encoded: string): string {
   const bytes = Buffer.from(encoded, "base64");
   bytes[0] = (bytes[0] ?? 0) ^ 0x01;
   return bytes.toString("base64");
+}
+
+async function checkThrows(
+  name: string,
+  action: () => unknown | Promise<unknown>,
+  expectedMessage?: string,
+) {
+  try {
+    await action();
+    check(name, "accepted", "rejected");
+  } catch (error) {
+    if (expectedMessage === undefined) {
+      check(name, "rejected", "rejected");
+    } else {
+      check(name, error instanceof Error ? error.message : error, expectedMessage);
+    }
+  }
+}
+
+function withoutPadding(value: string): string {
+  return value.replace(/=+$/, "");
+}
+
+function withOutOfAlphabetCharacter(value: string): string {
+  const paddingOffset = value.indexOf("=");
+  const offset = paddingOffset === -1 ? value.length : paddingOffset;
+  return `${value.slice(0, offset)}!${value.slice(offset)}`;
 }
 
 function isCarrierVector(value: unknown): value is CarrierVector {
