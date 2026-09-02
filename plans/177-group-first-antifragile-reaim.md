@@ -99,7 +99,10 @@ that must be updated in this file when it changes.
 
 The relay process and its disk are destroyed. A member reseeds a new relay on a different path with
 a different service identity (`LatticeCarrierServer.Runtime` `identity_file` / `log_file`) from
-bytes that member obtained only by pulling, never from the old server's disk. Every member keeps
+its retained state only: the log it obtained by pulling, plus the transport peer admission list
+(realm ids and public keys) it already holds as pairing state. Nothing comes from the old server's
+disk, and the peer list is not derivable from the log alone, since an admitted member that never
+authored an op has no key in it. Every member keeps
 its own local log between phases and pulls only what that copy lacks; all members reconverge with
 zero loss of acknowledged ops and Sim-equal state and frontier. The negative control is narrow: a
 relay reseeded from a stale member copy serves a strictly smaller op-id set than the oracle, the

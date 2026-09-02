@@ -8,9 +8,10 @@ defmodule LatticeCarrierServer.RelayReseedTest do
   between phases and pulls only what that copy lacks over the real WebSocket
   carrier. The reseeding member's copy starts empty and holds only bytes it
   pulled over that carrier. That member stands up a brand-new relay (fresh
-  service identity, fresh disk) from its retained copy alone, and every member
-  reconverges on `Lattice.Sim` as the oracle with the acknowledged relay ops
-  intact.
+  service identity, fresh disk) from its retained state alone: the pulled log
+  plus the transport admission list (realm ids and public keys) it already
+  holds as pairing state. Every member reconverges on `Lattice.Sim` as the
+  oracle with the acknowledged relay ops intact.
 
   The negative control is deliberately narrow: a stale copy reseeds a relay
   that serves a strictly smaller op-id set than the oracle, the missing ops are
@@ -34,12 +35,14 @@ defmodule LatticeCarrierServer.RelayReseedTest do
 
   @tag :tmp_dir
   test "a relay is disposable and reseedable from a member's retained copy", %{tmp_dir: tmp_dir} do
-    %{sim: sim, base_log: base_log, peers: peers, copies: copies} = township_fixture()
+    %{sim: sim, base_log: base_log, peers: peers, copies: copies, pairing: pairing} =
+      township_fixture()
+
     %{"resident" => resident} = peers
 
     # 1. Relay A boots from the base community log with its own service identity.
     dir_a = Path.join(tmp_dir, "relay-a")
-    pilot_a = write_pilot(dir_a, "relay-a", base_log, peers)
+    pilot_a = write_pilot(dir_a, "relay-a", base_log, pairing.admissions, pairing.relay_realms)
     server_a = spawn_pilot(pilot_a)
     assert %{@instance_name => %{port: port_a, pubkey: pubkey_a}} = server_a.instances
     assert pubkey_a == Base.encode64(pilot_a.server_pub)
@@ -74,7 +77,14 @@ defmodule LatticeCarrierServer.RelayReseedTest do
 
     # 6. The member reseeds relay B from its own retained copy under a different identity.
     dir_b = Path.join(tmp_dir, "relay-b")
-    pilot_b = write_pilot(dir_b, "relay-b", copies["member"], peers)
+    # Relay B is built from the member's retained state only: the log it
+    # pulled plus the transport admission list it holds as pairing state.
+    # The Sim identity map is never consulted for B.
+    retained = retained_member_state(copies["member"], pairing)
+
+    pilot_b =
+      write_pilot(dir_b, "relay-b", retained.log, retained.admissions, retained.relay_realms)
+
     refute pilot_b.server_pub == pilot_a.server_pub, "the reseeded relay must mint a new identity"
     server_b = spawn_pilot(pilot_b)
     assert %{@instance_name => %{port: port_b, pubkey: pubkey_b}} = server_b.instances
@@ -125,11 +135,13 @@ defmodule LatticeCarrierServer.RelayReseedTest do
   test "a stale member copy reseeds a relay that is visibly behind the acknowledged op", %{
     tmp_dir: tmp_dir
   } do
-    %{sim: sim, base_log: base_log, peers: peers, copies: copies} = township_fixture()
+    %{sim: sim, base_log: base_log, peers: peers, copies: copies, pairing: pairing} =
+      township_fixture()
+
     %{"resident" => resident} = peers
 
     dir_a = Path.join(tmp_dir, "relay-a")
-    pilot_a = write_pilot(dir_a, "relay-a", base_log, peers)
+    pilot_a = write_pilot(dir_a, "relay-a", base_log, pairing.admissions, pairing.relay_realms)
     server_a = spawn_pilot(pilot_a)
     assert %{@instance_name => %{port: port_a}} = server_a.instances
 
@@ -160,7 +172,14 @@ defmodule LatticeCarrierServer.RelayReseedTest do
     refute File.exists?(pilot_a.log_path)
 
     dir_b = Path.join(tmp_dir, "relay-b")
-    pilot_b = write_pilot(dir_b, "relay-b", copies["member"], peers)
+    # Relay B is built from the member's retained state only: the log it
+    # pulled plus the transport admission list it holds as pairing state.
+    # The Sim identity map is never consulted for B.
+    retained = retained_member_state(copies["member"], pairing)
+
+    pilot_b =
+      write_pilot(dir_b, "relay-b", retained.log, retained.admissions, retained.relay_realms)
+
     refute pilot_b.server_pub == pilot_a.server_pub, "the reseeded relay must mint a new identity"
     server_b = spawn_pilot(pilot_b)
     assert %{@instance_name => %{port: port_b, pubkey: pubkey_b}} = server_b.instances
@@ -241,14 +260,32 @@ defmodule LatticeCarrierServer.RelayReseedTest do
     assert sorted_ids(copies["resident"]) == sorted_ids(base_log)
     assert Log.op_ids(copies["member"]) == MapSet.new()
 
-    %{sim: sim, base_log: base_log, peers: peers, copies: copies}
+    # The transport admission list is pairing state every member already holds
+    # (realm ids and public keys only). It is distinct from any relay's disk
+    # and is what a reseeding member needs besides its pulled log.
+    pairing = %{admissions: peer_admissions(peers), relay_realms: [peers["resident"].realm_id]}
+
+    %{sim: sim, base_log: base_log, peers: peers, copies: copies, pairing: pairing}
+  end
+
+  defp peer_admissions(peers) do
+    Enum.map(@members, fn realm ->
+      %{"realm" => peers[realm].realm_id, "pubkey" => Base.encode64(peers[realm].pub)}
+    end)
+  end
+
+  # What a member retains across a relay loss: its own pulled log and its
+  # saved pairing state. Nothing here comes from the lost relay's disk.
+  defp retained_member_state(%Log{} = log, %{admissions: admissions, relay_realms: relay_realms}) do
+    %{log: log, admissions: admissions, relay_realms: relay_realms}
   end
 
   # Writes one pilot deployment (log dump, 0600 hex seed file, manifest) into
   # `dir`. Each call mints a distinct service identity from `label`. The
   # returned map carries only public material plus two closures over the
   # secret encodings, so no assertion can print a seed.
-  defp write_pilot(dir, label, %Log{} = log, peers) do
+  defp write_pilot(dir, label, %Log{} = log, admissions, relay_realms)
+       when is_list(admissions) and is_list(relay_realms) do
     File.mkdir_p!(dir)
     File.chmod!(dir, 0o700)
 
@@ -263,12 +300,6 @@ defmodule LatticeCarrierServer.RelayReseedTest do
     File.write!(identity_path, Base.encode16(server_seed, case: :lower) <> "\n")
     File.chmod!(identity_path, 0o600)
 
-    trusted_peers =
-      Enum.map(@members, fn realm ->
-        peer = peers[realm]
-        %{"realm" => peer.realm_id, "pubkey" => Base.encode64(peer.pub)}
-      end)
-
     manifest = %{
       "version" => 1,
       "health" => %{"ip" => "127.0.0.1", "port" => 0},
@@ -279,8 +310,8 @@ defmodule LatticeCarrierServer.RelayReseedTest do
           "identity_file" => identity_path,
           "log_file" => log_path,
           "listener" => %{"ip" => "127.0.0.1", "port" => 0},
-          "trusted_peers" => trusted_peers,
-          "relay_realms" => [peers["resident"].realm_id]
+          "trusted_peers" => admissions,
+          "relay_realms" => relay_realms
         }
       ]
     }
