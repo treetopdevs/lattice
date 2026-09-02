@@ -17,6 +17,48 @@ The first shared durability slice is already complete. PR #29 merged the public
 `Lattice.LiveOps.snapshot/0` fail-closed CapStore outage regression, and the exact merge result
 `4724dacb` passed all hosted jobs. Do not reopen or reimplement that seam in this program.
 
+## Amendment 2026-09-01 (Plan 177)
+
+`plans/177-group-first-antifragile-reaim.md` re-aims this map. The sections below it are kept as
+written for history; where they conflict with this amendment, the amendment wins.
+
+- **Product order.** The Treehouse-shaped durable group (under 150 people, tuned for roughly 9 to
+  15) is the first product. Township moves behind it in both semantic and device delivery order.
+  The recommended order in Status is superseded: after Wave A, run Treehouse Contract Correction
+  and Treehouse Domain and Cross-Runtime Parity (formerly Wave D1), then the Treehouse shell,
+  Android candidate and two-week pilot (formerly Wave D2), before Waves B1 and B2, so Treehouse
+  reaches a device before Township does. Wave E (iOS) keeps its one-product-at-a-time rule after
+  Android evidence stabilizes, but runs in Treehouse, Toolshed, Township order instead of the
+  merged Township/Toolshed/Treehouse order. Toolshed Custody v2 Semantic Repair keeps its P0 and
+  its position ahead of any Toolshed UI. A Toolshed custody ledger read model (per member:
+  transfers, on-time returns, open return requests with epoch age, disputes) is scheduled after
+  custody v2 with zero new op kinds; Plan 177 D2 (facts, never scores) governs its output.
+- **Toolshed as a module.** Plan 177 proposes Toolshed as a module of the group app rather than a
+  third isolated app. This is an amendment to the Product isolation contract below and is not in
+  force until an operator countersign line is added to that contract, before Wave C. Until then
+  the isolation table stands as merged. Isolation at the replica, catalog and manifest level is
+  retained in every case.
+- **Gates.** CD1 (Plans 150-152) is no longer the target gate. Plan 177 AF-1 (relay loss), AF-2
+  (founder loss) and AF-3 (member device loss) replace it. Plan 150 host mode is retained as a
+  privacy option only. Plan 152's LAN discovery item is dropped; QR image and deep link remain the
+  only offer carriers, and `TOWNSHIP_BUILD_MAP.md` §4a is unchanged.
+- **Copy.** Decision 3 copy stands for an operator-hosted relay. A member-operated relay may say
+  that its readers are members' devices only when it enumerates them: the relay host device and its
+  OS (including any administrator of that device), that device's backups, and every transport peer
+  its manifest admits; transport allowlisting is not semantic membership. It must also say the host
+  can deny service. No copy says "nothing hosted" or "serverless" while any relay persists
+  plaintext, and none claims founder-loss safety until the AF gates pass. Treehouse Contract
+  Correction must correct the one-pager claims "founder loss does not orphan the space" and
+  "nothing hosted" accordingly.
+- **Volume.** Thread rollover is the pilot compaction policy; the instrument measures per-thread op
+  count and bytes against the existing 4,000-op / 8 MiB / 5-second thresholds. Production
+  compaction remains excluded.
+- **Status today.** AF-1 is tested by `apps/lattice_carrier_server/test/relay_reseed_test.exs`
+  (member-retained copies and incremental pulls reconverge on the Sim oracle; the stale negative
+  control proves only a strictly smaller served set, missing ops enumerable against the oracle and a
+  frontier behind, with no divergence-reporting path). AF-2 fails by design (beacons are root-only per Plan 149; witnessed recovery in ADR 0004 covers a
+  role, not the root; rotation is M3) and its decision is routed into Plan 175. AF-3 has no path.
+
 ## Destination
 
 Produce three honest beta proofs of concept that can be installed on real phones, use a public

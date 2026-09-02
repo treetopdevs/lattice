@@ -216,6 +216,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 174 | **(spike)** What the governance-witness ceremony must prove natively | P1 | M (build: L) | — | TODO (Round 5b) |
 | 175 | **(spike)** How succession gets a trustworthy clock | P1 | M (build: L) | 162 step 2b (pending) | TODO (Round 5b) |
 | 176 | Fail closed at the wire/authority boundary: lease range, decode depth, replica marker, op kinds | P1 | M | 161 (rec.), 168, 172, 173 | TODO (Round 5; renumbered from 168 — AUTHZ-02 ceded to plan 162 step 2b(e)) |
+| 177 | Group-first antifragile re-aim: operator decisions, AF-1..AF-3 loss gates, program reorder | **P0** | M | 158, 175 | TODO (draft 2026-09-01; AF-1 relay-reseed test landed with this plan) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
