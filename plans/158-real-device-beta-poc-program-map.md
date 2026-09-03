@@ -68,9 +68,10 @@ written for history; where they conflict with this amendment, the amendment wins
   sole driver of Plan 149 lease lapse, so a beacon emitter can expire every expiring delegation on
   the replica, and one beacon at the canonical integer ceiling does it permanently while stopping
   the clock for the life of the replica. Only the founder's root key can do this today. Plan 179
-  widens it to any threshold subset of the pinned witnesses and therefore carries two
-  genesis-pinned bounds on the witnessed epoch: a per-step ceiling, and an absolute horizon below
-  the canonical integer ceiling. Neither bound removes the power inside the step. Any Treehouse
+  widens it to any threshold subset of the pinned witnesses and therefore carries two bounds on the
+  witnessed epoch: a per-step ceiling pinned in the genesis beacon policy, and an absolute horizon
+  fixed in both runtimes as a protocol constant, below the canonical integer ceiling and not
+  settable at genesis. Neither bound removes the power inside the step. Any Treehouse
   surface that describes the witness set names that power in the same sentence as the grant, per
   Plan 177 D1. Decision record: `docs/research/succession_tick_provenance.md`.
 - **What AF-2's "revoke a delegation" clause will and will not prove.** A revoke is honored only

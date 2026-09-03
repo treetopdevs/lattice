@@ -143,9 +143,10 @@ expiring delegation on the replica, and a single beacon at the canonical integer
 permanently while stopping the clock for the life of the replica (reproduced in
 `docs/research/succession_tick_provenance.md` section 6.6). Today only the founder's root key can
 do this, and it already holds issuer-side revocation, so nothing is widened. Plan 179 widens it to
-any threshold subset of the pinned witnesses, which is why it carries two genesis-pinned bounds on
-the witnessed epoch: a per-step ceiling, and an absolute horizon below the canonical integer
-ceiling. Neither bound removes the power inside the step. Any copy describing the witness set names
+any threshold subset of the pinned witnesses, which is why it carries two bounds on the witnessed
+epoch: a per-step ceiling pinned in the genesis beacon policy, and an absolute horizon fixed in both
+runtimes as a protocol constant, below the canonical integer ceiling and not settable at genesis.
+Neither bound removes the power inside the step. Any copy describing the witness set names
 that power in the same sentence as the grant. Decision record:
 `docs/research/succession_tick_provenance.md`.
 
