@@ -171,7 +171,7 @@ is scanned as ordinary prose.
 | 190 | `does not orphan the space` | the founder-loss sentence above; manual admin transfer only | AF-2 |
 | 200 | `TTL'd, use-limited capabilities` | the invitation sentence above | 158 shell ticket |
 | 201 | relay holds the plaintext log | the same sentence naming its readers and the withholding host | D1 |
-| 206 | `nothing hosted` | relay named, readers and withholding host named | D1 |
+| 206 | `nothing hosted` | relay named; the same full reader enumeration and the withholding host named | D1 |
 | 210 | `survive intact on the last phone` | device-held history to the extent synced; relay readers and withholding host named | AF-1 |
 | 235 | `nothing hosted, nothing to seize` | the hosting sentence above; AF-1 holds today | D1 |
 | 236 | `Coordinator-free` | deterministic conflict reduction needs no coordinator; the host is named | D1 |
@@ -180,7 +180,7 @@ is scanned as ordinary prose.
 | 261 | reactions, votes and polls as Treehouse ops | reactions, votes and polls are absent from the first beta | 178 vocabulary |
 | 262 | `social re-admission is the documented answer` | social re-admission is the intended answer (AF-3, not built) | AF-3 |
 | 265 | readable by every member | readable by every member and by the named relay readers, whose host can withhold availability | D1 |
-| 272 | `zero server dependency` | relay is a plaintext host whose host can read the log and withhold availability, and that the core loop tolerates losing (AF-1) | AF-1, D1 |
+| 272 | `zero server dependency` | relay is a plaintext host with the same full reader enumeration and the withholding host named, and that the core loop tolerates losing (AF-1) | AF-1, D1 |
 
 ## Scope
 

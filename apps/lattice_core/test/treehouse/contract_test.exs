@@ -121,8 +121,12 @@ defmodule Lattice.Treehouse.ContractTest do
     "Founder loss is not survived today: AF-2 fails because beacons are honored only from " <>
       "the replica root",
     "it is not a bearer link and carries no expiry or use-limit claim",
-    "the relay is a member-operated or operator-hosted plaintext host whose host can read " <>
-      "the log and withhold availability",
+    "the relay is a member-operated or operator-hosted plaintext host: its operator, or " <>
+      "for a member-operated relay the host device and its OS including any administrator, " <>
+      "that device's backups and every transport peer the relay manifest admits, can read " <>
+      "the log, and the host can withhold availability",
+    "can read that copy, and the host can withhold availability; it cannot decide who holds " <>
+      "a role or erase what members' devices hold",
     "History is device-held and replayable: wipe every device but one and the record and " <>
       "role structure that phone had synced survive on it",
     "Member key loss is the AF-3 design item (social re-admission by group attestation; " <>
