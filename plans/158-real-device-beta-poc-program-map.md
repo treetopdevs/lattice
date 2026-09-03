@@ -714,6 +714,10 @@ invites are not use-limited; the plaintext pilot relay is hosted and observable;
 semantic authority or erase device-held history, but it can withhold availability. Freeze the
 text-only command vocabulary, conflict rules, roles and beta exclusions.
 
+Status 2026-09-03: corrected and frozen in `plans/178-treehouse-contract-correction.md`; the
+one-pager copy and the contract sentences are pinned by
+`apps/lattice_core/test/treehouse/contract_test.exs`.
+
 ### Treehouse Domain and Cross-Runtime Parity
 
 **Owners:** Treehouse domain agent plus TS substrate agent; one parity-atomic integration PR.

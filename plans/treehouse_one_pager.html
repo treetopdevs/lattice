@@ -128,7 +128,7 @@
     <span>THE W0–W3 CUT</span>
   </div>
   <h1 class="title">Tree<span class="thin">house</span></h1>
-  <p class="subtitle">The low-stakes product hiding inside the Township stack: durable, uncapturable community spaces for people already burned by platforms — shipped on M1+M2 alone, with every research-gated milestone fenced out. Working name; the seam matters more than the sign.</p>
+  <p class="subtitle">The low-stakes product hiding inside the Township stack: durable, member-held community spaces for people already burned by platforms — a planned cut that rests on already-green M1 behaviors plus the M2 carrier, with every research-gated milestone fenced out. The Treehouse product runtime and deployment are not built yet. Working name; the seam matters more than the sign.</p>
   <div class="chips">
     <span class="chip live">DEPENDS · M1 ✓ + M2</span>
     <span class="chip warn">EXCLUDES · M4 / M6 ENTIRELY</span>
@@ -140,7 +140,7 @@
 <!-- ============ §1 WHAT IT IS ============ -->
 <section id="s1">
   <div class="sec-head"><span class="sec-num">§1</span><h2>What It Is</h2></div>
-  <p class="lede">A Discord-shaped space whose record cannot be deleted, paywalled, orphaned, or seized — because there is no server to do any of those things to. Threads are Replicas; roles are Caps; the community's history lives on its members' devices and converges when they do. Everything user-facing runs on behaviors that are already green (M1) plus the carrier and persistence M2 was going to build anyway.</p>
+  <p class="lede">A Discord-shaped space whose record its members hold themselves. Threads are Replicas; roles are Caps; the community's history lives on its members' devices and converges when they do. A relay carries the ops and keeps a plaintext copy: its operator, or for a member-operated relay the host device and its OS (including any administrator), its backups and every transport peer the manifest admits, can read that copy, and the host can withhold availability. What the relay cannot do is decide semantic authority or erase the history held on members' devices. Everything user-facing in this planned cut rests on behaviors that are already green (M1) plus the M2 carrier and persistence; the product runtime and deployment that would carry it are not built yet.</p>
   <div class="thesis">
     Treehouse sells exactly what the substrate already proves: durability precedes liveness, and authority is a revocable capability, not a role in someone's database. It sells nothing that is gated on open research.
     <span class="who">The honesty constraint that defines this cut</span>
@@ -162,13 +162,13 @@
     <div class="a">
       <div class="al">Audience · 02</div>
       <b>The Fediverse Diaspora</b>
-      <p>Mastodon and Bluesky users chose decentralization once already and then watched instances shut down, defederate, or change hands. They are ideologically pre-sold on "no one can take this from you" and fluent in the tradeoffs.</p>
+      <p>Mastodon and Bluesky users chose decentralization once already and then watched instances shut down, defederate, or change hands. They are ideologically pre-sold on records their members hold themselves, and fluent in the tradeoffs.</p>
       <span class="pain">PAIN: instance shutdowns orphaning communities · admin unilateralism · migration losing history and graph</span>
     </div>
     <div class="a">
       <div class="al">Audience · 03</div>
       <b>The Platform-Burned</b>
-      <p>Communities that survived a Discord ban wave, a subreddit closure, or an ownership coup. Small population, maximal motivation — and the only users who will honestly stress-test "the record survives every device dying but one."</p>
+      <p>Communities that survived a Discord ban wave, a subreddit closure, or an ownership coup. Small population, maximal motivation — and the only users who will honestly stress-test "the record a phone already synced survives every other device dying."</p>
       <span class="pain">PAIN: one moderation decision by a platform erased years of community record and structure</span>
     </div>
   </div>
@@ -178,16 +178,17 @@
 <section id="s3">
   <div class="sec-head"><span class="sec-num">§3</span><h2>What Ships</h2></div>
   <p>The Township workloads, minus the one that needs research. Same seams, same modules, lower stakes.</p>
+  <p class="footnote"><b>Corrected 2026-09-03 under Plan 178.</b> The hosting, founder-loss, invitation, history and exit-gate claims on this page were corrected to match Plan 177 D1 and AF-2. The frozen beta contract lives in <span class="mono">plans/178-treehouse-contract-correction.md</span>; the copy here is pinned by test.</p>
   <div class="work">
     <div class="w">
       <div class="wl">Ships · exercises M1 + M2 (≈ Township W1)</div>
       <b>Durable Threads</b>
-      <p>Channels and threads as Replicas: convergent posts and edits, offline authorship, partition-and-heal with no coordinator and no conflict dialog. The 90-day retention wall does not exist because there is no landlord.</p>
+      <p>Channels and threads as Replicas: convergent posts and edits, offline authorship, partition-and-heal whose conflict reduction is deterministic and so needs no coordinator and no conflict dialog. Transport still runs through a relay. History is device-held and replayable rather than sitting behind a 90-day retention wall, and the relay keeps a plaintext copy: its operator, or for a member-operated relay the host device and its OS including any administrator, that device's backups and every transport peer the relay manifest admits, can read that copy; the host can withhold availability; and it cannot erase the copies on members' devices. The first beta stops new posting at 4,000 ops, 8 MiB or any cold open over five seconds and rolls the thread over into a new one under the same Space, so this is not a safe-unbounded-history claim.</p>
     </div>
     <div class="w">
       <div class="wl">Ships · exercises M0 + M1 (≈ Township W2)</div>
       <b>Roles as Caps</b>
-      <p>Moderator and admin authority as transferable per-field Caps with succession. Handing off a community is one op. A founder who ghosts, rage-quits, or loses their device does not orphan the space — succession fires and the record continues.</p>
+      <p>Moderator and admin authority as transferable per-field Caps. Handing off a community is one op. Founder loss is not survived today: AF-2 fails because beacons are honored only from the replica root, witnessed recovery covers a role and not the root, and key rotation and recovery are M3; manual admin transfer is the only handoff the first beta claims. A founder who loses their device is not recovered by this cut; that is the AF-2 gate, and it fails today.</p>
     </div>
     <div class="w">
       <div class="wl">Ships · exercises M1 (≈ Township W2)</div>
@@ -197,17 +198,17 @@
     <div class="w">
       <div class="wl">Ships · exercises M1 (≈ Township W0)</div>
       <b>Invite by Capability</b>
-      <p>Admission is a Cap granted by existing members — invite links as attenuated, TTL'd, use-limited capabilities (the V1 macaroon model doing product work). No account creation ceremony, no registry to scrape or capture.</p>
+      <p>Admission is a Cap granted by existing members (the V1 macaroon model doing product work). An invitation is recipient-bound and has one signed ID and one recipient; replay is idempotent, rebinding is quarantined, and revocation closes it; it is not a bearer link and carries no expiry or use-limit claim. No account creation ceremony. The relay holds the admitted transport peer list and a plaintext log rather than accounts: its operator, or for a member-operated relay the host device and its OS including any administrator, that device's backups and every transport peer the relay manifest admits, can read that log, and the host can withhold availability.</p>
     </div>
   </div>
 
   <h4>The demo storyline — Treehouse edition</h4>
   <ol class="storyline">
-    <li>An OSS project spins up a space; contributors join by invite Cap generated on-device. No signup, no email harvest, nothing hosted.</li>
+    <li>An OSS project spins up a space; contributors join by recipient-bound invitation generated on-device. No signup, no email harvest. A member-operated or operator-hosted relay carries the ops and keeps a plaintext copy: its operator, or for a member-operated relay the host device and its OS including any administrator, that device's backups and every transport peer the relay manifest admits, can read that copy, and the host can withhold availability; it cannot decide who holds a role or erase what members' devices hold.</li>
     <li>A design thread accumulates posts from laptops that are mostly offline; two maintainers edit the RFC summary during a partition; the heal converges silently.</li>
     <li>The founding maintainer steps away. The admin Cap transfers in one op; their later stale moderation op is quarantined and audited, visibly.</li>
     <li>A mod account is phished. The attacker holds exactly one scoped Cap; revocation is one op; the trust graph shows precisely what the compromised account touched and when. The audit is the incident report.</li>
-    <li>Slack's free tier would have eaten this history eight months ago. Every device but one is wiped; the community's record and role structure survive intact on the last phone.</li>
+    <li>Slack's free tier would have eaten this history eight months ago. History is device-held and replayable: wipe every device but one and the record and role structure that phone had synced survive on it, with the relay's plaintext copy, readable by its operator or member-operated host device and OS administrators, that device's backups and every transport peer the manifest admits, as a second copy that lasts only while that host keeps serving it, since the host can withhold availability. A phone that never pulled an acknowledged op loses that op (the AF-1 stale-copy control).</li>
   </ol>
 </section>
 
@@ -232,7 +233,7 @@
       <span class="tag">Adversary · A3-lite</span>
       <h5>The Platform</h5>
       <p>Not the state with a subpoena — the landlord with a retention policy. Slack's 90-day wall, Discord's ban lever, an instance admin's shutdown notice: A3 events that happen to ordinary communities on schedule.</p>
-      <div class="def">DEFENSE → the full A3 defense, inherited for free: local-first, coordinator-free, nothing hosted, nothing to seize. This is the substrate's strongest claim and it is true today.</div>
+      <div class="def">DEFENSE → local-first, deterministic conflict reduction that needs no coordinator, and honest about the host. The relay is a plaintext host: its operator, or for a member-operated relay the host device and its OS including any administrator, that device's backups and every transport peer the relay manifest admits, can read the log; the host can withhold availability; and the relay cannot decide semantic authority or erase device-held history. Losing the relay is the AF-1 gate, which holds today; the record leaves with the members' devices.</div>
     </div>
   </div>
   <div class="warnbox">
@@ -249,26 +250,26 @@
     <thead><tr><th style="width:130px">Milestone</th><th>What Treehouse takes from it</th><th style="width:250px">Status for this cut</th></tr></thead>
     <tbody>
       <tr><td class="ph ok">M1 ✓</td><td>Everything: Replica, three CRDTs, per-field authority with delegation/transfer/revocation/quarantine, durable inbox, lifecycle + succession, the property suite as the correctness warranty.</td><td><span class="g">GREEN — the product is a skin over behaviors 1–19</span></td></tr>
-      <tr><td class="ph">M2</td><td>The JS/TypeScript WebSocket client as the phone/browser realm (per plan 011 and the AtomVM constraints), disk-backed logs with the stated durability contract, canonical CBOR (ADR-P08) as the hard prerequisite for the non-BEAM realm.</td><td><span class="g">BLOCKING — Treehouse is M2's application oracle, alongside 010a</span></td></tr>
-      <tr><td class="ph no">M3</td><td>Almost nothing. At these stakes, key loss resolves socially: re-invite, new identity, old identity tombstoned. KERI pre-rotation is not on this critical path.</td><td><span class="g">DEFERRED — social recovery is the M1-era answer, stated in copy</span></td></tr>
+      <tr><td class="ph">M2</td><td>The JS/TypeScript WebSocket client as the phone/browser realm (per plan 011 and the AtomVM constraints), disk-backed logs with the stated durability contract, canonical CBOR (ADR-P08) as the hard prerequisite for the non-BEAM realm.</td><td><span class="g">SUBSTRATE PRESENT — carrier, stable relay and TS client exist; the Treehouse product runtime and deployment are missing (Plan 158)</span></td></tr>
+      <tr><td class="ph no">M3</td><td>Nothing this cut can rely on. Member key loss is the AF-3 design item (social re-admission by group attestation; no path built today); founder/root key loss is AF-2 and fails today; KERI pre-rotation is M3.</td><td><span class="g">DEFERRED — no recovery path claimed in this cut</span></td></tr>
       <tr><td class="ph no">M4 / M6</td><td>Nothing. No receipt-freeness, no federation, no claim that implies either.</td><td><span class="g">EXCLUDED — by fence, below</span></td></tr>
     </tbody>
   </table>
 
   <div class="fence">
     <ul>
-      <li><b>Receipt-free anything</b> — the <span class="mono">Lattice.Attestation</span> stub stays a stub. Reactions, votes, and polls in Treehouse are plain convergent ops and say so. <span class="when">→ M4 / Township</span></li>
-      <li><b>KERI rotation &amp; recovery ceremony</b> — social re-admission is the documented answer; anything fancier waits. <span class="when">→ M3</span></li>
+      <li><b>Receipt-free anything</b> — the <span class="mono">Lattice.Attestation</span> stub stays a stub. Reactions, votes and polls are absent from the first beta: post bodies are text only, per the frozen command vocabulary. <span class="when">→ M4 / Township</span></li>
+      <li><b>KERI rotation &amp; recovery ceremony</b> — social re-admission is the intended answer (AF-3, not built); anything fancier waits. <span class="when">→ M3</span></li>
       <li><b>Federation, cross-space identity portability</b> — one space, one shared context. The clubhouse works without the town. <span class="when">→ M6</span></li>
       <li><b>Integrations &amp; bots</b> — per program decision: not until the core is strong. Named as the eventual killer surface (an integration is a Cap-holding realm — the security story writes itself) and deliberately not started. <span class="when">→ post-soak, own ADR</span></li>
-      <li><b>E2EE confidentiality</b> — content is readable by every replica-holding member; fine for OSS and semi-public communities, stated plainly in copy. <span class="when">→ M3 Keyhive track</span></li>
+      <li><b>E2EE confidentiality</b> — content is readable by every replica-holding member and, per §3 and §4, by the relay's operator or member-operated host device and OS administrators, that device's backups and every transport peer the manifest admits, whose host can also withhold availability; fine for OSS and semi-public communities, stated plainly in copy. <span class="when">→ M3 Keyhive track</span></li>
       <li><b>Content moderation tooling beyond Caps</b> — no filters, no scanners, no trust-and-safety machinery. Small invite-gated spaces moderate socially; the Cap model is the enforcement surface. <span class="when">→ questioned before built</span></li>
       <li><b>Tokens, funding mechanics, quadratic anything</b> — never on this branch. <span class="when">→ ∅</span></li>
     </ul>
   </div>
 
   <h4>Exit gate — when Treehouse counts as real</h4>
-  <p class="footnote" style="max-width:78ch"><b>①</b> Three unaffiliated communities (≥1 OSS project) run their primary coordination on it for 60 consecutive days with zero server dependency in the core loop. <b>②</b> At least one real succession event and one real revocation event occur in the wild and audit cleanly in the trust graph. <b>③</b> A full-partition week (member devices offline, no rendezvous) heals to convergence with no data loss and no conflict dialog. <b>④</b> A skeptical outsider can verify the durability claim from the exported audit evidence alone.</p>
+  <p class="footnote" style="max-width:78ch"><b>①</b> Three unaffiliated communities (≥1 OSS project) run their primary coordination on it for 60 consecutive days; the relay is a member-operated or operator-hosted plaintext host: its operator, or for a member-operated relay the host device and its OS including any administrator, that device's backups and every transport peer the relay manifest admits, can read the log, and the host can withhold availability, while the core loop tolerates losing the relay (AF-1), so it is not a dependency the copy pretends away. The first beta runs one community for two weeks (Plan 158); this larger gate is deferred. <b>②</b> At least one real admin transfer and one real revocation event occur in the wild and audit cleanly in the trust graph; the witnessed succession ceremony is hidden in the first beta. <b>③</b> A full-partition week (member devices offline, no rendezvous) heals to convergence with no data loss and no conflict dialog. <b>④</b> A skeptical outsider can verify the durability claim from the exported audit evidence alone.</p>
 </section>
 
 <!-- ============ FOOTER ============ -->
