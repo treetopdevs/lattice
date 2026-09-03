@@ -127,6 +127,38 @@ adds no post-genesis witness rotation. Key rotation and recovery are excluded as
 choice (witness-set beacons and top-level grants pinned at genesis, versus delegated root powers) is
 routed into the Plan 175 spike under its decision 4 ("Who must emit beacons"). No build here.
 
+Decision 2026-09-03: the Plan 175 spike settled decision 4. Root-only beacons stay the default and
+delegated single-key beacon power is rejected. The one in-bounds candidate is a witness set with a
+threshold pinned at genesis, carried as a new body of the existing `:authority` op kind, and it is
+opened as `plans/179-witnessed-beacons-af2-founder-loss.md` (effort L, risk HIGH) to be built and
+tested, not because it is known to work: Plan 179 is proposed to test post-founder-loss beacon
+advancement, and nothing about it may be claimed until its founder-removed Sim test is green and
+merged. The spike also left the legacy self-asserted succession tick frozen and characterized
+rather than repaired. Founder loss is still not survived, AF-2 fails until that test lands, and no
+copy may claim otherwise before then.
+
+One power this decision hands over, recorded here under D1 rather than discovered later. Epoch
+advancement is the sole driver of Plan 149 lease lapse, so a beacon emitter can expire every
+expiring delegation on the replica, and a single beacon at the canonical integer ceiling does it
+permanently while stopping the clock for the life of the replica (reproduced in
+`docs/research/succession_tick_provenance.md` section 6.6). Today only the founder's root key can
+do this, and it already holds issuer-side revocation, so nothing is widened. Plan 179 widens it to
+any threshold subset of the pinned witnesses, which is why it carries two genesis-pinned bounds on
+the witnessed epoch: a per-step ceiling, and an absolute horizon below the canonical integer
+ceiling. Neither bound removes the power inside the step. Any copy describing the witness set names
+that power in the same sentence as the grant. Decision record:
+`docs/research/succession_tick_provenance.md`.
+
+AF-2's own wording needs one qualifier, recorded here so no later copy inherits the wider reading.
+"Revoke a delegation" is provable after founder loss only for delegations whose issuer survives: a
+revoke is honored from the delegation issuer or the replica root and from nobody else, so every
+delegation the founder issued becomes permanently irrevocable once the founder realm is gone. The
+only exit for such a grant is a witnessed epoch advance past its expiry, which exists only if the
+grant was leased at issue time. A group that wants to be able to remove a founder-granted member
+after founder loss must lease every founder-issued grant at genesis, and that is a creation-time
+decision with no later repair. Plan 179 proves the narrowed clause and pins it with a negative
+control; the unleased founder grant to a member who later turns hostile stays an open gate.
+
 ### AF-3: member device loss
 
 A member with a new key rejoins and their history is linked to the new key by a group attestation
