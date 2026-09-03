@@ -161,8 +161,8 @@ is scanned as ordinary prose.
 
 | Line | Old claim | Corrected claim | Rule |
 | --- | --- | --- | --- |
-| 131 | `durable, uncapturable community spaces` | durable, member-held community spaces | D1 |
-| 143 | `because there is no server to do any of those things to` | a relay keeps a plaintext copy; its readers and the withholding host are named | D1 |
+| 131 | `durable, uncapturable community spaces`, `shipped on M1+M2 alone` | durable, member-held community spaces; a planned cut resting on already-green M1 behaviors plus the M2 carrier, with the product runtime and deployment named as not built | D1, 158 ticket |
+| 143 | `because there is no server to do any of those things to`, `Everything user-facing runs on` | a relay keeps a plaintext copy; its readers and the withholding host are named; the planned cut rests on green M1 behaviors plus the M2 carrier while its runtime and deployment are named as not built | D1, 158 ticket |
 | 165 | `no one can take this from you` | records their members hold themselves; no guarantee restated | D1 |
 | 171 | `the record survives every device dying but one` | only the record that phone had already synced | AF-1 |
 | 180 | (none) | honesty note: corrected 2026-09-03 under Plan 178 | 177 item 5 |

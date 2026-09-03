@@ -339,8 +339,11 @@ defmodule Lattice.Treehouse.ContractTest do
   defp attribute_values(html) do
     double = Regex.scan(~r/\s[\w:.-]+\s*=\s*"([^"]*)"/, html, capture: :all_but_first)
     single = Regex.scan(~r/\s[\w:.-]+\s*=\s*'([^']*)'/, html, capture: :all_but_first)
+    # An unquoted value: HTML ends it at the first whitespace or `>`, and it can never
+    # start with a quote, so this cannot re-match a quoted value.
+    unquoted = Regex.scan(~r/\s[\w:.-]+\s*=\s*([^\s"'=<>`]+)/, html, capture: :all_but_first)
 
-    List.flatten(double ++ single)
+    List.flatten(double ++ single ++ unquoted)
   end
 
   defp decode_entities(text) do
