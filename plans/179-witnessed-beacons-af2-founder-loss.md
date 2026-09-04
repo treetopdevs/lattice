@@ -565,7 +565,11 @@ tree therefore says the lockout binds
 every succeed op built on a history in which the pin is honored and names the fork as an exit; the
 spike's 6.2 close, decision 5 bullet, 7.5 table and section 9 answer 5 are qualified in place with
 the same marker. Step 8b's claim-boundary documents, and any later sentence about the pin, must
-carry the same ancestry qualification.
+carry the same ancestry qualification. One preflight item for step 8b, raised in PR review and not
+reproduced: while the root key lives, a later root genesis replacing the policy with
+`%{successor, dormant_ticks: 0}` may let a max-tick succeed carrying the honored pin pass, since
+`at_tick < last_active + 0` is false; if so, policy replacement is a second legacy exit before
+founder loss and never after it. Reproduce or refute it before writing the ADR 0004 sentence.
 Decision 1 (option D), the out-of-scope list and the STOP conditions are unchanged; the fork is
 legacy-tick behaviour, not beacon behaviour, and no code moved.
 
