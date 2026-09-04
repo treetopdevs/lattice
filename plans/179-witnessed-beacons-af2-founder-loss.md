@@ -540,9 +540,9 @@ Either way the doc must state plainly that under this configuration a holder can
 `last_active` at `2^64-1`, that every encodable succession tick whose ancestry carries the honored
 pin then quarantines `:premature_succession`, that `2^64` cannot be authored at all, and that the
 lockout is therefore reachable and, on every history in which the pin is honored, unrecoverable
-through the legacy path for the life of the replica; its exits are a succeed op by the designated
-successor whose deps fork around the pin, a voluntary transfer by the pinning holder, or a new
-replica. See `docs/research/succession_tick_provenance.md` sections 6.2 and 6.2a for the
+through the legacy path for the life of the replica; under the unchanged legacy policy its known
+exits are a succeed op by the designated successor whose deps fork around the pin, a voluntary
+transfer by the current holder, or a new replica. See `docs/research/succession_tick_provenance.md` sections 6.2 and 6.2a for the
 reproductions. Corrected during step 1 execution (2026-09-03): the earlier text required the doc
 to say the lockout was "unrecoverable through the legacy path for the life of the replica; the
 only exits are a voluntary transfer by the pinning holder or a new replica", which 6.2a refutes.

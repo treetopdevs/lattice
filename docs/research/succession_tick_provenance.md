@@ -366,7 +366,7 @@ and 2^64 cannot be constructed at all: `Lattice.Canonical.term/1`, `Lattice.Op.n
 for the life of the replica, on every history in which the pin is honored; the exits are a succeed
 op whose deps fork around the pin (6.2a, reproduced by Plan 179 step 1, which corrected this
 sentence from an unconditional "the only exits are outside this mechanism"), a voluntary transfer
-by the pinning holder, or a new replica.
+by the current holder, or a new replica.
 
 A harness detail worth recording rather than hiding: `Sim.transfer/5` defaults to `ops: [:lock,
 :unlock]`, which are `Lattice.Demo.Thread` commands, not `Township.Matter` commands. With the
@@ -436,8 +436,9 @@ byte-identical state on all three: true
 
 Two corrections to the reading above follow. The lockout binds every succeed op
 built on a history in which the pin is honored, not the role for the life of the replica; its exits
-are a succeed op that forks around the pin, a voluntary transfer by the pinning holder, or a new
-replica. And the
+are a succeed op that forks around the pin, a voluntary transfer by the current holder (the pinning
+author only in the self-transfer variant; after the transfer to bystander a further transfer by the
+author is `:transfer_not_holder`), or a new replica. And the
 seizure of 6.1 does not depend on the holder being quiet in the log; it depends only on the deps
 the successor chooses, because any ancestor with a low `last_active` satisfies the dormancy gate
 whatever the holder has done since. Decision 5 in section 9 and the "unrecoverable" column of 7.5
@@ -1199,7 +1200,7 @@ sentence updated by its own plan after (a) to (d) are green, never before.
    witnessed arm of `decide_succession_proof/7` never consults dormancy (section 6.3), but that was
    reproduced with the recovery policy present at genesis, not added later. Say the certain part
    plainly: the legacy path itself offers no repair, its known exits are the designated successor's
-   fork around the honored pin (6.2a), a voluntary transfer by the pinning holder, or a new replica,
+   fork around the honored pin (6.2a), a voluntary transfer by the current holder, or a new replica,
    and once the founder key is gone no policy replacement is possible at all. Do not build around
    it.
    The same ceiling exists on the beacon epoch and section 6.6 reproduces it: one beacon at

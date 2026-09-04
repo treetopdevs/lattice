@@ -33,9 +33,11 @@ defmodule Township.Matter do
   demo Thread's is. The runtime reads only its role name (`Lattice.Authority` and
   `Lattice.Sim` collect `Map.keys(__lattice_succession__())`), and `:clerk` is already
   a role through `clerk_locked?`; the `to:` and `after:` values are never consulted.
-  The initial policy is the `%{successor, dormant_ticks}` map carried by each matter's
-  genesis op (`Lattice.Sim.create_replica/2` `policies:`), and a later valid genesis
-  authored by the replica root may replace it (`Lattice.Authority.collect_policies/3`
+  The policy, when there is one, is the `%{successor, dormant_ticks}` map the genesis
+  author supplies explicitly (`Lattice.Sim.create_replica/2` `policies:`); a genesis
+  created without `policies:` carries none, this line installs no default, and
+  succession is then `:unauthorized_succession`. A later valid genesis authored by the
+  replica root may add or replace the policy (`Lattice.Authority.collect_policies/3`
   merges every valid root genesis, later wins); holding, succeeding to or being admitted
   to a role confers no power to change it, only the root key does.
   Plan 179 step 1c takes this relabel branch; moving the clerk policy to a witnessed
@@ -56,10 +58,12 @@ defmodule Township.Matter do
   cannot be authored at all because `Lattice.Canonical` refuses integers above the
   ceiling. That lockout is reachable and, for every succeed op built on a history in
   which the pin is honored, unrecoverable through the legacy path for the life of the
-  replica. Its known exits are the successor's fork above, a voluntary transfer by the
-  pinning holder, or a new replica; whether a later root-authored genesis that replaces
-  the policy rescues an already pinned role is an open question the spike did not
-  reproduce (section 9, answer 5), and after founder loss no such genesis can exist. See
+  replica. Under the unchanged legacy policy its known exits are the successor's fork
+  above, a voluntary transfer by the current holder, or a new replica. While the root
+  key lives a later root genesis can replace the policy, and whether a witnessed
+  recovery policy added that way rescues an already pinned role is an open question the
+  spike did not reproduce (section 9, answer 5); after founder loss no such genesis can
+  exist. See
   `docs/research/succession_tick_provenance.md` sections 6.2 and 6.2a for the
   reproductions.
   """
