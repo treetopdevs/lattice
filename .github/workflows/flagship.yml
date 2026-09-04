@@ -449,7 +449,7 @@ jobs:
   android_pilot_contract:
     name: Android pilot security contract
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       contents: read
 
@@ -467,7 +467,7 @@ jobs:
           cache-dependency-path: clients/township-tauri-shell/package-lock.json
 
       - name: Install Android pilot contract dependencies
-        run: npm --prefix clients/township-tauri-shell ci
+        run: npm --prefix clients/township-tauri-shell ci --no-audit --no-fund
 
       - name: Android pilot + harness contracts
         working-directory: clients/township-tauri-shell
