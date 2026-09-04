@@ -225,8 +225,15 @@ byte-identical proof obligation for that build, not for decision 1.
   [`op.ts`](../../clients/lattice-client/src/op.ts) line 117;
   [`township.ts`](../../clients/lattice-client/src/township.ts) line 392 (policy encode);
   [`materialize.ts`](../../clients/lattice-client/src/materialize.ts) line 17 doc comment.
+- [`clients/lattice-client/src/codec.ts`](../../clients/lattice-client/src/codec.ts)
+  `canonicalBytesForWitnessedSuccessionClaim` 206-221, which hard-codes the succession separator
+  (line 95) and the seven-field succession claim over canonical encoders that are module private
+  (318-350). Added in review round ci-2: any new witnessed claim shape needs its own exported
+  function here, because it cannot be composed from outside this file.
 - [`clients/lattice-client/test/conformance.ts`](../../clients/lattice-client/test/conformance.ts)
-  230, 638-668, 941, and the authority op kind list.
+  230, 638-668, 941, and the authority op kind list;
+  [`test/township_authoring.ts`](../../clients/lattice-client/test/township_authoring.ts), the only
+  gate over `authorTownshipGenesis` and therefore over the genesis policy **encoder**.
 
 ### 5.4 Other production code and docs in the radius
 
@@ -261,14 +268,15 @@ that its guards and this spike's provenance question did not overlap.
 
 ## 6. Reproductions
 
-All eight scratch scripts live under
-`/private/tmp/claude-501/-Users-nicholas-develop-lattice/d0d081c8-9652-463f-98d5-6003e03e5675/scratchpad/spike175/`
-and were never committed: the five original runs `s1_seizure.exs`, `s2_lockout_no_recovery.exs`,
-`s3_lockout_with_recovery.exs`, `s4_canonical_ceiling.exs`, `s5_beacon_root_only.exs`, and the
-review-round additions `r1_epoch_ceiling.exs`, `r2_pruned_deps_beacon.exs` and
-`ci1_fork_below_high_beacon.exs`. Each ran via `mix run` from `apps/lattice_core` in
-the spike worktree. Outputs are verbatim. Both exploits named in Plan 175 step 3 reproduced, so the
-premise stands and the STOP condition "either exploit fails to reproduce" did not fire.
+All eight scratch scripts live under an agent scratchpad directory outside the repository, written
+here as `<scratchpad>/spike175/<script>.exs` because no committed path may depend on one machine's
+scratch location, and they were never committed: the five original runs `s1_seizure.exs`,
+`s2_lockout_no_recovery.exs`, `s3_lockout_with_recovery.exs`, `s4_canonical_ceiling.exs`,
+`s5_beacon_root_only.exs`, and the review-round additions `r1_epoch_ceiling.exs`,
+`r2_pruned_deps_beacon.exs` and `ci1_fork_below_high_beacon.exs`. Each ran via `mix run` from
+`apps/lattice_core` in the spike worktree. Outputs are verbatim. Both exploits named in Plan 175
+step 3 reproduced, so the premise stands and the STOP condition "either exploit fails to
+reproduce" did not fire.
 
 `Lattice.Sim` derives every realm's Ed25519 keypair from the `seed:` string, so a seed is key
 material. No seed value appears anywhere in this document, and none of the replica identifiers
@@ -680,8 +688,15 @@ For succeed, heartbeat and transfer alike.
   succession disabled.
 - What it leaves: the dormancy gate stays decorative and the 2^64-1 lockout stays reachable on
   every plain `dormant_ticks` role (Township.Matter today), so no Township succession claim may
-  grow until a build lands; policy migration remains open (ADR 0004), so a locked role cannot
-  later adopt a witnessed policy.
+  grow until a build lands. Policy migration remains open in ADR 0004, but review round ci-2
+  corrected what that means: `collect_policies/3` (`authority.ex` 492-507) merges the policies of
+  every valid root-authored genesis and later merges win, and the existing
+  `township_genesis_projection_parity` exporter scenario
+  (`apps/lattice_core/lib/mix/tasks/lattice.export_vectors.ex` 509-608) already shows a second root
+  genesis replacing the first policy, so it is not true that a role's policy is fixed at creation.
+  What is unreproduced here is whether a witnessed recovery policy added by a later root genesis
+  rescues an **already pinned** role; what is certain is that no root genesis, and therefore no such
+  repair, is possible once the founder key is gone.
 - Decisions 2, 3, 5 and 6: unchanged from today (no beacons required, `dormant_ticks` keeps its
   unit and its decorative meaning, no lockout repair, no parity work).
 - Decision 4: D settles nothing about it, and blocks nothing. AF-2 is about who may advance the
@@ -724,12 +739,19 @@ delegation and advance the beacon." Today it fails by design (Plan 158 line 56-6
 2. **A witness set with threshold pinned at genesis.** A genesis beacon policy names distinct
    witness keys and a threshold; a beacon body variant carries a domain-separated threshold
    certificate binding the claim to this replica and this epoch, and is honored with the same
-   monotonicity and quarantine reasons as a root beacon. This is the candidate proposed for testing
-   post-founder-loss beacon advancement. It claims nothing until Plan 179's founder-removed Sim
-   test is green and merged; no design argument on this page is evidence that founder loss is
-   survived. It is not key rotation or recovery: the root key stays dead, nothing is re-signed, no
-   new root-equivalent authority is minted, so it is inside the beta boundary provided the operator
-   accepts a new body variant of the existing `:authority` kind (Plan 177's "no new op kinds"
+   monotonicity and quarantine reasons as a root beacon. "Pinned at genesis" names the authority,
+   not a one-shot moment: the policy is conferred only by a genesis op authored by the replica root,
+   which `collect_policies/3` (`authority.ex` 492-507) already lets the root reissue, merging every
+   valid root-authored genesis so a later one may add or replace the entry, while no witness, holder
+   or member can change it and no root genesis is possible at all once the founder key is gone
+   (review round ci-2; the existing `township_genesis_projection_parity` exporter scenario at
+   `apps/lattice_core/lib/mix/tasks/lattice.export_vectors.ex` 509-608 is the demonstration).
+   This is the candidate proposed for testing post-founder-loss beacon advancement. It claims
+   nothing until Plan 179's founder-removed Sim test is green and merged; no design argument on
+   this page is evidence that founder loss is survived. It is not key rotation or recovery: the
+   root key stays dead, nothing is re-signed, no new root-equivalent authority is minted, so it is
+   inside the beta boundary provided the operator accepts a new body variant of the existing
+   `:authority` kind (Plan 177's "no new op kinds"
    non-goal is respected: same kind, new body). It is the same governance shape Treehouse already
    pins for succession, so it composes with the frozen contract. It follows the
    [`SuccessionCertificate`](../../apps/lattice_core/lib/lattice/authority/succession_certificate.ex)
@@ -768,11 +790,11 @@ The response, pinned here so Plan 179 does not have to choose, is **two** bounds
 judge's policy layer for the witnessed body variant. Review round 2 found that a single per-step
 bound is not enough, for two separate reasons. Review round ci-1 added the distinction the first
 draft blurred: the two bounds are not the same kind of thing. `max_epoch_step` is a **genesis-pinned
-policy field**, the fifth and last key of the beacon policy, chosen per replica at creation time.
-The absolute horizon is a **fixed protocol constant**, a module attribute on the BEAM mirrored by an
-exported `const` in TypeScript, identical for every replica, not configurable, and not expressible
-at genesis: a beacon policy carrying a sixth key, including one attempting to pin its own horizon,
-fails closed. Nothing in the log can raise or lower the horizon.
+policy field**, the fifth and last key of the beacon policy, chosen per replica by the root in a
+genesis op. The absolute horizon is a **fixed protocol constant**, a module attribute on the BEAM
+mirrored by an exported `const` in TypeScript, identical for every replica, not configurable, and
+not expressible at genesis: a beacon policy carrying a sixth key, including one attempting to pin
+its own horizon, fails closed. Nothing in the log can raise or lower the horizon.
 
 First, a per-step bound that admits any positive value is vacuous. `Lattice.Canonical.max_integer/0`
 is positive, so a genesis pinning `max_epoch_step` at `2^64-1` would validate and one witnessed
@@ -1013,11 +1035,21 @@ sentence updated by its own plan after (a) to (d) are green, never before.
    every founder-issued delegation is irrevocable under `revoke_authorized?/4`, so the clause
    covers only delegations whose issuer survives, plus leased founder grants that a witnessed
    epoch can lapse (section 8.3).
-5. **How is an existing 2^64-1 lockout repaired?** It is not. No option is retroactive. A role
-   with a plain `dormant_ticks` policy and no recovery policy that has been pinned is unrecoverable
-   via the legacy path for the life of the replica, and because policy migration is still open
-   (ADR 0004) it cannot adopt a witnessed policy afterwards. Say so plainly; do not build around it.
-   The only exits are a voluntary transfer by the pinning holder or a new replica.
+5. **How is an existing 2^64-1 lockout repaired?** Not by any option here; none of A, B, C or D is
+   retroactive. A role with a plain `dormant_ticks` policy and no recovery policy that has been
+   pinned is unrecoverable via the legacy path for the life of the replica. Review round ci-2
+   removed a wrong second half of this answer: it previously said the role "cannot adopt a witnessed
+   policy afterwards" because policy migration is open. The live fold says otherwise.
+   `collect_policies/3` (`authority.ex` 492-507) merges the policies of every valid root-authored
+   genesis, later merges win, and `township_genesis_projection_parity`
+   (`apps/lattice_core/lib/mix/tasks/lattice.export_vectors.ex` 509-608) demonstrates a second root
+   genesis replacing the first policy. So a live root key can replace a role's policy, and whether
+   doing so rescues an already pinned role is an open question this spike did not reproduce: the
+   witnessed arm of `decide_succession_proof/7` never consults dormancy (section 6.3), but that was
+   reproduced with the recovery policy present at genesis, not added later. Say the certain part
+   plainly: the legacy path itself offers no repair, its known exits are a voluntary transfer by the
+   pinning holder or a new replica, and once the founder key is gone no policy replacement is
+   possible at all. Do not build around it.
    The same ceiling exists on the beacon epoch and section 6.6 reproduces it: one beacon at
    `2^64-1` lapses every expiring lease, makes every later lease dead on arrival unless it expires
    at exactly the ceiling, and renders every subsequent beacon `:stale_beacon` forever, since
@@ -1031,9 +1063,14 @@ sentence updated by its own plan after (a) to (d) are green, never before.
    exact today (section 4 records the one range caveat: TypeScript stops at 2^53-1 where the BEAM
    accepts 2^64-1, which is deferred format work, not a rule divergence). For Plan 179's witnessed
    beacon: `collect_beacons/3` and `classify_beacon/6` in `authority.ex` plus `collectBeacons` in
-   `authority.ts` gain a witnessed arm, the policy decoders in `carrier.ts` (1684-1693) and
-   `township.ts` gain the beacon policy, the beacon body decoder in `carrier.ts` (1496-1511) and
-   the `AuthorityEvidence` beacon arm in `op.ts` (line 124) gain the certificate,
+   `authority.ts` gain a witnessed arm, the policy **decoder** in `carrier.ts` (1684-1693) and the
+   production policy **encoder** and its authoring type in `township.ts` (381-397 and 40-43, reached
+   from `authorTownshipGenesis` at 210) gain the beacon policy, `codec.ts` gains an exported
+   beacon-claim canonical-bytes function beside the succession one at 206-221 because that
+   function's separator, claim shape and encoders are fixed and private (both added in review round
+   ci-2, so a TypeScript client can author a witness set rather than only replay one, and so the
+   claim preimage is not reimplemented in `authority.ts`), the beacon body decoder in `carrier.ts`
+   (1496-1511) and the `AuthorityEvidence` beacon arm in `op.ts` (line 124) gain the certificate,
    `Lattice.Log.known_dump_policy_atoms/0` (`log.ex` 276-302) gains every new policy and
    certificate atom or `Log.restore/1` fails `:unsafe_dump` on a freshly booted VM, `conformance.ts`
    gains the new vectors, and the change lands in one parity-atomic PR with regenerated vectors,
@@ -1091,9 +1128,16 @@ bound to the op's `author` and `deps` per 8.2; honored by
 `collect_beacons/3` and `collectBeacons` with the same `:unauthorized_beacon` and `:stale_beacon`
 reasons; root-only kept as the default; delegated beacon power rejected; an AF-2 Sim test that
 removes the founder and still admits, revokes and advances, with a witness-partition and heal case;
-the two claim-boundary documents ADR 0004 and `docs/lattice_poc_status.md` updated per the Plan 145
-precedent; and regenerated vectors in one parity-atomic PR. Effort L, risk HIGH, dependencies Plans
-145, 149, 162, 177 and 178. STOP conditions: any change to `Lattice.Canonical`'s integer bound; any
+parity proved in both directions rather than only by BEAM-generated vectors, which means the
+TypeScript **authoring** path is in scope too (the `township.ts` genesis policy encoder and its
+type, an exported beacon-claim canonical-bytes function in `codec.ts`, and the
+`test/township_authoring.ts` gate) with a canonical payload parity assertion that BEAM bytes equal
+TypeScript bytes; the compaction GATE extended with a witnessed beacon and a lease whose
+`expires_epoch` straddles the frontier, because the GATE as it stands names no beacon or lease at
+all and so cannot go red; the two claim-boundary documents ADR 0004 and
+`docs/lattice_poc_status.md` updated per the Plan 145 precedent; and regenerated vectors in one
+parity-atomic PR. Effort L, risk HIGH, dependencies Plans 145, 149, 162, 177 and 178. STOP
+conditions: any change to `Lattice.Canonical`'s integer bound; any
 change to the three Plan 162 succession vectors, to `township_beacon_unauthorized.json` or to the
 four lease vectors; any witness-minted top-level grant or genesis re-signing (M3); conformance
 divergence; any doc sentence claiming founder loss is survived before the AF-2 test is green and
