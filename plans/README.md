@@ -214,10 +214,11 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 172 | TypeScript canonical-encoder strictness (duplicate terms, non-canonical base64) | P1 | S–M | — | TODO (Round 5) |
 | 173 | Bounded carrier transport: connect deadlines + paged pulls | P1 | M–L | 169 | TODO (Round 5b) |
 | 174 | **(spike)** What the governance-witness ceremony must prove natively | P1 | M (build: L) | — | TODO (Round 5b) |
-| 175 | **(spike)** How succession gets a trustworthy clock | P1 | M (build: L) | 162 step 2b (pending) | TODO (Round 5b) |
+| 175 | **(spike)** How succession gets a trustworthy clock | P1 | M (build: L) | 162 step 2b (done) | DONE (2026-09-03; decision in docs/research/succession_tick_provenance.md; follow-on plan 179) |
 | 176 | Fail closed at the wire/authority boundary: lease range, decode depth, replica marker, op kinds | P1 | M | 161 (rec.), 168, 172, 173 | TODO (Round 5; renumbered from 168 — AUTHZ-02 ceded to plan 162 step 2b(e)) |
 | 177 | Group-first antifragile re-aim: operator decisions, AF-1..AF-3 loss gates, program reorder | **P0** | M | 158, 175 | TODO (draft 2026-09-01; AF-1 relay-reseed test landed with this plan) |
 | 178 | Treehouse Contract Correction: frozen text-only beta contract, one-pager claims corrected to D1/AF-2, copy pinned by test | **P0** | S | 158, 177 | DONE (2026-09-03; lands with apps/lattice_core/test/treehouse/contract_test.exs) |
+| 179 | Witnessed beacons pinned at genesis (AF-2 founder-loss clock) | P1 | S then L | 145, 149, 162, 177, 178 | TODO (2026-09-03; from the Plan 175 spike decision; step 1 is a separate S documentation PR that merges before the build) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

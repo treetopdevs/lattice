@@ -58,6 +58,33 @@ written for history; where they conflict with this amendment, the amendment wins
   control proves only a strictly smaller served set, missing ops enumerable against the oracle and a
   frontier behind, with no divergence-reporting path). AF-2 fails by design (beacons are root-only per Plan 149; witnessed recovery in ADR 0004 covers a
   role, not the root; rotation is M3) and its decision is routed into Plan 175. AF-3 has no path.
+- **AF-2 decision (2026-09-03).** The Plan 175 spike concluded: leave the legacy self-asserted
+  succession tick frozen and characterized, and spend the build budget on a witness set with a
+  threshold pinned at genesis, proposed to test post-founder-loss beacon advancement, opened as
+  `plans/179-witnessed-beacons-af2-founder-loss.md` (effort L, risk HIGH). Founder loss is still
+  not survived: root-only beacons remain the default and AF-2 fails until Plan 179's Sim test is
+  green and merged, so the frozen contract sentence stands.
+- **What that decision hands the witness set, recorded before the build.** Epoch advancement is the
+  sole driver of Plan 149 lease lapse, so a beacon emitter can expire every expiring delegation on
+  the replica, and one beacon at the canonical integer ceiling does it permanently while stopping
+  the clock for every op that carries that beacon in its causal ancestry. Read that scope exactly:
+  the lockout is descendant scoped, not replica wide, because the judge computes `prior_max` over
+  the candidate beacon's own ancestry, so a later beacon whose `deps` fork from before the high one
+  is still honored at a lower epoch on every replica (decision record sections 6.8 and 8.1). Only
+  the founder's root key can do this today. Plan 179
+  widens it to any threshold subset of the pinned witnesses and therefore carries two bounds on the
+  witnessed epoch: a per-step ceiling pinned in the genesis beacon policy, and an absolute horizon
+  fixed in both runtimes as a protocol constant, below the canonical integer ceiling and not
+  settable at genesis. Neither bound removes the power inside the step. Any Treehouse
+  surface that describes the witness set names that power in the same sentence as the grant, per
+  Plan 177 D1. Decision record: `docs/research/succession_tick_provenance.md`.
+- **What AF-2's "revoke a delegation" clause will and will not prove.** A revoke is honored only
+  from the delegation issuer or the replica root, so after founder loss every delegation the
+  founder issued is permanently irrevocable. Plan 179 proves the clause for delegations whose
+  issuer survives, plus leased founder grants that a witnessed epoch advance can lapse, and pins
+  the narrowing with a negative control. A Treehouse genesis that wants post-loss removal of a
+  founder-granted member has to lease every founder-issued grant at creation time; there is no
+  later repair. No beta surface may say founder-granted access can be revoked after founder loss.
 
 ## Destination
 
