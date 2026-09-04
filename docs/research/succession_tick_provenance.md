@@ -330,7 +330,7 @@ role exists to authorize, it took effect, and `last_active` did not move, becaus
 `last_active_from/3` maxes only over acquires and heartbeats. A visibly active holder reads as
 fully dormant.
 
-### 6.2 Lockout without a recovery policy (reproduced, permanent)
+### 6.2 Lockout without a recovery policy (reproduced; permanent on the pinned history, see 6.2a)
 
 Setup: replica `replica:township:p175-lockout`, same policy shape. Two pin variants, each
 `Sim.transfer(..., :clerk, at_tick: 18_446_744_073_709_551_615, ops: [:close_matter,
@@ -362,15 +362,94 @@ Both pin variants land, so the lockout needs no accomplice. After the pin every 
 sweeps to `:premature_succession`, including 2^64-1 itself (the gate needs `at_tick >= 2^64 + 2`),
 and 2^64 cannot be constructed at all: `Lattice.Canonical.term/1`, `Lattice.Op.new/6` and
 `Sim.succeed` each raise at authoring time, so no such op reaches the judge. With a
-`dormant_ticks` policy and no recovery policy, the legacy succession path for that role is dead
-for the life of the replica; the only exits are outside this mechanism (a voluntary transfer by the
-pinning holder, or a new replica).
+`dormant_ticks` policy and no recovery policy, the legacy succession path for that role is dead,
+for the life of the replica, on every history in which the pin is honored; the exits are a succeed
+op whose deps fork around the pin (6.2a, reproduced by Plan 179 step 1, which corrected this
+sentence from an unconditional "the only exits are outside this mechanism"), a voluntary transfer
+by the current holder, or a new replica.
 
 A harness detail worth recording rather than hiding: `Sim.transfer/5` defaults to `ops: [:lock,
 :unlock]`, which are `Lattice.Demo.Thread` commands, not `Township.Matter` commands. With the
 default both pins quarantine `:invalid_transfer` (the child delegation is not a subset of the
 genesis grant) and the pin never lands, which reads as a false negative. Naming real Matter ops
 fixes it. The first run hit exactly this.
+
+#### 6.2a The pin is fork-escapable by the designated successor (reproduced 2026-09-03, Plan 179 step 1)
+
+Plan 179 step 1 reproduced the question this section left open. `last_active_from/3`
+(`authority.ex` 989-994) reads acquires and heartbeats only from the succeed op's own causal
+ancestry, so the permanence claimed above holds only for succeed ops whose deps carry the pin
+while the fold honors it; a pin the fold quarantines, as `:double_transfer` below, is invisible to
+the gate.
+Setup: replica `replica:township:p179-fork`, realms clerk, bystander, resident, the same
+`%{successor: "resident", dormant_ticks: 3}` policy. Resident is partitioned from both other realms
+before the clerk pins with `Sim.transfer(..., "bystander", :clerk, at_tick: 2^64-1, ops:
+[:close_matter, :reopen_matter])`; resident then authors `Sim.succeed("resident", :clerk, at_tick:
+t)` on its own frontier, so the deps are the genesis only, and the partition heals. Three runs, `t`
+in `{5, 1_000_000, 2^64-1}`:
+
+```text
+fork@5: succeed deps carry the pin? false
+fork@5: on clerk: pin quarantined=false succeed quarantined=false holder="resident"
+fork@5: on bystander: pin quarantined=false succeed quarantined=false holder="resident"
+fork@5: on resident: pin quarantined=false succeed quarantined=false holder="resident"
+fork@5: byte-identical state on all three: true
+fork@5: control succeed (deps carry pin) at 2^64-1 quarantined={true, :premature_succession}
+
+fork@1000000: succeed deps carry the pin? false
+fork@1000000: on clerk: pin quarantined={true, :double_transfer} succeed quarantined=false holder="resident"
+fork@1000000: on bystander: pin quarantined={true, :double_transfer} succeed quarantined=false holder="resident"
+fork@1000000: on resident: pin quarantined={true, :double_transfer} succeed quarantined=false holder="resident"
+fork@1000000: byte-identical state on all three: true
+fork@1000000: control succeed (deps carry pin) at 2^64-1 quarantined=false
+
+fork@max: succeed deps carry the pin? false
+fork@max: on clerk: pin quarantined={true, :double_transfer} succeed quarantined=false holder="resident"
+fork@max: on bystander: pin quarantined={true, :double_transfer} succeed quarantined=false holder="resident"
+fork@max: on resident: pin quarantined={true, :double_transfer} succeed quarantined=false holder="resident"
+fork@max: byte-identical state on all three: true
+fork@max: control succeed (deps carry pin) at 2^64-1 quarantined={true, :premature_succession}
+```
+
+Every run lands the forked succeed on all three replicas with byte-identical state and resident as
+holder. Whether the pin itself survives depends on the canonical topo order between the two
+concurrent acquires, and that order is decided by their op ids, which hash author keys derived
+from the seed: which of the two cases a rerun sees is therefore seed-dependent, both occurred
+across these three runs, and the seed-independent outcomes are that the forked succeed is never
+quarantined, that resident holds on every replica, that state is byte-identical, and that the
+pin is either honored or `:double_transfer` according to that order. When the succeed sorts first, the transfer is retroactively quarantined
+`:double_transfer` because the fold's holder is already resident when it reaches the transfer
+(`decide_transfer/7`, `authority.ex` 883-885), and the only tick then gating a later succeed is
+the forked succeed's own acquire (`fork@1000000`'s control at `2^64-1` passes; `fork@max`'s control
+is `:premature_succession` because the forked succeed at `2^64-1` pinned `last_active` itself);
+when the transfer sorts first, both acquires are honored and the later one,
+the succeed, holds, and the control succeed at `2^64-1` whose deps carry the now honored pin is
+`:premature_succession` again. A second variant needs no partition: with the holder's heartbeat at tick 100
+and a real transfer to bystander at tick 200 both in the log, resident's honest succeed at tick 5
+(deps carrying both) quarantines `:premature_succession`, while the same succeed with deps pruned by
+hand to the genesis op lands on all three replicas with byte-identical state and resident as holder:
+
+```text
+heartbeat@100 quarantined=false transfer@200 quarantined=false
+honest succeed@5 (deps carry hb+transfer): quarantined={true, :premature_succession}
+pruned succeed@5 (deps=[genesis]) on clerk: quarantined=false transfer@200 quarantined=false holder="resident"
+pruned succeed@5 (deps=[genesis]) on bystander: quarantined=false transfer@200 quarantined=false holder="resident"
+pruned succeed@5 (deps=[genesis]) on resident: quarantined=false transfer@200 quarantined=false holder="resident"
+byte-identical state on all three: true
+```
+
+Two corrections to the reading above follow. The lockout binds every succeed op
+built on a history in which the pin is honored, not the role for the life of the replica; its exits
+are a succeed op that forks around the pin, a voluntary transfer by the current holder (the pinning
+author only in the self-transfer variant; after the transfer to bystander a further transfer by the
+author is `:transfer_not_holder`), or a new replica. And the
+seizure of 6.1 does not depend on the holder being quiet in the log; it depends only on the deps
+the successor chooses, because the gate reads the maximum tick over the succeed op's whole causal
+closure, so deps whose closure omits the holder's later acquires and heartbeats satisfy it whatever
+the holder has done since (a closure that carries a heartbeat at tick 100 still rejects tick 5). Decision 5 in section 9 and the "unrecoverable" column of 7.5
+read with the same qualification. Nothing here changes decision 1 (option D): the tick stays
+untrusted, the non-claim sentence stays, and Plan 179's build does not touch the dormancy
+arithmetic.
 
 ### 6.3 Lockout with a witnessed recovery policy (recovered)
 
@@ -598,7 +677,8 @@ precedent.
   would need the new DSL atom to benefit.
 - Decision 4: root-only beacons make the root a liveness dependency for succession.
 - Decision 5: no retroactive repair; a pinned `last_active` stays pinned; roles without a recovery
-  policy remain unrecoverable via the legacy path.
+  policy remain unrecoverable via the legacy path on every history that carries the honored pin
+  (6.2a: the designated successor's fork around the pin is the one legacy exit).
 - Decision 6: lockstep BEAM and TS change with regenerated vectors in one parity-atomic PR (the
   Plan 158 rule); STOP if conformance diverges.
 - Root goes quiet: no beacon after the holder's last activity means no succession can satisfy
@@ -726,6 +806,11 @@ For succeed, heartbeat and transfer alike.
 | B | yes | no at the ceiling: a root beacon at `max_integer/0` restores it (6.6). Fixed below the ceiling | unrecoverable | role freezes, heartbeats too | all tick-bearing | 0 plus new | L / HIGH |
 | C | yes | no at the ceiling, same as B | unrecoverable | role freezes, heartbeats too | 6 plus W1/W2 plus the six transfer vectors | 0 plus new | L (smallest) / HIGH |
 | D | no | no | unrecoverable | n/a | 0 | 0 | none |
+
+The "existing lockout" cells read with the 6.2a qualification added by Plan 179 step 1:
+unrecoverable on every history that carries the honored pin, and escapable by the designated
+successor's fork around it, which is a property of author-chosen deps that none of the four options
+evaluates.
 
 The B and C cells in the "future lockout" column read "yes" in the first two drafts of this
 document. That was wrong: neither option adds a ceiling below `Lattice.Canonical.max_integer/0`,
@@ -1101,7 +1186,10 @@ sentence updated by its own plan after (a) to (d) are green, never before.
    epoch can lapse (section 8.3).
 5. **How is an existing 2^64-1 lockout repaired?** Not by any option here; none of A, B, C or D is
    retroactive. A role with a plain `dormant_ticks` policy and no recovery policy that has been
-   pinned is unrecoverable via the legacy path for the life of the replica. Review round ci-2
+   pinned is unrecoverable via the legacy path, for the life of the replica, on every history that
+   carries the honored pin; under the unchanged legacy policy the designated successor's fork
+   around the pin is the one legacy exit (6.2a, Plan 179 step 1), and while the root key lives
+   policy replacement is the separate open question below. Review round ci-2
    removed a wrong second half of this answer: it previously said the role "cannot adopt a witnessed
    policy afterwards" because policy migration is open. The live fold says otherwise.
    `collect_policies/3` (`authority.ex` 492-507) merges the policies of every valid root-authored
@@ -1117,9 +1205,10 @@ sentence updated by its own plan after (a) to (d) are green, never before.
    leaves the prior valid one in force. The
    witnessed arm of `decide_succession_proof/7` never consults dormancy (section 6.3), but that was
    reproduced with the recovery policy present at genesis, not added later. Say the certain part
-   plainly: the legacy path itself offers no repair, its known exits are a voluntary transfer by the
-   pinning holder or a new replica, and once the founder key is gone no policy replacement is
-   possible at all. Do not build around it.
+   plainly: the legacy path itself offers no repair, its known exits are the designated successor's
+   fork around the honored pin (6.2a), a voluntary transfer by the current holder, or a new replica,
+   and once the founder key is gone no policy replacement is possible at all. Do not build around
+   it.
    The same ceiling exists on the beacon epoch and section 6.6 reproduces it: one beacon at
    `2^64-1` lapses every expiring lease, makes every later lease dead on arrival unless it expires
    at exactly the ceiling, and renders `:stale_beacon` every subsequent beacon carrying it in

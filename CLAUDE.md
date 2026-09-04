@@ -158,6 +158,12 @@ Use these real signatures — do not invent parallel APIs:
   (mutually exclusive); `command :name, [:args], do: [{field, mutation}]`; mutations are
   `{:write, v} | {:add, e} | {:remove, e} | {:append, v} | {:delete, id}` (absolute, never
   relative); `ephemeral` never logs; `succession :role, to:, after: {:dormant_ticks, n}`.
+- `after: {:dormant_ticks, n}` means a designated successor may claim the role once it asserts a
+  sufficiently large tick, not a time-based control. The tick is author-asserted and untrusted
+  (ADR 0004, `docs/research/succession_tick_provenance.md`), so never describe a legacy
+  succession policy as dormancy detection. The DSL line is decorative (only its role key is
+  read); the policy is whatever the genesis op's `policies:` supplies. `Township.Matter` records
+  the seizure, the `2^64-1` pin, and the fork that escapes it.
 - `Lattice.Sim`: `new/4`, `create_replica/2` (`policies:`), `grant/4` (`ops:`, and plan 149's
   `expires_epoch:` lease), `transfer/5` (also takes `expires_epoch:`), `succeed/4`, `request/4`,
   `command/5`, `beacon/3` (root-signed `{:beacon, epoch}` logical tick), `partition/3`, `heal/3`,
