@@ -151,7 +151,9 @@ One limit on the `succession` DSL, recorded by the Plan 175 spike:
 `after: {:dormant_ticks, n}` means a designated successor may claim the role once it
 asserts a sufficiently large tick, not a time-based control. Ticks are author-asserted
 and untrusted, so a legacy succession policy proves who signed the claim, not that the
-holder was dormant. See
+holder was dormant. The DSL line itself is decorative: the runtime reads only its role
+key, and the threshold applies only where the genesis op's explicit `policies:` entry
+installs a legacy `%{successor, dormant_ticks}` policy. See
 [docs/adr/0004-succession-validation.md](docs/adr/0004-succession-validation.md) and
 [docs/research/succession_tick_provenance.md](docs/research/succession_tick_provenance.md).
 

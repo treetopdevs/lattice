@@ -413,7 +413,11 @@ fork@max: control succeed (deps carry pin) at 2^64-1 quarantined={true, :prematu
 
 Every run lands the forked succeed on all three replicas with byte-identical state and resident as
 holder. Whether the pin itself survives depends on the canonical topo order between the two
-concurrent acquires: when the succeed sorts first, the transfer is retroactively quarantined
+concurrent acquires, and that order is decided by their op ids, which hash author keys derived
+from the seed: which of the two cases a rerun sees is therefore seed-dependent, both occurred
+across these three runs, and the seed-independent outcomes are that the forked succeed is never
+quarantined, that resident holds on every replica, that state is byte-identical, and that the
+pin is either honored or `:double_transfer` according to that order. When the succeed sorts first, the transfer is retroactively quarantined
 `:double_transfer` because the fold's holder is already resident when it reaches the transfer
 (`decide_transfer/7`, `authority.ex` 883-885), and the only tick then gating a later succeed is
 the forked succeed's own acquire (`fork@1000000`'s control at `2^64-1` passes; `fork@max`'s control

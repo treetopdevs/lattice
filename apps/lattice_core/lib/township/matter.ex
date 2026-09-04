@@ -33,10 +33,12 @@ defmodule Township.Matter do
   demo Thread's is. The runtime reads only its role name (`Lattice.Authority` and
   `Lattice.Sim` collect `Map.keys(__lattice_succession__())`), and `:clerk` is already
   a role through `clerk_locked?`; the `to:` and `after:` values are never consulted.
-  The policy, when there is one, is the `%{successor, dormant_ticks}` map the genesis
-  author supplies explicitly (`Lattice.Sim.create_replica/2` `policies:`); a genesis
-  created without `policies:` carries none, this line installs no default, and
-  succession is then `:unauthorized_succession`. A later valid genesis authored by the
+  The policy, when there is one, is what the genesis author supplies explicitly
+  (`Lattice.Sim.create_replica/2` `policies:`): the legacy `%{successor, dormant_ticks}`
+  shape this line mirrors, or the witnessed recovery-only `%{successor, recovery}` shape
+  with no `dormant_ticks` (a policy carrying both keys is `:invalid_recovery_policy`).
+  A genesis created without `policies:` carries none, this line installs no default,
+  and succession is then `:unauthorized_succession`. A later valid genesis authored by the
   replica root may add or replace the policy (`Lattice.Authority.collect_policies/3`
   merges every valid root genesis, later wins); holding, succeeding to or being admitted
   to a role confers no power to change it, only the root key does.
