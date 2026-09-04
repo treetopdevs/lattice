@@ -111,9 +111,14 @@ integer ranges differ. The BEAM admits any tick or epoch up to `Lattice.Canonica
 (2^64-1); TypeScript stops at `Number.MAX_SAFE_INTEGER` (2^53-1), enforced in
 [`carrier.ts`](../../clients/lattice-client/src/carrier.ts) by `integerValue` 1640-1642, by
 `nonNegativeInteger` 1870-1871 (which gates the `dormant_ticks` policy decode at 1693 and the
-`at_tick` decode at 1712), by the beacon body decode at 1500-1511 (a non-safe epoch decodes to
-`null`), and by `parseCarrierInteger` near 2119-2131. A larger value therefore fails the decode
-closed as a malformed carrier op rather than diverging silently. `plans/README.md` lines 939-946
+`at_tick` decode at 1712), by the beacon body decode at 1500-1511 (a non-integer epoch term decodes
+to `null`), and, before either of those, by `parseCarrierInteger` at 2117-2133. The ordering matters
+and review round ci-3 corrected an earlier reading of it: `parseCarrierInteger` throws while
+`decodeCarrierTerm` is still running, so the two term-level guards above never see an out-of-range
+integer at all. `carrierOpToSemanticOp` catches that throw at 1215-1219 and marks the **whole op**
+`structuralError: "malformed_term"`, which `materialize.ts` 136-138 records as the quarantine
+reason. A larger value therefore fails the decode closed as a malformed carrier op rather than
+diverging silently. `plans/README.md` lines 939-946
 already records this as deferred format work, and this spike does not reopen it: closing it means
 either an explicit cross-runtime bound or carrying `bigint` through authority semantics, and a
 cross-runtime bound below 2^64-1 would be a change to what `Lattice.Canonical` admits, which is a
@@ -613,8 +618,9 @@ dormancy counts epochs.
   What B removes is the holder's ability to do it unilaterally: the ceiling lockout becomes
   reachable only with root cooperation, and a root beacon at the ceiling is already terminal for
   every expiring lease and for the clock itself. Removing it outright needs a separate safe ceiling
-  or horizon below `max_integer/0`, which is the same policy-layer device section 8.1 pins for the
-  witnessed branch, not a consequence of epoch-valued ticks. Still not an absence proof and still
+  or horizon below `max_integer/0`, which is the same bounding device section 8.1 pins for the
+  witnessed branch (and which lives above `Lattice.Canonical`, in the judge or the structural layer,
+  never in a genesis field), not a consequence of epoch-valued ticks. Still not an absence proof and still
   root-liveness dependent.
 - Cost: the largest semantic change. Bodies keep their integer slot (no canonical change) but the
   integer's meaning changes, so every tick-bearing vector and test changes unless the semantics
@@ -696,7 +702,10 @@ For succeed, heartbeat and transfer alike.
   genesis replacing the first policy, so it is not true that a role's policy is fixed at creation.
   What is unreproduced here is whether a witnessed recovery policy added by a later root genesis
   rescues an **already pinned** role; what is certain is that no root genesis, and therefore no such
-  repair, is possible once the founder key is gone.
+  repair, is possible once the founder key is gone. Note the scope of that merged map, per review
+  round ci-3: it is the replica's current policy map, which is what the role timelines read, and it
+  is deliberately not what Plan 179's beacon judge reads, since that judge resolves the beacon policy
+  from each candidate beacon's own ancestry instead (section 8).
 - Decisions 2, 3, 5 and 6: unchanged from today (no beacons required, `dormant_ticks` keeps its
   unit and its decorative meaning, no lockout repair, no parity work).
 - Decision 4: D settles nothing about it, and blocks nothing. AF-2 is about who may advance the
@@ -719,8 +728,9 @@ document. That was wrong: neither option adds a ceiling below `Lattice.Canonical
 and section 6.6 shows a root beacon at that value is honored, so both leave the ceiling lockout
 reachable with root cooperation. They narrow the actor set from "the holder alone" to "the holder
 plus a root beacon at the ceiling", which is a real improvement and is not what "fixed" means. A
-genuine fix needs the separate safe ceiling or horizon of section 8.1, and that device is
-policy-layer only, so it is compatible with the `Lattice.Canonical` STOP condition.
+genuine fix needs the separate safe ceiling or horizon of section 8.1, and that device sits above
+`Lattice.Canonical` (in the beacon judge, or in the structural layer that runs before it), so it is
+compatible with the `Lattice.Canonical` STOP condition.
 
 The strict vector counts also carry the six transfer-tick vectors added to section 5.2 in review
 round 2. The repair columns only matter for roles that use plain `dormant_ticks`, which the
@@ -746,6 +756,15 @@ delegation and advance the beacon." Today it fails by design (Plan 158 line 56-6
    or member can change it and no root genesis is possible at all once the founder key is gone
    (review round ci-2; the existing `township_genesis_projection_parity` exporter scenario at
    `apps/lattice_core/lib/mix/tasks/lattice.export_vectors.ex` 509-608 is the demonstration).
+   Review round ci-3 added the consequence for the judge, because that global fold is not what a
+   beacon may be judged against: `collect_policies/3` merges every valid genesis in the whole
+   topological order with no ancestry filter and merges before validating, so handing its result to
+   the beacon judge would judge a beacon that predates a replacement, or forks around it, under the
+   final policy, and would let an invalid replacement overwrite a prior valid value. Plan 179
+   therefore resolves the beacon policy per candidate beacon, as the latest **valid** `:__beacon__`
+   among the genesis ops in that candidate's own causal ancestry, folded in the shared topological
+   order and validated before each replacement. The global fold is unchanged and keeps feeding every
+   role timeline; the ancestry-scoped resolution is a beacon-judge concern only.
    This is the candidate proposed for testing post-founder-loss beacon advancement. It claims
    nothing until Plan 179's founder-removed Sim test is green and merged; no design argument on
    this page is evidence that founder loss is survived. It is not key rotation or recovery: the
@@ -792,9 +811,10 @@ bound is not enough, for two separate reasons. Review round ci-1 added the disti
 draft blurred: the two bounds are not the same kind of thing. `max_epoch_step` is a **genesis-pinned
 policy field**, the fifth and last key of the beacon policy, chosen per replica by the root in a
 genesis op. The absolute horizon is a **fixed protocol constant**, a module attribute on the BEAM
-mirrored by an exported `const` in TypeScript, identical for every replica, not configurable, and
-not expressible at genesis: a beacon policy carrying a sixth key, including one attempting to pin
-its own horizon, fails closed. Nothing in the log can raise or lower the horizon.
+mirrored by an exported `const` in TypeScript whose value is `Number.MAX_SAFE_INTEGER`, identical
+for every replica, not configurable, and not expressible at genesis: a beacon policy carrying a
+sixth key, including one attempting to pin its own horizon, fails closed. Nothing in the log can
+raise or lower the horizon.
 
 First, a per-step bound that admits any positive value is vacuous. `Lattice.Canonical.max_integer/0`
 is positive, so a genesis pinning `max_epoch_step` at `2^64-1` would validate and one witnessed
@@ -808,12 +828,36 @@ the ceiling stays reachable in principle after enough steps. Plan 179 therefore 
 absolute witnessed-epoch horizon at `9_007_199_254_740_991` (`2^53-1`), above which a witnessed
 beacon is refused regardless of the step. That number is deliberate: it is
 `Number.MAX_SAFE_INTEGER`, so on the witnessed branch the two runtimes accept exactly the same
-range. Without it, `max_epoch_step` and the witnessed epoch could both take BEAM-honored values
-above `2^53-1` that TypeScript's decoders (`carrier.ts` `nonNegativeInteger` and the beacon body
-decode) refuse, and no vector would ever expose the divergence, because the exporter never emits
-such a value. This is a policy-layer rule about one new body variant, not a bound on what
+range.
+
+The two bounds are enforced at two different layers, and review round ci-3 pinned which, because an
+earlier draft of this paragraph put both in one layer and cited the wrong TypeScript sites.
+`max_epoch_step` is a value the beacon judge reads from the resolved beacon policy, and an epoch
+above `prior_max + max_epoch_step` is `:unauthorized_beacon`. The horizon is not read from anywhere:
+it is a compiled-in constant, and an epoch above it, in the witnessed beacon body or in its
+certificate claim, is refused **structurally, before the judge runs**, with the reason
+`:malformed_term` in both runtimes. That is the only contract the two runtimes can actually both
+reach. In TypeScript an integer term above `Number.MAX_SAFE_INTEGER` already throws inside
+`parseCarrierInteger` ([`carrier.ts`](../../clients/lattice-client/src/carrier.ts) 2117-2133) while
+`decodeCarrierTerm` is still running, so `carrierOpToSemanticOp` marks the whole op
+`structuralError: "malformed_term"` (1215-1219) and
+[`materialize.ts`](../../clients/lattice-client/src/materialize.ts) 136-138 writes that reason over
+any authority reason; `collectBeacons` never sees the op, because it carries no beacon evidence to
+match. The BEAM has the mirror machinery already, and the comment above `malformed_tick_ops/1`
+([`authority.ex`](../../apps/lattice_core/lib/lattice/authority.ex) 470-487) states the rule in the
+same terms: the TypeScript decoder refuses a non-canonical integer before it consults any schema, so
+the BEAM must quarantine `:malformed_term` structurally or the two runtimes diverge. Plan 179
+therefore extends that existing fold with a clause for the witnessed body rather than adding a
+horizon check inside the judge, and it widens no TypeScript decoder to carry a value no honored op
+may hold. An earlier draft cited `nonNegativeInteger` (1870-1871) and the beacon body decode
+(1500-1511) as the refusing sites; both read an already decoded term, so neither ever sees such a
+value. Without the horizon, `max_epoch_step` and the witnessed epoch could both take BEAM-honored
+values that TypeScript refuses as a malformed carrier op, and no vector would expose the divergence
+because the exporter emits no such value today; Plan 179 adds one that does,
+`township_beacon_witnessed_horizon`. This is a rule about one new body variant, not a bound on what
 `Lattice.Canonical` admits, so it does not touch the Plan 175 STOP condition and it does not close
-section 4's general format question, which stays open and deferred for every other integer.
+section 4's general format question, which stays open and deferred for every other integer,
+including the root beacon body, whose range gap this changes nothing about.
 
 Three residual facts belong here rather than in a footnote, because an earlier draft of this
 paragraph overstated the protection.
@@ -824,9 +868,17 @@ paragraph overstated the protection.
   beacon is honored and there is no per-beacon veto anyone can exercise. The only protections are
   the arithmetic (with the horizon, the ceiling is unreachable on the witnessed branch at any step
   size) and the visibility of the sequence in the log.
-- **The horizon is reachable, just bounded.** At the maximum pinned step it takes on the order of
-  `1.4e11` successive threshold-signed beacons to exhaust it. That is a number, not an
-  impossibility, and when it is exhausted the witnessed clock stops for the life of the replica.
+- **The horizon is reachable, just bounded, and exhausting it is descendant scoped too.** At the
+  maximum pinned step it takes on the order of `1.4e11` successive threshold-signed beacons to
+  exhaust it. That is a number, not an impossibility. Review round ci-3 narrowed what happens next:
+  an earlier draft said the witnessed clock then stops for the life of the replica, and that is
+  wider than the rule, for exactly the reason the root case below is. `classify_beacon/6` computes
+  `prior_max` over the candidate op's own ancestry, so once a witnessed beacon is honored at
+  `2^53-1`, advancement ends **for every op that carries that beacon in its ancestry**, while a
+  witnessed beacon whose `deps` fork from before it sees a lower `prior_max` and is honored at a
+  lower epoch, on every replica, exactly as section 6.8 reproduces for a high root beacon. The
+  witness set can legitimately sign a certificate over those forked deps, since it signs the `deps`
+  the author proposes. Plan 179 carries this as the second arm of its fork test.
 - **The root can still stop the witnessed clock on the history that carries it.** The root branch
   keeps today's bytes and today's unbounded behaviour, or `township_beacon_unauthorized.json` and
   the four lease vectors move. So a root beacon above the horizon, or at the canonical ceiling,
@@ -845,8 +897,10 @@ paragraph overstated the protection.
 Within the step bound the witness threshold still lapses every lease whose `expires_epoch` sits
 below `prior_max + max_epoch_step`. The bound limits the reach of one beacon; it does not remove
 the revocation power, and the product surface still has to say so in the same sentence as the
-grant. Both bounds live in the genesis policy layer, never in `Lattice.Canonical`, which stays
-frozen under the Plan 175 STOP condition.
+grant. Neither bound is a log-configurable genesis field: the step is a policy value the beacon
+judge reads, the horizon is a compiled-in constant enforced in the structural layer that runs before
+the judge, and a genesis carrying a sixth key that tries to pin its own horizon fails closed.
+`Lattice.Canonical` is untouched either way and stays frozen under the Plan 175 STOP condition.
 
 ### 8.2 Two threshold subsets under partition, and what "the prior beacon" means
 
@@ -1020,13 +1074,17 @@ sentence updated by its own plan after (a) to (d) are green, never before.
    Frequency is a policy question for the beacon holder and is not fixed here. A beacon confers no
    operation authority and no role, but section 6.6 and 8.1 correct the rest of that sentence: epoch
    advancement lapses every expiring lease on the replica, so it is a revocation power, and at the
-   canonical ceiling it is a permanent one that also stops the clock for the life of the replica.
+   canonical ceiling it is a permanent one that also stops the clock on every history that carries
+   that beacon in ancestry (section 6.8 shows the lockout is descendant scoped, not replica wide).
    Plan 179 therefore pins two bounds on the witnessed branch, not one, and they differ in kind: a
    genesis-pinned policy field `max_epoch_step` constrained to `1..65_535`, so a policy admitting
    `max_integer/0` cannot validate and make the bound vacuous, and an absolute witnessed-epoch
    horizon at `9_007_199_254_740_991` (`2^53-1`) that is a fixed protocol constant in both runtimes
    rather than a policy field, so accumulated steps cannot reach the canonical ceiling and the two
-   runtimes accept the same range on the witnessed branch. Neither bound removes the revocation power inside the step, so the product
+   runtimes accept the same range on the witnessed branch. They also enforce the two bounds at two
+   layers, which review round ci-3 pinned: the step in the beacon judge as `:unauthorized_beacon`,
+   the horizon structurally before the judge as `:malformed_term`, which is the verdict TypeScript
+   already produces for such a term and so the contract neither runtime can drift from. Neither bound removes the revocation power inside the step, so the product
    surface must still say in the same words as the grant that a threshold of witnesses may expire
    every leased delegation whose `expires_epoch` is below the next admissible epoch. Section 8.1
    records the three residuals: no mechanism quarantines a valid witnessed beacon, the horizon is
@@ -1044,7 +1102,13 @@ sentence updated by its own plan after (a) to (d) are green, never before.
    genesis, later merges win, and `township_genesis_projection_parity`
    (`apps/lattice_core/lib/mix/tasks/lattice.export_vectors.ex` 509-608) demonstrates a second root
    genesis replacing the first policy. So a live root key can replace a role's policy, and whether
-   doing so rescues an already pinned role is an open question this spike did not reproduce: the
+   doing so rescues an already pinned role is an open question this spike did not reproduce. What
+   that fold is, exactly, matters for Plan 179 and review round ci-3 pinned it: the merge is global
+   and unvalidated, over every valid root genesis in topological order, so it answers "what is the
+   replica's current policy map" and nothing else. Plan 179's beacon judge does not read it; it
+   resolves the latest **valid** `:__beacon__` in each candidate beacon's own ancestry, so a beacon
+   that predates a replacement or forks around it keeps the earlier policy and an invalid replacement
+   leaves the prior valid one in force. The
    witnessed arm of `decide_succession_proof/7` never consults dormancy (section 6.3), but that was
    reproduced with the recovery policy present at genesis, not added later. Say the certain part
    plainly: the legacy path itself offers no repair, its known exits are a voluntary transfer by the
@@ -1052,8 +1116,8 @@ sentence updated by its own plan after (a) to (d) are green, never before.
    possible at all. Do not build around it.
    The same ceiling exists on the beacon epoch and section 6.6 reproduces it: one beacon at
    `2^64-1` lapses every expiring lease, makes every later lease dead on arrival unless it expires
-   at exactly the ceiling, and renders every subsequent beacon `:stale_beacon` forever, since
-   `2^64` cannot be authored. That variant is likewise unrepairable after the fact and likewise
+   at exactly the ceiling, and renders `:stale_beacon` every subsequent beacon carrying it in
+   ancestry, since `2^64` cannot be authored (section 6.8: descendant scoped, not replica wide). That variant is likewise unrepairable after the fact and likewise
    out of reach of any fix that respects the `Lattice.Canonical` STOP condition. The difference is
    who can reach it: root-only today, which adds no power the root lacks, versus any threshold
    witness subset under Plan 179, which is why 8.1 pins two bounds on the witnessed branch, the
@@ -1063,7 +1127,9 @@ sentence updated by its own plan after (a) to (d) are green, never before.
    exact today (section 4 records the one range caveat: TypeScript stops at 2^53-1 where the BEAM
    accepts 2^64-1, which is deferred format work, not a rule divergence). For Plan 179's witnessed
    beacon: `collect_beacons/3` and `classify_beacon/6` in `authority.ex` plus `collectBeacons` in
-   `authority.ts` gain a witnessed arm, the policy **decoder** in `carrier.ts` (1684-1693) and the
+   `authority.ts` gain a witnessed arm (`collect_beacons/3` becoming `collect_beacons/4`, whose new
+   argument is the ordered beacon-policy sources rather than one merged policy, so each candidate
+   beacon is judged under the policy in force at its own causal position), the policy **decoder** in `carrier.ts` (1684-1693) and the
    production policy **encoder** and its authoring type in `township.ts` (381-397 and 40-43, reached
    from `authorTownshipGenesis` at 210) gain the beacon policy, `codec.ts` gains an exported
    beacon-claim canonical-bytes function beside the succession one at 206-221 because that
@@ -1120,13 +1186,14 @@ own README row because this spike may add exactly one row to `plans/README.md`. 
 Piece two is the build, because decision 4 needs code and Plan 177 requires "its follow-on build
 plan" for AF-2: a genesis beacon policy (distinct witness keys, threshold, version, and the
 genesis-pinned `1..65_535` `max_epoch_step` from 8.1, with the `2^53-1` horizon a fixed protocol
-constant rather than a sixth policy key) under a reserved policy key validated by its own shape and
-no schema context, so that `analyze/2` and the live-path `expired?/2` reach the identical policy
-from the same log; a witnessed beacon body variant of the existing `:authority` kind, the
+constant rather than a sixth policy key, and enforced structurally rather than in the judge) under a
+reserved policy key validated by its own shape and no schema context, so that `analyze/2` and the
+live-path `expired?/2` build the identical beacon-policy sources from the same log and resolve the
+identical policy for every op; a witnessed beacon body variant of the existing `:authority` kind, the
 three-element `{:beacon, epoch, certificate}`, carrying a domain-separated threshold certificate
 bound to the op's `author` and `deps` per 8.2; honored by
-`collect_beacons/3` and `collectBeacons` with the same `:unauthorized_beacon` and `:stale_beacon`
-reasons; root-only kept as the default; delegated beacon power rejected; an AF-2 Sim test that
+`collect_beacons/4` and `collectBeacons` with the same `:unauthorized_beacon` and `:stale_beacon`
+reasons, and the same structural `:malformed_term` verdict above the horizon; root-only kept as the default; delegated beacon power rejected; an AF-2 Sim test that
 removes the founder and still admits, revokes and advances, with a witness-partition and heal case;
 parity proved in both directions rather than only by BEAM-generated vectors, which means the
 TypeScript **authoring** path is in scope too (the `township.ts` genesis policy encoder and its
@@ -1183,7 +1250,9 @@ merged.
   them. The epoch bounds Plan 179 pins are arithmetic, not a veto, the `2^53-1` horizon is
   reachable in principle after roughly `1.4e11` maximum-size steps rather than unreachable, and the
   unbounded root branch can still stop the witnessed clock on every op that carries its high beacon
-  in ancestry, though not on a fork whose deps exclude it (section 8.1).
+  in ancestry, though not on a fork whose deps exclude it. The same scoping applies once the
+  witnessed branch itself reaches the horizon: advancement ends for that beacon's descendants, not
+  for the life of the replica (section 8.1).
 - No claim that a witnessed certificate is usable in exactly one operation. Section 8.2 withdraws
   that sentence from an earlier draft. Binding the claim to `(version, replica, epoch, author,
   deps)` stops a certificate being moved to a different author or a different ancestry; it does not

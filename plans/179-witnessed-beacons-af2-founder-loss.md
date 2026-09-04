@@ -386,8 +386,10 @@ Everything in the `CLAUDE.md` boundary, and specifically:
   threshold subset of the pinned witnesses gains mass lease revocation, and
   `docs/research/succession_tick_provenance.md` section 6.6 reproduces the worst case, one beacon
   at `2^64-1` that lapses every expiring lease, makes every later lease dead on arrival unless it
-  expires at exactly the ceiling, and renders every subsequent beacon `:stale_beacon` for the life
-  of the replica because `2^64` cannot be authored. Step 3 must therefore carry **both** bounds, the
+  expires at exactly the ceiling, and renders `:stale_beacon` every subsequent beacon that carries it
+  in ancestry, because `2^64` cannot be authored. Read that scope exactly: spike section 6.8
+  reproduces a beacon on deps that fork from before the high one still being honored, so the lockout
+  is descendant scoped rather than replica wide, on the witnessed branch as well as the root one. Step 3 must therefore carry **both** bounds, the
   genesis-pinned per-step `max_epoch_step` policy field and the absolute `2^53-1` horizon that is a
   fixed protocol constant rather than a policy field, and any product surface describing
   the witness set must say in the same sentence as the grant that a threshold of witnesses can
@@ -595,16 +597,24 @@ both genesis ops stay unquarantined while a third genesis from a non-root realm 
 - A later valid root-authored genesis **may** add `:__beacon__` where there was none, and **may**
   replace an existing `:__beacon__` with a different witness set, threshold, version or
   `max_epoch_step`. The replacement is validated by exactly the same five-key shape as an initial
-  one, and an invalid replacement is discarded under the "what ignored means" rule above, leaving
-  the previously merged policy in place rather than quarantining the genesis.
+  one **before** it replaces anything, and an invalid replacement is discarded under the "what
+  ignored means" rule above, leaving the previously resolved valid policy in force rather than
+  overwriting it and rather than quarantining the genesis. Validate first, then replace; the beacon
+  judge must never take a value it has not validated, which is one of the two reasons step 3 does
+  not accept a pre-merged policy map.
 - A witness can never change it. Policy is conferred only by a genesis op whose author is the
   replica root; `validate_rootless_delegation/4` and the `op.author == audience` guard are what make
   a forged genesis confer nothing, and that path is unchanged here.
 - The replacement takes effect **from that genesis op's causal position**, under the same
   descendant-scoped reading the rest of this plan uses: a witnessed beacon is judged against the
-  policy merged from the genesis ops in its own ancestry, so an op that does not carry the second
-  genesis in its ancestry is still judged under the first policy, and two concurrent replacements
-  converge because the fold is over the topological order every replica shares.
+  latest valid `:__beacon__` resolved from the genesis ops in **its own** ancestry, so a beacon that
+  predates the second genesis, or forks around it, is still judged under the first policy, and two
+  concurrent replacements resolve identically on every replica because the fold walks the shared
+  topological order. Step 3 pins the resolution, and it is a beacon-judge fold that is **not** the
+  global `collect_policies/3` merge: that global merge stays exactly as it is at 492-507 and keeps
+  feeding the role timelines unchanged. Handing the beacon judge the globally merged map would judge
+  a pre-replacement or forked beacon under the final policy, which is the bug this bullet exists to
+  prevent.
 - After founder loss the policy is therefore frozen in fact, not by rule: no root key survives to
   author another genesis. Say it that way; do not write that the policy cannot change.
 - Do **not** implement a first-genesis-wins special case for `:__beacon__`. It would make the
@@ -612,13 +622,30 @@ both genesis ops stay unquarantined while a third genesis from a non-root realm 
   reimplemented identically in `carrier.ts` `successionPolicies` or the two runtimes diverge, which
   is this plan's STOP. The reserved key follows the fold.
 
-Three tests are required, not one: an add (a genesis with no beacon policy, then a later root
-genesis that adds one, and a witnessed beacon honored only in the second genesis's descendants); a
-replace (a first witness set, then a root genesis replacing it, and a certificate from the old
-witness set refused in the replacement's descendants while it stays honored in ops that predate it);
-and a non-root attempt (a genesis from a non-root realm carrying a `:__beacon__` policy is
-`:impostor_genesis`, confers nothing, and the previously merged policy is unchanged on every
-replica).
+Six tests are required, not one. Three cover who may replace: an **add** (a genesis with no beacon
+policy, then a later root genesis that adds one, and a witnessed beacon honored only in the second
+genesis's descendants); a **replace** (a first witness set, then a root genesis replacing it, and a
+certificate from the old witness set refused in the replacement's descendants while it stays honored
+in ops that predate it); and a **non-root attempt** (a genesis from a non-root realm carrying a
+`:__beacon__` policy is `:impostor_genesis`, confers nothing, and the previously resolved policy is
+unchanged on every replica).
+
+Three more cover the ancestry scoping of the resolution itself, added in review round ci-3, and they
+are the cases a globally merged policy would get wrong:
+
+- **A beacon before the replacement.** Under a first policy, a witnessed beacon whose ancestry
+  carries only the first genesis is judged under the first policy and stays honored after the second
+  genesis is appended and every replica has synced. Its verdict must not move when the replacement
+  arrives.
+- **A beacon forking around the replacement.** A witnessed beacon whose `deps` exclude the second
+  genesis is judged under the first policy on every replica, even though the second genesis is
+  present in the log, so a certificate from the superseded witness set is honored on that branch
+  while a certificate from the same set is `:unauthorized_beacon` in the replacement's descendants.
+- **An invalid replacement.** A second root genesis carrying a `:__beacon__` value that fails the
+  five-key shape (say a sixth key, or a `max_epoch_step` of `65_536`) leaves the first policy in
+  force for its descendants, so a certificate from the first witness set is still honored there, the
+  second genesis op is not quarantined, and nothing falls back to root-only. This is the case a
+  merge-then-validate implementation silently breaks.
 
 **The residual the deleted collision rule leaves, stated rather than hidden.** If a replica module
 ever declares a role literally named `:__beacon__`, the same map value is visible to the role loop
@@ -678,28 +705,76 @@ missing `max_epoch_step`, zero, negative, non-integer, `65_536`, `2^53`,
 policy closed, so root-only is preserved and witnessed beacons on that genesis are not honored. The
 `:unauthorized_beacon` reason on those same ops is the step 3 expectation, per the correction above;
 in the RED commit assert only the non-honoring, and keep the missing-verdict failure as evidence.
+Two of those cases are **BEAM-side probes only and must never be exported as vectors**, noted in
+review round ci-3: a genesis whose `max_epoch_step` is `2^53` or `Lattice.Canonical.max_integer/0`
+carries an integer term TypeScript cannot decode at all (`parseCarrierInteger`, `carrier.ts`
+2117-2133), so that runtime quarantines the **whole genesis op** `malformed_term` while the BEAM
+decodes the genesis and merely fails the policy closed. The two verdicts differ because the inputs
+are outside the corpus's portable range, exactly as `docs/research/succession_tick_provenance.md`
+section 4 records; keep them in ExUnit, where the oracle is the BEAM, and pin the cross-runtime
+horizon story with the `township_beacon_witnessed_horizon` vector instead.
 
 **The absolute horizon, also pinned here, and it is not a policy field.** The two bounds are not the
 same kind of thing, and review round ci-1 found the earlier draft calling both "genesis-pinned".
-`max_epoch_step` is the fifth and last key of the beacon policy, chosen at genesis per replica.
-The absolute horizon is a **fixed protocol constant**: a module attribute in
-`beacon_certificate.ex` mirrored by an exported `const` in `authority.ts`, identical for every
-replica, not configurable, and not expressible at genesis. That is why the accepted policy shape
-above has exactly five keys and why a sixth key fails closed: a genesis that tries to pin its own
-horizon is rejected rather than honored. Both runtimes spell the constant identically and neither
-reads it from the log.
+`max_epoch_step` is the fifth and last key of the beacon policy, chosen at genesis per replica, read
+from the log and enforced in the beacon judge. The absolute horizon is a **fixed protocol
+constant**: a module attribute in `beacon_certificate.ex`, mirrored in `authority.ts` by an exported
+`const` whose value is `Number.MAX_SAFE_INTEGER` and which a unit assertion pins equal to
+`9_007_199_254_740_991`. It is identical for every replica, not configurable, and not expressible at
+genesis. That is why the accepted policy shape above has exactly five keys and why a sixth key fails
+closed: a genesis that tries to pin its own horizon is rejected rather than honored. Neither runtime
+reads the horizon from the log, and neither bound is a log-configurable genesis field.
 
-A per-step bound does not bound the total, because repeated legitimate increments accumulate. The
-witnessed branch therefore also refuses any epoch above `9_007_199_254_740_991` (`2^53-1`)
-regardless of the step, as `:unauthorized_beacon`. That
-number is `Number.MAX_SAFE_INTEGER`, so the horizon also makes the two runtimes accept the same
-range on this new body variant: without it a BEAM-honored `max_epoch_step` or witnessed epoch above
-`2^53-1` is `null` or invalid in TypeScript (`carrier.ts` `nonNegativeInteger` at 1870-1871, the
-beacon body decode at 1500-1511), no vector would ever expose it because the exporter emits no such
-value, and this plan's own STOP list names conformance divergence. Both bounds are enforced in the
-judge's policy layer for one new body variant, one read from the genesis policy and one compiled in;
-`Lattice.Canonical` is untouched and its uint64 bound stays frozen. The root branch stays unbounded
-and keeps its exact current bytes. Both runtimes enforce both bounds, spelled identically.
+A per-step bound does not bound the total, because repeated legitimate increments accumulate, so the
+witnessed branch also refuses any epoch above `9_007_199_254_740_991` (`2^53-1`) regardless of the
+step.
+
+**The cross-runtime contract for an above-horizon epoch, decided here in one sentence, corrected in
+review round ci-3: both runtimes reject it structurally, before the beacon judge runs, with the same
+reason `:malformed_term`, for the epoch in the witnessed beacon body and for the epoch in the
+certificate claim alike.** The alternative the reviewer offered, preserving an explicit
+above-horizon representation through the TypeScript decoder so its judge could return
+`:unauthorized_beacon`, is rejected: it changes more and it can drift, because it means widening
+`parseCarrierInteger` (`carrier.ts` 2117-2133), the `AuthorityEvidence` epoch type and every
+consumer of that type to carry a value no honored op may hold. The structural contract needs no new
+TypeScript decoding logic at all.
+
+Why that contract is the one both runtimes can actually reach, checked against the live tree rather
+than assumed. On the TypeScript side an integer term above `Number.MAX_SAFE_INTEGER` already throws
+inside `parseCarrierInteger` (`carrier.ts` 2118-2121 for the numeric form, 2130-2132 for the string
+form); that throw happens inside `decodeCarrierTerm`'s `"int"` arm (1310-1324), and
+`carrierOpToSemanticOp` catches it at 1215-1219 and marks the **whole op** `structuralError:
+"malformed_term"`, which `materialize.ts` 136-138 turns into the quarantine reason `malformed_term`,
+overwriting any authority reason. `collectBeacons` (`authority.ts` 1343-1379) never sees such an op,
+because it carries no `authority` evidence to match at 1354-1356, so it is neither honored nor
+`stale_beacon`. An earlier draft of this paragraph cited `nonNegativeInteger` (1870-1871) and the
+beacon body decode (1500-1511) as the sites that refuse the value; that citation was wrong, because
+both read an **already decoded** term and the throw above happens first. The BEAM has the mirror-image
+machinery already: `valid_tick?/1` (`authority.ex` 466-468) and `malformed_tick_body?/1` (483-487)
+exist precisely so an out-of-range integer in an `:authority` body quarantines `:malformed_term`
+rather than reaching the judge, and the comment at 470-473 gives the reason in the plan's own terms,
+that the TypeScript decoder refuses the term before it consults any schema, so the BEAM must
+quarantine structurally or the two runtimes diverge.
+
+So step 3 extends that existing structural fold rather than adding a policy-layer horizon check:
+`malformed_tick_body?/1` gains a clause for the **witnessed** beacon body, rejecting an epoch outside
+`0..9_007_199_254_740_991` in the body or in the certificate claim, and `malformed_tick_ops/1`
+(474-481) then quarantines the op `:malformed_term`. No precedence rule is needed on either side,
+because `tick_q` is merged last into `base_reasons` (`authority.ex` 346-352) and `materialize.ts`
+136-138 writes `malformed_term` after copying the authority reasons. `collect_beacons/4` must also
+refuse to honor a body its structural predicate rejects, or the op would be quarantined and still
+lapse leases. One new vector, `township_beacon_witnessed_horizon`, pins the verdict on both sides: a
+witnessed beacon at `9_007_199_254_740_992` (`2^53`) whose certificate claim carries the same epoch
+is `:malformed_term` on the BEAM and `malformed_term` in TypeScript, is honored by neither, and
+lapses no lease.
+
+The root branch is untouched by all of this. The two-element `{:beacon, epoch}` body keeps today's
+bytes and today's verdicts, so `township_beacon_unauthorized.json` and the four lease vectors do not
+move, and the **pre-existing** BEAM-versus-TypeScript range gap on root beacons stays exactly where
+`docs/research/succession_tick_provenance.md` section 4 records it. This plan does not close that
+gap and must not claim to. `Lattice.Canonical` is untouched and its uint64 bound stays frozen; the
+step bound lives in the beacon judge and the horizon in the structural layer that runs before it,
+and neither is read from a genesis policy field.
 
 2b. Witnessed beacon verdicts. Under a pinned policy: a beacon carrying a certificate at or above
 threshold is honored and advances the epoch; a subthreshold certificate, a certificate signed by a
@@ -738,14 +813,19 @@ is the cost, and it is paid in this PR or not at all. Do not add a reason atom t
 
 **Epoch bound cases, required by the Non-goals correction and spike section 6.6.** Under a pinned
 policy: a witnessed certificate for `prior_max + max_epoch_step` is honored; one for
-`prior_max + max_epoch_step + 1` is `:unauthorized_beacon`; one for
-`Lattice.Canonical.max_integer/0` is `:unauthorized_beacon` unconditionally, since `max_epoch_step`
-can never exceed `65_535` and the horizon refuses anything above `2^53-1` anyway; one for
-`9_007_199_254_740_992` (`2^53`) is `:unauthorized_beacon` even from a prior epoch that the step
-bound alone would allow, which is the horizon case and the case no vector could otherwise catch.
+`prior_max + max_epoch_step + 1` is `:unauthorized_beacon`, which is the step bound and is decided in
+the beacon judge. The two above-horizon cases carry the **other** reason, per the cross-runtime
+contract pinned in 2a: a witnessed certificate for `9_007_199_254_740_992` (`2^53`) is
+`:malformed_term` even from a prior epoch that the step bound alone would allow, and one for
+`Lattice.Canonical.max_integer/0` is `:malformed_term` unconditionally. Both are structural, decided
+before the judge, and they hold with or without a pinned policy. Assert in the same test that
+neither op is honored, that neither lapses a lease, and that the epoch in the certificate claim is
+judged by the same rule as the epoch in the body, so a claim carrying `2^53` under a body carrying an
+in-range epoch is `:malformed_term` too. `township_beacon_witnessed_horizon` is the vector that pins
+the `2^53` pair on both runtimes.
 Add one scenario proving the bounds are load bearing: with them removed, a single witnessed beacon
 at `2^64-1` lapses a lease whose `expires_epoch` is far below it, and every later beacon at every
-encodable epoch is `:stale_beacon`. Add a second: a genesis pinning
+encodable epoch that carries it in ancestry is `:stale_beacon`. Add a second: a genesis pinning
 `max_epoch_step: Lattice.Canonical.max_integer/0` fails the 2a policy validation closed, so the
 bound cannot be made vacuous by the policy that is supposed to enforce it. The root branch keeps today's unbounded behavior and today's
 bytes; the bound is witnessed-branch only, or `township_beacon_unauthorized.json` and the four
@@ -801,16 +881,53 @@ Keep the failing output as RED evidence.
 
 ### Step 3 (GREEN): BEAM
 
-Add the witnessed arm. `collect_beacons/3` learns the new body variant and takes the genesis
-beacon policy as a new argument, becoming `collect_beacons/4`; `classify_beacon/6` gains the
-witnessed branch and keeps the same two reasons and the same ancestry-scoped monotonicity rule as
-the root branch.
+Add the witnessed arm. `collect_beacons/3` learns the new body variant and becomes
+`collect_beacons/4`; `classify_beacon/6` gains the witnessed branch and keeps the same two reasons
+and the same ancestry-scoped monotonicity rule as the root branch.
 
-**Both callers change, not one.** In `analyze/2` at 313 the policy is already in hand one line
-after `collect_policies/3` at 310. The second caller is the live-path `expired?/2` at 254-277,
-which calls `collect_beacons(ordered, ancestors, root)` at 264 and does **not** call
-`collect_policies/3` at all: it must now compute the policies exactly as `analyze/2` does and pass
-the beacon policy in. Missing this ships an internal BEAM divergence, since
+**The new argument is the ordered beacon-policy sources, never one merged policy, corrected in
+review round ci-3.** An earlier draft of this step said `collect_beacons/4` takes "the genesis
+beacon policy", already in hand at `analyze/2` 313 one line after `collect_policies/3` at 310. Once
+the policy is root-replaceable that is wrong in two separate ways. `collect_policies/3`
+(`authority.ex` 492-507) folds `Map.merge(acc, policies)` over **every** valid root genesis in the
+whole topological order with no ancestry filter, so its result would judge a beacon that predates
+the replacement, or forks around it, under the final policy; and because the merge happens before
+any beacon-policy validation, an invalid replacement would overwrite a prior valid value instead of
+being ignored. Both answers converge across replicas and both are the wrong answer.
+
+The rule is therefore: `collect_beacons/4` takes the **ordered beacon-policy sources**, a list of
+`{genesis_op_id, value_under_the_reserved_key}` built in one pass over the same topologically
+ordered ops and under the same four guards `collect_policies/3` applies (the delegation validates,
+it is parentless, it is genuinely introduced by that op, and `op.author == audience`), keeping only
+the genesis ops that carry `:__beacon__`. `classify_beacon/6` then resolves the policy **per
+candidate beacon**, from that candidate's own causal ancestry:
+
+- Take the sources whose `genesis_op_id` is in `Map.get(ancestors, op.id, MapSet.new())`, the same
+  strict ancestor set the monotonicity rule at 735-741 already uses. `Dag.all_ancestors/1`
+  (`dag.ex` 134-147) excludes the op itself, which is the right reading here: a beacon cannot
+  introduce the policy that authorizes it.
+- Fold that subsequence left to right in the topological order `Dag.topo_sort/1` already fixes
+  (`dag.ex` 23-52, ties broken by op id through a `:gb_sets` ready set, so every replica walks the
+  same order and two concurrent replacements resolve identically everywhere).
+- Start at "no policy" and **validate each candidate value against the exact five-key shape of 2a
+  before it replaces anything**. A valid value replaces the previously resolved one; an invalid
+  value is ignored and the previously resolved valid value stays. The result is the latest valid
+  `:__beacon__` in that beacon's own ancestry, or "no policy", in which case the witnessed beacon is
+  `:unauthorized_beacon` and root-only survives.
+
+This is a **beacon-judge concern, distinct from the global fold**. `collect_policies/3` is not
+touched: it keeps its blind `Map.merge` over every valid root genesis, and `analyze/2` keeps handing
+that merged map to `build_role_timeline/6` (310, 322-324) for every role timeline exactly as at
+`8200c38d`. The two folds answer two different questions and the diff must show both: the global
+fold answers "what is this replica's current policy map", the beacon fold answers "which beacon
+policy was in force at this op's causal position". Do not make either call the other, and do not add
+a `:__beacon__` special case to `collect_policies/3`, which the drift check greps for.
+
+**Both callers change, not one.** In `analyze/2` at 313 the sources are built beside
+`collect_policies/3` at 310, from the same `ordered` and the same `deleg_valid`. The second caller
+is the live-path `expired?/2` at 254-277, which calls `collect_beacons(ordered, ancestors, root)` at
+264 and does **not** call `collect_policies/3` at all: it must now build the identical source list
+and pass it in. Missing this ships an internal BEAM divergence, since
 `apps/lattice_core/lib/toolshed/read_model.ex` line 90 computes `overdue?` from `expired?/2`, so a
 lease that a witnessed beacon lapsed would read as not overdue in the Toolshed read model while
 `analyze/2` quarantines its ops `:lease_expired`, with
@@ -868,17 +985,22 @@ ancestry) is convergent and is recorded as the fallback, but it has a residual t
 does not: the first witnessed beacon on a replica has an empty prior set, so its certificate is
 still liftable. See `docs/research/succession_tick_provenance.md` section 8.2.
 
-**The epoch bounds, both of them.** The witnessed branch rejects `epoch > prior_max + max_epoch_step`
-as `:unauthorized_beacon`, where `max_epoch_step` comes from the genesis policy and 2a has already
-refused any policy whose step is outside `1..65_535`. It also rejects, independently and regardless
-of the step, any `epoch > 9_007_199_254_740_991` (`2^53-1`) as `:unauthorized_beacon`. The step
-bound alone is not enough: it is vacuous if the policy may pin an arbitrary positive step, and it
-bounds one jump rather than the accumulated total, so only the absolute horizon keeps the canonical
-ceiling out of reach on this branch. The horizon is also `Number.MAX_SAFE_INTEGER`, so both runtimes
-accept the same range on the new body variant. `max_epoch_step` is read from the genesis policy; the
-horizon is a fixed protocol constant compiled into both runtimes, per 2a. Both bounds live entirely
-in the judge's policy layer; `Lattice.Canonical` is untouched and its uint64 bound is a STOP
-condition.
+**The epoch bounds, both of them, and the two layers they live in.** The witnessed branch rejects
+`epoch > prior_max + max_epoch_step` as `:unauthorized_beacon` **in the beacon judge**, where
+`max_epoch_step` is resolved from the beacon policy in force at that op's causal position and 2a has
+already refused any policy whose step is outside `1..65_535`. Independently, and regardless of the
+step, an `epoch > 9_007_199_254_740_991` (`2^53-1`) in the witnessed body or in its certificate
+claim is `:malformed_term` **in the structural layer that runs before the judge**, through the
+`malformed_tick_body?/1` clause 2a pins. The step bound alone is not enough: it is vacuous if the
+policy may pin an arbitrary positive step, and it bounds one jump rather than the accumulated total,
+so only the absolute horizon keeps the canonical ceiling out of reach on this branch. The horizon is
+`Number.MAX_SAFE_INTEGER`, and TypeScript already enforces exactly that bound in
+`parseCarrierInteger` (`carrier.ts` 2117-2133) with the same `malformed_term` outcome
+(`materialize.ts` 136-138), so the new body variant needs no new TypeScript decoding logic for it and
+the two runtimes cannot reach different verdicts. Neither bound is a log-configurable genesis field:
+one is a policy value the judge reads, the other a constant compiled into both runtimes.
+`Lattice.Canonical` is untouched and its uint64 bound is a STOP condition; the horizon is a rule
+about one new body variant, not a change to what `Lattice.Canonical` admits.
 
 The root branch is not bounded, so root beacons keep their exact current bytes and verdicts. State
 the consequence at exactly its real width, corrected in review round ci-1. A root beacon above the
@@ -888,12 +1010,19 @@ is every op built on the frontier after it. It does not end witnessed advancemen
 whose `deps` fork off before the high root beacon sees a low `prior_max` and is honored below the
 horizon, and the certificate for it is legitimately obtainable because the witnesses sign over those
 exact `deps`. `docs/research/succession_tick_provenance.md` section 6.8 reproduces the mechanism
-root-authored against the tree at `8200c38d`. Add a fork test for it in 2b: pin a policy, author a root beacon above the horizon,
-then have the witness set assemble a certificate over `deps` that exclude that root beacon, and
-assert the witnessed beacon is honored, that every replica agrees, and that a descendant of the root
-beacon carrying a witnessed certificate is still refused. The PR states the descendant-scoped
-reading and does not imply the horizon prevents the root from stopping the clock on the main
-history; that is the existing root power recorded in spike section 6.6.
+root-authored against the tree at `8200c38d`. Add a fork test for it in 2b, in **two** arms. The
+root arm: pin a policy, author a root beacon above the horizon, then have the witness set assemble a
+certificate over `deps` that exclude that root beacon, and assert the witnessed beacon is honored,
+that every replica agrees, and that a descendant of the root beacon carrying a witnessed certificate
+is still refused. The witnessed arm, added in review round ci-3 because the same reading applies to
+the witnessed branch and an earlier draft claimed a lifetime lockout there: reach the horizon on the
+witnessed branch by honoring a witnessed beacon **at** `9_007_199_254_740_991` (`2^53-1`), then have
+the witness set certify a lower epoch over `deps` that fork from before it. That op's `prior_max`
+excludes the horizon beacon, so it is honored at the lower epoch on every replica, while a witnessed
+beacon that carries the horizon beacon in its ancestry is `:stale_beacon` at any epoch. The PR states
+the descendant-scoped reading for both branches and does not imply the horizon prevents the root
+from stopping the clock on the main history; that is the existing root power recorded in spike
+section 6.6.
 
 The certificate is domain separated. A witnessed beacon confers epoch advancement, which per the
 Non-goals correction includes lapsing every expiring lease on the replica. Root-only behavior is
@@ -918,11 +1047,14 @@ cleanup and the proof that the construction path is real:
 ### Step 5: Exporter scenarios and vector regeneration
 
 Add scenarios producing `township_beacon_witnessed_advance`,
-`township_beacon_witnessed_subthreshold`, `township_beacon_witnessed_founder_loss` and
-`township_beacon_witnessed_concurrent` (step 2d). Regenerate with `MIX_ENV=test`, then prove the
+`township_beacon_witnessed_subthreshold`, `township_beacon_witnessed_founder_loss`,
+`township_beacon_witnessed_concurrent` (step 2d) and `township_beacon_witnessed_horizon` (the
+above-horizon parity vector pinned in 2a: a witnessed beacon at `2^53` whose certificate claim
+carries the same epoch, `:malformed_term` on both runtimes and honored by neither). Regenerate with
+`MIX_ENV=test`, then prove the
 Plan 145 and Plan 149 "regenerate, diff is empty" result: every pre-existing vector is
 byte-identical. Check the five beacon and lease vectors first, because they are the ones this
-step's `collect_beacons/3` change touches most directly and the only ones that pin today's
+step's `collect_beacons/4` change touches most directly and the only ones that pin today's
 root-only rule: `township_beacon_unauthorized.json` (exporter 2602-2634, pinning
 `:unauthorized_beacon` for a non-root beacon, `:stale_beacon` for a repeated epoch, and a leased
 post that stays honored), `township_lease_valid_causal.json` (2481-2505),
@@ -941,20 +1073,42 @@ BEAM-written bytes, which cannot detect an encoder that writes different ones.
 ### Step 6: TypeScript mirror
 
 `authority.ts` `collectBeacons` gains the witnessed arm with the same reasons, the same author
-rule, the same author-and-deps claim binding and the **same two** epoch bounds as step 3,
-including the `1..65_535` `max_epoch_step` policy ceiling read from the genesis policy and the
-`2^53-1` horizon as a module-level `const`, spelled identically in both runtimes;
-reuse the
+rule, the same author-and-deps claim binding, the **same ancestry-scoped policy resolution** and the
+**same two** epoch bounds as step 3; reuse the
 `verifyWitnessedSuccessionCertificate` verification shape at 830 with the beacon domain separator.
+
+**The policy resolution mirrors step 3, not `collectPolicies`.** `collectPolicies` (`authority.ts`
+999-1042) is the mirror of the BEAM's global fold: it walks every valid root genesis and last write
+wins per role, with no ancestry filter, and it stays that way for the role timelines. `collectBeacons`
+must instead resolve, for each candidate beacon, the latest valid `:__beacon__` among the genesis ops
+in that candidate's own ancestry, using the `ancestors(op.id, byId, ancCache)` set it already computes
+at 1355 for `priorMax`, folded in the same visible-op order, validating each value before it replaces
+the previous one. Carrying the genesis op id beside the policy is the shape this file already uses:
+`recoveryPoliciesByRole` keeps `genesisOperationId` at 1033-1035 for exactly this reason. A
+TypeScript side that reads one globally merged beacon policy is a divergence from step 3 on any log
+with two beacon-policy geneses, and this plan's STOP list names conformance divergence.
+
+**The horizon needs no new decoding logic here, per the 2a contract.** `parseCarrierInteger`
+(`carrier.ts` 2117-2133) already refuses any integer term above `Number.MAX_SAFE_INTEGER`,
+`carrierOpToSemanticOp` already marks the whole op `structuralError: "malformed_term"` at 1215-1219,
+and `materialize.ts` 136-138 already writes that reason over any authority reason, which is the
+verdict step 3's structural clause produces on the BEAM. What step 6 adds is one exported
+module-level `const` for the horizon, set to `Number.MAX_SAFE_INTEGER`, with `conformance.ts`
+asserting beside the new horizon vector that it equals `9_007_199_254_740_991`, so the constant is
+named and greppable and cannot silently drift from the BEAM module attribute. Do **not** widen `parseCarrierInteger`, the `AuthorityEvidence` epoch
+type or its consumers to carry an above-horizon value: that was the rejected alternative in 2a.
 **Five** sites change, not three, and two of them are encoders rather than decoders. A decoder-only
 step 6 would let TypeScript replay a BEAM-authored witnessed beacon while making it impossible for
 a TypeScript client to author one or to compute its claim bytes, and BEAM-generated conformance
 vectors cannot see that gap because every byte in them was produced by the BEAM:
 
 - `carrier.ts` 1500-1511, the beacon **body** decoder. Today it reads
-  `body.values[1]` and emits `{ type: "beacon", epoch }`, with a non-safe-integer epoch decoding to
+  `body.values[1]` and emits `{ type: "beacon", epoch }`, with a non-integer epoch term decoding to
   `null` so the reducer can still reach `:stale_beacon`. It must carry the certificate under the
-  same fail-open-to-the-reducer discipline.
+  same fail-open-to-the-reducer discipline. Note what that `null` does and does not cover: an
+  integer term above the horizon never arrives here at all, because `parseCarrierInteger` threw
+  during `decodeCarrierTerm` and the whole op is already `malformed_term`. Do not describe this site
+  as the horizon check.
 - `op.ts` line 124, the `AuthorityEvidence` beacon arm, currently
   `| { type: "beacon"; epoch: number | null };`. It gains the certificate field.
 - `carrier.ts` 1684-1693, the genesis **policy decoder**, which learns the reserved `:__beacon__`
@@ -976,7 +1130,7 @@ vectors cannot see that gap because every byte in them was produced by the BEAM:
   succession-shaped and its canonical encoders are private, so `authority.ts` cannot build the
   beacon payload without it.
 
-`conformance.ts` gains the four new vectors, and
+`conformance.ts` gains the five new vectors, and
 `clients/lattice-client/test/township_authoring.ts` gains two cases: a genesis authored through
 `authorTownshipGenesis` with a beacon policy, and the **canonical payload parity** check below.
 
@@ -1044,7 +1198,9 @@ emitter is that class of change.
   beacons alongside the replica root, both epoch bounds and why each exists (the `1..65_535`
   `max_epoch_step` ceiling that keeps the step bound from being vacuous, and the `2^53-1` horizon
   that keeps accumulated steps out of the canonical ceiling and holds the two runtimes to the same
-  range, and which of the two is genesis-pinned versus a fixed protocol constant), the
+  range, which of the two is genesis-pinned versus a fixed protocol constant, and at which layer each
+  is enforced: the step in the beacon judge as `:unauthorized_beacon`, the horizon structurally
+  before it as `:malformed_term` in both runtimes), the
   author-and-deps claim binding and the lifted-certificate attack it closes, the author rule, and the
   non-claims that survive: still no live clock, still no absence proof, still no founder-loss
   survival claim beyond what the merged AF-2 test shows, and specifically no claim that
@@ -1085,16 +1241,24 @@ a separate Plan 178-style slice revise the frozen founder-loss contract sentence
   root genesis replacing the witness set, with a certificate from the superseded set refused in the
   replacement's descendants and still honored in ops that predate it), and a **non-root attempt**
   (a `:__beacon__` policy in a genesis authored by a non-root realm is `:impostor_genesis`, confers
-  nothing, and leaves the merged policy unchanged on every replica). The third mirrors the impostor
+  nothing, and leaves the resolved policy unchanged on every replica). The third mirrors the impostor
   arm of `township_genesis_projection_parity` (`lattice.export_vectors.ex` 509-608).
+- The three ancestry-scoped resolution cases (step 2a, added in review round ci-3), which are the
+  cases one globally merged policy gets wrong: a witnessed beacon whose ancestry carries **only the
+  first** genesis keeps its verdict after the replacement is appended and synced; a witnessed beacon
+  whose `deps` **fork around** the replacement is judged under the first policy on every replica even
+  though the replacement is in the log; and an **invalid replacement** leaves the first policy in
+  force for its descendants without quarantining the second genesis and without falling back to
+  root-only. Each is asserted on every replica after a heal.
 - The certificate signature ordering case, separate from the policy case above and matching the
   precedent at `witnessed_succession_test.exs` 118-133: a certificate whose signature list is not in
   canonical order fails closed.
 - Witnessed beacon verdict cases: honored, subthreshold, foreign signer, wrong replica, wrong
   epoch, deps binding mismatch, author binding mismatch, duplicate signer, non-monotonic,
-  non-witness and non-root author, no policy pinned, at the epoch step bound, one past the step
-  bound, at `2^53` (the horizon case, refused even where the step bound alone would allow it), and
-  at the canonical ceiling (step 2b).
+  non-witness and non-root author, no policy pinned, at the epoch step bound, and one past the step
+  bound, all of which carry a beacon-judge reason; plus the two structural above-horizon cases, at
+  `2^53` (refused as `:malformed_term` even from a prior epoch the step bound alone would allow, in
+  the body and in the certificate claim) and at the canonical ceiling (step 2b).
 - The lifted-certificate case (step 2b): a listed witness below threshold re-publishes an honored
   certificate in an op with pruned deps. The op is `:unauthorized_beacon` on every replica, and a
   leased op honored before the original beacon stays honored on every replica.
@@ -1102,10 +1266,15 @@ a separate Plan 178-style slice revise the frozen founder-loss contract sentence
   certificate in a second op with the same epoch and the same deps. Both are honored, and the
   quarantine set and materialized state on every replica are identical to the single-beacon run, so
   the duplicate is inert. If it is not inert, that is a STOP.
-- The horizon fork case (step 2b, from review round ci-1): under a pinned policy, a root beacon
-  above the horizon, then a witnessed certificate over deps that exclude it. The witnessed beacon is
-  honored below the horizon on every replica, while a witnessed beacon whose deps carry the high
-  root beacon is refused. This is the executable form of the descendant-scoped lockout claim.
+- The horizon fork case (step 2b, from review round ci-1), in two arms. The **root** arm: under a
+  pinned policy, a root beacon above the horizon, then a witnessed certificate over deps that exclude
+  it. The witnessed beacon is honored below the horizon on every replica, while a witnessed beacon
+  whose deps carry the high root beacon is refused. The **witnessed** arm, added in review round
+  ci-3: a witnessed beacon honored **at** `2^53-1`, then a witnessed certificate at a lower epoch over
+  deps that fork from before it, honored on every replica, while a witnessed beacon carrying the
+  horizon beacon in its ancestry is `:stale_beacon` at any epoch. Together these are the executable
+  form of the descendant-scoped lockout claim on both branches, and the witnessed arm is what forbids
+  writing that reaching the horizon stops the clock for the life of the replica.
 - The reserved-key residual case (step 2a): with no replica module in the tree declaring
   `:__beacon__`, pin that a genesis carrying a beacon-shaped `:__beacon__` value leaves the genesis
   op and every role verdict exactly as they are at `8200c38d`, and that a succession-shaped value
@@ -1117,8 +1286,12 @@ a separate Plan 178-style slice revise the frozen founder-loss contract sentence
 - The witness partition and heal convergence test (step 2d).
 - A dump and restore of a log holding a witnessed beacon, in a freshly booted VM (step 7b).
 - Vectors `township_beacon_witnessed_advance`, `township_beacon_witnessed_subthreshold`,
-  `township_beacon_witnessed_founder_loss`, `township_beacon_witnessed_concurrent`, their exporter
-  scenarios and their `conformance.ts` checks.
+  `township_beacon_witnessed_founder_loss`, `township_beacon_witnessed_concurrent` and
+  `township_beacon_witnessed_horizon`, their exporter scenarios and their `conformance.ts` checks.
+  The last one is the cross-runtime parity vector for the horizon, added in review round ci-3: a
+  witnessed beacon at `9_007_199_254_740_992` (`2^53`) whose certificate claim carries the same
+  epoch, `:malformed_term` on the BEAM and `malformed_term` in TypeScript, honored by neither and
+  lapsing no lease.
 - **Canonical payload parity, both directions** (step 6, added in review round ci-2), in
   `clients/lattice-client/test/township_authoring.ts`: the new `codec.ts` beacon-claim function
   returns bytes **equal** to the BEAM's claim preimage for the same five-field claim
@@ -1221,9 +1394,14 @@ broken form.
   still caps the honored epoch at `2^53-1`, and reaching the ceiling needs **both** mutations at
   once. Record that pairing as its own case, which is the evidence that the two bounds are
   independent rather than redundant.
-- Remove the `2^53-1` horizon and confirm a witnessed epoch above `Number.MAX_SAFE_INTEGER` is
-  honored on the BEAM while TypeScript decodes it to `null` or refuses the policy, which is the
-  conformance divergence this plan names a STOP.
+- Remove the `malformed_tick_body?/1` horizon clause and confirm a witnessed epoch above
+  `Number.MAX_SAFE_INTEGER` is honored on the BEAM while TypeScript reports `malformed_term` for the
+  same op, which is the conformance divergence this plan names a STOP and the reason the horizon is
+  enforced structurally rather than in the judge.
+- Replace the ancestry-scoped beacon-policy resolution with the globally merged map from
+  `collect_policies/3` and confirm all three ci-3 cases fail: a beacon predating the replacement is
+  judged under the final policy, a beacon forking around it is too, and an invalid replacement
+  overwrites the prior valid policy so a certificate from the first witness set stops being honored.
 - Pass `nil` for the beacon policy in `expired?/2` only and confirm a witnessed beacon lapses a
   lease through `analyze/2` while `expired?/2` reports `false` and `toolshed/read_model_test.exs`
   stays green.
@@ -1240,7 +1418,7 @@ Restore each and record the named failure.
 | `~/.asdf/shims/mix test` | all pass |
 | `~/.asdf/shims/mix test apps/lattice_core/test/lattice2/` | all pass, including the new beacon suites and the GATE |
 | `MIX_ENV=test ~/.asdf/shims/mix lattice.export_vectors --out clients/lattice-client/test/vectors` | exit 0 |
-| `git status --short clients/lattice-client/test/vectors` | exactly four new files, no modified file |
+| `git status --short clients/lattice-client/test/vectors` | exactly five new files, no modified file |
 | `npm --prefix clients/lattice-client run typecheck` | exit 0 |
 | `npm --prefix clients/lattice-client run conformance` | exit 0, all PASS |
 | `npm --prefix clients/lattice-client run township:authoring` | exit 0, including the beacon-policy authoring case and both canonical payload parity assertions |
@@ -1258,7 +1436,9 @@ Restore each and record the named failure.
 | `grep -n 'def expired?' apps/lattice_core/lib/lattice/authority.ex` | still arity two, no module argument, so `read_model.ex` and `lease_lapse_test.exs` are untouched |
 | `grep -rn 'all_roles' apps/lattice_core/lib/lattice/authority.ex` | unchanged from `8200c38d`; no beacon-policy call site |
 | `git diff 8200c38d -- apps/lattice_core/lib/lattice/authority.ex \| grep -n 'collect_policies'` | no first-genesis-wins special case for `:__beacon__`; the merge fold is unchanged |
-| `grep -rn '9_007_199_254_740_991\|9007199254740991' apps clients` | a module attribute and a `const` only, never a genesis policy field |
+| `grep -rn '9_007_199_254_740_991\|9007199254740991' apps clients` | the BEAM module attribute and the TypeScript equality assertion only; the exported `const` itself is `Number.MAX_SAFE_INTEGER`, and neither is a genesis policy field |
+| `git diff 8200c38d -- clients/lattice-client/src/carrier.ts \| grep -n 'parseCarrierInteger'` | empty; the horizon adds no TypeScript decoding logic |
+| `git diff 8200c38d -- apps/lattice_core/lib/lattice/authority.ex \| grep -n 'collect_beacons'` | the new argument is the ordered beacon-policy sources, not the `collect_policies/3` result |
 | `grep -c $'\xe2\x80\x94' plans/179-witnessed-beacons-af2-founder-loss.md` | `0` |
 
 ## Done criteria
@@ -1278,30 +1458,49 @@ Machine-checkable. ALL must hold:
       `SuccessionCertificate.normalize_policy/1`; non-canonical order fails closed on the
       certificate's signature list, not on the policy. An absent or invalid policy yields
       `:unauthorized_beacon` for a witnessed beacon, preserving the root-only default.
-- [ ] Root-authorized replacement is permitted through the existing fold and tested three ways
-      (add, replace, non-root attempt). `collect_policies/3` keeps its `Map.merge` over every valid
-      root-authored genesis with no `:__beacon__` special case in either runtime, the replacement
-      applies from its genesis op's causal position, an invalid replacement is discarded rather than
-      quarantining the genesis, and no sentence in the plan, the spike or a product surface says the
-      beacon policy cannot be changed after creation. What is said instead: only the replica root can
-      change it, and no root genesis is possible once the founder key is gone.
+- [ ] Root-authorized replacement is permitted through the existing fold and tested six ways (add,
+      replace, non-root attempt, a beacon before the replacement, a beacon forking around it, and an
+      invalid replacement). `collect_policies/3` keeps its `Map.merge` over every valid root-authored
+      genesis with no `:__beacon__` special case in either runtime, the replacement applies from its
+      genesis op's causal position, an invalid replacement is discarded rather than quarantining the
+      genesis, and no sentence in the plan, the spike or a product surface says the beacon policy
+      cannot be changed after creation. What is said instead: only the replica root can change it,
+      and no root genesis is possible once the founder key is gone.
+- [ ] The beacon judge resolves its policy from **each candidate beacon's own causal ancestry** (the
+      latest valid `:__beacon__` among the genesis ops in that ancestry, in the shared topological
+      order, validated before it replaces the previous value), never from one globally merged policy.
+      `collect_beacons/4` takes the ordered beacon-policy sources rather than the `collect_policies/3`
+      result; the global fold is unchanged and still feeds every role timeline; `collectBeacons` in
+      `authority.ts` resolves the same way from the ancestor set it already computes, so the two
+      runtimes agree on a log carrying two beacon-policy geneses.
 - [ ] The policy is validated by its own shape and nothing else: no `all_roles/1` call and no schema
-      context, so `analyze/2` and `expired?/2` reach the identical beacon policy from the same log,
-      and `expired?/2` keeps its `(Log, delegation_id)` arity with `read_model.ex` and
-      `lease_lapse_test.exs` unchanged.
+      context, so `analyze/2` and `expired?/2` build the identical beacon-policy sources from the
+      same log and therefore resolve the identical policy for every op, and `expired?/2` keeps its
+      `(Log, delegation_id)` arity with `read_model.ex` and `lease_lapse_test.exs` unchanged.
 - [ ] `max_epoch_step` is a genesis-pinned policy field validated against the `1..65_535` ceiling,
       so a policy pinning `Lattice.Canonical.max_integer/0` fails closed and the step bound cannot be
       made vacuous by the policy that enforces it. The `2^53-1` horizon is **not** a policy field: it
       is a fixed protocol constant in both runtimes, a genesis attempting to pin it is rejected as a
-      sixth key, and no log content can raise or lower it.
-- [ ] The witnessed branch rejects an epoch above `prior_max + max_epoch_step` as
-      `:unauthorized_beacon`, and independently rejects any epoch above `9_007_199_254_740_991`
-      (`2^53-1`), so neither one jump nor accumulated jumps can reach
-      `Lattice.Canonical.max_integer/0` on that branch and both runtimes accept the same range. The
-      root branch keeps its current unbounded behavior and its current bytes, and the PR states the
-      descendant-scoped reading: a root beacon above the horizon ends witnessed advancement for every
-      op carrying it in ancestry, and the step 2b fork test shows a witnessed beacon on deps that
-      exclude it is still honored below the horizon.
+      sixth key, and no log content can raise or lower it. Neither bound is read from a
+      log-configurable genesis field for the horizon or from anywhere but the resolved policy for the
+      step.
+- [ ] The two bounds are enforced at the two layers this plan pins, and the reasons match across
+      runtimes. The step bound is a beacon-judge verdict: an epoch above
+      `prior_max + max_epoch_step` is `:unauthorized_beacon`. The horizon is structural and runs
+      before the judge: an epoch above `9_007_199_254_740_991` (`2^53-1`), in the witnessed body or in
+      the certificate claim, is `:malformed_term` on the BEAM through the extended
+      `malformed_tick_body?/1` and `malformed_term` in TypeScript through the existing
+      `parseCarrierInteger` path, honored by neither runtime and lapsing no lease. So neither one jump
+      nor accumulated jumps can reach `Lattice.Canonical.max_integer/0` on that branch, and
+      `township_beacon_witnessed_horizon` pins the `2^53` verdict on both sides. No TypeScript
+      decoder was widened to carry an above-horizon value.
+- [ ] The root branch keeps its current unbounded behavior and its current bytes, and the PR states
+      the descendant-scoped reading on **both** branches: a beacon at or above the horizon ends
+      witnessed advancement only for ops that carry it in ancestry, never for the life of the
+      replica, and the step 2b fork test proves it in two arms, a witnessed beacon on deps that
+      exclude a high root beacon and a witnessed beacon on deps that fork from before a witnessed
+      beacon honored at `2^53-1`, each honored at the lower epoch on every replica while a descendant
+      of the high beacon is refused.
 - [ ] A `Sim.create_replica` carrying a reserved `:__beacon__` policy actually builds, proved by
       its own test; the three existing `resolve_policy/2` clauses are unchanged in behaviour.
 - [ ] `Lattice.Authority.expired?/2` computes the genesis policies and passes the beacon policy
@@ -1324,7 +1523,8 @@ Machine-checkable. ALL must hold:
       replica, and no sentence anywhere implies founder-issued delegations are revocable after
       founder loss.
 - [ ] A witnessed beacon is honored in BEAM and TypeScript under the same monotonicity rule and
-      with the same `:unauthorized_beacon` and `:stale_beacon` reasons.
+      with the same `:unauthorized_beacon` and `:stale_beacon` reasons, and an above-horizon epoch
+      carries the same structural `malformed_term` verdict in both.
 - [ ] TypeScript can **author** as well as replay: `codec.ts` exports a beacon-claim canonical-bytes
       function under its own separator beside the succession one (which is unchanged, not
       generalized), `township.ts`'s `TownshipGenesisPolicy` and `townshipGenesisPoliciesTerm` accept
@@ -1339,9 +1539,10 @@ Machine-checkable. ALL must hold:
       byte-identically, and the subthreshold negative control is `:unauthorized_beacon`
       everywhere.
 - [ ] No new op kind exists: the beacon is a body of the existing `:authority` kind.
-- [ ] The four new vectors exist and pass conformance; every pre-existing vector is
-      byte-identical, enumerated in the report, with `township_beacon_unauthorized` and the four
-      lease vectors checked first and named explicitly.
+- [ ] The five new vectors exist and pass conformance, including
+      `township_beacon_witnessed_horizon`; every pre-existing vector is byte-identical, enumerated in
+      the report, with `township_beacon_unauthorized` and the four lease vectors checked first and
+      named explicitly.
 - [ ] `known_dump_policy_atoms/0` carries every new atom and a dump holding a witnessed beacon
       restores in a freshly booted VM.
 - [ ] `Lattice.Canonical` is unchanged.
@@ -1371,9 +1572,12 @@ Machine-checkable. ALL must hold:
 
 - **Reviewer focus**: the domain separator. A beacon certificate and a succession certificate must
   not be interchangeable, or a witness set pinned for one purpose silently gains the other. The
-  second focus is the ancestry-scoped monotonicity: the witnessed branch must reuse the exact
+  second focus is everything the judge reads from ancestry: the witnessed branch must reuse the exact
   `classify_beacon/6` prior-max computation, not a global maximum, or two concurrent witnessed
-  beacons diverge across replicas. Step 2d is that focus made executable, and step 3's
+  beacons diverge across replicas, and it must resolve its **policy** from the same candidate's
+  ancestry rather than from the globally merged `collect_policies/3` map, or a beacon that predates a
+  root replacement, or forks around it, is judged under the wrong policy and an invalid replacement
+  silently overwrites a valid one. Step 2d is that focus made executable, and step 3's
   author-and-deps binding is what it tests; a reviewer who sees the phrase "the prior valid beacon
   op id" anywhere in the diff should reject it, because in the concurrent case there are two. A
   reviewer who sees a claim that omits `deps` or `author` should also reject it, and so should a
@@ -1404,7 +1608,9 @@ Machine-checkable. ALL must hold:
   492-507) merges the policies of every valid root-authored genesis, and
   `township_genesis_projection_parity` (`lattice.export_vectors.ex` 509-608) is the existing
   demonstration of a second root genesis replacing the first policy. So the replica root may add or
-  replace `:__beacon__` at any time, applying from that genesis op's causal position; a witness,
+  replace `:__beacon__` at any time, applying from that genesis op's causal position, which the judge
+  implements by resolving the latest valid entry in each candidate beacon's own ancestry rather than
+  by reading the globally merged policy map; a witness,
   holder or member may never change it, an invalid replacement is discarded rather than honored, and
   once the founder realm is gone no root key survives to author another genesis, which is what
   freezes the policy after founder loss. A product surface describing the choice says that: the
