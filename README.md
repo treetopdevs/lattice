@@ -147,6 +147,14 @@ Headline guarantees (all asserted by tests):
 - **Durable messaging** — inbox ops and promises survive dormancy; `await` resolves
   after the target rematerializes.
 
+One limit on the `succession` DSL, recorded by the Plan 175 spike:
+`after: {:dormant_ticks, n}` means a designated successor may claim the role once it
+asserts a sufficiently large tick, not a time-based control. Ticks are author-asserted
+and untrusted, so a legacy succession policy proves who signed the claim, not that the
+holder was dormant. See
+[docs/adr/0004-succession-validation.md](docs/adr/0004-succession-validation.md) and
+[docs/research/succession_tick_provenance.md](docs/research/succession_tick_provenance.md).
+
 The code lives in `apps/lattice_core/lib/lattice/` (`Op`, `Log`, `Sync`, `Net`,
 `Clock`, `Crdt`, `Replica`, `Reduce`, `Authority`, `Registry`, `Materializer`,
 `Promise`, `Live`, `Sim`), with the public facade on `Lattice` (`materialize/2`,

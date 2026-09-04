@@ -537,14 +537,37 @@ branch and say which in the PR:
 - defer moving it to a witnessed shape to a later Township plan.
 
 Either way the doc must state plainly that under this configuration a holder can pin
-`last_active` at `2^64-1`, that every encodable succession tick then quarantines
-`:premature_succession`, that `2^64` cannot be authored at all, and that the lockout is therefore
-reachable and unrecoverable through the legacy path for the life of the replica; the only exits
-are a voluntary transfer by the pinning holder or a new replica. See
-`docs/research/succession_tick_provenance.md` section 6.2 for the reproduction.
+`last_active` at `2^64-1`, that every encodable succession tick whose ancestry carries the honored
+pin then quarantines `:premature_succession`, that `2^64` cannot be authored at all, and that the
+lockout is therefore reachable and, on every history in which the pin is honored, unrecoverable
+through the legacy path for the life of the replica; its exits are a succeed op by the designated
+successor whose deps fork around the pin, a voluntary transfer by the pinning holder, or a new
+replica. See `docs/research/succession_tick_provenance.md` sections 6.2 and 6.2a for the
+reproductions. Corrected during step 1 execution (2026-09-03): the earlier text required the doc
+to say the lockout was "unrecoverable through the legacy path for the life of the replica; the
+only exits are a voluntary transfer by the pinning holder or a new replica", which 6.2a refutes.
 
 1d. Run the prose-pinning suites (`audit_bundle_test.exs`, `read_model_test.exs`,
 `treehouse/contract_test.exs`) and confirm they are green and unchanged.
+
+**Step 1 execution note (2026-09-03).** Step 1c took the relabel branch: the `Township.Matter`
+moduledoc says the module-level line is decorative, why (every consumer reads only
+`Map.keys(__lattice_succession__())`), and where the live policy comes from. One sentence 1c
+originally mandated was found false while writing it and is corrected in place above: "the
+lockout is therefore reachable and unrecoverable through the legacy path for the life of the
+replica; the only exits are a voluntary transfer by the pinning holder or a new replica".
+`last_active_from/3` (`authority.ex` 989-994) is ancestry-scoped, and spike section 6.2a
+reproduces the escape: a succeed op by the designated successor whose deps omit the pinning
+transfer lands on every replica with byte-identical state, and when it sorts before the transfer
+in topo order the pin itself is retroactively quarantined `:double_transfer`, after which a later
+succeed whose deps carry that quarantined pin is gated only by the forked succeed's own tick. The
+tree therefore says the lockout binds
+every succeed op built on a history in which the pin is honored and names the fork as an exit; the
+spike's 6.2 close, decision 5 bullet, 7.5 table and section 9 answer 5 are qualified in place with
+the same marker. Step 8b's claim-boundary documents, and any later sentence about the pin, must
+carry the same ancestry qualification.
+Decision 1 (option D), the out-of-scope list and the STOP conditions are unchanged; the fork is
+legacy-tick behaviour, not beacon behaviour, and no code moved.
 
 ### Step 2 (RED): Failing oracle probes
 
