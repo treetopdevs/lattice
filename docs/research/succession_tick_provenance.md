@@ -444,8 +444,9 @@ are a succeed op that forks around the pin, a voluntary transfer by the current 
 author only in the self-transfer variant; after the transfer to bystander a further transfer by the
 author is `:transfer_not_holder`), or a new replica. And the
 seizure of 6.1 does not depend on the holder being quiet in the log; it depends only on the deps
-the successor chooses, because any ancestor with a low `last_active` satisfies the dormancy gate
-whatever the holder has done since. Decision 5 in section 9 and the "unrecoverable" column of 7.5
+the successor chooses, because the gate reads the maximum tick over the succeed op's whole causal
+closure, so deps whose closure omits the holder's later acquires and heartbeats satisfy it whatever
+the holder has done since (a closure that carries a heartbeat at tick 100 still rejects tick 5). Decision 5 in section 9 and the "unrecoverable" column of 7.5
 read with the same qualification. Nothing here changes decision 1 (option D): the tick stays
 untrusted, the non-claim sentence stays, and Plan 179's build does not touch the dormancy
 arithmetic.
@@ -1186,8 +1187,9 @@ sentence updated by its own plan after (a) to (d) are green, never before.
 5. **How is an existing 2^64-1 lockout repaired?** Not by any option here; none of A, B, C or D is
    retroactive. A role with a plain `dormant_ticks` policy and no recovery policy that has been
    pinned is unrecoverable via the legacy path, for the life of the replica, on every history that
-   carries the honored pin; the designated successor's fork around the pin is the one legacy exit
-   (6.2a, Plan 179 step 1). Review round ci-2
+   carries the honored pin; under the unchanged legacy policy the designated successor's fork
+   around the pin is the one legacy exit (6.2a, Plan 179 step 1), and while the root key lives
+   policy replacement is the separate open question below. Review round ci-2
    removed a wrong second half of this answer: it previously said the role "cannot adopt a witnessed
    policy afterwards" because policy migration is open. The live fold says otherwise.
    `collect_policies/3` (`authority.ex` 492-507) merges the policies of every valid root-authored

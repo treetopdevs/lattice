@@ -58,7 +58,10 @@ defmodule Township.Matter do
   `:premature_succession` (a pin the fold has itself quarantined, for example as
   `:double_transfer` behind a forked succeed, is invisible to the gate), and `2^64`
   cannot be authored at all because `Lattice.Canonical` refuses integers above the
-  ceiling. That lockout is reachable and, for every succeed op built on a history in
+  ceiling. The pin as reproduced is BEAM behaviour: a TypeScript replica decodes any
+  tick above `2^53-1` as `:malformed_term` (`parseCarrierInteger`), a pre-existing
+  cross-runtime range gap the spike records rather than closes. On the BEAM that
+  lockout is reachable and, for every succeed op built on a history in
   which the pin is honored, unrecoverable through the legacy path for the life of the
   replica. Under the unchanged legacy policy its known exits are the successor's fork
   above, a voluntary transfer by the current holder, or a new replica. While the root
