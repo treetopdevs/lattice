@@ -56,9 +56,12 @@ defmodule Township.Matter do
   cannot be authored at all because `Lattice.Canonical` refuses integers above the
   ceiling. That lockout is reachable and, for every succeed op built on a history in
   which the pin is honored, unrecoverable through the legacy path for the life of the
-  replica; its exits are the successor's fork above, a voluntary transfer by the pinning
-  holder, or a new replica. See `docs/research/succession_tick_provenance.md` sections
-  6.2 and 6.2a for the reproductions.
+  replica. Its known exits are the successor's fork above, a voluntary transfer by the
+  pinning holder, or a new replica; whether a later root-authored genesis that replaces
+  the policy rescues an already pinned role is an open question the spike did not
+  reproduce (section 9, answer 5), and after founder loss no such genesis can exist. See
+  `docs/research/succession_tick_provenance.md` sections 6.2 and 6.2a for the
+  reproductions.
   """
 
   use Lattice.Replica

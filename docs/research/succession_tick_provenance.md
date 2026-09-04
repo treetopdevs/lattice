@@ -1198,9 +1198,10 @@ sentence updated by its own plan after (a) to (d) are green, never before.
    leaves the prior valid one in force. The
    witnessed arm of `decide_succession_proof/7` never consults dormancy (section 6.3), but that was
    reproduced with the recovery policy present at genesis, not added later. Say the certain part
-   plainly: the legacy path itself offers no repair, its known exits are a voluntary transfer by the
-   pinning holder or a new replica, and once the founder key is gone no policy replacement is
-   possible at all. Do not build around it.
+   plainly: the legacy path itself offers no repair, its known exits are the designated successor's
+   fork around the honored pin (6.2a), a voluntary transfer by the pinning holder, or a new replica,
+   and once the founder key is gone no policy replacement is possible at all. Do not build around
+   it.
    The same ceiling exists on the beacon epoch and section 6.6 reproduces it: one beacon at
    `2^64-1` lapses every expiring lease, makes every later lease dead on arrival unless it expires
    at exactly the ceiling, and renders `:stale_beacon` every subsequent beacon carrying it in
