@@ -20,6 +20,11 @@
 > `clients/lattice-client/src/codec.ts`, where every canonical encoder used by
 > `canonicalBytesForWitnessedSuccessionClaim` (206-221) is module private, and
 > `clients/lattice-client/test/township_authoring.ts`, the gate over `authorTownshipGenesis`.
+> Review round ci-4 found a second, independent gap in the same three files and widened their
+> in-scope reasons rather than the pathspec, which already lists all three: the TypeScript client
+> cannot **author** a leased delegation at all, so the creation-time mitigation this plan's
+> Non-goals require ("lease every founder-issued grant at genesis") is inexpressible from the Tauri
+> and Expo shells. Step 6b is the repair; the drift check therefore also covers it.
 >
 > ```sh
 > git diff --stat 8200c38d..HEAD -- \
@@ -79,8 +84,10 @@
   `apps/lattice_core/lib/lattice/authority/beacon_certificate.ex`,
   `apps/lattice_core/lib/lattice/log.ex`
   (`known_dump_policy_atoms/0` only), `apps/lattice_core/lib/lattice/sim.ex`, the vector exporter
-  and its regenerated output, `clients/lattice-client/src/{authority,carrier,op,township}.ts`,
-  `clients/lattice-client/test/conformance.ts`, new BEAM tests, the compaction mirror, and the two
+  and its regenerated output, `clients/lattice-client/src/{authority,carrier,codec,op,township}.ts`
+  (`codec.ts` for the beacon-claim bytes of step 6 and the leased-authoring input of step 6b),
+  `clients/lattice-client/test/conformance.ts`,
+  `clients/lattice-client/test/township_authoring.ts`, new BEAM tests, the compaction mirror, and the two
   claim-boundary documents `docs/adr/0004-succession-validation.md` and
   `docs/lattice_poc_status.md`.
 
@@ -212,6 +219,25 @@ Read at `8200c38d`. Every pointer below was re-verified by the Plan 175 spike; s
 - Beacon body decode: `carrier.ts` 1500-1511, producing the `op.ts` line 124 `AuthorityEvidence`
   arm `| { type: "beacon"; epoch: number | null };`. A non-safe-integer epoch decodes to `null` on
   purpose so the reducer can still reach `:stale_beacon`.
+- **Leased delegation authoring is missing, and only the authoring half.** Found in review round
+  ci-4 and verified against the live tree. The **byte** layer is already complete:
+  `canonicalBytesForCarrierDelegation` (`codec.ts` 162-190) selects the
+  `lattice-delegation-v3` tag (line 93) and appends `encodeUint(expires_epoch)` when the core
+  carries one, `encodeDelegation` (`codec.ts` 290-308) appends the epoch as the tenth field of the
+  delegation term, `CarrierDelegationCore` declares the optional `expires_epoch` (`codec.ts` 63),
+  and the read path is whole: `carrier.ts` 203-218 validates the wire field,
+  `carrier.ts` 1659-1663 maps it to `expiresEpoch`, `op.ts` 31 declares it, `authority.ts`
+  1457-1476 enforces monotone narrowing down a chain, and `capability.ts` 116-130 lapses the op.
+  The **authoring** layer cannot reach any of it. `AuthorCarrierDelegationInput` (`codec.ts` 66-74)
+  has no expiry field, so `authorCarrierDelegation` (`codec.ts` 235-257) builds an
+  unsignedDelegation without `expires_epoch` and therefore always signs the unleased v2 arm;
+  `AuthorTownshipDelegationInput` (`township.ts` 29-37) has no expiry field either, so
+  `authorTownshipDelegation` (`township.ts` 187-205) and the `Pick`-derived
+  `AuthorAndPersistTownshipDelegationInput` (`township.ts` 67-76) consumed by
+  `authorAndPersistTownshipDelegation` (`township.ts` 293-337) cannot pass one. A Treehouse created
+  through the Tauri or Expo shell can therefore issue only unleased founder grants, which the
+  Non-goals below record as having **no later repair** after founder loss. Step 6b closes this.
+  It adds no canonical encoding: the v3 arm already exists and stays byte-identical.
 
 ### Dump vocabulary (`apps/lattice_core/lib/lattice/log.ex`)
 
@@ -308,7 +334,19 @@ byte-identically (step 5).
   inside `authority.ts`. The second is the BEAM and TypeScript divergence this plan names a STOP,
   and it would be invisible until a signature failed. Do not generalize the existing function to
   take a separator and a field list; add a sibling, so a certificate can never be encoded for both
-  purposes by passing a different argument.
+  purposes by passing a different argument. Review round ci-4 adds a **second, separate** reason for
+  this file, listed here so an executor does not read the beacon-claim function as its whole scope:
+  the optional lease field on `AuthorCarrierDelegationInput` (66-74) and its pass-through in
+  `authorCarrierDelegation` (235-257), per step 6b. That change adds no canonical encoding, because
+  `canonicalBytesForCarrierDelegation` (162-190) and `encodeDelegation` (290-308) already carry the
+  `lattice-delegation-v3` leased arm and must stay byte-identical.
+- `clients/lattice-client/src/township.ts` a **second time**, added in review round ci-4 beside the
+  genesis policy encoder above: the optional lease field on `AuthorTownshipDelegationInput` (29-37)
+  and on the `Pick`-derived `AuthorAndPersistTownshipDelegationInput` (67-76), plus its pass-through
+  in `authorTownshipDelegation` (187-205) and `authorAndPersistTownshipDelegation` (293-337), per
+  step 6b. Without it the creation-time mitigation this plan's Non-goals require of any group that
+  wants post-loss removal of a founder-granted member cannot be expressed by the Tauri or Expo
+  shell, and the Non-goals would be describing a mitigation the production client does not have.
 - `clients/lattice-client/test/conformance.ts` and
   `clients/lattice-client/test/township_authoring.ts` (the authoring gate, run by
   `npm --prefix clients/lattice-client run township:authoring`)
@@ -401,8 +439,13 @@ Everything in the `CLAUDE.md` boundary, and specifically:
   its `expires_epoch`, which exists only for a leased grant. AF-2's revoke clause is proved here
   for delegations whose issuer survives, and step 2c's negative control pins the narrowing. A group
   wanting post-loss removal of a founder-granted member must lease every founder-issued grant at
-  genesis. If that is unacceptable for the beta it is the next open gate, not something this plan
-  closes.
+  genesis. Review round ci-4 found that this mitigation is not currently expressible from the
+  production TypeScript client at all: the byte layer encodes the `lattice-delegation-v3` leased arm
+  (`codec.ts` 162-190) but no authoring input carries an expiry (`codec.ts` 66-74, `township.ts`
+  29-37), so the Tauri and Expo shells can issue only unleased grants. Step 6b makes it expressible,
+  and until step 6b is green this sentence describes an open prerequisite rather than an available
+  mitigation. Whether the leased default is acceptable for the beta is still the next open gate, not
+  something this plan closes.
 - No bound on what a witness-succeeded holder grants itself. `decide_succeed/8` checks the
   successor's identity and role and never inspects the `ops` on the root-less delegation the
   successor self-issues, so genesis bounds who may succeed, not what the successor may do. Fixing
@@ -1145,6 +1188,43 @@ separator or the policy encoding differs by one byte. `capability.ts` line 130 k
 `validBeacons` unchanged: a witnessed beacon lapses a lease exactly as a root beacon does, which is
 precisely the power the Non-goals correction names.
 
+### Step 6b: Leased delegation authoring in TypeScript
+
+Added in review round ci-4, and independent of the beacon mirror above. It exists because this
+plan's Non-goals require a creation-time mitigation ("lease every founder-issued grant at genesis")
+that the production client cannot currently express, so without this step Plan 179 would land a
+witnessed clock that lapses leases while no shell-authored Treehouse can create one.
+
+Verified against the live tree before writing: the byte layer is already whole and must not move.
+`canonicalBytesForCarrierDelegation` (`codec.ts` 162-190) already selects `delegationV3PayloadTag`
+(line 93) and appends `encodeUint(expires_epoch)` when the core carries one, mirroring
+`Lattice.Canonical.delegation_bytes/8`; `encodeDelegation` (`codec.ts` 290-308) already appends the
+epoch as the tenth delegation-term field; and `CarrierDelegationCore` (`codec.ts` 63) already
+declares the field. **Do not touch any of those three.** The gap is one layer up:
+
+- `codec.ts` 66-74, `AuthorCarrierDelegationInput`, gains an optional `expiresEpoch?: number`, and
+  `authorCarrierDelegation` (235-257) sets `expires_epoch` on the unsigned core **only** when the
+  input carries one. Omitting it must leave the authored delegation byte-identical to today's, so
+  the v2 arm and every existing lease vector stay untouched.
+- `township.ts` 29-37, `AuthorTownshipDelegationInput`, gains the same optional field, and
+  `authorTownshipDelegation` (187-205) forwards it under the same `!== undefined` discipline the
+  surrounding pass-throughs already use for `parentId`, `ops`, `roles` and `live`.
+- `township.ts` 67-76, `AuthorAndPersistTownshipDelegationInput`, adds it to the `Pick` list, and
+  `authorAndPersistTownshipDelegation` (293-337) forwards it into the `AuthorTownshipDelegationInput`
+  it builds, so the persisted local frame carries the lease.
+
+Two rules bound the step. First, **an unleased call must produce the same bytes it produces at
+`8200c38d`**: an optional field, never a default epoch, and no change to the ordering or the tag
+selection. Second, **do not add validation here that the judge does not have.** Narrowing down a
+chain is already enforced on the read side (`authority.ts` 1457-1476), and duplicating it in the
+authoring path would let the client and the judge disagree; author what the caller asks for and let
+the existing verification refuse it.
+
+`clients/lattice-client/test/township_authoring.ts` gains the leased-authoring case described in
+the test plan. The `expires_epoch` genesis path is deliberately excluded: `authorTownshipGenesis`
+(`township.ts` 210) self-issues the root delegation, and a leased root is a different design
+question this plan does not open.
+
 ### Step 7: Compaction parity
 
 Carry beacons through `apps/lattice_core/test/support/compaction_spike.ex` under the same rule as
@@ -1300,6 +1380,21 @@ a separate Plan 178-style slice revise the frozen founder-loss contract sentence
   BEAM-authored ones. A conformance vector alone cannot cover this: every byte in one was written by
   the BEAM, so it proves reading and not writing. Both assertions must fail on a one-byte difference
   in field order, separator or policy encoding.
+- **Leased delegation authoring in TypeScript** (step 6b, added in review round ci-4), in
+  `clients/lattice-client/test/township_authoring.ts`, four cases. One, `authorTownshipDelegation`
+  with `expiresEpoch` set produces a frame whose decoded delegation carries `expiresEpoch` and whose
+  canonical delegation bytes equal `canonicalBytesForCarrierDelegation` over the same core with the
+  `lattice-delegation-v3` tag, so the signed preimage is the leased arm and not the v2 one. Two, the
+  **unleased regression**: the same call without `expiresEpoch` produces a delegation whose id and
+  signature are byte-identical to the pre-step-6b output, which is what keeps
+  `township_lease_valid_causal`, `township_lease_expired`, `township_lease_expired_chain` and
+  `township_lease_renewed` byte-identical. Three, `authorAndPersistTownshipDelegation` with
+  `expiresEpoch` persists a local frame that still carries the lease after a round trip through
+  `carrierDelegationsFromFrames`. Four, **cross-runtime parity**: the authored leased delegation
+  bytes equal the BEAM-authored bytes for the same core, taken from an existing lease vector, so a
+  one-byte divergence in tag selection or field order fails. A conformance vector alone cannot cover
+  any of this, for the same reason step 6's parity gate exists: every byte in one was written by the
+  BEAM, so it proves reading and not writing.
 - The compaction straddle cases (step 7): a witnessed beacon beneath the frontier F whose epoch must
   survive into the snapshot's authority summary, a witnessed beacon retained above F, and a leased
   delegation whose `expires_epoch` sits between the two, asserted from the compacted side for both
@@ -1421,7 +1516,10 @@ Restore each and record the named failure.
 | `git status --short clients/lattice-client/test/vectors` | exactly five new files, no modified file |
 | `npm --prefix clients/lattice-client run typecheck` | exit 0 |
 | `npm --prefix clients/lattice-client run conformance` | exit 0, all PASS |
-| `npm --prefix clients/lattice-client run township:authoring` | exit 0, including the beacon-policy authoring case and both canonical payload parity assertions |
+| `npm --prefix clients/lattice-client run township:authoring` | exit 0, including the beacon-policy authoring case, both canonical payload parity assertions, and all four step-6b leased-authoring cases |
+| `grep -n 'expiresEpoch' clients/lattice-client/src/codec.ts clients/lattice-client/src/township.ts` | an optional authoring field on `AuthorCarrierDelegationInput`, `AuthorTownshipDelegationInput` and `AuthorAndPersistTownshipDelegationInput`, plus its pass-throughs. At `8200c38d` `township.ts` has zero matches and `codec.ts` has exactly three, all local to `canonicalBytesForCarrierDelegation` (163, 164, 184), which must still read the same |
+| `git diff 8200c38d -- clients/lattice-client/src/codec.ts \| grep -n 'delegationV3PayloadTag\|delegationPayloadTag\|encodeDelegation'` | empty; step 6b adds no canonical delegation encoding, it only reaches the arm that already exists |
+| the step-6b unleased regression case in `township_authoring.ts` | an unleased `authorTownshipDelegation` call yields a byte-identical delegation id and signature to `8200c38d` |
 | `grep -n 'lattice-beacon-witness-v1' clients/lattice-client/src/codec.ts apps/lattice_core/lib/lattice/authority/beacon_certificate.ex` | the separator appears once in each, spelled identically |
 | `grep -n 'export function canonicalBytesFor' clients/lattice-client/src/codec.ts` | a new beacon-claim function beside the succession one, not a widened succession function taking a separator |
 | `grep -nc 'beacon\|expires_epoch' apps/lattice_core/test/lattice2/compaction_spike_test.exs` | greater than 0, where it is 0 at `8200c38d` |
@@ -1532,6 +1630,14 @@ Machine-checkable. ALL must hold:
       BEAM-authored one, and canonical encoding is not duplicated inside `authority.ts`.
       `npm --prefix clients/lattice-client run township:authoring` is green and carries both
       parity assertions.
+- [ ] TypeScript can author a **leased** delegation (step 6b): `AuthorCarrierDelegationInput`,
+      `AuthorTownshipDelegationInput` and `AuthorAndPersistTownshipDelegationInput` carry an optional
+      `expiresEpoch`, `authorCarrierDelegation` signs the `lattice-delegation-v3` arm when it is set,
+      an unleased call is byte-identical to `8200c38d`, no canonical delegation encoding changed, and
+      all four leased-authoring cases in
+      `clients/lattice-client/test/township_authoring.ts` are green. Until this is true the
+      Non-goals' creation-time lease mitigation is an open prerequisite, not an available one, and no
+      surface may describe it as available.
 - [ ] A replica with no beacon policy behaves exactly as at `8200c38d`: root-only beacons, and a
       witnessed beacon is `:unauthorized_beacon`.
 - [ ] The AF-2 Sim test is green with the founder realm removed: a member is admitted, a

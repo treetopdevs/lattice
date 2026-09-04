@@ -475,10 +475,14 @@ Four things are established. One, `valid_epoch?/2` (`authority.ex` 750-751) requ
 there is no step bound anywhere. Two, one such beacon lapses every already-issued expiring lease at
 its next use. Three, every lease issued afterwards is dead on arrival unless it expires at exactly
 the ceiling, in which case it can never lapse: the mechanism has both failure directions at once.
-Four, the clock is then permanently stopped. Every later beacon is `:stale_beacon` for every
-encodable epoch, and `2^64` cannot be authored at all, so no future op can advance the epoch for
-the life of the replica. This is the beacon-side twin of section 6.2, and it is not repairable by
-any change that respects Plan 175's STOP condition on `Lattice.Canonical`.
+Four, the clock is then stopped for every op that carries that beacon in its causal ancestry. Every
+later beacon built on it is `:stale_beacon` for every encodable epoch, and `2^64` cannot be authored
+at all, so no descendant op can advance the epoch again. Read that scope exactly: `classify_beacon/6`
+computes `prior_max` over the candidate op's own ancestry, and section 6.8 reproduces a beacon whose
+`deps` fork from before the high one still being honored at a lower epoch on every replica, so the
+lockout is descendant scoped rather than replica wide. This is the beacon-side twin of section 6.2,
+and it is not repairable by any change that respects Plan 175's STOP condition on
+`Lattice.Canonical`.
 
 Today this costs nothing, because only the replica root can do it, and the root can already revoke
 any delegation it issued and stop beaconing at will. It is recorded here because the recommended
@@ -796,7 +800,9 @@ authority, no semantic authority, no role". The first half is true and the gloss
 advancement is the sole driver of Plan 149 lease lapse in both runtimes (`expired_as_of?/5` at
 `authority.ex` 1238-1248, `capability.ts` line 130), so whoever may advance the epoch may expire
 every leased delegation on the replica, and section 6.6 shows a single beacon at the canonical
-ceiling expires all of them permanently while stopping the clock forever.
+ceiling expires all of them permanently while stopping the clock for every op that carries that
+beacon in its ancestry. Section 6.8 pins that scope: a beacon on `deps` that fork from before the
+high one is still honored, so the lockout is descendant scoped rather than replica wide.
 
 Under root-only beacons that power is not new: the root already holds issuer-side revocation and
 already chooses whether to beacon at all, so nothing is widened. Candidate 2 does widen it. A
@@ -1228,8 +1234,9 @@ merged.
 - No claim that a beacon is powerless. Section 6.6 and 8.1 withdraw the first draft's "no semantic
   authority beyond epoch advancement" gloss: epoch advancement is the sole driver of Plan 149 lease
   lapse, so a beacon emitter can expire every expiring delegation on the replica, and one beacon at
-  the canonical ceiling does it permanently while stopping the clock for good. Under root-only
-  beacons that is not a new power. Plan 179 widens it, bounds it with the two genesis-policy rules
+  the canonical ceiling does it permanently while stopping the clock for every op that carries that
+  beacon in its ancestry, though not on a fork whose `deps` exclude it (sections 6.8 and 8.1).
+  Under root-only beacons that is not a new power. Plan 179 widens it, bounds it with the two genesis-policy rules
   of section 8.1, and still has to grant the remaining power in words: inside the step, a threshold
   of witnesses may expire every leased delegation whose `expires_epoch` is below the next
   admissible epoch.

@@ -140,8 +140,12 @@ copy may claim otherwise before then.
 One power this decision hands over, recorded here under D1 rather than discovered later. Epoch
 advancement is the sole driver of Plan 149 lease lapse, so a beacon emitter can expire every
 expiring delegation on the replica, and a single beacon at the canonical integer ceiling does it
-permanently while stopping the clock for the life of the replica (reproduced in
-`docs/research/succession_tick_provenance.md` section 6.6). Today only the founder's root key can
+permanently while stopping the clock for every op that carries that beacon in its causal ancestry
+(reproduced in `docs/research/succession_tick_provenance.md` section 6.6). Read that scope exactly:
+the lockout is descendant scoped, not replica wide, because the judge computes `prior_max` over the
+candidate beacon's own ancestry, so a later beacon whose `deps` fork from before the high one is
+still honored at a lower epoch on every replica (section 6.8, carried into section 8.1). Today only
+the founder's root key can
 do this, and it already holds issuer-side revocation, so nothing is widened. Plan 179 widens it to
 any threshold subset of the pinned witnesses, which is why it carries two bounds on the witnessed
 epoch: a per-step ceiling pinned in the genesis beacon policy, and an absolute horizon fixed in both

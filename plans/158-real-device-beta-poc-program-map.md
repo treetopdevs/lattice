@@ -67,7 +67,11 @@ written for history; where they conflict with this amendment, the amendment wins
 - **What that decision hands the witness set, recorded before the build.** Epoch advancement is the
   sole driver of Plan 149 lease lapse, so a beacon emitter can expire every expiring delegation on
   the replica, and one beacon at the canonical integer ceiling does it permanently while stopping
-  the clock for the life of the replica. Only the founder's root key can do this today. Plan 179
+  the clock for every op that carries that beacon in its causal ancestry. Read that scope exactly:
+  the lockout is descendant scoped, not replica wide, because the judge computes `prior_max` over
+  the candidate beacon's own ancestry, so a later beacon whose `deps` fork from before the high one
+  is still honored at a lower epoch on every replica (decision record sections 6.8 and 8.1). Only
+  the founder's root key can do this today. Plan 179
   widens it to any threshold subset of the pinned witnesses and therefore carries two bounds on the
   witnessed epoch: a per-step ceiling pinned in the genesis beacon policy, and an absolute horizon
   fixed in both runtimes as a protocol constant, below the canonical integer ceiling and not
