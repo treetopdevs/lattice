@@ -48,7 +48,9 @@ defmodule Township.Matter do
   `after: {:dormant_ticks, n}` means a designated successor may claim the role once it
   asserts a sufficiently large tick, not a time-based control. The tick is
   author-asserted and untrusted (ADR 0004), and the dormancy check reads `last_active`
-  only from the succeed op's own causal ancestry. Two consequences follow. First, the
+  only from the succeed op's own causal ancestry. Two consequences follow for any
+  positive `n` such as the 3 reproduced (with `dormant_ticks: 0`, which nothing
+  rejects, the ceiling tick itself passes the gate and there is no lockout). First, the
   designated successor can take the role at any time, whatever the holder did, by
   authoring a succeed op whose deps omit the holder's activity (a partitioned replica
   does this naturally); it lands with byte-identical state on every replica. Second, a
