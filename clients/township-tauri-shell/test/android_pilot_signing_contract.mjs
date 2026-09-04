@@ -408,13 +408,17 @@ test("main pushes and explicit release dispatches fail when distribution does no
   assert.match(requireStep.run, /DISTRIBUTED.*!=.*true/);
 });
 
-test("the pilot contract installs its declared YAML parser before executing", () => {
+test("the pilot contract installs dependencies without registry audit before executing", () => {
   const job = workflowJob("android_pilot_contract");
   const steps = workflowSteps(job);
   const install = steps.findIndex(({ name }) => name === "Install Android pilot contract dependencies");
   const contract = steps.findIndex(({ name }) => name === "Android pilot + harness contracts");
   assert.ok(install >= 0 && install < contract);
-  assert.equal(steps[install].run, "npm --prefix clients/township-tauri-shell ci");
+  assert.equal(
+    steps[install].run,
+    "npm --prefix clients/township-tauri-shell ci --no-audit --no-fund",
+  );
+  assert.equal(job["timeout-minutes"], 15);
   const setup = steps.find(({ name }) => name === "Set up Node");
   assert.equal(setup.with.cache, "npm");
   assert.equal(setup.with["cache-dependency-path"], "clients/township-tauri-shell/package-lock.json");
