@@ -497,15 +497,25 @@ Verification: `$MIXCMD test` → exit 0 with 6 new tests passing.
 
 Machine-checkable. ALL must hold:
 
-- [ ] `$MIXCMD format --check-formatted` exits 0
-- [ ] `$MIXCMD test` exits 0, 0 failures
-- [ ] `$MIXCMD credo --strict` exits 0
-- [ ] `$MIXCMD run scripts/township_demo.exs` exits 0 and narrates W0→W4
-- [ ] `grep -n "verify_authenticity" apps/lattice_core/lib/lattice/log.ex apps/lattice_core/lib/township/audit_bundle.ex apps/lattice_core/lib/lattice/registry.ex` returns matches in all three files
-- [ ] `grep -n "wrong_replica" apps/lattice_core/lib/lattice/registry.ex` returns a match
-- [ ] The 6 tests named in the test plan exist and pass
-- [ ] `git status --porcelain` lists no file outside the in-scope list
-- [ ] `plans/README.md` status row for 171 updated
+- [x] `$MIXCMD format --check-formatted` exits 0
+- [x] `$MIXCMD test` exits 0, 0 failures
+- [x] `$MIXCMD credo --strict` exits 0
+- [x] `$MIXCMD run scripts/township_demo.exs` exits 0 and narrates W0→W4
+- [x] Adopted helper wiring: `verify_authenticity` in `log.ex`, `restore_verified` in `log.ex`/`audit_bundle.ex`/`registry.ex`, and `AuditBundle.load_verified` in the instrument
+- [x] `rg -n "wrong_replica" apps/lattice_core/lib/lattice/registry.ex` returns a match
+- [x] The 6 tests named in the test plan exist and pass
+- [x] `git status --porcelain` lists no file outside the in-scope list
+- [x] `plans/README.md` status row for 171 updated
+
+### Hosted closure — 2026-09-06
+
+Claude Fable passed final implementation `41ace37b50439f83393eda427dc55a9ef650f899`.
+PR61 tip run 34036773840 passed, and merge
+`15ea1c37b2a134725ae6d820752a9ef8f105da8d` passed its exact workflow 34045534524.
+The checked criteria use the adopted execution amendment and recorded local
+format/test/Credo/demo evidence above. The integrator updates row171 to DONE.
+This closes the verified-input consumer contract, not an unseen-history or
+native/physical completeness claim.
 
 ## STOP conditions
 
