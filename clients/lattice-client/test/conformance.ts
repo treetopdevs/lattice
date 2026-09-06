@@ -305,7 +305,9 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
       : vec.ops;
 
   if (vec.scenario === "township_beacon_witnessed_large_policy_integer" ||
-      vec.scenario === "township_beacon_witnessed_unbound_root") {
+      vec.scenario === "township_beacon_witnessed_unbound_root" ||
+      vec.scenario === "township_beacon_witnessed_policy_metadata" ||
+      vec.scenario === "township_beacon_witnessed_certificate_metadata") {
     check("beacon review vector supplies raw signed frames", (carrierFrames?.length ?? 0) > 0, true);
     for (const frame of carrierFrames ?? []) {
       check("beacon review raw frame hash/signature", await verifyCarrierOp(frame, verifier),

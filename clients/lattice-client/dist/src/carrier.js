@@ -895,14 +895,21 @@ function canonicalAtom(value) {
 function canonicalTuple(values) {
     return concat(major(6, BigInt(tupleTag)), canonicalTerm(values));
 }
-// A known invalid reserved policy does not invalidate its otherwise valid genesis
-// on BEAM. Decode only its bounded numeric fields contextually; the signed raw
-// body and generic integer/horizon validation are never changed.
+// Invalid reserved metadata stays local to the policy/certificate on BEAM.
+// Context never changes the raw frame or the body/claim epoch horizon.
 function decodeCarrierBody(op) {
     const body = op.body;
     if (op.kind !== "authority" || body[0] !== "tuple" || body.length !== 2 ||
-        body[1].length !== 3 || body[1][0]?.[0] !== "atom" ||
-        body[1][0][1] !== "genesis")
+        !Array.isArray(body[1]) || body[1].length !== 3 || body[1][0]?.[0] !== "atom") {
+        return decodeCarrierTerm(body);
+    }
+    if (body[1][0][1] === "beacon") {
+        return { type: "tuple", values: [
+                decodeCarrierTerm(body[1][0]), decodeCarrierTerm(body[1][1]),
+                decodeCarrierTerm(body[1][2], "beacon_certificate"),
+            ] };
+    }
+    if (body[1][0][1] !== "genesis")
         return decodeCarrierTerm(body);
     const policies = body[1][2];
     if (policies[0] !== "map" || policies.length !== 2 || !Array.isArray(policies[1]) ||
@@ -914,33 +921,17 @@ function decodeCarrierBody(op) {
             { type: "map", pairs: policies[1].map(([key, value]) => [
                     decodeCarrierTerm(key),
                     key[0] === "atom" && key.length === 2 && key[1] === "__beacon__"
-                        ? decodeReservedBeaconPolicy(value) : decodeCarrierTerm(value),
+                        ? decodeCarrierTerm(value, "beacon_metadata") : decodeCarrierTerm(value),
                 ]) },
         ] };
 }
-function decodeReservedBeaconPolicy(term) {
-    const fields = ["mode", "version", "witnesses", "threshold", "max_epoch_step"];
-    if (term[0] !== "map" || term.length !== 2 || !Array.isArray(term[1]) ||
-        term[1].length !== fields.length ||
-        term[1].some((pair) => pair.length !== 2 || pair[0][0] !== "atom" ||
-            pair[0].length !== 2 || !fields.includes(pair[0][1])) ||
-        new Set(term[1].map(([key]) => key[1])).size !== fields.length) {
-        return decodeCarrierTerm(term);
-    }
-    return { type: "map", pairs: term[1].map(([key, value]) => {
-            const bounded = key[0] === "atom" && ["version", "threshold", "max_epoch_step"].includes(key[1]);
-            const wide = bounded && value[0] === "int" && value.length === 2 &&
-                typeof value[1] === "string" && /^(0|[1-9][0-9]*)$/.test(value[1]) &&
-                BigInt(value[1]) > BigInt(Number.MAX_SAFE_INTEGER) && BigInt(value[1]) <= uint64Max;
-            return [decodeCarrierTerm(key), wide ? null : decodeCarrierTerm(value)];
-        }) };
-}
-function decodeCarrierTerm(term) {
+function decodeCarrierTerm(term, context = "strict") {
     const [tag] = term;
     const expectedLength = tag === "nil" ? 1 : 2;
     if (term.length !== expectedLength) {
         throw new Error("malformed carrier term arity");
     }
+    const childContext = context === "strict" ? "strict" : "beacon_metadata";
     switch (tag) {
         case "nil":
             return null;
@@ -949,6 +940,11 @@ function decodeCarrierTerm(term) {
                 throw new Error("malformed bool term");
             return term[1];
         case "int": {
+            if (context !== "strict" && typeof term[1] === "string" && /^(0|[1-9][0-9]*)$/.test(term[1]) &&
+                BigInt(term[1]) > BigInt(Number.MAX_SAFE_INTEGER) && BigInt(term[1]) <= uint64Max) {
+                // An opaque invalid value cannot satisfy a numeric, binary or nullable field.
+                return { type: "invalid_beacon_integer" };
+            }
             return parseCarrierInteger(term[1]);
         }
         case "bin": {
@@ -965,12 +961,12 @@ function decodeCarrierTerm(term) {
         case "list": {
             if (!Array.isArray(term[1]))
                 throw new Error("malformed list term");
-            return { type: "list", values: term[1].map(decodeCarrierTerm) };
+            return { type: "list", values: term[1].map((value) => decodeCarrierTerm(value, childContext)) };
         }
         case "tuple": {
             if (!Array.isArray(term[1]))
                 throw new Error("malformed tuple term");
-            return { type: "tuple", values: term[1].map(decodeCarrierTerm) };
+            return { type: "tuple", values: term[1].map((value) => decodeCarrierTerm(value, childContext)) };
         }
         case "map": {
             if (!Array.isArray(term[1]))
@@ -981,9 +977,17 @@ function decodeCarrierTerm(term) {
                     if (!Array.isArray(pair) || pair.length !== 2) {
                         throw new Error("malformed map pair");
                     }
+                    const key = pair[0];
+                    let valueContext = childContext;
+                    if (key[0] === "atom" && key.length === 2) {
+                        if (context === "beacon_certificate" && key[1] === "claim")
+                            valueContext = "beacon_claim";
+                        if (context === "beacon_claim" && key[1] === "epoch" && pair[1][0] === "int")
+                            valueContext = "strict";
+                    }
                     return [
-                        decodeCarrierTerm(pair[0]),
-                        decodeCarrierTerm(pair[1]),
+                        decodeCarrierTerm(key, childContext),
+                        decodeCarrierTerm(pair[1], valueContext),
                     ];
                 }),
             };
@@ -991,7 +995,7 @@ function decodeCarrierTerm(term) {
         case "mapset": {
             if (!Array.isArray(term[1]))
                 throw new Error("malformed mapset term");
-            return { type: "mapset", values: term[1].map(decodeCarrierTerm) };
+            return { type: "mapset", values: term[1].map((value) => decodeCarrierTerm(value, childContext)) };
         }
         case "delegation": {
             if (!isCarrierDelegation(term[1])) {

@@ -655,6 +655,10 @@ const invalidPolicyTerms: CarrierTerm[] = [
     [["atom", "nested"], wideBeaconInteger],
   ]]]]]]],
   wideBeaconInteger,
+  ["int", "18446744073709551615"],
+  ["tuple", [wideBeaconInteger]],
+  ["mapset", [wideBeaconInteger]],
+  ["map", [[wideBeaconInteger, ["nil"]]]],
 ];
 for (const [caseIndex, policy] of invalidPolicyTerms.entries()) {
   const frame = await authorCarrierOp({ replica: beaconVector.replica, deps: [beaconGenesis.id],
@@ -691,6 +695,49 @@ for (const [caseIndex, certificate] of invalidCertificates.entries()) {
     signer: claimWitness, kind: "authority", cap: ["nil"],
     body: ["tuple", [["atom", "beacon"], ["int", claim.epoch], certificate]] });
   await checkMetadataFrame(frame, `invalid certificate ${caseIndex}`, "unauthorized_beacon");
+}
+const overflowingClaim: CarrierTerm = ["map", [
+  ...rawClaim[1].map(([key, value]): [CarrierTerm, CarrierTerm] =>
+    [key, key[1] === "epoch" ? wideBeaconInteger : value]),
+  [["atom", "extra"], wideBeaconInteger],
+]];
+const overflowingCertificate: CarrierTerm = ["map", [
+  ...validCertificate[1].map(([key, value]): [CarrierTerm, CarrierTerm] =>
+    [key, key[1] === "claim" ? overflowingClaim : value]),
+  [["atom", "extra"], wideBeaconInteger],
+]];
+for (const [label, epoch, certificate] of [
+  ["direct body epoch", wideBeaconInteger, validCertificate],
+  ["direct claim epoch despite extra fields", ["int", claim.epoch], overflowingCertificate],
+] as [string, CarrierTerm, CarrierTerm][]) {
+  const frame = await authorCarrierOp({ replica: beaconVector.replica, deps: claim.deps,
+    signer: claimWitness, kind: "authority", cap: ["nil"],
+    body: ["tuple", [["atom", "beacon"], epoch, certificate]] });
+  check(`${label} raw bytes remain authentic`, (await verifyCarrierOp(frame, { verify: async (pub, bytes, sig) =>
+    ed25519.verify(sig, bytes, Buffer.from(pub, "base64"), { zip215: false }) })).valid, true);
+  let refused = false;
+  try { decodeCarrierOpFrame(frame); } catch { refused = true; }
+  check(`${label} keeps strict horizon refusal`, refused, true);
+  check(`${label} keeps structural malformed_term`, materialize(beaconVector.schema,
+    carrierOpsToSemanticOps([...claimFrames, frame], beaconVector.realmByPubkey)).quarantineReasons.get(frame.id), "malformed_term");
+}
+const malformedMetadata: unknown[] = [
+  ["list", [wideBeaconInteger, ["int", "09007199254740992"]]],
+  ["list", [wideBeaconInteger, ["int", "18446744073709551616"]]],
+  ["list", [wideBeaconInteger, ["int", 9007199254740992]]],
+  ["list", [wideBeaconInteger, ["bin", "%%%"]]],
+  ["list", [wideBeaconInteger, ["int", "9007199254740992", "extra"]]],
+  ["map", [[["atom", "extra"], wideBeaconInteger, ["nil"]]]],
+];
+for (const [caseIndex, invalid] of malformedMetadata.entries()) {
+  const frame = structuredClone(beaconGenesis);
+  if (frame.body[0] !== "tuple") throw new Error("genesis fixture");
+  frame.body[1][2] = ["map", [[["atom", "__beacon__"], invalid as CarrierTerm]]];
+  let refused = false;
+  try { decodeCarrierOpFrame(frame); } catch { refused = true; }
+  check(`metadata grammar ${caseIndex} remains strict`, refused, true);
+  check(`metadata grammar ${caseIndex} stays structurally malformed`,
+    carrierOpsToSemanticOps([frame])[0]?.structuralError, "malformed_term");
 }
 async function checkMetadataFrame(frame: CarrierOpFrame, label: string, reason: string | undefined) {
   check(`${label} raw hash and signature`, (await verifyCarrierOp(frame, { verify: async (pub, bytes, sig) =>
