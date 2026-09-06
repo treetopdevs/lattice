@@ -352,3 +352,14 @@ changes. Owned paths are the two workflow/native source files, their existing pu
 this document, a direct native hash dependency plus its normal lockfile update, and the external
 packaged reader's matching public draft-row lookup. The latter is an oracle-format amendment,
 not a product IPC or hidden test interface. Packaged replay remains a separate gate.
+
+
+Before the draft repair, the reviewed compatibility rule is: a legacy-only row remains at its
+unchanged key and revision; a new draft uses the deterministic lowercase SHA-256 hex key. Reads
+and writes reject `draft_storage_conflict` when both rows exist, even if their values match, and
+retain both byte-identically. Corrupt legacy data refuses instead of falling through to an empty
+or new row. Old and new binaries can concurrently create separate rows for a previously absent
+draft; per-key CAS does not prevent that cross-key race. The resulting retained conflict needs
+an explicit later resolution and is never silently assigned a winner. Existing watermark checks
+must refuse advancement on that conflict. The packaged reader mirrors this public storage format,
+and the UI maps the explicit conflict to readable preservation guidance.
