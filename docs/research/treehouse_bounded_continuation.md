@@ -610,7 +610,7 @@ AGENTS asdf/PATH toolchain, without changing any test timeout:
 | Legacy and scope protection | Every pre-existing vector remains byte-identical to R03 `e08e3995`; shared README and unified ledger untouched; `git diff --check` and local document links pass. |
 
 After Fable's P2 correction, `mix check` again exited 0: 751 tests plus 27
-properties, zero failures, three existing exclusions and strict Credo clean
+properties, zero failures, three existing exclusions and strict Credo exit 0
 (`/tmp/treehouse-r04-fable-final-check.log`). TS `conformance` now passes 57
 histories, 12 codec and 13 authoring tests; `typecheck`, `build`, `canonical`
 and `carrier:township` also exit 0. Only the new continuation corpus gains a
