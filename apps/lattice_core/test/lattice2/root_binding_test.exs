@@ -82,6 +82,7 @@ defmodule Lattice2.RootBindingTest do
           "town#root:short",
           "town#root:",
           "town#root:#{String.duplicate("!", 43)}",
+          bound <> "\n",
           bound <> "#root:#{tag}"
         ] do
       assert Authority.replica_commitment(replica) == nil

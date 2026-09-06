@@ -131,7 +131,7 @@ if (!genesisDelegation) throw new Error("missing genesis fixture delegation");
 const unboundReplica = genesisFixture.replica.split("#root:")[0]!;
 check("bound Township replica id", await bindTownshipReplica(unboundReplica, clerkAuthor.publicKey), genesisFixture.replica);
 
-for (const replica of ["town#root:", "town#root:attacker", `${genesisFixture.replica}#root:again`]) {
+for (const replica of ["town#root:", "town#root:attacker", `${genesisFixture.replica}#root:again`, `${genesisFixture.replica}\n`]) {
   check("root parser refuses malformed marker", townshipReplicaCommitment(replica), null);
   let refused = false;
   try { await bindTownshipReplica(replica, clerkAuthor.publicKey); } catch { refused = true; }
@@ -220,7 +220,8 @@ const twoGenesisAnalysis = authorityForFrames(twoGenesisFrames);
 check("later genesis keeps the exact bound replica", laterGenesis.replica, authoredGenesis.replica);
 check("later genesis retains both distinct root records", new Set(twoGenesisFrames.map((frame) => frame.id)).size, 2);
 check("both valid root records remain honored", twoGenesisFrames.some((frame) => twoGenesisAnalysis.quarantineReasons.has(frame.id)), false);
-check("later genesis updates the policy", twoGenesisAnalysis.policiesByRole.get("clerk")?.dormantTicks, 5);
+const laterPolicy = twoGenesisAnalysis.policiesByRole.get("clerk");
+check("later genesis updates the policy", laterPolicy && "dormantTicks" in laterPolicy ? laterPolicy.dormantTicks : undefined, 5);
 
 const grantFixture = vector.clientDivergedCarrierOps.find((frame) => authorityCommandName(frame) === "grant");
 if (!grantFixture) throw new Error("missing resident grant fixture frame");

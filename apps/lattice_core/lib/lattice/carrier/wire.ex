@@ -312,8 +312,9 @@ defmodule Lattice.Carrier.Wire do
        when is_binary(id) and is_binary(replica) and is_binary(issuer_b64) and
               is_binary(audience_b64) and is_list(ops) and is_list(roles) and is_boolean(live) and
               is_binary(sig_b64) do
-    with parent_id = Map.get(frame, "parent_id"),
-         true <- is_nil(parent_id) or is_binary(parent_id),
+    parent_id = Map.get(frame, "parent_id")
+
+    with true <- is_nil(parent_id) or is_binary(parent_id),
          {:ok, issuer} <- Base.decode64(issuer_b64),
          {:ok, audience} <- Base.decode64(audience_b64),
          {:ok, sig} <- Base.decode64(sig_b64),

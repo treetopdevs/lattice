@@ -92,6 +92,13 @@ TS conformance gates live in `clients/lattice-client` (`npm ci` once, then `npm 
   signer matches the committed root, so a later valid genesis remains possible.
   Adversarial forged-genesis fixtures use the lower-level signed operation seam.
   No witnessed-beacon or lease-authoring semantics change.
+- Two existing adversarial call sites also need that fixture-only adaptation:
+  `clients/lattice-client/test/live_carrier.ts` and the `authorForgedRootGenesis`
+  helper in `clients/township-tauri-shell/src/township_release_root_origination_probe.ts`.
+  They must still deliver their signed impostor to the real refusal boundary.
+  Keep their downstream state/rejection assertions intact and run the existing
+  `carrier:township:live` and `release:root-origination:contract` gates. This does
+  not authorize physical-device execution or alter normal product/custody flows.
 
 ### CRYPTO-01 — out-of-range lease crashes analyze
 

@@ -208,7 +208,13 @@ export async function authorTownshipDelegation(input: AuthorTownshipDelegationIn
 }
 
 export async function authorTownshipGenesis(input: AuthorTownshipGenesisInput): Promise<CarrierOpFrame> {
-  const replica = await bindTownshipReplica(input.replica, input.signer.publicKey);
+  const commitment = townshipReplicaCommitment(input.replica);
+  if (commitment !== null && commitment !== await townshipReplicaRootTag(input.signer.publicKey)) {
+    throw new Error("genesis signer does not match the bound replica root");
+  }
+  const replica = commitment === null
+    ? await bindTownshipReplica(input.replica, input.signer.publicKey)
+    : input.replica;
   const delegationInput: AuthorCarrierDelegationInput = {
     replica,
     audiencePubkey: input.signer.publicKey,
@@ -243,9 +249,8 @@ export function authorTownshipRevocation(input: AuthorTownshipRevocationInput): 
 }
 
 export async function bindTownshipReplica(replica: string, rootPubkey: string | Uint8Array): Promise<string> {
-  return townshipReplicaCommitment(replica) === null
-    ? `${replica}#root:${await townshipReplicaRootTag(rootPubkey)}`
-    : replica;
+  if (replica.includes("#root:")) throw new Error("replica name already contains reserved #root: marker");
+  return `${replica}#root:${await townshipReplicaRootTag(rootPubkey)}`;
 }
 
 export function townshipReplicaCommitment(replica: string): string | null {
@@ -254,7 +259,7 @@ export function townshipReplicaCommitment(replica: string): string | null {
   if (offset === -1) return null;
 
   const commitment = replica.slice(offset + marker.length);
-  return commitment.length > 0 ? commitment : null;
+  return /^[A-Za-z0-9_-]{43}$/.test(commitment) ? commitment : null;
 }
 
 export function townshipReplicaRootTag(rootPubkey: string | Uint8Array): Promise<string> {
