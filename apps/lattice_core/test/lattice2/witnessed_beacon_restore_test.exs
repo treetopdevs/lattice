@@ -41,7 +41,8 @@ defmodule Lattice2.WitnessedBeaconRestoreTest do
     end
     """
 
-    elixir = Path.expand("~/.asdf/installs/elixir/1.19.5-otp-28/bin/elixir")
+    direct = Path.expand("~/.asdf/installs/elixir/1.19.5-otp-28/bin/elixir")
+    elixir = if File.exists?(direct), do: direct, else: "elixir"
 
     {output, status} =
       System.cmd(elixir, ["-pa", Application.app_dir(:lattice_core, "ebin"), "-e", script],
