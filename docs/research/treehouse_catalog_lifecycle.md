@@ -757,3 +757,12 @@ the committed fixed-atom fixture, not a machine-local vocabulary or copied resul
 Existing Node/client preparation applies; missing dependencies fail this gate.
 Temporary test-owned files are removed after the test. This changes test wiring
 only; the reviewed cutoff grammar and C01–C15 status remain unchanged.
+
+### Retained trust interface adoption — 2026-09-06
+
+The integrator adopts the [concrete retained-trust boundary](treehouse_catalog_retained_trust.md),
+including its six explicit decisions, closed APIs, independent actual signed
+entry verification, pure versus durable installation boundary and bounded
+control evidence freeze. This authorizes its named BEAM/TS implementation and
+public/reciprocal tests within R11a. R11b/R11c and installed restart/CAS/rotation
+gates remain separate required work; no acceptance case is closed by adoption.
