@@ -90,6 +90,8 @@ export async function authorTownshipDelegation(input) {
         delegationInput.roles = input.roles;
     if (input.live !== undefined)
         delegationInput.live = input.live;
+    if (input.expiresEpoch !== undefined)
+        delegationInput.expiresEpoch = input.expiresEpoch;
     const delegation = await authorCarrierDelegation(delegationInput);
     return authorCarrierOp({
         replica: input.replica,
@@ -201,6 +203,8 @@ export async function authorAndPersistTownshipDelegation(input) {
         delegationInput.roles = input.roles;
     if (input.live !== undefined)
         delegationInput.live = input.live;
+    if (input.expiresEpoch !== undefined)
+        delegationInput.expiresEpoch = input.expiresEpoch;
     const frame = await authorTownshipDelegation(delegationInput);
     const op = carrierOpsToSemanticOps([frame], input.realmByPubkey)[0];
     if (!op)
@@ -248,16 +252,59 @@ function townshipGenesisPoliciesTerm(policies) {
         "map",
         Object.entries(policies)
             .sort(([left], [right]) => left.localeCompare(right))
-            .map(([role, policy]) => [
-            ["atom", role],
-            [
-                "map",
+            .map(([role, policy]) => {
+            if ("mode" in policy) {
+                if (role !== "__beacon__")
+                    throw new Error("witnessed beacon policy requires __beacon__ key");
+                return [
+                    ["atom", role],
+                    [
+                        "map",
+                        [
+                            [
+                                ["atom", "mode"],
+                                ["atom", policy.mode],
+                            ],
+                            [
+                                ["atom", "version"],
+                                ["int", policy.version],
+                            ],
+                            [
+                                ["atom", "witnesses"],
+                                [
+                                    "list",
+                                    policy.witnesses.map((key) => ["bin", pubkeyBase64(key)]),
+                                ],
+                            ],
+                            [
+                                ["atom", "threshold"],
+                                ["int", policy.threshold],
+                            ],
+                            [
+                                ["atom", "max_epoch_step"],
+                                ["int", policy.maxEpochStep],
+                            ],
+                        ],
+                    ],
+                ];
+            }
+            return [
+                ["atom", role],
                 [
-                    [["atom", "successor"], ["bin", pubkeyBase64(policy.successorPubkey)]],
-                    [["atom", "dormant_ticks"], ["int", policy.dormantTicks]],
+                    "map",
+                    [
+                        [
+                            ["atom", "successor"],
+                            ["bin", pubkeyBase64(policy.successorPubkey)],
+                        ],
+                        [
+                            ["atom", "dormant_ticks"],
+                            ["int", policy.dormantTicks],
+                        ],
+                    ],
                 ],
-            ],
-        ]),
+            ];
+        }),
     ];
 }
 function textBase64(value) {

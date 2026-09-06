@@ -131,7 +131,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
   use Mix.Task
 
   alias Lattice.Authority
-  alias Lattice.Authority.{Consent, Delegation, SuccessionCertificate}
+  alias Lattice.Authority.{BeaconCertificate, Consent, Delegation, SuccessionCertificate}
   alias Lattice.Canonical
   alias Lattice.Carrier.Wire, as: CarrierWire
   alias Lattice.{Identity, Log, Op, Sim, Sync}
@@ -230,6 +230,11 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_lease_expired_chain(),
       township_lease_renewed(),
       township_beacon_unauthorized(),
+      township_beacon_witnessed_advance(),
+      township_beacon_witnessed_subthreshold(),
+      township_beacon_witnessed_founder_loss(),
+      township_beacon_witnessed_concurrent(),
+      township_beacon_witnessed_horizon(),
       township_policy_honored_target(),
       township_policy_target_reason_taxonomy(),
       township_policy_concurrent_target_not_visible(),
@@ -2477,6 +2482,358 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
   end
 
   # --- Plan 149 lease vectors (V6) -----------------------------------------
+
+  # Plan 179: new vectors only; all legacy scenario inputs remain unchanged.
+  defp beacon_sim(name) do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:beacon-#{name}",
+        ["clerk", "resident", "w0", "w1", "w2", "w3"],
+        seed: "township:beacon"
+      )
+
+    policies = %{
+      __beacon__: %{
+        mode: :witnessed,
+        version: 1,
+        witnesses: ["w0", "w1", "w2", "w3"],
+        threshold: 2,
+        max_epoch_step: 10
+      }
+    }
+
+    policies =
+      if name == "founder-loss",
+        do:
+          Map.put(policies, :clerk, %{
+            successor: "resident",
+            recovery: %{
+              mode: :witnessed,
+              version: 1,
+              witnesses: ["w0", "w1", "w2", "w3"],
+              threshold: 2
+            }
+          }),
+        else: policies
+
+    Sim.create_replica(sim, "clerk", policies: policies)
+  end
+
+  defp township_beacon_witnessed_advance do
+    {sim, genesis} = beacon_sim("advance")
+    {sim, lease} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 3)
+    sim = Sim.sync_all(sim)
+
+    {sim, early} =
+      Sim.command(sim, "resident", :post, ["before witnessed advance"], cap: lease.id)
+
+    sim = Sim.sync_all(sim)
+    {sim, beacon} = Sim.beacon(sim, "w0", 4, witnesses: ["w0", "w1"])
+    sim = Sim.sync_all(sim)
+    {sim, late} = Sim.command(sim, "resident", :post, ["after witnessed advance"], cap: lease.id)
+    sim = Sim.sync_all(sim)
+    {:genesis, root_delegation, policies} = genesis.body
+
+    replacement = %{
+      policies.__beacon__
+      | witnesses: Enum.map(["w2", "w3"], &Sim.identity(sim, &1).pub)
+    }
+
+    {sim, _replacement} =
+      Sim.append(
+        sim,
+        "clerk",
+        :authority,
+        {:genesis, root_delegation, %{__beacon__: replacement}}
+      )
+
+    # This author's frontier still forks before the replacement.
+    {sim, fork} = Sim.beacon(sim, "w0", 5, witnesses: ["w0", "w1"])
+    sim = Sim.sync_all(sim)
+    {sim, superseded} = Sim.beacon(sim, "w0", 6, witnesses: ["w0", "w1"])
+    {sim, current} = Sim.beacon(sim, "w2", 6, witnesses: ["w2", "w3"])
+    sim = Sim.sync_all(sim)
+
+    {sim, invalid_replacement} =
+      Sim.append(
+        sim,
+        "clerk",
+        :authority,
+        {:genesis, root_delegation, %{__beacon__: %{replacement | max_epoch_step: 65_536}}}
+      )
+
+    sim = Sim.sync_all(sim)
+    {sim, after_invalid} = Sim.beacon(sim, "w2", 7, witnesses: ["w2", "w3"])
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "resident")
+
+    for op <- [fork, current, invalid_replacement, after_invalid],
+        do: assert_authority_honored!(log, op.id)
+
+    assert_authority_reason!(log, superseded.id, :unauthorized_beacon)
+    assert_authority_honored!(log, early.id)
+    assert_authority_honored!(log, beacon.id)
+    assert_authority_reason!(log, late.id, :lease_expired)
+    true = Authority.expired?(log, lease.id)
+    {:beacon, _, certificate} = beacon.body
+
+    capability_scenario_with_canonical_ops("township_beacon_witnessed_advance", sim, log, %{
+      "case" => "witnessed_advance",
+      "honoredOperationId" => early.id,
+      "beaconOperationId" => beacon.id,
+      "expiredOperationId" => late.id,
+      "genesisOperationId" => genesis.id,
+      "founderSeed" => "township:beacon:clerk",
+      "claimPreimageHex" =>
+        certificate.claim
+        |> BeaconCertificate.signing_payload()
+        |> Base.encode16(case: :lower),
+      "genesisCanonicalHex" => genesis |> Op.canonical_encoding() |> Base.encode16(case: :lower)
+    })
+  end
+
+  defp township_beacon_witnessed_subthreshold do
+    {sim, _} = beacon_sim("subthreshold")
+    {sim, lease} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 3)
+    sim = Sim.sync_all(sim)
+    {sim, beacon} = Sim.beacon(sim, "w0", 4, witnesses: ["w0"])
+    {sim, negative_ops} = append_negative_beacons(sim)
+    sim = Sim.sync_all(sim)
+    {sim, post} = Sim.command(sim, "resident", :post, ["lease remains live"], cap: lease.id)
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "resident")
+    assert_authority_reason!(log, beacon.id, :unauthorized_beacon)
+    for op <- negative_ops, do: assert_authority_reason!(log, op.id, :unauthorized_beacon)
+    assert_authority_honored!(log, post.id)
+    false = Authority.expired?(log, lease.id)
+
+    capability_scenario_with_canonical_ops("township_beacon_witnessed_subthreshold", sim, log, %{
+      "case" => "witnessed_subthreshold",
+      "legacyMigration" => legacy_beacon_migration(),
+      "beaconOperationId" => beacon.id,
+      "honoredOperationId" => post.id
+    })
+  end
+
+  defp legacy_beacon_migration do
+    sim =
+      Sim.new(Matter, "replica:r03:legacy-migration", ["founder", "member", "w1"],
+        seed: "r03-migration"
+      )
+
+    {sim, _} = Sim.create_replica(sim, "founder")
+
+    {sim, grants} =
+      Enum.reduce(0..9, {sim, []}, fn epoch, {acc, grants} ->
+        {acc, grant} = Sim.grant(acc, "founder", "member", ops: [:post], expires_epoch: epoch)
+        {acc, grants ++ [grant]}
+      end)
+
+    sim = Sim.sync_all(sim)
+    export_sim = sim
+
+    sim = %{
+      sim
+      | realms: Map.delete(sim.realms, "founder"),
+        logs: Map.delete(sim.logs, "founder"),
+        caps: Map.delete(sim.caps, "founder")
+    }
+
+    {sim, simple} = Sim.beacon(sim, "w1", 7)
+    {sim, future} = Sim.append(sim, "w1", :authority, {:beacon, 7, %{}})
+    sim = Sim.sync_all(sim)
+
+    {sim, post} =
+      Sim.command(sim, "member", :post, ["clock has not advanced"], cap: Enum.at(grants, 6).id)
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "member")
+    encoded = for op <- Log.topo_ops(log), do: {Op.canonical_encoding(op), op.sig}
+
+    fingerprint =
+      :crypto.hash(:sha256, :erlang.term_to_binary(encoded, [:deterministic]))
+      |> Base.encode16(case: :lower)
+
+    "3c2172ced9d5088a6d2deff134be9b70863f2eee221a94d81424c0294bed430f" = fingerprint
+    assert_authority_reason!(log, simple.id, :unauthorized_beacon)
+    assert_authority_reason!(log, future.id, :unauthorized_beacon)
+    assert_authority_honored!(log, post.id)
+    false = Enum.any?(grants, &Authority.expired?(log, &1.id))
+    realms = realm_index(export_sim)
+
+    %{
+      "baselineCommit" => "afe5ea250072267927b89b353e7bde1e793176b5",
+      "signedBytesFingerprint" => fingerprint,
+      "oracleCarrierOps" => carrier_ops(log),
+      "realmByPubkey" => carrier_realm_by_pubkey(realms),
+      "state" => state_json(Matter, log, realms),
+      "legacyReasonPairs" => [[simple.id, "unauthorized_beacon"]],
+      "auditDeltaOperationId" => future.id,
+      "authorityQuarantine" => authority_quarantine(log)
+    }
+  end
+
+  defp append_negative_beacons(sim) do
+    author = Sim.identity(sim, "w0")
+    witnesses = Enum.map(["w0", "w1"], &Sim.identity(sim, &1))
+    deps = Log.frontier(Sim.log(sim, "w0"))
+    claim = BeaconCertificate.claim(sim.replica, 4, author.pub, deps)
+    good = BeaconCertificate.new(claim, witnesses)
+    [first, second] = good.signatures
+
+    wrong_domain = %{
+      good
+      | signatures:
+          Enum.map(witnesses, fn witness ->
+            %{
+              witness: witness.pub,
+              signature:
+                Identity.sign(witness, Canonical.term(["lattice-succession-witness-v1", claim]))
+            }
+          end)
+          |> Enum.sort_by(& &1.witness)
+    }
+
+    certificates = [
+      %{good | signatures: [first, first]},
+      %{good | signatures: [second, first]},
+      %{good | signatures: [%{first | signature: <<0::512>>}, second]},
+      %{good | signatures: [Map.put(first, :extra, 0), second]},
+      Map.put(good, :extra, 0),
+      BeaconCertificate.new(claim, [author, Sim.identity(sim, "resident")]),
+      BeaconCertificate.new(%{claim | replica: "replica:foreign"}, witnesses),
+      BeaconCertificate.new(%{claim | author: Sim.identity(sim, "w1").pub}, witnesses),
+      BeaconCertificate.new(%{claim | deps: []}, witnesses),
+      BeaconCertificate.new(%{claim | epoch: 5}, witnesses),
+      BeaconCertificate.new(%{claim | version: 2}, witnesses),
+      wrong_domain
+    ]
+
+    ops = Enum.map(certificates, &Op.new(author, sim.replica, deps, :authority, {:beacon, 4, &1}))
+    outsider = Sim.identity(sim, "resident")
+
+    outsider_cert =
+      BeaconCertificate.new(
+        BeaconCertificate.claim(sim.replica, 4, outsider.pub, deps),
+        witnesses
+      )
+
+    step_cert =
+      BeaconCertificate.new(BeaconCertificate.claim(sim.replica, 10, author.pub, deps), witnesses)
+
+    ops =
+      ops ++
+        [
+          Op.new(outsider, sim.replica, deps, :authority, {:beacon, 4, outsider_cert}),
+          Op.new(author, sim.replica, deps, :authority, {:beacon, 10, step_cert})
+        ]
+
+    log = Enum.reduce(ops, Sim.log(sim, "w0"), &Log.append!(&2, &1))
+    {%{sim | logs: Map.put(sim.logs, "w0", log)}, ops}
+  end
+
+  defp township_beacon_witnessed_founder_loss do
+    {sim, _} = beacon_sim("founder-loss")
+    export_realms = sim.realms
+    {sim, admission} = Sim.grant(sim, "clerk", "resident", ops: [:admit, :post], live: true)
+    {sim, lease} = Sim.grant(sim, "clerk", "w3", ops: [:post], expires_epoch: 3)
+    sim = Sim.sync_all(sim)
+    {sim, child} = Sim.grant(sim, "resident", "w2", ops: [:post])
+    sim = Sim.sync_all(sim)
+
+    sim = %{
+      sim
+      | realms: Map.delete(sim.realms, "clerk"),
+        logs: Map.delete(sim.logs, "clerk"),
+        caps: Map.delete(sim.caps, "clerk")
+    }
+
+    {sim, succession} =
+      Sim.succeed(sim, "resident", :clerk,
+        witnesses: ["w0", "w1"],
+        ops: [:close_matter, :reopen_matter]
+      )
+
+    {sim, admit} = Sim.command(sim, "resident", :admit, ["new participant"], cap: admission.id)
+    {sim, revoke} = Sim.revoke(sim, "resident", child.id)
+    {sim, forbidden} = Sim.revoke(sim, "resident", admission.id)
+    sim = Sim.sync_all(sim)
+    {sim, revoked} = Sim.command(sim, "w2", :post, ["issuer revoked"], cap: child.id)
+    {sim, beacon} = Sim.beacon(sim, "w0", 4, witnesses: ["w0", "w1"])
+    sim = Sim.sync_all(sim)
+    {sim, expired} = Sim.command(sim, "w3", :post, ["witnessed lapse"], cap: lease.id)
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "resident")
+    for op <- [succession, admit, revoke, beacon], do: assert_authority_honored!(log, op.id)
+    assert_authority_reason!(log, forbidden.id, :unauthorized_revoke)
+    assert_authority_reason!(log, revoked.id, :revoked_capability)
+    assert_authority_reason!(log, expired.id, :lease_expired)
+    true = Authority.expired?(log, lease.id)
+    true = Authority.delegation_active?(log, admission.id)
+    # Restore names for JSON labels only; all operations above ran without the founder identity.
+    capability_scenario_with_canonical_ops(
+      "township_beacon_witnessed_founder_loss",
+      %{sim | realms: export_realms},
+      log,
+      %{
+        "case" => "witnessed_founder_loss",
+        "founderIdentityRemoved" => true,
+        "successionOperationId" => succession.id,
+        "admissionOperationId" => admit.id,
+        "issuerRevokeOperationId" => revoke.id,
+        "unauthorizedFounderRevokeOperationId" => forbidden.id,
+        "beaconOperationId" => beacon.id,
+        "expiredOperationId" => expired.id
+      }
+    )
+  end
+
+  defp township_beacon_witnessed_concurrent do
+    {sim, _} = beacon_sim("concurrent")
+    left = ["clerk", "resident", "w0", "w1"]
+    right = ["w2", "w3"]
+    pairs = for a <- left, b <- right, do: {a, b}
+    sim = Enum.reduce(pairs, sim, fn {a, b}, acc -> Sim.partition(acc, a, b) end)
+    {sim, first} = Sim.beacon(sim, "w0", 4, witnesses: ["w0", "w1"])
+    {sim, second} = Sim.beacon(sim, "w2", 4, witnesses: ["w2", "w3"])
+    sim = Sim.sync_all(sim)
+    sim = Enum.reduce(pairs, sim, fn {a, b}, acc -> Sim.heal(acc, a, b) end) |> Sim.sync_all()
+    {sim, next} = Sim.beacon(sim, "w1", 5, witnesses: ["w1", "w3"])
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "resident")
+    for op <- [first, second, next], do: assert_authority_honored!(log, op.id)
+
+    capability_scenario_with_canonical_ops("township_beacon_witnessed_concurrent", sim, log, %{
+      "case" => "witnessed_concurrent",
+      "beaconOperationIds" => [first.id, second.id, next.id]
+    })
+  end
+
+  defp township_beacon_witnessed_horizon do
+    {sim, _} = beacon_sim("horizon")
+    horizon = 9_007_199_254_740_991
+    {sim, lease} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: horizon)
+    {sim, _} = Sim.beacon(sim, "clerk", horizon - 1)
+    sim = Sim.sync_all(sim)
+    {sim, beacon} = Sim.beacon(sim, "w0", horizon + 1, witnesses: ["w0", "w1"])
+    sim = Sim.sync_all(sim)
+
+    {sim, post} =
+      Sim.command(sim, "resident", :post, ["beyond horizon confers no lapse"], cap: lease.id)
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "resident")
+    assert_authority_reason!(log, beacon.id, :malformed_term)
+    assert_authority_honored!(log, post.id)
+    false = Authority.expired?(log, lease.id)
+
+    capability_scenario_with_canonical_ops("township_beacon_witnessed_horizon", sim, log, %{
+      "case" => "witnessed_horizon",
+      "beaconOperationId" => beacon.id,
+      "honoredOperationId" => post.id
+    })
+  end
 
   defp township_lease_valid_causal do
     sim =

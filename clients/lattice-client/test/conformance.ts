@@ -32,8 +32,9 @@ import {
   verifyCarrierOp,
   verifyWitnessedSuccessionCertificate,
   witnessedRecoveryPolicyId,
+  witnessedBeaconHorizon,
 } from "../src/index";
-import type { Op, ReplicaSchema } from "../src/index";
+import type { CarrierOpFrame, Op, ReplicaSchema } from "../src/index";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const vecDir = join(here, "vectors");
@@ -284,7 +285,17 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
   const vec = JSON.parse(readFileSync(join(vecDir, file), "utf8")) as Vector;
   console.log(`\n▸ ${vec.scenario}  (${file})`);
 
-  const carrierFrames = vec.oracleCarrierOps?.map(decodeCarrierOpFrame);
+  const horizonVector = vec.scenario === "township_beacon_witnessed_horizon";
+  const carrierFrames = horizonVector
+    ? vec.oracleCarrierOps as CarrierOpFrame[] | undefined
+    : vec.oracleCarrierOps?.map(decodeCarrierOpFrame);
+  if (horizonVector) {
+    check("witnessed epoch horizon is fixed across runtimes", witnessedBeaconHorizon, 9_007_199_254_740_991);
+    const frame = carrierFrames?.find((candidate) => candidate.id === vec.capabilityCase?.beaconOperationId);
+    let refused = false;
+    try { decodeCarrierOpFrame(frame); } catch { refused = true; }
+    check("strict frame decoding refuses above-horizon integer", refused, true);
+  }
   const ops =
     carrierFrames !== undefined && vec.realmByPubkey !== undefined
       ? carrierOpsToSemanticOps(carrierFrames, vec.realmByPubkey)
@@ -751,6 +762,17 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
       JSON.stringify(full.state),
       withoutLink === null ? null : JSON.stringify(withoutLink.state),
     );
+  }
+  if (vec.capabilityCase?.legacyMigration !== undefined) {
+    const migration = vec.capabilityCase.legacyMigration as {
+      oracleCarrierOps: CarrierOpFrame[]; realmByPubkey: Record<string, string>;
+      state: Record<string, unknown>; legacyReasonPairs: [string, string][];
+      auditDeltaOperationId: string; authorityQuarantine: [string, string][];
+    };
+    const historicalOps = carrierOpsToSemanticOps(migration.oracleCarrierOps, migration.realmByPubkey);
+    const migrated = materialize(vec.schema, historicalOps);
+    check("legacy beacon history preserves state and holders", stableComparisonValue(migrated.state), stableComparisonValue(migration.state));
+    check("legacy beacon history has exactly the authorized audit delta", sortedPairs([...migrated.quarantineReasons]), sortedPairs([...migration.legacyReasonPairs, [migration.auditDeltaOperationId, "unauthorized_beacon"]]));
   }
   if (vec.capabilityCase !== undefined) {
     const reasoned = full as typeof full & {

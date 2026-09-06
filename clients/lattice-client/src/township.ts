@@ -34,13 +34,24 @@ export interface AuthorTownshipDelegationInput {
   ops?: readonly string[];
   roles?: readonly string[];
   live?: boolean;
+  expiresEpoch?: number;
   signer: CarrierOpSigner;
 }
 
-export interface TownshipGenesisPolicy {
+export interface TownshipLegacyGenesisPolicy {
   successorPubkey: string | Uint8Array;
   dormantTicks: number;
 }
+
+export interface TownshipBeaconGenesisPolicy {
+  mode: "witnessed";
+  version: 1;
+  witnesses: readonly (string | Uint8Array)[];
+  threshold: number;
+  maxEpochStep: number;
+}
+
+export type TownshipGenesisPolicy = TownshipLegacyGenesisPolicy | TownshipBeaconGenesisPolicy;
 
 export interface AuthorTownshipGenesisInput {
   replica: string;
@@ -65,7 +76,7 @@ export interface AuthorAndPersistTownshipCommandInput
 }
 
 export interface AuthorAndPersistTownshipDelegationInput
-  extends Pick<AuthorTownshipDelegationInput, "replica" | "audiencePubkey" | "ops" | "roles" | "live" | "signer"> {
+  extends Pick<AuthorTownshipDelegationInput, "replica" | "audiencePubkey" | "ops" | "roles" | "live" | "expiresEpoch" | "signer"> {
   parentId?: string | null;
   localLog: LocalOpLogStore;
   carrierFrames: CarrierFrameStore;
@@ -194,6 +205,7 @@ export async function authorTownshipDelegation(input: AuthorTownshipDelegationIn
   if (input.ops !== undefined) delegationInput.ops = input.ops;
   if (input.roles !== undefined) delegationInput.roles = input.roles;
   if (input.live !== undefined) delegationInput.live = input.live;
+  if (input.expiresEpoch !== undefined) delegationInput.expiresEpoch = input.expiresEpoch;
 
   const delegation = await authorCarrierDelegation(delegationInput);
 
@@ -327,6 +339,7 @@ export async function authorAndPersistTownshipDelegation(
   if (input.ops !== undefined) delegationInput.ops = input.ops;
   if (input.roles !== undefined) delegationInput.roles = input.roles;
   if (input.live !== undefined) delegationInput.live = input.live;
+  if (input.expiresEpoch !== undefined) delegationInput.expiresEpoch = input.expiresEpoch;
 
   const frame = await authorTownshipDelegation(delegationInput);
   const op = carrierOpsToSemanticOps([frame], input.realmByPubkey)[0];
@@ -378,21 +391,68 @@ function commandBody(command: string, args: string[]): CarrierTerm {
   ];
 }
 
-function townshipGenesisPoliciesTerm(policies: Record<string, TownshipGenesisPolicy>): CarrierTerm {
+function townshipGenesisPoliciesTerm(
+  policies: Record<string, TownshipGenesisPolicy>,
+): CarrierTerm {
   return [
     "map",
     Object.entries(policies)
       .sort(([left], [right]) => left.localeCompare(right))
-      .map(([role, policy]) => [
-        ["atom", role],
-        [
-          "map",
+      .map(([role, policy]): [CarrierTerm, CarrierTerm] => {
+        if ("mode" in policy) {
+          if (role !== "__beacon__")
+            throw new Error("witnessed beacon policy requires __beacon__ key");
+          return [
+            ["atom", role],
+            [
+              "map",
+              [
+                [
+                  ["atom", "mode"],
+                  ["atom", policy.mode],
+                ],
+                [
+                  ["atom", "version"],
+                  ["int", policy.version],
+                ],
+                [
+                  ["atom", "witnesses"],
+                  [
+                    "list",
+                    policy.witnesses.map(
+                      (key) => ["bin", pubkeyBase64(key)] satisfies CarrierTerm,
+                    ),
+                  ],
+                ],
+                [
+                  ["atom", "threshold"],
+                  ["int", policy.threshold],
+                ],
+                [
+                  ["atom", "max_epoch_step"],
+                  ["int", policy.maxEpochStep],
+                ],
+              ],
+            ],
+          ];
+        }
+        return [
+          ["atom", role],
           [
-            [["atom", "successor"], ["bin", pubkeyBase64(policy.successorPubkey)]],
-            [["atom", "dormant_ticks"], ["int", policy.dormantTicks]],
+            "map",
+            [
+              [
+                ["atom", "successor"],
+                ["bin", pubkeyBase64(policy.successorPubkey)],
+              ],
+              [
+                ["atom", "dormant_ticks"],
+                ["int", policy.dormantTicks],
+              ],
+            ],
           ],
-        ],
-      ]) satisfies [CarrierTerm, CarrierTerm][],
+        ];
+      }) satisfies [CarrierTerm, CarrierTerm][],
   ];
 }
 

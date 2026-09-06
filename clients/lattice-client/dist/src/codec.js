@@ -102,6 +102,19 @@ export function canonicalBytesForWitnessedRecoveryPolicy(policy) {
         ]),
     ]);
 }
+/** Canonical preimage for the exact author and frontier authorized by beacon witnesses. */
+export function canonicalBytesForWitnessedBeaconClaim(claim) {
+    return encodeArray([
+        encodeBinaryString("lattice-beacon-witness-v1"),
+        encodeCanonicalMap([
+            ["version", encodeUint(claim.version)],
+            ["replica", encodeBinaryString(claim.replica)],
+            ["epoch", encodeUint(claim.epoch)],
+            ["author", encodeBytes(canonicalEvidenceBytes(claim.author))],
+            ["deps", encodeArray(claim.deps.map(encodeBinaryString))],
+        ]),
+    ]);
+}
 /** Canonical witness-signature payload shared with the BEAM certificate verifier. */
 export function canonicalBytesForWitnessedSuccessionClaim(claim) {
     return encodeArray([
@@ -135,6 +148,8 @@ export async function authorCarrierDelegation(input) {
         roles: uniqueSorted(input.roles ?? []),
         live: input.live ?? false,
     };
+    if (input.expiresEpoch !== undefined)
+        unsignedDelegation.expires_epoch = input.expiresEpoch;
     const canonicalBytes = canonicalBytesForCarrierDelegation(unsignedDelegation);
     const id = await canonicalHash(canonicalBytes);
     const signature = await input.signer.sign(canonicalBytes);

@@ -1,6 +1,6 @@
 import type { CarrierDelegation, CarrierOpFrame, CarrierTerm } from "./carrier";
 import type { Verifier } from "./identity";
-import type { Op, WitnessedRecoveryPolicyEvidence, WitnessedSuccessionClaimEvidence } from "./op";
+import type { Op, WitnessedBeaconClaimEvidence, WitnessedRecoveryPolicyEvidence, WitnessedSuccessionClaimEvidence } from "./op";
 export interface CanonicalCodec {
     /** Deterministically encode an op's signed core to bytes. */
     encode(core: OpCore): Uint8Array;
@@ -46,6 +46,7 @@ export interface AuthorCarrierDelegationInput {
     ops?: readonly string[];
     roles?: readonly string[];
     live?: boolean;
+    expiresEpoch?: number;
     signer: CarrierOpSigner;
 }
 export interface AuthorCarrierOpInput {
@@ -69,6 +70,8 @@ export declare function authorCarrierOp(input: AuthorCarrierOpInput): Promise<Ca
 export declare function canonicalBytesForCarrierDelegation(delegation: CarrierDelegationCore): Uint8Array;
 /** Canonical policy-id preimage shared with `Lattice.Authority.SuccessionCertificate`. */
 export declare function canonicalBytesForWitnessedRecoveryPolicy(policy: WitnessedRecoveryPolicyEvidence): Uint8Array;
+/** Canonical preimage for the exact author and frontier authorized by beacon witnesses. */
+export declare function canonicalBytesForWitnessedBeaconClaim(claim: WitnessedBeaconClaimEvidence): Uint8Array;
 /** Canonical witness-signature payload shared with the BEAM certificate verifier. */
 export declare function canonicalBytesForWitnessedSuccessionClaim(claim: WitnessedSuccessionClaimEvidence): Uint8Array;
 /** Canonical storage-locator preimage for one public succession witness artifact. */

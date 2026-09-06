@@ -2,6 +2,7 @@ import type { CarrierDelegation, CarrierOpFrame, CarrierTerm } from "./carrier";
 import type { Verifier } from "./identity";
 import type {
   Op,
+  WitnessedBeaconClaimEvidence,
   WitnessedRecoveryPolicyEvidence,
   WitnessedSuccessionClaimEvidence,
 } from "./op";
@@ -70,6 +71,7 @@ export interface AuthorCarrierDelegationInput {
   ops?: readonly string[];
   roles?: readonly string[];
   live?: boolean;
+  expiresEpoch?: number;
   signer: CarrierOpSigner;
 }
 
@@ -206,6 +208,22 @@ export function canonicalBytesForWitnessedRecoveryPolicy(
   ]);
 }
 
+/** Canonical preimage for the exact author and frontier authorized by beacon witnesses. */
+export function canonicalBytesForWitnessedBeaconClaim(
+  claim: WitnessedBeaconClaimEvidence,
+): Uint8Array {
+  return encodeArray([
+    encodeBinaryString("lattice-beacon-witness-v1"),
+    encodeCanonicalMap([
+      ["version", encodeUint(claim.version)],
+      ["replica", encodeBinaryString(claim.replica)],
+      ["epoch", encodeUint(claim.epoch)],
+      ["author", encodeBytes(canonicalEvidenceBytes(claim.author))],
+      ["deps", encodeArray(claim.deps.map(encodeBinaryString))],
+    ]),
+  ]);
+}
+
 /** Canonical witness-signature payload shared with the BEAM certificate verifier. */
 export function canonicalBytesForWitnessedSuccessionClaim(
   claim: WitnessedSuccessionClaimEvidence,
@@ -248,6 +266,7 @@ export async function authorCarrierDelegation(
     roles: uniqueSorted(input.roles ?? []),
     live: input.live ?? false,
   };
+  if (input.expiresEpoch !== undefined) unsignedDelegation.expires_epoch = input.expiresEpoch;
   const canonicalBytes = canonicalBytesForCarrierDelegation(unsignedDelegation);
   const id = await canonicalHash(canonicalBytes);
   const signature = await input.signer.sign(canonicalBytes);

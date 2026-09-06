@@ -94,3 +94,5 @@ export declare function assembleWitnessedSuccessionArtifact(claim: WitnessedSucc
 export declare function exportWitnessedSuccessionArtifactJson(artifact: WitnessedSuccessionArtifactEvidence): string;
 export declare function witnessedRecoveryPolicyId(policy: WitnessedRecoveryPolicyEvidence): string | null;
 export declare function verifyWitnessedSuccessionCertificate(certificate: WitnessedSuccessionCertificateEvidence | null, expectedClaim: WitnessedSuccessionClaimEvidence, policy: WitnessedRecoveryPolicyEvidence): WitnessedSuccessionVerification;
+/** Fixed portable logical-epoch horizon, independent of genesis policy. */
+export declare const witnessedBeaconHorizon: number;
