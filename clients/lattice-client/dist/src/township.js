@@ -1,4 +1,4 @@
-import { authorCarrierDelegation, authorCarrierOp, canonicalHash } from "./codec";
+import { authorCarrierDelegation, authorCarrierOp, canonicalBase64Bytes, canonicalHash } from "./codec";
 import { carrierDelegationsFromFrames, carrierOpsToSemanticOps } from "./carrier";
 import { frontier } from "./sync";
 export function townshipCommandBody(command) {
@@ -267,7 +267,11 @@ function pubkeyBase64(value) {
     return typeof value === "string" ? value : bytesBase64(value);
 }
 function pubkeyBytes(value) {
-    return typeof value === "string" ? base64ToBytes(value) : value;
+    const decoded = typeof value === "string" ? canonicalBase64Bytes(value, 32) : value;
+    if (decoded === null || decoded.length !== 32) {
+        throw new Error("invalid canonical Ed25519 public key");
+    }
+    return decoded;
 }
 function bytesBase64(bytes) {
     if (typeof Buffer !== "undefined")
@@ -276,14 +280,6 @@ function bytesBase64(bytes) {
     if (!btoaFn)
         throw new Error("base64 encoding unavailable");
     return btoaFn(String.fromCharCode(...bytes));
-}
-function base64ToBytes(value) {
-    if (typeof Buffer !== "undefined")
-        return new Uint8Array(Buffer.from(value, "base64"));
-    const atobFn = globalThis.atob;
-    if (!atobFn)
-        throw new Error("base64 decoding unavailable");
-    return Uint8Array.from(atobFn(value), (char) => char.charCodeAt(0));
 }
 function setSubset(needed, availableValues) {
     const available = new Set(availableValues);

@@ -288,11 +288,19 @@ catch (error) {
     nonCanonicalBase64Failure =
         error instanceof Error ? error.message : String(error);
 }
-check("hash-preserving base64 text drift is rejected before verification", {
-    hashStillMatches: await verifyCarrierOpHash(nonCanonicalBase64Frame),
+let nonCanonicalBase64HashFailure = "";
+try {
+    await verifyCarrierOpHash(nonCanonicalBase64Frame);
+}
+catch (error) {
+    nonCanonicalBase64HashFailure =
+        error instanceof Error ? error.message : String(error);
+}
+check("non-canonical base64 is rejected by frame decoding and canonical hashing", {
+    hashFailure: nonCanonicalBase64HashFailure,
     frameFailure: nonCanonicalBase64Failure,
 }, {
-    hashStillMatches: true,
+    hashFailure: "non-canonical base64",
     frameFailure: "malformed carrier op",
 });
 function coerceAtomPayload(term) {

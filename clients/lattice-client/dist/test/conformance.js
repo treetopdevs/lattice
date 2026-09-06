@@ -387,7 +387,9 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
                 ["honored", policyCase.honored],
                 ["structural", policyCase.structural],
                 ["authority", policyCase.authority],
+                ["capabilityBeforeApplication", policyCase.capabilityBeforeApplication],
                 ["application", policyCase.application],
+                ["wrongKind", policyCase.wrongKind],
             ];
             for (const [tier, entry] of tiers) {
                 if (entry === undefined)
