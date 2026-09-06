@@ -317,3 +317,63 @@ Stop and report back if:
   boundary and should land before it.
 - **Do not let this block plan 146.** 146's witness-artifact work is separable; this spike
   constrains the *ceremony's* claims, not the artifact format.
+
+## Evidence and drift amendment: 2026-09-06, R17a
+
+Reviewable design prepared at `641cbbd7` on
+`codex/treehouse-r17a-native-decision`. The
+[decision record](../docs/research/governance_witness_native_verification.md) answers
+all six decisions, contains the two-sentence verifier/signer summaries, provenance
+map and attack matrix, and selects bounded native authority projection over a
+retained authenticated history. The
+[follow-on build roadmap](roadmaps/treehouse-native-witness-build-2026-09-06.md)
+maps work to R01b/R36/R17b/R17c without allocating a new numeric plan. Its stage0
+assigns the independent fixed-prompt repair to the first implementation commit.
+This packet is not native implementation, profile adoption or physical proof.
+
+The original `91bb6ca6..HEAD` drift check includes unrelated subsequently merged
+work. Reconcile source facts first, then constrain this docs-only packet to exactly
+this plan and the two linked deliverables against base `641cbbd7`; production,
+tests, shared README and unified ledger are outside its edit scope. The integrator
+owns the still-required status-row update after review. No historical source
+excerpt or closed Plan146 evidence is relabeled as stronger than it was.
+
+Verified drift: `sign_governance_witness` is now `lib.rs:729-778`, still shape-only
+and interpolating `claim.replica`; canonical claim checks remain in
+`governance_witness.rs:27-68`, and semantic-cache loading still only parses JSON
+and checks an array. The statement in step2 that the first cryptographic check is
+not until Elixir is stale: TS already checks embedded delegation evidence, and
+`native_workflow.ts:150-198` verifies the native response digest/key/signature.
+Those checks do not establish native claim truth or authenticate every persisted
+outer operation. Current macOS `load_seed` exposes the seed to Rust memory; it is
+not the proposed opaque Android custody model.
+
+The selected architecture authenticates and retains ordinary command/inbox/DAG
+ancestors as well as authority operations, including semantic quarantines.
+Verified unsupported authority history persists with a signing block; refusing
+signing does not imply zero observation-store writes. R17b explicitly extends
+Plan146 Seam5 to the bounded existing CarrierTerm/op grammar with exact three-
+runtime byte parity, preserving legacy clerk payloads; arbitrary general CBOR and
+Core semantic changes remain excluded. That scoped amendment is recorded in
+Plan146 before the corresponding R17b implementation, after R01b scope adoption.
+
+The native verified pin selects Township clerk or Treehouse Space admin/Thread
+moderator, with a separate beacon domain and matched landed R03/R04 contracts.
+The OS reason uses a fingerprint of the full pinned replica ID, not only its root.
+Native authorization uses a 60-second monotonic, one-shot, caller/session-bound
+attempt and generation checks before presence and after blocking platform work
+before release. Whole-native-store rollback and unseen history remain non-claims.
+
+No prototype was needed to reject the compact signed-acquisition shortcut: the
+authority judge's causal and competing-acquisition rules establish its missing
+proof by inspection. Android algorithm/authentication/attestation feasibility and
+the proposed complete-history budget/latency remain unmeasured build gates.
+R01b adopts the eligibility contract before R36 preliminary device eligibility;
+R17c later proves the exact integrated physical ceremony. No cycle or software
+fallback is introduced. Only these three documentation paths change in R17a.
+
+Validation for this preparation: the six decision sections, required corrected
+boundaries, local Markdown links and balanced code fences were checked; this
+amendment preserves the complete original Plan174 text as a prefix, and the Git
+path audit admits exactly the three named documentation files. No runtime tests,
+native build, prototype or physical probe is represented by these document checks.
