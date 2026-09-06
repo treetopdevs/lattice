@@ -1,6 +1,7 @@
 defmodule Treehouse.CatalogVectors do
   @moduledoc "Deterministic public codec evidence; synthetic metadata is not installed catalog trust."
-  alias Lattice.{Authority, Identity}
+  alias Lattice.{Authority, Identity, Log, Op}
+  alias Lattice.Authority.{ContinuationCertificate, Delegation}
   alias Lattice.Carrier.Wire
   alias Treehouse.TransportCatalog, as: Catalog
 
@@ -49,6 +50,32 @@ defmodule Treehouse.CatalogVectors do
 
   @spec write_codec!(String.t()) :: :ok
   def write_codec!(path), do: File.write!(path, Jason.encode!(codec_vector(), pretty: true) <> "\n")
+
+  @spec bootstrap_history() :: map()
+  def bootstrap_history do
+    root = Identity.from_seed("root", "r11a-history-root")
+    catalog = Identity.from_seed("catalog", "r11a-history-catalog")
+    service = Identity.from_seed("service", "r11a-history-service")
+    nominee = Identity.from_seed("nominee", "r11a-history-nominee")
+    witnesses = for n <- 1..3, do: Identity.from_seed("w#{n}", "r11a-history-w#{n}")
+    replica = Authority.bind_replica("replica:treehouse:space:" <> id("history-space") <> "#authority:bounded-continuation-v1", root.pub)
+    delegation = Delegation.genesis(root, replica, ops: [:create_space, :create_thread, :catalog_bootstrap_v1, :replace_catalog_v1], roles: [:admin, :moderator])
+    genesis = Op.new(root, replica, [], :authority, {:genesis, delegation, %{}})
+    creation = Op.new(root, replica, [genesis.id], :command, {:create_space, ["Canopy"]}, cap: delegation.id)
+    profile = %{mode: :bounded_continuation, version: 1, product: :treehouse, kind: :space, role: :admin,
+      nominee: nominee.pub, witnesses: Enum.sort(Enum.map(witnesses, & &1.pub)), threshold: 2, max_lease_epochs: 7}
+    empty = Delegation.genesis(root, replica, ops: [], roles: [], live: false)
+    pin = Op.new(root, replica, [creation.id], :authority, {:genesis, empty, %{__continuation__: profile}})
+    record = %{version: 1, product: :treehouse, space: replica, space_root: root.pub,
+      profile_genesis: pin.id, profile_id: ContinuationCertificate.profile_id(profile), replacement_rule: :bounded_space_admin_v1,
+      catalog_key: catalog.pub, service_id: id("history-service"), service_key: service.pub,
+      origin: "wss://history-relay.invalid", nonce: id("history-bootstrap")}
+    bootstrap = Op.new(root, replica, [pin.id], :command, {:catalog_bootstrap_v1, [record]}, cap: delegation.id)
+    before = Enum.reduce([genesis, creation, pin], Log.new(replica), &Log.append!(&2, &1))
+    %{root: root, catalog: catalog, service: service, nominee: nominee, witnesses: witnesses,
+      replica: replica, delegation: delegation, genesis: genesis, creation: creation,
+      pin: pin, profile: profile, record: record, bootstrap: bootstrap, before: before, log: Log.append!(before, bootstrap)}
+  end
 
   defp id(label), do: :crypto.hash(:sha256, "r11a-beam-" <> label) |> Base.url_encode64(padding: false)
 end
