@@ -146,6 +146,10 @@ export function continuationProfileId(value: unknown): string | null {
     .replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
+export function verifyContinuationCertificate(_certificate: unknown, _expected: unknown, _profile: unknown): boolean {
+  return false;
+}
+
 const claimKeys = [
   "version", "product", "kind", "replica", "role", "profileId", "profileGenesis",
   "holder", "holderEpoch", "successor", "delegationId", "author", "deps", "epoch", "epochBasis",

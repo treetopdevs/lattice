@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
+import { ed25519 } from "@noble/curves/ed25519.js";
 import {
   canonicalBytesForContinuationClaim, canonicalBytesForContinuationProfile,
   continuationCertificateFromCarrierTerm, continuationCertificateToCarrierTerm,
   continuationClaimFromCarrierTerm, continuationClaimToCarrierTerm,
   continuationProfileFromCarrierTerm, continuationProfileId, continuationProfileToCarrierTerm,
   normalizeContinuationCertificate, normalizeContinuationClaim, normalizeContinuationProfile,
+  verifyContinuationCertificate,
 } from "../src/continuation";
 
 const lowKey = Buffer.alloc(32, 1).toString("base64");
@@ -65,9 +67,9 @@ test("claims reject unknown fields, unsafe epochs, noncanonical IDs and reordere
     { profileGenesis: "pin" }, { holderEpoch: `${claim.holderEpoch}="` },
     { delegationId: lowKey }, { holder: "bad" }, { successor: Buffer.alloc(33).toString("base64") },
     { author: `${highKey}\n` }, { epoch: -1 }, { epoch: 1.5 }, { epoch: 9_007_199_254_740_992 },
-    { epoch: "9" }, { epoch: Infinity }, { deps: ordered.toReversed() },
+    { epoch: "9" }, { epoch: Infinity }, { deps: [...ordered].reverse() },
     { deps: [ordered[0], ordered[0]] }, { deps: [ordered[0], , ordered[1]] },
-    { epochBasis: ordered.toReversed() }, { epochBasis: [ordered[0], "bad"] },
+    { epochBasis: [...ordered].reverse() }, { epochBasis: [ordered[0], "bad"] },
   ]) assert.equal(normalizeContinuationClaim({ ...claim, ...mutation }), null);
   for (const key of Object.keys(claim)) {
     const missing = { ...claim } as Record<string, unknown>;
@@ -105,3 +107,23 @@ test("carrier terms round-trip profile and full certificate without losing signe
   assert.ok(canonicalBytesForContinuationClaim(claim).length);
   assert.match(continuationProfileId(profile)!, /^[A-Za-z0-9_-]{43}$/);
 });
+
+test("a complete sorted threshold certificate verifies against the exact expected claim", () => {
+  const { signedProfile, boundClaim, certificate } = signedFixture();
+  assert.equal(verifyContinuationCertificate(certificate, boundClaim, signedProfile), true);
+});
+
+function signedFixture() {
+  const witnesses = [1, 2, 3].map((value) => {
+    const seed = Buffer.alloc(32, value);
+    return { seed, publicKey: Buffer.from(ed25519.getPublicKey(seed)).toString("base64") };
+  }).sort((a, b) => Buffer.compare(Buffer.from(a.publicKey, "base64"), Buffer.from(b.publicKey, "base64")));
+  const signedProfile = { ...profile, witnesses: witnesses.map((witness) => witness.publicKey) };
+  const boundClaim = { ...claim, profileId: continuationProfileId(signedProfile)! };
+  const payload = canonicalBytesForContinuationClaim(boundClaim);
+  const signatures = witnesses.map((witness) => ({
+    witness: witness.publicKey,
+    signature: Buffer.from(ed25519.sign(payload, witness.seed)).toString("base64"),
+  }));
+  return { signedProfile, boundClaim, witnesses, payload, certificate: { claim: boundClaim, signatures } };
+}
