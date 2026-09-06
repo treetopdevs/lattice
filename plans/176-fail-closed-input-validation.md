@@ -467,7 +467,7 @@ match that accepted source. The standalone R09 diff remains the adopted 19 paths
 At that exact integration source, `mix check` under asdf/OTP28 with
 `ERL_FLAGS='+S 4:4'` passed **726 tests + 27 properties**, zero failures and three
 existing exclusions. Strict Credo and formatting exited zero. The separate R08
-integration focused gate passed 12 tests; accepted-main restore/lifecycle probes
+integration focused gate passed 13 tests (4 + 1 + 8 across three suites); accepted-main restore/lifecycle probes
 passed 21. TypeScript typecheck, canonical, conformance, Township authoring and
 normal build also passed, leaving generated source unchanged. Logs are in
 `/tmp/lattice-treehouse-execution-20260906/r09-accepted-main-*` and
