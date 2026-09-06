@@ -115,23 +115,24 @@ term is authorized.
 | Delegation | Recompute v2/v3 signed bytes and ID; preserve replica, parent, attenuation, introduction and honored-candidate activation rules |
 | Policy | Existing role policy merges valid root geneses in canonical order; v1 policyId hashes the normalized four-key recovery map, not genesis bytes. R03 beacon policy is resolved per candidate ancestry |
 | Holder/acquisition | Evaluate honored acquire/transfer/succeed timeline, causal holder-at-deps and canonical-fold holder; preserve competing-branch rejection reasons |
-| Frontier | Compute from the complete admitted verified DAG; relevant missing dependencies block signing, while unconnected evidence stays outside it under the fixed-point admission rules below |
+| Frontier | Compute from the complete admitted verified DAG; relevant missing dependencies block signing, while not-yet-relevant evidence stays staged even when connected, under the fixed-point admission rules below |
 | Freshness | Retained evidence prevents caller omission of already known history; it proves neither unseen completeness nor wall-clock freshness |
 
 Distinguish storage admission from semantic judgment:
 
 - Structurally malformed, oversize or signature/ID-invalid input is refused before
   admission and contributes no trusted operation. No signature or artifact is produced.
-- An authenticated supported operation is retained even if semantically quarantined.
-  Its known authority verdict is reproduced; ordinary application verdicts are not
-  invented. Known shapes proved inert by the fixed pinned grammar remain supported;
-  today's temporary quarantine alone cannot establish permanent inertness.
-- Unknown authority variants, policy versions and schemas use the conservative
-  eligibility closure below. Relevant unknown or incomplete evidence durably blocks
-  signing. Unconnected unknown input and its unconnected supported descendant cones
-  remain staged outside the admitted frontier. A fresh self-signed key cannot cause
-  a permanent signing block merely by sending an unknown op or a supported wrapper
-  that depends on it.
+- Authenticated supported operations accepted for retention remain available even
+  if semantically quarantined, under the relevant-history or nonblocking staging
+  quota determined below. Known authority verdicts are reproduced; ordinary
+  application verdicts are not invented. Known shapes proved inert by the fixed
+  pinned grammar remain supported; temporary quarantine alone is no admission filter.
+- The conservative eligibility/relevance classifier below applies to **all**
+  authenticated input, including known-shape operations with complete dependencies,
+  as well as unknown authority variants, policy versions and schemas. Relevant
+  unknown or incomplete evidence durably blocks signing. Not-yet-relevant input
+  remains staged outside the admitted frontier. Neither connecting a fresh key's
+  command to an admitted root nor wrapping unknown input makes it relevant by itself.
 
 **Eligibility closure E is evidence of cryptographic introduction, never permission.**
 Compute the least fixed point over all retained authenticated evidence, including
@@ -154,13 +155,36 @@ author nor any dependency author. Unknown ancestry never expands E, and missing
 parent proofs remain unresolved instead of being guessed. Supported staged
 introductions must be inspected before DAG admission to avoid a closure deadlock.
 
+**2026-09-06 all-input relevance amendment:** DAG connectivity alone does not
+qualify input for capacity whose exhaustion blocks signing. After computing E,
+relevant operation history consists of authenticated E-authored operations and
+their required transitive operation ancestors. Required ancestors remain relevant
+regardless of their own authors or semantic quarantine. A known-shape, complete-DAG
+operation authored outside E remains in bounded **nonblocking staging** unless it
+is required by that history. E-authored quarantines are retained as relevant;
+this is not a permission, current-holder or application-verdict filter.
+
+Inspect independently authenticated E-issued introductions and their parent proofs
+before assigning those quotas, including supported evidence in the exact pending
+intake batch. Retain the necessary introduction/parent proof material under the
+reserved relevant-evidence budget, deduplicated by its existing canonical signed
+IDs; R17b must pin the internal representation/accounting before RED. Its outer
+operation is not made relevant merely by carrying or copying that proof, and its
+fresh outer author is not introduced by citing another audience's public capability.
+Rewrapping an already retained capability/proof therefore cannot repeatedly spend
+blocking capacity. A genuinely new authenticated E-issued introduction can expand
+E and trigger promotion; missing/unknown proof material required for an otherwise
+E-issued introduction still blocks, even with a different outer carrier. No new
+wire format, trusted producer or semantic permission follows from proof retention.
+
 Reclassify retained evidence to that fixed point before derivation and before the
 serialized release check. Unknown evidence authored by E, and unknown or missing
 ancestry of authenticated E-authored supported evidence, blocks durably. Unresolved
 parent evidence needed for an otherwise E-issued introduction also blocks; using a
-different outer carrier cannot hide an authenticated relevant issuer. Unconnected
-supported descendants with missing dependencies stay staged, so wrapping an unknown
-op in a fresh-key supported command cannot bypass the eligibility boundary.
+different outer carrier cannot hide an authenticated relevant issuer. Non-E
+supported descendants stay staged when not required by relevant history, whether
+their dependencies are missing or already complete; neither an unknown wrapper
+nor a connected supported command bypasses the eligibility boundary.
 
 A later verified introduction or E-authored descendant atomically promotes relevant
 staged evidence or persists its block before any claim is derived. Omitting retained
@@ -176,13 +200,24 @@ frontier citation. The repair prevents an unintroduced key from qualifying itsel
 it does not prove availability against eligible signatures. Unknown future
 introduction semantics are outside this pinned-version proof.
 
+The same residual applies to supported spam: a later E introduction of its author,
+or an eligible author's signed descendant citing it, promotes the retained required
+history atomically before derivation/release. If promotion exhausts relevant
+capacity, signing blocks. This correction prevents an unintroduced key from
+spending blocking capacity by itself; it cannot promise availability after an
+eligible signature makes that history relevant, including automatic frontier citation.
+
 Reserve a separate staging subquota (proposed 128 operations / 512 KiB), plus
 capacity for admitted history, promotion, intake and durable markers within the
-overall ceiling. A full unconnected staging quota refuses new unconnected input
-without evicting retained evidence or blocking otherwise complete admitted history.
+overall ceiling. A full nonblocking staging quota refuses new not-yet-relevant
+input, connected or unconnected, without evicting retained evidence or blocking
+otherwise complete admitted history. Stage3 first identifies independently
+relevant introduction proofs; staging exhaustion cannot hide their relevance.
 Quota-refused bytes are not trusted retained observations and cannot later be
-reclassified from storage. Resubmitting identical bytes once connected is a fresh
-admission, not a persistent per-bytes denylist. Order independence covers the same retained union, not different
+reclassified from storage. Resubmitting identical bytes after they become relevant
+or their missing evidence arrives is a fresh classification/admission, not a
+persistent per-bytes denylist. Mere connection does not confer relevance.
+Order independence covers the same retained union, not different
 quota-dependent admission sets. Pin exact accounting and reservation sizes in R17b
 before RED, including a full-staging promotion case.
 
@@ -204,12 +239,16 @@ recoverable input. The provisional intake batch ceiling is 64 frames / 512 KiB,
 within the overall retained-byte budget; each frame still obeys the carrier limit.
 
 Only classification of that exact journaled batch clears its fence: completed
-untrusted-input refusal, committed supported observation, pending-journal retention
+invalid-input or quota refusal, committed supported observation, pending-journal retention
 or durable block. Restart replays the same classification before enabling signing;
 an unrelated retry or different batch cannot clear it. An unreadable or mismatched
 journal is a corrupt-store refusal. Admission failures preserve the old committed
 state and recoverable batch; an ordinary crash cannot silently forget a verified
 unsupported observation or permanently strand a readable valid intake journal.
+Once a not-yet-relevant batch is classified as a staging-quota refusal, neither
+its journal nor repeated copied-cap wrappers may leave a persistent signing fence
+or admitted-capacity block. Crash recovery reaches that same refusal outcome;
+the transient fence still prevents signing before exact-batch classification.
 
 ## D3. Rollback, omission and durable limits
 
@@ -577,7 +616,8 @@ all retained signed history, pending evidence and relevant durable overhead, not
 only governance events. Include admission-journal bytes, reserved promotion and
 blocking metadata, and retained outbox pointers without double-counting their
 referenced frame. Define exact byte accounting and reservations in R17b before
-testing. Exhausting only unconnected staging refuses that input as D2 specifies;
+testing. Exhausting only nonblocking staging, including complete-DAG non-E input,
+refuses that input as D2 specifies;
 exhausting admitted/relevant capacity persists a visible signing-blocked condition.
 Never truncate relevant history to sign an old subset. This ceiling does not stop
 the carrier from
