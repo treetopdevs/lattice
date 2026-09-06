@@ -2250,3 +2250,16 @@ suggestions. Evidence is summarized in `r03-raw-deps-proof.json`, with
 publication and fresh hosted checks for this new repair are still pending at
 this local freeze. The preceding `39ea40da` hosted run passed but cannot serve
 as final-tip evidence for this correction.
+
+### Sol source review and publication handoff (2026-09-06)
+
+The actual read-only `gpt-5.6-sol` review of `39ea40da..c17eedaa` returned
+**PASS, no demonstrated P0/P1/P2**. It verified the narrow expected-claim change,
+raw signature/retention and received-claim controls, generated runtime parity,
+and unchanged 68 previous vector blobs. The result is saved as
+`/tmp/lattice-treehouse-execution-20260906/sol-r03-raw-deps-review-result.md`.
+The reviewer did not run tests and did not treat the then-running full suite as
+passed; the completed 747-test/27-property result above is separate execution
+evidence. This publication update changes documentation only. Fresh exact-tip
+hosted checks and review-thread closure remain publication gates, with the
+integrator retaining merge authority.
