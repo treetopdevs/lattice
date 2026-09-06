@@ -1954,3 +1954,182 @@ reaching the claim assertion; its output is preserved separately, and the
 final RED above reaches all eight behavioral failures without that error.
 Final independent exact-diff review, integration and hosted thread closure
 remain pending. Earlier review PASS records do not close this remediation.
+
+### Reserved beacon metadata follow-up scope (2026-09-06)
+
+The integrator approved this exact amendment before the next RED gate for
+PR68 threads `PRRT_kwDOSZGqLc6ft151` and `PRRT_kwDOSZGqLc6ft157`. The earlier
+`201e7ae6..4a823b96` review snapshot remains immutable; this is a separate delta.
+An otherwise well-formed exact authority/genesis body may decode canonical tagged
+uint64 values above the JavaScript safe horizon anywhere within its reserved
+`__beacon__` policy value, including missing, extra, or nested fields. Those
+integers become a private invalid-metadata sentinel solely in semantic decoding;
+the full surrounding shape remains available for the existing policy normalizer
+to reject. No sentinel represents a valid nullable field or numeric value.
+Other valid policies and the genesis itself retain BEAM's existing behavior.
+
+For an exact three-field beacon, certificate-local non-epoch metadata may use
+the same decoder so invalid certificates retain `unauthorized_beacon`. A direct
+integer at the exact `certificate.claim.epoch` map path remains subject to the
+portable horizon even if the surrounding maps contain extra fields. The outer
+body epoch remains generically decoded. Canonical integer syntax and uint64
+maximum, unrelated generic terms, term grammar, Base64, depth bounds, and every
+raw body/ID/signature byte retain their existing checks. No BEAM production
+authority, wire encoder, or canonical encoder changes are authorized here.
+
+The exact source scope is the private contextual adapter and term decoder in
+`clients/lattice-client/src/carrier.ts`, with public signed RED/GREEN controls
+in the existing Township authoring/conformance harness, new BEAM exporter cases
+and their vector files, normal generated dist, and this plan's evidence. Tests
+cover missing/extra/nested invalid metadata, preservation of unrelated valid
+policy behavior, direct claim/body overflow, malformed syntax/grammar/Base64,
+and valid controls. Existing vectors, protected tests, shared README, roadmap
+ledger and sibling worktrees remain untouched. The final follow-up review must
+inspect this contextual adapter's complete scope, not just the two examples.
+
+The public RED at `ce2d96af` records twenty strict-decoding and semantic
+failures on authentic signed policy/certificate metadata, with typecheck clean.
+The earlier development run had TypeScript tuple-inference errors in the fixture;
+the final RED log above follows their correction and preserves the same twenty
+behavioral failures. The repair uses an opaque `invalid_beacon_integer` sentinel,
+preserves all surrounding shapes, and applies the strict epoch exception only
+at the exact certificate/claim map path. Tests additionally cover missing,
+extra, nested, tuple, mapset, scalar and map-key metadata, maximum uint64,
+unchanged unrelated policy evidence, and body/claim epoch overflow despite
+extra fields. Invalid decimal syntax, above-uint64 values, unsafe numeric JSON,
+Base64 and map/term grammar retain strict refusal.
+
+At source commit `12af9f5deed1e9331c11ce66be3a344798fecc3a`, full `mix check` passes **695 tests plus
+27 properties, zero failures**, three existing exclusions, formatting and strict
+Credo exit 0 with the prescribed OTP/asdf PATH and `ERL_FLAGS='+S 4:4'`.
+Typecheck, Township authoring, canonical, carrier, V01 and normal dist build pass.
+The compiled exporter creates two new signed reciprocal scenarios:
+`township_beacon_witnessed_policy_metadata` proves a valid clerk succession and
+subsequent command survive invalid reserved policy metadata;
+`township_beacon_witnessed_certificate_metadata` proves invalid certificates
+remain unauthorized and do not prevent a later valid witnessed beacon.
+All **66** conformance vectors pass, including raw verification and exact frame
+preservation for these scenarios. Git-object comparison confirms the preceding
+64 vector blobs are unchanged.
+
+The first direct exporter invocation reused the previous compiled Mix task and
+therefore only exercised the preceding 64 vectors. That initial log is retained;
+it is not the final gate. The final invocation through `mix run` compiles the
+source, verifies both new files exist, and precedes the actual 66-vector replay.
+Evidence under `/tmp/lattice-treehouse-execution-20260906/` includes
+`r03-metadata-authoring-red-final.log`, `r03-metadata-red-typecheck-final.log`,
+`r03-metadata-authoring-bounds.log`, `r03-metadata-full-mix-check.log`,
+`r03-metadata-export-compiled.log` and `r03-metadata-conformance-final.log`.
+
+The earlier exact Fable attempt on `201e7ae6..4a823b96` ended with an API
+mid-response error and no verdict. Its full transcript and partial observations
+are retained; neither is a PASS. Final independent review and hosted thread/CI
+closure remain pending for this complete repair.
+
+### Public verifier canonical-bound follow-up (2026-09-06)
+
+The integrator authorized PR68 finding `PRRT_kwDOSZGqLc6fuGvg` before code:
+`BeaconCertificate.verify/3` must reject a matching claim epoch above the
+unchanged canonical uint64 maximum as `{:error, :unauthorized_beacon}` before
+constructing signing bytes. This is a total-verifier boundary repair, not a
+witnessed epoch-admission change. Existing canonically encodable claim bytes
+and valid signature verification remain unchanged, including standalone uint64
+controls; the authority judge still refuses witnessed epochs above its separate
+`9_007_199_254_740_991` horizon. The negative public test supplies matching
+certificate/expected claims above uint64 and must observe the documented error,
+not an exception. Scope is this certificate shape guard, its public test, and
+this evidence; generic canonical encoding, role semantics and old vectors stay
+unchanged. The separate high legacy ancestor finding requires the exact
+contextual representation disposition before its production changes.
+
+### Exact high legacy beacon ancestry (2026-09-06)
+
+For PR68 `PRRT_kwDOSZGqLc6fuGvf`, the integrator adopted a contextual decode
+amendment before code. Only an exact two-field authority `{:beacon, epoch}`
+preserves canonical uint64 epochs above `Number.MAX_SAFE_INTEGER` as exact
+decimal strings. Safe legacy epochs remain numbers. The beacon evidence and
+effective-beacon epoch types become `number | string` (with the existing null
+malformed-evidence arm); strings here are validated canonical high uint64 values,
+never rounded/saturated numeric sentinels. The collector compares causal maxima
+using transient BigInt values, preserving exact ascending/descending high-epoch
+decisions. Lease comparison explicitly handles high epochs relative to supported
+numeric leases. Root authentication and authorization-before-stale precedence
+remain unchanged. No authority or lease effect comes from a high non-root beacon.
+
+Consumer inventory at `a29c4510`: `carrier.ts` decodes evidence; `authority.ts`
+collects/stale-checks and exposes `security.validBeacons`; `capability.ts` consumes
+it for lease lapse. Materialization/quarantine use those decisions, with no
+independent epoch arithmetic. Township authoring constructs explicitly supplied
+safe witnessed claims and has no current-epoch reader. Generated declarations
+must carry the union. The separate combined R04 collector also passes beacons to
+`continuationExpectedClaim`, whose `Math.max` epoch/basis selection must explicitly
+refuse `invalid_continuation_epoch` if a selected valid ancestral legacy epoch
+exceeds its existing safe horizon; that integration is root-owned and is not
+permission to edit frozen R04 here.
+
+The prior Township authoring assertion that a valid high two-field root beacon
+is structurally malformed is explicitly superseded. Unrelated generic integers,
+all malformed decimal/uint64/depth grammar, and witnessed outer/direct claim
+epochs retain their strict boundaries. New public signed tests must distinguish
+two high integers that Number would collapse, low witnessed descendants, high
+unauthorized ancestors, exact causal ancestry and lease effects. New exporter
+evidence represents expected high epochs as decimal strings and verifies raw
+CarrierTerm bytes; JSON numeric rounding cannot be an oracle. Every old vector
+blob remains unchanged. The actual final Fable review includes this additive
+evidence API and the complete contextual decoder scope.
+
+### Nullish unleased evidence review correction (2026-09-06)
+
+The integrator adopted the actionable P2 from Fable's exact
+`a29c4510..0f3f2ca9` review before production changes. A type-violating semantic
+delegation with `expiresEpoch: null` re-encodes to the existing unleased signed
+representation, but exact lease comparison currently throws on `BigInt(null)`.
+The public materialization regression must reproduce this exception against a
+genuinely unleased signed delegation and an effective beacon. The narrow repair
+treats omitted/null lease evidence as unleased at the existing lease walk,
+matching canonical encoding and BEAM; explicit zero and finite leases retain
+their lapse behavior. Carrier ingress stays strict, with no new wire shape or
+accepted bytes. The cosmetic repeated epoch-helper call is left unchanged.
+Fable's PASS covers the preceding two hosted repairs; this P2 correction requires
+its own actual follow-up verdict and relevant TypeScript gates before freeze.
+
+### Final high-epoch and verifier evidence (2026-09-06)
+
+The BEAM public-verifier RED at `c5b89c84` raises `ArgumentError` for a matching
+claim above uint64; `d54df5c6` returns the documented unauthorized result while
+freshly signed zero, safe-horizon and uint64-maximum controls verify. The TS
+public RED at `0243936f` records twelve behavioral failures on authentic high
+legacy ancestors. `0f3f2ca9` preserves both distinct epochs exactly, refuses lower
+root/witnessed descendants, honors a concurrent valid witnessed branch, and
+preserves lease lapse without accepting high non-root authority. The two new
+BEAM-exported signed scenarios replay through both delivery orders in TS, with
+raw signature/frame checks and explicit decimal-string epoch evidence. All
+preceding **66** vector blobs compare byte-identically; the corpus is now **68**.
+
+At `0f3f2ca9`, full `mix check` exits 0 with **697 tests plus 27 properties,
+zero failures**, three existing exclusions, prescribed OTP/asdf PATH and
+`ERL_FLAGS='+S 4:4'`. Formatting and strict Credo pass with existing low-priority
+suggestions. The named beacon/restore/migration/compaction gate passes 38 tests
+plus one property. The nullish-lease follow-up changes only TS production/test
+code and its generated build after that BEAM gate. At `84d04517`, final TS gates
+pass: **1,310 conformance assertions across 68 vectors**, 559 canonical, 169
+Township authoring, 49 carrier and eight V01 checks, plus typecheck and build.
+
+Actual Claude Fable review of `a29c4510..0f3f2ca9` returned PASS with no P0/P1,
+identifying the nullish-lease P2 above. Its resumed review of the correction
+through `84d04517` returned PASS with no remaining actionable P0/P1/P2 in this
+bounded scope. Both results share session
+`d9fa4f1a-33c0-4ea2-ad82-4e8c9d48980d` and are saved under
+`/tmp/lattice-treehouse-execution-20260906/` as
+`fable-r03-high-legacy-review-result.md` and
+`fable-r03-null-lease-followup-result.md`. The cosmetic repeated helper call
+remains a documented deferral.
+
+That directory also retains `r03-high-legacy-proof.json`, the public RED/GREEN
+logs, `r03-high-legacy-full-mix-check.log`, and final named TS gate logs. Initial
+test development errors remain recorded: one fixture syntax error preceded the
+actual twelve-failure RED; a test-only Vector type reference and equivalent JSON
+object-key-order comparison were corrected before final conformance. None is
+claimed as a behavioral RED or a production failure. Hosted thread/CI closure
+and the combined R04 high-epoch refusal integration remain integrator-owned;
+local evidence does not imply those gates are closed.
