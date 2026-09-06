@@ -241,7 +241,7 @@ concrete collision contract:
 | Boundary | Adopted module contract |
 | --- | --- |
 | App and links | `dev.treetop.lattice.treehouse` and `treehouse://`; Toolshed routes are module routes validated within that product. `toolshed://` cannot select Treehouse storage or signing. |
-| Member key service | Retain `dev.treetop.lattice.treehouse.carrier`. Governance-witness keys use the separately protected Treehouse namespace adopted by R17a/R36; module activation cannot select a different product's key service. |
+| Member key service | Retain `dev.treetop.lattice.treehouse.carrier`. Governance-witness keys use the separately protected Treehouse namespace owned by R17a/R36; module activation cannot select a different product's key service. |
 | Database and migration | Retain `treehouse-v1.sqlite3`, its Treehouse product marker and migration ledger. Add module tables/namespaces through reviewed migrations; do not open or relabel `toolshed-v1.sqlite3`. |
 | Distribution lineage | Retain `treehouse-pilot-v1`, its pinned signing fingerprint and supported upgrade path. Module activation does not create a second app, alias or distribution lineage. |
 | Semantic boundaries | Shed/Tool replicas, catalog entries and permissions stay explicit. Membership in a Treehouse Space does not automatically grant authority or reading access to a Tool replica. Validate each signed operation against its own replica and role/capability rules. |
