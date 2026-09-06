@@ -30,3 +30,4 @@ export * from "./local_log";
 export * from "./tauri_bridge";
 export * from "./township";
 export * from "./treehouse";
+export { deriveTreehouseCatalogCutoff } from "./treehouse_catalog_cutoff";

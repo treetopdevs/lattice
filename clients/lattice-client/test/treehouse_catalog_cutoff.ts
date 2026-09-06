@@ -11,7 +11,7 @@ import { cutoffFixture } from "./support/export_treehouse_catalog_cutoff";
 // uint64 tagged decimals, actual {type:"push",ops:[frame]} <=64,000 bytes, and
 // fixed130 atom vocabulary (artifact SHA256 a66d085dd185091d745d933c3145101a97b3306406aba905af07ca051d09506c).
 // No semantic decoding, generic ingress changes, persistence or trust promotion.
-const module = await import("../src/treehouse_catalog_cutoff").catch(() => null);
+const module = await import("../src/index").catch(() => null);
 const bin = (value: Uint8Array | string): CarrierTerm => ["bin", Buffer.from(value).toString("base64")];
 
 test("public cutoff commits exact authenticated payloads including a semantic refusal and uint64 legacy epoch", async () => {
