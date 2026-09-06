@@ -86,6 +86,55 @@ defmodule Treehouse.CatalogCutoffTest do
     assert :erlang.term_to_binary(log) == before
   end
 
+  test "raw uint64 body integers remain portable without semantic number decoding" do
+    f = history()
+    op = Op.new(f.root, f.log.replica, Log.frontier(f.log), :command,
+      {:create_space, [18_446_744_073_709_551_615]}, cap: f.cap)
+    log = Log.append!(f.log, op)
+    assert :ok = Log.verify_authenticity(log)
+    assert {:ok, result} = CatalogCutoff.derive(log)
+    assert Enum.any?(result.ops, &(&1.id == op.id))
+  end
+
+  test "unknown authentic atoms and oversized frames refuse while verifiable forgery takes precedence" do
+    f = history()
+    for body <- [{:unsupported_cutoff_test_atom, []}, {:create_space, [String.duplicate("x", 64_000)]}] do
+      op = Op.new(f.root, f.log.replica, Log.frontier(f.log), :command, body, cap: f.cap)
+      log = Log.append!(f.log, op)
+      before = :erlang.term_to_binary(log)
+      assert :ok = Log.verify_authenticity(log)
+      assert {:error, :unsupported_cutoff} = CatalogCutoff.derive(log)
+      assert :erlang.term_to_binary(log) == before
+      forged = %{log | ops: Map.put(log.ops, op.id, %{op | sig: <<0::512>>})}
+      assert {:error, :invalid_verified_history} = CatalogCutoff.derive(forged)
+    end
+  end
+
+  test "rejected IDs and signatures are preserved but unencodable author width is unsupported" do
+    f = history()
+    rejected = %{f.denied | id: "retained-invalid-id", sig: <<1, 2, 3>>}
+    assert {:quarantined, log, :bad_signature} = Log.accept(f.log, rejected)
+    assert {:ok, result} = CatalogCutoff.derive(log)
+    assert [%{id: "retained-invalid-id", sig: <<1, 2, 3>>}] = result.rejected
+
+    short_author = %{rejected | author: <<0::248>>}
+    assert {:quarantined, unsupported, :bad_signature} = Log.accept(f.log, short_author)
+    assert :ok = Log.verify_authenticity(unsupported)
+    assert {:error, :unsupported_cutoff} = CatalogCutoff.derive(unsupported)
+  end
+
+  test "wide numeric delegation leases refuse without changing authenticated raw evidence" do
+    f = history()
+    {:genesis, delegation, _} = f.genesis.body
+    wide = %{delegation | expires_epoch: 9_007_199_254_740_992}
+    op = Op.new(f.root, f.log.replica, Log.frontier(f.log), :authority, {:grant, wide})
+    log = Log.append!(f.log, op)
+    assert :ok = Log.verify_authenticity(log)
+    before = :erlang.term_to_binary(log)
+    assert {:error, :unsupported_cutoff} = CatalogCutoff.derive(log)
+    assert :erlang.term_to_binary(log) == before
+  end
+
   defp history do
     sim = Sim.new(Space, "treehouse:cutoff", ["root"], seed: "r11a-cutoff")
     {sim, genesis} = Sim.create_replica(sim, "root")
