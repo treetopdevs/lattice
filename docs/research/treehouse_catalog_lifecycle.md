@@ -702,3 +702,42 @@ Space authority fold, or `{:error, :invalid_verified_history}`. It preserves
 validated rejected evidence in its input and never uses it as honored history;
 the separate cutoff binds that evidence. Multiple honored root bootstraps are
 returned together. Selecting/persisting trust remains the retained-trust gate.
+
+### Shared raw cutoff portability amendment — 2026-09-06
+
+The integrator adopts a cutoff-only shared grammar for BEAM/TS observations.
+This is stricter than the broad in-VM R06 log, preserves all source evidence,
+and changes neither general Wire/TS ingress nor canonical encoding. A supported
+cutoff uses exact raw CarrierTerm payload encoding rather than semantic decode.
+Accepted history first passes R06 authentication and complete dependency closure;
+rejected entries must be distinct per supplied ID, same replica, actually invalid
+under hash/signature verification, and carry exactly `bad_signature`. The same ID
+may occur once in each of the two separate lists. Rejected dependencies cannot
+satisfy accepted closure. Where raw evidence is representable its authentication
+failure takes `invalid_verified_history` precedence. Broader validated evidence
+that cannot meet the shared portable grammar returns `unsupported_cutoff`.
+
+Raw headers require a 32-byte author, lossless UTF-8 replica/ID/dependency text
+and binary signatures. A rejected ID need not be a hash and its signature need
+not have 64 bytes; both are preserved verbatim. Embedded delegations require
+32-byte issuer/audience, 64-byte signature, the existing flat shape and a lease
+that is absent or a safe JSON integer. Generic tagged integers remain exact
+through uint64 maximum, using canonical decimal strings above the safe horizon.
+The current depth64 and duplicate-canonical-map/set refusals remain. Unknown
+atoms are retained as unsupported evidence: the cutoff-only fixed vocabulary
+is the 130 sorted names frozen in `r11a-cutoff-atom-vocabulary.json`, SHA256
+`a66d085dd185091d745d933c3145101a97b3306406aba905af07ca051d09506c`, in the execution
+evidence directory. Both runtime constants and reciprocal fixtures must match
+that exact set; no runtime atom creation or dynamic module-loading vocabulary.
+
+Each operation must fit **64,000 UTF-8 bytes**, inclusive, in the actual complete
+`{type: "push", ops: [frame]}` JSON envelope. There is no invented aggregate cutoff
+cap; existing total-history limits still govern callers. Unsupported headers,
+wide numeric delegation leases, unknown atoms, oversized frames or in-VM values
+refuse without pruning history or claiming recovery. The read-only TS API is
+`deriveTreehouseCatalogCutoff({replica, frames, rejected: [{frame, reason}]})`;
+it clones input before awaiting authentication and returns the BEAM-equivalent
+cutoff, canonical bytes and separate sorted records, or the two named refusals.
+The implementation lives in `treehouse_catalog_cutoff.ts`; its public/reciprocal
+tests and BEAM `CatalogCutoff` portability tests must include high exact epochs,
+semantic quarantine, rejected-plus-genuine same IDs and unsupported raw evidence.
