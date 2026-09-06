@@ -33,9 +33,32 @@ only where needed to inject the new decoder. `clients/lattice-client/package.jso
 adds the named local gate; generated `dist/` accompanies its source. A new
 `scripts/treehouse_demo.exs` proves the offline workflow and dump round trip.
 This document records implementation evidence and limitations. README, unified
-ledger, Plan 178, protected contract assertions, build-map copy, UI, live catalog,
+ledger, protected contract assertions, build-map copy, UI, live catalog,
 grant screens, native custody and R04 production policy are outside this writer's
 scope. Any additional production file requires a concrete scope amendment.
+
+Root-approved amendment, before edit: `clients/lattice-client/src/authority.ts`
+also needs an internal effects projection adapter. A Treehouse Space genesis
+names both admin and moderator; visiting only the singular `op.field` omits one
+holder. Expand only internal per-role views, retaining the same signed op ID,
+deps and evidence. The DAG, capability-source collection and retained history
+keep one operation. A globally quarantined op cannot activate any role view.
+Two-role genesis and independent role-transfer parity are mandatory. Existing
+single-effect input and root, beacon and successor rules remain unchanged.
+
+Root-approved workflow amendments, recorded before implementation: Plan 178's
+creation sentence now describes the fixed existing genesis followed by the
+immediately dependent authorized name command. Pure preparation returns the
+missing signed operations and observes retained initialization as uninitialized,
+incomplete or ready; it performs no persistence and never reports a prepared name
+as durable. An interrupted caller retries exactly the same signed input; a
+different retained genesis or name refuses. Root-only preparation has empty
+succession policies and cannot claim the separately gated R04/R14 profile.
+The moderator vocabulary maps to one existing signed holder-gated authority
+transfer. Admin transfer and grant revocation likewise use the existing authority
+bodies. Read models derive real holders. No new genesis, delegation or wire
+format and no parallel role marker are introduced. Plan 178's protected claim
+sentences and ordered vocabulary remain unchanged.
 
 ## Atomic command semantics
 

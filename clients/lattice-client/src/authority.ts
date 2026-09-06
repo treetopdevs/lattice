@@ -24,6 +24,7 @@ import type {
   WitnessedSuccessionClaimEvidence,
   WitnessedSuccessionSignatureEvidence,
 } from "./op";
+import { effectViews } from "./op";
 import { isAuthorityField } from "./schema";
 import type { ReplicaSchema } from "./schema";
 import { frontier } from "./sync";
@@ -169,7 +170,8 @@ export function analyzeAuthority(
   });
   const writesPerRole = new Map<string, number>();
 
-  for (const op of admitted) {
+  const roleViews = (op: Op): Op[] => op.kind === "authority" ? effectViews(op) : [op];
+  for (const op of admitted.flatMap(roleViews)) {
     if (!authorityRoleWrite(schema, op)) continue;
     writesPerRole.set(op.field, (writesPerRole.get(op.field) ?? 0) + 1);
   }
@@ -209,70 +211,67 @@ export function analyzeAuthority(
   }
   const quarantinedWrites = new Set<string>(quarantineReasons.keys());
 
-  for (const op of admitted) {
-    if (op.authority?.type === "heartbeat") {
-      if (op.kind !== "authority") continue;
-      // Heartbeats never write a field: they only refresh the holder's
-      // last-active tick, and only when the author holds the role at its deps.
-      const heartbeat = op.authority;
-      const state = states.get(heartbeat.role) ?? emptyRoleState();
-      const anc = ancestors(op.id, byId as Map<string, Op>);
-      const holderAtDeps = [...state.acquires]
-        .reverse()
-        .find((acquire) => anc.has(acquire.opId))?.holder;
-      if (holderAtDeps === op.author) {
-        state.heartbeats.push({ opId: op.id, atTick: heartbeat.atTick });
+  for (const original of admitted) {
+    const views = roleViews(original);
+    if (original.kind === "authority" && original.effects !== undefined) {
+      // Preflight every role against the same pre-op state. One refused role
+      // refuses the original signed op; no partial role acquisition escapes.
+      if (quarantineReasons.has(original.id)) continue;
+      const denied = views.find((view) => authorityRoleWrite(schema, view) &&
+        view.authority !== undefined && !authorityWriteHonored(view, view.authority,
+          states.get(view.field) ?? emptyRoleState(), delegations, policies,
+          honoredSuccessionIntroductions, byId));
+      if (denied !== undefined && denied.authority !== undefined) {
+        const reason = authorityWriteRejectionReason(denied, denied.authority,
+          states.get(denied.field) ?? emptyRoleState(), delegations, policies,
+          honoredSuccessionIntroductions, byId);
+        if (reason !== undefined) quarantineReasons.set(original.id, reason);
+        quarantinedWrites.add(original.id);
+        continue;
       }
-      states.set(heartbeat.role, state);
-      continue;
     }
-
-    if (!authorityRoleWrite(schema, op)) continue;
-
-    const writeCount = writesPerRole.get(op.field) ?? 0;
-    if (op.authority === undefined) {
-      if (writeCount > 1) throw new Error(`missing authority evidence for ${op.id}`);
+    for (const op of views) {
+      if (op.authority?.type === "heartbeat") {
+        if (op.kind !== "authority") continue;
+        // Heartbeats never write a field: they only refresh the holder's
+        // last-active tick, and only when the author holds the role at its deps.
+        const heartbeat = op.authority;
+        const state = states.get(heartbeat.role) ?? emptyRoleState();
+        const anc = ancestors(op.id, byId as Map<string, Op>);
+        const holderAtDeps = [...state.acquires]
+          .reverse()
+          .find((acquire) => anc.has(acquire.opId))?.holder;
+        if (holderAtDeps === op.author) {
+          state.heartbeats.push({ opId: op.id, atTick: heartbeat.atTick });
+        }
+        states.set(heartbeat.role, state);
+        continue;
+      }
+  
+      if (!authorityRoleWrite(schema, op)) continue;
+  
+      const writeCount = writesPerRole.get(op.field) ?? 0;
+      if (op.authority === undefined) {
+        if (writeCount > 1) throw new Error(`missing authority evidence for ${op.id}`);
+        const state = states.get(op.field) ?? emptyRoleState();
+        if (typeof op.value === "string") {
+          state.holder = op.value;
+          state.acquires.push({ opId: op.id, holder: op.value, atTick: 0 });
+          states.set(op.field, state);
+        }
+        honoredWrites.add(op.id);
+        continue;
+      }
+  
+      const evidence = op.authority;
+      if (evidence.type === "beacon") {
+        throw new Error(`beacon ${op.id} cannot write authority role ${op.field}`);
+      }
+      if (evidence.type === "revoke") {
+        throw new Error(`revoke ${op.id} cannot write authority role ${op.field}`);
+      }
       const state = states.get(op.field) ?? emptyRoleState();
-      if (typeof op.value === "string") {
-        state.holder = op.value;
-        state.acquires.push({ opId: op.id, holder: op.value, atTick: 0 });
-        states.set(op.field, state);
-      }
-      honoredWrites.add(op.id);
-      continue;
-    }
-
-    const evidence = op.authority;
-    if (evidence.type === "beacon") {
-      throw new Error(`beacon ${op.id} cannot write authority role ${op.field}`);
-    }
-    if (evidence.type === "revoke") {
-      throw new Error(`revoke ${op.id} cannot write authority role ${op.field}`);
-    }
-    const state = states.get(op.field) ?? emptyRoleState();
-    const honored = authorityWriteHonored(
-      op,
-      evidence,
-      state,
-      delegations,
-      policies,
-      honoredSuccessionIntroductions,
-      byId,
-    );
-
-    if (honored) {
-      const holder = evidence.delegation.audienceRealm;
-      state.holder = holder;
-      state.acquires.push(honoredAcquire(op, evidence, holder));
-      states.set(op.field, state);
-      honoredWrites.add(op.id);
-      if (evidence.type === "succeed") {
-        const ids = honoredSuccessionIntroductions.get(evidence.delegation.id) ?? [];
-        ids.push(op.id);
-        honoredSuccessionIntroductions.set(evidence.delegation.id, ids);
-      }
-    } else {
-      const reason = authorityWriteRejectionReason(
+      const honored = authorityWriteHonored(
         op,
         evidence,
         state,
@@ -281,12 +280,34 @@ export function analyzeAuthority(
         honoredSuccessionIntroductions,
         byId,
       );
-      if (reason !== undefined) quarantineReasons.set(op.id, reason);
-      quarantinedWrites.add(op.id);
+  
+      if (honored) {
+        const holder = evidence.delegation.audienceRealm;
+        state.holder = holder;
+        state.acquires.push(honoredAcquire(op, evidence, holder));
+        states.set(op.field, state);
+        honoredWrites.add(op.id);
+        if (evidence.type === "succeed") {
+          const ids = honoredSuccessionIntroductions.get(evidence.delegation.id) ?? [];
+          ids.push(op.id);
+          honoredSuccessionIntroductions.set(evidence.delegation.id, ids);
+        }
+      } else {
+        const reason = authorityWriteRejectionReason(
+          op,
+          evidence,
+          state,
+          delegations,
+          policies,
+          honoredSuccessionIntroductions,
+          byId,
+        );
+        if (reason !== undefined) quarantineReasons.set(op.id, reason);
+        quarantinedWrites.add(op.id);
+      }
     }
   }
-
-  for (const op of ops) {
+  for (const op of ops.flatMap(roleViews)) {
     if (!included.has(op.id)) continue;
     if (!authorityRoleWrite(schema, op)) continue;
     if (!honoredWrites.has(op.id) && !quarantinedWrites.has(op.id)) {

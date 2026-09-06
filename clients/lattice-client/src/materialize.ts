@@ -1,4 +1,4 @@
-import { cmpHash } from "./op";
+import { cmpHash, compareUtf8, effectViews } from "./op";
 import type { Op } from "./op";
 import { isAuthorityField } from "./schema";
 import type { ReplicaSchema } from "./schema";
@@ -30,6 +30,13 @@ export class V01UnvalidatedAuthorityError extends Error {
     this.name = "V01UnvalidatedAuthorityError";
     this.role = role;
     this.cause = cause;
+  }
+}
+
+export class TreehouseDecoderProductError extends Error {
+  constructor(product: string) {
+    super(`Treehouse decoder product must match ${product} before projection`);
+    this.name = "TreehouseDecoderProductError";
   }
 }
 
@@ -90,6 +97,10 @@ export function materialize(
 ): Materialized {
   const byId = index(ops);
   const inc = included ?? new Set(ops.map((o) => o.id));
+  if ((schema.name === "Treehouse.Space" || schema.name === "Treehouse.Thread") &&
+      ops.some((op) => inc.has(op.id) && op.decodedProduct !== schema.name)) {
+    throw new TreehouseDecoderProductError(schema.name);
+  }
 
   const order = canonicalOrder(
     ops.filter((o) => inc.has(o.id)),
@@ -204,7 +215,7 @@ export function materialize(
   const live = order.filter((id) => !quarantined.has(id)).map((id) => byId.get(id)!);
 
   for (const [field, spec] of Object.entries(schema.fields)) {
-    const fieldOps = live.filter((o) => o.field === field);
+    const fieldOps = live.flatMap(effectViews).filter((o) => o.field === field);
     if (isAuthorityField(spec)) {
       // holder = last authority op in canonical order
       let holder: unknown = spec.default !== undefined ? spec.default : null;
@@ -220,7 +231,10 @@ export function materialize(
       state[field] = r.winner ? r.value : spec.default;
       winners[field] = r.winner;
     } else if (spec.merge === "or_set") {
-      state[field] = orSet(fieldOps, byId);
+      state[field] = orSet(fieldOps, byId,
+        schema.name === "Treehouse.Space" || schema.name === "Treehouse.Thread"
+          ? (left, right) => compareUtf8(typeof left === "string" ? left : JSON.stringify(left), typeof right === "string" ? right : JSON.stringify(right))
+          : undefined);
     } else if (spec.merge === "causal_list") {
       state[field] = causalList(fieldOps, depthOf);
     }

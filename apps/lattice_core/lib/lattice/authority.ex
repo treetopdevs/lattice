@@ -1152,10 +1152,9 @@ defmodule Lattice.Authority do
       true ->
         case command_status(module, cmd, args) do
           :ok ->
-            mutations = command_mutations(module, cmd, args)
-            roles_needed = mutation_roles(module, mutations)
-
-            with :ok <-
+            with {:ok, mutations} <- Lattice.Replica.command_effects(module, cmd, args),
+                 roles_needed = mutation_roles(module, mutations),
+                 :ok <-
                    cap_ok(
                      op,
                      cmd,
@@ -1187,14 +1186,6 @@ defmodule Lattice.Authority do
       {:error, {:bad_arity, ^cmd, _details}} -> {:error, :bad_command_arity}
       {:error, {:unknown_command, ^cmd}} -> {:error, :unknown_command}
     end
-  end
-
-  defp command_mutations(_module, nil, _args), do: []
-
-  defp command_mutations(module, cmd, args) do
-    module.__apply_command__(cmd, args)
-  rescue
-    ArgumentError -> []
   end
 
   defp mutation_roles(module, mutations) do

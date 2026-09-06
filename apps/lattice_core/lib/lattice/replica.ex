@@ -195,6 +195,34 @@ defmodule Lattice.Replica do
   end
 
   @doc false
+  @spec command_effects(module(), atom(), list()) ::
+          {:ok, [mutation()]} | {:error, :malformed_command}
+  def command_effects(module, command, args) do
+    effects = module.__apply_command__(command, args)
+
+    if is_list(effects) and Enum.all?(effects, &valid_effect?(module, &1)),
+      do: {:ok, effects},
+      else: {:error, :malformed_command}
+  rescue
+    _error in [ArgumentError, FunctionClauseError, MatchError, BadMapError] ->
+      {:error, :malformed_command}
+  end
+
+  defp valid_effect?(module, {field, mutation}) when is_atom(field) do
+    case {module.field_spec(field), mutation} do
+      {{^field, %{kind: :authority}}, {:write, _}} -> true
+      {{^field, %{crdt: :lww}}, {:write, _}} -> true
+      {{^field, %{crdt: :or_set}}, {kind, _}} when kind in [:add, :remove] -> true
+      {{^field, %{crdt: :causal_list}}, {kind, _}} when kind in [:append, :insert] -> true
+      {{^field, %{crdt: :causal_list}}, {:delete, id}} when is_binary(id) -> true
+      {{^field, %{crdt: :causal_list}}, {:edit, id, _}} when is_binary(id) -> true
+      _ -> false
+    end
+  end
+
+  defp valid_effect?(_, _), do: false
+
+  @doc false
   def __normalize_field__(name, opts) do
     if Keyword.has_key?(opts, :authority) and Keyword.has_key?(opts, :merge) do
       raise ArgumentError,

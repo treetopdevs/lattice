@@ -228,7 +228,7 @@ function isStringArray(value: unknown): value is string[] {
   );
 }
 
-type DecodedTerm =
+export type DecodedTerm =
   | null
   | boolean
   | number
@@ -275,11 +275,13 @@ interface DelegationTerm extends CarrierDelegation {
   type: "delegation";
 }
 
-interface Payload {
+export interface Payload {
   field: string;
   mutation: Mutation;
   value: unknown;
   command: string;
+  effects?: import("./op").CommandEffect[];
+  commandArgs?: unknown[];
   commandError?: CommandError;
   authority?: AuthorityEvidence;
   consent?: Omit<CustodyConsentEvidence, "authorPub">;
@@ -294,12 +296,16 @@ const tupleTag = 60_001;
 const carrierOpWireVersion = 1;
 const carrierSessionVersion = 2;
 
-interface CommandDecoder {
+export interface CommandDecoder {
   arity: number;
   decode: (
     args: DecodedTerm[],
     realmByPubkey: Record<string, string>,
   ) => Payload;
+}
+
+export interface CommandDecoderMap extends ReadonlyMap<string, CommandDecoder> {
+  readonly product?: string;
 }
 
 function commandDecoder(
@@ -1194,8 +1200,9 @@ function maybeCarrierFrameId(frame: unknown): string | null {
 export function carrierOpsToSemanticOps(
   frames: unknown[],
   realmByPubkey: Record<string, string> = {},
+  commandDecoders?: CommandDecoderMap,
 ): Op[] {
-  return frames.map((frame) => carrierOpToSemanticOp(frame, realmByPubkey));
+  return frames.map((frame) => carrierOpToSemanticOp(frame, realmByPubkey, commandDecoders));
 }
 
 export function decodeCarrierOpFrame(frame: unknown): CarrierOpFrame {
@@ -1205,6 +1212,7 @@ export function decodeCarrierOpFrame(frame: unknown): CarrierOpFrame {
 export function carrierOpToSemanticOp(
   frame: unknown,
   realmByPubkey: Record<string, string> = {},
+  commandDecoders?: CommandDecoderMap,
 ): Op {
   const op = assertCarrierOpFrame(frame, false);
   let payload: Payload;
@@ -1212,7 +1220,7 @@ export function carrierOpToSemanticOp(
   let structuralError: "malformed_term" | undefined;
   try {
     const body = decodeCarrierTerm(op.body);
-    payload = payloadFromBody(op.kind, body, realmByPubkey);
+    payload = payloadFromBody(op.kind, body, realmByPubkey, commandDecoders);
     cap = capabilityId(decodeCarrierTerm(op.cap));
   } catch {
     payload = neutralPayload("malformed_term");
@@ -1231,6 +1239,9 @@ export function carrierOpToSemanticOp(
     value: payload.value,
     hash: op.id,
     command: payload.command,
+    ...(commandDecoders?.product === undefined ? {} : { decodedProduct: commandDecoders.product }),
+    ...(payload.effects === undefined ? {} : { effects: payload.effects }),
+    ...(payload.commandArgs === undefined ? {} : { commandArgs: payload.commandArgs, authorPubkey: op.author }),
     ...(payload.commandError === undefined
       ? {}
       : { commandError: payload.commandError }),
@@ -1381,6 +1392,7 @@ function payloadFromBody(
   kind: OpKind,
   body: DecodedTerm,
   realmByPubkey: Record<string, string>,
+  commandDecoders?: CommandDecoderMap,
 ): Payload {
   if (kind === "command") {
     if (!isTuple(body) || body.values.length !== 2) {
@@ -1399,10 +1411,9 @@ function payloadFromBody(
         : neutralPayload(commandAuditLabel(body.values[0]), "unknown_command");
     }
 
-    const decoder =
-      townshipCommandDecoders.get(command) ??
-      toolshedCommandDecoders.get(command) ??
-      policyCommandDecoders.get(command);
+    const decoder = commandDecoders === undefined
+      ? townshipCommandDecoders.get(command) ?? toolshedCommandDecoders.get(command) ?? policyCommandDecoders.get(command)
+      : commandDecoders.get(command);
     if (decoder === undefined) {
       return neutralPayload(command, "unknown_command");
     }
@@ -1443,6 +1454,9 @@ function payloadFromBody(
             value: realmForPubkey(delegation.issuer, realmByPubkey),
             command: `genesis ${role}`,
             authority,
+            ...(commandDecoders === undefined ? {} : { effects: delegation.roles.map((field) => ({
+              field, mutation: "write" as const, value: realmForPubkey(delegation.issuer, realmByPubkey),
+            })) }),
           };
         }
         return { ...neutralPayload("genesis"), authority };

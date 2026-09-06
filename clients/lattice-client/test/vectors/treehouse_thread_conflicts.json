@@ -1,0 +1,738 @@
+{
+  "canonicalOps": [
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584b74726565686f7573653a7468726561643a636f6e666c6963747323726f6f743a315648476a655f68444a59625531646b54536f7a776a676772587666664f5638494e63544f6e6b4137366f58203189e5569b1f2de4e5c0abf06d0680d873a8f3429cc4be4b7b470be81961996080d9ea6049617574686f72697479d9ea6183d9ea604767656e65736973d9ea6389582b42353852474a564368673074495851726f4b5248762d484b4a6a327259787878326d4e5451356731425777584b74726565686f7573653a7468726561643a636f6e666c6963747323726f6f743a315648476a655f68444a59625531646b54536f7a776a676772587666664f5638494e63544f6e6b4137366f58203189e5569b1f2de4e5c0abf06d0680d873a8f3429cc4be4b7b470be81961996058203189e5569b1f2de4e5c0abf06d0680d873a8f3429cc4be4b7b470be819619960f686d9ea604e617263686976655f746872656164d9ea604b617574686f725f65646974d9ea6050617574686f725f746f6d6273746f6e65d9ea604d6372656174655f746872656164d9ea60536d6f64657261746f725f746f6d6273746f6e65d9ea6044706f737481d9ea60496d6f64657261746f72f5584094eff519eddeaf44f2257d7d445e328e9d79c89d375628abe5a67e4ebf55ef42b63f46d099eddd68111676517d5421e2f7ab1bfbee1a1065785379f6cbc7c10ba0f6",
+      "hash": "XP26Or1otaWJopTz0gu3BfhPcXnEDP87GhLMpVGb_VQ",
+      "id": "XP26Or1otaWJopTz0gu3BfhPcXnEDP87GhLMpVGb_VQ",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584b74726565686f7573653a7468726561643a636f6e666c6963747323726f6f743a315648476a655f68444a59625531646b54536f7a776a676772587666664f5638494e63544f6e6b4137366f58203189e5569b1f2de4e5c0abf06d0680d873a8f3429cc4be4b7b470be81961996081582b585032364f72316f7461574a6f70547a306775334266685063586e454450383747684c4d705647625f5651d9ea6047636f6d6d616e64d9ea6182d9ea604d6372656174655f746872656164814643616e6f7079582b42353852474a564368673074495851726f4b5248762d484b4a6a327259787878326d4e5451356731425777",
+      "hash": "VHir1iIeitJ5e40VsHUz3W1Ud1dw0SCwcAnllxS6iAw",
+      "id": "VHir1iIeitJ5e40VsHUz3W1Ud1dw0SCwcAnllxS6iAw",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584b74726565686f7573653a7468726561643a636f6e666c6963747323726f6f743a315648476a655f68444a59625531646b54536f7a776a676772587666664f5638494e63544f6e6b4137366f58203189e5569b1f2de4e5c0abf06d0680d873a8f3429cc4be4b7b470be81961996081582b564869723169496569744a35653430567348557a33573155643164773053437763416e6c6c785336694177d9ea6049617574686f72697479d9ea6182d9ea60456772616e74d9ea6389582b624a4f4b43664a6235482d32796c505f774f34764c70777734696b6f31576c755869795f794b4471685538584b74726565686f7573653a7468726561643a636f6e666c6963747323726f6f743a315648476a655f68444a59625531646b54536f7a776a676772587666664f5638494e63544f6e6b4137366f58203189e5569b1f2de4e5c0abf06d0680d873a8f3429cc4be4b7b470be819619960582007f53f59c629dff964c301fdb3e1a96a023cff0f7c6d1837ebfbfce514391306582b42353852474a564368673074495851726f4b5248762d484b4a6a327259787878326d4e545135673142577783d9ea604b617574686f725f65646974d9ea6050617574686f725f746f6d6273746f6e65d9ea6044706f737480f4584082467c3f551008f6c3f3ae073714e9dcaede3aa55846e9ae0d4357f3c26cbcca9ef482356f0e7a605a86b0d4b7d618950c483f7f99034728379ee4427d2f4d08f6",
+      "hash": "8qpY7eiR8ySs3bY1CZg5KUEfVzENJnMltizHyit4YBg",
+      "id": "8qpY7eiR8ySs3bY1CZg5KUEfVzENJnMltizHyit4YBg",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584b74726565686f7573653a7468726561643a636f6e666c6963747323726f6f743a315648476a655f68444a59625531646b54536f7a776a676772587666664f5638494e63544f6e6b4137366f58203189e5569b1f2de4e5c0abf06d0680d873a8f3429cc4be4b7b470be81961996081582b38717059376569523879537333625931435a67354b554566567a454e4a6e4d6c74697a4879697434594267d9ea6049617574686f72697479d9ea6182d9ea60456772616e74d9ea6389582b6e706169446978336342633642563078526c7034454e4f4b646f79342d5030734c4179655a565950377938584b74726565686f7573653a7468726561643a636f6e666c6963747323726f6f743a315648476a655f68444a59625531646b54536f7a776a676772587666664f5638494e63544f6e6b4137366f58203189e5569b1f2de4e5c0abf06d0680d873a8f3429cc4be4b7b470be81961996058203ab68edae56be356dcae5d6b339112c3c3cd252bb6fed851b60051aed1077200582b42353852474a564368673074495851726f4b5248762d484b4a6a327259787878326d4e545135673142577783d9ea604b617574686f725f65646974d9ea6050617574686f725f746f6d6273746f6e65d9ea6044706f737480f458401da4eb934f19bca072b99a877eed1c36850fdc114e5cca1448f37e782d478bdd9f022918084dab263c7711b711c69d0cf89d5e57b7d0a0cd379a6753fba2790cf6",
+      "hash": "YRtj3hKA22sl6CdBg5M0e5KgmLBOri_GCb0fuUbeppA",
+      "id": "YRtj3hKA22sl6CdBg5M0e5KgmLBOri_GCb0fuUbeppA",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584b74726565686f7573653a7468726561643a636f6e666c6963747323726f6f743a315648476a655f68444a59625531646b54536f7a776a676772587666664f5638494e63544f6e6b4137366f582007f53f59c629dff964c301fdb3e1a96a023cff0f7c6d1837ebfbfce51439130681582b5952746a33684b413232736c3643644267354d3065354b676d4c424f72695f474362306675556265707041d9ea6047636f6d6d616e64d9ea6182d9ea6044706f737481486f726967696e616c582b624a4f4b43664a6235482d32796c505f774f34764c70777734696b6f31576c755869795f794b4471685538",
+      "hash": "s89B-MdAY_voDB10uryPYmp_s7-Hc4jLM4Qn0DYnj0o",
+      "id": "s89B-MdAY_voDB10uryPYmp_s7-Hc4jLM4Qn0DYnj0o",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584b74726565686f7573653a7468726561643a636f6e666c6963747323726f6f743a315648476a655f68444a59625531646b54536f7a776a676772587666664f5638494e63544f6e6b4137366f582007f53f59c629dff964c301fdb3e1a96a023cff0f7c6d1837ebfbfce51439130681582b733839422d4d6441595f766f4442313075727950596d705f73372d4863346a4c4d34516e3044596e6a306fd9ea6047636f6d6d616e64d9ea6182d9ea604b617574686f725f6564697483582b733839422d4d6441595f766f4442313075727950596d705f73372d4863346a4c4d34516e3044596e6a306f582b733839422d4d6441595f766f4442313075727950596d705f73372d4863346a4c4d34516e3044596e6a306f457269676874582b624a4f4b43664a6235482d32796c505f774f34764c70777734696b6f31576c755869795f794b4471685538",
+      "hash": "5mMt5yOeX5oh4fPIvTdfLOZ5Peinob9eUVSkMS4iJrk",
+      "id": "5mMt5yOeX5oh4fPIvTdfLOZ5Peinob9eUVSkMS4iJrk",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584b74726565686f7573653a7468726561643a636f6e666c6963747323726f6f743a315648476a655f68444a59625531646b54536f7a776a676772587666664f5638494e63544f6e6b4137366f582007f53f59c629dff964c301fdb3e1a96a023cff0f7c6d1837ebfbfce51439130681582b733839422d4d6441595f766f4442313075727950596d705f73372d4863346a4c4d34516e3044596e6a306fd9ea6047636f6d6d616e64d9ea6182d9ea604b617574686f725f6564697483582b733839422d4d6441595f766f4442313075727950596d705f73372d4863346a4c4d34516e3044596e6a306f582b733839422d4d6441595f766f4442313075727950596d705f73372d4863346a4c4d34516e3044596e6a306f446c656674582b624a4f4b43664a6235482d32796c505f774f34764c70777734696b6f31576c755869795f794b4471685538",
+      "hash": "NqQCbqc8Pdll0zUj5dZ_8wC0lk3YVh1wydRIQ6YR6Ks",
+      "id": "NqQCbqc8Pdll0zUj5dZ_8wC0lk3YVh1wydRIQ6YR6Ks",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584b74726565686f7573653a7468726561643a636f6e666c6963747323726f6f743a315648476a655f68444a59625531646b54536f7a776a676772587666664f5638494e63544f6e6b4137366f582007f53f59c629dff964c301fdb3e1a96a023cff0f7c6d1837ebfbfce51439130681582b733839422d4d6441595f766f4442313075727950596d705f73372d4863346a4c4d34516e3044596e6a306fd9ea6047636f6d6d616e64d9ea6182d9ea6044706f7374814a636f6e63757272656e74582b624a4f4b43664a6235482d32796c505f774f34764c70777734696b6f31576c755869795f794b4471685538",
+      "hash": "R1JOI-vkyBtRJAVBIVSYlG8bXpOiut62v_NCPAVDwkA",
+      "id": "R1JOI-vkyBtRJAVBIVSYlG8bXpOiut62v_NCPAVDwkA",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584b74726565686f7573653a7468726561643a636f6e666c6963747323726f6f743a315648476a655f68444a59625531646b54536f7a776a676772587666664f5638494e63544f6e6b4137366f58203189e5569b1f2de4e5c0abf06d0680d873a8f3429cc4be4b7b470be81961996081582b733839422d4d6441595f766f4442313075727950596d705f73372d4863346a4c4d34516e3044596e6a306fd9ea6047636f6d6d616e64d9ea6182d9ea604e617263686976655f74687265616480582b42353852474a564368673074495851726f4b5248762d484b4a6a327259787878326d4e5451356731425777",
+      "hash": "ywF6lWhcDQFvFezMY5Ey4XEjFGBdflZVxE3vKjEj1Ps",
+      "id": "ywF6lWhcDQFvFezMY5Ey4XEjFGBdflZVxE3vKjEj1Ps",
+      "suite": "lattice-cbor-v1"
+    }
+  ],
+  "expectAtFrontier": [
+    {
+      "include": [
+        "8qpY7eiR8ySs3bY1CZg5KUEfVzENJnMltizHyit4YBg",
+        "VHir1iIeitJ5e40VsHUz3W1Ud1dw0SCwcAnllxS6iAw",
+        "XP26Or1otaWJopTz0gu3BfhPcXnEDP87GhLMpVGb_VQ",
+        "YRtj3hKA22sl6CdBg5M0e5KgmLBOri_GCb0fuUbeppA",
+        "s89B-MdAY_voDB10uryPYmp_s7-Hc4jLM4Qn0DYnj0o"
+      ],
+      "note": "before partition",
+      "state": {
+        "archived": false,
+        "moderation": "create_thread",
+        "moderator": "root",
+        "posts": [
+          "original"
+        ],
+        "title": "Canopy"
+      }
+    }
+  ],
+  "expectAtFullFrontier": {
+    "authorityQuarantine": [],
+    "quarantine": [],
+    "state": {
+      "archived": true,
+      "moderation": "create_thread",
+      "moderator": "root",
+      "posts": [
+        "left",
+        "concurrent"
+      ],
+      "title": "Canopy"
+    },
+    "winners": {
+      "archived": "ywF6lWhcDQFvFezMY5Ey4XEjFGBdflZVxE3vKjEj1Ps",
+      "moderation": "VHir1iIeitJ5e40VsHUz3W1Ud1dw0SCwcAnllxS6iAw",
+      "moderator": "XP26Or1otaWJopTz0gu3BfhPcXnEDP87GhLMpVGb_VQ",
+      "title": "VHir1iIeitJ5e40VsHUz3W1Ud1dw0SCwcAnllxS6iAw"
+    }
+  },
+  "generatedBy": "Lattice.Sim",
+  "ops": [
+    {
+      "author": "root",
+      "authorPubkey": "MYnlVpsfLeTlwKvwbQaA2HOo80KcxL5Le0cL6BlhmWA=",
+      "cap": null,
+      "command": "genesis moderator",
+      "commandArgs": null,
+      "deps": [],
+      "effects": [
+        {
+          "field": "moderator",
+          "mutation": "write",
+          "value": "root"
+        },
+        {
+          "field": "moderator",
+          "mutation": "write",
+          "value": "root"
+        }
+      ],
+      "field": "moderator",
+      "hash": "XP26Or1otaWJopTz0gu3BfhPcXnEDP87GhLMpVGb_VQ",
+      "id": "XP26Or1otaWJopTz0gu3BfhPcXnEDP87GhLMpVGb_VQ",
+      "kind": "authority",
+      "mutation": "write",
+      "replica": "treehouse:thread:conflicts#root:1VHGje_hDJYbU1dkTSozwjggrXvffOV8INcTOnkA76o",
+      "value": "root"
+    },
+    {
+      "author": "root",
+      "authorPubkey": "MYnlVpsfLeTlwKvwbQaA2HOo80KcxL5Le0cL6BlhmWA=",
+      "cap": "B58RGJVChg0tIXQroKRHv-HKJj2rYxxx2mNTQ5g1BWw",
+      "command": "create_thread",
+      "commandArgs": [
+        "Canopy"
+      ],
+      "deps": [
+        "XP26Or1otaWJopTz0gu3BfhPcXnEDP87GhLMpVGb_VQ"
+      ],
+      "effects": [
+        {
+          "field": "title",
+          "mutation": "write",
+          "value": "Canopy"
+        },
+        {
+          "field": "moderation",
+          "mutation": "write",
+          "value": "create_thread"
+        }
+      ],
+      "field": "title",
+      "hash": "VHir1iIeitJ5e40VsHUz3W1Ud1dw0SCwcAnllxS6iAw",
+      "id": "VHir1iIeitJ5e40VsHUz3W1Ud1dw0SCwcAnllxS6iAw",
+      "kind": "command",
+      "mutation": "write",
+      "replica": "treehouse:thread:conflicts#root:1VHGje_hDJYbU1dkTSozwjggrXvffOV8INcTOnkA76o",
+      "value": "Canopy"
+    },
+    {
+      "author": "root",
+      "authorPubkey": "MYnlVpsfLeTlwKvwbQaA2HOo80KcxL5Le0cL6BlhmWA=",
+      "cap": null,
+      "command": "grant alice",
+      "commandArgs": null,
+      "deps": [
+        "VHir1iIeitJ5e40VsHUz3W1Ud1dw0SCwcAnllxS6iAw"
+      ],
+      "effects": [
+        {
+          "field": "__authority",
+          "mutation": "write",
+          "value": null
+        }
+      ],
+      "field": "__authority",
+      "hash": "8qpY7eiR8ySs3bY1CZg5KUEfVzENJnMltizHyit4YBg",
+      "id": "8qpY7eiR8ySs3bY1CZg5KUEfVzENJnMltizHyit4YBg",
+      "kind": "authority",
+      "mutation": "write",
+      "replica": "treehouse:thread:conflicts#root:1VHGje_hDJYbU1dkTSozwjggrXvffOV8INcTOnkA76o",
+      "value": null
+    },
+    {
+      "author": "root",
+      "authorPubkey": "MYnlVpsfLeTlwKvwbQaA2HOo80KcxL5Le0cL6BlhmWA=",
+      "cap": null,
+      "command": "grant bob",
+      "commandArgs": null,
+      "deps": [
+        "8qpY7eiR8ySs3bY1CZg5KUEfVzENJnMltizHyit4YBg"
+      ],
+      "effects": [
+        {
+          "field": "__authority",
+          "mutation": "write",
+          "value": null
+        }
+      ],
+      "field": "__authority",
+      "hash": "YRtj3hKA22sl6CdBg5M0e5KgmLBOri_GCb0fuUbeppA",
+      "id": "YRtj3hKA22sl6CdBg5M0e5KgmLBOri_GCb0fuUbeppA",
+      "kind": "authority",
+      "mutation": "write",
+      "replica": "treehouse:thread:conflicts#root:1VHGje_hDJYbU1dkTSozwjggrXvffOV8INcTOnkA76o",
+      "value": null
+    },
+    {
+      "author": "alice",
+      "authorPubkey": "B/U/WcYp3/lkwwH9s+GpagI8/w98bRg36/v85RQ5EwY=",
+      "cap": "bJOKCfJb5H-2ylP_wO4vLpww4iko1WluXiy_yKDqhU8",
+      "command": "post",
+      "commandArgs": [
+        "original"
+      ],
+      "deps": [
+        "YRtj3hKA22sl6CdBg5M0e5KgmLBOri_GCb0fuUbeppA"
+      ],
+      "effects": [
+        {
+          "field": "posts",
+          "mutation": "append",
+          "value": "original"
+        }
+      ],
+      "field": "posts",
+      "hash": "s89B-MdAY_voDB10uryPYmp_s7-Hc4jLM4Qn0DYnj0o",
+      "id": "s89B-MdAY_voDB10uryPYmp_s7-Hc4jLM4Qn0DYnj0o",
+      "kind": "command",
+      "mutation": "append",
+      "replica": "treehouse:thread:conflicts#root:1VHGje_hDJYbU1dkTSozwjggrXvffOV8INcTOnkA76o",
+      "value": "original"
+    },
+    {
+      "author": "alice",
+      "authorPubkey": "B/U/WcYp3/lkwwH9s+GpagI8/w98bRg36/v85RQ5EwY=",
+      "cap": "bJOKCfJb5H-2ylP_wO4vLpww4iko1WluXiy_yKDqhU8",
+      "command": "author_edit",
+      "commandArgs": [
+        "s89B-MdAY_voDB10uryPYmp_s7-Hc4jLM4Qn0DYnj0o",
+        "s89B-MdAY_voDB10uryPYmp_s7-Hc4jLM4Qn0DYnj0o",
+        "right"
+      ],
+      "deps": [
+        "s89B-MdAY_voDB10uryPYmp_s7-Hc4jLM4Qn0DYnj0o"
+      ],
+      "effects": [
+        {
+          "field": "posts",
+          "mutation": "edit",
+          "value": {
+            "target": "s89B-MdAY_voDB10uryPYmp_s7-Hc4jLM4Qn0DYnj0o",
+            "value": "right"
+          }
+        }
+      ],
+      "field": "posts",
+      "hash": "5mMt5yOeX5oh4fPIvTdfLOZ5Peinob9eUVSkMS4iJrk",
+      "id": "5mMt5yOeX5oh4fPIvTdfLOZ5Peinob9eUVSkMS4iJrk",
+      "kind": "command",
+      "mutation": "edit",
+      "replica": "treehouse:thread:conflicts#root:1VHGje_hDJYbU1dkTSozwjggrXvffOV8INcTOnkA76o",
+      "value": {
+        "target": "s89B-MdAY_voDB10uryPYmp_s7-Hc4jLM4Qn0DYnj0o",
+        "value": "right"
+      }
+    },
+    {
+      "author": "alice",
+      "authorPubkey": "B/U/WcYp3/lkwwH9s+GpagI8/w98bRg36/v85RQ5EwY=",
+      "cap": "bJOKCfJb5H-2ylP_wO4vLpww4iko1WluXiy_yKDqhU8",
+      "command": "author_edit",
+      "commandArgs": [
+        "s89B-MdAY_voDB10uryPYmp_s7-Hc4jLM4Qn0DYnj0o",
+        "s89B-MdAY_voDB10uryPYmp_s7-Hc4jLM4Qn0DYnj0o",
+        "left"
+      ],
+      "deps": [
+        "s89B-MdAY_voDB10uryPYmp_s7-Hc4jLM4Qn0DYnj0o"
+      ],
+      "effects": [
+        {
+          "field": "posts",
+          "mutation": "edit",
+          "value": {
+            "target": "s89B-MdAY_voDB10uryPYmp_s7-Hc4jLM4Qn0DYnj0o",
+            "value": "left"
+          }
+        }
+      ],
+      "field": "posts",
+      "hash": "NqQCbqc8Pdll0zUj5dZ_8wC0lk3YVh1wydRIQ6YR6Ks",
+      "id": "NqQCbqc8Pdll0zUj5dZ_8wC0lk3YVh1wydRIQ6YR6Ks",
+      "kind": "command",
+      "mutation": "edit",
+      "replica": "treehouse:thread:conflicts#root:1VHGje_hDJYbU1dkTSozwjggrXvffOV8INcTOnkA76o",
+      "value": {
+        "target": "s89B-MdAY_voDB10uryPYmp_s7-Hc4jLM4Qn0DYnj0o",
+        "value": "left"
+      }
+    },
+    {
+      "author": "alice",
+      "authorPubkey": "B/U/WcYp3/lkwwH9s+GpagI8/w98bRg36/v85RQ5EwY=",
+      "cap": "bJOKCfJb5H-2ylP_wO4vLpww4iko1WluXiy_yKDqhU8",
+      "command": "post",
+      "commandArgs": [
+        "concurrent"
+      ],
+      "deps": [
+        "s89B-MdAY_voDB10uryPYmp_s7-Hc4jLM4Qn0DYnj0o"
+      ],
+      "effects": [
+        {
+          "field": "posts",
+          "mutation": "append",
+          "value": "concurrent"
+        }
+      ],
+      "field": "posts",
+      "hash": "R1JOI-vkyBtRJAVBIVSYlG8bXpOiut62v_NCPAVDwkA",
+      "id": "R1JOI-vkyBtRJAVBIVSYlG8bXpOiut62v_NCPAVDwkA",
+      "kind": "command",
+      "mutation": "append",
+      "replica": "treehouse:thread:conflicts#root:1VHGje_hDJYbU1dkTSozwjggrXvffOV8INcTOnkA76o",
+      "value": "concurrent"
+    },
+    {
+      "author": "root",
+      "authorPubkey": "MYnlVpsfLeTlwKvwbQaA2HOo80KcxL5Le0cL6BlhmWA=",
+      "cap": "B58RGJVChg0tIXQroKRHv-HKJj2rYxxx2mNTQ5g1BWw",
+      "command": "archive_thread",
+      "commandArgs": [],
+      "deps": [
+        "s89B-MdAY_voDB10uryPYmp_s7-Hc4jLM4Qn0DYnj0o"
+      ],
+      "effects": [
+        {
+          "field": "archived",
+          "mutation": "write",
+          "value": true
+        }
+      ],
+      "field": "archived",
+      "hash": "ywF6lWhcDQFvFezMY5Ey4XEjFGBdflZVxE3vKjEj1Ps",
+      "id": "ywF6lWhcDQFvFezMY5Ey4XEjFGBdflZVxE3vKjEj1Ps",
+      "kind": "command",
+      "mutation": "write",
+      "replica": "treehouse:thread:conflicts#root:1VHGje_hDJYbU1dkTSozwjggrXvffOV8INcTOnkA76o",
+      "value": true
+    }
+  ],
+  "oracleCarrierOps": [
+    {
+      "author": "MYnlVpsfLeTlwKvwbQaA2HOo80KcxL5Le0cL6BlhmWA=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "MYnlVpsfLeTlwKvwbQaA2HOo80KcxL5Le0cL6BlhmWA=",
+              "id": "B58RGJVChg0tIXQroKRHv-HKJj2rYxxx2mNTQ5g1BWw",
+              "issuer": "MYnlVpsfLeTlwKvwbQaA2HOo80KcxL5Le0cL6BlhmWA=",
+              "live": true,
+              "ops": [
+                "archive_thread",
+                "author_edit",
+                "author_tombstone",
+                "create_thread",
+                "moderator_tombstone",
+                "post"
+              ],
+              "parent_id": null,
+              "replica": "treehouse:thread:conflicts#root:1VHGje_hDJYbU1dkTSozwjggrXvffOV8INcTOnkA76o",
+              "roles": [
+                "moderator"
+              ],
+              "sig": "lO/1Ge3er0TyJX19RF4yjp15yJ03Viir5aZ+Tr9V70K2P0bQme3daBEWdlF9VCHi96sb++4aEGV4U3n2y8fBCw=="
+            }
+          ],
+          [
+            "map",
+            []
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [],
+      "id": "XP26Or1otaWJopTz0gu3BfhPcXnEDP87GhLMpVGb_VQ",
+      "kind": "authority",
+      "replica": "treehouse:thread:conflicts#root:1VHGje_hDJYbU1dkTSozwjggrXvffOV8INcTOnkA76o",
+      "sig": "JcqkTOyEfoBIWHD6651N8kwh21yJ0Q/xjtM0S6G/K2Ll4S9CeaUURwBFy5UKdg4BN9dgu94dIvyFnhOcZYwpBw==",
+      "v": 1
+    },
+    {
+      "author": "MYnlVpsfLeTlwKvwbQaA2HOo80KcxL5Le0cL6BlhmWA=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "create_thread"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "Q2Fub3B5"
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "QjU4UkdKVkNoZzB0SVhRcm9LUkh2LUhLSmoycll4eHgybU5UUTVnMUJXdw=="
+      ],
+      "deps": [
+        "XP26Or1otaWJopTz0gu3BfhPcXnEDP87GhLMpVGb_VQ"
+      ],
+      "id": "VHir1iIeitJ5e40VsHUz3W1Ud1dw0SCwcAnllxS6iAw",
+      "kind": "command",
+      "replica": "treehouse:thread:conflicts#root:1VHGje_hDJYbU1dkTSozwjggrXvffOV8INcTOnkA76o",
+      "sig": "Xbygmz0lC/SWemxxhT01oLFiuIAR6oyqlUeOyUPvoe3QelomMr4yPvJakE9eiyGfbJdHYBEw6KDozhul5zwQDg==",
+      "v": 1
+    },
+    {
+      "author": "MYnlVpsfLeTlwKvwbQaA2HOo80KcxL5Le0cL6BlhmWA=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "grant"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "B/U/WcYp3/lkwwH9s+GpagI8/w98bRg36/v85RQ5EwY=",
+              "id": "bJOKCfJb5H-2ylP_wO4vLpww4iko1WluXiy_yKDqhU8",
+              "issuer": "MYnlVpsfLeTlwKvwbQaA2HOo80KcxL5Le0cL6BlhmWA=",
+              "live": false,
+              "ops": [
+                "author_edit",
+                "author_tombstone",
+                "post"
+              ],
+              "parent_id": "B58RGJVChg0tIXQroKRHv-HKJj2rYxxx2mNTQ5g1BWw",
+              "replica": "treehouse:thread:conflicts#root:1VHGje_hDJYbU1dkTSozwjggrXvffOV8INcTOnkA76o",
+              "roles": [],
+              "sig": "gkZ8P1UQCPbD864HNxTp3K7eOqVYRumuDUNX88JsvMqe9II1bw56YFqGsNS31hiVDEg/f5kDRyg3nuRCfS9NCA=="
+            }
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "VHir1iIeitJ5e40VsHUz3W1Ud1dw0SCwcAnllxS6iAw"
+      ],
+      "id": "8qpY7eiR8ySs3bY1CZg5KUEfVzENJnMltizHyit4YBg",
+      "kind": "authority",
+      "replica": "treehouse:thread:conflicts#root:1VHGje_hDJYbU1dkTSozwjggrXvffOV8INcTOnkA76o",
+      "sig": "530u12PCD9edqsRNUXJ34jfy9DMos2IAxOs4Nzt7cjc7mj7pUzG+ulppMw2PhbN21IfGEm7Sc4k3NtZpAzHECg==",
+      "v": 1
+    },
+    {
+      "author": "MYnlVpsfLeTlwKvwbQaA2HOo80KcxL5Le0cL6BlhmWA=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "grant"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "OraO2uVr41bcrl1rM5ESw8PNJSu2/thRtgBRrtEHcgA=",
+              "id": "npaiDix3cBc6BV0xRlp4ENOKdoy4-P0sLAyeZVYP7y8",
+              "issuer": "MYnlVpsfLeTlwKvwbQaA2HOo80KcxL5Le0cL6BlhmWA=",
+              "live": false,
+              "ops": [
+                "author_edit",
+                "author_tombstone",
+                "post"
+              ],
+              "parent_id": "B58RGJVChg0tIXQroKRHv-HKJj2rYxxx2mNTQ5g1BWw",
+              "replica": "treehouse:thread:conflicts#root:1VHGje_hDJYbU1dkTSozwjggrXvffOV8INcTOnkA76o",
+              "roles": [],
+              "sig": "HaTrk08ZvKByuZqHfu0cNoUP3BFOXMoUSPN+eC1Hi92fAikYCE2rJjx3EbcRxp0M+J1eV7fQoM03mmdT+6J5DA=="
+            }
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "8qpY7eiR8ySs3bY1CZg5KUEfVzENJnMltizHyit4YBg"
+      ],
+      "id": "YRtj3hKA22sl6CdBg5M0e5KgmLBOri_GCb0fuUbeppA",
+      "kind": "authority",
+      "replica": "treehouse:thread:conflicts#root:1VHGje_hDJYbU1dkTSozwjggrXvffOV8INcTOnkA76o",
+      "sig": "ntdTWSB5wE3iTvh5UYL0KY4qd/vupDbl/1EMp/P7G6G8a/HN7XrZMcx0r/U0914nn/xdFO1t8PynTBSNnor0DA==",
+      "v": 1
+    },
+    {
+      "author": "B/U/WcYp3/lkwwH9s+GpagI8/w98bRg36/v85RQ5EwY=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "post"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "b3JpZ2luYWw="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "YkpPS0NmSmI1SC0yeWxQX3dPNHZMcHd3NGlrbzFXbHVYaXlfeUtEcWhVOA=="
+      ],
+      "deps": [
+        "YRtj3hKA22sl6CdBg5M0e5KgmLBOri_GCb0fuUbeppA"
+      ],
+      "id": "s89B-MdAY_voDB10uryPYmp_s7-Hc4jLM4Qn0DYnj0o",
+      "kind": "command",
+      "replica": "treehouse:thread:conflicts#root:1VHGje_hDJYbU1dkTSozwjggrXvffOV8INcTOnkA76o",
+      "sig": "2Sqq1wnnypFbUiVkHyPTp0RgroOS4x/o0d2D+2Mxb7OJAhdTV02yg5gPRtqMSezqsj1NjsprutJ74plvXW1lAg==",
+      "v": 1
+    },
+    {
+      "author": "B/U/WcYp3/lkwwH9s+GpagI8/w98bRg36/v85RQ5EwY=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "author_edit"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "czg5Qi1NZEFZX3ZvREIxMHVyeVBZbXBfczctSGM0akxNNFFuMERZbmowbw=="
+              ],
+              [
+                "bin",
+                "czg5Qi1NZEFZX3ZvREIxMHVyeVBZbXBfczctSGM0akxNNFFuMERZbmowbw=="
+              ],
+              [
+                "bin",
+                "cmlnaHQ="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "YkpPS0NmSmI1SC0yeWxQX3dPNHZMcHd3NGlrbzFXbHVYaXlfeUtEcWhVOA=="
+      ],
+      "deps": [
+        "s89B-MdAY_voDB10uryPYmp_s7-Hc4jLM4Qn0DYnj0o"
+      ],
+      "id": "5mMt5yOeX5oh4fPIvTdfLOZ5Peinob9eUVSkMS4iJrk",
+      "kind": "command",
+      "replica": "treehouse:thread:conflicts#root:1VHGje_hDJYbU1dkTSozwjggrXvffOV8INcTOnkA76o",
+      "sig": "kbE+PfeAV9HEs2PsjKOSo30/CoYcclbzEr4gt0npyhOYiHfEqhnZx9PqfQ0ZSMZUeUGKTd63HlCHFqCUJ001DQ==",
+      "v": 1
+    },
+    {
+      "author": "B/U/WcYp3/lkwwH9s+GpagI8/w98bRg36/v85RQ5EwY=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "author_edit"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "czg5Qi1NZEFZX3ZvREIxMHVyeVBZbXBfczctSGM0akxNNFFuMERZbmowbw=="
+              ],
+              [
+                "bin",
+                "czg5Qi1NZEFZX3ZvREIxMHVyeVBZbXBfczctSGM0akxNNFFuMERZbmowbw=="
+              ],
+              [
+                "bin",
+                "bGVmdA=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "YkpPS0NmSmI1SC0yeWxQX3dPNHZMcHd3NGlrbzFXbHVYaXlfeUtEcWhVOA=="
+      ],
+      "deps": [
+        "s89B-MdAY_voDB10uryPYmp_s7-Hc4jLM4Qn0DYnj0o"
+      ],
+      "id": "NqQCbqc8Pdll0zUj5dZ_8wC0lk3YVh1wydRIQ6YR6Ks",
+      "kind": "command",
+      "replica": "treehouse:thread:conflicts#root:1VHGje_hDJYbU1dkTSozwjggrXvffOV8INcTOnkA76o",
+      "sig": "onaEnfBnVq0RY2BNWIUh1ELWmgLDuL+mWrxDc5F5L8jfKQmvgcTMZMuqmNp447r2EXvBc6ykBQxBJC/fHFw1Dg==",
+      "v": 1
+    },
+    {
+      "author": "B/U/WcYp3/lkwwH9s+GpagI8/w98bRg36/v85RQ5EwY=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "post"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "Y29uY3VycmVudA=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "YkpPS0NmSmI1SC0yeWxQX3dPNHZMcHd3NGlrbzFXbHVYaXlfeUtEcWhVOA=="
+      ],
+      "deps": [
+        "s89B-MdAY_voDB10uryPYmp_s7-Hc4jLM4Qn0DYnj0o"
+      ],
+      "id": "R1JOI-vkyBtRJAVBIVSYlG8bXpOiut62v_NCPAVDwkA",
+      "kind": "command",
+      "replica": "treehouse:thread:conflicts#root:1VHGje_hDJYbU1dkTSozwjggrXvffOV8INcTOnkA76o",
+      "sig": "/hh0g70PTwKBj22pk1Ny08eHFhMBODR3ZeV7h15uZmb4gSpw71irJ8Hy4f13bRdg7Gi3tmsBoJBwzlxVl/+yBw==",
+      "v": 1
+    },
+    {
+      "author": "MYnlVpsfLeTlwKvwbQaA2HOo80KcxL5Le0cL6BlhmWA=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "archive_thread"
+          ],
+          [
+            "list",
+            []
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "QjU4UkdKVkNoZzB0SVhRcm9LUkh2LUhLSmoycll4eHgybU5UUTVnMUJXdw=="
+      ],
+      "deps": [
+        "s89B-MdAY_voDB10uryPYmp_s7-Hc4jLM4Qn0DYnj0o"
+      ],
+      "id": "ywF6lWhcDQFvFezMY5Ey4XEjFGBdflZVxE3vKjEj1Ps",
+      "kind": "command",
+      "replica": "treehouse:thread:conflicts#root:1VHGje_hDJYbU1dkTSozwjggrXvffOV8INcTOnkA76o",
+      "sig": "FzDW5nbiILGIo8d9aZwvLt7DeYWM6PQ/EsS2l6Ycmu7zllqH4/You4GNpolxGaI57jpFhxATaLyCI7UaeMkIDA==",
+      "v": 1
+    }
+  ],
+  "perspectives": [
+    {
+      "include": [
+        "8qpY7eiR8ySs3bY1CZg5KUEfVzENJnMltizHyit4YBg",
+        "VHir1iIeitJ5e40VsHUz3W1Ud1dw0SCwcAnllxS6iAw",
+        "XP26Or1otaWJopTz0gu3BfhPcXnEDP87GhLMpVGb_VQ",
+        "YRtj3hKA22sl6CdBg5M0e5KgmLBOri_GCb0fuUbeppA",
+        "s89B-MdAY_voDB10uryPYmp_s7-Hc4jLM4Qn0DYnj0o"
+      ],
+      "name": "before partition"
+    }
+  ],
+  "realmByPubkey": {
+    "B/U/WcYp3/lkwwH9s+GpagI8/w98bRg36/v85RQ5EwY=": "alice",
+    "MYnlVpsfLeTlwKvwbQaA2HOo80KcxL5Le0cL6BlhmWA=": "root",
+    "OraO2uVr41bcrl1rM5ESw8PNJSu2/thRtgBRrtEHcgA=": "bob"
+  },
+  "replica": "treehouse:thread:conflicts#root:1VHGje_hDJYbU1dkTSozwjggrXvffOV8INcTOnkA76o",
+  "scenario": "treehouse_thread_conflicts",
+  "scenarioKind": "treehouse",
+  "schema": {
+    "fields": {
+      "archived": {
+        "default": false,
+        "gatedBy": "moderator",
+        "merge": "lww"
+      },
+      "moderation": {
+        "default": null,
+        "gatedBy": "moderator",
+        "merge": "lww"
+      },
+      "moderator": {
+        "authority": "moderator"
+      },
+      "posts": {
+        "merge": "causal_list"
+      },
+      "title": {
+        "default": "",
+        "merge": "lww"
+      }
+    },
+    "name": "Treehouse.Thread"
+  }
+}
