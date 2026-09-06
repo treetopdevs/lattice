@@ -1,0 +1,578 @@
+{
+  "schema": "Township.Matter",
+  "members": 12,
+  "evidence_kind": "current_core_root_present_synthetic_measurement",
+  "source_base": "7610cc9b",
+  "grant_ops_scope": [
+    "post"
+  ],
+  "adopted_profile": false,
+  "founder_removed": false,
+  "runtimes_executed": [
+    "BEAM"
+  ],
+  "native_presence_prompts_executed": 0,
+  "replicas": 13,
+  "renewal_cycles": 2,
+  "epoch_unit_for_this_probe": "explicit signed integer; fourteen increments, renewal at epochs five and ten",
+  "lease_window_inclusive_epochs": 7,
+  "warning_inclusive_epochs": 2,
+  "renewal_interval_epochs": 5,
+  "initial_and_two_cycles": {
+    "signatures": 1157,
+    "operations": 676,
+    "signature_bytes": 74048,
+    "canonical_preimage_bytes": 281054,
+    "wire_json_bytes": 513793
+  },
+  "renewals_only": {
+    "signatures": 624,
+    "operations": 312,
+    "signature_bytes": 39936,
+    "canonical_preimage_bytes": 157392,
+    "wire_json_bytes": 279072
+  },
+  "per_replica": [
+    {
+      "signatures": 89,
+      "operations": 52,
+      "signature_bytes": 5696,
+      "canonical_preimage_bytes": 21599,
+      "wire_json_bytes": 39502,
+      "replica_index": 0,
+      "cycles": [
+        {
+          "cycle": 0,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10716,
+          "issue_epoch": 0,
+          "inclusive_expiry": 6
+        },
+        {
+          "cycle": 1,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10728,
+          "issue_epoch": 5,
+          "inclusive_expiry": 11
+        },
+        {
+          "cycle": 2,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10728,
+          "issue_epoch": 10,
+          "inclusive_expiry": 16
+        }
+      ]
+    },
+    {
+      "signatures": 89,
+      "operations": 52,
+      "signature_bytes": 5696,
+      "canonical_preimage_bytes": 21599,
+      "wire_json_bytes": 39502,
+      "replica_index": 1,
+      "cycles": [
+        {
+          "cycle": 0,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10716,
+          "issue_epoch": 0,
+          "inclusive_expiry": 6
+        },
+        {
+          "cycle": 1,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10728,
+          "issue_epoch": 5,
+          "inclusive_expiry": 11
+        },
+        {
+          "cycle": 2,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10728,
+          "issue_epoch": 10,
+          "inclusive_expiry": 16
+        }
+      ]
+    },
+    {
+      "signatures": 89,
+      "operations": 52,
+      "signature_bytes": 5696,
+      "canonical_preimage_bytes": 21599,
+      "wire_json_bytes": 39502,
+      "replica_index": 2,
+      "cycles": [
+        {
+          "cycle": 0,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10716,
+          "issue_epoch": 0,
+          "inclusive_expiry": 6
+        },
+        {
+          "cycle": 1,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10728,
+          "issue_epoch": 5,
+          "inclusive_expiry": 11
+        },
+        {
+          "cycle": 2,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10728,
+          "issue_epoch": 10,
+          "inclusive_expiry": 16
+        }
+      ]
+    },
+    {
+      "signatures": 89,
+      "operations": 52,
+      "signature_bytes": 5696,
+      "canonical_preimage_bytes": 21599,
+      "wire_json_bytes": 39502,
+      "replica_index": 3,
+      "cycles": [
+        {
+          "cycle": 0,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10716,
+          "issue_epoch": 0,
+          "inclusive_expiry": 6
+        },
+        {
+          "cycle": 1,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10728,
+          "issue_epoch": 5,
+          "inclusive_expiry": 11
+        },
+        {
+          "cycle": 2,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10728,
+          "issue_epoch": 10,
+          "inclusive_expiry": 16
+        }
+      ]
+    },
+    {
+      "signatures": 89,
+      "operations": 52,
+      "signature_bytes": 5696,
+      "canonical_preimage_bytes": 21599,
+      "wire_json_bytes": 39502,
+      "replica_index": 4,
+      "cycles": [
+        {
+          "cycle": 0,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10716,
+          "issue_epoch": 0,
+          "inclusive_expiry": 6
+        },
+        {
+          "cycle": 1,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10728,
+          "issue_epoch": 5,
+          "inclusive_expiry": 11
+        },
+        {
+          "cycle": 2,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10728,
+          "issue_epoch": 10,
+          "inclusive_expiry": 16
+        }
+      ]
+    },
+    {
+      "signatures": 89,
+      "operations": 52,
+      "signature_bytes": 5696,
+      "canonical_preimage_bytes": 21599,
+      "wire_json_bytes": 39502,
+      "replica_index": 5,
+      "cycles": [
+        {
+          "cycle": 0,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10716,
+          "issue_epoch": 0,
+          "inclusive_expiry": 6
+        },
+        {
+          "cycle": 1,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10728,
+          "issue_epoch": 5,
+          "inclusive_expiry": 11
+        },
+        {
+          "cycle": 2,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10728,
+          "issue_epoch": 10,
+          "inclusive_expiry": 16
+        }
+      ]
+    },
+    {
+      "signatures": 89,
+      "operations": 52,
+      "signature_bytes": 5696,
+      "canonical_preimage_bytes": 21599,
+      "wire_json_bytes": 39502,
+      "replica_index": 6,
+      "cycles": [
+        {
+          "cycle": 0,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10716,
+          "issue_epoch": 0,
+          "inclusive_expiry": 6
+        },
+        {
+          "cycle": 1,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10728,
+          "issue_epoch": 5,
+          "inclusive_expiry": 11
+        },
+        {
+          "cycle": 2,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10728,
+          "issue_epoch": 10,
+          "inclusive_expiry": 16
+        }
+      ]
+    },
+    {
+      "signatures": 89,
+      "operations": 52,
+      "signature_bytes": 5696,
+      "canonical_preimage_bytes": 21599,
+      "wire_json_bytes": 39502,
+      "replica_index": 7,
+      "cycles": [
+        {
+          "cycle": 0,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10716,
+          "issue_epoch": 0,
+          "inclusive_expiry": 6
+        },
+        {
+          "cycle": 1,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10728,
+          "issue_epoch": 5,
+          "inclusive_expiry": 11
+        },
+        {
+          "cycle": 2,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10728,
+          "issue_epoch": 10,
+          "inclusive_expiry": 16
+        }
+      ]
+    },
+    {
+      "signatures": 89,
+      "operations": 52,
+      "signature_bytes": 5696,
+      "canonical_preimage_bytes": 21599,
+      "wire_json_bytes": 39502,
+      "replica_index": 8,
+      "cycles": [
+        {
+          "cycle": 0,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10716,
+          "issue_epoch": 0,
+          "inclusive_expiry": 6
+        },
+        {
+          "cycle": 1,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10728,
+          "issue_epoch": 5,
+          "inclusive_expiry": 11
+        },
+        {
+          "cycle": 2,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10728,
+          "issue_epoch": 10,
+          "inclusive_expiry": 16
+        }
+      ]
+    },
+    {
+      "signatures": 89,
+      "operations": 52,
+      "signature_bytes": 5696,
+      "canonical_preimage_bytes": 21599,
+      "wire_json_bytes": 39502,
+      "replica_index": 9,
+      "cycles": [
+        {
+          "cycle": 0,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10716,
+          "issue_epoch": 0,
+          "inclusive_expiry": 6
+        },
+        {
+          "cycle": 1,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10728,
+          "issue_epoch": 5,
+          "inclusive_expiry": 11
+        },
+        {
+          "cycle": 2,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6048,
+          "wire_json_bytes": 10728,
+          "issue_epoch": 10,
+          "inclusive_expiry": 16
+        }
+      ]
+    },
+    {
+      "signatures": 89,
+      "operations": 52,
+      "signature_bytes": 5696,
+      "canonical_preimage_bytes": 21688,
+      "wire_json_bytes": 39591,
+      "replica_index": 10,
+      "cycles": [
+        {
+          "cycle": 0,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6072,
+          "wire_json_bytes": 10740,
+          "issue_epoch": 0,
+          "inclusive_expiry": 6
+        },
+        {
+          "cycle": 1,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6072,
+          "wire_json_bytes": 10752,
+          "issue_epoch": 5,
+          "inclusive_expiry": 11
+        },
+        {
+          "cycle": 2,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6072,
+          "wire_json_bytes": 10752,
+          "issue_epoch": 10,
+          "inclusive_expiry": 16
+        }
+      ]
+    },
+    {
+      "signatures": 89,
+      "operations": 52,
+      "signature_bytes": 5696,
+      "canonical_preimage_bytes": 21688,
+      "wire_json_bytes": 39591,
+      "replica_index": 11,
+      "cycles": [
+        {
+          "cycle": 0,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6072,
+          "wire_json_bytes": 10740,
+          "issue_epoch": 0,
+          "inclusive_expiry": 6
+        },
+        {
+          "cycle": 1,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6072,
+          "wire_json_bytes": 10752,
+          "issue_epoch": 5,
+          "inclusive_expiry": 11
+        },
+        {
+          "cycle": 2,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6072,
+          "wire_json_bytes": 10752,
+          "issue_epoch": 10,
+          "inclusive_expiry": 16
+        }
+      ]
+    },
+    {
+      "signatures": 89,
+      "operations": 52,
+      "signature_bytes": 5696,
+      "canonical_preimage_bytes": 21688,
+      "wire_json_bytes": 39591,
+      "replica_index": 12,
+      "cycles": [
+        {
+          "cycle": 0,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6072,
+          "wire_json_bytes": 10740,
+          "issue_epoch": 0,
+          "inclusive_expiry": 6
+        },
+        {
+          "cycle": 1,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6072,
+          "wire_json_bytes": 10752,
+          "issue_epoch": 5,
+          "inclusive_expiry": 11
+        },
+        {
+          "cycle": 2,
+          "signatures": 24,
+          "operations": 12,
+          "signature_bytes": 1536,
+          "canonical_preimage_bytes": 6072,
+          "wire_json_bytes": 10752,
+          "issue_epoch": 10,
+          "inclusive_expiry": 16
+        }
+      ]
+    }
+  ],
+  "unmeasured": [
+    "Treehouse command scopes",
+    "R04 continuation acquisitions",
+    "R03 witnessed beacon certificates",
+    "native prompts and user time",
+    "transport admission",
+    "catalogs",
+    "roles",
+    "user content",
+    "carrier envelope overhead"
+  ],
+  "candidate_budget_not_implemented": {
+    "grant_signature_calls_two_cycles": 624,
+    "one_prompt_per_member_renewal_intent": 312,
+    "exact_replica_batches_of_twelve_prompts_two_cycles": 26,
+    "daily_witnessed_beacon_operations_after_initial_epoch_over_fourteen_days": 182,
+    "threshold_two_witness_signatures_for_those_beacons": 364,
+    "beacon_author_op_signatures_for_those_beacons": 182,
+    "one_prompt_per_witness_claim": 364,
+    "additional_beacon_author_prompts_if_not_same_review": 182
+  }
+}
