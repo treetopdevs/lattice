@@ -1,6 +1,6 @@
 # R01a core contract adoption evidence
 
-Status: local verification and Claude Fable review passed; hosted tip and merge-result gates pending.
+Status: DONE. Local verification, Claude Fable review, final-tip and exact merge-result hosted gates passed.
 
 - Worktree: `/Users/nicholas/develop/lattice-treehouse-unified-20260906`.
 - Proposal/base: `641cbbd78bf1338a4a245e5a670ad425aa79be1b`.
@@ -47,3 +47,14 @@ After the synchronization fix, full local `mix check` exited 0 at seed 760687: 6
 27 properties, zero failures and three existing exclusions. Log:
 `/tmp/lattice-treehouse-execution-20260906/r01a-final-check.log`. This passing run supersedes,
 but does not erase, the failed seed-871368 run above.
+
+## Hosted closure
+
+Final reviewed PR tip `bed951d9ae753c390e509dceace1311df7c081c2` passed
+[run 34036627773](https://github.com/treetopdevs/lattice/actions/runs/34036627773).
+All five hosted review threads were resolved with the source/archive/contract
+repairs above. Claude Fable reviewed the final exact diff and returned PASS.
+PR 59 merged at `5d1861f16e12fb950049212a9e1301dec4e86607`; its exact
+[merge-result run 34037516446](https://github.com/treetopdevs/lattice/actions/runs/34037516446)
+passed all applicable jobs. Skipped protected Android distribution jobs do not
+establish a physical or signed pilot candidate. The R01a contract gate is closed.

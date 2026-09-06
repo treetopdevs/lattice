@@ -61,31 +61,31 @@ Rows are the authoritative dependency graph. Commas mean all prerequisites. “N
 
 | ID | Packet / accountable function | Size | Risk | Requires | Exit evidence | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| R01a | Core contract / integrator | M | Medium | None | Adopted order, archive, two dependency amendments, protected pins green | LOCAL VERIFIED |
-| R01b | Android and witness scope / operator + integrator | S | High | R01a, R17a | Adopted scope and deferred-ceremony amendment; actual sign-off | PLANNED |
-| R01c | Toolshed module isolation / operator + integrator | S | Medium | R01a | Countersigned collision contract; reserved legacy identities | LOCAL VERIFIED |
-| R02 | Founder lifecycle design / authority | M | High | R01a | Executable matrix: renewal, bounded successor, child roots and catalog recovery | IN PROGRESS |
+| R01a | Core contract / integrator | M | Medium | None | Adopted order, archive, two dependency amendments, protected pins green | DONE |
+| R01b | Android and witness scope / operator + integrator | S | High | R01a, R17a | Adopted scope and deferred-ceremony amendment; actual sign-off | LOCAL VERIFIED |
+| R01c | Toolshed module isolation / operator + integrator | S | Medium | R01a | Countersigned collision contract; reserved legacy identities | DONE |
+| R02 | Founder lifecycle design / authority | M | High | R01a | Executable matrix: renewal, bounded successor, child roots and catalog recovery | DONE |
 | R03 | Witnessed beacons / authority | L | High | R01a, R07 | Plan 179 steps 2–9, one Core integration PR | IN PROGRESS |
-| R04 | Continued authority / authority | L | High | R02, R03 | Core membership/renewal after two expiry cycles; bounded self-issue | PLANNED |
-| R05 | Diagnostic redaction / hardening | S | Medium | None | Plan 170 negative inspect/crash cases | LOCAL VERIFIED |
-| R06 | Verified restores / hardening | M | High | None | Plan 171 consumer policies; staged fail-closed recovery input | LOCAL VERIFIED |
-| R07 | Canonical strictness / codec | S–M | High | None | Plan 172 valid-byte parity plus duplicate/noncanonical refusals | LOCAL VERIFIED |
-| R08 | Deadlines and pagination / carrier | M–L | High | None | Plan 173 bounded setup, interrupted large-log real-transport replay | IN PROGRESS |
-| R09 | Input limits / hardening | M | High | R07, R08 | Plan 176 ingress and authority boundary refusals | PLANNED |
-| R10 | Root-only Treehouse domain / product + parity | XL | High | R01a, R07, R09 | Core complete vocabulary, effects, conflicts, offline demo | PLANNED |
-| R11a | Local catalog/provisioning / carrier | M | High | R02, R04, R06, R10 | Local signed catalogs, root bootstrap and bounded routes | PLANNED |
+| R04 | Continued authority / authority | L | High | R02, R03 | Core membership/renewal after two expiry cycles; bounded self-issue | LOCAL VERIFIED |
+| R05 | Diagnostic redaction / hardening | S | Medium | None | Plan 170 negative inspect/crash cases | DONE |
+| R06 | Verified restores / hardening | M | High | None | Plan 171 consumer policies; staged fail-closed recovery input | DONE |
+| R07 | Canonical strictness / codec | S–M | High | None | Plan 172 valid-byte parity plus duplicate/noncanonical refusals | DONE |
+| R08 | Deadlines and pagination / carrier | M–L | High | None | Plan 173 bounded setup, interrupted large-log real-transport replay | DONE |
+| R09 | Input limits / hardening | M | High | R07, R08 | Plan 176 ingress and authority boundary refusals | LOCAL VERIFIED |
+| R10 | Root-only Treehouse domain / product + parity | XL | High | R01a, R07, R09 | Core complete vocabulary, effects, conflicts, offline demo | LOCAL VERIFIED |
+| R11a | Local catalog/provisioning / carrier | M | High | R02, R04, R06, R10 | Local signed catalogs, root bootstrap and bounded routes | IN PROGRESS |
 | R11b | Lifecycle reconciliation / carrier | M | High | R11a | Crash-safe creation/removal, no phantom publication | PLANNED |
 | R11c | Catalog replacement trust / recovery | M | High | R11b | Retained client accepts authorized replacement without old signer | PLANNED |
-| R12 | Empty local app / product | L | Medium | R01a, R05, R06, R10 | Packaged offline preview; no member grants | PLANNED |
+| R12 | Empty local app / product | L | Medium | R01a, R05, R06, R10 | Packaged offline preview; no member grants | IN PROGRESS |
 | R13 | Enrollment and sync / product | L | High | R01b, R08, R11c, R12 | Packaged two-app join/heal; wrong-input and four-socket tests | PLANNED |
 | R14 | Profiles, roles, removal, renewal / product + authority | XL | High | R13, R04, R36 | Packaged enroll-then-pin, per-replica readiness and renewal | PLANNED |
-| R15 | Measured rollover / product | L | Medium | R14 | Packaged archival saga, finite-capacity stop, retained readability | PLANNED |
+| R15 | Measured rollover / product | L | Medium | R14 | Packaged archival saga, finite-capacity stop, retained readability; bounded relay workload and pagination latency | PLANNED |
 | R16 | Member reseed, AF-1 / recovery | M | High | R06, R11c, R15 | Packaged new-identity relay reseed from surviving member evidence | PLANNED |
 | R17a | Native witness decision / native custody | M | High | None | Plan 174 decision plus concrete Android build plan | IN PROGRESS |
 | R17b | Native witness signing / native custody | L | High | R17a, R01b, R03, R14 | Claim verification, protected signing, consent/replay negatives | PLANNED |
 | R17c | Independent witness proof / device QA | M | High | R17b | Physical custody/presence evidence for the selected Android profile | PLANNED |
 | R18 | Founder and combined loss / recovery | M | High | R04, R11c, R15, R16, R17c | Packaged loss with physical witnesses; independent retained trust | PLANNED |
-| R19a | AF-3 contract / identity | M | High | R01a, R02 | Adopted vouch, conflict, possession and lost-loan rules | PLANNED |
+| R19a | AF-3 contract / identity | M | High | R01a, R02 | Adopted vouch, conflict, possession and lost-loan rules | IN PROGRESS |
 | R19b | AF-3 semantics / identity + parity | L | High | R19a, R04, R10 | Core founder-present/absent re-admission with negative controls | PLANNED |
 | R20 | New-phone re-admission / product | M | High | R14, R19b | Packaged AF-3, old-key return, visible unresolved grants | PLANNED |
 | R21a | WSS/restore artifacts / operations | M | Medium | R05, R06, R08, R09, R11c | Reproducible deployment/runbook and local restore checks | PLANNED |
@@ -110,21 +110,49 @@ Rows are the authoritative dependency graph. Commas mean all prerequisites. “N
 | R35b | Lifetime policy proof / lifecycle | L or no-build | High | R35a | Implemented/tested adopted policy or tested finite end-of-life | PLANNED |
 | R36 | Protected witness identity / native custody | L | High | R01b, R12, R17a | Distinct persistent witness keys and reviewed public-identity binding | PLANNED |
 
-### Unmerged verification records (2026-09-06)
+### Execution evidence (2026-09-06)
 
-These immutable sibling tips record local preparation; none is an integrated dependency until
-its PR-tip and merge-result gates pass. Claude Fable reviewed R05/R06/R07 and returned PASS.
+This table is the current evidence snapshot; earlier revision evidence remains in
+Git history and each packet's source plan. R01a, R01c, R02, R05, R06, R07 and R08 have
+both final-tip and exact merge-result hosted gates closed. `LOCAL VERIFIED` still
+requires every remaining integration/review/hosted gate. Distribution jobs skipped
+without protected pilot inputs establish no signed pilot artifact or physical result.
+A passing review or a green path-filtered status is not a substitute for the required workflow.
 
-| Packet | Local tip | Evidence and remaining gate |
+| Packet | Immutable reviewed tip / PR | Evidence and remaining gate |
 | --- | --- | --- |
-| R01a | See [contract record](evidence/treehouse-r01a-2026-09-06.md) | PR 59; hosted remediation in progress |
-| R01c | `b9736790` | Module collision amendment; full local verification and Fable review, wording/evidence follow-up; R01a and hosted gates pending |
-| R05 | `4c88f41ec7757158a8fce94b44194debf87c22a7` | Plan 170; 666 tests + 27 properties, post-refresh raw-status regression; hosted gates pending |
-| R06 | `41ace37b50439f83393eda427dc55a9ef650f899` | Plan 171; 677 tests + 27 properties, deterministic snapshot-replacement regression; hosted gates pending |
-| R07 | `afe5ea250072267927b89b353e7bde1e793176b5` | Plan 172; preserved legacy vectors, Node/browser strictness and native bridge coverage; hosted gates pending |
+| R01a | `bed951d9ae753c390e509dceace1311df7c081c2` / [59](https://github.com/treetopdevs/lattice/pull/59) | DONE: Fable PASS; tip run 34036627773; merge `5d1861f16e12fb950049212a9e1301dec4e86607`, merge run 34037516446 passed; [contract record](evidence/treehouse-r01a-2026-09-06.md) |
+| R01b | `1beb114499e6a457d0b43cf10c731500b11731f1`, evidence `73ff1849f5e115d3690eb27b122036373175a2fe` | Existing execution authorization adopts concrete Android scope; Fable PASS, 663 tests + 27 properties. Final R17a integration/review and hosted gates remain; no physical device evidence |
+| R01c | `b973679077e6300a1390fb1da40443d5279ec30f` / [63](https://github.com/treetopdevs/lattice/pull/63) | DONE: module collision amendment, Fable PASS; tip run 34036906871; merge `67401756af8c3cd0e538a2bcb62dcb832091c6e0`, merge run 34046599577 passed. Stale ancestry finding refuted and resolved |
+| R02 | `389e9d4e520a9119913bfad591bc3c3f95ad12f8` / [64](https://github.com/treetopdevs/lattice/pull/64) | DONE: Fable PASS, 12 probes, 675 tests + 27 properties. Tip 34037599146 passed on unchanged retry after dependency-download DNS failure; merge `f0e323b638e8a8095bbcf6f420066c238d126b6e`, merge run 34045243247 passed. Cadence remains proposed; R11's catalog-policy amendment is separate |
+| R03 | `4a823b965895b980b2377e0b419f3c293b13b3e3` / [68](https://github.com/treetopdevs/lattice/pull/68) | Initial hosted repairs locally verified: 695 tests + 27 properties, preserved prior vectors, new resolved-root/invalid-policy controls. Final Fable review and tip run 34049965801 pending; two further hosted policy/certificate integer-classification findings are under repair |
+| R04 | `2462354698c93635454164fa452e5d45b35afe08` / [71](https://github.com/treetopdevs/lattice/pull/71) | Original implementation and arity follow-up Fable PASS. Final dependency integration c2d85b92 passes 772 tests + 27 properties and 57 reciprocal histories; tip run 34050110718 and bounded integration review pending. New R03 follow-up still needs integration; no physical founder-loss claim |
+| R05 | `4c88f41ec7757158a8fce94b44194debf87c22a7` / [60](https://github.com/treetopdevs/lattice/pull/60) | DONE: diagnostic negatives, Fable PASS, 666 tests + 27 properties; tip 34036748317; merge `2f83cc1ea5fdd2fdd5a4a7500b467cebaf392c1a`, merge run 34038896331 passed |
+| R06 | `41ace37b50439f83393eda427dc55a9ef650f899` / [61](https://github.com/treetopdevs/lattice/pull/61) | DONE: staged verified snapshots, deterministic replacement regression, Fable PASS, 677 tests + 27 properties; tip 34036773840; merge `15ea1c37b2a134725ae6d820752a9ef8f105da8d`, merge run 34045534524 passed |
+| R07 | `afe5ea250072267927b89b353e7bde1e793176b5` / [62](https://github.com/treetopdevs/lattice/pull/62) | DONE: strict canonical refusals and unchanged valid bytes, Fable PASS; tip 34036786373; merge `b68e6bd367736a23e1478a07257deb55f37b462d`, merge run 34040727942 passed |
+| R08 | `73a96a5418747b36bef6a0363d0ed3e35094d1e1` / [65](https://github.com/treetopdevs/lattice/pull/65) | DONE: exact repair Fable PASS; 678 tests + 27 properties; tip run 34046604253 passed; all hosted threads resolved. Merge `9bb7b340e49be605151458134391aa16e642fc29`, exact merge run 34048283122 passed. Pagination-cache cost remains an R15 measurement item |
+| R09 | Reviewed `29fe54f3e17291bd1280244c0dbc0c532ec30bbb`, count correction `99139544` / [70](https://github.com/treetopdevs/lattice/pull/70) | Accepted-base integration Fable PASS; 726 tests + 27 properties, TS gates, tip run 34048799634 passed. R08 integration focused count is 13 (4 + 1 + 8), corrected after review. Corrected-tip/merge gates remain; no production change in the correction |
+| R10 | Original `3d6a44431c6f3f1a3802aeab948f0dbb8e8f73a5`; reviewed integration `f5fe2fb5fb588296ad68aa836ef0c3ffacb73b97` | Original domain and final integration Fable PASS. Full suite at `90a07e2b876fe40ac73db8bfd3a035844b315e42`: 803 tests + 27 properties, zero failures. Later test-only f5fe2fb5 adds refused continuation consent, with its focused reciprocal test and format check passed. All 68 R10 and three R04 vector files preserved; R03 adds two top-level vectors. Further R03 metadata repair/integration and hosted gates remain |
+| R11a/b/c | Reviewed contract `789ab2353f8250a983573c33f600202b0b36b7c0`; adoption `0db817fa` | Fable follow-up PASS; exact defaults and dated Plan158/178/R02 amendments adopted before R11a production. Local catalog/codec implementation is underway. C01–C15 remain open; no route/profile enablement or recovery success claim |
+| R12 | Preparation `d57fab1e`; engine merge `50184e70` | Packaged original-binary fresh creation/edit/draft/archive/restart and independent BEAM replay pass. Preparation had one known R02/P05 dependency failure; engine merge supplies its accepted fix. Final rebuilt retained-identity replay awaits user-side macOS Keychain authorization; final integrated check, Fable and hosted gates remain |
+| R17a | `443c6a131577fe2ea24da608d34bb083f13c47cc` / [66](https://github.com/treetopdevs/lattice/pull/66) | Exact admission/consent/recovery repair and final eligibility clarification Fable PASS; final tip run 34048710026 passed. Seven semantic review threads resolved; canonical index closure follows this ledger. Exact merge gate remains; native implementation and physical eligibility are separate |
+| R19a | Proposed contract `78a047a3066f04497363d5375a43640e9fc70beb` | Frozen member-device-loss design: exact two-member vouch/possession, competing-link and old-key-return rules, 17 OPEN public acceptance cases. Document checks pass; actual Fable review, adoption and all implementation remain pending |
+| Independent native prompt | `0e942f2c6404130f5dcebda9bd754883846df6bd` / [67](https://github.com/treetopdevs/lattice/pull/67) | Constant reason, hostile-input negatives, Fable PASS, 68 Rust tests; tip run 34037880177 passed. Merge `cba32f3b` run 34047317736 failed in the existing randomized canonical map generator. Exact seed642605 RED/GREEN repair `d71c4dae` passes 707 tests + 27 properties; its review/hosted closure and old exact-merge rerun remain. No native semantic-verification claim |
 
-R02 lifecycle probes, R03 witnessed-beacon implementation, R08 transport pagination and R17a
-native design are active in separate worktrees. Their partial results are not completion claims.
+Local test totals above exclude three already-configured tests; none is hidden by
+this program. Uncapped concurrent BEAM suites exposed a module-load timeout and a
+transport-fixture scheduling race. Serialize local full suites with
+`ERL_FLAGS='+S 4:4'` and the prescribed OTP/asdf path, retain initial failures and
+record controlled reruns. This changes execution resources, not test timeouts or
+production contracts. Source review, local runtime checks, hosted packaging,
+physical hardware and elapsed pilot observations remain separate evidence tiers.
+
+At the R03/R09 integration, preserve the exact three-field witnessed-beacon decode
+before the exact two-field legacy branch; unsupported arities remain inert. R02
+P05's missing-policy three-field audit changes to `unauthorized_beacon` under its
+already adopted Plan 179 exception, preserving historical bytes, state and lease
+outcomes. R04 uses R09's explicit refusal of rebinding and a fresh reserved family;
+legacy replicas do not silently receive bounded continuation semantics.
 
 ### Work order and merge discipline
 
@@ -151,6 +179,28 @@ An otherwise authorized repeated archive is an honored write of `true` with no a
 Application refusal precedence is: missing/not-causal target; quarantined target; wrong target kind/Thread; wrong author; already tombstoned; archived Thread. An honored archive in the causal past denies new posts, author edits and author tombstones; moderator tombstones remain allowed. A post concurrent with archive remains honored. Existing canonical ordering resolves concurrent edits; tombstoned content cannot be revived. R10 proves create, concurrent admission/posting, partition/heal, tombstones, role transfer, removal, archive and dump/restore across both runtimes. Root-only succession replay is qualified until R04 establishes its bounded policy; legacy Township and Toolshed vectors remain green.
 
 R15 makes rollover a durable saga with one locally identified attempt, retryable successor draft/provisioning and explicit recovery after each transition. Check slot capacity before asking the user to archive for rollover; archive may still be a deliberate standalone action. If the operator or network disappears after archive, show the archived Thread and pending successor; retries cannot duplicate it. A live Space reference is published only after route readiness. The successor receives the approved per-replica profile and current reviewed roster; it is not automatically a copy of stale invitations or removed members. Copying a refused offline draft to a new Thread is an intentional new signed action.
+
+R15 also owns the deferred R08 pagination-cost gate. Before selecting a cache or
+other optimization, run the real Holder/WebSocket path with one Space and 12 total
+Threads (including archives), 4 concurrent foreground sockets, 4,000 retained ops
+and 8 MiB per exercised replica. Include authority/quarantine evidence, mixed
+frame sizes, interrupted/resumed pulls and concurrent appends; verify exact final
+op sets, verdicts and state. Measure page count, bytes, server work per page,
+p50/p95/max request latency, complete-sync time and peak memory. Include an idle
+small-Thread pull while another route is saturated to expose scheduler starvation.
+
+The adopted local acceptance bound is **every successful page and small-Thread
+pull completes within five seconds** on the recorded reference host under that
+workload; no timeout/retry/error counts as a successful sample. Publish raw timing
+samples and host/build/seed parameters, and require successful interrupted resume
+without lost/duplicated semantic results. Full-history application replay separately
+retains the existing five-second product gate. Record network time separately;
+this local bound is not a remote-network guarantee. The 5,000-op/10-MiB benchmark
+is a separate overload measurement and cannot replace the supported-envelope run.
+If per-page full-log sorting/digest/topological recomputation fails the bound,
+R15 remains open until a bounded reviewed optimization passes the same workload;
+do not raise caps/timeouts, omit busy samples or claim frame size bounds latency.
+This is a new required measurement contract, not a current performance result.
 
 ### Membership and transport: R11, R13, R14
 
@@ -318,3 +368,18 @@ Pause dependent work on: unadopted contract/scope change; inability to identify 
 ### Planning-artifact completion
 
 This proposal is complete as a document when its two source comparisons are traceable, every packet has an owner/risk/size/dependency/exit, the graph is acyclic, local links resolve, the diff preserves source artifacts and unrelated contracts, and repository formatting/full-suite verification is recorded. This does not close R01 or any implementation packet. The comparison records validation actually performed for this revision.
+
+### Evidence maintenance and external gates
+
+The execution-evidence table is the single status snapshot. Source-plan records
+and Git history preserve earlier runs. Associate each verification result with
+the exact commit it tested; distinguish a later test-only or documentation tip
+from its earlier full-suite source. Refresh the table instead of adding another
+competing current-status narrative. Every new merge still needs its required
+source, review, local and hosted gates.
+
+Physical-pilot inputs include independently controlled Android device models
+and the selected carrier host/domain. Software preparation continues while those
+inputs are pending. No device, signing identity, deployment or elapsed pilot
+evidence is inferred from source review or local tests. A review interrupted
+without a final verdict remains pending regardless of partial positive comments.

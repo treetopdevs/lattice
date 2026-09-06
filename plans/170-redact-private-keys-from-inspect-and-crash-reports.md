@@ -14,6 +14,7 @@
 
 ## Status
 
+- **Execution**: DONE — unified R05; reviewed source, PR60 tip and exact merge-result gates passed.
 - **Priority**: P1 — a live Ed25519 signing key is written to plaintext logs by any crash in a
   process that holds one. Cheapest high-value fix in the current backlog.
 - **Effort**: S — two small changes plus tests.
@@ -315,19 +316,40 @@ $MIXCMD format --check-formatted && $MIXCMD test && $MIXCMD credo --strict
 
 Verification: `$MIXCMD test` → exit 0 with 3 new tests passing.
 
+## Verified closure — 2026-09-06
+
+The planned-at diagnosis, source excerpts, RED instructions and STOP conditions are retained
+as execution history. The checklist records verification of the original R05 packet, not a demand
+to reproduce RED against the now-fixed source or to keep this later documentation worktree clean.
+The source-scope criterion includes the explicitly adopted `secret_test.exs` amendment above.
+
+- Reviewed source: `4c88f41ec7757158a8fce94b44194debf87c22a7`, [PR60](https://github.com/treetopdevs/lattice/pull/60).
+  Actual Claude Fable passed the original repair and its final post-refresh regression.
+- Local `mix check`: **666 tests + 27 properties, zero failures**, three existing exclusions;
+  formatting and strict Credo passed. Final focused checks passed **58/58**. Tests cover bare and
+  nested inspection, raw projection status before and after refresh, unchanged live identity,
+  and the independent Holder redaction guarantee.
+- Exact source-tip [workflow 34036748317](https://github.com/treetopdevs/lattice/actions/runs/34036748317)
+  passed at that SHA. Merge `2f83cc1ea5fdd2fdd5a4a7500b467cebaf392c1a` passed its own
+  [workflow 34038896331](https://github.com/treetopdevs/lattice/actions/runs/34038896331).
+- Reconciliation rechecked the `Inspect` derive, redaction moduledoc and projection
+  `format_status/1` in the current tree, the original packet's changed-file scope, and the
+  shared [plan index](README.md), which records Plan170 DONE. These are read-only checks;
+  no new runtime or custody claim is added.
+
 ## Done criteria
 
 Machine-checkable. ALL must hold:
 
-- [ ] `$MIXCMD format --check-formatted` exits 0
-- [ ] `$MIXCMD test` exits 0, 0 failures
-- [ ] `$MIXCMD credo --strict` exits 0
-- [ ] `grep -n "@derive {Inspect, except: \[:priv\]}" apps/lattice_core/lib/lattice/identity.ex` returns a match
-- [ ] `grep -n "inspect-redacted\|redacted" apps/lattice_core/lib/lattice/identity.ex` returns a match in the `@moduledoc` (step 3's documentation requirement)
-- [ ] `grep -n "format_status" apps/township_web/lib/township_web/carrier_projection.ex` returns a match
-- [ ] The 3 tests named in the test plan exist and pass
-- [ ] `git status --porcelain` lists no file outside the in-scope list
-- [ ] `plans/README.md` status row for 170 updated
+- [x] `$MIXCMD format --check-formatted` exits 0
+- [x] `$MIXCMD test` exits 0, 0 failures
+- [x] `$MIXCMD credo --strict` exits 0
+- [x] `grep -n "@derive {Inspect, except: \[:priv\]}" apps/lattice_core/lib/lattice/identity.ex` returns a match
+- [x] `grep -n "inspect-redacted\|redacted" apps/lattice_core/lib/lattice/identity.ex` returns a match in the `@moduledoc` (step 3's documentation requirement)
+- [x] `grep -n "format_status" apps/township_web/lib/township_web/carrier_projection.ex` returns a match
+- [x] The 3 tests named in the test plan exist and pass
+- [x] `git status --porcelain` lists no file outside the in-scope list
+- [x] `plans/README.md` status row for 170 updated
 
 ## STOP conditions
 

@@ -1,10 +1,11 @@
 # Treehouse founder lifecycle: R02 decision and probes
 
-Status: proposed contract for integrator and Claude Fable review. Preparation base:
-`7610cc9b`, 2026-09-06. No profile is enabled by this document. R01a was awaiting
-hosted closure when this preparation began. R03, R04, R10, R11 and native/device
-proof remain separate gates. Approval must name the selected constants and the
-versioned continuation and catalog contracts; this document alone does not adopt them.
+Status: **R02 design/probe packet adopted for bounded software implementation;
+physical profile selection remains gated on measured R14/R17 workload.** Original
+preparation base `7610cc9b`, 2026-09-06. Sections 1–8 preserve the reviewed design
+and measurements from that preparation; the dated adoption below resolves its
+candidate choices and supersedes the proposed extra catalog witness quorum.
+No profile, device or elapsed pilot is enabled by this document.
 
 The recommendation is a leased, witnessed continuation profile, with renewal of
 the issuer's authority before member grants, a separate root for every child,
@@ -392,3 +393,47 @@ this pinned base, not a production erasure or physical-loss claim.
 
 No authority implementation, Plan 179 vector, source worktree, shared README or
 unified status row is changed by R02 preparation.
+
+
+## Integrator adoption — 2026-09-06
+
+Under the user's instruction to complete the unified proposal, the integrator
+adopts this exact R02 software contract following the R02 design review, R04
+contract/implementation review and R11 design review:
+
+- Use R04's reviewed v1 bounded Space/admin and Thread/moderator continuation
+  profile and closed certificate from `75e544d2`, with the final integration at
+  `40079ee7`. A current holder or fixed nominee acquires only the predecessor's
+  effective operations, under the finite witnessed window; immutable roots and
+  actual issuer/root revocation rules remain unchanged. This is adoption of the
+  reviewed contract, not a claim that its outstanding hosted dependency gates pass.
+- Freeze section 4's **software acceptance candidate**: L=7 inclusive epochs,
+  warning during the final two epochs, renewal at E5/E10 from initial E0, maximum
+  witnessed step1, two of three independently controlled eligible witness keys,
+  and at most two separately signed dependent catch-up steps per reviewed ceremony.
+  Bootstrap/date mapping and daily cadence are human-reviewed practice; the judge
+  has no trusted elapsed-time clock. Missing beacon evidence never becomes epoch0.
+  These exact constants govern tests and the first workload rehearsal.
+- Field selection still requires R14/R17 measured sign calls, prompts, elapsed
+  coordinator time and missed-lead rehearsal, plus actual eligible keys under R36.
+  Named lead/backup and selected dates/devices are enrollment inputs. If the
+  seven/five candidate fails that rehearsal, amend the finite window explicitly
+  and lengthen R23 observation to cover two real expiry cycles before enabling a
+  profile. This later measurement gate does not withhold the already selected
+  software contract or introduce an R02→R14 dependency cycle.
+- Adopt R11 contract `789ab2353f8250a983573c33f600202b0b36b7c0`, including its
+  closed `catalog_bootstrap_v1` and `replace_catalog_v1` commands, retained trust
+  and possession rules. Replacement is authorized by the currently valid bounded
+  Space admin through an exact pre-loss command ceiling. **There is no additional
+  catalog witness quorum or new native witness-signing purpose.** R04's threshold
+  authorizes acquisition/renewal; catalog/service keys prove possession. This
+  expressly replaces section 2/6's earlier proposed separate catalog quorum.
+  Root and per-replica semantic grants remain separate from transport trust;
+  malicious authorized-admin redirection remains an explicit residual.
+
+R02's completed design/probe evidence is PR64 tip
+`389e9d4e520a9119913bfad591bc3c3f95ad12f8`, successful workflow34037599146,
+merge `f0e323b638e8a8095bbcf6f420066c238d126b6e` and successful exact merge
+workflow34045243247, with actual Claude Fable PASS. The original measurements
+remain software-signing evidence only. R04/R11 implementation, R14 enrollment,
+R36/R17 physical custody and R23 elapsed observation retain their own closure gates.
