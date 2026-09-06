@@ -680,6 +680,26 @@ const outsiderProjection = materialize(beaconVector.schema,
   carrierOpsToSemanticOps([beaconGenesis, leasedFrame, outsiderHigh, afterOutsider], beaconVector.realmByPubkey));
 check("high non-root beacon confers no maximum", outsiderProjection.quarantineReasons.get(outsiderHigh.id), "unauthorized_beacon");
 check("witnessed descendant of refused high non-root beacon remains eligible", outsiderProjection.quarantineReasons.has(afterOutsider.id), false);
+const concurrentLow = await witnessedAfter([leasedFrame.id], 4);
+check("a concurrent low witnessed fork is not a descendant of the high maximum", materialize(beaconVector.schema,
+  carrierOpsToSemanticOps([...highFrames, concurrentLow], beaconVector.realmByPubkey)).quarantineReasons.has(concurrentLow.id), false);
+const rootCeiling = await legacyHigh("18446744073709551615", [highSecond.id]);
+check("canonical uint64 ceiling remains valid only on the root legacy branch", materialize(beaconVector.schema,
+  carrierOpsToSemanticOps([beaconGenesis, leasedFrame, highFirst, highSecond, rootCeiling], beaconVector.realmByPubkey))
+  .quarantineReasons.has(rootCeiling.id), false);
+for (const epoch of [["int", "18446744073709551616"], ["int", "09007199254740992"],
+  ["int", "+9007199254740992"], ["int", 9007199254740992], ["list", [["int", "9007199254740992"]]]] as CarrierTerm[]) {
+  let refused = false;
+  const malformed = {...highFirst, body: ["tuple", [["atom", "beacon"], epoch]] as CarrierTerm};
+  try { decodeCarrierOpFrame(malformed); } catch { refused = true; }
+  check("legacy epoch context preserves strict integer and nested grammar", refused, true);
+}
+for (const outside of [{...highFirst, kind: "command"},
+  {...highFirst, body: ["tuple", [["atom", "beacon"], ["int", "9007199254740992"], ["map", []]]]}]) {
+  let refused = false;
+  try { decodeCarrierOpFrame(outside); } catch { refused = true; }
+  check("high legacy context cannot widen command or witnessed body epochs", refused, true);
+}
 const malformedPolicyFrame = structuredClone(beaconGenesis);
 if (malformedPolicyFrame.body[0] !== "tuple" || malformedPolicyFrame.body[1][2]?.[0] !== "map") throw new Error("policy fixture");
 (malformedPolicyFrame.body[1][2][1][0] as unknown[]).push(["nil"]);

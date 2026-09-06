@@ -26,7 +26,8 @@ export interface AuthorityRootEvidence {
 }
 export interface EffectiveBeaconEvidence {
     opId: string;
-    epoch: number;
+    /** Safe epochs are numbers; high legacy uint64 epochs retain exact decimal bytes. */
+    epoch: number | string;
 }
 export interface EffectiveRevokeEvidence {
     opId: string;

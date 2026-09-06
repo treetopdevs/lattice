@@ -239,6 +239,8 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_beacon_witnessed_large_policy_integer(),
       township_beacon_witnessed_policy_metadata(),
       township_beacon_witnessed_certificate_metadata(),
+      township_beacon_witnessed_high_legacy(),
+      township_beacon_witnessed_high_nonroot(),
       township_policy_honored_target(),
       township_policy_target_reason_taxonomy(),
       township_policy_concurrent_target_not_visible(),
@@ -3016,6 +3018,60 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     capability_scenario_with_canonical_ops("township_beacon_witnessed_concurrent", sim, log, %{
       "case" => "witnessed_concurrent",
       "beaconOperationIds" => [first.id, second.id, next.id]
+    })
+  end
+
+  defp township_beacon_witnessed_high_legacy do
+    {sim, _} = beacon_sim("high-legacy")
+    {sim, lease} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 3)
+    {sim, first} = Sim.beacon(sim, "clerk", 9_007_199_254_740_992)
+    {sim, second} = Sim.beacon(sim, "clerk", 9_007_199_254_740_993)
+    {sim, descending} = Sim.beacon(sim, "clerk", 9_007_199_254_740_992)
+    sim = Sim.sync_all(sim)
+    {sim, witnessed} = Sim.beacon(sim, "w0", 0, witnesses: ["w0", "w1"])
+    sim = Sim.sync_all(sim)
+    {sim, post} = Sim.command(sim, "resident", :post, ["exact legacy high lapses"], cap: lease.id)
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "resident")
+    assert_authority_honored!(log, first.id)
+    assert_authority_honored!(log, second.id)
+    assert_authority_reason!(log, descending.id, :stale_beacon)
+    assert_authority_reason!(log, witnessed.id, :stale_beacon)
+    assert_authority_reason!(log, post.id, :lease_expired)
+    true = Authority.expired?(log, lease.id)
+
+    capability_scenario_with_canonical_ops("township_beacon_witnessed_high_legacy", sim, log, %{
+      "case" => "witnessed_high_legacy",
+      "highLegacyEpochs" => [
+        %{"opId" => first.id, "epoch" => "9007199254740992"},
+        %{"opId" => second.id, "epoch" => "9007199254740993"}
+      ]
+    })
+  end
+
+  defp township_beacon_witnessed_high_nonroot do
+    {sim, _} = beacon_sim("high-nonroot")
+    {sim, lease} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 3)
+    sim = Sim.sync_all(sim)
+    {sim, unauthorized} = Sim.beacon(sim, "w0", 18_446_744_073_709_551_615)
+    sim = Sim.sync_all(sim)
+    false = Authority.expired?(Sim.log(sim, "resident"), lease.id)
+
+    {sim, before} =
+      Sim.command(sim, "resident", :post, ["nonroot high cannot lapse"], cap: lease.id)
+
+    sim = Sim.sync_all(sim)
+    {sim, witnessed} = Sim.beacon(sim, "w0", 4, witnesses: ["w0", "w1"])
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "resident")
+    assert_authority_reason!(log, unauthorized.id, :unauthorized_beacon)
+    assert_authority_honored!(log, before.id)
+    assert_authority_honored!(log, witnessed.id)
+
+    capability_scenario_with_canonical_ops("township_beacon_witnessed_high_nonroot", sim, log, %{
+      "case" => "witnessed_high_nonroot",
+      "highLegacyEpochs" => [],
+      "beaconOperationId" => witnessed.id
     })
   end
 

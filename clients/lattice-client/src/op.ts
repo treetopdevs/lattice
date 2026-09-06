@@ -143,7 +143,7 @@ export type AuthorityEvidence =
     }
   | { type: "revoke"; delegationId: string }
   | { type: "heartbeat"; role: string; atTick: number }
-  | { type: "beacon"; epoch: number | null; certificate?: WitnessedBeaconCertificateEvidence | null; authorPubkey?: string };
+  | { type: "beacon"; epoch: number | string | null; certificate?: WitnessedBeaconCertificateEvidence | null; authorPubkey?: string };
 
 export interface Op {
   /** Content-address id from Elixir. In Tier A this is an opaque handle. */

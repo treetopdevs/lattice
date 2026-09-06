@@ -54,7 +54,8 @@ export interface AuthorityRootEvidence {
 
 export interface EffectiveBeaconEvidence {
   opId: string;
-  epoch: number;
+  /** Safe epochs are numbers; high legacy uint64 epochs retain exact decimal bytes. */
+  epoch: number | string;
 }
 
 export interface EffectiveRevokeEvidence {
@@ -1456,10 +1457,10 @@ function collectBeacons(
     if (op.kind !== "authority" || evidence?.type !== "beacon") continue;
 
     const anc = ancestors(op.id, byId, ancCache);
-    let priorMax = -1;
+    let priorMax = -1n;
     for (const beacon of validBeacons) {
-      if (anc.has(beacon.opId) && beacon.epoch > priorMax)
-        priorMax = beacon.epoch;
+      const epoch = BigInt(beacon.epoch);
+      if (anc.has(beacon.opId) && epoch > priorMax) priorMax = epoch;
     }
 
     if (evidence.certificate !== undefined) {
@@ -1486,7 +1487,7 @@ function collectBeacons(
       const expected = {
         version: 1,
         replica: op.replica ?? "",
-        epoch: evidence.epoch ?? -1,
+        epoch: typeof evidence.epoch === "number" ? evidence.epoch : -1,
         author: author ?? "",
         deps: [...op.deps].sort(),
       };
@@ -1498,15 +1499,15 @@ function collectBeacons(
       ) {
         invalidBeacons.set(op.id, "unauthorized_beacon");
       } else if (
-        evidence.epoch === null ||
+        typeof evidence.epoch !== "number" ||
         !Number.isSafeInteger(evidence.epoch) ||
         evidence.epoch < 0 ||
-        evidence.epoch <= priorMax
+        BigInt(evidence.epoch) <= priorMax
       ) {
         invalidBeacons.set(op.id, "stale_beacon");
       } else if (
         evidence.epoch > witnessedBeaconHorizon ||
-        evidence.epoch > priorMax + policy.maxEpochStep
+        BigInt(evidence.epoch) > priorMax + BigInt(policy.maxEpochStep)
       ) {
         invalidBeacons.set(op.id, "unauthorized_beacon");
       } else {
@@ -1516,9 +1517,8 @@ function collectBeacons(
       invalidBeacons.set(op.id, "unauthorized_beacon");
     } else if (
       evidence.epoch === null ||
-      !Number.isSafeInteger(evidence.epoch) ||
-      evidence.epoch < 0 ||
-      evidence.epoch <= priorMax
+      exactLegacyBeaconEpoch(evidence.epoch) === null ||
+      exactLegacyBeaconEpoch(evidence.epoch)! <= priorMax
     ) {
       invalidBeacons.set(op.id, "stale_beacon");
     } else {
@@ -1527,6 +1527,13 @@ function collectBeacons(
   }
 
   return { validBeacons, invalidBeacons };
+}
+
+function exactLegacyBeaconEpoch(epoch: number | string): bigint | null {
+  if (typeof epoch === "number") return Number.isSafeInteger(epoch) && epoch >= 0 ? BigInt(epoch) : null;
+  if (!/^(0|[1-9][0-9]*)$/.test(epoch)) return null;
+  const exact = BigInt(epoch);
+  return exact > BigInt(Number.MAX_SAFE_INTEGER) && exact <= 18_446_744_073_709_551_615n ? exact : null;
 }
 
 function delegationQuarantineReasons(

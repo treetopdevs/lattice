@@ -233,6 +233,7 @@ type DecodedTerm =
   | boolean
   | number
   | { type: "invalid_beacon_integer" }
+  | { type: "legacy_beacon_epoch"; decimal: string }
   | BinTerm
   | AtomTerm
   | ListTerm
@@ -1313,9 +1314,21 @@ function canonicalTuple(values: unknown[]): Uint8Array {
 }
 
 // Invalid reserved metadata stays local to the policy/certificate on BEAM.
-// Context never changes the raw frame or the body/claim epoch horizon.
+// Context preserves the raw frame. Only exact two-field legacy beacons retain
+// high uint64 epochs as decimal evidence; witnessed body/claim epochs stay safe integers.
 function decodeCarrierBody(op: CarrierOpFrame): DecodedTerm {
   const body = op.body;
+  if (op.kind === "authority" && body[0] === "tuple" && body.length === 2 &&
+      Array.isArray(body[1]) && body[1].length === 2 && body[1][0]?.[0] === "atom" &&
+      body[1][0][1] === "beacon") {
+    const epoch = body[1][1]!;
+    if (epoch[0] === "int" && epoch.length === 2 && typeof epoch[1] === "string" &&
+        /^(0|[1-9][0-9]*)$/.test(epoch[1]) && BigInt(epoch[1]) > BigInt(Number.MAX_SAFE_INTEGER) &&
+        BigInt(epoch[1]) <= uint64Max) {
+      return {type: "tuple", values: [decodeCarrierTerm(body[1][0]),
+        {type: "legacy_beacon_epoch", decimal: epoch[1]}]};
+    }
+  }
   if (op.kind !== "authority" || body[0] !== "tuple" || body.length !== 2 ||
       !Array.isArray(body[1]) || body[1].length !== 3 || body[1][0]?.[0] !== "atom") {
     return decodeCarrierTerm(body);
@@ -1554,7 +1567,9 @@ function payloadFromBody(
         // decode must not throw before the reducer can reach that verdict.
         const epochTerm = body.values[1];
         const epoch =
-          typeof epochTerm === "number" && Number.isSafeInteger(epochTerm) ? epochTerm : null;
+          typeof epochTerm === "number" && Number.isSafeInteger(epochTerm) ? epochTerm :
+            epochTerm !== null && typeof epochTerm === "object" && epochTerm.type === "legacy_beacon_epoch"
+              ? epochTerm.decimal : null;
         return {
           ...neutralPayload(`beacon ${epoch ?? "malformed"}`),
           authority: { type: "beacon", epoch, ...(body.values.length === 3 ? { certificate: witnessedBeaconCertificate(body.values[2]) } : {}) },
