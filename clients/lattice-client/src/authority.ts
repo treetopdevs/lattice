@@ -69,7 +69,7 @@ export async function resolveContinuationProfileFromFrames(
     const root = resolveRoot(ordered, delegations);
     const context = continuationContext(replica, ordered, delegations, root, []);
     const pin = continuationPin(context, ids);
-    if (pin === undefined || root === null) return {ok: false, reason: "continuation_not_configured"};
+    if (pin === undefined || root === null || root.pubkey === null) return {ok: false, reason: "continuation_not_configured"};
     return {ok: true, replica, root: root.pubkey, profileGenesis: pin.opId,
       profileId: continuationProfileId(pin.profile), profile: pin.profile,
       verifiedFrontier: frontier(ops).sort()};
