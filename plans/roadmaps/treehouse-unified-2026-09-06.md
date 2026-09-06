@@ -140,7 +140,6 @@ A passing review or a green path-filtered status is not a substitute for the req
 | R17a | `0cdf8b6f9b9522b3a3ce06273c53840b82270335` / [66](https://github.com/treetopdevs/lattice/pull/66) | DONE: Fable decision/eligibility PASS; Sol final connected-history admission PASS. Exact tip run 34061332198 and merge `1026406b58266a95270c425df42e6b7749e7260f` / run 34064017804 passed. Design completion does not implement native authority verification, prove hardware eligibility or enable profiles |
 | R19a | `ae37bfd445e5ce0cc48c9b7f2b701d8746bd8df9` / [75](https://github.com/treetopdevs/lattice/pull/75) | Fable exact continuity design PASS; Sol four-document adoption PASS; seven documentation links/fences and exact tip run 34061740955 passed. Merge `413425da3b147afe8a3e016dedbc5b6bbdb0bc4d` / run 34065326328 in progress. All 17 A01–A17 implementation cases remain OPEN for R19b/R20 |
 | Independent native prompt | `0e942f2c6404130f5dcebda9bd754883846df6bd` / [67](https://github.com/treetopdevs/lattice/pull/67) | Constant reason, hostile-input negatives, Fable PASS and 68 Rust tests. Tip run 34037880177 passed. Merge `cba32f3b3a7634801c2474df317c36a12b7ebed9` / run 34047317736 attempt 2 passed. Attempt 1 generator failure preserved; independently reviewed test-only repair [72](https://github.com/treetopdevs/lattice/pull/72), merge `c22272ec2826aa3213e5a6b33e32b22c9c8a58cf` / run 34052205823 passed. No native semantic-verification claim |
-
 | R36 | Stage 1 `4434a02000e1b35211910edb45ef9b38fafdd5d4` / [77](https://github.com/treetopdevs/lattice/pull/77) | Private custody/provider boundary: Fable preparation PASS, Sol implementation/final integration PASS, 82 default / 83 permitted-feature Rust tests and integrated 809 tests + 27 properties passed. Exact tip run 34063968821 passed. Android Stage 2 design reviewed by actual Fable and adopted before its first implementation slice. Protected Android generation, independent attestation, physical eligibility and full R36 closure remain open |
 
 Local test totals above exclude three already-configured tests; none is hidden by
@@ -329,7 +328,7 @@ Plans 164/166 are optional local verification improvements; their actual depende
 
 | Evidence completed | Permitted statement and remaining boundary |
 | --- | --- |
-| R03 | `54aa22304bfeada09fa0ea276698c5ec3eb0d1f1` / [68](https://github.com/treetopdevs/lattice/pull/68) | Fable original/follow-up PASS; Sol final raw-dependency correction PASS. Full suite: 747 tests + 27 properties; 69 reciprocal vectors, 213 authoring, 1,345 conformance and 580 canonical assertions passed. Exact tip run 34062465105 passed. Fresh command-kind policy finding was refuted by signed BEAM/compaction/TS controls; actual Fable independently confirmed the refutation and the thread is resolved. Merge gate remains |
+| R03 | Sim/TS witnessed epoch advance and the narrow admission/revocation/lapse cases; not general founder survival |
 | R04 + R19b | The approved profile passes core founder continuation and member re-admission; no packaged, physical or availability claim |
 | R10/R12 | Deterministic domain and packaged local preview; no operating community |
 | R16/R18/R20 | Named packaged loss workflows pass with stated retained-evidence and witness assumptions |
