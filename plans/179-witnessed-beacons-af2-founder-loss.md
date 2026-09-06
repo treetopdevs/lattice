@@ -1986,3 +1986,42 @@ policy behavior, direct claim/body overflow, malformed syntax/grammar/Base64,
 and valid controls. Existing vectors, protected tests, shared README, roadmap
 ledger and sibling worktrees remain untouched. The final follow-up review must
 inspect this contextual adapter's complete scope, not just the two examples.
+
+The public RED at `ce2d96af` records twenty strict-decoding and semantic
+failures on authentic signed policy/certificate metadata, with typecheck clean.
+The earlier development run had TypeScript tuple-inference errors in the fixture;
+the final RED log above follows their correction and preserves the same twenty
+behavioral failures. The repair uses an opaque `invalid_beacon_integer` sentinel,
+preserves all surrounding shapes, and applies the strict epoch exception only
+at the exact certificate/claim map path. Tests additionally cover missing,
+extra, nested, tuple, mapset, scalar and map-key metadata, maximum uint64,
+unchanged unrelated policy evidence, and body/claim epoch overflow despite
+extra fields. Invalid decimal syntax, above-uint64 values, unsafe numeric JSON,
+Base64 and map/term grammar retain strict refusal.
+
+At source commit `12af9f5deed1e9331c11ce66be3a344798fecc3a`, full `mix check` passes **695 tests plus
+27 properties, zero failures**, three existing exclusions, formatting and strict
+Credo exit 0 with the prescribed OTP/asdf PATH and `ERL_FLAGS='+S 4:4'`.
+Typecheck, Township authoring, canonical, carrier, V01 and normal dist build pass.
+The compiled exporter creates two new signed reciprocal scenarios:
+`township_beacon_witnessed_policy_metadata` proves a valid clerk succession and
+subsequent command survive invalid reserved policy metadata;
+`township_beacon_witnessed_certificate_metadata` proves invalid certificates
+remain unauthorized and do not prevent a later valid witnessed beacon.
+All **66** conformance vectors pass, including raw verification and exact frame
+preservation for these scenarios. Git-object comparison confirms the preceding
+64 vector blobs are unchanged.
+
+The first direct exporter invocation reused the previous compiled Mix task and
+therefore only exercised the preceding 64 vectors. That initial log is retained;
+it is not the final gate. The final invocation through `mix run` compiles the
+source, verifies both new files exist, and precedes the actual 66-vector replay.
+Evidence under `/tmp/lattice-treehouse-execution-20260906/` includes
+`r03-metadata-authoring-red-final.log`, `r03-metadata-red-typecheck-final.log`,
+`r03-metadata-authoring-bounds.log`, `r03-metadata-full-mix-check.log`,
+`r03-metadata-export-compiled.log` and `r03-metadata-conformance-final.log`.
+
+The earlier exact Fable attempt on `201e7ae6..4a823b96` ended with an API
+mid-response error and no verdict. Its full transcript and partial observations
+are retained; neither is a PASS. Final independent review and hosted thread/CI
+closure remain pending for this complete repair.
