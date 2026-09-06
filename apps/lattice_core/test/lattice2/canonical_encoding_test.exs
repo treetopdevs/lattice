@@ -117,7 +117,7 @@ defmodule Lattice.CanonicalEncodingTest do
   end
 
   property "map insertion order does not change generated canonical bytes" do
-    check all(map <- map_of(signable_leaf_gen(), signable_term_gen(), max_length: 6)) do
+    check all(map <- signable_map_gen(signable_term_gen())) do
       reversed = map |> Map.to_list() |> Enum.reverse() |> Map.new()
 
       assert Canonical.term(map) == Canonical.term(reversed)
@@ -135,10 +135,16 @@ defmodule Lattice.CanonicalEncodingTest do
       one_of([
         list_of(child, max_length: 6),
         map(list_of(child, max_length: 4), &List.to_tuple/1),
-        map_of(signable_leaf_gen(), child, max_length: 6),
+        signable_map_gen(child),
         map(list_of(child, max_length: 6), &MapSet.new/1)
       ])
     end)
+  end
+
+  defp signable_map_gen(value_gen) do
+    # Mixed leaf keys frequently repeat nil/booleans. Constructing a map from
+    # bounded entries preserves every key type without uniqueness retries.
+    map(list_of(tuple({signable_leaf_gen(), value_gen}), max_length: 6), &Map.new/1)
   end
 
   defp signable_leaf_gen do
