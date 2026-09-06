@@ -46,7 +46,7 @@ export interface ContinuationCertificate {
 const profileDomain = "lattice-continuation-profile-v1";
 const claimDomain = "lattice-continuation-witness-v1";
 const textEncoder = new TextEncoder();
-const textDecoder = new TextDecoder("utf-8", { fatal: true });
+const textDecoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 
 export function continuationProfileToCarrierTerm(value: unknown): CarrierTerm | null {
   const profile = normalizeContinuationProfile(value);
@@ -182,7 +182,7 @@ const claimKeys = [
 /** Shape validation only: authority must derive the expected claim from verified history. */
 export function normalizeContinuationClaim(value: unknown): ContinuationClaim | null {
   if (!exactRecord(value, claimKeys) || value.version !== 1 || value.product !== "treehouse" ||
-    !kindRoleMatch(value.kind, value.role) || typeof value.replica !== "string" || value.replica.length === 0 ||
+    !kindRoleMatch(value.kind, value.role) || !replicaText(value.replica) ||
     !digestId(value.profileId) || !digestId(value.profileGenesis) || !digestId(value.holderEpoch) ||
     !digestId(value.delegationId) || !publicKey(value.holder) || !publicKey(value.successor) ||
     !publicKey(value.author) || !sortedIds(value.deps) || !sortedIds(value.epochBasis) ||
@@ -259,6 +259,10 @@ function integerIn(value: unknown, minimum: number, maximum: number): value is n
 
 function publicKey(value: unknown): value is string {
   return canonicalBase64Bytes(value, 32) !== null;
+}
+
+function replicaText(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && textDecoder.decode(textEncoder.encode(value)) === value;
 }
 
 function digestId(value: unknown): value is string {
