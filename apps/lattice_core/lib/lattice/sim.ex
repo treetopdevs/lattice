@@ -16,7 +16,7 @@ defmodule Lattice.Sim do
   """
 
   alias Lattice.{Authority, Identity, Log, Net, Op, Sync}
-  alias Lattice.Authority.{Delegation, SuccessionCertificate}
+  alias Lattice.Authority.{BeaconCertificate, Delegation, SuccessionCertificate}
 
   defstruct module: nil, replica: nil, realms: %{}, logs: %{}, net: %Net{}, caps: %{}
 
@@ -162,6 +162,28 @@ defmodule Lattice.Sim do
     append(sim, realm, :authority, {:beacon, epoch})
   end
 
+  @doc "Author a witnessed epoch using an explicit certificate or witness realm names."
+  @spec beacon(t(), String.t(), non_neg_integer(), keyword()) :: {t(), Op.t()}
+  def beacon(%__MODULE__{} = sim, realm, epoch, opts) do
+    certificate =
+      Keyword.get_lazy(opts, :certificate, fn ->
+        claim =
+          BeaconCertificate.claim(
+            sim.replica,
+            epoch,
+            identity(sim, realm).pub,
+            Log.frontier(log(sim, realm))
+          )
+
+        BeaconCertificate.new(
+          claim,
+          Enum.map(Keyword.fetch!(opts, :witnesses), &identity(sim, &1))
+        )
+      end)
+
+    append(sim, realm, :authority, {:beacon, epoch, certificate})
+  end
+
   @doc "Queue an authoritative request through the holder (behavior 6)."
   @spec request(t(), String.t(), term(), {atom(), [term()]}) :: {t(), Op.t()}
   def request(%__MODULE__{} = sim, realm, ref, {_cmd, _args} = payload) do
@@ -260,6 +282,10 @@ defmodule Lattice.Sim do
   end
 
   # --- Internals -----------------------------------------------------------
+
+  defp resolve_policy(sim, %{mode: :witnessed, witnesses: witnesses} = policy) do
+    %{policy | witnesses: Enum.map(witnesses, &identity(sim, &1).pub)}
+  end
 
   defp resolve_policy(
          sim,
