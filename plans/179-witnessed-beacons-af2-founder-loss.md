@@ -2077,3 +2077,18 @@ evidence represents expected high epochs as decimal strings and verifies raw
 CarrierTerm bytes; JSON numeric rounding cannot be an oracle. Every old vector
 blob remains unchanged. The actual final Fable review includes this additive
 evidence API and the complete contextual decoder scope.
+
+### Nullish unleased evidence review correction (2026-09-06)
+
+The integrator adopted the actionable P2 from Fable's exact
+`a29c4510..0f3f2ca9` review before production changes. A type-violating semantic
+delegation with `expiresEpoch: null` re-encodes to the existing unleased signed
+representation, but exact lease comparison currently throws on `BigInt(null)`.
+The public materialization regression must reproduce this exception against a
+genuinely unleased signed delegation and an effective beacon. The narrow repair
+treats omitted/null lease evidence as unleased at the existing lease walk,
+matching canonical encoding and BEAM; explicit zero and finite leases retain
+their lapse behavior. Carrier ingress stays strict, with no new wire shape or
+accepted bytes. The cosmetic repeated epoch-helper call is left unchanged.
+Fable's PASS covers the preceding two hosted repairs; this P2 correction requires
+its own actual follow-up verdict and relevant TypeScript gates before freeze.
