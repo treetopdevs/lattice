@@ -52,6 +52,29 @@ defmodule Treehouse.TransportCatalogTest do
              TransportCatalog.verify_catalog(envelope, ctx.root.pub)
   end
 
+  test "bootstrap admits only the closed fixed rule and canonical DNS service origins", ctx do
+    bootstrap = %{version: 1, product: :treehouse, space: ctx.catalog.space,
+      space_root: ctx.root.pub, profile_genesis: id("pin"), profile_id: id("profile"),
+      replacement_rule: :bounded_space_admin_v1, catalog_key: ctx.signer.pub,
+      service_id: id("service"), service_key: ctx.service.pub, origin: "wss://relay.invalid", nonce: id("nonce")}
+    assert {:ok, ^bootstrap} = TransportCatalog.normalize_bootstrap(bootstrap)
+    for origin <- ["wss://relay", "wss://relay.invalid:8443", "wss://a-b.invalid"] do
+      assert {:ok, _} = TransportCatalog.normalize_bootstrap(%{bootstrap | origin: origin})
+    end
+    for origin <- ["ws://relay.invalid", "wss://Relay.invalid", "wss://relay.invalid/",
+      "wss://relay.invalid:443", "wss://relay.invalid:0", "wss://relay.invalid:65536",
+      "wss://127.0.0.1", "wss://127.1", "wss://2130706433", "wss://0x7f000001",
+      "wss://0x", "wss://example.123", "wss://[::1]", "wss://relay.invalid.",
+      "wss://user@relay.invalid", "wss://relay.invalid?x", "wss://relay.invalid#x"] do
+      assert {:error, :malformed_catalog} = TransportCatalog.normalize_bootstrap(%{bootstrap | origin: origin})
+    end
+    for malformed <- [Map.put(bootstrap, :extra, 1), Map.delete(bootstrap, :nonce),
+      %{bootstrap | catalog_key: ctx.service.pub}, %{bootstrap | product: :township},
+      %{bootstrap | replacement_rule: :root}, %{bootstrap | space: <<255>>}] do
+      assert {:error, :malformed_catalog} = TransportCatalog.normalize_bootstrap(malformed)
+    end
+  end
+
   test "even the legitimate signer cannot introduce ambiguous or unsupported catalog shapes", ctx do
     catalog = ctx.catalog
     [entry] = catalog.entries

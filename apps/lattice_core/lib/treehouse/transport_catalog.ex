@@ -10,6 +10,9 @@ defmodule Treehouse.TransportCatalog do
   @rotation_fields ~w(version product space bootstrap parent prior_catalog generation new_catalog_key nonce inventory_digest cutoffs)a
   @max_artifact_bytes 131_072
 
+  @spec normalize_bootstrap(term()) :: {:ok, map()} | {:error, :malformed_catalog}
+  def normalize_bootstrap(_value), do: {:error, :malformed_catalog}
+
   @spec verify_rotation(term(), binary()) :: :ok | {:error, atom()}
   def verify_rotation(envelope, trusted_key) do
     with true <- fields?(envelope, [:rotation, :old_signature, :new_signature]),
