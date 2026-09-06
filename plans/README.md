@@ -1416,3 +1416,11 @@ Recorded so they are not re-audited next run. Each was opened and read during ve
   acting.
 - No plan modifies code outside its declared Scope, pushes, or opens PRs unless you
   instruct it. The advisor (this skill) wrote only the files under `plans/`.
+
+## Proposed unified Treehouse delivery roadmap (2026-09-06)
+
+The [unified delivery plan](roadmaps/treehouse-unified-2026-09-06.md) synthesizes the
+revised Treehouse delivery roadmap and Plan 180 into one proposed dependency and
+evidence ledger. Read the [comparison and decisions](roadmaps/treehouse-plan-comparison-2026-09-06.md)
+for the tradeoffs. This pointer does not adopt amendments or mark implementation,
+operator approvals, physical gates or pilots complete; existing status rows are unchanged.
