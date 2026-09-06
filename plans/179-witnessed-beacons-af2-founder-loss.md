@@ -2219,3 +2219,34 @@ hash/signature, preserve its duplicate list, honor its beacon and lease effects,
 and still refuse an actually duplicate-bearing signed certificate claim. A new
 BEAM-exported raw-frame vector and public Wire/log test establish reciprocal
 behavior without relying on `Op.new/6` to erase the relevant input first.
+
+### Retained raw-dependency evidence (2026-09-06)
+
+The final public RED in `r03-raw-deps-public-red-verified.log` records three
+failures: valid raw duplicate-dependency beacons are refused in both delivery
+orders and their finite lease does not lapse. Raw hash/signature, strict decode,
+duplicate-list retention and received-duplicate-certificate refusal already pass.
+The new signed BEAM vector additionally records five conformance failures before
+the repair, including incorrect state and quarantine reasons. An earlier test
+verifier passed a Base64 string where Noble requires key bytes; that fixture
+error is retained separately and is not counted as the behavioral RED. The
+corrected RED typecheck passes before the production change.
+
+Source `c17eedaa` changes only expected-claim dependency derivation to distinct,
+UTF-8 byte-sorted IDs. The raw frame, semantic operation, received certificate,
+ingress and DAG paths are unchanged. The public BEAM Wire/log test passes 18/0,
+including raw duplicate retention, unchanged authentic ID/signature, effective
+beacon/lease behavior and strict duplicate received-claim refusal. The compiled
+exporter adds `township_beacon_witnessed_raw_duplicate_deps`, with all **68**
+previous vector blobs byte-identical. Final TS gates pass **1,345 conformance
+checks across 69 vectors**, 213 authoring, 580 canonical, 49 carrier and eight
+V01 checks, plus typecheck and generated build.
+
+Full `mix check` at that source passes **747 tests plus 27 properties, zero
+failures**, three existing exclusions, prescribed OTP/asdf PATH and
+`ERL_FLAGS='+S 4:4'`; formatting and strict Credo exit 0 with existing low-priority
+suggestions. Evidence is summarized in `r03-raw-deps-proof.json`, with
+`r03-raw-deps-*` logs in the existing temporary evidence directory. Sol review,
+publication and fresh hosted checks for this new repair are still pending at
+this local freeze. The preceding `39ea40da` hosted run passed but cannot serve
+as final-tip evidence for this correction.
