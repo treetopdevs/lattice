@@ -23,7 +23,7 @@ const signer = (seedByte: number): CarrierOpSigner => {
 async function fixture() {
   const root = signer(1), holder = signer(2), nominee = signer(3);
   const witnesses = [signer(4), signer(5)].sort((a, b) => Buffer.compare(a.publicKey, b.publicKey));
-  const replica = bindTownshipReplica(
+  const replica = await bindTownshipReplica(
     `replica:treehouse:space:${Buffer.alloc(32, 11).toString("base64url")}#authority:bounded-continuation-v1`,
     root.publicKey,
   );
@@ -43,7 +43,7 @@ async function fixture() {
     body: tuple(atom("genesis"), ["delegation", empty], ["map", [
       [atom("__continuation__"), continuationProfileToCarrierTerm(profile)!],
     ]]) });
-  const beacon = await authorCarrierOp({ replica, deps: [pin.id], kind: "beacon", signer: root, cap: nil,
+  const beacon = await authorCarrierOp({ replica, deps: [pin.id], kind: "authority", signer: root, cap: nil,
     body: tuple(atom("beacon"), ["int", 5]) });
   const delegation = await authorCarrierDelegation({ replica, audiencePubkey: holder.publicKey,
     ops: ["post"], roles: ["admin"], expiresEpoch: 11, signer: holder });
