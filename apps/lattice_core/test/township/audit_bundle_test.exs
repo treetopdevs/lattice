@@ -1,6 +1,9 @@
 defmodule Township.AuditBundleTest do
   use ExUnit.Case, async: false
 
+  alias Lattice.{Identity, Log, Op, Sim}
+  alias Township.{AuditBundle, Matter}
+
   @moduletag timeout: 120_000
 
   @repo_root Path.expand("../../../..", __DIR__)
@@ -14,6 +17,70 @@ defmodule Township.AuditBundleTest do
     "trust_graph.dot",
     "trust_graph.mermaid"
   ]
+
+  test "rejects a self-consistent bundle whose post impersonates its declared author" do
+    dir = Path.join(System.tmp_dir!(), "township_forged_#{System.unique_integer([:positive])}")
+    on_exit(fn -> File.rm_rf(dir) end)
+    sim = Sim.new(Matter, "replica:matter:restore", ["clerk"], seed: "bundle-authenticity")
+    {sim, _} = Sim.create_replica(sim, "clerk")
+    {sim, post} = Sim.command(sim, "clerk", :post, ["forged clerk post"])
+    log = Sim.log(sim, "clerk")
+    assert {:ok, _} = AuditBundle.write(dir, log)
+    assert :ok = AuditBundle.verify(dir)
+
+    attacker = Identity.from_seed("attacker", <<91::256>>)
+    forged = Op.new(attacker, post.replica, post.deps, :command, post.body, cap: post.cap)
+    forged = %{forged | author: post.author}
+    forged = %{forged | id: Op.recompute_id(forged)}
+    refute Op.valid?(forged)
+
+    forged_log =
+      Log.from_ops(log.replica, log.ops |> Map.delete(post.id) |> Map.put(forged.id, forged))
+
+    # Regenerate every projection too: consistency alone must not verify this forgery.
+    assert {:ok, _} = AuditBundle.write(dir, forged_log)
+
+    assert Jason.decode!(File.read!(Path.join(dir, "state.json")))["posts"] ==
+             ["forged clerk post"]
+
+    assert {:error, errors} = AuditBundle.verify(dir)
+    assert Enum.any?(errors, &String.contains?(&1, forged.id))
+  end
+
+  @tag :tmp_dir
+  test "authentic accepted history with rejected-signature evidence still verifies", %{
+    tmp_dir: dir
+  } do
+    sim = Sim.new(Matter, "replica:matter:quarantine", ["clerk"], seed: "bundle-quarantine")
+    {sim, _} = Sim.create_replica(sim, "clerk")
+    {sim, post} = Sim.command(sim, "clerk", :post, ["accepted post"])
+    log = Sim.log(sim, "clerk")
+    rejected = %{post | body: {:post, ["rejected post"]}, sig: <<0::512>>}
+    rejected = %{rejected | id: Op.recompute_id(rejected)}
+    {:quarantined, log, :bad_signature} = Log.accept(log, rejected)
+
+    assert {:ok, _} = AuditBundle.write(dir, log)
+    assert :ok = AuditBundle.verify(dir)
+    assert {:ok, snapshot} = AuditBundle.load_verified(dir)
+    assert snapshot.log.quarantine == log.quarantine
+  end
+
+  @tag :tmp_dir
+  test "malformed log bytes and serialized structures return bundle errors", %{tmp_dir: tmp_dir} do
+    dir = Path.join(tmp_dir, "bundle")
+    File.cp_r!(@tracked_dir, dir)
+    path = Path.join(dir, "matter.log")
+    assert {:ok, log} = Log.restore(path)
+
+    for bytes <- [
+          "corrupted dump",
+          :erlang.term_to_binary({:lattice_log_dump_v1, %{log | ops: []}}),
+          :erlang.term_to_binary({:lattice_log_dump_v1, %{log | ops: %{"broken" => :invalid}}})
+        ] do
+      File.write!(path, bytes)
+      assert {:error, [_ | _]} = AuditBundle.verify(dir)
+    end
+  end
 
   test "fresh processes emit and independently verify the outsider audit bundle" do
     out_dir =
