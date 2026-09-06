@@ -29,7 +29,21 @@ with a verified hash manifest and an explicit archival-only note. The original t
 still match the original comparison. Plans 151/152 now put their former TODO text under a separate
 historical-status heading. No additional LAN/CD1 work is enabled.
 
-Final remediation gate: full local `mix check` exited 0, 663 tests and 27 properties,
-zero failures, three existing exclusions; seed 871368. The added archive pins are contract
+Initial remediation full gate: `mix check` exited 2 at seed 871368 with one failure in the
+unchanged browser-carrier spike audit-event assertion. The archive contract assertions passed.
+The failure is under investigation; this run is not a passing closure gate. The added archive pins are contract
 regressions; they do not claim the future R10 implementation exists. Hash verification passed
 for all three archival inputs. Hosted checks must run again at the remediated tip.
+
+The failed assertion was a pre-existing cross-process test race: receiving the target's message
+precedes the BrowserGateway process recording its carrier audit event. The two neighboring tests
+already flush that gateway before reading the audit. This packet adds the same existing synchronous
+`flush_gateway/1` call to the first test, preserving all assertions and production behavior. The
+isolated retry at the original seed passed before the fix; the full failure and source ordering
+establish why the extra synchronization is needed. This is a narrow verification-fixture amendment,
+not a change to carrier behavior. Passing rerun evidence is recorded separately when available.
+
+After the synchronization fix, full local `mix check` exited 0 at seed 760687: 663 tests,
+27 properties, zero failures and three existing exclusions. Log:
+`/tmp/lattice-treehouse-execution-20260906/r01a-final-check.log`. This passing run supersedes,
+but does not erase, the failed seed-871368 run above.
