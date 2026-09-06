@@ -13,6 +13,29 @@ defmodule Treehouse.CatalogCodecReciprocalTest do
     assert Enum.sort(Map.keys(rotation.rotation)) ==
              Enum.sort(@rotation_fields -- [:rotation, :old_signature, :new_signature, :replica, :frontier, :log_digest])
     assert :ok = TransportCatalog.verify_rotation(rotation, Base.decode64!(vector["expected_old_key"]))
+    assert Base.encode64(TransportCatalog.rotation_bytes(rotation.rotation)) == vector["rotation_bytes"]
+    assert Base.encode64(TransportCatalog.rotation_possession_bytes(rotation.rotation)) == vector["possession_bytes"]
+    assert TransportCatalog.rotation_id(rotation) == vector["rotation_id"]
+  end
+
+  test "changed transition fields or purpose signatures cannot reuse the legitimate rotation" do
+    vector = fixture()
+    assert {:ok, envelope} = Wire.decode_value(vector["rotation_envelope_term"])
+    key = Base.decode64!(vector["expected_old_key"])
+    for changed <- [
+      %{envelope | rotation: %{envelope.rotation | generation: 2}},
+      %{envelope | old_signature: envelope.new_signature},
+      %{envelope | new_signature: envelope.old_signature},
+      %{envelope | rotation: %{envelope.rotation | nonce: envelope.rotation.parent}}
+    ] do
+      assert {:error, :invalid_rotation_signature} = TransportCatalog.verify_rotation(changed, key)
+    end
+    for malformed <- [Map.put(envelope, :extra, 1),
+      %{envelope | rotation: %{envelope.rotation | cutoffs: []}},
+      %{envelope | rotation: %{envelope.rotation | generation: 0}},
+      %{envelope | rotation: Map.put(envelope.rotation, :service_key, key)}] do
+      assert {:error, :malformed_catalog} = TransportCatalog.verify_rotation(malformed, key)
+    end
   end
 
   defp fixture do

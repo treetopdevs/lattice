@@ -62,6 +62,7 @@ defmodule Treehouse.TransportCatalogTest do
       %{catalog | version: 2},
       %{catalog | product: :township},
       %{catalog | space: <<255>>},
+      %{catalog | space: "another-space"},
       %{catalog | bootstrap: "not-an-id"},
       %{catalog | revision: 9_007_199_254_740_992},
       %{catalog | previous: id("previous")},
@@ -72,6 +73,7 @@ defmodule Treehouse.TransportCatalogTest do
       %{catalog | entries: [%{entry | root: <<0::248>>}]},
       %{catalog | entries: [%{entry | schema: :treehouse_thread_v1}]},
       %{catalog | entries: [%{entry | route: "/r/../route"}]},
+      %{catalog | entries: [%{entry | reference: id("another-bootstrap")}]},
       %{catalog | entries: [%{entry | service_key: <<0::248>>}]}
     ]
 
