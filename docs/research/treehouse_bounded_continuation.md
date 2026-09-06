@@ -732,3 +732,36 @@ local full gate passes 746 tests+27properties, zero failures, three exclusions;
 that is R03 evidence, not a new R04 full-suite count. The latest R04 full local
 check remains the 775+27 result above. Final R04 integration and exact-tip/merge
 CI checks remain required; native/device/field evidence is not inferred.
+
+### Final R03 raw-dependency propagation — 2026-09-06
+
+Automatic merge `640a48a4` integrates reviewed R03 `54aa2230` into `ca3bd592`
+without manual conflict resolution. The only production change constructs the
+expected witnessed-beacon claim from a distinct, UTF-8 byte-sorted dependency
+set. Raw outer dependencies remain retained; a received certificate with duplicate
+claim dependencies still refuses. Continuation/profile selection, the exact high
+legacy epoch refusal, product boundaries and BEAM authority logic are unchanged.
+
+At this source, the seven focused beacon/continuation suites pass **50 tests,
+zero failures**. TS typecheck/build pass, with 213 Township authoring assertions,
+1,345 conformance assertions plus 57 signed continuation histories, 12 codec
+tests, 14 continuation-authoring tests and 580 canonical assertions. Fresh BEAM
+and TS exporters preserve all 68 prior top-level vectors and three continuation
+artifacts; the inherited raw-dependency case adds the 69th top-level vector.
+The continuation export changes JSON object-key presentation only: all 57 parsed
+histories, array order and signed/canonical byte strings are exactly equal. The
+initial byte-diff gate therefore exited 1; its log and generated artifact were
+retained, equality was checked, and the original presentation was restored. No
+runtime or fixture semantics changed to obtain preservation.
+
+Actual `gpt-5.6-sol` read-only review of `ca3bd592..640a48a4` and its engine
+propagation `86dd122d..2581ddc9` returned **PASS, no P0/P1/P2**. It verified identical
+propagated patch IDs and preservation of continuation/product paths; it did not
+run tests. The engine composition separately passed `mix check` at `2581ddc9`:
+808 tests and 27 properties, zero failures, three existing exclusions. This is
+engine evidence, not a new R04-only full-suite count. Local commands used the
+prescribed asdf/PATH toolchain and `ERL_FLAGS='+S 4:4'`. Formatting and strict
+Credo passed; existing low-priority suggestions remain. Logs and the review are
+under `/tmp/lattice-treehouse-execution-20260906/` with `r04-54aa-`,
+`engine-54aa-` and `sol-r04-engine-54aa-propagation-review-result.md` names.
+Exact-tip hosted and merge-result gates remain open until independently observed.
