@@ -506,6 +506,29 @@ const finalBeacon = await authorCarrierOp({ replica: beaconVector.replica, deps:
         signature: Buffer.from(entry.sign(claimPayload)).toString("base64") }))) });
 check("authored beacon claim uses final canonical dependencies", claim.deps, finalBeacon.deps);
 check("witnessed beacon authored from a two-tip frontier is honored", materialize(beaconVector.schema, carrierOpsToSemanticOps([...claimFrames, finalBeacon], beaconVector.realmByPubkey)).quarantine.includes(finalBeacon.id), false);
+// Hosted fvK0j: only the raw outer dependency list changes; the signed claim is exact.
+const rawDuplicateBeacon = { ...finalBeacon, deps: [...finalBeacon.deps].reverse().concat(finalBeacon.deps) };
+check("raw duplicate outer deps preserve the original hash and signature", await verifyCarrierOp(rawDuplicateBeacon, { verify: async (pub, bytes, signature) => ed25519.verify(signature, bytes, Buffer.from(pub, "base64"), { zip215: false }) }), { hash: true, signature: true, valid: true });
+check("strict frame decode retains raw duplicate dependencies", decodeCarrierOpFrame(rawDuplicateBeacon), rawDuplicateBeacon);
+const rawDuplicateOps = carrierOpsToSemanticOps([...claimFrames, rawDuplicateBeacon], beaconVector.realmByPubkey);
+check("semantic projection retains raw duplicate dependencies", rawDuplicateOps.find((op) => op.id === finalBeacon.id)?.deps, rawDuplicateBeacon.deps);
+for (const delivered of [rawDuplicateOps, [...rawDuplicateOps].reverse()]) {
+    check("authentic raw duplicate dependencies preserve witnessed admission", materialize(beaconVector.schema, delivered)
+        .quarantineReasons.get(finalBeacon.id), undefined);
+}
+const rawDuplicatePost = await authorTownshipCommand({ replica: beaconVector.replica,
+    deps: [rawDuplicateBeacon.id, leasedFrame.id], command: { command: "post", text: "raw duplicate lease lapse" },
+    capId: leasedDelegation.id, signer: leaseIssuer });
+check("authentic raw duplicate beacon still lapses a finite lease", materialize(beaconVector.schema, carrierOpsToSemanticOps([...claimFrames, leasedFrame, rawDuplicateBeacon, rawDuplicatePost], beaconVector.realmByPubkey))
+    .quarantineReasons.get(rawDuplicatePost.id), "lease_expired");
+const receivedDuplicateClaim = { ...claim, deps: [...claim.deps, claim.deps[0]] };
+const receivedDuplicateBeacon = await authorCarrierOp({ replica: beaconVector.replica, deps: claim.deps,
+    kind: "authority", cap: ["nil"], signer: claimWitness,
+    body: beaconClaimBody(receivedDuplicateClaim, entries.map((entry) => ({ witness: entry.publicKeyBase64,
+        signature: Buffer.from(entry.sign(canonicalBytesForWitnessedBeaconClaim(receivedDuplicateClaim))).toString("base64") }))) });
+check("actually duplicated received claim remains cryptographically authentic", (await verifyCarrierOp(receivedDuplicateBeacon, { verify: async (pub, bytes, signature) => ed25519.verify(signature, bytes, Buffer.from(pub, "base64"), { zip215: false }) })).valid, true);
+check("actually duplicated received claim remains unauthorized", materialize(beaconVector.schema, carrierOpsToSemanticOps([...claimFrames, receivedDuplicateBeacon], beaconVector.realmByPubkey))
+    .quarantineReasons.get(receivedDuplicateBeacon.id), "unauthorized_beacon");
 // Fable P2: malformed Tier-A null lease evidence re-encodes as genuinely unleased.
 // Public materialization must preserve that existing representation without throwing.
 const nullLeaseOps = carrierOpsToSemanticOps([...claimFrames, finalBeacon], beaconVector.realmByPubkey);

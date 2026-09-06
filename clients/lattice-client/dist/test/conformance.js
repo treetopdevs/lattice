@@ -141,11 +141,21 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
         vec.scenario === "township_beacon_witnessed_policy_metadata" ||
         vec.scenario === "township_beacon_witnessed_certificate_metadata" ||
         vec.scenario === "township_beacon_witnessed_high_legacy" ||
-        vec.scenario === "township_beacon_witnessed_high_nonroot") {
+        vec.scenario === "township_beacon_witnessed_high_nonroot" ||
+        vec.scenario === "township_beacon_witnessed_raw_duplicate_deps") {
         check("beacon review vector supplies raw signed frames", (carrierFrames?.length ?? 0) > 0, true);
         for (const frame of carrierFrames ?? []) {
             check("beacon review raw frame hash/signature", await verifyCarrierOp(frame, verifier), { hash: true, signature: true, valid: true });
             check("contextual decoding preserves exact raw frame", decodeCarrierOpFrame(frame), frame);
+        }
+    }
+    if (Array.isArray(vec.capabilityCase?.rawBeaconDeps)) {
+        const target = ops.find((op) => op.id === vec.capabilityCase?.beaconOperationId);
+        check("raw duplicate outer dependencies remain in semantic evidence", target?.deps, vec.capabilityCase.rawBeaconDeps);
+        for (const delivered of [ops, [...ops].reverse()]) {
+            const projection = materialize(vec.schema, delivered);
+            check("raw duplicate beacon matches BEAM admission in both delivery orders", projection.quarantineReasons.has(target.id), false);
+            check("duplicate received claim retains BEAM refusal in both delivery orders", projection.quarantineReasons.get(vec.capabilityCase.invalidReceivedClaimId), "unauthorized_beacon");
         }
     }
     if (Array.isArray(vec.capabilityCase?.highLegacyEpochs)) {
