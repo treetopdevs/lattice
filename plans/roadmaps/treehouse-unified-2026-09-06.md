@@ -189,11 +189,13 @@ op sets, verdicts and state. Measure page count, bytes, server work per page,
 p50/p95/max request latency, complete-sync time and peak memory. Include an idle
 small-Thread pull while another route is saturated to expose scheduler starvation.
 
-The adopted local acceptance bound is **every successful page and small-Thread
+The adopted local acceptance bound is **every required page and small-Thread
 pull completes within five seconds** on the recorded reference host under that
-workload; no timeout/retry/error counts as a successful sample. Publish raw timing
-samples and host/build/seed parameters, and require successful interrupted resume
-without lost/duplicated semantic results. Full-history application replay separately
+workload. Any timeout, unplanned retry or error in a required page or pull fails
+the gate; failed requests remain in the published results. Publish raw timing
+samples and host/build/seed parameters. Measure deliberately interrupted pulls
+and their planned resume steps separately, requiring successful recovery without
+lost/duplicated semantic results. Full-history application replay separately
 retains the existing five-second product gate. Record network time separately;
 this local bound is not a remote-network guarantee. The 5,000-op/10-MiB benchmark
 is a separate overload measurement and cannot replace the supported-envelope run.

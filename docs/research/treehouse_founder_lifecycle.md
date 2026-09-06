@@ -409,10 +409,10 @@ contract/implementation review and R11 design review:
   reviewed contract, not a claim that its outstanding hosted dependency gates pass.
 - Freeze section 4's **software acceptance candidate**: L=7 inclusive epochs,
   warning during the final two epochs, renewal at E5/E10 from initial E0, maximum
-  witnessed step1, two of three independently controlled eligible witness keys,
+  witnessed step 1, two of three independently controlled eligible witness keys,
   and at most two separately signed dependent catch-up steps per reviewed ceremony.
   Bootstrap/date mapping and daily cadence are human-reviewed practice; the judge
-  has no trusted elapsed-time clock. Missing beacon evidence never becomes epoch0.
+  has no trusted elapsed-time clock. Missing beacon evidence never becomes epoch 0.
   These exact constants govern tests and the first workload rehearsal.
 - Field selection still requires R14/R17 measured sign calls, prompts, elapsed
   coordinator time and missed-lead rehearsal, plus actual eligible keys under R36.
