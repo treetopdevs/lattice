@@ -333,6 +333,24 @@ existing APIs must return for an exact interface review, not approximate the
 authority timeline. The caller must serialize review, signing and promotion
 against its current store; a pure function cannot prove snapshot completeness.
 
+**R11a observation interface adopted 2026-09-06:**
+`Authority.continuation_profile(log)` and async TS
+`resolveContinuationProfileFromFrames({replica, frames})` independently verify
+complete authenticated retained history and reuse the existing R04 delegation,
+root, continuation-context and pin-selection helpers. Success returns the
+actual `replica`, `root`, `profile_genesis`, normalized `profile`, `profile_id`
+and `verified_frontier` (camelCase names in TS). BEAM wraps that record in
+`{:ok, result}`; TS returns `{ok: true, ...result}`. Legacy family refuses as
+`unauthorized_continuation`, unsupported reserved family as
+`unsupported_authority_profile`, bounded missing/invalid pin as
+`continuation_not_configured`, and malformed/incomplete/forged retained history
+as `invalid_verified_history` (`{:error, reason}` / `{ok: false, reason}`).
+These outcomes belong to this read-only observation, never replace existing
+method returns, and create no policy, role or cache. A later malformed pin is
+ignored under the existing selector; a later valid metadata-only pin supersedes
+it. Caller-supplied trusted projections and fabricated continuation candidates
+are not accepted inputs.
+
 ## 4. Retained trust, concurrent controls and refusal behavior
 
 Persist product/root/Space/bootstrap, accepted control chain, catalog watermark,
