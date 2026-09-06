@@ -249,10 +249,35 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       treehouse_space_succession(),
       treehouse_thread_archive(),
       treehouse_thread_conflicts(),
+      treehouse_space_map_order(),
       township_carrier_w1()
     ]
 
     fixed ++ Enum.map(@randomized_seeds, &township_random/1)
+  end
+
+  defp treehouse_space_map_order do
+    sim =
+      Sim.new(Treehouse.Space, "treehouse:space:map-order", ["root"],
+        seed: "treehouse-space:map_order"
+      )
+
+    {sim, _} = Sim.create_replica(sim, "root")
+    values = ["One more", "One", "One\"", "One/", "One\\", "One]", "One\u{10000}", "One\u{E000}"]
+
+    sim =
+      Enum.reduce(values, sim, fn title, sim ->
+        Sim.command(sim, "root", :create_thread, ["same-replica", title]) |> elem(0)
+      end)
+
+    sim =
+      Enum.reduce(values, sim, fn replica, sim ->
+        Sim.command(sim, "root", :create_thread, [replica, "same-title"]) |> elem(0)
+      end)
+
+    treehouse_scenario("treehouse_space_map_order", sim, Sim.log(sim, "root"), [
+      %{name: "complete", log: Sim.log(sim, "root")}
+    ])
   end
 
   defp treehouse_space_membership do

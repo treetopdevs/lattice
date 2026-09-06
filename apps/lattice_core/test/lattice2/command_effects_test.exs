@@ -15,6 +15,8 @@ defmodule Lattice2.CommandEffectsTest do
 
     command(:effects, [:effects], do: effects)
     command(:denied, [:value], do: [{:title, {:write, value}}, {:items, {:append, value}}])
+    command(:required_value, [:input], do: [{:title, {:write, Map.fetch!(input, "value")}}])
+    command(:divide, [:denominator], do: [{:title, {:write, div(10, denominator)}}])
 
     def command_op_status(%Op{body: {:denied, [_]}}, _, _), do: {:error, :application_denied}
     def command_op_status(_, _, _), do: :ok
@@ -40,6 +42,19 @@ defmodule Lattice2.CommandEffectsTest do
       {candidate, op} = Sim.command(sim, "root", :effects, [[{:title, {:write, "partial"}}, bad]])
       assert {true, :malformed_command} == Sim.quarantined(candidate, "root", op.id)
       assert Sim.state(candidate, "root") == Sim.state(sim, "root")
+    end
+  end
+
+  test "application evaluator errors quarantine hostile signed arguments without stopping replay" do
+    sim = founded()
+
+    for {command, args} <- [{:required_value, [%{}]}, {:divide, [0]}] do
+      {candidate, op} = Sim.command(sim, "root", command, args)
+      assert {true, :malformed_command} == Sim.quarantined(candidate, "root", op.id)
+      assert Sim.state(candidate, "root") == Sim.state(sim, "root")
+      {candidate, valid} = Sim.command(candidate, "root", :required_value, [%{"value" => "safe"}])
+      assert false == Sim.quarantined(candidate, "root", valid.id)
+      assert Sim.state(candidate, "root").title == "safe"
     end
   end
 

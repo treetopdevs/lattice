@@ -160,7 +160,7 @@ export function materialize(schema, ops, included, carrierAuthorityReport = null
         }
         else if (spec.merge === "or_set") {
             state[field] = orSet(fieldOps, byId, schema.name === "Treehouse.Space" || schema.name === "Treehouse.Thread"
-                ? (left, right) => compareUtf8(typeof left === "string" ? left : JSON.stringify(left), typeof right === "string" ? right : JSON.stringify(right))
+                ? compareTreehouseSetValues
                 : undefined);
         }
         else if (spec.merge === "causal_list") {
@@ -168,6 +168,20 @@ export function materialize(schema, ops, included, carrierAuthorityReport = null
         }
     }
     return { state, quarantine, quarantineReasons, order, winners };
+}
+// Treehouse admits only binary strings and exact two-binary-key Thread maps
+// into sets. Erlang compares equal-size maps by sorted keys, then values in
+// that key order. JSON delimiters/escapes and canonical CBOR length prefixes
+// do not implement Erlang binary term order.
+function compareTreehouseSetValues(left, right) {
+    if (typeof left === "string" && typeof right === "string")
+        return compareUtf8(left, right);
+    const reference = (value) => value !== null && typeof value === "object" && !Array.isArray(value) &&
+        Object.keys(value).length === 2 && Object.hasOwn(value, "replica") && Object.hasOwn(value, "title") &&
+        typeof value.replica === "string" && typeof value.title === "string";
+    if (!reference(left) || !reference(right))
+        throw new TypeError("unsupported Treehouse set value");
+    return compareUtf8(left.replica, right.replica) || compareUtf8(left.title, right.title);
 }
 function sortedIds(ids) {
     return [...ids].sort(cmpHash);

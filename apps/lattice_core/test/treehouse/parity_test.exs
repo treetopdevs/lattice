@@ -16,6 +16,8 @@ defmodule Treehouse.ParityTest do
           do: Treehouse.Space,
           else: Treehouse.Thread
 
+      Code.ensure_loaded!(module)
+
       ops =
         Enum.map(vector["oracleCarrierOps"], fn frame ->
           {:ok, op} = Wire.decode_op(frame)
@@ -74,7 +76,8 @@ defmodule Treehouse.ParityTest do
           "treehouse_space_roles",
           "treehouse_space_succession",
           "treehouse_thread_archive",
-          "treehouse_thread_conflicts"
+          "treehouse_thread_conflicts",
+          "treehouse_space_map_order"
         ] do
       vector = dir |> Path.join(name <> ".json") |> File.read!() |> Jason.decode!()
       assert vector["generatedBy"] == "Lattice.Sim"
@@ -121,6 +124,8 @@ defmodule Treehouse.ParityTest do
         if vector["schema"]["name"] == "Treehouse.Space",
           do: Treehouse.Space,
           else: Treehouse.Thread
+
+      Code.ensure_loaded!(module)
 
       ops =
         Enum.map(frames, fn frame ->

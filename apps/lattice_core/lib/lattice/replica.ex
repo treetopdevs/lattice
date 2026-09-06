@@ -198,14 +198,20 @@ defmodule Lattice.Replica do
   @spec command_effects(module(), atom(), list()) ::
           {:ok, [mutation()]} | {:error, :malformed_command}
   def command_effects(module, command, args) do
-    effects = module.__apply_command__(command, args)
+    with {:ok, effects} <- evaluate_command(module, command, args) do
+      if is_list(effects) and Enum.all?(effects, &valid_effect?(module, &1)),
+        do: {:ok, effects},
+        else: {:error, :malformed_command}
+    end
+  end
 
-    if is_list(effects) and Enum.all?(effects, &valid_effect?(module, &1)),
-      do: {:ok, effects},
-      else: {:error, :malformed_command}
+  # Signed arguments enter application DSL code here. Its evaluation errors
+  # refuse this command; failures in the authority/reducer machinery are not
+  # hidden by this boundary.
+  defp evaluate_command(module, command, args) do
+    {:ok, module.__apply_command__(command, args)}
   rescue
-    _error in [ArgumentError, FunctionClauseError, MatchError, BadMapError] ->
-      {:error, :malformed_command}
+    _error -> {:error, :malformed_command}
   end
 
   defp valid_effect?(module, {field, mutation}) when is_atom(field) do

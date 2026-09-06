@@ -1098,7 +1098,7 @@ function payloadFromBody(kind, body, realmByPubkey, commandDecoders) {
                         value: realmForPubkey(delegation.issuer, realmByPubkey),
                         command: `genesis ${role}`,
                         authority,
-                        ...(commandDecoders === undefined ? {} : { effects: delegation.roles.map((field) => ({
+                        ...(commandDecoders === undefined ? {} : { effects: [...new Set(delegation.roles)].map((field) => ({
                                 field, mutation: "write", value: realmForPubkey(delegation.issuer, realmByPubkey),
                             })) }),
                     };
