@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
 import { ed25519 } from "@noble/curves/ed25519.js";
+import { canonicalBytesForCarrierTerm } from "../src/codec";
+import type { CarrierTerm } from "../src/carrier";
 import {
   canonicalBytesForContinuationClaim, canonicalBytesForContinuationProfile,
   continuationCertificateFromCarrierTerm, continuationCertificateToCarrierTerm,
@@ -111,7 +113,102 @@ test("carrier terms round-trip profile and full certificate without losing signe
 test("a complete sorted threshold certificate verifies against the exact expected claim", () => {
   const { signedProfile, boundClaim, certificate } = signedFixture();
   assert.equal(verifyContinuationCertificate(certificate, boundClaim, signedProfile), true);
+  assert.equal(verifyContinuationCertificate({ ...certificate, signatures: certificate.signatures.slice(0, 2) }, boundClaim, signedProfile), true);
+  assert.equal(verifyContinuationCertificate(certificate, boundClaim, { ...signedProfile, witnesses: [...signedProfile.witnesses].reverse() }), true);
 });
+
+test("every supplied signature must be ordered, unique, configured and valid", () => {
+  const { signedProfile, boundClaim, witnesses, payload, certificate } = signedFixture();
+  const unknownSeed = Buffer.alloc(32, 4);
+  const unknownSignature = {
+    witness: Buffer.from(ed25519.getPublicKey(unknownSeed)).toString("base64"),
+    signature: Buffer.from(ed25519.sign(payload, unknownSeed)).toString("base64"),
+  };
+  for (const signatures of [
+    [], certificate.signatures.slice(0, 1), [...certificate.signatures].reverse(),
+    [certificate.signatures[0], certificate.signatures[0]],
+    [...certificate.signatures.slice(0, 2), { ...certificate.signatures[2], signature: Buffer.alloc(64).toString("base64") }],
+    [...certificate.signatures, unknownSignature].sort((a, b) => Buffer.compare(Buffer.from(a.witness, "base64"), Buffer.from(b.witness, "base64"))),
+  ]) assert.equal(verifyContinuationCertificate({ claim: boundClaim, signatures }, boundClaim, signedProfile), false);
+  const oldDomainBytes = canonicalBytesForCarrierTerm(["list", [textTerm("lattice-succession-witness-v1"), continuationClaimToCarrierTerm(boundClaim)!]]);
+  const wrongDomain = witnesses.map((witness) => ({
+    witness: witness.publicKey, signature: Buffer.from(ed25519.sign(oldDomainBytes, witness.seed)).toString("base64"),
+  }));
+  assert.equal(verifyContinuationCertificate({ claim: boundClaim, signatures: wrongDomain }, boundClaim, signedProfile), false);
+});
+
+test("old consent cannot bind any substituted claim field or profile choice", () => {
+  const { signedProfile, boundClaim, certificate } = signedFixture();
+  const mutations = {
+    version: 2, product: "township", kind: "thread", role: "moderator", replica: "different-replica",
+    profileId: digest("other-profile"), profileGenesis: digest("other-pin"), holder: highKey,
+    holderEpoch: digest("other-predecessor"), successor: lowKey, delegationId: digest("other-delegation"),
+    author: lowKey, deps: [digest("other-dependency")], epoch: 10, epochBasis: [digest("other-beacon")],
+  };
+  for (const [key, value] of Object.entries(mutations)) {
+    const substituted = { ...boundClaim, [key]: value };
+    assert.equal(verifyContinuationCertificate(certificate, substituted, signedProfile), false, `expected ${key}`);
+    assert.equal(verifyContinuationCertificate({ ...certificate, claim: substituted }, substituted, signedProfile), false, `signed ${key}`);
+  }
+  for (const mutation of [{ threshold: 1 }, { maxLeaseEpochs: 8 }, { nominee: highKey }]) {
+    assert.equal(verifyContinuationCertificate(certificate, boundClaim, { ...signedProfile, ...mutation }), false);
+  }
+});
+
+test("canonical bytes use the new domains, snake-case atom fields and raw key bytes", () => {
+  const normalized = normalizeContinuationProfile(profile)!;
+  const expectedProfilePairs: [CarrierTerm, CarrierTerm][] = [
+    [atomTerm("mode"), atomTerm("bounded_continuation")], [atomTerm("version"), ["int", 1]],
+    [atomTerm("product"), atomTerm("treehouse")], [atomTerm("kind"), atomTerm("space")],
+    [atomTerm("role"), atomTerm("admin")], [atomTerm("nominee"), ["bin", lowKey]],
+    [atomTerm("witnesses"), ["list", normalized.witnesses.map((key): CarrierTerm => ["bin", key])]],
+    [atomTerm("threshold"), ["int", 2]], [atomTerm("max_lease_epochs"), ["int", 7]],
+  ];
+  const expectedProfileTerm: CarrierTerm = ["map", expectedProfilePairs];
+  const expectedBytes = canonicalBytesForCarrierTerm(["list", [textTerm("lattice-continuation-profile-v1"), expectedProfileTerm]]);
+  assert.deepEqual(canonicalBytesForContinuationProfile(profile), expectedBytes);
+  assert.equal(continuationProfileId(profile), createHash("sha256").update(expectedBytes).digest("base64url"));
+  assert.equal(continuationProfileId({ ...profile, witnesses: [...profile.witnesses].reverse() }), continuationProfileId(profile));
+  const claimTerm = continuationClaimToCarrierTerm(claim)!;
+  assert.deepEqual(canonicalBytesForContinuationClaim(claim), canonicalBytesForCarrierTerm(["list", [textTerm("lattice-continuation-witness-v1"), claimTerm]]));
+  assert.notDeepEqual(canonicalBytesForContinuationClaim(claim), canonicalBytesForCarrierTerm(["list", [textTerm("lattice-succession-witness-v1"), claimTerm]]));
+  assert.equal(continuationProfileId({ ...profile, unknown: true }), null);
+  assert.throws(() => canonicalBytesForContinuationProfile({ ...profile, unknown: true }), TypeError);
+  assert.throws(() => canonicalBytesForContinuationClaim({ ...claim, unknown: true }), TypeError);
+});
+
+test("carrier decoding refuses duplicate, unknown and non-atom keys and malformed nested terms", () => {
+  const profileTerm = continuationProfileToCarrierTerm(profile)!;
+  assert.equal(profileTerm[0], "map");
+  if (profileTerm[0] !== "map") throw new Error("expected profile map");
+  const pairs = profileTerm[1];
+  for (const malformed of [
+    ["map", [...pairs, [atomTerm("unknown"), ["nil"]]]],
+    ["map", [pairs[0], pairs[0], ...pairs.slice(2)]],
+    ["map", [[textTerm("mode"), atomTerm("bounded_continuation")], ...pairs.slice(1)]],
+    ["map", pairs, "extra"],
+    ["tuple", pairs],
+  ]) assert.equal(continuationProfileFromCarrierTerm(malformed), null);
+  const claimTerm = continuationClaimToCarrierTerm(claim)!;
+  if (claimTerm[0] !== "map") throw new Error("expected claim map");
+  for (const [field, bad] of [
+    ["holder", ["bin", lowKey, "extra"]], ["replica", ["bin", "/w=="]],
+    ["epoch", ["int", "9007199254740992"]], ["epoch", ["int", "01"]],
+    ["deps", ["mapset", []]], ["profile_id", ["atom", claim.profileId]],
+  ] as const) {
+    const changed: unknown = ["map", claimTerm[1].map(([key, value]) => [key, key[0] === "atom" && key[1] === field ? bad : value])];
+    assert.equal(continuationClaimFromCarrierTerm(changed), null, field);
+  }
+  const numericText = ["map", claimTerm[1].map(([key, value]) => [key, key[0] === "atom" && key[1] === "epoch" ? ["int", "9"] : value])];
+  assert.deepEqual(continuationClaimFromCarrierTerm(numericText), claim);
+  const { certificate } = signedFixture();
+  const certificateTerm = continuationCertificateToCarrierTerm(certificate)!;
+  if (certificateTerm[0] !== "map") throw new Error("expected certificate map");
+  assert.equal(continuationCertificateFromCarrierTerm(["map", [certificateTerm[1][0], certificateTerm[1][0]]]), null);
+});
+
+function atomTerm(value: string): CarrierTerm { return ["atom", value]; }
+function textTerm(value: string): CarrierTerm { return ["bin", Buffer.from(value).toString("base64")]; }
 
 function signedFixture() {
   const witnesses = [1, 2, 3].map((value) => {

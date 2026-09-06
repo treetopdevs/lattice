@@ -1,3 +1,4 @@
+import { ed25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { canonicalBase64Bytes, canonicalBytesForCarrierTerm } from "./codec";
 import type { CarrierTerm } from "./carrier";
@@ -146,8 +147,31 @@ export function continuationProfileId(value: unknown): string | null {
     .replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
-export function verifyContinuationCertificate(_certificate: unknown, _expected: unknown, _profile: unknown): boolean {
-  return false;
+/** Cryptographic consent only; the caller independently judges the causal authority history. */
+export function verifyContinuationCertificate(certificate: unknown, expected: unknown, profile: unknown): boolean {
+  try {
+    const normalized = normalizeContinuationCertificate(certificate);
+    const expectedClaim = normalizeContinuationClaim(expected);
+    const policy = normalizeContinuationProfile(profile);
+    if (normalized === null || expectedClaim === null || policy === null ||
+      normalized.claim.profileId !== continuationProfileId(policy) ||
+      normalized.claim.product !== policy.product || normalized.claim.kind !== policy.kind ||
+      normalized.claim.role !== policy.role || normalized.signatures.length < policy.threshold) return false;
+
+    const payload = canonicalBytesForContinuationClaim(normalized.claim);
+    if (!equalBytes(payload, canonicalBytesForContinuationClaim(expectedClaim))) return false;
+    const allowed = new Set(policy.witnesses);
+    let previous: string | null = null;
+    for (const entry of normalized.signatures) {
+      if (!allowed.has(entry.witness) || previous !== null && comparePublicKeys(previous, entry.witness) >= 0 ||
+        !ed25519.verify(canonicalBase64Bytes(entry.signature, 64)!, payload,
+          canonicalBase64Bytes(entry.witness, 32)!, { zip215: false })) return false;
+      previous = entry.witness;
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 const claimKeys = [
@@ -259,6 +283,10 @@ function comparePublicKeys(left: string, right: string): number {
     if (a[i] !== b[i]) return a[i]! - b[i]!;
   }
   return 0;
+}
+
+function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
+  return left.length === right.length && left.every((byte, index) => byte === right[index]);
 }
 
 function atom(value: string): CarrierTerm { return ["atom", value]; }
