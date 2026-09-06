@@ -139,9 +139,15 @@ async function verified(captured: ReturnType<typeof snapshot>) {
       throw Error("read-only");
     },
     loadDraft: async (replica) => {
-      const record = captured.rows.find(
+      const legacy = captured.rows.find(
         (r) => r.key === `treehouse:preview:draft:${replica}`,
       );
+      const digest = createHash("sha256").update(replica).digest("hex");
+      const current = captured.rows.find(
+        (r) => r.key === `treehouse:preview:draft:${digest}`,
+      );
+      assert(!(legacy && current), "conflicting retained draft keys");
+      const record = legacy ?? current;
       return record ? (JSON.parse(record.value) as Draft) : null;
     },
   };

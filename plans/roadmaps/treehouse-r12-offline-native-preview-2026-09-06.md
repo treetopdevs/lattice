@@ -363,3 +363,28 @@ draft; per-key CAS does not prevent that cross-key race. The resulting retained 
 an explicit later resolution and is never silently assigned a winner. Existing watermark checks
 must refuse advancement on that conflict. The packaged reader mirrors this public storage format,
 and the UI maps the explicit conflict to readable preservation guidance.
+
+
+The bounded follow-ups are implemented with public RED/GREEN evidence. Missing-key selection
+first wrote revision metadata (11 writes instead of the expected 10), then passed without any
+commit, key creation or changed retained revision. Reopen restores the saved selection; switching
+still exposes the other Thread's actual posts, and authoring/unknown-profile refusals remain.
+The native `Seed` nonce regression first returned `local_store_unavailable`; the repaired public
+save/load and post-watermark sequence passes for the fragment in either nonce or root token.
+A legacy revision-7 row remains at the same key through revision 9, with no digest copy. A dual-row
+regression against the preceding native source first silently returned the legacy draft; it now
+refuses load, save/clear and watermark advancement, keeping both rows and history byte-identical.
+Corrupt legacy storage also refuses without creating a replacement.
+
+Final focused evidence is under `/tmp/lattice-treehouse-execution-20260906/`:
+`r12-missing-key-selection-red.log` / `r12-missing-key-selection-green.log`,
+`r12-draft-key-red.log`, `r12-dual-draft-red.log`, `r12-followup-native-final.log`
+(**10 native tests, zero failures**), `r12-followup-ui-tests.log` (workflow/storage/product pass),
+and `r12-followup-ui-build.log` (Vue typecheck and normal production build pass). Rust formatting
+and `git diff --check` pass. The first native filter matched zero tests; that log is retained as
+`r12-draft-key-red-first.log` and is not RED evidence. The corrected exact test name produced the
+recorded behavioral failure. No shared KV guard, schema, signing or engine source changed. The
+new direct `sha2` dependency uses the already locked 0.10.9 version; no dependency versions moved.
+The packaged reader now understands both draft row formats and refuses dual rows. This source
+repair does not rerun or replace packaged/Keychain evidence; the integrator still owns the later
+engine merge, full suite and hosted gates. Actual same-session Fable follow-up is pending.

@@ -126,7 +126,7 @@ fn draft_round_trip(nonce: &str, root: &str, legacy: bool) {
     let (record, thread) = thread_record(&mut store, nonce, root);
     let initial_revision = if legacy { 7 } else { 0 };
     if legacy {
-        let mut preceding =
+        let preceding =
             ProductDatabase::open_path("treehouse", &dir.path().join("treehouse-v1.sqlite3"))
                 .unwrap();
         preceding
@@ -182,9 +182,103 @@ fn draft_round_trip(nonce: &str, root: &str, legacy: bool) {
         .unwrap();
     assert_eq!(later.revision, initial_revision + 2);
     assert_eq!(store.load_draft(&thread).unwrap().unwrap(), later);
+    if legacy {
+        let db = ProductDatabase::open_path("treehouse", &dir.path().join("treehouse-v1.sqlite3"))
+            .unwrap();
+        let retained = db
+            .kv_get(&format!("treehouse:preview:draft:{thread}"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            serde_json::from_str::<Value>(&retained).unwrap()["revision"],
+            initial_revision + 2
+        );
+        assert_eq!(
+            db.kv_get(DIGEST_DRAFT_KEY).unwrap(),
+            None,
+            "retained legacy drafts are not copied or migrated"
+        );
+    }
     assert_eq!(
         serde_json::from_str::<Value>(&store.open().unwrap().record.unwrap()).unwrap()
             ["clearedDrafts"][&thread],
         initial_revision + 1
     );
+}
+
+// Fixed public fixture digest, independently computed from the d/b replica above.
+const DIGEST_DRAFT_KEY: &str =
+    "treehouse:preview:draft:66523e02425751cfbc6d2db953e02345a2fb24cbca405490626059d945017806";
+#[test]
+fn conflicting_draft_rows_refuse_reads_saves_and_watermarks_without_choosing_a_winner() {
+    for same_text in [false, true] {
+        let dir = tempfile::tempdir().unwrap();
+        let keys = Arc::new(InMemoryCarrierKeySeedStore::default());
+        let mut store = PreviewStore::at_directory(dir.path(), keys).unwrap();
+        let (record, thread) = thread_record(&mut store, &"d".repeat(43), &"b".repeat(43));
+        let db = ProductDatabase::open_path("treehouse", &dir.path().join("treehouse-v1.sqlite3"))
+            .unwrap();
+        let legacy_key = format!("treehouse:preview:draft:{thread}");
+        let legacy = json!({"version":1,"revision":1,"text":"Old process draft"}).to_string();
+        let current = if same_text {
+            legacy.clone()
+        } else {
+            json!({"version":1,"revision":1,"text":"New process draft"}).to_string()
+        };
+        db.kv_set(&legacy_key, &legacy).unwrap();
+        db.kv_set(DIGEST_DRAFT_KEY, &current).unwrap();
+        assert_eq!(
+            store.load_draft(&thread).unwrap_err(),
+            "draft_storage_conflict"
+        );
+        for text in ["", "Replacement"] {
+            assert_eq!(
+                store.save_draft(&thread, 1, text).unwrap_err(),
+                "draft_storage_conflict"
+            );
+        }
+        let mut posted = record.clone();
+        posted["revision"] = json!(6);
+        let mut frame = posted["profiles"][1]["frames"][0].clone();
+        frame["id"] = json!("f".repeat(43));
+        frame["deps"] = json!(["e".repeat(43)]);
+        posted["profiles"][1]["frames"]
+            .as_array_mut()
+            .unwrap()
+            .push(frame);
+        posted["profiles"][1]["outbox"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!("f".repeat(43)));
+        posted["clearedDrafts"][&thread] = json!(1);
+        assert_eq!(
+            store.commit(5, &posted.to_string()).unwrap_err(),
+            "draft_storage_conflict"
+        );
+        assert_eq!(store.open().unwrap().record, Some(record.to_string()));
+        assert_eq!(db.kv_get(&legacy_key).unwrap(), Some(legacy));
+        assert_eq!(db.kv_get(DIGEST_DRAFT_KEY).unwrap(), Some(current));
+    }
+}
+#[test]
+fn corrupt_legacy_draft_refuses_without_creating_a_replacement() {
+    let dir = tempfile::tempdir().unwrap();
+    let keys = Arc::new(InMemoryCarrierKeySeedStore::default());
+    let mut store = PreviewStore::at_directory(dir.path(), keys).unwrap();
+    let (record, thread) = thread_record(&mut store, &"d".repeat(43), &"b".repeat(43));
+    let db =
+        ProductDatabase::open_path("treehouse", &dir.path().join("treehouse-v1.sqlite3")).unwrap();
+    let legacy_key = format!("treehouse:preview:draft:{thread}");
+    db.kv_set(&legacy_key, "invalid retained draft").unwrap();
+    assert_eq!(store.load_draft(&thread).unwrap_err(), "invalid_draft");
+    assert_eq!(
+        store.save_draft(&thread, 0, "Replacement").unwrap_err(),
+        "invalid_draft"
+    );
+    assert_eq!(store.open().unwrap().record, Some(record.to_string()));
+    assert_eq!(
+        db.kv_get(&legacy_key).unwrap().as_deref(),
+        Some("invalid retained draft")
+    );
+    assert_eq!(db.kv_get(DIGEST_DRAFT_KEY).unwrap(), None);
 }

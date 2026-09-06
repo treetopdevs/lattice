@@ -9,6 +9,7 @@ use lattice_mobile_core::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, HashSet},
     fs::{File, OpenOptions},
@@ -389,7 +390,7 @@ impl PreviewStore {
             .kv_compare_and_set(HISTORY_KEY, raw.as_deref(), next)
             .map_err(storage_error)
     }
-    fn draft_key(&self, replica: &str) -> Result<String, String> {
+    fn captured_draft(&self, replica: &str) -> Result<(String, Option<String>), String> {
         let (_, r) = self.captured()?;
         if !r
             .profiles
@@ -398,7 +399,20 @@ impl PreviewStore {
         {
             return Err("thread_unavailable".into());
         }
-        Ok(format!("treehouse:preview:draft:{replica}"))
+        // Existing drafts retain their original CAS key and revision. New rows use
+        // lowercase hex so random public replica tokens cannot trip the secret guard.
+        let legacy_key = format!("treehouse:preview:draft:{replica}");
+        let key = format!(
+            "treehouse:preview:draft:{:x}",
+            Sha256::digest(replica.as_bytes())
+        );
+        let legacy = self.db.kv_get(&legacy_key).map_err(storage_error)?;
+        let current = self.db.kv_get(&key).map_err(storage_error)?;
+        match (legacy, current) {
+            (Some(_), Some(_)) => Err("draft_storage_conflict".into()),
+            (Some(raw), None) => Ok((legacy_key, Some(raw))),
+            (None, raw) => Ok((key, raw)),
+        }
     }
     fn parse_draft(raw: Option<&str>) -> Result<Option<Draft>, String> {
         let Some(raw) = raw else { return Ok(None) };
@@ -412,10 +426,7 @@ impl PreviewStore {
         Ok(Some(draft))
     }
     pub fn load_draft(&self, replica: &str) -> Result<Option<Draft>, String> {
-        let raw = self
-            .db
-            .kv_get(&self.draft_key(replica)?)
-            .map_err(storage_error)?;
+        let (_, raw) = self.captured_draft(replica)?;
         Self::parse_draft(raw.as_deref())
     }
     pub fn save_draft(
@@ -427,8 +438,7 @@ impl PreviewStore {
         if text.len() > DRAFT_BYTES || expected_revision >= MAX_REVISION {
             return Err("draft_too_large".into());
         }
-        let key = self.draft_key(replica)?;
-        let raw = self.db.kv_get(&key).map_err(storage_error)?;
+        let (key, raw) = self.captured_draft(replica)?;
         if Self::parse_draft(raw.as_deref())?.map_or(0, |d| d.revision) != expected_revision {
             return Ok(None);
         }

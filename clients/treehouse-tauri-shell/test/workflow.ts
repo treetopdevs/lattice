@@ -208,6 +208,10 @@ assert.equal(interruptedNative.writes, beforeReadSelectionWrites,
   "missing-key thread selection never commits the retained record");
 assert.equal(readOnly.state.revision, beforeReadSelectionRevision);
 assert.equal(interruptedNative.record, goodRecord);
+const readOnlyReopened = new TreehouseWorkflow(interruptedNative);
+await readOnlyReopened.open();
+assert.equal(readOnlyReopened.state.active, otherReadableThread,
+  "read-only navigation does not replace the retained selection");
 await readOnly.select(otherReadableThread);
 assert.equal(readOnly.views.get(otherReadableThread)!.posts[0]!.text, "Second thread history");
 await assert.rejects(readOnly.select("unknown-thread"), /unknown_profile/);
