@@ -84,6 +84,16 @@ authorities even when one person holds multiple product-scoped keys.
 | Admit/remove transport peer | Host operator applies reviewed public identity to exact route | Operator reconciles all current and archived routes | Readiness, manifest activation and exact peer list precede catalog publication | Operator on exact Tool route; no authority to sign Tool receipts |
 | Replace service/catalog identity | Proposed root-pinned catalog recovery threshold authorizes transport binding only | Retained Space bootstrap plus exact unchanged replica/root/creation bindings | New catalog entry only after authorized creation and route readiness | Separate product/module binding; replacement grants no Tool root authority |
 
+**R11 disposition adopted 2026-09-06:** the table's proposed separate catalog
+threshold is superseded for the unified Treehouse profile by the explicit
+living-root-pinned, bounded Space-admin delegation in the
+[reviewed R11 contract](treehouse_catalog_lifecycle.md). Current admin authority
+comes from actual honored finite acquisitions under R04, with
+`replace_catalog_v1` already in the acquisition's pre-loss ceiling. No new
+catalog witness quorum or native witness purpose is added. Original table text
+remains evidence of the earlier recommendation; all retained-client, fork,
+cutoff, key-loss and rollback controls remain required.
+
 The founder can sign root grants, policies and initial catalog bootstrap only while
 that key lives. The operator signs catalogs and manages routes only. No successful
 row may recover a founder seed, replay a hidden founder signing service, or give
@@ -269,6 +279,20 @@ profiles, and extend pilot observation. Neither software throughput nor 14 elaps
 days proves that people can sustain the ceremony.
 
 ## 6. Catalog replacement without founder or old service key
+
+**Adopted R11 amendment, 2026-09-06:** the separate two-of-three catalog witness
+recommendation below is historical and superseded for this profile by the
+integrator-adopted [R11 contract](treehouse_catalog_lifecycle.md), final Claude
+Fable PASS at `789ab235`. The original root bootstrap expressly delegates
+transport-only replacement to an actually honored bounded Space-admin action,
+not to a new operator or standalone certificate. Full retained authority,
+strict acquisition-cap and beacon evidence, exact predecessor/inventory/cutoff,
+both new-key possession signatures and authenticated readiness are required.
+R04 witness consent still governs acquisition/renewal; per-change catalog
+witness consent is not added. The earlier ceremony text is retained as proposal
+history, while its installed-client, fork, cutoff and combined-loss acceptance
+obligations continue under R11c. This dated amendment adopts scope, not runtime
+or physical proof.
 
 Amend the Plan 158 catalog lost-key clause in R11c: a root-pinned, product-scoped
 recovery authority may replace transport identity. Keep ordinary old-key-signed
