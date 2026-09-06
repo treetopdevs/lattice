@@ -151,6 +151,9 @@ defmodule TownshipWeb.CarrierProjectionTest do
 
     assert {:ok, :connecting} = CarrierProjection.subscribe(projection)
     assert {:ok, {:fresh, _payload}} = CarrierProjection.refresh(projection)
+
+    refreshed_status = projection |> :sys.get_status() |> :erlang.term_to_binary()
+    assert :binary.match(refreshed_status, identity.priv) == :nomatch
   end
 
   test "server-push mode refuses a carrier without the subscription extension" do
