@@ -106,7 +106,7 @@ defmodule LatticeNodeSpike.CarrierPaginationTest do
         ]
 
     process =
-      Port.open({:spawn_executable, Path.expand("~/.asdf/shims/elixir")}, [
+      Port.open({:spawn_executable, elixir_bin()}, [
         :binary,
         :exit_status,
         :stderr_to_stdout,
@@ -117,6 +117,11 @@ defmodule LatticeNodeSpike.CarrierPaginationTest do
 
     on_exit(fn -> if Port.info(process), do: Port.close(process) end)
     {process, await_ready(process, [])}
+  end
+
+  defp elixir_bin do
+    direct = Path.expand("~/.asdf/installs/elixir/1.19.5-otp-28/bin/elixir")
+    if File.exists?(direct), do: direct, else: System.find_executable("elixir")
   end
 
   defp await_ready(process, seen) do

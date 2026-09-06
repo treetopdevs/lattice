@@ -418,3 +418,29 @@ For the human or agent who owns this next:
   bucket covering `pull` and `relay`. Both are real (neither listener sets a connection cap
   today) and both are additive hardening rather than correctness — they belong with plan 165
   Part C's limiter work, not here.
+
+### 2026-09-06 integration review follow-up
+
+Claude Fable reviewed `641cbbd7..8722403f`: PASS, no P0/P1. The integrator
+accepted its documented performance and legacy-peer follow-ups without changing
+the transport protocol. During R09 integration, the new 50 ms setup fixture was
+scheduler-sensitive: the peer could miss the already-closed connection and wait
+in an unbounded accept. A focused retry also exceeded its 500 ms observer budget.
+Neither failed run is reported as green.
+
+The fixture now starts its peer before the connector, bounds accept/cleanup,
+runs serially, and uses a 500 ms configured setup timeout observed within two
+seconds. The unchanged legacy five-second read still fails this regression;
+the header-bound assertion also remains. No production timeout or assertion of
+received request/socket closure was relaxed. Re-running both tests against the
+original client produced two failures; restored reviewed production bytes then
+passed all 20 WebSocket tests and the real second-BEAM replay test. That accepted
+final run used `ERL_FLAGS='+S 4:4'` under concurrent host load; formatting and
+whitespace passed. A preliminary run overlapping the temporary baseline source
+substitution is not used as final evidence.
+
+The new second-BEAM fixture also resolves the local asdf Elixir executable with
+a PATH fallback for `erlef/setup-beam` CI. This repairs test portability without
+changing the exercised process/restart behavior. Logs are under
+`/tmp/lattice-treehouse-execution-20260906/r08-setup-fixture-*.log` and
+`r08-final-fixture-green.log`; exact follow-up review and hosted gates remain.
