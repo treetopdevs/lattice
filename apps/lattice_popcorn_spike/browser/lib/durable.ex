@@ -126,6 +126,12 @@ defmodule LatticeBrowser.Durable do
   def restore_log(nil), do: {:ok, nil}
 
   def restore_log(%{"ops" => ops} = payload) when is_list(ops) and length(ops) <= @max_ops do
+    # Wire intentionally uses existing atoms only. A cold browser VM has not
+    # loaded the authority/replica vocabulary yet; load fixed trusted modules,
+    # never create atoms from incoming strings.
+    Code.ensure_loaded!(Authority)
+    Code.ensure_loaded!(Notes)
+
     with {:ok, log} <- BrowserLogStore.restore_payload(payload),
          true <- Log.quarantine(log) == [],
          analysis = Authority.analyze(Notes, log),

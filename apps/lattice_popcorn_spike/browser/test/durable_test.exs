@@ -57,6 +57,27 @@ defmodule LatticeBrowser.DurableTest do
     assert Durable.view(restored) == Durable.view(a)
   end
 
+  test "a fresh VM restores the wire atom vocabulary without fixture-module warming" do
+    {_, a, _, _} = fixture()
+    path = Path.join(System.tmp_dir!(), "popcorn-cold-#{System.unique_integer([:positive])}")
+    File.write!(path, :erlang.term_to_binary(Durable.capsule(a)))
+    on_exit(fn -> File.rm(path) end)
+    ebin = :code.which(Durable) |> List.to_string() |> Path.dirname()
+
+    script = """
+    Application.ensure_all_started(:crypto)
+    capsule = File.read!(hd(System.argv())) |> :erlang.binary_to_term()
+    IO.inspect(LatticeBrowser.Durable.restore(capsule) |> elem(0))
+    """
+
+    {output, 0} =
+      System.cmd(System.find_executable("elixir"), ["-pa", ebin, "-e", script, path],
+        stderr_to_stdout: true
+      )
+
+    assert String.trim(output) == ":ok"
+  end
+
   test "corrupt storage and changed replica roots fail closed" do
     {_, a, _, _} = fixture()
     bad = put_in(Durable.capsule(a), ["public_key"], "different")

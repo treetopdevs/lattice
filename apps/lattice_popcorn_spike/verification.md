@@ -41,7 +41,7 @@ That success does not prove this extension. The new exact-head acceptance gate i
 `npm run e2e:replicas`, retaining `evidence/replicas.json` alongside the original
 runtime proof. It must pass before claiming real-browser durable convergence.
 
-Local extension checks: five OTP 29 tests (three durable-replica scenarios plus
+Local extension checks: six OTP 29 tests (four durable-replica scenarios plus
 two existing realm tests), nine JavaScript host tests, the existing native
 signed-echo/Gateway test, and the new two-replica real-WebSocket/Gateway test pass.
 The v2 regression suite passes: 20 properties and 209 tests. The browser bundle
@@ -55,3 +55,10 @@ workspace runtime. Root `mix verify` is blocked by missing Cargo in the existing
 fresh-process audit-bundle failure for that unavailable umbrella app. Neither
 failure is treated as a passing gate. GitHub CI supplies the full toolchain and
 real-browser acceptance environment.
+
+The first extension Chromium run found a cold-VM decode failure before enrollment
+completed. A fresh native-process regression reproduced it: the wire codec only
+accepts existing atoms, but the trusted Authority/Notes vocabulary was not loaded.
+The decoder now explicitly loads those fixed modules before processing a signed
+log. It still never creates atoms from incoming strings. The regression passes;
+the subsequent current-head Chromium run is the acceptance gate.
