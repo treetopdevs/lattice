@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Durable browser replicas · Lattice</title></head>
+<body><main>
+<h1>Two durable browser replicas</h1>
+<p>Open <a href="/replica.html?replica=alice">Alice</a> and <a href="/replica.html?replica=bob">Bob</a> in separate tabs. Connect both, go offline, add notes, then reconnect and sync both.</p>
+<h2 id="name"></h2>
+<p id="connection" role="status">Starting browser OTP…</p>
+<button id="connect" disabled>Connect / reconnect</button><button id="sync" disabled>Sync</button><button id="offline" disabled>Go offline</button>
+<form id="post"><label>Note <input id="text" maxlength="256" required></label><button id="save" disabled>Save locally</button></form>
+<p>Local writes are provisional until synchronized. Concurrent revocation can remove a provisional note from accepted state.</p>
+<h2>Accepted notes</h2><ul id="notes"></ul>
+<h2>Replica evidence</h2><pre id="state"></pre><p id="error" role="alert"></p>
+<p>Research demo: identity and signed log persist in this browser's IndexedDB. Same-origin scripts can access the key. The root is trusted on first enrollment. Storage deletion/rollback and server restart recovery are outside this proof.</p>
+<p>Revocation is a separate loopback fixture control described in the runbook; participants cannot revoke through this page.</p>
+</main><script type="module" src="/src/replica-main.mjs"></script></body></html>

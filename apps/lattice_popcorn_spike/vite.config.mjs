@@ -10,6 +10,7 @@ export const headers = {
 };
 export default defineConfig({
   plugins: [popcorn({ rootDir: fileURLToPath(new URL("browser", import.meta.url)), app: "lattice_browser", runtimeVariant: "crypto" })],
+  build: { rollupOptions: { input: { index: "index.html", replica: "replica.html" } } },
   server: {
     host: "127.0.0.1", port: 5179, strictPort: true, headers,
     proxy: { "/ws": { target: `ws://127.0.0.1:${process.env.LATTICE_POPCORN_PORT || 4059}`, ws: true } }
