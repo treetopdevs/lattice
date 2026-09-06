@@ -213,7 +213,11 @@ defmodule LatticeCarrierServerTest do
       |> Map.keys()
       |> MapSet.new()
 
-    assert {:error, :closed} = WebSocket.pull(connection, oversized_have)
+    assert {:error, :closed} =
+             Client.request_envelope(connection.client, %{
+               type: "pull",
+               have: Enum.sort(oversized_have)
+             })
   end
 
   @tag :tmp_dir

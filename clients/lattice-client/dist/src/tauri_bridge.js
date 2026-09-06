@@ -1,3 +1,4 @@
+import { canonicalBase64Bytes } from "./codec";
 export function createTauriKeyValueStore(invoke, opts = {}) {
     const getCommand = opts.getCommand ?? "lattice_kv_get";
     const setCommand = opts.setCommand ?? "lattice_kv_set";
@@ -12,8 +13,14 @@ export function createTauriKeyValueStore(invoke, opts = {}) {
 }
 export function createTauriCarrierSigner(invoke, opts) {
     const signCommand = opts.signCommand ?? "lattice_sign_carrier";
+    const publicKey = typeof opts.publicKey === "string"
+        ? canonicalBase64Bytes(opts.publicKey, 32)
+        : opts.publicKey;
+    if (publicKey === null || publicKey.length !== 32) {
+        throw new Error("invalid canonical Ed25519 public key");
+    }
     return {
-        publicKey: typeof opts.publicKey === "string" ? base64ToBytes(opts.publicKey) : opts.publicKey,
+        publicKey,
         async sign(bytes) {
             const signature = await invoke(signCommand, {
                 keyId: opts.keyId,
@@ -21,7 +28,10 @@ export function createTauriCarrierSigner(invoke, opts) {
             });
             if (typeof signature !== "string")
                 throw new Error(`${signCommand} returned a non-string signature`);
-            return base64ToBytes(signature);
+            const decoded = canonicalBase64Bytes(signature, 64);
+            if (decoded === null)
+                throw new Error("invalid canonical Ed25519 signature");
+            return decoded;
         },
     };
 }
@@ -40,14 +50,6 @@ export async function createTauriNativeCarrierSigner(invoke, opts) {
 }
 function storageKey(namespace, key) {
     return namespace === undefined || namespace === "" ? key : `${namespace}:${key}`;
-}
-function base64ToBytes(value) {
-    if (typeof Buffer !== "undefined")
-        return new Uint8Array(Buffer.from(value, "base64"));
-    const atobFn = globalThis.atob;
-    if (!atobFn)
-        throw new Error("base64 decoding unavailable");
-    return Uint8Array.from(atobFn(value), (char) => char.charCodeAt(0));
 }
 function bytesToBase64(bytes) {
     if (typeof Buffer !== "undefined")

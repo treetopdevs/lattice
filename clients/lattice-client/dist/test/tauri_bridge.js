@@ -73,6 +73,50 @@ const nativeSigned = await signCarrierChallenge(challenge, nativeSessionSigner);
 check("native signer challenge signature", nativeSigned.signature, "Ac2Re1+OPsZQswnGgsJ2+dqxJnr77kFuEhHUsYNVa9a5Puc2Se3mpO/rom/J5qTt9M1fWX+sMHAPhTwHOUk4BA==");
 const ensureCall = calls.find((call) => call.command === "lattice_ensure_carrier_key");
 check("ensure key command key id", ensureCall?.args.keyId, "session");
+for (const [name, publicKey] of [
+    ["whitespace", `${vector.client.sessionPubkey}\n`],
+    ["missing padding", vector.client.sessionPubkey.replace(/=+$/, "")],
+    ["31-byte key", Buffer.alloc(31, 1).toString("base64")],
+    ["33-byte key", Buffer.alloc(33, 1).toString("base64")],
+]) {
+    let refused = false;
+    try {
+        await createTauriNativeCarrierSigner(returningInvoke(publicKey), { keyId: "invalid" });
+    }
+    catch {
+        refused = true;
+    }
+    check(`native signer refuses public key with ${name}`, refused, true);
+}
+for (const [name, signature] of [
+    ["whitespace", `${nativeSigned.signature}\n`],
+    ["missing padding", nativeSigned.signature.replace(/=+$/, "")],
+    ["63-byte signature", Buffer.alloc(63, 1).toString("base64")],
+    ["65-byte signature", Buffer.alloc(65, 1).toString("base64")],
+]) {
+    const invalidSigner = createTauriCarrierSigner(returningInvoke(signature), {
+        keyId: "invalid",
+        publicKey: sessionIdentity.publicKey,
+    });
+    let refused = false;
+    try {
+        await invalidSigner.sign(new Uint8Array([1, 2, 3]));
+    }
+    catch {
+        refused = true;
+    }
+    check(`native signer refuses ${name}`, refused, true);
+}
+for (const length of [31, 33]) {
+    let refused = false;
+    try {
+        createTauriCarrierSigner(invoke, { keyId: "invalid", publicKey: new Uint8Array(length) });
+    }
+    catch {
+        refused = true;
+    }
+    check(`native signer refuses raw ${length}-byte public key`, refused, true);
+}
 const sessionSigner = createTauriCarrierSigner(invoke, {
     keyId: "session",
     publicKey: sessionIdentity.publicKeyBase64,
@@ -136,6 +180,9 @@ function seededEd25519Identity(seed) {
 }
 function base64Bytes(value) {
     return new Uint8Array(Buffer.from(value, "base64"));
+}
+function returningInvoke(value) {
+    return async () => value;
 }
 function bytesBase64(bytes) {
     return Buffer.from(bytes).toString("base64");

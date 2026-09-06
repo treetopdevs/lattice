@@ -28,6 +28,21 @@ class MemoryKeyValueStore {
     }
 }
 console.log(`\n▸ ${vector.scenario} Township command authoring`);
+for (const rootKey of [
+    `${vector.clientBaseCarrierOps[0].author}\n`,
+    vector.clientBaseCarrierOps[0].author.replace(/=+$/, ""),
+    Buffer.alloc(31, 1).toString("base64"),
+    new Uint8Array(33),
+]) {
+    let refused = false;
+    try {
+        await bindTownshipReplica("replica:matter:strict-root", rootKey);
+    }
+    catch {
+        refused = true;
+    }
+    check("replica binding refuses non-canonical or incorrectly sized root keys", refused, true);
+}
 check("set_title body", townshipCommandBody({ command: "set_title", text: "Road diet" }), commandBody("set_title", "Road diet"));
 check("set_summary body", townshipCommandBody({ command: "set_summary", text: "Needs traffic study" }), commandBody("set_summary", "Needs traffic study"));
 check("post body", townshipCommandBody({ command: "post", text: "resident: posted while offline" }), commandBody("post", "resident: posted while offline"));

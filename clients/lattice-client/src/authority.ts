@@ -1,6 +1,7 @@
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import {
+  canonicalBase64Bytes,
   canonicalBytesForCarrierDelegation,
   canonicalBytesForWitnessedRecoveryPolicy,
   canonicalBytesForWitnessedSuccessionArtifactId,
@@ -1476,14 +1477,14 @@ function delegationSelfConsistent(delegation: AuthorityDelegationEvidence): bool
         : { expires_epoch: delegation.expiresEpoch }),
     });
 
+    const signature = canonicalBase64Bytes(delegation.sig, 64);
+    const issuer = canonicalBase64Bytes(delegation.issuer, 32);
+
     return (
+      signature !== null &&
+      issuer !== null &&
       bytesToBase64Url(sha256(canonicalBytes)) === delegation.id &&
-      ed25519.verify(
-        base64ToBytes(delegation.sig),
-        canonicalBytes,
-        base64ToBytes(delegation.issuer),
-        { zip215: false },
-      )
+      ed25519.verify(signature, canonicalBytes, issuer, { zip215: false })
     );
   } catch {
     return false;
@@ -1511,34 +1512,11 @@ function replicaRootCommitment(replica: string): string | null {
   return commitment.length > 0 ? commitment : null;
 }
 
-function base64ToBytes(value: string): Uint8Array {
-  if (typeof Buffer !== "undefined") return new Uint8Array(Buffer.from(value, "base64"));
-
-  const atobFn = (globalThis as unknown as { atob?: (encoded: string) => string }).atob;
-  if (!atobFn) throw new Error("base64 decoding unavailable");
-  return Uint8Array.from(atobFn(value), (char) => char.charCodeAt(0));
-}
-
-function canonicalBase64Bytes(value: unknown, length?: number): Uint8Array | null {
-  if (typeof value !== "string") return null;
-  try {
-    const decoded = base64ToBytes(value);
-    if (bytesToBase64(decoded) !== value) return null;
-    return length === undefined || decoded.length === length ? decoded : null;
-  } catch {
-    return null;
-  }
-}
-
 function canonicalBase64UrlDigest(value: unknown): boolean {
   if (typeof value !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(value)) return false;
-  try {
-    const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "=";
-    const decoded = base64ToBytes(padded);
-    return decoded.length === 32 && bytesToBase64Url(decoded) === value;
-  } catch {
-    return false;
-  }
+  const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "=";
+  const decoded = canonicalBase64Bytes(padded, 32);
+  return decoded !== null && bytesToBase64Url(decoded) === value;
 }
 
 function bytesToBase64(value: Uint8Array): string {
