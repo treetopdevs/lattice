@@ -1168,3 +1168,17 @@ Status 2026-09-06 (Plan 179 local preparation): Sim and TypeScript now prove wit
 advance, pre-loss delegated admission, surviving-issuer revocation and leased-grant lapse with
 the founder removed. General AF-2 survival, bounded renewal, physical-device evidence and revised
 product claims remain open; exact integrated and hosted review gates are owned by the unified roadmap.
+
+## Member continuity scope adoption, 2026-09-06
+
+Under the existing instruction to execute the unified Treehouse proposal, adopt
+[R19a's reviewed member device-loss contract](../docs/research/member_device_loss.md)
+for R19b/R20. Ordinary member-key vouches and new-key possession support one
+admin-gated continuity command; they do not recover keys or change Core authority.
+Adopt the exact thresholds, closed bytes, conflict/capacity rules and lost-loan
+limits in that document. R14 must preauthorize the new command in the selected
+bounded Space ceiling and establish the required signed epoch basis before loss.
+Legacy preview genesis/state/vector bytes stay unchanged, and older profiles
+without that permission refuse AF-3 recording. Physical witness identities,
+Android deployment, user-side key-store approval and successful field recovery
+remain their independent gates; this amendment supplies none of that evidence.

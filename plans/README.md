@@ -209,16 +209,16 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 167 | Divergence explainer (`Township.Divergence.explain/2` + mix task) | P2 | M | 162 (rec.) | TODO (Round 4, direction) |
 | 168 | Commit the embedded delegation lease to the op hash (key-free divergence primitive) | **P0** | S–M | — | DONE (2026-08-08; dual Opus review; leased BEAM↔TS byte oracle added) |
 | 169 | Carrier control frames carry no authority (verdict gating + false acks) | **P0** | M | — | DONE (2026-08-08; diagnostic-only authority reports + durable peer re-offer; Opus-reviewed) |
-| 170 | Redact Ed25519 private keys from `inspect/1` and crash reports | P1 | S | — | TODO (Round 5) |
-| 171 | Give every unverified `Log.restore/1` consumer a policy (audit bundle + Registry) | P1 | M | 168 (rec.) | TODO (Round 5) |
-| 172 | TypeScript canonical-encoder strictness (duplicate terms, non-canonical base64) | P1 | S–M | — | TODO (Round 5) |
-| 173 | Bounded carrier transport: connect deadlines + paged pulls | P1 | M–L | 169 | TODO (Round 5b) |
-| 174 | **(spike)** What the governance-witness ceremony must prove natively | P1 | M (build: L) | — | TODO (Round 5b) |
+| 170 | Redact Ed25519 private keys from `inspect/1` and crash reports | P1 | S | — | DONE (PR 60; merge 2f83cc1e and exact hosted run 34038896331 passed; unified R05) |
+| 171 | Give every unverified `Log.restore/1` consumer a policy (audit bundle + Registry) | P1 | M | 168 (rec.) | DONE (PR 61; merge 15ea1c37 and exact hosted run 34045534524 passed; unified R06) |
+| 172 | TypeScript canonical-encoder strictness (duplicate terms, non-canonical base64) | P1 | S–M | — | DONE (PR 62; merge b68e6bd3 and exact hosted run 34040727942 passed; unified R07) |
+| 173 | Bounded carrier transport: connect deadlines + paged pulls | P1 | M–L | 169 | DONE (2026-09-06; reviewed repairs, exact tip and merge workflow 34048283122 passed; pagination cost remains R15) |
+| 174 | **(spike)** What the governance-witness ceremony must prove natively | P1 | M (build: L) | — | IN PROGRESS (PR66 final443c6a13 repair and clarification Fable PASS; exact tip34048710026 passed; merge closure remains; unified R17a) |
 | 175 | **(spike)** How succession gets a trustworthy clock | P1 | M (build: L) | 162 step 2b (done) | DONE (2026-09-03; decision in docs/research/succession_tick_provenance.md; follow-on plan 179) |
-| 176 | Fail closed at the wire/authority boundary: lease range, decode depth, replica marker, op kinds | P1 | M | 161 (rec.), 168, 172, 173 | TODO (Round 5; renumbered from 168 — AUTHZ-02 ceded to plan 162 step 2b(e)) |
+| 176 | Fail closed at the wire/authority boundary: lease range, decode depth, replica marker, op kinds | P1 | M | 161 (rec.), 168, 172, 173 | IN PROGRESS (R09 accepted29fe54f3 Fable PASS, 726 tests +27 properties, exact tip34048799634 passed; docs count correction99139544 and final hosted closure remain) |
 | 177 | Group-first antifragile re-aim: operator decisions, AF-1..AF-3 loss gates, program reorder | **P0** | M | 158, 175 | DONE (program amendment and AF-1 runtime test merged; AF-2/AF-3 remain open; unified roadmap owns execution) |
 | 178 | Treehouse Contract Correction: frozen text-only beta contract, one-pager claims corrected to D1/AF-2, copy pinned by test | **P0** | S | 158, 177 | DONE (2026-09-03; lands with apps/lattice_core/test/treehouse/contract_test.exs) |
-| 179 | Witnessed beacons pinned at genesis (AF-2 founder-loss clock) | P1 | S then L | 145, 149, 162, 177, 178 | IN PROGRESS (2026-09-03; step 1 is the separate documentation PR: the non-claim sentence in CLAUDE.md and README.md, and the Township.Matter succession line relabelled decorative with the legacy lockout stated; steps 2-9, the parity-atomic BEAM and TypeScript build, remain TODO) |
+| 179 | Witnessed beacons pinned at genesis (AF-2 founder-loss clock) | P1 | S then L | 145, 149, 162, 177, 178 | IN PROGRESS (PR68 final initial remediation4a823b96 in hosted checks; further reserved-policy/certificate integer parity findings under repair; exact integration and merge gates remain; unified R03) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

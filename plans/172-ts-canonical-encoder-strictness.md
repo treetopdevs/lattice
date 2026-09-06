@@ -14,6 +14,7 @@
 
 ## Status
 
+- **Execution**: DONE — unified R07; reviewed source, PR62 tip and exact merge-result gates passed.
 - **Priority**: P1 — both defects let a peer, with **no key material**, cause the TypeScript
   realm to disagree with BEAM about which operations are valid. One of them permanently wedges
   the client's sync loop.
@@ -401,20 +402,48 @@ New cases in `clients/lattice-client/test/canonical.ts`, following its existing 
 
 Verification: `npm run canonical` → exit 0 with 11 new checks reported.
 
+## Verified closure — 2026-09-06
+
+The planned-at diagnosis, source excerpts and RED/STOP instructions are historical execution
+material. The checklist records the original R07 packet's gates. In particular, the empty vector
+diff and changed-file scope refer to `641cbbd7..afe5ea25`; later independently authorized vectors
+and this documentation reconciliation do not retroactively expand that packet.
+
+- Reviewed source: `afe5ea250072267927b89b353e7bde1e793176b5`, [PR62](https://github.com/treetopdevs/lattice/pull/62).
+  Actual Claude Fable reviewed `641cbbd7..afe5ea25`: PASS.
+- Typecheck, build, conformance, canonical, Township authoring, all five named carrier gates and
+  Township shell typecheck passed. Recorded assertions include **964 conformance, 180 canonical,
+  52 authoring, 21 bridge, 49 carrier and 68 live TS/BEAM** checks. Full local `mix verify`
+  passed **663 tests + 27 properties, zero failures**, three existing exclusions. Logs include
+  `/tmp/treehouse-r07-final-{conformance,canonical,carrier,relay,relay-sync,feed,live}.log` and
+  `/tmp/treehouse-r07-mix-verify.log`; the eleven required negative/positive cases are covered.
+- The original vector-export diff was empty and remains empty when comparing that packet's Git
+  objects. Valid canonical bytes stayed unchanged. Current static reconciliation still finds
+  exactly one `Buffer.from(value, "base64")` across the four named source files, inside the shared
+  decoder. The amended fixture and consumer source ranges match the approved packet scope.
+- Exact source-tip [workflow 34036786373](https://github.com/treetopdevs/lattice/actions/runs/34036786373)
+  passed at that SHA; its client typecheck, client build and Township shell typecheck steps
+  each report success. Merge `b68e6bd367736a23e1478a07257deb55f37b462d` passed its own
+  [workflow 34040727942](https://github.com/treetopdevs/lattice/actions/runs/34040727942).
+  The shared [plan index](README.md) records Plan172 DONE.
+
+The wire-decoder and other browser-encoder limits in Maintenance notes remain outside R07's
+closure; no new protocol or device-readiness result is inferred from these gates.
+
 ## Done criteria
 
 Machine-checkable. ALL must hold:
 
-- [ ] `cd clients/lattice-client && npm run typecheck` exits 0
-- [ ] `cd clients/lattice-client && npm run conformance && npm run canonical && npm run township:authoring` — all exit 0
-- [ ] `cd clients/lattice-client && npm run carrier:township && npm run carrier:relay && npm run carrier:relay-sync && npm run carrier:feed && npm run carrier:township:live` — all exit 0
-- [ ] `cd clients/township-tauri-shell && npm run typecheck` exits 0
-- [ ] `$MIXCMD test` exits 0
-- [ ] `git diff --stat clients/lattice-client/test/vectors` is empty
-- [ ] `rg -F 'Buffer.from(value, "base64")' clients/lattice-client/src/authority.ts clients/lattice-client/src/codec.ts clients/lattice-client/src/township.ts clients/lattice-client/src/tauri_bridge.ts` totals 1
-- [ ] The 11 checks named in the test plan exist and pass
-- [ ] `git status --porcelain` lists no file outside the in-scope list
-- [ ] `plans/README.md` status row for 172 updated
+- [x] `cd clients/lattice-client && npm run typecheck` exits 0
+- [x] `cd clients/lattice-client && npm run conformance && npm run canonical && npm run township:authoring` — all exit 0
+- [x] `cd clients/lattice-client && npm run carrier:township && npm run carrier:relay && npm run carrier:relay-sync && npm run carrier:feed && npm run carrier:township:live` — all exit 0
+- [x] `cd clients/township-tauri-shell && npm run typecheck` exits 0
+- [x] `$MIXCMD test` exits 0
+- [x] `git diff --stat clients/lattice-client/test/vectors` is empty
+- [x] `rg -F 'Buffer.from(value, "base64")' clients/lattice-client/src/authority.ts clients/lattice-client/src/codec.ts clients/lattice-client/src/township.ts clients/lattice-client/src/tauri_bridge.ts` totals 1
+- [x] The 11 checks named in the test plan exist and pass
+- [x] `git status --porcelain` lists no file outside the in-scope list
+- [x] `plans/README.md` status row for 172 updated
 
 ## STOP conditions
 
