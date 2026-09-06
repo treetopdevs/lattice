@@ -123,6 +123,24 @@ defmodule Lattice2.RootBindingTest do
              {nil, nil, :impostor_genesis}
   end
 
+  test "a later valid genesis on the bound replica retains both root records" do
+    sim = founded()
+    delegation = root_genesis_delegation(sim)
+    original = Enum.find(Log.topo_ops(Sim.log(sim, "server")), &match?({:genesis, _, _}, &1.body))
+    policy = %{moderator: %{successor: Sim.identity(sim, "tab").pub, dormant_ticks: 5}}
+    {sim, later} = Sim.append(sim, "server", :authority, {:genesis, delegation, policy})
+    log = Sim.log(sim, "server")
+    analysis = Authority.analyze(Thread, log)
+
+    assert original.id != later.id
+    assert {:ok, ^original} = Log.fetch(log, original.id)
+    assert {:ok, ^later} = Log.fetch(log, later.id)
+    refute Map.has_key?(analysis.reasons, original.id)
+    refute Map.has_key?(analysis.reasons, later.id)
+    assert Authority.root(log) == Sim.identity(sim, "server").pub
+    assert analysis.policies.moderator.dormant_ticks == 5
+  end
+
   defp root_marker_log(replica, root) do
     delegation = Delegation.genesis(root, replica, ops: [:post], roles: [:moderator])
     genesis = Lattice.Op.new(root, replica, [], :authority, {:genesis, delegation, %{}})
