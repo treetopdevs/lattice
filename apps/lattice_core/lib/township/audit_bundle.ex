@@ -2,9 +2,12 @@ defmodule Township.AuditBundle do
   @moduledoc """
   Produces and verifies the outsider-replayable Township audit bundle.
 
-  `matter.log` is the only trusted input. Every state, authority, and graph
-  artifact is a deterministic projection of that log. Realm labels from the
-  manifest are display metadata used only in delegation-graph node labels.
+  `verify/1` checks the accepted operations' content hashes and declared-author
+  signatures, dependency closure, log structure and structural-quarantine evidence
+  before re-deriving every state, authority and graph artifact from `matter.log`.
+  This proves authenticity and projection consistency, not completeness: omitted
+  history cannot be detected without independent retained evidence. Realm labels
+  from the manifest are display metadata used only in delegation-graph node labels.
   """
 
   alias Jason.OrderedObject
@@ -55,9 +58,33 @@ defmodule Township.AuditBundle do
     end
   end
 
-  @doc "Restore `matter.log`, re-derive every claim, and report mismatches."
+  @doc "Verify `matter.log` authenticity, re-derive every claim, and report mismatches."
   @spec verify(String.t()) :: :ok | {:error, [verify_error()]}
   def verify(dir) when is_binary(dir) do
+    case load_verified(dir) do
+      {:ok, _snapshot} -> :ok
+      {:error, _errors} = error -> error
+    end
+  end
+
+  @doc """
+  Return the exact verified log and manifest metadata captured during bundle replay.
+
+  Consumers materialize this snapshot without re-reading a mutable bundle directory.
+  The fingerprint identifies the bytes whose accepted operations were verified;
+  it does not assert that no other operations exist elsewhere.
+  """
+  @spec load_verified(String.t()) ::
+          {:ok,
+           %{
+             log: Log.t(),
+             labels: labels(),
+             schema: String.t(),
+             bundle_dir: String.t(),
+             matter_sha256: String.t()
+           }}
+          | {:error, [verify_error()]}
+  def load_verified(dir) when is_binary(dir) do
     dir = Path.expand(dir)
 
     with {:ok, names} <- list_bundle(dir),
@@ -65,7 +92,7 @@ defmodule Township.AuditBundle do
          {:ok, manifest_doc, manifest_bytes} <- read_manifest(dir),
          {:ok, labels} <- validate_manifest(manifest_doc),
          :ok <- preload_lattice_core(),
-         {:ok, log} <- Log.restore(Path.join(dir, "matter.log")),
+         {:ok, %{log: log, sha256: sha256}} <- Log.restore_verified(Path.join(dir, "matter.log")),
          {:ok, expected, known_fingerprints} <- rederive(log, labels) do
       expected = Map.put(expected, "manifest.json", json(manifest_doc))
 
@@ -81,7 +108,18 @@ defmodule Township.AuditBundle do
         |> Kernel.++(validate_label_fingerprints(known_fingerprints, labels))
         |> Enum.sort()
 
-      if errors == [], do: :ok, else: {:error, errors}
+      if errors == [] do
+        {:ok,
+         %{
+           log: log,
+           labels: labels,
+           schema: manifest_doc["schema"],
+           bundle_dir: dir,
+           matter_sha256: sha256
+         }}
+      else
+        {:error, errors}
+      end
     else
       {:error, errors} when is_list(errors) -> {:error, errors}
       {:error, reason} -> {:error, [format_error(reason)]}

@@ -48,15 +48,19 @@ The finite 12-Thread policy and operator-assisted routing are consciously retain
 
 ## Traceability
 
-Original source files were read in full and left unchanged:
+Original source files were read in full and left unchanged. The links below now resolve to
+committed, byte-identical snapshots; their original worktree provenance is recorded alongside them:
 
 | Source | Reviewed working-file identity | Load-bearing portions |
 | --- | --- | --- |
-| [Delivery roadmap](/Users/nicholas/develop/lattice-treehouse-roadmap-20260904/plans/roadmaps/treehouse-delivery-2026-09-04.md) | SHA-256 `0f19d9f9cd31c2ad677d5cdad3db241c2bf63da2d084ce62f8478d7bacd2b8fe`; dirty worktree based on `b9ea8bcd675a1109621f6c1e4fa62dad74d80bbb` | Destination, R01–R36, composite stages, signed-epoch and membership tables |
-| [Plan 180](/Users/nicholas/develop/lattice/plans/180-group-first-roadmap.md) | SHA-256 `06f340581f0ae589b061265b62df0d6161ab95d37a656a46c4bc4ae7b2468c92`; untracked in checkout `9601f146db889f98c36bc3b203b6cb7ade8a4bc4` | Decisions R1–R6; 0.3 archive; 1.x Plan 179; 2.1 successor bound; 3.x AF-3; A2b/A2c; claims ledger |
-| [Prior delivery review](/Users/nicholas/develop/lattice-treehouse-roadmap-20260904/plans/roadmaps/treehouse-delivery-2026-09-05-opus-review.md) | Historical review/disposition record, not a review of this synthesis | Earlier bootstrap, scope, lease, catalog, capacity and evidence corrections; its findings do not constitute approval of this document |
+| [Delivery roadmap](sources/treehouse-delivery-2026-09-04.md) | SHA-256 `0f19d9f9cd31c2ad677d5cdad3db241c2bf63da2d084ce62f8478d7bacd2b8fe`; dirty worktree based on `b9ea8bcd675a1109621f6c1e4fa62dad74d80bbb` | Destination, R01–R36, composite stages, signed-epoch and membership tables |
+| [Plan 180](sources/180-group-first-roadmap.md) | SHA-256 `06f340581f0ae589b061265b62df0d6161ab95d37a656a46c4bc4ae7b2468c92`; untracked in checkout `9601f146db889f98c36bc3b203b6cb7ade8a4bc4` | Decisions R1–R6; 0.3 archive; 1.x Plan 179; 2.1 successor bound; 3.x AF-3; A2b/A2c; claims ledger |
+| [Prior delivery review](sources/treehouse-delivery-2026-09-05-opus-review.md) | Historical review/disposition record, not a review of this synthesis | Earlier bootstrap, scope, lease, catalog, capacity and evidence corrections; its findings do not constitute approval of this document |
 
-Source links above are local provenance links. The unified executor plan uses repository-relative source-plan links, so execution does not require the original comparison worktrees.
+Source snapshots and their [hash manifest](sources/SHA256SUMS) make this comparison reproducible
+without the original worktrees. They are historical inputs, not competing execution ledgers;
+[the archive note](sources/README.md) explains their unchanged relative-link context. The unified
+executor plan uses repository-relative current source-plan links.
 
 Current-baseline checks were made against immutable `af84459b`: causal policy context and expiry in [authority.ex](../../apps/lattice_core/lib/lattice/authority.ex), the [Plan 158 domain/catalog and mobile-ceremony contract](../158-real-device-beta-poc-program-map.md), [Plan 179 later-root-genesis policy](../179-witnessed-beacons-af2-founder-loss.md), and the separate governance/carrier key boundary in [native code](../../clients/township-tauri-shell/src-tauri/src/lib.rs). This was a targeted consistency check, not a new security or hosted-readiness audit.
 
@@ -79,7 +83,7 @@ Current-baseline checks were made against immutable `af84459b`: causal policy co
 
 R01–R36 from the delivery roadmap are retained; R01 is split into adoption stages and the graph makes additional constraints explicit. R35 owns both lifetime and the later proposed inclusive member-count boundary. This is one proposed successor schedule, not a directive to complete the original and consolidated versions twice.
 
-## Validation of this revision
+## Validation of the original proposal (historical, before execution authorization)
 
 Completed locally on 2026-09-06 in the isolated synthesis worktree:
 

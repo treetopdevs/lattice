@@ -37,6 +37,7 @@ defmodule LatticeCarrierSpike.BrowserCarrierSpikeTest do
     BrowserGateway.logical_call(gateway, frame)
 
     assert_receive {:carrier_target_call, %{from_tab_id: ^tab_id, payload: %{"value" => 42}}}
+    flush_gateway(gateway)
 
     assert %{call_count: 1} = EchoTarget.stats(target)
     assert_audit(:cap_use, tab_id: tab.id, cap_id: cap.id)

@@ -9,8 +9,13 @@ defmodule Lattice.Identity do
   For deterministic simulation (`mix test` re-runs, seeded property tests) a realm
   may be derived from a seed with `from_seed/2`, which produces a stable keypair so
   that op ids — which are content hashes — are byte-identical across runs.
+
+  The struct is inspect-redacted; accessing `priv` directly still returns the private key.
   """
 
+  # Protect every holder's logs, crash reports, ExUnit diffs and inspected config dumps.
+  # Carrier-server Holder status formatting and its Secret wrapper remain defense in depth.
+  @derive {Inspect, except: [:priv]}
   @enforce_keys [:realm_id, :pub, :priv]
   defstruct [:realm_id, :pub, :priv]
 
