@@ -33,6 +33,8 @@ import {
   townshipRevokeBody,
 } from "../src/index";
 import type { CarrierOpFrame, CarrierTerm, ReplicaSchema, WitnessedBeaconClaimEvidence } from "../src/index";
+import { analyzeAuthority } from "../src/authority";
+import { canonicalOrder, index } from "../src/dag";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const vector = JSON.parse(
@@ -623,8 +625,7 @@ check("received unsorted certificate claim still refuses", materialize(beaconVec
 
 const unrelatedIntegerBody: CarrierTerm = ["tuple", [["atom", "genesis"], ["delegation", beaconGenesisDelegation],
   ["map", [[["atom", "unrelated"], ["int", "9007199254740992"]]]]]];
-const epochOverflowBody: CarrierTerm = ["tuple", [["atom", "beacon"], ["int", "9007199254740992"]]];
-for (const body of [unrelatedIntegerBody, epochOverflowBody]) {
+for (const body of [unrelatedIntegerBody]) {
   const frame = await authorCarrierOp({ replica: beaconVector.replica, deps: [beaconGenesis.id],
     kind: "authority", cap: ["nil"], body, signer: beaconFounder });
   let refused = false;
@@ -633,6 +634,52 @@ for (const body of [unrelatedIntegerBody, epochOverflowBody]) {
   check("unrelated signed large integers retain semantic malformed term",
     carrierOpsToSemanticOps([frame])[0]?.structuralError, "malformed_term");
 }
+
+// PR68 fuGvf: canonical high root epochs remain exact causal evidence. These
+// two integers collapse to the same Number, so rounded maxima cannot pass.
+async function legacyHigh(epoch: string, deps: string[], signer = beaconFounder) {
+  return authorCarrierOp({replica: beaconVector.replica, deps, signer, kind: "authority", cap: ["nil"],
+    body: ["tuple", [["atom", "beacon"], ["int", epoch]]]});
+}
+async function witnessedAfter(deps: string[], epoch = 0) {
+  const exact = createWitnessedBeaconClaim(beaconVector.replica, epoch, claimWitness.publicKeyBase64, deps);
+  const bytes = canonicalBytesForWitnessedBeaconClaim(exact);
+  return authorCarrierOp({replica: beaconVector.replica, deps: exact.deps, signer: claimWitness,
+    kind: "authority", cap: ["nil"], body: beaconClaimBody(exact, entries.map((entry) => ({
+      witness: entry.publicKeyBase64, signature: Buffer.from(entry.sign(bytes)).toString("base64"),
+    })))});
+}
+const highFirst = await legacyHigh("9007199254740992", [leasedFrame.id]);
+const highSecond = await legacyHigh("9007199254740993", [highFirst.id]);
+const highDescending = await legacyHigh("9007199254740992", [highSecond.id]);
+const highWitnessed = await witnessedAfter([highDescending.id]);
+const highPost = await authorTownshipCommand({replica: beaconVector.replica, deps: [highWitnessed.id],
+  signer: leaseIssuer, capId: leasedDelegation.id, command: {command: "post", text: "high root epoch lapses lease"}});
+const highFrames = [beaconGenesis, leasedFrame, highFirst, highSecond, highDescending, highWitnessed, highPost];
+for (const frame of [highFirst, highSecond, highDescending]) {
+  let decoded: CarrierOpFrame | undefined;
+  try { decoded = decodeCarrierOpFrame(frame); } catch { /* the RED assertion below reports refusal */ }
+  check("canonical high legacy beacon preserves its exact raw frame", decoded, frame);
+  check("canonical high legacy beacon still verifies its original signature", (await verifyCarrierOp(frame,
+    {verify: async (author, bytes, signature) => ed25519.verify(signature, bytes, Buffer.from(author, "base64"), {zip215: false})})).valid, true);
+}
+for (const delivered of [highFrames, [...highFrames].reverse()]) {
+  const semantic = carrierOpsToSemanticOps(delivered, beaconVector.realmByPubkey);
+  const projected = materialize(beaconVector.schema, semantic);
+  const byId = index(semantic), order = canonicalOrder(semantic, byId);
+  const security = analyzeAuthority(beaconVector.schema, semantic, new Set(order), order, byId, beaconVector.replica).security;
+  check("two distinct high root epochs stay honored exactly", security.validBeacons.map((b) => [b.opId, b.epoch]),
+    [[highFirst.id, "9007199254740992"], [highSecond.id, "9007199254740993"]]);
+  check("descending high root epoch stays stale", projected.quarantineReasons.get(highDescending.id), "stale_beacon");
+  check("low witnessed descendant cannot erase a high root maximum", projected.quarantineReasons.get(highWitnessed.id), "stale_beacon");
+  check("valid high root epoch still lapses a numeric lease", projected.quarantineReasons.get(highPost.id), "lease_expired");
+}
+const outsiderHigh = await legacyHigh("18446744073709551615", [leasedFrame.id], claimWitness);
+const afterOutsider = await witnessedAfter([outsiderHigh.id], 4);
+const outsiderProjection = materialize(beaconVector.schema,
+  carrierOpsToSemanticOps([beaconGenesis, leasedFrame, outsiderHigh, afterOutsider], beaconVector.realmByPubkey));
+check("high non-root beacon confers no maximum", outsiderProjection.quarantineReasons.get(outsiderHigh.id), "unauthorized_beacon");
+check("witnessed descendant of refused high non-root beacon remains eligible", outsiderProjection.quarantineReasons.has(afterOutsider.id), false);
 const malformedPolicyFrame = structuredClone(beaconGenesis);
 if (malformedPolicyFrame.body[0] !== "tuple" || malformedPolicyFrame.body[1][2]?.[0] !== "map") throw new Error("policy fixture");
 (malformedPolicyFrame.body[1][2][1][0] as unknown[]).push(["nil"]);
