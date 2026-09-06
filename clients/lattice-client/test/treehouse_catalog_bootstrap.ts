@@ -14,6 +14,16 @@ import type { CatalogBootstrap } from "../src/treehouse_catalog_codec";
 import { authorTreehouseCommand, authorTreehouseRoleTransfer, observeTreehouse, prepareTreehouseSpaceCreation, treehouseCommandDecoders } from "../src/treehouse";
 import * as treehouse from "../src/treehouse";
 import { continuationProfileBindingMatches } from "../src/authority";
+import * as authority from "../src/authority";
+import * as publicApi from "../src/index";
+
+// Resolve every preexisting type through the package entry at compile time.
+type ExistingAuthorityTypes = [publicApi.ContinuationProfileObservation, publicApi.HonoredAcquire,
+  publicApi.DelegationValidation, publicApi.AuthorityDelegationRecord, publicApi.AuthorityRootEvidence,
+  publicApi.EffectiveBeaconEvidence, publicApi.EffectiveRevokeEvidence, publicApi.AuthoritySecurityProjection,
+  publicApi.RecoveryPolicyProjection, publicApi.AuthorityAnalysis, publicApi.WitnessedSuccessionReviewSelector,
+  publicApi.WitnessedSuccessionReview, publicApi.WitnessedSuccessionReviewRefusal, publicApi.WitnessedSuccessionReviewResult,
+  publicApi.ContinuationFamily, publicApi.WitnessedSuccessionVerificationReason, publicApi.WitnessedSuccessionVerification];
 
 const atom = (name: string): CarrierTerm => ["atom", name];
 const tuple = (...values: CarrierTerm[]): CarrierTerm => ["tuple", values];
@@ -24,6 +34,15 @@ const signer = (label: string): CarrierOpSigner => {
   const seed = createHash("sha256").update(`r11a-history-${label}`).digest();
   return { publicKey: ed25519.getPublicKey(seed), sign: (bytes) => ed25519.sign(bytes, seed) };
 };
+
+test("package entry keeps the semantic binding predicate internal and preserves all existing authority values", () => {
+  assert.equal(Object.hasOwn(publicApi, "continuationProfileBindingMatches"), false);
+  const existing = ["resolveContinuationProfileFromFrames", "analyzeAuthority", "continuationFamily", "deriveContinuationReview",
+    "deriveWitnessedSuccessionReview", "assembleWitnessedSuccessionArtifact", "exportWitnessedSuccessionArtifactJson",
+    "witnessedRecoveryPolicyId", "verifyWitnessedSuccessionCertificate", "witnessedBeaconHorizon"] as const;
+  for (const name of existing) assert.equal(publicApi[name], authority[name], name);
+  assert.equal(publicApi.treehouseCatalogBootstrapsFromFrames, treehouse.treehouseCatalogBootstrapsFromFrames);
+});
 
 // Same deterministic public history as Treehouse.CatalogVectors.bootstrap_history/0.
 async function fixture(replicaName = `replica:treehouse:space:${id("history-space")}#authority:bounded-continuation-v1`) {

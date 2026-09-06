@@ -367,6 +367,17 @@ context. A new bootstrap shape/scope/root/pin mismatch returns the application
 reason `application_invalid_catalog`, after existing malformed-command, cap and
 admin refusal precedence. This adds no Core role or permission path.
 
+**R11a package-boundary correction adopted 2026-09-06:** the existing
+`export * from "./authority"` would expose the internal predicate despite the
+contract above. The bootstrap lane may replace that wildcard in `src/index.ts`
+with explicit value/type exports preserving every preexisting authority export
+and omitting only `continuationProfileBindingMatches`. Public package-entry
+tests must demonstrate the predicate is absent and existing symbols remain
+available. The integrator must reconcile any additional authority exports from
+concurrent packets before normal distribution regeneration; generated files
+remain integrator-owned. This corrects the export boundary without changing
+authentication or authority semantics.
+
 The 2026-09-06 integrator-approved fixture amendment adds `ops:` to public
 `Sim.create_replica/3` as an explicit genesis capability ceiling, with omitted
 `ops:` preserving the current module-registry default exactly. It is not a
