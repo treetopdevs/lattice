@@ -1885,9 +1885,12 @@ resolved replica root, including legacy unbound replicas, while preserving
 later policy replacement by that same root. Root resolution and role timelines
 remain unchanged. New signed exporter cases characterize this boundary and
 invalid reserved policies carrying otherwise canonical uint64 integers above
-the JavaScript safe horizon. The semantic decoder may ignore such an invalid
-reserved policy exactly where BEAM does; generic integer parsing, strict frame
-decoding, canonical bytes and the enclosing valid genesis stay unchanged.
+the JavaScript safe horizon. A contextual decoder may ignore such an invalid
+reserved policy exactly where BEAM does. Strict frame validation now accepts
+those authentic invalid-policy geneses through the same contextual decoder as
+semantic projection; generic integer parsing, beacon/claim horizons and malformed
+grammar still refuse. The raw body, canonical bytes, IDs and signatures are never
+rewritten or normalized by this decoding step.
 
 Two explicit helper amendments supersede the narrower step 6/6b wording:
 `codec.ts` may export `createWitnessedBeaconClaim(replica, epoch, author, deps)`
