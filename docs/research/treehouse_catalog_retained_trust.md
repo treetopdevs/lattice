@@ -548,3 +548,34 @@ reason, preserving overflow metadata alongside it. Other block reasons have an
 empty authority witness array. Every such state remains frozen with no routes.
 These are pure-state validation rules, not C03/C14 persistence closure. Actual
 process stop/reopen, durable CAS and field recovery evidence remain outstanding.
+
+## 2026-09-06 frozen pending-entry evidence refinement
+
+Actual Fable review of TS source `050ed8c7` found that newly authenticated Thread
+history could reveal a refusal in a nonaccepted catalog already retained during
+a fork. The fallback saved that history, but reopening mislabeled the resulting
+authentic frozen evidence as corrupt storage. Public signed-history reproduction
+also demonstrated the same problem when complete child history reveals that a
+previously pending retained sibling names another Thread's real reference.
+
+For a validated existing block, an originally retained, nonaccepted catalog's
+entry proof may therefore become refused or demonstrably invalid as authentic
+history arrives. Preserve its exact signed artifact and raw history as diagnostic
+evidence, keep the node pending and unable to reserve routes, and return a frozen
+state that passes the same original-state validation on reopen. This does not
+promote the entry or certify the catalog's semantic validity. Retain the existing
+block and expose the affected entry's diagnostic operation IDs where applicable.
+
+This exception is limited to entry proofs of originally retained nonaccepted
+catalogs under an already validated block. It never softens artifact signatures,
+closed grammar, binding/transition graph validation, cutoff proofs, watermark or
+index coherence, raw-history authenticity/closure, or an accepted catalog's entry
+requirements. New candidate artifacts and unblocked candidates retain their
+ordinary invalid-transition refusal. Accepted-entry authority changes still need
+the historical authority witnesses above. Origin-first validation continues to
+reject corrupted installed evidence before considering incoming data.
+
+Both runtimes must reproduce the authentic authority-refusal and wrong-reference
+cases, reopen every resulting frozen state, and keep negative controls for
+unblocked/new candidates and saved corruption. This is a pure resolver correction;
+native persistence, recovery export and C01–C15 acceptance remain open.
