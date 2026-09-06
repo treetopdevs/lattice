@@ -1105,3 +1105,18 @@ The root integrator keeps the merge queue serialized at shared seams. Township E
 Profiles is the first product PR after Product Isolation and Migrations. Toolshed UI does not start
 before Custody v2 is green in both runtimes. Treehouse UI does not start before the BEAM domain and
 shared TS effect parity are green.
+
+
+## Member continuity scope adoption, 2026-09-06
+
+Under the existing instruction to execute the unified Treehouse proposal, adopt
+[R19a's reviewed member device-loss contract](../docs/research/member_device_loss.md)
+for R19b/R20. Ordinary member-key vouches and new-key possession support one
+admin-gated continuity command; they do not recover keys or change Core authority.
+Adopt the exact thresholds, closed bytes, conflict/capacity rules and lost-loan
+limits in that document. R14 must preauthorize the new command in the selected
+bounded Space ceiling and establish the required signed epoch basis before loss.
+Legacy preview genesis/state/vector bytes stay unchanged, and older profiles
+without that permission refuse AF-3 recording. Physical witness identities,
+Android deployment, user-side key-store approval and successful field recovery
+remain their independent gates; this amendment supplies none of that evidence.

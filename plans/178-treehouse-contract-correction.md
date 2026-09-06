@@ -276,3 +276,23 @@ Prohibited phrases (case-insensitive, listed in code spans so this file passes i
   changed; `TOWNSHIP_BUILD_MAP.md` untouched.
 - Contract test green with RED evidence recorded in the PR.
 - Every hosting sentence in the one-pager and this file names readers and the withholding host.
+
+
+### Adopted R19b vocabulary extension, 2026-09-06
+
+The integrator adopts [R19a's complete reviewed contract](../docs/research/member_device_loss.md)
+for the later atomic R19b implementation. Add exactly `attest member key v1`,
+mapped to `attest_member_key_v1(claim, possession, vouches)`, to the bounded
+Space vocabulary. The atomic implementation must update the ordered vocabulary
+and its exact contract assertion together, after any earlier adopted catalog
+commands; existing Thread commands and protected hosting/founder-loss claims stay
+unchanged. This dated extension is its explicit scope authorization, not a current
+runtime or AF-3 completion claim.
+
+The command uses the existing admin authority marker and normal capability gate;
+full continuity records derive only from actually honored authenticated signed
+command bodies. Add no materialized field or parallel identity log. Keep literal
+six-command legacy BEAM/TS root-only creation ceilings and historical exporter
+ceilings byte-identical; only a newly selected bounded profile preauthorizes this
+command. Existing grants cannot acquire it retroactively. All closed bytes,
+member/epoch checks, conflicts and unresolved-loss rules are defined by R19a.
