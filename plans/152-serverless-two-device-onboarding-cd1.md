@@ -7,6 +7,8 @@ LAN/CD1 program and this plan's proposed un-parking request. QR image and deep l
 carriers. Existing helpers/tests are retained; the historical draft below is not an active work
 queue. Android scope is separately recorded by unified R01b; LAN remains parked.
 
+## Historical draft status (superseded; not an active work queue)
+
 TODO (proposed draft — not yet reviewed or resumed by the operator). BLOCKED on Plans 150
 and 151.
 

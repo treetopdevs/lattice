@@ -90,6 +90,18 @@ defmodule TownshipWeb.CarrierProjection do
     end
   end
 
+  # Crash reports and raw `:sys.get_status/1` responses must not expose private keys.
+  @impl GenServer
+  def format_status(status) do
+    Map.new(status, fn
+      {:state, %{connect_opts: connect_opts} = state} when is_list(connect_opts) ->
+        {:state, %{state | connect_opts: redact_identity(connect_opts)}}
+
+      other ->
+        other
+    end)
+  end
+
   @impl GenServer
   def handle_call(:subscription, _from, state) do
     {:reply, {state.pubsub, state.topic}, state}
@@ -192,6 +204,16 @@ defmodule TownshipWeb.CarrierProjection do
     if state.refresh_job, do: Process.exit(state.refresh_job.pid, :shutdown)
     _ = disconnect(state)
     :ok
+  end
+
+  defp redact_identity(connect_opts) do
+    case Keyword.fetch(connect_opts, :identity) do
+      {:ok, %Lattice.Identity{} = identity} ->
+        Keyword.put(connect_opts, :identity, %{identity | priv: :redacted})
+
+      _other ->
+        connect_opts
+    end
   end
 
   defp queue_refresh(%{refresh_job: nil} = state, waiter, trigger) do

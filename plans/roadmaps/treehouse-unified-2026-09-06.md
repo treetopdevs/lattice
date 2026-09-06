@@ -63,14 +63,14 @@ Rows are the authoritative dependency graph. Commas mean all prerequisites. “N
 | --- | --- | --- | --- | --- | --- | --- |
 | R01a | Core contract / integrator | M | Medium | None | Adopted order, archive, two dependency amendments, protected pins green | LOCAL VERIFIED |
 | R01b | Android and witness scope / operator + integrator | S | High | R01a, R17a | Adopted scope and deferred-ceremony amendment; actual sign-off | PLANNED |
-| R01c | Toolshed module isolation / operator + integrator | S | Medium | R01a | Countersigned collision contract; reserved legacy identities | PLANNED |
-| R02 | Founder lifecycle design / authority | M | High | R01a | Executable matrix: renewal, bounded successor, child roots and catalog recovery | PLANNED |
-| R03 | Witnessed beacons / authority | L | High | R01a, R07 | Plan 179 steps 2–9, one Core integration PR | PLANNED |
+| R01c | Toolshed module isolation / operator + integrator | S | Medium | R01a | Countersigned collision contract; reserved legacy identities | LOCAL VERIFIED |
+| R02 | Founder lifecycle design / authority | M | High | R01a | Executable matrix: renewal, bounded successor, child roots and catalog recovery | IN PROGRESS |
+| R03 | Witnessed beacons / authority | L | High | R01a, R07 | Plan 179 steps 2–9, one Core integration PR | IN PROGRESS |
 | R04 | Continued authority / authority | L | High | R02, R03 | Core membership/renewal after two expiry cycles; bounded self-issue | PLANNED |
-| R05 | Diagnostic redaction / hardening | S | Medium | None | Plan 170 negative inspect/crash cases | IN PROGRESS |
-| R06 | Verified restores / hardening | M | High | None | Plan 171 consumer policies; staged fail-closed recovery input | IN PROGRESS |
-| R07 | Canonical strictness / codec | S–M | High | None | Plan 172 valid-byte parity plus duplicate/noncanonical refusals | IN PROGRESS |
-| R08 | Deadlines and pagination / carrier | M–L | High | None | Plan 173 bounded setup, interrupted large-log real-transport replay | PLANNED |
+| R05 | Diagnostic redaction / hardening | S | Medium | None | Plan 170 negative inspect/crash cases | LOCAL VERIFIED |
+| R06 | Verified restores / hardening | M | High | None | Plan 171 consumer policies; staged fail-closed recovery input | LOCAL VERIFIED |
+| R07 | Canonical strictness / codec | S–M | High | None | Plan 172 valid-byte parity plus duplicate/noncanonical refusals | LOCAL VERIFIED |
+| R08 | Deadlines and pagination / carrier | M–L | High | None | Plan 173 bounded setup, interrupted large-log real-transport replay | IN PROGRESS |
 | R09 | Input limits / hardening | M | High | R07, R08 | Plan 176 ingress and authority boundary refusals | PLANNED |
 | R10 | Root-only Treehouse domain / product + parity | XL | High | R01a, R07, R09 | Core complete vocabulary, effects, conflicts, offline demo | PLANNED |
 | R11a | Local catalog/provisioning / carrier | M | High | R02, R04, R06, R10 | Local signed catalogs, root bootstrap and bounded routes | PLANNED |
@@ -109,6 +109,22 @@ Rows are the authoritative dependency graph. Commas mean all prerequisites. “N
 | R35a | Lifetime/target decision / product + performance | M | High | R15, R23 | Observed growth, adopted boundary/retention decision or stop verdict | PLANNED |
 | R35b | Lifetime policy proof / lifecycle | L or no-build | High | R35a | Implemented/tested adopted policy or tested finite end-of-life | PLANNED |
 | R36 | Protected witness identity / native custody | L | High | R01b, R12, R17a | Distinct persistent witness keys and reviewed public-identity binding | PLANNED |
+
+### Unmerged verification records (2026-09-06)
+
+These immutable sibling tips record local preparation; none is an integrated dependency until
+its PR-tip and merge-result gates pass. Claude Fable reviewed R05/R06/R07 and returned PASS.
+
+| Packet | Local tip | Evidence and remaining gate |
+| --- | --- | --- |
+| R01a | See [contract record](evidence/treehouse-r01a-2026-09-06.md) | PR 59; hosted remediation in progress |
+| R01c | `b9736790` | Module collision amendment; full local verification and Fable review, wording/evidence follow-up; R01a and hosted gates pending |
+| R05 | `4c88f41ec7757158a8fce94b44194debf87c22a7` | Plan 170; 666 tests + 27 properties, post-refresh raw-status regression; hosted gates pending |
+| R06 | `41ace37b50439f83393eda427dc55a9ef650f899` | Plan 171; 677 tests + 27 properties, deterministic snapshot-replacement regression; hosted gates pending |
+| R07 | `afe5ea250072267927b89b353e7bde1e793176b5` | Plan 172; preserved legacy vectors, Node/browser strictness and native bridge coverage; hosted gates pending |
+
+R02 lifecycle probes, R03 witnessed-beacon implementation, R08 transport pagination and R17a
+native design are active in separate worktrees. Their partial results are not completion claims.
 
 ### Work order and merge discipline
 

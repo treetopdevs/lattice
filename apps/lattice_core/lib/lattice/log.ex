@@ -120,6 +120,72 @@ defmodule Lattice.Log do
   def verified_quarantine(_log), do: {:error, :invalid_structural_quarantine}
 
   @doc """
+  Verify an untrusted log before a consumer materializes or installs it.
+
+  Every accepted op must match its map key and replica, have all dependencies
+  present, and pass its content-hash and declared-author signature checks. The
+  referenced set must match those dependencies. Structural quarantine is checked
+  separately by `verified_quarantine/1`: its rejected signatures are evidence,
+  never accepted operations.
+
+  This proves internal integrity and accepted-op authenticity, not semantic
+  authority or completeness. It cannot detect an operation never included in the
+  log. Consumers must also bind `log.replica` to their requested replica.
+  """
+  @spec verify_authenticity(t()) :: :ok | {:error, [String.t()]}
+  def verify_authenticity(
+        %__MODULE__{
+          replica: replica,
+          ops: ops,
+          referenced: %MapSet{} = referenced,
+          quarantine: quarantine
+        } = log
+      )
+      when is_binary(replica) and byte_size(replica) > 0 and is_map(ops) and is_list(quarantine) do
+    op_errors = Enum.flat_map(ops, &verify_stored_op(&1, replica, ops))
+
+    reference_errors =
+      if op_errors == [] do
+        expected =
+          Enum.reduce(ops, MapSet.new(), fn {_, op}, acc ->
+            MapSet.union(acc, MapSet.new(op.deps))
+          end)
+
+        if MapSet.equal?(referenced, expected), do: [], else: ["log referenced set mismatch"]
+      else
+        []
+      end
+
+    quarantine_errors =
+      case verified_quarantine(log) do
+        {:ok, _evidence} -> []
+        {:error, _reason} -> ["log structural quarantine invalid"]
+      end
+
+    case Enum.sort(op_errors ++ reference_errors ++ quarantine_errors) do
+      [] -> :ok
+      errors -> {:error, errors}
+    end
+  rescue
+    _error -> {:error, ["log structure invalid"]}
+  end
+
+  def verify_authenticity(_log), do: {:error, ["log structure invalid"]}
+
+  defp verify_stored_op({id, %Op{id: op_id, replica: replica, deps: deps} = op}, replica, ops)
+       when is_binary(id) and is_list(deps) do
+    cond do
+      id != op_id -> ["log op #{id}: map key does not match op id"]
+      not valid_op?(op) -> ["log op #{id}: invalid content hash or signature"]
+      not Enum.all?(deps, &Map.has_key?(ops, &1)) -> ["log op #{id}: missing dependencies"]
+      true -> []
+    end
+  end
+
+  defp verify_stored_op({id, _op}, _replica, _ops),
+    do: ["log op #{inspect(id)}: invalid structure or replica"]
+
+  @doc """
   Accept an op into the log.
 
   Returns:
@@ -248,6 +314,36 @@ defmodule Lattice.Log do
       {:error, _} = err -> err
       _ -> {:error, :corrupt_dump}
     end
+  end
+
+  @doc """
+  Capture and verify a dump before a consumer replaces state or reports provenance.
+
+  The returned log and lowercase SHA-256 fingerprint come from the same single
+  file read. Legacy delegation structs are upgraded as in `restore/1`, while
+  malformed dumps fail closed before a caller installs anything. Authenticity has
+  the limits documented in `verify_authenticity/1`; this does not establish
+  completeness or bind the log to a consumer's requested replica.
+
+  `restore/1` retains its existing unverified deserialization contract.
+  """
+  @spec restore_verified(Path.t()) ::
+          {:ok, %{log: t(), sha256: String.t()}} | {:error, term()}
+  def restore_verified(path) do
+    with :ok <- ensure_dump_vocabulary(),
+         {:ok, bytes} <- File.read(path),
+         {:ok, {:lattice_log_dump_v1, %__MODULE__{ops: ops} = stored}} <-
+           safe_binary_to_term(bytes),
+         true <- is_map(ops),
+         log = upgrade_structs(stored),
+         :ok <- verify_authenticity(log) do
+      {:ok, %{log: log, sha256: :crypto.hash(:sha256, bytes) |> Base.encode16(case: :lower)}}
+    else
+      {:error, _reason} = error -> error
+      _invalid -> {:error, :invalid_log}
+    end
+  rescue
+    _error -> {:error, :invalid_log}
   end
 
   # `:safe` blocks atom/resource creation from a tampered dump; a dump referencing

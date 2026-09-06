@@ -12,6 +12,79 @@
 > If any in-scope file changed since this plan was written, compare the "Current state"
 > excerpts against the live code before proceeding; on a mismatch, treat it as a STOP condition.
 
+## Adopted R06 execution amendment — 2026-09-06
+
+The unified Treehouse program authorizes this packet from proposal commit
+`641cbbd78bf1338a4a245e5a670ad425aa79be1b`. The integration owner adopted the following
+bounded amendment after inspection found a second read of `matter.log` inside
+`TownshipWeb.InstrumentSource.Bundle`, after directory verification had finished. Merely
+checking the second log's signatures would still permit its projection and provenance to
+refer to different file versions. R06 requires the consumer to use the exact verified input.
+
+- Keep `Log.restore/1`, `Log.dump/2`, persisted formats, canonical bytes and authority rules
+  unchanged. Add `Log.restore_verified/1`: capture one file read, safely decode and upgrade
+  its existing structs, run `verify_authenticity/1`, and return that log together with the
+  captured bytes' SHA-256 fingerprint. Malformed serialized collections/ops fail before a
+  consumer installs any state; they cannot normalize into an empty replacement log.
+- Add `AuditBundle.load_verified/1` returning the verified log and the captured, validated
+  manifest metadata. Preserve `AuditBundle.verify/1`'s `:ok | {:error, [String.t()]}` contract
+  as a wrapper. The instrument consumes this snapshot without re-reading the directory and
+  records `verification: :bundle_signatures`.
+- Route Registry restore through the same staged `restore_verified/1` policy, then require
+  the requested replica match. Signature/structural refusal returns `:invalid_log`; an
+  authentic different replica returns `:wrong_replica`. A refused restore preserves prior
+  live state and leaves an unknown realm uninstalled.
+- Expand in-scope tests to `apps/lattice_core/test/lattice2/log_authenticity_test.exs` and
+  `apps/lattice_core/test/lattice2/registry_restore_test.exs`, and record this amendment in
+  this plan. Preserve the existing protected Plan 121 status/build-map assertions in
+  `audit_bundle_test.exs` exactly. The integration owner updates the shared index/roadmap.
+- The full-suite gate exposed an existing lifecycle fixture that hosted and restored a
+  root-bound `Sim` log under an unbound replica alias. The integration owner explicitly
+  adopted the narrow `lifecycle_test.exs` correction: use `Sim.replica(sim)` consistently
+  for Registry keys and event expectations, retaining all behavior 11–14 assertions and
+  strict production replica equality. No authority or Registry-host policy changes follow.
+- Add a deterministic instrument consumer regression using a local FIFO projection: once
+  verification has captured its log and opened the projection, replace `matter.log`, then
+  finish the projection. The displayed model, frontier and fingerprint must still describe
+  the captured verified log. No sleeps, timing race or production test callback is needed.
+
+These details supersede the direct-call wiring in steps 3/5/6 and their final grep criteria:
+`verify_authenticity` must appear in `log.ex`; `restore_verified` must appear in `log.ex`,
+`audit_bundle.ex` and `registry.ex`; the instrument must call `AuditBundle.load_verified`.
+All original signature, wrong-replica, quarantine, full-suite, static-analysis, demo and
+protected-contract gates still apply. The old unverified restore contract is explicitly
+covered by a compatibility test.
+
+The drift check found changes only in `Holder` among the original reference files; its
+`validate_log/1` predicate remains the plan's exemplar. `Health` is an additional production
+restore caller and already applies `Holder.validate_log/1`; it needs no change. The carrier
+policy and frozen election/attestation code remain outside this packet. Duplication between
+the new authenticity predicate and `Holder.validate_log/1` remains deliberate under that
+boundary. Authenticity still makes no claim that retained history is complete.
+
+### Local execution evidence — 2026-09-06
+
+- RED: a forged post with regenerated projections verified `:ok`; a forged Registry restore
+  installed successfully; an authentic other-replica restore installed under the requested
+  key; malformed serialized ops crashed the Registry; the deterministic file-replacement
+  test displayed the substituted post after verifying the original. Each corresponding
+  public-seam regression passed after the implementation.
+- GREEN: `mix check` under the prescribed OTP 28/asdf toolchain exited 0: 677 tests and
+  27 properties across the default umbrella suite, with the existing three exclusions.
+  Formatting and strict Credo passed; Credo still reports its non-failing baseline
+  suggestions. The three protected contract suites passed and the Plan 121 protected
+  assertion block was compared unchanged against the proposal base.
+- GREEN: both prescribed per-app Sobelow commands exited 0. `lattice_server` retained its
+  existing missing-Phoenix-router notice; the Township boundary scan completed cleanly.
+- GREEN: the Township demo narrated W0–W3 and the explicitly non-receipt-free legacy W4,
+  wrote to a fresh temporary artifact directory, and its emitted bundle independently
+  passed `mix lattice.township.verify_bundle`. The sole committed `matter.log` fixture,
+  `artifacts/township/matter.log`, independently verified and remained byte-identical.
+- Preservation: the `Log.restore/1` and `Log.dump/2` implementations, Holder validation,
+  authority/canonical source, persisted formats and the existing committed bundle were
+  unchanged. This is local implementation evidence; the integration owner records final
+  review and the shared roadmap/index status separately.
+
 ## Status
 
 - **Priority**: P1 — the artifact the project offers to outside auditors is presented as
