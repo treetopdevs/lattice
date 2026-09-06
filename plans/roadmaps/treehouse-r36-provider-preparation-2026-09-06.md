@@ -1,7 +1,7 @@
 # R36 Stage 1: provider-owned governance custody
 
-Prepared 2026-09-06. **Proposal for adoption; no implementation or profile
-enablement.** This document makes [Stage 1 of the native witness build](treehouse-native-witness-build-2026-09-06.md#stage-1-opaque-generation-and-signing-seam-r36)
+Prepared 2026-09-06. **Stage 1 scope adopted; implementation and gates pending;
+no profile enablement.** This document makes [Stage 1 of the native witness build](treehouse-native-witness-build-2026-09-06.md#stage-1-opaque-generation-and-signing-seam-r36)
 concrete. It does not close R36, R17b, R17c, R12 or their hosted gates.
 
 ## Exact preparation base and dependencies
@@ -318,3 +318,62 @@ on retry. StrongBox Ed25519 and software seeds are not fallbacks. Generation-tim
 attestation does not prove current OS/app/boot state. No physical-device
 eligibility, enrollment, attestation, trusted binding, recovery readiness or R36
 completion follows from this Stage 1 interface migration.
+
+## Dated adoption and assertion migration inventory — 2026-09-06
+
+The integrator read and adopted exact proposal `a54995663a932a0e712f386a430cf672eedd61d0`
+after actual Claude Fable design PASS (session
+`44399fee-f1ed-43d3-a9f5-d459490e65b1`). No P0/P1 were found. The exact interface,
+write allowlist and test move above are adopted; private-branch implementation
+may proceed while dependency/hosted enablement remains gated. This adoption and
+inventory are committed before the first production edit. Full implementation
+RED/GREEN and a new exact-diff Fable review remain required.
+
+Original custody test source is the Git object at `a5499566`:
+`clients/township-tauri-shell/src-tauri/tests/governance_witness_custody.rs`,
+SHA-256 `9376143de36b854156e624f9c40413c830ed0eb624bf1e35fcab5679b2638a09`.
+It contains 14 tests and 85 source assertion invocations (loop cases exercise
+additional outcomes). Counts are an inventory aid, not proof of equivalent tests.
+Every literal byte/digest/error expectation and behavioral check must survive.
+`external` below means that same integration-test file; `private` means the new
+`src/governance_provider_tests.rs`, with tests still driving the actual production
+provider through public state/IPC seams.
+
+| Original test name | Assertions | Destination and preserved behavior |
+| --- | --- | --- |
+| `governance_commands_are_separate_and_fail_closed_without_a_provider` | 8 | external: all four carrier-alias refusals, all three registered governance IPC refusals and empty KV. |
+| `governance_ensure_creates_one_paired_identity_and_reuses_it_after_restart` | 8 | private: 32-byte public identity, repeated ensure/read/restart equality, exactly one seed/sidecar creation, no secret material release. |
+| `governance_public_key_read_is_presence_free_and_never_creates_custody` | 3 | private: exact missing-identity error, zero writes and zero secret material release. |
+| `governance_ensure_rejects_incomplete_or_mismatched_identity_pairs` | 3 | private: all three fixture cases retain their exact errors, zero writes and zero secret material release. |
+| `governance_first_creation_is_rollback_safe` | 11 | private: seed failure, sidecar failure/owned cleanup, cleanup failure and subsequent incomplete refusal; exact errors/items/delete counts. |
+| `concurrent_governance_ensure_calls_share_one_creation` | 5 | private: both successful results equal, one pair, zero deletes and zero secret material release. |
+| `duplicate_seed_creation_reconciles_to_the_cross_state_winner` | 5 | private: distinct provider/state instances return the same winner, one pair, no loser deletes or secret release. |
+| `duplicate_seed_creation_waits_for_the_cross_state_winner_sidecar` | 5 | private: same assertions through controlled pending-sidecar interleaving; use barriers/notifications rather than timing-dependent delays. |
+| `governance_signing_requires_fresh_presence_and_seed_access_each_time` | 8 | private: unchanged public key, digest, two identical exact signatures independently verified, two protected material releases, zero writes, two fixed reasons and empty KV. |
+| `governance_presence_reason_cannot_be_shaped_by_submitted_replica` | 5 | private: all six hostile strings preserve the constant reason, cancelled error, zero material release/writes and empty KV. |
+| `governance_signing_refuses_cancel_unavailable_and_malformed_without_writes` | 10 | private: all three coarse outcomes, exact reason counts, no released seed/signature/writes/KV; malformed claim makes no authentication call. Add external opaque-provider non-dispatch controls. |
+| `governance_signing_fails_closed_when_presence_provider_is_not_bound` | 4 | external: read-only opaque provider preserves the public error and zero sign-result/write/secret-release observations. Reclassified as caller wiring, not proof of the removed two-provider production branch. |
+| `governance_signing_rejects_seed_identity_or_sidecar_mismatch` | 5 | private: all three mismatch fixtures fail after one auth/material release, exact mismatch error, no writes and empty KV. |
+| `governance_signing_names_missing_public_identity_facets_after_seed_access` | 5 | private: all three missing-facet fixtures retain exact errors, one auth/material release, no writes and empty KV. |
+
+Fable's three P2 dispositions are explicit before implementation:
+
+1. The absent-presence external mock checks caller wiring/shape only. Real
+   unavailable, cancel and lockout refusal remains covered through the actual
+   production provider's private backend and coarse error mapping.
+2. Replace the fixture's `secret_read_count` terminology with a counter for
+   successful release of seed material to the private provider. Refusal must
+   leave that count at zero and must produce no signature. Record authentication
+   attempts separately. Real macOS has one protected Keychain query, not two
+   independently proven OS phases; no test may claim otherwise.
+3. Demonstrate the existing public seed API is callable at the baseline. Its
+   subsequent removal deliberately produces an unresolved-symbol diagnostic for
+   that exact formerly callable symbol, paired with a positive new opaque API
+   compile/run control. Separate compile-fail examples prove private backend and
+   request construction/mutation are inaccessible for the expected reason. Do
+   not count an unrelated import typo or an absent new symbol alone as the RED.
+
+The complete-external-deletion limitation and prohibition on automatic ensure for
+a later pinned missing identity remain unchanged. No new Android purpose, seed
+fallback, device claim or additional persistence schema is adopted. Canonical
+payload files/fixtures and the TypeScript bridge remain byte-identical.
