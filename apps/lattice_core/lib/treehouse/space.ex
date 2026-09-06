@@ -11,7 +11,9 @@ defmodule Treehouse.Space do
 
   alias Lattice.{Authority, Identity, Log, Op}
   alias Lattice.Authority.Delegation
-  alias Treehouse.Invitation
+  alias Treehouse.{Invitation, TransportCatalog}
+
+  @preview_commands [:create_space, :create_thread, :issue_invitation, :revoke_invitation, :admit_member, :remove_member]
 
   state do
     field(:name, merge: :lww, default: "")
@@ -61,6 +63,10 @@ defmodule Treehouse.Space do
     ]
   )
 
+  command(:catalog_bootstrap_v1, [:record],
+    do: [{:admin_actions, {:write, "catalog_bootstrap_v1"}}]
+  )
+
   @doc "Prepare deterministic root-only creation; pending signed ops are not yet persisted."
   @spec prepare_creation(Identity.t(), String.t(), String.t(), Log.t() | nil) ::
           {:ok, map()} | {:error, atom()}
@@ -72,8 +78,7 @@ defmodule Treehouse.Space do
         do: replica,
         else: Authority.bind_replica(replica, identity.pub)
 
-    commands = Enum.map(__MODULE__.__lattice_commands__(), &elem(&1, 0))
-    delegation = Delegation.genesis(identity, replica, ops: commands, roles: [:admin, :moderator])
+    delegation = Delegation.genesis(identity, replica, ops: @preview_commands, roles: [:admin, :moderator])
     genesis = Op.new(identity, replica, [], :authority, {:genesis, delegation, %{}})
 
     name_op =
@@ -246,6 +251,18 @@ defmodule Treehouse.Space do
     if Invitation.recipient?(value),
       do: value,
       else: raise(ArgumentError, "recipient is not a canonical public key")
+  end
+
+  def command_op_status(%Op{body: {:catalog_bootstrap_v1, [record]}} = op, _visible, context) do
+    with {:ok, record} <- TransportCatalog.normalize_bootstrap(record),
+         {:ok, observed} <- Authority.continuation_profile(Log.from_ops(op.replica, context.visible_ops)),
+         true <- record.space == op.replica and record.space_root == op.author and
+           observed.root == op.author and observed.profile_genesis == record.profile_genesis and
+           observed.profile_id == record.profile_id and observed.profile.kind == :space do
+      :ok
+    else
+      _ -> {:error, :application_invalid_catalog}
+    end
   end
 
   def command_op_status(%Op{body: {:issue_invitation, [recipient, threads]}}, _visible, context) do
