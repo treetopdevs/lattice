@@ -1,6 +1,6 @@
 defmodule Treehouse.CatalogBootstrapTest do
   use ExUnit.Case, async: true
-  alias Lattice.{Authority, Log, Op}
+  alias Lattice.{Authority, Log, Op, Sim}
   alias Treehouse.{CatalogVectors, Space}
 
   test "an authorized root bootstrap is honored and records only the existing admin marker" do
@@ -28,5 +28,19 @@ defmodule Treehouse.CatalogBootstrapTest do
     assert {:ok, %{pending: [genesis, _]}} = Space.prepare_creation(f.root, "treehouse:legacy-preview", "Canopy")
     {:genesis, d, %{}} = genesis.body
     assert d.ops == MapSet.new([:create_space, :create_thread, :issue_invitation, :revoke_invitation, :admit_member, :remove_member])
+  end
+
+  test "Sim's explicit genesis ceiling restricts commands while omission keeps the registry default" do
+    sim = Sim.new(Space, "treehouse:sim-ceiling", ["root"], seed: "r11a-sim-ceiling")
+    {_default, default_genesis} = Sim.create_replica(sim, "root")
+    {:genesis, full, _} = default_genesis.body
+    assert full.ops == MapSet.new(Enum.map(Space.__lattice_commands__(), &elem(&1, 0)))
+    {limited, genesis} = Sim.create_replica(sim, "root", ops: [:create_space])
+    {:genesis, d, _} = genesis.body
+    assert d.ops == MapSet.new([:create_space])
+    {limited, allowed} = Sim.command(limited, "root", :create_space, ["Canopy"], cap: d.id)
+    assert Sim.quarantined(limited, "root", allowed.id) == false
+    {limited, excluded} = Sim.command(limited, "root", :create_thread, ["thread:one", "One"], cap: d.id)
+    assert Sim.quarantined(limited, "root", excluded.id) == {true, :cap_denied}
   end
 end
