@@ -725,9 +725,9 @@ that is absent or a safe JSON integer. Generic tagged integers remain exact
 through uint64 maximum, using canonical decimal strings above the safe horizon.
 The current depth64 and duplicate-canonical-map/set refusals remain. Unknown
 atoms are retained as unsupported evidence: the cutoff-only fixed vocabulary
-is the 130 sorted names frozen in `r11a-cutoff-atom-vocabulary.json`, SHA256
-`a66d085dd185091d745d933c3145101a97b3306406aba905af07ca051d09506c`, in the execution
-evidence directory. Both runtime constants and reciprocal fixtures must match
+is the 130 sorted names frozen in
+[`cutoff_atoms_v1.json`](../../clients/lattice-client/test/vectors/catalog/cutoff_atoms_v1.json), SHA256
+`a66d085dd185091d745d933c3145101a97b3306406aba905af07ca051d09506c`, in the retained execution evidence. Both runtime constants and reciprocal fixtures must match
 that exact set; no runtime atom creation or dynamic module-loading vocabulary.
 
 Each operation must fit **64,000 UTF-8 bytes**, inclusive, in the actual complete
@@ -741,3 +741,7 @@ cutoff, canonical bytes and separate sorted records, or the two named refusals.
 The implementation lives in `treehouse_catalog_cutoff.ts`; its public/reciprocal
 tests and BEAM `CatalogCutoff` portability tests must include high exact epochs,
 semantic quarantine, rejected-plus-genuine same IDs and unsupported raw evidence.
+
+The BEAM vocabulary is compiled from those fixed literal atoms; loading the
+cutoff module makes the entire closed grammar available to the existing-atom
+Wire decoder in a fresh VM. It never interns a name from imported input.
