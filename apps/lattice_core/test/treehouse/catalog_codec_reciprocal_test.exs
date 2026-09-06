@@ -4,6 +4,11 @@ defmodule Treehouse.CatalogCodecReciprocalTest do
   alias Lattice.Carrier.Wire
   alias Treehouse.TransportCatalog
 
+  setup do
+    Code.ensure_loaded!(TransportCatalog)
+    :ok
+  end
+
   # Existing atoms in the exact closed protocol, never supplied to atom creation.
   @rotation_fields ~w(rotation old_signature new_signature version product space bootstrap parent prior_catalog generation new_catalog_key nonce inventory_digest cutoffs replica frontier log_digest)a
 
