@@ -111,6 +111,32 @@ const wait = async (
   await writeFile(`${evidence}/failed-ui.json`, dump);
   assert.fail(`Visible state did not appear: ${label}`);
 };
+// A missing control (exit 3) means Swift did not issue an action. Only that
+// lookup may be retried; an attempted/refused/uncertain action fails immediately.
+// Keep the existing ten-second UI budget and capture the transient AX evidence.
+let actionSequence = 0;
+const act = async (kind: "set" | "press", label: string, value?: string) => {
+  const sequence = ++actionSequence;
+  for (let attempt = 0; attempt < 50; attempt++) {
+    try {
+      const result = ax(kind, label, ...(value === undefined ? [] : [value]));
+      if (kind === "set") {
+        await wait(label, (dump) => {
+          const nodes = JSON.parse(dump) as Record<string, string>[];
+          return nodes.some((node) =>
+            ["AXTextField", "AXTextArea"].includes(node.role ?? "") &&
+            (node.title === label || node.description === label) && node.value === value);
+        });
+      }
+      return result;
+    } catch (error) {
+      await writeFile(`${evidence}/action-${sequence}-${attempt}-ui.json`, ax("dump"));
+      if ((error as {status?: number}).status !== 3 || attempt === 49) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+  }
+  throw Error("Unreachable accessibility lookup state");
+};
 const snapshot = () => {
   const captured = rows();
   const record = captured.find(
@@ -209,13 +235,13 @@ try {
     const empty = await wait("Create local group");
     assert(empty.includes("Recovery is not set up"));
     await writeFile(`${evidence}/empty-ui.json`, empty);
-    ax("set", "Group name", "Canopy");
-    ax("press", "Create local group");
+    await act("set", "Group name", "Canopy");
+    await act("press", "Create local group");
     await writeFile(`${evidence}/created-ui.json`, await wait("Thread title"));
-    ax("set", "Thread title", "Field notes");
-    ax("press", "Create thread");
+    await act("set", "Thread title", "Field notes");
+    await act("press", "Create thread");
     await wait("Write a post");
-    ax("set", "Write a post", "First note from the native app");
+    await act("set", "Write a post", "First note from the native app");
     // Wait for the public SQLite draft, not an app-owned test hook or optimistic label.
     for (let i = 0; i < 40; i++) {
       await new Promise((r) => setTimeout(r, 200));
@@ -235,14 +261,14 @@ try {
           JSON.parse(r.value).text === "First note from the native app",
       ),
     );
-    ax("press", "Post");
+    await act("press", "Post");
     await wait("Edit post 1");
-    ax("press", "Edit post 1");
+    await act("press", "Edit post 1");
     await wait("Save edit");
-    ax("set", "Edit post", "Edited in the native app");
-    ax("press", "Save edit");
+    await act("set", "Edit post", "Edited in the native app");
+    await act("press", "Save edit");
     await wait("Edited in the native app");
-    ax("set", "Write a post", "A saved thought for later");
+    await act("set", "Write a post", "A saved thought for later");
     for (let i = 0; i < 40; i++) {
       await new Promise((r) => setTimeout(r, 200));
       if (
@@ -254,7 +280,7 @@ try {
       )
         break;
     }
-    ax("press", "Archive thread");
+    await act("press", "Archive thread");
     await wait("This thread is archived.");
     await writeFile(`${evidence}/before-restart-ui.json`, ax("dump"));
     const before = snapshot();

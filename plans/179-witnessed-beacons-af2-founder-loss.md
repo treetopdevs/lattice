@@ -2204,3 +2204,62 @@ America/New_York. It is incomplete, not PASS, and no repeat attempt is made
 before reset. Earlier actual Fable PASS verdicts through `65b5364e` remain
 source-scoped. Final hosted CI/review closure and fresh integration review remain
 separate gates, with merge sequencing owned by the integrator.
+
+### Expected claim from raw duplicate dependencies (2026-09-06)
+
+Hosted thread `PRRT_kwDOSZGqLc6fvK0j` identifies a separate received-operation
+case: canonical carrier hashing treats outer dependencies as a set, so an
+authentic raw frame may retain duplicate dependency IDs. The BEAM expected-claim
+constructor normalizes them, while TS currently only sorts. The integrator
+adopts distinct, UTF-8 byte-sorted dependency normalization only when deriving
+the expected witnessed claim. Raw frames and semantic dependency lists stay
+retained; carrier ingress, global DAG behavior and received-certificate strictness
+are unchanged. Public RED/GREEN evidence must verify the raw frame's unchanged
+hash/signature, preserve its duplicate list, honor its beacon and lease effects,
+and still refuse an actually duplicate-bearing signed certificate claim. A new
+BEAM-exported raw-frame vector and public Wire/log test establish reciprocal
+behavior without relying on `Op.new/6` to erase the relevant input first.
+
+### Retained raw-dependency evidence (2026-09-06)
+
+The final public RED in `r03-raw-deps-public-red-verified.log` records three
+failures: valid raw duplicate-dependency beacons are refused in both delivery
+orders and their finite lease does not lapse. Raw hash/signature, strict decode,
+duplicate-list retention and received-duplicate-certificate refusal already pass.
+The new signed BEAM vector additionally records five conformance failures before
+the repair, including incorrect state and quarantine reasons. An earlier test
+verifier passed a Base64 string where Noble requires key bytes; that fixture
+error is retained separately and is not counted as the behavioral RED. The
+corrected RED typecheck passes before the production change.
+
+Source `c17eedaa` changes only expected-claim dependency derivation to distinct,
+UTF-8 byte-sorted IDs. The raw frame, semantic operation, received certificate,
+ingress and DAG paths are unchanged. The public BEAM Wire/log test passes 18/0,
+including raw duplicate retention, unchanged authentic ID/signature, effective
+beacon/lease behavior and strict duplicate received-claim refusal. The compiled
+exporter adds `township_beacon_witnessed_raw_duplicate_deps`, with all **68**
+previous vector blobs byte-identical. Final TS gates pass **1,345 conformance
+checks across 69 vectors**, 213 authoring, 580 canonical, 49 carrier and eight
+V01 checks, plus typecheck and generated build.
+
+Full `mix check` at that source passes **747 tests plus 27 properties, zero
+failures**, three existing exclusions, prescribed OTP/asdf PATH and
+`ERL_FLAGS='+S 4:4'`; formatting and strict Credo exit 0 with existing low-priority
+suggestions. Evidence is summarized in `r03-raw-deps-proof.json`, with
+`r03-raw-deps-*` logs in the existing temporary evidence directory. Sol review,
+publication and fresh hosted checks for this new repair are still pending at
+this local freeze. The preceding `39ea40da` hosted run passed but cannot serve
+as final-tip evidence for this correction.
+
+### Sol source review and publication handoff (2026-09-06)
+
+The actual read-only `gpt-5.6-sol` review of `39ea40da..c17eedaa` returned
+**PASS, no demonstrated P0/P1/P2**. It verified the narrow expected-claim change,
+raw signature/retention and received-claim controls, generated runtime parity,
+and unchanged 68 previous vector blobs. The result is saved as
+`/tmp/lattice-treehouse-execution-20260906/sol-r03-raw-deps-review-result.md`.
+The reviewer did not run tests and did not treat the then-running full suite as
+passed; the completed 747-test/27-property result above is separate execution
+evidence. This publication update changes documentation only. Fresh exact-tip
+hosted checks and review-thread closure remain publication gates, with the
+integrator retaining merge authority.

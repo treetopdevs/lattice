@@ -241,6 +241,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_beacon_witnessed_certificate_metadata(),
       township_beacon_witnessed_high_legacy(),
       township_beacon_witnessed_high_nonroot(),
+      township_beacon_witnessed_raw_duplicate_deps(),
       township_policy_honored_target(),
       township_policy_target_reason_taxonomy(),
       township_policy_concurrent_target_not_visible(),
@@ -3321,6 +3322,50 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       "highLegacyEpochs" => [],
       "beaconOperationId" => witnessed.id
     })
+  end
+
+  defp township_beacon_witnessed_raw_duplicate_deps do
+    {sim, _} = beacon_sim("raw-duplicate-deps")
+    {sim, lease} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 3)
+    sim = Sim.sync_all(sim)
+    base = Sim.log(sim, "resident")
+    author = Sim.identity(sim, "w0")
+    signers = Enum.map(["w0", "w1"], &Sim.identity(sim, &1))
+    claim = BeaconCertificate.claim(sim.replica, 4, author.pub, Log.frontier(base))
+    cert = BeaconCertificate.new(claim, signers)
+    original = Op.new(author, sim.replica, claim.deps, :authority, {:beacon, 4, cert})
+    raw_deps = original.deps ++ original.deps
+    frame = original |> CarrierWire.encode_op() |> Map.put("deps", raw_deps)
+    {:ok, beacon} = CarrierWire.decode_op(frame)
+    true = Op.valid?(beacon)
+    true = beacon.id == original.id and beacon.sig == original.sig
+    invalid_cert = BeaconCertificate.new(%{claim | deps: raw_deps}, signers)
+    invalid = Op.new(author, sim.replica, claim.deps, :authority, {:beacon, 4, invalid_cert})
+    log = base |> Log.append!(beacon) |> Log.append!(invalid)
+    sim = %{sim | logs: Map.put(sim.logs, "resident", log)} |> Sim.sync_all()
+
+    {sim, post} =
+      Sim.command(sim, "resident", :post, ["raw duplicate beacon lapses"], cap: lease.id)
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "resident")
+    true = log.ops[beacon.id].deps == raw_deps
+    assert_authority_honored!(log, beacon.id)
+    assert_authority_reason!(log, invalid.id, :unauthorized_beacon)
+    assert_authority_reason!(log, post.id, :lease_expired)
+    true = Authority.expired?(log, lease.id)
+
+    capability_scenario_with_canonical_ops(
+      "township_beacon_witnessed_raw_duplicate_deps",
+      sim,
+      log,
+      %{
+        "case" => "witnessed_raw_duplicate_deps",
+        "beaconOperationId" => beacon.id,
+        "rawBeaconDeps" => raw_deps,
+        "invalidReceivedClaimId" => invalid.id
+      }
+    )
   end
 
   defp township_beacon_witnessed_horizon do
