@@ -77,7 +77,7 @@ function delegationChainIds(delegationId, security) {
 function expiredAsOf(op, delegationId, byId, security, ancCache) {
     for (const id of delegationChainIds(delegationId, security)) {
         const expires = security.delegations.get(id)?.delegation?.expiresEpoch;
-        if (expires === undefined)
+        if (expires == null)
             continue;
         const lapsed = security.validBeacons.some((beacon) => BigInt(beacon.epoch) > BigInt(expires) && !ancestors(beacon.opId, byId, ancCache).has(op.id));
         if (lapsed)

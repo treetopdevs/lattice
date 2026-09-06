@@ -623,6 +623,27 @@ try { nullLeaseMatches = isDeepStrictEqual(materialize(beaconVector.schema, null
 catch (error) { nullLeaseError = error instanceof Error ? error.message : String(error); }
 check("null unleased semantic evidence does not throw during public materialization", nullLeaseError, null);
 check("null unleased semantic evidence preserves the unleased result", nullLeaseMatches, true);
+const nullLeaseWire = structuredClone(beaconGenesis);
+if (nullLeaseWire.body[0] !== "tuple") throw new Error("expected genesis tuple fixture");
+const nullLeaseWireDelegation = nullLeaseWire.body[1][1];
+if (nullLeaseWireDelegation?.[0] !== "delegation") throw new Error("expected genesis delegation fixture");
+Reflect.set(nullLeaseWireDelegation[1], "expires_epoch", null);
+let nullLeaseWireRefused = false;
+try { decodeCarrierOpFrame(nullLeaseWire); } catch { nullLeaseWireRefused = true; }
+check("carrier ingress still refuses an explicit null lease field", nullLeaseWireRefused, true);
+for (const expiry of [0, 3]) {
+  const finiteGrant = await authorTownshipDelegation({ replica: beaconVector.replica,
+    deps: [beaconGenesis.id], audiencePubkey: leaseIssuer.publicKey,
+    parentId: beaconGenesisDelegation.id, ops: ["post"], expiresEpoch: expiry, signer: beaconFounder });
+  const finiteDelegation = carrierDelegationsFromFrames([finiteGrant])[0]!;
+  const finitePost = await authorTownshipCommand({ replica: beaconVector.replica,
+    deps: [finiteGrant.id, finalBeacon.id], command: { command: "post", text: "finite lease" },
+    capId: finiteDelegation.id, signer: leaseIssuer });
+  check("explicit zero and finite leases retain their signed epoch", finiteDelegation.expires_epoch, expiry);
+  check("explicit zero and finite leases still lapse at an effective epoch four beacon",
+    materialize(beaconVector.schema, carrierOpsToSemanticOps([...claimFrames, finiteGrant,
+      finalBeacon, finitePost], beaconVector.realmByPubkey)).quarantineReasons.get(finitePost.id), "lease_expired");
+}
 
 check("claim construction removes duplicates without mutating caller order",
   createWitnessedBeaconClaim(beaconVector.replica, 4, claimWitness.publicKeyBase64,
