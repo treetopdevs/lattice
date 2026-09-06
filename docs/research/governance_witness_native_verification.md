@@ -244,6 +244,27 @@ depends on honored succession. No trusted semantic producer or proof-of-executio
 system exists here. A bundle that independently decides these facts needs equivalent
 evaluation; trusting its sender would add a new authority. This is why A is selected.
 
+**2026-09-06 comparison completion (Plan 174 step 4).** The following evaluates
+both candidates against all six decisions. Option B here is the proposed signed
+frame/acquisition bundle, not an existing proof-of-honored-history protocol.
+No such independently verifiable semantic proof or trusted producer is adopted.
+
+| Decision / cost | Option A — selected native projection | Option B — rejected compact bundle |
+| --- | --- | --- |
+| 1. Authoritative native state | Native product/root pin plus the complete retained union, D2 admission classification and the matched authority projection. The browser cache is input, never authority. | Native product/root pin plus retained authenticated bundle bytes and references. These can establish signer/root identities but supply no authoritative honored holder/policy projection; a producer's semantic assertion is not authoritative. |
+| 2. Frames, replica, policy, frontier and freshness | D2 verifies canonical bytes, IDs, signatures, root/replica and complete supported ancestry, then derives policies/acquisitions and frontier from the classified union. Freshness means the retained evidence at review/release, not current global history or elapsed time. | Verify canonical bytes, IDs, signatures and root binding of supplied frames, plus any explicitly checked static chain constraints. That proves authentic supplied evidence, not an honored transfer, effective merged policy or complete frontier. A signed bundle timestamp, nonce or epoch does not prove missing competitors/revocations absent. No compact semantic/completeness proof exists here. |
+| 3. Rollback and omission | D3's retained union prevents an IPC retry from erasing known history; generation checks prevent local review/sign races. Whole-store rollback and unseen withheld operations remain undetectable without an independent anchor. | Could retain every accepted bundle/reference and bind review to that store generation, so replay cannot erase already retained bytes. It still cannot determine the authoritative history from those bundles without semantic evaluation, prove global completeness, or detect restoration of the whole old store. A MAC or local counter alone does not close those gaps. |
+| 4. Evaluation versus proof | Port only the needed landed Core authority rules after authenticating all supported history, with explicit refusal parity. No application CRDT materialization. | A sound independent proof must establish the same causal/current-holder, competing-acquisition and policy facts. Checking the full rules collapses into A; accepting a trusted producer adds a new trust authority; a succinct execution proof needs a new specified proof system. None is supplied or adopted by the compact bundle proposal. |
+| 5. Native review and OS prompt | D5 derives every identity/role/purpose field from native verified state, uses fixed allowlisted labels and bounded fingerprints, and exposes full escaped values in native review. Missing verified fields refuse before presence. | Authenticated bundle identity may be shown as such, but its claimed holder, effective policy or successor cannot be labeled verified. The same safe rendering and bounds are necessary; until the missing semantic proof exists, the required verified recovery review cannot be formed and signing must refuse. Presence cannot turn an authentic bundle into a true claim. |
+| 6. Direct IPC authorization | D6 uses explicit native review acceptance, caller/session/product/replica/key/domain/claim/generation binding, one-shot expiring tokens and post-blocking-work checks through serialized release. Bare claims and substitutions refuse. | Would require the same native caller/session binding, review acceptance, exact claim-plus-proof digest/store-generation binding and one-shot release controls. A valid token authorizes only the verified intent; it cannot compensate for absent semantic proof, so a syntactically valid bundle/token is insufficient to sign. |
+| What is proved / assumed | Proves native derivation over the retained authenticated union under matched Core rules. Assumes native code/custody integrity and the stated observation/store limits; no trusted semantic relay or proof producer. | Proves authenticity of the included signed statements and any checked chain facts. Honored state, completeness and freshness would remain assumptions if the sender were trusted. That additional producer trust is explicitly rejected, not silently supplied by a signature. |
+| Conformance and build size | Substantial third-runtime canonical/authority implementation: R17b Stages 3–5 must land atomically, with BEAM/TS/Rust bytes, refusal and semantic oracles; R36/R17c custody and physical work remain separate shared costs. | An authenticity-only bundle parser/verifier would be smaller, with canonical/signature/chain parity, but would not satisfy the ceremony. A sufficient alternative needs a new proof specification, producer/prover, verifier, trust/completeness/rollback model and semantic adversarial corpus; its cost and feasibility are unmeasured, with no demonstrated reduction over A. No existing honored-history oracle or completed proof implementation is claimed. |
+
+The compact bundle's missing semantic proof can be identified from the existing
+judge by inspection; no prototype or benchmark was needed to choose A. This
+comparison does not authorize building Option B, a new semantic producer or a
+new proof system. **Option A remains the single recommended architecture.**
+
 Project only the authority facts needed by each supported signing purpose:
 root/policy resolution, delegation validity/attenuation/activation, honored role
 timeline, revocation and beacon facts where the landed judge consumes them. Current
@@ -376,8 +397,16 @@ Use these one-line OS templates; `P`, `R`, `S` and `H` come from native state:
 Treehouse Space R:abcdefghijkl admin recovery to S:abcdefghijkl H:abcdefghijkl
 Treehouse Thread R:abcdefghijkl moderator recovery to S:abcdefghijkl H:abcdefghijkl
 Township Matter R:abcdefghijkl clerk recovery to S:abcdefghijkl H:abcdefghijkl
+Treehouse Space R:abcdefghijkl beacon epoch 12345
 Treehouse Thread R:abcdefghijkl beacon epoch 12345
 ```
+
+For a Treehouse beacon, select the Space or Thread template from the natively
+verified pinned replica kind. Never infer it from submitted claim text, a replica
+name prefix or a hard-coded Thread default. A missing, unsupported or mismatched
+product/kind refuses before presence; another beacon product/kind needs its own
+adopted allowlisted template. This applies to both beacon witness review and the
+separate final-beacon-operation review without merging their signing purposes.
 
 R is the first 12 base64url characters of SHA-256 of the **full pinned replica ID**;
 S is the same fingerprint of the verified successor public key; H is the first

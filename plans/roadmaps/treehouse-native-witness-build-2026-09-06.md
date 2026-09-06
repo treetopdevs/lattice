@@ -291,6 +291,9 @@ OS reason under 200 UTF-8 bytes. Hash the full pinned replica ID for its display
 fingerprint, not merely the root commitment. Product/kind/role, verified successor
 and acquisition fingerprint or exact beacon epoch come from native state. Missing
 verified display fields refuses before presence, with no submitted-value fallback.
+For Treehouse beacon review, choose D5's Space or Thread reason from the verified
+pin kind for both witness-claim and final-operation purposes. Do not default every
+beacon to Thread or accept a submitted kind label.
 
 Use D5's escaped, structurally isolated full-value rendering: fixed labels,
 monospace escaped values, always-visible full SHA-256 and original byte count,
@@ -323,6 +326,10 @@ retrievable under Stage4's explicit commit boundary. Test two replicas sharing a
 root get different native replica fingerprints, hostile full-value rendering and
 all supported roles. Full review retains exact
 keys, deps and lease consequences even though the OS line is abbreviated.
+Include separately pinned Treehouse Space and Thread beacon positive controls:
+each exact reason names its own verified kind and epoch. Wrong/missing kind,
+submitted-kind substitution and cross-product pin/template mismatch refuse before
+presence; changing only the submitted label cannot change an accepted OS reason.
 
 Stages3-5 land as one atomic signing cutover: remove/refuse legacy claim-only IPC
 and migrate existing `township_actions.ts`, `native_workflow.ts`, current product
