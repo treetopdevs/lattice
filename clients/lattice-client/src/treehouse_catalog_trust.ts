@@ -1,4 +1,9 @@
 import type { CatalogCutoff } from "./treehouse_catalog_codec";
+
+// This module proposes decisions over an adapter-owned complete snapshot. It
+// performs no I/O, proves no CAS/freshness/readiness, and never issues a durable
+// installation receipt. The expected token is reflected for the trusted adapter
+// to compare atomically with both trust and history generations.
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { canonicalBase64Bytes, canonicalBytesForCarrierOp, canonicalHash } from "./codec";
@@ -61,7 +66,9 @@ export type TreehouseCatalogTrustDecision =
   | {kind: "reject"; reason: TreehouseCatalogTrustReason; detail: TreehouseCatalogRefusalDetail}
   | {kind: "unchanged" | "propose" | "retain_blocked"; expected: TreehouseCatalogStoreToken;
       next: InstalledTreehouseCatalogTrustV1; reason: TreehouseCatalogTrustReason | null;
-      detail: TreehouseCatalogRefusalDetail; replacementConfigured: boolean;
+      detail: TreehouseCatalogRefusalDetail;
+      /** Profile equality only; no cap, acquisition, epoch or replacement readiness proof. */
+      replacementConfigured: boolean;
       observed: {bootstrapIds: string[]; bindingHeads: string[]; catalogHeads: {binding: string; catalogs: string[]}[]};
       routes: VerifiedTreehouseCatalogRoute[]};
 export type TreehouseCatalogRouteDecision =
@@ -74,7 +81,7 @@ export async function prepareTreehouseCatalogInstallation(input: {
   store: {kind: "verified_fresh"; expected: TreehouseCatalogStoreToken};
 }): Promise<TreehouseCatalogTrustDecision> {
   try {
-    const value = structuredClone(input);
+    const value = copyInput(input);
     if (!closed(value, ["review", "history", "store"]) || !reviewValid(value.review) ||
       !closed(value.store, ["kind", "expected"]) || value.store.kind !== "verified_fresh" || !tokenValid(value.store.expected)) fail("malformed_catalog");
     const history = await observeHistory(value.history);
@@ -82,7 +89,10 @@ export async function prepareTreehouseCatalogInstallation(input: {
     const observed = await treehouseCatalogBootstrapsFromFrames(history.raw);
     if (!observed.ok) fail("invalid_verified_history");
     const selected = observed.bootstraps.find((b) => b.id === value.review.bootstrapId);
-    if (selected === undefined) fail("catalog_authority_refused", [value.review.bootstrapId]);
+    if (selected === undefined) {
+      if (!history.byId.has(value.review.bootstrapId)) fail("trust_pending", [value.review.bootstrapId]);
+      throw new Refusal("catalog_authority_refused", detail([value.review.bootstrapId], history.projection.quarantineReasons.get(value.review.bootstrapId) ?? null));
+    }
     if (selected.record.spaceRoot !== value.review.spaceRoot || selected.record.space !== value.review.space) fail("wrong_catalog_scope");
     const ids = sorted(observed.bootstraps.map((b) => b.id));
     if (!equal(ids, value.review.observedBootstrapIds)) fail("catalog_fork", ids);
@@ -101,11 +111,13 @@ export async function evaluateTreehouseCatalogTrust(input: {
 }): Promise<TreehouseCatalogTrustDecision> {
   let frozen: {next: InstalledTreehouseCatalogTrustV1; expected: TreehouseCatalogStoreToken; replacement: boolean; bootstrapIds: string[]} | undefined;
   try {
-    const value = structuredClone(input);
-    if (!closed(value, ["installed", "expected", "incoming"]) || !tokenValid(value.expected) || !stateValid(value.installed) || !pageValid(value.incoming)) fail("malformed_catalog");
+    const value = copyInput(input);
+    if (!closed(value, ["installed", "expected", "incoming"]) || !tokenValid(value.expected) || !pageValid(value.incoming)) fail("malformed_catalog");
+    if (!stateValid(value.installed)) fail("trust_recovery_required");
     const original = value.installed;
     const next = structuredClone(original);
     const histories = await mergeHistories(original.histories, value.incoming.histories);
+    validateStoredClosure(original);
     next.histories = [...histories.values()].map((h) => h.raw).sort((a, b) => compareUtf8(a.replica, b.replica));
     const space = histories.get(original.review.space);
     if (space === undefined) fail("trust_recovery_required");
@@ -113,6 +125,7 @@ export async function evaluateTreehouseCatalogTrust(input: {
     const bootstrap = selected?.command === "catalog_bootstrap_v1" ? normalizeCatalogBootstrap(selected.commandArgs?.[0]) : null;
     if (bootstrap === null || bootstrap.space !== original.review.space || bootstrap.spaceRoot !== original.review.spaceRoot ||
       space.analysis.security.root?.pubkey !== original.review.spaceRoot) fail("trust_recovery_required");
+    if (original.review.observedBootstrapIds.some((id) => space.byId.get(id)?.command !== "catalog_bootstrap_v1")) fail("trust_recovery_required");
     const query = await treehouseCatalogBootstrapsFromFrames(space.raw);
     if (!query.ok) fail("invalid_verified_history");
     const bootstrapIds = sorted(query.bootstraps.map((b) => b.id));
@@ -204,8 +217,7 @@ export async function evaluateTreehouseCatalogTrust(input: {
     // admission/budget checking. Unknown signer/parent records never establish trust.
     const retained = [...original.catalogs.map((a) => ({kind: "catalog" as const, ...a})), ...original.rotations.map((a) => ({kind: "rotation" as const, ...a}))];
     const have = new Set(retained.map((a) => `${a.kind}:${a.id}`));
-    const additions = [...catalogs.values()].map((n) => ({kind: "catalog" as const, id: n.id, json: n.json}))
-      .concat([]).map((a) => a as {kind: "catalog" | "rotation"; id: string; json: string});
+    const additions: {kind: "catalog" | "rotation"; id: string; json: string}[] = [...catalogs.values()].map((n) => ({kind: "catalog", id: n.id, json: n.json}));
     additions.push(...[...rotations.values()].map((n) => ({kind: "rotation" as const, id: n.id, json: n.json})));
     let bytes = retained.reduce((sum, a) => sum + encoder.encode(a.json).length, 0);
     for (const artifact of additions.sort((a, b) => compareUtf8(`${a.kind}:${a.id}`, `${b.kind}:${b.id}`))) {
@@ -230,6 +242,9 @@ export async function evaluateTreehouseCatalogTrust(input: {
       for (const cutoff of r.cutoffs) if (!next.cutoffProofs.some((p) => equal(p.cutoff, cutoff))) binding.pending.push(cutoff.logDigest);
       binding.pending = sorted(binding.pending);
     }
+    for (const binding of [...bindings.values()].sort((a, b) => a.generation - b.generation)) {
+      if (binding.parent !== null) binding.pending = sorted([...binding.pending, ...bindings.get(binding.parent)!.pending]);
+    }
     const groups = new Map<string, CatalogNode[]>();
     for (const node of catalogs.values()) {
       const key = node.envelope.catalog.binding;
@@ -247,7 +262,9 @@ export async function evaluateTreehouseCatalogTrust(input: {
       }
     }
     const pendingIds = sorted([...catalogs.values()].filter((n) => n.pending.length > 0).map((n) => n.id));
-    if (next.blocked === null && (heads.length > 1 || forks.length > 0)) next.blocked = block(heads.length > 2 ? "control_history_limit" : "catalog_fork", heads, forks, [], [], pendingIds);
+    if (heads.length > 2 && next.blocked?.reason !== "authority_changed") next.blocked = block("control_history_limit", heads, forks, [], [], pendingIds);
+    else if (next.blocked === null && (heads.length > 1 || forks.length > 0)) next.blocked = block("catalog_fork", heads, forks, [], [], pendingIds);
+    if (next.blocked !== null) frozen = {next, expected: value.expected, replacement, bootstrapIds};
     // Pending signed nodes are retained but their unproven entries reserve no route.
     const routesUsed = new Map<string, string>();
     for (const node of catalogs.values()) if (node.pending.length === 0) for (const entry of node.envelope.catalog.entries) {
@@ -309,6 +326,27 @@ function closed(value: unknown, names: readonly string[]): value is Record<strin
   return typeof value === "object" && value !== null && !Array.isArray(value) &&
     Object.keys(value).length === names.length && Object.keys(value).every((key) => names.includes(key));
 }
+function copyInput<T>(input: T): T {
+  const pending: {value: unknown; leave: boolean}[] = [{value: input, leave: false}];
+  const active = new Set<object>(), finished = new Set<object>();
+  while (pending.length > 0) {
+    const {value, leave} = pending.pop()!;
+    if (leave && typeof value === "object" && value !== null) { active.delete(value); finished.add(value); continue; }
+    if (value === null || typeof value === "string" || typeof value === "boolean" || typeof value === "number") continue;
+    if (typeof value !== "object" || active.has(value)) fail("malformed_catalog");
+    if (finished.has(value)) continue;
+    active.add(value); pending.push({value, leave: true});
+    if (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) fail("malformed_catalog");
+    for (const key of Reflect.ownKeys(value)) {
+      if (Array.isArray(value) && key === "length") continue;
+      if (typeof key !== "string") fail("malformed_catalog");
+      const descriptor = Object.getOwnPropertyDescriptor(value, key)!;
+      if (!Object.hasOwn(descriptor, "value")) fail("malformed_catalog");
+      pending.push({value: descriptor.value, leave: false});
+    }
+  }
+  return structuredClone(input);
+}
 const safe = (n: unknown): n is number => typeof n === "number" && Number.isSafeInteger(n) && n >= 0;
 const text = (v: unknown): v is string => typeof v === "string" && v.length > 0 && new TextDecoder("utf-8", {fatal: true, ignoreBOM: true}).decode(encoder.encode(v)) === v;
 const idValid = (v: unknown): v is string => typeof v === "string" && /^[A-Za-z0-9_-]{43}$/.test(v) && canonicalBase64Bytes(v.replaceAll("-", "+").replaceAll("_", "/") + "=", 32) !== null;
@@ -325,7 +363,8 @@ function reviewValid(v: unknown): v is TreehouseCatalogBootstrapReview {
     v.disposition === "pin_exact_observed_bootstrap" && Array.isArray(v.observedBootstrapIds) && v.observedBootstrapIds.every(idValid) &&
     v.observedBootstrapIds.includes(v.bootstrapId) && equal(v.observedBootstrapIds, sorted(v.observedBootstrapIds));
 }
-function historyValid(v: unknown): v is TreehouseCatalogRawHistory { return closed(v, ["replica", "frames", "rejected"]) && text(v.replica) && Array.isArray(v.frames) && Array.isArray(v.rejected); }
+function historyValid(v: unknown): v is TreehouseCatalogRawHistory { return closed(v, ["replica", "frames", "rejected"]) && text(v.replica) && Array.isArray(v.frames) && Array.isArray(v.rejected) &&
+  v.rejected.every((r) => closed(r, ["frame", "reason"]) && r.reason === "bad_signature"); }
 function pageValid(v: unknown): v is TreehouseCatalogEvidencePage {
   if (!closed(v, ["catalogs", "rotations", "histories", "cutoffProofs"]) || !Array.isArray(v.catalogs) || !Array.isArray(v.rotations) || !Array.isArray(v.histories) || !Array.isArray(v.cutoffProofs)) return false;
   if (v.catalogs.length + v.rotations.length > 32) fail("control_history_limit");
@@ -335,11 +374,30 @@ function stateValid(v: unknown): v is InstalledTreehouseCatalogTrustV1 {
   if (!closed(v, ["version", "review", "histories", "catalogs", "rotations", "cutoffProofs", "accepted", "blocked"]) || v.version !== 1 || !reviewValid(v.review) ||
     !Array.isArray(v.histories) || !v.histories.every(historyValid) || !Array.isArray(v.catalogs) || !Array.isArray(v.rotations) || !Array.isArray(v.cutoffProofs)) return false;
   if (![...v.catalogs, ...v.rotations].every((a) => closed(a, ["id", "json"]) && idValid(a.id) && typeof a.json === "string")) return false;
+  if ([v.catalogs, v.rotations].some((a) => new Set(a.map((n) => n.id)).size !== a.length) ||
+    v.catalogs.length + v.rotations.length > 1024 || [...v.catalogs, ...v.rotations].reduce((n, a) => n + encoder.encode(a.json).length, 0) > 16 * 1024 * 1024) return false;
   if (v.accepted !== null && (!closed(v.accepted, ["binding", "generation", "catalog", "revision"]) || !idValid(v.accepted.binding) || !idValid(v.accepted.catalog) || !safe(v.accepted.generation) || !safe(v.accepted.revision))) return false;
   if (v.blocked !== null && (!closed(v.blocked, ["reason", "bindings", "catalogs", "bootstrapIds", "opIds", "pendingProofIds", "triggers"]) ||
     !["catalog_fork", "authority_changed", "control_history_limit"].includes(v.blocked.reason as string) ||
-    ![v.blocked.bindings, v.blocked.catalogs, v.blocked.bootstrapIds, v.blocked.opIds, v.blocked.pendingProofIds].every((a) => Array.isArray(a) && a.every(idValid)) || !Array.isArray(v.blocked.triggers))) return false;
+    ![v.blocked.bindings, v.blocked.catalogs, v.blocked.bootstrapIds, v.blocked.opIds, v.blocked.pendingProofIds].every((a) => Array.isArray(a) && a.every(idValid)) || !Array.isArray(v.blocked.triggers) ||
+    !v.blocked.triggers.every((t) => closed(t, ["kind", "id", "digest", "bytes"]) && (t.kind === "catalog" || t.kind === "rotation") && idValid(t.id) && idValid(t.digest) && safe(t.bytes)))) return false;
   return true;
+}
+function validateStoredClosure(state: InstalledTreehouseCatalogTrustV1) {
+  for (const history of state.histories) {
+    const ids = new Set(history.frames.map((frame) => (frame as CarrierOpFrame).id));
+    if (history.frames.some((frame) => (frame as CarrierOpFrame).deps.some((id) => !ids.has(id)))) fail("trust_recovery_required");
+  }
+  const catalogs = new Set(state.catalogs.map((c) => c.id));
+  const bindings = new Set([state.review.bootstrapId, ...state.rotations.map((r) => r.id)]);
+  for (const artifact of state.catalogs) {
+    const c = parseCatalog(artifact.json).catalog;
+    if (!bindings.has(c.binding) || (c.previous !== null && !catalogs.has(c.previous))) fail("trust_recovery_required");
+  }
+  for (const artifact of state.rotations) {
+    const r = catalogRotationEnvelopeFromCarrierTerm(parseJson(artifact.json))?.rotation;
+    if (r === undefined || !bindings.has(r.parent) || !catalogs.has(r.priorCatalog)) fail("trust_recovery_required");
+  }
 }
 interface ObservedHistory {
   raw: TreehouseCatalogRawHistory; frames: CarrierOpFrame[]; ops: Op[]; byId: Map<string, Op>;
@@ -349,20 +407,9 @@ async function observeHistory(raw: TreehouseCatalogRawHistory): Promise<Observed
   if (!historyValid(raw)) fail("invalid_verified_history");
   const family = continuationFamily(raw.replica);
   if (family !== "space" && family !== "thread") fail("wrong_catalog_scope");
-  const ids = new Set<string>();
-  // Authentication before a fetch refusal prevents forged partial input being
-  // mislabeled as a harmless missing page. Full portable validation follows.
-  for (const value of raw.frames) {
-    const f = value as CarrierOpFrame;
-    try {
-      if (!text(f.id) || f.replica !== raw.replica || ids.has(f.id) || !Array.isArray(f.deps) || !f.deps.every(text)) fail("invalid_verified_history");
-      const bytes = canonicalBytesForCarrierOp(f), key = canonicalBase64Bytes(f.author, 32), sig = canonicalBase64Bytes(f.sig, 64);
-      if (key === null || sig === null || await canonicalHash(bytes) !== f.id || !ed25519.verify(sig, bytes, key, {zip215: false})) fail("invalid_verified_history");
-      ids.add(f.id);
-    } catch (error) { if (error instanceof Refusal) throw error; fail("invalid_verified_history"); }
-  }
-  const missing = sorted(raw.frames.flatMap((f) => (f as CarrierOpFrame).deps.filter((id) => !ids.has(id))));
+  const missing = await authenticateFrames(raw);
   if (missing.length > 0) fail("trust_pending", missing);
+  const ids = new Set(raw.frames.map((f) => (f as CarrierOpFrame).id));
   const cutoff = await deriveTreehouseCatalogCutoff(raw);
   if (!cutoff.ok) fail(cutoff.reason);
   let frames: CarrierOpFrame[];
@@ -375,6 +422,22 @@ async function observeHistory(raw: TreehouseCatalogRawHistory): Promise<Observed
   return {raw: {...raw, frames: [...raw.frames].sort((a, b) => compareUtf8((a as CarrierOpFrame).id, (b as CarrierOpFrame).id)),
     rejected: [...raw.rejected].sort((a, b) => compareUtf8((a.frame as CarrierOpFrame).id, (b.frame as CarrierOpFrame).id))},
     frames, ops, byId, analysis: analyzeAuthority(schema, ops, ids, order, byId, raw.replica), projection: materialize(schema, ops, ids, null, raw.replica)};
+}
+async function authenticateFrames(raw: TreehouseCatalogRawHistory): Promise<string[]> {
+  if (!historyValid(raw)) fail("invalid_verified_history");
+  const ids = new Set<string>();
+  // Authentication before a fetch refusal prevents forged partial input being
+  // mislabeled as a harmless missing page. Full portable validation follows.
+  for (const value of raw.frames) {
+    const f = value as CarrierOpFrame;
+    try {
+      if (!text(f.id) || f.replica !== raw.replica || ids.has(f.id) || !Array.isArray(f.deps) || !f.deps.every(text)) fail("invalid_verified_history");
+      const bytes = canonicalBytesForCarrierOp(f), key = canonicalBase64Bytes(f.author, 32), sig = canonicalBase64Bytes(f.sig, 64);
+      if (key === null || sig === null || await canonicalHash(bytes) !== f.id || !ed25519.verify(sig, bytes, key, {zip215: false})) fail("invalid_verified_history");
+      ids.add(f.id);
+    } catch (error) { if (error instanceof Refusal) throw error; fail("invalid_verified_history"); }
+  }
+  return sorted(raw.frames.flatMap((f) => (f as CarrierOpFrame).deps.filter((id) => !ids.has(id))));
 }
 async function mergeHistories(saved: readonly TreehouseCatalogRawHistory[], incoming: readonly TreehouseCatalogRawHistory[]): Promise<Map<string, ObservedHistory>> {
   const map = new Map<string, TreehouseCatalogRawHistory>();
@@ -404,6 +467,16 @@ async function mergeHistories(saved: readonly TreehouseCatalogRawHistory[], inco
         rejected: merge(prior.rejected, history.rejected, (v) => v.frame as CarrierOpFrame)});
     }
   }
+  const missing: string[] = [];
+  let unsupported = false;
+  for (const raw of map.values()) {
+    missing.push(...await authenticateFrames(raw));
+    const rejected = await deriveTreehouseCatalogCutoff({...raw, frames: []});
+    if (!rejected.ok && rejected.reason === "invalid_verified_history") fail(rejected.reason);
+    if (!rejected.ok) unsupported = true;
+  }
+  if (unsupported) fail("unsupported_cutoff");
+  if (missing.length > 0) fail("trust_pending", missing);
   const observed = new Map<string, ObservedHistory>();
   for (const [id, raw] of map) observed.set(id, await observeHistory(raw));
   return observed;

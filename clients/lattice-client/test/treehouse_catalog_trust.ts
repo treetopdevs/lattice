@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { trustFixture, fixtureId, fixtureSigner, signedCatalog, signedRotation } from "./support/export_treehouse_catalog_trust";
 import { authorTreehouseCommand, authorTreehouseRoleTransfer } from "../src/treehouse";
+import { authorCarrierDelegation, authorCarrierOp, canonicalBytesForCarrierTerm } from "../src/codec";
+import { continuationProfileToCarrierTerm } from "../src/continuation";
+import type { CarrierTerm } from "../src/carrier";
 import { catalogEnvelopeFromCarrierTerm, catalogEnvelopeToCarrierTerm, catalogRotationEnvelopeFromCarrierTerm, catalogRotationEnvelopeToCarrierTerm,
   catalogRotationId, transportCatalogId } from "../src/treehouse_catalog_codec";
 import type { CatalogEntry, TransportCatalog } from "../src/treehouse_catalog_codec";
@@ -23,7 +26,7 @@ async function installed(f: Fixture) {
   assert.equal(result.kind, "propose", JSON.stringify(result)); return result.next;
 }
 function refused(result: TreehouseCatalogTrustDecision, reason: string) {
-  assert.equal(result.reason, reason, JSON.stringify(result));
+  assert.equal(result.reason, reason, `${result.kind}:${result.reason}:${JSON.stringify(result.detail)}`);
   if (result.kind !== "reject") assert.equal(result.routes.length, 0);
 }
 function revision(f: Fixture, entries: CatalogEntry[], previous = transportCatalogId(f.catalog), number = 1): TransportCatalog {
@@ -59,6 +62,13 @@ test("explicit review never elects from arrival order, and forged or partial sig
   const missing = {...history, frames: history.frames.filter((frame) => frame.id !== f.space.genesis.id)};
   refused(await run(reviewed, missing), "trust_pending");
   refused(await run(reviewed, {...missing, frames: missing.frames.map((frame) => frame.id === f.bootstrap.id ? {...frame, sig: Buffer.alloc(64).toString("base64")} : frame)}), "invalid_verified_history");
+});
+
+test("an explicitly reviewed bootstrap whose signed frame has not arrived requests evidence rather than inventing an authority refusal", async () => {
+  const f = await trustFixture();
+  const history = {...f.histories[0]!, frames: [f.space.genesis, f.space.creation, f.space.pin]};
+  const result = await prepareTreehouseCatalogInstallation({review: f.review, history, store: {kind: "verified_fresh", expected}});
+  refused(result, "trust_pending"); assert.deepEqual(result.detail.ids, [f.bootstrap.id]);
 });
 
 test("actual entry metadata refuses forged roots, wrong genesis/creation/reference, schema, signer and service", async () => {
@@ -171,6 +181,111 @@ test("two and three authenticated rotation heads remain retained and never evict
   const three = await evaluate(initial, {rotations, cutoffProofs: f.cutoffProofs});
   assert.equal(three.kind, "retain_blocked"); assert.equal(three.reason, "control_history_limit"); assert.equal(three.next.rotations.length, 3);
   const reopened = await evaluate(three.next); assert.equal(reopened.kind, "retain_blocked"); assert.deepEqual(reopened.routes, []);
+  const sequential = await evaluate(two.next, {rotations: [rotations[2]!]});
+  assert.equal(sequential.kind, "retain_blocked"); assert.equal(sequential.reason, "control_history_limit"); assert.equal(sequential.next.rotations.length, 3);
+});
+
+test("all supplied histories authenticate before any missing-page or unsupported-evidence refusal", async () => {
+  const f = await trustFixture(), state = await prepare(f);
+  const extra = await trustFixture(2);
+  const missing = {...extra.histories[1]!, frames: extra.threads[0]!.frames.filter((frame) => frame.id !== extra.threads[0]!.genesis.id)};
+  const forged = {...extra.histories[2]!, frames: extra.threads[1]!.frames.map((frame) => ({...frame, sig: Buffer.alloc(64).toString("base64")}))};
+  for (const histories of [[missing, forged], [forged, missing]]) refused(await evaluate(state, {histories}), "invalid_verified_history");
+  const unknown = await authorCarrierOp({replica: extra.threads[0]!.replica, signer: extra.threads[0]!.signer, deps: [extra.threads[0]!.pin.id],
+    kind: "authority", cap: ["nil"], body: ["atom", "unsupported_trust_evidence"]});
+  const unsupported = {...extra.histories[1]!, frames: [...extra.threads[0]!.frames, unknown]};
+  refused(await evaluate(state, {histories: [unsupported]}), "unsupported_cutoff");
+  refused(await evaluate(state, {histories: [unsupported, forged]}), "invalid_verified_history");
+});
+
+test("a later valid profile pin reports replacement unconfigured while pinned old-key rotation remains valid", async () => {
+  const f = await trustFixture(), state = await installed(f);
+  const d = await authorCarrierDelegation({replica: f.space.replica, signer: f.root, audiencePubkey: f.root.publicKey, ops: [], roles: [], live: false});
+  const pin = await authorCarrierOp({replica: f.space.replica, signer: f.root, deps: [f.space.frames.at(-1)!.id], kind: "authority", cap: ["nil"],
+    body: ["tuple", [["atom", "genesis"], ["delegation", d], ["map", [[["atom", "__continuation__"], continuationProfileToCarrierTerm({...f.space.profile, maxLeaseEpochs: 9})!]]]]]});
+  const envelope = catalogRotationEnvelopeFromCarrierTerm(JSON.parse(f.rotationJson))!;
+  const next = await signedCatalog({...f.catalog, binding: catalogRotationId(envelope)}, f.nextCatalogSigner);
+  const decision = await evaluate(state, {rotations: [f.rotationJson], catalogs: [next], cutoffProofs: f.cutoffProofs,
+    histories: [{...f.histories[0]!, frames: [...f.space.frames, pin]}]});
+  assert.equal(decision.kind, "propose", JSON.stringify(decision)); assert.equal(decision.replacementConfigured, false);
+  assert.equal(decision.next.accepted?.generation, 1); assert.equal(decision.routes.length, 2);
+});
+
+test("missing rotation predecessor/proof never promotes a partial chain, and descendant rotation cannot skip an ancestor cutoff", async () => {
+  const f = await trustFixture(), initial = await installed(f);
+  const missing = await signedRotation({...f.rotation, parent: fixtureId("missing-parent")}, f.catalogSigner, f.nextCatalogSigner);
+  refused(await evaluate(initial, {rotations: [missing]}), "trust_pending");
+  const r1 = catalogRotationEnvelopeFromCarrierTerm(JSON.parse(f.rotationJson))!, id1 = catalogRotationId(r1);
+  const c1 = {...f.catalog, binding: id1}, c1json = await signedCatalog(c1, f.nextCatalogSigner);
+  const nextSigner = fixtureSigner("third-catalog-key");
+  const r2 = {...f.rotation, parent: id1, priorCatalog: transportCatalogId(c1), generation: 2,
+    newCatalogKey: Buffer.from(nextSigner.publicKey).toString("base64"), nonce: fixtureId("second-rotation"),
+    cutoffs: f.cutoffProofs.map((p) => ({...p.cutoff, logDigest: fixtureId(`other-${p.cutoff.replica}`)}))};
+  const r2json = await signedRotation(r2, f.nextCatalogSigner, nextSigner);
+  const id2 = catalogRotationId(catalogRotationEnvelopeFromCarrierTerm(JSON.parse(r2json))!);
+  const c2json = await signedCatalog({...f.catalog, binding: id2}, nextSigner);
+  const pending = await evaluate(initial, {rotations: [f.rotationJson, r2json], catalogs: [c1json, c2json], cutoffProofs: f.cutoffProofs});
+  assert.equal(pending.kind, "propose"); assert.equal(pending.reason, "recovery_incomplete"); assert.deepEqual(pending.next.accepted, initial.accepted);
+});
+
+test("retained state and public input are closed, immutable during async work, and missing storage is never a fresh pin", async () => {
+  const f = await trustFixture(), state = await installed(f);
+  const duplicates = {...state, catalogs: [...state.catalogs, ...state.catalogs]};
+  refused(await evaluate(duplicates), "trust_recovery_required");
+  refused(await evaluate({...state, histories: []}), "trust_recovery_required");
+  refused(await evaluate({...state, accepted: {...state.accepted!, catalog: fixtureId("absent-accepted")}}), "trust_recovery_required");
+  const corruptHistory = {...state, histories: state.histories.map((h) => h.replica === f.space.replica ?
+    {...h, frames: h.frames.filter((frame) => (frame as {id: string}).id !== f.space.genesis.id)} : h)};
+  refused(await evaluate(corruptHistory, {histories: f.histories}), "trust_recovery_required");
+  const withGetter = Object.defineProperty({...state}, "accepted", {get() { throw new Error("getter invoked"); }, enumerable: true});
+  refused(await evaluate(withGetter), "malformed_catalog");
+  const incoming = {catalogs: [f.catalogJson], rotations: [], histories: f.histories, cutoffProofs: []};
+  const promise = evaluateTreehouseCatalogTrust({installed: await prepare(f), expected, incoming});
+  incoming.catalogs[0] = "tampered after call";
+  const decision = await promise; assert.equal(decision.kind, "propose"); assert.equal(decision.routes.length, 2);
+  const store = {kind: "existing_identity", expected} as never;
+  refused(await prepareTreehouseCatalogInstallation({review: f.review, history: f.histories[0]!, store}), "malformed_catalog");
+});
+
+test("twelve actual archived Threads retain all thirteen slots, while a legitimate signer cannot add the fourteenth entry", async () => {
+  const f = await trustFixture(12);
+  for (const t of f.threads) t.frames.push(await authorTreehouseCommand({product: "Treehouse.Thread", replica: t.replica, signer: t.signer,
+    deps: [t.pin.id], capId: t.delegation.id, command: {command: "archive_thread"}}));
+  const decision = await evaluate(await prepare(f), {histories: f.histories, catalogs: [f.catalogJson]});
+  assert.equal(decision.kind, "propose"); assert.equal(decision.routes.length, 13);
+  const raw = JSON.parse(f.catalogJson) as ["map", [CarrierTerm, CarrierTerm][]];
+  const catalog = raw[1].find(([key]) => JSON.stringify(key) === '["atom","catalog"]')![1] as ["map", [CarrierTerm, CarrierTerm][]];
+  const entries = catalog[1].find(([key]) => JSON.stringify(key) === '["atom","entries"]')![1] as ["list", CarrierTerm[]];
+  entries[1].push(entries[1][1]!);
+  const bytes = canonicalBytesForCarrierTerm(["list", [["bin", Buffer.from("lattice-treehouse-transport-catalog-v1").toString("base64")], catalog]]);
+  raw[1].find(([key]) => JSON.stringify(key) === '["atom","signature"]')![1] = ["bin", Buffer.from(await f.catalogSigner.sign(bytes)).toString("base64")];
+  refused(await evaluate(decision.next, {catalogs: [JSON.stringify(raw)]}), "malformed_catalog");
+});
+
+test("actual 1024-artifact and16MiB inclusive boundaries freeze without evicting or admitting overflow", async () => {
+  const f = await trustFixture(0), prepared = await prepare(f);
+  async function chain(count: number, width?: number) {
+    const catalogs = []; let prior: string | null = null;
+    for (let i = 0; i < count; i++) {
+      const catalog = {...f.catalog, revision: i, previous: prior};
+      let json = await signedCatalog(catalog, f.catalogSigner);
+      if (width !== undefined) json += " ".repeat(width - Buffer.byteLength(json));
+      prior = transportCatalogId(catalog); catalogs.push({id: prior, json});
+    }
+    return {catalogs: catalogs.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0), accepted: {binding: f.bootstrap.id, generation: 0, catalog: prior!, revision: count - 1}};
+  }
+  for (const [count, width] of [[1024, undefined], [128, 128 * 1024]] as const) {
+    const prior = await chain(count, width), state = {...prepared, ...prior};
+    const atBound = await evaluate(state); assert.equal(atBound.kind, "unchanged", `${atBound.kind}:${atBound.reason}`);
+    assert.equal(atBound.routes.length, 1);
+    const extra = await signedCatalog({...f.catalog, revision: count, previous: prior.accepted.catalog}, f.catalogSigner);
+    const result = await evaluate(state, {catalogs: [extra]});
+    assert.equal(result.kind, "retain_blocked", `${result.kind}:${result.reason}`); assert.equal(result.reason, "control_history_limit");
+    assert.deepEqual(result.next.catalogs, state.catalogs); assert.deepEqual(result.next.accepted, state.accepted); assert.deepEqual(result.routes, []);
+    assert.equal(result.next.blocked!.triggers[0]!.id, transportCatalogId({...f.catalog, revision: count, previous: prior.accepted.catalog}));
+    assert.equal(result.next.blocked!.triggers[0]!.bytes, Buffer.byteLength(extra));
+    const reopened = await evaluate(result.next); assert.equal(reopened.kind, "retain_blocked"); assert.deepEqual(reopened.routes, []);
+  }
 });
 
 test("module-issued route decisions cannot be fabricated or mutated into another pinned identity", async () => {
