@@ -1912,3 +1912,45 @@ purpose. Duplicate migration-fixture centralization is deferred: the shared
 fingerprint and independent gates already agree, and changing those oracles
 does not close a demonstrated runtime defect. All pre-existing vector bytes,
 protected tests, README and the shared roadmap ledger remain untouched.
+
+The resolved-root regression is committed in `c12920cf`; the original collector
+honored the outsider's witnessed beacon on an unbound replica. The repaired
+collectors refuse it in both runtimes while the same policy introduced later by
+the resolved root remains effective. `e9346432` adds two signed oracle scenarios:
+`township_beacon_witnessed_unbound_root` and
+`township_beacon_witnessed_large_policy_integer`. The latter interleaves valid
+beacons with invalid replacement policies whose version, threshold or step is
+`9_007_199_254_740_992`. Before the contextual decoder, strict TS replay stopped
+on those authentic geneses. Both new scenarios now pass raw hash/signature
+verification, exact-frame preservation and semantic conformance.
+
+`1ebea5f9` records eight public authoring failures: an inadequate automatic lease
+parent, resulting semantic refusal, missing-parent persistence, and an unsorted
+two-tip claim differing from the final operation's dependencies. The final
+authoring path uses the new claim constructor before signing; the unchanged
+received-certificate verifier still rejects the old unsorted signed claim.
+Explicit inadequate parents still produce the existing `not_attenuated` judge
+verdict. New controls retain strict refusal for unrelated signed large integers,
+beacon epoch overflow and malformed policy map pairs. The post-beacon compaction
+cut explicitly excludes the beacon while retaining the later command.
+
+At repair commit `580bc279bbb156aaa947ef6252481d0b2e7d357e`, final `mix check`
+exits 0: **695 tests plus 27 properties, zero failures**, three existing
+exclusions, clean formatting and strict Credo exit 0. The separate focused beacon,
+fresh-VM and compaction gate passes 35 tests plus one property. Typecheck, extended
+Township authoring, all 64 conformance vectors, canonical, carrier, V01 guard and
+the normal generated-dist build pass. Git-object comparison confirms all 62
+pre-existing vector files and the four protected test files are byte-identical
+to `201e7ae6`. No HTTP boundary or protected production semantics changed.
+
+Evidence lives under `/tmp/lattice-treehouse-execution-20260906/`:
+`r03-root-source-red.log`, `r03-root-source-green.log`,
+`r03-policy-integer-red.log`, `r03-policy-integer-green.log`,
+`r03-authoring-parent-claim-red-final.log`, `r03-hosted-final-authoring.log`,
+`r03-hosted-focused.log`, `r03-hosted-final-mix-check.log`,
+`r03-hosted-conformance.log` and `r03-hosted-scope-evidence.json`.
+The earlier authoring run exposed a fixture property-name mistake before
+reaching the claim assertion; its output is preserved separately, and the
+final RED above reaches all eight behavioral failures without that error.
+Final independent exact-diff review, integration and hosted thread closure
+remain pending. Earlier review PASS records do not close this remediation.
