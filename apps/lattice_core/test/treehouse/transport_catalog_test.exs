@@ -65,7 +65,8 @@ defmodule Treehouse.TransportCatalogTest do
       "wss://relay.invalid:443", "wss://relay.invalid:0", "wss://relay.invalid:65536",
       "wss://127.0.0.1", "wss://127.1", "wss://2130706433", "wss://0x7f000001",
       "wss://0x", "wss://example.123", "wss://[::1]", "wss://relay.invalid.",
-      "wss://user@relay.invalid", "wss://relay.invalid?x", "wss://relay.invalid#x"] do
+      "wss://user@relay.invalid", "wss://relay.invalid?x", "wss://relay.invalid#x",
+      "wss://relay.invalid\n", "wss://relay.invalid\r", "wss://relay.invalid\t"] do
       assert {:error, :malformed_catalog} = TransportCatalog.normalize_bootstrap(%{bootstrap | origin: origin})
     end
     for malformed <- [Map.put(bootstrap, :extra, 1), Map.delete(bootstrap, :nonce),
