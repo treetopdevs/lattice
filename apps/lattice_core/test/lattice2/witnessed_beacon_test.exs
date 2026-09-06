@@ -115,6 +115,19 @@ defmodule Lattice2.WitnessedBeaconTest do
     }
   end
 
+  test "public certificate verification refuses unencodable epochs without raising" do
+    sim = town()
+    for epoch <- [0, 9_007_199_254_740_991, 18_446_744_073_709_551_615] do
+      signed = certificate(sim, "w0", epoch)
+      assert :ok = BeaconCertificate.verify(signed, signed.claim, policy(sim))
+      for outside <- [18_446_744_073_709_551_616, Integer.pow(2, 256)] do
+        claim = %{signed.claim | epoch: outside}
+        assert {:error, :unauthorized_beacon} =
+                 BeaconCertificate.verify(%{signed | claim: claim}, claim, policy(sim))
+      end
+    end
+  end
+
   defp replace_policy(sim, value, realm \\ "clerk") do
     root = Sim.identity(sim, realm)
     d = Delegation.genesis(root, sim.replica, ops: [:post], live: true)
