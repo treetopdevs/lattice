@@ -7,10 +7,51 @@ defmodule Treehouse.TransportCatalog do
 
   @catalog_fields ~w(version product space bootstrap binding revision previous entries)a
   @entry_fields ~w(product replica kind schema root genesis creation reference route service_id service_key)a
+  @rotation_fields ~w(version product space bootstrap parent prior_catalog generation new_catalog_key nonce inventory_digest cutoffs)a
   @max_artifact_bytes 131_072
 
   @spec verify_rotation(term(), binary()) :: :ok | {:error, atom()}
-  def verify_rotation(_envelope, _trusted_key), do: {:error, :invalid_rotation_signature}
+  def verify_rotation(envelope, trusted_key) do
+    with true <- fields?(envelope, [:rotation, :old_signature, :new_signature]),
+         true <- bytes?(envelope.old_signature, 64) and bytes?(envelope.new_signature, 64) and bytes?(trusted_key, 32),
+         {:ok, rotation} <- normalize_rotation(envelope.rotation) do
+      if trusted_key != rotation.new_catalog_key and
+           Identity.verify(trusted_key, rotation_bytes(rotation), envelope.old_signature) and
+           Identity.verify(rotation.new_catalog_key, rotation_possession_bytes(rotation), envelope.new_signature),
+        do: :ok,
+        else: {:error, :invalid_rotation_signature}
+    else
+      _ -> {:error, :malformed_catalog}
+    end
+  end
+
+  @spec normalize_rotation(term()) :: {:ok, map()} | {:error, :malformed_catalog}
+  def normalize_rotation(value) do
+    if fields?(value, @rotation_fields) and value.version == 1 and value.product == :treehouse and
+         text?(value.space) and id?(value.bootstrap) and id?(value.parent) and id?(value.prior_catalog) and
+         integer?(value.generation) and value.generation > 0 and bytes?(value.new_catalog_key, 32) and
+         id?(value.nonce) and id?(value.inventory_digest) and cutoffs?(value.cutoffs),
+      do: {:ok, value}, else: {:error, :malformed_catalog}
+  end
+
+  @spec rotation_bytes(term()) :: binary()
+  def rotation_bytes(value),
+    do: Canonical.term(["lattice-treehouse-catalog-rotation-v1", require_value(normalize_rotation(value))])
+
+  @spec rotation_possession_bytes(term()) :: binary()
+  def rotation_possession_bytes(value),
+    do: Canonical.term(["lattice-treehouse-transport-possession-v1", :catalog, require_value(normalize_rotation(value))])
+
+  @spec rotation_id(term()) :: String.t()
+  def rotation_id(envelope) do
+    if fields?(envelope, [:rotation, :old_signature, :new_signature]) and
+         bytes?(envelope.old_signature, 64) and bytes?(envelope.new_signature, 64) do
+      require_value(normalize_rotation(envelope.rotation))
+      digest(Canonical.term(["lattice-treehouse-catalog-rotation-v1", envelope]))
+    else
+      raise ArgumentError, "malformed catalog rotation"
+    end
+  end
 
   @spec verify_catalog_json(binary(), binary()) :: :ok | {:error, atom()}
   def verify_catalog_json(bytes, trusted_key) do
@@ -117,6 +158,19 @@ defmodule Treehouse.TransportCatalog do
   defp previous?(0, nil), do: true
   defp previous?(revision, previous) when revision > 0, do: id?(previous)
   defp previous?(_, _), do: false
+
+  defp cutoffs?(values) when is_list(values) and length(values) in 1..13,
+    do: Enum.all?(values, &cutoff?/1) and ordered_unique?(Enum.map(values, & &1.replica))
+  defp cutoffs?(_), do: false
+
+  defp cutoff?(value),
+    do: fields?(value, [:replica, :frontier, :log_digest]) and text?(value.replica) and
+      id?(value.log_digest) and is_list(value.frontier) and Enum.all?(value.frontier, &id?/1) and
+      ordered_unique?(value.frontier)
+
+  defp require_value({:ok, value}), do: value
+  defp require_value(_), do: raise(ArgumentError, "malformed catalog value")
+  defp digest(value), do: :crypto.hash(:sha256, value) |> Base.url_encode64(padding: false)
 
   defp fields?(value, keys), do: is_map(value) and Enum.sort(Map.keys(value)) == Enum.sort(keys)
   defp text?(value), do: is_binary(value) and byte_size(value) > 0 and String.valid?(value)
