@@ -728,7 +728,7 @@ check("witnessed beacon authored from a two-tip frontier is honored", materializ
 // Hosted fvK0j: only the raw outer dependency list changes; the signed claim is exact.
 const rawDuplicateBeacon = { ...finalBeacon, deps: [...finalBeacon.deps].reverse().concat(finalBeacon.deps) };
 check("raw duplicate outer deps preserve the original hash and signature", await verifyCarrierOp(rawDuplicateBeacon,
-  { verify: async (pub, bytes, signature) => ed25519.verify(signature, bytes, pub) }),
+  { verify: async (pub, bytes, signature) => ed25519.verify(signature, bytes, Buffer.from(pub, "base64"), {zip215: false}) }),
   { hash: true, signature: true, valid: true });
 check("strict frame decode retains raw duplicate dependencies", decodeCarrierOpFrame(rawDuplicateBeacon), rawDuplicateBeacon);
 const rawDuplicateOps = carrierOpsToSemanticOps([...claimFrames, rawDuplicateBeacon], beaconVector.realmByPubkey);
@@ -750,7 +750,7 @@ const receivedDuplicateBeacon = await authorCarrierOp({ replica: beaconVector.re
   body: beaconClaimBody(receivedDuplicateClaim, entries.map((entry) => ({ witness: entry.publicKeyBase64,
     signature: Buffer.from(entry.sign(canonicalBytesForWitnessedBeaconClaim(receivedDuplicateClaim))).toString("base64") }))) });
 check("actually duplicated received claim remains cryptographically authentic", (await verifyCarrierOp(receivedDuplicateBeacon,
-  { verify: async (pub, bytes, signature) => ed25519.verify(signature, bytes, pub) })).valid, true);
+  { verify: async (pub, bytes, signature) => ed25519.verify(signature, bytes, Buffer.from(pub, "base64"), {zip215: false}) })).valid, true);
 check("actually duplicated received claim remains unauthorized", materialize(beaconVector.schema,
   carrierOpsToSemanticOps([...claimFrames, receivedDuplicateBeacon], beaconVector.realmByPubkey))
   .quarantineReasons.get(receivedDuplicateBeacon.id), "unauthorized_beacon");
