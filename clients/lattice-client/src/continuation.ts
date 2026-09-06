@@ -1,4 +1,5 @@
-import { canonicalBase64Bytes } from "./codec";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { canonicalBase64Bytes, canonicalBytesForCarrierTerm } from "./codec";
 import type { CarrierTerm } from "./carrier";
 
 export interface ContinuationProfile {
@@ -41,15 +42,109 @@ export interface ContinuationCertificate {
   signatures: ContinuationSignature[];
 }
 
-export function continuationProfileToCarrierTerm(_value: unknown): CarrierTerm | null { return null; }
-export function continuationProfileFromCarrierTerm(_value: unknown): ContinuationProfile | null { return null; }
-export function continuationClaimToCarrierTerm(_value: unknown): CarrierTerm | null { return null; }
-export function continuationClaimFromCarrierTerm(_value: unknown): ContinuationClaim | null { return null; }
-export function continuationCertificateToCarrierTerm(_value: unknown): CarrierTerm | null { return null; }
-export function continuationCertificateFromCarrierTerm(_value: unknown): ContinuationCertificate | null { return null; }
-export function canonicalBytesForContinuationProfile(_value: unknown): Uint8Array { throw new TypeError("unimplemented continuation profile"); }
-export function canonicalBytesForContinuationClaim(_value: unknown): Uint8Array { throw new TypeError("unimplemented continuation claim"); }
-export function continuationProfileId(_value: unknown): string | null { return null; }
+const profileDomain = "lattice-continuation-profile-v1";
+const claimDomain = "lattice-continuation-witness-v1";
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder("utf-8", { fatal: true });
+
+export function continuationProfileToCarrierTerm(value: unknown): CarrierTerm | null {
+  const profile = normalizeContinuationProfile(value);
+  if (profile === null) return null;
+  return atomMap({
+    mode: atom(profile.mode), version: integer(profile.version), product: atom(profile.product),
+    kind: atom(profile.kind), role: atom(profile.role), nominee: binary(profile.nominee),
+    witnesses: ["list", profile.witnesses.map(binary)], threshold: integer(profile.threshold),
+    max_lease_epochs: integer(profile.maxLeaseEpochs),
+  });
+}
+
+export function continuationProfileFromCarrierTerm(value: unknown): ContinuationProfile | null {
+  const fields = readAtomMap(value, [
+    "mode", "version", "product", "kind", "role", "nominee", "witnesses", "threshold", "max_lease_epochs",
+  ]);
+  if (fields === null) return null;
+  return normalizeContinuationProfile({
+    mode: readAtom(fields.mode), version: readInteger(fields.version), product: readAtom(fields.product),
+    kind: readAtom(fields.kind), role: readAtom(fields.role), nominee: readBinary(fields.nominee),
+    witnesses: readList(fields.witnesses)?.map(readBinary), threshold: readInteger(fields.threshold),
+    maxLeaseEpochs: readInteger(fields.max_lease_epochs),
+  });
+}
+
+export function continuationClaimToCarrierTerm(value: unknown): CarrierTerm | null {
+  const claim = normalizeContinuationClaim(value);
+  if (claim === null) return null;
+  return atomMap({
+    version: integer(claim.version), product: atom(claim.product), kind: atom(claim.kind),
+    replica: text(claim.replica), role: atom(claim.role), profile_id: text(claim.profileId),
+    profile_genesis: text(claim.profileGenesis), holder: binary(claim.holder),
+    holder_epoch: text(claim.holderEpoch), successor: binary(claim.successor),
+    delegation_id: text(claim.delegationId), author: binary(claim.author),
+    deps: ["list", claim.deps.map(text)], epoch: integer(claim.epoch),
+    epoch_basis: ["list", claim.epochBasis.map(text)],
+  });
+}
+
+export function continuationClaimFromCarrierTerm(value: unknown): ContinuationClaim | null {
+  const fields = readAtomMap(value, [
+    "version", "product", "kind", "replica", "role", "profile_id", "profile_genesis", "holder",
+    "holder_epoch", "successor", "delegation_id", "author", "deps", "epoch", "epoch_basis",
+  ]);
+  if (fields === null) return null;
+  return normalizeContinuationClaim({
+    version: readInteger(fields.version), product: readAtom(fields.product), kind: readAtom(fields.kind),
+    replica: readText(fields.replica), role: readAtom(fields.role), profileId: readText(fields.profile_id),
+    profileGenesis: readText(fields.profile_genesis), holder: readBinary(fields.holder),
+    holderEpoch: readText(fields.holder_epoch), successor: readBinary(fields.successor),
+    delegationId: readText(fields.delegation_id), author: readBinary(fields.author),
+    deps: readList(fields.deps)?.map(readText), epoch: readInteger(fields.epoch),
+    epochBasis: readList(fields.epoch_basis)?.map(readText),
+  });
+}
+
+export function continuationCertificateToCarrierTerm(value: unknown): CarrierTerm | null {
+  const certificate = normalizeContinuationCertificate(value);
+  if (certificate === null) return null;
+  return atomMap({
+    claim: continuationClaimToCarrierTerm(certificate.claim)!,
+    signatures: ["list", certificate.signatures.map((entry) => atomMap({
+      witness: binary(entry.witness), signature: binary(entry.signature),
+    }))],
+  });
+}
+
+export function continuationCertificateFromCarrierTerm(value: unknown): ContinuationCertificate | null {
+  const fields = readAtomMap(value, ["claim", "signatures"]);
+  if (fields === null) return null;
+  const entries = readList(fields.signatures);
+  if (entries === null) return null;
+  const signatures: unknown[] = [];
+  for (const entry of entries) {
+    const signature = readAtomMap(entry, ["witness", "signature"]);
+    if (signature === null) return null;
+    signatures.push({ witness: readBinary(signature.witness), signature: readBinary(signature.signature) });
+  }
+  return normalizeContinuationCertificate({ claim: continuationClaimFromCarrierTerm(fields.claim), signatures });
+}
+
+/** Domain-separated bytes from the existing canonical encoder; no independent codec. */
+export function canonicalBytesForContinuationProfile(value: unknown): Uint8Array {
+  const profile = continuationProfileToCarrierTerm(value);
+  if (profile === null) throw new TypeError("malformed continuation profile");
+  return canonicalBytesForCarrierTerm(["list", [text(profileDomain), profile]]);
+}
+
+export function canonicalBytesForContinuationClaim(value: unknown): Uint8Array {
+  const claim = continuationClaimToCarrierTerm(value);
+  if (claim === null) throw new TypeError("malformed continuation claim");
+  return canonicalBytesForCarrierTerm(["list", [text(claimDomain), claim]]);
+}
+
+export function continuationProfileId(value: unknown): string | null {
+  if (normalizeContinuationProfile(value) === null) return null;
+  return bytesToBase64(sha256(canonicalBytesForContinuationProfile(value)))
+    .replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+}
 
 const claimKeys = [
   "version", "product", "kind", "replica", "role", "profileId", "profileGenesis",
@@ -160,4 +255,62 @@ function comparePublicKeys(left: string, right: string): number {
     if (a[i] !== b[i]) return a[i]! - b[i]!;
   }
   return 0;
+}
+
+function atom(value: string): CarrierTerm { return ["atom", value]; }
+function integer(value: number): CarrierTerm { return ["int", value]; }
+function binary(value: string): CarrierTerm { return ["bin", value]; }
+function text(value: string): CarrierTerm { return binary(bytesToBase64(textEncoder.encode(value))); }
+function atomMap(fields: Record<string, CarrierTerm>): CarrierTerm {
+  return ["map", Object.entries(fields).map(([key, value]) => [atom(key), value])];
+}
+
+function readAtomMap(value: unknown, keys: readonly string[]): Record<string, unknown> | null {
+  if (!Array.isArray(value) || value.length !== 2 || value[0] !== "map" || !Array.isArray(value[1]) ||
+    value[1].length !== keys.length) return null;
+  const fields: Record<string, unknown> = Object.create(null);
+  for (const pair of value[1]) {
+    if (!Array.isArray(pair) || pair.length !== 2) return null;
+    const key = readAtom(pair[0]);
+    if (key === null || !keys.includes(key) || Object.hasOwn(fields, key)) return null;
+    fields[key] = pair[1];
+  }
+  return fields;
+}
+
+function readAtom(value: unknown): string | null {
+  return Array.isArray(value) && value.length === 2 && value[0] === "atom" && typeof value[1] === "string"
+    ? value[1] : null;
+}
+
+function readInteger(value: unknown): number | null {
+  if (!Array.isArray(value) || value.length !== 2 || value[0] !== "int") return null;
+  const raw = value[1];
+  if (integerIn(raw, 0, Number.MAX_SAFE_INTEGER)) return raw;
+  if (typeof raw !== "string" || !/^(0|[1-9][0-9]*)$/.test(raw)) return null;
+  const parsed = Number(raw);
+  return integerIn(parsed, 0, Number.MAX_SAFE_INTEGER) ? parsed : null;
+}
+
+function readBinary(value: unknown): string | null {
+  if (!Array.isArray(value) || value.length !== 2 || value[0] !== "bin" || typeof value[1] !== "string") return null;
+  return canonicalBase64Bytes(value[1]) === null ? null : value[1];
+}
+
+function readText(value: unknown): string | null {
+  const encoded = readBinary(value);
+  if (encoded === null) return null;
+  try { return textDecoder.decode(canonicalBase64Bytes(encoded)!); } catch { return null; }
+}
+
+function readList(value: unknown): unknown[] | null {
+  return Array.isArray(value) && value.length === 2 && value[0] === "list" && Array.isArray(value[1])
+    ? Array.from(value[1]) : null;
+}
+
+function bytesToBase64(value: Uint8Array): string {
+  if (typeof Buffer !== "undefined") return Buffer.from(value).toString("base64");
+  const encode = (globalThis as unknown as { btoa?: (value: string) => string }).btoa;
+  if (!encode) throw new Error("base64 encoding unavailable");
+  return encode(Array.from(value, (byte) => String.fromCharCode(byte)).join(""));
 }
