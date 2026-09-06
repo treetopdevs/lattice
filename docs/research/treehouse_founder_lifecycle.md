@@ -51,7 +51,7 @@ must never become a check that requires those gaps to survive the later work.
 | P02 | A child expiring at 6 remains lapsed after its founder parent expires. Extending it to 13 makes the grant introduction `not_attenuated` and its command `invalid_capability`. | Renew issuer authority first; a new ID is not proof of renewal. |
 | P03 | Surviving issuer revokes its child. Its revoke of a founder grant is `unauthorized_revoke`; an unleased founder grant remains usable. | Track actual issuers; permanent residual cannot be hidden by UI removal. |
 | P04 | Unpinned succession fails. A survivor's replacement genesis is `impostor_genesis`. | Founder loss before pinning cannot be repaired on that root. |
-| P05 | Non-root simple beacon is `unauthorized_beacon`. A three-field beacon is ignored by the beacon collector and lapses nothing, even though it has no quarantine reason. `Sim` cannot yet author the reserved beacon policy. | R03 is missing; absence of quarantine is not beacon authority. |
+| P05 | Non-root simple beacon is `unauthorized_beacon`. A three-field beacon is ignored by the beacon collector and lapses nothing, even though it has no quarantine reason. `Sim` cannot yet author the reserved beacon policy. | R03 is missing; absence of quarantine is not beacon authority. Plan 179 explicitly adopts the later `unauthorized_beacon` audit verdict without changing this materialized outcome; A13 pins that narrow migration exception. |
 | P06 | With founder and one witness removed, two-of-three succession succeeds; one remaining witness is `insufficient_recovery_witnesses`. | One lost witness tolerated only while the other two remain available; no rotation proof. |
 | P07 | Witnessed successor acquires more operations than its narrow predecessor, self-issues without parent or lease, admits a member and issues a child grant. | Current succession is not the bounded continuation profile. |
 | P08 | Removing a member from Matter's materialized set leaves a separate Core posting capability usable. | R10 policy and R14 grant/transport reconciliation must supply product removal. |
@@ -142,6 +142,12 @@ renewal back through a dead nominated key. It is a proposed versioned extension,
 not existing `decide_succeed` behavior. If the current holder key and fixed nominee
 are both lost, this profile stops; AF-3 or a separately approved recovery contract
 must supply new-key authority. Witness rotation after the root is lost is not added.
+
+Before selecting that dual-path policy, R04 must characterize concurrent succession
+against one predecessor, then pin the deterministic holder-versus-nominee winner
+using the role timeline's canonical order and an explicit quarantine reason for
+the losing acquisition. Arrival order or whichever ceremony finishes first cannot
+select authority; the partition/heal case must agree in both runtimes.
 
 The certificate must bind a separate continuation purpose/version, full profile
 digest, product, replica, role, predecessor holder and acquisition ID, new holder,
@@ -321,7 +327,7 @@ these case IDs; until then each is OPEN and no profile may claim its exit.
 | --- | --- | --- |
 | A01 two-cycle continuation | Physically remove founder identity/log in both runtimes; acquire leased issuer, issue/admit/remove, advance witnessed epochs, renew issuer then all children at E5/E10; verify old IDs lapse at E7/E12, new IDs work at E14, and every retained replica agrees. | R03/R04; failure stops live provisioning/strong pilot. |
 | A02 bounded succession | Narrow predecessor acquisition, attempt wider ops, extra role/live privilege, unleased/too-long expiry, foreign parent, noncausal acquisition and wrong epoch basis; all refuse. Honored acquisition with expired ancestor may renew only through the explicit continuation certificate. | R04; any scope expansion is a hard authorization stop. |
-| A03 claim substitution | Reuse a certificate with different delegation ID/expiry, author, deps, replica, product, role, holder epoch or profile; none gains authority. Exercise concurrent acquisition and an omitted known acquisition. | R04/R17; signing/verification mismatch stops the ceremony. |
+| A03 claim substitution | Reuse a certificate with different delegation ID/expiry, author, deps, replica, product, role, holder epoch or profile; none gains authority. Exercise concurrent acquisition and an omitted known acquisition. Characterize existing same-predecessor succession races before policy selection; pin the canonical holder-versus-nominee winner and losing-acquisition quarantine reason under partition/heal in both runtimes. | R04/R17; signing/verification mismatch or arrival-order authority stops the ceremony. |
 | A04 partial readiness | Lose founder before any pin and after 12 of 13 pins; show precisely unready roots. Valid root add/replace while alive works according to its causal contract; non-root repair fails. | R03/R14; no all-ready claim from Space-only pin. |
 | A05 witness failures | One of three lost succeeds with two; two lost fail; unknown/duplicate/reordered certificate signatures fail as specified. Hostile authorized threshold advancement is an explicit permitted-risk case, not silently denied by a fake clock. | R03/R04/R17; below quorum stops, hostile quorum pauses profile, post-loss rotation remains unavailable. |
 | A06 member removal | Revoke own-issued children, fail foreign issuer revoke, lapse leased founder grants, retain unleased negative control. Fan out across 13 replicas including archives and transport; disconnected/missing issuer stays `removal_pending`. Test concurrent old posts on heal. | R10/R11/R14; unresolved grants stay visible; no false completed removal. |
@@ -331,7 +337,7 @@ these case IDs; until then each is OPEN and no profile may claim its exit.
 | A10 crash boundaries | Kill between `local_draft`, `genesis_created`, `carrier_pending`, `listed`; during manifest activation, signature persistence and renewal upload. Resume exact attempt without duplicated genesis/route/op or phantom listing. | R11b/R14; ambiguous durability or identity reset stops workflow. |
 | A11 missed renewal/quorum | Lead absent, backup operates; then quorum absent through warning. Resume from retained union, show each impending lapse, recover only through approved bounded ceremony, refuse ordinary catch-up beyond two steps. | R14/R18; no hidden clock, auto-loop or unbounded grant. |
 | A12 packaged workload | Execute full 12-by-13 roster for two renewal rounds on selected devices, counting primitive signatures, user prompts, time, bytes, queued failures and exact retries, including continuation and beacon ceremonies. | R14/R17/R22/R23; missing native/device measurements block cadence adoption/profile enablement. |
-| A13 version and migration | Replay every legacy vector unchanged. Add a new profile with a living-root pin after enrollment, and prove old operations keep their prior verdicts while only causal descendants can use continuation. If that migration is not supported, reject it and restrict the profile to fresh versioned roots. | R04/R14; changed historical meaning without a separately approved contract is a stop. |
+| A13 version and migration | Replay every legacy vector unchanged. Add a new profile with a living-root pin after enrollment, and prove old operations keep their prior verdicts while only causal descendants can use continuation. If that migration is not supported, reject it and restrict the profile to fresh versioned roots. P05's previously inert three-field beacon is an explicit R03 exception already adopted by Plan 179's absent/invalid-policy contract: its audit verdict becomes `unauthorized_beacon`, while identical historical signed bytes, materialized state, holders, effective epochs and lease status must be preserved. Retain the immutable baseline evidence and identify the scoped updated executable expectation; this exception authorizes no other changed historical verdict. | R03/R04/R14; a delta beyond the explicit Plan 179 audit exception or an unapproved continuation migration is a stop. |
 
 ## 8. Source evidence and verification record
 
@@ -371,6 +377,18 @@ introduction reports `not_attenuated`, but a command citing it reports
 `invalid_capability`. Both seams are now asserted. This is probe calibration,
 not RED/GREEN evidence of implementing continuation. No TS, native, device,
 hosting or human-prompt execution is claimed by these local results.
+
+Claude Fable (`claude-fable-5`) reviewed the exact preparation range
+`7610cc9b2fab3acf21bf0b1b02db04a6b9a497c6..918bb018c66a1b23e833e30ed517aed397676b75`
+and returned PASS. Its two P1 recommendations are incorporated above: A03 requires
+characterizing and fixing deterministic dual-path race resolution before R04
+selects the policy, and A13 names P05 plus Plan 179's already explicit audit-only
+exception. The integrator verified that exception against Plan 179's
+"The verdict when the policy is absent or invalid" paragraph; the user's program
+authorization covers that existing contract. R03 must add the migration proof.
+Optional P2 coverage for duplicate/unknown witness signatures remains A05 work;
+the founder-loss helper's explicit Sim field inventory is a characterization at
+this pinned base, not a production erasure or physical-loss claim.
 
 No authority implementation, Plan 179 vector, source worktree, shared README or
 unified status row is changed by R02 preparation.
