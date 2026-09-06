@@ -791,3 +791,39 @@ proof is still missing. Retain pending proof IDs explicitly; never promote eithe
 branch, treat the missing proof as valid, or reserve its routes. Available invalid
 entry proof remains `invalid_catalog_transition`. This prevents withholding proof
 from hiding signed equivocation; it introduces no new Core verdict.
+
+### Integrated observation foundation evidence — 2026-09-06
+
+This R11a checkpoint contains the adopted closed codecs, actual root bootstrap,
+raw authenticated cutoff, all-honored bootstrap observation and actual signed
+entry observation. Retained-trust evaluation, durable installation, key rotation
+activation, provisioning and R11b/R11c remain unfinished. C01–C15 remain OPEN.
+
+At integrated foundation676b0708, `mix check` passes **856 tests +27 properties,
+zero failures**, three existing exclusions, formatting and strict Credo exit0.
+The final R03/R04/R10 source enters through automatic merge11ce9d72 of reviewed
+enginec0aa97d2. Formatting touched only12 R11 BEAM files and an independent
+metadata-stripped AST comparison confirms no expression change. The real fresh
+BEAM exporter regenerates all75 prior top-level vector files byte-identically.
+TypeScript bootstrap11, codec15, cutoff13 and profile observation tests, existing
+conformance/continuation/Treehouse/canonical suites, typecheck and normal build
+pass. The full Mix gate now runs both fresh cutoff authors/verifiers: exact
+records/pre-hash bytes/digest/frontier match TS→BEAM and BEAM→TS, including
+rejected and genuine evidence with the same supplied ID.
+
+Actual Fable approved the contract and TS bootstrap/export correction. Configured
+gpt-5.6-sol approved the frozen raw cutoff foundation5210ed2a and the entry
+foundation54a04cac, with no P0/P1/P2 in those scopes. The17 entry controls include
+independent roots, actual genesis/causal creation/reference, false metadata,
+unauthorized references, bounded family and corruption-before-pending refusal.
+The relevant logs are `r11a-foundation-full-check.log`, `r11a-format-ast.log`,
+`r11a-final-vector-comparison.json`, `r11a-final-*.log`, and the Sol reports under
+`/tmp/lattice-treehouse-execution-20260906/`. These are local/source evidence;
+final integrated review and hosted checks are separate required gates.
+
+The future raw `CatalogTrust` adapter distinguishes a validly signed incomplete
+raw snapshot (`trust_pending`) from forgery after checking all supplied raw
+frames. `CatalogEntries` takes complete R06 `Log` values; an incomplete Log struct
+violates that invariant and remains `invalid_verified_history`. The adapter may
+call the entry observer only after it has authenticated and completed those
+logs. This separation does not weaken R06 or hide another input's forgery.
