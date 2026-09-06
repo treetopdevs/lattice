@@ -1876,3 +1876,36 @@ characterization also passed (13 tests). Logs:
 `/tmp/lattice-treehouse-execution-20260906/r03-r02-integrated-check.log` and
 `r03-r02-p05-focused.log`. No TypeScript source changed after the preceding
 62-vector/leased-authoring/build gate.
+
+### Hosted review remediation scope (2026-09-06)
+
+The integrator authorized these precise follow-ups to frozen `201e7ae6` before
+their new regression gates. Both beacon-policy collectors must require the
+resolved replica root, including legacy unbound replicas, while preserving
+later policy replacement by that same root. Root resolution and role timelines
+remain unchanged. New signed exporter cases characterize this boundary and
+invalid reserved policies carrying otherwise canonical uint64 integers above
+the JavaScript safe horizon. The semantic decoder may ignore such an invalid
+reserved policy exactly where BEAM does; generic integer parsing, strict frame
+decoding, canonical bytes and the enclosing valid genesis stay unchanged.
+
+Two explicit helper amendments supersede the narrower step 6/6b wording:
+`codec.ts` may export `createWitnessedBeaconClaim(replica, epoch, author, deps)`
+to construct the existing five-field claim with unique sorted dependencies;
+the exact claim encoder and received-certificate verifier do not normalize
+hostile received evidence. `selectTownshipDelegationParentId` and its automatic
+persisted-authoring caller may consider requested `expiresEpoch` alongside
+their existing scope filters. A leased parent must cover the requested lease;
+an unleased child requires an unleased parent. Explicit parent selection and
+low-level signing retain the existing judge-refusal contract. No new authority
+rule or canonical encoding is introduced.
+
+Coverage stays in the existing R03 beacon tests, compaction GATE, TypeScript
+authoring/conformance harness and new exporter scenarios. The fresh-VM fixture
+may select the asdf shim with an explicit matching child toolchain path and a
+portable CI fallback. The horizon test must first establish that its real
+signed target frame exists. Policy-ID documentation may clarify its diagnostic
+purpose. Duplicate migration-fixture centralization is deferred: the shared
+fingerprint and independent gates already agree, and changing those oracles
+does not close a demonstrated runtime defect. All pre-existing vector bytes,
+protected tests, README and the shared roadmap ledger remain untouched.
