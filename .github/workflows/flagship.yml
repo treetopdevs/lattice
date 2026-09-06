@@ -175,6 +175,9 @@ jobs:
       - name: TS client conformance
         working-directory: clients/lattice-client
         run: npm run conformance
+      - name: TS Treehouse domain and authority review
+        working-directory: clients/lattice-client
+        run: npm run treehouse
       - name: TS V-01 authority fail-closed guard
         working-directory: clients/lattice-client
         run: npm run v01:guard

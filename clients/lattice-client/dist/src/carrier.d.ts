@@ -114,7 +114,12 @@ export interface CarrierDelegation {
     expires_epoch?: number;
 }
 export declare function carrierDelegationsFromFrames(frames: readonly CarrierOpFrame[]): CarrierDelegation[];
-export type DecodedTerm = null | boolean | number | BinTerm | AtomTerm | ListTerm | TupleTerm | MapTerm | MapSetTerm | DelegationTerm;
+export type DecodedTerm = null | boolean | number | {
+    type: "invalid_beacon_integer";
+} | {
+    type: "legacy_beacon_epoch";
+    decimal: string;
+} | BinTerm | AtomTerm | ListTerm | TupleTerm | MapTerm | MapSetTerm | DelegationTerm;
 interface BinTerm {
     type: "bin";
     bytes: Uint8Array;

@@ -336,3 +336,85 @@ match an honored signed genesis in every profile. The public wrong-identity asse
 failed (`/tmp/treehouse-r12-oracle-identity-red.log`), then passed after this verifier-only binding
 was added. The same real packaged artifact continues to pass. No production wire, authority or
 app path changed for this evidence correction.
+
+
+## Reviewed native follow-ups (2026-09-06)
+
+The integrator authorized the two concrete P2 repairs from the actual Claude Fable review of
+`6439daa3`. Public seams are `TreehouseWorkflow.select` with missing signing material and native
+`PreviewStore.save_draft` / `load_draft` / commit-watermark behavior for a valid replica nonce
+containing `Seed`. These repairs change no authority, frame, identity or shared KV guard contract.
+Missing-key selection is an in-memory reading preference; it must not commit, create a key,
+increment storage revision or enable authoring. Unknown profiles still refuse. Draft key encoding
+will use a stable lowercase hexadecimal SHA-256 identifier for new rows, with explicit retained
+legacy-row compatibility. The final evidence below will record that compatibility before code
+changes. Owned paths are the two workflow/native source files, their existing public tests,
+this document, a direct native hash dependency plus its normal lockfile update, and the external
+packaged reader's matching public draft-row lookup. The latter is an oracle-format amendment,
+not a product IPC or hidden test interface. Packaged replay remains a separate gate.
+
+
+Before the draft repair, the reviewed compatibility rule is: a legacy-only row remains at its
+unchanged key and revision; a new draft uses the deterministic lowercase SHA-256 hex key. Reads
+and writes reject `draft_storage_conflict` when both rows exist, even if their values match, and
+retain both byte-identically. Corrupt legacy data refuses instead of falling through to an empty
+or new row. Old and new binaries can concurrently create separate rows for a previously absent
+draft; per-key CAS does not prevent that cross-key race. The resulting retained conflict needs
+an explicit later resolution and is never silently assigned a winner. Existing watermark checks
+must refuse advancement on that conflict. The packaged reader mirrors this public storage format,
+and the UI maps the explicit conflict to readable preservation guidance.
+
+
+The bounded follow-ups are implemented with public RED/GREEN evidence. Missing-key selection
+first wrote revision metadata (11 writes instead of the expected 10), then passed without any
+commit, key creation or changed retained revision. Reopen restores the saved selection; switching
+still exposes the other Thread's actual posts, and authoring/unknown-profile refusals remain.
+The native `Seed` nonce regression first returned `local_store_unavailable`; the repaired public
+save/load and post-watermark sequence passes for the fragment in either nonce or root token.
+A legacy revision-7 row remains at the same key through revision 9, with no digest copy. A dual-row
+regression against the preceding native source first silently returned the legacy draft; it now
+refuses load, save/clear and watermark advancement, keeping both rows and history byte-identical.
+Corrupt legacy storage also refuses without creating a replacement.
+
+Final focused evidence is under `/tmp/lattice-treehouse-execution-20260906/`:
+`r12-missing-key-selection-red.log` / `r12-missing-key-selection-green.log`,
+`r12-draft-key-red.log`, `r12-dual-draft-red.log`, `r12-followup-native-final.log`
+(**10 native tests, zero failures**), `r12-followup-ui-tests.log` (workflow/storage/product pass),
+and `r12-followup-ui-build.log` (Vue typecheck and normal production build pass). Rust formatting
+and `git diff --check` pass. The first native filter matched zero tests; that log is retained as
+`r12-draft-key-red-first.log` and is not RED evidence. The corrected exact test name produced the
+recorded behavioral failure. No shared KV guard, schema, signing or engine source changed. The
+new direct `sha2` dependency uses the already locked 0.10.9 version; no dependency versions moved.
+The packaged reader now understands both draft row formats and refuses dual rows. This source
+repair does not rerun or replace packaged/Keychain evidence; the integrator still owns the later
+engine merge, full suite and hosted gates. Actual same-session Fable follow-up passed for both P2 repairs at `a5df72c0`; final dependency integration is recorded below.
+
+### Final preview integration — 2026-09-06
+
+Actual Fable's original implementation review at `6439daa3` and exact follow-up
+through `a5df72c0` now both stand at PASS: missing-key Thread selection remains
+readable, new draft keys use a lowercase SHA256 digest, legacy rows retain their
+original CAS key, and simultaneous legacy/new rows explicitly refuse writes as
+a retained conflict. Neither draft history nor signing identity is deleted.
+
+Automatic dependency merges through `e21d009d6f2e264cdc67ca8b4228f2b046072e1e`
+include final R10/R04/R03 engine source, including exact high legacy epochs and
+the reviewed claim-constructor dependency normalization. CI explicitly runs the
+new preview tests/build/native tests and packaged fresh/restart/oracle path; all
+existing gates and timeouts remain. AGENTS now documents preview npm dependencies
+required by the actual reciprocal Mix test in a fresh checkout.
+
+Full `mix check` at e21d009d passes **808 tests and 27 properties, zero failures**,
+three existing exclusions, clean formatting and strict Credo exit 0. Latest
+client build, preview tests and Vue production build pass. Logs are
+`/tmp/lattice-treehouse-execution-20260906/r12-final-high-epoch-full-check.log`,
+`r12-final-preview-tests.log`, and `r12-final-preview-build.log`. An initial
+client-build invocation used an incorrect relative npm prefix and failed before
+executing any build; correcting the working-directory-relative prefix passed.
+
+The original packaged fresh/restart and independent BEAM replay evidence remains
+valid for that recorded binary. Rebuilt retained-identity replay still awaits
+user-side macOS Keychain authorization; no new package/OS/device proof is inferred
+from these software gates. Final integrated review uses Sol under the user's
+instruction while Claude is unavailable. Exact hosted tip/merge checks and
+accepted parent closure remain required before R12 is complete.

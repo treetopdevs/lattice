@@ -348,6 +348,10 @@ export class TreehouseWorkflow {
     return this.exclusive(async () => {
       if (!this.state.profiles.some((p) => p.replica === replica))
         throw new Error("unknown_profile");
+      if (!this.keyAvailable) {
+        this.state = { ...this.state, active: replica };
+        return;
+      }
       await this.persist({ ...structuredClone(this.state), active: replica });
     });
   }

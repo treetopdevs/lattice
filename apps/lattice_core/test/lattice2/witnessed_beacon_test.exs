@@ -115,6 +115,84 @@ defmodule Lattice2.WitnessedBeaconTest do
     }
   end
 
+  test "public certificate verification refuses unencodable epochs without raising" do
+    sim = town()
+
+    for epoch <- [0, 9_007_199_254_740_991, 18_446_744_073_709_551_615] do
+      signed = certificate(sim, "w0", epoch)
+      assert :ok = BeaconCertificate.verify(signed, signed.claim, policy(sim))
+
+      for outside <- [18_446_744_073_709_551_616, Integer.pow(2, 256)] do
+        claim = %{signed.claim | epoch: outside}
+
+        assert {:error, :unauthorized_beacon} =
+                 BeaconCertificate.verify(%{signed | claim: claim}, claim, policy(sim))
+      end
+    end
+  end
+
+  test "public claim construction normalizes duplicate dependencies to the final signed op" do
+    sim = town() |> Sim.sync_all()
+    root = Sim.identity(sim, "clerk")
+    author = Sim.identity(sim, "w0")
+    signers = Enum.map(["w0", "w1"], &Sim.identity(sim, &1))
+    base = Sim.log(sim, "w0")
+    deps = Log.frontier(base)
+    left = Op.new(root, sim.replica, deps, :authority, {:heartbeat, :clerk, 1})
+    right = Op.new(root, sim.replica, deps, :authority, {:heartbeat, :clerk, 2})
+    log = base |> Log.append!(left) |> Log.append!(right)
+    supplied = [right.id, left.id, right.id, left.id]
+    claim = BeaconCertificate.claim(sim.replica, 4, author.pub, supplied)
+    signed = BeaconCertificate.new(claim, signers)
+    beacon = Op.new(author, sim.replica, supplied, :authority, {:beacon, 4, signed})
+    analysis = Authority.analyze(Matter, Log.append!(log, beacon))
+
+    refute Map.has_key?(analysis.reasons, beacon.id)
+    assert claim.deps == beacon.deps
+    assert claim.deps == Enum.sort([left.id, right.id])
+    assert :ok = BeaconCertificate.verify(signed, claim, policy(sim))
+
+    received = BeaconCertificate.new(%{claim | deps: supplied}, signers)
+    invalid = Op.new(author, sim.replica, supplied, :authority, {:beacon, 4, received})
+    invalid_analysis = Authority.analyze(Matter, Log.append!(log, invalid))
+    assert invalid_analysis.reasons[invalid.id] == :unauthorized_beacon
+    assert {:error, :unauthorized_beacon} = BeaconCertificate.verify(received, claim, policy(sim))
+  end
+
+  test "exact high legacy root epochs constrain descendants without constraining concurrent forks" do
+    sim = town()
+    {sim, lease} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 3)
+    base = Sim.sync_all(sim)
+    {sim, first} = Sim.beacon(base, "clerk", 9_007_199_254_740_992)
+    {sim, second} = Sim.beacon(sim, "clerk", 9_007_199_254_740_993)
+    {sim, descending} = Sim.beacon(sim, "clerk", 9_007_199_254_740_992)
+    sim = Sim.sync_all(sim)
+    {sim, low} = Sim.beacon(sim, "w0", 0, witnesses: ["w0", "w1"])
+    sim = Sim.sync_all(sim)
+
+    {sim, post} =
+      Sim.command(sim, "resident", :post, ["lapsed by exact high root"], cap: lease.id)
+
+    assert Sim.quarantined(sim, "resident", first.id) == false
+    assert Sim.quarantined(sim, "resident", second.id) == false
+    assert Sim.quarantined(sim, "resident", descending.id) == {true, :stale_beacon}
+    assert Sim.quarantined(sim, "resident", low.id) == {true, :stale_beacon}
+    assert Sim.quarantined(sim, "resident", post.id) == {true, :lease_expired}
+    assert Authority.expired?(Sim.log(sim, "resident"), lease.id)
+
+    {fork, allowed} = Sim.beacon(base, "w0", 4, witnesses: ["w0", "w1"])
+    merged = merge(Sim.log(sim, "resident"), Sim.log(fork, "w0"))
+    refute Map.has_key?(Authority.analyze(Matter, merged).reasons, allowed.id)
+    assert Authority.analyze(Matter, merged).reasons[low.id] == :stale_beacon
+
+    {other, unauthorized} = Sim.beacon(base, "w0", 18_446_744_073_709_551_615)
+    other = Sim.sync_all(other)
+    refute Authority.expired?(Sim.log(other, "resident"), lease.id)
+    {other, valid} = Sim.beacon(other, "w0", 4, witnesses: ["w0", "w1"])
+    assert Sim.quarantined(other, "w0", unauthorized.id) == {true, :unauthorized_beacon}
+    assert Sim.quarantined(other, "w0", valid.id) == false
+  end
+
   defp replace_policy(sim, value, realm \\ "clerk") do
     root = Sim.identity(sim, realm)
     d = Delegation.genesis(root, sim.replica, ops: [:post], live: true)

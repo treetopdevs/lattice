@@ -55,6 +55,8 @@ function describe(error: unknown): string {
       "Another window saved changes. Reopen Treehouse before retrying; your saved history is intact.",
     draft_changed_in_another_window:
       "Another window changed this draft. Your text is still here. Reopen before saving again.",
+    draft_storage_conflict:
+      "Two saved versions of this draft need resolution. Both are preserved; drafting is unavailable in this thread.",
     preview_storage_limit:
       "This local preview has reached its storage limit. Your saved history remains available.",
     thread_storage_limit:

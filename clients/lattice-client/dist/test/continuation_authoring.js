@@ -275,3 +275,24 @@ test("signer failures and invalid returned signatures fail closed", async () => 
     assert.deepEqual(await assembleContinuationFromFrames({ schema, frames: f.input.frames, review,
         certificate: cert, signer: { publicKey: f.holder.publicKey, sign: () => { throw new Error("locked"); } } }), { ok: false, reason: "invalid_continuation_input" });
 });
+test("valid high legacy epochs block bounded continuation while unauthorized high input stays inert", async () => {
+    for (const kind of ["space", "thread"]) {
+        for (const high of ["9007199254740992", "18446744073709551615"]) {
+            for (const authorized of [true, false]) {
+                const f = await fixture("bounded-continuation-v1", kind);
+                const frame = await authorCarrierOp({ replica: f.replica, deps: [f.beacon.id],
+                    kind: "authority", signer: authorized ? f.root : signer(9), cap: nil,
+                    body: tuple(atom("beacon"), ["int", high]) });
+                const result = await reviewContinuationFromFrames({ ...f.input,
+                    frames: [...f.input.frames, frame], deps: [frame.id] });
+                if (authorized)
+                    assert.deepEqual(result, { ok: false, reason: "invalid_continuation_epoch" });
+                else {
+                    assert.equal(result.ok, true);
+                    if (result.ok)
+                        assert.equal(result.review.claim.epoch, 5);
+                }
+            }
+        }
+    }
+});

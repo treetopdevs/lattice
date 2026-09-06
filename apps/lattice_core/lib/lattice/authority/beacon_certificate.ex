@@ -9,6 +9,7 @@ defmodule Lattice.Authority.BeaconCertificate do
 
   @claim_domain "lattice-beacon-witness-v1"
   @policy_domain "lattice-beacon-policy-v1"
+  @canonical_uint64_max 18_446_744_073_709_551_615
 
   @type claim :: %{
           version: 1,
@@ -54,7 +55,13 @@ defmodule Lattice.Authority.BeaconCertificate do
 
   @spec claim(String.t(), non_neg_integer(), Identity.pubkey(), [String.t()]) :: claim()
   def claim(replica, epoch, author, deps),
-    do: %{version: 1, replica: replica, epoch: epoch, author: author, deps: Enum.sort(deps)}
+    do: %{
+      version: 1,
+      replica: replica,
+      epoch: epoch,
+      author: author,
+      deps: deps |> Enum.uniq() |> Enum.sort()
+    }
 
   @spec new(claim(), [Identity.t()]) :: certificate()
   def new(claim, witnesses) do
@@ -97,6 +104,7 @@ defmodule Lattice.Authority.BeaconCertificate do
        ),
        do:
          map_size(claim) == 5 and is_binary(replica) and is_integer(epoch) and epoch >= 0 and
+           epoch <= @canonical_uint64_max and
            is_binary(author) and byte_size(author) == 32 and is_list(deps) and
            Enum.all?(deps, &is_binary/1)
 
