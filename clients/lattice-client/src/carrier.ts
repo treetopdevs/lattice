@@ -17,6 +17,7 @@ import type {
 } from "./op";
 import { cmpHash } from "./op";
 import { verifyCarrierOp } from "./codec";
+import { continuationProfileFromCarrierTerm, continuationCertificateFromCarrierTerm } from "./continuation";
 import type { Verifier } from "./identity";
 import { integrate } from "./sync";
 
@@ -1311,7 +1312,7 @@ export function carrierOpToSemanticOp(
   let structuralError: "malformed_term" | undefined;
   try {
     const body = decodeCarrierTerm(op.body);
-    payload = payloadFromBody(op.kind, body, realmByPubkey);
+    payload = payloadFromBody(op.kind, body, realmByPubkey, op.body);
     cap = capabilityId(decodeCarrierTerm(op.cap));
   } catch {
     payload = neutralPayload("malformed_term");
@@ -1325,6 +1326,7 @@ export function carrierOpToSemanticOp(
     deps: op.deps,
     kind: op.kind,
     author: realmForPubkey(op.author, realmByPubkey),
+    authorPubkey: op.author,
     field: payload.field,
     mutation: payload.mutation,
     value: payload.value,
@@ -1480,6 +1482,7 @@ function payloadFromBody(
   kind: OpKind,
   body: DecodedTerm,
   realmByPubkey: Record<string, string>,
+  rawBody: CarrierTerm,
 ): Payload {
   if (kind === "command") {
     if (!isTuple(body) || body.values.length !== 2) {
@@ -1523,6 +1526,9 @@ function payloadFromBody(
         const delegation = delegationTerm(body.values[1]);
         const beaconPolicy = witnessedBeaconPolicy(atomMap(body.values[2])?.get("__beacon__"));
         const policies = successionPolicies(body.values[2], realmByPubkey);
+        const rawPolicies = rawBody[0] === "tuple" ? rawBody[1][2] : undefined;
+        const continuationTerm = rawMapValue(rawPolicies, "__continuation__");
+        const continuationProfile = continuationTerm === undefined ? null : continuationProfileFromCarrierTerm(continuationTerm);
         // A Sim genesis self-grant carries exactly the replica's authority
         // roles (canonically sorted), so the first role names the authority
         // field this genesis writes — "clerk" for Township.Matter, "custody"
@@ -1534,6 +1540,7 @@ function payloadFromBody(
           delegation: delegationEvidence(delegation, realmByPubkey),
           ...(policies === undefined ? {} : { policies }),
           beaconPolicy,
+          continuationProfile,
         };
         if (role !== undefined) {
           return {
@@ -1581,7 +1588,7 @@ function payloadFromBody(
             type: "succeed",
             role,
             delegation: delegationEvidence(delegation, realmByPubkey),
-            proof: successionProof(body.values[3]),
+            proof: successionProof(body.values[3], rawBody[0] === "tuple" ? rawBody[1][3] : undefined),
           },
         };
       }
@@ -1903,7 +1910,16 @@ function successionPolicies(
   return Object.keys(policies).length > 0 ? policies : undefined;
 }
 
-function successionProof(term: DecodedTerm | undefined): SuccessionProofEvidence {
+function rawMapValue(term: CarrierTerm | undefined, key: string): CarrierTerm | undefined {
+  if (term?.[0] !== "map") return undefined;
+  const entries = term[1].filter(([k]) => k[0] === "atom" && k[1] === key);
+  return entries.length === 1 ? entries[0]![1] : undefined;
+}
+
+function successionProof(term: DecodedTerm | undefined, raw?: CarrierTerm): SuccessionProofEvidence {
+  if (raw?.[0] === "tuple" && raw[1][0]?.[0] === "atom" && raw[1][0][1] === "continuation_v1") {
+    return { mode: "continuation", certificate: raw[1].length === 2 ? continuationCertificateFromCarrierTerm(raw[1][1]!) : null };
+  }
   const atTick = nonNegativeInteger(term);
   if (atTick !== null) return { mode: "legacy", atTick };
 

@@ -268,8 +268,10 @@ the predecessor. Preserve existing invalid/not-holder checks; an otherwise
 valid stale transfer keeps the existing `double_transfer` reason. Legacy
 transfers and legacy succession retain their current interpretation.
 
-No explicit `:revoke` semantics change: only the actual issuer may revoke a
-delegation; current command checks honor revocation and causal lease rules.
+No explicit `:revoke` semantics change: the actual issuer or the replica root
+may revoke a delegation; current command checks honor revocation and causal
+lease rules. This corrects the preparation draft against the existing
+`Authority.revoke_authorized?/4` contract; it does not add revocation powers.
 Revoking a predecessor capability does not ban quorum continuation of its held
 role. Transfer to a different retained key removes the former holder's
 self-renewal eligibility; changing the profile requires the living root. Removing

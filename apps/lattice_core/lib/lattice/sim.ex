@@ -16,7 +16,13 @@ defmodule Lattice.Sim do
   """
 
   alias Lattice.{Authority, Identity, Log, Net, Op, Sync}
-  alias Lattice.Authority.{BeaconCertificate, Delegation, SuccessionCertificate}
+
+  alias Lattice.Authority.{
+    BeaconCertificate,
+    ContinuationCertificate,
+    Delegation,
+    SuccessionCertificate
+  }
 
   defstruct module: nil, replica: nil, realms: %{}, logs: %{}, net: %Net{}, caps: %{}
 
@@ -138,6 +144,47 @@ defmodule Lattice.Sim do
     proof = succession_proof(sim, successor_realm, role, opts)
     {sim, op} = append(sim, successor_realm, :authority, {:succeed, role, deleg, proof})
     {add_cap(sim, successor_realm, deleg), op}
+  end
+
+  @doc "Author a finite continuation using a reconstructed current-frontier claim and explicit witnesses."
+  @spec continue_role(t(), String.t(), atom(), keyword()) ::
+          {t(), Op.t()} | {:error, atom()}
+  def continue_role(%__MODULE__{} = sim, realm, role, opts) do
+    identity = identity(sim, realm)
+    log = log(sim, realm)
+
+    delegation =
+      Delegation.new(identity, sim.replica, identity.pub,
+        ops: Keyword.fetch!(opts, :ops),
+        roles: [role],
+        live: false,
+        expires_epoch: Keyword.fetch!(opts, :expires_epoch)
+      )
+
+    with {:ok, review} <-
+           Authority.continuation_review(
+             sim.module,
+             log,
+             role,
+             identity.pub,
+             Log.frontier(log),
+             delegation
+           ) do
+      witnesses = Enum.map(Keyword.fetch!(opts, :witnesses), &identity(sim, &1))
+      certificate = ContinuationCertificate.new(review.claim, witnesses)
+
+      with :ok <- ContinuationCertificate.verify(certificate, review.claim, review.profile) do
+        {sim, op} =
+          append(
+            sim,
+            realm,
+            :authority,
+            {:succeed, role, delegation, {:continuation_v1, certificate}}
+          )
+
+        {add_cap(sim, realm, delegation), op}
+      end
+    end
   end
 
   @doc "Revoke a delegation by id (authored by `issuer_realm`)."

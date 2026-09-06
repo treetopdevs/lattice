@@ -27,6 +27,11 @@ import type {
 import { isAuthorityField } from "./schema";
 import type { ReplicaSchema } from "./schema";
 import { frontier } from "./sync";
+import {
+  continuationProfileId, normalizeContinuationCertificate, normalizeContinuationProfile,
+  verifyContinuationCertificate,
+} from "./continuation";
+import type { ContinuationClaim, ContinuationProfile } from "./continuation";
 
 /** One honored role acquisition, in processing (canonical) order. */
 export interface HonoredAcquire {
@@ -193,6 +198,7 @@ export function analyzeAuthority(
     root,
     delegations,
   );
+  const continuation = continuationContext(replica, admitted, delegations, root, validBeacons);
   const states = new Map<string, RoleState>();
   const honoredWrites = new Set<string>();
   const honoredSuccessionIntroductions = new Map<string, string[]>();
@@ -210,6 +216,11 @@ export function analyzeAuthority(
   const quarantinedWrites = new Set<string>(quarantineReasons.keys());
 
   for (const op of admitted) {
+    if (continuation.family === "unsupported") {
+      quarantineReasons.set(op.id, "unsupported_authority_profile");
+      quarantinedWrites.add(op.id);
+      continue;
+    }
     if (op.authority?.type === "heartbeat") {
       if (op.kind !== "authority") continue;
       // Heartbeats never write a field: they only refresh the holder's
@@ -250,7 +261,11 @@ export function analyzeAuthority(
       throw new Error(`revoke ${op.id} cannot write authority role ${op.field}`);
     }
     const state = states.get(op.field) ?? emptyRoleState();
-    const honored = authorityWriteHonored(
+    const isContinuation = evidence.type === "succeed" &&
+      (continuation.family !== "legacy" || evidence.proof.mode === "continuation");
+    const continuationReason = isContinuation ? continuationRejectionReason(op,
+      evidence as Extract<AuthorityEvidence, {type: "succeed"}>, state, continuation, byId) : undefined;
+    const honored = isContinuation ? continuationReason === undefined : authorityWriteHonored(
       op,
       evidence,
       state,
@@ -272,7 +287,7 @@ export function analyzeAuthority(
         honoredSuccessionIntroductions.set(evidence.delegation.id, ids);
       }
     } else {
-      const reason = authorityWriteRejectionReason(
+      const reason = isContinuation ? continuationReason : authorityWriteRejectionReason(
         op,
         evidence,
         state,
@@ -308,11 +323,134 @@ export function analyzeAuthority(
     security: {
       delegations,
       root,
-      effectiveRevokes,
+      effectiveRevokes: continuation.family === "unsupported" ? [] : effectiveRevokes,
       honoredSuccessionIntroductions,
-      validBeacons,
+      validBeacons: continuation.family === "unsupported" ? [] : validBeacons,
     },
   };
+}
+
+export type ContinuationFamily = "legacy" | "unsupported" | "space" | "thread";
+
+/** Reserved only within the exact Treehouse Space/Thread namespace. */
+export function continuationFamily(replica: string | undefined): ContinuationFamily {
+  if (replica === undefined) return "legacy";
+  const intended = /^replica:treehouse:(space|thread):(.*)$/.exec(replica);
+  if (intended === null || !intended[2]!.includes("#authority:")) return "legacy";
+  const exact = /^replica:treehouse:(space|thread):([A-Za-z0-9_-]{43})#authority:bounded-continuation-v1#root:([A-Za-z0-9_-]{43})$/.exec(replica);
+  if (exact === null || !canonicalBase64UrlDigest(exact[2]) ||
+    !canonicalBase64UrlDigest(exact[3]) || replicaRootCommitment(replica) !== exact[3]) return "unsupported";
+  return exact[1] as "space" | "thread";
+}
+
+interface ContinuationPin { opId: string; profile: ContinuationProfile }
+interface ContinuationContext {
+  family: ContinuationFamily;
+  pins: ContinuationPin[];
+  delegations: ReadonlyMap<string, AuthorityDelegationRecord>;
+  beacons: readonly EffectiveBeaconEvidence[];
+}
+
+function continuationContext(replica: string | undefined, ordered: readonly Op[],
+  delegations: ReadonlyMap<string, AuthorityDelegationRecord>, root: AuthorityRootEvidence | null,
+  beacons: readonly EffectiveBeaconEvidence[]): ContinuationContext {
+  const family = continuationFamily(replica);
+  const pins: ContinuationPin[] = [];
+  for (const op of ordered) {
+    const evidence = op.authority;
+    if (op.kind !== "authority" || evidence?.type !== "genesis") continue;
+    const d = evidence.delegation;
+    const record = delegations.get(d.id);
+    const profile = normalizeContinuationProfile(evidence.continuationProfile);
+    if (profile !== null && family === profile.kind && record?.validation.valid &&
+      record.introductionOpIds.includes(op.id) && op.authorPubkey === root?.pubkey &&
+      d.issuer === root?.pubkey && d.audience === root?.pubkey && d.parentId === null &&
+      d.expiresEpoch === undefined && !d.live && d.ops.length === 0 && d.roles.length === 0) {
+      pins.push({opId: op.id, profile});
+    }
+  }
+  return {family, pins, delegations, beacons};
+}
+
+function continuationPin(ctx: ContinuationContext, visible: ReadonlySet<string>): ContinuationPin | undefined {
+  return [...ctx.pins].reverse().find((pin) => visible.has(pin.opId));
+}
+
+type ContinuationClaimResult = {ok: true; claim: ContinuationClaim; profile: ContinuationProfile} |
+  {ok: false; reason: string};
+
+function continuationExpectedClaim(op: Op, role: string, d: AuthorityDelegationEvidence,
+  acquires: readonly HonoredAcquire[], ctx: ContinuationContext, visible: ReadonlySet<string>,
+  byId: ReadonlyMap<string, Op>): ContinuationClaimResult {
+  const pin = continuationPin(ctx, visible);
+  if (pin === undefined) return {ok: false, reason: "continuation_not_configured"};
+  const p = [...acquires].reverse().find((acquire) => visible.has(acquire.opId));
+  const previousEvidence = p === undefined ? undefined : byId.get(p.opId)?.authority;
+  const previous = previousEvidence !== undefined && "delegation" in previousEvidence ? previousEvidence.delegation : undefined;
+  if (p?.holderPubkey === undefined || previous === undefined || op.authorPubkey === undefined ||
+    role !== pin.profile.role || ![p.holderPubkey, pin.profile.nominee].includes(op.authorPubkey) ||
+    d.issuer !== op.authorPubkey || d.audience !== op.authorPubkey || !d.roles.includes(role) ||
+    d.replica !== op.replica || !delegationSelfConsistent(d)) return {ok: false, reason: "unauthorized_continuation"};
+  if (d.roles.length !== 1 || !subset(d.ops, previous.ops) || d.live || d.parentId !== null ||
+    d.expiresEpoch === undefined) return {ok: false, reason: "continuation_scope_exceeded"};
+  const beacons = ctx.beacons.filter((b) => visible.has(b.opId));
+  const epoch = Math.max(-1, ...beacons.map((b) => b.epoch));
+  if (!Number.isSafeInteger(epoch) || epoch < 0) return {ok: false, reason: "invalid_continuation_epoch"};
+  const claim: ContinuationClaim = {
+    version: 1, product: "treehouse", kind: pin.profile.kind, replica: op.replica!, role: pin.profile.role,
+    profileId: continuationProfileId(pin.profile)!, profileGenesis: pin.opId,
+    holder: p.holderPubkey, holderEpoch: p.opId, successor: d.audience,
+    delegationId: d.id, author: op.authorPubkey, deps: [...op.deps].sort(), epoch,
+    epochBasis: beacons.filter((b) => b.epoch === epoch).map((b) => b.opId).sort(),
+  };
+  return {ok: true, claim, profile: pin.profile};
+}
+
+function continuationLeaseReason(d: AuthorityDelegationEvidence, epoch: number, width: number): string | undefined {
+  const upper = BigInt(epoch) + BigInt(width) - 1n;
+  const maximum = upper > BigInt(Number.MAX_SAFE_INTEGER) ? BigInt(Number.MAX_SAFE_INTEGER) : upper;
+  return d.expiresEpoch !== undefined && Number.isSafeInteger(d.expiresEpoch) && d.expiresEpoch >= epoch &&
+    BigInt(d.expiresEpoch) <= maximum ? undefined : "continuation_scope_exceeded";
+}
+
+function continuationRejectionReason(op: Op, evidence: Extract<AuthorityEvidence, {type: "succeed"}>,
+  state: RoleState, ctx: ContinuationContext, byId: ReadonlyMap<string, Op>): string | undefined {
+  if (ctx.family === "unsupported") return "unsupported_authority_profile";
+  if (ctx.family === "legacy") return "unauthorized_continuation";
+  if (evidence.proof.mode !== "continuation") return "continuation_required";
+  const cert = normalizeContinuationCertificate(evidence.proof.certificate);
+  const expiry = evidence.delegation.expiresEpoch;
+  if (cert === null || expiry !== undefined && (!Number.isSafeInteger(expiry) || expiry < 0)) return "malformed_term";
+  const expected = continuationExpectedClaim(op, evidence.role, evidence.delegation, state.acquires,
+    ctx, ancestors(op.id, byId as Map<string, Op>), byId);
+  if (!expected.ok) return expected.reason;
+  if (cert.claim.epoch !== expected.claim.epoch || JSON.stringify(cert.claim.epochBasis) !== JSON.stringify(expected.claim.epochBasis)) return "invalid_continuation_epoch";
+  const leaseReason = continuationLeaseReason(evidence.delegation, expected.claim.epoch, expected.profile.maxLeaseEpochs);
+  if (leaseReason !== undefined) return leaseReason;
+  if (!verifyContinuationCertificate(cert, expected.claim, expected.profile)) return "invalid_continuation_certificate";
+  return state.acquires.at(-1)?.opId === expected.claim.holderEpoch ? undefined : "stale_continuation";
+}
+
+/** Derive only from a complete operation set already authenticated by the carrier verifier. */
+export function deriveContinuationReview(schema: ReplicaSchema, ops: Op[], replica: string, role: string,
+  authorPubkey: string, deps: string[], delegation: AuthorityDelegationEvidence): ContinuationClaimResult {
+  const family = continuationFamily(replica);
+  if (family === "unsupported") return {ok: false, reason: "unsupported_authority_profile"};
+  if (family === "legacy") return {ok: false, reason: "unauthorized_continuation"};
+  const byId = index(ops);
+  if (ops.some((op) => op.replica !== replica || op.deps.some((id) => !byId.has(id)))) return {ok: false, reason: "invalid_verified_history"};
+  if (JSON.stringify([...frontier(ops)].sort()) !== JSON.stringify(deps)) return {ok: false, reason: "stale_verified_state"};
+  const order = canonicalOrder(ops, byId);
+  const included = new Set(order);
+  const analysis = analyzeAuthority(schema, ops, included, order, byId, replica);
+  const ctx = continuationContext(replica, order.map((id) => byId.get(id)!), analysis.security.delegations,
+    analysis.security.root, analysis.security.validBeacons);
+  const op: Op = {id: "", replica, author: delegation.issuerRealm, authorPubkey, deps,
+    kind: "authority", field: role, mutation: "write", value: delegation.audienceRealm, hash: ""};
+  const expected = continuationExpectedClaim(op, role, delegation, analysis.acquiresByRole.get(role) ?? [], ctx, included, byId);
+  if (!expected.ok) return expected;
+  const reason = continuationLeaseReason(delegation, expected.claim.epoch, expected.profile.maxLeaseEpochs);
+  return reason === undefined ? expected : {ok: false, reason};
 }
 
 function authorityReplicaAnchor(
@@ -488,6 +626,9 @@ function honoredAcquire(
   if (evidence.type === "succeed" && evidence.proof.mode === "legacy") {
     acquire.atTick = evidence.proof.atTick;
   }
+  if (evidence.type === "succeed" && evidence.proof.mode === "continuation" && evidence.proof.certificate !== null) {
+    acquire.atTick = evidence.proof.certificate.claim.epoch;
+  }
 
   return acquire;
 }
@@ -549,14 +690,15 @@ function authorityWriteHonored(
 
   if (evidence.type === "transfer" && evidence.role === op.field) {
     const visible = ancestors(op.id, byId as Map<string, Op>);
-    const holderAtDeps = [...state.acquires]
+    const predecessor = [...state.acquires]
       .reverse()
-      .find((acquire) => visible.has(acquire.opId))?.holder;
+      .find((acquire) => visible.has(acquire.opId));
 
     return (
       delegation.issuerRealm === op.author &&
-      holderAtDeps === op.author &&
-      state.holder === op.author
+      predecessor?.holder === op.author &&
+      state.holder === op.author &&
+      (continuationFamily(op.replica) === "legacy" || predecessor?.opId === state.acquires.at(-1)?.opId)
     );
   }
 
@@ -637,6 +779,8 @@ function authorityWriteRejectionReason(
 
   if (holderAtDeps !== op.author) return "transfer_not_holder";
   if (state.holder !== op.author) return "double_transfer";
+  if (continuationFamily(op.replica) !== "legacy" &&
+    [...state.acquires].reverse().find((a) => visible.has(a.opId))?.opId !== state.acquires.at(-1)?.opId) return "double_transfer";
   return undefined;
 }
 

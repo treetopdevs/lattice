@@ -67,7 +67,7 @@ defmodule Lattice.Authority do
   Quarantined ops stay in the log and are reported in `audit` (design invariant 4).
   """
 
-  alias Lattice.Authority.{BeaconCertificate, Delegation, SuccessionCertificate}
+  alias Lattice.Authority.{BeaconCertificate, Continuation, Delegation, SuccessionCertificate}
   alias Lattice.{Dag, Identity, Log, Op}
 
   # Separates a replica *name* from the root-key commitment bound into its id.
@@ -97,6 +97,95 @@ defmodule Lattice.Authority do
           %{holder: Identity.pubkey(), op_id: Op.id()} | nil
   def holder_epoch(module, %Log{} = log, role),
     do: Map.get(analyze(module, log).holder_epochs, role)
+
+  @doc "Derive one continuation claim from complete, verified history and its exact current frontier."
+  @spec continuation_review(
+          module(),
+          Log.t(),
+          atom(),
+          Identity.pubkey(),
+          [Op.id()],
+          Delegation.t()
+        ) ::
+          {:ok, map()} | {:error, atom()}
+  def continuation_review(module, %Log{} = log, role, author, deps, %Delegation{} = delegation) do
+    cond do
+      Continuation.family(log.replica) == :unsupported ->
+        {:error, :unsupported_authority_profile}
+
+      Continuation.family(log.replica) == :legacy ->
+        {:error, :unauthorized_continuation}
+
+      deps != Log.frontier(log) ->
+        {:error, :stale_verified_state}
+
+      not verified_complete_log?(log) ->
+        {:error, :invalid_verified_history}
+
+      true ->
+        continuation_review_from_log(module, log, role, author, deps, delegation)
+    end
+  rescue
+    _ -> {:error, :invalid_verified_history}
+  end
+
+  defp verified_complete_log?(log) do
+    ops = Log.ops(log)
+
+    Enum.all?(ops, fn {id, op} ->
+      id == op.id and op.replica == log.replica and Op.valid?(op) and
+        Enum.all?(op.deps, &Map.has_key?(ops, &1))
+    end) and length(Dag.topo_sort(ops)) == map_size(ops)
+  end
+
+  defp continuation_review_from_log(module, log, role, author, deps, delegation) do
+    ordered = Log.topo_ops(log)
+    ancestors = Dag.all_ancestors(Log.ops(log))
+    {commitment, genesis_ids, succession_ids} = deleg_context(log, ordered)
+    delegations = collect_delegations(ordered)
+
+    valid =
+      validate_delegations(delegations, commitment, genesis_ids, succession_ids, log.replica)
+
+    root = resolve_root(ordered, delegations, valid, commitment)
+    sources = collect_beacon_policy_sources(ordered, delegations, valid)
+    {beacons, _} = collect_beacons(ordered, ancestors, root, sources)
+    context = Continuation.context(log.replica, ordered, delegations, valid, root, beacons)
+
+    timeline =
+      build_role_timeline(
+        role,
+        ordered,
+        ancestors,
+        delegations,
+        valid,
+        collect_policies(ordered, delegations, valid),
+        context
+      )
+
+    proposed = struct(Op, replica: log.replica, author: author, deps: deps)
+    anc = Log.op_ids(log)
+
+    if role in MapSet.to_list(all_roles(module)) do
+      with {:ok, claim} <-
+             Continuation.review(context, proposed, role, delegation, timeline.acquires, anc),
+           :ok <-
+             Continuation.check_lease(
+               delegation,
+               claim.epoch,
+               Continuation.select_pin(context, anc).profile.max_lease_epochs
+             ) do
+        {:ok,
+         %{
+           claim: claim,
+           profile: Continuation.select_pin(context, anc).profile,
+           verified_frontier: deps
+         }}
+      end
+    else
+      {:error, :unauthorized_continuation}
+    end
+  end
 
   @doc """
   Bind a replica *name* to its root public key, returning the replica id.
@@ -218,6 +307,9 @@ defmodule Lattice.Authority do
 
   def verify_chain([genesis | _] = chain, replica) do
     cond do
+      Continuation.family(replica) == :unsupported ->
+        {:error, :unsupported_authority_profile}
+
       Enum.any?(chain, &(&1.replica != replica)) ->
         {:error, :wrong_replica}
 
@@ -256,8 +348,16 @@ defmodule Lattice.Authority do
 
     case Map.fetch(delegations, delegation_id) do
       {:ok, %{deleg: %Delegation{} = d}} ->
-        validate_delegation(d, delegations, commitment, genesis_ids, succession_ids, log.replica) ==
-          :ok and
+        Continuation.family(log.replica) != :unsupported and
+          validate_delegation(
+            d,
+            delegations,
+            commitment,
+            genesis_ids,
+            succession_ids,
+            log.replica
+          ) ==
+            :ok and
           not expired?(log, delegation_id)
 
       _ ->
@@ -335,6 +435,9 @@ defmodule Lattice.Authority do
     beacon_policies = collect_beacon_policy_sources(ordered, delegations, deleg_valid)
     {beacons, beacon_q} = collect_beacons(ordered, ancestors, root, beacon_policies)
 
+    continuation =
+      Continuation.context(log.replica, ordered, delegations, deleg_valid, root, beacons)
+
     invalid_deleg = invalid_delegation_ops(ordered, delegations, deleg_valid, commitment)
     tombstone_q = unauthorized_tombstones(ordered, root)
     revoke_q = unauthorized_revokes(ordered, delegations, root)
@@ -343,7 +446,16 @@ defmodule Lattice.Authority do
 
     timelines =
       Map.new(roles, fn role ->
-        {role, build_role_timeline(role, ordered, ancestors, delegations, deleg_valid, policies)}
+        {role,
+         build_role_timeline(
+           role,
+           ordered,
+           ancestors,
+           delegations,
+           deleg_valid,
+           policies,
+           continuation
+         )}
       end)
 
     holders = Map.new(timelines, fn {role, tl} -> {role, tl.holder} end)
@@ -373,6 +485,7 @@ defmodule Lattice.Authority do
       |> Map.merge(revoke_q)
       |> Map.merge(beacon_q)
       |> Map.merge(tick_q)
+      |> Map.merge(unsupported_profile_ops(continuation, ordered))
 
     cap_evidence = %{
       delegations: delegations,
@@ -385,7 +498,10 @@ defmodule Lattice.Authority do
     {cmd_q, cmd_audit, requests} =
       validate_commands(module, ops, ordered, ancestors, cap_evidence, base_reasons)
 
-    individual_reasons = Map.merge(base_reasons, cmd_q)
+    individual_reasons =
+      Map.merge(base_reasons, cmd_q) |> Map.merge(unsupported_profile_ops(continuation, ordered))
+
+    requests = if continuation.family == :unsupported, do: [], else: requests
 
     # Full-frontier command-conflict phase (Plan 158 Wave A2): one
     # deterministic pass over the complete structurally accepted DAG, run
@@ -419,6 +535,11 @@ defmodule Lattice.Authority do
       requests: requests
     }
   end
+
+  defp unsupported_profile_ops(%{family: :unsupported}, ordered),
+    do: Map.new(ordered, &{&1.id, :unsupported_authority_profile})
+
+  defp unsupported_profile_ops(_continuation, _ordered), do: %{}
 
   # --- Delegation collection / validation ---------------------------------
 
@@ -863,7 +984,15 @@ defmodule Lattice.Authority do
 
   # --- Role holder timelines ----------------------------------------------
 
-  defp build_role_timeline(role, ordered, ancestors, delegations, deleg_valid, policies) do
+  defp build_role_timeline(
+         role,
+         ordered,
+         ancestors,
+         delegations,
+         deleg_valid,
+         policies,
+         continuation
+       ) do
     init = %{
       holder: nil,
       acquires: [],
@@ -874,7 +1003,10 @@ defmodule Lattice.Authority do
     }
 
     Enum.reduce(ordered, init, fn op, st ->
-      case role_event(op, role, delegations) do
+      case if(continuation.family == :unsupported,
+             do: nil,
+             else: role_event(op, role, delegations)
+           ) do
         nil ->
           st
 
@@ -897,10 +1029,14 @@ defmodule Lattice.Authority do
           end
 
         {:transfer, d, at_tick} ->
-          decide_transfer(st, op, role, d, at_tick, ancestors, deleg_valid)
+          decide_transfer(st, op, role, d, at_tick, ancestors, deleg_valid, continuation.family)
 
         {:succeed, d, proof} ->
-          decide_succeed(st, op, role, d, proof, ancestors, deleg_valid, policies)
+          if continuation.family != :legacy or match?({:continuation_v1, _}, proof) do
+            decide_continuation(st, op, role, d, proof, ancestors, continuation)
+          else
+            decide_succeed(st, op, role, d, proof, ancestors, deleg_valid, policies)
+          end
 
         {:heartbeat, at_tick} ->
           decide_heartbeat(st, op, at_tick, ancestors)
@@ -934,6 +1070,7 @@ defmodule Lattice.Authority do
 
       {:succeed, ^role, %Delegation{} = d, proof} ->
         cond do
+          match?({:continuation_v1, _}, proof) -> {:succeed, d, proof}
           is_integer(proof) and not valid_tick?(proof) -> {:malformed_tick, op}
           not valid_delegation_intro?(delegations, d, op.id) -> nil
           true -> {:succeed, d, proof}
@@ -972,7 +1109,7 @@ defmodule Lattice.Authority do
     }
   end
 
-  defp decide_transfer(st, op, role, d, at_tick, ancestors, deleg_valid) do
+  defp decide_transfer(st, op, role, d, at_tick, ancestors, deleg_valid, family) do
     anc = Map.get(ancestors, op.id, MapSet.new())
     holder_at_deps = holder_from_acquires(st.acquires, anc)
 
@@ -988,8 +1125,20 @@ defmodule Lattice.Authority do
         # A concurrent transfer by the same holder already moved the token: anomaly.
         reject(st, op, :double_transfer, role)
 
+      family != :legacy and holder_acquire_from(st.acquires, anc) != List.last(st.acquires) ->
+        reject(st, op, :double_transfer, role)
+
       true ->
         record_acquire(st, op, d, at_tick)
+    end
+  end
+
+  defp decide_continuation(st, op, role, d, proof, ancestors, context) do
+    anc = Map.get(ancestors, op.id, MapSet.new())
+
+    case Continuation.judge(context, op, role, d, proof, st.acquires, anc) do
+      {:ok, epoch} -> record_acquire(st, op, d, epoch)
+      {:error, reason} -> reject(st, op, reason, role)
     end
   end
 

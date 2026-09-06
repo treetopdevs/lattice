@@ -8,6 +8,8 @@
 export type OpKind = "command" | "authority" | "inbox" | "tombstone";
 
 // Mutations mirror the Elixir Replica DSL's absolute mutations.
+import type { ContinuationCertificate, ContinuationProfile } from "./continuation";
+
 export type Mutation = "write" | "append" | "add" | "remove" | "delete";
 export type CommandError =
   | "unknown_command"
@@ -98,6 +100,7 @@ export interface WitnessedSuccessionCertificateEvidence {
 export type SuccessionProofEvidence =
   | { mode: "legacy"; atTick: number }
   | { mode: "witnessed"; certificate: WitnessedSuccessionCertificateEvidence | null }
+  | { mode: "continuation"; certificate: ContinuationCertificate | null }
   | { mode: "invalid" };
 
 export interface WitnessedBeaconPolicyEvidence {
@@ -127,6 +130,7 @@ export type AuthorityEvidence =
       delegation: AuthorityDelegationEvidence;
       policies?: Record<string, SuccessionPolicyEvidence>;
       beaconPolicy?: WitnessedBeaconPolicyEvidence | null;
+      continuationProfile?: ContinuationProfile | null;
     }
   | { type: "grant"; delegation: AuthorityDelegationEvidence }
   | {
@@ -155,6 +159,8 @@ export interface Op {
   kind: OpKind;
   /** Authoring realm / DID (the signer). */
   author: string;
+  /** Canonical Base64 of the signed outer author; independent of display realm aliases. */
+  authorPubkey?: string;
   /** The replica field this op targets (e.g. "summary", "posts", "clerk"). */
   field: string;
   /** Absolute mutation applied to that field. */
