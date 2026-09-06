@@ -82,6 +82,14 @@ test("claims reject unknown fields, unsafe epochs, noncanonical IDs and reordere
   assert.ok(normalizeContinuationClaim({ ...claim, deps: [], epochBasis: [] }), "authority resolves whether actual basis exists");
 });
 
+test("claim replica strings must encode without replacing malformed Unicode", () => {
+  assert.equal(normalizeContinuationClaim({ ...claim, replica: "replica:\ud800" }), null);
+  assert.equal(normalizeContinuationClaim({ ...claim, replica: "replica:\ud801" }), null);
+  assert.ok(normalizeContinuationClaim({ ...claim, replica: "replica:é" }));
+  const bomClaim = { ...claim, replica: "\ufeffreplica:fixture" };
+  assert.deepEqual(continuationClaimFromCarrierTerm(continuationClaimToCarrierTerm(bomClaim)), bomClaim);
+});
+
 test("certificate shape distinguishes malformed entries from invalid consent", () => {
   const entry = { witness: lowKey, signature: Buffer.alloc(64, 7).toString("base64") };
   for (const malformed of [
