@@ -714,3 +714,21 @@ conformance (including 14 continuation authoring tests), Township authoring,
 canonical and carrier tests all exit 0. Actual Fable reviewed R03's source
 and nullish follow-up with no remaining actionable P0/P1/P2; R04's new adapter
 still requires its own exact integration review, final tip CI and merge CI.
+
+### Accepted-main and claim-constructor closure
+
+Actual Fable reviewed R04 `f58267b8` with PASS and no P0/P1/P2. Merge `aaec0bc3`
+adds accepted main and reviewed R03 integration; its production source is
+byte-identical to f582, with only the accepted canonical-generator test and
+evidence updates. Test import/local-name collisions preserve the original
+R04 fixtures; client typecheck/build/authoring pass. Merge `621929d3` then adds
+R03 final `39ea40da`, whose claim constructor deduplicates dependencies to match
+`Op.new` and TS without loosening received certificates. The new signed public
+test accepts the constructed final op and rejects a received duplicate claim.
+
+At the user's request, configured `gpt-5.6-sol` independently reviewed that R03
+accepted-main/constructor packet: PASS, no demonstrated P0/P1/P2. R03's final
+local full gate passes 746 tests+27properties, zero failures, three exclusions;
+that is R03 evidence, not a new R04 full-suite count. The latest R04 full local
+check remains the 775+27 result above. Final R04 integration and exact-tip/merge
+CI checks remain required; native/device/field evidence is not inferred.

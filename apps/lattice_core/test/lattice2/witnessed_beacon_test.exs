@@ -131,6 +131,34 @@ defmodule Lattice2.WitnessedBeaconTest do
     end
   end
 
+  test "public claim construction normalizes duplicate dependencies to the final signed op" do
+    sim = town() |> Sim.sync_all()
+    root = Sim.identity(sim, "clerk")
+    author = Sim.identity(sim, "w0")
+    signers = Enum.map(["w0", "w1"], &Sim.identity(sim, &1))
+    base = Sim.log(sim, "w0")
+    deps = Log.frontier(base)
+    left = Op.new(root, sim.replica, deps, :authority, {:heartbeat, :clerk, 1})
+    right = Op.new(root, sim.replica, deps, :authority, {:heartbeat, :clerk, 2})
+    log = base |> Log.append!(left) |> Log.append!(right)
+    supplied = [right.id, left.id, right.id, left.id]
+    claim = BeaconCertificate.claim(sim.replica, 4, author.pub, supplied)
+    signed = BeaconCertificate.new(claim, signers)
+    beacon = Op.new(author, sim.replica, supplied, :authority, {:beacon, 4, signed})
+    analysis = Authority.analyze(Matter, Log.append!(log, beacon))
+
+    refute Map.has_key?(analysis.reasons, beacon.id)
+    assert claim.deps == beacon.deps
+    assert claim.deps == Enum.sort([left.id, right.id])
+    assert :ok = BeaconCertificate.verify(signed, claim, policy(sim))
+
+    received = BeaconCertificate.new(%{claim | deps: supplied}, signers)
+    invalid = Op.new(author, sim.replica, supplied, :authority, {:beacon, 4, received})
+    invalid_analysis = Authority.analyze(Matter, Log.append!(log, invalid))
+    assert invalid_analysis.reasons[invalid.id] == :unauthorized_beacon
+    assert {:error, :unauthorized_beacon} = BeaconCertificate.verify(received, claim, policy(sim))
+  end
+
   test "exact high legacy root epochs constrain descendants without constraining concurrent forks" do
     sim = town()
     {sim, lease} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 3)
