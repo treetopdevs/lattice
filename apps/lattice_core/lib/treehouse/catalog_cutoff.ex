@@ -29,7 +29,7 @@ defmodule Treehouse.CatalogCutoff do
     service_id service_key sig signature signatures space space_root succeed successor thread
     threads threshold title tombstone transfer treehouse treehouse_space_v1 treehouse_thread_v1
     version witness witnessed witnesses
-  ))
+  )a)
   @max_safe_integer 9_007_199_254_740_991
 
   @spec derive(term()) ::
@@ -91,7 +91,7 @@ defmodule Treehouse.CatalogCutoff do
   defp portable_value?(value) when is_binary(value) or is_integer(value), do: true
 
   defp portable_value?(value) when is_atom(value),
-    do: MapSet.member?(@cutoff_atoms, Atom.to_string(value))
+    do: MapSet.member?(@cutoff_atoms, value)
 
   defp portable_value?(%Delegation{} = d) do
     bytes?(d.issuer, 32) and bytes?(d.audience, 32) and bytes?(d.sig, 64) and

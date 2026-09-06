@@ -95,7 +95,9 @@ defmodule Treehouse.CatalogCutoffTest do
         f.log.replica,
         Log.frontier(f.log),
         :command,
-        {:create_space, [18_446_744_073_709_551_615]}, cap: f.cap)
+        {:create_space, [18_446_744_073_709_551_615]},
+        cap: f.cap
+      )
 
     log = Log.append!(f.log, op)
     assert :ok = Log.verify_authenticity(log)
@@ -144,6 +146,25 @@ defmodule Treehouse.CatalogCutoffTest do
     before = :erlang.term_to_binary(log)
     assert {:error, :unsupported_cutoff} = CatalogCutoff.derive(log)
     assert :erlang.term_to_binary(log) == before
+  end
+
+  test "authenticated unsupported operation kinds remain evidence instead of being misclassified" do
+    f = history()
+
+    op =
+      Op.new(
+        f.root,
+        f.log.replica,
+        Log.frontier(f.log),
+        :request,
+        {:create_space, ["Known bytes"]}
+      )
+
+    log = Log.append!(f.log, op)
+    assert :ok = Log.verify_authenticity(log)
+    assert {:error, :unsupported_cutoff} = CatalogCutoff.derive(log)
+    forged = %{log | ops: Map.put(log.ops, op.id, %{op | sig: <<0::512>>})}
+    assert {:error, :invalid_verified_history} = CatalogCutoff.derive(forged)
   end
 
   defp history do
