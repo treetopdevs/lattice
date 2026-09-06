@@ -1,0 +1,702 @@
+use crate as township_tauri_shell;
+use crate::governance_provider::{LegacySeedBackend, LegacySeedGovernanceProvider};
+use crate::{
+    GovernanceWitnessCreateError, GovernanceWitnessPresenceError, GovernanceWitnessProviderKind,
+    TownshipNativeState,
+};
+use base64::Engine as _;
+use ed25519_dalek::{Signature, SigningKey, Verifier, VerifyingKey};
+use std::sync::{Arc, Barrier, Mutex};
+
+fn claim() -> serde_json::Value {
+    serde_json::json!({
+        "version": 1,
+        "replica": "replica:matter:succession-witnessed-recovery#root:lc9GuxZMwEl99X0zNhDLAa6jR9n8pBX-2zFS3ghRwWo",
+        "role": "clerk",
+        "holder": "mCaZpMJ0SU2lf3v2ljw0D05Px4pmoY1jUIIVv19hmZ4=",
+        "holderEpoch": "SJMi-K8IUPUvtk3zYRUVMeska-KcUvNT_8oPWTlKDAI",
+        "successor": "DBY121cVb1O+BdK+NucwFZyZtUTdrPpxhnZ2Wg41jjY=",
+        "policyId": "APOtJzZqq0XmqxkCRK2sl4L--O-nrZ5QhxUOHpZhJ30"
+    })
+}
+
+#[test]
+fn governance_ensure_creates_one_paired_identity_and_reuses_it_after_restart() {
+    let store = MemoryGovernanceWitnessStore::default();
+    let first = state_with_store(store.clone());
+
+    let public_key = first.ensure_governance_witness_key().unwrap();
+    let public_key_bytes = base64::engine::general_purpose::STANDARD
+        .decode(&public_key)
+        .unwrap();
+    assert_eq!(public_key_bytes.len(), 32);
+    assert_eq!(first.ensure_governance_witness_key().unwrap(), public_key);
+    assert_eq!(first.governance_witness_public_key().unwrap(), public_key);
+    assert_eq!(store.write_counts(), (1, 1));
+    assert_eq!(store.released_seed_count(), 0);
+
+    let restarted = state_with_store(store.clone());
+    assert_eq!(
+        restarted.ensure_governance_witness_key().unwrap(),
+        public_key
+    );
+    assert_eq!(store.write_counts(), (1, 1));
+    assert_eq!(store.released_seed_count(), 0);
+}
+
+#[test]
+fn governance_public_key_read_is_presence_free_and_never_creates_custody() {
+    let store = MemoryGovernanceWitnessStore::default();
+    let state = state_with_store(store.clone());
+
+    assert_eq!(
+        state.governance_witness_public_key().unwrap_err(),
+        "governance witness identity is missing"
+    );
+    assert_eq!(store.write_counts(), (0, 0));
+    assert_eq!(store.released_seed_count(), 0);
+}
+
+#[test]
+fn governance_ensure_rejects_incomplete_or_mismatched_identity_pairs() {
+    let seed = [7u8; 32];
+    let public_key = SigningKey::from_bytes(&seed).verifying_key().to_bytes();
+
+    for (store, expected_error) in [
+        (
+            MemoryGovernanceWitnessStore::with_items(Some(seed), None),
+            "governance witness identity is incomplete: public sidecar is missing",
+        ),
+        (
+            MemoryGovernanceWitnessStore::with_items(None, Some(public_key)),
+            "governance witness identity is incomplete: protected-seed identity metadata is missing",
+        ),
+        (
+            MemoryGovernanceWitnessStore::with_items(Some(seed), Some([9u8; 32])),
+            "governance witness identity is corrupt: public key mismatch",
+        ),
+    ] {
+        let state = state_with_store(store.clone());
+        assert_eq!(
+            state.ensure_governance_witness_key().unwrap_err(),
+            expected_error
+        );
+        assert_eq!(store.write_counts(), (0, 0));
+        assert_eq!(store.released_seed_count(), 0);
+    }
+}
+
+#[test]
+fn governance_first_creation_is_rollback_safe() {
+    let seed_failure =
+        MemoryGovernanceWitnessStore::with_failures(Some("seed write failed"), None, None);
+    let seed_failure_state = state_with_store(seed_failure.clone());
+    assert_eq!(
+        seed_failure_state
+            .ensure_governance_witness_key()
+            .unwrap_err(),
+        "seed write failed"
+    );
+    assert_eq!(seed_failure.items(), (None, None));
+    assert_eq!(seed_failure.delete_count(), 0);
+
+    let sidecar_failure = MemoryGovernanceWitnessStore::with_failures(
+        None,
+        Some("public metadata write failed"),
+        None,
+    );
+    let sidecar_failure_state = state_with_store(sidecar_failure.clone());
+    assert_eq!(
+        sidecar_failure_state
+            .ensure_governance_witness_key()
+            .unwrap_err(),
+        "governance witness public metadata creation failed: public metadata write failed"
+    );
+    assert_eq!(sidecar_failure.items(), (None, None));
+    assert_eq!(sidecar_failure.delete_count(), 1);
+
+    let rollback_failure = MemoryGovernanceWitnessStore::with_failures(
+        None,
+        Some("public metadata write failed"),
+        Some("seed rollback failed"),
+    );
+    let rollback_failure_state = state_with_store(rollback_failure.clone());
+    assert_eq!(
+        rollback_failure_state
+            .ensure_governance_witness_key()
+            .unwrap_err(),
+        "governance witness public metadata creation failed: public metadata write failed; seed rollback failed: seed rollback failed"
+    );
+    assert!(rollback_failure.items().0.is_some());
+    assert_eq!(rollback_failure.items().1, None);
+    assert_eq!(rollback_failure.delete_count(), 1);
+    assert_eq!(
+        rollback_failure_state
+            .ensure_governance_witness_key()
+            .unwrap_err(),
+        "governance witness identity is incomplete: public sidecar is missing"
+    );
+}
+
+#[test]
+fn concurrent_governance_ensure_calls_share_one_creation() {
+    let store = MemoryGovernanceWitnessStore::with_create_delay(50);
+    let state = Arc::new(state_with_store(store.clone()));
+    let start = Arc::new(Barrier::new(3));
+
+    let handles: Vec<_> = (0..2)
+        .map(|_| {
+            let state = Arc::clone(&state);
+            let start = Arc::clone(&start);
+            std::thread::spawn(move || {
+                start.wait();
+                state.ensure_governance_witness_key()
+            })
+        })
+        .collect();
+    start.wait();
+
+    let results: Vec<_> = handles
+        .into_iter()
+        .map(|handle| handle.join().unwrap())
+        .collect();
+    assert!(results.iter().all(Result::is_ok), "{results:?}");
+    assert_eq!(results[0], results[1]);
+    assert_eq!(store.write_counts(), (1, 1));
+    assert_eq!(store.delete_count(), 0);
+    assert_eq!(store.released_seed_count(), 0);
+}
+
+#[test]
+fn duplicate_seed_creation_reconciles_to_the_cross_state_winner() {
+    let store = MemoryGovernanceWitnessStore::with_create_delays(50, 50, 0);
+    let first_state = state_with_store(store.clone());
+    let second_state = state_with_store(store.clone());
+    let start = Arc::new(Barrier::new(3));
+
+    let handles: Vec<_> = [first_state, second_state]
+        .into_iter()
+        .map(|state| {
+            let start = Arc::clone(&start);
+            std::thread::spawn(move || {
+                start.wait();
+                state.ensure_governance_witness_key()
+            })
+        })
+        .collect();
+    start.wait();
+
+    let results: Vec<_> = handles
+        .into_iter()
+        .map(|handle| handle.join().unwrap())
+        .collect();
+    assert!(results.iter().all(Result::is_ok), "{results:?}");
+    assert_eq!(results[0], results[1]);
+    assert_eq!(store.write_counts(), (1, 1));
+    assert_eq!(store.delete_count(), 0);
+    assert_eq!(store.released_seed_count(), 0);
+}
+
+#[test]
+fn duplicate_seed_creation_waits_for_the_cross_state_winner_sidecar() {
+    let store = MemoryGovernanceWitnessStore::with_create_delays(25, 0, 75);
+    let first_state = state_with_store(store.clone());
+    let second_state = state_with_store(store.clone());
+    let start = Arc::new(Barrier::new(3));
+
+    let handles: Vec<_> = [first_state, second_state]
+        .into_iter()
+        .map(|state| {
+            let start = Arc::clone(&start);
+            std::thread::spawn(move || {
+                start.wait();
+                state.ensure_governance_witness_key()
+            })
+        })
+        .collect();
+    start.wait();
+
+    let results: Vec<_> = handles
+        .into_iter()
+        .map(|handle| handle.join().unwrap())
+        .collect();
+    assert!(results.iter().all(Result::is_ok), "{results:?}");
+    assert_eq!(results[0], results[1]);
+    assert_eq!(store.write_counts(), (1, 1));
+    assert_eq!(store.delete_count(), 0);
+    assert_eq!(store.released_seed_count(), 0);
+}
+
+#[test]
+fn governance_signing_requires_fresh_presence_and_seed_access_each_time() {
+    let seed = [7u8; 32];
+    let public_key = SigningKey::from_bytes(&seed).verifying_key().to_bytes();
+    let store = MemoryGovernanceWitnessStore::with_items(Some(seed), Some(public_key));
+    let presence = RecordingPresence::allow();
+    let state = state_with_custody(store.clone(), presence.clone());
+
+    let first = state.sign_governance_witness(&claim()).unwrap();
+    let second = state.sign_governance_witness(&claim()).unwrap();
+
+    assert_eq!(
+        first.witness,
+        base64::engine::general_purpose::STANDARD.encode(public_key)
+    );
+    assert_eq!(
+        first.payload_digest,
+        "U0tPuFimGHNMZxjUriEzv1Y3h7QE9syyRCkoxy8wP1E"
+    );
+    assert_eq!(second.witness, first.witness);
+    assert_eq!(second.signature, first.signature);
+    verify_governance_signature(&first, public_key);
+    assert_eq!(store.released_seed_count(), 2);
+    assert_eq!(store.write_counts(), (0, 0));
+    assert_eq!(
+        presence.reasons(),
+        vec![
+            "Sign Township clerk recovery witness".to_string(),
+            "Sign Township clerk recovery witness".to_string(),
+        ]
+    );
+    assert!(state.kv_snapshot().unwrap().is_empty());
+}
+
+#[test]
+fn governance_presence_reason_cannot_be_shaped_by_submitted_replica() {
+    for replica in [
+        "replica:".to_string() + &"x".repeat(16_384),
+        "replica:ordinary\nApprove another action".to_string(),
+        "replica:ordinary\rReplace prompt".to_string(),
+        "replica:ordinary\0Hidden suffix".to_string(),
+        "replica:\u{03bb}".to_string(),
+        "replica:\u{202e}spoof\u{202c}".to_string(),
+    ] {
+        let seed = [7u8; 32];
+        let public_key = SigningKey::from_bytes(&seed).verifying_key().to_bytes();
+        let store = MemoryGovernanceWitnessStore::with_items(Some(seed), Some(public_key));
+        let presence = RecordingPresence::with_outcome(PresenceOutcome::Cancelled);
+        let state = state_with_custody(store.clone(), presence.clone());
+        let mut submitted = claim();
+        submitted["replica"] = serde_json::json!(replica);
+
+        assert_eq!(
+            state.sign_governance_witness(&submitted).unwrap_err(),
+            "governance witness authentication cancelled"
+        );
+        assert_eq!(
+            presence.reasons(),
+            vec!["Sign Township clerk recovery witness".to_string()]
+        );
+        assert_eq!(store.released_seed_count(), 0);
+        assert_eq!(store.write_counts(), (0, 0));
+        assert!(state.kv_snapshot().unwrap().is_empty());
+    }
+}
+
+#[test]
+fn governance_signing_refuses_cancel_unavailable_and_malformed_without_writes() {
+    let seed = [7u8; 32];
+    let public_key = SigningKey::from_bytes(&seed).verifying_key().to_bytes();
+
+    for (outcome, expected_error) in [
+        (
+            PresenceOutcome::Cancelled,
+            "governance witness authentication cancelled",
+        ),
+        (
+            PresenceOutcome::Unavailable,
+            "governance witness authentication unavailable",
+        ),
+        (
+            PresenceOutcome::Failed,
+            "governance witness authentication failed",
+        ),
+    ] {
+        let store = MemoryGovernanceWitnessStore::with_items(Some(seed), Some(public_key));
+        let presence = RecordingPresence::with_outcome(outcome);
+        let state = state_with_custody(store.clone(), presence.clone());
+
+        assert_eq!(
+            state.sign_governance_witness(&claim()).unwrap_err(),
+            expected_error
+        );
+        assert_eq!(presence.reasons().len(), 1);
+        assert_eq!(store.released_seed_count(), 0);
+        assert_eq!(store.write_counts(), (0, 0));
+        assert!(state.kv_snapshot().unwrap().is_empty());
+    }
+
+    let store = MemoryGovernanceWitnessStore::with_items(Some(seed), Some(public_key));
+    let presence = RecordingPresence::allow();
+    let state = state_with_custody(store.clone(), presence.clone());
+    let mut malformed = claim();
+    malformed["bytes"] = serde_json::json!("caller-selected");
+    assert!(state
+        .sign_governance_witness(&malformed)
+        .unwrap_err()
+        .contains("malformed governance witness claim"));
+    assert!(presence.reasons().is_empty());
+    assert_eq!(store.released_seed_count(), 0);
+    assert_eq!(store.write_counts(), (0, 0));
+    assert!(state.kv_snapshot().unwrap().is_empty());
+}
+
+#[test]
+fn governance_signing_rejects_seed_identity_or_sidecar_mismatch() {
+    let seed = [7u8; 32];
+    let public_key = SigningKey::from_bytes(&seed).verifying_key().to_bytes();
+
+    for store in [
+        MemoryGovernanceWitnessStore::with_identity_items(
+            Some(seed),
+            Some(public_key),
+            Some([9u8; 32]),
+        ),
+        MemoryGovernanceWitnessStore::with_identity_items(
+            Some(seed),
+            Some([9u8; 32]),
+            Some(public_key),
+        ),
+        MemoryGovernanceWitnessStore::with_identity_items(
+            Some(seed),
+            Some([9u8; 32]),
+            Some([9u8; 32]),
+        ),
+    ] {
+        let presence = RecordingPresence::allow();
+        let state = state_with_custody(store.clone(), presence.clone());
+
+        assert_eq!(
+            state.sign_governance_witness(&claim()).unwrap_err(),
+            "governance witness identity is corrupt: public key mismatch"
+        );
+        assert_eq!(presence.reasons().len(), 1);
+        assert_eq!(store.released_seed_count(), 1);
+        assert_eq!(store.write_counts(), (0, 0));
+        assert!(state.kv_snapshot().unwrap().is_empty());
+    }
+}
+
+#[test]
+fn governance_signing_names_missing_public_identity_facets_after_seed_access() {
+    let seed = [7u8; 32];
+    let public_key = SigningKey::from_bytes(&seed).verifying_key().to_bytes();
+
+    for (store, expected_error) in [
+        (
+            MemoryGovernanceWitnessStore::with_identity_items(
+                Some(seed),
+                Some(public_key),
+                None,
+            ),
+            "governance witness identity is incomplete: public sidecar is missing",
+        ),
+        (
+            MemoryGovernanceWitnessStore::with_identity_items(
+                Some(seed),
+                None,
+                Some(public_key),
+            ),
+            "governance witness identity is incomplete: protected-seed identity metadata is missing",
+        ),
+        (
+            MemoryGovernanceWitnessStore::with_identity_items(Some(seed), None, None),
+            "governance witness identity is incomplete: public identity metadata is missing",
+        ),
+    ] {
+        let presence = RecordingPresence::allow();
+        let state = state_with_custody(
+            store.clone(),
+            presence.clone(),
+        );
+
+        assert_eq!(
+            state.sign_governance_witness(&claim()).unwrap_err(),
+            expected_error
+        );
+        assert_eq!(presence.reasons().len(), 1);
+        assert_eq!(store.released_seed_count(), 1);
+        assert_eq!(store.write_counts(), (0, 0));
+        assert!(state.kv_snapshot().unwrap().is_empty());
+    }
+}
+
+fn verify_governance_signature(
+    result: &township_tauri_shell::GovernanceWitnessSignature,
+    public_key: [u8; 32],
+) {
+    let payload =
+        township_tauri_shell::governance_witness::canonical_governance_witness_payload(&claim())
+            .unwrap();
+    let signature: [u8; 64] = base64::engine::general_purpose::STANDARD
+        .decode(&result.signature)
+        .unwrap()
+        .try_into()
+        .unwrap();
+    VerifyingKey::from_bytes(&public_key)
+        .unwrap()
+        .verify(&payload.bytes, &Signature::from_bytes(&signature))
+        .unwrap();
+}
+
+#[derive(Clone)]
+struct RecordingPresence {
+    reasons: Arc<Mutex<Vec<String>>>,
+    outcome: PresenceOutcome,
+}
+
+#[derive(Clone, Copy)]
+enum PresenceOutcome {
+    Allow,
+    Cancelled,
+    Unavailable,
+    Failed,
+}
+
+impl RecordingPresence {
+    fn allow() -> Self {
+        Self::with_outcome(PresenceOutcome::Allow)
+    }
+
+    fn with_outcome(outcome: PresenceOutcome) -> Self {
+        Self {
+            reasons: Arc::new(Mutex::new(Vec::new())),
+            outcome,
+        }
+    }
+
+    fn reasons(&self) -> Vec<String> {
+        self.reasons.lock().unwrap().clone()
+    }
+}
+
+impl RecordingPresence {
+    fn authorize(&self, reason: &str) -> Result<(), GovernanceWitnessPresenceError> {
+        self.reasons.lock().unwrap().push(reason.to_string());
+        match self.outcome {
+            PresenceOutcome::Allow => Ok(()),
+            PresenceOutcome::Cancelled => Err(GovernanceWitnessPresenceError::Cancelled),
+            PresenceOutcome::Unavailable => Err(GovernanceWitnessPresenceError::Unavailable),
+            PresenceOutcome::Failed => Err(GovernanceWitnessPresenceError::Failed(
+                "platform detail must not escape".to_string(),
+            )),
+        }
+    }
+}
+
+#[derive(Clone, Default)]
+struct MemoryGovernanceWitnessStore {
+    inner: Arc<Mutex<MemoryGovernanceWitnessState>>,
+}
+
+#[derive(Default)]
+struct MemoryGovernanceWitnessState {
+    seed: Option<[u8; 32]>,
+    seed_public_key: Option<[u8; 32]>,
+    public_key: Option<[u8; 32]>,
+    seed_writes: usize,
+    public_key_writes: usize,
+    seed_releases: usize,
+    seed_create_error: Option<&'static str>,
+    public_key_create_error: Option<&'static str>,
+    delete_error: Option<&'static str>,
+    delete_count: usize,
+    create_delay_ms: u64,
+    duplicate_delay_ms: u64,
+    public_key_create_delay_ms: u64,
+}
+
+impl MemoryGovernanceWitnessStore {
+    fn with_items(seed: Option<[u8; 32]>, public_key: Option<[u8; 32]>) -> Self {
+        let seed_public_key =
+            seed.map(|seed| SigningKey::from_bytes(&seed).verifying_key().to_bytes());
+        Self::with_identity_items(seed, seed_public_key, public_key)
+    }
+
+    fn with_identity_items(
+        seed: Option<[u8; 32]>,
+        seed_public_key: Option<[u8; 32]>,
+        public_key: Option<[u8; 32]>,
+    ) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(MemoryGovernanceWitnessState {
+                seed,
+                seed_public_key,
+                public_key,
+                ..MemoryGovernanceWitnessState::default()
+            })),
+        }
+    }
+
+    fn with_failures(
+        seed_create_error: Option<&'static str>,
+        public_key_create_error: Option<&'static str>,
+        delete_error: Option<&'static str>,
+    ) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(MemoryGovernanceWitnessState {
+                seed_create_error,
+                public_key_create_error,
+                delete_error,
+                ..MemoryGovernanceWitnessState::default()
+            })),
+        }
+    }
+
+    fn with_create_delay(create_delay_ms: u64) -> Self {
+        Self::with_create_delays(create_delay_ms, 0, 0)
+    }
+
+    fn with_create_delays(
+        create_delay_ms: u64,
+        duplicate_delay_ms: u64,
+        public_key_create_delay_ms: u64,
+    ) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(MemoryGovernanceWitnessState {
+                create_delay_ms,
+                duplicate_delay_ms,
+                public_key_create_delay_ms,
+                ..MemoryGovernanceWitnessState::default()
+            })),
+        }
+    }
+
+    fn write_counts(&self) -> (usize, usize) {
+        let state = self.inner.lock().unwrap();
+        (state.seed_writes, state.public_key_writes)
+    }
+
+    fn released_seed_count(&self) -> usize {
+        self.inner.lock().unwrap().seed_releases
+    }
+
+    fn items(&self) -> (Option<[u8; 32]>, Option<[u8; 32]>) {
+        let state = self.inner.lock().unwrap();
+        (state.seed, state.public_key)
+    }
+
+    fn delete_count(&self) -> usize {
+        self.inner.lock().unwrap().delete_count
+    }
+}
+
+impl MemoryGovernanceWitnessStore {
+    fn load_seed_public_key(&self) -> Result<Option<[u8; 32]>, String> {
+        Ok(self.inner.lock().unwrap().seed_public_key)
+    }
+
+    fn load_seed(&self) -> Result<Option<[u8; 32]>, GovernanceWitnessPresenceError> {
+        let mut state = self.inner.lock().unwrap();
+        state.seed_releases += 1;
+        Ok(state.seed)
+    }
+
+    fn load_public_key(&self) -> Result<Option<[u8; 32]>, String> {
+        Ok(self.inner.lock().unwrap().public_key)
+    }
+
+    fn create_seed(&self, seed: [u8; 32]) -> Result<(), GovernanceWitnessCreateError> {
+        let state = self.inner.lock().unwrap();
+        if let Some(error) = state.seed_create_error {
+            return Err(GovernanceWitnessCreateError::Backend(error.to_string()));
+        }
+        if state.seed.is_some() {
+            return Err(GovernanceWitnessCreateError::Duplicate);
+        }
+        let create_delay_ms = state.create_delay_ms;
+        drop(state);
+        if create_delay_ms > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(create_delay_ms));
+        }
+        let mut state = self.inner.lock().unwrap();
+        if state.seed.is_some() {
+            let duplicate_delay_ms = state.duplicate_delay_ms;
+            drop(state);
+            if duplicate_delay_ms > 0 {
+                std::thread::sleep(std::time::Duration::from_millis(duplicate_delay_ms));
+            }
+            return Err(GovernanceWitnessCreateError::Duplicate);
+        }
+        state.seed = Some(seed);
+        state.seed_public_key = Some(SigningKey::from_bytes(&seed).verifying_key().to_bytes());
+        state.seed_writes += 1;
+        Ok(())
+    }
+
+    fn create_public_key(&self, public_key: [u8; 32]) -> Result<(), GovernanceWitnessCreateError> {
+        let state = self.inner.lock().unwrap();
+        if let Some(error) = state.public_key_create_error {
+            return Err(GovernanceWitnessCreateError::Backend(error.to_string()));
+        }
+        if state.public_key.is_some() {
+            return Err(GovernanceWitnessCreateError::Duplicate);
+        }
+        let public_key_create_delay_ms = state.public_key_create_delay_ms;
+        drop(state);
+        if public_key_create_delay_ms > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(public_key_create_delay_ms));
+        }
+        let mut state = self.inner.lock().unwrap();
+        if state.public_key.is_some() {
+            return Err(GovernanceWitnessCreateError::Duplicate);
+        }
+        state.public_key = Some(public_key);
+        state.public_key_writes += 1;
+        Ok(())
+    }
+
+    fn delete_seed(&self) -> Result<(), String> {
+        let mut state = self.inner.lock().unwrap();
+        state.delete_count += 1;
+        if let Some(error) = state.delete_error {
+            return Err(error.to_string());
+        }
+        state.seed = None;
+        state.seed_public_key = None;
+        Ok(())
+    }
+}
+
+struct TestBackend {
+    store: MemoryGovernanceWitnessStore,
+    presence: RecordingPresence,
+}
+impl LegacySeedBackend for TestBackend {
+    fn provider_kind(&self) -> GovernanceWitnessProviderKind {
+        GovernanceWitnessProviderKind::Injected
+    }
+    fn load_seed_public_key(&self) -> Result<Option<[u8; 32]>, String> {
+        self.store.load_seed_public_key()
+    }
+    fn load_public_key(&self) -> Result<Option<[u8; 32]>, String> {
+        self.store.load_public_key()
+    }
+    fn authorize_and_load_seed(
+        &self,
+        reason: &str,
+    ) -> Result<Option<[u8; 32]>, GovernanceWitnessPresenceError> {
+        self.presence.authorize(reason)?;
+        self.store.load_seed()
+    }
+    fn create_seed(&self, seed: [u8; 32]) -> Result<(), GovernanceWitnessCreateError> {
+        self.store.create_seed(seed)
+    }
+    fn create_public_key(&self, key: [u8; 32]) -> Result<(), GovernanceWitnessCreateError> {
+        self.store.create_public_key(key)
+    }
+    fn delete_seed(&self) -> Result<(), String> {
+        self.store.delete_seed()
+    }
+}
+fn state_with_store(store: MemoryGovernanceWitnessStore) -> TownshipNativeState {
+    state_with_custody(store, RecordingPresence::allow())
+}
+fn state_with_custody(
+    store: MemoryGovernanceWitnessStore,
+    presence: RecordingPresence,
+) -> TownshipNativeState {
+    TownshipNativeState::with_governance_witness_provider(Arc::new(
+        LegacySeedGovernanceProvider::new(TestBackend { store, presence }),
+    ))
+}

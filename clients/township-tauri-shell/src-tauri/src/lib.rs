@@ -15,18 +15,20 @@ use std::path::{Path, PathBuf};
 #[cfg(any(target_os = "android", target_os = "ios"))]
 use std::sync::OnceLock;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use base64::engine::general_purpose::{STANDARD as BASE64, URL_SAFE_NO_PAD};
+use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine as _;
-use ed25519_dalek::{Signer, SigningKey};
-use rand_core::OsRng;
 use tauri::Manager;
 
 #[cfg(all(target_os = "ios", feature = "township-ios-key-reuse-native-probe"))]
 use objc2_foundation::NSHomeDirectory;
 
+pub mod governance_provider;
 pub mod governance_witness;
+pub use governance_provider::{GovernanceWitnessProvider, LegacyClerkSigningRequest};
+#[cfg(test)]
+mod governance_provider_tests;
 #[cfg(all(
     target_os = "macos",
     not(feature = "township-governance-test-presence")
@@ -86,10 +88,6 @@ pub const TOWNSHIP_WITNESS_ARTIFACT_EXPORT_KV_PREFIX: &str =
 /// also the character count).
 pub const TOWNSHIP_WITNESS_ARTIFACT_ID_BYTES: usize =
     lattice_mobile_core::SHA256_BASE64URL_ID_BYTES;
-const GOVERNANCE_DUPLICATE_RECONCILIATION_TIMEOUT: Duration = Duration::from_millis(500);
-const GOVERNANCE_DUPLICATE_RECONCILIATION_INTERVAL: Duration = Duration::from_millis(10);
-const GOVERNANCE_PUBLIC_SIDECAR_MISSING: &str =
-    "governance witness identity is incomplete: public sidecar is missing";
 #[cfg(feature = "township-dev-trace")]
 const TOWNSHIP_DEV_TRACE_EVENT_MAX_CHARS: usize = 4_096;
 const TOWNSHIP_NATIVE_PROBE_SIGNING_PAYLOAD: &[u8] = b"township-native-probe";
@@ -129,42 +127,11 @@ pub enum GovernanceWitnessProviderKind {
     TestPresence,
 }
 
-/// A governance caller must not be able to create or obtain private key material.
-///
-/// ```compile_fail
-/// use township_tauri_shell::GovernanceWitnessKeyStore;
-///
-/// fn private_material_crosses_the_caller_boundary(store: &dyn GovernanceWitnessKeyStore) {
-///     let _ = store.create_seed([7; 32]);
-///     let _ = store.load_seed();
-/// }
-/// ```
-pub trait GovernanceWitnessKeyStore: Send + Sync {
-    fn provider_kind(&self) -> GovernanceWitnessProviderKind {
-        GovernanceWitnessProviderKind::Injected
-    }
-
-    fn load_seed_public_key(&self) -> Result<Option<[u8; 32]>, String>;
-    fn load_seed(&self) -> Result<Option<[u8; 32]>, GovernanceWitnessPresenceError>;
-    fn load_public_key(&self) -> Result<Option<[u8; 32]>, String>;
-    fn create_seed(&self, seed: [u8; 32]) -> Result<(), GovernanceWitnessCreateError>;
-    fn create_public_key(&self, public_key: [u8; 32]) -> Result<(), GovernanceWitnessCreateError>;
-    fn delete_seed(&self) -> Result<(), String>;
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GovernanceWitnessPresenceError {
     Cancelled,
     Unavailable,
     Failed(String),
-}
-
-pub trait GovernanceWitnessPresence: Send + Sync {
-    fn provider_kind(&self) -> GovernanceWitnessProviderKind {
-        GovernanceWitnessProviderKind::Injected
-    }
-
-    fn authorize(&self, reason: &str) -> Result<(), GovernanceWitnessPresenceError>;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
@@ -238,10 +205,7 @@ pub struct TownshipNativeState {
     values_path: Mutex<Option<PathBuf>>,
     product_db: Mutex<Option<lattice_mobile_core::ProductDatabase>>,
     signer: lattice_mobile_core::NativeCarrierSigner,
-    governance_key_store: Option<Arc<dyn GovernanceWitnessKeyStore>>,
-    governance_presence: Option<Arc<dyn GovernanceWitnessPresence>>,
-    governance_creation: Mutex<()>,
-    governance_signing: Mutex<()>,
+    governance_provider: Option<Arc<dyn GovernanceWitnessProvider>>,
 }
 
 impl Default for TownshipNativeState {
@@ -261,36 +225,16 @@ impl TownshipNativeState {
     where
         S: CarrierKeySeedStore + 'static,
     {
-        Self::with_values_and_key_stores(HashMap::new(), None, key_store, None, None)
+        Self::with_values_and_key_stores(HashMap::new(), None, key_store, None)
     }
 
-    pub fn with_governance_witness_key_store<S>(governance_key_store: S) -> Self
-    where
-        S: GovernanceWitnessKeyStore + 'static,
-    {
+    /// Trusted native injection only; the packaged provider is fixed by platform_secure.
+    pub fn with_governance_witness_provider(provider: Arc<dyn GovernanceWitnessProvider>) -> Self {
         Self::with_values_and_key_stores(
             HashMap::new(),
             None,
             InMemoryCarrierKeySeedStore::default(),
-            Some(Arc::new(governance_key_store)),
-            None,
-        )
-    }
-
-    pub fn with_governance_witness_custody<S, P>(
-        governance_key_store: S,
-        governance_presence: P,
-    ) -> Self
-    where
-        S: GovernanceWitnessKeyStore + 'static,
-        P: GovernanceWitnessPresence + 'static,
-    {
-        Self::with_values_and_key_stores(
-            HashMap::new(),
-            None,
-            InMemoryCarrierKeySeedStore::default(),
-            Some(Arc::new(governance_key_store)),
-            Some(Arc::new(governance_presence)),
+            Some(provider),
         )
     }
 
@@ -321,7 +265,6 @@ impl TownshipNativeState {
             Some(path),
             key_store,
             None,
-            None,
         ))
     }
 
@@ -329,8 +272,7 @@ impl TownshipNativeState {
         values: HashMap<String, String>,
         values_path: Option<PathBuf>,
         key_store: S,
-        governance_key_store: Option<Arc<dyn GovernanceWitnessKeyStore>>,
-        governance_presence: Option<Arc<dyn GovernanceWitnessPresence>>,
+        governance_provider: Option<Arc<dyn GovernanceWitnessProvider>>,
     ) -> Self
     where
         S: CarrierKeySeedStore + 'static,
@@ -341,10 +283,7 @@ impl TownshipNativeState {
             values_path: Mutex::new(values_path),
             product_db: Mutex::new(None),
             signer: lattice_mobile_core::NativeCarrierSigner::new(Arc::new(key_store)),
-            governance_key_store,
-            governance_presence,
-            governance_creation: Mutex::new(()),
-            governance_signing: Mutex::new(()),
+            governance_provider,
         }
     }
 
@@ -364,13 +303,14 @@ impl TownshipNativeState {
     pub fn platform_secure() -> Self {
         #[cfg(feature = "township-governance-test-presence")]
         {
-            let custody = Arc::new(test_governance::TestGovernanceWitnessCustody);
+            let custody = governance_provider::LegacySeedGovernanceProvider::new(
+                test_governance::TestGovernanceWitnessCustody,
+            );
             return Self::with_values_and_key_stores(
                 HashMap::new(),
                 None,
                 KeyringCarrierKeySeedStore::township(),
-                Some(custody.clone()),
-                Some(custody),
+                Some(Arc::new(custody)),
             );
         }
 
@@ -379,15 +319,16 @@ impl TownshipNativeState {
             target_os = "macos"
         ))]
         {
-            let custody = Arc::new(macos_governance::MacosGovernanceWitnessCustody::new(
-                TOWNSHIP_GOVERNANCE_KEYRING_SERVICE,
-            ));
+            let custody = governance_provider::LegacySeedGovernanceProvider::new(
+                macos_governance::MacosGovernanceWitnessCustody::new(
+                    TOWNSHIP_GOVERNANCE_KEYRING_SERVICE,
+                ),
+            );
             return Self::with_values_and_key_stores(
                 HashMap::new(),
                 None,
                 KeyringCarrierKeySeedStore::township(),
-                Some(custody.clone()),
-                Some(custody),
+                Some(Arc::new(custody)),
             );
         }
 
@@ -411,12 +352,11 @@ impl TownshipNativeState {
     }
 
     pub fn governance_witness_provider_kind(&self) -> GovernanceWitnessProviderKind {
-        match (&self.governance_key_store, &self.governance_presence) {
-            (Some(store), Some(presence)) if store.provider_kind() == presence.provider_kind() => {
-                store.provider_kind()
-            }
-            _ => GovernanceWitnessProviderKind::Unavailable,
-        }
+        self.governance_provider
+            .as_ref()
+            .map_or(GovernanceWitnessProviderKind::Unavailable, |provider| {
+                provider.provider_kind()
+            })
     }
 
     pub fn governance_witness_custody_is_bound(&self) -> bool {
@@ -686,190 +626,33 @@ impl TownshipNativeState {
     }
 
     pub fn ensure_governance_witness_key(&self) -> Result<String, String> {
-        let store = self
-            .governance_key_store
-            .as_ref()
-            .ok_or_else(|| "governance witness custody is unavailable".to_string())?;
-        let _creation = self
-            .governance_creation
-            .lock()
-            .map_err(|_| "governance witness creation lock poisoned".to_string())?;
-        if let Some(public_key) = existing_governance_public_key(store.as_ref())? {
-            return Ok(public_key);
-        }
-
-        let signing_key = SigningKey::generate(&mut OsRng);
-        let public_key = signing_key.verifying_key().to_bytes();
-        match store.create_seed(signing_key.to_bytes()) {
-            Ok(()) => {}
-            Err(GovernanceWitnessCreateError::Duplicate) => {
-                return reconcile_duplicate_governance_identity(store.as_ref());
-            }
-            Err(error) => return Err(governance_create_error(error)),
-        }
-        if let Err(error) = store.create_public_key(public_key) {
-            let create_error = governance_create_error(error);
-            store.delete_seed().map_err(|rollback_error| {
-                format!(
-                    "governance witness public metadata creation failed: {create_error}; seed rollback failed: {rollback_error}"
-                )
-            })?;
-            return Err(format!(
-                "governance witness public metadata creation failed: {create_error}"
-            ));
-        }
-
-        Ok(BASE64.encode(public_key))
+        self.governance_provider()?
+            .ensure_identity()
+            .map(|key| BASE64.encode(key))
     }
-
     pub fn governance_witness_public_key(&self) -> Result<String, String> {
-        let store = self
-            .governance_key_store
-            .as_ref()
-            .ok_or_else(|| "governance witness custody is unavailable".to_string())?;
-
-        match governance_public_identity(store.as_ref())? {
-            GovernancePublicIdentity::Complete(public_key) => Ok(BASE64.encode(public_key)),
-            GovernancePublicIdentity::Missing => {
-                Err("governance witness identity is missing".to_string())
-            }
-        }
+        self.governance_provider()?
+            .load_public_identity()?
+            .map(|key| BASE64.encode(key))
+            .ok_or_else(|| "governance witness identity is missing".to_string())
     }
-
     pub fn sign_governance_witness(
         &self,
         claim: &serde_json::Value,
     ) -> Result<GovernanceWitnessSignature, String> {
-        let payload = governance_witness::canonical_governance_witness_payload(claim)?;
-        let store = self
-            .governance_key_store
-            .as_ref()
-            .ok_or_else(|| "governance witness custody is unavailable".to_string())?;
-        let presence = self
-            .governance_presence
-            .as_ref()
-            .ok_or_else(|| "governance witness presence is unavailable".to_string())?;
-        let _signing = self
-            .governance_signing
-            .lock()
-            .map_err(|_| "governance witness signing lock poisoned".to_string())?;
-        presence
-            .authorize("Sign Township clerk recovery witness")
-            .map_err(governance_presence_error)?;
-
-        let seed = store
-            .load_seed()
-            .map_err(governance_presence_error)?
-            .ok_or_else(|| "governance witness protected seed is missing".to_string())?;
-        let signing_key = SigningKey::from_bytes(&seed);
-        let public_key = signing_key.verifying_key().to_bytes();
-        let stored_public_key = match governance_public_identity(store.as_ref())? {
-            GovernancePublicIdentity::Complete(public_key) => public_key,
-            GovernancePublicIdentity::Missing => {
-                return Err(
-                    "governance witness identity is incomplete: public identity metadata is missing"
-                        .to_string(),
-                );
-            }
-        };
-        if stored_public_key != public_key {
-            return Err("governance witness identity is corrupt: public key mismatch".to_string());
-        }
-
-        Ok(GovernanceWitnessSignature {
-            witness: BASE64.encode(public_key),
-            signature: BASE64.encode(signing_key.sign(&payload.bytes).to_bytes()),
-            payload_digest: URL_SAFE_NO_PAD.encode(payload.sha256),
-        })
+        let request = LegacyClerkSigningRequest::from_claim(claim)?;
+        self.governance_provider()?.sign_legacy_clerk(&request)
+    }
+    fn governance_provider(&self) -> Result<&dyn GovernanceWitnessProvider, String> {
+        self.governance_provider
+            .as_deref()
+            .ok_or_else(|| "governance witness custody is unavailable".to_string())
     }
 }
 
 #[cfg(feature = "township-governance-test-presence")]
 pub fn governance_test_presence_authorization_count() -> usize {
     test_governance::authorization_count()
-}
-
-fn governance_presence_error(error: GovernanceWitnessPresenceError) -> String {
-    match error {
-        GovernanceWitnessPresenceError::Cancelled => {
-            "governance witness authentication cancelled".to_string()
-        }
-        GovernanceWitnessPresenceError::Unavailable => {
-            "governance witness authentication unavailable".to_string()
-        }
-        GovernanceWitnessPresenceError::Failed(_) => {
-            "governance witness authentication failed".to_string()
-        }
-    }
-}
-
-fn existing_governance_public_key(
-    store: &dyn GovernanceWitnessKeyStore,
-) -> Result<Option<String>, String> {
-    match governance_public_identity(store)? {
-        GovernancePublicIdentity::Complete(public_key) => Ok(Some(BASE64.encode(public_key))),
-        GovernancePublicIdentity::Missing => Ok(None),
-    }
-}
-
-fn reconcile_duplicate_governance_identity(
-    store: &dyn GovernanceWitnessKeyStore,
-) -> Result<String, String> {
-    let deadline = Instant::now() + GOVERNANCE_DUPLICATE_RECONCILIATION_TIMEOUT;
-    loop {
-        match existing_governance_public_key(store) {
-            Ok(Some(public_key)) => return Ok(public_key),
-            Ok(None) => {
-                return Err(
-                    "governance witness concurrent identity creation disappeared before completion"
-                        .to_string(),
-                );
-            }
-            Err(error) if error == GOVERNANCE_PUBLIC_SIDECAR_MISSING => {
-                if Instant::now() >= deadline {
-                    return Err(
-                        "governance witness concurrent identity creation timed out before public sidecar"
-                            .to_string(),
-                    );
-                }
-                std::thread::sleep(GOVERNANCE_DUPLICATE_RECONCILIATION_INTERVAL);
-            }
-            Err(error) => return Err(error),
-        }
-    }
-}
-
-enum GovernancePublicIdentity {
-    Missing,
-    Complete([u8; 32]),
-}
-
-fn governance_public_identity(
-    store: &dyn GovernanceWitnessKeyStore,
-) -> Result<GovernancePublicIdentity, String> {
-    match (store.load_seed_public_key()?, store.load_public_key()?) {
-        (Some(seed_public_key), Some(public_key)) if seed_public_key == public_key => {
-            Ok(GovernancePublicIdentity::Complete(public_key))
-        }
-        (Some(_), Some(_)) => {
-            Err("governance witness identity is corrupt: public key mismatch".to_string())
-        }
-        (Some(_), None) => Err(GOVERNANCE_PUBLIC_SIDECAR_MISSING.to_string()),
-        (None, Some(_)) => Err(
-            "governance witness identity is incomplete: protected-seed identity metadata is missing"
-                .to_string(),
-        ),
-        (None, None) => Ok(GovernancePublicIdentity::Missing),
-    }
-}
-
-fn governance_create_error(error: GovernanceWitnessCreateError) -> String {
-    match error {
-        GovernanceWitnessCreateError::Duplicate => {
-            "governance witness identity already exists".to_string()
-        }
-        GovernanceWitnessCreateError::Backend(error) => error,
-    }
 }
 
 fn reject_governance_carrier_alias(key_id: &str) -> Result<(), String> {

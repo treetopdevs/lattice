@@ -388,3 +388,12 @@ opaque interface and private-construction controls. Existing locked dependency
 build output was independently cloned from the native-prompt worktree; an
 existing ignored frontend dist was copied only to satisfy Rust's Tauri build
 input, not as packaged UX evidence. No dependencies or devices were installed.
+
+Initial ownership GREEN: all nine Rust doctests pass, including the same removed
+seed-API example, private backend/request construction and mutation refusals, and
+the positive opaque API. The 12 migrated private custody tests and four external
+IPC/provider tests pass; all five unchanged canonical-payload tests and the
+ordinary macOS release-binding test pass. Logs are `r36-opaque-api-green.log`,
+`r36-custody-migration-green.log` and `r36-public-compatibility-green.log` under
+the same execution-evidence directory. This checkpoint still needs the additional
+deterministic failure/race controls, final gates and implementation review.
