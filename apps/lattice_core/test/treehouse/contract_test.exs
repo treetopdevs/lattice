@@ -112,6 +112,17 @@ defmodule Lattice.Treehouse.ContractTest do
     "## Frozen contract",
     "### Command vocabulary",
     "### Conflict rules",
+    "No unarchive command is added.",
+    "An otherwise authorized repeated archive is honored and writes `true` again: the visible " <>
+      "state is idempotent, while each separately signed command remains retained and counted " <>
+      "in the log.",
+    "A stale moderator still fails ordinary holder validation; repetition never bypasses authorization.",
+    "An honored archive in a candidate's causal past denies `post`, `author edit` and `author tombstone`.",
+    "`moderator tombstone` remains permitted to moderate retained history.",
+    "A post concurrent with archive remains honored",
+    "An archive retains its Space reference, route, history and Thread slot.",
+    "At slot exhaustion the Space remains readable and exportable, and new posting/Thread creation stops.",
+    "Rollover checks capacity before archive",
     "### Roles",
     "### Hosting and plaintext",
     "### Beta exclusions"
@@ -133,7 +144,11 @@ defmodule Lattice.Treehouse.ContractTest do
       "role structure that phone had synced survive on it",
     "Member key loss is the AF-3 design item (social re-admission by group attestation; " <>
       "no path built today); founder/root key loss is AF-2 and fails today",
-    "Reactions, votes and polls are absent from the first beta"
+    "Reactions, votes and polls are absent from the first beta",
+    "The planned moderator action archives a Thread while keeping its history readable and its slot occupied.",
+    "Posts already concurrent with archive remain; later posts, author edits and author tombstones " <>
+      "are refused, while moderator tombstones can still moderate history.",
+    "Each rollover uses another of the twelve total Thread slots and may wait for operator provisioning."
   ]
 
   @readme_row "| 178 | Treehouse Contract Correction: frozen text-only beta contract, " <>

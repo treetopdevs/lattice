@@ -32,9 +32,20 @@ defmodule LatticeCarrierServer.SecretTest do
       )
 
     pid = GenServer.whereis(holder)
-    rendered = pid |> :sys.get_status() |> inspect(limit: :infinity)
+    status = :sys.get_status(pid)
+    rendered = inspect(status, limit: :infinity)
+
+    {:status, ^pid, {:module, :gen_server}, [_dictionary, _status, _parent, _debug, formatted]} =
+      status
+
+    [reported_state] =
+      for {:data, entries} <- formatted,
+          {~c"State", state} <- entries,
+          do: state
 
     refute rendered =~ inspect(identity.priv)
-    assert rendered =~ ":redacted"
+    assert reported_state.identity.priv == :redacted
+    assert reported_state.identity.pub == identity.pub
+    assert reported_state.identity.realm_id == identity.realm_id
   end
 end
