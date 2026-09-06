@@ -63,6 +63,16 @@ legacy certificate bytes or add arbitrary atom decoding. Tables enumerate every
 field; missing/extra fields and unsupported versions refuse. Map order follows
 the existing canonical encoder. List order is explicit below.
 
+**R11a interface amendment adopted 2026-09-06:** standalone catalog and
+rotation envelopes serialize through the existing CarrierTerm JSON grammar.
+Expose `Lattice.Carrier.Wire.encode_value/1` and `decode_value/1` as narrow
+wrappers around its existing term encoder/decoder and canonical-signable
+checks. Preserve the existing depth, integer, duplicate-term and atom rules;
+no new atom creation, fake operation envelope or increased limit is allowed.
+The raw standalone parser applies the 128-KiB byte bound before JSON decoding.
+This is a public interface for the existing grammar, not a new canonical format
+or a repair to the separately owned R03 policy/certificate parsing.
+
 `Id` is an existing canonical 43-character SHA-256 base64url identifier;
 `Nonce` is 32 fresh random bytes represented canonically the same way. Raw keys
 are 32 bytes and signatures 64 bytes, with strict canonical Base64 in JSON.
