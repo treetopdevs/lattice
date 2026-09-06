@@ -119,6 +119,8 @@ defmodule Lattice.Authority.Delegation do
       )
 
     d.id == hash(encoding) and Identity.verify(d.issuer, encoding, d.sig)
+  rescue
+    ArgumentError -> false
   end
 
   @doc """
