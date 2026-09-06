@@ -731,10 +731,6 @@ impl TownshipNativeState {
         claim: &serde_json::Value,
     ) -> Result<GovernanceWitnessSignature, String> {
         let payload = governance_witness::canonical_governance_witness_payload(claim)?;
-        let replica = claim
-            .get("replica")
-            .and_then(serde_json::Value::as_str)
-            .ok_or_else(|| "malformed governance witness claim: missing replica".to_string())?;
         let store = self
             .governance_key_store
             .as_ref()
@@ -747,9 +743,8 @@ impl TownshipNativeState {
             .governance_signing
             .lock()
             .map_err(|_| "governance witness signing lock poisoned".to_string())?;
-        let reason = format!("Sign clerk recovery witness for {replica}");
         presence
-            .authorize(&reason)
+            .authorize("Sign Township clerk recovery witness")
             .map_err(governance_presence_error)?;
 
         let seed = store
