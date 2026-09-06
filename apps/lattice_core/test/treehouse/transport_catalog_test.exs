@@ -5,9 +5,9 @@ defmodule Treehouse.TransportCatalogTest do
   alias Treehouse.TransportCatalog
 
   test "a signed catalog verifies only against the independently supplied catalog key" do
-    root = Identity.new("catalog-root")
-    signer = Identity.new("catalog-signer")
-    service = Identity.new("catalog-service")
+    root = Identity.from_seed("catalog-root", "catalog-root")
+    signer = Identity.from_seed("catalog-signer", "catalog-signer")
+    service = Identity.from_seed("catalog-service", "catalog-service")
 
     replica =
       Authority.bind_replica(
