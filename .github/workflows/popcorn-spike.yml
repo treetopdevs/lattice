@@ -41,6 +41,10 @@ jobs:
           npm test
           npm run build
           npx playwright install --with-deps chromium
+      - name: Separate the completed browser toolchain from the server installation
+        run: |
+          mv "$INSTALL_DIR_FOR_OTP" "$RUNNER_TEMP/lattice-browser-otp"
+          mv "$INSTALL_DIR_FOR_ELIXIR" "$RUNNER_TEMP/lattice-browser-elixir"
       - name: Server compiler
         uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
         with:
