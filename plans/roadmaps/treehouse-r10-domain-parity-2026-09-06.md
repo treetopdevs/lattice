@@ -2,7 +2,7 @@
 
 Status: original atomic domain implementation `3d6a4443` and shared R04/R10
 integration `f5fe2fb5` passed exact Claude Fable review. Final R03/R09/accepted-main
-integration is undergoing its final required gates below. Hosted integration and
+integration passed the final local gates and Sol propagation review below. Hosted integration and
 downstream enablement remain open.
 This packet executes unified R10 and the adopted Plan 158 amendment. Plan 178
 remains the frozen vocabulary document; its protected status and claim text are
@@ -311,8 +311,8 @@ Final local/source and hosted gates will be recorded against their actual tips.
 
 ### Exact legacy epoch integration and final local gate
 
-Integration `dd41fd6025939e35ad95d9d478231f5ba619f201` adds R04 final
-`f58267b8` and R03 final `65b5364e`. The source merge is automatic; normal client
+Integration `dd41fd6025939e35ad95d9d478231f5ba619f201` adds the then-current R04
+`f58267b8` and R03 `65b5364e`. The source merge is automatic; normal client
 build at `f21456ca` regenerates the widened carrier declaration. Actual Fable's
 R04 integration review passes with no P0/P1/P2 and verifies the high-epoch
 continuation refusal seam. Earlier R10 final review at `25fa8e93` also passed;
@@ -326,3 +326,57 @@ typecheck/build/conformance and Treehouse domain/review checks pass. Logs are
 The existing CI unit job now runs the standalone Treehouse domain/review script
 explicitly as well as reciprocal BEAM tests and conformance; no existing gate
 is removed or timeout changed. Exact tip/merge CI remains required.
+
+### Final constructor dependency and reviewed engine source
+
+Final integration `883124b513f32bf4614a8512cd34e1da5d344893` adds R04
+`ca3bd592` and R03 `39ea40da`, including the claim-constructor dependency
+deduplication and its signed public regression. Configured `gpt-5.6-sol` reviewed
+the exact four-file cascade: PASS, no P0/P1/P2; the previous landing blocker
+from the absent constructor repair is resolved. TS product decoder, command
+effects, continuation composition and CI source remain unchanged in this merge.
+
+Full `mix check` at 883124b5 passes **807 tests and 27 properties, zero failures**,
+three existing exclusions, clean formatting and strict Credo exit 0, recorded in
+`/tmp/lattice-treehouse-execution-20260906/engine-ctor-final-full-check.log`.
+Fresh compiled BEAM vector regeneration leaves every tracked oracle file
+byte-identical (`engine-final-vector-regeneration.log`); earlier client build,
+conformance and Treehouse domain/review gates apply to unchanged TS source.
+Exact new-tip hosted checks, all fresh review threads and dependency/main merge
+checks remain open. The staged R10 PR is #74, based on R04 #71 until it lands.
+
+### Final raw-dependency parity propagation — 2026-09-06
+
+Automatic source merge `2581ddc9` carries R03 `54aa2230` through R04 `640a48a4`
+into `86dd122d`, with no manual conflict resolution. The sole production hunk
+normalizes the expected witnessed-beacon dependency set using distinct values
+and UTF-8 byte order. Raw outer dependencies remain authenticated and retained;
+duplicate received certificate dependencies still refuse. Treehouse product
+decoding, all-or-none effects, continuation selection and exact high legacy epoch
+handling remain unchanged. Later evidence commits change documentation only.
+
+Full `mix check` at this source passes **808 tests and 27 properties, zero
+failures**, with three existing exclusions. Formatting and strict Credo exit 0;
+existing low-priority suggestions remain. Commands used the prescribed asdf/PATH
+toolchain and `ERL_FLAGS='+S 4:4'`, with no timeout or suite changes. TS
+typecheck/build, 213 Township authoring assertions, 1,495 conformance assertions
+plus 57 continuation histories, 12 codec tests, 14 continuation-authoring tests,
+886 canonical assertions and 18 Treehouse checks pass. Six Treehouse scenarios
+retain all 75 reciprocal signed frames.
+
+Fresh current-source BEAM/TS exporters preserve every one of the 74 pre-existing
+top-level vectors and the three continuation artifacts. The inherited signed
+raw-dependency case adds the 75th top-level vector. The continuation exporter
+reorders JSON object keys, but all 57 parsed histories, array order and signed
+byte strings are exactly equal; regenerated output was preserved separately and
+the committed presentation retained. This is not a claim of byte-deterministic
+JSON object ordering. No fixture expectations or signed bytes were changed.
+
+Actual configured `gpt-5.6-sol` read-only review of `86dd122d..2581ddc9` and
+`ca3bd592..640a48a4` returned **PASS, no P0/P1/P2**. It verified identical propagated
+patch IDs, the new raw vector/test blobs and preserved continuation/product
+logic. Review did not execute the test gates. Full logs and preservation proofs
+are under `/tmp/lattice-treehouse-execution-20260906/engine-54aa-*`; the actual
+review is `sol-r04-engine-54aa-propagation-review-result.md` in that directory.
+Final PR-tip, dependency and merge-result hosted checks remain required. No
+native, device, provisioning or pilot readiness is inferred from this local gate.
