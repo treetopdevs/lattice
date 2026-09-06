@@ -148,14 +148,26 @@ map witnesses explicitly alongside R04 nominees and R03 witnesses. It never uses
 expiry as a filter, never grants permission and never grows from unknown ancestry.
 Inspect supported staged introductions before requiring complete DAG admission.
 
-Relevant unknown/missing evidence durably blocks signing. Unconnected unknown input
-and its unconnected supported descendant cones stay in bounded durable staging
-outside the admitted frontier. Reclassify the full retained union before deriving
+Relevant unknown/missing evidence durably blocks signing. Apply D2's dated
+all-input relevance classifier after E: known-shape non-E outer operations stay
+in bounded nonblocking staging even with complete dependencies, unless required
+as ancestors of E-authored history. Retain E-authored semantic quarantines and all
+required ancestors without using permission/current-holder status as a filter.
+Inspect independently authenticated E-issued introduction/parent proof material
+first, deduplicate its reserved relevant-budget accounting by existing signed IDs,
+and never promote a fresh author or each wrapper merely for copying a public cap.
+A new relevant proof or unresolved E-issued parent requirement cannot be hidden by
+an unrelated outer carrier or a full staging quota. Unknown nonrelevant input and
+its nonrelevant supported descendants also remain staged outside the admitted
+frontier. Reclassify the full retained union before deriving
 or releasing a claim; later eligible introductions/citations promote or block
 atomically. Known shapes proved inert by the fixed grammar remain supported.
 Invalid wire/ID/signature and quota-refused input are not trusted observations.
 Omitting retained evidence or restarting cannot remove a block. Preserve D2's
 eligible-author denial residual and same-retained-union convergence limit.
+An eligible signature or later introduction may promote retained supported spam;
+promotion that exceeds relevant capacity blocks before derivation/release. This
+explicit residual includes an honest eligible author's automatic frontier citation.
 
 Store pin, observations, pending evidence, blocking state and generation crash
 safely outside webview/cache mutation APIs. An existing key with missing/corrupt
@@ -168,9 +180,11 @@ Reserve capacity for staging, promotion, intake and durable markers. Atomically
 journal the fence and complete bounded batch bytes/digest-backed durable input;
 the API cannot create a fence alone. Proposed intake is 64 frames / 512 KiB within
 the overall ceiling. Restart classifies that exact recoverable batch before signing.
-Only completed refusal, retained pending/supported evidence or a durable block
-clears its fence; unrelated retries cannot. Corrupt/missing journal bytes refuse.
+Only completed invalid/quota refusal, retained pending/supported evidence or a
+durable block clears its fence; unrelated retries cannot. Corrupt/missing journal bytes refuse.
 An ordinary crash with a readable journal must recover, not strand the witness.
+Classified nonblocking-quota refusal must clear its exact batch fence without a
+permanent admitted-capacity block; incomplete classification still fences signing.
 
 RED: ordinary command/inbox ancestors before a valid acquisition; semantic
 quarantines retained; outer ID/signature mutation; malformed canonical data;
@@ -183,9 +197,31 @@ overblocking and staged introduction before DAG closure; later eligibility promo
 or blocks before release; staging exhaustion leaves admitted signing usable, while
 relevant-capacity exhaustion blocks; a legacy designated successor's unknown op
 blocks and its self-issued succession can anchor valid children; quota-refused
-bytes can be resubmitted as fresh admission once connected; readable fence recovery and corrupt-journal
+bytes can be resubmitted for fresh classification after new relevance or missing
+evidence, with mere connection insufficient; readable fence recovery and corrupt-journal
 refusal at every admission boundary. Restored whole old native store remains an
 explicit non-claim rather than a misleading passing rollback test.
+
+**2026-09-06 connected-spam RED extension:** before implementing the classifier,
+add these public signed-input/native-store cases and reciprocal oracle controls.
+They are required future tests, not results of this documentation correction.
+
+| Input/control | Required observable outcome |
+| --- | --- |
+| Correctly signed known-shape commands from fresh non-E keys, all depending directly on admitted root history, sufficient to fill staging and then overflow it | Complete DAGs do not qualify for admitted/relevant quota. Retained inputs stay staged; overflow is a nonblocking quota refusal; existing complete history can still derive/sign after exact-batch classification and restart. |
+| Fresh-key wrappers with distinct signed outer IDs copying an already retained public E-issued capability/parent proof | No outer author joins E; no wrapper becomes relevant just for the copied proof; relevant proof accounting grows zero times for duplicate signed IDs. Filling wrapper staging does not create a permanent fence/block. |
+| A genuinely new authenticated E-issued introduction supplied under a different outer author when staging is full | Inspect before outer-op quota assignment; retain required deduplicated proof evidence, expand E and atomically promote relevant retained history or persist its capacity/unknown-evidence block. Do not silently refuse relevant evidence as unrelated staging spam. |
+| E-authored but semantically quarantined supported operation, alongside an unrelated fresh-key supported operation | Preserve the E-authored operation under relevant capacity with the landed verdict; the fresh-key operation remains nonblocking staged. Quarantine/current-holder/lease status does not select admission relevance. |
+| E-authored supported descendant naming a staged non-E operation as an ancestor | Retain/promote the complete required authenticated ancestry, including that non-E node and quarantines, before derive/release. Missing/unknown relevant ancestry blocks; application effects are not invented. |
+| Later E introduction of a staged author, or eligible ancestry citation, both below and beyond remaining relevant capacity | Atomically promote or persist a block; no old-subset signing during admission, review or release. Include the explicit eligible-signature availability residual with supported spam. |
+| Otherwise E-issued introduction with missing/unknown parent evidence, including a changed unintroduced outer carrier | Preserve the authenticated issuer's relevant block. A complete copied proof control does not create new relevant facts or promote its outer wrapper. |
+| Crash at each exact-batch journal/classification boundary with only irrelevant staging overflow | Restart classifies the same recoverable bytes, records/refuses that quota-only input and clears its fence. It cannot leave a persistent admitted-capacity block or emit an artifact before classification. |
+| Resubmit previously quota-refused exact bytes after a real E introduction or ancestry requirement | Fresh admission sees current relevance; there is no persistent bytes denylist. Simply attaching to known history while remaining non-E stays nonblocking. |
+
+Pin distinct accounting for deduplicated introduction/parent proof material,
+staged outer frames and required operation ancestors without double-counting
+shared bytes. Existing signed IDs provide deduplication; no wire/Core change or
+new trusted proof producer is part of this correction.
 
 **Plan146 Seam5 scoped extension for this stage:** amend its fixed-claim-only
 restriction for R17b's closed history verifier. Allow the current CarrierTerm/op
@@ -291,6 +327,9 @@ OS reason under 200 UTF-8 bytes. Hash the full pinned replica ID for its display
 fingerprint, not merely the root commitment. Product/kind/role, verified successor
 and acquisition fingerprint or exact beacon epoch come from native state. Missing
 verified display fields refuses before presence, with no submitted-value fallback.
+For Treehouse beacon review, choose D5's Space or Thread reason from the verified
+pin kind for both witness-claim and final-operation purposes. Do not default every
+beacon to Thread or accept a submitted kind label.
 
 Use D5's escaped, structurally isolated full-value rendering: fixed labels,
 monospace escaped values, always-visible full SHA-256 and original byte count,
@@ -323,6 +362,10 @@ retrievable under Stage4's explicit commit boundary. Test two replicas sharing a
 root get different native replica fingerprints, hostile full-value rendering and
 all supported roles. Full review retains exact
 keys, deps and lease consequences even though the OS line is abbreviated.
+Include separately pinned Treehouse Space and Thread beacon positive controls:
+each exact reason names its own verified kind and epoch. Wrong/missing kind,
+submitted-kind substitution and cross-product pin/template mismatch refuse before
+presence; changing only the submitted label cannot change an accepted OS reason.
 
 Stages3-5 land as one atomic signing cutover: remove/refuse legacy claim-only IPC
 and migrate existing `township_actions.ts`, `native_workflow.ts`, current product
@@ -343,8 +386,10 @@ signed history, pending evidence and defined store overhead. Pin the exact byte
 accounting before RED, including intake journal, staging/promotion reservations,
 durable markers and outbox pointers without double-counting referenced frames.
 Proposed staging subquota is 128 operations / 512 KiB, separate from admitted
-capacity; filling only unconnected staging refuses further unrelated input without
-blocking complete admitted signing. Exhausting relevant/admitted capacity durably
+capacity; filling only nonblocking staging, including complete-DAG non-E frames,
+refuses further not-yet-relevant input without blocking complete admitted signing.
+Duplicated public proof wrappers cannot spend relevant capacity repeatedly.
+Exhausting relevant/admitted capacity durably
 blocks signing. No truncation, partial projection or old-subset signature. The
 carrier's recovery
 ingestion is separate, and offline healing can exceed this ceiling. A lifecycle
@@ -395,7 +440,7 @@ artifact threshold authorization or macOS evidence Android evidence.
 
 Stop the affected signing/profile workflow for native/Core disagreement; missing
 landed R03/R04 claim definitions; generic bytes/key selection; custody fallback;
-retained relevant unknown history discarded or unconnected input promoted without
+retained relevant unknown history discarded or not-yet-relevant input promoted without
 D2's classification; missing/corrupt native store silently
 reinitialized; state race releasing a signature; unsupported physical eligibility;
 or a claim of global freshness/whole-store rollback resistance without a separately

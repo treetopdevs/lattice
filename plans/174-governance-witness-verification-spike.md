@@ -395,3 +395,46 @@ boundaries, local Markdown links and balanced code fences were checked; this
 amendment preserves the complete original Plan174 text as a prefix, and the Git
 path audit admits exactly the three named documentation files. No runtime tests,
 native build, prototype or physical probe is represented by these document checks.
+
+## Dated all-input admission correction — 2026-09-06
+
+Hosted finding `PRRT_kwDOSZGqLc6fu9nq` identified a real gap at reviewed docs
+`b83c21dcdca2ca09dc80710fccca147881bd2ed9`: authenticated supported operations
+were retained unconditionally, while the nonblocking staging rule required
+missing dependencies. Fresh unintroduced keys could therefore connect known-shape
+commands to the root and consume capacity whose exhaustion blocks signing.
+Positive E introduction rules alone did not exclude these connected operations.
+
+The integrator adopted the bounded correction before these documentation edits:
+apply the E/relevance classifier to all authenticated input. Complete-DAG non-E
+operations stay in nonblocking staging unless required as ancestors of E-authored
+history. Preserve E-authored quarantines and required ancestors without deriving
+admission relevance from current permission, acquisition, expiry or application
+verdicts. Independently inspect E-issued introductions/parent proofs first,
+deduplicate relevant proof accounting by existing signed IDs, and do not promote
+each copied-cap wrapper or its fresh outer author. A genuinely new relevant proof
+cannot be hidden by a different outer carrier or by exhausted unrelated staging.
+
+Later E introduction/ancestry citation atomically promotes retained evidence or
+persists its block before derivation/release. Eligible authors can still make
+retained supported spam relevant and exhaust capacity; that availability residual
+is explicit. Exact-batch fences survive crashes until classification, but a
+completed nonblocking quota refusal must not leave a permanent signing fence or
+admitted-capacity block. Quota-refused bytes remain outside the retained union and
+may be freshly classified when relevance changes; connectivity alone is insufficient.
+
+D2, Stage3, the budget/STOP wording and nine future public signed-input test cases
+now state the same contract. No Core semantic rule, canonical/wire format, native
+source, R36 provider, device state, README or unified ledger changes. This packet
+modifies only this dated Plan174 amendment and its two existing R17a deliverables.
+The earlier original Plan174 text remains an unchanged prefix.
+
+Validation is documentation-only: local link/fence/whitespace and exact-scope
+checks; no runtime/native/physical tests or executed attack reproduction are
+claimed. Actual Fable follow-up review is **OPEN**: its available session quota
+was exhausted on the concurrent frozen R36 review. The user has authorized Sol
+reviews while Claude is unavailable; a separate exact-diff Sol verdict for this
+packet is pending integrator assignment. The earlier b83 documentation PASS does
+not cover this new admission correction. Do not publish, enable or mark R17b/R36
+complete on these local design checks; the integrator owns final review and
+hosted closure.
