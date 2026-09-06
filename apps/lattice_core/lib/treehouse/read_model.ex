@@ -5,6 +5,11 @@ defmodule Treehouse.ReadModel do
   A signed Space reference authorizes which Thread is presented; merely having
   another route/log cannot add membership or a reference. Missing history stays
   unavailable. This module does not authenticate or provision transport catalogs.
+
+  The frozen Thread vocabulary appends exactly one post per signed `post`
+  command, so each post element ID is its owning op ID. A future multi-post
+  command requires an explicit owning-op field from reduction before this read
+  model can support it; generated effect suffixes must not be parsed as identity.
   """
 
   alias Lattice.{Authority, Log, Reduce}

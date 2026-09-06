@@ -212,3 +212,66 @@ configuration. The final named protected check runs
 `township/audit_bundle_test.exs`: **22 tests, zero failures**. All four test files
 are byte-identical to the preparation baseline. The final reviewer reread resolves
 the retained-input finding. The standalone formatted demo passes after the fix.
+
+## Claude Fable follow-up to frozen f3fb93d3
+
+The exact-diff review requested one P1 correction and identified three P2 edges.
+The original implementation and its five vectors remain the immutable baseline;
+these follow-up changes do not redefine the command vocabulary or signed bytes.
+
+- **Structured set order (P1).** JSON serialization is not Erlang term order:
+  `One more` sorted before its prefix `One`, and escaped quote/slash values also
+  diverged. The Treehouse-only comparator now compares the exact admitted
+  `replica`/`title` map values in Erlang's sorted-key order with UTF-8 binary
+  comparison. Strings retain UTF-8 order; other shapes fail closed. It does not
+  substitute CBOR encoding order. Public signed authoring RED is preserved in
+  `/tmp/treehouse-r10-map-red.log`; the new BEAM-exported 17-frame
+  `treehouse_space_map_order` vector fails both complete and bounded-frontier
+  TS state checks under the former comparator
+  (`/tmp/treehouse-r10-map-vector-red.log`). It exercises shorter prefixes,
+  spaces, quotes, slashes, backslashes, BMP and supplementary Unicode in both
+  replica references and titles. The existing five Treehouse and 62 earlier
+  vectors stay byte-identical.
+- **Duplicate flat roles (P2).** Public verification confirms this representation
+  is authenticated: flat delegation role arrays have existing canonical set
+  semantics, unlike the duplicate nested mapset terms rejected by R07. BEAM Wire
+  decodes it to the identical original genesis. TS previously recorded two admin
+  acquisitions for one signed node (`/tmp/treehouse-r10-roles-red.log`); it did
+  not produce the speculative mixed honored/quarantined verdict in this case.
+  Deduplicating only the generated role effects now records one acquisition per
+  role without changing canonical input validation, IDs or signatures.
+- **Application evaluator failures (P2).** A new public synthetic DSL command
+  raises `KeyError` for an absent required argument; another raises
+  `ArithmeticError` on zero division. The former previously stopped
+  `Sim.quarantined` replay (`/tmp/treehouse-r10-evaluator-red.log`). Rescue now
+  surrounds only the application `__apply_command__` evaluation. These errors
+  refuse that command as `malformed_command`, preserve state and allow a later
+  valid command. Authority, effect validation and reducer failures are outside
+  this rescue boundary.
+- **Future multi-append post ownership (P2).** The shipped Thread vocabulary has
+  exactly one append per `post`, so the reported lookup is not reachable today.
+  `Treehouse.ReadModel` now documents the precise extension prerequisite: expose
+  an explicit owning-op ID from reduction before adding a multi-post command;
+  never infer ownership by parsing generated element-ID suffixes. No new command
+  or reducer identity representation was introduced.
+
+Focused BEAM evaluator/domain checks pass 14 tests, zero failures. The expanded
+Treehouse script includes the two public TS regressions; conformance, canonical,
+Township authoring, V01 guard, typecheck and production build all pass. Final
+parity, umbrella, protected and review evidence is recorded after those gates.
+This remains local implementation evidence until the integrator completes exact
+Claude review and hosted closure.
+
+Final follow-up gates: `mix check` exits 0 with **740 tests and 27 properties,
+zero failures**, retaining the three existing exclusions and unchanged Credo
+configuration (`/tmp/treehouse-r10-fable-fix-mix-check.log`). The four protected
+suites pass **22 tests, zero failures** and are byte-identical to `f3fb93d3`
+(`/tmp/treehouse-r10-fable-fix-protected.log`). Reciprocal/fresh-VM checks pass
+**3 tests, zero failures** over six Treehouse histories and **75 signed frames**.
+The fixture now explicitly loads each domain module before strict Wire decoding;
+the alphabetically earlier new vector exposed the old fixture-order dependency,
+and no production decoder was loosened. All **68** conformance scenarios pass;
+carrier, relay and relay-sync checks also pass. Existing **67 vector artifacts**
+are byte-identical to the frozen baseline. The exporter was run through
+`mix run -e 'Mix.Task.run("lattice.export_vectors")'` to compile the current source
+before generation; a bare task invocation can reuse an older compiled task.

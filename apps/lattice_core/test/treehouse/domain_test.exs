@@ -2,7 +2,31 @@ defmodule Treehouse.DomainTest do
   use ExUnit.Case, async: true
 
   alias Lattice.{Authority, Log, Op, Sim}
+  alias Lattice.Carrier.Wire
   alias Treehouse.{Invitation, ReadModel, Space, Thread}
+
+  test "authenticated duplicate flat genesis roles retain canonical set semantics" do
+    sim = Sim.new(Space, "treehouse:duplicate-roles", ["root"], seed: "duplicate-roles")
+    {sim, genesis} = Sim.create_replica(sim, "root")
+    frame = Wire.encode_op(genesis)
+    ["tuple", [command, ["delegation", delegation], policies]] = frame["body"]
+
+    duplicate =
+      put_in(frame["body"], [
+        "tuple",
+        [
+          command,
+          ["delegation", Map.put(delegation, "roles", ["admin", "admin", "moderator"])],
+          policies
+        ]
+      ])
+
+    assert {:ok, decoded} = Wire.decode_op(duplicate)
+    assert Op.valid?(decoded)
+    assert decoded == genesis
+    log = Log.append!(Log.new(Sim.replica(sim)), decoded)
+    assert ReadModel.observe(Space, log) == ReadModel.observe(Space, Sim.log(sim, "root"))
+  end
 
   test "creation refuses forged, misindexed, cross-replica and incomplete retained history" do
     sim = Sim.new(Space, "treehouse:retained-input", ["root"], seed: "retained-input")
