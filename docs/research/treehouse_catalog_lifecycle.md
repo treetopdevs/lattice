@@ -72,6 +72,11 @@ no new atom creation, fake operation envelope or increased limit is allowed.
 The raw standalone parser applies the 128-KiB byte bound before JSON decoding.
 This is a public interface for the existing grammar, not a new canonical format
 or a repair to the separately owned R03 policy/certificate parsing.
+The generic decoder retains its existing normalization of repeated map keys
+and mapset members. The new catalog ingress separately rejects duplicate fields
+in its closed raw atom maps before normalization or signature verification;
+the wrapper alone is not a strict canonical-envelope verifier. This preserves
+existing op decoding while refusing ambiguous signed catalog input.
 
 `Id` is an existing canonical 43-character SHA-256 base64url identifier;
 `Nonce` is 32 fresh random bytes represented canonically the same way. Raw keys

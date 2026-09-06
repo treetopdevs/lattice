@@ -62,7 +62,6 @@ defmodule Treehouse.TransportCatalogTest do
       %{catalog | product: :township},
       %{catalog | space: <<255>>},
       %{catalog | bootstrap: "not-an-id"},
-      %{catalog | revision: -1},
       %{catalog | revision: 9_007_199_254_740_992},
       %{catalog | previous: id("previous")},
       %{catalog | revision: 1},
@@ -82,6 +81,9 @@ defmodule Treehouse.TransportCatalogTest do
 
     assert {:error, :malformed_catalog} =
              TransportCatalog.verify_catalog(Map.put(signed(catalog, ctx.signer), :key, ctx.signer.pub), ctx.signer.pub)
+
+    assert {:error, :malformed_catalog} =
+             TransportCatalog.verify_catalog(%{catalog: %{catalog | revision: -1}, signature: <<0::512>>}, ctx.signer.pub)
   end
 
   defp signed(catalog, signer) do
