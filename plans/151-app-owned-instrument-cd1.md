@@ -2,6 +2,11 @@
 
 ## Status
 
+Disposition 2026-09-06: superseded for Treehouse delivery by unified packets R10-R15; their app-owned
+experience reuses the verified intent/custody patterns below. Any independent Township instrument
+remainder belongs to R34. This does not mark the original Township implementation complete, remove
+Phoenix, or authorize additional CD1 work. The original draft follows for reference.
+
 TODO (proposed draft — not yet reviewed or resumed by the operator). Sequenced after or in
 parallel with Plan 150; it runs against the operator stable server and must not require host
 mode, so the two plans do not block each other.

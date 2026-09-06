@@ -2,7 +2,7 @@
 
 ## Status
 
-DRAFT ticket execution. Documentation plus one copy-contract test. Not a product, security,
+DONE original contract correction (merged 2026-09-03). Documentation plus one copy-contract test. Not a product, security,
 availability, E2EE, founder-loss or centerless-operation claim.
 
 - **Priority**: P0 (Plan 158 ticket "Treehouse Contract Correction"; Plan 177 wave-reorder item 5).
@@ -70,6 +70,7 @@ Thread commands:
 - `author edit` replaces the body of the author's own honored post.
 - `author tombstone` tombstones the author's own honored post.
 - `moderator tombstone` tombstones a post through a distinct moderator-holder-gated command.
+- `archive thread` marks the Thread archived through its moderator-holder-gated authority field.
 
 ### Conflict rules
 
@@ -91,6 +92,38 @@ Application denial reasons are pinned in exactly this order:
 - `wrong target kind or thread`
 - `wrong author`
 - `already tombstoned`
+- `archived thread`
+
+### Archive semantics (R01a amendment, 2026-09-06)
+
+The operator authorized execution of the unified Treehouse plan as proposed on 2026-09-06.
+This is its narrowly adopted archive vocabulary amendment; implementation and product proof remain
+R10 and R15. The original status, hosting, founder-loss and invitation claim pins remain intact.
+
+Archive state belongs to the Thread field `archived`, declared `authority: :moderator`. A Space
+flag is not visible to another replica's causal command policy. An admin must hold the moderator
+role to archive; the initial profile may name the founder as both. No unarchive command is added.
+An otherwise authorized repeated archive is honored and writes `true` again: the visible state is
+idempotent, while each separately signed command remains retained and counted in the log. A stale
+moderator still fails ordinary holder validation; repetition never bypasses authorization.
+
+An honored archive in a candidate's causal past denies `post`, `author edit` and `author tombstone`.
+The archived-thread refusal comes after the preceding target, author and tombstone checks.
+`moderator tombstone` remains permitted to moderate retained history. A post concurrent with
+archive remains honored; canonical ordering and other existing conflict rules are unchanged.
+
+An archive retains its Space reference, route, history and Thread slot. The instrument reads the
+Thread's own archived field. At slot exhaustion the Space remains readable and exportable, and
+new posting/Thread creation stops. Rollover checks capacity before archive, retains a retryable
+successor draft and shows pending operator provisioning; an unavailable operator never creates a
+phantom live successor. No signed history is deleted or compacted.
+
+The authorized root-only R10/R12 preview may use signed catalog fixtures and keep its local Thread
+reference visibly local before live provisioning exists. It issues no member grants and makes no
+remote-route claim. R11 supplies the real provisioning saga; R13 cannot enable group enrollment
+before its catalog, continued-authority and scoped native prerequisites pass. The full candidate
+must follow the root-authored witnessed-profile path defined by R02/R14, whose design is still a
+separate gate. This preview exception does not enable a weaker community pilot.
 
 ### Roles
 
