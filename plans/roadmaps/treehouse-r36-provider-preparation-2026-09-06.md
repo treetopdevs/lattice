@@ -1,7 +1,7 @@
 # R36 Stage 1: provider-owned governance custody
 
-Prepared 2026-09-06. **Stage 1 implementation passes local gates and is ready for
-exact review; no profile enablement.** This document makes [Stage 1 of the native witness build](treehouse-native-witness-build-2026-09-06.md#stage-1-opaque-generation-and-signing-seam-r36)
+Prepared 2026-09-06. **Stage 1 implementation and parent composition pass local gates and
+source review; hosted checks remain open, with no profile enablement.** This document makes [Stage 1 of the native witness build](treehouse-native-witness-build-2026-09-06.md#stage-1-opaque-generation-and-signing-seam-r36)
 concrete. It does not close R36, R17b, R17c, R12 or their hosted gates.
 
 ## Exact preparation base and dependencies
@@ -449,3 +449,28 @@ Exact implementation Fable review, root-owned accepted dependency integration,
 full integrated Mix/hosted and packaged test-presence gates remain required.
 These local results do not establish real OS authentication, Android opaque-key
 eligibility, native semantic verification, R36 completion or readiness.
+
+### Final source integration and review — 2026-09-06
+
+Actual configured gpt-5.6-sol reviewed Stage1 implementation ab450cb6: PASS,
+no P0/P1/P2. The separate parent review at046cdba6 also passed. The final
+automatic parent integration dc477f68 includes R12, R01b910a735d, R17a0cdf8b6f
+and R03/R04/R10 enginec0aa97d2, followed by R12's evidence-only bfb6bc07. The
+Township Rust subtree is byte-identical to reviewed ab450cb6. Actual Claude's
+implementation attempt was quota-limited and is not a review verdict.
+
+Fresh integrated full `mix check` atdc477f68 passes809 tests+27 properties,
+zero failures, three exclusions, clean formatting and strict Credo exit0. Client
+build, preview workflow/storage/product tests and Vue production build pass.
+The first preview command stopped at missing `tsx` before executing tests;
+`npm ci` prepared this fresh worktree and the actual checks then passed. Logs
+are `r36-54aa-full-check.log`, `r36-54aa-client-build.log`,
+`r36-54aa-preview-tests-fixed.log` and `r36-54aa-preview-build.log` under the
+retained execution evidence directory. Prior Stage1-specific Rust82/83 and
+public IPC/compile-fail tests remain evidence for the unchanged native source.
+
+R12's prior hosted accessibility failure and its pending repair are retained in
+that parent packet. No local software result substitutes for that packaged gate,
+Android opaque-key eligibility, native authority verification, physical presence
+or independent-person/device evidence. Exact final-tip/merge workflows and
+parent closure remain required before Stage1 lands. R36 itself remains open.
