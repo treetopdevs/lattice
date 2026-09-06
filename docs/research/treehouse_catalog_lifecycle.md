@@ -367,6 +367,16 @@ context. A new bootstrap shape/scope/root/pin mismatch returns the application
 reason `application_invalid_catalog`, after existing malformed-command, cap and
 admin refusal precedence. This adds no Core role or permission path.
 
+The 2026-09-06 integrator-approved fixture amendment adds `ops:` to public
+`Sim.create_replica/3` as an explicit genesis capability ceiling, with omitted
+`ops:` preserving the current module-registry default exactly. It is not a
+permission bypass: commands outside that signed ceiling still refuse. The four
+historical Space vector scenarios explicitly pass their original six commands;
+roles, policies, signatures and bytes stay unchanged. Root-only product creation
+helpers likewise retain that literal old ceiling. New bounded fixtures choose
+their larger pre-loss ceiling explicitly. The final gate regenerates all
+historical vectors from freshly compiled current source and compares exact bytes.
+
 ## 4. Retained trust, concurrent controls and refusal behavior
 
 Persist product/root/Space/bootstrap, accepted control chain, catalog watermark,
