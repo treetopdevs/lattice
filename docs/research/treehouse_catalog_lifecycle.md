@@ -766,3 +766,28 @@ entry verification, pure versus durable installation boundary and bounded
 control evidence freeze. This authorizes its named BEAM/TS implementation and
 public/reciprocal tests within R11a. R11b/R11c and installed restart/CAS/rotation
 gates remain separate required work; no acceptance case is closed by adoption.
+
+### Authenticated catalog entry observation — 2026-09-06
+
+The integrator assigns `Treehouse.CatalogEntries.observe(catalog, histories)` in
+`apps/lattice_core/lib/treehouse/catalog_entries.ex`, with public tests in the
+matching `catalog_entries_test.exs`. `histories` maps exact replica IDs to complete
+R06-valid logs. This pure helper checks the closed catalog, observes the exact
+honored bootstrap in the actual Space log, then verifies each entry's independent
+bound product family, root, named valid genesis, honored causal creation and
+honored Space reference. All supplied logs are authenticated before a missing
+entry can be treated as pending. Unsupported portable evidence is not omitted.
+The helper returns authenticated entry facts and the observed bootstrap, never
+a trusted signer, route, installation receipt, discovery label or usable transport.
+Signature/retained-pin/revision/fork/rotation decisions remain `CatalogTrust` work.
+Missing complete evidence returns `trust_pending`; present but invalid identity,
+service or command linkage returns `invalid_catalog_transition`; malformed shape,
+forged retained history and unsupported cutoff retain their existing refusals.
+The six-field preview and current Core authority rules are unchanged.
+
+An in-scope signature-valid structurally valid catalog sibling with a valid
+predecessor freezes automatic work as `catalog_fork` even when its child/reference
+proof is still missing. Retain pending proof IDs explicitly; never promote either
+branch, treat the missing proof as valid, or reserve its routes. Available invalid
+entry proof remains `invalid_catalog_transition`. This prevents withholding proof
+from hiding signed equivocation; it introduces no new Core verdict.

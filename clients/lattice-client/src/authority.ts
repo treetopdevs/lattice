@@ -1586,6 +1586,7 @@ function collectRevokes(
 
 /** Fixed portable logical-epoch horizon, independent of genesis policy. */
 export const witnessedBeaconHorizon = Number.MAX_SAFE_INTEGER;
+const beaconClaimTextEncoder = new TextEncoder();
 
 function normalizeBeaconPolicy(
   policy: WitnessedBeaconPolicyEvidence | null | undefined,
@@ -1730,7 +1731,9 @@ function collectBeacons(
         replica: op.replica ?? "",
         epoch: typeof evidence.epoch === "number" ? evidence.epoch : -1,
         author: author ?? "",
-        deps: [...op.deps].sort(),
+        deps: [...new Set(op.deps)].sort((left, right) => compareBytes(
+          beaconClaimTextEncoder.encode(left), beaconClaimTextEncoder.encode(right),
+        )),
       };
       if (
         policy === null ||
