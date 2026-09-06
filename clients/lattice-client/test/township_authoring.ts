@@ -610,6 +610,20 @@ check("authored beacon claim uses final canonical dependencies", claim.deps, fin
 check("witnessed beacon authored from a two-tip frontier is honored", materialize(beaconVector.schema,
   carrierOpsToSemanticOps([...claimFrames, finalBeacon], beaconVector.realmByPubkey)).quarantine.includes(finalBeacon.id), false);
 
+// Fable P2: malformed Tier-A null lease evidence re-encodes as genuinely unleased.
+// Public materialization must preserve that existing representation without throwing.
+const nullLeaseOps = carrierOpsToSemanticOps([...claimFrames, finalBeacon], beaconVector.realmByPubkey);
+const nullLeaseControl = materialize(beaconVector.schema, nullLeaseOps);
+const nullLeaseGenesis = nullLeaseOps.find((op) => op.id === beaconGenesis.id)?.authority;
+if (nullLeaseGenesis?.type !== "genesis") throw new Error("expected unleased root genesis fixture");
+Reflect.set(nullLeaseGenesis.delegation, "expiresEpoch", null);
+let nullLeaseError: string | null = null;
+let nullLeaseMatches = false;
+try { nullLeaseMatches = isDeepStrictEqual(materialize(beaconVector.schema, nullLeaseOps), nullLeaseControl); }
+catch (error) { nullLeaseError = error instanceof Error ? error.message : String(error); }
+check("null unleased semantic evidence does not throw during public materialization", nullLeaseError, null);
+check("null unleased semantic evidence preserves the unleased result", nullLeaseMatches, true);
+
 check("claim construction removes duplicates without mutating caller order",
   createWitnessedBeaconClaim(beaconVector.replica, 4, claimWitness.publicKeyBase64,
     [...deliveredDeps, deliveredDeps[0]!]).deps, finalBeacon.deps);
