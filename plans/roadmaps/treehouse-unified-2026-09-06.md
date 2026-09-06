@@ -1,8 +1,8 @@
 # Treehouse: unified delivery plan
 
-Status: **PROPOSED, not adopted or implemented**. Prepared 2026-09-06 by comparing the two working-file roadmaps identified in the [comparison](treehouse-plan-comparison-2026-09-06.md). Repository baseline: `af84459bfc066b4ed405b99a02046b4f2c6315ee`, the locally available `origin/main`, not a fresh remote-status assertion. Worktree: `/Users/nicholas/develop/lattice-treehouse-unified-20260906`; branch: `codex/treehouse-unified-20260906`.
+Status: **EXECUTION AUTHORIZED; implementation in progress**. The operator instructed on 2026-09-06: “In that new work tree commit that proposal and working together with Claude Fabel for code reviews and implementation assistance complete that new plan as proposed”. Proposal commit: `641cbbd78bf1338a4a245e5a670ad425aa79be1b`. This authorizes the proposed program and its concrete scope amendments; it supplies no future design outcome, secret, device evidence or pilot observation. Prepared 2026-09-06 by comparing the two working-file roadmaps identified in the [comparison](treehouse-plan-comparison-2026-09-06.md). Repository baseline: `af84459bfc066b4ed405b99a02046b4f2c6315ee`, the locally available `origin/main`, not a fresh remote-status assertion. Worktree: `/Users/nicholas/develop/lattice-treehouse-unified-20260906`; branch: `codex/treehouse-unified-20260906`.
 
-This is the proposed single execution ledger after adoption. R-numbers preserve the delivery roadmap's packet identity; new sub-IDs split decisions, builds and evidence. Plan 180 remains source material, not a second schedule to execute. Source plans retain their detailed contracts and STOP conditions until the named amendment explicitly changes them. No plan numbers 181–183 are allocated by this proposal.
+This is the single execution ledger for the authorized program. R-numbers preserve the delivery roadmap's packet identity; new sub-IDs split decisions, builds and evidence. Plan 180 remains source material, not a second schedule to execute. Source plans retain their detailed contracts and STOP conditions until the named amendment explicitly changes them. No plan numbers 181–183 are allocated by this proposal.
 
 ## 1. Deliver one useful group, with demonstrated loss recovery
 
@@ -55,60 +55,76 @@ Mark Plan 152's additional LAN/CD1 program withdrawn, retain existing helpers, a
 
 ## 3. One dependency ledger
 
-All rows are **PLANNED**. `Core` means BEAM/TypeScript parity where semantics cross runtimes; `Packaged` means ordinary installed-app entry points; `Physical` means the exact signed artifact on real independent devices. `Adopted` requires the concrete amendment and any required sign-off. Sizes: S one bounded session, M several sessions, L sustained integration, XL multiple behavior slices in one integration unit. Risk and size are separate; estimates are calibrated against Plans 135–139 and 179 and revised after failing probes.
+Status is explicit per row. **IN PROGRESS** is active preparation/implementation; **LOCAL VERIFIED** still awaits its review and hosted gates; **DONE** requires the complete stated exit. Rows without work remain **PLANNED**. `Core` means BEAM/TypeScript parity where semantics cross runtimes; `Packaged` means ordinary installed-app entry points; `Physical` means the exact signed artifact on real independent devices. `Adopted` requires the concrete amendment and any required sign-off. Sizes: S one bounded session, M several sessions, L sustained integration, XL multiple behavior slices in one integration unit. Risk and size are separate; estimates are calibrated against Plans 135–139 and 179 and revised after failing probes.
 
 Rows are the authoritative dependency graph. Commas mean all prerequisites. “None” permits authorized entry work, not automatic approval of a proposed policy. Parent IDs denote all their stages; preparation and hardware collection can proceed before dependent enabling work. An implementation handoff adds the exact source plans and allowed files from section 9.
 
-| ID | Packet / accountable function | Size | Risk | Requires | Exit evidence |
-| --- | --- | --- | --- | --- | --- |
-| R01a | Core contract / integrator | M | Medium | None | Adopted order, archive, two dependency amendments, protected pins green |
-| R01b | Android and witness scope / operator + integrator | S | High | R01a, R17a | Adopted scope and deferred-ceremony amendment; actual sign-off |
-| R01c | Toolshed module isolation / operator + integrator | S | Medium | R01a | Countersigned collision contract; reserved legacy identities |
-| R02 | Founder lifecycle design / authority | M | High | R01a | Executable matrix: renewal, bounded successor, child roots and catalog recovery |
-| R03 | Witnessed beacons / authority | L | High | R01a, R07 | Plan 179 steps 2–9, one Core integration PR |
-| R04 | Continued authority / authority | L | High | R02, R03 | Core membership/renewal after two expiry cycles; bounded self-issue |
-| R05 | Diagnostic redaction / hardening | S | Medium | None | Plan 170 negative inspect/crash cases |
-| R06 | Verified restores / hardening | M | High | None | Plan 171 consumer policies; staged fail-closed recovery input |
-| R07 | Canonical strictness / codec | S–M | High | None | Plan 172 valid-byte parity plus duplicate/noncanonical refusals |
-| R08 | Deadlines and pagination / carrier | M–L | High | None | Plan 173 bounded setup, interrupted large-log real-transport replay |
-| R09 | Input limits / hardening | M | High | R07, R08 | Plan 176 ingress and authority boundary refusals |
-| R10 | Root-only Treehouse domain / product + parity | XL | High | R01a, R07, R09 | Core complete vocabulary, effects, conflicts, offline demo |
-| R11a | Local catalog/provisioning / carrier | M | High | R02, R04, R06, R10 | Local signed catalogs, root bootstrap and bounded routes |
-| R11b | Lifecycle reconciliation / carrier | M | High | R11a | Crash-safe creation/removal, no phantom publication |
-| R11c | Catalog replacement trust / recovery | M | High | R11b | Retained client accepts authorized replacement without old signer |
-| R12 | Empty local app / product | L | Medium | R01a, R05, R06, R10 | Packaged offline preview; no member grants |
-| R13 | Enrollment and sync / product | L | High | R01b, R08, R11c, R12 | Packaged two-app join/heal; wrong-input and four-socket tests |
-| R14 | Profiles, roles, removal, renewal / product + authority | XL | High | R13, R04, R36 | Packaged enroll-then-pin, per-replica readiness and renewal |
-| R15 | Measured rollover / product | L | Medium | R14 | Packaged archival saga, finite-capacity stop, retained readability |
-| R16 | Member reseed, AF-1 / recovery | M | High | R06, R11c, R15 | Packaged new-identity relay reseed from surviving member evidence |
-| R17a | Native witness decision / native custody | M | High | None | Plan 174 decision plus concrete Android build plan |
-| R17b | Native witness signing / native custody | L | High | R17a, R01b, R03, R14 | Claim verification, protected signing, consent/replay negatives |
-| R17c | Independent witness proof / device QA | M | High | R17b | Physical custody/presence evidence for the selected Android profile |
-| R18 | Founder and combined loss / recovery | M | High | R04, R11c, R15, R16, R17c | Packaged loss with physical witnesses; independent retained trust |
-| R19a | AF-3 contract / identity | M | High | R01a, R02 | Adopted vouch, conflict, possession and lost-loan rules |
-| R19b | AF-3 semantics / identity + parity | L | High | R19a, R04, R10 | Core founder-present/absent re-admission with negative controls |
-| R20 | New-phone re-admission / product | M | High | R14, R19b | Packaged AF-3, old-key return, visible unresolved grants |
-| R21a | WSS/restore artifacts / operations | M | Medium | R05, R06, R08, R09, R11c | Reproducible deployment/runbook and local restore checks |
-| R21b | WSS field restore / operations | M | High | R21a | Public WSS, restart and clean-host backup restore; operator inputs |
-| R22a | Signed Android artifact / release | M | High | R15, R16, R18, R20, R21a | Immutable internally distributed candidate and manifest |
-| R22b | Physical candidate / device QA | M | High | R22a, R21b | Exact candidate passes all group, loss, network and upgrade gates |
-| R23 | Community pilot / pilot lead | 14+ days | High | R22b | Participant evidence, incident disposition, continue/fix/stop |
-| R24 | Exact custody v2 / custody + parity | L | High | R03, R09, R11a | Core exact grant/request/loan/due binding; legacy refusal |
-| R25 | Admission, decline, disputes / custody + parity | M–L | High | R24, R19a | Core adopted versioned facts, precedence and lost-signer limits |
-| R26 | Toolshed module / product | L | Medium | R01c, R11c, R14, R23, R25 | Packaged inventory and Tool-root day ceremony; isolation/copy tests |
-| R27 | Offline QR co-signing / product + device QA | L | High | R13, R25, R26 | Physical borrow/return and independent authorized third-device audit |
-| R28 | Factual ledger / projections | M | Medium | R25, R26 | Core/UI across authorized Tool logs, zero writes |
-| R29 | Subject-present receipts / product | M | High | R20, R27, R28 | Packaged fresh same-key challenge and selected-evidence disclosure |
-| R30 | Household pilot / pilot lead | 7–14 days | High | R23, R27, R28, R29 | 5–8-household pilot with explicit decline, pending and dispute cases |
-| R31a | Optional desktop host / carrier | M | Medium | R08, R11b, R16, R23 | Scoped sidecar runtime; retained identity and bounded resources |
-| R31b | Packaged host proof / release | M | High | R31a | Supported packaged restart/reseed; scope approval if needed |
-| R32a | Optional iOS adoption/archive / release | M | High | R23 | Separate scope/hardware/signing approval and archive |
-| R32b | Physical iOS / device QA | M | High | R32a | Exact iPhone candidate loss/reboot/upgrade proof; R30 if Toolshed included |
-| R33 | Measured expansion / performance | Program | High | R23, R35b | Supported count AND lifetime/device envelope; staged field evidence |
-| R34 | Township follow-on / product | Program | Medium | R23 | Re-baselined B1/B2 plan; R30 additionally gates its product pilot |
-| R35a | Lifetime/target decision / product + performance | M | High | R15, R23 | Observed growth, adopted boundary/retention decision or stop verdict |
-| R35b | Lifetime policy proof / lifecycle | L or no-build | High | R35a | Implemented/tested adopted policy or tested finite end-of-life |
-| R36 | Protected witness identity / native custody | L | High | R01b, R12, R17a | Distinct persistent witness keys and reviewed public-identity binding |
+| ID | Packet / accountable function | Size | Risk | Requires | Exit evidence | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| R01a | Core contract / integrator | M | Medium | None | Adopted order, archive, two dependency amendments, protected pins green | LOCAL VERIFIED |
+| R01b | Android and witness scope / operator + integrator | S | High | R01a, R17a | Adopted scope and deferred-ceremony amendment; actual sign-off | PLANNED |
+| R01c | Toolshed module isolation / operator + integrator | S | Medium | R01a | Countersigned collision contract; reserved legacy identities | LOCAL VERIFIED |
+| R02 | Founder lifecycle design / authority | M | High | R01a | Executable matrix: renewal, bounded successor, child roots and catalog recovery | IN PROGRESS |
+| R03 | Witnessed beacons / authority | L | High | R01a, R07 | Plan 179 steps 2–9, one Core integration PR | IN PROGRESS |
+| R04 | Continued authority / authority | L | High | R02, R03 | Core membership/renewal after two expiry cycles; bounded self-issue | PLANNED |
+| R05 | Diagnostic redaction / hardening | S | Medium | None | Plan 170 negative inspect/crash cases | LOCAL VERIFIED |
+| R06 | Verified restores / hardening | M | High | None | Plan 171 consumer policies; staged fail-closed recovery input | LOCAL VERIFIED |
+| R07 | Canonical strictness / codec | S–M | High | None | Plan 172 valid-byte parity plus duplicate/noncanonical refusals | LOCAL VERIFIED |
+| R08 | Deadlines and pagination / carrier | M–L | High | None | Plan 173 bounded setup, interrupted large-log real-transport replay | IN PROGRESS |
+| R09 | Input limits / hardening | M | High | R07, R08 | Plan 176 ingress and authority boundary refusals | PLANNED |
+| R10 | Root-only Treehouse domain / product + parity | XL | High | R01a, R07, R09 | Core complete vocabulary, effects, conflicts, offline demo | PLANNED |
+| R11a | Local catalog/provisioning / carrier | M | High | R02, R04, R06, R10 | Local signed catalogs, root bootstrap and bounded routes | PLANNED |
+| R11b | Lifecycle reconciliation / carrier | M | High | R11a | Crash-safe creation/removal, no phantom publication | PLANNED |
+| R11c | Catalog replacement trust / recovery | M | High | R11b | Retained client accepts authorized replacement without old signer | PLANNED |
+| R12 | Empty local app / product | L | Medium | R01a, R05, R06, R10 | Packaged offline preview; no member grants | PLANNED |
+| R13 | Enrollment and sync / product | L | High | R01b, R08, R11c, R12 | Packaged two-app join/heal; wrong-input and four-socket tests | PLANNED |
+| R14 | Profiles, roles, removal, renewal / product + authority | XL | High | R13, R04, R36 | Packaged enroll-then-pin, per-replica readiness and renewal | PLANNED |
+| R15 | Measured rollover / product | L | Medium | R14 | Packaged archival saga, finite-capacity stop, retained readability | PLANNED |
+| R16 | Member reseed, AF-1 / recovery | M | High | R06, R11c, R15 | Packaged new-identity relay reseed from surviving member evidence | PLANNED |
+| R17a | Native witness decision / native custody | M | High | None | Plan 174 decision plus concrete Android build plan | IN PROGRESS |
+| R17b | Native witness signing / native custody | L | High | R17a, R01b, R03, R14 | Claim verification, protected signing, consent/replay negatives | PLANNED |
+| R17c | Independent witness proof / device QA | M | High | R17b | Physical custody/presence evidence for the selected Android profile | PLANNED |
+| R18 | Founder and combined loss / recovery | M | High | R04, R11c, R15, R16, R17c | Packaged loss with physical witnesses; independent retained trust | PLANNED |
+| R19a | AF-3 contract / identity | M | High | R01a, R02 | Adopted vouch, conflict, possession and lost-loan rules | PLANNED |
+| R19b | AF-3 semantics / identity + parity | L | High | R19a, R04, R10 | Core founder-present/absent re-admission with negative controls | PLANNED |
+| R20 | New-phone re-admission / product | M | High | R14, R19b | Packaged AF-3, old-key return, visible unresolved grants | PLANNED |
+| R21a | WSS/restore artifacts / operations | M | Medium | R05, R06, R08, R09, R11c | Reproducible deployment/runbook and local restore checks | PLANNED |
+| R21b | WSS field restore / operations | M | High | R21a | Public WSS, restart and clean-host backup restore; operator inputs | PLANNED |
+| R22a | Signed Android artifact / release | M | High | R15, R16, R18, R20, R21a | Immutable internally distributed candidate and manifest | PLANNED |
+| R22b | Physical candidate / device QA | M | High | R22a, R21b | Exact candidate passes all group, loss, network and upgrade gates | PLANNED |
+| R23 | Community pilot / pilot lead | 14+ days | High | R22b | Participant evidence, incident disposition, continue/fix/stop | PLANNED |
+| R24 | Exact custody v2 / custody + parity | L | High | R03, R09, R11a | Core exact grant/request/loan/due binding; legacy refusal | PLANNED |
+| R25 | Admission, decline, disputes / custody + parity | M–L | High | R24, R19a | Core adopted versioned facts, precedence and lost-signer limits | PLANNED |
+| R26 | Toolshed module / product | L | Medium | R01c, R11c, R14, R23, R25 | Packaged inventory and Tool-root day ceremony; isolation/copy tests | PLANNED |
+| R27 | Offline QR co-signing / product + device QA | L | High | R13, R25, R26 | Physical borrow/return and independent authorized third-device audit | PLANNED |
+| R28 | Factual ledger / projections | M | Medium | R25, R26 | Core/UI across authorized Tool logs, zero writes | PLANNED |
+| R29 | Subject-present receipts / product | M | High | R20, R27, R28 | Packaged fresh same-key challenge and selected-evidence disclosure | PLANNED |
+| R30 | Household pilot / pilot lead | 7–14 days | High | R23, R27, R28, R29 | 5–8-household pilot with explicit decline, pending and dispute cases | PLANNED |
+| R31a | Optional desktop host / carrier | M | Medium | R08, R11b, R16, R23 | Scoped sidecar runtime; retained identity and bounded resources | PLANNED |
+| R31b | Packaged host proof / release | M | High | R31a | Supported packaged restart/reseed; scope approval if needed | PLANNED |
+| R32a | Optional iOS adoption/archive / release | M | High | R23 | Separate scope/hardware/signing approval and archive | PLANNED |
+| R32b | Physical iOS / device QA | M | High | R32a | Exact iPhone candidate loss/reboot/upgrade proof; R30 if Toolshed included | PLANNED |
+| R33 | Measured expansion / performance | Program | High | R23, R35b | Supported count AND lifetime/device envelope; staged field evidence | PLANNED |
+| R34 | Township follow-on / product | Program | Medium | R23 | Re-baselined B1/B2 plan; R30 additionally gates its product pilot | PLANNED |
+| R35a | Lifetime/target decision / product + performance | M | High | R15, R23 | Observed growth, adopted boundary/retention decision or stop verdict | PLANNED |
+| R35b | Lifetime policy proof / lifecycle | L or no-build | High | R35a | Implemented/tested adopted policy or tested finite end-of-life | PLANNED |
+| R36 | Protected witness identity / native custody | L | High | R01b, R12, R17a | Distinct persistent witness keys and reviewed public-identity binding | PLANNED |
+
+### Unmerged verification records (2026-09-06)
+
+These immutable sibling tips record local preparation; none is an integrated dependency until
+its PR-tip and merge-result gates pass. Claude Fable reviewed R05/R06/R07 and returned PASS.
+
+| Packet | Local tip | Evidence and remaining gate |
+| --- | --- | --- |
+| R01a | See [contract record](evidence/treehouse-r01a-2026-09-06.md) | PR 59; hosted remediation in progress |
+| R01c | `b9736790` | Module collision amendment; full local verification and Fable review, wording/evidence follow-up; R01a and hosted gates pending |
+| R05 | `4c88f41ec7757158a8fce94b44194debf87c22a7` | Plan 170; 666 tests + 27 properties, post-refresh raw-status regression; hosted gates pending |
+| R06 | `41ace37b50439f83393eda427dc55a9ef650f899` | Plan 171; 677 tests + 27 properties, deterministic snapshot-replacement regression; hosted gates pending |
+| R07 | `afe5ea250072267927b89b353e7bde1e793176b5` | Plan 172; preserved legacy vectors, Node/browser strictness and native bridge coverage; hosted gates pending |
+
+R02 lifecycle probes, R03 witnessed-beacon implementation, R08 transport pagination and R17a
+native design are active in separate worktrees. Their partial results are not completion claims.
 
 ### Work order and merge discipline
 
@@ -116,7 +132,7 @@ Initial ready work: R01a, R05, R06, R07, R08 and R17a. Prioritize R02 and R17a e
 
 Two paths meet at the working group: R07/R08 → R09 → R10 → R12 produces the preview; R02/R03 → R04 → R11a/b/c supplies continued authority and provisioning. R17a → R01b/R36 supplies the protected identities. They converge at R13/R14; then R15, loss and operations work feed R22 and R23. This is a dependency explanation, not an extra edge list.
 
-Reserve one writer at a time for `authority.ex`, `authority.ts`, `codec.ts`, `carrier.ts`, the exporter/vector corpus, native shared state, lockfiles, generated mobile projects and workflow YAML. R03 and R10 may prepare independently; shared-file integration is serialized, preferably R03 first when ready. That ownership preference is not a false semantic dependency that blocks the offline preview if R03 stalls.
+Reserve one writer at a time for `authority.ex`, `authority.ts`, `codec.ts`, `carrier.ts`, the exporter/vector corpus, native shared state, lockfiles, generated mobile projects and workflow YAML. The integrator alone updates `plans/README.md` and this execution ledger; workers return source-plan evidence and proposed status text. R03 and R10 may prepare independently; shared-file integration is serialized, preferably R03 first when ready. That ownership preference is not a false semantic dependency that blocks the offline preview if R03 stalls.
 
 Atomic merge units: R03, R04, R10, R14, R19b, R24 and R25 each keep BEAM, TypeScript, bytes, projections and affected claim contracts together. R08 pagination keeps server and both clients together. Plan 179's preparation stages are RED authoring/oracle → BEAM judge → exporter → TS/leased authoring → compaction/dump → full gate/claims, one implementation PR. R10 preparation is membership/invites → posts/effects → roles/archive → reciprocal integration, one XL merge. R14 preparation is profile pinning → removal/fan-out → renewal UX, one integration unit.
 
@@ -129,6 +145,8 @@ Every packet closes with exact base/PR/merge SHAs, changed files, named tests an
 Use the existing Replica DSL and Plan 178 vocabulary plus the adopted `archive thread` extension. A command retains one signed op ID, one DAG node and one all-or-none verdict, with ordered `effects[]`; singular effects normalize to a one-element array. An invalid effect invalidates the whole command. Reciprocal BEAM/TS authoring, byte parity, projection and quarantine must agree.
 
 Archive belongs to `Treehouse.Thread`, in an `archived` field with `authority: :moderator`. Command policy sees only that Thread op's causal ancestors and verdicts; a Space flag cannot authorize Thread-local denial. An admin needs the moderator role to archive. No unarchive enters the first pilot.
+
+An otherwise authorized repeated archive is an honored write of `true` with no additional visible state change. Each distinct signed command is still retained/counted; ordinary capability/holder validation still rejects stale or unauthorized moderators. R01a explicitly adopts this repeat behavior without adding a denial reason.
 
 Application refusal precedence is: missing/not-causal target; quarantined target; wrong target kind/Thread; wrong author; already tombstoned; archived Thread. An honored archive in the causal past denies new posts, author edits and author tombstones; moderator tombstones remain allowed. A post concurrent with archive remains honored. Existing canonical ordering resolves concurrent edits; tombstoned content cannot be revived. R10 proves create, concurrent admission/posting, partition/heal, tombstones, role transfer, removal, archive and dump/restore across both runtimes. Root-only succession replay is qualified until R04 establishes its bounded policy; legacy Township and Toolshed vectors remain green.
 

@@ -88,6 +88,43 @@ written for history; where they conflict with this amendment, the amendment wins
 
 ## Destination
 
+### Execution amendment 2026-09-06 (unified Treehouse R01a)
+
+The operator's 2026-09-06 instruction to commit and complete the unified plan as proposed adopts
+the core contract and scheduling choices below. The execution ledger is
+`plans/roadmaps/treehouse-unified-2026-09-06.md`. Earlier ordering, baseline and immediate-next-work
+sections remain historical where they conflict with this amendment. The test-pinned Plan 158 status
+paragraph about Plan 178 and unrelated contract/test pins are unchanged.
+
+1. Deliver Treehouse first, then its Toolshed module, then Township. Toolshed custody semantics may
+   prepare independently, but module enablement waits for the group pilot and R01c's actual
+   isolation countersign. The isolation table is unchanged in R01a.
+2. Replace the historical `deploy -> catalog` dependency with local catalog/provisioning proof
+   against the supervised carrier runtime; public WSS, supported backup/restore and operator inputs
+   remain candidate gates. The operator, host OS administrators, backups and admitted transport
+   peers can read their plaintext copies, and the host can withhold service.
+3. Replace `catalog -> treehouseDomain` for R10's complete root-only BEAM/TypeScript semantic
+   integration with signed catalog fixtures and a runnable offline demo. Both runtimes still merge
+   together. R11 waits for R04's bounded continued-authority implementation and then supplies the
+   live saga; R13 cannot enable multi-app enrollment until R11 completes. The R12 native preview
+   remains local, issues no member grants, and displays `recovery_not_ready`.
+4. Adopt Plan 178's exact `archive thread` amendment before R10. Archive is Thread-local and
+   moderator-holder-gated, retains history/routes/slots, and leaves concurrent posts honored.
+   The 12-total-Thread limit and the 4,000-op / 8 MiB / five-second pilot stop remain. Expansion
+   beyond the observed cohort requires R35's measured lifecycle decision; no inclusive-150
+   amendment or capacity proof is supplied here.
+5. The strong candidate requires packaged and physical relay/founder/member and combined-loss
+   proofs before the community pilot. R01b must separately adopt the concrete Android witness
+   ceremony and scope after R17a; until then its earlier hidden-mobile-ceremony contract and
+   parked-platform list remain in force. R01a itself adds no native, physical or founder-loss claim.
+6. Plan 152's additional LAN/CD1 work is withdrawn. Plan 150 is the optional post-pilot host mode.
+   Plan 151 supplies reusable app-owned patterns to R10-R15; any independent Township instrument
+   remainder is deferred to R34. Existing helpers and their regression coverage remain.
+
+Future packet numbers refer to this adopted sequence, not completion. New authority parameters,
+social-continuity semantics, native guarantees, real custody records and external evidence remain
+their named decision or verification gates. No deployment or secret mutation occurred in R01a.
+
 Produce three honest beta proofs of concept that can be installed on real phones, use a public
 WSS carrier without a development tether, retain identity and replayable state through reboot and
 upgrade, converge after offline work, and expose enough local audit evidence to explain a refusal.
@@ -194,6 +231,35 @@ collision contract before any product shell lands.
 | Township | `dev.treetop.lattice.township` | `township://` | `dev.treetop.lattice.township.carrier` | `township-v1.sqlite3` | `township-pilot-v1` |
 | Toolshed | `dev.treetop.lattice.toolshed` | `toolshed://` | `dev.treetop.lattice.toolshed.carrier` | `toolshed-v1.sqlite3` | `toolshed-pilot-v1` |
 | Treehouse | `dev.treetop.lattice.treehouse` | `treehouse://` | `dev.treetop.lattice.treehouse.carrier` | `treehouse-v1.sqlite3` | `treehouse-pilot-v1` |
+
+### Toolshed module amendment and operator authorization (2026-09-06, R01c)
+
+The standalone Toolshed row above is retained as a reserved legacy identity, not the identity of
+an enabled module. For the unified Treehouse program, Toolshed runs inside Treehouse with this
+concrete collision contract:
+
+| Boundary | Adopted module contract |
+| --- | --- |
+| App and links | `dev.treetop.lattice.treehouse` and `treehouse://`; Toolshed routes are module routes validated within that product. `toolshed://` cannot select Treehouse storage or signing. |
+| Member key service | Retain `dev.treetop.lattice.treehouse.carrier`. Governance-witness keys use the separately protected Treehouse namespace owned by R17a/R36; module activation cannot select a different product's key service. |
+| Database and migration | Retain `treehouse-v1.sqlite3`, its Treehouse product marker and migration ledger. Add module tables/namespaces through reviewed migrations; do not open or relabel `toolshed-v1.sqlite3`. |
+| Distribution lineage | Retain `treehouse-pilot-v1`, its pinned signing fingerprint and supported upgrade path. Module activation does not create a second app, alias or distribution lineage. |
+| Semantic boundaries | Shed/Tool replicas, catalog entries and permissions stay explicit. Membership in a Treehouse Space does not automatically grant authority or reading access to a Tool replica. Validate each signed operation against its own replica and role/capability rules. |
+| Reserved legacy identities | Keep the standalone Toolshed app ID, scheme, carrier key service, database and pilot alias reserved and collision-tested. They remain dormant for this program; no automatic import, migration or signing bridge is authorized. Township remains independently isolated. |
+
+Operator countersign / authorization record: on 2026-09-06, Nicholas instructed, “In that new work
+tree commit that proposal and working together with Claude Fabel for code reviews and
+implementation assistance complete that new plan as proposed”. The already-written unified
+proposal's R01c and R26 explicitly selected the retained Treehouse identities, module namespaces
+and reserved legacy identities above. This record applies that instruction to this concrete
+contract; it is not a claim of a cryptographic signature or a new authorization inferred from
+future design work.
+
+R26 owns production manifest, native/TypeScript collision tests, database/module implementation
+and the complete Toolshed reader/host copy correction. Before that packet passes, current runtime
+product records stay unchanged and this amendment establishes no enabled module or pilot result.
+R26 still requires the completed group pilot, custody semantics, catalog and profile dependencies
+in the unified ledger. iOS, external credentials and device evidence remain separately gated.
 
 Each database has its own migration ledger and product marker. It stores replayable frames,
 delegations, outbox entries, profiles, replica metadata and user-visible drafts. Signing seeds stay
