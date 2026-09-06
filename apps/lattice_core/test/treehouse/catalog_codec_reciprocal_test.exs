@@ -38,6 +38,19 @@ defmodule Treehouse.CatalogCodecReciprocalTest do
     end
   end
 
+  test "standalone public catalog bytes and inventory IDs match the independent TS signer" do
+    vector = fixture()
+    assert {:ok, envelope} = Wire.decode_value(vector["catalog_envelope_term"])
+    assert :ok = TransportCatalog.verify_catalog(envelope, Base.decode64!(vector["expected_catalog_key"]))
+    assert Base.encode64(TransportCatalog.catalog_bytes(envelope.catalog)) == vector["catalog_bytes"]
+    assert TransportCatalog.catalog_id(envelope.catalog) == vector["catalog_id"]
+    assert Base.encode64(TransportCatalog.inventory_bytes(envelope.catalog.entries)) == vector["inventory_bytes"]
+    assert TransportCatalog.inventory_id(envelope.catalog.entries) == vector["inventory_id"]
+    assert {:ok, bootstrap} = Wire.decode_value(vector["bootstrap_term"])
+    assert {:ok, ^bootstrap} = TransportCatalog.normalize_bootstrap(bootstrap)
+    assert TransportCatalog.service_realm(bootstrap.service_id) == "treehouse-service:" <> bootstrap.service_id
+  end
+
   defp fixture do
     Path.expand("../../../../clients/lattice-client/test/vectors/treehouse_catalog/ts_codec.json", __DIR__)
     |> File.read!()
