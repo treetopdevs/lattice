@@ -82,6 +82,26 @@ defmodule Lattice.CarrierWireTest do
     assert encoded_delegation["roles"] == ["admin", "clerk", "member", "moderator"]
   end
 
+  test "wire lease bounds retain the canonical maximum and refuse out-of-range epochs" do
+    issuer = Identity.from_seed("issuer", "wire-lease-range")
+    audience = Identity.from_seed("audience", "wire-lease-range")
+
+    delegation =
+      Delegation.new(issuer, "replica:wire", audience.pub,
+        ops: [:post],
+        expires_epoch: Canonical.max_integer()
+      )
+
+    op = Op.new(issuer, "replica:wire", [], :authority, {:grant, delegation})
+    frame = Wire.encode_op(op)
+    assert {:ok, [^op]} = Wire.decode_ops([frame])
+
+    for invalid <- [Canonical.max_integer() + 1, -1, "5", 1.5] do
+      assert {:error, :malformed_op} =
+               Wire.decode_ops([put_delegation_field(frame, "expires_epoch", invalid)])
+    end
+  end
+
   test "map wire frames sort pairs by canonical key bytes" do
     id = Identity.from_seed("alice", "carrier-wire-map-order")
     op = Op.new(id, "replica:wire", [], :command, %{z: 1, a: 2, m: 3, b: 4})
