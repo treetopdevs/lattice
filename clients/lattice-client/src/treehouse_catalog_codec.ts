@@ -1,7 +1,7 @@
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { canonicalBase64Bytes, canonicalBytesForCarrierTerm } from "./codec";
-import type { CarrierTerm } from "./carrier";
+import type { CarrierTerm, DecodedTerm } from "./carrier";
 
 /** Pure signed record shapes. Valid signatures do not establish installed trust or authority. */
 export interface CatalogBootstrap {
@@ -151,6 +151,27 @@ const rotationEnvelopeCodec = recordCodec<CatalogRotationEnvelope>([
 export function normalizeCatalogBootstrap(value: unknown): CatalogBootstrap | null { return bootstrapCodec.normalize(value) ?? null; }
 export function catalogBootstrapToCarrierTerm(value: unknown): CarrierTerm | null { return toTerm(bootstrapCodec, value); }
 export function catalogBootstrapFromCarrierTerm(value: unknown): CatalogBootstrap | null { return bootstrapCodec.decode(value) ?? null; }
+/** Flat decoded command argument only; the existing codec owns closed fields and types. */
+export function catalogBootstrapFromDecodedTerm(value: DecodedTerm): CatalogBootstrap | null {
+  try {
+    if (value === null || typeof value !== "object" || value.type !== "map" || !Array.isArray(value.pairs)) return null;
+    const pairs: [CarrierTerm, CarrierTerm][] = [];
+    for (const pair of value.pairs) {
+      if (!Array.isArray(pair) || pair.length !== 2) return null;
+      const [key, item] = pair;
+      if (key === null || typeof key !== "object" || key.type !== "atom") return null;
+      let scalar: CarrierTerm;
+      if (typeof item === "number") scalar = ["int", item];
+      else if (item !== null && typeof item === "object" && item.type === "atom") scalar = ["atom", item.value];
+      else if (item !== null && typeof item === "object" && item.type === "bin" && item.bytes instanceof Uint8Array) scalar = ["bin", base64(item.bytes)];
+      else return null;
+      // Preserve duplicate pairs for the existing closed-map decoder to reject.
+      pairs.push([["atom", key.value], scalar]);
+    }
+    return catalogBootstrapFromCarrierTerm(["map", pairs]);
+  } catch { return null; }
+}
+
 export function normalizeCatalogEntry(value: unknown): CatalogEntry | null { return entryCodec.normalize(value) ?? null; }
 export function catalogEntryToCarrierTerm(value: unknown): CarrierTerm | null { return toTerm(entryCodec, value); }
 export function catalogEntryFromCarrierTerm(value: unknown): CatalogEntry | null { return entryCodec.decode(value) ?? null; }

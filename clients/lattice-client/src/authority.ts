@@ -80,6 +80,26 @@ export async function resolveContinuationProfileFromFrames(
   }
 }
 
+/** Internal application predicate over authenticated causal semantic ops; this does not authenticate input. */
+export function continuationProfileBindingMatches(
+  replica: string, causalOps: readonly Op[], expectedRoot: string, expectedPin: string, expectedProfileId: string,
+): boolean {
+  try {
+    if (continuationFamily(replica) !== "space") return false;
+    const ops = [...causalOps], byId = index(ops);
+    if (byId.size !== ops.length || ops.some((op) => op.replica !== replica || op.deps.some((dep) => !byId.has(dep)))) return false;
+    const order = canonicalOrder(ops, byId);
+    if (order.length !== ops.length) return false;
+    const ordered = order.map((id) => byId.get(id)!);
+    const delegations = validateDelegations(ordered, collectDelegations(ordered), replica);
+    const root = resolveRoot(ordered, delegations);
+    if (root?.pubkey !== expectedRoot) return false;
+    const pin = continuationPin(continuationContext(replica, ordered, delegations, root, []), new Set(order));
+    return pin !== undefined && pin.opId === expectedPin && pin.profile.kind === "space" &&
+      continuationProfileId(pin.profile) === expectedProfileId;
+  } catch { return false; }
+}
+
 /** One honored role acquisition, in processing (canonical) order. */
 export interface HonoredAcquire {
   opId: string;
