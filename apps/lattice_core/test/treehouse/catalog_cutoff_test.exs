@@ -88,8 +88,15 @@ defmodule Treehouse.CatalogCutoffTest do
 
   test "raw uint64 body integers remain portable without semantic number decoding" do
     f = history()
-    op = Op.new(f.root, f.log.replica, Log.frontier(f.log), :command,
-      {:create_space, [18_446_744_073_709_551_615]}, cap: f.cap)
+
+    op =
+      Op.new(
+        f.root,
+        f.log.replica,
+        Log.frontier(f.log),
+        :command,
+        {:create_space, [18_446_744_073_709_551_615]}, cap: f.cap)
+
     log = Log.append!(f.log, op)
     assert :ok = Log.verify_authenticity(log)
     assert {:ok, result} = CatalogCutoff.derive(log)
@@ -98,7 +105,11 @@ defmodule Treehouse.CatalogCutoffTest do
 
   test "unknown authentic atoms and oversized frames refuse while verifiable forgery takes precedence" do
     f = history()
-    for body <- [{:unsupported_cutoff_test_atom, []}, {:create_space, [String.duplicate("x", 64_000)]}] do
+
+    for body <- [
+          {:unsupported_cutoff_test_atom, []},
+          {:create_space, [String.duplicate("x", 64_000)]}
+        ] do
       op = Op.new(f.root, f.log.replica, Log.frontier(f.log), :command, body, cap: f.cap)
       log = Log.append!(f.log, op)
       before = :erlang.term_to_binary(log)
