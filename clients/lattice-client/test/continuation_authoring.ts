@@ -75,7 +75,6 @@ test("authenticated complete history derives actual pin, expired predecessor sco
 async function reviewed(f: Awaited<ReturnType<typeof fixture>>): Promise<ContinuationReview> {
   const result = await reviewContinuationFromFrames(f.input);
   assert.equal(result.ok, true, JSON.stringify(result));
-  if (!result.ok) throw new Error(result.reason);
   return result.review;
 }
 
@@ -103,5 +102,5 @@ test("fresh assembly signs a normal op honored by the public authority judge", a
   const analysis = analyzeAuthority(schema, ops, new Set(order), order, byId, f.replica);
   assert.equal(analysis.quarantineReasons.has(result.frame.id), false);
   assert.equal(analysis.honoredWrites.has(result.frame.id), true);
-  assert.equal(analysis.security.delegations.get(f.delegation.id)?.validation.valid, true);
+  assert.deepEqual(analysis.security.honoredSuccessionIntroductions.get(f.delegation.id), [result.frame.id]);
 });
