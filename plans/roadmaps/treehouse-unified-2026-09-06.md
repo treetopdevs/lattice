@@ -113,8 +113,9 @@ Rows are the authoritative dependency graph. Commas mean all prerequisites. “N
 ### Execution evidence (2026-09-06)
 
 This table is the current evidence snapshot; earlier revision evidence remains in
-Git history and each packet's source plan. R01a, R01c, R02, R05, R06, R07 and R08 have
-both final-tip and exact merge-result hosted gates closed. `LOCAL VERIFIED` still
+Git history and each packet's source plan. R01a, R01c, R05, R06, R07 and R08 have
+both final-tip and exact merge-result hosted gates closed. R02's earlier design/probe
+packet is accepted; its concrete adoption in this packet remains open. `LOCAL VERIFIED` still
 requires every remaining integration/review/hosted gate. Distribution jobs skipped
 without protected pilot inputs establish no signed pilot artifact or physical result.
 A passing review or a green path-filtered status is not a substitute for the required workflow.
