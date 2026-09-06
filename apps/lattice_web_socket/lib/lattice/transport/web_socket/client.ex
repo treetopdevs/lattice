@@ -246,9 +246,11 @@ defmodule Lattice.Transport.WebSocket.Client do
       "\r\n"
     ]
 
-    with :ok <- :gen_tcp.send(socket, request),
+    with {:ok, [buffer: buffer_size]} <- :inet.getopts(socket, [:buffer]),
+         :ok <- :gen_tcp.send(socket, request),
          {:ok, response, rest} <- recv_until_headers(socket, <<>>, deadline),
-         :ok <- validate_handshake(response, key) do
+         :ok <- validate_handshake(response, key),
+         :ok <- :inet.setopts(socket, buffer: buffer_size) do
       {:ok, rest}
     end
   end
@@ -268,8 +270,17 @@ defmodule Lattice.Transport.WebSocket.Client do
           {:error, :upgrade_headers_too_large}
 
         :nomatch ->
-          case :gen_tcp.recv(socket, 0, remaining) do
-            {:ok, chunk} -> recv_until_headers(socket, acc <> chunk, deadline)
+          allowance = @max_frame_size - byte_size(acc)
+
+          # Bound the driver's delivery, while recv(0) still returns short
+          # headers promptly. recv(allowance) would wait for bytes beyond the
+          # upgrade terminator. Restore the normal buffer after the handshake.
+          with :ok <- :inet.setopts(socket, buffer: allowance),
+               {:ok, chunk} when byte_size(chunk) <= allowance <-
+                 :gen_tcp.recv(socket, 0, remaining) do
+            recv_until_headers(socket, acc <> chunk, deadline)
+          else
+            {:ok, _oversized_chunk} -> {:error, :upgrade_headers_too_large}
             {:error, reason} -> {:error, reason}
           end
       end
