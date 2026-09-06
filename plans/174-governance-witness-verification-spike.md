@@ -317,3 +317,124 @@ Stop and report back if:
   boundary and should land before it.
 - **Do not let this block plan 146.** 146's witness-artifact work is separable; this spike
   constrains the *ceremony's* claims, not the artifact format.
+
+## Evidence and drift amendment: 2026-09-06, R17a
+
+Reviewable design prepared at `641cbbd7` on
+`codex/treehouse-r17a-native-decision`. The
+[decision record](../docs/research/governance_witness_native_verification.md) answers
+all six decisions, contains the two-sentence verifier/signer summaries, provenance
+map and attack matrix, and selects bounded native authority projection over a
+retained authenticated history. The
+[follow-on build roadmap](roadmaps/treehouse-native-witness-build-2026-09-06.md)
+maps work to R01b/R36/R17b/R17c without allocating a new numeric plan. Its stage0
+assigns the independent fixed-prompt repair to the first implementation commit.
+This packet is not native implementation, profile adoption or physical proof.
+
+The original `91bb6ca6..HEAD` drift check includes unrelated subsequently merged
+work. Reconcile source facts first, then constrain this docs-only packet to exactly
+this plan and the two linked deliverables against base `641cbbd7`; production,
+tests, shared README and unified ledger are outside its edit scope. The integrator
+owns the still-required status-row update after review. No historical source
+excerpt or closed Plan146 evidence is relabeled as stronger than it was.
+
+Verified drift: `sign_governance_witness` is now `lib.rs:729-778`, still shape-only
+and interpolating `claim.replica`; canonical claim checks remain in
+`governance_witness.rs:27-68`, and semantic-cache loading still only parses JSON
+and checks an array. The statement in step2 that the first cryptographic check is
+not until Elixir is stale: TS already checks embedded delegation evidence, and
+`native_workflow.ts:150-198` verifies the native response digest/key/signature.
+Those checks do not establish native claim truth or authenticate every persisted
+outer operation. Current macOS `load_seed` exposes the seed to Rust memory; it is
+not the proposed opaque Android custody model.
+
+The selected architecture authenticates and retains ordinary command/inbox/DAG
+ancestors as well as authority operations, including semantic quarantines.
+Decision D2 now separates complete admitted history from bounded unconnected
+staging, using conservative cryptographic introduction closure E. Relevant unknown
+or missing history blocks durably; fresh-key unknown input and its unconnected
+supported wrappers cannot alone disable signing. Staged evidence is reclassified
+before every derive/release, including later introduction and rootless continuation
+chains. This explicitly refines the earlier unconditional unknown/missing-history
+rule and requires a scoped R04 native-boundary amendment before R17b code. Retained
+evidence cannot be dropped; quota-refused input is outside that retained-union claim.
+Refusing signing does not imply zero observation-store writes. R17b explicitly extends
+Plan146 Seam5 to the bounded existing CarrierTerm/op grammar with exact three-
+runtime byte parity, preserving legacy clerk payloads; arbitrary general CBOR and
+Core semantic changes remain excluded. That scoped amendment is recorded in
+Plan146 before the corresponding R17b implementation, after R01b scope adoption.
+
+The native verified pin selects Township clerk or Treehouse Space admin/Thread
+moderator, with a separate beacon domain and matched landed R03/R04 contracts.
+The OS reason uses a fingerprint of the full pinned replica ID, not only its root.
+Native review safely escapes and isolates exact full values, exposes their full
+digests/byte counts and provides bounded complete continuation. Explicit native UI
+acceptance activates the 60-second one-shot caller/session-bound token; begin alone
+opens an unaccepted display. Generation checks surround all blocking work and the
+serialized release point. Incoming admission fences atomically retain recoverable
+batch bytes. Outgoing beacon frames atomically commit with recoverable outbox
+pointers before response; committed bytes can be retrieved after a crash without
+re-signing, while uncommitted attempts abort. Publication hints are advisory.
+
+Shared beacon claims select an available pinned outer witness author and derive
+all remaining values natively. Legacy clerk payloads remain explicitly frontier-
+unbound after release; displayed deps and token generation add no signed fields.
+Whole-native-store rollback, unseen history and availability against eligible
+authors citing unknown ancestry remain non-claims.
+
+No prototype was needed to reject the compact signed-acquisition shortcut: the
+authority judge's causal and competing-acquisition rules establish its missing
+proof by inspection. Android algorithm/authentication/attestation feasibility and
+the proposed complete-history budget/latency remain unmeasured build gates.
+R01b adopts the eligibility contract before R36 preliminary device eligibility;
+R17c later proves the exact integrated physical ceremony. No cycle or software
+fallback is introduced. Only these three documentation paths change in R17a.
+
+Validation for this preparation: the six decision sections, required corrected
+boundaries, local Markdown links and balanced code fences were checked; this
+amendment preserves the complete original Plan174 text as a prefix, and the Git
+path audit admits exactly the three named documentation files. No runtime tests,
+native build, prototype or physical probe is represented by these document checks.
+
+## Dated all-input admission correction — 2026-09-06
+
+Hosted finding `PRRT_kwDOSZGqLc6fu9nq` identified a real gap at reviewed docs
+`b83c21dcdca2ca09dc80710fccca147881bd2ed9`: authenticated supported operations
+were retained unconditionally, while the nonblocking staging rule required
+missing dependencies. Fresh unintroduced keys could therefore connect known-shape
+commands to the root and consume capacity whose exhaustion blocks signing.
+Positive E introduction rules alone did not exclude these connected operations.
+
+The integrator adopted the bounded correction before these documentation edits:
+apply the E/relevance classifier to all authenticated input. Complete-DAG non-E
+operations stay in nonblocking staging unless required as ancestors of E-authored
+history. Preserve E-authored quarantines and required ancestors without deriving
+admission relevance from current permission, acquisition, expiry or application
+verdicts. Independently inspect E-issued introductions/parent proofs first,
+deduplicate relevant proof accounting by existing signed IDs, and do not promote
+each copied-cap wrapper or its fresh outer author. A genuinely new relevant proof
+cannot be hidden by a different outer carrier or by exhausted unrelated staging.
+
+Later E introduction/ancestry citation atomically promotes retained evidence or
+persists its block before derivation/release. Eligible authors can still make
+retained supported spam relevant and exhaust capacity; that availability residual
+is explicit. Exact-batch fences survive crashes until classification, but a
+completed nonblocking quota refusal must not leave a permanent signing fence or
+admitted-capacity block. Quota-refused bytes remain outside the retained union and
+may be freshly classified when relevance changes; connectivity alone is insufficient.
+
+D2, Stage3, the budget/STOP wording and nine future public signed-input test cases
+now state the same contract. No Core semantic rule, canonical/wire format, native
+source, R36 provider, device state, README or unified ledger changes. This packet
+modifies only this dated Plan174 amendment and its two existing R17a deliverables.
+The earlier original Plan174 text remains an unchanged prefix.
+
+Validation is documentation-only: local link/fence/whitespace and exact-scope
+checks; no runtime/native/physical tests or executed attack reproduction are
+claimed. Actual Fable follow-up review is **OPEN**: its available session quota
+was exhausted on the concurrent frozen R36 review. The user has authorized Sol
+reviews while Claude is unavailable; a separate exact-diff Sol verdict for this
+packet is pending integrator assignment. The earlier b83 documentation PASS does
+not cover this new admission correction. Do not publish, enable or mark R17b/R36
+complete on these local design checks; the integrator owns final review and
+hosted closure.
