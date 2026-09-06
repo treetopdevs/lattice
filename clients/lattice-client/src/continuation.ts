@@ -12,6 +12,42 @@ export interface ContinuationProfile {
   maxLeaseEpochs: number;
 }
 
+export interface ContinuationClaim {
+  version: 1;
+  product: "treehouse";
+  kind: "space" | "thread";
+  replica: string;
+  role: "admin" | "moderator";
+  profileId: string;
+  profileGenesis: string;
+  holder: string;
+  holderEpoch: string;
+  successor: string;
+  delegationId: string;
+  author: string;
+  deps: string[];
+  epoch: number;
+  epochBasis: string[];
+}
+
+export interface ContinuationSignature {
+  witness: string;
+  signature: string;
+}
+
+export interface ContinuationCertificate {
+  claim: ContinuationClaim;
+  signatures: ContinuationSignature[];
+}
+
+export function normalizeContinuationClaim(_value: unknown): ContinuationClaim | null {
+  return null;
+}
+
+export function normalizeContinuationCertificate(_value: unknown): ContinuationCertificate | null {
+  return null;
+}
+
 const profileKeys = [
   "mode", "version", "product", "kind", "role", "nominee", "witnesses",
   "threshold", "maxLeaseEpochs",

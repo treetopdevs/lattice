@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { test } from "node:test";
-import { normalizeContinuationProfile } from "../src/continuation";
+import { normalizeContinuationCertificate, normalizeContinuationClaim, normalizeContinuationProfile } from "../src/continuation";
 
 const lowKey = Buffer.alloc(32, 1).toString("base64");
 const highKey = Buffer.alloc(32, 251).toString("base64");
@@ -8,6 +9,13 @@ const profile = {
   mode: "bounded_continuation", version: 1, product: "treehouse",
   kind: "space", role: "admin", nominee: lowKey,
   witnesses: [highKey, lowKey], threshold: 2, maxLeaseEpochs: 7,
+};
+const digest = (name: string) => createHash("sha256").update(name).digest("base64url");
+const claim = {
+  version: 1, product: "treehouse", kind: "space", replica: "replica:fixture", role: "admin",
+  profileId: digest("profile"), profileGenesis: digest("pin"), holder: lowKey,
+  holderEpoch: digest("predecessor"), successor: highKey, delegationId: digest("delegation"),
+  author: highKey, deps: [digest("dependency")], epoch: 9, epochBasis: [digest("beacon")],
 };
 
 test("normalizes exact continuation profiles by unsigned witness bytes", () => {
@@ -34,4 +42,10 @@ test("profile fields, paired roles, portable limits and canonical keys are close
   for (const maxLeaseEpochs of [1, 65_535]) {
     assert.ok(normalizeContinuationProfile({ ...profile, kind: "thread", role: "moderator", maxLeaseEpochs }));
   }
+});
+
+test("valid claims and certificates preserve exact signed evidence", () => {
+  assert.deepEqual(normalizeContinuationClaim(claim), claim);
+  const certificate = { claim, signatures: [{ witness: lowKey, signature: Buffer.alloc(64, 7).toString("base64") }] };
+  assert.deepEqual(normalizeContinuationCertificate(certificate), certificate);
 });
