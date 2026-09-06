@@ -132,7 +132,7 @@ test("authenticated but malformed authority stays in the reviewed frontier", asy
       tuple(atom("continuation_v1"), ["map", []])) });
   const frames = [...f.input.frames, malformed];
   const ops = carrierOpsToSemanticOps(frames);
-  assert.equal(ops.at(-1)?.structuralError, "malformed_term");
+  assert.equal(ops.at(-1)?.authorityInputReason, "malformed_term");
   const result = await reviewContinuationFromFrames({ ...f.input, frames, deps: [malformed.id] });
   assert.equal(result.ok, true, JSON.stringify(result));
   if (!result.ok) return;

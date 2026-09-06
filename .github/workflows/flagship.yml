@@ -144,10 +144,16 @@ jobs:
         # observed in CI regenerating a pre-session 9-scenario vector set instead of
         # the current 19. `mix test` (above) just forced a correct :test recompile in
         # this same job, so reuse that env instead of trusting :dev's staleness check.
-        run: MIX_ENV=test mix lattice.export_vectors --out clients/lattice-client/test/vectors
+        run: |
+          MIX_ENV=test mix lattice.export_vectors --out clients/lattice-client/test/vectors
+          MIX_ENV=test mix run -e 'Lattice.ContinuationVectors.write("clients/lattice-client/test/vectors")'
       - name: Install TS client dependencies
         working-directory: clients/lattice-client
         run: npm ci
+      - name: Regenerate and verify TS-authored continuation operations
+        run: |
+          npm --prefix clients/lattice-client run continuation:vectors
+          MIX_ENV=test mix test apps/lattice_core/test/treehouse/bounded_continuation_reciprocal_test.exs
       - name: Typecheck TS client
         working-directory: clients/lattice-client
         run: npm run typecheck

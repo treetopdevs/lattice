@@ -68,6 +68,7 @@ defmodule Lattice.Authority.ContinuationCertificate do
   @spec valid_claim?(term()) :: boolean()
   def valid_claim?(%{version: 1, product: :treehouse} = c) when map_size(c) == 15 do
     valid_kind_role?(c[:kind], c[:role]) and is_binary(c[:replica]) and
+      byte_size(c.replica) > 0 and String.valid?(c.replica) and
       pubkey?(c[:holder]) and pubkey?(c[:successor]) and pubkey?(c[:author]) and
       Enum.all?(@claim_ids, &id?(c[&1])) and canonical_ids?(c[:deps]) and
       canonical_ids?(c[:epoch_basis]) and epoch?(c[:epoch])

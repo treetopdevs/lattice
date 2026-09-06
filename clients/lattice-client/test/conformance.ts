@@ -15,6 +15,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { createPublicKey, verify as edVerify } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { runBoundedContinuationConformance } from "./bounded_continuation";
 import {
   analyzeAuthority,
   canonicalBytesForCarrierDelegation,
@@ -1638,6 +1639,7 @@ console.log("\n▸ carrier authority report is diagnostic only");
   );
 }
 
+await runBoundedContinuationConformance();
 console.log(`\n${failures === 0 ? "\x1b[32m✓ all conformance checks passed\x1b[0m" : `\x1b[31m✗ ${failures} check(s) failed\x1b[0m`}`);
 process.exit(failures === 0 ? 0 : 1);
 

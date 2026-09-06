@@ -131,11 +131,14 @@ defmodule Lattice.Authority do
 
   defp verified_complete_log?(log) do
     ops = Log.ops(log)
+    reconstructed = Log.from_ops(log.replica, ops)
 
-    Enum.all?(ops, fn {id, op} ->
-      id == op.id and op.replica == log.replica and Op.valid?(op) and
-        Enum.all?(op.deps, &Map.has_key?(ops, &1))
-    end) and length(Dag.topo_sort(ops)) == map_size(ops)
+    log.referenced == reconstructed.referenced and
+      match?({:ok, _}, Log.verified_quarantine(log)) and
+      Enum.all?(ops, fn {id, op} ->
+        id == op.id and op.replica == log.replica and Op.valid?(op) and
+          Enum.all?(op.deps, &Map.has_key?(ops, &1))
+      end) and length(Dag.topo_sort(ops)) == map_size(ops)
   end
 
   defp continuation_review_from_log(module, log, role, author, deps, delegation) do
@@ -473,6 +476,7 @@ defmodule Lattice.Authority do
 
     role_q = Enum.reduce(timelines, %{}, fn {_r, tl}, acc -> Map.merge(acc, tl.quarantine) end)
     role_audit = Enum.flat_map(timelines, fn {_r, tl} -> tl.audit end)
+    continuation_q = Continuation.unhandled_reasons(ordered, roles, continuation, ancestors)
 
     # Plan 158 Wave A2: every reason above is decided independently of any
     # application-policy verdict (none of them consult command_op_status), so
@@ -481,6 +485,7 @@ defmodule Lattice.Authority do
     base_reasons =
       invalid_deleg
       |> Map.merge(role_q)
+      |> Map.merge(continuation_q)
       |> Map.merge(tombstone_q)
       |> Map.merge(revoke_q)
       |> Map.merge(beacon_q)
@@ -1032,7 +1037,7 @@ defmodule Lattice.Authority do
           decide_transfer(st, op, role, d, at_tick, ancestors, deleg_valid, continuation.family)
 
         {:succeed, d, proof} ->
-          if continuation.family != :legacy or match?({:continuation_v1, _}, proof) do
+          if continuation.family != :legacy or Continuation.proof?(proof) do
             decide_continuation(st, op, role, d, proof, ancestors, continuation)
           else
             decide_succeed(st, op, role, d, proof, ancestors, deleg_valid, policies)
@@ -1069,12 +1074,7 @@ defmodule Lattice.Authority do
         end
 
       {:succeed, ^role, %Delegation{} = d, proof} ->
-        cond do
-          match?({:continuation_v1, _}, proof) -> {:succeed, d, proof}
-          is_integer(proof) and not valid_tick?(proof) -> {:malformed_tick, op}
-          not valid_delegation_intro?(delegations, d, op.id) -> nil
-          true -> {:succeed, d, proof}
-        end
+        succession_event(op, d, proof, delegations)
 
       {:heartbeat, ^role, tick} ->
         if valid_tick?(tick), do: {:heartbeat, tick}, else: {:malformed_tick, op}
@@ -1085,6 +1085,15 @@ defmodule Lattice.Authority do
   end
 
   defp role_event(_op, _role, _delegations), do: nil
+
+  defp succession_event(op, d, proof, delegations) do
+    cond do
+      Continuation.proof?(proof) -> {:succeed, d, proof}
+      is_integer(proof) and not valid_tick?(proof) -> {:malformed_tick, op}
+      not valid_delegation_intro?(delegations, d, op.id) -> nil
+      true -> {:succeed, d, proof}
+    end
+  end
 
   defp record_acquire(st, op, %Delegation{} = delegation, at_tick) do
     %{

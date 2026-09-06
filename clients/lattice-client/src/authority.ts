@@ -221,6 +221,11 @@ export function analyzeAuthority(
       quarantinedWrites.add(op.id);
       continue;
     }
+    if (op.authorityInputReason !== undefined) {
+      quarantineReasons.set(op.id, op.authorityInputReason);
+      quarantinedWrites.add(op.id);
+      continue;
+    }
     if (op.authority?.type === "heartbeat") {
       if (op.kind !== "authority") continue;
       // Heartbeats never write a field: they only refresh the holder's
@@ -238,7 +243,17 @@ export function analyzeAuthority(
       continue;
     }
 
-    if (!authorityRoleWrite(schema, op)) continue;
+    if (!authorityRoleWrite(schema, op)) {
+      if (op.kind === "authority" && op.authority?.type === "succeed" &&
+        (continuation.family !== "legacy" || op.authority.proof.mode === "continuation")) {
+        const reason = continuationRejectionReason(op, op.authority, emptyRoleState(), continuation, byId);
+        if (reason !== undefined) {
+          quarantineReasons.set(op.id, reason);
+          quarantinedWrites.add(op.id);
+        }
+      }
+      continue;
+    }
 
     const writeCount = writesPerRole.get(op.field) ?? 0;
     if (op.authority === undefined) {
@@ -335,7 +350,7 @@ export type ContinuationFamily = "legacy" | "unsupported" | "space" | "thread";
 /** Reserved only within the exact Treehouse Space/Thread namespace. */
 export function continuationFamily(replica: string | undefined): ContinuationFamily {
   if (replica === undefined) return "legacy";
-  const intended = /^replica:treehouse:(space|thread):(.*)$/.exec(replica);
+  const intended = /^replica:treehouse:(space|thread):([\s\S]*)$/.exec(replica);
   if (intended === null || !intended[2]!.includes("#authority:")) return "legacy";
   const exact = /^replica:treehouse:(space|thread):([A-Za-z0-9_-]{43})#authority:bounded-continuation-v1#root:([A-Za-z0-9_-]{43})$/.exec(replica);
   if (exact === null || !canonicalBase64UrlDigest(exact[2]) ||
@@ -1274,7 +1289,8 @@ function validateDelegations(
       delegation: record.delegation,
       introductionOpIds: [...record.introductionOpIds],
       invalidIntroductionReasons: new Map(record.invalidIntroductionReasons),
-      validation: delegationValidation(
+      validation: continuationFamily(outerReplica) === "unsupported" ?
+        {valid: false, reason: "unsupported_authority_profile"} : delegationValidation(
         id,
         collected,
         genesisIds,

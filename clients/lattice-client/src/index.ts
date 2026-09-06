@@ -24,6 +24,7 @@ export * from "./sync";
 export * from "./carrier";
 export * from "./codec";
 export * from "./continuation";
+export * from "./continuation_authoring";
 export * from "./identity";
 export * from "./local_log";
 export * from "./tauri_bridge";

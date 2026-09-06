@@ -29,8 +29,8 @@ end
 
 defmodule Treehouse.ContinuationFixtures do
   @moduledoc "Signed public-Sim fixtures with independently assembled R04 claims."
-  alias Lattice.Authority.Delegation
   alias Lattice.{Authority, Canonical, Identity, Log, Sim}
+  alias Lattice.Authority.Delegation
 
   @spec new(keyword()) :: {Sim.t(), Lattice.Op.t()}
   def new(opts \\ []) do
@@ -41,8 +41,13 @@ defmodule Treehouse.ContinuationFixtures do
     module = if kind == :space, do: __MODULE__.Space, else: __MODULE__.Thread
 
     realms = ["founder", "holder", "nominee", "copy", "w1", "w2", "w3", "observer"]
-    sim = Sim.new(module, name, realms ++ Enum.map(1..12, &"member#{&1}"), seed: "r04-fixture")
-    Sim.create_replica(sim, "founder")
+
+    sim =
+      Sim.new(module, Keyword.get(opts, :name, name), realms ++ Enum.map(1..12, &"member#{&1}"),
+        seed: "r04-fixture"
+      )
+
+    Sim.create_replica(sim, Keyword.get(opts, :creator, "founder"))
   end
 
   @spec profile(Sim.t(), keyword()) :: map()
@@ -146,4 +151,85 @@ defmodule Treehouse.ContinuationFixtures do
 
   @spec digest(binary()) :: String.t()
   def digest(bytes), do: :crypto.hash(:sha256, bytes) |> Base.url_encode64(padding: false)
+
+  @doc "Candidate seven-epoch schedule on signed logical ticks, with the founder removed before E1."
+  @spec two_cycles(keyword()) :: map()
+  def two_cycles(opts \\ []) do
+    {sim, genesis} = new(opts)
+    # Enrollment is signed retained input. Product acceptance and protected-key
+    # eligibility remain R10/R14/R17 responsibilities, not a Core roster claim.
+    sim =
+      Enum.reduce(1..12, sim, fn n, s ->
+        {s, _} =
+          Sim.append(s, "member#{n}", :inbox, {:enrollment, identity_public(s, "member#{n}")})
+
+        s
+      end)
+      |> Sim.sync_all()
+
+    {sim, pin, profile} = pin(sim)
+    {sim, epoch0} = Sim.beacon(sim, "founder", 0)
+
+    commands =
+      if role(sim) == :admin, do: [:manage, :post, :admit, :remove_member], else: [:manage, :post]
+
+    {sim, transfer} =
+      Sim.transfer(sim, "founder", "holder", role(sim), ops: commands, expires_epoch: 6)
+
+    sim = Sim.sync_all(sim)
+    {sim, generation0} = member_grants(sim, 6)
+    sim = Sim.sync_all(sim)
+    bootstrap_ids = Log.op_ids(Sim.log(sim, "holder"))
+    # Sim has no external signer callbacks. Assert its exact field inventory
+    # in the public test, then remove every per-founder record here.
+    sim = %{
+      sim
+      | realms: Map.delete(sim.realms, "founder"),
+        logs: Map.delete(sim.logs, "founder"),
+        caps: Map.delete(sim.caps, "founder")
+    }
+
+    {sim, generations, acquisitions} =
+      Enum.reduce(1..14, {sim, [generation0], []}, fn epoch, {s, generations, acquisitions} ->
+        {s, _} = Sim.beacon(s, "w1", epoch, witnesses: ["w1", "w2"])
+        s = Sim.sync_all(s)
+
+        if epoch in [5, 10] do
+          {s, acquisition} =
+            Sim.continue_role(s, "holder", role(s),
+              ops: commands,
+              expires_epoch: epoch + 6,
+              witnesses: ["w1", "w2"]
+            )
+
+          s = Sim.sync_all(s)
+          {s, grants} = member_grants(s, epoch + 6)
+          {Sim.sync_all(s), generations ++ [grants], acquisitions ++ [acquisition]}
+        else
+          {s, generations, acquisitions}
+        end
+      end)
+
+    %{
+      sim: sim,
+      genesis: genesis,
+      pin: pin,
+      profile: profile,
+      epoch0: epoch0,
+      transfer: transfer,
+      generations: generations,
+      acquisitions: acquisitions,
+      bootstrap_ids: bootstrap_ids
+    }
+  end
+
+  defp identity_public(sim, realm), do: Sim.identity(sim, realm).pub
+
+  defp member_grants(sim, expires) do
+    Enum.map_reduce(1..12, sim, fn n, s ->
+      {s, d} = Sim.grant(s, "holder", "member#{n}", ops: [:post], expires_epoch: expires)
+      {d, s}
+    end)
+    |> then(fn {grants, s} -> {s, grants} end)
+  end
 end

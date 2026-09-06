@@ -180,6 +180,8 @@ export interface Op {
   commandError?: CommandError;
   /** Structurally malformed carrier term retained only for local audit/quarantine. */
   structuralError?: "malformed_term";
+  /** Recognized new authority input whose malformed delegation cannot supply evidence. */
+  authorityInputReason?: "malformed_term" | "unauthorized_continuation" | "unsupported_authority_profile";
   /** Capability id retained from carrier evidence; decoded nil is explicit null. */
   cap?: string | null;
   /** Semantic authority facts retained from the verified carrier body. */

@@ -161,6 +161,10 @@ export async function authorCarrierDelegation(input) {
         sig: bytesToBase64(signature),
     };
 }
+/** Encode the existing closed carrier term grammar without an op envelope. */
+export function canonicalBytesForCarrierTerm(term) {
+    return encodeCarrierTerm(term);
+}
 function encodeCarrierTerm(term) {
     const [tag] = term;
     switch (tag) {

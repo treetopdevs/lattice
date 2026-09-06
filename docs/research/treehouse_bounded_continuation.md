@@ -1,14 +1,18 @@
-# Treehouse bounded continuation: R04 decision proposal
+# Treehouse bounded continuation: R04 contract and evidence
 
-Status: **proposed for integrator and Claude Fable review; no production behavior
-is enabled by this packet.** Base: `389e9d4e520a9119913bfad591bc3c3f95ad12f8`.
+Status: **contract adopted after integrator and Claude Fable design review;
+atomic BEAM/TS implementation verified locally and ready for exact implementation
+review and hosted integration. No product profile
+or production group is enabled by this packet.** Preparation base:
+`389e9d4e520a9119913bfad591bc3c3f95ad12f8`; combined implementation base:
+`d52366193c091aec0cf69598f44c10b9f718f124`.
 This resolves the choices left by [R02](treehouse_founder_lifecycle.md) and
 [unified R04](../../plans/roadmaps/treehouse-unified-2026-09-06.md#authority-contract-r02r04).
 The accompanying [five probes](../../apps/lattice_core/test/treehouse/bounded_continuation_probe_test.exs)
-characterize existing behavior. Sections below specify future acceptance, not
-tests that have already passed. R03 is a prerequisite; its frozen review SHA is
-`d08883da7d2e5a007bf66d3ffd2205d600109604`. It was still under review, so
-implementation must use its final landed contract and SHA.
+characterize the unchanged legacy behavior. The implementation uses final R03
+`e08e3995bf562035bd36593687bd0e55ddd5f59e` and R09
+`7f984d4482cd55d06ad437e8fcf7309b8bdd606f`, including R07/R08 ancestry. Section 8
+preserves preparation evidence; section 9 records implementation proof and limits.
 
 ## 1. Evidence that determines the boundary
 
@@ -345,9 +349,10 @@ its independently verified history and the final Core contract; TS review is
 not native evidence. Frozen-frontier assembly must refuse if the caller's
 current review no longer equals the collected claim.
 
-## 6. Executable acceptance to add after adoption
+## 6. Executable acceptance contract
 
-These are **required future tests**, not green claims from this packet. Use
+These are the **adopted acceptance requirements**. Their evidence is recorded
+separately below. Use
 public Sim partition/heal, fresh `Log` restoration, public TS authoring and
 analysis; export new vectors rather than hand-authoring expected JSON.
 
@@ -465,7 +470,7 @@ rollback; those remain R17's explicit trust limits. Catalog replacement still
 requires R11c's retained bootstrap/authorized replacement chain and rollback
 negatives. No role certificate substitutes for that service trust contract.
 
-## 8. This packet's verification record
+## 8. Preparation verification record, preserved from the design review
 
 The five characterization probes and full `mix verify` pass at the recorded
 base: **680 tests + 27 properties, 0 failures, 3 configured exclusions**. A later
@@ -481,5 +486,121 @@ zero (existing suggestions in unchanged files remain). C04 fixture
 calibration first compared `Sim.transfer`'s returned delegation ID with an
 acquisition op ID; the corrected test obtains the actual transfer from public
 `Log.topo_ops`. That was test construction, not a production defect or R04 RED.
-No production, existing test, vector, shared README or unified ledger was edited.
-Full formatting/test results are recorded with this packet's final commit report.
+At that preparation checkpoint, no production, existing test, vector, shared
+README or unified ledger was edited. Implementation changes below follow the
+separate integrator adoption and preserve these earlier probes and evidence.
+
+## 9. Atomic implementation evidence
+
+The implementation's initial public RED is committed in `85a925ec`: six tests
+construct real signed delegations, profile pins and certificates through public
+Sim/Log APIs, without depending on missing helper functions. The baseline
+reported `unauthorized_succession` for valid continuation, finite scope, witness
+binding and race cases. The new judge makes these cases pass while all five
+legacy characterization probes retain their original outcomes. Further tests
+exercise V01–V11 at the Core boundary, including malformed outer/proof arities and
+undeclared roles, which cannot acquire authority by avoiding a role timeline.
+
+The [authority tests](../../apps/lattice_core/test/treehouse/bounded_continuation_test.exs)
+cover causal replacement, invalid replacement retention, missing pins,
+12-of-13 partial configuration, attenuated scope, inclusive lease bounds and
+portable-horizon clipping, exact maximum-beacon basis, every claim binding,
+quorum/signature refusals, invalid-first and valid-competing races, rejected
+parent activation, current-frontier review, corrupt/missing retained history,
+fresh-VM dump vocabulary, and compaction straddling the pin and acquisition.
+The [lifecycle tests](../../apps/lattice_core/test/treehouse/bounded_continuation_lifecycle_test.exs)
+remove every founder record before E1, run all 13 replicas through E5/E10
+renewals and E14 lapse, admit/remove/revoke a new finite member, and create an
+independent child root with signed enrollment before its own pin.
+
+The new signed corpus lives only under
+`clients/lattice-client/test/vectors/continuation/`. Fifty-six BEAM histories
+include all 13 two-cycle replicas, signed refusal cases and complete operation
+bytes. Public TS carrier verification, authority analysis and materialization
+match the BEAM role acquisition, quarantine reasons and post state in both
+delivery orders. Profile hashes, profile bytes, claim bytes and full operation
+bytes match. A separate TS-authored three-witness certificate is verified in
+BEAM; signature verification alone does not change the holder. The original
+seven-field recovery certificate and all pre-existing vector bytes are unchanged.
+Two complete TS-authored histories additionally exercise Space holder renewal
+and Thread nominee acquisition: BEAM authenticates every frame, matches full
+operation/claim bytes and honors the final continuation through `Log.accept`
+and `Authority.analyze`. Forged signatures remain quarantined, a genuine retry
+can repair that retained forgery, and missing dependencies prevent admission.
+
+Review reproduced two additional runtime mismatches before fixing them: a line
+separator in an intended Treehouse replica name fell through to TS legacy
+handling, and a malformed new-proof arity on a legacy replica used BEAM's old
+succession refusal. Both now refuse consistently, with signed reciprocal cases
+and public RED logs preserved as `/tmp/treehouse-r04-family-lines-red.log` and
+`/tmp/treehouse-r04-legacy-proof-arity-red.log`.
+
+Independent review also reproduced a signed extra-field genesis becoming a
+pin only in TS. The same decoder class affected transfers, grants and revokes.
+The versioned family now matches BEAM's exact ordinary authority tuple shapes;
+unsupported shapes remain inert signed history and legacy decoding is unchanged.
+The RED is `/tmp/treehouse-r04-authority-arity-red.log`. A separate signed
+non-delegation body under the new proof head now exposes the agreed family-first
+refusal through the TS decoder, authority analysis and quarantine adapter.
+Its RED is `/tmp/treehouse-r04-refusal-precedence-red.log`. Truly malformed
+carrier terms retain their earlier structural refusal. Standalone BEAM claim
+normalization also now agrees with TS on nonempty valid UTF-8 replica text;
+the failed empty-text case is `/tmp/treehouse-r04-replica-text-red.log`.
+
+The public TS `reviewContinuationFromFrames` and
+`assembleContinuationFromFrames` authenticate complete raw carrier snapshots,
+derive the exact claim and compare a fresh review before signing. They refuse
+hash/signature/replica/duplicate/closure errors, stale consent, changed
+delegations, invalid surplus signatures and mismatched signers. Snapshot copying
+protects asynchronous verification from caller mutation; returned signatures
+are checked. The caller still owns serialization with its current store.
+These APIs cannot prove that unknown operations were not withheld, and they
+provide no native custody or presence evidence. `Authority.continuation_review/6`
+also verifies signed log contents and reconstructed frontier metadata;
+`Sim.continue_role/4` authors only after the same history/scope/lease review.
+
+The candidate workload counter derives records from the signed histories after
+bootstrap: **312 member grants, 26 continuations and 182 witnessed beacons**,
+totalling **520 operations and 1,274 signatures**. The distinct native purposes
+would require 52 continuation-witness approvals, 364 beacon-witness approvals
+and 182 final-beacon-operation signatures: **598 estimated presence prompts**.
+This is an operation count, not a device measurement or adoption of a daily
+clock. The seven-epoch width and E5/E10 schedule remain test candidates.
+
+CI retains every existing obligation and explicitly regenerates the new corpus
+once alongside the legacy corpus. The existing conformance command also runs
+the 12 strict codec tests and 13 authenticated-authoring tests. The new exporter
+is separate because the legacy exporter has sixteen existing test invocations;
+regenerating the full lifecycle corpus in each adds no independent proof.
+CI also regenerates the two TS-authored histories after installing Node
+dependencies, then runs their focused BEAM import/authority test on those fresh
+bytes. The two directions therefore exercise current exporters and verifiers.
+
+The checked-in configuration and source audit finds no pre-existing reserved
+Treehouse instance IDs outside the new parser/fixtures. This does not establish
+absence in external retained histories or release profiles. R12/profile
+enablement must audit those IDs and give every collision a named disposition.
+These test-only schemas prove the Core contract; integration with R10's actual
+Space/Thread policies, R11 catalog trust, R14 membership/eligibility review and
+R17 native implementation remains each downstream packet's explicit gate.
+No product admission, independent-person quorum, protected-key custody, native
+rollback resistance or production readiness is inferred from this evidence.
+
+Final local gates passed on 2026-09-06 with `ERL_FLAGS='+S 4:4'` and the
+AGENTS asdf/PATH toolchain, without changing any test timeout:
+
+| Gate | Result |
+|---|---|
+| `mix check` (format, full suite, strict Credo) | 751 tests + 27 properties, zero failures, three existing exclusions; exit 0. Log: `/tmp/treehouse-r04-final-reviewed-check.log`. |
+| Public authority/compaction focused gate | 40 tests + one property, zero failures; final full suite also includes all lifecycle and reciprocal tests. |
+| TS `typecheck`, `build`, `conformance` | Exit 0; 56 new signed histories plus the legacy corpus, 12 codec and 13 authenticated-authoring tests. Log: `/tmp/treehouse-r04-final-reviewed-conformance.log`; final adapter replay: `/tmp/treehouse-r04-final-adapter-conformance.log`. |
+| TS `canonical`, `v01:guard`, `township:authoring`, `succession:review`, `succession:artifact`, `tauri:bridge` | Each exits 0. |
+| TS `carrier:township`, `carrier:relay`, `carrier:relay-sync`, `carrier:feed`, `carrier:township:live` | Each exits 0; live log: `/tmp/treehouse-r04-live-carrier.log`. |
+| Reciprocal regeneration | BEAM-generated corpus and TS-generated full histories reproduced; TS-authored final operations pass the BEAM public import/authority test. |
+| Legacy and scope protection | Every pre-existing vector remains byte-identical to R03 `e08e3995`; shared README and unified ledger untouched; `git diff --check` and local document links pass. |
+
+Independent bounded reviews identified the decoder/normalizer issues recorded
+above; their final source rereads found no remaining demonstrated issue in that
+scope. Claude Fable's earlier design PASS is preserved separately from the still
+pending exact implementation review. Local gates do not substitute for hosted
+checks, actual R10 product-schema integration, or native/device evidence.

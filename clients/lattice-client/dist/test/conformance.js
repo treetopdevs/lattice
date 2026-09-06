@@ -14,6 +14,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { createPublicKey, verify as edVerify } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { runBoundedContinuationConformance } from "./bounded_continuation";
 import { analyzeAuthority, canonicalBytesForCarrierDelegation, canonicalHash, canonicalOrder, carrierDelegationsFromFrames, carrierOpsToSemanticOps, decodeCarrierOpFrame, index, materialize, toolshedCarrierCommandTable, toolshedCarrierCommandNames, townshipCarrierCommandTable, townshipCarrierCommandNames, verifyCarrierOp, verifyWitnessedSuccessionCertificate, witnessedRecoveryPolicyId, witnessedBeaconHorizon, } from "../src/index";
 const here = dirname(fileURLToPath(import.meta.url));
 const vecDir = join(here, "vectors");
@@ -835,6 +836,7 @@ console.log("\n▸ carrier authority report is diagnostic only");
     check("carrier report divergence carries sorted local ids", divergence instanceof Error && "localIds" in divergence ? divergence.localIds : null, []);
     check("carrier report divergence carries sorted reported ids", divergence instanceof Error && "reportedIds" in divergence ? divergence.reportedIds : null, [quarantined.id]);
 }
+await runBoundedContinuationConformance();
 console.log(`\n${failures === 0 ? "\x1b[32m✓ all conformance checks passed\x1b[0m" : `\x1b[31m✗ ${failures} check(s) failed\x1b[0m`}`);
 process.exit(failures === 0 ? 0 : 1);
 async function verifyEd25519(author, bytes, signature) {

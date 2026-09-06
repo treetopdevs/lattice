@@ -77,6 +77,8 @@ export declare function canonicalBytesForWitnessedSuccessionClaim(claim: Witness
 /** Canonical storage-locator preimage for one public succession witness artifact. */
 export declare function canonicalBytesForWitnessedSuccessionArtifactId(claim: WitnessedSuccessionClaimEvidence, witness: string): Uint8Array;
 export declare function authorCarrierDelegation(input: AuthorCarrierDelegationInput): Promise<CarrierDelegation>;
+/** Encode the existing closed carrier term grammar without an op envelope. */
+export declare function canonicalBytesForCarrierTerm(term: CarrierTerm): Uint8Array;
 /** Decode canonical standard Base64, refusing malformed text or an unexpected byte length. */
 export declare function canonicalBase64Bytes(value: unknown, length?: number): Uint8Array | null;
 /**
