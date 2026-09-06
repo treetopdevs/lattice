@@ -311,8 +311,8 @@ Final local/source and hosted gates will be recorded against their actual tips.
 
 ### Exact legacy epoch integration and final local gate
 
-Integration `dd41fd6025939e35ad95d9d478231f5ba619f201` adds R04 final
-`f58267b8` and R03 final `65b5364e`. The source merge is automatic; normal client
+Integration `dd41fd6025939e35ad95d9d478231f5ba619f201` adds the then-current R04
+`f58267b8` and R03 `65b5364e`. The source merge is automatic; normal client
 build at `f21456ca` regenerates the widened carrier declaration. Actual Fable's
 R04 integration review passes with no P0/P1/P2 and verifies the high-epoch
 continuation refusal seam. Earlier R10 final review at `25fa8e93` also passed;
@@ -326,3 +326,21 @@ typecheck/build/conformance and Treehouse domain/review checks pass. Logs are
 The existing CI unit job now runs the standalone Treehouse domain/review script
 explicitly as well as reciprocal BEAM tests and conformance; no existing gate
 is removed or timeout changed. Exact tip/merge CI remains required.
+
+### Final constructor dependency and reviewed engine source
+
+Final integration `883124b513f32bf4614a8512cd34e1da5d344893` adds R04
+`ca3bd592` and R03 `39ea40da`, including the claim-constructor dependency
+deduplication and its signed public regression. Configured `gpt-5.6-sol` reviewed
+the exact four-file cascade: PASS, no P0/P1/P2; the previous landing blocker
+from the absent constructor repair is resolved. TS product decoder, command
+effects, continuation composition and CI source remain unchanged in this merge.
+
+Full `mix check` at 883124b5 passes **807 tests and 27 properties, zero failures**,
+three existing exclusions, clean formatting and strict Credo exit 0, recorded in
+`/tmp/lattice-treehouse-execution-20260906/engine-ctor-final-full-check.log`.
+Fresh compiled BEAM vector regeneration leaves every tracked oracle file
+byte-identical (`engine-final-vector-regeneration.log`); earlier client build,
+conformance and Treehouse domain/review gates apply to unchanged TS source.
+Exact new-tip hosted checks, all fresh review threads and dependency/main merge
+checks remain open. The staged R10 PR is #74, based on R04 #71 until it lands.
