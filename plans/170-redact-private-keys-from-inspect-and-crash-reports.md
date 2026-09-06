@@ -123,6 +123,20 @@ Baseline at the planned-at commit: `$MIXCMD test` exits 0.
 
 ## Scope
 
+### Unified R05 execution amendment — 2026-09-06
+
+The adopted unified roadmap authorizes one additional test-only change in
+`apps/lattice_carrier_server/test/secret_test.exs`: replace the existing assertion that
+inspected status includes `:redacted` with a structural assertion that the running Holder's
+raw status identity has `priv: :redacted`. Retain the inspected private-key absence check
+and assert that its public identity fields survive. The struct-level derive intentionally
+omits `priv`, including the placeholder, so its rendered marker is no longer observable.
+This amendment preserves the independent Holder status guarantee without modifying carrier
+production code or weakening its existing redaction. All other carrier files remain excluded.
+
+Projection verification uses `apps/township_web/test/`: the original app-root argument
+`apps/township_web/` silently selected no tests in the umbrella runner.
+
 **In scope**:
 
 - `apps/lattice_core/lib/lattice/identity.ex` — the `@derive` attribute **and** the one-sentence
@@ -267,7 +281,7 @@ adapt rather than copy verbatim:
 Read the module first to confirm the state is a map with a `:connect_opts` key and to place
 the callback with the other `@impl GenServer` functions.
 
-**Verify**: `$MIXCMD test apps/township_web/` → exit 0.
+**Verify**: `$MIXCMD test apps/township_web/test/` → exit 0.
 
 ### Step 5: Prove the projection redaction with a test
 
@@ -280,7 +294,7 @@ status does not contain `inspect(identity.priv)`. If starting a full projection 
 carrier peer, call `TownshipWeb.CarrierProjection.format_status/1` directly with a synthetic
 status map instead — a direct unit test of the callback is sufficient and much cheaper.
 
-**Verify**: `$MIXCMD test apps/township_web/` → exit 0 with the new case passing.
+**Verify**: `$MIXCMD test apps/township_web/test/` → exit 0 with the new case passing.
 
 ### Step 6: Full green
 
