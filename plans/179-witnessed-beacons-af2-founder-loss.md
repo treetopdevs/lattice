@@ -2133,3 +2133,74 @@ object-key-order comparison were corrected before final conformance. None is
 claimed as a behavioral RED or a production failure. Hosted thread/CI closure
 and the combined R04 high-epoch refusal integration remain integrator-owned;
 local evidence does not imply those gates are closed.
+
+### Accepted-main publication integration (2026-09-06)
+
+Publishing `65b5364e` exposed a conflict with accepted main `c22272ec`, which
+already contains the R09 input/restore fixes and canonical-generator repair.
+The integrator authorized merging that exact base while retaining both reviewed
+packets. The manual source resolution is the existing reviewed R04 `f582` beacon
+case: exact three-field witnessed handling precedes the exact two-field legacy
+guard, and other tuple arities remain inert. No continuation code is imported.
+The automatic merge's legacy-only guard demonstrably drops a valid witnessed
+claim through public authoring; restoring the reviewed case makes that control
+and all existing high-epoch/lease checks pass. Test import unions are deduplicated,
+the colliding R09 lease fixture is renamed locally, and dist is regenerated.
+Accepted-main production changes otherwise merge without manual alteration.
+
+The initial integrated typecheck correctly flags the contradictory arity branch
+and duplicate fixture binding. After the fixture/import correction, the distinct
+public behavioral RED reaches `missing beacon claim`; the first attempted
+development run still had the duplicate binding and is not counted as that RED.
+Evidence uses the `r03-main-integration-*` logs. A requested npm pagination script
+does not exist in this manifest; the existing test is run directly with `tsx`
+instead, with the failed command retained. Final integrated gates and the narrow
+manual-resolution review remain required before hosted closure is claimed.
+
+### Public claim dependency normalization (2026-09-06)
+
+Fresh hosted thread `PRRT_kwDOSZGqLc6fvEZJ` demonstrates that BEAM `claim/4`
+sorts but does not deduplicate caller dependencies, while `Op.new/6` normalizes
+the final operation and the TS constructor already uses distinct sorted IDs.
+The integrator adopts the same distinct-and-sorted normalization for the BEAM
+authoring helper before code. The public RED must construct and sign a claim
+from duplicate frontier IDs, author the normal signed outer operation, and
+observe the unwanted unauthorized verdict. The correction must honor that
+operation while preserving exact claim/outer dependency equality. A received
+certificate actually carrying duplicate dependencies remains unauthorized;
+received-claim validation and all canonical bytes for already normalized inputs
+remain unchanged. Existing signed vectors are regenerated and compared exactly.
+
+### Integrated publication evidence (2026-09-06)
+
+The accepted-main merge is `cd8dbf8d`, with parents `65b5364e` and `c22272ec`.
+Its manual beacon case compares byte-for-byte with the reviewed `f582` case;
+there is no manual BEAM delta from the automatic merge. Public integrated
+authoring passes 205 checks, all 68 vectors pass 1,310 conformance assertions,
+and canonical 559, carrier 49, V01 eight, bridge 21, direct pagination tests,
+typecheck and build pass. Focused beacon/root/restore tests pass 50/0. Full
+`mix check` on that integrated source passes 745 tests plus 27 properties,
+zero failures, three existing exclusions.
+
+The new constructor RED at `8f4b2dd7` observes `unauthorized_beacon` on the
+signed public operation with duplicate caller dependencies. The repair at
+`1a3897d8` passes 17 focused tests, including actual operation acceptance and
+strict received-duplicate refusal. Final `mix check` passes **746 tests plus
+27 properties, zero failures**, three existing exclusions, formatting and strict
+Credo exit 0 with existing low-priority suggestions. Both full runs use the
+prescribed OTP/asdf paths and `ERL_FLAGS='+S 4:4'`. The freshly compiled exporter
+regenerates all **68** vectors byte-identically, and final conformance passes.
+These gates are recorded in `r03-c222-integration-full-mix-check.log`,
+`r03-claim-deps-public-{red,green}.log`, `r03-claim-deps-full-mix-check.log`,
+`r03-claim-deps-export-compiled.log` and `r03-claim-deps-conformance-final.log`
+under the existing temporary evidence directory.
+
+The integrator independently reviewed `cd8dbf8d..1a3897d8` and found no
+demonstrated P0/P1/P2 in the constructor correction; this is integrator review,
+not a Claude verdict. The attempted fresh Claude Fable integration review
+returned `is_error: true` and a session-limit response, saved as
+`fable-r03-main-integration-result.md`, with reset reported at 6:50pm
+America/New_York. It is incomplete, not PASS, and no repeat attempt is made
+before reset. Earlier actual Fable PASS verdicts through `65b5364e` remain
+source-scoped. Final hosted CI/review closure and fresh integration review remain
+separate gates, with merge sequencing owned by the integrator.

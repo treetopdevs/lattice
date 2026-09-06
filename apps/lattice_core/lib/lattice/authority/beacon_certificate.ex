@@ -55,7 +55,13 @@ defmodule Lattice.Authority.BeaconCertificate do
 
   @spec claim(String.t(), non_neg_integer(), Identity.pubkey(), [String.t()]) :: claim()
   def claim(replica, epoch, author, deps),
-    do: %{version: 1, replica: replica, epoch: epoch, author: author, deps: Enum.sort(deps)}
+    do: %{
+      version: 1,
+      replica: replica,
+      epoch: epoch,
+      author: author,
+      deps: deps |> Enum.uniq() |> Enum.sort()
+    }
 
   @spec new(claim(), [Identity.t()]) :: certificate()
   def new(claim, witnesses) do
