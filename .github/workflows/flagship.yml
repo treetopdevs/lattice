@@ -135,6 +135,10 @@ jobs:
         run: mix deps.get
       - name: Check formatting
         run: mix format --check-formatted
+      # Reciprocal Treehouse tests execute the real TS authoring/verification seam.
+      - name: Install TS client dependencies
+        working-directory: clients/lattice-client
+        run: npm ci
       - name: Run full test suite
         run: mix test
       - name: Regenerate TS oracle vectors
@@ -147,9 +151,6 @@ jobs:
         run: |
           MIX_ENV=test mix lattice.export_vectors --out clients/lattice-client/test/vectors
           MIX_ENV=test mix run -e 'Lattice.ContinuationVectors.write("clients/lattice-client/test/vectors")'
-      - name: Install TS client dependencies
-        working-directory: clients/lattice-client
-        run: npm ci
       - name: Regenerate and verify TS-authored continuation operations
         run: |
           npm --prefix clients/lattice-client run continuation:vectors
