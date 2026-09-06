@@ -500,6 +500,87 @@ jobs:
       - name: Build, crash, restart, and verify the packaged pilot
         run: mix test apps/lattice_carrier_server/test/release_test.exs --include packaged_release
 
+  treehouse_android_preview:
+    name: Treehouse Android compile and binding bytes
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            clients/lattice-client/package-lock.json
+            clients/treehouse-tauri-shell/package-lock.json
+      - name: Install Android NDK and Rust target
+        run: |
+          echo "y" | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            "ndk;27.1.12297006" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+          rustup target add aarch64-linux-android
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.1.12297006" >> "$GITHUB_ENV"
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+      - name: Install client and shell dependencies
+        run: |
+          npm --prefix clients/lattice-client ci
+          npm --prefix clients/lattice-client run build
+          npm --prefix clients/treehouse-tauri-shell ci
+      - name: Build debug Treehouse APK
+        working-directory: clients/treehouse-tauri-shell
+        env:
+          CARGO_BUILD_JOBS: "4"
+        run: |
+          mkdir -p "$RUNNER_TEMP/treehouse-android"
+          npm run tauri -- android build --debug --apk --ci --target aarch64 \
+            2>&1 | tee "$RUNNER_TEMP/treehouse-android/build.log"
+      - name: Verify Kotlin bytes, product rules and Android lint
+        working-directory: clients/treehouse-tauri-shell/src-tauri/gen/android
+        run: |
+          ./gradlew --no-daemon -p buildSrc test \
+            2>&1 | tee "$RUNNER_TEMP/treehouse-android/product-tests.log"
+          ./gradlew --no-daemon :app:testUniversalDebugUnitTest :app:lintUniversalDebug \
+            2>&1 | tee "$RUNNER_TEMP/treehouse-android/unit-lint.log"
+      - name: Prove release refuses absent pilot signing
+        working-directory: clients/treehouse-tauri-shell/src-tauri/gen/android
+        run: |
+          if ./gradlew --no-daemon :app:preUniversalReleaseBuild \
+            > "$RUNNER_TEMP/treehouse-android/release-refusal.log" 2>&1; then
+            cat "$RUNNER_TEMP/treehouse-android/release-refusal.log"
+            echo "Unexpected release acceptance without Treehouse pilot signing"
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/treehouse-android/release-refusal.log"
+          grep -F ':app:verifyTreehouseReleaseIdentity FAILED' "$RUNNER_TEMP/treehouse-android/release-refusal.log"
+          grep -F 'Treehouse release requires explicit pilot signing' "$RUNNER_TEMP/treehouse-android/release-refusal.log"
+      - name: Record compile artifact identity
+        working-directory: clients/treehouse-tauri-shell
+        run: |
+          APK=src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
+          sha256sum "$APK" > "$RUNNER_TEMP/treehouse-android/apk-sha256.txt"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$APK" \
+            > "$RUNNER_TEMP/treehouse-android/debug-signature.txt"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" \
+            > "$RUNNER_TEMP/treehouse-android/apk-badging.txt"
+          printf '%s\n' 'Debug compile and public byte-parity evidence only; no device, witness custody, eligibility or pilot distribution.' \
+            > "$RUNNER_TEMP/treehouse-android/scope.txt"
+      - name: Upload Treehouse compile evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: treehouse-android-compile-evidence
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/treehouse-android/
+            clients/treehouse-tauri-shell/src-tauri/gen/android/app/build/test-results/
+            clients/treehouse-tauri-shell/src-tauri/gen/android/app/build/reports/
+            clients/treehouse-tauri-shell/src-tauri/gen/android/buildSrc/build/test-results/
+
   android_pilot_contract:
     name: Android pilot security contract
     runs-on: ubuntu-latest

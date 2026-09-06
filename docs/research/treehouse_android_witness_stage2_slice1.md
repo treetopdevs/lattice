@@ -1,7 +1,8 @@
 # R36 Stage 2, slice 1: Android bootstrap and binding bytes
 
-Status: **locally implemented and verified; independent implementation review
-and hosted closure pending. R36 Stage 2 remains in progress.**
+Status: **locally implemented and verified; actual Claude Fable implementation
+review passed for source `42338ed8`. Hosted closure remains pending, and R36
+Stage 2 remains in progress.**
 
 Prepared before implementation on 2026-09-06 under the adopted Stage 2 boundary
 at `833cbccad89fdedd67a6d73418c2736af3be72bc`. This packet remains incomplete
@@ -138,3 +139,20 @@ hosted mutation ran in this slice. Standard SDK debug APK signing occurred only
 as part of the authorized local build. The remaining Stage 2 slices above are
 still required; local byte parity does not prove opaque custody or safe native
 review/session handling.
+
+## Integrator hosted gate addition
+
+After the implementation review, the integrator adds a separate secret-free
+`Treehouse Android compile and binding bytes` job to the existing Flagship
+workflow. It builds the arm64 debug APK, executes the Kotlin binding and buildSrc
+product tests, runs Android lint, and requires an actual release-build refusal
+at the Treehouse signing guard when pilot signing is absent. It records the
+debug APK hash, signer and package metadata and uploads logs/test reports only.
+It does not upload a distribution APK or request any device or governance key.
+The existing BEAM/Rust/TypeScript and packaged preview jobs remain required.
+
+The added job passes actionlint including shellcheck. Whole-workflow parsing
+passes; whole-workflow shellcheck retains three pre-existing SC2209 warnings
+about unquoted literal `MIX_ENV=test` assignments in continuation vector gates.
+No suppression or unrelated workflow change is introduced. Hosted execution and
+the integrated full Mix suite remain pending until recorded below.
