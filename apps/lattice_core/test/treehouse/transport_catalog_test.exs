@@ -2,6 +2,7 @@ defmodule Treehouse.TransportCatalogTest do
   use ExUnit.Case, async: true
 
   alias Lattice.{Authority, Canonical, Identity}
+  alias Lattice.Carrier.Wire
   alias Treehouse.TransportCatalog
 
   setup do
@@ -89,6 +90,31 @@ defmodule Treehouse.TransportCatalogTest do
   defp signed(catalog, signer) do
     signature = Identity.sign(signer, Canonical.term(["lattice-treehouse-transport-catalog-v1", catalog]))
     %{catalog: catalog, signature: signature}
+  end
+
+  test "raw standalone ingress refuses duplicate signed fields before wire normalization", ctx do
+    envelope = signed(ctx.catalog, ctx.signer)
+    ["map", pairs] = raw = Wire.encode_value(envelope)
+    assert :ok = TransportCatalog.verify_catalog_json(Jason.encode!(raw), ctx.signer.pub)
+
+    duplicate = ["map", pairs ++ [hd(pairs)]]
+    assert {:ok, ^envelope} = Wire.decode_value(duplicate)
+    assert {:error, :malformed_catalog} =
+             TransportCatalog.verify_catalog_json(Jason.encode!(duplicate), ctx.signer.pub)
+
+    nested_duplicate = ["map", Enum.map(pairs, fn
+      {["atom", "catalog"], _} -> raise "wire pairs are lists"
+      [["atom", "catalog"] = key, ["map", fields]] -> [key, ["map", fields ++ [hd(fields)]]]
+      pair -> pair
+    end)]
+    assert {:error, :malformed_catalog} =
+             TransportCatalog.verify_catalog_json(Jason.encode!(nested_duplicate), ctx.signer.pub)
+
+    deep = Enum.reduce(1..65, ["int", 0], fn _, term -> ["list", [term]] end)
+    assert {:error, :malformed_catalog} =
+             TransportCatalog.verify_catalog_json(Jason.encode!(deep), ctx.signer.pub)
+    assert {:error, :control_history_limit} =
+             TransportCatalog.verify_catalog_json(String.duplicate(" ", 131_073), ctx.signer.pub)
   end
 
   defp id(label), do: :crypto.hash(:sha256, label) |> Base.url_encode64(padding: false)

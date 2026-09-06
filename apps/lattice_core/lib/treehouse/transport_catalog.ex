@@ -7,6 +7,9 @@ defmodule Treehouse.TransportCatalog do
   @catalog_fields ~w(version product space bootstrap binding revision previous entries)a
   @entry_fields ~w(product replica kind schema root genesis creation reference route service_id service_key)a
 
+  @spec verify_catalog_json(binary(), binary()) :: :ok | {:error, atom()}
+  def verify_catalog_json(_bytes, _trusted_key), do: {:error, :malformed_catalog}
+
   @spec normalize_catalog(term()) :: {:ok, map()} | {:error, :malformed_catalog}
   def normalize_catalog(value) do
     if fields?(value, @catalog_fields) and value.version == 1 and value.product == :treehouse and
