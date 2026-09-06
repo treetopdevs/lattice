@@ -1848,3 +1848,31 @@ public BEAM refusal and existing cross-runtime delegation validation remain gree
 The review also identifies a pre-existing four-or-more-element beacon-body arity
 divergence: R09's coordinated input-boundary review owns its disposition. R03 does
 not silently change that legacy shape or claim the known gap is closed.
+
+
+### R02 accepted-main integration (2026-09-06)
+
+R02 merged through PR64 at `f0e323b638e8a8095bbcf6f420066c238d126b6e`
+after its unchanged-head macOS dependency-download rerun passed. This packet
+now includes that source and applies the previously adopted R02 A13 / Plan179
+P05 exception: an unconfigured signed three-field beacon is quarantined with
+`unauthorized_beacon`, while epoch, materialized state and lease behavior remain
+inert. The historical R02 probe remains in immutable commit `389e9d4e`.
+Its obsolete Sim constructor exception is replaced with assertions on the actual
+resolved beacon policy and witness identities. This is the exact reviewed
+preparation resolution from `d5236619`; no other R02 probe changes.
+
+Accepted-main integration before this P05 update passed 682 tests + 27 properties,
+zero failures, three existing exclusions, plus TS typecheck, all62-vector
+conformance, canonical, leased Township authoring and deterministic build. Fable
+reviewed merge `baf7d37d` and found no findings. The final P05-integrated gate is
+recorded separately; preceding results do not stand in for it.
+
+
+Final R02/P05-integrated `mix check` passed: 694 tests + 27 properties,
+zero failures, three existing exclusions, strict Credo exit0, with the prescribed
+OTP/asdf path and `ERL_FLAGS='+S 4:4'`. Focused P05 plus immutable migration
+characterization also passed (13 tests). Logs:
+`/tmp/lattice-treehouse-execution-20260906/r03-r02-integrated-check.log` and
+`r03-r02-p05-focused.log`. No TypeScript source changed after the preceding
+62-vector/leased-authoring/build gate.
