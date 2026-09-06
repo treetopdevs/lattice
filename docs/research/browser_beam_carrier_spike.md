@@ -1,6 +1,9 @@
 # Browser BEAM Carrier Spike
 
-Branch target: `spike/browser-beam-carrier`.
+Historical branch target: `spike/browser-beam-carrier`.
+
+The September 2026 browser path supersedes the WS/distribution acceptance target
+below; see “Current browser acceptance path”.
 
 Acceptance target:
 
@@ -30,7 +33,7 @@ This is intentionally not wired into the main browser demo. The clean JSON
 WebSocket resume layer stays the production-facing demo surface while this
 branch explores the carrier behind a fail-closed boundary.
 
-## What Kept Popcorn / web_socket_dist Out Of The Main Stack
+## Historical AtomVM / web_socket_dist assessment (May 2026)
 
 Popcorn is not yet a drop-in browser Erlang-distribution node for this use case.
 Its current documentation describes the browser runtime as AtomVM in an iframe,
@@ -66,20 +69,23 @@ To start the experimental WS/dist server half:
 elixir --erl "-proto_dist Elixir.TCPFilter" -S mix lattice.browser_carrier.server 5000
 ```
 
-## Next Acceptance Step
+## Current browser acceptance path (September 2026)
 
-The honest browser-side completion step is one of:
+Popcorn `0.4.0-next.0` uses OTP/BEAM in Wasm and deliberately removes
+Erlang distribution, native sockets, OS spawning, and dynamic native loading.
+The older discussion above describes the AtomVM release line only. Do not wait
+for, vendor, or enable `web_socket_dist` as the next browser milestone.
 
-- Vendor or reproducibly build `@otp-interop/web-socket-dist` so Playwright can
-  load the real browser carrier without private package auth.
-- Add a Popcorn browser agent that invokes that JavaScript carrier shim from the
-  iframe and sends the same `lattice_call` JSON string across `web_socket_dist`.
-- Run the carrier listener with `--erl "-proto_dist Elixir.TCPFilter"` and the
-  `LatticeCarrierSpike.Filter` policy, then assert the same positive and hostile
-  cases from a real browser page.
+The primary candidate is now **Popcorn OTP/crypto behind the existing JSON
+WebSocket Gateway**. `apps/lattice_popcorn_spike` contains the optional proof;
+see its [runbook](../../apps/lattice_popcorn_spike/README.md). The legacy server
+carrier proof remains separate research, with its existing tests intact.
 
-Until that lands, this branch should be described as a server-side carrier
-boundary proof, not full acceptance of browser Popcorn over WS/dist.
+Browser acceptance requires an actual Worker run, native verification of the
+same canonical signed bytes, capability allow/deny/expiry, and server cleanup
+following hard Worker termination. Source code or a successful bundle alone
+does not establish these claims. Production readiness is explicitly excluded:
+the prerelease bridge needs `unsafe-eval`, COOP/COEP, and a compatible host OTP.
 
 ## References
 

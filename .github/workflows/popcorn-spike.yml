@@ -1,0 +1,92 @@
+name: Popcorn browser proof
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'apps/lattice_popcorn_spike/**'
+      - '.github/workflows/popcorn-spike.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  browser-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/lattice_popcorn_spike
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - name: Browser compiler
+        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
+        with:
+          otp-version: '29.0.6'
+          elixir-version: '1.20.4'
+      - name: Build and test browser application
+        run: |
+          npm ci
+          npm run prepare:shared
+          cd browser
+          mix deps.get
+          mix format --check-formatted
+          mix test
+          cd ..
+          npm test
+          npm run build
+          npx playwright install --with-deps chromium
+      - name: Separate the completed browser toolchain from the server installation
+        run: |
+          mv "$INSTALL_DIR_FOR_OTP" "$RUNNER_TEMP/lattice-browser-otp"
+          mv "$INSTALL_DIR_FOR_ELIXIR" "$RUNNER_TEMP/lattice-browser-elixir"
+      - name: Server compiler
+        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
+        with:
+          otp-version: '28.3.1'
+          elixir-version: '1.19.5'
+      - name: Test existing Gateway with native signing realm
+        working-directory: apps/lattice_demo
+        env:
+          MIX_ENV: test
+        run: |
+          mix deps.get
+          mix run ../lattice_popcorn_spike/test/server_test.exs
+      - name: Prove built runtime in Chromium
+        env:
+          MIX_ENV: test
+        run: |
+          (cd ../lattice_demo && mix run ../lattice_popcorn_spike/scripts/server.exs) > gateway.log 2>&1 &
+          gateway_pid=$!
+          npm run preview > preview.log 2>&1 &
+          preview_pid=$!
+          trap 'kill "$gateway_pid" "$preview_pid" 2>/dev/null || true' EXIT
+          node --input-type=module <<'JS'
+          let ready = false;
+          for (let i = 0; i < 100; i++) {
+            try {
+              ready = (await fetch('http://127.0.0.1:4059/proof/state')).ok &&
+                (await fetch('http://127.0.0.1:5179/build.json')).ok;
+              if (ready) break;
+            } catch {}
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+          if (!ready) throw new Error('proof servers did not become ready');
+          JS
+          npm run e2e
+      - name: Preserve proof evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: popcorn-browser-proof
+          if-no-files-found: warn
+          path: |
+            apps/lattice_popcorn_spike/evidence/
+            apps/lattice_popcorn_spike/dist/build.json
+            apps/lattice_popcorn_spike/gateway.log
+            apps/lattice_popcorn_spike/preview.log

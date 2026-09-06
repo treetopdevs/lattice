@@ -1,7 +1,7 @@
 # Design: Really Adding AtomVM to the Browser Side
 
 Date: 2026-05-23
-Status: Validated design, not yet implemented. M2 has since landed the shared carrier
+Status: Historical AtomVM design; runtime selection superseded September 2026. M2 has since landed the shared carrier
 prerequisites (`Lattice.Canonical`, `Lattice.Carrier.Wire`, session auth, and browser
 log-store payloads), but this AtomVM/WASM tab realm itself is still future work.
 
@@ -21,8 +21,9 @@ least-authority thesis.
    do NOT enable AtomVM's 2025 distribution protocol.** The browser BEAM is a
    guest in a sandbox, not a node in the cluster. That non-choice is itself a
    thesis statement: even a genuine browser-side BEAM cannot escape the gateway.
-2. **Spike both toolchains first.** Raw AtomVM-WASM vs Popcorn is decided by a
-   timeboxed bake-off with hard go/no-go gates before any realm code is written.
+2. **Compare runtime families.** Popcorn OTP/crypto is the primary candidate;
+   Popcorn 0.3.3 and raw AtomVM remain size/control comparisons. The optional
+   proof lives in `apps/lattice_popcorn_spike`; no browser distribution is used.
 3. **Full tab realm in BEAM (north star).** AtomVM owns the entire tab state
    machine; JS shrinks to a pure I/O shim. Reached via a focused first milestone
    (the `tab_call` handler).
@@ -72,25 +73,24 @@ emscripten target → `AtomVM.js` + `AtomVM.wasm`. Compile tab Elixir → `.beam
 bundle with `packbeam` into a `.avm`. Artifact ~190 KB VM + small `.avm`. Full
 control of JS host + bridge.
 
-**Candidate B — Popcorn (Software Mansion).** Add as a mix dep; its bundler
-produces WASM + packed bytecode and ships a JS interop package. Constraints to
-verify: pins **Elixir 1.17.3 / OTP 26.0.2**, artifacts **>3 MB**, **no
-bitstrings / ETS / big integers**. Faster to first light; heavier, more
-constrained.
+**Candidate B — Popcorn OTP/crypto (primary).** Pin matching npm and Hex
+`0.4.0-next.0` packages. The published crypto manifest identifies OTP 29.0.6;
+use a compatible host toolchain and record the manifest and actual build versions.
+The old Elixir 1.17.3 / OTP 26 pin and AtomVM ETS/bitstring/bignum constraints
+are not assumptions for this runtime. Reuse Lattice's canonical/identity value
+modules without starting its server supervision tree in the browser.
 
-**Gate — the spike must prove four things for each candidate:**
+**Gate:** boot a supervised realm in a Worker, sign canonical bytes with Ed25519,
+verify them natively, make a capability-authorized call through the existing
+JSON Gateway, deny forged/missing/expired capabilities before target delivery,
+and close the host WebSocket when the Worker fails or is terminated. Measure
+bundle assets, cold boot-plus-connect latency, and BEAM memory. Record CSP and
+COOP/COEP. Do not count local signatures as v2 delegation authorization or log
+admission. A full replicated log is a later milestone.
 
-1. **Builds** reproducibly on this machine.
-2. **Loads** AtomVM in a tab served by the existing `static_handler.ex`.
-3. **Round-trips one message** JS→BEAM→JS across the bridge.
-4. **Parses/produces one real JSON envelope** in BEAM (consume a fake `welcome`,
-   emit a `hello`) — flushes the JSON-codec maturity risk, not just byte passing.
-
-**Decision rubric:** pick the candidate that loads + round-trips reliably, keeps
-payload acceptable, lets us write idiomatic-enough Elixir, and does not force
-features AtomVM lacks. **Tie-break → Raw AtomVM-WASM** for control and
-defensibility (matches the repo's "no shortcut / authoritative" ethos); choose
-Popcorn only if it *dramatically* de-risks.
+**Decision rubric:** prefer Popcorn OTP if the proof succeeds and measured cost
+is acceptable. Revisit AtomVM only for measured size/control needs. The rest of
+this May document is historical detail for the AtomVM alternative.
 
 **Guardrail:** the WASM build is an **optional, isolated** target behind its own
 script/flag. `mix test` and existing demos keep working with zero new required
