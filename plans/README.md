@@ -209,16 +209,16 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 167 | Divergence explainer (`Township.Divergence.explain/2` + mix task) | P2 | M | 162 (rec.) | TODO (Round 4, direction) |
 | 168 | Commit the embedded delegation lease to the op hash (key-free divergence primitive) | **P0** | S–M | — | DONE (2026-08-08; dual Opus review; leased BEAM↔TS byte oracle added) |
 | 169 | Carrier control frames carry no authority (verdict gating + false acks) | **P0** | M | — | DONE (2026-08-08; diagnostic-only authority reports + durable peer re-offer; Opus-reviewed) |
-| 170 | Redact Ed25519 private keys from `inspect/1` and crash reports | P1 | S | — | TODO (Round 5) |
-| 171 | Give every unverified `Log.restore/1` consumer a policy (audit bundle + Registry) | P1 | M | 168 (rec.) | TODO (Round 5) |
-| 172 | TypeScript canonical-encoder strictness (duplicate terms, non-canonical base64) | P1 | S–M | — | TODO (Round 5) |
-| 173 | Bounded carrier transport: connect deadlines + paged pulls | P1 | M–L | 169 | TODO (Round 5b) |
-| 174 | **(spike)** What the governance-witness ceremony must prove natively | P1 | M (build: L) | — | TODO (Round 5b) |
+| 170 | Redact Ed25519 private keys from `inspect/1` and crash reports | P1 | S | — | DONE (PR60; merge2f83cc1e and exact hosted run34038896331 passed; unified R05) |
+| 171 | Give every unverified `Log.restore/1` consumer a policy (audit bundle + Registry) | P1 | M | 168 (rec.) | IN PROGRESS (PR61 locally verified and Fable PASS; integrated/hosted closure tracked by unified R06) |
+| 172 | TypeScript canonical-encoder strictness (duplicate terms, non-canonical base64) | P1 | S–M | — | DONE (PR62; mergeb68e6bd3 and exact hosted run34040727942 passed; unified R07) |
+| 173 | Bounded carrier transport: connect deadlines + paged pulls | P1 | M–L | 169 | IN PROGRESS (PR65; local pagination/setup gates pass; hosted header/null-cursor review fixes pending; unified R08) |
+| 174 | **(spike)** What the governance-witness ceremony must prove natively | P1 | M (build: L) | — | IN PROGRESS (PR66 decision and build roadmap reviewed; new hosted durability/consent findings under repair; unified R17a) |
 | 175 | **(spike)** How succession gets a trustworthy clock | P1 | M (build: L) | 162 step 2b (done) | DONE (2026-09-03; decision in docs/research/succession_tick_provenance.md; follow-on plan 179) |
-| 176 | Fail closed at the wire/authority boundary: lease range, decode depth, replica marker, op kinds | P1 | M | 161 (rec.), 168, 172, 173 | TODO (Round 5; renumbered from 168 — AUTHZ-02 ceded to plan 162 step 2b(e)) |
+| 176 | Fail closed at the wire/authority boundary: lease range, decode depth, replica marker, op kinds | P1 | M | 161 (rec.), 168, 172, 173 | IN PROGRESS (local implementation4bb7ed00, Fable PASS,694 tests+27 properties; prerequisite integration/hosted gates pending; unified R09) |
 | 177 | Group-first antifragile re-aim: operator decisions, AF-1..AF-3 loss gates, program reorder | **P0** | M | 158, 175 | DONE (program amendment and AF-1 runtime test merged; AF-2/AF-3 remain open; unified roadmap owns execution) |
 | 178 | Treehouse Contract Correction: frozen text-only beta contract, one-pager claims corrected to D1/AF-2, copy pinned by test | **P0** | S | 158, 177 | DONE (2026-09-03; lands with apps/lattice_core/test/treehouse/contract_test.exs) |
-| 179 | Witnessed beacons pinned at genesis (AF-2 founder-loss clock) | P1 | S then L | 145, 149, 162, 177, 178 | IN PROGRESS (2026-09-03; step 1 is the separate documentation PR: the non-claim sentence in CLAUDE.md and README.md, and the Township.Matter succession line relabelled decorative with the legacy lockout stated; steps 2-9, the parity-atomic BEAM and TypeScript build, remain TODO) |
+| 179 | Witnessed beacons pinned at genesis (AF-2 founder-loss clock) | P1 | S then L | 145, 149, 162, 177, 178 | IN PROGRESS (PR68; witnessed beacons/lease parity locally verified, all57 original vectors unchanged; R02 integration and hosted closure pending; unified R03) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

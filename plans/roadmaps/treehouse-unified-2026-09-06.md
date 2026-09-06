@@ -69,10 +69,10 @@ Rows are the authoritative dependency graph. Commas mean all prerequisites. “N
 | R04 | Continued authority / authority | L | High | R02, R03 | Core membership/renewal after two expiry cycles; bounded self-issue | IN PROGRESS |
 | R05 | Diagnostic redaction / hardening | S | Medium | None | Plan 170 negative inspect/crash cases | DONE |
 | R06 | Verified restores / hardening | M | High | None | Plan 171 consumer policies; staged fail-closed recovery input | LOCAL VERIFIED |
-| R07 | Canonical strictness / codec | S–M | High | None | Plan 172 valid-byte parity plus duplicate/noncanonical refusals | LOCAL VERIFIED |
-| R08 | Deadlines and pagination / carrier | M–L | High | None | Plan 173 bounded setup, interrupted large-log real-transport replay | LOCAL VERIFIED |
+| R07 | Canonical strictness / codec | S–M | High | None | Plan 172 valid-byte parity plus duplicate/noncanonical refusals | DONE |
+| R08 | Deadlines and pagination / carrier | M–L | High | None | Plan 173 bounded setup, interrupted large-log real-transport replay | IN PROGRESS |
 | R09 | Input limits / hardening | M | High | R07, R08 | Plan 176 ingress and authority boundary refusals | LOCAL VERIFIED |
-| R10 | Root-only Treehouse domain / product + parity | XL | High | R01a, R07, R09 | Core complete vocabulary, effects, conflicts, offline demo | IN PROGRESS |
+| R10 | Root-only Treehouse domain / product + parity | XL | High | R01a, R07, R09 | Core complete vocabulary, effects, conflicts, offline demo | LOCAL VERIFIED |
 | R11a | Local catalog/provisioning / carrier | M | High | R02, R04, R06, R10 | Local signed catalogs, root bootstrap and bounded routes | PLANNED |
 | R11b | Lifecycle reconciliation / carrier | M | High | R11a | Crash-safe creation/removal, no phantom publication | PLANNED |
 | R11c | Catalog replacement trust / recovery | M | High | R11b | Retained client accepts authorized replacement without old signer | PLANNED |
@@ -81,7 +81,7 @@ Rows are the authoritative dependency graph. Commas mean all prerequisites. “N
 | R14 | Profiles, roles, removal, renewal / product + authority | XL | High | R13, R04, R36 | Packaged enroll-then-pin, per-replica readiness and renewal | PLANNED |
 | R15 | Measured rollover / product | L | Medium | R14 | Packaged archival saga, finite-capacity stop, retained readability | PLANNED |
 | R16 | Member reseed, AF-1 / recovery | M | High | R06, R11c, R15 | Packaged new-identity relay reseed from surviving member evidence | PLANNED |
-| R17a | Native witness decision / native custody | M | High | None | Plan 174 decision plus concrete Android build plan | LOCAL VERIFIED |
+| R17a | Native witness decision / native custody | M | High | None | Plan 174 decision plus concrete Android build plan | IN PROGRESS |
 | R17b | Native witness signing / native custody | L | High | R17a, R01b, R03, R14 | Claim verification, protected signing, consent/replay negatives | PLANNED |
 | R17c | Independent witness proof / device QA | M | High | R17b | Physical custody/presence evidence for the selected Android profile | PLANNED |
 | R18 | Founder and combined loss / recovery | M | High | R04, R11c, R15, R16, R17c | Packaged loss with physical witnesses; independent retained trust | PLANNED |
@@ -112,7 +112,7 @@ Rows are the authoritative dependency graph. Commas mean all prerequisites. “N
 
 ### Execution evidence (2026-09-06)
 
-Only R01a and R05 have both final-tip and exact merge-result hosted gates closed
+Only R01a, R05 and R07 have both final-tip and exact merge-result hosted gates closed
 in this snapshot. `LOCAL VERIFIED` may include a merged commit awaiting its own
 merge-result check. A passing review or a green path-filtered status is not a
 substitute for the required workflow. Distribution jobs skipped without protected
@@ -128,9 +128,9 @@ pilot inputs establish no signed pilot artifact or physical result.
 | R04 | Design `d99a1dfc1012335aaca9c68526a5b11cfb6bd8aa`, evidence `475bcfc37c45420e97c5908f073851e43f40dfc0` | Fable design PASS; five legacy probes, controlled full check 680 tests + 27 properties. Fresh versioned bounded-continuation implementation started; no implemented continuation claim |
 | R05 | `4c88f41ec7757158a8fce94b44194debf87c22a7` / [60](https://github.com/treetopdevs/lattice/pull/60) | DONE: Plan 170 negative diagnostic cases; 666 tests + 27 properties, Fable PASS, tip run 34036748317; merge `2f83cc1ea5fdd2fdd5a4a7500b467cebaf392c1a`, exact merge run 34038896331 passed |
 | R06 | `41ace37b50439f83393eda427dc55a9ef650f899` / [61](https://github.com/treetopdevs/lattice/pull/61) | Plan 171; 677 tests + 27 properties, deterministic snapshot-replacement regression, Fable PASS; final-tip run 34036773840 passed. Merge-result gate pending |
-| R07 | `afe5ea250072267927b89b353e7bde1e793176b5` / [62](https://github.com/treetopdevs/lattice/pull/62) | Plan 172 valid-byte parity, Node/browser strictness and native bridge cases; Fable PASS, tip run 34036786373 passed; merged at `b68e6bd367736a23e1478a07257deb55f37b462d`, exact merge run 34040727942 pending |
+| R07 | `afe5ea250072267927b89b353e7bde1e793176b5` / [62](https://github.com/treetopdevs/lattice/pull/62) | Plan 172 valid-byte parity, Node/browser strictness and native bridge cases; Fable PASS, tip run 34036786373 passed; merged at `b68e6bd367736a23e1478a07257deb55f37b462d`, exact merge run 34040727942 passed |
 | R08 | `a172265e8720d73410fda38213232500972fd784` / [65](https://github.com/treetopdevs/lattice/pull/65) | Plan 173 finite setup and snapshot-bound pagination; Fable PASS including fixture follow-up, 675 tests + 27 properties, real second-BEAM interruption/restart; final-tip run 34039405153 passed. Initial CI path failure and excluded overlapping local run retained in Plan 173; merge-result gate pending |
-| R09 | `7f984d4482cd55d06ad437e8fcf7309b8bdd606f` | Plan 176; 694 tests + 27 properties, TS/live/shell gates, 57 unchanged legacy vectors, both boundary scans. Fable exact review PASS, no P0/P1; accepted-base integration and hosted gates pending |
+| R09 | `7f984d4482cd55d06ad437e8fcf7309b8bdd606f`, comments/evidence `4bb7ed0062f620edbc42700f5387e83a343dac0e` | Plan 176; 694 tests + 27 properties, TS/live/shell gates, 57 unchanged legacy vectors, both boundary scans. Fable exact review PASS, no P0/P1; accepted-base integration and hosted gates pending |
 | R10 | Pre-code contract `8cac29e8`; active source work is not frozen | Complete Treehouse domain/effects and reciprocal replay under implementation. Adversarial findings are being fixed; no completed product or final gate claim |
 | R17a | `a5d605786f959f330bc003dc6c12dfbdbecf4316` / [66](https://github.com/treetopdevs/lattice/pull/66) | Fable PASS including the separately typed final-beacon signing purpose; documentation-only final tip required explicit workflow dispatch 34040771390, pending. Actual key eligibility, native build and physical ceremony remain separate stages |
 | Independent native prompt | `0e942f2c6404130f5dcebda9bd754883846df6bd` / [67](https://github.com/treetopdevs/lattice/pull/67) | Constant presence prompt, hostile submitted-claim regressions; Fable PASS; 68 Rust tests including 4 doc tests and 14 custody tests; tip run 34037880177 passed. Merge-result gate pending; this does not implement native semantic verification |
@@ -342,3 +342,30 @@ Pause dependent work on: unadopted contract/scope change; inability to identify 
 ### Planning-artifact completion
 
 This proposal is complete as a document when its two source comparisons are traceable, every packet has an owner/risk/size/dependency/exit, the graph is acyclic, local links resolve, the diff preserves source artifacts and unrelated contracts, and repository formatting/full-suite verification is recorded. This does not close R01 or any implementation packet. The comparison records validation actually performed for this revision.
+
+### Review and integration follow-up (2026-09-06)
+
+The prior table is a timestamped preparation record. R07 exact merge run
+34040727942 has now passed, closing R07. R02 tip run 34037599146 passed on its
+unchanged retry, preserving the original DNS-failure record; PR 64 merged at
+`f0e323b638e8a8095bbcf6f420066c238d126b6e`, exact merge run 34045243247 is pending.
+R03 is published as PR 68 and is integrating that R02 source with the named P05
+exception. R08's later hosted review found header-read allocation and explicit
+null-cursor edge cases; fixes are active before merge. R17a's later hosted review
+found incomplete durable intake/outbox recovery and native consent/author-selection
+contracts; the design is being revised with Claude before merge, despite its
+previous review and dispatch 34040771390 passing. A passing earlier review does
+not dispose of later concrete findings.
+
+R10 is frozen at `f3fb93d3c818e92b44c933a8e963e6617c6d2510`: full check: 738 tests
++ 27 properties, zero failures and three configured exclusions; five new vectors with 58
+reciprocal signed frames, all 62 existing vectors unchanged, five independent-VM
+restores, offline demo, both boundary scans and protected 22-test gate pass. Exact
+Claude review is running. R12 offline native preview has begun contract preparation;
+no packaged preview exists yet. R04 final source is approaching freeze after
+malformed-input parity repairs and reciprocal authoring; no new completion claim
+is added by this status note.
+
+R06 PR61 has now merged at `15ea1c37b2a134725ae6d820752a9ef8f105da8d`.
+Its final tip and Fable review passed; exact merge run34045534524 is queued behind
+R02. R06 remains locally verified until that exact merged-source gate passes.
