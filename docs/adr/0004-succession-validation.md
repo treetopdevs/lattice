@@ -87,6 +87,51 @@ ignored after a valid threshold. A witnessed proof under a legacy policy, or a l
 witnessed policy, is also rejected. The BEAM reducer and TypeScript client independently verify and
 reduce the checked `township_succession_witnessed_recovery` vector.
 
+### Witnessed logical beacons (Plan 179)
+
+A valid root genesis may add an exact five-field policy under `:__beacon__`:
+`%{mode: :witnessed, version: 1, witnesses: [...], threshold: m, max_epoch_step: n}`.
+This authorizes a witness threshold to advance logical epochs and thereby lapse leased grants.
+It grants no clock, elapsed-time, absence, availability or witness-independence proof.
+The root retains its existing two-element beacon format and its existing epoch range.
+
+A witnessed `{:beacon, epoch, certificate}` may be authored only by the root or a configured
+witness. Its exact five-field claim binds `version`, `replica`, `epoch`, the actual op `author`,
+and canonical `deps`, under `lattice-beacon-witness-v1`. Every signature must be valid, from a
+distinct allowed 32-byte key, and in canonical key order; an invalid extra signature rejects the
+whole certificate. The normalized policy identity uses `lattice-beacon-policy-v1` separately.
+Author/dependency binding prevents a witness from lifting an existing certificate into a pruned
+causal history and retroactively lapsing an earlier post. A second op by the same author with the
+same epoch, dependencies and certificate is permitted and confers the same lapse effect.
+
+The beacon judge resolves the latest valid policy in each beacon's own strict ancestry, in
+canonical topological order. Invalid replacements are ignored without quarantining their genesis;
+a valid root replacement applies only to its descendants. Existing role-policy merging remains
+unchanged. Only a surviving root key can author another valid root genesis.
+
+Two separate bounds apply. The genesis-pinned `max_epoch_step` must lie in `1..65_535` and limits
+an advance above the maximum honored ancestral epoch (initially `-1`); exceeding it is
+`:unauthorized_beacon`. The fixed protocol horizon is `9_007_199_254_740_991`, not a policy field.
+A witnessed body or claim exceeding that horizon is structurally `:malformed_term`: the BEAM
+checks the witnessed body and TypeScript keeps its existing strict integer decoder. The horizon
+prevents accumulated bounded steps from reaching the canonical uint64 ceiling. A high root beacon
+or a witnessed beacon at the horizon constrains its descendants; a fork excluding it can still
+advance from that fork's own epoch. Legacy dormancy arithmetic is unchanged, including the existing
+root-assisted repair of a maximum-tick pin by replacing the role policy with `dormant_ticks: 0`.
+
+Compatibility includes one explicit audit change. A historical three-element beacon without a
+valid ancestral beacon policy formerly had no beacon verdict and no effect. It now receives
+`:unauthorized_beacon` and still has no effect. The migration fixture pins identical signed bytes,
+materialized state, holders and public lease-expiry results against commit `afe5ea250072267927b89b353e7bde1e793176b5`;
+only that operation's audit verdict changes. The immutable R02 P05 baseline remains evidence of
+the former behavior. This exception does not activate old beacons or migrate a role policy.
+
+Local Sim and TypeScript evidence covers pre-loss delegated admission, surviving-issuer
+revocation, witnessed epoch advance and leased-grant lapse after the founder is removed.
+A surviving member still cannot revoke a founder-issued grant merely because the founder is gone.
+This is not general founder-loss survival, a native ceremony, physical-device AF-2 evidence,
+bounded successor authority, or repeated lease renewal. Those remain separate delivery gates.
+
 ## Rationale
 
 * **Log-derivable and deterministic.** Both modes carry all reducer inputs in signed operations;

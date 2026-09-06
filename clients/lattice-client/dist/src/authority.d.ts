@@ -1,5 +1,6 @@
 import type { AuthorityDelegationEvidence, Op, SuccessionPolicyEvidence, WitnessedRecoveryPolicyEvidence, WitnessedSuccessionPolicyEvidence, WitnessedSuccessionArtifactEvidence, WitnessedSuccessionCertificateEvidence, WitnessedSuccessionClaimEvidence, WitnessedSuccessionSignatureEvidence } from "./op";
 import type { ReplicaSchema } from "./schema";
+import type { ContinuationClaim, ContinuationProfile } from "./continuation";
 /** One honored role acquisition, in processing (canonical) order. */
 export interface HonoredAcquire {
     opId: string;
@@ -81,6 +82,19 @@ export type WitnessedSuccessionReviewResult = {
  * Multi-write histories without complete authority evidence remain fail-closed.
  */
 export declare function analyzeAuthority(schema: ReplicaSchema, ops: Op[], included: ReadonlySet<string>, order: readonly string[], byId: ReadonlyMap<string, Op>, expectedReplica?: string | undefined): AuthorityAnalysis;
+export type ContinuationFamily = "legacy" | "unsupported" | "space" | "thread";
+/** Reserved only within the exact Treehouse Space/Thread namespace. */
+export declare function continuationFamily(replica: string | undefined): ContinuationFamily;
+type ContinuationClaimResult = {
+    ok: true;
+    claim: ContinuationClaim;
+    profile: ContinuationProfile;
+} | {
+    ok: false;
+    reason: string;
+};
+/** Derive only from a complete operation set already authenticated by the carrier verifier. */
+export declare function deriveContinuationReview(schema: ReplicaSchema, ops: Op[], replica: string, role: string, authorPubkey: string, deps: string[], delegation: AuthorityDelegationEvidence): ContinuationClaimResult;
 /** Derive a witnessed-succession review solely from a verified local operation set. */
 export declare function deriveWitnessedSuccessionReview(schema: ReplicaSchema, ops: Op[], selector: WitnessedSuccessionReviewSelector, priorReview: WitnessedSuccessionReview | null): WitnessedSuccessionReviewResult;
 export type WitnessedSuccessionVerificationReason = "invalid_recovery_policy" | "malformed_recovery_certificate" | "unsupported_recovery_version" | "recovery_claim_mismatch" | "recovery_policy_mismatch" | "unknown_recovery_witness" | "duplicate_recovery_witness" | "noncanonical_recovery_signatures" | "invalid_recovery_signature" | "insufficient_recovery_witnesses";
@@ -94,3 +108,6 @@ export declare function assembleWitnessedSuccessionArtifact(claim: WitnessedSucc
 export declare function exportWitnessedSuccessionArtifactJson(artifact: WitnessedSuccessionArtifactEvidence): string;
 export declare function witnessedRecoveryPolicyId(policy: WitnessedRecoveryPolicyEvidence): string | null;
 export declare function verifyWitnessedSuccessionCertificate(certificate: WitnessedSuccessionCertificateEvidence | null, expectedClaim: WitnessedSuccessionClaimEvidence, policy: WitnessedRecoveryPolicyEvidence): WitnessedSuccessionVerification;
+/** Fixed portable logical-epoch horizon, independent of genesis policy. */
+export declare const witnessedBeaconHorizon: number;
+export {};

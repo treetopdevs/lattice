@@ -1105,3 +1105,8 @@ The root integrator keeps the merge queue serialized at shared seams. Township E
 Profiles is the first product PR after Product Isolation and Migrations. Toolshed UI does not start
 before Custody v2 is green in both runtimes. Treehouse UI does not start before the BEAM domain and
 shared TS effect parity are green.
+
+Status 2026-09-06 (Plan 179 local preparation): Sim and TypeScript now prove witnessed epoch
+advance, pre-loss delegated admission, surviving-issuer revocation and leased-grant lapse with
+the founder removed. General AF-2 survival, bounded renewal, physical-device evidence and revised
+product claims remain open; exact integrated and hosted review gates are owned by the unified roadmap.

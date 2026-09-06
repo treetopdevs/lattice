@@ -1,0 +1,1588 @@
+{
+  "canonicalOps": [
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584e7265706c6963613a6d61747465723a626561636f6e2d616476616e636523726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f74585865735820cdc39c918646a0ebaacadcbd0a62413f38e18451482d09568a1f7c771a1bbca580d9ea6049617574686f72697479d9ea6183d9ea604767656e65736973d9ea6389582b634d584f6569417a43414251756a2d314141317a31335534734b506b48624861746b463177567964684949584e7265706c6963613a6d61747465723a626561636f6e2d616476616e636523726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f74585865735820cdc39c918646a0ebaacadcbd0a62413f38e18451482d09568a1f7c771a1bbca55820cdc39c918646a0ebaacadcbd0a62413f38e18451482d09568a1f7c771a1bbca5f688d9ea604561646d6974d9ea604c636c6f73655f6d6174746572d9ea604d6c696e6b5f656c656374696f6ed9ea6044706f7374d9ea604d72656d6f76655f6d656d626572d9ea604d72656f70656e5f6d6174746572d9ea604b7365745f73756d6d617279d9ea60497365745f7469746c6581d9ea6045636c65726bf558402141ca49efabd8dfff9b0624f0730b6c7189e4260aa67669d01a9b934f7d93eb3dd7b83dfd649c2042e3d3bbdaf6cce207bdf4c4e8c089ab84211ad7422c260fa1d9ea604a5f5f626561636f6e5f5fa5d9ea60446d6f6465d9ea60497769746e6573736564d9ea604776657273696f6e01d9ea60497468726573686f6c6402d9ea60497769746e6573736573845820153cb54c395fa3bd58a3602c091c6692cba2210fdc2b522b1bffdf0f3772de4f582094b21722f64abf8a5ab5c5bfcf4060280bc3fb66deb58892119127a50a3c4c9558201df77021f73a8ae344e27c57714b000c48b78d326f75928136ea25212105e714582060ca761871c343acd85f5ed280e9df353a04e4eafbfc9f30782dea1f27ec6a3dd9ea604e6d61785f65706f63685f737465700af6",
+      "hash": "-ho6iRTaGvaTT07G6_NUqjQaqAw9FM99GcU8omPw1ZA",
+      "id": "-ho6iRTaGvaTT07G6_NUqjQaqAw9FM99GcU8omPw1ZA",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584e7265706c6963613a6d61747465723a626561636f6e2d616476616e636523726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f74585865735820cdc39c918646a0ebaacadcbd0a62413f38e18451482d09568a1f7c771a1bbca581582b2d686f36695254614776615454303747365f4e55716a516171417739464d3939476355386f6d5077315a41d9ea6049617574686f72697479d9ea6182d9ea60456772616e74d9ea638a582b757a4746795f763855435936555055574676532d415032367957665537594b484a476263546f5341616855584e7265706c6963613a6d61747465723a626561636f6e2d616476616e636523726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f74585865735820cdc39c918646a0ebaacadcbd0a62413f38e18451482d09568a1f7c771a1bbca55820d2f04f1dbcb6ac29d3d4860d3e2069fa71e2c500101136fe3b764f1af32f6cf0582b634d584f6569417a43414251756a2d314141317a31335534734b506b48624861746b46317756796468494981d9ea6044706f737480f45840940c0336d3e12ca41868b9cfb79e9f3f3eaf6d776eaca7bb5244760f44aaf7eb44b1a06fbcc4d0f413f1595c80fee582e93f6abaaf8e0fdc11f994c1b302720303f6",
+      "hash": "2K--5Pm3qLCKf1bhpnvp2DWRKT75i-6YZyCH3ZbuJZU",
+      "id": "2K--5Pm3qLCKf1bhpnvp2DWRKT75i-6YZyCH3ZbuJZU",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584e7265706c6963613a6d61747465723a626561636f6e2d616476616e636523726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f74585865735820d2f04f1dbcb6ac29d3d4860d3e2069fa71e2c500101136fe3b764f1af32f6cf081582b324b2d2d35506d33714c434b66316268706e7670324457524b543735692d36595a794348335a62754a5a55d9ea6047636f6d6d616e64d9ea6182d9ea6044706f73748158186265666f7265207769746e657373656420616476616e6365582b757a4746795f763855435936555055574676532d415032367957665537594b484a476263546f5341616855",
+      "hash": "G5Ze4Qb7ZsbvA920oz5Me10d6hJZCIBkBI9ZitC0y10",
+      "id": "G5Ze4Qb7ZsbvA920oz5Me10d6hJZCIBkBI9ZitC0y10",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584e7265706c6963613a6d61747465723a626561636f6e2d616476616e636523726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f74585865735820153cb54c395fa3bd58a3602c091c6692cba2210fdc2b522b1bffdf0f3772de4f81582b47355a65345162375a736276413932306f7a354d6531306436684a5a4349426b4249395a69744330793130d9ea6049617574686f72697479d9ea6183d9ea6046626561636f6e04a2d9ea6045636c61696da5d9ea60446465707381582b47355a65345162375a736276413932306f7a354d6531306436684a5a4349426b4249395a69744330793130d9ea604565706f636804d9ea6046617574686f725820153cb54c395fa3bd58a3602c091c6692cba2210fdc2b522b1bffdf0f3772de4fd9ea60477265706c696361584e7265706c6963613a6d61747465723a626561636f6e2d616476616e636523726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f7458586573d9ea604776657273696f6e01d9ea604a7369676e61747572657382a2d9ea60477769746e6573735820153cb54c395fa3bd58a3602c091c6692cba2210fdc2b522b1bffdf0f3772de4fd9ea60497369676e617475726558406b238c401c36903fa33e9092f55c0303bc3d3bb9803e06adbff786bcd2d64901081427ecf178392552494ceadb4f904e1b739d8938dad3a5e3c713f350e6f404a2d9ea60477769746e657373582094b21722f64abf8a5ab5c5bfcf4060280bc3fb66deb58892119127a50a3c4c95d9ea60497369676e61747572655840af2d5ad25fc6540a113e480546995159b71d187ba6d37438b5889ad400c3b573300c36f512963858a92b493384001993b0c146aa09908ad11c692ace84440a0af6",
+      "hash": "d4iqB87XR9sJwBRqFmiXgtujSQEhp1H7cQp6hqZr-I4",
+      "id": "d4iqB87XR9sJwBRqFmiXgtujSQEhp1H7cQp6hqZr-I4",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584e7265706c6963613a6d61747465723a626561636f6e2d616476616e636523726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f74585865735820d2f04f1dbcb6ac29d3d4860d3e2069fa71e2c500101136fe3b764f1af32f6cf081582b64346971423837585239734a77425271466d69586774756a53514568703148376351703668715a722d4934d9ea6047636f6d6d616e64d9ea6182d9ea6044706f737481576166746572207769746e657373656420616476616e6365582b757a4746795f763855435936555055574676532d415032367957665537594b484a476263546f5341616855",
+      "hash": "jxkjkQ4t8qAuNSOAtkJgEjun2vkQ-bysHSMxFXhEOvo",
+      "id": "jxkjkQ4t8qAuNSOAtkJgEjun2vkQ-bysHSMxFXhEOvo",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584e7265706c6963613a6d61747465723a626561636f6e2d616476616e636523726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f74585865735820153cb54c395fa3bd58a3602c091c6692cba2210fdc2b522b1bffdf0f3772de4f81582b6a786b6a6b513474387141754e534f41746b4a67456a756e32766b512d62797348534d78465868454f766fd9ea6049617574686f72697479d9ea6183d9ea6046626561636f6e05a2d9ea6045636c61696da5d9ea60446465707381582b6a786b6a6b513474387141754e534f41746b4a67456a756e32766b512d62797348534d78465868454f766fd9ea604565706f636805d9ea6046617574686f725820153cb54c395fa3bd58a3602c091c6692cba2210fdc2b522b1bffdf0f3772de4fd9ea60477265706c696361584e7265706c6963613a6d61747465723a626561636f6e2d616476616e636523726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f7458586573d9ea604776657273696f6e01d9ea604a7369676e61747572657382a2d9ea60477769746e6573735820153cb54c395fa3bd58a3602c091c6692cba2210fdc2b522b1bffdf0f3772de4fd9ea60497369676e61747572655840ac66d5df5f50e8f7c5d012872b645a6c4fad3221f1de3de76fec639ee3946e75a4b5ef04f06bc17477d69c6e27db0e2b8dcc688e3fa3d416cf169f6b18f42205a2d9ea60477769746e657373582094b21722f64abf8a5ab5c5bfcf4060280bc3fb66deb58892119127a50a3c4c95d9ea60497369676e61747572655840424fe1bf926da150f43991ddb647cf611c04adc402270782b15033494c74ad30a567404f10e040b478cf0db7a8b04f855d293e7fd2fdd53c29654e586f93f60af6",
+      "hash": "1niRTnybPydHTF-2-pWrRCDzRY5CKRSWNMTy7s9OZNo",
+      "id": "1niRTnybPydHTF-2-pWrRCDzRY5CKRSWNMTy7s9OZNo",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584e7265706c6963613a6d61747465723a626561636f6e2d616476616e636523726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f74585865735820cdc39c918646a0ebaacadcbd0a62413f38e18451482d09568a1f7c771a1bbca581582b6a786b6a6b513474387141754e534f41746b4a67456a756e32766b512d62797348534d78465868454f766fd9ea6049617574686f72697479d9ea6183d9ea604767656e65736973d9ea6389582b634d584f6569417a43414251756a2d314141317a31335534734b506b48624861746b463177567964684949584e7265706c6963613a6d61747465723a626561636f6e2d616476616e636523726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f74585865735820cdc39c918646a0ebaacadcbd0a62413f38e18451482d09568a1f7c771a1bbca55820cdc39c918646a0ebaacadcbd0a62413f38e18451482d09568a1f7c771a1bbca5f688d9ea604561646d6974d9ea604c636c6f73655f6d6174746572d9ea604d6c696e6b5f656c656374696f6ed9ea6044706f7374d9ea604d72656d6f76655f6d656d626572d9ea604d72656f70656e5f6d6174746572d9ea604b7365745f73756d6d617279d9ea60497365745f7469746c6581d9ea6045636c65726bf558402141ca49efabd8dfff9b0624f0730b6c7189e4260aa67669d01a9b934f7d93eb3dd7b83dfd649c2042e3d3bbdaf6cce207bdf4c4e8c089ab84211ad7422c260fa1d9ea604a5f5f626561636f6e5f5fa5d9ea60446d6f6465d9ea60497769746e6573736564d9ea604776657273696f6e01d9ea60497468726573686f6c6402d9ea60497769746e65737365738258201df77021f73a8ae344e27c57714b000c48b78d326f75928136ea25212105e714582060ca761871c343acd85f5ed280e9df353a04e4eafbfc9f30782dea1f27ec6a3dd9ea604e6d61785f65706f63685f737465700af6",
+      "hash": "o27hPu531V6IA5eB_64E6Gi0FiJ6qeKQ9UHeRMpDAa0",
+      "id": "o27hPu531V6IA5eB_64E6Gi0FiJ6qeKQ9UHeRMpDAa0",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584e7265706c6963613a6d61747465723a626561636f6e2d616476616e636523726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f74585865735820153cb54c395fa3bd58a3602c091c6692cba2210fdc2b522b1bffdf0f3772de4f82582b316e6952546e79625079644854462d322d7057725243447a525935434b5253574e4d54793773394f5a4e6f582b6f3237685075353331563649413565425f3634453647693046694a3671654b5139554865524d7044416130d9ea6049617574686f72697479d9ea6183d9ea6046626561636f6e06a2d9ea6045636c61696da5d9ea60446465707382582b316e6952546e79625079644854462d322d7057725243447a525935434b5253574e4d54793773394f5a4e6f582b6f3237685075353331563649413565425f3634453647693046694a3671654b5139554865524d7044416130d9ea604565706f636806d9ea6046617574686f725820153cb54c395fa3bd58a3602c091c6692cba2210fdc2b522b1bffdf0f3772de4fd9ea60477265706c696361584e7265706c6963613a6d61747465723a626561636f6e2d616476616e636523726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f7458586573d9ea604776657273696f6e01d9ea604a7369676e61747572657382a2d9ea60477769746e6573735820153cb54c395fa3bd58a3602c091c6692cba2210fdc2b522b1bffdf0f3772de4fd9ea60497369676e61747572655840c4530ea9f0607f344a4ed8d293c77b5fbb8a498f9b5b2c6585c548b7330a4f2adb6c5cb5c1ca3d8a4293718dda2fce94ee468a39f7f1b04afa54219060682703a2d9ea60477769746e657373582094b21722f64abf8a5ab5c5bfcf4060280bc3fb66deb58892119127a50a3c4c95d9ea60497369676e61747572655840ed32c7d68936fb87d36cf22e22944b5a10d31a6e5f8c55219c73d41834626f947a7eed8c10d47be77c9393dbbf2864ccca4e2cb316e2000243b992a62895bd02f6",
+      "hash": "9WddhWyvrc4RPBhBWBI7act2J2EMbZCpgk5wikXoR2E",
+      "id": "9WddhWyvrc4RPBhBWBI7act2J2EMbZCpgk5wikXoR2E",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584e7265706c6963613a6d61747465723a626561636f6e2d616476616e636523726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f745858657358201df77021f73a8ae344e27c57714b000c48b78d326f75928136ea25212105e71482582b316e6952546e79625079644854462d322d7057725243447a525935434b5253574e4d54793773394f5a4e6f582b6f3237685075353331563649413565425f3634453647693046694a3671654b5139554865524d7044416130d9ea6049617574686f72697479d9ea6183d9ea6046626561636f6e06a2d9ea6045636c61696da5d9ea60446465707382582b316e6952546e79625079644854462d322d7057725243447a525935434b5253574e4d54793773394f5a4e6f582b6f3237685075353331563649413565425f3634453647693046694a3671654b5139554865524d7044416130d9ea604565706f636806d9ea6046617574686f7258201df77021f73a8ae344e27c57714b000c48b78d326f75928136ea25212105e714d9ea60477265706c696361584e7265706c6963613a6d61747465723a626561636f6e2d616476616e636523726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f7458586573d9ea604776657273696f6e01d9ea604a7369676e61747572657382a2d9ea60477769746e65737358201df77021f73a8ae344e27c57714b000c48b78d326f75928136ea25212105e714d9ea60497369676e61747572655840fd1c82e599285dd71973d95b8211b2dfcf986c07ca14d4500e7fa6a166e3bfdf547ccb89aa1424832112911a8c7050eb3c88ddcbebe1d9ab70e34d3f6c02de0ba2d9ea60477769746e657373582060ca761871c343acd85f5ed280e9df353a04e4eafbfc9f30782dea1f27ec6a3dd9ea60497369676e61747572655840afcd80e08cf0fcb77e9a80218fb4d40489e2489460031acc34244e81821458a85a27836564f4898fd588765c931494429faa487cdda7dfd4cafcdefdb02da304f6",
+      "hash": "K6D_Ww07eNabMWl9mV-PP0taTglpO4pSC3LEQB3RVzo",
+      "id": "K6D_Ww07eNabMWl9mV-PP0taTglpO4pSC3LEQB3RVzo",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584e7265706c6963613a6d61747465723a626561636f6e2d616476616e636523726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f74585865735820cdc39c918646a0ebaacadcbd0a62413f38e18451482d09568a1f7c771a1bbca582582b3957646468577976726334525042684257424937616374324a32454d625a4370676b3577696b586f523245582b4b36445f57773037654e61624d576c396d562d505030746154676c704f34705343334c4551423352567a6fd9ea6049617574686f72697479d9ea6183d9ea604767656e65736973d9ea6389582b634d584f6569417a43414251756a2d314141317a31335534734b506b48624861746b463177567964684949584e7265706c6963613a6d61747465723a626561636f6e2d616476616e636523726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f74585865735820cdc39c918646a0ebaacadcbd0a62413f38e18451482d09568a1f7c771a1bbca55820cdc39c918646a0ebaacadcbd0a62413f38e18451482d09568a1f7c771a1bbca5f688d9ea604561646d6974d9ea604c636c6f73655f6d6174746572d9ea604d6c696e6b5f656c656374696f6ed9ea6044706f7374d9ea604d72656d6f76655f6d656d626572d9ea604d72656f70656e5f6d6174746572d9ea604b7365745f73756d6d617279d9ea60497365745f7469746c6581d9ea6045636c65726bf558402141ca49efabd8dfff9b0624f0730b6c7189e4260aa67669d01a9b934f7d93eb3dd7b83dfd649c2042e3d3bbdaf6cce207bdf4c4e8c089ab84211ad7422c260fa1d9ea604a5f5f626561636f6e5f5fa5d9ea60446d6f6465d9ea60497769746e6573736564d9ea604776657273696f6e01d9ea60497468726573686f6c6402d9ea60497769746e65737365738258201df77021f73a8ae344e27c57714b000c48b78d326f75928136ea25212105e714582060ca761871c343acd85f5ed280e9df353a04e4eafbfc9f30782dea1f27ec6a3dd9ea604e6d61785f65706f63685f737465701a00010000f6",
+      "hash": "HX-sFHTWQ4U0Ld5YMWtOdMIX5IT0EWodEuDmL7YJU6E",
+      "id": "HX-sFHTWQ4U0Ld5YMWtOdMIX5IT0EWodEuDmL7YJU6E",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584e7265706c6963613a6d61747465723a626561636f6e2d616476616e636523726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f745858657358201df77021f73a8ae344e27c57714b000c48b78d326f75928136ea25212105e71481582b48582d7346485457513455304c6435594d57744f644d49583549543045576f644575446d4c37594a553645d9ea6049617574686f72697479d9ea6183d9ea6046626561636f6e07a2d9ea6045636c61696da5d9ea60446465707381582b48582d7346485457513455304c6435594d57744f644d49583549543045576f644575446d4c37594a553645d9ea604565706f636807d9ea6046617574686f7258201df77021f73a8ae344e27c57714b000c48b78d326f75928136ea25212105e714d9ea60477265706c696361584e7265706c6963613a6d61747465723a626561636f6e2d616476616e636523726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f7458586573d9ea604776657273696f6e01d9ea604a7369676e61747572657382a2d9ea60477769746e65737358201df77021f73a8ae344e27c57714b000c48b78d326f75928136ea25212105e714d9ea60497369676e6174757265584097794f2e6133c22787dda4939c9635f455a8a6ed960a4c7a1dfad083a543147212edd944d7ae3e5df64c7e6ec964947b930014b36f403d490396d4fea0b40301a2d9ea60477769746e657373582060ca761871c343acd85f5ed280e9df353a04e4eafbfc9f30782dea1f27ec6a3dd9ea60497369676e617475726558408ae10ed26988db5a4d23b82d9a737146964f120e9aa8a3ec4ada2f2b8edbe00ef5af4dff5ac37bbb6a96d44d8df9128f7bcfaffac19796adb87e01099d8df606f6",
+      "hash": "SQeOIf-Dz3nnEVlxKmZgY4viFCgZdsg7b8wXAhtcwnA",
+      "id": "SQeOIf-Dz3nnEVlxKmZgY4viFCgZdsg7b8wXAhtcwnA",
+      "suite": "lattice-cbor-v1"
+    }
+  ],
+  "capabilityCase": {
+    "beaconOperationId": "d4iqB87XR9sJwBRqFmiXgtujSQEhp1H7cQp6hqZr-I4",
+    "case": "witnessed_advance",
+    "claimPreimageHex": "8258196c6174746963652d626561636f6e2d7769746e6573732d7631a5d9ea60446465707381582b47355a65345162375a736276413932306f7a354d6531306436684a5a4349426b4249395a69744330793130d9ea604565706f636804d9ea6046617574686f725820153cb54c395fa3bd58a3602c091c6692cba2210fdc2b522b1bffdf0f3772de4fd9ea60477265706c696361584e7265706c6963613a6d61747465723a626561636f6e2d616476616e636523726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f7458586573d9ea604776657273696f6e01",
+    "expiredOperationId": "jxkjkQ4t8qAuNSOAtkJgEjun2vkQ-bysHSMxFXhEOvo",
+    "founderSeed": "township:beacon:clerk",
+    "genesisCanonicalHex": "874d6c6174746963652d6f702d7632584e7265706c6963613a6d61747465723a626561636f6e2d616476616e636523726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f74585865735820cdc39c918646a0ebaacadcbd0a62413f38e18451482d09568a1f7c771a1bbca580d9ea6049617574686f72697479d9ea6183d9ea604767656e65736973d9ea6389582b634d584f6569417a43414251756a2d314141317a31335534734b506b48624861746b463177567964684949584e7265706c6963613a6d61747465723a626561636f6e2d616476616e636523726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f74585865735820cdc39c918646a0ebaacadcbd0a62413f38e18451482d09568a1f7c771a1bbca55820cdc39c918646a0ebaacadcbd0a62413f38e18451482d09568a1f7c771a1bbca5f688d9ea604561646d6974d9ea604c636c6f73655f6d6174746572d9ea604d6c696e6b5f656c656374696f6ed9ea6044706f7374d9ea604d72656d6f76655f6d656d626572d9ea604d72656f70656e5f6d6174746572d9ea604b7365745f73756d6d617279d9ea60497365745f7469746c6581d9ea6045636c65726bf558402141ca49efabd8dfff9b0624f0730b6c7189e4260aa67669d01a9b934f7d93eb3dd7b83dfd649c2042e3d3bbdaf6cce207bdf4c4e8c089ab84211ad7422c260fa1d9ea604a5f5f626561636f6e5f5fa5d9ea60446d6f6465d9ea60497769746e6573736564d9ea604776657273696f6e01d9ea60497468726573686f6c6402d9ea60497769746e6573736573845820153cb54c395fa3bd58a3602c091c6692cba2210fdc2b522b1bffdf0f3772de4f582094b21722f64abf8a5ab5c5bfcf4060280bc3fb66deb58892119127a50a3c4c9558201df77021f73a8ae344e27c57714b000c48b78d326f75928136ea25212105e714582060ca761871c343acd85f5ed280e9df353a04e4eafbfc9f30782dea1f27ec6a3dd9ea604e6d61785f65706f63685f737465700af6",
+    "genesisOperationId": "-ho6iRTaGvaTT07G6_NUqjQaqAw9FM99GcU8omPw1ZA",
+    "honoredOperationId": "G5Ze4Qb7ZsbvA920oz5Me10d6hJZCIBkBI9ZitC0y10"
+  },
+  "expectAtFrontier": [],
+  "expectAtFullFrontier": {
+    "authorityQuarantine": [
+      [
+        "9WddhWyvrc4RPBhBWBI7act2J2EMbZCpgk5wikXoR2E",
+        "unauthorized_beacon"
+      ],
+      [
+        "jxkjkQ4t8qAuNSOAtkJgEjun2vkQ-bysHSMxFXhEOvo",
+        "lease_expired"
+      ]
+    ],
+    "quarantine": [
+      "9WddhWyvrc4RPBhBWBI7act2J2EMbZCpgk5wikXoR2E",
+      "jxkjkQ4t8qAuNSOAtkJgEjun2vkQ-bysHSMxFXhEOvo"
+    ],
+    "state": {
+      "clerk": "clerk",
+      "clerk_locked": false,
+      "members": [],
+      "posts": [
+        "before witnessed advance"
+      ],
+      "summary": "",
+      "title": ""
+    },
+    "winners": {
+      "clerk": "HX-sFHTWQ4U0Ld5YMWtOdMIX5IT0EWodEuDmL7YJU6E",
+      "clerk_locked": null,
+      "summary": null,
+      "title": null
+    }
+  },
+  "generatedBy": "Lattice.Sim",
+  "ops": [
+    {
+      "author": "clerk",
+      "command": "genesis clerk",
+      "deps": [],
+      "field": "clerk",
+      "hash": "-ho6iRTaGvaTT07G6_NUqjQaqAw9FM99GcU8omPw1ZA",
+      "id": "-ho6iRTaGvaTT07G6_NUqjQaqAw9FM99GcU8omPw1ZA",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "clerk"
+    },
+    {
+      "author": "clerk",
+      "command": "grant resident",
+      "deps": [
+        "-ho6iRTaGvaTT07G6_NUqjQaqAw9FM99GcU8omPw1ZA"
+      ],
+      "field": "__authority",
+      "hash": "2K--5Pm3qLCKf1bhpnvp2DWRKT75i-6YZyCH3ZbuJZU",
+      "id": "2K--5Pm3qLCKf1bhpnvp2DWRKT75i-6YZyCH3ZbuJZU",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "resident",
+      "command": "post",
+      "deps": [
+        "2K--5Pm3qLCKf1bhpnvp2DWRKT75i-6YZyCH3ZbuJZU"
+      ],
+      "field": "posts",
+      "hash": "G5Ze4Qb7ZsbvA920oz5Me10d6hJZCIBkBI9ZitC0y10",
+      "id": "G5Ze4Qb7ZsbvA920oz5Me10d6hJZCIBkBI9ZitC0y10",
+      "kind": "command",
+      "mutation": "append",
+      "value": "before witnessed advance"
+    },
+    {
+      "author": "w0",
+      "command": "authority",
+      "deps": [
+        "G5Ze4Qb7ZsbvA920oz5Me10d6hJZCIBkBI9ZitC0y10"
+      ],
+      "field": "__authority",
+      "hash": "d4iqB87XR9sJwBRqFmiXgtujSQEhp1H7cQp6hqZr-I4",
+      "id": "d4iqB87XR9sJwBRqFmiXgtujSQEhp1H7cQp6hqZr-I4",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "resident",
+      "command": "post",
+      "deps": [
+        "d4iqB87XR9sJwBRqFmiXgtujSQEhp1H7cQp6hqZr-I4"
+      ],
+      "field": "posts",
+      "hash": "jxkjkQ4t8qAuNSOAtkJgEjun2vkQ-bysHSMxFXhEOvo",
+      "id": "jxkjkQ4t8qAuNSOAtkJgEjun2vkQ-bysHSMxFXhEOvo",
+      "kind": "command",
+      "mutation": "append",
+      "value": "after witnessed advance"
+    },
+    {
+      "author": "w0",
+      "command": "authority",
+      "deps": [
+        "jxkjkQ4t8qAuNSOAtkJgEjun2vkQ-bysHSMxFXhEOvo"
+      ],
+      "field": "__authority",
+      "hash": "1niRTnybPydHTF-2-pWrRCDzRY5CKRSWNMTy7s9OZNo",
+      "id": "1niRTnybPydHTF-2-pWrRCDzRY5CKRSWNMTy7s9OZNo",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "clerk",
+      "command": "genesis clerk",
+      "deps": [
+        "jxkjkQ4t8qAuNSOAtkJgEjun2vkQ-bysHSMxFXhEOvo"
+      ],
+      "field": "clerk",
+      "hash": "o27hPu531V6IA5eB_64E6Gi0FiJ6qeKQ9UHeRMpDAa0",
+      "id": "o27hPu531V6IA5eB_64E6Gi0FiJ6qeKQ9UHeRMpDAa0",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "clerk"
+    },
+    {
+      "author": "w0",
+      "command": "authority",
+      "deps": [
+        "1niRTnybPydHTF-2-pWrRCDzRY5CKRSWNMTy7s9OZNo",
+        "o27hPu531V6IA5eB_64E6Gi0FiJ6qeKQ9UHeRMpDAa0"
+      ],
+      "field": "__authority",
+      "hash": "9WddhWyvrc4RPBhBWBI7act2J2EMbZCpgk5wikXoR2E",
+      "id": "9WddhWyvrc4RPBhBWBI7act2J2EMbZCpgk5wikXoR2E",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "w2",
+      "command": "authority",
+      "deps": [
+        "1niRTnybPydHTF-2-pWrRCDzRY5CKRSWNMTy7s9OZNo",
+        "o27hPu531V6IA5eB_64E6Gi0FiJ6qeKQ9UHeRMpDAa0"
+      ],
+      "field": "__authority",
+      "hash": "K6D_Ww07eNabMWl9mV-PP0taTglpO4pSC3LEQB3RVzo",
+      "id": "K6D_Ww07eNabMWl9mV-PP0taTglpO4pSC3LEQB3RVzo",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "clerk",
+      "command": "genesis clerk",
+      "deps": [
+        "9WddhWyvrc4RPBhBWBI7act2J2EMbZCpgk5wikXoR2E",
+        "K6D_Ww07eNabMWl9mV-PP0taTglpO4pSC3LEQB3RVzo"
+      ],
+      "field": "clerk",
+      "hash": "HX-sFHTWQ4U0Ld5YMWtOdMIX5IT0EWodEuDmL7YJU6E",
+      "id": "HX-sFHTWQ4U0Ld5YMWtOdMIX5IT0EWodEuDmL7YJU6E",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "clerk"
+    },
+    {
+      "author": "w2",
+      "command": "authority",
+      "deps": [
+        "HX-sFHTWQ4U0Ld5YMWtOdMIX5IT0EWodEuDmL7YJU6E"
+      ],
+      "field": "__authority",
+      "hash": "SQeOIf-Dz3nnEVlxKmZgY4viFCgZdsg7b8wXAhtcwnA",
+      "id": "SQeOIf-Dz3nnEVlxKmZgY4viFCgZdsg7b8wXAhtcwnA",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    }
+  ],
+  "oracleCarrierOps": [
+    {
+      "author": "zcOckYZGoOuqyty9CmJBPzjhhFFILQlWih98dxobvKU=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "zcOckYZGoOuqyty9CmJBPzjhhFFILQlWih98dxobvKU=",
+              "id": "cMXOeiAzCABQuj-1AA1z13U4sKPkHbHatkF1wVydhII",
+              "issuer": "zcOckYZGoOuqyty9CmJBPzjhhFFILQlWih98dxobvKU=",
+              "live": true,
+              "ops": [
+                "admit",
+                "close_matter",
+                "link_election",
+                "post",
+                "remove_member",
+                "reopen_matter",
+                "set_summary",
+                "set_title"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:beacon-advance#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "IUHKSe+r2N//mwYk8HMLbHGJ5CYKpnZp0Bqbk099k+s917g9/WScIELj07va9sziB730xOjAiauEIRrXQiwmDw=="
+            }
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "__beacon__"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "mode"
+                      ],
+                      [
+                        "atom",
+                        "witnessed"
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "version"
+                      ],
+                      [
+                        "int",
+                        1
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "threshold"
+                      ],
+                      [
+                        "int",
+                        2
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "witnesses"
+                      ],
+                      [
+                        "list",
+                        [
+                          [
+                            "bin",
+                            "FTy1TDlfo71Yo2AsCRxmksuiIQ/cK1IrG//fDzdy3k8="
+                          ],
+                          [
+                            "bin",
+                            "lLIXIvZKv4patcW/z0BgKAvD+2betYiSEZEnpQo8TJU="
+                          ],
+                          [
+                            "bin",
+                            "HfdwIfc6iuNE4nxXcUsADEi3jTJvdZKBNuolISEF5xQ="
+                          ],
+                          [
+                            "bin",
+                            "YMp2GHHDQ6zYX17SgOnfNToE5Or7/J8weC3qHyfsaj0="
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "max_epoch_step"
+                      ],
+                      [
+                        "int",
+                        10
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [],
+      "id": "-ho6iRTaGvaTT07G6_NUqjQaqAw9FM99GcU8omPw1ZA",
+      "kind": "authority",
+      "replica": "replica:matter:beacon-advance#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+      "sig": "QFoGOTLLgcmmHnIMxIv4J4ZvtKKNxZ9TpdeZX1a6hEDOdaCrEhjCzVL0AWiI67L/pz+McsDJjeQRihOGp41sBA==",
+      "v": 1
+    },
+    {
+      "author": "zcOckYZGoOuqyty9CmJBPzjhhFFILQlWih98dxobvKU=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "grant"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "0vBPHby2rCnT1IYNPiBp+nHixQAQETb+O3ZPGvMvbPA=",
+              "expires_epoch": 3,
+              "id": "uzGFy_v8UCY6UPUWFvS-AP26yWfU7YKHJGbcToSAahU",
+              "issuer": "zcOckYZGoOuqyty9CmJBPzjhhFFILQlWih98dxobvKU=",
+              "live": false,
+              "ops": [
+                "post"
+              ],
+              "parent_id": "cMXOeiAzCABQuj-1AA1z13U4sKPkHbHatkF1wVydhII",
+              "replica": "replica:matter:beacon-advance#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+              "roles": [],
+              "sig": "lAwDNtPhLKQYaLnPt56fPz6vbXdurKe7UkR2D0Sq9+tEsaBvvMTQ9BPxWVyA/uWC6T9quq+OD9wR+ZTBswJyAw=="
+            }
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "-ho6iRTaGvaTT07G6_NUqjQaqAw9FM99GcU8omPw1ZA"
+      ],
+      "id": "2K--5Pm3qLCKf1bhpnvp2DWRKT75i-6YZyCH3ZbuJZU",
+      "kind": "authority",
+      "replica": "replica:matter:beacon-advance#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+      "sig": "UP8OqhA5uodN72LWzGXnvsu//HRaZdJLqa9GlW0j9rjnOzTYYM1GhBTd37OPy2yvyLVYJifAYs/f/mL6dKP0Ag==",
+      "v": 1
+    },
+    {
+      "author": "0vBPHby2rCnT1IYNPiBp+nHixQAQETb+O3ZPGvMvbPA=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "post"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "YmVmb3JlIHdpdG5lc3NlZCBhZHZhbmNl"
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "dXpHRnlfdjhVQ1k2VVBVV0Z2Uy1BUDI2eVdmVTdZS0hKR2JjVG9TQWFoVQ=="
+      ],
+      "deps": [
+        "2K--5Pm3qLCKf1bhpnvp2DWRKT75i-6YZyCH3ZbuJZU"
+      ],
+      "id": "G5Ze4Qb7ZsbvA920oz5Me10d6hJZCIBkBI9ZitC0y10",
+      "kind": "command",
+      "replica": "replica:matter:beacon-advance#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+      "sig": "bPmMYSDf8VexMIJOt2rFUX+YSACdSFrHctZCx/vrL4LfDTmr/fIiHCZKuGdX4pC4PZwhZ/O3ct500QDCMc0ZDg==",
+      "v": 1
+    },
+    {
+      "author": "FTy1TDlfo71Yo2AsCRxmksuiIQ/cK1IrG//fDzdy3k8=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "beacon"
+          ],
+          [
+            "int",
+            4
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "claim"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "deps"
+                      ],
+                      [
+                        "list",
+                        [
+                          [
+                            "bin",
+                            "RzVaZTRRYjdac2J2QTkyMG96NU1lMTBkNmhKWkNJQmtCSTlaaXRDMHkxMA=="
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "epoch"
+                      ],
+                      [
+                        "int",
+                        4
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "author"
+                      ],
+                      [
+                        "bin",
+                        "FTy1TDlfo71Yo2AsCRxmksuiIQ/cK1IrG//fDzdy3k8="
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "replica"
+                      ],
+                      [
+                        "bin",
+                        "cmVwbGljYTptYXR0ZXI6YmVhY29uLWFkdmFuY2Ujcm9vdDpWZlJ1NHhDVVNZUXp6R1lwd29SMkVkVFpSMVMyNldpMkF4V0R4T3RYWGVz"
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "version"
+                      ],
+                      [
+                        "int",
+                        1
+                      ]
+                    ]
+                  ]
+                ]
+              ],
+              [
+                [
+                  "atom",
+                  "signatures"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "witness"
+                          ],
+                          [
+                            "bin",
+                            "FTy1TDlfo71Yo2AsCRxmksuiIQ/cK1IrG//fDzdy3k8="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "signature"
+                          ],
+                          [
+                            "bin",
+                            "ayOMQBw2kD+jPpCS9VwDA7w9O7mAPgatv/eGvNLWSQEIFCfs8Xg5JVJJTOrbT5BOG3OdiTja06XjxxPzUOb0BA=="
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "witness"
+                          ],
+                          [
+                            "bin",
+                            "lLIXIvZKv4patcW/z0BgKAvD+2betYiSEZEnpQo8TJU="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "signature"
+                          ],
+                          [
+                            "bin",
+                            "ry1a0l/GVAoRPkgFRplRWbcdGHum03Q4tYia1ADDtXMwDDb1EpY4WKkrSTOEABmTsMFGqgmQitEcaSrOhEQKCg=="
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "G5Ze4Qb7ZsbvA920oz5Me10d6hJZCIBkBI9ZitC0y10"
+      ],
+      "id": "d4iqB87XR9sJwBRqFmiXgtujSQEhp1H7cQp6hqZr-I4",
+      "kind": "authority",
+      "replica": "replica:matter:beacon-advance#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+      "sig": "nuhpWrD5SK8aNucMxxSVs14IK1VBcV0MweZBMCOuj3HTCyXa1ASIJV3+/y7LHt1f9Kp2OWGn14w9axTUGeQuCA==",
+      "v": 1
+    },
+    {
+      "author": "0vBPHby2rCnT1IYNPiBp+nHixQAQETb+O3ZPGvMvbPA=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "post"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "YWZ0ZXIgd2l0bmVzc2VkIGFkdmFuY2U="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "dXpHRnlfdjhVQ1k2VVBVV0Z2Uy1BUDI2eVdmVTdZS0hKR2JjVG9TQWFoVQ=="
+      ],
+      "deps": [
+        "d4iqB87XR9sJwBRqFmiXgtujSQEhp1H7cQp6hqZr-I4"
+      ],
+      "id": "jxkjkQ4t8qAuNSOAtkJgEjun2vkQ-bysHSMxFXhEOvo",
+      "kind": "command",
+      "replica": "replica:matter:beacon-advance#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+      "sig": "bgqLrHP/gpqG+ZmBsHLEADiB9oDs2wOKij582dqbRUhZ+rXSX247vRlXzd8JmrUPwRZsOBUma3OnWCPepnkiDA==",
+      "v": 1
+    },
+    {
+      "author": "FTy1TDlfo71Yo2AsCRxmksuiIQ/cK1IrG//fDzdy3k8=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "beacon"
+          ],
+          [
+            "int",
+            5
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "claim"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "deps"
+                      ],
+                      [
+                        "list",
+                        [
+                          [
+                            "bin",
+                            "anhramtRNHQ4cUF1TlNPQXRrSmdFanVuMnZrUS1ieXNIU014RlhoRU92bw=="
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "epoch"
+                      ],
+                      [
+                        "int",
+                        5
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "author"
+                      ],
+                      [
+                        "bin",
+                        "FTy1TDlfo71Yo2AsCRxmksuiIQ/cK1IrG//fDzdy3k8="
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "replica"
+                      ],
+                      [
+                        "bin",
+                        "cmVwbGljYTptYXR0ZXI6YmVhY29uLWFkdmFuY2Ujcm9vdDpWZlJ1NHhDVVNZUXp6R1lwd29SMkVkVFpSMVMyNldpMkF4V0R4T3RYWGVz"
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "version"
+                      ],
+                      [
+                        "int",
+                        1
+                      ]
+                    ]
+                  ]
+                ]
+              ],
+              [
+                [
+                  "atom",
+                  "signatures"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "witness"
+                          ],
+                          [
+                            "bin",
+                            "FTy1TDlfo71Yo2AsCRxmksuiIQ/cK1IrG//fDzdy3k8="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "signature"
+                          ],
+                          [
+                            "bin",
+                            "rGbV319Q6PfF0BKHK2RabE+tMiHx3j3nb+xjnuOUbnWkte8E8GvBdHfWnG4n2w4rjcxojj+j1BbPFp9rGPQiBQ=="
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "witness"
+                          ],
+                          [
+                            "bin",
+                            "lLIXIvZKv4patcW/z0BgKAvD+2betYiSEZEnpQo8TJU="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "signature"
+                          ],
+                          [
+                            "bin",
+                            "Qk/hv5JtoVD0OZHdtkfPYRwErcQCJweCsVAzSUx0rTClZ0BPEOBAtHjPDbeosE+FXSk+f9L91TwpZU5Yb5P2Cg=="
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "jxkjkQ4t8qAuNSOAtkJgEjun2vkQ-bysHSMxFXhEOvo"
+      ],
+      "id": "1niRTnybPydHTF-2-pWrRCDzRY5CKRSWNMTy7s9OZNo",
+      "kind": "authority",
+      "replica": "replica:matter:beacon-advance#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+      "sig": "MUQOrg4Avcio/WLDjXBEI2wkQowXZphw21Ff4eK9Gs5zmQbl8jg/dfeg6+LwNWy9rwsF9k6Cg9jbIokV/DBDDQ==",
+      "v": 1
+    },
+    {
+      "author": "zcOckYZGoOuqyty9CmJBPzjhhFFILQlWih98dxobvKU=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "zcOckYZGoOuqyty9CmJBPzjhhFFILQlWih98dxobvKU=",
+              "id": "cMXOeiAzCABQuj-1AA1z13U4sKPkHbHatkF1wVydhII",
+              "issuer": "zcOckYZGoOuqyty9CmJBPzjhhFFILQlWih98dxobvKU=",
+              "live": true,
+              "ops": [
+                "admit",
+                "close_matter",
+                "link_election",
+                "post",
+                "remove_member",
+                "reopen_matter",
+                "set_summary",
+                "set_title"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:beacon-advance#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "IUHKSe+r2N//mwYk8HMLbHGJ5CYKpnZp0Bqbk099k+s917g9/WScIELj07va9sziB730xOjAiauEIRrXQiwmDw=="
+            }
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "__beacon__"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "mode"
+                      ],
+                      [
+                        "atom",
+                        "witnessed"
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "version"
+                      ],
+                      [
+                        "int",
+                        1
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "threshold"
+                      ],
+                      [
+                        "int",
+                        2
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "witnesses"
+                      ],
+                      [
+                        "list",
+                        [
+                          [
+                            "bin",
+                            "HfdwIfc6iuNE4nxXcUsADEi3jTJvdZKBNuolISEF5xQ="
+                          ],
+                          [
+                            "bin",
+                            "YMp2GHHDQ6zYX17SgOnfNToE5Or7/J8weC3qHyfsaj0="
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "max_epoch_step"
+                      ],
+                      [
+                        "int",
+                        10
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "jxkjkQ4t8qAuNSOAtkJgEjun2vkQ-bysHSMxFXhEOvo"
+      ],
+      "id": "o27hPu531V6IA5eB_64E6Gi0FiJ6qeKQ9UHeRMpDAa0",
+      "kind": "authority",
+      "replica": "replica:matter:beacon-advance#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+      "sig": "wg/kSnZ3QzGQU6eX/4X5KI9ZULXnYP6Nrm1rLCtvaKM+0IU/XvGA5Poax8Cl4yoE1/Q2z4M9ahWQJx541ImdDg==",
+      "v": 1
+    },
+    {
+      "author": "FTy1TDlfo71Yo2AsCRxmksuiIQ/cK1IrG//fDzdy3k8=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "beacon"
+          ],
+          [
+            "int",
+            6
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "claim"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "deps"
+                      ],
+                      [
+                        "list",
+                        [
+                          [
+                            "bin",
+                            "MW5pUlRueWJQeWRIVEYtMi1wV3JSQ0R6Ulk1Q0tSU1dOTVR5N3M5T1pObw=="
+                          ],
+                          [
+                            "bin",
+                            "bzI3aFB1NTMxVjZJQTVlQl82NEU2R2kwRmlKNnFlS1E5VUhlUk1wREFhMA=="
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "epoch"
+                      ],
+                      [
+                        "int",
+                        6
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "author"
+                      ],
+                      [
+                        "bin",
+                        "FTy1TDlfo71Yo2AsCRxmksuiIQ/cK1IrG//fDzdy3k8="
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "replica"
+                      ],
+                      [
+                        "bin",
+                        "cmVwbGljYTptYXR0ZXI6YmVhY29uLWFkdmFuY2Ujcm9vdDpWZlJ1NHhDVVNZUXp6R1lwd29SMkVkVFpSMVMyNldpMkF4V0R4T3RYWGVz"
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "version"
+                      ],
+                      [
+                        "int",
+                        1
+                      ]
+                    ]
+                  ]
+                ]
+              ],
+              [
+                [
+                  "atom",
+                  "signatures"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "witness"
+                          ],
+                          [
+                            "bin",
+                            "FTy1TDlfo71Yo2AsCRxmksuiIQ/cK1IrG//fDzdy3k8="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "signature"
+                          ],
+                          [
+                            "bin",
+                            "xFMOqfBgfzRKTtjSk8d7X7uKSY+bWyxlhcVItzMKTyrbbFy1wco9ikKTcY3aL86U7kaKOffxsEr6VCGQYGgnAw=="
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "witness"
+                          ],
+                          [
+                            "bin",
+                            "lLIXIvZKv4patcW/z0BgKAvD+2betYiSEZEnpQo8TJU="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "signature"
+                          ],
+                          [
+                            "bin",
+                            "7TLH1ok2+4fTbPIuIpRLWhDTGm5fjFUhnHPUGDRib5R6fu2MENR753yTk9u/KGTMyk4ssxbiAAJDuZKmKJW9Ag=="
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "1niRTnybPydHTF-2-pWrRCDzRY5CKRSWNMTy7s9OZNo",
+        "o27hPu531V6IA5eB_64E6Gi0FiJ6qeKQ9UHeRMpDAa0"
+      ],
+      "id": "9WddhWyvrc4RPBhBWBI7act2J2EMbZCpgk5wikXoR2E",
+      "kind": "authority",
+      "replica": "replica:matter:beacon-advance#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+      "sig": "XOAZENp4p0BIyrD/GjpefnBcTDQVdj1EjyX+E+hldpjoLMyPdsIWUFDY0bkG7QjlOBS6s0odDrQmZhj/gwJcDw==",
+      "v": 1
+    },
+    {
+      "author": "HfdwIfc6iuNE4nxXcUsADEi3jTJvdZKBNuolISEF5xQ=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "beacon"
+          ],
+          [
+            "int",
+            6
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "claim"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "deps"
+                      ],
+                      [
+                        "list",
+                        [
+                          [
+                            "bin",
+                            "MW5pUlRueWJQeWRIVEYtMi1wV3JSQ0R6Ulk1Q0tSU1dOTVR5N3M5T1pObw=="
+                          ],
+                          [
+                            "bin",
+                            "bzI3aFB1NTMxVjZJQTVlQl82NEU2R2kwRmlKNnFlS1E5VUhlUk1wREFhMA=="
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "epoch"
+                      ],
+                      [
+                        "int",
+                        6
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "author"
+                      ],
+                      [
+                        "bin",
+                        "HfdwIfc6iuNE4nxXcUsADEi3jTJvdZKBNuolISEF5xQ="
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "replica"
+                      ],
+                      [
+                        "bin",
+                        "cmVwbGljYTptYXR0ZXI6YmVhY29uLWFkdmFuY2Ujcm9vdDpWZlJ1NHhDVVNZUXp6R1lwd29SMkVkVFpSMVMyNldpMkF4V0R4T3RYWGVz"
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "version"
+                      ],
+                      [
+                        "int",
+                        1
+                      ]
+                    ]
+                  ]
+                ]
+              ],
+              [
+                [
+                  "atom",
+                  "signatures"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "witness"
+                          ],
+                          [
+                            "bin",
+                            "HfdwIfc6iuNE4nxXcUsADEi3jTJvdZKBNuolISEF5xQ="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "signature"
+                          ],
+                          [
+                            "bin",
+                            "/RyC5ZkoXdcZc9lbghGy38+YbAfKFNRQDn+moWbjv99UfMuJqhQkgyESkRqMcFDrPIjdy+vh2atw400/bALeCw=="
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "witness"
+                          ],
+                          [
+                            "bin",
+                            "YMp2GHHDQ6zYX17SgOnfNToE5Or7/J8weC3qHyfsaj0="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "signature"
+                          ],
+                          [
+                            "bin",
+                            "r82A4Izw/Ld+moAhj7TUBIniSJRgAxrMNCROgYIUWKhaJ4NlZPSJj9WIdlyTFJRCn6pIfN2n39TK/N79sC2jBA=="
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "1niRTnybPydHTF-2-pWrRCDzRY5CKRSWNMTy7s9OZNo",
+        "o27hPu531V6IA5eB_64E6Gi0FiJ6qeKQ9UHeRMpDAa0"
+      ],
+      "id": "K6D_Ww07eNabMWl9mV-PP0taTglpO4pSC3LEQB3RVzo",
+      "kind": "authority",
+      "replica": "replica:matter:beacon-advance#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+      "sig": "OFTHRBByXEC3qeBsdUGgFw9ioktx4utSFNb2UNWp4UcIpVAwpdG507Mi8akGk2tbsXwEqODfnnRY/doBcfJXDw==",
+      "v": 1
+    },
+    {
+      "author": "zcOckYZGoOuqyty9CmJBPzjhhFFILQlWih98dxobvKU=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "zcOckYZGoOuqyty9CmJBPzjhhFFILQlWih98dxobvKU=",
+              "id": "cMXOeiAzCABQuj-1AA1z13U4sKPkHbHatkF1wVydhII",
+              "issuer": "zcOckYZGoOuqyty9CmJBPzjhhFFILQlWih98dxobvKU=",
+              "live": true,
+              "ops": [
+                "admit",
+                "close_matter",
+                "link_election",
+                "post",
+                "remove_member",
+                "reopen_matter",
+                "set_summary",
+                "set_title"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:beacon-advance#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "IUHKSe+r2N//mwYk8HMLbHGJ5CYKpnZp0Bqbk099k+s917g9/WScIELj07va9sziB730xOjAiauEIRrXQiwmDw=="
+            }
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "__beacon__"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "mode"
+                      ],
+                      [
+                        "atom",
+                        "witnessed"
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "version"
+                      ],
+                      [
+                        "int",
+                        1
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "threshold"
+                      ],
+                      [
+                        "int",
+                        2
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "witnesses"
+                      ],
+                      [
+                        "list",
+                        [
+                          [
+                            "bin",
+                            "HfdwIfc6iuNE4nxXcUsADEi3jTJvdZKBNuolISEF5xQ="
+                          ],
+                          [
+                            "bin",
+                            "YMp2GHHDQ6zYX17SgOnfNToE5Or7/J8weC3qHyfsaj0="
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "max_epoch_step"
+                      ],
+                      [
+                        "int",
+                        65536
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "9WddhWyvrc4RPBhBWBI7act2J2EMbZCpgk5wikXoR2E",
+        "K6D_Ww07eNabMWl9mV-PP0taTglpO4pSC3LEQB3RVzo"
+      ],
+      "id": "HX-sFHTWQ4U0Ld5YMWtOdMIX5IT0EWodEuDmL7YJU6E",
+      "kind": "authority",
+      "replica": "replica:matter:beacon-advance#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+      "sig": "XKOBpY+89tMJldFNnR2CJO6/FNnnYb7lAZPaTUTrlWfKIY91zbUnlarBpJxQejfhMa9jqWCDn+AdYMhQkopvCA==",
+      "v": 1
+    },
+    {
+      "author": "HfdwIfc6iuNE4nxXcUsADEi3jTJvdZKBNuolISEF5xQ=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "beacon"
+          ],
+          [
+            "int",
+            7
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "claim"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "deps"
+                      ],
+                      [
+                        "list",
+                        [
+                          [
+                            "bin",
+                            "SFgtc0ZIVFdRNFUwTGQ1WU1XdE9kTUlYNUlUMEVXb2RFdURtTDdZSlU2RQ=="
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "epoch"
+                      ],
+                      [
+                        "int",
+                        7
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "author"
+                      ],
+                      [
+                        "bin",
+                        "HfdwIfc6iuNE4nxXcUsADEi3jTJvdZKBNuolISEF5xQ="
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "replica"
+                      ],
+                      [
+                        "bin",
+                        "cmVwbGljYTptYXR0ZXI6YmVhY29uLWFkdmFuY2Ujcm9vdDpWZlJ1NHhDVVNZUXp6R1lwd29SMkVkVFpSMVMyNldpMkF4V0R4T3RYWGVz"
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "version"
+                      ],
+                      [
+                        "int",
+                        1
+                      ]
+                    ]
+                  ]
+                ]
+              ],
+              [
+                [
+                  "atom",
+                  "signatures"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "witness"
+                          ],
+                          [
+                            "bin",
+                            "HfdwIfc6iuNE4nxXcUsADEi3jTJvdZKBNuolISEF5xQ="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "signature"
+                          ],
+                          [
+                            "bin",
+                            "l3lPLmEzwieH3aSTnJY19FWopu2WCkx6HfrQg6VDFHIS7dlE164+XfZMfm7JZJR7kwAUs29APUkDltT+oLQDAQ=="
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "witness"
+                          ],
+                          [
+                            "bin",
+                            "YMp2GHHDQ6zYX17SgOnfNToE5Or7/J8weC3qHyfsaj0="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "signature"
+                          ],
+                          [
+                            "bin",
+                            "iuEO0mmI21pNI7gtmnNxRpZPEg6aqKPsStovK47b4A71r03/WsN7u2qW1E2N+RKPe8+v+sGXlq24fgEJnY32Bg=="
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "HX-sFHTWQ4U0Ld5YMWtOdMIX5IT0EWodEuDmL7YJU6E"
+      ],
+      "id": "SQeOIf-Dz3nnEVlxKmZgY4viFCgZdsg7b8wXAhtcwnA",
+      "kind": "authority",
+      "replica": "replica:matter:beacon-advance#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+      "sig": "A7wx454vSaIhejiL+5aW+CG0BED5O8eyQALAaxKIJTT5ENcZZFQO+KyqJ2GgrsXZGui4W12kkIhhuXeGUEEwAw==",
+      "v": 1
+    }
+  ],
+  "perspectives": [],
+  "realmByPubkey": {
+    "0vBPHby2rCnT1IYNPiBp+nHixQAQETb+O3ZPGvMvbPA=": "resident",
+    "FTy1TDlfo71Yo2AsCRxmksuiIQ/cK1IrG//fDzdy3k8=": "w0",
+    "HfdwIfc6iuNE4nxXcUsADEi3jTJvdZKBNuolISEF5xQ=": "w2",
+    "YMp2GHHDQ6zYX17SgOnfNToE5Or7/J8weC3qHyfsaj0=": "w3",
+    "lLIXIvZKv4patcW/z0BgKAvD+2betYiSEZEnpQo8TJU=": "w1",
+    "zcOckYZGoOuqyty9CmJBPzjhhFFILQlWih98dxobvKU=": "clerk"
+  },
+  "replica": "replica:matter:beacon-advance#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+  "scenario": "township_beacon_witnessed_advance",
+  "scenarioKind": "adversarial",
+  "schema": {
+    "fields": {
+      "clerk": {
+        "authority": "clerk"
+      },
+      "clerk_locked": {
+        "default": false,
+        "gatedBy": "clerk",
+        "merge": "lww"
+      },
+      "members": {
+        "merge": "or_set"
+      },
+      "posts": {
+        "merge": "causal_list"
+      },
+      "summary": {
+        "default": "",
+        "merge": "lww"
+      },
+      "title": {
+        "default": "",
+        "merge": "lww"
+      }
+    },
+    "name": "Township.Matter"
+  }
+}

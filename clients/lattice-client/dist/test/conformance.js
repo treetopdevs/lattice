@@ -14,7 +14,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import { createPublicKey, verify as edVerify } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { analyzeAuthority, canonicalBytesForCarrierDelegation, canonicalHash, canonicalOrder, carrierDelegationsFromFrames, carrierOpsToSemanticOps, decodeCarrierOpFrame, index, materialize, toolshedCarrierCommandTable, toolshedCarrierCommandNames, townshipCarrierCommandTable, townshipCarrierCommandNames, verifyCarrierOp, verifyWitnessedSuccessionCertificate, witnessedRecoveryPolicyId, } from "../src/index";
+import { runBoundedContinuationConformance } from "./bounded_continuation";
+import { analyzeAuthority, canonicalBytesForCarrierDelegation, canonicalHash, canonicalOrder, carrierDelegationsFromFrames, carrierOpsToSemanticOps, decodeCarrierOpFrame, index, materialize, toolshedCarrierCommandTable, toolshedCarrierCommandNames, townshipCarrierCommandTable, townshipCarrierCommandNames, verifyCarrierOp, verifyWitnessedSuccessionCertificate, witnessedRecoveryPolicyId, witnessedBeaconHorizon, } from "../src/index";
 const here = dirname(fileURLToPath(import.meta.url));
 const vecDir = join(here, "vectors");
 const verifier = { verify: verifyEd25519 };
@@ -114,10 +115,38 @@ let testedToolshedCommandDrift = false;
 for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
     const vec = JSON.parse(readFileSync(join(vecDir, file), "utf8"));
     console.log(`\n▸ ${vec.scenario}  (${file})`);
-    const carrierFrames = vec.oracleCarrierOps?.map(decodeCarrierOpFrame);
+    const horizonVector = vec.scenario === "township_beacon_witnessed_horizon";
+    const carrierFrames = horizonVector
+        ? vec.oracleCarrierOps
+        : vec.oracleCarrierOps?.map(decodeCarrierOpFrame);
+    if (horizonVector) {
+        check("witnessed epoch horizon is fixed across runtimes", witnessedBeaconHorizon, 9_007_199_254_740_991);
+        const frame = carrierFrames?.find((candidate) => candidate.id === vec.capabilityCase?.beaconOperationId);
+        check("horizon vector supplies its signed beacon frame", frame !== undefined, true);
+        if (frame !== undefined) {
+            let refused = false;
+            try {
+                decodeCarrierOpFrame(frame);
+            }
+            catch {
+                refused = true;
+            }
+            check("strict frame decoding refuses above-horizon integer", refused, true);
+        }
+    }
     const ops = carrierFrames !== undefined && vec.realmByPubkey !== undefined
         ? carrierOpsToSemanticOps(carrierFrames, vec.realmByPubkey)
         : vec.ops;
+    if (vec.scenario === "township_beacon_witnessed_large_policy_integer" ||
+        vec.scenario === "township_beacon_witnessed_unbound_root" ||
+        vec.scenario === "township_beacon_witnessed_policy_metadata" ||
+        vec.scenario === "township_beacon_witnessed_certificate_metadata") {
+        check("beacon review vector supplies raw signed frames", (carrierFrames?.length ?? 0) > 0, true);
+        for (const frame of carrierFrames ?? []) {
+            check("beacon review raw frame hash/signature", await verifyCarrierOp(frame, verifier), { hash: true, signature: true, valid: true });
+            check("contextual decoding preserves exact raw frame", decodeCarrierOpFrame(frame), frame);
+        }
+    }
     for (const op of ops) {
         const evidenceType = op.authority?.type;
         if (evidenceType === undefined)
@@ -351,6 +380,13 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
             : undefined;
         check("link_election carries its real command name", linkOperation?.command, "link_election");
         check("link_election zero-mutation state is byte-identical", JSON.stringify(full.state), withoutLink === null ? null : JSON.stringify(withoutLink.state));
+    }
+    if (vec.capabilityCase?.legacyMigration !== undefined) {
+        const migration = vec.capabilityCase.legacyMigration;
+        const historicalOps = carrierOpsToSemanticOps(migration.oracleCarrierOps, migration.realmByPubkey);
+        const migrated = materialize(vec.schema, historicalOps);
+        check("legacy beacon history preserves state and holders", stableComparisonValue(migrated.state), stableComparisonValue(migration.state));
+        check("legacy beacon history has exactly the authorized audit delta", sortedPairs([...migrated.quarantineReasons]), sortedPairs([...migration.legacyReasonPairs, [migration.auditDeltaOperationId, "unauthorized_beacon"]]));
     }
     if (vec.capabilityCase !== undefined) {
         const reasoned = full;
@@ -813,6 +849,7 @@ console.log("\n▸ carrier authority report is diagnostic only");
     check("carrier report divergence carries sorted local ids", divergence instanceof Error && "localIds" in divergence ? divergence.localIds : null, []);
     check("carrier report divergence carries sorted reported ids", divergence instanceof Error && "reportedIds" in divergence ? divergence.reportedIds : null, [quarantined.id]);
 }
+await runBoundedContinuationConformance();
 console.log(`\n${failures === 0 ? "\x1b[32m✓ all conformance checks passed\x1b[0m" : `\x1b[31m✗ ${failures} check(s) failed\x1b[0m`}`);
 process.exit(failures === 0 ? 0 : 1);
 async function verifyEd25519(author, bytes, signature) {

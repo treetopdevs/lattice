@@ -8,6 +8,8 @@
 export type OpKind = "command" | "authority" | "inbox" | "tombstone";
 
 // Mutations mirror the Elixir Replica DSL's absolute mutations.
+import type { ContinuationCertificate, ContinuationProfile } from "./continuation";
+
 export type Mutation = "write" | "append" | "add" | "remove" | "delete";
 export type CommandError =
   | "unknown_command"
@@ -98,13 +100,37 @@ export interface WitnessedSuccessionCertificateEvidence {
 export type SuccessionProofEvidence =
   | { mode: "legacy"; atTick: number }
   | { mode: "witnessed"; certificate: WitnessedSuccessionCertificateEvidence | null }
+  | { mode: "continuation"; certificate: ContinuationCertificate | null }
   | { mode: "invalid" };
+
+export interface WitnessedBeaconPolicyEvidence {
+  mode: "witnessed";
+  version: number;
+  witnesses: string[];
+  threshold: number;
+  maxEpochStep: number;
+}
+
+export interface WitnessedBeaconClaimEvidence {
+  version: number;
+  replica: string;
+  epoch: number;
+  author: string;
+  deps: string[];
+}
+
+export interface WitnessedBeaconCertificateEvidence {
+  claim: WitnessedBeaconClaimEvidence;
+  signatures: WitnessedSuccessionSignatureEvidence[];
+}
 
 export type AuthorityEvidence =
   | {
       type: "genesis";
       delegation: AuthorityDelegationEvidence;
       policies?: Record<string, SuccessionPolicyEvidence>;
+      beaconPolicy?: WitnessedBeaconPolicyEvidence | null;
+      continuationProfile?: ContinuationProfile | null;
     }
   | { type: "grant"; delegation: AuthorityDelegationEvidence }
   | {
@@ -121,7 +147,7 @@ export type AuthorityEvidence =
     }
   | { type: "revoke"; delegationId: string }
   | { type: "heartbeat"; role: string; atTick: number }
-  | { type: "beacon"; epoch: number | null };
+  | { type: "beacon"; epoch: number | null; certificate?: WitnessedBeaconCertificateEvidence | null; authorPubkey?: string };
 
 export interface Op {
   /** Content-address id from Elixir. In Tier A this is an opaque handle. */
@@ -133,6 +159,8 @@ export interface Op {
   kind: OpKind;
   /** Authoring realm / DID (the signer). */
   author: string;
+  /** Canonical Base64 of the signed outer author; independent of display realm aliases. */
+  authorPubkey?: string;
   /** The replica field this op targets (e.g. "summary", "posts", "clerk"). */
   field: string;
   /** Absolute mutation applied to that field. */
@@ -152,6 +180,8 @@ export interface Op {
   commandError?: CommandError;
   /** Structurally malformed carrier term retained only for local audit/quarantine. */
   structuralError?: "malformed_term";
+  /** Recognized new authority input whose malformed delegation cannot supply evidence. */
+  authorityInputReason?: "malformed_term" | "unauthorized_continuation" | "unsupported_authority_profile";
   /** Capability id retained from carrier evidence; decoded nil is explicit null. */
   cap?: string | null;
   /** Semantic authority facts retained from the verified carrier body. */

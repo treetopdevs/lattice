@@ -37,12 +37,21 @@ export interface AuthorTownshipDelegationInput {
     ops?: readonly string[];
     roles?: readonly string[];
     live?: boolean;
+    expiresEpoch?: number;
     signer: CarrierOpSigner;
 }
-export interface TownshipGenesisPolicy {
+export interface TownshipLegacyGenesisPolicy {
     successorPubkey: string | Uint8Array;
     dormantTicks: number;
 }
+export interface TownshipBeaconGenesisPolicy {
+    mode: "witnessed";
+    version: 1;
+    witnesses: readonly (string | Uint8Array)[];
+    threshold: number;
+    maxEpochStep: number;
+}
+export type TownshipGenesisPolicy = TownshipLegacyGenesisPolicy | TownshipBeaconGenesisPolicy;
 export interface AuthorTownshipGenesisInput {
     replica: string;
     ops?: readonly string[];
@@ -60,7 +69,7 @@ export interface AuthorAndPersistTownshipCommandInput extends Pick<AuthorTownshi
     delegationFrames?: CarrierFrameStore;
     realmByPubkey: Record<string, string>;
 }
-export interface AuthorAndPersistTownshipDelegationInput extends Pick<AuthorTownshipDelegationInput, "replica" | "audiencePubkey" | "ops" | "roles" | "live" | "signer"> {
+export interface AuthorAndPersistTownshipDelegationInput extends Pick<AuthorTownshipDelegationInput, "replica" | "audiencePubkey" | "ops" | "roles" | "live" | "expiresEpoch" | "signer"> {
     parentId?: string | null;
     localLog: LocalOpLogStore;
     carrierFrames: CarrierFrameStore;
@@ -89,6 +98,7 @@ export declare function selectTownshipDelegationParentId(delegations: readonly C
     ops?: readonly string[];
     roles?: readonly string[];
     live?: boolean;
+    expiresEpoch?: number;
 }): string | null;
 export declare function authorTownshipCommand(input: AuthorTownshipCommandInput): Promise<CarrierOpFrame>;
 export declare function authorTownshipCommandFromLog(input: AuthorTownshipCommandFromLogInput): Promise<CarrierOpFrame>;

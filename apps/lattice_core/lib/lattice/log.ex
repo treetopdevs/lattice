@@ -393,7 +393,28 @@ defmodule Lattice.Log do
       :policy_id,
       :role,
       :replica,
-      :beacon
+      :__beacon__,
+      :max_epoch_step,
+      :epoch,
+      :author,
+      :deps,
+      :beacon,
+      :__continuation__,
+      :bounded_continuation,
+      :continuation_v1,
+      :product,
+      :treehouse,
+      :kind,
+      :space,
+      :thread,
+      :admin,
+      :moderator,
+      :nominee,
+      :max_lease_epochs,
+      :profile_id,
+      :profile_genesis,
+      :delegation_id,
+      :epoch_basis
     ]
   end
 

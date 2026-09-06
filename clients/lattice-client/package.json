@@ -16,7 +16,10 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "conformance": "tsx test/conformance.ts",
+    "conformance": "tsx test/conformance.ts && npm run continuation:codec && npm run continuation:authoring",
+    "continuation:codec": "tsx test/continuation_codec.ts",
+    "continuation:authoring": "tsx test/continuation_authoring.ts",
+    "continuation:vectors": "tsx test/support/export_continuation_authoring.ts",
     "v01:guard": "tsx test/v01_authority_guard.ts",
     "canonical": "tsx test/canonical.ts",
     "succession:review": "tsx test/witnessed_succession_review.ts",

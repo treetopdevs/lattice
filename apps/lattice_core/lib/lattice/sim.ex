@@ -16,7 +16,13 @@ defmodule Lattice.Sim do
   """
 
   alias Lattice.{Authority, Identity, Log, Net, Op, Sync}
-  alias Lattice.Authority.{Delegation, SuccessionCertificate}
+
+  alias Lattice.Authority.{
+    BeaconCertificate,
+    ContinuationCertificate,
+    Delegation,
+    SuccessionCertificate
+  }
 
   defstruct module: nil, replica: nil, realms: %{}, logs: %{}, net: %Net{}, caps: %{}
 
@@ -140,6 +146,47 @@ defmodule Lattice.Sim do
     {add_cap(sim, successor_realm, deleg), op}
   end
 
+  @doc "Author a finite continuation using a reconstructed current-frontier claim and explicit witnesses."
+  @spec continue_role(t(), String.t(), atom(), keyword()) ::
+          {t(), Op.t()} | {:error, atom()}
+  def continue_role(%__MODULE__{} = sim, realm, role, opts) do
+    identity = identity(sim, realm)
+    log = log(sim, realm)
+
+    delegation =
+      Delegation.new(identity, sim.replica, identity.pub,
+        ops: Keyword.fetch!(opts, :ops),
+        roles: [role],
+        live: false,
+        expires_epoch: Keyword.fetch!(opts, :expires_epoch)
+      )
+
+    with {:ok, review} <-
+           Authority.continuation_review(
+             sim.module,
+             log,
+             role,
+             identity.pub,
+             Log.frontier(log),
+             delegation
+           ) do
+      witnesses = Enum.map(Keyword.fetch!(opts, :witnesses), &identity(sim, &1))
+      certificate = ContinuationCertificate.new(review.claim, witnesses)
+
+      with :ok <- ContinuationCertificate.verify(certificate, review.claim, review.profile) do
+        {sim, op} =
+          append(
+            sim,
+            realm,
+            :authority,
+            {:succeed, role, delegation, {:continuation_v1, certificate}}
+          )
+
+        {add_cap(sim, realm, delegation), op}
+      end
+    end
+  end
+
   @doc "Revoke a delegation by id (authored by `issuer_realm`)."
   @spec revoke(t(), String.t(), String.t()) :: {t(), Op.t()}
   def revoke(%__MODULE__{} = sim, issuer_realm, delegation_id) do
@@ -160,6 +207,28 @@ defmodule Lattice.Sim do
   @spec beacon(t(), String.t(), non_neg_integer()) :: {t(), Op.t()}
   def beacon(%__MODULE__{} = sim, realm, epoch) do
     append(sim, realm, :authority, {:beacon, epoch})
+  end
+
+  @doc "Author a witnessed epoch using an explicit certificate or witness realm names."
+  @spec beacon(t(), String.t(), non_neg_integer(), keyword()) :: {t(), Op.t()}
+  def beacon(%__MODULE__{} = sim, realm, epoch, opts) do
+    certificate =
+      Keyword.get_lazy(opts, :certificate, fn ->
+        claim =
+          BeaconCertificate.claim(
+            sim.replica,
+            epoch,
+            identity(sim, realm).pub,
+            Log.frontier(log(sim, realm))
+          )
+
+        BeaconCertificate.new(
+          claim,
+          Enum.map(Keyword.fetch!(opts, :witnesses), &identity(sim, &1))
+        )
+      end)
+
+    append(sim, realm, :authority, {:beacon, epoch, certificate})
   end
 
   @doc "Queue an authoritative request through the holder (behavior 6)."
@@ -260,6 +329,10 @@ defmodule Lattice.Sim do
   end
 
   # --- Internals -----------------------------------------------------------
+
+  defp resolve_policy(sim, %{mode: :witnessed, witnesses: witnesses} = policy) do
+    %{policy | witnesses: Enum.map(witnesses, &identity(sim, &1).pub)}
+  end
 
   defp resolve_policy(
          sim,

@@ -1,0 +1,1357 @@
+{
+  "version": 1,
+  "vectors": [
+    {
+      "kind": "space",
+      "role": "admin",
+      "replica": "replica:treehouse:space:CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws#authority:bounded-continuation-v1#root:NHUPmL1Z_PyUbaRaqr6TO-FUpLUJThxKv0KGZQXzyX4",
+      "schema": {
+        "name": "ContinuationAuthoringFixture",
+        "fields": {
+          "admin": {
+            "authority": "admin"
+          }
+        }
+      },
+      "frames": [
+        {
+          "v": 1,
+          "id": "6wNHJudyCoP9iYHLpG1LkyrN1NgwbJ4GEfHIM2vEbVc",
+          "replica": "replica:treehouse:space:CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws#authority:bounded-continuation-v1#root:NHUPmL1Z_PyUbaRaqr6TO-FUpLUJThxKv0KGZQXzyX4",
+          "author": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+          "deps": [],
+          "kind": "authority",
+          "body": [
+            "tuple",
+            [
+              [
+                "atom",
+                "genesis"
+              ],
+              [
+                "delegation",
+                {
+                  "replica": "replica:treehouse:space:CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws#authority:bounded-continuation-v1#root:NHUPmL1Z_PyUbaRaqr6TO-FUpLUJThxKv0KGZQXzyX4",
+                  "issuer": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+                  "audience": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+                  "parent_id": null,
+                  "ops": [
+                    "manage",
+                    "post"
+                  ],
+                  "roles": [
+                    "admin"
+                  ],
+                  "live": false,
+                  "id": "JdXVv1o_4UQXPAcS0W7f2rKVEy7SNzFsWMqajHa32U0",
+                  "sig": "6u8GYRKPtGRW0DBZEBVFd9Oq8cikJMR8X/gniuYEOj+5ny9IBxPODq2Vcd9CrA5ej+Mc+vjsDS5MOTAUNUtgAw=="
+                }
+              ],
+              [
+                "map",
+                []
+              ]
+            ]
+          ],
+          "cap": [
+            "nil"
+          ],
+          "sig": "fVW9odY35j4M3fEednJ7KxnNboNvJgBjZ73p1rlYUDNexHaT8wOWhPXEWcXQ6RIy5NS44K82JQzGvMiJ4KvxBw=="
+        },
+        {
+          "v": 1,
+          "id": "BfsFy_RZDmr1jGmSz_sGRtL3l06QawEZucaKZCYMjSw",
+          "replica": "replica:treehouse:space:CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws#authority:bounded-continuation-v1#root:NHUPmL1Z_PyUbaRaqr6TO-FUpLUJThxKv0KGZQXzyX4",
+          "author": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+          "deps": [
+            "6wNHJudyCoP9iYHLpG1LkyrN1NgwbJ4GEfHIM2vEbVc"
+          ],
+          "kind": "authority",
+          "body": [
+            "tuple",
+            [
+              [
+                "atom",
+                "transfer"
+              ],
+              [
+                "atom",
+                "admin"
+              ],
+              [
+                "delegation",
+                {
+                  "replica": "replica:treehouse:space:CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws#authority:bounded-continuation-v1#root:NHUPmL1Z_PyUbaRaqr6TO-FUpLUJThxKv0KGZQXzyX4",
+                  "issuer": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+                  "audience": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+                  "parent_id": "JdXVv1o_4UQXPAcS0W7f2rKVEy7SNzFsWMqajHa32U0",
+                  "ops": [
+                    "post"
+                  ],
+                  "roles": [
+                    "admin"
+                  ],
+                  "live": false,
+                  "expires_epoch": 2,
+                  "id": "gDotXaoecBVSFwSnTe9rXnaSm-1-UhfAGDLVxMs8IlQ",
+                  "sig": "kb0u3yvPpdqvXbs7xcIrCnycOjZrSGFOdZYjnbpuCDL78hEv9j6uzDufQbpd0/wgbzEBjwRXa2poiY2J0rkYBw=="
+                }
+              ],
+              [
+                "int",
+                0
+              ]
+            ]
+          ],
+          "cap": [
+            "nil"
+          ],
+          "sig": "jkqQJpDf8PqGf+BLUvecKVf9glmLIgF6Xb9j6Ks57GP2spEzPjUoeoFnsmJLbF9+V6wuxHxNchSvsdsK5p/eDA=="
+        },
+        {
+          "v": 1,
+          "id": "g-J0SiEXm-VxiR20LQr5oe1m-ciKEz9Tm6P6IPvyi9E",
+          "replica": "replica:treehouse:space:CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws#authority:bounded-continuation-v1#root:NHUPmL1Z_PyUbaRaqr6TO-FUpLUJThxKv0KGZQXzyX4",
+          "author": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+          "deps": [
+            "BfsFy_RZDmr1jGmSz_sGRtL3l06QawEZucaKZCYMjSw"
+          ],
+          "kind": "authority",
+          "body": [
+            "tuple",
+            [
+              [
+                "atom",
+                "genesis"
+              ],
+              [
+                "delegation",
+                {
+                  "replica": "replica:treehouse:space:CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws#authority:bounded-continuation-v1#root:NHUPmL1Z_PyUbaRaqr6TO-FUpLUJThxKv0KGZQXzyX4",
+                  "issuer": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+                  "audience": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+                  "parent_id": null,
+                  "ops": [],
+                  "roles": [],
+                  "live": false,
+                  "id": "omYSQDGfTAb04GPWECcfx1tTcvoeJmjiEKYFQojEBiA",
+                  "sig": "ZNlyAsy0Z3HSPiIqVCWctA+U2cGOw7EE+V8zwXOKG7fSQiClqe4m0hSVbsAixPBMYrvSKKtqp+GGc+I040EmDA=="
+                }
+              ],
+              [
+                "map",
+                [
+                  [
+                    [
+                      "atom",
+                      "__continuation__"
+                    ],
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "mode"
+                          ],
+                          [
+                            "atom",
+                            "bounded_continuation"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "version"
+                          ],
+                          [
+                            "int",
+                            1
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "product"
+                          ],
+                          [
+                            "atom",
+                            "treehouse"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "kind"
+                          ],
+                          [
+                            "atom",
+                            "space"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "role"
+                          ],
+                          [
+                            "atom",
+                            "admin"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "nominee"
+                          ],
+                          [
+                            "bin",
+                            "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "witnesses"
+                          ],
+                          [
+                            "list",
+                            [
+                              [
+                                "bin",
+                                "bnoc3Smwt4/ROvTFWY/v9O8qlxZuPKby5Pv8zYBQW/E="
+                              ],
+                              [
+                                "bin",
+                                "ypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnw="
+                              ]
+                            ]
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "threshold"
+                          ],
+                          [
+                            "int",
+                            2
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "max_lease_epochs"
+                          ],
+                          [
+                            "int",
+                            7
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ],
+          "cap": [
+            "nil"
+          ],
+          "sig": "fcayYjZupuRsIX+mcA0caU5WTSjo/2KDO439Gtd4OWBZ/U+kp3gz2wjmG+i8jCTv+Dl6XEidtqi2rmK480HmDg=="
+        },
+        {
+          "v": 1,
+          "id": "ieqQE2fElCkS67_9cpWBg2I698a07rPFXq-4aAkzoEQ",
+          "replica": "replica:treehouse:space:CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws#authority:bounded-continuation-v1#root:NHUPmL1Z_PyUbaRaqr6TO-FUpLUJThxKv0KGZQXzyX4",
+          "author": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+          "deps": [
+            "g-J0SiEXm-VxiR20LQr5oe1m-ciKEz9Tm6P6IPvyi9E"
+          ],
+          "kind": "authority",
+          "body": [
+            "tuple",
+            [
+              [
+                "atom",
+                "beacon"
+              ],
+              [
+                "int",
+                5
+              ]
+            ]
+          ],
+          "cap": [
+            "nil"
+          ],
+          "sig": "OmkQR9ZuCG7PJjpAt3ZUg0C8MJIVSHshpzeyjsFSQaj1sklIRUpEGi7LNfiQKwZpnAjvkVrx/gE+oqX7nLyaDg=="
+        },
+        {
+          "v": 1,
+          "id": "THaIdMs22_X4da8Qaw7HzFSYNhWSQNmMp5ORKT6AuOo",
+          "replica": "replica:treehouse:space:CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws#authority:bounded-continuation-v1#root:NHUPmL1Z_PyUbaRaqr6TO-FUpLUJThxKv0KGZQXzyX4",
+          "author": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+          "deps": [
+            "ieqQE2fElCkS67_9cpWBg2I698a07rPFXq-4aAkzoEQ"
+          ],
+          "kind": "authority",
+          "body": [
+            "tuple",
+            [
+              [
+                "atom",
+                "succeed"
+              ],
+              [
+                "atom",
+                "admin"
+              ],
+              [
+                "delegation",
+                {
+                  "replica": "replica:treehouse:space:CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws#authority:bounded-continuation-v1#root:NHUPmL1Z_PyUbaRaqr6TO-FUpLUJThxKv0KGZQXzyX4",
+                  "issuer": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+                  "audience": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+                  "parent_id": null,
+                  "ops": [
+                    "post"
+                  ],
+                  "roles": [
+                    "admin"
+                  ],
+                  "live": false,
+                  "expires_epoch": 11,
+                  "id": "D8vV7lGVvSkrnrXuisrmW2T5kFzozZMxPq9jJjIjULI",
+                  "sig": "4Ut10MqSpfyxKA4GKnTfhZ0oaH1bOhYMIrX5ISVwg0/BGCO9zNDczC2UBZhK2GILCMLJWN7taNxX8OsVYXNGAA=="
+                }
+              ],
+              [
+                "tuple",
+                [
+                  [
+                    "atom",
+                    "continuation_v1"
+                  ],
+                  [
+                    "map",
+                    [
+                      [
+                        [
+                          "atom",
+                          "claim"
+                        ],
+                        [
+                          "map",
+                          [
+                            [
+                              [
+                                "atom",
+                                "version"
+                              ],
+                              [
+                                "int",
+                                1
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "product"
+                              ],
+                              [
+                                "atom",
+                                "treehouse"
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "kind"
+                              ],
+                              [
+                                "atom",
+                                "space"
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "replica"
+                              ],
+                              [
+                                "bin",
+                                "cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6Q3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3cyNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpOSFVQbUwxWl9QeVViYVJhcXI2VE8tRlVwTFVKVGh4S3YwS0daUVh6eVg0"
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "role"
+                              ],
+                              [
+                                "atom",
+                                "admin"
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "profile_id"
+                              ],
+                              [
+                                "bin",
+                                "bEx3VW9sdXVncmZDLWU5SnNZQWk0WXVZLTdiTHZnUmVRQi1lRXdLNm1Qaw=="
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "profile_genesis"
+                              ],
+                              [
+                                "bin",
+                                "Zy1KMFNpRVhtLVZ4aVIyMExRcjVvZTFtLWNpS0V6OVRtNlA2SVB2eWk5RQ=="
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "holder"
+                              ],
+                              [
+                                "bin",
+                                "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q="
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "holder_epoch"
+                              ],
+                              [
+                                "bin",
+                                "QmZzRnlfUlpEbXIxakdtU3pfc0dSdEwzbDA2UWF3RVp1Y2FLWkNZTWpTdw=="
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "successor"
+                              ],
+                              [
+                                "bin",
+                                "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q="
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "delegation_id"
+                              ],
+                              [
+                                "bin",
+                                "RDh2VjdsR1Z2U2tybnJYdWlzcm1XMlQ1a0Z6b3paTXhQcTlqSmpJalVMSQ=="
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "author"
+                              ],
+                              [
+                                "bin",
+                                "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q="
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "deps"
+                              ],
+                              [
+                                "list",
+                                [
+                                  [
+                                    "bin",
+                                    "aWVxUUUyZkVsQ2tTNjdfOWNwV0JnMkk2OThhMDdyUEZYcS00YUFrem9FUQ=="
+                                  ]
+                                ]
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "epoch"
+                              ],
+                              [
+                                "int",
+                                5
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "epoch_basis"
+                              ],
+                              [
+                                "list",
+                                [
+                                  [
+                                    "bin",
+                                    "aWVxUUUyZkVsQ2tTNjdfOWNwV0JnMkk2OThhMDdyUEZYcS00YUFrem9FUQ=="
+                                  ]
+                                ]
+                              ]
+                            ]
+                          ]
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "signatures"
+                        ],
+                        [
+                          "list",
+                          [
+                            [
+                              "map",
+                              [
+                                [
+                                  [
+                                    "atom",
+                                    "witness"
+                                  ],
+                                  [
+                                    "bin",
+                                    "bnoc3Smwt4/ROvTFWY/v9O8qlxZuPKby5Pv8zYBQW/E="
+                                  ]
+                                ],
+                                [
+                                  [
+                                    "atom",
+                                    "signature"
+                                  ],
+                                  [
+                                    "bin",
+                                    "UiuOGtRZZ8oM16xDphuwa419kco+aUrbdTE2uIzBGXUhL1UP7QcVVUpmKBGyYo29GWntPZhnNd6XzDHjIax3DQ=="
+                                  ]
+                                ]
+                              ]
+                            ],
+                            [
+                              "map",
+                              [
+                                [
+                                  [
+                                    "atom",
+                                    "witness"
+                                  ],
+                                  [
+                                    "bin",
+                                    "ypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnw="
+                                  ]
+                                ],
+                                [
+                                  [
+                                    "atom",
+                                    "signature"
+                                  ],
+                                  [
+                                    "bin",
+                                    "QJMMvG5xnqV4EtCTtgHuO1bzjw2Epuf8L0YtjLVwyI+yeu5KpY/GavC7tjBjLxno6f84TufGJcxieeR8/OprBA=="
+                                  ]
+                                ]
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ],
+          "cap": [
+            "nil"
+          ],
+          "sig": "wL8fOEEwjRJs9QZSLayQbyBF5ndmWcxvJ7pyqC5y+9HE8q3aOBBWrXPmeQ4PWOeYI8M1rlB9cQ6LzaA07zl9Aw=="
+        }
+      ],
+      "finalOpId": "THaIdMs22_X4da8Qaw7HzFSYNhWSQNmMp5ORKT6AuOo",
+      "holder": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+      "delegationId": "D8vV7lGVvSkrnrXuisrmW2T5kFzozZMxPq9jJjIjULI",
+      "canonical": [
+        {
+          "id": "6wNHJudyCoP9iYHLpG1LkyrN1NgwbJ4GEfHIM2vEbVc",
+          "bytes": "h01sYXR0aWNlLW9wLXYyWJZyZXBsaWNhOnRyZWVob3VzZTpzcGFjZTpDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzI2F1dGhvcml0eTpib3VuZGVkLWNvbnRpbnVhdGlvbi12MSNyb290Ok5IVVBtTDFaX1B5VWJhUmFxcjZUTy1GVXBMVUpUaHhLdjBLR1pRWHp5WDRYIIqI4910CfGV/VLbLTy6XXLKZwm/HZQSG/N0iAG0D29cgNnqYElhdXRob3JpdHnZ6mGD2epgR2dlbmVzaXPZ6mOJWCtKZFhWdjFvXzRVUVhQQWNTMFc3ZjJyS1ZFeTdTTnpGc1dNcWFqSGEzMlUwWJZyZXBsaWNhOnRyZWVob3VzZTpzcGFjZTpDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzI2F1dGhvcml0eTpib3VuZGVkLWNvbnRpbnVhdGlvbi12MSNyb290Ok5IVVBtTDFaX1B5VWJhUmFxcjZUTy1GVXBMVUpUaHhLdjBLR1pRWHp5WDRYIIqI4910CfGV/VLbLTy6XXLKZwm/HZQSG/N0iAG0D29cWCCKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXPaC2epgRm1hbmFnZdnqYERwb3N0gdnqYEVhZG1pbvRYQOrvBmESj7RkVtAwWRAVRXfTqvHIpCTEfF/4J4rmBDo/uZ8vSAcTzg6tlXHfQqwOXo/jHPr47A0uTDkwFDVLYAOg9g=="
+        },
+        {
+          "id": "BfsFy_RZDmr1jGmSz_sGRtL3l06QawEZucaKZCYMjSw",
+          "bytes": "h01sYXR0aWNlLW9wLXYyWJZyZXBsaWNhOnRyZWVob3VzZTpzcGFjZTpDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzI2F1dGhvcml0eTpib3VuZGVkLWNvbnRpbnVhdGlvbi12MSNyb290Ok5IVVBtTDFaX1B5VWJhUmFxcjZUTy1GVXBMVUpUaHhLdjBLR1pRWHp5WDRYIIqI4910CfGV/VLbLTy6XXLKZwm/HZQSG/N0iAG0D29cgVgrNndOSEp1ZHlDb1A5aVlITHBHMUxreXJOMU5nd2JKNEdFZkhJTTJ2RWJWY9nqYElhdXRob3JpdHnZ6mGE2epgSHRyYW5zZmVy2epgRWFkbWlu2epjilgrZ0RvdFhhb2VjQlZTRndTblRlOXJYbmFTbS0xLVVoZkFHRExWeE1zOElsUViWcmVwbGljYTp0cmVlaG91c2U6c3BhY2U6Q3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3cyNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpOSFVQbUwxWl9QeVViYVJhcXI2VE8tRlVwTFVKVGh4S3YwS0daUVh6eVg0WCCKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXFgggTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5RYK0pkWFZ2MW9fNFVRWFBBY1MwVzdmMnJLVkV5N1NOekZzV01xYWpIYTMyVTCB2epgRHBvc3SB2epgRWFkbWlu9FhAkb0u3yvPpdqvXbs7xcIrCnycOjZrSGFOdZYjnbpuCDL78hEv9j6uzDufQbpd0/wgbzEBjwRXa2poiY2J0rkYBwIA9g=="
+        },
+        {
+          "id": "g-J0SiEXm-VxiR20LQr5oe1m-ciKEz9Tm6P6IPvyi9E",
+          "bytes": "h01sYXR0aWNlLW9wLXYyWJZyZXBsaWNhOnRyZWVob3VzZTpzcGFjZTpDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzI2F1dGhvcml0eTpib3VuZGVkLWNvbnRpbnVhdGlvbi12MSNyb290Ok5IVVBtTDFaX1B5VWJhUmFxcjZUTy1GVXBMVUpUaHhLdjBLR1pRWHp5WDRYIIqI4910CfGV/VLbLTy6XXLKZwm/HZQSG/N0iAG0D29cgVgrQmZzRnlfUlpEbXIxakdtU3pfc0dSdEwzbDA2UWF3RVp1Y2FLWkNZTWpTd9nqYElhdXRob3JpdHnZ6mGD2epgR2dlbmVzaXPZ6mOJWCtvbVlTUURHZlRBYjA0R1BXRUNjZngxdFRjdm9lSm1qaUVLWUZRb2pFQmlBWJZyZXBsaWNhOnRyZWVob3VzZTpzcGFjZTpDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzI2F1dGhvcml0eTpib3VuZGVkLWNvbnRpbnVhdGlvbi12MSNyb290Ok5IVVBtTDFaX1B5VWJhUmFxcjZUTy1GVXBMVUpUaHhLdjBLR1pRWHp5WDRYIIqI4910CfGV/VLbLTy6XXLKZwm/HZQSG/N0iAG0D29cWCCKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXPaAgPRYQGTZcgLMtGdx0j4iKlQlnLQPlNnBjsOxBPlfM8Fzihu30kIgpanuJtIUlW7AIsTwTGK70iiraqfhhnPiNONBJgyh2epgUF9fY29udGludWF0aW9uX1+p2epgRGtpbmTZ6mBFc3BhY2XZ6mBEbW9kZdnqYFRib3VuZGVkX2NvbnRpbnVhdGlvbtnqYERyb2xl2epgRWFkbWlu2epgR25vbWluZWVYIO1JKMYo0cLG6ukDOJBZlWEpWSc6XGP5NjbBRhSshzfR2epgR3Byb2R1Y3TZ6mBJdHJlZWhvdXNl2epgR3ZlcnNpb24B2epgSXRocmVzaG9sZALZ6mBJd2l0bmVzc2Vzglggbnoc3Smwt4/ROvTFWY/v9O8qlxZuPKby5Pv8zYBQW/FYIMqTrBcFGHBx1nuDx/8O/oEI6OxFMFdddyaHkzPb2r582epgUG1heF9sZWFzZV9lcG9jaHMH9g=="
+        },
+        {
+          "id": "ieqQE2fElCkS67_9cpWBg2I698a07rPFXq-4aAkzoEQ",
+          "bytes": "h01sYXR0aWNlLW9wLXYyWJZyZXBsaWNhOnRyZWVob3VzZTpzcGFjZTpDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzI2F1dGhvcml0eTpib3VuZGVkLWNvbnRpbnVhdGlvbi12MSNyb290Ok5IVVBtTDFaX1B5VWJhUmFxcjZUTy1GVXBMVUpUaHhLdjBLR1pRWHp5WDRYIIqI4910CfGV/VLbLTy6XXLKZwm/HZQSG/N0iAG0D29cgVgrZy1KMFNpRVhtLVZ4aVIyMExRcjVvZTFtLWNpS0V6OVRtNlA2SVB2eWk5RdnqYElhdXRob3JpdHnZ6mGC2epgRmJlYWNvbgX2"
+        },
+        {
+          "id": "THaIdMs22_X4da8Qaw7HzFSYNhWSQNmMp5ORKT6AuOo",
+          "bytes": "h01sYXR0aWNlLW9wLXYyWJZyZXBsaWNhOnRyZWVob3VzZTpzcGFjZTpDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzI2F1dGhvcml0eTpib3VuZGVkLWNvbnRpbnVhdGlvbi12MSNyb290Ok5IVVBtTDFaX1B5VWJhUmFxcjZUTy1GVXBMVUpUaHhLdjBLR1pRWHp5WDRYIIE5dw6ofRdfVqNUZsNMfszLjYqRtO43ol32D1uPybOUgVgraWVxUUUyZkVsQ2tTNjdfOWNwV0JnMkk2OThhMDdyUEZYcS00YUFrem9FUdnqYElhdXRob3JpdHnZ6mGE2epgR3N1Y2NlZWTZ6mBFYWRtaW7Z6mOKWCtEOHZWN2xHVnZTa3Juclh1aXNybVcyVDVrRnpvelpNeFBxOWpKaklqVUxJWJZyZXBsaWNhOnRyZWVob3VzZTpzcGFjZTpDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzI2F1dGhvcml0eTpib3VuZGVkLWNvbnRpbnVhdGlvbi12MSNyb290Ok5IVVBtTDFaX1B5VWJhUmFxcjZUTy1GVXBMVUpUaHhLdjBLR1pRWHp5WDRYIIE5dw6ofRdfVqNUZsNMfszLjYqRtO43ol32D1uPybOUWCCBOXcOqH0XX1ajVGbDTH7My42KkbTuN6Jd9g9bj8mzlPaB2epgRHBvc3SB2epgRWFkbWlu9FhA4Ut10MqSpfyxKA4GKnTfhZ0oaH1bOhYMIrX5ISVwg0/BGCO9zNDczC2UBZhK2GILCMLJWN7taNxX8OsVYXNGAAvZ6mGC2epgT2NvbnRpbnVhdGlvbl92MaLZ6mBFY2xhaW2v2epgRGRlcHOBWCtpZXFRRTJmRWxDa1M2N185Y3BXQmcySTY5OGEwN3JQRlhxLTRhQWt6b0VR2epgRGtpbmTZ6mBFc3BhY2XZ6mBEcm9sZdnqYEVhZG1pbtnqYEVlcG9jaAXZ6mBGYXV0aG9yWCCBOXcOqH0XX1ajVGbDTH7My42KkbTuN6Jd9g9bj8mzlNnqYEZob2xkZXJYIIE5dw6ofRdfVqNUZsNMfszLjYqRtO43ol32D1uPybOU2epgR3Byb2R1Y3TZ6mBJdHJlZWhvdXNl2epgR3JlcGxpY2FYlnJlcGxpY2E6dHJlZWhvdXNlOnNwYWNlOkN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3MjYXV0aG9yaXR5OmJvdW5kZWQtY29udGludWF0aW9uLXYxI3Jvb3Q6TkhVUG1MMVpfUHlVYmFSYXFyNlRPLUZVcExVSlRoeEt2MEtHWlFYenlYNNnqYEd2ZXJzaW9uAdnqYElzdWNjZXNzb3JYIIE5dw6ofRdfVqNUZsNMfszLjYqRtO43ol32D1uPybOU2epgSnByb2ZpbGVfaWRYK2xMd1VvbHV1Z3JmQy1lOUpzWUFpNFl1WS03Ykx2Z1JlUUItZUV3SzZtUGvZ6mBLZXBvY2hfYmFzaXOBWCtpZXFRRTJmRWxDa1M2N185Y3BXQmcySTY5OGEwN3JQRlhxLTRhQWt6b0VR2epgTGhvbGRlcl9lcG9jaFgrQmZzRnlfUlpEbXIxakdtU3pfc0dSdEwzbDA2UWF3RVp1Y2FLWkNZTWpTd9nqYE1kZWxlZ2F0aW9uX2lkWCtEOHZWN2xHVnZTa3Juclh1aXNybVcyVDVrRnpvelpNeFBxOWpKaklqVUxJ2epgT3Byb2ZpbGVfZ2VuZXNpc1grZy1KMFNpRVhtLVZ4aVIyMExRcjVvZTFtLWNpS0V6OVRtNlA2SVB2eWk5RdnqYEpzaWduYXR1cmVzgqLZ6mBHd2l0bmVzc1ggbnoc3Smwt4/ROvTFWY/v9O8qlxZuPKby5Pv8zYBQW/HZ6mBJc2lnbmF0dXJlWEBSK44a1FlnygzXrEOmG7BrjX2Ryj5pStt1MTa4jMEZdSEvVQ/tBxVVSmYoEbJijb0Zae09mGc13pfMMeMhrHcNotnqYEd3aXRuZXNzWCDKk6wXBRhwcdZ7g8f/Dv6BCOjsRTBXXXcmh5Mz29q+fNnqYElzaWduYXR1cmVYQECTDLxucZ6leBLQk7YB7jtW848NhKbn/C9GLYy1cMiPsnruSqWPxmrwu7YwYy8Z6On/OE7nxiXMYnnkfPzqawT2"
+        }
+      ],
+      "profileId": "lLwUoluugrfC-e9JsYAi4YuY-7bLvgReQB-eEwK6mPk",
+      "profileBytes": "glgfbGF0dGljZS1jb250aW51YXRpb24tcHJvZmlsZS12ManZ6mBEa2luZNnqYEVzcGFjZdnqYERtb2Rl2epgVGJvdW5kZWRfY29udGludWF0aW9u2epgRHJvbGXZ6mBFYWRtaW7Z6mBHbm9taW5lZVgg7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9HZ6mBHcHJvZHVjdNnqYEl0cmVlaG91c2XZ6mBHdmVyc2lvbgHZ6mBJdGhyZXNob2xkAtnqYEl3aXRuZXNzZXOCWCBuehzdKbC3j9E69MVZj+/07yqXFm48pvLk+/zNgFBb8VggypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnzZ6mBQbWF4X2xlYXNlX2Vwb2Nocwc=",
+      "claimBytes": "glgfbGF0dGljZS1jb250aW51YXRpb24td2l0bmVzcy12Ma/Z6mBEZGVwc4FYK2llcVFFMmZFbENrUzY3XzljcFdCZzJJNjk4YTA3clBGWHEtNGFBa3pvRVHZ6mBEa2luZNnqYEVzcGFjZdnqYERyb2xl2epgRWFkbWlu2epgRWVwb2NoBdnqYEZhdXRob3JYIIE5dw6ofRdfVqNUZsNMfszLjYqRtO43ol32D1uPybOU2epgRmhvbGRlclgggTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5TZ6mBHcHJvZHVjdNnqYEl0cmVlaG91c2XZ6mBHcmVwbGljYViWcmVwbGljYTp0cmVlaG91c2U6c3BhY2U6Q3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3cyNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpOSFVQbUwxWl9QeVViYVJhcXI2VE8tRlVwTFVKVGh4S3YwS0daUVh6eVg02epgR3ZlcnNpb24B2epgSXN1Y2Nlc3NvclgggTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5TZ6mBKcHJvZmlsZV9pZFgrbEx3VW9sdXVncmZDLWU5SnNZQWk0WXVZLTdiTHZnUmVRQi1lRXdLNm1Qa9nqYEtlcG9jaF9iYXNpc4FYK2llcVFFMmZFbENrUzY3XzljcFdCZzJJNjk4YTA3clBGWHEtNGFBa3pvRVHZ6mBMaG9sZGVyX2Vwb2NoWCtCZnNGeV9SWkRtcjFqR21Tel9zR1J0TDNsMDZRYXdFWnVjYUtaQ1lNalN32epgTWRlbGVnYXRpb25faWRYK0Q4dlY3bEdWdlNrcm5yWHVpc3JtVzJUNWtGem96Wk14UHE5akpqSWpVTEnZ6mBPcHJvZmlsZV9nZW5lc2lzWCtnLUowU2lFWG0tVnhpUjIwTFFyNW9lMW0tY2lLRXo5VG02UDZJUHZ5aTlF",
+      "profile": {
+        "mode": "bounded_continuation",
+        "version": 1,
+        "product": "treehouse",
+        "kind": "space",
+        "role": "admin",
+        "nominee": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+        "witnesses": [
+          "bnoc3Smwt4/ROvTFWY/v9O8qlxZuPKby5Pv8zYBQW/E=",
+          "ypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnw="
+        ],
+        "threshold": 2,
+        "maxLeaseEpochs": 7
+      },
+      "claim": {
+        "version": 1,
+        "product": "treehouse",
+        "kind": "space",
+        "replica": "replica:treehouse:space:CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws#authority:bounded-continuation-v1#root:NHUPmL1Z_PyUbaRaqr6TO-FUpLUJThxKv0KGZQXzyX4",
+        "role": "admin",
+        "profileId": "lLwUoluugrfC-e9JsYAi4YuY-7bLvgReQB-eEwK6mPk",
+        "profileGenesis": "g-J0SiEXm-VxiR20LQr5oe1m-ciKEz9Tm6P6IPvyi9E",
+        "holder": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+        "holderEpoch": "BfsFy_RZDmr1jGmSz_sGRtL3l06QawEZucaKZCYMjSw",
+        "successor": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+        "delegationId": "D8vV7lGVvSkrnrXuisrmW2T5kFzozZMxPq9jJjIjULI",
+        "author": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+        "deps": [
+          "ieqQE2fElCkS67_9cpWBg2I698a07rPFXq-4aAkzoEQ"
+        ],
+        "epoch": 5,
+        "epochBasis": [
+          "ieqQE2fElCkS67_9cpWBg2I698a07rPFXq-4aAkzoEQ"
+        ]
+      },
+      "certificate": {
+        "claim": {
+          "version": 1,
+          "product": "treehouse",
+          "kind": "space",
+          "replica": "replica:treehouse:space:CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws#authority:bounded-continuation-v1#root:NHUPmL1Z_PyUbaRaqr6TO-FUpLUJThxKv0KGZQXzyX4",
+          "role": "admin",
+          "profileId": "lLwUoluugrfC-e9JsYAi4YuY-7bLvgReQB-eEwK6mPk",
+          "profileGenesis": "g-J0SiEXm-VxiR20LQr5oe1m-ciKEz9Tm6P6IPvyi9E",
+          "holder": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+          "holderEpoch": "BfsFy_RZDmr1jGmSz_sGRtL3l06QawEZucaKZCYMjSw",
+          "successor": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+          "delegationId": "D8vV7lGVvSkrnrXuisrmW2T5kFzozZMxPq9jJjIjULI",
+          "author": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+          "deps": [
+            "ieqQE2fElCkS67_9cpWBg2I698a07rPFXq-4aAkzoEQ"
+          ],
+          "epoch": 5,
+          "epochBasis": [
+            "ieqQE2fElCkS67_9cpWBg2I698a07rPFXq-4aAkzoEQ"
+          ]
+        },
+        "signatures": [
+          {
+            "witness": "bnoc3Smwt4/ROvTFWY/v9O8qlxZuPKby5Pv8zYBQW/E=",
+            "signature": "UiuOGtRZZ8oM16xDphuwa419kco+aUrbdTE2uIzBGXUhL1UP7QcVVUpmKBGyYo29GWntPZhnNd6XzDHjIax3DQ=="
+          },
+          {
+            "witness": "ypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnw=",
+            "signature": "QJMMvG5xnqV4EtCTtgHuO1bzjw2Epuf8L0YtjLVwyI+yeu5KpY/GavC7tjBjLxno6f84TufGJcxieeR8/OprBA=="
+          }
+        ]
+      }
+    },
+    {
+      "kind": "thread",
+      "role": "moderator",
+      "replica": "replica:treehouse:thread:CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws#authority:bounded-continuation-v1#root:NHUPmL1Z_PyUbaRaqr6TO-FUpLUJThxKv0KGZQXzyX4",
+      "schema": {
+        "name": "ContinuationAuthoringFixture",
+        "fields": {
+          "moderator": {
+            "authority": "moderator"
+          }
+        }
+      },
+      "frames": [
+        {
+          "v": 1,
+          "id": "RaeasDp6Ok3AiIrgrlm7UkqdJibuQruPzzhM9Us-aNs",
+          "replica": "replica:treehouse:thread:CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws#authority:bounded-continuation-v1#root:NHUPmL1Z_PyUbaRaqr6TO-FUpLUJThxKv0KGZQXzyX4",
+          "author": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+          "deps": [],
+          "kind": "authority",
+          "body": [
+            "tuple",
+            [
+              [
+                "atom",
+                "genesis"
+              ],
+              [
+                "delegation",
+                {
+                  "replica": "replica:treehouse:thread:CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws#authority:bounded-continuation-v1#root:NHUPmL1Z_PyUbaRaqr6TO-FUpLUJThxKv0KGZQXzyX4",
+                  "issuer": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+                  "audience": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+                  "parent_id": null,
+                  "ops": [
+                    "manage",
+                    "post"
+                  ],
+                  "roles": [
+                    "moderator"
+                  ],
+                  "live": false,
+                  "id": "CKdQFzDX-LwUfwPISh3xNNPe5PdUxidPJEVl2ndH_q0",
+                  "sig": "LjK/rQfbQkAVWKXsoQigqOSp+zLVpEdTH4CeJs22QrXQ6xwRp6UG4vQaYEYzTkXXRm2/p0xfNgOgpZLU3aC4DQ=="
+                }
+              ],
+              [
+                "map",
+                []
+              ]
+            ]
+          ],
+          "cap": [
+            "nil"
+          ],
+          "sig": "PIcR4IqwJZZYL85pIa/veQzp+OOOc3rRBKC/kndnK0A44JKV9qJXLtBoAGXhdGHNq7CiJLXkLfzpc1h4MlhKAQ=="
+        },
+        {
+          "v": 1,
+          "id": "7pFU1jw1GLLOYRcnsnuPo0jZntgvDJMB_fy_U-ij_xk",
+          "replica": "replica:treehouse:thread:CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws#authority:bounded-continuation-v1#root:NHUPmL1Z_PyUbaRaqr6TO-FUpLUJThxKv0KGZQXzyX4",
+          "author": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+          "deps": [
+            "RaeasDp6Ok3AiIrgrlm7UkqdJibuQruPzzhM9Us-aNs"
+          ],
+          "kind": "authority",
+          "body": [
+            "tuple",
+            [
+              [
+                "atom",
+                "transfer"
+              ],
+              [
+                "atom",
+                "moderator"
+              ],
+              [
+                "delegation",
+                {
+                  "replica": "replica:treehouse:thread:CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws#authority:bounded-continuation-v1#root:NHUPmL1Z_PyUbaRaqr6TO-FUpLUJThxKv0KGZQXzyX4",
+                  "issuer": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+                  "audience": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+                  "parent_id": "CKdQFzDX-LwUfwPISh3xNNPe5PdUxidPJEVl2ndH_q0",
+                  "ops": [
+                    "post"
+                  ],
+                  "roles": [
+                    "moderator"
+                  ],
+                  "live": false,
+                  "expires_epoch": 2,
+                  "id": "aG8s4JIdf2FM3x8unDHWqvB9dG8OjvqQBxhbx5JFzzY",
+                  "sig": "op6BsvMmvfwC4fRfBQym0/WeuKNFoERSrBG2Q4M4KKs+mz4E67dNTJBe7L1LaDqSx8NPn1nbjUMrJ1bG9tUJBQ=="
+                }
+              ],
+              [
+                "int",
+                0
+              ]
+            ]
+          ],
+          "cap": [
+            "nil"
+          ],
+          "sig": "qL64QHvscKFcmJYX5bkUC+Cv4LlcvEMBx8wpe4SFmdY2k71GCzEXAU8wDPxvkSGbCVKmHhIU/BJ9Jh9pG2ZiBw=="
+        },
+        {
+          "v": 1,
+          "id": "kIMzi6nBNFQ3cH0LuZOo_0yX8Luph2fOaBtUqq6sBpo",
+          "replica": "replica:treehouse:thread:CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws#authority:bounded-continuation-v1#root:NHUPmL1Z_PyUbaRaqr6TO-FUpLUJThxKv0KGZQXzyX4",
+          "author": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+          "deps": [
+            "7pFU1jw1GLLOYRcnsnuPo0jZntgvDJMB_fy_U-ij_xk"
+          ],
+          "kind": "authority",
+          "body": [
+            "tuple",
+            [
+              [
+                "atom",
+                "genesis"
+              ],
+              [
+                "delegation",
+                {
+                  "replica": "replica:treehouse:thread:CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws#authority:bounded-continuation-v1#root:NHUPmL1Z_PyUbaRaqr6TO-FUpLUJThxKv0KGZQXzyX4",
+                  "issuer": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+                  "audience": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+                  "parent_id": null,
+                  "ops": [],
+                  "roles": [],
+                  "live": false,
+                  "id": "o5xoroJpI6hbzPIGsqJiFvU2LrTpAuNHLNBoteyg7KE",
+                  "sig": "M4VBIbF8mbM15i00MZc2w8OxUwxUYJQatYVnOCI4FFE95MPGJ9PJxwk/2tzUIwM/VSoyki0TN0vIebtxC2nLCg=="
+                }
+              ],
+              [
+                "map",
+                [
+                  [
+                    [
+                      "atom",
+                      "__continuation__"
+                    ],
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "mode"
+                          ],
+                          [
+                            "atom",
+                            "bounded_continuation"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "version"
+                          ],
+                          [
+                            "int",
+                            1
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "product"
+                          ],
+                          [
+                            "atom",
+                            "treehouse"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "kind"
+                          ],
+                          [
+                            "atom",
+                            "thread"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "role"
+                          ],
+                          [
+                            "atom",
+                            "moderator"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "nominee"
+                          ],
+                          [
+                            "bin",
+                            "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "witnesses"
+                          ],
+                          [
+                            "list",
+                            [
+                              [
+                                "bin",
+                                "bnoc3Smwt4/ROvTFWY/v9O8qlxZuPKby5Pv8zYBQW/E="
+                              ],
+                              [
+                                "bin",
+                                "ypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnw="
+                              ]
+                            ]
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "threshold"
+                          ],
+                          [
+                            "int",
+                            2
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "max_lease_epochs"
+                          ],
+                          [
+                            "int",
+                            7
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ],
+          "cap": [
+            "nil"
+          ],
+          "sig": "++pnuiTG/2IXuGN5fkygsrPIGZ+33NBb66ScaRmvVZkiXGcVcNjp04BFN//3F4uRkRzpMIobEt/X8Lx6mvS+BQ=="
+        },
+        {
+          "v": 1,
+          "id": "ZG4pSWfmYdq3kp34y2JTVmCTKkJd_DAcwYg_wVjWQCY",
+          "replica": "replica:treehouse:thread:CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws#authority:bounded-continuation-v1#root:NHUPmL1Z_PyUbaRaqr6TO-FUpLUJThxKv0KGZQXzyX4",
+          "author": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+          "deps": [
+            "kIMzi6nBNFQ3cH0LuZOo_0yX8Luph2fOaBtUqq6sBpo"
+          ],
+          "kind": "authority",
+          "body": [
+            "tuple",
+            [
+              [
+                "atom",
+                "beacon"
+              ],
+              [
+                "int",
+                5
+              ]
+            ]
+          ],
+          "cap": [
+            "nil"
+          ],
+          "sig": "8H0JhKBLTf4ForKQE/esHgU4X3SP28fQkjQ8zoN1Dp1qh58eS/C6XsYLBjp42KtyOr/2OankZRDv6+hA1DeUAQ=="
+        },
+        {
+          "v": 1,
+          "id": "tLNC8yHv6veVtivzrPB2ap8IVuEC49FcoaN87ZZMNyM",
+          "replica": "replica:treehouse:thread:CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws#authority:bounded-continuation-v1#root:NHUPmL1Z_PyUbaRaqr6TO-FUpLUJThxKv0KGZQXzyX4",
+          "author": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+          "deps": [
+            "ZG4pSWfmYdq3kp34y2JTVmCTKkJd_DAcwYg_wVjWQCY"
+          ],
+          "kind": "authority",
+          "body": [
+            "tuple",
+            [
+              [
+                "atom",
+                "succeed"
+              ],
+              [
+                "atom",
+                "moderator"
+              ],
+              [
+                "delegation",
+                {
+                  "replica": "replica:treehouse:thread:CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws#authority:bounded-continuation-v1#root:NHUPmL1Z_PyUbaRaqr6TO-FUpLUJThxKv0KGZQXzyX4",
+                  "issuer": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+                  "audience": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+                  "parent_id": null,
+                  "ops": [
+                    "post"
+                  ],
+                  "roles": [
+                    "moderator"
+                  ],
+                  "live": false,
+                  "expires_epoch": 11,
+                  "id": "fbvr4xBSM_opyJxWl89aTRyHzyDjwJozxRJoifzp0mw",
+                  "sig": "6lVi1wI5/yWawUV4LGZRfncieJxAK3RUTq7AcIJK/aGn8DIvmvdgnY58W2/7irqDFcFDzkGQkfputtIXIbI8DA=="
+                }
+              ],
+              [
+                "tuple",
+                [
+                  [
+                    "atom",
+                    "continuation_v1"
+                  ],
+                  [
+                    "map",
+                    [
+                      [
+                        [
+                          "atom",
+                          "claim"
+                        ],
+                        [
+                          "map",
+                          [
+                            [
+                              [
+                                "atom",
+                                "version"
+                              ],
+                              [
+                                "int",
+                                1
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "product"
+                              ],
+                              [
+                                "atom",
+                                "treehouse"
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "kind"
+                              ],
+                              [
+                                "atom",
+                                "thread"
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "replica"
+                              ],
+                              [
+                                "bin",
+                                "cmVwbGljYTp0cmVlaG91c2U6dGhyZWFkOkN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3MjYXV0aG9yaXR5OmJvdW5kZWQtY29udGludWF0aW9uLXYxI3Jvb3Q6TkhVUG1MMVpfUHlVYmFSYXFyNlRPLUZVcExVSlRoeEt2MEtHWlFYenlYNA=="
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "role"
+                              ],
+                              [
+                                "atom",
+                                "moderator"
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "profile_id"
+                              ],
+                              [
+                                "bin",
+                                "bk9Jb2RsR3FvLWdVdEV4eTc2dkswMk41TFE1UzdIQUlzNkI1SlNVdUMzcw=="
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "profile_genesis"
+                              ],
+                              [
+                                "bin",
+                                "a0lNemk2bkJORlEzY0gwTHVaT29fMHlYOEx1cGgyZk9hQnRVcXE2c0Jwbw=="
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "holder"
+                              ],
+                              [
+                                "bin",
+                                "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q="
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "holder_epoch"
+                              ],
+                              [
+                                "bin",
+                                "N3BGVTFqdzFHTExPWVJjbnNudVBvMGpabnRndkRKTUJfZnlfVS1pal94aw=="
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "successor"
+                              ],
+                              [
+                                "bin",
+                                "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E="
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "delegation_id"
+                              ],
+                              [
+                                "bin",
+                                "ZmJ2cjR4QlNNX29weUp4V2w4OWFUUnlIenlEandKb3p4UkpvaWZ6cDBtdw=="
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "author"
+                              ],
+                              [
+                                "bin",
+                                "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E="
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "deps"
+                              ],
+                              [
+                                "list",
+                                [
+                                  [
+                                    "bin",
+                                    "Wkc0cFNXZm1ZZHEza3AzNHkySlRWbUNUS2tKZF9EQWN3WWdfd1ZqV1FDWQ=="
+                                  ]
+                                ]
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "epoch"
+                              ],
+                              [
+                                "int",
+                                5
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "epoch_basis"
+                              ],
+                              [
+                                "list",
+                                [
+                                  [
+                                    "bin",
+                                    "Wkc0cFNXZm1ZZHEza3AzNHkySlRWbUNUS2tKZF9EQWN3WWdfd1ZqV1FDWQ=="
+                                  ]
+                                ]
+                              ]
+                            ]
+                          ]
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "signatures"
+                        ],
+                        [
+                          "list",
+                          [
+                            [
+                              "map",
+                              [
+                                [
+                                  [
+                                    "atom",
+                                    "witness"
+                                  ],
+                                  [
+                                    "bin",
+                                    "bnoc3Smwt4/ROvTFWY/v9O8qlxZuPKby5Pv8zYBQW/E="
+                                  ]
+                                ],
+                                [
+                                  [
+                                    "atom",
+                                    "signature"
+                                  ],
+                                  [
+                                    "bin",
+                                    "9GuDJp+qWF7S6njHY3I5YKTQ5Hdu/OlQsrbqn4aAx1hHrp7A7zqvwjw70u2e1CgKkk+ZBjCpBxrBIuzsm0SMCQ=="
+                                  ]
+                                ]
+                              ]
+                            ],
+                            [
+                              "map",
+                              [
+                                [
+                                  [
+                                    "atom",
+                                    "witness"
+                                  ],
+                                  [
+                                    "bin",
+                                    "ypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnw="
+                                  ]
+                                ],
+                                [
+                                  [
+                                    "atom",
+                                    "signature"
+                                  ],
+                                  [
+                                    "bin",
+                                    "xsK95ShfZlbHQVgiH1gi8tuNM7nvLF0yfun1dtkRasFduT32C+uThdf7kTUJxMPNZtQ9B9LFPYUUsRkZKFJ4AA=="
+                                  ]
+                                ]
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ],
+          "cap": [
+            "nil"
+          ],
+          "sig": "6P07cn3dgnDX99llkKTXwR5ldcqqXo6sm88IFEqXpiHUSjmIM4yABgDD5fafk8Q8lBG6tCOZ8o43Evx9DSgRAg=="
+        }
+      ],
+      "finalOpId": "tLNC8yHv6veVtivzrPB2ap8IVuEC49FcoaN87ZZMNyM",
+      "holder": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+      "delegationId": "fbvr4xBSM_opyJxWl89aTRyHzyDjwJozxRJoifzp0mw",
+      "canonical": [
+        {
+          "id": "RaeasDp6Ok3AiIrgrlm7UkqdJibuQruPzzhM9Us-aNs",
+          "bytes": "h01sYXR0aWNlLW9wLXYyWJdyZXBsaWNhOnRyZWVob3VzZTp0aHJlYWQ6Q3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3cyNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpOSFVQbUwxWl9QeVViYVJhcXI2VE8tRlVwTFVKVGh4S3YwS0daUVh6eVg0WCCKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXIDZ6mBJYXV0aG9yaXR52ephg9nqYEdnZW5lc2lz2epjiVgrQ0tkUUZ6RFgtTHdVZndQSVNoM3hOTlBlNVBkVXhpZFBKRVZsMm5kSF9xMFiXcmVwbGljYTp0cmVlaG91c2U6dGhyZWFkOkN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3MjYXV0aG9yaXR5OmJvdW5kZWQtY29udGludWF0aW9uLXYxI3Jvb3Q6TkhVUG1MMVpfUHlVYmFSYXFyNlRPLUZVcExVSlRoeEt2MEtHWlFYenlYNFggiojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1xYIIqI4910CfGV/VLbLTy6XXLKZwm/HZQSG/N0iAG0D29c9oLZ6mBGbWFuYWdl2epgRHBvc3SB2epgSW1vZGVyYXRvcvRYQC4yv60H20JAFVil7KEIoKjkqfsy1aRHUx+AnibNtkK10OscEaelBuL0GmBGM05F10Ztv6dMXzYDoKWS1N2guA2g9g=="
+        },
+        {
+          "id": "7pFU1jw1GLLOYRcnsnuPo0jZntgvDJMB_fy_U-ij_xk",
+          "bytes": "h01sYXR0aWNlLW9wLXYyWJdyZXBsaWNhOnRyZWVob3VzZTp0aHJlYWQ6Q3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3cyNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpOSFVQbUwxWl9QeVViYVJhcXI2VE8tRlVwTFVKVGh4S3YwS0daUVh6eVg0WCCKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXIFYK1JhZWFzRHA2T2szQWlJcmdybG03VWtxZEppYnVRcnVQenpoTTlVcy1hTnPZ6mBJYXV0aG9yaXR52ephhNnqYEh0cmFuc2ZlctnqYEltb2RlcmF0b3LZ6mOKWCthRzhzNEpJZGYyRk0zeDh1bkRIV3F2QjlkRzhPanZxUUJ4aGJ4NUpGenpZWJdyZXBsaWNhOnRyZWVob3VzZTp0aHJlYWQ6Q3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3cyNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpOSFVQbUwxWl9QeVViYVJhcXI2VE8tRlVwTFVKVGh4S3YwS0daUVh6eVg0WCCKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXFgggTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5RYK0NLZFFGekRYLUx3VWZ3UElTaDN4Tk5QZTVQZFV4aWRQSkVWbDJuZEhfcTCB2epgRHBvc3SB2epgSW1vZGVyYXRvcvRYQKKegbLzJr38AuH0XwUMptP1nrijRaBEUqwRtkODOCirPps+BOu3TUyQXuy9S2g6ksfDT59Z241DKydWxvbVCQUCAPY="
+        },
+        {
+          "id": "kIMzi6nBNFQ3cH0LuZOo_0yX8Luph2fOaBtUqq6sBpo",
+          "bytes": "h01sYXR0aWNlLW9wLXYyWJdyZXBsaWNhOnRyZWVob3VzZTp0aHJlYWQ6Q3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3cyNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpOSFVQbUwxWl9QeVViYVJhcXI2VE8tRlVwTFVKVGh4S3YwS0daUVh6eVg0WCCKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXIFYKzdwRlUxancxR0xMT1lSY25zbnVQbzBqWm50Z3ZESk1CX2Z5X1UtaWpfeGvZ6mBJYXV0aG9yaXR52ephg9nqYEdnZW5lc2lz2epjiVgrbzV4b3JvSnBJNmhielBJR3NxSmlGdlUyTHJUcEF1TkhMTkJvdGV5ZzdLRViXcmVwbGljYTp0cmVlaG91c2U6dGhyZWFkOkN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3MjYXV0aG9yaXR5OmJvdW5kZWQtY29udGludWF0aW9uLXYxI3Jvb3Q6TkhVUG1MMVpfUHlVYmFSYXFyNlRPLUZVcExVSlRoeEt2MEtHWlFYenlYNFggiojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1xYIIqI4910CfGV/VLbLTy6XXLKZwm/HZQSG/N0iAG0D29c9oCA9FhAM4VBIbF8mbM15i00MZc2w8OxUwxUYJQatYVnOCI4FFE95MPGJ9PJxwk/2tzUIwM/VSoyki0TN0vIebtxC2nLCqHZ6mBQX19jb250aW51YXRpb25fX6nZ6mBEa2luZNnqYEZ0aHJlYWTZ6mBEbW9kZdnqYFRib3VuZGVkX2NvbnRpbnVhdGlvbtnqYERyb2xl2epgSW1vZGVyYXRvctnqYEdub21pbmVlWCDtSSjGKNHCxurpAziQWZVhKVknOlxj+TY2wUYUrIc30dnqYEdwcm9kdWN02epgSXRyZWVob3VzZdnqYEd2ZXJzaW9uAdnqYEl0aHJlc2hvbGQC2epgSXdpdG5lc3Nlc4JYIG56HN0psLeP0Tr0xVmP7/TvKpcWbjym8uT7/M2AUFvxWCDKk6wXBRhwcdZ7g8f/Dv6BCOjsRTBXXXcmh5Mz29q+fNnqYFBtYXhfbGVhc2VfZXBvY2hzB/Y="
+        },
+        {
+          "id": "ZG4pSWfmYdq3kp34y2JTVmCTKkJd_DAcwYg_wVjWQCY",
+          "bytes": "h01sYXR0aWNlLW9wLXYyWJdyZXBsaWNhOnRyZWVob3VzZTp0aHJlYWQ6Q3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3cyNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpOSFVQbUwxWl9QeVViYVJhcXI2VE8tRlVwTFVKVGh4S3YwS0daUVh6eVg0WCCKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXIFYK2tJTXppNm5CTkZRM2NIMEx1Wk9vXzB5WDhMdXBoMmZPYUJ0VXFxNnNCcG/Z6mBJYXV0aG9yaXR52ephgtnqYEZiZWFjb24F9g=="
+        },
+        {
+          "id": "tLNC8yHv6veVtivzrPB2ap8IVuEC49FcoaN87ZZMNyM",
+          "bytes": "h01sYXR0aWNlLW9wLXYyWJdyZXBsaWNhOnRyZWVob3VzZTp0aHJlYWQ6Q3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3cyNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpOSFVQbUwxWl9QeVViYVJhcXI2VE8tRlVwTFVKVGh4S3YwS0daUVh6eVg0WCDtSSjGKNHCxurpAziQWZVhKVknOlxj+TY2wUYUrIc30YFYK1pHNHBTV2ZtWWRxM2twMzR5MkpUVm1DVEtrSmRfREFjd1lnX3dWaldRQ1nZ6mBJYXV0aG9yaXR52ephhNnqYEdzdWNjZWVk2epgSW1vZGVyYXRvctnqY4pYK2ZidnI0eEJTTV9vcHlKeFdsODlhVFJ5SHp5RGp3Sm96eFJKb2lmenAwbXdYl3JlcGxpY2E6dHJlZWhvdXNlOnRocmVhZDpDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzI2F1dGhvcml0eTpib3VuZGVkLWNvbnRpbnVhdGlvbi12MSNyb290Ok5IVVBtTDFaX1B5VWJhUmFxcjZUTy1GVXBMVUpUaHhLdjBLR1pRWHp5WDRYIO1JKMYo0cLG6ukDOJBZlWEpWSc6XGP5NjbBRhSshzfRWCDtSSjGKNHCxurpAziQWZVhKVknOlxj+TY2wUYUrIc30faB2epgRHBvc3SB2epgSW1vZGVyYXRvcvRYQOpVYtcCOf8lmsFFeCxmUX53InicQCt0VE6uwHCCSv2hp/AyL5r3YJ2OfFtv+4q6gxXBQ85BkJH6brbSFyGyPAwL2ephgtnqYE9jb250aW51YXRpb25fdjGi2epgRWNsYWltr9nqYERkZXBzgVgrWkc0cFNXZm1ZZHEza3AzNHkySlRWbUNUS2tKZF9EQWN3WWdfd1ZqV1FDWdnqYERraW5k2epgRnRocmVhZNnqYERyb2xl2epgSW1vZGVyYXRvctnqYEVlcG9jaAXZ6mBGYXV0aG9yWCDtSSjGKNHCxurpAziQWZVhKVknOlxj+TY2wUYUrIc30dnqYEZob2xkZXJYIIE5dw6ofRdfVqNUZsNMfszLjYqRtO43ol32D1uPybOU2epgR3Byb2R1Y3TZ6mBJdHJlZWhvdXNl2epgR3JlcGxpY2FYl3JlcGxpY2E6dHJlZWhvdXNlOnRocmVhZDpDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzI2F1dGhvcml0eTpib3VuZGVkLWNvbnRpbnVhdGlvbi12MSNyb290Ok5IVVBtTDFaX1B5VWJhUmFxcjZUTy1GVXBMVUpUaHhLdjBLR1pRWHp5WDTZ6mBHdmVyc2lvbgHZ6mBJc3VjY2Vzc29yWCDtSSjGKNHCxurpAziQWZVhKVknOlxj+TY2wUYUrIc30dnqYEpwcm9maWxlX2lkWCtuT0lvZGxHcW8tZ1V0RXh5NzZ2SzAyTjVMUTVTN0hBSXM2QjVKU1V1QzNz2epgS2Vwb2NoX2Jhc2lzgVgrWkc0cFNXZm1ZZHEza3AzNHkySlRWbUNUS2tKZF9EQWN3WWdfd1ZqV1FDWdnqYExob2xkZXJfZXBvY2hYKzdwRlUxancxR0xMT1lSY25zbnVQbzBqWm50Z3ZESk1CX2Z5X1UtaWpfeGvZ6mBNZGVsZWdhdGlvbl9pZFgrZmJ2cjR4QlNNX29weUp4V2w4OWFUUnlIenlEandKb3p4UkpvaWZ6cDBtd9nqYE9wcm9maWxlX2dlbmVzaXNYK2tJTXppNm5CTkZRM2NIMEx1Wk9vXzB5WDhMdXBoMmZPYUJ0VXFxNnNCcG/Z6mBKc2lnbmF0dXJlc4Ki2epgR3dpdG5lc3NYIG56HN0psLeP0Tr0xVmP7/TvKpcWbjym8uT7/M2AUFvx2epgSXNpZ25hdHVyZVhA9GuDJp+qWF7S6njHY3I5YKTQ5Hdu/OlQsrbqn4aAx1hHrp7A7zqvwjw70u2e1CgKkk+ZBjCpBxrBIuzsm0SMCaLZ6mBHd2l0bmVzc1ggypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnzZ6mBJc2lnbmF0dXJlWEDGwr3lKF9mVsdBWCIfWCLy240zue8sXTJ+6fV22RFqwV25PfYL65OF1/uRNQnEw81m1D0H0sU9hRSxGRkoUngA9g=="
+        }
+      ],
+      "profileId": "nOIodlGqo-gUtExy76vK02N5LQ5S7HAIs6B5JSUuC3s",
+      "profileBytes": "glgfbGF0dGljZS1jb250aW51YXRpb24tcHJvZmlsZS12ManZ6mBEa2luZNnqYEZ0aHJlYWTZ6mBEbW9kZdnqYFRib3VuZGVkX2NvbnRpbnVhdGlvbtnqYERyb2xl2epgSW1vZGVyYXRvctnqYEdub21pbmVlWCDtSSjGKNHCxurpAziQWZVhKVknOlxj+TY2wUYUrIc30dnqYEdwcm9kdWN02epgSXRyZWVob3VzZdnqYEd2ZXJzaW9uAdnqYEl0aHJlc2hvbGQC2epgSXdpdG5lc3Nlc4JYIG56HN0psLeP0Tr0xVmP7/TvKpcWbjym8uT7/M2AUFvxWCDKk6wXBRhwcdZ7g8f/Dv6BCOjsRTBXXXcmh5Mz29q+fNnqYFBtYXhfbGVhc2VfZXBvY2hzBw==",
+      "claimBytes": "glgfbGF0dGljZS1jb250aW51YXRpb24td2l0bmVzcy12Ma/Z6mBEZGVwc4FYK1pHNHBTV2ZtWWRxM2twMzR5MkpUVm1DVEtrSmRfREFjd1lnX3dWaldRQ1nZ6mBEa2luZNnqYEZ0aHJlYWTZ6mBEcm9sZdnqYEltb2RlcmF0b3LZ6mBFZXBvY2gF2epgRmF1dGhvclgg7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9HZ6mBGaG9sZGVyWCCBOXcOqH0XX1ajVGbDTH7My42KkbTuN6Jd9g9bj8mzlNnqYEdwcm9kdWN02epgSXRyZWVob3VzZdnqYEdyZXBsaWNhWJdyZXBsaWNhOnRyZWVob3VzZTp0aHJlYWQ6Q3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3cyNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpOSFVQbUwxWl9QeVViYVJhcXI2VE8tRlVwTFVKVGh4S3YwS0daUVh6eVg02epgR3ZlcnNpb24B2epgSXN1Y2Nlc3Nvclgg7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9HZ6mBKcHJvZmlsZV9pZFgrbk9Jb2RsR3FvLWdVdEV4eTc2dkswMk41TFE1UzdIQUlzNkI1SlNVdUMzc9nqYEtlcG9jaF9iYXNpc4FYK1pHNHBTV2ZtWWRxM2twMzR5MkpUVm1DVEtrSmRfREFjd1lnX3dWaldRQ1nZ6mBMaG9sZGVyX2Vwb2NoWCs3cEZVMWp3MUdMTE9ZUmNuc251UG8walpudGd2REpNQl9meV9VLWlqX3hr2epgTWRlbGVnYXRpb25faWRYK2ZidnI0eEJTTV9vcHlKeFdsODlhVFJ5SHp5RGp3Sm96eFJKb2lmenAwbXfZ6mBPcHJvZmlsZV9nZW5lc2lzWCtrSU16aTZuQk5GUTNjSDBMdVpPb18weVg4THVwaDJmT2FCdFVxcTZzQnBv",
+      "profile": {
+        "mode": "bounded_continuation",
+        "version": 1,
+        "product": "treehouse",
+        "kind": "thread",
+        "role": "moderator",
+        "nominee": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+        "witnesses": [
+          "bnoc3Smwt4/ROvTFWY/v9O8qlxZuPKby5Pv8zYBQW/E=",
+          "ypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnw="
+        ],
+        "threshold": 2,
+        "maxLeaseEpochs": 7
+      },
+      "claim": {
+        "version": 1,
+        "product": "treehouse",
+        "kind": "thread",
+        "replica": "replica:treehouse:thread:CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws#authority:bounded-continuation-v1#root:NHUPmL1Z_PyUbaRaqr6TO-FUpLUJThxKv0KGZQXzyX4",
+        "role": "moderator",
+        "profileId": "nOIodlGqo-gUtExy76vK02N5LQ5S7HAIs6B5JSUuC3s",
+        "profileGenesis": "kIMzi6nBNFQ3cH0LuZOo_0yX8Luph2fOaBtUqq6sBpo",
+        "holder": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+        "holderEpoch": "7pFU1jw1GLLOYRcnsnuPo0jZntgvDJMB_fy_U-ij_xk",
+        "successor": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+        "delegationId": "fbvr4xBSM_opyJxWl89aTRyHzyDjwJozxRJoifzp0mw",
+        "author": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+        "deps": [
+          "ZG4pSWfmYdq3kp34y2JTVmCTKkJd_DAcwYg_wVjWQCY"
+        ],
+        "epoch": 5,
+        "epochBasis": [
+          "ZG4pSWfmYdq3kp34y2JTVmCTKkJd_DAcwYg_wVjWQCY"
+        ]
+      },
+      "certificate": {
+        "claim": {
+          "version": 1,
+          "product": "treehouse",
+          "kind": "thread",
+          "replica": "replica:treehouse:thread:CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws#authority:bounded-continuation-v1#root:NHUPmL1Z_PyUbaRaqr6TO-FUpLUJThxKv0KGZQXzyX4",
+          "role": "moderator",
+          "profileId": "nOIodlGqo-gUtExy76vK02N5LQ5S7HAIs6B5JSUuC3s",
+          "profileGenesis": "kIMzi6nBNFQ3cH0LuZOo_0yX8Luph2fOaBtUqq6sBpo",
+          "holder": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+          "holderEpoch": "7pFU1jw1GLLOYRcnsnuPo0jZntgvDJMB_fy_U-ij_xk",
+          "successor": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+          "delegationId": "fbvr4xBSM_opyJxWl89aTRyHzyDjwJozxRJoifzp0mw",
+          "author": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+          "deps": [
+            "ZG4pSWfmYdq3kp34y2JTVmCTKkJd_DAcwYg_wVjWQCY"
+          ],
+          "epoch": 5,
+          "epochBasis": [
+            "ZG4pSWfmYdq3kp34y2JTVmCTKkJd_DAcwYg_wVjWQCY"
+          ]
+        },
+        "signatures": [
+          {
+            "witness": "bnoc3Smwt4/ROvTFWY/v9O8qlxZuPKby5Pv8zYBQW/E=",
+            "signature": "9GuDJp+qWF7S6njHY3I5YKTQ5Hdu/OlQsrbqn4aAx1hHrp7A7zqvwjw70u2e1CgKkk+ZBjCpBxrBIuzsm0SMCQ=="
+          },
+          {
+            "witness": "ypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnw=",
+            "signature": "xsK95ShfZlbHQVgiH1gi8tuNM7nvLF0yfun1dtkRasFduT32C+uThdf7kTUJxMPNZtQ9B9LFPYUUsRkZKFJ4AA=="
+          }
+        ]
+      }
+    }
+  ]
+}
