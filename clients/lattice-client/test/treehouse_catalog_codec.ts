@@ -305,6 +305,32 @@ test("public bytes and IDs use exact domains, raw key binaries, atom fields and 
   ]) assert.throws(() => fn({ malformed: true }), TypeError);
 });
 
+test("public adapters work without Node Buffer and preserve the same signed bytes in browser hosts", () => {
+  const expected = catalogCodec.canonicalBytesForTransportCatalog(catalog);
+  const term = catalogCodec.catalogRotationEnvelopeToCarrierTerm(rotationEnvelope);
+  const host = globalThis as unknown as { Buffer: typeof Buffer | undefined };
+  const original = host.Buffer;
+  try {
+    host.Buffer = undefined;
+    assert.deepEqual(catalogCodec.canonicalBytesForTransportCatalog(catalog), expected);
+    assert.deepEqual(catalogCodec.catalogRotationEnvelopeFromCarrierTerm(term), rotationEnvelope);
+    assert.equal(catalogCodec.verifyCatalogEnvelope(envelope, bootstrap.catalogKey), true);
+    assert.equal(catalogCodec.verifyCatalogRotationEnvelope(rotationEnvelope, bootstrap.catalogKey), true);
+  } finally { host.Buffer = original; }
+});
+
+test("normalization copies nested evidence and refuses accessor-backed fields without invoking them", () => {
+  const normalized = catalogCodec.normalizeCatalogRotationEnvelope(rotationEnvelope)!;
+  assert.notEqual(normalized.rotation.cutoffs, rotation.cutoffs);
+  normalized.rotation.cutoffs[0]!.frontier.push(digest("later"));
+  assert.deepEqual(rotation.cutoffs[0]!.frontier, cutoff.frontier);
+  let invoked = false;
+  const accessor = { ...bootstrap };
+  Object.defineProperty(accessor, "catalogKey", { get() { invoked = true; return bootstrap.catalogKey; } });
+  assert.equal(catalogCodec.normalizeCatalogBootstrap(accessor), null);
+  assert.equal(invoked, false);
+});
+
 function atom(value: string): CarrierTerm { return ["atom", value]; }
 function text(value: string): CarrierTerm { return ["bin", Buffer.from(value).toString("base64")]; }
 function changeField(term: CarrierTerm, field: string, replacement: unknown): unknown {

@@ -129,7 +129,10 @@ const catalogCodec = recordCodec<TransportCatalog>([
   ["version", "version", versionValue], ["product", "product", productValue], ["space", "space", textValue],
   ["bootstrap", "bootstrap", idValue], ["binding", "binding", idValue], ["revision", "revision", integerValue],
   ["previous", "previous", optionalId], ["entries", "entries", entriesCodec],
-], (value) => (value.revision === 0) === (value.previous === null));
+], (value) => {
+  const space = value.entries.find((entry) => entry.kind === "space")!;
+  return (value.revision === 0) === (value.previous === null) && space.replica === value.space && space.reference === value.bootstrap;
+});
 const envelopeCodec = recordCodec<CatalogEnvelope>([["catalog", "catalog", catalogCodec], ["signature", "signature", signatureValue]]);
 const cutoffCodec = recordCodec<CatalogCutoff>([
   ["replica", "replica", textValue], ["frontier", "frontier", constrained(listCodec(idValue), strictlySorted)], ["logDigest", "log_digest", idValue],
