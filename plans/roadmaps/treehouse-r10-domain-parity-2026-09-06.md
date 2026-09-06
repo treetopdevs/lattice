@@ -1,9 +1,9 @@
 # R10 — Treehouse domain and reciprocal runtime build contract
 
-Status: implemented and locally verified from `d08883da7d2e5a007bf66d3ffd2205d600109604`;
-R09 source integration is complete in `4934c73d`. Final local gates pass below.
-Exact-diff Fable review and hosted integration remain pending; no downstream
-enablement is claimed.
+Status: original atomic domain implementation `3d6a4443` and shared R04/R10
+integration `f5fe2fb5` passed exact Claude Fable review. Final R03/R09/accepted-main
+integration is undergoing its final required gates below. Hosted integration and
+downstream enablement remain open.
 This packet executes unified R10 and the adopted Plan 158 amendment. Plan 178
 remains the frozen vocabulary document; its protected status and claim text are
 not rewritten here. One atomic XL integration contains BEAM, TypeScript,
@@ -275,3 +275,36 @@ carrier, relay and relay-sync checks also pass. Existing **67 vector artifacts**
 are byte-identical to the frozen baseline. The exporter was run through
 `mix run -e 'Mix.Task.run("lattice.export_vectors")'` to compile the current source
 before generation; a bare task invocation can reuse an older compiled task.
+
+
+## Final shared-engine integration — 2026-09-06
+
+The original domain and review fixes at `3d6a44431c6f3f1a3802aeab948f0dbb8e8f73a5`
+passed actual Claude Fable review. Shared integration `da239a62` combines the
+R04 continuation judge and raw-body decoder with R10's product decoder, ordered
+effects and per-role views. Original-op family/input refusals run before role
+views, and preflight and application share the same pure role decision.
+Full `mix check` passed 784 tests + 27 properties at that source.
+
+Integration `90a07e2b876fe40ac73db8bfd3a035844b315e42` adds accepted R06/R08/R09
+and initial R03 remediation. Full `mix check` passed 803 tests + 27 properties,
+zero failures, the same three exclusions, clean formatting and strict Credo exit 0.
+The 68 R10 top-level vectors and three R04 continuation artifacts were preserved;
+R03 added two top-level vectors. This is separate from physical custody/pilot proof.
+
+The reciprocal real-Space continuation test executes the actual TS product
+decoder against BEAM-authored retained histories, all ordered command effects,
+valid finite continuation, stale holder and lease expiry. Follow-up
+`f5fe2fb5fb588296ad68aa836ef0c3ffacb73b97` adds authentic refused consent reuse;
+the focused test and format check pass. Fable's final integration review returned
+PASS and closed its missing-real-product-history P2. CI now installs and builds
+the existing client before this reciprocal Mix test, and AGENTS documents that
+fresh-checkout prerequisite. No test skips, production bypasses or alternate
+fixtures are introduced.
+
+Final source integration `8a31683055846eeb60ac4ede15d03cde029cf02d` adds R03's
+full reserved-metadata repair `a29c4510`, its generated declaration, R04's matching
+integration/evidence, and accepted main `c22272ec` with R09's count correction
+and the independently reviewed canonical-generator repair. The contextual body
+decoder remains composed with the product decoder and raw continuation parser.
+Final local/source and hosted gates will be recorded against their actual tips.

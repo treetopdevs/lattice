@@ -28,6 +28,18 @@ PATH="$HOME/.asdf/installs/erlang/28.3.1/bin:$HOME/.asdf/installs/elixir/1.19.5-
 
 ## Verify the repo is healthy
 
+The full suite includes a reciprocal Treehouse test that executes the real TypeScript
+client. On a fresh checkout, prepare that client before running `mix test`,
+`mix verify`, or `mix check`:
+
+```sh
+npm --prefix clients/lattice-client ci
+npm --prefix clients/lattice-client run build
+```
+
+CI performs the same preparation before Mix. A missing Node/client dependency is
+a failed prerequisite; do not skip the reciprocal test or substitute a fixture.
+
 ```sh
 ~/.asdf/shims/mix verify                          # format --check-formatted + full test suite
 ~/.asdf/shims/mix check                           # verify + credo --strict
