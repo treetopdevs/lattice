@@ -114,6 +114,15 @@ defmodule Lattice2.RootBindingTest do
     end
   end
 
+  test "a malformed-marker log cannot select a root or assign a role during analysis" do
+    root = Lattice.Identity.from_seed("root", "root-marker-analysis")
+    {_delegation, genesis, log} = root_marker_log("town#root:attacker", root)
+    analysis = Authority.analyze(Thread, log)
+
+    assert {Authority.root(log), analysis.holders.moderator, analysis.reasons[genesis.id]} ==
+             {nil, nil, :impostor_genesis}
+  end
+
   defp root_marker_log(replica, root) do
     delegation = Delegation.genesis(root, replica, ops: [:post], roles: [:moderator])
     genesis = Lattice.Op.new(root, replica, [], :authority, {:genesis, delegation, %{}})
