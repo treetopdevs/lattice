@@ -269,3 +269,21 @@ election, and `Lattice.Attestation.Stub` stays frozen and false; no ballots or c
 - AF-1 test green; AF-2 and AF-3 "today" lines truthful at merge time.
 - The operator countersign line is still absent from the isolation contract; adding it is a later,
   explicit act.
+
+
+## R19a member-key continuity correction, 2026-09-06
+
+The integrator adopts the reviewed [member device-loss contract](../docs/research/member_device_loss.md)
+under the existing unified-program execution instruction. The earlier AF-3
+sentence “The old identity is tombstoned” is historical shorthand that must never
+invoke Core's root-only, replica-wide `:tombstone` operation. The retained log
+instead records a signed old/new-key continuity statement. Membership removal,
+each actual issuer/root capability revocation or signed-epoch lapse, and transport
+removal remain explicit independent actions, with unresolved items visible.
+
+The selected certificate needs fresh new-key possession and exactly two distinct
+other currently admitted ordinary member keys, followed by the existing current
+admin/capability gate. No signature alias, restored private key, new operation kind,
+automatic membership/capability transfer or loan/receipt substitution is created.
+Final Claude Fable design follow-up passed at d52dc9d3. R19b implementation and
+R20 packaged AF-3 evidence remain open; original frozen status claims remain history.

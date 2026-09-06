@@ -1,6 +1,6 @@
 # Treehouse member device loss: R19a contract proposal
 
-Status: **proposed for integrator adoption and Claude Fable design review. No
+Status: **adopted after integrator and final Claude Fable design review. No
 implementation or AF-3 success is claimed.** This document prepares unified
 R19a on accepted R01a/R02 main commit
 `f0e323b638e8a8095bbcf6f420066c238d126b6e`. R19b must implement and prove the
@@ -596,3 +596,30 @@ The fixed threshold, closed claim/signature domains, 16-parent/head capacity sto
 beacon basis remain selected defaults awaiting final follow-up review and explicit
 adoption. No source-plan amendment, production implementation or A01–A17 result
 is inferred from this proposed document.
+
+
+## Integrator adoption — 2026-09-06
+
+The integrator adopts the full contract reviewed at
+`d52dc9d3` under the user's instruction to complete the unified proposal.
+Actual Claude Fable follow-up returned PASS, closing the prior P1 and all P2
+findings; it reviewed design soundness and ran no implementation tests.
+
+The adopted defaults are exactly two distinct other currently admitted ordinary
+member vouchers, with the admin permitted as one qualifying voucher; the closed
+13-field claim and eight-field return challenge; all four stated signature domains;
+16 parents/heads and the unchanged 64,000-byte complete-op capacity stop; a
+60-second monotonic, session-bound, one-use local returning-key challenge; truthful
+removed-member review plus separate ordinary admission; and a required valid signed
+beacon basis even before loss (signed zero is valid, absent evidence is not).
+Raw recipient keys and sorted-distinct outer dependencies follow the corrected
+byte rules. Loss of quorum, unresolved conflict, immutable original receipts/loans
+and independently unreconciled grants keep their explicit refusal/unresolved states.
+
+The no-new-state-field rule, literal six-command legacy creator/fixture ceilings,
+current-admin capability gate, pure deterministic conflict propagation and
+retained authenticated audit provenance are binding implementation requirements.
+Source-plan amendments below authorize the atomic R19b vocabulary/contract/test
+cutover; they do not say the new command is implemented. R04/R10 accepted-source
+reconciliation, R19b's seventeen public signed-input cases and R20 packaged proof
+remain required. This decision proves no AF-3 success or physical key recovery.
