@@ -53,6 +53,8 @@ defmodule Lattice.Treehouse.ContractTest do
     "change moderator",
     "revoke grant",
     "witnessed succession",
+    "catalog bootstrap v1",
+    "replace catalog v1",
     "post",
     "author edit",
     "author tombstone",
