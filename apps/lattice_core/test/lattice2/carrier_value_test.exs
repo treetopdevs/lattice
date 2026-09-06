@@ -17,7 +17,11 @@ defmodule Lattice.CarrierValueTest do
 
     # Preserve generic op-wire normalization; catalog ingress adds its own closed-map refusal.
     assert {:ok, %{catalog: 2}} =
-             Wire.decode_value(["map", [[["atom", "catalog"], ["int", 1]], [["atom", "catalog"], ["int", 2]]]])
+             Wire.decode_value([
+               "map",
+               [[["atom", "catalog"], ["int", 1]], [["atom", "catalog"], ["int", 2]]]
+             ])
+
     assert {:ok, MapSet.new([1])} == Wire.decode_value(["mapset", [["int", 1], ["int", 1]]])
   end
 end

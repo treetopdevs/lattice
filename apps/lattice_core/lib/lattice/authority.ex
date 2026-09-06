@@ -67,7 +67,14 @@ defmodule Lattice.Authority do
   Quarantined ops stay in the log and are reported in `audit` (design invariant 4).
   """
 
-  alias Lattice.Authority.{BeaconCertificate, Continuation, ContinuationCertificate, Delegation, SuccessionCertificate}
+  alias Lattice.Authority.{
+    BeaconCertificate,
+    Continuation,
+    ContinuationCertificate,
+    Delegation,
+    SuccessionCertificate
+  }
+
   alias Lattice.{Dag, Identity, Log, Op}
 
   # Separates a replica *name* from the root-key commitment bound into its id.
@@ -133,8 +140,12 @@ defmodule Lattice.Authority do
   @spec continuation_profile(Log.t()) :: {:ok, map()} | {:error, atom()}
   def continuation_profile(%Log{} = log) do
     case Continuation.family(log.replica) do
-      :legacy -> {:error, :unauthorized_continuation}
-      :unsupported -> {:error, :unsupported_authority_profile}
+      :legacy ->
+        {:error, :unauthorized_continuation}
+
+      :unsupported ->
+        {:error, :unsupported_authority_profile}
+
       {:bounded, _} ->
         if verified_complete_log?(log),
           do: continuation_profile_from_log(log),
@@ -148,17 +159,29 @@ defmodule Lattice.Authority do
     ordered = Log.topo_ops(log)
     {commitment, genesis_ids, succession_ids} = deleg_context(log, ordered)
     delegations = collect_delegations(ordered)
-    valid = validate_delegations(delegations, commitment, genesis_ids, succession_ids, log.replica)
+
+    valid =
+      validate_delegations(delegations, commitment, genesis_ids, succession_ids, log.replica)
+
     root = resolve_root(ordered, delegations, valid, commitment)
     context = Continuation.context(log.replica, ordered, delegations, valid, root, [])
 
     case Continuation.select_pin(context, Log.op_ids(log)) do
-      nil -> {:error, :continuation_not_configured}
+      nil ->
+        {:error, :continuation_not_configured}
+
       pin ->
         {:ok, profile_id} = ContinuationCertificate.profile_id(pin.profile)
-        {:ok, %{replica: log.replica, root: root, profile_genesis: pin.op_id,
-          profile_id: profile_id, profile: pin.profile,
-          verified_frontier: Log.frontier(log)}}
+
+        {:ok,
+         %{
+           replica: log.replica,
+           root: root,
+           profile_genesis: pin.op_id,
+           profile_id: profile_id,
+           profile: pin.profile,
+           verified_frontier: Log.frontier(log)
+         }}
     end
   end
 

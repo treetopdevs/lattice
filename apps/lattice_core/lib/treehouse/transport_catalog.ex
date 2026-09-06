@@ -24,13 +24,19 @@ defmodule Treehouse.TransportCatalog do
   @spec verify_rotation(term(), binary()) :: :ok | {:error, atom()}
   def verify_rotation(envelope, trusted_key) do
     with true <- fields?(envelope, [:rotation, :old_signature, :new_signature]),
-         true <- bytes?(envelope.old_signature, 64) and bytes?(envelope.new_signature, 64) and bytes?(trusted_key, 32),
+         true <-
+           bytes?(envelope.old_signature, 64) and bytes?(envelope.new_signature, 64) and
+             bytes?(trusted_key, 32),
          {:ok, rotation} <- normalize_rotation(envelope.rotation) do
       if trusted_key != rotation.new_catalog_key and
            Identity.verify(trusted_key, rotation_bytes(rotation), envelope.old_signature) and
-           Identity.verify(rotation.new_catalog_key, rotation_possession_bytes(rotation), envelope.new_signature),
-        do: :ok,
-        else: {:error, :invalid_rotation_signature}
+           Identity.verify(
+             rotation.new_catalog_key,
+             rotation_possession_bytes(rotation),
+             envelope.new_signature
+           ),
+         do: :ok,
+         else: {:error, :invalid_rotation_signature}
     else
       _ -> {:error, :malformed_catalog}
     end
@@ -39,19 +45,30 @@ defmodule Treehouse.TransportCatalog do
   @spec normalize_rotation(term()) :: {:ok, map()} | {:error, :malformed_catalog}
   def normalize_rotation(value) do
     if fields?(value, @rotation_fields) and value.version == 1 and value.product == :treehouse and
-         text?(value.space) and id?(value.bootstrap) and id?(value.parent) and id?(value.prior_catalog) and
+         text?(value.space) and id?(value.bootstrap) and id?(value.parent) and
+         id?(value.prior_catalog) and
          integer?(value.generation) and value.generation > 0 and bytes?(value.new_catalog_key, 32) and
          id?(value.nonce) and id?(value.inventory_digest) and cutoffs?(value.cutoffs),
-      do: {:ok, value}, else: {:error, :malformed_catalog}
+       do: {:ok, value},
+       else: {:error, :malformed_catalog}
   end
 
   @spec rotation_bytes(term()) :: binary()
   def rotation_bytes(value),
-    do: Canonical.term(["lattice-treehouse-catalog-rotation-v1", require_value(normalize_rotation(value))])
+    do:
+      Canonical.term([
+        "lattice-treehouse-catalog-rotation-v1",
+        require_value(normalize_rotation(value))
+      ])
 
   @spec rotation_possession_bytes(term()) :: binary()
   def rotation_possession_bytes(value),
-    do: Canonical.term(["lattice-treehouse-transport-possession-v1", :catalog, require_value(normalize_rotation(value))])
+    do:
+      Canonical.term([
+        "lattice-treehouse-transport-possession-v1",
+        :catalog,
+        require_value(normalize_rotation(value))
+      ])
 
   @spec rotation_id(term()) :: String.t()
   def rotation_id(envelope) do
@@ -109,7 +126,11 @@ defmodule Treehouse.TransportCatalog do
 
   @spec catalog_bytes(term()) :: binary()
   def catalog_bytes(value),
-    do: Canonical.term(["lattice-treehouse-transport-catalog-v1", require_value(normalize_catalog(value))])
+    do:
+      Canonical.term([
+        "lattice-treehouse-transport-catalog-v1",
+        require_value(normalize_catalog(value))
+      ])
 
   @spec catalog_id(term()) :: String.t()
   def catalog_id(value), do: digest(catalog_bytes(value))
@@ -126,7 +147,8 @@ defmodule Treehouse.TransportCatalog do
 
   @spec service_realm(term()) :: String.t()
   def service_realm(service_id) do
-    if id?(service_id), do: "treehouse-service:" <> service_id,
+    if id?(service_id),
+      do: "treehouse-service:" <> service_id,
       else: raise(ArgumentError, "malformed catalog service ID")
   end
 
@@ -201,12 +223,14 @@ defmodule Treehouse.TransportCatalog do
 
   defp cutoffs?(values) when is_list(values) and length(values) in 1..13,
     do: Enum.all?(values, &cutoff?/1) and ordered_unique?(Enum.map(values, & &1.replica))
+
   defp cutoffs?(_), do: false
 
   defp cutoff?(value),
-    do: fields?(value, [:replica, :frontier, :log_digest]) and text?(value.replica) and
-      id?(value.log_digest) and is_list(value.frontier) and Enum.all?(value.frontier, &id?/1) and
-      ordered_unique?(value.frontier)
+    do:
+      fields?(value, [:replica, :frontier, :log_digest]) and text?(value.replica) and
+        id?(value.log_digest) and is_list(value.frontier) and Enum.all?(value.frontier, &id?/1) and
+        ordered_unique?(value.frontier)
 
   defp require_value({:ok, value}), do: value
   defp require_value(_), do: raise(ArgumentError, "malformed catalog value")
@@ -223,20 +247,30 @@ defmodule Treehouse.TransportCatalog do
 
   defp origin?(value) when is_binary(value) do
     case Regex.run(~r/^wss:\/\/([a-z0-9.-]+)(?::([1-9][0-9]*))?$/, value) do
-      [^value, host] -> dns_host?(host)
+      [^value, host] ->
+        dns_host?(host)
+
       [^value, host, port] ->
-        dns_host?(host) and port != "443" and byte_size(port) <= 5 and String.to_integer(port) <= 65_535
-      _ -> false
+        dns_host?(host) and port != "443" and byte_size(port) <= 5 and
+          String.to_integer(port) <= 65_535
+
+      _ ->
+        false
     end
   end
+
   defp origin?(_), do: false
 
   # WHATWG treats an ASCII numeric final label (including 0x forms) as an
   # attempted IPv4 address. Such literals/aliases are outside this DNS profile.
   defp dns_host?(host) do
     labels = String.split(host, ".")
+
     byte_size(host) <= 253 and
-      Enum.all?(labels, &(byte_size(&1) in 1..63 and Regex.match?(~r/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/, &1))) and
+      Enum.all?(
+        labels,
+        &(byte_size(&1) in 1..63 and Regex.match?(~r/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/, &1))
+      ) and
       not Regex.match?(~r/^(?:[0-9]+|0x[0-9a-f]*)$/, List.last(labels))
   end
 end

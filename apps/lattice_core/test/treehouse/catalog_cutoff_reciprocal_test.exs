@@ -63,7 +63,9 @@ defmodule Treehouse.CatalogCutoffReciprocalTest do
         fixture.replica,
         Log.frontier(fixture.log),
         :command,
-        {:create_space, [atoms]}, cap: fixture.delegation.id)
+        {:create_space, [atoms]},
+        cap: fixture.delegation.id
+      )
 
     high =
       Op.new(
@@ -82,7 +84,9 @@ defmodule Treehouse.CatalogCutoffReciprocalTest do
         fixture.replica,
         [high.id],
         :command,
-        {:create_space, ["Retained after rejected signature"]}, cap: fixture.delegation.id)
+        {:create_space, ["Retained after rejected signature"]},
+        cap: fixture.delegation.id
+      )
 
     assert {:quarantined, second, :bad_signature} =
              Log.accept(first, %{genuine | sig: <<0::512>>})

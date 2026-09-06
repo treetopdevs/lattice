@@ -37,7 +37,9 @@ defmodule Treehouse.CatalogBootstrapObservationTest do
         f.replica,
         [f.bootstrap.id],
         :command,
-        {:catalog_bootstrap_v1, [f.record]}, cap: f.delegation.id)
+        {:catalog_bootstrap_v1, [f.record]},
+        cap: f.delegation.id
+      )
 
     log = Log.append!(f.log, invalid)
     before = :erlang.term_to_binary(log)

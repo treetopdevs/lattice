@@ -265,7 +265,14 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
   # Historical signed fixtures retain their original pre-catalog ceiling.
   defp treehouse_preview_commands,
-    do: [:create_space, :create_thread, :issue_invitation, :revoke_invitation, :admit_member, :remove_member]
+    do: [
+      :create_space,
+      :create_thread,
+      :issue_invitation,
+      :revoke_invitation,
+      :admit_member,
+      :remove_member
+    ]
 
   defp treehouse_space_map_order do
     sim =

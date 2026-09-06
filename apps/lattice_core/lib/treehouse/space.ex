@@ -13,7 +13,14 @@ defmodule Treehouse.Space do
   alias Lattice.Authority.Delegation
   alias Treehouse.{Invitation, TransportCatalog}
 
-  @preview_commands [:create_space, :create_thread, :issue_invitation, :revoke_invitation, :admit_member, :remove_member]
+  @preview_commands [
+    :create_space,
+    :create_thread,
+    :issue_invitation,
+    :revoke_invitation,
+    :admit_member,
+    :remove_member
+  ]
 
   state do
     field(:name, merge: :lww, default: "")
@@ -78,7 +85,9 @@ defmodule Treehouse.Space do
         do: replica,
         else: Authority.bind_replica(replica, identity.pub)
 
-    delegation = Delegation.genesis(identity, replica, ops: @preview_commands, roles: [:admin, :moderator])
+    delegation =
+      Delegation.genesis(identity, replica, ops: @preview_commands, roles: [:admin, :moderator])
+
     genesis = Op.new(identity, replica, [], :authority, {:genesis, delegation, %{}})
 
     name_op =
@@ -255,10 +264,12 @@ defmodule Treehouse.Space do
 
   def command_op_status(%Op{body: {:catalog_bootstrap_v1, [record]}} = op, _visible, context) do
     with {:ok, record} <- TransportCatalog.normalize_bootstrap(record),
-         {:ok, observed} <- Authority.continuation_profile(Log.from_ops(op.replica, context.visible_ops)),
-         true <- record.space == op.replica and record.space_root == op.author and
-           observed.root == op.author and observed.profile_genesis == record.profile_genesis and
-           observed.profile_id == record.profile_id and observed.profile.kind == :space do
+         {:ok, observed} <-
+           Authority.continuation_profile(Log.from_ops(op.replica, context.visible_ops)),
+         true <-
+           record.space == op.replica and record.space_root == op.author and
+             observed.root == op.author and observed.profile_genesis == record.profile_genesis and
+             observed.profile_id == record.profile_id and observed.profile.kind == :space do
       :ok
     else
       _ -> {:error, :application_invalid_catalog}
