@@ -85,7 +85,12 @@ defmodule Lattice2.DelegationLeaseTest do
     {sim, delegation} = Sim.grant(sim, "issuer", "audience", ops: [:post], expires_epoch: 3)
     log = Sim.log(sim, "issuer")
     grant = Enum.find(Log.topo_ops(log), &(&1.body == {:grant, delegation}))
-    malformed = %{grant | body: {:grant, %{delegation | expires_epoch: Canonical.max_integer() + 1}}}
+
+    malformed = %{
+      grant
+      | body: {:grant, %{delegation | expires_epoch: Canonical.max_integer() + 1}}
+    }
+
     reconstructed = Log.from_ops(log.replica, Map.put(log.ops, grant.id, malformed))
 
     assert Authority.analyze(Thread, reconstructed).reasons[grant.id] == :bad_delegation_sig

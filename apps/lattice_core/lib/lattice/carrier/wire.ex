@@ -4,6 +4,9 @@ defmodule Lattice.Carrier.Wire do
 
   This module serializes complete `%Lattice.Op{}` structs for transport;
   integrity is still decided by `Lattice.Log.accept/2`.
+
+  Body and capability terms may contain at most 64 nested generic composites.
+  Scalars and flat delegation records do not recurse through that budget.
   """
 
   alias Lattice.Authority.Delegation
@@ -13,6 +16,7 @@ defmodule Lattice.Carrier.Wire do
   @version 1
   @max_json_safe_integer 9_007_199_254_740_991
   @max_canonical_integer 18_446_744_073_709_551_615
+  @max_decode_depth 64
 
   @spec version() :: pos_integer()
   def version, do: @version
@@ -207,53 +211,59 @@ defmodule Lattice.Carrier.Wire do
     raise ArgumentError, "unsupported wire term: #{inspect(value)}"
   end
 
-  defp decode_term(["nil"]), do: {:ok, nil}
-  defp decode_term(["bool", value]) when is_boolean(value), do: {:ok, value}
+  defp decode_term(term, depth \\ @max_decode_depth)
+  defp decode_term(["nil"], _depth), do: {:ok, nil}
+  defp decode_term(["bool", value], _depth) when is_boolean(value), do: {:ok, value}
 
-  defp decode_term(["int", value])
+  defp decode_term(["int", value], _depth)
        when is_integer(value) and value >= 0 and value <= @max_json_safe_integer, do: {:ok, value}
 
-  defp decode_term(["int", value]) when is_binary(value) do
+  defp decode_term(["int", value], _depth) when is_binary(value) do
     case Integer.parse(value) do
       {int, ""} when int >= 0 and int <= @max_canonical_integer -> {:ok, int}
       _other -> {:error, :malformed_term}
     end
   end
 
-  defp decode_term(["bin", value]) when is_binary(value) do
+  defp decode_term(["bin", value], _depth) when is_binary(value) do
     case Base.decode64(value) do
       {:ok, bin} -> {:ok, bin}
       :error -> {:error, :malformed_term}
     end
   end
 
-  defp decode_term(["atom", value]) when is_binary(value), do: existing_atom(value)
-  defp decode_term(["list", values]) when is_list(values), do: decode_list(values)
+  defp decode_term(["atom", value], _depth) when is_binary(value), do: existing_atom(value)
 
-  defp decode_term(["tuple", values]) when is_list(values) do
-    with {:ok, values} <- decode_list(values), do: {:ok, List.to_tuple(values)}
+  defp decode_term(["list", values], depth) when is_list(values) and depth > 0,
+    do: decode_list(values, depth - 1)
+
+  defp decode_term(["tuple", values], depth) when is_list(values) and depth > 0 do
+    with {:ok, values} <- decode_list(values, depth - 1), do: {:ok, List.to_tuple(values)}
   end
 
-  defp decode_term(["mapset", values]) when is_list(values) do
-    with {:ok, values} <- decode_list(values), do: {:ok, MapSet.new(values)}
+  defp decode_term(["mapset", values], depth) when is_list(values) and depth > 0 do
+    with {:ok, values} <- decode_list(values, depth - 1), do: {:ok, MapSet.new(values)}
   end
 
-  defp decode_term(["delegation", value]) when is_map(value), do: decode_delegation(value)
-  defp decode_term(["map", pairs]) when is_list(pairs), do: decode_map(pairs)
-  defp decode_term(_), do: {:error, :malformed_term}
+  defp decode_term(["delegation", value], _depth) when is_map(value), do: decode_delegation(value)
 
-  defp decode_list(values), do: reduce_decode(values, [])
+  defp decode_term(["map", pairs], depth) when is_list(pairs) and depth > 0,
+    do: decode_map(pairs, depth - 1)
 
-  defp reduce_decode([], acc), do: {:ok, Enum.reverse(acc)}
+  defp decode_term(_, _depth), do: {:error, :malformed_term}
 
-  defp reduce_decode([value | rest], acc) do
-    with {:ok, value} <- decode_term(value), do: reduce_decode(rest, [value | acc])
+  defp decode_list(values, depth), do: reduce_decode(values, [], depth)
+
+  defp reduce_decode([], acc, _depth), do: {:ok, Enum.reverse(acc)}
+
+  defp reduce_decode([value | rest], acc, depth) do
+    with {:ok, value} <- decode_term(value, depth), do: reduce_decode(rest, [value | acc], depth)
   end
 
-  defp decode_map(pairs) do
+  defp decode_map(pairs, depth) do
     Enum.reduce_while(pairs, {:ok, %{}}, fn
       [k, v], {:ok, acc} ->
-        with {:ok, k} <- decode_term(k), {:ok, v} <- decode_term(v) do
+        with {:ok, k} <- decode_term(k, depth), {:ok, v} <- decode_term(v, depth) do
           {:cont, {:ok, Map.put(acc, k, v)}}
         else
           _ -> {:halt, {:error, :malformed_term}}
