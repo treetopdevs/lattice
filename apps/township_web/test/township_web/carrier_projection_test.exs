@@ -2,7 +2,7 @@ defmodule TownshipWeb.CarrierProjectionTest do
   use ExUnit.Case, async: true
 
   alias Lattice.Carrier.Backoff
-  alias Lattice.{Log, Sim}
+  alias Lattice.{Identity, Log, Sim}
   alias Township.Matter
   alias TownshipWeb.CarrierProjection
 
@@ -124,6 +124,33 @@ defmodule TownshipWeb.CarrierProjectionTest do
       send(conn.test_pid, :carrier_closed)
       :ok
     end
+  end
+
+  test "a running projection's raw status removes private key bytes" do
+    identity = Identity.from_seed("projection-redaction", "projection-redaction-probe")
+    peer_log = peer_log()
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         carrier: PullOnlyCarrier,
+         connect_opts: [identity: identity, ops: Log.topo_ops(peer_log), test_pid: self()],
+         replica: peer_log.replica,
+         peer_realm: "clerk",
+         topic: "township:projection:redaction:#{System.unique_integer([:positive])}",
+         schedule: :manual}
+      )
+
+    status = :sys.get_status(projection)
+    encoded_status = :erlang.term_to_binary(status)
+
+    # Bypass Inspect so struct redaction cannot mask an exposed raw status value.
+    assert :binary.match(encoded_status, identity.priv) == :nomatch
+    assert :binary.match(encoded_status, identity.pub) != :nomatch
+    assert inspect(status, limit: :infinity) =~ "projection-redaction"
+
+    assert {:ok, :connecting} = CarrierProjection.subscribe(projection)
+    assert {:ok, {:fresh, _payload}} = CarrierProjection.refresh(projection)
   end
 
   test "server-push mode refuses a carrier without the subscription extension" do
