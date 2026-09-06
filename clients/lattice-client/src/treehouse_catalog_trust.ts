@@ -42,6 +42,8 @@ export interface TreehouseCatalogBlock {
   reason: "catalog_fork" | "authority_changed" | "control_history_limit";
   bindings: string[]; catalogs: string[]; bootstrapIds: string[]; opIds: string[];
   pendingProofIds: string[]; triggers: TreehouseCatalogOverflowTrigger[];
+  /** Authenticated prior causal refusals, not a timestamp or proof of store provenance. */
+  authorityWitnesses: {replica: string; frontier: string[]; opIds: string[]}[];
 }
 export interface InstalledTreehouseCatalogTrustV1 {
   version: 1; review: TreehouseCatalogBootstrapReview;
@@ -109,9 +111,33 @@ export async function prepareTreehouseCatalogInstallation(input: {
 export async function evaluateTreehouseCatalogTrust(input: {
   installed: InstalledTreehouseCatalogTrustV1; expected: TreehouseCatalogStoreToken; incoming: TreehouseCatalogEvidencePage;
 }): Promise<TreehouseCatalogTrustDecision> {
+  try {
+    if (!closed(input, ["installed", "expected", "incoming"])) fail("malformed_catalog");
+    let original: InstalledTreehouseCatalogTrustV1;
+    try {
+      original = copyInput(ownValue(input, "installed"));
+      if (!stateValid(original)) fail("trust_recovery_required");
+    } catch { fail("trust_recovery_required"); }
+    // Capture both origins synchronously. Incoming cloning errors must not hide
+    // saved corruption, nor may callers mutate a page while saved validation awaits.
+    let candidate: Pick<typeof input, "expected" | "incoming"> | undefined, candidateError: unknown;
+    try { candidate = copyInput({expected: ownValue(input, "expected"), incoming: ownValue(input, "incoming")}); }
+    catch (error) { candidateError = error; }
+    const checked = await evaluateSnapshot({installed: original, expected: {trustRevision: 0, historyGeneration: 0},
+      incoming: {catalogs: [], rotations: [], histories: [], cutoffProofs: []}}, true);
+    if (checked.kind === "reject") throw new Refusal("trust_recovery_required", checked.detail);
+    if (candidate === undefined) throw candidateError;
+    return await evaluateSnapshot({installed: original, ...candidate}, false);
+  } catch (error) { return rejection(error); }
+}
+
+// One graph/proof algorithm for both origins. The first pass has no incoming
+// evidence, no promotion and no sticky-block error fallback.
+async function evaluateSnapshot(value: {
+  installed: InstalledTreehouseCatalogTrustV1; expected: TreehouseCatalogStoreToken; incoming: TreehouseCatalogEvidencePage;
+}, originalOnly: boolean): Promise<TreehouseCatalogTrustDecision> {
   let frozen: {next: InstalledTreehouseCatalogTrustV1; expected: TreehouseCatalogStoreToken; replacement: boolean; bootstrapIds: string[]} | undefined;
   try {
-    const value = copyInput(input);
     if (!closed(value, ["installed", "expected", "incoming"]) || !tokenValid(value.expected) || !pageValid(value.incoming)) fail("malformed_catalog");
     if (!stateValid(value.installed)) fail("trust_recovery_required");
     const original = value.installed;
@@ -145,10 +171,18 @@ export async function evaluateTreehouseCatalogTrust(input: {
         if (proof.invalid || proof.pending.length > 0) fail("trust_recovery_required");
       }
     }
-    if (refused.length > 0) next.blocked = block("authority_changed", [], [], [], refused);
+    if (refused.length > 0 && next.blocked?.reason !== "authority_changed") {
+      const priorTriggers = next.blocked?.triggers ?? [];
+      next.blocked = block("authority_changed", [], [], [], refused);
+      next.blocked.triggers = priorTriggers;
+      next.blocked.authorityWitnesses = [...histories.values()].flatMap((history) => {
+        const opIds = sorted(refused.filter((id) => history.byId.has(id)));
+        return opIds.length === 0 ? [] : [{replica: history.raw.replica, frontier: history.frontier, opIds}];
+      }).sort((a, b) => compareUtf8(a.replica, b.replica));
+    }
     const unseenBootstrapIds = bootstrapIds.filter((id) => !original.review.observedBootstrapIds.includes(id));
     if (unseenBootstrapIds.length > 0 && next.blocked === null) next.blocked = block("catalog_fork", [], [], unseenBootstrapIds);
-    if (next.blocked !== null) frozen = {next, expected: value.expected, replacement, bootstrapIds};
+    if (next.blocked !== null) frozen = {next: structuredClone(next), expected: value.expected, replacement, bootstrapIds};
 
     const catalogs = new Map<string, CatalogNode>(), rotations = new Map<string, RotationNode>();
     for (const saved of original.catalogs) addCatalog(catalogs, saved.json, bootstrap, original.review.bootstrapId, saved.id);
@@ -201,8 +235,8 @@ export async function evaluateTreehouseCatalogTrust(input: {
       } else if (binding.inventory !== null && catalogInventoryId(c.entries) !== binding.inventory) fail("invalid_catalog_transition", [id]);
       for (const entry of c.entries) {
         const proof = entryProof(entry, histories, space);
-        if (proof.invalid || proof.refused.length > 0) {
-          if (next.blocked?.reason !== "authority_changed") fail("invalid_catalog_transition", [id, ...proof.refused]);
+        if (proof.invalid || (proof.refused.length > 0 && next.blocked?.reason !== "authority_changed")) {
+          fail("invalid_catalog_transition", [id, ...proof.refused]);
         }
         node.pending.push(...proof.pending);
       }
@@ -213,26 +247,6 @@ export async function evaluateTreehouseCatalogTrust(input: {
     for (const id of sorted(catalogs.keys())) catalogFor(id);
     for (const id of sorted(rotations.keys())) bindingFor(id);
 
-    // All records are authenticated against their own predecessor graph before
-    // admission/budget checking. Unknown signer/parent records never establish trust.
-    const retained = [...original.catalogs.map((a) => ({kind: "catalog" as const, ...a})), ...original.rotations.map((a) => ({kind: "rotation" as const, ...a}))];
-    const have = new Set(retained.map((a) => `${a.kind}:${a.id}`));
-    const additions: {kind: "catalog" | "rotation"; id: string; json: string}[] = [...catalogs.values()].map((n) => ({kind: "catalog", id: n.id, json: n.json}));
-    additions.push(...[...rotations.values()].map((n) => ({kind: "rotation" as const, id: n.id, json: n.json})));
-    let bytes = retained.reduce((sum, a) => sum + encoder.encode(a.json).length, 0);
-    for (const artifact of additions.sort((a, b) => compareUtf8(`${a.kind}:${a.id}`, `${b.kind}:${b.id}`))) {
-      if (have.has(`${artifact.kind}:${artifact.id}`)) continue;
-      const size = encoder.encode(artifact.json).length;
-      if (retained.length + 1 > 1024 || bytes + size > 16 * 1024 * 1024) {
-        // Preserve the original store's artifact set at exhaustion, not an
-        // arbitrary sorted subset of this incoming page.
-        next.catalogs = original.catalogs; next.rotations = original.rotations;
-        next.blocked = block("control_history_limit", [], [], [], []);
-        next.blocked.triggers = [{kind: artifact.kind, id: artifact.id, digest: hash(encoder.encode(artifact.json)), bytes: size}];
-        return issue("retain_blocked", value.expected, next, "control_history_limit", replacement, bootstrapIds, [], [], []);
-      }
-      retained.push(artifact); have.add(`${artifact.kind}:${artifact.id}`); bytes += size;
-    }
     next.catalogs = [...catalogs.values()].map((n) => ({id: n.id, json: n.json})).sort(byId);
     next.rotations = [...rotations.values()].map((n) => ({id: n.id, json: n.json})).sort(byId);
     next.cutoffProofs = await mergeProofs(original.cutoffProofs, value.incoming.cutoffProofs, histories);
@@ -264,7 +278,6 @@ export async function evaluateTreehouseCatalogTrust(input: {
     const pendingIds = sorted([...catalogs.values()].filter((n) => n.pending.length > 0).map((n) => n.id));
     if (heads.length > 2 && next.blocked?.reason !== "authority_changed") next.blocked = block("control_history_limit", heads, forks, [], [], pendingIds);
     else if (next.blocked === null && (heads.length > 1 || forks.length > 0)) next.blocked = block("catalog_fork", heads, forks, [], [], pendingIds);
-    if (next.blocked !== null) frozen = {next, expected: value.expected, replacement, bootstrapIds};
     // Pending signed nodes are retained but their unproven entries reserve no route.
     const routesUsed = new Map<string, string>();
     for (const node of catalogs.values()) if (node.pending.length === 0) for (const entry of node.envelope.catalog.entries) {
@@ -275,7 +288,30 @@ export async function evaluateTreehouseCatalogTrust(input: {
     if (original.accepted !== null) {
       const saved = catalogs.get(original.accepted.catalog), binding = bindings.get(original.accepted.binding);
       if (saved === undefined || binding === undefined || saved.envelope.catalog.binding !== binding.id ||
-        saved.envelope.catalog.revision !== original.accepted.revision || binding.generation !== original.accepted.generation) fail("trust_recovery_required");
+        saved.envelope.catalog.revision !== original.accepted.revision || binding.generation !== original.accepted.generation ||
+        saved.pending.length > 0 || binding.pending.length > 0) fail("trust_recovery_required");
+    }
+    if (originalOnly) {
+      await validateStoredBlock(original, next.blocked, catalogs, bindings, unseenBootstrapIds, histories);
+      if (original.cutoffProofs.length !== next.cutoffProofs.length) fail("trust_recovery_required");
+      return issue("unchanged", value.expected, original, original.blocked?.reason ?? null, replacement, bootstrapIds, heads, catalogHeads, []);
+    }
+    // Validate every original/candidate graph and proof before a budget shortcut.
+    // An exhausted page stays wholly unadmitted; all its distinct trigger metadata
+    // proves the excess against the original set, including 1023 + two records.
+    const retained = [...original.catalogs.map((a) => ({kind: "catalog" as const, ...a})), ...original.rotations.map((a) => ({kind: "rotation" as const, ...a}))];
+    const have = new Set(retained.map((a) => `${a.kind}:${a.id}`));
+    const additions = [...next.catalogs.map((a) => ({kind: "catalog" as const, ...a})), ...next.rotations.map((a) => ({kind: "rotation" as const, ...a}))]
+      .filter((a) => !have.has(`${a.kind}:${a.id}`)).sort((a, b) => compareUtf8(`${a.kind}:${a.id}`, `${b.kind}:${b.id}`));
+    const bytes = retained.reduce((n, a) => n + encoder.encode(a.json).length, 0);
+    const overflow = retained.length + additions.length > 1024 || bytes + additions.reduce((n, a) => n + encoder.encode(a.json).length, 0) > 16 * 1024 * 1024;
+    if ((original.blocked?.triggers.length ?? 0) > 0 || overflow) {
+      next.catalogs = original.catalogs; next.rotations = original.rotations; next.cutoffProofs = original.cutoffProofs;
+      const triggers = original.blocked?.triggers.length ? original.blocked.triggers : additions.map((a) => ({kind: a.kind, id: a.id,
+        digest: hash(encoder.encode(a.json)), bytes: encoder.encode(a.json).length}));
+      if (next.blocked?.reason !== "authority_changed") next.blocked = block("control_history_limit", [], [], []);
+      next.blocked.triggers = triggers;
+      return issue("retain_blocked", value.expected, next, next.blocked.reason, replacement, bootstrapIds, [], [], []);
     }
     if (next.blocked !== null) return issue("retain_blocked", value.expected, next, next.blocked.reason, replacement, bootstrapIds, heads, catalogHeads, []);
     const head = bindings.get(heads[0]!)!;
@@ -288,7 +324,7 @@ export async function evaluateTreehouseCatalogTrust(input: {
     const routes = next.accepted === null ? [] : catalogRoutes(catalogs.get(next.accepted.catalog)!, bindings.get(next.accepted.binding)!, bootstrap);
     return issue(equal(next, original) ? "unchanged" : "propose", value.expected, next, reason, replacement, bootstrapIds, heads, catalogHeads, routes);
   } catch (error) {
-    if (frozen !== undefined) return issue("retain_blocked", frozen.expected, frozen.next, frozen.next.blocked!.reason,
+    if (!originalOnly && frozen !== undefined) return issue("retain_blocked", frozen.expected, frozen.next, frozen.next.blocked!.reason,
       frozen.replacement, frozen.bootstrapIds, frozen.next.blocked!.bindings, [], []);
     return rejection(error);
   }
@@ -320,11 +356,16 @@ function issue(kind: "unchanged" | "propose" | "retain_blocked", expected: Treeh
   return result;
 }
 function block(reason: TreehouseCatalogBlock["reason"], bindings: string[], catalogs: string[], bootstrapIds: string[], opIds: string[] = [], pendingProofIds: string[] = []): TreehouseCatalogBlock {
-  return {reason, bindings: sorted(bindings), catalogs: sorted(catalogs), bootstrapIds: sorted(bootstrapIds), opIds: sorted(opIds), pendingProofIds: sorted(pendingProofIds), triggers: []};
+  return {reason, bindings: sorted(bindings), catalogs: sorted(catalogs), bootstrapIds: sorted(bootstrapIds), opIds: sorted(opIds), pendingProofIds: sorted(pendingProofIds), triggers: [], authorityWitnesses: []};
 }
 function closed(value: unknown, names: readonly string[]): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value) &&
     Object.keys(value).length === names.length && Object.keys(value).every((key) => names.includes(key));
+}
+function ownValue<T, K extends keyof T>(value: T, key: K): T[K] {
+  const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  if (descriptor === undefined || !Object.hasOwn(descriptor, "value")) fail("malformed_catalog");
+  return descriptor.value;
 }
 function copyInput<T>(input: T): T {
   const pending: {value: unknown; leave: boolean}[] = [{value: input, leave: false}];
@@ -377,9 +418,11 @@ function stateValid(v: unknown): v is InstalledTreehouseCatalogTrustV1 {
   if ([v.catalogs, v.rotations].some((a) => new Set(a.map((n) => n.id)).size !== a.length) ||
     v.catalogs.length + v.rotations.length > 1024 || [...v.catalogs, ...v.rotations].reduce((n, a) => n + encoder.encode(a.json).length, 0) > 16 * 1024 * 1024) return false;
   if (v.accepted !== null && (!closed(v.accepted, ["binding", "generation", "catalog", "revision"]) || !idValid(v.accepted.binding) || !idValid(v.accepted.catalog) || !safe(v.accepted.generation) || !safe(v.accepted.revision))) return false;
-  if (v.blocked !== null && (!closed(v.blocked, ["reason", "bindings", "catalogs", "bootstrapIds", "opIds", "pendingProofIds", "triggers"]) ||
+  if (v.blocked !== null && (!closed(v.blocked, ["reason", "bindings", "catalogs", "bootstrapIds", "opIds", "pendingProofIds", "triggers", "authorityWitnesses"]) ||
     !["catalog_fork", "authority_changed", "control_history_limit"].includes(v.blocked.reason as string) ||
     ![v.blocked.bindings, v.blocked.catalogs, v.blocked.bootstrapIds, v.blocked.opIds, v.blocked.pendingProofIds].every((a) => Array.isArray(a) && a.every(idValid)) || !Array.isArray(v.blocked.triggers) ||
+    !Array.isArray(v.blocked.authorityWitnesses) || !v.blocked.authorityWitnesses.every((w) => closed(w, ["replica", "frontier", "opIds"]) && text(w.replica) &&
+      Array.isArray(w.frontier) && w.frontier.every(idValid) && Array.isArray(w.opIds) && w.opIds.every(idValid)) ||
     !v.blocked.triggers.every((t) => closed(t, ["kind", "id", "digest", "bytes"]) && (t.kind === "catalog" || t.kind === "rotation") && idValid(t.id) && idValid(t.digest) && safe(t.bytes)))) return false;
   return true;
 }
@@ -399,8 +442,83 @@ function validateStoredClosure(state: InstalledTreehouseCatalogTrustV1) {
     if (r === undefined || !bindings.has(r.parent) || !catalogs.has(r.priorCatalog)) fail("trust_recovery_required");
   }
 }
+// Block indexes are witnesses, not a cached winner. Historical fork heads may
+// acquire descendants, so validate their retained relations rather than equality
+// with the current head list. No incoming record can complete these witnesses.
+async function validateStoredBlock(state: InstalledTreehouseCatalogTrustV1, derived: TreehouseCatalogBlock | null,
+  catalogs: Map<string, CatalogNode>, bindings: Map<string, Binding>, unseen: string[], histories: Map<string, ObservedHistory>) {
+  const saved = state.blocked;
+  if (saved === null) { if (derived !== null) fail("trust_recovery_required"); return; }
+  if (![saved.bindings, saved.catalogs, saved.bootstrapIds, saved.opIds, saved.pendingProofIds].every((ids) => equal(ids, sorted(ids))) ||
+    saved.bindings.some((id) => !bindings.has(id)) || saved.catalogs.some((id) => !catalogs.has(id)) ||
+    saved.pendingProofIds.some((id) => !catalogs.has(id))) fail("trust_recovery_required");
+  const emptyIndexes = saved.bindings.length + saved.catalogs.length + saved.bootstrapIds.length + saved.opIds.length + saved.pendingProofIds.length === 0;
+  if (saved.triggers.length > 0) {
+    // Trigger JSON is deliberately unadmitted. Reopen checks retained budget and
+    // canonical metadata; the adapter owns the admission-time authentication proof.
+    const keys = saved.triggers.map((t) => `${t.kind}:${t.id}`);
+    if ((saved.reason !== "control_history_limit" && saved.reason !== "authority_changed") ||
+      (saved.reason === "control_history_limit" && !emptyIndexes) || saved.triggers.length > 32 || !equal(keys, sorted(keys)) ||
+      saved.triggers.some((t) => t.bytes === 0 || t.bytes > 128 * 1024 || (t.kind === "catalog" ? catalogs : bindings).has(t.id))) fail("trust_recovery_required");
+    const count = state.catalogs.length + state.rotations.length;
+    const bytes = [...state.catalogs, ...state.rotations].reduce((n, a) => n + encoder.encode(a.json).length, 0);
+    if (count + saved.triggers.length <= 1024 && bytes + saved.triggers.reduce((n, t) => n + t.bytes, 0) <= 16 * 1024 * 1024) fail("trust_recovery_required");
+  }
+  if (saved.reason === "authority_changed") {
+    if (saved.opIds.length === 0 || saved.bindings.length + saved.catalogs.length + saved.bootstrapIds.length + saved.pendingProofIds.length !== 0) fail("trust_recovery_required");
+    await validateAuthorityWitnesses(state, catalogs, histories);
+    return;
+  }
+  if (saved.authorityWitnesses.length > 0) fail("trust_recovery_required");
+  if (saved.triggers.length > 0) return;
+  if (saved.opIds.length > 0 || saved.bootstrapIds.some((id) => !unseen.includes(id))) fail("trust_recovery_required");
+  const bindingAncestor = (older: string, newer: string): boolean => {
+    let cursor: string | null = newer;
+    while (cursor !== null) { if (cursor === older) return true; cursor = bindings.get(cursor)!.parent; }
+    return false;
+  };
+  const independentBindings = saved.bindings.length > 1 && saved.bindings.every((a, i) => saved.bindings.slice(i + 1).every((b) => !bindingAncestor(a, b) && !bindingAncestor(b, a)));
+  const catalogConflict = (a: string, b: string): boolean => {
+    const ca = catalogs.get(a)!.envelope.catalog, cb = catalogs.get(b)!.envelope.catalog;
+    if (ca.binding !== cb.binding) return false;
+    if (!catalogAncestor(a, b, catalogs) && !catalogAncestor(b, a, catalogs)) return true;
+    return [...bindings.values()].some((binding) => binding.parent === ca.binding &&
+      ((binding.prior === a && a !== b && catalogAncestor(a, b, catalogs)) || (binding.prior === b && a !== b && catalogAncestor(b, a, catalogs))));
+  };
+  if (saved.catalogs.some((a) => !saved.catalogs.some((b) => a !== b && catalogConflict(a, b)))) fail("trust_recovery_required");
+  if (saved.reason === "control_history_limit") {
+    if (!independentBindings || saved.bindings.length <= 2 || saved.bootstrapIds.length > 0) fail("trust_recovery_required");
+  } else if (!independentBindings && saved.catalogs.length === 0 && saved.bootstrapIds.length === 0) fail("trust_recovery_required");
+}
+async function validateAuthorityWitnesses(state: InstalledTreehouseCatalogTrustV1, catalogs: Map<string, CatalogNode>, histories: Map<string, ObservedHistory>) {
+  const saved = state.blocked!, witnesses = saved.authorityWitnesses;
+  if (witnesses.length === 0 || !equal(witnesses.map((w) => w.replica), sorted(witnesses.map((w) => w.replica))) ||
+    !equal(saved.opIds, sorted(witnesses.flatMap((w) => w.opIds)))) fail("trust_recovery_required");
+  const allowed = new Map<string, Set<string>>([[state.review.space, new Set([state.review.bootstrapId])]]);
+  if (state.accepted !== null) for (const entry of catalogs.get(state.accepted.catalog)!.envelope.catalog.entries) {
+    const ids = allowed.get(entry.replica) ?? new Set<string>();
+    ids.add(entry.genesis); ids.add(entry.creation); allowed.set(entry.replica, ids);
+    allowed.get(state.review.space)!.add(entry.reference);
+  }
+  for (const witness of witnesses) {
+    const history = histories.get(witness.replica);
+    if (history === undefined || witness.frontier.length === 0 || witness.opIds.length === 0 ||
+      witness.frontier.length > history.frames.length || witness.opIds.length > history.frames.length ||
+      !equal(witness.frontier, sorted(witness.frontier)) || !equal(witness.opIds, sorted(witness.opIds)) ||
+      witness.opIds.some((id) => !allowed.get(witness.replica)?.has(id))) fail("trust_recovery_required");
+    const frames = new Map(history.frames.map((frame) => [frame.id, frame])), closure = new Set<string>(), pending = [...witness.frontier];
+    while (pending.length > 0) {
+      const id = pending.pop()!;
+      if (closure.has(id)) continue;
+      const frame = frames.get(id); if (frame === undefined) fail("trust_recovery_required");
+      closure.add(id); pending.push(...frame.deps);
+    }
+    const historical = await observeHistory({replica: witness.replica, frames: history.raw.frames.filter((frame) => closure.has((frame as CarrierOpFrame).id)), rejected: []});
+    if (!equal(historical.frontier, witness.frontier) || witness.opIds.some((id) => !historical.projection.quarantineReasons.has(id))) fail("trust_recovery_required");
+  }
+}
 interface ObservedHistory {
-  raw: TreehouseCatalogRawHistory; frames: CarrierOpFrame[]; ops: Op[]; byId: Map<string, Op>;
+  raw: TreehouseCatalogRawHistory; frames: CarrierOpFrame[]; frontier: string[]; ops: Op[]; byId: Map<string, Op>;
   analysis: ReturnType<typeof analyzeAuthority>; projection: ReturnType<typeof materialize>;
 }
 async function observeHistory(raw: TreehouseCatalogRawHistory): Promise<ObservedHistory> {
@@ -421,7 +539,7 @@ async function observeHistory(raw: TreehouseCatalogRawHistory): Promise<Observed
   if (ops.length !== frames.length || order.length !== frames.length) fail("invalid_verified_history");
   return {raw: {...raw, frames: [...raw.frames].sort((a, b) => compareUtf8((a as CarrierOpFrame).id, (b as CarrierOpFrame).id)),
     rejected: [...raw.rejected].sort((a, b) => compareUtf8((a.frame as CarrierOpFrame).id, (b.frame as CarrierOpFrame).id))},
-    frames, ops, byId, analysis: analyzeAuthority(schema, ops, ids, order, byId, raw.replica), projection: materialize(schema, ops, ids, null, raw.replica)};
+    frames, frontier: cutoff.cutoff.frontier, ops, byId, analysis: analyzeAuthority(schema, ops, ids, order, byId, raw.replica), projection: materialize(schema, ops, ids, null, raw.replica)};
 }
 async function authenticateFrames(raw: TreehouseCatalogRawHistory): Promise<string[]> {
   if (!historyValid(raw)) fail("invalid_verified_history");
