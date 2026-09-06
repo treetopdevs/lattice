@@ -387,4 +387,34 @@ recorded behavioral failure. No shared KV guard, schema, signing or engine sourc
 new direct `sha2` dependency uses the already locked 0.10.9 version; no dependency versions moved.
 The packaged reader now understands both draft row formats and refuses dual rows. This source
 repair does not rerun or replace packaged/Keychain evidence; the integrator still owns the later
-engine merge, full suite and hosted gates. Actual same-session Fable follow-up is pending.
+engine merge, full suite and hosted gates. Actual same-session Fable follow-up passed for both P2 repairs at `a5df72c0`; final dependency integration is recorded below.
+
+### Final preview integration — 2026-09-06
+
+Actual Fable's original implementation review at `6439daa3` and exact follow-up
+through `a5df72c0` now both stand at PASS: missing-key Thread selection remains
+readable, new draft keys use a lowercase SHA256 digest, legacy rows retain their
+original CAS key, and simultaneous legacy/new rows explicitly refuse writes as
+a retained conflict. Neither draft history nor signing identity is deleted.
+
+Automatic dependency merges through `e21d009d6f2e264cdc67ca8b4228f2b046072e1e`
+include final R10/R04/R03 engine source, including exact high legacy epochs and
+the reviewed claim-constructor dependency normalization. CI explicitly runs the
+new preview tests/build/native tests and packaged fresh/restart/oracle path; all
+existing gates and timeouts remain. AGENTS now documents preview npm dependencies
+required by the actual reciprocal Mix test in a fresh checkout.
+
+Full `mix check` at e21d009d passes **808 tests and 27 properties, zero failures**,
+three existing exclusions, clean formatting and strict Credo exit 0. Latest
+client build, preview tests and Vue production build pass. Logs are
+`/tmp/lattice-treehouse-execution-20260906/r12-final-high-epoch-full-check.log`,
+`r12-final-preview-tests.log`, and `r12-final-preview-build.log`. An initial
+client-build invocation used an incorrect relative npm prefix and failed before
+executing any build; correcting the working-directory-relative prefix passed.
+
+The original packaged fresh/restart and independent BEAM replay evidence remains
+valid for that recorded binary. Rebuilt retained-identity replay still awaits
+user-side macOS Keychain authorization; no new package/OS/device proof is inferred
+from these software gates. Final integrated review uses Sol under the user's
+instruction while Claude is unavailable. Exact hosted tip/merge checks and
+accepted parent closure remain required before R12 is complete.
