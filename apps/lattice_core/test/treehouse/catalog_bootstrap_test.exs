@@ -41,6 +41,6 @@ defmodule Treehouse.CatalogBootstrapTest do
     {limited, allowed} = Sim.command(limited, "root", :create_space, ["Canopy"], cap: d.id)
     assert Sim.quarantined(limited, "root", allowed.id) == false
     {limited, excluded} = Sim.command(limited, "root", :create_thread, ["thread:one", "One"], cap: d.id)
-    assert Sim.quarantined(limited, "root", excluded.id) == {true, :cap_denied}
+    assert Sim.quarantined(limited, "root", excluded.id) == {true, :operation_not_granted}
   end
 end
