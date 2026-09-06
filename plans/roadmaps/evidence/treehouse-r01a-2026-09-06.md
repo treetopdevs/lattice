@@ -14,3 +14,22 @@ Status: local verification and Claude Fable review passed; hosted tip and merge-
 - Local raw evidence: `/tmp/lattice-treehouse-execution-20260906/r01a-red.log`, `r01a-check.log`, `r01a-pins.log`, and `fable-r01a-r05-review.json`. These paths are local convenience records; the reproducible commands, immutable changes and hosted run are the durable verification references.
 
 This packet adopts contracts only. It proves no Treehouse implementation, Android custody, physical ceremony, founder recovery or community pilot.
+
+## Hosted review remediation
+
+CodeRabbit and the hosted Codex reviewer identified missing archive-rule pins and the one-pager's
+omitted author-tombstone refusal. The existing contract arrays now pin repeat authorization,
+concurrent posts, moderator tombstones, retained routes/history/slots, no unarchive, finite-capacity
+stop and rollover order. A focused RED run failed only on the omitted one-pager sentence (11 tests,
+one failure, seed 874760); the copy now states all three refused author actions.
+
+The hosted review also requested portable comparison inputs and unambiguous withdrawn statuses.
+The two input roadmaps and historical Opus review are preserved byte-for-byte under `../sources/`,
+with a verified hash manifest and an explicit archival-only note. The original two roadmap hashes
+still match the original comparison. Plans 151/152 now put their former TODO text under a separate
+historical-status heading. No additional LAN/CD1 work is enabled.
+
+Final remediation gate: full local `mix check` exited 0, 663 tests and 27 properties,
+zero failures, three existing exclusions; seed 871368. The added archive pins are contract
+regressions; they do not claim the future R10 implementation exists. Hash verification passed
+for all three archival inputs. Hosted checks must run again at the remediated tip.
