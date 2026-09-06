@@ -4,7 +4,7 @@ defmodule Treehouse.TransportCatalogTest do
   alias Lattice.{Authority, Canonical, Identity}
   alias Treehouse.TransportCatalog
 
-  test "a signed catalog verifies only against the independently supplied catalog key" do
+  setup do
     root = Identity.from_seed("catalog-root", "catalog-root")
     signer = Identity.from_seed("catalog-signer", "catalog-signer")
     service = Identity.from_seed("catalog-service", "catalog-service")
@@ -40,14 +40,53 @@ defmodule Treehouse.TransportCatalogTest do
       ]
     }
 
-    signature =
-      Identity.sign(signer, Canonical.term(["lattice-treehouse-transport-catalog-v1", catalog]))
+    %{root: root, signer: signer, service: service, catalog: catalog}
+  end
 
-    envelope = %{catalog: catalog, signature: signature}
-    assert :ok = TransportCatalog.verify_catalog(envelope, signer.pub)
+  test "a signed catalog verifies only against the independently supplied catalog key", ctx do
+    envelope = signed(ctx.catalog, ctx.signer)
+    assert :ok = TransportCatalog.verify_catalog(envelope, ctx.signer.pub)
 
     assert {:error, :invalid_catalog_signature} =
-             TransportCatalog.verify_catalog(envelope, root.pub)
+             TransportCatalog.verify_catalog(envelope, ctx.root.pub)
+  end
+
+  test "even the legitimate signer cannot introduce ambiguous or unsupported catalog shapes", ctx do
+    catalog = ctx.catalog
+    [entry] = catalog.entries
+
+    invalid = [
+      Map.put(catalog, :extra, true),
+      Map.delete(catalog, :binding),
+      %{catalog | version: 2},
+      %{catalog | product: :township},
+      %{catalog | space: <<255>>},
+      %{catalog | bootstrap: "not-an-id"},
+      %{catalog | revision: -1},
+      %{catalog | revision: 9_007_199_254_740_992},
+      %{catalog | previous: id("previous")},
+      %{catalog | revision: 1},
+      %{catalog | entries: []},
+      %{catalog | entries: [entry, entry]},
+      %{catalog | entries: [Map.put(entry, :extra, true)]},
+      %{catalog | entries: [%{entry | root: <<0::248>>}]},
+      %{catalog | entries: [%{entry | schema: :treehouse_thread_v1}]},
+      %{catalog | entries: [%{entry | route: "/r/../route"}]},
+      %{catalog | entries: [%{entry | service_key: <<0::248>>}]}
+    ]
+
+    for candidate <- invalid do
+      assert {:error, :malformed_catalog} =
+               TransportCatalog.verify_catalog(signed(candidate, ctx.signer), ctx.signer.pub)
+    end
+
+    assert {:error, :malformed_catalog} =
+             TransportCatalog.verify_catalog(Map.put(signed(catalog, ctx.signer), :key, ctx.signer.pub), ctx.signer.pub)
+  end
+
+  defp signed(catalog, signer) do
+    signature = Identity.sign(signer, Canonical.term(["lattice-treehouse-transport-catalog-v1", catalog]))
+    %{catalog: catalog, signature: signature}
   end
 
   defp id(label), do: :crypto.hash(:sha256, label) |> Base.url_encode64(padding: false)
