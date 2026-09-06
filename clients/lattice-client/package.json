@@ -31,7 +31,10 @@
     "carrier:relay": "tsx test/carrier_relay.ts",
     "carrier:relay-sync": "tsx test/carrier_relay_sync.ts",
     "carrier:township:live": "tsx test/live_carrier.ts",
-    "carrier:feed": "tsx test/carrier_feed.ts"
+    "carrier:feed": "tsx test/carrier_feed.ts",
+    "catalog:bootstrap": "tsx test/treehouse_catalog_bootstrap.ts",
+    "catalog:codec": "tsx test/treehouse_catalog_codec.ts",
+    "continuation:profile": "tsx test/continuation_profile_observation.ts"
   },
   "devDependencies": {
     "tsx": "^4.23.0",

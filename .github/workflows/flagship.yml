@@ -161,6 +161,12 @@ jobs:
       - name: TS client conformance
         working-directory: clients/lattice-client
         run: npm run conformance
+      - name: TS Treehouse catalog and profile observations
+        working-directory: clients/lattice-client
+        run: |
+          npm run catalog:bootstrap
+          npm run catalog:codec
+          npm run continuation:profile
       - name: TS V-01 authority fail-closed guard
         working-directory: clients/lattice-client
         run: npm run v01:guard

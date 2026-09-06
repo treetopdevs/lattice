@@ -1,6 +1,25 @@
 import type { AuthorityDelegationEvidence, Op, SuccessionPolicyEvidence, WitnessedRecoveryPolicyEvidence, WitnessedSuccessionPolicyEvidence, WitnessedSuccessionArtifactEvidence, WitnessedSuccessionCertificateEvidence, WitnessedSuccessionClaimEvidence, WitnessedSuccessionSignatureEvidence } from "./op";
 import type { ReplicaSchema } from "./schema";
 import type { ContinuationClaim, ContinuationProfile } from "./continuation";
+export type ContinuationProfileObservation = {
+    ok: true;
+    replica: string;
+    root: string;
+    profileGenesis: string;
+    profileId: string;
+    profile: ContinuationProfile;
+    verifiedFrontier: string[];
+} | {
+    ok: false;
+    reason: string;
+};
+/** Observe an actual root-authenticated pin; the caller owns complete store snapshots. */
+export declare function resolveContinuationProfileFromFrames(input: {
+    replica: string;
+    frames: readonly unknown[];
+}): Promise<ContinuationProfileObservation>;
+/** Internal application predicate over authenticated causal semantic ops; this does not authenticate input. */
+export declare function continuationProfileBindingMatches(replica: string, causalOps: readonly Op[], expectedRoot: string, expectedPin: string, expectedProfileId: string): boolean;
 /** One honored role acquisition, in processing (canonical) order. */
 export interface HonoredAcquire {
     opId: string;

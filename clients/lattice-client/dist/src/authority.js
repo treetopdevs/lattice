@@ -1,11 +1,80 @@
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
-import { canonicalBase64Bytes, canonicalBytesForWitnessedBeaconClaim, canonicalBytesForCarrierDelegation, canonicalBytesForWitnessedRecoveryPolicy, canonicalBytesForWitnessedSuccessionArtifactId, canonicalBytesForWitnessedSuccessionClaim, } from "./codec";
+import { canonicalBase64Bytes, canonicalBytesForWitnessedBeaconClaim, canonicalBytesForCarrierDelegation, canonicalBytesForWitnessedRecoveryPolicy, canonicalBytesForWitnessedSuccessionArtifactId, canonicalBytesForWitnessedSuccessionClaim, verifyCarrierOp, } from "./codec";
+import { carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
 import { ancestors, canonicalOrder, index } from "./dag";
 import { effectViews } from "./op";
 import { isAuthorityField } from "./schema";
 import { frontier } from "./sync";
 import { continuationProfileId, normalizeContinuationCertificate, normalizeContinuationProfile, verifyContinuationCertificate, } from "./continuation";
+/** Observe an actual root-authenticated pin; the caller owns complete store snapshots. */
+export async function resolveContinuationProfileFromFrames(input) {
+    try {
+        const { replica, frames } = structuredClone(input);
+        const family = continuationFamily(replica);
+        if (family === "legacy")
+            return { ok: false, reason: "unauthorized_continuation" };
+        if (family === "unsupported")
+            return { ok: false, reason: "unsupported_authority_profile" };
+        const decoded = frames.map(decodeCarrierOpFrame);
+        const ids = new Set(decoded.map((frame) => frame.id));
+        if (ids.size !== decoded.length || decoded.some((frame) => frame.replica !== replica ||
+            frame.deps.some((dep) => !ids.has(dep))))
+            return { ok: false, reason: "invalid_verified_history" };
+        for (const frame of decoded) {
+            const verified = await verifyCarrierOp(frame, { verify: async (author, bytes, signature) => {
+                    const key = canonicalBase64Bytes(author, 32);
+                    return key !== null && ed25519.verify(signature, bytes, key, { zip215: false });
+                } });
+            if (!verified.valid)
+                return { ok: false, reason: "invalid_verified_history" };
+        }
+        const ops = carrierOpsToSemanticOps(decoded), byId = index(ops);
+        const order = canonicalOrder(ops, byId);
+        if (order.length !== ops.length)
+            return { ok: false, reason: "invalid_verified_history" };
+        const ordered = order.map((id) => byId.get(id));
+        const delegations = validateDelegations(ordered, collectDelegations(ordered), replica);
+        const root = resolveRoot(ordered, delegations);
+        const context = continuationContext(replica, ordered, delegations, root, []);
+        const pin = continuationPin(context, ids);
+        if (pin === undefined || root === null || root.pubkey === null)
+            return { ok: false, reason: "continuation_not_configured" };
+        const profileId = continuationProfileId(pin.profile);
+        if (profileId === null)
+            return { ok: false, reason: "continuation_not_configured" };
+        return { ok: true, replica, root: root.pubkey, profileGenesis: pin.opId,
+            profileId, profile: pin.profile,
+            verifiedFrontier: frontier(ops).sort() };
+    }
+    catch {
+        return { ok: false, reason: "invalid_verified_history" };
+    }
+}
+/** Internal application predicate over authenticated causal semantic ops; this does not authenticate input. */
+export function continuationProfileBindingMatches(replica, causalOps, expectedRoot, expectedPin, expectedProfileId) {
+    try {
+        if (continuationFamily(replica) !== "space")
+            return false;
+        const ops = [...causalOps], byId = index(ops);
+        if (byId.size !== ops.length || ops.some((op) => op.replica !== replica || op.deps.some((dep) => !byId.has(dep))))
+            return false;
+        const order = canonicalOrder(ops, byId);
+        if (order.length !== ops.length)
+            return false;
+        const ordered = order.map((id) => byId.get(id));
+        const delegations = validateDelegations(ordered, collectDelegations(ordered), replica);
+        const root = resolveRoot(ordered, delegations);
+        if (root?.pubkey !== expectedRoot)
+            return false;
+        const pin = continuationPin(continuationContext(replica, ordered, delegations, root, []), new Set(order));
+        return pin !== undefined && pin.opId === expectedPin && pin.profile.kind === "space" &&
+            continuationProfileId(pin.profile) === expectedProfileId;
+    }
+    catch {
+        return false;
+    }
+}
 function emptyRoleState() {
     return { holder: null, acquires: [], heartbeats: [] };
 }
