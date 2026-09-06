@@ -151,14 +151,15 @@ defmodule Treehouse.CatalogCutoffTest do
   test "authenticated unsupported operation kinds remain evidence instead of being misclassified" do
     f = history()
 
-    op =
-      Op.new(
-        f.root,
-        f.log.replica,
-        Log.frontier(f.log),
-        :request,
-        {:create_space, ["Known bytes"]}
-      )
+    # New authoring refuses this kind; an existing authenticated in-VM record
+    # can still be broader than the current four-kind Wire grammar.
+    unsigned = %{f.denied | kind: :request, cap: nil}
+
+    op = %{
+      unsigned
+      | id: Op.recompute_id(unsigned),
+        sig: Lattice.Identity.sign(f.root, Canonical.op_payload(unsigned))
+    }
 
     log = Log.append!(f.log, op)
     assert :ok = Log.verify_authenticity(log)
