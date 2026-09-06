@@ -99,6 +99,17 @@ TS conformance gates live in `clients/lattice-client` (`npm ci` once, then `npm 
   Keep their downstream state/rejection assertions intact and run the existing
   `carrier:township:live` and `release:root-origination:contract` gates. This does
   not authorize physical-device execution or alter normal product/custody flows.
+- Fable identified an existing extra-field beacon parity gap: BEAM retains but
+  ignores a signed four-field beacon while TypeScript treated it as a legacy
+  two-field beacon and could lapse leases. The approved narrow amendment adds
+  an exact two-field guard in `carrier.ts`'s legacy beacon decoder, signed
+  four-field inertness/lease controls in the existing delegation lease and
+  Township authoring tests, and normal generated `dist` output. Wrong arities
+  remain stored and unquarantined, with no epoch or lease effect; no BEAM
+  production or historical audit semantics change. When combined with R03,
+  preserve its exact three-field witnessed branch before the legacy guard and
+  rerun all five R03 vectors plus its leased-authoring checks. This explicitly
+  amends the earlier decoder ownership exclusion only for this arity guard.
 
 ### CRYPTO-01 — out-of-range lease crashes analyze
 
