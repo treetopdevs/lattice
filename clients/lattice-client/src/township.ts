@@ -1,4 +1,4 @@
-import { authorCarrierDelegation, authorCarrierOp, canonicalHash } from "./codec";
+import { authorCarrierDelegation, authorCarrierOp, canonicalBase64Bytes, canonicalHash } from "./codec";
 import { carrierDelegationsFromFrames, carrierOpsToSemanticOps } from "./carrier";
 import { frontier } from "./sync";
 import type { AuthorCarrierDelegationInput, AuthorCarrierOpInput, CarrierOpSigner } from "./codec";
@@ -34,13 +34,24 @@ export interface AuthorTownshipDelegationInput {
   ops?: readonly string[];
   roles?: readonly string[];
   live?: boolean;
+  expiresEpoch?: number;
   signer: CarrierOpSigner;
 }
 
-export interface TownshipGenesisPolicy {
+export interface TownshipLegacyGenesisPolicy {
   successorPubkey: string | Uint8Array;
   dormantTicks: number;
 }
+
+export interface TownshipBeaconGenesisPolicy {
+  mode: "witnessed";
+  version: 1;
+  witnesses: readonly (string | Uint8Array)[];
+  threshold: number;
+  maxEpochStep: number;
+}
+
+export type TownshipGenesisPolicy = TownshipLegacyGenesisPolicy | TownshipBeaconGenesisPolicy;
 
 export interface AuthorTownshipGenesisInput {
   replica: string;
@@ -65,7 +76,7 @@ export interface AuthorAndPersistTownshipCommandInput
 }
 
 export interface AuthorAndPersistTownshipDelegationInput
-  extends Pick<AuthorTownshipDelegationInput, "replica" | "audiencePubkey" | "ops" | "roles" | "live" | "signer"> {
+  extends Pick<AuthorTownshipDelegationInput, "replica" | "audiencePubkey" | "ops" | "roles" | "live" | "expiresEpoch" | "signer"> {
   parentId?: string | null;
   localLog: LocalOpLogStore;
   carrierFrames: CarrierFrameStore;
@@ -194,6 +205,7 @@ export async function authorTownshipDelegation(input: AuthorTownshipDelegationIn
   if (input.ops !== undefined) delegationInput.ops = input.ops;
   if (input.roles !== undefined) delegationInput.roles = input.roles;
   if (input.live !== undefined) delegationInput.live = input.live;
+  if (input.expiresEpoch !== undefined) delegationInput.expiresEpoch = input.expiresEpoch;
 
   const delegation = await authorCarrierDelegation(delegationInput);
 
@@ -327,6 +339,7 @@ export async function authorAndPersistTownshipDelegation(
   if (input.ops !== undefined) delegationInput.ops = input.ops;
   if (input.roles !== undefined) delegationInput.roles = input.roles;
   if (input.live !== undefined) delegationInput.live = input.live;
+  if (input.expiresEpoch !== undefined) delegationInput.expiresEpoch = input.expiresEpoch;
 
   const frame = await authorTownshipDelegation(delegationInput);
   const op = carrierOpsToSemanticOps([frame], input.realmByPubkey)[0];
@@ -378,21 +391,68 @@ function commandBody(command: string, args: string[]): CarrierTerm {
   ];
 }
 
-function townshipGenesisPoliciesTerm(policies: Record<string, TownshipGenesisPolicy>): CarrierTerm {
+function townshipGenesisPoliciesTerm(
+  policies: Record<string, TownshipGenesisPolicy>,
+): CarrierTerm {
   return [
     "map",
     Object.entries(policies)
       .sort(([left], [right]) => left.localeCompare(right))
-      .map(([role, policy]) => [
-        ["atom", role],
-        [
-          "map",
+      .map(([role, policy]): [CarrierTerm, CarrierTerm] => {
+        if ("mode" in policy) {
+          if (role !== "__beacon__")
+            throw new Error("witnessed beacon policy requires __beacon__ key");
+          return [
+            ["atom", role],
+            [
+              "map",
+              [
+                [
+                  ["atom", "mode"],
+                  ["atom", policy.mode],
+                ],
+                [
+                  ["atom", "version"],
+                  ["int", policy.version],
+                ],
+                [
+                  ["atom", "witnesses"],
+                  [
+                    "list",
+                    policy.witnesses.map(
+                      (key) => ["bin", pubkeyBase64(key)] satisfies CarrierTerm,
+                    ),
+                  ],
+                ],
+                [
+                  ["atom", "threshold"],
+                  ["int", policy.threshold],
+                ],
+                [
+                  ["atom", "max_epoch_step"],
+                  ["int", policy.maxEpochStep],
+                ],
+              ],
+            ],
+          ];
+        }
+        return [
+          ["atom", role],
           [
-            [["atom", "successor"], ["bin", pubkeyBase64(policy.successorPubkey)]],
-            [["atom", "dormant_ticks"], ["int", policy.dormantTicks]],
+            "map",
+            [
+              [
+                ["atom", "successor"],
+                ["bin", pubkeyBase64(policy.successorPubkey)],
+              ],
+              [
+                ["atom", "dormant_ticks"],
+                ["int", policy.dormantTicks],
+              ],
+            ],
           ],
-        ],
-      ]) satisfies [CarrierTerm, CarrierTerm][],
+        ];
+      }) satisfies [CarrierTerm, CarrierTerm][],
   ];
 }
 
@@ -405,7 +465,11 @@ function pubkeyBase64(value: string | Uint8Array): string {
 }
 
 function pubkeyBytes(value: string | Uint8Array): Uint8Array {
-  return typeof value === "string" ? base64ToBytes(value) : value;
+  const decoded = typeof value === "string" ? canonicalBase64Bytes(value, 32) : value;
+  if (decoded === null || decoded.length !== 32) {
+    throw new Error("invalid canonical Ed25519 public key");
+  }
+  return decoded;
 }
 
 function bytesBase64(bytes: Uint8Array): string {
@@ -414,14 +478,6 @@ function bytesBase64(bytes: Uint8Array): string {
   const btoaFn = (globalThis as unknown as { btoa?: (decoded: string) => string }).btoa;
   if (!btoaFn) throw new Error("base64 encoding unavailable");
   return btoaFn(String.fromCharCode(...bytes));
-}
-
-function base64ToBytes(value: string): Uint8Array {
-  if (typeof Buffer !== "undefined") return new Uint8Array(Buffer.from(value, "base64"));
-
-  const atobFn = (globalThis as unknown as { atob?: (encoded: string) => string }).atob;
-  if (!atobFn) throw new Error("base64 decoding unavailable");
-  return Uint8Array.from(atobFn(value), (char) => char.charCodeAt(0));
 }
 
 function setSubset<T>(needed: ReadonlySet<T>, availableValues: readonly T[]): boolean {

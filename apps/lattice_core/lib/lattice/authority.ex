@@ -15,8 +15,9 @@ defmodule Lattice.Authority do
       role after the holder has been dormant past the threshold
     * `{:revoke, delegation_id}`         — revoke a delegation (and citations of it)
     * `{:heartbeat, role, at_tick}`      — holder liveness signal (resets dormancy)
-    * `{:beacon, epoch}`                 — root-signed logical tick (plan 149); leases
-      lapse when a valid beacon passes their `expires_epoch`
+    * `{:beacon, epoch}`                 — root-signed logical tick (plan 149)
+    * `{:beacon, epoch, certificate}`    — bounded witness-authorized logical tick (plan 179);
+      leases lapse when a valid beacon passes their `expires_epoch`
 
   ## Rules enforced
 
@@ -38,9 +39,12 @@ defmodule Lattice.Authority do
     * **Delegation leases** (plan 149): a delegation may carry `expires_epoch`; an
       op citing a chain with a lapsed lease — a valid beacon with a greater epoch
       exists that the op is not causally before — is quarantined `:lease_expired`.
-      Beacons are honored only from the replica root and only strictly monotonic
-      in their causal ancestry; violators quarantine as `:unauthorized_beacon` /
-      `:stale_beacon` and confer no lapse. Renewal is a fresh delegation with a
+      Root beacons and opt-in threshold-certified witness beacons are strictly
+      monotonic in their causal ancestry; witness claims bind the op's actual author
+      and dependencies under its ancestral root-pinned policy. Violators quarantine as
+      `:unauthorized_beacon` / `:stale_beacon` and confer no lapse; witnessed epochs
+      beyond the fixed portable horizon are structurally `:malformed_term`.
+      Renewal is a fresh delegation with a
       later lease, never an in-place mutation.
     * **Application-policy causal context** (plan 158): after `cap_ok` and
       `authority_ok`, a command op is judged by the replica's
@@ -63,11 +67,12 @@ defmodule Lattice.Authority do
   Quarantined ops stay in the log and are reported in `audit` (design invariant 4).
   """
 
-  alias Lattice.Authority.{Delegation, SuccessionCertificate}
+  alias Lattice.Authority.{BeaconCertificate, Delegation, SuccessionCertificate}
   alias Lattice.{Dag, Identity, Log, Op}
 
   # Separates a replica *name* from the root-key commitment bound into its id.
   @root_marker "#root:"
+  @witnessed_beacon_horizon 9_007_199_254_740_991
 
   @type analysis :: %{
           quarantine: MapSet.t(Op.id()),
@@ -261,7 +266,8 @@ defmodule Lattice.Authority do
       validate_delegations(delegations, commitment, genesis_ids, succession_ids, log.replica)
 
     root = resolve_root(ordered, delegations, deleg_valid, commitment)
-    {beacons, _beacon_q} = collect_beacons(ordered, ancestors, root)
+    beacon_policies = collect_beacon_policy_sources(ordered, delegations, deleg_valid)
+    {beacons, _beacon_q} = collect_beacons(ordered, ancestors, root, beacon_policies)
 
     case Map.fetch(delegations, delegation_id) do
       {:ok, %{deleg: %Delegation{} = d}} ->
@@ -310,7 +316,8 @@ defmodule Lattice.Authority do
     policies = collect_policies(ordered, delegations, deleg_valid)
     root = resolve_root(ordered, delegations, deleg_valid, commitment)
     revokes = collect_revokes(ordered, delegations, root)
-    {beacons, beacon_q} = collect_beacons(ordered, ancestors, root)
+    beacon_policies = collect_beacon_policy_sources(ordered, delegations, deleg_valid)
+    {beacons, beacon_q} = collect_beacons(ordered, ancestors, root, beacon_policies)
 
     invalid_deleg = invalid_delegation_ops(ordered, delegations, deleg_valid, commitment)
     tombstone_q = unauthorized_tombstones(ordered, root)
@@ -484,7 +491,19 @@ defmodule Lattice.Authority do
     do: not valid_tick?(proof)
 
   defp malformed_tick_body?({:heartbeat, _role, tick}), do: not valid_tick?(tick)
+
+  defp malformed_tick_body?({:beacon, epoch, certificate}) do
+    claim_epoch =
+      if is_map(certificate) and is_map(Map.get(certificate, :claim)),
+        do: Map.get(Map.get(certificate, :claim), :epoch)
+
+    outside_beacon_horizon?(epoch) or outside_beacon_horizon?(claim_epoch)
+  end
+
   defp malformed_tick_body?(_), do: false
+
+  defp outside_beacon_horizon?(epoch),
+    do: is_integer(epoch) and (epoch < 0 or epoch > @witnessed_beacon_horizon)
 
   # Succession policies are conferred only by a *valid* genesis — an impostor genesis
   # (one whose audience does not match the replica's root commitment) is quarantined
@@ -716,12 +735,45 @@ defmodule Lattice.Authority do
   # order, so validity is itself a pure causal judgment). Violators quarantine
   # (:unauthorized_beacon / :stale_beacon) for audit and confer no lapse —
   # mirroring unauthorized_revokes and the Round-3 forged-authority handling.
-  defp collect_beacons(ordered, ancestors, root) do
+  defp collect_beacon_policy_sources(ordered, delegations, deleg_valid) do
+    for %Op{body: {:genesis, %Delegation{id: id, audience: audience} = d, policies}} = op <-
+          ordered,
+        is_map(policies),
+        Map.get(deleg_valid, id) == :ok,
+        is_nil(d.parent_id),
+        valid_delegation_intro?(delegations, d, op.id),
+        op.author == audience,
+        Map.has_key?(policies, :__beacon__),
+        do: {op.id, policies.__beacon__}
+  end
+
+  defp beacon_policy(sources, ancestors) do
+    Enum.reduce(sources, nil, fn {id, value}, policy ->
+      case {MapSet.member?(ancestors, id), BeaconCertificate.normalize_policy(value)} do
+        {true, {:ok, normalized}} -> normalized
+        _ -> policy
+      end
+    end)
+  end
+
+  defp collect_beacons(ordered, ancestors, root, policy_sources) do
     {valid, quarantine} =
       Enum.reduce(ordered, {%{}, %{}}, fn op, {valid, q} ->
         case op do
           %Op{kind: :authority, body: {:beacon, epoch}} ->
             classify_beacon(op, epoch, valid, q, ancestors, root)
+
+          %Op{kind: :authority, body: {:beacon, epoch, certificate}} ->
+            classify_witnessed_beacon(
+              op,
+              epoch,
+              certificate,
+              valid,
+              q,
+              ancestors,
+              root,
+              policy_sources
+            )
 
           _ ->
             {valid, q}
@@ -749,6 +801,42 @@ defmodule Lattice.Authority do
 
   defp valid_epoch?(epoch, prior_max),
     do: is_integer(epoch) and epoch >= 0 and epoch > prior_max
+
+  defp classify_witnessed_beacon(op, epoch, certificate, valid, q, ancestors, root, sources) do
+    anc = Map.get(ancestors, op.id, MapSet.new())
+    policy = beacon_policy(sources, anc)
+
+    prior_max =
+      valid
+      |> Enum.filter(fn {id, _} -> MapSet.member?(anc, id) end)
+      |> Enum.map(&elem(&1, 1))
+      |> Enum.max(fn -> -1 end)
+
+    expected = BeaconCertificate.claim(op.replica, epoch, op.author, op.deps)
+
+    cond do
+      malformed_tick_body?(op.body) ->
+        {valid, Map.put(q, op.id, :malformed_term)}
+
+      is_nil(policy) ->
+        {valid, Map.put(q, op.id, :unauthorized_beacon)}
+
+      op.author != root and op.author not in policy.witnesses ->
+        {valid, Map.put(q, op.id, :unauthorized_beacon)}
+
+      BeaconCertificate.verify(certificate, expected, policy) != :ok ->
+        {valid, Map.put(q, op.id, :unauthorized_beacon)}
+
+      not valid_epoch?(epoch, prior_max) ->
+        {valid, Map.put(q, op.id, :stale_beacon)}
+
+      epoch > prior_max + policy.max_epoch_step ->
+        {valid, Map.put(q, op.id, :unauthorized_beacon)}
+
+      true ->
+        {Map.put(valid, op.id, epoch), q}
+    end
+  end
 
   defp valid_delegation_intro?(delegations, %Delegation{id: id}, op_id) do
     case Map.fetch(delegations, id) do

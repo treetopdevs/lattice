@@ -1,6 +1,6 @@
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
-import { canonicalBytesForCarrierDelegation, canonicalBytesForWitnessedRecoveryPolicy, canonicalBytesForWitnessedSuccessionArtifactId, canonicalBytesForWitnessedSuccessionClaim, } from "./codec";
+import { canonicalBase64Bytes, canonicalBytesForWitnessedBeaconClaim, canonicalBytesForCarrierDelegation, canonicalBytesForWitnessedRecoveryPolicy, canonicalBytesForWitnessedSuccessionArtifactId, canonicalBytesForWitnessedSuccessionClaim, } from "./codec";
 import { ancestors, canonicalOrder, index } from "./dag";
 import { isAuthorityField } from "./schema";
 import { frontier } from "./sync";
@@ -45,7 +45,7 @@ export function analyzeAuthority(schema, ops, included, order, byId, expectedRep
     const { policies, recoveryPoliciesByRole } = collectPolicies(admitted, delegations);
     const root = resolveRoot(admitted, delegations);
     const { effectiveRevokes, unauthorizedRevokes } = collectRevokes(admitted, delegations, root);
-    const { validBeacons, invalidBeacons } = collectBeacons(admitted, byId, root);
+    const { validBeacons, invalidBeacons } = collectBeacons(admitted, byId, root, delegations);
     const states = new Map();
     const honoredWrites = new Set();
     const honoredSuccessionIntroductions = new Map();
@@ -861,11 +861,76 @@ function collectRevokes(ops, delegations, root) {
     }
     return { effectiveRevokes, unauthorizedRevokes };
 }
+/** Fixed portable logical-epoch horizon, independent of genesis policy. */
+export const witnessedBeaconHorizon = Number.MAX_SAFE_INTEGER;
+function normalizeBeaconPolicy(policy) {
+    if (policy == null ||
+        !exactKeys(policy, [
+            "mode",
+            "version",
+            "witnesses",
+            "threshold",
+            "maxEpochStep",
+        ]) ||
+        policy.mode !== "witnessed" ||
+        policy.version !== 1 ||
+        !Array.isArray(policy.witnesses) ||
+        policy.witnesses.some((key) => canonicalBase64Bytes(key, 32) === null) ||
+        new Set(policy.witnesses).size !== policy.witnesses.length ||
+        !Number.isSafeInteger(policy.threshold) ||
+        policy.threshold < 1 ||
+        policy.threshold > policy.witnesses.length ||
+        !Number.isSafeInteger(policy.maxEpochStep) ||
+        policy.maxEpochStep < 1 ||
+        policy.maxEpochStep > 65_535)
+        return null;
+    return {
+        ...policy,
+        witnesses: [...policy.witnesses].sort(compareBase64Evidence),
+    };
+}
+function verifyBeaconCertificate(certificate, expected, policy) {
+    if (certificate === null ||
+        !exactKeys(certificate, ["claim", "signatures"]) ||
+        !exactKeys(certificate.claim, [
+            "version",
+            "replica",
+            "epoch",
+            "author",
+            "deps",
+        ]) ||
+        certificate.claim.version !== expected.version ||
+        certificate.claim.replica !== expected.replica ||
+        certificate.claim.epoch !== expected.epoch ||
+        certificate.claim.author !== expected.author ||
+        !Array.isArray(certificate.claim.deps) ||
+        certificate.claim.deps.length !== expected.deps.length ||
+        certificate.claim.deps.some((id, index) => id !== expected.deps[index]) ||
+        !Array.isArray(certificate.signatures))
+        return false;
+    const signatures = certificate.signatures;
+    if (signatures.length < policy.threshold ||
+        !signatures.every((entry) => exactKeys(entry, ["witness", "signature"]) &&
+            canonicalBase64Bytes(entry.witness, 32) !== null &&
+            canonicalBase64Bytes(entry.signature, 64) !== null &&
+            policy.witnesses.includes(entry.witness)) ||
+        !signatures.every((entry, index) => index === 0 ||
+            compareBase64Evidence(signatures[index - 1].witness, entry.witness) <
+                0))
+        return false;
+    try {
+        const payload = canonicalBytesForWitnessedBeaconClaim(certificate.claim);
+        return signatures.every((entry) => ed25519.verify(canonicalBase64Bytes(entry.signature, 64), payload, canonicalBase64Bytes(entry.witness, 32), { zip215: false }));
+    }
+    catch {
+        return false;
+    }
+}
 // Plan 149: beacons in topo order — valid iff root-authored with an integer
 // epoch strictly greater than every valid beacon epoch in the op's causal
 // ancestry; violators quarantine (:unauthorized_beacon / :stale_beacon) and
 // confer no lapse. Mirrors Lattice.Authority.collect_beacons/3.
-function collectBeacons(visible, byId, root, ancCache = new Map()) {
+function collectBeacons(visible, byId, root, delegations, ancCache = new Map()) {
     const validBeacons = [];
     const invalidBeacons = new Map();
     for (const op of visible) {
@@ -878,7 +943,53 @@ function collectBeacons(visible, byId, root, ancCache = new Map()) {
             if (anc.has(beacon.opId) && beacon.epoch > priorMax)
                 priorMax = beacon.epoch;
         }
-        if (op.author !== root?.realm) {
+        if (evidence.certificate !== undefined) {
+            let policy = null;
+            for (const source of visible) {
+                const genesis = source.authority;
+                if (!anc.has(source.id) ||
+                    source.kind !== "authority" ||
+                    genesis?.type !== "genesis" ||
+                    !validDelegation(genesis.delegation, delegations) ||
+                    genesis.delegation.parentId !== null ||
+                    !delegations
+                        .get(genesis.delegation.id)
+                        ?.introductionOpIds.includes(source.id) ||
+                    source.author !== genesis.delegation.audienceRealm)
+                    continue;
+                const candidate = normalizeBeaconPolicy(genesis.beaconPolicy);
+                if (candidate !== null)
+                    policy = candidate;
+            }
+            const author = evidence.authorPubkey;
+            const expected = {
+                version: 1,
+                replica: op.replica ?? "",
+                epoch: evidence.epoch ?? -1,
+                author: author ?? "",
+                deps: [...op.deps].sort(),
+            };
+            if (policy === null ||
+                author === undefined ||
+                (author !== root?.pubkey && !policy.witnesses.includes(author)) ||
+                !verifyBeaconCertificate(evidence.certificate, expected, policy)) {
+                invalidBeacons.set(op.id, "unauthorized_beacon");
+            }
+            else if (evidence.epoch === null ||
+                !Number.isSafeInteger(evidence.epoch) ||
+                evidence.epoch < 0 ||
+                evidence.epoch <= priorMax) {
+                invalidBeacons.set(op.id, "stale_beacon");
+            }
+            else if (evidence.epoch > witnessedBeaconHorizon ||
+                evidence.epoch > priorMax + policy.maxEpochStep) {
+                invalidBeacons.set(op.id, "unauthorized_beacon");
+            }
+            else {
+                validBeacons.push({ opId: op.id, epoch: evidence.epoch });
+            }
+        }
+        else if (op.author !== root?.realm) {
             invalidBeacons.set(op.id, "unauthorized_beacon");
         }
         else if (evidence.epoch === null ||
@@ -966,8 +1077,12 @@ function delegationSelfConsistent(delegation) {
                 ? {}
                 : { expires_epoch: delegation.expiresEpoch }),
         });
-        return (bytesToBase64Url(sha256(canonicalBytes)) === delegation.id &&
-            ed25519.verify(base64ToBytes(delegation.sig), canonicalBytes, base64ToBytes(delegation.issuer), { zip215: false }));
+        const signature = canonicalBase64Bytes(delegation.sig, 64);
+        const issuer = canonicalBase64Bytes(delegation.issuer, 32);
+        return (signature !== null &&
+            issuer !== null &&
+            bytesToBase64Url(sha256(canonicalBytes)) === delegation.id &&
+            ed25519.verify(signature, canonicalBytes, issuer, { zip215: false }));
     }
     catch {
         return false;
@@ -992,38 +1107,12 @@ function replicaRootCommitment(replica) {
     const commitment = replica.slice(offset + marker.length);
     return commitment.length > 0 ? commitment : null;
 }
-function base64ToBytes(value) {
-    if (typeof Buffer !== "undefined")
-        return new Uint8Array(Buffer.from(value, "base64"));
-    const atobFn = globalThis.atob;
-    if (!atobFn)
-        throw new Error("base64 decoding unavailable");
-    return Uint8Array.from(atobFn(value), (char) => char.charCodeAt(0));
-}
-function canonicalBase64Bytes(value, length) {
-    if (typeof value !== "string")
-        return null;
-    try {
-        const decoded = base64ToBytes(value);
-        if (bytesToBase64(decoded) !== value)
-            return null;
-        return length === undefined || decoded.length === length ? decoded : null;
-    }
-    catch {
-        return null;
-    }
-}
 function canonicalBase64UrlDigest(value) {
     if (typeof value !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(value))
         return false;
-    try {
-        const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "=";
-        const decoded = base64ToBytes(padded);
-        return decoded.length === 32 && bytesToBase64Url(decoded) === value;
-    }
-    catch {
-        return false;
-    }
+    const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "=";
+    const decoded = canonicalBase64Bytes(padded, 32);
+    return decoded !== null && bytesToBase64Url(decoded) === value;
 }
 function bytesToBase64(value) {
     return typeof Buffer !== "undefined" ? Buffer.from(value).toString("base64") : browserBase64(value);

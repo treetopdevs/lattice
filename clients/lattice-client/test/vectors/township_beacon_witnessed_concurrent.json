@@ -1,0 +1,761 @@
+{
+  "canonicalOps": [
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258517265706c6963613a6d61747465723a626561636f6e2d636f6e63757272656e7423726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f74585865735820cdc39c918646a0ebaacadcbd0a62413f38e18451482d09568a1f7c771a1bbca580d9ea6049617574686f72697479d9ea6183d9ea604767656e65736973d9ea6389582b4f657744786559753352557455434362697a45684749614a524b594d496d777a7a5f47636b37555a744f5158517265706c6963613a6d61747465723a626561636f6e2d636f6e63757272656e7423726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f74585865735820cdc39c918646a0ebaacadcbd0a62413f38e18451482d09568a1f7c771a1bbca55820cdc39c918646a0ebaacadcbd0a62413f38e18451482d09568a1f7c771a1bbca5f688d9ea604561646d6974d9ea604c636c6f73655f6d6174746572d9ea604d6c696e6b5f656c656374696f6ed9ea6044706f7374d9ea604d72656d6f76655f6d656d626572d9ea604d72656f70656e5f6d6174746572d9ea604b7365745f73756d6d617279d9ea60497365745f7469746c6581d9ea6045636c65726bf558401d094af398fc7674045658bc963a88373db4ed6e94ffd64385dbae00c78c89fceff55a2b0207fc53976d6c33e1ee78ccd5a25ed25a40eff1ad9aca8157dbb308a1d9ea604a5f5f626561636f6e5f5fa5d9ea60446d6f6465d9ea60497769746e6573736564d9ea604776657273696f6e01d9ea60497468726573686f6c6402d9ea60497769746e6573736573845820153cb54c395fa3bd58a3602c091c6692cba2210fdc2b522b1bffdf0f3772de4f582094b21722f64abf8a5ab5c5bfcf4060280bc3fb66deb58892119127a50a3c4c9558201df77021f73a8ae344e27c57714b000c48b78d326f75928136ea25212105e714582060ca761871c343acd85f5ed280e9df353a04e4eafbfc9f30782dea1f27ec6a3dd9ea604e6d61785f65706f63685f737465700af6",
+      "hash": "ub7c-5NDYGG7PtO1i-RIXY-9YPztHytDv553mU8wFPE",
+      "id": "ub7c-5NDYGG7PtO1i-RIXY-9YPztHytDv553mU8wFPE",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258517265706c6963613a6d61747465723a626561636f6e2d636f6e63757272656e7423726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f74585865735820153cb54c395fa3bd58a3602c091c6692cba2210fdc2b522b1bffdf0f3772de4f81582b756237632d354e445947473750744f31692d524958592d3959507a7448797444763535336d553877465045d9ea6049617574686f72697479d9ea6183d9ea6046626561636f6e04a2d9ea6045636c61696da5d9ea60446465707381582b756237632d354e445947473750744f31692d524958592d3959507a7448797444763535336d553877465045d9ea604565706f636804d9ea6046617574686f725820153cb54c395fa3bd58a3602c091c6692cba2210fdc2b522b1bffdf0f3772de4fd9ea60477265706c69636158517265706c6963613a6d61747465723a626561636f6e2d636f6e63757272656e7423726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f7458586573d9ea604776657273696f6e01d9ea604a7369676e61747572657382a2d9ea60477769746e6573735820153cb54c395fa3bd58a3602c091c6692cba2210fdc2b522b1bffdf0f3772de4fd9ea60497369676e61747572655840f8330b6ebb9f4a56f5522e957b638c0bef7b6281b95f2b6e34b952bd53e700814e257928bf69b96c2fa09dcfa83e3f15d6284b547ca86214e06b202a61196803a2d9ea60477769746e657373582094b21722f64abf8a5ab5c5bfcf4060280bc3fb66deb58892119127a50a3c4c95d9ea60497369676e617475726558402f77feef19399eb7b57970d7215da2240d00c18d48055bfffc0efc84bc431c18f2d18c8f9788cc6f224fc6b8c885be2281a6c88a1234ddadde98ccc8acac180cf6",
+      "hash": "NZKEpDPDb9z_dcy8mFA-LtKcVq0ODjxXpkfr5lKfAaQ",
+      "id": "NZKEpDPDb9z_dcy8mFA-LtKcVq0ODjxXpkfr5lKfAaQ",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258517265706c6963613a6d61747465723a626561636f6e2d636f6e63757272656e7423726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f745858657358201df77021f73a8ae344e27c57714b000c48b78d326f75928136ea25212105e71481582b756237632d354e445947473750744f31692d524958592d3959507a7448797444763535336d553877465045d9ea6049617574686f72697479d9ea6183d9ea6046626561636f6e04a2d9ea6045636c61696da5d9ea60446465707381582b756237632d354e445947473750744f31692d524958592d3959507a7448797444763535336d553877465045d9ea604565706f636804d9ea6046617574686f7258201df77021f73a8ae344e27c57714b000c48b78d326f75928136ea25212105e714d9ea60477265706c69636158517265706c6963613a6d61747465723a626561636f6e2d636f6e63757272656e7423726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f7458586573d9ea604776657273696f6e01d9ea604a7369676e61747572657382a2d9ea60477769746e65737358201df77021f73a8ae344e27c57714b000c48b78d326f75928136ea25212105e714d9ea60497369676e617475726558401ffc70d8972111f14baedee99ddd1fe628ffc44101908e565be42dddc6e32ac18e23cd3129e9962c064148790a150a0da366d1d6cad64e6c70c6e3a89169ba08a2d9ea60477769746e657373582060ca761871c343acd85f5ed280e9df353a04e4eafbfc9f30782dea1f27ec6a3dd9ea60497369676e61747572655840f6fd4dc327207673bd4d48ae41c28295965c588f9ac0c727e3d1babb0ee73ca4622ca5754af9d8d4cd97d7de46a1a11d5d50df10c7c7d2c1d21f9e84dd0d270cf6",
+      "hash": "e_9Etu2N4vMwjYF6S4gITrfiQgz_0jCX2cN201szlog",
+      "id": "e_9Etu2N4vMwjYF6S4gITrfiQgz_0jCX2cN201szlog",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258517265706c6963613a6d61747465723a626561636f6e2d636f6e63757272656e7423726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f7458586573582094b21722f64abf8a5ab5c5bfcf4060280bc3fb66deb58892119127a50a3c4c9582582b4e5a4b457044504462397a5f646379386d46412d4c744b635671304f446a7858706b6672356c4b66416151582b655f39457475324e34764d776a594636533467495472666951677a5f306a435832634e323031737a6c6f67d9ea6049617574686f72697479d9ea6183d9ea6046626561636f6e05a2d9ea6045636c61696da5d9ea60446465707382582b4e5a4b457044504462397a5f646379386d46412d4c744b635671304f446a7858706b6672356c4b66416151582b655f39457475324e34764d776a594636533467495472666951677a5f306a435832634e323031737a6c6f67d9ea604565706f636805d9ea6046617574686f72582094b21722f64abf8a5ab5c5bfcf4060280bc3fb66deb58892119127a50a3c4c95d9ea60477265706c69636158517265706c6963613a6d61747465723a626561636f6e2d636f6e63757272656e7423726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f7458586573d9ea604776657273696f6e01d9ea604a7369676e61747572657382a2d9ea60477769746e657373582060ca761871c343acd85f5ed280e9df353a04e4eafbfc9f30782dea1f27ec6a3dd9ea60497369676e61747572655840d5dad316af9916c91e93c940024db3b2c7120107fc343446b7d10199c57b18c718adda238850c52f40eab18ae187df5b9fa06c71eb1432d3fb7d19525f317e03a2d9ea60477769746e657373582094b21722f64abf8a5ab5c5bfcf4060280bc3fb66deb58892119127a50a3c4c95d9ea60497369676e61747572655840ce30d6768b7c8d1673e1701497f85c5d2ddcd88c0f4e8982e2035ec8401606c4f9403c6635a6856b2135bcd9a68289388520aecd91129b77fcfc40a08f40b00ef6",
+      "hash": "L_o8Fhp60vGsHCdNokjwaVQkl2uBZLS3tPq8DQwDChw",
+      "id": "L_o8Fhp60vGsHCdNokjwaVQkl2uBZLS3tPq8DQwDChw",
+      "suite": "lattice-cbor-v1"
+    }
+  ],
+  "capabilityCase": {
+    "beaconOperationIds": [
+      "NZKEpDPDb9z_dcy8mFA-LtKcVq0ODjxXpkfr5lKfAaQ",
+      "e_9Etu2N4vMwjYF6S4gITrfiQgz_0jCX2cN201szlog",
+      "L_o8Fhp60vGsHCdNokjwaVQkl2uBZLS3tPq8DQwDChw"
+    ],
+    "case": "witnessed_concurrent"
+  },
+  "expectAtFrontier": [],
+  "expectAtFullFrontier": {
+    "authorityQuarantine": [],
+    "quarantine": [],
+    "state": {
+      "clerk": "clerk",
+      "clerk_locked": false,
+      "members": [],
+      "posts": [],
+      "summary": "",
+      "title": ""
+    },
+    "winners": {
+      "clerk": "ub7c-5NDYGG7PtO1i-RIXY-9YPztHytDv553mU8wFPE",
+      "clerk_locked": null,
+      "summary": null,
+      "title": null
+    }
+  },
+  "generatedBy": "Lattice.Sim",
+  "ops": [
+    {
+      "author": "clerk",
+      "command": "genesis clerk",
+      "deps": [],
+      "field": "clerk",
+      "hash": "ub7c-5NDYGG7PtO1i-RIXY-9YPztHytDv553mU8wFPE",
+      "id": "ub7c-5NDYGG7PtO1i-RIXY-9YPztHytDv553mU8wFPE",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "clerk"
+    },
+    {
+      "author": "w0",
+      "command": "authority",
+      "deps": [
+        "ub7c-5NDYGG7PtO1i-RIXY-9YPztHytDv553mU8wFPE"
+      ],
+      "field": "__authority",
+      "hash": "NZKEpDPDb9z_dcy8mFA-LtKcVq0ODjxXpkfr5lKfAaQ",
+      "id": "NZKEpDPDb9z_dcy8mFA-LtKcVq0ODjxXpkfr5lKfAaQ",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "w2",
+      "command": "authority",
+      "deps": [
+        "ub7c-5NDYGG7PtO1i-RIXY-9YPztHytDv553mU8wFPE"
+      ],
+      "field": "__authority",
+      "hash": "e_9Etu2N4vMwjYF6S4gITrfiQgz_0jCX2cN201szlog",
+      "id": "e_9Etu2N4vMwjYF6S4gITrfiQgz_0jCX2cN201szlog",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "w1",
+      "command": "authority",
+      "deps": [
+        "NZKEpDPDb9z_dcy8mFA-LtKcVq0ODjxXpkfr5lKfAaQ",
+        "e_9Etu2N4vMwjYF6S4gITrfiQgz_0jCX2cN201szlog"
+      ],
+      "field": "__authority",
+      "hash": "L_o8Fhp60vGsHCdNokjwaVQkl2uBZLS3tPq8DQwDChw",
+      "id": "L_o8Fhp60vGsHCdNokjwaVQkl2uBZLS3tPq8DQwDChw",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    }
+  ],
+  "oracleCarrierOps": [
+    {
+      "author": "zcOckYZGoOuqyty9CmJBPzjhhFFILQlWih98dxobvKU=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "zcOckYZGoOuqyty9CmJBPzjhhFFILQlWih98dxobvKU=",
+              "id": "OewDxeYu3RUtUCCbizEhGIaJRKYMImwzz_Gck7UZtOQ",
+              "issuer": "zcOckYZGoOuqyty9CmJBPzjhhFFILQlWih98dxobvKU=",
+              "live": true,
+              "ops": [
+                "admit",
+                "close_matter",
+                "link_election",
+                "post",
+                "remove_member",
+                "reopen_matter",
+                "set_summary",
+                "set_title"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:beacon-concurrent#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "HQlK85j8dnQEVli8ljqINz207W6U/9ZDhduuAMeMifzv9VorAgf8U5dtbDPh7njM1aJe0lpA7/GtmsqBV9uzCA=="
+            }
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "__beacon__"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "mode"
+                      ],
+                      [
+                        "atom",
+                        "witnessed"
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "version"
+                      ],
+                      [
+                        "int",
+                        1
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "threshold"
+                      ],
+                      [
+                        "int",
+                        2
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "witnesses"
+                      ],
+                      [
+                        "list",
+                        [
+                          [
+                            "bin",
+                            "FTy1TDlfo71Yo2AsCRxmksuiIQ/cK1IrG//fDzdy3k8="
+                          ],
+                          [
+                            "bin",
+                            "lLIXIvZKv4patcW/z0BgKAvD+2betYiSEZEnpQo8TJU="
+                          ],
+                          [
+                            "bin",
+                            "HfdwIfc6iuNE4nxXcUsADEi3jTJvdZKBNuolISEF5xQ="
+                          ],
+                          [
+                            "bin",
+                            "YMp2GHHDQ6zYX17SgOnfNToE5Or7/J8weC3qHyfsaj0="
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "max_epoch_step"
+                      ],
+                      [
+                        "int",
+                        10
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [],
+      "id": "ub7c-5NDYGG7PtO1i-RIXY-9YPztHytDv553mU8wFPE",
+      "kind": "authority",
+      "replica": "replica:matter:beacon-concurrent#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+      "sig": "wBPEkUnTJX00ZBCwm1a8r+YMuNEMu60UYKDH4zqkrDxReH28gngnXkZgmje/u3655gePhHiCd78g7OewvbUpCw==",
+      "v": 1
+    },
+    {
+      "author": "FTy1TDlfo71Yo2AsCRxmksuiIQ/cK1IrG//fDzdy3k8=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "beacon"
+          ],
+          [
+            "int",
+            4
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "claim"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "deps"
+                      ],
+                      [
+                        "list",
+                        [
+                          [
+                            "bin",
+                            "dWI3Yy01TkRZR0c3UHRPMWktUklYWS05WVB6dEh5dER2NTUzbVU4d0ZQRQ=="
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "epoch"
+                      ],
+                      [
+                        "int",
+                        4
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "author"
+                      ],
+                      [
+                        "bin",
+                        "FTy1TDlfo71Yo2AsCRxmksuiIQ/cK1IrG//fDzdy3k8="
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "replica"
+                      ],
+                      [
+                        "bin",
+                        "cmVwbGljYTptYXR0ZXI6YmVhY29uLWNvbmN1cnJlbnQjcm9vdDpWZlJ1NHhDVVNZUXp6R1lwd29SMkVkVFpSMVMyNldpMkF4V0R4T3RYWGVz"
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "version"
+                      ],
+                      [
+                        "int",
+                        1
+                      ]
+                    ]
+                  ]
+                ]
+              ],
+              [
+                [
+                  "atom",
+                  "signatures"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "witness"
+                          ],
+                          [
+                            "bin",
+                            "FTy1TDlfo71Yo2AsCRxmksuiIQ/cK1IrG//fDzdy3k8="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "signature"
+                          ],
+                          [
+                            "bin",
+                            "+DMLbrufSlb1Ui6Ve2OMC+97YoG5XytuNLlSvVPnAIFOJXkov2m5bC+gnc+oPj8V1ihLVHyoYhTgayAqYRloAw=="
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "witness"
+                          ],
+                          [
+                            "bin",
+                            "lLIXIvZKv4patcW/z0BgKAvD+2betYiSEZEnpQo8TJU="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "signature"
+                          ],
+                          [
+                            "bin",
+                            "L3f+7xk5nre1eXDXIV2iJA0AwY1IBVv//A78hLxDHBjy0YyPl4jMbyJPxrjIhb4igabIihI03a3emMzIrKwYDA=="
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "ub7c-5NDYGG7PtO1i-RIXY-9YPztHytDv553mU8wFPE"
+      ],
+      "id": "NZKEpDPDb9z_dcy8mFA-LtKcVq0ODjxXpkfr5lKfAaQ",
+      "kind": "authority",
+      "replica": "replica:matter:beacon-concurrent#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+      "sig": "H+jrsVi+nmRtiIXQ0wD7FwyDnEWdwl85dbFKuXguZ7C8x6S+AAYlsn9dC9RgyMg8vK5d6lgf9KF5WHn2MIekCw==",
+      "v": 1
+    },
+    {
+      "author": "HfdwIfc6iuNE4nxXcUsADEi3jTJvdZKBNuolISEF5xQ=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "beacon"
+          ],
+          [
+            "int",
+            4
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "claim"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "deps"
+                      ],
+                      [
+                        "list",
+                        [
+                          [
+                            "bin",
+                            "dWI3Yy01TkRZR0c3UHRPMWktUklYWS05WVB6dEh5dER2NTUzbVU4d0ZQRQ=="
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "epoch"
+                      ],
+                      [
+                        "int",
+                        4
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "author"
+                      ],
+                      [
+                        "bin",
+                        "HfdwIfc6iuNE4nxXcUsADEi3jTJvdZKBNuolISEF5xQ="
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "replica"
+                      ],
+                      [
+                        "bin",
+                        "cmVwbGljYTptYXR0ZXI6YmVhY29uLWNvbmN1cnJlbnQjcm9vdDpWZlJ1NHhDVVNZUXp6R1lwd29SMkVkVFpSMVMyNldpMkF4V0R4T3RYWGVz"
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "version"
+                      ],
+                      [
+                        "int",
+                        1
+                      ]
+                    ]
+                  ]
+                ]
+              ],
+              [
+                [
+                  "atom",
+                  "signatures"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "witness"
+                          ],
+                          [
+                            "bin",
+                            "HfdwIfc6iuNE4nxXcUsADEi3jTJvdZKBNuolISEF5xQ="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "signature"
+                          ],
+                          [
+                            "bin",
+                            "H/xw2JchEfFLrt7pnd0f5ij/xEEBkI5WW+Qt3cbjKsGOI80xKemWLAZBSHkKFQoNo2bR1srWTmxwxuOokWm6CA=="
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "witness"
+                          ],
+                          [
+                            "bin",
+                            "YMp2GHHDQ6zYX17SgOnfNToE5Or7/J8weC3qHyfsaj0="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "signature"
+                          ],
+                          [
+                            "bin",
+                            "9v1NwycgdnO9TUiuQcKClZZcWI+awMcn49G6uw7nPKRiLKV1SvnY1M2X195GoaEdXVDfEMfH0sHSH56E3Q0nDA=="
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "ub7c-5NDYGG7PtO1i-RIXY-9YPztHytDv553mU8wFPE"
+      ],
+      "id": "e_9Etu2N4vMwjYF6S4gITrfiQgz_0jCX2cN201szlog",
+      "kind": "authority",
+      "replica": "replica:matter:beacon-concurrent#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+      "sig": "j1fNwSJZoQp3X5tw/6UPDl7fGk0B+WMUiaAHTgjR2Py4M8gT+7lFRwjH+2PxmyORHzdF2zMrHhYeqazyZGQEBg==",
+      "v": 1
+    },
+    {
+      "author": "lLIXIvZKv4patcW/z0BgKAvD+2betYiSEZEnpQo8TJU=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "beacon"
+          ],
+          [
+            "int",
+            5
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "claim"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "deps"
+                      ],
+                      [
+                        "list",
+                        [
+                          [
+                            "bin",
+                            "TlpLRXBEUERiOXpfZGN5OG1GQS1MdEtjVnEwT0RqeFhwa2ZyNWxLZkFhUQ=="
+                          ],
+                          [
+                            "bin",
+                            "ZV85RXR1Mk40dk13allGNlM0Z0lUcmZpUWd6XzBqQ1gyY04yMDFzemxvZw=="
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "epoch"
+                      ],
+                      [
+                        "int",
+                        5
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "author"
+                      ],
+                      [
+                        "bin",
+                        "lLIXIvZKv4patcW/z0BgKAvD+2betYiSEZEnpQo8TJU="
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "replica"
+                      ],
+                      [
+                        "bin",
+                        "cmVwbGljYTptYXR0ZXI6YmVhY29uLWNvbmN1cnJlbnQjcm9vdDpWZlJ1NHhDVVNZUXp6R1lwd29SMkVkVFpSMVMyNldpMkF4V0R4T3RYWGVz"
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "version"
+                      ],
+                      [
+                        "int",
+                        1
+                      ]
+                    ]
+                  ]
+                ]
+              ],
+              [
+                [
+                  "atom",
+                  "signatures"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "witness"
+                          ],
+                          [
+                            "bin",
+                            "YMp2GHHDQ6zYX17SgOnfNToE5Or7/J8weC3qHyfsaj0="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "signature"
+                          ],
+                          [
+                            "bin",
+                            "1drTFq+ZFskek8lAAk2zsscSAQf8NDRGt9EBmcV7GMcYrdojiFDFL0DqsYrhh99bn6BscesUMtP7fRlSXzF+Aw=="
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "witness"
+                          ],
+                          [
+                            "bin",
+                            "lLIXIvZKv4patcW/z0BgKAvD+2betYiSEZEnpQo8TJU="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "signature"
+                          ],
+                          [
+                            "bin",
+                            "zjDWdot8jRZz4XAUl/hcXS3c2IwPTomC4gNeyEAWBsT5QDxmNaaFayE1vNmmgok4hSCuzZESm3f8/ECgj0CwDg=="
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "NZKEpDPDb9z_dcy8mFA-LtKcVq0ODjxXpkfr5lKfAaQ",
+        "e_9Etu2N4vMwjYF6S4gITrfiQgz_0jCX2cN201szlog"
+      ],
+      "id": "L_o8Fhp60vGsHCdNokjwaVQkl2uBZLS3tPq8DQwDChw",
+      "kind": "authority",
+      "replica": "replica:matter:beacon-concurrent#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+      "sig": "lgNe9vrfwWMSGaZ3cFpmojob1X20jhvSnVmnRwsVRrCAVtg6cfKnviNB0xkUYxnz9QrNR29TKciSCnYjo/YtDg==",
+      "v": 1
+    }
+  ],
+  "perspectives": [],
+  "realmByPubkey": {
+    "0vBPHby2rCnT1IYNPiBp+nHixQAQETb+O3ZPGvMvbPA=": "resident",
+    "FTy1TDlfo71Yo2AsCRxmksuiIQ/cK1IrG//fDzdy3k8=": "w0",
+    "HfdwIfc6iuNE4nxXcUsADEi3jTJvdZKBNuolISEF5xQ=": "w2",
+    "YMp2GHHDQ6zYX17SgOnfNToE5Or7/J8weC3qHyfsaj0=": "w3",
+    "lLIXIvZKv4patcW/z0BgKAvD+2betYiSEZEnpQo8TJU=": "w1",
+    "zcOckYZGoOuqyty9CmJBPzjhhFFILQlWih98dxobvKU=": "clerk"
+  },
+  "replica": "replica:matter:beacon-concurrent#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+  "scenario": "township_beacon_witnessed_concurrent",
+  "scenarioKind": "adversarial",
+  "schema": {
+    "fields": {
+      "clerk": {
+        "authority": "clerk"
+      },
+      "clerk_locked": {
+        "default": false,
+        "gatedBy": "clerk",
+        "merge": "lww"
+      },
+      "members": {
+        "merge": "or_set"
+      },
+      "posts": {
+        "merge": "causal_list"
+      },
+      "summary": {
+        "default": "",
+        "merge": "lww"
+      },
+      "title": {
+        "default": "",
+        "merge": "lww"
+      }
+    },
+    "name": "Township.Matter"
+  }
+}

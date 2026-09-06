@@ -1,4 +1,4 @@
-import { authorCarrierDelegation, authorCarrierOp, canonicalHash } from "./codec";
+import { authorCarrierDelegation, authorCarrierOp, canonicalBase64Bytes, canonicalHash } from "./codec";
 import { carrierDelegationsFromFrames, carrierOpsToSemanticOps } from "./carrier";
 import { frontier } from "./sync";
 export function townshipCommandBody(command) {
@@ -90,6 +90,8 @@ export async function authorTownshipDelegation(input) {
         delegationInput.roles = input.roles;
     if (input.live !== undefined)
         delegationInput.live = input.live;
+    if (input.expiresEpoch !== undefined)
+        delegationInput.expiresEpoch = input.expiresEpoch;
     const delegation = await authorCarrierDelegation(delegationInput);
     return authorCarrierOp({
         replica: input.replica,
@@ -201,6 +203,8 @@ export async function authorAndPersistTownshipDelegation(input) {
         delegationInput.roles = input.roles;
     if (input.live !== undefined)
         delegationInput.live = input.live;
+    if (input.expiresEpoch !== undefined)
+        delegationInput.expiresEpoch = input.expiresEpoch;
     const frame = await authorTownshipDelegation(delegationInput);
     const op = carrierOpsToSemanticOps([frame], input.realmByPubkey)[0];
     if (!op)
@@ -248,16 +252,59 @@ function townshipGenesisPoliciesTerm(policies) {
         "map",
         Object.entries(policies)
             .sort(([left], [right]) => left.localeCompare(right))
-            .map(([role, policy]) => [
-            ["atom", role],
-            [
-                "map",
+            .map(([role, policy]) => {
+            if ("mode" in policy) {
+                if (role !== "__beacon__")
+                    throw new Error("witnessed beacon policy requires __beacon__ key");
+                return [
+                    ["atom", role],
+                    [
+                        "map",
+                        [
+                            [
+                                ["atom", "mode"],
+                                ["atom", policy.mode],
+                            ],
+                            [
+                                ["atom", "version"],
+                                ["int", policy.version],
+                            ],
+                            [
+                                ["atom", "witnesses"],
+                                [
+                                    "list",
+                                    policy.witnesses.map((key) => ["bin", pubkeyBase64(key)]),
+                                ],
+                            ],
+                            [
+                                ["atom", "threshold"],
+                                ["int", policy.threshold],
+                            ],
+                            [
+                                ["atom", "max_epoch_step"],
+                                ["int", policy.maxEpochStep],
+                            ],
+                        ],
+                    ],
+                ];
+            }
+            return [
+                ["atom", role],
                 [
-                    [["atom", "successor"], ["bin", pubkeyBase64(policy.successorPubkey)]],
-                    [["atom", "dormant_ticks"], ["int", policy.dormantTicks]],
+                    "map",
+                    [
+                        [
+                            ["atom", "successor"],
+                            ["bin", pubkeyBase64(policy.successorPubkey)],
+                        ],
+                        [
+                            ["atom", "dormant_ticks"],
+                            ["int", policy.dormantTicks],
+                        ],
+                    ],
                 ],
-            ],
-        ]),
+            ];
+        }),
     ];
 }
 function textBase64(value) {
@@ -267,7 +314,11 @@ function pubkeyBase64(value) {
     return typeof value === "string" ? value : bytesBase64(value);
 }
 function pubkeyBytes(value) {
-    return typeof value === "string" ? base64ToBytes(value) : value;
+    const decoded = typeof value === "string" ? canonicalBase64Bytes(value, 32) : value;
+    if (decoded === null || decoded.length !== 32) {
+        throw new Error("invalid canonical Ed25519 public key");
+    }
+    return decoded;
 }
 function bytesBase64(bytes) {
     if (typeof Buffer !== "undefined")
@@ -276,14 +327,6 @@ function bytesBase64(bytes) {
     if (!btoaFn)
         throw new Error("base64 encoding unavailable");
     return btoaFn(String.fromCharCode(...bytes));
-}
-function base64ToBytes(value) {
-    if (typeof Buffer !== "undefined")
-        return new Uint8Array(Buffer.from(value, "base64"));
-    const atobFn = globalThis.atob;
-    if (!atobFn)
-        throw new Error("base64 decoding unavailable");
-    return Uint8Array.from(atobFn(value), (char) => char.charCodeAt(0));
 }
 function setSubset(needed, availableValues) {
     const available = new Set(availableValues);

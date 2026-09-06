@@ -269,3 +269,8 @@ election, and `Lattice.Attestation.Stub` stays frozen and false; no ballots or c
 - AF-1 test green; AF-2 and AF-3 "today" lines truthful at merge time.
 - The operator countersign line is still absent from the isolation contract; adding it is a later,
   explicit act.
+
+Status 2026-09-06 (Plan 179 local preparation): Sim and TypeScript now prove witnessed epoch
+advance, pre-loss delegated admission, surviving-issuer revocation and leased-grant lapse with
+the founder removed. General AF-2 survival, bounded renewal, physical-device evidence and revised
+product claims remain open; exact integrated and hosted review gates are owned by the unified roadmap.

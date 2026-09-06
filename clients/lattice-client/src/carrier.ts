@@ -1,6 +1,8 @@
 import type {
   AuthorityDelegationEvidence,
   AuthorityEvidence,
+  WitnessedBeaconPolicyEvidence,
+  WitnessedBeaconCertificateEvidence,
   CommandError,
   CustodyConsentEvidence,
   Mutation,
@@ -1234,7 +1236,9 @@ export function carrierOpToSemanticOp(
       : { commandError: payload.commandError }),
     ...(structuralError === undefined ? {} : { structuralError }),
     cap,
-    ...(payload.authority === undefined ? {} : { authority: payload.authority }),
+    ...(payload.authority === undefined ? {} : { authority:
+      payload.authority.type === "beacon" && payload.authority.certificate !== undefined
+        ? { ...payload.authority, authorPubkey: op.author } : payload.authority }),
     ...(payload.consent === undefined
       ? {}
       : { consent: { ...payload.consent, authorPub: op.author } }),
@@ -1418,6 +1422,7 @@ function payloadFromBody(
     switch (command) {
       case "genesis": {
         const delegation = delegationTerm(body.values[1]);
+        const beaconPolicy = witnessedBeaconPolicy(atomMap(body.values[2])?.get("__beacon__"));
         const policies = successionPolicies(body.values[2], realmByPubkey);
         // A Sim genesis self-grant carries exactly the replica's authority
         // roles (canonically sorted), so the first role names the authority
@@ -1429,6 +1434,7 @@ function payloadFromBody(
           type: "genesis" as const,
           delegation: delegationEvidence(delegation, realmByPubkey),
           ...(policies === undefined ? {} : { policies }),
+          beaconPolicy,
         };
         if (role !== undefined) {
           return {
@@ -1506,7 +1512,7 @@ function payloadFromBody(
           typeof epochTerm === "number" && Number.isSafeInteger(epochTerm) ? epochTerm : null;
         return {
           ...neutralPayload(`beacon ${epoch ?? "malformed"}`),
-          authority: { type: "beacon", epoch },
+          authority: { type: "beacon", epoch, ...(body.values.length === 3 ? { certificate: witnessedBeaconCertificate(body.values[2]) } : {}) },
         };
       }
     }
@@ -1661,6 +1667,82 @@ function delegationEvidence(
     ...(delegation.expires_epoch === undefined
       ? {}
       : { expiresEpoch: delegation.expires_epoch }),
+  };
+}
+
+function witnessedBeaconPolicy(
+  term: DecodedTerm | undefined,
+): WitnessedBeaconPolicyEvidence | null {
+  const policy = exactAtomMap(term, [
+    "mode",
+    "version",
+    "witnesses",
+    "threshold",
+    "max_epoch_step",
+  ]);
+  const version = nonNegativeInteger(policy?.get("version"));
+  const threshold = nonNegativeInteger(policy?.get("threshold"));
+  const maxEpochStep = nonNegativeInteger(policy?.get("max_epoch_step"));
+  const witnesses = listValuesOrNull(policy?.get("witnesses"))?.map((entry) =>
+    binaryBytes(entry, 32),
+  );
+  if (
+    atomValue(policy?.get("mode")) !== "witnessed" ||
+    version === null ||
+    threshold === null ||
+    maxEpochStep === null ||
+    witnesses === undefined ||
+    witnesses.some((entry) => entry === null)
+  )
+    return null;
+  return {
+    mode: "witnessed",
+    version,
+    threshold,
+    maxEpochStep,
+    witnesses: (witnesses as Uint8Array[]).map(bytesToBase64),
+  };
+}
+
+function witnessedBeaconCertificate(
+  term: DecodedTerm | undefined,
+): WitnessedBeaconCertificateEvidence | null {
+  const certificate = exactAtomMap(term, ["claim", "signatures"]);
+  const claim = exactAtomMap(certificate?.get("claim"), [
+    "version",
+    "replica",
+    "epoch",
+    "author",
+    "deps",
+  ]);
+  const version = nonNegativeInteger(claim?.get("version"));
+  const replica = binaryUtf8(claim?.get("replica"));
+  const epoch = nonNegativeInteger(claim?.get("epoch"));
+  const author = binaryBytes(claim?.get("author"), 32);
+  const deps = listValuesOrNull(claim?.get("deps"))?.map(binaryUtf8);
+  const signatures = listValuesOrNull(certificate?.get("signatures"))?.map(
+    witnessedSignature,
+  );
+  if (
+    version === null ||
+    replica === null ||
+    epoch === null ||
+    author === null ||
+    deps === undefined ||
+    deps.some((entry) => entry === null) ||
+    signatures === undefined ||
+    signatures.some((entry) => entry === null)
+  )
+    return null;
+  return {
+    claim: {
+      version,
+      replica,
+      epoch,
+      author: bytesToBase64(author),
+      deps: deps as string[],
+    },
+    signatures: signatures as WitnessedSuccessionSignatureEvidence[],
   };
 }
 

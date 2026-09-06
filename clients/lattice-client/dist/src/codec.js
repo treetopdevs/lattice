@@ -19,7 +19,7 @@ export function canonicalBytesForCarrierOp(frame) {
     return encodeArray([
         encodeBinaryString(opTag),
         encodeBinaryString(frame.replica),
-        encodeBytes(base64ToBytes(frame.author)),
+        encodeBytes(requireCanonicalBase64Bytes(frame.author, 32)),
         encodeArray(uniqueSorted(frame.deps).map(encodeBinaryString)),
         encodeAtom(frame.kind),
         encodeCarrierTerm(frame.body),
@@ -41,7 +41,7 @@ export async function verifyCarrierOpHash(frame) {
 export async function verifyCarrierOp(frame, verifier) {
     const canonicalBytes = canonicalBytesForCarrierOp(frame);
     const hash = (await canonicalHash(canonicalBytes)) === frame.id;
-    const signature = await verifier.verify(frame.author, canonicalBytes, base64ToBytes(frame.sig));
+    const signature = await verifier.verify(frame.author, canonicalBytes, requireCanonicalBase64Bytes(frame.sig, 64));
     return { hash, signature, valid: hash && signature };
 }
 export async function authorCarrierOp(input) {
@@ -70,8 +70,8 @@ export function canonicalBytesForCarrierDelegation(delegation) {
     const leased = expiresEpoch !== undefined && expiresEpoch !== null;
     const shared = [
         encodeBinaryString(delegation.replica),
-        encodeBytes(base64ToBytes(delegation.issuer)),
-        encodeBytes(base64ToBytes(delegation.audience)),
+        encodeBytes(requireCanonicalBase64Bytes(delegation.issuer, 32)),
+        encodeBytes(requireCanonicalBase64Bytes(delegation.audience, 32)),
         delegation.parent_id === null ? bytes(0xf6) : encodeBinaryString(delegation.parent_id),
         encodeArray(uniqueSorted(delegation.ops).map(encodeAtom)),
         encodeArray(uniqueSorted(delegation.roles).map(encodeAtom)),
@@ -99,6 +99,19 @@ export function canonicalBytesForWitnessedRecoveryPolicy(policy) {
             ["version", encodeUint(policy.version)],
             ["witnesses", encodeArray(witnesses.map(encodeBytes))],
             ["threshold", encodeUint(policy.threshold)],
+        ]),
+    ]);
+}
+/** Canonical preimage for the exact author and frontier authorized by beacon witnesses. */
+export function canonicalBytesForWitnessedBeaconClaim(claim) {
+    return encodeArray([
+        encodeBinaryString("lattice-beacon-witness-v1"),
+        encodeCanonicalMap([
+            ["version", encodeUint(claim.version)],
+            ["replica", encodeBinaryString(claim.replica)],
+            ["epoch", encodeUint(claim.epoch)],
+            ["author", encodeBytes(canonicalEvidenceBytes(claim.author))],
+            ["deps", encodeArray(claim.deps.map(encodeBinaryString))],
         ]),
     ]);
 }
@@ -135,6 +148,8 @@ export async function authorCarrierDelegation(input) {
         roles: uniqueSorted(input.roles ?? []),
         live: input.live ?? false,
     };
+    if (input.expiresEpoch !== undefined)
+        unsignedDelegation.expires_epoch = input.expiresEpoch;
     const canonicalBytes = canonicalBytesForCarrierDelegation(unsignedDelegation);
     const id = await canonicalHash(canonicalBytes);
     const signature = await input.signer.sign(canonicalBytes);
@@ -156,7 +171,7 @@ function encodeCarrierTerm(term) {
         case "int":
             return encodeUint(term[1]);
         case "bin":
-            return encodeBytes(base64ToBytes(term[1]));
+            return encodeBytes(requireCanonicalBase64Bytes(term[1]));
         case "atom":
             return encodeAtom(term[1]);
         case "list":
@@ -165,8 +180,15 @@ function encodeCarrierTerm(term) {
             return encodeTagged(tupleTag, encodeArray(term[1].map(encodeCarrierTerm)));
         case "map":
             return encodeMap(term[1]);
-        case "mapset":
-            return encodeTagged(mapsetTag, encodeArray(term[1].map(encodeCarrierTerm).sort(compareBytes)));
+        case "mapset": {
+            const elements = term[1].map(encodeCarrierTerm).sort(compareBytes);
+            for (let i = 1; i < elements.length; i++) {
+                if (compareBytes(elements[i - 1], elements[i]) === 0) {
+                    throw new Error("duplicate canonical mapset element");
+                }
+            }
+            return encodeTagged(mapsetTag, encodeArray(elements));
+        }
         case "delegation":
             return encodeDelegation(term[1]);
     }
@@ -175,13 +197,13 @@ function encodeDelegation(delegation) {
     const fields = [
         encodeBinaryString(delegation.id),
         encodeBinaryString(delegation.replica),
-        encodeBytes(base64ToBytes(delegation.issuer)),
-        encodeBytes(base64ToBytes(delegation.audience)),
+        encodeBytes(requireCanonicalBase64Bytes(delegation.issuer, 32)),
+        encodeBytes(requireCanonicalBase64Bytes(delegation.audience, 32)),
         delegation.parent_id === null ? bytes(0xf6) : encodeBinaryString(delegation.parent_id),
         encodeArray(uniqueSorted(delegation.ops).map(encodeAtom)),
         encodeArray(uniqueSorted(delegation.roles).map(encodeAtom)),
         bytes(delegation.live ? 0xf5 : 0xf4),
-        encodeBytes(base64ToBytes(delegation.sig)),
+        encodeBytes(requireCanonicalBase64Bytes(delegation.sig, 64)),
     ];
     if (delegation.expires_epoch !== undefined && delegation.expires_epoch !== null) {
         fields.push(encodeUint(delegation.expires_epoch));
@@ -192,6 +214,11 @@ function encodeMap(pairs) {
     const encoded = pairs
         .map(([key, value]) => [encodeCarrierTerm(key), encodeCarrierTerm(value)])
         .sort(([left], [right]) => compareBytes(left, right));
+    for (let i = 1; i < encoded.length; i++) {
+        if (compareBytes(encoded[i - 1][0], encoded[i][0]) === 0) {
+            throw new Error("duplicate canonical map key");
+        }
+    }
     return concat(major(5, BigInt(encoded.length)), ...encoded.flatMap(([key, value]) => [key, value]));
 }
 function encodeCanonicalMap(pairs) {
@@ -275,9 +302,29 @@ function base64ToBytes(value) {
         throw new Error("base64 decoding unavailable");
     return Uint8Array.from(atobFn(value), (char) => char.charCodeAt(0));
 }
+/** Decode canonical standard Base64, refusing malformed text or an unexpected byte length. */
+export function canonicalBase64Bytes(value, length) {
+    if (typeof value !== "string")
+        return null;
+    try {
+        const decoded = base64ToBytes(value);
+        if (bytesToBase64(decoded) !== value)
+            return null;
+        return length === undefined || decoded.length === length ? decoded : null;
+    }
+    catch {
+        return null;
+    }
+}
+function requireCanonicalBase64Bytes(value, length) {
+    const decoded = canonicalBase64Bytes(value, length);
+    if (decoded === null)
+        throw new Error("non-canonical base64");
+    return decoded;
+}
 function canonicalEvidenceBytes(value) {
-    const decoded = base64ToBytes(value);
-    if (bytesToBase64(decoded) !== value)
+    const decoded = canonicalBase64Bytes(value, 32);
+    if (decoded === null)
         throw new Error("non-canonical base64 evidence");
     return decoded;
 }
@@ -290,7 +337,12 @@ function bytesToBase64(value) {
     const btoaFn = globalThis.btoa;
     if (!btoaFn)
         throw new Error("base64 encoding unavailable");
-    return btoaFn(String.fromCharCode(...value));
+    // Binary terms can exceed the browser's function-argument limit during round-trip validation.
+    let binary = "";
+    for (let offset = 0; offset < value.length; offset += 8192) {
+        binary += String.fromCharCode(...value.subarray(offset, offset + 8192));
+    }
+    return btoaFn(binary);
 }
 function pubkeyBase64(value) {
     return typeof value === "string" ? value : bytesToBase64(value);

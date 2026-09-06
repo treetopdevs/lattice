@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
-import { authorAndPersistTownshipCommand, authorCarrierDelegation, authorTownshipGenesis, authorTownshipDelegation, authorTownshipCommand, authorTownshipCommandFromLog, authorTownshipRevocation, bindTownshipReplica, carrierDelegationsFromFrames, carrierOpsToSemanticOps, createJsonCarrierFrameStore, createJsonLocalOpLogStore, selectTownshipCapId, townshipCapTerm, townshipCommandBody, townshipRevokeBody, } from "../src/index";
+import { authorAndPersistTownshipCommand, authorAndPersistTownshipDelegation, canonicalBytesForCarrierDelegation, canonicalBytesForCarrierOp, canonicalBytesForWitnessedBeaconClaim, authorCarrierDelegation, authorTownshipGenesis, authorTownshipDelegation, authorTownshipCommand, authorTownshipCommandFromLog, authorTownshipRevocation, bindTownshipReplica, carrierDelegationsFromFrames, carrierOpsToSemanticOps, createJsonCarrierFrameStore, createJsonLocalOpLogStore, selectTownshipCapId, townshipCapTerm, townshipCommandBody, townshipRevokeBody, } from "../src/index";
 const here = dirname(fileURLToPath(import.meta.url));
 const vector = JSON.parse(readFileSync(join(here, "vectors", "township_carrier_w1.json"), "utf8"));
 let failures = 0;
@@ -28,6 +28,21 @@ class MemoryKeyValueStore {
     }
 }
 console.log(`\n▸ ${vector.scenario} Township command authoring`);
+for (const rootKey of [
+    `${vector.clientBaseCarrierOps[0].author}\n`,
+    vector.clientBaseCarrierOps[0].author.replace(/=+$/, ""),
+    Buffer.alloc(31, 1).toString("base64"),
+    new Uint8Array(33),
+]) {
+    let refused = false;
+    try {
+        await bindTownshipReplica("replica:matter:strict-root", rootKey);
+    }
+    catch {
+        refused = true;
+    }
+    check("replica binding refuses non-canonical or incorrectly sized root keys", refused, true);
+}
 check("set_title body", townshipCommandBody({ command: "set_title", text: "Road diet" }), commandBody("set_title", "Road diet"));
 check("set_summary body", townshipCommandBody({ command: "set_summary", text: "Needs traffic study" }), commandBody("set_summary", "Needs traffic study"));
 check("post body", townshipCommandBody({ command: "post", text: "resident: posted while offline" }), commandBody("post", "resident: posted while offline"));
@@ -243,6 +258,72 @@ check("author-and-persist rejects missing cap", rejectedMissingCap, true);
 await persistedStore.append(carrierOpsToSemanticOps([postFixture], vector.realmByPubkey)[0]);
 await persistedStore.append(carrierOpsToSemanticOps([postFixture], vector.realmByPubkey)[0]);
 check("persisted local log append is idempotent", (await persistedStore.load()).map((op) => op.id), vector.clientDivergedCarrierOps.map((frame) => frame.id));
+// Plan 179: authoring must reproduce BEAM bytes, not merely replay its frames.
+const beaconVector = JSON.parse(readFileSync(join(here, "vectors", "township_beacon_witnessed_advance.json"), "utf8"));
+const beaconFounder = seededEd25519Identity(beaconVector.capabilityCase.founderSeed);
+const beaconGenesis = beaconVector.oracleCarrierOps.find((frame) => frame.id === beaconVector.capabilityCase.genesisOperationId);
+const beaconGenesisDelegation = carrierDelegationsFromFrames([
+    beaconGenesis,
+])[0];
+const witnessKeys = ["w0", "w1", "w2", "w3"].map((realm) => Object.entries(beaconVector.realmByPubkey).find(([, value]) => value === realm)[0]);
+const authoredBeaconGenesis = await authorTownshipGenesis({
+    replica: beaconVector.replica,
+    ops: beaconGenesisDelegation.ops,
+    roles: beaconGenesisDelegation.roles,
+    live: beaconGenesisDelegation.live,
+    signer: beaconFounder,
+    policies: {
+        __beacon__: {
+            mode: "witnessed",
+            version: 1,
+            witnesses: witnessKeys,
+            threshold: 2,
+            maxEpochStep: 10,
+        },
+    },
+});
+check("beacon policy genesis canonical bytes equal BEAM", Buffer.from(canonicalBytesForCarrierOp(authoredBeaconGenesis)).toString("hex"), beaconVector.capabilityCase.genesisCanonicalHex);
+check("beacon policy genesis id and signature equal BEAM", [authoredBeaconGenesis.id, authoredBeaconGenesis.sig], [beaconGenesis.id, beaconGenesis.sig]);
+const beaconOp = carrierOpsToSemanticOps(beaconVector.oracleCarrierOps, beaconVector.realmByPubkey).find((op) => op.id === beaconVector.capabilityCase.beaconOperationId);
+if (beaconOp.authority?.type !== "beacon" || !beaconOp.authority.certificate)
+    throw new Error("missing beacon claim");
+check("witnessed beacon claim preimage equals BEAM", Buffer.from(canonicalBytesForWitnessedBeaconClaim(beaconOp.authority.certificate.claim)).toString("hex"), beaconVector.capabilityCase.claimPreimageHex);
+const leasedFrame = beaconVector.oracleCarrierOps.find((frame) => authorityCommandName(frame) === "grant");
+const leasedDelegation = carrierDelegationsFromFrames([leasedFrame])[0];
+const authoredLeased = await authorCarrierDelegation({
+    replica: leasedDelegation.replica,
+    audiencePubkey: leasedDelegation.audience,
+    parentId: leasedDelegation.parent_id,
+    ops: leasedDelegation.ops,
+    roles: leasedDelegation.roles,
+    live: leasedDelegation.live,
+    expiresEpoch: 3,
+    signer: beaconFounder,
+});
+check("leased authoring preserves the v3 epoch", authoredLeased.expires_epoch, 3);
+check("leased authoring canonical bytes equal BEAM", Buffer.from(canonicalBytesForCarrierDelegation(authoredLeased)).toString("hex"), Buffer.from(canonicalBytesForCarrierDelegation(leasedDelegation)).toString("hex"));
+check("leased authoring id and signature equal BEAM", [authoredLeased.id, authoredLeased.sig], [leasedDelegation.id, leasedDelegation.sig]);
+const leaseStorage = new MemoryKeyValueStore();
+const leaseLocalLog = createJsonLocalOpLogStore(leaseStorage, "lease-local");
+const leaseFrames = createJsonCarrierFrameStore(leaseStorage, "lease-frames");
+await leaseFrames.save([beaconGenesis]);
+await leaseLocalLog.save(carrierOpsToSemanticOps([beaconGenesis], beaconVector.realmByPubkey));
+const persistedLease = await authorAndPersistTownshipDelegation({
+    replica: beaconVector.replica,
+    audiencePubkey: leasedDelegation.audience,
+    parentId: leasedDelegation.parent_id,
+    ops: leasedDelegation.ops,
+    roles: leasedDelegation.roles,
+    live: leasedDelegation.live,
+    expiresEpoch: 3,
+    signer: beaconFounder,
+    localLog: leaseLocalLog,
+    carrierFrames: leaseFrames,
+    realmByPubkey: beaconVector.realmByPubkey,
+});
+const restoredLease = carrierDelegationsFromFrames(await createJsonCarrierFrameStore(leaseStorage, "lease-frames").load()).find((delegation) => delegation.id === persistedLease.delegation.id);
+check("leased authoring persistence retains expiresEpoch", restoredLease?.expires_epoch, 3);
+check("omitted lease preserves existing unleased bytes and signature", authoredResidentDelegation, grantDelegation);
 console.log(`\n${failures === 0 ? "\x1b[32m✓ Township authoring checks passed\x1b[0m" : `\x1b[31m✗ ${failures} check(s) failed\x1b[0m`}`);
 process.exit(failures === 0 ? 0 : 1);
 function commandBody(command, arg) {

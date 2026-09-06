@@ -1756,3 +1756,95 @@ Machine-checkable. ALL must hold:
   whether that rescues an **already pinned** role is an open question this spike did not reproduce
   and this plan does not answer. What is settled either way is that no such repair exists once the
   founder key is gone.
+
+## Local implementation record (2026-09-06, unified R03)
+
+Prepared on `codex/treehouse-r03-witnessed-beacons` from R07 `afe5ea250072267927b89b353e7bde1e793176b5`,
+with the R01a contract commit `7610cc9b` applied as `e16bcacc`. The integrator explicitly authorized
+local preparation while dependencies awaited hosted closure; that authorization does not permit
+publishing or enabling downstream work before the dependency gate. README and the unified ledger
+remain integrator-owned. Final integration against the latest R01a and hosted closure remain pending.
+
+The authoring-only RED commit `067ed0bf` exposes a witnessed beacon that fails to lapse a leased
+post through the public Sim seam. Implementation then proceeds in vertical slices: exact policy
+and certificate validation, ancestry-scoped BEAM judgment and public expiry, negative/replay/fork
+probes, compaction, exporter and TypeScript parity. The final packet must land atomically.
+
+Three narrow execution amendments are authorized:
+
+- The compaction extension is a dedicated named GATE (1) witness/lease straddle alongside the
+  legacy straddle, using the same state, reasons, quarantine, holder and request equivalence helper.
+  The unchanged mirror produced RED by retaining the after-lapse post. The corrected snapshot
+  carries the final valid covered beacon policy and maximum honored covered epoch; both below-cut
+  and retained witnessed beacons are exercised. Every legacy straddle assertion stays intact.
+- The horizon vector separately asserts strict `decodeCarrierOpFrame` refusal, then passes its
+  raw signed frame through `carrierOpsToSemanticOps` to reach the intended structural classification.
+  The original conformance harness rejected the frame before that public seam. No production
+  integer decoder is relaxed, and every legacy vector is unchanged.
+- R02 P05's historical no-policy three-element beacon receives the audit-only transition explicitly
+  specified in this plan's step 2a: no verdict becomes `:unauthorized_beacon`, with no new authority
+  or state effect. The integrator adopted this exact A13 exception. The migration probe runs the
+  same signed history as immutable baseline `afe5ea250072267927b89b353e7bde1e793176b5`, pins its
+  canonical-byte/signature fingerprint `3c2172ced9d5088a6d2deff134be9b70863f2eee221a94d81424c0294bed430f`,
+  state and holders, checks ten public lease-expiry probes, and asserts that the only reason delta
+  is the formerly ignored beacon. The same signed migration frames are embedded in the new
+  subthreshold vector for independent TypeScript projection. Original P05 evidence is preserved;
+  its version-labeled executable expectation is updated only by the integrator.
+
+The fresh bare-VM restore test loads only Log and its struct dependencies plus explicit host
+command/role vocabulary; it first failed `:unsafe_dump` and passes with `:__beacon__`,
+`:max_epoch_step`, `:epoch`, `:author` and `:deps` added to the dump vocabulary. This is stronger
+than preloading the certificate module in the test VM. `Log.restore/1`, persisted formats,
+`Lattice.Canonical`, succession certificate bytes, dormancy comparisons and role timelines are unchanged.
+
+Exactly five new vectors are exported: `township_beacon_witnessed_advance`,
+`township_beacon_witnessed_subthreshold`, `township_beacon_witnessed_founder_loss`,
+`township_beacon_witnessed_concurrent`, and `township_beacon_witnessed_horizon`. Advance also covers
+policy replacement, a fork around it and invalid replacement; subthreshold includes signature,
+claim-binding, membership, author and step negatives. The existing `township_beacon_unauthorized`,
+`township_lease_valid_causal`, `township_lease_expired`, `township_lease_expired_chain`,
+`township_lease_renewed`, three succession vectors and every other pre-existing vector remain
+byte-identical. Client authoring proves the BEAM genesis and claim preimage bytes in the reverse
+direction, preserves unleased IDs/signatures and round-trips a v3 leased grant through persistence.
+
+Deliberate mutation evidence is retained outside the worktree in `/tmp/treehouse-r03-mutation-*.log`.
+Quorum, membership, domain separation, replica binding, author binding, dependency binding,
+authorized author, step bound, policy ceiling, fixed horizon, global instead of causal policy,
+public expiry policy sources, dump vocabulary, and the combined ceiling/horizon removal each
+produce behavioral RED. Separate TypeScript mutations of claim preimage, genesis policy bytes
+and lease propagation make the authoring parity checks fail. All mutations are restored.
+
+The claim remains Sim/TypeScript witnessed progress, pre-loss delegated admission, surviving-issuer
+revocation and leased lapse. This packet does not provide native/physical AF-2 evidence, a live clock,
+absence proof, new successor scope, renewed authority, or revocation of a founder-issued grant by
+another member. A role policy lacking `:successor` still has the pre-existing succession `KeyError`
+hazard; this packet neither repairs nor relies on that path. No production replica declares the
+reserved `:__beacon__` role; a test-only fixture pins unchanged genesis/transfer behavior for it.
+
+Local verification at this preparation base: `mix check` passes 679 tests and 27 properties
+with zero failures and the existing three exclusions; TypeScript typecheck, conformance,
+canonical, township authoring and generated-dist build all pass. Both boundary-app Sobelow
+commands exit zero. The Township demo writes `/tmp/treehouse-r03-demo` and the independent
+bundle verifier accepts it. A separately booted `mix run --no-start` also restores the witnessed
+dump (`FRESH_MIX_RESTORE_OK`), in addition to the bare-VM regression. Gate output lives in
+`/tmp/treehouse-r03-check-final.log`, `/tmp/treehouse-r03-*-final.log`,
+`/tmp/treehouse-r03-ts-build.log`, `/tmp/treehouse-r03-*-sobelow.log`,
+`/tmp/treehouse-r03-demo-verify.log`, and `/tmp/treehouse-r03-fresh-mix-read.log`.
+These are local preparation results, not final integrated-main, hosted, native or device proof.
+
+### Exact-diff review follow-up
+
+Claude Fable reviewed `e16bcacc..d08883da` and requested one P1 repair: the new
+bare-VM restore test used a machine-local asdf executable without the existing
+CI fallback. It now prefers that exact local executable and falls back to
+`elixir` on PATH, matching `log_restore_fresh_vm_test.exs` and `erlef/setup-beam`.
+The tested dump vocabulary, independent process and restore assertions are unchanged.
+
+The earlier reserved-role STOP applies to production replica modules. The new
+test-only `ReservedRoleFixture` is the narrowly required negative characterization
+of that same residual, not a supported production role or a new collision rule.
+Optional impostor-genesis beacon vector coverage remains a later follow-up; the
+public BEAM refusal and existing cross-runtime delegation validation remain green.
+The review also identifies a pre-existing four-or-more-element beacon-body arity
+divergence: R09's coordinated input-boundary review owns its disposition. R03 does
+not silently change that legacy shape or claim the known gap is closed.
