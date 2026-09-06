@@ -1475,7 +1475,8 @@ function collectBeacons(
           !delegations
             .get(genesis.delegation.id)
             ?.introductionOpIds.includes(source.id) ||
-          source.author !== genesis.delegation.audienceRealm
+          source.author !== genesis.delegation.audienceRealm ||
+          genesis.delegation.audience !== root?.pubkey
         )
           continue;
         const candidate = normalizeBeaconPolicy(genesis.beaconPolicy);

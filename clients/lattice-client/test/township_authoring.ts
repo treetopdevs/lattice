@@ -13,6 +13,7 @@ import {
   canonicalBytesForCarrierDelegation,
   canonicalBytesForCarrierOp,
   canonicalBytesForWitnessedBeaconClaim,
+  createWitnessedBeaconClaim,
   authorCarrierDelegation,
   authorTownshipGenesis,
   authorTownshipDelegation,
@@ -570,7 +571,8 @@ for (const expiry of [4, undefined]) {
   try {
     await authorAndPersistTownshipDelegation({ replica: beaconVector.replica,
       audiencePubkey: witnessKeys[0]!, ops: ["post"], signer: leaseIssuer,
-      ...(expiry === undefined ? {} : { expiresEpoch: expiry }), ...stores });
+      ...(expiry === undefined ? {} : { expiresEpoch: expiry }), ...stores,
+      realmByPubkey: beaconVector.realmByPubkey });
   } catch (error) { refused = error instanceof Error && error.message === "no local delegation authorizes grant"; }
   check("automatic selection refuses uncovered or unbounded child lease", refused, true);
   check("missing suitable lease parent appends no frame", isDeepStrictEqual(await stores.carrierFrames.load(), [beaconGenesis, leasedFrame]), true);
@@ -593,8 +595,7 @@ for (const text of ["left tip", "right tip"]) tips.push(await authorTownshipComm
 tips.sort((a, b) => a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
 const claimFrames = [beaconGenesis, ...tips];
 const deliveredDeps = frontier(carrierOpsToSemanticOps(claimFrames, beaconVector.realmByPubkey));
-const claim: WitnessedBeaconClaimEvidence = { version: 1, replica: beaconVector.replica, epoch: 4,
-  author: claimWitness.publicKeyBase64, deps: deliveredDeps };
+const claim = createWitnessedBeaconClaim(beaconVector.replica, 4, claimWitness.publicKeyBase64, deliveredDeps);
 const claimPayload = canonicalBytesForWitnessedBeaconClaim(claim);
 const entries = [claimWitness, claimWitness2].sort((a, b) => Buffer.compare(a.publicKey, b.publicKey));
 const finalBeacon = await authorCarrierOp({ replica: beaconVector.replica, deps: claim.deps,
@@ -605,6 +606,38 @@ check("authored beacon claim uses final canonical dependencies", claim.deps, fin
 check("witnessed beacon authored from a two-tip frontier is honored", materialize(beaconVector.schema,
   carrierOpsToSemanticOps([...claimFrames, finalBeacon], beaconVector.realmByPubkey)).quarantine.includes(finalBeacon.id), false);
 
+check("claim construction removes duplicates without mutating caller order",
+  createWitnessedBeaconClaim(beaconVector.replica, 4, claimWitness.publicKeyBase64,
+    [...deliveredDeps, deliveredDeps[0]!]).deps, finalBeacon.deps);
+check("claim constructor leaves original delivered order unchanged", deliveredDeps, tips.map((tip) => tip.id));
+const unnormalizedClaim = { ...claim, deps: deliveredDeps };
+const unnormalizedBeacon = await authorCarrierOp({ replica: beaconVector.replica, deps: claim.deps,
+  kind: "authority", cap: ["nil"], signer: claimWitness,
+  body: beaconClaimBody(unnormalizedClaim, entries.map((entry) => ({ witness: entry.publicKeyBase64,
+    signature: Buffer.from(entry.sign(canonicalBytesForWitnessedBeaconClaim(unnormalizedClaim))).toString("base64") }))) });
+check("received unsorted certificate claim still refuses", materialize(beaconVector.schema,
+  carrierOpsToSemanticOps([...claimFrames, unnormalizedBeacon], beaconVector.realmByPubkey))
+  .quarantineReasons.get(unnormalizedBeacon.id), "unauthorized_beacon");
+
+const unrelatedIntegerBody: CarrierTerm = ["tuple", [["atom", "genesis"], ["delegation", beaconGenesisDelegation],
+  ["map", [[["atom", "unrelated"], ["int", "9007199254740992"]]]]]];
+const epochOverflowBody: CarrierTerm = ["tuple", [["atom", "beacon"], ["int", "9007199254740992"]]];
+for (const body of [unrelatedIntegerBody, epochOverflowBody]) {
+  const frame = await authorCarrierOp({ replica: beaconVector.replica, deps: [beaconGenesis.id],
+    kind: "authority", cap: ["nil"], body, signer: beaconFounder });
+  let refused = false;
+  try { decodeCarrierOpFrame(frame); } catch { refused = true; }
+  check("unrelated signed large integers retain strict refusal", refused, true);
+  check("unrelated signed large integers retain semantic malformed term",
+    carrierOpsToSemanticOps([frame])[0]?.structuralError, "malformed_term");
+}
+const malformedPolicyFrame = structuredClone(beaconGenesis);
+if (malformedPolicyFrame.body[0] !== "tuple" || malformedPolicyFrame.body[1][2]?.[0] !== "map") throw new Error("policy fixture");
+(malformedPolicyFrame.body[1][2][1][0] as unknown[]).push(["nil"]);
+let malformedPolicyRefused = false;
+try { decodeCarrierOpFrame(malformedPolicyFrame); } catch { malformedPolicyRefused = true; }
+check("contextual policy decode keeps malformed map-pair refusal", malformedPolicyRefused, true);
+
 function beaconClaimBody(claim: WitnessedBeaconClaimEvidence,
   signatures: { witness: string; signature: string }[]): CarrierTerm {
   const fields: [CarrierTerm, CarrierTerm][] = [
@@ -612,10 +645,13 @@ function beaconClaimBody(claim: WitnessedBeaconClaimEvidence,
     [["atom", "epoch"], ["int", claim.epoch]], [["atom", "author"], ["bin", claim.author]],
     [["atom", "deps"], ["list", claim.deps.map((id) => ["bin", textBase64(id)])]],
   ];
-  return ["tuple", [["atom", "beacon"], ["int", claim.epoch], ["map", [
-    [["atom", "claim"], ["map", fields]], [["atom", "signatures"], ["list", signatures.map((entry) =>
-      ["map", [[["atom", "witness"], ["bin", entry.witness]], [["atom", "signature"], ["bin", entry.signature]]]])]],
-  ]]]];
+  const signatureTerms: CarrierTerm[] = signatures.map((entry) => ["map", [
+    [["atom", "witness"], ["bin", entry.witness]], [["atom", "signature"], ["bin", entry.signature]],
+  ]]);
+  const certificate: CarrierTerm = ["map", [
+    [["atom", "claim"], ["map", fields]], [["atom", "signatures"], ["list", signatureTerms]],
+  ]];
+  return ["tuple", [["atom", "beacon"], ["int", claim.epoch], certificate]];
 }
 
 

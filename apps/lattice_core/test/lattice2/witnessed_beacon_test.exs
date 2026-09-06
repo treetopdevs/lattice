@@ -67,7 +67,12 @@ defmodule Lattice2.WitnessedBeaconTest do
     }
 
     {sim, _} =
-      Sim.append(sim, "outsider", :authority, {:genesis, outsider_delegation, %{__beacon__: value}})
+      Sim.append(
+        sim,
+        "outsider",
+        :authority,
+        {:genesis, outsider_delegation, %{__beacon__: value}}
+      )
 
     sim = Sim.sync_all(sim)
     {sim, bad} = Sim.beacon(sim, "outsider", 4, witnesses: ["outsider"])
@@ -80,7 +85,9 @@ defmodule Lattice2.WitnessedBeaconTest do
     refute Authority.expired?(log, lease.id)
     assert Sim.quarantined(sim, "resident", post.id) == false
 
-    {sim, _} = Sim.append(sim, "clerk", :authority, {:genesis, root_delegation, %{__beacon__: value}})
+    {sim, _} =
+      Sim.append(sim, "clerk", :authority, {:genesis, root_delegation, %{__beacon__: value}})
+
     sim = Sim.sync_all(sim)
     {sim, good} = Sim.beacon(sim, "outsider", 4, witnesses: ["outsider"])
     sim = Sim.sync_all(sim)

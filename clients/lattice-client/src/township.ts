@@ -156,6 +156,7 @@ export function selectTownshipDelegationParentId(
     ops?: readonly string[];
     roles?: readonly string[];
     live?: boolean;
+    expiresEpoch?: number;
   } = {},
 ): string | null {
   const issuer = typeof issuerPubkey === "string" ? issuerPubkey : bytesBase64(issuerPubkey);
@@ -167,6 +168,8 @@ export function selectTownshipDelegationParentId(
     if (candidate.audience !== issuer) return false;
     if (options.replica !== undefined && candidate.replica !== options.replica) return false;
     if (neededLive && !candidate.live) return false;
+    if (candidate.expires_epoch !== undefined &&
+        (options.expiresEpoch === undefined || options.expiresEpoch > candidate.expires_epoch)) return false;
     if (!setSubset(neededOps, candidate.ops)) return false;
     return setSubset(neededRoles, candidate.roles);
   });
@@ -314,10 +317,12 @@ export async function authorAndPersistTownshipDelegation(
     ops?: readonly string[];
     roles?: readonly string[];
     live?: boolean;
+    expiresEpoch?: number;
   } = { replica: input.replica };
   if (input.ops !== undefined) parentOptions.ops = input.ops;
   if (input.roles !== undefined) parentOptions.roles = input.roles;
   if (input.live !== undefined) parentOptions.live = input.live;
+  if (input.expiresEpoch !== undefined) parentOptions.expiresEpoch = input.expiresEpoch;
 
   const parentId =
     input.parentId === undefined

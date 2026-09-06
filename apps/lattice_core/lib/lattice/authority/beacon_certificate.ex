@@ -40,6 +40,7 @@ defmodule Lattice.Authority.BeaconCertificate do
 
   def normalize_policy(_), do: {:error, :invalid_beacon_policy}
 
+  @doc "Diagnostic policy fingerprint used by conformance tests; beacon claims do not carry it."
   @spec policy_id(term()) :: {:ok, String.t()} | {:error, :invalid_beacon_policy}
   def policy_id(policy) do
     with {:ok, normalized} <- normalize_policy(policy) do

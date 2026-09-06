@@ -51,6 +51,9 @@ export function selectTownshipDelegationParentId(delegations, issuerPubkey, opti
             return false;
         if (neededLive && !candidate.live)
             return false;
+        if (candidate.expires_epoch !== undefined &&
+            (options.expiresEpoch === undefined || options.expiresEpoch > candidate.expires_epoch))
+            return false;
         if (!setSubset(neededOps, candidate.ops))
             return false;
         return setSubset(neededRoles, candidate.roles);
@@ -185,6 +188,8 @@ export async function authorAndPersistTownshipDelegation(input) {
         parentOptions.roles = input.roles;
     if (input.live !== undefined)
         parentOptions.live = input.live;
+    if (input.expiresEpoch !== undefined)
+        parentOptions.expiresEpoch = input.expiresEpoch;
     const parentId = input.parentId === undefined
         ? selectTownshipDelegationParentId(carrierDelegationsFromFrames(delegationFrames), input.signer.publicKey, parentOptions)
         : input.parentId;
