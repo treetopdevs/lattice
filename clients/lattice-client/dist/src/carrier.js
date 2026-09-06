@@ -1153,6 +1153,10 @@ function payloadFromBody(kind, body, realmByPubkey) {
                 };
             }
             case "beacon": {
+                // BEAM ignores unsupported tuple shapes; extra fields must not turn
+                // retained evidence into an epoch that can lapse a delegation lease.
+                if (body.values.length !== 2)
+                    return neutralPayload(kind);
                 // Plan 149: retain the epoch as evidence even when malformed — a
                 // non-integer epoch quarantines :stale_beacon in the oracle, so the
                 // decode must not throw before the reducer can reach that verdict.

@@ -53,6 +53,126 @@ TS conformance gates live in `clients/lattice-client` (`npm ci` once, then `npm 
 
 ## Current state (verified against `91bb6ca6`)
 
+### Unified R09 execution amendments — 2026-09-06
+
+- Preparation base `7d10eca6a1cccdf9b43e3beeb03bc03e67ee547b`, tree
+  `eb9bfbd8a0363ebe7cf4b386746526ffe2dd4a46`, merges exact prerequisite tips
+  R07 `afe5ea250072267927b89b353e7bde1e793176b5` and R08
+  `8722403f16f82fbdc883d3ed92476163c723ed82`. This is local preparation,
+  not a claim that either dependency has passed hosted integration.
+- Plan 162 is integrated; its tick, replica and authority semantics remain unchanged.
+  `Wire.decode_op/1` already uses `Canonical.signable?/1`, so its public lease-range
+  refusal passes before this packet. The RED lease defect is reproducible through
+  `Delegation.valid_sig?/1` and `Authority.analyze/2` on a reconstructed in-VM log.
+  The early wire guard preserves the existing public refusal as a defense in depth.
+- The live generic composite arms are list, tuple, mapset and map; there are no `kv`
+  or nested `op` arms. Body/cap paths each allow 64 composites, with scalars and flat
+  delegation records accepted at the leaf. Unsupported shell tags remain refused.
+- The flat delegation's unchecked `parent_id` could otherwise smuggle a recursive
+  term into canonical analysis. The authorized decoder amendment validates nil or
+  binary at `decode_delegation/1`; every other field already has scalar or flat-list
+  guards. The existing TypeScript `isCarrierDelegation` enforces that parent shape.
+- The source proposal's malformed tag -> `nil` change needs a fail-closed correction:
+  interpreted directly, `nil` would promote a malformed claimed root to a legacy
+  unbound replica and accept a previously refused genesis. The authorized amendment
+  permits a private `root_commitment/1` discriminator, an explicit malformed clause
+  in `root_matches?/2`, and switching `deleg_context/2` plus `verify_chain/2` to that
+  discriminator. Public `replica_commitment/1` retains its tag-or-nil shape; only
+  marker-free names may use the legacy unbound path. The existing shared context
+  carries refusal into analyze/root/live delegation checks without changing their
+  bodies or beacon semantics. `bind_replica/2` refuses any preexisting marker.
+- R03 ownership is coordinated: no beacon collector/judge, witnessed policy, tick,
+  TS decoder or exporter-source edits belong to this packet. The integrator alone
+  owns the shared README and unified execution ledger.
+- The stale TS prohibition is amended only for matching root-boundary parity:
+  `authority.ts`'s private `replicaRootMatches`/`replicaRootCommitment`, `township.ts`'s
+  `bindTownshipReplica`/`townshipReplicaCommitment` and its `authorTownshipGenesis`
+  caller, existing public authority/authoring tests, and normally rebuilt `dist`.
+  The authoring helper preserves a canonical already-bound replica only after its
+  signer matches the committed root, so a later valid genesis remains possible.
+  Adversarial forged-genesis fixtures use the lower-level signed operation seam.
+  No witnessed-beacon or lease-authoring semantics change.
+- Two existing adversarial call sites also need that fixture-only adaptation:
+  `clients/lattice-client/test/live_carrier.ts` and the `authorForgedRootGenesis`
+  helper in `clients/township-tauri-shell/src/township_release_root_origination_probe.ts`.
+  They must still deliver their signed impostor to the real refusal boundary.
+  Keep their downstream state/rejection assertions intact and run the existing
+  `carrier:township:live` and `release:root-origination:contract` gates. This does
+  not authorize physical-device execution or alter normal product/custody flows.
+- Fable identified an existing extra-field beacon parity gap: BEAM retains but
+  ignores a signed four-field beacon while TypeScript treated it as a legacy
+  two-field beacon and could lapse leases. The approved narrow amendment adds
+  an exact two-field guard in `carrier.ts`'s legacy beacon decoder, signed
+  four-field inertness/lease controls in the existing delegation lease and
+  Township authoring tests, and normal generated `dist` output. Wrong arities
+  remain stored and unquarantined, with no epoch or lease effect; no BEAM
+  production or historical audit semantics change. When combined with R03,
+  preserve its exact three-field witnessed branch before the legacy guard and
+  rerun all five R03 vectors plus its leased-authoring checks. This explicitly
+  amends the earlier decoder ownership exclusion only for this arity guard.
+
+### Unified R09 local implementation evidence — 2026-09-06
+
+The implementation is locally complete on `codex/treehouse-r09-input-limits` in
+`/Users/nicholas/develop/lattice-treehouse-r09-20260906`. Claude Fable's exact-diff
+review of `7d10eca6a1cccdf9b43e3beeb03bc03e67ee547b` through
+`7f984d4482cd55d06ad437e8fcf7309b8bdd606f` returned PASS with no P0/P1 findings.
+Its P2 rescue-invariant comment and restore-path residual note are recorded in
+this documentation-only follow-up. Shared R03 integration must still preserve
+the exact-three witnessed branch before the legacy arity guard and pass all
+five R03 vectors plus leased-authoring checks. Integration and hosted gates
+remain integrator-owned; this evidence does not mark those gates or the
+R07/R08 dependencies DONE. The follow-up changes comments/documentation only;
+format and diff checks passed, preserving the runtime evidence below.
+
+- Behavioral RED commits: `97399748` (direct/reconstructed lease overflow),
+  `c25e4f39` (body/cap composite-depth matrix), `19e5d498` (root marker),
+  `5b9cefe2` (recursive parent and op kind), `2d656d4f` (TS root parity and
+  retained-genesis controls), and `49cb785d` (five TS failures from a signed
+  four-field beacon's incorrect epoch/lease effect). Each was run before its
+  implementation. The wire overflow case was already green at the preparation
+  base and is a preserved control, not a claimed new RED.
+- A temporary parser-only implementation of the original malformed-tag-to-nil
+  proposal made public `verify_chain` and root/holder analysis accept an attacker
+  genesis on `town#root:attacker`. That mutation was never committed. The private
+  malformed-claim discriminator preserves refusal while public parsing returns
+  nil. Valid legacy-unbound and valid-bound controls remain green in both runtimes.
+- Public once-bound lifecycle controls retain two distinct, valid signed genesis
+  records and apply the later policy in both runtimes. High-level TS authoring
+  refuses a different signer; lower-level signed impostor fixtures still reach
+  and prove the server/semantic refusal. The caller audit required no Sim source
+  change and no idempotent behavior in the low-level binding helper.
+- Depth controls accept 8 and 64 composites and refuse 65 for list, tuple, mapset,
+  map keys and map values in both body and cap paths. A 1,000-level raw delegation
+  parent is refused before canonical recursion, while nil/binary parents remain
+  accepted. All four declared op kinds remain accepted.
+- The BEAM signed four-field beacon is a baseline-green inertness control;
+  TypeScript now matches it. It stays stored and unquarantined, leaves the leased
+  post materialized and contributes no epoch. A later exact two-field beacon
+  still lapses the lease and preserves the earlier causal post.
+- The first full `mix check` failed in R08's scheduler-sensitive 50 ms test
+  fixture; a focused rerun also failed under host BEAM contention. The integrator
+  reproduced the old-client RED and supplied fixture/CI-path repair
+  `a172265e8720d73410fda38213232500972fd784`, cherry-picked here as `1717f45e`.
+  Production setup deadlines were unchanged. Final gates ran serially with
+  `ERL_FLAGS='+S 4:4'` and the explicit OTP 28/asdf PATH, including child BEAMs.
+
+Final local gates after the arity correction and R08 prerequisite repair:
+
+| Gate | Observed result |
+| --- | --- |
+| `mix check` (format + full tests + strict Credo) | Exit 0; 694 tests + 27 properties, 3 existing exclusions; no new Credo issues |
+| `MIX_ENV=test mix lattice.export_vectors --out clients/lattice-client/test/vectors` | Exit 0; all 57 tracked vector files unchanged |
+| TS `typecheck`, `township:authoring`, `build` | Exit 0; normal generated outputs committed |
+| TS `conformance`, `canonical`, `v01:guard` after regeneration | Exit 0 |
+| TS `carrier:township`, `carrier:township:live` | Exit 0, including real peer signed-impostor refusal |
+| Shell `release:root-origination:contract`, `typecheck` | Exit 0; exact lower-level adversarial fixture retained |
+| Both boundary apps' `mix sobelow --exit --skip` | Exit 0; `lattice_server` has no Phoenix router surface, so its runtime boundary tests provide the relevant refusal proof |
+
+Logs are retained locally under `/tmp/lattice-r09-final-*` and the behavioral
+RED logs under `/tmp/lattice-r09-*red.log`. No push, PR, hosted CI, deployment,
+packaged application, physical device or pilot result is claimed by this packet.
+
 ### CRYPTO-01 — out-of-range lease crashes analyze
 
 Decode accepts any non-negative integer (`apps/lattice_core/lib/lattice/carrier/wire.ex:324-331`):
@@ -301,6 +421,10 @@ loop and the TS conformance trio after vector regeneration.
   if untrusted terms ever bypass `Wire.decode_term/1`.
 - `Op.new/6`'s guard change means dynamically computed kinds now fail at construction —
   intentional; check any metaprogramming call sites in tests if they break.
+- The kind allowlist covers wire decoding and `Op.new/6`; `Log.restore` and direct
+  in-VM `%Op{}` construction can still admit non-contract kinds because `Log.accept`
+  validates ID/signature integrity. Closing that residual would require a separately
+  reviewed broader contract; it is not claimed by this packet.
 
 ## STOP conditions
 
@@ -330,3 +454,30 @@ loop and the TS conformance trio after vector regeneration.
 - Re-verify before executing: HEAD still `91bb6ca6` (or re-read the cited regions);
   `plans/162` (also rewrites `authority.ex` regions, and owns the AUTHZ-02 tick guard via its
   step 2b(e)) has not landed — if it has, re-read `analyze`/`bind_replica` before editing.
+
+### Accepted-base integration evidence — 2026-09-06
+
+The earlier local snapshot above remains evidence for its frozen revision. Final
+R08 review fixes were merged at `515744dc`, then accepted main through R08 merge
+`9bb7b340e49be605151458134391aa16e642fc29` was integrated at
+`3f17f4cc99020eca0a36aedfd07d5d4a5afd93db`. No conflicts or new R09 production
+semantics were introduced by the accepted-main merge; its restored-log consumers
+match that accepted source. The standalone R09 diff remains the adopted 19 paths.
+
+At that exact integration source, `mix check` under asdf/OTP28 with
+`ERL_FLAGS='+S 4:4'` passed **726 tests + 27 properties**, zero failures and three
+existing exclusions. Strict Credo and formatting exited zero. The separate R08
+integration focused gate passed 13 tests (4 + 1 + 8 across three suites); accepted-main restore/lifecycle probes
+passed 21. TypeScript typecheck, canonical, conformance, Township authoring and
+normal build also passed, leaving generated source unchanged. Logs are in
+`/tmp/lattice-treehouse-execution-20260906/r09-accepted-main-*` and
+`r09-final-r08-integration-focused.log`; the TS command stream is retained in
+execution session 52558.
+
+Fable's implementation/comment follow-ups remain PASS at their exact recorded
+revisions. Accepted-base integration review and final hosted checks are pending;
+Claude's unfinished session-limit review is not approval. R08's own exact merge
+workflow must pass before dependent closure. The shared engine integration also
+preserves R03's witnessed three-field branch before this plan's legacy arity guard;
+that combined engine has separate review/evidence and is not part of this PR's
+standalone R09 production diff. No native, device or pilot result is implied.

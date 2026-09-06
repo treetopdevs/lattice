@@ -65,6 +65,68 @@ defmodule Lattice2.DelegationLeaseTest do
     refute Delegation.valid_sig?(%{d | expires_epoch: nil})
   end
 
+  test "an out-of-range in-VM lease fails signature validation without raising" do
+    delegation =
+      Delegation.new(issuer(), @replica, audience().pub,
+        ops: [:post],
+        expires_epoch: Canonical.max_integer()
+      )
+
+    assert Delegation.valid_sig?(delegation)
+    refute Delegation.valid_sig?(%{delegation | expires_epoch: Canonical.max_integer() + 1})
+  end
+
+  test "a reconstructed grant with an out-of-range lease quarantines without crashing reduction" do
+    alias Lattice.{Authority, Log, Sim}
+    alias Lattice.Demo.Thread
+
+    sim = Sim.new(Thread, @replica, ["issuer", "audience"], seed: "invalid-lease-reconstruction")
+    {sim, _genesis} = Sim.create_replica(sim, "issuer")
+    {sim, delegation} = Sim.grant(sim, "issuer", "audience", ops: [:post], expires_epoch: 3)
+    log = Sim.log(sim, "issuer")
+    grant = Enum.find(Log.topo_ops(log), &(&1.body == {:grant, delegation}))
+
+    malformed = %{
+      grant
+      | body: {:grant, %{delegation | expires_epoch: Canonical.max_integer() + 1}}
+    }
+
+    reconstructed = Log.from_ops(log.replica, Map.put(log.ops, grant.id, malformed))
+
+    assert Authority.analyze(Thread, reconstructed).reasons[grant.id] == :bad_delegation_sig
+    assert Lattice.state(Thread, reconstructed) == Lattice.state(Thread, log)
+  end
+
+  test "a signed four-field beacon stays stored but cannot lapse a lease" do
+    alias Lattice.{Authority, Sim}
+    alias Township.Matter
+
+    sim = Sim.new(Matter, @replica, ["clerk", "resident"], seed: "beacon-arity")
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, delegation} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 3)
+    {sim, malformed} = Sim.append(sim, "clerk", :authority, {:beacon, 9, nil, nil})
+    sim = Sim.sync_all(sim)
+    {sim, post} = Sim.command(sim, "resident", :post, ["lease remains live"], cap: delegation.id)
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    assert log.ops[malformed.id] == malformed
+    refute Authority.expired?(log, delegation.id)
+    assert Sim.quarantined(sim, "clerk", malformed.id) == false
+    assert Sim.quarantined(sim, "clerk", post.id) == false
+    assert "lease remains live" in Sim.state(sim, "clerk").posts
+
+    {sim, legacy} = Sim.beacon(sim, "clerk", 9)
+    sim = Sim.sync_all(sim)
+    {sim, late} = Sim.command(sim, "resident", :post, ["lease now lapsed"], cap: delegation.id)
+    sim = Sim.sync_all(sim)
+
+    assert Authority.expired?(Sim.log(sim, "clerk"), delegation.id)
+    assert Sim.quarantined(sim, "clerk", legacy.id) == false
+    assert {true, :lease_expired} = Sim.quarantined(sim, "clerk", late.id)
+    refute "lease now lapsed" in Sim.state(sim, "clerk").posts
+  end
+
   test "attenuation narrows the lease: child must not outlive a leased parent" do
     parent =
       Delegation.new(issuer(), @replica, audience().pub,
