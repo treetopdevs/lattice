@@ -3,12 +3,28 @@ defmodule Treehouse.TransportCatalog do
 
   alias Lattice.{Canonical, Identity}
   alias Lattice.Authority.ContinuationCertificate
+  alias Lattice.Carrier.Wire
 
   @catalog_fields ~w(version product space bootstrap binding revision previous entries)a
   @entry_fields ~w(product replica kind schema root genesis creation reference route service_id service_key)a
+  @max_artifact_bytes 131_072
 
   @spec verify_catalog_json(binary(), binary()) :: :ok | {:error, atom()}
-  def verify_catalog_json(_bytes, _trusted_key), do: {:error, :malformed_catalog}
+  def verify_catalog_json(bytes, trusted_key) do
+    with {:ok, envelope} <- decode_catalog_json(bytes), do: verify_catalog(envelope, trusted_key)
+  end
+
+  @spec decode_catalog_json(binary()) :: {:ok, map()} | {:error, atom()}
+  def decode_catalog_json(bytes) do
+    with {:ok, envelope} <- decode_artifact(bytes),
+         true <- fields?(envelope, [:catalog, :signature]) and bytes?(envelope.signature, 64),
+         {:ok, _} <- normalize_catalog(envelope.catalog) do
+      {:ok, envelope}
+    else
+      {:error, :control_history_limit} = error -> error
+      _ -> {:error, :malformed_catalog}
+    end
+  end
 
   @spec normalize_catalog(term()) :: {:ok, map()} | {:error, :malformed_catalog}
   def normalize_catalog(value) do
@@ -35,6 +51,47 @@ defmodule Treehouse.TransportCatalog do
   end
 
   def verify_catalog(_envelope, _trusted_key), do: {:error, :malformed_catalog}
+
+  defp decode_artifact(bytes) when is_binary(bytes) and byte_size(bytes) > @max_artifact_bytes,
+    do: {:error, :control_history_limit}
+
+  defp decode_artifact(bytes) when is_binary(bytes) do
+    with {:ok, raw} <- Jason.decode(bytes),
+         true <- closed_raw_maps?(raw, 64),
+         {:ok, value} <- Wire.decode_value(raw) do
+      {:ok, value}
+    else
+      _ -> {:error, :malformed_catalog}
+    end
+  end
+
+  defp decode_artifact(_), do: {:error, :malformed_catalog}
+
+  defp closed_raw_maps?(["map", pairs], depth) when is_list(pairs) and depth > 0 do
+    keys = for [["atom", key], _] <- pairs, is_binary(key), do: key
+
+    length(keys) == length(pairs) and length(Enum.uniq(keys)) == length(keys) and
+      Enum.all?(pairs, fn [_, value] -> closed_raw_maps?(value, depth - 1) end)
+  end
+
+  defp closed_raw_maps?(["list", values], depth) when is_list(values) and depth > 0,
+    do: Enum.all?(values, &closed_raw_maps?(&1, depth - 1))
+
+  defp closed_raw_maps?(["bin", encoded], _) when is_binary(encoded) do
+    case Base.decode64(encoded) do
+      {:ok, bytes} -> Base.encode64(bytes) == encoded
+      _ -> false
+    end
+  end
+
+  defp closed_raw_maps?(["int", value], _) when is_integer(value), do: integer?(value)
+
+  defp closed_raw_maps?(["int", value], _) when is_binary(value),
+    do: Regex.match?(~r/^(0|[1-9][0-9]*)$/, value)
+
+  defp closed_raw_maps?(["atom", value], _) when is_binary(value), do: true
+  defp closed_raw_maps?(["nil"], _), do: true
+  defp closed_raw_maps?(_, _), do: false
 
   defp entries?(values) when is_list(values) and length(values) in 1..13 do
     Enum.all?(values, &entry?/1) and Enum.count(values, &(&1.kind == :space)) == 1 and
