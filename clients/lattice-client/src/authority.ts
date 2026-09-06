@@ -7,7 +7,9 @@ import {
   canonicalBytesForWitnessedRecoveryPolicy,
   canonicalBytesForWitnessedSuccessionArtifactId,
   canonicalBytesForWitnessedSuccessionClaim,
+  verifyCarrierOp,
 } from "./codec";
+import { carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
 import { ancestors, canonicalOrder, index } from "./dag";
 import type {
   AuthorityDelegationEvidence,
@@ -41,9 +43,39 @@ export type ContinuationProfileObservation =
 
 /** Observe an actual root-authenticated pin; the caller owns complete store snapshots. */
 export async function resolveContinuationProfileFromFrames(
-  _input: {replica: string; frames: readonly unknown[]},
+  input: {replica: string; frames: readonly unknown[]},
 ): Promise<ContinuationProfileObservation> {
-  return {ok: false, reason: "continuation_not_configured"};
+  try {
+    const {replica, frames} = structuredClone(input);
+    const family = continuationFamily(replica);
+    if (family === "legacy") return {ok: false, reason: "unauthorized_continuation"};
+    if (family === "unsupported") return {ok: false, reason: "unsupported_authority_profile"};
+    const decoded = frames.map(decodeCarrierOpFrame);
+    const ids = new Set(decoded.map((frame) => frame.id));
+    if (ids.size !== decoded.length || decoded.some((frame) => frame.replica !== replica ||
+      frame.deps.some((dep) => !ids.has(dep)))) return {ok: false, reason: "invalid_verified_history"};
+    for (const frame of decoded) {
+      const verified = await verifyCarrierOp(frame, {verify: async (author, bytes, signature) => {
+        const key = canonicalBase64Bytes(author, 32);
+        return key !== null && ed25519.verify(signature, bytes, key, {zip215: false});
+      }});
+      if (!verified.valid) return {ok: false, reason: "invalid_verified_history"};
+    }
+    const ops = carrierOpsToSemanticOps(decoded), byId = index(ops);
+    const order = canonicalOrder(ops, byId);
+    if (order.length !== ops.length) return {ok: false, reason: "invalid_verified_history"};
+    const ordered = order.map((id) => byId.get(id)!);
+    const delegations = validateDelegations(ordered, collectDelegations(ordered), replica);
+    const root = resolveRoot(ordered, delegations);
+    const context = continuationContext(replica, ordered, delegations, root, []);
+    const pin = continuationPin(context, ids);
+    if (pin === undefined || root === null) return {ok: false, reason: "continuation_not_configured"};
+    return {ok: true, replica, root: root.pubkey, profileGenesis: pin.opId,
+      profileId: continuationProfileId(pin.profile), profile: pin.profile,
+      verifiedFrontier: frontier(ops).sort()};
+  } catch {
+    return {ok: false, reason: "invalid_verified_history"};
+  }
 }
 
 /** One honored role acquisition, in processing (canonical) order. */
