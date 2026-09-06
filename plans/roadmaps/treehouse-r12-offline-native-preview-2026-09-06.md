@@ -439,3 +439,14 @@ restart, signature and independent BEAM replay assertion required. This does not
 change product UI, storage, identity, native commands or workflow gates. Vue
 production build/typecheck and the standalone Swift helper compile pass; the
 repaired exact hosted UI run remains required before claiming this failure fixed.
+
+The final raw outer-dependency repair is inherited through reviewed engine
+c0aa97d2 at automatic integration 01768cf6. The continuation/product union stays
+intact; the R03 repair normalizes only expected signed claim dependencies and
+preserves received-claim strictness and raw DAG evidence. Fresh integrated full
+`mix check` passes **809 tests + 27 properties, zero failures**, three exclusions,
+formatting and strict Credo exit0. Client build, preview workflow/storage/product
+tests and Vue production build pass. Logs: `r12-54aa-full-check.log`,
+`r12-54aa-client-build.log`, `r12-54aa-preview-tests.log` and
+`r12-54aa-preview-build.log` in the retained execution directory. These gates do
+not replace the pending exact hosted accessibility/restart repair proof.
