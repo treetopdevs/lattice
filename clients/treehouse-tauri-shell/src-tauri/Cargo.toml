@@ -1,0 +1,22 @@
+[package]
+name = "treehouse-tauri-shell"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.90"
+[lib]
+name = "treehouse_tauri_shell"
+crate-type = ["staticlib", "cdylib", "rlib"]
+[dependencies]
+base64 = "0.22"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+fs2 = "0.4"
+keyring = "4"
+lattice-mobile-core = { path = "../../lattice-mobile-core/native" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2.11.5", features = [] }
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+[dev-dependencies]
+rusqlite = { version = "0.37", features = ["bundled"] }
+tempfile = "3"

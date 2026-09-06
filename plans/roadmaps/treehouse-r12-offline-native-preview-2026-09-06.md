@@ -218,3 +218,121 @@ Preparation can proceed while dependencies receive hosted closure, but R12 enabl
 gates wait for the integrator's accepted merge base. A verification mismatch, lost retained frame,
 replacement identity after failure, product-isolation breach, required protected-pin edit or
 unavailable packaged proof stops only the dependent action and preserves concrete evidence.
+
+## Implementation refinements (2026-09-06)
+
+The accepted R10 follow-up is integrated as `fe0240b2` after the approved R06 prerequisite merge
+`8325043b`. R10's frozen source remains untouched. The final combined engine/dependency gate and
+hosted enablement still belong to the integrator; these are local preparation bases.
+
+The preview uses a conservative **1 MiB total serialized public-history record** ceiling, in
+addition to the per-Thread 4,000-op / 8 MiB stop. The aggregate ceiling can stop authoring first.
+It is an explicit preview envelope, not a 13 × 8 MiB native IPC or pilot latency claim. Draft text
+is limited to 16 KiB and is saved after a short idle debounce through a separate small native CAS
+record. Typing does not reverify signed history or rewrite the history aggregate. Selecting a
+Thread changes metadata without re-verifying signatures; new signed commands verify the changed
+replica and open verifies all captured replicas. Partitioned append-only history storage and
+full-volume cold-open measurements remain R15.
+
+Posting atomically commits the signed frame, retained outbox ID and the exact saved draft revision
+as a `clearedDrafts` watermark in the history record. The draft record has its own monotonic
+revision. A draft at or below the committed watermark is hidden; a later concurrently saved draft
+survives. Failed history writes keep the old watermark and draft. The native guard checks retained
+frames and queue IDs are never removed or altered, public identity is immutable, and watermark
+advancement accompanies an appended frame and cannot exceed the durable draft revision. This
+refines the original single-aggregate draft wording without changing signed or DB schema formats.
+
+User-facing status is **Recovery is not set up** and **Saved on this device**. The internal/export
+readiness name is `recovery_not_ready`; the interface does not display protocol implementation
+labels. Local outbox counts describe retained operations, never transport acknowledgement.
+
+Native composition is split into `src-tauri/src/preview.rs` for the public persistence/signing
+service and the small Tauri registration in `lib.rs`. The fixed key-store service is manifest-bound
+and uses `device-carrier-v1`. An interprocess file lock serializes explicit initial key creation.
+Reopen and sign only load existing seed-store material; they do not call an API that generates a
+missing key. Signing derives the ordinary Ed25519 signer from that one captured key and checks its
+public identity against retained storage. There is no development seed/import command, caller-
+selected key service, or claim of protected witness authority. New generated icon assets belong
+only to the separate Treehouse package.
+
+The app record's N-1 fixture is an explicitly pre-release version `0` envelope with the same
+seven public fields and no draft watermark map. It is not a claim about a previously shipped
+Treehouse version. Both readers accept only that exact predecessor shape; TS authenticates its
+captured history before a CAS migration adds `clearedDrafts`, increments the storage revision and
+writes current version `1`. Original frames, roots and queues remain identical. Missing-key
+history stays available for reading without trying to perform a migration write. Unknown/future
+versions or extra predecessor fields refuse; native writes accept current version only.
+
+The external Accessibility driver scopes inspection to the Treehouse window, excluding system
+menus. WKWebView does not turn `AXValue` assignment into a normal text-input event, so the driver
+focuses the visible field and sends ordinary Unicode keyboard events to that app process. It does
+not execute JavaScript or invoke product commands. The initial scaffold's disabled create control
+produced the required real packaged assertion RED. An empty DB left by that RED (zero KV/frames)
+can be reopened without cleanup; the harness refuses any existing retained records.
+
+## Local implementation evidence and open closure gates
+
+The isolated implementation is ready for exact review, **not R12 DONE or enablement**. It adds the
+separate empty Vue/Wry app, six narrow native commands, shared CAS, native retention/key/draft
+guards, authenticated TS workflows and the independent BEAM preview oracle. It changes no Core
+semantics, carrier bytes, R10 vectors, protected assertion blocks, README or unified ledger.
+
+Meaningful behavioral RED evidence is retained locally:
+
+- `/tmp/treehouse-r12-cas-red.log`: a stale second SQLite handle replaced acknowledged history.
+- `/tmp/treehouse-r12-workflow-red.log`: explicit group creation remained unavailable in the
+  working bootstrap; imports and empty boot already worked.
+- `/tmp/treehouse-r12-native-retention-red.log`: a current-revision native write erased a saved
+  profile. The native boundary now rejects deletion/mutation and mismatched-key signing.
+- `/tmp/treehouse-r12-migration-red.log`: the closed predecessor envelope refused before migration.
+- `/tmp/treehouse-r12-incomplete-profile-red.log`: a valid genesis alone was accepted as a complete
+  group. The consumer now requires its honored directly dependent initialization command.
+- `/tmp/treehouse-r12-packaged-red.log`: the actual macOS package exposed an empty UI, but its
+  disabled creation control did not produce the group/Thread composer. The package hash is in
+  `/tmp/treehouse-r12-packaged-red-binary.sha256`.
+
+GREEN preparation evidence:
+
+| Gate | Result and exact local evidence |
+| --- | --- |
+| Shared native matrix | 32 tests / 0 failures, including two independent CAS-handle cases; `/tmp/treehouse-r12-shared-native.log`. |
+| New native service | 6 tests / 0 failures; identity/history refusal, interrupted creation, stale drafts/watermarks, failed transaction, closed N-1 input and product/future/interrupted/corrupt DB refusal; `/tmp/treehouse-r12-native-tests.log`. |
+| New TS workflow/storage/product | Empty creation, exact key retry, commands, draft watermark, stale writers, uncertain acknowledgement, hostile snapshots, missing/mismatched key, N-1 metadata migration, authentic quarantine retention and initialization refusal; `/tmp/treehouse-r12-client-tests.log`. |
+| TS/Vue production build | Typecheck and Vite build pass; `/tmp/treehouse-r12-ui-build.log`. |
+| Real macOS creation and restart | `/tmp/treehouse-r12-packaged-green/result.json` records the original package hash and source-state scope. External visible UI creates one Space and one Thread, posts and edits, saves a later draft, archives, quits and relaunches. The exact identity, eight retained signed frames and all draft/aggregate rows survive. No injected seed, peer, frame or hidden app test command is involved. |
+| Independent packaged-frame oracle | `/tmp/treehouse-r12-packaged-oracle.log` contains `TREEHOUSE_NATIVE_PREVIEW_ORACLE_OK`. Exact public packaged frames match BEAM Wire/Sync/Treehouse state, real holders, original post IDs, order, quarantine and dump/restore. An initial oracle-format mismatch was corrected by comparing BEAM's separately stored holders with TS's role fields; no engine semantic change. |
+| Independent workflow oracle | One test / 0 failures on the current source; `/tmp/treehouse-r12-oracle-check.log`. |
+| Visual inspection | Actual archived reading window and saved draft inspected at `/tmp/treehouse-r12-packaged-green/restarted-window.png`. |
+| Full preparation suite | 770 tests + 27 properties, **one known dependency failure**, three existing exclusions. R02 P05 still expects the pre-R03 ignored beacon verdict; R03 returns the separately adopted `:unauthorized_beacon`. `/tmp/treehouse-r12-mix-check-preparation.log` records this; no expectation is weakened in R12. The integrator's reviewed engine merge supplies the approved migration test. |
+| Source lint/format | Elixir format and final strict Credo pass with existing baseline suggestions; `/tmp/treehouse-r12-elixir-format.log`, `/tmp/treehouse-r12-credo.log`. Rust formatting passes in both crates. |
+
+The final rebuilt app is packaged successfully (`/tmp/treehouse-r12-frozen-package-build.log`),
+but its retained-identity replay is **blocked by macOS Keychain authorization**: changing the
+unsigned executable makes the platform request the login Keychain password for the existing
+Treehouse key. `/tmp/treehouse-r12-packaged-current.log` records the unavailable UI state. No
+password or seed is requested through chat/tools, exported, replaced or bypassed. The original
+visible-test identity/history are preserved. User-side OS authorization and a replay of the
+rebuilt package remain open; the earlier successful same-binary restart is not an upgrade claim.
+The later source changes add closed metadata migration/validation, reuse the already verified
+changed-profile observation, and make failed draft saves explicit. Their focused gates pass;
+this does not turn the blocked rebuilt-binary replay into packaged GREEN.
+
+Final closure still requires the root-supplied reviewed engine/dependency merge, a full integrated
+`mix check`, rebuilt retained-identity replay after platform authorization, exact Claude Fable
+review, and hosted CI/merge verification. The root owns actual workflow wiring. Its unit job must
+install `clients/treehouse-tauri-shell` dependencies **before** Mix runs the new reciprocal test.
+The macOS job must build the ordinary package, run the external Accessibility gate on a clean
+account and replay its exact public artifact through BEAM; no browser or seeded fallback counts.
+
+Final bounded read-only review by the R05 agent found no concrete P1/P2 in the native storage,
+fixed key binding, stale-writer CAS, interrupted initialization or draft-watermark boundaries.
+That review ran no tests and did not access Keychain material; exact Claude review remains open.
+The three protected prose/contract suites pass 18 tests / 0 failures at the preparation base
+(`/tmp/treehouse-r12-protected.log`), and legacy client conformance plus the full Treehouse client
+suite pass (`/tmp/treehouse-r12-client-conformance.log`, `/tmp/treehouse-r12-client-treehouse.log`).
+
+The independent oracle also rejects a relabelled artifact identity: its top-level public key must
+match an honored signed genesis in every profile. The public wrong-identity assertion first
+failed (`/tmp/treehouse-r12-oracle-identity-red.log`), then passed after this verifier-only binding
+was added. The same real packaged artifact continues to pass. No production wire, authority or
+app path changed for this evidence correction.
