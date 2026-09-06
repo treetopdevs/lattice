@@ -80,14 +80,17 @@ Use an existing `:command` operation with the exact body:
 {:attest_member_key_v1, [claim, possession, vouches]}
 ```
 
-Its ordered effects append the immutable statement to a new Space
-`member_key_attestations` causal-list field, then write `"attest_member_key_v1"`
-to the existing `admin_actions` field. The latter requires the ordinary
-`:admin` holder gate; the whole command also needs a real capability permitting
-this exact command. All effects apply or none do. The append preserves the
-full certificate, and its provenance is the outer operation ID. It does not
-modify `members`, issue/revoke a delegation, change a role, alter a post, or
-admit a transport peer.
+The command writes `"attest_member_key_v1"` to the existing `admin_actions`
+LWW marker, using its ordinary `:admin` holder gate. The whole command also
+needs a real capability permitting this exact command. The full immutable
+statement and certificate remain in the retained authenticated signed command
+body, with its outer operation ID as provenance. A pure query derives continuity
+records only from commands actually honored by the complete authority/application
+analysis. It does not treat the marker's current value as an audit log, add a
+materialized field, duplicate the evidence in another log, or change the marker's
+type. This preserves legacy R10 state shapes and vector bytes. It does not modify
+`members`, issue/revoke a delegation, change a role, alter a post, or admit a
+transport peer.
 
 Enable this application contract only for a supported R04 bounded **Space**
 family. Legacy/root-only preview and Thread replicas cannot use the new
@@ -553,3 +556,15 @@ complete old-key exclusion.
 No runtime tests were run for this docs-only preparation. Exact source reads,
 document scope checks and `git diff --check` are the preparation evidence;
 all A01–A17 and packaged outcomes remain unproven until their named packets.
+
+
+## Proposal compatibility correction — 2026-09-06
+
+The integrator replaced the proposed extra materialized attestation list before
+adoption or production edits. Full certificates already live in signed retained
+command bodies; derived records must select actually honored authenticated
+commands. The existing `admin_actions` LWW marker and its admin gate remain
+unchanged. This mirrors the adopted R11 compatibility rule and preserves the
+legacy R10 schema, fixed root-only command ceiling and existing vectors. The
+closed claim, signatures, membership checks, conflicts and A01–A17 acceptance
+matrix are unchanged and remain proposed for exact Claude Fable design review.
