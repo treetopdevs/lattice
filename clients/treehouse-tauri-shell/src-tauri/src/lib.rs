@@ -1,6 +1,9 @@
 //! Empty offline Treehouse shell. Native commands have fixed product and key boundaries.
 mod key_store;
+#[cfg(target_os = "android")]
+mod android_keyring;
 pub mod preview;
+pub mod witness_binding;
 use preview::{Draft, OpenResult, PreviewStore};
 use std::sync::{Arc, Mutex};
 use tauri::Manager as _;
@@ -57,16 +60,21 @@ fn treehouse_sign_carrier(
 ) -> Result<String, String> {
     with_store(&state, |s| s.sign(&bytes))
 }
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
-            let store = app
+            #[cfg(target_os = "android")]
+            let bootstrap = android_keyring::configure();
+            #[cfg(not(target_os = "android"))]
+            let bootstrap: Result<(), String> = Ok(());
+            let store = bootstrap.and_then(|()| app
                 .path()
                 .app_data_dir()
                 .map_err(|_| "local_store_unavailable".to_string())
                 .and_then(|path| {
                     PreviewStore::at_directory(&path, Arc::new(key_store::TreehouseKeyStore))
-                });
+                }));
             app.manage(AppState(Mutex::new(store)));
             Ok(())
         })
