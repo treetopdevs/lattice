@@ -56,7 +56,8 @@ defmodule Lattice.Treehouse.ContractTest do
     "post",
     "author edit",
     "author tombstone",
-    "moderator tombstone"
+    "moderator tombstone",
+    "archive thread"
   ]
 
   @denial_precedence [
@@ -64,7 +65,8 @@ defmodule Lattice.Treehouse.ContractTest do
     "quarantined target",
     "wrong target kind or thread",
     "wrong author",
-    "already tombstoned"
+    "already tombstoned",
+    "archived thread"
   ]
 
   @roles ["admin", "moderator", "member"]

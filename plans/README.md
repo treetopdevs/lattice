@@ -190,14 +190,14 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 147 | Port capability/revocation validation into TS reduction (close the F1 decision gap) | **P0** | L | 140, 141 | DONE |
 | 148 | Valid-genesis holder/policy projection parity (F2 prerequisite) | **P0** | S | 145, 147 | DONE |
 | 149 | Delegation leases via epoch beacons (`expires_epoch`, `{:beacon, epoch}`, `:lease_expired`) | P1 | L | 144–148 | DONE — V1–V9 green; hosted flagship run `29667002069` (all three jobs) at implementation tip on `pd003/toolshed` |
-| 150 | Device-hosted carrier boundary (packaged app hosts the sidecar server) | P1 | L | 127, 128, 129, 132, 142, 143 | TODO (proposed draft; CD1 track) |
-| 151 | App-owned instrument (Phoenix leaves the demo loop) | P1 | L | 134, 138, 139, 143, 147, 148 | TODO (proposed draft; CD1 track) |
-| 152 | Serverless two-device onboarding (discharges CD1) | P1 | L | 150, 151, 066-075, 094-100, 110-116 | BLOCKED (needs 150+151 and the §4a un-parking sign-off recorded in the plan) |
+| 150 | Device-hosted carrier boundary (packaged app hosts the sidecar server) | P1 | L | 127, 128, 129, 132, 142, 143 | TODO (optional host mode after unified R23; R31 owns delivery) |
+| 151 | App-owned instrument (Phoenix leaves the demo loop) | P1 | L | 134, 138, 139, 143, 147, 148 | SUPERSEDED for Treehouse by unified R10-R15; Township remainder deferred to R34 |
+| 152 | Serverless two-device onboarding (discharges CD1) | P1 | L | 150, 151, 066-075, 094-100, 110-116 | SUPERSEDED (Plan 177 and unified R01a withdraw additional LAN/CD1 work; helpers retained) |
 | 154 | Self-contained HTML auditor report from the Township audit bundle (`mix lattice.township.report`) | P1 | M | — | TODO (direction round 2026-07-18) |
 | 155 | Instrument renders computed evidence: authority ledger panel + replay frame holders/state | P1 | S–M | — (before 157) | DONE (PR #32; hosted run `29755770936` green across all three jobs) |
 | 156 | Election evidence report: projection + close evidence + the 12-scope non-claim manifest | P2 | M | — (154 rec. for style) | TODO (direction round 2026-07-18) |
 | 157 | Public `Authority.observe/2` (role chronology, leases, beacon frontier) + instrument panel | P2 | M–L | 155 | TODO (direction round 2026-07-18) |
-| 158 | Real-device beta POC program map: shared carrier/distribution foundation, then Township, Toolshed, Treehouse | **P0** | XL | 029, 037, 128, 132, 141, 142 | TODO (execution map ready; LiveOps/CapStore prerequisite is DONE) |
+| 158 | Real-device beta POC program map: shared carrier/distribution foundation, then Township, Toolshed, Treehouse | **P0** | XL | 029, 037, 128, 132, 141, 142 | IN PROGRESS (shared carrier, isolation, distribution and causal-policy foundation merged; unified R01a updates order; catalog, WSS and product gates remain) |
 | 159 | Wave A1 kickoff — shared beta foundation | P1 | — | 158 | DRAFT (parallel session, untracked at time of Round 4) |
 | 160 | PD-003-B Toolshed QR ceremony physics spike | P1 | M | 158 | PROPOSED (parallel session, untracked at time of Round 4) |
 | 161 | Close the three silent verification gaps (Sobelow, orphaned suites, format scope) | P1 | S–M | 165 Part B (sequencing only — refuted as a real dependency; Sobelow cannot see umbrella `config/`, see plan 161 step 3 correction) | DONE (scope amendment authorized; Claude review fixes landed; a parallel advisor-branch run `cc56d133..2b2ae207` remains unmerged and superseded) |
@@ -216,7 +216,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 174 | **(spike)** What the governance-witness ceremony must prove natively | P1 | M (build: L) | — | TODO (Round 5b) |
 | 175 | **(spike)** How succession gets a trustworthy clock | P1 | M (build: L) | 162 step 2b (done) | DONE (2026-09-03; decision in docs/research/succession_tick_provenance.md; follow-on plan 179) |
 | 176 | Fail closed at the wire/authority boundary: lease range, decode depth, replica marker, op kinds | P1 | M | 161 (rec.), 168, 172, 173 | TODO (Round 5; renumbered from 168 — AUTHZ-02 ceded to plan 162 step 2b(e)) |
-| 177 | Group-first antifragile re-aim: operator decisions, AF-1..AF-3 loss gates, program reorder | **P0** | M | 158, 175 | TODO (draft 2026-09-01; AF-1 relay-reseed test landed with this plan) |
+| 177 | Group-first antifragile re-aim: operator decisions, AF-1..AF-3 loss gates, program reorder | **P0** | M | 158, 175 | DONE (program amendment and AF-1 runtime test merged; AF-2/AF-3 remain open; unified roadmap owns execution) |
 | 178 | Treehouse Contract Correction: frozen text-only beta contract, one-pager claims corrected to D1/AF-2, copy pinned by test | **P0** | S | 158, 177 | DONE (2026-09-03; lands with apps/lattice_core/test/treehouse/contract_test.exs) |
 | 179 | Witnessed beacons pinned at genesis (AF-2 founder-loss clock) | P1 | S then L | 145, 149, 162, 177, 178 | IN PROGRESS (2026-09-03; step 1 is the separate documentation PR: the non-claim sentence in CLAUDE.md and README.md, and the Township.Matter succession line relabelled decorative with the legacy lockout stated; steps 2-9, the parity-atomic BEAM and TypeScript build, remain TODO) |
 
@@ -1417,10 +1417,11 @@ Recorded so they are not re-audited next run. Each was opened and read during ve
 - No plan modifies code outside its declared Scope, pushes, or opens PRs unless you
   instruct it. The advisor (this skill) wrote only the files under `plans/`.
 
-## Proposed unified Treehouse delivery roadmap (2026-09-06)
+## Unified Treehouse delivery execution (2026-09-06)
 
 The [unified delivery plan](roadmaps/treehouse-unified-2026-09-06.md) synthesizes the
-revised Treehouse delivery roadmap and Plan 180 into one proposed dependency and
-evidence ledger. Read the [comparison and decisions](roadmaps/treehouse-plan-comparison-2026-09-06.md)
-for the tradeoffs. This pointer does not adopt amendments or mark implementation,
-operator approvals, physical gates or pilots complete; existing status rows are unchanged.
+revised Treehouse delivery roadmap and Plan 180 into one dependency and evidence ledger.
+The operator authorized completing it as proposed on 2026-09-06. Read the
+[comparison and decisions](roadmaps/treehouse-plan-comparison-2026-09-06.md) for the tradeoffs.
+Packet statuses separate local implementation, review, hosted merge and physical/pilot proof;
+future parameter decisions and external evidence remain their named gates.
