@@ -151,7 +151,7 @@ defmodule Lattice.Authority do
       validate_delegations(delegations, commitment, genesis_ids, succession_ids, log.replica)
 
     root = resolve_root(ordered, delegations, valid, commitment)
-    sources = collect_beacon_policy_sources(ordered, delegations, valid)
+    sources = collect_beacon_policy_sources(ordered, delegations, valid, root)
     {beacons, _} = collect_beacons(ordered, ancestors, root, sources)
     context = Continuation.context(log.replica, ordered, delegations, valid, root, beacons)
 
@@ -385,7 +385,7 @@ defmodule Lattice.Authority do
       validate_delegations(delegations, commitment, genesis_ids, succession_ids, log.replica)
 
     root = resolve_root(ordered, delegations, deleg_valid, commitment)
-    beacon_policies = collect_beacon_policy_sources(ordered, delegations, deleg_valid)
+    beacon_policies = collect_beacon_policy_sources(ordered, delegations, deleg_valid, root)
     {beacons, _beacon_q} = collect_beacons(ordered, ancestors, root, beacon_policies)
 
     case Map.fetch(delegations, delegation_id) do
@@ -435,7 +435,7 @@ defmodule Lattice.Authority do
     policies = collect_policies(ordered, delegations, deleg_valid)
     root = resolve_root(ordered, delegations, deleg_valid, commitment)
     revokes = collect_revokes(ordered, delegations, root)
-    beacon_policies = collect_beacon_policy_sources(ordered, delegations, deleg_valid)
+    beacon_policies = collect_beacon_policy_sources(ordered, delegations, deleg_valid, root)
     {beacons, beacon_q} = collect_beacons(ordered, ancestors, root, beacon_policies)
 
     continuation =
@@ -877,14 +877,14 @@ defmodule Lattice.Authority do
   # order, so validity is itself a pure causal judgment). Violators quarantine
   # (:unauthorized_beacon / :stale_beacon) for audit and confer no lapse —
   # mirroring unauthorized_revokes and the Round-3 forged-authority handling.
-  defp collect_beacon_policy_sources(ordered, delegations, deleg_valid) do
+  defp collect_beacon_policy_sources(ordered, delegations, deleg_valid, root) do
     for %Op{body: {:genesis, %Delegation{id: id, audience: audience} = d, policies}} = op <-
           ordered,
         is_map(policies),
         Map.get(deleg_valid, id) == :ok,
         is_nil(d.parent_id),
         valid_delegation_intro?(delegations, d, op.id),
-        op.author == audience,
+        op.author == audience and audience == root,
         Map.has_key?(policies, :__beacon__),
         do: {op.id, policies.__beacon__}
   end

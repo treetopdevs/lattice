@@ -235,6 +235,8 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_beacon_witnessed_founder_loss(),
       township_beacon_witnessed_concurrent(),
       township_beacon_witnessed_horizon(),
+      township_beacon_witnessed_unbound_root(),
+      township_beacon_witnessed_large_policy_integer(),
       township_policy_honored_target(),
       township_policy_target_reason_taxonomy(),
       township_policy_concurrent_target_not_visible(),
@@ -2518,6 +2520,113 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
         else: policies
 
     Sim.create_replica(sim, "clerk", policies: policies)
+  end
+
+  defp township_beacon_witnessed_unbound_root do
+    sim =
+      Sim.new(Matter, "replica:matter:beacon-unbound-root", ["clerk", "resident", "outsider"],
+        seed: "beacon:unbound-review"
+      )
+
+    root = Sim.identity(sim, "clerk")
+    root_delegation = Delegation.genesis(root, sim.replica, ops: [:post], roles: [:clerk])
+    {sim, _} = Sim.append(sim, "clerk", :authority, {:genesis, root_delegation, %{}})
+    sim = %{sim | caps: Map.put(sim.caps, "clerk", [root_delegation])} |> Sim.sync_all()
+    {sim, lease} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 3)
+    sim = Sim.sync_all(sim)
+    outsider = Sim.identity(sim, "outsider")
+    outsider_delegation = Delegation.genesis(outsider, sim.replica, ops: [:post])
+
+    policy = %{
+      mode: :witnessed,
+      version: 1,
+      witnesses: [outsider.pub],
+      threshold: 1,
+      max_epoch_step: 10
+    }
+
+    {sim, _} =
+      Sim.append(
+        sim,
+        "outsider",
+        :authority,
+        {:genesis, outsider_delegation, %{__beacon__: policy}}
+      )
+
+    sim = Sim.sync_all(sim)
+    {sim, bad} = Sim.beacon(sim, "outsider", 4, witnesses: ["outsider"])
+    sim = Sim.sync_all(sim)
+
+    {sim, post} =
+      Sim.command(sim, "resident", :post, ["lease survives impostor policy"], cap: lease.id)
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "resident")
+    assert_authority_reason!(log, bad.id, :unauthorized_beacon)
+    assert_authority_honored!(log, post.id)
+    false = Authority.expired?(log, lease.id)
+
+    {sim, _} =
+      Sim.append(sim, "clerk", :authority, {:genesis, root_delegation, %{__beacon__: policy}})
+
+    sim = Sim.sync_all(sim)
+    {sim, good} = Sim.beacon(sim, "outsider", 4, witnesses: ["outsider"])
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "resident")
+    assert_authority_honored!(log, good.id)
+    true = Authority.expired?(log, lease.id)
+
+    capability_scenario_with_canonical_ops("township_beacon_witnessed_unbound_root", sim, log, %{
+      "case" => "witnessed_unbound_root",
+      "impostorBeaconOperationId" => bad.id,
+      "beaconOperationId" => good.id,
+      "honoredOperationId" => post.id
+    })
+  end
+
+  defp township_beacon_witnessed_large_policy_integer do
+    {sim, _} = beacon_sim("large-policy-integer")
+    root = Sim.identity(sim, "clerk")
+    delegation = Delegation.genesis(root, sim.replica, ops: [:post], roles: [:clerk])
+
+    policy = %{
+      mode: :witnessed,
+      version: 1,
+      witnesses: Enum.map(["w0", "w1"], &Sim.identity(sim, &1).pub),
+      threshold: 2,
+      max_epoch_step: 10
+    }
+
+    {sim, invalid_ids} =
+      Enum.reduce([:version, :threshold, :max_epoch_step], {sim, []}, fn field, {acc, ids} ->
+        {acc, genesis} =
+          Sim.append(
+            acc,
+            "clerk",
+            :authority,
+            {:genesis, delegation, %{__beacon__: Map.put(policy, field, 9_007_199_254_740_992)}}
+          )
+
+        acc = Sim.sync_all(acc)
+        {acc, beacon} = Sim.beacon(acc, "w0", length(ids), witnesses: ["w0", "w1"])
+        acc = Sim.sync_all(acc)
+        log = Sim.log(acc, "clerk")
+        assert_authority_honored!(log, genesis.id)
+        assert_authority_honored!(log, beacon.id)
+        {acc, ids ++ [genesis.id]}
+      end)
+
+    log = Sim.log(sim, "clerk")
+
+    capability_scenario_with_canonical_ops(
+      "township_beacon_witnessed_large_policy_integer",
+      sim,
+      log,
+      %{
+        "case" => "witnessed_large_policy_integer",
+        "invalidPolicyOperationIds" => invalid_ids
+      }
+    )
   end
 
   defp township_beacon_witnessed_advance do

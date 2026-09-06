@@ -70,6 +70,10 @@ export declare function authorCarrierOp(input: AuthorCarrierOpInput): Promise<Ca
 export declare function canonicalBytesForCarrierDelegation(delegation: CarrierDelegationCore): Uint8Array;
 /** Canonical policy-id preimage shared with `Lattice.Authority.SuccessionCertificate`. */
 export declare function canonicalBytesForWitnessedRecoveryPolicy(policy: WitnessedRecoveryPolicyEvidence): Uint8Array;
+/** Construct the exact five-field authoring claim before witnesses sign it.
+ * Received claims remain exact evidence and are never normalized by verification.
+ */
+export declare function createWitnessedBeaconClaim(replica: string, epoch: number, author: string, deps: readonly string[]): WitnessedBeaconClaimEvidence;
 /** Canonical preimage for the exact author and frontier authorized by beacon witnesses. */
 export declare function canonicalBytesForWitnessedBeaconClaim(claim: WitnessedBeaconClaimEvidence): Uint8Array;
 /** Canonical witness-signature payload shared with the BEAM certificate verifier. */

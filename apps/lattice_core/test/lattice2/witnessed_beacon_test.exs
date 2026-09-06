@@ -47,6 +47,54 @@ defmodule Lattice2.WitnessedBeaconTest do
 
   defp merge(left, right), do: elem(Sync.reconcile(left, right), 0)
 
+  test "only the resolved legacy root can introduce a beacon policy" do
+    sim = Sim.new(Matter, "replica:matter:unbound-beacon", @realms, seed: "beacon:unbound")
+    root = Sim.identity(sim, "clerk")
+    root_delegation = Delegation.genesis(root, sim.replica, ops: [:post], roles: [:clerk])
+    {sim, _} = Sim.append(sim, "clerk", :authority, {:genesis, root_delegation, %{}})
+    sim = %{sim | caps: Map.put(sim.caps, "clerk", [root_delegation])} |> Sim.sync_all()
+    {sim, lease} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 3)
+    sim = Sim.sync_all(sim)
+    outsider = Sim.identity(sim, "outsider")
+    outsider_delegation = Delegation.genesis(outsider, sim.replica, ops: [:post])
+
+    value = %{
+      mode: :witnessed,
+      version: 1,
+      witnesses: [outsider.pub],
+      threshold: 1,
+      max_epoch_step: 10
+    }
+
+    {sim, _} =
+      Sim.append(
+        sim,
+        "outsider",
+        :authority,
+        {:genesis, outsider_delegation, %{__beacon__: value}}
+      )
+
+    sim = Sim.sync_all(sim)
+    {sim, bad} = Sim.beacon(sim, "outsider", 4, witnesses: ["outsider"])
+    sim = Sim.sync_all(sim)
+    {sim, post} = Sim.command(sim, "resident", :post, ["lease remains live"], cap: lease.id)
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "resident")
+    assert Authority.root(log) == root.pub
+    assert {true, :unauthorized_beacon} = Sim.quarantined(sim, "resident", bad.id)
+    refute Authority.expired?(log, lease.id)
+    assert Sim.quarantined(sim, "resident", post.id) == false
+
+    {sim, _} =
+      Sim.append(sim, "clerk", :authority, {:genesis, root_delegation, %{__beacon__: value}})
+
+    sim = Sim.sync_all(sim)
+    {sim, good} = Sim.beacon(sim, "outsider", 4, witnesses: ["outsider"])
+    sim = Sim.sync_all(sim)
+    assert Sim.quarantined(sim, "resident", good.id) == false
+    assert Authority.expired?(Sim.log(sim, "resident"), lease.id)
+  end
+
   defp certificate(sim, realm, epoch, signers \\ ["w0", "w1"]) do
     sim.replica
     |> BeaconCertificate.claim(

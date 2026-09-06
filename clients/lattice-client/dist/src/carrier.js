@@ -890,7 +890,7 @@ export function carrierOpToSemanticOp(frame, realmByPubkey = {}) {
     let structuralError;
     let authorityInputReason;
     try {
-        const body = decodeCarrierTerm(op.body);
+        const body = decodeCarrierBody(op);
         try {
             payload = payloadFromBody(op.kind, body, realmByPubkey, op.body, op.replica);
         }
@@ -993,6 +993,46 @@ function canonicalAtom(value) {
 }
 function canonicalTuple(values) {
     return concat(major(6, BigInt(tupleTag)), canonicalTerm(values));
+}
+// A known invalid reserved policy does not invalidate its otherwise valid genesis
+// on BEAM. Decode only its bounded numeric fields contextually; the signed raw
+// body and generic integer/horizon validation are never changed.
+function decodeCarrierBody(op) {
+    const body = op.body;
+    if (op.kind !== "authority" || body[0] !== "tuple" || body.length !== 2 ||
+        body[1].length !== 3 || body[1][0]?.[0] !== "atom" ||
+        body[1][0][1] !== "genesis")
+        return decodeCarrierTerm(body);
+    const policies = body[1][2];
+    if (policies[0] !== "map" || policies.length !== 2 || !Array.isArray(policies[1]) ||
+        policies[1].some((pair) => !Array.isArray(pair) || pair.length !== 2)) {
+        return decodeCarrierTerm(body);
+    }
+    return { type: "tuple", values: [
+            decodeCarrierTerm(body[1][0]), decodeCarrierTerm(body[1][1]),
+            { type: "map", pairs: policies[1].map(([key, value]) => [
+                    decodeCarrierTerm(key),
+                    key[0] === "atom" && key.length === 2 && key[1] === "__beacon__"
+                        ? decodeReservedBeaconPolicy(value) : decodeCarrierTerm(value),
+                ]) },
+        ] };
+}
+function decodeReservedBeaconPolicy(term) {
+    const fields = ["mode", "version", "witnesses", "threshold", "max_epoch_step"];
+    if (term[0] !== "map" || term.length !== 2 || !Array.isArray(term[1]) ||
+        term[1].length !== fields.length ||
+        term[1].some((pair) => pair.length !== 2 || pair[0][0] !== "atom" ||
+            pair[0].length !== 2 || !fields.includes(pair[0][1])) ||
+        new Set(term[1].map(([key]) => key[1])).size !== fields.length) {
+        return decodeCarrierTerm(term);
+    }
+    return { type: "map", pairs: term[1].map(([key, value]) => {
+            const bounded = key[0] === "atom" && ["version", "threshold", "max_epoch_step"].includes(key[1]);
+            const wide = bounded && value[0] === "int" && value.length === 2 &&
+                typeof value[1] === "string" && /^(0|[1-9][0-9]*)$/.test(value[1]) &&
+                BigInt(value[1]) > BigInt(Number.MAX_SAFE_INTEGER) && BigInt(value[1]) <= uint64Max;
+            return [decodeCarrierTerm(key), wide ? null : decodeCarrierTerm(value)];
+        }) };
 }
 function decodeCarrierTerm(term) {
     const [tag] = term;
@@ -1259,7 +1299,7 @@ function assertCarrierOpFrame(frame, validateTerms) {
         base64ToBytes(carrierFrame.author);
         base64ToBytes(carrierFrame.sig);
         if (validateTerms) {
-            decodeCarrierTerm(carrierFrame.body);
+            decodeCarrierBody(carrierFrame);
             decodeCarrierTerm(carrierFrame.cap);
         }
     }

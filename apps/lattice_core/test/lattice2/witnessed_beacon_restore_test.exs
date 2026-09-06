@@ -41,12 +41,30 @@ defmodule Lattice2.WitnessedBeaconRestoreTest do
     end
     """
 
-    direct = Path.expand("~/.asdf/installs/elixir/1.19.5-otp-28/bin/elixir")
-    elixir = if File.exists?(direct), do: direct, else: "elixir"
+    shim = Path.expand("~/.asdf/shims/elixir")
+
+    elixir =
+      if File.exists?(shim),
+        do: shim,
+        else:
+          System.find_executable("elixir") ||
+            raise("Elixir executable unavailable for restore probe")
+
+    # Match the running test VM's OTP and Elixir, independently of PATH shadows.
+    child_path =
+      Enum.join(
+        [
+          Path.join(to_string(:code.root_dir()), "bin"),
+          Path.expand("../../bin", Application.app_dir(:elixir)),
+          System.get_env("PATH", "")
+        ],
+        ":"
+      )
 
     {output, status} =
       System.cmd(elixir, ["-pa", Application.app_dir(:lattice_core, "ebin"), "-e", script],
-        stderr_to_stdout: true
+        stderr_to_stdout: true,
+        env: [{"PATH", child_path}]
       )
 
     assert status == 0, output
