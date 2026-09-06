@@ -239,6 +239,10 @@ and claims no native semantic verification. Adversarial input tests prove that
 controls, Unicode direction overrides and long replica strings cannot affect it.
 The full verified template activates only with the R17b cutover.
 
+The admin/moderator templates are provisional until R04 lands: current-holder
+renewal must say renewal and display its actual verified intent, rather than
+presenting every continuation as recovery to a successor.
+
 ## D6. Native authorization, token lifetime and races
 
 `begin` accepts only an intent selecting an already pinned replica and supported
@@ -247,12 +251,14 @@ derives the claim, shows the full native review, and creates an unpredictable to
 bound to canonical claim bytes, domain/profile, replica, witness key, caller/session
 and retained-store generation. A caller-supplied session label is not authentication.
 
-Use a **60-second monotonic TTL**, starting at token creation and covering the whole
+Use a proposed **60-second monotonic TTL**, starting at token creation and covering the whole
 attempt. Permit one pending attempt per native window/product/replica/key/domain;
 replacement begin invalidates the prior token. Sign atomically consumes the token
 once before any platform signing attempt. Cancellation, dismissal, session teardown
 and process restart invalidate pending/in-flight release authorization. Re-signing
 requires a new native review, token and fresh per-operation OS authentication.
+R22/R23 ceremony and accessibility measurements may motivate a reviewed change to
+this constant; expiry always fails closed and an active attempt never extends itself.
 
 Check token expiry, cancellation, session, identity and store generation immediately
 before presence/platform signing, then **again after every blocking presence or
@@ -323,6 +329,9 @@ Propose full verification/projection of **5,000 operations / 10 MiB within five
 seconds**, and one appended-operation update within **500 ms**, on the minimum
 supported physical profile. These are unmeasured acceptance targets; failing them
 blocks readiness and returns the budget/profile to review, not partial verification.
+Also measure a cold run just below the retained ceiling, plus an at-ceiling refusal
+run, against the same proposed five-second bound before R17b readiness. Passing
+the smaller corpus cannot conceal an unusable restart near the retention limit.
 
 Even after implementation, no claim covers whole-native-store rollback, unknown
 withheld operations, trusted time, user comprehension, human identity, witness

@@ -204,11 +204,14 @@ and acquisition fingerprint or exact beacon epoch come from native state. Missin
 verified display fields refuses before presence, with no submitted-value fallback.
 
 Implement D6: begin derives and binds the full native claim; unpredictable token,
-60-second monotonic TTL, one pending attempt per native window/product/replica/key/
+proposed 60-second monotonic TTL, one pending attempt per native window/product/replica/key/
 domain, actual native-resolved caller/session, atomic consume once, cancel/restart
 invalidation. Check state generation and all release authorization immediately
 before presence, after blocking presence/platform signing, and atomically with final
 signature release. A signature computed after invalidation is discarded.
+R22/R23 ceremony/accessibility measurements may revise the TTL through review;
+an active attempt never extends itself. Admin/moderator prompt templates must name
+the landed R04 action correctly, including current-holder renewal.
 
 RED: bare claim/no token, token replay/expiry, wrong native window/session/product/
 key/domain, supplied caller label, substitution, cancellation and second begin;
@@ -244,6 +247,9 @@ and projection in five seconds; one-operation incremental update in 500 ms on th
 minimum supported profile. Include posts/edits, authority, inbox and quarantined
 history, competing branches and bounded adversarial term shapes. Record actual
 numbers; these targets are not current measurements or guaranteed feasibility.
+Include cold verification just below the retained ceiling and an at-ceiling
+refusal run against the same proposed five-second bound before R17b readiness;
+the smaller benchmark alone does not establish restart usability near the limit.
 
 Required commands at the actual landed implementation paths:
 
