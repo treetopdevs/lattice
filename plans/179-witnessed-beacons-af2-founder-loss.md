@@ -2204,3 +2204,18 @@ America/New_York. It is incomplete, not PASS, and no repeat attempt is made
 before reset. Earlier actual Fable PASS verdicts through `65b5364e` remain
 source-scoped. Final hosted CI/review closure and fresh integration review remain
 separate gates, with merge sequencing owned by the integrator.
+
+### Expected claim from raw duplicate dependencies (2026-09-06)
+
+Hosted thread `PRRT_kwDOSZGqLc6fvK0j` identifies a separate received-operation
+case: canonical carrier hashing treats outer dependencies as a set, so an
+authentic raw frame may retain duplicate dependency IDs. The BEAM expected-claim
+constructor normalizes them, while TS currently only sorts. The integrator
+adopts distinct, UTF-8 byte-sorted dependency normalization only when deriving
+the expected witnessed claim. Raw frames and semantic dependency lists stay
+retained; carrier ingress, global DAG behavior and received-certificate strictness
+are unchanged. Public RED/GREEN evidence must verify the raw frame's unchanged
+hash/signature, preserve its duplicate list, honor its beacon and lease effects,
+and still refuse an actually duplicate-bearing signed certificate claim. A new
+BEAM-exported raw-frame vector and public Wire/log test establish reciprocal
+behavior without relying on `Op.new/6` to erase the relevant input first.
