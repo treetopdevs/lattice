@@ -132,7 +132,7 @@ A passing review or a green path-filtered status is not a substitute for the req
 | R07 | `afe5ea250072267927b89b353e7bde1e793176b5` / [62](https://github.com/treetopdevs/lattice/pull/62) | DONE: strict canonical refusals and unchanged valid bytes, Fable PASS; tip 34036786373; merge `b68e6bd367736a23e1478a07257deb55f37b462d`, merge run 34040727942 passed |
 | R08 | `73a96a5418747b36bef6a0363d0ed3e35094d1e1` / [65](https://github.com/treetopdevs/lattice/pull/65) | DONE: exact repair Fable PASS; 678 tests + 27 properties; tip run 34046604253 passed; all hosted threads resolved. Merge `9bb7b340e49be605151458134391aa16e642fc29`, exact merge run 34048283122 passed. Pagination-cache cost remains an R15 measurement item |
 | R09 | Reviewed `29fe54f3e17291bd1280244c0dbc0c532ec30bbb`, count correction `99139544` / [70](https://github.com/treetopdevs/lattice/pull/70) | Accepted-base integration Fable PASS; 726 tests + 27 properties, TS gates, tip run 34048799634 passed. R08 integration focused count is 13 (4 + 1 + 8), corrected after review. Corrected-tip/merge gates remain; no production change in the correction |
-| R10 | Original `3d6a44431c6f3f1a3802aeab948f0dbb8e8f73a5`; engine `f5fe2fb5` | Original domain and review fixes Fable PASS. Shared engine90a passes 803 tests + 27 properties; all 68 R10 and three R04 vector files preserved, 70 total top-level after R03 additions. Real Space continuation parity includes authorized/refused consent and all command effects. Final integration review and new R03 follow-up/hosted gates remain |
+| R10 | Original `3d6a44431c6f3f1a3802aeab948f0dbb8e8f73a5`; reviewed integration `f5fe2fb5fb588296ad68aa836ef0c3ffacb73b97` | Original domain and final integration Fable PASS. Full suite at `90a07e2b876fe40ac73db8bfd3a035844b315e42`: 803 tests + 27 properties, zero failures. Later test-only f5fe2fb5 adds refused continuation consent, with its focused reciprocal test and format check passed. All 68 R10 and three R04 vector files preserved; R03 adds two top-level vectors. Further R03 metadata repair/integration and hosted gates remain |
 | R11a/b/c | Reviewed contract `789ab2353f8250a983573c33f600202b0b36b7c0`; adoption `0db817fa` | Fable follow-up PASS; exact defaults and dated Plan158/178/R02 amendments adopted before R11a production. Local catalog/codec implementation is underway. C01–C15 remain open; no route/profile enablement or recovery success claim |
 | R12 | Preparation `d57fab1e`; engine merge `50184e70` | Packaged original-binary fresh creation/edit/draft/archive/restart and independent BEAM replay pass. Preparation had one known R02/P05 dependency failure; engine merge supplies its accepted fix. Final rebuilt retained-identity replay awaits user-side macOS Keychain authorization; final integrated check, Fable and hosted gates remain |
 | R17a | `443c6a131577fe2ea24da608d34bb083f13c47cc` / [66](https://github.com/treetopdevs/lattice/pull/66) | Exact admission/consent/recovery repair and final eligibility clarification Fable PASS; final tip run 34048710026 passed. Seven semantic review threads resolved; canonical index closure follows this ledger. Exact merge gate remains; native implementation and physical eligibility are separate |
@@ -347,29 +347,17 @@ Pause dependent work on: unadopted contract/scope change; inability to identify 
 
 This proposal is complete as a document when its two source comparisons are traceable, every packet has an owner/risk/size/dependency/exit, the graph is acyclic, local links resolve, the diff preserves source artifacts and unrelated contracts, and repository formatting/full-suite verification is recorded. This does not close R01 or any implementation packet. The comparison records validation actually performed for this revision.
 
-### Current integration and verification limits
+### Evidence maintenance and external gates
 
-The independent R04/R10 merge is `da239a624fb23b67f4b769343d809c25b591f1ea` in
-`codex/treehouse-engine-integration`: full `mix check` passed 784 tests + 27
-properties, zero failures and three configured exclusions. All 68 R10 vector files
-and three R04 continuation artifacts are byte-identical to their reviewed parents.
-Its TypeScript conformance/continuation/Treehouse gates pass. Follow-up `b1b873f7`
-adds a real Space continuation/effects cross-runtime regression (one test passed)
-and moves the existing client dependency-install step before Mix's reciprocal
-suite in CI. Source merge review stopped at Claude's session limit without a final
-verdict; it is not approval. Final R03 corrections and accepted-main integration
-remain, followed by full required gates and exact review.
+The execution-evidence table is the single status snapshot. Source-plan records
+and Git history preserve earlier runs. Associate each verification result with
+the exact commit it tested; distinguish a later test-only or documentation tip
+from its earlier full-suite source. Refresh the table instead of adding another
+competing current-status narrative. Every new merge still needs its required
+source, review, local and hosted gates.
 
-PR69's prior documentation tip `f96df254` passed explicit dispatch 34046746058.
-Its final three protected suites passed 18 tests; the accepted R06-base full
-`mix verify` earlier passed 692 tests + 27 properties. This status normalization
-must receive its own document checks, exact review and updated hosted dispatch.
-It changes no dependency edge, protected 121/122/178 row or runtime contract.
-The two hosted index findings are addressed by recording R08's completed repairs
-and R03's completed R02 integration distinctly from later open findings.
-
-The pending physical-pilot inputs are the independently controlled Android device
-models and the selected carrier host/domain. They were requested while software
-work continues. No device, signing identity, deployment or elapsed pilot evidence
-has been invented. Claude reports a session reset at 13:50 America/New_York on
-2026-09-06; unfinished reviews remain pending until an actual final verdict.
+Physical-pilot inputs include independently controlled Android device models
+and the selected carrier host/domain. Software preparation continues while those
+inputs are pending. No device, signing identity, deployment or elapsed pilot
+evidence is inferred from source review or local tests. A review interrupted
+without a final verdict remains pending regardless of partial positive comments.
