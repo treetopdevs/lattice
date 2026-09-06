@@ -44,3 +44,21 @@ candidate cannot use a device until R36 validates its actual key, authentication
 and attestation combination. R17c later proves the integrated physical ceremony;
 R22/R23 supply candidate and pilot evidence. The lease cadence, real signers,
 hosting inputs and optional iOS scope remain their separate gates.
+
+## Final native-decision integration — 2026-09-06
+
+Integration `e7285fb1` retains the reviewed R01b scope amendment and brings in
+final R17a `443c6a131577fe2ea24da608d34bb083f13c47cc` plus accepted main
+`9bb7b340e49be605151458134391aa16e642fc29`. Both merges were automatic. All
+three R17a documents are byte-identical to the final reviewed native-decision
+tip, which passed exact Fable review and hosted workflow34048710026. All
+production and test files are byte-identical to accepted main. The concrete
+Android/camera/pairing/witness scope remains the same reviewed Plan158 amendment;
+no additional native primitive, permission, field deployment or device result
+is adopted by this merge. R17a's admission, consent and restart rules govern its
+later implementation.
+
+Final dependency/index landing, bounded integration review, exact PR-tip and
+merge-result workflows remain pending. No device was connected or provisioned
+by this documentation integration, and no operator secret or countersign was
+created.
