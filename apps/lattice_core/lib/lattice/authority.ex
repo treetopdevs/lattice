@@ -155,8 +155,9 @@ defmodule Lattice.Authority do
     case Continuation.select_pin(context, Log.op_ids(log)) do
       nil -> {:error, :continuation_not_configured}
       pin ->
+        {:ok, profile_id} = ContinuationCertificate.profile_id(pin.profile)
         {:ok, %{replica: log.replica, root: root, profile_genesis: pin.op_id,
-          profile_id: ContinuationCertificate.profile_id(pin.profile), profile: pin.profile,
+          profile_id: profile_id, profile: pin.profile,
           verified_frontier: Log.frontier(log)}}
     end
   end

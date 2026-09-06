@@ -63,7 +63,7 @@ defmodule Treehouse.Space do
     ]
   )
 
-  command(:catalog_bootstrap_v1, [:record],
+  command(:catalog_bootstrap_v1, [:_record],
     do: [{:admin_actions, {:write, "catalog_bootstrap_v1"}}]
   )
 
