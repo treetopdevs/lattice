@@ -61,18 +61,18 @@ Rows are the authoritative dependency graph. Commas mean all prerequisites. “N
 
 | ID | Packet / accountable function | Size | Risk | Requires | Exit evidence | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| R01a | Core contract / integrator | M | Medium | None | Adopted order, archive, two dependency amendments, protected pins green | LOCAL VERIFIED |
-| R01b | Android and witness scope / operator + integrator | S | High | R01a, R17a | Adopted scope and deferred-ceremony amendment; actual sign-off | PLANNED |
+| R01a | Core contract / integrator | M | Medium | None | Adopted order, archive, two dependency amendments, protected pins green | DONE |
+| R01b | Android and witness scope / operator + integrator | S | High | R01a, R17a | Adopted scope and deferred-ceremony amendment; actual sign-off | LOCAL VERIFIED |
 | R01c | Toolshed module isolation / operator + integrator | S | Medium | R01a | Countersigned collision contract; reserved legacy identities | LOCAL VERIFIED |
-| R02 | Founder lifecycle design / authority | M | High | R01a | Executable matrix: renewal, bounded successor, child roots and catalog recovery | IN PROGRESS |
-| R03 | Witnessed beacons / authority | L | High | R01a, R07 | Plan 179 steps 2–9, one Core integration PR | IN PROGRESS |
-| R04 | Continued authority / authority | L | High | R02, R03 | Core membership/renewal after two expiry cycles; bounded self-issue | PLANNED |
-| R05 | Diagnostic redaction / hardening | S | Medium | None | Plan 170 negative inspect/crash cases | LOCAL VERIFIED |
+| R02 | Founder lifecycle design / authority | M | High | R01a | Executable matrix: renewal, bounded successor, child roots and catalog recovery | LOCAL VERIFIED |
+| R03 | Witnessed beacons / authority | L | High | R01a, R07 | Plan 179 steps 2–9, one Core integration PR | LOCAL VERIFIED |
+| R04 | Continued authority / authority | L | High | R02, R03 | Core membership/renewal after two expiry cycles; bounded self-issue | IN PROGRESS |
+| R05 | Diagnostic redaction / hardening | S | Medium | None | Plan 170 negative inspect/crash cases | DONE |
 | R06 | Verified restores / hardening | M | High | None | Plan 171 consumer policies; staged fail-closed recovery input | LOCAL VERIFIED |
 | R07 | Canonical strictness / codec | S–M | High | None | Plan 172 valid-byte parity plus duplicate/noncanonical refusals | LOCAL VERIFIED |
-| R08 | Deadlines and pagination / carrier | M–L | High | None | Plan 173 bounded setup, interrupted large-log real-transport replay | IN PROGRESS |
-| R09 | Input limits / hardening | M | High | R07, R08 | Plan 176 ingress and authority boundary refusals | PLANNED |
-| R10 | Root-only Treehouse domain / product + parity | XL | High | R01a, R07, R09 | Core complete vocabulary, effects, conflicts, offline demo | PLANNED |
+| R08 | Deadlines and pagination / carrier | M–L | High | None | Plan 173 bounded setup, interrupted large-log real-transport replay | LOCAL VERIFIED |
+| R09 | Input limits / hardening | M | High | R07, R08 | Plan 176 ingress and authority boundary refusals | LOCAL VERIFIED |
+| R10 | Root-only Treehouse domain / product + parity | XL | High | R01a, R07, R09 | Core complete vocabulary, effects, conflicts, offline demo | IN PROGRESS |
 | R11a | Local catalog/provisioning / carrier | M | High | R02, R04, R06, R10 | Local signed catalogs, root bootstrap and bounded routes | PLANNED |
 | R11b | Lifecycle reconciliation / carrier | M | High | R11a | Crash-safe creation/removal, no phantom publication | PLANNED |
 | R11c | Catalog replacement trust / recovery | M | High | R11b | Retained client accepts authorized replacement without old signer | PLANNED |
@@ -81,7 +81,7 @@ Rows are the authoritative dependency graph. Commas mean all prerequisites. “N
 | R14 | Profiles, roles, removal, renewal / product + authority | XL | High | R13, R04, R36 | Packaged enroll-then-pin, per-replica readiness and renewal | PLANNED |
 | R15 | Measured rollover / product | L | Medium | R14 | Packaged archival saga, finite-capacity stop, retained readability | PLANNED |
 | R16 | Member reseed, AF-1 / recovery | M | High | R06, R11c, R15 | Packaged new-identity relay reseed from surviving member evidence | PLANNED |
-| R17a | Native witness decision / native custody | M | High | None | Plan 174 decision plus concrete Android build plan | IN PROGRESS |
+| R17a | Native witness decision / native custody | M | High | None | Plan 174 decision plus concrete Android build plan | LOCAL VERIFIED |
 | R17b | Native witness signing / native custody | L | High | R17a, R01b, R03, R14 | Claim verification, protected signing, consent/replay negatives | PLANNED |
 | R17c | Independent witness proof / device QA | M | High | R17b | Physical custody/presence evidence for the selected Android profile | PLANNED |
 | R18 | Founder and combined loss / recovery | M | High | R04, R11c, R15, R16, R17c | Packaged loss with physical witnesses; independent retained trust | PLANNED |
@@ -110,21 +110,45 @@ Rows are the authoritative dependency graph. Commas mean all prerequisites. “N
 | R35b | Lifetime policy proof / lifecycle | L or no-build | High | R35a | Implemented/tested adopted policy or tested finite end-of-life | PLANNED |
 | R36 | Protected witness identity / native custody | L | High | R01b, R12, R17a | Distinct persistent witness keys and reviewed public-identity binding | PLANNED |
 
-### Unmerged verification records (2026-09-06)
+### Execution evidence (2026-09-06)
 
-These immutable sibling tips record local preparation; none is an integrated dependency until
-its PR-tip and merge-result gates pass. Claude Fable reviewed R05/R06/R07 and returned PASS.
+Only R01a and R05 have both final-tip and exact merge-result hosted gates closed
+in this snapshot. `LOCAL VERIFIED` may include a merged commit awaiting its own
+merge-result check. A passing review or a green path-filtered status is not a
+substitute for the required workflow. Distribution jobs skipped without protected
+pilot inputs establish no signed pilot artifact or physical result.
 
-| Packet | Local tip | Evidence and remaining gate |
+| Packet | Immutable reviewed tip / PR | Evidence and remaining gate |
 | --- | --- | --- |
-| R01a | See [contract record](evidence/treehouse-r01a-2026-09-06.md) | PR 59; hosted remediation in progress |
-| R01c | `b9736790` | Module collision amendment; full local verification and Fable review, wording/evidence follow-up; R01a and hosted gates pending |
-| R05 | `4c88f41ec7757158a8fce94b44194debf87c22a7` | Plan 170; 666 tests + 27 properties, post-refresh raw-status regression; hosted gates pending |
-| R06 | `41ace37b50439f83393eda427dc55a9ef650f899` | Plan 171; 677 tests + 27 properties, deterministic snapshot-replacement regression; hosted gates pending |
-| R07 | `afe5ea250072267927b89b353e7bde1e793176b5` | Plan 172; preserved legacy vectors, Node/browser strictness and native bridge coverage; hosted gates pending |
+| R01a | `bed951d9ae753c390e509dceace1311df7c081c2` / [59](https://github.com/treetopdevs/lattice/pull/59) | DONE: Fable PASS, hosted tip run 34036627773; merge `5d1861f16e12fb950049212a9e1301dec4e86607`, exact merge run 34037516446 passed; [contract record](evidence/treehouse-r01a-2026-09-06.md) |
+| R01b | `1beb114499e6a457d0b43cf10c731500b11731f1`, evidence follow-up `73ff1849f5e115d3690eb27b122036373175a2fe` | Concrete Android scope uses the existing execution authorization; Fable PASS; 663 tests + 27 properties; R17a integration and hosted gates pending. No connected physical device at inventory |
+| R01c | `b973679077e6300a1390fb1da40443d5279ec30f` / [63](https://github.com/treetopdevs/lattice/pull/63) | Module collision amendment, Fable PASS, full local verification; final-tip run 34036906871 passed. Hosted stale-ancestry finding refuted with actual parent/PR history and resolved; merge-result gate pending |
+| R02 | `389e9d4e520a9119913bfad591bc3c3f95ad12f8` / [64](https://github.com/treetopdevs/lattice/pull/64) | Fable PASS; 12 lifecycle probes, 675 tests + 27 properties. Run 34037599146 macOS job failed before application checks because GitHub DNS failed during dependency download; unchanged-tip job rerun pending. Field cadence remains proposed |
+| R03 | `e08e3995bf562035bd36593687bd0e55ddd5f59e` | Fable PASS after CI executable-path repair; 679 tests + 27 properties, five new signed beacon vectors and 57 unchanged legacy vectors. Accepted-base integration, final gates and PR remain; scope is witnessed epochs and lease lapse |
+| R04 | Design `d99a1dfc1012335aaca9c68526a5b11cfb6bd8aa`, evidence `475bcfc37c45420e97c5908f073851e43f40dfc0` | Fable design PASS; five legacy probes, controlled full check 680 tests + 27 properties. Fresh versioned bounded-continuation implementation started; no implemented continuation claim |
+| R05 | `4c88f41ec7757158a8fce94b44194debf87c22a7` / [60](https://github.com/treetopdevs/lattice/pull/60) | DONE: Plan 170 negative diagnostic cases; 666 tests + 27 properties, Fable PASS, tip run 34036748317; merge `2f83cc1ea5fdd2fdd5a4a7500b467cebaf392c1a`, exact merge run 34038896331 passed |
+| R06 | `41ace37b50439f83393eda427dc55a9ef650f899` / [61](https://github.com/treetopdevs/lattice/pull/61) | Plan 171; 677 tests + 27 properties, deterministic snapshot-replacement regression, Fable PASS; final-tip run 34036773840 passed. Merge-result gate pending |
+| R07 | `afe5ea250072267927b89b353e7bde1e793176b5` / [62](https://github.com/treetopdevs/lattice/pull/62) | Plan 172 valid-byte parity, Node/browser strictness and native bridge cases; Fable PASS, tip run 34036786373 passed; merged at `b68e6bd367736a23e1478a07257deb55f37b462d`, exact merge run 34040727942 pending |
+| R08 | `a172265e8720d73410fda38213232500972fd784` / [65](https://github.com/treetopdevs/lattice/pull/65) | Plan 173 finite setup and snapshot-bound pagination; Fable PASS including fixture follow-up, 675 tests + 27 properties, real second-BEAM interruption/restart; final-tip run 34039405153 passed. Initial CI path failure and excluded overlapping local run retained in Plan 173; merge-result gate pending |
+| R09 | `7f984d4482cd55d06ad437e8fcf7309b8bdd606f` | Plan 176; 694 tests + 27 properties, TS/live/shell gates, 57 unchanged legacy vectors, both boundary scans. Fable exact review PASS, no P0/P1; accepted-base integration and hosted gates pending |
+| R10 | Pre-code contract `8cac29e8`; active source work is not frozen | Complete Treehouse domain/effects and reciprocal replay under implementation. Adversarial findings are being fixed; no completed product or final gate claim |
+| R17a | `a5d605786f959f330bc003dc6c12dfbdbecf4316` / [66](https://github.com/treetopdevs/lattice/pull/66) | Fable PASS including the separately typed final-beacon signing purpose; documentation-only final tip required explicit workflow dispatch 34040771390, pending. Actual key eligibility, native build and physical ceremony remain separate stages |
+| Independent native prompt | `0e942f2c6404130f5dcebda9bd754883846df6bd` / [67](https://github.com/treetopdevs/lattice/pull/67) | Constant presence prompt, hostile submitted-claim regressions; Fable PASS; 68 Rust tests including 4 doc tests and 14 custody tests; tip run 34037880177 passed. Merge-result gate pending; this does not implement native semantic verification |
 
-R02 lifecycle probes, R03 witnessed-beacon implementation, R08 transport pagination and R17a
-native design are active in separate worktrees. Their partial results are not completion claims.
+Local test totals above exclude three already-configured tests; none is hidden by
+this program. Uncapped concurrent BEAM suites exposed a module-load timeout and a
+transport-fixture scheduling race. Serialize local full suites with
+`ERL_FLAGS='+S 4:4'` and the prescribed OTP/asdf path, retain initial failures and
+record controlled reruns. This changes execution resources, not test timeouts or
+production contracts. Source review, local runtime checks, hosted packaging,
+physical hardware and elapsed pilot observations remain separate evidence tiers.
+
+At the R03/R09 integration, preserve the exact three-field witnessed-beacon decode
+before the exact two-field legacy branch; unsupported arities remain inert. R02
+P05's missing-policy three-field audit changes to `unauthorized_beacon` under its
+already adopted Plan 179 exception, preserving historical bytes, state and lease
+outcomes. R04 uses R09's explicit refusal of rebinding and a fresh reserved family;
+legacy replicas do not silently receive bounded continuation semantics.
 
 ### Work order and merge discipline
 
