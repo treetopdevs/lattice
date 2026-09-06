@@ -114,9 +114,16 @@ TS conformance gates live in `clients/lattice-client` (`npm ci` once, then `npm 
 ### Unified R09 local implementation evidence — 2026-09-06
 
 The implementation is locally complete on `codex/treehouse-r09-input-limits` in
-`/Users/nicholas/develop/lattice-treehouse-r09-20260906`. Exact-diff Fable review,
-shared R03 integration and hosted gates remain integrator-owned; this evidence
-does not mark those gates or the R07/R08 dependencies DONE.
+`/Users/nicholas/develop/lattice-treehouse-r09-20260906`. Claude Fable's exact-diff
+review of `7d10eca6a1cccdf9b43e3beeb03bc03e67ee547b` through
+`7f984d4482cd55d06ad437e8fcf7309b8bdd606f` returned PASS with no P0/P1 findings.
+Its P2 rescue-invariant comment and restore-path residual note are recorded in
+this documentation-only follow-up. Shared R03 integration must still preserve
+the exact-three witnessed branch before the legacy arity guard and pass all
+five R03 vectors plus leased-authoring checks. Integration and hosted gates
+remain integrator-owned; this evidence does not mark those gates or the
+R07/R08 dependencies DONE. The follow-up changes comments/documentation only;
+format and diff checks passed, preserving the runtime evidence below.
 
 - Behavioral RED commits: `97399748` (direct/reconstructed lease overflow),
   `c25e4f39` (body/cap composite-depth matrix), `19e5d498` (root marker),
@@ -414,6 +421,10 @@ loop and the TS conformance trio after vector regeneration.
   if untrusted terms ever bypass `Wire.decode_term/1`.
 - `Op.new/6`'s guard change means dynamically computed kinds now fail at construction —
   intentional; check any metaprogramming call sites in tests if they break.
+- The kind allowlist covers wire decoding and `Op.new/6`; `Log.restore` and direct
+  in-VM `%Op{}` construction can still admit non-contract kinds because `Log.accept`
+  validates ID/signature integrity. Closing that residual would require a separately
+  reviewed broader contract; it is not claimed by this packet.
 
 ## STOP conditions
 
