@@ -677,3 +677,19 @@ and certificate-metadata controls. Logs are
 `/tmp/lattice-treehouse-execution-20260906/r04-final-metadata-check.log` and
 `r04-metadata-conformance.log` in that directory. Final reviewed tip and exact
 merge-result hosted checks remain necessary before completion.
+
+
+### Exact high legacy epoch integration amendment — 2026-09-06
+
+R03's reviewed follow-up preserves valid legacy root beacon uint64 epochs above
+JavaScript's exact integer horizon as canonical decimal strings in TS evidence.
+Before integrating that dependency, the integrator adopts this narrow R04 adapter
+rule: a selected valid ancestral high legacy epoch makes bounded continuation
+refuse `invalid_continuation_epoch`; it cannot be rounded, omitted or replaced by
+an earlier portable epoch. Only the existing safe numeric horizon can form a new
+continuation claim. An unauthorized high beacon does not enter valid epoch evidence
+and must not block an otherwise valid acquisition. Preserve all legacy frame bytes,
+R04 policy/certificate shapes and actual Core refusal precedence. Add public signed
+BEAM/TS integration controls for both cases, and handle the widened evidence type
+at every R04 review/assembly consumer before build/review. This is an adapter
+correction, not a new continuation or lease rule.
