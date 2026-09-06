@@ -280,6 +280,11 @@ export async function authorCarrierDelegation(
   };
 }
 
+/** Encode the existing closed carrier term grammar without an op envelope. */
+export function canonicalBytesForCarrierTerm(term: CarrierTerm): Uint8Array {
+  return encodeCarrierTerm(term);
+}
+
 function encodeCarrierTerm(term: CarrierTerm): Uint8Array {
   const [tag] = term;
 
