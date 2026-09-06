@@ -247,9 +247,9 @@ export function analyzeAuthority(
         states.set(heartbeat.role, state);
         continue;
       }
-  
+
       if (!authorityRoleWrite(schema, op)) continue;
-  
+
       const writeCount = writesPerRole.get(op.field) ?? 0;
       if (op.authority === undefined) {
         if (writeCount > 1) throw new Error(`missing authority evidence for ${op.id}`);
@@ -262,7 +262,7 @@ export function analyzeAuthority(
         honoredWrites.add(op.id);
         continue;
       }
-  
+
       const evidence = op.authority;
       if (evidence.type === "beacon") {
         throw new Error(`beacon ${op.id} cannot write authority role ${op.field}`);
@@ -280,7 +280,7 @@ export function analyzeAuthority(
         honoredSuccessionIntroductions,
         byId,
       );
-  
+
       if (honored) {
         const holder = evidence.delegation.audienceRealm;
         state.holder = holder;

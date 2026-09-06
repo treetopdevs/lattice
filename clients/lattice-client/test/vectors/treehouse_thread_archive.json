@@ -1274,5 +1274,15 @@
       }
     },
     "name": "Treehouse.Thread"
+  },
+  "treehouseObservation": {
+    "operationCount": 16,
+    "posts": [
+      {
+        "author": "72XXRBEsWVVKtd0d0Ov4aepZzuTHMDnANqUoZETFPY4=",
+        "id": "pYUtdxMe0NihvJE5Sl2Zb9Q1AVpKK2eEN1qRMgsGitU",
+        "text": "edited"
+      }
+    ]
   }
 }

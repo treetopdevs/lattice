@@ -1,7 +1,9 @@
 # R10 — Treehouse domain and reciprocal runtime build contract
 
-Status: preparation on `d08883da7d2e5a007bf66d3ffd2205d600109604`; implementation,
-R09 integration, final integrated gates and exact-diff review remain pending.
+Status: implemented and locally verified from `d08883da7d2e5a007bf66d3ffd2205d600109604`;
+R09 source integration is complete in `4934c73d`. Final local gates pass below.
+Exact-diff Fable review and hosted integration remain pending; no downstream
+enablement is claimed.
 This packet executes unified R10 and the adopted Plan 158 amendment. Plan 178
 remains the frozen vocabulary document; its protected status and claim text are
 not rewritten here. One atomic XL integration contains BEAM, TypeScript,
@@ -111,11 +113,12 @@ Concurrent posts survive. Authorized repeat archives remain distinct honored ops
 writing true. Stale moderators retain the ordinary authority refusal. Space
 references and external fixture routes/slots survive archive unchanged.
 
-Signed reference fixtures distinguish semantic membership from transport
-availability: an extra route grants no commands, a missing route means unavailable,
-and wrong replica/service/product binding refuses before a live reference is
-presented. This is bounded fixture proof, not live catalog provisioning or the R15
-slot/rollover saga.
+Signed reference fixtures distinguish semantic membership from available history:
+an extra reference grants nothing, missing history means unavailable, and the
+wrong replica refuses. The TS projection additionally refuses missing/mismatched
+product decoder provenance. Signed service/catalog metadata validation and live
+route provisioning belong to R11; these fixtures do not claim that trust path or
+the R15 slot/rollover saga.
 
 ## Evidence sequence and closure
 
@@ -136,3 +139,76 @@ authoring/Treehouse/build gates, the offline demo and independent dump restore,
 and both per-app Sobelow gates. Review uses the complete immutable diff. Local
 success is not hosted merge proof, native/physical founder-loss evidence, live
 enrollment/provisioning proof or pilot readiness. No push/PR occurs before freeze.
+
+## Implementation evidence
+
+Public REDs retained under `/tmp/treehouse-r10-*.log` cover missing domain and TS
+authoring exports, invalid invitation issuance, malformed later effects applying
+a prefix, repeated same-op LWW/list edits choosing `z` instead of final `a`,
+malformed Space values, missing real role transfer and creation retry, default
+Township decoder acceptance against a Treehouse schema, inherited `constructor`
+field acceptance, Unicode scope order divergence, and missing TS post identity
+observation. Each changed production seam then passed its public GREEN. Review
+also added genuine two-fork edits, concurrent honored/rejected invitation
+revocation, malformed invitation argument types and non-causal revoke targets.
+No legacy assertions or vectors were rewritten to conceal these failures.
+
+R09 integration used the common reviewed resolution from `d5236619`: the
+three-field witnessed beacon decoder precedes the exact-two legacy guard; other
+arities remain inert. Township authoring imports were unioned, one R09 fixture
+local renamed to avoid a duplicate declaration, and dist regenerated. R03's sole
+post-baseline portability fix `e08e3995` is retained as `a530e25a`. The creation
+helper consumes an already valid bound replica directly and verifies its root;
+it does not weaken R09's reserved-marker binder.
+
+Five new vectors carry 58 signed frames: Space membership (21), independent
+roles/impostor genesis (7), existing witnessed Space role succession (5), Thread
+archive (16), and concurrent Thread edits/posts (9). The succession fixture is
+explicitly a legacy/root-only replay of existing witnessed role semantics, with
+the founder retained as one witness. It is not R04's bounded continuation family
+or an AF-2 proof. Every frame is re-authored in TS with identical canonical bytes,
+ID and signature, then delivered in reverse order through the BEAM Wire/Sync
+seams. State, holders, quarantine reasons, order, original post identity and
+unique operation count agree. All 62 pre-R10 vector files remain byte-identical.
+
+Public restore evidence checks each of the five histories in the current VM and
+an independent VM that loads the application vocabulary. IDs, signatures,
+holders, edited post identity/text, tombstones, archive, references, counts and
+quarantine match exactly. No Log vocabulary, persisted format or canonical
+encoding change was required. The offline `scripts/treehouse_demo.exs` also
+replays interrupted creation, recipient acceptance, exact-replica fixture grants,
+real moderator transfer, archive and dump/restore. It creates no live service.
+
+The removal fixture explicitly retains the interval between semantic membership
+removal and actual issuer-authored revocations on independent replica logs. A
+forged recipient revocation fails; a causal post after the real Thread revocation
+fails. Durable reconciliation, transport admission and `removal_pending` UI are
+R11/R14 work. A stale Thread moderator cannot archive; its current holder can.
+
+Named local results: focused domain/effects/contract suites 40 tests,
+zero failures; TS typecheck, canonical, Township authoring (including witnessed
+three-field and inert four-field beacons), Treehouse, all 67-vector conformance,
+V01 guard, carrier, relay, relay-sync and build all exit 0. Final umbrella and
+per-boundary results follow. No hosted claim is made.
+
+The final independent input-boundary review found that BEAM preparation trusted
+an in-memory retained Log while TS preparation verified retained frames. The new
+public RED reproduced a forged name signature reporting ready with no pending
+operations. Preparation now verifies every retained op's hash/signature, map
+key/ID, replica and dependency closure before observing status or suppressing a
+pending op; malformed structures fail closed. Six hostile retained-log forms
+pass the focused GREEN (8 domain tests, zero failures). This changes only the
+new Space helper, not Log.restore, Authority or a persisted format.
+
+The first full `mix check` exited 0 with 737 tests and 27 properties, zero
+failures and three existing exclusions. Both `lattice_server` and `township_web`
+Sobelow scans exited 0. After the review fix, the final full `mix check` exited 0
+with **738 tests and 27 properties, zero failures** and the same three existing
+exclusions (`/tmp/treehouse-r10-mix-check-reviewed.log`). Existing Credo suggestions
+retain their baseline exit-status treatment; this packet changes no lint
+configuration. The final named protected check runs
+`treehouse/contract_test.exs`, `township/election_protocol_contract_test.exs`,
+`township/attestation_contract_test.exs` and the Plan 121 assertions in
+`township/audit_bundle_test.exs`: **22 tests, zero failures**. All four test files
+are byte-identical to the preparation baseline. The final reviewer reread resolves
+the retained-input finding. The standalone formatted demo passes after the fix.

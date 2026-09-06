@@ -734,5 +734,20 @@
       }
     },
     "name": "Treehouse.Thread"
+  },
+  "treehouseObservation": {
+    "operationCount": 9,
+    "posts": [
+      {
+        "author": "B/U/WcYp3/lkwwH9s+GpagI8/w98bRg36/v85RQ5EwY=",
+        "id": "s89B-MdAY_voDB10uryPYmp_s7-Hc4jLM4Qn0DYnj0o",
+        "text": "left"
+      },
+      {
+        "author": "B/U/WcYp3/lkwwH9s+GpagI8/w98bRg36/v85RQ5EwY=",
+        "id": "R1JOI-vkyBtRJAVBIVSYlG8bXpOiut62v_NCPAVDwkA",
+        "text": "concurrent"
+      }
+    ]
   }
 }

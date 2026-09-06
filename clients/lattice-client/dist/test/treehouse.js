@@ -4,7 +4,7 @@ import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { authorTownshipGenesis, authorTreehouseCommand, carrierOpsToSemanticOps, materialize, treehouseCommandDecoders, treehouseThreadSchema, treehouseSpaceSchema, acceptTreehouseInvitation, authorCarrierOp, analyzeAuthority, canonicalOrder, index, canonicalBytesForCarrierOp, prepareTreehouseSpaceCreation, authorTreehouseRoleTransfer, treehouseSpaceInitialization, } from "../src/index";
+import { authorTownshipGenesis, authorTreehouseCommand, carrierOpsToSemanticOps, materialize, treehouseCommandDecoders, treehouseThreadSchema, treehouseSpaceSchema, acceptTreehouseInvitation, authorCarrierOp, analyzeAuthority, canonicalOrder, index, canonicalBytesForCarrierOp, prepareTreehouseSpaceCreation, authorTreehouseRoleTransfer, treehouseSpaceInitialization, observeTreehouse, authorTreehouseWitnessedSuccession, } from "../src/index";
 const privateSeed = createHash("sha256").update("treehouse-ts:root").digest();
 const signer = { publicKey: ed25519.getPublicKey(privateSeed), sign: (bytes) => ed25519.sign(bytes, privateSeed) };
 const preparation = await prepareTreehouseSpaceCreation({ replica: "treehouse:ts:creation", name: "Canopy", signer });
@@ -34,6 +34,9 @@ const late = await authorTreehouseCommand({ product: "Treehouse.Thread", replica
 const tombstone = await authorTreehouseCommand({ product: "Treehouse.Thread", replica: genesis.replica, deps: [late.id], signer, capId, command: { command: "moderator_tombstone", postId: post.id, targetId: edit.id } });
 const decode = (frames) => carrierOpsToSemanticOps(frames, {}, treehouseCommandDecoders("Treehouse.Thread"));
 assert.deepEqual(materialize(treehouseThreadSchema, decode([genesis, post, edit])).state.posts, ["edited"]);
+const editedView = observeTreehouse("Treehouse.Thread", decode([genesis, post, edit]));
+assert.deepEqual(editedView.posts, [{ id: post.id, author: post.author, text: "edited" }]);
+assert.equal(editedView.operationCount, 3);
 const result = materialize(treehouseThreadSchema, decode([genesis, post, edit, archive, late, tombstone]));
 assert.deepEqual(result.state.posts, []);
 assert.equal(result.state.archived, true);
@@ -132,7 +135,7 @@ const vectorDir = join(dirname(fileURLToPath(import.meta.url)), "vectors");
 const reciprocal = {};
 for (const name of readdirSync(vectorDir).filter((name) => name.startsWith("treehouse_") && name.endsWith(".json"))) {
     const vector = JSON.parse(readFileSync(join(vectorDir, name), "utf8"));
-    const seed = vector.scenario === "treehouse_space_membership" ? "treehouse-membership" : vector.scenario === "treehouse_space_roles" ? "treehouse-space:roles" : `treehouse-thread:${vector.scenario.replace("treehouse_thread_", "")}`;
+    const seed = vector.scenario === "treehouse_space_membership" ? "treehouse-membership" : vector.scenario.startsWith("treehouse_space_") ? `treehouse-space:${vector.scenario.replace("treehouse_space_", "")}` : `treehouse-thread:${vector.scenario.replace("treehouse_thread_", "")}`;
     const authored = [];
     for (const original of vector.oracleCarrierOps) {
         const realm = vector.realmByPubkey[original.author];
@@ -140,15 +143,24 @@ for (const name of readdirSync(vectorDir).filter((name) => name.startsWith("tree
         const signer = { publicKey: ed25519.getPublicKey(secret), sign: (bytes) => ed25519.sign(bytes, secret) };
         assert.equal(Buffer.from(signer.publicKey).toString("base64"), original.author);
         const semantic = carrierOpsToSemanticOps([original], vector.realmByPubkey, treehouseCommandDecoders(vector.schema.name))[0];
-        const result = semantic.kind === "command" && semantic.commandError === undefined
-            ? await authorTreehouseCommand({ product: vector.schema.name, replica: original.replica, deps: original.deps, signer, capId: semantic.cap ?? null, command: commandFromOp(semantic, vector.schema.name) })
-            : await authorCarrierOp({ replica: original.replica, deps: original.deps, signer, kind: original.kind, body: original.body, cap: original.cap });
+        const result = semantic.authority?.type === "succeed" && original.body[0] === "tuple"
+            ? await authorTreehouseWitnessedSuccession({ replica: original.replica, deps: original.deps, signer,
+                role: original.body[1][1][1],
+                delegation: original.body[1][2][1],
+                certificate: original.body[1][3][1][1] })
+            : semantic.kind === "command" && semantic.commandError === undefined
+                ? await authorTreehouseCommand({ product: vector.schema.name, replica: original.replica, deps: original.deps, signer, capId: semantic.cap ?? null, command: commandFromOp(semantic, vector.schema.name) })
+                : await authorCarrierOp({ replica: original.replica, deps: original.deps, signer, kind: original.kind, body: original.body, cap: original.cap });
         assert.equal(result.id, original.id);
         assert.equal(result.sig, original.sig);
         assert.equal(Buffer.from(canonicalBytesForCarrierOp(result)).toString("hex"), vector.canonicalOps.find((entry) => entry.id === original.id).bytesHex);
         authored.push(result);
     }
     reciprocal[vector.scenario] = authored;
+    if (vector.treehouseObservation) {
+        const observed = observeTreehouse(vector.schema.name, carrierOpsToSemanticOps(authored, vector.realmByPubkey, treehouseCommandDecoders(vector.schema.name)));
+        assert.deepEqual({ operationCount: observed.operationCount, posts: observed.posts }, vector.treehouseObservation);
+    }
     console.log(`PASS reciprocal Treehouse command bytes and signatures: ${vector.scenario} (${authored.length} frames)`);
 }
 if (process.env.TREEHOUSE_TS_FRAMES !== undefined)

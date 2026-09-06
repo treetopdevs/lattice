@@ -692,5 +692,9 @@
       }
     },
     "name": "Treehouse.Space"
+  },
+  "treehouseObservation": {
+    "operationCount": 7,
+    "posts": []
   }
 }

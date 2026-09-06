@@ -66,7 +66,12 @@ defmodule Treehouse.Space do
           {:ok, map()} | {:error, atom()}
   def prepare_creation(identity, replica, name, retained \\ nil) do
     name = text!(name)
-    replica = Authority.bind_replica(replica, identity.pub)
+
+    replica =
+      if Authority.replica_commitment(replica),
+        do: replica,
+        else: Authority.bind_replica(replica, identity.pub)
+
     commands = Enum.map(__MODULE__.__lattice_commands__(), &elem(&1, 0))
     delegation = Delegation.genesis(identity, replica, ops: commands, roles: [:admin, :moderator])
     genesis = Op.new(identity, replica, [], :authority, {:genesis, delegation, %{}})
@@ -81,6 +86,9 @@ defmodule Treehouse.Space do
     cond do
       log.replica != replica ->
         {:error, :wrong_replica}
+
+      not valid_retained_log?(log) ->
+        {:error, :invalid_retained_log}
 
       Authority.root(Log.append!(Log.new(replica), genesis)) != identity.pub ->
         {:error, :wrong_root}
@@ -98,6 +106,20 @@ defmodule Treehouse.Space do
          }}
     end
   end
+
+  defp valid_retained_log?(%Log{ops: ops, replica: replica}) when is_map(ops) do
+    Enum.all?(ops, fn
+      {id, %Op{id: id, replica: ^replica, deps: deps} = op} ->
+        Op.valid?(op) and Enum.all?(deps, &Map.has_key?(ops, &1))
+
+      _ ->
+        false
+    end)
+  rescue
+    _ -> false
+  end
+
+  defp valid_retained_log?(_), do: false
 
   @doc "Observe durable root/name initialization without inferring a missing policy or name."
   @spec initialization(Log.t()) :: :uninitialized | :incomplete | :ready
@@ -176,6 +198,19 @@ defmodule Treehouse.Space do
         :authority,
         {:revoke, text!(delegation_id)}
       )
+
+  @doc "Author existing witnessed role evidence; bounded continuation remains the R04/R14 gate."
+  @spec witnessed_succession(Identity.t(), Log.t(), atom(), Delegation.t(), map()) :: Op.t()
+  def witnessed_succession(identity, log, role, delegation, certificate)
+      when role in [:admin, :moderator],
+      do:
+        Op.new(
+          identity,
+          log.replica,
+          Log.frontier(log),
+          :authority,
+          {:succeed, role, delegation, {:witnessed, certificate}}
+        )
 
   defp admission(invitation_id, recipient, level, acceptance) do
     Enum.each([invitation_id, recipient, level, acceptance], &text!/1)

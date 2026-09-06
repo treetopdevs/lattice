@@ -107,6 +107,24 @@
       "hash": "vT208NB2s8LerIx3uPUrJ3lyt7iS1BtlcPFFKvJXf8k",
       "id": "vT208NB2s8LerIx3uPUrJ3lyt7iS1BtlcPFFKvJXf8k",
       "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584b74726565686f7573653a73706163653a6d656d6265727368697023726f6f743a42416b5231694c61374d656b5f31637a346d53586636705465575a496e6b58596446636a486a30586435515820d06c03b8b24ab96d078bd2206decacc4638591b0274a47d8b34e41c5ee62adca81582b76543230384e423273384c6572497833755055724a336c79743769533142746c635046464b764a5866386bd9ea6047636f6d6d616e64d9ea6182d9ea605069737375655f696e7669746174696f6e82582c306f4b2f63616e6a72376937756a4e6134666a53327137794378626d734635665746504636356c455a39453d835474726565686f7573653a7468726561643a6f6e6543ee808044f0908080582b614e714f6d6130306e71336b32494c474e69567151326f2d4241465a52665a67696e58356776425a4c4751",
+      "hash": "U36rOZzht7M7wblx3wUPf2SQv8JC4E-XtdqL62QsJlM",
+      "id": "U36rOZzht7M7wblx3wUPf2SQv8JC4E-XtdqL62QsJlM",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584b74726565686f7573653a73706163653a6d656d6265727368697023726f6f743a42416b5231694c61374d656b5f31637a346d53586636705465575a496e6b58596446636a486a30586435515820d06c03b8b24ab96d078bd2206decacc4638591b0274a47d8b34e41c5ee62adca81582b553336724f5a7a6874374d3777626c78337755506632535176384a4334452d587464714c363251734a6c4dd9ea6047636f6d6d616e64d9ea6182d9ea604c61646d69745f6d656d62657284582b76543230384e423273384c6572497833755055724a336c79743769533142746c635046464b764a5866386b582c42746b57796339396f4b5770526b5145523964726f6741476e326a46396d654a544e4e565546702b2f6e4d3d466d656d6265725858537944567834323664307a79307671616234425074644f317a674c68366d393647367849394c39615a72334353545447724d6e425178344f654e416a624c43733163704b31597238475249416746574d2f64355144773d3d582b614e714f6d6130306e71336b32494c474e69567151326f2d4241465a52665a67696e58356776425a4c4751",
+      "hash": "GPADtKZR_-JVIgoAG8wrBD_YPxHkMojv47gHlF4YJkc",
+      "id": "GPADtKZR_-JVIgoAG8wrBD_YPxHkMojv47gHlF4YJkc",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584b74726565686f7573653a73706163653a6d656d6265727368697023726f6f743a42416b5231694c61374d656b5f31637a346d53586636705465575a496e6b58596446636a486a30586435515820d06c03b8b24ab96d078bd2206decacc4638591b0274a47d8b34e41c5ee62adca81582b553336724f5a7a6874374d3777626c78337755506632535176384a4334452d587464714c363251734a6c4dd9ea6047636f6d6d616e64d9ea6182d9ea604c61646d69745f6d656d62657284582b553336724f5a7a6874374d3777626c78337755506632535176384a4334452d587464714c363251734a6c4d582c306f4b2f63616e6a72376937756a4e6134666a53327137794378626d734635665746504636356c455a39453d466d656d626572585877785951693655554f2b727a644a3265523344386b464b32486b704c34336971736b377251566b644a444d593461716346665a383356554a35376565304352546b486c764639717973377a4f4248466b6f39443741513d3d582b614e714f6d6130306e71336b32494c474e69567151326f2d4241465a52665a67696e58356776425a4c4751",
+      "hash": "wePFkoU8PWVVxkb0Hj80z9lCBkzWxMrt0uRRUZNf3gc",
+      "id": "wePFkoU8PWVVxkb0Hj80z9lCBkzWxMrt0uRRUZNf3gc",
+      "suite": "lattice-cbor-v1"
     }
   ],
   "expectAtFrontier": [
@@ -197,7 +215,7 @@
     ],
     "state": {
       "admin": "root",
-      "admin_actions": "issue_invitation",
+      "admin_actions": "admit_member",
       "invitations": [
         {
           "recipient": "0oK/canjr7i7ujNa4fjS2q7yCxbmsF5fWFPF65lEZ9E=",
@@ -212,9 +230,20 @@
             "",
             "𐀀"
           ]
+        },
+        {
+          "recipient": "0oK/canjr7i7ujNa4fjS2q7yCxbmsF5fWFPF65lEZ9E=",
+          "threads": [
+            "treehouse:thread:one",
+            "",
+            "𐀀"
+          ]
         }
       ],
-      "members": [],
+      "members": [
+        "0oK/canjr7i7ujNa4fjS2q7yCxbmsF5fWFPF65lEZ9E=",
+        "BtkWyc99oKWpRkQER9drogAGn2jF9meJTNNVUFp+/nM="
+      ],
       "membership_events": [
         {
           "action": "admit",
@@ -230,6 +259,18 @@
         },
         {
           "action": "remove",
+          "recipient": "0oK/canjr7i7ujNa4fjS2q7yCxbmsF5fWFPF65lEZ9E="
+        },
+        {
+          "action": "admit",
+          "invitation": "vT208NB2s8LerIx3uPUrJ3lyt7iS1BtlcPFFKvJXf8k",
+          "level": "member",
+          "recipient": "BtkWyc99oKWpRkQER9drogAGn2jF9meJTNNVUFp+/nM="
+        },
+        {
+          "action": "admit",
+          "invitation": "U36rOZzht7M7wblx3wUPf2SQv8JC4E-XtdqL62QsJlM",
+          "level": "member",
           "recipient": "0oK/canjr7i7ujNa4fjS2q7yCxbmsF5fWFPF65lEZ9E="
         }
       ],
@@ -256,7 +297,7 @@
     },
     "winners": {
       "admin": "YycdqnI7-W9wxH451pptwTXPUYLZaIIM7Vy-UBFZ0eg",
-      "admin_actions": "vT208NB2s8LerIx3uPUrJ3lyt7iS1BtlcPFFKvJXf8k",
+      "admin_actions": "wePFkoU8PWVVxkb0Hj80z9lCBkzWxMrt0uRRUZNf3gc",
       "moderator": "YycdqnI7-W9wxH451pptwTXPUYLZaIIM7Vy-UBFZ0eg",
       "moderator_actions": null,
       "name": "8clmQ4GqLPY-po9i0n4p5JrIZp1d8CfF3zouik9EK84"
@@ -912,6 +953,144 @@
           "𐀀"
         ]
       }
+    },
+    {
+      "author": "root",
+      "authorPubkey": "0GwDuLJKuW0Hi9IgbeysxGOFkbAnSkfYs05Bxe5irco=",
+      "cap": "aNqOma00nq3k2ILGNiVqQ2o-BAFZRfZginX5gvBZLGQ",
+      "command": "issue_invitation",
+      "commandArgs": [
+        "0oK/canjr7i7ujNa4fjS2q7yCxbmsF5fWFPF65lEZ9E=",
+        [
+          "treehouse:thread:one",
+          "",
+          "𐀀"
+        ]
+      ],
+      "deps": [
+        "vT208NB2s8LerIx3uPUrJ3lyt7iS1BtlcPFFKvJXf8k"
+      ],
+      "effects": [
+        {
+          "field": "invitations",
+          "mutation": "append",
+          "value": {
+            "recipient": "0oK/canjr7i7ujNa4fjS2q7yCxbmsF5fWFPF65lEZ9E=",
+            "threads": [
+              "treehouse:thread:one",
+              "",
+              "𐀀"
+            ]
+          }
+        },
+        {
+          "field": "admin_actions",
+          "mutation": "write",
+          "value": "issue_invitation"
+        }
+      ],
+      "field": "invitations",
+      "hash": "U36rOZzht7M7wblx3wUPf2SQv8JC4E-XtdqL62QsJlM",
+      "id": "U36rOZzht7M7wblx3wUPf2SQv8JC4E-XtdqL62QsJlM",
+      "kind": "command",
+      "mutation": "append",
+      "replica": "treehouse:space:membership#root:BAkR1iLa7Mek_1cz4mSXf6pTeWZInkXYdFcjHj0Xd5Q",
+      "value": {
+        "recipient": "0oK/canjr7i7ujNa4fjS2q7yCxbmsF5fWFPF65lEZ9E=",
+        "threads": [
+          "treehouse:thread:one",
+          "",
+          "𐀀"
+        ]
+      }
+    },
+    {
+      "author": "root",
+      "authorPubkey": "0GwDuLJKuW0Hi9IgbeysxGOFkbAnSkfYs05Bxe5irco=",
+      "cap": "aNqOma00nq3k2ILGNiVqQ2o-BAFZRfZginX5gvBZLGQ",
+      "command": "admit_member",
+      "commandArgs": [
+        "vT208NB2s8LerIx3uPUrJ3lyt7iS1BtlcPFFKvJXf8k",
+        "BtkWyc99oKWpRkQER9drogAGn2jF9meJTNNVUFp+/nM=",
+        "member",
+        "SyDVx426d0zy0vqab4BPtdO1zgLh6m96G6xI9L9aZr3CSTTGrMnBQx4OeNAjbLCs1cpK1Yr8GRIAgFWM/d5QDw=="
+      ],
+      "deps": [
+        "U36rOZzht7M7wblx3wUPf2SQv8JC4E-XtdqL62QsJlM"
+      ],
+      "effects": [
+        {
+          "field": "members",
+          "mutation": "add",
+          "value": "BtkWyc99oKWpRkQER9drogAGn2jF9meJTNNVUFp+/nM="
+        },
+        {
+          "field": "membership_events",
+          "mutation": "append",
+          "value": {
+            "action": "admit",
+            "invitation": "vT208NB2s8LerIx3uPUrJ3lyt7iS1BtlcPFFKvJXf8k",
+            "level": "member",
+            "recipient": "BtkWyc99oKWpRkQER9drogAGn2jF9meJTNNVUFp+/nM="
+          }
+        },
+        {
+          "field": "admin_actions",
+          "mutation": "write",
+          "value": "admit_member"
+        }
+      ],
+      "field": "members",
+      "hash": "GPADtKZR_-JVIgoAG8wrBD_YPxHkMojv47gHlF4YJkc",
+      "id": "GPADtKZR_-JVIgoAG8wrBD_YPxHkMojv47gHlF4YJkc",
+      "kind": "command",
+      "mutation": "add",
+      "replica": "treehouse:space:membership#root:BAkR1iLa7Mek_1cz4mSXf6pTeWZInkXYdFcjHj0Xd5Q",
+      "value": "BtkWyc99oKWpRkQER9drogAGn2jF9meJTNNVUFp+/nM="
+    },
+    {
+      "author": "root",
+      "authorPubkey": "0GwDuLJKuW0Hi9IgbeysxGOFkbAnSkfYs05Bxe5irco=",
+      "cap": "aNqOma00nq3k2ILGNiVqQ2o-BAFZRfZginX5gvBZLGQ",
+      "command": "admit_member",
+      "commandArgs": [
+        "U36rOZzht7M7wblx3wUPf2SQv8JC4E-XtdqL62QsJlM",
+        "0oK/canjr7i7ujNa4fjS2q7yCxbmsF5fWFPF65lEZ9E=",
+        "member",
+        "wxYQi6UUO+rzdJ2eR3D8kFK2HkpL43iqsk7rQVkdJDMY4aqcFfZ83VUJ57ee0CRTkHlvF9qys7zOBHFko9D7AQ=="
+      ],
+      "deps": [
+        "U36rOZzht7M7wblx3wUPf2SQv8JC4E-XtdqL62QsJlM"
+      ],
+      "effects": [
+        {
+          "field": "members",
+          "mutation": "add",
+          "value": "0oK/canjr7i7ujNa4fjS2q7yCxbmsF5fWFPF65lEZ9E="
+        },
+        {
+          "field": "membership_events",
+          "mutation": "append",
+          "value": {
+            "action": "admit",
+            "invitation": "U36rOZzht7M7wblx3wUPf2SQv8JC4E-XtdqL62QsJlM",
+            "level": "member",
+            "recipient": "0oK/canjr7i7ujNa4fjS2q7yCxbmsF5fWFPF65lEZ9E="
+          }
+        },
+        {
+          "field": "admin_actions",
+          "mutation": "write",
+          "value": "admit_member"
+        }
+      ],
+      "field": "members",
+      "hash": "wePFkoU8PWVVxkb0Hj80z9lCBkzWxMrt0uRRUZNf3gc",
+      "id": "wePFkoU8PWVVxkb0Hj80z9lCBkzWxMrt0uRRUZNf3gc",
+      "kind": "command",
+      "mutation": "add",
+      "replica": "treehouse:space:membership#root:BAkR1iLa7Mek_1cz4mSXf6pTeWZInkXYdFcjHj0Xd5Q",
+      "value": "0oK/canjr7i7ujNa4fjS2q7yCxbmsF5fWFPF65lEZ9E="
     }
   ],
   "oracleCarrierOps": [
@@ -1658,6 +1837,146 @@
       "replica": "treehouse:space:membership#root:BAkR1iLa7Mek_1cz4mSXf6pTeWZInkXYdFcjHj0Xd5Q",
       "sig": "z4BIaC6JHBiJc1idJ8jibXEv/vyKeAtUMtfbllY5tSBXc+Y3MD9ayRJqBSanvPXW1z154cv/EmVVnqdid2JsAA==",
       "v": 1
+    },
+    {
+      "author": "0GwDuLJKuW0Hi9IgbeysxGOFkbAnSkfYs05Bxe5irco=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "issue_invitation"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "MG9LL2NhbmpyN2k3dWpOYTRmalMycTd5Q3hibXNGNWZXRlBGNjVsRVo5RT0="
+              ],
+              [
+                "list",
+                [
+                  [
+                    "bin",
+                    "dHJlZWhvdXNlOnRocmVhZDpvbmU="
+                  ],
+                  [
+                    "bin",
+                    "7oCA"
+                  ],
+                  [
+                    "bin",
+                    "8JCAgA=="
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "YU5xT21hMDBucTNrMklMR05pVnFRMm8tQkFGWlJmWmdpblg1Z3ZCWkxHUQ=="
+      ],
+      "deps": [
+        "vT208NB2s8LerIx3uPUrJ3lyt7iS1BtlcPFFKvJXf8k"
+      ],
+      "id": "U36rOZzht7M7wblx3wUPf2SQv8JC4E-XtdqL62QsJlM",
+      "kind": "command",
+      "replica": "treehouse:space:membership#root:BAkR1iLa7Mek_1cz4mSXf6pTeWZInkXYdFcjHj0Xd5Q",
+      "sig": "opp42Y151oJB0d2YK91wLNOSPUUygHgFOfqFEYyCTfKE8Ei+scfaQ6Ep2wMzcIFJ5K9OnggBJDSjy5czFms/BA==",
+      "v": 1
+    },
+    {
+      "author": "0GwDuLJKuW0Hi9IgbeysxGOFkbAnSkfYs05Bxe5irco=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "admit_member"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "dlQyMDhOQjJzOExlckl4M3VQVXJKM2x5dDdpUzFCdGxjUEZGS3ZKWGY4aw=="
+              ],
+              [
+                "bin",
+                "QnRrV3ljOTlvS1dwUmtRRVI5ZHJvZ0FHbjJqRjltZUpUTk5WVUZwKy9uTT0="
+              ],
+              [
+                "bin",
+                "bWVtYmVy"
+              ],
+              [
+                "bin",
+                "U3lEVng0MjZkMHp5MHZxYWI0QlB0ZE8xemdMaDZtOTZHNnhJOUw5YVpyM0NTVFRHck1uQlF4NE9lTkFqYkxDczFjcEsxWXI4R1JJQWdGV00vZDVRRHc9PQ=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "YU5xT21hMDBucTNrMklMR05pVnFRMm8tQkFGWlJmWmdpblg1Z3ZCWkxHUQ=="
+      ],
+      "deps": [
+        "U36rOZzht7M7wblx3wUPf2SQv8JC4E-XtdqL62QsJlM"
+      ],
+      "id": "GPADtKZR_-JVIgoAG8wrBD_YPxHkMojv47gHlF4YJkc",
+      "kind": "command",
+      "replica": "treehouse:space:membership#root:BAkR1iLa7Mek_1cz4mSXf6pTeWZInkXYdFcjHj0Xd5Q",
+      "sig": "WCn+tWnkcCjr0wmiw2j+PKRibhli4QKtIbYgJjqsG8igwnPpkLLWr5aE/zCU+Ld70U4W9pCgHieaqlZACXmGCw==",
+      "v": 1
+    },
+    {
+      "author": "0GwDuLJKuW0Hi9IgbeysxGOFkbAnSkfYs05Bxe5irco=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "admit_member"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "VTM2ck9aemh0N003d2JseDN3VVBmMlNRdjhKQzRFLVh0ZHFMNjJRc0psTQ=="
+              ],
+              [
+                "bin",
+                "MG9LL2NhbmpyN2k3dWpOYTRmalMycTd5Q3hibXNGNWZXRlBGNjVsRVo5RT0="
+              ],
+              [
+                "bin",
+                "bWVtYmVy"
+              ],
+              [
+                "bin",
+                "d3hZUWk2VVVPK3J6ZEoyZVIzRDhrRksySGtwTDQzaXFzazdyUVZrZEpETVk0YXFjRmZaODNWVUo1N2VlMENSVGtIbHZGOXF5czd6T0JIRmtvOUQ3QVE9PQ=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "YU5xT21hMDBucTNrMklMR05pVnFRMm8tQkFGWlJmWmdpblg1Z3ZCWkxHUQ=="
+      ],
+      "deps": [
+        "U36rOZzht7M7wblx3wUPf2SQv8JC4E-XtdqL62QsJlM"
+      ],
+      "id": "wePFkoU8PWVVxkb0Hj80z9lCBkzWxMrt0uRRUZNf3gc",
+      "kind": "command",
+      "replica": "treehouse:space:membership#root:BAkR1iLa7Mek_1cz4mSXf6pTeWZInkXYdFcjHj0Xd5Q",
+      "sig": "hGh8vrz54IFdFduxjrFuVIkLyjKbemrq+awaNFJZ8C4k+lNdqyFmNHJZw+dVQdS/xfVlmvCLKQlfZv5brTV+Aw==",
+      "v": 1
     }
   ],
   "perspectives": [
@@ -1720,5 +2039,9 @@
       }
     },
     "name": "Treehouse.Space"
+  },
+  "treehouseObservation": {
+    "operationCount": 21,
+    "posts": []
   }
 }

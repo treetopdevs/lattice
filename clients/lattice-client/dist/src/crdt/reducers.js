@@ -62,6 +62,10 @@ export function orSet(fieldOps, byId, compare = compareValues) {
 }
 /** Causal list: appended values ordered by `{causal height, op id}` (Sim's sort key). */
 export function causalList(fieldOps, depthOf) {
+    return causalListEntries(fieldOps, depthOf).map((entry) => entry.value);
+}
+/** Original element/op identity survives edits; tombstones remove only presentation. */
+export function causalListEntries(fieldOps, depthOf) {
     const counts = insertCounts(fieldOps);
     const deleted = new Set(fieldOps.filter((op) => op.mutation === "delete").map((op) => op.value));
     const editsByTarget = new Map();
@@ -79,7 +83,7 @@ export function causalList(fieldOps, depthOf) {
         .sort((a, b) => depthOf(a.id) - depthOf(b.id) || cmpHash(a.id, b.id) || (a.effectIndex ?? 0) - (b.effectIndex ?? 0))
         .map((o) => {
         const result = editedValues.get(effectElementId(o, counts));
-        return result === undefined || result.winner === null ? o.value : result.value;
+        return { id: effectElementId(o, counts), opId: o.id, value: result === undefined || result.winner === null ? o.value : result.value };
     });
 }
 function insertCounts(ops) {

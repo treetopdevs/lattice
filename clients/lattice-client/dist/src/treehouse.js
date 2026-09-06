@@ -1,9 +1,11 @@
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { authorCarrierDelegation, authorCarrierOp, verifyCarrierOp } from "./codec";
 import { base64ToBytes, canonicalTerm, carrierDelegationsFromFrames, carrierOpsToSemanticOps } from "./carrier";
-import { compareUtf8 } from "./op";
+import { compareUtf8, effectViews } from "./op";
 import { authorTownshipGenesis, authorTownshipRevocation, townshipCapTerm } from "./township";
 import { materialize } from "./materialize";
+import { depth, index } from "./dag";
+import { causalListEntries } from "./crdt/reducers";
 export const treehouseSpaceSchema = {
     name: "Treehouse.Space",
     fields: {
@@ -68,6 +70,19 @@ export function authorTreehouseCommand(input) {
     return authorCarrierOp({ replica: input.replica, deps: input.deps, signer: input.signer,
         kind: "command", cap: townshipCapTerm(input.capId), body: treehouseCommandBody(input.product, input.command) });
 }
+/** Product observation preserves signed post identity and counts original DAG nodes. */
+export function observeTreehouse(product, ops) {
+    const schema = product === "Treehouse.Space" ? treehouseSpaceSchema : treehouseThreadSchema;
+    const projection = materialize(schema, ops);
+    const byId = index(ops);
+    const depthCache = new Map();
+    const live = [...byId.values()].filter((op) => !projection.quarantineReasons.has(op.id));
+    const posts = product === "Treehouse.Thread" ? causalListEntries(live.flatMap(effectViews).filter((op) => op.field === "posts"), (id) => depth(id, byId, depthCache)).map((entry) => {
+        const original = byId.get(entry.opId);
+        return { id: entry.id, author: original.authorPubkey ?? original.author, text: entry.value };
+    }) : [];
+    return { ...projection, operationCount: byId.size, posts };
+}
 /** Observe retained semantic history; decoding must have used the Space product. */
 export function treehouseSpaceInitialization(ops) {
     const projection = materialize(treehouseSpaceSchema, ops);
@@ -113,6 +128,11 @@ export async function authorTreehouseRoleTransfer(input) {
 }
 /** Existing issuer-checked revocation, with no separate Treehouse grant primitive. */
 export const authorTreehouseGrantRevocation = authorTownshipRevocation;
+/** Existing witnessed role proof only; this does not create the R04/R14 bounded profile. */
+export function authorTreehouseWitnessedSuccession(input) {
+    return authorCarrierOp({ replica: input.replica, deps: input.deps, signer: input.signer, kind: "authority", cap: ["nil"],
+        body: ["tuple", [["atom", "succeed"], ["atom", input.role], ["delegation", input.delegation], ["tuple", [["atom", "witnessed"], input.certificate]]]] });
+}
 function term(value) {
     if (typeof value === "string")
         return ["bin", bytesBase64(new TextEncoder().encode(value))];

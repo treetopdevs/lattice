@@ -55,6 +55,20 @@ export declare function authorTreehouseCommand(input: {
     command: TreehouseCommand;
 }): Promise<CarrierOpFrame>;
 export type TreehouseInitialization = "uninitialized" | "incomplete" | "ready";
+/** Product observation preserves signed post identity and counts original DAG nodes. */
+export declare function observeTreehouse(product: TreehouseProduct, ops: Op[]): {
+    operationCount: number;
+    posts: {
+        id: string;
+        author: string;
+        text: unknown;
+    }[];
+    state: Record<string, unknown>;
+    quarantine: string[];
+    quarantineReasons: ReadonlyMap<string, string>;
+    order: string[];
+    winners: Record<string, string | null>;
+};
 /** Observe retained semantic history; decoding must have used the Space product. */
 export declare function treehouseSpaceInitialization(ops: Op[]): TreehouseInitialization;
 /** Pure root-only preparation. Returned pending frames have not been persisted. */
@@ -83,6 +97,15 @@ export declare function authorTreehouseRoleTransfer(input: {
 }>;
 /** Existing issuer-checked revocation, with no separate Treehouse grant primitive. */
 export declare const authorTreehouseGrantRevocation: typeof authorTownshipRevocation;
+/** Existing witnessed role proof only; this does not create the R04/R14 bounded profile. */
+export declare function authorTreehouseWitnessedSuccession(input: {
+    replica: string;
+    deps: string[];
+    signer: CarrierOpSigner;
+    role: "admin" | "moderator";
+    delegation: CarrierDelegation;
+    certificate: CarrierTerm;
+}): Promise<CarrierOpFrame>;
 /** Explicit injection keeps Treehouse command names independent of Township. */
 export declare function treehouseCommandDecoders(product: TreehouseProduct): CommandDecoderMap;
 export declare function treehouseInvitationAcceptanceBytes(replica: string, invitation: Op): Uint8Array;

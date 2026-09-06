@@ -13,3 +13,9 @@ export declare function lww(writers: Op[], depthOf: (id: string) => number): {
 export declare function orSet(fieldOps: Op[], byId: Map<string, Op>, compare?: (a: unknown, b: unknown) => number): unknown[];
 /** Causal list: appended values ordered by `{causal height, op id}` (Sim's sort key). */
 export declare function causalList(fieldOps: Op[], depthOf: (id: string) => number): unknown[];
+/** Original element/op identity survives edits; tombstones remove only presentation. */
+export declare function causalListEntries(fieldOps: Op[], depthOf: (id: string) => number): {
+    id: string;
+    opId: string;
+    value: unknown;
+}[];

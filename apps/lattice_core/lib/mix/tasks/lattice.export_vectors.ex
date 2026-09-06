@@ -246,6 +246,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       toolshed_custody_consent(),
       treehouse_space_membership(),
       treehouse_space_roles(),
+      treehouse_space_succession(),
       treehouse_thread_archive(),
       treehouse_thread_conflicts(),
       township_carrier_w1()
@@ -282,16 +283,66 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     {sim, _} = Sim.command(sim, "root", :create_thread, ["\u{E000}", "BMP"])
     {sim, _} = Sim.command(sim, "root", :create_thread, ["\u{10000}", "Supplementary"])
 
-    {sim, _} =
+    {sim, bob_invite} =
       Sim.command(sim, "root", :issue_invitation, [
         bob,
         ["treehouse:thread:one", "\u{E000}", "\u{10000}"]
       ])
 
+    scope = ["treehouse:thread:one", "\u{E000}", "\u{10000}"]
+    {sim, alice_invite} = Sim.command(sim, "root", :issue_invitation, [alice, scope])
+
+    alice_signature =
+      Treehouse.Invitation.accept(Sim.identity(sim, "alice"), Sim.replica(sim), alice_invite)
+
+    bob_signature =
+      Treehouse.Invitation.accept(Sim.identity(sim, "bob"), Sim.replica(sim), bob_invite)
+
+    {_, left} =
+      Sim.command(sim, "root", :admit_member, [alice_invite.id, alice, "member", alice_signature])
+
+    {_, right} =
+      Sim.command(sim, "root", :admit_member, [bob_invite.id, bob, "member", bob_signature])
+
+    {log, %{pending: []}} = Sync.deliver(Sim.log(sim, "root"), [left, right])
+    {reverse, %{pending: []}} = Sync.deliver(Sim.log(sim, "root"), [right, left])
+
+    unless Lattice.state(Treehouse.Space, log) == Lattice.state(Treehouse.Space, reverse),
+      do: raise("Treehouse admission-order divergence")
+
+    treehouse_scenario("treehouse_space_membership", sim, log, [
+      %{name: "admitted", log: admitted}
+    ])
+  end
+
+  defp treehouse_space_succession do
+    # Legacy/root-only replay qualification: this is not R04's bounded family.
+    sim =
+      Sim.new(Treehouse.Space, "treehouse:space:succession", ["root", "alice", "bob"],
+        seed: "treehouse-space:succession"
+      )
+
+    {sim, _} =
+      Sim.create_replica(sim, "root",
+        policies: %{
+          admin: %{
+            successor: "alice",
+            recovery: %{mode: :witnessed, version: 1, witnesses: ["root", "bob"], threshold: 2}
+          }
+        }
+      )
+
+    {sim, _} = Sim.command(sim, "root", :create_space, ["Before succession"])
+    sim = Sim.sync_all(sim)
+    before = Sim.log(sim, "root")
+    {sim, _} = Sim.succeed(sim, "alice", :admin, witnesses: ["root", "bob"], ops: [:create_space])
+    sim = Sim.sync_all(sim)
+    {sim, _} = Sim.command(sim, "alice", :create_space, ["Witnessed role replay"])
+    {sim, _} = Sim.command(sim, "root", :create_space, ["Stale founder"])
     sim = Sim.sync_all(sim)
 
-    treehouse_scenario("treehouse_space_membership", sim, Sim.log(sim, "root"), [
-      %{name: "admitted", log: admitted}
+    treehouse_scenario("treehouse_space_succession", sim, Sim.log(sim, "root"), [
+      %{name: "before succession", log: before}
     ])
   end
 
@@ -397,6 +448,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
   defp treehouse_scenario(name, sim, log, perspectives) do
     realms = realm_index(sim)
+    observation = Treehouse.ReadModel.observe(sim.module, log)
 
     %{
       name: name,
@@ -409,6 +461,14 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       realmByPubkey: carrier_realm_by_pubkey(realms),
       oracleCarrierOps: carrier_ops(log),
       canonicalOps: canonical_ops(log),
+      treehouseObservation: %{
+        "operationCount" => observation.operation_count,
+        "posts" =>
+          Enum.map(
+            observation.posts,
+            &%{"id" => &1.id, "author" => Base.encode64(&1.author), "text" => &1.text}
+          )
+      },
       authorityQuarantine: authority_quarantine(sim.module, log)
     }
   end
@@ -4383,6 +4443,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     |> maybe_put("realmByPubkey", Map.get(scenario, :realmByPubkey))
     |> maybe_put("oracleCarrierOps", Map.get(scenario, :oracleCarrierOps))
     |> maybe_put("canonicalOps", Map.get(scenario, :canonicalOps))
+    |> maybe_put("treehouseObservation", Map.get(scenario, :treehouseObservation))
     |> maybe_put("successionOperationId", Map.get(scenario, :successionOperationId))
     |> maybe_put("tickProvenance", Map.get(scenario, :tickProvenance))
     |> maybe_put("witnessedRecovery", Map.get(scenario, :witnessedRecovery))
