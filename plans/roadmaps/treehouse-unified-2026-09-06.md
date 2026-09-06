@@ -44,8 +44,8 @@ Prepare reviewable amendments before collecting any required sign-off. Planning 
 | Native/physical scope | Adopt Android camera/pairing/physical scope and a supported witness ceremony; LAN remains parked | R01b, before R13/R36/native ceremony; iOS remains R32a |
 | Module isolation | Keep Treehouse app ID, database, key service and signing lineage; Toolshed becomes namespaces/replica permissions; legacy Toolshed IDs remain reserved | R01c actual Plan 158 countersign, before R26; does not block R10/R12 |
 | Founder authority | Bounded successor, surviving renewal issuer, leased removable founder grants and pre-authorized catalog replacement | R02 probes and explicit contract, implemented in R04 |
-| Witness establishment | Proposed 2-of-3 independent keys; separate beacon/succession/recovery purposes and per-replica pinning | R02/R17a; threshold is proposed until adopted |
-| Epoch and renewal operations | Compare a daily reviewed signed-day cadence and seven-day lease window against measured fan-out; adopt exact units/window/bounds from probes | R02, before R14 profile enablement |
+| Witness establishment | Adopted software candidate: 2-of-3 independently controlled eligible keys, separate fixed purposes and per-replica pinning | R02/R17a software decision closed; R36/R17c prove selected keys and ceremonies |
+| Epoch and renewal operations | Adopted software candidate: L=7 inclusive epochs, warning in final two, renewal E5/E10, step 1 and at most two separately signed catch-up steps | R14/R17 measure field cadence before profile enablement |
 | Social continuity | Group-scoped old/new-key attestation plus new-key possession, followed by ordinary explicit admission | R19a; exact threshold/conflict/vocabulary decisions precede R19b |
 | Expansion | Keep the observed pilot cohort first; inclusive 150 is only a proposed later target, requiring amendment of Plan 177's “under 150” | R35a, before R33; does not block core chat |
 
@@ -61,31 +61,31 @@ Rows are the authoritative dependency graph. Commas mean all prerequisites. “N
 
 | ID | Packet / accountable function | Size | Risk | Requires | Exit evidence | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| R01a | Core contract / integrator | M | Medium | None | Adopted order, archive, two dependency amendments, protected pins green | LOCAL VERIFIED |
-| R01b | Android and witness scope / operator + integrator | S | High | R01a, R17a | Adopted scope and deferred-ceremony amendment; actual sign-off | PLANNED |
-| R01c | Toolshed module isolation / operator + integrator | S | Medium | R01a | Countersigned collision contract; reserved legacy identities | LOCAL VERIFIED |
-| R02 | Founder lifecycle design / authority | M | High | R01a | Executable matrix: renewal, bounded successor, child roots and catalog recovery | IN PROGRESS |
-| R03 | Witnessed beacons / authority | L | High | R01a, R07 | Plan 179 steps 2–9, one Core integration PR | IN PROGRESS |
-| R04 | Continued authority / authority | L | High | R02, R03 | Core membership/renewal after two expiry cycles; bounded self-issue | PLANNED |
-| R05 | Diagnostic redaction / hardening | S | Medium | None | Plan 170 negative inspect/crash cases | LOCAL VERIFIED |
-| R06 | Verified restores / hardening | M | High | None | Plan 171 consumer policies; staged fail-closed recovery input | LOCAL VERIFIED |
-| R07 | Canonical strictness / codec | S–M | High | None | Plan 172 valid-byte parity plus duplicate/noncanonical refusals | LOCAL VERIFIED |
-| R08 | Deadlines and pagination / carrier | M–L | High | None | Plan 173 bounded setup, interrupted large-log real-transport replay | IN PROGRESS |
-| R09 | Input limits / hardening | M | High | R07, R08 | Plan 176 ingress and authority boundary refusals | PLANNED |
-| R10 | Root-only Treehouse domain / product + parity | XL | High | R01a, R07, R09 | Core complete vocabulary, effects, conflicts, offline demo | PLANNED |
-| R11a | Local catalog/provisioning / carrier | M | High | R02, R04, R06, R10 | Local signed catalogs, root bootstrap and bounded routes | PLANNED |
+| R01a | Core contract / integrator | M | Medium | None | Adopted order, archive, two dependency amendments, protected pins green | DONE |
+| R01b | Android and witness scope / operator + integrator | S | High | R01a, R17a | Adopted scope and deferred-ceremony amendment; actual sign-off | LOCAL VERIFIED |
+| R01c | Toolshed module isolation / operator + integrator | S | Medium | R01a | Countersigned collision contract; reserved legacy identities | DONE |
+| R02 | Founder lifecycle design / authority | M | High | R01a | Executable matrix: renewal, bounded successor, child roots and catalog recovery | DONE |
+| R03 | Witnessed beacons / authority | L | High | R01a, R07 | Plan 179 steps 2–9, one Core integration PR | LOCAL VERIFIED |
+| R04 | Continued authority / authority | L | High | R02, R03 | Core membership/renewal after two expiry cycles; bounded self-issue | LOCAL VERIFIED |
+| R05 | Diagnostic redaction / hardening | S | Medium | None | Plan 170 negative inspect/crash cases | DONE |
+| R06 | Verified restores / hardening | M | High | None | Plan 171 consumer policies; staged fail-closed recovery input | DONE |
+| R07 | Canonical strictness / codec | S–M | High | None | Plan 172 valid-byte parity plus duplicate/noncanonical refusals | DONE |
+| R08 | Deadlines and pagination / carrier | M–L | High | None | Plan 173 bounded setup, interrupted large-log real-transport replay | DONE |
+| R09 | Input limits / hardening | M | High | R07, R08 | Plan 176 ingress and authority boundary refusals | DONE |
+| R10 | Root-only Treehouse domain / product + parity | XL | High | R01a, R07, R09 | Core complete vocabulary, effects, conflicts, offline demo | LOCAL VERIFIED |
+| R11a | Local catalog/provisioning / carrier | M | High | R02, R04, R06, R10 | Local signed catalogs, root bootstrap and bounded routes | IN PROGRESS |
 | R11b | Lifecycle reconciliation / carrier | M | High | R11a | Crash-safe creation/removal, no phantom publication | PLANNED |
 | R11c | Catalog replacement trust / recovery | M | High | R11b | Retained client accepts authorized replacement without old signer | PLANNED |
-| R12 | Empty local app / product | L | Medium | R01a, R05, R06, R10 | Packaged offline preview; no member grants | PLANNED |
+| R12 | Empty local app / product | L | Medium | R01a, R05, R06, R10 | Packaged offline preview; no member grants | IN PROGRESS |
 | R13 | Enrollment and sync / product | L | High | R01b, R08, R11c, R12 | Packaged two-app join/heal; wrong-input and four-socket tests | PLANNED |
 | R14 | Profiles, roles, removal, renewal / product + authority | XL | High | R13, R04, R36 | Packaged enroll-then-pin, per-replica readiness and renewal | PLANNED |
-| R15 | Measured rollover / product | L | Medium | R14 | Packaged archival saga, finite-capacity stop, retained readability | PLANNED |
+| R15 | Measured rollover / product | L | Medium | R14 | Packaged archival saga, finite-capacity stop, retained readability; bounded relay workload and pagination latency | PLANNED |
 | R16 | Member reseed, AF-1 / recovery | M | High | R06, R11c, R15 | Packaged new-identity relay reseed from surviving member evidence | PLANNED |
-| R17a | Native witness decision / native custody | M | High | None | Plan 174 decision plus concrete Android build plan | IN PROGRESS |
+| R17a | Native witness decision / native custody | M | High | None | Plan 174 decision plus concrete Android build plan | DONE |
 | R17b | Native witness signing / native custody | L | High | R17a, R01b, R03, R14 | Claim verification, protected signing, consent/replay negatives | PLANNED |
 | R17c | Independent witness proof / device QA | M | High | R17b | Physical custody/presence evidence for the selected Android profile | PLANNED |
 | R18 | Founder and combined loss / recovery | M | High | R04, R11c, R15, R16, R17c | Packaged loss with physical witnesses; independent retained trust | PLANNED |
-| R19a | AF-3 contract / identity | M | High | R01a, R02 | Adopted vouch, conflict, possession and lost-loan rules | PLANNED |
+| R19a | AF-3 contract / identity | M | High | R01a, R02 | Adopted vouch, conflict, possession and lost-loan rules | DONE |
 | R19b | AF-3 semantics / identity + parity | L | High | R19a, R04, R10 | Core founder-present/absent re-admission with negative controls | PLANNED |
 | R20 | New-phone re-admission / product | M | High | R14, R19b | Packaged AF-3, old-key return, visible unresolved grants | PLANNED |
 | R21a | WSS/restore artifacts / operations | M | Medium | R05, R06, R08, R09, R11c | Reproducible deployment/runbook and local restore checks | PLANNED |
@@ -108,23 +108,54 @@ Rows are the authoritative dependency graph. Commas mean all prerequisites. “N
 | R34 | Township follow-on / product | Program | Medium | R23 | Re-baselined B1/B2 plan; R30 additionally gates its product pilot | PLANNED |
 | R35a | Lifetime/target decision / product + performance | M | High | R15, R23 | Observed growth, adopted boundary/retention decision or stop verdict | PLANNED |
 | R35b | Lifetime policy proof / lifecycle | L or no-build | High | R35a | Implemented/tested adopted policy or tested finite end-of-life | PLANNED |
-| R36 | Protected witness identity / native custody | L | High | R01b, R12, R17a | Distinct persistent witness keys and reviewed public-identity binding | PLANNED |
+| R36 | Protected witness identity / native custody | L | High | R01b, R12, R17a | Distinct persistent witness keys and reviewed public-identity binding | IN PROGRESS |
 
-### Unmerged verification records (2026-09-06)
+### Execution evidence (2026-09-06)
 
-These immutable sibling tips record local preparation; none is an integrated dependency until
-its PR-tip and merge-result gates pass. Claude Fable reviewed R05/R06/R07 and returned PASS.
+This table is the current evidence snapshot; earlier revision evidence remains in
+Git history and each packet's source plan. R01a, R01c, R02, R05, R06, R07, R08, R09, R17a and R19a have
+both final-tip and exact merge-result hosted gates closed. R02 closes its software
+contract, R17a its native design and R19a its member-continuity contract; physical selection and implementation
+retain their separate gates. `LOCAL VERIFIED` still
+requires every remaining integration/review/hosted gate. Distribution jobs skipped
+without protected pilot inputs establish no signed pilot artifact or physical result.
+A passing review or a green path-filtered status is not a substitute for the required workflow.
 
-| Packet | Local tip | Evidence and remaining gate |
+| Packet | Immutable reviewed tip / PR | Evidence and remaining gate |
 | --- | --- | --- |
-| R01a | See [contract record](evidence/treehouse-r01a-2026-09-06.md) | PR 59; hosted remediation in progress |
-| R01c | `b9736790` | Module collision amendment; full local verification and Fable review, wording/evidence follow-up; R01a and hosted gates pending |
-| R05 | `4c88f41ec7757158a8fce94b44194debf87c22a7` | Plan 170; 666 tests + 27 properties, post-refresh raw-status regression; hosted gates pending |
-| R06 | `41ace37b50439f83393eda427dc55a9ef650f899` | Plan 171; 677 tests + 27 properties, deterministic snapshot-replacement regression; hosted gates pending |
-| R07 | `afe5ea250072267927b89b353e7bde1e793176b5` | Plan 172; preserved legacy vectors, Node/browser strictness and native bridge coverage; hosted gates pending |
+| R01a | `bed951d9ae753c390e509dceace1311df7c081c2` / [59](https://github.com/treetopdevs/lattice/pull/59) | DONE: Fable PASS; tip run 34036627773; merge `5d1861f16e12fb950049212a9e1301dec4e86607`, merge run 34037516446 passed; [contract record](evidence/treehouse-r01a-2026-09-06.md) |
+| R01b | `910a735d3df910ddc40f83e02bd8e699b806d983` / [73](https://github.com/treetopdevs/lattice/pull/73) | Android scope and final R17a integration reviewed: Fable design PASS, Sol final adoption PASS, protected tests and tip run 34061333469 passed. Merge `8f6af223856e63e7215d80cb933672c213fcce07`; exact merge run 34065497216 pending. No physical device result |
+| R01c | `b973679077e6300a1390fb1da40443d5279ec30f` / [63](https://github.com/treetopdevs/lattice/pull/63) | DONE: module collision amendment, Fable PASS; tip run 34036906871; merge `67401756af8c3cd0e538a2bcb62dcb832091c6e0`, merge run 34046599577 passed. Stale ancestry finding refuted and resolved |
+| R02 | Design/probes `389e9d4e520a9119913bfad591bc3c3f95ad12f8` / [64](https://github.com/treetopdevs/lattice/pull/64); adoption `f6d18328231a80211c1e9c7f0b6f9790e7e79e06` / [69](https://github.com/treetopdevs/lattice/pull/69) | DONE: design Fable PASS, 12 probes, 675 tests + 27 properties, tip 34037599146 and merge 34045243247 passed. Final adoption Sol PASS, tip 34063120883 and merge `73f01d85d425eed60c029dfc1684fbdd6ebd5acd` / run 34063872043 passed. Software candidate and bounded-admin catalog policy adopted; measured field cadence and eligible keys remain R14/R17/R36 gates |
+| R03 | `54aa22304bfeada09fa0ea276698c5ec3eb0d1f1` / [68](https://github.com/treetopdevs/lattice/pull/68) | Fable original/follow-up PASS; Sol final raw-dependency correction PASS. Full suite: 747 tests + 27 properties; 69 reciprocal vectors, 213 authoring, 1,345 conformance and 580 canonical assertions passed. Exact tip run 34062465105 passed. Fresh command-kind policy finding was refuted by signed BEAM/compaction/TS controls; actual Fable independently confirmed the refutation and the thread is resolved. Merge gate remains |
+| R04 | `eeeb215a68048eca375c982849fdabd8342d98b4` / [71](https://github.com/treetopdevs/lattice/pull/71) | Fable implementation PASS; Sol final R03 propagation PASS. Latest focused BEAM 50 tests, 57 reciprocal continuation histories, 213 authoring and 1,345 conformance assertions passed. Earlier full source: 775 tests + 27 properties; integrated R10 full suite also covers this source. Exact tip run 34063379332 passed; parent and merge gates remain |
+| R05 | `4c88f41ec7757158a8fce94b44194debf87c22a7` / [60](https://github.com/treetopdevs/lattice/pull/60) | DONE: diagnostic negatives, Fable PASS, 666 tests + 27 properties; tip 34036748317; merge `2f83cc1ea5fdd2fdd5a4a7500b467cebaf392c1a`, merge run 34038896331 passed |
+| R06 | `41ace37b50439f83393eda427dc55a9ef650f899` / [61](https://github.com/treetopdevs/lattice/pull/61) | DONE: staged verified snapshots, deterministic replacement regression, Fable PASS, 677 tests + 27 properties; tip 34036773840; merge `15ea1c37b2a134725ae6d820752a9ef8f105da8d`, merge run 34045534524 passed |
+| R07 | `afe5ea250072267927b89b353e7bde1e793176b5` / [62](https://github.com/treetopdevs/lattice/pull/62) | DONE: strict canonical refusals and unchanged valid bytes, Fable PASS; tip 34036786373; merge `b68e6bd367736a23e1478a07257deb55f37b462d`, merge run 34040727942 passed |
+| R08 | `73a96a5418747b36bef6a0363d0ed3e35094d1e1` / [65](https://github.com/treetopdevs/lattice/pull/65) | DONE: exact repair Fable PASS; 678 tests + 27 properties; tip run 34046604253 passed; all hosted threads resolved. Merge `9bb7b340e49be605151458134391aa16e642fc29`, exact merge run 34048283122 passed. Pagination-cache cost remains an R15 measurement item |
+| R09 | `99139544050395cda535b3fbc08576dd47e2818a` / [70](https://github.com/treetopdevs/lattice/pull/70) | DONE: Fable PASS; 726 tests + 27 properties and TS gates. Corrected exact tip run 34050467317 passed; merge `7f1636fda170afcaf5712572c4e72fb92edf75b2` / run 34052131674 passed. The R08 focused count correction changed documentation only |
+| R10 | `c0aa97d26927c350e1ea57106e82221b57dc77a9` / [74](https://github.com/treetopdevs/lattice/pull/74) | Fable domain PASS; Sol final dependency propagation PASS. Integrated full suite: 808 tests + 27 properties; 1,495 conformance / 75 top-level vectors, 886 canonical, 18 Treehouse and 57 continuation histories passed. Existing vector content preserved. Exact tip run 34063386044 passed; stacked parent and merge gates remain |
+| R11a/b/c | Foundation `6885a25a5cae9770315b0df679ff70e5164fc126` / [78](https://github.com/treetopdevs/lattice/pull/78); [reviewed lifecycle contract](sources/treehouse-catalog-reviewed-2026-09-06.md) and [adoption patch](sources/treehouse-catalog-adoption-2026-09-06.patch) | Contract Fable PASS; Sol cutoff/entry/integrated foundation PASS. Foundation full suite: 856 tests + 27 properties; 75 prior top-level vectors byte-identical; fresh reciprocal cutoff gate and exact tip run 34064596153 passed. Separate unpublished retained-trust evaluator is under repair after Sol found saved corruption masked by a freeze; historical-freeze evidence amendment adopted before repair. Real durable CAS, provisioning, reconciliation and replacement remain unfinished; C01–C15 OPEN |
+| R12 | `bfb6bc07fe9096e2987bf1b49c72a39970dc25f2` / [76](https://github.com/treetopdevs/lattice/pull/76) | Fable implementation PASS; Sol final integration/AX harness repair PASS. Full suite: 809 tests + 27 properties plus client/preview/Vue gates. Exact repaired-tip run 34063793972 passed real empty UI, draft/post/edit/archive, retained restart and BEAM replay. Earlier run 34062001387 failed an AX lookup; failure retained, only proven pre-action lookups retried. Local rebuilt retained-identity replay awaits user-side Keychain approval. Parent/merge gates remain |
+| R17a | `0cdf8b6f9b9522b3a3ce06273c53840b82270335` / [66](https://github.com/treetopdevs/lattice/pull/66) | DONE: Fable decision/eligibility PASS; Sol final connected-history admission PASS. Exact tip run 34061332198 and merge `1026406b58266a95270c425df42e6b7749e7260f` / run 34064017804 passed. Design completion does not implement native authority verification, prove hardware eligibility or enable profiles |
+| R19a | `ae37bfd445e5ce0cc48c9b7f2b701d8746bd8df9` / [75](https://github.com/treetopdevs/lattice/pull/75) | Fable exact continuity design PASS; Sol four-document adoption PASS; seven documentation links/fences and exact tip run 34061740955 passed. DONE (design only): merge `413425da3b147afe8a3e016dedbc5b6bbdb0bc4d` / run 34065326328 passed. All 17 A01–A17 implementation cases remain OPEN for R19b/R20 |
+| Independent native prompt | `0e942f2c6404130f5dcebda9bd754883846df6bd` / [67](https://github.com/treetopdevs/lattice/pull/67) | Constant reason, hostile-input negatives, Fable PASS and 68 Rust tests. Tip run 34037880177 passed. Merge `cba32f3b3a7634801c2474df317c36a12b7ebed9` / run 34047317736 attempt 2 passed. Attempt 1 generator failure preserved; independently reviewed test-only repair [72](https://github.com/treetopdevs/lattice/pull/72), merge `c22272ec2826aa3213e5a6b33e32b22c9c8a58cf` / run 34052205823 passed. No native semantic-verification claim |
+| R36 | Stage 1 `4434a02000e1b35211910edb45ef9b38fafdd5d4` / [77](https://github.com/treetopdevs/lattice/pull/77) | Private custody/provider boundary: Fable preparation PASS, Sol implementation/final integration PASS, 82 default / 83 permitted-feature Rust tests and integrated 809 tests + 27 properties passed. Exact tip run 34063968821 passed. Android Stage 2 design reviewed by actual Fable and adopted before its first implementation slice. Protected Android generation, independent attestation, physical eligibility and full R36 closure remain open |
 
-R02 lifecycle probes, R03 witnessed-beacon implementation, R08 transport pagination and R17a
-native design are active in separate worktrees. Their partial results are not completion claims.
+Local test totals above exclude three already-configured tests; none is hidden by
+this program. Uncapped concurrent BEAM suites exposed a module-load timeout and a
+transport-fixture scheduling race. Serialize local full suites with
+`ERL_FLAGS='+S 4:4'` and the prescribed OTP/asdf path, retain initial failures and
+record controlled reruns. This changes execution resources, not test timeouts or
+production contracts. Source review, local runtime checks, hosted packaging,
+physical hardware and elapsed pilot observations remain separate evidence tiers.
+
+At the R03/R09 integration, preserve the exact three-field witnessed-beacon decode
+before the exact two-field legacy branch; unsupported arities remain inert. R02
+P05's missing-policy three-field audit changes to `unauthorized_beacon` under its
+already adopted Plan 179 exception, preserving historical bytes, state and lease
+outcomes. R04 uses R09's explicit refusal of rebinding and a fresh reserved family;
+legacy replicas do not silently receive bounded continuation semantics.
 
 ### Work order and merge discipline
 
@@ -151,6 +182,31 @@ An otherwise authorized repeated archive is an honored write of `true` with no a
 Application refusal precedence is: missing/not-causal target; quarantined target; wrong target kind/Thread; wrong author; already tombstoned; archived Thread. An honored archive in the causal past denies new posts, author edits and author tombstones; moderator tombstones remain allowed. A post concurrent with archive remains honored. Existing canonical ordering resolves concurrent edits; tombstoned content cannot be revived. R10 proves create, concurrent admission/posting, partition/heal, tombstones, role transfer, removal, archive and dump/restore across both runtimes. Root-only succession replay is qualified until R04 establishes its bounded policy; legacy Township and Toolshed vectors remain green.
 
 R15 makes rollover a durable saga with one locally identified attempt, retryable successor draft/provisioning and explicit recovery after each transition. Check slot capacity before asking the user to archive for rollover; archive may still be a deliberate standalone action. If the operator or network disappears after archive, show the archived Thread and pending successor; retries cannot duplicate it. A live Space reference is published only after route readiness. The successor receives the approved per-replica profile and current reviewed roster; it is not automatically a copy of stale invitations or removed members. Copying a refused offline draft to a new Thread is an intentional new signed action.
+
+R15 also owns the deferred R08 pagination-cost gate. Before selecting a cache or
+other optimization, run the real Holder/WebSocket path with one Space and 12 total
+Threads (including archives), 4 concurrent foreground sockets, 4,000 retained ops
+and 8 MiB per exercised replica. Include authority/quarantine evidence, mixed
+frame sizes, interrupted/resumed pulls and concurrent appends; verify exact final
+op sets, verdicts and state. Measure page count, bytes, server work per page,
+p50/p95/max request latency, complete-sync time and peak memory. Include an idle
+small-Thread pull while another route is saturated to expose scheduler starvation.
+
+The adopted local acceptance bound is **every required page and small-Thread
+pull completes within five seconds** on the recorded reference host under that
+workload. Any timeout, unplanned retry or error in a required page or pull fails
+the gate; failed requests remain in the published results. Publish raw timing
+samples and host/build/seed parameters. Measure deliberately interrupted pulls
+and their planned resume steps separately. Every planned resume request must
+meet the same five-second bound and recover without lost/duplicated semantic
+results. Full-history application replay separately
+retains the existing five-second product gate. Record network time separately;
+this local bound is not a remote-network guarantee. The 5,000-op/10-MiB benchmark
+is a separate overload measurement and cannot replace the supported-envelope run.
+If per-page full-log sorting/digest/topological recomputation fails the bound,
+R15 remains open until a bounded reviewed optimization passes the same workload;
+do not raise caps/timeouts, omit busy samples or claim frame size bounds latency.
+This is a new required measurement contract, not a current performance result.
 
 ### Membership and transport: R11, R13, R14
 
@@ -190,9 +246,9 @@ R17b shows the group, precise action/epoch, dependencies and lease consequences 
 
 ### Signed time and renewal: R02, R14, R18, R23
 
-Leases lapse through valid signed epochs, not wall time. Without an advancing beacon they do not lapse. R02 adopts exact units, inclusive expiry arithmetic, warning window, permitted catch-up, issuer and maximum jump, using Plan 179's bounds. Seven signed-day leases with a two-day warning and a daily reviewed epoch are candidates, not already accepted constants. Group epochs and Tool-root-signed UTC-day assertions are distinct; witnesses do not inherit Tool clock authority.
+Leases lapse through valid signed epochs, not wall time. Without an advancing beacon they do not lapse. R02 adopts exact units, inclusive expiry arithmetic, warning window, permitted catch-up, issuer and maximum jump, using Plan 179's bounds. The adopted software candidate uses L=7 inclusive epochs, warning in the final two epochs, E5/E10 renewal, maximum step 1 and at most two separately signed dependent catch-up steps. Daily practice and field cadence still require the R14/R17 workload rehearsal. Group epochs and Tool-root-signed UTC-day assertions are distinct; witnesses do not inherit Tool clock authority.
 
-Measure before adopting the cadence: 12 members × 13 group replicas is up to 156 grant renewals per cycle, 312 across two cycles before additional role grants. Count actual signatures, prompts, bytes and operations. R14 provides bounded, reviewed exact-recipient/replica renewal batches with per-grant results and idempotent retry, or R02 chooses an operable longer window. A batch grants no arbitrary signing power. Stale epoch, issued/expiring/lapsed grants and pending/failed renewal are visible. Name a coordinator and backup, rehearse missed quorum/operator availability, and preserve evidence without hidden clock or unbounded-grant fallback.
+Measure before selecting the field cadence: 12 members × 13 group replicas is up to 156 grant renewals per cycle, 312 across two cycles before additional role grants. Count actual signatures, prompts, bytes and operations. R14 provides bounded, reviewed exact-recipient/replica renewal batches with per-grant results and idempotent retry, or R02 chooses an operable longer window. A batch grants no arbitrary signing power. Stale epoch, issued/expiring/lapsed grants and pending/failed renewal are visible. Name a coordinator and backup, rehearse missed quorum/operator availability, and preserve evidence without hidden clock or unbounded-grant fallback.
 
 ### Three losses and their composition: R16, R18–R20
 
@@ -318,3 +374,18 @@ Pause dependent work on: unadopted contract/scope change; inability to identify 
 ### Planning-artifact completion
 
 This proposal is complete as a document when its two source comparisons are traceable, every packet has an owner/risk/size/dependency/exit, the graph is acyclic, local links resolve, the diff preserves source artifacts and unrelated contracts, and repository formatting/full-suite verification is recorded. This does not close R01 or any implementation packet. The comparison records validation actually performed for this revision.
+
+### Evidence maintenance and external gates
+
+The execution-evidence table is the single status snapshot. Source-plan records
+and Git history preserve earlier runs. Associate each verification result with
+the exact commit it tested; distinguish a later test-only or documentation tip
+from its earlier full-suite source. Refresh the table instead of adding another
+competing current-status narrative. Every new merge still needs its required
+source, review, local and hosted gates.
+
+Physical-pilot inputs include independently controlled Android device models
+and the selected carrier host/domain. Software preparation continues while those
+inputs are pending. No device, signing identity, deployment or elapsed pilot
+evidence is inferred from source review or local tests. A review interrupted
+without a final verdict remains pending regardless of partial positive comments.
