@@ -64,7 +64,7 @@ Rows are the authoritative dependency graph. Commas mean all prerequisites. “N
 | R01a | Core contract / integrator | M | Medium | None | Adopted order, archive, two dependency amendments, protected pins green | DONE |
 | R01b | Android and witness scope / operator + integrator | S | High | R01a, R17a | Adopted scope and deferred-ceremony amendment; actual sign-off | LOCAL VERIFIED |
 | R01c | Toolshed module isolation / operator + integrator | S | Medium | R01a | Countersigned collision contract; reserved legacy identities | LOCAL VERIFIED |
-| R02 | Founder lifecycle design / authority | M | High | R01a | Executable matrix: renewal, bounded successor, child roots and catalog recovery | LOCAL VERIFIED |
+| R02 | Founder lifecycle design / authority | M | High | R01a | Executable matrix: renewal, bounded successor, child roots and catalog recovery | DONE |
 | R03 | Witnessed beacons / authority | L | High | R01a, R07 | Plan 179 steps 2–9, one Core integration PR | LOCAL VERIFIED |
 | R04 | Continued authority / authority | L | High | R02, R03 | Core membership/renewal after two expiry cycles; bounded self-issue | IN PROGRESS |
 | R05 | Diagnostic redaction / hardening | S | Medium | None | Plan 170 negative inspect/crash cases | DONE |
@@ -72,11 +72,11 @@ Rows are the authoritative dependency graph. Commas mean all prerequisites. “N
 | R07 | Canonical strictness / codec | S–M | High | None | Plan 172 valid-byte parity plus duplicate/noncanonical refusals | DONE |
 | R08 | Deadlines and pagination / carrier | M–L | High | None | Plan 173 bounded setup, interrupted large-log real-transport replay | IN PROGRESS |
 | R09 | Input limits / hardening | M | High | R07, R08 | Plan 176 ingress and authority boundary refusals | LOCAL VERIFIED |
-| R10 | Root-only Treehouse domain / product + parity | XL | High | R01a, R07, R09 | Core complete vocabulary, effects, conflicts, offline demo | LOCAL VERIFIED |
+| R10 | Root-only Treehouse domain / product + parity | XL | High | R01a, R07, R09 | Core complete vocabulary, effects, conflicts, offline demo | IN PROGRESS |
 | R11a | Local catalog/provisioning / carrier | M | High | R02, R04, R06, R10 | Local signed catalogs, root bootstrap and bounded routes | PLANNED |
 | R11b | Lifecycle reconciliation / carrier | M | High | R11a | Crash-safe creation/removal, no phantom publication | PLANNED |
 | R11c | Catalog replacement trust / recovery | M | High | R11b | Retained client accepts authorized replacement without old signer | PLANNED |
-| R12 | Empty local app / product | L | Medium | R01a, R05, R06, R10 | Packaged offline preview; no member grants | PLANNED |
+| R12 | Empty local app / product | L | Medium | R01a, R05, R06, R10 | Packaged offline preview; no member grants | IN PROGRESS |
 | R13 | Enrollment and sync / product | L | High | R01b, R08, R11c, R12 | Packaged two-app join/heal; wrong-input and four-socket tests | PLANNED |
 | R14 | Profiles, roles, removal, renewal / product + authority | XL | High | R13, R04, R36 | Packaged enroll-then-pin, per-replica readiness and renewal | PLANNED |
 | R15 | Measured rollover / product | L | Medium | R14 | Packaged archival saga, finite-capacity stop, retained readability | PLANNED |
@@ -112,7 +112,7 @@ Rows are the authoritative dependency graph. Commas mean all prerequisites. “N
 
 ### Execution evidence (2026-09-06)
 
-Only R01a, R05 and R07 have both final-tip and exact merge-result hosted gates closed
+R01a, R02, R05 and R07 have both final-tip and exact merge-result hosted gates closed
 in this snapshot. `LOCAL VERIFIED` may include a merged commit awaiting its own
 merge-result check. A passing review or a green path-filtered status is not a
 substitute for the required workflow. Distribution jobs skipped without protected
@@ -366,6 +366,26 @@ no packaged preview exists yet. R04 final source is approaching freeze after
 malformed-input parity repairs and reciprocal authoring; no new completion claim
 is added by this status note.
 
-R06 PR61 has now merged at `15ea1c37b2a134725ae6d820752a9ef8f105da8d`.
-Its final tip and Fable review passed; exact merge run34045534524 is queued behind
+R06 PR 61 has now merged at `15ea1c37b2a134725ae6d820752a9ef8f105da8d`.
+Its final tip and Fable review passed; exact merge run 34045534524 is queued behind
 R02. R06 remains locally verified until that exact merged-source gate passes.
+
+
+Latest review disposition: R02 exact merge run 34045243247 passed, closing R02's
+Core design/probe packet without adopting a physical cadence. R01c PR 63 merged at
+`67401756af8c3cd0e538a2bcb62dcb832091c6e0`; its own merge-result check is pending.
+R08 follow-up `73a96a5418747b36bef6a0363d0ed3e35094d1e1` passed exact Fable review
+and full local 678-test + 27-property gate; new final-tip CI is pending. R03
+P05-integrated `201e7ae60ed421b3b83b1f5540c73b6ba435b764` passed Fable review and
+694 tests + 27 properties; its PR 68 final-tip gate is running. R10's exact review
+found one Thread-reference map-order parity defect plus bounded follow-ups; those
+are active repairs, so its status returns to IN PROGRESS. R04's implementation
+`8b7c9b5307d93814fe87f0f65be4d163339ff4a7` passed Fable review with one audit-arity
+parity follow-up now being fixed. Earlier local totals remain evidence of their
+exact frozen revisions, not claims that later findings were already closed.
+
+Ledger verification at accepted R06 base `e840ec60` passed `mix verify` with
+692 tests + 27 properties, zero failures and three configured exclusions. The
+subsequent edits here change status prose only; required protected rows and DAG
+edges remain unchanged. Fable has reviewed both prior ledger diffs; this note
+records the resulting later evidence and dispositions.
