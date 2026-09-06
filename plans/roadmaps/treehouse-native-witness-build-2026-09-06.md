@@ -70,18 +70,34 @@ governance or Treehouse carrier aliases. Carrier APIs cannot select witness keys
 and witness APIs cannot select carrier keys. The generation/signing path has no
 software fallback or exported/imported seed.
 
+**2026-09-06 documentation correction:** implement the decision's
+[Android eligibility API and evidence rules](../../docs/research/governance_witness_native_verification.md#android-eligibility-and-evidence-order).
+Use the AndroidKeyStore EC generator with `ECGenParameterSpec("ed25519")`, a
+SIGN-only/DIGEST_NONE key and TEE-backed KeyMint Curve25519. The newer explicit
+Ed25519 generator alias and an API33+ version are not hardware eligibility proof;
+StrongBox Curve25519 is unsupported in the pinned AOSP contract. Generation and
+signing remain opaque, without a software provider or seed fallback.
+
 R01b's adopted eligibility contract requires all of the following on each proposed
 physical device **before pinning its real witness key**:
 
 1. Actual platform Ed25519 generation and a key-bound per-operation authentication
    round trip, with independently verified signature under that public key.
-2. A fresh validator challenge and independently checked attestation chain for the
-   actual key. Validate the correct trustworthy extension occurrence, current
-   trusted roots and revocation, both attestation and key security levels, generated
-   origin, signing purpose/algorithm, per-use authentication authorizations,
-   app/signing identity and locked verified boot state as specified in decision D1/D2
-   and the Android section. The verifier must reject a valid chain for another key.
-3. Public metadata and a create-only persistent binding that survive restart.
+2. A fresh validator generation challenge and independently checked attestation
+   chain for the actual key at initial provisioning. Validate the correct trustworthy
+   extension occurrence, current trusted roots and revocation, TEE attestation and
+   key security levels, generated origin, signing purpose/algorithm, per-use
+   authentication authorizations, app/signing identity and locked verified boot
+   state as specified in decision D1/D2 and the Android section. The verifier must
+   reject a valid chain for another key. Per-use authorizations contain
+   hardware-enforced USER_AUTH_TYPE with absent NO_AUTH_REQUIRED and AUTH_TIMEOUT;
+   USER_SECURE_ID is non-attested. Do not require an attested zero timeout or SID.
+3. Public metadata and a create-only persistent binding that survive restart,
+   retaining the original generation attempt/challenge and exact chain. Retry and
+   restart reconcile those bytes and require fresh fixed-domain possession under
+   the same key; they never recreate it to refresh attestation. Original attestation
+   reports generation-time state, not every later OS/app/boot state. Recheck trust
+   and revocation; missing required current-state evidence remains incomplete.
    Record enrollment/invalidation, reboot, cancel/lockout and unsupported outcomes.
 
 Use a native-issued fixed `lattice-witness-binding-challenge-v1` possession intent
@@ -96,7 +112,12 @@ wrong extension, software attestation or software key level, imported origin,
 no-auth/reusable-auth parameters, wrong app/signing certificate, unlocked boot,
 unsupported algorithm/authentication combination and absent attestation all remain
 ineligible. Test domain crossover, cross-product/alias/caller/session/recipient
-binding, replay, concurrent ensure and restart during creation. A failed probe
+binding, replay, concurrent ensure and restart during creation. Include a positive
+per-use attestation with the documented absent fields, negative timed/no-auth
+records, authentication-operation substitution, reused possession nonces, retained
+creation-challenge mismatch and recovery that must not overwrite an existing key.
+These are required future public tests, not results from this documentation change.
+A failed probe
 publishes no eligible identity and changes no pin; incomplete custody is explicit,
 not silently replaced. R12 preview remains usable.
 
@@ -270,6 +291,9 @@ OS reason under 200 UTF-8 bytes. Hash the full pinned replica ID for its display
 fingerprint, not merely the root commitment. Product/kind/role, verified successor
 and acquisition fingerprint or exact beacon epoch come from native state. Missing
 verified display fields refuses before presence, with no submitted-value fallback.
+For Treehouse beacon review, choose D5's Space or Thread reason from the verified
+pin kind for both witness-claim and final-operation purposes. Do not default every
+beacon to Thread or accept a submitted kind label.
 
 Use D5's escaped, structurally isolated full-value rendering: fixed labels,
 monospace escaped values, always-visible full SHA-256 and original byte count,
@@ -302,6 +326,10 @@ retrievable under Stage4's explicit commit boundary. Test two replicas sharing a
 root get different native replica fingerprints, hostile full-value rendering and
 all supported roles. Full review retains exact
 keys, deps and lease consequences even though the OS line is abbreviated.
+Include separately pinned Treehouse Space and Thread beacon positive controls:
+each exact reason names its own verified kind and epoch. Wrong/missing kind,
+submitted-kind substitution and cross-product pin/template mismatch refuse before
+presence; changing only the submitted label cannot change an accepted OS reason.
 
 Stages3-5 land as one atomic signing cutover: remove/refuse legacy claim-only IPC
 and migrate existing `township_actions.ts`, `native_workflow.ts`, current product
