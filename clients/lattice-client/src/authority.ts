@@ -34,6 +34,18 @@ import {
 } from "./continuation";
 import type { ContinuationClaim, ContinuationProfile } from "./continuation";
 
+export type ContinuationProfileObservation =
+  {ok: true; replica: string; root: string; profileGenesis: string; profileId: string;
+    profile: ContinuationProfile; verifiedFrontier: string[]} |
+  {ok: false; reason: string};
+
+/** Observe an actual root-authenticated pin; the caller owns complete store snapshots. */
+export async function resolveContinuationProfileFromFrames(
+  _input: {replica: string; frames: readonly unknown[]},
+): Promise<ContinuationProfileObservation> {
+  return {ok: false, reason: "continuation_not_configured"};
+}
+
 /** One honored role acquisition, in processing (canonical) order. */
 export interface HonoredAcquire {
   opId: string;
