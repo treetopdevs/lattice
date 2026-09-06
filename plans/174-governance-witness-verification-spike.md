@@ -350,8 +350,15 @@ not the proposed opaque Android custody model.
 
 The selected architecture authenticates and retains ordinary command/inbox/DAG
 ancestors as well as authority operations, including semantic quarantines.
-Verified unsupported authority history persists with a signing block; refusing
-signing does not imply zero observation-store writes. R17b explicitly extends
+Decision D2 now separates complete admitted history from bounded unconnected
+staging, using conservative cryptographic introduction closure E. Relevant unknown
+or missing history blocks durably; fresh-key unknown input and its unconnected
+supported wrappers cannot alone disable signing. Staged evidence is reclassified
+before every derive/release, including later introduction and rootless continuation
+chains. This explicitly refines the earlier unconditional unknown/missing-history
+rule and requires a scoped R04 native-boundary amendment before R17b code. Retained
+evidence cannot be dropped; quota-refused input is outside that retained-union claim.
+Refusing signing does not imply zero observation-store writes. R17b explicitly extends
 Plan146 Seam5 to the bounded existing CarrierTerm/op grammar with exact three-
 runtime byte parity, preserving legacy clerk payloads; arbitrary general CBOR and
 Core semantic changes remain excluded. That scoped amendment is recorded in
@@ -360,9 +367,20 @@ Plan146 before the corresponding R17b implementation, after R01b scope adoption.
 The native verified pin selects Township clerk or Treehouse Space admin/Thread
 moderator, with a separate beacon domain and matched landed R03/R04 contracts.
 The OS reason uses a fingerprint of the full pinned replica ID, not only its root.
-Native authorization uses a 60-second monotonic, one-shot, caller/session-bound
-attempt and generation checks before presence and after blocking platform work
-before release. Whole-native-store rollback and unseen history remain non-claims.
+Native review safely escapes and isolates exact full values, exposes their full
+digests/byte counts and provides bounded complete continuation. Explicit native UI
+acceptance activates the 60-second one-shot caller/session-bound token; begin alone
+opens an unaccepted display. Generation checks surround all blocking work and the
+serialized release point. Incoming admission fences atomically retain recoverable
+batch bytes. Outgoing beacon frames atomically commit with recoverable outbox
+pointers before response; committed bytes can be retrieved after a crash without
+re-signing, while uncommitted attempts abort. Publication hints are advisory.
+
+Shared beacon claims select an available pinned outer witness author and derive
+all remaining values natively. Legacy clerk payloads remain explicitly frontier-
+unbound after release; displayed deps and token generation add no signed fields.
+Whole-native-store rollback, unseen history and availability against eligible
+authors citing unknown ancestry remain non-claims.
 
 No prototype was needed to reject the compact signed-acquisition shortcut: the
 authority judge's causal and competing-acquisition rules establish its missing

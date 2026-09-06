@@ -115,7 +115,7 @@ term is authorized.
 | Delegation | Recompute v2/v3 signed bytes and ID; preserve replica, parent, attenuation, introduction and honored-candidate activation rules |
 | Policy | Existing role policy merges valid root geneses in canonical order; v1 policyId hashes the normalized four-key recovery map, not genesis bytes. R03 beacon policy is resolved per candidate ancestry |
 | Holder/acquisition | Evaluate honored acquire/transfer/succeed timeline, causal holder-at-deps and canonical-fold holder; preserve competing-branch rejection reasons |
-| Frontier | Compute from the complete retained verified DAG; missing dependencies block signing until closure is restored |
+| Frontier | Compute from the complete admitted verified DAG; relevant missing dependencies block signing, while unconnected evidence stays outside it under the fixed-point admission rules below |
 | Freshness | Retained evidence prevents caller omission of already known history; it proves neither unseen completeness nor wall-clock freshness |
 
 Distinguish storage admission from semantic judgment:
@@ -124,29 +124,96 @@ Distinguish storage admission from semantic judgment:
   admission and contributes no trusted operation. No signature or artifact is produced.
 - An authenticated supported operation is retained even if semantically quarantined.
   Its known authority verdict is reproduced; ordinary application verdicts are not
-  invented. Missing dependencies remain bounded pending evidence and block derivation.
-- An authenticated unknown authority variant, policy version or relevant schema is
-  durably retained with a signing-blocked marker. Omitting it on a later request or
-  restarting must not restore signing over the older subset. A compatible reviewed
-  implementation and complete revalidation, not dropping evidence, clears the block.
+  invented. Known shapes proved inert by the fixed pinned grammar remain supported;
+  today's temporary quarantine alone cannot establish permanent inertness.
+- Unknown authority variants, policy versions and schemas use the conservative
+  eligibility closure below. Relevant unknown or incomplete evidence durably blocks
+  signing. Unconnected unknown input and its unconnected supported descendant cones
+  remain staged outside the admitted frontier. A fresh self-signed key cannot cause
+  a permanent signing block merely by sending an unknown op or a supported wrapper
+  that depends on it.
+
+**Eligibility closure E is evidence of cryptographic introduction, never permission.**
+Compute the least fixed point over all retained authenticated evidence, including
+staged supported evidence whose DAG is incomplete. Seed E with the pinned root and
+the witness/nominee keys in every retained root-authenticated recognized profile,
+including superseded profiles. Extend E through verified same-replica delegation
+introductions with canonical signed ID, issuer already in E, and complete parent
+proofs satisfying the existing issuer/audience and attenuation rules. A recognized
+parentless continuation delegation whose issuer equals its audience and is already
+in E supplies a conservative chain anchor; it adds no new key itself.
+
+These positive rules do not depend on current acquisition winners, effective pin,
+revocation, lease expiry, candidate activation or semantic quarantine. They are
+monotone for the same retained evidence union. The embedded delegation signature
+introduces its actual audience even if a different key authored the outer operation.
+Citing a public capability for another audience introduces neither the citing
+author nor any dependency author. Unknown ancestry never expands E, and missing
+parent proofs remain unresolved instead of being guessed. Supported staged
+introductions must be inspected before DAG admission to avoid a closure deadlock.
+
+Reclassify retained evidence to that fixed point before derivation and before the
+serialized release check. Unknown evidence authored by E, and unknown or missing
+ancestry of authenticated E-authored supported evidence, blocks durably. Unresolved
+parent evidence needed for an otherwise E-issued introduction also blocks; using a
+different outer carrier cannot hide an authenticated relevant issuer. Unconnected
+supported descendants with missing dependencies stay staged, so wrapping an unknown
+op in a fresh-key supported command cannot bypass the eligibility boundary.
+
+A later verified introduction or E-authored descendant atomically promotes relevant
+staged evidence or persists its block before any claim is derived. Omitting retained
+evidence on a later request or restarting cannot restore signing over an older
+subset. A reviewed compatible implementation and complete revalidation, never
+dropping relevant evidence, clears an unsupported-history block. No transport peer
+or caller-supplied trust flag participates in this decision.
+
+This intentionally permits conservative overblocking by historically introduced,
+revoked or quarantined keys. An eligible author that signs an ancestry citation of
+unknown evidence also causes a block, including an honest author's automatic
+frontier citation. The repair prevents an unintroduced key from qualifying itself;
+it does not prove availability against eligible signatures. Unknown future
+introduction semantics are outside this pinned-version proof.
+
+Reserve a separate staging subquota (proposed 128 operations / 512 KiB), plus
+capacity for admitted history, promotion, intake and durable markers within the
+overall ceiling. A full unconnected staging quota refuses new unconnected input
+without evicting retained evidence or blocking otherwise complete admitted history.
+Quota-refused bytes are not trusted retained observations and cannot later be
+reclassified; order independence covers the same retained union, not different
+quota-dependent admission sets. Pin exact accounting and reservation sizes in R17b
+before RED, including a full-staging promotion case.
+
+This explicitly refines R04's unconditional unknown-history admission block and
+the earlier R17 missing-dependency rule. R17b must record the same scoped amendment
+in R04's native boundary before implementation; the landed Core judge, signed
+bytes and verdict semantics remain unchanged.
 
 Thus unsupported-history refusal may write retained evidence and blocking state.
 The guarantee is **no signing effects**, not zero store writes. Persist observation
 and generation atomically before successful admission; a failure cannot report
 trusted acceptance or permit a subsequent stale signing attempt.
 
-R17b must reserve bounded durable space for incomplete/over-budget markers and
-write an admission-in-progress fence before verifying a new batch. Clear it only
-with a completed untrusted-input refusal, committed observation or durable blocked
-outcome; restart with an
-uncleared fence refuses signing. This prevents a failed persistence step from
-turning already verified unsupported input into a silently forgotten observation.
+R17b reserves durable capacity for its admission journal as well as incomplete,
+over-budget and pending-input records. One atomic durable write stores an admission
+fence **and the complete bounded batch bytes** (or a digest referencing bytes made
+durable in that same transaction). The store API cannot construct a fence without
+recoverable input. The provisional intake batch ceiling is 64 frames / 512 KiB,
+within the overall retained-byte budget; each frame still obeys the carrier limit.
+
+Only classification of that exact journaled batch clears its fence: completed
+untrusted-input refusal, committed supported observation, pending-journal retention
+or durable block. Restart replays the same classification before enabling signing;
+an unrelated retry or different batch cannot clear it. An unreadable or mismatched
+journal is a corrupt-store refusal. Admission failures preserve the old committed
+state and recoverable batch; an ordinary crash cannot silently forget a verified
+unsupported observation or permanently strand a readable valid intake journal.
 
 ## D3. Rollback, omission and durable limits
 
-Keep an append-only union of verified observations, including competing branches
-and quarantined operations. Derivation always reads that native union, never an
-IPC-selected subset. Replaying an older cache cannot erase known revokes, policies
+Keep an append-only union of retained verified observations, including staged input,
+competing branches and quarantined operations. Derivation first classifies that
+entire union under D2, then reads its complete admitted DAG, never an IPC-selected
+subset. Replaying an older cache cannot erase known revokes, policies
 or acquisitions; dependency pruning cannot erase retained ancestry. A valid new
 fork remains a fork and is judged under Core rules, not refused merely because
 its dependencies exclude an unrelated newer beacon.
@@ -192,12 +259,39 @@ The native pin selects a fixed product/kind/role allowlist:
 | Treehouse / `Treehouse.Thread` | `moderator`, using the approved landed Core profile |
 | Approved per-replica beacon pin | Beacon witness purpose, separate from role succession |
 
+**Legacy clerk consent remains frontier-unbound.** Its frozen seven-field claim
+binds the succession tuple, holder acquisition and policy, but no deps, epoch basis
+or native-store generation. Review, token and generation checks govern creation of
+the signature; they add nothing to its signed bytes. A released artifact remains
+usable wherever Core derives that same seven-field claim, including later history
+or signatures collected over different frontiers. No Treehouse-strength consent
+claim may cite it. R04 continuation and R03 beacon claims bind their own exact deps;
+Township frontier-bound succession would require a separately adopted new domain,
+purpose and Core verifier. Preserve legacy bytes and disclose their actual scope.
+
 An IPC role string or replica name prefix cannot choose the schema or signing
 domain. Unknown product/kind/role refuses. Add admin/moderator byte and semantic
 vectors after their Core contracts land; preserve legacy clerk bytes. Beacon claims
 remain in their distinct domain with R03 author/deps binding, ancestry policy,
 step/horizon bounds and permitted fork/duplicate semantics. Presence/possession
 binding uses another fixed domain; none exposes arbitrary signing.
+
+**Shared beacon author selection.** A beacon witness-claim intent can select one
+proposed outer author from the natively verified pinned witness set. All other
+claim values are native-derived: the exact canonical frontier of admitted history,
+the pinned replica, version and next valid epoch. The native purpose chooses one
+epoch beyond the admitted valid causal maximum, refusing beyond R03's horizon or
+profile step bound; the separately adopted R14 cadence governs when a human starts
+the ceremony, not a hidden wall clock. Echoed deps/epoch may be compared for exact
+equality but cannot select an older retained subset or missing evidence.
+
+Every witness sees and accepts the same proposed outer author. Different admitted
+frontiers require synchronization before witnesses can produce identical claims;
+signatures over different author/deps/epoch values cannot form a certificate. The
+full native review labels the outer-author key separately from the local approving
+witness. Final-operation signing additionally requires that selected author to be
+this device's own configured witness key. This selects an available consenting
+witness without a fixed lowest-key availability dependency or a generic author IPC.
 
 R03 also requires a founder-absent beacon's **outer operation author** to be a
 configured witness key. Claim signatures alone are insufficient, and substituting
@@ -213,10 +307,28 @@ This operation requires its own native review, one-shot token and fresh per-use
 platform authentication, including all D6 checks after blocking work. Its review
 says **sign beacon operation** and shows the verified epoch and certificate
 signers; it is distinct from signing a witness claim. Persist the successfully
-signed frame as known native history before release, using the same crash-safe
-admission fence; failed persistence releases nothing and leaves signing blocked.
-The returned frame still requires explicit publication through the ordinary
-member-authenticated carrier path. Signing itself opens no network connection.
+signed frame and a pending-release outbox entry in one authorized atomic commit
+before any IPC response. The entry holds only the op ID, purpose, creation
+generation and advisory publication state; there is at most one per retained
+signed frame and its bytes count inside the same ceiling. An authenticated
+same-product caller can enumerate entries and retrieve identical committed frame
+bytes after restart, without new signing, presence or consent. A crash after
+commit but before response therefore loses no publication input.
+
+The atomic commit is the release-authorization point: all D6 checks must pass in
+the serialized transaction. Cancellation before it prevents commit; cancellation
+after it cannot retract an already authorized artifact. An uncommitted outgoing
+signing attempt is aborted on restart, never automatically authorized from an
+old token or confused with replay of an incoming admission journal. Failed commit
+produces no retrievable outbox entry and releases no signature.
+
+The existing carrier has no signed durable-publication receipt for this purpose.
+A webview's published report is only an advisory annotation, never proof or
+permission to delete the entry. Entries remain retrievable for the retained
+history's lifetime and never block subsequent signing merely because publication
+is unconfirmed. Duplicate publication is idempotent. The returned or recovered
+frame still needs ordinary member-authenticated carrier publication. Signing and
+retrieval open no network connection; no remote durability claim is invented.
 Legacy clerk artifacts and their export-only behavior stay unchanged. R17b must
 prove exact BEAM/TS/Rust outer-op bytes, wrong-author/member-key refusal,
 certificate/deps substitution, replay and crash boundaries. Count this additional
@@ -237,6 +349,23 @@ role/purpose, witness and successor keys, holder acquisition or exact beacon epo
 profile, dependencies and lease consequences. A compromised webview cannot replace
 those fields. A caller's candidate claim may be compared for equality but never
 supplies a missing verified value. Missing verified identity refuses before presence.
+
+Authenticated strings are not display-safe by virtue of their signatures. Every
+free-form value appears in a fixed-label, visually isolated monospace field with
+its full SHA-256 fingerprint and exact original byte count always visible.
+Newline, control and Unicode direction characters render as explicit codepoint
+escapes, never as layout or direction instructions. The proposed initial viewport
+is at most 256 rendered UTF-8 bytes with an explicit continuation indicator; the
+exact escaped full value remains accessible in bounded scrolling chunks of at most
+4 KiB. Rendering must remain bounded by the admitted input sizes and must refuse
+before presence if the full value cannot be displayed safely. No silent truncation,
+WebView-provided label or inserted structure is permitted. Raw byte identity, not
+the escaped display, remains the signed value.
+
+For legacy clerk review, state explicitly that the artifact authorizes the shown
+succession while its seven-field tuple remains applicable; displayed dependencies
+are not bound by its released signature. A full review cannot imply a stronger
+claim than its domain encodes.
 
 Use these one-line OS templates; `P`, `R`, `S` and `H` come from native state:
 
@@ -268,20 +397,27 @@ presenting every continuation as recovery to a successor.
 
 ## D6. Native authorization, token lifetime and races
 
-`begin` accepts only an intent selecting an already pinned replica and supported
-purpose. Native resolves the actual runtime window/caller/session and product,
-derives the claim, shows the full native review, and creates an unpredictable token
-bound to canonical claim bytes, domain/profile, replica, witness key, caller/session
-and retained-store generation. A caller-supplied session label is not authentication.
+`begin` selects an already pinned replica and supported purpose, with only the
+closed beacon outer-author selection described in D4 where applicable. Native
+resolves the actual runtime window/caller/session and product, derives the claim
+and opens a **displayed, unaccepted** review. Its proposed display timeout is
+120 monotonic seconds. No signing token is issued yet, and no IPC message can
+synthesize acceptance of the native-controlled review surface.
 
-Use a proposed **60-second monotonic TTL**, starting at token creation and covering the whole
-attempt. Permit one pending attempt per native window/product/replica/key/domain;
-replacement begin invalidates the prior token. Sign atomically consumes the token
-once before any platform signing attempt. Cancellation, dismissal, session teardown
+An explicit native UI acceptance rechecks caller/session, generation and the
+re-derived claim against the display. Any change requires a new review; accepting
+a stale display refuses. Only then is an unpredictable token activated, bound to
+canonical claim bytes, domain/profile, replica, witness key, caller/session and
+generation. Its proposed 60-second monotonic TTL starts at acceptance and covers
+the entire remaining attempt. A supplied session label is never authentication.
+One attempt is allowed per native window/product/replica/key/domain; replacement
+begin invalidates the previous display and token. Sign refuses an unaccepted or
+missing token before any platform work, and consumes an accepted token exactly
+once before any signing attempt. Cancellation, dismissal, session teardown
 and process restart invalidate pending/in-flight release authorization. Re-signing
 requires a new native review, token and fresh per-operation OS authentication.
 R22/R23 ceremony and accessibility measurements may motivate a reviewed change to
-this constant; expiry always fails closed and an active attempt never extends itself.
+either timeout; expiry always fails closed and an active attempt never extends itself.
 
 Check token expiry, cancellation, session, identity and store generation immediately
 before presence/platform signing, then **again after every blocking presence or
@@ -291,6 +427,12 @@ changes while the OS prompt is open or while hardware signs, discard any resulti
 signature and release no artifact. Presence and the signing mutex do not substitute
 for these checks. Durable history may have advanced even though no signature escapes.
 
+These are signing-time controls. After the authorized release point, only the
+fields in the signed domain remain bound; legacy clerk artifacts have D4's
+explicit frontier-unbound consequence. For an outgoing frame, atomic durable
+history/outbox commit is that release point, and recovery returns the already
+authorized bytes rather than creating a new artifact under an expired token.
+
 At atomic cutover remove/refuse claim-only `lattice_sign_governance_witness` and
 migrate all callers together. Bare claims, expired/replayed tokens, wrong caller,
 window, product, purpose or key, stale generation and substituted claims refuse.
@@ -298,8 +440,10 @@ There is no temporary compatibility path that can bypass native derivation.
 The separate final-beacon purpose binds its token to the complete canonical op
 and certificate as well as the store generation. Claim-signing consent cannot
 authorize the outer signature. Successful frame retention and the final release
-check form one serialized transaction; its own history append must not be mistaken
-for an unrelated generation race, and a crash before completion leaves a fence.
+check and outbox write form one serialized transaction; its own append must not
+be mistaken for an unrelated generation race. Restart aborts an uncommitted
+outgoing attempt; a committed attempt remains retrievable through D4's outbox.
+Incoming admission-journal recovery is a separate transaction type.
 
 ## Android eligibility and evidence order
 
@@ -347,9 +491,12 @@ and attestation validation workflow must have independent replay/substitution te
 
 Propose a witness ceiling of **8,192 operations or 16 MiB per replica**, counting
 all retained signed history, pending evidence and relevant durable overhead, not
-only governance events. Define the exact byte accounting in R17b before testing.
-At exhaustion persist a visible signing-blocked condition; never truncate to sign
-the old subset. This witness ceiling does not stop the separate carrier from
+only governance events. Include admission-journal bytes, reserved promotion and
+blocking metadata, and retained outbox pointers without double-counting their
+referenced frame. Define exact byte accounting and reservations in R17b before
+testing. Exhausting only unconnected staging refuses that input as D2 specifies;
+exhausting admitted/relevant capacity persists a visible signing-blocked condition.
+Never truncate relevant history to sign an old subset. This ceiling does not stop the carrier from
 retaining bounded recovery input. Healing can exceed it; there is no guarantee
 that every posting-stop overshoot fits. R35 owns the resulting lifecycle decision.
 

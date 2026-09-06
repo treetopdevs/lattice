@@ -118,32 +118,49 @@ verification handles complete bodies/caps of supported `command`, `inbox`,
 Recognized ordinary posts/edits must authenticate and remain usable as ancestors
 without requiring application CRDT materialization or an application verdict.
 
-Persist every authenticated observation, including semantic quarantines and
-competing branches, keyed by verified op ID with dependency closure. Missing
-dependencies make derivation incomplete. Structurally invalid wire input or invalid
-ID/signature is not trusted admission; a valid signed operation with an unsupported
-authority variant/policy is retained with a durable signing-blocked marker. A later
-request that omits it, or restart, cannot clear the block. Refusal means no signing
-effects; observation/block persistence may be necessary.
+Apply decision D2's complete fixed-point admission contract. Retain authenticated
+supported evidence, semantic quarantines and competing branches. E tracks positive
+cryptographic introductions from the root/recognized profile keys through valid
+embedded delegation issuers and parent proofs, including already-E self-issued
+continuation anchors. It never uses current honored status, revocation or lease
+expiry as a filter, never grants permission and never grows from unknown ancestry.
+Inspect supported staged introductions before requiring complete DAG admission.
+
+Relevant unknown/missing evidence durably blocks signing. Unconnected unknown input
+and its unconnected supported descendant cones stay in bounded durable staging
+outside the admitted frontier. Reclassify the full retained union before deriving
+or releasing a claim; later eligible introductions/citations promote or block
+atomically. Known shapes proved inert by the fixed grammar remain supported.
+Invalid wire/ID/signature and quota-refused input are not trusted observations.
+Omitting retained evidence or restarting cannot remove a block. Preserve D2's
+eligible-author denial residual and same-retained-union convergence limit.
 
 Store pin, observations, pending evidence, blocking state and generation crash
 safely outside webview/cache mutation APIs. An existing key with missing/corrupt
 binding/history refuses; no empty-store auto-repair. Derive from the union of all
-retained evidence, not an IPC subset or a saved signed-snapshot list. No scalar
+retained admitted evidence after classifying the entire union, never an IPC subset
+or a saved signed-snapshot list. No scalar
 ordering of op hashes, global beacon floor or invented rollback-resistant counter.
 
-Reserve durable capacity for incomplete/over-budget markers. Before verification,
-write an admission-in-progress fence; only a completed untrusted-input refusal,
-committed observation or durable blocked outcome clears it. An uncleared fence
-at restart refuses signing. Test
-write failure and capacity exhaustion at each fence/observation/marker transition,
-so unknown authenticated input cannot disappear through a failed transaction.
+Reserve capacity for staging, promotion, intake and durable markers. Atomically
+journal the fence and complete bounded batch bytes/digest-backed durable input;
+the API cannot create a fence alone. Proposed intake is 64 frames / 512 KiB within
+the overall ceiling. Restart classifies that exact recoverable batch before signing.
+Only completed refusal, retained pending/supported evidence or a durable block
+clears its fence; unrelated retries cannot. Corrupt/missing journal bytes refuse.
+An ordinary crash with a readable journal must recover, not strand the witness.
 
 RED: ordinary command/inbox ancestors before a valid acquisition; semantic
 quarantines retained; outer ID/signature mutation; malformed canonical data;
-duplicate map/set encodings; missing deps; known branch omitted; unknown signed
-authority/policy followed by an old-history retry and restart; crash at every
-admission transaction boundary; restored whole old native store remains an
+duplicate map/set encodings; relevant missing deps; known branch omitted; eligible
+unknown authority/policy followed by an old-history retry and restart; fresh-key
+unknown plus fresh-key supported descendant remains staged; public capability
+citation cannot introduce its citing author; embedded E-issuer introduction with
+another outer author, rootless continuation children, superseded/revoked-key
+overblocking and staged introduction before DAG closure; later eligibility promotes
+or blocks before release; staging exhaustion leaves admitted signing usable, while
+relevant-capacity exhaustion blocks; readable fence recovery and corrupt-journal
+refusal at every admission boundary. Restored whole old native store remains an
 explicit non-claim rather than a misleading passing rollback test.
 
 **Plan146 Seam5 scoped extension for this stage:** amend its fixed-claim-only
@@ -151,8 +168,10 @@ restriction for R17b's closed history verifier. Allow the current CarrierTerm/op
 canonical subset required for ordinary histories, with exact BEAM/TS/Rust byte,
 hash and rejection parity. Preserve its fixed legacy clerk payload and all existing
 legacy vectors. General CBOR, new canonical terms, generic signing and changes to
-Core semantics remain outside scope. The old broad-codec STOP must not prohibit
-this explicitly reviewed bounded extension.
+Core semantics remain outside scope. Also record D2's explicit R04 native-boundary
+amendment for unknown/incomplete admission, retained versus quota-refused input,
+and the conservative E closure before RED. The old broad-codec STOP must not
+prohibit this explicitly reviewed bounded extension.
 
 Scope: new native canonical verifier and store modules, `lib.rs`, focused native
 tests; new BEAM exporter scenarios and generated new oracle files, focused TS oracle
@@ -176,6 +195,20 @@ Core contract exists; preserve legacy clerk payload bytes. Each versioned R04
 continuation purpose must match the final landed Core profile/claim, rather than
 implementing this plan author's guessed continuation semantics.
 
+Legacy clerk's seven-field signed tuple remains frontier-unbound. Review/token
+generation checks govern signing time only; an exported artifact can be reused
+wherever that same tuple applies, including different frontiers. Disclose that
+scope and preserve bytes. A future stronger Township claim needs a separately
+adopted domain/purpose and Core verifier.
+
+For shared beacon witness claims, the sole author selector is a key in the native
+pinned witness set. Native derives all other fields from the exact admitted
+frontier and chooses its next valid causal epoch, within R03 step/horizon bounds.
+Every witness accepts the same displayed outer author; differing frontiers require
+sync before identical claims can be signed. R14's human cadence governs when to
+start, without trusted-time claims. Final op signing requires the selected author
+to equal the local configured protected witness key.
+
 Add the separately typed **final beacon operation** purpose required by R03:
 after independently verifying the assembled threshold certificate, native derives
 the exact replica/deps/epoch/local witness author, constructs only
@@ -184,15 +217,28 @@ existing canonical op bytes using that configured protected witness key. An
 ordinary member/carrier signature cannot substitute for the required author.
 Do not expose a generic op or bytes signer. This purpose has a fresh review,
 one-shot token and per-use authentication distinct from each witness-claim signature.
-Persist the signed frame in native retained history before releasing it through a
-crash-safe fenced transaction; no signature escapes failed persistence. Explicit
-later publication uses the ordinary member-authenticated carrier, with no network
-action during signing. Legacy clerk artifact export remains unchanged.
+Commit the signed frame and one pending-release outbox pointer atomically after
+all consent/generation checks. That commit is the release-authorization point.
+Cancellation before commit prevents it; after commit the artifact is already
+authorized. Restart aborts an uncommitted outgoing attempt, distinct from replaying
+an incoming admission journal. Failed commit leaves no retrievable outbox entry.
+
+The authenticated same-product caller can enumerate/retrieve identical committed
+frames after restart without re-signing or new presence. Pointers count inside
+the retained ceiling and remain retrievable for the frame's history lifetime.
+Webview publication hints are advisory, never proof or deletion authority;
+unconfirmed entries do not block later signing. Ordinary publication is idempotent
+and member-authenticated. Signing/retrieval initiate no network. Legacy clerk
+artifact export remains unchanged.
 
 RED/oracles additionally cover complete outer-op byte/ID/signature parity,
 unconfigured author or member-key substitution, changed deps/epoch/certificate/cap,
 insufficient or invalid surplus signatures, cross-purpose consent reuse, generation
-changes during authentication/signing and every retain-before-release crash point.
+changes during authentication/signing, two witnesses selecting the same available
+author, changed author/frontier refusing aggregation, and every retain-before-release
+crash point. Verify commit-before-response recovery returns identical bytes without
+another presence/signature, failed commits return nothing, uncommitted attempts
+abort on restart, and advisory publication cannot delete or strand pending frames.
 Count final-beacon authentication separately in the R02/R14 ceremony workload.
 
 For R03 beacons, use its exact five-field claim `(version, replica, epoch, author,
@@ -205,8 +251,8 @@ forks as unauthorized under an invented global epoch rule.
 RED/oracle matrix: competing signed but dishonored transfers; invalid parent,
 lease/role distinction; before/after candidate activation; valid and impostor
 multiple geneses; superseded policies; native/BEAM/TS holder and policy equality;
-admin/moderator/clerk allowlist and cross-role substitution; unknown authority
-blocks; R03 lifted certificate, threshold and permitted fork/duplicate cases;
+admin/moderator/clerk allowlist and cross-role substitution; D2-relevant unknown
+authority blocks; R03 lifted certificate, threshold and permitted fork/duplicate cases;
 R04's approved scope, expiry and claim-substitution cases. If native needs another
 authority fact, extend the projection against the Core oracle before claiming it.
 
@@ -222,22 +268,36 @@ fingerprint, not merely the root commitment. Product/kind/role, verified success
 and acquisition fingerprint or exact beacon epoch come from native state. Missing
 verified display fields refuses before presence, with no submitted-value fallback.
 
-Implement D6: begin derives and binds the full native claim; unpredictable token,
-proposed 60-second monotonic TTL, one pending attempt per native window/product/replica/key/
-domain, actual native-resolved caller/session, atomic consume once, cancel/restart
-invalidation. Check state generation and all release authorization immediately
+Use D5's escaped, structurally isolated full-value rendering: fixed labels,
+monospace escaped values, always-visible full SHA-256 and original byte count,
+bounded initial viewport and explicit continuation to exact full escaped values
+in at most 4 KiB chunks. Controls, newlines, bidi and confusable strings must not
+create labels/structure or hide identity. Rendering is bounded by admitted sizes;
+inability to render safely refuses. Legacy clerk review explicitly discloses that
+its released signature does not bind displayed dependencies.
+
+Implement D6: begin derives the full claim and opens a displayed, unaccepted native
+review with a proposed 120-second timeout. No token exists until an explicit native
+UI gesture accepts the unchanged re-derived claim and generation; IPC cannot
+synthesize acceptance. Then activate the unpredictable one-shot token with a
+60-second monotonic TTL from acceptance. Bind actual native caller/session and
+window/product/replica/key/domain, allow one pending attempt, and invalidate on
+replacement/cancel/restart. Check state generation and all release authorization immediately
 before presence, after blocking presence/platform signing, and atomically with final
 signature release. A signature computed after invalidation is discarded.
 R22/R23 ceremony/accessibility measurements may revise the TTL through review;
 an active attempt never extends itself. Admin/moderator prompt templates must name
 the landed R04 action correctly, including current-holder renewal.
 
-RED: bare claim/no token, token replay/expiry, wrong native window/session/product/
+RED: bare claim/no token, displayed-but-unaccepted review, synthetic IPC acceptance,
+stale native display, token replay/expiry, wrong native window/session/product/
 key/domain, supplied caller label, substitution, cancellation and second begin;
 state change before presence, **during the blocking OS prompt**, during platform
 signing and just before release; process death/restart; each yields no released
-signature/artifact. Test two replicas sharing a root get different native replica
-fingerprints, and all supported roles render correctly. Full review retains exact
+signature/artifact before authorization. Already committed outbox frames remain
+retrievable under Stage4's explicit commit boundary. Test two replicas sharing a
+root get different native replica fingerprints, hostile full-value rendering and
+all supported roles. Full review retains exact
 keys, deps and lease consequences even though the OS line is abbreviated.
 
 Stages3-5 land as one atomic signing cutover: remove/refuse legacy claim-only IPC
@@ -256,8 +316,12 @@ presence bypass, carrier authority or public witness-exchange API is added.
 
 Proposed witness ceiling: 8,192 operations or 16 MiB per replica, counting **all**
 signed history, pending evidence and defined store overhead. Pin the exact byte
-accounting before RED. At either bound, durably block witness signing and show why;
-no truncation, partial projection or old-subset signature. The carrier's recovery
+accounting before RED, including intake journal, staging/promotion reservations,
+durable markers and outbox pointers without double-counting referenced frames.
+Proposed staging subquota is 128 operations / 512 KiB, separate from admitted
+capacity; filling only unconnected staging refuses further unrelated input without
+blocking complete admitted signing. Exhausting relevant/admitted capacity durably
+blocks signing. No truncation, partial projection or old-subset signature. The carrier's recovery
 ingestion is separate, and offline healing can exceed this ceiling. A lifecycle
 decision is required if the supported witness envelope is exhausted.
 
@@ -306,7 +370,8 @@ artifact threshold authorization or macOS evidence Android evidence.
 
 Stop the affected signing/profile workflow for native/Core disagreement; missing
 landed R03/R04 claim definitions; generic bytes/key selection; custody fallback;
-unknown authenticated history discarded; missing/corrupt native store silently
+retained relevant unknown history discarded or unconnected input promoted without
+D2's classification; missing/corrupt native store silently
 reinitialized; state race releasing a signature; unsupported physical eligibility;
 or a claim of global freshness/whole-store rollback resistance without a separately
 reviewed mechanism. Preserve evidence and the offline preview.
