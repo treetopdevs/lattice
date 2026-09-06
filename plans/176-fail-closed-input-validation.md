@@ -68,6 +68,10 @@ TS conformance gates live in `clients/lattice-client` (`npm ci` once, then `npm 
 - The live generic composite arms are list, tuple, mapset and map; there are no `kv`
   or nested `op` arms. Body/cap paths each allow 64 composites, with scalars and flat
   delegation records accepted at the leaf. Unsupported shell tags remain refused.
+- The flat delegation's unchecked `parent_id` could otherwise smuggle a recursive
+  term into canonical analysis. The authorized decoder amendment validates nil or
+  binary at `decode_delegation/1`; every other field already has scalar or flat-list
+  guards. The existing TypeScript `isCarrierDelegation` enforces that parent shape.
 - The source proposal's malformed tag -> `nil` change needs a fail-closed correction:
   interpreted directly, `nil` would promote a malformed claimed root to a legacy
   unbound replica and accept a previously refused genesis. The authorized amendment
@@ -80,6 +84,14 @@ TS conformance gates live in `clients/lattice-client` (`npm ci` once, then `npm 
 - R03 ownership is coordinated: no beacon collector/judge, witnessed policy, tick,
   TS decoder or exporter-source edits belong to this packet. The integrator alone
   owns the shared README and unified execution ledger.
+- The stale TS prohibition is amended only for matching root-boundary parity:
+  `authority.ts`'s private `replicaRootMatches`/`replicaRootCommitment`, `township.ts`'s
+  `bindTownshipReplica`/`townshipReplicaCommitment` and its `authorTownshipGenesis`
+  caller, existing public authority/authoring tests, and normally rebuilt `dist`.
+  The authoring helper preserves a canonical already-bound replica only after its
+  signer matches the committed root, so a later valid genesis remains possible.
+  Adversarial forged-genesis fixtures use the lower-level signed operation seam.
+  No witnessed-beacon or lease-authoring semantics change.
 
 ### CRYPTO-01 — out-of-range lease crashes analyze
 

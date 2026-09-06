@@ -130,6 +130,45 @@ defmodule Lattice.CarrierWireTest do
     end
   end
 
+  test "flat delegation parents cannot bypass the composite depth budget" do
+    issuer = Identity.from_seed("issuer", "wire-parent-shape")
+    delegation = Delegation.new(issuer, "replica:wire", issuer.pub, ops: [:post])
+    frame = Wire.encode_op(Op.new(issuer, "replica:wire", [], :authority, {:grant, delegation}))
+
+    for parent <- [nil, "parent-delegation-id"] do
+      assert {:ok, [_op]} = Wire.decode_ops([put_delegation_field(frame, "parent_id", parent)])
+    end
+
+    nested = Enum.reduce(1..1_000, nil, fn _level, child -> [child] end)
+
+    for parent <- [nested, %{nested: nested}, 1, false] do
+      assert {:error, :malformed_op} =
+               Wire.decode_ops([put_delegation_field(frame, "parent_id", parent)])
+    end
+  end
+
+  test "operation construction permits only the declared four kinds" do
+    identity = Identity.from_seed("alice", "op-kind-construction")
+
+    for kind <- [:command, :authority, :inbox, :tombstone] do
+      assert %Op{kind: ^kind} = Op.new(identity, "replica:wire", [], kind, nil)
+    end
+
+    for kind <- [:witness, :beacon, :genesis, :unknown] do
+      assert_raise FunctionClauseError, fn -> Op.new(identity, "replica:wire", [], kind, nil) end
+    end
+  end
+
+  test "wire operation kinds refuse existing atoms outside the four-kind contract" do
+    identity = Identity.from_seed("alice", "wire-kind-allowlist")
+    frame = Wire.encode_op(Op.new(identity, "replica:wire", [], :command, nil))
+
+    for kind <- [:witness, :beacon, :genesis, :unknown] do
+      assert {:error, :malformed_op} =
+               Wire.decode_ops([Map.put(frame, "kind", Atom.to_string(kind))])
+    end
+  end
+
   test "map wire frames sort pairs by canonical key bytes" do
     id = Identity.from_seed("alice", "carrier-wire-map-order")
     op = Op.new(id, "replica:wire", [], :command, %{z: 1, a: 2, m: 3, b: 4})
