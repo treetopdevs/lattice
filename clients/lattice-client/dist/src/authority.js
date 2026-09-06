@@ -1,6 +1,6 @@
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
-import { canonicalBytesForCarrierDelegation, canonicalBytesForWitnessedRecoveryPolicy, canonicalBytesForWitnessedSuccessionArtifactId, canonicalBytesForWitnessedSuccessionClaim, } from "./codec";
+import { canonicalBase64Bytes, canonicalBytesForCarrierDelegation, canonicalBytesForWitnessedRecoveryPolicy, canonicalBytesForWitnessedSuccessionArtifactId, canonicalBytesForWitnessedSuccessionClaim, } from "./codec";
 import { ancestors, canonicalOrder, index } from "./dag";
 import { isAuthorityField } from "./schema";
 import { frontier } from "./sync";
@@ -966,8 +966,12 @@ function delegationSelfConsistent(delegation) {
                 ? {}
                 : { expires_epoch: delegation.expiresEpoch }),
         });
-        return (bytesToBase64Url(sha256(canonicalBytes)) === delegation.id &&
-            ed25519.verify(base64ToBytes(delegation.sig), canonicalBytes, base64ToBytes(delegation.issuer), { zip215: false }));
+        const signature = canonicalBase64Bytes(delegation.sig, 64);
+        const issuer = canonicalBase64Bytes(delegation.issuer, 32);
+        return (signature !== null &&
+            issuer !== null &&
+            bytesToBase64Url(sha256(canonicalBytes)) === delegation.id &&
+            ed25519.verify(signature, canonicalBytes, issuer, { zip215: false }));
     }
     catch {
         return false;
@@ -992,38 +996,12 @@ function replicaRootCommitment(replica) {
     const commitment = replica.slice(offset + marker.length);
     return commitment.length > 0 ? commitment : null;
 }
-function base64ToBytes(value) {
-    if (typeof Buffer !== "undefined")
-        return new Uint8Array(Buffer.from(value, "base64"));
-    const atobFn = globalThis.atob;
-    if (!atobFn)
-        throw new Error("base64 decoding unavailable");
-    return Uint8Array.from(atobFn(value), (char) => char.charCodeAt(0));
-}
-function canonicalBase64Bytes(value, length) {
-    if (typeof value !== "string")
-        return null;
-    try {
-        const decoded = base64ToBytes(value);
-        if (bytesToBase64(decoded) !== value)
-            return null;
-        return length === undefined || decoded.length === length ? decoded : null;
-    }
-    catch {
-        return null;
-    }
-}
 function canonicalBase64UrlDigest(value) {
     if (typeof value !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(value))
         return false;
-    try {
-        const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "=";
-        const decoded = base64ToBytes(padded);
-        return decoded.length === 32 && bytesToBase64Url(decoded) === value;
-    }
-    catch {
-        return false;
-    }
+    const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "=";
+    const decoded = canonicalBase64Bytes(padded, 32);
+    return decoded !== null && bytesToBase64Url(decoded) === value;
 }
 function bytesToBase64(value) {
     return typeof Buffer !== "undefined" ? Buffer.from(value).toString("base64") : browserBase64(value);

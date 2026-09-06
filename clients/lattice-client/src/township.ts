@@ -1,4 +1,4 @@
-import { authorCarrierDelegation, authorCarrierOp, canonicalHash } from "./codec";
+import { authorCarrierDelegation, authorCarrierOp, canonicalBase64Bytes, canonicalHash } from "./codec";
 import { carrierDelegationsFromFrames, carrierOpsToSemanticOps } from "./carrier";
 import { frontier } from "./sync";
 import type { AuthorCarrierDelegationInput, AuthorCarrierOpInput, CarrierOpSigner } from "./codec";
@@ -405,7 +405,11 @@ function pubkeyBase64(value: string | Uint8Array): string {
 }
 
 function pubkeyBytes(value: string | Uint8Array): Uint8Array {
-  return typeof value === "string" ? base64ToBytes(value) : value;
+  const decoded = typeof value === "string" ? canonicalBase64Bytes(value, 32) : value;
+  if (decoded === null || decoded.length !== 32) {
+    throw new Error("invalid canonical Ed25519 public key");
+  }
+  return decoded;
 }
 
 function bytesBase64(bytes: Uint8Array): string {
@@ -414,14 +418,6 @@ function bytesBase64(bytes: Uint8Array): string {
   const btoaFn = (globalThis as unknown as { btoa?: (decoded: string) => string }).btoa;
   if (!btoaFn) throw new Error("base64 encoding unavailable");
   return btoaFn(String.fromCharCode(...bytes));
-}
-
-function base64ToBytes(value: string): Uint8Array {
-  if (typeof Buffer !== "undefined") return new Uint8Array(Buffer.from(value, "base64"));
-
-  const atobFn = (globalThis as unknown as { atob?: (encoded: string) => string }).atob;
-  if (!atobFn) throw new Error("base64 decoding unavailable");
-  return Uint8Array.from(atobFn(value), (char) => char.charCodeAt(0));
 }
 
 function setSubset<T>(needed: ReadonlySet<T>, availableValues: readonly T[]): boolean {
