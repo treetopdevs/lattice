@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
-import { authorAndPersistTownshipCommand, analyzeAuthority, authorCarrierDelegation, authorCarrierOp, authorTownshipGenesis, authorTownshipDelegation, authorTownshipCommand, authorTownshipCommandFromLog, authorTownshipRevocation, bindTownshipReplica, canonicalOrder, carrierDelegationsFromFrames, carrierOpsToSemanticOps, createJsonCarrierFrameStore, createJsonLocalOpLogStore, index, selectTownshipCapId, townshipCapTerm, townshipCommandBody, townshipGenesisBody, townshipReplicaCommitment, townshipRevokeBody, } from "../src/index";
+import { authorAndPersistTownshipCommand, analyzeAuthority, authorCarrierDelegation, authorCarrierOp, authorTownshipGenesis, authorTownshipDelegation, authorTownshipCommand, authorTownshipCommandFromLog, authorTownshipRevocation, bindTownshipReplica, canonicalBytesForCarrierDelegation, canonicalOrder, carrierDelegationsFromFrames, carrierOpsToSemanticOps, createJsonCarrierFrameStore, createJsonLocalOpLogStore, index, materialize, selectTownshipCapId, townshipCapTerm, townshipCommandBody, townshipGenesisBody, townshipReplicaCommitment, townshipRevokeBody, } from "../src/index";
 const here = dirname(fileURLToPath(import.meta.url));
 const vector = JSON.parse(readFileSync(join(here, "vectors", "township_carrier_w1.json"), "utf8"));
 let failures = 0;
@@ -169,6 +169,51 @@ const grantDelegation = carrierDelegationsFromFrames([grantFixture])[0];
 if (!grantDelegation)
     throw new Error("missing resident grant fixture delegation");
 const capId = grantDelegation.id;
+// Signed wrong-arity beacons are retained evidence, with no epoch or lease effect.
+const leasedCore = { ...grantDelegation, expires_epoch: 3 };
+const leasedBytes = canonicalBytesForCarrierDelegation(leasedCore);
+const leasedDelegation = {
+    ...leasedCore,
+    id: createHash("sha256").update(leasedBytes).digest("base64url"),
+    sig: Buffer.from(clerkAuthor.sign(leasedBytes)).toString("base64"),
+};
+const leasedGrant = await authorCarrierOp({
+    replica: authoredGenesis.replica, deps: [authoredGenesis.id], kind: "authority",
+    body: ["tuple", [["atom", "grant"], ["delegation", leasedDelegation]]],
+    cap: ["nil"], signer: clerkAuthor,
+});
+const wrongArityBeacon = await authorCarrierOp({
+    replica: authoredGenesis.replica, deps: [leasedGrant.id], kind: "authority",
+    body: ["tuple", [["atom", "beacon"], ["int", 9], ["nil"], ["nil"]]],
+    cap: ["nil"], signer: clerkAuthor,
+});
+const liveLeasePost = await authorTownshipCommand({
+    replica: authoredGenesis.replica, deps: [wrongArityBeacon.id],
+    command: { command: "post", text: "lease remains live" },
+    capId: leasedDelegation.id, signer: residentAuthor,
+});
+const wrongArityFrames = [authoredGenesis, leasedGrant, wrongArityBeacon, liveLeasePost];
+const wrongArityOps = carrierOpsToSemanticOps(wrongArityFrames, vector.realmByPubkey);
+const wrongArityState = materialize(vector.schema, wrongArityOps);
+check("signed four-field beacon remains stored", wrongArityOps.some((op) => op.id === wrongArityBeacon.id), true);
+check("signed four-field beacon remains unquarantined", wrongArityState.quarantineReasons.has(wrongArityBeacon.id), false);
+check("signed four-field beacon adds no epoch", authorityForFrames(wrongArityFrames).security.validBeacons, []);
+check("signed four-field beacon cannot lapse the leased post", wrongArityState.quarantineReasons.has(liveLeasePost.id), false);
+check("post after four-field beacon stays materialized", wrongArityState.state.posts, ["lease remains live"]);
+const legacyBeacon = await authorCarrierOp({
+    replica: authoredGenesis.replica, deps: [liveLeasePost.id], kind: "authority",
+    body: ["tuple", [["atom", "beacon"], ["int", 9]]], cap: ["nil"], signer: clerkAuthor,
+});
+const lapsedLeasePost = await authorTownshipCommand({
+    replica: authoredGenesis.replica, deps: [legacyBeacon.id],
+    command: { command: "post", text: "lease now lapsed" },
+    capId: leasedDelegation.id, signer: residentAuthor,
+});
+const legacyBeaconFrames = [...wrongArityFrames, legacyBeacon, lapsedLeasePost];
+const legacyBeaconState = materialize(vector.schema, carrierOpsToSemanticOps(legacyBeaconFrames, vector.realmByPubkey));
+check("two-field beacon advances the epoch", authorityForFrames(legacyBeaconFrames).security.validBeacons, [{ opId: legacyBeacon.id, epoch: 9 }]);
+check("two-field beacon still lapses the leased post", legacyBeaconState.quarantineReasons.get(lapsedLeasePost.id), "lease_expired");
+check("two-field beacon preserves the earlier causal post", legacyBeaconState.state.posts, ["lease remains live"]);
 check("delegation cap term", townshipCapTerm(capId), ["bin", textBase64(capId)]);
 check("missing cap term", townshipCapTerm(null), ["nil"]);
 check("carrier delegation ids from frames", delegations.map((delegation) => delegation.id), [

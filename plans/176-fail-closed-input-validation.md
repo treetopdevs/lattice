@@ -111,6 +111,61 @@ TS conformance gates live in `clients/lattice-client` (`npm ci` once, then `npm 
   rerun all five R03 vectors plus its leased-authoring checks. This explicitly
   amends the earlier decoder ownership exclusion only for this arity guard.
 
+### Unified R09 local implementation evidence — 2026-09-06
+
+The implementation is locally complete on `codex/treehouse-r09-input-limits` in
+`/Users/nicholas/develop/lattice-treehouse-r09-20260906`. Exact-diff Fable review,
+shared R03 integration and hosted gates remain integrator-owned; this evidence
+does not mark those gates or the R07/R08 dependencies DONE.
+
+- Behavioral RED commits: `97399748` (direct/reconstructed lease overflow),
+  `c25e4f39` (body/cap composite-depth matrix), `19e5d498` (root marker),
+  `5b9cefe2` (recursive parent and op kind), `2d656d4f` (TS root parity and
+  retained-genesis controls), and `49cb785d` (five TS failures from a signed
+  four-field beacon's incorrect epoch/lease effect). Each was run before its
+  implementation. The wire overflow case was already green at the preparation
+  base and is a preserved control, not a claimed new RED.
+- A temporary parser-only implementation of the original malformed-tag-to-nil
+  proposal made public `verify_chain` and root/holder analysis accept an attacker
+  genesis on `town#root:attacker`. That mutation was never committed. The private
+  malformed-claim discriminator preserves refusal while public parsing returns
+  nil. Valid legacy-unbound and valid-bound controls remain green in both runtimes.
+- Public once-bound lifecycle controls retain two distinct, valid signed genesis
+  records and apply the later policy in both runtimes. High-level TS authoring
+  refuses a different signer; lower-level signed impostor fixtures still reach
+  and prove the server/semantic refusal. The caller audit required no Sim source
+  change and no idempotent behavior in the low-level binding helper.
+- Depth controls accept 8 and 64 composites and refuse 65 for list, tuple, mapset,
+  map keys and map values in both body and cap paths. A 1,000-level raw delegation
+  parent is refused before canonical recursion, while nil/binary parents remain
+  accepted. All four declared op kinds remain accepted.
+- The BEAM signed four-field beacon is a baseline-green inertness control;
+  TypeScript now matches it. It stays stored and unquarantined, leaves the leased
+  post materialized and contributes no epoch. A later exact two-field beacon
+  still lapses the lease and preserves the earlier causal post.
+- The first full `mix check` failed in R08's scheduler-sensitive 50 ms test
+  fixture; a focused rerun also failed under host BEAM contention. The integrator
+  reproduced the old-client RED and supplied fixture/CI-path repair
+  `a172265e8720d73410fda38213232500972fd784`, cherry-picked here as `1717f45e`.
+  Production setup deadlines were unchanged. Final gates ran serially with
+  `ERL_FLAGS='+S 4:4'` and the explicit OTP 28/asdf PATH, including child BEAMs.
+
+Final local gates after the arity correction and R08 prerequisite repair:
+
+| Gate | Observed result |
+| --- | --- |
+| `mix check` (format + full tests + strict Credo) | Exit 0; 694 tests + 27 properties, 3 existing exclusions; no new Credo issues |
+| `MIX_ENV=test mix lattice.export_vectors --out clients/lattice-client/test/vectors` | Exit 0; all 57 tracked vector files unchanged |
+| TS `typecheck`, `township:authoring`, `build` | Exit 0; normal generated outputs committed |
+| TS `conformance`, `canonical`, `v01:guard` after regeneration | Exit 0 |
+| TS `carrier:township`, `carrier:township:live` | Exit 0, including real peer signed-impostor refusal |
+| Shell `release:root-origination:contract`, `typecheck` | Exit 0; exact lower-level adversarial fixture retained |
+| Both boundary apps' `mix sobelow --exit --skip` | Exit 0; `lattice_server` has no Phoenix router surface, so its runtime boundary tests provide the relevant refusal proof |
+
+Logs are retained locally under `/tmp/lattice-r09-final-*` and the behavioral
+RED logs under `/tmp/lattice-r09-*red.log`. No push, PR, hosted CI, deployment,
+packaged application, physical device or pilot result is claimed by this packet.
+
 ### CRYPTO-01 — out-of-range lease crashes analyze
 
 Decode accepts any non-negative integer (`apps/lattice_core/lib/lattice/carrier/wire.ex:324-331`):
