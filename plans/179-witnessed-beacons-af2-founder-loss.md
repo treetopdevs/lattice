@@ -2025,3 +2025,19 @@ The earlier exact Fable attempt on `201e7ae6..4a823b96` ended with an API
 mid-response error and no verdict. Its full transcript and partial observations
 are retained; neither is a PASS. Final independent review and hosted thread/CI
 closure remain pending for this complete repair.
+
+### Public verifier canonical-bound follow-up (2026-09-06)
+
+The integrator authorized PR68 finding `PRRT_kwDOSZGqLc6fuGvg` before code:
+`BeaconCertificate.verify/3` must reject a matching claim epoch above the
+unchanged canonical uint64 maximum as `{:error, :unauthorized_beacon}` before
+constructing signing bytes. This is a total-verifier boundary repair, not a
+witnessed epoch-admission change. Existing canonically encodable claim bytes
+and valid signature verification remain unchanged, including standalone uint64
+controls; the authority judge still refuses witnessed epochs above its separate
+`9_007_199_254_740_991` horizon. The negative public test supplies matching
+certificate/expected claims above uint64 and must observe the documented error,
+not an exception. Scope is this certificate shape guard, its public test, and
+this evidence; generic canonical encoding, role semantics and old vectors stay
+unchanged. The separate high legacy ancestor finding requires the exact
+contextual representation disposition before its production changes.
