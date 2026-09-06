@@ -23,6 +23,9 @@ defmodule Lattice.Carrier.WebSocket do
   @recv_timeout 10_000
   @max_push_ops 64
   @max_push_bytes 64_000
+  @max_read_pages 1_024
+  @max_have_request_bytes 48_000
+  @max_cursor_bytes 512
 
   @enforce_keys [:client]
   defstruct [
@@ -178,17 +181,21 @@ defmodule Lattice.Carrier.WebSocket do
 
   @impl Lattice.Carrier
   def advertise(%__MODULE__{} = conn, _local_log) do
-    with {:ok, %{"type" => "frontier_result", "ids" => ids}} <-
-           request(conn, %{type: "frontier"}) do
+    with {:ok, ids} <- read_pages(conn, :frontier, %{type: "frontier"}) do
       {:ok, MapSet.new(ids), conn}
     end
   end
 
   @impl Lattice.Carrier
   def pull(%__MODULE__{} = conn, %MapSet{} = have) do
-    with {:ok, %{"type" => "ops", "ops" => encoded}} <-
-           request(conn, %{type: "pull", have: Enum.sort(have)}),
-         {:ok, ops} <- Wire.decode_ops(encoded) do
+    initial = %{type: "pull", have: Enum.sort(have)}
+
+    initial =
+      if byte_size(Jason.encode!(initial)) <= @max_have_request_bytes,
+        do: initial,
+        else: %{type: "pull", have: []}
+
+    with {:ok, ops} <- read_pages(conn, :pull, initial) do
       {:ok, ops, conn}
     end
   end
@@ -365,6 +372,106 @@ defmodule Lattice.Carrier.WebSocket do
       :error -> {:error, {:missing_required_opt, key}}
     end
   end
+
+  defp read_pages(conn, kind, initial) do
+    read_pages(conn, kind, initial, %{cursor: nil, chunks: [], seen: MapSet.new(), pages: 0})
+  end
+
+  defp read_pages(conn, kind, initial, state) do
+    envelope = if state.cursor, do: Map.put(initial, :cursor, state.cursor), else: initial
+
+    with {:ok, response} <- request(conn, envelope),
+         {:ok, entries} <- read_page_entries(response, kind),
+         ids = Enum.map(entries, &read_entry_id(&1, kind)),
+         :ok <- unique_page_ids(ids, state.seen),
+         {:ok, cursor} <- next_read_cursor(response, kind, ids, state),
+         :ok <- frontier_page_order(kind, ids, cursor, state.cursor) do
+      chunks = [entries | state.chunks]
+
+      cond do
+        cursor == nil ->
+          {:ok, chunks |> Enum.reverse() |> List.flatten()}
+
+        state.pages + 1 >= @max_read_pages ->
+          {:error, :pagination_page_limit}
+
+        true ->
+          next = %{
+            cursor: cursor,
+            chunks: chunks,
+            seen: MapSet.union(state.seen, MapSet.new(ids)),
+            pages: state.pages + 1
+          }
+
+          read_pages(conn, kind, initial, next)
+      end
+    end
+  end
+
+  defp read_page_entries(%{"type" => "ops", "ops" => encoded}, :pull),
+    do: Wire.decode_ops(encoded)
+
+  defp read_page_entries(%{"type" => "frontier_result", "ids" => ids}, :frontier)
+       when is_list(ids) do
+    if Enum.all?(ids, &is_binary/1), do: {:ok, ids}, else: {:error, :malformed_page}
+  end
+
+  defp read_page_entries(_response, _kind), do: {:error, :malformed_page}
+
+  defp read_entry_id(%Op{id: id}, :pull), do: id
+  defp read_entry_id(id, :frontier), do: id
+
+  defp unique_page_ids(ids, seen) do
+    incoming = MapSet.new(ids)
+
+    if MapSet.size(incoming) == length(ids) and MapSet.disjoint?(incoming, seen),
+      do: :ok,
+      else: {:error, :pagination_no_progress}
+  end
+
+  defp next_read_cursor(%{"next_cursor" => cursor}, kind, ids, state) when is_map(cursor) do
+    cond do
+      not valid_read_cursor?(cursor, kind) ->
+        {:error, :malformed_pagination_cursor}
+
+      ids == [] or cursor["offset"] != MapSet.size(state.seen) + length(ids) or
+          cursor["after"] != List.last(ids) ->
+        {:error, :pagination_no_progress}
+
+      state.cursor != nil and
+          Map.take(cursor, ["snapshot", "have"]) != Map.take(state.cursor, ["snapshot", "have"]) ->
+        {:error, :pagination_snapshot_changed}
+
+      true ->
+        {:ok, cursor}
+    end
+  end
+
+  defp next_read_cursor(%{"next_cursor" => _invalid}, _kind, _ids, _state),
+    do: {:error, :malformed_pagination_cursor}
+
+  defp next_read_cursor(_response, _kind, _ids, _state), do: {:ok, nil}
+
+  defp valid_read_cursor?(cursor, kind) do
+    keys = ["version", "after", "snapshot", "offset"] ++ if(kind == :pull, do: ["have"], else: [])
+
+    Enum.sort(Map.keys(cursor)) == Enum.sort(keys) and
+      byte_size(Jason.encode!(cursor)) <= @max_cursor_bytes and cursor["version"] == 1 and
+      is_integer(cursor["offset"]) and cursor["offset"] > 0 and
+      sized_binary?(cursor["after"], 43) and sized_binary?(cursor["snapshot"], 64) and
+      (kind != :pull or sized_binary?(cursor["have"], 64))
+  end
+
+  defp sized_binary?(value, size), do: is_binary(value) and byte_size(value) == size
+
+  defp frontier_page_order(:frontier, ids, cursor, previous)
+       when cursor != nil or previous != nil do
+    if ids == Enum.sort(ids) and (previous == nil or ids == [] or hd(ids) > previous["after"]),
+      do: :ok,
+      else: {:error, :pagination_no_progress}
+  end
+
+  defp frontier_page_order(_kind, _ids, _cursor, _previous), do: :ok
 
   defp request(%__MODULE__{client: client}, msg) do
     with {:ok, envelope} <- Client.request_envelope(client, msg, @recv_timeout) do
