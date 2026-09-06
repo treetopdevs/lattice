@@ -140,7 +140,7 @@ fn governance_first_creation_is_rollback_safe() {
 
 #[test]
 fn concurrent_governance_ensure_calls_share_one_creation() {
-    let store = MemoryGovernanceWitnessStore::with_create_delay(50);
+    let store = MemoryGovernanceWitnessStore::default();
     let state = Arc::new(state_with_store(store.clone()));
     let start = Arc::new(Barrier::new(3));
 
@@ -169,7 +169,7 @@ fn concurrent_governance_ensure_calls_share_one_creation() {
 
 #[test]
 fn duplicate_seed_creation_reconciles_to_the_cross_state_winner() {
-    let store = MemoryGovernanceWitnessStore::with_create_delays(50, 50, 0);
+    let store = MemoryGovernanceWitnessStore::with_creation_race(false);
     let first_state = state_with_store(store.clone());
     let second_state = state_with_store(store.clone());
     let start = Arc::new(Barrier::new(3));
@@ -199,7 +199,7 @@ fn duplicate_seed_creation_reconciles_to_the_cross_state_winner() {
 
 #[test]
 fn duplicate_seed_creation_waits_for_the_cross_state_winner_sidecar() {
-    let store = MemoryGovernanceWitnessStore::with_create_delays(25, 0, 75);
+    let store = MemoryGovernanceWitnessStore::with_creation_race(true);
     let first_state = state_with_store(store.clone());
     let second_state = state_with_store(store.clone());
     let start = Arc::new(Barrier::new(3));
@@ -225,6 +225,7 @@ fn duplicate_seed_creation_waits_for_the_cross_state_winner_sidecar() {
     assert_eq!(store.write_counts(), (1, 1));
     assert_eq!(store.delete_count(), 0);
     assert_eq!(store.released_seed_count(), 0);
+    assert!(store.inner.lock().unwrap().incomplete_reads >= 1);
 }
 
 #[test]
@@ -442,7 +443,8 @@ fn verify_governance_signature(
 #[derive(Clone)]
 struct RecordingPresence {
     reasons: Arc<Mutex<Vec<String>>>,
-    outcome: PresenceOutcome,
+    outcome: Arc<Mutex<PresenceOutcome>>,
+    on_allow: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
 #[derive(Clone, Copy)]
@@ -461,7 +463,8 @@ impl RecordingPresence {
     fn with_outcome(outcome: PresenceOutcome) -> Self {
         Self {
             reasons: Arc::new(Mutex::new(Vec::new())),
-            outcome,
+            outcome: Arc::new(Mutex::new(outcome)),
+            on_allow: None,
         }
     }
 
@@ -473,8 +476,13 @@ impl RecordingPresence {
 impl RecordingPresence {
     fn authorize(&self, reason: &str) -> Result<(), GovernanceWitnessPresenceError> {
         self.reasons.lock().unwrap().push(reason.to_string());
-        match self.outcome {
-            PresenceOutcome::Allow => Ok(()),
+        match *self.outcome.lock().unwrap() {
+            PresenceOutcome::Allow => {
+                if let Some(action) = &self.on_allow {
+                    action();
+                }
+                Ok(())
+            }
             PresenceOutcome::Cancelled => Err(GovernanceWitnessPresenceError::Cancelled),
             PresenceOutcome::Unavailable => Err(GovernanceWitnessPresenceError::Unavailable),
             PresenceOutcome::Failed => Err(GovernanceWitnessPresenceError::Failed(
@@ -489,6 +497,16 @@ struct MemoryGovernanceWitnessStore {
     inner: Arc<Mutex<MemoryGovernanceWitnessState>>,
 }
 
+#[derive(Clone, Copy)]
+enum CreationFault {
+    SeedResponseLost,
+    CrashBeforeSidecar,
+    CrashAfterSidecar,
+    SidecarResponseLost,
+    DuplicateIncomplete,
+    DuplicateDisappeared,
+}
+
 #[derive(Default)]
 struct MemoryGovernanceWitnessState {
     seed: Option<[u8; 32]>,
@@ -501,9 +519,10 @@ struct MemoryGovernanceWitnessState {
     public_key_create_error: Option<&'static str>,
     delete_error: Option<&'static str>,
     delete_count: usize,
-    create_delay_ms: u64,
-    duplicate_delay_ms: u64,
-    public_key_create_delay_ms: u64,
+    creation_barrier: Option<Arc<Barrier>>,
+    sidecar_observation: Option<Arc<Barrier>>,
+    incomplete_reads: usize,
+    fault: Option<CreationFault>,
 }
 
 impl MemoryGovernanceWitnessStore {
@@ -543,20 +562,11 @@ impl MemoryGovernanceWitnessStore {
         }
     }
 
-    fn with_create_delay(create_delay_ms: u64) -> Self {
-        Self::with_create_delays(create_delay_ms, 0, 0)
-    }
-
-    fn with_create_delays(
-        create_delay_ms: u64,
-        duplicate_delay_ms: u64,
-        public_key_create_delay_ms: u64,
-    ) -> Self {
+    fn with_creation_race(wait_for_observation: bool) -> Self {
         Self {
             inner: Arc::new(Mutex::new(MemoryGovernanceWitnessState {
-                create_delay_ms,
-                duplicate_delay_ms,
-                public_key_create_delay_ms,
+                creation_barrier: Some(Arc::new(Barrier::new(2))),
+                sidecar_observation: wait_for_observation.then(|| Arc::new(Barrier::new(2))),
                 ..MemoryGovernanceWitnessState::default()
             })),
         }
@@ -588,12 +598,30 @@ impl MemoryGovernanceWitnessStore {
 
     fn load_seed(&self) -> Result<Option<[u8; 32]>, GovernanceWitnessPresenceError> {
         let mut state = self.inner.lock().unwrap();
-        state.seed_releases += 1;
+        if state.seed.is_some() {
+            state.seed_releases += 1;
+        }
         Ok(state.seed)
     }
 
     fn load_public_key(&self) -> Result<Option<[u8; 32]>, String> {
-        Ok(self.inner.lock().unwrap().public_key)
+        let mut state = self.inner.lock().unwrap();
+        let value = state.public_key;
+        let observation = if state.seed.is_some() && value.is_none() {
+            state.incomplete_reads += 1;
+            if state.incomplete_reads == 1 {
+                state.sidecar_observation.clone()
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        drop(state);
+        if let Some(observation) = observation {
+            observation.wait();
+        }
+        Ok(value)
     }
 
     fn create_seed(&self, seed: [u8; 32]) -> Result<(), GovernanceWitnessCreateError> {
@@ -604,23 +632,34 @@ impl MemoryGovernanceWitnessStore {
         if state.seed.is_some() {
             return Err(GovernanceWitnessCreateError::Duplicate);
         }
-        let create_delay_ms = state.create_delay_ms;
+        let barrier = state.creation_barrier.clone();
         drop(state);
-        if create_delay_ms > 0 {
-            std::thread::sleep(std::time::Duration::from_millis(create_delay_ms));
+        if let Some(barrier) = barrier {
+            barrier.wait();
         }
         let mut state = self.inner.lock().unwrap();
         if state.seed.is_some() {
-            let duplicate_delay_ms = state.duplicate_delay_ms;
-            drop(state);
-            if duplicate_delay_ms > 0 {
-                std::thread::sleep(std::time::Duration::from_millis(duplicate_delay_ms));
-            }
+            return Err(GovernanceWitnessCreateError::Duplicate);
+        }
+        if matches!(state.fault, Some(CreationFault::DuplicateDisappeared)) {
+            return Err(GovernanceWitnessCreateError::Duplicate);
+        }
+        if matches!(state.fault, Some(CreationFault::DuplicateIncomplete)) {
+            let winner = [9; 32];
+            state.seed = Some(winner);
+            state.seed_public_key =
+                Some(SigningKey::from_bytes(&winner).verifying_key().to_bytes());
+            state.seed_writes += 1;
             return Err(GovernanceWitnessCreateError::Duplicate);
         }
         state.seed = Some(seed);
         state.seed_public_key = Some(SigningKey::from_bytes(&seed).verifying_key().to_bytes());
         state.seed_writes += 1;
+        if matches!(state.fault, Some(CreationFault::SeedResponseLost)) {
+            return Err(GovernanceWitnessCreateError::Backend(
+                "seed response lost".to_string(),
+            ));
+        }
         Ok(())
     }
 
@@ -632,10 +671,14 @@ impl MemoryGovernanceWitnessStore {
         if state.public_key.is_some() {
             return Err(GovernanceWitnessCreateError::Duplicate);
         }
-        let public_key_create_delay_ms = state.public_key_create_delay_ms;
+        let fault = state.fault;
+        let observation = state.sidecar_observation.clone();
         drop(state);
-        if public_key_create_delay_ms > 0 {
-            std::thread::sleep(std::time::Duration::from_millis(public_key_create_delay_ms));
+        if matches!(fault, Some(CreationFault::CrashBeforeSidecar)) {
+            panic!("simulated process loss before sidecar write");
+        }
+        if let Some(observation) = observation {
+            observation.wait();
         }
         let mut state = self.inner.lock().unwrap();
         if state.public_key.is_some() {
@@ -643,7 +686,16 @@ impl MemoryGovernanceWitnessStore {
         }
         state.public_key = Some(public_key);
         state.public_key_writes += 1;
-        Ok(())
+        drop(state);
+        match fault {
+            Some(CreationFault::CrashAfterSidecar) => {
+                panic!("simulated process loss after sidecar write")
+            }
+            Some(CreationFault::SidecarResponseLost) => Err(GovernanceWitnessCreateError::Backend(
+                "sidecar response lost".to_string(),
+            )),
+            _ => Ok(()),
+        }
     }
 
     fn delete_seed(&self) -> Result<(), String> {
@@ -699,4 +751,221 @@ fn state_with_custody(
     TownshipNativeState::with_governance_witness_provider(Arc::new(
         LegacySeedGovernanceProvider::new(TestBackend { store, presence }),
     ))
+}
+
+fn store_with_fault(fault: CreationFault) -> MemoryGovernanceWitnessStore {
+    let store = MemoryGovernanceWitnessStore::default();
+    store.inner.lock().unwrap().fault = Some(fault);
+    store
+}
+
+#[test]
+fn ambiguous_seed_creation_never_claims_cleanup_ownership_or_recreates() {
+    let store = store_with_fault(CreationFault::SeedResponseLost);
+    assert_eq!(
+        state_with_store(store.clone())
+            .ensure_governance_witness_key()
+            .unwrap_err(),
+        "seed response lost"
+    );
+    let retained = store.items().0.unwrap();
+    assert_eq!(store.write_counts(), (1, 0));
+    assert_eq!(store.delete_count(), 0);
+    assert_eq!(
+        state_with_store(store.clone())
+            .ensure_governance_witness_key()
+            .unwrap_err(),
+        "governance witness identity is incomplete: public sidecar is missing"
+    );
+    assert_eq!(store.items(), (Some(retained), None));
+    assert_eq!(store.released_seed_count(), 0);
+}
+
+#[test]
+fn restart_at_each_creation_write_preserves_the_retained_identity_state() {
+    for fault in [
+        CreationFault::CrashBeforeSidecar,
+        CreationFault::CrashAfterSidecar,
+    ] {
+        let store = store_with_fault(fault);
+        let state = state_with_store(store.clone());
+        assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(
+            || state.ensure_governance_witness_key()
+        ))
+        .is_err());
+        let retained = store.items().0.unwrap();
+        let restarted = state_with_store(store.clone());
+        match fault {
+            CreationFault::CrashBeforeSidecar => {
+                assert_eq!(
+                    restarted.ensure_governance_witness_key().unwrap_err(),
+                    "governance witness identity is incomplete: public sidecar is missing"
+                );
+                assert_eq!(store.write_counts(), (1, 0));
+            }
+            CreationFault::CrashAfterSidecar => {
+                let expected = base64::engine::general_purpose::STANDARD
+                    .encode(SigningKey::from_bytes(&retained).verifying_key().to_bytes());
+                assert_eq!(restarted.ensure_governance_witness_key().unwrap(), expected);
+                assert_eq!(restarted.governance_witness_public_key().unwrap(), expected);
+                assert_eq!(store.write_counts(), (1, 1));
+            }
+            _ => unreachable!(),
+        }
+        assert_eq!(store.items().0, Some(retained));
+        assert_eq!(store.delete_count(), 0);
+        assert_eq!(store.released_seed_count(), 0);
+    }
+}
+
+#[test]
+fn ambiguous_sidecar_failure_preserves_the_explicit_legacy_incomplete_outcome() {
+    let store = store_with_fault(CreationFault::SidecarResponseLost);
+    assert_eq!(
+        state_with_store(store.clone())
+            .ensure_governance_witness_key()
+            .unwrap_err(),
+        "governance witness public metadata creation failed: sidecar response lost"
+    );
+    let sidecar = store.items().1.unwrap();
+    assert_eq!(store.items().0, None);
+    assert_eq!(store.delete_count(), 1);
+    assert_eq!(
+        state_with_store(store.clone())
+            .ensure_governance_witness_key()
+            .unwrap_err(),
+        "governance witness identity is incomplete: protected-seed identity metadata is missing"
+    );
+    assert_eq!(store.items(), (None, Some(sidecar)));
+    assert_eq!(store.write_counts(), (1, 1));
+}
+
+#[test]
+fn duplicate_timeout_or_disappearance_never_deletes_the_other_attempt() {
+    for (fault, expected) in [
+        (
+            CreationFault::DuplicateIncomplete,
+            "governance witness concurrent identity creation timed out before public sidecar",
+        ),
+        (
+            CreationFault::DuplicateDisappeared,
+            "governance witness concurrent identity creation disappeared before completion",
+        ),
+    ] {
+        let store = store_with_fault(fault);
+        assert_eq!(
+            state_with_store(store.clone())
+                .ensure_governance_witness_key()
+                .unwrap_err(),
+            expected
+        );
+        assert_eq!(store.delete_count(), 0);
+        assert_eq!(store.released_seed_count(), 0);
+        assert_eq!(store.write_counts().1, 0);
+    }
+}
+
+#[test]
+fn cancelled_attempt_retries_with_fresh_authentication_and_same_key() {
+    let seed = [7; 32];
+    let public = SigningKey::from_bytes(&seed).verifying_key().to_bytes();
+    let store = MemoryGovernanceWitnessStore::with_items(Some(seed), Some(public));
+    let presence = RecordingPresence::with_outcome(PresenceOutcome::Cancelled);
+    let state = state_with_custody(store.clone(), presence.clone());
+    assert_eq!(
+        state.sign_governance_witness(&claim()).unwrap_err(),
+        "governance witness authentication cancelled"
+    );
+    assert_eq!(store.released_seed_count(), 0);
+    *presence.outcome.lock().unwrap() = PresenceOutcome::Allow;
+    let result = state.sign_governance_witness(&claim()).unwrap();
+    verify_governance_signature(&result, public);
+    assert_eq!(
+        presence.reasons(),
+        vec!["Sign Township clerk recovery witness"; 2]
+    );
+    assert_eq!(store.released_seed_count(), 1);
+    assert_eq!(store.write_counts(), (0, 0));
+    assert!(state.kv_snapshot().unwrap().is_empty());
+}
+
+#[test]
+fn missing_protected_key_and_identity_change_during_authentication_release_no_signature() {
+    let seed = [7; 32];
+    let public = SigningKey::from_bytes(&seed).verifying_key().to_bytes();
+    let missing =
+        MemoryGovernanceWitnessStore::with_identity_items(None, Some(public), Some(public));
+    assert_eq!(
+        state_with_custody(missing.clone(), RecordingPresence::allow())
+            .sign_governance_witness(&claim())
+            .unwrap_err(),
+        "governance witness protected seed is missing"
+    );
+    assert_eq!(missing.released_seed_count(), 0);
+    let store = MemoryGovernanceWitnessStore::with_items(Some(seed), Some(public));
+    let changed = store.clone();
+    let mut presence = RecordingPresence::allow();
+    presence.on_allow = Some(Arc::new(move || {
+        changed.inner.lock().unwrap().public_key = Some([9; 32]);
+    }));
+    let state = state_with_custody(store.clone(), presence.clone());
+    assert_eq!(
+        state.sign_governance_witness(&claim()).unwrap_err(),
+        "governance witness identity is corrupt: public key mismatch"
+    );
+    assert_eq!(presence.reasons().len(), 1);
+    assert_eq!(store.released_seed_count(), 1);
+    assert_eq!(store.write_counts(), (0, 0));
+    assert!(state.kv_snapshot().unwrap().is_empty());
+}
+
+#[test]
+fn shared_provider_concurrent_claims_keep_their_own_bytes_and_fresh_protected_access() {
+    let seed = [7; 32];
+    let public = SigningKey::from_bytes(&seed).verifying_key().to_bytes();
+    let store = MemoryGovernanceWitnessStore::with_items(Some(seed), Some(public));
+    let presence = RecordingPresence::allow();
+    let provider = Arc::new(LegacySeedGovernanceProvider::new(TestBackend {
+        store: store.clone(),
+        presence: presence.clone(),
+    }));
+    let start = Arc::new(Barrier::new(9));
+    let calls: Vec<_> = (0..8)
+        .map(|i| {
+            let state = TownshipNativeState::with_governance_witness_provider(provider.clone());
+            let start = start.clone();
+            std::thread::spawn(move || {
+                let mut submitted = claim();
+                submitted["replica"] = serde_json::json!(format!("replica:parallel:{i}"));
+                start.wait();
+                (
+                    submitted.clone(),
+                    state.sign_governance_witness(&submitted).unwrap(),
+                )
+            })
+        })
+        .collect();
+    start.wait();
+    for call in calls {
+        let (submitted, result) = call.join().unwrap();
+        let payload =
+            crate::governance_witness::canonical_governance_witness_payload(&submitted).unwrap();
+        let signature = base64::engine::general_purpose::STANDARD
+            .decode(result.signature)
+            .unwrap();
+        VerifyingKey::from_bytes(&public)
+            .unwrap()
+            .verify(&payload.bytes, &Signature::from_slice(&signature).unwrap())
+            .unwrap();
+        assert_eq!(
+            result.witness,
+            base64::engine::general_purpose::STANDARD.encode(public)
+        );
+    }
+    assert_eq!(
+        presence.reasons(),
+        vec!["Sign Township clerk recovery witness"; 8]
+    );
+    assert_eq!(store.released_seed_count(), 8);
+    assert_eq!(store.write_counts(), (0, 0));
 }

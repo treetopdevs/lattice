@@ -1,7 +1,7 @@
 # R36 Stage 1: provider-owned governance custody
 
-Prepared 2026-09-06. **Stage 1 scope adopted; implementation and gates pending;
-no profile enablement.** This document makes [Stage 1 of the native witness build](treehouse-native-witness-build-2026-09-06.md#stage-1-opaque-generation-and-signing-seam-r36)
+Prepared 2026-09-06. **Stage 1 implementation passes local gates and is ready for
+exact review; no profile enablement.** This document makes [Stage 1 of the native witness build](treehouse-native-witness-build-2026-09-06.md#stage-1-opaque-generation-and-signing-seam-r36)
 concrete. It does not close R36, R17b, R17c, R12 or their hosted gates.
 
 ## Exact preparation base and dependencies
@@ -15,7 +15,7 @@ branch: `codex/treehouse-r36-provider-20260906`.
 | R17a final decision | `443c6a131577fe2ea24da608d34bb083f13c47cc`, inherited through the next input. |
 | Android eligibility correction | `da519123724b3b70c44c16408846845bc7c584d0`, actual exact-diff Claude Fable PASS. Automatic merge `5f80d83a`; no runtime changes. |
 | R01b adopted native scope | `258cb3d0ba7ca3b12b35e808af082db729015e54`, automatic merge `ee888759ea1bbc41ff5abfe39fcc18bc9da463a8`. |
-| Stage 1 preparation source | Clean `ee888759ea1bbc41ff5abfe39fcc18bc9da463a8`; the only subsequent proposed change is this document. |
+| Stage 1 preparation source | Clean `ee888759ea1bbc41ff5abfe39fcc18bc9da463a8`; the initial proposal changed only this document. Later adopted implementation evidence is recorded below. |
 
 The integrator must supply accepted R12/R01b/R17a dependency closure before
 enabling the implementation packet. Their presence in this local branch is not
@@ -397,3 +397,55 @@ ordinary macOS release-binding test pass. Logs are `r36-opaque-api-green.log`,
 `r36-custody-migration-green.log` and `r36-public-compatibility-green.log` under
 the same execution-evidence directory. This checkpoint still needs the additional
 deterministic failure/race controls, final gates and implementation review.
+
+## Local implementation gate record — 2026-09-06
+
+The provider migration is implemented in the exact adopted source/test scope.
+The external crate API now has only public-identity and closed legacy signing
+operations. The existing macOS protected query, creation flags, accounts, public
+identity attributes and error classification are unchanged; queued caller-visible
+presence state is removed in favor of one provider-owned authenticated access.
+No real Keychain identity was created, read, deleted or signed during these gates.
+
+- Ordinary `cargo test --locked --offline`: **82 passed, 0 failed, 0 ignored**,
+  including nine doctests, 19 private production-provider tests, all unchanged
+  payload oracles and ordinary release binding (`r36-native-full.log`).
+- Full dev-trace/test-presence feature suite: **83 passed, 0 failed, 0 ignored**
+  (`r36-test-feature-full.log`). The test-presence-only build refuses with the
+  exact required compile-time error (`r36-invalid-test-feature-refusal.log`).
+- The compiler reports the intended removed-symbol `E0432`, private-backend
+  `E0603`, private request-field mutation `E0616` and construction `E0451`, paired
+  with positive opaque API examples (`r36-api-diagnostics.log`).
+- Controlled races and added creation crash/ambiguous-response, duplicate
+  timeout/disappearance, cancel-then-retry, missing protected key, identity change
+  during authentication and shared-provider concurrent-claim controls pass
+  (`r36-controlled-races-green.log`, `r36-failure-controls-green.log`). These are
+  preservation/characterization controls, not falsely reported new baseline REDs.
+  Duplicate-sidecar interleaving is forced with barriers and an observed-pending
+  assertion; no test fixture sleeps. The production 500 ms reconciliation bound
+  remains unchanged.
+- Existing runtime wiring, TS native bridge and witness artifact contracts pass
+  (`r36-runtime-wiring.log`, `r36-ts-governance-green.log`, `r36-ts-artifact.log`).
+  Initial TS execution exposed a missing copied mobile-core dependency cache;
+  copying the existing cache resolved it without dependency/source changes.
+- Existing witness fixture preflight passes (`r36-fixture-preflight.log`): the
+  synthetic feature provider's public identity feeds independently created BEAM
+  fixture and restore/oracle checks. The isolated OTP 28 `MIX_ENV=test` compile
+  passes (`r36-fixture-compile.log`). No full Mix suite or packaged ceremony is
+  claimed by this focused fixture gate.
+
+Logs are under `/tmp/lattice-treehouse-execution-20260906/`. Native full suites
+used Homebrew Cargo 1.98.0; the unchanged preflight helper rebuilt its synthetic
+probe with pinned rustup Cargo/Rust 1.93.1. All builds used existing locked cached
+dependencies, with independent worktree outputs; no install or upgrade occurred.
+`cargo fmt --all -- --check` and `git diff --check` pass. All original assertions
+in 13 custody tests match after whitespace/counter-name normalization; the 14th
+absent-presence case has the explicitly adopted wiring-only mapping above.
+Payload source/tests, Cargo inputs, TS bridge/source and generated client output
+are byte-identical to the adopted base. Shared README/ledger/workflow, Treehouse
+preview, mobile storage and Android files are unchanged.
+
+Exact implementation Fable review, root-owned accepted dependency integration,
+full integrated Mix/hosted and packaged test-presence gates remain required.
+These local results do not establish real OS authentication, Android opaque-key
+eligibility, native semantic verification, R36 completion or readiness.
