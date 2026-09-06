@@ -28,13 +28,14 @@ PATH="$HOME/.asdf/installs/erlang/28.3.1/bin:$HOME/.asdf/installs/elixir/1.19.5-
 
 ## Verify the repo is healthy
 
-The full suite includes a reciprocal Treehouse test that executes the real TypeScript
-client. On a fresh checkout, prepare that client before running `mix test`,
+The full suite includes reciprocal Treehouse tests that execute the real TypeScript
+client and native-preview application workflow. On a fresh checkout, prepare that client before running `mix test`,
 `mix verify`, or `mix check`:
 
 ```sh
 npm --prefix clients/lattice-client ci
 npm --prefix clients/lattice-client run build
+npm --prefix clients/treehouse-tauri-shell ci
 ```
 
 CI performs the same preparation before Mix. A missing Node/client dependency is
