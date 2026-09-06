@@ -466,11 +466,13 @@ The five characterization probes and full `mix verify` pass at the recorded
 base: **680 tests + 27 properties, 0 failures, 3 configured exclusions**. A later
 `mix check` run completed with one existing `Township.ReadModelTest` 60-second
 timeout in `preload_lattice_core/0` / `code.ensure_loaded/1`; no assertion failed.
-The initial green run remains separate evidence. The integrator queued a repeat
-with `ERL_FLAGS='+S 4:4'` after other full-suite jobs finish, with no test timeout
-change. That repeat is not yet claimed green. A new probe alias-order suggestion
-was corrected; standalone strict Credo then exited zero (existing suggestions
-in unchanged files remain). C04 fixture
+The initial green run remains separate evidence. After other full-suite jobs
+finished, the controlled `mix check` repeat with `ERL_FLAGS='+S 4:4'` exited zero:
+**680 tests + 27 properties, 0 failures, 3 configured exclusions**, followed by
+strict Credo exit zero. The preload timeout did not recur; no test timeout or
+production behavior changed. Preserve the earlier failed-run evidence. A new
+probe alias-order suggestion was corrected; standalone strict Credo also exited
+zero (existing suggestions in unchanged files remain). C04 fixture
 calibration first compared `Sim.transfer`'s returned delegation ID with an
 acquisition op ID; the corrected test obtains the actual transfer from public
 `Log.topo_ops`. That was test construction, not a production defect or R04 RED.
