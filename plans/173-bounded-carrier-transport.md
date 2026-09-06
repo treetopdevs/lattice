@@ -135,9 +135,9 @@ export PATH="$HOME/.asdf/installs/erlang/28.3.1/bin:$HOME/.asdf/installs/elixir/
 | Format check | `$MIXCMD format --check-formatted` | exit 0 |
 | Full suite | `$MIXCMD test` | exit 0 |
 | Credo | `$MIXCMD credo --strict` | exit 0 |
-| Carrier server suite | `$MIXCMD test apps/lattice_carrier_server/` | all pass |
-| WS client suite | `$MIXCMD test apps/lattice_web_socket/` | all pass |
-| G1 carrier acceptance | `$MIXCMD test apps/lattice_node_spike/` | all pass |
+| Carrier server suite | `$MIXCMD test apps/lattice_carrier_server/test` | all pass |
+| WS client suite | `$MIXCMD test apps/lattice_web_socket/test` | all pass |
+| G1 carrier acceptance | `$MIXCMD test apps/lattice_node_spike/test` | all pass |
 | TS typecheck | `cd clients/lattice-client && npm run typecheck` | exit 0 |
 | TS carrier gates | `cd clients/lattice-client && npm run carrier:township && npm run carrier:relay && npm run carrier:relay-sync && npm run carrier:feed && npm run carrier:township:live` | exit 0 |
 | TS build | `cd clients/lattice-client && npm run build` | exit 0 |
@@ -145,6 +145,41 @@ export PATH="$HOME/.asdf/installs/erlang/28.3.1/bin:$HOME/.asdf/installs/elixir/
 Baseline at the planned-at commit: `$MIXCMD test` exits 0.
 
 ## Scope
+
+### Unified R08 execution amendments — 2026-09-06
+
+- Plan 169 is already integrated (`dff9e285` is reachable from the execution base
+  `641cbbd78bf1338a4a245e5a670ad425aa79be1b`); preserve its acknowledgement semantics.
+- The BEAM adapter lives at `apps/lattice_web_socket/lib/lattice/carrier/web_socket.ex`.
+  This replaces the stale `apps/lattice_core` path below. The required acceptance tests in
+  `apps/lattice_node_spike/test/` are explicitly in scope, as are both clients' frontier loops.
+- Use app `test/` directories for umbrella test selection; app-root arguments silently
+  select no tests. Existing HTTP reads have a 5,000 ms per-read timeout; Part A adds the
+  configured total deadline, including slow trickles, rather than claiming every stalled
+  upgrade previously waited forever.
+- Pagination adds optional `cursor` requests and `next_cursor` responses, leaving terminal
+  and small legacy responses unchanged. Pull pages retain `Sync.missing/2`'s deterministic
+  topological order so cursor-ignorant clients can accept each causal prefix. Frontier IDs
+  remain sorted. Never sort pull history globally by ID: a dependent-only prefix can stall
+  an older client permanently. Legacy clients progress across repeated synchronization
+  calls; one cursor-ignorant call does not establish complete history or frontier coverage.
+  Both upgraded clients collect every frontier and pull page before reporting success.
+- A stateless cursor is at most 512 encoded bytes and contains `version: 1`, the last
+  emitted ID in `after`, an increasing integer `offset`, and a snapshot digest bound to
+  the request kind, replica and complete ID set. Pull cursors also bind the fixed initial
+  `have` set by digest. Validate exact keys, types, bounds, snapshot/filter and `after`
+  membership at `offset - 1`. There is no per-client server pagination cache. A cursor's
+  lifetime is its exact snapshot: an unchanged-log restart preserves it; mutation or a
+  different route/filter refuses it. Interrupted sync starts afresh.
+- Each client accepts at most 1,024 pages, validates exact offset advancement by page count,
+  last-ID binding and duplicate absence, and discards all partial results on any refusal or
+  cap. These transport fields carry no semantic authority. Operation signature, hash and
+  replica verification and acknowledgement semantics remain unchanged.
+- Initial `have` requests are bounded to 48,000 encoded bytes; larger local histories send
+  an empty set and replay authenticated duplicates. Repeat that fixed bounded set with
+  continuations instead of growing the request beyond the existing 64,000-byte ingress cap.
+  Page sizing includes encoded JSON and continuation overhead. Preserve the source plan's
+  explicit single-oversized-operation exception and existing client refusal.
 
 **In scope**:
 
@@ -192,7 +227,7 @@ TCP connection and then never responds to the HTTP upgrade, and asserts that
 Use a short configured timeout in the test so the suite stays fast. Read the existing
 `client_test.exs` first and follow how it constructs test peers.
 
-**Verify**: `$MIXCMD test apps/lattice_web_socket/` → **the new test FAILS by timing out**. If it
+**Verify**: `$MIXCMD test apps/lattice_web_socket/test` → **the new test FAILS by timing out**. If it
 passes, the deadline already exists — STOP and report.
 
 ### Step 2 (GREEN): Bound connect and pre-auth setup
@@ -207,8 +242,8 @@ Bound the upgrade response too: cap the bytes `handshake/4` will accumulate befo
 so a peer cannot stream unbounded headers pre-authentication. Reuse `@max_frame_size` as the
 budget rather than inventing a second constant.
 
-**Verify**: `$MIXCMD test apps/lattice_web_socket/` → all pass including the step-1 test.
-Then `$MIXCMD test apps/lattice_node_spike/` → still passes (the G1 acceptance harness uses this
+**Verify**: `$MIXCMD test apps/lattice_web_socket/test` → all pass including the step-1 test.
+Then `$MIXCMD test apps/lattice_node_spike/test` → still passes (the G1 acceptance harness uses this
 client; a too-tight default would show up here).
 
 **Commit Part A now, before starting Part B.**
@@ -223,7 +258,7 @@ To size the log without a huge fixture, note that `Wire.encode_op/1` output is d
 base64 author/sig plus the body; generating on the order of a few hundred ops with modest bodies
 is enough. Measure with `byte_size(Jason.encode!(reply))` and assert against 64 000.
 
-**Verify**: `$MIXCMD test apps/lattice_carrier_server/` → **the new test FAILS** (the reply
+**Verify**: `$MIXCMD test apps/lattice_carrier_server/test` → **the new test FAILS** (the reply
 exceeds the budget). Record the measured size in your report — it is the evidence the cliff is
 real at a realistic log size.
 
@@ -248,11 +283,11 @@ an explicit continuation signal. Requirements:
 Do the same for `"frontier"` if `Holder.op_ids/1` can exceed the budget on a mature log; measure
 first and say so in your report either way.
 
-**Verify**: `$MIXCMD test apps/lattice_carrier_server/` → all pass including step 3.
+**Verify**: `$MIXCMD test apps/lattice_carrier_server/test` → all pass including step 3.
 
 ### Step 5 (GREEN): Consume the continuation in both clients
 
-Two clients pull: the BEAM one in `apps/lattice_core/lib/lattice/carrier/web_socket.ex` and the
+Two clients pull: the BEAM one in `apps/lattice_web_socket/lib/lattice/carrier/web_socket.ex` and the
 TypeScript one in `clients/lattice-client/src/carrier.ts`. Both must loop until the server
 reports no continuation.
 
@@ -274,7 +309,7 @@ the page shape does not prove that.
 Put it where the existing carrier convergence tests live
 (`apps/lattice_node_spike/test/township_carrier_test.exs` is the G1 pattern; read it first).
 
-**Verify**: `$MIXCMD test apps/lattice_node_spike/` → exit 0 with the new multi-page case.
+**Verify**: `$MIXCMD test apps/lattice_node_spike/test` → exit 0 with the new multi-page case.
 
 ### Step 7: Full gate
 
@@ -308,6 +343,31 @@ Part B:
 Verification: `$MIXCMD test` → exit 0; the five TS carrier gates → exit 0.
 
 ## Done criteria
+
+### Unified R08 execution evidence — 2026-09-06
+
+- RED setup: a configured 50 ms deadline did not return within 500 ms before Part A.
+  A separate streaming-header regression proves rejection of a 64,001-byte upgrade.
+- RED history: 200 ordinary dependent posts produced a 200,741-byte unpaged pull.
+  The 1,500-ID frontier measured 69,034 bytes before paging; the unmodified BEAM loop
+  returned only 1,386 of those IDs after the server began paging.
+- The new server, BEAM and TypeScript regressions prove complete bounded draining,
+  deterministic causal order, repeated-call legacy progress, cursor/filter/snapshot
+  refusal, duplicate and page-cap refusal, bounded initial requests, and the explicit
+  single-oversized-operation limit.
+- `LatticeNodeSpike.CarrierPaginationTest` kills its own second-BEAM peer after one
+  page, restarts from the same log, resumes the stateless cursor, and compares complete
+  operation IDs and deterministic materialized-state bytes against `Lattice.Sim`.
+- Full Elixir tests: 675 tests and 27 properties, zero failures, three existing exclusions.
+  After validation-helper cleanup, the final carrier/WS/node suites pass 165 tests,
+  and formatting plus strict Credo exit zero. Credo retains existing advisory findings
+  outside the changed files.
+- TypeScript typecheck, build, conformance, canonical, `carrier:township`, `carrier:relay`,
+  `carrier:relay-sync`, `carrier:feed` and `carrier:township:live` all exit zero. The feed
+  gate includes the new pagination refusal matrix. The generated conformance JS also
+  catches up two cases already present in its unchanged source.
+- Part A is committed separately as `34a17e3a85e87ce91a038b4b9ee3424498e0bee2`.
+  The unified-roadmap integrator owns the shared README status update and final review.
 
 Machine-checkable. ALL must hold:
 

@@ -1,5 +1,11 @@
 defmodule LatticeCarrierServer.WebSocket do
-  @moduledoc false
+  @moduledoc """
+  Authenticated carrier transport with snapshot-bound, byte-budgeted read pages.
+
+  A single operation whose encoded response exceeds 64,000 bytes is emitted once
+  and remains unsyncable to clients enforcing that frame budget. Pagination does
+  not raise that limit or change operation verification or semantic authority.
+  """
 
   @behaviour :cowboy_websocket
 
@@ -217,13 +223,12 @@ defmodule LatticeCarrierServer.WebSocket do
     end
   end
 
-  defp handle_message("frontier", _message, state) do
-    %{type: "frontier_result", ids: Holder.op_ids(state.holder)}
+  defp handle_message("frontier", message, state) do
+    read_page(state.holder, :frontier, [], Map.get(message, "cursor"))
   end
 
-  defp handle_message("pull", %{"have" => have}, state) when is_list(have) do
-    ops = state.holder |> Holder.missing_for(have) |> Enum.map(&Wire.encode_op/1)
-    %{type: "ops", ops: ops}
+  defp handle_message("pull", %{"have" => have} = message, state) when is_list(have) do
+    read_page(state.holder, :pull, have, Map.get(message, "cursor"))
   end
 
   defp handle_message("state", _message, state) do
@@ -261,6 +266,13 @@ defmodule LatticeCarrierServer.WebSocket do
 
   defp handle_message(_type, _message, _state) do
     %{type: "error", reason: "read_only"}
+  end
+
+  defp read_page(holder, kind, have, cursor) do
+    case Holder.read_page(holder, kind, have, cursor) do
+      {:ok, reply} -> reply
+      {:error, reason} -> %{type: "error", reason: Atom.to_string(reason)}
+    end
   end
 
   defp queue_availability(state, availability) do

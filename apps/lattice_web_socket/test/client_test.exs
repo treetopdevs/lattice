@@ -4,6 +4,7 @@ defmodule LatticeWebSocket.ClientTest do
   import Bitwise
 
   alias Lattice.Transport.WebSocket.Client
+  alias Lattice.Carrier.WebSocket, as: CarrierClient
 
   test "hostname takes precedence over the legacy host option" do
     {port, server} = start_server(fn _socket -> Process.sleep(25) end)
@@ -18,6 +19,74 @@ defmodule LatticeWebSocket.ClientTest do
 
     assert :ok = Client.close(client)
     assert :ok = Task.await(server)
+  end
+
+  test "frontier pagination fails at its page cap instead of returning partial IDs" do
+    {port, server} =
+      start_server(fn socket ->
+        for page <- 1..1_024 do
+          assert {:ok, request} = recv_client_text(socket)
+          assert %{"type" => "frontier"} = Jason.decode!(request)
+          id = String.pad_leading(Integer.to_string(page), 43, "0")
+
+          cursor = %{
+            "version" => 1,
+            "offset" => page,
+            "after" => id,
+            "snapshot" => String.duplicate("a", 64)
+          }
+
+          reply = %{type: "frontier_result", ids: [id], next_cursor: cursor}
+          assert :ok = :gen_tcp.send(socket, server_text_frame(Jason.encode!(reply)))
+        end
+      end)
+
+    assert {:ok, client} = Client.connect(host: "127.0.0.1", port: port)
+
+    assert {:error, :pagination_page_limit} =
+             CarrierClient.advertise(
+               %CarrierClient{client: client},
+               Lattice.Log.new("pagination")
+             )
+
+    Task.await(server)
+    assert :ok = Client.close(client)
+  end
+
+  test "frontier pagination rejects repeated IDs and changed snapshots" do
+    for {second_id, snapshot, expected} <- [
+          {1, "a", :pagination_no_progress},
+          {2, "b", :pagination_snapshot_changed}
+        ] do
+      {port, server} =
+        start_server(fn socket ->
+          for {page, value, digest} <- [{1, 1, "a"}, {2, second_id, snapshot}] do
+            assert {:ok, _request} = recv_client_text(socket)
+            id = String.pad_leading(Integer.to_string(value), 43, "0")
+
+            cursor = %{
+              "version" => 1,
+              "offset" => page,
+              "after" => id,
+              "snapshot" => String.duplicate(digest, 64)
+            }
+
+            reply = %{type: "frontier_result", ids: [id], next_cursor: cursor}
+            assert :ok = :gen_tcp.send(socket, server_text_frame(Jason.encode!(reply)))
+          end
+        end)
+
+      assert {:ok, client} = Client.connect(host: "127.0.0.1", port: port)
+
+      assert {:error, ^expected} =
+               CarrierClient.advertise(
+                 %CarrierClient{client: client},
+                 Lattice.Log.new("pagination")
+               )
+
+      Task.await(server)
+      assert :ok = Client.close(client)
+    end
   end
 
   test "an atomic request parses a split response and excludes streaming mode" do
