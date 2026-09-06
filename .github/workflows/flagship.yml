@@ -532,6 +532,7 @@ jobs:
           npm --prefix clients/lattice-client run build
           npm --prefix clients/treehouse-tauri-shell ci
       - name: Build debug Treehouse APK
+        shell: bash
         working-directory: clients/treehouse-tauri-shell
         env:
           CARGO_BUILD_JOBS: "4"
@@ -540,6 +541,7 @@ jobs:
           npm run tauri -- android build --debug --apk --ci --target aarch64 \
             2>&1 | tee "$RUNNER_TEMP/treehouse-android/build.log"
       - name: Verify Kotlin bytes, product rules and Android lint
+        shell: bash
         working-directory: clients/treehouse-tauri-shell/src-tauri/gen/android
         run: |
           ./gradlew --no-daemon -p buildSrc test \
