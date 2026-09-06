@@ -308,3 +308,21 @@ integration/evidence, and accepted main `c22272ec` with R09's count correction
 and the independently reviewed canonical-generator repair. The contextual body
 decoder remains composed with the product decoder and raw continuation parser.
 Final local/source and hosted gates will be recorded against their actual tips.
+
+### Exact legacy epoch integration and final local gate
+
+Integration `dd41fd6025939e35ad95d9d478231f5ba619f201` adds R04 final
+`f58267b8` and R03 final `65b5364e`. The source merge is automatic; normal client
+build at `f21456ca` regenerates the widened carrier declaration. Actual Fable's
+R04 integration review passes with no P0/P1/P2 and verifies the high-epoch
+continuation refusal seam. Earlier R10 final review at `25fa8e93` also passed;
+the new exact R10 integration review remains open after Claude's session limit.
+
+Full `mix check` at f21456ca passes **806 tests and 27 properties, zero failures**,
+three existing exclusions, clean formatting and strict Credo exit 0. Final TS
+typecheck/build/conformance and Treehouse domain/review checks pass. Logs are
+`/tmp/lattice-treehouse-execution-20260906/engine-high-epoch-full-check.log`,
+`engine-high-epoch-conformance.log`, and `engine-high-epoch-treehouse.log`.
+The existing CI unit job now runs the standalone Treehouse domain/review script
+explicitly as well as reciprocal BEAM tests and conformance; no existing gate
+is removed or timeout changed. Exact tip/merge CI remains required.
