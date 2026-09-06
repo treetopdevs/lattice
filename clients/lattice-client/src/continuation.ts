@@ -1,4 +1,5 @@
 import { canonicalBase64Bytes } from "./codec";
+import type { CarrierTerm } from "./carrier";
 
 export interface ContinuationProfile {
   mode: "bounded_continuation";
@@ -39,6 +40,16 @@ export interface ContinuationCertificate {
   claim: ContinuationClaim;
   signatures: ContinuationSignature[];
 }
+
+export function continuationProfileToCarrierTerm(_value: unknown): CarrierTerm | null { return null; }
+export function continuationProfileFromCarrierTerm(_value: unknown): ContinuationProfile | null { return null; }
+export function continuationClaimToCarrierTerm(_value: unknown): CarrierTerm | null { return null; }
+export function continuationClaimFromCarrierTerm(_value: unknown): ContinuationClaim | null { return null; }
+export function continuationCertificateToCarrierTerm(_value: unknown): CarrierTerm | null { return null; }
+export function continuationCertificateFromCarrierTerm(_value: unknown): ContinuationCertificate | null { return null; }
+export function canonicalBytesForContinuationProfile(_value: unknown): Uint8Array { throw new TypeError("unimplemented continuation profile"); }
+export function canonicalBytesForContinuationClaim(_value: unknown): Uint8Array { throw new TypeError("unimplemented continuation claim"); }
+export function continuationProfileId(_value: unknown): string | null { return null; }
 
 const claimKeys = [
   "version", "product", "kind", "replica", "role", "profileId", "profileGenesis",

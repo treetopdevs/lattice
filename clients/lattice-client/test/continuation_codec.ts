@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
-import { normalizeContinuationCertificate, normalizeContinuationClaim, normalizeContinuationProfile } from "../src/continuation";
+import {
+  canonicalBytesForContinuationClaim, canonicalBytesForContinuationProfile,
+  continuationCertificateFromCarrierTerm, continuationCertificateToCarrierTerm,
+  continuationClaimFromCarrierTerm, continuationClaimToCarrierTerm,
+  continuationProfileFromCarrierTerm, continuationProfileId, continuationProfileToCarrierTerm,
+  normalizeContinuationCertificate, normalizeContinuationClaim, normalizeContinuationProfile,
+} from "../src/continuation";
 
 const lowKey = Buffer.alloc(32, 1).toString("base64");
 const highKey = Buffer.alloc(32, 251).toString("base64");
@@ -84,4 +90,18 @@ test("certificate shape distinguishes malformed entries from invalid consent", (
   ]) assert.equal(normalizeContinuationCertificate(malformed), null);
   assert.ok(normalizeContinuationCertificate({ claim, signatures: [] }));
   assert.ok(normalizeContinuationCertificate({ claim, signatures: [entry, entry] }), "well-shaped duplicates are a certificate verdict, not malformed input");
+});
+
+test("carrier terms round-trip profile and full certificate without losing signed fields", () => {
+  const encodedProfile = continuationProfileToCarrierTerm(profile);
+  assert.ok(encodedProfile);
+  assert.deepEqual(continuationProfileFromCarrierTerm(encodedProfile), normalizeContinuationProfile(profile));
+  const encodedClaim = continuationClaimToCarrierTerm(claim);
+  assert.ok(encodedClaim);
+  assert.deepEqual(continuationClaimFromCarrierTerm(encodedClaim), claim);
+  const certificate = { claim, signatures: [{ witness: highKey, signature: Buffer.alloc(64, 3).toString("base64") }] };
+  assert.deepEqual(continuationCertificateFromCarrierTerm(continuationCertificateToCarrierTerm(certificate)), certificate);
+  assert.ok(canonicalBytesForContinuationProfile(profile).length);
+  assert.ok(canonicalBytesForContinuationClaim(claim).length);
+  assert.match(continuationProfileId(profile)!, /^[A-Za-z0-9_-]{43}$/);
 });
