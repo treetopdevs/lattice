@@ -4,13 +4,17 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import {
+  authorCarrierOp,
+  frontier,
+  materialize,
+  decodeCarrierOpFrame,
   authorAndPersistTownshipCommand,
   authorAndPersistTownshipDelegation,
   canonicalBytesForCarrierOp,
   canonicalBytesForWitnessedBeaconClaim,
   analyzeAuthority,
+  createWitnessedBeaconClaim,
   authorCarrierDelegation,
-  authorCarrierOp,
   authorTownshipGenesis,
   authorTownshipDelegation,
   authorTownshipCommand,
@@ -24,7 +28,6 @@ import {
   createJsonCarrierFrameStore,
   createJsonLocalOpLogStore,
   index,
-  materialize,
   selectTownshipCapId,
   townshipCapTerm,
   townshipCommandBody,
@@ -32,7 +35,7 @@ import {
   townshipReplicaCommitment,
   townshipRevokeBody,
 } from "../src/index";
-import type { CarrierOpFrame, CarrierTerm, ReplicaSchema } from "../src/index";
+import type { CarrierOpFrame, CarrierTerm, ReplicaSchema, WitnessedBeaconClaimEvidence } from "../src/index";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const vector = JSON.parse(
@@ -522,6 +525,7 @@ const beaconVector = JSON.parse(
     "utf8",
   ),
 ) as {
+  schema: ReplicaSchema;
   replica: string;
   realmByPubkey: Record<string, string>;
   oracleCarrierOps: CarrierOpFrame[];
@@ -655,6 +659,117 @@ check(
   authoredResidentDelegation,
   grantDelegation,
 );
+
+// Hosted R03: automatic parent selection must cover the requested lease.
+const leaseIssuer = seededEd25519Identity("township:beacon:resident");
+const longerParent = await authorTownshipDelegation({ replica: beaconVector.replica,
+  deps: [leasedFrame.id], audiencePubkey: leaseIssuer.publicKey, parentId: leasedDelegation.parent_id,
+  ops: ["post"], expiresEpoch: 9, signer: beaconFounder });
+const longerDelegation = carrierDelegationsFromFrames([longerParent])[0]!;
+async function reviewLeaseStores(frames: CarrierOpFrame[]) {
+  const storage = new MemoryKeyValueStore();
+  const localLog = createJsonLocalOpLogStore(storage, "local");
+  const carrierFrames = createJsonCarrierFrameStore(storage, "frames");
+  await localLog.save(carrierOpsToSemanticOps(frames, beaconVector.realmByPubkey));
+  await carrierFrames.save(frames);
+  return { localLog, carrierFrames };
+}
+const parentFrames = [beaconGenesis, leasedFrame, longerParent];
+const parentStores = await reviewLeaseStores(parentFrames);
+const selectedLease = await authorAndPersistTownshipDelegation({ replica: beaconVector.replica,
+  audiencePubkey: witnessKeys[0]!, ops: ["post"], expiresEpoch: 8, signer: leaseIssuer,
+  ...parentStores, realmByPubkey: beaconVector.realmByPubkey });
+check("automatic lease parent skips an earlier inadequate lease", selectedLease.parentId, longerDelegation.id);
+check("automatically selected lease remains semantically valid", materialize(beaconVector.schema,
+  await parentStores.localLog.load()).quarantine.includes(selectedLease.op.id), false);
+for (const expiry of [4, undefined]) {
+  const stores = await reviewLeaseStores([beaconGenesis, leasedFrame]);
+  let refused = false;
+  try {
+    await authorAndPersistTownshipDelegation({ replica: beaconVector.replica,
+      audiencePubkey: witnessKeys[0]!, ops: ["post"], signer: leaseIssuer,
+      ...(expiry === undefined ? {} : { expiresEpoch: expiry }), ...stores,
+      realmByPubkey: beaconVector.realmByPubkey });
+  } catch (error) { refused = error instanceof Error && error.message === "no local delegation authorizes grant"; }
+  check("automatic selection refuses uncovered or unbounded child lease", refused, true);
+  check("missing suitable lease parent appends no frame", isDeepStrictEqual(await stores.carrierFrames.load(), [beaconGenesis, leasedFrame]), true);
+}
+const explicitStores = await reviewLeaseStores([beaconGenesis, leasedFrame]);
+const explicitLease = await authorAndPersistTownshipDelegation({ replica: beaconVector.replica,
+  audiencePubkey: witnessKeys[0]!, ops: ["post"], expiresEpoch: 8, parentId: leasedDelegation.id,
+  signer: leaseIssuer, ...explicitStores, realmByPubkey: beaconVector.realmByPubkey });
+check("explicit inadequate parent still reaches the existing judge refusal", materialize(beaconVector.schema,
+  await explicitStores.localLog.load()).quarantineReasons.get(explicitLease.op.id), "not_attenuated");
+
+// A two-tip frontier retains delivery order. Witnesses must sign the same sorted
+// dependency list that is carried by the final ordinary operation.
+const claimWitness = seededEd25519Identity("township:beacon:w0");
+const claimWitness2 = seededEd25519Identity("township:beacon:w1");
+const tips: CarrierOpFrame[] = [];
+for (const text of ["left tip", "right tip"]) tips.push(await authorTownshipCommand({
+  replica: beaconVector.replica, deps: [beaconGenesis.id], command: { command: "post", text },
+  capId: beaconGenesisDelegation.id, signer: beaconFounder }));
+tips.sort((a, b) => a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
+const claimFrames = [beaconGenesis, ...tips];
+const deliveredDeps = frontier(carrierOpsToSemanticOps(claimFrames, beaconVector.realmByPubkey));
+const claim = createWitnessedBeaconClaim(beaconVector.replica, 4, claimWitness.publicKeyBase64, deliveredDeps);
+const claimPayload = canonicalBytesForWitnessedBeaconClaim(claim);
+const entries = [claimWitness, claimWitness2].sort((a, b) => Buffer.compare(a.publicKey, b.publicKey));
+const finalBeacon = await authorCarrierOp({ replica: beaconVector.replica, deps: claim.deps,
+  kind: "authority", cap: ["nil"], signer: claimWitness,
+  body: beaconClaimBody(claim, entries.map((entry) => ({ witness: entry.publicKeyBase64,
+    signature: Buffer.from(entry.sign(claimPayload)).toString("base64") }))) });
+check("authored beacon claim uses final canonical dependencies", claim.deps, finalBeacon.deps);
+check("witnessed beacon authored from a two-tip frontier is honored", materialize(beaconVector.schema,
+  carrierOpsToSemanticOps([...claimFrames, finalBeacon], beaconVector.realmByPubkey)).quarantine.includes(finalBeacon.id), false);
+
+check("claim construction removes duplicates without mutating caller order",
+  createWitnessedBeaconClaim(beaconVector.replica, 4, claimWitness.publicKeyBase64,
+    [...deliveredDeps, deliveredDeps[0]!]).deps, finalBeacon.deps);
+check("claim constructor leaves original delivered order unchanged", deliveredDeps, tips.map((tip) => tip.id));
+const unnormalizedClaim = { ...claim, deps: deliveredDeps };
+const unnormalizedBeacon = await authorCarrierOp({ replica: beaconVector.replica, deps: claim.deps,
+  kind: "authority", cap: ["nil"], signer: claimWitness,
+  body: beaconClaimBody(unnormalizedClaim, entries.map((entry) => ({ witness: entry.publicKeyBase64,
+    signature: Buffer.from(entry.sign(canonicalBytesForWitnessedBeaconClaim(unnormalizedClaim))).toString("base64") }))) });
+check("received unsorted certificate claim still refuses", materialize(beaconVector.schema,
+  carrierOpsToSemanticOps([...claimFrames, unnormalizedBeacon], beaconVector.realmByPubkey))
+  .quarantineReasons.get(unnormalizedBeacon.id), "unauthorized_beacon");
+
+const unrelatedIntegerBody: CarrierTerm = ["tuple", [["atom", "genesis"], ["delegation", beaconGenesisDelegation],
+  ["map", [[["atom", "unrelated"], ["int", "9007199254740992"]]]]]];
+const epochOverflowBody: CarrierTerm = ["tuple", [["atom", "beacon"], ["int", "9007199254740992"]]];
+for (const body of [unrelatedIntegerBody, epochOverflowBody]) {
+  const frame = await authorCarrierOp({ replica: beaconVector.replica, deps: [beaconGenesis.id],
+    kind: "authority", cap: ["nil"], body, signer: beaconFounder });
+  let refused = false;
+  try { decodeCarrierOpFrame(frame); } catch { refused = true; }
+  check("unrelated signed large integers retain strict refusal", refused, true);
+  check("unrelated signed large integers retain semantic malformed term",
+    carrierOpsToSemanticOps([frame])[0]?.structuralError, "malformed_term");
+}
+const malformedPolicyFrame = structuredClone(beaconGenesis);
+if (malformedPolicyFrame.body[0] !== "tuple" || malformedPolicyFrame.body[1][2]?.[0] !== "map") throw new Error("policy fixture");
+(malformedPolicyFrame.body[1][2][1][0] as unknown[]).push(["nil"]);
+let malformedPolicyRefused = false;
+try { decodeCarrierOpFrame(malformedPolicyFrame); } catch { malformedPolicyRefused = true; }
+check("contextual policy decode keeps malformed map-pair refusal", malformedPolicyRefused, true);
+
+function beaconClaimBody(claim: WitnessedBeaconClaimEvidence,
+  signatures: { witness: string; signature: string }[]): CarrierTerm {
+  const fields: [CarrierTerm, CarrierTerm][] = [
+    [["atom", "version"], ["int", claim.version]], [["atom", "replica"], ["bin", textBase64(claim.replica)]],
+    [["atom", "epoch"], ["int", claim.epoch]], [["atom", "author"], ["bin", claim.author]],
+    [["atom", "deps"], ["list", claim.deps.map((id) => ["bin", textBase64(id)])]],
+  ];
+  const signatureTerms: CarrierTerm[] = signatures.map((entry) => ["map", [
+    [["atom", "witness"], ["bin", entry.witness]], [["atom", "signature"], ["bin", entry.signature]],
+  ]]);
+  const certificate: CarrierTerm = ["map", [
+    [["atom", "claim"], ["map", fields]], [["atom", "signatures"], ["list", signatureTerms]],
+  ]];
+  return ["tuple", [["atom", "beacon"], ["int", claim.epoch], certificate]];
+}
 
 
 console.log(
