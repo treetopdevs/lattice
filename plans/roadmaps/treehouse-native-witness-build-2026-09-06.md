@@ -176,6 +176,25 @@ Core contract exists; preserve legacy clerk payload bytes. Each versioned R04
 continuation purpose must match the final landed Core profile/claim, rather than
 implementing this plan author's guessed continuation semantics.
 
+Add the separately typed **final beacon operation** purpose required by R03:
+after independently verifying the assembled threshold certificate, native derives
+the exact replica/deps/epoch/local witness author, constructs only
+`{:beacon, epoch, certificate}` as `:authority` with `cap: nil`, and signs the
+existing canonical op bytes using that configured protected witness key. An
+ordinary member/carrier signature cannot substitute for the required author.
+Do not expose a generic op or bytes signer. This purpose has a fresh review,
+one-shot token and per-use authentication distinct from each witness-claim signature.
+Persist the signed frame in native retained history before releasing it through a
+crash-safe fenced transaction; no signature escapes failed persistence. Explicit
+later publication uses the ordinary member-authenticated carrier, with no network
+action during signing. Legacy clerk artifact export remains unchanged.
+
+RED/oracles additionally cover complete outer-op byte/ID/signature parity,
+unconfigured author or member-key substitution, changed deps/epoch/certificate/cap,
+insufficient or invalid surplus signatures, cross-purpose consent reuse, generation
+changes during authentication/signing and every retain-before-release crash point.
+Count final-beacon authentication separately in the R02/R14 ceremony workload.
+
 For R03 beacons, use its exact five-field claim `(version, replica, epoch, author,
 deps)`, domain, ancestry-scoped policy/prior maximum, step bound and structural
 horizon behavior. Preserve permitted forks around a high beacon and inert

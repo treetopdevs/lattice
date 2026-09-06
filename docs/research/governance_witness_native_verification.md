@@ -199,6 +199,29 @@ remain in their distinct domain with R03 author/deps binding, ancestry policy,
 step/horizon bounds and permitted fork/duplicate semantics. Presence/possession
 binding uses another fixed domain; none exposes arbitrary signing.
 
+R03 also requires a founder-absent beacon's **outer operation author** to be a
+configured witness key. Claim signatures alone are insufficient, and substituting
+the member/carrier key cannot satisfy that rule. Add a separate fixed native
+final-beacon-operation purpose: derive the pinned replica, current exact deps,
+local witness public key and epoch; verify the complete threshold certificate
+against that independently derived claim; construct only the existing
+`:authority` body `{:beacon, epoch, certificate}` with `cap: nil`; then sign the
+existing canonical operation bytes with that same protected witness key. No
+caller-selected author, capability, body, arbitrary op or signing bytes is admitted.
+
+This operation requires its own native review, one-shot token and fresh per-use
+platform authentication, including all D6 checks after blocking work. Its review
+says **sign beacon operation** and shows the verified epoch and certificate
+signers; it is distinct from signing a witness claim. Persist the successfully
+signed frame as known native history before release, using the same crash-safe
+admission fence; failed persistence releases nothing and leaves signing blocked.
+The returned frame still requires explicit publication through the ordinary
+member-authenticated carrier path. Signing itself opens no network connection.
+Legacy clerk artifacts and their export-only behavior stay unchanged. R17b must
+prove exact BEAM/TS/Rust outer-op bytes, wrong-author/member-key refusal,
+certificate/deps substitution, replay and crash boundaries. Count this additional
+per-use authentication in R02/R14 workload estimates and physical measurements.
+
 **Scoped Plan 146 Seam 5 extension:** R17b may implement the bounded existing
 CarrierTerm/op grammar needed to authenticate complete history. The old restriction
 to one fixed clerk payload cannot apply to that verifier. Its replacement gate is
@@ -272,6 +295,11 @@ At atomic cutover remove/refuse claim-only `lattice_sign_governance_witness` and
 migrate all callers together. Bare claims, expired/replayed tokens, wrong caller,
 window, product, purpose or key, stale generation and substituted claims refuse.
 There is no temporary compatibility path that can bypass native derivation.
+The separate final-beacon purpose binds its token to the complete canonical op
+and certificate as well as the store generation. Claim-signing consent cannot
+authorize the outer signature. Successful frame retention and the final release
+check form one serialized transaction; its own history append must not be mistaken
+for an unrelated generation race, and a crash before completion leaves a fence.
 
 ## Android eligibility and evidence order
 
