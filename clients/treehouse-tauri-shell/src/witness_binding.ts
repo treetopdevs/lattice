@@ -13,7 +13,7 @@ export function canonicalBytesForWitnessBinding(input: unknown): Uint8Array {
   const keys = Object.keys(value);
   if (keys.length !== 9 || !keys.every(k => k === "replica" || (binaryFields as readonly string[]).includes(k)))
     throw new TypeError("invalid_binding_claim");
-  if (typeof value.replica !== "string") throw new TypeError("invalid_binding_replica");
+  if (typeof value.replica !== "string" || value.replica.length > 512) throw new TypeError("invalid_binding_replica");
   const replica = encoder.encode(value.replica);
   if (replica.length === 0 || replica.length > 512 ||
     new TextDecoder("utf-8", {fatal: true, ignoreBOM: true}).decode(replica) !== value.replica)
@@ -24,6 +24,8 @@ export function canonicalBytesForWitnessBinding(input: unknown): Uint8Array {
     fixed("lattice-witness-binding-challenge-v1"), ["int", 1],
     fixed("treehouse"), fixed("dev.treetop.lattice.treehouse"), bin(replica),
     ...binaryFields.map(field => {
+      if (typeof value[field] !== "string" || value[field].length !== 44)
+        throw new TypeError("invalid_binding_field");
       const bytes = canonicalBase64Bytes(value[field], 32);
       if (bytes === null) throw new TypeError("invalid_binding_field");
       return bin(bytes);

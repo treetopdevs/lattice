@@ -4,7 +4,7 @@ defmodule Treehouse.WitnessBindingBytesTest do
   alias Lattice.{Canonical, Identity}
 
   @fixture Path.expand(
-             "../../../../../clients/treehouse-tauri-shell/test/fixtures/witness_binding_v1.json",
+             "../../../../clients/treehouse-tauri-shell/test/fixtures/witness_binding_v1.json",
              __DIR__
            )
   @binary_fields ~w(enrollmentId recipient creationAttemptId actualWitnessPublicKey generationChallengeDigest freshValidatorNonce nativeRandomNonce nativeCallerSessionDigest)
@@ -20,8 +20,14 @@ defmodule Treehouse.WitnessBindingBytesTest do
       assert Enum.all?(values, &(byte_size(&1) == 32))
       assert byte_size(fields["replica"]) in 1..512
 
-      terms = ["lattice-witness-binding-challenge-v1", 1, "treehouse",
-        "dev.treetop.lattice.treehouse", fields["replica"] | values]
+      terms = [
+        "lattice-witness-binding-challenge-v1",
+        1,
+        "treehouse",
+        "dev.treetop.lattice.treehouse",
+        fields["replica"] | values
+      ]
+
       bytes = Canonical.term(terms)
       assert bytes == Base.decode64!(vector["canonicalBase64"])
       key = Base.decode64!(fields["actualWitnessPublicKey"])

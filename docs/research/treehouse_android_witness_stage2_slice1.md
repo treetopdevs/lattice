@@ -44,6 +44,10 @@ The adopted new `src-tauri/src/witness_binding.rs`, Rust binding tests, Kotlin
 `test/fixtures/witness_binding_v1.json`, and BEAM byte-oracle test own byte parity.
 Generated Android build configuration and source/tests may include small pure
 product/signing-configuration helpers under the new project's `buildSrc`.
+The default template's unimplemented Android TV/Leanback launch advertisement is
+removed: this slice targets the reviewed handset profile and supplies no TV
+banner or remote-control interface. Lint remains enabled without a baseline or
+suppression. Generated webview and dependency-version warnings remain visible.
 No shared client/Core implementation, Township source, workflow, source plan,
 README or unified ledger is edited.
 

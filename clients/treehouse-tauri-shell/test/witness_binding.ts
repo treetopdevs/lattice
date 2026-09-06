@@ -18,6 +18,13 @@ for (const { name, fields, canonicalBase64, signatureBase64 } of fixture.vectors
   assert.equal(Buffer.from(canonicalBytesForWitnessBinding(fields)).toString("base64"), canonicalBase64);
 }
 const fields = fixture.vectors[0].fields;
+// A browser build has no Node Buffer; the codec uses the existing portable seam.
+const expected = canonicalBytesForWitnessBinding(fields);
+const savedBuffer = globalThis.Buffer;
+try {
+  (globalThis as unknown as {Buffer: unknown}).Buffer = undefined;
+  assert.deepEqual(canonicalBytesForWitnessBinding(fields), expected);
+} finally { globalThis.Buffer = savedBuffer; }
 for (const bad of [null, [], {}, {...fields, extra: 1}, {...fields, product: "township"},
   {...fields, replica: ""}, {...fields, replica: "a".repeat(513)}, {...fields, replica: "🌲".repeat(129)},
   {...fields, replica: "\ud800"}, {...fields, replica: "\udc00"},
