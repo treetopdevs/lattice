@@ -1,0 +1,726 @@
+{
+  "canonicalOps": [
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584b74726565686f7573653a73706163653a73756363657373696f6e23726f6f743a787934383869706d6835426a636f535468575345756476466a76394363676f475876375f67324f3063314958207612856473e7d923c7b7eb833369296070f0f45d74634e305d98ff109985d50880d9ea6049617574686f72697479d9ea6183d9ea604767656e65736973d9ea6389582b54757058566a4e486f4c77427a6e6b764b64614a6a5252754b342d663659397659764354432d52376f2d4d584b74726565686f7573653a73706163653a73756363657373696f6e23726f6f743a787934383869706d6835426a636f535468575345756476466a76394363676f475876375f67324f3063314958207612856473e7d923c7b7eb833369296070f0f45d74634e305d98ff109985d50858207612856473e7d923c7b7eb833369296070f0f45d74634e305d98ff109985d508f686d9ea604c61646d69745f6d656d626572d9ea604c6372656174655f7370616365d9ea604d6372656174655f746872656164d9ea605069737375655f696e7669746174696f6ed9ea604d72656d6f76655f6d656d626572d9ea60517265766f6b655f696e7669746174696f6e82d9ea604561646d696ed9ea60496d6f64657261746f72f55840dd9acf59548b169f0941952d51cbd1ee6c2f48678acb0d39d5aff68649884d54adca40c44dd561af94be73d589eba8dfc70a835eee9788f79cca3e92d1bac90fa1d9ea604561646d696ea2d9ea60487265636f76657279a4d9ea60446d6f6465d9ea60497769746e6573736564d9ea604776657273696f6e01d9ea60497468726573686f6c6402d9ea60497769746e65737365738258207612856473e7d923c7b7eb833369296070f0f45d74634e305d98ff109985d508582047a75399c953eed4ee1a0d4095d2716e8112dbbd4e27665cfaa3a833622726abd9ea6049737563636573736f7258204726c7278b5df601ea739d0c713f2df14eee2a9a3edb234a70b27f7f17cfd32df6",
+      "hash": "6AUtI6jVugZQp9-BiaDQS7QkepM6mM6EcBk1Bogg4NU",
+      "id": "6AUtI6jVugZQp9-BiaDQS7QkepM6mM6EcBk1Bogg4NU",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584b74726565686f7573653a73706163653a73756363657373696f6e23726f6f743a787934383869706d6835426a636f535468575345756476466a76394363676f475876375f67324f3063314958207612856473e7d923c7b7eb833369296070f0f45d74634e305d98ff109985d50881582b3641557449366a5675675a5170392d42696144515337516b65704d366d4d364563426b31426f6767344e55d9ea6047636f6d6d616e64d9ea6182d9ea604c6372656174655f737061636581514265666f72652073756363657373696f6e582b54757058566a4e486f4c77427a6e6b764b64614a6a5252754b342d663659397659764354432d52376f2d4d",
+      "hash": "DIw2NBXgaWmViKUGAL0HQ_6BTZV5iD07eKH5y7MxDEU",
+      "id": "DIw2NBXgaWmViKUGAL0HQ_6BTZV5iD07eKH5y7MxDEU",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584b74726565686f7573653a73706163653a73756363657373696f6e23726f6f743a787934383869706d6835426a636f535468575345756476466a76394363676f475876375f67324f3063314958204726c7278b5df601ea739d0c713f2df14eee2a9a3edb234a70b27f7f17cfd32d81582b444977324e42586761576d56694b5547414c3048515f3642545a563569443037654b483579374d78444555d9ea6049617574686f72697479d9ea6184d9ea604773756363656564d9ea604561646d696ed9ea6389582b34484b506e4259543474745869555f4c4869775a523970575970476f6f377053796d63753233323446414d584b74726565686f7573653a73706163653a73756363657373696f6e23726f6f743a787934383869706d6835426a636f535468575345756476466a76394363676f475876375f67324f3063314958204726c7278b5df601ea739d0c713f2df14eee2a9a3edb234a70b27f7f17cfd32d58204726c7278b5df601ea739d0c713f2df14eee2a9a3edb234a70b27f7f17cfd32df681d9ea604c6372656174655f737061636581d9ea604561646d696ef45840bd6ec3b3d92b6e53d02ad1a0372a5ea00df32a5fd1b48d9f315b7af5e91a15757720b6d47a6af83301050030a79d0531c8ced2c299c928e40ebac8950dbe8207d9ea6182d9ea60497769746e6573736564a2d9ea6045636c61696da7d9ea6044726f6c65d9ea604561646d696ed9ea6046686f6c64657258207612856473e7d923c7b7eb833369296070f0f45d74634e305d98ff109985d508d9ea60477265706c696361584b74726565686f7573653a73706163653a73756363657373696f6e23726f6f743a787934383869706d6835426a636f535468575345756476466a76394363676f475876375f67324f30633149d9ea604776657273696f6e01d9ea6049706f6c6963795f6964582b654862545a4e6534743739443173386271362d34686e327069314662486a74327a31566b6d46704b577351d9ea6049737563636573736f7258204726c7278b5df601ea739d0c713f2df14eee2a9a3edb234a70b27f7f17cfd32dd9ea604c686f6c6465725f65706f6368582b3641557449366a5675675a5170392d42696144515337516b65704d366d4d364563426b31426f6767344e55d9ea604a7369676e61747572657382a2d9ea60477769746e657373582047a75399c953eed4ee1a0d4095d2716e8112dbbd4e27665cfaa3a833622726abd9ea60497369676e6174757265584004a40378fc8d0be1df0cda8dc8b03a153738c65b04094e14f4d7082729750b14bead59903a3269f727c5e0bfc809f00a9caabc4a43b33af78752339c857f940ba2d9ea60477769746e65737358207612856473e7d923c7b7eb833369296070f0f45d74634e305d98ff109985d508d9ea60497369676e61747572655840c783ea5eacaf27e7de77572f70246100cc750686e880d669afa57239244a911defd929ae1698cf0df3011e1679b5db5e844555cba7a0a006253296e6bc5bd80bf6",
+      "hash": "fjo74e5Y3G2oN6t4U1X7B-GwLlzNXVWxdLsQG3-K2Nc",
+      "id": "fjo74e5Y3G2oN6t4U1X7B-GwLlzNXVWxdLsQG3-K2Nc",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584b74726565686f7573653a73706163653a73756363657373696f6e23726f6f743a787934383869706d6835426a636f535468575345756476466a76394363676f475876375f67324f3063314958207612856473e7d923c7b7eb833369296070f0f45d74634e305d98ff109985d50881582b666a6f37346535593347326f4e36743455315837422d47774c6c7a4e58565778644c735147332d4b324e63d9ea6047636f6d6d616e64d9ea6182d9ea604c6372656174655f7370616365814d5374616c6520666f756e646572582b54757058566a4e486f4c77427a6e6b764b64614a6a5252754b342d663659397659764354432d52376f2d4d",
+      "hash": "LcvuZlic-zCTKKXt7CTvn_EqLps2r4NUOotduDB0G24",
+      "id": "LcvuZlic-zCTKKXt7CTvn_EqLps2r4NUOotduDB0G24",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584b74726565686f7573653a73706163653a73756363657373696f6e23726f6f743a787934383869706d6835426a636f535468575345756476466a76394363676f475876375f67324f3063314958204726c7278b5df601ea739d0c713f2df14eee2a9a3edb234a70b27f7f17cfd32d81582b666a6f37346535593347326f4e36743455315837422d47774c6c7a4e58565778644c735147332d4b324e63d9ea6047636f6d6d616e64d9ea6182d9ea604c6372656174655f737061636581555769746e657373656420726f6c65207265706c6179582b34484b506e4259543474745869555f4c4869775a523970575970476f6f377053796d63753233323446414d",
+      "hash": "zDepU2xiY0X6M_y9oiGZ8SXiCty7KJF9CcqjVzxxjMc",
+      "id": "zDepU2xiY0X6M_y9oiGZ8SXiCty7KJF9CcqjVzxxjMc",
+      "suite": "lattice-cbor-v1"
+    }
+  ],
+  "expectAtFrontier": [
+    {
+      "include": [
+        "6AUtI6jVugZQp9-BiaDQS7QkepM6mM6EcBk1Bogg4NU",
+        "DIw2NBXgaWmViKUGAL0HQ_6BTZV5iD07eKH5y7MxDEU"
+      ],
+      "note": "before succession",
+      "state": {
+        "admin": "root",
+        "admin_actions": "create_space",
+        "invitations": [],
+        "members": [],
+        "membership_events": [],
+        "moderator": "root",
+        "moderator_actions": null,
+        "name": "Before succession",
+        "revoked_invitations": [],
+        "threads": []
+      }
+    }
+  ],
+  "expectAtFullFrontier": {
+    "authorityQuarantine": [
+      [
+        "LcvuZlic-zCTKKXt7CTvn_EqLps2r4NUOotduDB0G24",
+        "not_holder"
+      ]
+    ],
+    "quarantine": [
+      "LcvuZlic-zCTKKXt7CTvn_EqLps2r4NUOotduDB0G24"
+    ],
+    "state": {
+      "admin": "alice",
+      "admin_actions": "create_space",
+      "invitations": [],
+      "members": [],
+      "membership_events": [],
+      "moderator": "root",
+      "moderator_actions": null,
+      "name": "Witnessed role replay",
+      "revoked_invitations": [],
+      "threads": []
+    },
+    "winners": {
+      "admin": "fjo74e5Y3G2oN6t4U1X7B-GwLlzNXVWxdLsQG3-K2Nc",
+      "admin_actions": "zDepU2xiY0X6M_y9oiGZ8SXiCty7KJF9CcqjVzxxjMc",
+      "moderator": "6AUtI6jVugZQp9-BiaDQS7QkepM6mM6EcBk1Bogg4NU",
+      "moderator_actions": null,
+      "name": "zDepU2xiY0X6M_y9oiGZ8SXiCty7KJF9CcqjVzxxjMc"
+    }
+  },
+  "generatedBy": "Lattice.Sim",
+  "ops": [
+    {
+      "author": "root",
+      "authorPubkey": "dhKFZHPn2SPHt+uDM2kpYHDw9F10Y04wXZj/EJmF1Qg=",
+      "cap": null,
+      "command": "genesis admin",
+      "commandArgs": null,
+      "deps": [],
+      "effects": [
+        {
+          "field": "admin",
+          "mutation": "write",
+          "value": "root"
+        },
+        {
+          "field": "moderator",
+          "mutation": "write",
+          "value": "root"
+        }
+      ],
+      "field": "admin",
+      "hash": "6AUtI6jVugZQp9-BiaDQS7QkepM6mM6EcBk1Bogg4NU",
+      "id": "6AUtI6jVugZQp9-BiaDQS7QkepM6mM6EcBk1Bogg4NU",
+      "kind": "authority",
+      "mutation": "write",
+      "replica": "treehouse:space:succession#root:xy488ipmh5BjcoSThWSEudvFjv9CcgoGXv7_g2O0c1I",
+      "value": "root"
+    },
+    {
+      "author": "root",
+      "authorPubkey": "dhKFZHPn2SPHt+uDM2kpYHDw9F10Y04wXZj/EJmF1Qg=",
+      "cap": "TupXVjNHoLwBznkvKdaJjRRuK4-f6Y9vYvCTC-R7o-M",
+      "command": "create_space",
+      "commandArgs": [
+        "Before succession"
+      ],
+      "deps": [
+        "6AUtI6jVugZQp9-BiaDQS7QkepM6mM6EcBk1Bogg4NU"
+      ],
+      "effects": [
+        {
+          "field": "name",
+          "mutation": "write",
+          "value": "Before succession"
+        },
+        {
+          "field": "admin_actions",
+          "mutation": "write",
+          "value": "create_space"
+        }
+      ],
+      "field": "name",
+      "hash": "DIw2NBXgaWmViKUGAL0HQ_6BTZV5iD07eKH5y7MxDEU",
+      "id": "DIw2NBXgaWmViKUGAL0HQ_6BTZV5iD07eKH5y7MxDEU",
+      "kind": "command",
+      "mutation": "write",
+      "replica": "treehouse:space:succession#root:xy488ipmh5BjcoSThWSEudvFjv9CcgoGXv7_g2O0c1I",
+      "value": "Before succession"
+    },
+    {
+      "author": "alice",
+      "authorPubkey": "RybHJ4td9gHqc50McT8t8U7uKpo+2yNKcLJ/fxfP0y0=",
+      "cap": null,
+      "command": "succeed admin",
+      "commandArgs": null,
+      "deps": [
+        "DIw2NBXgaWmViKUGAL0HQ_6BTZV5iD07eKH5y7MxDEU"
+      ],
+      "effects": [
+        {
+          "field": "admin",
+          "mutation": "write",
+          "value": "alice"
+        }
+      ],
+      "field": "admin",
+      "hash": "fjo74e5Y3G2oN6t4U1X7B-GwLlzNXVWxdLsQG3-K2Nc",
+      "id": "fjo74e5Y3G2oN6t4U1X7B-GwLlzNXVWxdLsQG3-K2Nc",
+      "kind": "authority",
+      "mutation": "write",
+      "replica": "treehouse:space:succession#root:xy488ipmh5BjcoSThWSEudvFjv9CcgoGXv7_g2O0c1I",
+      "value": "alice"
+    },
+    {
+      "author": "root",
+      "authorPubkey": "dhKFZHPn2SPHt+uDM2kpYHDw9F10Y04wXZj/EJmF1Qg=",
+      "cap": "TupXVjNHoLwBznkvKdaJjRRuK4-f6Y9vYvCTC-R7o-M",
+      "command": "create_space",
+      "commandArgs": [
+        "Stale founder"
+      ],
+      "deps": [
+        "fjo74e5Y3G2oN6t4U1X7B-GwLlzNXVWxdLsQG3-K2Nc"
+      ],
+      "effects": [
+        {
+          "field": "name",
+          "mutation": "write",
+          "value": "Stale founder"
+        },
+        {
+          "field": "admin_actions",
+          "mutation": "write",
+          "value": "create_space"
+        }
+      ],
+      "field": "name",
+      "hash": "LcvuZlic-zCTKKXt7CTvn_EqLps2r4NUOotduDB0G24",
+      "id": "LcvuZlic-zCTKKXt7CTvn_EqLps2r4NUOotduDB0G24",
+      "kind": "command",
+      "mutation": "write",
+      "replica": "treehouse:space:succession#root:xy488ipmh5BjcoSThWSEudvFjv9CcgoGXv7_g2O0c1I",
+      "value": "Stale founder"
+    },
+    {
+      "author": "alice",
+      "authorPubkey": "RybHJ4td9gHqc50McT8t8U7uKpo+2yNKcLJ/fxfP0y0=",
+      "cap": "4HKPnBYT4ttXiU_LHiwZR9pWYpGoo7pSymcu2324FAM",
+      "command": "create_space",
+      "commandArgs": [
+        "Witnessed role replay"
+      ],
+      "deps": [
+        "fjo74e5Y3G2oN6t4U1X7B-GwLlzNXVWxdLsQG3-K2Nc"
+      ],
+      "effects": [
+        {
+          "field": "name",
+          "mutation": "write",
+          "value": "Witnessed role replay"
+        },
+        {
+          "field": "admin_actions",
+          "mutation": "write",
+          "value": "create_space"
+        }
+      ],
+      "field": "name",
+      "hash": "zDepU2xiY0X6M_y9oiGZ8SXiCty7KJF9CcqjVzxxjMc",
+      "id": "zDepU2xiY0X6M_y9oiGZ8SXiCty7KJF9CcqjVzxxjMc",
+      "kind": "command",
+      "mutation": "write",
+      "replica": "treehouse:space:succession#root:xy488ipmh5BjcoSThWSEudvFjv9CcgoGXv7_g2O0c1I",
+      "value": "Witnessed role replay"
+    }
+  ],
+  "oracleCarrierOps": [
+    {
+      "author": "dhKFZHPn2SPHt+uDM2kpYHDw9F10Y04wXZj/EJmF1Qg=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "dhKFZHPn2SPHt+uDM2kpYHDw9F10Y04wXZj/EJmF1Qg=",
+              "id": "TupXVjNHoLwBznkvKdaJjRRuK4-f6Y9vYvCTC-R7o-M",
+              "issuer": "dhKFZHPn2SPHt+uDM2kpYHDw9F10Y04wXZj/EJmF1Qg=",
+              "live": true,
+              "ops": [
+                "admit_member",
+                "create_space",
+                "create_thread",
+                "issue_invitation",
+                "remove_member",
+                "revoke_invitation"
+              ],
+              "parent_id": null,
+              "replica": "treehouse:space:succession#root:xy488ipmh5BjcoSThWSEudvFjv9CcgoGXv7_g2O0c1I",
+              "roles": [
+                "admin",
+                "moderator"
+              ],
+              "sig": "3ZrPWVSLFp8JQZUtUcvR7mwvSGeKyw051a/2hkmITVStykDETdVhr5S+c9WJ66jfxwqDXu6XiPecyj6S0brJDw=="
+            }
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "admin"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "recovery"
+                      ],
+                      [
+                        "map",
+                        [
+                          [
+                            [
+                              "atom",
+                              "mode"
+                            ],
+                            [
+                              "atom",
+                              "witnessed"
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "version"
+                            ],
+                            [
+                              "int",
+                              1
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "threshold"
+                            ],
+                            [
+                              "int",
+                              2
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "witnesses"
+                            ],
+                            [
+                              "list",
+                              [
+                                [
+                                  "bin",
+                                  "dhKFZHPn2SPHt+uDM2kpYHDw9F10Y04wXZj/EJmF1Qg="
+                                ],
+                                [
+                                  "bin",
+                                  "R6dTmclT7tTuGg1AldJxboES271OJ2Zc+qOoM2InJqs="
+                                ]
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "successor"
+                      ],
+                      [
+                        "bin",
+                        "RybHJ4td9gHqc50McT8t8U7uKpo+2yNKcLJ/fxfP0y0="
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [],
+      "id": "6AUtI6jVugZQp9-BiaDQS7QkepM6mM6EcBk1Bogg4NU",
+      "kind": "authority",
+      "replica": "treehouse:space:succession#root:xy488ipmh5BjcoSThWSEudvFjv9CcgoGXv7_g2O0c1I",
+      "sig": "a0wyuXWBl3CocEHFBRzDldWieWHomzv9TftGy+NJN23J5b7pqc0mdc0m0oHs36WrCuAoLZcESjESAdW8d+jKCg==",
+      "v": 1
+    },
+    {
+      "author": "dhKFZHPn2SPHt+uDM2kpYHDw9F10Y04wXZj/EJmF1Qg=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "create_space"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "QmVmb3JlIHN1Y2Nlc3Npb24="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "VHVwWFZqTkhvTHdCem5rdktkYUpqUlJ1SzQtZjZZOXZZdkNUQy1SN28tTQ=="
+      ],
+      "deps": [
+        "6AUtI6jVugZQp9-BiaDQS7QkepM6mM6EcBk1Bogg4NU"
+      ],
+      "id": "DIw2NBXgaWmViKUGAL0HQ_6BTZV5iD07eKH5y7MxDEU",
+      "kind": "command",
+      "replica": "treehouse:space:succession#root:xy488ipmh5BjcoSThWSEudvFjv9CcgoGXv7_g2O0c1I",
+      "sig": "+dxMUiN65fe98EDccMggz6Bu424yifUnU8jLqAYbOEN50T/GoDKul2U7ez954CafI8eKBEIZy/Ggnz4lYE/OAg==",
+      "v": 1
+    },
+    {
+      "author": "RybHJ4td9gHqc50McT8t8U7uKpo+2yNKcLJ/fxfP0y0=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "succeed"
+          ],
+          [
+            "atom",
+            "admin"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "RybHJ4td9gHqc50McT8t8U7uKpo+2yNKcLJ/fxfP0y0=",
+              "id": "4HKPnBYT4ttXiU_LHiwZR9pWYpGoo7pSymcu2324FAM",
+              "issuer": "RybHJ4td9gHqc50McT8t8U7uKpo+2yNKcLJ/fxfP0y0=",
+              "live": false,
+              "ops": [
+                "create_space"
+              ],
+              "parent_id": null,
+              "replica": "treehouse:space:succession#root:xy488ipmh5BjcoSThWSEudvFjv9CcgoGXv7_g2O0c1I",
+              "roles": [
+                "admin"
+              ],
+              "sig": "vW7Ds9krblPQKtGgNypeoA3zKl/RtI2fMVt69ekaFXV3ILbUemr4MwEFADCnnQUxyM7SwpnJKOQOusiVDb6CBw=="
+            }
+          ],
+          [
+            "tuple",
+            [
+              [
+                "atom",
+                "witnessed"
+              ],
+              [
+                "map",
+                [
+                  [
+                    [
+                      "atom",
+                      "claim"
+                    ],
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "role"
+                          ],
+                          [
+                            "atom",
+                            "admin"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "holder"
+                          ],
+                          [
+                            "bin",
+                            "dhKFZHPn2SPHt+uDM2kpYHDw9F10Y04wXZj/EJmF1Qg="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "replica"
+                          ],
+                          [
+                            "bin",
+                            "dHJlZWhvdXNlOnNwYWNlOnN1Y2Nlc3Npb24jcm9vdDp4eTQ4OGlwbWg1Qmpjb1NUaFdTRXVkdkZqdjlDY2dvR1h2N19nMk8wYzFJ"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "version"
+                          ],
+                          [
+                            "int",
+                            1
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "policy_id"
+                          ],
+                          [
+                            "bin",
+                            "ZUhiVFpOZTR0NzlEMXM4YnE2LTRobjJwaTFGYkhqdDJ6MVZrbUZwS1dzUQ=="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "successor"
+                          ],
+                          [
+                            "bin",
+                            "RybHJ4td9gHqc50McT8t8U7uKpo+2yNKcLJ/fxfP0y0="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "holder_epoch"
+                          ],
+                          [
+                            "bin",
+                            "NkFVdEk2alZ1Z1pRcDktQmlhRFFTN1FrZXBNNm1NNkVjQmsxQm9nZzROVQ=="
+                          ]
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "signatures"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "map",
+                          [
+                            [
+                              [
+                                "atom",
+                                "witness"
+                              ],
+                              [
+                                "bin",
+                                "R6dTmclT7tTuGg1AldJxboES271OJ2Zc+qOoM2InJqs="
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "signature"
+                              ],
+                              [
+                                "bin",
+                                "BKQDePyNC+HfDNqNyLA6FTc4xlsECU4U9NcIJyl1CxS+rVmQOjJp9yfF4L/ICfAKnKq8SkOzOveHUjOchX+UCw=="
+                              ]
+                            ]
+                          ]
+                        ],
+                        [
+                          "map",
+                          [
+                            [
+                              [
+                                "atom",
+                                "witness"
+                              ],
+                              [
+                                "bin",
+                                "dhKFZHPn2SPHt+uDM2kpYHDw9F10Y04wXZj/EJmF1Qg="
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "signature"
+                              ],
+                              [
+                                "bin",
+                                "x4PqXqyvJ+fed1cvcCRhAMx1BobogNZpr6VyOSRKkR3v2SmuFpjPDfMBHhZ5tdtehEVVy6egoAYlMpbmvFvYCw=="
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "DIw2NBXgaWmViKUGAL0HQ_6BTZV5iD07eKH5y7MxDEU"
+      ],
+      "id": "fjo74e5Y3G2oN6t4U1X7B-GwLlzNXVWxdLsQG3-K2Nc",
+      "kind": "authority",
+      "replica": "treehouse:space:succession#root:xy488ipmh5BjcoSThWSEudvFjv9CcgoGXv7_g2O0c1I",
+      "sig": "YUj0xzdv/gZ4zT7rx+tN4+PaCyXhB5SRRlre6YwtyuQZlqeaURw8we/5I2Kdto/u3acJrxTgCdosYjen+dyoDQ==",
+      "v": 1
+    },
+    {
+      "author": "dhKFZHPn2SPHt+uDM2kpYHDw9F10Y04wXZj/EJmF1Qg=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "create_space"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "U3RhbGUgZm91bmRlcg=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "VHVwWFZqTkhvTHdCem5rdktkYUpqUlJ1SzQtZjZZOXZZdkNUQy1SN28tTQ=="
+      ],
+      "deps": [
+        "fjo74e5Y3G2oN6t4U1X7B-GwLlzNXVWxdLsQG3-K2Nc"
+      ],
+      "id": "LcvuZlic-zCTKKXt7CTvn_EqLps2r4NUOotduDB0G24",
+      "kind": "command",
+      "replica": "treehouse:space:succession#root:xy488ipmh5BjcoSThWSEudvFjv9CcgoGXv7_g2O0c1I",
+      "sig": "JLRFuoM8QSrzOCCs7Ss2kSfZcnz/6RQLPXdcuxx4/laHS5BONdBYcqhe+wmyxvfg8n1Ia77hxf3q+WOoEHoOCg==",
+      "v": 1
+    },
+    {
+      "author": "RybHJ4td9gHqc50McT8t8U7uKpo+2yNKcLJ/fxfP0y0=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "create_space"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "V2l0bmVzc2VkIHJvbGUgcmVwbGF5"
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "NEhLUG5CWVQ0dHRYaVVfTEhpd1pSOXBXWXBHb283cFN5bWN1MjMyNEZBTQ=="
+      ],
+      "deps": [
+        "fjo74e5Y3G2oN6t4U1X7B-GwLlzNXVWxdLsQG3-K2Nc"
+      ],
+      "id": "zDepU2xiY0X6M_y9oiGZ8SXiCty7KJF9CcqjVzxxjMc",
+      "kind": "command",
+      "replica": "treehouse:space:succession#root:xy488ipmh5BjcoSThWSEudvFjv9CcgoGXv7_g2O0c1I",
+      "sig": "IxIqCGljjgcGm1dLz0Knz5MfYljTMxf9kQwNOGUWYmI4+eRXhlpFFRryBnaCfonlwnfvAY19C0W70tYwc/B+Bg==",
+      "v": 1
+    }
+  ],
+  "perspectives": [
+    {
+      "include": [
+        "6AUtI6jVugZQp9-BiaDQS7QkepM6mM6EcBk1Bogg4NU",
+        "DIw2NBXgaWmViKUGAL0HQ_6BTZV5iD07eKH5y7MxDEU"
+      ],
+      "name": "before succession"
+    }
+  ],
+  "realmByPubkey": {
+    "R6dTmclT7tTuGg1AldJxboES271OJ2Zc+qOoM2InJqs=": "bob",
+    "RybHJ4td9gHqc50McT8t8U7uKpo+2yNKcLJ/fxfP0y0=": "alice",
+    "dhKFZHPn2SPHt+uDM2kpYHDw9F10Y04wXZj/EJmF1Qg=": "root"
+  },
+  "replica": "treehouse:space:succession#root:xy488ipmh5BjcoSThWSEudvFjv9CcgoGXv7_g2O0c1I",
+  "scenario": "treehouse_space_succession",
+  "scenarioKind": "treehouse",
+  "schema": {
+    "fields": {
+      "admin": {
+        "authority": "admin"
+      },
+      "admin_actions": {
+        "default": null,
+        "gatedBy": "admin",
+        "merge": "lww"
+      },
+      "invitations": {
+        "merge": "causal_list"
+      },
+      "members": {
+        "merge": "or_set"
+      },
+      "membership_events": {
+        "merge": "causal_list"
+      },
+      "moderator": {
+        "authority": "moderator"
+      },
+      "moderator_actions": {
+        "default": null,
+        "gatedBy": "moderator",
+        "merge": "lww"
+      },
+      "name": {
+        "default": "",
+        "merge": "lww"
+      },
+      "revoked_invitations": {
+        "merge": "or_set"
+      },
+      "threads": {
+        "merge": "or_set"
+      }
+    },
+    "name": "Treehouse.Space"
+  },
+  "treehouseObservation": {
+    "operationCount": 5,
+    "posts": []
+  }
+}

@@ -1,5 +1,6 @@
 import { ancestors } from "./dag";
-import { gatedBy } from "./schema";
+import { effectsFor } from "./op";
+import { gatedBy, validCommandEffects } from "./schema";
 /**
  * Validate one carrier-decoded command against the same delegation and revoke
  * evidence used by authority analysis. Legacy Tier-A ops without outer-replica
@@ -9,6 +10,8 @@ export function capabilityQuarantine(op, schema, byId, security, ancCache = new 
     if (op.kind === "command" && op.commandError !== undefined) {
         return { quarantined: true, reason: op.commandError };
     }
+    if (!validCommandEffects(schema, op))
+        return { quarantined: true, reason: "malformed_command" };
     if (op.kind !== "command" || op.replica === undefined) {
         return { quarantined: false };
     }
@@ -44,8 +47,8 @@ export function capabilityQuarantine(op, schema, byId, security, ancCache = new 
     if (!record.introductionOpIds.some((opId) => visible.has(opId))) {
         return { quarantined: true, reason: "capability_not_visible" };
     }
-    const role = gatedBy(schema, op.field);
-    if (role !== null && !delegation.roles.includes(role)) {
+    const roles = effectsFor(op).map((effect) => gatedBy(schema, effect.field));
+    if (roles.some((role) => role !== null && !delegation.roles.includes(role))) {
         return { quarantined: true, reason: "role_not_granted" };
     }
     if (revokedAsOf(op, delegation.id, byId, security, ancCache)) {

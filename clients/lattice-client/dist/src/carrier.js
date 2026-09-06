@@ -877,13 +877,13 @@ function maybeCarrierFrameId(frame) {
     }
     return null;
 }
-export function carrierOpsToSemanticOps(frames, realmByPubkey = {}) {
-    return frames.map((frame) => carrierOpToSemanticOp(frame, realmByPubkey));
+export function carrierOpsToSemanticOps(frames, realmByPubkey = {}, commandDecoders) {
+    return frames.map((frame) => carrierOpToSemanticOp(frame, realmByPubkey, commandDecoders));
 }
 export function decodeCarrierOpFrame(frame) {
     return assertCarrierOpFrame(frame, true);
 }
-export function carrierOpToSemanticOp(frame, realmByPubkey = {}) {
+export function carrierOpToSemanticOp(frame, realmByPubkey = {}, commandDecoders) {
     const op = assertCarrierOpFrame(frame, false);
     let payload;
     let cap;
@@ -892,7 +892,7 @@ export function carrierOpToSemanticOp(frame, realmByPubkey = {}) {
     try {
         const body = decodeCarrierTerm(op.body);
         try {
-            payload = payloadFromBody(op.kind, body, realmByPubkey, op.body, op.replica);
+            payload = payloadFromBody(op.kind, body, realmByPubkey, op.body, op.replica, commandDecoders);
         }
         catch (error) {
             if (!continuationWithoutDelegation(op.kind, op.body))
@@ -922,6 +922,9 @@ export function carrierOpToSemanticOp(frame, realmByPubkey = {}) {
         value: payload.value,
         hash: op.id,
         command: payload.command,
+        ...(commandDecoders?.product === undefined ? {} : { decodedProduct: commandDecoders.product }),
+        ...(payload.effects === undefined ? {} : { effects: payload.effects }),
+        ...(payload.commandArgs === undefined ? {} : { commandArgs: payload.commandArgs, authorPubkey: op.author }),
         ...(payload.commandError === undefined
             ? {}
             : { commandError: payload.commandError }),
@@ -1064,7 +1067,7 @@ function decodeCarrierTerm(term) {
     }
     throw new Error("malformed carrier term");
 }
-function payloadFromBody(kind, body, realmByPubkey, rawBody, replica) {
+function payloadFromBody(kind, body, realmByPubkey, rawBody, replica, commandDecoders) {
     if (kind === "command") {
         if (!isTuple(body) || body.values.length !== 2) {
             return neutralPayload("command", "malformed_command");
@@ -1079,9 +1082,9 @@ function payloadFromBody(kind, body, realmByPubkey, rawBody, replica) {
                 ? neutralPayload("malformed_command", "malformed_command")
                 : neutralPayload(commandAuditLabel(body.values[0]), "unknown_command");
         }
-        const decoder = townshipCommandDecoders.get(command) ??
-            toolshedCommandDecoders.get(command) ??
-            policyCommandDecoders.get(command);
+        const decoder = commandDecoders === undefined
+            ? townshipCommandDecoders.get(command) ?? toolshedCommandDecoders.get(command) ?? policyCommandDecoders.get(command)
+            : commandDecoders.get(command);
         if (decoder === undefined) {
             return neutralPayload(command, "unknown_command");
         }
@@ -1132,6 +1135,9 @@ function payloadFromBody(kind, body, realmByPubkey, rawBody, replica) {
                         value: realmForPubkey(delegation.issuer, realmByPubkey),
                         command: `genesis ${role}`,
                         authority,
+                        ...(commandDecoders === undefined ? {} : { effects: [...new Set(delegation.roles)].map((field) => ({
+                                field, mutation: "write", value: realmForPubkey(delegation.issuer, realmByPubkey),
+                            })) }),
                     };
                 }
                 return { ...neutralPayload("genesis"), authority };

@@ -27,6 +27,7 @@ import { concurrent } from "./dag";
 import { cmpHash } from "./op";
 import type { Op } from "./op";
 import type { ReplicaSchema } from "./schema";
+import { treehouseCommandOpStatus } from "./treehouse";
 
 /**
  * Plan 158 Wave A2 causal context: `visibleOps`/`verdicts` restricted to
@@ -43,7 +44,7 @@ export type CommandOpStatus = { ok: true } | { ok: false; reason: string };
 
 /** True iff `schema` declares an application-policy conjunct at all. */
 export function hasApplicationPolicy(schema: ReplicaSchema): boolean {
-  return schema.name === "PolicyFixture";
+  return schema.name === "PolicyFixture" || schema.name === "Treehouse.Space" || schema.name === "Treehouse.Thread";
 }
 
 /**
@@ -58,6 +59,7 @@ export function commandOpStatus(
   visibleIds: ReadonlySet<string>,
   context: CommandOpStatusContext,
 ): CommandOpStatus {
+  if (schema.name === "Treehouse.Space" || schema.name === "Treehouse.Thread") return treehouseCommandOpStatus(schema, op, visibleIds, context);
   if (schema.name === "PolicyFixture") {
     return policyFixtureCommandOpStatus(op, visibleIds, context);
   }

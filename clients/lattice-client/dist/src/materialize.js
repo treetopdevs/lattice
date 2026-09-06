@@ -1,4 +1,4 @@
-import { cmpHash } from "./op";
+import { cmpHash, compareUtf8, effectViews } from "./op";
 import { isAuthorityField } from "./schema";
 import { index, depth, canonicalOrder } from "./dag";
 import { isQuarantined } from "./quarantine";
@@ -25,6 +25,12 @@ export class V01UnvalidatedAuthorityError extends Error {
         this.name = "V01UnvalidatedAuthorityError";
         this.role = role;
         this.cause = cause;
+    }
+}
+export class TreehouseDecoderProductError extends Error {
+    constructor(product) {
+        super(`Treehouse decoder product must match ${product} before projection`);
+        this.name = "TreehouseDecoderProductError";
     }
 }
 export class CarrierAuthorityReportDivergenceError extends Error {
@@ -54,6 +60,10 @@ export class CarrierAuthorityReportDivergenceError extends Error {
 export function materialize(schema, ops, included, carrierAuthorityReport = null, expectedReplica) {
     const byId = index(ops);
     const inc = included ?? new Set(ops.map((o) => o.id));
+    if ((schema.name === "Treehouse.Space" || schema.name === "Treehouse.Thread") &&
+        ops.some((op) => inc.has(op.id) && op.decodedProduct !== schema.name)) {
+        throw new TreehouseDecoderProductError(schema.name);
+    }
     const order = canonicalOrder(ops.filter((o) => inc.has(o.id)), byId);
     const structurallyQuarantined = new Set(ops
         .filter((op) => inc.has(op.id) &&
@@ -131,7 +141,7 @@ export function materialize(schema, ops, included, carrierAuthorityReport = null
     const winners = {};
     const live = order.filter((id) => !quarantined.has(id)).map((id) => byId.get(id));
     for (const [field, spec] of Object.entries(schema.fields)) {
-        const fieldOps = live.filter((o) => o.field === field);
+        const fieldOps = live.flatMap(effectViews).filter((o) => o.field === field);
         if (isAuthorityField(spec)) {
             // holder = last authority op in canonical order
             let holder = spec.default !== undefined ? spec.default : null;
@@ -149,13 +159,29 @@ export function materialize(schema, ops, included, carrierAuthorityReport = null
             winners[field] = r.winner;
         }
         else if (spec.merge === "or_set") {
-            state[field] = orSet(fieldOps, byId);
+            state[field] = orSet(fieldOps, byId, schema.name === "Treehouse.Space" || schema.name === "Treehouse.Thread"
+                ? compareTreehouseSetValues
+                : undefined);
         }
         else if (spec.merge === "causal_list") {
             state[field] = causalList(fieldOps, depthOf);
         }
     }
     return { state, quarantine, quarantineReasons, order, winners };
+}
+// Treehouse admits only binary strings and exact two-binary-key Thread maps
+// into sets. Erlang compares equal-size maps by sorted keys, then values in
+// that key order. JSON delimiters/escapes and canonical CBOR length prefixes
+// do not implement Erlang binary term order.
+function compareTreehouseSetValues(left, right) {
+    if (typeof left === "string" && typeof right === "string")
+        return compareUtf8(left, right);
+    const reference = (value) => value !== null && typeof value === "object" && !Array.isArray(value) &&
+        Object.keys(value).length === 2 && Object.hasOwn(value, "replica") && Object.hasOwn(value, "title") &&
+        typeof value.replica === "string" && typeof value.title === "string";
+    if (!reference(left) || !reference(right))
+        throw new TypeError("unsupported Treehouse set value");
+    return compareUtf8(left.replica, right.replica) || compareUtf8(left.title, right.title);
 }
 function sortedIds(ids) {
     return [...ids].sort(cmpHash);

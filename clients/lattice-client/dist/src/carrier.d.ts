@@ -1,4 +1,4 @@
-import type { Op, OpKind } from "./op";
+import type { AuthorityEvidence, CommandError, CustodyConsentEvidence, Mutation, Op, OpKind } from "./op";
 import type { Verifier } from "./identity";
 export interface CarrierChallenge {
     type: "carrier_challenge";
@@ -114,6 +114,53 @@ export interface CarrierDelegation {
     expires_epoch?: number;
 }
 export declare function carrierDelegationsFromFrames(frames: readonly CarrierOpFrame[]): CarrierDelegation[];
+export type DecodedTerm = null | boolean | number | BinTerm | AtomTerm | ListTerm | TupleTerm | MapTerm | MapSetTerm | DelegationTerm;
+interface BinTerm {
+    type: "bin";
+    bytes: Uint8Array;
+    text: string;
+}
+interface AtomTerm {
+    type: "atom";
+    value: string;
+}
+interface ListTerm {
+    type: "list";
+    values: DecodedTerm[];
+}
+interface TupleTerm {
+    type: "tuple";
+    values: DecodedTerm[];
+}
+interface MapTerm {
+    type: "map";
+    pairs: [DecodedTerm, DecodedTerm][];
+}
+interface MapSetTerm {
+    type: "mapset";
+    values: DecodedTerm[];
+}
+interface DelegationTerm extends CarrierDelegation {
+    type: "delegation";
+}
+export interface Payload {
+    field: string;
+    mutation: Mutation;
+    value: unknown;
+    command: string;
+    effects?: import("./op").CommandEffect[];
+    commandArgs?: unknown[];
+    commandError?: CommandError;
+    authority?: AuthorityEvidence;
+    consent?: Omit<CustodyConsentEvidence, "authorPub">;
+}
+export interface CommandDecoder {
+    arity: number;
+    decode: (args: DecodedTerm[], realmByPubkey: Record<string, string>) => Payload;
+}
+export interface CommandDecoderMap extends ReadonlyMap<string, CommandDecoder> {
+    readonly product?: string;
+}
 /** Command names decoded for the Township matter carrier boundary. */
 export declare function townshipCarrierCommandNames(): string[];
 /** Command names and arities decoded for the Township matter carrier boundary. */
@@ -179,9 +226,9 @@ export declare class CarrierWebSocketClient {
     private closeAvailability;
 }
 export declare function syncCarrierOnce(client: CarrierSyncClient, localOps: Op[], localCarrierFrames: unknown[], realmByPubkey: Record<string, string> | undefined, options: SyncCarrierOptions): Promise<SyncCarrierResult>;
-export declare function carrierOpsToSemanticOps(frames: unknown[], realmByPubkey?: Record<string, string>): Op[];
+export declare function carrierOpsToSemanticOps(frames: unknown[], realmByPubkey?: Record<string, string>, commandDecoders?: CommandDecoderMap): Op[];
 export declare function decodeCarrierOpFrame(frame: unknown): CarrierOpFrame;
-export declare function carrierOpToSemanticOp(frame: unknown, realmByPubkey?: Record<string, string>): Op;
+export declare function carrierOpToSemanticOp(frame: unknown, realmByPubkey?: Record<string, string>, commandDecoders?: CommandDecoderMap): Op;
 /**
  * Deterministic `Lattice.Canonical` bytes for the JS value subset the client
  * signs over (nil/bool/uint/string/bytes/array). Strings and byte arrays both

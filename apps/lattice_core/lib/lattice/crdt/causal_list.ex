@@ -15,11 +15,17 @@ defmodule Lattice.Crdt.CausalList do
   content) and unions tombstones — commutative, associative, idempotent.
   """
 
-  defstruct elements: %{}, tombstones: MapSet.new()
+  alias Lattice.Crdt.Lww
+
+  defstruct elements: %{}, tombstones: MapSet.new(), edits: %{}
 
   @type id :: term()
   @type element :: %{value: term(), sort_key: term()}
-  @type t :: %__MODULE__{elements: %{id() => element()}, tombstones: MapSet.t(id())}
+  @type t :: %__MODULE__{
+          elements: %{id() => element()},
+          tombstones: MapSet.t(id()),
+          edits: %{id() => Lww.t()}
+        }
 
   @spec new() :: t()
   def new, do: %__MODULE__{}
@@ -34,22 +40,35 @@ defmodule Lattice.Crdt.CausalList do
   @spec delete(t(), id()) :: t()
   def delete(%__MODULE__{} = list, id), do: %{list | tombstones: MapSet.put(list.tombstones, id)}
 
+  @doc "Replace an existing element's body by canonical edit order, keeping its original position."
+  @spec edit(t(), id(), term(), term()) :: t()
+  def edit(%__MODULE__{} = list, id, value, tag) do
+    %{
+      list
+      | edits:
+          Map.update(list.edits, id, Lww.put(Lww.new(), value, tag), &Lww.put(&1, value, tag))
+    }
+  end
+
   @doc "Join two lists."
   @spec merge(t(), t()) :: t()
   def merge(%__MODULE__{} = a, %__MODULE__{} = b) do
     %__MODULE__{
       elements: Map.merge(a.elements, b.elements),
-      tombstones: MapSet.union(a.tombstones, b.tombstones)
+      tombstones: MapSet.union(a.tombstones, b.tombstones),
+      edits: Map.merge(a.edits, b.edits, fn _, left, right -> Lww.merge(left, right) end)
     }
   end
 
   @doc "Live entries (id + value) in causal order."
   @spec entries(t()) :: [%{id: id(), value: term()}]
-  def entries(%__MODULE__{elements: elements, tombstones: tombstones}) do
+  def entries(%__MODULE__{elements: elements, tombstones: tombstones, edits: edits}) do
     elements
     |> Enum.reject(fn {id, _el} -> MapSet.member?(tombstones, id) end)
     |> Enum.sort_by(fn {id, %{sort_key: key}} -> {key, id} end)
-    |> Enum.map(fn {id, %{value: value}} -> %{id: id, value: value} end)
+    |> Enum.map(fn {id, %{value: value}} ->
+      %{id: id, value: Lww.value(Map.get(edits, id, Lww.new()), value)}
+    end)
   end
 
   @doc "Ordered list of values."
