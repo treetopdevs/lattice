@@ -7,8 +7,8 @@ defmodule Treehouse.BoundedContinuationProbeTest do
   """
   use ExUnit.Case, async: true
 
-  alias Lattice.{Log, Sim}
   alias Lattice.Authority.{Delegation, SuccessionCertificate}
+  alias Lattice.{Log, Sim}
   alias Township.Matter
 
   @left ["nominee", "w1"]

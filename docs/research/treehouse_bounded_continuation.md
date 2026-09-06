@@ -56,17 +56,28 @@ the authority marker, are already committed by every delegation and operation;
 no canonical format changes.
 
 The marker selects the authority family from the replica's birth, before a
-policy pin exists. Recognizing `#authority:` with an unsupported version or
-malformed family must refuse authority evaluation/signing; it must not fall
-back to legacy. A name without the reserved marker follows the unchanged legacy
-path. No current checked-in vector uses this marker; implementation must audit
-the entire existing fixture inventory before reserving it. A typo creates a
+policy pin exists. Recognition is confined to the exact
+`replica:treehouse:space:` or `replica:treehouse:thread:` prefix plus a reserved
+`#authority:` segment before the root suffix. Within those intended families,
+an unsupported authority version, malformed nonce/tag, repeated/misplaced
+segment or failure of the exact grammar above refuses authority evaluation and
+signing; it must not fall back to legacy. Names without that reserved
+prefix/segment combination follow the unchanged legacy path, including other
+legacy namespaces that contain the literal `#authority:`. A typo creates a
 different replica and cannot satisfy a retained pin for the intended replica.
 For an unsupported reserved family, retain authenticated log input but expose
 no active delegations, acquisitions or commands: analysis quarantines semantic
 operations as `unsupported_authority_profile`, and author/review builders return
 that typed refusal. Root-commitment inspection remains an identity observation,
 not permission to bypass that analysis gate.
+
+This identifier reservation is itself an explicit reviewed contract amendment.
+No current checked-in vector uses the reserved family, but absence from vectors
+is not proof about external history. Before enablement, audit checked-in IDs and
+retained/release-profile IDs; any pre-existing ID colliding with the reservation
+needs a named migration or disposition. No existing Treehouse production roots
+are established by this baseline's evidence; do not infer the absence of unseen
+roots. These checks qualify the legacy compatibility claim.
 
 R09's corresponding existing TS exports are `bindTownshipReplica` and
 `townshipReplicaCommitment`; its hardened authoring permits an already-bound
@@ -350,7 +361,7 @@ analysis; export new vectors rather than hand-authoring expected JSON.
 | V08 new child | After both cycles, a surviving authorized Space issuer permits creation/linking of a new Thread, with a distinct creator/root. Creator signs child genesis, actual members enroll, then creator pins its own reviewed policies and initial E. Show child moderator continuation and grants; deny cross-replica parent/cap/profile and an unpinned new child. No Space-root signature is available. |
 | V09 hostile/lost keys | One lost witness with retained threshold succeeds; below threshold stalls; unavailable holder+nominee stalls even with quorum; quorum cannot add ops or rotate witness/root. Logical clock withholding/acceleration is documented, not a wall-clock guarantee. |
 | V10 removal/restoration | Old issuer grants lapse without forged revocation; missing/corrupt evidence, fresh-log import, dump/fresh-VM vocabulary and compaction preserve role epochs, profile sources, beacons, quarantine and command results, including race losers. Retained catalog trust is supplied to R11c; service replacement is not asserted by a role certificate alone. |
-| V11 migration | Replay all legacy vector bytes/verdicts and the five characterization cases unchanged. New-family versions are additional fixtures. Product projections/claim contracts cannot label legacy, unpinned or partially pinned roots strongly ready. |
+| V11 migration | Replay all legacy vector bytes/verdicts and the five characterization cases unchanged. Other legacy namespaces containing literal `#authority:` keep behavior; malformed/unknown intended Treehouse families refuse. Audit retained IDs and disposition any reservation collision explicitly. New-family versions are additional fixtures. Product projections/claim contracts cannot label legacy, unpinned or partially pinned roots strongly ready. |
 
 Until R10 supplies actual Treehouse schemas, Core can exercise space/admin and
 thread/moderator in isolated test-schema modules with explicit admission,
@@ -452,7 +463,14 @@ negatives. No role certificate substitutes for that service trust contract.
 ## 8. This packet's verification record
 
 The five characterization probes and full `mix verify` pass at the recorded
-base: **680 tests + 27 properties, 0 failures, 3 configured exclusions**. C04 fixture
+base: **680 tests + 27 properties, 0 failures, 3 configured exclusions**. A later
+`mix check` run completed with one existing `Township.ReadModelTest` 60-second
+timeout in `preload_lattice_core/0` / `code.ensure_loaded/1`; no assertion failed.
+The initial green run remains separate evidence. The integrator queued a repeat
+with `ERL_FLAGS='+S 4:4'` after other full-suite jobs finish, with no test timeout
+change. That repeat is not yet claimed green. A new probe alias-order suggestion
+was corrected; standalone strict Credo then exited zero (existing suggestions
+in unchanged files remain). C04 fixture
 calibration first compared `Sim.transfer`'s returned delegation ID with an
 acquisition op ID; the corrected test obtains the actual transfer from public
 `Log.topo_ops`. That was test construction, not a production defect or R04 RED.
