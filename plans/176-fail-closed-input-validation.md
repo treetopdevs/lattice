@@ -454,3 +454,30 @@ loop and the TS conformance trio after vector regeneration.
 - Re-verify before executing: HEAD still `91bb6ca6` (or re-read the cited regions);
   `plans/162` (also rewrites `authority.ex` regions, and owns the AUTHZ-02 tick guard via its
   step 2b(e)) has not landed — if it has, re-read `analyze`/`bind_replica` before editing.
+
+### Accepted-base integration evidence — 2026-09-06
+
+The earlier local snapshot above remains evidence for its frozen revision. Final
+R08 review fixes were merged at `515744dc`, then accepted main through R08 merge
+`9bb7b340e49be605151458134391aa16e642fc29` was integrated at
+`3f17f4cc99020eca0a36aedfd07d5d4a5afd93db`. No conflicts or new R09 production
+semantics were introduced by the accepted-main merge; its restored-log consumers
+match that accepted source. The standalone R09 diff remains the adopted 19 paths.
+
+At that exact integration source, `mix check` under asdf/OTP28 with
+`ERL_FLAGS='+S 4:4'` passed **726 tests + 27 properties**, zero failures and three
+existing exclusions. Strict Credo and formatting exited zero. The separate R08
+integration focused gate passed 12 tests; accepted-main restore/lifecycle probes
+passed 21. TypeScript typecheck, canonical, conformance, Township authoring and
+normal build also passed, leaving generated source unchanged. Logs are in
+`/tmp/lattice-treehouse-execution-20260906/r09-accepted-main-*` and
+`r09-final-r08-integration-focused.log`; the TS command stream is retained in
+execution session 52558.
+
+Fable's implementation/comment follow-ups remain PASS at their exact recorded
+revisions. Accepted-base integration review and final hosted checks are pending;
+Claude's unfinished session-limit review is not approval. R08's own exact merge
+workflow must pass before dependent closure. The shared engine integration also
+preserves R03's witnessed three-field branch before this plan's legacy arity guard;
+that combined engine has separate review/evidence and is not part of this PR's
+standalone R09 production diff. No native, device or pilot result is implied.
