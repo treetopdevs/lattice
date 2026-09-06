@@ -129,6 +129,16 @@ pub enum GovernanceWitnessProviderKind {
     TestPresence,
 }
 
+/// A governance caller must not be able to create or obtain private key material.
+///
+/// ```compile_fail
+/// use township_tauri_shell::GovernanceWitnessKeyStore;
+///
+/// fn private_material_crosses_the_caller_boundary(store: &dyn GovernanceWitnessKeyStore) {
+///     let _ = store.create_seed([7; 32]);
+///     let _ = store.load_seed();
+/// }
+/// ```
 pub trait GovernanceWitnessKeyStore: Send + Sync {
     fn provider_kind(&self) -> GovernanceWitnessProviderKind {
         GovernanceWitnessProviderKind::Injected

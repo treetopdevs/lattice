@@ -377,3 +377,14 @@ The complete-external-deletion limitation and prohibition on automatic ensure fo
 a later pinned missing identity remain unchanged. No new Android purpose, seed
 fallback, device claim or additional persistence schema is adopted. Canonical
 payload files/fixtures and the TypeScript bridge remain byte-identical.
+
+First ownership RED: `cargo test --locked --offline --doc GovernanceWitnessKeyStore`
+exited 101 with the intended failure, **"Test compiled successfully, but it's
+marked compile_fail"**. The external example calls both `create_seed` and
+`load_seed` on the real public trait; it needs no device or real key. Log:
+`/tmp/lattice-treehouse-execution-20260906/r36-public-seed-api-red.log`.
+The exact example will remain as a removal regression alongside the new positive
+opaque interface and private-construction controls. Existing locked dependency
+build output was independently cloned from the native-prompt worktree; an
+existing ignored frontend dist was copied only to satisfy Rust's Tauri build
+input, not as packaged UX evidence. No dependencies or devices were installed.
