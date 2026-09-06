@@ -40,12 +40,42 @@ export interface ContinuationCertificate {
   signatures: ContinuationSignature[];
 }
 
-export function normalizeContinuationClaim(_value: unknown): ContinuationClaim | null {
-  return null;
+const claimKeys = [
+  "version", "product", "kind", "replica", "role", "profileId", "profileGenesis",
+  "holder", "holderEpoch", "successor", "delegationId", "author", "deps", "epoch", "epochBasis",
+] as const;
+
+/** Shape validation only: authority must derive the expected claim from verified history. */
+export function normalizeContinuationClaim(value: unknown): ContinuationClaim | null {
+  if (!exactRecord(value, claimKeys) || value.version !== 1 || value.product !== "treehouse" ||
+    !kindRoleMatch(value.kind, value.role) || typeof value.replica !== "string" || value.replica.length === 0 ||
+    !digestId(value.profileId) || !digestId(value.profileGenesis) || !digestId(value.holderEpoch) ||
+    !digestId(value.delegationId) || !publicKey(value.holder) || !publicKey(value.successor) ||
+    !publicKey(value.author) || !sortedIds(value.deps) || !sortedIds(value.epochBasis) ||
+    !integerIn(value.epoch, 0, Number.MAX_SAFE_INTEGER)) return null;
+
+  return {
+    version: 1, product: "treehouse", kind: value.kind as ContinuationClaim["kind"],
+    replica: value.replica, role: value.role as ContinuationClaim["role"],
+    profileId: value.profileId, profileGenesis: value.profileGenesis,
+    holder: value.holder, holderEpoch: value.holderEpoch, successor: value.successor,
+    delegationId: value.delegationId, author: value.author,
+    deps: [...value.deps], epoch: value.epoch, epochBasis: [...value.epochBasis],
+  };
 }
 
-export function normalizeContinuationCertificate(_value: unknown): ContinuationCertificate | null {
-  return null;
+/** Preserve signature order; quorum, order, membership and validity belong to verification. */
+export function normalizeContinuationCertificate(value: unknown): ContinuationCertificate | null {
+  if (!exactRecord(value, ["claim", "signatures"]) || !Array.isArray(value.signatures)) return null;
+  const claim = normalizeContinuationClaim(value.claim);
+  if (claim === null) return null;
+  const signatures: ContinuationSignature[] = [];
+  for (const entry of value.signatures) {
+    if (!exactRecord(entry, ["witness", "signature"]) || !publicKey(entry.witness) ||
+      typeof entry.signature !== "string" || canonicalBase64Bytes(entry.signature, 64) === null) return null;
+    signatures.push({ witness: entry.witness, signature: entry.signature });
+  }
+  return { claim, signatures };
 }
 
 const profileKeys = [
@@ -95,6 +125,21 @@ function integerIn(value: unknown, minimum: number, maximum: number): value is n
 
 function publicKey(value: unknown): value is string {
   return canonicalBase64Bytes(value, 32) !== null;
+}
+
+function digestId(value: unknown): value is string {
+  if (typeof value !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(value)) return false;
+  return canonicalBase64Bytes(value.replaceAll("-", "+").replaceAll("_", "/") + "=", 32) !== null;
+}
+
+function sortedIds(value: unknown): value is string[] {
+  if (!Array.isArray(value)) return false;
+  let previous: string | null = null;
+  for (const id of value) {
+    if (!digestId(id) || previous !== null && previous >= id) return false;
+    previous = id;
+  }
+  return true;
 }
 
 function comparePublicKeys(left: string, right: string): number {

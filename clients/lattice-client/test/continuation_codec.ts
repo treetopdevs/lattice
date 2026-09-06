@@ -49,3 +49,39 @@ test("valid claims and certificates preserve exact signed evidence", () => {
   const certificate = { claim, signatures: [{ witness: lowKey, signature: Buffer.alloc(64, 7).toString("base64") }] };
   assert.deepEqual(normalizeContinuationCertificate(certificate), certificate);
 });
+
+test("claims reject unknown fields, unsafe epochs, noncanonical IDs and reordered dependencies", () => {
+  const ordered = [digest("first"), digest("second")].sort();
+  const noncanonicalId = `${digest("profile").slice(0, -1)}B`;
+  for (const mutation of [
+    { extra: true }, { version: 2 }, { product: "township" }, { replica: "" },
+    { kind: "thread", role: "admin" }, { profileId: noncanonicalId },
+    { profileGenesis: "pin" }, { holderEpoch: `${claim.holderEpoch}="` },
+    { delegationId: lowKey }, { holder: "bad" }, { successor: Buffer.alloc(33).toString("base64") },
+    { author: `${highKey}\n` }, { epoch: -1 }, { epoch: 1.5 }, { epoch: 9_007_199_254_740_992 },
+    { epoch: "9" }, { epoch: Infinity }, { deps: ordered.toReversed() },
+    { deps: [ordered[0], ordered[0]] }, { deps: [ordered[0], , ordered[1]] },
+    { epochBasis: ordered.toReversed() }, { epochBasis: [ordered[0], "bad"] },
+  ]) assert.equal(normalizeContinuationClaim({ ...claim, ...mutation }), null);
+  for (const key of Object.keys(claim)) {
+    const missing = { ...claim } as Record<string, unknown>;
+    delete missing[key];
+    assert.equal(normalizeContinuationClaim(missing), null, key);
+  }
+  for (const epoch of [0, Number.MAX_SAFE_INTEGER]) assert.ok(normalizeContinuationClaim({ ...claim, epoch }));
+  assert.ok(normalizeContinuationClaim({ ...claim, deps: [], epochBasis: [] }), "authority resolves whether actual basis exists");
+});
+
+test("certificate shape distinguishes malformed entries from invalid consent", () => {
+  const entry = { witness: lowKey, signature: Buffer.alloc(64, 7).toString("base64") };
+  for (const malformed of [
+    { claim, signatures: [entry], extra: true }, { claim, signatures: null },
+    { claim, signatures: [{ ...entry, extra: true }] },
+    { claim, signatures: [{ witness: lowKey }] },
+    { claim, signatures: [{ ...entry, signature: Buffer.alloc(63).toString("base64") }] },
+    { claim, signatures: [{ ...entry, witness: "bad" }] },
+    { claim, signatures: [entry, , entry] },
+  ]) assert.equal(normalizeContinuationCertificate(malformed), null);
+  assert.ok(normalizeContinuationCertificate({ claim, signatures: [] }));
+  assert.ok(normalizeContinuationCertificate({ claim, signatures: [entry, entry] }), "well-shaped duplicates are a certificate verdict, not malformed input");
+});
