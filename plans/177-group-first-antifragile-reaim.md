@@ -274,3 +274,20 @@ Status 2026-09-06 (Plan 179 local preparation): Sim and TypeScript now prove wit
 advance, pre-loss delegated admission, surviving-issuer revocation and leased-grant lapse with
 the founder removed. General AF-2 survival, bounded renewal, physical-device evidence and revised
 product claims remain open; exact integrated and hosted review gates are owned by the unified roadmap.
+
+## R19a member-key continuity correction, 2026-09-06
+
+The integrator adopts the reviewed [member device-loss contract](../docs/research/member_device_loss.md)
+under the existing unified-program execution instruction. The earlier AF-3
+sentence “The old identity is tombstoned” is historical shorthand that must never
+invoke Core's root-only, replica-wide `:tombstone` operation. The retained log
+instead records a signed old/new-key continuity statement. Membership removal,
+each actual issuer/root capability revocation or signed-epoch lapse, and transport
+removal remain explicit independent actions, with unresolved items visible.
+
+The selected certificate needs fresh new-key possession and exactly two distinct
+other currently admitted ordinary member keys, followed by the existing current
+admin/capability gate. No signature alias, restored private key, new operation kind,
+automatic membership/capability transfer or loan/receipt substitution is created.
+Final Claude Fable design follow-up passed at d52dc9d3. R19b implementation and
+R20 packaged AF-3 evidence remain open; original frozen status claims remain history.
