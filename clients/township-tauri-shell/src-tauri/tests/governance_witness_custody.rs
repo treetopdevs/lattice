@@ -323,8 +323,8 @@ fn governance_signing_requires_fresh_presence_and_seed_access_each_time() {
     assert_eq!(
         presence.reasons(),
         vec![
-            "Sign clerk recovery witness for replica:matter:succession-witnessed-recovery#root:lc9GuxZMwEl99X0zNhDLAa6jR9n8pBX-2zFS3ghRwWo".to_string(),
-            "Sign clerk recovery witness for replica:matter:succession-witnessed-recovery#root:lc9GuxZMwEl99X0zNhDLAa6jR9n8pBX-2zFS3ghRwWo".to_string(),
+            "Sign Township clerk recovery witness".to_string(),
+            "Sign Township clerk recovery witness".to_string(),
         ]
     );
     assert!(state.kv_snapshot().unwrap().is_empty());
