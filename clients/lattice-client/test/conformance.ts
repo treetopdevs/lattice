@@ -15,6 +15,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { createPublicKey, verify as edVerify } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { runBoundedContinuationConformance } from "./bounded_continuation";
 import {
   analyzeAuthority,
   canonicalBytesForCarrierDelegation,
@@ -293,9 +294,12 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
   if (horizonVector) {
     check("witnessed epoch horizon is fixed across runtimes", witnessedBeaconHorizon, 9_007_199_254_740_991);
     const frame = carrierFrames?.find((candidate) => candidate.id === vec.capabilityCase?.beaconOperationId);
-    let refused = false;
-    try { decodeCarrierOpFrame(frame); } catch { refused = true; }
-    check("strict frame decoding refuses above-horizon integer", refused, true);
+    check("horizon vector supplies its signed beacon frame", frame !== undefined, true);
+    if (frame !== undefined) {
+      let refused = false;
+      try { decodeCarrierOpFrame(frame); } catch { refused = true; }
+      check("strict frame decoding refuses above-horizon integer", refused, true);
+    }
   }
   const ops =
     carrierFrames !== undefined && vec.realmByPubkey !== undefined
@@ -303,6 +307,16 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
         vec.schema.name === "Treehouse.Space" || vec.schema.name === "Treehouse.Thread"
           ? treehouseCommandDecoders(vec.schema.name) : undefined)
       : vec.ops;
+
+  if (vec.scenario === "township_beacon_witnessed_large_policy_integer" ||
+      vec.scenario === "township_beacon_witnessed_unbound_root") {
+    check("beacon review vector supplies raw signed frames", (carrierFrames?.length ?? 0) > 0, true);
+    for (const frame of carrierFrames ?? []) {
+      check("beacon review raw frame hash/signature", await verifyCarrierOp(frame, verifier),
+        { hash: true, signature: true, valid: true });
+      check("contextual decoding preserves exact raw frame", decodeCarrierOpFrame(frame), frame);
+    }
+  }
 
   for (const op of ops) {
     const evidenceType = op.authority?.type;
@@ -1641,6 +1655,7 @@ console.log("\n▸ carrier authority report is diagnostic only");
   );
 }
 
+await runBoundedContinuationConformance();
 console.log(`\n${failures === 0 ? "\x1b[32m✓ all conformance checks passed\x1b[0m" : `\x1b[31m✗ ${failures} check(s) failed\x1b[0m`}`);
 process.exit(failures === 0 ? 0 : 1);
 

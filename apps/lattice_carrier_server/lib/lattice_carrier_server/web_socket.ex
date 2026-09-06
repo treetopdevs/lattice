@@ -223,6 +223,10 @@ defmodule LatticeCarrierServer.WebSocket do
     end
   end
 
+  defp handle_message(type, %{"cursor" => nil}, _state) when type in ["frontier", "pull"] do
+    %{type: "error", reason: "malformed_cursor"}
+  end
+
   defp handle_message("frontier", message, state) do
     read_page(state.holder, :frontier, [], Map.get(message, "cursor"))
   end

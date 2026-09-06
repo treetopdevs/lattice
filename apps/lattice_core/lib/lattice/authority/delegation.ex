@@ -120,6 +120,8 @@ defmodule Lattice.Authority.Delegation do
 
     d.id == hash(encoding) and Identity.verify(d.issuer, encoding, d.sig)
   rescue
+    # Canonical rejects malformed terms with ArgumentError; keep this rescue
+    # aligned with that invariant if its refusal exception types ever change.
     ArgumentError -> false
   end
 

@@ -49,6 +49,7 @@ defmodule Lattice2.CompactionSpikeTest do
     frontier = Log.frontier(Sim.log(sim, "r0"))
     {sim, witnessed} = Sim.beacon(sim, "w0", 5, witnesses: ["w0", "w1"])
     sim = Sim.sync_all(sim)
+    beacon_frontier = Log.frontier(Sim.log(sim, "r0"))
     {sim, late} = Sim.command(sim, "r1", :post, ["after lapse"], cap: lease.id)
     sim = Sim.sync_all(sim)
     log = Sim.log(sim, "r0")
@@ -57,6 +58,9 @@ defmodule Lattice2.CompactionSpikeTest do
     refute Map.has_key?(full.reasons, witnessed.id)
     assert full.reasons[late.id] == :lease_expired
     assert_compaction_equivalence(log, frontier)
+    {_snapshot, retained, _result} = assert_compaction_equivalence(log, beacon_frontier)
+    refute Log.has?(retained, witnessed.id)
+    assert Log.has?(retained, late.id)
   end
 
   defp t2b(term), do: :erlang.term_to_binary(term, [:deterministic])

@@ -323,11 +323,44 @@ fn governance_signing_requires_fresh_presence_and_seed_access_each_time() {
     assert_eq!(
         presence.reasons(),
         vec![
-            "Sign clerk recovery witness for replica:matter:succession-witnessed-recovery#root:lc9GuxZMwEl99X0zNhDLAa6jR9n8pBX-2zFS3ghRwWo".to_string(),
-            "Sign clerk recovery witness for replica:matter:succession-witnessed-recovery#root:lc9GuxZMwEl99X0zNhDLAa6jR9n8pBX-2zFS3ghRwWo".to_string(),
+            "Sign Township clerk recovery witness".to_string(),
+            "Sign Township clerk recovery witness".to_string(),
         ]
     );
     assert!(state.kv_snapshot().unwrap().is_empty());
+}
+
+#[test]
+fn governance_presence_reason_cannot_be_shaped_by_submitted_replica() {
+    for replica in [
+        "replica:".to_string() + &"x".repeat(16_384),
+        "replica:ordinary\nApprove another action".to_string(),
+        "replica:ordinary\rReplace prompt".to_string(),
+        "replica:ordinary\0Hidden suffix".to_string(),
+        "replica:\u{03bb}".to_string(),
+        "replica:\u{202e}spoof\u{202c}".to_string(),
+    ] {
+        let seed = [7u8; 32];
+        let public_key = SigningKey::from_bytes(&seed).verifying_key().to_bytes();
+        let store = MemoryGovernanceWitnessStore::with_items(Some(seed), Some(public_key));
+        let presence = RecordingPresence::with_outcome(PresenceOutcome::Cancelled);
+        let state =
+            TownshipNativeState::with_governance_witness_custody(store.clone(), presence.clone());
+        let mut submitted = claim();
+        submitted["replica"] = serde_json::json!(replica);
+
+        assert_eq!(
+            state.sign_governance_witness(&submitted).unwrap_err(),
+            "governance witness authentication cancelled"
+        );
+        assert_eq!(
+            presence.reasons(),
+            vec!["Sign Township clerk recovery witness".to_string()]
+        );
+        assert_eq!(store.secret_read_count(), 0);
+        assert_eq!(store.write_counts(), (0, 0));
+        assert!(state.kv_snapshot().unwrap().is_empty());
+    }
 }
 
 #[test]

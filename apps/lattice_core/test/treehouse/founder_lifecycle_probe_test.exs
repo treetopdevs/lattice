@@ -137,20 +137,21 @@ defmodule Treehouse.FounderLifecycleProbeTest do
     assert Authority.bind_replica("replica:r02:space", identity.pub) != sim.replica
   end
 
-  test "P05 witnessed beacon syntax is currently ignored and does not lapse a lease" do
+  test "P05 an unconfigured witnessed beacon is refused without lapsing a lease" do
     {sim, grant} = Sim.grant(founded(), "founder", "member", ops: [:post], expires_epoch: 6)
     sim = sim |> Sim.sync_all() |> lose("founder")
     {sim, simple} = Sim.beacon(sim, "w1", 7)
     {sim, future_shape} = Sim.append(sim, "w1", :authority, {:beacon, 7, %{}})
     sim = Sim.sync_all(sim)
     verdict_everywhere(sim, simple, {true, :unauthorized_beacon})
-    # Absence of quarantine is NOT an honored beacon: the collector has no arm.
-    verdict_everywhere(sim, future_shape, false)
+    # R02 A13 / Plan179 migration exception: R03 adds only this audit refusal
+    # to the formerly inert three-field shape. The epoch and state stay inert.
+    verdict_everywhere(sim, future_shape, {true, :unauthorized_beacon})
     refute Authority.expired?(Sim.log(sim, "member"), grant.id)
     {sim, post} = Sim.command(sim, "member", :post, ["clock has not advanced"], cap: grant.id)
     verdict_everywhere(Sim.sync_all(sim), post, false)
 
-    assert_raise FunctionClauseError, fn ->
+    configured =
       founded(
         policies: %{
           __beacon__: %{
@@ -162,7 +163,15 @@ defmodule Treehouse.FounderLifecycleProbeTest do
           }
         }
       )
-    end
+
+    policy =
+      Authority.analyze(configured.module, Sim.log(configured, "member")).policies.__beacon__
+
+    assert policy.mode == :witnessed
+    assert policy.version == 1
+    assert policy.threshold == 2
+    assert policy.max_epoch_step == 1
+    assert policy.witnesses == Enum.map(["w1", "w2", "w3"], &Sim.identity(configured, &1).pub)
   end
 
   test "P06 one lost witness leaves two-of-three succession; two lost witnesses stop it" do

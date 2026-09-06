@@ -102,6 +102,12 @@ export function canonicalBytesForWitnessedRecoveryPolicy(policy) {
         ]),
     ]);
 }
+/** Construct the exact five-field authoring claim before witnesses sign it.
+ * Received claims remain exact evidence and are never normalized by verification.
+ */
+export function createWitnessedBeaconClaim(replica, epoch, author, deps) {
+    return { version: 1, replica, epoch, author, deps: uniqueSorted(deps) };
+}
 /** Canonical preimage for the exact author and frontier authorized by beacon witnesses. */
 export function canonicalBytesForWitnessedBeaconClaim(claim) {
     return encodeArray([
@@ -160,6 +166,10 @@ export async function authorCarrierDelegation(input) {
         id,
         sig: bytesToBase64(signature),
     };
+}
+/** Encode the existing closed carrier term grammar without an op envelope. */
+export function canonicalBytesForCarrierTerm(term) {
+    return encodeCarrierTerm(term);
 }
 function encodeCarrierTerm(term) {
     const [tag] = term;

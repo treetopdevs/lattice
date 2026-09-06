@@ -105,23 +105,40 @@ defmodule LatticeNodeSpike.CarrierPaginationTest do
           source_path
         ]
 
+    {elixir, env} = child_runtime()
+
     process =
-      Port.open({:spawn_executable, elixir_bin()}, [
+      Port.open({:spawn_executable, elixir}, [
         :binary,
         :exit_status,
         :stderr_to_stdout,
         {:line, 4_096},
         {:args, args},
-        {:cd, @repo_root}
+        {:cd, @repo_root},
+        {:env, env}
       ])
 
     on_exit(fn -> if Port.info(process), do: Port.close(process) end)
     {process, await_ready(process, [])}
   end
 
-  defp elixir_bin do
-    direct = Path.expand("~/.asdf/installs/elixir/1.19.5-otp-28/bin/elixir")
-    if File.exists?(direct), do: direct, else: System.find_executable("elixir")
+  defp child_runtime do
+    shim = Path.expand("~/.asdf/shims/elixir")
+    erlang = Path.expand("~/.asdf/installs/erlang/28.3.1/bin")
+    elixir = Path.expand("~/.asdf/installs/elixir/1.19.5-otp-28/bin")
+
+    if File.regular?(shim) and File.regular?(Path.join(erlang, "erl")) and
+         File.regular?(Path.join(elixir, "elixir")) do
+      # The child must select OTP 28 even when the caller's PATH is unprefixed.
+      path = Enum.join([erlang, elixir, System.get_env("PATH", "")], ":")
+      {shim, [{~c"PATH", String.to_charlist(path)}]}
+    else
+      # erlef/setup-beam supplies the correct executable directly on CI PATH.
+      executable =
+        System.find_executable("elixir") || flunk("Elixir executable unavailable on PATH")
+
+      {executable, []}
+    end
   end
 
   defp await_ready(process, seen) do

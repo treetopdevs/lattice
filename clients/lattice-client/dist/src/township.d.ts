@@ -98,6 +98,7 @@ export declare function selectTownshipDelegationParentId(delegations: readonly C
     ops?: readonly string[];
     roles?: readonly string[];
     live?: boolean;
+    expiresEpoch?: number;
 }): string | null;
 export declare function authorTownshipCommand(input: AuthorTownshipCommandInput): Promise<CarrierOpFrame>;
 export declare function authorTownshipCommandFromLog(input: AuthorTownshipCommandFromLogInput): Promise<CarrierOpFrame>;

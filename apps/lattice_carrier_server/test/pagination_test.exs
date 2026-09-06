@@ -78,6 +78,17 @@ defmodule LatticeCarrierServer.PaginationTest do
     assert encoded_ops == Enum.map(Log.topo_ops(log), &Wire.encode_op/1)
   end
 
+  test "explicit null cursors refuse while omitted cursors retain legacy reads" do
+    holder = start_holder(large_log(2))
+
+    for message <- [%{type: "frontier"}, %{type: "pull", have: []}] do
+      refute holder |> request(message) |> Jason.decode!() |> Map.has_key?("reason")
+
+      assert %{"type" => "error", "reason" => "malformed_cursor"} =
+               holder |> request(Map.put(message, :cursor, nil)) |> Jason.decode!()
+    end
+  end
+
   test "a legacy client ignoring cursors drains a dependent chain through causal prefixes" do
     log = large_log(200)
     holder = start_holder(log)

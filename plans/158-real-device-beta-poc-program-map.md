@@ -232,6 +232,35 @@ collision contract before any product shell lands.
 | Toolshed | `dev.treetop.lattice.toolshed` | `toolshed://` | `dev.treetop.lattice.toolshed.carrier` | `toolshed-v1.sqlite3` | `toolshed-pilot-v1` |
 | Treehouse | `dev.treetop.lattice.treehouse` | `treehouse://` | `dev.treetop.lattice.treehouse.carrier` | `treehouse-v1.sqlite3` | `treehouse-pilot-v1` |
 
+### Toolshed module amendment and operator authorization (2026-09-06, R01c)
+
+The standalone Toolshed row above is retained as a reserved legacy identity, not the identity of
+an enabled module. For the unified Treehouse program, Toolshed runs inside Treehouse with this
+concrete collision contract:
+
+| Boundary | Adopted module contract |
+| --- | --- |
+| App and links | `dev.treetop.lattice.treehouse` and `treehouse://`; Toolshed routes are module routes validated within that product. `toolshed://` cannot select Treehouse storage or signing. |
+| Member key service | Retain `dev.treetop.lattice.treehouse.carrier`. Governance-witness keys use the separately protected Treehouse namespace owned by R17a/R36; module activation cannot select a different product's key service. |
+| Database and migration | Retain `treehouse-v1.sqlite3`, its Treehouse product marker and migration ledger. Add module tables/namespaces through reviewed migrations; do not open or relabel `toolshed-v1.sqlite3`. |
+| Distribution lineage | Retain `treehouse-pilot-v1`, its pinned signing fingerprint and supported upgrade path. Module activation does not create a second app, alias or distribution lineage. |
+| Semantic boundaries | Shed/Tool replicas, catalog entries and permissions stay explicit. Membership in a Treehouse Space does not automatically grant authority or reading access to a Tool replica. Validate each signed operation against its own replica and role/capability rules. |
+| Reserved legacy identities | Keep the standalone Toolshed app ID, scheme, carrier key service, database and pilot alias reserved and collision-tested. They remain dormant for this program; no automatic import, migration or signing bridge is authorized. Township remains independently isolated. |
+
+Operator countersign / authorization record: on 2026-09-06, Nicholas instructed, “In that new work
+tree commit that proposal and working together with Claude Fabel for code reviews and
+implementation assistance complete that new plan as proposed”. The already-written unified
+proposal's R01c and R26 explicitly selected the retained Treehouse identities, module namespaces
+and reserved legacy identities above. This record applies that instruction to this concrete
+contract; it is not a claim of a cryptographic signature or a new authorization inferred from
+future design work.
+
+R26 owns production manifest, native/TypeScript collision tests, database/module implementation
+and the complete Toolshed reader/host copy correction. Before that packet passes, current runtime
+product records stay unchanged and this amendment establishes no enabled module or pilot result.
+R26 still requires the completed group pilot, custody semantics, catalog and profile dependencies
+in the unified ledger. iOS, external credentials and device evidence remain separately gated.
+
 Each database has its own migration ledger and product marker. It stores replayable frames,
 delegations, outbox entries, profiles, replica metadata and user-visible drafts. Signing seeds stay
 only behind the platform key-store command boundary. A shell must fail closed if the database's
