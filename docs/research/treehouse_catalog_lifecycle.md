@@ -745,3 +745,15 @@ semantic quarantine, rejected-plus-genuine same IDs and unsupported raw evidence
 The BEAM vocabulary is compiled from those fixed literal atoms; loading the
 cutoff module makes the entire closed grammar available to the existing-atom
 Wire decoder in a fresh VM. It never interns a name from imported input.
+
+### Continuous reciprocal cutoff gate — 2026-09-06
+
+The integrator assigns `catalog_cutoff_reciprocal_test.exs` under the existing
+Treehouse test directory to turn the reviewed manual reciprocal proof into a
+required full-suite gate. It invokes the actual TS exporter/observer with fresh
+temporary files and independently signs BEAM histories, then compares every raw
+record, canonical pre-hash byte, digest and frontier in both directions. It uses
+the committed fixed-atom fixture, not a machine-local vocabulary or copied result.
+Existing Node/client preparation applies; missing dependencies fail this gate.
+Temporary test-owned files are removed after the test. This changes test wiring
+only; the reviewed cutoff grammar and C01–C15 status remain unchanged.
