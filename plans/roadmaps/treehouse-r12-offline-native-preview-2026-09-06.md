@@ -418,3 +418,24 @@ user-side macOS Keychain authorization; no new package/OS/device proof is inferr
 from these software gates. Final integrated review uses Sol under the user's
 instruction while Claude is unavailable. Exact hosted tip/merge checks and
 accepted parent closure remain required before R12 is complete.
+
+### Hosted accessibility failure and observation repair — 2026-09-06
+
+Exact a8776f5c workflow 34062001387 failed the real empty-preview UI step:
+`Create local group` was absent from the helper's tree immediately after text
+entry. The retained `empty-ui.json` shows the actual AXButton before input;
+`app.log` records NSSpellServer timeouts. Those observations do not establish
+application corruption or a completed interaction. All other jobs passed. The
+failure and public artifact are preserved under the execution evidence directory
+as `r12-a877-hosted-failure.log` and `r12-a877-hosted-preview/`.
+
+The integrator adopts a bounded test-harness correction in its existing TS and
+Swift accessibility files: require a matching enabled button/text control,
+confirm text through the actual AX value after injection, and retry only exit3
+lookups where Swift issued no action. Any attempted/refused/uncertain action
+fails immediately. Preserve the existing 50x200ms polling budget, capture each
+missing-control tree, and leave every product interaction, durable draft check,
+restart, signature and independent BEAM replay assertion required. This does not
+change product UI, storage, identity, native commands or workflow gates. Vue
+production build/typecheck and the standalone Swift helper compile pass; the
+repaired exact hosted UI run remains required before claiming this failure fixed.

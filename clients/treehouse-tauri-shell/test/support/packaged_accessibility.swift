@@ -11,7 +11,7 @@ func descendants(_ node: AXUIElement, depth: Int = 0) -> [AXUIElement] {
   if depth > 80 { return [] }; return [node] + children(node).flatMap { descendants($0, depth: depth + 1) }
 }
 func output(_ node: AXUIElement) -> [String: String] {
- ["role":text(node,kAXRoleAttribute as CFString),"title":text(node,kAXTitleAttribute as CFString),"description":text(node,kAXDescriptionAttribute as CFString),"value":text(node,kAXValueAttribute as CFString)]
+ ["role":text(node,kAXRoleAttribute as CFString),"title":text(node,kAXTitleAttribute as CFString),"description":text(node,kAXDescriptionAttribute as CFString),"value":text(node,kAXValueAttribute as CFString),"enabled":String(attribute(node,kAXEnabledAttribute as CFString) as? Bool ?? false)]
 }
 guard AXIsProcessTrusted() else { fputs("Accessibility permission is unavailable\n",stderr);exit(2) }
 let args=CommandLine.arguments
@@ -24,7 +24,11 @@ if args[2]=="dump" {
 } else {
  guard args.count>=4 else {exit(2)}
  let label=args[3]
- guard let node=nodes.first(where: {n in let values=output(n);return values["title"]==label || values["description"]==label}) else {fputs("Visible control not found: \(label)\n",stderr);exit(3)}
+ guard let node=nodes.first(where: {n in
+  let values=output(n)
+  let roleMatches=args[2]=="press" ? values["role"]=="AXButton" : ["AXTextField","AXTextArea"].contains(values["role"] ?? "")
+  return roleMatches && values["enabled"]=="true" && (values["title"]==label || values["description"]==label)
+ }) else {fputs("Enabled visible control not found: \(label)\n",stderr);exit(3)}
  let result:AXError
  if args[2]=="press" {result=AXUIElementPerformAction(node,kAXPressAction as CFString)}
  else if args[2]=="set",args.count==5 {
