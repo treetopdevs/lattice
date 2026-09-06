@@ -201,6 +201,33 @@ if (!vector) {
       }),
     );
 
+    for (const length of [31, 33]) {
+      const wrongLengthKey = Buffer.alloc(length, 1).toString("base64");
+      await checkThrows(`canonical base64 author of ${length} bytes is rejected`, () =>
+        canonicalBytesForCarrierOp({ ...firstFrame, author: wrongLengthKey }),
+      );
+      for (const field of ["issuer", "audience"] as const) {
+        await checkThrows(`canonical base64 delegation ${field} of ${length} bytes is rejected`, () =>
+          canonicalBytesForCarrierOp({
+            ...firstFrame,
+            body: ["delegation", { ...delegation, [field]: wrongLengthKey }],
+          }),
+        );
+      }
+    }
+    for (const length of [63, 65]) {
+      const wrongLengthSignature = Buffer.alloc(length, 1).toString("base64");
+      await checkThrows(`canonical base64 frame signature of ${length} bytes is rejected`, () =>
+        verifyCarrierOp({ ...firstFrame, sig: wrongLengthSignature }, permissiveVerifier),
+      );
+      await checkThrows(`canonical base64 delegation signature of ${length} bytes is rejected`, () =>
+        canonicalBytesForCarrierOp({
+          ...firstFrame,
+          body: ["delegation", { ...delegation, sig: wrongLengthSignature }],
+        }),
+      );
+    }
+
     check(
       "canonical base64 frame preserves op id and verification",
       {
@@ -211,6 +238,29 @@ if (!vector) {
         id: firstFrame.id,
         verification: { hash: true, signature: true, valid: true },
       },
+    );
+
+    const largeBinaryFrame: CarrierOpFrame = {
+      ...firstFrame,
+      body: ["bin", Buffer.alloc(256 * 1024, 0xa5).toString("base64")],
+    };
+    const nodeLargeBinaryBytes = bytesToHex(canonicalBytesForCarrierOp(largeBinaryFrame));
+    const bufferDescriptor = Object.getOwnPropertyDescriptor(globalThis, "Buffer");
+    if (!bufferDescriptor) throw new Error("missing Node Buffer descriptor");
+    let browserLargeBinaryBytes = "";
+    let browserBase64Failure = "";
+    try {
+      Reflect.deleteProperty(globalThis, "Buffer");
+      browserLargeBinaryBytes = bytesToHex(canonicalBytesForCarrierOp(largeBinaryFrame));
+    } catch (error) {
+      browserBase64Failure = error instanceof Error ? error.message : String(error);
+    } finally {
+      Object.defineProperty(globalThis, "Buffer", bufferDescriptor);
+    }
+    check(
+      "browser base64 preserves canonical bytes for a 256 KiB binary term",
+      { failure: browserBase64Failure, parity: browserLargeBinaryBytes === nodeLargeBinaryBytes },
+      { failure: "", parity: true },
     );
 
     check(
