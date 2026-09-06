@@ -2,6 +2,13 @@
 
 ## Status
 
+SUPERSEDED for this delivery program (2026-09-06, unified R01a). Plan 177 withdrew the additional
+LAN/CD1 program and this plan's proposed un-parking request. QR image and deep link remain the offer
+carriers. Existing helpers/tests are retained; the historical draft below is not an active work
+queue. Android scope is separately recorded by unified R01b; LAN remains parked.
+
+## Historical draft status (superseded; not an active work queue)
+
 TODO (proposed draft — not yet reviewed or resumed by the operator). BLOCKED on Plans 150
 and 151.
 

@@ -2,8 +2,15 @@
 
 ## Status
 
-DRAFT program amendment. Operator decisions recorded 2026-09-01. Not a product, security,
+DONE program amendment and AF-1 runtime test (merged); AF-2 and AF-3 remain open.
+Operator decisions recorded 2026-09-01. Not a product, security,
 availability or centerless-operation claim.
+
+Execution 2026-09-06: the operator authorized the unified Treehouse plan as proposed. Its R01a
+core amendment is recorded in Plan 158 and its archive contract in Plan 178. The single execution
+ledger is `plans/roadmaps/treehouse-unified-2026-09-06.md`; this historical amendment is not a
+second work queue. R01b and R01c still own their concrete native/scope and isolation records,
+and no new loss, platform, deployment or capacity proof is supplied by this status correction.
 
 - **Priority**: P0 (program direction).
 - **Effort**: M for the amendment and the AF-1 test. The AF-2 and AF-3 builds are not sized here.
