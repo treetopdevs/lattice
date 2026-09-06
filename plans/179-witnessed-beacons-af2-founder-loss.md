@@ -1831,3 +1831,20 @@ dump (`FRESH_MIX_RESTORE_OK`), in addition to the bare-VM regression. Gate outpu
 `/tmp/treehouse-r03-ts-build.log`, `/tmp/treehouse-r03-*-sobelow.log`,
 `/tmp/treehouse-r03-demo-verify.log`, and `/tmp/treehouse-r03-fresh-mix-read.log`.
 These are local preparation results, not final integrated-main, hosted, native or device proof.
+
+### Exact-diff review follow-up
+
+Claude Fable reviewed `e16bcacc..d08883da` and requested one P1 repair: the new
+bare-VM restore test used a machine-local asdf executable without the existing
+CI fallback. It now prefers that exact local executable and falls back to
+`elixir` on PATH, matching `log_restore_fresh_vm_test.exs` and `erlef/setup-beam`.
+The tested dump vocabulary, independent process and restore assertions are unchanged.
+
+The earlier reserved-role STOP applies to production replica modules. The new
+test-only `ReservedRoleFixture` is the narrowly required negative characterization
+of that same residual, not a supported production role or a new collision rule.
+Optional impostor-genesis beacon vector coverage remains a later follow-up; the
+public BEAM refusal and existing cross-runtime delegation validation remain green.
+The review also identifies a pre-existing four-or-more-element beacon-body arity
+divergence: R09's coordinated input-boundary review owns its disposition. R03 does
+not silently change that legacy shape or claim the known gap is closed.
