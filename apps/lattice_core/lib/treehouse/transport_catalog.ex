@@ -200,8 +200,8 @@ defmodule Treehouse.TransportCatalog do
 
   defp origin?(value) when is_binary(value) do
     case Regex.run(~r/^wss:\/\/([a-z0-9.-]+)(?::([1-9][0-9]*))?$/, value) do
-      [_, host] -> dns_host?(host)
-      [_, host, port] ->
+      [^value, host] -> dns_host?(host)
+      [^value, host, port] ->
         dns_host?(host) and port != "443" and byte_size(port) <= 5 and String.to_integer(port) <= 65_535
       _ -> false
     end
