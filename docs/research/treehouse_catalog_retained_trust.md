@@ -488,3 +488,63 @@ explicit public exports and normal generated build/CI integration.
 The proposal deliberately leaves these concrete choices visible. Root can adopt
 the defaults and assign the TS implementation while building BEAM/durability in
 parallel; no production work in this lane starts before that adoption.
+
+## 2026-09-06 origin-aware retained-state validation amendment
+
+Before incoming union, candidate parsing, overflow handling or a durable-freeze
+return, validate the original installed snapshot's complete authenticated graph,
+exact cutoff proofs, raw-history closure, watermark and index coherence. Original
+corruption returns `trust_recovery_required`; incoming evidence never repairs it
+and an existing freeze never masks it. This resolves the P1 found by the actual
+configured gpt-5.6-sol review of unpublished TS source d912f5b7.
+
+The integrator adopts the following additive field in the unpublished v1 block:
+
+```ts
+authorityWitnesses: {
+  replica: string;
+  frontier: string[];
+  opIds: string[];
+}[];
+```
+
+BEAM uses the corresponding predeclared `authority_witnesses` / `op_ids` keys.
+Witnesses are unique and sorted by replica. Frontier and operation IDs are
+canonical, sorted and distinct. An authority freeze has at least one witness;
+the exact union of witness operation IDs equals the block's operation IDs.
+Each listed operation is a selected bootstrap or accepted-entry genesis,
+creation or reference in its actual replica. Reconstruct the witness frontier's
+complete dependency closure only from original retained accepted raw frames,
+authenticate and fold it, require that frontier to be the closure's exact
+frontier, and reproduce each named refusal. Reject unknown, missing, redundant
+or inconsistent references. Counts are bounded by the corresponding retained
+history's frame count; this field adds references, not duplicate raw history or
+an independent frame allowance. Rejected evidence cannot supply accepted closure.
+
+Capture these frontiers on the first observed authority freeze and preserve them
+when later history re-honors an operation. The original complete current graph,
+watermark and proofs still require validation separately. The witness proves a
+refusal in an authenticated causal subset, not when it was observed or provenance
+of an arbitrary caller-created map. Installed native storage remains the trusted
+boundary; no whole-store rollback protection or automatic unfreeze is added.
+Missing/invalid historical witnesses require recovery. No deployed state migration
+is claimed: this version is not yet integrated or published.
+
+Overflow uses the existing closed `triggers` array, retaining metadata for all
+distinct unadmitted authenticated page artifacts needed to establish exhaustion
+against the original retained set. At most 32 trigger records are retained, in
+canonical kind/ID order. For example, an original count of 1,023 plus two incoming
+records needs both triggers when the entire page remains unadmitted. Count/bytes
+including those triggers must establish the adopted aggregate overflow. Reopen
+checks canonical metadata and budget coherence; it cannot reauthenticate omitted
+JSON bytes. Those bytes remain explicitly unaccepted and operator-retained outside
+this state, as already adopted. Existing exhaustion witnesses are preserved;
+subsequent unadmitted pages do not append an unbounded trigger journal or imply
+admission/completeness.
+
+Authority witnesses and prior overflow triggers survive either order of those
+events. Once authority witnesses exist, retain `authority_changed` as the block
+reason, preserving overflow metadata alongside it. Other block reasons have an
+empty authority witness array. Every such state remains frozen with no routes.
+These are pure-state validation rules, not C03/C14 persistence closure. Actual
+process stop/reopen, durable CAS and field recovery evidence remain outstanding.

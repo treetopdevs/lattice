@@ -84,7 +84,8 @@ Every public object is an exact closed map. Unexpected/missing keys, wrong atoms
 @type block :: %{
   reason: :catalog_fork | :authority_changed | :control_history_limit,
   bindings: [binary()], catalogs: [binary()], bootstrap_ids: [binary()], op_ids: [binary()],
-  pending_proof_ids: [binary()], triggers: [overflow_trigger()]
+  pending_proof_ids: [binary()], triggers: [overflow_trigger()],
+  authority_witnesses: [%{replica: binary(), frontier: [binary()], op_ids: [binary()]}]
 }
 ```
 
@@ -186,3 +187,12 @@ Current TS fixture SHA-256 supplied by the TS lane: `84f75a5378696b77208b47346ba
 ## Explicit nonclaims
 
 Pure `:propose` does not install trust or authorize route use. This packet does not close C03, C14, any C01-C15 row, native restart/CAS/durability, carrier readiness, provisioning, lost-key replacement, same-key encrypted restore, device/WSS/reboot evidence, or absence of withheld remote history.
+
+## Adopted historical-freeze and overflow clarification
+
+The dated origin-aware validation amendment in
+[the common retained-trust boundary](treehouse_catalog_retained_trust.md#2026-09-06-origin-aware-retained-state-validation-amendment)
+is authoritative for historical authority witnesses, original-snapshot validation,
+32-record exhaustion metadata, and preservation across authority/overflow events.
+It supersedes the earlier single-trigger description in this proposal. Both
+runtimes implement the same closed values using their declared naming adapters.
