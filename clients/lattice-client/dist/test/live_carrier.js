@@ -4,7 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { isDeepStrictEqual } from "node:util";
-import { authorAndPersistTownshipCommand, authorTownshipCommand, authorTownshipDelegation, authorTownshipGenesis, authorTownshipRevocation, carrierDelegationsFromFrames, carrierOpsToSemanticOps, connectCarrierWebSocket, createJsonCarrierFrameStore, createJsonLocalOpLogStore, frontier, materialize, selectTownshipCapId, syncCarrierOnce, } from "../src/index";
+import { authorAndPersistTownshipCommand, authorCarrierDelegation, authorCarrierOp, authorTownshipCommand, authorTownshipDelegation, authorTownshipRevocation, carrierDelegationsFromFrames, carrierOpsToSemanticOps, connectCarrierWebSocket, createJsonCarrierFrameStore, createJsonLocalOpLogStore, frontier, materialize, selectTownshipCapId, syncCarrierOnce, townshipGenesisBody, } from "../src/index";
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "../../..");
 const vecDir = join(here, "vectors");
@@ -144,11 +144,21 @@ try {
     check("authority-unsound grant quarantine member", hasAuthorityQuarantinePair(unsoundPeerReport.authority_quarantine, expectedUnsoundQuarantine), true);
     // The Sim-exported full set also includes W1's pre-existing stale-clerk not_holder entry.
     checkAuthorityQuarantine("authority-unsound grant peer authority quarantine", unsoundPeerReport.authority_quarantine, vector.authorityUnsoundGrant.authorityQuarantine);
-    const forgedGenesis = await authorTownshipGenesis({
+    const forgedDelegation = await authorCarrierDelegation({
         replica: vector.replica,
+        audiencePubkey: evilAuthor.publicKey,
+        parentId: null,
         ops: ["post"],
         roles: ["clerk"],
         live: true,
+        signer: evilAuthor,
+    });
+    const forgedGenesis = await authorCarrierOp({
+        replica: vector.replica,
+        deps: [],
+        kind: "authority",
+        body: townshipGenesisBody(forgedDelegation),
+        cap: ["nil"],
         signer: evilAuthor,
     });
     check("forged genesis command", commandName(forgedGenesis), "genesis");

@@ -161,6 +161,7 @@ export declare class CarrierWebSocketClient {
     constructor(socket: WebSocketLike);
     advertise(): Promise<string[]>;
     pull(have: string[]): Promise<unknown[]>;
+    private readPages;
     push(ops: unknown[]): Promise<CarrierPushReport>;
     relay(op: CarrierOpFrame): Promise<CarrierPushReport>;
     status(): Promise<string>;

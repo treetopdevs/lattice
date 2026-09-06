@@ -1,8 +1,11 @@
 import { bytesBase64 } from "./base64";
 import {
+  authorCarrierDelegation,
+  authorCarrierOp,
   authorTownshipGenesis,
   bindTownshipReplica,
   carrierOpsToSemanticOps,
+  townshipGenesisBody,
   type CarrierOpFrame,
   type CarrierVerifier,
   type Op,
@@ -542,8 +545,19 @@ async function authorForgedRootGenesis(
       ...(options.invoke === undefined ? {} : { invoke: options.invoke }),
     }));
   const forgedPublicKeyBase64 = bytesBase64(forgerWorkflow.signer.publicKey);
-  const frame = await authorTownshipGenesis({
+  const delegation = await authorCarrierDelegation({
     replica: options.metadata.rootReplica,
+    audiencePubkey: forgerWorkflow.signer.publicKey,
+    parentId: null,
+    live: true,
+    signer: forgerWorkflow.signer,
+  });
+  const frame = await authorCarrierOp({
+    replica: options.metadata.rootReplica,
+    deps: [],
+    kind: "authority",
+    body: townshipGenesisBody(delegation),
+    cap: ["nil"],
     signer: forgerWorkflow.signer,
   });
   await appendSemanticFrame(options.workflow, frame, {

@@ -265,9 +265,15 @@ defmodule Lattice.Registry do
   def handle_call({:restore, identity, module, replica, path}, _from, st) do
     key = {identity.realm_id, replica}
 
-    case Log.restore(path) do
-      {:ok, log} ->
+    case Log.restore_verified(path) do
+      {:ok, %{log: %Log{replica: ^replica} = log}} ->
         {:reply, :ok, put_entry(st, key, new_entry(identity, module, log))}
+
+      {:ok, _snapshot} ->
+        {:reply, {:error, :wrong_replica}, st}
+
+      {:error, errors} when is_list(errors) ->
+        {:reply, {:error, :invalid_log}, st}
 
       {:error, _} = err ->
         {:reply, err, st}

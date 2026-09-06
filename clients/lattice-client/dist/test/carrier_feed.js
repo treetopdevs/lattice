@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import "./carrier_pagination";
 import { CarrierWebSocketClient, connectCarrierWebSocket } from "../src/index";
 const serverNonce = Buffer.alloc(32, 7).toString("base64url");
 class ManualCarrierWebSocket {
