@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
-import { authorAndPersistTownshipCommand, authorAndPersistTownshipDelegation, canonicalBytesForCarrierDelegation, canonicalBytesForCarrierOp, canonicalBytesForWitnessedBeaconClaim, authorCarrierDelegation, authorTownshipGenesis, authorTownshipDelegation, authorTownshipCommand, authorTownshipCommandFromLog, authorTownshipRevocation, bindTownshipReplica, carrierDelegationsFromFrames, carrierOpsToSemanticOps, createJsonCarrierFrameStore, createJsonLocalOpLogStore, selectTownshipCapId, townshipCapTerm, townshipCommandBody, townshipRevokeBody, } from "../src/index";
+import { authorAndPersistTownshipCommand, authorAndPersistTownshipDelegation, canonicalBytesForCarrierOp, canonicalBytesForWitnessedBeaconClaim, analyzeAuthority, authorCarrierDelegation, authorCarrierOp, authorTownshipGenesis, authorTownshipDelegation, authorTownshipCommand, authorTownshipCommandFromLog, authorTownshipRevocation, bindTownshipReplica, canonicalBytesForCarrierDelegation, canonicalOrder, carrierDelegationsFromFrames, carrierOpsToSemanticOps, createJsonCarrierFrameStore, createJsonLocalOpLogStore, index, materialize, selectTownshipCapId, townshipCapTerm, townshipCommandBody, townshipGenesisBody, townshipReplicaCommitment, townshipRevokeBody, } from "../src/index";
 const here = dirname(fileURLToPath(import.meta.url));
 const vector = JSON.parse(readFileSync(join(here, "vectors", "township_carrier_w1.json"), "utf8"));
 let failures = 0;
@@ -62,6 +62,46 @@ if (!genesisDelegation)
     throw new Error("missing genesis fixture delegation");
 const unboundReplica = genesisFixture.replica.split("#root:")[0];
 check("bound Township replica id", await bindTownshipReplica(unboundReplica, clerkAuthor.publicKey), genesisFixture.replica);
+for (const replica of ["town#root:", "town#root:attacker", `${genesisFixture.replica}#root:again`, `${genesisFixture.replica}\n`]) {
+    check("root parser refuses malformed marker", townshipReplicaCommitment(replica), null);
+    let refused = false;
+    try {
+        await bindTownshipReplica(replica, clerkAuthor.publicKey);
+    }
+    catch {
+        refused = true;
+    }
+    check("direct binding refuses existing marker", refused, true);
+    const delegation = await authorCarrierDelegation({
+        replica, audiencePubkey: clerkAuthor.publicKey, ops: ["post"], roles: ["clerk"],
+        parentId: null, signer: clerkAuthor,
+    });
+    const frame = await authorCarrierOp({
+        replica, deps: [], kind: "authority", body: townshipGenesisBody(delegation),
+        cap: ["nil"], signer: clerkAuthor,
+    });
+    const analysis = authorityForFrames([frame]);
+    check("malformed marker cannot select root", analysis.security.root, null);
+    check("malformed marker cannot assign role", analysis.acquiresByRole.get("clerk")?.length ?? 0, 0);
+    check("malformed marker retains genesis refusal", analysis.quarantineReasons.get(frame.id), "impostor_genesis");
+}
+let directRebindRefused = false;
+try {
+    await bindTownshipReplica(genesisFixture.replica, clerkAuthor.publicKey);
+}
+catch {
+    directRebindRefused = true;
+}
+check("direct binding refuses a canonical already-bound name", directRebindRefused, true);
+const legacyDelegation = await authorCarrierDelegation({
+    replica: "legacy:thread", audiencePubkey: clerkAuthor.publicKey, ops: ["post"], roles: ["clerk"],
+    parentId: null, signer: clerkAuthor,
+});
+const legacyGenesis = await authorCarrierOp({
+    replica: "legacy:thread", deps: [], kind: "authority", body: townshipGenesisBody(legacyDelegation),
+    cap: ["nil"], signer: clerkAuthor,
+});
+check("marker-free legacy roots remain accepted", authorityForFrames([legacyGenesis]).security.root?.pubkey, clerkAuthor.publicKeyBase64);
 const authoredGenesis = await authorTownshipGenesis({
     replica: unboundReplica,
     ops: genesisDelegation.ops,
@@ -76,12 +116,27 @@ const authoredGenesis = await authorTownshipGenesis({
     signer: clerkAuthor,
 });
 check("authored root-bound genesis frame", authoredGenesis, genesisFixture);
-const forgedGenesis = await authorTownshipGenesis({
-    replica: genesisFixture.replica,
-    ops: ["post"],
-    roles: ["clerk"],
-    live: true,
-    signer: evilAuthor,
+let wrongRootRefused = false;
+try {
+    await authorTownshipGenesis({
+        replica: genesisFixture.replica,
+        ops: ["post"],
+        roles: ["clerk"],
+        live: true,
+        signer: evilAuthor,
+    });
+}
+catch {
+    wrongRootRefused = true;
+}
+check("high-level genesis authoring refuses a mismatched bound root", wrongRootRefused, true);
+const impostorDelegation = await authorCarrierDelegation({
+    replica: genesisFixture.replica, audiencePubkey: evilAuthor.publicKey,
+    ops: ["post"], roles: ["clerk"], live: true, parentId: null, signer: evilAuthor,
+});
+const forgedGenesis = await authorCarrierOp({
+    replica: genesisFixture.replica, deps: [], kind: "authority", body: townshipGenesisBody(impostorDelegation),
+    cap: ["nil"], signer: evilAuthor,
 });
 const forgedDelegation = carrierDelegationsFromFrames([forgedGenesis])[0];
 if (!forgedDelegation)
@@ -89,6 +144,24 @@ if (!forgedDelegation)
 check("forged genesis keeps honest root-bound replica", forgedGenesis.replica, genesisFixture.replica);
 check("forged genesis is self-issued", forgedDelegation.issuer, forgedDelegation.audience);
 check("forged genesis root differs from bound root", forgedDelegation.audience === genesisDelegation.audience, false);
+check("signed impostor genesis remains semantically refused", authorityForFrames([forgedGenesis]).quarantineReasons.get(forgedGenesis.id), "impostor_genesis");
+const laterDraft = await authorTownshipGenesis({
+    replica: authoredGenesis.replica, ops: genesisDelegation.ops, roles: genesisDelegation.roles,
+    live: genesisDelegation.live,
+    policies: { clerk: { successorPubkey: residentAuthor.publicKey, dormantTicks: 5 } },
+    signer: clerkAuthor,
+});
+const laterGenesis = await authorCarrierOp({
+    replica: laterDraft.replica, deps: [authoredGenesis.id], kind: "authority", body: laterDraft.body,
+    cap: ["nil"], signer: clerkAuthor,
+});
+const twoGenesisFrames = [authoredGenesis, laterGenesis];
+const twoGenesisAnalysis = authorityForFrames(twoGenesisFrames);
+check("later genesis keeps the exact bound replica", laterGenesis.replica, authoredGenesis.replica);
+check("later genesis retains both distinct root records", new Set(twoGenesisFrames.map((frame) => frame.id)).size, 2);
+check("both valid root records remain honored", twoGenesisFrames.some((frame) => twoGenesisAnalysis.quarantineReasons.has(frame.id)), false);
+const laterPolicy = twoGenesisAnalysis.policiesByRole.get("clerk");
+check("later genesis updates the policy", laterPolicy && "dormantTicks" in laterPolicy ? laterPolicy.dormantTicks : undefined, 5);
 const grantFixture = vector.clientDivergedCarrierOps.find((frame) => authorityCommandName(frame) === "grant");
 if (!grantFixture)
     throw new Error("missing resident grant fixture frame");
@@ -96,6 +169,51 @@ const grantDelegation = carrierDelegationsFromFrames([grantFixture])[0];
 if (!grantDelegation)
     throw new Error("missing resident grant fixture delegation");
 const capId = grantDelegation.id;
+// Signed wrong-arity beacons are retained evidence, with no epoch or lease effect.
+const leasedCore = { ...grantDelegation, expires_epoch: 3 };
+const leasedBytes = canonicalBytesForCarrierDelegation(leasedCore);
+const wrongArityLeasedDelegation = {
+    ...leasedCore,
+    id: createHash("sha256").update(leasedBytes).digest("base64url"),
+    sig: Buffer.from(clerkAuthor.sign(leasedBytes)).toString("base64"),
+};
+const leasedGrant = await authorCarrierOp({
+    replica: authoredGenesis.replica, deps: [authoredGenesis.id], kind: "authority",
+    body: ["tuple", [["atom", "grant"], ["delegation", wrongArityLeasedDelegation]]],
+    cap: ["nil"], signer: clerkAuthor,
+});
+const wrongArityBeacon = await authorCarrierOp({
+    replica: authoredGenesis.replica, deps: [leasedGrant.id], kind: "authority",
+    body: ["tuple", [["atom", "beacon"], ["int", 9], ["nil"], ["nil"]]],
+    cap: ["nil"], signer: clerkAuthor,
+});
+const liveLeasePost = await authorTownshipCommand({
+    replica: authoredGenesis.replica, deps: [wrongArityBeacon.id],
+    command: { command: "post", text: "lease remains live" },
+    capId: wrongArityLeasedDelegation.id, signer: residentAuthor,
+});
+const wrongArityFrames = [authoredGenesis, leasedGrant, wrongArityBeacon, liveLeasePost];
+const wrongArityOps = carrierOpsToSemanticOps(wrongArityFrames, vector.realmByPubkey);
+const wrongArityState = materialize(vector.schema, wrongArityOps);
+check("signed four-field beacon remains stored", wrongArityOps.some((op) => op.id === wrongArityBeacon.id), true);
+check("signed four-field beacon remains unquarantined", wrongArityState.quarantineReasons.has(wrongArityBeacon.id), false);
+check("signed four-field beacon adds no epoch", authorityForFrames(wrongArityFrames).security.validBeacons, []);
+check("signed four-field beacon cannot lapse the leased post", wrongArityState.quarantineReasons.has(liveLeasePost.id), false);
+check("post after four-field beacon stays materialized", wrongArityState.state.posts, ["lease remains live"]);
+const legacyBeacon = await authorCarrierOp({
+    replica: authoredGenesis.replica, deps: [liveLeasePost.id], kind: "authority",
+    body: ["tuple", [["atom", "beacon"], ["int", 9]]], cap: ["nil"], signer: clerkAuthor,
+});
+const lapsedLeasePost = await authorTownshipCommand({
+    replica: authoredGenesis.replica, deps: [legacyBeacon.id],
+    command: { command: "post", text: "lease now lapsed" },
+    capId: wrongArityLeasedDelegation.id, signer: residentAuthor,
+});
+const legacyBeaconFrames = [...wrongArityFrames, legacyBeacon, lapsedLeasePost];
+const legacyBeaconState = materialize(vector.schema, carrierOpsToSemanticOps(legacyBeaconFrames, vector.realmByPubkey));
+check("two-field beacon advances the epoch", authorityForFrames(legacyBeaconFrames).security.validBeacons, [{ opId: legacyBeacon.id, epoch: 9 }]);
+check("two-field beacon still lapses the leased post", legacyBeaconState.quarantineReasons.get(lapsedLeasePost.id), "lease_expired");
+check("two-field beacon preserves the earlier causal post", legacyBeaconState.state.posts, ["lease remains live"]);
 check("delegation cap term", townshipCapTerm(capId), ["bin", textBase64(capId)]);
 check("missing cap term", townshipCapTerm(null), ["nil"]);
 check("carrier delegation ids from frames", delegations.map((delegation) => delegation.id), [
@@ -329,6 +447,11 @@ process.exit(failures === 0 ? 0 : 1);
 function commandBody(command, arg) {
     const args = arg === undefined ? [] : [["bin", textBase64(arg)]];
     return ["tuple", [["atom", command], ["list", args]]];
+}
+function authorityForFrames(frames) {
+    const ops = carrierOpsToSemanticOps(frames, vector.realmByPubkey);
+    const byId = index(ops);
+    return analyzeAuthority(vector.schema, ops, new Set(byId.keys()), canonicalOrder(ops, byId), byId, frames[0].replica);
 }
 function authorityCommandName(frame) {
     const body = frame.body;

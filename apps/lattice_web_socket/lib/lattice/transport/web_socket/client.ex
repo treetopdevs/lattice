@@ -5,6 +5,9 @@ defmodule Lattice.Transport.WebSocket.Client do
   This speaks the WebSocket wire protocol over `:gen_tcp`. It is intentionally
   small, but it is not an in-process transport shortcut: messages cross the same
   Cowboy WebSocket boundary as a browser tab.
+
+  TCP connection and HTTP upgrade share a finite setup deadline. Upgrade headers
+  are limited to the same 64,000-byte budget as WebSocket payloads.
   """
 
   use GenServer
@@ -14,9 +17,12 @@ defmodule Lattice.Transport.WebSocket.Client do
 
   @guid "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
   @call_timeout_slack 1_000
+  @default_connect_timeout 5_000
   @max_frame_size 64_000
   @max_notification_types 32
 
+  @doc "Start a client with one finite `:connect_timeout` covering TCP and HTTP upgrade setup."
+  @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts) do
     GenServer.start_link(__MODULE__, opts)
   end
@@ -69,10 +75,18 @@ defmodule Lattice.Transport.WebSocket.Client do
     host = Keyword.get(opts, :hostname, Keyword.get(opts, :host, "localhost"))
     port = Keyword.fetch!(opts, :port)
     path = Keyword.get(opts, :path, "/ws")
+    connect_timeout = Keyword.get(opts, :connect_timeout, @default_connect_timeout)
 
-    with {:ok, socket} <-
-           :gen_tcp.connect(String.to_charlist(host), port, [:binary, active: false, packet: :raw]),
-         {:ok, buffer} <- handshake(socket, host, port, path),
+    with :ok <- validate_connect_timeout(connect_timeout),
+         deadline = System.monotonic_time(:millisecond) + connect_timeout,
+         {:ok, socket} <-
+           :gen_tcp.connect(
+             String.to_charlist(host),
+             port,
+             [:binary, active: false, packet: :raw],
+             connect_timeout
+           ),
+         {:ok, buffer} <- handshake(socket, host, port, path, deadline),
          :ok <- :inet.setopts(socket, active: :once) do
       state = %{
         socket: socket,
@@ -216,7 +230,10 @@ defmodule Lattice.Transport.WebSocket.Client do
     :ok
   end
 
-  defp handshake(socket, host, port, path) do
+  defp validate_connect_timeout(timeout) when is_integer(timeout) and timeout > 0, do: :ok
+  defp validate_connect_timeout(_timeout), do: {:error, :invalid_connect_timeout}
+
+  defp handshake(socket, host, port, path, deadline) do
     key = :crypto.strong_rand_bytes(16) |> Base.encode64()
 
     request = [
@@ -230,24 +247,34 @@ defmodule Lattice.Transport.WebSocket.Client do
     ]
 
     with :ok <- :gen_tcp.send(socket, request),
-         {:ok, response, rest} <- recv_until_headers(socket, <<>>),
+         {:ok, response, rest} <- recv_until_headers(socket, <<>>, deadline),
          :ok <- validate_handshake(response, key) do
       {:ok, rest}
     end
   end
 
-  defp recv_until_headers(socket, acc) do
-    case :binary.match(acc, "\r\n\r\n") do
-      {index, 4} ->
-        header_size = index + 4
-        <<headers::binary-size(header_size), rest::binary>> = acc
-        {:ok, headers, rest}
+  defp recv_until_headers(socket, acc, deadline) do
+    with remaining when remaining > 0 <- deadline - System.monotonic_time(:millisecond) do
+      case :binary.match(acc, "\r\n\r\n") do
+        {index, 4} when index + 4 <= @max_frame_size ->
+          header_size = index + 4
+          <<headers::binary-size(header_size), rest::binary>> = acc
+          {:ok, headers, rest}
 
-      :nomatch ->
-        case :gen_tcp.recv(socket, 0, 5_000) do
-          {:ok, chunk} -> recv_until_headers(socket, acc <> chunk)
-          {:error, reason} -> {:error, reason}
-        end
+        {_index, 4} ->
+          {:error, :upgrade_headers_too_large}
+
+        :nomatch when byte_size(acc) >= @max_frame_size ->
+          {:error, :upgrade_headers_too_large}
+
+        :nomatch ->
+          case :gen_tcp.recv(socket, 0, remaining) do
+            {:ok, chunk} -> recv_until_headers(socket, acc <> chunk, deadline)
+            {:error, reason} -> {:error, reason}
+          end
+      end
+    else
+      _expired -> {:error, :timeout}
     end
   end
 

@@ -24,3 +24,5 @@ export declare function isAuthorityField(spec: FieldSpec): spec is {
 export declare function gatedBy(schema: ReplicaSchema, field: string): string | null;
 /** The role name a field tracks the holder of, if it is an authority field. */
 export declare function authorityRole(schema: ReplicaSchema, field: string): string | null;
+/** Validate complete ordered effects before any capability or reduction work. */
+export declare function validCommandEffects(schema: ReplicaSchema, op: import("./op").Op): boolean;

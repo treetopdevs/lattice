@@ -1,4 +1,4 @@
-import { cmpHash } from "./op";
+import { cmpHash, compareUtf8, effectViews } from "./op";
 import { isAuthorityField } from "./schema";
 import { index, depth, canonicalOrder } from "./dag";
 import { isQuarantined } from "./quarantine";
@@ -25,6 +25,12 @@ export class V01UnvalidatedAuthorityError extends Error {
         this.name = "V01UnvalidatedAuthorityError";
         this.role = role;
         this.cause = cause;
+    }
+}
+export class TreehouseDecoderProductError extends Error {
+    constructor(product) {
+        super(`Treehouse decoder product must match ${product} before projection`);
+        this.name = "TreehouseDecoderProductError";
     }
 }
 export class CarrierAuthorityReportDivergenceError extends Error {
@@ -54,6 +60,10 @@ export class CarrierAuthorityReportDivergenceError extends Error {
 export function materialize(schema, ops, included, carrierAuthorityReport = null, expectedReplica) {
     const byId = index(ops);
     const inc = included ?? new Set(ops.map((o) => o.id));
+    if ((schema.name === "Treehouse.Space" || schema.name === "Treehouse.Thread") &&
+        ops.some((op) => inc.has(op.id) && op.decodedProduct !== schema.name)) {
+        throw new TreehouseDecoderProductError(schema.name);
+    }
     const order = canonicalOrder(ops.filter((o) => inc.has(o.id)), byId);
     const structurallyQuarantined = new Set(ops
         .filter((op) => inc.has(op.id) &&
@@ -131,7 +141,7 @@ export function materialize(schema, ops, included, carrierAuthorityReport = null
     const winners = {};
     const live = order.filter((id) => !quarantined.has(id)).map((id) => byId.get(id));
     for (const [field, spec] of Object.entries(schema.fields)) {
-        const fieldOps = live.filter((o) => o.field === field);
+        const fieldOps = live.flatMap(effectViews).filter((o) => o.field === field);
         if (isAuthorityField(spec)) {
             // holder = last authority op in canonical order
             let holder = spec.default !== undefined ? spec.default : null;
@@ -149,7 +159,9 @@ export function materialize(schema, ops, included, carrierAuthorityReport = null
             winners[field] = r.winner;
         }
         else if (spec.merge === "or_set") {
-            state[field] = orSet(fieldOps, byId);
+            state[field] = orSet(fieldOps, byId, schema.name === "Treehouse.Space" || schema.name === "Treehouse.Thread"
+                ? (left, right) => compareUtf8(typeof left === "string" ? left : JSON.stringify(left), typeof right === "string" ? right : JSON.stringify(right))
+                : undefined);
         }
         else if (spec.merge === "causal_list") {
             state[field] = causalList(fieldOps, depthOf);

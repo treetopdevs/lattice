@@ -104,22 +104,37 @@ defmodule Lattice.Authority do
   Every op commits to its replica id (it is part of the signed/hashed encoding), so
   a bound id cryptographically pins *which* self-issued genesis is the legitimate
   root: a genesis forged by any other key cannot match the commitment, and `analyze`
-  refuses to honor it. Idempotent — re-binding an already-bound id is a no-op.
+  refuses to honor it. Names must not already contain the reserved `#root:` marker.
   """
   @spec bind_replica(String.t(), Identity.pubkey()) :: String.t()
   def bind_replica(name, root_pub) when is_binary(name) and is_binary(root_pub) do
-    case replica_commitment(name) do
-      nil -> name <> @root_marker <> root_tag(root_pub)
-      _already_bound -> name
+    if String.contains?(name, @root_marker),
+      do: raise(ArgumentError, "replica name already contains reserved #root: marker")
+
+    name <> @root_marker <> root_tag(root_pub)
+  end
+
+  @doc "The valid root-key commitment carried by a bound replica id, or nil."
+  @spec replica_commitment(String.t()) :: String.t() | nil
+  def replica_commitment(replica) when is_binary(replica) do
+    case root_commitment(replica) do
+      tag when is_binary(tag) -> tag
+      _unbound_or_malformed -> nil
     end
   end
 
-  @doc "The root-key commitment carried by a bound replica id, or nil if unbound."
-  @spec replica_commitment(String.t()) :: String.t() | nil
-  def replica_commitment(replica) when is_binary(replica) do
-    case String.split(replica, @root_marker, parts: 2) do
-      [_name, tag] when byte_size(tag) > 0 -> tag
-      _ -> nil
+  # A malformed claim must never share the permissive legacy-unbound sentinel.
+  # All authority entry points use this discriminator through deleg_context/2.
+  defp root_commitment(replica) do
+    case String.split(replica, @root_marker) do
+      [_unbound_name] ->
+        nil
+
+      [_name, tag] ->
+        if Regex.match?(~r/\A[A-Za-z0-9_-]{43}\z/, tag), do: tag, else: :malformed_root_claim
+
+      _repeated_marker ->
+        :malformed_root_claim
     end
   end
 
@@ -166,12 +181,13 @@ defmodule Lattice.Authority do
   # A genesis is root-eligible when the replica is unbound (legacy) or its audience
   # matches the replica's root commitment.
   defp root_matches?(nil, _audience), do: true
+  defp root_matches?(:malformed_root_claim, _audience), do: false
   defp root_matches?(commitment, audience), do: root_tag(audience) == commitment
 
   # Replica root commitment plus delegation ids introduced by the two operations
   # that deliberately carry root-less self-issues.
   defp deleg_context(%Log{} = log, ordered) do
-    {replica_commitment(log.replica), genesis_deleg_ids(ordered), succession_deleg_ids(ordered)}
+    {root_commitment(log.replica), genesis_deleg_ids(ordered), succession_deleg_ids(ordered)}
   end
 
   defp genesis_deleg_ids(ordered) do
@@ -208,7 +224,7 @@ defmodule Lattice.Authority do
       not (is_nil(genesis.parent_id) and genesis.issuer == genesis.audience) ->
         {:error, :bad_genesis}
 
-      not root_matches?(replica_commitment(replica), genesis.audience) ->
+      not root_matches?(root_commitment(replica), genesis.audience) ->
         {:error, :impostor_genesis}
 
       not Enum.all?(chain, &Delegation.valid_sig?/1) ->

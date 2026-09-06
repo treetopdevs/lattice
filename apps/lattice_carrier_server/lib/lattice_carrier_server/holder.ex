@@ -13,6 +13,7 @@ defmodule LatticeCarrierServer.Holder do
 
   use GenServer
 
+  alias Lattice.Carrier.Wire
   alias Lattice.{Identity, Log, Op, Sync}
   alias LatticeCarrierServer.{Durability, Secret}
 
@@ -20,6 +21,8 @@ defmodule LatticeCarrierServer.Holder do
   @default_persistence_timeout_ms 4_000
   @orphan_cleanup_timeout_ms 250
   @relay_call_slack_ms 750
+  @read_frame_budget 64_000
+  @cursor_byte_budget 512
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts) do
@@ -46,6 +49,13 @@ defmodule LatticeCarrierServer.Holder do
 
   @spec missing_for(GenServer.server(), [Lattice.Op.id()]) :: [Lattice.Op.t()]
   def missing_for(holder, have_ids), do: GenServer.call(holder, {:missing_for, have_ids})
+
+  @doc "Read one byte-budgeted page from a snapshot-bound, stateless continuation."
+  @spec read_page(GenServer.server(), :frontier | :pull, [Op.id()], map() | nil) ::
+          {:ok, map()} | {:error, atom()}
+  def read_page(holder, kind, have_ids, cursor) when kind in [:frontier, :pull] do
+    GenServer.call(holder, {:read_page, kind, have_ids, cursor})
+  end
 
   @spec relay(GenServer.server(), String.t(), Lattice.Op.t()) ::
           {:ok, Sync.report()} | {:error, term()}
@@ -129,6 +139,10 @@ defmodule LatticeCarrierServer.Holder do
     {:reply, Sync.missing(state.log, MapSet.new(have_ids)), state}
   end
 
+  def handle_call({:read_page, kind, have_ids, cursor}, _from, state) do
+    {:reply, build_read_page(state.log, kind, have_ids, cursor), state}
+  end
+
   def handle_call(:state_report, _from, %{state_reporter: nil} = state) do
     {:reply, {:error, :read_only}, state}
   end
@@ -188,6 +202,104 @@ defmodule LatticeCarrierServer.Holder do
       end
 
     {:noreply, %{state | subscribers: subscribers}}
+  end
+
+  defp build_read_page(log, kind, have_ids, cursor) do
+    if is_list(have_ids) and Enum.all?(have_ids, &is_binary/1) do
+      ids = log |> Log.op_ids() |> Enum.sort()
+      have = have_ids |> Enum.uniq() |> Enum.sort()
+      snapshot = page_digest({:carrier_page_v1, kind, log.replica, ids})
+      token = %{"version" => 1, "snapshot" => snapshot}
+      token = if kind == :pull, do: Map.put(token, "have", page_digest(have)), else: token
+      entries = if kind == :pull, do: Sync.missing(log, MapSet.new(have)), else: ids
+
+      with {:ok, offset} <- page_offset(cursor, token, entries, kind) do
+        {:ok, fill_read_page(Enum.drop(entries, offset), kind, token, offset, [], 0)}
+      end
+    else
+      {:error, :malformed}
+    end
+  end
+
+  defp page_offset(nil, _token, _entries, _kind), do: {:ok, 0}
+
+  defp page_offset(cursor, token, entries, kind) when is_map(cursor) do
+    offset = Map.get(cursor, "offset")
+    after_id = Map.get(cursor, "after")
+
+    cond do
+      byte_size(Jason.encode!(cursor)) > @cursor_byte_budget or
+          Enum.sort(Map.keys(cursor)) != Enum.sort(["offset", "after" | Map.keys(token)]) ->
+        {:error, :malformed_cursor}
+
+      cursor["version"] != 1 or not is_integer(offset) or offset <= 0 or
+        not sized_binary?(after_id, 43) or not sized_binary?(cursor["snapshot"], 64) or
+          (kind == :pull and not sized_binary?(cursor["have"], 64)) ->
+        {:error, :malformed_cursor}
+
+      Map.take(cursor, Map.keys(token)) != token ->
+        {:error, :stale_cursor}
+
+      offset > length(entries) or page_entry_id(Enum.at(entries, offset - 1), kind) != after_id ->
+        {:error, :malformed_cursor}
+
+      true ->
+        {:ok, offset}
+    end
+  end
+
+  defp page_offset(_cursor, _token, _entries, _kind), do: {:error, :malformed_cursor}
+
+  defp sized_binary?(value, size), do: is_binary(value) and byte_size(value) == size
+
+  defp fill_read_page([], kind, _token, _offset, encoded, _bytes) do
+    page_reply(kind, Enum.reverse(encoded), nil)
+  end
+
+  defp fill_read_page([entry | remaining], kind, token, offset, encoded, bytes) do
+    value = if kind == :pull, do: Wire.encode_op(entry), else: entry
+    count = length(encoded) + 1
+    candidate_bytes = bytes + byte_size(Jason.encode!(value))
+    cursor = page_cursor(token, offset + count, page_entry_id(entry, kind))
+    next_cursor = if remaining == [], do: nil, else: cursor
+
+    size =
+      byte_size(Jason.encode!(page_reply(kind, [], next_cursor))) + candidate_bytes + count - 1
+
+    cond do
+      size <= @read_frame_budget ->
+        fill_read_page(remaining, kind, token, offset, [value | encoded], candidate_bytes)
+
+      encoded == [] ->
+        # A single oversized op cannot fit any page. Emit it once rather than loop
+        # on an empty continuation; clients retain their explicit frame refusal.
+        page_reply(kind, [value], next_cursor)
+
+      true ->
+        previous_id = if kind == :pull, do: hd(encoded)["id"], else: hd(encoded)
+        cursor = page_cursor(token, offset + count - 1, previous_id)
+        page_reply(kind, Enum.reverse(encoded), cursor)
+    end
+  end
+
+  defp page_reply(kind, entries, cursor) do
+    reply =
+      if kind == :pull,
+        do: %{"type" => "ops", "ops" => entries},
+        else: %{"type" => "frontier_result", "ids" => entries}
+
+    if cursor, do: Map.put(reply, "next_cursor", cursor), else: reply
+  end
+
+  defp page_cursor(token, offset, after_id) do
+    Map.merge(token, %{"offset" => offset, "after" => after_id})
+  end
+
+  defp page_entry_id(%Op{id: id}, :pull), do: id
+  defp page_entry_id(id, :frontier), do: id
+
+  defp page_digest(term) do
+    :crypto.hash(:sha256, :erlang.term_to_binary(term)) |> Base.encode16(case: :lower)
   end
 
   defp unwrap_identity(%Secret{} = secret), do: Secret.unwrap(secret)

@@ -1,5 +1,15 @@
 export type OpKind = "command" | "authority" | "inbox" | "tombstone";
-export type Mutation = "write" | "append" | "add" | "remove" | "delete";
+export type Mutation = "write" | "append" | "insert" | "add" | "remove" | "delete" | "edit";
+export interface CommandEffect {
+    field: string;
+    mutation: Mutation;
+    value: unknown;
+}
+/** One semantic effect for old input, complete ordered effects for new commands. */
+export declare function effectsFor(op: Op): readonly CommandEffect[];
+/** Internal reduction views retain their original signed ID and DAG edges. */
+export declare function effectViews(op: Op): Op[];
+export declare function effectElementId(op: Op, counts: ReadonlyMap<string, number>): string;
 export type CommandError = "unknown_command" | "bad_command_arity" | "malformed_command";
 export interface AuthorityDelegationEvidence {
     id: string;
@@ -143,6 +153,16 @@ export interface Op {
     mutation: Mutation;
     /** The value written / appended / added / removed. */
     value: unknown;
+    /** Full command effects; never additional operations or DAG nodes. */
+    effects?: CommandEffect[];
+    /** Internal ordered-effect view index, absent from retained frames. */
+    effectIndex?: number;
+    /** Product-decoded command arguments retained for causal application policy. */
+    commandArgs?: unknown[];
+    /** Original signer, independent of display realm labels. */
+    authorPubkey?: string;
+    /** Explicit product decoder provenance; never inferred from overlapping names. */
+    decodedProduct?: string;
     /**
    * Ordering key from Elixir, used ONLY as the LWW/order tiebreak in Tier A.
    * Today this is the opaque op id because Elixir reduces by `{height, op.id}`.
@@ -180,3 +200,5 @@ export interface CustodyConsentEvidence {
 }
 /** Compare two opaque ordering keys. Returns >0 if a>b. */
 export declare function cmpHash(a: string, b: string): number;
+/** BEAM binary order for product values; opaque legacy ordering stays unchanged. */
+export declare function compareUtf8(a: string, b: string): number;

@@ -24,9 +24,10 @@
 // reduces to no conflicts, exactly like the BEAM default callbacks.
 import { concurrent } from "./dag";
 import { cmpHash } from "./op";
+import { treehouseCommandOpStatus } from "./treehouse";
 /** True iff `schema` declares an application-policy conjunct at all. */
 export function hasApplicationPolicy(schema) {
-    return schema.name === "PolicyFixture";
+    return schema.name === "PolicyFixture" || schema.name === "Treehouse.Space" || schema.name === "Treehouse.Thread";
 }
 /**
  * The replica's causal-context command validity conjunct (Plan 158 Wave A2's
@@ -35,6 +36,8 @@ export function hasApplicationPolicy(schema) {
  * set — see `isQuarantined` in quarantine.ts, the sole caller.
  */
 export function commandOpStatus(schema, op, visibleIds, context) {
+    if (schema.name === "Treehouse.Space" || schema.name === "Treehouse.Thread")
+        return treehouseCommandOpStatus(schema, op, visibleIds, context);
     if (schema.name === "PolicyFixture") {
         return policyFixtureCommandOpStatus(op, visibleIds, context);
     }

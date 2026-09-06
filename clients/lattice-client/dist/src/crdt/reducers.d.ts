@@ -10,6 +10,6 @@ export declare function lww(writers: Op[], depthOf: (id: string) => number): {
     winner: string | null;
 };
 /** OR-set: add-wins observed-remove set, with add ops as tags. */
-export declare function orSet(fieldOps: Op[], byId: Map<string, Op>): unknown[];
+export declare function orSet(fieldOps: Op[], byId: Map<string, Op>, compare?: (a: unknown, b: unknown) => number): unknown[];
 /** Causal list: appended values ordered by `{causal height, op id}` (Sim's sort key). */
 export declare function causalList(fieldOps: Op[], depthOf: (id: string) => number): unknown[];
