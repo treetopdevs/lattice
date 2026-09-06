@@ -85,6 +85,11 @@ original explicit command ceiling and canonical genesis rather than deriving
 a broader grant from the expanded command registry. R11a implements the local
 bootstrap/catalog trust seam; R11c owns replacement activation. This vocabulary
 adoption is not a claim that either workflow or a community profile is enabled.
+The integrator's 2026-09-06 state-compatibility correction preserves existing
+materialized fields: each command writes its name through `admin_actions`, and
+catalog-control queries derive the complete record only from actually honored
+authenticated command bodies. Do not introduce a `catalog_controls` field or
+change the existing LWW marker into a list.
 
 Thread commands:
 

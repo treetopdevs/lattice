@@ -129,9 +129,12 @@ limitation, not a new authority or compaction rule.
 
 ### Root bootstrap
 
-Add the exact Space command `catalog_bootstrap_v1(record)`. Its ordered effects
-append the complete record to a new `catalog_controls` causal list and write
-`admin_actions`. The ordinary cap/holder gate applies; application validation
+Add the exact Space command `catalog_bootstrap_v1(record)`. It writes its ordinary
+command-name marker to the existing `admin_actions` LWW field. The complete signed
+record remains in its immutable command body. A pure query extracts catalog
+controls only from authenticated operations actually honored by the authority
+judge; there is no new materialized field or duplicated side log. The ordinary
+cap/holder gate applies; application validation
 additionally requires the raw author to equal the immutable Space root. It must
 be signed while that root is available, before operator provisioning.
 
@@ -233,8 +236,9 @@ service identity. Same-key encrypted restore does not create a rotation record.
 ## 3. Replacement authorized by bounded Space admin
 
 Add the exact Space command
-`replace_catalog_v1(claim, catalog_possession, service_possession)`. It appends the
-complete proposed transition to `catalog_controls` and writes `admin_actions`.
+`replace_catalog_v1(claim, catalog_possession, service_possession)`. It writes its
+ordinary command-name marker to `admin_actions`; its complete signed transition
+is extracted from the honored raw command body by the same pure query.
 It does not mutate another replica's root, a membership row or a semantic grant.
 The old catalog and service private keys are not inputs.
 
@@ -620,6 +624,12 @@ new named review boundary. This document contains no adopted field measurement,
 device attestation result or permission to enable an incomplete profile.
 
 The original review and correction are preserved at `0666e726` and `789ab235`.
+On 2026-09-06 the integrator adopted the narrower state-compatibility amendment:
+catalog controls come from honored signed command history, preserving all existing
+materialized field types and empty-state/vector shapes. This corrects the reviewed
+draft's proposed `catalog_controls` field and two-effect wording. The final
+implementation review must check this explicit correction; closed command bytes,
+permissions and retained-history requirements are unchanged.
 The final follow-up resolved all five original findings. Its one advisory
 frontier-width point is addressed in section 2 with the integrator-adopted
 bounded operational disposition. C01–C15 remain OPEN until their implementation
