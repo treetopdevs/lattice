@@ -75,7 +75,7 @@ defmodule Treehouse.TransportCatalog do
     if fields?(value, @catalog_fields) and value.version == 1 and value.product == :treehouse and
          text?(value.space) and id?(value.bootstrap) and id?(value.binding) and
          integer?(value.revision) and previous?(value.revision, value.previous) and
-         entries?(value.entries),
+         entries?(value.entries) and catalog_consistent?(value),
        do: {:ok, value},
        else: {:error, :malformed_catalog}
   end
@@ -140,10 +140,16 @@ defmodule Treehouse.TransportCatalog do
   defp entries?(values) when is_list(values) and length(values) in 1..13 do
     Enum.all?(values, &entry?/1) and Enum.count(values, &(&1.kind == :space)) == 1 and
       ordered_unique?(Enum.map(values, & &1.replica)) and
-      length(Enum.uniq_by(values, & &1.route)) == length(values)
+      length(Enum.uniq_by(values, & &1.route)) == length(values) and
+      length(Enum.uniq_by(values, &{&1.service_id, &1.service_key})) == 1
   end
 
   defp entries?(_), do: false
+
+  defp catalog_consistent?(catalog) do
+    space = Enum.find(catalog.entries, &(&1.kind == :space))
+    space.replica == catalog.space and space.reference == catalog.bootstrap
+  end
 
   defp entry?(value) do
     fields?(value, @entry_fields) and value.product == :treehouse and text?(value.replica) and
