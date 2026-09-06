@@ -1,18 +1,20 @@
 # Treehouse bounded continuation: R04 contract and evidence
 
 Status: **contract adopted after integrator and Claude Fable design review;
-atomic BEAM/TS implementation verified locally and ready for exact implementation
-review and hosted integration. No product profile
+atomic BEAM/TS implementation and arity follow-up passed exact Fable review.
+Final dependency integration is locally verified and awaits its bounded review
+and hosted integration. No product profile
 or production group is enabled by this packet.** Preparation base:
 `389e9d4e520a9119913bfad591bc3c3f95ad12f8`; combined implementation base:
 `d52366193c091aec0cf69598f44c10b9f718f124`.
 This resolves the choices left by [R02](treehouse_founder_lifecycle.md) and
 [unified R04](../../plans/roadmaps/treehouse-unified-2026-09-06.md#authority-contract-r02r04).
 The accompanying [five probes](../../apps/lattice_core/test/treehouse/bounded_continuation_probe_test.exs)
-characterize the unchanged legacy behavior. The implementation uses final R03
+characterize the unchanged legacy behavior. The original implementation used R03
 `e08e3995bf562035bd36593687bd0e55ddd5f59e` and R09
 `7f984d4482cd55d06ad437e8fcf7309b8bdd606f`, including R07/R08 ancestry. Section 8
 preserves preparation evidence; section 9 records implementation proof and limits.
+Section 10 records the final dependency integration without replacing that history.
 
 ## 1. Evidence that determines the boundary
 
@@ -622,3 +624,35 @@ scope. Claude Fable's design and exact implementation PASS records are separate
 from final integrator review of the narrow P2 correction. Local gates do not
 substitute for hosted checks, actual R10 product-schema integration, or
 native/device evidence.
+
+## 10. Final dependency integration, 2026-09-06
+
+The exact implementation/arity follow-up at `75e544d2` passed Claude Fable
+review. Integration `c2d85b9219f03521b7fb78a892b36882961f8789` adds final R09
+`29fe54f3` (including accepted main `9bb7b340` and R06 verified restore) and R03
+hosted remediation `4a823b96`. R03's final review/hosted closure remains separate;
+this local integration does not declare that dependency complete.
+
+The manual merge preserves R04's raw body/replica continuation parsing and inner
+refusal adapter while using R03's contextual `decodeCarrierBody`. It combines
+the authoring-test imports without duplicates. All three BEAM beacon-policy
+collection calls, including `continuation_review_from_log`, now pass the resolved
+root. No R10 product/effects implementation is included in this R04 packet.
+R06's restored authentication/consumer changes are retained; Log differs from
+the accepted restore baseline only by the required R03/R04 policy vocabulary.
+
+At that exact integration, full `mix check` exits 0 with **772 tests and 27
+properties, zero failures**, the same three exclusions, clean formatting and
+strict Credo exit 0. Existing low-priority suggestions remain; lint configuration
+is unchanged. The gate uses the documented asdf/OTP 28 PATH and `+S 4:4`.
+TS typecheck, build, conformance (including 57 continuation histories and the new
+R03 vectors) and Township authoring all pass. Logs are
+`/tmp/lattice-treehouse-execution-20260906/r04-final-accepted-check.log`,
+`r04-final-r03-conformance.log` and `r04-final-r03-authoring.log` in that directory.
+The exact manual-resolution artifact is `r04-final-r03-manual-resolution.diff`.
+
+The separate engine integration `90a07e2b` exercises R04 with R10's actual
+Space commands and ordered effects. Its product evidence belongs to the R10
+packet. Final integration review, exact PR-tip checks and merge-result checks
+remain required before this R04 packet is DONE. No device or founder-loss pilot
+proof follows from these local tests.
