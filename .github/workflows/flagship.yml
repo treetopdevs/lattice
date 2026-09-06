@@ -167,6 +167,9 @@ jobs:
           npm run catalog:bootstrap
           npm run catalog:codec
           npm run continuation:profile
+      - name: TS Treehouse domain and authority review
+        working-directory: clients/lattice-client
+        run: npm run treehouse
       - name: TS V-01 authority fail-closed guard
         working-directory: clients/lattice-client
         run: npm run v01:guard
