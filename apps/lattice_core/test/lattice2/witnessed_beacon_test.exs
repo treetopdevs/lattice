@@ -3,6 +3,7 @@ defmodule Lattice2.WitnessedBeaconTest do
 
   alias Lattice.{Authority, Canonical, Identity, Log, Op, Sim, Sync}
   alias Lattice.Authority.{BeaconCertificate, Delegation}
+  alias Lattice.Carrier.Wire
   alias Township.Matter
 
   @realms ["clerk", "resident", "w0", "w1", "w2", "w3", "outsider"]
@@ -157,6 +158,37 @@ defmodule Lattice2.WitnessedBeaconTest do
     invalid_analysis = Authority.analyze(Matter, Log.append!(log, invalid))
     assert invalid_analysis.reasons[invalid.id] == :unauthorized_beacon
     assert {:error, :unauthorized_beacon} = BeaconCertificate.verify(received, claim, policy(sim))
+  end
+
+  test "raw duplicate outer dependencies stay authenticated and effective after wire decoding" do
+    sim = town()
+    {sim, lease} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 3)
+    sim = Sim.sync_all(sim)
+    base = Sim.log(sim, "w0")
+    signed = certificate(sim, "w0", 4)
+    author = Sim.identity(sim, "w0")
+    original = Op.new(author, sim.replica, signed.claim.deps, :authority, {:beacon, 4, signed})
+    duplicate_deps = original.deps ++ original.deps
+    frame = original |> Wire.encode_op() |> Map.put("deps", duplicate_deps)
+    assert {:ok, decoded} = Wire.decode_op(frame)
+    assert decoded.deps == duplicate_deps
+    assert decoded.id == original.id and decoded.sig == original.sig
+    assert Op.valid?(decoded)
+    assert {:ok, log} = Log.accept(base, decoded)
+    assert log.ops[decoded.id].deps == duplicate_deps
+    refute Map.has_key?(Authority.analyze(Matter, log).reasons, decoded.id)
+    assert Authority.expired?(log, lease.id)
+
+    invalid_claim = %{signed.claim | deps: duplicate_deps}
+
+    invalid_cert =
+      BeaconCertificate.new(invalid_claim, Enum.map(["w0", "w1"], &Sim.identity(sim, &1)))
+
+    invalid = Op.new(author, sim.replica, original.deps, :authority, {:beacon, 4, invalid_cert})
+    assert Op.valid?(invalid)
+    assert {:ok, refused_log} = Log.accept(base, invalid)
+    assert Authority.analyze(Matter, refused_log).reasons[invalid.id] == :unauthorized_beacon
+    refute Authority.expired?(refused_log, lease.id)
   end
 
   test "exact high legacy root epochs constrain descendants without constraining concurrent forks" do
