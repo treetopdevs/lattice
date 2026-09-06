@@ -85,7 +85,7 @@ Rows are the authoritative dependency graph. Commas mean all prerequisites. “N
 | R17b | Native witness signing / native custody | L | High | R17a, R01b, R03, R14 | Claim verification, protected signing, consent/replay negatives | PLANNED |
 | R17c | Independent witness proof / device QA | M | High | R17b | Physical custody/presence evidence for the selected Android profile | PLANNED |
 | R18 | Founder and combined loss / recovery | M | High | R04, R11c, R15, R16, R17c | Packaged loss with physical witnesses; independent retained trust | PLANNED |
-| R19a | AF-3 contract / identity | M | High | R01a, R02 | Adopted vouch, conflict, possession and lost-loan rules | IN PROGRESS |
+| R19a | AF-3 contract / identity | M | High | R01a, R02 | Adopted vouch, conflict, possession and lost-loan rules | DONE |
 | R19b | AF-3 semantics / identity + parity | L | High | R19a, R04, R10 | Core founder-present/absent re-admission with negative controls | PLANNED |
 | R20 | New-phone re-admission / product | M | High | R14, R19b | Packaged AF-3, old-key return, visible unresolved grants | PLANNED |
 | R21a | WSS/restore artifacts / operations | M | Medium | R05, R06, R08, R09, R11c | Reproducible deployment/runbook and local restore checks | PLANNED |
@@ -113,9 +113,9 @@ Rows are the authoritative dependency graph. Commas mean all prerequisites. “N
 ### Execution evidence (2026-09-06)
 
 This table is the current evidence snapshot; earlier revision evidence remains in
-Git history and each packet's source plan. R01a, R01c, R02, R05, R06, R07, R08, R09 and R17a have
+Git history and each packet's source plan. R01a, R01c, R02, R05, R06, R07, R08, R09, R17a and R19a have
 both final-tip and exact merge-result hosted gates closed. R02 closes its software
-contract and R17a closes its native design; physical selection and implementation
+contract, R17a its native design and R19a its member-continuity contract; physical selection and implementation
 retain their separate gates. `LOCAL VERIFIED` still
 requires every remaining integration/review/hosted gate. Distribution jobs skipped
 without protected pilot inputs establish no signed pilot artifact or physical result.
@@ -138,7 +138,7 @@ A passing review or a green path-filtered status is not a substitute for the req
 | R11a/b/c | Foundation `6885a25a5cae9770315b0df679ff70e5164fc126` / [78](https://github.com/treetopdevs/lattice/pull/78); [reviewed lifecycle contract](sources/treehouse-catalog-reviewed-2026-09-06.md) and [adoption patch](sources/treehouse-catalog-adoption-2026-09-06.patch) | Contract Fable PASS; Sol cutoff/entry/integrated foundation PASS. Foundation full suite: 856 tests + 27 properties; 75 prior top-level vectors byte-identical; fresh reciprocal cutoff gate and exact tip run 34064596153 passed. Separate unpublished retained-trust evaluator is under repair after Sol found saved corruption masked by a freeze; historical-freeze evidence amendment adopted before repair. Real durable CAS, provisioning, reconciliation and replacement remain unfinished; C01–C15 OPEN |
 | R12 | `bfb6bc07fe9096e2987bf1b49c72a39970dc25f2` / [76](https://github.com/treetopdevs/lattice/pull/76) | Fable implementation PASS; Sol final integration/AX harness repair PASS. Full suite: 809 tests + 27 properties plus client/preview/Vue gates. Exact repaired-tip run 34063793972 passed real empty UI, draft/post/edit/archive, retained restart and BEAM replay. Earlier run 34062001387 failed an AX lookup; failure retained, only proven pre-action lookups retried. Local rebuilt retained-identity replay awaits user-side Keychain approval. Parent/merge gates remain |
 | R17a | `0cdf8b6f9b9522b3a3ce06273c53840b82270335` / [66](https://github.com/treetopdevs/lattice/pull/66) | DONE: Fable decision/eligibility PASS; Sol final connected-history admission PASS. Exact tip run 34061332198 and merge `1026406b58266a95270c425df42e6b7749e7260f` / run 34064017804 passed. Design completion does not implement native authority verification, prove hardware eligibility or enable profiles |
-| R19a | `ae37bfd445e5ce0cc48c9b7f2b701d8746bd8df9` / [75](https://github.com/treetopdevs/lattice/pull/75) | Fable exact continuity design PASS; Sol four-document adoption PASS; seven documentation links/fences and exact tip run 34061740955 passed. Merge `413425da3b147afe8a3e016dedbc5b6bbdb0bc4d` / run 34065326328 in progress. All 17 A01–A17 implementation cases remain OPEN for R19b/R20 |
+| R19a | `ae37bfd445e5ce0cc48c9b7f2b701d8746bd8df9` / [75](https://github.com/treetopdevs/lattice/pull/75) | Fable exact continuity design PASS; Sol four-document adoption PASS; seven documentation links/fences and exact tip run 34061740955 passed. DONE (design only): merge `413425da3b147afe8a3e016dedbc5b6bbdb0bc4d` / run 34065326328 passed. All 17 A01–A17 implementation cases remain OPEN for R19b/R20 |
 | Independent native prompt | `0e942f2c6404130f5dcebda9bd754883846df6bd` / [67](https://github.com/treetopdevs/lattice/pull/67) | Constant reason, hostile-input negatives, Fable PASS and 68 Rust tests. Tip run 34037880177 passed. Merge `cba32f3b3a7634801c2474df317c36a12b7ebed9` / run 34047317736 attempt 2 passed. Attempt 1 generator failure preserved; independently reviewed test-only repair [72](https://github.com/treetopdevs/lattice/pull/72), merge `c22272ec2826aa3213e5a6b33e32b22c9c8a58cf` / run 34052205823 passed. No native semantic-verification claim |
 | R36 | Stage 1 `4434a02000e1b35211910edb45ef9b38fafdd5d4` / [77](https://github.com/treetopdevs/lattice/pull/77) | Private custody/provider boundary: Fable preparation PASS, Sol implementation/final integration PASS, 82 default / 83 permitted-feature Rust tests and integrated 809 tests + 27 properties passed. Exact tip run 34063968821 passed. Android Stage 2 design reviewed by actual Fable and adopted before its first implementation slice. Protected Android generation, independent attestation, physical eligibility and full R36 closure remain open |
 
