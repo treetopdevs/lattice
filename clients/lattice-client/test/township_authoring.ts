@@ -3,11 +3,13 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
+import { ed25519 } from "@noble/curves/ed25519.js";
 import {
   authorCarrierOp,
   frontier,
   materialize,
   decodeCarrierOpFrame,
+  verifyCarrierOp,
   authorAndPersistTownshipCommand,
   authorAndPersistTownshipDelegation,
   canonicalBytesForCarrierDelegation,
@@ -637,6 +639,68 @@ if (malformedPolicyFrame.body[0] !== "tuple" || malformedPolicyFrame.body[1][2]?
 let malformedPolicyRefused = false;
 try { decodeCarrierOpFrame(malformedPolicyFrame); } catch { malformedPolicyRefused = true; }
 check("contextual policy decode keeps malformed map-pair refusal", malformedPolicyRefused, true);
+
+// Reserved metadata invalidity must stay local to its policy/certificate.
+const wideBeaconInteger: CarrierTerm = ["int", "9007199254740992"];
+const validPolicyTerm: ["map", [CarrierTerm, CarrierTerm][]] = ["map", [
+  [["atom", "mode"], ["atom", "witnessed"]], [["atom", "version"], ["int", 1]],
+  [["atom", "witnesses"], ["list", witnessKeys.map((key) => ["bin", key])]],
+  [["atom", "threshold"], ["int", 2]], [["atom", "max_epoch_step"], ["int", 10]],
+]];
+const invalidPolicyTerms: CarrierTerm[] = [
+  ["map", [...validPolicyTerm[1], [["atom", "extra"], wideBeaconInteger]]],
+  ["map", validPolicyTerm[1].filter(([key]) => key[1] !== "mode").map(([key, value]) =>
+    [key, key[1] === "version" ? wideBeaconInteger : value])],
+  ["map", [...validPolicyTerm[1], [["atom", "extra"], ["list", [["map", [
+    [["atom", "nested"], wideBeaconInteger],
+  ]]]]]]],
+  wideBeaconInteger,
+];
+for (const [caseIndex, policy] of invalidPolicyTerms.entries()) {
+  const frame = await authorCarrierOp({ replica: beaconVector.replica, deps: [beaconGenesis.id],
+    signer: beaconFounder, kind: "authority", cap: ["nil"], body: ["tuple", [
+      ["atom", "genesis"], ["delegation", beaconGenesisDelegation], ["map", [
+        [["atom", "__beacon__"], policy],
+        [["atom", "clerk"], ["map", [
+          [["atom", "successor"], ["bin", leaseIssuer.publicKeyBase64]],
+          [["atom", "dormant_ticks"], ["int", 0]],
+        ]]],
+      ]],
+    ]] });
+  await checkMetadataFrame(frame, `invalid policy ${caseIndex}`, undefined);
+  const decoded = carrierOpsToSemanticOps([frame], beaconVector.realmByPubkey)[0]!;
+  check(`invalid policy ${caseIndex} preserves another valid policy`,
+    decoded.authority?.type === "genesis" ? decoded.authority.policies?.clerk?.mode : undefined, "legacy");
+}
+const validClaimBody = beaconClaimBody(claim, entries.map((entry) => ({ witness: entry.publicKeyBase64,
+  signature: Buffer.from(entry.sign(claimPayload)).toString("base64") })));
+if (validClaimBody[0] !== "tuple" || validClaimBody[1][2]?.[0] !== "map") throw new Error("claim fixture");
+const validCertificate = validClaimBody[1][2];
+const rawClaim = validCertificate[1].find(([key]) => key[0] === "atom" && key[1] === "claim")![1];
+if (rawClaim[0] !== "map") throw new Error("claim fixture");
+const invalidCertificates: CarrierTerm[] = [
+  ["map", validCertificate[1].map(([key, value]): [CarrierTerm, CarrierTerm] => [key, key[1] === "claim"
+    ? ["map", rawClaim[1].map(([field, fieldValue]): [CarrierTerm, CarrierTerm] => [field, field[1] === "version" ? wideBeaconInteger : fieldValue])]
+    : value])],
+  ["map", [...validCertificate[1], [["atom", "extra"], ["list", [wideBeaconInteger]]]]],
+  ["map", [[["atom", "signatures"], ["list", [wideBeaconInteger]]]]],
+  wideBeaconInteger,
+];
+for (const [caseIndex, certificate] of invalidCertificates.entries()) {
+  const frame = await authorCarrierOp({ replica: beaconVector.replica, deps: claim.deps,
+    signer: claimWitness, kind: "authority", cap: ["nil"],
+    body: ["tuple", [["atom", "beacon"], ["int", claim.epoch], certificate]] });
+  await checkMetadataFrame(frame, `invalid certificate ${caseIndex}`, "unauthorized_beacon");
+}
+async function checkMetadataFrame(frame: CarrierOpFrame, label: string, reason: string | undefined) {
+  check(`${label} raw hash and signature`, (await verifyCarrierOp(frame, { verify: async (pub, bytes, sig) =>
+    ed25519.verify(sig, bytes, Buffer.from(pub, "base64"), { zip215: false }) })).valid, true);
+  let decoded: CarrierOpFrame | undefined;
+  try { decoded = decodeCarrierOpFrame(frame); } catch { /* Assertion below records the strict boundary RED. */ }
+  check(`${label} strict decoder preserves the original frame`, decoded, frame);
+  const ops = carrierOpsToSemanticOps([...claimFrames, frame], beaconVector.realmByPubkey);
+  check(`${label} semantic refusal stays local`, materialize(beaconVector.schema, ops).quarantineReasons.get(frame.id), reason);
+}
 
 function beaconClaimBody(claim: WitnessedBeaconClaimEvidence,
   signatures: { witness: string; signature: string }[]): CarrierTerm {

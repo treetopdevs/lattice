@@ -1954,3 +1954,35 @@ reaching the claim assertion; its output is preserved separately, and the
 final RED above reaches all eight behavioral failures without that error.
 Final independent exact-diff review, integration and hosted thread closure
 remain pending. Earlier review PASS records do not close this remediation.
+
+### Reserved beacon metadata follow-up scope (2026-09-06)
+
+The integrator approved this exact amendment before the next RED gate for
+PR68 threads `PRRT_kwDOSZGqLc6ft151` and `PRRT_kwDOSZGqLc6ft157`. The earlier
+`201e7ae6..4a823b96` review snapshot remains immutable; this is a separate delta.
+An otherwise well-formed exact authority/genesis body may decode canonical tagged
+uint64 values above the JavaScript safe horizon anywhere within its reserved
+`__beacon__` policy value, including missing, extra, or nested fields. Those
+integers become a private invalid-metadata sentinel solely in semantic decoding;
+the full surrounding shape remains available for the existing policy normalizer
+to reject. No sentinel represents a valid nullable field or numeric value.
+Other valid policies and the genesis itself retain BEAM's existing behavior.
+
+For an exact three-field beacon, certificate-local non-epoch metadata may use
+the same decoder so invalid certificates retain `unauthorized_beacon`. A direct
+integer at the exact `certificate.claim.epoch` map path remains subject to the
+portable horizon even if the surrounding maps contain extra fields. The outer
+body epoch remains generically decoded. Canonical integer syntax and uint64
+maximum, unrelated generic terms, term grammar, Base64, depth bounds, and every
+raw body/ID/signature byte retain their existing checks. No BEAM production
+authority, wire encoder, or canonical encoder changes are authorized here.
+
+The exact source scope is the private contextual adapter and term decoder in
+`clients/lattice-client/src/carrier.ts`, with public signed RED/GREEN controls
+in the existing Township authoring/conformance harness, new BEAM exporter cases
+and their vector files, normal generated dist, and this plan's evidence. Tests
+cover missing/extra/nested invalid metadata, preservation of unrelated valid
+policy behavior, direct claim/body overflow, malformed syntax/grammar/Base64,
+and valid controls. Existing vectors, protected tests, shared README, roadmap
+ledger and sibling worktrees remain untouched. The final follow-up review must
+inspect this contextual adapter's complete scope, not just the two examples.
