@@ -83,6 +83,16 @@ defmodule Treehouse.ContinuationProductIntegrationTest do
     {:succeed, :admin, new_cap, _certificate} = acquired.body
     sim = Sim.sync_all(sim)
 
+    # A new signed wrapper cannot reuse consent for the preceding acquisition
+    # and frontier. Keep the authentic refused operation in the product history.
+    {sim, replayed_consent} = Sim.append(sim, "nominee", :authority, acquired.body)
+
+    assert {true, :invalid_continuation_certificate} ==
+             Sim.quarantined(sim, "nominee", replayed_consent.id)
+
+    sim = Sim.sync_all(sim)
+    assert Authority.holder_epoch(Space, Sim.log(sim, "nominee"), :admin).op_id == acquired.id
+
     {sim, stale} =
       Sim.command(sim, "holder", :create_thread, ["thread:stale", "Must not appear"],
         cap: old_cap.id
@@ -140,7 +150,11 @@ defmodule Treehouse.ContinuationProductIntegrationTest do
         adminAction: state.admin_actions,
         holder: Base.encode64(Sim.identity(sim, "nominee").pub),
         acquisition: acquired.id,
-        reasons: %{stale.id => "not_holder", expired.id => "lease_expired"}
+        reasons: %{
+          replayed_consent.id => "invalid_continuation_certificate",
+          stale.id => "not_holder",
+          expired.id => "lease_expired"
+        }
       })
     )
 
