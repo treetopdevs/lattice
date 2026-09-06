@@ -1,8 +1,7 @@
 defmodule Treehouse.ContinuationProfileObservationTest do
   use ExUnit.Case, async: true
 
-  alias Lattice.{Authority, Log, Sim}
-  alias Lattice.Authority.ContinuationCertificate
+  alias Lattice.{Authority, Canonical, Log, Sim}
   alias Treehouse.ContinuationFixtures, as: F
 
   test "a later metadata-only root pin is observed without inventing a continuation candidate" do
@@ -17,7 +16,7 @@ defmodule Treehouse.ContinuationProfileObservationTest do
                   replica: sim.replica,
                   root: Sim.identity(sim, "founder").pub,
                   profile_genesis: pin.id,
-                  profile_id: ContinuationCertificate.profile_id(profile),
+                  profile_id: F.digest(Canonical.term(["lattice-continuation-profile-v1", profile])),
                   profile: profile,
                   verified_frontier: Log.frontier(log)
                 }}

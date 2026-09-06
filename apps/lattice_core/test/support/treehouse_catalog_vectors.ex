@@ -66,8 +66,9 @@ defmodule Treehouse.CatalogVectors do
       nominee: nominee.pub, witnesses: Enum.sort(Enum.map(witnesses, & &1.pub)), threshold: 2, max_lease_epochs: 7}
     empty = Delegation.genesis(root, replica, ops: [], roles: [], live: false)
     pin = Op.new(root, replica, [creation.id], :authority, {:genesis, empty, %{__continuation__: profile}})
+    {:ok, profile_id} = ContinuationCertificate.profile_id(profile)
     record = %{version: 1, product: :treehouse, space: replica, space_root: root.pub,
-      profile_genesis: pin.id, profile_id: ContinuationCertificate.profile_id(profile), replacement_rule: :bounded_space_admin_v1,
+      profile_genesis: pin.id, profile_id: profile_id, replacement_rule: :bounded_space_admin_v1,
       catalog_key: catalog.pub, service_id: id("history-service"), service_key: service.pub,
       origin: "wss://history-relay.invalid", nonce: id("history-bootstrap")}
     bootstrap = Op.new(root, replica, [pin.id], :command, {:catalog_bootstrap_v1, [record]}, cap: delegation.id)
