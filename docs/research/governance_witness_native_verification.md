@@ -450,9 +450,27 @@ Incoming admission-journal recovery is a separate transaction type.
 
 ## Android eligibility and evidence order
 
-Current AOSP registers an ED25519 key generator. That does not establish an API33
-hardware guarantee or demonstrate Ed25519 plus per-use authentication and
-attestation on the selected device. [AOSP provider change](https://android.googlesource.com/platform/frameworks/base/+/2c68aa6bc7d3).
+**2026-09-06 eligibility correction:** this documentation-only amendment makes
+R17a/R36's existing opaque Ed25519 requirement executable against the public
+Android API. It supplies no native implementation or physical eligibility result.
+
+Android 13/API33 supplies the Ed25519 signing path, with Curve25519 hardware
+support introduced by KeyMint v2. Use
+`KeyPairGenerator.getInstance("EC", "AndroidKeyStore")` with
+`KeyGenParameterSpec` and `ECGenParameterSpec("ed25519")`; the explicit
+`"Ed25519"` generator alias was added later. Do not initialize this provider with
+bare `NamedParameterSpec`, infer hardware eligibility from an API level or alias,
+or fall back to another provider. The selected device must pass the full combined
+probe below. [Android13 generator](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r1/keystore/java/android/security/keystore2/AndroidKeyStoreKeyPairGeneratorSpi.java),
+[Android13 signing provider](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r1/keystore/java/android/security/keystore2/AndroidKeyStoreBCWorkaroundProvider.java),
+[later generator alias](https://android.googlesource.com/platform/frameworks/base/+/2c68aa6bc7d30124fd27a1d00508722823e1768e).
+
+This Ed25519 profile targets TEE (`TRUSTED_ENVIRONMENT`). AOSP excludes
+Curve25519 from StrongBox; do not request StrongBox or use its feature flag as
+eligibility evidence. Generate with `PURPOSE_SIGN` and `DIGEST_NONE`, not key
+agreement or `PURPOSE_ATTEST_KEY`. Attestation of this signing key is requested
+through the generation challenge; making the witness an attestation signing key
+is a different purpose. [Pinned KeyMint contract](https://android.googlesource.com/platform/hardware/interfaces/+/c07fb30b8f0d50fe8f800562cff42de5a8dc8188/security/keymint/aidl/android/hardware/security/keymint/IKeyMintDevice.aidl).
 
 R01b first adopts this fail-closed eligibility contract and native scope. R36 then
 runs preliminary eligibility on the proposed physical devices **before key pinning**;
@@ -462,19 +480,52 @@ back into the earlier R01b approval, and preliminary custody is not final R17c p
 
 Eligibility requires actual platform Ed25519 generation and a fresh, key-bound,
 per-operation authenticated signing round trip with no seed transit or software
-fallback. An independent validator must check the fresh challenge, actual witness
-public key, chain signatures, current trusted roots/revocation, and the correct
+fallback. An independent validator must check the fresh generation challenge at
+initial provisioning, the actual witness public key, chain signatures, current
+trusted roots/revocation, and the correct
 first trustworthy attestation extension; it must not blindly inspect only the leaf.
 [Android attestation validation](https://developer.android.com/privacy-and-security/security-key-attestation).
 
 Require both attestation and key security level (KeyMint/Keymaster field for the
-schema version) to be TEE or StrongBox, generated origin, Ed25519/signing purpose,
-hardware-enforced per-use authentication rather than a reusable time window, and
+schema version) to be TEE for this profile, generated origin, Ed25519/signing
+purpose, hardware-enforced per-use authentication rather than a reusable time window, and
 the expected app package/signing-certificate identity and locked verified boot
 state. Inspect software/hardware authorization lists according to their actual
 schema; an absent or inconsistent required property fails eligibility. Match the
 attested public key to the key that passes the fresh signing challenge.
 [Attestation field schema](https://source.android.com/docs/security/features/keystore/attestation).
+
+Request `setUserAuthenticationRequired(true)` and
+`setUserAuthenticationParameters(0, selectedAuthenticators)`, and bind the actual
+`Signature.getInstance("Ed25519")` operation to `BiometricPrompt.CryptoObject`. The selected
+strong-biometric/device-credential policy must be recorded and tested; a bare
+prompt success, recent unlock, or weak biometric is not a substitute. In the
+KeyMint authorization schema, per-use authentication has hardware-enforced
+`USER_AUTH_TYPE`, absent `NO_AUTH_REQUIRED` and absent `AUTH_TIMEOUT`; the public
+API's timeout `0` does not mean an attested timeout field containing zero.
+`USER_SECURE_ID` is deliberately non-attested and must not be required in the
+certificate. Require positive authentication evidence and reject inconsistent
+lists; these documented absences do not permit absent authentication requirements.
+[Pinned authentication parameter translation](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r1/keystore/java/android/security/keystore2/KeyStore2ParameterUtils.java),
+[pinned KeyMint tag semantics](https://android.googlesource.com/platform/hardware/interfaces/+/c07fb30b8f0d50fe8f800562cff42de5a8dc8188/security/keymint/aidl/android/hardware/security/keymint/Tag.aidl),
+[attestation field schema](https://source.android.com/docs/security/features/keystore/attestation).
+
+Persist the original generation attempt, validator challenge, exact certificate
+chain and public-key binding with the create-only identity. Public
+`setAttestationChallenge` is a generation parameter, not an API for refreshing an
+existing key's attestation. On retry or restart, reconcile that retained attempt
+and chain and require a fresh single-use possession challenge under the same key;
+do not regenerate it to obtain a newer attestation. The initial challenge must
+have been issued for that exact retained attempt; a stale or unrelated supplied
+chain still refuses. [Pinned generation specification](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r1/keystore/java/android/security/keystore/KeyGenParameterSpec.java).
+
+Attestation describes generation-time key authorizations, app identity and boot
+state. Fresh possession proves current use of that same key under its enforced
+authentication policy; it does not freshly attest every later OS/app/boot state.
+Recheck trust/revocation and retain this limitation in restart and exact-candidate
+evidence. If required current-state evidence is unavailable, report incomplete
+eligibility instead of reinterpreting old attestation as current. The R17c physical
+ceremony and exact candidate checks remain separate and mandatory.
 
 This is a proposed eligibility requirement, not proof a selected device satisfies
 it. R36 records failure as unsupported/incomplete, publishes no eligible key and
