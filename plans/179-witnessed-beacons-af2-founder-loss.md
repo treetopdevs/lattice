@@ -2133,3 +2133,26 @@ object-key-order comparison were corrected before final conformance. None is
 claimed as a behavioral RED or a production failure. Hosted thread/CI closure
 and the combined R04 high-epoch refusal integration remain integrator-owned;
 local evidence does not imply those gates are closed.
+
+### Accepted-main publication integration (2026-09-06)
+
+Publishing `65b5364e` exposed a conflict with accepted main `c22272ec`, which
+already contains the R09 input/restore fixes and canonical-generator repair.
+The integrator authorized merging that exact base while retaining both reviewed
+packets. The manual source resolution is the existing reviewed R04 `f582` beacon
+case: exact three-field witnessed handling precedes the exact two-field legacy
+guard, and other tuple arities remain inert. No continuation code is imported.
+The automatic merge's legacy-only guard demonstrably drops a valid witnessed
+claim through public authoring; restoring the reviewed case makes that control
+and all existing high-epoch/lease checks pass. Test import unions are deduplicated,
+the colliding R09 lease fixture is renamed locally, and dist is regenerated.
+Accepted-main production changes otherwise merge without manual alteration.
+
+The initial integrated typecheck correctly flags the contradictory arity branch
+and duplicate fixture binding. After the fixture/import correction, the distinct
+public behavioral RED reaches `missing beacon claim`; the first attempted
+development run still had the duplicate binding and is not counted as that RED.
+Evidence uses the `r03-main-integration-*` logs. A requested npm pagination script
+does not exist in this manifest; the existing test is run directly with `tsx`
+instead, with the failed command retained. Final integrated gates and the narrow
+manual-resolution review remain required before hosted closure is claimed.
