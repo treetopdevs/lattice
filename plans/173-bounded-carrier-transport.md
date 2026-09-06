@@ -502,3 +502,12 @@ topological order in the Holder. Frame and page-count limits do not establish a
 bound on relay latency under a large concurrent workload. The roadmap's workload
 gate must measure that cost before selecting an optimization. This remediation
 adds no shared cache or cursor/session state.
+
+### Hosted closure — 2026-09-06
+
+Claude Fable passed the final exact repair. PR65's final source/evidence tip
+`73a96a5418747b36bef6a0363d0ed3e35094d1e1` passed workflow34046604253; all hosted
+review threads were resolved. Merge `9bb7b340e49be605151458134391aa16e642fc29`
+passed its exact workflow34048283122. The shared index can therefore mark
+Plan173/unified R08 DONE. The separately recorded R15 pagination-cost measurement
+and native/device/pilot gates remain outside that closure.
