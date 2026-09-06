@@ -1096,6 +1096,8 @@ function replicaRootMatches(replica, audience) {
     const commitment = replicaRootCommitment(replica);
     if (commitment === null)
         return true;
+    if (commitment === false)
+        return false;
     const audienceBytes = canonicalBase64Bytes(audience, 32);
     return audienceBytes !== null && bytesToBase64Url(sha256(audienceBytes)) === commitment;
 }
@@ -1105,7 +1107,7 @@ function replicaRootCommitment(replica) {
     if (offset === -1)
         return null;
     const commitment = replica.slice(offset + marker.length);
-    return commitment.length > 0 ? commitment : null;
+    return /^[A-Za-z0-9_-]{43}$/.test(commitment) ? commitment : false;
 }
 function canonicalBase64UrlDigest(value) {
     if (typeof value !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(value))

@@ -6,9 +6,10 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { isDeepStrictEqual } from "node:util";
 import {
   authorAndPersistTownshipCommand,
+  authorCarrierDelegation,
+  authorCarrierOp,
   authorTownshipCommand,
   authorTownshipDelegation,
-  authorTownshipGenesis,
   authorTownshipRevocation,
   carrierDelegationsFromFrames,
   carrierOpsToSemanticOps,
@@ -19,6 +20,7 @@ import {
   materialize,
   selectTownshipCapId,
   syncCarrierOnce,
+  townshipGenesisBody,
 } from "../src/index";
 import type { CarrierOpFrame, CarrierVerifier, Op, ReplicaSchema, Verifier } from "../src/index";
 
@@ -264,11 +266,21 @@ try {
     vector.authorityUnsoundGrant.authorityQuarantine,
   );
 
-  const forgedGenesis = await authorTownshipGenesis({
+  const forgedDelegation = await authorCarrierDelegation({
     replica: vector.replica,
+    audiencePubkey: evilAuthor.publicKey,
+    parentId: null,
     ops: ["post"],
     roles: ["clerk"],
     live: true,
+    signer: evilAuthor,
+  });
+  const forgedGenesis = await authorCarrierOp({
+    replica: vector.replica,
+    deps: [],
+    kind: "authority",
+    body: townshipGenesisBody(forgedDelegation),
+    cap: ["nil"],
     signer: evilAuthor,
   });
   check("forged genesis command", commandName(forgedGenesis), "genesis");

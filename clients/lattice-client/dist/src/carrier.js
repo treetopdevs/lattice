@@ -408,6 +408,9 @@ class CarrierAvailabilityRoute {
         waiter?.reject(reason);
     }
 }
+const maxCarrierReadPages = 1_024;
+const maxCarrierHaveRequestBytes = 48_000;
+const maxCarrierReadFrameBytes = 64_000;
 export class CarrierWebSocketClient {
     socket;
     pendingServerNonce = null;
@@ -427,14 +430,56 @@ export class CarrierWebSocketClient {
         });
     }
     async advertise() {
-        const response = await this.request({ type: "frontier" });
-        return stringListField(response, "ids", "frontier_result");
+        return await this.readPages("frontier", { type: "frontier" });
     }
     async pull(have) {
-        const response = await this.request({ type: "pull", have: [...have].sort() });
-        if (!hasType(response, "ops") || !Array.isArray(response.ops))
-            throw new Error("malformed carrier ops response");
-        return response.ops;
+        let initial = { type: "pull", have: [...new Set(have)].sort() };
+        if (textEncoder.encode(JSON.stringify(initial)).length > maxCarrierHaveRequestBytes) {
+            initial = { type: "pull", have: [] };
+        }
+        return this.readPages("pull", initial);
+    }
+    async readPages(kind, initial) {
+        const entries = [];
+        const seen = new Set();
+        let cursor;
+        for (let page = 0; page < maxCarrierReadPages; page++) {
+            const response = await this.request(cursor ? { ...initial, cursor } : initial);
+            if (textEncoder.encode(JSON.stringify(response)).length > maxCarrierReadFrameBytes) {
+                throw new Error("carrier page exceeds frame budget");
+            }
+            let values;
+            if (kind === "frontier") {
+                values = stringListField(response, "ids", "frontier_result");
+            }
+            else {
+                if (!hasType(response, "ops") || !Array.isArray(response.ops)) {
+                    throw new Error("malformed carrier ops response");
+                }
+                values = response.ops;
+            }
+            const envelope = response;
+            const continues = Object.hasOwn(envelope, "next_cursor");
+            if (!continues && !cursor)
+                return values;
+            const ids = values.map((value) => carrierReadEntryId(value, kind));
+            if (new Set(ids).size !== ids.length || ids.some((id) => seen.has(id))) {
+                throw new Error("carrier pagination made no progress");
+            }
+            if (kind === "frontier" && (ids.some((id, index) => index > 0 && id <= ids[index - 1]) ||
+                (cursor && ids.length > 0 && ids[0] <= cursor.after)))
+                throw new Error("carrier pagination made no progress");
+            const next = continues
+                ? decodeReadCursor(envelope.next_cursor, kind, ids, seen.size, cursor)
+                : undefined;
+            entries.push(...values);
+            for (const id of ids)
+                seen.add(id);
+            if (!next)
+                return entries;
+            cursor = next;
+        }
+        throw new Error("carrier pagination page limit exceeded");
     }
     async push(ops) {
         const response = await this.request({ type: "push", ops });
@@ -631,6 +676,34 @@ export class CarrierWebSocketClient {
         this.availabilityRoute = null;
         route.close(reason);
     }
+}
+function carrierReadEntryId(value, kind) {
+    const id = kind === "frontier" ? value
+        : value !== null && typeof value === "object" ? value.id : null;
+    if (typeof id !== "string" || id.length !== 43)
+        throw new Error("malformed carrier page id");
+    return id;
+}
+function decodeReadCursor(value, kind, ids, count, previous) {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+        throw new Error("malformed carrier pagination cursor");
+    }
+    const cursor = value;
+    const keys = ["version", "offset", "after", "snapshot", ...(kind === "pull" ? ["have"] : [])];
+    if (JSON.stringify(Object.keys(cursor).sort()) !== JSON.stringify(keys.sort()) ||
+        textEncoder.encode(JSON.stringify(cursor)).length > 512 || cursor.version !== 1 ||
+        !Number.isSafeInteger(cursor.offset) || cursor.offset <= 0 ||
+        typeof cursor.after !== "string" || cursor.after.length !== 43 ||
+        typeof cursor.snapshot !== "string" || cursor.snapshot.length !== 64 ||
+        (kind === "pull" && (typeof cursor.have !== "string" || cursor.have.length !== 64)))
+        throw new Error("malformed carrier pagination cursor");
+    if (ids.length === 0 || cursor.offset !== count + ids.length || cursor.after !== ids.at(-1)) {
+        throw new Error("carrier pagination made no progress");
+    }
+    if (previous && (cursor.snapshot !== previous.snapshot || cursor.have !== previous.have)) {
+        throw new Error("carrier pagination snapshot changed");
+    }
+    return cursor;
 }
 export async function syncCarrierOnce(client, localOps, localCarrierFrames, realmByPubkey = {}, options) {
     const peerIds = new Set(await client.advertise());
@@ -1083,6 +1156,19 @@ function payloadFromBody(kind, body, realmByPubkey) {
                 };
             }
             case "beacon": {
+                // R03's witnessed branch must precede R09's exact legacy-shape guard.
+                if (body.values.length === 3) {
+                    const epochTerm = body.values[1];
+                    const epoch = typeof epochTerm === "number" && Number.isSafeInteger(epochTerm) ? epochTerm : null;
+                    return {
+                        ...neutralPayload(`beacon ${epoch ?? "malformed"}`),
+                        authority: { type: "beacon", epoch, certificate: witnessedBeaconCertificate(body.values[2]) },
+                    };
+                }
+                // BEAM ignores unsupported tuple shapes; extra fields must not turn
+                // retained evidence into an epoch that can lapse a delegation lease.
+                if (body.values.length !== 2)
+                    return neutralPayload(kind);
                 // Plan 149: retain the epoch as evidence even when malformed — a
                 // non-integer epoch quarantines :stale_beacon in the oracle, so the
                 // decode must not throw before the reducer can reach that verdict.
@@ -1090,7 +1176,7 @@ function payloadFromBody(kind, body, realmByPubkey) {
                 const epoch = typeof epochTerm === "number" && Number.isSafeInteger(epochTerm) ? epochTerm : null;
                 return {
                     ...neutralPayload(`beacon ${epoch ?? "malformed"}`),
-                    authority: { type: "beacon", epoch, ...(body.values.length === 3 ? { certificate: witnessedBeaconCertificate(body.values[2]) } : {}) },
+                    authority: { type: "beacon", epoch },
                 };
             }
         }

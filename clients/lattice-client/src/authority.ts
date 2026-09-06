@@ -1647,17 +1647,18 @@ function subset(child: readonly string[], parent: readonly string[]): boolean {
 function replicaRootMatches(replica: string, audience: string): boolean {
   const commitment = replicaRootCommitment(replica);
   if (commitment === null) return true;
+  if (commitment === false) return false;
   const audienceBytes = canonicalBase64Bytes(audience, 32);
   return audienceBytes !== null && bytesToBase64Url(sha256(audienceBytes)) === commitment;
 }
 
-function replicaRootCommitment(replica: string): string | null {
+function replicaRootCommitment(replica: string): string | null | false {
   const marker = "#root:";
   const offset = replica.indexOf(marker);
   if (offset === -1) return null;
 
   const commitment = replica.slice(offset + marker.length);
-  return commitment.length > 0 ? commitment : null;
+  return /^[A-Za-z0-9_-]{43}$/.test(commitment) ? commitment : false;
 }
 
 function canonicalBase64UrlDigest(value: unknown): boolean {
