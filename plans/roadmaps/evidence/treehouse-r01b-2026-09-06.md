@@ -73,3 +73,15 @@ This merge changes only the two parent design/build documents, which are
 byte-identical to b83c21dc. The original R01b tip258cb3d0 passed hosted
 workflow34052544798 (and its PR-triggered34052545487). This newer integrated tip
 and its merge result still require their own hosted checks.
+
+### Native admission relevance follow-up
+
+The automatic parent merge adopts R17a `0cdf8b6f`, which has a separate exact
+gpt-5.6-sol review PASS under the user's instruction to use Sol until Claude
+returns. Connected noneligible input stays under nonblocking staging unless
+needed as eligible-history ancestry; independent introduction proofs are
+deduplicated and later promotion is atomic. The original R01b scope and every
+runtime file are unchanged. Earlier final `f741c35c` passed workflow34059428983
+and actual Fable adoption review; the new parent adoption needs its fresh tip
+checks and accepted R17a/ledger merge results. No runtime/native/device result
+or new operator authorization is inferred from the documentation correction.
