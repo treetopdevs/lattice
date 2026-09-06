@@ -506,6 +506,51 @@ const finalBeacon = await authorCarrierOp({ replica: beaconVector.replica, deps:
         signature: Buffer.from(entry.sign(claimPayload)).toString("base64") }))) });
 check("authored beacon claim uses final canonical dependencies", claim.deps, finalBeacon.deps);
 check("witnessed beacon authored from a two-tip frontier is honored", materialize(beaconVector.schema, carrierOpsToSemanticOps([...claimFrames, finalBeacon], beaconVector.realmByPubkey)).quarantine.includes(finalBeacon.id), false);
+// Fable P2: malformed Tier-A null lease evidence re-encodes as genuinely unleased.
+// Public materialization must preserve that existing representation without throwing.
+const nullLeaseOps = carrierOpsToSemanticOps([...claimFrames, finalBeacon], beaconVector.realmByPubkey);
+const nullLeaseControl = materialize(beaconVector.schema, nullLeaseOps);
+const nullLeaseGenesis = nullLeaseOps.find((op) => op.id === beaconGenesis.id)?.authority;
+if (nullLeaseGenesis?.type !== "genesis")
+    throw new Error("expected unleased root genesis fixture");
+Reflect.set(nullLeaseGenesis.delegation, "expiresEpoch", null);
+let nullLeaseError = null;
+let nullLeaseMatches = false;
+try {
+    nullLeaseMatches = isDeepStrictEqual(materialize(beaconVector.schema, nullLeaseOps), nullLeaseControl);
+}
+catch (error) {
+    nullLeaseError = error instanceof Error ? error.message : String(error);
+}
+check("null unleased semantic evidence does not throw during public materialization", nullLeaseError, null);
+check("null unleased semantic evidence preserves the unleased result", nullLeaseMatches, true);
+const nullLeaseWire = structuredClone(beaconGenesis);
+if (nullLeaseWire.body[0] !== "tuple")
+    throw new Error("expected genesis tuple fixture");
+const nullLeaseWireDelegation = nullLeaseWire.body[1][1];
+if (nullLeaseWireDelegation?.[0] !== "delegation")
+    throw new Error("expected genesis delegation fixture");
+Reflect.set(nullLeaseWireDelegation[1], "expires_epoch", null);
+let nullLeaseWireRefused = false;
+try {
+    decodeCarrierOpFrame(nullLeaseWire);
+}
+catch {
+    nullLeaseWireRefused = true;
+}
+check("carrier ingress still refuses an explicit null lease field", nullLeaseWireRefused, true);
+for (const expiry of [0, 3]) {
+    const finiteGrant = await authorTownshipDelegation({ replica: beaconVector.replica,
+        deps: [beaconGenesis.id], audiencePubkey: leaseIssuer.publicKey,
+        parentId: beaconGenesisDelegation.id, ops: ["post"], expiresEpoch: expiry, signer: beaconFounder });
+    const finiteDelegation = carrierDelegationsFromFrames([finiteGrant])[0];
+    const finitePost = await authorTownshipCommand({ replica: beaconVector.replica,
+        deps: [finiteGrant.id, finalBeacon.id], command: { command: "post", text: "finite lease" },
+        capId: finiteDelegation.id, signer: leaseIssuer });
+    check("explicit zero and finite leases retain their signed epoch", finiteDelegation.expires_epoch, expiry);
+    check("explicit zero and finite leases still lapse at an effective epoch four beacon", materialize(beaconVector.schema, carrierOpsToSemanticOps([...claimFrames, finiteGrant,
+        finalBeacon, finitePost], beaconVector.realmByPubkey)).quarantineReasons.get(finitePost.id), "lease_expired");
+}
 check("claim construction removes duplicates without mutating caller order", createWitnessedBeaconClaim(beaconVector.replica, 4, claimWitness.publicKeyBase64, [...deliveredDeps, deliveredDeps[0]]).deps, finalBeacon.deps);
 check("claim constructor leaves original delivered order unchanged", deliveredDeps, tips.map((tip) => tip.id));
 const unnormalizedClaim = { ...claim, deps: deliveredDeps };
@@ -517,8 +562,7 @@ check("received unsorted certificate claim still refuses", materialize(beaconVec
     .quarantineReasons.get(unnormalizedBeacon.id), "unauthorized_beacon");
 const unrelatedIntegerBody = ["tuple", [["atom", "genesis"], ["delegation", beaconGenesisDelegation],
         ["map", [[["atom", "unrelated"], ["int", "9007199254740992"]]]]]];
-const epochOverflowBody = ["tuple", [["atom", "beacon"], ["int", "9007199254740992"]]];
-for (const body of [unrelatedIntegerBody, epochOverflowBody]) {
+for (const body of [unrelatedIntegerBody]) {
     const frame = await authorCarrierOp({ replica: beaconVector.replica, deps: [beaconGenesis.id],
         kind: "authority", cap: ["nil"], body, signer: beaconFounder });
     let refused = false;
@@ -530,6 +574,79 @@ for (const body of [unrelatedIntegerBody, epochOverflowBody]) {
     }
     check("unrelated signed large integers retain strict refusal", refused, true);
     check("unrelated signed large integers retain semantic malformed term", carrierOpsToSemanticOps([frame])[0]?.structuralError, "malformed_term");
+}
+// PR68 fuGvf: canonical high root epochs remain exact causal evidence. These
+// two integers collapse to the same Number, so rounded maxima cannot pass.
+async function legacyHigh(epoch, deps, signer = beaconFounder) {
+    return authorCarrierOp({ replica: beaconVector.replica, deps, signer, kind: "authority", cap: ["nil"],
+        body: ["tuple", [["atom", "beacon"], ["int", epoch]]] });
+}
+async function witnessedAfter(deps, epoch = 0) {
+    const exact = createWitnessedBeaconClaim(beaconVector.replica, epoch, claimWitness.publicKeyBase64, deps);
+    const bytes = canonicalBytesForWitnessedBeaconClaim(exact);
+    return authorCarrierOp({ replica: beaconVector.replica, deps: exact.deps, signer: claimWitness,
+        kind: "authority", cap: ["nil"], body: beaconClaimBody(exact, entries.map((entry) => ({
+            witness: entry.publicKeyBase64, signature: Buffer.from(entry.sign(bytes)).toString("base64"),
+        }))) });
+}
+const highFirst = await legacyHigh("9007199254740992", [leasedFrame.id]);
+const highSecond = await legacyHigh("9007199254740993", [highFirst.id]);
+const highDescending = await legacyHigh("9007199254740992", [highSecond.id]);
+const highWitnessed = await witnessedAfter([highDescending.id]);
+const highPost = await authorTownshipCommand({ replica: beaconVector.replica, deps: [highWitnessed.id],
+    signer: leaseIssuer, capId: leasedDelegation.id, command: { command: "post", text: "high root epoch lapses lease" } });
+const highFrames = [beaconGenesis, leasedFrame, highFirst, highSecond, highDescending, highWitnessed, highPost];
+for (const frame of [highFirst, highSecond, highDescending]) {
+    let decoded;
+    try {
+        decoded = decodeCarrierOpFrame(frame);
+    }
+    catch { /* the RED assertion below reports refusal */ }
+    check("canonical high legacy beacon preserves its exact raw frame", decoded, frame);
+    check("canonical high legacy beacon still verifies its original signature", (await verifyCarrierOp(frame, { verify: async (author, bytes, signature) => ed25519.verify(signature, bytes, Buffer.from(author, "base64"), { zip215: false }) })).valid, true);
+}
+for (const delivered of [highFrames, [...highFrames].reverse()]) {
+    const semantic = carrierOpsToSemanticOps(delivered, beaconVector.realmByPubkey);
+    const projected = materialize(beaconVector.schema, semantic);
+    const byId = index(semantic), order = canonicalOrder(semantic, byId);
+    const security = analyzeAuthority(beaconVector.schema, semantic, new Set(order), order, byId, beaconVector.replica).security;
+    check("two distinct high root epochs stay honored exactly", security.validBeacons.map((b) => [b.opId, b.epoch]), [[highFirst.id, "9007199254740992"], [highSecond.id, "9007199254740993"]]);
+    check("descending high root epoch stays stale", projected.quarantineReasons.get(highDescending.id), "stale_beacon");
+    check("low witnessed descendant cannot erase a high root maximum", projected.quarantineReasons.get(highWitnessed.id), "stale_beacon");
+    check("valid high root epoch still lapses a numeric lease", projected.quarantineReasons.get(highPost.id), "lease_expired");
+}
+const outsiderHigh = await legacyHigh("18446744073709551615", [leasedFrame.id], claimWitness);
+const afterOutsider = await witnessedAfter([outsiderHigh.id], 4);
+const outsiderProjection = materialize(beaconVector.schema, carrierOpsToSemanticOps([beaconGenesis, leasedFrame, outsiderHigh, afterOutsider], beaconVector.realmByPubkey));
+check("high non-root beacon confers no maximum", outsiderProjection.quarantineReasons.get(outsiderHigh.id), "unauthorized_beacon");
+check("witnessed descendant of refused high non-root beacon remains eligible", outsiderProjection.quarantineReasons.has(afterOutsider.id), false);
+const concurrentLow = await witnessedAfter([leasedFrame.id], 4);
+check("a concurrent low witnessed fork is not a descendant of the high maximum", materialize(beaconVector.schema, carrierOpsToSemanticOps([...highFrames, concurrentLow], beaconVector.realmByPubkey)).quarantineReasons.has(concurrentLow.id), false);
+const rootCeiling = await legacyHigh("18446744073709551615", [highSecond.id]);
+check("canonical uint64 ceiling remains valid only on the root legacy branch", materialize(beaconVector.schema, carrierOpsToSemanticOps([beaconGenesis, leasedFrame, highFirst, highSecond, rootCeiling], beaconVector.realmByPubkey))
+    .quarantineReasons.has(rootCeiling.id), false);
+for (const epoch of [["int", "18446744073709551616"], ["int", "09007199254740992"],
+    ["int", "+9007199254740992"], ["int", 9007199254740992], ["list", [["int", "9007199254740992"]]]]) {
+    let refused = false;
+    const malformed = { ...highFirst, body: ["tuple", [["atom", "beacon"], epoch]] };
+    try {
+        decodeCarrierOpFrame(malformed);
+    }
+    catch {
+        refused = true;
+    }
+    check("legacy epoch context preserves strict integer and nested grammar", refused, true);
+}
+for (const outside of [{ ...highFirst, kind: "command" },
+    { ...highFirst, body: ["tuple", [["atom", "beacon"], ["int", "9007199254740992"], ["map", []]]] }]) {
+    let refused = false;
+    try {
+        decodeCarrierOpFrame(outside);
+    }
+    catch {
+        refused = true;
+    }
+    check("high legacy context cannot widen command or witnessed body epochs", refused, true);
 }
 const malformedPolicyFrame = structuredClone(beaconGenesis);
 if (malformedPolicyFrame.body[0] !== "tuple" || malformedPolicyFrame.body[1][2]?.[0] !== "map")

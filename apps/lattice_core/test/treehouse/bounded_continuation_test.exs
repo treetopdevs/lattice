@@ -13,6 +13,37 @@ defmodule Treehouse.BoundedContinuationTest do
     {Sim.sync_all(sim), genesis, pin, profile, epoch}
   end
 
+  test "valid high legacy epochs refuse continuation but unauthorized high beacons stay inert" do
+    for kind <- [:space, :thread],
+        high <- [9_007_199_254_740_992, 18_446_744_073_709_551_615],
+        realm <- ["founder", "observer"] do
+      {sim, _genesis, pin, profile, epoch} = ready(kind: kind)
+      {_, candidate} = F.continue(sim, "nominee", pin, profile, epoch_basis: [epoch.id])
+      {:succeed, role, delegation, _} = candidate.body
+      {branch, high_op} = Sim.beacon(sim, realm, high)
+      branch = Sim.sync_all(branch)
+      log = Sim.log(branch, "nominee")
+
+      result =
+        Authority.continuation_review(
+          branch.module,
+          log,
+          role,
+          Sim.identity(branch, "nominee").pub,
+          Log.frontier(log),
+          delegation
+        )
+
+      if realm == "founder" do
+        assert Sim.quarantined(branch, "nominee", high_op.id) == false
+        assert result == {:error, :invalid_continuation_epoch}
+      else
+        assert Sim.quarantined(branch, "nominee", high_op.id) == {true, :unauthorized_beacon}
+        assert {:ok, %{claim: %{epoch: 0}}} = result
+      end
+    end
+  end
+
   test "V01 empty-role enrollment pin preserves the founder acquisition; legacy proof refuses" do
     {sim, genesis, _pin, _profile, _epoch} = ready()
     assert Authority.holder_epoch(sim.module, Sim.log(sim, "nominee"), :admin).op_id == genesis.id

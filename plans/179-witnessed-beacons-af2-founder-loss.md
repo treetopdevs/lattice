@@ -2025,3 +2025,111 @@ The earlier exact Fable attempt on `201e7ae6..4a823b96` ended with an API
 mid-response error and no verdict. Its full transcript and partial observations
 are retained; neither is a PASS. Final independent review and hosted thread/CI
 closure remain pending for this complete repair.
+
+### Public verifier canonical-bound follow-up (2026-09-06)
+
+The integrator authorized PR68 finding `PRRT_kwDOSZGqLc6fuGvg` before code:
+`BeaconCertificate.verify/3` must reject a matching claim epoch above the
+unchanged canonical uint64 maximum as `{:error, :unauthorized_beacon}` before
+constructing signing bytes. This is a total-verifier boundary repair, not a
+witnessed epoch-admission change. Existing canonically encodable claim bytes
+and valid signature verification remain unchanged, including standalone uint64
+controls; the authority judge still refuses witnessed epochs above its separate
+`9_007_199_254_740_991` horizon. The negative public test supplies matching
+certificate/expected claims above uint64 and must observe the documented error,
+not an exception. Scope is this certificate shape guard, its public test, and
+this evidence; generic canonical encoding, role semantics and old vectors stay
+unchanged. The separate high legacy ancestor finding requires the exact
+contextual representation disposition before its production changes.
+
+### Exact high legacy beacon ancestry (2026-09-06)
+
+For PR68 `PRRT_kwDOSZGqLc6fuGvf`, the integrator adopted a contextual decode
+amendment before code. Only an exact two-field authority `{:beacon, epoch}`
+preserves canonical uint64 epochs above `Number.MAX_SAFE_INTEGER` as exact
+decimal strings. Safe legacy epochs remain numbers. The beacon evidence and
+effective-beacon epoch types become `number | string` (with the existing null
+malformed-evidence arm); strings here are validated canonical high uint64 values,
+never rounded/saturated numeric sentinels. The collector compares causal maxima
+using transient BigInt values, preserving exact ascending/descending high-epoch
+decisions. Lease comparison explicitly handles high epochs relative to supported
+numeric leases. Root authentication and authorization-before-stale precedence
+remain unchanged. No authority or lease effect comes from a high non-root beacon.
+
+Consumer inventory at `a29c4510`: `carrier.ts` decodes evidence; `authority.ts`
+collects/stale-checks and exposes `security.validBeacons`; `capability.ts` consumes
+it for lease lapse. Materialization/quarantine use those decisions, with no
+independent epoch arithmetic. Township authoring constructs explicitly supplied
+safe witnessed claims and has no current-epoch reader. Generated declarations
+must carry the union. The separate combined R04 collector also passes beacons to
+`continuationExpectedClaim`, whose `Math.max` epoch/basis selection must explicitly
+refuse `invalid_continuation_epoch` if a selected valid ancestral legacy epoch
+exceeds its existing safe horizon; that integration is root-owned and is not
+permission to edit frozen R04 here.
+
+The prior Township authoring assertion that a valid high two-field root beacon
+is structurally malformed is explicitly superseded. Unrelated generic integers,
+all malformed decimal/uint64/depth grammar, and witnessed outer/direct claim
+epochs retain their strict boundaries. New public signed tests must distinguish
+two high integers that Number would collapse, low witnessed descendants, high
+unauthorized ancestors, exact causal ancestry and lease effects. New exporter
+evidence represents expected high epochs as decimal strings and verifies raw
+CarrierTerm bytes; JSON numeric rounding cannot be an oracle. Every old vector
+blob remains unchanged. The actual final Fable review includes this additive
+evidence API and the complete contextual decoder scope.
+
+### Nullish unleased evidence review correction (2026-09-06)
+
+The integrator adopted the actionable P2 from Fable's exact
+`a29c4510..0f3f2ca9` review before production changes. A type-violating semantic
+delegation with `expiresEpoch: null` re-encodes to the existing unleased signed
+representation, but exact lease comparison currently throws on `BigInt(null)`.
+The public materialization regression must reproduce this exception against a
+genuinely unleased signed delegation and an effective beacon. The narrow repair
+treats omitted/null lease evidence as unleased at the existing lease walk,
+matching canonical encoding and BEAM; explicit zero and finite leases retain
+their lapse behavior. Carrier ingress stays strict, with no new wire shape or
+accepted bytes. The cosmetic repeated epoch-helper call is left unchanged.
+Fable's PASS covers the preceding two hosted repairs; this P2 correction requires
+its own actual follow-up verdict and relevant TypeScript gates before freeze.
+
+### Final high-epoch and verifier evidence (2026-09-06)
+
+The BEAM public-verifier RED at `c5b89c84` raises `ArgumentError` for a matching
+claim above uint64; `d54df5c6` returns the documented unauthorized result while
+freshly signed zero, safe-horizon and uint64-maximum controls verify. The TS
+public RED at `0243936f` records twelve behavioral failures on authentic high
+legacy ancestors. `0f3f2ca9` preserves both distinct epochs exactly, refuses lower
+root/witnessed descendants, honors a concurrent valid witnessed branch, and
+preserves lease lapse without accepting high non-root authority. The two new
+BEAM-exported signed scenarios replay through both delivery orders in TS, with
+raw signature/frame checks and explicit decimal-string epoch evidence. All
+preceding **66** vector blobs compare byte-identically; the corpus is now **68**.
+
+At `0f3f2ca9`, full `mix check` exits 0 with **697 tests plus 27 properties,
+zero failures**, three existing exclusions, prescribed OTP/asdf PATH and
+`ERL_FLAGS='+S 4:4'`. Formatting and strict Credo pass with existing low-priority
+suggestions. The named beacon/restore/migration/compaction gate passes 38 tests
+plus one property. The nullish-lease follow-up changes only TS production/test
+code and its generated build after that BEAM gate. At `84d04517`, final TS gates
+pass: **1,310 conformance assertions across 68 vectors**, 559 canonical, 169
+Township authoring, 49 carrier and eight V01 checks, plus typecheck and build.
+
+Actual Claude Fable review of `a29c4510..0f3f2ca9` returned PASS with no P0/P1,
+identifying the nullish-lease P2 above. Its resumed review of the correction
+through `84d04517` returned PASS with no remaining actionable P0/P1/P2 in this
+bounded scope. Both results share session
+`d9fa4f1a-33c0-4ea2-ad82-4e8c9d48980d` and are saved under
+`/tmp/lattice-treehouse-execution-20260906/` as
+`fable-r03-high-legacy-review-result.md` and
+`fable-r03-null-lease-followup-result.md`. The cosmetic repeated helper call
+remains a documented deferral.
+
+That directory also retains `r03-high-legacy-proof.json`, the public RED/GREEN
+logs, `r03-high-legacy-full-mix-check.log`, and final named TS gate logs. Initial
+test development errors remain recorded: one fixture syntax error preceded the
+actual twelve-failure RED; a test-only Vector type reference and equivalent JSON
+object-key-order comparison were corrected before final conformance. None is
+claimed as a behavioral RED or a production failure. Hosted thread/CI closure
+and the combined R04 high-epoch refusal integration remain integrator-owned;
+local evidence does not imply those gates are closed.
