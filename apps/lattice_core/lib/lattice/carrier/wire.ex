@@ -17,6 +17,7 @@ defmodule Lattice.Carrier.Wire do
   @max_json_safe_integer 9_007_199_254_740_991
   @max_canonical_integer 18_446_744_073_709_551_615
   @max_decode_depth 64
+  @op_kinds [:command, :authority, :inbox, :tombstone]
 
   @spec version() :: pos_integer()
   def version, do: @version
@@ -54,6 +55,7 @@ defmodule Lattice.Carrier.Wire do
          {:ok, author} <- Base.decode64(author_b64),
          {:ok, sig} <- Base.decode64(sig_b64),
          {:ok, kind} <- existing_atom(kind),
+         true <- kind in @op_kinds,
          {:ok, body} <- decode_term(body),
          {:ok, cap} <- decode_term(cap),
          true <- Canonical.signable?(body),
@@ -310,7 +312,9 @@ defmodule Lattice.Carrier.Wire do
        when is_binary(id) and is_binary(replica) and is_binary(issuer_b64) and
               is_binary(audience_b64) and is_list(ops) and is_list(roles) and is_boolean(live) and
               is_binary(sig_b64) do
-    with {:ok, issuer} <- Base.decode64(issuer_b64),
+    with parent_id = Map.get(frame, "parent_id"),
+         true <- is_nil(parent_id) or is_binary(parent_id),
+         {:ok, issuer} <- Base.decode64(issuer_b64),
          {:ok, audience} <- Base.decode64(audience_b64),
          {:ok, sig} <- Base.decode64(sig_b64),
          {:ok, ops} <- existing_atoms(ops),
@@ -322,7 +326,7 @@ defmodule Lattice.Carrier.Wire do
          replica: replica,
          issuer: issuer,
          audience: audience,
-         parent_id: Map.get(frame, "parent_id"),
+         parent_id: parent_id,
          ops: MapSet.new(ops),
          roles: MapSet.new(roles),
          live: live,

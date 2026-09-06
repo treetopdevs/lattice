@@ -54,7 +54,7 @@ defmodule Lattice.Op do
   """
   @spec new(Identity.t(), String.t(), [id()], kind(), term(), keyword()) :: t()
   def new(%Identity{} = identity, replica, deps, kind, body, opts \\ [])
-      when is_binary(replica) and is_list(deps) and is_atom(kind) do
+      when is_binary(replica) and is_list(deps) and kind in [:command, :authority, :inbox, :tombstone] do
     cap = Keyword.get(opts, :cap)
     sorted_deps = normalize_deps(deps)
     encoding = canonical_bytes(replica, identity.pub, sorted_deps, kind, body, cap)
