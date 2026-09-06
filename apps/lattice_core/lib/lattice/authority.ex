@@ -129,6 +129,10 @@ defmodule Lattice.Authority do
     _ -> {:error, :invalid_verified_history}
   end
 
+  @doc "Observe the selected root-authenticated continuation pin in complete retained history."
+  @spec continuation_profile(Log.t()) :: {:ok, map()} | {:error, atom()}
+  def continuation_profile(%Log{} = _log), do: {:error, :continuation_not_configured}
+
   defp verified_complete_log?(log) do
     ops = Log.ops(log)
     reconstructed = Log.from_ops(log.replica, ops)
