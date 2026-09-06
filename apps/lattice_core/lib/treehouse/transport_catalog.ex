@@ -95,7 +95,7 @@ defmodule Treehouse.TransportCatalog do
   def verify_catalog(%{catalog: catalog, signature: signature} = envelope, trusted_key) do
     with true <- map_size(envelope) == 2 and bytes?(signature, 64) and bytes?(trusted_key, 32),
          {:ok, catalog} <- normalize_catalog(catalog) do
-      bytes = Canonical.term(["lattice-treehouse-transport-catalog-v1", catalog])
+      bytes = catalog_bytes(catalog)
 
       if Identity.verify(trusted_key, bytes, signature),
         do: :ok,
@@ -106,6 +106,29 @@ defmodule Treehouse.TransportCatalog do
   end
 
   def verify_catalog(_envelope, _trusted_key), do: {:error, :malformed_catalog}
+
+  @spec catalog_bytes(term()) :: binary()
+  def catalog_bytes(value),
+    do: Canonical.term(["lattice-treehouse-transport-catalog-v1", require_value(normalize_catalog(value))])
+
+  @spec catalog_id(term()) :: String.t()
+  def catalog_id(value), do: digest(catalog_bytes(value))
+
+  @spec inventory_bytes(term()) :: binary()
+  def inventory_bytes(entries) do
+    if entries?(entries),
+      do: Canonical.term(["lattice-treehouse-route-inventory-v1", entries]),
+      else: raise(ArgumentError, "malformed catalog inventory")
+  end
+
+  @spec inventory_id(term()) :: String.t()
+  def inventory_id(entries), do: digest(inventory_bytes(entries))
+
+  @spec service_realm(term()) :: String.t()
+  def service_realm(service_id) do
+    if id?(service_id), do: "treehouse-service:" <> service_id,
+      else: raise(ArgumentError, "malformed catalog service ID")
+  end
 
   defp decode_artifact(bytes) when is_binary(bytes) and byte_size(bytes) > @max_artifact_bytes,
     do: {:error, :control_history_limit}
