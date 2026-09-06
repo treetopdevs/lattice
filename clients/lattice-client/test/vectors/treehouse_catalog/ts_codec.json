@@ -1,0 +1,984 @@
+{
+  "bootstrap_term": [
+    "map",
+    [
+      [
+        [
+          "atom",
+          "version"
+        ],
+        [
+          "int",
+          1
+        ]
+      ],
+      [
+        [
+          "atom",
+          "product"
+        ],
+        [
+          "atom",
+          "treehouse"
+        ]
+      ],
+      [
+        [
+          "atom",
+          "space"
+        ],
+        [
+          "bin",
+          "dHJlZWhvdXNlOnNwYWNlOmNvZGVjLWZpeHR1cmU="
+        ]
+      ],
+      [
+        [
+          "atom",
+          "space_root"
+        ],
+        [
+          "bin",
+          "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w="
+        ]
+      ],
+      [
+        [
+          "atom",
+          "profile_genesis"
+        ],
+        [
+          "bin",
+          "clh5SGRSSVplZjBMa2RieVlSaGgyZlc5eV9BQjVpNWFoUkxxS0lScm1tSQ=="
+        ]
+      ],
+      [
+        [
+          "atom",
+          "profile_id"
+        ],
+        [
+          "bin",
+          "R1FEcXRzQW9TRDF4SmxtZTV2VU40Tko1QjdYR1g2a0ZKRmdMU3ctWVVyQQ=="
+        ]
+      ],
+      [
+        [
+          "atom",
+          "replacement_rule"
+        ],
+        [
+          "atom",
+          "bounded_space_admin_v1"
+        ]
+      ],
+      [
+        [
+          "atom",
+          "catalog_key"
+        ],
+        [
+          "bin",
+          "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q="
+        ]
+      ],
+      [
+        [
+          "atom",
+          "service_id"
+        ],
+        [
+          "bin",
+          "bmZhd0pxakd3bTQ4T3MwamNLRnVrX185d0FGZjliMkhraGg0Z0NYYkFvQQ=="
+        ]
+      ],
+      [
+        [
+          "atom",
+          "service_key"
+        ],
+        [
+          "bin",
+          "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E="
+        ]
+      ],
+      [
+        [
+          "atom",
+          "origin"
+        ],
+        [
+          "bin",
+          "d3NzOi8vY2F0YWxvZy5pbnZhbGlk"
+        ]
+      ],
+      [
+        [
+          "atom",
+          "nonce"
+        ],
+        [
+          "bin",
+          "RE5GLU5UU1B5Y0kwbFNNbV9IOFNPSEcxc0lHNklBaExnbTRCTUs3ZFVVUQ=="
+        ]
+      ]
+    ]
+  ],
+  "entry_term": [
+    "map",
+    [
+      [
+        [
+          "atom",
+          "product"
+        ],
+        [
+          "atom",
+          "treehouse"
+        ]
+      ],
+      [
+        [
+          "atom",
+          "replica"
+        ],
+        [
+          "bin",
+          "dHJlZWhvdXNlOnNwYWNlOmNvZGVjLWZpeHR1cmU="
+        ]
+      ],
+      [
+        [
+          "atom",
+          "kind"
+        ],
+        [
+          "atom",
+          "space"
+        ]
+      ],
+      [
+        [
+          "atom",
+          "schema"
+        ],
+        [
+          "atom",
+          "treehouse_space_v1"
+        ]
+      ],
+      [
+        [
+          "atom",
+          "root"
+        ],
+        [
+          "bin",
+          "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w="
+        ]
+      ],
+      [
+        [
+          "atom",
+          "genesis"
+        ],
+        [
+          "bin",
+          "ajI4YW0zZVBkRXVxeTZ2SFlLM0ZkWXRVN2NIU1JMb0x0OVNNSzdJcmtZQQ=="
+        ]
+      ],
+      [
+        [
+          "atom",
+          "creation"
+        ],
+        [
+          "bin",
+          "LWFkelJuVFZwM0otRVdqa2RrVkFXLXZqTUlIN09qajF5ajY2WmZ5ZlV2Yw=="
+        ]
+      ],
+      [
+        [
+          "atom",
+          "reference"
+        ],
+        [
+          "bin",
+          "TXp3RTNSVWFLbWd4d0RuTG1tVWQ4cEdZdm9vRTRXem9ZZFMybzBvUnlWUQ=="
+        ]
+      ],
+      [
+        [
+          "atom",
+          "route"
+        ],
+        [
+          "bin",
+          "L3IvM2FCUWdJMm1ndjMtb1FBbHpibFBybm5VMkJwVGJtdHJQb3ZPb2JzM21BVQ=="
+        ]
+      ],
+      [
+        [
+          "atom",
+          "service_id"
+        ],
+        [
+          "bin",
+          "bmZhd0pxakd3bTQ4T3MwamNLRnVrX185d0FGZjliMkhraGg0Z0NYYkFvQQ=="
+        ]
+      ],
+      [
+        [
+          "atom",
+          "service_key"
+        ],
+        [
+          "bin",
+          "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E="
+        ]
+      ]
+    ]
+  ],
+  "catalog_envelope_term": [
+    "map",
+    [
+      [
+        [
+          "atom",
+          "catalog"
+        ],
+        [
+          "map",
+          [
+            [
+              [
+                "atom",
+                "version"
+              ],
+              [
+                "int",
+                1
+              ]
+            ],
+            [
+              [
+                "atom",
+                "product"
+              ],
+              [
+                "atom",
+                "treehouse"
+              ]
+            ],
+            [
+              [
+                "atom",
+                "space"
+              ],
+              [
+                "bin",
+                "dHJlZWhvdXNlOnNwYWNlOmNvZGVjLWZpeHR1cmU="
+              ]
+            ],
+            [
+              [
+                "atom",
+                "bootstrap"
+              ],
+              [
+                "bin",
+                "TXp3RTNSVWFLbWd4d0RuTG1tVWQ4cEdZdm9vRTRXem9ZZFMybzBvUnlWUQ=="
+              ]
+            ],
+            [
+              [
+                "atom",
+                "binding"
+              ],
+              [
+                "bin",
+                "TXp3RTNSVWFLbWd4d0RuTG1tVWQ4cEdZdm9vRTRXem9ZZFMybzBvUnlWUQ=="
+              ]
+            ],
+            [
+              [
+                "atom",
+                "revision"
+              ],
+              [
+                "int",
+                0
+              ]
+            ],
+            [
+              [
+                "atom",
+                "previous"
+              ],
+              [
+                "nil"
+              ]
+            ],
+            [
+              [
+                "atom",
+                "entries"
+              ],
+              [
+                "list",
+                [
+                  [
+                    "map",
+                    [
+                      [
+                        [
+                          "atom",
+                          "product"
+                        ],
+                        [
+                          "atom",
+                          "treehouse"
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "replica"
+                        ],
+                        [
+                          "bin",
+                          "dHJlZWhvdXNlOnNwYWNlOmNvZGVjLWZpeHR1cmU="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "kind"
+                        ],
+                        [
+                          "atom",
+                          "space"
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "schema"
+                        ],
+                        [
+                          "atom",
+                          "treehouse_space_v1"
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "root"
+                        ],
+                        [
+                          "bin",
+                          "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "genesis"
+                        ],
+                        [
+                          "bin",
+                          "ajI4YW0zZVBkRXVxeTZ2SFlLM0ZkWXRVN2NIU1JMb0x0OVNNSzdJcmtZQQ=="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "creation"
+                        ],
+                        [
+                          "bin",
+                          "LWFkelJuVFZwM0otRVdqa2RrVkFXLXZqTUlIN09qajF5ajY2WmZ5ZlV2Yw=="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "reference"
+                        ],
+                        [
+                          "bin",
+                          "TXp3RTNSVWFLbWd4d0RuTG1tVWQ4cEdZdm9vRTRXem9ZZFMybzBvUnlWUQ=="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "route"
+                        ],
+                        [
+                          "bin",
+                          "L3IvM2FCUWdJMm1ndjMtb1FBbHpibFBybm5VMkJwVGJtdHJQb3ZPb2JzM21BVQ=="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "service_id"
+                        ],
+                        [
+                          "bin",
+                          "bmZhd0pxakd3bTQ4T3MwamNLRnVrX185d0FGZjliMkhraGg0Z0NYYkFvQQ=="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "service_key"
+                        ],
+                        [
+                          "bin",
+                          "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E="
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    "map",
+                    [
+                      [
+                        [
+                          "atom",
+                          "product"
+                        ],
+                        [
+                          "atom",
+                          "treehouse"
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "replica"
+                        ],
+                        [
+                          "bin",
+                          "dHJlZWhvdXNlOnRocmVhZDpjb2RlYy1maXh0dXJl"
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "kind"
+                        ],
+                        [
+                          "atom",
+                          "thread"
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "schema"
+                        ],
+                        [
+                          "atom",
+                          "treehouse_thread_v1"
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "root"
+                        ],
+                        [
+                          "bin",
+                          "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "genesis"
+                        ],
+                        [
+                          "bin",
+                          "U2xqZ1RQN1lnaFdmVmdXdXY1OV9WbUphbFZ3NE9sM3pLUEFYRGFjTHJLTQ=="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "creation"
+                        ],
+                        [
+                          "bin",
+                          "Qk5YNVJEc203cnl4RWVsVGNiWWtkTlc5WDl2clI5UkdoNGlEM1pNTFpHaw=="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "reference"
+                        ],
+                        [
+                          "bin",
+                          "REV6UWU0S0Q4SnFWWlJlTnRGcUFVRE9GSndtbk8xVnhlM3RMM3FGRi1yNA=="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "route"
+                        ],
+                        [
+                          "bin",
+                          "L3IvbldGUlQ2UldnWC1CU204YVBXcnZhTno1UDIzaVdTTEVCeE5zWmp2bWUyaw=="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "service_id"
+                        ],
+                        [
+                          "bin",
+                          "bmZhd0pxakd3bTQ4T3MwamNLRnVrX185d0FGZjliMkhraGg0Z0NYYkFvQQ=="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "service_key"
+                        ],
+                        [
+                          "bin",
+                          "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E="
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      [
+        [
+          "atom",
+          "signature"
+        ],
+        [
+          "bin",
+          "UaJC89bh/L2shPak4xV3jdPnXUs5afV1XQiqs8wU9ojdnT6pDlSUWUA7c054nZCZ8WR6uEYN358CIWhJEgYsBQ=="
+        ]
+      ]
+    ]
+  ],
+  "rotation_envelope_term": [
+    "map",
+    [
+      [
+        [
+          "atom",
+          "rotation"
+        ],
+        [
+          "map",
+          [
+            [
+              [
+                "atom",
+                "version"
+              ],
+              [
+                "int",
+                1
+              ]
+            ],
+            [
+              [
+                "atom",
+                "product"
+              ],
+              [
+                "atom",
+                "treehouse"
+              ]
+            ],
+            [
+              [
+                "atom",
+                "space"
+              ],
+              [
+                "bin",
+                "dHJlZWhvdXNlOnNwYWNlOmNvZGVjLWZpeHR1cmU="
+              ]
+            ],
+            [
+              [
+                "atom",
+                "bootstrap"
+              ],
+              [
+                "bin",
+                "TXp3RTNSVWFLbWd4d0RuTG1tVWQ4cEdZdm9vRTRXem9ZZFMybzBvUnlWUQ=="
+              ]
+            ],
+            [
+              [
+                "atom",
+                "parent"
+              ],
+              [
+                "bin",
+                "TXp3RTNSVWFLbWd4d0RuTG1tVWQ4cEdZdm9vRTRXem9ZZFMybzBvUnlWUQ=="
+              ]
+            ],
+            [
+              [
+                "atom",
+                "prior_catalog"
+              ],
+              [
+                "bin",
+                "MG9VR0dmQmRFbkNNSjB3RXJ0enZOQ1hZMTV5b3BCMW12MWxfY1dsTElmTQ=="
+              ]
+            ],
+            [
+              [
+                "atom",
+                "generation"
+              ],
+              [
+                "int",
+                1
+              ]
+            ],
+            [
+              [
+                "atom",
+                "new_catalog_key"
+              ],
+              [
+                "bin",
+                "ypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnw="
+              ]
+            ],
+            [
+              [
+                "atom",
+                "nonce"
+              ],
+              [
+                "bin",
+                "c2lSeF8xQXZBWlV6TkhtNkRQdXZ1ajN0czlBTmY4MTV3aUxpa2ZPaDhSSQ=="
+              ]
+            ],
+            [
+              [
+                "atom",
+                "inventory_digest"
+              ],
+              [
+                "bin",
+                "c1JxRnNwYXBDdnhHQkRCRFNsQk9lc3NFc0dSWFczSjNja2FJcnc1WjBZaw=="
+              ]
+            ],
+            [
+              [
+                "atom",
+                "cutoffs"
+              ],
+              [
+                "list",
+                [
+                  [
+                    "map",
+                    [
+                      [
+                        [
+                          "atom",
+                          "replica"
+                        ],
+                        [
+                          "bin",
+                          "dHJlZWhvdXNlOnNwYWNlOmNvZGVjLWZpeHR1cmU="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "frontier"
+                        ],
+                        [
+                          "list",
+                          [
+                            [
+                              "bin",
+                              "MDZQWEtWdlBBTDJqTmFhYmE5d1FNSEVFV0VUM0RmOW5Gc2dqSUcxZy02Yw=="
+                            ],
+                            [
+                              "bin",
+                              "VUxEU1NvekVzRmI4SlJGQkVoYTFMOC0yX01VVnZiMnUwTExpd2I3NmxaNA=="
+                            ]
+                          ]
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "log_digest"
+                        ],
+                        [
+                          "bin",
+                          "OG5BTE1jaV9Lb0RkYldwOV9QNU5SS0hvU3Jwc0tSNlNRdGdzaEhhTzhQTQ=="
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      [
+        [
+          "atom",
+          "old_signature"
+        ],
+        [
+          "bin",
+          "6hjYwNsSbr3k9J3BfDx5tfc1ce+RRpJzfYOzcgsssAXBXoBWrLqq+vU+bGsMdR1R1eLfM+qUxkqh1fwOIHLuDw=="
+        ]
+      ],
+      [
+        [
+          "atom",
+          "new_signature"
+        ],
+        [
+          "bin",
+          "9MH32v2Et7rht+czaNabl3E1vSl6xl4KbCBUNSsfEiRC8j/0GH0OFrItnJW33SOP0kSOczFh2k++NFXeRBX4Cw=="
+        ]
+      ]
+    ]
+  ],
+  "cutoff_term": [
+    "map",
+    [
+      [
+        [
+          "atom",
+          "replica"
+        ],
+        [
+          "bin",
+          "dHJlZWhvdXNlOnNwYWNlOmNvZGVjLWZpeHR1cmU="
+        ]
+      ],
+      [
+        [
+          "atom",
+          "frontier"
+        ],
+        [
+          "list",
+          [
+            [
+              "bin",
+              "MDZQWEtWdlBBTDJqTmFhYmE5d1FNSEVFV0VUM0RmOW5Gc2dqSUcxZy02Yw=="
+            ],
+            [
+              "bin",
+              "VUxEU1NvekVzRmI4SlJGQkVoYTFMOC0yX01VVnZiMnUwTExpd2I3NmxaNA=="
+            ]
+          ]
+        ]
+      ],
+      [
+        [
+          "atom",
+          "log_digest"
+        ],
+        [
+          "bin",
+          "OG5BTE1jaV9Lb0RkYldwOV9QNU5SS0hvU3Jwc0tSNlNRdGdzaEhhTzhQTQ=="
+        ]
+      ]
+    ]
+  ],
+  "expected_catalog_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+  "expected_old_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+  "catalog_bytes": "glgmbGF0dGljZS10cmVlaG91c2UtdHJhbnNwb3J0LWNhdGFsb2ctdjGo2epgRXNwYWNlWB10cmVlaG91c2U6c3BhY2U6Y29kZWMtZml4dHVyZdnqYEdiaW5kaW5nWCtNendFM1JVYUttZ3h3RG5MbW1VZDhwR1l2b29FNFd6b1lkUzJvMG9SeVZR2epgR2VudHJpZXOCq9nqYERraW5k2epgRXNwYWNl2epgRHJvb3RYIIqI4910CfGV/VLbLTy6XXLKZwm/HZQSG/N0iAG0D29c2epgRXJvdXRlWC4vci8zYUJRZ0kybWd2My1vUUFsemJsUHJublUyQnBUYm10clBvdk9vYnMzbUFV2epgRnNjaGVtYdnqYFJ0cmVlaG91c2Vfc3BhY2VfdjHZ6mBHZ2VuZXNpc1grajI4YW0zZVBkRXVxeTZ2SFlLM0ZkWXRVN2NIU1JMb0x0OVNNSzdJcmtZQdnqYEdwcm9kdWN02epgSXRyZWVob3VzZdnqYEdyZXBsaWNhWB10cmVlaG91c2U6c3BhY2U6Y29kZWMtZml4dHVyZdnqYEhjcmVhdGlvblgrLWFkelJuVFZwM0otRVdqa2RrVkFXLXZqTUlIN09qajF5ajY2WmZ5ZlV2Y9nqYElyZWZlcmVuY2VYK016d0UzUlVhS21neHdEbkxtbVVkOHBHWXZvb0U0V3pvWWRTMm8wb1J5VlHZ6mBKc2VydmljZV9pZFgrbmZhd0pxakd3bTQ4T3MwamNLRnVrX185d0FGZjliMkhraGg0Z0NYYkFvQdnqYEtzZXJ2aWNlX2tleVgg7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9Gr2epgRGtpbmTZ6mBGdGhyZWFk2epgRHJvb3RYIIqI4910CfGV/VLbLTy6XXLKZwm/HZQSG/N0iAG0D29c2epgRXJvdXRlWC4vci9uV0ZSVDZSV2dYLUJTbThhUFdydmFOejVQMjNpV1NMRUJ4TnNaanZtZTJr2epgRnNjaGVtYdnqYFN0cmVlaG91c2VfdGhyZWFkX3Yx2epgR2dlbmVzaXNYK1NsamdUUDdZZ2hXZlZnV3V2NTlfVm1KYWxWdzRPbDN6S1BBWERhY0xyS03Z6mBHcHJvZHVjdNnqYEl0cmVlaG91c2XZ6mBHcmVwbGljYVgedHJlZWhvdXNlOnRocmVhZDpjb2RlYy1maXh0dXJl2epgSGNyZWF0aW9uWCtCTlg1UkRzbTdyeXhFZWxUY2JZa2ROVzlYOXZyUjlSR2g0aUQzWk1MWkdr2epgSXJlZmVyZW5jZVgrREV6UWU0S0Q4SnFWWlJlTnRGcUFVRE9GSndtbk8xVnhlM3RMM3FGRi1yNNnqYEpzZXJ2aWNlX2lkWCtuZmF3SnFqR3dtNDhPczBqY0tGdWtfXzl3QUZmOWIySGtoaDRnQ1hiQW9B2epgS3NlcnZpY2Vfa2V5WCDtSSjGKNHCxurpAziQWZVhKVknOlxj+TY2wUYUrIc30dnqYEdwcm9kdWN02epgSXRyZWVob3VzZdnqYEd2ZXJzaW9uAdnqYEhwcmV2aW91c/bZ6mBIcmV2aXNpb24A2epgSWJvb3RzdHJhcFgrTXp3RTNSVWFLbWd4d0RuTG1tVWQ4cEdZdm9vRTRXem9ZZFMybzBvUnlWUQ==",
+  "rotation_bytes": "glglbGF0dGljZS10cmVlaG91c2UtY2F0YWxvZy1yb3RhdGlvbi12MavZ6mBFbm9uY2VYK3NpUnhfMUF2QVpVek5IbTZEUHV2dWozdHM5QU5mODE1d2lMaWtmT2g4UknZ6mBFc3BhY2VYHXRyZWVob3VzZTpzcGFjZTpjb2RlYy1maXh0dXJl2epgRnBhcmVudFgrTXp3RTNSVWFLbWd4d0RuTG1tVWQ4cEdZdm9vRTRXem9ZZFMybzBvUnlWUdnqYEdjdXRvZmZzgaPZ6mBHcmVwbGljYVgddHJlZWhvdXNlOnNwYWNlOmNvZGVjLWZpeHR1cmXZ6mBIZnJvbnRpZXKCWCswNlBYS1Z2UEFMMmpOYWFiYTl3UU1IRUVXRVQzRGY5bkZzZ2pJRzFnLTZjWCtVTERTU296RXNGYjhKUkZCRWhhMUw4LTJfTVVWdmIydTBMTGl3Yjc2bFo02epgSmxvZ19kaWdlc3RYKzhuQUxNY2lfS29EZGJXcDlfUDVOUktIb1NycHNLUjZTUXRnc2hIYU84UE3Z6mBHcHJvZHVjdNnqYEl0cmVlaG91c2XZ6mBHdmVyc2lvbgHZ6mBJYm9vdHN0cmFwWCtNendFM1JVYUttZ3h3RG5MbW1VZDhwR1l2b29FNFd6b1lkUzJvMG9SeVZR2epgSmdlbmVyYXRpb24B2epgTXByaW9yX2NhdGFsb2dYKzBvVUdHZkJkRW5DTUowd0VydHp2TkNYWTE1eW9wQjFtdjFsX2NXbExJZk3Z6mBPbmV3X2NhdGFsb2dfa2V5WCDKk6wXBRhwcdZ7g8f/Dv6BCOjsRTBXXXcmh5Mz29q+fNnqYFBpbnZlbnRvcnlfZGlnZXN0WCtzUnFGc3BhcEN2eEdCREJEU2xCT2Vzc0VzR1JYVzNKM2NrYUlydzVaMFlr",
+  "possession_bytes": "g1gpbGF0dGljZS10cmVlaG91c2UtdHJhbnNwb3J0LXBvc3Nlc3Npb24tdjHZ6mBHY2F0YWxvZ6vZ6mBFbm9uY2VYK3NpUnhfMUF2QVpVek5IbTZEUHV2dWozdHM5QU5mODE1d2lMaWtmT2g4UknZ6mBFc3BhY2VYHXRyZWVob3VzZTpzcGFjZTpjb2RlYy1maXh0dXJl2epgRnBhcmVudFgrTXp3RTNSVWFLbWd4d0RuTG1tVWQ4cEdZdm9vRTRXem9ZZFMybzBvUnlWUdnqYEdjdXRvZmZzgaPZ6mBHcmVwbGljYVgddHJlZWhvdXNlOnNwYWNlOmNvZGVjLWZpeHR1cmXZ6mBIZnJvbnRpZXKCWCswNlBYS1Z2UEFMMmpOYWFiYTl3UU1IRUVXRVQzRGY5bkZzZ2pJRzFnLTZjWCtVTERTU296RXNGYjhKUkZCRWhhMUw4LTJfTVVWdmIydTBMTGl3Yjc2bFo02epgSmxvZ19kaWdlc3RYKzhuQUxNY2lfS29EZGJXcDlfUDVOUktIb1NycHNLUjZTUXRnc2hIYU84UE3Z6mBHcHJvZHVjdNnqYEl0cmVlaG91c2XZ6mBHdmVyc2lvbgHZ6mBJYm9vdHN0cmFwWCtNendFM1JVYUttZ3h3RG5MbW1VZDhwR1l2b29FNFd6b1lkUzJvMG9SeVZR2epgSmdlbmVyYXRpb24B2epgTXByaW9yX2NhdGFsb2dYKzBvVUdHZkJkRW5DTUowd0VydHp2TkNYWTE1eW9wQjFtdjFsX2NXbExJZk3Z6mBPbmV3X2NhdGFsb2dfa2V5WCDKk6wXBRhwcdZ7g8f/Dv6BCOjsRTBXXXcmh5Mz29q+fNnqYFBpbnZlbnRvcnlfZGlnZXN0WCtzUnFGc3BhcEN2eEdCREJEU2xCT2Vzc0VzR1JYVzNKM2NrYUlydzVaMFlr",
+  "inventory_bytes": "glgkbGF0dGljZS10cmVlaG91c2Utcm91dGUtaW52ZW50b3J5LXYxgqvZ6mBEa2luZNnqYEVzcGFjZdnqYERyb290WCCKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXNnqYEVyb3V0ZVguL3IvM2FCUWdJMm1ndjMtb1FBbHpibFBybm5VMkJwVGJtdHJQb3ZPb2JzM21BVdnqYEZzY2hlbWHZ6mBSdHJlZWhvdXNlX3NwYWNlX3Yx2epgR2dlbmVzaXNYK2oyOGFtM2VQZEV1cXk2dkhZSzNGZFl0VTdjSFNSTG9MdDlTTUs3SXJrWUHZ6mBHcHJvZHVjdNnqYEl0cmVlaG91c2XZ6mBHcmVwbGljYVgddHJlZWhvdXNlOnNwYWNlOmNvZGVjLWZpeHR1cmXZ6mBIY3JlYXRpb25YKy1hZHpSblRWcDNKLUVXamtka1ZBVy12ak1JSDdPamoxeWo2NlpmeWZVdmPZ6mBJcmVmZXJlbmNlWCtNendFM1JVYUttZ3h3RG5MbW1VZDhwR1l2b29FNFd6b1lkUzJvMG9SeVZR2epgSnNlcnZpY2VfaWRYK25mYXdKcWpHd200OE9zMGpjS0Z1a19fOXdBRmY5YjJIa2hoNGdDWGJBb0HZ6mBLc2VydmljZV9rZXlYIO1JKMYo0cLG6ukDOJBZlWEpWSc6XGP5NjbBRhSshzfRq9nqYERraW5k2epgRnRocmVhZNnqYERyb290WCCKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXNnqYEVyb3V0ZVguL3IvbldGUlQ2UldnWC1CU204YVBXcnZhTno1UDIzaVdTTEVCeE5zWmp2bWUya9nqYEZzY2hlbWHZ6mBTdHJlZWhvdXNlX3RocmVhZF92MdnqYEdnZW5lc2lzWCtTbGpnVFA3WWdoV2ZWZ1d1djU5X1ZtSmFsVnc0T2wzektQQVhEYWNMcktN2epgR3Byb2R1Y3TZ6mBJdHJlZWhvdXNl2epgR3JlcGxpY2FYHnRyZWVob3VzZTp0aHJlYWQ6Y29kZWMtZml4dHVyZdnqYEhjcmVhdGlvblgrQk5YNVJEc203cnl4RWVsVGNiWWtkTlc5WDl2clI5UkdoNGlEM1pNTFpHa9nqYElyZWZlcmVuY2VYK0RFelFlNEtEOEpxVlpSZU50RnFBVURPRkp3bW5PMVZ4ZTN0TDNxRkYtcjTZ6mBKc2VydmljZV9pZFgrbmZhd0pxakd3bTQ4T3MwamNLRnVrX185d0FGZjliMkhraGg0Z0NYYkFvQdnqYEtzZXJ2aWNlX2tleVgg7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+  "catalog_id": "ONCszkqDesEf-DPKcCXDA01Z6IqD9FjO7PqXQ9xxOHI",
+  "rotation_id": "jrRCiGE4BM6Mz2tlb2wJvkupuLN_HK-MrKI9tiNxWFk",
+  "inventory_id": "4b6mh3HWvW9sMyP1HTl_G4oyd8ieJg9DOL6_D2NpTv4",
+  "typed": {
+    "bootstrap": {
+      "version": 1,
+      "product": "treehouse",
+      "space": "treehouse:space:codec-fixture",
+      "spaceRoot": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+      "profileGenesis": "rXyHdRIZef0LkdbyYRhh2fW9y_AB5i5ahRLqKIRrmmI",
+      "profileId": "GQDqtsAoSD1xJlme5vUN4NJ5B7XGX6kFJFgLSw-YUrA",
+      "replacementRule": "bounded_space_admin_v1",
+      "catalogKey": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+      "serviceId": "nfawJqjGwm48Os0jcKFuk__9wAFf9b2Hkhh4gCXbAoA",
+      "serviceKey": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+      "origin": "wss://catalog.invalid",
+      "nonce": "DNF-NTSPycI0lSMm_H8SOHG1sIG6IAhLgm4BMK7dUUQ"
+    },
+    "entry": {
+      "product": "treehouse",
+      "replica": "treehouse:space:codec-fixture",
+      "kind": "space",
+      "schema": "treehouse_space_v1",
+      "root": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+      "genesis": "j28am3ePdEuqy6vHYK3FdYtU7cHSRLoLt9SMK7IrkYA",
+      "creation": "-adzRnTVp3J-EWjkdkVAW-vjMIH7Ojj1yj66ZfyfUvc",
+      "reference": "MzwE3RUaKmgxwDnLmmUd8pGYvooE4WzoYdS2o0oRyVQ",
+      "route": "/r/3aBQgI2mgv3-oQAlzblPrnnU2BpTbmtrPovOobs3mAU",
+      "serviceId": "nfawJqjGwm48Os0jcKFuk__9wAFf9b2Hkhh4gCXbAoA",
+      "serviceKey": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E="
+    },
+    "catalog": {
+      "version": 1,
+      "product": "treehouse",
+      "space": "treehouse:space:codec-fixture",
+      "bootstrap": "MzwE3RUaKmgxwDnLmmUd8pGYvooE4WzoYdS2o0oRyVQ",
+      "binding": "MzwE3RUaKmgxwDnLmmUd8pGYvooE4WzoYdS2o0oRyVQ",
+      "revision": 0,
+      "previous": null,
+      "entries": [
+        {
+          "product": "treehouse",
+          "replica": "treehouse:space:codec-fixture",
+          "kind": "space",
+          "schema": "treehouse_space_v1",
+          "root": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+          "genesis": "j28am3ePdEuqy6vHYK3FdYtU7cHSRLoLt9SMK7IrkYA",
+          "creation": "-adzRnTVp3J-EWjkdkVAW-vjMIH7Ojj1yj66ZfyfUvc",
+          "reference": "MzwE3RUaKmgxwDnLmmUd8pGYvooE4WzoYdS2o0oRyVQ",
+          "route": "/r/3aBQgI2mgv3-oQAlzblPrnnU2BpTbmtrPovOobs3mAU",
+          "serviceId": "nfawJqjGwm48Os0jcKFuk__9wAFf9b2Hkhh4gCXbAoA",
+          "serviceKey": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E="
+        },
+        {
+          "product": "treehouse",
+          "replica": "treehouse:thread:codec-fixture",
+          "kind": "thread",
+          "schema": "treehouse_thread_v1",
+          "root": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+          "genesis": "SljgTP7YghWfVgWuv59_VmJalVw4Ol3zKPAXDacLrKM",
+          "creation": "BNX5RDsm7ryxEelTcbYkdNW9X9vrR9RGh4iD3ZMLZGk",
+          "reference": "DEzQe4KD8JqVZReNtFqAUDOFJwmnO1Vxe3tL3qFF-r4",
+          "route": "/r/nWFRT6RWgX-BSm8aPWrvaNz5P23iWSLEBxNsZjvme2k",
+          "serviceId": "nfawJqjGwm48Os0jcKFuk__9wAFf9b2Hkhh4gCXbAoA",
+          "serviceKey": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E="
+        }
+      ]
+    },
+    "envelope": {
+      "catalog": {
+        "version": 1,
+        "product": "treehouse",
+        "space": "treehouse:space:codec-fixture",
+        "bootstrap": "MzwE3RUaKmgxwDnLmmUd8pGYvooE4WzoYdS2o0oRyVQ",
+        "binding": "MzwE3RUaKmgxwDnLmmUd8pGYvooE4WzoYdS2o0oRyVQ",
+        "revision": 0,
+        "previous": null,
+        "entries": [
+          {
+            "product": "treehouse",
+            "replica": "treehouse:space:codec-fixture",
+            "kind": "space",
+            "schema": "treehouse_space_v1",
+            "root": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+            "genesis": "j28am3ePdEuqy6vHYK3FdYtU7cHSRLoLt9SMK7IrkYA",
+            "creation": "-adzRnTVp3J-EWjkdkVAW-vjMIH7Ojj1yj66ZfyfUvc",
+            "reference": "MzwE3RUaKmgxwDnLmmUd8pGYvooE4WzoYdS2o0oRyVQ",
+            "route": "/r/3aBQgI2mgv3-oQAlzblPrnnU2BpTbmtrPovOobs3mAU",
+            "serviceId": "nfawJqjGwm48Os0jcKFuk__9wAFf9b2Hkhh4gCXbAoA",
+            "serviceKey": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E="
+          },
+          {
+            "product": "treehouse",
+            "replica": "treehouse:thread:codec-fixture",
+            "kind": "thread",
+            "schema": "treehouse_thread_v1",
+            "root": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+            "genesis": "SljgTP7YghWfVgWuv59_VmJalVw4Ol3zKPAXDacLrKM",
+            "creation": "BNX5RDsm7ryxEelTcbYkdNW9X9vrR9RGh4iD3ZMLZGk",
+            "reference": "DEzQe4KD8JqVZReNtFqAUDOFJwmnO1Vxe3tL3qFF-r4",
+            "route": "/r/nWFRT6RWgX-BSm8aPWrvaNz5P23iWSLEBxNsZjvme2k",
+            "serviceId": "nfawJqjGwm48Os0jcKFuk__9wAFf9b2Hkhh4gCXbAoA",
+            "serviceKey": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E="
+          }
+        ]
+      },
+      "signature": "UaJC89bh/L2shPak4xV3jdPnXUs5afV1XQiqs8wU9ojdnT6pDlSUWUA7c054nZCZ8WR6uEYN358CIWhJEgYsBQ=="
+    },
+    "cutoff": {
+      "replica": "treehouse:space:codec-fixture",
+      "frontier": [
+        "06PXKVvPAL2jNaaba9wQMHEEWET3Df9nFsgjIG1g-6c",
+        "ULDSSozEsFb8JRFBEha1L8-2_MUVvb2u0LLiwb76lZ4"
+      ],
+      "logDigest": "8nALMci_KoDdbWp9_P5NRKHoSrpsKR6SQtgshHaO8PM"
+    },
+    "rotation": {
+      "version": 1,
+      "product": "treehouse",
+      "space": "treehouse:space:codec-fixture",
+      "bootstrap": "MzwE3RUaKmgxwDnLmmUd8pGYvooE4WzoYdS2o0oRyVQ",
+      "parent": "MzwE3RUaKmgxwDnLmmUd8pGYvooE4WzoYdS2o0oRyVQ",
+      "priorCatalog": "0oUGGfBdEnCMJ0wErtzvNCXY15yopB1mv1l_cWlLIfM",
+      "generation": 1,
+      "newCatalogKey": "ypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnw=",
+      "nonce": "siRx_1AvAZUzNHm6DPuvuj3ts9ANf815wiLikfOh8RI",
+      "inventoryDigest": "sRqFspapCvxGBDBDSlBOessEsGRXW3J3ckaIrw5Z0Yk",
+      "cutoffs": [
+        {
+          "replica": "treehouse:space:codec-fixture",
+          "frontier": [
+            "06PXKVvPAL2jNaaba9wQMHEEWET3Df9nFsgjIG1g-6c",
+            "ULDSSozEsFb8JRFBEha1L8-2_MUVvb2u0LLiwb76lZ4"
+          ],
+          "logDigest": "8nALMci_KoDdbWp9_P5NRKHoSrpsKR6SQtgshHaO8PM"
+        }
+      ]
+    },
+    "rotationEnvelope": {
+      "rotation": {
+        "version": 1,
+        "product": "treehouse",
+        "space": "treehouse:space:codec-fixture",
+        "bootstrap": "MzwE3RUaKmgxwDnLmmUd8pGYvooE4WzoYdS2o0oRyVQ",
+        "parent": "MzwE3RUaKmgxwDnLmmUd8pGYvooE4WzoYdS2o0oRyVQ",
+        "priorCatalog": "0oUGGfBdEnCMJ0wErtzvNCXY15yopB1mv1l_cWlLIfM",
+        "generation": 1,
+        "newCatalogKey": "ypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnw=",
+        "nonce": "siRx_1AvAZUzNHm6DPuvuj3ts9ANf815wiLikfOh8RI",
+        "inventoryDigest": "sRqFspapCvxGBDBDSlBOessEsGRXW3J3ckaIrw5Z0Yk",
+        "cutoffs": [
+          {
+            "replica": "treehouse:space:codec-fixture",
+            "frontier": [
+              "06PXKVvPAL2jNaaba9wQMHEEWET3Df9nFsgjIG1g-6c",
+              "ULDSSozEsFb8JRFBEha1L8-2_MUVvb2u0LLiwb76lZ4"
+            ],
+            "logDigest": "8nALMci_KoDdbWp9_P5NRKHoSrpsKR6SQtgshHaO8PM"
+          }
+        ]
+      },
+      "oldSignature": "6hjYwNsSbr3k9J3BfDx5tfc1ce+RRpJzfYOzcgsssAXBXoBWrLqq+vU+bGsMdR1R1eLfM+qUxkqh1fwOIHLuDw==",
+      "newSignature": "9MH32v2Et7rht+czaNabl3E1vSl6xl4KbCBUNSsfEiRC8j/0GH0OFrItnJW33SOP0kSOczFh2k++NFXeRBX4Cw=="
+    }
+  }
+}

@@ -9,6 +9,9 @@ defmodule Treehouse.TransportCatalog do
   @entry_fields ~w(product replica kind schema root genesis creation reference route service_id service_key)a
   @max_artifact_bytes 131_072
 
+  @spec verify_rotation(term(), binary()) :: :ok | {:error, atom()}
+  def verify_rotation(_envelope, _trusted_key), do: {:error, :invalid_rotation_signature}
+
   @spec verify_catalog_json(binary(), binary()) :: :ok | {:error, atom()}
   def verify_catalog_json(bytes, trusted_key) do
     with {:ok, envelope} <- decode_catalog_json(bytes), do: verify_catalog(envelope, trusted_key)
