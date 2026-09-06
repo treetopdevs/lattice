@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { trustFixture, fixtureId, fixtureSigner, signedCatalog, signedRotation } from "./support/export_treehouse_catalog_trust";
-import { authorTreehouseCommand, authorTreehouseRoleTransfer } from "../src/treehouse";
+import { authorTreehouseCommand, authorTreehouseRoleTransfer, treehouseCommandDecoders, treehouseThreadSchema } from "../src/treehouse";
 import { authorCarrierDelegation, authorCarrierOp, canonicalBytesForCarrierTerm } from "../src/codec";
 import { continuationProfileToCarrierTerm } from "../src/continuation";
 import type { CarrierTerm } from "../src/carrier";
+import { carrierOpsToSemanticOps } from "../src/carrier";
+import { materialize } from "../src/materialize";
 import { catalogEnvelopeFromCarrierTerm, catalogEnvelopeToCarrierTerm, catalogRotationEnvelopeFromCarrierTerm, catalogRotationEnvelopeToCarrierTerm,
   catalogRotationId, transportCatalogId } from "../src/treehouse_catalog_codec";
 import type { CatalogEntry, TransportCatalog } from "../src/treehouse_catalog_codec";
@@ -136,6 +138,98 @@ test("valid catalog siblings freeze in both orders, including withheld child pro
   const pendingJson = await signedCatalog(c, f.catalogSigner);
   const fork = await evaluate(initial, {catalogs: [artifacts[0]!, pendingJson]}); assert.equal(fork.kind, "retain_blocked");
   assert.equal(fork.reason, "catalog_fork"); assert.deepEqual(fork.detail.pendingProofIds, [transportCatalogId(c)]);
+});
+
+test("authentic moderator changes in a pending nonaccepted fork sibling retain a reopenable freeze", async () => {
+  const f = await trustFixture(2), thread = f.threads[1]!;
+  const baseCatalog = {...f.catalog, entries: f.catalog.entries.filter((entry) => entry.replica !== thread.replica)};
+  const base = {...f, catalog: baseCatalog, catalogJson: await signedCatalog(baseCatalog, f.catalogSigner),
+    histories: f.histories.filter((history) => history.replica !== thread.replica)};
+  const first = await installed(base);
+  const left = revision(base, base.catalog.entries.map((entry) => ({...entry, route: `/r/${fixtureId(`left-${entry.replica}`)}`})));
+  const right = revision(base, f.catalog.entries.map((entry) => entry.replica === thread.replica ?
+    {...entry, route: left.entries.find((entry) => entry.kind === "space")!.route} : entry));
+  const catalogs = [await signedCatalog(left, f.catalogSigner), await signedCatalog(right, f.catalogSigner)];
+  const fork = await evaluate(first, {catalogs});
+  assert.equal(fork.kind, "retain_blocked"); assert.equal(fork.reason, "catalog_fork");
+  assert.deepEqual(fork.detail.pendingProofIds, [transportCatalogId(right)]);
+  const {frame: transfer} = await authorTreehouseRoleTransfer({replica: thread.replica, deps: [thread.genesis.id], signer: thread.signer,
+    recipient: fixtureSigner("fork-thread-successor").publicKey, parent: thread.delegation, action: "change_moderator"});
+  const frames = [...thread.frames, transfer];
+  const ops = carrierOpsToSemanticOps(frames, {}, treehouseCommandDecoders("Treehouse.Thread"));
+  const projection = materialize(treehouseThreadSchema, ops, new Set(ops.map((op) => op.id)), null, thread.replica);
+  assert.equal(projection.quarantineReasons.has(transfer.id), false, "the real signed moderator transfer is honored");
+  assert.equal(projection.quarantineReasons.has(thread.creation.id), true, "the concurrent transfer actually refuses the child creation");
+  const unblocked = await evaluate(first, {catalogs: [catalogs[1]!], histories: [{replica: thread.replica, frames, rejected: []}]});
+  assert.equal(unblocked.kind, "reject"); refused(unblocked, "invalid_catalog_transition");
+  const retained = [];
+  for (const delivered of [frames, [...frames].reverse()]) {
+    const changed = await evaluate(fork.next, {histories: [{replica: thread.replica, frames: delivered, rejected: []}]});
+    assert.equal(changed.kind, "retain_blocked"); assert.equal(changed.reason, "catalog_fork");
+    assert.deepEqual(changed.next.accepted, first.accepted); assert.deepEqual(changed.next.catalogs, fork.next.catalogs);
+    assert.deepEqual(changed.next.blocked, fork.next.blocked); assert.deepEqual(changed.routes, []);
+    assert.deepEqual(changed.next.histories.find((history) => history.replica === thread.replica)!.frames,
+      [...frames].sort((a, b) => Buffer.compare(Buffer.from(a.id), Buffer.from(b.id))),
+      "every authenticated incoming frame is retained exactly");
+    const reopened = await evaluate(changed.next);
+    assert.equal(reopened.kind, "retain_blocked", JSON.stringify(reopened)); assert.equal(reopened.reason, "catalog_fork");
+    assert.deepEqual(reopened.next, changed.next); assert.deepEqual(reopened.routes, []);
+    const invalidCandidate = await evaluate(changed.next, {catalogs: ["malformed"]});
+    assert.equal(invalidCandidate.kind, "retain_blocked"); assert.deepEqual(invalidCandidate.next, changed.next);
+    const reopenedFallback = await evaluate(invalidCandidate.next);
+    assert.equal(reopenedFallback.kind, "retain_blocked"); assert.deepEqual(reopenedFallback.next, changed.next);
+    retained.push(changed.next);
+  }
+  assert.deepEqual(retained[0], retained[1]);
+  const {frame: spaceTransfer} = await authorTreehouseRoleTransfer({replica: f.space.replica, deps: [f.space.creation.id], signer: f.root,
+    recipient: fixtureSigner("fork-space-successor").publicKey, parent: f.space.delegation, action: "transfer_admin"});
+  const authority = await evaluate(fork.next, {histories: [{...f.histories[0]!, frames: [...f.space.frames, spaceTransfer]}]});
+  assert.equal(authority.kind, "retain_blocked"); assert.equal(authority.reason, "authority_changed");
+  const authorityChild = await evaluate(authority.next, {histories: [{replica: thread.replica, frames, rejected: []}]});
+  assert.equal(authorityChild.kind, "retain_blocked"); assert.equal(authorityChild.reason, "authority_changed");
+  assert.deepEqual(authorityChild.next.blocked!.authorityWitnesses, authority.next.blocked!.authorityWitnesses);
+  assert.equal(authorityChild.next.histories.some((history) => history.replica === thread.replica), true);
+  for (const frozen of [authority, authorityChild]) {
+    const reopened = await evaluate(frozen.next);
+    assert.equal(reopened.kind, "retain_blocked", JSON.stringify(reopened));
+    assert.deepEqual(reopened.next, frozen.next); assert.deepEqual(reopened.routes, []);
+  }
+});
+
+for (const contradiction of ["reference", "root"] as const) test(`authentic withheld proof revealing a retained sibling ${contradiction} mismatch must not emit unreopenable state`, async () => {
+  const f = await trustFixture(2), thread = f.threads[1]!;
+  const catalog = {...f.catalog, entries: f.catalog.entries.filter((entry) => entry.replica !== thread.replica)};
+  const base = {...f, catalog, catalogJson: await signedCatalog(catalog, f.catalogSigner),
+    histories: f.histories.filter((history) => history.replica !== thread.replica)};
+  const first = await installed(base);
+  const left = revision(base, base.catalog.entries.map((entry) => ({...entry, route: `/r/${fixtureId(`mismatch-left-${entry.replica}`)}`})));
+  const wrongReference = f.threads[0]!.reference.id;
+  const right = revision(base, f.catalog.entries.map((entry) => entry.replica !== thread.replica ? entry :
+    contradiction === "reference" ? {...entry, reference: wrongReference} : {...entry, root: f.bootstrapRecord.spaceRoot}));
+  const json = await signedCatalog(right, f.catalogSigner);
+  const fork = await evaluate(first, {catalogs: [await signedCatalog(left, f.catalogSigner), json]});
+  assert.equal(fork.kind, "retain_blocked"); assert.equal(fork.reason, "catalog_fork");
+  assert.deepEqual(fork.detail.pendingProofIds, [transportCatalogId(right)]);
+  const history = f.histories.find((history) => history.replica === thread.replica)!;
+  const unblocked = await evaluate(first, {catalogs: [json], histories: [history]});
+  assert.equal(unblocked.kind, "reject"); refused(unblocked, "invalid_catalog_transition");
+  const changed = await evaluate(fork.next, {histories: [history]});
+  assert.equal(changed.kind, "retain_blocked"); assert.equal(changed.reason, "catalog_fork");
+  assert.deepEqual(changed.next.catalogs, fork.next.catalogs); assert.deepEqual(changed.next.accepted, first.accepted);
+  assert.equal(changed.next.histories.some((saved) => saved.replica === thread.replica), true);
+  const reopened = await evaluate(changed.next);
+  assert.equal(reopened.kind, "retain_blocked", JSON.stringify(reopened));
+  assert.deepEqual(reopened.next, changed.next); assert.deepEqual(reopened.routes, []);
+  const incomingInvalid = {...right, revision: 2, previous: transportCatalogId(left)};
+  const candidate = await evaluate(changed.next, {catalogs: [await signedCatalog(incomingInvalid, f.catalogSigner)]});
+  assert.equal(candidate.kind, "retain_blocked");
+  assert.deepEqual(candidate.next.catalogs, changed.next.catalogs, "a new invalid candidate is not admitted through the retained-evidence exception");
+  assert.deepEqual((await evaluate(candidate.next)).kind, "retain_blocked");
+  const corrupted = structuredClone(changed.next), row = corrupted.catalogs.find((row) => row.id === transportCatalogId(right))!;
+  const envelope = catalogEnvelopeFromCarrierTerm(JSON.parse(row.json))!;
+  row.json = JSON.stringify(catalogEnvelopeToCarrierTerm({...envelope, signature: Buffer.alloc(64).toString("base64")}));
+  const broken = await evaluate(corrupted, {catalogs: [json], histories: f.histories});
+  assert.equal(broken.kind, "reject"); refused(broken, "trust_recovery_required");
 });
 
 test("old-key rotation verifies possession, exact cutoff and inventory, then accepts a first new-key catalog", async () => {
@@ -338,6 +432,10 @@ test("a concurrent real role transfer reclassifies accepted bootstrap/reference 
   assert.deepEqual(changed.next.accepted, state.accepted); assert.deepEqual(changed.next.review, state.review); assert.deepEqual(changed.routes, []);
   const invalidCatalog = await evaluate(state, {histories: [{...f.histories[0]!, frames: [...f.space.frames, transfer]}], catalogs: ["malformed"]});
   assert.equal(invalidCatalog.kind, "retain_blocked"); assert.equal(invalidCatalog.reason, "authority_changed");
+  for (const frozen of [changed, invalidCatalog]) {
+    const reopened = await evaluate(frozen.next);
+    assert.equal(reopened.kind, "retain_blocked"); assert.deepEqual(reopened.next, frozen.next);
+  }
 });
 
 async function blockedRotation(f: Fixture) {

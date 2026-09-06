@@ -185,10 +185,30 @@ async function evaluateSnapshot(value: {
     if (next.blocked !== null) frozen = {next: structuredClone(next), expected: value.expected, replacement, bootstrapIds};
 
     const catalogs = new Map<string, CatalogNode>(), rotations = new Map<string, RotationNode>();
+    const retainedCatalogIds = new Set(original.catalogs.map((row) => row.id));
     for (const saved of original.catalogs) addCatalog(catalogs, saved.json, bootstrap, original.review.bootstrapId, saved.id);
     for (const saved of original.rotations) addRotation(rotations, saved.json, bootstrap, original.review.bootstrapId, saved.id);
     for (const json of value.incoming.catalogs) addCatalog(catalogs, json, bootstrap, original.review.bootstrapId);
     for (const json of value.incoming.rotations) addRotation(rotations, json, bootstrap, original.review.bootstrapId);
+    const acceptedCatalogIds = new Set<string>(), acceptedBindingIds = new Set<string>();
+    const pendingCatalogs = original.accepted === null ? [] : [original.accepted.catalog];
+    const pendingBindings = original.accepted === null ? [] : [original.accepted.binding];
+    while (pendingCatalogs.length > 0 || pendingBindings.length > 0) {
+      const catalogId = pendingCatalogs.pop();
+      if (catalogId !== undefined && !acceptedCatalogIds.has(catalogId)) {
+        const node = catalogs.get(catalogId);
+        if (node === undefined) fail("trust_recovery_required");
+        acceptedCatalogIds.add(catalogId); pendingBindings.push(node.envelope.catalog.binding);
+        if (node.envelope.catalog.previous !== null) pendingCatalogs.push(node.envelope.catalog.previous);
+      }
+      const bindingId = pendingBindings.pop();
+      if (bindingId !== undefined && bindingId !== original.review.bootstrapId && !acceptedBindingIds.has(bindingId)) {
+        const node = rotations.get(bindingId);
+        if (node === undefined) fail("trust_recovery_required");
+        acceptedBindingIds.add(bindingId); pendingBindings.push(node.envelope.rotation.parent);
+        pendingCatalogs.push(node.envelope.rotation.priorCatalog);
+      }
+    }
     const bindings = new Map<string, Binding>([[original.review.bootstrapId, {id: original.review.bootstrapId, generation: 0,
       key: bootstrap.catalogKey, parent: null, prior: null, pending: [], inventory: null}]]);
     const visiting = new Set<string>();
@@ -233,11 +253,17 @@ async function evaluateSnapshot(value: {
         const prior = catalogFor(c.previous).envelope.catalog;
         if (prior.binding !== c.binding || c.revision !== prior.revision + 1 || !safe(prior.revision + 1) || !inventoryExtends(prior.entries, c.entries)) fail("invalid_catalog_transition", [id]);
       } else if (binding.inventory !== null && catalogInventoryId(c.entries) !== binding.inventory) fail("invalid_catalog_transition", [id]);
+      const retainedDiagnostic = original.blocked !== null && !acceptedCatalogIds.has(id) && retainedCatalogIds.has(id);
       for (const entry of c.entries) {
         const proof = entryProof(entry, histories, space);
-        if (proof.invalid || (proof.refused.length > 0 && next.blocked?.reason !== "authority_changed")) {
+        if ((proof.invalid && !retainedDiagnostic) ||
+          (proof.refused.length > 0 && next.blocked?.reason !== "authority_changed" && !retainedDiagnostic)) {
           fail("invalid_catalog_transition", [id, ...proof.refused]);
         }
+        // Previously retained frozen siblings can acquire contradictory proof.
+        // Keep those signed facts diagnostic; they cannot reserve a route.
+        if (proof.invalid) node.pending.push(entry.genesis, entry.creation, entry.reference);
+        if (retainedDiagnostic) node.pending.push(...proof.refused);
         node.pending.push(...proof.pending);
       }
       node.pending = sorted(node.pending);
