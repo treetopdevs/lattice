@@ -2025,3 +2025,55 @@ The earlier exact Fable attempt on `201e7ae6..4a823b96` ended with an API
 mid-response error and no verdict. Its full transcript and partial observations
 are retained; neither is a PASS. Final independent review and hosted thread/CI
 closure remain pending for this complete repair.
+
+### Public verifier canonical-bound follow-up (2026-09-06)
+
+The integrator authorized PR68 finding `PRRT_kwDOSZGqLc6fuGvg` before code:
+`BeaconCertificate.verify/3` must reject a matching claim epoch above the
+unchanged canonical uint64 maximum as `{:error, :unauthorized_beacon}` before
+constructing signing bytes. This is a total-verifier boundary repair, not a
+witnessed epoch-admission change. Existing canonically encodable claim bytes
+and valid signature verification remain unchanged, including standalone uint64
+controls; the authority judge still refuses witnessed epochs above its separate
+`9_007_199_254_740_991` horizon. The negative public test supplies matching
+certificate/expected claims above uint64 and must observe the documented error,
+not an exception. Scope is this certificate shape guard, its public test, and
+this evidence; generic canonical encoding, role semantics and old vectors stay
+unchanged. The separate high legacy ancestor finding requires the exact
+contextual representation disposition before its production changes.
+
+### Exact high legacy beacon ancestry (2026-09-06)
+
+For PR68 `PRRT_kwDOSZGqLc6fuGvf`, the integrator adopted a contextual decode
+amendment before code. Only an exact two-field authority `{:beacon, epoch}`
+preserves canonical uint64 epochs above `Number.MAX_SAFE_INTEGER` as exact
+decimal strings. Safe legacy epochs remain numbers. The beacon evidence and
+effective-beacon epoch types become `number | string` (with the existing null
+malformed-evidence arm); strings here are validated canonical high uint64 values,
+never rounded/saturated numeric sentinels. The collector compares causal maxima
+using transient BigInt values, preserving exact ascending/descending high-epoch
+decisions. Lease comparison explicitly handles high epochs relative to supported
+numeric leases. Root authentication and authorization-before-stale precedence
+remain unchanged. No authority or lease effect comes from a high non-root beacon.
+
+Consumer inventory at `a29c4510`: `carrier.ts` decodes evidence; `authority.ts`
+collects/stale-checks and exposes `security.validBeacons`; `capability.ts` consumes
+it for lease lapse. Materialization/quarantine use those decisions, with no
+independent epoch arithmetic. Township authoring constructs explicitly supplied
+safe witnessed claims and has no current-epoch reader. Generated declarations
+must carry the union. The separate combined R04 collector also passes beacons to
+`continuationExpectedClaim`, whose `Math.max` epoch/basis selection must explicitly
+refuse `invalid_continuation_epoch` if a selected valid ancestral legacy epoch
+exceeds its existing safe horizon; that integration is root-owned and is not
+permission to edit frozen R04 here.
+
+The prior Township authoring assertion that a valid high two-field root beacon
+is structurally malformed is explicitly superseded. Unrelated generic integers,
+all malformed decimal/uint64/depth grammar, and witnessed outer/direct claim
+epochs retain their strict boundaries. New public signed tests must distinguish
+two high integers that Number would collapse, low witnessed descendants, high
+unauthorized ancestors, exact causal ancestry and lease effects. New exporter
+evidence represents expected high epochs as decimal strings and verifies raw
+CarrierTerm bytes; JSON numeric rounding cannot be an oracle. Every old vector
+blob remains unchanged. The actual final Fable review includes this additive
+evidence API and the complete contextual decoder scope.

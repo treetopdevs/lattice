@@ -128,7 +128,7 @@ export type AuthorityEvidence = {
     atTick: number;
 } | {
     type: "beacon";
-    epoch: number | null;
+    epoch: number | string | null;
     certificate?: WitnessedBeaconCertificateEvidence | null;
     authorPubkey?: string;
 };

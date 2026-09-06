@@ -223,7 +223,13 @@ function continuationExpectedClaim(op, role, d, acquires, ctx, visible, byId) {
         d.expiresEpoch === undefined)
         return { ok: false, reason: "continuation_scope_exceeded" };
     const beacons = ctx.beacons.filter((b) => visible.has(b.opId));
-    const epoch = Math.max(-1, ...beacons.map((b) => b.epoch));
+    let epoch = -1;
+    for (const beacon of beacons) {
+        // Exact high legacy epochs are retained evidence, outside this claim horizon.
+        if (typeof beacon.epoch !== "number")
+            return { ok: false, reason: "invalid_continuation_epoch" };
+        epoch = Math.max(epoch, beacon.epoch);
+    }
     if (!Number.isSafeInteger(epoch) || epoch < 0)
         return { ok: false, reason: "invalid_continuation_epoch" };
     const claim = {
@@ -1086,10 +1092,11 @@ function collectBeacons(visible, byId, root, delegations, ancCache = new Map()) 
         if (op.kind !== "authority" || evidence?.type !== "beacon")
             continue;
         const anc = ancestors(op.id, byId, ancCache);
-        let priorMax = -1;
+        let priorMax = -1n;
         for (const beacon of validBeacons) {
-            if (anc.has(beacon.opId) && beacon.epoch > priorMax)
-                priorMax = beacon.epoch;
+            const epoch = BigInt(beacon.epoch);
+            if (anc.has(beacon.opId) && epoch > priorMax)
+                priorMax = epoch;
         }
         if (evidence.certificate !== undefined) {
             let policy = null;
@@ -1114,7 +1121,7 @@ function collectBeacons(visible, byId, root, delegations, ancCache = new Map()) 
             const expected = {
                 version: 1,
                 replica: op.replica ?? "",
-                epoch: evidence.epoch ?? -1,
+                epoch: typeof evidence.epoch === "number" ? evidence.epoch : -1,
                 author: author ?? "",
                 deps: [...op.deps].sort(),
             };
@@ -1124,14 +1131,14 @@ function collectBeacons(visible, byId, root, delegations, ancCache = new Map()) 
                 !verifyBeaconCertificate(evidence.certificate, expected, policy)) {
                 invalidBeacons.set(op.id, "unauthorized_beacon");
             }
-            else if (evidence.epoch === null ||
+            else if (typeof evidence.epoch !== "number" ||
                 !Number.isSafeInteger(evidence.epoch) ||
                 evidence.epoch < 0 ||
-                evidence.epoch <= priorMax) {
+                BigInt(evidence.epoch) <= priorMax) {
                 invalidBeacons.set(op.id, "stale_beacon");
             }
             else if (evidence.epoch > witnessedBeaconHorizon ||
-                evidence.epoch > priorMax + policy.maxEpochStep) {
+                BigInt(evidence.epoch) > priorMax + BigInt(policy.maxEpochStep)) {
                 invalidBeacons.set(op.id, "unauthorized_beacon");
             }
             else {
@@ -1142,9 +1149,8 @@ function collectBeacons(visible, byId, root, delegations, ancCache = new Map()) 
             invalidBeacons.set(op.id, "unauthorized_beacon");
         }
         else if (evidence.epoch === null ||
-            !Number.isSafeInteger(evidence.epoch) ||
-            evidence.epoch < 0 ||
-            evidence.epoch <= priorMax) {
+            exactLegacyBeaconEpoch(evidence.epoch) === null ||
+            exactLegacyBeaconEpoch(evidence.epoch) <= priorMax) {
             invalidBeacons.set(op.id, "stale_beacon");
         }
         else {
@@ -1152,6 +1158,14 @@ function collectBeacons(visible, byId, root, delegations, ancCache = new Map()) 
         }
     }
     return { validBeacons, invalidBeacons };
+}
+function exactLegacyBeaconEpoch(epoch) {
+    if (typeof epoch === "number")
+        return Number.isSafeInteger(epoch) && epoch >= 0 ? BigInt(epoch) : null;
+    if (!/^(0|[1-9][0-9]*)$/.test(epoch))
+        return null;
+    const exact = BigInt(epoch);
+    return exact > BigInt(Number.MAX_SAFE_INTEGER) && exact <= 18446744073709551615n ? exact : null;
 }
 function delegationQuarantineReasons(delegations) {
     const reasons = new Map();
