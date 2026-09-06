@@ -125,6 +125,64 @@ Future packet numbers refer to this adopted sequence, not completion. New author
 social-continuity semantics, native guarantees, real custody records and external evidence remain
 their named decision or verification gates. No deployment or secret mutation occurred in R01a.
 
+### Native execution amendment 2026-09-06 (unified Treehouse R01b)
+
+The operator's instruction to complete the unified proposal authorizes its Android/native
+implementation scope. Following R17a's reviewed decision, this amendment applies that execution
+authorization to the concrete build contract below. It records no additional operator signature,
+eligible device, secret, distribution certificate or physical result. The reviewed sources are
+`docs/research/governance_witness_native_verification.md` and
+`plans/roadmaps/treehouse-native-witness-build-2026-09-06.md` at `a5d60578`.
+
+1. Un-park Treehouse Android camera permission/pairing, cold/warm product links, internally signed
+   candidate installation and physical acceptance within R13/R22. Preserve product isolation,
+   recipient/replica/service checks, no bearer invitation secret and no seed-bearing QR/link.
+   The supported candidate still requires its actual signing identity and unrelated physical
+   devices; an emulator or debug signing is not that result. LAN/CD1 stays withdrawn and iOS
+   remains separately gated by R32a. No exact-package deletion or device-data reset is authorized
+   by this general scope amendment.
+2. Replace the earlier hidden/deferred mobile-witness ceremony for the strong Treehouse candidate
+   with the reviewed R36/R17b/R17c workflow. R36 generates a distinct protected Android witness
+   identity and exports only public metadata through typed operations. Actual provider Ed25519
+   generation and per-operation-authenticated signing, independently validated fresh actual-key
+   attestation, hardware security levels, app identity and boot state determine preliminary
+   eligibility before R14 pins a key. No software fallback, generic signer or carrier/witness
+   alias crossover is admitted. Hardware/API feasibility remains unproved until measured.
+   R03 also requires a configured witness key to sign the completed beacon operation. A separate
+   fixed native purpose verifies the full certificate and derives the exact authority body,
+   nil capability, replica/deps/epoch and same protected author before fresh presence/signing.
+   It retains the signed frame crash-safely before release, permits no arbitrary operation, and
+   leaves network publication to explicit later Sync using the ordinary member/carrier identity.
+3. Select R17a Option A: native authentication and durable retention of complete bounded signed
+   history, then the matched authority projection. Retain application ancestors, quarantines,
+   competing branches and authenticated unsupported-history blocking state. Native review derives
+   full replica identity and exact intent; consent is single-use, caller/session-bound and checked
+   again after blocking platform operations. Signing from an older supplied subset, a missing or
+   corrupt native store, or stale consent refuses. Whole-native-store rollback and unseen withheld
+   operations remain explicit non-claims.
+4. Authorize R17b's precise Plan 146 Seam 5 extension for the existing closed CarrierTerm/op
+   grammar needed to verify complete history, with BEAM/TS/Rust bytes, IDs and rejection parity.
+   Record the corresponding scoped Plan 146 amendment in the atomic R17b build. Existing clerk
+   claim bytes remain fixed; arbitrary general CBOR, generic signing and new Core semantics are
+   excluded. R17b consumes the landed R03/R04 contracts and retires claim-only IPC atomically.
+   Android is the selected strong-candidate witness platform; macOS Keychain seed retrieval and
+   its outstanding codesigning/presence proof remain a distinct existing platform track.
+5. Adopt the fail-closed build gates, without calling their proposed constants measured: 8,192
+   operations/16 MiB witness-retention ceiling, five-second cold verification targets including
+   near-ceiling restart/refusal, 500 ms incremental target and proposed 60-second consent TTL.
+   Exact byte accounting and minimum-device measurements precede readiness; changing a target
+   requires a reviewed profile decision. An active attempt never extends itself. This amendment
+   does not adopt R02's field lease cadence or invent a viable Android hardware combination.
+6. Keep the order acyclic: R01b scope -> R36 preliminary custody eligibility -> R14 enroll/pin ->
+   R17b integrated signing -> R17c independent physical ceremony. R12 remains a local root-only
+   preview; it issues no member grants or recovery claim. An unsupported device, missing retained
+   proof or failed ceremony blocks the affected readiness gate while independent preview work
+   continues. The constant-prompt maintenance fix remains independently landable before this build.
+
+The exact authorization source and review/verification evidence are recorded in
+`plans/roadmaps/evidence/treehouse-r01b-2026-09-06.md`. This amendment changes the relevant scope
+and deferred-ceremony requirements, not the earlier program's historical evidence.
+
 Produce three honest beta proofs of concept that can be installed on real phones, use a public
 WSS carrier without a development tether, retain identity and replayable state through reboot and
 upgrade, converge after offline work, and expose enough local audit evidence to explain a refusal.
