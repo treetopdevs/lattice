@@ -222,11 +222,22 @@ defmodule Lattice.ContinuationVectors do
     {bad_revoke, _} =
       Sim.command(bad_revoke, "founder", :post, ["extra revoke is inert"], cap: original.id)
 
+    {bad_legacy_succeed, ignored} =
+      Sim.append(
+        Sim.sync_all(sim),
+        "holder",
+        :authority,
+        {:succeed, :admin, d, 0, :extra}
+      )
+
+    false = Sim.quarantined(bad_legacy_succeed, "holder", ignored.id)
+
     [
       vector("space:extra-genesis-is-not-pin", bad_pin, "nominee"),
       vector("space:extra-transfer-is-not-predecessor", bad_transfer, "holder"),
       vector("space:extra-grant-is-not-capability", bad_grant, "holder"),
-      vector("space:extra-revoke-is-inert", bad_revoke, "founder")
+      vector("space:extra-revoke-is-inert", bad_revoke, "founder"),
+      vector("space:extra-legacy-succeed-is-inert", bad_legacy_succeed, "holder")
     ]
   end
 
