@@ -1,8 +1,9 @@
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { deriveContinuationReview } from "./authority";
 import { carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
-import type { CarrierDelegation } from "./carrier";
+import type { CarrierDelegation, CarrierOpFrame } from "./carrier";
 import { canonicalBase64Bytes, canonicalBytesForCarrierDelegation, canonicalHash, verifyCarrierOp } from "./codec";
+import type { CarrierOpSigner } from "./codec";
 import type { ContinuationClaim, ContinuationProfile } from "./continuation";
 import type { AuthorityDelegationEvidence, Op } from "./op";
 import type { ReplicaSchema } from "./schema";
@@ -26,6 +27,24 @@ export interface ReviewContinuationFromFramesInput {
 export type ContinuationReviewResult =
   | { ok: true; review: ContinuationReview }
   | { ok: false; reason: string };
+
+export interface AssembleContinuationFromFramesInput {
+  schema: ReplicaSchema;
+  frames: readonly unknown[];
+  review: ContinuationReview;
+  certificate: unknown;
+  signer: CarrierOpSigner;
+}
+
+export type ContinuationAssemblyResult =
+  | { ok: true; frame: CarrierOpFrame }
+  | { ok: false; reason: string };
+
+export async function assembleContinuationFromFrames(
+  _input: AssembleContinuationFromFramesInput,
+): Promise<ContinuationAssemblyResult> {
+  return refuse("not_implemented");
+}
 
 /**
  * Authenticate a complete caller-supplied snapshot, retaining signed semantic

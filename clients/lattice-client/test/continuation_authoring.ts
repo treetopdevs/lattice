@@ -1,13 +1,17 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { authorCarrierDelegation, authorCarrierOp } from "../src/codec";
+import { authorCarrierDelegation, authorCarrierOp, verifyCarrierOp } from "../src/codec";
 import type { CarrierOpSigner } from "../src/codec";
 import type { CarrierTerm } from "../src/carrier";
-import { continuationProfileId, continuationProfileToCarrierTerm } from "../src/continuation";
+import { canonicalBytesForContinuationClaim, continuationProfileId, continuationProfileToCarrierTerm } from "../src/continuation";
 import type { ContinuationProfile } from "../src/continuation";
 import { bindTownshipReplica } from "../src/township";
-import { reviewContinuationFromFrames } from "../src/continuation_authoring";
+import { assembleContinuationFromFrames, reviewContinuationFromFrames } from "../src/continuation_authoring";
+import type { ContinuationReview } from "../src/continuation_authoring";
+import { analyzeAuthority } from "../src/authority";
+import { carrierOpsToSemanticOps } from "../src/carrier";
+import { canonicalOrder, index } from "../src/dag";
 import type { ReplicaSchema } from "../src/schema";
 
 const schema: ReplicaSchema = { name: "ContinuationAuthoringFixture", fields: { admin: { authority: "admin" } } };
@@ -66,4 +70,38 @@ test("authenticated complete history derives actual pin, expired predecessor sco
   });
   assert.deepEqual(result.review.profile, f.profile);
   assert.deepEqual(result.review.delegation, f.delegation);
+});
+
+async function reviewed(f: Awaited<ReturnType<typeof fixture>>): Promise<ContinuationReview> {
+  const result = await reviewContinuationFromFrames(f.input);
+  assert.equal(result.ok, true, JSON.stringify(result));
+  if (!result.ok) throw new Error(result.reason);
+  return result.review;
+}
+
+async function certificate(review: ContinuationReview, witnesses: CarrierOpSigner[]) {
+  const bytes = canonicalBytesForContinuationClaim(review.claim);
+  return { claim: review.claim, signatures: await Promise.all(witnesses.map(async (witness) => ({
+    witness: b64(witness.publicKey), signature: b64(await witness.sign(bytes)),
+  }))) };
+}
+
+test("fresh assembly signs a normal op honored by the public authority judge", async () => {
+  const f = await fixture(), review = await reviewed(f);
+  const result = await assembleContinuationFromFrames({ schema, frames: f.input.frames, review,
+    certificate: await certificate(review, f.witnesses), signer: f.holder });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  if (!result.ok) return;
+  assert.equal(result.frame.kind, "authority");
+  assert.equal(result.frame.author, b64(f.holder.publicKey));
+  assert.deepEqual(result.frame.cap, nil);
+  assert.deepEqual(result.frame.deps, [f.beacon.id]);
+  assert.equal((await verifyCarrierOp(result.frame, { verify: async (author, bytes, sig) =>
+    ed25519.verify(sig, bytes, Buffer.from(author, "base64"), { zip215: false }) })).valid, true);
+  const ops = carrierOpsToSemanticOps([...f.input.frames, result.frame]);
+  const byId = index(ops), order = canonicalOrder(ops, byId);
+  const analysis = analyzeAuthority(schema, ops, new Set(order), order, byId, f.replica);
+  assert.equal(analysis.quarantineReasons.has(result.frame.id), false);
+  assert.equal(analysis.honoredWrites.has(result.frame.id), true);
+  assert.equal(analysis.security.delegations.get(f.delegation.id)?.validation.valid, true);
 });
