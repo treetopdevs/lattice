@@ -8,10 +8,18 @@ defmodule Treehouse.TransportCatalog do
   @catalog_fields ~w(version product space bootstrap binding revision previous entries)a
   @entry_fields ~w(product replica kind schema root genesis creation reference route service_id service_key)a
   @rotation_fields ~w(version product space bootstrap parent prior_catalog generation new_catalog_key nonce inventory_digest cutoffs)a
+  @bootstrap_fields ~w(version product space space_root profile_genesis profile_id replacement_rule catalog_key service_id service_key origin nonce)a
   @max_artifact_bytes 131_072
 
   @spec normalize_bootstrap(term()) :: {:ok, map()} | {:error, :malformed_catalog}
-  def normalize_bootstrap(_value), do: {:error, :malformed_catalog}
+  def normalize_bootstrap(value) do
+    if fields?(value, @bootstrap_fields) and value.version == 1 and value.product == :treehouse and
+         text?(value.space) and bytes?(value.space_root, 32) and id?(value.profile_genesis) and
+         id?(value.profile_id) and value.replacement_rule == :bounded_space_admin_v1 and
+         bytes?(value.catalog_key, 32) and bytes?(value.service_key, 32) and
+         value.catalog_key != value.service_key and id?(value.service_id) and id?(value.nonce) and
+         origin?(value.origin), do: {:ok, value}, else: {:error, :malformed_catalog}
+  end
 
   @spec verify_rotation(term(), binary()) :: :ok | {:error, atom()}
   def verify_rotation(envelope, trusted_key) do
@@ -189,4 +197,23 @@ defmodule Treehouse.TransportCatalog do
   defp ordered_unique?(values), do: values == Enum.sort(Enum.uniq(values))
   defp route?("/r/" <> nonce), do: id?(nonce)
   defp route?(_), do: false
+
+  defp origin?(value) when is_binary(value) do
+    case Regex.run(~r/^wss:\/\/([a-z0-9.-]+)(?::([1-9][0-9]*))?$/, value) do
+      [_, host] -> dns_host?(host)
+      [_, host, port] ->
+        dns_host?(host) and port != "443" and byte_size(port) <= 5 and String.to_integer(port) <= 65_535
+      _ -> false
+    end
+  end
+  defp origin?(_), do: false
+
+  # WHATWG treats an ASCII numeric final label (including 0x forms) as an
+  # attempted IPv4 address. Such literals/aliases are outside this DNS profile.
+  defp dns_host?(host) do
+    labels = String.split(host, ".")
+    byte_size(host) <= 253 and
+      Enum.all?(labels, &(byte_size(&1) in 1..63 and Regex.match?(~r/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/, &1))) and
+      not Regex.match?(~r/^(?:[0-9]+|0x[0-9a-f]*)$/, List.last(labels))
+  end
 end
