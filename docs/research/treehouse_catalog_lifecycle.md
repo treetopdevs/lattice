@@ -355,6 +355,18 @@ ignored under the existing selector; a later valid metadata-only pin supersedes
 it. Caller-supplied trusted projections and fabricated continuation candidates
 are not accepted inputs.
 
+The integrator also adopted the narrow internal synchronous TS predicate
+`continuationProfileBindingMatches(replica, causalOps, root, pin, profileId)` on
+2026-09-06 for the existing synchronous application callback. It reuses those
+same collectors and selector; its semantic-op input does not authenticate a
+history. It is used only after the parent's existing authenticated-carrier,
+capability and admin gates, and is not exported by the package index. Public
+installation continues to use authenticated raw-frame observation. BEAM uses
+`continuation_profile(Log.from_ops(...))` on that same authenticated causal
+context. A new bootstrap shape/scope/root/pin mismatch returns the application
+reason `application_invalid_catalog`, after existing malformed-command, cap and
+admin refusal precedence. This adds no Core role or permission path.
+
 ## 4. Retained trust, concurrent controls and refusal behavior
 
 Persist product/root/Space/bootstrap, accepted control chain, catalog watermark,
