@@ -1606,9 +1606,15 @@ function payloadFromBody(
         };
       }
       case "succeed": {
+        const rawProof = rawBody[0] === "tuple" ? rawBody[1][3] : undefined;
+        const continuationHead = rawProof?.[0] === "tuple" && rawProof[1][0]?.[0] === "atom" &&
+          rawProof[1][0][1] === "continuation_v1";
+        if (continuationFamily(replica) !== "legacy" && body.values.length !== 4 && !continuationHead) {
+          return neutralPayload(kind);
+        }
         const role = atomName(body.values[1]);
         const delegation = delegationTerm(body.values[2]);
-        let proof = successionProof(body.values[3], rawBody[0] === "tuple" ? rawBody[1][3] : undefined);
+        let proof = successionProof(body.values[3], rawProof);
         if (proof.mode === "continuation" && body.values.length !== 4) proof = {mode: "continuation", certificate: null};
         return {
           field: role,

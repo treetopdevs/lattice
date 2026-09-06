@@ -514,7 +514,7 @@ renewals and E14 lapse, admit/remove/revoke a new finite member, and create an
 independent child root with signed enrollment before its own pin.
 
 The new signed corpus lives only under
-`clients/lattice-client/test/vectors/continuation/`. Fifty-six BEAM histories
+`clients/lattice-client/test/vectors/continuation/`. Fifty-seven BEAM histories
 include all 13 two-cycle replicas, signed refusal cases and complete operation
 bytes. Public TS carrier verification, authority analysis and materialization
 match the BEAM role acquisition, quarantine reasons and post state in both
@@ -546,6 +546,16 @@ Its RED is `/tmp/treehouse-r04-refusal-precedence-red.log`. Truly malformed
 carrier terms retain their earlier structural refusal. Standalone BEAM claim
 normalization also now agrees with TS on nonempty valid UTF-8 replica text;
 the failed empty-text case is `/tmp/treehouse-r04-replica-text-red.log`.
+
+Claude Fable's exact implementation review of `8b7c9b53` passed without P0/P1
+findings and identified one P2 audit mismatch: a surplus-arity legacy-proof
+`succeed` on the bounded family was inert in BEAM but `continuation_required`
+in TS. The signed regression in `22aaf8a5` reproduces that difference
+(`/tmp/treehouse-r04-fable-legacy-succeed-red.log`). The bounded TS shape guard
+now keeps that operation inert, while recognized new-proof heads retain their
+family-first refusal rules. All 57 histories pass in both delivery orders
+(`/tmp/treehouse-r04-fable-legacy-succeed-green.log`). Legacy decoding and
+pre-existing vectors remain unchanged.
 
 The public TS `reviewContinuationFromFrames` and
 `assembleContinuationFromFrames` authenticate complete raw carrier snapshots,
@@ -599,8 +609,16 @@ AGENTS asdf/PATH toolchain, without changing any test timeout:
 | Reciprocal regeneration | BEAM-generated corpus and TS-generated full histories reproduced; TS-authored final operations pass the BEAM public import/authority test. |
 | Legacy and scope protection | Every pre-existing vector remains byte-identical to R03 `e08e3995`; shared README and unified ledger untouched; `git diff --check` and local document links pass. |
 
+After Fable's P2 correction, `mix check` again exited 0: 751 tests plus 27
+properties, zero failures, three existing exclusions and strict Credo clean
+(`/tmp/treehouse-r04-fable-final-check.log`). TS `conformance` now passes 57
+histories, 12 codec and 13 authoring tests; `typecheck`, `build`, `canonical`
+and `carrier:township` also exit 0. Only the new continuation corpus gains a
+signed fixture; its prior entries and all legacy vectors are unchanged.
+
 Independent bounded reviews identified the decoder/normalizer issues recorded
 above; their final source rereads found no remaining demonstrated issue in that
-scope. Claude Fable's earlier design PASS is preserved separately from the still
-pending exact implementation review. Local gates do not substitute for hosted
-checks, actual R10 product-schema integration, or native/device evidence.
+scope. Claude Fable's design and exact implementation PASS records are separate
+from final integrator review of the narrow P2 correction. Local gates do not
+substitute for hosted checks, actual R10 product-schema integration, or
+native/device evidence.
