@@ -336,3 +336,19 @@ match an honored signed genesis in every profile. The public wrong-identity asse
 failed (`/tmp/treehouse-r12-oracle-identity-red.log`), then passed after this verifier-only binding
 was added. The same real packaged artifact continues to pass. No production wire, authority or
 app path changed for this evidence correction.
+
+
+## Reviewed native follow-ups (2026-09-06)
+
+The integrator authorized the two concrete P2 repairs from the actual Claude Fable review of
+`6439daa3`. Public seams are `TreehouseWorkflow.select` with missing signing material and native
+`PreviewStore.save_draft` / `load_draft` / commit-watermark behavior for a valid replica nonce
+containing `Seed`. These repairs change no authority, frame, identity or shared KV guard contract.
+Missing-key selection is an in-memory reading preference; it must not commit, create a key,
+increment storage revision or enable authoring. Unknown profiles still refuse. Draft key encoding
+will use a stable lowercase hexadecimal SHA-256 identifier for new rows, with explicit retained
+legacy-row compatibility. The final evidence below will record that compatibility before code
+changes. Owned paths are the two workflow/native source files, their existing public tests,
+this document, a direct native hash dependency plus its normal lockfile update, and the external
+packaged reader's matching public draft-row lookup. The latter is an oracle-format amendment,
+not a product IPC or hidden test interface. Packaged replay remains a separate gate.

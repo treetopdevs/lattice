@@ -176,6 +176,9 @@ console.log(
   "PASS interrupted key binding, exact retry, two writers and uncertain acknowledgement",
 );
 
+await retry.createThread("Another readable thread");
+const otherReadableThread = retry.state.active!;
+await retry.command(otherReadableThread, { command: "post", text: "Second thread history" });
 const goodRecord = interruptedNative.record!;
 const hostile = JSON.parse(goodRecord);
 hostile.profiles[0].frames[0].sig = Buffer.alloc(64).toString("base64");
@@ -195,6 +198,20 @@ interruptedNative.seed = null;
 const readOnly = new TreehouseWorkflow(interruptedNative);
 await readOnly.open();
 assert.equal(readOnly.keyAvailable, false);
+assert.equal(readOnly.state.active, otherReadableThread);
+const beforeReadSelectionWrites = interruptedNative.writes;
+const beforeReadSelectionRevision = readOnly.state.revision;
+await readOnly.select(concurrentThread);
+assert.equal(readOnly.state.active, concurrentThread);
+assert.equal(readOnly.views.get(concurrentThread)!.posts.length, 2);
+assert.equal(interruptedNative.writes, beforeReadSelectionWrites,
+  "missing-key thread selection never commits the retained record");
+assert.equal(readOnly.state.revision, beforeReadSelectionRevision);
+assert.equal(interruptedNative.record, goodRecord);
+await readOnly.select(otherReadableThread);
+assert.equal(readOnly.views.get(otherReadableThread)!.posts[0]!.text, "Second thread history");
+await assert.rejects(readOnly.select("unknown-thread"), /unknown_profile/);
+assert.equal(readOnly.state.active, otherReadableThread);
 await assert.rejects(
   readOnly.command(concurrentThread, {
     command: "post",
