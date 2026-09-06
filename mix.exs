@@ -4,12 +4,20 @@ defmodule Lattice.MixProject do
   def project do
     [
       apps_path: "apps",
+      apps: umbrella_apps(),
       version: "0.1.0",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       aliases: aliases(),
       releases: releases()
     ]
+  end
+
+  # The optional Popcorn project has its own nested Mix root and OTP toolchain.
+  # Match Mix's direct-child discovery without treating that container as an app.
+  defp umbrella_apps do
+    Path.wildcard(Path.join(__DIR__, "apps/*/mix.exs"))
+    |> Enum.map(fn path -> path |> Path.dirname() |> Path.basename() |> String.to_atom() end)
   end
 
   def cli do
