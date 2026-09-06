@@ -2156,3 +2156,17 @@ Evidence uses the `r03-main-integration-*` logs. A requested npm pagination scri
 does not exist in this manifest; the existing test is run directly with `tsx`
 instead, with the failed command retained. Final integrated gates and the narrow
 manual-resolution review remain required before hosted closure is claimed.
+
+### Public claim dependency normalization (2026-09-06)
+
+Fresh hosted thread `PRRT_kwDOSZGqLc6fvEZJ` demonstrates that BEAM `claim/4`
+sorts but does not deduplicate caller dependencies, while `Op.new/6` normalizes
+the final operation and the TS constructor already uses distinct sorted IDs.
+The integrator adopts the same distinct-and-sorted normalization for the BEAM
+authoring helper before code. The public RED must construct and sign a claim
+from duplicate frontier IDs, author the normal signed outer operation, and
+observe the unwanted unauthorized verdict. The correction must honor that
+operation while preserving exact claim/outer dependency equality. A received
+certificate actually carrying duplicate dependencies remains unauthorized;
+received-claim validation and all canonical bytes for already normalized inputs
+remain unchanged. Existing signed vectors are regenerated and compared exactly.
