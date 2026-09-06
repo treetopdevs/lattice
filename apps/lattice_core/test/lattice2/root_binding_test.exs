@@ -61,6 +61,65 @@ defmodule Lattice2.RootBindingTest do
     assert Sim.holder(sim, "server", :moderator) == Sim.identity(sim, "server").pub
   end
 
+  test "binding refuses preexisting, empty and repeated root markers" do
+    root = Lattice.Identity.from_seed("root", "root-marker-construction")
+    bound = Authority.bind_replica("replica:thread:marker", root.pub)
+
+    for name <- ["town#root:x", "town#root:", bound, bound <> "#root:x"] do
+      assert_raise ArgumentError, ~r/#root:/, fn -> Authority.bind_replica(name, root.pub) end
+    end
+  end
+
+  test "root commitment parsing accepts one complete tag and refuses malformed claims" do
+    root = Lattice.Identity.from_seed("root", "root-marker-parsing")
+    bound = Authority.bind_replica("replica:thread:marker", root.pub)
+    tag = :crypto.hash(:sha256, root.pub) |> Base.url_encode64(padding: false)
+    assert Authority.replica_commitment(bound) == tag
+    assert Authority.replica_commitment("legacy:thread") == nil
+
+    for replica <- [
+          "town#root:attacker",
+          "town#root:short",
+          "town#root:",
+          "town#root:#{String.duplicate("!", 43)}",
+          bound <> "#root:#{tag}"
+        ] do
+      assert Authority.replica_commitment(replica) == nil
+    end
+  end
+
+  test "a malformed root claim cannot fall through as a legacy unbound genesis" do
+    root = Lattice.Identity.from_seed("root", "root-marker-refusal")
+
+    for replica <- ["town#root:attacker", "town#root:", "town#root:short#root:second"] do
+      {delegation, genesis, log} = root_marker_log(replica, root)
+      assert Authority.verify_chain([delegation], replica) == {:error, :impostor_genesis}, replica
+      assert Authority.root(log) == nil
+      assert Authority.holder(Thread, log, :moderator) == nil
+      assert Authority.analyze(Thread, log).reasons[genesis.id] == :impostor_genesis
+      refute Authority.delegation_active?(log, delegation.id)
+    end
+  end
+
+  test "canonical bound and marker-free legacy roots retain their authority" do
+    root = Lattice.Identity.from_seed("root", "root-marker-controls")
+
+    for replica <- ["legacy:thread", Authority.bind_replica("bound:thread", root.pub)] do
+      {delegation, genesis, log} = root_marker_log(replica, root)
+      assert :ok = Authority.verify_chain([delegation], replica)
+      assert Authority.root(log) == root.pub
+      assert Authority.holder(Thread, log, :moderator) == root.pub
+      refute Map.has_key?(Authority.analyze(Thread, log).reasons, genesis.id)
+      assert Authority.delegation_active?(log, delegation.id)
+    end
+  end
+
+  defp root_marker_log(replica, root) do
+    delegation = Delegation.genesis(root, replica, ops: [:post], roles: [:moderator])
+    genesis = Lattice.Op.new(root, replica, [], :authority, {:genesis, delegation, %{}})
+    {delegation, genesis, Log.append!(Log.new(replica), genesis)}
+  end
+
   test "a forged self-issued genesis is quarantined and confers no role on any realm" do
     sim = founded()
     {sim, genesis_op, _deleg} = forge_genesis(sim, "evil", [:moderator], [:post, :lock, :unlock])

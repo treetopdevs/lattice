@@ -53,6 +53,34 @@ TS conformance gates live in `clients/lattice-client` (`npm ci` once, then `npm 
 
 ## Current state (verified against `91bb6ca6`)
 
+### Unified R09 execution amendments — 2026-09-06
+
+- Preparation base `7d10eca6a1cccdf9b43e3beeb03bc03e67ee547b`, tree
+  `eb9bfbd8a0363ebe7cf4b386746526ffe2dd4a46`, merges exact prerequisite tips
+  R07 `afe5ea250072267927b89b353e7bde1e793176b5` and R08
+  `8722403f16f82fbdc883d3ed92476163c723ed82`. This is local preparation,
+  not a claim that either dependency has passed hosted integration.
+- Plan 162 is integrated; its tick, replica and authority semantics remain unchanged.
+  `Wire.decode_op/1` already uses `Canonical.signable?/1`, so its public lease-range
+  refusal passes before this packet. The RED lease defect is reproducible through
+  `Delegation.valid_sig?/1` and `Authority.analyze/2` on a reconstructed in-VM log.
+  The early wire guard preserves the existing public refusal as a defense in depth.
+- The live generic composite arms are list, tuple, mapset and map; there are no `kv`
+  or nested `op` arms. Body/cap paths each allow 64 composites, with scalars and flat
+  delegation records accepted at the leaf. Unsupported shell tags remain refused.
+- The source proposal's malformed tag -> `nil` change needs a fail-closed correction:
+  interpreted directly, `nil` would promote a malformed claimed root to a legacy
+  unbound replica and accept a previously refused genesis. The authorized amendment
+  permits a private `root_commitment/1` discriminator, an explicit malformed clause
+  in `root_matches?/2`, and switching `deleg_context/2` plus `verify_chain/2` to that
+  discriminator. Public `replica_commitment/1` retains its tag-or-nil shape; only
+  marker-free names may use the legacy unbound path. The existing shared context
+  carries refusal into analyze/root/live delegation checks without changing their
+  bodies or beacon semantics. `bind_replica/2` refuses any preexisting marker.
+- R03 ownership is coordinated: no beacon collector/judge, witnessed policy, tick,
+  TS decoder or exporter-source edits belong to this packet. The integrator alone
+  owns the shared README and unified execution ledger.
+
 ### CRYPTO-01 — out-of-range lease crashes analyze
 
 Decode accepts any non-negative integer (`apps/lattice_core/lib/lattice/carrier/wire.ex:324-331`):
