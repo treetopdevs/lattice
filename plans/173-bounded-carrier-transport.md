@@ -14,8 +14,9 @@
 
 ## Status
 
-- **Execution**: local PR65 remediation verified; exact follow-up review and hosted
-  closure remain pending. The unified-roadmap integrator owns the shared plan-index row.
+- **Execution**: DONE — unified R08. PR65's reviewed tip and exact merge-result workflow
+  passed; the shared plan index is updated. Earlier pending-review/CI notes are historical
+  execution evidence, superseded by the Hosted closure record below.
 - **Priority**: P1 — Part B is a deterministic compatibility cliff that triggers on **normal
   history growth** with no adversary and no overload. Part A is a hang primitive.
 - **Effort**: M–L — Part A is small; Part B is a protocol addition (continuations) that must
@@ -383,9 +384,12 @@ Machine-checkable. ALL must hold:
 - [x] `git log --oneline` shows Part A and Part B in **separate** commits
 - [x] Your report records the measured pre-fix `"pull"` response size from step 3
 - [x] `git status --porcelain` lists no file outside the in-scope list
-- [ ] `plans/README.md` status row for 173 updated — integrator-owned at hosted closure;
-  this packet does not edit the shared index. The checked criteria above reflect the
-  recorded local evidence, not a claim that PR65's current hosted checks have passed.
+- [x] `plans/README.md` status row for 173 updated — the integrator records DONE after
+  PR65 tip workflow 34046604253 and exact merge workflow 34048283122 passed.
+
+The checklist's named tests and source-scope checks refer to the original R08 implementation
+and reviewed remediation, not the changed-file list of this later documentation reconciliation.
+The earlier local evidence is preserved; final hosted closure is recorded below.
 
 ## STOP conditions
 
@@ -508,6 +512,6 @@ adds no shared cache or cursor/session state.
 Claude Fable passed the final exact repair. PR65's final source/evidence tip
 `73a96a5418747b36bef6a0363d0ed3e35094d1e1` passed workflow34046604253; all hosted
 review threads were resolved. Merge `9bb7b340e49be605151458134391aa16e642fc29`
-passed its exact workflow34048283122. The shared index can therefore mark
+passed its exact workflow34048283122. The shared index records
 Plan173/unified R08 DONE. The separately recorded R15 pagination-cost measurement
 and native/device/pilot gates remain outside that closure.

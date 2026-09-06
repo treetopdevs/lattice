@@ -79,7 +79,7 @@ Rows are the authoritative dependency graph. Commas mean all prerequisites. “N
 | R12 | Empty local app / product | L | Medium | R01a, R05, R06, R10 | Packaged offline preview; no member grants | IN PROGRESS |
 | R13 | Enrollment and sync / product | L | High | R01b, R08, R11c, R12 | Packaged two-app join/heal; wrong-input and four-socket tests | PLANNED |
 | R14 | Profiles, roles, removal, renewal / product + authority | XL | High | R13, R04, R36 | Packaged enroll-then-pin, per-replica readiness and renewal | PLANNED |
-| R15 | Measured rollover / product | L | Medium | R14 | Packaged archival saga, finite-capacity stop, retained readability | PLANNED |
+| R15 | Measured rollover / product | L | Medium | R14 | Packaged archival saga, finite-capacity stop, retained readability; bounded relay workload and pagination latency | PLANNED |
 | R16 | Member reseed, AF-1 / recovery | M | High | R06, R11c, R15 | Packaged new-identity relay reseed from surviving member evidence | PLANNED |
 | R17a | Native witness decision / native custody | M | High | None | Plan 174 decision plus concrete Android build plan | IN PROGRESS |
 | R17b | Native witness signing / native custody | L | High | R17a, R01b, R03, R14 | Claim verification, protected signing, consent/replay negatives | PLANNED |
@@ -179,6 +179,28 @@ An otherwise authorized repeated archive is an honored write of `true` with no a
 Application refusal precedence is: missing/not-causal target; quarantined target; wrong target kind/Thread; wrong author; already tombstoned; archived Thread. An honored archive in the causal past denies new posts, author edits and author tombstones; moderator tombstones remain allowed. A post concurrent with archive remains honored. Existing canonical ordering resolves concurrent edits; tombstoned content cannot be revived. R10 proves create, concurrent admission/posting, partition/heal, tombstones, role transfer, removal, archive and dump/restore across both runtimes. Root-only succession replay is qualified until R04 establishes its bounded policy; legacy Township and Toolshed vectors remain green.
 
 R15 makes rollover a durable saga with one locally identified attempt, retryable successor draft/provisioning and explicit recovery after each transition. Check slot capacity before asking the user to archive for rollover; archive may still be a deliberate standalone action. If the operator or network disappears after archive, show the archived Thread and pending successor; retries cannot duplicate it. A live Space reference is published only after route readiness. The successor receives the approved per-replica profile and current reviewed roster; it is not automatically a copy of stale invitations or removed members. Copying a refused offline draft to a new Thread is an intentional new signed action.
+
+R15 also owns the deferred R08 pagination-cost gate. Before selecting a cache or
+other optimization, run the real Holder/WebSocket path with one Space and 12 total
+Threads (including archives), 4 concurrent foreground sockets, 4,000 retained ops
+and 8 MiB per exercised replica. Include authority/quarantine evidence, mixed
+frame sizes, interrupted/resumed pulls and concurrent appends; verify exact final
+op sets, verdicts and state. Measure page count, bytes, server work per page,
+p50/p95/max request latency, complete-sync time and peak memory. Include an idle
+small-Thread pull while another route is saturated to expose scheduler starvation.
+
+The adopted local acceptance bound is **every successful page and small-Thread
+pull completes within five seconds** on the recorded reference host under that
+workload; no timeout/retry/error counts as a successful sample. Publish raw timing
+samples and host/build/seed parameters, and require successful interrupted resume
+without lost/duplicated semantic results. Full-history application replay separately
+retains the existing five-second product gate. Record network time separately;
+this local bound is not a remote-network guarantee. The 5,000-op/10-MiB benchmark
+is a separate overload measurement and cannot replace the supported-envelope run.
+If per-page full-log sorting/digest/topological recomputation fails the bound,
+R15 remains open until a bounded reviewed optimization passes the same workload;
+do not raise caps/timeouts, omit busy samples or claim frame size bounds latency.
+This is a new required measurement contract, not a current performance result.
 
 ### Membership and transport: R11, R13, R14
 
