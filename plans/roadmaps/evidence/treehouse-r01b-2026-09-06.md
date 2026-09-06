@@ -62,3 +62,14 @@ Final dependency/index landing, bounded integration review, exact PR-tip and
 merge-result workflows remain pending. No device was connected or provisioned
 by this documentation integration, and no operator secret or countersign was
 created.
+
+
+The reviewed native parent is subsequently integrated through `b83c21dc`:
+TEE-only Ed25519 API/attestation requirements, retained generation evidence,
+verified Space/Thread beacon prompt kinds and the complete two-option decision
+matrix. Both exact documentation follow-ups passed actual Claude Fable review;
+the original R01b scope, signed-byte requirements and physical gates are unchanged.
+This merge changes only the two parent design/build documents, which are
+byte-identical to b83c21dc. The original R01b tip258cb3d0 passed hosted
+workflow34052544798 (and its PR-triggered34052545487). This newer integrated tip
+and its merge result still require their own hosted checks.
