@@ -22,6 +22,31 @@ defmodule Lattice.Carrier.Wire do
   @spec version() :: pos_integer()
   def version, do: @version
 
+  @doc "Encode one signable value using the unchanged carrier term grammar."
+  @spec encode_value(term()) :: list()
+  def encode_value(value) do
+    if Canonical.signable?(value),
+      do: encode_term(value),
+      else: raise(ArgumentError, "unsupported wire value")
+  end
+
+  @doc """
+  Decode a standalone signable value with the existing term depth/integer rules.
+
+  Like op decoding, this preserves generic map/mapset normalization. A closed
+  artifact protocol must reject duplicate raw fields before calling this seam.
+  It is not a strict canonical-envelope or signature verifier.
+  """
+  @spec decode_value(term()) :: {:ok, term()} | {:error, :malformed_term}
+  def decode_value(value) do
+    with {:ok, decoded} <- decode_term(value),
+         true <- Canonical.signable?(decoded) do
+      {:ok, decoded}
+    else
+      _ -> {:error, :malformed_term}
+    end
+  end
+
   @spec encode_op(Op.t()) :: map()
   def encode_op(%Op{} = op) do
     %{
