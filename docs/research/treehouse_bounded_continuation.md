@@ -693,3 +693,24 @@ R04 policy/certificate shapes and actual Core refusal precedence. Add public sig
 BEAM/TS integration controls for both cases, and handle the widened evidence type
 at every R04 review/assembly consumer before build/review. This is an adapter
 correction, not a new continuation or lease rule.
+
+### Final high-epoch adapter evidence — 2026-09-06
+
+Integration `0bb76df6e8ca5699c22e429091e25ac659b6bb9a` applies the adopted
+rule through the public review/assembly seam. Both BEAM and TS signed controls
+cover Space and Thread, MAX_SAFE_INTEGER+1 and uint64 maximum: authenticated
+root epochs refuse `invalid_continuation_epoch`, while unauthorized high epochs
+leave the valid acquisition review available. The widened R03 evidence type
+first produced the recorded TS2345 build RED; the explicit safe-epoch guard
+repairs it without numeric coercion or changing witnessed-beacon limits.
+
+Full `mix check` at that integration passes **775 tests and 27 properties, zero
+failures**, three existing exclusions, clean formatting and strict Credo exit 0
+(`/tmp/lattice-treehouse-execution-20260906/r04-high-epoch-full-check.log`).
+The focused BEAM continuation suite passes 21 tests. Integration `7bf76c8b`
+then adds reviewed R03 final `65b5364e`: a TS-only nullish no-lease correction
+and regression controls, with BEAM source unchanged. Final TS typecheck, build,
+conformance (including 14 continuation authoring tests), Township authoring,
+canonical and carrier tests all exit 0. Actual Fable reviewed R03's source
+and nullish follow-up with no remaining actionable P0/P1/P2; R04's new adapter
+still requires its own exact integration review, final tip CI and merge CI.
