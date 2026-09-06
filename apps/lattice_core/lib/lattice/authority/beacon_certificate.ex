@@ -9,6 +9,7 @@ defmodule Lattice.Authority.BeaconCertificate do
 
   @claim_domain "lattice-beacon-witness-v1"
   @policy_domain "lattice-beacon-policy-v1"
+  @canonical_uint64_max 18_446_744_073_709_551_615
 
   @type claim :: %{
           version: 1,
@@ -97,6 +98,7 @@ defmodule Lattice.Authority.BeaconCertificate do
        ),
        do:
          map_size(claim) == 5 and is_binary(replica) and is_integer(epoch) and epoch >= 0 and
+           epoch <= @canonical_uint64_max and
            is_binary(author) and byte_size(author) == 32 and is_list(deps) and
            Enum.all?(deps, &is_binary/1)
 
