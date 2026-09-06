@@ -32,3 +32,26 @@ size is not the network payload.
 Browser acceptance and the complete repository gate remain open. Run the exact
 built preview and E2E from the runbook on a browser-enabled host, then retain the
 successful evidence before changing any project-wide browser-BEAM claim.
+
+## Durable browser replica extension (September 6, 2026)
+
+The original runtime proof passed in Chromium on `f3cfb21` in run
+[34013339074](https://github.com/treetopdevs/lattice/actions/runs/34013339074).
+That success does not prove this extension. The new exact-head acceptance gate is
+`npm run e2e:replicas`, retaining `evidence/replicas.json` alongside the original
+runtime proof. It must pass before claiming real-browser durable convergence.
+
+Local extension checks: five OTP 29 tests (three durable-replica scenarios plus
+two existing realm tests), nine JavaScript host tests, the existing native
+signed-echo/Gateway test, and the new two-replica real-WebSocket/Gateway test pass.
+The v2 regression suite passes: 20 properties and 209 tests. The browser bundle
+builds with warnings treated as errors. One unreachable private nil clause was
+removed from core Authority because Elixir 1.20 diagnoses it when compiling the
+exact shared source; authority behavior is unchanged and v2 regressions pass.
+
+Local Chromium exits before opening a page because `socket()` is denied by the
+workspace runtime. Root `mix verify` is blocked by missing Cargo in the existing
+`township_bench` Rustler app. A baseline core-wide run also reports the existing
+fresh-process audit-bundle failure for that unavailable umbrella app. Neither
+failure is treated as a passing gate. GitHub CI supplies the full toolchain and
+real-browser acceptance environment.
