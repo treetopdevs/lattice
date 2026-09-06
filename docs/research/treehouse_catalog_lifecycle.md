@@ -681,3 +681,13 @@ bootstrap deterministically; the query never chooses trust or resolves a fork.
 The corresponding BEAM query reuses normal `Authority.analyze(Treehouse.Space, log)`
 after R06 verification. Existing authority marker state is never the audit source.
 These are additive R11a public seams and tests, not catalog/profile enablement.
+
+The BEAM observation is assigned to `Treehouse.CatalogBootstrap.observe(log)` in
+`apps/lattice_core/lib/treehouse/catalog_bootstrap.ex`, with public tests in
+`apps/lattice_core/test/treehouse/catalog_bootstrap_observation_test.exs`. It
+returns `{:ok, %{bootstraps: [%{id: id, record: record}], verified_frontier: ids}}`
+in normal canonical operation order after R06 authentication and the full
+Space authority fold, or `{:error, :invalid_verified_history}`. It preserves
+validated rejected evidence in its input and never uses it as honored history;
+the separate cutoff binds that evidence. Multiple honored root bootstraps are
+returned together. Selecting/persisting trust remains the retained-trust gate.
