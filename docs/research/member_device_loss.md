@@ -32,7 +32,7 @@ The following evidence was inspected, rather than inferred from old plan copy:
 
 | Source | Observed contract | Consequence |
 | --- | --- | --- |
-| Accepted-base `Lattice.Authority.tombstoned?/1`, `authority.ex:135–152` | A root-authored `:tombstone` irreversibly kills the whole replica. | Never implement an identity retirement with this operation. |
+| Accepted-base `Lattice.Authority.tombstoned?/1`, `authority.ex:134–154` | A root-authored `:tombstone` irreversibly kills the whole replica. | Never implement an identity retirement with this operation. |
 | Accepted-base `Lattice.Crdt.OrSet`, `crdt/or_set.ex:1–12` | Membership removes only observed admission tags; a concurrent add survives. | Check the exact admission evidence, not a last-event string or a public-key list supplied by a caller. |
 | Accepted-base `Authority.causal_context/5` and `Replica.command_conflicts/3` | Application callbacks receive only strict ancestors and prior individual verdicts. A separate final conflict pass can deny concurrent candidates. | Define causal membership and concurrent removal separately; do not recurse through authority analysis inside the callback. |
 | R10 snapshot `3d6a44431c6f3f1a3802aeab948f0dbb8e8f73a5`, `Treehouse.Space` and `Treehouse.Invitation` | Recipient-signed invitation acceptance binds Space, invite ID, recipient and exact Thread scope. Space membership, capability issuance, held roles and transport admission remain separate. | Reuse ordinary explicit admission. The new certificate is not an invitation acceptance or a grant. |
@@ -67,7 +67,11 @@ Proposed dated amendments, to adopt explicitly before R19b production edits:
    the R10 root-only preview helper derive a broader genesis from a newly
    expanded command registry. Its existing command list and vectors stay
    byte-identical; an explicitly versioned bounded-profile creator owns the
-   new ceiling. An old profile lacking this permission refuses AF-3 recording.
+   new ceiling. Pin the legacy BEAM/TS creator to the literal original six-command
+   ceiling, and pin the historical Space exporter fixtures to that same explicit
+   ceiling through the reviewed Sim `ops:` option. Registry expansion must not
+   determine any legacy genesis bytes. An old profile lacking this permission
+   refuses AF-3 recording.
 
 These are proposed amendments only. The source plans, frozen claim text,
 shared README and unified execution ledger are unchanged by this document.
@@ -81,7 +85,7 @@ Use an existing `:command` operation with the exact body:
 ```
 
 The command writes `"attest_member_key_v1"` to the existing `admin_actions`
-LWW marker, using its ordinary `:admin` holder gate. The whole command also
+authority marker, using its ordinary `:admin` holder gate. The whole command also
 needs a real capability permitting this exact command. The full immutable
 statement and certificate remain in the retained authenticated signed command
 body, with its outer operation ID as provenance. A pure query derives continuity
@@ -203,8 +207,18 @@ claim and fresh possession/vouches. The runtime cannot prove that an untrusted
 caller or unavailable peer supplied all existing operations; this is a
 retained-snapshot check, not a global freshness guarantee.
 
-Core compares `claim.deps` to the outer operation's exact dependency list and
-derives all evidence from its strict ancestry and deterministic prior verdicts:
+The new command requires the outer operation's dependency list itself to be
+sorted by canonical ASCII op ID and duplicate-free. Compare it element-for-element
+to the closed sorted `claim.deps`; reordered or duplicated outer dependencies
+refuse this command even if they name the same set. This application requirement
+does not change generic outer-op encoding or legacy command acceptance. Derive
+all evidence from its strict ancestry and deterministic prior verdicts:
+
+Admission recipients use canonical padded Base64 text. Require the existing
+canonical decode/re-encode round trip, exactly 32 decoded bytes, then compare
+those raw bytes to the claim key; never compare display labels, unpadded text,
+case-folded text or a realm name. Apply this rule to both old-key and voucher
+admission references.
 
 1. `old_admission` is an honored ordinary `admit_member` in this Space whose
    recipient is exactly `old_pub`. A role-bearing genesis or a grant alone is
@@ -563,8 +577,22 @@ all A01–A17 and packaged outcomes remain unproven until their named packets.
 The integrator replaced the proposed extra materialized attestation list before
 adoption or production edits. Full certificates already live in signed retained
 command bodies; derived records must select actually honored authenticated
-commands. The existing `admin_actions` LWW marker and its admin gate remain
+commands. The existing `admin_actions` authority marker and its admin gate remain
 unchanged. This mirrors the adopted R11 compatibility rule and preserves the
 legacy R10 schema, fixed root-only command ceiling and existing vectors. The
 closed claim, signatures, membership checks, conflicts and A01–A17 acceptance
 matrix are unchanged and remain proposed for exact Claude Fable design review.
+
+
+## Design review corrections — 2026-09-06
+
+Claude Fable reviewed `2cf28134` and returned a design PASS with a P1 build-rule
+gap and P2 representation clarifications; these are repaired before adoption.
+The legacy six-command genesis ceiling and historical fixture path are now explicit.
+Admission recipients compare canonical decoded raw key bytes; outer command
+dependencies must themselves be sorted-distinct and match the claim exactly.
+The fixed threshold, closed claim/signature domains, 16-parent/head capacity stop,
+60-second local return challenge, truthful removed-member flow and required signed
+beacon basis remain selected defaults awaiting final follow-up review and explicit
+adoption. No source-plan amendment, production implementation or A01–A17 result
+is inferred from this proposed document.
