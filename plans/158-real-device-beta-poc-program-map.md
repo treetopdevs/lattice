@@ -93,8 +93,8 @@ written for history; where they conflict with this amendment, the amendment wins
 The operator's 2026-09-06 instruction to commit and complete the unified plan as proposed adopts
 the core contract and scheduling choices below. The execution ledger is
 `plans/roadmaps/treehouse-unified-2026-09-06.md`. Earlier ordering, baseline and immediate-next-work
-sections remain historical where they conflict with this amendment. The protected Plan 178 status
-paragraph and unrelated contract/test pins are unchanged.
+sections remain historical where they conflict with this amendment. The test-pinned Plan 158 status
+paragraph about Plan 178 and unrelated contract/test pins are unchanged.
 
 1. Deliver Treehouse first, then its Toolshed module, then Township. Toolshed custody semantics may
    prepare independently, but module enablement waits for the group pilot and R01c's actual

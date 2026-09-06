@@ -7,6 +7,8 @@ experience reuses the verified intent/custody patterns below. Any independent To
 remainder belongs to R34. This does not mark the original Township implementation complete, remove
 Phoenix, or authorize additional CD1 work. The original draft follows for reference.
 
+## Historical draft status (superseded; not an active work queue)
+
 TODO (proposed draft — not yet reviewed or resumed by the operator). Sequenced after or in
 parallel with Plan 150; it runs against the operator stable server and must not require host
 mode, so the two plans do not block each other.
