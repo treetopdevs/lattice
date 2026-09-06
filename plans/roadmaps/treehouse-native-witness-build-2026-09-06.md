@@ -122,7 +122,8 @@ Apply decision D2's complete fixed-point admission contract. Retain authenticate
 supported evidence, semantic quarantines and competing branches. E tracks positive
 cryptographic introductions from the root/recognized profile keys through valid
 embedded delegation issuers and parent proofs, including already-E self-issued
-continuation anchors. It never uses current honored status, revocation or lease
+succession/continuation anchors. Seed legacy designated successors and v1 recovery
+map witnesses explicitly alongside R04 nominees and R03 witnesses. It never uses current honored status, revocation or lease
 expiry as a filter, never grants permission and never grows from unknown ancestry.
 Inspect supported staged introductions before requiring complete DAG admission.
 
@@ -159,7 +160,9 @@ citation cannot introduce its citing author; embedded E-issuer introduction with
 another outer author, rootless continuation children, superseded/revoked-key
 overblocking and staged introduction before DAG closure; later eligibility promotes
 or blocks before release; staging exhaustion leaves admitted signing usable, while
-relevant-capacity exhaustion blocks; readable fence recovery and corrupt-journal
+relevant-capacity exhaustion blocks; a legacy designated successor's unknown op
+blocks and its self-issued succession can anchor valid children; quota-refused
+bytes can be resubmitted as fresh admission once connected; readable fence recovery and corrupt-journal
 refusal at every admission boundary. Restored whole old native store remains an
 explicit non-claim rather than a misleading passing rollback test.
 
@@ -321,7 +324,8 @@ durable markers and outbox pointers without double-counting referenced frames.
 Proposed staging subquota is 128 operations / 512 KiB, separate from admitted
 capacity; filling only unconnected staging refuses further unrelated input without
 blocking complete admitted signing. Exhausting relevant/admitted capacity durably
-blocks signing. No truncation, partial projection or old-subset signature. The carrier's recovery
+blocks signing. No truncation, partial projection or old-subset signature. The
+carrier's recovery
 ingestion is separate, and offline healing can exceed this ceiling. A lifecycle
 decision is required if the supported witness envelope is exhausted.
 

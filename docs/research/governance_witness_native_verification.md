@@ -137,11 +137,13 @@ Distinguish storage admission from semantic judgment:
 Compute the least fixed point over all retained authenticated evidence, including
 staged supported evidence whose DAG is incomplete. Seed E with the pinned root and
 the witness/nominee keys in every retained root-authenticated recognized profile,
-including superseded profiles. Extend E through verified same-replica delegation
+including superseded profiles. This explicitly includes each recognized legacy
+role policy's designated `successor` and the witness keys in its v1 four-key
+recovery map, as well as R04's nominee and R03's witnesses. Extend E through verified same-replica delegation
 introductions with canonical signed ID, issuer already in E, and complete parent
 proofs satisfying the existing issuer/audience and attenuation rules. A recognized
-parentless continuation delegation whose issuer equals its audience and is already
-in E supplies a conservative chain anchor; it adds no new key itself.
+parentless succession/continuation delegation whose issuer equals its audience and
+is already in E supplies a conservative chain anchor; it adds no new key itself.
 
 These positive rules do not depend on current acquisition winners, effective pin,
 revocation, lease expiry, candidate activation or semantic quarantine. They are
@@ -179,7 +181,8 @@ capacity for admitted history, promotion, intake and durable markers within the
 overall ceiling. A full unconnected staging quota refuses new unconnected input
 without evicting retained evidence or blocking otherwise complete admitted history.
 Quota-refused bytes are not trusted retained observations and cannot later be
-reclassified; order independence covers the same retained union, not different
+reclassified from storage. Resubmitting identical bytes once connected is a fresh
+admission, not a persistent per-bytes denylist. Order independence covers the same retained union, not different
 quota-dependent admission sets. Pin exact accounting and reservation sizes in R17b
 before RED, including a full-staging promotion case.
 
@@ -496,7 +499,8 @@ blocking metadata, and retained outbox pointers without double-counting their
 referenced frame. Define exact byte accounting and reservations in R17b before
 testing. Exhausting only unconnected staging refuses that input as D2 specifies;
 exhausting admitted/relevant capacity persists a visible signing-blocked condition.
-Never truncate relevant history to sign an old subset. This ceiling does not stop the carrier from
+Never truncate relevant history to sign an old subset. This ceiling does not stop
+the carrier from
 retaining bounded recovery input. Healing can exceed it; there is no guarantee
 that every posting-stop overshoot fits. R35 owns the resulting lifecycle decision.
 
