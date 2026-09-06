@@ -43,7 +43,7 @@ The R04/R10 SHAs are immutable integration evidence, not claims that those
 packets or the final R03 remediation have landed. R19b must recheck these seams
 against the actual combined accepted source before its RED tests and code.
 
-Proposed dated amendments, to adopt explicitly before R19b production edits:
+Adopted dated amendments, required before R19b production edits:
 
 1. **Plan 177 AF-3:** replace the meaning of “the old identity is tombstoned”
    with: “The log retains a signed old/new-key continuity statement. The old
@@ -73,8 +73,9 @@ Proposed dated amendments, to adopt explicitly before R19b production edits:
    determine any legacy genesis bytes. An old profile lacking this permission
    refuses AF-3 recording.
 
-These are proposed amendments only. The source plans, frozen claim text,
-shared README and unified execution ledger are unchanged by this document.
+These dated source-plan amendments authorize the future atomic R19b cutover.
+They do not change current runtime behavior; frozen historical claims, shared
+README and unified execution ledger remain outside this packet.
 
 ## 2. One certificate and one ordinary admin command
 
