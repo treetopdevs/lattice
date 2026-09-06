@@ -887,7 +887,7 @@ export function carrierOpToSemanticOp(frame, realmByPubkey = {}) {
     let cap;
     let structuralError;
     try {
-        const body = decodeCarrierTerm(op.body);
+        const body = decodeCarrierBody(op);
         payload = payloadFromBody(op.kind, body, realmByPubkey);
         cap = capabilityId(decodeCarrierTerm(op.cap));
     }
@@ -912,7 +912,8 @@ export function carrierOpToSemanticOp(frame, realmByPubkey = {}) {
             : { commandError: payload.commandError }),
         ...(structuralError === undefined ? {} : { structuralError }),
         cap,
-        ...(payload.authority === undefined ? {} : { authority: payload.authority }),
+        ...(payload.authority === undefined ? {} : { authority: payload.authority.type === "beacon" && payload.authority.certificate !== undefined
+                ? { ...payload.authority, authorPubkey: op.author } : payload.authority }),
         ...(payload.consent === undefined
             ? {}
             : { consent: { ...payload.consent, authorPub: op.author } }),
@@ -967,12 +968,43 @@ function canonicalAtom(value) {
 function canonicalTuple(values) {
     return concat(major(6, BigInt(tupleTag)), canonicalTerm(values));
 }
-function decodeCarrierTerm(term) {
+// Invalid reserved metadata stays local to the policy/certificate on BEAM.
+// Context never changes the raw frame or the body/claim epoch horizon.
+function decodeCarrierBody(op) {
+    const body = op.body;
+    if (op.kind !== "authority" || body[0] !== "tuple" || body.length !== 2 ||
+        !Array.isArray(body[1]) || body[1].length !== 3 || body[1][0]?.[0] !== "atom") {
+        return decodeCarrierTerm(body);
+    }
+    if (body[1][0][1] === "beacon") {
+        return { type: "tuple", values: [
+                decodeCarrierTerm(body[1][0]), decodeCarrierTerm(body[1][1]),
+                decodeCarrierTerm(body[1][2], "beacon_certificate"),
+            ] };
+    }
+    if (body[1][0][1] !== "genesis")
+        return decodeCarrierTerm(body);
+    const policies = body[1][2];
+    if (policies[0] !== "map" || policies.length !== 2 || !Array.isArray(policies[1]) ||
+        policies[1].some((pair) => !Array.isArray(pair) || pair.length !== 2)) {
+        return decodeCarrierTerm(body);
+    }
+    return { type: "tuple", values: [
+            decodeCarrierTerm(body[1][0]), decodeCarrierTerm(body[1][1]),
+            { type: "map", pairs: policies[1].map(([key, value]) => [
+                    decodeCarrierTerm(key),
+                    key[0] === "atom" && key.length === 2 && key[1] === "__beacon__"
+                        ? decodeCarrierTerm(value, "beacon_metadata") : decodeCarrierTerm(value),
+                ]) },
+        ] };
+}
+function decodeCarrierTerm(term, context = "strict") {
     const [tag] = term;
     const expectedLength = tag === "nil" ? 1 : 2;
     if (term.length !== expectedLength) {
         throw new Error("malformed carrier term arity");
     }
+    const childContext = context === "strict" ? "strict" : "beacon_metadata";
     switch (tag) {
         case "nil":
             return null;
@@ -981,6 +1013,11 @@ function decodeCarrierTerm(term) {
                 throw new Error("malformed bool term");
             return term[1];
         case "int": {
+            if (context !== "strict" && typeof term[1] === "string" && /^(0|[1-9][0-9]*)$/.test(term[1]) &&
+                BigInt(term[1]) > BigInt(Number.MAX_SAFE_INTEGER) && BigInt(term[1]) <= uint64Max) {
+                // An opaque invalid value cannot satisfy a numeric, binary or nullable field.
+                return { type: "invalid_beacon_integer" };
+            }
             return parseCarrierInteger(term[1]);
         }
         case "bin": {
@@ -997,12 +1034,12 @@ function decodeCarrierTerm(term) {
         case "list": {
             if (!Array.isArray(term[1]))
                 throw new Error("malformed list term");
-            return { type: "list", values: term[1].map(decodeCarrierTerm) };
+            return { type: "list", values: term[1].map((value) => decodeCarrierTerm(value, childContext)) };
         }
         case "tuple": {
             if (!Array.isArray(term[1]))
                 throw new Error("malformed tuple term");
-            return { type: "tuple", values: term[1].map(decodeCarrierTerm) };
+            return { type: "tuple", values: term[1].map((value) => decodeCarrierTerm(value, childContext)) };
         }
         case "map": {
             if (!Array.isArray(term[1]))
@@ -1013,9 +1050,17 @@ function decodeCarrierTerm(term) {
                     if (!Array.isArray(pair) || pair.length !== 2) {
                         throw new Error("malformed map pair");
                     }
+                    const key = pair[0];
+                    let valueContext = childContext;
+                    if (key[0] === "atom" && key.length === 2) {
+                        if (context === "beacon_certificate" && key[1] === "claim")
+                            valueContext = "beacon_claim";
+                        if (context === "beacon_claim" && key[1] === "epoch" && pair[1][0] === "int")
+                            valueContext = "strict";
+                    }
                     return [
-                        decodeCarrierTerm(pair[0]),
-                        decodeCarrierTerm(pair[1]),
+                        decodeCarrierTerm(key, childContext),
+                        decodeCarrierTerm(pair[1], valueContext),
                     ];
                 }),
             };
@@ -1023,7 +1068,7 @@ function decodeCarrierTerm(term) {
         case "mapset": {
             if (!Array.isArray(term[1]))
                 throw new Error("malformed mapset term");
-            return { type: "mapset", values: term[1].map(decodeCarrierTerm) };
+            return { type: "mapset", values: term[1].map((value) => decodeCarrierTerm(value, childContext)) };
         }
         case "delegation": {
             if (!isCarrierDelegation(term[1])) {
@@ -1073,6 +1118,7 @@ function payloadFromBody(kind, body, realmByPubkey) {
         switch (command) {
             case "genesis": {
                 const delegation = delegationTerm(body.values[1]);
+                const beaconPolicy = witnessedBeaconPolicy(atomMap(body.values[2])?.get("__beacon__"));
                 const policies = successionPolicies(body.values[2], realmByPubkey);
                 // A Sim genesis self-grant carries exactly the replica's authority
                 // roles (canonically sorted), so the first role names the authority
@@ -1084,6 +1130,7 @@ function payloadFromBody(kind, body, realmByPubkey) {
                     type: "genesis",
                     delegation: delegationEvidence(delegation, realmByPubkey),
                     ...(policies === undefined ? {} : { policies }),
+                    beaconPolicy,
                 };
                 if (role !== undefined) {
                     return {
@@ -1160,7 +1207,7 @@ function payloadFromBody(kind, body, realmByPubkey) {
                 const epoch = typeof epochTerm === "number" && Number.isSafeInteger(epochTerm) ? epochTerm : null;
                 return {
                     ...neutralPayload(`beacon ${epoch ?? "malformed"}`),
-                    authority: { type: "beacon", epoch },
+                    authority: { type: "beacon", epoch, ...(body.values.length === 3 ? { certificate: witnessedBeaconCertificate(body.values[2]) } : {}) },
                 };
             }
         }
@@ -1197,7 +1244,7 @@ function assertCarrierOpFrame(frame, validateTerms) {
         base64ToBytes(carrierFrame.author);
         base64ToBytes(carrierFrame.sig);
         if (validateTerms) {
-            decodeCarrierTerm(carrierFrame.body);
+            decodeCarrierBody(carrierFrame);
             decodeCarrierTerm(carrierFrame.cap);
         }
     }
@@ -1301,6 +1348,68 @@ function delegationEvidence(delegation, realmByPubkey) {
         ...(delegation.expires_epoch === undefined
             ? {}
             : { expiresEpoch: delegation.expires_epoch }),
+    };
+}
+function witnessedBeaconPolicy(term) {
+    const policy = exactAtomMap(term, [
+        "mode",
+        "version",
+        "witnesses",
+        "threshold",
+        "max_epoch_step",
+    ]);
+    const version = nonNegativeInteger(policy?.get("version"));
+    const threshold = nonNegativeInteger(policy?.get("threshold"));
+    const maxEpochStep = nonNegativeInteger(policy?.get("max_epoch_step"));
+    const witnesses = listValuesOrNull(policy?.get("witnesses"))?.map((entry) => binaryBytes(entry, 32));
+    if (atomValue(policy?.get("mode")) !== "witnessed" ||
+        version === null ||
+        threshold === null ||
+        maxEpochStep === null ||
+        witnesses === undefined ||
+        witnesses.some((entry) => entry === null))
+        return null;
+    return {
+        mode: "witnessed",
+        version,
+        threshold,
+        maxEpochStep,
+        witnesses: witnesses.map(bytesToBase64),
+    };
+}
+function witnessedBeaconCertificate(term) {
+    const certificate = exactAtomMap(term, ["claim", "signatures"]);
+    const claim = exactAtomMap(certificate?.get("claim"), [
+        "version",
+        "replica",
+        "epoch",
+        "author",
+        "deps",
+    ]);
+    const version = nonNegativeInteger(claim?.get("version"));
+    const replica = binaryUtf8(claim?.get("replica"));
+    const epoch = nonNegativeInteger(claim?.get("epoch"));
+    const author = binaryBytes(claim?.get("author"), 32);
+    const deps = listValuesOrNull(claim?.get("deps"))?.map(binaryUtf8);
+    const signatures = listValuesOrNull(certificate?.get("signatures"))?.map(witnessedSignature);
+    if (version === null ||
+        replica === null ||
+        epoch === null ||
+        author === null ||
+        deps === undefined ||
+        deps.some((entry) => entry === null) ||
+        signatures === undefined ||
+        signatures.some((entry) => entry === null))
+        return null;
+    return {
+        claim: {
+            version,
+            replica,
+            epoch,
+            author: bytesToBase64(author),
+            deps: deps,
+        },
+        signatures: signatures,
     };
 }
 function successionPolicies(term, realmByPubkey) {

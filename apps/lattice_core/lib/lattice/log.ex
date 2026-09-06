@@ -393,6 +393,11 @@ defmodule Lattice.Log do
       :policy_id,
       :role,
       :replica,
+      :__beacon__,
+      :max_epoch_step,
+      :epoch,
+      :author,
+      :deps,
       :beacon
     ]
   end
