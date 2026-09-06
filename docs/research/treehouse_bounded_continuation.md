@@ -29,7 +29,7 @@ helper checks Sim's complete field inventory before dropping its identity, log
 and capability cache. Tests use public authoring, sync, log and authority seams.
 
 The corresponding source is `Authority.collect_policies/3`,
-`build_role_timeline/6`, `decide_transfer/8` and
+`build_role_timeline/6`, `decide_transfer/7` and
 `decide_succession_proof/7` in
 [authority.ex](../../apps/lattice_core/lib/lattice/authority.ex), and the exact
 seven-field claim in
@@ -424,7 +424,10 @@ module, authoring, exporter, dump/compaction mirrors and affected claim surfaces
 Do not begin it against a moving R03 worktree. Record its landed SHA, resolve any
 R03 policy/reason API differences explicitly, and coordinate the authority writer.
 
-1. Add V01..V06 RED public tests and deterministic new vector exporter cases.
+1. At prerequisite integration, explicitly test that R09's `bind_replica/2`
+   refuses rebinding, rather than silently accepting an already-bound name;
+   retain matching-root later-genesis authoring as a separate permitted seam.
+   Add V01..V06 RED public tests and deterministic new vector exporter cases.
    Keep this packet's legacy characterization tests; their verdicts must not move.
 2. Implement new-family selection, causal profile sources and bounded acquisition
    stages; preserve the legacy path. Add TS-author-to-BEAM verification, not just
