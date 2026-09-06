@@ -130,7 +130,7 @@ limitation, not a new authority or compaction rule.
 ### Root bootstrap
 
 Add the exact Space command `catalog_bootstrap_v1(record)`. It writes its ordinary
-command-name marker to the existing `admin_actions` LWW field. The complete signed
+command-name marker to the existing `admin_actions` authority marker. The complete signed
 record remains in its immutable command body. A pure query extracts catalog
 controls only from authenticated operations actually honored by the authority
 judge; there is no new materialized field or duplicated side log. The ordinary
@@ -656,3 +656,28 @@ The final follow-up resolved all five original findings. Its one advisory
 frontier-width point is addressed in section 2 with the integrator-adopted
 bounded operational disposition. C01–C15 remain OPEN until their implementation
 packets provide the stated evidence; design review alone closes none of them.
+
+
+### Cutoff and bootstrap observation build paths, 2026-09-06
+
+The integrator assigns pure `Treehouse.CatalogCutoff` to
+`apps/lattice_core/lib/treehouse/catalog_cutoff.ex`, with public tests in
+`apps/lattice_core/test/treehouse/catalog_cutoff_test.exs`. `derive(log)` first
+uses the existing R06 accepted/quarantine authenticity checks, verifies exact
+bounded carrier round trips and complete accepted dependency closure, then returns
+`{:ok, %{cutoff: %{replica: replica, frontier: ids, log_digest: digest},
+canonical_bytes: bytes, ops: accepted_records, rejected: rejected_records}}`.
+The sorted raw records and pre-hash bytes follow section 3 exactly. Invalid
+history returns `{:error, :invalid_verified_history}`; authenticated or validated
+rejected evidence outside the shared bounded grammar returns
+`{:error, :unsupported_cutoff}` without changing or omitting the source evidence.
+No state projection, authority claim, file I/O or trust promotion occurs here.
+
+The TS bootstrap query is `treehouseCatalogBootstrapsFromFrames({replica, frames})`,
+returning `{ok: true, bootstraps: [{id, record}], verifiedFrontier}` after cloning,
+authenticating complete raw history and normal product materialization, or
+`{ok: false, reason: "invalid_verified_history"}`. Return every actually honored
+bootstrap deterministically; the query never chooses trust or resolves a fork.
+The corresponding BEAM query reuses normal `Authority.analyze(Treehouse.Space, log)`
+after R06 verification. Existing authority marker state is never the audit source.
+These are additive R11a public seams and tests, not catalog/profile enablement.
