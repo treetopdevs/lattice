@@ -2092,3 +2092,44 @@ their lapse behavior. Carrier ingress stays strict, with no new wire shape or
 accepted bytes. The cosmetic repeated epoch-helper call is left unchanged.
 Fable's PASS covers the preceding two hosted repairs; this P2 correction requires
 its own actual follow-up verdict and relevant TypeScript gates before freeze.
+
+### Final high-epoch and verifier evidence (2026-09-06)
+
+The BEAM public-verifier RED at `c5b89c84` raises `ArgumentError` for a matching
+claim above uint64; `d54df5c6` returns the documented unauthorized result while
+freshly signed zero, safe-horizon and uint64-maximum controls verify. The TS
+public RED at `0243936f` records twelve behavioral failures on authentic high
+legacy ancestors. `0f3f2ca9` preserves both distinct epochs exactly, refuses lower
+root/witnessed descendants, honors a concurrent valid witnessed branch, and
+preserves lease lapse without accepting high non-root authority. The two new
+BEAM-exported signed scenarios replay through both delivery orders in TS, with
+raw signature/frame checks and explicit decimal-string epoch evidence. All
+preceding **66** vector blobs compare byte-identically; the corpus is now **68**.
+
+At `0f3f2ca9`, full `mix check` exits 0 with **697 tests plus 27 properties,
+zero failures**, three existing exclusions, prescribed OTP/asdf PATH and
+`ERL_FLAGS='+S 4:4'`. Formatting and strict Credo pass with existing low-priority
+suggestions. The named beacon/restore/migration/compaction gate passes 38 tests
+plus one property. The nullish-lease follow-up changes only TS production/test
+code and its generated build after that BEAM gate. At `84d04517`, final TS gates
+pass: **1,310 conformance assertions across 68 vectors**, 559 canonical, 169
+Township authoring, 49 carrier and eight V01 checks, plus typecheck and build.
+
+Actual Claude Fable review of `a29c4510..0f3f2ca9` returned PASS with no P0/P1,
+identifying the nullish-lease P2 above. Its resumed review of the correction
+through `84d04517` returned PASS with no remaining actionable P0/P1/P2 in this
+bounded scope. Both results share session
+`d9fa4f1a-33c0-4ea2-ad82-4e8c9d48980d` and are saved under
+`/tmp/lattice-treehouse-execution-20260906/` as
+`fable-r03-high-legacy-review-result.md` and
+`fable-r03-null-lease-followup-result.md`. The cosmetic repeated helper call
+remains a documented deferral.
+
+That directory also retains `r03-high-legacy-proof.json`, the public RED/GREEN
+logs, `r03-high-legacy-full-mix-check.log`, and final named TS gate logs. Initial
+test development errors remain recorded: one fixture syntax error preceded the
+actual twelve-failure RED; a test-only Vector type reference and equivalent JSON
+object-key-order comparison were corrected before final conformance. None is
+claimed as a behavioral RED or a production failure. Hosted thread/CI closure
+and the combined R04 high-epoch refusal integration remain integrator-owned;
+local evidence does not imply those gates are closed.
