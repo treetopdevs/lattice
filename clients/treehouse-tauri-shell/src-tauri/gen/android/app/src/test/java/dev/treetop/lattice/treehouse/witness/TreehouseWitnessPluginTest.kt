@@ -17,10 +17,40 @@ class TreehouseWitnessPluginTest {
         var calls = 0
         var cancels = 0
         var cancelResult = true
+        var throwBeforeCallback = false
+        var throwAfterCallback = false
         override fun execute(request: WitnessPrivateRequest, callback: (WitnessResult<ByteArray>) -> Unit) {
+            if (throwBeforeCallback) throw IllegalStateException("runtime construction failed")
             calls++; this.callback = callback; callbacks.add(callback)
+            if (throwAfterCallback) {
+                callback(WitnessResult.Stored(byteArrayOf(7)))
+                throw IllegalStateException("runtime failed after callback")
+            }
         }
         override fun cancel(operationId: WitnessBytes, session: WitnessBytes): Boolean { cancels++; return cancelResult }
+    }
+
+    @Test fun runtimeExceptionCompletesExactlyOnceAndReleasesOperationOwnership() {
+        val runtime = Runtime().also { it.throwBeforeCallback = true }
+        val dispatch = WitnessPrivateDispatch(runtime)
+        val results = mutableListOf<WitnessResult<ByteArray>>()
+        dispatch.dispatch(WitnessPrivateRequest.Identity(w(1), w(9)), results::add)
+        assertEquals(listOf(WitnessResult.Refused("native_failed")), results)
+        runtime.throwBeforeCallback = false
+        dispatch.dispatch(WitnessPrivateRequest.Identity(w(2), w(9)), results::add)
+        assertEquals(1, runtime.calls)
+    }
+
+    @Test fun callbackThenRuntimeExceptionCannotResolveTwiceOrStealNextOwner() {
+        val runtime = Runtime().also { it.throwAfterCallback = true }
+        val dispatch = WitnessPrivateDispatch(runtime)
+        val results = mutableListOf<WitnessResult<ByteArray>>()
+        dispatch.dispatch(WitnessPrivateRequest.Identity(w(1), w(9)), results::add)
+        assertEquals(1, results.size)
+        assertArrayEquals(byteArrayOf(7), (results.single() as WitnessResult.Stored).value)
+        runtime.throwAfterCallback = false
+        dispatch.dispatch(WitnessPrivateRequest.Identity(w(2), w(9)), results::add)
+        assertEquals(2, runtime.calls)
     }
 
     @Test fun overlappingOperationRefusesAndCancellationSuppressesLateResult() {

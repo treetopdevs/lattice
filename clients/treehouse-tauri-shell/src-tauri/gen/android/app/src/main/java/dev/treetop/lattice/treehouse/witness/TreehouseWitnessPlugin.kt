@@ -73,7 +73,7 @@ internal class WitnessPrivateDispatch(private val runtime: WitnessPrivateRuntime
         if (selected == null) {
             callback(terminal(request, WitnessTerminalStatus.REFUSED, "storage_busy")); return
         }
-        runtime.execute(request) { result ->
+        val complete: (WitnessResult<ByteArray>) -> Unit = complete@ { result ->
             var preparedDelivery = false
             val deliver = synchronized(lock) {
                 if (active !== selected) false
@@ -92,6 +92,8 @@ internal class WitnessPrivateDispatch(private val runtime: WitnessPrivateRuntime
                 }
             }
         }
+        try { runtime.execute(request, complete) }
+        catch (_: Exception) { complete(WitnessResult.Refused("native_failed")) }
     }
 
     fun invalidate() {
