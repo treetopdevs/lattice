@@ -105,18 +105,57 @@ explicit metadata, generationChallenge and enrollment fields while allowing
 contractual nulls. All six Rust reciprocal tests pass after repair; the two
 Kotlin producer/consumer tests passed. These are host codec and software-signature
 checks, not JNI, platform signing, attestation or physical custody evidence.
-Independent review of this final reciprocal packet remains pending.
+Independent Sol review of the final reciprocal packet and required-nullable repair passed.
+
+## Owner, projection and operation checkpoint
+
+At `f6afeaf229b8962bb12fb74ab59c57f07daf7e96`, native registration,
+required-nullable reciprocal snapshots, runtime exception completion, public
+command spelling, sealed public result projection, ephemeral operation registry,
+and actual plugin document/lifecycle hooks have passed independent Sol review.
+The five public witness commands remain inactive.
+
+Root review found a UI-thread deadlock despite the initial owner tests: a worker
+could hold the owner mutex while waiting for the native URL query, while a UI hook
+waited for that mutex. The reviewed repair uses nonblocking acquisition and a
+permanent refusal latch. Its regression holds the URL query while navigation,
+page-load, lifecycle and destruction hooks return promptly; resumed work refuses.
+
+Root checks at this checkpoint passed 84 Rust tests plus three compile-fail
+documentation checks, 138 Android tests (137 executed, one existing skip), Android
+lint, and actual Android Rust cross-compilation. Logs:
+`/tmp/treehouse-r36-owner-result-full-rust.log`,
+`/tmp/treehouse-r36-owner-result-full-android.log`, and
+`/tmp/treehouse-r36-owner-result-android-rust.log`.
+
+The pinned independent validator tooling passed Sol review and root offline clean
+verification: 156 JVM tests and vendor-integrity tamper checks. This proves the
+retained tooling can be reproduced; it does not prove an Android witness eligible.
+Log: `/tmp/treehouse-r36-validator-root-check.log`.
+
+## Architectural consolidation before activation
+
+A bounded architectural audit identified operation lifetime ownership spread
+across too many layers as the common cause of repeated cancellation and callback
+repairs. Consolidation will place execution, cancellation, owner invalidation,
+prepared continuation and completion-after-drain behind one native flow interface.
+The closed Rust/Kotlin protocol, durable journal, provider, review UI and strict
+signature verifier retain their contracts. An outer task destructor is not proof
+that an inner native callback has drained; slot release must follow the actual
+transport acknowledgement.
+
+This consolidation and its external flow regressions are open work. Neither the
+new frontend panel nor the public native command surface is activated.
 
 ## Remaining gates
 
-Native identity orchestration, session event wiring, public binding export and
-independent validation remain unfinished. No end-to-end Rust → Kotlin → journal → biometric operation → Rust
-proof is asserted.
+End-to-end orchestration, public command and UI integration, independent validator
+policy review and validation reporting remain unfinished. No end-to-end Rust →
+Kotlin → journal → biometric operation → Rust proof is asserted.
 
-Tauri page-load completion supplies a URL without a document identifier. The
-session guard's native tickets must not be paired with a later URL-only completion
-by assuming it belongs to the latest navigation. Actual adapter wiring remains a
-separate refusal-tested gate.
+Actual native hooks are wired and host refusal-tested. Pinned Wry source invokes
+the navigation hook before app-initiated page loads. Physical Android ordering,
+background cancellation and restart still require device evidence.
 
 The host Android tests use Robolectric SDK33. API24 compatibility is lint evidence,
 not a physical API24 run. No local build or test establishes device custody,
