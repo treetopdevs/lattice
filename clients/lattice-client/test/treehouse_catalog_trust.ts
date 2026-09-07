@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { trustFixture, fixtureId, fixtureSigner, signedCatalog, signedRotation } from "./support/export_treehouse_catalog_trust";
-import { authorTreehouseCommand, authorTreehouseRoleTransfer, treehouseCommandDecoders, treehouseThreadSchema } from "../src/treehouse";
+import { authorTreehouseCommand, authorTreehouseRoleTransfer, treehouseCatalogBootstrapsFromFrames, treehouseCommandDecoders, treehouseSpaceSchema, treehouseThreadSchema } from "../src/treehouse";
 import { authorCarrierDelegation, authorCarrierOp, canonicalBytesForCarrierTerm } from "../src/codec";
 import { continuationProfileToCarrierTerm } from "../src/continuation";
 import type { CarrierTerm } from "../src/carrier";
@@ -71,6 +71,66 @@ test("an explicitly reviewed bootstrap whose signed frame has not arrived reques
   const history = {...f.histories[0]!, frames: [f.space.genesis, f.space.creation, f.space.pin]};
   const result = await prepareTreehouseCatalogInstallation({review: f.review, history, store: {kind: "verified_fresh", expected}});
   refused(result, "trust_pending"); assert.deepEqual(result.detail.ids, [f.bootstrap.id]);
+});
+
+test("a historically honored unseen bootstrap keeps a reopenable fork after a concurrent admin transfer refuses it", async () => {
+  const f = await trustFixture(), initial = await installed(f);
+  const deps = [f.space.frames.at(-1)!.id];
+  const second = await authorTreehouseCommand({product: "Treehouse.Space", replica: f.space.replica, signer: f.root,
+    deps, capId: f.space.delegation.id,
+    command: {command: "catalog_bootstrap_v1", record: {...f.bootstrapRecord, nonce: fixtureId("historical-bootstrap")}}});
+  const fork = await evaluate(initial, {histories: [{...f.histories[0]!, frames: [...f.space.frames, second]}]});
+  assert.equal(fork.kind, "retain_blocked"); assert.equal(fork.reason, "catalog_fork");
+  assert.deepEqual(fork.next.blocked!.bootstrapIds, [second.id]);
+  const {frame: transfer} = await authorTreehouseRoleTransfer({replica: f.space.replica, deps, signer: f.root,
+    recipient: fixtureSigner("historical-bootstrap-successor").publicKey, parent: f.space.delegation, action: "transfer_admin"});
+  const frames = [...f.space.frames, second, transfer];
+  const ops = carrierOpsToSemanticOps(frames, {}, treehouseCommandDecoders("Treehouse.Space"));
+  const projection = materialize(treehouseSpaceSchema, ops, new Set(ops.map((op) => op.id)), null, f.space.replica);
+  assert.equal(projection.quarantineReasons.has(transfer.id), false);
+  assert.equal(projection.quarantineReasons.has(f.bootstrap.id), false);
+  assert.equal(projection.quarantineReasons.has(f.threads[0]!.reference.id), false);
+  assert.equal(projection.quarantineReasons.has(second.id), true, "the unseen bootstrap really becomes refused");
+  const retained = [];
+  for (const delivered of [frames, [...frames].reverse()]) {
+    const changed = await evaluate(fork.next, {histories: [{...f.histories[0]!, frames: delivered}]});
+    assert.equal(changed.kind, "retain_blocked"); assert.equal(changed.reason, "catalog_fork");
+    assert.deepEqual(changed.next.accepted, initial.accepted); assert.deepEqual(changed.next.blocked, fork.next.blocked);
+    assert.deepEqual(changed.routes, []);
+    const reopened = await evaluate(changed.next);
+    assert.equal(reopened.kind, "retain_blocked", JSON.stringify(reopened));
+    assert.equal(reopened.reason, "catalog_fork"); assert.deepEqual(reopened.next, changed.next); assert.deepEqual(reopened.routes, []);
+    retained.push(changed.next);
+  }
+  assert.deepEqual(retained[0], retained[1]);
+  for (const mutation of ["missing", "missing-ancestor", "forged", "wrong-command", "reviewed"] as const) {
+    const broken = structuredClone(retained[0]!);
+    const history = broken.histories.find((h) => h.replica === f.space.replica)!;
+    if (mutation === "missing" || mutation === "missing-ancestor") {
+      const missing = mutation === "missing" ? second.id : f.space.pin.id;
+      history.frames = history.frames.filter((frame) => (frame as {id: string}).id !== missing);
+    } else if (mutation === "forged") {
+      history.frames = history.frames.map((frame) => (frame as {id: string}).id === second.id ?
+        {...frame as object, sig: Buffer.alloc(64).toString("base64")} : frame);
+    } else broken.blocked!.bootstrapIds = [mutation === "wrong-command" ? f.threads[0]!.reference.id : f.bootstrap.id];
+    const rejected = await evaluate(broken, {histories: [{...f.histories[0]!, frames}]});
+    assert.equal(rejected.kind, "reject", mutation); refused(rejected, "trust_recovery_required");
+  }
+  for (const defect of ["wrong-root", "never-authorized"] as const) {
+    const invalid = await authorTreehouseCommand({product: "Treehouse.Space", replica: f.space.replica, signer: f.root,
+      deps: defect === "never-authorized" ? [transfer.id] : deps, capId: f.space.delegation.id,
+      command: {command: "catalog_bootstrap_v1", record: {...f.bootstrapRecord, nonce: fixtureId(`invalid-bootstrap-${defect}`),
+        ...(defect === "wrong-root" ? {spaceRoot: Buffer.from(fixtureSigner("impostor-root").publicKey).toString("base64")} : {})}}});
+    const history = {...f.histories[0]!, frames: [...frames, invalid]};
+    const observed = await treehouseCatalogBootstrapsFromFrames(history);
+    assert.equal(observed.ok, true, "the entire signed raw history authenticates");
+    assert.equal(observed.bootstraps.some((bootstrap) => bootstrap.id === invalid.id), false, defect);
+    const broken = structuredClone(retained[0]!);
+    broken.histories = broken.histories.map((h) => h.replica === f.space.replica ? history : h);
+    broken.blocked!.bootstrapIds = [invalid.id];
+    const rejected = await evaluate(broken);
+    assert.equal(rejected.kind, "reject", defect); refused(rejected, "trust_recovery_required");
+  }
 });
 
 test("actual entry metadata refuses forged roots, wrong genesis/creation/reference, schema, signer and service", async () => {
@@ -277,6 +337,9 @@ test("two and three authenticated rotation heads remain retained and never evict
   const reopened = await evaluate(three.next); assert.equal(reopened.kind, "retain_blocked"); assert.deepEqual(reopened.routes, []);
   const sequential = await evaluate(two.next, {rotations: [rotations[2]!]});
   assert.equal(sequential.kind, "retain_blocked"); assert.equal(sequential.reason, "control_history_limit"); assert.equal(sequential.next.rotations.length, 3);
+  const reopenedSequential = await evaluate(sequential.next);
+  assert.equal(reopenedSequential.kind, "retain_blocked"); assert.equal(reopenedSequential.reason, "control_history_limit");
+  assert.deepEqual(reopenedSequential.next, sequential.next); assert.deepEqual(reopenedSequential.routes, []);
 });
 
 test("all supplied histories authenticate before any missing-page or unsupported-evidence refusal", async () => {
