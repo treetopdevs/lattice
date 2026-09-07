@@ -20,6 +20,8 @@ defmodule LatticeCarrierServer.Holder do
   @frontier_limit 64
   @default_persistence_timeout_ms 4_000
   @orphan_cleanup_timeout_ms 250
+  alias LatticeCarrierServer.Operator.ReleaseGate
+
   @relay_call_slack_ms 750
   @read_frame_budget 64_000
   @cursor_byte_budget 512
@@ -89,10 +91,16 @@ defmodule LatticeCarrierServer.Holder do
     relay_realms = Keyword.fetch!(opts, :relay_realms)
     durability = Keyword.get(opts, :durability) || Durability.Posix
 
-    with {:ok, log} <- load_source(source),
-         :ok <- rehearse_durability(source, relay_realms, durability) do
+    owner = Keyword.get(opts, :release_owner)
+    key = {:holder, Keyword.get(opts, :release_route)}
+
+    with {:ok, lease} <- startup_lease(owner, key),
+         {:ok, log} <- load_source(source),
+         :ok <- rehearse_durability(source, relay_realms, durability),
+         :ok <- startup_complete(owner, lease, key) do
       {:ok,
        %{
+         release_owner: owner,
          identity: identity,
          log: log,
          source: source,
@@ -108,6 +116,11 @@ defmodule LatticeCarrierServer.Holder do
       {:error, reason} -> {:stop, {:source_error, reason}}
     end
   end
+
+  defp startup_lease(nil, _key), do: {:ok, nil}
+  defp startup_lease(owner, key), do: ReleaseGate.acquire(owner, key)
+  defp startup_complete(nil, _lease, _key), do: :ok
+  defp startup_complete(owner, lease, key), do: ReleaseGate.complete(owner, lease, key, self())
 
   # Crash reports and `:sys.get_status/1` must never render the private key:
   # replace the identity's priv bytes in any formatted state.
@@ -184,7 +197,26 @@ defmodule LatticeCarrierServer.Holder do
     end
   end
 
-  def handle_call({:relay, peer_realm, op}, _from, state) do
+  def handle_call({:drain_release, owner}, _from, state) do
+    if state.release_owner == owner and not ReleaseGate.accepting?(owner),
+      do:
+        {:reply,
+         {:ok, %{holder: self(), source: state.source, pub: state.identity.pub, log: state.log}},
+         state},
+      else: {:reply, {:error, :release_closed}, state}
+  end
+
+  def handle_call({:relay, peer_realm, op}, _from, %{release_owner: owner} = state)
+      when owner != nil do
+    if ReleaseGate.accepting?(owner),
+      do: relay_owned(peer_realm, op, state),
+      else: {:reply, {:error, :release_closed}, state}
+  end
+
+  def handle_call({:relay, peer_realm, op}, _from, state),
+    do: relay_owned(peer_realm, op, state)
+
+  defp relay_owned(peer_realm, op, state) do
     if MapSet.member?(state.relay_realms, peer_realm) do
       {log, report} = Sync.deliver(state.log, [op])
       persist_relay(log, report, state)
