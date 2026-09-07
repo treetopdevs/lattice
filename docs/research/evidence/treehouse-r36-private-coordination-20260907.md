@@ -159,6 +159,25 @@ verification passed (`/tmp/treehouse-r36-validator-policy-root.log`). This is an
 additional constraint, not an issuance, trusted snapshot, possession, report or
 eligibility implementation.
 
+## Offline verification component
+
+Offline verifier `6287d2188d4fb2ba509e4f37366a851b12023852` and repair
+`e22747c755d8f22093aef99446b889f549b1dcb5` passed independent Sol review and
+integrated as `da1167a96` and `0a3c0e8f0`. Root strict offline checks passed
+165 JVM tests plus upstream tamper checks
+(`/tmp/treehouse-r36-validator-offline-root.log`). Real upstream path, revocation,
+challenge and profile verification are exercised; exact DER refuses trailing data,
+trust digests commit owned certificate and name-constraint bytes, and evidence
+arrays are defensively copied.
+
+Even a cryptographically matching result remains
+`INCOMPLETE / CHALLENGE_FRESHNESS_UNESTABLISHED`: this component does not implement
+validator issuance persistence/consumption, official trust acquisition, possession,
+current-state or physical-candidate proof. It cannot establish witness eligibility.
+The existing Android workflow now runs strict validator checks with JDK21 and
+retains their log in the compile-evidence artifact; workflow delta `0d325e7b`
+passed Sol review. Its hosted execution remains a native packet closure gate.
+
 ## Architectural consolidation before activation
 
 A bounded architectural audit identified operation lifetime ownership spread
