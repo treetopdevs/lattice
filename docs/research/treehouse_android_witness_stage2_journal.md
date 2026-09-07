@@ -537,3 +537,38 @@ No provider response or signature is produced. Proposed private sizing envelope 
 - No unexplained numerical reserve. Serialize using actual API33 org.json.JSONObject then count UTF8 <=131072 before metadata/enrollment admission. Future2B must serialize and independently guard its actual final response again.
 
 API33 JSONStringer escapes every slash (source captured read-only in r36-journal-api33-JSONStringer.java). This means a legal raw64KiB synthetic certificate chain can exceed128KiB JSON and must refuse. Constructed worst-case envelope with8 chains (7x8191 +8199 bytes, all255),512 NUL replica bytes, maximum signed64 creation version, actual SHA256 original-challenge digest, and all255 remaining fixed fields produces 179761 UTF8 bytes; chain Base64 alone totals87400 characters before slash escaping. This is genuine legal storage-input shape and a required oversized precommit negative. Ordinary64KiB all-zero synthetic chain is a valid positive (no slash expansion) subject to actual serializer result. No global assertion that every64KiB chain fits.
+
+
+## Root adoption: test-only directory synchronization fixture
+
+Adopted 2026-09-07 UTC. The following bounded fixture resolves a verified
+Robolectric limitation; production Android syscalls remain unchanged.
+
+# Android 2A test-only directory synchronization adapter
+
+Proposed exact test fixture `WitnessDirectoryOsShadow.kt` under the existing app `src/test/java/dev/treetop/lattice/treehouse/witness` package. No production dependency, method, flag or syscall changes. No instrumentation/APK/device usage. The production journal retains Android `Os.open`, `Os.fstat`, `Os.fsync` and `Os.close`.
+
+The verified Robolectric4.16 `ShadowLinux` implements directory `open` through Java `RandomAccessFile`, causing EIO, and descriptor `fstat` through `stat(null)`. This is independent of API33 NATIVE SQLite, which already passed a real file-backed DELETE/EXTRA transaction and reopen test. Failure evidence remains `r36-journal-io-diagnostic.log`; source is `r36-journal-ShadowLinux.java`. The temporary diagnostic result text has been restored; production exposes stable refusals only.
+
+Use a scoped Robolectric shadow of static `android.system.Os` (not replacement production code). Configure it only on `WitnessJournalTest`/its explicit test-only crash fixture. Tests register their own temporary application directory before any journal operation. The shadow intercepts only directory calls within those registered temporary roots; all unregistered/non-directory `open` calls and operations on non-owned descriptors invoke the original `Os` method through Robolectric's direct-call helper, retaining the existing Linux shadow behavior. Other methods are untouched.
+
+For an intercepted directory open:
+
+1. Require the exact production flags `O_RDONLY | O_NOFOLLOW | O_CLOEXEC`, and mode0. Require every applicable test-owned path component be nonsymlink and the leaf's NOFOLLOW attributes be a directory. Reject altered/create/write/truncate flags and nonordinary targets.
+2. Open a real host `FileChannel` using `StandardOpenOption.READ` and `LinkOption.NOFOLLOW_LINKS`. No directory creation, file substitution, deletion or successful fallback.
+3. Allocate a fresh `FileDescriptor` identity solely as a test-local opaque handle; do not assign or reuse an OS descriptor integer, reflect into private JDK fields, or collide with stdin/stdout/stderr or a real descriptor. An identity-keyed, synchronized map owns the exact channel/path/attributes. A separate retired-identity set makes repeated operations/close fail explicitly; it is cleared only between tests after asserting all owned channels were closed. No fake descriptor reaches a native syscall.
+4. `fstat` on a live owned handle rechecks the opened path's actual host directory attributes and returns a directory-mode StructStat consistent with them. It does not assert Android metadata. Type or path mismatch refuses. Production's directory type check remains active.
+5. `fsync` on a live owned handle invokes actual `channel.force(true)`; IOException propagates as ErrnoException. Record the completed operation only after force succeeds.
+6. `close` closes that exact host channel, records/retire the handle only after ownership bookkeeping, and propagates any failure. Owned stale/fake handles never fall through to unrelated OS descriptors. Cleanup drains/removes only test-owned channels and reports a leaked handle as a test failure; it cannot make the production operation successful.
+
+Test-only controls may request one deterministic failure at `open`, `fstat`, `fsync` or `close` for an exact registered directory. Fail before claiming success; if a close-failure test must also release its host test resource, it does so in explicit cleanup after the journal refusal. Tests assert no generation fence/metadata/consent receipt escapes the corresponding failure and check durable database state afterward. Controls and operation records reset between tests. No production injection shortcut skips directory synchronization.
+
+Add a direct fixture prerequisite that opens a real temporary directory through the unchanged production Os sequence, observes directory mode, forces/closes it, and verifies expected flags and completed operations. Include a non-directory delegation control to the existing Robolectric implementation and a stale-handle/refusal control. Continue to run actual API33 NATIVE SQLite for all journal mutations and reopen checks.
+
+This is real host FileChannel directory-force evidence plus actual host SQLite transaction/reopen evidence. It is not Android Os/JNI execution, handset directory-fsync, storage power loss, Android process lifecycle, KeyStore, biometrics or custody proof. The ordinary APK still contains only fixed Android Os production calls. Those physical/platform gates remain open. A failure of the proposed host adapter itself is retained and reviewed; never turn it into a no-op success.
+
+Root precision: retain the host NOFOLLOW file identity (`fileKey`) captured at
+open and require the same non-null identity on later path checks. Replacement,
+missing identity or symlink changes refuse, rather than describing a replacement
+path as the opened directory. This remains a test fixture, not a claim that a
+path-stat is native fstat. Add a deterministic path-replacement refusal control.
