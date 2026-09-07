@@ -300,3 +300,43 @@ Use the real `PolicyFixture` or `PolicyReplica` callback:
 5. Stop and return `REVISE` if implementation changes `%Snapshot{}`, default APIs, default hashes, production Authority/Reduce, op kinds, global authority collectors, or callback contracts. Stop if any outside-profile refusal is reported as semantic equivalence.
 
 The packet is ready for implementation review only after these boundaries are adopted. It does not close any original R19b mirrored semantic gate by itself.
+
+
+## Covered delegation seed correction adopted 2026-09-07 UTC
+
+Independent Sol review of963b0616 found that the unchanged legacy snapshot's
+first-introduction collector can retain a forged same-ID delegation before a
+valid introduction. The real Authority collector preserves valid introductions
+and invalid-introduction diagnostics separately. A default snapshot hash only
+proves that legacy summary reproduced; it is not sufficient application-authority
+evidence for this covered shape.
+
+For the new application arm only, root authorizes an exact covered authority seed
+reconstructed from the already authenticated `covered_ops`. Mirror the actual
+kind-gated collector's delegation value, valid introduction IDs and invalid
+introduction reasons, then apply the real covered validation context. Use this
+corrected seed consistently for delegation validation/visibility, role/acquire
+summaries, continuation and covered/retained cross-kind revokes. Do not mutate the
+legacy Snapshot or its collectors/helpers/hash/entrypoints. Existing base_snapshot
+remains verified historical evidence; the new arm must not treat its lossy
+collection as authoritative. The new seed may be ephemeral and rederived from the
+hashed raw covered operations on each invocation, avoiding an independently
+caller-supplied cache or new container field.
+
+No combined-log Authority.analyze call, second application/conflict judge or
+refusal-only narrowing of the adopted accepted profile is authorized. Covered-only
+analysis remains permitted for construction/verification. Preserve old snapshot
+byte pins and original new-container pins where their recorded data is unchanged.
+
+Require genuine op-signed bad-delegation-signature introduction sorting before a
+valid same-ID introduction, plus valid-before-invalid order and invalid-only
+controls. Above the stable cut, command capability/holder decisions and both
+command/inbox revoke-shaped bodies must match actual full judgment. Individually
+bad introductions remain denied; the valid one cannot be poisoned or ignored.
+
+The delivery-order requirement also remains: exercise actual append/reconciliation
+sequences for every accepted fixture and compare the full result plus normalized
+callback input traces. Reversing an already constructed map is only map equality
+and cannot satisfy that requirement. Retain sorted outside-profile refusal tests,
+with no equality credit. Independent review follows the exact repair. Future
+valid_beacons callback adoption is separate; this repair does not activate it.
