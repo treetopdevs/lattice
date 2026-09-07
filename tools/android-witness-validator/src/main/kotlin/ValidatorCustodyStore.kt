@@ -51,6 +51,11 @@ class AssociatedCandidate internal constructor(publicKey: ByteArray, spki: ByteA
   internal val keyBytes = publicKey.copyOf(); internal val spkiBytes = spki.copyOf(); internal val chainBytes = chain.map(ByteArray::copyOf)
   val publicKey get() = keyBytes.copyOf(); val spki get() = spkiBytes.copyOf(); val chain get() = chainBytes.map(ByteArray::copyOf)
 }
+internal class RetainedIssuance(expected: ExpectedEnrollment, challenge: ByteArray) {
+  val expected = expected.owned()
+  private val challengeBytes = challenge.copyOf()
+  val generationChallenge get() = challengeBytes.copyOf()
+}
 
 internal enum class PersistStage { TEMP_FORCED, RENAMED, DIRECTORY_FORCED, REOPENED }
 internal fun interface PersistCheckpoint { fun reached(stage: PersistStage) }
@@ -112,6 +117,20 @@ class ValidatorCustodyStore internal constructor(
     state.nonces[nonce.key()] = Nonce(issuanceId.copyOf(), nonce.copyOf(), false)
     persist(state)
     PossessionTicket(issuanceId.copyOf(), nonce.copyOf())
+  }
+
+  internal fun retainedIssuance(issuanceId: ByteArray): RetainedIssuance? = locked { state ->
+    require(issuanceId.size == 32)
+    state.issuances[issuanceId.key()]?.let { RetainedIssuance(it.expected, it.challenge) }
+  }
+
+  internal fun abandonPossession(ticket: PossessionTicket): Boolean = locked { state ->
+    require(ticket.id.size == 32 && ticket.nonce.size == 32)
+    val nonce = state.nonces[ticket.nonce.key()] ?: return@locked false
+    if (nonce.spent || !nonce.issuanceId.contentEquals(ticket.id)) return@locked false
+    nonce.spent = true
+    persist(state)
+    true
   }
 
   /** Spend is durable before any caller-supplied packet parser or signature verifier runs. */
