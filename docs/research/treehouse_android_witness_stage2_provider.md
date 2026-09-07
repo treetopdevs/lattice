@@ -494,3 +494,26 @@ Android dispatch/JNI/lifecycle behavior and the combined TEE/Ed25519/attestation
 strong-biometric profile require selected-device evidence. The latter facts do
 not block 2A. A discovered inability to uphold a 2B guard is a recorded refusal
 or an exact review amendment, never a hidden fallback.
+
+
+## First component boundary and DER work bounds
+
+Root clarification,2026-09-07 UTC: the first component checkpoint implements
+fixed-alias platform observation/capture/reconciliation and construction of the
+exact KeyGenParameterSpec. It has no reachable generateKeyPair call. Actual key
+generation and the private native review/fence-consuming entry are implemented
+with the next coordinator integration. Do not introduce an unissuable review
+token or use reflection tests as a substitute for that missing authorization
+flow. Configuration and metadata tests are useful component evidence only.
+
+For each already bounded16KiB certificate, the strict DER reader additionally
+bounds nesting to32 and traversed TLV elements to8192, checking before descent
+or processing. Count every traversed node, not only the selected extension OID.
+Retain definite minimal lengths and complete required structure/trailing-data
+checks. Treat opaque leaf contents according to their schema; do not recursively
+interpret arbitrary octets as DER. Traverse remaining KeyDescription fields
+within those same bounds without asserting attestation trust or eligibility.
+Boundary tests must distinguish legal-representation limits from syntactically
+invalid inputs; do not claim an impossible8192-element certificate as a legal
+positive under the16KiB byte cap. These are parsing work bounds, not device
+capacity measurements or permission to reject a validated chain silently.
