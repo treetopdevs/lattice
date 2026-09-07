@@ -104,6 +104,16 @@ tests/build. The performance trace helper also terminates its tracer on early
 assertion failure. A refreshed hosted tip and exact merge-result check remain
 required after these final source repairs.
 
+## R19b hosted tip and merge
+
+Final tip `55bc37711968e7c242dff3a7ec974d9b48595645` passed all jobs in
+hosted run 34142364012. All review threads were resolved; refreshed main remained
+`b9671a5982e37511574432f1d43ad61cd5b149c4` with no pending main workflow.
+PR85 merged as `7256eb9b2e753f68074a729222488a906b3277c1`. Its tree
+`432c0ed699234e32134ea9dce0ee40a26e328527` exactly matches the independently
+computed merge candidate. Main run 34144303577 is pending; the queue remains
+closed until its result is checked. The preview still exposes six commands.
+
 ## Native vertical slice
 
 Source through `9d4fcad9629242797df5783168ef258fac2fcd12` adds retained
