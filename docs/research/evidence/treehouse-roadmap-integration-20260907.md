@@ -71,6 +71,16 @@ A refreshed hosted tip and merge-result check remain required. Ancestor-cache
 reuse suggestions remain optional performance work; no scalability improvement
 is claimed by this packet.
 
+Final assembly review additionally reproduced altered-capability consent, malformed
+voucher precedence, and signer-result failures. Repairs `946104a9` and `7e6ba428`
+close those cases. Appended repair `17463e456` preserves authenticated-history and
+capacity refusals and distinguishes malformed certificate shape from bad crypto.
+Independent Sol review passed the final assembly path; all refusals precede signer
+invocation. Root full checks passed 1,018 tests plus 27 properties, zero failures,
+three existing exclusions, format and Credo. Broad client checks passed again after the final TypeScript-only parity repair;
+preview tests/build also passed on the unchanged preview source. Hosted run34135777656 passed the prior `125558e0` tip;
+that does not close the refreshed-tip or merge-result gates.
+
 ## Native vertical slice
 
 Source through `9d4fcad9629242797df5783168ef258fac2fcd12` adds retained
