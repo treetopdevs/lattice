@@ -1,53 +1,113 @@
-# Android witness validator dependency admission
+# Treehouse Android witness validator
 
-This directory admits the upstream Android Key Attestation verifier as reviewed
-source tooling. It includes the bounded Treehouse fixed-profile constraint, but
-does not provide a production validation service or eligibility report.
+This local JVM 21 tool retains validator-issued challenges, imports closed public
+witness results, verifies the fixed generation profile and fresh possession, and
+keeps the result separate from device eligibility. Run it on a separate trusted
+computer. The phone never supplies trust roots, revocations, time or policy.
 
-## Pin and provenance
+## Build and provenance
 
-- Repository: <https://github.com/android/keyattestation>
-- Commit: `a48898a68337b920cbd368eab5824f696d7bbf3d`
-- Git tree: `1e7bcbf19e46fcf68004ca99b34fcbe017bc2dee`
-- License: Apache License 2.0, preserved in
-  `vendor/android-keyattestation/LICENSE`
+The official Android Key Attestation verifier is vendored byte-for-byte from
+`android/keyattestation` commit `a48898a68337b920cbd368eab5824f696d7bbf3d`,
+tree `1e7bcbf19e46fcf68004ca99b34fcbe017bc2dee`. Its Apache-2.0 license and
+source inventory remain under `vendor/android-keyattestation` and
+`upstream.lock.json`. Compilation verifies the source pin; Gradle verifies dependency
+SHA-256 values and its wrapper distribution checksum. No network root replacement
+or caller-provided trust file is supported.
 
-`upstream.lock.json` records every vendored file and its SHA-256 digest.
-`verifyPinnedUpstream` runs before compilation and tests. Gradle dependency
-verification is strict and records SHA-256 checksums in
-`gradle/verification-metadata.xml`. The build copies the upstream dependency
-versions and JVM 21 toolchain requirement; it does not substitute unpublished
-coordinates. The upstream Gradle 8.10 wrapper is retained, and the local wrapper
-adds Gradle's published distribution SHA-256 checksum.
-
-Run with a JDK 21 `JAVA_HOME`:
+With JDK 21 in `JAVA_HOME`:
 
 ```sh
-./gradlew --offline --no-daemon --dependency-verification=strict clean check
+./gradlew --no-daemon --dependency-verification=strict check installDist
 ```
 
-The first build on a new machine must populate the Gradle distribution and the
-already-verified dependency cache while online. The command above is the
-reproducibility gate after that bootstrap.
+After the first verified online dependency bootstrap, add `--offline` to repeat the
+build gate. The installed launcher is
+`build/install/treehouse-android-witness-validator/bin/treehouse-android-witness-validator`.
+The application plugin is built into Gradle and adds no dependency coordinates.
 
-## Current limits
+## Manual request and response flow
 
-This packet verifies that the pinned upstream sources and dependencies build and
-that the upstream test suite passes. It does not:
+The first argument is the validator-owned state directory, followed by the command
+and its exact identifier arguments. JSON input is one UTF-8 object, limited to
+128 KiB, with duplicate keys, unexpected fields, noncanonical numbers/Base64 and
+excessive nesting refused. Each invocation writes one closed JSON result to stdout.
+Usage/internal launch failures may exit nonzero; a domain refusal or incomplete
+verification is a JSON result, so inspect its status rather than only the exit code.
 
-- define the Treehouse closed validator request or report;
-- map upstream results to Treehouse eligibility;
-- fetch, authenticate, freeze, or refresh revocation status;
-- establish that the vendored `roots.json` is current for a validation event;
-- validate a physical device, a real certificate chain, or a fresh challenge;
-- supply device-recognition trust data or make an eligibility decision.
+| Command | Additional identifiers | Standard input |
+|---|---|---|
+| `issue-generation` | None | `{version:1, kind:"issue_generation", expected:{...}}` |
+| `verify-generation` | Issuance ID | Exported `generated_unvalidated` public result |
+| `issue-possession` | Issuance ID | `{version:1, kind:"issue_possession", expected:{...}}` |
+| `verify-possession` | Issuance ID, fresh validator nonce | Exported signed public result, or the failed/cancelled response |
+| `abandon-possession` | Issuance ID, fresh validator nonce | Exactly empty |
 
-The upstream API accepts injected trust anchors, revocation data, time, and
-constraints. A later reviewed wrapper must bind those inputs to independently
-recorded validator requests and official validator-controlled sources. Phone
-supplied roots, revocation data, time, or policy must never be trusted.
+The `expected` object has exactly `replica`, `enrollmentId`, `recipient`,
+`creationAttemptId`, `appSignerSha256`, and `creationVersionCode`. Binary fields are
+canonical padded Base64 for 32 bytes. The version code is a positive signed-64-bit
+decimal string. Obtain and check these expected facts independently; do not promote
+phone-provided metadata into expectations merely because it parses.
 
-`TreehouseWitnessProfileConstraint` is only a generation-time fixed-profile
-policy at upstream's `ConstraintConfig.additionalConstraints` seam. It does not
-issue a challenge, validate chain trust or revocation, verify fresh possession,
-or emit an eligibility report. Those validator-controlled steps remain required.
+Issuance output contains an `issuanceId` and a nested `uiRequest`. Retain the complete
+receipt on the validator computer. Save only its `uiRequest` object to a JSON file
+for the app's import control. Generation requests contain exactly
+`creationAttemptId` and `generationChallenge`; possession requests contain exactly
+`replica`, `enrollmentId`, `recipient` and `freshValidatorNonce`.
+
+The original generation request remains bound to the same attempt, enrollment and
+first verified certificate/key candidate after restart. Reverification cannot
+substitute another chain or key. Possession issuance requires that association.
+A possession nonce is durably spent before public packet parsing/signature checking,
+including malformed and oversized results. A cancelled or lost response must be
+consumed through verification or `abandon-possession`; obtain a new nonce for retry.
+Native random/session nonces are signed context, not validator-issued observations.
+
+For example, using files whose expected values were independently checked:
+
+```sh
+witness_validator=build/install/treehouse-android-witness-validator/bin/treehouse-android-witness-validator
+"$witness_validator" ./validator-state issue-generation < generation-input.json > generation-receipt.json
+"$witness_validator" ./validator-state verify-generation "$issuance_id" < generated-public-result.json
+"$witness_validator" ./validator-state issue-possession "$issuance_id" < possession-input.json > possession-receipt.json
+"$witness_validator" ./validator-state verify-possession "$issuance_id" "$validator_nonce" < signed-public-result.json
+"$witness_validator" ./validator-state abandon-possession "$issuance_id" "$validator_nonce" < /dev/null
+```
+
+Set the two identifier variables from the retained receipts before the corresponding
+commands. Abandonment is an alternative for an unused/lost response, not another
+successful verification step.
+
+## Official trust and durable state
+
+Only generation verification calls the production official trust repository, after
+strict import and retained-context checks. Roots come from the reviewed vendored
+pin. Revocations come only from `https://android.googleapis.com/attestation/status`,
+with redirects disabled, a 5-second connect timeout, 10-second read timeout and
+512-KiB response limit. It records exact response bytes/digest, Cache-Control/Age,
+root digest, fetch/expiry times and the snapshot digest.
+
+A single unambiguous `max-age` is reduced by `Age`, with an additional 24-hour local
+cap. Missing/invalid/conflicting freshness, `no-store`, `no-cache`, expired state or
+unavailable required inputs yields incomplete. A still-fresh frozen snapshot can
+be reused offline; stale-on-error is not supported. Root updates require a reviewed
+vendored pin/provenance update. Backward wall-clock observations refuse; this is
+not a hardware clock or rollback-resistant storage claim.
+
+Both stores use an OS process lock, file force, atomic replacement, parent-directory
+force and strict reopen. A failure/refusal marker or orphaned partial record is
+retained and refuses subsequent use. Do not delete markers or reset a store to
+bypass a refusal. Custody records retain at most 4,096 generation issuances and
+4,096 possession nonces without pruning; capacity refusal preserves the old state.
+Directory-force support is required. This does not claim resistance to a trusted
+host administrator restoring an old disk image or prove real power-loss behavior.
+
+## Evidence limits
+
+An associated candidate remains `incomplete / challenge_freshness_unestablished`.
+The tool does not infer a challenge freshness duration or fresh device state from
+an old attestation. Successful signature verification is reported as possession
+only. Current package/device/boot observation, selected physical authenticator,
+exact approved APK and the R17c ceremony remain separate gates. No command returns
+an eligibility decision, and software fixtures or a successful official-source fetch
+cannot close physical device, custody, production signing, release or pilot gates.
