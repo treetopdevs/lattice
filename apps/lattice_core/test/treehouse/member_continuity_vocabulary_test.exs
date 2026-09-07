@@ -128,7 +128,10 @@ defmodule Treehouse.MemberContinuityVocabularyTest do
           Application.app_dir(:jason, "ebin"),
           "-e",
           script | args
-        ], env: [{"ERL_FLAGS", "+S 4:4"}], stderr_to_stdout: true)
+        ],
+        env: [{"ERL_FLAGS", "+S 4:4"}],
+        stderr_to_stdout: true
+      )
 
     assert status == 0, output
     output

@@ -60,7 +60,9 @@ defmodule Treehouse.CatalogCutoffVocabularyTest do
           fixture.space.replica,
           Log.frontier(fixture.space_log),
           :command,
-          {:attest_member_key_v1, [atoms]}, cap: fixture.space.delegation.id)
+          {:attest_member_key_v1, [atoms]},
+          cap: fixture.space.delegation.id
+        )
 
       for delivered <- [
             [op | Log.topo_ops(fixture.space_log)],
@@ -100,7 +102,9 @@ defmodule Treehouse.CatalogCutoffVocabularyTest do
         fixture.space.replica,
         Log.frontier(fixture.space_log),
         :command,
-        {:attest_member_key_v1, [atoms]}, cap: fixture.space.delegation.id)
+        {:attest_member_key_v1, [atoms]},
+        cap: fixture.space.delegation.id
+      )
 
     assert {:quarantined, rejected, :bad_signature} =
              Log.accept(fixture.space_log, %{op | sig: <<0::512>>})
