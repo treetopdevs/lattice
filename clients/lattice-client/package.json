@@ -38,7 +38,7 @@
     "catalog:cutoff": "tsx test/treehouse_catalog_cutoff.ts",
     "catalog:trust": "tsx --test test/treehouse_catalog_trust.ts",
     "member:continuity:codec": "tsx --test test/treehouse_member_continuity_codec.ts",
-    "member:continuity": "tsx --test test/treehouse_member_continuity_policy.ts test/treehouse_member_continuity_semantic_reciprocal.ts test/treehouse_member_continuity_review_boundary.ts"
+    "member:continuity": "tsx --test test/treehouse_member_continuity_policy.ts test/treehouse_member_continuity_semantic_reciprocal.ts test/treehouse_member_continuity_review_boundary.ts test/treehouse_member_continuity_claim_shape.ts"
   },
   "devDependencies": {
     "tsx": "^4.23.0",
