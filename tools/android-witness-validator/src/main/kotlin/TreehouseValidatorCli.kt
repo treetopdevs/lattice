@@ -143,5 +143,8 @@ object TreehouseValidatorCli {
 
 fun main(args: Array<String>) {
   require(args.size >= 2) { "usage: <store-directory> <command> [identifiers...]" }
-  System.out.write(TreehouseValidatorCli.execute(Path.of(args[0]), args[1], System.`in`.readNBytes(131_073), args.drop(2)))
+  val directory = Path.of(args[0])
+  val officialTrust = OfficialTrustSnapshotRepository(directory.resolve("official-trust"))
+  System.out.write(TreehouseValidatorCli.execute(directory, args[1], System.`in`.readNBytes(131_073), args.drop(2),
+    TrustedSnapshotProvider(officialTrust::loadOrRefresh)))
 }

@@ -1,4 +1,5 @@
 plugins {
+  application
   id("com.adarshr.test-logger") version "4.0.0"
   id("org.jetbrains.kotlin.jvm") version "2.2.0"
 }
@@ -68,4 +69,8 @@ tasks.compileTestKotlin { compilerOptions { javaParameters = true } }
 tasks.check { dependsOn(verifyPinnedUpstream, "verifyUpstreamTamperTest") }
 tasks.register<Exec>("verifyUpstreamTamperTest") {
   commandLine("python3", "-m", "unittest", "src/test/python/test_verify_upstream.py")
+}
+
+application {
+  mainClass.set("com.android.keyattestation.verifier.TreehouseValidatorCliKt")
 }
