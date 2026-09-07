@@ -4,6 +4,7 @@ mod android_keyring;
 mod key_store;
 pub mod preview;
 pub mod witness_binding;
+mod witness_android;
 use preview::{Draft, OpenResult, PreviewStore};
 use std::sync::{Arc, Mutex};
 use tauri::Manager as _;
@@ -63,6 +64,7 @@ fn treehouse_sign_carrier(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(witness_android::private_plugin())
         .setup(|app| {
             #[cfg(target_os = "android")]
             let bootstrap = android_keyring::configure();
