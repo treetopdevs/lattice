@@ -77,6 +77,41 @@ defmodule Lattice.CompactionSpike do
               hash: nil
   end
 
+  defmodule ApplicationSnapshot do
+    @moduledoc """
+    Research-only application evidence around an unchanged default `Snapshot`.
+
+    It retains every covered operation and therefore makes no compaction or
+    storage-bound claim.
+    """
+
+    defstruct version: 1,
+              authority_profile: :covered_authority_v1,
+              replica: nil,
+              frontier: [],
+              base_snapshot: nil,
+              covered_ops: %{},
+              covered_individual_reasons: %{},
+              covered_final_reasons: %{},
+              covered_conflict_losers: %{},
+              covered_valid_beacons: [],
+              hash: nil
+
+    @type t :: %__MODULE__{
+            version: pos_integer(),
+            authority_profile: atom(),
+            replica: String.t(),
+            frontier: [Lattice.Op.id()],
+            base_snapshot: struct(),
+            covered_ops: %{Lattice.Op.id() => Lattice.Op.t()},
+            covered_individual_reasons: %{Lattice.Op.id() => atom()},
+            covered_final_reasons: %{Lattice.Op.id() => atom()},
+            covered_conflict_losers: %{Lattice.Op.id() => atom()},
+            covered_valid_beacons: [%{op_id: Lattice.Op.id(), epoch: non_neg_integer()}],
+            hash: binary()
+          }
+  end
+
   # --- Compaction -----------------------------------------------------------
 
   @doc """
@@ -103,6 +138,508 @@ defmodule Lattice.CompactionSpike do
         {:error, {:unstable_frontier, op_id}}
     end
   end
+
+  @doc "Research-only application evidence at a stable frontier."
+  @spec compact_application(module(), Log.t(), [Op.id()]) ::
+          {:ok, ApplicationSnapshot.t(), Log.t()} | {:error, term()}
+  def compact_application(module, %Log{} = log, frontier) do
+    with :ok <- application_log_authenticity(log),
+         {:ok, base_snapshot, retained_log} <- compact(module, log, frontier) do
+      all_ops = Log.ops(log)
+      covered_ids = Dag.reachable(all_ops, frontier)
+      covered_ops = Map.take(all_ops, MapSet.to_list(covered_ids))
+
+      snapshot =
+        build_application_snapshot(module, base_snapshot, log.replica, covered_ops, frontier)
+
+      {:ok, snapshot, retained_log}
+    end
+  end
+
+  @doc "Reduce a verified application snapshot plus its retained log."
+  @spec reduce_application(module(), ApplicationSnapshot.t(), Log.t()) ::
+          map() | {:error, term()}
+  def reduce_application(module, %ApplicationSnapshot{} = snapshot, %Log{} = retained_log) do
+    with :ok <- verify_application_container(snapshot),
+         :ok <- verify_retained_envelope(snapshot, retained_log),
+         {:ok, combined_log, retained_ops} <- combine_application_logs(snapshot, retained_log),
+         :ok <- verify_application_cut(snapshot, combined_log, retained_ops),
+         :ok <- verify_application_profile(retained_ops),
+         :ok <- verify_application_evidence(module, snapshot) do
+      reduce_verified_application(module, snapshot, combined_log, retained_ops)
+    end
+  end
+
+  defp build_application_snapshot(module, base_snapshot, replica, covered_ops, frontier) do
+    covered_log = Log.from_ops(replica, covered_ops)
+
+    {analysis, covered_valid_beacons} =
+      Authority.analyze_with_beacon_evidence(module, covered_log)
+
+    conflict_losers =
+      for %{event: :command_conflict, op: id, reason: reason} <- analysis.audit,
+          into: %{},
+          do: {id, reason}
+
+    snapshot = %ApplicationSnapshot{
+      replica: replica,
+      frontier: Enum.sort(frontier),
+      base_snapshot: base_snapshot,
+      covered_ops: covered_ops,
+      covered_individual_reasons: Map.drop(analysis.reasons, Map.keys(conflict_losers)),
+      covered_final_reasons: analysis.reasons,
+      covered_conflict_losers: conflict_losers,
+      covered_valid_beacons: covered_valid_beacons
+    }
+
+    %{snapshot | hash: application_snapshot_hash(snapshot)}
+  end
+
+  defp application_snapshot_hash(%ApplicationSnapshot{} = snapshot) do
+    :crypto.hash(
+      :sha256,
+      :erlang.term_to_binary(%{snapshot | hash: nil}, [:deterministic, {:minor_version, 2}])
+    )
+  end
+
+  defp application_log_authenticity(log) do
+    case Log.verify_authenticity(log) do
+      :ok -> :ok
+      {:error, errors} -> {:error, {:application_log_invalid, errors}}
+    end
+  end
+
+  defp verify_application_container(%ApplicationSnapshot{} = snapshot) do
+    with true <- snapshot.version == 1,
+         true <- snapshot.authority_profile == :covered_authority_v1,
+         true <- is_binary(snapshot.replica),
+         true <- is_list(snapshot.frontier),
+         true <- is_map(snapshot.covered_ops),
+         true <- is_map(snapshot.covered_individual_reasons),
+         true <- is_map(snapshot.covered_final_reasons),
+         true <- is_map(snapshot.covered_conflict_losers),
+         true <- is_list(snapshot.covered_valid_beacons),
+         true <- snapshot.frontier == Enum.sort(snapshot.frontier),
+         true <- Enum.all?(snapshot.frontier, &Map.has_key?(snapshot.covered_ops, &1)),
+         true <- covered_entries_bound?(snapshot),
+         true <- application_reason_maps_closed?(snapshot),
+         true <- application_beacons_closed?(snapshot),
+         true <- application_snapshot_hash(snapshot) == snapshot.hash,
+         covered_log = Log.from_ops(snapshot.replica, snapshot.covered_ops),
+         :ok <- application_log_authenticity(covered_log),
+         %Snapshot{} = base_snapshot <- snapshot.base_snapshot,
+         true <- snapshot_hash(base_snapshot) == base_snapshot.hash do
+      :ok
+    else
+      _other -> {:error, :application_snapshot_mismatch}
+    end
+  rescue
+    _error -> {:error, :application_snapshot_mismatch}
+  end
+
+  defp covered_entries_bound?(snapshot) do
+    Enum.all?(snapshot.covered_ops, fn
+      {id, %Op{id: op_id, replica: replica}} -> id == op_id and replica == snapshot.replica
+      _entry -> false
+    end)
+  end
+
+  defp application_reason_maps_closed?(snapshot) do
+    covered_ids = map_keys(snapshot.covered_ops)
+    individual_ids = map_keys(snapshot.covered_individual_reasons)
+    final_ids = map_keys(snapshot.covered_final_reasons)
+    conflict_ids = map_keys(snapshot.covered_conflict_losers)
+
+    MapSet.subset?(individual_ids, covered_ids) and
+      MapSet.subset?(final_ids, covered_ids) and
+      MapSet.subset?(conflict_ids, covered_ids) and
+      MapSet.disjoint?(individual_ids, conflict_ids) and
+      Map.merge(snapshot.covered_individual_reasons, snapshot.covered_conflict_losers) ==
+        snapshot.covered_final_reasons
+  end
+
+  defp application_beacons_closed?(snapshot) do
+    snapshot.covered_valid_beacons == Enum.sort_by(snapshot.covered_valid_beacons, & &1.op_id) and
+      Enum.all?(snapshot.covered_valid_beacons, fn
+        %{op_id: id, epoch: epoch} -> Map.has_key?(snapshot.covered_ops, id) and is_integer(epoch)
+        _record -> false
+      end)
+  end
+
+  defp verify_application_evidence(module, %ApplicationSnapshot{} = snapshot) do
+    covered_log = Log.from_ops(snapshot.replica, snapshot.covered_ops)
+
+    with :ok <- verify(module, snapshot.base_snapshot, covered_log),
+         recomputed_base =
+           build_snapshot(module, snapshot.replica, snapshot.covered_ops, snapshot.frontier),
+         recomputed =
+           build_application_snapshot(
+             module,
+             recomputed_base,
+             snapshot.replica,
+             snapshot.covered_ops,
+             snapshot.frontier
+           ),
+         true <- recomputed.hash == snapshot.hash do
+      :ok
+    else
+      _other -> {:error, :application_snapshot_mismatch}
+    end
+  rescue
+    _error -> {:error, :application_snapshot_mismatch}
+  end
+
+  defp verify_retained_envelope(%ApplicationSnapshot{} = snapshot, %Log{} = retained_log) do
+    expected_references = retained_references(Log.ops(retained_log))
+
+    if match?(%MapSet{}, expected_references) and retained_log.replica == snapshot.replica and
+         retained_log.quarantine == [] and
+         MapSet.equal?(retained_log.referenced, expected_references),
+       do: :ok,
+       else: {:error, :application_retained_log_mismatch}
+  end
+
+  defp retained_references(ops) do
+    Enum.reduce_while(ops, MapSet.new(), fn
+      {_id, %Op{deps: deps}}, references when is_list(deps) ->
+        {:cont, MapSet.union(references, MapSet.new(deps))}
+
+      _entry, _references ->
+        {:halt, :invalid}
+    end)
+  end
+
+  defp combine_application_logs(%ApplicationSnapshot{} = snapshot, %Log{} = retained_log) do
+    retained_ops = Log.ops(retained_log)
+    overlap = MapSet.intersection(map_keys(snapshot.covered_ops), map_keys(retained_ops))
+
+    if MapSet.size(overlap) > 0 do
+      {:error, :application_cut_mismatch}
+    else
+      combined_log =
+        Log.from_ops(snapshot.replica, Map.merge(snapshot.covered_ops, retained_ops))
+
+      case application_log_authenticity(combined_log) do
+        :ok -> {:ok, combined_log, retained_ops}
+        {:error, _reason} = error -> error
+      end
+    end
+  end
+
+  defp verify_application_cut(snapshot, combined_log, retained_ops) do
+    all_ops = Log.ops(combined_log)
+    covered_ids = Dag.reachable(all_ops, snapshot.frontier)
+
+    cond do
+      not MapSet.equal?(covered_ids, map_keys(snapshot.covered_ops)) ->
+        {:error, :application_cut_mismatch}
+
+      unstable = unstable_op(all_ops, retained_ops, snapshot.frontier) ->
+        {:error, {:unstable_frontier, unstable}}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp verify_application_profile(retained_ops) do
+    outside_profile_ids =
+      retained_ops
+      |> Map.values()
+      |> Enum.reject(&(&1.kind in [:command, :inbox]))
+      |> Enum.map(& &1.id)
+      |> Enum.sort()
+
+    if outside_profile_ids == [],
+      do: :ok,
+      else: {:error, {:application_authority_rebinding_outside_profile, outside_profile_ids}}
+  end
+
+  defp reduce_verified_application(module, snapshot, combined_log, retained_ops) do
+    base = snapshot.base_snapshot
+    combined_ops = Log.ops(combined_log)
+    ancestors = Dag.all_ancestors(combined_ops)
+    retained_ids = map_keys(retained_ops)
+    seed = application_covered_authority_seed(module, snapshot)
+
+    ordered_retained =
+      combined_ops
+      |> Dag.topo_sort()
+      |> Enum.filter(&MapSet.member?(retained_ids, &1.id))
+
+    revokes =
+      base
+      |> Map.put(:covered_revokes, collect_raw_revokes(seed.ordered))
+      |> merged_revokes(ordered_retained, seed.delegations, base.root)
+
+    # The verified stable cut places every covered beacon in every retained op's strict past.
+    covered_lease_beacons =
+      Enum.map(snapshot.covered_valid_beacons, fn %{op_id: op_id, epoch: epoch} ->
+        %{op_id: op_id, epoch: epoch, covered?: true}
+      end)
+
+    seeded_base = %{base | delegations: seed.delegations, roles: seed.roles}
+
+    timelines =
+      Map.new(all_roles(module), fn role ->
+        {role,
+         build_seeded_timeline(
+           role,
+           seeded_base,
+           [],
+           ancestors,
+           seed.deleg_valid,
+           base.policies,
+           seed.continuation
+         )}
+      end)
+
+    ctx = %{
+      module: module,
+      anc: ancestors,
+      ops: combined_ops,
+      delegations: seed.delegations,
+      covered_delegation_ids: seed.delegation_ids,
+      deleg_valid: seed.deleg_valid,
+      retained_intros: %{},
+      covered_intros: seed.covered_intros,
+      covered_honored_succession_ids: base.covered_honored_succession_ids,
+      revokes: revokes,
+      beacons: covered_lease_beacons,
+      valid_beacons: snapshot.covered_valid_beacons
+    }
+
+    unsupported_reasons =
+      if seed.continuation.family == :unsupported,
+        do: Map.new(ordered_retained, &{&1.id, :unsupported_authority_profile}),
+        else: %{}
+
+    {retained_command_reasons, retained_requests} =
+      validate_application_commands(
+        ordered_retained,
+        timelines,
+        ctx,
+        snapshot.covered_individual_reasons,
+        unsupported_reasons
+      )
+
+    retained_reasons = Map.merge(retained_command_reasons, unsupported_reasons)
+    individual_reasons = Map.merge(snapshot.covered_individual_reasons, retained_reasons)
+
+    full_verdicts =
+      Map.new(combined_ops, fn {id, _op} ->
+        {id, Map.get(individual_reasons, id, :honored)}
+      end)
+
+    conflict_losers =
+      module.command_conflicts(combined_ops, full_verdicts, ancestors)
+      |> Enum.filter(fn {id, _reason} -> Map.get(full_verdicts, id) == :honored end)
+      |> Map.new()
+
+    final_reasons = Map.merge(individual_reasons, conflict_losers)
+    quarantine = final_reasons |> Map.keys() |> MapSet.new()
+
+    %{
+      state: Reduce.reduce(module, combined_log, quarantine: quarantine),
+      quarantine: quarantine,
+      reasons: final_reasons,
+      holders: base.frozen_holders,
+      requests:
+        if(seed.continuation.family == :unsupported,
+          do: [],
+          else: base.frozen_requests ++ retained_requests
+        )
+    }
+  end
+
+  defp application_covered_authority_seed(module, snapshot) do
+    base = snapshot.base_snapshot
+    ordered = Dag.topo_sort(snapshot.covered_ops)
+    records = collect_application_delegations(ordered)
+
+    delegations =
+      for {id, %{deleg: %Delegation{} = delegation}} <- records,
+          into: %{},
+          do: {id, delegation}
+
+    deleg_valid =
+      validate_application_delegations(
+        records,
+        delegations,
+        base.root,
+        genesis_delegation_ids(ordered),
+        succession_delegation_ids(ordered),
+        base.replica
+      )
+
+    covered_intros =
+      for {id, %{op_ids: [_ | _]}} <- records, into: MapSet.new(), do: id
+
+    roles =
+      summarize_roles(
+        module,
+        snapshot.covered_ops,
+        ordered,
+        %{reasons: snapshot.covered_individual_reasons},
+        deleg_valid
+      )
+
+    continuation =
+      Continuation.context(
+        base.replica,
+        ordered,
+        records,
+        deleg_valid,
+        base.root,
+        snapshot.covered_valid_beacons
+      )
+      |> Map.put(:covered_ids, MapSet.new(Map.keys(base.covered_heights)))
+
+    %{
+      ordered: ordered,
+      delegations: delegations,
+      delegation_ids: Map.keys(records) |> MapSet.new(),
+      deleg_valid: deleg_valid,
+      covered_intros: covered_intros,
+      roles: roles,
+      continuation: continuation
+    }
+  end
+
+  defp collect_application_delegations(ordered) do
+    Enum.reduce(ordered, %{}, fn op, acc ->
+      case delegation_in(op) do
+        nil -> acc
+        %Delegation{} = delegation -> collect_application_delegation(acc, delegation, op.id)
+      end
+    end)
+  end
+
+  defp collect_application_delegation(acc, %Delegation{} = delegation, op_id) do
+    if Delegation.valid_sig?(delegation) do
+      Map.update(
+        acc,
+        delegation.id,
+        %{deleg: delegation, op_ids: [op_id], invalid_ops: %{}},
+        fn entry ->
+          %{entry | deleg: entry.deleg || delegation, op_ids: [op_id | entry.op_ids]}
+        end
+      )
+    else
+      Map.update(
+        acc,
+        delegation.id,
+        %{deleg: nil, op_ids: [], invalid_ops: %{op_id => :bad_delegation_sig}},
+        fn entry ->
+          %{entry | invalid_ops: Map.put(entry.invalid_ops, op_id, :bad_delegation_sig)}
+        end
+      )
+    end
+  end
+
+  defp validate_application_delegations(
+         records,
+         delegations,
+         root,
+         genesis_ids,
+         succession_ids,
+         replica
+       ) do
+    Map.new(records, fn
+      {id, %{deleg: %Delegation{} = delegation}} ->
+        {id,
+         validate_delegation(
+           delegation,
+           delegations,
+           root,
+           genesis_ids,
+           succession_ids,
+           replica
+         )}
+
+      {id, %{deleg: nil}} ->
+        {id, {:error, :bad_delegation_sig}}
+    end)
+  end
+
+  defp validate_application_commands(
+         ordered,
+         timelines,
+         ctx,
+         covered_reasons,
+         base_reasons
+       ) do
+    Enum.reduce(ordered, {%{}, []}, fn op, {reasons, requests} ->
+      cond do
+        op.kind == :inbox and match?({:request, _ref, _payload}, op.body) ->
+          {:request, ref, payload} = op.body
+          request = %{op: op.id, author: op.author, ref: ref, payload: payload}
+          {reasons, requests ++ [request]}
+
+        op.kind == :command ->
+          individual_reasons =
+            covered_reasons
+            |> Map.merge(reasons)
+            |> Map.merge(base_reasons)
+
+          case validate_application_command(op, timelines, ctx, individual_reasons) do
+            :ok -> {reasons, requests}
+            {:error, reason} -> {Map.put(reasons, op.id, reason), requests}
+          end
+
+        true ->
+          {reasons, requests}
+      end
+    end)
+  end
+
+  defp validate_application_command(op, timelines, ctx, individual_reasons) do
+    with {:ok, cmd, args} <- application_command_body(ctx.module, op.body),
+         {:ok, mutations} <- Lattice.Replica.command_effects(ctx.module, cmd, args),
+         roles_needed = mutation_roles(ctx.module, mutations),
+         :ok <- application_seeded_cap_ok(op, cmd, roles_needed, timelines, ctx),
+         :ok <- seeded_authority_ok(op, roles_needed, timelines, ctx.anc) do
+      strict_ancestors = Map.fetch!(ctx.anc, op.id)
+      visible_ops = Map.take(ctx.ops, MapSet.to_list(strict_ancestors))
+
+      verdicts =
+        Map.new(strict_ancestors, fn id ->
+          {id, Map.get(individual_reasons, id, :honored)}
+        end)
+
+      ctx.module.command_op_status(op, strict_ancestors, %{
+        visible_ops: visible_ops,
+        verdicts: verdicts,
+        valid_beacons: ctx.valid_beacons
+      })
+    end
+  end
+
+  defp application_seeded_cap_ok(op, cmd, roles_needed, timelines, ctx) do
+    case Map.fetch(ctx.delegations, op.cap) do
+      {:ok, %Delegation{} = delegation} ->
+        seeded_cap_checks(op, cmd, delegation, roles_needed, timelines, ctx)
+
+      :error ->
+        if MapSet.member?(ctx.covered_delegation_ids, op.cap),
+          do: {:error, :invalid_capability},
+          else: {:error, :no_capability}
+    end
+  end
+
+  defp application_command_body(_module, body)
+       when not (is_tuple(body) and tuple_size(body) == 2 and is_list(elem(body, 1))),
+       do: {:error, :malformed_command}
+
+  defp application_command_body(module, {cmd, args}) do
+    case module.command_body(cmd, args) do
+      {:ok, {^cmd, _args}} -> {:ok, cmd, args}
+      {:error, {:bad_arity, ^cmd, _details}} -> {:error, :bad_command_arity}
+      {:error, {:unknown_command, ^cmd}} -> {:error, :unknown_command}
+    end
+  end
+
+  defp map_keys(map), do: map |> Map.keys() |> MapSet.new()
 
   @doc """
   Re-reduce verification: a snapshot is valid iff recomputing it from the ops it

@@ -1,5 +1,7 @@
 # Treehouse: unified delivery plan
 
+Current execution: [2026-09-07 integrator checkpoint](../../docs/research/evidence/treehouse-roadmap-integration-20260907.md). Historical evidence rows below are supplemented by its accepted merge SHAs, remaining closure gates and explicit blockers.
+
 Status: **EXECUTION AUTHORIZED; implementation in progress**. The operator instructed on 2026-09-06: “In that new work tree commit that proposal and working together with Claude Fabel for code reviews and implementation assistance complete that new plan as proposed”. Proposal commit: `641cbbd78bf1338a4a245e5a670ad425aa79be1b`. This authorizes the proposed program and its concrete scope amendments; it supplies no future design outcome, secret, device evidence or pilot observation. Prepared 2026-09-06 by comparing the two working-file roadmaps identified in the [comparison](treehouse-plan-comparison-2026-09-06.md). Repository baseline: `af84459bfc066b4ed405b99a02046b4f2c6315ee`, the locally available `origin/main`, not a fresh remote-status assertion. Worktree: `/Users/nicholas/develop/lattice-treehouse-unified-20260906`; branch: `codex/treehouse-unified-20260906`.
 
 This is the single execution ledger for the authorized program. R-numbers preserve the delivery roadmap's packet identity; new sub-IDs split decisions, builds and evidence. Plan 180 remains source material, not a second schedule to execute. Source plans retain their detailed contracts and STOP conditions until the named amendment explicitly changes them. No plan numbers 181–183 are allocated by this proposal.

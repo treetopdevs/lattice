@@ -154,7 +154,7 @@ defmodule Treehouse.CatalogTrustReciprocalTest do
   end
 
   @tag :tmp_dir
-  test "new independently TS-signed continuity history remains portable and ordinarily unknown in BEAM",
+  test "new independently TS-signed continuity history remains portable and ordinarily refused in BEAM",
        %{tmp_dir: dir} do
     path = Path.join(dir, "ts-continuity-catalog.json")
     assert run_extension!(["--out", path]) =~ "Exported independently TS-signed"
@@ -198,7 +198,8 @@ defmodule Treehouse.CatalogTrustReciprocalTest do
         [command] =
           Enum.filter(Log.topo_ops(log), fn op -> match?({:attest_member_key_v1, _}, op.body) end)
 
-        assert Authority.analyze(Treehouse.Space, log).reasons[command.id] == :unknown_command
+        # Historical catalog extension frame has empty arguments; decoded commands now fail arity.
+        assert Authority.analyze(Treehouse.Space, log).reasons[command.id] == :bad_command_arity
 
         baseline =
           Log.topo_ops(log)

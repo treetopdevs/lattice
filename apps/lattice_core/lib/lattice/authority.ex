@@ -55,6 +55,9 @@ defmodule Lattice.Authority do
       a concurrent/future op or its own not-yet-decided verdict.
       `command_op_status/2` remains a legacy compatibility target: the default
       `/3` calls it with `visible_ids`.
+      `analyze_with_beacon_evidence/2` exposes the same globally accepted beacon
+      source set. Consumers must establish causal visibility before applying it
+      to an operation; the evidence list grants no authority.
     * **Full-frontier command conflicts** (plan 158): once every op's
       individual verdict is final, `command_conflicts/3` runs one pass over
       the complete structurally accepted DAG and may declare deterministic
@@ -91,6 +94,15 @@ defmodule Lattice.Authority do
           audit: [map()],
           requests: [map()]
         }
+
+  @typedoc "One beacon accepted by this analysis pass's existing beacon judge."
+  @type valid_beacon_evidence :: %{
+          required(:op_id) => Op.id(),
+          required(:epoch) => non_neg_integer()
+        }
+
+  @typedoc "Accepted beacon records sorted by raw op-id bytes in ascending order."
+  @type beacon_evidence :: [valid_beacon_evidence()]
 
   @doc "Set of op ids excluded from reduction by authority rules."
   @spec quarantine(module(), Log.t()) :: MapSet.t(Op.id())
@@ -479,6 +491,23 @@ defmodule Lattice.Authority do
   @doc "Full authority analysis for `log` interpreted by Replica `module`."
   @spec analyze(module(), Log.t()) :: analysis()
   def analyze(module, %Log{} = log) do
+    {analysis, _beacons} = do_analyze(module, log)
+    analysis
+  end
+
+  @doc """
+  Runs the ordinary authority analysis once and returns its unchanged result with
+  the complete beacon records accepted by that same pass's existing beacon judge.
+
+  The evidence is sorted by raw `op_id` bytes. It is global to `log`; it has not
+  been filtered to an arbitrary operation's causal past. It is immutable judgment
+  evidence, not a capability, authority grant, trust receipt, persistence claim,
+  or proof that a particular operation observed a beacon.
+  """
+  @spec analyze_with_beacon_evidence(module(), Log.t()) :: {analysis(), beacon_evidence()}
+  def analyze_with_beacon_evidence(module, %Log{} = log), do: do_analyze(module, log)
+
+  defp do_analyze(module, log) do
     ops = Log.ops(log)
     ordered = Dag.topo_sort(ops)
     ancestors = Dag.all_ancestors(ops)
@@ -587,7 +616,7 @@ defmodule Lattice.Authority do
       for {id, reason} <- conflict_losers,
           do: %{event: :command_conflict, op: id, reason: reason}
 
-    %{
+    analysis = %{
       quarantine: reasons |> Map.keys() |> MapSet.new(),
       reasons: reasons,
       holders: holders,
@@ -596,6 +625,8 @@ defmodule Lattice.Authority do
       audit: role_audit ++ cmd_audit ++ conflict_audit,
       requests: requests
     }
+
+    {analysis, Enum.sort_by(beacons, & &1.op_id)}
   end
 
   defp unsupported_profile_ops(%{family: :unsupported}, ordered),

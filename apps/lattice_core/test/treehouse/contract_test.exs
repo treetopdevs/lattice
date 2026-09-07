@@ -55,6 +55,7 @@ defmodule Lattice.Treehouse.ContractTest do
     "witnessed succession",
     "catalog bootstrap v1",
     "replace catalog v1",
+    "attest member key v1",
     "post",
     "author edit",
     "author tombstone",

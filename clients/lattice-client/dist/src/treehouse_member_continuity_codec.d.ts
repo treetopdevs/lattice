@@ -52,6 +52,8 @@ export declare function canonicalBytesForMemberContinuityReturn(value: unknown):
 /** Exact expected bytes and old-key proof only; no freshness, consumption or authorization claim. */
 export declare function verifyMemberKeyReturn(value: unknown, signature: unknown, expected: unknown): boolean;
 export declare function memberContinuityClaimFromCarrierTerm(value: unknown): MemberContinuityClaim | null;
+/** A valid claim remains target evidence even when its exact-three-argument certificate is malformed. */
+export declare function memberContinuityClaimFromDecodedTerm(value: unknown): MemberContinuityClaim | null;
 export declare function memberContinuityCertificateToCarrierTerm(value: unknown): CarrierTerm | null;
 export declare function memberContinuityCertificateFromCarrierTerm(value: unknown): MemberContinuityCertificate | null;
 /** Three exact argument terms only; this neither registers a command nor signs an outer operation. */
