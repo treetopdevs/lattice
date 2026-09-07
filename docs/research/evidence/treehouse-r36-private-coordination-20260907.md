@@ -313,3 +313,55 @@ existing exclusions, formatting and Credo. Logs:
 
 The refreshed device inventory still contains no attached Android device. R36,
 R17c, enrollment, production signing, release and pilot gates remain open.
+
+## Hosted review repairs before merge
+
+The first reviewed native tip `669c3ae3c92d8bba249771a3c1f958590339641e`
+passed hosted run `34153067909`. Six late review threads were inspected before
+merge. The following repairs passed independent Sol review:
+
+- Rust `093feb37db9b61e004379db299059edaf0e306fa` emits the active cancellation
+  ID before Prepare/Generate review dispatch and refuses dispatch if notice
+  delivery fails. A completed operation's late cancellation returns `missing`;
+  an already-cancelled or inconsistent/poisoned owner still refuses. The old
+  source failed five focused assertions; the repaired flow passed 15 tests
+  (`/tmp/treehouse-r36-hosted-flow-red.log`,
+  `/tmp/treehouse-r36-hosted-flow-green.log`).
+- Kotlin author `e0df8615338b9306d6b137c301592afb79d98103`, integrated as
+  `56c3365d9`, maps biometric error callbacks to the protocol-safe symbolic
+  `biometric_error`. The real review-result/terminal-codec regression failed on
+  old source; 17 focused tests plus lint passed after repair.
+- Validator author `1dde29ab9a5e39c2c38cd1e65d2f01bd615b1e94`, integrated as
+  `859a2933a`, distinguishes structural packet failures, retained-context
+  mismatch, unknown issuance, and authoritative-store failure. The possession
+  nonce remains durably spent before untrusted parsing. Behavioral REDs covered
+  both reported cases and corrupt-store misclassification; seven focused tests
+  and 184 full JVM tests plus upstream tamper verification passed.
+
+The proposed unconditional `onDrained()` acknowledgment after a journal-close
+exception was rejected by both independent Sol reviewers. In-memory references
+are cleared before OS lock/channel close is attempted; an exception does not
+prove those resources were released. The existing flow intentionally withholds
+positive drain/admission and requires process teardown/OS release. No coordinator
+change or successful-cleanup claim was made for that condition.
+
+Catalog PR87 is now merged as `33af72ab5021233c65ab6767bc9a3dc7ba87ac21`.
+Its exact tree `bb8d4122faa05a8fe510d85cd71d2ee26b7be6d3` matched the expected
+merge result and main run `34153218509` passed. The initial unchanged carrier
+restart failure and successful failed-job retry of tip run `34150528756` remain
+part of the closure history. The repaired combined root checks passed 119 Rust
+tests plus three compile-fail docs (and a child-process helper), Android Rust
+target compilation, 150 Android host tests (149 executed and one existing skip)
+plus lint, 184 JVM tests plus upstream tamper verification, installed CLI smoke,
+and 1,031 BEAM tests plus 27 properties with zero failures, three existing
+exclusions, formatting and strict Credo. Logs are
+`/tmp/treehouse-r36-hosted-repair-root-{rust,android,kotlin,validator,beam}.log`.
+The new exact hosted tip and merge-result gates remain pending.
+
+An independent source audit confirmed that retained challenge association alone
+cannot establish generation freshness: the validator contract still needs a
+challenge lifetime and clock/restart rule. The native 120-second review timeout
+starts at a different boundary and cannot silently supply that rule. A future
+validator-owned live ceremony may collect issuance-to-association timing while
+continuing to report incomplete. Real protected generation, CryptoObject
+possession and current device/package/boot evidence remain separate gates.
