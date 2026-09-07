@@ -111,6 +111,10 @@ fn replica<'de, D: Deserializer<'de>>(deserializer: D) -> Result<String, D::Erro
 /// use treehouse_tauri_shell::witness_binding::BindingSigningRequest;
 /// let forged: BindingSigningRequest = serde_json::from_str("{}").unwrap();
 /// ```
+/// ```compile_fail
+/// // The only constructor requires the crate-private concrete sealed-review type.
+/// use treehouse_tauri_shell::witness_reviewed::SealedReviewedBinding;
+/// ```
 pub struct BindingSigningRequest {
     bytes: Vec<u8>,
 }
@@ -118,5 +122,11 @@ pub struct BindingSigningRequest {
 impl BindingSigningRequest {
     pub fn bytes(&self) -> &[u8] {
         &self.bytes
+    }
+
+    pub(crate) fn from_sealed(reviewed: &crate::witness_reviewed::SealedReviewedBinding) -> Self {
+        Self {
+            bytes: reviewed.sealed_claim_bytes().to_vec(),
+        }
     }
 }
