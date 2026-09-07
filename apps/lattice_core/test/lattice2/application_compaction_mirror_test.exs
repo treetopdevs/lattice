@@ -1165,11 +1165,13 @@ defmodule Lattice2.ApplicationCompactionMirrorTest do
 
   test "source guard excludes full combined authority analysis from the reducer" do
     source = File.read!(Path.expand("../support/compaction_spike.ex", __DIR__))
-    [reducer | _] = source |> String.split("defp reduce_verified_application", parts: 2) |> tl()
-    reducer = reducer |> String.split("defp validate_application_commands", parts: 2) |> hd()
+    assert source =~ "defp reduce_verified_application("
+    assert source =~ "defp application_covered_authority_seed("
+    [_prefix, rest] = String.split(source, "defp reduce_verified_application(", parts: 2)
+    [reducer, _tail] = String.split(rest, "defp application_covered_authority_seed(", parts: 2)
 
-    refute reducer =~ "Authority.analyze"
-    refute reducer =~ "Lattice.Authority.analyze"
+    refute reducer =~ ~r/\bAuthority\.analyze\(/
+    refute reducer =~ ~r/\bLattice\.Authority\.analyze\(/
     assert reducer =~ "Reduce.reduce(module, combined_log"
     refute reducer =~ "materialize_compacted"
   end

@@ -25,7 +25,7 @@ Only one main-branch workflow may be pending.
   Root `mix check` passed on candidate tree
   `73fb2cf482773b71b4e7dfa887b2c5e891184dc9`. Merge
   `b9671a5982e37511574432f1d43ad61cd5b149c4` matches that exact tree.
-  Main run34132702099 is pending; no next main merge precedes its success.
+  Main run34132702099 passed. The foundational merge queue is closed.
 
 ## Atomic continuity train
 
@@ -54,6 +54,23 @@ literal seven-key ordinary analysis result and the same beacon judge. This prove
 the bounded research mirror, not production compaction or a compacted public
 observer. Hosted tip and exact merge-result gates remain open.
 
+Hosted review of PR85 reopened six TypeScript checks: browser-safe placeholder
+encoding, pre-consent envelope capacity, authenticated continuation-profile pins,
+canonical voucher order, missing/quarantined target refusal precedence, and a
+closed runtime review-request shape. Each reproduced in a behavioral RED test;
+repair `046b022d7503980c6b749bdf63aed40d9e3bbbe7` passed 26 focused tests
+and independent Sol review. Root full checks, broad client checks and preview
+tests/build passed on the repaired source. The new review-boundary tests are part
+of the existing hosted `member:continuity` command.
+
+Hosted run34132780516 failed in two cold-process tests because they hard-coded
+the local asdf executable path. They now discover Elixir from the configured PATH:
+the documented local OTP/Elixir prefix or CI's setup-beam environment. The exact
+12-case reciprocal assertion and reducer source-guard anchors are also tightened.
+A refreshed hosted tip and merge-result check remain required. Ancestor-cache
+reuse suggestions remain optional performance work; no scalability improvement
+is claimed by this packet.
+
 ## Native vertical slice
 
 Source through `9d4fcad9629242797df5783168ef258fac2fcd12` adds retained
@@ -74,7 +91,10 @@ remain gates. R36 is not complete.
 The rebuilt R12 replay against retained September6 evidence failed to observe
 the archived-thread accessibility state and returned an empty UI snapshot.
 Historical Keychain approval evidence does not establish the cause of this new
-failure. Rebuilt replay remains open.
+failure. A subsequent computer-use inspection reached the rebuilt app's
+"Opening local history…" screen. Inspection of `com.apple.SecurityAgent` was
+refused by the computer-use tool; that refusal does not prove a Keychain prompt
+is present. Rebuilt replay remains open.
 
 The dirty QuickJS experiment is preserved separately, off the critical path.
 R11 native installation/CAS and replacement remain unfinished. No enrollment,

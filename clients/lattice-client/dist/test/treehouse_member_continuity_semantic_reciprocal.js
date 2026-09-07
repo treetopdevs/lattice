@@ -7,7 +7,7 @@ import { observeMemberContinuityFromFrames } from "../src/treehouse_member_conti
 const vector = (producer) => fileURLToPath(new URL(`./vectors/member_continuity_semantics/${producer}_semantics.json`, import.meta.url));
 for (const producer of ["beam", "ts"]) {
     test(`${producer} independently authored signed histories replay and assemble with exact bytes`, async () => {
-        assert.ok(await verifySemanticCorpus(vector(producer)) >= 9);
+        assert.equal(await verifySemanticCorpus(vector(producer)), 12);
     });
     test(`${producer} forged signature, partial closure and wrong replica cannot supply accepted evidence`, async () => {
         const corpus = JSON.parse(await readFile(vector(producer), "utf8"));

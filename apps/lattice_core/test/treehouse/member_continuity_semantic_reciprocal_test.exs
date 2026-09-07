@@ -121,7 +121,7 @@ defmodule Treehouse.MemberContinuitySemanticReciprocalTest do
 
         {output, status} =
           System.cmd(
-            Path.expand("~/.asdf/shims/elixir"),
+            elixir_executable(),
             [
               "-pa",
               Application.app_dir(:lattice_core, "ebin"),
@@ -173,7 +173,7 @@ defmodule Treehouse.MemberContinuitySemanticReciprocalTest do
 
       {output, status} =
         System.cmd(
-          Path.expand("~/.asdf/shims/elixir"),
+          elixir_executable(),
           ["-pa", Application.app_dir(:lattice_core, "ebin"), "-e", script, path],
           env: [{"ERL_FLAGS", "+S 4:4"}],
           stderr_to_stdout: true
@@ -215,4 +215,9 @@ defmodule Treehouse.MemberContinuitySemanticReciprocalTest do
     do: Path.join(@vectors, "#{producer}_semantics.json") |> File.read!() |> Jason.decode!()
 
   defp json(value), do: value |> Jason.encode!() |> Jason.decode!()
+
+  # Local invocations supply the documented OTP/Elixir PATH prefix; CI supplies
+  # erlef/setup-beam. Do not require a developer's local version-manager layout.
+  defp elixir_executable,
+    do: System.find_executable("elixir") || raise("Elixir executable unavailable")
 end
