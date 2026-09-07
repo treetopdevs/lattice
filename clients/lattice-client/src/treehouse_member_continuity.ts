@@ -276,12 +276,15 @@ export async function assembleMemberContinuityFromFrames(input: {
   try {
     const frozen = structuredClone({frames: input.frames, review: input.review, certificate: input.certificate});
     const current = await reviewMemberContinuityFromFrames({...frozen.review.request, frames: frozen.frames});
-    if (!current.ok || current.review.author !== frozen.review.author || current.review.capId !== frozen.review.capId || !equalBytes(current.review.claimBytes, frozen.review.claimBytes) ||
+    if (!current.ok) return refuse(current.reason === "invalid_verified_history" || current.reason === "continuity_capacity_stop"
+      ? current.reason : "stale_verified_state");
+    if (current.review.author !== frozen.review.author || current.review.capId !== frozen.review.capId || !equalBytes(current.review.claimBytes, frozen.review.claimBytes) ||
       current.review.claimId !== frozen.review.claimId || !same(current.review.verifiedFrontier, frozen.review.verifiedFrontier)) {
       return refuse("stale_verified_state");
     }
     const certificate = normalizeMemberContinuityCertificate(frozen.certificate);
-    if (certificate === null || !verifyMemberContinuityCertificate(certificate, current.review.claim)) {
+    if (certificate === null) return refuse("application_invalid_continuity");
+    if (!verifyMemberContinuityCertificate(certificate, current.review.claim)) {
       return refuse("application_continuity_invalid_certificate");
     }
     const reviewedAuthor = canonicalBase64Bytes(current.review.author, 32);

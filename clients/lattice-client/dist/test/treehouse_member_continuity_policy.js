@@ -257,6 +257,23 @@ test("review derives consent from signed history and assembly never invokes a si
     }
     let calls = 0;
     const guarded = { publicKey: admin.pub, sign: (bytes) => { calls++; return ed25519.sign(bytes, admin.seed); } };
+    const corruptHistory = structuredClone(frames);
+    corruptHistory[0].sig = b64(new Uint8Array(64));
+    assert.deepEqual(await assembleMemberContinuityFromFrames({ frames: corruptHistory, review: reviewed.review,
+        certificate, signer: guarded }), { ok: false, reason: "invalid_verified_history" });
+    assert.equal(calls, 0);
+    const wideLeaves = await Promise.all(Array.from({ length: 600 }, (_, index) => authorCarrierOp({
+        replica: genesis.replica, deps: [epoch.id], kind: "inbox", cap: ["nil"], signer: adminSigner,
+        body: ["tuple", [["atom", "request"], ["int", index], ["nil"]]]
+    })));
+    assert.deepEqual(await assembleMemberContinuityFromFrames({ frames: [...frames, ...wideLeaves], review: reviewed.review,
+        certificate, signer: guarded }), { ok: false, reason: "continuity_capacity_stop" });
+    assert.equal(calls, 0);
+    for (const malformed of [null, { ...certificate, extra: true }, { ...certificate, possession: "" }]) {
+        assert.deepEqual(await assembleMemberContinuityFromFrames({ frames, review: reviewed.review,
+            certificate: malformed, signer: guarded }), { ok: false, reason: "application_invalid_continuity" });
+        assert.equal(calls, 0);
+    }
     const bad = await assembleMemberContinuityFromFrames({ frames, review: reviewed.review,
         certificate: { ...certificate, possession: b64(new Uint8Array(64)) }, signer: guarded });
     assert.deepEqual(bad, { ok: false, reason: "application_continuity_invalid_certificate" });
