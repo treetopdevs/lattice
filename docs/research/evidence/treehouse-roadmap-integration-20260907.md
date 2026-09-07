@@ -20,10 +20,12 @@ Only one main-branch workflow may be pending.
   checks passed on its source candidate; final documentation changes retained
   identical source. Merge `e13958b8896fb0bb2ea7fe6ff7b930705d38be6a` exactly
   matches candidate tree `8bea141a0a5180f7d8c3139740d1d32cd017fa66`.
-  Main run34129782391 is pending at this checkpoint.
-- Provider PR84 is next. Root `mix check` passed on candidate tree
-  `73fb2cf482773b71b4e7dfa887b2c5e891184dc9`. Its merge waits for the journal
-  main workflow and its own final hosted/review gates.
+  Main run34129782391 passed.
+- Provider PR84 passed independent Sol review and hosted tip run34078507203.
+  Root `mix check` passed on candidate tree
+  `73fb2cf482773b71b4e7dfa887b2c5e891184dc9`. Merge
+  `b9671a5982e37511574432f1d43ad61cd5b149c4` matches that exact tree.
+  Main run34132702099 is pending; no next main merge precedes its success.
 
 ## Atomic continuity train
 
