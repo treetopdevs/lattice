@@ -25,6 +25,7 @@
     "succession:review": "tsx test/witnessed_succession_review.ts",
     "succession:artifact": "tsx test/witnessed_succession_artifact.ts",
     "township:authoring": "tsx test/township_authoring.ts",
+    "treehouse": "tsx test/treehouse.ts && tsx test/treehouse_review.ts",
     "tauri:bridge": "tsx test/tauri_bridge.ts",
     "carrier:township": "tsx test/carrier.ts",
     "carrier:relay": "tsx test/carrier_relay.ts",

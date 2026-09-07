@@ -46,7 +46,10 @@ map one-to-one onto it.
 
 Space commands:
 
-- `create space` pins the name, the admin holder and the witnessed succession policy in genesis.
+- `create space` pins the admin holder and the selected succession policy in the existing genesis
+  format, then signs an immediately dependent authorized name command in the same local workflow.
+  A saved genesis without that command is incomplete initialization; retry retains the same root
+  and signed command. The root-only preview pins no witnessed policy and claims no recovery.
 - `create thread` takes a title, runs the catalog provisioning saga, and publishes the
   capability-authorized Thread reference on the Space only after its route is ready; the new
   reference, route and grants then propagate to existing members.
@@ -58,8 +61,8 @@ Space commands:
 - `remove member` revokes Space and Thread grants and transport admission, exposing
   `removal_pending` until reconciliation completes.
 - `transfer admin` moves the admin holder.
-- `change moderator` grants or transfers a moderator role; its authority-field effect makes the
-  whole command holder-gated.
+- `change moderator` maps to the existing signed holder-gated moderator authority transfer;
+  the read model derives the actual holder, with no application marker pretending to transfer it.
 - `revoke grant` revokes one grant, including a moderator grant.
 - `witnessed succession` follows the witness set, threshold and evidence rules pinned in genesis;
   dormant-tick succession is not enabled, and the mobile ceremony is hidden in the first beta.

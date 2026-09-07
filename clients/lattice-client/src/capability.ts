@@ -1,7 +1,8 @@
 import type { AuthoritySecurityProjection } from "./authority";
 import { ancestors } from "./dag";
 import type { Op } from "./op";
-import { gatedBy } from "./schema";
+import { effectsFor } from "./op";
+import { gatedBy, validCommandEffects } from "./schema";
 import type { ReplicaSchema } from "./schema";
 
 export type CapabilityQuarantineDecision =
@@ -23,6 +24,7 @@ export function capabilityQuarantine(
   if (op.kind === "command" && op.commandError !== undefined) {
     return { quarantined: true, reason: op.commandError };
   }
+  if (!validCommandEffects(schema, op)) return { quarantined: true, reason: "malformed_command" };
 
   if (op.kind !== "command" || op.replica === undefined) {
     return { quarantined: false };
@@ -68,8 +70,8 @@ export function capabilityQuarantine(
     return { quarantined: true, reason: "capability_not_visible" };
   }
 
-  const role = gatedBy(schema, op.field);
-  if (role !== null && !delegation.roles.includes(role)) {
+  const roles = effectsFor(op).map((effect) => gatedBy(schema, effect.field));
+  if (roles.some((role) => role !== null && !delegation.roles.includes(role))) {
     return { quarantined: true, reason: "role_not_granted" };
   }
   if (revokedAsOf(op, delegation.id, byId, security, ancCache)) {

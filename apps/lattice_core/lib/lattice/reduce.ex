@@ -63,14 +63,15 @@ defmodule Lattice.Reduce do
           {cmd, args} when is_list(args) ->
             op
             |> apply_command(replica_module, cmd, args)
-            |> Enum.map(fn {field, mutation} -> {field, op, mutation} end)
+            |> Enum.with_index()
+            |> Enum.map(fn {{field, mutation}, index} -> {field, op, mutation, index} end)
 
           _ ->
             []
         end
       end)
 
-    by_field = Enum.group_by(mutations, fn {field, _op, _m} -> field end)
+    by_field = Enum.group_by(mutations, fn {field, _op, _m, _index} -> field end)
     add_index = build_add_index(by_field)
     all_ancestors = Dag.all_ancestors(ops)
 
@@ -83,6 +84,7 @@ defmodule Lattice.Reduce do
            heights: heights,
            all_ancestors: all_ancestors,
            add_index: add_index,
+           element_counts: insert_counts(field_mutations),
            field: field
          })}
       end
@@ -95,18 +97,22 @@ defmodule Lattice.Reduce do
   # gated reduction never reaches this with an undefined command. The rescue is only a
   # defensive fallback for direct (ungated) `reduce/3` calls; it returns no mutations.
   defp apply_command(_op, replica_module, cmd, args) do
-    replica_module.__apply_command__(cmd, args)
-  rescue
-    ArgumentError -> []
+    case Lattice.Replica.command_effects(replica_module, cmd, args) do
+      {:ok, effects} -> effects
+      {:error, _} -> []
+    end
   end
 
   # OR-Set needs, per {field, elem}, the set of add op ids (for observed removes).
   defp build_add_index(by_field) do
     for {field, muts} <- by_field, into: %{} do
+      counts = insert_counts(muts)
+
       index =
         Enum.reduce(muts, %{}, fn
-          {^field, op, {:add, elem}}, acc ->
-            Map.update(acc, elem, MapSet.new([op.id]), &MapSet.put(&1, op.id))
+          {^field, op, {:add, elem}, index}, acc ->
+            add = {effect_id(counts, op.id, index), op.id, index}
+            Map.update(acc, elem, [add], &[add | &1])
 
           _, acc ->
             acc
@@ -126,8 +132,10 @@ defmodule Lattice.Reduce do
     do: build_causal_list(muts, ctx)
 
   defp build_lww(muts, %{heights: heights}) do
-    Enum.reduce(muts, Lww.new(), fn
-      {_field, op, {:write, value}}, lww ->
+    muts
+    |> last_effects_per_target()
+    |> Enum.reduce(Lww.new(), fn
+      {_field, op, {:write, value}, _index}, lww ->
         Lww.put(lww, value, {Map.fetch!(heights, op.id), op.id})
 
       _, lww ->
@@ -135,16 +143,27 @@ defmodule Lattice.Reduce do
     end)
   end
 
-  defp build_or_set(muts, %{all_ancestors: all_ancestors, add_index: add_index, field: field}) do
+  defp build_or_set(muts, %{
+         all_ancestors: all_ancestors,
+         add_index: add_index,
+         field: field,
+         element_counts: counts
+       }) do
     elem_adds = Map.get(add_index, field, %{})
 
     Enum.reduce(muts, OrSet.new(), fn
-      {_field, op, {:add, elem}}, set ->
-        OrSet.add(set, elem, op.id)
+      {_field, op, {:add, elem}, index}, set ->
+        OrSet.add(set, elem, effect_id(counts, op.id, index))
 
-      {_field, op, {:remove, elem}}, set ->
+      {_field, op, {:remove, elem}, index}, set ->
         ancestors = Map.get(all_ancestors, op.id, MapSet.new())
-        observed = elem_adds |> Map.get(elem, MapSet.new()) |> MapSet.intersection(ancestors)
+
+        observed =
+          for {tag, owner, add_index} <- Map.get(elem_adds, elem, []),
+              MapSet.member?(ancestors, owner) or (owner == op.id and add_index < index),
+              into: MapSet.new(),
+              do: tag
+
         OrSet.remove(set, observed)
 
       _, set ->
@@ -152,20 +171,62 @@ defmodule Lattice.Reduce do
     end)
   end
 
-  defp build_causal_list(muts, %{heights: heights}) do
-    Enum.reduce(muts, CausalList.new(), fn
-      {_field, op, {:append, value}}, list ->
-        CausalList.insert(list, op.id, value, {Map.fetch!(heights, op.id), op.id})
+  defp build_causal_list(muts, %{heights: heights, element_counts: counts}) do
+    edits =
+      muts
+      |> Enum.filter(&match?({_, _, {:edit, _, _}, _}, &1))
+      |> Enum.group_by(fn {field, op, {:edit, target, _}, _} -> {field, op.id, target} end)
+      |> Map.values()
+      |> Enum.map(&Enum.max_by(&1, fn {_, _, _, index} -> index end))
 
-      {_field, op, {:insert, value}}, list ->
-        CausalList.insert(list, op.id, value, {Map.fetch!(heights, op.id), op.id})
+    ordered = Enum.reject(muts, &match?({_, _, {:edit, _, _}, _}, &1)) ++ edits
 
-      {_field, _op, {:delete, target_id}}, list ->
+    Enum.reduce(ordered, CausalList.new(), fn
+      {_field, op, {kind, value}, index}, list when kind in [:append, :insert] ->
+        CausalList.insert(
+          list,
+          effect_id(counts, op.id, index),
+          value,
+          {Map.fetch!(heights, op.id), op.id}
+        )
+
+      {_field, _op, {:delete, target_id}, _index}, list ->
         CausalList.delete(list, target_id)
+
+      {_field, op, {:edit, target_id, value}, _index}, list ->
+        CausalList.edit(list, target_id, value, {Map.fetch!(heights, op.id), op.id})
 
       _, list ->
         list
     end)
+  end
+
+  # Preserve legacy single-insert IDs. Several inserts into one field need
+  # distinct element tags, while the signed operation remains one DAG node.
+  defp effect_id(counts, op_id, index) do
+    if Map.get(counts, op_id, 0) == 1,
+      do: op_id,
+      else: op_id <> "#effect:" <> String.pad_leading(Integer.to_string(index), 10, "0")
+  end
+
+  defp insert_counts(muts) do
+    Enum.reduce(muts, %{}, fn
+      {_, op, {kind, _}, _}, acc when kind in [:append, :insert, :add] ->
+        Map.update(acc, op.id, 1, &(&1 + 1))
+
+      _, acc ->
+        acc
+    end)
+  end
+
+  defp last_effects_per_target(muts) do
+    muts
+    |> Enum.reduce(%{}, fn {field, op, _mutation, index} = effect, acc ->
+      Map.update(acc, {field, op.id}, effect, fn {_, _, _, previous} = old ->
+        if index > previous, do: effect, else: old
+      end)
+    end)
+    |> Map.values()
   end
 
   # --- Materialize CRDT -> plain value -------------------------------------

@@ -1,3 +1,4 @@
+import { effectsFor } from "./op";
 import { ancestors } from "./dag";
 import { gatedBy } from "./schema";
 import { capabilityQuarantine } from "./capability";
@@ -34,8 +35,10 @@ export function isQuarantined(op, schema, byId, authority, ancCache = new Map(),
     const capability = capabilityQuarantine(op, schema, byId, authority.security, ancCache);
     if (capability.quarantined)
         return capability;
-    const role = gatedBy(schema, op.field);
-    if (role) {
+    const roles = new Set(effectsFor(op).map((effect) => gatedBy(schema, effect.field)));
+    for (const role of roles) {
+        if (role === null)
+            continue;
         const acquires = authority.acquiresByRole.get(role) ?? [];
         const visible = ancestors(op.id, byId, ancCache);
         let holderAtDeps;

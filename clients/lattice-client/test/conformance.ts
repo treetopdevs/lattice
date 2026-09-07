@@ -34,6 +34,7 @@ import {
   verifyWitnessedSuccessionCertificate,
   witnessedRecoveryPolicyId,
   witnessedBeaconHorizon,
+  treehouseCommandDecoders,
 } from "../src/index";
 import type { CarrierOpFrame, Op, ReplicaSchema } from "../src/index";
 
@@ -302,7 +303,9 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
   }
   const ops =
     carrierFrames !== undefined && vec.realmByPubkey !== undefined
-      ? carrierOpsToSemanticOps(carrierFrames, vec.realmByPubkey)
+      ? carrierOpsToSemanticOps(carrierFrames, vec.realmByPubkey,
+        vec.schema.name === "Treehouse.Space" || vec.schema.name === "Treehouse.Thread"
+          ? treehouseCommandDecoders(vec.schema.name) : undefined)
       : vec.ops;
 
   if (vec.scenario === "township_beacon_witnessed_large_policy_integer" ||

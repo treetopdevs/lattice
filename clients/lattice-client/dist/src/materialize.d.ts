@@ -14,6 +14,9 @@ export declare class V01UnvalidatedAuthorityError extends Error {
     readonly cause: unknown;
     constructor(role: string, writes: number, cause?: unknown);
 }
+export declare class TreehouseDecoderProductError extends Error {
+    constructor(product: string);
+}
 export interface CarrierAuthorityReportDiagnostic {
     /** Complete carrier report domain after frame verification. */
     opIds: ReadonlySet<string>;

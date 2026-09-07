@@ -29,3 +29,4 @@ export * from "./identity";
 export * from "./local_log";
 export * from "./tauri_bridge";
 export * from "./township";
+export * from "./treehouse";

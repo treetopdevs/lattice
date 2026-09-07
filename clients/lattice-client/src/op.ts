@@ -10,7 +10,27 @@ export type OpKind = "command" | "authority" | "inbox" | "tombstone";
 // Mutations mirror the Elixir Replica DSL's absolute mutations.
 import type { ContinuationCertificate, ContinuationProfile } from "./continuation";
 
-export type Mutation = "write" | "append" | "add" | "remove" | "delete";
+export type Mutation = "write" | "append" | "insert" | "add" | "remove" | "delete" | "edit";
+
+export interface CommandEffect {
+  field: string;
+  mutation: Mutation;
+  value: unknown;
+}
+
+/** One semantic effect for old input, complete ordered effects for new commands. */
+export function effectsFor(op: Op): readonly CommandEffect[] {
+  return op.effects ?? [{ field: op.field, mutation: op.mutation, value: op.value }];
+}
+
+/** Internal reduction views retain their original signed ID and DAG edges. */
+export function effectViews(op: Op): Op[] {
+  return effectsFor(op).map((effect, effectIndex) => ({ ...op, ...effect, effectIndex }));
+}
+
+export function effectElementId(op: Op, counts: ReadonlyMap<string, number>): string {
+  return counts.get(op.id) === 1 ? op.id : `${op.id}#effect:${String(op.effectIndex ?? 0).padStart(10, "0")}`;
+}
 export type CommandError =
   | "unknown_command"
   | "bad_command_arity"
@@ -167,6 +187,14 @@ export interface Op {
   mutation: Mutation;
   /** The value written / appended / added / removed. */
   value: unknown;
+  /** Full command effects; never additional operations or DAG nodes. */
+  effects?: CommandEffect[];
+  /** Internal ordered-effect view index, absent from retained frames. */
+  effectIndex?: number;
+  /** Product-decoded command arguments retained for causal application policy. */
+  commandArgs?: unknown[];
+  /** Explicit product decoder provenance; never inferred from overlapping names. */
+  decodedProduct?: string;
   /**
  * Ordering key from Elixir, used ONLY as the LWW/order tiebreak in Tier A.
  * Today this is the opaque op id because Elixir reduces by `{height, op.id}`.
@@ -209,4 +237,14 @@ export interface CustodyConsentEvidence {
 /** Compare two opaque ordering keys. Returns >0 if a>b. */
 export function cmpHash(a: string, b: string): number {
   return a > b ? 1 : a < b ? -1 : 0;
+}
+
+/** BEAM binary order for product values; opaque legacy ordering stays unchanged. */
+export function compareUtf8(a: string, b: string): number {
+  const encoder = new TextEncoder();
+  const left = encoder.encode(a); const right = encoder.encode(b);
+  for (let index = 0; index < Math.min(left.length, right.length); index++) {
+    if (left[index] !== right[index]) return left[index]! - right[index]!;
+  }
+  return left.length - right.length;
 }

@@ -15,7 +15,7 @@ import { createPublicKey, verify as edVerify } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { runBoundedContinuationConformance } from "./bounded_continuation";
-import { analyzeAuthority, canonicalBytesForCarrierDelegation, canonicalHash, canonicalOrder, carrierDelegationsFromFrames, carrierOpsToSemanticOps, decodeCarrierOpFrame, index, materialize, toolshedCarrierCommandTable, toolshedCarrierCommandNames, townshipCarrierCommandTable, townshipCarrierCommandNames, verifyCarrierOp, verifyWitnessedSuccessionCertificate, witnessedRecoveryPolicyId, witnessedBeaconHorizon, } from "../src/index";
+import { analyzeAuthority, canonicalBytesForCarrierDelegation, canonicalHash, canonicalOrder, carrierDelegationsFromFrames, carrierOpsToSemanticOps, decodeCarrierOpFrame, index, materialize, toolshedCarrierCommandTable, toolshedCarrierCommandNames, townshipCarrierCommandTable, townshipCarrierCommandNames, verifyCarrierOp, verifyWitnessedSuccessionCertificate, witnessedRecoveryPolicyId, witnessedBeaconHorizon, treehouseCommandDecoders, } from "../src/index";
 const here = dirname(fileURLToPath(import.meta.url));
 const vecDir = join(here, "vectors");
 const verifier = { verify: verifyEd25519 };
@@ -135,7 +135,8 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
         }
     }
     const ops = carrierFrames !== undefined && vec.realmByPubkey !== undefined
-        ? carrierOpsToSemanticOps(carrierFrames, vec.realmByPubkey)
+        ? carrierOpsToSemanticOps(carrierFrames, vec.realmByPubkey, vec.schema.name === "Treehouse.Space" || vec.schema.name === "Treehouse.Thread"
+            ? treehouseCommandDecoders(vec.schema.name) : undefined)
         : vec.ops;
     if (vec.scenario === "township_beacon_witnessed_large_policy_integer" ||
         vec.scenario === "township_beacon_witnessed_unbound_root" ||

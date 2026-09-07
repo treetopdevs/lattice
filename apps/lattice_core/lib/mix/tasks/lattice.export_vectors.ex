@@ -251,10 +251,258 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_causal_list_partition(),
       township_partial_log_lww(),
       toolshed_custody_consent(),
+      treehouse_space_membership(),
+      treehouse_space_roles(),
+      treehouse_space_succession(),
+      treehouse_thread_archive(),
+      treehouse_thread_conflicts(),
+      treehouse_space_map_order(),
       township_carrier_w1()
     ]
 
     fixed ++ Enum.map(@randomized_seeds, &township_random/1)
+  end
+
+  defp treehouse_space_map_order do
+    sim =
+      Sim.new(Treehouse.Space, "treehouse:space:map-order", ["root"],
+        seed: "treehouse-space:map_order"
+      )
+
+    {sim, _} = Sim.create_replica(sim, "root")
+    values = ["One more", "One", "One\"", "One/", "One\\", "One]", "One\u{10000}", "One\u{E000}"]
+
+    sim =
+      Enum.reduce(values, sim, fn title, sim ->
+        Sim.command(sim, "root", :create_thread, ["same-replica", title]) |> elem(0)
+      end)
+
+    sim =
+      Enum.reduce(values, sim, fn replica, sim ->
+        Sim.command(sim, "root", :create_thread, [replica, "same-title"]) |> elem(0)
+      end)
+
+    treehouse_scenario("treehouse_space_map_order", sim, Sim.log(sim, "root"), [
+      %{name: "complete", log: Sim.log(sim, "root")}
+    ])
+  end
+
+  defp treehouse_space_membership do
+    sim =
+      Sim.new(Treehouse.Space, "treehouse:space:membership", ["root", "alice", "bob"],
+        seed: "treehouse-membership"
+      )
+
+    {sim, _} = Sim.create_replica(sim, "root")
+    {sim, _} = Sim.command(sim, "root", :create_space, ["Canopy"])
+    {sim, _} = Sim.command(sim, "root", :create_thread, ["treehouse:thread:one", "One"])
+    alice = Base.encode64(Sim.identity(sim, "alice").pub)
+    bob = Base.encode64(Sim.identity(sim, "bob").pub)
+    {sim, invite} = Sim.command(sim, "root", :issue_invitation, [alice, ["treehouse:thread:one"]])
+    signature = Treehouse.Invitation.accept(Sim.identity(sim, "alice"), Sim.replica(sim), invite)
+    {sim, _} = Sim.command(sim, "root", :admit_member, [invite.id, bob, "member", signature])
+    {sim, _} = Sim.command(sim, "root", :admit_member, [invite.id, alice, "member", signature])
+    admitted = Sim.log(sim, "root")
+    {sim, _} = Sim.command(sim, "root", :admit_member, [invite.id, alice, "member", signature])
+    {sim, _} = Sim.command(sim, "root", :revoke_invitation, [invite.id])
+    {sim, _} = Sim.command(sim, "root", :admit_member, [invite.id, alice, "member", signature])
+    {sim, _} = Sim.command(sim, "root", :remove_member, [alice])
+    {sim, _} = Sim.command(sim, "root", :issue_invitation, ["bad-key", ["treehouse:thread:one"]])
+    {sim, _} = Sim.command(sim, "root", :create_thread, [nil, 42])
+    {sim, _} = Sim.command(sim, "root", :issue_invitation, [[alice], ["treehouse:thread:one"]])
+    {sim, _} = Sim.command(sim, "root", :revoke_invitation, [[invite.id]])
+    {sim, _} = Sim.command(sim, "root", :admit_member, [invite.id, alice, ["member"], signature])
+    {sim, _} = Sim.command(sim, "root", :create_thread, ["\u{E000}", "BMP"])
+    {sim, _} = Sim.command(sim, "root", :create_thread, ["\u{10000}", "Supplementary"])
+
+    {sim, bob_invite} =
+      Sim.command(sim, "root", :issue_invitation, [
+        bob,
+        ["treehouse:thread:one", "\u{E000}", "\u{10000}"]
+      ])
+
+    scope = ["treehouse:thread:one", "\u{E000}", "\u{10000}"]
+    {sim, alice_invite} = Sim.command(sim, "root", :issue_invitation, [alice, scope])
+
+    alice_signature =
+      Treehouse.Invitation.accept(Sim.identity(sim, "alice"), Sim.replica(sim), alice_invite)
+
+    bob_signature =
+      Treehouse.Invitation.accept(Sim.identity(sim, "bob"), Sim.replica(sim), bob_invite)
+
+    {_, left} =
+      Sim.command(sim, "root", :admit_member, [alice_invite.id, alice, "member", alice_signature])
+
+    {_, right} =
+      Sim.command(sim, "root", :admit_member, [bob_invite.id, bob, "member", bob_signature])
+
+    {log, %{pending: []}} = Sync.deliver(Sim.log(sim, "root"), [left, right])
+    {reverse, %{pending: []}} = Sync.deliver(Sim.log(sim, "root"), [right, left])
+
+    unless Lattice.state(Treehouse.Space, log) == Lattice.state(Treehouse.Space, reverse),
+      do: raise("Treehouse admission-order divergence")
+
+    treehouse_scenario("treehouse_space_membership", sim, log, [
+      %{name: "admitted", log: admitted}
+    ])
+  end
+
+  defp treehouse_space_succession do
+    # Legacy/root-only replay qualification: this is not R04's bounded family.
+    sim =
+      Sim.new(Treehouse.Space, "treehouse:space:succession", ["root", "alice", "bob"],
+        seed: "treehouse-space:succession"
+      )
+
+    {sim, _} =
+      Sim.create_replica(sim, "root",
+        policies: %{
+          admin: %{
+            successor: "alice",
+            recovery: %{mode: :witnessed, version: 1, witnesses: ["root", "bob"], threshold: 2}
+          }
+        }
+      )
+
+    {sim, _} = Sim.command(sim, "root", :create_space, ["Before succession"])
+    sim = Sim.sync_all(sim)
+    before = Sim.log(sim, "root")
+    {sim, _} = Sim.succeed(sim, "alice", :admin, witnesses: ["root", "bob"], ops: [:create_space])
+    sim = Sim.sync_all(sim)
+    {sim, _} = Sim.command(sim, "alice", :create_space, ["Witnessed role replay"])
+    {sim, _} = Sim.command(sim, "root", :create_space, ["Stale founder"])
+    sim = Sim.sync_all(sim)
+
+    treehouse_scenario("treehouse_space_succession", sim, Sim.log(sim, "root"), [
+      %{name: "before succession", log: before}
+    ])
+  end
+
+  defp treehouse_space_roles do
+    sim =
+      Sim.new(Treehouse.Space, "treehouse:space:roles", ["root", "alice", "bob"],
+        seed: "treehouse-space:roles"
+      )
+
+    {sim, genesis} = Sim.create_replica(sim, "root")
+    {:genesis, parent, _} = genesis.body
+    root = Sim.identity(sim, "root")
+    alice = Sim.identity(sim, "alice")
+    bob = Sim.identity(sim, "bob")
+    log = Sim.log(sim, "root")
+    {moderator, moderator_cap} = Treehouse.Space.change_moderator(root, log, alice.pub, parent)
+    log = Log.append!(log, moderator)
+    {admin, admin_cap} = Treehouse.Space.transfer_admin(root, log, bob.pub, parent)
+    log = Log.append!(log, admin)
+    transferred = log
+    {stale, _} = Treehouse.Space.change_moderator(root, log, bob.pub, parent)
+    {current, _} = Treehouse.Space.change_moderator(alice, log, bob.pub, moderator_cap)
+    log = log |> Log.append!(stale) |> Log.append!(current)
+
+    name =
+      Op.new(bob, log.replica, Log.frontier(log), :command, {:create_space, ["Transferred"]},
+        cap: admin_cap.id
+      )
+
+    forged =
+      Delegation.genesis(alice, log.replica,
+        ops: MapSet.to_list(parent.ops),
+        roles: [:admin, :moderator]
+      )
+
+    impostor = Op.new(alice, log.replica, [], :authority, {:genesis, forged, %{}})
+    log = log |> Log.append!(name) |> Log.append!(impostor)
+
+    treehouse_scenario("treehouse_space_roles", sim, log, [
+      %{name: "independent holders", log: transferred}
+    ])
+  end
+
+  defp treehouse_thread_setup(name) do
+    sim =
+      Sim.new(Treehouse.Thread, "treehouse:thread:" <> name, ["root", "alice", "bob"],
+        seed: "treehouse-thread:" <> name
+      )
+
+    {sim, _} = Sim.create_replica(sim, "root")
+    {sim, _} = Sim.command(sim, "root", :create_thread, ["Canopy"])
+    {sim, _} = Sim.grant(sim, "root", "alice", ops: [:post, :author_edit, :author_tombstone])
+    {sim, _} = Sim.grant(sim, "root", "bob", ops: [:post, :author_edit, :author_tombstone])
+    Sim.sync_all(sim)
+  end
+
+  defp treehouse_thread_archive do
+    sim = treehouse_thread_setup("archive")
+    {sim, post} = Sim.command(sim, "alice", :post, ["retained"])
+    {sim, other} = Sim.command(sim, "alice", :post, ["moderated"])
+    {sim, edit} = Sim.command(sim, "alice", :author_edit, [post.id, post.id, "edited"])
+    sim = Sim.sync_all(sim)
+    {sim, forged} = Sim.command(sim, "bob", :author_edit, [post.id, edit.id, "forged"])
+    sim = Sim.sync_all(sim)
+    {sim, _} = Sim.command(sim, "alice", :author_edit, [post.id, forged.id, "laundered"])
+    sim = Sim.sync_all(sim)
+    before_archive = Sim.log(sim, "root")
+    {sim, _} = Sim.command(sim, "root", :archive_thread, [])
+    {sim, _} = Sim.command(sim, "root", :archive_thread, [])
+    sim = Sim.sync_all(sim)
+    {sim, _} = Sim.command(sim, "alice", :post, ["late"])
+    {sim, _} = Sim.command(sim, "alice", :author_edit, [post.id, edit.id, "late edit"])
+    {sim, _} = Sim.command(sim, "alice", :author_tombstone, [post.id, edit.id])
+    {sim, _} = Sim.command(sim, "bob", :author_tombstone, [post.id, edit.id])
+    {sim, _} = Sim.command(sim, "root", :moderator_tombstone, [other.id, other.id])
+    sim = Sim.sync_all(sim)
+
+    treehouse_scenario("treehouse_thread_archive", sim, Sim.log(sim, "root"), [
+      %{name: "before archive", log: before_archive}
+    ])
+  end
+
+  defp treehouse_thread_conflicts do
+    sim = treehouse_thread_setup("conflicts")
+    {sim, post} = Sim.command(sim, "alice", :post, ["original"])
+    sim = Sim.sync_all(sim)
+    {_, left} = Sim.command(sim, "alice", :author_edit, [post.id, post.id, "left"])
+    {_, right} = Sim.command(sim, "alice", :author_edit, [post.id, post.id, "right"])
+    {_, archive} = Sim.command(sim, "root", :archive_thread, [])
+    {_, concurrent_post} = Sim.command(sim, "alice", :post, ["concurrent"])
+    base = Sim.log(sim, "root")
+    {log, report} = Sync.deliver(base, [left, right, archive, concurrent_post])
+    {reverse, reverse_report} = Sync.deliver(base, [concurrent_post, archive, right, left])
+
+    unless report.pending == [] and reverse_report.pending == [] and
+             Lattice.state(Treehouse.Thread, log) == Lattice.state(Treehouse.Thread, reverse),
+           do: raise("Treehouse delivery-order divergence")
+
+    treehouse_scenario("treehouse_thread_conflicts", sim, log, [
+      %{name: "before partition", log: base}
+    ])
+  end
+
+  defp treehouse_scenario(name, sim, log, perspectives) do
+    realms = realm_index(sim)
+    observation = Treehouse.ReadModel.observe(sim.module, log)
+
+    %{
+      name: name,
+      kind: "treehouse",
+      module: sim.module,
+      log: log,
+      realms: realms,
+      perspectives: perspectives,
+      replica: log.replica,
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      canonicalOps: canonical_ops(log),
+      treehouseObservation: %{
+        "operationCount" => observation.operation_count,
+        "posts" =>
+          Enum.map(
+            observation.posts,
+            &%{"id" => &1.id, "author" => Base.encode64(&1.author), "text" => &1.text}
+          )
+      },
+      authorityQuarantine: authority_quarantine(sim.module, log)
+    }
   end
 
   defp township_zoning_variance_24 do
@@ -4530,6 +4778,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     |> maybe_put("realmByPubkey", Map.get(scenario, :realmByPubkey))
     |> maybe_put("oracleCarrierOps", Map.get(scenario, :oracleCarrierOps))
     |> maybe_put("canonicalOps", Map.get(scenario, :canonicalOps))
+    |> maybe_put("treehouseObservation", Map.get(scenario, :treehouseObservation))
     |> maybe_put("successionOperationId", Map.get(scenario, :successionOperationId))
     |> maybe_put("tickProvenance", Map.get(scenario, :tickProvenance))
     |> maybe_put("witnessedRecovery", Map.get(scenario, :witnessedRecovery))
@@ -4654,6 +4903,55 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     }
   end
 
+  defp schema_json(module) when module in [Treehouse.Space, Treehouse.Thread] do
+    fields =
+      Map.new(module.__lattice_fields__(), fn
+        {field, %{kind: :authority, role: role, default: default}} ->
+          {Atom.to_string(field),
+           %{"merge" => "lww", "gatedBy" => Atom.to_string(role), "default" => default}}
+
+        {field, %{crdt: crdt, default: default}} ->
+          spec = %{"merge" => Atom.to_string(crdt)}
+
+          {Atom.to_string(field),
+           if(crdt == :lww, do: Map.put(spec, "default", default), else: spec)}
+      end)
+
+    roles =
+      Map.new(authority_roles(module), fn role ->
+        {Atom.to_string(role), %{"authority" => Atom.to_string(role)}}
+      end)
+
+    %{"name" => module |> Module.split() |> Enum.join("."), "fields" => Map.merge(fields, roles)}
+  end
+
+  defp op_json(module, %Op{} = op, realms) when module in [Treehouse.Space, Treehouse.Thread] do
+    {command, args} =
+      case op.body do
+        {cmd, args} when op.kind == :command and is_list(args) -> {Atom.to_string(cmd), args}
+        _ -> {payload_json(module, op, realms).command, nil}
+      end
+
+    effects = treehouse_effects(module, op, realms)
+
+    first =
+      List.first(effects) || %{"field" => "__authority", "mutation" => "write", "value" => nil}
+
+    Map.merge(first, %{
+      "id" => op.id,
+      "replica" => op.replica,
+      "deps" => op.deps,
+      "kind" => Atom.to_string(op.kind),
+      "author" => realm_for_pub(realms, op.author),
+      "authorPubkey" => Base.encode64(op.author),
+      "hash" => op.id,
+      "cap" => op.cap,
+      "command" => command,
+      "commandArgs" => args,
+      "effects" => effects
+    })
+  end
+
   defp op_json(module, %Lattice.Op{} = op, realms) do
     payload = payload_json(module, op, realms)
 
@@ -4668,6 +4966,45 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       "hash" => op.id,
       "command" => payload.command
     }
+  end
+
+  defp treehouse_effects(module, %Op{kind: :command, body: {command, args}}, _realms) do
+    case Lattice.Replica.command_effects(module, command, args) do
+      {:ok, effects} ->
+        Enum.map(effects, fn
+          {field, {:edit, target, value}} ->
+            %{
+              "field" => Atom.to_string(field),
+              "mutation" => "edit",
+              "value" => %{"target" => target, "value" => value}
+            }
+
+          {field, {mutation, value}} ->
+            %{
+              "field" => Atom.to_string(field),
+              "mutation" => Atom.to_string(mutation),
+              "value" => value
+            }
+        end)
+
+      {:error, _} ->
+        []
+    end
+  end
+
+  defp treehouse_effects(module, %Op{kind: :authority, body: {:genesis, delegation, _}}, realms) do
+    for role <- Enum.sort(authority_roles(module)),
+        MapSet.member?(delegation.roles, role),
+        do: %{
+          "field" => Atom.to_string(role),
+          "mutation" => "write",
+          "value" => realm_for_pub(realms, delegation.audience)
+        }
+  end
+
+  defp treehouse_effects(module, op, realms) do
+    payload = payload_json(module, op, realms)
+    [%{"field" => payload.field, "mutation" => payload.mutation, "value" => payload.value}]
   end
 
   # ADR 0007: the transfer's holder write projects the recipient's realm name;
@@ -4824,6 +5161,19 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     %{"events" => state.events}
   end
 
+  defp state_json(module, log, realms) when module in [Treehouse.Space, Treehouse.Thread] do
+    state =
+      Map.new(Lattice.state(module, log), fn {field, value} -> {Atom.to_string(field), value} end)
+
+    Enum.reduce(authority_roles(module), state, fn role, acc ->
+      Map.put(
+        acc,
+        Atom.to_string(role),
+        realm_for_pub(realms, Authority.holder(module, log, role))
+      )
+    end)
+  end
+
   defp state_bytes_b64(%Log{} = log) do
     Matter
     |> Lattice.state(log)
@@ -4852,12 +5202,28 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
   # are excluded from `winner_fields(Matter)`/`winner_fields(Tool)`.
   defp winner_fields(PolicyFixture), do: []
 
+  defp winner_fields(module) when module in [Treehouse.Space, Treehouse.Thread] do
+    schema_json(module)["fields"]
+    |> Enum.filter(fn {_field, spec} ->
+      spec["merge"] == "lww" or Map.has_key?(spec, "authority")
+    end)
+    |> Enum.map(&elem(&1, 0))
+  end
+
   defp winners(module, ops, quarantine) do
     by_id = Map.new(ops, &{&1["id"], &1})
 
+    effect_ops =
+      Enum.flat_map(ops, fn op ->
+        case Map.fetch(op, "effects") do
+          {:ok, effects} -> Enum.map(effects, &Map.merge(op, &1))
+          :error -> [op]
+        end
+      end)
+
     for field <- winner_fields(module), into: %{} do
       winner =
-        ops
+        effect_ops
         |> Enum.reject(&MapSet.member?(quarantine, &1["id"]))
         |> Enum.filter(&(&1["field"] == field and &1["mutation"] == "write"))
         |> Enum.max_by(&{depth(&1["id"], by_id, %{}), &1["id"]}, fn -> nil end)
