@@ -97,8 +97,8 @@ class TreehouseOfflineGenerationVerifierTest {
     assertEquals(false, constrained.contentEquals((fixture.request.trust as TrustSnapshotAvailability.Available).snapshot.digest))
   }
 
-  private data class Fixture(val request: OfflineGenerationRequest, val publicKey: ByteArray, val root: X509Certificate)
-  private fun fixture(): Fixture {
+  internal data class Fixture(val request: OfflineGenerationRequest, val publicKey: ByteArray, val root: X509Certificate, val leaf: KeyPair)
+  internal fun fixture(): Fixture {
     val leaf = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
     val intermediate = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
     val root = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
@@ -112,7 +112,7 @@ class TreehouseOfflineGenerationVerifierTest {
       "https://validator.invalid/frozen-official-snapshot", now.minusSeconds(60), now.plusSeconds(3600))
     val issued = GenerationIssuance(ByteArray(32) { 1 }, ByteArray(32) { 2 }, ByteArray(32) { 3 },
       "replica:test", ByteArray(32) { 4 }, ByteArray(32) { 5 }, rawKey(leaf), ByteArray(32) { 7 }, 42)
-    return Fixture(OfflineGenerationRequest(issued, GenerationCandidate(chain.map(X509Certificate::getEncoded)), trust, now), rawKey(leaf), rootCert)
+    return Fixture(OfflineGenerationRequest(issued, GenerationCandidate(chain.map(X509Certificate::getEncoded)), trust, now), rawKey(leaf), rootCert, leaf)
   }
 
   private fun description(publicKey: ByteArray) = KeyDescription(

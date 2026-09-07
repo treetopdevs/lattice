@@ -184,6 +184,23 @@ object TreehouseOfflineGenerationVerifier {
     }
   }
 
+  /** Package-internal authority for durable first association. The proof cannot be
+   * constructed from a report or caller boolean; it follows this exact candidate's
+   * successful PKIX, revocation, challenge, profile and public-key checks. */
+  internal fun verifyCandidateForAssociation(request: OfflineGenerationRequest): VerifiedGenerationCandidate? {
+    val report = verify(request)
+    val checks = report.generationTime
+    if (report.status != GenerationStatus.INCOMPLETE ||
+      report.reason != GenerationReason.CHALLENGE_FRESHNESS_UNESTABLISHED ||
+      !checks.challengeAssociated || !checks.chainValidated || !checks.revocationChecked ||
+      !checks.profileMatched || !checks.publicKeyMatched) return null
+    return VerifiedGenerationCandidate(
+      request.issuance.issuanceId,
+      request.issuance.expectedPublicKey,
+      request.candidate.chain,
+    )
+  }
+
   private fun report(request: OfflineGenerationRequest, status: GenerationStatus, reason: GenerationReason,
     snapshot: TrustSnapshot? = null, checks: GenerationTimeChecks = GenerationTimeChecks(false, false, false, false, false, true)) = OfflineGenerationReport(
       version = 1, kind = "generation_attestation", status = status, reason = reason,
@@ -192,6 +209,14 @@ object TreehouseOfflineGenerationVerifier {
       generationTime = checks, currentState = CurrentState.NOT_ESTABLISHED,
       currentStateBlockers = CurrentStateBlocker.entries.toSet(),
     )
+}
+
+internal class VerifiedGenerationCandidate internal constructor(
+  issuanceId: ByteArray, publicKey: ByteArray, chain: List<ByteArray>,
+) {
+  internal val issuanceId = issuanceId.copyOf()
+  internal val publicKey = publicKey.copyOf()
+  internal val chain = chain.map(ByteArray::copyOf)
 }
 
 private fun snapshotDigest(anchors: Set<TrustAnchor>, revoked: Set<String>, provenance: String,
