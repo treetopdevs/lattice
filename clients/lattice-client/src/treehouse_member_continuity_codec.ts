@@ -234,6 +234,10 @@ function readCertificateArguments(args: unknown[], reader: Reader): MemberContin
 export function memberContinuityClaimFromCarrierTerm(value: unknown): MemberContinuityClaim | null {
   try { return readClaim(value, wireReader); } catch { return null; }
 }
+/** A valid claim remains target evidence even when its exact-three-argument certificate is malformed. */
+export function memberContinuityClaimFromDecodedTerm(value: unknown): MemberContinuityClaim | null {
+  try { return readClaim(value, decodedReader); } catch { return null; }
+}
 export function memberContinuityCertificateToCarrierTerm(value: unknown): CarrierTerm | null {
   const certificate = normalizeMemberContinuityCertificate(value);
   if (certificate === null) return null;

@@ -381,7 +381,7 @@ defmodule Treehouse.MemberContinuityCodecTest do
     assert :ok = Lattice.Log.verify_authenticity(u.log)
     assert Lattice.Op.valid?(u.op)
     analysis = Authority.analyze(Treehouse.Space, u.log)
-    assert analysis.reasons[u.op.id] == :unknown_command
+    assert analysis.reasons[u.op.id] == :operation_not_granted
     assert MapSet.member?(analysis.quarantine, u.op.id)
     assert Map.keys(Lattice.Log.ops(u.log)) |> Enum.sort() == Enum.sort([u.genesis.id, u.op.id])
   end

@@ -183,7 +183,10 @@ jobs:
           npm run catalog:cutoff
           npm run catalog:trust
           npm run member:continuity:codec
+          npm run member:continuity
           npm run continuation:profile
+      - name: Reciprocal continuity claim-shape refusals
+        run: MIX_ENV=test mix run --no-compile --no-start clients/lattice-client/test/support/verify_member_continuity_claim_shape.exs clients/lattice-client/test/vectors/member_continuity_claim_shape/beam.json
       - name: TS Treehouse domain and authority review
         working-directory: clients/lattice-client
         run: npm run treehouse

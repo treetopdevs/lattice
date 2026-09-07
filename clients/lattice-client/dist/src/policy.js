@@ -25,6 +25,7 @@
 import { concurrent } from "./dag";
 import { cmpHash } from "./op";
 import { treehouseCommandOpStatus } from "./treehouse";
+import { memberContinuityCommandConflicts } from "./treehouse_member_continuity";
 /** True iff `schema` declares an application-policy conjunct at all. */
 export function hasApplicationPolicy(schema) {
     return schema.name === "PolicyFixture" || schema.name === "Treehouse.Space" || schema.name === "Treehouse.Thread";
@@ -51,6 +52,8 @@ export function commandOpStatus(schema, op, visibleIds, context) {
  * already final by the time this runs. Returns `{ loserId => reason }`.
  */
 export function commandConflicts(schema, included, byId, verdicts, ancCache) {
+    if (schema.name === "Treehouse.Space")
+        return memberContinuityCommandConflicts(byId, verdicts);
     if (schema.name !== "PolicyFixture")
         return new Map();
     return policyFixtureCommandConflicts(included, byId, verdicts, ancCache);

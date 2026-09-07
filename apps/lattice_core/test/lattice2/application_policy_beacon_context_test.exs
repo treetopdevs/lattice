@@ -1,8 +1,8 @@
 defmodule Lattice2.ApplicationPolicyBeaconContextTest do
   use ExUnit.Case, async: true
 
+  alias Lattice.{Authority, Log, Op, Sim}
   alias Lattice.Carrier.Wire
-  alias Lattice.{Log, Op, Sim}
 
   defmodule ContextReplica do
     use Lattice.Replica
@@ -16,8 +16,10 @@ defmodule Lattice2.ApplicationPolicyBeaconContextTest do
     command(:probe, [:expected], do: [{:events, {:append, expected}}])
     command(:admin_probe, [:expected], do: [{:admin_events, {:write, expected}}])
 
-    def command_op_status(%Op{body: {name, [expected]}}, _visible, context)
+    def command_op_status(%Op{body: {name, [expected]}} = op, visible, context)
         when name in [:probe, :admin_probe] do
+      notify({:policy, op.id, Enum.sort(visible), context})
+
       case Map.fetch(context, :valid_beacons) do
         :error -> {:error, :missing_valid_beacons}
         {:ok, ^expected} -> :ok
@@ -25,7 +27,19 @@ defmodule Lattice2.ApplicationPolicyBeaconContextTest do
       end
     end
 
-    def command_op_status(_op, _visible, _context), do: :ok
+    def command_op_status(op, visible, context) do
+      notify({:policy, op.id, Enum.sort(visible), context})
+      :ok
+    end
+
+    def command_conflicts(ops, verdicts, ancestors) do
+      notify({:conflicts, ops, verdicts, ancestors})
+      %{}
+    end
+
+    defp notify(event) do
+      if observer = Process.get(:authority_evidence_observer), do: send(observer, event)
+    end
   end
 
   defmodule LegacyReplica do
@@ -42,6 +56,118 @@ defmodule Lattice2.ApplicationPolicyBeaconContextTest do
       do: {:error, :legacy_application_denied}
 
     def command_op_status(_op, _visible), do: :ok
+  end
+
+  @tag :beacon_api
+  test "each public entry point is one pass and preserves the exact seven-key map in every family" do
+    # Captured by executing immutable pre-refactor Authority at 280e8d30 on these signed logs.
+    for {family, original_analysis_sha256} <- [
+          {:legacy, "d22fc3e705706d5385a3512d6f37baba6f72b5a907515b55f638ba399c0810ff"},
+          {:bounded, "8d09130bb731f9ec9a35364399462fac82f51145cfeded6a5aa04a946c1ce4a7"},
+          {:unsupported, "2d49ee424020c3fdd3f8107a8d50b4b33ab18804c3ed786093dd175a323be838"}
+        ] do
+      sim = founded("public-api-#{family}", family: family)
+      {sim, zero} = Sim.beacon(sim, "root", 0)
+      {sim, high} = Sim.beacon(sim, "root", 18_446_744_073_709_551_615)
+      expected = records([{zero, 0}, {high, 18_446_744_073_709_551_615}])
+
+      cap =
+        sim
+        |> Sim.log("root")
+        |> Log.topo_ops()
+        |> hd()
+        |> Map.fetch!(:body)
+        |> elem(1)
+        |> Map.fetch!(:id)
+
+      {sim, command} = Sim.command(sim, "root", :probe, [expected], cap: cap)
+      authenticate!(sim, "root")
+      log = Sim.log(sim, "root")
+      {ordinary, ordinary_events} = observed(fn -> Authority.analyze(ContextReplica, log) end)
+
+      {{analysis, evidence}, evidence_events} =
+        observed(fn -> Authority.analyze_with_beacon_evidence(ContextReplica, log) end)
+
+      assert analysis == ordinary
+
+      assert :erlang.term_to_binary(analysis, [:deterministic]) ==
+               :erlang.term_to_binary(ordinary, [:deterministic])
+
+      assert analysis
+             |> :erlang.term_to_binary([:deterministic])
+             |> then(&:crypto.hash(:sha256, &1))
+             |> Base.encode16(case: :lower) == original_analysis_sha256
+
+      assert Enum.sort(Map.keys(analysis)) == [
+               :audit,
+               :holder_epochs,
+               :holders,
+               :policies,
+               :quarantine,
+               :reasons,
+               :requests
+             ]
+
+      assert evidence == expected
+      assert evidence_events == ordinary_events
+
+      assert [{:policy, id, _visible, context}, {:conflicts, _ops, _verdicts, _ancestors}] =
+               evidence_events
+
+      assert id == command.id
+      assert context.valid_beacons == expected
+
+      if family == :unsupported,
+        do: assert(analysis.reasons[command.id] == :unsupported_authority_profile)
+    end
+  end
+
+  @tag :beacon_api
+  test "global evidence retains valid concurrent and future records while callbacks keep strict past" do
+    sim = founded("global-api")
+    {empty, []} = Authority.analyze_with_beacon_evidence(ContextReplica, Sim.log(sim, "root"))
+    assert empty == Authority.analyze(ContextReplica, Sim.log(sim, "root"))
+    {sim, grant} = Sim.grant(sim, "root", "peer", ops: [:probe])
+    {sim, zero} = Sim.beacon(sim, "root", 0)
+    sim = sim |> Sim.sync_all() |> Sim.partition("root", "peer")
+    {sim, concurrent} = Sim.beacon(sim, "root", 4)
+    expected = records([{zero, 0}])
+    {sim, command} = Sim.command(sim, "peer", :probe, [expected], cap: grant.id)
+    sim = sim |> Sim.heal("root", "peer") |> Sim.sync_all()
+    {sim, future} = Sim.beacon(sim, "root", 9)
+    log = Sim.log(sim, "root")
+    authenticate!(sim, "root")
+
+    {{analysis, evidence}, events} =
+      observed(fn -> Authority.analyze_with_beacon_evidence(ContextReplica, log) end)
+
+    refute Map.has_key?(analysis.reasons, command.id)
+    assert evidence == records([{zero, 0}, {concurrent, 4}, {future, 9}])
+    assert [{:policy, id, _visible, context}, {:conflicts, _, _, _}] = events
+    assert id == command.id
+    assert context.valid_beacons == expected
+  end
+
+  defp observed(fun) do
+    old = Process.put(:authority_evidence_observer, self())
+
+    try do
+      value = fun.()
+      {value, evidence_events([])}
+    after
+      if old,
+        do: Process.put(:authority_evidence_observer, old),
+        else: Process.delete(:authority_evidence_observer)
+    end
+  end
+
+  defp evidence_events(acc) do
+    receive do
+      {:policy, _, _, _} = event -> evidence_events([event | acc])
+      {:conflicts, _, _, _} = event -> evidence_events([event | acc])
+    after
+      0 -> Enum.reverse(acc)
+    end
   end
 
   test "context is present and empty before any signed beacon" do
@@ -129,14 +255,21 @@ defmodule Lattice2.ApplicationPolicyBeaconContextTest do
     {sim, stale} = Sim.beacon(sim, "root", 5)
     {sim, wrong_kind} = Sim.append(sim, "root", :command, {:beacon, 8})
     {sim, invalid_certificate} = Sim.beacon(sim, "root", 6, certificate: %{})
+    {sim, malformed_epoch} = Sim.append(sim, "root", :authority, {:beacon, "not-an-epoch"})
 
     assert {true, :unauthorized_beacon} == Sim.quarantined(sim, "root", unauthorized.id)
     assert {true, :stale_beacon} == Sim.quarantined(sim, "root", stale.id)
     assert {true, :malformed_command} == Sim.quarantined(sim, "root", wrong_kind.id)
     assert {true, :unauthorized_beacon} == Sim.quarantined(sim, "root", invalid_certificate.id)
+    assert {true, :stale_beacon} == Sim.quarantined(sim, "root", malformed_epoch.id)
     expected = records([{zero, 0}, {five, 5}])
     {sim, command} = Sim.command(sim, "root", :probe, [expected])
     assert_honored(sim, "root", command, expected)
+
+    {_analysis, evidence} =
+      Authority.analyze_with_beacon_evidence(ContextReplica, Sim.log(sim, "root"))
+
+    assert evidence == expected
   end
 
   test "ordinary and legacy two-argument callbacks retain their outcomes" do
@@ -202,10 +335,19 @@ defmodule Lattice2.ApplicationPolicyBeaconContextTest do
   defp founded(label, options \\ []) do
     module = Keyword.get(options, :module, ContextReplica)
 
+    replica =
+      case Keyword.get(options, :family, :legacy) do
+        :legacy ->
+          "replica:r19b-context:#{label}"
+
+        family ->
+          nonce = :crypto.hash(:sha256, label) |> Base.url_encode64(padding: false)
+          name = if family == :bounded, do: "bounded-continuation-v1", else: "future-v1"
+          "replica:treehouse:space:#{nonce}#authority:#{name}"
+      end
+
     sim =
-      Sim.new(module, "replica:r19b-context:#{label}", ["root", "peer"],
-        seed: "r19b-context-#{label}"
-      )
+      Sim.new(module, replica, ["root", "peer"], seed: "r19b-context-#{label}")
 
     policies =
       if Keyword.get(options, :witnessed, false) do
@@ -236,6 +378,14 @@ defmodule Lattice2.ApplicationPolicyBeaconContextTest do
     authenticate!(sim, realm)
     assert false == Sim.quarantined(sim, realm, command.id)
     assert expected in Sim.state(sim, realm).events
+
+    {analysis, evidence} =
+      Authority.analyze_with_beacon_evidence(ContextReplica, Sim.log(sim, realm))
+
+    assert analysis == Authority.analyze(ContextReplica, Sim.log(sim, realm))
+    assert MapSet.subset?(MapSet.new(expected), MapSet.new(evidence))
+    assert evidence == Enum.sort_by(evidence, & &1.op_id)
+    assert Enum.uniq_by(evidence, & &1.op_id) == evidence
   end
 
   defp authenticate!(sim, realm) do

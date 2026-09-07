@@ -74,7 +74,11 @@ Space commands:
   route adoption additionally requires retained-trust authority, possession,
   inventory and readiness verification.
 
-The last two entries are the **adopted unified R11 vocabulary amendment,
+- `attest member key v1` records a closed group-scoped continuity certificate through
+  the existing admin marker and ordinary command capability. It confers no admission,
+  grant, identity alias or transport right; independent enrollment remains explicit.
+
+The two catalog entries are the **adopted unified R11 vocabulary amendment,
 2026-09-06**, after integrator adoption and Claude Fable's exact `789ab235`
 contract PASS. Their closed fields, domains and refusals are defined by the
 [R11 contract](../docs/research/treehouse_catalog_lifecycle.md). Neither changes

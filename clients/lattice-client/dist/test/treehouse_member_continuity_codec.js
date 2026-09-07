@@ -237,7 +237,7 @@ test("nested voucher and signature maps remain closed and byte order is unsigned
     }
 });
 for (const producer of ["beam", "ts"])
-    test(`${producer} independently signed fixture verifies all four purposes and remains an unimplemented command`, async () => {
+    test(`${producer} independently signed fixture verifies all four purposes and remains ungranted under its historical ceiling`, async () => {
         const { readFile } = await import("node:fs/promises");
         const { verifyMemberContinuityVector } = await import("./support/export_member_continuity");
         const vector = JSON.parse(await readFile(new URL(`./vectors/member_continuity/${producer}_codec.json`, import.meta.url), "utf8"));

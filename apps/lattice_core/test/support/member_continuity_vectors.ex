@@ -128,7 +128,9 @@ defmodule Treehouse.MemberContinuityVectors do
     u = unknown_command(f)
     :ok = Certificate.verify_certificate(f.certificate, f.claim)
     :ok = Certificate.verify_return(f.challenge, f.signature, f.challenge)
-    :unknown_command = Map.fetch!(Authority.analyze(Treehouse.Space, u.log).reasons, u.op.id)
+    # Preserve the historical fixture provenance while checking the current refusal.
+    :operation_not_granted =
+      Map.fetch!(Authority.analyze(Treehouse.Space, u.log).reasons, u.op.id)
 
     %{
       version: 1,

@@ -28,6 +28,7 @@ import { cmpHash } from "./op";
 import type { Op } from "./op";
 import type { ReplicaSchema } from "./schema";
 import { treehouseCommandOpStatus } from "./treehouse";
+import { memberContinuityCommandConflicts } from "./treehouse_member_continuity";
 
 /**
  * Plan 158 Wave A2 causal context: `visibleOps`/`verdicts` and the existing
@@ -83,6 +84,7 @@ export function commandConflicts(
   verdicts: ReadonlyMap<string, string>,
   ancCache: Map<string, Set<string>>,
 ): ReadonlyMap<string, string> {
+  if (schema.name === "Treehouse.Space") return memberContinuityCommandConflicts(byId, verdicts);
   if (schema.name !== "PolicyFixture") return new Map();
   return policyFixtureCommandConflicts(included, byId, verdicts, ancCache);
 }

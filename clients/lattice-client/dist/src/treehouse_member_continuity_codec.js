@@ -252,6 +252,15 @@ export function memberContinuityClaimFromCarrierTerm(value) {
         return null;
     }
 }
+/** A valid claim remains target evidence even when its exact-three-argument certificate is malformed. */
+export function memberContinuityClaimFromDecodedTerm(value) {
+    try {
+        return readClaim(value, decodedReader);
+    }
+    catch {
+        return null;
+    }
+}
 export function memberContinuityCertificateToCarrierTerm(value) {
     const certificate = normalizeMemberContinuityCertificate(value);
     if (certificate === null)

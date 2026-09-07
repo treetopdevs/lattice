@@ -41,7 +41,7 @@ defmodule Treehouse.MemberContinuityVocabularyTest do
           {:ok, ops} = Lattice.Carrier.Wire.decode_ops(vector["frames"])
           {log, %{pending: []}} = Lattice.Sync.deliver(Lattice.Log.new(vector["replica"]), Enum.reverse(ops))
           :ok = Lattice.Log.verify_authenticity(log)
-          :unknown_command = Map.fetch!(Lattice.Authority.analyze(Treehouse.Space, log).reasons, first.id)
+          :operation_not_granted = Map.fetch!(Lattice.Authority.analyze(Treehouse.Space, log).reasons, first.id)
           baseline = Enum.reduce(Enum.reject(ops, &(&1.id == first.id)), Lattice.Log.new(first.replica), &Lattice.Log.append!(&2, &1))
           true = Lattice.state(Treehouse.Space, log) == Lattice.state(Treehouse.Space, baseline)
           true = Lattice.Log.ops(log)[first.id] == first
@@ -91,7 +91,7 @@ defmodule Treehouse.MemberContinuityVocabularyTest do
         {:ok, %{log: log, sha256: hash}} = Lattice.Log.restore_verified(genuine)
         true = hash == (:crypto.hash(:sha256, File.read!(genuine)) |> Base.encode16(case: :lower))
         :ok = Lattice.Log.verify_authenticity(log)
-        :unknown_command = Map.fetch!(Lattice.Authority.analyze(Treehouse.Space, log).reasons, vector["op_id"])
+        :operation_not_granted = Map.fetch!(Lattice.Authority.analyze(Treehouse.Space, log).reasons, vector["op_id"])
         {:ok, expected} = Lattice.Carrier.Wire.decode_ops(vector["frames"])
         true = Enum.sort_by(Map.values(Lattice.Log.ops(log)), & &1.id) == Enum.sort_by(expected, & &1.id)
         {:error, _} = Lattice.Log.restore_verified(forged)

@@ -15,6 +15,8 @@ import { causalListEntries } from "./crdt/reducers";
 import { continuationProfileBindingMatches } from "./authority";
 import { catalogBootstrapFromDecodedTerm, catalogBootstrapToCarrierTerm, normalizeCatalogBootstrap } from "./treehouse_catalog_codec";
 import type { CatalogBootstrap } from "./treehouse_catalog_codec";
+import { memberContinuityCertificateFromDecodedArguments, memberContinuityClaimFromDecodedTerm } from "./treehouse_member_continuity_codec";
+import { memberContinuityCommandStatus } from "./treehouse_member_continuity";
 
 export type TreehouseProduct = "Treehouse.Space" | "Treehouse.Thread";
 
@@ -266,6 +268,13 @@ export function treehouseCommandDecoders(product: TreehouseProduct): CommandDeco
       const marker = admin("catalog_bootstrap_v1");
       return { ...marker, command: "catalog_bootstrap_v1", effects: [marker], commandArgs: [catalogBootstrapFromDecodedTerm(raw[0]!)] };
     } }],
+    ["attest_member_key_v1", { arity: 3, decode: (raw): Payload => {
+      const certificate = memberContinuityCertificateFromDecodedArguments(raw);
+      const marker = admin("attest_member_key_v1");
+      return { ...marker, command: "attest_member_key_v1", effects: [marker],
+        commandArgs: certificate === null ? [memberContinuityClaimFromDecodedTerm(raw[0]), null, null] :
+          [certificate.claim, certificate.possession, certificate.vouches] };
+    } }],
     ["create_space", decoder(1, "create_space", ([name]) => [effect("name", "write", text(name)), admin("create_space")])],
     ["create_thread", decoder(2, "create_thread", ([replica, title]) => [effect("threads", "add", { replica: reference(replica), title: text(title) }), admin("create_thread")])],
     ["issue_invitation", decoder(2, "issue_invitation", ([recipient, threads]) => [effect("invitations", "append", { recipient: text(recipient), threads: texts(threads) }), admin("issue_invitation")])],
@@ -339,6 +348,7 @@ function bytesBase64(bytes: Uint8Array): string {
 }
 
 function spaceStatus(op: Op, visible: ReadonlySet<string>, context: CommandOpStatusContext): CommandOpStatus {
+  if (op.command === "attest_member_key_v1") return memberContinuityCommandStatus(op, visible, context);
   if (op.command === "catalog_bootstrap_v1") {
     const record = normalizeCatalogBootstrap(op.commandArgs?.[0]);
     return record !== null && record.space === op.replica && record.spaceRoot === op.authorPubkey &&
