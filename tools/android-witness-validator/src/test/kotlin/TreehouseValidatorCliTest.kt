@@ -32,6 +32,13 @@ class TreehouseValidatorCliTest {
     assertReason(dir, "issue-generation", issue("issue_generation").toByteArray(), "invalid_request", listOf(enc(bytes(1))))
     val deep = "[".repeat(40) + "0" + "]".repeat(40)
     assertReason(dir, "issue-generation", deep.toByteArray(), "invalid_request")
+    assertReason(dir, "issue-possession", issue("issue_possession").toByteArray(), "unknown_issuance", listOf(enc(bytes(88))))
+  }
+
+  @Test fun `corrupt authoritative store is unavailable rather than caller-invalid`() {
+    val dir = Files.createTempDirectory("validator-cli-corrupt-store")
+    Files.write(dir.resolve("custody.bin"), byteArrayOf(1, 2, 3))
+    assertReason(dir, "issue-generation", issue("issue_generation").toByteArray(), "store_unavailable")
   }
 
   @Test fun `malformed and oversized possession responses spend before parsing and abandon is durable`() {

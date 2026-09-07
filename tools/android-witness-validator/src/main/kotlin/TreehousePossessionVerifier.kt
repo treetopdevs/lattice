@@ -62,19 +62,21 @@ object TreehousePossessionVerifier {
     val metadata = identity.get("metadata").obj(setOf("publicKey", "spki", "appSignerSha256", "creationVersionCode", "certificateChain"))
     val identityKey = metadata.bytes32("publicKey")
     val spki = metadata.bytes("spki", 44, 44)
-    require(metadata.string("creationVersionCode").matches(Regex("[1-9][0-9]{0,18}")) && metadata.string("creationVersionCode").toLong() == expected.creationVersionCode)
-    require(metadata.bytes32("appSignerSha256").contentEquals(expected.signerCertificateSha256))
+    val version = metadata.string("creationVersionCode")
+    require(isCanonicalPositiveI64(version))
+    context(version.toLong() == expected.creationVersionCode)
+    context(metadata.bytes32("appSignerSha256").contentEquals(expected.signerCertificateSha256))
     val chain = metadata.getAsJsonArray("certificateChain").map { it.asString.canonicalBytes(1, 16_384) }
     require(chain.size in 1..8 && chain.sumOf(ByteArray::size) <= 65_536)
-    require(attempt.contentEquals(expected.creationAttemptId) && identityKey.contentEquals(candidate.publicKey) &&
+    context(attempt.contentEquals(expected.creationAttemptId) && identityKey.contentEquals(candidate.publicKey) &&
       spki.contentEquals(candidate.spki) && chain.same(candidate.chain))
 
     val binding = root.get("binding").obj(setOf("claim", "signature"))
     val claim = binding.get("claim").obj(CLAIM_KEYS)
     require(claim.string("domain") == DOMAIN && claim.int("version") == 1 && claim.string("product") == "treehouse" && claim.string("appId") == APP)
-    require(claim.string("replica") == expected.replica)
+    context(claim.string("replica") == expected.replica)
     val fields = listOf("enrollmentId", "recipient", "creationAttemptId", "actualWitnessPublicKey", "generationChallengeDigest", "freshValidatorNonce", "nativeRandomNonce", "nativeCallerSessionDigest").associateWith(claim::bytes32)
-    require(fields.getValue("enrollmentId").contentEquals(expected.enrollmentId) && fields.getValue("recipient").contentEquals(expected.recipient) &&
+    context(fields.getValue("enrollmentId").contentEquals(expected.enrollmentId) && fields.getValue("recipient").contentEquals(expected.recipient) &&
       fields.getValue("creationAttemptId").contentEquals(expected.creationAttemptId) && fields.getValue("actualWitnessPublicKey").contentEquals(candidate.publicKey) &&
       challenge.contentEquals(retainedChallenge) && fields.getValue("generationChallengeDigest").contentEquals(MessageDigest.getInstance("SHA-256").digest(retainedChallenge)) &&
       fields.getValue("freshValidatorNonce").contentEquals(ticket.validatorNonce))
@@ -85,6 +87,8 @@ object TreehousePossessionVerifier {
     verifier.update(canonical)
     if (!verifier.verify(signature)) report(PossessionStatus.REFUSED, PossessionReason.INVALID_SIGNATURE, true, context = true, canonical = true)
     else report(PossessionStatus.VERIFIED_POSSESSION, PossessionReason.VERIFIED, true, context = true, canonical = true, signature = true)
+  } catch (_: ExpectedContextMismatch) {
+    report(PossessionStatus.REFUSED, PossessionReason.EXPECTED_CONTEXT_MISMATCH, true)
   } catch (_: IllegalArgumentException) {
     report(PossessionStatus.REFUSED, PossessionReason.INVALID_PACKET, true)
   } catch (_: Exception) {
@@ -99,6 +103,9 @@ object TreehousePossessionVerifier {
   private const val APP = "dev.treetop.lattice.treehouse"
   private val CLAIM_KEYS = setOf("domain", "version", "product", "appId", "replica", "enrollmentId", "recipient", "creationAttemptId", "actualWitnessPublicKey", "generationChallengeDigest", "freshValidatorNonce", "nativeRandomNonce", "nativeCallerSessionDigest")
 }
+
+private class ExpectedContextMismatch : RuntimeException()
+private fun context(matches: Boolean) { if (!matches) throw ExpectedContextMismatch() }
 
 private fun JsonElement.obj(keys: Set<String>): JsonObject = asJsonObject.also { require(it.keySet() == keys) }
 private fun JsonObject.string(name: String) = get(name).asJsonPrimitive.also { require(it.isString) }.asString

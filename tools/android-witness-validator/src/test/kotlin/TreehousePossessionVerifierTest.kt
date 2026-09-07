@@ -62,6 +62,14 @@ class TreehousePossessionVerifierTest {
     val exactFifth = packet(expected, issuance.generationChallenge, fifth.validatorNonce, pair.public.encoded, publicKey, chain, pair)
     val unsafeRevision = String(exactFifth).replace("\"revision\":\"1\"", "\"revision\":\"9999999999999999999\"").toByteArray()
     assertEquals(PossessionReason.INVALID_PACKET, TreehousePossessionVerifier.verify(store, fifth, unsafeRevision).reason)
+
+    val sixth = store.issuePossession(issuance.issuanceId, expected)
+    val exactSixth = packet(expected, issuance.generationChallenge, sixth.validatorNonce, pair.public.encoded, publicKey, chain, pair)
+    val substitutedAttempt = String(exactSixth).replace(enc(expected.creationAttemptId), enc(bytes(99))).toByteArray()
+    val mismatch = TreehousePossessionVerifier.verify(store, sixth, substitutedAttempt)
+    assertEquals(PossessionReason.EXPECTED_CONTEXT_MISMATCH, mismatch.reason)
+    assertEquals(true, mismatch.checks.nonceSpent)
+    assertEquals(false, mismatch.checks.enrollmentContextMatched)
   }
 
   private fun packet(expected: ExpectedEnrollment, challenge: ByteArray, nonce: ByteArray, spki: ByteArray,

@@ -27,7 +27,8 @@ object TreehouseValidatorCli {
         "abandon-possession" -> { arity(identifiers, 2); require(input.isEmpty()); abandon(store, ticket(identifiers)) }
         else -> refused("unknown_command")
       }.toString().toByteArray(Charsets.UTF_8)
-    } catch (_: IllegalArgumentException) { refused("invalid_request").toString().toByteArray() }
+    } catch (_: UnknownIssuanceException) { refused("unknown_issuance").toString().toByteArray() }
+      catch (_: IllegalArgumentException) { refused("invalid_request").toString().toByteArray() }
       catch (_: IllegalStateException) { incomplete("store_unavailable").toString().toByteArray() }
       catch (_: Exception) { incomplete("internal_failure").toString().toByteArray() }
   }

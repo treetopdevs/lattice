@@ -56,6 +56,7 @@ internal class RetainedIssuance(expected: ExpectedEnrollment, challenge: ByteArr
   private val challengeBytes = challenge.copyOf()
   val generationChallenge get() = challengeBytes.copyOf()
 }
+internal class UnknownIssuanceException : RuntimeException("unknown_issuance")
 
 internal enum class PersistStage { TEMP_FORCED, RENAMED, DIRECTORY_FORCED, REOPENED }
 internal fun interface PersistCheckpoint { fun reached(stage: PersistStage) }
@@ -110,7 +111,7 @@ class ValidatorCustodyStore internal constructor(
 
   fun issuePossession(issuanceId: ByteArray, expected: ExpectedEnrollment): PossessionTicket = locked { state ->
     require(issuanceId.size == 32)
-    val issuance = state.issuances[issuanceId.key()] ?: error("unknown_issuance")
+    val issuance = state.issuances[issuanceId.key()] ?: throw UnknownIssuanceException()
     require(issuance.candidate != null && issuance.expected.same(expected))
     require(state.nonces.size < MAX_NONCES) { "nonce_capacity" }
     val nonce = freshNonce(state)
@@ -150,7 +151,10 @@ class ValidatorCustodyStore internal constructor(
     FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE).use { channel ->
       channel.lock().use {
         check(!Files.exists(tempFile) && !Files.exists(refusalFile)) { "ambiguous_or_refused_store" }
-        return block(read())
+        val state = try { read() } catch (error: Exception) {
+          throw IllegalStateException("custody_store_unavailable", error)
+        }
+        return block(state)
       }
     }
   }
