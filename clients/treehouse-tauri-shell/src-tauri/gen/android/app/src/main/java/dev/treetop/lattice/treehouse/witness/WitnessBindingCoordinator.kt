@@ -63,7 +63,7 @@ internal class WitnessBindingCoordinator(
     private val active = AtomicReference<Attempt?>(null)
     private val lifecycle = Any()
 
-    private enum class State { REVIEW, PREPARED, SIGNING, TERMINAL }
+    private enum class State { REVIEW, PREPARED, PREPARE_DELIVERING, SIGNING, TERMINAL }
     private inner class Handle : WitnessBindingHandle
     private inner class Attempt(val request: WitnessBindingRequest) {
         val handle = Handle()
@@ -137,9 +137,25 @@ internal class WitnessBindingCoordinator(
                 val revisionValid = isUsable(attempt, checkRevision = true)
                 lifecycleCheckpoint("before_prepare_delivery")
                 val deliverStored = synchronized(lifecycle) {
-                    revisionValid && attempt.state.get() == State.PREPARED && currentForDelivery(attempt)
+                    revisionValid && currentForDelivery(attempt) &&
+                        attempt.state.compareAndSet(State.PREPARED, State.PREPARE_DELIVERING)
                 }
-                if (deliverStored) try { callback(result) } catch (_: Exception) { terminatePrepared(attempt) }
+                if (deliverStored) {
+                    lifecycleCheckpoint("prepare_delivery_owned")
+                    var delivered = false
+                    try { callback(result); delivered = true } catch (_: Exception) { terminatePrepared(attempt) }
+                    if (delivered) {
+                        var finishNow = false
+                        synchronized(lifecycle) {
+                            if (attempt.state.get() == State.PREPARE_DELIVERING) {
+                                if (currentForDelivery(attempt)) attempt.state.set(State.PREPARED)
+                                else { attempt.state.set(State.TERMINAL); finishNow = true }
+                            }
+                        }
+                        lifecycleCheckpoint("prepare_delivery_complete")
+                        if (finishNow) finish(attempt)
+                    }
+                }
                 else {
                     terminatePrepared(attempt)
                     callback(WitnessResult.Refused(if (remainingMillis(attempt) <= 0) "binding_timeout" else "cancelled"))
@@ -154,8 +170,10 @@ internal class WitnessBindingCoordinator(
     fun signPrepared(handle: WitnessBindingHandle, callback: (WitnessResult<SignedWitnessBinding>) -> Unit) {
         val attempt = synchronized(lifecycle) {
             val candidate = active.get()
+            val state = candidate?.state?.get()
             if (candidate != null && handle === candidate.handle && currentForDelivery(candidate) &&
-                candidate.state.compareAndSet(State.PREPARED, State.SIGNING)) candidate else null
+                (state == State.PREPARED || state == State.PREPARE_DELIVERING) &&
+                candidate.state.compareAndSet(state, State.SIGNING)) candidate else null
         }
         if (attempt == null) {
             callback(WitnessResult.Refused("stale_binding_handle"))
@@ -201,7 +219,8 @@ internal class WitnessBindingCoordinator(
         synchronized(lifecycle) {
             attempt = active.get() ?: return false
             if (attempt.request.attemptId != WitnessBytes(attemptId) ||
-                attempt.request.sessionDigest != WitnessBytes(sessionDigest) || attempt.state.get() == State.TERMINAL) return false
+                attempt.request.sessionDigest != WitnessBytes(sessionDigest) ||
+                attempt.state.get() in arrayOf(State.PREPARE_DELIVERING, State.TERMINAL)) return false
             attempt.cancelled.set(true)
             if (attempt.state.compareAndSet(State.PREPARED, State.TERMINAL)) finishNow = true
         }
@@ -224,7 +243,10 @@ internal class WitnessBindingCoordinator(
         if (finishNow) finish(attempt)
     }
     private fun terminatePrepared(attempt: Attempt) {
-        val won = synchronized(lifecycle) { attempt.state.compareAndSet(State.PREPARED, State.TERMINAL) }
+        val won = synchronized(lifecycle) {
+            attempt.state.compareAndSet(State.PREPARED, State.TERMINAL) ||
+                attempt.state.compareAndSet(State.PREPARE_DELIVERING, State.TERMINAL)
+        }
         if (won) finish(attempt)
     }
     private fun finish(attempt: Attempt) {

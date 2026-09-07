@@ -142,6 +142,24 @@ class WitnessBindingCoordinatorTest {
         assertEquals(WitnessResult.Refused("cancelled"), result.get())
     }
 
+    @Test fun prepareDeliveryOwnershipWinsOverCancellationAndLeavesCancelableHandle() {
+        val context = completedContext()
+        val entered = CountDownLatch(1); val release = CountDownLatch(1); val completed = CountDownLatch(1)
+        val coordinator = WitnessBindingCoordinator(context, bytes(7), Ui(), Platform(signing(keyPair())), { true },
+            lifecycleCheckpoint = {
+                if (it == "prepare_delivery_owned") { entered.countDown(); release.await() }
+                if (it == "prepare_delivery_complete") completed.countDown()
+            })
+        val done = CountDownLatch(1); val result = AtomicReference<WitnessResult<PreparedWitnessBinding>>()
+        coordinator.prepareBinding(request(3)) { result.set(it); done.countDown() }
+        assertTrue(entered.await(10, TimeUnit.SECONDS))
+        assertFalse(coordinator.cancel(bytes(5), bytes(8)))
+        release.countDown(); assertTrue(done.await(10, TimeUnit.SECONDS))
+        assertTrue(result.get() is WitnessResult.Stored)
+        assertTrue(completed.await(10, TimeUnit.SECONDS))
+        assertTrue(coordinator.cancel(bytes(5), bytes(8)))
+    }
+
     @Test fun storedSignatureDeliveryWinsOverReentrantCancel() {
         val context = completedContext()
         val coordinator = WitnessBindingCoordinator(context, bytes(7), Ui(), Platform(signing(keyPair())), { true })
