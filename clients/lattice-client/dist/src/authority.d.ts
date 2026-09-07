@@ -26,7 +26,8 @@ export interface AuthorityRootEvidence {
 }
 export interface EffectiveBeaconEvidence {
     opId: string;
-    epoch: number;
+    /** Safe epochs are numbers; high legacy uint64 epochs retain exact decimal bytes. */
+    epoch: number | string;
 }
 export interface EffectiveRevokeEvidence {
     opId: string;
@@ -94,3 +95,5 @@ export declare function assembleWitnessedSuccessionArtifact(claim: WitnessedSucc
 export declare function exportWitnessedSuccessionArtifactJson(artifact: WitnessedSuccessionArtifactEvidence): string;
 export declare function witnessedRecoveryPolicyId(policy: WitnessedRecoveryPolicyEvidence): string | null;
 export declare function verifyWitnessedSuccessionCertificate(certificate: WitnessedSuccessionCertificateEvidence | null, expectedClaim: WitnessedSuccessionClaimEvidence, policy: WitnessedRecoveryPolicyEvidence): WitnessedSuccessionVerification;
+/** Fixed portable logical-epoch horizon, independent of genesis policy. */
+export declare const witnessedBeaconHorizon: number;

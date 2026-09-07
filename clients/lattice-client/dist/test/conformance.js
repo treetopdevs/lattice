@@ -14,7 +14,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { createPublicKey, verify as edVerify } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { analyzeAuthority, canonicalBytesForCarrierDelegation, canonicalHash, canonicalOrder, carrierDelegationsFromFrames, carrierOpsToSemanticOps, decodeCarrierOpFrame, index, materialize, toolshedCarrierCommandTable, toolshedCarrierCommandNames, townshipCarrierCommandTable, townshipCarrierCommandNames, verifyCarrierOp, verifyWitnessedSuccessionCertificate, witnessedRecoveryPolicyId, } from "../src/index";
+import { analyzeAuthority, canonicalBytesForCarrierDelegation, canonicalHash, canonicalOrder, carrierDelegationsFromFrames, carrierOpsToSemanticOps, decodeCarrierOpFrame, index, materialize, toolshedCarrierCommandTable, toolshedCarrierCommandNames, townshipCarrierCommandTable, townshipCarrierCommandNames, verifyCarrierOp, verifyWitnessedSuccessionCertificate, witnessedRecoveryPolicyId, witnessedBeaconHorizon, } from "../src/index";
 const here = dirname(fileURLToPath(import.meta.url));
 const vecDir = join(here, "vectors");
 const verifier = { verify: verifyEd25519 };
@@ -114,10 +114,59 @@ let testedToolshedCommandDrift = false;
 for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
     const vec = JSON.parse(readFileSync(join(vecDir, file), "utf8"));
     console.log(`\n▸ ${vec.scenario}  (${file})`);
-    const carrierFrames = vec.oracleCarrierOps?.map(decodeCarrierOpFrame);
+    const horizonVector = vec.scenario === "township_beacon_witnessed_horizon";
+    const carrierFrames = horizonVector
+        ? vec.oracleCarrierOps
+        : vec.oracleCarrierOps?.map(decodeCarrierOpFrame);
+    if (horizonVector) {
+        check("witnessed epoch horizon is fixed across runtimes", witnessedBeaconHorizon, 9_007_199_254_740_991);
+        const frame = carrierFrames?.find((candidate) => candidate.id === vec.capabilityCase?.beaconOperationId);
+        check("horizon vector supplies its signed beacon frame", frame !== undefined, true);
+        if (frame !== undefined) {
+            let refused = false;
+            try {
+                decodeCarrierOpFrame(frame);
+            }
+            catch {
+                refused = true;
+            }
+            check("strict frame decoding refuses above-horizon integer", refused, true);
+        }
+    }
     const ops = carrierFrames !== undefined && vec.realmByPubkey !== undefined
         ? carrierOpsToSemanticOps(carrierFrames, vec.realmByPubkey)
         : vec.ops;
+    if (vec.scenario === "township_beacon_witnessed_large_policy_integer" ||
+        vec.scenario === "township_beacon_witnessed_unbound_root" ||
+        vec.scenario === "township_beacon_witnessed_policy_metadata" ||
+        vec.scenario === "township_beacon_witnessed_certificate_metadata" ||
+        vec.scenario === "township_beacon_witnessed_high_legacy" ||
+        vec.scenario === "township_beacon_witnessed_high_nonroot" ||
+        vec.scenario === "township_beacon_witnessed_raw_duplicate_deps") {
+        check("beacon review vector supplies raw signed frames", (carrierFrames?.length ?? 0) > 0, true);
+        for (const frame of carrierFrames ?? []) {
+            check("beacon review raw frame hash/signature", await verifyCarrierOp(frame, verifier), { hash: true, signature: true, valid: true });
+            check("contextual decoding preserves exact raw frame", decodeCarrierOpFrame(frame), frame);
+        }
+    }
+    if (Array.isArray(vec.capabilityCase?.rawBeaconDeps)) {
+        const target = ops.find((op) => op.id === vec.capabilityCase?.beaconOperationId);
+        check("raw duplicate outer dependencies remain in semantic evidence", target?.deps, vec.capabilityCase.rawBeaconDeps);
+        for (const delivered of [ops, [...ops].reverse()]) {
+            const projection = materialize(vec.schema, delivered);
+            check("raw duplicate beacon matches BEAM admission in both delivery orders", projection.quarantineReasons.has(target.id), false);
+            check("duplicate received claim retains BEAM refusal in both delivery orders", projection.quarantineReasons.get(vec.capabilityCase.invalidReceivedClaimId), "unauthorized_beacon");
+        }
+    }
+    if (Array.isArray(vec.capabilityCase?.highLegacyEpochs)) {
+        const expected = vec.capabilityCase.highLegacyEpochs;
+        for (const delivered of [ops, [...ops].reverse()]) {
+            const byId = index(delivered), order = canonicalOrder(delivered, byId);
+            const analysis = analyzeAuthority(vec.schema, delivered, new Set(order), order, byId, carrierFrames?.[0]?.replica);
+            check("exact high legacy epoch evidence agrees with BEAM decimal strings", analysis.security.validBeacons.filter((beacon) => typeof beacon.epoch === "string")
+                .map(({ opId, epoch }) => [opId, epoch]), expected.map(({ opId, epoch }) => [opId, epoch]));
+        }
+    }
     for (const op of ops) {
         const evidenceType = op.authority?.type;
         if (evidenceType === undefined)
@@ -351,6 +400,13 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
             : undefined;
         check("link_election carries its real command name", linkOperation?.command, "link_election");
         check("link_election zero-mutation state is byte-identical", JSON.stringify(full.state), withoutLink === null ? null : JSON.stringify(withoutLink.state));
+    }
+    if (vec.capabilityCase?.legacyMigration !== undefined) {
+        const migration = vec.capabilityCase.legacyMigration;
+        const historicalOps = carrierOpsToSemanticOps(migration.oracleCarrierOps, migration.realmByPubkey);
+        const migrated = materialize(vec.schema, historicalOps);
+        check("legacy beacon history preserves state and holders", stableComparisonValue(migrated.state), stableComparisonValue(migration.state));
+        check("legacy beacon history has exactly the authorized audit delta", sortedPairs([...migrated.quarantineReasons]), sortedPairs([...migration.legacyReasonPairs, [migration.auditDeltaOperationId, "unauthorized_beacon"]]));
     }
     if (vec.capabilityCase !== undefined) {
         const reasoned = full;

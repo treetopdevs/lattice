@@ -78,10 +78,29 @@ export type SuccessionProofEvidence = {
 } | {
     mode: "invalid";
 };
+export interface WitnessedBeaconPolicyEvidence {
+    mode: "witnessed";
+    version: number;
+    witnesses: string[];
+    threshold: number;
+    maxEpochStep: number;
+}
+export interface WitnessedBeaconClaimEvidence {
+    version: number;
+    replica: string;
+    epoch: number;
+    author: string;
+    deps: string[];
+}
+export interface WitnessedBeaconCertificateEvidence {
+    claim: WitnessedBeaconClaimEvidence;
+    signatures: WitnessedSuccessionSignatureEvidence[];
+}
 export type AuthorityEvidence = {
     type: "genesis";
     delegation: AuthorityDelegationEvidence;
     policies?: Record<string, SuccessionPolicyEvidence>;
+    beaconPolicy?: WitnessedBeaconPolicyEvidence | null;
 } | {
     type: "grant";
     delegation: AuthorityDelegationEvidence;
@@ -104,7 +123,9 @@ export type AuthorityEvidence = {
     atTick: number;
 } | {
     type: "beacon";
-    epoch: number | null;
+    epoch: number | string | null;
+    certificate?: WitnessedBeaconCertificateEvidence | null;
+    authorPubkey?: string;
 };
 export interface Op {
     /** Content-address id from Elixir. In Tier A this is an opaque handle. */

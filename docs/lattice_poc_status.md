@@ -225,7 +225,12 @@ None observed across seeds 1, 7, 99, 555, 2024, 12345 (100 runs each).
   opt-in `township_succession_witnessed_recovery` path instead requires a valid-genesis-pinned
   m-of-n Ed25519 certificate bound to the exact replica, role, holder, acquisition epoch,
   successor, and policy; BEAM and TypeScript independently verify and reduce its adversarial
-  vector. That proves configured witness authorization, not elapsed time, absence, liveness,
+  vector. Plan 179 also permits a root or configured witness to publish an ancestry-bound,
+  threshold-signed logical beacon, giving that threshold the power to lapse leased grants within
+  the pinned step bound and fixed portable horizon. Its Sim/TypeScript founder-removal evidence
+  covers predelegated admission, surviving-issuer revocation and leased lapse; founder-issued
+  grants do not become revocable by other members. This is not general founder-loss or device proof.
+  That proves configured witness authorization, not elapsed time, absence, liveness,
   independence, honesty, non-coercion, consensus, or receipt-freeness. User-facing succession
   remains blocked on a separate review, collection, custody, and publication ceremony (ADR 0004).
 - **Public API name clashes** — v1 already defines `Lattice.call/3`, `Lattice.grant/4`,

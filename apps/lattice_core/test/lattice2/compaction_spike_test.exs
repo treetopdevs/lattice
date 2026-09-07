@@ -23,6 +23,46 @@ defmodule Lattice2.CompactionSpikeTest do
   @realms ["r0", "r1", "r2"]
   @witness_realms ["r0", "r1", "w0", "w1", "w2"]
 
+  test "GATE (1) witnessed beacons and a lease straddle the stable frontier" do
+    sim = Sim.new(Thread, @replica, @witness_realms, seed: "compaction:beacon")
+
+    {sim, _} =
+      Sim.create_replica(sim, "r0",
+        policies: %{
+          __beacon__: %{
+            mode: :witnessed,
+            version: 1,
+            witnesses: ["w0", "w1", "w2"],
+            threshold: 2,
+            max_epoch_step: 2
+          }
+        }
+      )
+
+    {sim, lease} = Sim.grant(sim, "r0", "r1", ops: [:post], expires_epoch: 4)
+    {sim, _} = Sim.beacon(sim, "r0", 2)
+    sim = Sim.sync_all(sim)
+    {sim, _} = Sim.beacon(sim, "w0", 3, witnesses: ["w0", "w1"])
+    sim = Sim.sync_all(sim)
+    {sim, early} = Sim.command(sim, "r1", :post, ["before lapse"], cap: lease.id)
+    sim = Sim.sync_all(sim)
+    frontier = Log.frontier(Sim.log(sim, "r0"))
+    {sim, witnessed} = Sim.beacon(sim, "w0", 5, witnesses: ["w0", "w1"])
+    sim = Sim.sync_all(sim)
+    beacon_frontier = Log.frontier(Sim.log(sim, "r0"))
+    {sim, late} = Sim.command(sim, "r1", :post, ["after lapse"], cap: lease.id)
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "r0")
+    full = Authority.analyze(Thread, log)
+    refute Map.has_key?(full.reasons, early.id)
+    refute Map.has_key?(full.reasons, witnessed.id)
+    assert full.reasons[late.id] == :lease_expired
+    assert_compaction_equivalence(log, frontier)
+    {_snapshot, retained, _result} = assert_compaction_equivalence(log, beacon_frontier)
+    refute Log.has?(retained, witnessed.id)
+    assert Log.has?(retained, late.id)
+  end
+
   defp t2b(term), do: :erlang.term_to_binary(term, [:deterministic])
 
   # The GATE oracle: compact at `frontier`, re-reduce, compare byte-for-byte

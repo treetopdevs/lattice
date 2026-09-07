@@ -1,0 +1,562 @@
+{
+  "canonicalOps": [
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584e7265706c6963613a6d61747465723a626561636f6e2d686f72697a6f6e23726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f74585865735820cdc39c918646a0ebaacadcbd0a62413f38e18451482d09568a1f7c771a1bbca580d9ea6049617574686f72697479d9ea6183d9ea604767656e65736973d9ea6389582b73415170325238642d6e32326678496e3678685258334a6a2d677254367139384f4335327a336637565945584e7265706c6963613a6d61747465723a626561636f6e2d686f72697a6f6e23726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f74585865735820cdc39c918646a0ebaacadcbd0a62413f38e18451482d09568a1f7c771a1bbca55820cdc39c918646a0ebaacadcbd0a62413f38e18451482d09568a1f7c771a1bbca5f688d9ea604561646d6974d9ea604c636c6f73655f6d6174746572d9ea604d6c696e6b5f656c656374696f6ed9ea6044706f7374d9ea604d72656d6f76655f6d656d626572d9ea604d72656f70656e5f6d6174746572d9ea604b7365745f73756d6d617279d9ea60497365745f7469746c6581d9ea6045636c65726bf55840cd7c5b47dbc9aa3ac6a9f2969be3d27bed0a121de2aaf7381b1afdb18b29004c79e46c18e2036e3c51104357701ecb55d4d091a5475b791c94a79cdfa738990da1d9ea604a5f5f626561636f6e5f5fa5d9ea60446d6f6465d9ea60497769746e6573736564d9ea604776657273696f6e01d9ea60497468726573686f6c6402d9ea60497769746e6573736573845820153cb54c395fa3bd58a3602c091c6692cba2210fdc2b522b1bffdf0f3772de4f582094b21722f64abf8a5ab5c5bfcf4060280bc3fb66deb58892119127a50a3c4c9558201df77021f73a8ae344e27c57714b000c48b78d326f75928136ea25212105e714582060ca761871c343acd85f5ed280e9df353a04e4eafbfc9f30782dea1f27ec6a3dd9ea604e6d61785f65706f63685f737465700af6",
+      "hash": "OLBKJj6OSIdxfK9brQb0OuBa55K1XGfHhGr1rLSsrSI",
+      "id": "OLBKJj6OSIdxfK9brQb0OuBa55K1XGfHhGr1rLSsrSI",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584e7265706c6963613a6d61747465723a626561636f6e2d686f72697a6f6e23726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f74585865735820cdc39c918646a0ebaacadcbd0a62413f38e18451482d09568a1f7c771a1bbca581582b4f4c424b4a6a364f53496478664b3962725162304f75426135354b315847664868477231724c5373725349d9ea6049617574686f72697479d9ea6182d9ea60456772616e74d9ea638a582b63433744456d583032536969487a5771396a54565a4e565579434934316c2d4b5a6d592d665a32435a4c67584e7265706c6963613a6d61747465723a626561636f6e2d686f72697a6f6e23726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f74585865735820cdc39c918646a0ebaacadcbd0a62413f38e18451482d09568a1f7c771a1bbca55820d2f04f1dbcb6ac29d3d4860d3e2069fa71e2c500101136fe3b764f1af32f6cf0582b73415170325238642d6e32326678496e3678685258334a6a2d677254367139384f4335327a33663756594581d9ea6044706f737480f4584073bcc5dcd69c75601ac1f21a7f821a1b7aef4370ce92b8fbcac1fbeaf20fb092b487043c6774e7e64dfe51a0238b0b5a512ef20338ed48b4e9c30ff159be130e1b001ffffffffffffff6",
+      "hash": "jCWFWufTuEkcM46y7gJipee00qqhWlfov9p9SHxlBjI",
+      "id": "jCWFWufTuEkcM46y7gJipee00qqhWlfov9p9SHxlBjI",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584e7265706c6963613a6d61747465723a626561636f6e2d686f72697a6f6e23726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f74585865735820cdc39c918646a0ebaacadcbd0a62413f38e18451482d09568a1f7c771a1bbca581582b6a4357465775665475456b634d34367937674a697065653030717168576c666f763970395348786c426a49d9ea6049617574686f72697479d9ea6182d9ea6046626561636f6e1b001ffffffffffffef6",
+      "hash": "Vz5lQ3p-X1HTiRB2fPUeUUb_Py83FJxpZZnswkIPiMU",
+      "id": "Vz5lQ3p-X1HTiRB2fPUeUUb_Py83FJxpZZnswkIPiMU",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584e7265706c6963613a6d61747465723a626561636f6e2d686f72697a6f6e23726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f74585865735820153cb54c395fa3bd58a3602c091c6692cba2210fdc2b522b1bffdf0f3772de4f81582b567a356c5133702d5831485469524232665055655555625f50793833464a78705a5a6e73776b4950694d55d9ea6049617574686f72697479d9ea6183d9ea6046626561636f6e1b0020000000000000a2d9ea6045636c61696da5d9ea60446465707381582b567a356c5133702d5831485469524232665055655555625f50793833464a78705a5a6e73776b4950694d55d9ea604565706f63681b0020000000000000d9ea6046617574686f725820153cb54c395fa3bd58a3602c091c6692cba2210fdc2b522b1bffdf0f3772de4fd9ea60477265706c696361584e7265706c6963613a6d61747465723a626561636f6e2d686f72697a6f6e23726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f7458586573d9ea604776657273696f6e01d9ea604a7369676e61747572657382a2d9ea60477769746e6573735820153cb54c395fa3bd58a3602c091c6692cba2210fdc2b522b1bffdf0f3772de4fd9ea60497369676e61747572655840c7480489e6342f9f1c28376430c12cc07c17e701518ae36ccc8a7447c9b63d409b2840f6e735efbe87f4ca14599d33f2ec31806fd74ee52f29d82df2a4e29d0ca2d9ea60477769746e657373582094b21722f64abf8a5ab5c5bfcf4060280bc3fb66deb58892119127a50a3c4c95d9ea60497369676e61747572655840094e4df16050456040b3dc68a2cb31619f61b616ecd8291029cc1679604d7cc6d3af614f432540f886981813848cb689e6252bd7d359f80a038ae06cc619360cf6",
+      "hash": "uQQoP1kW6mlBwjEGKxo-2jiq8NQPDlY-l6AnfAzymNk",
+      "id": "uQQoP1kW6mlBwjEGKxo-2jiq8NQPDlY-l6AnfAzymNk",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d7632584e7265706c6963613a6d61747465723a626561636f6e2d686f72697a6f6e23726f6f743a56665275347843555359517a7a475970776f52324564545a523153323657693241785744784f74585865735820d2f04f1dbcb6ac29d3d4860d3e2069fa71e2c500101136fe3b764f1af32f6cf081582b7551516f50316b57366d6c42776a45474b786f2d326a6971384e5150446c592d6c36416e66417a796d4e6bd9ea6047636f6d6d616e64d9ea6182d9ea6044706f737481581f6265796f6e6420686f72697a6f6e20636f6e66657273206e6f206c61707365582b63433744456d583032536969487a5771396a54565a4e565579434934316c2d4b5a6d592d665a32435a4c67",
+      "hash": "-_YhK1x32SozXVBmbPObUPTcLL5h3FT0SZr9xqQLKbQ",
+      "id": "-_YhK1x32SozXVBmbPObUPTcLL5h3FT0SZr9xqQLKbQ",
+      "suite": "lattice-cbor-v1"
+    }
+  ],
+  "capabilityCase": {
+    "beaconOperationId": "uQQoP1kW6mlBwjEGKxo-2jiq8NQPDlY-l6AnfAzymNk",
+    "case": "witnessed_horizon",
+    "honoredOperationId": "-_YhK1x32SozXVBmbPObUPTcLL5h3FT0SZr9xqQLKbQ"
+  },
+  "expectAtFrontier": [],
+  "expectAtFullFrontier": {
+    "authorityQuarantine": [
+      [
+        "uQQoP1kW6mlBwjEGKxo-2jiq8NQPDlY-l6AnfAzymNk",
+        "malformed_term"
+      ]
+    ],
+    "quarantine": [
+      "uQQoP1kW6mlBwjEGKxo-2jiq8NQPDlY-l6AnfAzymNk"
+    ],
+    "state": {
+      "clerk": "clerk",
+      "clerk_locked": false,
+      "members": [],
+      "posts": [
+        "beyond horizon confers no lapse"
+      ],
+      "summary": "",
+      "title": ""
+    },
+    "winners": {
+      "clerk": "OLBKJj6OSIdxfK9brQb0OuBa55K1XGfHhGr1rLSsrSI",
+      "clerk_locked": null,
+      "summary": null,
+      "title": null
+    }
+  },
+  "generatedBy": "Lattice.Sim",
+  "ops": [
+    {
+      "author": "clerk",
+      "command": "genesis clerk",
+      "deps": [],
+      "field": "clerk",
+      "hash": "OLBKJj6OSIdxfK9brQb0OuBa55K1XGfHhGr1rLSsrSI",
+      "id": "OLBKJj6OSIdxfK9brQb0OuBa55K1XGfHhGr1rLSsrSI",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "clerk"
+    },
+    {
+      "author": "clerk",
+      "command": "grant resident",
+      "deps": [
+        "OLBKJj6OSIdxfK9brQb0OuBa55K1XGfHhGr1rLSsrSI"
+      ],
+      "field": "__authority",
+      "hash": "jCWFWufTuEkcM46y7gJipee00qqhWlfov9p9SHxlBjI",
+      "id": "jCWFWufTuEkcM46y7gJipee00qqhWlfov9p9SHxlBjI",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "clerk",
+      "command": "authority",
+      "deps": [
+        "jCWFWufTuEkcM46y7gJipee00qqhWlfov9p9SHxlBjI"
+      ],
+      "field": "__authority",
+      "hash": "Vz5lQ3p-X1HTiRB2fPUeUUb_Py83FJxpZZnswkIPiMU",
+      "id": "Vz5lQ3p-X1HTiRB2fPUeUUb_Py83FJxpZZnswkIPiMU",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "w0",
+      "command": "authority",
+      "deps": [
+        "Vz5lQ3p-X1HTiRB2fPUeUUb_Py83FJxpZZnswkIPiMU"
+      ],
+      "field": "__authority",
+      "hash": "uQQoP1kW6mlBwjEGKxo-2jiq8NQPDlY-l6AnfAzymNk",
+      "id": "uQQoP1kW6mlBwjEGKxo-2jiq8NQPDlY-l6AnfAzymNk",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "resident",
+      "command": "post",
+      "deps": [
+        "uQQoP1kW6mlBwjEGKxo-2jiq8NQPDlY-l6AnfAzymNk"
+      ],
+      "field": "posts",
+      "hash": "-_YhK1x32SozXVBmbPObUPTcLL5h3FT0SZr9xqQLKbQ",
+      "id": "-_YhK1x32SozXVBmbPObUPTcLL5h3FT0SZr9xqQLKbQ",
+      "kind": "command",
+      "mutation": "append",
+      "value": "beyond horizon confers no lapse"
+    }
+  ],
+  "oracleCarrierOps": [
+    {
+      "author": "zcOckYZGoOuqyty9CmJBPzjhhFFILQlWih98dxobvKU=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "zcOckYZGoOuqyty9CmJBPzjhhFFILQlWih98dxobvKU=",
+              "id": "sAQp2R8d-n22fxIn6xhRX3Jj-grT6q98OC52z3f7VYE",
+              "issuer": "zcOckYZGoOuqyty9CmJBPzjhhFFILQlWih98dxobvKU=",
+              "live": true,
+              "ops": [
+                "admit",
+                "close_matter",
+                "link_election",
+                "post",
+                "remove_member",
+                "reopen_matter",
+                "set_summary",
+                "set_title"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:beacon-horizon#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "zXxbR9vJqjrGqfKWm+PSe+0KEh3iqvc4Gxr9sYspAEx55GwY4gNuPFEQQ1dwHstV1NCRpUdbeRyUp5zfpziZDQ=="
+            }
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "__beacon__"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "mode"
+                      ],
+                      [
+                        "atom",
+                        "witnessed"
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "version"
+                      ],
+                      [
+                        "int",
+                        1
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "threshold"
+                      ],
+                      [
+                        "int",
+                        2
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "witnesses"
+                      ],
+                      [
+                        "list",
+                        [
+                          [
+                            "bin",
+                            "FTy1TDlfo71Yo2AsCRxmksuiIQ/cK1IrG//fDzdy3k8="
+                          ],
+                          [
+                            "bin",
+                            "lLIXIvZKv4patcW/z0BgKAvD+2betYiSEZEnpQo8TJU="
+                          ],
+                          [
+                            "bin",
+                            "HfdwIfc6iuNE4nxXcUsADEi3jTJvdZKBNuolISEF5xQ="
+                          ],
+                          [
+                            "bin",
+                            "YMp2GHHDQ6zYX17SgOnfNToE5Or7/J8weC3qHyfsaj0="
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "max_epoch_step"
+                      ],
+                      [
+                        "int",
+                        10
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [],
+      "id": "OLBKJj6OSIdxfK9brQb0OuBa55K1XGfHhGr1rLSsrSI",
+      "kind": "authority",
+      "replica": "replica:matter:beacon-horizon#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+      "sig": "M6UhzTTUodeMQvAUpXn/lZ85NyNoAp1DglJKwEbQDdZQMIzgNOIEAYNjgd6RUWpwChHRGX+KuN2ni9KJU/UFDQ==",
+      "v": 1
+    },
+    {
+      "author": "zcOckYZGoOuqyty9CmJBPzjhhFFILQlWih98dxobvKU=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "grant"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "0vBPHby2rCnT1IYNPiBp+nHixQAQETb+O3ZPGvMvbPA=",
+              "expires_epoch": 9007199254740991,
+              "id": "cC7DEmX02SiiHzWq9jTVZNVUyCI41l-KZmY-fZ2CZLg",
+              "issuer": "zcOckYZGoOuqyty9CmJBPzjhhFFILQlWih98dxobvKU=",
+              "live": false,
+              "ops": [
+                "post"
+              ],
+              "parent_id": "sAQp2R8d-n22fxIn6xhRX3Jj-grT6q98OC52z3f7VYE",
+              "replica": "replica:matter:beacon-horizon#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+              "roles": [],
+              "sig": "c7zF3NacdWAawfIaf4IaG3rvQ3DOkrj7ysH76vIPsJK0hwQ8Z3Tn5k3+UaAjiwtaUS7yAzjtSLTpww/xWb4TDg=="
+            }
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "OLBKJj6OSIdxfK9brQb0OuBa55K1XGfHhGr1rLSsrSI"
+      ],
+      "id": "jCWFWufTuEkcM46y7gJipee00qqhWlfov9p9SHxlBjI",
+      "kind": "authority",
+      "replica": "replica:matter:beacon-horizon#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+      "sig": "wxNl0LHUMUVRBwvgpufJOdSWVzKu1RbiXZKfhRy0UIQ78KvT75xzGCykRkihCdFGD+AbTqbiD9i9+JzWYa1zCg==",
+      "v": 1
+    },
+    {
+      "author": "zcOckYZGoOuqyty9CmJBPzjhhFFILQlWih98dxobvKU=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "beacon"
+          ],
+          [
+            "int",
+            9007199254740990
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "jCWFWufTuEkcM46y7gJipee00qqhWlfov9p9SHxlBjI"
+      ],
+      "id": "Vz5lQ3p-X1HTiRB2fPUeUUb_Py83FJxpZZnswkIPiMU",
+      "kind": "authority",
+      "replica": "replica:matter:beacon-horizon#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+      "sig": "f36ej1ImyrKvTQjGRtUYb7/thYgKt4O1r3+MbO2o5mxeez8InXd52DWO8Mo2zed6f+ic1/9SK+ES8xn6sJtnAw==",
+      "v": 1
+    },
+    {
+      "author": "FTy1TDlfo71Yo2AsCRxmksuiIQ/cK1IrG//fDzdy3k8=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "beacon"
+          ],
+          [
+            "int",
+            "9007199254740992"
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "claim"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "deps"
+                      ],
+                      [
+                        "list",
+                        [
+                          [
+                            "bin",
+                            "Vno1bFEzcC1YMUhUaVJCMmZQVWVVVWJfUHk4M0ZKeHBaWm5zd2tJUGlNVQ=="
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "epoch"
+                      ],
+                      [
+                        "int",
+                        "9007199254740992"
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "author"
+                      ],
+                      [
+                        "bin",
+                        "FTy1TDlfo71Yo2AsCRxmksuiIQ/cK1IrG//fDzdy3k8="
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "replica"
+                      ],
+                      [
+                        "bin",
+                        "cmVwbGljYTptYXR0ZXI6YmVhY29uLWhvcml6b24jcm9vdDpWZlJ1NHhDVVNZUXp6R1lwd29SMkVkVFpSMVMyNldpMkF4V0R4T3RYWGVz"
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "version"
+                      ],
+                      [
+                        "int",
+                        1
+                      ]
+                    ]
+                  ]
+                ]
+              ],
+              [
+                [
+                  "atom",
+                  "signatures"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "witness"
+                          ],
+                          [
+                            "bin",
+                            "FTy1TDlfo71Yo2AsCRxmksuiIQ/cK1IrG//fDzdy3k8="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "signature"
+                          ],
+                          [
+                            "bin",
+                            "x0gEieY0L58cKDdkMMEswHwX5wFRiuNszIp0R8m2PUCbKED25zXvvof0yhRZnTPy7DGAb9dO5S8p2C3ypOKdDA=="
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "witness"
+                          ],
+                          [
+                            "bin",
+                            "lLIXIvZKv4patcW/z0BgKAvD+2betYiSEZEnpQo8TJU="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "signature"
+                          ],
+                          [
+                            "bin",
+                            "CU5N8WBQRWBAs9xoossxYZ9hthbs2CkQKcwWeWBNfMbTr2FPQyVA+IaYGBOEjLaJ5iUr19NZ+AoDiuBsxhk2DA=="
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "Vz5lQ3p-X1HTiRB2fPUeUUb_Py83FJxpZZnswkIPiMU"
+      ],
+      "id": "uQQoP1kW6mlBwjEGKxo-2jiq8NQPDlY-l6AnfAzymNk",
+      "kind": "authority",
+      "replica": "replica:matter:beacon-horizon#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+      "sig": "s8SGNWCcqxBwCxI8odcee2L/vizDrBROMEVFQOMzGFOJon6u5nC6fJwJae6tfW5vOtD51cix0aLQFjfhDexrCA==",
+      "v": 1
+    },
+    {
+      "author": "0vBPHby2rCnT1IYNPiBp+nHixQAQETb+O3ZPGvMvbPA=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "post"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "YmV5b25kIGhvcml6b24gY29uZmVycyBubyBsYXBzZQ=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "Y0M3REVtWDAyU2lpSHpXcTlqVFZaTlZVeUNJNDFsLUtabVktZloyQ1pMZw=="
+      ],
+      "deps": [
+        "uQQoP1kW6mlBwjEGKxo-2jiq8NQPDlY-l6AnfAzymNk"
+      ],
+      "id": "-_YhK1x32SozXVBmbPObUPTcLL5h3FT0SZr9xqQLKbQ",
+      "kind": "command",
+      "replica": "replica:matter:beacon-horizon#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+      "sig": "F+3ZXHlK52M7DJqzZ2Kw2DScG85iFad6QFcRtUcRycYtIw09iRWfpwdd74jmoximFAhTxjAh5PUWyOT85Mn0Cg==",
+      "v": 1
+    }
+  ],
+  "perspectives": [],
+  "realmByPubkey": {
+    "0vBPHby2rCnT1IYNPiBp+nHixQAQETb+O3ZPGvMvbPA=": "resident",
+    "FTy1TDlfo71Yo2AsCRxmksuiIQ/cK1IrG//fDzdy3k8=": "w0",
+    "HfdwIfc6iuNE4nxXcUsADEi3jTJvdZKBNuolISEF5xQ=": "w2",
+    "YMp2GHHDQ6zYX17SgOnfNToE5Or7/J8weC3qHyfsaj0=": "w3",
+    "lLIXIvZKv4patcW/z0BgKAvD+2betYiSEZEnpQo8TJU=": "w1",
+    "zcOckYZGoOuqyty9CmJBPzjhhFFILQlWih98dxobvKU=": "clerk"
+  },
+  "replica": "replica:matter:beacon-horizon#root:VfRu4xCUSYQzzGYpwoR2EdTZR1S26Wi2AxWDxOtXXes",
+  "scenario": "township_beacon_witnessed_horizon",
+  "scenarioKind": "adversarial",
+  "schema": {
+    "fields": {
+      "clerk": {
+        "authority": "clerk"
+      },
+      "clerk_locked": {
+        "default": false,
+        "gatedBy": "clerk",
+        "merge": "lww"
+      },
+      "members": {
+        "merge": "or_set"
+      },
+      "posts": {
+        "merge": "causal_list"
+      },
+      "summary": {
+        "default": "",
+        "merge": "lww"
+      },
+      "title": {
+        "default": "",
+        "merge": "lww"
+      }
+    },
+    "name": "Township.Matter"
+  }
+}

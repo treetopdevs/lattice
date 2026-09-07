@@ -27,7 +27,7 @@ defmodule Lattice.CompactionSpike do
   """
 
   alias Lattice.{Authority, Dag, Log, Op, Reduce}
-  alias Lattice.Authority.{Delegation, SuccessionCertificate}
+  alias Lattice.Authority.{BeaconCertificate, Delegation, SuccessionCertificate}
   alias Lattice.Crdt.{CausalList, Lww, OrSet}
 
   defmodule Snapshot do
@@ -67,6 +67,8 @@ defmodule Lattice.CompactionSpike do
               # Raw covered revoke refs (re-judged against the merged delegation
               # set at analysis time, since authorization can bind late).
               covered_revokes: [],
+              covered_beacon_epoch: -1,
+              covered_beacon_policy: nil,
               # role => %{last_acquire: %{op_id, holder, at_tick} | nil,
               #           last_active_tick: n}
               roles: %{},
@@ -158,6 +160,9 @@ defmodule Lattice.CompactionSpike do
       policies: analysis.policies,
       root: root,
       covered_revokes: collect_raw_revokes(ordered),
+      covered_beacon_epoch: covered_beacon_epoch(ordered, analysis.reasons),
+      covered_beacon_policy:
+        resolve_beacon_policy(beacon_policy_sources(ordered, deleg_valid, root), nil, nil),
       roles: summarize_roles(module, covered_ops, ordered, analysis, deleg_valid)
     }
 
@@ -324,6 +329,7 @@ defmodule Lattice.CompactionSpike do
       Map.merge(snapshot.policies, collect_valid_policies(ordered, deleg_valid, root))
 
     revokes = merged_revokes(snapshot, ordered, delegations, root)
+    {beacons, beacon_reasons} = seeded_beacons(snapshot, ordered, anc, deleg_valid, root)
     invalid_intros = invalid_intro_reasons(retained_intros, deleg_valid)
     invalid_genesis = invalid_genesis_reasons(ordered, deleg_valid, root)
 
@@ -335,7 +341,8 @@ defmodule Lattice.CompactionSpike do
       retained_intros: retained_intros,
       covered_intros: snapshot.covered_intros,
       covered_honored_succession_ids: snapshot.covered_honored_succession_ids,
-      revokes: revokes
+      revokes: revokes,
+      beacons: beacons
     }
 
     timelines =
@@ -355,6 +362,7 @@ defmodule Lattice.CompactionSpike do
       |> Map.merge(role_reasons)
       |> Map.merge(cmd_reasons)
       |> Map.merge(tick_reasons)
+      |> Map.merge(beacon_reasons)
 
     reasons = Map.merge(snapshot.frozen_reasons, new_reasons)
 
@@ -736,6 +744,9 @@ defmodule Lattice.CompactionSpike do
       seeded_revoked_as_of?(op, d, ctx) ->
         {:error, :revoked_capability}
 
+      seeded_expired_as_of?(op, d, ctx) ->
+        {:error, :lease_expired}
+
       true ->
         :ok
     end
@@ -792,6 +803,123 @@ defmodule Lattice.CompactionSpike do
         (r.covered? or
            not MapSet.member?(Map.get(ctx.anc, r.op_id, MapSet.new()), op.id))
     end)
+  end
+
+  defp seeded_expired_as_of?(op, d, ctx) do
+    d
+    |> delegation_chain_ids(ctx.delegations)
+    |> Enum.any?(fn id ->
+      expires = ctx.delegations[id].expires_epoch
+
+      expires != nil and
+        Enum.any?(ctx.beacons, fn beacon ->
+          beacon.epoch > expires and
+            (beacon.covered? or
+               not MapSet.member?(Map.get(ctx.anc, beacon.op_id, MapSet.new()), op.id))
+        end)
+    end)
+  end
+
+  # Every covered op is in the past of every retained op at a stable cut.
+  # Only the maximum honored epoch and final valid beacon policy are needed.
+  defp covered_beacon_epoch(ordered, reasons) do
+    ordered
+    |> Enum.flat_map(fn op ->
+      if op.kind == :authority and not Map.has_key?(reasons, op.id) do
+        case op.body do
+          {:beacon, epoch} -> [epoch]
+          {:beacon, epoch, _certificate} -> [epoch]
+          _ -> []
+        end
+      else
+        []
+      end
+    end)
+    |> Enum.max(fn -> -1 end)
+  end
+
+  defp beacon_policy_sources(ordered, deleg_valid, root) do
+    for %Op{kind: :authority, body: {:genesis, %Delegation{} = d, policies}} = op <- ordered,
+        is_map(policies),
+        deleg_valid[d.id] == :ok,
+        is_nil(d.parent_id),
+        op.author == d.audience,
+        d.audience == root,
+        Delegation.valid_sig?(d),
+        Map.has_key?(policies, :__beacon__),
+        do: {op.id, policies.__beacon__}
+  end
+
+  defp resolve_beacon_policy(sources, ancestors, seed) do
+    Enum.reduce(sources, seed, fn {id, raw}, policy ->
+      case {is_nil(ancestors) or MapSet.member?(ancestors, id),
+            BeaconCertificate.normalize_policy(raw)} do
+        {true, {:ok, normalized}} -> normalized
+        _ -> policy
+      end
+    end)
+  end
+
+  defp seeded_beacons(snapshot, ordered, anc, deleg_valid, root) do
+    sources = beacon_policy_sources(ordered, deleg_valid, root)
+    seed = %{op_id: nil, epoch: snapshot.covered_beacon_epoch, covered?: true}
+
+    Enum.reduce(ordered, {[seed], %{}}, fn op, {valid, reasons} ->
+      case op do
+        %Op{kind: :authority, body: body}
+        when is_tuple(body) and tuple_size(body) in [2, 3] and elem(body, 0) == :beacon ->
+          op_anc = Map.get(anc, op.id, MapSet.new())
+
+          prior =
+            valid
+            |> Enum.filter(&(&1.covered? or MapSet.member?(op_anc, &1.op_id)))
+            |> Enum.map(& &1.epoch)
+            |> Enum.max()
+
+          policy = resolve_beacon_policy(sources, op_anc, snapshot.covered_beacon_policy)
+          epoch = elem(body, 1)
+          reason = seeded_beacon_reason(op, epoch, prior, root, policy)
+
+          if reason,
+            do: {valid, Map.put(reasons, op.id, reason)},
+            else: {valid ++ [%{op_id: op.id, epoch: epoch, covered?: false}], reasons}
+
+        _ ->
+          {valid, reasons}
+      end
+    end)
+  end
+
+  defp seeded_beacon_reason(%Op{body: {:beacon, _}} = op, epoch, prior, root, _policy) do
+    cond do
+      op.author != root -> :unauthorized_beacon
+      not is_integer(epoch) or epoch < 0 or epoch <= prior -> :stale_beacon
+      true -> nil
+    end
+  end
+
+  defp seeded_beacon_reason(%Op{body: {:beacon, _, certificate}} = op, epoch, prior, root, policy) do
+    claim_epoch =
+      if is_map(certificate) and is_map(Map.get(certificate, :claim)),
+        do: Map.get(Map.get(certificate, :claim), :epoch)
+
+    expected = BeaconCertificate.claim(op.replica, epoch, op.author, op.deps)
+
+    malformed =
+      Enum.any?(
+        [epoch, claim_epoch],
+        &(is_integer(&1) and (&1 < 0 or &1 > 9_007_199_254_740_991))
+      )
+
+    cond do
+      malformed -> :malformed_term
+      is_nil(policy) -> :unauthorized_beacon
+      op.author != root and op.author not in policy.witnesses -> :unauthorized_beacon
+      BeaconCertificate.verify(certificate, expected, policy) != :ok -> :unauthorized_beacon
+      not is_integer(epoch) or epoch < 0 or epoch <= prior -> :stale_beacon
+      epoch > prior + policy.max_epoch_step -> :unauthorized_beacon
+      true -> nil
+    end
   end
 
   defp seeded_authority_ok(_op, [], _timelines, _anc), do: :ok

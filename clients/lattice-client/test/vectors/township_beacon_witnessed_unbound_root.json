@@ -1,0 +1,816 @@
+{
+  "canonicalOps": [
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258227265706c6963613a6d61747465723a626561636f6e2d756e626f756e642d726f6f7458201f11be4a8611b3467434ae062d535ff305d45edbd52e1c4975401a3ec2b7a32a80d9ea6049617574686f72697479d9ea6183d9ea604767656e65736973d9ea6389582b302d69666c6e48645846762d34426236504b4b655a757a2d6b6a43556b674131507336464443477a64554d58227265706c6963613a6d61747465723a626561636f6e2d756e626f756e642d726f6f7458201f11be4a8611b3467434ae062d535ff305d45edbd52e1c4975401a3ec2b7a32a58201f11be4a8611b3467434ae062d535ff305d45edbd52e1c4975401a3ec2b7a32af681d9ea6044706f737481d9ea6045636c65726bf558406a0cd29dfb441530d6a445ea5af5d0626ed1b0c10af4b2d2ccc1445370d8896aed3cd67e3d6b38b90e18a0a16c08ae9eca2ee2a7bb9850697cf9ca13d4f3c009a0f6",
+      "hash": "ANKf9Oai2X9PRGktVJzdDB4pIdkYjXjDDRN09W4tpYw",
+      "id": "ANKf9Oai2X9PRGktVJzdDB4pIdkYjXjDDRN09W4tpYw",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258227265706c6963613a6d61747465723a626561636f6e2d756e626f756e642d726f6f7458201f11be4a8611b3467434ae062d535ff305d45edbd52e1c4975401a3ec2b7a32a81582b414e4b66394f61693258395052476b74564a7a644442347049646b596a586a4444524e3039573474705977d9ea6049617574686f72697479d9ea6182d9ea60456772616e74d9ea638a582b416543546f4c386c4f5773624758744d6b726e545833574f62484f6146655056324d486268485061655a7758227265706c6963613a6d61747465723a626561636f6e2d756e626f756e642d726f6f7458201f11be4a8611b3467434ae062d535ff305d45edbd52e1c4975401a3ec2b7a32a582046550953bcad225c64ff7cb6f9ad57b37d4632b7298f64414419ecd3ebe10e45582b302d69666c6e48645846762d34426236504b4b655a757a2d6b6a43556b674131507336464443477a64554d81d9ea6044706f737480f45840c700528d219a2525f7ad66d6a36bb3f90676acce34905daf524d1fbd5cdac33cd10dd656284721b0185471efac383bd292215310e1e98982bdd8f2849d387a0403f6",
+      "hash": "nbGKwjKNf1wRTY9tlyuxIvABetUCVA078JE5c_YN0_s",
+      "id": "nbGKwjKNf1wRTY9tlyuxIvABetUCVA078JE5c_YN0_s",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258227265706c6963613a6d61747465723a626561636f6e2d756e626f756e642d726f6f74582044f484bad934a50c071a16145b0a0384a27555b51635c8b15ee319dfa8559a6581582b6e62474b776a4b4e66317752545939746c797578497641426574554356413037384a4535635f594e305f73d9ea6049617574686f72697479d9ea6183d9ea604767656e65736973d9ea6389582b6c536c566a6e6e30575957316b6d675845627631374275785755574571794e3151654253465975766c444958227265706c6963613a6d61747465723a626561636f6e2d756e626f756e642d726f6f74582044f484bad934a50c071a16145b0a0384a27555b51635c8b15ee319dfa8559a65582044f484bad934a50c071a16145b0a0384a27555b51635c8b15ee319dfa8559a65f681d9ea6044706f737480f5584066236be73f6c39668b7bf57beb8f8af9aa4c99064607f3066e575e8673c82649451bce1de7d2ce7f3c3cced6cc81b3e83c275205239cf709975567d24a80d20fa1d9ea604a5f5f626561636f6e5f5fa5d9ea60446d6f6465d9ea60497769746e6573736564d9ea604776657273696f6e01d9ea60497468726573686f6c6401d9ea60497769746e657373657381582044f484bad934a50c071a16145b0a0384a27555b51635c8b15ee319dfa8559a65d9ea604e6d61785f65706f63685f737465700af6",
+      "hash": "JNlsqTm9qPnDxxfqImHJoS_hKZl2DGTm78kirX9staI",
+      "id": "JNlsqTm9qPnDxxfqImHJoS_hKZl2DGTm78kirX9staI",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258227265706c6963613a6d61747465723a626561636f6e2d756e626f756e642d726f6f74582044f484bad934a50c071a16145b0a0384a27555b51635c8b15ee319dfa8559a6581582b4a4e6c7371546d3971506e4478786671496d484a6f535f684b5a6c324447546d37386b6972583973746149d9ea6049617574686f72697479d9ea6183d9ea6046626561636f6e04a2d9ea6045636c61696da5d9ea60446465707381582b4a4e6c7371546d3971506e4478786671496d484a6f535f684b5a6c324447546d37386b6972583973746149d9ea604565706f636804d9ea6046617574686f72582044f484bad934a50c071a16145b0a0384a27555b51635c8b15ee319dfa8559a65d9ea60477265706c69636158227265706c6963613a6d61747465723a626561636f6e2d756e626f756e642d726f6f74d9ea604776657273696f6e01d9ea604a7369676e61747572657381a2d9ea60477769746e657373582044f484bad934a50c071a16145b0a0384a27555b51635c8b15ee319dfa8559a65d9ea60497369676e6174757265584000bd990fed10624080a72c9c289bfaee7fd99ed90c75d218b8bb47008b333af49e4b7febc0ac4c98db30bfb0b52082185ee4fbc83a893fdcf3ab080594bca50ff6",
+      "hash": "yGm6ZGSSAolGCjApwf9uP1b0C9QKwgE2oK2OQ5i4b30",
+      "id": "yGm6ZGSSAolGCjApwf9uP1b0C9QKwgE2oK2OQ5i4b30",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258227265706c6963613a6d61747465723a626561636f6e2d756e626f756e642d726f6f74582046550953bcad225c64ff7cb6f9ad57b37d4632b7298f64414419ecd3ebe10e4581582b79476d365a475353416f6c47436a417077663975503162304339514b776745326f4b324f51356934623330d9ea6047636f6d6d616e64d9ea6182d9ea6044706f737481581e6c6561736520737572766976657320696d706f73746f7220706f6c696379582b416543546f4c386c4f5773624758744d6b726e545833574f62484f6146655056324d486268485061655a77",
+      "hash": "taTfxsy6G3OD23Hv6_y4NoWzCiJ6VZS29bC9iVsFtQQ",
+      "id": "taTfxsy6G3OD23Hv6_y4NoWzCiJ6VZS29bC9iVsFtQQ",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258227265706c6963613a6d61747465723a626561636f6e2d756e626f756e642d726f6f7458201f11be4a8611b3467434ae062d535ff305d45edbd52e1c4975401a3ec2b7a32a81582b746154667873793647334f4432334876365f79344e6f577a43694a36565a53323962433969567346745151d9ea6049617574686f72697479d9ea6183d9ea604767656e65736973d9ea6389582b302d69666c6e48645846762d34426236504b4b655a757a2d6b6a43556b674131507336464443477a64554d58227265706c6963613a6d61747465723a626561636f6e2d756e626f756e642d726f6f7458201f11be4a8611b3467434ae062d535ff305d45edbd52e1c4975401a3ec2b7a32a58201f11be4a8611b3467434ae062d535ff305d45edbd52e1c4975401a3ec2b7a32af681d9ea6044706f737481d9ea6045636c65726bf558406a0cd29dfb441530d6a445ea5af5d0626ed1b0c10af4b2d2ccc1445370d8896aed3cd67e3d6b38b90e18a0a16c08ae9eca2ee2a7bb9850697cf9ca13d4f3c009a1d9ea604a5f5f626561636f6e5f5fa5d9ea60446d6f6465d9ea60497769746e6573736564d9ea604776657273696f6e01d9ea60497468726573686f6c6401d9ea60497769746e657373657381582044f484bad934a50c071a16145b0a0384a27555b51635c8b15ee319dfa8559a65d9ea604e6d61785f65706f63685f737465700af6",
+      "hash": "wYHHIZtaKZX7ceoKu4K3pIZXwL7SyyIwtwFPKrm-rto",
+      "id": "wYHHIZtaKZX7ceoKu4K3pIZXwL7SyyIwtwFPKrm-rto",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258227265706c6963613a6d61747465723a626561636f6e2d756e626f756e642d726f6f74582044f484bad934a50c071a16145b0a0384a27555b51635c8b15ee319dfa8559a6581582b77594848495a74614b5a583763656f4b75344b3370495a58774c375379794977747746504b726d2d72746fd9ea6049617574686f72697479d9ea6183d9ea6046626561636f6e04a2d9ea6045636c61696da5d9ea60446465707381582b77594848495a74614b5a583763656f4b75344b3370495a58774c375379794977747746504b726d2d72746fd9ea604565706f636804d9ea6046617574686f72582044f484bad934a50c071a16145b0a0384a27555b51635c8b15ee319dfa8559a65d9ea60477265706c69636158227265706c6963613a6d61747465723a626561636f6e2d756e626f756e642d726f6f74d9ea604776657273696f6e01d9ea604a7369676e61747572657381a2d9ea60477769746e657373582044f484bad934a50c071a16145b0a0384a27555b51635c8b15ee319dfa8559a65d9ea60497369676e617475726558409c8b29e494bcc691f2147f36cede008dda8ca5ed46e65e02a884e351ac04b166e56d0e732032dec2fe6ee5d0ee458ea9363a485dbd12b63f8542155133166a04f6",
+      "hash": "JFc01iZ5-y8aahbYXysA4MsE2L9PClHZ9YgbPkHdzKA",
+      "id": "JFc01iZ5-y8aahbYXysA4MsE2L9PClHZ9YgbPkHdzKA",
+      "suite": "lattice-cbor-v1"
+    }
+  ],
+  "capabilityCase": {
+    "beaconOperationId": "JFc01iZ5-y8aahbYXysA4MsE2L9PClHZ9YgbPkHdzKA",
+    "case": "witnessed_unbound_root",
+    "honoredOperationId": "taTfxsy6G3OD23Hv6_y4NoWzCiJ6VZS29bC9iVsFtQQ",
+    "impostorBeaconOperationId": "yGm6ZGSSAolGCjApwf9uP1b0C9QKwgE2oK2OQ5i4b30"
+  },
+  "expectAtFrontier": [],
+  "expectAtFullFrontier": {
+    "authorityQuarantine": [
+      [
+        "yGm6ZGSSAolGCjApwf9uP1b0C9QKwgE2oK2OQ5i4b30",
+        "unauthorized_beacon"
+      ]
+    ],
+    "quarantine": [
+      "yGm6ZGSSAolGCjApwf9uP1b0C9QKwgE2oK2OQ5i4b30"
+    ],
+    "state": {
+      "clerk": "clerk",
+      "clerk_locked": false,
+      "members": [],
+      "posts": [
+        "lease survives impostor policy"
+      ],
+      "summary": "",
+      "title": ""
+    },
+    "winners": {
+      "clerk": "wYHHIZtaKZX7ceoKu4K3pIZXwL7SyyIwtwFPKrm-rto",
+      "clerk_locked": null,
+      "summary": null,
+      "title": null
+    }
+  },
+  "generatedBy": "Lattice.Sim",
+  "ops": [
+    {
+      "author": "clerk",
+      "command": "genesis clerk",
+      "deps": [],
+      "field": "clerk",
+      "hash": "ANKf9Oai2X9PRGktVJzdDB4pIdkYjXjDDRN09W4tpYw",
+      "id": "ANKf9Oai2X9PRGktVJzdDB4pIdkYjXjDDRN09W4tpYw",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "clerk"
+    },
+    {
+      "author": "clerk",
+      "command": "grant resident",
+      "deps": [
+        "ANKf9Oai2X9PRGktVJzdDB4pIdkYjXjDDRN09W4tpYw"
+      ],
+      "field": "__authority",
+      "hash": "nbGKwjKNf1wRTY9tlyuxIvABetUCVA078JE5c_YN0_s",
+      "id": "nbGKwjKNf1wRTY9tlyuxIvABetUCVA078JE5c_YN0_s",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "outsider",
+      "command": "genesis",
+      "deps": [
+        "nbGKwjKNf1wRTY9tlyuxIvABetUCVA078JE5c_YN0_s"
+      ],
+      "field": "__authority",
+      "hash": "JNlsqTm9qPnDxxfqImHJoS_hKZl2DGTm78kirX9staI",
+      "id": "JNlsqTm9qPnDxxfqImHJoS_hKZl2DGTm78kirX9staI",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "outsider",
+      "command": "authority",
+      "deps": [
+        "JNlsqTm9qPnDxxfqImHJoS_hKZl2DGTm78kirX9staI"
+      ],
+      "field": "__authority",
+      "hash": "yGm6ZGSSAolGCjApwf9uP1b0C9QKwgE2oK2OQ5i4b30",
+      "id": "yGm6ZGSSAolGCjApwf9uP1b0C9QKwgE2oK2OQ5i4b30",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "resident",
+      "command": "post",
+      "deps": [
+        "yGm6ZGSSAolGCjApwf9uP1b0C9QKwgE2oK2OQ5i4b30"
+      ],
+      "field": "posts",
+      "hash": "taTfxsy6G3OD23Hv6_y4NoWzCiJ6VZS29bC9iVsFtQQ",
+      "id": "taTfxsy6G3OD23Hv6_y4NoWzCiJ6VZS29bC9iVsFtQQ",
+      "kind": "command",
+      "mutation": "append",
+      "value": "lease survives impostor policy"
+    },
+    {
+      "author": "clerk",
+      "command": "genesis clerk",
+      "deps": [
+        "taTfxsy6G3OD23Hv6_y4NoWzCiJ6VZS29bC9iVsFtQQ"
+      ],
+      "field": "clerk",
+      "hash": "wYHHIZtaKZX7ceoKu4K3pIZXwL7SyyIwtwFPKrm-rto",
+      "id": "wYHHIZtaKZX7ceoKu4K3pIZXwL7SyyIwtwFPKrm-rto",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "clerk"
+    },
+    {
+      "author": "outsider",
+      "command": "authority",
+      "deps": [
+        "wYHHIZtaKZX7ceoKu4K3pIZXwL7SyyIwtwFPKrm-rto"
+      ],
+      "field": "__authority",
+      "hash": "JFc01iZ5-y8aahbYXysA4MsE2L9PClHZ9YgbPkHdzKA",
+      "id": "JFc01iZ5-y8aahbYXysA4MsE2L9PClHZ9YgbPkHdzKA",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    }
+  ],
+  "oracleCarrierOps": [
+    {
+      "author": "HxG+SoYRs0Z0NK4GLVNf8wXUXtvVLhxJdUAaPsK3oyo=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "HxG+SoYRs0Z0NK4GLVNf8wXUXtvVLhxJdUAaPsK3oyo=",
+              "id": "0-iflnHdXFv-4Bb6PKKeZuz-kjCUkgA1Ps6FDCGzdUM",
+              "issuer": "HxG+SoYRs0Z0NK4GLVNf8wXUXtvVLhxJdUAaPsK3oyo=",
+              "live": true,
+              "ops": [
+                "post"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:beacon-unbound-root",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "agzSnftEFTDWpEXqWvXQYm7RsMEK9LLSzMFEU3DYiWrtPNZ+PWs4uQ4YoKFsCK6eyi7ip7uYUGl8+coT1PPACQ=="
+            }
+          ],
+          [
+            "map",
+            []
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [],
+      "id": "ANKf9Oai2X9PRGktVJzdDB4pIdkYjXjDDRN09W4tpYw",
+      "kind": "authority",
+      "replica": "replica:matter:beacon-unbound-root",
+      "sig": "vtEbH4w4zoNp49sMiIj+reh/g3KSlNB2IjE5Nku7Rv68er7MI6+lVkeIkisonP6buIK7esOlCZC0WVFEjqMdDA==",
+      "v": 1
+    },
+    {
+      "author": "HxG+SoYRs0Z0NK4GLVNf8wXUXtvVLhxJdUAaPsK3oyo=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "grant"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "RlUJU7ytIlxk/3y2+a1Xs31GMrcpj2RBRBns0+vhDkU=",
+              "expires_epoch": 3,
+              "id": "AeCToL8lOWsbGXtMkrnTX3WObHOaFePV2MHbhHPaeZw",
+              "issuer": "HxG+SoYRs0Z0NK4GLVNf8wXUXtvVLhxJdUAaPsK3oyo=",
+              "live": false,
+              "ops": [
+                "post"
+              ],
+              "parent_id": "0-iflnHdXFv-4Bb6PKKeZuz-kjCUkgA1Ps6FDCGzdUM",
+              "replica": "replica:matter:beacon-unbound-root",
+              "roles": [],
+              "sig": "xwBSjSGaJSX3rWbWo2uz+QZ2rM40kF2vUk0fvVzawzzRDdZWKEchsBhUce+sODvSkiFTEOHpiYK92PKEnTh6BA=="
+            }
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "ANKf9Oai2X9PRGktVJzdDB4pIdkYjXjDDRN09W4tpYw"
+      ],
+      "id": "nbGKwjKNf1wRTY9tlyuxIvABetUCVA078JE5c_YN0_s",
+      "kind": "authority",
+      "replica": "replica:matter:beacon-unbound-root",
+      "sig": "abKDsbHkT82KmGv2Qjd3e1+ZAwm/O3NpPmV4+aN1UfL0ThrdBfa9iE16VqFe7Vo1u+9dVevQzHLUgqpZSF0ZAA==",
+      "v": 1
+    },
+    {
+      "author": "RPSEutk0pQwHGhYUWwoDhKJ1VbUWNcixXuMZ36hVmmU=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "RPSEutk0pQwHGhYUWwoDhKJ1VbUWNcixXuMZ36hVmmU=",
+              "id": "lSlVjnn0WYW1kmgXEbv17BuxWUWEqyN1QeBSFYuvlDI",
+              "issuer": "RPSEutk0pQwHGhYUWwoDhKJ1VbUWNcixXuMZ36hVmmU=",
+              "live": true,
+              "ops": [
+                "post"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:beacon-unbound-root",
+              "roles": [],
+              "sig": "ZiNr5z9sOWaLe/V764+K+apMmQZGB/MGbldehnPIJklFG84d59LOfzw8ztbMgbPoPCdSBSOc9wmXVWfSSoDSDw=="
+            }
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "__beacon__"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "mode"
+                      ],
+                      [
+                        "atom",
+                        "witnessed"
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "version"
+                      ],
+                      [
+                        "int",
+                        1
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "threshold"
+                      ],
+                      [
+                        "int",
+                        1
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "witnesses"
+                      ],
+                      [
+                        "list",
+                        [
+                          [
+                            "bin",
+                            "RPSEutk0pQwHGhYUWwoDhKJ1VbUWNcixXuMZ36hVmmU="
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "max_epoch_step"
+                      ],
+                      [
+                        "int",
+                        10
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "nbGKwjKNf1wRTY9tlyuxIvABetUCVA078JE5c_YN0_s"
+      ],
+      "id": "JNlsqTm9qPnDxxfqImHJoS_hKZl2DGTm78kirX9staI",
+      "kind": "authority",
+      "replica": "replica:matter:beacon-unbound-root",
+      "sig": "iXOp6qmE2OkaUmW9BzG9pGm8RJeZmSD5zRYeZzFI6MK0fkRJajP8yZo06tVPFJpMY82y6g29mJyzNr3oBq3HAg==",
+      "v": 1
+    },
+    {
+      "author": "RPSEutk0pQwHGhYUWwoDhKJ1VbUWNcixXuMZ36hVmmU=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "beacon"
+          ],
+          [
+            "int",
+            4
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "claim"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "deps"
+                      ],
+                      [
+                        "list",
+                        [
+                          [
+                            "bin",
+                            "Sk5sc3FUbTlxUG5EeHhmcUltSEpvU19oS1psMkRHVG03OGtpclg5c3RhSQ=="
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "epoch"
+                      ],
+                      [
+                        "int",
+                        4
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "author"
+                      ],
+                      [
+                        "bin",
+                        "RPSEutk0pQwHGhYUWwoDhKJ1VbUWNcixXuMZ36hVmmU="
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "replica"
+                      ],
+                      [
+                        "bin",
+                        "cmVwbGljYTptYXR0ZXI6YmVhY29uLXVuYm91bmQtcm9vdA=="
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "version"
+                      ],
+                      [
+                        "int",
+                        1
+                      ]
+                    ]
+                  ]
+                ]
+              ],
+              [
+                [
+                  "atom",
+                  "signatures"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "witness"
+                          ],
+                          [
+                            "bin",
+                            "RPSEutk0pQwHGhYUWwoDhKJ1VbUWNcixXuMZ36hVmmU="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "signature"
+                          ],
+                          [
+                            "bin",
+                            "AL2ZD+0QYkCApyycKJv67n/ZntkMddIYuLtHAIszOvSeS3/rwKxMmNswv7C1IIIYXuT7yDqJP9zzqwgFlLylDw=="
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "JNlsqTm9qPnDxxfqImHJoS_hKZl2DGTm78kirX9staI"
+      ],
+      "id": "yGm6ZGSSAolGCjApwf9uP1b0C9QKwgE2oK2OQ5i4b30",
+      "kind": "authority",
+      "replica": "replica:matter:beacon-unbound-root",
+      "sig": "IcRAaWpRFRi1JUeZq35qW9TUtlTD/OwIO+FScNQxZe3pZQ7GyWmsUvSth0T68SlfF/vcMf259Tz4HVgt4eAKAw==",
+      "v": 1
+    },
+    {
+      "author": "RlUJU7ytIlxk/3y2+a1Xs31GMrcpj2RBRBns0+vhDkU=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "post"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "bGVhc2Ugc3Vydml2ZXMgaW1wb3N0b3IgcG9saWN5"
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "QWVDVG9MOGxPV3NiR1h0TWtyblRYM1dPYkhPYUZlUFYyTUhiaEhQYWVadw=="
+      ],
+      "deps": [
+        "yGm6ZGSSAolGCjApwf9uP1b0C9QKwgE2oK2OQ5i4b30"
+      ],
+      "id": "taTfxsy6G3OD23Hv6_y4NoWzCiJ6VZS29bC9iVsFtQQ",
+      "kind": "command",
+      "replica": "replica:matter:beacon-unbound-root",
+      "sig": "2QU+I1jHM4N+7K5VjsjaSz32aNMcDLhZWwBZnLjyKpFwKFnd+4fqNeVUGs6SafCL0UQ4xJS90ebCXFM7sPJSDQ==",
+      "v": 1
+    },
+    {
+      "author": "HxG+SoYRs0Z0NK4GLVNf8wXUXtvVLhxJdUAaPsK3oyo=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "HxG+SoYRs0Z0NK4GLVNf8wXUXtvVLhxJdUAaPsK3oyo=",
+              "id": "0-iflnHdXFv-4Bb6PKKeZuz-kjCUkgA1Ps6FDCGzdUM",
+              "issuer": "HxG+SoYRs0Z0NK4GLVNf8wXUXtvVLhxJdUAaPsK3oyo=",
+              "live": true,
+              "ops": [
+                "post"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:beacon-unbound-root",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "agzSnftEFTDWpEXqWvXQYm7RsMEK9LLSzMFEU3DYiWrtPNZ+PWs4uQ4YoKFsCK6eyi7ip7uYUGl8+coT1PPACQ=="
+            }
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "__beacon__"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "mode"
+                      ],
+                      [
+                        "atom",
+                        "witnessed"
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "version"
+                      ],
+                      [
+                        "int",
+                        1
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "threshold"
+                      ],
+                      [
+                        "int",
+                        1
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "witnesses"
+                      ],
+                      [
+                        "list",
+                        [
+                          [
+                            "bin",
+                            "RPSEutk0pQwHGhYUWwoDhKJ1VbUWNcixXuMZ36hVmmU="
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "max_epoch_step"
+                      ],
+                      [
+                        "int",
+                        10
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "taTfxsy6G3OD23Hv6_y4NoWzCiJ6VZS29bC9iVsFtQQ"
+      ],
+      "id": "wYHHIZtaKZX7ceoKu4K3pIZXwL7SyyIwtwFPKrm-rto",
+      "kind": "authority",
+      "replica": "replica:matter:beacon-unbound-root",
+      "sig": "NWrTyy3WKSDS+P+gTD7gYqkoaaF52k+1DFGnJdpgz6jhJFJ+Z4MSoPRCpDkmnxF3wDqT0QhcPmh8xrSvzSplAw==",
+      "v": 1
+    },
+    {
+      "author": "RPSEutk0pQwHGhYUWwoDhKJ1VbUWNcixXuMZ36hVmmU=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "beacon"
+          ],
+          [
+            "int",
+            4
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "claim"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "deps"
+                      ],
+                      [
+                        "list",
+                        [
+                          [
+                            "bin",
+                            "d1lISEladGFLWlg3Y2VvS3U0SzNwSVpYd0w3U3l5SXd0d0ZQS3JtLXJ0bw=="
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "epoch"
+                      ],
+                      [
+                        "int",
+                        4
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "author"
+                      ],
+                      [
+                        "bin",
+                        "RPSEutk0pQwHGhYUWwoDhKJ1VbUWNcixXuMZ36hVmmU="
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "replica"
+                      ],
+                      [
+                        "bin",
+                        "cmVwbGljYTptYXR0ZXI6YmVhY29uLXVuYm91bmQtcm9vdA=="
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "version"
+                      ],
+                      [
+                        "int",
+                        1
+                      ]
+                    ]
+                  ]
+                ]
+              ],
+              [
+                [
+                  "atom",
+                  "signatures"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "witness"
+                          ],
+                          [
+                            "bin",
+                            "RPSEutk0pQwHGhYUWwoDhKJ1VbUWNcixXuMZ36hVmmU="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "signature"
+                          ],
+                          [
+                            "bin",
+                            "nIsp5JS8xpHyFH82zt4AjdqMpe1G5l4CqITjUawEsWblbQ5zIDLewv5u5dDuRY6pNjpIXb0Stj+FQhVRMxZqBA=="
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "wYHHIZtaKZX7ceoKu4K3pIZXwL7SyyIwtwFPKrm-rto"
+      ],
+      "id": "JFc01iZ5-y8aahbYXysA4MsE2L9PClHZ9YgbPkHdzKA",
+      "kind": "authority",
+      "replica": "replica:matter:beacon-unbound-root",
+      "sig": "3fppGX/IkEIFLmfLQbKYlc7P14y4sciUrOKYxIA/kL1ZVeA8bnGNEk9wg6VzXW8XdFHhWsZLBPf/+VpvFi0DDA==",
+      "v": 1
+    }
+  ],
+  "perspectives": [],
+  "realmByPubkey": {
+    "HxG+SoYRs0Z0NK4GLVNf8wXUXtvVLhxJdUAaPsK3oyo=": "clerk",
+    "RPSEutk0pQwHGhYUWwoDhKJ1VbUWNcixXuMZ36hVmmU=": "outsider",
+    "RlUJU7ytIlxk/3y2+a1Xs31GMrcpj2RBRBns0+vhDkU=": "resident"
+  },
+  "replica": "replica:matter:beacon-unbound-root",
+  "scenario": "township_beacon_witnessed_unbound_root",
+  "scenarioKind": "adversarial",
+  "schema": {
+    "fields": {
+      "clerk": {
+        "authority": "clerk"
+      },
+      "clerk_locked": {
+        "default": false,
+        "gatedBy": "clerk",
+        "merge": "lww"
+      },
+      "members": {
+        "merge": "or_set"
+      },
+      "posts": {
+        "merge": "causal_list"
+      },
+      "summary": {
+        "default": "",
+        "merge": "lww"
+      },
+      "title": {
+        "default": "",
+        "merge": "lww"
+      }
+    },
+    "name": "Township.Matter"
+  }
+}

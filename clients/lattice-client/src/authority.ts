@@ -2,6 +2,7 @@ import { ed25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import {
   canonicalBase64Bytes,
+  canonicalBytesForWitnessedBeaconClaim,
   canonicalBytesForCarrierDelegation,
   canonicalBytesForWitnessedRecoveryPolicy,
   canonicalBytesForWitnessedSuccessionArtifactId,
@@ -11,6 +12,9 @@ import { ancestors, canonicalOrder, index } from "./dag";
 import type {
   AuthorityDelegationEvidence,
   AuthorityEvidence,
+  WitnessedBeaconPolicyEvidence,
+  WitnessedBeaconCertificateEvidence,
+  WitnessedBeaconClaimEvidence,
   Op,
   SuccessionPolicyEvidence,
   WitnessedRecoveryPolicyEvidence,
@@ -50,7 +54,8 @@ export interface AuthorityRootEvidence {
 
 export interface EffectiveBeaconEvidence {
   opId: string;
-  epoch: number;
+  /** Safe epochs are numbers; high legacy uint64 epochs retain exact decimal bytes. */
+  epoch: number | string;
 }
 
 export interface EffectiveRevokeEvidence {
@@ -187,6 +192,7 @@ export function analyzeAuthority(
     admitted,
     byId as Map<string, Op>,
     root,
+    delegations,
   );
   const states = new Map<string, RoleState>();
   const honoredWrites = new Set<string>();
@@ -1337,6 +1343,99 @@ function collectRevokes(
   return { effectiveRevokes, unauthorizedRevokes };
 }
 
+/** Fixed portable logical-epoch horizon, independent of genesis policy. */
+export const witnessedBeaconHorizon = Number.MAX_SAFE_INTEGER;
+const beaconClaimTextEncoder = new TextEncoder();
+
+function normalizeBeaconPolicy(
+  policy: WitnessedBeaconPolicyEvidence | null | undefined,
+): WitnessedBeaconPolicyEvidence | null {
+  if (
+    policy == null ||
+    !exactKeys(policy, [
+      "mode",
+      "version",
+      "witnesses",
+      "threshold",
+      "maxEpochStep",
+    ]) ||
+    policy.mode !== "witnessed" ||
+    policy.version !== 1 ||
+    !Array.isArray(policy.witnesses) ||
+    policy.witnesses.some((key) => canonicalBase64Bytes(key, 32) === null) ||
+    new Set(policy.witnesses).size !== policy.witnesses.length ||
+    !Number.isSafeInteger(policy.threshold) ||
+    policy.threshold < 1 ||
+    policy.threshold > policy.witnesses.length ||
+    !Number.isSafeInteger(policy.maxEpochStep) ||
+    policy.maxEpochStep < 1 ||
+    policy.maxEpochStep > 65_535
+  )
+    return null;
+  return {
+    ...policy,
+    witnesses: [...policy.witnesses].sort(compareBase64Evidence),
+  };
+}
+
+function verifyBeaconCertificate(
+  certificate: WitnessedBeaconCertificateEvidence | null,
+  expected: WitnessedBeaconClaimEvidence,
+  policy: WitnessedBeaconPolicyEvidence,
+): boolean {
+  if (
+    certificate === null ||
+    !exactKeys(certificate, ["claim", "signatures"]) ||
+    !exactKeys(certificate.claim, [
+      "version",
+      "replica",
+      "epoch",
+      "author",
+      "deps",
+    ]) ||
+    certificate.claim.version !== expected.version ||
+    certificate.claim.replica !== expected.replica ||
+    certificate.claim.epoch !== expected.epoch ||
+    certificate.claim.author !== expected.author ||
+    !Array.isArray(certificate.claim.deps) ||
+    certificate.claim.deps.length !== expected.deps.length ||
+    certificate.claim.deps.some((id, index) => id !== expected.deps[index]) ||
+    !Array.isArray(certificate.signatures)
+  )
+    return false;
+  const signatures = certificate.signatures;
+  if (
+    signatures.length < policy.threshold ||
+    !signatures.every(
+      (entry) =>
+        exactKeys(entry, ["witness", "signature"]) &&
+        canonicalBase64Bytes(entry.witness, 32) !== null &&
+        canonicalBase64Bytes(entry.signature, 64) !== null &&
+        policy.witnesses.includes(entry.witness),
+    ) ||
+    !signatures.every(
+      (entry, index) =>
+        index === 0 ||
+        compareBase64Evidence(signatures[index - 1]!.witness, entry.witness) <
+          0,
+    )
+  )
+    return false;
+  try {
+    const payload = canonicalBytesForWitnessedBeaconClaim(certificate.claim);
+    return signatures.every((entry) =>
+      ed25519.verify(
+        canonicalBase64Bytes(entry.signature, 64)!,
+        payload,
+        canonicalBase64Bytes(entry.witness, 32)!,
+        { zip215: false },
+      ),
+    );
+  } catch {
+    return false;
+  }
+}
+
 // Plan 149: beacons in topo order — valid iff root-authored with an integer
 // epoch strictly greater than every valid beacon epoch in the op's causal
 // ancestry; violators quarantine (:unauthorized_beacon / :stale_beacon) and
@@ -1345,6 +1444,7 @@ function collectBeacons(
   visible: readonly Op[],
   byId: Map<string, Op>,
   root: AuthorityRootEvidence | null,
+  delegations: ReadonlyMap<string, AuthorityDelegationRecord>,
   ancCache = new Map<string, Set<string>>(),
 ): {
   validBeacons: EffectiveBeaconEvidence[];
@@ -1358,18 +1458,70 @@ function collectBeacons(
     if (op.kind !== "authority" || evidence?.type !== "beacon") continue;
 
     const anc = ancestors(op.id, byId, ancCache);
-    let priorMax = -1;
+    let priorMax = -1n;
     for (const beacon of validBeacons) {
-      if (anc.has(beacon.opId) && beacon.epoch > priorMax) priorMax = beacon.epoch;
+      const epoch = BigInt(beacon.epoch);
+      if (anc.has(beacon.opId) && epoch > priorMax) priorMax = epoch;
     }
 
-    if (op.author !== root?.realm) {
+    if (evidence.certificate !== undefined) {
+      let policy: WitnessedBeaconPolicyEvidence | null = null;
+      for (const source of visible) {
+        const genesis = source.authority;
+        if (
+          !anc.has(source.id) ||
+          source.kind !== "authority" ||
+          genesis?.type !== "genesis" ||
+          !validDelegation(genesis.delegation, delegations) ||
+          genesis.delegation.parentId !== null ||
+          !delegations
+            .get(genesis.delegation.id)
+            ?.introductionOpIds.includes(source.id) ||
+          source.author !== genesis.delegation.audienceRealm ||
+          genesis.delegation.audience !== root?.pubkey
+        )
+          continue;
+        const candidate = normalizeBeaconPolicy(genesis.beaconPolicy);
+        if (candidate !== null) policy = candidate;
+      }
+      const author = evidence.authorPubkey;
+      const expected = {
+        version: 1,
+        replica: op.replica ?? "",
+        epoch: typeof evidence.epoch === "number" ? evidence.epoch : -1,
+        author: author ?? "",
+        deps: [...new Set(op.deps)].sort((left, right) => compareBytes(
+          beaconClaimTextEncoder.encode(left), beaconClaimTextEncoder.encode(right),
+        )),
+      };
+      if (
+        policy === null ||
+        author === undefined ||
+        (author !== root?.pubkey && !policy.witnesses.includes(author)) ||
+        !verifyBeaconCertificate(evidence.certificate, expected, policy)
+      ) {
+        invalidBeacons.set(op.id, "unauthorized_beacon");
+      } else if (
+        typeof evidence.epoch !== "number" ||
+        !Number.isSafeInteger(evidence.epoch) ||
+        evidence.epoch < 0 ||
+        BigInt(evidence.epoch) <= priorMax
+      ) {
+        invalidBeacons.set(op.id, "stale_beacon");
+      } else if (
+        evidence.epoch > witnessedBeaconHorizon ||
+        BigInt(evidence.epoch) > priorMax + BigInt(policy.maxEpochStep)
+      ) {
+        invalidBeacons.set(op.id, "unauthorized_beacon");
+      } else {
+        validBeacons.push({ opId: op.id, epoch: evidence.epoch });
+      }
+    } else if (op.author !== root?.realm) {
       invalidBeacons.set(op.id, "unauthorized_beacon");
     } else if (
       evidence.epoch === null ||
-      !Number.isSafeInteger(evidence.epoch) ||
-      evidence.epoch < 0 ||
-      evidence.epoch <= priorMax
+      exactLegacyBeaconEpoch(evidence.epoch) === null ||
+      exactLegacyBeaconEpoch(evidence.epoch)! <= priorMax
     ) {
       invalidBeacons.set(op.id, "stale_beacon");
     } else {
@@ -1378,6 +1530,13 @@ function collectBeacons(
   }
 
   return { validBeacons, invalidBeacons };
+}
+
+function exactLegacyBeaconEpoch(epoch: number | string): bigint | null {
+  if (typeof epoch === "number") return Number.isSafeInteger(epoch) && epoch >= 0 ? BigInt(epoch) : null;
+  if (!/^(0|[1-9][0-9]*)$/.test(epoch)) return null;
+  const exact = BigInt(epoch);
+  return exact > BigInt(Number.MAX_SAFE_INTEGER) && exact <= 18_446_744_073_709_551_615n ? exact : null;
 }
 
 function delegationQuarantineReasons(
