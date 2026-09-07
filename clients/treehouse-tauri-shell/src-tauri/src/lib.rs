@@ -10,6 +10,7 @@ mod witness_document;
 mod witness_drain;
 mod witness_entropy;
 mod witness_mobile;
+mod witness_owner;
 mod witness_public;
 mod witness_reviewed;
 mod witness_session;
