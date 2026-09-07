@@ -41,6 +41,19 @@ SQLite cursors or raw arrays exposed to callers:
   nonce, native operation attempt, native nonce and session digest just inserted.
   It is a storage receipt, with no signing deadline or platform authorization.
 
+A storage-only restart seam is adopted on 2026-09-07 before implementation:
+`reconcileOriginalGeneration(expectedRevision, originalAttempt, exactChallenge,
+capturedMetadata) -> Snapshot | Refused`. It requires the retained
+`generation_started` phase and exact revision/original-attempt/challenge, applies
+all ordinary metadata/schema/size invariants, and commits the same completion
+record atomically. It returns no generation fence or generator permission. A
+completed-record retry may only observe the exact original metadata idempotently;
+changed metadata refuses. The later 2B coordinator must independently inspect the
+actual fixed key/profile/chain and original challenge before invoking this seam.
+No transient fence is reconstructed on restart. This fills the previously absent
+storage entry point for the already adopted started-plus-matching-key recovery
+case; no provider, IPC, signing or eligibility path is added by 2A.
+
 The record schema and transitions remain those reviewed below. Capture host
 file-backed transaction/reopen, bound, contention and failure evidence honestly;
 host SQLite success does not establish handset fsync, JNI, biometrics or custody.
