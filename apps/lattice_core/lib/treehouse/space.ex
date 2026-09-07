@@ -94,6 +94,10 @@ defmodule Treehouse.Space do
     do: [{:admin_actions, {:write, "catalog_bootstrap_v1"}}]
   )
 
+  command(:attest_member_key_v1, [:_claim, :_possession, :_vouches],
+    do: [{:admin_actions, {:write, "attest_member_key_v1"}}]
+  )
+
   @doc "Prepare deterministic root-only creation; pending signed ops are not yet persisted."
   @spec prepare_creation(Identity.t(), String.t(), String.t(), Log.t() | nil) ::
           {:ok, map()} | {:error, atom()}
@@ -281,6 +285,12 @@ defmodule Treehouse.Space do
       do: value,
       else: raise(ArgumentError, "recipient is not a canonical public key")
   end
+
+  def command_conflicts(ops, verdicts, ancestors),
+    do: Treehouse.MemberContinuity.command_conflicts(ops, verdicts, ancestors)
+
+  def command_op_status(%Op{body: {:attest_member_key_v1, _}} = op, visible, context),
+    do: Treehouse.MemberContinuity.command_op_status(op, visible, context)
 
   def command_op_status(%Op{body: {:catalog_bootstrap_v1, [record]}} = op, _visible, context) do
     with {:ok, record} <- TransportCatalog.normalize_bootstrap(record),

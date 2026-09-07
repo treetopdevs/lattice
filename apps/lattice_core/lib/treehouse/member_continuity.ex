@@ -3,10 +3,19 @@ defmodule Treehouse.MemberContinuity do
   Pure member-continuity application judgment and deny-only graph projection.
 
   Callback inputs are internal judge-produced evidence, not authenticated public
-  inputs. This module does not register a command or confer membership or rights.
+  inputs. The Space command delegates here without conferring membership or rights.
   """
   alias Lattice.{Authority, Dag, Log, Op}
   alias Treehouse.MemberContinuityCertificate, as: Certificate
+
+  @doc "Derive a closed consent claim from authenticated current Space evidence."
+  @spec review(Log.t(), map()) :: {:ok, map()} | {:error, atom()}
+  defdelegate review(log, request), to: Treehouse.MemberContinuityAuthoring
+
+  @doc "Recheck consent and ordinary authority before signing and authenticating one final frame."
+  @spec assemble(Log.t(), map(), map(), Lattice.Identity.t() | map()) ::
+          {:ok, map()} | {:error, atom()}
+  defdelegate assemble(log, review, certificate, signer), to: Treehouse.MemberContinuityAuthoring
 
   @doc "Authenticate complete retained Space history before projecting the real Space judge."
   @spec observe(Log.t()) :: {:ok, map()} | {:error, atom()}
@@ -105,6 +114,7 @@ defmodule Treehouse.MemberContinuity do
   def command_op_status(op, visible, context) do
     with {:ok, cert} <- certificate(op),
          true <- cert.claim.space == op.replica and cert.claim.deps == op.deps,
+         context = causal_final_context(context),
          :ok <- targets(cert.claim, op.replica, visible, context),
          :ok <- eligibility(cert.claim, context),
          :ok <- epoch(cert.claim, context),
@@ -116,6 +126,19 @@ defmodule Treehouse.MemberContinuity do
       {:error, :invalid_member_continuity} -> {:error, :application_invalid_continuity}
       {:error, reason} -> {:error, reason}
     end
+  end
+
+  # Resolve only already visible application conflicts using the same deny-only
+  # graph. Core authority verdicts and exact beacon evidence are never rejudged.
+  defp causal_final_context(context) do
+    denied =
+      command_conflicts(
+        context.visible_ops,
+        context.verdicts,
+        Dag.all_ancestors(context.visible_ops)
+      )
+
+    %{context | verdicts: Map.merge(context.verdicts, denied)}
   end
 
   defp parent_context(claim, context) do
@@ -185,10 +208,13 @@ defmodule Treehouse.MemberContinuity do
         Enum.any?(claim.epoch_basis, &(not beacon?(context.visible_ops[&1], replica))) or
           Enum.any?(parent_groups, fn {_, wrappers} ->
             not Enum.any?(wrappers, fn {id, op} ->
-              {:ok, cert} = certificate(op)
+              case {context.verdicts[id], claim_of(op)} do
+                {:honored, {:ok, parent_claim}} ->
+                  op.replica == replica and parent_claim.old_pub == claim.old_pub
 
-              context.verdicts[id] == :honored and op.replica == replica and
-                  cert.claim.old_pub == claim.old_pub
+                _ ->
+                  false
+              end
             end)
           end) ->
         {:error, :application_wrong_target}

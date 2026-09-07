@@ -89,7 +89,8 @@ defmodule Lattice.Authority do
           holder_epochs: %{atom() => %{holder: Identity.pubkey(), op_id: Op.id()}},
           policies: %{atom() => map()},
           audit: [map()],
-          requests: [map()]
+          requests: [map()],
+          valid_beacons: [%{op_id: Op.id(), epoch: non_neg_integer()}]
         }
 
   @doc "Set of op ids excluded from reduction by authority rules."
@@ -594,7 +595,12 @@ defmodule Lattice.Authority do
       holder_epochs: holder_epochs,
       policies: policies,
       audit: role_audit ++ cmd_audit ++ conflict_audit,
-      requests: requests
+      requests: requests,
+      valid_beacons:
+        if(continuation.family == :unsupported,
+          do: [],
+          else: Enum.sort_by(beacons, & &1.op_id)
+        )
     }
   end
 
