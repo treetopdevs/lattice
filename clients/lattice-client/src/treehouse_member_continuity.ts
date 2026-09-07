@@ -1,5 +1,5 @@
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { analyzeAuthority, continuationFamily } from "./authority";
+import { analyzeAuthority, continuationFamily, resolveContinuationProfileFromFrames } from "./authority";
 import { base64ToBytes, carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
 import type { CarrierOpFrame, CarrierTerm } from "./carrier";
 import { authorCarrierOp, canonicalBase64Bytes, verifyCarrierOp } from "./codec";
@@ -160,6 +160,10 @@ export async function observeMemberContinuityFromFrames(input: {
       return {ok: false, reason: "unsupported_continuity_history"};
     }
     if (snapshot.oldPub !== undefined && canonicalBase64Bytes(snapshot.oldPub, 32) === null) return invalid;
+    const profile = await resolveContinuationProfileFromFrames({replica: snapshot.replica, frames});
+    if (!profile.ok) return profile.reason === "invalid_verified_history"
+      ? invalid : {ok: false, reason: "unsupported_continuity_history"};
+    if (profile.profile.kind !== "space") return {ok: false, reason: "unsupported_continuity_history"};
     const ops = carrierOpsToSemanticOps(frames, {}, treehouseCommandDecoders("Treehouse.Space"));
     const byId = new Map(ops.map((op) => [op.id, op]));
     const rawClaims = new Map(frames.map((frame) => [frame.id, claimFromFrame(frame)]));
@@ -204,23 +208,25 @@ export async function observeMemberContinuityFromFrames(input: {
 /** Derive every consent-bearing claim field from one authenticated judged snapshot. */
 export async function reviewMemberContinuityFromFrames(request: MemberContinuityReviewRequest): Promise<MemberContinuityReviewResult> {
   try {
+    if (!validReviewRequest(request)) return refuse("application_invalid_continuity");
     const frozen = structuredClone(request);
-    if (canonicalBase64Bytes(frozen.author, 32) === null || !canonicalId(frozen.capId)) {
-      return refuse("application_invalid_continuity");
-    }
-    if (new Set(frozen.voucherAdmissions).size !== 2) return refuse("application_continuity_ineligible_member");
+    const observed = await observeMemberContinuityFromFrames({replica: frozen.replica, frames: frozen.frames, oldPub: frozen.oldPub});
+    if (!observed.ok) return observed;
     const history = await authenticateJudgedHistory(frozen.replica, frozen.frames);
     if (history === null) return refuse("invalid_verified_history");
-    const admission = (id: string) => {
-      const op = history.byId.get(id);
-      return op?.kind === "command" && op.command === "admit_member" &&
-        !history.projection.quarantineReasons.has(id) && typeof op.commandArgs?.[1] === "string" ? op.commandArgs[1] : null;
-    };
-    const old = admission(frozen.oldAdmission);
-    const vouchers = frozen.voucherAdmissions.map((id) => ({admission: id, member: admission(id)}));
-    if (old !== frozen.oldPub || vouchers.some((voucher) => voucher.member === null)) {
-      return refuse("application_wrong_target");
+    // Match the authoring contract: resolve voucher visibility and verdicts before
+    // decoding their targets; old-admission precedence belongs to the later claim judge.
+    if (frozen.voucherAdmissions.some((id) => !history.byId.has(id))) return refuse("application_target_not_visible");
+    if (frozen.voucherAdmissions.some((id) => history.projection.quarantineReasons.has(id))) return refuse("application_target_quarantined");
+    const vouchers: Array<{admission: string; member: string}> = [];
+    for (const id of frozen.voucherAdmissions) {
+      const op = history.byId.get(id)!;
+      const member = op.commandArgs?.[1];
+      if (op.kind !== "command" || op.command !== "admit_member" || typeof member !== "string" ||
+          canonicalBase64Bytes(member, 32) === null) return refuse("application_wrong_target");
+      vouchers.push({admission: id, member});
     }
+    vouchers.sort((left, right) => compareRawKeys(left.member, right.member));
     const beaconValues = history.authority.security.validBeacons.map((beacon) => ({...beacon,
       value: typeof beacon.epoch === "number" ? beacon.epoch : Number(beacon.epoch)}));
     if (beaconValues.length === 0 || beaconValues.some((beacon) => !Number.isSafeInteger(beacon.value) || beacon.value < 0)) {
@@ -228,8 +234,6 @@ export async function reviewMemberContinuityFromFrames(request: MemberContinuity
     }
     const epoch = Math.max(...beaconValues.map((beacon) => beacon.value));
     const epochBasis = beaconValues.filter((beacon) => beacon.value === epoch).map((beacon) => beacon.opId).sort();
-    const observed = await observeMemberContinuityFromFrames({replica: frozen.replica, frames: frozen.frames, oldPub: frozen.oldPub});
-    if (!observed.ok) return observed;
     const parents = observed.links.find((link) => link.oldPub === frozen.oldPub)?.heads ?? [];
     if (parents.length > 16) return refuse("continuity_capacity_stop");
     const claim = normalizeMemberContinuityClaim({version: 1, product: "treehouse", space: frozen.replica,
@@ -237,14 +241,8 @@ export async function reviewMemberContinuityFromFrames(request: MemberContinuity
       oldMembership: frozen.oldMembership, nonce: frozen.nonce, deps: history.frontier,
       epoch, epochBasis, parents, vouchers});
     if (claim === null) return refuse("application_invalid_continuity");
-    const context: MemberContinuityContext = {visibleOps: history.byId,
-      verdicts: new Map(history.order.map((id) => [id, history.projection.quarantineReasons.get(id) ?? "honored"])),
-      validBeacons: history.authority.security.validBeacons};
-    const visible = new Set(history.byId.keys());
-    const target = targetStatus(claim, visible, context);
-    if (!target.ok) return target;
-    if (!eligible(claim, context)) return refuse("application_continuity_ineligible_member");
-    if (!epochValid(claim, context.validBeacons)) return refuse("application_continuity_invalid_epoch");
+    // The same ordinary candidate judge supplies authority and application refusal
+    // precedence after the envelope check, as in the BEAM authoring path.
     const preflightReason = await reviewAuthorityPreflight(history.frames, claim, frozen.author, frozen.capId);
     if (preflightReason !== "application_continuity_invalid_certificate") return refuse(preflightReason ?? "stale_verified_state");
     const review: MemberContinuityReview = {request: frozen, claim, claimId: memberContinuityClaimId(claim)!,
@@ -263,6 +261,7 @@ async function reviewAuthorityPreflight(frames: readonly CarrierOpFrame[], claim
   const candidate = await authorCarrierOp({replica: claim.space, deps: [...claim.deps], kind: "command",
     cap: townshipCapTerm(capId), body: ["tuple", [["atom", "attest_member_key_v1"], args]],
     signer: {publicKey: base64ToBytes(author), sign: () => new Uint8Array(64)}});
+  if (envelopeBytes(candidate) > 64_000) return "continuity_capacity_stop";
   return (await judgeCandidate(frames, candidate)).quarantineReasons.get(candidate.id);
 }
 
@@ -327,7 +326,26 @@ async function judgeCandidate(values: readonly unknown[], frame: CarrierOpFrame)
 function envelopeBytes(frame: CarrierOpFrame): number {
   return new TextEncoder().encode(JSON.stringify({type: "push", ops: [frame]})).length;
 }
-function b64(bytes: Uint8Array): string { return Buffer.from(bytes).toString("base64"); }
+function b64(bytes: Uint8Array): string {
+  if (typeof Buffer !== "undefined") return Buffer.from(bytes).toString("base64");
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return globalThis.btoa(binary);
+}
+const reviewRequestFields = ["replica", "frames", "oldPub", "oldAdmission", "newPub", "oldMembership", "nonce",
+  "voucherAdmissions", "author", "capId"].sort();
+function validReviewRequest(value: unknown): value is MemberContinuityReviewRequest {
+  if (value === null || typeof value !== "object" || Array.isArray(value) ||
+      !same(Object.keys(value).sort(), reviewRequestFields)) return false;
+  const request = value as Record<string, unknown>;
+  const key = (item: unknown) => typeof item === "string" && canonicalBase64Bytes(item, 32) !== null;
+  return typeof request.replica === "string" && Array.isArray(request.frames) &&
+    key(request.author) && key(request.oldPub) && key(request.newPub) && request.oldPub !== request.newPub &&
+    key(request.nonce) && canonicalId(request.oldAdmission) && canonicalId(request.capId) &&
+    (request.oldMembership === "active" || request.oldMembership === "removed") &&
+    Array.isArray(request.voucherAdmissions) && request.voucherAdmissions.length === 2 &&
+    new Set(request.voucherAdmissions).size === 2 && request.voucherAdmissions.every(canonicalId);
+}
 function canonicalId(value: unknown): value is string {
   return typeof value === "string" && /^[A-Za-z0-9_-]{43}$/.test(value) &&
     canonicalBase64Bytes(value.replaceAll("-", "+").replaceAll("_", "/") + "=", 32) !== null;

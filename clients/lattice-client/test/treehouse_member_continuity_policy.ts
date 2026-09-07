@@ -19,7 +19,10 @@ import { treehouseCommandOpStatus, treehouseSpaceSchema } from "../src/treehouse
 import { authorTreehouseCommand, treehouseCommandDecoders, treehouseInvitationAcceptanceBytes } from "../src/treehouse";
 import { commandConflicts } from "../src/policy";
 import { ancestors } from "../src/dag";
-import { authorCarrierOp } from "../src/codec";
+import { authorCarrierOp, authorCarrierDelegation } from "../src/codec";
+import { continuationProfileToCarrierTerm } from "../src/continuation";
+import type { CarrierOpSigner } from "../src/codec";
+import type { CarrierOpFrame } from "../src/carrier";
 import { carrierDelegationsFromFrames, carrierOpsToSemanticOps } from "../src/carrier";
 import type { CarrierTerm } from "../src/carrier";
 import { authorTownshipGenesis } from "../src/township";
@@ -164,6 +167,10 @@ test("heads coalesce wrappers and retain every same-old unresolved claim", async
 
 test("public observation authenticates raw closure and uses the ordinary capability judge", async () => {
   const raw = await memberContinuityFixture();
+  const rootSeed = createHash("sha256").update("r19b-ts-export:root").digest();
+  const pin = await profilePin(raw.frames[0]!, {publicKey: ed25519.getPublicKey(rootSeed),
+    sign: (bytes) => ed25519.sign(bytes, rootSeed)});
+  raw.frames.push(pin);
   assert.deepEqual(await observeMemberContinuityFromFrames({replica: "replica:treehouse:thread:unsupported", frames: []}),
     {ok: false, reason: "unsupported_continuity_history"});
   assert.deepEqual(await observeMemberContinuityFromFrames({replica: raw.replica, frames: raw.frames, oldPub: "not-a-key"}),
@@ -171,7 +178,7 @@ test("public observation authenticates raw closure and uses the ordinary capabil
   const observed = await observeMemberContinuityFromFrames({replica: raw.replica, frames: raw.frames, oldPub: raw.claim.oldPub});
   assert.equal(observed.ok, true);
   if (observed.ok) {
-    assert.deepEqual(observed.verifiedFrontier, [raw.command.id]);
+    assert.deepEqual(observed.verifiedFrontier, [raw.command.id, pin.id].sort());
     assert.deepEqual(observed.records, []);
     assert.equal(observed.quarantine.find((entry) => entry.opId === raw.command.id)?.reason, "operation_not_granted");
     assert.equal(observed.links[0]?.status, "unlinked");
@@ -189,7 +196,6 @@ test("public observation authenticates raw closure and uses the ordinary capabil
       affectedWrappers: [{opId: raw.command.id, reason: "operation_not_granted"}]}]);
   }
 
-  const rootSeed = createHash("sha256").update("r19b-ts-export:root").digest();
   const rawFirst = b64(new Uint8Array(32));
   const base64First = b64(new Uint8Array(32).fill(248));
   assert.ok(base64First < rawFirst, "fixture must disagree under Base64 and raw-byte ordering");
@@ -206,7 +212,7 @@ test("public observation authenticates raw closure and uses the ordinary capabil
       codec.memberContinuityCommandArgumentsToCarrierTerm(firstCertificate)!]],
     signer: {publicKey: ed25519.getPublicKey(rootSeed), sign: (bytes) => ed25519.sign(bytes, rootSeed)}});
   const ordered = await observeMemberContinuityFromFrames({replica: raw.replica,
-    frames: [raw.frames[0]!, second, first]});
+    frames: [raw.frames[0]!, pin, second, first]});
   assert.equal(ordered.ok, true);
   if (ordered.ok) assert.deepEqual(ordered.links.map((link) => link.oldPub), [rawFirst, base64First]
     .sort((left, right) => Buffer.compare(Buffer.from(left, "base64"), Buffer.from(right, "base64"))));
@@ -221,7 +227,7 @@ test("review derives consent from signed history and assembly never invokes a si
     signer: adminSigner, roles: ["admin", "moderator"],
     ops: ["create_space", "create_thread", "issue_invitation", "revoke_invitation", "admit_member", "remove_member", "attest_member_key_v1"]});
   const delegation = carrierDelegationsFromFrames([genesis])[0]!;
-  const frames = [genesis];
+  const frames = [genesis, await profilePin(genesis, adminSigner)];
   const admissions: string[] = [];
   for (const [index, member] of [former, ...witnesses].entries()) {
     const invite = await authorTreehouseCommand({product: "Treehouse.Space", replica: genesis.replica,
@@ -308,3 +314,15 @@ test("review derives consent from signed history and assembly never invokes a si
   assert.equal((reviewed.review.request.frames[0] as {sig: string}).sig, reviewedGenesisSignature);
   assert.notEqual(reviewed.review.request.voucherAdmissions[0], request.voucherAdmissions[0]);
 });
+
+
+async function profilePin(genesis: CarrierOpFrame, signer: CarrierOpSigner) {
+  const empty = await authorCarrierDelegation({replica: genesis.replica, audiencePubkey: signer.publicKey, signer});
+  const witnesses = [identity("pin-witness-a"), identity("pin-witness-b"), identity("pin-witness-c")]
+    .sort((a, b) => Buffer.compare(a.pub, b.pub));
+  const profile = continuationProfileToCarrierTerm({mode: "bounded_continuation", version: 1, product: "treehouse",
+    kind: "space", role: "admin", nominee: b64(identity("pin-nominee").pub), witnesses: witnesses.map(key => b64(key.pub)),
+    threshold: 2, maxLeaseEpochs: 7})!;
+  return authorCarrierOp({replica: genesis.replica, deps: [genesis.id], kind: "authority", cap: ["nil"], signer,
+    body: ["tuple", [["atom", "genesis"], ["delegation", empty], ["map", [[["atom", "__continuation__"], profile]]]]]});
+}
