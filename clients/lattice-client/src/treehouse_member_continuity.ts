@@ -1,16 +1,20 @@
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { analyzeAuthority } from "./authority";
 import { base64ToBytes, carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
-import type { CommandDecoder, CommandDecoderMap } from "./carrier";
-import { verifyCarrierOp } from "./codec";
+import type { CarrierOpFrame, CarrierTerm } from "./carrier";
+import { authorCarrierOp, verifyCarrierOp } from "./codec";
+import type { CarrierOpSigner } from "./codec";
 import { ancestors, canonicalOrder, concurrent } from "./dag";
 import { materialize } from "./materialize";
 import type { Op } from "./op";
 import { frontier } from "./sync";
+import { townshipCapTerm } from "./township";
 import { treehouseCommandDecoders, treehouseSpaceSchema } from "./treehouse";
 import {
   memberContinuityClaimId,
-  memberContinuityCertificateFromDecodedArguments,
+  canonicalBytesForMemberContinuityClaim,
+  canonicalBytesForMemberContinuityPossession,
+  memberContinuityCommandArgumentsToCarrierTerm,
   normalizeMemberContinuityCertificate,
   normalizeMemberContinuityClaim,
   verifyMemberContinuityCertificate,
@@ -36,8 +40,20 @@ export type MemberContinuityObservation =
       affectedWrappers: Array<{opId: string; reason: string}>}>; quarantine: Array<{opId: string; reason: string}>}
   | {ok: false; reason: "invalid_verified_history" | "unsupported_continuity_history"};
 
+export interface MemberContinuityReviewRequest {
+  replica: string; frames: readonly unknown[]; oldPub: string; oldAdmission: string; newPub: string;
+  oldMembership: "active" | "removed"; nonce: string; voucherAdmissions: readonly [string, string];
+  author: string; capId: string;
+}
+export interface MemberContinuityReview {
+  request: MemberContinuityReviewRequest; claim: MemberContinuityClaim; claimId: string;
+  claimBytes: Uint8Array; possessionBytes: Uint8Array; author: string; capId: string; verifiedFrontier: string[];
+}
+export type MemberContinuityReviewResult = {ok: true; review: MemberContinuityReview} | {ok: false; reason: string};
+export type MemberContinuityAssemblyResult = {ok: true; frame: CarrierOpFrame; claimId: string} | {ok: false; reason: string};
+
 const allowed: MemberContinuityStatus = {ok: true};
-const refuse = (reason: string): MemberContinuityStatus => ({ok: false, reason});
+const refuse = (reason: string): {ok: false; reason: string} => ({ok: false, reason});
 
 /**
  * The Treehouse.Space application conjunct for one already structurally,
@@ -52,16 +68,25 @@ export function memberContinuityCommandStatus(
   const certificate = certificateFor(op);
   if (certificate === null || certificate.claim.space !== op.replica ||
       !same(certificate.claim.deps, op.deps)) return refuse("application_invalid_continuity");
+  const effective = finalCausalContext(context);
   const claim = certificate.claim;
-  const target = targetStatus(claim, visible, context);
+  const target = targetStatus(claim, visible, effective);
   if (!target.ok) return target;
-  if (!eligible(claim, context)) return refuse("application_continuity_ineligible_member");
-  if (!epochValid(claim, context.validBeacons)) return refuse("application_continuity_invalid_epoch");
-  if (!same(claim.parents, memberContinuityHeads(records(context), claim.oldPub))) {
+  if (!eligible(claim, effective)) return refuse("application_continuity_ineligible_member");
+  if (!epochValid(claim, effective.validBeacons)) return refuse("application_continuity_invalid_epoch");
+  if (!same(claim.parents, memberContinuityHeads(records(effective), claim.oldPub))) {
     return refuse("application_continuity_stale_context");
   }
   return verifyMemberContinuityCertificate(certificate, claim)
     ? allowed : refuse("application_continuity_invalid_certificate");
+}
+
+function finalCausalContext(context: MemberContinuityContext): MemberContinuityContext {
+  const verdicts = new Map(context.verdicts);
+  for (const [id, reason] of memberContinuityCommandConflicts(context.visibleOps, verdicts)) {
+    if ((verdicts.get(id) ?? "honored") === "honored") verdicts.set(id, reason);
+  }
+  return {...context, verdicts};
 }
 
 /** Complete deterministic loser map over individually honored operations. */
@@ -130,26 +155,12 @@ export async function observeMemberContinuityFromFrames(input: {
         ed25519.verify(signature, bytes, base64ToBytes(author), {zip215: false})});
       if (!verified.valid) return invalid;
     }
-    const ops = carrierOpsToSemanticOps(frames, {}, continuityDecoders());
+    const ops = carrierOpsToSemanticOps(frames, {}, treehouseCommandDecoders("Treehouse.Space"));
     const byId = new Map(ops.map((op) => [op.id, op]));
     const order = canonicalOrder(ops, byId);
     if (order.length !== ops.length) return invalid;
-    const base = materialize(treehouseSpaceSchema, ops, ids, null, snapshot.replica);
-    const authority = analyzeAuthority(treehouseSpaceSchema, ops, ids, order, byId, snapshot.replica);
-    const verdicts = new Map(order.map((id) => [id, base.quarantineReasons.get(id) ?? "honored"]));
-    const ancestorCache = new Map<string, Set<string>>();
-    for (const id of order) {
-      const op = byId.get(id)!;
-      if (verdicts.get(id) !== "honored" || claimFor(op) === null) continue;
-      const visible = ancestors(id, byId, ancestorCache);
-      const visibleOps = new Map([...visible].map((target) => [target, byId.get(target)!]));
-      const visibleVerdicts = new Map([...visible].map((target) => [target, verdicts.get(target) ?? "honored"]));
-      const validBeacons = authority.security.validBeacons.filter((beacon) => visible.has(beacon.opId));
-      const status = memberContinuityCommandStatus(op, visible, {visibleOps, verdicts: visibleVerdicts, validBeacons});
-      if (!status.ok) verdicts.set(id, status.reason);
-    }
-    const conflicts = memberContinuityCommandConflicts(byId, verdicts);
-    for (const [id, reason] of conflicts) if (verdicts.get(id) === "honored") verdicts.set(id, reason);
+    const judged = materialize(treehouseSpaceSchema, ops, ids, null, snapshot.replica);
+    const verdicts = new Map(order.map((id) => [id, judged.quarantineReasons.get(id) ?? "honored"]));
     const grouped = new Map<string, {claim: MemberContinuityClaim; wrappers: Array<{
       opId: string; author: string; capId: string | null; certificate: MemberContinuityCertificate;
     }>} >();
@@ -182,22 +193,131 @@ export async function observeMemberContinuityFromFrames(input: {
   } catch { return invalid; }
 }
 
-function continuityDecoders(): CommandDecoderMap {
-  const decoders = new Map(treehouseCommandDecoders("Treehouse.Space"));
-  const continuity: CommandDecoder = {arity: 3, decode: (args) => {
-    const certificate = normalizeDecodedCertificate(args);
-    const marker = {field: "admin_actions", mutation: "write" as const, value: "attest_member_key_v1"};
-    return {...marker, command: "attest_member_key_v1", effects: [marker],
-      commandArgs: certificate === null ? [null] : [certificate.claim, certificate.possession, certificate.vouches]};
-  }};
-  decoders.set("attest_member_key_v1", continuity);
-  return Object.assign(decoders, {product: "Treehouse.Space"});
+/** Derive every consent-bearing claim field from one authenticated judged snapshot. */
+export async function reviewMemberContinuityFromFrames(request: MemberContinuityReviewRequest): Promise<MemberContinuityReviewResult> {
+  try {
+    const frozen = structuredClone(request);
+    if (new Set(frozen.voucherAdmissions).size !== 2) return refuse("application_continuity_ineligible_member");
+    const history = await authenticateJudgedHistory(frozen.replica, frozen.frames);
+    if (history === null) return refuse("invalid_verified_history");
+    const admission = (id: string) => {
+      const op = history.byId.get(id);
+      return op?.kind === "command" && op.command === "admit_member" &&
+        !history.projection.quarantineReasons.has(id) && typeof op.commandArgs?.[1] === "string" ? op.commandArgs[1] : null;
+    };
+    const old = admission(frozen.oldAdmission);
+    const vouchers = frozen.voucherAdmissions.map((id) => ({admission: id, member: admission(id)}));
+    if (old !== frozen.oldPub || vouchers.some((voucher) => voucher.member === null)) {
+      return refuse("application_wrong_target");
+    }
+    const beaconValues = history.authority.security.validBeacons.map((beacon) => ({...beacon,
+      value: typeof beacon.epoch === "number" ? beacon.epoch : Number(beacon.epoch)}));
+    if (beaconValues.length === 0 || beaconValues.some((beacon) => !Number.isSafeInteger(beacon.value) || beacon.value < 0)) {
+      return refuse("application_continuity_invalid_epoch");
+    }
+    const epoch = Math.max(...beaconValues.map((beacon) => beacon.value));
+    const epochBasis = beaconValues.filter((beacon) => beacon.value === epoch).map((beacon) => beacon.opId).sort();
+    const observed = await observeMemberContinuityFromFrames({replica: frozen.replica, frames: frozen.frames, oldPub: frozen.oldPub});
+    if (!observed.ok) return observed;
+    const parents = observed.links.find((link) => link.oldPub === frozen.oldPub)?.heads ?? [];
+    if (parents.length > 16) return refuse("continuity_capacity_stop");
+    const claim = normalizeMemberContinuityClaim({version: 1, product: "treehouse", space: frozen.replica,
+      oldPub: frozen.oldPub, newPub: frozen.newPub, oldAdmission: frozen.oldAdmission,
+      oldMembership: frozen.oldMembership, nonce: frozen.nonce, deps: history.frontier,
+      epoch, epochBasis, parents, vouchers});
+    if (claim === null) return refuse("application_invalid_continuity");
+    const context: MemberContinuityContext = {visibleOps: history.byId,
+      verdicts: new Map(history.order.map((id) => [id, history.projection.quarantineReasons.get(id) ?? "honored"])),
+      validBeacons: history.authority.security.validBeacons};
+    const visible = new Set(history.byId.keys());
+    const target = targetStatus(claim, visible, context);
+    if (!target.ok) return target;
+    if (!eligible(claim, context)) return refuse("application_continuity_ineligible_member");
+    if (!epochValid(claim, context.validBeacons)) return refuse("application_continuity_invalid_epoch");
+    const preflightReason = await reviewAuthorityPreflight(history.frames, claim, frozen.author, frozen.capId);
+    if (preflightReason !== "application_continuity_invalid_certificate") return refuse(preflightReason ?? "stale_verified_state");
+    const review: MemberContinuityReview = {request: frozen, claim, claimId: memberContinuityClaimId(claim)!,
+      claimBytes: canonicalBytesForMemberContinuityClaim(claim),
+      possessionBytes: canonicalBytesForMemberContinuityPossession(claim), author: frozen.author,
+      capId: frozen.capId, verifiedFrontier: history.frontier};
+    return {ok: true, review};
+  } catch { return refuse("invalid_verified_history"); }
 }
 
-function normalizeDecodedCertificate(args: unknown[]): MemberContinuityCertificate | null {
-  // Kept behind a tiny indirection so the public frame decoder remains the
-  // sole raw-term parser for this semantic module.
-  return memberContinuityCertificateFromDecodedArguments(args);
+async function reviewAuthorityPreflight(frames: readonly CarrierOpFrame[], claim: MemberContinuityClaim,
+  author: string, capId: string): Promise<string | undefined> {
+  const zero = b64(new Uint8Array(64));
+  const certificate = {claim, possession: zero, vouches: claim.vouchers.map((voucher) => ({member: voucher.member, signature: zero}))};
+  const args = memberContinuityCommandArgumentsToCarrierTerm(certificate)!;
+  const candidate = await authorCarrierOp({replica: claim.space, deps: [...claim.deps], kind: "command",
+    cap: townshipCapTerm(capId), body: ["tuple", [["atom", "attest_member_key_v1"], args]],
+    signer: {publicKey: base64ToBytes(author), sign: () => new Uint8Array(64)}});
+  return (await judgeCandidate(frames, candidate)).quarantineReasons.get(candidate.id);
+}
+
+/** Recheck consent, preflight an unsigned intent, sign once, then re-fold the public signed history. */
+export async function assembleMemberContinuityFromFrames(input: {
+  frames: readonly unknown[]; review: MemberContinuityReview; certificate: unknown; signer: CarrierOpSigner;
+}): Promise<MemberContinuityAssemblyResult> {
+  try {
+    const frozen = structuredClone({frames: input.frames, review: input.review, certificate: input.certificate});
+    const current = await reviewMemberContinuityFromFrames({...frozen.review.request, frames: frozen.frames});
+    if (!current.ok || !equalBytes(current.review.claimBytes, frozen.review.claimBytes) ||
+      current.review.claimId !== frozen.review.claimId || !same(current.review.verifiedFrontier, frozen.review.verifiedFrontier)) {
+      return refuse("stale_verified_state");
+    }
+    const certificate = normalizeMemberContinuityCertificate(frozen.certificate);
+    if (certificate === null || !verifyMemberContinuityCertificate(certificate, current.review.claim)) {
+      return refuse("application_continuity_invalid_certificate");
+    }
+    if (b64(input.signer.publicKey) !== current.review.author) return refuse("wrong_signer");
+    const args = memberContinuityCommandArgumentsToCarrierTerm(certificate);
+    if (args === null || args[0] !== "list") return refuse("application_invalid_continuity");
+    const body: CarrierTerm = ["tuple", [["atom", "attest_member_key_v1"], args]];
+    const placeholder = await authorCarrierOp({replica: current.review.claim.space, deps: [...current.review.claim.deps],
+      kind: "command", cap: townshipCapTerm(current.review.capId), body, signer: {publicKey: input.signer.publicKey,
+        sign: () => new Uint8Array(64)}});
+    const preflight = await judgeCandidate(frozen.frames, placeholder);
+    const preflightReason = preflight.quarantineReasons.get(placeholder.id);
+    if (preflightReason !== undefined) return refuse(preflightReason);
+    if (envelopeBytes(placeholder) > 64_000) return refuse("continuity_capacity_stop");
+    const frame = await authorCarrierOp({replica: current.review.claim.space, deps: [...current.review.claim.deps],
+      kind: "command", cap: townshipCapTerm(current.review.capId), body, signer: input.signer});
+    if (envelopeBytes(frame) > 64_000) return refuse("continuity_capacity_stop");
+    const final = await observeMemberContinuityFromFrames({replica: current.review.claim.space,
+      frames: [...frozen.frames, frame], oldPub: current.review.claim.oldPub});
+    if (!final.ok) return refuse(final.reason);
+    const wrapper = final.records.flatMap((record) => record.wrappers).find((item) => item.opId === frame.id);
+    if (wrapper === undefined) return refuse(final.quarantine.find((item) => item.opId === frame.id)?.reason ?? "stale_verified_state");
+    return {ok: true, frame, claimId: current.review.claimId};
+  } catch { return refuse("invalid_continuity_input"); }
+}
+
+async function authenticateJudgedHistory(replica: string, values: readonly unknown[]) {
+  const frames = structuredClone(values).map(decodeCarrierOpFrame);
+  const ids = new Set(frames.map((frame) => frame.id));
+  if (ids.size !== frames.length || frames.some((frame) => frame.replica !== replica || frame.deps.some((dep) => !ids.has(dep)))) return null;
+  for (const frame of frames) {
+    if (!(await verifyCarrierOp(frame, {verify: async (author, bytes, signature) =>
+      ed25519.verify(signature, bytes, base64ToBytes(author), {zip215: false})})).valid) return null;
+  }
+  const ops = carrierOpsToSemanticOps(frames, {}, treehouseCommandDecoders("Treehouse.Space"));
+  const byId = new Map(ops.map((op) => [op.id, op])); const order = canonicalOrder(ops, byId);
+  const projection = materialize(treehouseSpaceSchema, ops, ids, null, replica);
+  const authority = analyzeAuthority(treehouseSpaceSchema, ops, ids, order, byId, replica);
+  return {frames, ops, byId, order, projection, authority, frontier: frontier(ops).sort()};
+}
+async function judgeCandidate(values: readonly unknown[], frame: CarrierOpFrame) {
+  const frames = [...values.map(decodeCarrierOpFrame), frame];
+  const ops = carrierOpsToSemanticOps(frames, {}, treehouseCommandDecoders("Treehouse.Space"));
+  return materialize(treehouseSpaceSchema, ops, new Set(ops.map((op) => op.id)), null, frame.replica);
+}
+function envelopeBytes(frame: CarrierOpFrame): number {
+  return new TextEncoder().encode(JSON.stringify({type: "push", ops: [frame]})).length;
+}
+function b64(bytes: Uint8Array): string { return Buffer.from(bytes).toString("base64"); }
+function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function targetStatus(claim: MemberContinuityClaim, visible: ReadonlySet<string>, context: MemberContinuityContext): MemberContinuityStatus {

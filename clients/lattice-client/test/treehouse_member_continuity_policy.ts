@@ -10,9 +10,18 @@ import {
   memberContinuityCommandStatus,
   memberContinuityHeads,
   observeMemberContinuityFromFrames,
+  reviewMemberContinuityFromFrames,
+  assembleMemberContinuityFromFrames,
   type MemberContinuityContext,
 } from "../src/treehouse_member_continuity";
 import { memberContinuityFixture } from "./support/export_member_continuity";
+import { treehouseCommandOpStatus, treehouseSpaceSchema } from "../src/treehouse";
+import { authorTreehouseCommand, treehouseCommandDecoders, treehouseInvitationAcceptanceBytes } from "../src/treehouse";
+import { commandConflicts } from "../src/policy";
+import { ancestors } from "../src/dag";
+import { authorCarrierOp } from "../src/codec";
+import { carrierDelegationsFromFrames, carrierOpsToSemanticOps } from "../src/carrier";
+import { authorTownshipGenesis } from "../src/township";
 
 const digest = (label: string) => createHash("sha256").update(`r19b-policy:${label}`).digest();
 const b64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64");
@@ -58,6 +67,8 @@ async function fixture() {
 test("individual judgment follows shape, target, eligibility, epoch, context, certificate precedence", async () => {
   const f = await fixture();
   assert.deepEqual(memberContinuityCommandStatus(f.statement, new Set(f.context.visibleOps.keys()), f.context), {ok: true});
+  assert.deepEqual(treehouseCommandOpStatus(treehouseSpaceSchema, f.statement,
+    new Set(f.context.visibleOps.keys()), f.context), {ok: true});
   const malformed = {...f.statement, commandArgs: [{...f.claim, extra: true}, f.certificate.possession, f.certificate.vouches]};
   assert.equal(reason(memberContinuityCommandStatus(malformed, new Set(), {visibleOps: new Map(), verdicts: new Map(), validBeacons: []})),
     "application_invalid_continuity");
@@ -111,6 +122,9 @@ test("deny-only graph seeds stale vouchers before target collision and propagate
   const ops = new Map([f.statement, other, resolution, remove].map((entry) => [entry.id, entry]));
   const verdicts = new Map([...ops.keys()].map((id) => [id, "honored"]));
   const denied = memberContinuityCommandConflicts(ops, verdicts);
+  const cache = new Map<string, Set<string>>();
+  for (const id of ops.keys()) ancestors(id, ops, cache);
+  assert.deepEqual(commandConflicts(treehouseSpaceSchema, new Set(ops.keys()), ops, verdicts, cache), denied);
   assert.equal(denied.get(f.statement.id), "application_continuity_stale_voucher");
   assert.equal(denied.get(other.id), "application_continuity_stale_voucher");
   assert.equal(denied.get(resolution.id), "application_continuity_stale_voucher");
@@ -123,6 +137,15 @@ test("deny-only graph seeds stale vouchers before target collision and propagate
   const parents = memberContinuityCommandConflicts(parentOps,
     new Map([...parentOps.keys()].map((id) => [id, "honored"])));
   assert.equal(parents.get(resolution.id), "application_continuity_invalid_parent");
+  const freshClaim = {...f.claim, parents: [], deps: [f.statement.id, other.id].sort(), nonce: b64(digest("fresh-after-conflict"))};
+  const freshPossession = b64(ed25519.sign(codec.canonicalBytesForMemberContinuityPossession(freshClaim), next.seed));
+  const freshVouches = voucherKeys.map((key) => ({member: b64(key.pub), signature: b64(ed25519.sign(
+    codec.canonicalBytesForMemberContinuityVouch(freshClaim, freshPossession), key.seed))}));
+  const fresh = op("fresh-after-conflict", "attest_member_key_v1", [freshClaim, freshPossession, freshVouches], freshClaim.deps);
+  const causalOps = new Map([...f.context.visibleOps, [f.statement.id, f.statement], [other.id, other]]);
+  const causalVerdicts = new Map([...f.context.verdicts, [f.statement.id, "honored"], [other.id, "honored"]]);
+  assert.deepEqual(memberContinuityCommandStatus(fresh, new Set(causalOps.keys()),
+    {...f.context, visibleOps: causalOps, verdicts: causalVerdicts}), {ok: true});
 });
 
 test("heads coalesce wrappers and retain every same-old unresolved claim", async () => {
@@ -151,4 +174,63 @@ test("public observation authenticates raw closure and uses the ordinary capabil
   const partial = raw.frames.filter((frame) => frame.id === raw.command.id);
   assert.deepEqual(await observeMemberContinuityFromFrames({replica: raw.replica, frames: partial}),
     {ok: false, reason: "invalid_verified_history"});
+});
+
+test("review derives consent from signed history and assembly never invokes a signer before public judgment", async () => {
+  const admin = identity("integration-admin"), former = identity("integration-old"), successor = identity("integration-next");
+  const witnesses = [identity("integration-voucher-a"), identity("integration-voucher-b")]
+    .sort((a, b) => Buffer.compare(a.pub, b.pub));
+  const adminSigner = {publicKey: admin.pub, sign: (bytes: Uint8Array) => ed25519.sign(bytes, admin.seed)};
+  const genesis = await authorTownshipGenesis({replica: `replica:treehouse:space:${opId("integration-space")}#authority:bounded-continuation-v1`,
+    signer: adminSigner, roles: ["admin", "moderator"],
+    ops: ["create_space", "create_thread", "issue_invitation", "revoke_invitation", "admit_member", "remove_member", "attest_member_key_v1"]});
+  const delegation = carrierDelegationsFromFrames([genesis])[0]!;
+  const frames = [genesis];
+  const admissions: string[] = [];
+  for (const [index, member] of [former, ...witnesses].entries()) {
+    const invite = await authorTreehouseCommand({product: "Treehouse.Space", replica: genesis.replica,
+      deps: [frames.at(-1)!.id], signer: adminSigner, capId: delegation.id,
+      command: {command: "issue_invitation", recipient: b64(member.pub), threads: []}});
+    frames.push(invite);
+    const inviteOp = carrierOpsToSemanticOps([invite], {}, treehouseCommandDecoders("Treehouse.Space"))[0]!;
+    const acceptance = b64(ed25519.sign(treehouseInvitationAcceptanceBytes(genesis.replica, inviteOp), member.seed));
+    const admit = await authorTreehouseCommand({product: "Treehouse.Space", replica: genesis.replica,
+      deps: [invite.id], signer: adminSigner, capId: delegation.id,
+      command: {command: "admit_member", invitationId: invite.id, recipient: b64(member.pub), level: "member", acceptance}});
+    frames.push(admit); admissions[index] = admit.id;
+  }
+  const epoch = await authorCarrierOp({replica: genesis.replica, deps: [frames.at(-1)!.id], kind: "authority",
+    body: ["tuple", [["atom", "beacon"], ["int", 0]]], cap: ["nil"], signer: adminSigner});
+  frames.push(epoch);
+  const request = {replica: genesis.replica, frames, oldPub: b64(former.pub), oldAdmission: admissions[0]!,
+    newPub: b64(successor.pub), oldMembership: "active" as const, nonce: b64(digest("integration-nonce")),
+    voucherAdmissions: [admissions[1]!, admissions[2]!] as [string, string], author: b64(admin.pub), capId: delegation.id};
+  const reviewed = await reviewMemberContinuityFromFrames(request);
+  assert.equal(reviewed.ok, true, JSON.stringify(reviewed));
+  assert.deepEqual(await reviewMemberContinuityFromFrames({...request, oldMembership: "removed"}),
+    {ok: false, reason: "application_continuity_ineligible_member"});
+  assert.deepEqual(await reviewMemberContinuityFromFrames({...request, capId: opId("unknown-cap")}),
+    {ok: false, reason: "no_capability"});
+  if (!reviewed.ok) return;
+  const possession = b64(ed25519.sign(reviewed.review.possessionBytes, successor.seed));
+  const certificate = {claim: reviewed.review.claim, possession, vouches: witnesses.map((member) => ({member: b64(member.pub),
+    signature: b64(ed25519.sign(codec.canonicalBytesForMemberContinuityVouch(reviewed.review.claim, possession), member.seed))}))};
+  let calls = 0;
+  const guarded = {publicKey: admin.pub, sign: (bytes: Uint8Array) => { calls++; return ed25519.sign(bytes, admin.seed); }};
+  const bad = await assembleMemberContinuityFromFrames({frames, review: reviewed.review,
+    certificate: {...certificate, possession: b64(new Uint8Array(64))}, signer: guarded});
+  assert.deepEqual(bad, {ok: false, reason: "application_continuity_invalid_certificate"});
+  assert.equal(calls, 0);
+  const changed = await authorTreehouseCommand({product: "Treehouse.Space", replica: genesis.replica,
+    deps: [epoch.id], signer: adminSigner, capId: delegation.id,
+    command: {command: "issue_invitation", recipient: b64(identity("late-member").pub), threads: []}});
+  assert.deepEqual(await assembleMemberContinuityFromFrames({frames: [...frames, changed], review: reviewed.review,
+    certificate, signer: guarded}), {ok: false, reason: "stale_verified_state"});
+  assert.equal(calls, 0);
+  const assembled = await assembleMemberContinuityFromFrames({frames, review: reviewed.review, certificate, signer: guarded});
+  assert.equal(assembled.ok, true, JSON.stringify(assembled)); assert.equal(calls, 1);
+  if (assembled.ok) {
+    const observed = await observeMemberContinuityFromFrames({replica: genesis.replica, frames: [...frames, assembled.frame]});
+    assert.equal(observed.ok, true); if (observed.ok) assert.equal(observed.records[0]?.claimId, reviewed.review.claimId);
+  }
 });

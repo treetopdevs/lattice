@@ -78,7 +78,10 @@ export async function verifyMemberContinuityVector(vector: unknown) {
     assert.equal(cutoff.ok, true); assert.equal(cutoff.ops.length, frames.length);
     const ops = carrierOpsToSemanticOps(frames, {}, treehouseCommandDecoders("Treehouse.Space"));
     const projection = materialize(treehouseSpaceSchema, ops, new Set(ops.map((op) => op.id)), null, value.unknown_command.replica);
-    assert.equal(projection.quarantineReasons.get(value.unknown_command.op_id), value.unknown_command.expected_reason);
+    // The frozen codec fixture records its pre-semantic `unknown_command` provenance.
+    // R19b now recognizes the closed command, while the unchanged legacy grant
+    // still refuses it before application semantics.
+    assert.equal(projection.quarantineReasons.get(value.unknown_command.op_id), "operation_not_granted");
     assert.equal(value.unknown_command.expected_reason, "unknown_command");
     const before = ops.filter((op) => op.id !== value.unknown_command.op_id);
     assert.deepEqual(projection.state, materialize(treehouseSpaceSchema, before, new Set(before.map((op) => op.id)), null, value.unknown_command.replica).state);
