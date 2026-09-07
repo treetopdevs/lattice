@@ -4,6 +4,8 @@
 //! may therefore establish only its first observed `Started`/matching `Finished`
 //! pair. Any ambiguity permanently closes this adapter; replacement requires a
 //! newly constructed native owner and launch-owned nonce source.
+//! Wiring must deliver the native navigation-request hook before the initial
+//! `Started`; the adapter never fabricates that request from a load event.
 
 use crate::witness_bridge::Bytes32;
 use crate::witness_session::{SessionSnapshot, WitnessSession, SESSION_REFUSED};
@@ -16,7 +18,10 @@ pub(crate) struct WitnessDocumentSession<N> {
 }
 
 enum Phase {
-    AwaitingFirstStart,
+    AwaitingFirstRequest,
+    AwaitingFirstStart {
+        document: Url,
+    },
     AwaitingFirstFinish {
         ticket: crate::witness_session::NativeLoadTicket,
         document: Url,
@@ -29,8 +34,31 @@ impl<N: FnMut() -> Bytes32> WitnessDocumentSession<N> {
     pub(crate) fn new(launch_nonce: Bytes32, navigation_nonce: N) -> Self {
         Self {
             session: WitnessSession::new(launch_nonce),
-            phase: Phase::AwaitingFirstStart,
+            phase: Phase::AwaitingFirstRequest,
             navigation_nonce,
+        }
+    }
+
+    /// Records the first native navigation request. Every later request
+    /// immediately invalidates this owner, including before Tauri emits Started.
+    pub(crate) fn navigation_requested<R: Runtime>(
+        &mut self,
+        webview: &Webview<R>,
+        requested_url: &Url,
+    ) -> Result<(), &'static str> {
+        let phase = std::mem::replace(&mut self.phase, Phase::Refused);
+        if matches!(phase, Phase::AwaitingFirstRequest)
+            && webview.window().label() == "main"
+            && webview.label() == "main"
+            && local_document(requested_url)
+        {
+            self.phase = Phase::AwaitingFirstStart {
+                document: requested_url.clone(),
+            };
+            Ok(())
+        } else {
+            self.session.navigation_started();
+            Err(SESSION_REFUSED)
         }
     }
 
@@ -42,7 +70,9 @@ impl<N: FnMut() -> Bytes32> WitnessDocumentSession<N> {
     ) -> Result<(), &'static str> {
         let phase = std::mem::replace(&mut self.phase, Phase::Refused);
         match (phase, event) {
-            (Phase::AwaitingFirstStart, PageLoadEvent::Started) => {
+            (Phase::AwaitingFirstStart { document }, PageLoadEvent::Started)
+                if document == *event_url =>
+            {
                 if webview.url().map_err(|_| SESSION_REFUSED)? != *event_url {
                     return Err(SESSION_REFUSED);
                 }
@@ -103,4 +133,12 @@ impl<N: FnMut() -> Bytes32> WitnessDocumentSession<N> {
         self.session.owner_destroyed();
         self.phase = Phase::Refused;
     }
+}
+
+fn local_document(url: &Url) -> bool {
+    url.scheme() == "http"
+        && url.host_str() == Some("tauri.localhost")
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.port().is_none()
 }

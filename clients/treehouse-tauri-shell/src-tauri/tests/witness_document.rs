@@ -15,6 +15,14 @@ fn nonce(value: u8) -> Bytes32 {
     Bytes32([value; 32])
 }
 
+fn request(
+    adapter: &mut WitnessDocumentSession<impl FnMut() -> Bytes32>,
+    webview: &Webview<tauri::test::MockRuntime>,
+    url: &Url,
+) {
+    adapter.navigation_requested(webview, url).unwrap();
+}
+
 fn view() -> (
     tauri::App<tauri::test::MockRuntime>,
     Webview<tauri::test::MockRuntime>,
@@ -35,6 +43,7 @@ fn first_actual_started_and_matching_finished_establish_one_session() {
     let (_app, webview) = view();
     let url = LOCAL.parse().unwrap();
     let mut adapter = WitnessDocumentSession::new(nonce(1), || nonce(2));
+    request(&mut adapter, &webview, &url);
     assert!(adapter.snapshot(&webview).is_err());
     assert_eq!(
         adapter.page_load(&webview, PageLoadEvent::Started, &url),
@@ -56,6 +65,7 @@ fn same_url_reload_and_late_finished_never_receive_a_replacement_ticket() {
     let (_app, webview) = view();
     let url = LOCAL.parse().unwrap();
     let mut adapter = WitnessDocumentSession::new(nonce(1), || nonce(2));
+    request(&mut adapter, &webview, &url);
     assert!(adapter
         .page_load(&webview, PageLoadEvent::Started, &url)
         .is_ok());
@@ -76,6 +86,7 @@ fn any_event_after_establishment_permanently_refuses_this_owner() {
         let (_app, webview) = view();
         let url = LOCAL.parse().unwrap();
         let mut adapter = WitnessDocumentSession::new(nonce(1), || nonce(2));
+        request(&mut adapter, &webview, &url);
         adapter
             .page_load(&webview, PageLoadEvent::Started, &url)
             .unwrap();
@@ -96,6 +107,7 @@ fn lifecycle_and_destruction_latch_closed_until_fresh_owner() {
     for destroy in [false, true] {
         let (_app, webview) = view();
         let mut adapter = WitnessDocumentSession::new(nonce(1), || nonce(2));
+        request(&mut adapter, &webview, &url);
         adapter
             .page_load(&webview, PageLoadEvent::Started, &url)
             .unwrap();
@@ -112,6 +124,7 @@ fn lifecycle_and_destruction_latch_closed_until_fresh_owner() {
     }
     let (_app, webview) = view();
     let mut fresh = WitnessDocumentSession::new(nonce(1), || nonce(2));
+    request(&mut fresh, &webview, &url);
     fresh
         .page_load(&webview, PageLoadEvent::Started, &url)
         .unwrap();
@@ -133,7 +146,7 @@ fn foreign_owner_and_origin_poison_first_start() {
         .unwrap();
     let mut foreign = WitnessDocumentSession::new(nonce(1), || nonce(2));
     assert_eq!(
-        foreign.page_load(other.as_ref(), PageLoadEvent::Started, &local),
+        foreign.navigation_requested(other.as_ref(), &local),
         Err(SESSION_REFUSED)
     );
     assert_eq!(
@@ -144,7 +157,7 @@ fn foreign_owner_and_origin_poison_first_start() {
     let (_app, webview) = view();
     let mut origin = WitnessDocumentSession::new(nonce(1), || nonce(2));
     assert_eq!(
-        origin.page_load(&webview, PageLoadEvent::Started, &remote),
+        origin.navigation_requested(&webview, &remote),
         Err(SESSION_REFUSED)
     );
     assert_eq!(
@@ -155,6 +168,7 @@ fn foreign_owner_and_origin_poison_first_start() {
     let (_app, webview) = view();
     webview.navigate(remote.clone()).unwrap();
     let mut mismatched = WitnessDocumentSession::new(nonce(1), || nonce(2));
+    request(&mut mismatched, &webview, &local);
     assert_eq!(
         mismatched.page_load(&webview, PageLoadEvent::Started, &local),
         Err(SESSION_REFUSED)
@@ -166,12 +180,73 @@ fn missing_initial_started_hook_can_never_be_repaired_by_finished_or_later_start
     let (_app, webview) = view();
     let url = LOCAL.parse().unwrap();
     let mut adapter = WitnessDocumentSession::new(nonce(1), || nonce(2));
+    request(&mut adapter, &webview, &url);
     assert_eq!(
         adapter.page_load(&webview, PageLoadEvent::Finished, &url),
         Err(SESSION_REFUSED)
     );
     assert_eq!(
         adapter.page_load(&webview, PageLoadEvent::Started, &url),
+        Err(SESSION_REFUSED)
+    );
+    assert!(adapter.snapshot(&webview).is_err());
+}
+
+#[test]
+fn navigation_request_immediately_invalidates_an_established_snapshot() {
+    let (_app, webview) = view();
+    let url: Url = LOCAL.parse().unwrap();
+    let mut adapter = WitnessDocumentSession::new(nonce(1), || nonce(2));
+    request(&mut adapter, &webview, &url);
+    adapter
+        .page_load(&webview, PageLoadEvent::Started, &url)
+        .unwrap();
+    adapter
+        .page_load(&webview, PageLoadEvent::Finished, &url)
+        .unwrap();
+    assert!(adapter.snapshot(&webview).is_ok());
+    assert_eq!(
+        adapter.navigation_requested(&webview, &url),
+        Err(SESSION_REFUSED)
+    );
+    assert!(adapter.snapshot(&webview).is_err());
+    assert_eq!(
+        adapter.page_load(&webview, PageLoadEvent::Finished, &url),
+        Err(SESSION_REFUSED)
+    );
+}
+
+#[test]
+fn repeated_request_before_first_start_latches_refusal() {
+    let (_app, webview) = view();
+    let url: Url = LOCAL.parse().unwrap();
+    let mut adapter = WitnessDocumentSession::new(nonce(1), || nonce(2));
+    request(&mut adapter, &webview, &url);
+    assert_eq!(
+        adapter.navigation_requested(&webview, &url),
+        Err(SESSION_REFUSED)
+    );
+    assert_eq!(
+        adapter.page_load(&webview, PageLoadEvent::Started, &url),
+        Err(SESSION_REFUSED)
+    );
+}
+
+#[test]
+fn request_while_first_load_is_pending_refuses_late_finished() {
+    let (_app, webview) = view();
+    let url: Url = LOCAL.parse().unwrap();
+    let mut adapter = WitnessDocumentSession::new(nonce(1), || nonce(2));
+    request(&mut adapter, &webview, &url);
+    adapter
+        .page_load(&webview, PageLoadEvent::Started, &url)
+        .unwrap();
+    assert_eq!(
+        adapter.navigation_requested(&webview, &url),
+        Err(SESSION_REFUSED)
+    );
+    assert_eq!(
+        adapter.page_load(&webview, PageLoadEvent::Finished, &url),
         Err(SESSION_REFUSED)
     );
     assert!(adapter.snapshot(&webview).is_err());
