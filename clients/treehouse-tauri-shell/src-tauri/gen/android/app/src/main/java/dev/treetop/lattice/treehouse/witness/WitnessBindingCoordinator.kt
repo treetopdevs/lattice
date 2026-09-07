@@ -54,6 +54,7 @@ internal class WitnessBindingCoordinator(
     private val monotonicNanos: () -> Long = System::nanoTime,
     private val journalCheckpoint: (String) -> Unit = {},
     private val lifecycleCheckpoint: (String) -> Unit = {},
+    private val onDrained: () -> Unit = {},
     private val scheduleExpiry: (Long, () -> Unit) -> WitnessExpiry = { delay, task ->
         val future = timer.schedule(task, delay, TimeUnit.MILLISECONDS)
         WitnessExpiry { future.cancel(false) }
@@ -111,7 +112,9 @@ internal class WitnessBindingCoordinator(
                     enrollment.recipient.copyBytes(), metadata.publicKey.copyBytes(),
                     snapshot.identity.creationAttemptId.copyBytes(), digest, request.validatorNonce.copyBytes(),
                     request.nativeNonce.copyBytes(), request.sessionDigest.copyBytes())
-                attempt.cancellation.set(ui.review(details) { attempt.review.complete(it) })
+                val reviewCancellation = ui.review(details) { attempt.review.complete(it) }
+                attempt.cancellation.set(reviewCancellation)
+                if (!isCurrent(attempt)) { reviewCancellation.cancel(); attempt.review.complete(false) }
                 if (!attempt.review.get(120, TimeUnit.SECONDS)) throw Failure("cancelled")
                 requireCurrent(attempt)
                 // Consent time starts before the durable write; storage transit can only consume it.
@@ -191,7 +194,9 @@ internal class WitnessBindingCoordinator(
                 requireUsable(attempt, checkRevision = true)
                 val signature = stored(platform.prepareSignature(stored(attempt.journal.observeExisting()).identity))
                 requireUsable(attempt, checkRevision = true)
-                attempt.cancellation.set(ui.authenticate(signature) { attempt.presence.complete(it) })
+                val presenceCancellation = ui.authenticate(signature) { attempt.presence.complete(it) }
+                attempt.cancellation.set(presenceCancellation)
+                if (!isCurrent(attempt)) { presenceCancellation.cancel(); attempt.presence.complete(WitnessPresenceResult.Refused("cancelled")) }
                 val presence = attempt.presence.get(remainingMillis(attempt), TimeUnit.MILLISECONDS)
                 val returned = when (presence) {
                     is WitnessPresenceResult.Success -> presence.signature
@@ -263,8 +268,9 @@ internal class WitnessBindingCoordinator(
     private fun finish(attempt: Attempt) {
         attempt.expiry?.cancel()
         if (!active.compareAndSet(attempt, null)) return
-        try { attempt.closeJournal() } catch (_: Exception) {}
+        try { attempt.closeJournal() } catch (_: Exception) { return }
         attempt.state.set(State.TERMINAL)
+        onDrained()
     }
     private fun requireCurrent(attempt: Attempt) { if (!isCurrent(attempt)) throw Failure("cancelled") }
     private fun isCurrent(attempt: Attempt) = active.get() === attempt && !attempt.cancelled.get() &&

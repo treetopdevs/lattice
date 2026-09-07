@@ -25,6 +25,8 @@ internal class WitnessPreparedHandleRegistry internal constructor(
             override fun cancel(operationId: ByteArray, sessionDigest: ByteArray) = coordinator.cancel(operationId, sessionDigest)
         }, secureHandles(), { System.nanoTime() / 1_000_000L })
 
+    constructor(backend: WitnessPreparedHandleBackend): this(backend, secureHandles(), { System.nanoTime() / 1_000_000L })
+
     private enum class State { PREPARED, SIGNING, CANCELLED, TERMINAL }
     private class Entry(val operationId: WitnessBytes, val session: WitnessBytes, val token: WitnessBytes,
         val prepared: PreparedWitnessBinding, val deadline: Long) {
