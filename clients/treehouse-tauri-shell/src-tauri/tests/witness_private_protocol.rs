@@ -64,12 +64,13 @@ fn duplicate_extra_wrong_types_noncanonical_and_bounds_refuse() {
 fn revisions_and_replica_are_canonical_and_bounded() {
     let template = |revision: &str, replica: &str| {
         format!(
-            r#"{{"kind":"proof","protocol":"{PRIVATE_PROTOCOL}","operationId":"{}","sessionDigest":"{}","expectedRevision":"{revision}","replica":"{replica}","enrollmentId":"{}","recipient":"{}","freshValidatorNonce":"{}"}}"#,
+            r#"{{"kind":"proof","protocol":"{PRIVATE_PROTOCOL}","operationId":"{}","sessionDigest":"{}","expectedRevision":"{revision}","replica":"{replica}","enrollmentId":"{}","recipient":"{}","freshValidatorNonce":"{}","nativeNonce":"{}"}}"#,
             b(1),
             b(2),
             b(3),
             b(4),
-            b(5)
+            b(5),
+            b(6)
         )
     };
     assert!(decode_request(template("9223372036854775807", "r").as_bytes()).is_ok());
@@ -146,4 +147,83 @@ fn encoding_revalidates_constructed_values_and_escaped_replica_round_trips() {
         generation_challenge: Bytes32([4; 32]),
     });
     assert!(encode_request(&invalid).is_err());
+}
+
+#[test]
+fn native_proof_nonce_is_required_and_canonical() {
+    let proof = format!(
+        r#"{{"kind":"proof","protocol":"{PRIVATE_PROTOCOL}","operationId":"{}","sessionDigest":"{}","expectedRevision":"1","replica":"r","enrollmentId":"{}","recipient":"{}","freshValidatorNonce":"{}","nativeNonce":"{}"}}"#,
+        b(1),
+        b(2),
+        b(3),
+        b(4),
+        b(5),
+        b(6)
+    );
+    let decoded = decode_request(proof.as_bytes()).unwrap();
+    assert!(
+        matches!(&decoded, PrivateRequest::Proof(value) if value.native_nonce == Bytes32([6; 32]))
+    );
+    assert_eq!(
+        decode_request(&encode_request(&decoded).unwrap()).unwrap(),
+        decoded
+    );
+    for bad in [
+        proof.replace(&format!(r#","nativeNonce":"{}""#, b(6)), ""),
+        proof.replace(&b(6), "AA=="),
+        proof.replace(&b(6), b(6).trim_end_matches('=')),
+    ] {
+        assert!(decode_request(bad.as_bytes()).is_err());
+    }
+}
+
+#[test]
+fn opaque_sign_handoff_is_closed_and_response_remains_proof() {
+    let handoff = format!(
+        r#"{{"kind":"sign_prepared","protocol":"{PRIVATE_PROTOCOL}","operationId":"{}","sessionDigest":"{}","handle":"{}"}}"#,
+        b(1),
+        b(2),
+        b(3)
+    );
+    let decoded = decode_request(handoff.as_bytes()).unwrap();
+    assert!(
+        matches!(&decoded, PrivateRequest::SignPrepared(value) if value.handle == Bytes32([3; 32]))
+    );
+    assert_eq!(
+        decode_request(&encode_request(&decoded).unwrap()).unwrap(),
+        decoded
+    );
+    for extra in [
+        "alias",
+        "signBytes",
+        "version",
+        "expectedRevision",
+        "nativeNonce",
+    ] {
+        let bad = handoff.replacen("}", &format!(r#","{extra}":"x"}}"#), 1);
+        assert!(decode_request(bad.as_bytes()).is_err());
+    }
+    for bad in [
+        handoff.replace(&format!(r#","handle":"{}""#, b(3)), ""),
+        handoff.replace(&b(3), "AA=="),
+        handoff.replace(&b(3), b(3).trim_end_matches('=')),
+        handoff.replacen("}", &format!(r#","h\u0061ndle":"{}"}}"#, b(3)), 1),
+    ] {
+        assert!(decode_request(bad.as_bytes()).is_err());
+    }
+    let response = TerminalResponse::terminal(
+        ResponseKind::Proof,
+        Bytes32([1; 32]),
+        TerminalStatus::Cancelled,
+    )
+    .unwrap();
+    let encoded = encode_terminal_response(&response).unwrap();
+    assert_eq!(
+        decode_terminal_response(&encoded).unwrap().kind,
+        ResponseKind::Proof
+    );
+    let invalid = String::from_utf8(encoded)
+        .unwrap()
+        .replace("proof", "sign_prepared");
+    assert!(decode_terminal_response(invalid.as_bytes()).is_err());
 }

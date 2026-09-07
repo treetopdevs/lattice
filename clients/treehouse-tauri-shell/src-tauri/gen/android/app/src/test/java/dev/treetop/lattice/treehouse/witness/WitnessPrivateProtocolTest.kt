@@ -13,7 +13,7 @@ class WitnessPrivateProtocolTest {
             "{\"kind\":\"identity\",$common}",
             "{\"kind\":\"prepare\",$common,\"replica\":\"replica:test\",\"enrollmentId\":\"${b(3)}\",\"recipient\":\"${b(4)}\",\"creationAttemptId\":\"${b(5)}\"}",
             "{\"kind\":\"generate\",$common,\"expectedRevision\":\"7\",\"creationAttemptId\":\"${b(5)}\",\"generationChallenge\":\"${b(6)}\"}",
-            "{\"kind\":\"proof\",$common,\"expectedRevision\":\"7\",\"replica\":\"replica:test\",\"enrollmentId\":\"${b(3)}\",\"recipient\":\"${b(4)}\",\"freshValidatorNonce\":\"${b(7)}\"}",
+            "{\"kind\":\"proof\",$common,\"expectedRevision\":\"7\",\"replica\":\"replica:test\",\"enrollmentId\":\"${b(3)}\",\"recipient\":\"${b(4)}\",\"freshValidatorNonce\":\"${b(7)}\",\"nativeNonce\":\"${b(9)}\"}",
             "{\"kind\":\"cancel\",$common,\"targetOperationId\":\"${b(8)}\"}")
         assertTrue(WitnessPrivateProtocol.decodeRequest(requests[0].toByteArray()) is WitnessPrivateRequest.Identity)
         assertTrue(WitnessPrivateProtocol.decodeRequest(requests[1].toByteArray()) is WitnessPrivateRequest.Prepare)
@@ -73,6 +73,30 @@ class WitnessPrivateProtocolTest {
         }
         val valid = WitnessTerminalResponse(WitnessPrivateKind.IDENTITY, WitnessBytes(bytes(1)), WitnessTerminalStatus.MISSING)
         assertEquals(valid, WitnessPrivateProtocol.decodeTerminal(checkNotNull(WitnessPrivateProtocol.encodeTerminal(valid))))
+    }
+    @Test fun nativeNonceIsRequiredAndCanonical() {
+        val common="\"protocol\":\"${WitnessPrivateProtocol.PROTOCOL}\",\"operationId\":\"${b(1)}\",\"sessionDigest\":\"${b(2)}\""
+        val proof="{\"kind\":\"proof\",$common,\"expectedRevision\":\"1\",\"replica\":\"r\",\"enrollmentId\":\"${b(3)}\",\"recipient\":\"${b(4)}\",\"freshValidatorNonce\":\"${b(5)}\",\"nativeNonce\":\"${b(6)}\"}"
+        assertEquals(WitnessBytes(bytes(6)), (WitnessPrivateProtocol.decodeRequest(proof.toByteArray()) as WitnessPrivateRequest.Proof).nativeNonce)
+        for (bad in listOf(proof.replace(",\"nativeNonce\":\"${b(6)}\"", ""), proof.replace(b(6), "AA=="), proof.replace(b(6), b(6).trimEnd('=')))) {
+            assertNull(WitnessPrivateProtocol.decodeRequest(bad.toByteArray()))
+        }
+    }
+
+    @Test fun opaqueSignHandoffIsClosedAndResponseRemainsProof() {
+        val common="\"protocol\":\"${WitnessPrivateProtocol.PROTOCOL}\",\"operationId\":\"${b(1)}\",\"sessionDigest\":\"${b(2)}\""
+        val handoff="{\"kind\":\"sign_prepared\",$common,\"handle\":\"${b(3)}\"}"
+        assertEquals(WitnessBytes(bytes(3)), (WitnessPrivateProtocol.decodeRequest(handoff.toByteArray()) as WitnessPrivateRequest.SignPrepared).handle)
+        for (extra in listOf("alias", "signBytes", "version", "expectedRevision", "nativeNonce")) {
+            assertNull(WitnessPrivateProtocol.decodeRequest(handoff.replace("}", ",\"$extra\":\"x\"}").toByteArray()))
+        }
+        for (bad in listOf(handoff.replace(",\"handle\":\"${b(3)}\"", ""), handoff.replace(b(3), "AA=="), handoff.replace(b(3), b(3).trimEnd('=')), handoff.replace("}", ",\"h\\u0061ndle\":\"${b(3)}\"}"))) {
+            assertNull(WitnessPrivateProtocol.decodeRequest(bad.toByteArray()))
+        }
+        val response=WitnessTerminalResponse(WitnessPrivateKind.PROOF, WitnessBytes(bytes(1)), WitnessTerminalStatus.CANCELLED)
+        val encoded=checkNotNull(WitnessPrivateProtocol.encodeTerminal(response))
+        assertEquals(response, WitnessPrivateProtocol.decodeTerminal(encoded))
+        assertNull(WitnessPrivateProtocol.decodeTerminal(String(encoded).replace("proof", "sign_prepared").toByteArray()))
     }
     private fun bytes(v:Int)=ByteArray(32){v.toByte()}
     private fun b(v:Int)=b(bytes(v))

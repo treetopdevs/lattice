@@ -70,6 +70,7 @@ pub enum PrivateRequest {
     Prepare(PrepareRequest),
     Generate(GenerateRequest),
     Proof(ProofRequest),
+    SignPrepared(SignPreparedRequest),
     Cancel(CancelRequest),
 }
 
@@ -137,6 +138,21 @@ pub struct ProofRequest {
     pub recipient: Bytes32,
     #[serde(rename = "freshValidatorNonce")]
     pub fresh_validator_nonce: Bytes32,
+    #[serde(rename = "nativeNonce")]
+    pub native_nonce: Bytes32,
+}
+
+/// Opaque private bridge token; never accepts bytes to sign or a key selector.
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct SignPreparedRequest {
+    #[serde(deserialize_with = "protocol", serialize_with = "serialize_protocol")]
+    pub protocol: (),
+    #[serde(rename = "operationId")]
+    pub operation_id: Bytes32,
+    #[serde(rename = "sessionDigest")]
+    pub session_digest: Bytes32,
+    pub handle: Bytes32,
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]

@@ -14,7 +14,9 @@ internal sealed interface WitnessPrivateRequest {
     data class Generate(override val operationId: WitnessBytes, override val sessionDigest: WitnessBytes, val expectedRevision: Long,
         val creationAttemptId: WitnessBytes, val generationChallenge: WitnessBytes): WitnessPrivateRequest
     data class Proof(override val operationId: WitnessBytes, override val sessionDigest: WitnessBytes, val expectedRevision: Long,
-        val replica: String, val enrollmentId: WitnessBytes, val recipient: WitnessBytes, val freshValidatorNonce: WitnessBytes): WitnessPrivateRequest
+        val replica: String, val enrollmentId: WitnessBytes, val recipient: WitnessBytes, val freshValidatorNonce: WitnessBytes, val nativeNonce: WitnessBytes): WitnessPrivateRequest
+    data class SignPrepared(override val operationId: WitnessBytes, override val sessionDigest: WitnessBytes,
+        val handle: WitnessBytes): WitnessPrivateRequest
     data class Cancel(override val operationId: WitnessBytes, override val sessionDigest: WitnessBytes,
         val targetOperationId: WitnessBytes): WitnessPrivateRequest
 }
@@ -43,8 +45,10 @@ internal object WitnessPrivateProtocol {
                 WitnessPrivateRequest.Prepare(operation, session, replica(objectValue), field32(objectValue,"enrollmentId"), field32(objectValue,"recipient"), field32(objectValue,"creationAttemptId")) }
             "generate" -> { exact(objectValue,"kind","protocol","operationId","sessionDigest","expectedRevision","creationAttemptId","generationChallenge")
                 WitnessPrivateRequest.Generate(operation, session, revision(objectValue), field32(objectValue,"creationAttemptId"), field32(objectValue,"generationChallenge")) }
-            "proof" -> { exact(objectValue,"kind","protocol","operationId","sessionDigest","expectedRevision","replica","enrollmentId","recipient","freshValidatorNonce")
-                WitnessPrivateRequest.Proof(operation, session, revision(objectValue), replica(objectValue), field32(objectValue,"enrollmentId"), field32(objectValue,"recipient"), field32(objectValue,"freshValidatorNonce")) }
+            "proof" -> { exact(objectValue,"kind","protocol","operationId","sessionDigest","expectedRevision","replica","enrollmentId","recipient","freshValidatorNonce","nativeNonce")
+                WitnessPrivateRequest.Proof(operation, session, revision(objectValue), replica(objectValue), field32(objectValue,"enrollmentId"), field32(objectValue,"recipient"), field32(objectValue,"freshValidatorNonce"), field32(objectValue,"nativeNonce")) }
+            "sign_prepared" -> { exact(objectValue,"kind","protocol","operationId","sessionDigest","handle")
+                WitnessPrivateRequest.SignPrepared(operation, session, field32(objectValue,"handle")) }
             "cancel" -> { exact(objectValue,"kind","protocol","operationId","sessionDigest","targetOperationId")
                 WitnessPrivateRequest.Cancel(operation, session, field32(objectValue,"targetOperationId")) }
             else -> null
