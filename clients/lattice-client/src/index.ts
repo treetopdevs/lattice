@@ -17,7 +17,19 @@ export * from "./quarantine";
 export * from "./capability";
 export * from "./consent";
 export * from "./policy";
-export * from "./authority";
+// Keep the unauthenticating application predicate internal to the module graph.
+export {
+  resolveContinuationProfileFromFrames, analyzeAuthority, continuationFamily, deriveContinuationReview,
+  deriveWitnessedSuccessionReview, assembleWitnessedSuccessionArtifact, exportWitnessedSuccessionArtifactJson,
+  witnessedRecoveryPolicyId, verifyWitnessedSuccessionCertificate, witnessedBeaconHorizon,
+} from "./authority";
+export type {
+  ContinuationProfileObservation, HonoredAcquire, DelegationValidation, AuthorityDelegationRecord,
+  AuthorityRootEvidence, EffectiveBeaconEvidence, EffectiveRevokeEvidence, AuthoritySecurityProjection,
+  RecoveryPolicyProjection, AuthorityAnalysis, WitnessedSuccessionReviewSelector, WitnessedSuccessionReview,
+  WitnessedSuccessionReviewRefusal, WitnessedSuccessionReviewResult, ContinuationFamily,
+  WitnessedSuccessionVerificationReason, WitnessedSuccessionVerification,
+} from "./authority";
 export * from "./crdt/reducers";
 export * from "./materialize";
 export * from "./sync";
@@ -30,3 +42,18 @@ export * from "./local_log";
 export * from "./tauri_bridge";
 export * from "./township";
 export * from "./treehouse";
+
+export { deriveTreehouseCatalogCutoff } from "./treehouse_catalog_cutoff";
+export type { TreehouseCatalogCutoffInput, TreehouseCatalogCutoffResult, TreehouseCutoffOp, TreehouseCutoffRejectedOp } from "./treehouse_catalog_cutoff";
+
+// Decisions are pure candidates; only a trusted adapter can establish installation.
+export {
+  prepareTreehouseCatalogInstallation, evaluateTreehouseCatalogTrust, resolveTreehouseCatalogRoute,
+} from "./treehouse_catalog_trust";
+export type {
+  TreehouseCatalogRawHistory, TreehouseCatalogBootstrapReview, TreehouseCatalogCutoffProof,
+  TreehouseCatalogEvidencePage, TreehouseCatalogStoreToken, TreehouseCatalogWatermark,
+  TreehouseCatalogOverflowTrigger, TreehouseCatalogBlock, InstalledTreehouseCatalogTrustV1,
+  TreehouseCatalogTrustReason, TreehouseCatalogRefusalDetail, VerifiedTreehouseCatalogRoute,
+  TreehouseCatalogTrustDecision, TreehouseCatalogRouteDecision,
+} from "./treehouse_catalog_trust";

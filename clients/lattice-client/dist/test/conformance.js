@@ -153,10 +153,15 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
     }
     if (Array.isArray(vec.capabilityCase?.rawBeaconDeps)) {
         const target = ops.find((op) => op.id === vec.capabilityCase?.beaconOperationId);
-        check("raw duplicate outer dependencies remain in semantic evidence", target?.deps, vec.capabilityCase.rawBeaconDeps);
+        check("raw duplicate beacon vector supplies its semantic beacon operation", target !== undefined, true);
+        if (target !== undefined) {
+            check("raw duplicate outer dependencies remain in semantic evidence", target.deps, vec.capabilityCase.rawBeaconDeps);
+        }
         for (const delivered of [ops, [...ops].reverse()]) {
             const projection = materialize(vec.schema, delivered);
-            check("raw duplicate beacon matches BEAM admission in both delivery orders", projection.quarantineReasons.has(target.id), false);
+            if (target !== undefined) {
+                check("raw duplicate beacon matches BEAM admission in both delivery orders", projection.quarantineReasons.has(target.id), false);
+            }
             check("duplicate received claim retains BEAM refusal in both delivery orders", projection.quarantineReasons.get(vec.capabilityCase.invalidReceivedClaimId), "unauthorized_beacon");
         }
     }

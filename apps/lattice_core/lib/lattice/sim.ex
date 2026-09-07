@@ -49,6 +49,8 @@ defmodule Lattice.Sim do
   Establish the Replica: `creator_realm` self-grants full capability + all roles via
   a genesis op, seeded into every realm's log. `:policies` maps role => `%{successor:
   realm_id, dormant_ticks: n}` and is resolved to successor pubkeys in the log.
+  `:ops` supplies an explicit signed genesis capability ceiling; omitted, it
+  includes the current command registry. It never bypasses later cap checks.
   Returns `{sim, genesis_op}`.
   """
   @spec create_replica(t(), String.t(), keyword()) :: {t(), Op.t()}
@@ -59,7 +61,7 @@ defmodule Lattice.Sim do
     # cannot match the commitment and is quarantined by `Lattice.Authority`.
     replica = Authority.bind_replica(sim.replica, creator.pub)
     sim = %{sim | replica: replica}
-    ops = command_names(sim.module)
+    ops = Keyword.get_lazy(opts, :ops, fn -> command_names(sim.module) end)
     roles = roles(sim.module)
 
     genesis_deleg =

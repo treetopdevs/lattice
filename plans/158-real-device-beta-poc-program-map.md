@@ -455,6 +455,33 @@ clients verify every catalog signature through the root-bound bootstrap. Normal 
 old key to sign the new key and cutoff; loss recovery requires a new founder/product-root ceremony and
 never silently trusts a regenerated operator key.
 
+#### Adopted unified R11 catalog amendment — 2026-09-06
+
+The preceding founder-only lost-catalog-key clause remains historical. For the
+unified Treehouse profile only, the integrator adopts the exact reviewed
+[R11 catalog contract](../docs/research/treehouse_catalog_lifecycle.md), reviewed
+by Claude Fable at `789ab235` with a final PASS. A living-root-pinned delegation
+authorizes an honored bounded Space-admin `replace_catalog_v1` action; that
+permission must exist in its pre-loss acquisition ceiling. Installed clients
+retain their original bootstrap and verify full current Core authority, exact
+control predecessor digests, new-key possession, inventory and cutoff before
+adoption. No new root, operator authority, fresh-client trust injection or
+additional catalog witness quorum is implied. Planned old-key rotation and
+encrypted same-key restore remain separate; other products are unchanged.
+
+Known fork, rollback, reclassified authority and missing evidence stop automatic
+switching. Publication binds the exact prepared signed Space reference and child
+genesis/creation bytes, readies transport and signs the catalog before publishing
+that original reference. Treehouse's 12-Thread limit includes archives and is a
+catalog/provisioning limit. The root-only preview's exact original command
+ceiling/genesis bytes remain unchanged; an explicit bounded-profile creator
+owns the new permission. The 64,000-byte final carrier envelope is unchanged;
+wide frontiers have only the conditional authorized bounded-fan-in retry stated
+in R11, never a guarantee, pruning, split signed operation or increased cap.
+
+This is scope adoption for local R11a and later R11b/R11c packets, not completed
+catalog, hosted dependency, WSS, native or physical loss-recovery evidence.
+
 Each entry binds product, schema version, replica ID, replica kind, opaque WSS route, expected
 service-key fingerprint and creation op. A catalog signature does not make a Tool or Thread
 semantically visible and confers no product authority: the product replica must contain its own

@@ -66,6 +66,30 @@ Space commands:
 - `revoke grant` revokes one grant, including a moderator grant.
 - `witnessed succession` follows the witness set, threshold and evidence rules pinned in genesis;
   dormant-tick succession is not enabled, and the mobile ceremony is hidden in the first beta.
+- `catalog bootstrap v1` is the root-authored, admin-field-gated
+  `catalog_bootstrap_v1(record)` command, pinning the closed transport-only
+  binding and bounded-admin replacement rule before loss.
+- `replace catalog v1` is `replace_catalog_v1(claim, catalog_possession, service_possession)`,
+  recording the scoped admin-authorized transport replacement proposal; actual
+  route adoption additionally requires retained-trust authority, possession,
+  inventory and readiness verification.
+
+The last two entries are the **adopted unified R11 vocabulary amendment,
+2026-09-06**, after integrator adoption and Claude Fable's exact `789ab235`
+contract PASS. Their closed fields, domains and refusals are defined by the
+[R11 contract](../docs/research/treehouse_catalog_lifecycle.md). Neither changes
+membership, grants, immutable replica roots or child authority. Existing
+commands and protected hosting/founder-loss/invitation copy stay unchanged.
+These entries are unavailable in the existing root-only preview: preserve its
+original explicit command ceiling and canonical genesis rather than deriving
+a broader grant from the expanded command registry. R11a implements the local
+bootstrap/catalog trust seam; R11c owns replacement activation. This vocabulary
+adoption is not a claim that either workflow or a community profile is enabled.
+The integrator's 2026-09-06 state-compatibility correction preserves existing
+materialized fields: each command writes its name through `admin_actions`, and
+catalog-control queries derive the complete record only from actually honored
+authenticated command bodies. Do not introduce a `catalog_controls` field or
+change the existing LWW marker into a list.
 
 Thread commands:
 

@@ -1,7 +1,7 @@
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { authorCarrierDelegation, authorCarrierOp, verifyCarrierOp } from "./codec";
 import type { CarrierOpSigner } from "./codec";
-import { base64ToBytes, canonicalTerm, carrierDelegationsFromFrames, carrierOpsToSemanticOps } from "./carrier";
+import { base64ToBytes, canonicalTerm, carrierDelegationsFromFrames, carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
 import type { CarrierDelegation, CarrierOpFrame, CarrierTerm, CommandDecoder, CommandDecoderMap, DecodedTerm, Payload } from "./carrier";
 import type { CommandEffect, Op } from "./op";
 import { compareUtf8, effectViews } from "./op";
@@ -9,8 +9,12 @@ import type { ReplicaSchema } from "./schema";
 import type { CommandOpStatus, CommandOpStatusContext } from "./policy";
 import { authorTownshipGenesis, authorTownshipRevocation, townshipCapTerm } from "./township";
 import { materialize } from "./materialize";
-import { depth, index } from "./dag";
+import { canonicalOrder, depth, index } from "./dag";
+import { frontier } from "./sync";
 import { causalListEntries } from "./crdt/reducers";
+import { continuationProfileBindingMatches } from "./authority";
+import { catalogBootstrapFromDecodedTerm, catalogBootstrapToCarrierTerm, normalizeCatalogBootstrap } from "./treehouse_catalog_codec";
+import type { CatalogBootstrap } from "./treehouse_catalog_codec";
 
 export type TreehouseProduct = "Treehouse.Space" | "Treehouse.Thread";
 
@@ -21,6 +25,7 @@ export type TreehouseCommand =
   | { command: "revoke_invitation"; invitationId: string }
   | { command: "admit_member"; invitationId: string; recipient: string; level: "member" | "moderator"; acceptance: string }
   | { command: "remove_member"; recipient: string }
+  | { command: "catalog_bootstrap_v1"; record: CatalogBootstrap }
   | { command: "post"; text: string }
   | { command: "author_edit"; postId: string; targetId: string; text: string }
   | { command: "author_tombstone" | "moderator_tombstone"; postId: string; targetId: string }
@@ -51,6 +56,11 @@ export const treehouseThreadSchema: ReplicaSchema = {
 export function treehouseCommandBody(product: TreehouseProduct, command: TreehouseCommand): CarrierTerm {
   let args: unknown[];
   switch (command.command) {
+    case "catalog_bootstrap_v1": {
+      const record = catalogBootstrapToCarrierTerm(command.record);
+      if (product !== "Treehouse.Space" || record === null) throw new Error("invalid catalog bootstrap command");
+      return ["tuple", [["atom", command.command], ["list", [record]]]];
+    }
     case "create_space": args = [command.name]; break;
     case "create_thread": args = product === "Treehouse.Space" ? [command.threadReplica, command.title] : [command.title]; break;
     case "issue_invitation": args = [command.recipient, command.threads]; break;
@@ -92,6 +102,47 @@ export function observeTreehouse(product: TreehouseProduct, ops: Op[]) {
   return { ...projection, operationCount: byId.size, posts };
 }
 
+export type TreehouseCatalogBootstrapsResult =
+  | { ok: true; bootstraps: { id: string; record: CatalogBootstrap }[]; verifiedFrontier: string[] }
+  | { ok: false; reason: "invalid_verified_history" };
+
+/**
+ * All honored bootstrap records in one authenticated complete Space snapshot.
+ * Array order never selects an initial trust/fork winner. Authentic quarantined
+ * frames remain in the verified frontier; callers own persistence and pinning.
+ */
+export async function treehouseCatalogBootstrapsFromFrames(input: {
+  replica: string; frames: readonly unknown[];
+}): Promise<TreehouseCatalogBootstrapsResult> {
+  const invalid = { ok: false, reason: "invalid_verified_history" } as const;
+  try {
+    const snapshot = structuredClone(input);
+    const frames = snapshot.frames.map(decodeCarrierOpFrame);
+    const ids = new Set(frames.map((frame) => frame.id));
+    if (ids.size !== frames.length || frames.some((frame) => frame.replica !== snapshot.replica ||
+      frame.deps.some((dep) => !ids.has(dep)))) return invalid;
+    for (const frame of frames) {
+      const checked = await verifyCarrierOp(frame, { verify: async (pub, bytes, sig) =>
+        ed25519.verify(sig, bytes, base64ToBytes(pub), { zip215: false }) });
+      if (!checked.valid) return invalid;
+    }
+    const ops = carrierOpsToSemanticOps(frames, {}, treehouseCommandDecoders("Treehouse.Space"));
+    const byId = index(ops), order = canonicalOrder(ops, byId);
+    if (ops.length !== frames.length || order.length !== ops.length) return invalid;
+    const projection = materialize(treehouseSpaceSchema, ops);
+    const bootstraps: { id: string; record: CatalogBootstrap }[] = [];
+    for (const id of order) {
+      const op = byId.get(id)!;
+      if (op.kind === "command" && op.command === "catalog_bootstrap_v1" && !projection.quarantineReasons.has(id)) {
+        const record = normalizeCatalogBootstrap(op.commandArgs?.[0]);
+        if (record === null) return invalid;
+        bootstraps.push({ id, record });
+      }
+    }
+    return { ok: true, bootstraps, verifiedFrontier: frontier(ops).sort(compareUtf8) };
+  } catch { return invalid; }
+}
+
 /** Observe retained semantic history; decoding must have used the Space product. */
 export function treehouseSpaceInitialization(ops: Op[]): TreehouseInitialization {
   const projection = materialize(treehouseSpaceSchema, ops);
@@ -106,7 +157,8 @@ export async function prepareTreehouseSpaceCreation(input: {
   replica: string; name: string; signer: CarrierOpSigner; retained?: CarrierOpFrame[];
 }): Promise<{ replica: string; profile: "legacy_root_only"; status: TreehouseInitialization; pending: CarrierOpFrame[] }> {
   const genesis = await authorTownshipGenesis({ replica: input.replica, signer: input.signer,
-    ops: [...treehouseCommandDecoders("Treehouse.Space").keys()], roles: ["admin", "moderator"], policies: {} });
+    ops: ["create_space", "create_thread", "issue_invitation", "revoke_invitation", "admit_member", "remove_member"],
+    roles: ["admin", "moderator"], policies: {} });
   const delegation = carrierDelegationsFromFrames([genesis])[0]!;
   const name = await authorTreehouseCommand({ product: "Treehouse.Space", replica: genesis.replica, deps: [genesis.id], signer: input.signer,
     capId: delegation.id, command: { command: "create_space", name: input.name } });
@@ -210,6 +262,10 @@ export function treehouseCommandDecoders(product: TreehouseProduct): CommandDeco
   if (product !== "Treehouse.Space") throw new Error("unknown Treehouse product");
   const admin = (command: string) => effect("admin_actions", "write", command);
   return Object.assign(new Map<string, CommandDecoder>([
+    ["catalog_bootstrap_v1", { arity: 1, decode: (raw): Payload => {
+      const marker = admin("catalog_bootstrap_v1");
+      return { ...marker, command: "catalog_bootstrap_v1", effects: [marker], commandArgs: [catalogBootstrapFromDecodedTerm(raw[0]!)] };
+    } }],
     ["create_space", decoder(1, "create_space", ([name]) => [effect("name", "write", text(name)), admin("create_space")])],
     ["create_thread", decoder(2, "create_thread", ([replica, title]) => [effect("threads", "add", { replica: reference(replica), title: text(title) }), admin("create_thread")])],
     ["issue_invitation", decoder(2, "issue_invitation", ([recipient, threads]) => [effect("invitations", "append", { recipient: text(recipient), threads: texts(threads) }), admin("issue_invitation")])],
@@ -283,6 +339,12 @@ function bytesBase64(bytes: Uint8Array): string {
 }
 
 function spaceStatus(op: Op, visible: ReadonlySet<string>, context: CommandOpStatusContext): CommandOpStatus {
+  if (op.command === "catalog_bootstrap_v1") {
+    const record = normalizeCatalogBootstrap(op.commandArgs?.[0]);
+    return record !== null && record.space === op.replica && record.spaceRoot === op.authorPubkey &&
+      continuationProfileBindingMatches(record.space, [...context.visibleOps.values()], record.spaceRoot, record.profileGenesis, record.profileId)
+      ? allowed : refused("application_invalid_catalog");
+  }
   const threadScope = [...new Set([...context.visibleOps.values()].filter((prior) => prior.kind === "command" && prior.command === "create_thread" && honored(context, prior)).map((prior) => prior.commandArgs![0] as string))].sort(compareUtf8);
   const sameScope = (scope: unknown) => JSON.stringify(scope) === JSON.stringify(threadScope);
   if (op.command === "issue_invitation") {
