@@ -49,8 +49,10 @@ async function main() {
     }
     return;
   }
-  if (args.length !== 0 && (args.length !== 2 || args[0] !== "--out" || !args[1])) throw new Error("usage: export_treehouse_catalog_cutoff.ts [--out <path> | --verify-beam <path>]");
-  const output = args[1] === undefined ? fileURLToPath(new URL("../vectors/catalog/ts_cutoff.json", import.meta.url)) : resolve(args[1]);
+  const extension = args[0] === "--with-member-continuity";
+  if (extension) args.shift();
+  if (args.length !== 0 && (args.length !== 2 || args[0] !== "--out" || !args[1])) throw new Error("usage: export_treehouse_catalog_cutoff.ts [--with-member-continuity] [--out <path> | --verify-beam <path>]");
+  const output = args[1] === undefined ? fileURLToPath(new URL(extension ? "../vectors/catalog/ts_cutoff_member_continuity.json" : "../vectors/catalog/ts_cutoff.json", import.meta.url)) : resolve(args[1]);
   const { deriveTreehouseCatalogCutoff } = await import("../../src/treehouse_catalog_cutoff");
   const f = await cutoffFixture();
   const inputs: { name: string; replica: string; frames: CarrierOpFrame[]; rejected: { frame: CarrierOpFrame; reason: "bad_signature" }[] }[] = [
@@ -58,6 +60,16 @@ async function main() {
     { name: "genuine-and-rejected-same-id-plus-arbitrary-rejected-id-and-signature", replica: f.replica, frames: f.frames,
       rejected: [{ frame: f.forged, reason: "bad_signature" }, { frame: f.supplied, reason: "bad_signature" }] },
   ];
+  if (extension) {
+    inputs.length = 0;
+    for (const file of ["cutoff_atoms_member_continuity_v1.json", "cutoff_atoms_with_member_continuity_v1.json"]) {
+      const names = JSON.parse(await readFile(new URL(`../vectors/catalog/${file}`, import.meta.url), "utf8")) as string[];
+      const op = await authorCarrierOp({replica: f.replica, signer: f.signer, deps: [f.genuine.id], kind: "command", cap: ["nil"],
+        body: ["tuple", [["atom", "attest_member_key_v1"], ["list", [["list", names.map((name): CarrierTerm => ["atom", name])]]]]]});
+      inputs.push({name: `member-continuity-${names.length}-names`, replica: f.replica, frames: [...f.frames, op],
+        rejected: [{frame: {...op, sig: ""}, reason: "bad_signature"}]});
+    }
+  }
   const vectors = await Promise.all(inputs.map(async (input) => {
     const result = await deriveTreehouseCatalogCutoff(input);
     assert.equal(result.ok, true, input.name);

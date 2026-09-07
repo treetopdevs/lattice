@@ -24,6 +24,33 @@ defmodule Treehouse.CatalogCutoffReciprocalTest do
     %{"version" => 1, "vectors" => vectors} = path |> File.read!() |> Jason.decode!()
     assert length(vectors) == 2
 
+    baseline =
+      File.read!(
+        Path.join(@client, "test/vectors/catalog/cutoff_default_pre_member_continuity.json")
+      )
+
+    assert Base.encode16(:crypto.hash(:sha256, baseline), case: :lower) ==
+             "21d0167dcbee9ac72216af7e1af4ab9d34ac559fd09347046671c25dcf00c0bc"
+
+    assert File.read!(path) == baseline
+
+    verify_ts_vectors(vectors)
+  end
+
+  test "fresh TS continuity supplement and union retain rejected same-ID evidence", context do
+    path = Path.join(context.directory, "ts-continuity.json")
+    run_ts!(["--with-member-continuity", "--out", path])
+    %{"version" => 1, "vectors" => vectors} = path |> File.read!() |> Jason.decode!()
+
+    assert Enum.map(vectors, & &1["name"]) == [
+             "member-continuity-9-names",
+             "member-continuity-139-names"
+           ]
+
+    verify_ts_vectors(vectors)
+  end
+
+  defp verify_ts_vectors(vectors) do
     for vector <- vectors do
       log =
         Enum.reduce(vector["rejected"], Log.new(vector["replica"]), fn rejected, log ->
@@ -48,80 +75,89 @@ defmodule Treehouse.CatalogCutoffReciprocalTest do
        context do
     fixture = CatalogVectors.bootstrap_history()
 
-    names =
-      @client
-      |> Path.join("test/vectors/catalog/cutoff_atoms_v1.json")
-      |> File.read!()
-      |> Jason.decode!()
-
-    # Only the committed closed vocabulary; no imported atom is ever interned.
-    atoms = Enum.map(names, &String.to_existing_atom/1)
-
-    vocabulary =
-      Op.new(
-        fixture.root,
-        fixture.replica,
-        Log.frontier(fixture.log),
-        :command,
-        {:create_space, [atoms]},
-        cap: fixture.delegation.id
-      )
-
-    high =
-      Op.new(
-        fixture.root,
-        fixture.replica,
-        [vocabulary.id],
-        :authority,
-        {:beacon, 18_446_744_073_709_551_615}
-      )
-
-    first = fixture.log |> Log.append!(vocabulary) |> Log.append!(high)
-
-    genuine =
-      Op.new(
-        fixture.root,
-        fixture.replica,
-        [high.id],
-        :command,
-        {:create_space, ["Retained after rejected signature"]},
-        cap: fixture.delegation.id
-      )
-
-    assert {:quarantined, second, :bad_signature} =
-             Log.accept(first, %{genuine | sig: <<0::512>>})
-
-    assert {:quarantined, second, :bad_signature} =
-             Log.accept(second, %{
-               genuine
-               | id: "untrusted supplied id",
-                 deps: ["withheld rejected-only dependency"],
-                 sig: <<>>
-             })
-
-    second = Log.append!(second, genuine)
-
     vectors =
-      for {name, log} <- [
-            {"beam-all-fixed-atoms-and-exact-high-legacy", first},
-            {"beam-rejected-and-genuine-same-id", second}
-          ] do
-        %{
-          "name" => name,
-          "replica" => log.replica,
-          "frames" => Enum.map(Log.topo_ops(log), &Wire.encode_op/1),
-          "rejected" =>
-            Enum.map(Log.quarantine(log), fn rejected ->
-              %{"frame" => Wire.encode_op(rejected.op), "reason" => "bad_signature"}
-            end),
-          "result" => result(log)
-        }
-      end
+      Enum.flat_map(
+        [
+          "cutoff_atoms_v1.json",
+          "cutoff_atoms_member_continuity_v1.json",
+          "cutoff_atoms_with_member_continuity_v1.json"
+        ],
+        fn file ->
+          names =
+            @client
+            |> Path.join("test/vectors/catalog/" <> file)
+            |> File.read!()
+            |> Jason.decode!()
+
+          # Only the committed closed vocabulary; no imported atom is ever interned.
+          atoms = Enum.map(names, &String.to_existing_atom/1)
+
+          vocabulary =
+            Op.new(
+              fixture.root,
+              fixture.replica,
+              Log.frontier(fixture.log),
+              :command,
+              {:create_space, [atoms]},
+              cap: fixture.delegation.id
+            )
+
+          high =
+            Op.new(
+              fixture.root,
+              fixture.replica,
+              [vocabulary.id],
+              :authority,
+              {:beacon, 18_446_744_073_709_551_615}
+            )
+
+          first = fixture.log |> Log.append!(vocabulary) |> Log.append!(high)
+
+          genuine =
+            Op.new(
+              fixture.root,
+              fixture.replica,
+              [high.id],
+              :command,
+              {:create_space, ["Retained after rejected signature"]},
+              cap: fixture.delegation.id
+            )
+
+          assert {:quarantined, second, :bad_signature} =
+                   Log.accept(first, %{genuine | sig: <<0::512>>})
+
+          assert {:quarantined, second, :bad_signature} =
+                   Log.accept(second, %{
+                     genuine
+                     | id: "untrusted supplied id",
+                       deps: ["withheld rejected-only dependency"],
+                       sig: <<>>
+                   })
+
+          second = Log.append!(second, genuine)
+
+          for {name, log} <- [
+                {"beam-all-fixed-atoms-and-exact-high-legacy", first},
+                {"beam-rejected-and-genuine-same-id", second}
+              ] do
+            %{
+              "name" => name,
+              "replica" => log.replica,
+              "frames" => Enum.map(Log.topo_ops(log), &Wire.encode_op/1),
+              "rejected" =>
+                Enum.map(Log.quarantine(log), fn rejected ->
+                  %{"frame" => Wire.encode_op(rejected.op), "reason" => "bad_signature"}
+                end),
+              "result" => result(log)
+            }
+          end
+        end
+      )
 
     path = Path.join(context.directory, "beam.json")
     File.write!(path, Jason.encode!(%{"version" => 1, "vectors" => vectors}))
     output = run_ts!(["--verify-beam", path])
-    assert length(Regex.scan(~r/PASS BEAM→TS exact cutoff/, output)) == 2
+    assert length(Regex.scan(~r/PASS BEAM→TS exact cutoff/, output)) == 6
   end
 
   defp result(log) do

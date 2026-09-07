@@ -827,3 +827,23 @@ frames. `CatalogEntries` takes complete R06 `Log` values; an incomplete Log stru
 violates that invariant and remains `invalid_verified_history`. The adapter may
 call the entry observer only after it has authenticated and completed those
 logs. This separation does not weaken R06 or hide another input's forgery.
+
+
+## R19b cutoff vocabulary extension adopted 2026-09-07 UTC
+
+Preserve the historical 130-name paragraph and its fixture bytes/hash unchanged.
+Adopt the exact nine-name continuity supplement and globally sorted 139-name union
+specified in [the prerequisite contract](member_continuity_prerequisites.md).
+Supplement SHA256:
+`38aab5c25051af1d009c917274cdf68ae4f61776ebef0bf3634ad3899b9ce8df`.
+Union SHA256:
+`e7e7e16800327ca76b68ddabf7015c84b1750a327def5c0366c4e37f4ed7aaac`.
+All three compiled validators (BEAM CatalogCutoff, BEAM CatalogTrust and TS
+CatalogCutoff) must equal this union, superseding only their runtime exact-130
+obligation. Previously supported histories retain exact bytes, records and digest.
+The new names becoming portable grants no command capability, membership, catalog
+trust or transport admission. Every other unsupported atom still refuses; generic
+wire decoding, integer/depth rules, retained accepted/rejected evidence, actual
+64,000-byte envelope and caller budgets remain unchanged. No input creates atoms
+or selects a module to load. Source equality complements actual signed ingress,
+cold-start and reciprocal proof; implementation gates remain OPEN until executed.

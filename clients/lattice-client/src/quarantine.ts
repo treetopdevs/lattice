@@ -1,4 +1,5 @@
 import type { Op } from "./op";
+import { cmpHash } from "./op";
 import { effectsFor } from "./op";
 import { ancestors } from "./dag";
 import { gatedBy } from "./schema";
@@ -10,12 +11,12 @@ import { commandOpStatus, hasApplicationPolicy } from "./policy";
 
 /**
  * Plan 158 Wave A2 — the current materialization's log view, for the causal
- * application-policy conjunct: `included` bounds `visibleIds`/`visibleOps` to
- * exactly the ops actually in scope (mirrors `Log.ops(log)`, so a partial
- * frontier never treats an unsynced op as causally visible), and
- * `reasonsSoFar` carries every included id's own verdict already decided
- * earlier in the SAME canonical walk (topo order guarantees every ancestor of
- * the op under judgment was already visited).
+ * application-policy conjunct: `included` bounds `visibleIds`/`visibleOps` and
+ * the authority judge's `validBeacons` to exactly the ops actually in scope
+ * (mirrors `Log.ops(log)`, so a partial frontier never treats an unsynced op as
+ * causally visible), and `reasonsSoFar` carries every included id's own verdict
+ * already decided earlier in the SAME canonical walk (topo order guarantees
+ * every ancestor of the op under judgment was already visited).
  */
 export interface CommandPolicyScope {
   included: ReadonlySet<string>;
@@ -106,7 +107,15 @@ export function isQuarantined(
       visibleOps.set(id, byId.get(id)!);
       verdicts.set(id, policyScope.reasonsSoFar.get(id) ?? "honored");
     }
-    const status = commandOpStatus(schema, op, visibleIds, { visibleOps, verdicts });
+    const validBeacons = authority.security.validBeacons
+      .filter((beacon) => visibleIds.has(beacon.opId))
+      .map((beacon) => ({ opId: beacon.opId, epoch: beacon.epoch }))
+      .sort((left, right) => cmpHash(left.opId, right.opId));
+    const status = commandOpStatus(schema, op, visibleIds, {
+      visibleOps,
+      verdicts,
+      validBeacons,
+    });
     if (!status.ok) return { quarantined: true, reason: status.reason };
   }
 

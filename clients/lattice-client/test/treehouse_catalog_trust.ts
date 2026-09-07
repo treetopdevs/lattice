@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { trustFixture, fixtureId, fixtureSigner, signedCatalog, signedRotation } from "./support/export_treehouse_catalog_trust";
 import { authorTreehouseCommand, authorTreehouseRoleTransfer, treehouseCatalogBootstrapsFromFrames, treehouseCommandDecoders, treehouseSpaceSchema, treehouseThreadSchema } from "../src/treehouse";
@@ -618,4 +619,42 @@ test("invalid candidate transitions cannot poison a retained freeze, and the sam
   const saved = {...original, catalogs: [...original.catalogs, {id: transportCatalogId(invalid), json}]};
   const broken = await evaluate(saved, {catalogs: [f.catalogJson]});
   assert.equal(broken.kind, "reject"); refused(broken, "trust_recovery_required");
+});
+
+
+test("continuity vocabulary remains authenticated raw evidence across catalog install and reopen", async () => {
+  const f = await trustFixture();
+  for (const file of ["cutoff_atoms_member_continuity_v1.json", "cutoff_atoms_with_member_continuity_v1.json"]) {
+    const names = JSON.parse(readFileSync(new URL(`./vectors/catalog/${file}`, import.meta.url), "utf8")) as string[];
+    const frame = await authorCarrierOp({replica: f.space.replica, signer: f.root, deps: [f.space.frames.at(-1)!.id], kind: "command",
+      cap: ["bin", Buffer.from(f.space.delegation.id).toString("base64")],
+      body: ["tuple", [["atom", "attest_member_key_v1"], ["list", [["list", names.map((name): CarrierTerm => ["atom", name])]]]]]});
+    const history = {...f.histories[0]!, frames: [...f.space.frames, frame],
+      rejected: [{frame: {...frame, sig: Buffer.alloc(64).toString("base64")}, reason: "bad_signature" as const}]};
+    const states = [];
+    for (const frames of [history.frames, [...history.frames].reverse()]) {
+      const raw = {...history, frames};
+      const prepared = await prepareTreehouseCatalogInstallation({review: f.review, history: raw, store: {kind: "verified_fresh", expected}});
+      assert.equal(prepared.kind, "propose", JSON.stringify(prepared));
+      const result = await evaluate(prepared.next, {catalogs: [f.catalogJson], histories: [raw, ...f.histories.slice(1)]});
+      assert.equal(result.kind, "propose"); assert.equal(result.routes.length, 2);
+      const retained = result.next.histories.find((h) => h.replica === f.space.replica)!;
+      assert.ok(retained.frames.some((op) => (op as {id: string}).id === frame.id));
+      assert.equal(retained.rejected.length, 1); assert.equal((retained.rejected[0]!.frame as {id: string}).id, frame.id);
+      const reopened = await evaluate(result.next); assert.equal(reopened.kind, "unchanged"); assert.deepEqual(reopened.next, result.next);
+      const ops = carrierOpsToSemanticOps(frames, {}, treehouseCommandDecoders("Treehouse.Space"));
+      const projection = materialize(treehouseSpaceSchema, ops, new Set(ops.map((op) => op.id)), null, f.space.replica);
+      assert.equal(projection.quarantineReasons.get(frame.id), "unknown_command");
+      states.push(result.next);
+    }
+    assert.deepEqual(states[0], states[1]);
+    for (const atom of ["cutoff_unknown_evidence_v99", "claim_id"]) {
+      const unknown = await authorCarrierOp({replica: f.space.replica, signer: f.root, deps: [frame.id], kind: "command", cap: ["nil"], body: ["atom", atom]});
+      refused(await prepareTreehouseCatalogInstallation({review: f.review, history: {...history, frames: [...history.frames, unknown]},
+        store: {kind: "verified_fresh", expected}}), "unsupported_cutoff");
+    }
+    refused(await prepareTreehouseCatalogInstallation({review: f.review,
+      history: {...history, frames: history.frames.map((op) => op.id === frame.id ? {...op, sig: ""} : op)},
+      store: {kind: "verified_fresh", expected}}), "invalid_verified_history");
+  }
 });

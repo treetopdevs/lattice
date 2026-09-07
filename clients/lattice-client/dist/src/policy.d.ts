@@ -1,14 +1,20 @@
 import type { Op } from "./op";
 import type { ReplicaSchema } from "./schema";
 /**
- * Plan 158 Wave A2 causal context: `visibleOps`/`verdicts` restricted to
- * exactly a command op's causal past, in causal/canonical order — the literal
- * TS shape of `Lattice.Replica.command_op_status/3`'s `context` argument.
+ * Plan 158 Wave A2 causal context: `visibleOps`/`verdicts` and the existing
+ * authority judge's `validBeacons` restricted to exactly a command op's causal
+ * past, in causal/canonical order — the literal TS shape of
+ * `Lattice.Replica.command_op_status/3`'s `context` argument.
  */
 export interface CommandOpStatusContext {
     visibleOps: ReadonlyMap<string, Op>;
     /** Each visible op's deterministic verdict: `"honored"` or its quarantine reason. */
     verdicts: ReadonlyMap<string, string>;
+    /** Valid causal beacons, copied and sorted by ASCII op ID. */
+    validBeacons: readonly Readonly<{
+        opId: string;
+        epoch: number | string;
+    }>[];
 }
 export type CommandOpStatus = {
     ok: true;
