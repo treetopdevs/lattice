@@ -7,7 +7,7 @@
     "dev": "vite --host 127.0.0.1 --port 5175",
     "typecheck": "vue-tsc --noEmit",
     "build": "npm run typecheck && vite build",
-    "test": "tsx test/workflow.ts && tsx test/storage.ts && node test/product_contract.mjs",
+    "test": "tsx test/workflow.ts && tsx test/storage.ts && node test/product_contract.mjs && tsx test/witness_binding.ts && node test/android_contract.mjs",
     "packaged": "tsx test/packaged_preview.ts",
     "tauri": "tauri",
     "native:test": "cargo test --manifest-path src-tauri/Cargo.toml"
