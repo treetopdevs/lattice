@@ -353,6 +353,29 @@ class WitnessNativeReviewTest {
     }
 
     @Test
+    fun biometricPlatformErrorRemainsAClosedEncodableRefusal() {
+        val outcomes = mutableListOf<WitnessPresenceResult>()
+        WitnessNativeReview(activity).authenticate(Signature.getInstance("Ed25519"), {}, outcomes::add)
+        idleMain()
+
+        WitnessBiometricPromptShadow.fail(BiometricPrompt.BIOMETRIC_ERROR_LOCKOUT)
+        idleMain()
+
+        val refusal = outcomes.single() as WitnessPresenceResult.Refused
+        assertEquals("biometric_error", refusal.reason)
+        assertTrue(
+            WitnessPrivateProtocol.encodeTerminal(
+                WitnessTerminalResponse(
+                    WitnessPrivateKind.PROOF,
+                    WitnessBytes(bytes(7)),
+                    WitnessTerminalStatus.REFUSED,
+                    refusal.reason
+                )
+            ) != null
+        )
+    }
+
+    @Test
     fun presenceRejectsSubstitutedCryptoAndCancelWinsOverLatePlatformCallbacks() {
         val expected = Signature.getInstance("Ed25519")
         val substituted = Signature.getInstance("Ed25519")
@@ -527,6 +550,11 @@ class WitnessBiometricPromptShadow {
 
         fun failLate() {
             executor?.execute { callback?.onAuthenticationError(BiometricPrompt.BIOMETRIC_ERROR_CANCELED, "late") }
+                ?: error("authentication was not started")
+        }
+
+        fun fail(errorCode: Int) {
+            executor?.execute { callback?.onAuthenticationError(errorCode, "platform refusal") }
                 ?: error("authentication was not started")
         }
 

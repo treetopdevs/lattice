@@ -290,7 +290,7 @@ internal class WitnessNativeReview(private val activity: Activity) : WitnessRevi
                             errorCode: Int,
                             errString: CharSequence
                         ) {
-                            finish(WitnessPresenceResult.Refused("biometric_error_$errorCode"))
+                            finish(WitnessPresenceResult.Refused("biometric_error"))
                         }
                     }
 
