@@ -1,8 +1,8 @@
 # Android witness validator dependency admission
 
 This directory admits the upstream Android Key Attestation verifier as reviewed
-source tooling. It does not provide Treehouse eligibility policy or a production
-validation service.
+source tooling. It includes the bounded Treehouse fixed-profile constraint, but
+does not provide a production validation service or eligibility report.
 
 ## Pin and provenance
 
@@ -46,3 +46,8 @@ The upstream API accepts injected trust anchors, revocation data, time, and
 constraints. A later reviewed wrapper must bind those inputs to independently
 recorded validator requests and official validator-controlled sources. Phone
 supplied roots, revocation data, time, or policy must never be trusted.
+
+`TreehouseWitnessProfileConstraint` is only a generation-time fixed-profile
+policy at upstream's `ConstraintConfig.additionalConstraints` seam. It does not
+issue a challenge, validate chain trust or revocation, verify fresh possession,
+or emit an eligibility report. Those validator-controlled steps remain required.
