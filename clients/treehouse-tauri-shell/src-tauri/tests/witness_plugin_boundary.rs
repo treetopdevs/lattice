@@ -6,6 +6,8 @@ fn direct_webview_invokes_are_terminally_refused_for_every_private_command() {
     let mut context = tauri::test::mock_context(tauri::test::noop_assets());
     // Deliberately broaden the test ACL: a future permission mistake must not reach Kotlin.
     for command in [
+        "dispatch",
+        "sign_prepared",
         "identity",
         "prepare",
         "generate",
@@ -30,6 +32,8 @@ fn direct_webview_invokes_are_terminally_refused_for_every_private_command() {
             .build()
             .unwrap();
     for command in [
+        "dispatch",
+        "sign_prepared",
         "identity",
         "prepare",
         "generate",

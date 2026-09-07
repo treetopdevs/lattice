@@ -3,15 +3,15 @@
 mod android_keyring;
 mod key_store;
 pub mod preview;
-pub mod witness_binding;
 mod witness_android;
+pub mod witness_binding;
 mod witness_bridge;
-mod witness_reviewed;
-mod witness_entropy;
 mod witness_document;
 mod witness_drain;
+mod witness_entropy;
 mod witness_mobile;
 mod witness_public;
+mod witness_reviewed;
 mod witness_session;
 mod witness_snapshot;
 use preview::{Draft, OpenResult, PreviewStore};
