@@ -205,6 +205,53 @@ class WitnessJournalTest {
     }
 
 
+    @Test fun preparedIdentityRetainsExactEnrollmentButRefusesDistinctEnrollmentWithoutMutation() {
+        val context = journalContext()
+        val original = enrollment()
+        WitnessJournal(context, ByteArray(32) { 7 }).use { journal ->
+            stored(journal.prepareAccepted(original, ByteArray(32) { 3 }))
+            val before = database(context).readBytes()
+            assertEquals(1L, stored(journal.prepareAccepted(original, ByteArray(32) { 3 })).identity.revision)
+            assertEquals(WitnessResult.Refused("enrollment_conflict"), journal.prepareAccepted(enrollment(replica = "different"), ByteArray(32) { 3 }))
+            assertEquals(WitnessResult.Refused("identity_incomplete"), journal.prepareAccepted(enrollment(id = 2), ByteArray(32) { 3 }))
+            val unchanged = stored(journal.observeExisting())
+            assertEquals(WitnessPhase.PREPARED, unchanged.identity.phase)
+            assertEquals(1L, unchanged.identity.revision)
+            assertEquals(listOf(original), unchanged.enrollments)
+            assertArrayEquals(before, database(context).readBytes())
+        }
+    }
+
+    @Test fun startedIdentityRefusesDistinctEnrollmentWithoutInvalidatingOriginalGenerationFence() {
+        val context = journalContext()
+        val original = enrollment()
+        val additional = enrollment(id = 2)
+        WitnessJournal(context, ByteArray(32) { 7 }).use { journal ->
+            stored(journal.prepareAccepted(original, ByteArray(32) { 3 }))
+            val fence = stored(journal.commitGenerationStarted(1, ByteArray(32) { 3 }, ByteArray(32) { 4 }))
+            val before = database(context).readBytes()
+            assertEquals(2L, stored(journal.prepareAccepted(original, ByteArray(32) { 3 })).identity.revision)
+            assertEquals(WitnessResult.Refused("identity_incomplete"), journal.prepareAccepted(additional, ByteArray(32) { 3 }))
+            val unchanged = stored(journal.observeExisting())
+            assertEquals(WitnessPhase.GENERATION_STARTED, unchanged.identity.phase)
+            assertEquals(2L, unchanged.identity.revision)
+            assertEquals(listOf(original), unchanged.enrollments)
+            assertArrayEquals(before, database(context).readBytes())
+            val completed = stored(journal.finishOriginalGeneration(fence, metadata()))
+            assertEquals(3L, completed.identity.revision)
+            assertEquals(metadata(), completed.identity.metadata)
+            val bound = stored(journal.prepareAccepted(additional, ByteArray(32) { 3 }))
+            assertEquals(4L, bound.identity.revision)
+            assertEquals(listOf(original, additional), bound.enrollments)
+            assertEquals(completed.identity.metadata, bound.identity.metadata)
+        }
+        WitnessJournal(context, ByteArray(32) { 7 }).use { reopened ->
+            val retained = stored(reopened.observeExisting())
+            assertEquals(4L, retained.identity.revision)
+            assertEquals(listOf(original, additional), retained.enrollments)
+        }
+    }
+
     @Test fun generationFenceIsDurablePrivateSingleUseAndCompletionRetainsOriginalMetadata() {
         val context = journalContext()
         val enrollment = enrollment()
@@ -455,7 +502,7 @@ class WitnessJournalTest {
 
     @Test fun enrollmentAndNonceLimitsAreInclusiveAndNeverEvictRetainedRows() {
         val context = journalContext()
-        preparePhase(context, 1)
+        preparePhase(context, 3)
         mutateFixture(context) { db ->
             for (number in 1..4094) db.execSQL("INSERT INTO enrollments (enrollment_id,replica,recipient,creation_attempt_id) VALUES (?,?,?,?)",
                 arrayOf(numbered(number), "replica:$number", ByteArray(32) { 2 }, ByteArray(32) { 3 }))
@@ -465,7 +512,7 @@ class WitnessJournalTest {
             assertEquals(4096, stored(journal.prepareAccepted(last, ByteArray(32) { 3 })).enrollments.size)
             val overflow = WitnessEnrollment(numbered(4096), "replica:overflow", ByteArray(32) { 2 }, ByteArray(32) { 3 })
             assertEquals(WitnessResult.Refused("enrollment_limit"), journal.prepareAccepted(overflow, ByteArray(32) { 3 }))
-            assertEquals(2L, stored(journal.prepareAccepted(last, ByteArray(32) { 3 })).identity.revision)
+            assertEquals(4L, stored(journal.prepareAccepted(last, ByteArray(32) { 3 })).identity.revision)
             val conflict = WitnessEnrollment(numbered(4095), "replica:different", ByteArray(32) { 2 }, ByteArray(32) { 3 })
             assertEquals(WitnessResult.Refused("enrollment_conflict"), journal.prepareAccepted(conflict, ByteArray(32) { 3 }))
         }

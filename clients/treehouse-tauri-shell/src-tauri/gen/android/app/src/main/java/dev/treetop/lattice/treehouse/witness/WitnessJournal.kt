@@ -84,6 +84,7 @@ internal class WitnessJournal(context: Context, expectedAppSignerSha256: ByteArr
                     storageRequire(existing == enrollment, "enrollment_conflict")
                     result = current
                 } else {
+                    storageRequire(current.identity.phase == WitnessPhase.GENERATED_UNVALIDATED, "identity_incomplete")
                     storageRequire(current.enrollments.size < 4096, "enrollment_limit")
                     current.identity.metadata?.let { requireResponseFits(it, current.identity.creationAttemptId, current.identity.generationChallenge!!, listOf(enrollment)) }
                     val revision = nextRevision(current.identity.revision)
