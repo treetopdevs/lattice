@@ -205,7 +205,7 @@ defmodule Treehouse.CatalogTrust do
         }
 
         graph_block = graph_block(context)
-        next = if next.blocked == nil, do: %{next | blocked: graph_block}, else: next
+        next = %{next | blocked: merge_graph_block(next.blocked, graph_block)}
 
         triggers = overflow(context, original)
 
@@ -1104,7 +1104,7 @@ defmodule Treehouse.CatalogTrust do
     block = state.blocked
     security = security_block(state, histories, bootstrap_ids)
     graph = graph_block(context)
-    validate_block_indexes!(state, context, bootstrap_ids)
+    validate_block_indexes!(state, context, histories)
 
     valid =
       case block.reason do
@@ -1113,7 +1113,8 @@ defmodule Treehouse.CatalogTrust do
             (block.triggers == [] or overflow_witness?(state, block.triggers))
 
         :catalog_fork ->
-          (security != nil and security.reason == :catalog_fork) or
+          block.bootstrap_ids != [] or
+            (security != nil and security.reason == :catalog_fork) or
             (graph != nil and graph.reason == :catalog_fork)
 
         :control_history_limit ->
@@ -1125,7 +1126,7 @@ defmodule Treehouse.CatalogTrust do
     if not valid, do: refuse(:trust_recovery_required)
   end
 
-  defp validate_block_indexes!(state, context, bootstrap_ids) do
+  defp validate_block_indexes!(state, context, histories) do
     block = state.blocked
 
     if Enum.any?(block.bindings, &(not Map.has_key?(context.bindings, &1))) or
@@ -1133,9 +1134,24 @@ defmodule Treehouse.CatalogTrust do
            block.catalogs ++ block.pending_proof_ids,
            &(not Map.has_key?(context.catalogs, &1))
          ) or
-         Enum.any?(block.bootstrap_ids, &(&1 not in bootstrap_ids)) or
          Enum.any?(block.bootstrap_ids, &(&1 in state.review.observed_bootstrap_ids)),
        do: refuse(:trust_recovery_required)
+
+    validate_historical_bootstrap_fork!(state, histories)
+  end
+
+  defp validate_historical_bootstrap_fork!(state, histories) do
+    log = histories[state.review.space] || refuse(:trust_recovery_required)
+
+    Enum.each(state.blocked.bootstrap_ids, fn id ->
+      op = Log.ops(log)[id] || refuse(:trust_recovery_required)
+      record = bootstrap_record!(op)
+      validate_bootstrap_scope!(record, state.review, log)
+      historical = causal_slice!(log, [id])
+
+      if id not in current_bootstrap_ids!(historical),
+        do: refuse(:trust_recovery_required)
+    end)
   end
 
   defp overflow_witness?(state, triggers) do
@@ -1237,6 +1253,14 @@ defmodule Treehouse.CatalogTrust do
 
   defp merge_security_block(previous, nil), do: previous
   defp merge_security_block(_previous, current), do: current
+
+  defp merge_graph_block(nil, current), do: current
+  defp merge_graph_block(%{reason: :authority_changed} = previous, _current), do: previous
+
+  defp merge_graph_block(_previous, %{reason: :control_history_limit} = current),
+    do: current
+
+  defp merge_graph_block(previous, _current), do: previous
 
   defp graph_block(context) do
     heads = binding_heads(context)

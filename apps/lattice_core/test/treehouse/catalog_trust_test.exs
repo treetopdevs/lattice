@@ -8,6 +8,147 @@ defmodule Treehouse.CatalogTrustTest do
 
   @expected %{trust_revision: 0, history_generation: 0}
 
+  test "two rotation heads escalate to a retained three-head limit and survive reopen" do
+    fixture = CatalogTrustVectors.fixture(0)
+    state = installed(fixture)
+
+    rotations =
+      for index <- 1..3 do
+        signer = Identity.from_seed("rotation", "r11a-review-rotation-#{index}")
+
+        rotation = %{
+          fixture.rotation
+          | new_catalog_key: signer.pub,
+            nonce: CatalogTrustVectors.id("rotation-#{index}")
+        }
+
+        rotation
+        |> CatalogTrustVectors.sign_rotation(fixture.space.catalog, signer)
+        |> CatalogTrustVectors.artifact_json()
+      end
+
+    for order <- [rotations, Enum.reverse(rotations)] do
+      assert %{kind: :retain_blocked, reason: :catalog_fork, next: two} =
+               evaluate(state, fixture,
+                 rotations: Enum.take(order, 2),
+                 cutoff_proofs: fixture.cutoff_proofs
+               )
+
+      assert %{kind: :retain_blocked, reason: :control_history_limit, next: three, routes: []} =
+               evaluate(two, fixture, rotations: Enum.drop(order, 2))
+
+      assert length(three.rotations) == 3
+      assert three.accepted == state.accepted
+
+      assert %{kind: :retain_blocked, reason: :control_history_limit, next: reopened, routes: []} =
+               evaluate(three, fixture)
+
+      assert reopened == three
+
+      assert %{next: together} =
+               evaluate(state, fixture, rotations: order, cutoff_proofs: fixture.cutoff_proofs)
+
+      assert together == three
+    end
+  end
+
+  test "historical unseen bootstrap fork remains authentic after only that bootstrap is refused" do
+    fixture = CatalogTrustVectors.fixture(0)
+    state = installed(fixture)
+    {:catalog_bootstrap_v1, [record]} = fixture.space.bootstrap.body
+
+    unseen =
+      Op.new(
+        fixture.space.root,
+        fixture.space.replica,
+        [fixture.space.bootstrap.id],
+        :command,
+        {:catalog_bootstrap_v1, [%{record | nonce: CatalogTrustVectors.id("unseen-bootstrap")}]},
+        cap: fixture.space.delegation.id
+      )
+
+    fork_log = Log.append!(fixture.space_log, unseen)
+    refute Map.has_key?(Authority.analyze(Treehouse.Space, fork_log).reasons, unseen.id)
+
+    assert %{kind: :retain_blocked, reason: :catalog_fork, next: frozen} =
+             evaluate(state, fixture, histories: [CatalogTrustVectors.raw_history(fork_log)])
+
+    assert frozen.blocked.bootstrap_ids == [unseen.id]
+
+    transfer =
+      Enum.find_value(1..200, fn index ->
+        successor = Identity.from_seed("successor", "r11a-unseen-successor-#{index}")
+
+        delegation =
+          Delegation.new(fixture.space.root, fixture.space.replica, successor.pub,
+            parent_id: fixture.space.delegation.id,
+            ops: MapSet.to_list(fixture.space.delegation.ops),
+            roles: [:admin]
+          )
+
+        candidate =
+          Op.new(
+            fixture.space.root,
+            fixture.space.replica,
+            [fixture.space.bootstrap.id],
+            :authority,
+            {:transfer, :admin, delegation, 0}
+          )
+
+        reasons = Authority.analyze(Treehouse.Space, Log.append!(fork_log, candidate)).reasons
+
+        if Map.has_key?(reasons, unseen.id) and
+             not Map.has_key?(reasons, fixture.space.bootstrap.id), do: candidate
+      end) || flunk("no deterministic transfer refusing only unseen bootstrap")
+
+    changed = CatalogTrustVectors.raw_history(Log.append!(fork_log, transfer))
+
+    assert %{kind: :retain_blocked, reason: :catalog_fork, next: retained, routes: []} =
+             evaluate(frozen, fixture, histories: [changed])
+
+    assert retained.accepted == state.accepted
+
+    assert %{kind: :retain_blocked, reason: :catalog_fork, next: reopened, routes: []} =
+             evaluate(retained, fixture)
+
+    assert reopened == retained
+
+    invalid =
+      Op.new(
+        fixture.space.root,
+        fixture.space.replica,
+        [fixture.space.bootstrap.id],
+        :command,
+        {:catalog_bootstrap_v1,
+         [
+           %{
+             record
+             | space_root: <<0::256>>,
+               nonce: CatalogTrustVectors.id("never-valid-bootstrap")
+           }
+         ]}, cap: fixture.space.delegation.id)
+
+    invalid_log = Log.append!(fixture.space_log, invalid)
+    assert Map.has_key?(Authority.analyze(Treehouse.Space, invalid_log).reasons, invalid.id)
+
+    invented = %{
+      state
+      | histories: [CatalogTrustVectors.raw_history(invalid_log)],
+        blocked: %{frozen.blocked | bootstrap_ids: [invalid.id]}
+    }
+
+    assert %{kind: :reject, reason: :trust_recovery_required} = evaluate(invented, fixture)
+
+    for wrong <- [
+          fixture.space.creation.id,
+          fixture.space.bootstrap.id,
+          CatalogTrustVectors.id("absent")
+        ] do
+      corrupt = put_in(retained.blocked.bootstrap_ids, [wrong])
+      assert %{kind: :reject, reason: :trust_recovery_required} = evaluate(corrupt, fixture)
+    end
+  end
+
   test "reviewed bootstrap and authenticated catalog produce installation-required routes" do
     fixture = CatalogTrustVectors.fixture()
 
