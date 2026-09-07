@@ -1,7 +1,7 @@
 # Native catalog runtime resource experiment
 
 **Result: the default rquickjs0.11.0 runtime fails the required sticky OOM gate.**
-Eight diagnostic tests pass because they characterize that limitation and the
+Nine diagnostic tests pass because they characterize that limitation and the
 working deadline/cancellation behavior. They do not approve the runtime for
 catalog verification or native trust installation.
 
@@ -18,7 +18,13 @@ text are not accepted as OOM evidence for a production decision. Stack exhaustio
 is similarly catchable. This prevents interpreting a caught verifier exception as
 a durable semantic refusal on otherwise valid history.
 
-Deadline/cancellation use a Rust-owned sticky flag and final monotonic-clock check.
+Deadline/cancellation use Rust-owned sticky flags. After guest settlement and
+runtime teardown, native also reads the original cancellation atomic and checks
+the monotonic deadline before accepting a result. Cancellation linearizes at that
+final atomic read: a request observed there refuses, while one arriving after that
+acceptance point does not revise the completed result. A deterministic settlement
+control covers short and Promise results cancelled after their last engine poll,
+with uncancelled positive controls.
 The cancellation test waits for a native start signal after acquiring the runtime
 slot, avoiding cancellation of a fixture that has not started. Promise jobs are
 drained outside the context borrow under the same deadline; unresolved promises
@@ -52,6 +58,11 @@ Execution evidence is under
 - `r11a-native-runtime-final-toolchain-tests.log`: after setting task-local PATH,
   RUSTC and RUSTDOC to the same stable1.93.1 toolchain, the full locked Cargo test
   run passed all eight diagnostics and the empty doc-test target; fmt check passed.
+
+- `r11a-runtime-settlement-cancel-red.log`: the real short-result cancellation
+  was incorrectly accepted before the final native cancellation check (one failure).
+- `r11a-runtime-settlement-cancel-green.log`: all nine diagnostics and the empty
+  doc-test target passed after the repair, with formatting checked.
 
 A1 deterministic cross-path/machine bundle, A2 genuine BEAM/TS native catalog
 parity, actual host known-answer tests, Android build/link, hard host-allocation
