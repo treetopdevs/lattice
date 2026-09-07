@@ -5,83 +5,83 @@ defmodule Treehouse.BoundedContinuationLifecycleTest do
   alias Lattice.Authority.Delegation
   alias Treehouse.ContinuationFixtures, as: F
 
-  test "V07 thirteen independent replicas survive two renewals without any founder record" do
-    counters =
-      Enum.reduce(0..12, %{beacons: 0, continuations: 0, grants: 0, signatures: 0}, fn index,
-                                                                                       counts ->
-        kind = if index == 0, do: :space, else: :thread
-        fixture = F.two_cycles(kind: kind, label: "fanout-#{index}")
-        sim = fixture.sim
+  # Each independently constructed replica has its own behavioral case and timeout.
+  # Together these retain the thirteen-replica workload: 182 beacons, 26
+  # continuations, 312 grants and 1,274 signatures across two renewal cycles.
+  for index <- 0..12 do
+    @tag replica_index: index
+    test "V07 replica #{index} survives two renewals without any founder record", %{
+      replica_index: index
+    } do
+      kind = if index == 0, do: :space, else: :thread
+      fixture = F.two_cycles(kind: kind, label: "fanout-#{index}")
+      sim = fixture.sim
 
-        assert Enum.sort(Map.keys(Map.from_struct(sim))) == [
-                 :caps,
-                 :logs,
-                 :module,
-                 :net,
-                 :realms,
-                 :replica
-               ]
+      assert Enum.sort(Map.keys(Map.from_struct(sim))) == [
+               :caps,
+               :logs,
+               :module,
+               :net,
+               :realms,
+               :replica
+             ]
 
-        for collection <- [sim.realms, sim.logs, sim.caps],
-            do: refute(Map.has_key?(collection, "founder"))
+      for collection <- [sim.realms, sim.logs, sim.caps],
+          do: refute(Map.has_key?(collection, "founder"))
 
-        [old, intermediate, current] = fixture.generations
+      [old, intermediate, current] = fixture.generations
 
-        for {grants, expected} <- [
-              {old, :lease_expired},
-              {intermediate, :lease_expired},
-              {current, nil}
-            ],
-            {d, i} <- Enum.with_index(grants, 1) do
-          {branch, command} = Sim.command(sim, "member#{i}", :post, ["epoch fourteen"], cap: d.id)
+      for {grants, expected} <- [
+            {old, :lease_expired},
+            {intermediate, :lease_expired},
+            {current, nil}
+          ],
+          {d, i} <- Enum.with_index(grants, 1) do
+        {branch, command} = Sim.command(sim, "member#{i}", :post, ["epoch fourteen"], cap: d.id)
 
-          assert Sim.quarantined(branch, "member#{i}", command.id) ==
-                   if(expected, do: {true, expected}, else: false)
-        end
+        assert Sim.quarantined(branch, "member#{i}", command.id) ==
+                 if(expected, do: {true, expected}, else: false)
+      end
 
-        {:succeed, _, parent, _} = List.last(fixture.acquisitions).body
-        assert parent.parent_id == nil
-        assert parent.expires_epoch == 16
-        assert Enum.all?(current, &(&1.parent_id == parent.id))
+      {:succeed, _, parent, _} = List.last(fixture.acquisitions).body
+      assert parent.parent_id == nil
+      assert parent.expires_epoch == 16
+      assert Enum.all?(current, &(&1.parent_id == parent.id))
 
-        assert Authority.holder_epoch(sim.module, Sim.log(sim, "holder"), F.role(sim)).op_id ==
-                 List.last(fixture.acquisitions).id
+      assert Authority.holder_epoch(sim.module, Sim.log(sim, "holder"), F.role(sim)).op_id ==
+               List.last(fixture.acquisitions).id
 
-        # Post-bootstrap operational counters only: exclude E0, preview/enrollment,
-        # initial transfer/grants, and the separate command validation branches.
-        counts =
-          Sim.log(sim, "holder")
-          |> Log.topo_ops()
-          |> Enum.reject(&MapSet.member?(fixture.bootstrap_ids, &1.id))
-          |> Enum.reduce(counts, fn op, acc ->
-            case op.body do
-              {:beacon, _, certificate} ->
-                %{
-                  acc
-                  | beacons: acc.beacons + 1,
-                    signatures: acc.signatures + 1 + length(certificate.signatures)
-                }
+      # Post-bootstrap operational counters only: exclude E0, preview/enrollment,
+      # initial transfer/grants, and the separate command validation branches.
+      counts =
+        Sim.log(sim, "holder")
+        |> Log.topo_ops()
+        |> Enum.reject(&MapSet.member?(fixture.bootstrap_ids, &1.id))
+        |> Enum.reduce(%{beacons: 0, continuations: 0, grants: 0, signatures: 0}, fn op, acc ->
+          case op.body do
+            {:beacon, _, certificate} ->
+              %{
+                acc
+                | beacons: acc.beacons + 1,
+                  signatures: acc.signatures + 1 + length(certificate.signatures)
+              }
 
-              {:succeed, _, _, {:continuation_v1, certificate}} ->
-                %{
-                  acc
-                  | continuations: acc.continuations + 1,
-                    signatures: acc.signatures + 2 + length(certificate.signatures)
-                }
+            {:succeed, _, _, {:continuation_v1, certificate}} ->
+              %{
+                acc
+                | continuations: acc.continuations + 1,
+                  signatures: acc.signatures + 2 + length(certificate.signatures)
+              }
 
-              {:grant, _} ->
-                %{acc | grants: acc.grants + 1, signatures: acc.signatures + 2}
-            end
-          end)
+            {:grant, _} ->
+              %{acc | grants: acc.grants + 1, signatures: acc.signatures + 2}
+          end
+        end)
 
-        assert length(fixture.acquisitions) == 2
-        counts
-      end)
-
-    assert counters == %{beacons: 182, continuations: 26, grants: 312, signatures: 1274}
-    assert counters.beacons + counters.continuations + counters.grants == 520
-    # Independent native purposes; these are operation counts, not measured prompts.
-    assert 182 * 2 + 26 * 2 + 182 == 598
+      assert length(fixture.acquisitions) == 2
+      assert counts == %{beacons: 14, continuations: 2, grants: 24, signatures: 98}
+      assert counts.beacons + counts.continuations + counts.grants == 40
+    end
   end
 
   test "V08 surviving Space authority permits a new independent child, enrollment and moderator continuation" do
