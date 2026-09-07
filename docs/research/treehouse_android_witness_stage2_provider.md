@@ -555,3 +555,49 @@ This is local metadata reconciliation only. It does not verify certificate signa
 ## Required public tests before closure
 
 Exact one-package/one-signer positive; missing/duplicate/misplaced709 and wrong wrappers; empty/multiple/duplicated package and signer sets; wrong package and malformed UTF8 bytes; exact Long.MAX_VALUE and adjacent invalid version/nonminimal integer; wrong signer length and current signer mismatch/multiple; extra/trailing/nested malformed fields with shared work budget. Actual component started-capture/reconcile succeeds with creation version1 while native current version2, preserving original1; complete reopen still returns1 and exact saved bytes. Wrong challenge/pub/SPKI/chain/current signer refuse; missing journal or prepared-with-key cannot adopt. Test-only platform fixtures remain outside ordinary APK.
+
+
+## First component source verification — 2026-09-07 UTC
+
+The bounded observation/metadata/configuration component is implemented at
+`5a04946c374e37a30db8eacfef1f71558160b940`, with independently reviewed profile
+repair `e4600edde558f2102ba29759a41a8b38dd76cde1`. The source adds four Kotlin
+production/test files. No generation or signing operation is reachable yet.
+The ordinary provider reads the fixed AndroidKeyStore entry, checks its actual
+local KeyInfo profile, parses bounded original leaf metadata, binds the current
+single APK signer to creation metadata, and returns public metadata for the
+journal owner's later exact completion. The generation-spec builder returns
+configuration only. It cannot generate, restore a consumed fence, or authorize
+an operation. Completed observations compare all saved public metadata.
+
+Independent Sol standards review passed. Its separate specification review found
+one P2: the local profile omitted the fixed builder's unset validity windows and
+unrestricted usage count. The repair checks all three validity dates are null and
+remaining usage is exactly unrestricted. Four public regressions genuinely failed
+before the fix, returning Present for a mismatched key. They now refuse for
+started observation, original reconciliation and completed reopen; the builder's
+corresponding defaults are also pinned. Independent Sol repair review passed with
+no P0-P2 findings. This is source review, not Android device evidence.
+
+Final component validation at `e4600edd` passed all 61 executed app tests, with
+zero failures/errors and one preexisting deliberate parent crash-fixture skip;
+lint reports zero errors. The parent implementation also passed shell contracts,
+Rust binding tests and sealed-request compile-fail doctests. The actual updated
+arm64 debug APK build reran shell typecheck/build and passed signature verification.
+Its SHA-256 is `d03c3d59d0e9b24d523fb9cd527bf8cfe0f31bd0476c8287824dfab8bf8633f5`.
+It contains the two production classes and only the arm64 native library, while
+excluding the new test fixture classes. This proves compilation and packaging,
+not installation, platform key generation, durable handset behavior or custody.
+
+Detailed immutable logs, XML, reviews, both original and repaired APKs and hashes
+are retained under `/tmp/lattice-treehouse-execution-20260906/`; the final repair
+manifest is `r36-provider-lifetime-final-manifest.json`. The earlier first-component
+manifest and spec finding remain preserved. Parent journal validation is recorded
+in `treehouse_android_witness_stage2_journal.md`; its final evidence integration
+changes documentation only. Hosted PR-tip and merge-result gates remain pending
+for this component at this dated snapshot.
+
+The remaining coordinator, native review/presence, private bridge, five commands,
+independent certificate-chain validator, two eligible physical devices and full
+B01-B04/R36 acceptance remain OPEN. No software key fallback, alias replacement,
+profile enablement or custody claim follows from this checkpoint.
