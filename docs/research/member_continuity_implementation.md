@@ -543,3 +543,42 @@ bounded packet and the dated Plan158/lifecycle clauses above, before shared code
 edits. It adds no command registration, continuity policy or compaction context.
 The new native runtime, actual TS continuity consumer, A01–A17 and field/native
 ceremonies retain their separate open gates.
+
+
+## Verified codec, catalog vocabulary and cold-start prerequisites — 2026-09-07 UTC
+
+Pure codec sourcef5415cc8 was approved by Claude Fable. The integrated prerequisite
+source `f649e4b7fc13f6fdce4d24acede625ae1de28c40` then passed independent
+gpt-5.6-sol review with no P0–P2. All three compiled cutoff validators use the
+exact139-name union, while the historical130-name fixture and nine-name supplement
+remain separate immutable evidence. Selected Space supplies13 closed application
+literals, including the four existing names found missing in real cold processes.
+No atom is created from input and no command is registered.
+
+Actual signed BEAM/TypeScript histories pass cutoff/trust intake, retain selected
+rejected evidence and reopen in both delivery orders. Fresh selected-Space
+processes decode and authenticate original frames and verified dumps; actual
+path-backed manifest startup, first WebSocket relay and another process's durable
+reopen/pull pass. Corrupt startup refuses readiness. The original exporter/default
+bytes, pure codec fixtures and trust646 fixture remain unchanged. All84 previously
+tracked vectors were preserved by the prerequisite change.
+
+Root's serialized full mix check atf649 passed915 tests and27 properties, zero
+failures and three exclusions, formatting and strict Credo exit0. Focused evidence
+includes57 core and2 carrier tests; TypeScript cutoff/trust/codec suites,886
+canonical checks,1497 conformance checks and existing continuation suites passed.
+
+Final integration `2cbe3ba747044612ead23c6ba3d83f4059cc106a` adds the pure
+codec package export, its npm/CI gate and generated distribution files. The codec
+suite passes10 cases; eight direct imports exercise the public barrel, and two
+reciprocal fixture cases retain their existing support helper. Build passes.
+Independent Sol review approves the final wiring. All87 vectors present atf649
+remain unchanged. Workflow syntax/expressions pass; full actionlint retains
+exactly three preexisting SC2209 notices on unchanged lines, with no new diagnostic.
+An initial diagnostic comparison used the wrong absolute/relative path spelling;
+the corrected comparison and preserved logs document the exact baseline equality.
+
+These prerequisites grant no membership, command capability or installed trust.
+R19b A01–A17 and the real TypeScript continuity-policy consumer remain OPEN. The
+application compaction mirror and its beacon-context integration are separate
+reviewed work; they are not included in this source's completion claim.
