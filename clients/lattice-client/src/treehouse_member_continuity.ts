@@ -450,7 +450,7 @@ function claimFor(op: Op): MemberContinuityClaim | null {
 function claimFromFrame(frame: CarrierOpFrame): MemberContinuityClaim | null {
   const body = frame.body;
   if (body[0] !== "tuple" || body[1].length !== 2 || body[1][0]?.[0] !== "atom" ||
-    body[1][0][1] !== "attest_member_key_v1" || body[1][1]?.[0] !== "list") return null;
+    body[1][0][1] !== "attest_member_key_v1" || body[1][1]?.[0] !== "list" || body[1][1][1].length !== 3) return null;
   const claim = body[1][1][1][0];
   return claim === undefined ? null : memberContinuityClaimFromCarrierTerm(claim);
 }

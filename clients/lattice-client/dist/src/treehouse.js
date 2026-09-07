@@ -9,7 +9,7 @@ import { frontier } from "./sync";
 import { causalListEntries } from "./crdt/reducers";
 import { continuationProfileBindingMatches } from "./authority";
 import { catalogBootstrapFromDecodedTerm, catalogBootstrapToCarrierTerm, normalizeCatalogBootstrap } from "./treehouse_catalog_codec";
-import { memberContinuityCertificateFromDecodedArguments } from "./treehouse_member_continuity_codec";
+import { memberContinuityCertificateFromDecodedArguments, memberContinuityClaimFromDecodedTerm } from "./treehouse_member_continuity_codec";
 import { memberContinuityCommandStatus } from "./treehouse_member_continuity";
 export const treehouseSpaceSchema = {
     name: "Treehouse.Space",
@@ -254,7 +254,8 @@ export function treehouseCommandDecoders(product) {
                     const certificate = memberContinuityCertificateFromDecodedArguments(raw);
                     const marker = admin("attest_member_key_v1");
                     return { ...marker, command: "attest_member_key_v1", effects: [marker],
-                        commandArgs: certificate === null ? [null] : [certificate.claim, certificate.possession, certificate.vouches] };
+                        commandArgs: certificate === null ? [memberContinuityClaimFromDecodedTerm(raw[0]), null, null] :
+                            [certificate.claim, certificate.possession, certificate.vouches] };
                 } }],
         ["create_space", decoder(1, "create_space", ([name]) => [effect("name", "write", text(name)), admin("create_space")])],
         ["create_thread", decoder(2, "create_thread", ([replica, title]) => [effect("threads", "add", { replica: reference(replica), title: text(title) }), admin("create_thread")])],
