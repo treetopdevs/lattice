@@ -110,6 +110,33 @@ class WitnessPreparationCoordinatorTest {
         }
     }
 
+    @Test fun refusedObservationNeverReachesReviewRandomnessOrWrite() {
+        val context = context()
+        val directory = File(context.noBackupFilesDir, "treehouse-governance-v1").also { it.mkdir() }
+        File(directory, "identity.sqlite3").createNewFile()
+        val ui = Ui(); val randomCalls = AtomicInteger()
+        val coordinator = WitnessPreparationCoordinator(context, bytes(7), ui, { true },
+            { randomCalls.incrementAndGet(); bytes(3) })
+        assertEquals(WitnessResult.Refused("incomplete_store"), prepare(coordinator, request()))
+        assertEquals(0, ui.calls.get())
+        assertEquals(0, randomCalls.get())
+        assertEquals(0L, File(directory, "identity.sqlite3").length())
+    }
+
+    @Test fun cancellationBeforeUiHandlePublicationStillCancelsPublishedHandle() {
+        val context = context(); val ui = Ui()
+        val entered = CountDownLatch(1); val release = CountDownLatch(1)
+        val coordinator = WitnessPreparationCoordinator(context, bytes(7), ui, { true }, { bytes(3) }, {},
+            { if (it == "before_cancellation_publish") { entered.countDown(); release.await() } })
+        val done = CountDownLatch(1); val result = AtomicReference<WitnessResult<PreparedWitnessCreation>>()
+        coordinator.prepare(request()) { result.set(it); done.countDown() }
+        assertTrue(entered.await(10, TimeUnit.SECONDS))
+        assertTrue(coordinator.cancel(bytes(5), bytes(8)))
+        release.countDown(); assertTrue(done.await(10, TimeUnit.SECONDS))
+        assertEquals(WitnessResult.Refused("cancelled"), result.get())
+        assertEquals(1, ui.cancellations.get())
+    }
+
     private fun coordinator(context: Context, ui: Ui, random: Int) =
         WitnessPreparationCoordinator(context, bytes(7), ui, { true }, { bytes(random) })
     private fun request(enrollment: Int = 1, recipient: Int = 2) =
@@ -120,12 +147,12 @@ class WitnessPreparationCoordinatorTest {
         assertTrue(done.await(10, TimeUnit.SECONDS)); return result.get()
     }
     private class Ui(private val auto: Boolean = true, private val accepted: Boolean = true): WitnessReviewUi {
-        val calls = AtomicInteger(); val entered = CountDownLatch(1)
+        val calls = AtomicInteger(); val cancellations = AtomicInteger(); val entered = CountDownLatch(1)
         private val callback = AtomicReference<((Boolean) -> Unit)?>()
         override fun review(details: WitnessReviewDetails, callback: (Boolean) -> Unit): WitnessUiCancellation {
             calls.incrementAndGet(); this.callback.set(callback); entered.countDown()
             if (auto) callback(accepted)
-            return object: WitnessUiCancellation { override fun cancel() { callback(false) } }
+            return object: WitnessUiCancellation { override fun cancel() { cancellations.incrementAndGet(); callback(false) } }
         }
         fun answer(value: Boolean) { callback.get()?.invoke(value) }
         override fun authenticate(signature: java.security.Signature, callback: (WitnessPresenceResult) -> Unit) =

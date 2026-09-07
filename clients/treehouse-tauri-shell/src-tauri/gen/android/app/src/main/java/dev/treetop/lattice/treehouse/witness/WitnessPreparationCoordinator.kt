@@ -32,6 +32,7 @@ internal class WitnessPreparationCoordinator(
     private val sessionValid: (WitnessBytes) -> Boolean,
     private val random32: () -> ByteArray = { ByteArray(32).also(SecureRandom()::nextBytes) },
     private val journalCheckpoint: (String) -> Unit = {},
+    private val reviewCheckpoint: (String) -> Unit = {},
 ) {
     private val expectedSigner = witness32(signer)
     private val active = AtomicReference<Attempt?>(null)
@@ -55,7 +56,11 @@ internal class WitnessPreparationCoordinator(
                 WitnessJournal(context, expectedSigner.copyBytes(), journalCheckpoint).use { journal ->
                     val observed = journal.observeExisting()
                     requireCurrent(attempt)
-                    val existing = (observed as? WitnessResult.Stored)?.value
+                    val existing = when (observed) {
+                        is WitnessResult.Stored -> observed.value
+                        WitnessResult.Missing -> null
+                        is WitnessResult.Refused -> throw Failure(observed.reason)
+                    }
                     val found = existing?.enrollments?.find { it.enrollmentId == request.enrollmentId }
                     val snapshot = if (found != null) {
                         if (found.replica != request.replica || found.recipient != request.recipient)
@@ -70,7 +75,13 @@ internal class WitnessPreparationCoordinator(
                             request.recipient.copyBytes(), creationAttempt.copyBytes())
                         val details = WitnessReviewDetails.prepareCreation(request.replica,
                             request.enrollmentId.copyBytes(), request.recipient.copyBytes())
-                        attempt.cancellation.set(ui.review(details) { attempt.review.complete(it) })
+                        val cancellation = ui.review(details) { attempt.review.complete(it) }
+                        reviewCheckpoint("before_cancellation_publish")
+                        attempt.cancellation.set(cancellation)
+                        if (!isCurrent(attempt)) {
+                            cancellation.cancel()
+                            throw Failure("cancelled")
+                        }
                         if (!attempt.review.get(120, TimeUnit.SECONDS)) throw Failure("cancelled")
                         requireCurrent(attempt)
                         stored(journal.prepareAccepted(enrollment, creationAttempt.copyBytes()))
