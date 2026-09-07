@@ -183,6 +183,10 @@ export async function reviewMemberContinuityFromFrames(request) {
                 return refuse("application_wrong_target");
             vouchers.push({ admission: id, member });
         }
+        if (new Set(vouchers.map(voucher => voucher.member)).size !== 2 ||
+            vouchers.some(voucher => voucher.member === frozen.oldPub || voucher.member === frozen.newPub)) {
+            return refuse("application_invalid_continuity");
+        }
         vouchers.sort((left, right) => compareRawKeys(left.member, right.member));
         const beaconValues = history.authority.security.validBeacons.map((beacon) => ({ ...beacon,
             value: typeof beacon.epoch === "number" ? beacon.epoch : Number(beacon.epoch) }));
@@ -231,7 +235,7 @@ export async function assembleMemberContinuityFromFrames(input) {
     try {
         const frozen = structuredClone({ frames: input.frames, review: input.review, certificate: input.certificate });
         const current = await reviewMemberContinuityFromFrames({ ...frozen.review.request, frames: frozen.frames });
-        if (!current.ok || !equalBytes(current.review.claimBytes, frozen.review.claimBytes) ||
+        if (!current.ok || current.review.author !== frozen.review.author || current.review.capId !== frozen.review.capId || !equalBytes(current.review.claimBytes, frozen.review.claimBytes) ||
             current.review.claimId !== frozen.review.claimId || !same(current.review.verifiedFrontier, frozen.review.verifiedFrontier)) {
             return refuse("stale_verified_state");
         }
@@ -255,8 +259,22 @@ export async function assembleMemberContinuityFromFrames(input) {
             return refuse(preflightReason);
         if (envelopeBytes(placeholder) > 64_000)
             return refuse("continuity_capacity_stop");
-        const frame = await authorCarrierOp({ replica: current.review.claim.space, deps: [...current.review.claim.deps],
-            kind: "command", cap: townshipCapTerm(current.review.capId), body, signer: input.signer });
+        let frame;
+        try {
+            frame = await authorCarrierOp({ replica: current.review.claim.space, deps: [...current.review.claim.deps],
+                kind: "command", cap: townshipCapTerm(current.review.capId), body, signer: input.signer });
+        }
+        catch {
+            return refuse("signer_failed");
+        }
+        try {
+            if (!(await verifyCarrierOp(frame, { verify: async (author, bytes, signature) => ed25519.verify(signature, bytes, base64ToBytes(author), { zip215: false }) })).valid) {
+                return refuse("invalid_signer_signature");
+            }
+        }
+        catch {
+            return refuse("invalid_signer_signature");
+        }
         if (envelopeBytes(frame) > 64_000)
             return refuse("continuity_capacity_stop");
         const final = await observeMemberContinuityFromFrames({ replica: current.review.claim.space,

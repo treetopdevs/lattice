@@ -241,6 +241,24 @@ test("review derives consent from signed history and assembly never invokes a si
       command: {command: "admit_member", invitationId: invite.id, recipient: b64(member.pub), level: "member", acceptance}});
     frames.push(admit); admissions[index] = admit.id;
   }
+  const alternateCap = await authorCarrierDelegation({replica: genesis.replica, audiencePubkey: admin.pub,
+    roles: ["admin"], ops: ["attest_member_key_v1"], signer: adminSigner});
+  frames.push(await authorCarrierOp({replica: genesis.replica, deps: [frames.at(-1)!.id], kind: "authority",
+    cap: ["nil"], signer: adminSigner, body: ["tuple", [["atom", "genesis"], ["delegation", alternateCap], ["map", []]]]}));
+  for (const members of [[admissions[0]!, admissions[2]!], [admissions[1]!, admissions[2]!]] as [string, string][]) {
+    assert.deepEqual(await reviewMemberContinuityFromFrames({replica: genesis.replica, frames,
+      oldPub: b64(former.pub), oldAdmission: admissions[0]!, newPub: b64(witnesses[0]!.pub),
+      oldMembership: "active", nonce: b64(digest("integration-nonce")), voucherAdmissions: members,
+      author: b64(admin.pub), capId: delegation.id}), {ok: false, reason: "application_invalid_continuity"});
+  }
+  const duplicateAdmission = await authorCarrierOp({replica: genesis.replica, deps: [frames.at(-1)!.id],
+    kind: "command", cap: townshipCapTerm(delegation.id), signer: adminSigner,
+    body: frames.find(frame => frame.id === admissions[1])!.body});
+  assert.deepEqual(await reviewMemberContinuityFromFrames({replica: genesis.replica,
+    frames: [...frames, duplicateAdmission], oldPub: b64(former.pub), oldAdmission: admissions[0]!,
+    newPub: b64(successor.pub), oldMembership: "active", nonce: b64(digest("integration-nonce")),
+    voucherAdmissions: [admissions[1]!, duplicateAdmission.id], author: b64(admin.pub), capId: delegation.id}),
+    {ok: false, reason: "application_invalid_continuity"});
   const epoch = await authorCarrierOp({replica: genesis.replica, deps: [frames.at(-1)!.id], kind: "authority",
     body: ["tuple", [["atom", "beacon"], ["int", 0]]], cap: ["nil"], signer: adminSigner});
   frames.push(epoch);
@@ -292,6 +310,13 @@ test("review derives consent from signed history and assembly never invokes a si
   assert.deepEqual(await assembleMemberContinuityFromFrames({frames: [...frames, changed], review: reviewed.review,
     certificate, signer: guarded}), {ok: false, reason: "stale_verified_state"});
   assert.equal(calls, 0);
+  const alternateReview = await reviewMemberContinuityFromFrames({...request, capId: alternateCap.id});
+  assert.equal(alternateReview.ok, true, JSON.stringify(alternateReview));
+  const alteredConsent = structuredClone(reviewed.review);
+  alteredConsent.request.capId = alternateCap.id;
+  assert.deepEqual(await assembleMemberContinuityFromFrames({frames, review: alteredConsent, certificate, signer: guarded}),
+    {ok: false, reason: "stale_verified_state"});
+  assert.equal(calls, 0);
   const assembled = await assembleMemberContinuityFromFrames({frames, review: reviewed.review, certificate, signer: guarded});
   assert.equal(assembled.ok, true, JSON.stringify(assembled)); assert.equal(calls, 1);
   if (assembled.ok) {
@@ -301,8 +326,17 @@ test("review derives consent from signed history and assembly never invokes a si
   let malformedCalls = 0;
   const malformedSigner = {publicKey: admin.pub, sign: () => { malformedCalls++; return new Uint8Array(63); }};
   assert.deepEqual(await assembleMemberContinuityFromFrames({frames, review: reviewed.review, certificate, signer: malformedSigner}),
-    {ok: false, reason: "invalid_verified_history"});
+    {ok: false, reason: "invalid_signer_signature"});
   assert.equal(malformedCalls, 1);
+  for (const sign of [() => new Uint8Array(64)]) {
+    assert.deepEqual(await assembleMemberContinuityFromFrames({frames, review: reviewed.review, certificate,
+      signer: {publicKey: admin.pub, sign}}), {ok: false, reason: "invalid_signer_signature"});
+  }
+  for (const sign of [() => { throw new Error("signer unavailable"); },
+    () => Promise.reject(new Error("signer rejected"))]) {
+    assert.deepEqual(await assembleMemberContinuityFromFrames({frames, review: reviewed.review, certificate,
+      signer: {publicKey: admin.pub, sign}}), {ok: false, reason: "signer_failed"});
+  }
   const reviewedFrameCount = reviewed.review.request.frames.length;
   const reviewedGenesisSignature = (reviewed.review.request.frames[0] as {sig: string}).sig;
   (request.frames[0] as {sig: string}).sig = b64(new Uint8Array(64));
