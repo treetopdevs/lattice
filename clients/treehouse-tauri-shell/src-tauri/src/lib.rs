@@ -1,6 +1,7 @@
 //! Empty offline Treehouse shell. Native commands have fixed product and key boundaries.
 #[cfg(target_os = "android")]
 mod android_keyring;
+mod catalog_store;
 mod key_store;
 pub mod preview;
 pub mod witness_binding;
