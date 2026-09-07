@@ -96,6 +96,269 @@ defmodule Lattice2.ApplicationCompactionMirrorTest do
     end
   end
 
+  defmodule BeaconReplica do
+    @moduledoc false
+    use Lattice.Replica
+
+    state do
+      field(:events, merge: :causal_list, default: [])
+    end
+
+    command(:observe_beacons, [:expected], do: [{:events, {:append, expected}}])
+    command(:mask_beacon, [:target], do: [{:events, {:append, {:mask, target}}}])
+
+    def command_op_status(op, visible, context) do
+      if observer = Process.get(:application_mirror_observer),
+        do: send(observer, {:application_context, op.id, visible, context})
+
+      case op.body do
+        {:observe_beacons, [expected]} ->
+          case Map.fetch(context, :valid_beacons) do
+            :error -> {:error, :missing_valid_beacons}
+            {:ok, ^expected} -> :ok
+            {:ok, _other} -> {:error, :wrong_valid_beacons}
+          end
+
+        _other ->
+          :ok
+      end
+    end
+
+    def command_conflicts(ops, verdicts, ancestors) do
+      if observer = Process.get(:application_mirror_observer),
+        do: send(observer, {:application_conflicts, ops, verdicts, ancestors})
+
+      for {id, %Op{kind: :command, body: {:mask_beacon, [target]}}} <- ops,
+          Map.get(verdicts, id) == :honored,
+          into: %{},
+          do: {target, :application_conflict}
+    end
+  end
+
+  for {label, options} <- [
+        {"conflict callback", [conflict: true]},
+        {"unsupported callback", [unsupported: true]},
+        {"conflict finite lease", [conflict: true, finite: true]},
+        {"unsupported finite lease", [unsupported: true, finite: true]},
+        {"invalid-only finite lease", [invalid_only: true, finite: true]},
+        {"exact high uint64 callback", [conflict: true, epoch: 18_446_744_073_709_551_615]}
+      ] do
+    @tag :beacon_evidence
+    test "verified application beacon evidence preserves #{label} under both real deliveries" do
+      options = unquote(options)
+      fixture = beacon_mirror_log(options)
+
+      outcomes =
+        Enum.map(delivery_sequences(fixture.log), &assert_beacon_mirror(&1, fixture, options))
+
+      assert Enum.at(outcomes, 0) == Enum.at(outcomes, 1)
+    end
+  end
+
+  @tag :beacon_evidence
+  test "rehashed beacon tampering cannot replace authentic covered evidence" do
+    fixture = beacon_mirror_log(conflict: true)
+
+    assert {:ok, snapshot, retained} =
+             CompactionSpike.compact_application(BeaconReplica, fixture.log, fixture.frontier)
+
+    assert snapshot.covered_valid_beacons == fixture.expected
+    [first, second] = fixture.expected
+
+    for evidence <- [
+          [],
+          [first],
+          [first, first, second],
+          Enum.reverse(fixture.expected),
+          [%{first | epoch: first.epoch + 20}, second],
+          [%{first | op_id: fixture.invalid.id}, second],
+          fixture.expected ++ [%{op_id: fixture.invalid.id, epoch: 99}],
+          [Map.put(first, :covered?, true), second]
+        ] do
+      tampered = %{snapshot | covered_valid_beacons: evidence, hash: nil}
+      tampered = %{tampered | hash: :crypto.hash(:sha256, term_bytes(tampered))}
+
+      assert {:error, :application_snapshot_mismatch} ==
+               CompactionSpike.reduce_application(BeaconReplica, tampered, retained)
+    end
+  end
+
+  defp beacon_mirror_log(options) do
+    label = inspect(options)
+
+    name =
+      if options[:unsupported],
+        do: "replica:treehouse:space:beacon-mirror#authority:future-v1",
+        else: "replica:application-beacon-mirror"
+
+    {sim, _genesis} =
+      BeaconReplica
+      |> Sim.new(name, ["root", "peer"], seed: "mirror-beacons-#{label}")
+      |> Sim.create_replica("root")
+
+    root = Sim.identity(sim, "root")
+    peer = Sim.identity(sim, "peer")
+    base = Sim.log(sim, "root")
+    cap = root_cap(base)
+
+    delegation =
+      Delegation.new(root, base.replica, peer.pub,
+        parent_id: cap,
+        ops: [:observe_beacons],
+        expires_epoch: if(options[:finite], do: 0)
+      )
+
+    grant = Op.new(root, base.replica, Log.frontier(base), :authority, {:grant, delegation})
+    covered = Log.append!(base, grant)
+    epoch = options[:epoch] || 1
+
+    {covered, expected, valid} =
+      if options[:invalid_only] do
+        {covered, [], nil}
+      else
+        zero = Op.new(root, base.replica, Log.frontier(covered), :authority, {:beacon, 0})
+        covered = Log.append!(covered, zero)
+        valid = Op.new(root, base.replica, Log.frontier(covered), :authority, {:beacon, epoch})
+
+        {Log.append!(covered, valid),
+         Enum.sort_by(
+           [%{op_id: zero.id, epoch: 0}, %{op_id: valid.id, epoch: epoch}],
+           & &1.op_id
+         ), valid}
+      end
+
+    invalid =
+      Op.new(
+        peer,
+        base.replica,
+        Log.frontier(covered),
+        :authority,
+        {:beacon, 18_446_744_073_709_551_615}
+      )
+
+    covered = Log.append!(covered, invalid)
+    malformed = Op.new(root, base.replica, Log.frontier(covered), :authority, {:beacon, 9, %{}})
+    covered = Log.append!(covered, malformed)
+    wrong_kind = Op.new(root, base.replica, Log.frontier(covered), :command, {:beacon, 9})
+    covered = Log.append!(covered, wrong_kind)
+
+    covered_probe =
+      Op.new(root, base.replica, Log.frontier(covered), :command, {:observe_beacons, [expected]},
+        cap: cap
+      )
+
+    covered = Log.append!(covered, covered_probe)
+
+    covered =
+      if options[:conflict] do
+        mask =
+          Op.new(root, base.replica, Log.frontier(covered), :command, {:mask_beacon, [valid.id]},
+            cap: cap
+          )
+
+        Log.append!(covered, mask)
+      else
+        covered
+      end
+
+    frontier = Log.frontier(covered)
+
+    retained =
+      Op.new(peer, base.replica, frontier, :command, {:observe_beacons, [expected]},
+        cap: delegation.id
+      )
+
+    log = Log.append!(covered, retained)
+    assert :ok == Log.verify_authenticity(log)
+
+    for op <- Log.topo_ops(log) do
+      wire = op |> Lattice.Carrier.Wire.encode_op() |> Jason.encode!() |> Jason.decode!()
+      assert {:ok, ^op} = Lattice.Carrier.Wire.decode_op(wire)
+    end
+
+    assert MapSet.subset?(
+             MapSet.new(frontier),
+             Lattice.Dag.all_ancestors(Log.ops(log))[retained.id]
+           )
+
+    %{
+      log: log,
+      frontier: frontier,
+      expected: expected,
+      valid: valid,
+      invalid: invalid,
+      retained: retained
+    }
+  end
+
+  defp assert_beacon_mirror(delivered, fixture, options) do
+    previous = Process.put(:application_mirror_observer, self())
+    drain_messages([])
+
+    try do
+      full = Authority.analyze(BeaconReplica, delivered)
+      full_trace = drain_messages([]) |> normalize_callback_trace()
+      full_state = Reduce.reduce(BeaconReplica, delivered, quarantine: full.quarantine)
+
+      assert {:ok, snapshot, retained} =
+               CompactionSpike.compact_application(BeaconReplica, delivered, fixture.frontier)
+
+      construction_trace = drain_messages([]) |> normalize_callback_trace()
+      result = CompactionSpike.reduce_application(BeaconReplica, snapshot, retained)
+      replay_trace = drain_messages([]) |> normalize_callback_trace()
+
+      retained_trace =
+        Enum.filter(
+          replay_trace,
+          &match?({:application_context, id, _, _} when id == fixture.retained.id, &1)
+        )
+
+      full_retained =
+        Enum.filter(
+          full_trace,
+          &match?({:application_context, id, _, _} when id == fixture.retained.id, &1)
+        )
+
+      if options[:finite] && !options[:invalid_only] do
+        assert full_retained == []
+        assert retained_trace == []
+
+        expected_reason =
+          if options[:unsupported], do: :unsupported_authority_profile, else: :lease_expired
+
+        assert result.reasons[fixture.retained.id] == expected_reason
+      else
+        assert length(full_retained) == 1
+        assert retained_trace == full_retained
+        [{:application_context, _, _, context}] = retained_trace
+        assert context.valid_beacons == fixture.expected
+      end
+
+      assert snapshot.covered_valid_beacons == fixture.expected
+      assert result.reasons == full.reasons
+      assert result.quarantine == full.quarantine
+      assert result.holders == full.holders
+      assert result.requests == full.requests
+      assert term_bytes(result.state) == term_bytes(full_state)
+      assert List.last(replay_trace) == List.last(full_trace)
+      if options[:conflict], do: assert(full.reasons[fixture.valid.id] == :application_conflict)
+
+      if options[:unsupported] do
+        assert full.requests == []
+
+        assert Enum.all?(full.reasons, fn {_id, reason} ->
+                 reason == :unsupported_authority_profile
+               end)
+      end
+
+      {snapshot.hash, term_bytes(snapshot), result, construction_trace, replay_trace, full_trace}
+    after
+      if previous,
+        do: Process.put(:application_mirror_observer, previous),
+        else: Process.delete(:application_mirror_observer)
+    end
+  end
+
   test "signed revoked invitation mirrors application refusal across a stable cut" do
     for revoked? <- [false, true] do
       {log, frontier, admission} = invitation_log(revoked?)
@@ -1255,8 +1518,8 @@ defmodule Lattice2.ApplicationCompactionMirrorTest do
     end)
   end
 
-  defp normalize_context(%{visible_ops: visible_ops, verdicts: verdicts}),
-    do: %{visible_ops: sort_map(visible_ops), verdicts: sort_map(verdicts)}
+  defp normalize_context(%{visible_ops: visible_ops, verdicts: verdicts} = context),
+    do: %{context | visible_ops: sort_map(visible_ops), verdicts: sort_map(verdicts)}
 
   defp normalize_context(context), do: context
 
