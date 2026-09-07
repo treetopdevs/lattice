@@ -1,5 +1,7 @@
 package dev.treetop.lattice.treehouse.witness
 
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.Application
@@ -304,14 +306,17 @@ internal class WitnessNativeReview(private val activity: Activity) : WitnessRevi
         }
     }
 
-    private fun activityUsable(): Boolean = !activity.isFinishing && !activity.isDestroyed
+    private fun activityUsable(): Boolean = !activity.isFinishing && !activity.isDestroyed &&
+        (activity as? LifecycleOwner)?.lifecycle?.currentState == Lifecycle.State.RESUMED
 
     private fun lifecycleCallbacks(onInvalidated: () -> Unit): Application.ActivityLifecycleCallbacks =
         object : Application.ActivityLifecycleCallbacks {
             override fun onActivityCreated(activity: Activity, state: Bundle?) = Unit
             override fun onActivityStarted(activity: Activity) = Unit
             override fun onActivityResumed(activity: Activity) = Unit
-            override fun onActivityPaused(changed: Activity) = Unit
+            override fun onActivityPaused(changed: Activity) {
+                if (changed === activity) onInvalidated()
+            }
             override fun onActivitySaveInstanceState(activity: Activity, state: Bundle) = Unit
 
             override fun onActivityStopped(changed: Activity) {

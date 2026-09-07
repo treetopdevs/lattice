@@ -1,5 +1,6 @@
 package dev.treetop.lattice.treehouse.witness
 
+import androidx.activity.ComponentActivity
 import android.app.Activity
 import android.app.AlertDialog
 import android.Manifest
@@ -46,11 +47,11 @@ import org.robolectric.util.ReflectionHelpers.ClassParameter
 )
 class WitnessNativeReviewTest {
     private lateinit var activity: Activity
-    private lateinit var controller: ActivityController<Activity>
+    private lateinit var controller: ActivityController<ComponentActivity>
 
     @Before
     fun setUp() {
-        controller = Robolectric.buildActivity(Activity::class.java).setup()
+        controller = Robolectric.buildActivity(ComponentActivity::class.java).setup()
         activity = controller.get()
         activity.setTheme(android.R.style.Theme_Material_Light)
     }
@@ -221,6 +222,41 @@ class WitnessNativeReviewTest {
         controller.pause().stop().destroy()
         idleMain()
         assertEquals(listOf(false), teardown)
+    }
+
+    @Test
+    fun pauseAloneInvalidatesReviewAndRefusesNewReviewWhilePaused() {
+        val outcomes = mutableListOf<Boolean>()
+        val details = WitnessReviewDetails.prepareCreation("replica", bytes(1), bytes(2))
+        WitnessNativeReview(activity).review(details, outcomes::add)
+        idleMain()
+        controller.pause()
+        idleMain()
+        assertEquals(listOf(false), outcomes)
+        val paused = mutableListOf<Boolean>()
+        WitnessNativeReview(activity).review(details, paused::add)
+        idleMain()
+        assertEquals(listOf(false), paused)
+        controller.resume()
+    }
+
+    @Test
+    fun pauseAloneCancelsPresenceAndRefusesNewPresenceWhilePaused() {
+        val outcomes = mutableListOf<WitnessPresenceResult>()
+        WitnessNativeReview(activity).authenticate(Signature.getInstance("Ed25519"), outcomes::add)
+        idleMain()
+        val signal = WitnessBiometricPromptShadow.cancellationSignal!!
+        controller.pause()
+        idleMain()
+        assertTrue(signal.isCanceled)
+        assertEquals(1, outcomes.size)
+        assertTrue(outcomes.single() is WitnessPresenceResult.Refused)
+        val paused = mutableListOf<WitnessPresenceResult>()
+        WitnessNativeReview(activity).authenticate(Signature.getInstance("Ed25519"), paused::add)
+        idleMain()
+        assertEquals(1, paused.size)
+        assertTrue(paused.single() is WitnessPresenceResult.Refused)
+        controller.resume()
     }
 
     @Test
