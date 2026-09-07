@@ -1,24 +1,33 @@
 package dev.treetop.lattice.treehouse.witness
 
-import java.nio.CharBuffer
-import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
 import java.io.ByteArrayOutputStream
 import dev.treetop.lattice.treehouse.BuildConfig
 
 /** Proposed public facts only. It has no native consent, key or signing interface. */
-class PublicBindingClaim(replica: String, fields: List<ByteArray>) {
-    init {
-        require(replica.length in 1..512) { "invalid_binding_replica" }
-        require(fields.size == 8 && fields.all { it.size == 32 }) { "invalid_binding_fields" }
-    }
-    private val replicaBytes: ByteArray = StandardCharsets.UTF_8.newEncoder()
-        .onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT)
-        .encode(CharBuffer.wrap(replica)).let { buffer -> ByteArray(buffer.remaining()).also { buffer.get(it) } }
-    private val binaryFields = fields.map { it.copyOf() }
-    init {
-        require(replicaBytes.size in 1..512) { "invalid_binding_replica" }
-    }
+class PublicBindingClaim(
+    replica: String,
+    enrollmentId: ByteArray,
+    recipient: ByteArray,
+    creationAttemptId: ByteArray,
+    actualWitnessPublicKey: ByteArray,
+    generationChallengeDigest: ByteArray,
+    freshValidatorNonce: ByteArray,
+    nativeRandomNonce: ByteArray,
+    nativeCallerSessionDigest: ByteArray,
+) {
+    private val replicaBytes = witnessUtf8(replica, 512)
+    private val binaryFields = listOf(enrollmentId, recipient, creationAttemptId, actualWitnessPublicKey,
+        generationChallengeDigest, freshValidatorNonce, nativeRandomNonce, nativeCallerSessionDigest)
+        .map { require(it.size == 32) { "invalid_binding_fields" }; it.copyOf() }
+    val enrollmentId: ByteArray get() = binaryFields[0].copyOf()
+    val recipient: ByteArray get() = binaryFields[1].copyOf()
+    val creationAttemptId: ByteArray get() = binaryFields[2].copyOf()
+    val actualWitnessPublicKey: ByteArray get() = binaryFields[3].copyOf()
+    val generationChallengeDigest: ByteArray get() = binaryFields[4].copyOf()
+    val freshValidatorNonce: ByteArray get() = binaryFields[5].copyOf()
+    val nativeRandomNonce: ByteArray get() = binaryFields[6].copyOf()
+    val nativeCallerSessionDigest: ByteArray get() = binaryFields[7].copyOf()
     internal fun fieldCopies(): List<ByteArray> = binaryFields.map { it.copyOf() }
     internal fun replicaCopy(): ByteArray = replicaBytes.copyOf()
 }

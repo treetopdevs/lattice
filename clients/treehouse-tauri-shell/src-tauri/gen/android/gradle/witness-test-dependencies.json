@@ -1,0 +1,182 @@
+{
+  "version": 1,
+  "robolectric": "4.16",
+  "sdk": 33,
+  "dependencies": [
+    {
+      "coordinate": "androidx.test.espresso:espresso-idling-resource:3.7.0",
+      "artifact": "espresso-idling-resource-3.7.0.aar",
+      "sha256": "5ff62326b49c308c1d060466ae3cf4aa0e3deaf9295f077a6886048dda3e9b14"
+    },
+    {
+      "coordinate": "androidx.test:monitor:1.8.0",
+      "artifact": "monitor-1.8.0.aar",
+      "sha256": "56cb7496a06d9f2dca7d3ff76c50a8a30bd18e00a24a3b267d5a31437b278e67"
+    },
+    {
+      "coordinate": "com.almworks.sqlite4java:sqlite4java:1.0.392",
+      "artifact": "sqlite4java-1.0.392.jar",
+      "sha256": "243a64470fda0e86a6fddeb0af4c7aa9426ce84e68cbfe18d75ee5da4b7e0b92"
+    },
+    {
+      "coordinate": "com.google.auto.value:auto-value-annotations:1.11.0",
+      "artifact": "auto-value-annotations-1.11.0.jar",
+      "sha256": "5a055ce4255333b3346e1a8703da5bf8ff049532286fdcd31712d624abe111dd"
+    },
+    {
+      "coordinate": "com.google.errorprone:error_prone_annotation:2.41.0",
+      "artifact": "error_prone_annotation-2.41.0.jar",
+      "sha256": "192e99ad3be8a0a44fe210cdc9b0265601dcb446e521ba922c793e50add413c3"
+    },
+    {
+      "coordinate": "com.google.errorprone:error_prone_annotations:2.36.0",
+      "artifact": "error_prone_annotations-2.36.0.jar",
+      "sha256": "77440e270b0bc9a249903c5a076c36a722c4886ca4f42675f2903a1c53ed61a5"
+    },
+    {
+      "coordinate": "com.google.guava:failureaccess:1.0.3",
+      "artifact": "failureaccess-1.0.3.jar",
+      "sha256": "cbfc3906b19b8f55dd7cfd6dfe0aa4532e834250d7f080bd8d211a3e246b59cb"
+    },
+    {
+      "coordinate": "com.google.guava:guava:33.4.8-jre",
+      "artifact": "guava-33.4.8-jre.jar",
+      "sha256": "f3d7f57f67fd622f4d468dfdd692b3a5e3909246c28017ac3263405f0fe617ed"
+    },
+    {
+      "coordinate": "com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava",
+      "artifact": "listenablefuture-9999.0-empty-to-avoid-conflict-with-guava.jar",
+      "sha256": "b372a037d4230aa57fbeffdef30fd6123f9c0c2db85d0aced00c91b974f33f99"
+    },
+    {
+      "coordinate": "com.google.j2objc:j2objc-annotations:3.0.0",
+      "artifact": "j2objc-annotations-3.0.0.jar",
+      "sha256": "88241573467ddca44ffd4d74aa04c2bbfd11bf7c17e0c342c94c9de7a70a7c64"
+    },
+    {
+      "coordinate": "com.google.testparameterinjector:test-parameter-injector:1.18",
+      "artifact": "test-parameter-injector-1.18.jar",
+      "sha256": "e5a7c649c54c412049908247ca5e25fe6921d746849c6017a84dc6044237a4b4"
+    },
+    {
+      "coordinate": "com.ibm.icu:icu4j:77.1",
+      "artifact": "icu4j-77.1.jar",
+      "sha256": "b3640b9f416a4411fd33c59abbeea8fd57d024c23e1819bf9673220a97499fe3"
+    },
+    {
+      "coordinate": "javax.annotation:javax.annotation-api:1.3.2",
+      "artifact": "javax.annotation-api-1.3.2.jar",
+      "sha256": "e04ba5195bcd555dc95650f7cc614d151e4bcd52d29a10b8aa2197f3ab89ab9b"
+    },
+    {
+      "coordinate": "javax.inject:javax.inject:1",
+      "artifact": "javax.inject-1.jar",
+      "sha256": "91c77044a50c481636c32d916fd89c9118a72195390452c81065080f957de7ff"
+    },
+    {
+      "coordinate": "org.bouncycastle:bcprov-jdk18on:1.81",
+      "artifact": "bcprov-jdk18on-1.81.jar",
+      "sha256": "249f396412b0c0ce67f25c8197da757b241b8be3ec4199386c00704a2457459b"
+    },
+    {
+      "coordinate": "org.conscrypt:conscrypt-openjdk-uber:2.5.2",
+      "artifact": "conscrypt-openjdk-uber-2.5.2.jar",
+      "sha256": "eaf537d98e033d0f0451cd1b8cc74e02d7b55ec882da63c88060d806ba89c348"
+    },
+    {
+      "coordinate": "org.jspecify:jspecify:1.0.0",
+      "artifact": "jspecify-1.0.0.jar",
+      "sha256": "1fad6e6be7557781e4d33729d49ae1cdc8fdda6fe477bb0cc68ce351eafdfbab"
+    },
+    {
+      "coordinate": "org.ow2.asm:asm-commons:9.8",
+      "artifact": "asm-commons-9.8.jar",
+      "sha256": "3301a1c1cb4c59fcc5292648dac1d7c5aed4c0f067dfbe88873b8cdfe77404f4"
+    },
+    {
+      "coordinate": "org.ow2.asm:asm-tree:9.8",
+      "artifact": "asm-tree-9.8.jar",
+      "sha256": "14b7880cb7c85eed101e2710432fc3ffb83275532a6a894dc4c4095d49ad59f1"
+    },
+    {
+      "coordinate": "org.ow2.asm:asm:9.8",
+      "artifact": "asm-9.8.jar",
+      "sha256": "876eab6a83daecad5ca67eb9fcabb063c97b5aeb8cf1fca7a989ecde17522051"
+    },
+    {
+      "coordinate": "org.robolectric:annotations:4.16",
+      "artifact": "annotations-4.16.jar",
+      "sha256": "409f50354fc08b382a8fa8c42416438d3664d2cb4e63bf252022c875288fbf7a"
+    },
+    {
+      "coordinate": "org.robolectric:junit:4.16",
+      "artifact": "junit-4.16.jar",
+      "sha256": "2c9aca263f0c41b1f0452c88d28ad618e553325f0213ce75de42fb02dd5c0479"
+    },
+    {
+      "coordinate": "org.robolectric:nativeruntime-dist-compat:1.0.18",
+      "artifact": "nativeruntime-dist-compat-1.0.18.jar",
+      "sha256": "a6c34d92c990754e5aee076032a36f8e38fcacb5eb878ebe0a324509f3864eef"
+    },
+    {
+      "coordinate": "org.robolectric:nativeruntime:4.16",
+      "artifact": "nativeruntime-4.16.jar",
+      "sha256": "85c9c9763de195a166a2cfc88e8623b572bef92cb96f60342fcca3cbbd69ed25"
+    },
+    {
+      "coordinate": "org.robolectric:pluginapi:4.16",
+      "artifact": "pluginapi-4.16.jar",
+      "sha256": "ffdb38f7d0a667e10d0609472ec13792018a69ccaf52c776166e03c61eae6428"
+    },
+    {
+      "coordinate": "org.robolectric:plugins-maven-dependency-resolver:4.16",
+      "artifact": "plugins-maven-dependency-resolver-4.16.jar",
+      "sha256": "60858ba0f8c21b2ca38aca7bf18b0fb39ebd10ddf80ef74777fac9ba8909880a"
+    },
+    {
+      "coordinate": "org.robolectric:resources:4.16",
+      "artifact": "resources-4.16.jar",
+      "sha256": "0d6abfd274d3c853a564ea23ce1c52d31d075281ae0e7d64bbbc1477b2ed7679"
+    },
+    {
+      "coordinate": "org.robolectric:robolectric:4.16",
+      "artifact": "robolectric-4.16.jar",
+      "sha256": "d5b073aa051c88995a621e13c9c0d2afd1be835800d59c80d58c1dbfd8eca19b"
+    },
+    {
+      "coordinate": "org.robolectric:sandbox:4.16",
+      "artifact": "sandbox-4.16.jar",
+      "sha256": "78462f9987db60b24283eebdf31a7f4d11487197f8508a2ea262aa5ca4bb0b18"
+    },
+    {
+      "coordinate": "org.robolectric:shadowapi:4.16",
+      "artifact": "shadowapi-4.16.jar",
+      "sha256": "8502d044ab781668fc52eb8784dcacd50c54eaa819cf5cc5fbb1b8457c9931a6"
+    },
+    {
+      "coordinate": "org.robolectric:shadows-framework:4.16",
+      "artifact": "shadows-framework-4.16.jar",
+      "sha256": "f3ddb731c95cb4663634355bed62932ec8f2c7a3daab876885a16b48e1530eda"
+    },
+    {
+      "coordinate": "org.robolectric:utils-reflector:4.16",
+      "artifact": "utils-reflector-4.16.jar",
+      "sha256": "efa21dcd2d68b8f3e202580a141b5f338a33e194a46bcd33b70ddb9e6d5ad63d"
+    },
+    {
+      "coordinate": "org.robolectric:utils:4.16",
+      "artifact": "utils-4.16.jar",
+      "sha256": "51940c4668ed065101c8a932c6b8a7efa7b546fd5a8e98180f40ac3840b27428"
+    },
+    {
+      "coordinate": "org.yaml:snakeyaml:2.4",
+      "artifact": "snakeyaml-2.4.jar",
+      "sha256": "ef779af5d29a9dde8cc70ce0341f5c6f7735e23edff9685ceaa9d35359b7bb7f"
+    },
+    {
+      "coordinate": "org.robolectric:android-all-instrumented:13-robolectric-9030017-i7",
+      "artifact": "android-all-instrumented-13-robolectric-9030017-i7.jar",
+      "sha256": "1c3fd182c03d47626686ca3b39c4ec5bdb0898b1056f4eb8f96f32c6209a5c04"
+    }
+  ]
+}
