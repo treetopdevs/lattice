@@ -132,10 +132,10 @@ defmodule Treehouse.MemberContinuity do
   # graph. Core authority verdicts and exact beacon evidence are never rejudged.
   defp causal_final_context(context) do
     denied =
-      command_conflicts(
+      resolve_command_conflicts(
         context.visible_ops,
         context.verdicts,
-        Dag.all_ancestors(context.visible_ops)
+        &Dag.ancestors(context.visible_ops, &1)
       )
 
     %{context | verdicts: Map.merge(context.verdicts, denied)}
@@ -314,26 +314,43 @@ defmodule Treehouse.MemberContinuity do
 
   @spec command_conflicts(map(), map(), map()) :: map()
   def command_conflicts(ops, verdicts, ancestors) do
+    resolve_command_conflicts(ops, verdicts, &Map.fetch!(ancestors, &1))
+  end
+
+  defp resolve_command_conflicts(ops, verdicts, ancestors) do
     candidates =
       for op <- Dag.topo_sort(ops),
           verdicts[op.id] == :honored,
           {:ok, cert} <- [certificate(op)],
           do: {op, cert}
 
-    removals = for {id, op} <- ops, verdicts[id] == :honored, do: op
+    removals_by_member =
+      for {id, op} <- ops,
+          verdicts[id] == :honored,
+          {:ok, member} <- [removal_member(op)],
+          reduce: %{} do
+        grouped -> Map.update(grouped, member, [op], &[op | &1])
+      end
+
+    candidates_by_target = Enum.group_by(candidates, fn {_op, cert} -> cert.claim.new_pub end)
+
+    parent_wrappers =
+      Enum.group_by(candidates, fn {_op, cert} ->
+        {Certificate.claim_id(cert.claim), cert.claim.old_pub}
+      end)
 
     seeds =
       Enum.reduce(candidates, %{}, fn {op, cert}, denied ->
         stale =
           Enum.any?(cert.claim.vouchers, fn voucher ->
-            Enum.any?(removals, fn removal ->
-              removal?(removal, voucher.member) and concurrent?(op.id, removal.id, ancestors) and
-                MapSet.member?(ancestors[removal.id], voucher.admission)
+            Enum.any?(removals_by_member[Base.encode64(voucher.member)] || [], fn removal ->
+              concurrent?(op.id, removal.id, ancestors) and
+                MapSet.member?(ancestors.(removal.id), voucher.admission)
             end)
           end)
 
         collision =
-          Enum.any?(candidates, fn {other, other_cert} ->
+          Enum.any?(candidates_by_target[cert.claim.new_pub], fn {other, other_cert} ->
             cert.claim.old_pub != other_cert.claim.old_pub and
               cert.claim.new_pub == other_cert.claim.new_pub and
               concurrent?(op.id, other.id, ancestors)
@@ -349,10 +366,8 @@ defmodule Treehouse.MemberContinuity do
     Enum.reduce(candidates, seeds, fn {op, cert}, denied ->
       invalid =
         Enum.any?(cert.claim.parents, fn parent ->
-          not Enum.any?(candidates, fn {wrapper, parent_cert} ->
-            Certificate.claim_id(parent_cert.claim) == parent and
-              parent_cert.claim.old_pub == cert.claim.old_pub and
-              MapSet.member?(ancestors[op.id], wrapper.id) and
+          not Enum.any?(parent_wrappers[{parent, cert.claim.old_pub}] || [], fn {wrapper, _cert} ->
+            MapSet.member?(ancestors.(op.id), wrapper.id) and
               not Map.has_key?(denied, wrapper.id)
           end)
         end)
@@ -364,5 +379,11 @@ defmodule Treehouse.MemberContinuity do
   end
 
   defp concurrent?(a, b, ancestors),
-    do: a != b and not MapSet.member?(ancestors[a], b) and not MapSet.member?(ancestors[b], a)
+    do: a != b and not MapSet.member?(ancestors.(a), b) and not MapSet.member?(ancestors.(b), a)
+
+  defp removal_member(%Op{kind: :command, body: {:remove_member, [recipient]}})
+       when is_binary(recipient),
+       do: {:ok, recipient}
+
+  defp removal_member(_), do: :error
 end
