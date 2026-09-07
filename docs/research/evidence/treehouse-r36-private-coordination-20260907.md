@@ -55,12 +55,39 @@ Local logs: `/tmp/treehouse-r36-integrated-final-rust.log` and
 `/tmp/treehouse-r36-expiry-final-native.log`. Hosted tip, exact merge candidate,
 root umbrella checks and merge-result checks remain open for this native packet.
 
+## Subsequent integrated source checkpoint
+
+At `c43982d265989c8738e8c6deef1d8126e78c842a`, the isolated native train
+also contains reviewed preparation, document-session, response-drain, opaque
+handle-registry and private Rust mobile-dispatch seams. Preparation preserves
+journal refusal precedence and cancels a review handle published after
+cancellation; its current-state transaction is not a comparison against the
+initially observed revision. The document adapter requires an actual initial
+native navigation request and immediately refuses later requests and stale load
+events. The drain task survives caller loss and rechecks session on delivery.
+
+Root combined Android checks passed at `7bd978854080bd28f6c72a4078699508c6476c31`:
+124 tests, 123 executed, one existing skip, zero failures/errors, and lint clean.
+Root combined Rust tests passed on that same source: 51 tests and three
+compile-fail documentation checks. The later mobile adapter passed six focused
+tests; the actual Android Rust compilation passed after the private modules were
+included in the crate. Source, repairs and the build-only module declarations
+passed independent Sol review.
+
+Logs: `/tmp/treehouse-r36-coordination-combined-android.log`,
+`/tmp/treehouse-r36-coordination-combined-rust.log`,
+`/tmp/treehouse-r36-mobile-integrated.log`, and
+`/tmp/treehouse-r36-private-android-rust-check-rustup.log`.
+The initial Android check used Homebrew Rust without Android standard libraries;
+the successful check uses the already-installed Rustup stable toolchain and
+NDK 27.1. It is compilation evidence, not APK execution or physical proof.
+
 ## Remaining gates
 
-Actual plugin dispatch, native preparation/identity coordination, opaque handle
-mapping, session event wiring, native-owned asynchronous response draining,
-public binding export and independent validation remain unfinished. No end-to-end
-Rust → Kotlin → journal → biometric operation → Rust proof is asserted.
+Actual Kotlin plugin integration and registration, native identity coordination,
+session event wiring, public binding export and independent validation remain
+unfinished. No end-to-end Rust → Kotlin → journal → biometric operation → Rust
+proof is asserted.
 
 Tauri page-load completion supplies a URL without a document identifier. The
 session guard's native tickets must not be paired with a later URL-only completion
