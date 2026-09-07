@@ -572,3 +572,15 @@ open and require the same non-null identity on later path checks. Replacement,
 missing identity or symlink changes refuse, rather than describing a replacement
 path as the opened directory. This remains a test fixture, not a claim that a
 path-stat is native fstat. Add a deterministic path-replacement refusal control.
+
+
+## Orphan rollback journal refusal — 2026-09-07 UTC
+
+Root adopts the reproduced missing-database boundary: when the fixed rollback
+journal exists but identity.sqlite3 does not, WitnessPaths validation must return
+`incomplete_store` before any creating helper or writable SQLite open. Observation
+and explicit prepare both retain the orphan journal and directory bytes unchanged.
+It is retained evidence of incomplete storage, not a fresh identity. A lone valid
+coordination lock remains compatible with Missing and explicit prepare; no lock
+unlink, reset, recovery-generation attempt or provider call is added. Preserve the
+public RED and require read/prepare refusal plus byte-for-byte tree retention.
