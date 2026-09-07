@@ -11,7 +11,11 @@ promises with a fixed native reason string. A successful missing or cancellation
 result is exactly `{version:1,status:"missing"}` or
 `{version:1,status:"cancelled"}`. No success envelope can contain eligible true.
 
-Identity success is exactly `{version:1,status:"identity",eligible:false,identity}`.
+Identity success for a completed generated-unvalidated record is exactly
+`{version:1,status:"identity",eligible:false,identity}`. Prepared or generation-started
+reads instead return exactly
+`{version:1,status:"incomplete",eligible:false,identity}`; null metadata never
+reports a complete public identity.
 Preparation success is exactly
 `{version:1,status:"prepared",eligible:false,identity,enrollment}`. Generation
 success is exactly
