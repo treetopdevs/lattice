@@ -362,46 +362,33 @@ defmodule Lattice.CompactionSpike do
     combined_ops = Log.ops(combined_log)
     ancestors = Dag.all_ancestors(combined_ops)
     retained_ids = map_keys(retained_ops)
+    seed = application_covered_authority_seed(module, snapshot)
 
     ordered_retained =
       combined_ops
       |> Dag.topo_sort()
       |> Enum.filter(&MapSet.member?(retained_ids, &1.id))
 
-    deleg_valid =
-      validate_delegations_merged(
-        base.delegations,
-        base.root,
-        base.covered_genesis_ids,
-        base.covered_succession_ids,
-        base.replica
-      )
+    revokes =
+      base
+      |> Map.put(:covered_revokes, collect_raw_revokes(seed.ordered))
+      |> merged_revokes(ordered_retained, seed.delegations, base.root)
 
-    revokes = merged_revokes(base, ordered_retained, base.delegations, base.root)
     beacons = [%{op_id: nil, epoch: base.covered_beacon_epoch, covered?: true}]
 
-    continuation =
-      seeded_continuation_context(
-        base,
-        [],
-        base.delegations,
-        %{},
-        deleg_valid,
-        base.root,
-        []
-      )
+    seeded_base = %{base | delegations: seed.delegations, roles: seed.roles}
 
     timelines =
       Map.new(all_roles(module), fn role ->
         {role,
          build_seeded_timeline(
            role,
-           base,
+           seeded_base,
            [],
            ancestors,
-           deleg_valid,
+           seed.deleg_valid,
            base.policies,
-           continuation
+           seed.continuation
          )}
       end)
 
@@ -409,17 +396,18 @@ defmodule Lattice.CompactionSpike do
       module: module,
       anc: ancestors,
       ops: combined_ops,
-      delegations: base.delegations,
-      deleg_valid: deleg_valid,
+      delegations: seed.delegations,
+      covered_delegation_ids: seed.delegation_ids,
+      deleg_valid: seed.deleg_valid,
       retained_intros: %{},
-      covered_intros: base.covered_intros,
+      covered_intros: seed.covered_intros,
       covered_honored_succession_ids: base.covered_honored_succession_ids,
       revokes: revokes,
       beacons: beacons
     }
 
     unsupported_reasons =
-      if continuation.family == :unsupported,
+      if seed.continuation.family == :unsupported,
         do: Map.new(ordered_retained, &{&1.id, :unsupported_authority_profile}),
         else: %{}
 
@@ -454,11 +442,121 @@ defmodule Lattice.CompactionSpike do
       reasons: final_reasons,
       holders: base.frozen_holders,
       requests:
-        if(continuation.family == :unsupported,
+        if(seed.continuation.family == :unsupported,
           do: [],
           else: base.frozen_requests ++ retained_requests
         )
     }
+  end
+
+  defp application_covered_authority_seed(module, snapshot) do
+    base = snapshot.base_snapshot
+    ordered = Dag.topo_sort(snapshot.covered_ops)
+    records = collect_application_delegations(ordered)
+
+    delegations =
+      for {id, %{deleg: %Delegation{} = delegation}} <- records,
+          into: %{},
+          do: {id, delegation}
+
+    deleg_valid =
+      validate_application_delegations(
+        records,
+        delegations,
+        base.root,
+        genesis_delegation_ids(ordered),
+        succession_delegation_ids(ordered),
+        base.replica
+      )
+
+    covered_intros =
+      for {id, %{op_ids: [_ | _]}} <- records, into: MapSet.new(), do: id
+
+    roles =
+      summarize_roles(
+        module,
+        snapshot.covered_ops,
+        ordered,
+        %{reasons: snapshot.covered_individual_reasons},
+        deleg_valid
+      )
+
+    continuation =
+      Continuation.context(
+        base.replica,
+        ordered,
+        records,
+        deleg_valid,
+        base.root,
+        snapshot.covered_valid_beacons
+      )
+      |> Map.put(:covered_ids, MapSet.new(Map.keys(base.covered_heights)))
+
+    %{
+      ordered: ordered,
+      delegations: delegations,
+      delegation_ids: Map.keys(records) |> MapSet.new(),
+      deleg_valid: deleg_valid,
+      covered_intros: covered_intros,
+      roles: roles,
+      continuation: continuation
+    }
+  end
+
+  defp collect_application_delegations(ordered) do
+    Enum.reduce(ordered, %{}, fn op, acc ->
+      case delegation_in(op) do
+        nil -> acc
+        %Delegation{} = delegation -> collect_application_delegation(acc, delegation, op.id)
+      end
+    end)
+  end
+
+  defp collect_application_delegation(acc, %Delegation{} = delegation, op_id) do
+    if Delegation.valid_sig?(delegation) do
+      Map.update(
+        acc,
+        delegation.id,
+        %{deleg: delegation, op_ids: [op_id], invalid_ops: %{}},
+        fn entry ->
+          %{entry | deleg: entry.deleg || delegation, op_ids: [op_id | entry.op_ids]}
+        end
+      )
+    else
+      Map.update(
+        acc,
+        delegation.id,
+        %{deleg: nil, op_ids: [], invalid_ops: %{op_id => :bad_delegation_sig}},
+        fn entry ->
+          %{entry | invalid_ops: Map.put(entry.invalid_ops, op_id, :bad_delegation_sig)}
+        end
+      )
+    end
+  end
+
+  defp validate_application_delegations(
+         records,
+         delegations,
+         root,
+         genesis_ids,
+         succession_ids,
+         replica
+       ) do
+    Map.new(records, fn
+      {id, %{deleg: %Delegation{} = delegation}} ->
+        {id,
+         validate_delegation(
+           delegation,
+           delegations,
+           root,
+           genesis_ids,
+           succession_ids,
+           replica
+         )}
+
+      {id, %{deleg: nil}} ->
+        {id, {:error, :bad_delegation_sig}}
+    end)
   end
 
   defp validate_application_commands(
@@ -496,7 +594,7 @@ defmodule Lattice.CompactionSpike do
     with {:ok, cmd, args} <- application_command_body(ctx.module, op.body),
          {:ok, mutations} <- Lattice.Replica.command_effects(ctx.module, cmd, args),
          roles_needed = mutation_roles(ctx.module, mutations),
-         :ok <- seeded_cap_ok(op, cmd, roles_needed, timelines, ctx),
+         :ok <- application_seeded_cap_ok(op, cmd, roles_needed, timelines, ctx),
          :ok <- seeded_authority_ok(op, roles_needed, timelines, ctx.anc) do
       strict_ancestors = Map.fetch!(ctx.anc, op.id)
       visible_ops = Map.take(ctx.ops, MapSet.to_list(strict_ancestors))
@@ -510,6 +608,18 @@ defmodule Lattice.CompactionSpike do
         visible_ops: visible_ops,
         verdicts: verdicts
       })
+    end
+  end
+
+  defp application_seeded_cap_ok(op, cmd, roles_needed, timelines, ctx) do
+    case Map.fetch(ctx.delegations, op.cap) do
+      {:ok, %Delegation{} = delegation} ->
+        seeded_cap_checks(op, cmd, delegation, roles_needed, timelines, ctx)
+
+      :error ->
+        if MapSet.member?(ctx.covered_delegation_ids, op.cap),
+          do: {:error, :invalid_capability},
+          else: {:error, :no_capability}
     end
   end
 
