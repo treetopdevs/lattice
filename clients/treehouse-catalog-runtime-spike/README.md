@@ -7,8 +7,9 @@ catalog verification or native trust installation.
 
 This standalone, unpublished crate is outside both shipped shells. It executes
 private fault fixtures only, with no keys, devices, network, filesystem guest
-APIs, product commands, catalog input or state writes. The default allocator is
-used; no allocator/rust-alloc/parallel/loader features or upstream patches.
+APIs, product commands, catalog input or state writes. The original mode uses the default allocator. A separately adopted private mode
+uses the checked allocation wrapper described below. No rust-alloc/parallel/loader
+features, upstream patches or dependencies were added.
 
 The genuine exhaustion fixture allocates until the32MiB engine cap raises a
 catchable exception, releases its temporary arrays and returns the same serialized
@@ -73,3 +74,45 @@ bundling evidence, not native isolation. C03/C14 remain OPEN.
 Proceeding with a budget-enforcing allocator or another runtime needs an exact
 separately reviewed amendment. This experiment does not silently enable one or
 weaken the sticky failure requirement.
+
+
+## Separate allocation wrapper: initialization gate failed
+
+The private budget mode enforces charged requested engine allocations itself,
+including pinned RustAllocator rounding/header bytes. The original runtime's
+set_memory_limit is not used to claim this custom mode's bound. Six small trait
+tests cover alignment, calloc zeroing, exact/over/overflow limits, live blocks,
+grow/shrink, failed realloc preservation, null/zero behavior and sticky failure
+after cleanup. An explicitly test-only injected null is not measured OS exhaustion.
+Accounting bounds requested layouts, not fragmentation, RSS, host buffers or stacks.
+
+Actual caught and uncaught allocation exhaustion and queued Promise exhaustion
+now refuse through a Rust-owned sticky flag; the ordinary control succeeds and
+charged blocks return to zero at teardown. This is useful partial evidence. The
+mandatory tiny-budget initialization case instead terminates its child process
+with SIGSEGV. The pinned rquickjs0.11 raw binding calls JS_SetDumpFlags before
+checking the result of JS_NewRuntime2 for null; the pinned debug engine's setter
+dereferences rt. That source path explains the observed null-budget crash; no
+debugger backtrace was obtained. The attempted LLDB run made no progress and was
+terminated, with its incomplete log preserved.
+
+The stopped suite has20 passing diagnostic tests:6 allocator,5 budget-engine
+(including a separate-child assertion of this failed initialization gate), and
+9 original default-mode/settlement diagnostics. A passing crash-characterization
+test does not turn initialization into successful resource refusal. No upstream
+patch, minimum-budget workaround or weakened acceptance was added. Sanitizer/Miri
+proof is unperformed; only the existing stable toolchain was used. This new mode
+remains unsuitable for catalog installation. Catchable stack failure, native host
+allocation, A1/A2/aggregateA3, Android and C03/C14 remain OPEN.
+
+Additional retained execution logs:
+
+- r11a-budget-allocator-unit-first.log:6 trait checks passed.
+- r11a-budget-engine-red.log: the genuine default-engine masked OOM was accepted,
+  failing the required result-refusal assertion before custom mode integration.
+- r11a-budget-engine-first.log: two budget cases passed before the process crashed.
+- r11a-budget-engine-promise-isolated.log: a test composition error inserted a
+  newline after return and skipped its fixture. The corrected parenthesized
+  composition runs real queued exhaustion; both outputs are preserved.
+- r11a-budget-engine-stopped.log: final20 diagnostics and empty doc-tests passed;
+  the tiny-budget failure is isolated in its own unpublished probe process.
