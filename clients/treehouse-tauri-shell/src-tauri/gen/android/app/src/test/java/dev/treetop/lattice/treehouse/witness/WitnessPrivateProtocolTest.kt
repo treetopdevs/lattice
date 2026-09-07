@@ -45,6 +45,33 @@ class WitnessPrivateProtocolTest {
         assertTrue(WitnessPrivateProtocol.decodeRequest(valid.replace("line\\n\\\"\\u00e9", "raw😀").toByteArray()) is WitnessPrivateRequest.Prepare)
         assertNull(WitnessPrivateProtocol.decodeRequest(valid.replace("\"kind\"", "\"k\\u0069nd\":\"prepare\",\"kind\"").toByteArray()))
     }
+    @Test fun unicodeEscapesRequireFourAsciiHexDigits() {
+        val common="\"protocol\":\"${WitnessPrivateProtocol.PROTOCOL}\",\"operationId\":\"${b(1)}\",\"sessionDigest\":\"${b(2)}\""
+        fun prepare(replica: String) = "{\"kind\":\"prepare\",$common,\"replica\":\"$replica\",\"enrollmentId\":\"${b(3)}\",\"recipient\":\"${b(4)}\",\"creationAttemptId\":\"${b(5)}\"}"
+        for (escape in listOf("\\u+061", "\\u-061", "\\u٠٠٦١", "\\u００６１")) {
+            assertNull(escape, WitnessPrivateProtocol.decodeRequest(prepare(escape).toByteArray()))
+        }
+        assertEquals("a", (WitnessPrivateProtocol.decodeRequest(prepare("\\u0061").toByteArray()) as WitnessPrivateRequest.Prepare).replica)
+    }
+
+    @Test fun revisionsRequireCanonicalAsciiDecimal() {
+        fun generate(revision: String) = "{\"kind\":\"generate\",\"protocol\":\"${WitnessPrivateProtocol.PROTOCOL}\",\"operationId\":\"${b(1)}\",\"sessionDigest\":\"${b(2)}\",\"expectedRevision\":\"$revision\",\"creationAttemptId\":\"${b(3)}\",\"generationChallenge\":\"${b(4)}\"}"
+        for (revision in listOf("١", "１", "٠1", "０1", "01", "0", "+1", "9223372036854775808")) {
+            assertNull(revision, WitnessPrivateProtocol.decodeRequest(generate(revision).toByteArray()))
+        }
+        for (revision in listOf("1", "9223372036854775807")) {
+            assertEquals(revision.toLong(), (WitnessPrivateProtocol.decodeRequest(generate(revision).toByteArray()) as WitnessPrivateRequest.Generate).expectedRevision)
+        }
+    }
+
+    @Test fun terminalEncodingRejectsNon32ByteOperationIds() {
+        for (size in listOf(0, 1, 31, 33, 64)) {
+            val invalid = WitnessTerminalResponse(WitnessPrivateKind.IDENTITY, WitnessBytes(ByteArray(size)), WitnessTerminalStatus.MISSING)
+            assertNull("size=$size", WitnessPrivateProtocol.encodeTerminal(invalid))
+        }
+        val valid = WitnessTerminalResponse(WitnessPrivateKind.IDENTITY, WitnessBytes(bytes(1)), WitnessTerminalStatus.MISSING)
+        assertEquals(valid, WitnessPrivateProtocol.decodeTerminal(checkNotNull(WitnessPrivateProtocol.encodeTerminal(valid))))
+    }
     private fun bytes(v:Int)=ByteArray(32){v.toByte()}
     private fun b(v:Int)=b(bytes(v))
     private fun b(v:ByteArray)=Base64.getEncoder().encodeToString(v)

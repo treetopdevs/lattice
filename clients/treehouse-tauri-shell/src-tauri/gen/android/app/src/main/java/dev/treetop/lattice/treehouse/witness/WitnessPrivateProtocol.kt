@@ -54,6 +54,7 @@ internal object WitnessPrivateProtocol {
 
     fun encodeTerminal(response: WitnessTerminalResponse): ByteArray? {
       return try {
+        require(response.operationId.size == 32)
         if ((response.status == WitnessTerminalStatus.REFUSED) != (response.reason != null) ||
             response.reason?.let { !validReason(it) } == true) return null
         val reason = response.reason?.let { ",\"reason\":\"$it\"" } ?: ""
@@ -92,7 +93,7 @@ internal object WitnessPrivateProtocol {
     private fun field32(value: Map<String,String>, name: String): WitnessBytes { val encoded=value.getValue(name); require(encoded.length==44); val raw=Base64.getDecoder().decode(encoded); require(raw.size==32 && Base64.getEncoder().encodeToString(raw)==encoded); return WitnessBytes(raw) }
     private fun canonical(value: WitnessBytes) = Base64.getEncoder().encodeToString(value.copyBytes())
     private fun replica(value: Map<String,String>): String = value.getValue("replica").also { require(it.isNotEmpty() && it.toByteArray(StandardCharsets.UTF_8).size <= 512) }
-    private fun revision(value: Map<String,String>): Long { val text=value.getValue("expectedRevision"); require(text.length in 1..19 && text.all(Char::isDigit) && (text.length==1 || text[0]!='0')); return text.toLong().also { require(it>0) } }
+    private fun revision(value: Map<String,String>): Long { val text=value.getValue("expectedRevision"); require(text.length in 1..19 && text.all { it in '0'..'9' } && (text.length==1 || text[0]!='0')); return text.toLong().also { require(it>0) } }
     private fun validReason(reason: String) = reason.isNotEmpty() && reason.length<=64 && reason.all { it in 'a'..'z' || it=='_' }
     private fun binary(out: ByteArrayOutputStream, bytes: ByteArray) { when(bytes.size) { in 0..23 -> out.write(0x40 or bytes.size); in 24..255 -> { out.write(0x58); out.write(bytes.size) }; else -> { out.write(0x59); out.write(bytes.size ushr 8); out.write(bytes.size) } }; out.write(bytes) }
 
@@ -102,7 +103,13 @@ internal object WitnessPrivateProtocol {
             while(true) { val key=string(); require(!out.containsKey(key)); ws(); take(':'); ws(); out[key]=string(); ws(); if(peek('}')) { at++; ws(); require(at==text.length); return out }; take(','); ws() } }
         private fun string():String { take('"'); val out=StringBuilder(); while(at<text.length) { val c=text[at++]; when { c=='"' -> return out.toString(); c=='\\' -> escape(out); c<' ' -> error("control"); c.isHighSurrogate() -> { require(at<text.length && text[at].isLowSurrogate()); out.append(c).append(text[at++]) }; c.isLowSurrogate() -> error("raw low surrogate"); else -> out.append(c) } }; error("unterminated") }
         private fun escape(out:StringBuilder) { require(at<text.length); when(val c=text[at++]) { '"','\\','/' -> out.append(c); 'b'->out.append('\b'); 'f'->out.append('\u000c'); 'n'->out.append('\n'); 'r'->out.append('\r'); 't'->out.append('\t'); 'u' -> { val first=hex(); when { first in 0xd800..0xdbff -> { require(at+2<=text.length && text.substring(at,at+2)=="\\u"); at+=2; val second=hex(); require(second in 0xdc00..0xdfff); out.appendCodePoint(Character.toCodePoint(first.toChar(),second.toChar())) }; first in 0xdc00..0xdfff -> error("low surrogate"); else -> out.append(first.toChar()) } }; else -> error("escape") } }
-        private fun hex():Int { require(at+4<=text.length); val value=text.substring(at,at+4).toInt(16); at+=4; return value }
+        private fun hex(): Int {
+            require(at + 4 <= text.length)
+            val digits = text.substring(at, at + 4)
+            require(digits.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' })
+            at += 4
+            return digits.toInt(16)
+        }
         private fun ws() { while(at<text.length && text[at] in charArrayOf(' ','\t','\n','\r')) at++ }
         private fun take(c:Char) { require(at<text.length && text[at++]==c) }
         private fun peek(c:Char)=at<text.length && text[at]==c
