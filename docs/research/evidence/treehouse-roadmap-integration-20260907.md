@@ -111,8 +111,13 @@ hosted run 34142364012. All review threads were resolved; refreshed main remaine
 `b9671a5982e37511574432f1d43ad61cd5b149c4` with no pending main workflow.
 PR85 merged as `7256eb9b2e753f68074a729222488a906b3277c1`. Its tree
 `432c0ed699234e32134ea9dce0ee40a26e328527` exactly matches the independently
-computed merge candidate. Main run 34144303577 is pending; the queue remains
-closed until its result is checked. The preview still exposes six commands.
+computed merge candidate. Main run 34144303577 completed with one failure: the existing bundled
+thirteen-replica renewal lifecycle exceeded its 60-second test timeout. The other
+jobs passed. Test-only closure PR86 splits the same independent fixtures into
+thirteen named cases, preserving every behavior and exact per-replica operational
+counts without changing the timeout. Sol review and root 1,031 tests plus 27
+properties passed; hosted tip 34145548570 remains pending. The preview still
+exposes six commands, and merge-result closure remains open.
 
 ## Native vertical slice
 
