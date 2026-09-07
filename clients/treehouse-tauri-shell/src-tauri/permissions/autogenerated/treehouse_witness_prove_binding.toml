@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-treehouse-witness-prove-binding"
+description = "Enables the treehouse_witness_prove_binding command without any pre-configured scope."
+commands.allow = ["treehouse_witness_prove_binding"]
+
+[[permission]]
+identifier = "deny-treehouse-witness-prove-binding"
+description = "Denies the treehouse_witness_prove_binding command without any pre-configured scope."
+commands.deny = ["treehouse_witness_prove_binding"]

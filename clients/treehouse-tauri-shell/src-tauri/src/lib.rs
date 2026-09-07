@@ -95,14 +95,188 @@ pub fn run() {
             app.manage(AppState(Mutex::new(store)));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
-            treehouse_open,
-            treehouse_initialize_identity,
-            treehouse_commit,
-            treehouse_load_draft,
-            treehouse_save_draft,
-            treehouse_sign_carrier
-        ])
+        .invoke_handler(application_invoke_handler())
         .run(tauri::generate_context!())
         .expect("Treehouse application runtime failed");
+}
+
+fn application_invoke_handler<R: tauri::Runtime>(
+) -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static {
+    let preview: fn(tauri::ipc::Invoke<R>) -> bool = tauri::generate_handler![
+        treehouse_open,
+        treehouse_initialize_identity,
+        treehouse_commit,
+        treehouse_load_draft,
+        treehouse_save_draft,
+        treehouse_sign_carrier
+    ];
+    move |invoke| {
+        if witness_commands::recognizes_command(invoke.message.command()) {
+            witness_commands::handle(invoke)
+        } else {
+            preview(invoke)
+        }
+    }
+}
+
+#[cfg(test)]
+mod application_boundary_tests {
+    use super::*;
+    use serde_json::{json, Value};
+    use tauri::{test::MockRuntime, WebviewUrl, WebviewWindowBuilder};
+
+    fn app() -> tauri::App<MockRuntime> {
+        let mut context = tauri::test::mock_context(tauri::test::noop_assets());
+        for command in [
+            "treehouse_open",
+            witness_public::WITNESS_IDENTITY,
+            witness_public::WITNESS_PREPARE_CREATION,
+            witness_public::WITNESS_GENERATE,
+            witness_public::WITNESS_PROVE_BINDING,
+            witness_public::WITNESS_CANCEL,
+            "treehouse_witness_identity",
+        ] {
+            context.runtime_authority_mut().__allow_command(
+                command.into(),
+                tauri::utils::acl::ExecutionContext::Remote {
+                    url: "http://tauri.localhost/*".parse().unwrap(),
+                },
+            );
+        }
+        let app = tauri::test::mock_builder()
+            .plugin(witness_android::private_plugin())
+            .invoke_handler(application_invoke_handler())
+            .build(context)
+            .unwrap();
+        app.manage(AppState(Mutex::new(Err(
+            "preview_test_store_unavailable".into()
+        ))));
+        app
+    }
+
+    fn invoke(
+        view: &tauri::WebviewWindow<MockRuntime>,
+        command: &str,
+        body: Value,
+    ) -> Result<Value, Value> {
+        tauri::test::get_ipc_response(
+            view,
+            tauri::webview::InvokeRequest {
+                cmd: command.into(),
+                callback: tauri::ipc::CallbackFn(0),
+                error: tauri::ipc::CallbackFn(1),
+                url: "http://tauri.localhost".parse().unwrap(),
+                body: body.into(),
+                headers: Default::default(),
+                invoke_key: tauri::test::INVOKE_KEY.into(),
+            },
+        )
+        .and_then(|body| body.deserialize().map_err(|e| json!(e.to_string())))
+    }
+
+    #[test]
+    fn compiled_permissions_allow_only_local_main_witness_requests() {
+        use std::collections::BTreeMap;
+        use tauri::utils::acl::{capability::Capability, manifest::Manifest, resolved::Resolved};
+        let manifests: BTreeMap<String, Manifest> =
+            serde_json::from_str(include_str!("../gen/schemas/acl-manifests.json")).unwrap();
+        let capabilities: BTreeMap<String, Capability> =
+            serde_json::from_str(include_str!("../gen/schemas/capabilities.json")).unwrap();
+        for target in [
+            tauri::utils::platform::Target::Android,
+            tauri::utils::platform::Target::MacOS,
+        ] {
+            let resolved = Resolved::resolve(&manifests, capabilities.clone(), target).unwrap();
+            let authority = tauri::ipc::RuntimeAuthority::new(
+                serde_json::from_str(include_str!("../gen/schemas/acl-manifests.json")).unwrap(),
+                resolved,
+            );
+            for command in [
+                witness_public::WITNESS_IDENTITY,
+                witness_public::WITNESS_PREPARE_CREATION,
+                witness_public::WITNESS_GENERATE,
+                witness_public::WITNESS_PROVE_BINDING,
+                witness_public::WITNESS_CANCEL,
+            ] {
+                assert!(
+                    authority
+                        .resolve_access(command, "main", "main", &tauri::ipc::Origin::Local)
+                        .is_some(),
+                    "{command}"
+                );
+                assert!(
+                    authority
+                        .resolve_access(command, "main", "other", &tauri::ipc::Origin::Local)
+                        .is_none(),
+                    "{command}"
+                );
+                assert!(
+                    authority
+                        .resolve_access(
+                            command,
+                            "main",
+                            "main",
+                            &tauri::ipc::Origin::Remote {
+                                url: "https://example.invalid".parse().unwrap()
+                            }
+                        )
+                        .is_none(),
+                    "{command}"
+                );
+            }
+            assert!(authority
+                .resolve_access("treehouse_open", "main", "main", &tauri::ipc::Origin::Local)
+                .is_some());
+            for command in [
+                "treehouse_witness_identity",
+                "plugin:treehouse-witness-internal|dispatch",
+                "treehouse_unregistered_action",
+            ] {
+                assert!(
+                    authority
+                        .resolve_access(command, "main", "main", &tauri::ipc::Origin::Local)
+                        .is_none(),
+                    "{command}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn application_routes_witness_requests_to_closed_decoder_and_preview_to_existing_store() {
+        let app = app();
+        let view = WebviewWindowBuilder::new(&app, "main", WebviewUrl::App("index.html".into()))
+            .build()
+            .unwrap();
+        assert_eq!(
+            invoke(&view, "treehouse_open", json!({})),
+            Err(json!("preview_test_store_unavailable"))
+        );
+        for command in [
+            witness_public::WITNESS_IDENTITY,
+            witness_public::WITNESS_PREPARE_CREATION,
+            witness_public::WITNESS_GENERATE,
+            witness_public::WITNESS_PROVE_BINDING,
+            witness_public::WITNESS_CANCEL,
+        ] {
+            assert_eq!(
+                invoke(&view, command, json!({"unexpected":true})),
+                Err(json!(witness_public::PUBLIC_REQUEST_REFUSED)),
+                "{command}"
+            );
+        }
+    }
+
+    #[test]
+    fn application_identity_refuses_without_android_flow_and_does_not_fall_through() {
+        let app = app();
+        let view = WebviewWindowBuilder::new(&app, "main", WebviewUrl::App("index.html".into()))
+            .build()
+            .unwrap();
+        assert_eq!(
+            invoke(&view, witness_public::WITNESS_IDENTITY, json!({})),
+            Err(json!(witness_flow::FLOW_REFUSED))
+        );
+        assert!(invoke(&view, "treehouse_witness_identity", json!({})).is_err());
+    }
 }

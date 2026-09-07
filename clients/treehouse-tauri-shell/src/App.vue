@@ -2,6 +2,7 @@
 import { computed, onMounted, onBeforeUnmount, ref, shallowRef } from "vue";
 import { TreehouseWorkflow } from "./treehouse_workflow";
 import { native } from "./native_adapter";
+import WitnessSetup from "./WitnessSetup.vue";
 const workflow = new TreehouseWorkflow(native);
 const state = shallowRef(workflow.state);
 const ready = ref(false),
@@ -522,5 +523,6 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
         </section>
       </main>
     </div>
+    <WitnessSetup />
   </div>
 </template>
