@@ -2,9 +2,11 @@ package dev.treetop.lattice.treehouse.witness
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.Application
 import android.hardware.biometrics.BiometricManager
 import android.hardware.biometrics.BiometricPrompt
 import android.os.Build
+import android.os.Bundle
 import android.os.CancellationSignal
 import android.os.Handler
 import android.os.Looper
@@ -28,12 +30,96 @@ internal interface WitnessUiCancellation {
     fun cancel()
 }
 
-internal class WitnessReviewDetails(
+internal class WitnessReviewDetails private constructor(
     val title: String,
     fields: List<Pair<String, String>>
 ) {
-    val fields: List<Pair<String, String>> =
-        Collections.unmodifiableList(fields.map { (label, value) -> label to value })
+    val fields: List<Pair<String, String>> = Collections.unmodifiableList(fields.toList())
+
+    companion object {
+        fun prepareCreation(
+            replica: String,
+            enrollmentId: ByteArray,
+            recipient: ByteArray
+        ): WitnessReviewDetails =
+            enrollment(
+                title = "Prepare Treehouse witness enrollment",
+                purpose = "Prepare witness enrollment",
+                replica = replica,
+                enrollmentId = enrollmentId,
+                recipient = recipient
+            )
+
+        fun generate(
+            replica: String,
+            enrollmentId: ByteArray,
+            recipient: ByteArray,
+            creationAttemptId: ByteArray,
+            generationChallenge: ByteArray
+        ): WitnessReviewDetails =
+            enrollment(
+                title = "Generate Treehouse witness identity",
+                purpose = "Generate witness identity",
+                replica = replica,
+                enrollmentId = enrollmentId,
+                recipient = recipient,
+                extra = listOf(
+                    "Creation attempt ID" to hex(witness32(creationAttemptId)),
+                    "Generation challenge" to hex(witness32(generationChallenge))
+                )
+            )
+
+        fun proveBinding(
+            replica: String,
+            enrollmentId: ByteArray,
+            recipient: ByteArray,
+            witnessPublicKey: ByteArray,
+            creationAttemptId: ByteArray,
+            generationChallengeDigest: ByteArray,
+            validatorNonce: ByteArray,
+            nativeNonce: ByteArray,
+            nativeSessionDigest: ByteArray
+        ): WitnessReviewDetails =
+            enrollment(
+                title = "Prove Treehouse witness key possession",
+                purpose = "Prove witness key possession",
+                replica = replica,
+                enrollmentId = enrollmentId,
+                recipient = recipient,
+                extra = listOf(
+                    "Witness public key" to hex(witness32(witnessPublicKey)),
+                    "Creation attempt ID" to hex(witness32(creationAttemptId)),
+                    "Generation challenge digest" to hex(witness32(generationChallengeDigest)),
+                    "Validator nonce" to hex(witness32(validatorNonce)),
+                    "Native nonce" to hex(witness32(nativeNonce)),
+                    "Native session digest" to hex(witness32(nativeSessionDigest))
+                )
+            )
+
+        private fun enrollment(
+            title: String,
+            purpose: String,
+            replica: String,
+            enrollmentId: ByteArray,
+            recipient: ByteArray,
+            extra: List<Pair<String, String>> = emptyList()
+        ): WitnessReviewDetails {
+            witnessUtf8(replica, 512)
+            return WitnessReviewDetails(
+                title,
+                listOf(
+                    "Product" to "treehouse",
+                    "Purpose" to purpose,
+                    "Replica" to replica,
+                    "Enrollment ID" to hex(witness32(enrollmentId)),
+                    "Recipient" to hex(witness32(recipient))
+                ) + extra
+            )
+        }
+
+        private fun hex(value: WitnessBytes): String =
+            value.copyBytes().joinToString("") { "%02X".format(it.toInt() and 0xff) }
+    }
 }
 
 internal sealed class WitnessPresenceResult {
@@ -52,13 +138,23 @@ internal class WitnessNativeReview(private val activity: Activity) : WitnessRevi
     ): WitnessUiCancellation {
         val terminal = AtomicBoolean(false)
         val dialog = AtomicReference<AlertDialog?>(null)
+        val lifecycle = AtomicReference<Application.ActivityLifecycleCallbacks?>(null)
+        lateinit var timeout: Runnable
+
+        fun cleanup() {
+            mainHandler.removeCallbacks(timeout)
+            lifecycle.getAndSet(null)?.let(activity.application::unregisterActivityLifecycleCallbacks)
+        }
 
         fun finishFromUi(accepted: Boolean) {
             if (terminal.compareAndSet(false, true)) {
+                cleanup()
                 dialog.getAndSet(null)?.dismiss()
                 callback(accepted)
             }
         }
+
+        timeout = Runnable { finishFromUi(false) }
 
         mainHandler.post {
             if (terminal.get()) return@post
@@ -68,6 +164,10 @@ internal class WitnessNativeReview(private val activity: Activity) : WitnessRevi
             }
 
             try {
+                val callbacks = lifecycleCallbacks { finishFromUi(false) }
+                lifecycle.set(callbacks)
+                activity.application.registerActivityLifecycleCallbacks(callbacks)
+                mainHandler.postDelayed(timeout, REVIEW_TIMEOUT_MILLIS)
                 val built =
                     AlertDialog.Builder(activity)
                         .setTitle(escapeForReview(details.title))
@@ -97,6 +197,7 @@ internal class WitnessNativeReview(private val activity: Activity) : WitnessRevi
         return cancellation {
             if (terminal.compareAndSet(false, true)) {
                 mainHandler.post {
+                    cleanup()
                     dialog.getAndSet(null)?.dismiss()
                     callback(false)
                 }
@@ -110,9 +211,24 @@ internal class WitnessNativeReview(private val activity: Activity) : WitnessRevi
     ): WitnessUiCancellation {
         val terminal = AtomicBoolean(false)
         val cancellationSignal = AtomicReference<CancellationSignal?>(null)
+        val lifecycle = AtomicReference<Application.ActivityLifecycleCallbacks?>(null)
+        lateinit var timeout: Runnable
 
-        fun finish(result: WitnessPresenceResult) {
-            if (terminal.compareAndSet(false, true)) callback(result)
+        fun cleanup() {
+            mainHandler.removeCallbacks(timeout)
+            lifecycle.getAndSet(null)?.let(activity.application::unregisterActivityLifecycleCallbacks)
+        }
+
+        fun finish(result: WitnessPresenceResult, cancelPlatform: Boolean = false) {
+            if (terminal.compareAndSet(false, true)) {
+                cleanup()
+                if (cancelPlatform) cancellationSignal.get()?.cancel()
+                callback(result)
+            }
+        }
+
+        timeout = Runnable {
+            finish(WitnessPresenceResult.Refused("biometric_timeout"), cancelPlatform = true)
         }
 
         mainHandler.post {
@@ -123,9 +239,15 @@ internal class WitnessNativeReview(private val activity: Activity) : WitnessRevi
             }
 
             try {
+                val callbacks = lifecycleCallbacks {
+                    finish(WitnessPresenceResult.Refused("cancelled"), cancelPlatform = true)
+                }
+                lifecycle.set(callbacks)
+                activity.application.registerActivityLifecycleCallbacks(callbacks)
                 val signal = CancellationSignal()
                 val cryptoObject = BiometricPrompt.CryptoObject(signature)
                 cancellationSignal.set(signal)
+                mainHandler.postDelayed(timeout, PRESENCE_TIMEOUT_MILLIS)
 
                 val authenticationCallback =
                     object : BiometricPrompt.AuthenticationCallback() {
@@ -174,6 +296,7 @@ internal class WitnessNativeReview(private val activity: Activity) : WitnessRevi
         return cancellation {
             if (terminal.compareAndSet(false, true)) {
                 mainHandler.post {
+                    cleanup()
                     cancellationSignal.get()?.cancel()
                     callback(WitnessPresenceResult.Refused("cancelled"))
                 }
@@ -182,6 +305,23 @@ internal class WitnessNativeReview(private val activity: Activity) : WitnessRevi
     }
 
     private fun activityUsable(): Boolean = !activity.isFinishing && !activity.isDestroyed
+
+    private fun lifecycleCallbacks(onInvalidated: () -> Unit): Application.ActivityLifecycleCallbacks =
+        object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityCreated(activity: Activity, state: Bundle?) = Unit
+            override fun onActivityStarted(activity: Activity) = Unit
+            override fun onActivityResumed(activity: Activity) = Unit
+            override fun onActivityPaused(changed: Activity) = Unit
+            override fun onActivitySaveInstanceState(activity: Activity, state: Bundle) = Unit
+
+            override fun onActivityStopped(changed: Activity) {
+                if (changed === activity) onInvalidated()
+            }
+
+            override fun onActivityDestroyed(changed: Activity) {
+                if (changed === activity) onInvalidated()
+            }
+        }
 
     private fun cancellation(action: () -> Unit): WitnessUiCancellation =
         object : WitnessUiCancellation {
@@ -232,5 +372,7 @@ internal class WitnessNativeReview(private val activity: Activity) : WitnessRevi
                 "This does not establish group authority."
         const val POSITIVE_LABEL = "Continue"
         const val NEGATIVE_LABEL = "Cancel"
+        const val REVIEW_TIMEOUT_MILLIS = 120_000L
+        const val PRESENCE_TIMEOUT_MILLIS = 60_000L
     }
 }
