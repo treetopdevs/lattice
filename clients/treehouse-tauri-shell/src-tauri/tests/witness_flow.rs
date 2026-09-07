@@ -197,7 +197,7 @@ fn completed_identity_is_reviewed_then_presence_signed_and_publicly_projected() 
     let observed = phases.clone();
     let pending = flow
         .execute(
-            view,
+            view.clone(),
             witness_public::PublicRequest::Proof(witness_public::ProofPublicRequest {
                 replica: "replica:test".into(),
                 enrollment_id: Bytes32([1; 32]),
@@ -224,6 +224,19 @@ fn completed_identity_is_reviewed_then_presence_signed_and_publicly_projected() 
     assert_eq!(
         session,
         Bytes32(witness_bridge::session_digest(Bytes32([1; 32]), Bytes32([2; 32])).0)
+    );
+    let late_cancel = flow
+        .execute(
+            view,
+            witness_public::PublicRequest::Cancel(witness_public::CancelPublicRequest {
+                attempt_id: Bytes32([9; 32]),
+            }),
+            Arc::new(|_, _| panic!("cancellation must not emit a new pending ID")),
+        )
+        .expect("a completed operation is missing, not a device refusal");
+    assert_eq!(
+        block_on(late_cancel.receive()).unwrap(),
+        br#"{"status":"missing","version":1}"#
     );
 }
 
@@ -894,4 +907,124 @@ fn lifecycle_wins_while_result_is_ready_but_native_drain_is_unacknowledged() {
 #[test]
 fn explicit_cancel_wins_while_result_is_ready_but_native_drain_is_unacknowledged() {
     terminal_publication_race(true);
+}
+
+fn creation_review_notice(generating: bool, notice_fails: bool) {
+    let app = tauri::test::mock_builder()
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
+        .unwrap();
+    let window = WebviewWindowBuilder::new(
+        &app,
+        "main",
+        WebviewUrl::External("http://tauri.localhost/".parse().unwrap()),
+    )
+    .build()
+    .unwrap();
+    let view = window.as_ref().clone();
+    let owner = Arc::new(witness_owner::test_adapter::from_entropy({
+        let mut n = 0u8;
+        move || {
+            n += 1;
+            Ok(Bytes32([n; 32]))
+        }
+    }));
+    let url = "http://tauri.localhost/".parse().unwrap();
+    owner.navigation_requested(&view, &url);
+    owner
+        .page_load(&view, PageLoadEvent::Started, &url)
+        .unwrap();
+    owner
+        .page_load(&view, PageLoadEvent::Finished, &url)
+        .unwrap();
+    let operations = Arc::new(witness_operation::test_adapter::registry(|| {
+        Ok(Bytes32([9; 32]))
+    }));
+    let trace = Arc::new(Mutex::new(Vec::new()));
+    let dispatch_trace = trace.clone();
+    let flow = witness_flow::test_adapter::flow(owner, operations, move |request, current| {
+        let kind = match &request {
+            witness_bridge::PrivateRequest::Identity(_) => "identity",
+            witness_bridge::PrivateRequest::Prepare(_) => "prepare",
+            witness_bridge::PrivateRequest::Generate(_) => "generate",
+            _ => panic!("unexpected dispatch"),
+        };
+        dispatch_trace.lock().unwrap().push(kind);
+        witness_mobile::test_adapter::dispatch(
+            request,
+            move |payload| async move {
+                if kind == "identity" {
+                    Ok(
+                        json!({"protocol":witness_bridge::PRIVATE_PROTOCOL,"kind":"identity",
+                    "operationId":payload["operationId"],"sessionDigest":payload["sessionDigest"],
+                    "status":"snapshot","eligible":false,
+                    "identity":{"creationAttemptId":STANDARD.encode([3;32]),"phase":"prepared",
+                        "generationChallenge":null,"metadata":null,"revision":"1"},"enrollment":null}),
+                    )
+                } else {
+                    Ok(
+                        json!({"protocol":witness_bridge::PRIVATE_PROTOCOL,"kind":kind,
+                    "operationId":payload["operationId"],"status":"refused","reason":"review_declined"}),
+                    )
+                }
+            },
+            move || current(),
+        )
+    });
+    let request = if generating {
+        witness_public::PublicRequest::Generate(witness_public::GeneratePublicRequest {
+            creation_attempt_id: Bytes32([3; 32]),
+            generation_challenge: Bytes32([4; 32]),
+        })
+    } else {
+        witness_public::PublicRequest::Prepare(witness_public::PreparePublicRequest {
+            replica: "replica:test".into(),
+            enrollment_id: Bytes32([1; 32]),
+            recipient: Bytes32([2; 32]),
+        })
+    };
+    let notice_trace = trace.clone();
+    let pending = flow
+        .execute(
+            view,
+            request,
+            Arc::new(move |id, phase| {
+                assert_eq!(id, Bytes32([9; 32]));
+                assert_eq!(phase, witness_flow::PendingPhase::Review);
+                notice_trace.lock().unwrap().push("notice");
+                if notice_fails {
+                    Err("event_delivery_failed")
+                } else {
+                    Ok(())
+                }
+            }),
+        )
+        .unwrap();
+    assert_eq!(block_on(pending.receive()), Err(witness_flow::FLOW_REFUSED));
+    let expected = if notice_fails {
+        vec!["identity", "notice"]
+    } else {
+        vec![
+            "identity",
+            "notice",
+            if generating { "generate" } else { "prepare" },
+        ]
+    };
+    assert_eq!(*trace.lock().unwrap(), expected);
+}
+
+#[test]
+fn prepare_publishes_cancel_id_before_native_review() {
+    creation_review_notice(false, false);
+}
+#[test]
+fn generate_publishes_cancel_id_before_native_review() {
+    creation_review_notice(true, false);
+}
+#[test]
+fn prepare_refuses_before_review_if_cancel_id_cannot_be_delivered() {
+    creation_review_notice(false, true);
+}
+#[test]
+fn generate_refuses_before_review_if_cancel_id_cannot_be_delivered() {
+    creation_review_notice(true, true);
 }

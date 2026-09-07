@@ -233,10 +233,12 @@ impl WitnessFlow {
                 None => witness_result::encode_missing(),
             },
             PublicRequest::Prepare(request) => {
-                self.prepare(&webview, token, session, request).await
+                self.prepare(&webview, token, session, request, notice)
+                    .await
             }
             PublicRequest::Generate(request) => {
-                self.generate(&webview, token, session, request).await
+                self.generate(&webview, token, session, request, notice)
+                    .await
             }
             PublicRequest::Proof(request) => {
                 self.proof(&webview, token, session, request, notice).await
@@ -271,6 +273,7 @@ impl WitnessFlow {
         token: &OperationToken,
         session: &SessionSnapshot,
         public: PreparePublicRequest,
+        notice: PhaseNotice,
     ) -> Result<Vec<u8>, &'static str> {
         let attempt = match self.identity(webview, token, session).await? {
             Some(snapshot) => snapshot.identity().creation_attempt_id(),
@@ -285,6 +288,7 @@ impl WitnessFlow {
             recipient: public.recipient,
             creation_attempt_id: attempt,
         });
+        emit_notice(&notice, token.id(), PendingPhase::Review)?;
         match self.call(webview, token, session, request).await? {
             MobileResponse::Snapshot(snapshot) => witness_result::encode_prepare(&snapshot),
             _ => Err(FLOW_REFUSED),
@@ -297,6 +301,7 @@ impl WitnessFlow {
         token: &OperationToken,
         session: &SessionSnapshot,
         public: GeneratePublicRequest,
+        notice: PhaseNotice,
     ) -> Result<Vec<u8>, &'static str> {
         let snapshot = self
             .identity(webview, token, session)
@@ -313,6 +318,7 @@ impl WitnessFlow {
             creation_attempt_id: public.creation_attempt_id,
             generation_challenge: public.generation_challenge,
         });
+        emit_notice(&notice, token.id(), PendingPhase::Review)?;
         match self.call(webview, token, session, request).await? {
             MobileResponse::Snapshot(snapshot) => witness_result::encode_generate(&snapshot),
             _ => Err(FLOW_REFUSED),
@@ -406,7 +412,7 @@ impl WitnessFlow {
         if let Some(sealed) = sealed {
             let _ = witness_reviewed::cancel(sealed, token.id(), session.digest());
         }
-        if let Some(target) = self.claim_cancel(token.id(), session) {
+        if let Ok(Some(target)) = self.claim_cancel(token.id(), session) {
             if let Ok(cancel) = self.start_cancel(&target) {
                 let _ = Self::finish_cancel(cancel).await;
             }
@@ -619,7 +625,7 @@ impl WitnessFlow {
     }
 
     fn cancel_started(self: Arc<Self>, id: Bytes32, session: SessionSnapshot) {
-        let target = self.claim_cancel(id, &session);
+        let target = self.claim_cancel(id, &session).ok().flatten();
         let reserved = target
             .as_ref()
             .and_then(|target| self.reserve_cancel(target).ok());
@@ -649,7 +655,16 @@ impl WitnessFlow {
         id: Bytes32,
         session: SessionSnapshot,
     ) -> Result<FlowPending, &'static str> {
-        let target = self.claim_cancel(id, &session).ok_or(FLOW_REFUSED)?;
+        let Some(target) = self.claim_cancel(id, &session)? else {
+            let (sender, receiver) = channel(1);
+            sender
+                .try_send(witness_result::encode_missing())
+                .map_err(|_| FLOW_REFUSED)?;
+            return Ok(FlowPending {
+                receiver,
+                cancel: None,
+            });
+        };
         let current = self.reserve_cancel(&target)?;
         let pending = self.active.lock().ok().and_then(|active| {
             active
@@ -727,18 +742,25 @@ impl WitnessFlow {
         &self,
         id: Bytes32,
         session: &SessionSnapshot,
-    ) -> Option<crate::witness_operation::CancellationTarget> {
+    ) -> Result<Option<crate::witness_operation::CancellationTarget>, &'static str> {
         {
-            let mut active = self.active.lock().ok()?;
-            let state = active
+            let mut active = self.active.lock().map_err(|_| FLOW_REFUSED)?;
+            let Some(state) = active
                 .as_mut()
-                .filter(|state| state.id == id && state.session == *session)?;
-            if state.publication != Publication::Running {
-                return None;
+                .filter(|state| state.id == id && state.session == *session)
+            else {
+                return Ok(None);
+            };
+            match state.publication {
+                Publication::Committed => return Ok(None),
+                Publication::Cancelled => return Err(FLOW_REFUSED),
+                Publication::Running => state.publication = Publication::Cancelled,
             }
-            state.publication = Publication::Cancelled;
         }
-        self.operations.cancel(id, session)
+        self.operations
+            .cancel(id, session)
+            .map(Some)
+            .ok_or(FLOW_REFUSED)
     }
 
     fn reserve_cancel(
