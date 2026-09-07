@@ -1,0 +1,20 @@
+[package]
+name = "treehouse-catalog-runtime-spike"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Standalone R11a native catalog verifier feasibility experiment. Not a product runtime."
+
+# Dependency admission per docs/research/treehouse_catalog_runtime_experiment.md:
+# rquickjs pinned exactly; default allocator only (no `allocator`/`rust-alloc`),
+# no `parallel`, no loader or system modules. serde_json is only used to
+# compare the private diagnostic fixtures; its exact version already exists
+# in the repository native locks.
+[dependencies]
+rquickjs = "=0.11.0"
+
+[dev-dependencies]
+serde_json = "=1.0.151"
+
+[lib]
+path = "src/lib.rs"
