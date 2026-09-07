@@ -49,7 +49,8 @@ class TreehouseOfflineGenerationVerifierTest {
   @Test fun `real verifier binds trust time challenge key and fixed profile`() {
     val fixture = fixture()
     val valid = TreehouseOfflineGenerationVerifier.verify(fixture.request)
-    assertEquals(GenerationStatus.VERIFIED_GENERATION_TIME, valid.status)
+    assertEquals(GenerationStatus.INCOMPLETE, valid.status)
+    assertEquals(GenerationReason.CHALLENGE_FRESHNESS_UNESTABLISHED, valid.reason)
     assertEquals(true, valid.generationTime.challengeAssociated)
     assertEquals(true, valid.generationTime.validatorEnrollmentContextRetained)
 
@@ -71,6 +72,29 @@ class TreehouseOfflineGenerationVerifierTest {
     val revokedReport = TreehouseOfflineGenerationVerifier.verify(
       OfflineGenerationRequest(fixture.request.issuance, fixture.request.candidate, revoked, now))
     assertEquals(GenerationReason.CHAIN_VALIDATION_FAILED, revokedReport.reason)
+
+    for (suffix in listOf(byteArrayOf(0), fixture.root.encoded)) {
+      val trailing = fixture.request.candidate.chain.mapIndexed { index, der -> if (index == 0) der + suffix else der }
+      val trailingReport = TreehouseOfflineGenerationVerifier.verify(
+        OfflineGenerationRequest(fixture.request.issuance, GenerationCandidate(trailing), fixture.request.trust, now))
+      assertEquals(GenerationReason.CHAIN_PARSING_FAILED, trailingReport.reason)
+    }
+  }
+
+  @Test fun `validator inputs and report bytes are owned and trust digest commits anchor constraints`() {
+    val fixture = fixture(); val issuanceId = ByteArray(32) { 1 }
+    val issued = GenerationIssuance(issuanceId, ByteArray(32) { 2 }, ByteArray(32) { 3 }, "replica:test",
+      ByteArray(32) { 4 }, ByteArray(32) { 5 }, fixture.publicKey, ByteArray(32) { 7 }, 42)
+    issuanceId.fill(99)
+    val report = TreehouseOfflineGenerationVerifier.verify(
+      OfflineGenerationRequest(issued, fixture.request.candidate, fixture.request.trust, now))
+    assertEquals(1, report.issuanceId[0])
+    report.issuanceId.fill(88)
+    assertEquals(1, report.issuanceId[0])
+    val constrained = TrustSnapshot.fromValidatorConfiguration(
+      setOf(TrustAnchor(fixture.root, byteArrayOf(0x30, 0x00))), emptySet(), "source",
+      now.minusSeconds(1), now.plusSeconds(1)).snapshot.digest
+    assertEquals(false, constrained.contentEquals((fixture.request.trust as TrustSnapshotAvailability.Available).snapshot.digest))
   }
 
   private data class Fixture(val request: OfflineGenerationRequest, val publicKey: ByteArray, val root: X509Certificate)

@@ -3,20 +3,23 @@ package com.android.keyattestation.verifier
 import com.google.common.util.concurrent.Futures
 import com.google.protobuf.ByteString
 import java.security.MessageDigest
+import java.security.cert.CertificateFactory
 import java.security.cert.TrustAnchor
 import java.time.Instant
+import java.io.ByteArrayInputStream
+import java.nio.ByteBuffer
 
 private const val TREEHOUSE_PACKAGE = "dev.treetop.lattice.treehouse"
 
 class GenerationIssuance(
-  val issuanceId: ByteArray,
-  val generationChallenge: ByteArray,
-  val creationAttemptId: ByteArray,
+  issuanceId: ByteArray,
+  generationChallenge: ByteArray,
+  creationAttemptId: ByteArray,
   val replica: String,
-  val enrollmentId: ByteArray,
-  val recipient: ByteArray,
-  val expectedPublicKey: ByteArray,
-  val expectedSignerCertificateSha256: ByteArray,
+  enrollmentId: ByteArray,
+  recipient: ByteArray,
+  expectedPublicKey: ByteArray,
+  expectedSignerCertificateSha256: ByteArray,
   val expectedCreationVersionCode: Long,
 ) {
   init {
@@ -33,6 +36,13 @@ class GenerationIssuance(
   internal val recipientBytes = recipient.copyOf()
   internal val publicKeyBytes = expectedPublicKey.copyOf()
   internal val signerBytes = expectedSignerCertificateSha256.copyOf()
+  val issuanceId: ByteArray get() = issuanceIdBytes.copyOf()
+  val generationChallenge: ByteArray get() = challengeBytes.copyOf()
+  val creationAttemptId: ByteArray get() = attemptBytes.copyOf()
+  val enrollmentId: ByteArray get() = enrollmentBytes.copyOf()
+  val recipient: ByteArray get() = recipientBytes.copyOf()
+  val expectedPublicKey: ByteArray get() = publicKeyBytes.copyOf()
+  val expectedSignerCertificateSha256: ByteArray get() = signerBytes.copyOf()
 }
 
 class GenerationCandidate(certificateChain: List<ByteArray>) {
@@ -57,17 +67,23 @@ class TrustSnapshot private constructor(
   val provenance: String,
   val fetchedAt: Instant,
   val expiresAt: Instant,
-  val digest: ByteArray,
+  digest: ByteArray,
 ) {
+  private val digestBytes = digest.copyOf()
+  val digest: ByteArray get() = digestBytes.copyOf()
   companion object {
-    /** Called only after validator-controlled acquisition authenticates and freezes official inputs. */
+    /** Called only after validator-controlled acquisition authenticates and freezes official inputs.
+     * The recorded provenance string is audit context; it does not itself authenticate a source. */
     internal fun fromValidatorConfiguration(
       anchors: Set<TrustAnchor>, revokedSerials: Set<String>, provenance: String,
       fetchedAt: Instant, expiresAt: Instant,
     ): TrustSnapshotAvailability.Available {
       require(anchors.isNotEmpty() && provenance.isNotEmpty() && expiresAt > fetchedAt)
-      require(revokedSerials.all { it.isNotEmpty() })
-      val ownedAnchors = anchors.toSet()
+      require(revokedSerials.all { it.matches(Regex("(?:0|[1-9a-f][0-9a-f]*)")) })
+      val ownedAnchors = anchors.map { anchor ->
+        val certificate = requireNotNull(anchor.trustedCert) { "certificate trust anchor required" }
+        TrustAnchor(parseExactCertificate(certificate.encoded), anchor.nameConstraints?.copyOf())
+      }.toSet()
       val ownedRevoked = revokedSerials.toSet()
       return TrustSnapshotAvailability.Available(TrustSnapshot(
         ownedAnchors, ownedRevoked, provenance, fetchedAt, expiresAt,
@@ -87,7 +103,8 @@ class OfflineGenerationRequest(
 enum class GenerationStatus { VERIFIED_GENERATION_TIME, REFUSED, INCOMPLETE }
 enum class GenerationReason {
   VERIFIED, TRUST_SNAPSHOT_UNAVAILABLE, TRUST_SNAPSHOT_EXPIRED, TRUST_SNAPSHOT_NOT_YET_VALID, CHAIN_PARSING_FAILED,
-  CHAIN_VALIDATION_FAILED, CHALLENGE_MISMATCH, PROFILE_MISMATCH,
+  CHAIN_VALIDATION_FAILED, CHALLENGE_MISMATCH, CHALLENGE_FRESHNESS_UNESTABLISHED, PROFILE_MISMATCH,
+  INTERNAL_VALIDATION_FAILURE,
 }
 enum class CurrentState { NOT_ESTABLISHED }
 enum class CurrentStateBlocker { CURRENT_PACKAGE_STATE_UNAVAILABLE, CURRENT_DEVICE_STATE_UNAVAILABLE, PHYSICAL_CANDIDATE_PROOF_REQUIRED }
@@ -105,13 +122,19 @@ class OfflineGenerationReport internal constructor(
   val kind: String,
   val status: GenerationStatus,
   val reason: GenerationReason,
-  val issuanceId: ByteArray,
-  val trustSnapshotDigest: ByteArray?,
+  issuanceId: ByteArray,
+  trustSnapshotDigest: ByteArray?,
   val validationTime: Instant,
   val generationTime: GenerationTimeChecks,
   val currentState: CurrentState,
   val currentStateBlockers: Set<CurrentStateBlocker>,
 )
+{
+  private val issuanceIdBytes = issuanceId.copyOf()
+  private val trustDigestBytes = trustSnapshotDigest?.copyOf()
+  val issuanceId: ByteArray get() = issuanceIdBytes.copyOf()
+  val trustSnapshotDigest: ByteArray? get() = trustDigestBytes?.copyOf()
+}
 
 /** Offline generation-time verification only. This does not acquire trust data, issue or persist
  * challenges, verify fresh possession/current device state, or make an eligibility decision. */
@@ -132,7 +155,7 @@ object TreehouseOfflineGenerationVerifier {
       return report(request, GenerationStatus.INCOMPLETE, GenerationReason.TRUST_SNAPSHOT_NOT_YET_VALID, snapshot)
     if (request.validationTime >= snapshot.expiresAt)
       return report(request, GenerationStatus.INCOMPLETE, GenerationReason.TRUST_SNAPSHOT_EXPIRED, snapshot)
-    val certificates = try { request.candidate.chain.map { it.inputStream().asX509Certificate() } }
+    val certificates = try { request.candidate.chain.map(::parseExactCertificate) }
       catch (_: Exception) { return report(request, GenerationStatus.REFUSED, GenerationReason.CHAIN_PARSING_FAILED, snapshot) }
     val expected = TreehouseWitnessExpected(
       TREEHOUSE_PACKAGE, issuance.signerBytes, issuance.expectedCreationVersionCode, issuance.publicKeyBytes)
@@ -145,10 +168,10 @@ object TreehouseOfflineGenerationVerifier {
         override fun checkChallenge(challenge: ByteString) = Futures.immediateFuture(challenge == expectedChallenge)
       })
     } catch (_: Exception) {
-      return report(request, GenerationStatus.INCOMPLETE, GenerationReason.TRUST_SNAPSHOT_UNAVAILABLE, snapshot)
+      return report(request, GenerationStatus.INCOMPLETE, GenerationReason.INTERNAL_VALIDATION_FAILURE, snapshot)
     }
     return when (result) {
-      is VerificationResult.Success -> report(request, GenerationStatus.VERIFIED_GENERATION_TIME, GenerationReason.VERIFIED, snapshot,
+      is VerificationResult.Success -> report(request, GenerationStatus.INCOMPLETE, GenerationReason.CHALLENGE_FRESHNESS_UNESTABLISHED, snapshot,
         GenerationTimeChecks(true, true, true, true, true, true))
       VerificationResult.ChallengeMismatch -> report(request, GenerationStatus.REFUSED, GenerationReason.CHALLENGE_MISMATCH, snapshot,
         GenerationTimeChecks(false, true, true, false, false, true))
@@ -174,11 +197,35 @@ object TreehouseOfflineGenerationVerifier {
 private fun snapshotDigest(anchors: Set<TrustAnchor>, revoked: Set<String>, provenance: String,
   fetchedAt: Instant, expiresAt: Instant): ByteArray {
   val digest = MessageDigest.getInstance("SHA-256")
-  fun add(bytes: ByteArray) { digest.update(bytes.size.toString().toByteArray()); digest.update(0); digest.update(bytes) }
+  digest.update("treehouse-validator-trust-snapshot-v1".toByteArray(Charsets.US_ASCII))
+  fun add(bytes: ByteArray) { digest.update(ByteBuffer.allocate(8).putLong(bytes.size.toLong()).array()); digest.update(bytes) }
   add(provenance.toByteArray(Charsets.UTF_8)); add(fetchedAt.toString().toByteArray()); add(expiresAt.toString().toByteArray())
-  anchors.map { requireNotNull(it.trustedCert).encoded }.sortedWith(::compareBytes).forEach(::add)
-  revoked.sorted().forEach { add(it.toByteArray(Charsets.US_ASCII)) }
+  val orderedAnchors = anchors.map { anchor -> requireNotNull(anchor.trustedCert).encoded to anchor.nameConstraints?.copyOf() }
+    .sortedWith { left, right ->
+      compareBytes(left.first, right.first).takeIf { it != 0 }
+        ?: when {
+          left.second == null && right.second != null -> -1
+          left.second != null && right.second == null -> 1
+          else -> compareBytes(left.second ?: ByteArray(0), right.second ?: ByteArray(0))
+        }
+    }
+  digest.update(ByteBuffer.allocate(8).putLong(orderedAnchors.size.toLong()).array())
+  orderedAnchors.forEach { (certificate, constraints) ->
+    add(certificate)
+    digest.update(if (constraints == null) 0 else 1)
+    if (constraints != null) add(constraints)
+  }
+  val orderedRevoked = revoked.sorted()
+  digest.update(ByteBuffer.allocate(8).putLong(orderedRevoked.size.toLong()).array())
+  orderedRevoked.forEach { add(it.toByteArray(Charsets.US_ASCII)) }
   return digest.digest()
+}
+
+private fun parseExactCertificate(der: ByteArray): java.security.cert.X509Certificate {
+  val input = ByteArrayInputStream(der)
+  val certificate = CertificateFactory.getInstance("X.509").generateCertificate(input)
+  require(input.available() == 0) { "trailing certificate bytes" }
+  return certificate as java.security.cert.X509Certificate
 }
 
 private fun compareBytes(left: ByteArray, right: ByteArray): Int {
