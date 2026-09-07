@@ -51,12 +51,22 @@ pub(crate) struct WitnessFlow {
 struct Active {
     id: Bytes32,
     token: OperationToken,
+    session: SessionSnapshot,
     pending: Option<NativeCancellation>,
     drains: Vec<NativeDrain>,
     cancel_sent: bool,
     cancel_starting: bool,
+    call_starting: bool,
     run_finished: bool,
     cancel_current: Current,
+    publication: Publication,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum Publication {
+    Running,
+    Cancelled,
+    Committed,
 }
 
 pub(crate) struct FlowPending {
@@ -128,8 +138,8 @@ impl WitnessFlow {
         webview: &Webview<R>,
         url: &Url,
     ) -> bool {
-        let allow = self.owner.navigation_requested(webview, url);
         self.cancel_invalidated();
+        let allow = self.owner.navigation_requested(webview, url);
         allow
     }
 
@@ -139,10 +149,8 @@ impl WitnessFlow {
         event: PageLoadEvent,
         url: &Url,
     ) -> Result<(), &'static str> {
+        self.cancel_invalidated();
         let result = self.owner.page_load(webview, event, url);
-        if result.is_err() {
-            self.cancel_invalidated();
-        }
         result
     }
 
@@ -173,12 +181,15 @@ impl WitnessFlow {
         *active = Some(Active {
             id,
             token: token.clone(),
+            session: session.clone(),
             pending: None,
             drains: Vec::new(),
             cancel_sent: false,
             cancel_starting: false,
+            call_starting: false,
             run_finished: false,
             cancel_current,
+            publication: Publication::Running,
         });
         drop(active);
 
@@ -387,7 +398,7 @@ impl WitnessFlow {
 
     async fn cleanup_after_proof<R: Runtime>(
         &self,
-        webview: &Webview<R>,
+        _webview: &Webview<R>,
         token: &OperationToken,
         session: &SessionSnapshot,
         sealed: Option<&SealedReviewedBinding>,
@@ -395,7 +406,7 @@ impl WitnessFlow {
         if let Some(sealed) = sealed {
             let _ = witness_reviewed::cancel(sealed, token.id(), session.digest());
         }
-        if let Some(target) = self.operations.cancel(token.id(), session) {
+        if let Some(target) = self.claim_cancel(token.id(), session) {
             if let Ok(cancel) = self.start_cancel(&target) {
                 let _ = Self::finish_cancel(cancel).await;
             }
@@ -443,7 +454,27 @@ impl WitnessFlow {
         let view = webview.clone();
         let session_for_check = session.clone();
         let current: Current = Arc::new(move || owner.current(&view, &session_for_check));
-        let pending = (self.dispatch)(request, current);
+        {
+            let mut active = self.active.lock().map_err(|_| FLOW_REFUSED)?;
+            let state = active
+                .as_mut()
+                .filter(|state| state.id == token.id())
+                .ok_or(FLOW_REFUSED)?;
+            state.call_starting = true;
+        }
+        let pending = match catch_unwind(AssertUnwindSafe(|| (self.dispatch)(request, current))) {
+            Ok(pending) => pending,
+            Err(_) => {
+                if let Ok(mut active) = self.active.lock() {
+                    if let Some(state) = active.as_mut().filter(|state| state.id == token.id()) {
+                        state.drains.push(NativeDrain::failed());
+                        state.call_starting = false;
+                        self.completion_ready.notify_all();
+                    }
+                }
+                return Err(FLOW_REFUSED);
+            }
+        };
         let drain = pending.drain();
         if self
             .set_pending(token.id(), pending.cancellation(), drain.clone())
@@ -489,6 +520,8 @@ impl WitnessFlow {
         }
         state.pending = Some(cancellation);
         state.drains.push(drain);
+        state.call_starting = false;
+        self.completion_ready.notify_all();
         Ok(())
     }
     fn clear_pending(&self, id: Bytes32) {
@@ -499,38 +532,94 @@ impl WitnessFlow {
         }
     }
     async fn finish(&self, token: OperationToken) -> bool {
-        let active = self.active.clone();
-        let ready = self.completion_ready.clone();
-        let completion = tauri::async_runtime::spawn_blocking(move || {
-            let Ok(mut active) = active.lock() else {
-                return None;
-            };
-            let state = active.as_mut().filter(|state| state.id == token.id())?;
-            state.run_finished = true;
-            while active.as_ref().is_some_and(|state| state.cancel_starting) {
-                let Ok(next) = ready.wait(active) else {
+        let mut waited = 0usize;
+        'drain: loop {
+            let active = self.active.clone();
+            let ready = self.completion_ready.clone();
+            let id = token.id();
+            let next = tauri::async_runtime::spawn_blocking(move || {
+                let Ok(mut active) = active.lock() else {
                     return None;
                 };
-                active = next;
-            }
-            Self::take_completion(&mut active)
-        })
-        .await
-        .ok()
-        .flatten();
-        let Some((owned_token, drains)) = completion else {
-            return false;
-        };
-        for drain in drains {
-            if !drain.wait().await {
-                return false;
+                let state = active.as_mut().filter(|state| state.id == id)?;
+                state.run_finished = true;
+                while active
+                    .as_ref()
+                    .is_some_and(|state| state.cancel_starting || state.call_starting)
+                {
+                    let Ok(value) = ready.wait(active) else {
+                        return None;
+                    };
+                    active = value;
+                }
+                let state = active.as_ref().filter(|state| state.id == id)?;
+                Some(state.drains.get(waited).cloned())
+            })
+            .await
+            .ok()
+            .flatten();
+            match next {
+                Some(Some(drain)) => {
+                    if !drain.wait().await {
+                        return false;
+                    }
+                    waited += 1;
+                }
+                Some(None) => {
+                    // Cancellation may have reserved or registered a drain
+                    // after the blocking snapshot released the mutex.
+                    let current = {
+                        let Ok(active) = self.active.lock() else {
+                            return false;
+                        };
+                        let Some(state) = active.as_ref().filter(|state| state.id == token.id())
+                        else {
+                            return false;
+                        };
+                        if state.cancel_starting
+                            || state.call_starting
+                            || state.drains.len() > waited
+                        {
+                            drop(active);
+                            continue 'drain;
+                        }
+                        state.cancel_current.clone()
+                    };
+                    // This may query the webview URL, so it must not run while
+                    // holding flow state. Hooks claim Cancelled before they
+                    // mutate the owner latch, closing the recheck interval.
+                    let owner_current = current();
+                    let Ok(mut active) = self.active.lock() else {
+                        return false;
+                    };
+                    let Some(state) = active.as_mut().filter(|state| state.id == token.id()) else {
+                        return false;
+                    };
+                    if state.cancel_starting || state.call_starting || state.drains.len() > waited {
+                        drop(active);
+                        continue 'drain;
+                    }
+                    if state.publication == Publication::Running && !owner_current {
+                        state.publication = Publication::Cancelled;
+                        let _ = self.operations.cancel(token.id(), &state.session);
+                    }
+                    let publish = state.publication == Publication::Running;
+                    state.publication = if publish {
+                        Publication::Committed
+                    } else {
+                        state.publication
+                    };
+                    let cleared = self.operations.complete(&token);
+                    *active = None;
+                    return publish && cleared;
+                }
+                None => return false,
             }
         }
-        self.operations.complete(&owned_token)
     }
 
     fn cancel_started(self: Arc<Self>, id: Bytes32, session: SessionSnapshot) {
-        let target = self.operations.cancel(id, &session);
+        let target = self.claim_cancel(id, &session);
         let reserved = target
             .as_ref()
             .and_then(|target| self.reserve_cancel(target).ok());
@@ -560,7 +649,7 @@ impl WitnessFlow {
         id: Bytes32,
         session: SessionSnapshot,
     ) -> Result<FlowPending, &'static str> {
-        let target = self.operations.cancel(id, &session).ok_or(FLOW_REFUSED)?;
+        let target = self.claim_cancel(id, &session).ok_or(FLOW_REFUSED)?;
         let current = self.reserve_cancel(&target)?;
         let pending = self.active.lock().ok().and_then(|active| {
             active
@@ -588,19 +677,31 @@ impl WitnessFlow {
     }
 
     pub(crate) fn lifecycle_invalidated(self: &Arc<Self>) {
-        self.owner.lifecycle_cancelled();
         self.cancel_invalidated();
+        self.owner.lifecycle_cancelled();
     }
 
     pub(crate) fn owner_destroyed(self: &Arc<Self>) {
-        self.owner.owner_destroyed();
         self.cancel_invalidated();
+        self.owner.owner_destroyed();
     }
 
     fn cancel_invalidated(self: &Arc<Self>) {
+        let id = {
+            let Ok(mut active) = self.active.lock() else {
+                return;
+            };
+            let Some(state) = active.as_mut() else { return };
+            if state.publication != Publication::Running {
+                return;
+            }
+            state.publication = Publication::Cancelled;
+            state.id
+        };
         let Some(target) = self.operations.lifecycle_invalidated() else {
             return;
         };
+        debug_assert_eq!(target.id(), id);
         let reserved = self.reserve_cancel(&target).ok();
         let pending = self.active.lock().ok().and_then(|active| {
             active
@@ -620,6 +721,24 @@ impl WitnessFlow {
                 }
             });
         }
+    }
+
+    fn claim_cancel(
+        &self,
+        id: Bytes32,
+        session: &SessionSnapshot,
+    ) -> Option<crate::witness_operation::CancellationTarget> {
+        {
+            let mut active = self.active.lock().ok()?;
+            let state = active
+                .as_mut()
+                .filter(|state| state.id == id && state.session == *session)?;
+            if state.publication != Publication::Running {
+                return None;
+            }
+            state.publication = Publication::Cancelled;
+        }
+        self.operations.cancel(id, session)
     }
 
     fn reserve_cancel(
@@ -723,17 +842,6 @@ impl WitnessFlow {
                 self.completion_ready.notify_all();
             }
         }
-    }
-
-    fn take_completion(active: &mut Option<Active>) -> Option<(OperationToken, Vec<NativeDrain>)> {
-        let ready = active
-            .as_ref()
-            .is_some_and(|state| state.run_finished && !state.cancel_starting);
-        if !ready {
-            return None;
-        }
-        let state = active.take()?;
-        Some((state.token, state.drains))
     }
 
     async fn finish_cancel(pending: MobilePending) -> Result<Vec<u8>, &'static str> {

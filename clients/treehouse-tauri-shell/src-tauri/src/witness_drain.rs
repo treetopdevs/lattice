@@ -164,3 +164,52 @@ where
         drain,
     }
 }
+
+#[cfg(test)]
+pub(crate) mod test_adapter {
+    use super::*;
+
+    pub(crate) fn start_native_call_with_ack_gate<T, F, V>(
+        dispatch: F,
+        current: V,
+        response_ready: std::sync::mpsc::Sender<()>,
+        acknowledge: std::sync::mpsc::Receiver<()>,
+    ) -> NativePending<T>
+    where
+        T: Send + 'static,
+        F: Future<Output = T> + Send + 'static,
+        V: Fn() -> bool + Send + Sync + 'static,
+    {
+        let (sender, receiver) = channel(1);
+        let drain = NativeDrain(Arc::new((
+            std::sync::Mutex::new(DrainState::Pending),
+            std::sync::Condvar::new(),
+        )));
+        let signal = DrainSignal {
+            drain: drain.clone(),
+            acknowledged: false,
+        };
+        let cancellation = NativeCancellation(Arc::new(AtomicBool::new(false)));
+        let task_cancellation = cancellation.clone();
+        let current: Arc<dyn Fn() -> bool + Send + Sync> = Arc::new(current);
+        let task_current = current.clone();
+        drop(tauri::async_runtime::spawn(async move {
+            let result = dispatch.await;
+            let released = if task_cancellation.0.load(Ordering::Acquire) || !task_current() {
+                Err(CALL_CANCELLED)
+            } else {
+                Ok(result)
+            };
+            let _ = sender.send(released).await;
+            let _ = response_ready.send(());
+            let _ = tauri::async_runtime::spawn_blocking(move || acknowledge.recv()).await;
+            signal.acknowledge();
+        }));
+        NativePending {
+            receiver,
+            cancellation,
+            current,
+            drain,
+        }
+    }
+}

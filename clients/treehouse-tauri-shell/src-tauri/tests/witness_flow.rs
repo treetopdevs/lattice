@@ -779,3 +779,119 @@ fn lifecycle_hook_latches_owner_and_cancels_without_a_retrieved_webview() {
         )
         .is_err());
 }
+
+fn terminal_publication_race(cancel_with_command: bool) {
+    let app = tauri::test::mock_builder()
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
+        .unwrap();
+    let window = WebviewWindowBuilder::new(
+        &app,
+        "main",
+        WebviewUrl::External("http://tauri.localhost/".parse().unwrap()),
+    )
+    .build()
+    .unwrap();
+    let view = window.as_ref().clone();
+    let owner = Arc::new(witness_owner::test_adapter::from_entropy(|| {
+        Ok(Bytes32([1; 32]))
+    }));
+    let url = "http://tauri.localhost/".parse().unwrap();
+    owner.navigation_requested(&view, &url);
+    owner
+        .page_load(&view, PageLoadEvent::Started, &url)
+        .unwrap();
+    owner
+        .page_load(&view, PageLoadEvent::Finished, &url)
+        .unwrap();
+    let operations = Arc::new(witness_operation::test_adapter::registry(|| {
+        Ok(Bytes32([9; 32]))
+    }));
+    let (ready_tx, ready_rx) = mpsc::channel();
+    let (ack_tx, ack_rx) = mpsc::channel();
+    let ack_rx = Arc::new(Mutex::new(Some(ack_rx)));
+    let flow =
+        witness_flow::test_adapter::flow(
+            owner,
+            operations,
+            move |request, current| match request {
+                witness_bridge::PrivateRequest::Identity(value) => {
+                    let terminal = TerminalResponse::terminal(
+                        ResponseKind::Identity,
+                        value.operation_id,
+                        TerminalStatus::Missing,
+                    )
+                    .unwrap();
+                    witness_mobile::test_adapter::gated_response(
+                        Ok(witness_mobile::MobileResponse::Terminal(terminal)),
+                        move || current(),
+                        ready_tx.clone(),
+                        ack_rx.lock().unwrap().take().unwrap(),
+                    )
+                }
+                witness_bridge::PrivateRequest::Cancel(value) => {
+                    let operation_id = value.operation_id;
+                    witness_mobile::test_adapter::dispatch(
+                        witness_bridge::PrivateRequest::Cancel(value),
+                        move |_| async move {
+                            let terminal = TerminalResponse::terminal(
+                                ResponseKind::Cancel,
+                                operation_id,
+                                TerminalStatus::Cancelled,
+                            )
+                            .unwrap();
+                            Ok(serde_json::from_slice(
+                                &encode_terminal_response(&terminal).unwrap(),
+                            )
+                            .unwrap())
+                        },
+                        move || current(),
+                    )
+                }
+                _ => panic!("unexpected request"),
+            },
+        );
+    let original = flow
+        .execute(
+            view.clone(),
+            witness_public::PublicRequest::Identity,
+            Arc::new(|_, _| Ok(())),
+        )
+        .unwrap();
+    ready_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+    // Let finish reach its drain wait. The operation must remain cancellable
+    // throughout that wait, independent of executor scheduling.
+    std::thread::sleep(Duration::from_millis(20));
+
+    if cancel_with_command {
+        let cancelled = flow
+            .execute(
+                view,
+                witness_public::PublicRequest::Cancel(witness_public::CancelPublicRequest {
+                    attempt_id: Bytes32([9; 32]),
+                }),
+                Arc::new(|_, _| Ok(())),
+            )
+            .unwrap();
+        assert_eq!(
+            block_on(cancelled.receive()).unwrap(),
+            br#"{"status":"cancelled","version":1}"#
+        );
+    } else {
+        flow.lifecycle_invalidated();
+    }
+    ack_tx.send(()).unwrap();
+    assert!(
+        block_on(original.receive()).is_err(),
+        "cancel must suppress a computed result"
+    );
+}
+
+#[test]
+fn lifecycle_wins_while_result_is_ready_but_native_drain_is_unacknowledged() {
+    terminal_publication_race(false);
+}
+
+#[test]
+fn explicit_cancel_wins_while_result_is_ready_but_native_drain_is_unacknowledged() {
+    terminal_publication_race(true);
+}

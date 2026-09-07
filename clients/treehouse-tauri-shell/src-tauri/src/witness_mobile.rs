@@ -240,5 +240,23 @@ pub(crate) mod test_adapter {
     {
         dispatch_with(request, transport, current)
     }
+    pub(crate) fn gated_response<V>(
+        response: Result<MobileResponse, &'static str>,
+        current: V,
+        response_ready: std::sync::mpsc::Sender<()>,
+        acknowledge: std::sync::mpsc::Receiver<()>,
+    ) -> MobilePending
+    where
+        V: Fn() -> bool + Send + Sync + 'static,
+    {
+        MobilePending(
+            crate::witness_drain::test_adapter::start_native_call_with_ack_gate(
+                async move { response },
+                current,
+                response_ready,
+                acknowledge,
+            ),
+        )
+    }
     pub(crate) const METHOD: &str = MOBILE_METHOD;
 }
