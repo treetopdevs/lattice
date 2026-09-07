@@ -112,6 +112,14 @@ internal class WitnessGenerationCoordinator(private val context: Context, signer
         val fence = stored(journal.commitGenerationStarted(snapshot.identity.revision,
             request.creationAttempt.copyBytes(), request.challenge.copyBytes()))
         snapshot = stored(journal.retainExistingForAttempt(fence.revision, request.creationAttempt.copyBytes()))
+        // PREPARED is used only for the real provider's fail-closed absence observation; a STARTED
+        // record deliberately reports absent custody as incomplete. Generation still uses the
+        // retained STARTED snapshot and its opaque fence, never this old observation record.
+        when (val afterFence = platform.observe(original)) {
+            WitnessKeyObservation.Absent -> Unit
+            is WitnessKeyObservation.Present -> throw Failure("identity_incomplete")
+            is WitnessKeyObservation.Refused -> throw Failure(afterFence.reason)
+        }
         // Accepted consent plus the durable fence commits this one invocation. Cancellation now
         // suppresses release, while the native operation and original metadata still drain.
         var generatorFailed = false

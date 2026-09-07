@@ -98,6 +98,22 @@ class WitnessGenerationCoordinatorTest {
         WitnessJournal(context, bytes(7)).use { assertEquals(WitnessPhase.GENERATED_UNVALIDATED, stored(it.observeExisting()).identity.phase) }
     }
 
+    @Test fun aliasAppearingAfterFenceIsNeverOverwritten() {
+      for (refused in listOf(false, true)) {
+        val context = context()
+        WitnessJournal(context, bytes(7)).use { stored(it.prepareAccepted(WitnessEnrollment(bytes(1), "replica:test", bytes(2), bytes(3)), bytes(3))) }
+        val fake = FakePlatform()
+        val coordinator = WitnessGenerationCoordinator(context, bytes(7), Review(true), fake, { true }, { stage ->
+            if (stage == "before_response") {
+                if (refused) fake.refusal = "identity_incomplete" else fake.present = true
+            }
+        })
+        assertEquals(WitnessResult.Refused("identity_incomplete"), run(coordinator, request(1)))
+        assertEquals(0, fake.calls)
+        WitnessJournal(context, bytes(7)).use { assertEquals(WitnessPhase.GENERATION_STARTED, stored(it.observeExisting()).identity.phase) }
+      }
+    }
+
     @Test fun mismatchedChallengeAndDeadSessionRefuseWithoutGeneration() {
         val context = context()
         WitnessJournal(context, bytes(7)).use {
@@ -132,9 +148,10 @@ class WitnessGenerationCoordinatorTest {
     private class FakePlatform: WitnessGenerationPlatform {
         var calls = 0
         var present = false
+        var refusal: String? = null
         var onGenerate: (WitnessIdentityRecord, GenerationFence) -> Unit = { _, _ -> }
         override fun observe(original: WitnessIdentityRecord): WitnessKeyObservation =
-            if (present) WitnessKeyObservation.Present(metadata()) else WitnessKeyObservation.Absent
+            refusal?.let { WitnessKeyObservation.Refused(it) } ?: if (present) WitnessKeyObservation.Present(metadata()) else WitnessKeyObservation.Absent
         override fun generate(original: WitnessIdentityRecord, fence: GenerationFence) {
             onGenerate(original, fence)
             calls++
