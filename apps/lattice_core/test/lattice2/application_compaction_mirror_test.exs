@@ -2,6 +2,7 @@ defmodule Lattice2.ApplicationCompactionMirrorTest do
   use ExUnit.Case, async: true
 
   alias Lattice.{Authority, CompactionSpike, Log, Op, Reduce, Sim, Sync}
+  alias Lattice.Authority.Delegation
   alias Lattice.Demo.Thread
   alias Treehouse.{Invitation, Space}
 
@@ -114,6 +115,7 @@ defmodule Lattice2.ApplicationCompactionMirrorTest do
 
       expected = if revoked?, do: :application_invalid_invitation, else: :honored
       assert Map.get(result.reasons, admission.id, :honored) == expected
+      assert_application_matches_full(Space, log, frontier)
 
       if revoked? do
         assert {:ok, legacy_snapshot, legacy_retained} =
@@ -232,6 +234,7 @@ defmodule Lattice2.ApplicationCompactionMirrorTest do
 
     legacy = CompactionSpike.reduce_compacted(PolicyReplica, snapshot.base_snapshot, retained)
     refute term_bytes(legacy.state) == term_bytes(full_state)
+    assert_application_matches_full(PolicyReplica, full_log, frontier)
   end
 
   test "retained application context uses individual rather than covered conflict verdicts" do
@@ -270,6 +273,7 @@ defmodule Lattice2.ApplicationCompactionMirrorTest do
     assert visible_ops[covered_loser].id == covered_loser
     assert verdicts[covered_loser] == :honored
     assert snapshot.covered_final_reasons[covered_loser] == :application_conflict
+    assert_application_matches_full(PolicyReplica, full_log, frontier)
   end
 
   test "covered conflict audit exactly reconstructs each captured individual context" do
@@ -299,6 +303,8 @@ defmodule Lattice2.ApplicationCompactionMirrorTest do
 
     assert Map.merge(snapshot.covered_individual_reasons, snapshot.covered_conflict_losers) ==
              snapshot.covered_final_reasons
+
+    assert_application_matches_full(PolicyReplica, covered_log, frontier)
   end
 
   test "covered retained refused and concurrent targets expose exact causal contexts" do
@@ -330,6 +336,7 @@ defmodule Lattice2.ApplicationCompactionMirrorTest do
     assert contexts[covered_reference.id].visible_ops[covered_source.id] == covered_source
     assert contexts[refused_reference.id].verdicts[covered_denied.id] == :application_denied
     assert contexts[retained_reference.id].verdicts[retained_source.id] == :honored
+    assert_application_matches_full(PolicyReplica, log, frontier)
 
     for order <- [:target_before, :target_after] do
       {concurrent_log, concurrent_frontier, concurrent_source, concurrent_reference} =
@@ -353,24 +360,15 @@ defmodule Lattice2.ApplicationCompactionMirrorTest do
     {sim, tombstone} = Sim.append(sim, "root", :tombstone, {:delete, "anything"})
     log = Sim.log(sim, "root")
 
-    assert {:ok, snapshot, retained} =
-             CompactionSpike.compact_application(PolicyReplica, log, frontier)
-
     expected = Enum.sort([authority.id, tombstone.id])
 
-    assert {:error, {:application_authority_rebinding_outside_profile, ^expected}} =
-             CompactionSpike.reduce_application(PolicyReplica, snapshot, retained)
+    for delivered <- delivery_sequences(log) do
+      assert {:ok, snapshot, retained} =
+               CompactionSpike.compact_application(PolicyReplica, delivered, frontier)
 
-    reversed =
-      retained
-      |> Log.ops()
-      |> Map.values()
-      |> Enum.reverse()
-      |> Map.new(&{&1.id, &1})
-      |> then(&Log.from_ops(log.replica, &1))
-
-    assert {:error, {:application_authority_rebinding_outside_profile, ^expected}} =
-             CompactionSpike.reduce_application(PolicyReplica, snapshot, reversed)
+      assert {:error, {:application_authority_rebinding_outside_profile, ^expected}} =
+               CompactionSpike.reduce_application(PolicyReplica, snapshot, retained)
+    end
   end
 
   test "command and inbox revoke-shaped bodies remain inside profile and affect later caps" do
@@ -483,6 +481,8 @@ defmodule Lattice2.ApplicationCompactionMirrorTest do
     for invalid_id <- invalid_ids do
       refute_received {:application_context, ^invalid_id, _, _}
     end
+
+    assert_application_matches_full(PolicyReplica, log, frontier)
   end
 
   test "retained capability and holder precedence matches the full engine" do
@@ -574,6 +574,7 @@ defmodule Lattice2.ApplicationCompactionMirrorTest do
     assert is_map(result)
     assert_received {:application_context, ^retained_id, _, context}
     assert Map.keys(context) |> Enum.sort() == [:verdicts, :visible_ops]
+    assert_application_matches_full(PolicyReplica, log, frontier)
   end
 
   test "covered revoked expired invisible and stale evidence survives the mirror" do
@@ -786,7 +787,7 @@ defmodule Lattice2.ApplicationCompactionMirrorTest do
     assert first.id in Map.keys(Log.ops(retained))
   end
 
-  test "application result and callbacks are independent of retained map insertion order" do
+  test "application result and callbacks match across actual append and reconcile delivery" do
     {_covered_log, full_log, frontier, _covered_claims, _retained_claim} = winner_capture_log()
     identity = test_identity(full_log)
 
@@ -801,20 +802,45 @@ defmodule Lattice2.ApplicationCompactionMirrorTest do
 
     full_log = Log.append!(full_log, request)
 
-    assert {:ok, snapshot, retained} =
-             CompactionSpike.compact_application(PolicyReplica, full_log, frontier)
+    assert_application_matches_full(PolicyReplica, full_log, frontier)
+  end
 
-    reversed =
-      retained
-      |> Log.ops()
-      |> Map.values()
-      |> Enum.reverse()
-      |> Map.new(&{&1.id, &1})
-      |> then(&Log.from_ops(full_log.replica, &1))
+  test "covered same-id delegation forgeries cannot poison the application authority seed" do
+    for order <- [:invalid_first, :valid_first] do
+      {log, frontier, command, invalid_intro} = same_id_grant_log(order)
+      full = Authority.analyze(PolicyReplica, log)
 
-    first_result = CompactionSpike.reduce_application(PolicyReplica, snapshot, retained)
-    second_result = CompactionSpike.reduce_application(PolicyReplica, snapshot, reversed)
-    assert term_bytes(first_result) == term_bytes(second_result)
+      assert full.reasons[invalid_intro.id] == :bad_delegation_sig
+      refute Map.has_key?(full.reasons, command.id)
+      assert_application_matches_full(PolicyReplica, log, frontier)
+    end
+
+    {invalid_only, frontier, command, invalid_intro} = same_id_grant_log(:invalid_only)
+    full = Authority.analyze(PolicyReplica, invalid_only)
+    assert full.reasons[invalid_intro.id] == :bad_delegation_sig
+    assert full.reasons[command.id] == :invalid_capability
+    assert_application_matches_full(PolicyReplica, invalid_only, frontier)
+  end
+
+  test "covered same-id transfer forgery preserves the genuine holder transition" do
+    {log, frontier, command, invalid_intro} = same_id_transfer_log()
+    full = Authority.analyze(Thread, log)
+
+    assert full.reasons[invalid_intro.id] == :bad_delegation_sig
+    refute Map.has_key?(full.reasons, command.id)
+    assert full.holders.moderator == command.author
+    assert_application_matches_full(Thread, log, frontier)
+  end
+
+  test "covered same-id delegation seed authorizes cross-kind retained revokes" do
+    for kind <- [:command, :inbox] do
+      {log, frontier, later, invalid_intro} = same_id_revoke_log(kind)
+      full = Authority.analyze(PolicyReplica, log)
+
+      assert full.reasons[invalid_intro.id] == :bad_delegation_sig
+      assert full.reasons[later.id] == :revoked_capability
+      assert_application_matches_full(PolicyReplica, log, frontier)
+    end
   end
 
   test "callback counts separate covered verification from one retained fold and one final pass" do
@@ -847,6 +873,7 @@ defmodule Lattice2.ApplicationCompactionMirrorTest do
     assert Enum.sort(Map.keys(verdicts)) == Enum.sort(Map.keys(combined_ops))
     assert Enum.sort(Map.keys(ancestors)) == Enum.sort(Map.keys(combined_ops))
     assert result.reasons == Authority.analyze(PolicyReplica, full_log).reasons
+    assert_application_matches_full(PolicyReplica, full_log, frontier)
   end
 
   test "source guard excludes full combined authority analysis from the reducer" do
@@ -1012,27 +1039,234 @@ defmodule Lattice2.ApplicationCompactionMirrorTest do
     {concurrent_log, frontier, source, reference}
   end
 
+  defp same_id_grant_log(order) do
+    {sim, _genesis} =
+      PolicyReplica
+      |> Sim.new("replica:application-mirror:same-id-grant-#{order}", ["root", "peer"],
+        seed: "same-id-grant-#{order}"
+      )
+      |> Sim.create_replica("root")
+
+    base = Sim.log(sim, "root")
+    identity = Sim.identity(sim, "root")
+
+    delegation =
+      Delegation.new(identity, base.replica, Sim.identity(sim, "peer").pub,
+        ops: [:source],
+        parent_id: root_cap(base)
+      )
+
+    {valid_intro, invalid_intro} =
+      same_id_introductions(identity, base, delegation, &{:grant, &1}, order)
+
+    intro_ops =
+      if order == :invalid_only,
+        do: [invalid_intro],
+        else: [valid_intro, invalid_intro]
+
+    covered = append_ops(base, intro_ops)
+    frontier = Log.frontier(covered)
+
+    command =
+      Op.new(
+        Sim.identity(sim, "peer"),
+        base.replica,
+        frontier,
+        :command,
+        {:source, ["same-id"]},
+        cap: delegation.id
+      )
+
+    {Log.append!(covered, command), frontier, command, invalid_intro}
+  end
+
+  defp same_id_transfer_log do
+    {sim, _genesis} =
+      Thread
+      |> Sim.new("replica:application-mirror:same-id-transfer", ["root", "peer"],
+        seed: "same-id-transfer"
+      )
+      |> Sim.create_replica("root")
+
+    base = Sim.log(sim, "root")
+    identity = Sim.identity(sim, "root")
+
+    delegation =
+      Delegation.new(identity, base.replica, Sim.identity(sim, "peer").pub,
+        ops: [:lock],
+        roles: [:moderator],
+        parent_id: root_cap(base)
+      )
+
+    {valid_intro, invalid_intro} =
+      same_id_introductions(
+        identity,
+        base,
+        delegation,
+        &{:transfer, :moderator, &1, 1},
+        :invalid_first
+      )
+
+    covered = append_ops(base, [valid_intro, invalid_intro])
+    frontier = Log.frontier(covered)
+
+    command =
+      Op.new(
+        Sim.identity(sim, "peer"),
+        base.replica,
+        frontier,
+        :command,
+        {:lock, []},
+        cap: delegation.id
+      )
+
+    {Log.append!(covered, command), frontier, command, invalid_intro}
+  end
+
+  defp same_id_revoke_log(kind) do
+    {log, frontier, first, invalid_intro} = same_id_grant_log(:invalid_first)
+    covered = Log.from_ops(log.replica, Map.drop(Log.ops(log), [first.id]))
+    root = Lattice.Identity.from_seed("root", "same-id-grant-invalid_first:root")
+    peer = Lattice.Identity.from_seed("peer", "same-id-grant-invalid_first:peer")
+    delegation_id = first.cap
+
+    revoke = Op.new(root, log.replica, frontier, kind, {:revoke, delegation_id})
+    with_revoke = Log.append!(covered, revoke)
+
+    later =
+      Op.new(
+        peer,
+        log.replica,
+        [revoke.id],
+        :command,
+        {:source, ["after-revoke"]},
+        cap: delegation_id
+      )
+
+    {Log.append!(with_revoke, later), frontier, later, invalid_intro}
+  end
+
+  defp same_id_introductions(identity, base, delegation, body, order) do
+    valid = Op.new(identity, base.replica, Log.frontier(base), :authority, body.(delegation))
+
+    invalid =
+      Enum.find_value(0..255, fn byte ->
+        <<_first, rest::binary>> = delegation.sig
+        forged = %{delegation | sig: <<byte, rest::binary>>}
+
+        if not Delegation.valid_sig?(forged) do
+          candidate =
+            Op.new(identity, base.replica, Log.frontier(base), :authority, body.(forged))
+
+          matches? =
+            case order do
+              :valid_first -> valid.id < candidate.id
+              _ -> candidate.id < valid.id
+            end
+
+          if matches?, do: candidate
+        end
+      end)
+
+    assert %Op{} = invalid
+    {valid, invalid}
+  end
+
+  defp append_ops(log, ops) do
+    Enum.reduce(Enum.sort_by(ops, & &1.id), log, fn op, acc -> Log.append!(acc, op) end)
+  end
+
   defp assert_application_matches_full(module, log, frontier) do
     assert :ok == Log.verify_authenticity(log)
     full = Authority.analyze(module, log)
     state = Reduce.reduce(module, log, quarantine: full.quarantine)
-    assert {:ok, snapshot, retained} = CompactionSpike.compact_application(module, log, frontier)
-    result = CompactionSpike.reduce_application(module, snapshot, retained)
-    assert result.reasons == full.reasons
-    assert result.quarantine == full.quarantine
-    assert result.holders == full.holders
-    assert result.requests == full.requests
-    assert term_bytes(result.state) == term_bytes(state)
-    result
+
+    outcomes =
+      for delivered <- delivery_sequences(log) do
+        drain_messages([])
+        previous_observer = Process.put(:application_mirror_observer, self())
+
+        try do
+          assert {:ok, snapshot, retained} =
+                   CompactionSpike.compact_application(module, delivered, frontier)
+
+          result = CompactionSpike.reduce_application(module, snapshot, retained)
+          trace = drain_messages([]) |> normalize_callback_trace()
+          assert result.reasons == full.reasons
+          assert result.quarantine == full.quarantine
+          assert result.holders == full.holders
+          assert result.requests == full.requests
+          assert term_bytes(result.state) == term_bytes(state)
+          {result, trace}
+        after
+          if previous_observer,
+            do: Process.put(:application_mirror_observer, previous_observer),
+            else: Process.delete(:application_mirror_observer)
+        end
+      end
+
+    [{first_result, first_trace}, {second_result, second_trace}] = outcomes
+    assert term_bytes(first_result) == term_bytes(second_result)
+    assert first_trace == second_trace
+    first_result
   end
 
   defp assert_single_outside_profile(module, log, frontier, op_id) do
     assert :ok == Log.verify_authenticity(log)
-    assert {:ok, snapshot, retained} = CompactionSpike.compact_application(module, log, frontier)
 
-    assert {:error, {:application_authority_rebinding_outside_profile, [^op_id]}} =
-             CompactionSpike.reduce_application(module, snapshot, retained)
+    for delivered <- delivery_sequences(log) do
+      assert {:ok, snapshot, retained} =
+               CompactionSpike.compact_application(module, delivered, frontier)
+
+      assert {:error, {:application_authority_rebinding_outside_profile, [^op_id]}} =
+               CompactionSpike.reduce_application(module, snapshot, retained)
+    end
   end
+
+  defp delivery_sequences(log) do
+    ops = Log.ops(log)
+    ordered = Lattice.Dag.topo_sort(ops)
+    appended = Enum.reduce(ordered, Log.new(log.replica), &Log.append!(&2, &1))
+
+    reconciled =
+      Enum.reduce(Enum.reverse(ordered), Log.new(log.replica), fn op, delivered ->
+        closure_ids = Lattice.Dag.reachable(ops, [op.id])
+        source = Log.from_ops(log.replica, Map.take(ops, MapSet.to_list(closure_ids)))
+        {merged, _source, _report} = Sync.reconcile(delivered, source)
+        merged
+      end)
+
+    assert Log.ops(appended) == ops
+    assert Log.ops(reconciled) == ops
+    [appended, reconciled]
+  end
+
+  defp normalize_callback_trace(messages) do
+    Enum.map(messages, fn
+      {:application_context, op_id, visible_ids, context} ->
+        {:application_context, op_id, Enum.sort(visible_ids), normalize_context(context)}
+
+      {:application_conflicts, ops, verdicts, ancestors} ->
+        {:application_conflicts, sort_map(ops), sort_map(verdicts),
+         normalize_ancestors(ancestors)}
+
+      message ->
+        message
+    end)
+  end
+
+  defp normalize_context(%{visible_ops: visible_ops, verdicts: verdicts}),
+    do: %{visible_ops: sort_map(visible_ops), verdicts: sort_map(verdicts)}
+
+  defp normalize_context(context), do: context
+
+  defp normalize_ancestors(ancestors) do
+    ancestors
+    |> Enum.map(fn {id, ids} -> {id, Enum.sort(ids)} end)
+    |> Enum.sort()
+  end
+
+  defp sort_map(map), do: Enum.sort(map)
 
   defp root_cap(log) do
     log
