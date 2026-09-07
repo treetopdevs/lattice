@@ -103,6 +103,7 @@ struct Guest<'a> {
     cancel: Option<Arc<AtomicBool>>,
     started_signal: Option<Arc<AtomicBool>>,
     script: &'a str,
+    before_acceptance: Option<Box<dyn FnOnce() + Send>>,
 }
 
 fn exception_text(ctx: &rquickjs::Ctx<'_>, error: rquickjs::Error) -> String {
@@ -285,17 +286,33 @@ fn run_guest(guest: Guest<'_>) -> Result<RunSuccess, RunFailure> {
         }),
     };
 
+    let memory_used_size_sample = runtime.memory_usage().memory_used_size;
+    // Context destroyed here with the runtime; nothing (including the module's
+    // route WeakMap) survives the invocation.
+    drop(context);
+    drop(runtime);
+
+    if let Some(control) = guest.before_acceptance {
+        control();
+    }
+
+    // Cancellation linearizes at this final native read after guest settlement
+    // and teardown. A request observed here refuses even without an interrupt;
+    // one arriving after this acceptance point does not revise this result.
+    if guest
+        .cancel
+        .as_ref()
+        .is_some_and(|cancel| cancel.load(Ordering::SeqCst))
+    {
+        signals.cancelled.store(true, Ordering::SeqCst);
+    }
     let final_signals = SignalSnapshot {
         deadline_exceeded: signals.deadline_exceeded.load(Ordering::SeqCst),
         cancelled: signals.cancelled.load(Ordering::SeqCst),
         interrupt_polls: signals.interrupt_polls.load(Ordering::Relaxed),
         wall_exceeded_deadline: started.elapsed() >= deadline,
-        memory_used_size_sample: runtime.memory_usage().memory_used_size,
+        memory_used_size_sample,
     };
-    // Context destroyed here with the runtime; nothing (including the module's
-    // route WeakMap) survives the invocation.
-    drop(context);
-    drop(runtime);
 
     // Out-of-band acceptance rule: sticky signals and the monotonic clock are
     // checked by Rust after completion. A caught-and-masked in-guest failure
@@ -335,6 +352,28 @@ pub fn run_fault_fixture_with_start_signal(
     cancel: Option<Arc<AtomicBool>>,
     started_signal: Option<Arc<AtomicBool>>,
 ) -> Result<RunSuccess, RunFailure> {
+    run_fixture_with_controls(script, limits, cancel, started_signal, None)
+}
+
+/// Private deterministic settlement control for the stopped experiment. It runs
+/// after all guest work and runtime destruction, before final native acceptance.
+#[doc(hidden)]
+pub fn run_fault_fixture_with_settlement_control(
+    script: &str,
+    limits: ExperimentLimits,
+    cancel: Option<Arc<AtomicBool>>,
+    control: Box<dyn FnOnce() + Send>,
+) -> Result<RunSuccess, RunFailure> {
+    run_fixture_with_controls(script, limits, cancel, None, Some(control))
+}
+
+fn run_fixture_with_controls(
+    script: &str,
+    limits: ExperimentLimits,
+    cancel: Option<Arc<AtomicBool>>,
+    started_signal: Option<Arc<AtomicBool>>,
+    before_acceptance: Option<Box<dyn FnOnce() + Send>>,
+) -> Result<RunSuccess, RunFailure> {
     if script.len() > limits.input_bytes_max {
         return Err(RunFailure::InputBound {
             bytes: script.len(),
@@ -350,6 +389,7 @@ pub fn run_fault_fixture_with_start_signal(
                 limits,
                 cancel,
                 started_signal,
+                before_acceptance,
                 script: &script,
             })
         })

@@ -10,7 +10,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use treehouse_catalog_runtime_spike::{
-    run_fault_fixture, run_fault_fixture_with_start_signal, ExperimentLimits, RunFailure,
+    run_fault_fixture, run_fault_fixture_with_settlement_control,
+    run_fault_fixture_with_start_signal, ExperimentLimits, RunFailure,
 };
 
 const FAULT_LIMITS: ExperimentLimits = ExperimentLimits {
@@ -239,5 +240,44 @@ fn native_io_bounds_are_enforced() {
     match run_fault_fixture("\"0123456789abcdef\"", tight_out, None) {
         Err(RunFailure::OutputBound { max }) => assert_eq!(max, 8),
         other => panic!("oversized output must be refused, not truncated, got {other:?}"),
+    }
+}
+
+/// The native settlement barrier runs after the last possible engine interrupt.
+/// A cancellation there must refuse even a short or already-settled Promise result.
+#[test]
+fn cancellation_at_native_settlement_refuses_short_and_promise_results() {
+    for script in ["'ordinary result'", "Promise.resolve('ordinary result')"] {
+        let cancel = Arc::new(AtomicBool::new(false));
+        let request = Arc::clone(&cancel);
+        let barrier_ran = Arc::new(AtomicBool::new(false));
+        let reached = Arc::clone(&barrier_ran);
+        let result = run_fault_fixture_with_settlement_control(
+            script,
+            FAULT_LIMITS,
+            Some(cancel),
+            Box::new(move || {
+                reached.store(true, Ordering::SeqCst);
+                request.store(true, Ordering::SeqCst);
+            }),
+        );
+        assert!(barrier_ran.load(Ordering::SeqCst));
+        match result {
+            Err(RunFailure::LateResult { signals }) => {
+                assert!(signals.cancelled);
+                assert!(!signals.deadline_exceeded);
+            }
+            other => panic!("settlement cancellation must refuse: {other:?}"),
+        }
+
+        let control = run_fault_fixture_with_settlement_control(
+            script,
+            FAULT_LIMITS,
+            Some(Arc::new(AtomicBool::new(false))),
+            Box::new(|| {}),
+        )
+        .expect("the same short and promise results without cancellation succeed");
+        assert_eq!(control.output, "ordinary result");
+        assert!(!control.signals.cancelled);
     }
 }
