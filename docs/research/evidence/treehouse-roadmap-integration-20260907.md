@@ -120,8 +120,9 @@ properties passed. Final tip `8a1d35e877edbb043a232182526434a5f19b38ba`
 passed hosted run 34147415076 after independent Sol review. PR86 merged as
 `03f127f56f28c219439747ea2770778e5fef196e`; merged tree
 `070e3160bceb852d8f2d8f92f9e1e0bd17e006ed` matched the root merge candidate.
-Main run 34149188715 is pending. The preview still exposes six commands, and
-merge-result closure remains open until that run passes.
+Main run 34149188715 passed all required jobs. R19b core semantic closure is
+complete. Main still exposes six preview commands; the separate native witness
+activation branch does not grant enrollment, custody, release or pilot closure.
 
 ## Native vertical slice
 
