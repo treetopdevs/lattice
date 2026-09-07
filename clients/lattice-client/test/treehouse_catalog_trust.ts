@@ -628,7 +628,7 @@ test("continuity vocabulary remains authenticated raw evidence across catalog in
     const names = JSON.parse(readFileSync(new URL(`./vectors/catalog/${file}`, import.meta.url), "utf8")) as string[];
     const frame = await authorCarrierOp({replica: f.space.replica, signer: f.root, deps: [f.space.frames.at(-1)!.id], kind: "command",
       cap: ["bin", Buffer.from(f.space.delegation.id).toString("base64")],
-      body: ["tuple", [["atom", "attest_member_key_v1"], ["list", [["list", names.map((name) => ["atom", name])]]]]]});
+      body: ["tuple", [["atom", "attest_member_key_v1"], ["list", [["list", names.map((name): CarrierTerm => ["atom", name])]]]]]});
     const history = {...f.histories[0]!, frames: [...f.space.frames, frame],
       rejected: [{frame: {...frame, sig: Buffer.alloc(64).toString("base64")}, reason: "bad_signature" as const}]};
     const states = [];

@@ -103,7 +103,7 @@ test("all fixed vocabulary names are shared with the durable fixture and accepte
   assert.ok(literal); assert.deepEqual(JSON.parse(literal), names);
   const f = await cutoffFixture();
   const frame = await authorCarrierOp({ replica: f.replica, signer: f.signer, deps: [], kind: "command", cap: ["nil"],
-    body: ["list", names.map((name) => ["atom", name])] });
+    body: ["list", names.map((name): CarrierTerm => ["atom", name])] });
   assert.equal((await derive({ replica: f.replica, frames: [frame], rejected: [] })).ok, true);
 });
 
@@ -204,10 +204,22 @@ test("signed continuity supplement and union are portable without granting a com
   for (const file of ["cutoff_atoms_member_continuity_v1.json", "cutoff_atoms_with_member_continuity_v1.json"]) {
     const names = JSON.parse(readFileSync(new URL(`./vectors/catalog/${file}`, import.meta.url), "utf8")) as string[];
     const frame = await authorCarrierOp({replica: f.replica, signer: f.signer, deps: [], kind: "command", cap: ["nil"],
-      body: ["tuple", [["atom", "attest_member_key_v1"], ["list", [["list", names.map((name) => ["atom", name])]]]]]});
+      body: ["tuple", [["atom", "attest_member_key_v1"], ["list", [["list", names.map((name): CarrierTerm => ["atom", name])]]]]]});
     const input = {replica: f.replica, frames: [frame], rejected: [{frame: {...frame, sig: ""}, reason: "bad_signature" as const}]};
     const result = await derive(input); assert.equal(result.ok, true, file);
     assert.deepEqual(result.ops[0]!.bytes, canonicalBytesForCarrierOp(frame));
     assert.equal(result.rejected[0]!.id, frame.id);
+  }
+});
+
+test("the continuity extension cannot admit duplicate canonical containers or alternate uint64 spellings", async () => {
+  const f = await cutoffFixture();
+  const pair: [CarrierTerm, CarrierTerm] = [["atom", "new_pub"], ["bin", ""]];
+  const bodies: CarrierTerm[] = [["map", [pair]], ["mapset", [["atom", "active"]]], ["int", "18446744073709551615"]];
+  const malformed: CarrierTerm[] = [["map", [pair, pair]], ["mapset", [["atom", "active"], ["atom", "active"]]], ["int", "018446744073709551615"]];
+  for (let index = 0; index < bodies.length; index++) {
+    const frame = await authorCarrierOp({replica: f.replica, signer: f.signer, deps: [], kind: "command", cap: ["nil"], body: bodies[index]!});
+    assert.equal((await derive({replica: f.replica, frames: [frame], rejected: []})).ok, true);
+    assert.deepEqual(await derive({replica: f.replica, frames: [{...frame, body: malformed[index]!}], rejected: []}), invalid);
   }
 });

@@ -56,6 +56,7 @@ defmodule Treehouse.MemberContinuityReciprocalTest do
       for delivered <- [ops, Enum.reverse(ops)] do
         {log, %{pending: []}} = Sync.deliver(Log.new(vector["replica"]), delivered)
         assert :ok = Log.verify_authenticity(log)
+
         # R19b vocabulary-only stage: old signed bytes are portable; the command stays unregistered.
         assert {:ok, cutoff} = Treehouse.CatalogCutoff.derive(log)
         assert length(cutoff.ops) == length(ops)
