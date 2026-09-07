@@ -73,8 +73,9 @@ export async function verifyMemberContinuityVector(vector: unknown) {
       assert.ok(frame.deps.every((dependency) => frames.some((other) => other.id === dependency)));
       assert.equal(b64(canonicalBytesForCarrierOp(frame)).length > 0, true);
     }
-    assert.deepEqual(await deriveTreehouseCatalogCutoff({replica: value.unknown_command.replica, frames, rejected: []}),
-      {ok: false, reason: "unsupported_cutoff"}, "the unchanged cutoff vocabulary does not enable new command history");
+    // R19b vocabulary-only stage: original fixture bytes become portable; no command activation.
+    const cutoff = await deriveTreehouseCatalogCutoff({replica: value.unknown_command.replica, frames, rejected: []});
+    assert.equal(cutoff.ok, true); assert.equal(cutoff.ops.length, frames.length);
     const ops = carrierOpsToSemanticOps(frames, {}, treehouseCommandDecoders("Treehouse.Space"));
     const projection = materialize(treehouseSpaceSchema, ops, new Set(ops.map((op) => op.id)), null, value.unknown_command.replica);
     assert.equal(projection.quarantineReasons.get(value.unknown_command.op_id), value.unknown_command.expected_reason);

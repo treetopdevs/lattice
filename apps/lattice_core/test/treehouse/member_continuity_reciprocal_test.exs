@@ -56,7 +56,9 @@ defmodule Treehouse.MemberContinuityReciprocalTest do
       for delivered <- [ops, Enum.reverse(ops)] do
         {log, %{pending: []}} = Sync.deliver(Log.new(vector["replica"]), delivered)
         assert :ok = Log.verify_authenticity(log)
-        assert {:error, :unsupported_cutoff} = Treehouse.CatalogCutoff.derive(log)
+        # R19b vocabulary-only stage: old signed bytes are portable; the command stays unregistered.
+        assert {:ok, cutoff} = Treehouse.CatalogCutoff.derive(log)
+        assert length(cutoff.ops) == length(ops)
         analysis = Authority.analyze(Treehouse.Space, log)
         assert analysis.reasons[vector["op_id"]] == :unknown_command
         assert Lattice.state(Treehouse.Space, log) == Lattice.state(Treehouse.Space, baseline)
