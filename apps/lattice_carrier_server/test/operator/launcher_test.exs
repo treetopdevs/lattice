@@ -1,35 +1,44 @@
 defmodule LatticeCarrierServer.Operator.LauncherTest do
   use ExUnit.Case, async: false
-  @launcher Path.expand("../../../../scripts/treehouse_operator_locked.sh", __DIR__)
+  @launcher Path.expand("../../../../scripts/treehouse_operator.sh", __DIR__)
 
-  if :os.type() == {:unix, :linux} do
-    test "two Linux processes exclude, then SIGKILL releases the same lock" do
-      root = Path.expand(".operator-lock-#{System.unique_integer([:positive])}", File.cwd!())
+  if :os.type() != {:unix, :linux} do
+    test "unsupported host refuses without executing the requested mutation" do
+      assert {"unsupported_operator_platform\n", 78} =
+               System.cmd(@launcher, ["/", "/bin/false"], stderr_to_stdout: true)
+    end
+  end
+
+  if :os.type() != {:unix, :linux} do
+    test "direct journal mutation cannot bypass OS lock on unsupported host" do
+      root = Path.expand(".operator-direct-#{System.unique_integer([:positive])}", File.cwd!())
       File.mkdir!(root)
       File.chmod!(root, 0o700)
       on_exit(fn -> File.rm_rf!(root) end)
 
-      port =
-        Port.open({:spawn_executable, @launcher}, [
-          :binary,
-          :exit_status,
-          args: [root, "/bin/sh", "-c", "echo LOCKED; exec sleep 120"]
-        ])
+      record = %{
+        "version" => 1,
+        "phase" => "carrier_pending",
+        "attempt" => Base.url_encode64(<<0::256>>, padding: false),
+        "generation" => 0,
+        "catalog_head" => nil,
+        "manifest_digest" => LatticeCarrierServer.Operator.Journal.digest("manifest"),
+        "artifacts" => [
+          %{
+            "kind" => "manifest",
+            "review" => nil,
+            "op_id" => nil,
+            "replica" => nil,
+            "path" => Path.join(root, "artifact"),
+            "sha256" => LatticeCarrierServer.Operator.Journal.digest("artifact")
+          }
+        ]
+      }
 
-      assert_receive {^port, {:data, "LOCKED\n"}}, 5_000
-      {:os_pid, pid} = Port.info(port, :os_pid)
-      assert {_, 75} = System.cmd(@launcher, [root, "/bin/true"], stderr_to_stdout: true)
-      assert {_, 0} = System.cmd("kill", ["-KILL", Integer.to_string(pid)])
-      assert_receive {^port, {:exit_status, _}}, 5_000
-      assert {_, 0} = System.cmd(@launcher, [root, "/bin/true"], stderr_to_stdout: true)
-    end
-  else
-    @tag skip: "Actual Linux flock/SIGKILL proof requires the Linux hosted gate"
-    test "two Linux processes exclude, then SIGKILL releases the same lock", do: :ok
+      assert {:error, :unsupported_operator_platform} =
+               LatticeCarrierServer.Operator.Journal.compare_and_set(root, nil, record)
 
-    test "unsupported host refuses without executing the requested mutation" do
-      assert {"unsupported_operator_platform\n", 78} =
-               System.cmd(@launcher, ["/", "/bin/false"], stderr_to_stdout: true)
+      refute File.exists?(LatticeCarrierServer.Operator.Journal.path(root))
     end
   end
 end

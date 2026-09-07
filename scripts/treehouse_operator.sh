@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Local Linux operator entry wrapper. No service activation, signing, or seed inputs.
-# Usage: treehouse_operator_locked.sh OPERATOR_ROOT COMMAND [ARG...]
-# COMMAND must perform all journal/staging mutations in this process lifetime.
+# Usage: treehouse_operator.sh OPERATOR_ROOT COMMAND [ARG...]
+# COMMAND uses the Journal/Staging APIs; each mutation is owned by the Python helper.
 set -euo pipefail
 umask 077
 if [[ "$(uname -s)" != Linux ]]; then
@@ -35,15 +35,7 @@ while :; do
   [[ "$cursor" == / ]] && break
   cursor=$(dirname -- "$cursor")
 done
-lock="$root/operator.lock"
-if [[ ! -e "$lock" && ! -L "$lock" ]]; then
-  ( set -o noclobber; : > "$lock" ) 2>/dev/null || true
-fi
-if [[ ! -f "$lock" || -L "$lock" || "$(stat -c %u -- "$lock")" != "$uid" ||
-      "$(stat -c %h -- "$lock")" != 1 || "$(stat -c %a -- "$lock")" != 600 ]]; then
-  echo "unsafe_operator_lock" >&2
-  exit 78
-fi
-# --no-fork keeps the OS lock descriptor in the executed command. Kernel release,
-# never PID-file removal, determines ownership after that command exits or dies.
-exec flock --exclusive --nonblock --conflict-exit-code 75 --no-fork "$lock" "$@"
+# The mutation API owns its own helper/flock. An outer flock here would deadlock
+# that helper and could not protect direct API calls.
+command -v python3 >/dev/null || { echo "operator_python3_unavailable" >&2; exit 78; }
+exec "$@"

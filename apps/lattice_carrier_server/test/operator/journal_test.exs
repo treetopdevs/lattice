@@ -1,13 +1,7 @@
 defmodule LatticeCarrierServer.Operator.JournalTest do
   use ExUnit.Case, async: false
+  if :os.type() != {:unix, :linux}, do: @moduletag(skip: "Requires actual Linux OS lock")
   alias LatticeCarrierServer.Operator.Journal
-
-  defmodule LocalSequence do
-    def sync_file(path), do: LatticeCarrierServer.Durability.Posix.sync_file(path)
-    def rename(a, b), do: File.rename(a, b)
-    # Host-only fault/ordering adapter; never Linux directory durability evidence.
-    def sync_directory(_), do: :ok
-  end
 
   setup do
     root = Path.expand(".operator-test-#{System.unique_integer([:positive])}", File.cwd!())
@@ -21,7 +15,7 @@ defmodule LatticeCarrierServer.Operator.JournalTest do
     record = %{
       "version" => 1,
       "phase" => "carrier_pending",
-      "attempt" => Base.encode64(:crypto.hash(:sha256, "attempt")),
+      "attempt" => Base.url_encode64(:crypto.hash(:sha256, "attempt"), padding: false),
       "generation" => 1,
       "catalog_head" => nil,
       "manifest_digest" => Journal.digest("manifest"),
@@ -30,38 +24,27 @@ defmodule LatticeCarrierServer.Operator.JournalTest do
           "path" => Path.join(root, "artifact"),
           "sha256" => Journal.digest("bytes"),
           "kind" => "manifest",
+          "review" => nil,
           "replica" => nil,
           "op_id" => nil
         }
       ]
     }
 
-    assert :ok = Journal.compare_and_set(root, nil, record, LocalSequence)
+    assert :ok = Journal.compare_and_set(root, nil, record)
 
-    assert {:error, :stale_operator_intent} =
-             Journal.compare_and_set(root, nil, %{record | "generation" => 2}, LocalSequence)
+    assert {:error, {:operator_refused, "stale_operator_intent"}} =
+             Journal.compare_and_set(root, nil, %{record | "generation" => 2})
 
     assert {:ok, bytes} = Journal.read(root)
     assert {:ok, ^record} = Journal.decode(bytes)
-  end
-
-  defmodule RenameFailure do
-    def sync_file(path), do: LocalSequence.sync_file(path)
-    def rename(_, _), do: {:error, :injected_rename_failure}
-    def sync_directory(_), do: :ok
-  end
-
-  defmodule DirectoryFailure do
-    def sync_file(path), do: LocalSequence.sync_file(path)
-    def rename(a, b), do: File.rename(a, b)
-    def sync_directory(_), do: {:error, :injected_directory_failure}
   end
 
   defp record(root) do
     %{
       "version" => 1,
       "phase" => "carrier_pending",
-      "attempt" => Base.encode64(:crypto.hash(:sha256, "attempt")),
+      "attempt" => Base.url_encode64(:crypto.hash(:sha256, "attempt"), padding: false),
       "generation" => 1,
       "catalog_head" => nil,
       "manifest_digest" => Journal.digest("manifest"),
@@ -70,6 +53,7 @@ defmodule LatticeCarrierServer.Operator.JournalTest do
           "path" => Path.join(root, "artifact"),
           "sha256" => Journal.digest("bytes"),
           "kind" => "manifest",
+          "review" => nil,
           "replica" => nil,
           "op_id" => nil
         }
@@ -77,38 +61,13 @@ defmodule LatticeCarrierServer.Operator.JournalTest do
     }
   end
 
-  test "failed rename preserves old intent and failed post-rename sync never acknowledges", %{
-    root: root
-  } do
-    old = record(root)
-    assert :ok = Journal.compare_and_set(root, nil, old, LocalSequence)
-    {:ok, raw} = Journal.read(root)
-    next = %{old | "attempt" => Base.encode64(:crypto.hash(:sha256, "new")), "generation" => 2}
-
-    assert {:error, :injected_rename_failure} =
-             Journal.compare_and_set(root, raw, next, RenameFailure)
-
-    assert {:ok, ^raw} = Journal.read(root)
-
-    assert {:error, :injected_directory_failure} =
-             Journal.compare_and_set(root, raw, next, DirectoryFailure)
-
-    assert {:ok, new_raw} = Journal.read(root)
-    assert {:ok, ^next} = Journal.decode(new_raw)
-
-    assert {:error, :injected_directory_failure} =
-             Journal.compare_and_set(root, new_raw, next, DirectoryFailure)
-
-    assert :ok = Journal.compare_and_set(root, new_raw, next, LocalSequence)
-  end
-
   test "same attempt cannot be rewritten and corruption preserves evidence", %{root: root} do
     old = record(root)
-    :ok = Journal.compare_and_set(root, nil, old, LocalSequence)
+    :ok = Journal.compare_and_set(root, nil, old)
     {:ok, raw} = Journal.read(root)
 
-    assert {:error, :stale_operator_intent} =
-             Journal.compare_and_set(root, raw, %{old | "generation" => 2}, LocalSequence)
+    assert {:error, {:operator_refused, "stale_operator_intent"}} =
+             Journal.compare_and_set(root, raw, %{old | "generation" => 2})
 
     for corrupt <- [
           "{}",

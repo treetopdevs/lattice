@@ -2,15 +2,15 @@ defmodule LatticeCarrierServer.Operator.Journal do
   @moduledoc """
   Local candidate journal, never an activated manifest or catalog authority.
 
-  Mutations require the Linux operator launcher's whole-command OS lock. The
+  Mutations acquire and own a Linux OS lock for the entire transaction. The
   compare is cooperative CAS among those operator processes, not a lock against
   an unrelated writer. Generation/catalog-head values are reviewed intent only.
   An ambiguous file or failed sync is retained for explicit reconciliation.
   """
   import Bitwise
-  alias LatticeCarrierServer.Durability
+  alias LatticeCarrierServer.Operator.Lock
   @fields ~w(version phase attempt generation catalog_head manifest_digest artifacts)
-  @artifact_fields ~w(kind op_id path replica sha256)
+  @artifact_fields ~w(kind op_id path replica review sha256)
   @max_bytes 1_048_576
 
   @spec secure_root(Path.t()) :: :ok | {:error, term()}
@@ -60,46 +60,17 @@ defmodule LatticeCarrierServer.Operator.Journal do
 
   def decode(_), do: {:error, :corrupt_operator_journal}
 
-  @spec compare_and_set(Path.t(), binary() | nil, map(), module()) :: :ok | {:error, term()}
-  def compare_and_set(root, expected, next, durability \\ Durability.Posix) do
-    with true <- valid?(next),
-         {:ok, current} <- read(root),
-         true <- current == expected,
-         true <- same_attempt_consistent?(current, next),
-         {:ok, raw} <- Jason.encode(next),
-         true <- byte_size(raw) <= @max_bytes do
-      if current == raw do
-        with :ok <- durability.sync_file(path(root)),
-             :ok <- durability.sync_directory(Path.expand(root)),
-             do: :ok
-      else
-        replace(root, raw, durability)
-      end
+  @spec compare_and_set(Path.t(), binary() | nil, map()) :: :ok | {:error, term()}
+  def compare_and_set(root, expected, next) do
+    if valid?(next) do
+      Lock.commit(root, expected, Jason.encode!(next))
     else
-      false -> {:error, :stale_operator_intent}
-      {:error, _} = error -> error
-    end
-  end
-
-  defp same_attempt_consistent?(nil, _), do: true
-
-  defp same_attempt_consistent?(raw, next) do
-    {:ok, old} = decode(raw)
-    old["attempt"] != next["attempt"] or old == next
-  end
-
-  defp replace(root, raw, durability) do
-    with {:ok, temp} <- Durability.secure_temp(path(root)),
-         :ok <- File.write(temp, raw),
-         :ok <- durability.sync_file(temp),
-         :ok <- durability.rename(temp, path(root)),
-         :ok <- durability.sync_directory(Path.expand(root)) do
-      :ok
+      {:error, :corrupt_operator_journal}
     end
   end
 
   defp valid?(r) when is_map(r) do
-    Enum.sort(Map.keys(r)) == Enum.sort(@fields) and r["version"] == 1 and
+    Enum.sort(Map.keys(r)) == Enum.sort(@fields) and r["version"] === 1 and
       r["phase"] == "carrier_pending" and nonce?(r["attempt"]) and
       is_integer(r["generation"]) and r["generation"] >= 0 and
       r["generation"] < 9_007_199_254_740_991 and
@@ -115,21 +86,30 @@ defmodule LatticeCarrierServer.Operator.Journal do
     Enum.sort(Map.keys(a)) == @artifact_fields and is_binary(a["path"]) and
       Path.type(a["path"]) == :absolute and digest?(a["sha256"]) and
       a["kind"] in ["log", "reference", "manifest"] and
-      ((a["kind"] == "manifest" and a["replica"] == nil and a["op_id"] == nil) or
-         (a["kind"] != "manifest" and is_binary(a["replica"]) and op_id?(a["op_id"])))
+      ((a["kind"] == "manifest" and a["replica"] == nil and a["op_id"] == nil and
+          a["review"] == nil) or
+         (a["kind"] != "manifest" and is_binary(a["replica"]) and op_id?(a["op_id"]) and
+            review?(a)))
   end
 
   defp artifact?(_), do: false
 
-  @spec nonce?(term()) :: boolean()
-  def nonce?(value) when is_binary(value) do
-    case Base.decode64(value) do
-      {:ok, bytes} -> byte_size(bytes) == 32 and Base.encode64(bytes) == value
-      _ -> false
-    end
+  defp review?(%{"kind" => "reference", "review" => nil}), do: true
+
+  defp review?(%{"kind" => "log", "review" => r}) when is_map(r) do
+    Enum.sort(Map.keys(r)) == ~w(creation grants profile_genesis profile_id) and
+      Enum.all?(~w(creation profile_genesis profile_id), &op_id?(r[&1])) and
+      is_list(r["grants"]) and length(r["grants"]) <= 128 and
+      Enum.all?(r["grants"], fn g ->
+        is_map(g) and Enum.sort(Map.keys(g)) == ~w(delegation introduction recipient) and
+          is_binary(g["recipient"]) and op_id?(g["delegation"]) and op_id?(g["introduction"])
+      end)
   end
 
-  def nonce?(_), do: false
+  defp review?(_), do: false
+
+  @spec nonce?(term()) :: boolean()
+  def nonce?(value), do: op_id?(value)
 
   @spec op_id?(term()) :: boolean()
   def op_id?(value) when is_binary(value) do

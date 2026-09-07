@@ -1,71 +1,88 @@
 defmodule LatticeCarrierServer.Operator.Staging do
   @moduledoc """
-  Immutable operator candidate staging; no service or publication effects.
+  Read-only authenticated preparation plus an isolated Linux mutation owner.
 
-  Run only beneath the whole-command Linux operator lock. Existing logs are
-  captured and compared, never rewritten. Signature checks prove supplied bytes,
-  not current semantic authority, roster completeness, or authenticated readiness.
-  Review/generation/catalog-head metadata remains operator intent. The only
-  durable phase emitted is carrier_pending.
+  The Python3 helper holds its own flock through staging, BEAM inspection, and
+  durable commit/reopen. BEAM never writes or renames operator files. Current
+  manifest/log digests are rechecked by that same owner before commit.
+  The candidate is not activation, authenticated readiness, or publication.
+  Generation/catalog-head values remain reviewed operator intent.
   """
-  alias Lattice.{Authority, Log, Op}
   alias Lattice.Carrier.Wire
-  alias LatticeCarrierServer.{Durability, Manifest}
-  alias LatticeCarrierServer.Operator.Journal
+  alias Lattice.{Authority, Log, Op}
+  alias LatticeCarrierServer.Manifest
+  alias LatticeCarrierServer.Operator.{Journal, Lock}
   @max_artifact 32 * 1024 * 1024
 
   @spec artifact_path(Path.t(), binary(), binary()) :: Path.t()
-  def artifact_path(root, attempt, digest) do
-    Path.join([Path.expand(root), "attempt-" <> Journal.digest(attempt), digest])
-  end
+  def artifact_path(root, attempt, digest),
+    do: Path.join([Path.expand(root), "attempt-" <> Journal.digest(attempt), digest])
 
-  @spec prepare(Path.t(), binary() | nil, map(), [map()], keyword()) ::
-          {:ok, map()} | {:error, term()}
-  def prepare(root, expected, request, artifacts, opts \\ []) do
-    durability = Keyword.get(opts, :durability, Durability.Posix)
-
-    with :ok <- Journal.secure_root(root),
+  @spec prepare(Path.t(), binary() | nil, map(), [map()]) :: {:ok, map()} | {:error, term()}
+  def prepare(root, expected, request, artifacts) do
+    with true <- :os.type() == {:unix, :linux},
+         :ok <- Journal.secure_root(root),
          true <- request_valid?(request) and artifacts_valid?(artifacts),
-         {:ok, current} <- Journal.read(root),
-         true <- current == expected,
+         {:ok, ^expected} <- Journal.read(root),
          {:ok, manifest} <- Manifest.load(request.active_manifest),
-         {:ok, active_bytes} <- File.read(request.active_manifest),
-         true <- Journal.digest(active_bytes) == request.manifest_digest,
-         {:ok, existing} <- capture_logs(manifest.instances),
-         :ok <- retain_directory(root, request.attempt, durability),
-         {:ok, retained} <- retain_artifacts(root, request.attempt, artifacts, durability),
-         :ok <- exact_inventory(root, request.attempt, retained),
-         :ok <- verify_artifacts(retained, manifest.instances),
-         :ok <- verify_candidate_manifest(retained, manifest),
-         {:ok, after_logs} <- capture_logs(manifest.instances),
-         true <- existing == after_logs,
-         {:ok, final_manifest} <- File.read(request.active_manifest),
-         true <- final_manifest == active_bytes,
-         record = %{
-           "version" => 1,
-           "phase" => "carrier_pending",
-           "attempt" => request.attempt,
-           "generation" => request.generation,
-           "catalog_head" => request.catalog_head,
-           "manifest_digest" => request.manifest_digest,
-           "artifacts" =>
-             Enum.map(
-               retained,
-               &%{
-                 "path" => &1.path,
-                 "sha256" => &1.digest,
-                 "kind" => Atom.to_string(&1.kind),
-                 "replica" => &1.replica,
-                 "op_id" => &1.op_id
-               }
-             )
-         },
-         :ok <- Journal.compare_and_set(root, expected, record, durability) do
-      {:ok, record}
+         {:ok, bytes} <- File.read(request.active_manifest),
+         true <- Journal.digest(bytes) == request.manifest_digest,
+         {:ok, checks} <- capture_logs(manifest.instances) do
+      checks = [%{path: request.active_manifest, sha256: request.manifest_digest} | checks]
+
+      material =
+        Enum.map(artifacts, &%{sha256: Journal.digest(&1.bytes), bytes: Base.encode64(&1.bytes)})
+
+      retained =
+        Enum.map(artifacts, fn artifact ->
+          digest = Journal.digest(artifact.bytes)
+
+          Map.merge(artifact, %{
+            digest: digest,
+            path: artifact_path(root, request.attempt, digest)
+          })
+        end)
+
+      Lock.stage(root, expected, request.attempt, checks, material, fn ->
+        with :ok <- inspect_staged(retained, manifest) do
+          {:ok,
+           %{
+             "version" => 1,
+             "phase" => "carrier_pending",
+             "attempt" => request.attempt,
+             "generation" => request.generation,
+             "catalog_head" => request.catalog_head,
+             "manifest_digest" => request.manifest_digest,
+             "artifacts" =>
+               Enum.map(
+                 retained,
+                 &%{
+                   "path" => &1.path,
+                   "sha256" => &1.digest,
+                   "kind" => Atom.to_string(&1.kind),
+                   "replica" => &1.replica,
+                   "op_id" => &1.op_id,
+                   "review" => &1.review
+                 }
+               )
+           }}
+        end
+      end)
     else
-      false -> {:error, :stale_or_invalid_operator_intent}
+      false -> {:error, :unsupported_or_stale_operator_intent}
+      {:ok, _} -> {:error, :stale_operator_intent}
       {:error, _} = error -> error
     end
+  end
+
+  @doc false
+  @spec inspect_staged([map()], Manifest.t()) :: :ok | {:error, term()}
+  def inspect_staged(retained, manifest) do
+    with :ok <- verify_artifacts(retained, manifest.instances),
+         :ok <- verify_candidate_manifest(retained, manifest),
+         do: :ok
+  rescue
+    _ -> {:error, :invalid_staged_signed_artifact}
   end
 
   defp request_valid?(r) when is_map(r) do
@@ -82,92 +99,54 @@ defmodule LatticeCarrierServer.Operator.Staging do
   defp artifacts_valid?(artifacts) when is_list(artifacts) do
     length(artifacts) in 1..128 and
       Enum.all?(artifacts, fn a ->
-        is_map(a) and Enum.sort(Map.keys(a)) == [:bytes, :kind, :op_id, :replica] and
+        is_map(a) and Enum.sort(Map.keys(a)) == [:bytes, :kind, :op_id, :replica, :review] and
           a.kind in [:log, :reference, :manifest] and is_binary(a.bytes) and
           byte_size(a.bytes) in 1..@max_artifact and
-          ((a.kind == :manifest and a.replica == nil and a.op_id == nil) or
-             (is_binary(a.replica) and Journal.op_id?(a.op_id)))
-      end) and Enum.count(artifacts, &(&1.kind == :manifest)) == 1 and
+          ((a.kind == :manifest and a.replica == nil and a.op_id == nil and a.review == nil) or
+             (a.kind == :reference and is_binary(a.replica) and Journal.op_id?(a.op_id) and
+                a.review == nil) or
+             (a.kind == :log and is_binary(a.replica) and Journal.op_id?(a.op_id) and
+                review_valid?(a.review)))
+      end) and Enum.reduce(artifacts, 0, &(byte_size(&1.bytes) + &2)) <= @max_artifact and
+      Enum.count(artifacts, &(&1.kind == :manifest)) == 1 and
       Enum.count(artifacts, &(&1.kind == :reference)) == 1 and
-      Enum.any?(artifacts, &(&1.kind == :log)) and
-      Enum.uniq_by(artifacts, &Journal.digest(&1.bytes)) == artifacts
+      Enum.any?(artifacts, &(&1.kind == :log))
   end
 
   defp artifacts_valid?(_), do: false
 
+  defp review_valid?(r) when is_map(r) do
+    Enum.sort(Map.keys(r)) == ~w(creation grants profile_genesis profile_id) and
+      Enum.all?(~w(creation profile_genesis profile_id), &Journal.op_id?(r[&1])) and
+      is_list(r["grants"]) and length(r["grants"]) <= 128 and
+      Enum.all?(r["grants"], fn g ->
+        is_map(g) and Enum.sort(Map.keys(g)) == ~w(delegation introduction recipient) and
+          canonical_key?(g["recipient"]) and Journal.op_id?(g["delegation"]) and
+          Journal.op_id?(g["introduction"])
+      end) and Enum.uniq_by(r["grants"], & &1["recipient"]) == r["grants"]
+  end
+
+  defp review_valid?(_), do: false
+
+  defp canonical_key?(key) when is_binary(key) do
+    case Base.decode64(key) do
+      {:ok, bytes} -> byte_size(bytes) == 32 and Base.encode64(bytes) == key
+      _ -> false
+    end
+  end
+
+  defp canonical_key?(_), do: false
+
   defp capture_logs(instances) do
-    Enum.reduce_while(instances, {:ok, %{}}, fn instance, {:ok, captures} ->
+    Enum.reduce_while(instances, {:ok, []}, fn instance, {:ok, captures} ->
       case Log.restore_verified(instance.log_file) do
-        {:ok, %{sha256: digest}} -> {:cont, {:ok, Map.put(captures, instance.log_file, digest)}}
-        _ -> {:halt, {:error, :invalid_existing_log}}
+        {:ok, %{sha256: digest}} ->
+          {:cont, {:ok, [%{path: instance.log_file, sha256: digest} | captures]}}
+
+        _ ->
+          {:halt, {:error, :invalid_existing_log}}
       end
     end)
-  end
-
-  defp retain_directory(root, attempt, durability) do
-    directory = Path.join(Path.expand(root), "attempt-" <> Journal.digest(attempt))
-
-    case File.mkdir(directory) do
-      :ok ->
-        with :ok <- File.chmod(directory, 0o700),
-             :ok <- durability.sync_directory(Path.expand(root)),
-             do: :ok
-
-      {:error, :eexist} ->
-        Journal.secure_root(directory)
-
-      {:error, _} = error ->
-        error
-    end
-  end
-
-  defp retain_artifacts(root, attempt, artifacts, durability) do
-    Enum.reduce_while(artifacts, {:ok, []}, fn artifact, {:ok, retained} ->
-      digest = Journal.digest(artifact.bytes)
-      path = artifact_path(root, attempt, digest)
-
-      case retain(path, artifact.bytes, durability) do
-        :ok -> {:cont, {:ok, retained ++ [Map.merge(artifact, %{path: path, digest: digest})]}}
-        {:error, _} = error -> {:halt, error}
-      end
-    end)
-  end
-
-  defp retain(path, bytes, durability) do
-    case File.open(path, [:write, :binary, :exclusive]) do
-      {:ok, file} ->
-        result =
-          with :ok <- File.chmod(path, 0o600),
-               :ok <- IO.binwrite(file, bytes),
-               :ok <- :file.sync(file),
-               do: :ok
-
-        _ = File.close(file)
-        with :ok <- result, do: durability.sync_directory(Path.dirname(path))
-
-      {:error, :eexist} ->
-        with {:ok, %{type: :regular, links: 1}} <- File.lstat(path),
-             {:ok, ^bytes} <- File.read(path),
-             :ok <- durability.sync_file(path),
-             :ok <- durability.sync_directory(Path.dirname(path)) do
-          :ok
-        else
-          _ -> {:error, :immutable_artifact_conflict}
-        end
-
-      {:error, _} = error ->
-        error
-    end
-  end
-
-  defp exact_inventory(root, attempt, retained) do
-    with {:ok, names} <-
-           File.ls(Path.join(Path.expand(root), "attempt-" <> Journal.digest(attempt))),
-         true <- Enum.sort(names) == Enum.sort(Enum.map(retained, & &1.digest)) do
-      :ok
-    else
-      _ -> {:error, :ambiguous_staging_inventory}
-    end
   end
 
   defp verify_artifacts(artifacts, instances) do
@@ -178,14 +157,7 @@ defmodule LatticeCarrierServer.Operator.Staging do
             :ok
 
           :log ->
-            with {:ok, %{log: log, sha256: digest}} <- Log.restore_verified(artifact.path),
-                 true <- digest == artifact.digest and log.replica == artifact.replica,
-                 %Op{kind: :authority, body: {:genesis, _, _}, author: author} <-
-                   Map.get(log.ops, artifact.op_id),
-                 true <-
-                   is_binary(Authority.replica_commitment(log.replica)) and
-                     Authority.root(log) == author,
-                 do: :ok
+            verify_child(artifact)
 
           :reference ->
             with {:ok, frame} <- Jason.decode(artifact.bytes),
@@ -205,15 +177,56 @@ defmodule LatticeCarrierServer.Operator.Staging do
     end)
   end
 
+  defp verify_child(artifact) do
+    r = artifact.review
+
+    with {:ok, %{log: log, sha256: digest}} <- Log.restore_verified(artifact.path),
+         true <- digest == artifact.digest and log.replica == artifact.replica,
+         %Op{kind: :authority, body: {:genesis, _, _}, author: author} <- log.ops[artifact.op_id],
+         true <-
+           is_binary(Authority.replica_commitment(log.replica)) and Authority.root(log) == author,
+         {:ok, selected} <- Authority.continuation_profile(log),
+         true <-
+           selected.profile_genesis == r["profile_genesis"] and
+             selected.profile_id == r["profile_id"],
+         true <-
+           selected.profile.product == :treehouse and selected.profile.kind == :thread and
+             selected.profile.role == :moderator,
+         analysis = Authority.analyze(Treehouse.Thread, log),
+         true <- analysis.reasons == %{},
+         %Op{kind: :command, body: {:create_thread, [_]}} <- log.ops[r["creation"]],
+         true <- Enum.all?(r["grants"], &valid_grant?(&1, log, analysis)) do
+      :ok
+    else
+      _ -> {:error, :invalid_child_admission}
+    end
+  end
+
+  defp valid_grant?(review, log, analysis) do
+    case log.ops[review["introduction"]] do
+      %Op{kind: :authority, body: {:grant, d}} ->
+        Base.encode64(d.audience) == review["recipient"] and d.id == review["delegation"] and
+          not Map.has_key?(analysis.reasons, review["introduction"]) and
+          Authority.delegation_active?(log, d.id) and not Authority.revoked?(log, d.id)
+
+      _ ->
+        false
+    end
+  end
+
   defp replay_reference(op, instances) do
     Enum.reduce_while(instances, {:error, :missing_space_history}, fn instance, refusal ->
       case Log.restore_verified(instance.log_file) do
         {:ok, %{log: %{replica: replica} = log}} when replica == op.replica ->
-          union = Log.append!(log, op)
+          case Log.accept(log, op) do
+            {:ok, union} ->
+              if Map.has_key?(Authority.analyze(Treehouse.Space, union).reasons, op.id),
+                do: {:halt, {:error, :reference_refused}},
+                else: {:halt, :ok}
 
-          if Map.has_key?(Authority.analyze(Treehouse.Space, union).reasons, op.id),
-            do: {:halt, {:error, :reference_refused}},
-            else: {:halt, :ok}
+            _ ->
+              {:halt, {:error, :reference_refused}}
+          end
 
         _ ->
           {:cont, refusal}
@@ -223,14 +236,9 @@ defmodule LatticeCarrierServer.Operator.Staging do
 
   defp verify_candidate_manifest(artifacts, active) do
     manifest = Enum.find(artifacts, &(&1.kind == :manifest))
-
-    allowed =
-      (Enum.map(active.instances, & &1.log_file) ++
-         Enum.filter(artifacts, &(&1.kind == :log)))
-      |> Enum.map(fn
-        path when is_binary(path) -> path
-        artifact -> artifact.path
-      end)
+    children = Enum.filter(artifacts, &(&1.kind == :log))
+    allowed = Enum.map(active.instances, & &1.log_file) ++ Enum.map(children, & &1.path)
+    reference = Enum.find(artifacts, &(&1.kind == :reference))
 
     with {:ok, candidate} <- Manifest.load(manifest.path),
          true <- Enum.all?(candidate.instances, &(&1.log_file in allowed)),
@@ -240,10 +248,40 @@ defmodule LatticeCarrierServer.Operator.Staging do
                candidate.instances,
                &(&1.name == old.name and &1.log_file == old.log_file)
              )
+           end),
+         {:ok, roster} <- current_roster(reference.replica, active.instances),
+         true <-
+           Enum.all?(children, fn child ->
+             reviewed = Enum.map(child.review["grants"], & &1["recipient"]) |> Enum.sort()
+
+             peers =
+               for instance <- candidate.instances,
+                   instance.log_file == child.path,
+                   {_realm, pub} <- instance.trusted_peers,
+                   do: Base.encode64(pub)
+
+             {:ok, %{log: child_log}} = Log.restore_verified(child.path)
+             child_root = Base.encode64(Authority.root(child_log))
+
+             Enum.all?(roster, &(&1 in peers)) and
+               Enum.all?(peers, &(&1 in roster or &1 == child_root)) and reviewed == roster
            end) do
       :ok
     else
       _ -> {:error, :invalid_candidate_manifest}
     end
+  end
+
+  defp current_roster(replica, instances) do
+    Enum.reduce_while(instances, {:error, :missing_space_history}, fn instance, refusal ->
+      case Log.restore_verified(instance.log_file) do
+        {:ok, %{log: %{replica: ^replica} = log}} ->
+          members = Lattice.state(Treehouse.Space, log).members |> Enum.to_list()
+          {:halt, {:ok, Enum.sort(Enum.uniq(members))}}
+
+        _ ->
+          {:cont, refusal}
+      end
+    end)
   end
 end
