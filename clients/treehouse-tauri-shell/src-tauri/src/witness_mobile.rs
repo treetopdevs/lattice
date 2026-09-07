@@ -5,7 +5,7 @@ use crate::{
         decode_terminal_response, encode_request, PrivateRequest, ResponseKind, TerminalResponse,
         MAX_PRIVATE_MESSAGE,
     },
-    witness_drain::{start_native_call, NativeCancellation, NativePending},
+    witness_drain::{start_native_call, NativeCancellation, NativeDrain, NativePending},
     witness_snapshot::{decode_snapshot, SnapshotResponse},
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -56,6 +56,9 @@ pub(crate) struct MobilePending(NativePending<Result<MobileResponse, &'static st
 impl MobilePending {
     pub(crate) fn cancellation(&self) -> NativeCancellation {
         self.0.cancellation()
+    }
+    pub(crate) fn drain(&self) -> NativeDrain {
+        self.0.drain()
     }
     pub(crate) async fn receive(self) -> Result<MobileResponse, &'static str> {
         self.0.receive().await?

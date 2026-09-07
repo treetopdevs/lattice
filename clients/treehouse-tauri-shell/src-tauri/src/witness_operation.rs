@@ -23,6 +23,7 @@ struct Active {
     cancelled: bool,
 }
 
+#[derive(Clone)]
 pub(crate) struct OperationToken {
     marker: Arc<()>,
     id: Bytes32,

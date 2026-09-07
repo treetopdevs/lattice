@@ -28,11 +28,75 @@ pub(crate) struct NativePending<T> {
     receiver: Receiver<Result<T, &'static str>>,
     cancellation: NativeCancellation,
     current: Arc<dyn Fn() -> bool + Send + Sync>,
+    drain: NativeDrain,
+}
+
+#[derive(Clone)]
+pub(crate) struct NativeDrain(Arc<(std::sync::Mutex<DrainState>, std::sync::Condvar)>);
+
+#[derive(Clone, Copy)]
+enum DrainState {
+    Pending,
+    Drained,
+    Failed,
+}
+
+struct DrainSignal {
+    drain: NativeDrain,
+    acknowledged: bool,
+}
+
+impl DrainSignal {
+    fn acknowledge(mut self) {
+        let (lock, ready) = &*self.drain.0;
+        if let Ok(mut state) = lock.lock() {
+            *state = DrainState::Drained;
+            ready.notify_all();
+        }
+        self.acknowledged = true;
+    }
+}
+
+impl Drop for DrainSignal {
+    fn drop(&mut self) {
+        if self.acknowledged {
+            return;
+        }
+        let (lock, ready) = &*self.drain.0;
+        if let Ok(mut state) = lock.lock() {
+            *state = DrainState::Failed;
+            ready.notify_all();
+        }
+    }
+}
+
+impl NativeDrain {
+    pub(crate) async fn wait(&self) -> bool {
+        let drain = self.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            let (lock, ready) = &*drain.0;
+            let Ok(mut state) = lock.lock() else {
+                return false;
+            };
+            while matches!(*state, DrainState::Pending) {
+                let Ok(next) = ready.wait(state) else {
+                    return false;
+                };
+                state = next;
+            }
+            matches!(*state, DrainState::Drained)
+        })
+        .await
+        .unwrap_or(false)
+    }
 }
 
 impl<T> NativePending<T> {
     pub(crate) fn cancellation(&self) -> NativeCancellation {
         self.cancellation.clone()
+    }
+    pub(crate) fn drain(&self) -> NativeDrain {
+        self.drain.clone()
     }
 
     pub(crate) async fn receive(mut self) -> Result<T, &'static str> {
@@ -60,6 +124,14 @@ where
     V: Fn() -> bool + Send + Sync + 'static,
 {
     let (sender, receiver) = channel(1);
+    let drain = NativeDrain(Arc::new((
+        std::sync::Mutex::new(DrainState::Pending),
+        std::sync::Condvar::new(),
+    )));
+    let signal = DrainSignal {
+        drain: drain.clone(),
+        acknowledged: false,
+    };
     let cancellation = NativeCancellation(Arc::new(AtomicBool::new(false)));
     let task_cancellation = cancellation.clone();
     let current: Arc<dyn Fn() -> bool + Send + Sync> = Arc::new(current);
@@ -73,6 +145,7 @@ where
         };
         // A lost caller is ordinary cancellation, not a native callback failure.
         let _ = sender.send(released).await;
+        signal.acknowledge();
     });
     // Dropping a Tokio/Tauri join handle detaches; aborting it would drop the
     // mobile receiver and let the later callback panic in the pinned helper.
@@ -81,5 +154,6 @@ where
         receiver,
         cancellation,
         current,
+        drain,
     }
 }
