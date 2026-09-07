@@ -1,10 +1,15 @@
 //! R11a standalone native catalog verifier feasibility experiment.
 //!
 //! This stopped experiment characterizes catchable resource failures in
-//! rquickjs 0.11.0 with its default allocator. It executes private fault
+//! rquickjs 0.11.0 with its default allocator and a separately adopted budget mode. It executes private fault
 //! fixtures only. It does not execute the catalog verifier or ship in a product.
-//! The missing sticky OOM signal blocks runtime adoption; see README.md.
+//! The default missing sticky OOM signal and budget initialization crash block
+//! runtime adoption; see README.md.
 
+#[doc(hidden)]
+pub mod budget_allocator;
+
+use budget_allocator::{BudgetAllocator, BudgetObserver, BudgetSnapshot};
 use rquickjs::{Context, Runtime, Value};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -62,6 +67,10 @@ pub struct SignalSnapshot {
 
 #[derive(Clone, Debug)]
 pub enum RunFailure {
+    AllocationFailure {
+        stage: &'static str,
+        accounting: BudgetSnapshot,
+    },
     /// Input exceeded the recorded native input bound; refused before intake.
     InputBound {
         bytes: usize,
@@ -92,6 +101,7 @@ pub enum RunFailure {
 #[derive(Clone, Debug)]
 pub struct RunSuccess {
     pub output: String,
+    pub allocation: Option<BudgetSnapshot>,
     pub signals: SignalSnapshot,
 }
 
@@ -104,6 +114,7 @@ struct Guest<'a> {
     started_signal: Option<Arc<AtomicBool>>,
     script: &'a str,
     before_acceptance: Option<Box<dyn FnOnce() + Send>>,
+    budget_allocator: bool,
 }
 
 fn exception_text(ctx: &rquickjs::Ctx<'_>, error: rquickjs::Error) -> String {
@@ -131,6 +142,16 @@ fn exception_text(ctx: &rquickjs::Ctx<'_>, error: rquickjs::Error) -> String {
     }
 }
 
+fn allocation_failure(
+    observer: &Option<Arc<BudgetObserver>>,
+    stage: &'static str,
+) -> Option<RunFailure> {
+    let accounting = observer.as_ref()?.snapshot();
+    accounting
+        .failed
+        .then_some(RunFailure::AllocationFailure { stage, accounting })
+}
+
 fn run_guest(guest: Guest<'_>) -> Result<RunSuccess, RunFailure> {
     let _gate = EVALUATION_GATE
         .lock()
@@ -143,8 +164,21 @@ fn run_guest(guest: Guest<'_>) -> Result<RunSuccess, RunFailure> {
         });
     }
 
-    let runtime = Runtime::new().map_err(|e| RunFailure::Internal(format!("runtime: {e:?}")))?;
-    runtime.set_memory_limit(guest.limits.memory_bytes);
+    let allocator = guest
+        .budget_allocator
+        .then(|| BudgetAllocator::new(guest.limits.memory_bytes));
+    let allocation_observer = allocator.as_ref().map(BudgetAllocator::observer);
+    let runtime_result = match allocator {
+        Some(allocator) => Runtime::new_with_alloc(allocator),
+        None => Runtime::new(),
+    };
+    let runtime = runtime_result.map_err(|error| {
+        allocation_failure(&allocation_observer, "runtime initialization")
+            .unwrap_or_else(|| RunFailure::Internal(format!("runtime: {error:?}")))
+    })?;
+    if !guest.budget_allocator {
+        runtime.set_memory_limit(guest.limits.memory_bytes);
+    }
     runtime.set_max_stack_size(guest.limits.stack_bytes);
 
     let signals = Arc::new(StickySignals::default());
@@ -169,8 +203,16 @@ fn run_guest(guest: Guest<'_>) -> Result<RunSuccess, RunFailure> {
         })));
     }
 
-    let context =
-        Context::full(&runtime).map_err(|e| RunFailure::Internal(format!("context: {e:?}")))?;
+    let context = match Context::full(&runtime) {
+        Ok(context) => context,
+        Err(error) => {
+            drop(runtime);
+            return Err(
+                allocation_failure(&allocation_observer, "context initialization")
+                    .unwrap_or_else(|| RunFailure::Internal(format!("context: {error:?}"))),
+            );
+        }
+    };
 
     // Phase 1: evaluate a private fault fixture inside the context borrow.
     let evaluated: Result<rquickjs::Persistent<Value<'static>>, RunFailure> = context.with(|ctx| {
@@ -325,9 +367,16 @@ fn run_guest(guest: Guest<'_>) -> Result<RunSuccess, RunFailure> {
             signals: final_signals,
         });
     }
+    if let Some(failure) = allocation_failure(&allocation_observer, "guest evaluation or teardown")
+    {
+        return Err(failure);
+    }
     let output = outcome?;
     Ok(RunSuccess {
         output,
+        allocation: allocation_observer
+            .as_ref()
+            .map(|observer| observer.snapshot()),
         signals: final_signals,
     })
 }
@@ -352,7 +401,7 @@ pub fn run_fault_fixture_with_start_signal(
     cancel: Option<Arc<AtomicBool>>,
     started_signal: Option<Arc<AtomicBool>>,
 ) -> Result<RunSuccess, RunFailure> {
-    run_fixture_with_controls(script, limits, cancel, started_signal, None)
+    run_fixture_with_controls(script, limits, cancel, started_signal, None, false)
 }
 
 /// Private deterministic settlement control for the stopped experiment. It runs
@@ -364,7 +413,17 @@ pub fn run_fault_fixture_with_settlement_control(
     cancel: Option<Arc<AtomicBool>>,
     control: Box<dyn FnOnce() + Send>,
 ) -> Result<RunSuccess, RunFailure> {
-    run_fixture_with_controls(script, limits, cancel, None, Some(control))
+    run_fixture_with_controls(script, limits, cancel, None, Some(control), false)
+}
+
+/// Separately selected private allocation mode; never used by a shipped shell.
+#[doc(hidden)]
+pub fn run_budget_fault_fixture(
+    script: &str,
+    limits: ExperimentLimits,
+    cancel: Option<Arc<AtomicBool>>,
+) -> Result<RunSuccess, RunFailure> {
+    run_fixture_with_controls(script, limits, cancel, None, None, true)
 }
 
 fn run_fixture_with_controls(
@@ -373,6 +432,7 @@ fn run_fixture_with_controls(
     cancel: Option<Arc<AtomicBool>>,
     started_signal: Option<Arc<AtomicBool>>,
     before_acceptance: Option<Box<dyn FnOnce() + Send>>,
+    budget_allocator: bool,
 ) -> Result<RunSuccess, RunFailure> {
     if script.len() > limits.input_bytes_max {
         return Err(RunFailure::InputBound {
@@ -390,6 +450,7 @@ fn run_fixture_with_controls(
                 cancel,
                 started_signal,
                 before_acceptance,
+                budget_allocator,
                 script: &script,
             })
         })
