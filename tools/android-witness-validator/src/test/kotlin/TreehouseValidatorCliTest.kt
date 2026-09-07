@@ -4,6 +4,7 @@ import com.google.gson.JsonParser
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Base64
+import java.security.KeyPairGenerator
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -27,6 +28,10 @@ class TreehouseValidatorCliTest {
     assertReason(dir, "issue-generation", duplicate.toByteArray(), "invalid_request")
     assertReason(dir, "issue-generation", issue("issue_generation").replace(enc(bytes(4)), enc(bytes(4)).dropLast(1)).toByteArray(), "invalid_request")
     assertReason(dir, "issue-generation", ByteArray(131_073) { 'x'.code.toByte() }, "invalid_request")
+    assertReason(dir, "issue-generation", issue("issue_generation").replace("\"version\":1", "\"version\":1e0").toByteArray(), "invalid_request")
+    assertReason(dir, "issue-generation", issue("issue_generation").toByteArray(), "invalid_request", listOf(enc(bytes(1))))
+    val deep = "[".repeat(40) + "0" + "]".repeat(40)
+    assertReason(dir, "issue-generation", deep.toByteArray(), "invalid_request")
   }
 
   @Test fun `malformed and oversized possession responses spend before parsing and abandon is durable`() {
@@ -41,6 +46,11 @@ class TreehouseValidatorCliTest {
     val abandonedIds = listOf(enc(abandoned.issuanceId), enc(abandoned.validatorNonce))
     assertEquals("spent", json(TreehouseValidatorCli.execute(setup.dir, "abandon-possession", byteArrayOf(), abandonedIds))["status"].asString)
     assertEquals("missing_or_spent", json(TreehouseValidatorCli.execute(setup.dir, "abandon-possession", byteArrayOf(), abandonedIds))["status"].asString)
+
+    val untouched = setup.store.issuePossession(setup.issuance.issuanceId, setup.expected)
+    val untouchedIds = listOf(enc(untouched.issuanceId), enc(untouched.validatorNonce))
+    assertReason(setup.dir, "abandon-possession", "{}".toByteArray(), "invalid_request", untouchedIds)
+    assertEquals("spent", json(TreehouseValidatorCli.execute(setup.dir, "abandon-possession", byteArrayOf(), untouchedIds))["status"].asString)
   }
 
   @Test fun `generated public import is closed retained-bound and cannot mint trust`() {
@@ -54,6 +64,17 @@ class TreehouseValidatorCliTest {
     assertFalse(report["associated"].asBoolean)
     val extra = valid.dropLast(1) + ",\"roots\":[]}" 
     assertReason(setup.dir, "verify-generation", extra.toByteArray(), "invalid_request", ids)
+
+    val alternate = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+    val mismatchedMetadata = valid.replace(enc(fixture.publicKey), enc(alternate.public.encoded.copyOfRange(12,44)))
+      .replace(enc(fixture.leaf.public.encoded), enc(alternate.public.encoded))
+    assertReason(setup.dir, "verify-generation", mismatchedMetadata.toByteArray(), "invalid_request", ids)
+
+    val available = json(TreehouseValidatorCli.execute(setup.dir, "verify-generation", valid.toByteArray(), ids,
+      TrustedSnapshotProvider { fixture.request.trust }, { fixture.request.validationTime }))
+    assertTrue(available["associated"].asBoolean)
+    assertEquals("incomplete", available["status"].asString)
+    assertEquals("challenge_freshness_unestablished", available["reason"].asString)
   }
 
   private data class Setup(val dir: Path, val store: ValidatorCustodyStore, val expected: ExpectedEnrollment, val issuance: GenerationTicket)

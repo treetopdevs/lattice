@@ -1,16 +1,12 @@
 package com.android.keyattestation.verifier
 
 import com.google.gson.JsonArray
-import com.google.gson.JsonElement
 import com.google.gson.JsonNull
 import com.google.gson.JsonObject
-import com.google.gson.JsonPrimitive
-import com.google.gson.Strictness
-import com.google.gson.stream.JsonReader
-import com.google.gson.stream.JsonToken
-import java.io.StringReader
-import java.math.BigDecimal
+import java.io.ByteArrayInputStream
 import java.nio.file.Path
+import java.security.cert.CertificateFactory
+import java.security.cert.X509Certificate
 import java.time.Instant
 import java.util.Base64
 
@@ -20,15 +16,15 @@ fun interface TrustedSnapshotProvider { fun load(): TrustSnapshotAvailability }
 object TreehouseValidatorCli {
   private val unavailableTrust = TrustedSnapshotProvider { TrustSnapshotAvailability.Unavailable(TrustBlocker.UNAVAILABLE) }
   fun execute(storeDirectory: Path, command: String, input: ByteArray, identifiers: List<String> = emptyList(),
-    trustProvider: TrustedSnapshotProvider = unavailableTrust): ByteArray {
+    trustProvider: TrustedSnapshotProvider = unavailableTrust, clock: () -> Instant = Instant::now): ByteArray {
     val store = ValidatorCustodyStore(storeDirectory)
     return try {
       when (command) {
-        "issue-generation" -> issueGeneration(store, parse(input))
-        "verify-generation" -> verifyGeneration(store, id(identifiers, 0), parse(input), trustProvider)
-        "issue-possession" -> issuePossession(store, id(identifiers, 0), parse(input))
-        "verify-possession" -> verifyPossession(store, ticket(identifiers), input)
-        "abandon-possession" -> abandon(store, ticket(identifiers))
+        "issue-generation" -> { arity(identifiers, 0); issueGeneration(store, parse(input)) }
+        "verify-generation" -> { arity(identifiers, 1); verifyGeneration(store, id(identifiers, 0), parse(input), trustProvider, clock()) }
+        "issue-possession" -> { arity(identifiers, 1); issuePossession(store, id(identifiers, 0), parse(input)) }
+        "verify-possession" -> { arity(identifiers, 2); verifyPossession(store, ticket(identifiers), input) }
+        "abandon-possession" -> { arity(identifiers, 2); require(input.isEmpty()); abandon(store, ticket(identifiers)) }
         else -> refused("unknown_command")
       }.toString().toByteArray(Charsets.UTF_8)
     } catch (_: IllegalArgumentException) { refused("invalid_request").toString().toByteArray() }
@@ -72,16 +68,17 @@ object TreehouseValidatorCli {
     return base("possession_abandonment", if (spent) "spent" else "missing_or_spent")
   }
 
-  private fun verifyGeneration(store: ValidatorCustodyStore, id: ByteArray, root: JsonObject, trustProvider: TrustedSnapshotProvider): JsonObject {
+  private fun verifyGeneration(store: ValidatorCustodyStore, id: ByteArray, root: JsonObject, trustProvider: TrustedSnapshotProvider,
+    validationTime: Instant): JsonObject {
     val retained = store.retainedIssuance(id) ?: return refused("unknown_issuance")
     val chain = generated(root, retained)
     // The production trust source is intentionally absent. Parsing and retained-context comparison
     // are executable, but no caller JSON can promote trust to Available.
     val trust = trustProvider.load()
-    val associated = store.verifyAndAssociateGeneration(id, chain, trust, Instant.now())
+    val associated = store.verifyAndAssociateGeneration(id, chain, trust, validationTime)
     val unavailable = trust as? TrustSnapshotAvailability.Unavailable
-    return base("generation_verification", if (associated) "verified_generation_time" else if (unavailable != null) "incomplete" else "refused").apply {
-      addProperty("reason", if (associated) "verified" else when (unavailable?.blocker) {
+    return base("generation_verification", if (associated || unavailable != null) "incomplete" else "refused").apply {
+      addProperty("reason", if (associated) "challenge_freshness_unestablished" else when (unavailable?.blocker) {
         TrustBlocker.EXPIRED -> "trust_snapshot_expired"; TrustBlocker.NOT_YET_VALID -> "trust_snapshot_not_yet_valid"
         else -> if (unavailable != null) "trust_snapshot_unavailable" else "generation_verification_failed"
       }); addProperty("issuanceId", enc(id)); addProperty("associated", associated)
@@ -107,6 +104,10 @@ object TreehouseValidatorCli {
     require(metadata.string("creationVersionCode") == e.creationVersionCode.toString())
     return metadata.getAsJsonArray("certificateChain").map { canonical(it.asString, 1, 16_384) }.also {
       require(it.size in 1..8 && it.sumOf(ByteArray::size) <= 65_536)
+      val source = ByteArrayInputStream(it.first())
+      val leaf = CertificateFactory.getInstance("X.509").generateCertificate(source) as X509Certificate
+      require(source.available() == 0 && leaf.encoded.contentEquals(it.first()))
+      require(leaf.publicKey.encoded.contentEquals(spki) && leaf.publicKey.encoded.copyOfRange(12, 44).contentEquals(key))
     }
   }
 
@@ -135,10 +136,9 @@ object TreehouseValidatorCli {
   private fun canonical(text: String, min: Int, max: Int): ByteArray { val b = Base64.getDecoder().decode(text); require(b.size in min..max && Base64.getEncoder().encodeToString(b) == text); return b }
   private fun enc(bytes: ByteArray) = Base64.getEncoder().encodeToString(bytes)
   private fun id(values: List<String>, index: Int) = canonical(values.getOrElse(index) { throw IllegalArgumentException("identifier") }, 32, 32)
+  private fun arity(values: List<String>, expected: Int) = require(values.size == expected)
   private fun ticket(values: List<String>) = PossessionTicket(id(values, 0), id(values, 1))
-  private fun parse(bytes: ByteArray): JsonObject { require(bytes.size <= 131_072); val text = bytes.toString(Charsets.UTF_8); require(text.toByteArray().contentEquals(bytes)); val reader = JsonReader(StringReader(text)).apply { strictness = Strictness.STRICT }
-    fun read(): JsonElement = when (reader.peek()) { JsonToken.BEGIN_OBJECT -> JsonObject().also { o -> reader.beginObject(); while (reader.hasNext()) { val n=reader.nextName(); require(!o.has(n)); o.add(n,read()) }; reader.endObject() }; JsonToken.BEGIN_ARRAY -> JsonArray().also { a -> reader.beginArray(); while(reader.hasNext()) a.add(read()); reader.endArray() }; JsonToken.STRING -> JsonPrimitive(reader.nextString()); JsonToken.NUMBER -> JsonPrimitive(BigDecimal(reader.nextString())); JsonToken.BOOLEAN -> JsonPrimitive(reader.nextBoolean()); JsonToken.NULL -> { reader.nextNull(); JsonNull.INSTANCE }; else -> throw IllegalArgumentException("json") }
-    val result=read(); require(reader.peek()==JsonToken.END_DOCUMENT && result.isJsonObject); return result.asJsonObject }
+  private fun parse(bytes: ByteArray): JsonObject = strictPublicJson(bytes).also { require(it.isJsonObject) }.asJsonObject
 }
 
 fun main(args: Array<String>) {

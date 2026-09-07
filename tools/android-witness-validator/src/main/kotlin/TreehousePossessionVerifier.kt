@@ -5,10 +5,6 @@ import com.google.gson.JsonElement
 import com.google.gson.JsonNull
 import com.google.gson.JsonObject
 import com.google.gson.JsonPrimitive
-import com.google.gson.stream.JsonReader
-import com.google.gson.Strictness
-import com.google.gson.stream.JsonToken
-import java.io.StringReader
 import java.io.ByteArrayOutputStream
 import java.security.KeyFactory
 import java.security.MessageDigest
@@ -55,11 +51,12 @@ object TreehousePossessionVerifier {
     bytes: ByteArray): PossessionReport = try {
     val text = bytes.toString(Charsets.UTF_8)
     require(text.toByteArray(Charsets.UTF_8).contentEquals(bytes))
-    val root = strictJson(text).obj(setOf("version", "status", "eligible", "identity", "binding"))
+    val root = strictPublicJson(bytes).obj(setOf("version", "status", "eligible", "identity", "binding"))
     require(root.int("version") == 1 && root.string("status") == "signed" && !root.bool("eligible"))
     val identity = root.get("identity").obj(setOf("creationAttemptId", "phase", "generationChallenge", "metadata", "revision"))
     require(identity.string("phase") == "generated_unvalidated")
-    require(identity.string("revision").matches(Regex("[1-9][0-9]{0,18}")))
+    val revision = identity.string("revision")
+    require(revision.matches(Regex("[1-9][0-9]{0,18}")) && revision.toLongOrNull() != null)
     val attempt = identity.bytes32("creationAttemptId")
     val challenge = identity.bytes32("generationChallenge")
     val metadata = identity.get("metadata").obj(setOf("publicKey", "spki", "appSignerSha256", "creationVersionCode", "certificateChain"))
@@ -103,25 +100,6 @@ object TreehousePossessionVerifier {
   private val CLAIM_KEYS = setOf("domain", "version", "product", "appId", "replica", "enrollmentId", "recipient", "creationAttemptId", "actualWitnessPublicKey", "generationChallengeDigest", "freshValidatorNonce", "nativeRandomNonce", "nativeCallerSessionDigest")
 }
 
-private fun strictJson(text: String): JsonElement {
-  val reader = JsonReader(StringReader(text)).apply { strictness = Strictness.STRICT }
-  fun read(): JsonElement = when (reader.peek()) {
-    JsonToken.BEGIN_OBJECT -> JsonObject().also { objectValue -> reader.beginObject(); while (reader.hasNext()) { val name = reader.nextName(); require(!objectValue.has(name)); objectValue.add(name, read()) }; reader.endObject() }
-    JsonToken.BEGIN_ARRAY -> JsonArray().also { array -> reader.beginArray(); while (reader.hasNext()) array.add(read()); reader.endArray() }
-    JsonToken.STRING -> JsonPrimitive(reader.nextString())
-    JsonToken.NUMBER -> JsonPrimitive(RawNumber(reader.nextString()))
-    JsonToken.BOOLEAN -> JsonPrimitive(reader.nextBoolean())
-    JsonToken.NULL -> { reader.nextNull(); JsonNull.INSTANCE }
-    else -> error("invalid json")
-  }
-  val value = read(); require(reader.peek() == JsonToken.END_DOCUMENT); return value
-}
-private class RawNumber(private val raw: String): Number() {
-  override fun toByte() = raw.toByte(); override fun toDouble() = raw.toDouble()
-  override fun toFloat() = raw.toFloat(); override fun toInt() = raw.toInt()
-  override fun toLong() = raw.toLong(); override fun toShort() = raw.toShort()
-  override fun toString() = raw
-}
 private fun JsonElement.obj(keys: Set<String>): JsonObject = asJsonObject.also { require(it.keySet() == keys) }
 private fun JsonObject.string(name: String) = get(name).asJsonPrimitive.also { require(it.isString) }.asString
 private fun JsonObject.int(name: String) = stringNumber(name).toInt().also { require(it.toString() == stringNumber(name)) }
