@@ -192,6 +192,21 @@ class WitnessBindingCoordinatorTest {
         assertTrue("${signed.get()}", signed.get() is WitnessResult.Stored)
     }
 
+    @Test fun earlyExpiryLosesToOwnedPrepareDeliveryAndCannotBlockReentrantSigning() {
+        val context = completedContext()
+        val expiry = AtomicReference<() -> Unit>()
+        val signed = AtomicReference<WitnessResult<SignedWitnessBinding>>(); val signedDone = CountDownLatch(1)
+        lateinit var coordinator: WitnessBindingCoordinator
+        coordinator = WitnessBindingCoordinator(context, bytes(7), Ui(), Platform(signing(keyPair())), { true },
+            lifecycleCheckpoint = { if (it == "prepare_delivery_owned") expiry.get().invoke() },
+            scheduleExpiry = { _, task -> expiry.set(task); WitnessExpiry {} })
+        coordinator.prepareBinding(request(3)) {
+            coordinator.signPrepared(stored(it).handle) { value -> signed.set(value); signedDone.countDown() }
+        }
+        assertTrue(signedDone.await(10, TimeUnit.SECONDS))
+        assertTrue("${signed.get()}", signed.get() is WitnessResult.Stored)
+    }
+
     @Test fun cancellationCannotMissExpiryInstalledAfterPreparedPublication() {
         val context = completedContext()
         val entered = CountDownLatch(1); val release = CountDownLatch(1)

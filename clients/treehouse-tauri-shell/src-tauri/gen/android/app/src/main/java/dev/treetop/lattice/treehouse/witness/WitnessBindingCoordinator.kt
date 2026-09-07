@@ -234,7 +234,8 @@ internal class WitnessBindingCoordinator(
     private fun expire(attempt: Attempt) {
         var finishNow = false
         synchronized(lifecycle) {
-            if (active.get() !== attempt || attempt.state.get() == State.TERMINAL) return
+            if (active.get() !== attempt ||
+                attempt.state.get() in arrayOf(State.PREPARE_DELIVERING, State.TERMINAL)) return
             attempt.cancelled.set(true)
             if (attempt.state.compareAndSet(State.PREPARED, State.TERMINAL)) finishNow = true
         }
