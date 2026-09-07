@@ -8,7 +8,8 @@ assert(activity.includes('System.loadLibrary("treehouse_tauri_shell")'));
 assert(activity.indexOf("Keyring.initializeNdkContext") < activity.indexOf("super.onCreate"));
 const manifest = read(`${a}app/src/main/AndroidManifest.xml`);
 assert(manifest.includes('android:allowBackup="false"'));
-assert(!manifest.includes("USE_BIOMETRIC")); // Protected custody is a later slice.
+assert.equal((manifest.match(/android.permission.USE_BIOMETRIC/g) ?? []).length, 1);
+// Native review requires this permission; eligibility and public activation remain closed.
 const gradle = read(`${a}app/build.gradle.kts`);
 assert(gradle.includes("namespace = product.appId") && gradle.includes("applicationId = product.appId"));
 assert(gradle.includes('buildConfigField("boolean", "WITNESS_ELIGIBILITY_IMPLEMENTED", "false")'));
