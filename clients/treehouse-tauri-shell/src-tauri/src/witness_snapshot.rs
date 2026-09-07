@@ -18,6 +18,7 @@ pub(crate) struct SnapshotResponse {
     status: String,
     eligible: bool,
     identity: IdentityRecord,
+    #[serde(deserialize_with = "required_nullable")]
     enrollment: Nullable<EnrollmentRecord>,
 }
 
@@ -35,8 +36,9 @@ pub(crate) struct IdentityRecord {
     #[serde(rename = "creationAttemptId")]
     creation_attempt_id: Bytes32,
     phase: Phase,
-    #[serde(rename = "generationChallenge")]
+    #[serde(rename = "generationChallenge", deserialize_with = "required_nullable")]
     generation_challenge: Nullable<Bytes32>,
+    #[serde(deserialize_with = "required_nullable")]
     metadata: Nullable<IdentityMetadata>,
     revision: Revision,
 }
@@ -74,6 +76,15 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for Nullable<T> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         Option::<T>::deserialize(deserializer).map(Self)
     }
+}
+
+// Field-level deserialization makes omission an error; explicit JSON null remains valid.
+fn required_nullable<'de, D, T>(deserializer: D) -> Result<Nullable<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Nullable::deserialize(deserializer)
 }
 
 impl SnapshotResponse {
