@@ -584,3 +584,38 @@ It is retained evidence of incomplete storage, not a fresh identity. A lone vali
 coordination lock remains compatible with Missing and explicit prepare; no lock
 unlink, reset, recovery-generation attempt or provider call is added. Preserve the
 public RED and require read/prepare refusal plus byte-for-byte tree retention.
+
+
+## Verified journal component — 2026-09-07 UTC
+
+Frozen source `07f536ae21499e5867f54216dc2e951f6a9307fe` passed independent
+gpt-5.6-sol review after repairing distinct enrollment admission. Exact existing
+enrollment retries stay idempotent; a new enrollment requires generated_unvalidated
+metadata. Prepared/started refusals preserve database bytes, rows, revision and the
+original usable generation fence. Actual RED evidence reproduced both incorrect
+admissions before the guard.
+
+The final Android test run discovered37 tests:36 passed, zero failures/errors,
+and one parent-only subprocess entry was skipped. That fixture actually executed
+in two child JVMs for durable started-fence and hot-journal controls. Lint passed;
+buildSrc tests passed. The original full Rust gate passed12 tests and two compile-fail
+tests, and the narrow repair's binding/compile-fail/fmt gates passed. Shell tests,
+typecheck and build passed. Root's final serialized mix check passed810 tests and
+27 properties with zero failures, three exclusions, clean formatting and strict
+Credo exit0. Logs and immutable manifests are retained in the execution directory.
+
+The rebuilt arm64 debug APK verifies with SHA256
+`ddaed60f6a87022bce4525da0038b0c7f9809dd40fa625c67df47ac1da4c9607`.
+Missing-signing-input release prebuild correctly refuses. The prior c851 APK and
+source snapshot remain separate recovery evidence. A first build used mismatched
+Homebrew/Rustup compilers; its failure remains recorded and the successful build
+used only the task-local matching Rust1.93.1 toolchain.
+
+These are host tests and an actual APK build. The Os test fixture uses real host
+FileChannel directory forcing and API33 native SQLite; it does not prove Android
+JNI/syscall behavior or handset power-loss durability. A hot rollback journal
+returns the generic storage_io_error refusal and preserves bytes; no distinct
+hot-journal reason or automatic recovery is claimed. No witness IPC/plugin,
+KeyStore generation/signature, native review, biometric operation, validator,
+device eligibility or R14 pin has been enabled by this component. Stage2A's
+provider-invocation gate continues in2B; R36 remains IN PROGRESS.
