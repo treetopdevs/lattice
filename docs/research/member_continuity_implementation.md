@@ -533,3 +533,13 @@ new command registration, application policy, public index/package/CI wiring,
 selected-Space cold-start integration, expanded catalog vocabulary, adopted
 compaction context, installed continuity flow or physical ceremony. All A01–A17
 whole implementation rows remain OPEN pending their actual required behavior.
+
+
+## Prerequisite implementation adoption — 2026-09-07 UTC
+
+Actual Fable approved [the exact vocabulary and causal beacon context packet](member_continuity_prerequisites.md)
+after correcting its generated-file baseline claim. Root now authorizes that
+bounded packet and the dated Plan158/lifecycle clauses above, before shared code
+edits. It adds no command registration, continuity policy or compaction context.
+The new native runtime, actual TS continuity consumer, A01–A17 and field/native
+ceremonies retain their separate open gates.
