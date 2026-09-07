@@ -22,6 +22,26 @@ defmodule Treehouse.Space do
     :remove_member
   ]
 
+  @doc false
+  @spec known_continuity_wire_atoms() :: [atom()]
+  def known_continuity_wire_atoms do
+    [
+      :active,
+      :admission,
+      :attest_member_key_v1,
+      :epoch_basis,
+      :new_pub,
+      :nonce,
+      :old_admission,
+      :old_membership,
+      :old_pub,
+      :parents,
+      :removed,
+      :treehouse,
+      :vouchers
+    ]
+  end
+
   state do
     field(:name, merge: :lww, default: "")
     field(:members, merge: :or_set)
