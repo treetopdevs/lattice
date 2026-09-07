@@ -71,6 +71,13 @@ impl Drop for DrainSignal {
 }
 
 impl NativeDrain {
+    pub(crate) fn failed() -> Self {
+        Self(Arc::new((
+            std::sync::Mutex::new(DrainState::Failed),
+            std::sync::Condvar::new(),
+        )))
+    }
+
     pub(crate) async fn wait(&self) -> bool {
         let drain = self.clone();
         tauri::async_runtime::spawn_blocking(move || {

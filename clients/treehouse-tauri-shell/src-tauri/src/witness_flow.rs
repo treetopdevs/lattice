@@ -22,7 +22,7 @@ use crate::{
 use sha2::{Digest, Sha256};
 use std::{
     panic::{catch_unwind, AssertUnwindSafe},
-    sync::{Arc, Mutex},
+    sync::{Arc, Condvar, Mutex},
     time::Instant,
 };
 use tauri::{async_runtime::channel, webview::PageLoadEvent, Runtime, Url, Webview};
@@ -44,6 +44,8 @@ pub(crate) struct WitnessFlow {
     operations: Arc<WitnessOperationRegistry>,
     dispatch: Dispatch,
     active: Arc<Mutex<Option<Active>>>,
+    completion_ready: Arc<Condvar>,
+    cancel_nonce: Mutex<Box<dyn FnMut() -> Result<Bytes32, &'static str> + Send>>,
 }
 
 struct Active {
@@ -62,14 +64,28 @@ pub(crate) struct FlowPending {
     cancel: Option<Box<dyn FnOnce() + Send>>,
 }
 
-struct CompletionGuard<'a> {
-    flow: &'a WitnessFlow,
-    token: &'a OperationToken,
+struct CompletionGuard {
+    flow: Arc<WitnessFlow>,
+    token: OperationToken,
+    armed: bool,
 }
 
-impl Drop for CompletionGuard<'_> {
+impl CompletionGuard {
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for CompletionGuard {
     fn drop(&mut self) {
-        self.flow.finish(self.token);
+        if !self.armed {
+            return;
+        }
+        let flow = self.flow.clone();
+        let token = self.token.clone();
+        tauri::async_runtime::spawn(async move {
+            let _ = flow.finish(token).await;
+        });
     }
 }
 
@@ -88,11 +104,22 @@ impl WitnessFlow {
         operations: Arc<WitnessOperationRegistry>,
         dispatch: impl Fn(PrivateRequest, Current) -> MobilePending + Send + Sync + 'static,
     ) -> Arc<Self> {
+        Self::with_cancel_entropy(owner, operations, dispatch, crate::witness_entropy::nonce32)
+    }
+
+    fn with_cancel_entropy(
+        owner: Arc<WitnessOwner>,
+        operations: Arc<WitnessOperationRegistry>,
+        dispatch: impl Fn(PrivateRequest, Current) -> MobilePending + Send + Sync + 'static,
+        nonce: impl FnMut() -> Result<Bytes32, &'static str> + Send + 'static,
+    ) -> Arc<Self> {
         Arc::new(Self {
             owner,
             operations,
             dispatch: Arc::new(dispatch),
             active: Arc::new(Mutex::new(None)),
+            completion_ready: Arc::new(Condvar::new()),
+            cancel_nonce: Mutex::new(Box::new(nonce)),
         })
     }
 
@@ -160,15 +187,18 @@ impl WitnessFlow {
         let task_webview = webview.clone();
         let task_session = session.clone();
         tauri::async_runtime::spawn(async move {
-            let completion = CompletionGuard {
-                flow: &flow,
-                token: &token,
+            let mut completion = CompletionGuard {
+                flow: flow.clone(),
+                token: token.clone(),
+                armed: true,
             };
             let result = flow
                 .run(task_webview, request, notice, &token, &task_session)
                 .await;
-            drop(completion);
-            let _ = sender.send(result).await;
+            completion.disarm();
+            let completed = flow.finish(token).await;
+            let published = if completed { result } else { Err(FLOW_REFUSED) };
+            let _ = sender.send(published).await;
         });
 
         let cancel_flow = self.clone();
@@ -468,13 +498,32 @@ impl WitnessFlow {
             }
         }
     }
-    fn finish(&self, token: &OperationToken) {
-        let completion = self.active.lock().ok().and_then(|mut active| {
-            let state = active.as_mut().filter(|state| state.id == token.id())?;
+    async fn finish(&self, token: OperationToken) -> bool {
+        let completion = {
+            let Ok(mut active) = self.active.lock() else {
+                return false;
+            };
+            let Some(state) = active.as_mut().filter(|state| state.id == token.id()) else {
+                return false;
+            };
             state.run_finished = true;
+            while active.as_ref().is_some_and(|state| state.cancel_starting) {
+                let Ok(next) = self.completion_ready.wait(active) else {
+                    return false;
+                };
+                active = next;
+            }
             Self::take_completion(&mut active)
-        });
-        self.spawn_completion(completion);
+        };
+        let Some((owned_token, drains)) = completion else {
+            return false;
+        };
+        for drain in drains {
+            if !drain.wait().await {
+                return false;
+            }
+        }
+        self.operations.complete(&owned_token)
     }
 
     fn cancel_started(self: Arc<Self>, id: Bytes32, session: SessionSnapshot) {
@@ -575,7 +624,13 @@ impl WitnessFlow {
             state.cancel_starting = true;
             state.cancel_current.clone()
         };
-        let cancel_id = crate::witness_entropy::nonce32()?;
+        let cancel_id = match self.cancel_nonce.lock().map_err(|_| FLOW_REFUSED)?.as_mut()() {
+            Ok(id) => id,
+            Err(reason) => {
+                self.rollback_unlaunched_cancel(target.id());
+                return Err(reason);
+            }
+        };
         let session = target.session_digest();
         let request = PrivateRequest::Cancel(CancelRequest {
             protocol: (),
@@ -583,7 +638,13 @@ impl WitnessFlow {
             session_digest: session,
             target_operation_id: target.id(),
         });
-        let pending = (self.dispatch)(request, current);
+        let pending = match catch_unwind(AssertUnwindSafe(|| (self.dispatch)(request, current))) {
+            Ok(pending) => pending,
+            Err(_) => {
+                self.record_failed_cancel(target.id());
+                return Err(FLOW_REFUSED);
+            }
+        };
         let drain = pending.drain();
         let mut active = self.active.lock().map_err(|_| FLOW_REFUSED)?;
         let state = active
@@ -592,10 +653,28 @@ impl WitnessFlow {
             .ok_or(FLOW_REFUSED)?;
         state.drains.push(drain);
         state.cancel_starting = false;
-        let completion = Self::take_completion(&mut active);
-        drop(active);
-        self.spawn_completion(completion);
+        self.completion_ready.notify_all();
         Ok(pending)
+    }
+
+    fn rollback_unlaunched_cancel(&self, id: Bytes32) {
+        if let Ok(mut active) = self.active.lock() {
+            if let Some(state) = active.as_mut().filter(|state| state.id == id) {
+                state.cancel_sent = false;
+                state.cancel_starting = false;
+                self.completion_ready.notify_all();
+            }
+        }
+    }
+
+    fn record_failed_cancel(&self, id: Bytes32) {
+        if let Ok(mut active) = self.active.lock() {
+            if let Some(state) = active.as_mut().filter(|state| state.id == id) {
+                state.drains.push(NativeDrain::failed());
+                state.cancel_starting = false;
+                self.completion_ready.notify_all();
+            }
+        }
     }
 
     fn take_completion(active: &mut Option<Active>) -> Option<(OperationToken, Vec<NativeDrain>)> {
@@ -607,22 +686,6 @@ impl WitnessFlow {
         }
         let state = active.take()?;
         Some((state.token, state.drains))
-    }
-
-    fn spawn_completion(&self, completion: Option<(OperationToken, Vec<NativeDrain>)>) {
-        let Some((token, drains)) = completion else {
-            return;
-        };
-        let operations = self.operations.clone();
-        tauri::async_runtime::spawn(async move {
-            let mut complete = true;
-            for drain in drains {
-                complete &= drain.wait().await;
-            }
-            if complete {
-                operations.complete(&token);
-            }
-        });
     }
 
     async fn finish_cancel(pending: MobilePending) -> Result<Vec<u8>, &'static str> {
@@ -666,5 +729,14 @@ pub(crate) mod test_adapter {
         dispatch: impl Fn(PrivateRequest, Current) -> MobilePending + Send + Sync + 'static,
     ) -> Arc<WitnessFlow> {
         WitnessFlow::with_dispatch(owner, operations, dispatch)
+    }
+
+    pub(crate) fn flow_with_cancel_entropy(
+        owner: Arc<WitnessOwner>,
+        operations: Arc<WitnessOperationRegistry>,
+        dispatch: impl Fn(PrivateRequest, Current) -> MobilePending + Send + Sync + 'static,
+        nonce: impl FnMut() -> Result<Bytes32, &'static str> + Send + 'static,
+    ) -> Arc<WitnessFlow> {
+        WitnessFlow::with_cancel_entropy(owner, operations, dispatch, nonce)
     }
 }

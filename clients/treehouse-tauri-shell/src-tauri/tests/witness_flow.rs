@@ -90,7 +90,7 @@ fn identity_missing_runs_through_owned_session_operation_and_private_transport()
     });
     let pending = flow
         .execute(
-            view,
+            view.clone(),
             witness_public::PublicRequest::Identity,
             Arc::new(|_, _| Ok(())),
         )
@@ -99,6 +99,14 @@ fn identity_missing_runs_through_owned_session_operation_and_private_transport()
         block_on(pending.receive()).unwrap(),
         br#"{"status":"missing","version":1}"#
     );
+    let immediate = flow
+        .execute(
+            view,
+            witness_public::PublicRequest::Identity,
+            Arc::new(|_, _| Ok(())),
+        )
+        .expect("terminal publication must include registry completion");
+    assert!(block_on(immediate.receive()).is_ok());
 }
 
 #[test]
@@ -484,4 +492,265 @@ fn malformed_prepared_claim_dispatches_cancel_and_never_reaches_signing() {
         std::thread::sleep(Duration::from_millis(1));
     }
     panic!("malformed prepared cleanup did not release after cancel drained");
+}
+
+#[test]
+fn unknown_cancel_dispatch_failure_is_a_failed_drain_and_retains_slot() {
+    let app = tauri::test::mock_builder()
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
+        .unwrap();
+    let window = WebviewWindowBuilder::new(
+        &app,
+        "main",
+        WebviewUrl::External("http://tauri.localhost/".parse().unwrap()),
+    )
+    .build()
+    .unwrap();
+    let view = window.as_ref().clone();
+    let owner = Arc::new(witness_owner::test_adapter::from_entropy({
+        let mut n = 0u8;
+        move || {
+            n += 1;
+            Ok(Bytes32([n; 32]))
+        }
+    }));
+    let url = "http://tauri.localhost/".parse().unwrap();
+    owner.navigation_requested(&view, &url);
+    owner
+        .page_load(&view, PageLoadEvent::Started, &url)
+        .unwrap();
+    owner
+        .page_load(&view, PageLoadEvent::Finished, &url)
+        .unwrap();
+    let operations = Arc::new(witness_operation::test_adapter::registry(|| {
+        Ok(Bytes32([9; 32]))
+    }));
+    let (started_tx, started_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    let release = Arc::new(Mutex::new(Some(release_rx)));
+    let flow = witness_flow::test_adapter::flow(owner, operations, move |request, current| {
+        if matches!(request, witness_bridge::PrivateRequest::Cancel(_)) {
+            panic!("unknown whether a mobile callback launched before transport panic");
+        }
+        let release = release.clone();
+        let started = started_tx.clone();
+        let operation_id = match &request {
+            witness_bridge::PrivateRequest::Identity(value) => value.operation_id,
+            _ => panic!("unexpected request"),
+        };
+        witness_mobile::test_adapter::dispatch(
+            request,
+            move |_| async move {
+                started.send(()).unwrap();
+                release.lock().unwrap().take().unwrap().recv().unwrap();
+                let terminal = TerminalResponse::terminal(
+                    ResponseKind::Identity,
+                    operation_id,
+                    TerminalStatus::Missing,
+                )
+                .unwrap();
+                Ok(serde_json::from_slice(&encode_terminal_response(&terminal).unwrap()).unwrap())
+            },
+            move || current(),
+        )
+    });
+    let pending = flow
+        .execute(
+            view.clone(),
+            witness_public::PublicRequest::Identity,
+            Arc::new(|_, _| Ok(())),
+        )
+        .unwrap();
+    started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+    drop(pending);
+    release_tx.send(()).unwrap();
+    std::thread::sleep(Duration::from_millis(20));
+    assert!(flow
+        .execute(
+            view,
+            witness_public::PublicRequest::Identity,
+            Arc::new(|_, _| Ok(())),
+        )
+        .is_err());
+}
+
+#[test]
+fn known_unlaunched_cancel_entropy_failure_does_not_wedge_after_original_drain() {
+    let app = tauri::test::mock_builder()
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
+        .unwrap();
+    let window = WebviewWindowBuilder::new(
+        &app,
+        "main",
+        WebviewUrl::External("http://tauri.localhost/".parse().unwrap()),
+    )
+    .build()
+    .unwrap();
+    let view = window.as_ref().clone();
+    let owner = Arc::new(witness_owner::test_adapter::from_entropy({
+        let mut n = 0u8;
+        move || {
+            n += 1;
+            Ok(Bytes32([n; 32]))
+        }
+    }));
+    let url = "http://tauri.localhost/".parse().unwrap();
+    owner.navigation_requested(&view, &url);
+    owner
+        .page_load(&view, PageLoadEvent::Started, &url)
+        .unwrap();
+    owner
+        .page_load(&view, PageLoadEvent::Finished, &url)
+        .unwrap();
+    let operations = Arc::new(witness_operation::test_adapter::registry(|| {
+        Ok(Bytes32([9; 32]))
+    }));
+    let (started_tx, started_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    let release = Arc::new(Mutex::new(Some(release_rx)));
+    let flow = witness_flow::test_adapter::flow_with_cancel_entropy(
+        owner,
+        operations,
+        move |request, current| {
+            let release = release.clone();
+            let started = started_tx.clone();
+            let operation_id = match &request {
+                witness_bridge::PrivateRequest::Identity(v) => v.operation_id,
+                _ => panic!("cancel must not launch without entropy"),
+            };
+            witness_mobile::test_adapter::dispatch(
+                request,
+                move |_| async move {
+                    if let Some(gate) = release.lock().unwrap().take() {
+                        started.send(()).unwrap();
+                        gate.recv().unwrap();
+                    }
+                    let terminal = TerminalResponse::terminal(
+                        ResponseKind::Identity,
+                        operation_id,
+                        TerminalStatus::Missing,
+                    )
+                    .unwrap();
+                    Ok(
+                        serde_json::from_slice(&encode_terminal_response(&terminal).unwrap())
+                            .unwrap(),
+                    )
+                },
+                move || current(),
+            )
+        },
+        || Err("native_entropy_unavailable"),
+    );
+    let pending = flow
+        .execute(
+            view.clone(),
+            witness_public::PublicRequest::Identity,
+            Arc::new(|_, _| Ok(())),
+        )
+        .unwrap();
+    started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+    drop(pending);
+    release_tx.send(()).unwrap();
+    for _ in 0..100 {
+        if let Ok(next) = flow.execute(
+            view.clone(),
+            witness_public::PublicRequest::Identity,
+            Arc::new(|_, _| Ok(())),
+        ) {
+            assert!(block_on(next.receive()).is_ok());
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    panic!("known no-launch entropy failure wedged the registry");
+}
+
+#[test]
+fn lifecycle_hook_latches_owner_and_cancels_without_a_retrieved_webview() {
+    let app = tauri::test::mock_builder()
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
+        .unwrap();
+    let window = WebviewWindowBuilder::new(
+        &app,
+        "main",
+        WebviewUrl::External("http://tauri.localhost/".parse().unwrap()),
+    )
+    .build()
+    .unwrap();
+    let view = window.as_ref().clone();
+    let owner = Arc::new(witness_owner::test_adapter::from_entropy({
+        let mut n = 0u8;
+        move || {
+            n += 1;
+            Ok(Bytes32([n; 32]))
+        }
+    }));
+    let url = "http://tauri.localhost/".parse().unwrap();
+    owner.navigation_requested(&view, &url);
+    owner
+        .page_load(&view, PageLoadEvent::Started, &url)
+        .unwrap();
+    owner
+        .page_load(&view, PageLoadEvent::Finished, &url)
+        .unwrap();
+    let operations = Arc::new(witness_operation::test_adapter::registry(|| {
+        Ok(Bytes32([9; 32]))
+    }));
+    let (started_tx, started_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    let release = Arc::new(Mutex::new(Some(release_rx)));
+    let (kinds_tx, kinds_rx) = mpsc::channel();
+    let flow = witness_flow::test_adapter::flow(owner, operations, move |request, current| {
+        let release = release.clone();
+        let started = started_tx.clone();
+        let (kind, id) = match &request {
+            witness_bridge::PrivateRequest::Identity(v) => (ResponseKind::Identity, v.operation_id),
+            witness_bridge::PrivateRequest::Cancel(v) => (ResponseKind::Cancel, v.operation_id),
+            _ => panic!("unexpected"),
+        };
+        kinds_tx.send(kind).unwrap();
+        witness_mobile::test_adapter::dispatch(
+            request,
+            move |_| async move {
+                if kind == ResponseKind::Identity {
+                    started.send(()).unwrap();
+                    release.lock().unwrap().take().unwrap().recv().unwrap();
+                }
+                let status = if kind == ResponseKind::Identity {
+                    TerminalStatus::Missing
+                } else {
+                    TerminalStatus::Cancelled
+                };
+                let terminal = TerminalResponse::terminal(kind, id, status).unwrap();
+                Ok(serde_json::from_slice(&encode_terminal_response(&terminal).unwrap()).unwrap())
+            },
+            move || current(),
+        )
+    });
+    let pending = flow
+        .execute(
+            view.clone(),
+            witness_public::PublicRequest::Identity,
+            Arc::new(|_, _| Ok(())),
+        )
+        .unwrap();
+    started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+    flow.lifecycle_invalidated();
+    assert_eq!(
+        kinds_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+        ResponseKind::Identity
+    );
+    assert_eq!(
+        kinds_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+        ResponseKind::Cancel
+    );
+    release_tx.send(()).unwrap();
+    assert!(block_on(pending.receive()).is_err());
+    assert!(flow
+        .execute(
+            view,
+            witness_public::PublicRequest::Identity,
+            Arc::new(|_, _| Ok(()))
+        )
+        .is_err());
 }
