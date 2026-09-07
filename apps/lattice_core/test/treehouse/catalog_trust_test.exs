@@ -4,9 +4,82 @@ defmodule Treehouse.CatalogTrustTest do
   alias Lattice.{Authority, Canonical, Identity, Log, Op}
   alias Lattice.Authority.Delegation
   alias Lattice.Carrier.Wire
-  alias Treehouse.{CatalogTrust, CatalogTrustVectors, TransportCatalog}
+  alias Treehouse.{CatalogBootstrap, CatalogTrust, CatalogTrustVectors, TransportCatalog}
 
   @expected %{trust_revision: 0, history_generation: 0}
+
+  @tag timeout: 120_000
+  test "overflow witnesses survive a newly observed authentic bootstrap fork" do
+    {fixture, frozen, _incoming} = overflow_rotation_fixture(1)
+    {:catalog_bootstrap_v1, [record]} = fixture.space.bootstrap.body
+
+    unseen =
+      Op.new(
+        fixture.space.root,
+        fixture.space.replica,
+        Log.frontier(fixture.space_log),
+        :command,
+        {:catalog_bootstrap_v1,
+         [%{record | nonce: CatalogTrustVectors.id("overflow-unseen-bootstrap")}]},
+        cap: fixture.space.delegation.id
+      )
+
+    fork_log = Log.append!(fixture.space_log, unseen)
+    assert {:ok, %{bootstraps: observed}} = CatalogBootstrap.observe(fork_log)
+    assert Enum.any?(observed, &(&1.id == unseen.id))
+    raw = CatalogTrustVectors.raw_history(fork_log)
+
+    for frames <- [raw.frames, Enum.reverse(raw.frames)] do
+      assert %{kind: :retain_blocked, reason: :control_history_limit, next: retained, routes: []} =
+               decision = evaluate(frozen, fixture, histories: [%{raw | frames: frames}])
+
+      assert unseen.id in decision.observed.bootstrap_ids
+      assert retained.histories != frozen.histories
+      assert retained.histories == [raw]
+      assert retained.blocked == frozen.blocked
+      assert retained.catalogs == frozen.catalogs
+      assert retained.rotations == frozen.rotations
+      assert retained.accepted == frozen.accepted
+
+      assert %{kind: :retain_blocked, reason: :control_history_limit, next: reopened, routes: []} =
+               evaluate(retained, fixture)
+
+      assert reopened == retained
+    end
+  end
+
+  @tag timeout: 120_000
+  test "overflow witnesses survive incoming and already retained three-head graphs" do
+    for retained_count <- [1, 3] do
+      {fixture, frozen, incoming} = overflow_rotation_fixture(retained_count)
+
+      for rotations <- [incoming, Enum.reverse(incoming)] do
+        assert %{
+                 kind: :retain_blocked,
+                 reason: :control_history_limit,
+                 next: retained,
+                 routes: []
+               } =
+                 evaluate(frozen, fixture, rotations: rotations)
+
+        assert retained.catalogs == frozen.catalogs
+        assert retained.rotations == frozen.rotations
+        assert retained.cutoff_proofs == frozen.cutoff_proofs
+        assert retained.accepted == frozen.accepted
+
+        assert %{
+                 kind: :retain_blocked,
+                 reason: :control_history_limit,
+                 next: reopened,
+                 routes: []
+               } =
+                 evaluate(retained, fixture)
+
+        assert reopened == retained
+        assert retained.blocked == frozen.blocked
+      end
+    end
+  end
 
   test "two rotation heads escalate to a retained three-head limit and survive reopen" do
     fixture = CatalogTrustVectors.fixture(0)
@@ -53,7 +126,7 @@ defmodule Treehouse.CatalogTrustTest do
   end
 
   test "historical unseen bootstrap fork remains authentic after only that bootstrap is refused" do
-    fixture = CatalogTrustVectors.fixture(0)
+    fixture = CatalogTrustVectors.fixture(1)
     state = installed(fixture)
     {:catalog_bootstrap_v1, [record]} = fixture.space.bootstrap.body
 
@@ -61,7 +134,7 @@ defmodule Treehouse.CatalogTrustTest do
       Op.new(
         fixture.space.root,
         fixture.space.replica,
-        [fixture.space.bootstrap.id],
+        Log.frontier(fixture.space_log),
         :command,
         {:catalog_bootstrap_v1, [%{record | nonce: CatalogTrustVectors.id("unseen-bootstrap")}]},
         cap: fixture.space.delegation.id
@@ -90,7 +163,7 @@ defmodule Treehouse.CatalogTrustTest do
           Op.new(
             fixture.space.root,
             fixture.space.replica,
-            [fixture.space.bootstrap.id],
+            Log.frontier(fixture.space_log),
             :authority,
             {:transfer, :admin, delegation, 0}
           )
@@ -98,7 +171,8 @@ defmodule Treehouse.CatalogTrustTest do
         reasons = Authority.analyze(Treehouse.Space, Log.append!(fork_log, candidate)).reasons
 
         if Map.has_key?(reasons, unseen.id) and
-             not Map.has_key?(reasons, fixture.space.bootstrap.id), do: candidate
+             not Map.has_key?(reasons, fixture.space.bootstrap.id),
+           do: candidate
       end) || flunk("no deterministic transfer refusing only unseen bootstrap")
 
     changed = CatalogTrustVectors.raw_history(Log.append!(fork_log, transfer))
@@ -113,31 +187,50 @@ defmodule Treehouse.CatalogTrustTest do
 
     assert reopened == retained
 
-    invalid =
-      Op.new(
-        fixture.space.root,
-        fixture.space.replica,
-        [fixture.space.bootstrap.id],
-        :command,
-        {:catalog_bootstrap_v1,
-         [
-           %{
-             record
-             | space_root: <<0::256>>,
-               nonce: CatalogTrustVectors.id("never-valid-bootstrap")
-           }
-         ]}, cap: fixture.space.delegation.id)
+    for defect <- [:wrong_root, :never_authorized] do
+      invalid_record = %{record | nonce: CatalogTrustVectors.id("invalid-bootstrap-#{defect}")}
 
-    invalid_log = Log.append!(fixture.space_log, invalid)
-    assert Map.has_key?(Authority.analyze(Treehouse.Space, invalid_log).reasons, invalid.id)
+      invalid_record =
+        if defect == :wrong_root,
+          do: %{invalid_record | space_root: <<0::256>>},
+          else: invalid_record
 
-    invented = %{
-      state
-      | histories: [CatalogTrustVectors.raw_history(invalid_log)],
-        blocked: %{frozen.blocked | bootstrap_ids: [invalid.id]}
-    }
+      source =
+        if defect == :never_authorized,
+          do: Log.append!(fixture.space_log, transfer),
+          else: fixture.space_log
 
-    assert %{kind: :reject, reason: :trust_recovery_required} = evaluate(invented, fixture)
+      invalid =
+        Op.new(
+          fixture.space.root,
+          fixture.space.replica,
+          Log.frontier(source),
+          :command,
+          {:catalog_bootstrap_v1, [invalid_record]},
+          cap: fixture.space.delegation.id
+        )
+
+      invalid_log = Log.append!(source, invalid)
+      assert :ok = Log.verify_authenticity(invalid_log)
+      assert {:ok, observed} = CatalogBootstrap.observe(invalid_log)
+      refute Enum.any?(observed.bootstraps, &(&1.id == invalid.id))
+
+      invented = %{
+        state
+        | histories:
+            Enum.map(state.histories, fn history ->
+              if history.replica == fixture.space.replica,
+                do: CatalogTrustVectors.raw_history(invalid_log),
+                else: history
+            end),
+          blocked: %{frozen.blocked | bootstrap_ids: [invalid.id]}
+      }
+
+      thread_histories = Enum.reject(state.histories, &(&1.replica == fixture.space.replica))
+      assert length(thread_histories) == 1
+      assert Enum.all?(thread_histories, &(&1 in invented.histories))
+      assert %{kind: :reject, reason: :trust_recovery_required} = evaluate(invented, fixture)
+    end
 
     for wrong <- [
           fixture.space.creation.id,
@@ -818,6 +911,51 @@ defmodule Treehouse.CatalogTrustTest do
       end)
 
     {Enum.sort_by(records, & &1.id), latest, count}
+  end
+
+  defp overflow_rotation_fixture(retained_count) do
+    fixture = CatalogTrustVectors.fixture(0)
+    {records, latest, next_revision} = catalog_chain(fixture, 1_023 - retained_count)
+    state = %{prepared(fixture) | catalogs: records, accepted: latest}
+
+    rotations =
+      for index <- 1..3 do
+        signer = Identity.from_seed("rotation", "r11a-overflow-rotation-#{index}")
+
+        %{
+          fixture.rotation
+          | prior_catalog: latest.catalog,
+            new_catalog_key: signer.pub,
+            nonce: CatalogTrustVectors.id("overflow-rotation-#{index}")
+        }
+        |> CatalogTrustVectors.sign_rotation(fixture.space.catalog, signer)
+        |> CatalogTrustVectors.artifact_json()
+      end
+
+    assert %{next: with_rotations} =
+             evaluate(state, fixture,
+               rotations: Enum.take(rotations, retained_count),
+               cutoff_proofs: fixture.cutoff_proofs
+             )
+
+    assert length(with_rotations.rotations) == retained_count
+    first = %{fixture.catalog | revision: next_revision, previous: latest.catalog}
+
+    second = %{
+      fixture.catalog
+      | revision: next_revision + 1,
+        previous: TransportCatalog.catalog_id(first)
+    }
+
+    assert %{kind: :retain_blocked, reason: :control_history_limit, next: frozen, routes: []} =
+             evaluate(with_rotations, fixture,
+               catalogs: [json(first, fixture.space.catalog), json(second, fixture.space.catalog)]
+             )
+
+    assert length(frozen.blocked.triggers) == 2
+    assert frozen.rotations == with_rotations.rotations
+    assert frozen.catalogs == records
+    {fixture, frozen, Enum.drop(rotations, retained_count)}
   end
 
   defp evaluate(state, _fixture, incoming \\ []) do

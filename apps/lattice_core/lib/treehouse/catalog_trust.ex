@@ -1251,11 +1251,14 @@ defmodule Treehouse.CatalogTrust do
   defp merge_security_block(previous, %{reason: :authority_changed} = current),
     do: %{current | triggers: if(previous, do: previous.triggers, else: [])}
 
+  defp merge_security_block(%{triggers: [_ | _]} = previous, _current), do: previous
+
   defp merge_security_block(previous, nil), do: previous
   defp merge_security_block(_previous, current), do: current
 
   defp merge_graph_block(nil, current), do: current
   defp merge_graph_block(%{reason: :authority_changed} = previous, _current), do: previous
+  defp merge_graph_block(%{triggers: [_ | _]} = previous, _current), do: previous
 
   defp merge_graph_block(_previous, %{reason: :control_history_limit} = current),
     do: current
