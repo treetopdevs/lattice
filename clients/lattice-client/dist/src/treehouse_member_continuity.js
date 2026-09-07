@@ -7,7 +7,7 @@ import { materialize } from "./materialize";
 import { frontier } from "./sync";
 import { townshipCapTerm } from "./township";
 import { treehouseCommandDecoders, treehouseSpaceSchema } from "./treehouse";
-import { memberContinuityClaimId, canonicalBytesForMemberContinuityClaim, canonicalBytesForMemberContinuityPossession, memberContinuityCommandArgumentsToCarrierTerm, normalizeMemberContinuityCertificate, normalizeMemberContinuityClaim, verifyMemberContinuityCertificate, } from "./treehouse_member_continuity_codec";
+import { memberContinuityClaimId, memberContinuityClaimFromCarrierTerm, canonicalBytesForMemberContinuityClaim, canonicalBytesForMemberContinuityPossession, memberContinuityCommandArgumentsToCarrierTerm, normalizeMemberContinuityCertificate, normalizeMemberContinuityClaim, verifyMemberContinuityCertificate, } from "./treehouse_member_continuity_codec";
 const allowed = { ok: true };
 const refuse = (reason) => ({ ok: false, reason });
 /**
@@ -109,6 +109,7 @@ export async function observeMemberContinuityFromFrames(input) {
             return invalid;
         const ops = carrierOpsToSemanticOps(frames, {}, treehouseCommandDecoders("Treehouse.Space"));
         const byId = new Map(ops.map((op) => [op.id, op]));
+        const rawClaims = new Map(frames.map((frame) => [frame.id, claimFromFrame(frame)]));
         const order = canonicalOrder(ops, byId);
         if (order.length !== ops.length)
             return invalid;
@@ -126,14 +127,14 @@ export async function observeMemberContinuityFromFrames(input) {
             grouped.set(claimId, group);
         }
         const rawRecords = [...grouped].flatMap(([, group]) => group.wrappers.map((wrapper) => ({ wrapperId: wrapper.opId, certificate: wrapper.certificate })));
-        const oldKeys = new Set(order.map((id) => claimFor(byId.get(id))?.oldPub)
+        const oldKeys = new Set(order.map((id) => rawClaims.get(id)?.oldPub)
             .filter((key) => key !== undefined));
         if (snapshot.oldPub !== undefined)
             oldKeys.add(snapshot.oldPub);
         const links = [...oldKeys].sort(compareRawKeys).map((oldPub) => {
             const heads = memberContinuityHeads(rawRecords, oldPub);
-            const affectedWrappers = order.filter((id) => claimFor(byId.get(id))?.oldPub === oldPub && verdicts.get(id) !== "honored")
-                .map((opId) => ({ opId, reason: verdicts.get(opId) }));
+            const affectedWrappers = order.filter((id) => rawClaims.get(id)?.oldPub === oldPub && verdicts.get(id) !== "honored")
+                .map((opId) => ({ opId, reason: verdicts.get(opId) })).sort((left, right) => compareIds(left.opId, right.opId));
             const reviewRequired = affectedWrappers.some((item) => item.reason === "application_continuity_invalid_parent");
             const status = heads.length > 16 ? "capacity_stop" : reviewRequired ? "review_required" :
                 heads.length === 0 ? "unlinked" : heads.length === 1 ? "attested" : "contested";
@@ -142,7 +143,8 @@ export async function observeMemberContinuityFromFrames(input) {
         return { ok: true, replica: snapshot.replica, verifiedFrontier: frontier(ops).sort(),
             records: [...grouped].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
                 .map(([claimId, group]) => ({ claimId, claim: group.claim, wrappers: group.wrappers.sort((a, b) => a.opId < b.opId ? -1 : 1) })),
-            links, quarantine: order.filter((id) => verdicts.get(id) !== "honored").map((opId) => ({ opId, reason: verdicts.get(opId) })) };
+            links, quarantine: order.filter((id) => verdicts.get(id) !== "honored")
+                .map((opId) => ({ opId, reason: verdicts.get(opId) })).sort((left, right) => compareIds(left.opId, right.opId)) };
     }
     catch {
         return invalid;
@@ -305,6 +307,7 @@ function compareRawKeys(left, right) {
             return a[index] - b[index];
     return 0;
 }
+function compareIds(left, right) { return left < right ? -1 : left > right ? 1 : 0; }
 function equalBytes(left, right) {
     return left.length === right.length && left.every((value, index) => value === right[index]);
 }
@@ -378,6 +381,14 @@ function claimFor(op) {
     if (op.kind !== "command" || op.command !== "attest_member_key_v1" || op.commandArgs?.length !== 3)
         return null;
     return normalizeMemberContinuityClaim(op.commandArgs[0]);
+}
+function claimFromFrame(frame) {
+    const body = frame.body;
+    if (body[0] !== "tuple" || body[1].length !== 2 || body[1][0]?.[0] !== "atom" ||
+        body[1][0][1] !== "attest_member_key_v1" || body[1][1]?.[0] !== "list")
+        return null;
+    const claim = body[1][1][1][0];
+    return claim === undefined ? null : memberContinuityClaimFromCarrierTerm(claim);
 }
 function records(context) {
     const result = [];

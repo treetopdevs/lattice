@@ -3,7 +3,7 @@ import test from "node:test";
 import { createHash } from "node:crypto";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import * as codec from "../src/treehouse_member_continuity_codec";
-import { bindTownshipReplica } from "../src/township";
+import { bindTownshipReplica, townshipCapTerm } from "../src/township";
 import { memberContinuityCommandConflicts, memberContinuityCommandStatus, memberContinuityHeads, observeMemberContinuityFromFrames, reviewMemberContinuityFromFrames, assembleMemberContinuityFromFrames, } from "../src/treehouse_member_continuity";
 import { memberContinuityFixture } from "./support/export_member_continuity";
 import { treehouseCommandOpStatus, treehouseSpaceSchema } from "../src/treehouse";
@@ -222,6 +222,18 @@ test("review derives consent from signed history and assembly never invokes a si
     const possession = b64(ed25519.sign(reviewed.review.possessionBytes, successor.seed));
     const certificate = { claim: reviewed.review.claim, possession, vouches: witnesses.map((member) => ({ member: b64(member.pub),
             signature: b64(ed25519.sign(codec.canonicalBytesForMemberContinuityVouch(reviewed.review.claim, possession), member.seed)) })) };
+    const malformedArgs = codec.memberContinuityCommandArgumentsToCarrierTerm({ ...certificate, possession: b64(new Uint8Array(64)) });
+    const malformedItems = malformedArgs[1];
+    malformedItems[1] = ["bin", ""];
+    const malformedResigned = await authorCarrierOp({ replica: genesis.replica, deps: [epoch.id], kind: "command",
+        cap: townshipCapTerm(delegation.id), body: ["tuple", [["atom", "attest_member_key_v1"], malformedArgs]],
+        signer: adminSigner });
+    const malformedObserved = await observeMemberContinuityFromFrames({ replica: genesis.replica,
+        frames: [...frames, malformedResigned] });
+    assert.equal(malformedObserved.ok, true);
+    if (malformedObserved.ok) {
+        assert.deepEqual(malformedObserved.links.find((link) => link.oldPub === reviewed.review.claim.oldPub)?.affectedWrappers, [{ opId: malformedResigned.id, reason: "application_invalid_continuity" }]);
+    }
     let calls = 0;
     const guarded = { publicKey: admin.pub, sign: (bytes) => { calls++; return ed25519.sign(bytes, admin.seed); } };
     const bad = await assembleMemberContinuityFromFrames({ frames, review: reviewed.review,
