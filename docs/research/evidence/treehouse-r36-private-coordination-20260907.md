@@ -210,7 +210,7 @@ private plugin rejection remains handled, including broadened ACL tests.
 Public IPC adapter `54c6c616d7de041a95c15b39b2c4f737914266c3` passed Sol
 review and integrated as `720ab247c`. JSON object responses stay objects, and
 pending events target the actual WebviewWindow listener scope. Application command
-registration, ACL and panel activation are still pending.
+registration, ACL and panel activation are recorded in the next checkpoint below.
 
 Root checks at `ae511ff91`: 105 Rust tests plus three compile-fail documentation
 tests passed (`/tmp/treehouse-r36-flow-hooks-root-rust.log`); actual Android Rust
@@ -219,15 +219,39 @@ Root final Kotlin checks passed 149 total tests, 148 executed, one existing skip
 zero failures, plus Android lint
 (`/tmp/treehouse-r36-terminal-publication-root.log`).
 
-Validator persistence/possession first packet is not integrated: independent review
-found capacity overflow could leave a durable refusal marker and fault checkpoint
-labels preceded their named operations. Repairs and renewed review are required.
-Neither the frontend panel nor public native commands are activated.
+Validator persistence/possession packet `759ea28b` and repair `699628bd` passed
+independent Sol whole-packet rereview and integrated as `96e31fc7e` / `5cf9fc29d`.
+The capacity check occurs before entropy or mutation; persistence fault checkpoints
+now follow their named durable actions. Root 173 tests plus upstream tamper checks
+passed (`/tmp/treehouse-r36-validator-possession-root.log`). Association requires
+actual upstream verification with the retained issuance; possession nonce spend
+is durable before packet parsing and actual Ed25519 verification. Current-state
+claims remain unresolved. No production trusted snapshot acquisition is implemented.
+
+Application activation packet `b78805e00d67f2baf6bb5903e79a0913af7c2d1c`
+passed independent Sol review. Exact five-command dispatch precedes the unchanged
+six-command preview fallback. AppManifest enumerates eleven commands and a separate
+local-main-webview capability grants only the five witness requests. The opt-in
+panel is now imported. Desktop has no Android flow and refuses custody requests.
+Meaningful RED reached the old handler and returned command-not-found; three
+application boundary tests now pass, including the compiled Android/macOS ACL.
+Logs: `/tmp/treehouse-r36-application-red.log`,
+`/tmp/treehouse-r36-application-green.log`.
+
+Root integrated checks through merge `59a21ce2333ad19e43e8a5285b49daef48951139`:
+108 Rust tests plus three compile-fail docs, Android Rust target compilation,
+preview workflow/storage/product/bridge/binding tests and build, and 1,031 BEAM
+tests plus 27 properties, zero failures, three existing exclusions, formatting
+and Credo passed. Logs: `/tmp/treehouse-r36-application-root-full-rust.log`,
+`/tmp/treehouse-r36-application-root-android.log`,
+`/tmp/treehouse-r36-application-client-green.log`,
+`/tmp/treehouse-r36-application-root-full-beam.log`.
+Hosted native tip and merged-result checks remain open.
 
 ## Remaining gates
 
-End-to-end orchestration, public command and UI integration, independent validator
-policy review and validation reporting remain unfinished. No end-to-end Rust →
+Executable validator import/export, official trust snapshot acquisition and
+current-state/physical validation reporting remain unfinished. No end-to-end Rust →
 Kotlin → journal → biometric operation → Rust proof is asserted.
 
 Actual native hooks are wired and host refusal-tested. Pinned Wry source invokes
