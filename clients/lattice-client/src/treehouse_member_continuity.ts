@@ -1,8 +1,8 @@
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { analyzeAuthority } from "./authority";
+import { analyzeAuthority, continuationFamily } from "./authority";
 import { base64ToBytes, carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
 import type { CarrierOpFrame, CarrierTerm } from "./carrier";
-import { authorCarrierOp, verifyCarrierOp } from "./codec";
+import { authorCarrierOp, canonicalBase64Bytes, verifyCarrierOp } from "./codec";
 import type { CarrierOpSigner } from "./codec";
 import { ancestors, canonicalOrder, concurrent } from "./dag";
 import { materialize } from "./materialize";
@@ -155,6 +155,10 @@ export async function observeMemberContinuityFromFrames(input: {
         ed25519.verify(signature, bytes, base64ToBytes(author), {zip215: false})});
       if (!verified.valid) return invalid;
     }
+    if (continuationFamily(snapshot.replica) !== "space") {
+      return {ok: false, reason: "unsupported_continuity_history"};
+    }
+    if (snapshot.oldPub !== undefined && canonicalBase64Bytes(snapshot.oldPub, 32) === null) return invalid;
     const ops = carrierOpsToSemanticOps(frames, {}, treehouseCommandDecoders("Treehouse.Space"));
     const byId = new Map(ops.map((op) => [op.id, op]));
     const order = canonicalOrder(ops, byId);
@@ -174,16 +178,17 @@ export async function observeMemberContinuityFromFrames(input: {
     }
     const rawRecords: MemberContinuityRecord[] = [...grouped].flatMap(([, group]) =>
       group.wrappers.map((wrapper) => ({wrapperId: wrapper.opId, certificate: wrapper.certificate})));
-    const oldKeys = new Set([...grouped.values()].map((group) => group.claim.oldPub));
+    const oldKeys = new Set(order.map((id) => claimFor(byId.get(id)!)?.oldPub)
+      .filter((key): key is string => key !== undefined));
     if (snapshot.oldPub !== undefined) oldKeys.add(snapshot.oldPub);
-    const links = [...oldKeys].sort().map((oldPub) => {
+    const links = [...oldKeys].sort(compareRawKeys).map((oldPub) => {
       const heads = memberContinuityHeads(rawRecords, oldPub);
       const affectedWrappers = order.filter((id) => claimFor(byId.get(id)!)?.oldPub === oldPub && verdicts.get(id) !== "honored")
         .map((opId) => ({opId, reason: verdicts.get(opId)!}));
       const reviewRequired = affectedWrappers.some((item) => item.reason === "application_continuity_invalid_parent");
       const status: "unlinked" | "attested" | "contested" | "review_required" | "capacity_stop" =
-        heads.length === 0 ? "unlinked" : heads.length > 16 ? "capacity_stop" :
-        reviewRequired ? "review_required" : heads.length === 1 ? "attested" : "contested";
+        heads.length > 16 ? "capacity_stop" : reviewRequired ? "review_required" :
+        heads.length === 0 ? "unlinked" : heads.length === 1 ? "attested" : "contested";
       return {oldPub, heads, status, affectedWrappers};
     });
     return {ok: true, replica: snapshot.replica, verifiedFrontier: frontier(ops).sort(),
@@ -197,6 +202,9 @@ export async function observeMemberContinuityFromFrames(input: {
 export async function reviewMemberContinuityFromFrames(request: MemberContinuityReviewRequest): Promise<MemberContinuityReviewResult> {
   try {
     const frozen = structuredClone(request);
+    if (canonicalBase64Bytes(frozen.author, 32) === null || !canonicalId(frozen.capId)) {
+      return refuse("application_invalid_continuity");
+    }
     if (new Set(frozen.voucherAdmissions).size !== 2) return refuse("application_continuity_ineligible_member");
     const history = await authenticateJudgedHistory(frozen.replica, frozen.frames);
     if (history === null) return refuse("invalid_verified_history");
@@ -270,7 +278,8 @@ export async function assembleMemberContinuityFromFrames(input: {
     if (certificate === null || !verifyMemberContinuityCertificate(certificate, current.review.claim)) {
       return refuse("application_continuity_invalid_certificate");
     }
-    if (b64(input.signer.publicKey) !== current.review.author) return refuse("wrong_signer");
+    const reviewedAuthor = canonicalBase64Bytes(current.review.author, 32);
+    if (reviewedAuthor === null || !equalBytes(input.signer.publicKey, reviewedAuthor)) return refuse("wrong_signer");
     const args = memberContinuityCommandArgumentsToCarrierTerm(certificate);
     if (args === null || args[0] !== "list") return refuse("application_invalid_continuity");
     const body: CarrierTerm = ["tuple", [["atom", "attest_member_key_v1"], args]];
@@ -316,6 +325,15 @@ function envelopeBytes(frame: CarrierOpFrame): number {
   return new TextEncoder().encode(JSON.stringify({type: "push", ops: [frame]})).length;
 }
 function b64(bytes: Uint8Array): string { return Buffer.from(bytes).toString("base64"); }
+function canonicalId(value: unknown): value is string {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{43}$/.test(value) &&
+    canonicalBase64Bytes(value.replaceAll("-", "+").replaceAll("_", "/") + "=", 32) !== null;
+}
+function compareRawKeys(left: string, right: string): number {
+  const a = canonicalBase64Bytes(left, 32)!; const b = canonicalBase64Bytes(right, 32)!;
+  for (let index = 0; index < 32; index++) if (a[index] !== b[index]) return a[index]! - b[index]!;
+  return 0;
+}
 function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }

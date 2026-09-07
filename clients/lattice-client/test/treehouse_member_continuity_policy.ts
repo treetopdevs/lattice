@@ -89,6 +89,9 @@ test("individual judgment follows shape, target, eligibility, epoch, context, ce
     {...f.context, visibleOps: removedOps, verdicts: removedVerdicts})), "application_continuity_ineligible_member");
   assert.equal(reason(memberContinuityCommandStatus(f.statement, new Set(f.context.visibleOps.keys()), {...f.context, validBeacons: []})),
     "application_continuity_invalid_epoch");
+  assert.equal(reason(memberContinuityCommandStatus(f.statement, new Set(f.context.visibleOps.keys()),
+    {...f.context, validBeacons: [{opId: f.claim.epochBasis[0]!, epoch: "9007199254740993"}]})),
+    "application_continuity_invalid_epoch");
   const prior = op("prior-wrapper", "attest_member_key_v1",
     [f.claim, f.certificate.possession, f.certificate.vouches], f.claim.deps);
   const priorOps = new Map([...f.context.visibleOps, [prior.id, prior]]);
@@ -160,6 +163,10 @@ test("heads coalesce wrappers and retain every same-old unresolved claim", async
 
 test("public observation authenticates raw closure and uses the ordinary capability judge", async () => {
   const raw = await memberContinuityFixture();
+  assert.deepEqual(await observeMemberContinuityFromFrames({replica: "replica:treehouse:thread:unsupported", frames: []}),
+    {ok: false, reason: "unsupported_continuity_history"});
+  assert.deepEqual(await observeMemberContinuityFromFrames({replica: raw.replica, frames: raw.frames, oldPub: "not-a-key"}),
+    {ok: false, reason: "invalid_verified_history"});
   const observed = await observeMemberContinuityFromFrames({replica: raw.replica, frames: raw.frames, oldPub: raw.claim.oldPub});
   assert.equal(observed.ok, true);
   if (observed.ok) {
@@ -174,6 +181,34 @@ test("public observation authenticates raw closure and uses the ordinary capabil
   const partial = raw.frames.filter((frame) => frame.id === raw.command.id);
   assert.deepEqual(await observeMemberContinuityFromFrames({replica: raw.replica, frames: partial}),
     {ok: false, reason: "invalid_verified_history"});
+  const refusedOnly = await observeMemberContinuityFromFrames({replica: raw.replica, frames: raw.frames});
+  assert.equal(refusedOnly.ok, true);
+  if (refusedOnly.ok) {
+    assert.deepEqual(refusedOnly.links, [{oldPub: raw.claim.oldPub, heads: [], status: "unlinked",
+      affectedWrappers: [{opId: raw.command.id, reason: "operation_not_granted"}]}]);
+  }
+
+  const rootSeed = createHash("sha256").update("r19b-ts-export:root").digest();
+  const rawFirst = b64(new Uint8Array(32));
+  const base64First = b64(new Uint8Array(32).fill(248));
+  assert.ok(base64First < rawFirst, "fixture must disagree under Base64 and raw-byte ordering");
+  const secondClaim = {...raw.claim, oldPub: base64First, nonce: b64(digest("raw-order"))};
+  const secondCertificate = {...raw.certificate, claim: secondClaim};
+  const second = await authorCarrierOp({replica: raw.replica, deps: [raw.frames[0]!.id], kind: "command",
+    cap: raw.command.cap, body: ["tuple", [["atom", "attest_member_key_v1"],
+      codec.memberContinuityCommandArgumentsToCarrierTerm(secondCertificate)!]],
+    signer: {publicKey: ed25519.getPublicKey(rootSeed), sign: (bytes) => ed25519.sign(bytes, rootSeed)}});
+  const firstClaim = {...raw.claim, oldPub: rawFirst, nonce: b64(digest("raw-order-first"))};
+  const firstCertificate = {...raw.certificate, claim: firstClaim};
+  const first = await authorCarrierOp({replica: raw.replica, deps: [raw.frames[0]!.id], kind: "command",
+    cap: raw.command.cap, body: ["tuple", [["atom", "attest_member_key_v1"],
+      codec.memberContinuityCommandArgumentsToCarrierTerm(firstCertificate)!]],
+    signer: {publicKey: ed25519.getPublicKey(rootSeed), sign: (bytes) => ed25519.sign(bytes, rootSeed)}});
+  const ordered = await observeMemberContinuityFromFrames({replica: raw.replica,
+    frames: [raw.frames[0]!, second, first]});
+  assert.equal(ordered.ok, true);
+  if (ordered.ok) assert.deepEqual(ordered.links.map((link) => link.oldPub), [rawFirst, base64First]
+    .sort((left, right) => Buffer.compare(Buffer.from(left, "base64"), Buffer.from(right, "base64"))));
 });
 
 test("review derives consent from signed history and assembly never invokes a signer before public judgment", async () => {
@@ -211,6 +246,15 @@ test("review derives consent from signed history and assembly never invokes a si
     {ok: false, reason: "application_continuity_ineligible_member"});
   assert.deepEqual(await reviewMemberContinuityFromFrames({...request, capId: opId("unknown-cap")}),
     {ok: false, reason: "no_capability"});
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  const significant = request.author.at(-2)!;
+  const aliasedAuthor = request.author.slice(0, -2) + alphabet[alphabet.indexOf(significant) + 1]! + "=";
+  assert.deepEqual(Buffer.from(aliasedAuthor, "base64"), Buffer.from(request.author, "base64"));
+  assert.notEqual(aliasedAuthor, request.author);
+  assert.deepEqual(await reviewMemberContinuityFromFrames({...request, author: aliasedAuthor}),
+    {ok: false, reason: "application_invalid_continuity"});
+  assert.deepEqual(await reviewMemberContinuityFromFrames({...request, capId: request.capId + "="}),
+    {ok: false, reason: "application_invalid_continuity"});
   if (!reviewed.ok) return;
   const possession = b64(ed25519.sign(reviewed.review.possessionBytes, successor.seed));
   const certificate = {claim: reviewed.review.claim, possession, vouches: witnesses.map((member) => ({member: b64(member.pub),
@@ -233,4 +277,19 @@ test("review derives consent from signed history and assembly never invokes a si
     const observed = await observeMemberContinuityFromFrames({replica: genesis.replica, frames: [...frames, assembled.frame]});
     assert.equal(observed.ok, true); if (observed.ok) assert.equal(observed.records[0]?.claimId, reviewed.review.claimId);
   }
+  let malformedCalls = 0;
+  const malformedSigner = {publicKey: admin.pub, sign: () => { malformedCalls++; return new Uint8Array(63); }};
+  assert.deepEqual(await assembleMemberContinuityFromFrames({frames, review: reviewed.review, certificate, signer: malformedSigner}),
+    {ok: false, reason: "invalid_verified_history"});
+  assert.equal(malformedCalls, 1);
+  const reviewedFrameCount = reviewed.review.request.frames.length;
+  const reviewedGenesisSignature = (reviewed.review.request.frames[0] as {sig: string}).sig;
+  (request.frames[0] as {sig: string}).sig = b64(new Uint8Array(64));
+  request.frames.push(await authorTreehouseCommand({product: "Treehouse.Space", replica: genesis.replica,
+    deps: [epoch.id], signer: adminSigner, capId: delegation.id,
+    command: {command: "issue_invitation", recipient: b64(identity("mutated-request").pub), threads: []}}));
+  request.voucherAdmissions[0] = opId("mutated-admission");
+  assert.equal(reviewed.review.request.frames.length, reviewedFrameCount);
+  assert.equal((reviewed.review.request.frames[0] as {sig: string}).sig, reviewedGenesisSignature);
+  assert.notEqual(reviewed.review.request.voucherAdmissions[0], request.voucherAdmissions[0]);
 });
