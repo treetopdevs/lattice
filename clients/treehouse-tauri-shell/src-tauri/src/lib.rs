@@ -7,6 +7,7 @@ pub mod witness_binding;
 mod witness_android;
 mod witness_bridge;
 mod witness_reviewed;
+mod witness_entropy;
 use preview::{Draft, OpenResult, PreviewStore};
 use std::sync::{Arc, Mutex};
 use tauri::Manager as _;

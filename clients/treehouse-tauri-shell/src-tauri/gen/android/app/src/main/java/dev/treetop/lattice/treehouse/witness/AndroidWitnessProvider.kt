@@ -35,6 +35,15 @@ internal interface WitnessKeyPlatform {
  */
 @TargetApi(33)
 internal class AndroidWitnessProvider(private val context: Context, private val platform: WitnessKeyPlatform = AndroidKeyPlatform) {
+    /** Native package identity for journal ownership; never opens or creates a key. */
+    fun observeCurrentAppSigner(): WitnessResult<WitnessBytes> {
+        if (!supportedContext()) return WitnessResult.Refused("unsupported_profile")
+        return try {
+            currentSigner()?.let { WitnessResult.Stored(it) }
+                ?: WitnessResult.Refused("app_identity_mismatch")
+        } catch (_: Exception) { WitnessResult.Refused("app_identity_mismatch") }
+    }
+
     fun observeFixedIdentity(original: WitnessIdentityRecord?): WitnessKeyObservation {
         if (!supportedContext()) return WitnessKeyObservation.Refused("unsupported_profile")
         if (original != null && !validRecord(original)) return WitnessKeyObservation.Refused("identity_incomplete")
