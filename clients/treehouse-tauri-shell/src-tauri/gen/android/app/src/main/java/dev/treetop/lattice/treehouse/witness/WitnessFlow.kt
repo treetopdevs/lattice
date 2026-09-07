@@ -36,6 +36,7 @@ internal class WitnessFlow(
         var cancelled = false
         var deliveryDepth = 0
         var drained = false
+        val pendingUi = mutableSetOf<Any>()
         var phase = Phase.RUNNING
         val review = CompletableFuture<Boolean>()
         var cancellation: WitnessUiCancellation? = null
@@ -129,7 +130,7 @@ internal class WitnessFlow(
             catch (_: ArithmeticException) { throw Failure("cancelled") }
         val timeout = scheduleReviewTimeout { cancel(attempt, lifecycle = true) }
         try {
-            val cancellation = ui.review(details) { attempt.review.complete(it) }
+            val cancellation = ownedUi(attempt).review(details, {}) { attempt.review.complete(it) }
             val now = monotonicNanos()
             val elapsed = now < started || now >= deadline
             val cancelNow = synchronized(lock) { attempt.cancellation = cancellation; elapsed || !current(attempt) }
@@ -157,12 +158,37 @@ internal class WitnessFlow(
         catch (_: Exception) { cancel(attempt, lifecycle = true) }
         finally { synchronized(lock) {
             attempt.deliveryDepth--
-            if (attempt.drained && attempt.deliveryDepth == 0 && attempt.delivery.delivered && active === attempt) active = null
+            releaseIfDrained(attempt)
         } }
     }
     private fun drain(attempt: Attempt) = synchronized(lock) {
         attempt.drained = true
-        if (attempt.delivery.delivered && attempt.deliveryDepth == 0 && active === attempt) active = null
+        releaseIfDrained(attempt)
+    }
+
+    /** Called under lock; backend completion and cancellation alone never release UI ownership. */
+    private fun releaseIfDrained(attempt: Attempt) {
+        if (active === attempt && attempt.drained && attempt.pendingUi.isEmpty() &&
+            attempt.delivery.delivered && attempt.deliveryDepth == 0) active = null
+    }
+    private fun ownedUi(attempt: Attempt): WitnessReviewUi = object: WitnessReviewUi {
+        private fun ticket(onLocalCleanup: () -> Unit): () -> Unit {
+            val ticket = Any()
+            synchronized(lock) { attempt.pendingUi.add(ticket) }
+            return acknowledgement@ {
+                val first = synchronized(lock) {
+                    if (!attempt.pendingUi.remove(ticket)) false
+                    else { releaseIfDrained(attempt); true }
+                }
+                if (first) onLocalCleanup()
+            }
+        }
+        override fun review(details: WitnessReviewDetails, onLocalCleanup: () -> Unit,
+            callback: (Boolean) -> Unit): WitnessUiCancellation =
+            ui.review(details, ticket(onLocalCleanup), callback)
+        override fun authenticate(signature: java.security.Signature, onLocalCleanup: () -> Unit,
+            callback: (WitnessPresenceResult) -> Unit): WitnessUiCancellation =
+            ui.authenticate(signature, ticket(onLocalCleanup), callback)
     }
 
     private fun observe(): WitnessResult<WitnessSnapshot> = try {
@@ -279,7 +305,7 @@ internal class WitnessFlow(
             try { deliver(attempt, attempt.initialDelivery, WitnessResult.Refused("enrollment_mismatch")) } finally { drain(attempt) }; return
         }
         requireCurrent(attempt)
-        val binding = bindingFactory(context, signer.copyBytes(), ui,
+        val binding = bindingFactory(context, signer.copyBytes(), ownedUi(attempt),
             { current(attempt) && it == request.sessionDigest }, { drain(attempt) })
         val handles = WitnessPreparedHandleRegistry(binding)
         synchronized(lock) {

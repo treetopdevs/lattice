@@ -112,7 +112,7 @@ internal class WitnessBindingCoordinator(
                     enrollment.recipient.copyBytes(), metadata.publicKey.copyBytes(),
                     snapshot.identity.creationAttemptId.copyBytes(), digest, request.validatorNonce.copyBytes(),
                     request.nativeNonce.copyBytes(), request.sessionDigest.copyBytes())
-                val reviewCancellation = ui.review(details) { attempt.review.complete(it) }
+                val reviewCancellation = ui.review(details, {}) { attempt.review.complete(it) }
                 attempt.cancellation.set(reviewCancellation)
                 if (!isCurrent(attempt)) { reviewCancellation.cancel(); attempt.review.complete(false) }
                 if (!attempt.review.get(120, TimeUnit.SECONDS)) throw Failure("cancelled")
@@ -194,7 +194,7 @@ internal class WitnessBindingCoordinator(
                 requireUsable(attempt, checkRevision = true)
                 val signature = stored(platform.prepareSignature(stored(attempt.journal.observeExisting()).identity))
                 requireUsable(attempt, checkRevision = true)
-                val presenceCancellation = ui.authenticate(signature) { attempt.presence.complete(it) }
+                val presenceCancellation = ui.authenticate(signature, {}) { attempt.presence.complete(it) }
                 attempt.cancellation.set(presenceCancellation)
                 if (!isCurrent(attempt)) { presenceCancellation.cancel(); attempt.presence.complete(WitnessPresenceResult.Refused("cancelled")) }
                 val presence = attempt.presence.get(remainingMillis(attempt), TimeUnit.MILLISECONDS)

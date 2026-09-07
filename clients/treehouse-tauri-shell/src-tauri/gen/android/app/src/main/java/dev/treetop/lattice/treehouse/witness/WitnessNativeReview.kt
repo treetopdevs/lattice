@@ -19,11 +19,17 @@ import java.util.concurrent.Executor
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
+/** Cleanup acknowledgement means owned local resources were handled on the main thread.
+ * It is not evidence that platform callbacks drained or that system UI visibly disappeared.
+ * Every invocation must acknowledge exactly once after successful cleanup, even on refusal.
+ * A thrown cleanup failure must not acknowledge success. cancel() only requests cancellation.
+ */
 internal interface WitnessReviewUi {
-    fun review(details: WitnessReviewDetails, callback: (Boolean) -> Unit): WitnessUiCancellation
+    fun review(details: WitnessReviewDetails, onLocalCleanup: () -> Unit, callback: (Boolean) -> Unit): WitnessUiCancellation
 
     fun authenticate(
         signature: Signature,
+        onLocalCleanup: () -> Unit,
         callback: (WitnessPresenceResult) -> Unit
     ): WitnessUiCancellation
 }
@@ -136,9 +142,11 @@ internal class WitnessNativeReview(private val activity: Activity) : WitnessRevi
 
     override fun review(
         details: WitnessReviewDetails,
+        onLocalCleanup: () -> Unit,
         callback: (Boolean) -> Unit
     ): WitnessUiCancellation {
         val terminal = AtomicBoolean(false)
+        val cleanupDelivered = AtomicBoolean(false)
         val dialog = AtomicReference<AlertDialog?>(null)
         val lifecycle = AtomicReference<Application.ActivityLifecycleCallbacks?>(null)
         lateinit var timeout: Runnable
@@ -152,6 +160,7 @@ internal class WitnessNativeReview(private val activity: Activity) : WitnessRevi
             if (terminal.compareAndSet(false, true)) {
                 cleanup()
                 dialog.getAndSet(null)?.dismiss()
+                if (cleanupDelivered.compareAndSet(false, true)) onLocalCleanup()
                 callback(accepted)
             }
         }
@@ -201,6 +210,7 @@ internal class WitnessNativeReview(private val activity: Activity) : WitnessRevi
                 mainHandler.post {
                     cleanup()
                     dialog.getAndSet(null)?.dismiss()
+                    if (cleanupDelivered.compareAndSet(false, true)) onLocalCleanup()
                     callback(false)
                 }
             }
@@ -209,9 +219,11 @@ internal class WitnessNativeReview(private val activity: Activity) : WitnessRevi
 
     override fun authenticate(
         signature: Signature,
+        onLocalCleanup: () -> Unit,
         callback: (WitnessPresenceResult) -> Unit
     ): WitnessUiCancellation {
         val terminal = AtomicBoolean(false)
+        val cleanupDelivered = AtomicBoolean(false)
         val cancellationSignal = AtomicReference<CancellationSignal?>(null)
         val lifecycle = AtomicReference<Application.ActivityLifecycleCallbacks?>(null)
         lateinit var timeout: Runnable
@@ -224,7 +236,9 @@ internal class WitnessNativeReview(private val activity: Activity) : WitnessRevi
         fun finish(result: WitnessPresenceResult, cancelPlatform: Boolean = false) {
             if (terminal.compareAndSet(false, true)) {
                 cleanup()
-                if (cancelPlatform) cancellationSignal.get()?.cancel()
+                val signal = cancellationSignal.getAndSet(null)
+                if (cancelPlatform || result !is WitnessPresenceResult.Success) signal?.cancel()
+                if (cleanupDelivered.compareAndSet(false, true)) onLocalCleanup()
                 callback(result)
             }
         }
@@ -299,7 +313,8 @@ internal class WitnessNativeReview(private val activity: Activity) : WitnessRevi
             if (terminal.compareAndSet(false, true)) {
                 mainHandler.post {
                     cleanup()
-                    cancellationSignal.get()?.cancel()
+                    cancellationSignal.getAndSet(null)?.cancel()
+                    if (cleanupDelivered.compareAndSet(false, true)) onLocalCleanup()
                     callback(WitnessPresenceResult.Refused("cancelled"))
                 }
             }

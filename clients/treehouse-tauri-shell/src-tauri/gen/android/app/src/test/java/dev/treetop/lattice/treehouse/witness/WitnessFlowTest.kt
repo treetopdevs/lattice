@@ -61,7 +61,8 @@ class WitnessFlowTest {
         lateinit var flow: WitnessFlow
         var cancelled = 0
         val ui = object: Review() {
-            override fun review(details: WitnessReviewDetails, callback: (Boolean) -> Unit): WitnessUiCancellation {
+            override fun review(details: WitnessReviewDetails, onLocalCleanup: () -> Unit, callback: (Boolean) -> Unit): WitnessUiCancellation {
+                onLocalCleanup() // This fake owns no Android UI resources.
                 assertEquals(WitnessTerminalStatus.CANCELLED, terminal(run(flow, cancel(5))).status)
                 callback(true); callback(true)
                 return object: WitnessUiCancellation { override fun cancel() { cancelled++ } }
@@ -92,7 +93,8 @@ class WitnessFlowTest {
     @Test fun cancelledReviewCannotGenerateAndStartedMissingKeyCannotRegenerate() {
         val context = context(); prepared(context); val platform = Platform()
         val denied = object: Review() {
-            override fun review(details: WitnessReviewDetails, callback: (Boolean) -> Unit): WitnessUiCancellation {
+            override fun review(details: WitnessReviewDetails, onLocalCleanup: () -> Unit, callback: (Boolean) -> Unit): WitnessUiCancellation {
+                onLocalCleanup() // This fake owns no Android UI resources.
                 callback(false); return object: WitnessUiCancellation { override fun cancel() {} }
             }
         }
@@ -155,7 +157,8 @@ class WitnessFlowTest {
         val context = completedContext(); val reviewEntered = CountDownLatch(1)
         val promptCancelled = CountDownLatch(1)
         val ui = object: Review() {
-            override fun review(details: WitnessReviewDetails, callback: (Boolean) -> Unit): WitnessUiCancellation {
+            override fun review(details: WitnessReviewDetails, onLocalCleanup: () -> Unit, callback: (Boolean) -> Unit): WitnessUiCancellation {
+                onLocalCleanup() // This fake owns no Android UI resources.
                 reviewEntered.countDown()
                 return object: WitnessUiCancellation { override fun cancel() { promptCancelled.countDown() } }
             }
@@ -196,7 +199,8 @@ class WitnessFlowTest {
         val key = java.security.KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
         val signature = Signature.getInstance("Ed25519").also { it.initSign(key.private) }
         val ui = object: Review() {
-            override fun authenticate(signature: Signature, callback: (WitnessPresenceResult) -> Unit): WitnessUiCancellation {
+            override fun authenticate(signature: Signature, onLocalCleanup: () -> Unit, callback: (WitnessPresenceResult) -> Unit): WitnessUiCancellation {
+                onLocalCleanup() // This fake owns no Android UI resources.
                 callback(WitnessPresenceResult.Success(signature))
                 return object: WitnessUiCancellation { override fun cancel() {} }
             }
@@ -247,7 +251,7 @@ class WitnessFlowTest {
     @Test fun incompleteOrCorruptPreparationRefusesBeforeReview() {
         val context = context(); prepared(context)
         val ui = object: Review() {
-            override fun review(details: WitnessReviewDetails, callback: (Boolean) -> Unit): WitnessUiCancellation = error("must not review")
+            override fun review(details: WitnessReviewDetails, onLocalCleanup: () -> Unit, callback: (Boolean) -> Unit): WitnessUiCancellation = error("must not review")
         }
         val flow = flow(context, Platform(), ui)
         assertEquals(WitnessResult.Refused("identity_incomplete"), run(flow, WitnessPrivateRequest.Prepare(w(5), w(6), "replica:test", w(12), w(2), w(3)))); awaitIdle(flow)
@@ -269,7 +273,8 @@ class WitnessFlowTest {
     @Test fun lateCancelledReviewCannotCompleteTheNextOwnerAndThrowingCallbackStillDrains() {
         val context = context(); val callbacks = java.util.concurrent.LinkedBlockingQueue<(Boolean) -> Unit>()
         val ui = object: Review() {
-            override fun review(details: WitnessReviewDetails, callback: (Boolean) -> Unit): WitnessUiCancellation {
+            override fun review(details: WitnessReviewDetails, onLocalCleanup: () -> Unit, callback: (Boolean) -> Unit): WitnessUiCancellation {
+                onLocalCleanup() // This fake owns no Android UI resources.
                 callbacks.put(callback); return object: WitnessUiCancellation { override fun cancel() {} }
             }
         }
@@ -293,7 +298,8 @@ class WitnessFlowTest {
         val context = context(); val entered = CountDownLatch(1)
         val answer = AtomicReference<(Boolean) -> Unit>()
         val ui = object: Review() {
-            override fun review(details: WitnessReviewDetails, callback: (Boolean) -> Unit): WitnessUiCancellation {
+            override fun review(details: WitnessReviewDetails, onLocalCleanup: () -> Unit, callback: (Boolean) -> Unit): WitnessUiCancellation {
+                onLocalCleanup() // This fake owns no Android UI resources.
                 answer.set(callback); entered.countDown()
                 return object: WitnessUiCancellation { override fun cancel() {} }
             }
@@ -315,7 +321,8 @@ class WitnessFlowTest {
         val timeout = AtomicReference<() -> Unit>(); val cancelled = CountDownLatch(1)
         val now = java.util.concurrent.atomic.AtomicLong(1)
         val ui = object: Review() {
-            override fun review(details: WitnessReviewDetails, callback: (Boolean) -> Unit): WitnessUiCancellation {
+            override fun review(details: WitnessReviewDetails, onLocalCleanup: () -> Unit, callback: (Boolean) -> Unit): WitnessUiCancellation {
+                onLocalCleanup() // This fake owns no Android UI resources.
                 entered.countDown(); assertTrue(release.await(10, TimeUnit.SECONDS)); callback(true)
                 return object: WitnessUiCancellation { override fun cancel() { cancelled.countDown() } }
             }
@@ -335,7 +342,8 @@ class WitnessFlowTest {
         for (clockDelta in listOf(TimeUnit.SECONDS.toNanos(121), -1L)) {
             val context = context(); var now = 100L
             val ui = object: Review() {
-                override fun review(details: WitnessReviewDetails, callback: (Boolean) -> Unit): WitnessUiCancellation {
+                override fun review(details: WitnessReviewDetails, onLocalCleanup: () -> Unit, callback: (Boolean) -> Unit): WitnessUiCancellation {
+                onLocalCleanup() // This fake owns no Android UI resources.
                     callback(true); now += clockDelta
                     return object: WitnessUiCancellation { override fun cancel() {} }
                 }
@@ -352,7 +360,8 @@ class WitnessFlowTest {
         val oldCallback = AtomicReference<(WitnessResult<PreparedWitnessBinding>) -> Unit>()
         val oldResult = AtomicReference<WitnessResult<PreparedWitnessBinding>>()
         val ui = object: Review() {
-            override fun authenticate(signature: Signature, callback: (WitnessPresenceResult) -> Unit): WitnessUiCancellation {
+            override fun authenticate(signature: Signature, onLocalCleanup: () -> Unit, callback: (WitnessPresenceResult) -> Unit): WitnessUiCancellation {
+                onLocalCleanup() // This fake owns no Android UI resources.
                 presence.set(callback); presenceEntered.countDown()
                 return object: WitnessUiCancellation { override fun cancel() {} }
             }
@@ -387,6 +396,102 @@ class WitnessFlowTest {
         assertTrue(signedReplies.single() is WitnessResult.Stored)
     }
 
+    @Test fun backendCompletionDoesNotReleaseAdmissionUntilOwnedLocalCleanupAcknowledges() {
+        val context = context(); val cleanup = AtomicReference<() -> Unit>()
+        val ui = object: Review() {
+            override fun review(details: WitnessReviewDetails, onLocalCleanup: () -> Unit, callback: (Boolean) -> Unit): WitnessUiCancellation {
+                cleanup.set(onLocalCleanup); callback(true)
+                return object: WitnessUiCancellation { override fun cancel() {} }
+            }
+        }
+        val flow = flow(context, Platform(), ui)
+        assertTrue(run(flow, prepare()) is WitnessResult.Stored)
+        WitnessJournal(context, bytes(7)).use { assertTrue(it.observeExisting() is WitnessResult.Stored) }
+        repeat(20) {
+            val result = run(flow, WitnessPrivateRequest.Identity(w(8), w(6)))
+            assertEquals("storage_busy", (result as? WitnessResult.Stored)?.let { WitnessPrivateProtocol.decodeTerminal(it.value)?.reason })
+        }
+        cleanup.get().invoke(); awaitIdle(flow)
+    }
+
+    @Test fun duplicateOldCleanupCannotReleaseSuccessorAndMissingCleanupStaysClosed() {
+        val context = completedContext(); val cleanups = java.util.concurrent.LinkedBlockingQueue<() -> Unit>()
+        val ui = object: Review() {
+            override fun review(details: WitnessReviewDetails, onLocalCleanup: () -> Unit, callback: (Boolean) -> Unit): WitnessUiCancellation {
+                cleanups.put(onLocalCleanup); callback(true)
+                return object: WitnessUiCancellation { override fun cancel() {} }
+            }
+        }
+        val flow = flow(context, Platform().also { it.present = true }, ui)
+        fun request(id: Int) = WitnessPrivateRequest.Prepare(w(5), w(6), "replica:test", w(id), w(2), w(3))
+        assertTrue(run(flow, request(12)) is WitnessResult.Stored)
+        val old = cleanups.poll(10, TimeUnit.SECONDS)!!
+        assertBusy(flow); old(); awaitIdle(flow)
+        assertTrue(run(flow, request(13)) is WitnessResult.Stored)
+        val next = cleanups.poll(10, TimeUnit.SECONDS)!!
+        repeat(20) { old(); assertBusy(flow) }
+        next(); next(); awaitIdle(flow)
+    }
+    @Test fun cancelledUiCleanupFailureDoesNotReopenEvenAfterBackendDrain() {
+        val context = context(); val entered = CountDownLatch(1)
+        val ui = object: Review() {
+            override fun review(details: WitnessReviewDetails, onLocalCleanup: () -> Unit, callback: (Boolean) -> Unit): WitnessUiCancellation {
+                entered.countDown()
+                return object: WitnessUiCancellation { override fun cancel() { throw IllegalStateException("local cleanup failed") } }
+            }
+        }
+        val flow = flow(context, Platform(), ui); val done = CountDownLatch(1)
+        flow.submit(prepare()) { done.countDown() }
+        assertTrue(entered.await(10, TimeUnit.SECONDS))
+        assertEquals(WitnessTerminalStatus.CANCELLED, terminal(run(flow, cancel(5))).status)
+        assertTrue(done.await(2, TimeUnit.SECONDS))
+        repeat(20) { assertBusy(flow) }
+        WitnessJournal(context, bytes(7)).use { assertEquals(WitnessResult.Missing, it.observeExisting()) }
+    }
+    @Test fun preparedExpiryWithoutPublicCallbackStillWaitsForReviewCleanup() {
+        val context = completedContext(); val cleanup = AtomicReference<() -> Unit>()
+        val expiry = AtomicReference<() -> Unit>(); var now = 1L
+        val ui = object: Review() {
+            override fun review(details: WitnessReviewDetails, onLocalCleanup: () -> Unit, callback: (Boolean) -> Unit): WitnessUiCancellation {
+                cleanup.set(onLocalCleanup); callback(true)
+                return object: WitnessUiCancellation { override fun cancel() {} }
+            }
+        }
+        val flow = WitnessFlow(context, bytes(7), ui, Platform(), identity = { WitnessKeyObservation.Present(metadata()) },
+            bindingFactory = { ctx, signer, review, valid, drained ->
+                WitnessBindingCoordinator(ctx, signer, review, sessionValid = valid, monotonicNanos = { now }, onDrained = drained,
+                    scheduleExpiry = { _, task -> expiry.set(task); WitnessExpiry {} }).asFlowBinding()
+            })
+        assertTrue(run(flow, proof()) is WitnessResult.Stored)
+        now += TimeUnit.SECONDS.toNanos(61); expiry.get().invoke()
+        WitnessJournal(context, bytes(7)).use { assertTrue(it.observeExisting() is WitnessResult.Stored) }
+        repeat(20) { assertBusy(flow) }
+        cleanup.get().invoke(); awaitIdle(flow)
+    }
+    @Test fun timeoutWhileHandlePublicationBlockedRequiresLaterCleanupAcknowledgement() {
+        val context = context(); val entered = CountDownLatch(1); val release = CountDownLatch(1)
+        val cleanup = AtomicReference<() -> Unit>(); val timer = AtomicReference<() -> Unit>()
+        val ui = object: Review() {
+            override fun review(details: WitnessReviewDetails, onLocalCleanup: () -> Unit, callback: (Boolean) -> Unit): WitnessUiCancellation {
+                cleanup.set(onLocalCleanup); entered.countDown(); assertTrue(release.await(10, TimeUnit.SECONDS))
+                return object: WitnessUiCancellation { override fun cancel() {} }
+            }
+        }
+        val flow = WitnessFlow(context, bytes(7), ui, Platform(), identity = { WitnessKeyObservation.Absent },
+            scheduleReviewTimeout = { task -> timer.set(task); object: WitnessUiCancellation { override fun cancel() {} } })
+        val done = CountDownLatch(1)
+        flow.submit(prepare()) { done.countDown() }
+        assertTrue(entered.await(10, TimeUnit.SECONDS)); timer.get().invoke()
+        assertTrue(done.await(2, TimeUnit.SECONDS)); assertBusy(flow)
+        release.countDown()
+        repeat(20) { assertBusy(flow) }
+        cleanup.get().invoke(); awaitIdle(flow)
+    }
+    private fun assertBusy(flow: WitnessFlow) {
+        val result = run(flow, WitnessPrivateRequest.Identity(w(8), w(6)))
+        assertEquals("storage_busy", (result as? WitnessResult.Stored)?.let { WitnessPrivateProtocol.decodeTerminal(it.value)?.reason })
+    }
+
     private fun completedContext(): Context {
         val context = context(); prepared(context)
         WitnessJournal(context, bytes(7)).use { journal ->
@@ -415,10 +520,11 @@ class WitnessFlowTest {
         assertTrue(done.await(10, TimeUnit.SECONDS)); return result.get()
     }
     private open class Review: WitnessReviewUi {
-        override fun review(details: WitnessReviewDetails, callback: (Boolean) -> Unit): WitnessUiCancellation {
+        override fun review(details: WitnessReviewDetails, onLocalCleanup: () -> Unit, callback: (Boolean) -> Unit): WitnessUiCancellation {
+                onLocalCleanup() // This fake owns no Android UI resources.
             callback(true); return object: WitnessUiCancellation { override fun cancel() {} }
         }
-        override fun authenticate(signature: Signature, callback: (WitnessPresenceResult) -> Unit): WitnessUiCancellation = error("no signing")
+        override fun authenticate(signature: Signature, onLocalCleanup: () -> Unit, callback: (WitnessPresenceResult) -> Unit): WitnessUiCancellation = error("no signing")
     }
     private class Platform: WitnessGenerationPlatform {
         @Volatile var present = false

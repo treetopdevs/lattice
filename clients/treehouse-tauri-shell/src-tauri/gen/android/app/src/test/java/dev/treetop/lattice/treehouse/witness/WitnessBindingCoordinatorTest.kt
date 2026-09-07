@@ -278,10 +278,12 @@ class WitnessBindingCoordinatorTest {
             callback(WitnessPresenceResult.Success(signature))
         },
     ): WitnessReviewUi {
-        override fun review(details: WitnessReviewDetails, callback: (Boolean) -> Unit): WitnessUiCancellation {
+        override fun review(details: WitnessReviewDetails, onLocalCleanup: () -> Unit, callback: (Boolean) -> Unit): WitnessUiCancellation {
+                onLocalCleanup() // This fake owns no Android UI resources.
             callback(accepted); return cancellation()
         }
-        override fun authenticate(signature: Signature, callback: (WitnessPresenceResult) -> Unit): WitnessUiCancellation {
+        override fun authenticate(signature: Signature, onLocalCleanup: () -> Unit, callback: (WitnessPresenceResult) -> Unit): WitnessUiCancellation {
+                onLocalCleanup() // This fake owns no Android UI resources.
             onPresence(signature, callback); return cancellation()
         }
         private fun cancellation() = object : WitnessUiCancellation { override fun cancel() {} }

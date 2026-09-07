@@ -64,6 +64,52 @@ class WitnessNativeReviewTest {
     }
 
     @Test
+    fun promptCancellationAcknowledgesOnlyAfterSignalCancelAndSuppressesLateCallbacks() {
+        var cleaned = 0
+        val outcomes = mutableListOf<WitnessPresenceResult>()
+        val cancellation = WitnessNativeReview(activity).authenticate(Signature.getInstance("Ed25519"), { cleaned++ }, outcomes::add)
+        idleMain()
+        val signal = WitnessBiometricPromptShadow.cancellationSignal!!
+        cancellation.cancel()
+        assertEquals(0, cleaned); assertFalse(signal.isCanceled)
+        idleMain()
+        assertTrue(signal.isCanceled); assertEquals(1, cleaned)
+        WitnessBiometricPromptShadow.succeedExact(); WitnessBiometricPromptShadow.failLate(); idleMain()
+        assertEquals(1, cleaned); assertEquals(listOf(WitnessPresenceResult.Refused("cancelled")), outcomes)
+    }
+
+    @Test
+    @Config(shadows = [WitnessBiometricBuilderShadow::class, WitnessBiometricPromptShadow::class, WitnessFailingCleanupSignalShadow::class])
+    fun failedActualSignalCleanupDoesNotAcknowledgeSuccess() {
+        var cleaned = 0
+        val cancellation = WitnessNativeReview(activity).authenticate(Signature.getInstance("Ed25519"), { cleaned++ }) {}
+        idleMain(); cancellation.cancel()
+        var failed = false
+        try { idleMain() } catch (_: RuntimeException) { failed = true }
+        assertTrue(failed); assertEquals(0, cleaned)
+    }
+
+    @Test
+    fun cancellationPostingDoesNotAcknowledgeBeforeActualMainThreadDialogCleanup() {
+        var cleaned = 0
+        val outcomes = mutableListOf<Boolean>()
+        val cancellation = WitnessNativeReview(activity).review(
+            WitnessReviewDetails.prepareCreation("replica", bytes(1), bytes(2)), { cleaned++ }, outcomes::add)
+        idleMain()
+        val dialog = ShadowAlertDialog.getLatestAlertDialog()
+        assertTrue(dialog.isShowing)
+        cancellation.cancel()
+        assertEquals(0, cleaned)
+        assertTrue(dialog.isShowing)
+        idleMain()
+        assertFalse(dialog.isShowing)
+        assertEquals(1, cleaned)
+        cancellation.cancel(); idleMain()
+        assertEquals(1, cleaned)
+        assertEquals(listOf(false), outcomes)
+    }
+
+    @Test
     fun closedPreparationReviewCopiesValuesEscapesControlsAndAcceptsOnlyFromButton() {
         val completeValue = "line\nvalue" + "x".repeat(480) + "-exact-tail"
         val enrollment = bytes(1)
@@ -73,7 +119,7 @@ class WitnessNativeReviewTest {
         recipient.fill(99)
         val outcomes = mutableListOf<Boolean>()
 
-        val cancellation = WitnessNativeReview(activity).review(details, outcomes::add)
+        val cancellation = WitnessNativeReview(activity).review(details, {}, outcomes::add)
         idleMain()
 
         val dialog = ShadowAlertDialog.getLatestAlertDialog()
@@ -115,7 +161,7 @@ class WitnessNativeReviewTest {
         val buttonCancellation =
             WitnessNativeReview(activity).review(
                 WitnessReviewDetails.prepareCreation("replica", bytes(1), bytes(2)),
-                buttonOutcomes::add
+                {}, buttonOutcomes::add
             )
         idleMain()
         ShadowAlertDialog.getLatestAlertDialog()
@@ -130,7 +176,7 @@ class WitnessNativeReviewTest {
         val cancellation =
             WitnessNativeReview(activity).review(
                 WitnessReviewDetails.prepareCreation("replica", bytes(1), bytes(2)),
-                cancelledOutcomes::add
+                {}, cancelledOutcomes::add
             )
         cancellation.cancel()
         idleMain()
@@ -140,7 +186,7 @@ class WitnessNativeReviewTest {
         val raceCancellation =
             WitnessNativeReview(activity).review(
                 WitnessReviewDetails.prepareCreation("replica", bytes(1), bytes(2)),
-                raceOutcomes::add
+                {}, raceOutcomes::add
             )
         idleMain()
         val raceDialog = ShadowAlertDialog.getLatestAlertDialog()
@@ -157,7 +203,7 @@ class WitnessNativeReviewTest {
         val generation = WitnessReviewDetails.generate(
             "replica", bytes(1), bytes(2), bytes(3), bytes(4)
         )
-        WitnessNativeReview(activity).review(generation) {}
+        WitnessNativeReview(activity).review(generation, {}) {}
         idleMain()
         var dialog = ShadowAlertDialog.getLatestAlertDialog()
         assertEquals("Generate Treehouse witness identity", shadowOf(dialog).title.toString())
@@ -170,7 +216,7 @@ class WitnessNativeReviewTest {
         val binding = WitnessReviewDetails.proveBinding(
             "replica", bytes(1), bytes(2), bytes(5), bytes(3), bytes(6), bytes(7), bytes(8), bytes(9)
         )
-        WitnessNativeReview(activity).review(binding) {}
+        WitnessNativeReview(activity).review(binding, {}) {}
         idleMain()
         dialog = ShadowAlertDialog.getLatestAlertDialog()
         assertEquals("Prove Treehouse witness key possession", shadowOf(dialog).title.toString())
@@ -206,7 +252,7 @@ class WitnessNativeReviewTest {
     fun reviewTimesOutAt120SecondsAndActivityTeardownRefusesExactlyOnce() {
         val outcomes = mutableListOf<Boolean>()
         WitnessNativeReview(activity).review(
-            WitnessReviewDetails.prepareCreation("replica", bytes(1), bytes(2)), outcomes::add
+            WitnessReviewDetails.prepareCreation("replica", bytes(1), bytes(2)), {}, outcomes::add
         )
         idleMain()
         shadowOf(Looper.getMainLooper()).idleFor(119, TimeUnit.SECONDS)
@@ -216,7 +262,7 @@ class WitnessNativeReviewTest {
 
         val teardown = mutableListOf<Boolean>()
         WitnessNativeReview(activity).review(
-            WitnessReviewDetails.prepareCreation("replica", bytes(1), bytes(2)), teardown::add
+            WitnessReviewDetails.prepareCreation("replica", bytes(1), bytes(2)), {}, teardown::add
         )
         idleMain()
         controller.pause().stop().destroy()
@@ -228,13 +274,13 @@ class WitnessNativeReviewTest {
     fun pauseAloneInvalidatesReviewAndRefusesNewReviewWhilePaused() {
         val outcomes = mutableListOf<Boolean>()
         val details = WitnessReviewDetails.prepareCreation("replica", bytes(1), bytes(2))
-        WitnessNativeReview(activity).review(details, outcomes::add)
+        WitnessNativeReview(activity).review(details, {}, outcomes::add)
         idleMain()
         controller.pause()
         idleMain()
         assertEquals(listOf(false), outcomes)
         val paused = mutableListOf<Boolean>()
-        WitnessNativeReview(activity).review(details, paused::add)
+        WitnessNativeReview(activity).review(details, {}, paused::add)
         idleMain()
         assertEquals(listOf(false), paused)
         controller.resume()
@@ -243,7 +289,7 @@ class WitnessNativeReviewTest {
     @Test
     fun pauseAloneCancelsPresenceAndRefusesNewPresenceWhilePaused() {
         val outcomes = mutableListOf<WitnessPresenceResult>()
-        WitnessNativeReview(activity).authenticate(Signature.getInstance("Ed25519"), outcomes::add)
+        WitnessNativeReview(activity).authenticate(Signature.getInstance("Ed25519"), {}, outcomes::add)
         idleMain()
         val signal = WitnessBiometricPromptShadow.cancellationSignal!!
         controller.pause()
@@ -252,7 +298,7 @@ class WitnessNativeReviewTest {
         assertEquals(1, outcomes.size)
         assertTrue(outcomes.single() is WitnessPresenceResult.Refused)
         val paused = mutableListOf<WitnessPresenceResult>()
-        WitnessNativeReview(activity).authenticate(Signature.getInstance("Ed25519"), paused::add)
+        WitnessNativeReview(activity).authenticate(Signature.getInstance("Ed25519"), {}, paused::add)
         idleMain()
         assertEquals(1, paused.size)
         assertTrue(paused.single() is WitnessPresenceResult.Refused)
@@ -265,7 +311,7 @@ class WitnessNativeReviewTest {
         try {
             ReflectionHelpers.setStaticField(Build.VERSION::class.java, "SDK_INT", 32)
             val outcomes = mutableListOf<WitnessPresenceResult>()
-            WitnessNativeReview(activity).authenticate(Signature.getInstance("Ed25519"), outcomes::add)
+            WitnessNativeReview(activity).authenticate(Signature.getInstance("Ed25519"), {}, outcomes::add)
             idleMain()
 
             assertEquals(
@@ -284,7 +330,7 @@ class WitnessNativeReviewTest {
         val signature = Signature.getInstance("Ed25519")
         val outcomes = mutableListOf<WitnessPresenceResult>()
 
-        WitnessNativeReview(activity).authenticate(signature, outcomes::add)
+        WitnessNativeReview(activity).authenticate(signature, {}, outcomes::add)
         idleMain()
 
         assertEquals("Prove Treehouse witness key possession", WitnessBiometricBuilderShadow.title)
@@ -311,7 +357,7 @@ class WitnessNativeReviewTest {
         val expected = Signature.getInstance("Ed25519")
         val substituted = Signature.getInstance("Ed25519")
         val mismatch = mutableListOf<WitnessPresenceResult>()
-        WitnessNativeReview(activity).authenticate(expected, mismatch::add)
+        WitnessNativeReview(activity).authenticate(expected, {}, mismatch::add)
         idleMain()
         WitnessBiometricPromptShadow.succeedWithNewCrypto(substituted)
         idleMain()
@@ -320,7 +366,7 @@ class WitnessNativeReviewTest {
         WitnessBiometricBuilderShadow.reset()
         WitnessBiometricPromptShadow.reset()
         val cancelled = mutableListOf<WitnessPresenceResult>()
-        val cancellation = WitnessNativeReview(activity).authenticate(expected, cancelled::add)
+        val cancellation = WitnessNativeReview(activity).authenticate(expected, {}, cancelled::add)
         idleMain()
         val signal = WitnessBiometricPromptShadow.cancellationSignal
         WitnessBiometricPromptShadow.queueSuccessExact()
@@ -338,7 +384,7 @@ class WitnessNativeReviewTest {
     @Test
     fun presenceTimesOutAt60SecondsAndCancelsTheExactPlatformOperation() {
         val outcomes = mutableListOf<WitnessPresenceResult>()
-        WitnessNativeReview(activity).authenticate(Signature.getInstance("Ed25519"), outcomes::add)
+        WitnessNativeReview(activity).authenticate(Signature.getInstance("Ed25519"), {}, outcomes::add)
         idleMain()
         val signal = WitnessBiometricPromptShadow.cancellationSignal
         shadowOf(Looper.getMainLooper()).idleFor(59, TimeUnit.SECONDS)
@@ -354,7 +400,7 @@ class WitnessNativeReviewTest {
     @Test
     fun activityTeardownCancelsPresenceAndDrainsOneTerminalCallback() {
         val outcomes = mutableListOf<WitnessPresenceResult>()
-        WitnessNativeReview(activity).authenticate(Signature.getInstance("Ed25519"), outcomes::add)
+        WitnessNativeReview(activity).authenticate(Signature.getInstance("Ed25519"), {}, outcomes::add)
         idleMain()
         val signal = WitnessBiometricPromptShadow.cancellationSignal
         controller.pause().stop().destroy()
@@ -493,4 +539,11 @@ class WitnessBiometricPromptShadow {
             callback = null
         }
     }
+}
+
+/** A local cleanup failure, not a synthetic biometric acceptance. */
+@Implements(CancellationSignal::class)
+class WitnessFailingCleanupSignalShadow {
+    @Implementation
+    fun cancel() { throw IllegalStateException("local cleanup failed") }
 }
