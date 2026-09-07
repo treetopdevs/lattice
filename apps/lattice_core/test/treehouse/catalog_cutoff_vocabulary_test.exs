@@ -77,7 +77,9 @@ defmodule Treehouse.CatalogCutoffVocabularyTest do
         assert Enum.any?(cutoff.ops, &(&1.id == op.id))
         assert [%{id: id, sig: <<0::512>>}] = cutoff.rejected
         assert id == op.id
-        assert Lattice.Authority.analyze(Treehouse.Space, log).reasons[op.id] == :unknown_command
+
+        assert Lattice.Authority.analyze(Treehouse.Space, log).reasons[op.id] ==
+                 :bad_command_arity
 
         assert Lattice.state(Treehouse.Space, log) ==
                  Lattice.state(Treehouse.Space, fixture.space_log)

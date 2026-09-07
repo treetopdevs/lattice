@@ -748,7 +748,8 @@ test("continuity vocabulary remains authenticated raw evidence across catalog in
             assert.deepEqual(reopened.next, result.next);
             const ops = carrierOpsToSemanticOps(frames, {}, treehouseCommandDecoders("Treehouse.Space"));
             const projection = materialize(treehouseSpaceSchema, ops, new Set(ops.map((op) => op.id)), null, f.space.replica);
-            assert.equal(projection.quarantineReasons.get(frame.id), "unknown_command");
+            // Preserve the historical empty-argument frame; activation changes only its live refusal.
+            assert.equal(projection.quarantineReasons.get(frame.id), "bad_command_arity");
             states.push(result.next);
         }
         assert.deepEqual(states[0], states[1]);

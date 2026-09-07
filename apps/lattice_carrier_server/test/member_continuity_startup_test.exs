@@ -7,7 +7,7 @@ defmodule LatticeCarrierServer.MemberContinuityStartupTest do
 
   @moduletag :tmp_dir
 
-  test "fresh path-backed startup, first relay and process reopen retain an unknown continuity command",
+  test "fresh path-backed startup, first relay and process reopen retain a continuity command outside the preview grant",
        %{tmp_dir: dir} do
     fixture = fixture(dir)
     assert run!(fixture, "relay") =~ "CONTINUITY_FIRST_RELAY_DURABLE_OK"
@@ -125,7 +125,7 @@ defmodule LatticeCarrierServer.MemberContinuityStartupTest do
         {:ok, %{log: retained}} = Lattice.Log.restore_verified(log_path)
         {:ok, expected} = expected_path |> File.read!() |> Jason.decode!() |> Lattice.Carrier.Wire.decode_ops()
         true = Enum.sort_by(expected, & &1.id) == Enum.sort_by(Map.values(retained.ops), & &1.id)
-        :unknown_command = Map.fetch!(Lattice.Authority.analyze(Treehouse.Space, retained).reasons, relay.id)
+        :operation_not_granted = Map.fetch!(Lattice.Authority.analyze(Treehouse.Space, retained).reasons, relay.id)
         genesis = Enum.find(expected, &(&1.kind == :authority))
         baseline = Lattice.Log.new(relay.replica) |> Lattice.Log.append!(genesis)
         true = Lattice.state(Treehouse.Space, retained) == Lattice.state(Treehouse.Space, baseline)
