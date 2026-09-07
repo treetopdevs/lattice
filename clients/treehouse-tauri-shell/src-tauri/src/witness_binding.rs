@@ -40,6 +40,34 @@ impl BindingClaim {
         Ok(claim)
     }
 
+    /// Read-only structured view of the same fixed thirteen canonical fields.
+    pub(crate) fn public_projection(&self) -> serde_json::Value {
+        let product = lattice_mobile_core::ProductManifest::for_product("treehouse")
+            .expect("checked-in Treehouse product manifest");
+        serde_json::json!({
+            "domain": "lattice-witness-binding-challenge-v1", "version": 1,
+            "product": product.product, "appId": product.app_id, "replica": self.replica,
+            "enrollmentId": STANDARD.encode(self.enrollment_id),
+            "recipient": STANDARD.encode(self.recipient),
+            "creationAttemptId": STANDARD.encode(self.creation_attempt_id),
+            "actualWitnessPublicKey": STANDARD.encode(self.actual_witness_public_key),
+            "generationChallengeDigest": STANDARD.encode(self.generation_challenge_digest),
+            "freshValidatorNonce": STANDARD.encode(self.fresh_validator_nonce),
+            "nativeRandomNonce": STANDARD.encode(self.native_random_nonce),
+            "nativeCallerSessionDigest": STANDARD.encode(self.native_caller_session_digest),
+        })
+    }
+
+    pub(crate) fn creation_attempt_id(&self) -> &[u8; 32] {
+        &self.creation_attempt_id
+    }
+    pub(crate) fn actual_witness_public_key(&self) -> &[u8; 32] {
+        &self.actual_witness_public_key
+    }
+    pub(crate) fn generation_challenge_digest(&self) -> &[u8; 32] {
+        &self.generation_challenge_digest
+    }
+
     /// An owned copy of the fixed-array canonical bytes, with no signing side effect.
     pub fn canonical_bytes(&self) -> Vec<u8> {
         let product = lattice_mobile_core::ProductManifest::for_product("treehouse")
@@ -111,6 +139,10 @@ fn replica<'de, D: Deserializer<'de>>(deserializer: D) -> Result<String, D::Erro
 /// use treehouse_tauri_shell::witness_binding::BindingSigningRequest;
 /// let forged: BindingSigningRequest = serde_json::from_str("{}").unwrap();
 /// ```
+/// ```compile_fail
+/// // The only constructor requires the crate-private concrete sealed-review type.
+/// use treehouse_tauri_shell::witness_reviewed::SealedReviewedBinding;
+/// ```
 pub struct BindingSigningRequest {
     bytes: Vec<u8>,
 }
@@ -118,5 +150,11 @@ pub struct BindingSigningRequest {
 impl BindingSigningRequest {
     pub fn bytes(&self) -> &[u8] {
         &self.bytes
+    }
+
+    pub(crate) fn from_sealed(reviewed: &crate::witness_reviewed::SealedReviewedBinding) -> Self {
+        Self {
+            bytes: reviewed.sealed_claim_bytes().to_vec(),
+        }
     }
 }

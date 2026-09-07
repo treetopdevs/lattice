@@ -13,6 +13,7 @@ import android.security.keystore.KeyInfo
 import java.security.KeyStore
 import java.security.PrivateKey
 import java.security.MessageDigest
+import java.security.Signature
 import java.security.cert.X509Certificate
 
 internal sealed interface WitnessKeyObservation {
@@ -34,6 +35,15 @@ internal interface WitnessKeyPlatform {
  */
 @TargetApi(33)
 internal class AndroidWitnessProvider(private val context: Context, private val platform: WitnessKeyPlatform = AndroidKeyPlatform) {
+    /** Native package identity for journal ownership; never opens or creates a key. */
+    fun observeCurrentAppSigner(): WitnessResult<WitnessBytes> {
+        if (!supportedContext()) return WitnessResult.Refused("unsupported_profile")
+        return try {
+            currentSigner()?.let { WitnessResult.Stored(it) }
+                ?: WitnessResult.Refused("app_identity_mismatch")
+        } catch (_: Exception) { WitnessResult.Refused("app_identity_mismatch") }
+    }
+
     fun observeFixedIdentity(original: WitnessIdentityRecord?): WitnessKeyObservation {
         if (!supportedContext()) return WitnessKeyObservation.Refused("unsupported_profile")
         if (original != null && !validRecord(original)) return WitnessKeyObservation.Refused("identity_incomplete")
@@ -86,6 +96,26 @@ internal class AndroidWitnessProvider(private val context: Context, private val 
             original.creationAttemptId != ownedAttempt || original.generationChallenge != ownedChallenge)
             return WitnessKeyObservation.Refused("original_identity_mismatch")
         return observeFixedIdentity(original)
+    }
+
+    /** Fresh fixed-key operation only after repeating the complete local profile observation. */
+    fun prepareFixedSignature(original: WitnessIdentityRecord): WitnessResult<Signature> {
+        if (original.phase != WitnessPhase.GENERATED_UNVALIDATED || original.metadata == null)
+            return WitnessResult.Refused("identity_incomplete")
+        val observed = observeFixedIdentity(original)
+        if (observed is WitnessKeyObservation.Refused) return WitnessResult.Refused(observed.reason)
+        if (observed !is WitnessKeyObservation.Present) return WitnessResult.Refused("identity_incomplete")
+        return try {
+            val store = platform.loadStore()
+            val key = store.getKey(FIXED_ALIAS, null) as? PrivateKey
+                ?: return WitnessResult.Refused("unexpected_key_type")
+            if (!matchesProfile(platform.keyInfo(key))) return WitnessResult.Refused("unsupported_profile")
+            val certificate = store.getCertificate(FIXED_ALIAS) as? X509Certificate
+                ?: return WitnessResult.Refused("inconsistent_key_entry")
+            if (WitnessBytes(certificate.publicKey.encoded) != observed.metadata.spki)
+                return WitnessResult.Refused("original_identity_mismatch")
+            WitnessResult.Stored(Signature.getInstance("Ed25519").also { it.initSign(key) })
+        } catch (_: Exception) { WitnessResult.Refused("key_operation_failed") }
     }
 
     /** A spec is configuration only. It cannot consume/restore a journal fence or invoke a generator. */

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-treehouse-commit"
+description = "Enables the treehouse_commit command without any pre-configured scope."
+commands.allow = ["treehouse_commit"]
+
+[[permission]]
+identifier = "deny-treehouse-commit"
+description = "Denies the treehouse_commit command without any pre-configured scope."
+commands.deny = ["treehouse_commit"]

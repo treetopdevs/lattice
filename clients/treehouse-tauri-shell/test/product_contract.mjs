@@ -47,7 +47,22 @@ assert.deepEqual(
     "treehouse_sign_carrier",
   ].sort(),
 );
+const previewCommands = ["treehouse_open", "treehouse_initialize_identity", "treehouse_commit", "treehouse_load_draft", "treehouse_save_draft", "treehouse_sign_carrier"];
+const witnessCommands = ["treehouse_witness_public_identity", "treehouse_witness_prepare_creation", "treehouse_witness_generate", "treehouse_witness_prove_binding", "treehouse_witness_cancel"];
+const build = await readFile("src-tauri/build.rs", "utf8");
+assert.deepEqual([...build.matchAll(/"(treehouse_\w+)"/g)].map(m => m[1]).sort(), [...previewCommands, ...witnessCommands].sort());
+const previewCapability = JSON.parse(await readFile("src-tauri/capabilities/default.json", "utf8"));
+const witnessCapability = JSON.parse(await readFile("src-tauri/capabilities/witness.json", "utf8"));
+const permission = command => "allow-" + command.replaceAll("_", "-");
+assert.deepEqual(previewCapability.permissions.slice().sort(), ["core:default", ...previewCommands.map(permission)].sort());
+assert.deepEqual(witnessCapability.permissions.slice().sort(), witnessCommands.map(permission).sort());
+assert.deepEqual(witnessCapability.webviews, ["main"]);
+assert.equal(witnessCapability.windows, undefined);
+assert.equal(witnessCapability.remote, undefined);
+assert.equal(witnessCapability.local, true);
+assert(registration.includes("witness_commands::recognizes_command"));
+assert(registration.includes("witness_commands::handle(invoke)"));
 assert(!registration.includes("std::env"));
 console.log(
-  "PASS isolated offline product, fixed key service and exact six public native commands",
+  "PASS isolated offline product, fixed key service and six preview commands plus five closed witness commands",
 );

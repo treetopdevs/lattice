@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-treehouse-witness-public-identity"
+description = "Enables the treehouse_witness_public_identity command without any pre-configured scope."
+commands.allow = ["treehouse_witness_public_identity"]
+
+[[permission]]
+identifier = "deny-treehouse-witness-public-identity"
+description = "Denies the treehouse_witness_public_identity command without any pre-configured scope."
+commands.deny = ["treehouse_witness_public_identity"]

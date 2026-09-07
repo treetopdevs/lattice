@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-treehouse-witness-prepare-creation"
+description = "Enables the treehouse_witness_prepare_creation command without any pre-configured scope."
+commands.allow = ["treehouse_witness_prepare_creation"]
+
+[[permission]]
+identifier = "deny-treehouse-witness-prepare-creation"
+description = "Denies the treehouse_witness_prepare_creation command without any pre-configured scope."
+commands.deny = ["treehouse_witness_prepare_creation"]

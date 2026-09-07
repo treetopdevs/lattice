@@ -8,7 +8,8 @@ assert(activity.includes('System.loadLibrary("treehouse_tauri_shell")'));
 assert(activity.indexOf("Keyring.initializeNdkContext") < activity.indexOf("super.onCreate"));
 const manifest = read(`${a}app/src/main/AndroidManifest.xml`);
 assert(manifest.includes('android:allowBackup="false"'));
-assert(!manifest.includes("USE_BIOMETRIC")); // Protected custody is a later slice.
+assert.equal((manifest.match(/android.permission.USE_BIOMETRIC/g) ?? []).length, 1);
+// Native review requires this permission; eligibility and public activation remain closed.
 const gradle = read(`${a}app/build.gradle.kts`);
 assert(gradle.includes("namespace = product.appId") && gradle.includes("applicationId = product.appId"));
 assert(gradle.includes('buildConfigField("boolean", "WITNESS_ELIGIBILITY_IMPLEMENTED", "false")'));
@@ -24,8 +25,9 @@ assert(rules.includes('env["TREEHOUSE_ANDROID_SIGNING"] != "pilot"'));
 const native = read("src-tauri/src/lib.rs");
 assert(native.includes("#[cfg_attr(mobile, tauri::mobile_entry_point)]"));
 assert(native.includes("android_keyring::configure()"));
-assert(!native.includes("treehouse_witness_"));
+assert(native.includes("witness_commands::recognizes_command"));
+assert(native.includes("witness_commands::handle(invoke)"));
 const store = read("src-tauri/src/android_keyring.rs");
 assert(store.includes("crate::key_store::KEY_SERVICE"));
 assert(!store.includes("governance-witness"));
-console.log("PASS fixed Android product, separate carrier JNI startup, offline debug and fail-closed release wiring; no witness commands");
+console.log("PASS fixed Android product, separate carrier JNI startup, offline debug and fail-closed release wiring; closed witness command composition");

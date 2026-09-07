@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-treehouse-open"
+description = "Enables the treehouse_open command without any pre-configured scope."
+commands.allow = ["treehouse_open"]
+
+[[permission]]
+identifier = "deny-treehouse-open"
+description = "Denies the treehouse_open command without any pre-configured scope."
+commands.deny = ["treehouse_open"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-treehouse-witness-generate"
+description = "Enables the treehouse_witness_generate command without any pre-configured scope."
+commands.allow = ["treehouse_witness_generate"]
+
+[[permission]]
+identifier = "deny-treehouse-witness-generate"
+description = "Denies the treehouse_witness_generate command without any pre-configured scope."
+commands.deny = ["treehouse_witness_generate"]

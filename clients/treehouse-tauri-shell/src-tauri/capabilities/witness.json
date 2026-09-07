@@ -1,0 +1,15 @@
+{
+  "identifier": "witness",
+  "description": "Closed witness requests from the local main webview",
+  "local": true,
+  "webviews": [
+    "main"
+  ],
+  "permissions": [
+    "allow-treehouse-witness-public-identity",
+    "allow-treehouse-witness-prepare-creation",
+    "allow-treehouse-witness-generate",
+    "allow-treehouse-witness-prove-binding",
+    "allow-treehouse-witness-cancel"
+  ]
+}

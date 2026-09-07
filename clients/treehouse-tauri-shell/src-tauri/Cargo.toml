@@ -11,6 +11,7 @@ base64 = "0.22"
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 fs2 = "0.4"
 keyring = "4"
+rand_core = { version = "0.6", features = ["getrandom"] }
 lattice-mobile-core = { path = "../../lattice-mobile-core/native" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -22,5 +23,6 @@ keyring-core = "=1.0.0"
 [build-dependencies]
 tauri-build = { version = "2.6.3", features = [] }
 [dev-dependencies]
+tauri = { version = "2.11.5", default-features = false, features = ["test"] }
 rusqlite = { version = "0.37", features = ["bundled"] }
 tempfile = "3"

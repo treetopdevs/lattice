@@ -1,6 +1,16 @@
 {
   "identifier": "default",
   "description": "The local Treehouse window",
-  "windows": ["main"],
-  "permissions": ["core:default"]
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "allow-treehouse-open",
+    "allow-treehouse-initialize-identity",
+    "allow-treehouse-commit",
+    "allow-treehouse-load-draft",
+    "allow-treehouse-save-draft",
+    "allow-treehouse-sign-carrier"
+  ]
 }

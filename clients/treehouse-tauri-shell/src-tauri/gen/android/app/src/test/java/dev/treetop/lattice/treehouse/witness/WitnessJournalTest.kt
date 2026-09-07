@@ -26,6 +26,43 @@ class WitnessJournalTest {
     @get:Rule val temporary = TemporaryFolder()
     @After fun resetDirectoryAdapter() { WitnessDirectoryOsShadow.reset() }
 
+    @Test fun retainedAttemptReadPinsExistingJournalWithoutMutationUntilClose() {
+        val context = journalContext()
+        val signer = ByteArray(32) { 7 }
+        WitnessJournal(context, signer).use { stored(it.prepareAccepted(enrollment(), ByteArray(32) { 3 })) }
+        val before = database(context).readBytes()
+        WitnessJournal(context, signer).use { owner ->
+            assertEquals(1L, stored(owner.retainExistingForAttempt(1, ByteArray(32) { 3 })).identity.revision)
+            WitnessJournal(context, signer).use { competitor ->
+                assertEquals(WitnessResult.Refused("storage_busy"), competitor.observeExisting())
+            }
+            assertArrayEquals(before, database(context).readBytes())
+        }
+        WitnessJournal(context, signer).use { assertEquals(1L, stored(it.observeExisting()).identity.revision) }
+        assertArrayEquals(before, database(context).readBytes())
+    }
+
+    @Test fun retainedAttemptReadRefusesStaleOrSubstitutedAttemptWithoutCreatingStorage() {
+        val context = journalContext()
+        val signer = ByteArray(32) { 7 }
+        WitnessJournal(context, signer).use { journal ->
+            assertSame(WitnessResult.Missing, journal.retainExistingForAttempt(1, ByteArray(32) { 3 }))
+        }
+        assertFalse(database(context).exists())
+        WitnessJournal(context, signer).use { stored(it.prepareAccepted(enrollment(), ByteArray(32) { 3 })) }
+        val before = database(context).readBytes()
+        WitnessJournal(context, signer).use { journal ->
+            assertEquals(WitnessResult.Refused("stale_revision"), journal.retainExistingForAttempt(2, ByteArray(32) { 3 }))
+            assertEquals(WitnessResult.Refused("creation_attempt_mismatch"), journal.retainExistingForAttempt(1, ByteArray(32) { 4 }))
+            WitnessJournal(context, signer).use { competitor ->
+                assertEquals(1L, stored(competitor.observeExisting()).identity.revision)
+            }
+            journal.close()
+            assertEquals(WitnessResult.Refused("journal_closed"), journal.retainExistingForAttempt(1, ByteArray(32) { 3 }))
+        }
+        assertArrayEquals(before, database(context).readBytes())
+    }
+
     @Test fun observationCreatesNothingAndAcceptedPreparationReopensExactly() {
         val context = journalContext()
         val signer = ByteArray(32) { 7 }

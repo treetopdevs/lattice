@@ -4463,6 +4463,7 @@ dependencies = [
  "keyring",
  "keyring-core",
  "lattice-mobile-core",
+ "rand_core",
  "rusqlite",
  "serde",
  "serde_json",

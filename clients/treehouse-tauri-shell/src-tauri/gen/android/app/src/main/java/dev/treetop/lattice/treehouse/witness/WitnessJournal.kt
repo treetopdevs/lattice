@@ -46,6 +46,27 @@ internal class WitnessJournal(context: Context, expectedAppSignerSha256: ByteArr
         }
     }
 
+    /** Coordinator-only read: pin the exact original attempt until the owner drains and closes. */
+    fun retainExistingForAttempt(expectedRevision: Long, originalAttempt: ByteArray): WitnessResult<WitnessSnapshot> = operation {
+        val attempt = witness32(originalAttempt)
+        paths.validate()
+        if (!paths.database.exists()) WitnessResult.Missing else {
+            requireExistingDatabase()
+            var acquired: WitnessProcessLock.Lease? = null
+            try {
+                if (lease == null) acquired = acquire(false)
+                val snapshot = open(false, false).use { read(it) }
+                storageRequire(snapshot.identity.revision == expectedRevision, "stale_revision")
+                storageRequire(snapshot.identity.creationAttemptId == attempt, "creation_attempt_mismatch")
+                if (acquired != null) {
+                    lease = acquired
+                    acquired = null
+                }
+                WitnessResult.Stored(snapshot)
+            } finally { acquired?.close() }
+        }
+    }
+
     fun prepareAccepted(enrollment: WitnessEnrollment, nativeCreationAttempt: ByteArray): WitnessResult<WitnessSnapshot> = operation {
         val attempt = witness32(nativeCreationAttempt)
         storageRequire(attempt == enrollment.creationAttemptId, "creation_attempt_mismatch")
