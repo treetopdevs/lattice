@@ -322,7 +322,11 @@ fn dropping_caller_sends_private_cancel_but_holds_slot_until_blocked_call_drains
         )
         .unwrap();
     started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
-    let dropper = std::thread::spawn(move || drop(pending));
+    let (drop_returned_tx, drop_returned_rx) = mpsc::channel();
+    let dropper = std::thread::spawn(move || {
+        drop(pending);
+        drop_returned_tx.send(()).unwrap();
+    });
     assert_eq!(
         kinds_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
         ResponseKind::Identity
@@ -334,6 +338,9 @@ fn dropping_caller_sends_private_cancel_but_holds_slot_until_blocked_call_drains
     cancel_launch_rx
         .recv_timeout(Duration::from_secs(1))
         .unwrap();
+    drop_returned_rx
+        .recv_timeout(Duration::from_secs(1))
+        .expect("caller drop must return while cancel dispatch factory is blocked");
     // Let the original callback finish while start_cancel is between launch
     // and drain registration. The operation must remain reserved.
     release_tx.send(()).unwrap();
@@ -575,7 +582,7 @@ fn unknown_cancel_dispatch_failure_is_a_failed_drain_and_retains_slot() {
 }
 
 #[test]
-fn known_unlaunched_cancel_entropy_failure_does_not_wedge_after_original_drain() {
+fn known_unlaunched_cancel_entropy_panic_does_not_wedge_after_original_drain() {
     let app = tauri::test::mock_builder()
         .build(tauri::test::mock_context(tauri::test::noop_assets()))
         .unwrap();
@@ -639,7 +646,7 @@ fn known_unlaunched_cancel_entropy_failure_does_not_wedge_after_original_drain()
                 move || current(),
             )
         },
-        || Err("native_entropy_unavailable"),
+        || panic!("cancel entropy source panic before launch"),
     );
     let pending = flow
         .execute(
@@ -700,15 +707,29 @@ fn lifecycle_hook_latches_owner_and_cancels_without_a_retrieved_webview() {
     let (release_tx, release_rx) = mpsc::channel();
     let release = Arc::new(Mutex::new(Some(release_rx)));
     let (kinds_tx, kinds_rx) = mpsc::channel();
+    let (factory_enter_tx, factory_enter_rx) = mpsc::channel();
+    let (factory_release_tx, factory_release_rx) = mpsc::channel();
+    let factory_release = Arc::new(Mutex::new(Some(factory_release_rx)));
     let flow = witness_flow::test_adapter::flow(owner, operations, move |request, current| {
         let release = release.clone();
         let started = started_tx.clone();
+        let factory_release = factory_release.clone();
         let (kind, id) = match &request {
             witness_bridge::PrivateRequest::Identity(v) => (ResponseKind::Identity, v.operation_id),
             witness_bridge::PrivateRequest::Cancel(v) => (ResponseKind::Cancel, v.operation_id),
             _ => panic!("unexpected"),
         };
         kinds_tx.send(kind).unwrap();
+        if kind == ResponseKind::Cancel {
+            factory_enter_tx.send(()).unwrap();
+            factory_release
+                .lock()
+                .unwrap()
+                .take()
+                .unwrap()
+                .recv()
+                .unwrap();
+        }
         witness_mobile::test_adapter::dispatch(
             request,
             move |_| async move {
@@ -736,6 +757,10 @@ fn lifecycle_hook_latches_owner_and_cancels_without_a_retrieved_webview() {
         .unwrap();
     started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
     flow.lifecycle_invalidated();
+    factory_enter_rx
+        .recv_timeout(Duration::from_secs(1))
+        .expect("cancel factory must run on the owned background task");
+    factory_release_tx.send(()).unwrap();
     assert_eq!(
         kinds_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
         ResponseKind::Identity

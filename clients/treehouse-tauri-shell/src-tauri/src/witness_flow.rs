@@ -499,22 +499,25 @@ impl WitnessFlow {
         }
     }
     async fn finish(&self, token: OperationToken) -> bool {
-        let completion = {
-            let Ok(mut active) = self.active.lock() else {
-                return false;
+        let active = self.active.clone();
+        let ready = self.completion_ready.clone();
+        let completion = tauri::async_runtime::spawn_blocking(move || {
+            let Ok(mut active) = active.lock() else {
+                return None;
             };
-            let Some(state) = active.as_mut().filter(|state| state.id == token.id()) else {
-                return false;
-            };
+            let state = active.as_mut().filter(|state| state.id == token.id())?;
             state.run_finished = true;
             while active.as_ref().is_some_and(|state| state.cancel_starting) {
-                let Ok(next) = self.completion_ready.wait(active) else {
-                    return false;
+                let Ok(next) = ready.wait(active) else {
+                    return None;
                 };
                 active = next;
             }
             Self::take_completion(&mut active)
-        };
+        })
+        .await
+        .ok()
+        .flatten();
         let Some((owned_token, drains)) = completion else {
             return false;
         };
@@ -528,7 +531,9 @@ impl WitnessFlow {
 
     fn cancel_started(self: Arc<Self>, id: Bytes32, session: SessionSnapshot) {
         let target = self.operations.cancel(id, &session);
-        let cancel = target.and_then(|target| self.start_cancel(&target).ok());
+        let reserved = target
+            .as_ref()
+            .and_then(|target| self.reserve_cancel(target).ok());
         let pending = self.active.lock().ok().and_then(|active| {
             active
                 .as_ref()
@@ -539,9 +544,12 @@ impl WitnessFlow {
         if let Some(pending) = pending {
             pending.cancel();
         }
-        if let Some(cancel) = cancel {
+        if let (Some(target), Some(current)) = (target, reserved) {
+            let flow = self.clone();
             tauri::async_runtime::spawn(async move {
-                let _ = Self::finish_cancel(cancel).await;
+                if let Ok(cancel) = flow.dispatch_reserved_cancel_async(target, current).await {
+                    let _ = Self::finish_cancel(cancel).await;
+                }
             });
         }
     }
@@ -553,7 +561,7 @@ impl WitnessFlow {
         session: SessionSnapshot,
     ) -> Result<FlowPending, &'static str> {
         let target = self.operations.cancel(id, &session).ok_or(FLOW_REFUSED)?;
-        let cancel = self.start_cancel(&target)?;
+        let current = self.reserve_cancel(&target)?;
         let pending = self.active.lock().ok().and_then(|active| {
             active
                 .as_ref()
@@ -565,8 +573,12 @@ impl WitnessFlow {
             pending.cancel();
         }
         let (sender, receiver) = channel(1);
+        let flow = self.clone();
         tauri::async_runtime::spawn(async move {
-            let result = Self::finish_cancel(cancel).await;
+            let result = match flow.dispatch_reserved_cancel_async(target, current).await {
+                Ok(cancel) => Self::finish_cancel(cancel).await,
+                Err(reason) => Err(reason),
+            };
             let _ = sender.send(result).await;
         });
         Ok(FlowPending {
@@ -589,7 +601,7 @@ impl WitnessFlow {
         let Some(target) = self.operations.lifecycle_invalidated() else {
             return;
         };
-        let cancel = self.start_cancel(&target).ok();
+        let reserved = self.reserve_cancel(&target).ok();
         let pending = self.active.lock().ok().and_then(|active| {
             active
                 .as_ref()
@@ -600,35 +612,59 @@ impl WitnessFlow {
         if let Some(pending) = pending {
             pending.cancel();
         }
-        if let Some(cancel) = cancel {
+        if let Some(current) = reserved {
+            let flow = self.clone();
             tauri::async_runtime::spawn(async move {
-                let _ = Self::finish_cancel(cancel).await;
+                if let Ok(cancel) = flow.dispatch_reserved_cancel_async(target, current).await {
+                    let _ = Self::finish_cancel(cancel).await;
+                }
             });
         }
+    }
+
+    fn reserve_cancel(
+        &self,
+        target: &crate::witness_operation::CancellationTarget,
+    ) -> Result<Current, &'static str> {
+        let mut active = self.active.lock().map_err(|_| FLOW_REFUSED)?;
+        let state = active
+            .as_mut()
+            .filter(|state| state.id == target.id())
+            .ok_or(FLOW_REFUSED)?;
+        if state.cancel_sent || state.cancel_starting {
+            return Err(FLOW_REFUSED);
+        }
+        state.cancel_sent = true;
+        state.cancel_starting = true;
+        Ok(state.cancel_current.clone())
     }
 
     fn start_cancel(
         &self,
         target: &crate::witness_operation::CancellationTarget,
     ) -> Result<MobilePending, &'static str> {
-        let current = {
-            let mut active = self.active.lock().map_err(|_| FLOW_REFUSED)?;
-            let state = active
-                .as_mut()
-                .filter(|state| state.id == target.id())
-                .ok_or(FLOW_REFUSED)?;
-            if state.cancel_sent || state.cancel_starting {
-                return Err(FLOW_REFUSED);
-            }
-            state.cancel_sent = true;
-            state.cancel_starting = true;
-            state.cancel_current.clone()
-        };
-        let cancel_id = match self.cancel_nonce.lock().map_err(|_| FLOW_REFUSED)?.as_mut()() {
-            Ok(id) => id,
-            Err(reason) => {
+        let current = self.reserve_cancel(target)?;
+        self.dispatch_reserved_cancel(target, current)
+    }
+
+    fn dispatch_reserved_cancel(
+        &self,
+        target: &crate::witness_operation::CancellationTarget,
+        current: Current,
+    ) -> Result<MobilePending, &'static str> {
+        let nonce = catch_unwind(AssertUnwindSafe(|| {
+            let mut source = self.cancel_nonce.lock().map_err(|_| FLOW_REFUSED)?;
+            source.as_mut()()
+        }));
+        let cancel_id = match nonce {
+            Ok(Ok(id)) => id,
+            Ok(Err(reason)) => {
                 self.rollback_unlaunched_cancel(target.id());
                 return Err(reason);
+            }
+            Err(_) => {
+                self.rollback_unlaunched_cancel(target.id());
+                return Err(FLOW_REFUSED);
             }
         };
         let session = target.session_digest();
@@ -655,6 +691,18 @@ impl WitnessFlow {
         state.cancel_starting = false;
         self.completion_ready.notify_all();
         Ok(pending)
+    }
+
+    async fn dispatch_reserved_cancel_async(
+        self: Arc<Self>,
+        target: crate::witness_operation::CancellationTarget,
+        current: Current,
+    ) -> Result<MobilePending, &'static str> {
+        tauri::async_runtime::spawn_blocking(move || {
+            self.dispatch_reserved_cancel(&target, current)
+        })
+        .await
+        .map_err(|_| FLOW_REFUSED)?
     }
 
     fn rollback_unlaunched_cancel(&self, id: Bytes32) {
