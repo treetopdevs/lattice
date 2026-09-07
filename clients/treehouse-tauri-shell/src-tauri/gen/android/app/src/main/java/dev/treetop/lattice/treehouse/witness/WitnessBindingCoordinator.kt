@@ -5,7 +5,6 @@ import java.security.MessageDigest
 import java.security.Signature
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
-import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicBoolean
@@ -43,6 +42,8 @@ internal interface WitnessBindingPlatform {
     fun prepareSignature(original: WitnessIdentityRecord): WitnessResult<Signature>
 }
 
+internal fun interface WitnessExpiry { fun cancel() }
+
 /** One durable consent and one exact fixed-key CryptoObject operation. */
 internal class WitnessBindingCoordinator(
     private val context: Context,
@@ -52,9 +53,15 @@ internal class WitnessBindingCoordinator(
     private val sessionValid: (WitnessBytes) -> Boolean,
     private val monotonicNanos: () -> Long = System::nanoTime,
     private val journalCheckpoint: (String) -> Unit = {},
+    private val lifecycleCheckpoint: (String) -> Unit = {},
+    private val scheduleExpiry: (Long, () -> Unit) -> WitnessExpiry = { delay, task ->
+        val future = timer.schedule(task, delay, TimeUnit.MILLISECONDS)
+        WitnessExpiry { future.cancel(false) }
+    },
 ) {
     private val expectedSigner = witness32(signer)
     private val active = AtomicReference<Attempt?>(null)
+    private val lifecycle = Any()
 
     private enum class State { REVIEW, PREPARED, SIGNING, TERMINAL }
     private inner class Handle : WitnessBindingHandle
@@ -69,7 +76,7 @@ internal class WitnessBindingCoordinator(
         lateinit var claim: PublicBindingClaim
         var consentRevision = -1L
         var consentStarted = Long.MIN_VALUE
-        var expiry: ScheduledFuture<*>? = null
+        var expiry: WitnessExpiry? = null
         fun closeJournal() { if (::journal.isInitialized) journal.close() }
     }
 
@@ -113,22 +120,29 @@ internal class WitnessBindingCoordinator(
                     request.sessionDigest.copyBytes()))
                 attempt.consentRevision = consent.revision
                 requireUsable(attempt, checkRevision = true)
-                if (!attempt.state.compareAndSet(State.REVIEW, State.PREPARED)) throw Failure("cancelled")
                 val remaining = remainingMillis(attempt)
                 if (remaining <= 0) throw Failure("binding_timeout")
-                attempt.expiry = timer.schedule({ expire(attempt) }, remaining, TimeUnit.MILLISECONDS)
+                synchronized(lifecycle) {
+                    if (!currentForDelivery(attempt) || !attempt.state.compareAndSet(State.REVIEW, State.PREPARED))
+                        throw Failure("cancelled")
+                    lifecycleCheckpoint("prepared_published")
+                    attempt.expiry = scheduleExpiry(remaining) { expire(attempt) }
+                }
                 retained = true
                 WitnessResult.Stored(PreparedWitnessBinding(attempt.handle, attempt.claim, remaining))
             } catch (error: Exception) {
                 WitnessResult.Refused(if (error is Failure) error.reason else if (error is TimeoutException) "cancelled" else "binding_failed")
             }
             if (retained) {
-                if (isUsable(attempt, checkRevision = true)) {
-                    try { callback(result) } catch (_: Exception) { terminatePrepared(attempt) }
+                val revisionValid = isUsable(attempt, checkRevision = true)
+                lifecycleCheckpoint("before_prepare_delivery")
+                val deliverStored = synchronized(lifecycle) {
+                    revisionValid && attempt.state.get() == State.PREPARED && currentForDelivery(attempt)
                 }
+                if (deliverStored) try { callback(result) } catch (_: Exception) { terminatePrepared(attempt) }
                 else {
                     terminatePrepared(attempt)
-                    callback(WitnessResult.Refused("cancelled"))
+                    callback(WitnessResult.Refused(if (remainingMillis(attempt) <= 0) "binding_timeout" else "cancelled"))
                 }
             } else {
                 finish(attempt)
@@ -138,8 +152,12 @@ internal class WitnessBindingCoordinator(
     }
 
     fun signPrepared(handle: WitnessBindingHandle, callback: (WitnessResult<SignedWitnessBinding>) -> Unit) {
-        val attempt = active.get()
-        if (attempt == null || handle !== attempt.handle || !attempt.state.compareAndSet(State.PREPARED, State.SIGNING)) {
+        val attempt = synchronized(lifecycle) {
+            val candidate = active.get()
+            if (candidate != null && handle === candidate.handle && currentForDelivery(candidate) &&
+                candidate.state.compareAndSet(State.PREPARED, State.SIGNING)) candidate else null
+        }
+        if (attempt == null) {
             callback(WitnessResult.Refused("stale_binding_handle"))
             return
         }
@@ -164,36 +182,53 @@ internal class WitnessBindingCoordinator(
                 WitnessResult.Refused(if (error is Failure) error.reason else if (error is TimeoutException) "binding_timeout" else "binding_failed")
             }
             // Keep the active slot and process lease through the final validity check and release.
-            val released = if (isUsable(attempt, checkRevision = true)) result else
-                WitnessResult.Refused(if (remainingMillis(attempt) <= 0) "binding_timeout" else "cancelled")
+            val revisionValid = isUsable(attempt, checkRevision = true)
+            lifecycleCheckpoint("before_sign_delivery")
+            val released = synchronized(lifecycle) {
+                val usable = revisionValid && attempt.state.get() == State.SIGNING && currentForDelivery(attempt)
+                attempt.state.set(State.TERMINAL)
+                if (usable) result else WitnessResult.Refused(
+                    if (remainingMillis(attempt) <= 0) "binding_timeout" else "cancelled")
+            }
             try { callback(released) } finally { finish(attempt) }
         }
     }
 
     fun cancel(attemptId: ByteArray, sessionDigest: ByteArray): Boolean {
         if (attemptId.size != 32 || sessionDigest.size != 32) return false
-        val attempt = active.get() ?: return false
-        if (attempt.request.attemptId != WitnessBytes(attemptId) || attempt.request.sessionDigest != WitnessBytes(sessionDigest)) return false
-        attempt.cancelled.set(true)
+        val attempt: Attempt
+        var finishNow = false
+        synchronized(lifecycle) {
+            attempt = active.get() ?: return false
+            if (attempt.request.attemptId != WitnessBytes(attemptId) ||
+                attempt.request.sessionDigest != WitnessBytes(sessionDigest) || attempt.state.get() == State.TERMINAL) return false
+            attempt.cancelled.set(true)
+            if (attempt.state.compareAndSet(State.PREPARED, State.TERMINAL)) finishNow = true
+        }
         attempt.cancellation.get()?.cancel()
         attempt.review.complete(false)
         attempt.presence.complete(WitnessPresenceResult.Refused("cancelled"))
-        if (attempt.state.compareAndSet(State.PREPARED, State.TERMINAL)) finish(attempt)
+        if (finishNow) finish(attempt)
         return true
     }
 
     private fun expire(attempt: Attempt) {
-        attempt.cancelled.set(true)
+        var finishNow = false
+        synchronized(lifecycle) {
+            if (active.get() !== attempt || attempt.state.get() == State.TERMINAL) return
+            attempt.cancelled.set(true)
+            if (attempt.state.compareAndSet(State.PREPARED, State.TERMINAL)) finishNow = true
+        }
         attempt.cancellation.get()?.cancel()
         attempt.presence.complete(WitnessPresenceResult.Refused("binding_timeout"))
-        if (attempt.state.compareAndSet(State.PREPARED, State.TERMINAL)) finish(attempt)
+        if (finishNow) finish(attempt)
     }
     private fun terminatePrepared(attempt: Attempt) {
-        attempt.state.compareAndSet(State.PREPARED, State.TERMINAL)
-        finish(attempt)
+        val won = synchronized(lifecycle) { attempt.state.compareAndSet(State.PREPARED, State.TERMINAL) }
+        if (won) finish(attempt)
     }
     private fun finish(attempt: Attempt) {
-        attempt.expiry?.cancel(false)
+        attempt.expiry?.cancel()
         if (!active.compareAndSet(attempt, null)) return
         try { attempt.closeJournal() } catch (_: Exception) {}
         attempt.state.set(State.TERMINAL)
@@ -201,6 +236,8 @@ internal class WitnessBindingCoordinator(
     private fun requireCurrent(attempt: Attempt) { if (!isCurrent(attempt)) throw Failure("cancelled") }
     private fun isCurrent(attempt: Attempt) = active.get() === attempt && !attempt.cancelled.get() &&
         try { sessionValid(attempt.request.sessionDigest) } catch (_: Exception) { false }
+    private fun currentForDelivery(attempt: Attempt) = active.get() === attempt && !attempt.cancelled.get() &&
+        remainingMillis(attempt) > 0 && try { sessionValid(attempt.request.sessionDigest) } catch (_: Exception) { false }
     private fun requireUsable(attempt: Attempt, checkRevision: Boolean) {
         if (!isUsable(attempt, checkRevision)) throw Failure(if (remainingMillis(attempt) <= 0) "binding_timeout" else "cancelled")
     }

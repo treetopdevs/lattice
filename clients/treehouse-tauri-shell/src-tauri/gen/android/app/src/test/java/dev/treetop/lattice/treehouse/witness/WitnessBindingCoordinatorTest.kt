@@ -129,6 +129,68 @@ class WitnessBindingCoordinatorTest {
         assertEquals(WitnessResult.Refused("validator_nonce_spent"), prepare(repeated, request(4)))
     }
 
+    @Test fun cancelWinningBeforePrepareDeliverySuppressesStored() {
+        val context = completedContext()
+        val entered = CountDownLatch(1); val release = CountDownLatch(1)
+        val coordinator = WitnessBindingCoordinator(context, bytes(7), Ui(), Platform(signing(keyPair())), { true },
+            lifecycleCheckpoint = { if (it == "before_prepare_delivery") { entered.countDown(); release.await() } })
+        val done = CountDownLatch(1); val result = AtomicReference<WitnessResult<PreparedWitnessBinding>>()
+        coordinator.prepareBinding(request(3)) { result.set(it); done.countDown() }
+        assertTrue(entered.await(10, TimeUnit.SECONDS))
+        assertTrue(coordinator.cancel(bytes(5), bytes(8)))
+        release.countDown(); assertTrue(done.await(10, TimeUnit.SECONDS))
+        assertEquals(WitnessResult.Refused("cancelled"), result.get())
+    }
+
+    @Test fun storedSignatureDeliveryWinsOverReentrantCancel() {
+        val context = completedContext()
+        val coordinator = WitnessBindingCoordinator(context, bytes(7), Ui(), Platform(signing(keyPair())), { true })
+        val prepared = stored(prepare(coordinator, request(3)))
+        val cancelled = AtomicReference<Boolean>()
+        val done = CountDownLatch(1); val result = AtomicReference<WitnessResult<SignedWitnessBinding>>()
+        coordinator.signPrepared(prepared.handle) {
+            result.set(it); cancelled.set(coordinator.cancel(bytes(5), bytes(8))); done.countDown()
+        }
+        assertTrue(done.await(10, TimeUnit.SECONDS))
+        assertTrue(result.get() is WitnessResult.Stored)
+        assertFalse(cancelled.get())
+    }
+
+    @Test fun throwingPrepareCallbackCannotCloseReentrantSigningLease() {
+        val context = completedContext()
+        val entered = CountDownLatch(1); val release = CountDownLatch(1); val signedDone = CountDownLatch(1)
+        val signed = AtomicReference<WitnessResult<SignedWitnessBinding>>()
+        lateinit var coordinator: WitnessBindingCoordinator
+        val ui = Ui(onPresence = { signature, callback ->
+            entered.countDown(); Thread { release.await(); callback(WitnessPresenceResult.Success(signature)) }.start()
+        })
+        coordinator = WitnessBindingCoordinator(context, bytes(7), ui, Platform(signing(keyPair())), { true })
+        coordinator.prepareBinding(request(3)) {
+            coordinator.signPrepared(stored(it).handle) { value -> signed.set(value); signedDone.countDown() }
+            throw IllegalStateException("caller_failed")
+        }
+        assertTrue(entered.await(10, TimeUnit.SECONDS)); release.countDown()
+        assertTrue(signedDone.await(10, TimeUnit.SECONDS))
+        assertTrue("${signed.get()}", signed.get() is WitnessResult.Stored)
+    }
+
+    @Test fun cancellationCannotMissExpiryInstalledAfterPreparedPublication() {
+        val context = completedContext()
+        val entered = CountDownLatch(1); val release = CountDownLatch(1)
+        val expiryCancelled = AtomicBoolean(false)
+        val coordinator = WitnessBindingCoordinator(context, bytes(7), Ui(), Platform(signing(keyPair())), { true },
+            lifecycleCheckpoint = { if (it == "prepared_published") { entered.countDown(); release.await() } },
+            scheduleExpiry = { _, _ -> WitnessExpiry { expiryCancelled.set(true) } })
+        val done = CountDownLatch(1)
+        coordinator.prepareBinding(request(3)) { done.countDown() }
+        assertTrue(entered.await(10, TimeUnit.SECONDS))
+        val cancelled = AtomicReference<Boolean>(); val cancelDone = CountDownLatch(1)
+        Thread { cancelled.set(coordinator.cancel(bytes(5), bytes(8))); cancelDone.countDown() }.start()
+        release.countDown(); assertTrue(cancelDone.await(10, TimeUnit.SECONDS)); assertTrue(cancelled.get())
+        assertTrue(done.await(10, TimeUnit.SECONDS))
+        assertTrue(expiryCancelled.get())
+    }
+
     private fun completedContext(): Context {
         val context = context()
         val enrollment = WitnessEnrollment(bytes(1), "replica:test", bytes(2), bytes(3))
