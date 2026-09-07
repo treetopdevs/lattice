@@ -218,7 +218,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 176 | Fail closed at the wire/authority boundary: lease range, decode depth, replica marker, op kinds | P1 | M | 161 (rec.), 168, 172, 173 | DONE (PR70 final 99139544, Fable PASS, 726 tests + 27 properties; exact tip 34050467317 and merge 7f1636fd / run 34052131674 passed; unified R09) |
 | 177 | Group-first antifragile re-aim: operator decisions, AF-1..AF-3 loss gates, program reorder | **P0** | M | 158, 175 | DONE (program amendment and AF-1 runtime test merged; AF-2/AF-3 remain open; unified roadmap owns execution) |
 | 178 | Treehouse Contract Correction: frozen text-only beta contract, one-pager claims corrected to D1/AF-2, copy pinned by test | **P0** | S | 158, 177 | DONE (2026-09-03; lands with apps/lattice_core/test/treehouse/contract_test.exs) |
-| 179 | Witnessed beacons pinned at genesis (AF-2 founder-loss clock) | P1 | S then L | 145, 149, 162, 177, 178 | IN PROGRESS (PR68 final 54aa2230 reviewed, full 747 tests + 27 properties and exact tip 34062465105 passed; fresh command-kind claim refuted by signed BEAM/compaction/TS cases and independently confirmed by Fable; thread resolved, merge gate remains; unified R03) |
+| 179 | Witnessed beacons pinned at genesis (AF-2 founder-loss clock) | P1 | S then L | 145, 149, 162, 177, 178 | DONE (PR68 final 5d5e0560; Fable/Sol reviews passed; full source 747 tests + 27 properties; final tip 34067997116 and merge 6f0a555a / run 34068926435 passed. Narrow Core beacon/admission/revocation/lapse proof; general founder survival and physical ceremonies remain later unified gates) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
