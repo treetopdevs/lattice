@@ -8,8 +8,10 @@ defmodule LatticeCarrierServer.Operator.Staging do
   The candidate is not activation, authenticated readiness, or publication.
   Generation/catalog-head values remain reviewed operator intent.
   """
+  alias Lattice.Authority
   alias Lattice.Carrier.Wire
-  alias Lattice.{Authority, Log, Op}
+  alias Lattice.Log
+  alias Lattice.Op
   alias LatticeCarrierServer.Manifest
   alias LatticeCarrierServer.Operator.{Journal, Lock}
   @max_artifact 32 * 1024 * 1024
@@ -97,23 +99,33 @@ defmodule LatticeCarrierServer.Operator.Staging do
   defp request_valid?(_), do: false
 
   defp artifacts_valid?(artifacts) when is_list(artifacts) do
-    length(artifacts) in 1..128 and
-      Enum.all?(artifacts, fn a ->
-        is_map(a) and Enum.sort(Map.keys(a)) == [:bytes, :kind, :op_id, :replica, :review] and
-          a.kind in [:log, :reference, :manifest] and is_binary(a.bytes) and
-          byte_size(a.bytes) in 1..@max_artifact and
-          ((a.kind == :manifest and a.replica == nil and a.op_id == nil and a.review == nil) or
-             (a.kind == :reference and is_binary(a.replica) and Journal.op_id?(a.op_id) and
-                a.review == nil) or
-             (a.kind == :log and is_binary(a.replica) and Journal.op_id?(a.op_id) and
-                review_valid?(a.review)))
-      end) and Enum.reduce(artifacts, 0, &(byte_size(&1.bytes) + &2)) <= @max_artifact and
+    length(artifacts) in 1..128 and Enum.all?(artifacts, &artifact_valid?/1) and
+      Enum.reduce(artifacts, 0, &(byte_size(&1.bytes) + &2)) <= @max_artifact and
       Enum.count(artifacts, &(&1.kind == :manifest)) == 1 and
       Enum.count(artifacts, &(&1.kind == :reference)) == 1 and
       Enum.any?(artifacts, &(&1.kind == :log))
   end
 
   defp artifacts_valid?(_), do: false
+
+  defp artifact_valid?(a) when is_map(a) do
+    Enum.sort(Map.keys(a)) == [:bytes, :kind, :op_id, :replica, :review] and
+      is_binary(a.bytes) and byte_size(a.bytes) in 1..@max_artifact and
+      artifact_identity_valid?(a)
+  end
+
+  defp artifact_valid?(_), do: false
+
+  defp artifact_identity_valid?(%{kind: :manifest} = a),
+    do: a.replica == nil and a.op_id == nil and a.review == nil
+
+  defp artifact_identity_valid?(%{kind: :reference} = a),
+    do: is_binary(a.replica) and Journal.op_id?(a.op_id) and a.review == nil
+
+  defp artifact_identity_valid?(%{kind: :log} = a),
+    do: is_binary(a.replica) and Journal.op_id?(a.op_id) and review_valid?(a.review)
+
+  defp artifact_identity_valid?(_), do: false
 
   defp review_valid?(r) when is_map(r) do
     Enum.sort(Map.keys(r)) == ~w(creation grants profile_genesis profile_id) and
@@ -218,20 +230,21 @@ defmodule LatticeCarrierServer.Operator.Staging do
     Enum.reduce_while(instances, {:error, :missing_space_history}, fn instance, refusal ->
       case Log.restore_verified(instance.log_file) do
         {:ok, %{log: %{replica: replica} = log}} when replica == op.replica ->
-          case Log.accept(log, op) do
-            {:ok, union} ->
-              if Map.has_key?(Authority.analyze(Treehouse.Space, union).reasons, op.id),
-                do: {:halt, {:error, :reference_refused}},
-                else: {:halt, :ok}
-
-            _ ->
-              {:halt, {:error, :reference_refused}}
-          end
+          {:halt, accept_reference(log, op)}
 
         _ ->
           {:cont, refusal}
       end
     end)
+  end
+
+  defp accept_reference(log, op) do
+    with {:ok, union} <- Log.accept(log, op),
+         false <- Map.has_key?(Authority.analyze(Treehouse.Space, union).reasons, op.id) do
+      :ok
+    else
+      _ -> {:error, :reference_refused}
+    end
   end
 
   defp verify_candidate_manifest(artifacts, active) do

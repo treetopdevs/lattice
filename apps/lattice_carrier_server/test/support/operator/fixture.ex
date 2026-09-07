@@ -2,8 +2,8 @@ defmodule LatticeCarrierServer.Operator.Fixture do
   @moduledoc false
   import ExUnit.Assertions
   import ExUnit.Callbacks
-  alias Lattice.{Log, Sim}
   alias Lattice.Carrier.Wire
+  alias Lattice.{Log, Sim}
   alias LatticeCarrierServer.Operator.{Journal, Staging}
 
   def new do
