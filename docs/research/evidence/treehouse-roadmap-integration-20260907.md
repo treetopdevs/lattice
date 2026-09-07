@@ -81,6 +81,29 @@ three existing exclusions, format and Credo. Broad client checks passed again af
 preview tests/build also passed on the unchanged preview source. Hosted run34135777656 passed the prior `125558e0` tip;
 that does not close the refreshed-tip or merge-result gates.
 
+The next hosted run, 34139000971 at `0ca940fc`, passed every required job.
+Subsequent review nevertheless reopened exact attestation arity, known-but-refused
+parent evidence, and repeated whole-graph conflict work. Repair `54f9a8900`
+requires three arguments and preserves an independently valid claim from a
+malformed certificate. Six new authenticated edge histories agree with BEAM for
+parent/child projections in forward and reverse order; both runtimes are gated
+in CI. Historical signed vectors remain unchanged.
+
+Indexed conflict repairs `f5da66bb0` (BEAM) and `03f9d1878` (TypeScript) passed
+independent Sol review. The actual six-recovery BEAM analysis reduced full ancestor
+closure calls from seven to one. The TypeScript control reduced unrelated kind
+classifications from 8,256 to at most 192 for 64 independent candidates, with
+32 reference-equivalence cases. The exact three-key callback context, seven-key
+ordinary analysis result, denial precedence and canonical topological order are
+preserved. Prefix normalization and large genuinely conflicting groups retain
+nonlinear costs; no general scalability bound is claimed.
+
+Root refreshed checks passed 1,019 tests plus 27 properties, zero failures, three
+existing exclusions, formatting and Credo, broad client checks, and preview
+tests/build. The performance trace helper also terminates its tracer on early
+assertion failure. A refreshed hosted tip and exact merge-result check remain
+required after these final source repairs.
+
 ## Native vertical slice
 
 Source through `9d4fcad9629242797df5783168ef258fac2fcd12` adds retained

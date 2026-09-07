@@ -36,6 +36,7 @@ defmodule Treehouse.MemberContinuityPerformanceTest do
 
     on_exit(fn ->
       :erlang.trace_pattern({Dag, :all_ancestors, 1}, false, [:global])
+      if Process.alive?(tracer), do: Process.exit(tracer, :kill)
     end)
 
     analysis = Authority.analyze(Space, log)
