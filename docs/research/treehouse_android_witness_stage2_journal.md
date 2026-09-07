@@ -520,3 +520,20 @@ Android dispatch/JNI/lifecycle behavior and the combined TEE/Ed25519/attestation
 strong-biometric profile require selected-device evidence. The latter facts do
 not block 2A. A discovered inability to uphold a 2B guard is a recorded refusal
 or an exact review amendment, never a hidden fallback.
+
+## Adopted 2A storage-size preflight — 2026-09-07
+
+The integrator adopts the exact private projection below before metadata completion
+implementation. Its field descriptions map to the unchanged existing binding codec;
+it is not a new public wire response. Check every retained/proposed selected
+enrollment independently; do not combine the whole enrollment inventory into a
+pretend single response. Placeholder bytes are ephemeral sizing inputs only.
+
+# Android 2A exact private precommit-size projection
+
+No provider response or signature is produced. Proposed private sizing envelope only:
+- identity exactly version, product, appId, creationAttemptId, generationChallenge, publicKey, spki, creationAppSignerSha256, creationVersionCode, certificateChain. All values are actual original public metadata.
+- binding exactly claim and signature. claim exactly the existing 13 fixed binding fields: domain/version/product/appId/replica plus enrollmentId/recipient/creationAttemptId/actualWitnessPublicKey/generationChallengeDigest/freshValidatorNonce/nativeRandomNonce/nativeCallerSessionDigest. Select each actual retained/proposed enrollment for preflight; derive known fields from original state. The three future ephemeral slots use 32-byte all-255 size placeholders, signature uses64-byte all-255 size placeholder. These are sizing bytes only, never persisted as a proof, returned or signed.
+- No unexplained numerical reserve. Serialize using actual API33 org.json.JSONObject then count UTF8 <=131072 before metadata/enrollment admission. Future2B must serialize and independently guard its actual final response again.
+
+API33 JSONStringer escapes every slash (source captured read-only in r36-journal-api33-JSONStringer.java). This means a legal raw64KiB synthetic certificate chain can exceed128KiB JSON and must refuse. Constructed worst-case envelope with8 chains (7x8191 +8199 bytes, all255),512 NUL replica bytes, maximum signed64 creation version, actual SHA256 original-challenge digest, and all255 remaining fixed fields produces 179761 UTF8 bytes; chain Base64 alone totals87400 characters before slash escaping. This is genuine legal storage-input shape and a required oversized precommit negative. Ordinary64KiB all-zero synthetic chain is a valid positive (no slash expansion) subject to actual serializer result. No global assertion that every64KiB chain fits.
