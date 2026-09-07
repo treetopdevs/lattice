@@ -52,26 +52,54 @@ export function memberContinuityCommandConflicts(ops, verdicts) {
         .filter((op) => verdicts.get(op.id) === "honored")
         .map((op) => ({ op, certificate: certificateFor(op) }))
         .filter((entry) => entry.certificate !== null);
-    const removals = [...ops.values()].filter((op) => verdicts.get(op.id) === "honored");
+    const byNewPub = new Map();
+    const parentWrappers = new Map();
+    const referencedParents = new Set(candidates.flatMap(candidate => candidate.certificate.claim.parents));
+    for (const candidate of candidates) {
+        const claim = candidate.certificate.claim;
+        const targets = byNewPub.get(claim.newPub) ?? [];
+        targets.push(candidate);
+        byNewPub.set(claim.newPub, targets);
+        if (referencedParents.size > 0) {
+            const claimId = memberContinuityClaimId(claim);
+            if (referencedParents.has(claimId)) {
+                const byOldPub = parentWrappers.get(claimId) ?? new Map();
+                const wrappers = byOldPub.get(claim.oldPub) ?? [];
+                wrappers.push(candidate);
+                byOldPub.set(claim.oldPub, wrappers);
+                parentWrappers.set(claimId, byOldPub);
+            }
+        }
+    }
+    const removalsByRecipient = new Map();
+    for (const op of ops.values()) {
+        if (verdicts.get(op.id) !== "honored" || op.kind !== "command" || op.command !== "remove_member")
+            continue;
+        const recipient = op.commandArgs?.[0];
+        if (typeof recipient !== "string")
+            continue;
+        const removals = removalsByRecipient.get(recipient) ?? [];
+        removals.push(op);
+        removalsByRecipient.set(recipient, removals);
+    }
     const denied = new Map();
     for (const candidate of candidates) {
-        const stale = candidate.certificate.claim.vouchers.some((voucher) => removals.some((removal) => removalOf(removal, voucher.member) && concurrent(candidate.op.id, removal.id, byId, ancestorCache) &&
+        const claim = candidate.certificate.claim;
+        const stale = claim.vouchers.some((voucher) => (removalsByRecipient.get(voucher.member) ?? []).some((removal) => concurrent(candidate.op.id, removal.id, byId, ancestorCache) &&
             ancestors(removal.id, byId, ancestorCache).has(voucher.admission)));
-        const collision = candidates.some((other) => candidate.certificate.claim.oldPub !== other.certificate.claim.oldPub &&
-            candidate.certificate.claim.newPub === other.certificate.claim.newPub &&
-            concurrent(candidate.op.id, other.op.id, byId, ancestorCache));
         if (stale)
             denied.set(candidate.op.id, "application_continuity_stale_voucher");
-        else if (collision)
+        else if ((byNewPub.get(claim.newPub) ?? []).some((other) => claim.oldPub !== other.certificate.claim.oldPub && concurrent(candidate.op.id, other.op.id, byId, ancestorCache))) {
             denied.set(candidate.op.id, "application_continuity_conflicting_target");
+        }
     }
     for (const candidate of candidates) {
-        const invalid = candidate.certificate.claim.parents.some((parent) => !candidates.some((wrapper) => memberContinuityClaimId(wrapper.certificate.claim) === parent &&
-            wrapper.certificate.claim.oldPub === candidate.certificate.claim.oldPub &&
-            ancestors(candidate.op.id, byId, ancestorCache).has(wrapper.op.id) && !denied.has(wrapper.op.id)));
-        if (invalid && !denied.has(candidate.op.id)) {
+        if (denied.has(candidate.op.id))
+            continue;
+        const claim = candidate.certificate.claim;
+        const invalid = claim.parents.some((parent) => !(parentWrappers.get(parent)?.get(claim.oldPub) ?? []).some((wrapper) => ancestors(candidate.op.id, byId, ancestorCache).has(wrapper.op.id) && !denied.has(wrapper.op.id)));
+        if (invalid)
             denied.set(candidate.op.id, "application_continuity_invalid_parent");
-        }
     }
     return denied;
 }
