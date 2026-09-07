@@ -4,20 +4,28 @@ defmodule Treehouse.CatalogTrustReciprocalTest do
   alias Lattice.Carrier.Wire
   alias Treehouse.{CatalogTrust, CatalogTrustVectors, TransportCatalog}
 
+  @client Path.expand("../../../../clients/lattice-client", __DIR__)
+  @exporter "test/support/export_treehouse_catalog_trust.ts"
   @expected %{trust_revision: 0, history_generation: 0}
   @fixture_sha "64688429c8306d83c4d3236743dceffb6348278ccdca51bbaaa0644af8e88036"
 
   @tag :tmp_dir
-  test "named support emits a self-contained public BEAM reciprocal fixture", %{tmp_dir: tmp_dir} do
+  test "fresh BEAM catalog and rotation evidence verifies through actual TS trust", %{
+    tmp_dir: tmp_dir
+  } do
     path = Path.join(tmp_dir, "beam_trust.json")
     vector = CatalogTrustVectors.write_public_fixture!(path)
     assert File.exists?(path)
     assert Jason.decode!(File.read!(path))["expected"]["catalogId"] == vector.expected.catalogId
     refute File.read!(path) =~ "private"
     refute File.read!(path) =~ "seed"
+    assert run_ts!(["--verify-beam", path]) =~ "PASS BEAM→TS public prepare/catalog/rotation"
   end
 
-  test "TS fixture matches BEAM bytes, IDs, cutoffs and public decisions in both input orders" do
+  @tag :tmp_dir
+  test "fresh TS catalog evidence matches BEAM bytes, cutoffs and decisions in both orders", %{
+    tmp_dir: tmp_dir
+  } do
     path =
       System.get_env("TREEHOUSE_TS_TRUST_VECTOR") ||
         Path.expand(
@@ -28,7 +36,13 @@ defmodule Treehouse.CatalogTrustReciprocalTest do
     assert File.regular?(path), "integrated TS trust fixture is required"
     sha = :crypto.hash(:sha256, File.read!(path)) |> Base.encode16(case: :lower)
     assert sha == @fixture_sha
-    fixture = CatalogTrustVectors.read_ts_fixture!(path)
+    generated = Path.join(tmp_dir, "ts_trust.json")
+    run_ts!(["--out", generated])
+
+    assert File.read!(generated) == File.read!(path),
+           "fresh TS producer differs from pinned signed fixture"
+
+    fixture = CatalogTrustVectors.read_ts_fixture!(generated)
     {:ok, catalog_envelope} = decode_artifact(fixture.catalog_json)
     {:ok, rotation_envelope} = decode_artifact(fixture.rotation_json)
     {:ok, rotated_envelope} = decode_artifact(fixture.rotated_catalog_json)
@@ -85,6 +99,17 @@ defmodule Treehouse.CatalogTrustReciprocalTest do
                  evaluate(rotated, catalogs: [fixture.fork_catalog_json])
       end
     end
+  end
+
+  defp run_ts!(arguments) do
+    {output, status} =
+      System.cmd(Path.join(@client, "node_modules/.bin/tsx"), [@exporter | arguments],
+        cd: @client,
+        stderr_to_stdout: true
+      )
+
+    assert status == 0, output
+    output
   end
 
   defp evaluate(installed, incoming) do

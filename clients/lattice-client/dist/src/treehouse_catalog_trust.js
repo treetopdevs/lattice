@@ -318,7 +318,7 @@ async function evaluateSnapshot(value, originalOnly) {
                 fail("trust_recovery_required");
         }
         if (originalOnly) {
-            await validateStoredBlock(original, next.blocked, catalogs, bindings, unseenBootstrapIds, histories);
+            await validateStoredBlock(original, next.blocked, catalogs, bindings, histories);
             if (original.cutoffProofs.length !== next.cutoffProofs.length)
                 fail("trust_recovery_required");
             return issue("unchanged", value.expected, original, original.blocked?.reason ?? null, replacement, bootstrapIds, heads, catalogHeads, []);
@@ -511,7 +511,7 @@ function validateStoredClosure(state) {
 // Block indexes are witnesses, not a cached winner. Historical fork heads may
 // acquire descendants, so validate their retained relations rather than equality
 // with the current head list. No incoming record can complete these witnesses.
-async function validateStoredBlock(state, derived, catalogs, bindings, unseen, histories) {
+async function validateStoredBlock(state, derived, catalogs, bindings, histories) {
     const saved = state.blocked;
     if (saved === null) {
         if (derived !== null)
@@ -546,8 +546,9 @@ async function validateStoredBlock(state, derived, catalogs, bindings, unseen, h
         fail("trust_recovery_required");
     if (saved.triggers.length > 0)
         return;
-    if (saved.opIds.length > 0 || saved.bootstrapIds.some((id) => !unseen.includes(id)))
+    if (saved.opIds.length > 0)
         fail("trust_recovery_required");
+    await validateBootstrapWitnesses(state, histories);
     const bindingAncestor = (older, newer) => {
         let cursor = newer;
         while (cursor !== null) {
@@ -575,6 +576,35 @@ async function validateStoredBlock(state, derived, catalogs, bindings, unseen, h
     }
     else if (!independentBindings && saved.catalogs.length === 0 && saved.bootstrapIds.length === 0)
         fail("trust_recovery_required");
+}
+async function validateBootstrapWitnesses(state, histories) {
+    const history = histories.get(state.review.space);
+    if (history === undefined)
+        fail("trust_recovery_required");
+    const frames = new Map(history.raw.frames.map((frame) => [frame.id, frame]));
+    for (const id of state.blocked.bootstrapIds) {
+        if (state.review.observedBootstrapIds.includes(id))
+            fail("trust_recovery_required");
+        const closure = new Set(), pending = [id];
+        while (pending.length > 0) {
+            const current = pending.pop();
+            if (closure.has(current))
+                continue;
+            const frame = frames.get(current);
+            if (frame === undefined)
+                fail("trust_recovery_required");
+            closure.add(current);
+            pending.push(...frame.deps);
+        }
+        // A concurrent authority change can refuse a previously observed bootstrap.
+        // Prove the retained command was honored in its own inclusive causal slice;
+        // raw existence alone cannot supply a historical fork witness.
+        const observed = await treehouseCatalogBootstrapsFromFrames({ replica: state.review.space,
+            frames: history.raw.frames.filter((frame) => closure.has(frame.id)) });
+        if (!observed.ok || !observed.bootstraps.some((bootstrap) => bootstrap.id === id &&
+            bootstrap.record.space === state.review.space && bootstrap.record.spaceRoot === state.review.spaceRoot))
+            fail("trust_recovery_required");
+    }
 }
 async function validateAuthorityWitnesses(state, catalogs, histories) {
     const saved = state.blocked, witnesses = saved.authorityWitnesses;
