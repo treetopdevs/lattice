@@ -71,3 +71,6 @@ The host Android tests use Robolectric SDK33. API24 compatibility is lint eviden
 not a physical API24 run. No local build or test establishes device custody,
 same-UID atomic KeyStore compare/create, enrollment readiness, production signing,
 release eligibility or pilot completion.
+
+The September 7 device inventory (`adb devices -l`) listed no attached device.
+Physical biometric/custody proof therefore remains unavailable in this session.
