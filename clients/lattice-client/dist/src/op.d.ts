@@ -1,4 +1,5 @@
 export type OpKind = "command" | "authority" | "inbox" | "tombstone";
+import type { ContinuationCertificate, ContinuationProfile } from "./continuation";
 export type Mutation = "write" | "append" | "add" | "remove" | "delete";
 export type CommandError = "unknown_command" | "bad_command_arity" | "malformed_command";
 export interface AuthorityDelegationEvidence {
@@ -76,6 +77,9 @@ export type SuccessionProofEvidence = {
     mode: "witnessed";
     certificate: WitnessedSuccessionCertificateEvidence | null;
 } | {
+    mode: "continuation";
+    certificate: ContinuationCertificate | null;
+} | {
     mode: "invalid";
 };
 export interface WitnessedBeaconPolicyEvidence {
@@ -101,6 +105,7 @@ export type AuthorityEvidence = {
     delegation: AuthorityDelegationEvidence;
     policies?: Record<string, SuccessionPolicyEvidence>;
     beaconPolicy?: WitnessedBeaconPolicyEvidence | null;
+    continuationProfile?: ContinuationProfile | null;
 } | {
     type: "grant";
     delegation: AuthorityDelegationEvidence;
@@ -137,6 +142,8 @@ export interface Op {
     kind: OpKind;
     /** Authoring realm / DID (the signer). */
     author: string;
+    /** Canonical Base64 of the signed outer author; independent of display realm aliases. */
+    authorPubkey?: string;
     /** The replica field this op targets (e.g. "summary", "posts", "clerk"). */
     field: string;
     /** Absolute mutation applied to that field. */
@@ -156,6 +163,8 @@ export interface Op {
     commandError?: CommandError;
     /** Structurally malformed carrier term retained only for local audit/quarantine. */
     structuralError?: "malformed_term";
+    /** Recognized new authority input whose malformed delegation cannot supply evidence. */
+    authorityInputReason?: "malformed_term" | "unauthorized_continuation" | "unsupported_authority_profile";
     /** Capability id retained from carrier evidence; decoded nil is explicit null. */
     cap?: string | null;
     /** Semantic authority facts retained from the verified carrier body. */

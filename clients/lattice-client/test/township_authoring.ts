@@ -14,8 +14,8 @@ import {
   authorAndPersistTownshipDelegation,
   canonicalBytesForCarrierOp,
   canonicalBytesForWitnessedBeaconClaim,
-  createWitnessedBeaconClaim,
   analyzeAuthority,
+  createWitnessedBeaconClaim,
   authorCarrierDelegation,
   authorTownshipGenesis,
   authorTownshipDelegation,
@@ -242,14 +242,14 @@ const capId = grantDelegation.id;
 // Signed wrong-arity beacons are retained evidence, with no epoch or lease effect.
 const leasedCore = { ...grantDelegation, expires_epoch: 3 };
 const leasedBytes = canonicalBytesForCarrierDelegation(leasedCore);
-const arityLeasedDelegation = {
+const wrongArityLeasedDelegation = {
   ...leasedCore,
   id: createHash("sha256").update(leasedBytes).digest("base64url"),
   sig: Buffer.from(clerkAuthor.sign(leasedBytes)).toString("base64"),
 };
 const leasedGrant = await authorCarrierOp({
   replica: authoredGenesis.replica, deps: [authoredGenesis.id], kind: "authority",
-  body: ["tuple", [["atom", "grant"], ["delegation", arityLeasedDelegation]]],
+  body: ["tuple", [["atom", "grant"], ["delegation", wrongArityLeasedDelegation]]],
   cap: ["nil"], signer: clerkAuthor,
 });
 const wrongArityBeacon = await authorCarrierOp({
@@ -260,7 +260,7 @@ const wrongArityBeacon = await authorCarrierOp({
 const liveLeasePost = await authorTownshipCommand({
   replica: authoredGenesis.replica, deps: [wrongArityBeacon.id],
   command: { command: "post", text: "lease remains live" },
-  capId: arityLeasedDelegation.id, signer: residentAuthor,
+  capId: wrongArityLeasedDelegation.id, signer: residentAuthor,
 });
 const wrongArityFrames = [authoredGenesis, leasedGrant, wrongArityBeacon, liveLeasePost];
 const wrongArityOps = carrierOpsToSemanticOps(wrongArityFrames, vector.realmByPubkey);
@@ -278,7 +278,7 @@ const legacyBeacon = await authorCarrierOp({
 const lapsedLeasePost = await authorTownshipCommand({
   replica: authoredGenesis.replica, deps: [legacyBeacon.id],
   command: { command: "post", text: "lease now lapsed" },
-  capId: arityLeasedDelegation.id, signer: residentAuthor,
+  capId: wrongArityLeasedDelegation.id, signer: residentAuthor,
 });
 const legacyBeaconFrames = [...wrongArityFrames, legacyBeacon, lapsedLeasePost];
 const legacyBeaconState = materialize(vector.schema, carrierOpsToSemanticOps(legacyBeaconFrames, vector.realmByPubkey));
