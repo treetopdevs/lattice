@@ -536,90 +536,109 @@ defmodule Treehouse.CatalogTrust do
   end
 
   defp resolve_catalog!(id, context, visiting) do
-    node = Map.get(context.catalogs, id) || refuse(:trust_pending, [id])
-
-    if node.ready do
-      {context, node}
-    else
-      marker = {:catalog, id}
-      if MapSet.member?(visiting, marker), do: refuse(:invalid_catalog_transition, [id])
-      visiting = MapSet.put(visiting, marker)
-      catalog = node.envelope.catalog
-      {context, binding} = resolve_binding!(catalog.binding, context, visiting)
-
-      case TransportCatalog.verify_catalog(node.envelope, binding.key) do
-        :ok -> :ok
-        {:error, reason} -> refuse(reason, [id])
-      end
-
-      if catalog.space != context.bootstrap.space or catalog.bootstrap != context.bootstrap_id,
-        do: refuse(:wrong_catalog_scope, [id])
-
-      if Enum.any?(catalog.entries, fn entry ->
-           entry.service_id != context.bootstrap.service_id or
-             entry.service_key != context.bootstrap.service_key
-         end),
-         do: refuse(:wrong_catalog_scope, [id])
-
-      context =
-        if catalog.previous == nil do
-          if binding.inventory != nil and
-               TransportCatalog.inventory_id(catalog.entries) != binding.inventory,
-             do: refuse(:invalid_catalog_transition, [id])
-
-          context
-        else
-          {context, prior} = resolve_catalog!(catalog.previous, context, visiting)
-          previous = prior.envelope.catalog
-
-          if previous.binding != catalog.binding or catalog.revision != previous.revision + 1 or
-               not safe?(previous.revision + 1) or
-               not inventory_extends?(previous.entries, catalog.entries),
-             do: refuse(:invalid_catalog_transition, [id])
-
-          context
-        end
-
-      historical = historical_accepted_entry_proof?(id, context)
-      {context, entry_proof} = observe_entries(catalog, historical, context)
-
-      pending =
-        case entry_proof do
-          {:ok, _} ->
-            []
-
-          {:error, :trust_pending} ->
-            [id]
-
-          {:error, :invalid_catalog_transition} ->
-            authority =
-              if authority_frozen_context?(context),
-                do: authority_refusal_status(catalog, context.histories),
-                else: :invalid
-
-            cond do
-              authority != :invalid and node.retained and context.state.blocked != nil and
-                  not supports_accepted_watermark?(id, context) ->
-                pending_frozen_entry!(catalog, node, context, id)
-
-              authority == :pending ->
-                [id]
-
-              authority == :complete ->
-                []
-
-              true ->
-                pending_frozen_entry!(catalog, node, context, id)
-            end
-
-          {:error, reason} ->
-            refuse(reason, [id])
-        end
-
-      node = %{node | ready: true, pending: pending}
-      {%{context | catalogs: Map.put(context.catalogs, id, node)}, node}
+    case Map.get(context.catalogs, id) do
+      nil -> refuse(:trust_pending, [id])
+      %{ready: true} = node -> {context, node}
+      node -> resolve_unready_catalog!(id, node, context, visiting)
     end
   end
+
+  defp resolve_unready_catalog!(id, node, context, visiting) do
+    visiting = catalog_visiting!(id, visiting)
+    catalog = node.envelope.catalog
+    {context, binding} = resolve_binding!(catalog.binding, context, visiting)
+    verify_catalog!(node.envelope, binding.key, id)
+    validate_catalog_scope!(catalog, context, id)
+    context = resolve_catalog_parent!(catalog, binding, context, visiting, id)
+    historical = historical_accepted_entry_proof?(id, context)
+    {context, entry_proof} = observe_entries(catalog, historical, context)
+    pending = catalog_pending!(entry_proof, catalog, node, context, id)
+    node = %{node | ready: true, pending: pending}
+    {%{context | catalogs: Map.put(context.catalogs, id, node)}, node}
+  end
+
+  defp catalog_visiting!(id, visiting) do
+    marker = {:catalog, id}
+    if MapSet.member?(visiting, marker), do: refuse(:invalid_catalog_transition, [id])
+    MapSet.put(visiting, marker)
+  end
+
+  defp verify_catalog!(envelope, key, id) do
+    case TransportCatalog.verify_catalog(envelope, key) do
+      :ok -> :ok
+      {:error, reason} -> refuse(reason, [id])
+    end
+  end
+
+  defp validate_catalog_scope!(catalog, context, id) do
+    wrong_entry? =
+      Enum.any?(catalog.entries, fn entry ->
+        entry.service_id != context.bootstrap.service_id or
+          entry.service_key != context.bootstrap.service_key
+      end)
+
+    if catalog.space != context.bootstrap.space or catalog.bootstrap != context.bootstrap_id or
+         wrong_entry?,
+       do: refuse(:wrong_catalog_scope, [id])
+  end
+
+  defp resolve_catalog_parent!(%{previous: nil} = catalog, binding, context, _visiting, id) do
+    if binding.inventory != nil and
+         TransportCatalog.inventory_id(catalog.entries) != binding.inventory,
+       do: refuse(:invalid_catalog_transition, [id])
+
+    context
+  end
+
+  defp resolve_catalog_parent!(catalog, _binding, context, visiting, id) do
+    {context, prior} = resolve_catalog!(catalog.previous, context, visiting)
+    previous = prior.envelope.catalog
+
+    if previous.binding != catalog.binding or catalog.revision != previous.revision + 1 or
+         not safe?(previous.revision + 1) or
+         not inventory_extends?(previous.entries, catalog.entries),
+       do: refuse(:invalid_catalog_transition, [id])
+
+    context
+  end
+
+  defp catalog_pending!({:ok, _}, _catalog, _node, _context, _id), do: []
+  defp catalog_pending!({:error, :trust_pending}, _catalog, _node, _context, id), do: [id]
+
+  defp catalog_pending!(
+         {:error, :invalid_catalog_transition},
+         catalog,
+         node,
+         context,
+         id
+       ) do
+    authority =
+      if authority_frozen_context?(context),
+        do: authority_refusal_status(catalog, context.histories),
+        else: :invalid
+
+    cond do
+      authority != :invalid and retained_diagnostic?(node, context, id) ->
+        pending_frozen_entry!(catalog, node, context, id)
+
+      authority == :pending ->
+        [id]
+
+      authority == :complete ->
+        []
+
+      true ->
+        pending_frozen_entry!(catalog, node, context, id)
+    end
+  end
+
+  defp catalog_pending!({:error, reason}, _catalog, _node, _context, id),
+    do: refuse(reason, [id])
+
+  defp retained_diagnostic?(node, context, id),
+    do:
+      node.retained and context.state.blocked != nil and
+        not supports_accepted_watermark?(id, context)
 
   defp observe_entries(catalog, historical, context) do
     key = {TransportCatalog.inventory_id(catalog.entries), historical}
@@ -1228,19 +1247,7 @@ defmodule Treehouse.CatalogTrust do
 
     forks =
       Enum.reduce(context.bindings, forks, fn {_id, binding}, acc ->
-        if binding.parent == nil do
-          acc
-        else
-          context.catalogs
-          |> Map.values()
-          |> Enum.filter(&(&1.envelope.catalog.binding == binding.parent))
-          |> Enum.reduce(acc, fn node, values ->
-            if node.id != binding.prior and
-                 catalog_ancestor?(binding.prior, node.id, context.catalogs),
-               do: [node.id, binding.prior | values],
-               else: values
-          end)
-        end
+        rotation_forks(binding, context, acc)
       end)
 
     pending =
@@ -1254,6 +1261,21 @@ defmodule Treehouse.CatalogTrust do
       length(heads) > 1 or forks != [] -> block(:catalog_fork, heads, forks, [], [], pending)
       true -> nil
     end
+  end
+
+  defp rotation_forks(%{parent: nil}, _context, forks), do: forks
+
+  defp rotation_forks(binding, context, forks) do
+    context.catalogs
+    |> Map.values()
+    |> Enum.filter(&(&1.envelope.catalog.binding == binding.parent))
+    |> Enum.reduce(forks, &add_rotation_fork(&1, &2, binding, context.catalogs))
+  end
+
+  defp add_rotation_fork(node, forks, binding, catalogs) do
+    if node.id != binding.prior and catalog_ancestor?(binding.prior, node.id, catalogs),
+      do: [node.id, binding.prior | forks],
+      else: forks
   end
 
   defp binding_heads(context) do
@@ -1417,19 +1439,7 @@ defmodule Treehouse.CatalogTrust do
              true <- canonical_b64?(frame["author"], op.author),
              true <- canonical_b64?(frame["sig"], op.sig),
              true <- op.replica == replica do
-          valid = Op.valid?(op)
-
-          case {mode, valid} do
-            {expected, valid?}
-            when (expected == :accepted and valid?) or
-                   (expected == :rejected and not valid?) ->
-              if portable_frame_size?(frame),
-                do: {:ok, op, frame},
-                else: {:unsupported, op.id}
-
-            _ ->
-              {:invalid, op.id}
-          end
+          classify_scanned_op(mode, Op.valid?(op), op, frame)
         else
           {:error, :malformed_op} -> {:unsupported, Map.get(frame, "id")}
           _ -> {:invalid, Map.get(frame, "id")}
@@ -1438,6 +1448,13 @@ defmodule Treehouse.CatalogTrust do
   rescue
     _ -> {:invalid, nil}
   end
+
+  defp classify_scanned_op(mode, valid?, op, frame)
+       when (mode == :accepted and valid?) or (mode == :rejected and not valid?) do
+    if portable_frame_size?(frame), do: {:ok, op, frame}, else: {:unsupported, op.id}
+  end
+
+  defp classify_scanned_op(_mode, _valid?, op, _frame), do: {:invalid, op.id}
 
   defp scan_rejected(value, replica) do
     if fields?(value, [:frame, :reason]) and value.reason == :bad_signature,
@@ -1514,34 +1531,37 @@ defmodule Treehouse.CatalogTrust do
   end
 
   defp merge_frame_lists!(left, right, frame) do
-    Enum.reduce([left, right], %{}, fn list, acc ->
-      if not proper_list?(list), do: refuse(:invalid_verified_history)
-
-      ids =
-        Enum.map(list, fn item ->
-          if not is_map(item), do: refuse(:invalid_verified_history)
-          raw = frame.(item)
-          if not is_map(raw), do: refuse(:invalid_verified_history)
-          Map.get(raw, "id")
-        end)
-
-      if duplicate?(ids), do: refuse(:invalid_verified_history)
-
-      Enum.reduce(list, acc, fn item, values ->
-        id = Map.get(frame.(item), "id")
-
-        case values[id] do
-          nil ->
-            Map.put(values, id, item)
-
-          previous ->
-            if equivalent_frame?(frame.(previous), frame.(item)),
-              do: values,
-              else: refuse(:invalid_verified_history, [id])
-        end
-      end)
-    end)
+    Enum.reduce([left, right], %{}, &merge_frame_list!(&1, &2, frame))
     |> Map.values()
+  end
+
+  defp merge_frame_list!(list, acc, frame) do
+    if not proper_list?(list), do: refuse(:invalid_verified_history)
+    ids = Enum.map(list, &frame_id!(&1, frame))
+    if duplicate?(ids), do: refuse(:invalid_verified_history)
+    Enum.reduce(list, acc, &merge_frame_item!(&1, &2, frame))
+  end
+
+  defp frame_id!(item, frame) do
+    if not is_map(item), do: refuse(:invalid_verified_history)
+    raw = frame.(item)
+    if not is_map(raw), do: refuse(:invalid_verified_history)
+    Map.get(raw, "id")
+  end
+
+  defp merge_frame_item!(item, values, frame) do
+    id = frame_id!(item, frame)
+
+    case values[id] do
+      nil -> Map.put(values, id, item)
+      previous -> merge_equivalent_frame!(previous, item, id, values, frame)
+    end
+  end
+
+  defp merge_equivalent_frame!(previous, item, id, values, frame) do
+    if equivalent_frame?(frame.(previous), frame.(item)),
+      do: values,
+      else: refuse(:invalid_verified_history, [id])
   end
 
   defp equivalent_frame?(left, right) do
@@ -1588,47 +1608,52 @@ defmodule Treehouse.CatalogTrust do
 
   defp current_bootstrap!(review, log) do
     op = Log.ops(log)[review.bootstrap_id] || refuse(:trust_recovery_required)
+    record = bootstrap_record!(op)
+    validate_bootstrap_scope!(record, review, log)
+    validate_observed_bootstrap_records!(review.observed_bootstrap_ids, log)
+    {record, current_bootstrap_ids!(log), continuation_matches?(record, log)}
+  end
 
-    record =
-      case op do
-        %Op{kind: :command, body: {:catalog_bootstrap_v1, [value]}} ->
-          case TransportCatalog.normalize_bootstrap(value) do
-            {:ok, normalized} -> normalized
-            _ -> refuse(:trust_recovery_required)
-          end
+  defp bootstrap_record!(%Op{kind: :command, body: {:catalog_bootstrap_v1, [value]}}) do
+    case TransportCatalog.normalize_bootstrap(value) do
+      {:ok, normalized} -> normalized
+      _ -> refuse(:trust_recovery_required)
+    end
+  end
 
-        _ ->
-          refuse(:trust_recovery_required)
-      end
+  defp bootstrap_record!(_op), do: refuse(:trust_recovery_required)
 
+  defp validate_bootstrap_scope!(record, review, log) do
     if record.space != review.space or record.space_root != review.space_root or
          Authority.root(log) != review.space_root,
        do: refuse(:trust_recovery_required)
+  end
 
-    Enum.each(review.observed_bootstrap_ids, fn id ->
+  defp validate_observed_bootstrap_records!(ids, log) do
+    Enum.each(ids, fn id ->
       case Log.ops(log)[id] do
         %Op{kind: :command, body: {:catalog_bootstrap_v1, [_]}} -> :ok
         _ -> refuse(:trust_recovery_required)
       end
     end)
+  end
 
-    ids =
-      case CatalogBootstrap.observe(log) do
-        {:ok, observed} -> observed.bootstraps |> Enum.map(& &1.id) |> sorted()
-        _ -> refuse(:invalid_verified_history)
-      end
+  defp current_bootstrap_ids!(log) do
+    case CatalogBootstrap.observe(log) do
+      {:ok, observed} -> observed.bootstraps |> Enum.map(& &1.id) |> sorted()
+      _ -> refuse(:invalid_verified_history)
+    end
+  end
 
-    replacement =
-      case Authority.continuation_profile(log) do
-        {:ok, profile} ->
-          profile.root == record.space_root and profile.profile_genesis == record.profile_genesis and
-            profile.profile_id == record.profile_id
+  defp continuation_matches?(record, log) do
+    case Authority.continuation_profile(log) do
+      {:ok, profile} ->
+        profile.root == record.space_root and profile.profile_genesis == record.profile_genesis and
+          profile.profile_id == record.profile_id
 
-        _ ->
-          false
-      end
-
-    {record, ids, replacement}
+      _ ->
+        false
+    end
   end
 
   defp catalog_fact_histories(catalog, histories) do
@@ -1745,6 +1770,13 @@ defmodule Treehouse.CatalogTrust do
     if value.reason not in [:catalog_fork, :authority_changed, :control_history_limit],
       do: refuse(:trust_recovery_required)
 
+    validate_block_ids!(value)
+    validate_triggers!(value.triggers)
+    witness_ids = validate_witness_shape!(value.authority_witnesses)
+    validate_block_relationships!(value, witness_ids)
+  end
+
+  defp validate_block_ids!(value) do
     for name <- [:bindings, :catalogs, :bootstrap_ids, :op_ids, :pending_proof_ids] do
       ids = Map.fetch!(value, name)
 
@@ -1752,42 +1784,47 @@ defmodule Treehouse.CatalogTrust do
            ids != sorted(Enum.uniq(ids)),
          do: refuse(:trust_recovery_required)
     end
+  end
 
-    if not proper_list?(value.triggers) or length(value.triggers) > 32,
+  defp validate_triggers!(triggers) do
+    if not proper_list?(triggers) or length(triggers) > 32,
       do: refuse(:trust_recovery_required)
 
-    Enum.each(value.triggers, fn trigger ->
-      require_fields!(trigger, [:kind, :id, :digest, :bytes], :trust_recovery_required)
-
-      if trigger.kind not in [:catalog, :rotation] or not id?(trigger.id) or
-           not id?(trigger.digest) or not safe?(trigger.bytes) or trigger.bytes == 0 or
-           trigger.bytes > @max_artifact_bytes,
-         do: refuse(:trust_recovery_required)
-    end)
-
-    trigger_keys = Enum.map(value.triggers, &{&1.kind, &1.id})
+    Enum.each(triggers, &validate_trigger!/1)
+    trigger_keys = Enum.map(triggers, &{&1.kind, &1.id})
     if trigger_keys != Enum.sort(Enum.uniq(trigger_keys)), do: refuse(:trust_recovery_required)
+  end
 
-    if not proper_list?(value.authority_witnesses), do: refuse(:trust_recovery_required)
+  defp validate_trigger!(trigger) do
+    require_fields!(trigger, [:kind, :id, :digest, :bytes], :trust_recovery_required)
+
+    if trigger.kind not in [:catalog, :rotation] or not id?(trigger.id) or
+         not id?(trigger.digest) or not safe?(trigger.bytes) or trigger.bytes == 0 or
+         trigger.bytes > @max_artifact_bytes,
+       do: refuse(:trust_recovery_required)
+  end
+
+  defp validate_witness_shape!(witnesses) do
+    if not proper_list?(witnesses), do: refuse(:trust_recovery_required)
 
     replicas =
-      Enum.map(value.authority_witnesses, fn witness ->
-        require_fields!(witness, [:replica, :frontier, :op_ids], :trust_recovery_required)
-
-        if not text?(witness.replica) or not proper_list?(witness.frontier) or
-             not proper_list?(witness.op_ids) or not Enum.all?(witness.frontier, &id?/1) or
-             not Enum.all?(witness.op_ids, &id?/1) or witness.frontier != sorted(witness.frontier) or
-             witness.frontier != sorted(Enum.uniq(witness.frontier)) or
-             witness.op_ids != sorted(Enum.uniq(witness.op_ids)),
-           do: refuse(:trust_recovery_required)
-
+      Enum.map(witnesses, fn witness ->
+        validate_witness!(witness)
         witness.replica
       end)
 
     if replicas != sorted(Enum.uniq(replicas)), do: refuse(:trust_recovery_required)
+    witnesses |> Enum.flat_map(& &1.op_ids) |> sorted()
+  end
 
-    witness_ids = value.authority_witnesses |> Enum.flat_map(& &1.op_ids) |> sorted()
+  defp validate_witness!(witness) do
+    require_fields!(witness, [:replica, :frontier, :op_ids], :trust_recovery_required)
 
+    if not text?(witness.replica) or not ids?(witness.frontier) or not ids?(witness.op_ids),
+      do: refuse(:trust_recovery_required)
+  end
+
+  defp validate_block_relationships!(value, witness_ids) do
     empty_indexes =
       value.bindings == [] and value.catalogs == [] and value.bootstrap_ids == [] and
         value.pending_proof_ids == []
@@ -1806,33 +1843,43 @@ defmodule Treehouse.CatalogTrust do
     if decision.reason != nil and decision.reason not in reason_values(),
       do: refuse(:trust_recovery_required)
 
+    validate_decision_detail!(decision)
+    validate_decision_observed!(decision.observed)
+    if not proper_list?(decision.routes), do: refuse(:trust_recovery_required)
+    Enum.each(decision.routes, &validate_route_shape!/1)
+    validate_decision_block!(decision)
+  end
+
+  defp validate_decision_detail!(decision) do
     require_fields!(decision.detail, @detail_fields, :trust_recovery_required)
 
     if not ids?(decision.detail.ids) or not ids?(decision.detail.pending_proof_ids) or
          (decision.detail.core_reason != nil and not is_atom(decision.detail.core_reason)) or
          not is_boolean(decision.replacement_configured),
        do: refuse(:trust_recovery_required)
+  end
 
-    require_fields!(decision.observed, @observed_fields, :trust_recovery_required)
+  defp validate_decision_observed!(observed) do
+    require_fields!(observed, @observed_fields, :trust_recovery_required)
 
-    if not ids?(decision.observed.bootstrap_ids) or
-         not ids?(decision.observed.binding_heads) or
-         not proper_list?(decision.observed.catalog_heads),
+    if not ids?(observed.bootstrap_ids) or not ids?(observed.binding_heads) or
+         not proper_list?(observed.catalog_heads),
        do: refuse(:trust_recovery_required)
 
     catalog_head_keys =
-      Enum.map(decision.observed.catalog_heads, fn head ->
-        require_fields!(head, @catalog_head_fields, :trust_recovery_required)
-        if not id?(head.binding) or not ids?(head.catalogs), do: refuse(:trust_recovery_required)
-        head.binding
-      end)
+      Enum.map(observed.catalog_heads, &validate_catalog_head!/1)
 
     if catalog_head_keys != sorted(Enum.uniq(catalog_head_keys)),
       do: refuse(:trust_recovery_required)
+  end
 
-    if not proper_list?(decision.routes), do: refuse(:trust_recovery_required)
-    Enum.each(decision.routes, &validate_route_shape!/1)
+  defp validate_catalog_head!(head) do
+    require_fields!(head, @catalog_head_fields, :trust_recovery_required)
+    if not id?(head.binding) or not ids?(head.catalogs), do: refuse(:trust_recovery_required)
+    head.binding
+  end
 
+  defp validate_decision_block!(decision) do
     blocked_reason = decision.next.blocked && decision.next.blocked.reason
 
     if (blocked_reason != nil and
@@ -1845,16 +1892,22 @@ defmodule Treehouse.CatalogTrust do
   defp validate_route_shape!(route) do
     require_fields!(route, @route_fields, :trust_recovery_required)
 
-    valid =
-      text?(route.replica) and route.kind in [:space, :thread] and
-        route.schema in [:treehouse_space_v1, :treehouse_thread_v1] and
-        bytes?(route.root, 32) and id?(route.genesis) and id?(route.creation) and
-        id?(route.reference) and id?(route.binding) and id?(route.catalog) and
-        safe?(route.revision) and text?(route.origin) and text?(route.path) and
-        text?(route.url) and text?(route.service_id) and bytes?(route.service_key, 32) and
-        text?(route.realm)
+    valid = valid_route_identity?(route) and valid_route_transport?(route)
 
     if not valid, do: refuse(:trust_recovery_required)
+  end
+
+  defp valid_route_identity?(route) do
+    text?(route.replica) and route.kind in [:space, :thread] and
+      route.schema in [:treehouse_space_v1, :treehouse_thread_v1] and
+      bytes?(route.root, 32) and id?(route.genesis) and id?(route.creation) and
+      id?(route.reference)
+  end
+
+  defp valid_route_transport?(route) do
+    id?(route.binding) and id?(route.catalog) and safe?(route.revision) and
+      text?(route.origin) and text?(route.path) and text?(route.url) and
+      text?(route.service_id) and bytes?(route.service_key, 32) and text?(route.realm)
   end
 
   defp validate_page!(page) do
@@ -1972,19 +2025,9 @@ defmodule Treehouse.CatalogTrust do
 
   defp closed_wire_term?(["delegation", value], depth) when is_map(value) and depth > 0 do
     required = ~w(id replica issuer audience parent_id ops roles live sig)
-    keys = Map.keys(value)
 
-    Enum.sort(keys) in [Enum.sort(required), Enum.sort(["expires_epoch" | required])] and
-      is_binary(value["id"]) and is_binary(value["replica"]) and
-      canonical_b64_text?(value["issuer"]) and canonical_b64_text?(value["audience"]) and
-      canonical_b64_text?(value["sig"]) and
-      (is_nil(value["parent_id"]) or is_binary(value["parent_id"])) and
-      is_list(value["ops"]) and
-      Enum.all?(value["ops"], &(is_binary(&1) and Map.has_key?(@cutoff_atom_by_name, &1))) and
-      is_list(value["roles"]) and
-      Enum.all?(value["roles"], &(is_binary(&1) and Map.has_key?(@cutoff_atom_by_name, &1))) and
-      is_boolean(value["live"]) and
-      (not Map.has_key?(value, "expires_epoch") or safe?(value["expires_epoch"]))
+    closed_delegation_keys?(value, required) and closed_delegation_identity?(value) and
+      closed_delegation_lists?(value) and closed_delegation_lifetime?(value)
   end
 
   defp closed_wire_term?(["bin", encoded], _depth) when is_binary(encoded) do
@@ -2013,6 +2056,32 @@ defmodule Treehouse.CatalogTrust do
   defp closed_wire_term?(["bool", value], _depth) when is_boolean(value), do: true
   defp closed_wire_term?(["nil"], _depth), do: true
   defp closed_wire_term?(_, _depth), do: false
+
+  defp closed_delegation_keys?(value, required) do
+    keys = Enum.sort(Map.keys(value))
+    keys in [Enum.sort(required), Enum.sort(["expires_epoch" | required])]
+  end
+
+  defp closed_delegation_identity?(value) do
+    is_binary(value["id"]) and is_binary(value["replica"]) and
+      canonical_b64_text?(value["issuer"]) and canonical_b64_text?(value["audience"]) and
+      canonical_b64_text?(value["sig"]) and
+      (is_nil(value["parent_id"]) or is_binary(value["parent_id"]))
+  end
+
+  defp closed_delegation_lists?(value) do
+    closed_delegation_atoms?(value["ops"]) and closed_delegation_atoms?(value["roles"])
+  end
+
+  defp closed_delegation_atoms?(values) do
+    is_list(values) and
+      Enum.all?(values, &(is_binary(&1) and Map.has_key?(@cutoff_atom_by_name, &1)))
+  end
+
+  defp closed_delegation_lifetime?(value) do
+    is_boolean(value["live"]) and
+      (not Map.has_key?(value, "expires_epoch") or safe?(value["expires_epoch"]))
+  end
 
   defp canonical_wire_terms_unique?(terms) do
     Enum.reduce_while(terms, MapSet.new(), fn term, seen ->
