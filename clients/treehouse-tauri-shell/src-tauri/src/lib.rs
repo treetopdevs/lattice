@@ -6,6 +6,7 @@ pub mod preview;
 mod witness_android;
 pub mod witness_binding;
 mod witness_bridge;
+mod witness_commands;
 mod witness_document;
 mod witness_drain;
 mod witness_entropy;
