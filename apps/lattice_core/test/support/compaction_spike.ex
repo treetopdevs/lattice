@@ -172,7 +172,9 @@ defmodule Lattice.CompactionSpike do
 
   defp build_application_snapshot(module, base_snapshot, replica, covered_ops, frontier) do
     covered_log = Log.from_ops(replica, covered_ops)
-    analysis = Authority.analyze(module, covered_log)
+
+    {analysis, covered_valid_beacons} =
+      Authority.analyze_with_beacon_evidence(module, covered_log)
 
     conflict_losers =
       for %{event: :command_conflict, op: id, reason: reason} <- analysis.audit,
@@ -187,11 +189,7 @@ defmodule Lattice.CompactionSpike do
       covered_individual_reasons: Map.drop(analysis.reasons, Map.keys(conflict_losers)),
       covered_final_reasons: analysis.reasons,
       covered_conflict_losers: conflict_losers,
-      covered_valid_beacons:
-        covered_log
-        |> Log.topo_ops()
-        |> continuation_beacons(analysis.reasons)
-        |> Enum.sort_by(& &1.op_id)
+      covered_valid_beacons: covered_valid_beacons
     }
 
     %{snapshot | hash: application_snapshot_hash(snapshot)}
@@ -374,7 +372,11 @@ defmodule Lattice.CompactionSpike do
       |> Map.put(:covered_revokes, collect_raw_revokes(seed.ordered))
       |> merged_revokes(ordered_retained, seed.delegations, base.root)
 
-    beacons = [%{op_id: nil, epoch: base.covered_beacon_epoch, covered?: true}]
+    # The verified stable cut places every covered beacon in every retained op's strict past.
+    covered_lease_beacons =
+      Enum.map(snapshot.covered_valid_beacons, fn %{op_id: op_id, epoch: epoch} ->
+        %{op_id: op_id, epoch: epoch, covered?: true}
+      end)
 
     seeded_base = %{base | delegations: seed.delegations, roles: seed.roles}
 
@@ -403,7 +405,8 @@ defmodule Lattice.CompactionSpike do
       covered_intros: seed.covered_intros,
       covered_honored_succession_ids: base.covered_honored_succession_ids,
       revokes: revokes,
-      beacons: beacons
+      beacons: covered_lease_beacons,
+      valid_beacons: snapshot.covered_valid_beacons
     }
 
     unsupported_reasons =
@@ -606,7 +609,8 @@ defmodule Lattice.CompactionSpike do
 
       ctx.module.command_op_status(op, strict_ancestors, %{
         visible_ops: visible_ops,
-        verdicts: verdicts
+        verdicts: verdicts,
+        valid_beacons: ctx.valid_beacons
       })
     end
   end

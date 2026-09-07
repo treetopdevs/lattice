@@ -1,8 +1,9 @@
 defmodule Lattice2.ApplicationCompactionMirrorTest do
   use ExUnit.Case, async: true
 
-  alias Lattice.{Authority, CompactionSpike, Log, Op, Reduce, Sim, Sync}
+  alias Lattice.{Authority, CompactionSpike, Dag, Log, Op, Reduce, Sim, Sync}
   alias Lattice.Authority.Delegation
+  alias Lattice.Carrier.Wire
   alias Lattice.Demo.Thread
   alias Treehouse.{Invitation, Space}
 
@@ -135,6 +136,15 @@ defmodule Lattice2.ApplicationCompactionMirrorTest do
     end
   end
 
+  @corrected_snapshot_pins %{
+    [conflict: true] =>
+      {"20d92cade51c054451bedc7e6c3d33a47a7ec9422a60319a98103d6769d15c60",
+       "455b18b91661f86b5b271fd384f14a70069ccd43f4fe5cf32d03e973ae213f6d"},
+    [unsupported: true] =>
+      {"c0bd5a1571d15f2e00d93050cf94c730c4fc7ea4873842b212278cc7affc756f",
+       "6789f14de5cd8f5d80440e7be1ae7ed195f24dfe748196a215b8610ca13241ac"}
+  }
+
   for {label, options} <- [
         {"conflict callback", [conflict: true]},
         {"unsupported callback", [unsupported: true]},
@@ -152,6 +162,13 @@ defmodule Lattice2.ApplicationCompactionMirrorTest do
         Enum.map(delivery_sequences(fixture.log), &assert_beacon_mirror(&1, fixture, options))
 
       assert Enum.at(outcomes, 0) == Enum.at(outcomes, 1)
+
+      if expected_pin = @corrected_snapshot_pins[options] do
+        {hash, bytes, _, _, _, _} = hd(outcomes)
+
+        assert {Base.encode16(hash, case: :lower),
+                Base.encode16(:crypto.hash(:sha256, bytes), case: :lower)} == expected_pin
+      end
     end
   end
 
@@ -272,13 +289,13 @@ defmodule Lattice2.ApplicationCompactionMirrorTest do
     assert :ok == Log.verify_authenticity(log)
 
     for op <- Log.topo_ops(log) do
-      wire = op |> Lattice.Carrier.Wire.encode_op() |> Jason.encode!() |> Jason.decode!()
-      assert {:ok, ^op} = Lattice.Carrier.Wire.decode_op(wire)
+      wire = op |> Wire.encode_op() |> Jason.encode!() |> Jason.decode!()
+      assert {:ok, ^op} = Wire.decode_op(wire)
     end
 
     assert MapSet.subset?(
              MapSet.new(frontier),
-             Lattice.Dag.all_ancestors(Log.ops(log))[retained.id]
+             Dag.all_ancestors(Log.ops(log))[retained.id]
            )
 
     %{
@@ -298,6 +315,12 @@ defmodule Lattice2.ApplicationCompactionMirrorTest do
     try do
       full = Authority.analyze(BeaconReplica, delivered)
       full_trace = drain_messages([]) |> normalize_callback_trace()
+
+      {analysis, evidence} = Authority.analyze_with_beacon_evidence(BeaconReplica, delivered)
+      assert analysis == full
+      assert evidence == fixture.expected
+      assert drain_messages([]) |> normalize_callback_trace() == full_trace
+
       full_state = Reduce.reduce(BeaconReplica, delivered, quarantine: full.quarantine)
 
       assert {:ok, snapshot, retained} =
@@ -811,7 +834,7 @@ defmodule Lattice2.ApplicationCompactionMirrorTest do
     assert_application_matches_full(PolicyReplica, lease_log, lease_frontier)
   end
 
-  test "covered beacons are exact ordered evidence and are not a callback context key" do
+  test "covered beacons are exact ordered evidence in the verified callback context" do
     {sim, _genesis} = founded_policy("beacons")
     {sim, first} = Sim.beacon(sim, "root", 2)
     {sim, second} = Sim.beacon(sim, "root", 3)
@@ -836,7 +859,8 @@ defmodule Lattice2.ApplicationCompactionMirrorTest do
     retained_id = retained.id
     assert is_map(result)
     assert_received {:application_context, ^retained_id, _, context}
-    assert Map.keys(context) |> Enum.sort() == [:verdicts, :visible_ops]
+    assert Map.keys(context) |> Enum.sort() == [:valid_beacons, :verdicts, :visible_ops]
+    assert context.valid_beacons == snapshot.covered_valid_beacons
     assert_application_matches_full(PolicyReplica, log, frontier)
   end
 

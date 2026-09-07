@@ -1,8 +1,8 @@
 defmodule Lattice2.ApplicationPolicyBeaconContextTest do
   use ExUnit.Case, async: true
 
-  alias Lattice.Carrier.Wire
   alias Lattice.{Authority, Log, Op, Sim}
+  alias Lattice.Carrier.Wire
 
   defmodule ContextReplica do
     use Lattice.Replica
@@ -60,7 +60,12 @@ defmodule Lattice2.ApplicationPolicyBeaconContextTest do
 
   @tag :beacon_api
   test "each public entry point is one pass and preserves the exact seven-key map in every family" do
-    for family <- [:legacy, :bounded, :unsupported] do
+    # Captured by executing immutable pre-refactor Authority at 280e8d30 on these signed logs.
+    for {family, original_analysis_sha256} <- [
+          {:legacy, "d22fc3e705706d5385a3512d6f37baba6f72b5a907515b55f638ba399c0810ff"},
+          {:bounded, "8d09130bb731f9ec9a35364399462fac82f51145cfeded6a5aa04a946c1ce4a7"},
+          {:unsupported, "2d49ee424020c3fdd3f8107a8d50b4b33ab18804c3ed786093dd175a323be838"}
+        ] do
       sim = founded("public-api-#{family}", family: family)
       {sim, zero} = Sim.beacon(sim, "root", 0)
       {sim, high} = Sim.beacon(sim, "root", 18_446_744_073_709_551_615)
@@ -87,6 +92,11 @@ defmodule Lattice2.ApplicationPolicyBeaconContextTest do
 
       assert :erlang.term_to_binary(analysis, [:deterministic]) ==
                :erlang.term_to_binary(ordinary, [:deterministic])
+
+      assert analysis
+             |> :erlang.term_to_binary([:deterministic])
+             |> then(&:crypto.hash(:sha256, &1))
+             |> Base.encode16(case: :lower) == original_analysis_sha256
 
       assert Enum.sort(Map.keys(analysis)) == [
                :audit,
@@ -245,14 +255,21 @@ defmodule Lattice2.ApplicationPolicyBeaconContextTest do
     {sim, stale} = Sim.beacon(sim, "root", 5)
     {sim, wrong_kind} = Sim.append(sim, "root", :command, {:beacon, 8})
     {sim, invalid_certificate} = Sim.beacon(sim, "root", 6, certificate: %{})
+    {sim, malformed_epoch} = Sim.append(sim, "root", :authority, {:beacon, "not-an-epoch"})
 
     assert {true, :unauthorized_beacon} == Sim.quarantined(sim, "root", unauthorized.id)
     assert {true, :stale_beacon} == Sim.quarantined(sim, "root", stale.id)
     assert {true, :malformed_command} == Sim.quarantined(sim, "root", wrong_kind.id)
     assert {true, :unauthorized_beacon} == Sim.quarantined(sim, "root", invalid_certificate.id)
+    assert {true, :stale_beacon} == Sim.quarantined(sim, "root", malformed_epoch.id)
     expected = records([{zero, 0}, {five, 5}])
     {sim, command} = Sim.command(sim, "root", :probe, [expected])
     assert_honored(sim, "root", command, expected)
+
+    {_analysis, evidence} =
+      Authority.analyze_with_beacon_evidence(ContextReplica, Sim.log(sim, "root"))
+
+    assert evidence == expected
   end
 
   test "ordinary and legacy two-argument callbacks retain their outcomes" do
