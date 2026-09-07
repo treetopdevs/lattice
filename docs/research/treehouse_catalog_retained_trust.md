@@ -604,3 +604,34 @@ overflow followed by an unseen bootstrap, including empty-page reopen, original
 trigger equality, retained-history/observed-ID advancement and empty routes.
 Retain authority-before/after-overflow controls. Independent Fable review remains
 required on the exact implementation. C03/C14 and durable native gates stay OPEN.
+
+
+## Integrated pure trust evidence — 2026-09-07 UTC
+
+Integrated source `00396f79d62b05d0606c7c50a993587e87b72572` combines TS
+`40263ce98ad00314628b6ca4e3c9cc264e601a93` and BEAM
+`8b9edda748527abeba7e2f6302ef39a6ff61cdb7`. Actual Fable approved the historical
+bootstrap repair, TS recovery behavior and live reciprocal gate. After Claude's
+session limit interrupted the follow-up, independent Sol approved the final
+three-line BEAM overflow repair and exact root API/CI integration, with no P0–P2.
+The user's requested Sol fallback was used; interrupted reviews were not counted
+as approvals. Initial failures and findings remain in the execution evidence.
+
+Root full `mix check` at that source passed 877 tests and 27 properties, zero
+failures, three configured exclusions, formatting and strict Credo exit0. The
+integrated TS trust suite passed34 tests with no skips (64.377 seconds), typecheck
+and build. The final BEAM leaf's public/reciprocal subset passed21 tests. Root's
+full run executes fresh BEAM output through the actual TS trust verifier and
+fresh TS output through BEAM, with exact comparison against the pinned TS fixture.
+All published-foundation vector files remained byte-identical. Public index
+exports three trust functions and14 types; every usable route is still explicitly
+an installation-required candidate, not a native receipt.
+
+Relevant artifacts under `/tmp/lattice-treehouse-execution-20260906/` are
+`r11a-final-integrated-full-check.log`, `r11a-integrated-ts-trust-402.log`,
+`r11a-final-trust-vector-preservation.json`,
+`sol-r11a-overflow-final-review.md`, and
+`sol-r11a-final-integration-review.md`.
+Exact publication-tip and merge-result hosted gates remain separate. No native
+SQLite transaction, freshness observation, provisioning, actual transport lease,
+process restart or C03/C14 completion is claimed by these pure-state checks.
