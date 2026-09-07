@@ -275,6 +275,21 @@ defmodule Treehouse.MemberContinuityAuthoringTest do
              MemberContinuity.review(Sim.log(sim, "root"), request)
   end
 
+  test "malformed derived vouchers refuse before a missing epoch" do
+    {sim, claim, request} = fixture()
+    base = Sim.log(sim, "root")
+    no_beacon = Log.from_ops(base.replica, Map.delete(base.ops, hd(claim.epoch_basis)))
+    assert :ok = Log.verify_authenticity(no_beacon)
+
+    for malformed <- [
+          %{request | voucher_admissions: [claim.old_admission, hd(request.voucher_admissions)]},
+          %{request | new_pub: hd(claim.vouchers).member}
+        ] do
+      assert {:error, :application_invalid_continuity} =
+               MemberContinuity.review(no_beacon, malformed)
+    end
+  end
+
   test "founder and lost old-member signing state are absent during actual witnessed continuation" do
     {sim, claim, request} = fixture()
 

@@ -21,6 +21,7 @@ defmodule Treehouse.MemberContinuityAuthoring do
          {:ok, observed} <- MemberContinuity.observe(log),
          {analysis, valid_beacons} = Authority.analyze_with_beacon_evidence(Space, log),
          {:ok, vouchers} <- vouchers(log, analysis, request.voucher_admissions),
+         :ok <- voucher_shape(vouchers, request),
          {:ok, epoch, basis} <- epoch(valid_beacons),
          parents = parent_heads(observed, request.old_pub),
          true <- length(parents) <= 16,
@@ -127,6 +128,15 @@ defmodule Treehouse.MemberContinuityAuthoring do
     if :wrong_target in result,
       do: {:error, :application_wrong_target},
       else: {:ok, Enum.sort_by(result, & &1.member)}
+  end
+
+  defp voucher_shape(vouchers, request) do
+    members = Enum.map(vouchers, & &1.member)
+
+    if length(Enum.uniq(members)) == 2 and
+         Enum.all?(members, &(&1 not in [request.old_pub, request.new_pub])),
+       do: :ok,
+       else: {:error, :application_invalid_continuity}
   end
 
   defp epoch([]), do: {:error, :application_continuity_invalid_epoch}
