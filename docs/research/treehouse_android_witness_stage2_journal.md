@@ -3,7 +3,9 @@
 Integrator adoption on 2026-09-07 within the user-authorized unified program.
 Actual Claude Fable reviewed the source proposal against frozen `b633fd17` and
 returned PASS for slice 2A with no P0/P1/P2. Review artifact:
-`/tmp/lattice-treehouse-execution-20260906/fable-r36-android-slice2-result.md`.
+[retained exact review](evidence/treehouse-r36-journal-design-review-20260906.md),
+SHA-256 `df88db8955a5dd92a97d024cd55cdc2355a00c22674d60e49125ed9aec568a0a`.
+The original local path was `/tmp/lattice-treehouse-execution-20260906/fable-r36-android-slice2-result.md`.
 The original proposal is preserved below as provenance. **Only slice 2A is
 adopted for implementation:** section 3, section 6's 2A file/dependency allowlist,
 A01-A05 foundation requirements and applicable build gates. A04's actual provider
@@ -147,16 +149,22 @@ creating it. This matches the pinned platform's `noBackupFilesDir` location;
 explicit prepare verifies equality against `context.noBackupFilesDir` before
 initialization. An unexpected platform mapping refuses instead of using another
 directory. Existing components must be ordinary files/directories, with symlink
-substitution refused inside the product-owned subtree. Parent app-private storage
-is trusted outside webview/cache mutation, as in the adopted threat boundary.
+substitution detected at validation is refused inside the product-owned subtree.
+Parent app-private storage is trusted outside webview/cache mutation, as in the
+adopted threat boundary. This is not protection against an adversarial same-UID
+writer racing intermediate directory replacement between validation and open;
+cooperating native instances serialize through the fixed process lock.
 
 `WitnessJournal.observeExisting()` opens an existing database with
 `OPEN_READONLY | NO_LOCALIZED_COLLATORS`, the non-deleting error handler, no
 CREATE flag, no writable PRAGMA, migration, lock-file creation or repair. Missing
 database is a storage observation only; the later coordinator combines it with
 actual key observations. If a hot rollback journal cannot be read without
-recovery writes, report incomplete. Explicit mutating/reconciliation operations
-may perform SQLite's normal crash recovery, under the process lock. Normal
+recovery writes, refuse and retain the journal/database bytes. Mutating and
+reconciliation operations also perform the existing read-only validation before
+opening writable storage, so they do not authorize hot-journal recovery. This
+reference wording is corrected on 2026-09-07 to match the implemented refusal
+and the final evidence below; the initial proposal's recovery exception is withdrawn. Normal
 transaction-journal cleanup is distinct from deleting/replacing the identity
 database or a corrupt store.
 
@@ -216,6 +224,8 @@ observeExisting() -> Missing | Snapshot | Refused(reason)
 prepareAccepted(enrollment, nativeCreationAttempt) -> Snapshot | Refused
 commitGenerationStarted(expectedRevision, originalAttempt, exactChallenge)
   -> durable GenerationFence | Refused
+reconcileOriginalGeneration(expectedRevision, originalAttempt, exactChallenge,
+                            capturedMetadata) -> Snapshot | Refused
 finishOriginalGeneration(fence, capturedActualMetadata) -> Snapshot | Refused
 commitBindingConsent(expectedRevision, exactEnrollment, validatorNonce,
                      nativeAttempt, nativeNonce, nativeSession) -> ConsentRecord | Refused

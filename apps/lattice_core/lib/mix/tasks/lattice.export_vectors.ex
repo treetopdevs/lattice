@@ -263,13 +263,24 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     fixed ++ Enum.map(@randomized_seeds, &township_random/1)
   end
 
+  # Historical signed fixtures retain their original pre-catalog ceiling.
+  defp treehouse_preview_commands,
+    do: [
+      :create_space,
+      :create_thread,
+      :issue_invitation,
+      :revoke_invitation,
+      :admit_member,
+      :remove_member
+    ]
+
   defp treehouse_space_map_order do
     sim =
       Sim.new(Treehouse.Space, "treehouse:space:map-order", ["root"],
         seed: "treehouse-space:map_order"
       )
 
-    {sim, _} = Sim.create_replica(sim, "root")
+    {sim, _} = Sim.create_replica(sim, "root", ops: treehouse_preview_commands())
     values = ["One more", "One", "One\"", "One/", "One\\", "One]", "One\u{10000}", "One\u{E000}"]
 
     sim =
@@ -293,7 +304,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
         seed: "treehouse-membership"
       )
 
-    {sim, _} = Sim.create_replica(sim, "root")
+    {sim, _} = Sim.create_replica(sim, "root", ops: treehouse_preview_commands())
     {sim, _} = Sim.command(sim, "root", :create_space, ["Canopy"])
     {sim, _} = Sim.command(sim, "root", :create_thread, ["treehouse:thread:one", "One"])
     alice = Base.encode64(Sim.identity(sim, "alice").pub)
@@ -356,6 +367,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
     {sim, _} =
       Sim.create_replica(sim, "root",
+        ops: treehouse_preview_commands(),
         policies: %{
           admin: %{
             successor: "alice",
@@ -384,7 +396,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
         seed: "treehouse-space:roles"
       )
 
-    {sim, genesis} = Sim.create_replica(sim, "root")
+    {sim, genesis} = Sim.create_replica(sim, "root", ops: treehouse_preview_commands())
     {:genesis, parent, _} = genesis.body
     root = Sim.identity(sim, "root")
     alice = Sim.identity(sim, "alice")

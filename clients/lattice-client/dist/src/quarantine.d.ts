@@ -3,12 +3,12 @@ import type { ReplicaSchema } from "./schema";
 import type { AuthorityAnalysis } from "./authority";
 /**
  * Plan 158 Wave A2 — the current materialization's log view, for the causal
- * application-policy conjunct: `included` bounds `visibleIds`/`visibleOps` to
- * exactly the ops actually in scope (mirrors `Log.ops(log)`, so a partial
- * frontier never treats an unsynced op as causally visible), and
- * `reasonsSoFar` carries every included id's own verdict already decided
- * earlier in the SAME canonical walk (topo order guarantees every ancestor of
- * the op under judgment was already visited).
+ * application-policy conjunct: `included` bounds `visibleIds`/`visibleOps` and
+ * the authority judge's `validBeacons` to exactly the ops actually in scope
+ * (mirrors `Log.ops(log)`, so a partial frontier never treats an unsynced op as
+ * causally visible), and `reasonsSoFar` carries every included id's own verdict
+ * already decided earlier in the SAME canonical walk (topo order guarantees
+ * every ancestor of the op under judgment was already visited).
  */
 export interface CommandPolicyScope {
     included: ReadonlySet<string>;

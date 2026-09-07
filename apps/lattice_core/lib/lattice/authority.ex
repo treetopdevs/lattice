@@ -49,11 +49,12 @@ defmodule Lattice.Authority do
     * **Application-policy causal context** (plan 158): after `cap_ok` and
       `authority_ok`, a command op is judged by the replica's
       `command_op_status/3`, given `visible_ids` plus a `context` of
-      `visible_ops`/`verdicts` restricted to exactly the op's causal past and
-      built in causal/canonical order — so the callback can require an
-      honored target without ever seeing a concurrent/future op or its own
-      not-yet-decided verdict. `command_op_status/2` remains a legacy
-      compatibility target: the default `/3` calls it with `visible_ids`.
+      `visible_ops`/`verdicts` and the already-validated `valid_beacons`, all
+      restricted to exactly the op's causal past and built in causal/canonical
+      order — so the callback can require honored evidence without ever seeing
+      a concurrent/future op or its own not-yet-decided verdict.
+      `command_op_status/2` remains a legacy compatibility target: the default
+      `/3` calls it with `visible_ids`.
     * **Full-frontier command conflicts** (plan 158): once every op's
       individual verdict is final, `command_conflicts/3` runs one pass over
       the complete structurally accepted DAG and may declare deterministic
@@ -67,7 +68,14 @@ defmodule Lattice.Authority do
   Quarantined ops stay in the log and are reported in `audit` (design invariant 4).
   """
 
-  alias Lattice.Authority.{BeaconCertificate, Continuation, Delegation, SuccessionCertificate}
+  alias Lattice.Authority.{
+    BeaconCertificate,
+    Continuation,
+    ContinuationCertificate,
+    Delegation,
+    SuccessionCertificate
+  }
+
   alias Lattice.{Dag, Identity, Log, Op}
 
   # Separates a replica *name* from the root-key commitment bound into its id.
@@ -127,6 +135,55 @@ defmodule Lattice.Authority do
     end
   rescue
     _ -> {:error, :invalid_verified_history}
+  end
+
+  @doc "Observe the selected root-authenticated continuation pin in complete retained history."
+  @spec continuation_profile(Log.t()) :: {:ok, map()} | {:error, atom()}
+  def continuation_profile(%Log{} = log) do
+    case Continuation.family(log.replica) do
+      :legacy ->
+        {:error, :unauthorized_continuation}
+
+      :unsupported ->
+        {:error, :unsupported_authority_profile}
+
+      {:bounded, _} ->
+        if verified_complete_log?(log),
+          do: continuation_profile_from_log(log),
+          else: {:error, :invalid_verified_history}
+    end
+  rescue
+    _ -> {:error, :invalid_verified_history}
+  end
+
+  defp continuation_profile_from_log(log) do
+    ordered = Log.topo_ops(log)
+    {commitment, genesis_ids, succession_ids} = deleg_context(log, ordered)
+    delegations = collect_delegations(ordered)
+
+    valid =
+      validate_delegations(delegations, commitment, genesis_ids, succession_ids, log.replica)
+
+    root = resolve_root(ordered, delegations, valid, commitment)
+    context = Continuation.context(log.replica, ordered, delegations, valid, root, [])
+
+    case Continuation.select_pin(context, Log.op_ids(log)) do
+      nil ->
+        {:error, :continuation_not_configured}
+
+      pin ->
+        {:ok, profile_id} = ContinuationCertificate.profile_id(pin.profile)
+
+        {:ok,
+         %{
+           replica: log.replica,
+           root: root,
+           profile_genesis: pin.op_id,
+           profile_id: profile_id,
+           profile: pin.profile,
+           verified_frontier: Log.frontier(log)
+         }}
+    end
   end
 
   defp verified_complete_log?(log) do
@@ -1267,7 +1324,8 @@ defmodule Lattice.Authority do
            requests ++ [%{op: op.id, author: op.author, ref: ref, payload: payload}]}
 
         op.kind == :command ->
-          context = causal_context(op, ops, ancestors, base_reasons, quarantine)
+          context =
+            causal_context(op, ops, ancestors, base_reasons, quarantine, cap_evidence.beacons)
 
           case validate_command(module, op, ancestors, cap_evidence, context) do
             :ok ->
@@ -1285,13 +1343,14 @@ defmodule Lattice.Authority do
   end
 
   # Plan 158 Wave A2: the causal context handed to `command_op_status/3` —
-  # `visible_ops` and `verdicts` restricted to exactly `op`'s causal past
-  # (never `op` itself, never a concurrent or future op). Topo order
+  # `visible_ops`, `verdicts`, and the existing judge's `valid_beacons`
+  # restricted to exactly `op`'s causal past (never `op` itself, never a
+  # concurrent or future op). Topo order
   # guarantees every ancestor was already folded into `quarantine_so_far`
   # (if it was itself a command op) or is independently decided in
   # `base_reasons` (every other reason never depends on command_op_status),
   # so every id's verdict here is final by the time `op` consults it.
-  defp causal_context(op, ops, ancestors, base_reasons, quarantine_so_far) do
+  defp causal_context(op, ops, ancestors, base_reasons, quarantine_so_far, beacons) do
     anc = Map.get(ancestors, op.id, MapSet.new())
     visible_ops = Map.take(ops, MapSet.to_list(anc))
 
@@ -1301,7 +1360,12 @@ defmodule Lattice.Authority do
         {id, reason || :honored}
       end)
 
-    %{visible_ops: visible_ops, verdicts: verdicts}
+    valid_beacons =
+      beacons
+      |> Enum.filter(&MapSet.member?(anc, &1.op_id))
+      |> Enum.sort_by(& &1.op_id)
+
+    %{visible_ops: visible_ops, verdicts: verdicts, valid_beacons: valid_beacons}
   end
 
   defp validate_command(module, op, ancestors, cap_evidence, context) do

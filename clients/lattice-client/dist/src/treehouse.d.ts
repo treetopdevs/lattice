@@ -4,6 +4,7 @@ import type { Op } from "./op";
 import type { ReplicaSchema } from "./schema";
 import type { CommandOpStatus, CommandOpStatusContext } from "./policy";
 import { authorTownshipRevocation } from "./township";
+import type { CatalogBootstrap } from "./treehouse_catalog_codec";
 export type TreehouseProduct = "Treehouse.Space" | "Treehouse.Thread";
 export type TreehouseCommand = {
     command: "create_space";
@@ -28,6 +29,9 @@ export type TreehouseCommand = {
 } | {
     command: "remove_member";
     recipient: string;
+} | {
+    command: "catalog_bootstrap_v1";
+    record: CatalogBootstrap;
 } | {
     command: "post";
     text: string;
@@ -69,6 +73,26 @@ export declare function observeTreehouse(product: TreehouseProduct, ops: Op[]): 
     order: string[];
     winners: Record<string, string | null>;
 };
+export type TreehouseCatalogBootstrapsResult = {
+    ok: true;
+    bootstraps: {
+        id: string;
+        record: CatalogBootstrap;
+    }[];
+    verifiedFrontier: string[];
+} | {
+    ok: false;
+    reason: "invalid_verified_history";
+};
+/**
+ * All honored bootstrap records in one authenticated complete Space snapshot.
+ * Array order never selects an initial trust/fork winner. Authentic quarantined
+ * frames remain in the verified frontier; callers own persistence and pinning.
+ */
+export declare function treehouseCatalogBootstrapsFromFrames(input: {
+    replica: string;
+    frames: readonly unknown[];
+}): Promise<TreehouseCatalogBootstrapsResult>;
 /** Observe retained semantic history; decoding must have used the Space product. */
 export declare function treehouseSpaceInitialization(ops: Op[]): TreehouseInitialization;
 /** Pure root-only preparation. Returned pending frames have not been persisted. */

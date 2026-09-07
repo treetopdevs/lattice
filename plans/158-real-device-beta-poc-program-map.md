@@ -455,6 +455,33 @@ clients verify every catalog signature through the root-bound bootstrap. Normal 
 old key to sign the new key and cutoff; loss recovery requires a new founder/product-root ceremony and
 never silently trusts a regenerated operator key.
 
+#### Adopted unified R11 catalog amendment — 2026-09-06
+
+The preceding founder-only lost-catalog-key clause remains historical. For the
+unified Treehouse profile only, the integrator adopts the exact reviewed
+[R11 catalog contract](../docs/research/treehouse_catalog_lifecycle.md), reviewed
+by Claude Fable at `789ab235` with a final PASS. A living-root-pinned delegation
+authorizes an honored bounded Space-admin `replace_catalog_v1` action; that
+permission must exist in its pre-loss acquisition ceiling. Installed clients
+retain their original bootstrap and verify full current Core authority, exact
+control predecessor digests, new-key possession, inventory and cutoff before
+adoption. No new root, operator authority, fresh-client trust injection or
+additional catalog witness quorum is implied. Planned old-key rotation and
+encrypted same-key restore remain separate; other products are unchanged.
+
+Known fork, rollback, reclassified authority and missing evidence stop automatic
+switching. Publication binds the exact prepared signed Space reference and child
+genesis/creation bytes, readies transport and signs the catalog before publishing
+that original reference. Treehouse's 12-Thread limit includes archives and is a
+catalog/provisioning limit. The root-only preview's exact original command
+ceiling/genesis bytes remain unchanged; an explicit bounded-profile creator
+owns the new permission. The 64,000-byte final carrier envelope is unchanged;
+wide frontiers have only the conditional authorized bounded-fan-in retry stated
+in R11, never a guarantee, pruning, split signed operation or increased cap.
+
+This is scope adoption for local R11a and later R11b/R11c packets, not completed
+catalog, hosted dependency, WSS, native or physical loss-recovery evidence.
+
 Each entry binds product, schema version, replica ID, replica kind, opaque WSS route, expected
 service-key fingerprint and creation op. A catalog signature does not make a Tool or Thread
 semantically visible and confers no product authority: the product replica must contain its own
@@ -523,6 +550,20 @@ can distinguish an honored target from a structural/authority/application-quaran
 a concurrent/future op, emits the same pinned reason in both runtimes, and excludes the same ID from
 both materialized states. Full-frontier vectors deliver concurrent conflicts in every order and prove
 the same winner, loser reason and partial-frontier reclassification after sync and dump/restore.
+
+
+**R19b context amendment adopted 2026-09-07 UTC:** Add read-only `valid_beacons`
+(BEAM) / `validBeacons` (TypeScript) containing the existing judge's validated
+beacons whose op IDs are strict ancestors of the command. Emit each once in
+ascending ASCII op-ID order, as exactly `{op_id, epoch}` / `{opId, epoch}` records.
+An empty list and signed epoch zero differ. Preserve exact BEAM uint64 integers;
+TS safe integers remain numbers and higher legacy epochs remain canonical decimal
+strings. No raw beacon-shaped body supplies this field and no second judge is
+introduced. Existing callback arities, maps, compatibility, permission/holder/
+consent precedence and final conflict phase remain unchanged. The prior verdict
+map remains individual verdicts at the causal walk, not final conflict outcomes.
+The exact scope, proof obligations and still-open TS actual consumer/compaction
+proof are in [the adopted prerequisites](../docs/research/member_continuity_prerequisites.md).
 
 ### Product Isolation and Migrations
 

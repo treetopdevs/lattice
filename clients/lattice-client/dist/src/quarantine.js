@@ -1,3 +1,4 @@
+import { cmpHash } from "./op";
 import { effectsFor } from "./op";
 import { ancestors } from "./dag";
 import { gatedBy } from "./schema";
@@ -77,7 +78,15 @@ export function isQuarantined(op, schema, byId, authority, ancCache = new Map(),
             visibleOps.set(id, byId.get(id));
             verdicts.set(id, policyScope.reasonsSoFar.get(id) ?? "honored");
         }
-        const status = commandOpStatus(schema, op, visibleIds, { visibleOps, verdicts });
+        const validBeacons = authority.security.validBeacons
+            .filter((beacon) => visibleIds.has(beacon.opId))
+            .map((beacon) => ({ opId: beacon.opId, epoch: beacon.epoch }))
+            .sort((left, right) => cmpHash(left.opId, right.opId));
+        const status = commandOpStatus(schema, op, visibleIds, {
+            visibleOps,
+            verdicts,
+            validBeacons,
+        });
         if (!status.ok)
             return { quarantined: true, reason: status.reason };
     }

@@ -16,7 +16,8 @@ export * from "./quarantine";
 export * from "./capability";
 export * from "./consent";
 export * from "./policy";
-export * from "./authority";
+// Keep the unauthenticating application predicate internal to the module graph.
+export { resolveContinuationProfileFromFrames, analyzeAuthority, continuationFamily, deriveContinuationReview, deriveWitnessedSuccessionReview, assembleWitnessedSuccessionArtifact, exportWitnessedSuccessionArtifactJson, witnessedRecoveryPolicyId, verifyWitnessedSuccessionCertificate, witnessedBeaconHorizon, } from "./authority";
 export * from "./crdt/reducers";
 export * from "./materialize";
 export * from "./sync";
@@ -29,3 +30,8 @@ export * from "./local_log";
 export * from "./tauri_bridge";
 export * from "./township";
 export * from "./treehouse";
+export { deriveTreehouseCatalogCutoff } from "./treehouse_catalog_cutoff";
+// Decisions are pure candidates; only a trusted adapter can establish installation.
+export { prepareTreehouseCatalogInstallation, evaluateTreehouseCatalogTrust, resolveTreehouseCatalogRoute, } from "./treehouse_catalog_trust";
+// Cryptographic codec utilities only; these do not admit a member or activate a command.
+export * from "./treehouse_member_continuity_codec";
