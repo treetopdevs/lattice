@@ -21,3 +21,5 @@ export * from "./township";
 export * from "./treehouse";
 export { deriveTreehouseCatalogCutoff } from "./treehouse_catalog_cutoff";
 export type { TreehouseCatalogCutoffInput, TreehouseCatalogCutoffResult, TreehouseCutoffOp, TreehouseCutoffRejectedOp } from "./treehouse_catalog_cutoff";
+export { prepareTreehouseCatalogInstallation, evaluateTreehouseCatalogTrust, resolveTreehouseCatalogRoute, } from "./treehouse_catalog_trust";
+export type { TreehouseCatalogRawHistory, TreehouseCatalogBootstrapReview, TreehouseCatalogCutoffProof, TreehouseCatalogEvidencePage, TreehouseCatalogStoreToken, TreehouseCatalogWatermark, TreehouseCatalogOverflowTrigger, TreehouseCatalogBlock, InstalledTreehouseCatalogTrustV1, TreehouseCatalogTrustReason, TreehouseCatalogRefusalDetail, VerifiedTreehouseCatalogRoute, TreehouseCatalogTrustDecision, TreehouseCatalogRouteDecision, } from "./treehouse_catalog_trust";

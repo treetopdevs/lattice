@@ -31,3 +31,5 @@ export * from "./tauri_bridge";
 export * from "./township";
 export * from "./treehouse";
 export { deriveTreehouseCatalogCutoff } from "./treehouse_catalog_cutoff";
+// Decisions are pure candidates; only a trusted adapter can establish installation.
+export { prepareTreehouseCatalogInstallation, evaluateTreehouseCatalogTrust, resolveTreehouseCatalogRoute, } from "./treehouse_catalog_trust";
