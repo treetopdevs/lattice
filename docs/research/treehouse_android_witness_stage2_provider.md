@@ -517,3 +517,41 @@ Boundary tests must distinguish legal-representation limits from syntactically
 invalid inputs; do not claim an impossible8192-element certificate as a legal
 positive under the16KiB byte cap. These are parsing work bounds, not device
 capacity measurements or permission to reject a validated chain silently.
+
+
+## Adopted original application metadata extraction — 2026-09-07 UTC
+
+Root adopts the exact proposal SHA256
+`778fac5eded8b8de4968321ef1f8979aa4212d489cdf76d79994648ac40813eb`
+after independent gpt-5.6-sol review returned PASS with no P0–P2. Its proposed
+status below records review-time provenance. This extends only the component's
+bounded metadata reader/capture as specified, without schema, IPC or trust changes.
+The original creation version must never be fabricated from an updated package's
+current version. Independent validation and physical custody remain separate.
+
+# Proposed local original application metadata extraction
+
+Prepared 2026-09-07 UTC. Exact component scope only; no production 709 parser change before root adoption/Sol review.
+
+Problem: a started journal row has original attempt/challenge but no creation app version. PackageManager after a crash/update supplies the current version, not creationVersionCode. The actual fixed-key leaf retains the KeyDescription produced for the original attestation challenge. Extract its application metadata instead of fabricating creation provenance or requiring the app never update.
+
+Pinned source: Android tag android-13.0.0_r1, system/security/keystore/keystore_attestation_id.cpp lines53-55 (SHA256 certificate bytes),84-117 (closed two-set ASN1 schema),168-180 (version integer),197-265 (package/signature encoding); system/keymaster/km_openssl/attestation_record.cpp lines1028-1041 (challenge and application ID into softwareEnforced). Local captured sources are r36-android13-attestation-id.cpp and r36-android13-attestation-record.cpp. URLs:
+https://android.googlesource.com/platform/system/security/+/refs/tags/android-13.0.0_r1/keystore/keystore_attestation_id.cpp
+https://android.googlesource.com/platform/system/keymaster/+/refs/tags/android-13.0.0_r1/km_openssl/attestation_record.cpp
+Public schema: https://source.android.com/docs/security/features/keystore/attestation (AuthorizationList attestationApplicationId [709] EXPLICIT OCTET_STRING; embedded AttestationApplicationId/packageInfos/signatureDigests).
+
+## Exact proposed disposition
+
+Extend ONLY WitnessAttestationMetadata required leaf reader and AndroidWitnessProvider capture/tests, with no journal/schema/IPC/validator changes. Within the single correctly positioned leaf attestation extension, require the exact eight-field KeyDescription already adopted. Across its two authorization lists, require exactly one context-specific explicit709, present in softwareEnforced only; hardware placement, both placement, duplicate709, missing709, wrong wrapper, extra explicit children or trailing payload refuse. Other authorization fields stay bounded structurally traversed, with duplicate tags refused per-list, without local policy/trust interpretation. This v1 placement matches pinned source; new placement would require reviewed profile extension.
+
+The709 child is exactly one primitive OCTET STRING, containing exactly one DER SEQUENCE with two SET fields: packageInfos then signatureDigests. The packageInfos SET must contain exactly one SEQUENCE of exactly (packageName OCTET STRING, version INTEGER); its bytes must equal ASCII dev.treetop.lattice.treehouse. No lossy replacement UTF8, alternative package, shared-UID extra package, duplicates or empty set. Version must be canonical DER nonnegative INTEGER and in1..Long.MAX_VALUE; render decimal with Long.toString. Reject zero, negative, out-of-range/nonminimal, extra fields and alternate tags. SignatureDigests SET contains exactly one primitive OCTET STRING of exactly32 bytes; duplicates/multiple/empty refuse. DER definite/minimal length, SET canonical order, exact consumption, max16KiB certificate/depth32/node8192 shared cumulative budget apply also to this known embedded payload. Unrelated OCTET STRING contents remain opaque.
+
+Real backend separately obtains current native PackageManager GET_SIGNING_CERTIFICATES for exactly its context package, requires exactly one current APK signing certificate and hasMultipleSigners=false, computes SHA256 of its raw certificate bytes, and requires equality with the709 digest. Historical signer arrays are not accepted as current signer, multiple/changed signer refuses. Actual context package, credential-protected storage, API33+ and native BuildConfig product/app constants remain mandatory. Current positive longVersionCode is observed only to ensure the running package has sane native metadata; it is not copied into creationVersionCode and no creation/current version equality is required. Thus ordinary updates can reopen while app-signing rotation remains refused. An optional current >= creation check is deliberately NOT proposed: no downgrade policy has been adopted and version is provenance, not an authority or rollback anchor.
+
+Started reconciliation requires original phase/attempt/challenge widths, exact caller expected original attempt/challenge, positive revision, absent saved metadata, actual fixed private-key presence and matching local KeyInfo profile. The actual first KeyStore certificate must byte-equal chain[0], its exposed SPKI must equal the parser's actual leaf SPKI, Ed25519 public32 is extracted exactly, and challenge must match the immutable started challenge. CapturedWitnessIdentity then gets publicKey/SPKI/exact original returned chain, creation version and signer from this actual leaf. A started row has no previously recorded pubkey; do not falsely claim comparison to a nonexistent saved key. It binds to the same observed fixed-key entry and original challenge under trusted native journal/process ownership. The later coordinator must perform held-lock exact-identity completion. Complete observations additionally compare EVERY retained metadata field, including full chain order/bytes and saved creation version/signer; no refresh/replacement.
+
+This is local metadata reconciliation only. It does not verify certificate signatures, chain root, revocation, boot state, first trustworthy extension, same-UID attacker resistance, hardware attestation authenticity or eligibility. Synthetic fixtures prove grammar/binding only. Independent validator/device gates remain mandatory. No generation, signing, token or public command is introduced.
+
+## Required public tests before closure
+
+Exact one-package/one-signer positive; missing/duplicate/misplaced709 and wrong wrappers; empty/multiple/duplicated package and signer sets; wrong package and malformed UTF8 bytes; exact Long.MAX_VALUE and adjacent invalid version/nonminimal integer; wrong signer length and current signer mismatch/multiple; extra/trailing/nested malformed fields with shared work budget. Actual component started-capture/reconcile succeeds with creation version1 while native current version2, preserving original1; complete reopen still returns1 and exact saved bytes. Wrong challenge/pub/SPKI/chain/current signer refuse; missing journal or prepared-with-key cannot adopt. Test-only platform fixtures remain outside ordinary APK.
