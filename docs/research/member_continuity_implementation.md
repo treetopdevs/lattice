@@ -226,6 +226,14 @@ causal wrappers is target_quarantined; a merely concurrent/later wrapper cannot
 repair it. Exact outer deps must themselves be sorted-distinct and equal claim.deps
 rather than relying on generic canonical set normalization.
 
+For this parent/head check, "honored" means the final causal continuity view.
+Derive it from the ordinary judge's individual verdicts over strict ancestors by
+calling the same pure deny-only conflict helper described in §5. This does not
+rerun authority, decode beacon policy again, or change any individual verdict.
+A fresh review may therefore use the remaining heads after a known conflict;
+a later concurrent invalidation still triggers §5's invalid-parent propagation.
+The raw observer and authoring review use that same causal view.
+
 Pin exact individual reasons in the adopted order:
 `application_invalid_continuity`, `application_target_not_visible`,
 `application_target_quarantined`, `application_wrong_target`,

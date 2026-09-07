@@ -45,7 +45,7 @@ defmodule Treehouse.MemberContinuityReciprocalTest do
     assert fixture("beam_codec.json")["claim_id"] != fixture("ts_codec.json")["claim_id"]
   end
 
-  test "both real signed command histories stay retained and unknown in either delivery order" do
+  test "both real signed command histories stay retained and ungranted in either delivery order" do
     for file <- ["ts_codec.json", "beam_codec.json"] do
       vector = fixture(file)["unknown_command"]
       assert {:ok, ops} = Wire.decode_ops(vector["frames"])
@@ -57,11 +57,11 @@ defmodule Treehouse.MemberContinuityReciprocalTest do
         {log, %{pending: []}} = Sync.deliver(Log.new(vector["replica"]), delivered)
         assert :ok = Log.verify_authenticity(log)
 
-        # R19b vocabulary-only stage: old signed bytes are portable; the command stays unregistered.
+        # R19b vocabulary-only stage: old signed bytes remain portable; their old grants do not gain the new command.
         assert {:ok, cutoff} = Treehouse.CatalogCutoff.derive(log)
         assert length(cutoff.ops) == length(ops)
         analysis = Authority.analyze(Treehouse.Space, log)
-        assert analysis.reasons[vector["op_id"]] == :unknown_command
+        assert analysis.reasons[vector["op_id"]] == :operation_not_granted
         assert Lattice.state(Treehouse.Space, log) == Lattice.state(Treehouse.Space, baseline)
         assert map_size(Log.ops(log)) == length(ops)
       end
@@ -92,7 +92,7 @@ defmodule Treehouse.MemberContinuityReciprocalTest do
       true = Enum.all?(ops, &Lattice.Op.valid?/1)
       {log, %{pending: []}} = Lattice.Sync.deliver(Lattice.Log.new(vector["replica"]), Enum.reverse(ops))
       :ok = Lattice.Log.verify_authenticity(log)
-      :unknown_command = Map.fetch!(Lattice.Authority.analyze(Treehouse.Space, log).reasons, vector["op_id"])
+      :operation_not_granted = Map.fetch!(Lattice.Authority.analyze(Treehouse.Space, log).reasons, vector["op_id"])
     end
     IO.puts("MEMBER_CONTINUITY_CODEC_COLD_VM_UNKNOWN_OK")
     """

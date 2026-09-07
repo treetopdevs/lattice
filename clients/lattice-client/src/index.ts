@@ -60,3 +60,7 @@ export type {
 
 // Cryptographic codec utilities only; these do not admit a member or activate a command.
 export * from "./treehouse_member_continuity_codec";
+
+// Authenticated complete-history continuity APIs; attestation grants no membership or rights.
+export { observeMemberContinuityFromFrames, reviewMemberContinuityFromFrames, assembleMemberContinuityFromFrames } from "./treehouse_member_continuity";
+export type { MemberContinuityObservation, MemberContinuityReviewRequest, MemberContinuityReview, MemberContinuityReviewResult, MemberContinuityAssemblyResult } from "./treehouse_member_continuity";
