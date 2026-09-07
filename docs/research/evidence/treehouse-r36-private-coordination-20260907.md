@@ -82,11 +82,35 @@ The initial Android check used Homebrew Rust without Android standard libraries;
 the successful check uses the already-installed Rustup stable toolchain and
 NDK 27.1. It is compilation evidence, not APK execution or physical proof.
 
+## Private dispatch and reciprocal checkpoint
+
+Kotlin dispatch `7514d533` integrated as `20f79ae35` after independent Sol PASS.
+Its immutable per-invocation ownership suppresses duplicate Stored/Refused/Missing
+callbacks and old proof callbacks arriving during a later signing operation.
+Root Android tests passed 134 total, 133 executed, one existing skip, zero failures,
+and lint (`/tmp/treehouse-r36-dispatch-integrated-android.log`).
+
+Registration `c244ab60` installs the exact private Android class once and retains
+the universal Rust webview rejection handler. Independent Sol PASS; actual Android
+Rust compilation passed. The broadened-ACL IPC test includes dispatch and
+sign_prepared; deliberately replacing rejection with success makes it RED.
+Logs: `/tmp/treehouse-r36-registration-boundary-green.log`,
+`/tmp/treehouse-r36-registration-boundary-red.log`,
+`/tmp/treehouse-r36-registration-android-check.log`.
+
+Reciprocal test packet `18e512818` reproduces six Rust requests and Kotlin
+snapshot/proof/terminal outputs with their actual serializers. It exposed three
+omitted nullable snapshot fields accepted by Rust. Repair `8fd60967` requires
+explicit metadata, generationChallenge and enrollment fields while allowing
+contractual nulls. All six Rust reciprocal tests pass after repair; the two
+Kotlin producer/consumer tests passed. These are host codec and software-signature
+checks, not JNI, platform signing, attestation or physical custody evidence.
+Independent review of this final reciprocal packet remains pending.
+
 ## Remaining gates
 
-Actual Kotlin plugin integration and registration, native identity coordination,
-session event wiring, public binding export and independent validation remain
-unfinished. No end-to-end Rust → Kotlin → journal → biometric operation → Rust
+Native identity orchestration, session event wiring, public binding export and
+independent validation remain unfinished. No end-to-end Rust → Kotlin → journal → biometric operation → Rust
 proof is asserted.
 
 Tauri page-load completion supplies a URL without a document identifier. The
