@@ -133,6 +133,32 @@ verification: 156 JVM tests and vendor-integrity tamper checks. This proves the
 retained tooling can be reproduced; it does not prove an Android witness eligible.
 Log: `/tmp/treehouse-r36-validator-root-check.log`.
 
+## Disconnected frontend and validator profile
+
+Frontend packet `67a71ddba64348be4070e6e7e96ab9cd3dc39965` integrated as
+`8c3c0bc3e3433bf6b7ce8cc2b086d6551d8382d4` after independent Sol PASS.
+It exposes the five closed typed routes, subscribes before invocation, verifies
+fixed proof bytes and identity consistency, and keeps cancellation tied to the
+native ephemeral event identifier. The opt-in panel remains unimported by App.
+A delayed prior event can cause fail-closed cancellation of an obsolete ID; the
+native operation/session gate remains authoritative. No actual event delivery or
+physical proof follows from fake-transport tests.
+
+Root preview tests, 13 bridge tests, typecheck and build passed. The initial root
+run exposed the obsolete Android test assertion that biometric permission must
+be absent, although reviewed native review already requires it. Repair
+`830f95c5d2705f578ee6e71b9f033e19c55aab6b` asserts its exact single declaration
+and preserves false eligibility and the closed public command surface. Sol PASS.
+Log: `/tmp/treehouse-r36-frontend-root-check.log`.
+
+Validator profile `aff3c3ee3d99b9622ccf04687d130e59d53e9c2d` passed independent
+Sol review and integrated as `e2a9d40a5`. It adds the exact generation-time TEE,
+Ed25519, generated-origin, per-use authentication, application and locked-boot
+constraint, including raw authorization tag rejection. Root offline strict
+verification passed (`/tmp/treehouse-r36-validator-policy-root.log`). This is an
+additional constraint, not an issuance, trusted snapshot, possession, report or
+eligibility implementation.
+
 ## Architectural consolidation before activation
 
 A bounded architectural audit identified operation lifetime ownership spread
