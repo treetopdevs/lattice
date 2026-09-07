@@ -564,8 +564,10 @@ jobs:
         shell: bash
         working-directory: tools/android-witness-validator
         run: |
-          JAVA_HOME="$JAVA_HOME_21_X64" ./gradlew --no-daemon --dependency-verification=strict check \
+          JAVA_HOME="$JAVA_HOME_21_X64" ./gradlew --no-daemon --dependency-verification=strict check installDist \
             2>&1 | tee "$RUNNER_TEMP/treehouse-android/validator-tests.log"
+          JAVA_HOME="$JAVA_HOME_21_X64" python3 scripts/smoke_installed.py \
+            2>&1 | tee "$RUNNER_TEMP/treehouse-android/validator-installed.log"
       - name: Prove release refuses absent pilot signing
         working-directory: clients/treehouse-tauri-shell/src-tauri/gen/android
         run: |
