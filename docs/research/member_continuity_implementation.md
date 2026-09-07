@@ -502,3 +502,34 @@ These later refinements must receive independent review with their concrete
 source/tests before shared production edits or A01–A17 closure. R04/R10 accepted
 main gates, R14/R20/native and physical loss-ceremony evidence retain their own
 requirements. This adoption grants no membership, capability or transport right.
+
+
+## Initial codec evidence — 2026-09-07 UTC
+
+The closed BEAM/TS artifact slice is frozen at
+`f5415cc8294fd94350d74869fb35de855d3eeb96`. Actual Claude Fable independently
+reviewed the nine new files and returned PASS with no P0–P2 findings. Targeted
+checks passed 15 BEAM tests and 10 TypeScript tests, typechecking and scoped
+Credo. Fresh independent reciprocal exports matched exact bytes in both
+producer/consumer directions; all 81 preexisting vector files stayed identical.
+
+Root ran the full repository `mix check` against that exact source with isolated
+TMPDIR, OTP28/Elixir1.19.5 and `+S 4:4`: 871 tests and 27 properties passed,
+zero failures, three exclusions, formatting and strict Credo exit0. Existing
+low-priority Credo suggestions remain. The retained log is
+`/tmp/lattice-treehouse-execution-20260906/r19b-codec-full-check.log`.
+
+The BEAM-authored fixture SHA256 is
+`319af9036d12d900fa93d1b212c419c6797dd7ca6dcd96dfed08f0b0a42b3f2c`;
+the TS-authored fixture SHA256 is
+`b874dbac44fda6b7a23554de99bc81b875db4994685b9339750ebba19821c0ee`.
+The largest schema-valid detached return case at the chosen grammar boundary is
+63,990 bytes including signature; the next valid case is 64,035 and refuses.
+An exact 64,000-byte case is not reachable under that grammar; no invalid padding
+was introduced to manufacture one.
+
+This evidence closes only the initial pure codec review packet. There is no
+new command registration, application policy, public index/package/CI wiring,
+selected-Space cold-start integration, expanded catalog vocabulary, adopted
+compaction context, installed continuity flow or physical ceremony. All A01–A17
+whole implementation rows remain OPEN pending their actual required behavior.
