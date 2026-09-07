@@ -81,11 +81,16 @@ impl SealedReviewedBinding {
 }
 
 pub(crate) struct VerifiedBinding {
+    claim: BindingClaim,
     claim_bytes: Vec<u8>,
     signature: [u8; 64],
 }
 
 impl VerifiedBinding {
+    pub(crate) fn claim(&self) -> &BindingClaim {
+        &self.claim
+    }
+
     pub(crate) fn claim_bytes(&self) -> &[u8] {
         &self.claim_bytes
     }
@@ -157,6 +162,7 @@ pub(crate) fn accept_signed(
     key.verify_strict(&sealed.claim_bytes, &signature)
         .map_err(|_| REVIEWED_BINDING_REFUSED)?;
     Ok(VerifiedBinding {
+        claim: signed.claim,
         claim_bytes: sealed.claim_bytes.clone(),
         signature: signed.signature,
     })
