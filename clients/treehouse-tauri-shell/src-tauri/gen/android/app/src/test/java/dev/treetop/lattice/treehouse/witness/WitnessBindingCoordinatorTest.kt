@@ -207,6 +207,29 @@ class WitnessBindingCoordinatorTest {
         assertTrue("${signed.get()}", signed.get() is WitnessResult.Stored)
     }
 
+    @Test fun earlyExpiryDuringPrepareDeliveryIsRescheduledAndEventuallyReleasesLease() {
+        val context = completedContext()
+        var now = 1_000L
+        val scheduled = mutableListOf<() -> Unit>(); val completed = CountDownLatch(1)
+        val coordinator = WitnessBindingCoordinator(context, bytes(7), Ui(), Platform(signing(keyPair())), { true },
+            monotonicNanos = { now },
+            lifecycleCheckpoint = {
+                if (it == "prepare_delivery_owned") scheduled.single().invoke()
+                if (it == "prepare_delivery_complete") completed.countDown()
+            },
+            scheduleExpiry = { _, task -> scheduled.add(task); WitnessExpiry {} })
+        val prepared = stored(prepare(coordinator, request(3)))
+        assertTrue(completed.await(10, TimeUnit.SECONDS))
+        assertEquals(2, scheduled.size)
+        now += 60_000_000_001L
+        scheduled.last().invoke()
+        val next = WitnessBindingCoordinator(context, bytes(7), Ui(), Platform(signing(keyPair())), { true })
+        val nextPrepared = stored(prepare(next, request(4, 10)))
+        assertTrue(next.cancel(bytes(5), bytes(8)))
+        assertNotNull(nextPrepared.handle)
+        assertNotNull(prepared.handle)
+    }
+
     @Test fun cancellationCannotMissExpiryInstalledAfterPreparedPublication() {
         val context = completedContext()
         val entered = CountDownLatch(1); val release = CountDownLatch(1)
@@ -234,8 +257,8 @@ class WitnessBindingCoordinatorTest {
         }
         return context
     }
-    private fun request(revision: Long) = WitnessBindingRequest(revision, "replica:test", bytes(1), bytes(2),
-        bytes(6), bytes(5), bytes(9), bytes(8))
+    private fun request(revision: Long, validatorNonce: Int = 6) = WitnessBindingRequest(revision, "replica:test", bytes(1), bytes(2),
+        bytes(validatorNonce), bytes(5), bytes(9), bytes(8))
     private fun prepare(coordinator: WitnessBindingCoordinator, request: WitnessBindingRequest): WitnessResult<PreparedWitnessBinding> {
         val done = CountDownLatch(1); val result = AtomicReference<WitnessResult<PreparedWitnessBinding>>()
         coordinator.prepareBinding(request) { result.set(it); done.countDown() }

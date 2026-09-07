@@ -77,6 +77,7 @@ internal class WitnessBindingCoordinator(
         var consentRevision = -1L
         var consentStarted = Long.MIN_VALUE
         var expiry: WitnessExpiry? = null
+        var expiryPending = false
         fun closeJournal() { if (::journal.isInitialized) journal.close() }
     }
 
@@ -148,7 +149,13 @@ internal class WitnessBindingCoordinator(
                         var finishNow = false
                         synchronized(lifecycle) {
                             if (attempt.state.get() == State.PREPARE_DELIVERING) {
-                                if (currentForDelivery(attempt)) attempt.state.set(State.PREPARED)
+                                if (currentForDelivery(attempt)) {
+                                    attempt.state.set(State.PREPARED)
+                                    if (attempt.expiryPending) {
+                                        attempt.expiryPending = false
+                                        attempt.expiry = scheduleExpiry(remainingMillis(attempt)) { expire(attempt) }
+                                    }
+                                }
                                 else { attempt.state.set(State.TERMINAL); finishNow = true }
                             }
                         }
@@ -234,8 +241,11 @@ internal class WitnessBindingCoordinator(
     private fun expire(attempt: Attempt) {
         var finishNow = false
         synchronized(lifecycle) {
-            if (active.get() !== attempt ||
-                attempt.state.get() in arrayOf(State.PREPARE_DELIVERING, State.TERMINAL)) return
+            if (active.get() !== attempt || attempt.state.get() == State.TERMINAL) return
+            if (attempt.state.get() == State.PREPARE_DELIVERING) {
+                attempt.expiryPending = true
+                return
+            }
             attempt.cancelled.set(true)
             if (attempt.state.compareAndSet(State.PREPARED, State.TERMINAL)) finishNow = true
         }
@@ -274,7 +284,7 @@ internal class WitnessBindingCoordinator(
         val elapsed = monotonicNanos() - attempt.consentStarted
         if (elapsed < 0) return 0
         val nanos = CONSENT_NANOS - elapsed
-        return if (nanos <= 0) 0 else (nanos / 1_000_000L).coerceAtLeast(1)
+        return if (nanos <= 0) 0 else (nanos + 999_999L) / 1_000_000L
     }
     private fun <T> stored(result: WitnessResult<T>): T = when (result) {
         is WitnessResult.Stored -> result.value
