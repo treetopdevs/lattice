@@ -323,25 +323,28 @@ defmodule Treehouse.MemberContinuityAuthoringTest do
     assert [%{status: :attested}] = observed.links
   end
 
-  test "analysis exposes only judge-produced signed zero and preserves exact high evidence" do
+  test "analysis evidence exposes only judge-produced signed zero and preserves exact high evidence" do
     {sim, claim, _request} = fixture()
     log = Sim.log(sim, "root")
 
-    assert Authority.analyze(Space, log).valid_beacons == [
+    {_analysis, evidence} = Authority.analyze_with_beacon_evidence(Space, log)
+
+    assert evidence == [
              %{op_id: hd(claim.epoch_basis), epoch: 0}
            ]
 
     {unauthorized, bad} = Sim.beacon(Sim.sync_all(sim), "new", 9_007_199_254_740_993)
     unauthorized = Sim.sync_all(unauthorized)
-    analysis = Authority.analyze(Space, Sim.log(unauthorized, "root"))
+
+    {analysis, evidence} =
+      Authority.analyze_with_beacon_evidence(Space, Sim.log(unauthorized, "root"))
+
     assert analysis.reasons[bad.id] == :unauthorized_beacon
-    assert analysis.valid_beacons == [%{op_id: hd(claim.epoch_basis), epoch: 0}]
+    assert evidence == [%{op_id: hd(claim.epoch_basis), epoch: 0}]
     {high, beacon} = Sim.beacon(sim, "root", 9_007_199_254_740_993)
 
-    assert %{op_id: beacon.id, epoch: 9_007_199_254_740_993} in Authority.analyze(
-             Space,
-             Sim.log(high, "root")
-           ).valid_beacons
+    {_analysis, evidence} = Authority.analyze_with_beacon_evidence(Space, Sim.log(high, "root"))
+    assert %{op_id: beacon.id, epoch: 9_007_199_254_740_993} in evidence
   end
 
   defp fixture do

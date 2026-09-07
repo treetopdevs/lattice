@@ -19,9 +19,9 @@ defmodule Treehouse.MemberContinuityAuthoring do
   def review(log, request) do
     with :ok <- request_shape(request),
          {:ok, observed} <- MemberContinuity.observe(log),
-         analysis = Authority.analyze(Space, log),
+         {analysis, valid_beacons} = Authority.analyze_with_beacon_evidence(Space, log),
          {:ok, vouchers} <- vouchers(log, analysis, request.voucher_admissions),
-         {:ok, epoch, basis} <- epoch(analysis.valid_beacons),
+         {:ok, epoch, basis} <- epoch(valid_beacons),
          parents = parent_heads(observed, request.old_pub),
          true <- length(parents) <= 16,
          {:ok, claim} <- claim(log, request, vouchers, epoch, basis, parents),
