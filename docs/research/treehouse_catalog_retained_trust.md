@@ -548,3 +548,29 @@ reason, preserving overflow metadata alongside it. Other block reasons have an
 empty authority witness array. Every such state remains frozen with no routes.
 These are pure-state validation rules, not C03/C14 persistence closure. Actual
 process stop/reopen, durable CAS and field recovery evidence remain outstanding.
+
+
+## Overflow freeze precedence clarification — 2026-09-07 UTC
+
+Root adopts the following narrow BEAM/TS parity rule for the existing closed
+state shape. A validated trigger-bearing overflow freeze retains its original
+block and trigger metadata when later graph forks, additional binding heads or
+an unseen authentic bootstrap are observed. Those later unadmitted artifacts
+must not replace the block with indexes into artifacts absent from the retained
+catalog/rotation set. Retained raw histories and observed bootstrap IDs still
+advance through their existing verified path; no routes are enabled.
+
+An actual authority refusal remains stronger: preserve an existing
+`authority_changed` block, or upgrade to a newly verified authority block while
+retaining prior overflow triggers. In BEAM this authorizes one trigger-preserving
+clause in each of `merge_graph_block` and `merge_security_block`, after their
+existing authority-priority clauses and before non-authority replacement.
+It matches the TS overflow branch's existing normalized journal shape. No
+validator, schema, budget, watermark, raw authentication or historical-witness
+predicate is weakened; no new unfreeze path is introduced.
+
+Require public RED/GREEN for overflow followed by two new rotations and for
+overflow followed by an unseen bootstrap, including empty-page reopen, original
+trigger equality, retained-history/observed-ID advancement and empty routes.
+Retain authority-before/after-overflow controls. Independent Fable review remains
+required on the exact implementation. C03/C14 and durable native gates stay OPEN.
