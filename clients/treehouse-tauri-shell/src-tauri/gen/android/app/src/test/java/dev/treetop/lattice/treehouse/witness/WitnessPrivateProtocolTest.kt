@@ -4,6 +4,8 @@ import java.util.Base64
 import org.junit.Assert.*
 import org.junit.Test
 
+@org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(sdk = [33])
 class WitnessPrivateProtocolTest {
     @Test fun allClosedRequestsDecode() {
         val common="\"protocol\":\"${WitnessPrivateProtocol.PROTOCOL}\",\"operationId\":\"${b(1)}\",\"sessionDigest\":\"${b(2)}\""

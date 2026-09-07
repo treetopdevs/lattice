@@ -3,7 +3,7 @@ package dev.treetop.lattice.treehouse.witness
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
-import java.util.Base64
+import android.util.Base64
 
 internal sealed interface WitnessPrivateRequest {
     val operationId: WitnessBytes
@@ -90,8 +90,8 @@ internal object WitnessPrivateProtocol {
     }
 
     private fun exact(value: Map<String,String>, vararg names: String) { require(value.keys == names.toSet()) }
-    private fun field32(value: Map<String,String>, name: String): WitnessBytes { val encoded=value.getValue(name); require(encoded.length==44); val raw=Base64.getDecoder().decode(encoded); require(raw.size==32 && Base64.getEncoder().encodeToString(raw)==encoded); return WitnessBytes(raw) }
-    private fun canonical(value: WitnessBytes) = Base64.getEncoder().encodeToString(value.copyBytes())
+    private fun field32(value: Map<String,String>, name: String): WitnessBytes { val encoded=value.getValue(name); require(encoded.length==44); val raw=Base64.decode(encoded, Base64.NO_WRAP); require(raw.size==32 && Base64.encodeToString(raw, Base64.NO_WRAP)==encoded); return WitnessBytes(raw) }
+    private fun canonical(value: WitnessBytes) = Base64.encodeToString(value.copyBytes(), Base64.NO_WRAP)
     private fun replica(value: Map<String,String>): String = value.getValue("replica").also { require(it.isNotEmpty() && it.toByteArray(StandardCharsets.UTF_8).size <= 512) }
     private fun revision(value: Map<String,String>): Long { val text=value.getValue("expectedRevision"); require(text.length in 1..19 && text.all { it in '0'..'9' } && (text.length==1 || text[0]!='0')); return text.toLong().also { require(it>0) } }
     private fun validReason(reason: String) = reason.isNotEmpty() && reason.length<=64 && reason.all { it in 'a'..'z' || it=='_' }
