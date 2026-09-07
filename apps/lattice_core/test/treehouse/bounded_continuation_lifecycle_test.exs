@@ -81,8 +81,6 @@ defmodule Treehouse.BoundedContinuationLifecycleTest do
       assert length(fixture.acquisitions) == 2
       assert counts == %{beacons: 14, continuations: 2, grants: 24, signatures: 98}
       assert counts.beacons + counts.continuations + counts.grants == 40
-      # Independent native purposes; these are operation counts, not measured prompts.
-      assert counts.beacons * 2 + counts.continuations * 2 + counts.beacons == 46
     end
   end
 
