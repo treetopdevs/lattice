@@ -44,6 +44,19 @@ class WitnessPrivateBindingResponsesTest {
         assertNull(WitnessPrivateBindingResponses.signed(w(1), w(8), w(2), SignedWitnessBinding(claim(), ByteArray(64))))
     }
 
+    @Test fun androidBase64PreservesCanonicalPaddingWithoutLineWrapping() {
+        val signed = SignedWitnessBinding(claim(), ByteArray(64) { 0xff.toByte() })
+        val encoded = JSONObject(String(checkNotNull(WitnessPrivateBindingResponses.signed(w(1), w(9), w(2), signed))))
+        val signature = encoded.getString("signature")
+        assertEquals(android.util.Base64.encodeToString(signed.signature, android.util.Base64.NO_WRAP), signature)
+        assertEquals(88, signature.length)
+        assertTrue(signature.endsWith("=="))
+        assertFalse(signature.contains('\n'))
+        assertEquals(android.util.Base64.encodeToString(w(1).copyBytes(), android.util.Base64.NO_WRAP), encoded.getString("operationId"))
+        assertEquals(44, encoded.getString("operationId").length)
+        assertArrayEquals(signed.signature, android.util.Base64.decode(signature, android.util.Base64.NO_WRAP))
+    }
+
     private fun keys(json: JSONObject): Set<String> = json.keys().asSequence().toSet()
     private fun w(v: Int) = WitnessBytes(ByteArray(32) { v.toByte() })
     private fun claim() = PublicBindingClaim("line\n\"é😀", bytes(1), bytes(2), bytes(3), bytes(4), bytes(5), bytes(6), bytes(7), bytes(9))

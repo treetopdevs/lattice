@@ -1,7 +1,7 @@
 package dev.treetop.lattice.treehouse.witness
 
 import java.nio.charset.StandardCharsets
-import java.util.Base64
+import android.util.Base64
 
 /** Closed outbound envelopes from coordinator-owned claims only. No public claim decoder. */
 internal object WitnessPrivateBindingResponses {
@@ -43,7 +43,7 @@ internal object WitnessPrivateBindingResponses {
         return fields.entries.joinToString(",", "{", "}") { (key, value) -> "${quote(key)}:${quote(value)}" }
     }
 
-    private fun base64(bytes: ByteArray): String = Base64.getEncoder().encodeToString(bytes)
+    private fun base64(bytes: ByteArray): String = Base64.encodeToString(bytes, Base64.NO_WRAP)
     private fun quote(value: String): String = buildString {
         append('"')
         for (character in value) when (character) {
