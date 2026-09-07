@@ -20,7 +20,7 @@ function fixture() {
 }
 
 test("closed member claim preserves exact reviewed key, admission, epoch and ordered voucher evidence", async () => {
-  const {normalizeMemberContinuityClaim} = await import("../src/treehouse_member_continuity_codec");
+  const {normalizeMemberContinuityClaim} = await import("../src/index");
   const {claim} = fixture();
   assert.deepEqual(normalizeMemberContinuityClaim(claim), claim);
   const bad: unknown[] = [null, {...claim, extra: 1}, {...claim, oldPub: claim.newPub}, {...claim, epoch: 2 ** 53},
@@ -37,7 +37,7 @@ test("closed member claim preserves exact reviewed key, admission, epoch and ord
 });
 
 test("member possession and both vouches bind the exact independent claim and distinct byte purposes", async () => {
-  const codec = await import("../src/treehouse_member_continuity_codec");
+  const codec = await import("../src/index");
   const {claim, next, vouchers} = fixture();
   const possession = next.sign(codec.canonicalBytesForMemberContinuityPossession(claim));
   const certificate = {claim, possession, vouches: vouchers.map((member) =>
@@ -70,7 +70,7 @@ test("member possession and both vouches bind the exact independent claim and di
 });
 
 test("old-key return binds the exact reviewed challenge and proves no expiry or one-use policy", async () => {
-  const codec = await import("../src/treehouse_member_continuity_codec");
+  const codec = await import("../src/index");
   const {old, next, claim} = fixture();
   const challenge = {version: 1 as const, product: "treehouse" as const, space: claim.space,
     oldPub: old.pub, heads: [id("claim")], deps: [...claim.deps], reviewer: next.pub, nonce: claim.nonce};
@@ -92,7 +92,7 @@ test("old-key return binds the exact reviewed challenge and proves no expiry or 
 });
 
 test("carrier adapters preserve closed maps and reject duplicate keys, tags and malformed text before signature use", async () => {
-  const codec = await import("../src/treehouse_member_continuity_codec");
+  const codec = await import("../src/index");
   const {claim, next, vouchers} = fixture();
   const possession = next.sign(codec.canonicalBytesForMemberContinuityPossession(claim));
   const certificate = {claim, possession, vouches: vouchers.map((member) =>
@@ -125,7 +125,7 @@ test("carrier adapters preserve closed maps and reject duplicate keys, tags and 
 });
 
 test("the narrow decoded-argument adapter consumes real signed carrier decode and refuses metadata sentinels", async () => {
-  const codec = await import("../src/treehouse_member_continuity_codec");
+  const codec = await import("../src/index");
   const {authorCarrierOp} = await import("../src/codec");
   const {carrierOpsToSemanticOps} = await import("../src/carrier");
   const {claim, next, vouchers} = fixture();
@@ -156,7 +156,7 @@ test("the narrow decoded-argument adapter consumes real signed carrier decode an
 });
 
 test("detached return accepts the largest v1 challenge below64000 and refuses its next genuinely signed size", async () => {
-  const codec = await import("../src/treehouse_member_continuity_codec");
+  const codec = await import("../src/index");
   const {canonicalBytesForCarrierTerm} = await import("../src/codec");
   const {claim, old} = fixture();
   // The exact ASCII Space has fixed width. All other scalars are fixed width.
@@ -183,7 +183,7 @@ test("detached return accepts the largest v1 challenge below64000 and refuses it
 });
 
 test("every closed claim field is bound and scalar/array ambiguities never normalize into consent", async () => {
-  const codec = await import("../src/treehouse_member_continuity_codec");
+  const codec = await import("../src/index");
   const {claim, next, vouchers} = fixture();
   const possession = next.sign(codec.canonicalBytesForMemberContinuityPossession(claim));
   const certificate = {claim, possession, vouches: vouchers.map((v) => ({member: v.pub,
@@ -211,7 +211,7 @@ test("every closed claim field is bound and scalar/array ambiguities never norma
 });
 
 test("nested voucher and signature maps remain closed and byte order is unsigned key order", async () => {
-  const codec = await import("../src/treehouse_member_continuity_codec");
+  const codec = await import("../src/index");
   const {claim, next, vouchers} = fixture();
   const possession = next.sign(codec.canonicalBytesForMemberContinuityPossession(claim));
   const certificate = {claim, possession, vouches: vouchers.map((v) => ({member: v.pub,

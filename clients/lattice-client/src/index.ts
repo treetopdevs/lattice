@@ -57,3 +57,6 @@ export type {
   TreehouseCatalogTrustReason, TreehouseCatalogRefusalDetail, VerifiedTreehouseCatalogRoute,
   TreehouseCatalogTrustDecision, TreehouseCatalogRouteDecision,
 } from "./treehouse_catalog_trust";
+
+// Cryptographic codec utilities only; these do not admit a member or activate a command.
+export * from "./treehouse_member_continuity_codec";
