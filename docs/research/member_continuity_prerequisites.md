@@ -314,3 +314,48 @@ All are under `/tmp/lattice-treehouse-execution-20260906/`:
 Adoption needed: the exact dated hash/union obligation, fixed Space literal
 helper and additive context contract above. No additional runtime decision,
 new command capability, compaction claim or generic input relaxation is implied.
+
+
+## Adopted selected-Space loading correction — 2026-09-07 UTC
+
+Actual gpt-5.6-sol approved the exact amendment SHA256
+`afce19e5a69c7ee83e6f6e206125bd2cd438e8b00f367e33918d7b5151f65c49`
+with no P0–P2. Root adopts it below before the helper is broadened. This
+supersedes only the earlier helper's exact-nine return shape, not the nine-name
+cutoff supplement or139-name union. The four cold-missing literals are three
+existing claim field names and the fixed treehouse product value.
+
+# Exact selected-Space literal amendment proposal — 2026-09-07 UTC
+
+Status: proposed; current Space helper remains the adopted nine literals. No broadened helper implemented. Cutoff validators already use the adopted139 union and remain unchanged by this proposal.
+
+Base review commit36fa838a (parent252ee892); working production delta currently adds only the originally adopted nine-literal Space helper. Fresh isolated Elixir1.19.5/OTP28 process,+S4, includes only lattice_core/Jason ebin paths. Script explicitly confirms no MemberContinuityCertificate, CatalogCutoff or CatalogTrust loaded. It loads selectedSpace and existing Authority/Delegation/Wire, reads the original genuinely signed beam_codec.json and checks existing atoms without creating any.
+
+Actual output:
+```
+missing_existing_claim_atoms: ["epoch_basis", "nonce", "parents", "treehouse"]
+first_actual_signed_frame: {:error, :malformed_op}
+```
+
+Source: `apps/lattice_core/lib/treehouse/member_continuity_certificate.ex` closed `@claim_fields` at19 includes `:epoch_basis`, `:nonce`, `:parents`; normalize_claim at29–37 binds `product: :treehouse` and validates all of them. All four names were already in historical130 cutoff_atoms_v1.json. They are not new cutoff vocabulary and not detached-return-only fields.
+
+The immutable original cold RED has three failures: undefined nine helper; first real signed frame malformed_op; genuine verified dump unsafe_dump. With the originally adopted nine-literal helper, exact return test passes but both behavioral cold tests remain RED. The previous codec-explicit-load positive remains valid but cannot prove selectedSpace-only loading.
+
+Proposed API adjustment: keep `Treehouse.Space.known_continuity_wire_atoms/0`, @doc false and @spec::[atom()], but return exactly these13 sorted literals:
+
+```elixir
+[:active, :admission, :attest_member_key_v1, :epoch_basis, :new_pub,
+ :nonce, :old_admission, :old_membership, :old_pub, :parents, :removed,
+ :treehouse, :vouchers]
+```
+
+Revise only the selected-Space helper's exact-nine test to assert nine supplement plus these four existing shared claim fields. The JSON nine supplement,139 union, all three cutoff enums, old130 fixture and canonical bytes stay unchanged. No registry/capability/command handler, globalLog loader, input-driven module load or input-to-atom creation. The helper merely puts actual selected application's closed claim vocabulary into its runtime atom chunk.
+
+Required GREEN: unprewarmed first actual signedBEAM andTS frames decode/hash+signatureverify, ordinary unknown_command and unchanged state; separate cold restore_verified genuine dump authenticated/byte-equal, forged dump refuses, unknown extra-atom dump unsafe_dump. Current in-progress server test separately covers existing actual path-backed manifest preload/firstrelay/durablestop+reopen.
+
+Evidence hashes:
+
+- `r19b-selected-space-red.log` SHA256 `4cd761c6aa97d49a6539125700e6b07eec7f798c94445a76e3897ae835ee7c45`
+- `r19b-selected-space-green.log` SHA256 `2e53de01933a073e7b36e74a2ab21fbb971c0626413fe44be66ba8ba0006b980`
+- `r19b-space-missing-atoms.exs` SHA256 `a716e0f8b20459c3bd18e3b53380a9d1cd76220165959d7b9903aa8b0a1e9ad7`
+- `r19b-space-missing-atoms.log` SHA256 `98289b4808ed3ebb9ca8634a8cc770afa3d6eb0789c4935df10baf1c41fd304f`
