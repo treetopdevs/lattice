@@ -116,8 +116,12 @@ thirteen-replica renewal lifecycle exceeded its 60-second test timeout. The othe
 jobs passed. Test-only closure PR86 splits the same independent fixtures into
 thirteen named cases, preserving every behavior and exact per-replica operational
 counts without changing the timeout. Sol review and root 1,031 tests plus 27
-properties passed; hosted tip 34145548570 remains pending. The preview still
-exposes six commands, and merge-result closure remains open.
+properties passed. Final tip `8a1d35e877edbb043a232182526434a5f19b38ba`
+passed hosted run 34147415076 after independent Sol review. PR86 merged as
+`03f127f56f28c219439747ea2770778e5fef196e`; merged tree
+`070e3160bceb852d8f2d8f92f9e1e0bd17e006ed` matched the root merge candidate.
+Main run 34149188715 is pending. The preview still exposes six commands, and
+merge-result closure remains open until that run passes.
 
 ## Native vertical slice
 
@@ -149,3 +153,19 @@ R11 native installation/CAS and replacement remain unfinished. No enrollment,
 authority readiness, protected signing, physical proof, recovery, release
 candidate or pilot closure follows from these local checks. Device custody and
 elapsed pilot observation require their own actual evidence.
+
+
+## R11 dependency audit after continuity merge
+
+Read-only Sol audit against main `7256eb9b` and native root `ebe801ff` confirmed
+that the retained TS/BEAM catalog evaluator is integrated but remains candidate-only.
+The dirty QuickJS worktree has no immutable reviewed vendored patch; it is preserved
+without edits or builds. Native evaluator acceptance, initial installation, route
+activation and replacement promotion remain blocked. A candidate-only native
+whole-record CAS store can proceed independently, without implying installation.
+Both StoreToken counters and snapshot bytes must change atomically in one CAS;
+separate counter keys would not provide that property.
+
+R13 still requires R01b, completed R11c and R12 closure. R36 is a separate vertical
+slice, not an R13 prerequisite. Independently keyed packaged devices, real carrier
+sync/restart, admission refusals and fair scheduling remain enrollment gates.

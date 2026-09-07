@@ -182,15 +182,47 @@ passed Sol review. Its hosted execution remains a native packet closure gate.
 
 A bounded architectural audit identified operation lifetime ownership spread
 across too many layers as the common cause of repeated cancellation and callback
-repairs. Consolidation will place execution, cancellation, owner invalidation,
+repairs. Consolidation places execution, cancellation, owner invalidation,
 prepared continuation and completion-after-drain behind one native flow interface.
 The closed Rust/Kotlin protocol, durable journal, provider, review UI and strict
 signature verifier retain their contracts. An outer task destructor is not proof
 that an inner native callback has drained; slot release must follow the actual
 transport acknowledgement.
 
-This consolidation and its external flow regressions are open work. Neither the
-new frontend panel nor the public native command surface is activated.
+Rust consolidated flow through `f980c0b46200ab2072e07aa99e2301b4e7f22db5`
+and Kotlin flow through `0d2c5eeedcc4d15f7d1d58c36a4e24e20ac229f2`
+passed independent Sol review and are integrated. Rust has one Running/Cancelled/
+Committed publication owner across all registered native drains. Kotlin retains
+admission through backend, journal and local UI cleanup acknowledgements, and clears
+the exact active operation before publishing its staged terminal callback. Entropy
+and cancel dispatch setup run off synchronous lifecycle/navigation/drop handlers.
+
+Local UI cleanup acknowledgement proves local main-handler cleanup executed. It
+is not proof that Android system UI disappeared or a physical platform callback
+completed. Unknown native launch/acknowledgement failures retain admission closed.
+
+Private hook packet `1dcbcd2dba84d1b5ad82581252003ea462a42d56` passed Sol
+review and integrated as `ae511ff91`. Android registers one managed Arc<WitnessFlow>
+before configured windows are created; navigation, page, lifecycle, destruction
+and exit delegate to it. Desktop retains the preview document guard. Universal
+private plugin rejection remains handled, including broadened ACL tests.
+
+Public IPC adapter `54c6c616d7de041a95c15b39b2c4f737914266c3` passed Sol
+review and integrated as `720ab247c`. JSON object responses stay objects, and
+pending events target the actual WebviewWindow listener scope. Application command
+registration, ACL and panel activation are still pending.
+
+Root checks at `ae511ff91`: 105 Rust tests plus three compile-fail documentation
+tests passed (`/tmp/treehouse-r36-flow-hooks-root-rust.log`); actual Android Rust
+target compilation passed (`/tmp/treehouse-r36-flow-hooks-root-android.log`).
+Root final Kotlin checks passed 149 total tests, 148 executed, one existing skip,
+zero failures, plus Android lint
+(`/tmp/treehouse-r36-terminal-publication-root.log`).
+
+Validator persistence/possession first packet is not integrated: independent review
+found capacity overflow could leave a durable refusal marker and fault checkpoint
+labels preceded their named operations. Repairs and renewed review are required.
+Neither the frontend panel nor public native commands are activated.
 
 ## Remaining gates
 
