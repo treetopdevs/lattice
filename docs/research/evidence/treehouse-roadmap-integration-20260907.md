@@ -33,12 +33,24 @@ Historical vector bytes remain literal. Their six-command grants refuse the
 newly decoded command as `operation_not_granted`; preview grants remain unchanged.
 The adopted vocabulary addition does not activate catalog replacement.
 
-BEAM source passed independent Sol review. TypeScript review repairs cover
-unsupported families, refused links, zero-head status precedence and raw-key
-ordering. Reciprocal signed histories still expose malformed-wrapper provenance
-and output-order differences. Final reciprocal/cold-process proof, independent
-review, root full checks, hosted tip and merge-result gates remain open.
-Compaction/mirror integration follows reciprocal semantic success.
+BEAM source and the TypeScript repairs passed independent Sol review. Reciprocal
+proof now covers 24 independently signed histories, 48 cold-process decode/restore
+checks and two forged-restore refusals. The bounded mirror proof covers 40 legal
+stable cuts and 80 append/reconcile folds. Independent Sol reviewed both proof
+packets and the evidence API integration. All 87 historical vector files remain
+byte-identical; only new semantic corpora were added.
+
+Root full `mix check` passed at `ac101743`: 1,017 tests plus 27 properties,
+zero failures, three existing exclusions, format and Credo passing. Client
+conformance/canonical/domain/catalog/continuation/codec/semantic checks and
+preview tests/build passed. The preview contract still asserts exactly six public
+native commands. Initial full-run failures are retained: historical arity and
+grant-refusal expectations were updated, without changing their signed bytes.
+
+Compaction integration uses the reviewed evidence tuple API, preserving the
+literal seven-key ordinary analysis result and the same beacon judge. This proves
+the bounded research mirror, not production compaction or a compacted public
+observer. Hosted tip and exact merge-result gates remain open.
 
 ## Native vertical slice
 
