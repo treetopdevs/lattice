@@ -4,7 +4,7 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
   alias Lattice.{Log, Op}
   alias LatticeCarrierServer.Manifest
   alias LatticeCarrierServer.Operator.{Journal, Staging}
-  Code.require_file("../support/operator/fixture.exs", __DIR__)
+  Code.require_file("../support/operator/fixture.ex", __DIR__)
 
   setup do
     {:ok, data} = LatticeCarrierServer.Operator.Fixture.new()

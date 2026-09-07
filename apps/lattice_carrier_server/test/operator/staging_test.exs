@@ -4,7 +4,7 @@ defmodule LatticeCarrierServer.Operator.StagingTest do
   alias Lattice.Carrier.Wire
   alias LatticeCarrierServer.Operator.{Journal, Staging}
 
-  Code.require_file("../support/operator/fixture.exs", __DIR__)
+  Code.require_file("../support/operator/fixture.ex", __DIR__)
 
   setup do
     LatticeCarrierServer.Operator.Fixture.new()
