@@ -57,7 +57,8 @@ export async function verifyContinuityCatalogVector(input) {
         assert.equal(commands.length, 1);
         const ops = carrierOpsToSemanticOps(frames, {}, treehouseCommandDecoders("Treehouse.Space"));
         const projection = materialize(treehouseSpaceSchema, ops, new Set(ops.map((op) => op.id)), null, space.replica);
-        assert.equal(projection.quarantineReasons.get(commands[0].id), "unknown_command");
+        // Preserve historical signed catalog bytes; their one-argument command now fails decoded arity.
+        assert.equal(projection.quarantineReasons.get(commands[0].id), "bad_command_arity");
         const before = ops.filter((op) => op.id !== commands[0].id);
         assert.deepEqual(projection.state, materialize(treehouseSpaceSchema, before, new Set(before.map((op) => op.id)), null, space.replica).state);
         states.push(result.next);
