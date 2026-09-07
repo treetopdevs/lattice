@@ -70,6 +70,8 @@ pub enum RunFailure {
     AllocationFailure {
         stage: &'static str,
         accounting: BudgetSnapshot,
+        /// Private bounded provisional guest output; never a successful verdict.
+        completed_output: Option<String>,
     },
     /// Input exceeded the recorded native input bound; refused before intake.
     InputBound {
@@ -147,9 +149,11 @@ fn allocation_failure(
     stage: &'static str,
 ) -> Option<RunFailure> {
     let accounting = observer.as_ref()?.snapshot();
-    accounting
-        .failed
-        .then_some(RunFailure::AllocationFailure { stage, accounting })
+    accounting.failed.then_some(RunFailure::AllocationFailure {
+        stage,
+        accounting,
+        completed_output: None,
+    })
 }
 
 fn run_guest(guest: Guest<'_>) -> Result<RunSuccess, RunFailure> {
@@ -367,9 +371,17 @@ fn run_guest(guest: Guest<'_>) -> Result<RunSuccess, RunFailure> {
             signals: final_signals,
         });
     }
-    if let Some(failure) = allocation_failure(&allocation_observer, "guest evaluation or teardown")
+    if let Some(RunFailure::AllocationFailure {
+        stage, accounting, ..
+    }) = allocation_failure(&allocation_observer, "guest evaluation or teardown")
     {
-        return Err(failure);
+        // Diagnostic data only: move the already bounded provisional result.
+        // The sticky allocation failure still prevents successful acceptance.
+        return Err(RunFailure::AllocationFailure {
+            stage,
+            accounting,
+            completed_output: outcome.ok(),
+        });
     }
     let output = outcome?;
     Ok(RunSuccess {

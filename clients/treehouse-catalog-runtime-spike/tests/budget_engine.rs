@@ -2,6 +2,9 @@
 use std::time::Duration;
 use treehouse_catalog_runtime_spike::{run_budget_fault_fixture, ExperimentLimits, RunFailure};
 
+const MASKED_OUTPUT: &str = r#"{"oomObserved":true,"refusal":{"kind":"reject","reason":"malformed_catalog","detail":{"ids":[],"coreReason":null,"pendingProofIds":[]}}}"#;
+const CONTROL_OUTPUT: &str = r#"{"oomObserved":false,"refusal":{"kind":"reject","reason":"malformed_catalog","detail":{"ids":[],"coreReason":null,"pendingProofIds":[]}}}"#;
+
 const LIMITS: ExperimentLimits = ExperimentLimits {
     memory_bytes: 32 * 1024 * 1024,
     stack_bytes: 2 * 1024 * 1024,
@@ -12,24 +15,30 @@ const LIMITS: ExperimentLimits = ExperimentLimits {
 
 #[test]
 fn caught_engine_exhaustion_is_not_a_semantic_result() {
-    assert_allocation_failure(run_budget_fault_fixture(
+    let completed = assert_allocation_failure(run_budget_fault_fixture(
         include_str!("../fault_fixtures/oom_masquerade.js"),
         LIMITS,
         None,
     ));
+    assert_eq!(completed.as_deref(), Some(MASKED_OUTPUT));
 }
 
 fn assert_allocation_failure(
     result: Result<treehouse_catalog_runtime_spike::RunSuccess, RunFailure>,
-) {
+) -> Option<String> {
     match result {
-        Err(RunFailure::AllocationFailure { accounting, .. }) => {
+        Err(RunFailure::AllocationFailure {
+            accounting,
+            completed_output,
+            ..
+        }) => {
             assert!(accounting.failed);
             assert_eq!(
                 accounting.live_bytes, 0,
                 "runtime teardown frees all charged blocks"
             );
             assert!(accounting.peak_bytes <= LIMITS.memory_bytes);
+            completed_output
         }
         other => panic!("expected genuine sticky allocation refusal, got {other:?}"),
     }
@@ -47,7 +56,7 @@ fn non_exhausting_control_succeeds_with_zero_live_charge_after_teardown() {
     assert!(!accounting.failed);
     assert_eq!(accounting.live_bytes, 0);
     assert!(accounting.peak_bytes > 0 && accounting.peak_bytes <= LIMITS.memory_bytes);
-    assert!(result.output.contains("malformed_catalog"));
+    assert_eq!(result.output, CONTROL_OUTPUT);
 }
 
 #[test]
@@ -60,16 +69,20 @@ fn queued_promise_exhaustion_cannot_mask_the_native_failure() {
             .trim()
             .trim_end_matches(';')
     );
-    assert_allocation_failure(run_budget_fault_fixture(&script, LIMITS, None));
+    let completed = assert_allocation_failure(run_budget_fault_fixture(&script, LIMITS, None));
+    assert_eq!(completed.as_deref(), Some(MASKED_OUTPUT));
 }
 
 #[test]
 fn uncaught_exhaustion_is_a_sticky_resource_failure() {
-    assert_allocation_failure(run_budget_fault_fixture(
-        "(()=>{let a=[];for(;;)a.push(new Array(65536).fill(1));})()",
-        LIMITS,
-        None,
-    ));
+    assert_eq!(
+        assert_allocation_failure(run_budget_fault_fixture(
+            "(()=>{let a=[];for(;;)a.push(new Array(65536).fill(1));})()",
+            LIMITS,
+            None
+        )),
+        None
+    );
 }
 
 /// Failed adoption gate: rquickjs0.11 calls JS_SetDumpFlags before checking
@@ -82,6 +95,10 @@ fn initialization_budget_gate_fails_in_the_pinned_runtime() {
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_tiny_budget_probe"))
         .output()
         .expect("start private initialization probe");
+    assert!(
+        output.stdout.is_empty(),
+        "initialization must not return a guest result"
+    );
     assert_eq!(output.status.signal(), Some(11),
         "re-evaluate the failed initialization gate if the pinned runtime stops crashing: status={:?}, stdout={}, stderr={}",
         output.status, String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));

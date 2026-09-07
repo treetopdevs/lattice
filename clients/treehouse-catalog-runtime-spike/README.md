@@ -116,3 +116,16 @@ Additional retained execution logs:
   composition runs real queued exhaustion; both outputs are preserved.
 - r11a-budget-engine-stopped.log: final20 diagnostics and empty doc-tests passed;
   the tiny-budget failure is isolated in its own unpublished probe process.
+
+Independent Sol review found that an AllocationFailure alone did not prove the
+caught/queued guest settled to its plausible refusal. The narrow repair retains
+the already bounded completed output only as private failure diagnostics (moved,
+not copied). Both cases now assert the exact completed masked JSON bytes before
+native refusal; the uncaught case has no completed output, and the initialization
+child returns none. The real non-exhausting control retains its exact expected
+bytes. Final success remains impossible after sticky allocation failure.
+`r11a-budget-settlement-evidence-red.log` preserves the two missing-evidence
+failures. The first attempted edit missed the formatted acceptance branch, so
+`r11a-budget-settlement-evidence-green.log` still has those same two failures;
+its filename is not a success claim. After the actual branch correction,
+`r11a-budget-settlement-evidence-final.log` records the passing20-test gate.
