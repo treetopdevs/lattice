@@ -30,14 +30,17 @@ internal class WitnessFlow(
     private class Delivery(val callback: (WitnessResult<ByteArray>) -> Unit) {
         var delivered = false
         var received = false
+        var result: WitnessResult<ByteArray>? = null
+        var prepared = false
     }
+    private class CancelReply(val request: WitnessPrivateRequest.Cancel, val callback: (WitnessResult<ByteArray>) -> Unit)
     private class Attempt(val request: WitnessPrivateRequest, val initialDelivery: Delivery) {
         var delivery = initialDelivery
         var cancelled = false
-        var deliveryDepth = 0
         var drained = false
         val pendingUi = mutableSetOf<Any>()
         var phase = Phase.RUNNING
+        var cancelReply: CancelReply? = null
         val review = CompletableFuture<Boolean>()
         var cancellation: WitnessUiCancellation? = null
         var binding: WitnessFlowBinding? = null
@@ -50,8 +53,10 @@ internal class WitnessFlow(
             val selected = synchronized(lock) { active?.takeIf {
                 it.request.operationId == request.targetOperationId && it.request.sessionDigest == request.sessionDigest
             } }
-            val won = selected != null && cancel(selected)
-            callback(terminal(request, if (won) WitnessTerminalStatus.CANCELLED else WitnessTerminalStatus.MISSING))
+            // One accepted cancellation reply per owner. Extra requests receive MISSING;
+            // they cannot accumulate callbacks or claim the still-draining cancellation.
+            val won = selected != null && cancel(selected, reply = CancelReply(request, callback))
+            if (!won) reply(callback, terminal(request, WitnessTerminalStatus.MISSING))
             return
         }
         val delivery = Delivery(callback)
@@ -68,13 +73,13 @@ internal class WitnessFlow(
                 } else null
             } else if (current == null) Attempt(request, delivery).also { active = it } else null
         }
-        if (selected == null) { callback(terminal(request, WitnessTerminalStatus.REFUSED, "storage_busy")); return }
+        if (selected == null) { reply(callback, terminal(request, WitnessTerminalStatus.REFUSED, "storage_busy")); return }
         if (continuation) {
             selected.handles!!.signPrepared(request as WitnessPrivateRequest.SignPrepared) { result ->
-                try { deliver(selected, delivery, result) } finally {
+                try { stage(selected, delivery, result) } finally {
                     // A refused token may never enter the coordinator. Revoke its retained
                     // preparation explicitly; only onDrained can release global admission.
-                    if (result !is WitnessResult.Stored) cancel(selected, lifecycle = true)
+                    if (result !is WitnessResult.Stored) cancel(selected, preserveResult = true)
                 }
             }
             return
@@ -82,7 +87,7 @@ internal class WitnessFlow(
         worker.execute {
             if (request is WitnessPrivateRequest.Proof) {
                 try { proof(selected, request) } catch (_: Exception) {
-                    deliver(selected, delivery, WitnessResult.Refused("binding_failed")); drain(selected)
+                    stage(selected, delivery, WitnessResult.Refused("binding_failed")); drain(selected)
                 }
             } else {
                 val result = try {
@@ -100,24 +105,32 @@ internal class WitnessFlow(
                     })
                 }
                 // All journal use blocks and platform effects have finished before drain.
-                try { deliver(selected, delivery, result) } finally { drain(selected) }
+                try { stage(selected, delivery, result) } finally { drain(selected) }
             }
         }
     }
 
-    fun invalidate() { synchronized(lock) { active }?.let { cancel(it, lifecycle = true) } }
+    fun invalidate() { synchronized(lock) { active }?.let { cancel(it) } }
 
-    private fun cancel(attempt: Attempt, lifecycle: Boolean = false): Boolean {
+    private fun cancel(attempt: Attempt, reply: CancelReply? = null,
+        preserveResult: Boolean = false, expectedDelivery: Delivery? = null): Boolean {
         val selected = synchronized(lock) {
-            if (active !== attempt || attempt.cancelled || (!lifecycle && (attempt.deliveryDepth > 0 || (attempt.delivery.delivered && attempt.phase != Phase.PREPARED)))) return false
+            if (active !== attempt || attempt.cancelled || (expectedDelivery != null && attempt.delivery !== expectedDelivery)) return false
             attempt.cancelled = true
+            attempt.cancelReply = reply
+            val delivery = attempt.delivery
+            if (!delivery.delivered && (!preserveResult || delivery.result == null)) {
+                delivery.result = WitnessResult.Refused("cancelled")
+                delivery.prepared = false
+                delivery.received = true
+            }
             Triple(attempt.cancellation, attempt.binding, attempt.bindingAttempt)
         }
         try { selected.first?.cancel() } catch (_: Exception) { }
         attempt.review.complete(false)
         if (selected.second != null && selected.third != null)
             try { selected.second!!.cancel(selected.third!!.copyBytes(), attempt.request.sessionDigest.copyBytes()) } catch (_: Exception) { }
-        deliver(attempt, attempt.delivery, WitnessResult.Refused("cancelled"))
+        publishReady(attempt)
         return true
     }
 
@@ -128,7 +141,7 @@ internal class WitnessFlow(
         val started = monotonicNanos()
         val deadline = try { Math.addExact(started, TimeUnit.SECONDS.toNanos(120)) }
             catch (_: ArithmeticException) { throw Failure("cancelled") }
-        val timeout = scheduleReviewTimeout { cancel(attempt, lifecycle = true) }
+        val timeout = scheduleReviewTimeout { cancel(attempt) }
         try {
             val cancellation = ownedUi(attempt).review(details, {}) { attempt.review.complete(it) }
             val now = monotonicNanos()
@@ -146,30 +159,58 @@ internal class WitnessFlow(
         if (active !== attempt || attempt.delivery !== delivery || delivery.delivered || delivery.received) false
         else { delivery.received = true; true }
     }
-    private fun deliver(attempt: Attempt, delivery: Delivery, result: WitnessResult<ByteArray>, prepared: Boolean = false) {
-        val callback = synchronized(lock) {
-            if (active !== attempt || attempt.delivery !== delivery || delivery.delivered) return
-            delivery.delivered = true
-            attempt.deliveryDepth++
-            if (prepared && !attempt.cancelled) attempt.phase = Phase.PREPARED
-            delivery.callback
+    /** Stage an owned result; Java/JNI completion is never used as a drain acknowledgement. */
+    private fun stage(attempt: Attempt, delivery: Delivery, result: WitnessResult<ByteArray>, prepared: Boolean = false) {
+        val owned = if (result is WitnessResult.Stored) WitnessResult.Stored(result.value.copyOf()) else result
+        synchronized(lock) {
+            if (active !== attempt || attempt.delivery !== delivery || delivery.delivered || delivery.result != null) return
+            delivery.result = if (attempt.cancelled) WitnessResult.Refused("cancelled") else owned
+            delivery.prepared = prepared && !attempt.cancelled
         }
-        try { callback(if (current(attempt)) result else WitnessResult.Refused("cancelled")) }
-        catch (_: Exception) { cancel(attempt, lifecycle = true) }
-        finally { synchronized(lock) {
-            attempt.deliveryDepth--
-            releaseIfDrained(attempt)
-        } }
+        publishReady(attempt)
     }
-    private fun drain(attempt: Attempt) = synchronized(lock) {
-        attempt.drained = true
-        releaseIfDrained(attempt)
+    private fun drain(attempt: Attempt) {
+        synchronized(lock) { attempt.drained = true }
+        publishReady(attempt)
     }
 
-    /** Called under lock; backend completion and cancellation alone never release UI ownership. */
-    private fun releaseIfDrained(attempt: Attempt) {
-        if (active === attempt && attempt.drained && attempt.pendingUi.isEmpty() &&
-            attempt.delivery.delivered && attempt.deliveryDepth == 0) active = null
+    private fun publishReady(attempt: Attempt) {
+        val callbacks = synchronized(lock) {
+            if (active !== attempt || attempt.pendingUi.isNotEmpty()) return
+            val delivery = attempt.delivery
+            if (!attempt.drained) {
+                if (!delivery.prepared || delivery.delivered || attempt.cancelled) return
+                val result = delivery.result ?: return
+                delivery.delivered = true
+                attempt.phase = Phase.PREPARED
+                listOf<() -> Unit>({
+                    try { delivery.callback(result) } catch (_: Throwable) {
+                        // A failed prepared publication may revoke only this exact invocation,
+                        // never a reentrant signing invocation or a later owner.
+                        cancel(attempt, expectedDelivery = delivery)
+                    }
+                })
+            } else {
+                if (!delivery.delivered && delivery.result == null) return
+                val replies = mutableListOf<() -> Unit>()
+                if (!delivery.delivered) {
+                    val result = if (delivery.prepared) WitnessResult.Refused("binding_timeout") else delivery.result!!
+                    delivery.delivered = true
+                    replies.add { reply(delivery.callback, result) }
+                }
+                attempt.cancelReply?.let { cancellation ->
+                    val result = terminal(cancellation.request, WitnessTerminalStatus.CANCELLED)
+                    replies.add { reply(cancellation.callback, result) }
+                }
+                // Commit idle before any terminal callback can wake Rust or reenter submit.
+                active = null
+                replies
+            }
+        }
+        callbacks.forEach { it() }
+    }
+    private fun reply(callback: (WitnessResult<ByteArray>) -> Unit, result: WitnessResult<ByteArray>) {
+        try { callback(result) } catch (_: Throwable) { }
     }
     private fun ownedUi(attempt: Attempt): WitnessReviewUi = object: WitnessReviewUi {
         private fun ticket(onLocalCleanup: () -> Unit): () -> Unit {
@@ -178,9 +219,11 @@ internal class WitnessFlow(
             return acknowledgement@ {
                 val first = synchronized(lock) {
                     if (!attempt.pendingUi.remove(ticket)) false
-                    else { releaseIfDrained(attempt); true }
+                    else true
                 }
-                if (first) onLocalCleanup()
+                if (first) {
+                    try { onLocalCleanup() } finally { publishReady(attempt) }
+                }
             }
         }
         override fun review(details: WitnessReviewDetails, onLocalCleanup: () -> Unit,
@@ -298,11 +341,11 @@ internal class WitnessFlow(
     private fun proof(attempt: Attempt, request: WitnessPrivateRequest.Proof) {
         val snapshot = observe()
         if (snapshot !is WitnessResult.Stored) {
-            try { deliver(attempt, attempt.initialDelivery, snapshot.mapSnapshot(request, null)) } finally { drain(attempt) }; return
+            try { stage(attempt, attempt.initialDelivery, snapshot.mapSnapshot(request, null)) } finally { drain(attempt) }; return
         }
         val enrollment = snapshot.value.enrollments.singleOrNull { it.enrollmentId == request.enrollmentId }
         if (enrollment == null) {
-            try { deliver(attempt, attempt.initialDelivery, WitnessResult.Refused("enrollment_mismatch")) } finally { drain(attempt) }; return
+            try { stage(attempt, attempt.initialDelivery, WitnessResult.Refused("enrollment_mismatch")) } finally { drain(attempt) }; return
         }
         requireCurrent(attempt)
         val binding = bindingFactory(context, signer.copyBytes(), ownedUi(attempt),
@@ -320,12 +363,12 @@ internal class WitnessFlow(
             when (result) {
                 is WitnessResult.Stored -> {
                     val registered = handles.register(request.operationId, request.sessionDigest, result.value)
-                    deliver(attempt, attempt.initialDelivery, registered, prepared = registered is WitnessResult.Stored)
+                    stage(attempt, attempt.initialDelivery, registered, prepared = registered is WitnessResult.Stored)
                     if (registered !is WitnessResult.Stored || !current(attempt))
-                        cancel(attempt, lifecycle = true)
+                        cancel(attempt, preserveResult = true)
                 }
-                is WitnessResult.Refused -> deliver(attempt, attempt.initialDelivery, result)
-                WitnessResult.Missing -> deliver(attempt, attempt.initialDelivery, WitnessResult.Missing)
+                is WitnessResult.Refused -> stage(attempt, attempt.initialDelivery, result)
+                WitnessResult.Missing -> stage(attempt, attempt.initialDelivery, WitnessResult.Missing)
             }
         }
     }

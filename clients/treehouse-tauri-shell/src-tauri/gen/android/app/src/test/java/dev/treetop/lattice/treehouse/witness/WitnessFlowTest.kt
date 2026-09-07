@@ -23,29 +23,27 @@ class WitnessFlowTest {
     @get:Rule val temporary = TemporaryFolder()
     @After fun cleanup() { WitnessDirectoryOsShadow.reset() }
     @Test fun cancellationDoesNotReadmitWhileBackendStillDrains() {
-        val context = context()
-        prepared(context)
-        val entered = CountDownLatch(1)
-        val release = CountDownLatch(1)
-        val completed = CountDownLatch(1)
+        val context = context(); prepared(context)
+        val entered = CountDownLatch(1); val release = CountDownLatch(1)
+        val completed = CountDownLatch(1); val cancelled = CountDownLatch(1)
         val platform = Platform()
         platform.generateAction = { entered.countDown(); assertTrue(release.await(10, TimeUnit.SECONDS)) }
-        val flow = flow(context, platform)
-        val results = mutableListOf<WitnessResult<ByteArray>>()
-        flow.submit(generate()) { synchronized(results) { results.add(it) }; completed.countDown() }
+        val flow = flow(context, platform); val results = mutableListOf<WitnessResult<ByteArray>>()
+        flow.submit(generate()) { results.add(it); completed.countDown() }
         assertTrue(entered.await(10, TimeUnit.SECONDS))
+        assertEquals(WitnessTerminalStatus.MISSING, terminal(run(flow, cancel(8))).status)
+        flow.submit(cancel(5)) { assertEquals(WitnessTerminalStatus.CANCELLED, terminal(it).status); cancelled.countDown() }
         try {
-            assertEquals(WitnessTerminalStatus.MISSING, terminal(run(flow, cancel(8))).status)
-            assertEquals(WitnessTerminalStatus.CANCELLED, terminal(run(flow, cancel(5))).status)
-            assertTrue(completed.await(2, TimeUnit.SECONDS))
-            assertEquals("storage_busy", terminal(run(flow, WitnessPrivateRequest.Identity(w(8), w(6)))).reason)
+            assertFalse(completed.await(50, TimeUnit.MILLISECONDS)); assertFalse(cancelled.await(50, TimeUnit.MILLISECONDS))
+            assertBusy(flow)
             WitnessJournal(context, bytes(7)).use { assertEquals(WitnessResult.Refused("storage_busy"), it.observeExisting()) }
+            repeat(20) { assertEquals(WitnessTerminalStatus.MISSING, terminal(run(flow, cancel(5))).status) }
         } finally { release.countDown() }
-        awaitIdle(flow)
+        assertTrue(completed.await(10, TimeUnit.SECONDS)); assertTrue(cancelled.await(10, TimeUnit.SECONDS))
         WitnessJournal(context, bytes(7)).use { assertEquals(WitnessPhase.GENERATED_UNVALIDATED, stored(it.observeExisting()).identity.phase) }
-        assertEquals(listOf(WitnessResult.Refused("cancelled")), results)
-        assertEquals(1, platform.calls)
+        assertEquals(listOf(WitnessResult.Refused("cancelled")), results); assertEquals(1, platform.calls)
     }
+
     @Test fun generationRetainsOriginalAndNeverGeneratesOnRetry() {
         val context = context(); prepared(context)
         val platform = Platform()
@@ -63,7 +61,7 @@ class WitnessFlowTest {
         val ui = object: Review() {
             override fun review(details: WitnessReviewDetails, onLocalCleanup: () -> Unit, callback: (Boolean) -> Unit): WitnessUiCancellation {
                 onLocalCleanup() // This fake owns no Android UI resources.
-                assertEquals(WitnessTerminalStatus.CANCELLED, terminal(run(flow, cancel(5))).status)
+                flow.submit(cancel(5)) { assertEquals(WitnessTerminalStatus.CANCELLED, terminal(it).status) }
                 callback(true); callback(true)
                 return object: WitnessUiCancellation { override fun cancel() { cancelled++ } }
             }
@@ -81,15 +79,15 @@ class WitnessFlowTest {
         val conflict = WitnessPrivateRequest.Prepare(w(5), w(6), "other", w(1), w(2), w(3))
         assertEquals(WitnessResult.Refused("enrollment_conflict"), run(flow, conflict)); awaitIdle(flow)
     }
-    @Test fun completedCallbackStillOwnsAdmissionUntilItReturns() {
-        val context = context(); val flow = flow(context, Platform())
-        val done = CountDownLatch(1)
+    @Test fun terminalCallbackNoLongerOwnsAdmissionWhileItRuns() {
+        val context = context(); val flow = flow(context, Platform()); val done = CountDownLatch(1)
         flow.submit(WitnessPrivateRequest.Identity(w(5), w(6))) {
-            assertEquals("storage_busy", terminal(run(flow, WitnessPrivateRequest.Identity(w(8), w(6)))).reason)
+            assertEquals(WitnessResult.Missing, run(flow, WitnessPrivateRequest.Identity(w(8), w(6))))
             done.countDown()
         }
-        assertTrue(done.await(10, TimeUnit.SECONDS)); awaitIdle(flow)
+        assertTrue(done.await(10, TimeUnit.SECONDS))
     }
+
     @Test fun cancelledReviewCannotGenerateAndStartedMissingKeyCannotRegenerate() {
         val context = context(); prepared(context); val platform = Platform()
         val denied = object: Review() {
@@ -140,19 +138,18 @@ class WitnessFlowTest {
     }
     @Test fun lifecycleLossWhileIdentityReadDrainsSuppressesOldResult() {
         val context = context(); val entered = CountDownLatch(1); val release = CountDownLatch(1)
-        val results = mutableListOf<WitnessResult<ByteArray>>()
+        val done = CountDownLatch(1); val results = mutableListOf<WitnessResult<ByteArray>>()
         val flow = WitnessFlow(context, bytes(7), Review(), Platform(), identity = {
             entered.countDown(); assertTrue(release.await(10, TimeUnit.SECONDS)); WitnessKeyObservation.Absent
         })
-        flow.submit(WitnessPrivateRequest.Identity(w(5), w(6))) { results.add(it) }
+        flow.submit(WitnessPrivateRequest.Identity(w(5), w(6))) { results.add(it); done.countDown() }
         assertTrue(entered.await(10, TimeUnit.SECONDS))
-        try {
-            flow.invalidate(); flow.invalidate()
-            assertEquals(listOf(WitnessResult.Refused("cancelled")), results)
-            assertEquals("storage_busy", terminal(run(flow, WitnessPrivateRequest.Identity(w(8), w(6)))).reason)
-        } finally { release.countDown() }
-        awaitIdle(flow); assertEquals(1, results.size)
+        try { flow.invalidate(); flow.invalidate(); assertFalse(done.await(50, TimeUnit.MILLISECONDS)); assertBusy(flow) }
+        finally { release.countDown() }
+        assertTrue(done.await(10, TimeUnit.SECONDS)); assertEquals(listOf(WitnessResult.Refused("cancelled")), results)
+        assertEquals(WitnessResult.Missing, run(flow, WitnessPrivateRequest.Identity(w(8), w(6))))
     }
+
     @Test fun proofReviewCancellationUsesInternalCreationIdentityAndPromptlyDrains() {
         val context = completedContext(); val reviewEntered = CountDownLatch(1)
         val promptCancelled = CountDownLatch(1)
@@ -194,7 +191,7 @@ class WitnessFlowTest {
         assertEquals(1, results.size)
         expiry.get().invoke(); awaitIdle(flow)
     }
-    @Test fun signedCallbackDoesNotReleaseGlobalAdmissionBeforeBindingJournalCloses() {
+    @Test fun signedCallbackIsPublishedOnlyAfterBindingJournalCloses() {
         val context = completedContext()
         val key = java.security.KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
         val signature = Signature.getInstance("Ed25519").also { it.initSign(key.private) }
@@ -221,8 +218,8 @@ class WitnessFlowTest {
         assertTrue(entered.await(10, TimeUnit.SECONDS))
         try {
             assertTrue(replies.single() is WitnessResult.Stored)
-            assertEquals("storage_busy", terminal(run(flow, WitnessPrivateRequest.Identity(w(8), w(6)))).reason)
-            WitnessJournal(context, bytes(7)).use { assertEquals(WitnessResult.Refused("storage_busy"), it.observeExisting()) }
+            assertTrue(run(flow, WitnessPrivateRequest.Identity(w(8), w(6))) is WitnessResult.Stored)
+            WitnessJournal(context, bytes(7)).use { assertTrue(it.observeExisting() is WitnessResult.Stored) }
         } finally { release.countDown() }
         awaitIdle(flow)
         WitnessJournal(context, bytes(7)).use { assertTrue(it.observeExisting() is WitnessResult.Stored) }
@@ -333,9 +330,10 @@ class WitnessFlowTest {
         flow.submit(prepare()) { result.set(it); done.countDown() }
         assertTrue(entered.await(10, TimeUnit.SECONDS))
         now.addAndGet(TimeUnit.SECONDS.toNanos(120)); timeout.get().invoke()
-        assertTrue(done.await(2, TimeUnit.SECONDS)); assertEquals(WitnessResult.Refused("cancelled"), result.get())
+        assertFalse(done.await(50, TimeUnit.MILLISECONDS))
         assertEquals("storage_busy", terminal(run(flow, WitnessPrivateRequest.Identity(w(8), w(6)))).reason)
-        release.countDown(); assertTrue(cancelled.await(2, TimeUnit.SECONDS)); awaitIdle(flow)
+        release.countDown(); assertTrue(cancelled.await(2, TimeUnit.SECONDS)); assertTrue(done.await(10, TimeUnit.SECONDS))
+        assertEquals(WitnessResult.Refused("cancelled"), result.get()); awaitIdle(flow)
         WitnessJournal(context, bytes(7)).use { assertEquals(WitnessResult.Missing, it.observeExisting()) }
     }
     @Test fun deadlineOverrunOrBackwardsClockRefusesEvenWithAlreadyAcceptedCallback() {
@@ -386,6 +384,7 @@ class WitnessFlowTest {
             preparedReplies.add(prepared)
             val handle = WitnessBytes(android.util.Base64.decode(org.json.JSONObject(String(stored(prepared), Charsets.UTF_8)).getString("handle"), android.util.Base64.DEFAULT))
             flow.submit(WitnessPrivateRequest.SignPrepared(w(5), w(6), handle)) { signedReplies.add(it); signedDone.countDown() }
+            throw AssertionError("prepared consumer failed after starting signing")
         }
         assertTrue(presenceEntered.await(10, TimeUnit.SECONDS))
         oldCallback.get().invoke(oldResult.get()); oldCallback.get().invoke(WitnessResult.Refused("late_prepare"))
@@ -396,22 +395,22 @@ class WitnessFlowTest {
         assertTrue(signedReplies.single() is WitnessResult.Stored)
     }
 
-    @Test fun backendCompletionDoesNotReleaseAdmissionUntilOwnedLocalCleanupAcknowledges() {
-        val context = context(); val cleanup = AtomicReference<() -> Unit>()
+    @Test fun backendCompletionDoesNotPublishTerminalUntilOwnedLocalCleanupAcknowledges() {
+        val context = context(); val cleanup = AtomicReference<() -> Unit>(); val committed = CountDownLatch(1)
         val ui = object: Review() {
             override fun review(details: WitnessReviewDetails, onLocalCleanup: () -> Unit, callback: (Boolean) -> Unit): WitnessUiCancellation {
                 cleanup.set(onLocalCleanup); callback(true)
                 return object: WitnessUiCancellation { override fun cancel() {} }
             }
         }
-        val flow = flow(context, Platform(), ui)
-        assertTrue(run(flow, prepare()) is WitnessResult.Stored)
-        WitnessJournal(context, bytes(7)).use { assertTrue(it.observeExisting() is WitnessResult.Stored) }
-        repeat(20) {
-            val result = run(flow, WitnessPrivateRequest.Identity(w(8), w(6)))
-            assertEquals("storage_busy", (result as? WitnessResult.Stored)?.let { WitnessPrivateProtocol.decodeTerminal(it.value)?.reason })
-        }
-        cleanup.get().invoke(); awaitIdle(flow)
+        val flow = WitnessFlow(context, bytes(7), ui, Platform(), identity = { WitnessKeyObservation.Absent },
+            journalCheckpoint = { if (it == "before_response") committed.countDown() })
+        val done = CountDownLatch(1); val result = AtomicReference<WitnessResult<ByteArray>>()
+        flow.submit(prepare()) { result.set(it); done.countDown() }
+        assertTrue(committed.await(10, TimeUnit.SECONDS)); assertFalse(done.await(50, TimeUnit.MILLISECONDS))
+        repeat(20) { assertBusy(flow) }
+        cleanup.get().invoke(); assertTrue(done.await(10, TimeUnit.SECONDS)); assertTrue(result.get() is WitnessResult.Stored)
+        assertTrue(run(flow, WitnessPrivateRequest.Identity(w(8), w(6))) is WitnessResult.Stored)
     }
 
     @Test fun duplicateOldCleanupCannotReleaseSuccessorAndMissingCleanupStaysClosed() {
@@ -424,14 +423,15 @@ class WitnessFlowTest {
         }
         val flow = flow(context, Platform().also { it.present = true }, ui)
         fun request(id: Int) = WitnessPrivateRequest.Prepare(w(5), w(6), "replica:test", w(id), w(2), w(3))
-        assertTrue(run(flow, request(12)) is WitnessResult.Stored)
+        val firstDone = CountDownLatch(1); flow.submit(request(12)) { firstDone.countDown() }
         val old = cleanups.poll(10, TimeUnit.SECONDS)!!
-        assertBusy(flow); old(); awaitIdle(flow)
-        assertTrue(run(flow, request(13)) is WitnessResult.Stored)
+        assertBusy(flow); old(); assertTrue(firstDone.await(10, TimeUnit.SECONDS))
+        val nextDone = CountDownLatch(1); flow.submit(request(13)) { nextDone.countDown() }
         val next = cleanups.poll(10, TimeUnit.SECONDS)!!
-        repeat(20) { old(); assertBusy(flow) }
-        next(); next(); awaitIdle(flow)
+        repeat(20) { old(); assertBusy(flow) }; assertFalse(nextDone.await(50, TimeUnit.MILLISECONDS))
+        next(); next(); assertTrue(nextDone.await(10, TimeUnit.SECONDS)); awaitIdle(flow)
     }
+
     @Test fun cancelledUiCleanupFailureDoesNotReopenEvenAfterBackendDrain() {
         val context = context(); val entered = CountDownLatch(1)
         val ui = object: Review() {
@@ -443,14 +443,14 @@ class WitnessFlowTest {
         val flow = flow(context, Platform(), ui); val done = CountDownLatch(1)
         flow.submit(prepare()) { done.countDown() }
         assertTrue(entered.await(10, TimeUnit.SECONDS))
-        assertEquals(WitnessTerminalStatus.CANCELLED, terminal(run(flow, cancel(5))).status)
-        assertTrue(done.await(2, TimeUnit.SECONDS))
+        val cancelDone = CountDownLatch(1); flow.submit(cancel(5)) { cancelDone.countDown() }
+        assertFalse(done.await(50, TimeUnit.MILLISECONDS)); assertFalse(cancelDone.await(50, TimeUnit.MILLISECONDS))
         repeat(20) { assertBusy(flow) }
         WitnessJournal(context, bytes(7)).use { assertEquals(WitnessResult.Missing, it.observeExisting()) }
     }
-    @Test fun preparedExpiryWithoutPublicCallbackStillWaitsForReviewCleanup() {
+    @Test fun preparedExpiryBeforeReviewCleanupPublishesOnlyExpiredTerminalAfterCleanup() {
         val context = completedContext(); val cleanup = AtomicReference<() -> Unit>()
-        val expiry = AtomicReference<() -> Unit>(); var now = 1L
+        val expiry = AtomicReference<() -> Unit>(); val expiryReady = CountDownLatch(1); var now = 1L
         val ui = object: Review() {
             override fun review(details: WitnessReviewDetails, onLocalCleanup: () -> Unit, callback: (Boolean) -> Unit): WitnessUiCancellation {
                 cleanup.set(onLocalCleanup); callback(true)
@@ -460,14 +460,17 @@ class WitnessFlowTest {
         val flow = WitnessFlow(context, bytes(7), ui, Platform(), identity = { WitnessKeyObservation.Present(metadata()) },
             bindingFactory = { ctx, signer, review, valid, drained ->
                 WitnessBindingCoordinator(ctx, signer, review, sessionValid = valid, monotonicNanos = { now }, onDrained = drained,
-                    scheduleExpiry = { _, task -> expiry.set(task); WitnessExpiry {} }).asFlowBinding()
+                    scheduleExpiry = { _, task -> expiry.set(task); expiryReady.countDown(); WitnessExpiry {} }).asFlowBinding()
             })
-        assertTrue(run(flow, proof()) is WitnessResult.Stored)
+        val done = CountDownLatch(1); val result = AtomicReference<WitnessResult<ByteArray>>()
+        flow.submit(proof()) { result.set(it); done.countDown() }
+        assertTrue(expiryReady.await(10, TimeUnit.SECONDS)); assertFalse(done.await(50, TimeUnit.MILLISECONDS))
         now += TimeUnit.SECONDS.toNanos(61); expiry.get().invoke()
-        WitnessJournal(context, bytes(7)).use { assertTrue(it.observeExisting() is WitnessResult.Stored) }
-        repeat(20) { assertBusy(flow) }
-        cleanup.get().invoke(); awaitIdle(flow)
+        repeat(20) { assertBusy(flow) }; assertFalse(done.await(50, TimeUnit.MILLISECONDS))
+        cleanup.get().invoke(); assertTrue(done.await(10, TimeUnit.SECONDS))
+        assertEquals(WitnessResult.Refused("binding_timeout"), result.get()); awaitIdle(flow)
     }
+
     @Test fun timeoutWhileHandlePublicationBlockedRequiresLaterCleanupAcknowledgement() {
         val context = context(); val entered = CountDownLatch(1); val release = CountDownLatch(1)
         val cleanup = AtomicReference<() -> Unit>(); val timer = AtomicReference<() -> Unit>()
@@ -482,14 +485,105 @@ class WitnessFlowTest {
         val done = CountDownLatch(1)
         flow.submit(prepare()) { done.countDown() }
         assertTrue(entered.await(10, TimeUnit.SECONDS)); timer.get().invoke()
-        assertTrue(done.await(2, TimeUnit.SECONDS)); assertBusy(flow)
+        assertFalse(done.await(50, TimeUnit.MILLISECONDS)); assertBusy(flow)
         release.countDown()
         repeat(20) { assertBusy(flow) }
-        cleanup.get().invoke(); awaitIdle(flow)
+        cleanup.get().invoke(); assertTrue(done.await(10, TimeUnit.SECONDS)); awaitIdle(flow)
     }
     private fun assertBusy(flow: WitnessFlow) {
         val result = run(flow, WitnessPrivateRequest.Identity(w(8), w(6)))
         assertEquals("storage_busy", (result as? WitnessResult.Stored)?.let { WitnessPrivateProtocol.decodeTerminal(it.value)?.reason })
+    }
+
+    @Test fun storedTerminalCallbackCanImmediatelyAdmitNextOperation() {
+        val context = context(); val flow = flow(context, Platform())
+        val next = AtomicReference<WitnessResult<ByteArray>>(); val done = CountDownLatch(1)
+        flow.submit(prepare()) { first ->
+            assertTrue(first is WitnessResult.Stored)
+            flow.submit(WitnessPrivateRequest.Identity(w(8), w(6))) { next.set(it); done.countDown() }
+        }
+        assertTrue(done.await(10, TimeUnit.SECONDS))
+        assertEquals("identity", org.json.JSONObject(String(stored(next.get()), Charsets.UTF_8)).getString("kind"))
+        assertFalse(org.json.JSONObject(String(stored(next.get()), Charsets.UTF_8)).optString("reason") == "storage_busy")
+    }
+    @Test fun cancellationReplyWaitsForDrainThenCanAdmitNextOperationDespiteThrowingOriginalCallback() {
+        val context = context(); prepared(context); val platform = Platform()
+        val entered = CountDownLatch(1); val release = CountDownLatch(1)
+        platform.generateAction = { entered.countDown(); assertTrue(release.await(10, TimeUnit.SECONDS)) }
+        val flow = flow(context, platform)
+        val cancelled = CountDownLatch(1); val nextDone = CountDownLatch(1)
+        val next = AtomicReference<WitnessResult<ByteArray>>()
+        flow.submit(generate()) { throw AssertionError("original consumer failed") }
+        assertTrue(entered.await(10, TimeUnit.SECONDS))
+        flow.submit(cancel(5)) { response ->
+            assertEquals(WitnessTerminalStatus.CANCELLED, terminal(response).status)
+            cancelled.countDown()
+            flow.submit(WitnessPrivateRequest.Identity(w(8), w(6))) { next.set(it); nextDone.countDown() }
+        }
+        try { assertFalse(cancelled.await(100, TimeUnit.MILLISECONDS)) }
+        finally { release.countDown() }
+        assertTrue(cancelled.await(10, TimeUnit.SECONDS)); assertTrue(nextDone.await(10, TimeUnit.SECONDS))
+        assertFalse(org.json.JSONObject(String(stored(next.get()), Charsets.UTF_8)).optString("reason") == "storage_busy")
+    }
+
+    @Test fun preparedWaitsForReviewCleanupAndSignedCallbackWithoutDrainCannotPublish() {
+        val context = completedContext(); val reviewCleanup = AtomicReference<() -> Unit>()
+        val reviewed = CountDownLatch(1); val preparedReply = CountDownLatch(1)
+        val drain = AtomicReference<() -> Unit>(); val drainReady = CountDownLatch(1)
+        val signedReply = CountDownLatch(1); val nextReply = CountDownLatch(1)
+        val signature = Signature.getInstance("Ed25519").also { it.initSign(java.security.KeyPairGenerator.getInstance("Ed25519").generateKeyPair().private) }
+        val ui = object: Review() {
+            override fun review(details: WitnessReviewDetails, onLocalCleanup: () -> Unit, callback: (Boolean) -> Unit): WitnessUiCancellation {
+                reviewCleanup.set(onLocalCleanup); reviewed.countDown(); callback(true)
+                return object: WitnessUiCancellation { override fun cancel() {} }
+            }
+            override fun authenticate(signature: Signature, onLocalCleanup: () -> Unit, callback: (WitnessPresenceResult) -> Unit): WitnessUiCancellation {
+                onLocalCleanup(); callback(WitnessPresenceResult.Success(signature))
+                return object: WitnessUiCancellation { override fun cancel() {} }
+            }
+        }
+        val flow = WitnessFlow(context, bytes(7), ui, Platform(), identity = { WitnessKeyObservation.Present(metadata()) },
+            bindingFactory = { ctx, signer, review, valid, drained ->
+                WitnessBindingCoordinator(ctx, signer, review, object: WitnessBindingPlatform {
+                    override fun prepareSignature(original: WitnessIdentityRecord) = WitnessResult.Stored(signature)
+                }, valid, onDrained = { drain.set(drained); drainReady.countDown() }).asFlowBinding()
+            })
+        val next = AtomicReference<WitnessResult<ByteArray>>()
+        flow.submit(proof()) { prepared ->
+            val handle = WitnessBytes(android.util.Base64.decode(org.json.JSONObject(String(stored(prepared), Charsets.UTF_8)).getString("handle"), android.util.Base64.DEFAULT))
+            preparedReply.countDown()
+            flow.submit(WitnessPrivateRequest.SignPrepared(w(5), w(6), handle)) {
+                assertTrue(it is WitnessResult.Stored); signedReply.countDown()
+                flow.submit(WitnessPrivateRequest.Identity(w(8), w(6))) { identity -> next.set(identity); nextReply.countDown() }
+            }
+        }
+        assertTrue(reviewed.await(10, TimeUnit.SECONDS)); assertFalse(preparedReply.await(50, TimeUnit.MILLISECONDS))
+        assertEquals("storage_busy", terminal(run(flow, WitnessPrivateRequest.SignPrepared(w(5), w(6), w(99)))).reason)
+        reviewCleanup.get().invoke(); assertTrue(preparedReply.await(10, TimeUnit.SECONDS))
+        assertTrue(drainReady.await(10, TimeUnit.SECONDS)); assertFalse(signedReply.await(50, TimeUnit.MILLISECONDS))
+        WitnessJournal(context, bytes(7)).use { assertTrue(it.observeExisting() is WitnessResult.Stored) }
+        assertBusy(flow)
+        drain.get().invoke(); assertTrue(signedReply.await(10, TimeUnit.SECONDS)); assertTrue(nextReply.await(10, TimeUnit.SECONDS))
+        assertEquals("identity", org.json.JSONObject(String(stored(next.get()), Charsets.UTF_8)).getString("kind"))
+        assertFalse(org.json.JSONObject(String(stored(next.get()), Charsets.UTF_8)).optString("reason") == "storage_busy")
+        drain.get().invoke(); reviewCleanup.get().invoke(); awaitIdle(flow)
+    }
+    @Test fun throwingCancelReplyCannotDisturbSuccessorAdmittedByOriginalTerminal() {
+        val context = context(); prepared(context); val platform = Platform()
+        val entered = CountDownLatch(1); val release = CountDownLatch(1)
+        platform.generateAction = { entered.countDown(); assertTrue(release.await(10, TimeUnit.SECONDS)) }
+        val flow = flow(context, platform); val next = AtomicReference<WitnessResult<ByteArray>>()
+        val nextDone = CountDownLatch(1); val cancelDone = CountDownLatch(1)
+        flow.submit(generate()) { result ->
+            assertEquals(WitnessResult.Refused("cancelled"), result)
+            flow.submit(WitnessPrivateRequest.Identity(w(8), w(6))) { next.set(it); nextDone.countDown() }
+        }
+        assertTrue(entered.await(10, TimeUnit.SECONDS))
+        flow.submit(cancel(5)) { cancelDone.countDown(); throw AssertionError("cancel consumer failed") }
+        release.countDown()
+        assertTrue(cancelDone.await(10, TimeUnit.SECONDS)); assertTrue(nextDone.await(10, TimeUnit.SECONDS))
+        assertTrue(next.get() is WitnessResult.Stored)
+        assertFalse(org.json.JSONObject(String(stored(next.get()), Charsets.UTF_8)).optString("reason") == "storage_busy")
     }
 
     private fun completedContext(): Context {
