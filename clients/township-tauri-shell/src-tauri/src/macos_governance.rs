@@ -1,5 +1,3 @@
-use std::sync::Mutex;
-
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine as _;
 use core_foundation::base::TCFType;
@@ -19,9 +17,9 @@ use security_framework_sys::base::{errSecDuplicateItem, errSecItemNotFound};
 use security_framework_sys::item::kSecValueData;
 use security_framework_sys::keychain_item::SecItemAdd;
 
+use crate::governance_provider::LegacySeedBackend;
 use crate::{
-    GovernanceWitnessCreateError, GovernanceWitnessKeyStore, GovernanceWitnessPresence,
-    GovernanceWitnessPresenceError, GovernanceWitnessProviderKind,
+    GovernanceWitnessCreateError, GovernanceWitnessPresenceError, GovernanceWitnessProviderKind,
 };
 
 const SEED_ACCOUNT: &str = "governance-witness-v1.seed";
@@ -33,14 +31,12 @@ const ERR_SEC_INTERACTION_NOT_ALLOWED: i32 = -25308;
 
 pub struct MacosGovernanceWitnessCustody {
     service: String,
-    pending_reason: Mutex<Option<String>>,
 }
 
 impl MacosGovernanceWitnessCustody {
     pub fn new(service: impl Into<String>) -> Self {
         Self {
             service: service.into(),
-            pending_reason: Mutex::new(None),
         }
     }
 
@@ -170,7 +166,7 @@ impl MacosGovernanceWitnessCustody {
     }
 }
 
-impl GovernanceWitnessKeyStore for MacosGovernanceWitnessCustody {
+impl LegacySeedBackend for MacosGovernanceWitnessCustody {
     fn provider_kind(&self) -> GovernanceWitnessProviderKind {
         GovernanceWitnessProviderKind::MacosProtectedKeychain
     }
@@ -179,22 +175,11 @@ impl GovernanceWitnessKeyStore for MacosGovernanceWitnessCustody {
         self.public_identity_attribute()
     }
 
-    fn load_seed(&self) -> Result<Option<[u8; 32]>, GovernanceWitnessPresenceError> {
-        let reason = self
-            .pending_reason
-            .lock()
-            .map_err(|_| {
-                GovernanceWitnessPresenceError::Failed(
-                    "governance witness authentication context lock poisoned".to_string(),
-                )
-            })?
-            .take()
-            .ok_or_else(|| {
-                GovernanceWitnessPresenceError::Failed(
-                    "governance witness authentication context is missing".to_string(),
-                )
-            })?;
-        self.read_protected_seed(&reason)
+    fn authorize_and_load_seed(
+        &self,
+        reason: &str,
+    ) -> Result<Option<[u8; 32]>, GovernanceWitnessPresenceError> {
+        self.read_protected_seed(reason)
     }
 
     fn load_public_key(&self) -> Result<Option<[u8; 32]>, String> {
@@ -244,32 +229,6 @@ impl GovernanceWitnessKeyStore for MacosGovernanceWitnessCustody {
     fn delete_seed(&self) -> Result<(), String> {
         delete_generic_password_options(self.password_options(SEED_ACCOUNT))
             .map_err(|error| format!("governance witness Keychain seed rollback failed: {error}"))
-    }
-}
-
-impl GovernanceWitnessPresence for MacosGovernanceWitnessCustody {
-    fn provider_kind(&self) -> GovernanceWitnessProviderKind {
-        GovernanceWitnessProviderKind::MacosProtectedKeychain
-    }
-
-    fn authorize(&self, reason: &str) -> Result<(), GovernanceWitnessPresenceError> {
-        if reason.is_empty() {
-            return Err(GovernanceWitnessPresenceError::Failed(
-                "empty authentication reason".to_string(),
-            ));
-        }
-        let mut pending = self.pending_reason.lock().map_err(|_| {
-            GovernanceWitnessPresenceError::Failed(
-                "authentication context lock poisoned".to_string(),
-            )
-        })?;
-        if pending.is_some() {
-            return Err(GovernanceWitnessPresenceError::Failed(
-                "authentication context already pending".to_string(),
-            ));
-        }
-        *pending = Some(reason.to_string());
-        Ok(())
     }
 }
 
