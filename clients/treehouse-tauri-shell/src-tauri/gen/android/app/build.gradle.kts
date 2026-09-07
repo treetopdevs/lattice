@@ -21,6 +21,13 @@ val verifyTreehouseReleaseIdentity = tasks.register("verifyTreehouseReleaseIdent
     doLast { releaseRefusal?.let { throw GradleException(it) } }
 }
 
+// Pinned host-only SDK: Robolectric must not download executable jars at test runtime.
+val witnessTestSdk by configurations.creating
+val prepareWitnessTestSdk = tasks.register<Sync>("prepareWitnessTestSdk") {
+    from(witnessTestSdk)
+    into(layout.buildDirectory.dir("witnessTestSdk"))
+}
+
 android {
     compileSdk = 36
     namespace = product.appId
@@ -74,6 +81,14 @@ android {
     kotlinOptions {
         jvmTarget = "1.8"
     }
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+        unitTests.all {
+            it.dependsOn(prepareWitnessTestSdk)
+            it.systemProperty("robolectric.offline", "true")
+            it.systemProperty("robolectric.dependency.dir", layout.buildDirectory.dir("witnessTestSdk").get().asFile.absolutePath)
+        }
+    }
     buildFeatures {
         buildConfig = true
     }
@@ -119,6 +134,8 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.lifecycle:lifecycle-process:2.10.0")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.16")
+    witnessTestSdk("org.robolectric:android-all-instrumented:13-robolectric-9030017-i7")
     androidTestImplementation("androidx.test.ext:junit:1.1.4")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.0")
 }
