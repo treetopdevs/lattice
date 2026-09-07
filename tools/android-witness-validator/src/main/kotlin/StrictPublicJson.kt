@@ -40,6 +40,9 @@ internal fun strictPublicJson(bytes: ByteArray): JsonElement {
   return value
 }
 
+internal fun isCanonicalPositiveI64(raw: String): Boolean =
+  raw.matches(Regex("[1-9][0-9]{0,18}")) && raw.toLongOrNull()?.let { it > 0 } == true
+
 private class RawJsonNumber(private val raw: String) : Number() {
   override fun toByte() = raw.toByte(); override fun toDouble() = raw.toDouble()
   override fun toFloat() = raw.toFloat(); override fun toInt() = raw.toInt()

@@ -64,6 +64,8 @@ class TreehouseValidatorCliTest {
     assertFalse(report["associated"].asBoolean)
     val extra = valid.dropLast(1) + ",\"roots\":[]}" 
     assertReason(setup.dir, "verify-generation", extra.toByteArray(), "invalid_request", ids)
+    val unsafeRevision = valid.replace("\"revision\":\"1\"", "\"revision\":\"9999999999999999999\"")
+    assertReason(setup.dir, "verify-generation", unsafeRevision.toByteArray(), "invalid_request", ids)
 
     val alternate = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
     val mismatchedMetadata = valid.replace(enc(fixture.publicKey), enc(alternate.public.encoded.copyOfRange(12,44)))

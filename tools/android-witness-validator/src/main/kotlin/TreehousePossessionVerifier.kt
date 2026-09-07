@@ -56,7 +56,7 @@ object TreehousePossessionVerifier {
     val identity = root.get("identity").obj(setOf("creationAttemptId", "phase", "generationChallenge", "metadata", "revision"))
     require(identity.string("phase") == "generated_unvalidated")
     val revision = identity.string("revision")
-    require(revision.matches(Regex("[1-9][0-9]{0,18}")) && revision.toLongOrNull() != null)
+    require(isCanonicalPositiveI64(revision))
     val attempt = identity.bytes32("creationAttemptId")
     val challenge = identity.bytes32("generationChallenge")
     val metadata = identity.get("metadata").obj(setOf("publicKey", "spki", "appSignerSha256", "creationVersionCode", "certificateChain"))

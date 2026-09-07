@@ -92,7 +92,7 @@ object TreehouseValidatorCli {
     root.exact("version", "status", "eligible", "identity")
     require(root.int("version") == 1 && root.string("status") == "generated_unvalidated" && !root.bool("eligible"))
     val identity = root.obj("identity"); identity.exact("creationAttemptId", "phase", "generationChallenge", "metadata", "revision")
-    require(identity.string("phase") == "generated_unvalidated" && identity.string("revision").matches(Regex("[1-9][0-9]{0,18}")))
+    require(identity.string("phase") == "generated_unvalidated" && isCanonicalPositiveI64(identity.string("revision")))
     val e = retained.expected
     require(identity.bytes32("creationAttemptId").contentEquals(e.creationAttemptId))
     require(identity.bytes32("generationChallenge").contentEquals(retained.generationChallenge))
