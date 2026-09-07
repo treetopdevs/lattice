@@ -85,6 +85,10 @@ class AndroidWitnessProviderTest {
         assertEquals(KeyProperties.AUTH_BIOMETRIC_STRONG, spec.userAuthenticationType)
         assertTrue(spec.isInvalidatedByBiometricEnrollment)
         assertFalse(spec.isStrongBoxBacked)
+        assertNull(spec.keyValidityStart)
+        assertNull(spec.keyValidityForOriginationEnd)
+        assertNull(spec.keyValidityForConsumptionEnd)
+        assertEquals(KeyProperties.UNRESTRICTED_USAGE_COUNT, spec.maxUsageCount)
         assertFalse(spec.isUserAuthenticationValidWhileOnBody)
         assertFalse(spec.isUserConfirmationRequired)
         assertTrue(spec.encryptionPaddings.isEmpty()); assertTrue(spec.signaturePaddings.isEmpty())
@@ -208,6 +212,32 @@ class AndroidWitnessProviderTest {
         }
         val invalidated = completePlatform().also { it.fail = "keyInfo" }
         assertTrue(AndroidWitnessProvider(context(), invalidated).observeFixedIdentity(started(c = WitnessDerFixture.challenge)) is WitnessKeyObservation.Refused)
+    }
+
+    @Test fun fixedIdentityRefusesAnyKeyValidityStart() = refusesLifetimeConstraint(4, Date(Long.MAX_VALUE))
+
+    @Test fun fixedIdentityRefusesAnyOriginationExpiry() = refusesLifetimeConstraint(5, Date(1))
+
+    @Test fun fixedIdentityRefusesAnyConsumptionExpiry() = refusesLifetimeConstraint(6, Date(Long.MAX_VALUE))
+
+    @Test fun fixedIdentityRefusesLimitedOrExhaustedUsage() {
+        for (remaining in listOf(1, 0, -2)) refusesLifetimeConstraint(21, remaining)
+    }
+
+    private fun refusesLifetimeConstraint(index: Int, value: Any) {
+        installSigningMetadata(2)
+        val original = started(c = WitnessDerFixture.challenge)
+        val platform = completePlatform()
+        val provider = AndroidWitnessProvider(context(), platform)
+        val metadata = (provider.observeFixedIdentity(original) as WitnessKeyObservation.Present).metadata
+        val completed = WitnessIdentityRecord(original.creationAttemptId, WitnessPhase.GENERATED_UNVALIDATED,
+            original.generationChallenge, metadata, 3)
+        platform.profile = profile(mapOf(index to value))
+        val refusal = WitnessKeyObservation.Refused("unsupported_profile")
+        assertEquals("started profile field $index", refusal, provider.observeFixedIdentity(original))
+        assertEquals("original reconciliation profile field $index", refusal,
+            provider.reconcileOriginal(original, original.creationAttemptId.copyBytes(), original.generationChallenge!!.copyBytes()))
+        assertEquals("completed profile field $index", refusal, provider.observeFixedIdentity(completed))
     }
 
     @Test fun missingMalformedSurplusOrMismatchedCertificateMaterialRefuses() {

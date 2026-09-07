@@ -129,6 +129,8 @@ internal class AndroidWitnessProvider(private val context: Context, private val 
 
     private fun matchesProfile(info: KeyInfo) = info.keystoreAlias == FIXED_ALIAS && info.keySize == 256 &&
         info.securityLevel == KeyProperties.SECURITY_LEVEL_TRUSTED_ENVIRONMENT && info.origin == KeyProperties.ORIGIN_GENERATED &&
+        info.keyValidityStart == null && info.keyValidityForOriginationEnd == null && info.keyValidityForConsumptionEnd == null &&
+        info.remainingUsageCount == KeyProperties.UNRESTRICTED_USAGE_COUNT &&
         info.purposes == KeyProperties.PURPOSE_SIGN && info.digests.contentEquals(arrayOf(KeyProperties.DIGEST_NONE)) &&
         info.encryptionPaddings.isEmpty() && info.signaturePaddings.isEmpty() && info.blockModes.isEmpty() &&
         info.isUserAuthenticationRequired && info.userAuthenticationType == KeyProperties.AUTH_BIOMETRIC_STRONG &&
