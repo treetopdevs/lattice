@@ -23,6 +23,21 @@ fn bytes(value: Value) -> InvokeBody {
 }
 
 #[test]
+fn adopted_public_identity_name_is_the_only_identity_command() {
+    assert_eq!(
+        decode_public_request(
+            "treehouse_witness_public_identity",
+            &InvokeBody::Json(json!({}))
+        ),
+        Ok(PublicRequest::Identity)
+    );
+    assert_eq!(
+        decode_public_request("treehouse_witness_identity", &InvokeBody::Json(json!({}))),
+        Err(PUBLIC_REQUEST_REFUSED)
+    );
+}
+
+#[test]
 fn exact_public_requests_decode_to_owned_internal_values() {
     assert_eq!(
         decode_public_request(WITNESS_IDENTITY, &InvokeBody::Json(json!({}))),

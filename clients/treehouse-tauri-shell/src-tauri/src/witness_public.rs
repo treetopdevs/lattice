@@ -4,7 +4,7 @@ use crate::witness_bridge::Bytes32;
 use serde::{de::Error as _, Deserialize, Deserializer};
 use tauri::ipc::InvokeBody;
 
-pub const WITNESS_IDENTITY: &str = "treehouse_witness_identity";
+pub const WITNESS_IDENTITY: &str = "treehouse_witness_public_identity";
 pub const WITNESS_PREPARE_CREATION: &str = "treehouse_witness_prepare_creation";
 pub const WITNESS_GENERATE: &str = "treehouse_witness_generate";
 pub const WITNESS_PROVE_BINDING: &str = "treehouse_witness_prove_binding";
