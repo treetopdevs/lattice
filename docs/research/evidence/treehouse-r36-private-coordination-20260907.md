@@ -250,8 +250,8 @@ Hosted native tip and merged-result checks remain open.
 
 ## Remaining gates
 
-Executable validator import/export, official trust snapshot acquisition and
-current-state/physical validation reporting remain unfinished. No end-to-end Rust →
+Challenge freshness and current-state/physical validation remain unfinished.
+Executable import/export and official trust acquisition are recorded below. No end-to-end Rust →
 Kotlin → journal → biometric operation → Rust proof is asserted.
 
 Actual native hooks are wired and host refusal-tested. Pinned Wry source invokes
@@ -265,3 +265,51 @@ release eligibility or pilot completion.
 
 The September 7 device inventory (`adb devices -l`) listed no attached device.
 Physical biometric/custody proof therefore remains unavailable in this session.
+
+
+## Executable validator and final integration
+
+Official trust repository `3160ec8af90a2894434a898c9ce3dd9d6fdd51ce` passed
+independent Sol review and integrated as `d38d99df1`. CLI packet through
+`d508e18a2687cad56575d87fb15d1f8cfbb7c392` passed independent Sol whole-packet
+rereview and integrated through `60e1bfa04`. Review repairs bind generated metadata
+to the exact DER leaf key, share one bounded lexeme-preserving JSON decoder, bound
+both imported revision fields to positive i64, enforce exact command arguments and
+empty abandonment bodies, and preserve incomplete challenge-freshness reporting.
+
+Root runner `bb505dcd9de669ba0a6e7a75c9a15d3a9230118a` and workflow/smoke
+`31e9aafa35db032d91cb885d55aaed0f796aace7` each passed independent Sol review.
+The installed CLI uses the fixed official repository only after retained-bound
+generation import; issue/possession/abandon commands do not acquire trust data.
+Root `check installDist` passed 183 JVM tests plus upstream tamper verification
+(`/tmp/treehouse-r36-validator-executable-root.log`). The actual installed launcher
+issued the exact UI request and a new process refused malformed import before
+creating a trust directory (`/tmp/treehouse-r36-validator-installed-root.json`).
+The same installed-process smoke is now part of the existing Android workflow.
+
+Root invoked the production HTTPS fetcher and reopened its durable result on
+September 7 (`/tmp/treehouse-r36-official-source-root.log`):
+- Snapshot digest: `ZlHh9PwZAGutEWN1BdMbbr+p9ytCoFLGgBB8599gsj4=`.
+- Fetch observation: `2026-09-07T18:26:45.476471Z`.
+- Computed expiry: `2026-09-08T01:46:11.476471Z`.
+- Reopened snapshot digest was identical.
+
+This proves source acquisition/reopen on this host, not attestation for a selected
+phone. Available roots/revocations and associated candidate facts still produce
+an incomplete generation report until challenge freshness is established. Fresh
+possession does not refresh current package, boot or device state.
+
+The integration includes candidate-store dependency PR87 at exact
+`69631a58ad91c51d39c6a8fdbb04886b5fec883c`, merged locally as
+`ceb8bba330b6f0ffd62455a4dedaa1b28cf7a595`. PR87's hosted unit failure was in
+the unchanged carrier restart test; final hosted closure is still pending. It must
+merge before the native packet. Final combined root checks passed 115 Rust tests
+plus three compile-fail docs (and a child-process helper), Android Rust target
+compilation, and 1,031 BEAM tests plus 27 properties with zero failures, three
+existing exclusions, formatting and Credo. Logs:
+`/tmp/treehouse-r36-final-root-rust.log`,
+`/tmp/treehouse-r36-final-root-android.log`,
+`/tmp/treehouse-r36-final-root-beam.log`.
+
+The refreshed device inventory still contains no attached Android device. R36,
+R17c, enrollment, production signing, release and pilot gates remain open.
