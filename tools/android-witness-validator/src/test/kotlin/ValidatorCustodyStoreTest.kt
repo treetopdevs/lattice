@@ -7,6 +7,9 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.nio.channels.FileChannel
 import java.nio.file.StandardOpenOption
+import java.io.ByteArrayOutputStream
+import java.io.DataOutputStream
+import java.security.MessageDigest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -73,6 +76,22 @@ class ValidatorCustodyStoreTest {
     assertFalse(store.verifyAndAssociateGeneration(originalId, fixture.request.candidate.chain, fixture.request.trust, fixture.request.validationTime))
   }
 
+  @Test fun exactIssuanceCapacityRefusesBeforeEntropyAndPreservesReopen() {
+    val directory = Files.createTempDirectory("validator-issuance-capacity")
+    val entropyCalls = AtomicInteger()
+    val store = ValidatorCustodyStore(directory, {
+      val value = entropyCalls.incrementAndGet()
+      ByteArray(32).also { bytes -> java.nio.ByteBuffer.wrap(bytes, 24, 8).putLong(value.toLong()) }
+    }, PersistCheckpoint {})
+    writeFullStore(directory)
+    val first = assertFails { store.issueGeneration(expected()) }
+    assertTrue(first.message.orEmpty().contains("issuance_capacity"))
+    assertEquals(0, entropyCalls.get(), "capacity refusal must precede entropy")
+    assertFails { ValidatorCustodyStore(directory).issueGeneration(expected()) }
+    assertFalse(Files.exists(directory.resolve("custody.bin.pending")))
+    assertFalse(Files.exists(directory.resolve("custody.refused")))
+  }
+
   @Test fun separateHostProcessOwnsTheAuthoritativeMutationLock() {
     val directory = Files.createTempDirectory("validator-process-lock")
     val java = Path.of(System.getProperty("java.home"), "bin", "java").toString()
@@ -97,6 +116,21 @@ class ValidatorCustodyStoreTest {
     "replica:test", enrollment, bytes(5), bytes(3), bytes(7), 42,
   )
   private fun bytes(value: Int) = ByteArray(32) { value.toByte() }
+  private fun writeFullStore(directory: Path) {
+    val body = ByteArrayOutputStream()
+    DataOutputStream(body).use { out ->
+      out.writeUTF("treehouse-validator-custody-v1"); out.writeInt(4_096)
+      repeat(4_096) { index ->
+        val id = ByteArray(32).also { java.nio.ByteBuffer.wrap(it, 24, 8).putLong((index + 1).toLong()) }
+        out.write(id); out.write(bytes(2)); out.writeUTF("replica:test")
+        out.write(bytes(4)); out.write(bytes(5)); out.write(bytes(3)); out.write(bytes(7)); out.writeLong(42)
+        out.writeBoolean(false)
+      }
+      out.writeInt(0)
+    }
+    val payload = body.toByteArray()
+    Files.write(directory.resolve("custody.bin"), payload + MessageDigest.getInstance("SHA-256").digest(payload))
+  }
 }
 
 object ValidatorLockProcess {

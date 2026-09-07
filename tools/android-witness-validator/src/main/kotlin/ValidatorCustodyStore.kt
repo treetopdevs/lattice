@@ -17,6 +17,7 @@ import java.time.Instant
 
 private const val STORE_MAGIC = "treehouse-validator-custody-v1"
 private const val MAX_NONCES = 4_096
+private const val MAX_ISSUANCES = 4_096
 
 class ExpectedEnrollment(
   val replica: String,
@@ -67,6 +68,7 @@ class ValidatorCustodyStore internal constructor(
   private val lockFile = directory.resolve("custody.lock")
 
   fun issueGeneration(expected: ExpectedEnrollment): GenerationTicket = locked { state ->
+    require(state.issuances.size < MAX_ISSUANCES) { "issuance_capacity" }
     val id = fresh(state)
     val challenge = random32().also { require(it.size == 32) }
     state.issuances[id.key()] = Issuance(id, challenge.copyOf(), expected.owned())
@@ -142,14 +144,14 @@ class ValidatorCustodyStore internal constructor(
       FileChannel.open(refusalFile, StandardOpenOption.WRITE).use { it.force(true) }
       forceDirectory()
       FileChannel.open(tempFile, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE).use { file ->
-        file.write(java.nio.ByteBuffer.wrap(bytes)); checkpoint.reached(PersistStage.TEMP_FORCED); file.force(true)
+        file.write(java.nio.ByteBuffer.wrap(bytes)); file.force(true); checkpoint.reached(PersistStage.TEMP_FORCED)
       }
-      checkpoint.reached(PersistStage.RENAMED)
       Files.move(tempFile, stateFile, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-      checkpoint.reached(PersistStage.DIRECTORY_FORCED)
+      checkpoint.reached(PersistStage.RENAMED)
       forceDirectory()
-      checkpoint.reached(PersistStage.REOPENED)
+      checkpoint.reached(PersistStage.DIRECTORY_FORCED)
       check(encode(read()).contentEquals(bytes)) { "store_reopen_mismatch" }
+      checkpoint.reached(PersistStage.REOPENED)
       Files.delete(refusalFile); forceDirectory()
     } catch (error: Exception) {
       throw IllegalStateException("custody_persistence_refused", error)
@@ -206,7 +208,7 @@ private fun decode(bytes: ByteArray): State {
   val payload = bytes.copyOf(bytes.size - 32); require(MessageDigest.getInstance("SHA-256").digest(payload).contentEquals(bytes.copyOfRange(bytes.size - 32, bytes.size)))
   val state = State(); DataInputStream(ByteArrayInputStream(payload)).use { input ->
     require(input.readUTF() == STORE_MAGIC)
-    repeat(input.readInt().also { require(it in 0..4096) }) {
+    repeat(input.readInt().also { require(it in 0..MAX_ISSUANCES) }) {
       val id = input.readNBytes(32); val challenge = input.readNBytes(32); val replica = input.readUTF()
       require(id.size == 32 && challenge.size == 32)
       val expected = ExpectedEnrollment(replica, input.readNBytes(32), input.readNBytes(32), input.readNBytes(32), input.readNBytes(32), input.readLong())
