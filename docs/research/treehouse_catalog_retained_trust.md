@@ -548,3 +548,90 @@ reason, preserving overflow metadata alongside it. Other block reasons have an
 empty authority witness array. Every such state remains frozen with no routes.
 These are pure-state validation rules, not C03/C14 persistence closure. Actual
 process stop/reopen, durable CAS and field recovery evidence remain outstanding.
+
+## 2026-09-06 frozen pending-entry evidence refinement
+
+Actual Fable review of TS source `050ed8c7` found that newly authenticated Thread
+history could reveal a refusal in a nonaccepted catalog already retained during
+a fork. The fallback saved that history, but reopening mislabeled the resulting
+authentic frozen evidence as corrupt storage. Public signed-history reproduction
+also demonstrated the same problem when complete child history reveals that a
+previously pending retained sibling names another Thread's real reference.
+
+For a validated existing block, an originally retained, nonaccepted catalog's
+entry proof may therefore become refused or demonstrably invalid as authentic
+history arrives. Preserve its exact signed artifact and raw history as diagnostic
+evidence, keep the node pending and unable to reserve routes, and return a frozen
+state that passes the same original-state validation on reopen. This does not
+promote the entry or certify the catalog's semantic validity. Retain the existing
+block and expose the affected entry's diagnostic operation IDs where applicable.
+
+This exception is limited to entry proofs of originally retained nonaccepted
+catalogs under an already validated block. It never softens artifact signatures,
+closed grammar, binding/transition graph validation, cutoff proofs, watermark or
+index coherence, raw-history authenticity/closure, or an accepted catalog's entry
+requirements. New candidate artifacts and unblocked candidates retain their
+ordinary invalid-transition refusal. Accepted-entry authority changes still need
+the historical authority witnesses above. Origin-first validation continues to
+reject corrupted installed evidence before considering incoming data.
+
+Both runtimes must reproduce the authentic authority-refusal and wrong-reference
+cases, reopen every resulting frozen state, and keep negative controls for
+unblocked/new candidates and saved corruption. This is a pure resolver correction;
+native persistence, recovery export and C01–C15 acceptance remain open.
+
+## Overflow freeze precedence clarification — 2026-09-07 UTC
+
+Root adopts the following narrow BEAM/TS parity rule for the existing closed
+state shape. A validated trigger-bearing overflow freeze retains its original
+block and trigger metadata when later graph forks, additional binding heads or
+an unseen authentic bootstrap are observed. Those later unadmitted artifacts
+must not replace the block with indexes into artifacts absent from the retained
+catalog/rotation set. Retained raw histories and observed bootstrap IDs still
+advance through their existing verified path; no routes are enabled.
+
+An actual authority refusal remains stronger: preserve an existing
+`authority_changed` block, or upgrade to a newly verified authority block while
+retaining prior overflow triggers. In BEAM this authorizes one trigger-preserving
+clause in each of `merge_graph_block` and `merge_security_block`, after their
+existing authority-priority clauses and before non-authority replacement.
+It matches the TS overflow branch's existing normalized journal shape. No
+validator, schema, budget, watermark, raw authentication or historical-witness
+predicate is weakened; no new unfreeze path is introduced.
+
+Require public RED/GREEN for overflow followed by two new rotations and for
+overflow followed by an unseen bootstrap, including empty-page reopen, original
+trigger equality, retained-history/observed-ID advancement and empty routes.
+Retain authority-before/after-overflow controls. Independent Fable review remains
+required on the exact implementation. C03/C14 and durable native gates stay OPEN.
+
+
+## Integrated pure trust evidence — 2026-09-07 UTC
+
+Integrated source `00396f79d62b05d0606c7c50a993587e87b72572` combines TS
+`40263ce98ad00314628b6ca4e3c9cc264e601a93` and BEAM
+`8b9edda748527abeba7e2f6302ef39a6ff61cdb7`. Actual Fable approved the historical
+bootstrap repair, TS recovery behavior and live reciprocal gate. After Claude's
+session limit interrupted the follow-up, independent Sol approved the final
+three-line BEAM overflow repair and exact root API/CI integration, with no P0–P2.
+The user's requested Sol fallback was used; interrupted reviews were not counted
+as approvals. Initial failures and findings remain in the execution evidence.
+
+Root full `mix check` at that source passed 877 tests and 27 properties, zero
+failures, three configured exclusions, formatting and strict Credo exit0. The
+integrated TS trust suite passed34 tests with no skips (64.377 seconds), typecheck
+and build. The final BEAM leaf's public/reciprocal subset passed21 tests. Root's
+full run executes fresh BEAM output through the actual TS trust verifier and
+fresh TS output through BEAM, with exact comparison against the pinned TS fixture.
+All published-foundation vector files remained byte-identical. Public index
+exports three trust functions and14 types; every usable route is still explicitly
+an installation-required candidate, not a native receipt.
+
+Relevant artifacts under `/tmp/lattice-treehouse-execution-20260906/` are
+`r11a-final-integrated-full-check.log`, `r11a-integrated-ts-trust-402.log`,
+`r11a-final-trust-vector-preservation.json`,
+`sol-r11a-overflow-final-review.md`, and
+`sol-r11a-final-integration-review.md`.
+Exact publication-tip and merge-result hosted gates remain separate. No native
+SQLite transaction, freshness observation, provisioning, actual transport lease,
+process restart or C03/C14 completion is claimed by these pure-state checks.

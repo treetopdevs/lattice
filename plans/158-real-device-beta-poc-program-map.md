@@ -551,6 +551,20 @@ a concurrent/future op, emits the same pinned reason in both runtimes, and exclu
 both materialized states. Full-frontier vectors deliver concurrent conflicts in every order and prove
 the same winner, loser reason and partial-frontier reclassification after sync and dump/restore.
 
+
+**R19b context amendment adopted 2026-09-07 UTC:** Add read-only `valid_beacons`
+(BEAM) / `validBeacons` (TypeScript) containing the existing judge's validated
+beacons whose op IDs are strict ancestors of the command. Emit each once in
+ascending ASCII op-ID order, as exactly `{op_id, epoch}` / `{opId, epoch}` records.
+An empty list and signed epoch zero differ. Preserve exact BEAM uint64 integers;
+TS safe integers remain numbers and higher legacy epochs remain canonical decimal
+strings. No raw beacon-shaped body supplies this field and no second judge is
+introduced. Existing callback arities, maps, compatibility, permission/holder/
+consent precedence and final conflict phase remain unchanged. The prior verdict
+map remains individual verdicts at the causal walk, not final conflict outcomes.
+The exact scope, proof obligations and still-open TS actual consumer/compaction
+proof are in [the adopted prerequisites](../docs/research/member_continuity_prerequisites.md).
+
 ### Product Isolation and Migrations
 
 **Type:** task. **Owner:** shared mobile-runtime agent.

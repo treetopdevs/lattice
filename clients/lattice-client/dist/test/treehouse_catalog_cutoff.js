@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { authorCarrierOp, canonicalBytesForCarrierOp, canonicalBytesForCarrierTerm, canonicalHash } from "../src/codec";
 import { decodeCarrierOpFrame } from "../src/carrier";
@@ -77,7 +78,22 @@ test("raw cutoff keeps exact generic uint64 terms without routing through semant
     assert.deepEqual(result.ops.find((op) => op.id === frame.id).bytes, canonicalBytesForCarrierOp(frame));
 });
 test("all fixed vocabulary names are shared with the durable fixture and accepted as raw evidence", async () => {
-    const names = JSON.parse(readFileSync(new URL("./vectors/catalog/cutoff_atoms_v1.json", import.meta.url), "utf8"));
+    const fixtures = [
+        ["cutoff_atoms_v1.json", 130, "a66d085dd185091d745d933c3145101a97b3306406aba905af07ca051d09506c"],
+        ["cutoff_atoms_member_continuity_v1.json", 9, "38aab5c25051af1d009c917274cdf68ae4f61776ebef0bf3634ad3899b9ce8df"],
+        ["cutoff_atoms_with_member_continuity_v1.json", 139, "e7e7e16800327ca76b68ddabf7015c84b1750a327def5c0366c4e37f4ed7aaac"],
+    ];
+    const [old, added, names] = fixtures.map(([file, count, hash]) => {
+        const bytes = readFileSync(new URL(`./vectors/catalog/${file}`, import.meta.url));
+        assert.equal(createHash("sha256").update(bytes).digest("hex"), hash);
+        const values = JSON.parse(bytes.toString("utf8"));
+        assert.equal(values.length, count);
+        assert.deepEqual([...new Set(values)].sort(), values);
+        return values;
+    });
+    assert.ok(old && added && names);
+    assert.equal(added.some((name) => old.includes(name)), false);
+    assert.deepEqual([...old, ...added].sort(), names);
     const source = readFileSync(new URL("../src/treehouse_catalog_cutoff.ts", import.meta.url), "utf8");
     const literal = source.match(/const atoms = new Set\((\[[\s\S]*?\])\);/)?.[1];
     assert.ok(literal);
@@ -179,4 +195,28 @@ test("a representable authenticated kind outside the four wire kinds is unsuppor
     const frame = await authorCarrierOp({ replica: f.replica, signer: f.signer, deps: [], kind: "request", cap: ["nil"], body: ["nil"] });
     assert.deepEqual(await derive({ replica: f.replica, frames: [frame], rejected: [] }), unsupported);
     assert.deepEqual(await derive({ replica: f.replica, frames: [{ ...frame, sig: "" }], rejected: [] }), invalid);
+});
+test("signed continuity supplement and union are portable without granting a command", async () => {
+    const f = await cutoffFixture();
+    for (const file of ["cutoff_atoms_member_continuity_v1.json", "cutoff_atoms_with_member_continuity_v1.json"]) {
+        const names = JSON.parse(readFileSync(new URL(`./vectors/catalog/${file}`, import.meta.url), "utf8"));
+        const frame = await authorCarrierOp({ replica: f.replica, signer: f.signer, deps: [], kind: "command", cap: ["nil"],
+            body: ["tuple", [["atom", "attest_member_key_v1"], ["list", [["list", names.map((name) => ["atom", name])]]]]] });
+        const input = { replica: f.replica, frames: [frame], rejected: [{ frame: { ...frame, sig: "" }, reason: "bad_signature" }] };
+        const result = await derive(input);
+        assert.equal(result.ok, true, file);
+        assert.deepEqual(result.ops[0].bytes, canonicalBytesForCarrierOp(frame));
+        assert.equal(result.rejected[0].id, frame.id);
+    }
+});
+test("the continuity extension cannot admit duplicate canonical containers or alternate uint64 spellings", async () => {
+    const f = await cutoffFixture();
+    const pair = [["atom", "new_pub"], ["bin", ""]];
+    const bodies = [["map", [pair]], ["mapset", [["atom", "active"]]], ["int", "18446744073709551615"]];
+    const malformed = [["map", [pair, pair]], ["mapset", [["atom", "active"], ["atom", "active"]]], ["int", "018446744073709551615"]];
+    for (let index = 0; index < bodies.length; index++) {
+        const frame = await authorCarrierOp({ replica: f.replica, signer: f.signer, deps: [], kind: "command", cap: ["nil"], body: bodies[index] });
+        assert.equal((await derive({ replica: f.replica, frames: [frame], rejected: [] })).ok, true);
+        assert.deepEqual(await derive({ replica: f.replica, frames: [{ ...frame, body: malformed[index] }], rejected: [] }), invalid);
+    }
 });

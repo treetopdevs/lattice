@@ -49,11 +49,12 @@ defmodule Lattice.Authority do
     * **Application-policy causal context** (plan 158): after `cap_ok` and
       `authority_ok`, a command op is judged by the replica's
       `command_op_status/3`, given `visible_ids` plus a `context` of
-      `visible_ops`/`verdicts` restricted to exactly the op's causal past and
-      built in causal/canonical order — so the callback can require an
-      honored target without ever seeing a concurrent/future op or its own
-      not-yet-decided verdict. `command_op_status/2` remains a legacy
-      compatibility target: the default `/3` calls it with `visible_ids`.
+      `visible_ops`/`verdicts` and the already-validated `valid_beacons`, all
+      restricted to exactly the op's causal past and built in causal/canonical
+      order — so the callback can require honored evidence without ever seeing
+      a concurrent/future op or its own not-yet-decided verdict.
+      `command_op_status/2` remains a legacy compatibility target: the default
+      `/3` calls it with `visible_ids`.
     * **Full-frontier command conflicts** (plan 158): once every op's
       individual verdict is final, `command_conflicts/3` runs one pass over
       the complete structurally accepted DAG and may declare deterministic
@@ -1323,7 +1324,8 @@ defmodule Lattice.Authority do
            requests ++ [%{op: op.id, author: op.author, ref: ref, payload: payload}]}
 
         op.kind == :command ->
-          context = causal_context(op, ops, ancestors, base_reasons, quarantine)
+          context =
+            causal_context(op, ops, ancestors, base_reasons, quarantine, cap_evidence.beacons)
 
           case validate_command(module, op, ancestors, cap_evidence, context) do
             :ok ->
@@ -1341,13 +1343,14 @@ defmodule Lattice.Authority do
   end
 
   # Plan 158 Wave A2: the causal context handed to `command_op_status/3` —
-  # `visible_ops` and `verdicts` restricted to exactly `op`'s causal past
-  # (never `op` itself, never a concurrent or future op). Topo order
+  # `visible_ops`, `verdicts`, and the existing judge's `valid_beacons`
+  # restricted to exactly `op`'s causal past (never `op` itself, never a
+  # concurrent or future op). Topo order
   # guarantees every ancestor was already folded into `quarantine_so_far`
   # (if it was itself a command op) or is independently decided in
   # `base_reasons` (every other reason never depends on command_op_status),
   # so every id's verdict here is final by the time `op` consults it.
-  defp causal_context(op, ops, ancestors, base_reasons, quarantine_so_far) do
+  defp causal_context(op, ops, ancestors, base_reasons, quarantine_so_far, beacons) do
     anc = Map.get(ancestors, op.id, MapSet.new())
     visible_ops = Map.take(ops, MapSet.to_list(anc))
 
@@ -1357,7 +1360,12 @@ defmodule Lattice.Authority do
         {id, reason || :honored}
       end)
 
-    %{visible_ops: visible_ops, verdicts: verdicts}
+    valid_beacons =
+      beacons
+      |> Enum.filter(&MapSet.member?(anc, &1.op_id))
+      |> Enum.sort_by(& &1.op_id)
+
+    %{visible_ops: visible_ops, verdicts: verdicts, valid_beacons: valid_beacons}
   end
 
   defp validate_command(module, op, ancestors, cap_evidence, context) do

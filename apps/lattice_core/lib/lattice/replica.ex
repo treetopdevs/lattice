@@ -76,13 +76,14 @@ defmodule Lattice.Replica do
       @doc """
       Causal-context command validity hook (Plan 158 Wave A2). The same gate
       as `command_op_status/2`, additionally given `context`: `%{visible_ops:
-      %{Op.id() => Op.t()}, verdicts: %{Op.id() => :honored | atom()}}` —
-      both restricted to exactly `op`'s causal past and built in
-      causal/canonical order, so a policy can require an honored target
-      without ever seeing a concurrent or future op (or its own
-      not-yet-decided verdict). The default is a compatibility adapter that
-      calls the module's `command_op_status/2`. Overriding replaces the
-      default entirely, so an override must supply its own catch-all clause.
+      %{Op.id() => Op.t()}, verdicts: %{Op.id() => :honored | atom()},
+      valid_beacons: [%{op_id: Op.id(), epoch: non_neg_integer()}]}`. Every
+      field is restricted to exactly `op`'s causal past and built in
+      causal/canonical order; `valid_beacons` projects the existing authority
+      judge's accepted beacon records in ascending op-id order. The default is
+      a compatibility adapter that calls the module's `command_op_status/2`.
+      Overriding replaces the default entirely, so an override must supply its
+      own catch-all clause.
       """
       def command_op_status(op, visible_ids, _context), do: command_op_status(op, visible_ids)
 

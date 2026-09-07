@@ -196,3 +196,10 @@ is authoritative for historical authority witnesses, original-snapshot validatio
 32-record exhaustion metadata, and preservation across authority/overflow events.
 It supersedes the earlier single-trigger description in this proposal. Both
 runtimes implement the same closed values using their declared naming adapters.
+
+The subsequent [frozen pending-entry refinement](treehouse_catalog_retained_trust.md#2026-09-06-frozen-pending-entry-evidence-refinement)
+also applies identically to BEAM: preserve diagnostic entry-proof failures only
+for originally retained nonaccepted catalogs under a validated existing block.
+It does not weaken original authentication, graph/index validation, accepted
+entry requirements or new/unblocked candidate refusal. The public regressions
+must reopen the emitted frozen states and preserve all corruption controls.

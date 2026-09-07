@@ -502,3 +502,83 @@ These later refinements must receive independent review with their concrete
 source/tests before shared production edits or A01–A17 closure. R04/R10 accepted
 main gates, R14/R20/native and physical loss-ceremony evidence retain their own
 requirements. This adoption grants no membership, capability or transport right.
+
+
+## Initial codec evidence — 2026-09-07 UTC
+
+The closed BEAM/TS artifact slice is frozen at
+`f5415cc8294fd94350d74869fb35de855d3eeb96`. Actual Claude Fable independently
+reviewed the nine new files and returned PASS with no P0–P2 findings. Targeted
+checks passed 15 BEAM tests and 10 TypeScript tests, typechecking and scoped
+Credo. Fresh independent reciprocal exports matched exact bytes in both
+producer/consumer directions; all 81 preexisting vector files stayed identical.
+
+Root ran the full repository `mix check` against that exact source with isolated
+TMPDIR, OTP28/Elixir1.19.5 and `+S 4:4`: 871 tests and 27 properties passed,
+zero failures, three exclusions, formatting and strict Credo exit0. Existing
+low-priority Credo suggestions remain. The retained log is
+`/tmp/lattice-treehouse-execution-20260906/r19b-codec-full-check.log`.
+
+The BEAM-authored fixture SHA256 is
+`319af9036d12d900fa93d1b212c419c6797dd7ca6dcd96dfed08f0b0a42b3f2c`;
+the TS-authored fixture SHA256 is
+`b874dbac44fda6b7a23554de99bc81b875db4994685b9339750ebba19821c0ee`.
+The largest schema-valid detached return case at the chosen grammar boundary is
+63,990 bytes including signature; the next valid case is 64,035 and refuses.
+An exact 64,000-byte case is not reachable under that grammar; no invalid padding
+was introduced to manufacture one.
+
+This evidence closes only the initial pure codec review packet. There is no
+new command registration, application policy, public index/package/CI wiring,
+selected-Space cold-start integration, expanded catalog vocabulary, adopted
+compaction context, installed continuity flow or physical ceremony. All A01–A17
+whole implementation rows remain OPEN pending their actual required behavior.
+
+
+## Prerequisite implementation adoption — 2026-09-07 UTC
+
+Actual Fable approved [the exact vocabulary and causal beacon context packet](member_continuity_prerequisites.md)
+after correcting its generated-file baseline claim. Root now authorizes that
+bounded packet and the dated Plan158/lifecycle clauses above, before shared code
+edits. It adds no command registration, continuity policy or compaction context.
+The new native runtime, actual TS continuity consumer, A01–A17 and field/native
+ceremonies retain their separate open gates.
+
+
+## Verified codec, catalog vocabulary and cold-start prerequisites — 2026-09-07 UTC
+
+Pure codec sourcef5415cc8 was approved by Claude Fable. The integrated prerequisite
+source `f649e4b7fc13f6fdce4d24acede625ae1de28c40` then passed independent
+gpt-5.6-sol review with no P0–P2. All three compiled cutoff validators use the
+exact139-name union, while the historical130-name fixture and nine-name supplement
+remain separate immutable evidence. Selected Space supplies13 closed application
+literals, including the four existing names found missing in real cold processes.
+No atom is created from input and no command is registered.
+
+Actual signed BEAM/TypeScript histories pass cutoff/trust intake, retain selected
+rejected evidence and reopen in both delivery orders. Fresh selected-Space
+processes decode and authenticate original frames and verified dumps; actual
+path-backed manifest startup, first WebSocket relay and another process's durable
+reopen/pull pass. Corrupt startup refuses readiness. The original exporter/default
+bytes, pure codec fixtures and trust646 fixture remain unchanged. All84 previously
+tracked vectors were preserved by the prerequisite change.
+
+Root's serialized full mix check atf649 passed915 tests and27 properties, zero
+failures and three exclusions, formatting and strict Credo exit0. Focused evidence
+includes57 core and2 carrier tests; TypeScript cutoff/trust/codec suites,886
+canonical checks,1497 conformance checks and existing continuation suites passed.
+
+Final integration `2cbe3ba747044612ead23c6ba3d83f4059cc106a` adds the pure
+codec package export, its npm/CI gate and generated distribution files. The codec
+suite passes10 cases; eight direct imports exercise the public barrel, and two
+reciprocal fixture cases retain their existing support helper. Build passes.
+Independent Sol review approves the final wiring. All87 vectors present atf649
+remain unchanged. Workflow syntax/expressions pass; full actionlint retains
+exactly three preexisting SC2209 notices on unchanged lines, with no new diagnostic.
+An initial diagnostic comparison used the wrong absolute/relative path spelling;
+the corrected comparison and preserved logs document the exact baseline equality.
+
+These prerequisites grant no membership, command capability or installed trust.
+R19b A01–A17 and the real TypeScript continuity-policy consumer remain OPEN. The
+application compaction mirror and its beacon-context integration are separate
+reviewed work; they are not included in this source's completion claim.

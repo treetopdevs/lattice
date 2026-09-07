@@ -35,7 +35,9 @@
     "catalog:bootstrap": "tsx test/treehouse_catalog_bootstrap.ts",
     "catalog:codec": "tsx test/treehouse_catalog_codec.ts",
     "continuation:profile": "tsx test/continuation_profile_observation.ts",
-    "catalog:cutoff": "tsx test/treehouse_catalog_cutoff.ts"
+    "catalog:cutoff": "tsx test/treehouse_catalog_cutoff.ts",
+    "catalog:trust": "tsx --test test/treehouse_catalog_trust.ts",
+    "member:continuity:codec": "tsx --test test/treehouse_member_continuity_codec.ts"
   },
   "devDependencies": {
     "tsx": "^4.23.0",
