@@ -92,7 +92,7 @@ fn identity_missing_runs_through_owned_session_operation_and_private_transport()
         .execute(
             view,
             witness_public::PublicRequest::Identity,
-            Arc::new(|_, _| {}),
+            Arc::new(|_, _| Ok(())),
         )
         .unwrap();
     assert_eq!(
@@ -196,7 +196,10 @@ fn completed_identity_is_reviewed_then_presence_signed_and_publicly_projected() 
                 recipient: Bytes32([2; 32]),
                 fresh_validator_nonce: Bytes32([6; 32]),
             }),
-            Arc::new(move |id, phase| observed.lock().unwrap().push((id, phase))),
+            Arc::new(move |id, phase| {
+                observed.lock().unwrap().push((id, phase));
+                Ok(())
+            }),
         )
         .unwrap();
     let result = block_on(pending.receive()).unwrap();
@@ -250,10 +253,18 @@ fn dropping_caller_sends_private_cancel_but_holds_slot_until_blocked_call_drains
     let (started_tx, started_rx) = mpsc::channel();
     let (release_tx, release_rx) = mpsc::channel();
     let release = Arc::new(Mutex::new(Some(release_rx)));
+    let (cancel_launch_tx, cancel_launch_rx) = mpsc::channel();
+    let (register_tx, register_rx) = mpsc::channel();
+    let register = Arc::new(Mutex::new(Some(register_rx)));
+    let (cancel_release_tx, cancel_release_rx) = mpsc::channel();
+    let cancel_release = Arc::new(Mutex::new(Some(cancel_release_rx)));
     let (kinds_tx, kinds_rx) = mpsc::channel();
     let flow = witness_flow::test_adapter::flow(owner, operations, move |request, current| {
         let release = release.clone();
+        let register = register.clone();
+        let cancel_release = cancel_release.clone();
         let started = started_tx.clone();
+        let cancel_launch = cancel_launch_tx.clone();
         let kinds = kinds_tx.clone();
         let (kind, operation_id) = match &request {
             witness_bridge::PrivateRequest::Identity(value) => {
@@ -265,31 +276,45 @@ fn dropping_caller_sends_private_cancel_but_holds_slot_until_blocked_call_drains
             _ => panic!("unexpected later phase"),
         };
         kinds.send(kind).unwrap();
-        witness_mobile::test_adapter::dispatch(
+        let pending = witness_mobile::test_adapter::dispatch(
             request,
             move |_| async move {
                 let status = if kind == ResponseKind::Identity {
-                    started.send(()).unwrap();
-                    release.lock().unwrap().take().unwrap().recv().unwrap();
+                    if let Some(release) = release.lock().unwrap().take() {
+                        started.send(()).unwrap();
+                        release.recv().unwrap();
+                    }
                     TerminalStatus::Missing
                 } else {
+                    cancel_release
+                        .lock()
+                        .unwrap()
+                        .take()
+                        .unwrap()
+                        .recv()
+                        .unwrap();
                     TerminalStatus::Cancelled
                 };
                 let terminal = TerminalResponse::terminal(kind, operation_id, status).unwrap();
                 Ok(serde_json::from_slice(&encode_terminal_response(&terminal).unwrap()).unwrap())
             },
             move || current(),
-        )
+        );
+        if kind == ResponseKind::Cancel {
+            cancel_launch.send(()).unwrap();
+            register.lock().unwrap().take().unwrap().recv().unwrap();
+        }
+        pending
     });
     let pending = flow
         .execute(
             view.clone(),
             witness_public::PublicRequest::Identity,
-            Arc::new(|_, _| {}),
+            Arc::new(|_, _| Ok(())),
         )
         .unwrap();
     started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
-    drop(pending);
+    let dropper = std::thread::spawn(move || drop(pending));
     assert_eq!(
         kinds_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
         ResponseKind::Identity
@@ -298,24 +323,165 @@ fn dropping_caller_sends_private_cancel_but_holds_slot_until_blocked_call_drains
         kinds_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
         ResponseKind::Cancel
     );
+    cancel_launch_rx
+        .recv_timeout(Duration::from_secs(1))
+        .unwrap();
+    // Let the original callback finish while start_cancel is between launch
+    // and drain registration. The operation must remain reserved.
+    release_tx.send(()).unwrap();
+    std::thread::sleep(Duration::from_millis(20));
     assert!(flow
         .execute(
             view.clone(),
             witness_public::PublicRequest::Identity,
-            Arc::new(|_, _| {})
+            Arc::new(|_, _| Ok(()))
         )
         .is_err());
-    release_tx.send(()).unwrap();
+    register_tx.send(()).unwrap();
+    dropper.join().unwrap();
+    assert!(flow
+        .execute(
+            view.clone(),
+            witness_public::PublicRequest::Identity,
+            Arc::new(|_, _| Ok(()))
+        )
+        .is_err());
+    cancel_release_tx.send(()).unwrap();
     for _ in 0..100 {
         if let Ok(next) = flow.execute(
             view.clone(),
             witness_public::PublicRequest::Identity,
-            Arc::new(|_, _| {}),
+            Arc::new(|_, _| Ok(())),
         ) {
-            drop(next);
+            assert!(block_on(next.receive()).is_ok());
             return;
         }
         std::thread::sleep(Duration::from_millis(1));
     }
     panic!("operation slot was not released after the original callback drained");
+}
+
+#[test]
+fn malformed_prepared_claim_dispatches_cancel_and_never_reaches_signing() {
+    let app = tauri::test::mock_builder()
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
+        .unwrap();
+    let window = WebviewWindowBuilder::new(
+        &app,
+        "main",
+        WebviewUrl::External("http://tauri.localhost/".parse().unwrap()),
+    )
+    .build()
+    .unwrap();
+    let view = window.as_ref().clone();
+    let owner = Arc::new(witness_owner::test_adapter::from_entropy({
+        let mut n = 0u8;
+        move || {
+            n += 1;
+            Ok(Bytes32([n; 32]))
+        }
+    }));
+    let url = "http://tauri.localhost/".parse().unwrap();
+    owner.navigation_requested(&view, &url);
+    owner
+        .page_load(&view, PageLoadEvent::Started, &url)
+        .unwrap();
+    owner
+        .page_load(&view, PageLoadEvent::Finished, &url)
+        .unwrap();
+    let operations = Arc::new(witness_operation::test_adapter::registry(|| {
+        Ok(Bytes32([9; 32]))
+    }));
+    let key = SigningKey::from_bytes(&[11; 32]).verifying_key().to_bytes();
+    let attempt = Bytes32([3; 32]);
+    let challenge = Bytes32([4; 32]);
+    let (kinds_tx, kinds_rx) = mpsc::channel();
+    let flow = witness_flow::test_adapter::flow(owner, operations, move |request, current| {
+        let kinds = kinds_tx.clone();
+        witness_mobile::test_adapter::dispatch(
+            request,
+            move |payload| async move {
+                let kind = payload["kind"].as_str().unwrap();
+                kinds.send(kind.to_owned()).unwrap();
+                let op = payload["operationId"].clone();
+                let session = payload["sessionDigest"].clone();
+                let response = match kind {
+                    "identity" => {
+                        let mut spki = vec![
+                            0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00,
+                        ];
+                        spki.extend(key);
+                        json!({"protocol":witness_bridge::PRIVATE_PROTOCOL,"kind":"identity","operationId":op,"sessionDigest":session,"status":"snapshot","eligible":false,
+                          "identity":{"creationAttemptId":STANDARD.encode(attempt.0),"phase":"generated_unvalidated","generationChallenge":STANDARD.encode(challenge.0),
+                          "metadata":{"publicKey":STANDARD.encode(key),"spki":STANDARD.encode(spki),"appSignerSha256":STANDARD.encode([5;32]),"creationVersionCode":"1","certificateChain":[STANDARD.encode([1])]},"revision":"1"},"enrollment":null})
+                    }
+                    "proof" => {
+                        let digest: [u8; 32] = Sha256::digest(challenge.0).into();
+                        // The recipient is deliberately different from the reviewed public request.
+                        let claim = json!({"replica":"replica:test","enrollmentId":payload["enrollmentId"],"recipient":STANDARD.encode([99;32]),"creationAttemptId":STANDARD.encode(attempt.0),
+                          "actualWitnessPublicKey":STANDARD.encode(key),"generationChallengeDigest":STANDARD.encode(digest),"freshValidatorNonce":payload["freshValidatorNonce"],
+                          "nativeRandomNonce":payload["nativeNonce"],"nativeCallerSessionDigest":session});
+                        json!({"protocol":witness_bridge::PRIVATE_PROTOCOL,"kind":"proof","operationId":op,"sessionDigest":session,"status":"prepared","handle":STANDARD.encode([8;32]),"claim":claim,"remainingMillis":60000})
+                    }
+                    "cancel" => {
+                        json!({"protocol":witness_bridge::PRIVATE_PROTOCOL,"kind":"cancel","operationId":op,"sessionDigest":session,"status":"cancelled"})
+                    }
+                    "sign_prepared" => panic!("malformed prepared response reached signing"),
+                    _ => panic!("unexpected private phase"),
+                };
+                Ok(response)
+            },
+            move || current(),
+        )
+    });
+    let pending = flow
+        .execute(
+            view.clone(),
+            witness_public::PublicRequest::Proof(witness_public::ProofPublicRequest {
+                replica: "replica:test".into(),
+                enrollment_id: Bytes32([1; 32]),
+                recipient: Bytes32([2; 32]),
+                fresh_validator_nonce: Bytes32([6; 32]),
+            }),
+            Arc::new(|_, _| Ok(())),
+        )
+        .unwrap();
+    assert!(block_on(pending.receive()).is_err());
+    assert_eq!(
+        kinds_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+        "identity"
+    );
+    assert_eq!(
+        kinds_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+        "proof"
+    );
+    assert_eq!(
+        kinds_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+        "cancel"
+    );
+    for _ in 0..100 {
+        if let Ok(next) = flow.execute(
+            view.clone(),
+            witness_public::PublicRequest::Proof(witness_public::ProofPublicRequest {
+                replica: "replica:test".into(),
+                enrollment_id: Bytes32([1; 32]),
+                recipient: Bytes32([2; 32]),
+                fresh_validator_nonce: Bytes32([6; 32]),
+            }),
+            Arc::new(|_, _| Err("emit_failed")),
+        ) {
+            assert!(block_on(next.receive()).is_err());
+            assert_eq!(
+                kinds_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+                "identity"
+            );
+            assert_eq!(
+                kinds_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+                "cancel"
+            );
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    panic!("malformed prepared cleanup did not release after cancel drained");
 }

@@ -25,7 +25,7 @@ use std::{
     sync::{Arc, Mutex},
     time::Instant,
 };
-use tauri::{async_runtime::channel, Runtime, Webview};
+use tauri::{async_runtime::channel, webview::PageLoadEvent, Runtime, Url, Webview};
 
 pub(crate) const FLOW_REFUSED: &str = "witness_refused";
 
@@ -37,7 +37,7 @@ pub(crate) enum PendingPhase {
 
 type Current = Arc<dyn Fn() -> bool + Send + Sync>;
 type Dispatch = Arc<dyn Fn(PrivateRequest, Current) -> MobilePending + Send + Sync>;
-type PhaseNotice = Arc<dyn Fn(Bytes32, PendingPhase) + Send + Sync>;
+type PhaseNotice = Arc<dyn Fn(Bytes32, PendingPhase) -> Result<(), &'static str> + Send + Sync>;
 
 pub(crate) struct WitnessFlow {
     owner: Arc<WitnessOwner>,
@@ -48,9 +48,13 @@ pub(crate) struct WitnessFlow {
 
 struct Active {
     id: Bytes32,
+    token: OperationToken,
     pending: Option<NativeCancellation>,
     drains: Vec<NativeDrain>,
     cancel_sent: bool,
+    cancel_starting: bool,
+    run_finished: bool,
+    cancel_current: Current,
 }
 
 pub(crate) struct FlowPending {
@@ -71,14 +75,12 @@ impl Drop for CompletionGuard<'_> {
 
 impl WitnessFlow {
     #[cfg(target_os = "android")]
-    pub(crate) fn new<R: Runtime>(
-        owner: Arc<WitnessOwner>,
-        operations: Arc<WitnessOperationRegistry>,
-        plugin: Arc<NativeWitnessPlugin<R>>,
-    ) -> Arc<Self> {
-        Self::with_dispatch(owner, operations, move |request, current| {
-            plugin.dispatch(request, move || current())
-        })
+    pub(crate) fn new<R: Runtime>(plugin: Arc<NativeWitnessPlugin<R>>) -> Arc<Self> {
+        Self::with_dispatch(
+            Arc::new(WitnessOwner::new()),
+            Arc::new(WitnessOperationRegistry::new()),
+            move |request, current| plugin.dispatch(request, move || current()),
+        )
     }
 
     fn with_dispatch(
@@ -94,6 +96,29 @@ impl WitnessFlow {
         })
     }
 
+    pub(crate) fn navigation_requested<R: Runtime>(
+        self: &Arc<Self>,
+        webview: &Webview<R>,
+        url: &Url,
+    ) -> bool {
+        let allow = self.owner.navigation_requested(webview, url);
+        self.cancel_invalidated();
+        allow
+    }
+
+    pub(crate) fn page_load<R: Runtime>(
+        self: &Arc<Self>,
+        webview: &Webview<R>,
+        event: PageLoadEvent,
+        url: &Url,
+    ) -> Result<(), &'static str> {
+        let result = self.owner.page_load(webview, event, url);
+        if result.is_err() {
+            self.cancel_invalidated();
+        }
+        result
+    }
+
     pub(crate) fn execute<R: Runtime>(
         self: &Arc<Self>,
         webview: Webview<R>,
@@ -106,15 +131,27 @@ impl WitnessFlow {
         }
         let token = self.operations.begin(&session)?;
         let id = token.id();
+        let cancel_owner = self.owner.clone();
+        let cancel_view = webview.clone();
+        let cancel_session = session.digest();
+        let cancel_current: Current = Arc::new(move || {
+            cancel_owner
+                .snapshot(&cancel_view)
+                .is_ok_and(|snapshot| snapshot.digest() == cancel_session)
+        });
         let Ok(mut active) = self.active.lock() else {
             self.operations.complete(&token);
             return Err(FLOW_REFUSED);
         };
         *active = Some(Active {
             id,
+            token: token.clone(),
             pending: None,
             drains: Vec::new(),
             cancel_sent: false,
+            cancel_starting: false,
+            run_finished: false,
+            cancel_current,
         });
         drop(active);
 
@@ -135,12 +172,9 @@ impl WitnessFlow {
         });
 
         let cancel_flow = self.clone();
-        let cancel_webview = webview;
         Ok(FlowPending {
             receiver,
-            cancel: Some(Box::new(move || {
-                cancel_flow.cancel_started(cancel_webview, id, session)
-            })),
+            cancel: Some(Box::new(move || cancel_flow.cancel_started(id, session))),
         })
     }
 
@@ -265,7 +299,11 @@ impl WitnessFlow {
             .generation_challenge()
             .ok_or(FLOW_REFUSED)?;
         let native_nonce = crate::witness_entropy::nonce32()?;
-        emit_notice(&notice, token.id(), PendingPhase::Review)?;
+        if emit_notice(&notice, token.id(), PendingPhase::Review).is_err() {
+            self.cleanup_after_proof(webview, token, session, None)
+                .await;
+            return Err(FLOW_REFUSED);
+        }
         self.ensure_current(webview, token, session)?;
         let context = ReviewedBindingContext::from_native_review(
             token.id(),
@@ -290,24 +328,48 @@ impl WitnessFlow {
             fresh_validator_nonce: public.fresh_validator_nonce,
             native_nonce,
         });
-        let started = Instant::now();
-        let prepared_bytes = match self.call(webview, token, session, request).await? {
-            MobileResponse::Reviewed(bytes) => bytes,
-            _ => return Err(FLOW_REFUSED),
+        let sealed = match self.call(webview, token, session, request).await {
+            Ok(MobileResponse::Reviewed(bytes)) => {
+                witness_reviewed::accept_prepared(context, &bytes, 0)
+            }
+            _ => Err(FLOW_REFUSED),
         };
-        let sealed = witness_reviewed::accept_prepared(context, &prepared_bytes, 0)?;
+        let sealed = match sealed {
+            Ok(sealed) => sealed,
+            Err(reason) => {
+                self.cleanup_after_proof(webview, token, session, None)
+                    .await;
+                return Err(reason);
+            }
+        };
+        // remainingMillis is measured by Kotlin at prepared receipt. Only time
+        // after that receipt consumes the sealed Rust TTL.
+        let started = Instant::now();
         let result = self
             .sign(webview, token, session, &snapshot, &sealed, started, notice)
             .await;
         if result.is_err() {
-            let _ = witness_reviewed::cancel(&sealed, token.id(), session.digest());
-            if let Some(target) = self.operations.cancel(token.id(), session) {
-                if let Ok(cancel) = self.start_cancel(webview.clone(), &target) {
-                    let _ = Self::finish_cancel(cancel).await;
-                }
-            }
+            self.cleanup_after_proof(webview, token, session, Some(&sealed))
+                .await;
         }
         result
+    }
+
+    async fn cleanup_after_proof<R: Runtime>(
+        &self,
+        webview: &Webview<R>,
+        token: &OperationToken,
+        session: &SessionSnapshot,
+        sealed: Option<&SealedReviewedBinding>,
+    ) {
+        if let Some(sealed) = sealed {
+            let _ = witness_reviewed::cancel(sealed, token.id(), session.digest());
+        }
+        if let Some(target) = self.operations.cancel(token.id(), session) {
+            if let Ok(cancel) = self.start_cancel(&target) {
+                let _ = Self::finish_cancel(cancel).await;
+            }
+        }
     }
 
     async fn sign<R: Runtime>(
@@ -407,41 +469,23 @@ impl WitnessFlow {
         }
     }
     fn finish(&self, token: &OperationToken) {
-        let drains = self.active.lock().ok().and_then(|mut active| {
-            if active.as_ref().is_some_and(|state| state.id == token.id()) {
-                active.take().map(|state| state.drains)
-            } else {
-                None
-            }
+        let completion = self.active.lock().ok().and_then(|mut active| {
+            let state = active.as_mut().filter(|state| state.id == token.id())?;
+            state.run_finished = true;
+            Self::take_completion(&mut active)
         });
-        let Some(drains) = drains else { return };
-        let operations = self.operations.clone();
-        let token = token.clone();
-        tauri::async_runtime::spawn(async move {
-            let mut complete = true;
-            for drain in drains {
-                complete &= drain.wait().await;
-            }
-            if complete {
-                operations.complete(&token);
-            }
-        });
+        self.spawn_completion(completion);
     }
 
-    fn cancel_started<R: Runtime>(
-        self: Arc<Self>,
-        webview: Webview<R>,
-        id: Bytes32,
-        session: SessionSnapshot,
-    ) {
+    fn cancel_started(self: Arc<Self>, id: Bytes32, session: SessionSnapshot) {
         let target = self.operations.cancel(id, &session);
-        let cancel = target.and_then(|target| self.start_cancel(webview, &target).ok());
-        let pending = self.active.lock().ok().and_then(|mut active| {
-            let state = active
-                .as_mut()
-                .filter(|state| state.id == id && !state.cancel_sent)?;
-            state.cancel_sent = true;
-            state.pending.clone()
+        let cancel = target.and_then(|target| self.start_cancel(&target).ok());
+        let pending = self.active.lock().ok().and_then(|active| {
+            active
+                .as_ref()
+                .filter(|state| state.id == id)?
+                .pending
+                .clone()
         });
         if let Some(pending) = pending {
             pending.cancel();
@@ -455,16 +499,18 @@ impl WitnessFlow {
 
     fn cancel_request<R: Runtime>(
         self: &Arc<Self>,
-        webview: Webview<R>,
+        _webview: Webview<R>,
         id: Bytes32,
         session: SessionSnapshot,
     ) -> Result<FlowPending, &'static str> {
         let target = self.operations.cancel(id, &session).ok_or(FLOW_REFUSED)?;
-        let cancel = self.start_cancel(webview, &target)?;
-        let pending = self.active.lock().ok().and_then(|mut active| {
-            let state = active.as_mut().filter(|state| state.id == id)?;
-            state.cancel_sent = true;
-            state.pending.clone()
+        let cancel = self.start_cancel(&target)?;
+        let pending = self.active.lock().ok().and_then(|active| {
+            active
+                .as_ref()
+                .filter(|state| state.id == id)?
+                .pending
+                .clone()
         });
         if let Some(pending) = pending {
             pending.cancel();
@@ -480,15 +526,27 @@ impl WitnessFlow {
         })
     }
 
-    pub(crate) fn lifecycle_invalidated<R: Runtime>(self: &Arc<Self>, webview: Webview<R>) {
+    pub(crate) fn lifecycle_invalidated(self: &Arc<Self>) {
+        self.owner.lifecycle_cancelled();
+        self.cancel_invalidated();
+    }
+
+    pub(crate) fn owner_destroyed(self: &Arc<Self>) {
+        self.owner.owner_destroyed();
+        self.cancel_invalidated();
+    }
+
+    fn cancel_invalidated(self: &Arc<Self>) {
         let Some(target) = self.operations.lifecycle_invalidated() else {
             return;
         };
-        let cancel = self.start_cancel(webview, &target).ok();
-        let pending = self.active.lock().ok().and_then(|mut active| {
-            let state = active.as_mut().filter(|state| state.id == target.id())?;
-            state.cancel_sent = true;
-            state.pending.clone()
+        let cancel = self.start_cancel(&target).ok();
+        let pending = self.active.lock().ok().and_then(|active| {
+            active
+                .as_ref()
+                .filter(|state| state.id == target.id())?
+                .pending
+                .clone()
         });
         if let Some(pending) = pending {
             pending.cancel();
@@ -500,11 +558,23 @@ impl WitnessFlow {
         }
     }
 
-    fn start_cancel<R: Runtime>(
+    fn start_cancel(
         &self,
-        webview: Webview<R>,
         target: &crate::witness_operation::CancellationTarget,
     ) -> Result<MobilePending, &'static str> {
+        let current = {
+            let mut active = self.active.lock().map_err(|_| FLOW_REFUSED)?;
+            let state = active
+                .as_mut()
+                .filter(|state| state.id == target.id())
+                .ok_or(FLOW_REFUSED)?;
+            if state.cancel_sent || state.cancel_starting {
+                return Err(FLOW_REFUSED);
+            }
+            state.cancel_sent = true;
+            state.cancel_starting = true;
+            state.cancel_current.clone()
+        };
         let cancel_id = crate::witness_entropy::nonce32()?;
         let session = target.session_digest();
         let request = PrivateRequest::Cancel(CancelRequest {
@@ -513,10 +583,6 @@ impl WitnessFlow {
             session_digest: session,
             target_operation_id: target.id(),
         });
-        let owner = self.owner.clone();
-        let view = webview.clone();
-        let current: Current =
-            Arc::new(move || owner.snapshot(&view).is_ok_and(|s| s.digest() == session));
         let pending = (self.dispatch)(request, current);
         let drain = pending.drain();
         let mut active = self.active.lock().map_err(|_| FLOW_REFUSED)?;
@@ -525,7 +591,38 @@ impl WitnessFlow {
             .filter(|state| state.id == target.id())
             .ok_or(FLOW_REFUSED)?;
         state.drains.push(drain);
+        state.cancel_starting = false;
+        let completion = Self::take_completion(&mut active);
+        drop(active);
+        self.spawn_completion(completion);
         Ok(pending)
+    }
+
+    fn take_completion(active: &mut Option<Active>) -> Option<(OperationToken, Vec<NativeDrain>)> {
+        let ready = active
+            .as_ref()
+            .is_some_and(|state| state.run_finished && !state.cancel_starting);
+        if !ready {
+            return None;
+        }
+        let state = active.take()?;
+        Some((state.token, state.drains))
+    }
+
+    fn spawn_completion(&self, completion: Option<(OperationToken, Vec<NativeDrain>)>) {
+        let Some((token, drains)) = completion else {
+            return;
+        };
+        let operations = self.operations.clone();
+        tauri::async_runtime::spawn(async move {
+            let mut complete = true;
+            for drain in drains {
+                complete &= drain.wait().await;
+            }
+            if complete {
+                operations.complete(&token);
+            }
+        });
     }
 
     async fn finish_cancel(pending: MobilePending) -> Result<Vec<u8>, &'static str> {
@@ -539,7 +636,9 @@ impl WitnessFlow {
 }
 
 fn emit_notice(notice: &PhaseNotice, id: Bytes32, phase: PendingPhase) -> Result<(), &'static str> {
-    catch_unwind(AssertUnwindSafe(|| notice(id, phase))).map_err(|_| FLOW_REFUSED)
+    catch_unwind(AssertUnwindSafe(|| notice(id, phase)))
+        .map_err(|_| FLOW_REFUSED)?
+        .map_err(|_| FLOW_REFUSED)
 }
 
 impl FlowPending {
