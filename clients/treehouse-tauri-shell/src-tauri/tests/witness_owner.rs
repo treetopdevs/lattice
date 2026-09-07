@@ -11,8 +11,9 @@ mod witness_session;
 
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
-    Arc,
+    mpsc, Arc,
 };
+use std::time::Duration;
 use tauri::{
     plugin::Plugin, webview::PageLoadEvent, Url, Webview, WebviewUrl, WebviewWindowBuilder,
 };
@@ -220,4 +221,59 @@ fn view_other() -> (
     Webview<tauri::test::MockRuntime>,
 ) {
     view("other")
+}
+
+#[test]
+fn native_hooks_never_wait_for_an_in_flight_native_fact_query() {
+    for hook in 0..4 {
+        let (_app, view) = view("main");
+        let owner = Arc::new(owner());
+        establish(&owner, &view);
+        let snapshot = owner.snapshot(&view).unwrap();
+        let (held_tx, held_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let (query_tx, query_rx) = mpsc::channel();
+        let holding = owner.clone();
+        let query_view = view.clone();
+        let guard = std::thread::spawn(move || {
+            query_tx
+                .send(test_adapter::snapshot_after_gate(
+                    &holding,
+                    &query_view,
+                    held_tx,
+                    release_rx,
+                ))
+                .unwrap();
+        });
+        held_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+
+        let (returned_tx, returned_rx) = mpsc::channel();
+        let callback_owner = owner.clone();
+        let callback_view = view.clone();
+        let callback = std::thread::spawn(move || {
+            let url = LOCAL.parse().unwrap();
+            match hook {
+                0 => {
+                    callback_owner.navigation_requested(&callback_view, &url);
+                }
+                1 => {
+                    let _ = callback_owner.page_load(&callback_view, PageLoadEvent::Started, &url);
+                }
+                2 => callback_owner.lifecycle_cancelled(),
+                _ => callback_owner.owner_destroyed(),
+            }
+            returned_tx.send(()).unwrap();
+        });
+
+        let prompt = returned_rx.recv_timeout(Duration::from_millis(100));
+        release_tx.send(()).unwrap();
+        guard.join().unwrap();
+        callback.join().unwrap();
+        assert!(prompt.is_ok(), "native hook {hook} waited for owner state");
+        assert_eq!(
+            query_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+            Err("invalid_witness_session")
+        );
+        assert!(!owner.current(&view, &snapshot));
+    }
 }

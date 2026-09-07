@@ -10,13 +10,17 @@
 use crate::witness_bridge::Bytes32;
 use crate::witness_document::WitnessDocumentSession;
 use crate::witness_session::{SessionSnapshot, SESSION_REFUSED};
-use std::sync::Mutex;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Mutex,
+};
 use tauri::{webview::PageLoadEvent, Runtime, Url, Webview};
 
 type Document = WitnessDocumentSession<Box<dyn FnMut() -> Bytes32 + Send>>;
 
 pub(crate) struct WitnessOwner {
     state: Mutex<Result<Document, &'static str>>,
+    refused: AtomicBool,
 }
 
 impl WitnessOwner {
@@ -33,15 +37,32 @@ impl WitnessOwner {
         })();
         Self {
             state: Mutex::new(state),
+            refused: AtomicBool::new(false),
         }
+    }
+
+    fn refuse(&self) {
+        self.refused.store(true, Ordering::SeqCst);
+    }
+
+    fn is_refused(&self) -> bool {
+        self.refused.load(Ordering::SeqCst)
     }
 
     /// Tauri navigation hook result. Witness refusal must never block preview.
     pub(crate) fn navigation_requested<R: Runtime>(&self, webview: &Webview<R>, url: &Url) -> bool {
-        if let Ok(mut state) = self.state.lock() {
-            if let Ok(document) = state.as_mut() {
-                let _ = document.navigation_requested(webview, url);
+        if self.is_refused() {
+            return true;
+        }
+        match self.state.try_lock() {
+            Ok(mut state) => {
+                if let Ok(document) = state.as_mut() {
+                    if document.navigation_requested(webview, url).is_err() {
+                        self.refuse();
+                    }
+                }
             }
+            Err(_) => self.refuse(),
         }
         true
     }
@@ -52,19 +73,44 @@ impl WitnessOwner {
         event: PageLoadEvent,
         url: &Url,
     ) -> Result<(), &'static str> {
-        let mut state = self.state.lock().map_err(|_| SESSION_REFUSED)?;
-        state
+        if self.is_refused() {
+            return Err(SESSION_REFUSED);
+        }
+        let mut state = self.state.try_lock().map_err(|_| {
+            self.refuse();
+            SESSION_REFUSED
+        })?;
+        let result = state
             .as_mut()
             .map_err(|reason| *reason)?
-            .page_load(webview, event, url)
+            .page_load(webview, event, url);
+        if self.is_refused() {
+            Err(SESSION_REFUSED)
+        } else {
+            result
+        }
     }
 
     pub(crate) fn snapshot<R: Runtime>(
         &self,
         webview: &Webview<R>,
     ) -> Result<SessionSnapshot, &'static str> {
-        let state = self.state.lock().map_err(|_| SESSION_REFUSED)?;
-        state.as_ref().map_err(|reason| *reason)?.snapshot(webview)
+        if self.is_refused() {
+            return Err(SESSION_REFUSED);
+        }
+        let state = self.state.try_lock().map_err(|_| {
+            self.refuse();
+            SESSION_REFUSED
+        })?;
+        let snapshot = state
+            .as_ref()
+            .map_err(|reason| *reason)?
+            .snapshot(webview)?;
+        if self.is_refused() {
+            Err(SESSION_REFUSED)
+        } else {
+            Ok(snapshot)
+        }
     }
 
     pub(crate) fn current<R: Runtime>(
@@ -76,7 +122,8 @@ impl WitnessOwner {
     }
 
     pub(crate) fn lifecycle_cancelled(&self) {
-        if let Ok(mut state) = self.state.lock() {
+        self.refuse();
+        if let Ok(mut state) = self.state.try_lock() {
             if let Ok(document) = state.as_mut() {
                 document.lifecycle_cancelled();
             }
@@ -84,7 +131,8 @@ impl WitnessOwner {
     }
 
     pub(crate) fn owner_destroyed(&self) {
-        if let Ok(mut state) = self.state.lock() {
+        self.refuse();
+        if let Ok(mut state) = self.state.try_lock() {
             if let Ok(document) = state.as_mut() {
                 document.owner_destroyed();
             }
@@ -95,6 +143,7 @@ impl WitnessOwner {
 #[cfg(test)]
 pub(crate) mod test_adapter {
     use super::*;
+    use std::sync::mpsc::{Receiver, Sender};
     pub(crate) fn from_entropy(
         source: impl FnMut() -> Result<Bytes32, &'static str>,
     ) -> WitnessOwner {
@@ -103,5 +152,24 @@ pub(crate) mod test_adapter {
     pub(crate) fn poison(owner: &WitnessOwner) {
         let _guard = owner.state.lock().unwrap();
         panic!("deliberate native owner mutex poison");
+    }
+    pub(crate) fn snapshot_after_gate<R: Runtime>(
+        owner: &WitnessOwner,
+        webview: &Webview<R>,
+        held: Sender<()>,
+        release: Receiver<()>,
+    ) -> Result<SessionSnapshot, &'static str> {
+        let state = owner.state.lock().unwrap();
+        held.send(()).unwrap();
+        release.recv().unwrap();
+        let snapshot = state
+            .as_ref()
+            .map_err(|reason| *reason)?
+            .snapshot(webview)?;
+        if owner.is_refused() {
+            Err(SESSION_REFUSED)
+        } else {
+            Ok(snapshot)
+        }
     }
 }
