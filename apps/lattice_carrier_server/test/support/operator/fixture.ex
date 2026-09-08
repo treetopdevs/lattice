@@ -185,6 +185,18 @@ defmodule LatticeCarrierServer.Operator.Fixture do
   # genesis names different beacon witnesses.
   defp pin_child(sim, nil), do: Treehouse.ContinuationFixtures.pin(sim, author: "creator")
 
+  defp pin_child(sim, :reordered_witnesses) do
+    profile = Treehouse.ContinuationFixtures.profile(sim)
+
+    pin_child(sim, %{
+      mode: :witnessed,
+      version: 1,
+      witnesses: Enum.reverse(profile.witnesses),
+      threshold: profile.threshold,
+      max_epoch_step: 1
+    })
+  end
+
   defp pin_child(sim, beacon) do
     profile = Treehouse.ContinuationFixtures.profile(sim)
     root = Sim.identity(sim, "creator")

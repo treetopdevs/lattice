@@ -193,6 +193,12 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
              Staging.inspect_staged(hostile.retained, hostile.manifest)
   end
 
+  test "the reviewed witness set is accepted in any signed order", _f do
+    reordered = staged(pin_beacon: :reordered_witnesses)
+
+    assert :ok = Staging.inspect_staged(reordered.retained, reordered.manifest)
+  end
+
   test "an epoch-beacon policy on the child root genesis refuses", _f do
     hostile =
       staged(

@@ -261,9 +261,11 @@ defmodule LatticeCarrierServer.Operator.Staging do
   # genesis policy map also sources the epoch-beacon policy. Beacon witnesses
   # and threshold are therefore bound to the reviewed profile's own.
   defp reviewed_beacon_policy?(policies, profile) do
+    # The reviewed profile's witnesses are normalized (sorted); the pinned
+    # policy carries whatever order was signed, and the runtime sorts too.
     is_map(policies) and Enum.sort(Map.keys(policies)) == [:__beacon__, :__continuation__] and
       match?(%{mode: :witnessed}, policies.__beacon__) and
-      policies.__beacon__.witnesses == profile.witnesses and
+      Enum.sort(policies.__beacon__.witnesses) == profile.witnesses and
       policies.__beacon__.threshold == profile.threshold
   end
 

@@ -72,3 +72,71 @@ mutate/reopen only after obtaining the lock. This host has no available Linux
 Docker daemon, so actual Linux execution remains a hosted gate. Hosted tip and
 merge-result checks are also pending. Activation still requires a separately
 reviewed service quiesce/drain/acknowledgment seam and lifecycle reconciliation.
+
+## Hosted review repair (2026-09-08)
+
+Hosted review of tip `23add70a9` reported six inventory findings on the semantic
+staging inspection. All six were reproduced first as failing tests against the
+unchanged production module: 11 tests, 5 failures, and then the revised
+duplicate-Space fixture (the earlier one passed for the wrong reason) as the
+sixth. The repair replaces the previous per-artifact checks with one closed
+predicate in `LatticeCarrierServer.Operator.Staging.inspect_staged/2`:
+
+1. exactly one child log, one signed Space reference and one candidate manifest
+   per attempt, refused before any log is read;
+2. the child's authority operations are whitelisted to the pinned root genesis,
+   the reviewed continuation profile pin and the reviewed grant introductions,
+   whose honored active set must equal the reviewed inventory exactly;
+3. the referenced Space must have exactly one active history, and an unreadable
+   sibling instance log refuses instead of being skipped;
+4. a reference operation already present in that history is published, not
+   carrier pending;
+5. the candidate manifest reproduces the manifest health listener and every
+   existing instance configuration verbatim, excluding only the positional
+   `:ref` and the opaque identity wrapper, and adds exactly one instance;
+6. the admitted child's bootstrap transport peers are exactly the current Space
+   members plus the independently rooted child, and it declares no relay realms.
+
+Three independent Sol reviews were obtained. The first returned REVISE with a P0:
+a grant is not the only shape that introduces an active delegation, so a role
+transfer on the child log conferred an honored `:moderator` capability plus
+`:post` to an unreviewed key while staging returned `:ok`. That escape was
+reproduced as a test and closed by whitelisting authority rather than
+blacklisting grant shapes. The second review returned PASS and found that the
+reviewed `profile_id` digests only the continuation profile while any
+root-authored genesis policy map also sources the epoch-beacon policy: a
+candidate could keep a byte-identical reviewed profile id and name its own
+beacon witnesses, giving a party absent from the reviewed inventory a unilateral
+lapse over every reviewed grant. It also found that a candidate could open
+Plan 128 relay write ingress on the admitted child. Both were reproduced and
+closed; the child root genesis must now carry no policies at all. The third
+review returned PASS and found the beacon witness comparison was order
+sensitive against a normalized list, which would have refused an honest
+operator; that too was reproduced and corrected.
+
+One P2 was deliberately not taken: the fail-closed net around `inspect_staged/2`
+stays, because letting an exception escape into the staging lock owner's
+callback is worse than an imprecise refusal atom. It was widened from `rescue`
+to `catch` so throws and exits are covered as well.
+
+Two assertions changed meaning rather than being relaxed. An omitted grant now
+refuses as `:invalid_staged_signed_artifact` on the artifact itself instead of
+`:invalid_candidate_manifest` through the roster comparison, and the previously
+reachable `:invalid_child_admission`, `:reference_refused` and
+`:missing_space_history` atoms have no remaining production consumer.
+
+Focused checks passed 31 operator tests with zero failures and 12 explicit
+Linux-only skips. Root `mix check` exited zero on the repaired source: 1,061
+tests and 27 properties, zero failures, 12 Linux-only skips and three existing
+exclusions, with formatting and strict Credo clean
+(`/tmp/treehouse-operator-repair-root-check.log`). The first root run in this
+worktree reported 17 failures that were entirely environmental — a build root
+outside the worktree that the second-BEAM child processes could not resolve, and
+missing `clients/lattice-client` and `clients/treehouse-tauri-shell`
+dependencies. No production or assertion change was made to address them; the
+worktree was given its own build root and those dependencies were installed.
+
+Signed authority semantics are unchanged. Space-root membership is never
+manufactured, the result stays candidate only, and BEAM still writes no operator
+files. Linux mutation-owner execution, hosted tip and merge-result checks, and
+the separately reviewed quiesce/drain/acknowledgement seam remain open.
