@@ -86,8 +86,10 @@ defmodule LatticeCarrierServer.Operator.Staging do
          :ok <- verify_reference(bundle, space),
          :ok <- verify_candidate_manifest(bundle, manifest, space),
          do: :ok
-  rescue
-    _ -> {:error, :invalid_staged_signed_artifact}
+  catch
+    # Total, not only exceptions: a throw or exit escaping into the staging
+    # lock owner's callback would leave it without a refusal.
+    _kind, _reason -> {:error, :invalid_staged_signed_artifact}
   end
 
   # One attempt carries exactly one child, one signed Space reference and one
@@ -221,7 +223,11 @@ defmodule LatticeCarrierServer.Operator.Staging do
 
     with {:ok, %{log: log, sha256: digest}} <- Log.restore_verified(artifact.path),
          true <- digest == artifact.digest and log.replica == artifact.replica,
-         %Op{kind: :authority, body: {:genesis, _, _}, author: author} <- log.ops[artifact.op_id],
+         %Op{kind: :authority, body: {:genesis, _, root}, author: author} <-
+           log.ops[artifact.op_id],
+         # The reviewed profile pin is the candidate's only policy source; a
+         # root genesis policy would not be covered by the reviewed digest.
+         true <- root == %{},
          true <-
            is_binary(Authority.replica_commitment(log.replica)) and Authority.root(log) == author,
          {:ok, selected} <- Authority.continuation_profile(log),
@@ -231,6 +237,8 @@ defmodule LatticeCarrierServer.Operator.Staging do
          true <-
            selected.profile.product == :treehouse and selected.profile.kind == :thread and
              selected.profile.role == :moderator,
+         %Op{kind: :authority, body: {:genesis, _, pinned}} <- log.ops[r["profile_genesis"]],
+         true <- reviewed_beacon_policy?(pinned, selected.profile),
          analysis = Authority.analyze(Treehouse.Thread, log),
          true <- analysis.reasons == %{},
          %Op{kind: :command, body: {:create_thread, [_]}} <- log.ops[r["creation"]],
@@ -247,6 +255,16 @@ defmodule LatticeCarrierServer.Operator.Staging do
     else
       _ -> {:error, :invalid_staged_signed_artifact}
     end
+  end
+
+  # `profile_id` digests only the continuation profile, but any root-authored
+  # genesis policy map also sources the epoch-beacon policy. Beacon witnesses
+  # and threshold are therefore bound to the reviewed profile's own.
+  defp reviewed_beacon_policy?(policies, profile) do
+    is_map(policies) and Enum.sort(Map.keys(policies)) == [:__beacon__, :__continuation__] and
+      match?(%{mode: :witnessed}, policies.__beacon__) and
+      policies.__beacon__.witnesses == profile.witnesses and
+      policies.__beacon__.threshold == profile.threshold
   end
 
   defp reviewed_grants(review) do
@@ -282,6 +300,9 @@ defmodule LatticeCarrierServer.Operator.Staging do
          true <- admitted.log_file == child.path,
          {:ok, %{log: child_log}} <- Log.restore_verified(child.path),
          true <- bootstrap_peers_exact?(admitted, roster, child_log),
+         # Relay ingress is a separate reviewed decision, never a side effect
+         # of admitting a candidate child.
+         true <- admitted.relay_realms == [],
          true <- Enum.sort(Enum.map(child.review["grants"], & &1["recipient"])) == roster do
       :ok
     else

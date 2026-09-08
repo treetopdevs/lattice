@@ -6,7 +6,11 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
   alias LatticeCarrierServer.Operator.{Journal, Staging}
 
   setup do
-    {:ok, data} = LatticeCarrierServer.Operator.Fixture.new()
+    {:ok, staged()}
+  end
+
+  defp staged(opts \\ []) do
+    {:ok, data} = LatticeCarrierServer.Operator.Fixture.new(opts)
     f = Map.new(data)
 
     retained =
@@ -21,7 +25,7 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
       end)
 
     {:ok, manifest} = Manifest.load(f.request.active_manifest)
-    {:ok, Map.merge(f, %{retained: retained, manifest: manifest})}
+    Map.merge(f, %{retained: retained, manifest: manifest})
   end
 
   test "actual bounded child, profile, grant inventory and signed reference replay", f do
@@ -169,6 +173,52 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
 
     assert {:error, :invalid_staged_signed_artifact} =
              Staging.inspect_staged(f.retained ++ [child], f.manifest)
+  end
+
+  test "a reviewed profile pin carrying unreviewed beacon witnesses refuses", _f do
+    outsider = Lattice.Identity.from_seed("outsider", "operator-outsider").pub
+
+    hostile =
+      staged(
+        pin_beacon: %{
+          mode: :witnessed,
+          version: 1,
+          witnesses: [outsider],
+          threshold: 1,
+          max_epoch_step: 1
+        }
+      )
+
+    assert {:error, :invalid_staged_signed_artifact} =
+             Staging.inspect_staged(hostile.retained, hostile.manifest)
+  end
+
+  test "an epoch-beacon policy on the child root genesis refuses", _f do
+    hostile =
+      staged(
+        root_policies: %{
+          __beacon__: %{
+            mode: :witnessed,
+            version: 1,
+            witnesses: ["nominee"],
+            threshold: 1,
+            max_epoch_step: 1
+          }
+        }
+      )
+
+    assert {:error, :invalid_staged_signed_artifact} =
+             Staging.inspect_staged(hostile.retained, hostile.manifest)
+  end
+
+  test "candidate cannot open relay ingress on the admitted child", f do
+    candidate = candidate_json(f)
+    [old, child] = candidate["instances"]
+    child = Map.put(child, "relay_realms", ["member"])
+    retained = replace_candidate(f, Map.put(candidate, "instances", [old, child]))
+
+    assert {:error, :invalid_candidate_manifest} =
+             Staging.inspect_staged(retained, f.manifest)
   end
 
   test "candidate requires the independently rooted child as a bootstrap peer", f do

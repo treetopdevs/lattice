@@ -2,11 +2,12 @@ defmodule LatticeCarrierServer.Operator.Fixture do
   @moduledoc false
   import ExUnit.Assertions
   import ExUnit.Callbacks
+  alias Lattice.Authority.Delegation
   alias Lattice.Carrier.Wire
   alias Lattice.{Log, Sim}
   alias LatticeCarrierServer.Operator.{Journal, Staging}
 
-  def new do
+  def new(opts \\ []) do
     root = Path.expand(".operator-stage-#{System.unique_integer([:positive])}", File.cwd!())
     File.mkdir!(root)
     File.chmod!(root, 0o700)
@@ -37,7 +38,7 @@ defmodule LatticeCarrierServer.Operator.Fixture do
         ["creator", "nominee", "w1", "w2", "w3", "space-member"],
         seed: "independent-child"
       )
-      |> Sim.create_replica("creator")
+      |> Sim.create_replica("creator", policies: Keyword.get(opts, :root_policies, %{}))
 
     child = %{
       child
@@ -45,7 +46,7 @@ defmodule LatticeCarrierServer.Operator.Fixture do
     }
 
     {child, creation} = Sim.command(child, "creator", :create_thread, ["Branch"])
-    {child, pin, _} = Treehouse.ContinuationFixtures.pin(child, author: "creator")
+    {child, pin, _} = pin_child(child, Keyword.get(opts, :pin_beacon))
 
     {child, grant} =
       Sim.grant(child, "creator", "space-member",
@@ -176,5 +177,27 @@ defmodule LatticeCarrierServer.Operator.Fixture do
      space: space,
      updated_log: Sim.log(space_with_ref, "creator"),
      reference: reference}
+  end
+
+  # The honest pin is the shared continuation fixture. `pin_beacon` authors the
+  # same reviewed profile with a caller-chosen epoch-beacon policy instead, so a
+  # test can stage a child whose reviewed profile digest is unchanged while its
+  # genesis names different beacon witnesses.
+  defp pin_child(sim, nil), do: Treehouse.ContinuationFixtures.pin(sim, author: "creator")
+
+  defp pin_child(sim, beacon) do
+    profile = Treehouse.ContinuationFixtures.profile(sim)
+    root = Sim.identity(sim, "creator")
+    deleg = Delegation.genesis(root, sim.replica, ops: [], roles: [], live: false)
+
+    {sim, op} =
+      Sim.append(
+        sim,
+        root.realm_id,
+        :authority,
+        {:genesis, deleg, %{__continuation__: profile, __beacon__: beacon}}
+      )
+
+    {Sim.sync_all(sim), op, profile}
   end
 end
