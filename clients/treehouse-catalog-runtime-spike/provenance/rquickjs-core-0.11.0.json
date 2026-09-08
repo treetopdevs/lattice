@@ -1,0 +1,19 @@
+{
+  "crate": "rquickjs-core",
+  "version": "0.11.0",
+  "archive_sha256": "b8bf7840285c321c3ab20e752a9afb95548c75cd7f4632a0627cea3507e310c1",
+  "archive_file_count": 78,
+  "archive_uncompressed_bytes": 632108,
+  "vcs_commit": "c99675e50201d74554d0f667094f800e1287001b",
+  "vcs_path": "core",
+  "archive_manifest": "rquickjs-core-0.11.0-archive-files.sha256",
+  "original_raw_rs_sha256": "8799f18de9176757fcc5065a6a12963181a0d913529aae8d46e0cef8884dfb55",
+  "patch_file": "rquickjs-core-0.11.0-initialization.patch",
+  "patch_sha256": "2c0bbb4c34dc6038ce9e06e81e1dea578abd5dd13eeaa36080aca3ae2abc0346",
+  "patched_raw_rs_sha256": "7d41fcc9b0a8f786d9f4557c5cd604a80f1258adc7888112b01f6d672c8b0dc5",
+  "additive_license": {
+    "path": "vendor/rquickjs-core-0.11.0/LICENSE",
+    "source": "https://raw.githubusercontent.com/DelSkayn/rquickjs/c99675e50201d74554d0f667094f800e1287001b/LICENSE",
+    "sha256": "0517c7f76916dcc6557b3c0e1c077f14dd05bfe8e0d7d2a2fa298fe0d49a790a"
+  }
+}

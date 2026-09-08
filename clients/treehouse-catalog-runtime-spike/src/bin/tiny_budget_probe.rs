@@ -1,6 +1,8 @@
 //! Private child-process diagnostic for the pinned runtime initialization failure.
 use std::time::Duration;
-use treehouse_catalog_runtime_spike::{run_budget_fault_fixture, ExperimentLimits};
+use treehouse_catalog_runtime_spike::{
+    run_budget_fault_fixture, ExperimentLimits, RunFailure,
+};
 
 fn main() {
     let result = run_budget_fault_fixture(
@@ -14,5 +16,17 @@ fn main() {
         },
         None,
     );
-    println!("initialization returned: {result:?}");
+    match result {
+        Err(RunFailure::AllocationFailure {
+            stage,
+            accounting,
+            completed_output,
+        }) => {
+            assert_eq!(stage, "runtime initialization");
+            assert!(accounting.failed);
+            assert_eq!(accounting.live_bytes, 0);
+            assert_eq!(completed_output, None);
+        }
+        other => panic!("expected typed initialization refusal, got {other:?}"),
+    }
 }
