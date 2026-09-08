@@ -80,11 +80,46 @@ defmodule LatticeCarrierServer.Operator.Staging do
   @doc false
   @spec inspect_staged([map()], Manifest.t()) :: :ok | {:error, term()}
   def inspect_staged(retained, manifest) do
-    with :ok <- verify_artifacts(retained, manifest.instances),
-         :ok <- verify_candidate_manifest(retained, manifest),
+    with {:ok, bundle} <- classify(retained),
+         {:ok, space} <- unique_history(bundle.reference.replica, manifest.instances),
+         :ok <- verify_child(bundle.child),
+         :ok <- verify_reference(bundle, space),
+         :ok <- verify_candidate_manifest(bundle, manifest, space),
          do: :ok
   rescue
     _ -> {:error, :invalid_staged_signed_artifact}
+  end
+
+  # One attempt carries exactly one child, one signed Space reference and one
+  # candidate manifest. Any other shape is refused before any log is read.
+  defp classify(retained) when is_list(retained) do
+    case Enum.group_by(retained, & &1.kind) do
+      %{log: [child], reference: [reference], manifest: [manifest]} = kinds
+      when map_size(kinds) == 3 ->
+        {:ok, %{child: child, reference: reference, manifest: manifest}}
+
+      _ ->
+        {:error, :invalid_staged_signed_artifact}
+    end
+  end
+
+  defp classify(_), do: {:error, :invalid_staged_signed_artifact}
+
+  # The referenced Space must have exactly one active history. Two instances
+  # serving the same replica make roster and replay selection arbitrary.
+  defp unique_history(replica, instances) do
+    histories =
+      Enum.flat_map(instances, fn instance ->
+        case Log.restore_verified(instance.log_file) do
+          {:ok, %{log: %{replica: ^replica} = log}} -> [log]
+          _ -> []
+        end
+      end)
+
+    case histories do
+      [log] -> {:ok, log}
+      _ -> {:error, :invalid_candidate_manifest}
+    end
   end
 
   defp request_valid?(r) when is_map(r) do
@@ -103,7 +138,7 @@ defmodule LatticeCarrierServer.Operator.Staging do
       Enum.reduce(artifacts, 0, &(byte_size(&1.bytes) + &2)) <= @max_artifact and
       Enum.count(artifacts, &(&1.kind == :manifest)) == 1 and
       Enum.count(artifacts, &(&1.kind == :reference)) == 1 and
-      Enum.any?(artifacts, &(&1.kind == :log))
+      Enum.count(artifacts, &(&1.kind == :log)) == 1
   end
 
   defp artifacts_valid?(_), do: false
@@ -161,32 +196,21 @@ defmodule LatticeCarrierServer.Operator.Staging do
     end)
   end
 
-  defp verify_artifacts(artifacts, instances) do
-    Enum.reduce_while(artifacts, :ok, fn artifact, :ok ->
-      result =
-        case artifact.kind do
-          :manifest ->
-            :ok
-
-          :log ->
-            verify_child(artifact)
-
-          :reference ->
-            with {:ok, frame} <- Jason.decode(artifact.bytes),
-                 {:ok, op} <- Wire.decode_op(frame),
-                 true <-
-                   Op.valid?(op) and op.id == artifact.op_id and op.replica == artifact.replica,
-                 true <- op.kind == :command,
-                 {:create_thread, [child_replica, title]} <- op.body,
-                 true <-
-                   is_binary(title) and
-                     Enum.any?(artifacts, &(&1.kind == :log and &1.replica == child_replica)),
-                 :ok <- replay_reference(op, instances),
-                 do: :ok
-        end
-
-      if result == :ok, do: {:cont, :ok}, else: {:halt, {:error, :invalid_staged_signed_artifact}}
-    end)
+  defp verify_reference(%{reference: reference, child: child}, space) do
+    with {:ok, frame} <- Jason.decode(reference.bytes),
+         {:ok, op} <- Wire.decode_op(frame),
+         true <- Op.valid?(op) and op.id == reference.op_id and op.replica == reference.replica,
+         true <- op.kind == :command,
+         {:create_thread, [child_replica, title]} <- op.body,
+         true <- is_binary(title) and child_replica == child.replica,
+         # An op already present in the active history is published, not pending.
+         false <- Map.has_key?(space.ops, op.id),
+         {:ok, union} <- Log.accept(space, op),
+         false <- Map.has_key?(Authority.analyze(Treehouse.Space, union).reasons, op.id) do
+      :ok
+    else
+      _ -> {:error, :invalid_staged_signed_artifact}
+    end
   end
 
   defp verify_child(artifact) do
@@ -207,94 +231,67 @@ defmodule LatticeCarrierServer.Operator.Staging do
          analysis = Authority.analyze(Treehouse.Thread, log),
          true <- analysis.reasons == %{},
          %Op{kind: :command, body: {:create_thread, [_]}} <- log.ops[r["creation"]],
-         true <- Enum.all?(r["grants"], &valid_grant?(&1, log, analysis)) do
+         # The reviewed inventory is exact: every honored active grant the child
+         # log actually carries was reviewed, and nothing else was claimed.
+         true <- reviewed_grants(r) == honored_grants(log, analysis) do
       :ok
     else
-      _ -> {:error, :invalid_child_admission}
+      _ -> {:error, :invalid_staged_signed_artifact}
     end
   end
 
-  defp valid_grant?(review, log, analysis) do
-    case log.ops[review["introduction"]] do
-      %Op{kind: :authority, body: {:grant, d}} ->
-        Base.encode64(d.audience) == review["recipient"] and d.id == review["delegation"] and
-          not Map.has_key?(analysis.reasons, review["introduction"]) and
-          Authority.delegation_active?(log, d.id) and not Authority.revoked?(log, d.id)
-
-      _ ->
-        false
-    end
+  defp reviewed_grants(review) do
+    MapSet.new(review["grants"], &{&1["introduction"], &1["delegation"], &1["recipient"]})
   end
 
-  defp replay_reference(op, instances) do
-    Enum.reduce_while(instances, {:error, :missing_space_history}, fn instance, refusal ->
-      case Log.restore_verified(instance.log_file) do
-        {:ok, %{log: %{replica: replica} = log}} when replica == op.replica ->
-          {:halt, accept_reference(log, op)}
-
-        _ ->
-          {:cont, refusal}
-      end
-    end)
+  defp honored_grants(log, analysis) do
+    for {op_id, %Op{kind: :authority, body: {:grant, d}}} <- log.ops,
+        not Map.has_key?(analysis.reasons, op_id),
+        Authority.delegation_active?(log, d.id),
+        not Authority.revoked?(log, d.id),
+        into: MapSet.new(),
+        do: {op_id, d.id, Base.encode64(d.audience)}
   end
 
-  defp accept_reference(log, op) do
-    with {:ok, union} <- Log.accept(log, op),
-         false <- Map.has_key?(Authority.analyze(Treehouse.Space, union).reasons, op.id) do
-      :ok
-    else
-      _ -> {:error, :reference_refused}
-    end
-  end
-
-  defp verify_candidate_manifest(artifacts, active) do
-    manifest = Enum.find(artifacts, &(&1.kind == :manifest))
-    children = Enum.filter(artifacts, &(&1.kind == :log))
-    allowed = Enum.map(active.instances, & &1.log_file) ++ Enum.map(children, & &1.path)
-    reference = Enum.find(artifacts, &(&1.kind == :reference))
+  defp verify_candidate_manifest(%{manifest: manifest, child: child}, active, space) do
+    roster = Enum.sort(Enum.uniq(Enum.to_list(Lattice.state(Treehouse.Space, space).members)))
 
     with {:ok, candidate} <- Manifest.load(manifest.path),
-         true <- Enum.all?(candidate.instances, &(&1.log_file in allowed)),
-         true <-
-           Enum.all?(active.instances, fn old ->
-             Enum.any?(
-               candidate.instances,
-               &(&1.name == old.name and &1.log_file == old.log_file)
-             )
-           end),
-         {:ok, roster} <- current_roster(reference.replica, active.instances),
-         true <-
-           Enum.all?(children, fn child ->
-             reviewed = Enum.map(child.review["grants"], & &1["recipient"]) |> Enum.sort()
-
-             peers =
-               for instance <- candidate.instances,
-                   instance.log_file == child.path,
-                   {_realm, pub} <- instance.trusted_peers,
-                   do: Base.encode64(pub)
-
-             {:ok, %{log: child_log}} = Log.restore_verified(child.path)
-             child_root = Base.encode64(Authority.root(child_log))
-
-             Enum.all?(roster, &(&1 in peers)) and
-               Enum.all?(peers, &(&1 in roster or &1 == child_root)) and reviewed == roster
-           end) do
+         {:ok, admitted} <- admitted_instance(candidate.instances, active.instances),
+         true <- admitted.log_file == child.path,
+         {:ok, %{log: child_log}} <- Log.restore_verified(child.path),
+         true <- bootstrap_peers_exact?(admitted, roster, child_log),
+         true <- Enum.sort(Enum.map(child.review["grants"], & &1["recipient"])) == roster do
       :ok
     else
       _ -> {:error, :invalid_candidate_manifest}
     end
   end
 
-  defp current_roster(replica, instances) do
-    Enum.reduce_while(instances, {:error, :missing_space_history}, fn instance, refusal ->
-      case Log.restore_verified(instance.log_file) do
-        {:ok, %{log: %{replica: ^replica} = log}} ->
-          members = Lattice.state(Treehouse.Space, log).members |> Enum.to_list()
-          {:halt, {:ok, Enum.sort(Enum.uniq(members))}}
+  # The candidate adds exactly one instance and reproduces every existing
+  # instance configuration verbatim; only the positional ref and the opaque
+  # identity wrapper are excluded from that equality.
+  defp admitted_instance(candidate, active) do
+    proposed = Enum.map(candidate, &comparable/1)
+    existing = Enum.map(active, &comparable/1)
+    # One unmatched proposal out of exactly one extra instance means every
+    # existing configuration was matched, each consumed at most once.
+    with [only] <- proposed -- existing,
+         true <- length(proposed) == length(existing) + 1 do
+      {:ok, Enum.find(candidate, &(comparable(&1) == only))}
+    else
+      _ -> {:error, :invalid_candidate_manifest}
+    end
+  end
 
-        _ ->
-          {:cont, refusal}
-      end
-    end)
+  defp comparable(instance), do: Map.drop(instance, [:ref, :identity])
+
+  # Bootstrap transport peers are exactly the current Space members plus the
+  # independently rooted child; neither an omission nor an extra is accepted.
+  defp bootstrap_peers_exact?(instance, roster, child_log) do
+    peers =
+      for {_realm, pub} <- instance.trusted_peers, into: MapSet.new(), do: Base.encode64(pub)
+
+    MapSet.equal?(peers, MapSet.new([Base.encode64(Authority.root(child_log)) | roster]))
   end
 end

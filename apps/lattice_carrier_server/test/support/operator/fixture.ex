@@ -123,6 +123,17 @@ defmodule LatticeCarrierServer.Operator.Fixture do
     File.chmod!(child_identity, 0o600)
     next_instance = %{next_instance | "identity_file" => child_identity}
 
+    next_instance =
+      Map.update!(next_instance, "trusted_peers", fn peers ->
+        peers ++
+          [
+            %{
+              "realm" => "child-root",
+              "pubkey" => Base.encode64(Sim.identity(child, "creator").pub)
+            }
+          ]
+      end)
+
     artifacts = [
       %{
         kind: :log,
@@ -161,6 +172,8 @@ defmodule LatticeCarrierServer.Operator.Fixture do
      artifacts: artifacts,
      active_log: active_log,
      active_bytes: File.read!(active_log),
+     child: child,
+     space: space,
      updated_log: Sim.log(space_with_ref, "creator"),
      reference: reference}
   end
