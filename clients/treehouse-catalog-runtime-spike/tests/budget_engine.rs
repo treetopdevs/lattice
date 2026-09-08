@@ -85,13 +85,11 @@ fn uncaught_exhaustion_is_a_sticky_resource_failure() {
     );
 }
 
-/// Failed adoption gate: rquickjs0.11 calls JS_SetDumpFlags before checking
-/// JS_NewRuntime2 for null. Characterize the real crash in a separate process;
-/// no patch, minimum-budget workaround, or successful runtime claim.
+/// The 64-byte cap must reach the real runtime constructor and return a typed
+/// resource refusal without producing guest output or crashing the process.
 #[cfg(unix)]
 #[test]
-fn initialization_budget_gate_fails_in_the_pinned_runtime() {
-    use std::os::unix::process::ExitStatusExt;
+fn initialization_budget_refuses_without_crashing() {
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_tiny_budget_probe"))
         .output()
         .expect("start private initialization probe");
@@ -99,7 +97,16 @@ fn initialization_budget_gate_fails_in_the_pinned_runtime() {
         output.stdout.is_empty(),
         "initialization must not return a guest result"
     );
-    assert_eq!(output.status.signal(), Some(11),
-        "re-evaluate the failed initialization gate if the pinned runtime stops crashing: status={:?}, stdout={}, stderr={}",
-        output.status, String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "initialization must return a typed refusal: status={:?}, stdout={}, stderr={}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        output.stderr.is_empty(),
+        "successful refusal must not emit diagnostics: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }

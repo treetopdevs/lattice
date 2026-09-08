@@ -1,0 +1,42 @@
+--- a/src/runtime/raw.rs
++++ b/src/runtime/raw.rs
+@@ -145,11 +145,16 @@
+     pub unsafe fn new_base(mut opaque: Opaque<'static>) -> Result<Self> {
+         let rt = qjs::JS_NewRuntime();
+ 
+-        Self::add_dump_flags(rt);
+-
+         let rt = NonNull::new(rt).ok_or(Error::Allocation)?;
+ 
+-        opaque.initialize(rt.as_ptr())?;
++        Self::add_dump_flags(rt.as_ptr());
++
++        if let Err(error) = opaque.initialize(rt.as_ptr()) {
++            // No runtime opaque or Rust class instances have been installed yet.
++            // Keep the allocator holder alive until all runtime blocks are freed.
++            qjs::JS_FreeRuntime(rt.as_ptr());
++            return Err(error);
++        }
+ 
+         let opaque = Box::into_raw(Box::new(opaque));
+         unsafe { qjs::JS_SetRuntimeOpaque(rt.as_ptr(), opaque as *mut _) };
+@@ -173,11 +178,16 @@
+ 
+         let rt = qjs::JS_NewRuntime2(&functions, opaque_ptr as _);
+ 
+-        Self::add_dump_flags(rt);
+-
+         let rt = NonNull::new(rt).ok_or(Error::Allocation)?;
+ 
+-        opaque.initialize(rt.as_ptr())?;
++        Self::add_dump_flags(rt.as_ptr());
++
++        if let Err(error) = opaque.initialize(rt.as_ptr()) {
++            // No runtime opaque or Rust class instances have been installed yet.
++            // Keep the allocator holder alive until all runtime blocks are freed.
++            qjs::JS_FreeRuntime(rt.as_ptr());
++            return Err(error);
++        }
+ 
+         let opaque = Box::into_raw(Box::new(opaque));
+         unsafe { qjs::JS_SetRuntimeOpaque(rt.as_ptr(), opaque as *mut _) };
