@@ -109,10 +109,13 @@ defmodule LatticeCarrierServer.Operator.Staging do
   # serving the same replica make roster and replay selection arbitrary.
   defp unique_history(replica, instances) do
     histories =
-      Enum.flat_map(instances, fn instance ->
+      Enum.reduce_while(instances, [], fn instance, matches ->
         case Log.restore_verified(instance.log_file) do
-          {:ok, %{log: %{replica: ^replica} = log}} -> [log]
-          _ -> []
+          # An unreadable sibling could otherwise make an ambiguous manifest
+          # look unique, so it refuses instead of being skipped.
+          {:ok, %{log: %{replica: ^replica} = log}} -> {:cont, [log | matches]}
+          {:ok, _other_replica} -> {:cont, matches}
+          _ -> {:halt, :unreadable}
         end
       end)
 
@@ -233,7 +236,13 @@ defmodule LatticeCarrierServer.Operator.Staging do
          %Op{kind: :command, body: {:create_thread, [_]}} <- log.ops[r["creation"]],
          # The reviewed inventory is exact: every honored active grant the child
          # log actually carries was reviewed, and nothing else was claimed.
-         true <- reviewed_grants(r) == honored_grants(log, analysis) do
+         reviewed = reviewed_grants(r),
+         true <- reviewed == honored_grants(log, analysis),
+         # Grants are not the only authority shape. A transfer or succession
+         # also introduces an active delegation, so authority is whitelisted:
+         # the pinned genesis, the reviewed profile pin and the reviewed grant
+         # introductions are the only authority operations a candidate carries.
+         true <- authority_closed?(log, artifact, reviewed) do
       :ok
     else
       _ -> {:error, :invalid_staged_signed_artifact}
@@ -242,6 +251,17 @@ defmodule LatticeCarrierServer.Operator.Staging do
 
   defp reviewed_grants(review) do
     MapSet.new(review["grants"], &{&1["introduction"], &1["delegation"], &1["recipient"]})
+  end
+
+  defp authority_closed?(log, artifact, reviewed) do
+    allowed =
+      MapSet.new([artifact.op_id, artifact.review["profile_genesis"]])
+      |> MapSet.union(MapSet.new(reviewed, &elem(&1, 0)))
+
+    Enum.all?(log.ops, fn
+      {op_id, %Op{kind: :authority}} -> MapSet.member?(allowed, op_id)
+      _ -> true
+    end)
   end
 
   defp honored_grants(log, analysis) do
@@ -257,6 +277,7 @@ defmodule LatticeCarrierServer.Operator.Staging do
     roster = Enum.sort(Enum.uniq(Enum.to_list(Lattice.state(Treehouse.Space, space).members)))
 
     with {:ok, candidate} <- Manifest.load(manifest.path),
+         true <- candidate.health == active.health,
          {:ok, admitted} <- admitted_instance(candidate.instances, active.instances),
          true <- admitted.log_file == child.path,
          {:ok, %{log: child_log}} <- Log.restore_verified(child.path),

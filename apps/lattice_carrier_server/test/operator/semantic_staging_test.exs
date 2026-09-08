@@ -145,6 +145,25 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
              )
   end
 
+  test "an honored role transfer outside the reviewed inventory refuses", f do
+    [child | rest] = f.retained
+
+    {transferred, _deleg} =
+      Lattice.Sim.transfer(f.child, "creator", "nominee", :moderator,
+        ops: [:post],
+        expires_epoch: 7
+      )
+
+    :ok = Log.dump(Lattice.Sim.log(transferred, "creator"), child.path)
+    bytes = File.read!(child.path)
+
+    assert {:error, :invalid_staged_signed_artifact} =
+             Staging.inspect_staged(
+               [%{child | bytes: bytes, digest: Journal.digest(bytes)} | rest],
+               f.manifest
+             )
+  end
+
   test "one attempt refuses a second child without its own signed Space reference", f do
     [child | _] = f.retained
 
