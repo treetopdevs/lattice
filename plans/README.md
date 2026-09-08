@@ -1416,3 +1416,14 @@ Recorded so they are not re-audited next run. Each was opened and read during ve
   acting.
 - No plan modifies code outside its declared Scope, pushes, or opens PRs unless you
   instruct it. The advisor (this skill) wrote only the files under `plans/`.
+
+## Proposed Treehouse delivery roadmap (2026-09-05)
+
+[Treehouse delivery roadmap](roadmaps/treehouse-delivery-2026-09-04.md) breaks the
+group-first destination into R01–R36 with dependencies, operator gates and evidence tiers.
+[HTML summary](roadmaps/treehouse-delivery-2026-09-04.html) and the complete
+[Claude Opus review/disposition](roadmaps/treehouse-delivery-2026-09-05-opus-review.md)
+accompany it. This is a proposed execution map, not an additional set of DONE claims.
+R01 owns adoption, source-plan backlinks and explicit scoped un-parking; the existing
+status rows, product contracts and parked boundaries remain in force until their named
+approval gates are met.
