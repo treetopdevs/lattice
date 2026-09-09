@@ -17,6 +17,16 @@ centerless-operation claim.
   read time; refresh it before opening this PR. The working checkout
   `claude/lucid-cerf-6af5a8` (`9601f146`) is 51 commits behind and was not used as the baseline;
   every fact below was read from `origin/main`.
+- **Catalog-status correction (2026-09-09)**: this branch's actual git parent is `495cf3b9c`
+  (PR #86, PR #87's catalog candidate store, and PR #88's native validator, all merged after the
+  `af84459b` read). At `495cf3b9c`, `Treehouse.TransportCatalog`, `Treehouse.CatalogBootstrap` and
+  `Treehouse.CatalogTrust` (signed catalog bytes, bootstrap observation, and pure candidate trust
+  decisions) already exist, plus a native candidate-only CAS persistence module
+  (`clients/treehouse-tauri-shell/src-tauri/src/catalog_store.rs`); see
+  `TREEHOUSE_HANDOFF_2026-09-07.md:76-83`. Only the "Wave A2 replica catalog" row below and the A2b
+  chunk are refreshed against `495cf3b9c` to correct this; every other row in "Where main stands"
+  is left exactly as read at `af84459b` on 2026-09-04 and should be treated as a historical
+  point-in-time snapshot, re-read before relying on it.
 - **Lands with**: this file, `plans/180-group-first-roadmap.html` (a lossy one-page summary of
   this roadmap; this file is the full text) and one appended row in `plans/README.md` (proposed text at the end of this file).
   Open the PR from a fresh branch at `origin/main`, not from the stale checkout.
@@ -31,7 +41,7 @@ Plan 177's intention, made checkable. "There" is all six of these, each with evi
 | E2 Three loss gates | AF-1, AF-2 and AF-3 each have a merged green `Lattice.Sim` loss test mirrored in both runtimes, and AF-1 has a user-facing reseed path | AF-1 green (`relay_reseed_test.exs`); AF-2 fails by design (Plan 179 step 1 merged, steps 2 to 9 open); AF-3 has no design |
 | E3 Toolshed as a module | The Plan 158 isolation contract carries the operator countersign; custody v2 is green in both runtimes; the custody ledger read model renders facts only (D2) with a subject-present presentation flow | countersign absent; custody v1 only; `read_model.ex` reads one Tool log |
 | E4 Rollover (D3) | The instrument measures per-thread ops, bytes and cold-open time against 4,000 / 8 MiB / 5 s and offers `archive thread` plus `create thread` | policy only; the frozen vocabulary has no `archive thread` |
-| E5 Honest copy (D1) | Every hosting sentence names who can read and who can withhold; no founder-loss claim precedes AF-2; the ledgers say what merged | one-pager corrected; Plan 158 still carries the superseded order; README rows 152, 158, 177 stale |
+| E5 Honest copy (D1) | Every hosting sentence names who can read and who can withhold; no founder-loss claim precedes both AF-2 and AF-3; the ledgers say what merged | one-pager corrected; Plan 158 still carries the superseded order; README rows 152, 158, 177 stale |
 | E6 Member-operated relay | Plan 150 host mode exists as a privacy option with D1 copy, without LAN discovery | Plan 150 TODO; Plan 152 says BLOCKED rather than superseded |
 
 Outside "there", by the `CLAUDE.md` boundary and Plan 177: federation and cross-space identity
@@ -45,7 +55,7 @@ Outside "there", by the `CLAUDE.md` boundary and Plan 177: federation and cross-
 | Wave A1 shared foundation | closed: pilot carrier runtime, product isolation and migrations, signed Android distribution plus Device A harness | PRs #45, #48, #49, the Android distribution closure commits, #56; `apps/lattice_carrier_server/lib/*` (health, durability, manifest, release) |
 | Wave A2 policy context | closed: `command_op_status/3`, causal context, `command_conflicts/3`, TS parity, adversarial vectors | PR #51 |
 | Wave A2 WSS deployment | not started; blocked on operator inputs (host, DNS, TLS, backup destination, secrets custody) | no deployment files in the tree |
-| Wave A2 replica catalog | not started | no catalog or `pilotctl` code in the tree |
+| Wave A2 replica catalog | partially started (refreshed against `495cf3b9c`, not `af84459b`) | `Treehouse.TransportCatalog`, `CatalogBootstrap` and `CatalogTrust` (signed catalog bytes, bootstrap observation, pure candidate trust decisions) plus native candidate-only CAS persistence (`catalog_store.rs`) exist from PR #87; no `pilotctl` CLI task, no durable provisioning saga, no storage/CAS wiring beyond the native candidate, and no installed trust or route activation |
 | Wave A3 camera and links | not started | no `CAMERA` declaration or permission bridge |
 | Plan 177 re-aim | merged (PR #52) but the README row and the plan header still say DRAFT/TODO | `plans/README.md` row 177 |
 | Plan 178 contract | merged (PR #53); README row DONE; plan header still says DRAFT | `apps/lattice_core/test/treehouse/contract_test.exs` |
@@ -259,15 +269,23 @@ is about availability, E2EE, hosting or a device.
 ## Phase 3: AF-3, member device loss
 
 - **3.1 Spike (new Plan 182, docs only, Plan 175 shape).** Questions it must answer with existing
-  op kinds only: the vouch artifact (a threshold certificate by current members over `(replica,
-  old_pub, new_pub, epoch)`, reusing the `SuccessionCertificate` pattern, carried inside an
-  existing kind); who signs the new key's grants (the admin, exact-audience, through the ordinary
-  admit path); what happens to the old key (its grants revoked by their issuers or lapsed by lease,
-  which is where D4 matters again, and a `:tombstone` whose semantics for an identity are defined);
-  how history is linked (a projection fact "new key vouched for old key by these members", D2,
-  never a score); the TypeScript mirror; and the negative controls (subthreshold vouch, vouch for
-  a key that was never a member, replayed vouch, vouch signed by removed members). STOP: any old-key
-  re-signing (M3), any cross-space registry (M6), any new op kind.
+  op kinds only, applying Plan 177's already-adopted R19a correction
+  (`plans/177-group-first-antifragile-reaim.md:278-293`,
+  `docs/research/member_device_loss.md`): the vouch artifact (a threshold certificate by current
+  members over `(replica, old_pub, new_pub, epoch)`, reusing the `SuccessionCertificate` pattern,
+  carried inside an existing kind); who signs the new key's grants (the admin, exact-audience,
+  through the ordinary admit path); what happens to the old key (a signed old/new-key continuity
+  statement links it to the new key in the retained log, never Core's root-only, replica-wide
+  `:tombstone` op, which `authority.ex:927-933` shows is neither member-key-scoped nor an identity
+  primitive and which R19a forbids invoking here; each of the old key's grants is revoked by its
+  actual issuer or the root, or lapses by lease, which is where D4 matters again; membership
+  removal and transport removal are explicit independent actions; any grant no eligible issuer or
+  root can revoke and that carries no lease stays an explicitly visible unresolved item, never
+  assumed resolved by the vouch alone); how history is linked (a projection fact "new key vouched
+  for old key by these members", D2, never a score); the TypeScript mirror; and the negative
+  controls (subthreshold vouch, vouch for a key that was never a member, replayed vouch, vouch
+  signed by removed members). STOP: any old-key re-signing (M3), any cross-space registry (M6),
+  any new op kind, any use of `:tombstone` for identity or member-key semantics.
 - **3.2 Build (new Plan 183).** Sim tests in both runtimes: a member loses its device, creates a
   new key, k members co-sign the vouch, the admin admits the new key, the old key's causally later
   post is quarantined, the projection links both keys, every replica materializes byte-identically;
@@ -321,10 +339,16 @@ Claims after 3.2: "re-admission after member device loss by group attestation is
 - **4.3 Catalog-coupled lifecycle and the D1 integration PR.** `create thread` runs the A2b saga
   and publishes the Space reference only after the route is ready; the join bundle carries both
   current sets plus per-Thread admissions and exact-audience grants; `remove member` revokes
-  Space and Thread grants and transport admission with `removal_pending` until reconciliation;
-  missing, extra and mismatched routes do not change semantic visibility. This is the merge
-  point: Plan 158 lists the catalog as a parent of the Treehouse domain, so 4.1, 4.2 and 4.3 land
-  as one parity-atomic PR after A2b and 1.6 are on `main`.
+  transport admission immediately, but a Space or Thread grant is revocable only by that
+  delegation's actual issuer or the replica root (`authority.ex:936-957`): the current Space
+  admin cannot revoke a grant issued by a predecessor admin or another member merely by removing
+  membership, an issue that surfaces after an admin handoff or founder loss. So `remove member`
+  requests, per grant, either the actual issuer's or root's revocation signature or a proven lease
+  lapse, and each grant that has neither stays an explicitly visible `removal_pending` item, never
+  assumed resolved by generic reconciliation; missing, extra and mismatched routes do not change
+  semantic visibility. This is the merge point: Plan 158 lists the catalog as a parent of the
+  Treehouse domain, so 4.1, 4.2 and 4.3 land as one parity-atomic PR after A2b and 1.6 are on
+  `main`.
 
 Claims after 4.3: "Treehouse membership, roles, invitations, posts, edits, tombstones, rollover
 and witnessed admin succession are deterministic through partition, heal, dump and restore in both
@@ -465,8 +489,8 @@ What may be said, and only after the named merge:
 | 1.6 | in Sim, a pinned witness set advances the epoch after the founder realm is removed; admission through a pre-loss delegated capability; revocation by a surviving issuer; lease lapse for leased founder-issued grants | founder loss is survived (Plan 177 STOP: not before AF-2 and AF-3 both pass); founder-granted access is revocable; anything on a device |
 | 3.2 | a member with a new key is re-admitted by group attestation in Sim | recovery, rotation, cross-space identity |
 | 4.3 | Treehouse semantics are deterministic in both runtimes; witnessed admin succession is domain evidence with the successor's self-issued ops unbounded until 2.1 | a product exists; anything about succession on a device |
-| 5.2 | a packaged Treehouse app converges with Sim over the stable relay | phones, availability |
-| 6.1 | two unrelated phones converge over public WSS | a pilot happened |
+| 5.2 | a packaged Treehouse app converges with Sim over the stable relay, whose operator can read the log and can withhold availability | phones, availability |
+| 6.1 | two unrelated phones converge over public WSS, whose operator can read the log and can withhold availability | a pilot happened |
 | 6.2 | one assisted two-week pilot completed with named readers and a withholding host | the prohibited Plan 178 phrases, E2EE, availability, safe unbounded history |
 | 7.4 | the audit trail is the reputation, rendered as facts | score, karma, rating, any aggregate |
 | 8.1 | a member can host the relay and its readers are enumerated | centerless operation, the prohibited hosting phrases |

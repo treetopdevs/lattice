@@ -219,6 +219,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 177 | Group-first antifragile re-aim: operator decisions, AF-1..AF-3 loss gates, program reorder | **P0** | M | 158, 175 | DONE (program amendment and AF-1 runtime test merged; AF-2/AF-3 remain open; unified roadmap owns execution) |
 | 178 | Treehouse Contract Correction: frozen text-only beta contract, one-pager claims corrected to D1/AF-2, copy pinned by test | **P0** | S | 158, 177 | DONE (2026-09-03; lands with apps/lattice_core/test/treehouse/contract_test.exs) |
 | 179 | Witnessed beacons pinned at genesis (AF-2 founder-loss clock) | P1 | S then L | 145, 149, 162, 177, 178 | DONE (PR68 final 5d5e0560; Fable/Sol reviews passed; full source 747 tests + 27 properties; final tip 34067997116 and merge 6f0a555a / run 34068926435 passed. Narrow Core beacon/admission/revocation/lapse proof; general founder survival and physical ceremonies remain later unified gates) |
+| 180 | Group-first roadmap: chunked schedule from the corrected map to the Treehouse two-week pilot (AF-2 and AF-3 builds, Toolshed as a module, D3 rollover, host option) | **P0** | S | 158, 177, 178, 179 | DRAFT (2026-09-04; schedule only, no code; superseded in execution by the unified delivery plan, `plans/roadmaps/treehouse-unified-2026-09-06.md`) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

@@ -171,6 +171,7 @@
     <span>baseline <b>origin/main af84459b</b></span>
     <span>read <b>2026-09-04</b></span>
     <span>open PRs <b>none at read time</b></span>
+    <span>catalog status refreshed <b>2026-09-09 against 495cf3b9c</b></span>
     <span>this page is a summary; full text <b>plans/180-group-first-roadmap.md</b></span>
   </div>
 </header>
@@ -203,7 +204,7 @@
     </article>
     <article class="gate partial">
       <div class="id">E5</div><h3>Honest copy (D1)</h3>
-      <p class="must">Every hosting sentence names who can read and who can withhold; no founder-loss claim precedes AF-2; the ledgers say what merged.</p>
+      <p class="must">Every hosting sentence names who can read and who can withhold; no founder-loss claim precedes both AF-2 and AF-3; the ledgers say what merged.</p>
       <p class="today"><b>Partial</b> One-pager corrected. Plan 158 still carries the superseded order; README rows 152, 158, 177 are stale.</p>
     </article>
     <article class="gate open">
@@ -217,14 +218,14 @@
 <section id="state">
   <div class="sec-head">
     <h2>Where main stands</h2>
-    <p>Read from <code>origin/main</code> at <code>af84459b</code>. The working checkout is 51 commits behind and was not used.</p>
+    <p>Read from <code>origin/main</code> at <code>af84459b</code>, except the catalog row below, refreshed 2026-09-09 against this branch's actual parent <code>495cf3b9c</code>. The working checkout is 51 commits behind and was not used. Every other row here is a historical point-in-time snapshot; re-read before relying on it.</p>
   </div>
   <div class="ledger">
     <dl>
       <div class="row"><dt>Wave A1</dt><dd><span class="pill done">closed</span>Pilot carrier runtime, product isolation and migrations, signed Android distribution plus the Device A harness. PRs #45, #48, #49, the distribution closure, #56.</dd></div>
       <div class="row"><dt>Wave A2 policy</dt><dd><span class="pill done">closed</span><code>command_op_status/3</code>, causal context, full-frontier conflicts, TypeScript parity, adversarial vectors. PR #51.</dd></div>
       <div class="row"><dt>Wave A2 WSS</dt><dd><span class="pill ext">operator</span>Deployment and recovery not started; needs a host, DNS, TLS, a backup destination and secrets custody.</dd></div>
-      <div class="row"><dt>Wave A2 catalog</dt><dd><span class="pill open">open</span>No signed transport catalog or <code>pilotctl</code> code in the tree.</dd></div>
+      <div class="row"><dt>Wave A2 catalog</dt><dd><span class="pill part">partial</span><code>TransportCatalog</code>, <code>CatalogBootstrap</code> and <code>CatalogTrust</code> (signed bytes, bootstrap observation, pure trust decisions) plus native candidate-only CAS (<code>catalog_store.rs</code>) exist from PR #87; no <code>pilotctl</code>, saga, storage/CAS wiring beyond the native candidate, or installed trust/route activation.</dd></div>
       <div class="row"><dt>Wave A3 camera</dt><dd><span class="pill open">open</span>No <code>CAMERA</code> declaration or permission bridge yet.</dd></div>
       <div class="row"><dt>Substrate</dt><dd><span class="pill part">mixed</span>172 in flight in a Codex worktree; 146 at Seam 11; 164, 166, 167, 170, 171, 173, 174, 176 TODO.</dd></div>
     </dl>
@@ -517,8 +518,8 @@
       <tr><td class="after">1.6</td><td>In Sim, a pinned witness set advances the epoch after the founder realm is removed; admission through a pre-loss delegated capability; revocation by a surviving issuer; lease lapse for leased founder-issued grants.</td><td class="no">Founder loss is survived (not before AF-2 and AF-3 both pass). Founder-granted access is revocable. Anything on a device.</td></tr>
       <tr><td class="after">3.2</td><td>A member with a new key is re-admitted by group attestation in Sim.</td><td class="no">Recovery, rotation, cross-space identity.</td></tr>
       <tr><td class="after">4.3</td><td>Treehouse semantics are deterministic in both runtimes; witnessed admin succession is domain evidence with the successor's self-issued ops unbounded until 2.1.</td><td class="no">A product exists. Anything about succession on a device.</td></tr>
-      <tr><td class="after">5.2</td><td>A packaged Treehouse app converges with Sim over the stable relay.</td><td class="no">Phones. Availability.</td></tr>
-      <tr><td class="after">6.1</td><td>Two unrelated phones converge over public WSS.</td><td class="no">A pilot happened.</td></tr>
+      <tr><td class="after">5.2</td><td>A packaged Treehouse app converges with Sim over the stable relay, whose operator can read the log and can withhold availability.</td><td class="no">Phones. Availability.</td></tr>
+      <tr><td class="after">6.1</td><td>Two unrelated phones converge over public WSS, whose operator can read the log and can withhold availability.</td><td class="no">A pilot happened.</td></tr>
       <tr><td class="after">6.2</td><td>One assisted two-week pilot completed, with the relay's readers named and its host able to withhold.</td><td class="no">The Plan 178 prohibited phrases, E2EE, availability, safe unbounded history.</td></tr>
       <tr><td class="after">7.4</td><td>The audit trail is the reputation, rendered as facts.</td><td class="no">Score, karma, rating, any aggregate.</td></tr>
       <tr><td class="after">8.1</td><td>A member can host the relay and its readers are enumerated.</td><td class="no">Centerless operation. The prohibited hosting phrases.</td></tr>
