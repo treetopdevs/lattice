@@ -8,15 +8,30 @@ defmodule LatticeCarrierServer.Operator.Journal do
   An ambiguous file or failed sync is retained for explicit reconciliation.
   """
   import Bitwise
+  alias Jason.OrderedObject
   alias LatticeCarrierServer.Operator.Lock
   @fields ~w(version phase attempt generation catalog_head manifest_digest artifacts)
   @artifact_fields ~w(kind op_id path replica review sha256)
+  @review_fields ~w(creation grants profile_genesis profile_id)
+  @grant_fields ~w(delegation introduction recipient)
   @max_bytes 1_048_576
 
+  # System.cmd/3 raises on a nonzero exit and ErlangError when `id` cannot run
+  # at all; both must become a closed refusal rather than escaping this guard.
   @spec secure_root(Path.t()) :: :ok | {:error, term()}
   def secure_root(root) do
-    {uid, 0} = System.cmd("id", ["-u"])
-    secure_directory(Path.expand(root), String.to_integer(String.trim(uid)))
+    case System.cmd("id", ["-u"], stderr_to_stdout: true) do
+      {uid, 0} ->
+        case Integer.parse(String.trim(uid)) do
+          {value, ""} -> secure_directory(Path.expand(root), value)
+          _ -> {:error, :unsafe_operator_directory}
+        end
+
+      _ ->
+        {:error, :unsafe_operator_directory}
+    end
+  rescue
+    ErlangError -> {:error, :unsafe_operator_directory}
   end
 
   defp secure_directory(path, uid) do
@@ -39,7 +54,13 @@ defmodule LatticeCarrierServer.Operator.Journal do
 
         {:ok, %{type: :regular, mode: mode, links: 1, size: size}}
         when band(mode, 0o077) == 0 and size <= @max_bytes ->
-          with {:ok, raw} <- File.read(path(root)), {:ok, _} <- decode(raw), do: {:ok, raw}
+          with {:ok, raw} <- File.read(path(root)),
+               {:ok, record} <- decode(raw),
+               true <- artifacts_contained?(record, root) do
+            {:ok, raw}
+          else
+            _ -> {:error, :corrupt_operator_journal}
+          end
 
         _ ->
           {:error, :corrupt_operator_journal}
@@ -51,7 +72,7 @@ defmodule LatticeCarrierServer.Operator.Journal do
   def decode(raw) when is_binary(raw) and byte_size(raw) <= @max_bytes do
     with {:ok, record} <- Jason.decode(raw),
          true <- valid?(record),
-         true <- Jason.encode!(record) == raw do
+         true <- Jason.encode!(canonical(record)) == raw do
       {:ok, record}
     else
       _ -> {:error, :corrupt_operator_journal}
@@ -62,11 +83,63 @@ defmodule LatticeCarrierServer.Operator.Journal do
 
   @spec compare_and_set(Path.t(), binary() | nil, map()) :: :ok | {:error, term()}
   def compare_and_set(root, expected, next) do
-    if valid?(next) do
-      Lock.commit(root, expected, Jason.encode!(next))
+    if valid?(next) and artifacts_contained?(next, root) do
+      Lock.commit(root, expected, encode(next))
     else
       {:error, :corrupt_operator_journal}
     end
+  end
+
+  # `Lock.stage/6`'s own commit step must serialize a completed record through
+  # this exact canonical order too — any independent `Jason.encode!/1` there
+  # would (re)introduce the incidental-key-order fragility `canonical/1`
+  # exists to close, since `decode/1` verifies against this same output.
+  @spec encode(map()) :: binary()
+  def encode(record), do: Jason.encode!(canonical(record))
+
+  # Jason does not guarantee ordinary map key order (it is at the mercy of
+  # `:maps.to_list/1`), so a future Elixir/Jason change could otherwise flip
+  # the byte-for-byte comparison this journal relies on for `decode/1` and
+  # `compare_and_set/3`. Every object this journal writes or re-verifies is
+  # therefore rebuilt with an explicit, fixed field order before encoding.
+  defp canonical(record) do
+    OrderedObject.new(Enum.map(@fields, &{&1, canonical_field(&1, record[&1])}))
+  end
+
+  defp canonical_field("artifacts", artifacts), do: Enum.map(artifacts, &canonical_artifact/1)
+  defp canonical_field(_key, value), do: value
+
+  defp canonical_artifact(a) do
+    OrderedObject.new(Enum.map(@artifact_fields, &{&1, canonical_artifact_field(&1, a[&1])}))
+  end
+
+  defp canonical_artifact_field("review", review), do: canonical_review(review)
+  defp canonical_artifact_field(_key, value), do: value
+
+  defp canonical_review(nil), do: nil
+
+  defp canonical_review(review) do
+    OrderedObject.new(Enum.map(@review_fields, &{&1, canonical_review_field(&1, review[&1])}))
+  end
+
+  defp canonical_review_field("grants", grants), do: Enum.map(grants, &canonical_grant/1)
+  defp canonical_review_field(_key, value), do: value
+
+  defp canonical_grant(g), do: OrderedObject.new(Enum.map(@grant_fields, &{&1, g[&1]}))
+
+  # An artifact path is trusted content once it is in the journal: `Staging`
+  # joins every attempt path under the operator root, and nothing else should
+  # ever be able to persist a record naming a path elsewhere. Reject anything
+  # that is not already a normalized (no `..`/`.` segments), strictly
+  # root-contained path, both when writing and when re-trusting a stored one.
+  defp artifacts_contained?(record, root) do
+    base = Path.expand(root)
+
+    Enum.all?(record["artifacts"], fn artifact ->
+      path = artifact["path"]
+
+      is_binary(path) and Path.expand(path) == path and String.starts_with?(path, base <> "/")
+    end)
   end
 
   defp valid?(r) when is_map(r) do

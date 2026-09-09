@@ -8,6 +8,7 @@ defmodule LatticeCarrierServer.Operator.Lock do
   The helper must be deployed with the operator checkout; no release installation
   or supported-host availability is asserted by this primitive.
   """
+  alias LatticeCarrierServer.Operator.Journal
   @helper Path.expand("../../../../../scripts/treehouse_operator_mutation.py", __DIR__)
   @external_resource @helper
   @timeout 10_000
@@ -54,7 +55,8 @@ defmodule LatticeCarrierServer.Operator.Lock do
           {:ok, %{"staged" => true}} when is_function(inspect_staged, 0) ->
             case inspect_staged.() do
               {:ok, record} ->
-                true = Port.command(port, Jason.encode!(%{commit: Jason.encode!(record)}) <> "\n")
+                commit = Journal.encode(record)
+                true = Port.command(port, Jason.encode!(%{commit: commit}) <> "\n")
                 with :ok <- completed(port), do: {:ok, record}
 
               {:error, _} = error ->

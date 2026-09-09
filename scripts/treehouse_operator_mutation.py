@@ -98,17 +98,21 @@ def directory(path):
         current = parent
 
 
-def file_bytes(path, bound=MAX_FILE, missing=False, private=False):
+def file_bytes(path, bound=MAX_FILE, missing=False, private=False, allow_root=False):
     directory(os.path.dirname(path))
     try:
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        # O_NONBLOCK keeps a non-regular path (a FIFO in particular) from
+        # blocking this open indefinitely; it has no effect on a regular
+        # file. The S_ISREG check below still runs before any read.
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except FileNotFoundError:
         if missing:
             return None
         raise
+    owners = (0, os.geteuid()) if allow_root else (os.geteuid(),)
     with os.fdopen(fd, "rb") as stream:
         st = os.fstat(stream.fileno())
-        if (not stat.S_ISREG(st.st_mode) or st.st_nlink != 1 or st.st_uid != os.geteuid()
+        if (not stat.S_ISREG(st.st_mode) or st.st_nlink != 1 or st.st_uid not in owners
                 or st.st_mode & (0o077 if private else 0o022) or st.st_size > bound):
             refuse("unsafe_operator_file")
         raw = stream.read(bound + 1)
@@ -178,7 +182,16 @@ def snapshots(checks):
             refuse("malformed_operator_plan")
         if type(check["path"]) is not str or not os.path.isabs(check["path"]):
             refuse("malformed_operator_plan")
-        if digest(file_bytes(check["path"])) != check["sha256"]:
+        # These are read-only snapshot inputs (the active manifest and its
+        # referenced logs), so a root-provisioned deployment file is
+        # accepted alongside one owned by this service user. The full call
+        # is wrapped, not just the leaf open, because a missing ancestor
+        # directory raises FileNotFoundError from directory()'s own lstat.
+        try:
+            raw = file_bytes(check["path"], allow_root=True)
+        except FileNotFoundError:
+            refuse("stale_operator_intent")
+        if digest(raw) != check["sha256"]:
             refuse("stale_operator_intent")
 
 

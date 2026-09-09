@@ -130,6 +130,23 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
              )
   end
 
+  test "a root-authored tombstone on the child refuses the bundle", f do
+    [child | rest] = f.retained
+    {:ok, %{log: original}} = Log.restore_verified(child.path)
+    root = Lattice.Identity.from_seed("creator", "independent-child:creator")
+    target = child.review["creation"]
+
+    tombstone = Op.new(root, original.replica, [target], :tombstone, {:delete, target})
+    :ok = Log.dump(Log.append!(original, tombstone), child.path)
+    bytes = File.read!(child.path)
+
+    assert {:error, :invalid_staged_signed_artifact} =
+             Staging.inspect_staged(
+               [%{child | bytes: bytes, digest: Journal.digest(bytes)} | rest],
+               f.manifest
+             )
+  end
+
   test "an honored child grant omitted from the reviewed inventory refuses", f do
     [child | rest] = f.retained
 
@@ -235,6 +252,20 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
 
     assert {:error, :invalid_candidate_manifest} =
              Staging.inspect_staged(retained, f.manifest)
+  end
+
+  test "a candidate whose child root reuses the active Space root refuses", _f do
+    hostile = staged(child_creator: :reuse_space_root)
+
+    assert {:error, :invalid_candidate_manifest} =
+             Staging.inspect_staged(hostile.retained, hostile.manifest)
+  end
+
+  test "a candidate whose child root reuses the admitted carrier service key refuses", _f do
+    hostile = staged(child_creator: :reuse_carrier_service_key)
+
+    assert {:error, :invalid_candidate_manifest} =
+             Staging.inspect_staged(hostile.retained, hostile.manifest)
   end
 
   test "a Space reference already present in active history is not carrier pending", f do

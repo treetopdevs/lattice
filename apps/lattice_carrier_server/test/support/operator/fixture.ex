@@ -4,7 +4,7 @@ defmodule LatticeCarrierServer.Operator.Fixture do
   import ExUnit.Callbacks
   alias Lattice.Authority.Delegation
   alias Lattice.Carrier.Wire
-  alias Lattice.{Log, Sim}
+  alias Lattice.{Identity, Log, Sim}
   alias LatticeCarrierServer.Operator.{Journal, Staging}
 
   def new(opts \\ []) do
@@ -38,6 +38,7 @@ defmodule LatticeCarrierServer.Operator.Fixture do
         ["creator", "nominee", "w1", "w2", "w3", "space-member"],
         seed: "independent-child"
       )
+      |> reuse_child_creator(Keyword.get(opts, :child_creator), space)
       |> Sim.create_replica("creator", policies: Keyword.get(opts, :root_policies, %{}))
 
     child = %{
@@ -74,7 +75,11 @@ defmodule LatticeCarrierServer.Operator.Fixture do
       ]
     }
 
-    assert Sim.identity(space, "creator").pub != Sim.identity(child, "creator").pub
+    # Honest staging never reuses another authority's key for the child root;
+    # a `:child_creator` override intentionally breaks that for a test.
+    if Keyword.get(opts, :child_creator) == nil do
+      assert Sim.identity(space, "creator").pub != Sim.identity(child, "creator").pub
+    end
 
     {space_with_ref, reference} =
       Sim.command(space, "creator", :create_thread, [child.replica, "Branch"])
@@ -177,6 +182,24 @@ defmodule LatticeCarrierServer.Operator.Fixture do
      space: space,
      updated_log: Sim.log(space_with_ref, "creator"),
      reference: reference}
+  end
+
+  # Honest staging derives the child's root from its own independent seed.
+  # `:reuse_space_root` and `:reuse_carrier_service_key` let a test author the
+  # exact same genesis with the child bootstrap moderator authority collapsed
+  # onto the active Space root or the admitted carrier instance's own
+  # transport identity instead, to prove `Staging` refuses either reuse.
+  defp reuse_child_creator(sim, nil, _space), do: sim
+
+  defp reuse_child_creator(sim, :reuse_space_root, space) do
+    %{sim | realms: Map.put(sim.realms, "creator", Sim.identity(space, "creator"))}
+  end
+
+  defp reuse_child_creator(sim, :reuse_carrier_service_key, _space) do
+    # Matches the exact derivation `Manifest.load/1` applies to the
+    # "child-service" identity file below: sha256(seed) as the raw Ed25519 seed.
+    identity = Identity.from_seed("creator", "child-service")
+    %{sim | realms: Map.put(sim.realms, "creator", identity)}
   end
 
   # The honest pin is the shared continuation fixture. `pin_beacon` authors the

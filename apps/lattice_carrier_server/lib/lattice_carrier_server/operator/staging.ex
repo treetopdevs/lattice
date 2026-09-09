@@ -26,9 +26,14 @@ defmodule LatticeCarrierServer.Operator.Staging do
          :ok <- Journal.secure_root(root),
          true <- request_valid?(request) and artifacts_valid?(artifacts),
          {:ok, ^expected} <- Journal.read(root),
-         {:ok, manifest} <- Manifest.load(request.active_manifest),
+         # The parsed manifest must describe the exact bytes just digested, not
+         # whatever an unrelated writer left on disk moments later. `bytes` is
+         # read once, checked, and then reconfirmed unchanged around the
+         # separate `Manifest.load/1` read so the two views cannot diverge.
          {:ok, bytes} <- File.read(request.active_manifest),
          true <- Journal.digest(bytes) == request.manifest_digest,
+         {:ok, manifest} <- Manifest.load(request.active_manifest),
+         {:ok, ^bytes} <- File.read(request.active_manifest),
          {:ok, checks} <- capture_logs(manifest.instances) do
       checks = [%{path: request.active_manifest, sha256: request.manifest_digest} | checks]
 
@@ -82,9 +87,9 @@ defmodule LatticeCarrierServer.Operator.Staging do
   def inspect_staged(retained, manifest) do
     with {:ok, bundle} <- classify(retained),
          {:ok, space} <- unique_history(bundle.reference.replica, manifest.instances),
-         :ok <- verify_child(bundle.child),
+         {:ok, child_log} <- verify_child(bundle.child),
          :ok <- verify_reference(bundle, space),
-         :ok <- verify_candidate_manifest(bundle, manifest, space),
+         :ok <- verify_candidate_manifest(bundle, manifest, space, child_log),
          do: :ok
   catch
     # Total, not only exceptions: a throw or exit escaping into the staging
@@ -250,8 +255,13 @@ defmodule LatticeCarrierServer.Operator.Staging do
          # also introduces an active delegation, so authority is whitelisted:
          # the pinned genesis, the reviewed profile pin and the reviewed grant
          # introductions are the only authority operations a candidate carries.
-         true <- authority_closed?(log, artifact, reviewed) do
-      :ok
+         true <- authority_closed?(log, artifact, reviewed),
+         # A root-authored tombstone ends the replica's lifecycle. Authority
+         # analysis only quarantines an *unauthorized* tombstone, so a valid
+         # one would otherwise sail through every check above; it is refused
+         # here explicitly rather than folded into the closed inventory.
+         false <- Authority.tombstoned?(log) do
+      {:ok, log}
     else
       _ -> {:error, :invalid_staged_signed_artifact}
     end
@@ -293,14 +303,20 @@ defmodule LatticeCarrierServer.Operator.Staging do
         do: {op_id, d.id, Base.encode64(d.audience)}
   end
 
-  defp verify_candidate_manifest(%{manifest: manifest, child: child}, active, space) do
+  defp verify_candidate_manifest(%{manifest: manifest, child: child}, active, space, child_log) do
     roster = Enum.sort(Enum.uniq(Enum.to_list(Lattice.state(Treehouse.Space, space).members)))
 
     with {:ok, candidate} <- Manifest.load(manifest.path),
          true <- candidate.health == active.health,
          {:ok, admitted} <- admitted_instance(candidate.instances, active.instances),
          true <- admitted.log_file == child.path,
-         {:ok, %{log: child_log}} <- Log.restore_verified(child.path),
+         # The child's bootstrap moderator authority must be independently
+         # generated, never the active Space root or the admitted carrier
+         # service key — either reuse would hand Space or operator
+         # infrastructure the child's authority, and using the carrier's own
+         # transport key this way would cross the carrier server's
+         # no-semantic-authority boundary.
+         true <- Authority.root(child_log) not in [Authority.root(space), admitted.pub],
          true <- bootstrap_peers_exact?(admitted, roster, child_log),
          # Relay ingress is a separate reviewed decision, never a side effect
          # of admitting a candidate child.

@@ -91,4 +91,87 @@ defmodule LatticeCarrierServer.Operator.JournalTest do
     on_exit(fn -> File.rm(alias_path) end)
     assert {:error, :unsafe_operator_directory} = Journal.read(alias_path)
   end
+
+  test "an artifact path outside the operator root is refused on write", %{root: root} do
+    sibling = root <> "-sibling"
+    outside = put_in(record(root), ["artifacts", Access.at(0), "path"], Path.join(sibling, "x"))
+
+    assert {:error, :corrupt_operator_journal} = Journal.compare_and_set(root, nil, outside)
+    assert {:ok, nil} = Journal.read(root)
+  end
+
+  test "a `..`-traversal artifact path is refused even textually prefixed by root", %{
+    root: root
+  } do
+    traversal = put_in(record(root), ["artifacts", Access.at(0), "path"], root <> "/../escape")
+
+    assert {:error, :corrupt_operator_journal} = Journal.compare_and_set(root, nil, traversal)
+    assert {:ok, nil} = Journal.read(root)
+  end
+
+  test "read refuses a stored journal whose artifact path was rewritten outside the root", %{
+    root: root
+  } do
+    good = record(root)
+    :ok = Journal.compare_and_set(root, nil, good)
+    {:ok, raw} = Journal.read(root)
+    tampered = String.replace(raw, Path.join(root, "artifact"), "/tmp/escaped-artifact")
+    refute tampered == raw
+    File.write!(Journal.path(root), tampered)
+
+    assert {:error, :corrupt_operator_journal} = Journal.read(root)
+  end
+
+  test "encode writes a fixed canonical field order that decode agrees with", %{root: root} do
+    # `decode/1` deliberately refuses anything that is not byte-identical to
+    # this canonical form (that is what catches tampering/corruption), so the
+    # regression this guards against is write and read silently drifting
+    # apart onto two different incidental orders — not decode accepting an
+    # arbitrary reordering. Assert the concrete, fixed field order instead:
+    # a future Elixir/Jason change to ordinary map iteration cannot move it.
+    encoded = Journal.encode(record(root))
+    assert {:ok, decoded} = Journal.decode(encoded)
+    assert decoded == record(root)
+
+    [artifact_json] = Regex.run(~r/"artifacts":\[(\{.*\})\]/, encoded, capture: :all_but_first)
+
+    assert_ordered(
+      encoded,
+      ~w(version phase attempt generation catalog_head manifest_digest artifacts)
+    )
+
+    assert_ordered(artifact_json, ~w(kind op_id path replica review sha256))
+
+    # Encoding is a pure function of the record's values, not of whatever
+    # order its keys happened to be inserted in.
+    shuffled = Map.new(Enum.shuffle(Map.to_list(record(root))))
+    assert Journal.encode(shuffled) == encoded
+  end
+
+  defp assert_ordered(json, fields) do
+    positions =
+      Enum.map(fields, fn field ->
+        {index, _len} = :binary.match(json, "\"#{field}\":")
+        index
+      end)
+
+    assert positions == Enum.sort(positions)
+  end
+
+  test "secure_root refuses rather than raising when `id -u` exits nonzero", %{root: root} do
+    decoy_dir = Path.expand(".operator-decoy-#{System.unique_integer([:positive])}", File.cwd!())
+    File.mkdir!(decoy_dir)
+    decoy_id = Path.join(decoy_dir, "id")
+    File.write!(decoy_id, "#!/bin/sh\nexit 1\n")
+    File.chmod!(decoy_id, 0o755)
+    original_path = System.get_env("PATH")
+    System.put_env("PATH", decoy_dir <> ":" <> original_path)
+
+    on_exit(fn ->
+      System.put_env("PATH", original_path)
+      File.rm_rf!(decoy_dir)
+    end)
+
+    assert {:error, :unsafe_operator_directory} = Journal.secure_root(root)
+  end
 end

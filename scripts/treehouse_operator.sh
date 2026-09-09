@@ -19,10 +19,12 @@ if [[ "$root" != /* || ! -d "$root" || -L "$root" ]]; then
   echo "unsafe_operator_directory" >&2
   exit 78
 fi
-if [[ "$(readlink -f -- "$root")" != "$root" ]]; then
+resolved=$(readlink -f -- "$root")
+if [[ "$resolved" != "${root%/}" && "$resolved" != "$root" ]]; then
   echo "unsafe_operator_directory" >&2
   exit 78
 fi
+root=$resolved
 cursor=$root
 while :; do
   if [[ ! -d "$cursor" || -L "$cursor" ]]; then exit 78; fi
