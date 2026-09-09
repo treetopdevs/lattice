@@ -6,6 +6,11 @@ on:
     paths:
       - 'apps/lattice_popcorn_spike/**'
       - '.github/workflows/popcorn-spike.yml'
+      - 'apps/lattice_demo/**'
+      - 'apps/lattice_core/lib/lattice/identity.ex'
+      - 'apps/lattice_core/lib/lattice/canonical.ex'
+      - 'apps/lattice_core/lib/lattice/op.ex'
+      - 'apps/lattice_core/lib/lattice/authority/delegation.ex'
 
 permissions:
   contents: read

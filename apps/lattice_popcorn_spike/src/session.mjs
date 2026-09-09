@@ -53,12 +53,15 @@ export function createSession({ createVM, openSocket, onEvent = () => {}, heartb
         socket = openSocket();
         socket.addEventListener("close", stop);
         socket.addEventListener("error", stop);
+        let resolveWelcome;
+        const welcomed = new Promise(resolve => { resolveWelcome = resolve; });
         socket.addEventListener("message", event => {
           if (!boundedString(event.data, 65536)) return stop();
           let frame;
           try { frame = JSON.parse(event.data); } catch { return stop(); }
           void enqueue(async () => {
             await call({ command: "receive_server_event", event: frame });
+            if (frame.type === "welcome") resolveWelcome();
             onEvent(frame);
           }).catch(() => {});
         });
@@ -69,6 +72,15 @@ export function createSession({ createVM, openSocket, onEvent = () => {}, heartb
           socket.addEventListener("error", () => { clearTimeout(timer); reject(new Error("socket_error")); }, { once: true });
         });
         await enqueue(() => send({ command: "connect" }));
+        // The realm only leaves "connecting" once it processes a "welcome" server
+        // event; without this wait, a stalled/erroring Gateway looks connected.
+        await new Promise((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error("welcome_timeout")), 5000);
+          const finish = fn => (...args) => { clearTimeout(timer); fn(...args); };
+          welcomed.then(finish(resolve));
+          socket.addEventListener("close", finish(() => reject(new Error("socket_closed"))), { once: true });
+          socket.addEventListener("error", finish(() => reject(new Error("socket_error"))), { once: true });
+        });
         heartbeat = setInterval(() => {
           if (healthPending || closed) return;
           healthPending = true;

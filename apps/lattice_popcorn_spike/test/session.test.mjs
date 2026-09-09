@@ -9,7 +9,16 @@ function fixture({ failCall = false, failBoot = false } = {}) {
     readyState = 0;
     bufferedAmount = 0;
     close() { this.readyState = 3; this.dispatchEvent(new Event("close")); }
-    send(text) { frames.push(JSON.parse(text)); }
+    send(text) {
+      const frame = JSON.parse(text);
+      frames.push(frame);
+      // Stand in for the Gateway: echo a "welcome" once the session sends its connect envelope.
+      if (frame.type === "connect") {
+        queueMicrotask(() => this.dispatchEvent(new MessageEvent("message", {
+          data: JSON.stringify({ type: "welcome", tab_id: "tab-1" })
+        })));
+      }
+    }
   }
   const socket = new Socket();
   const vm = {

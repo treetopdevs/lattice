@@ -76,16 +76,27 @@ try {
   // Exercise forbidden protocol vocabulary on the real server from a second socket.
   const refusals = await page.evaluate(async () => {
     const ws = new WebSocket(new URL("/ws", location.href.replace(/^http/, "ws")));
-    await new Promise(resolve => ws.onopen = resolve);
-    const results = [];
-    for (const type of ["rpc", "spawn", "send", "registered_name", "setnode"]) {
-      results.push(await new Promise(resolve => {
-        ws.onmessage = e => resolve(JSON.parse(e.data));
-        ws.send(JSON.stringify({ type, target: "kernel", pid: "<0.1.0>" }));
-      }));
+    try {
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error("ws_open_timeout")), 5000);
+        ws.onopen = () => { clearTimeout(timer); resolve(); };
+        ws.onerror = () => { clearTimeout(timer); reject(new Error("ws_open_error")); };
+        ws.onclose = () => { clearTimeout(timer); reject(new Error("ws_open_closed")); };
+      });
+      const results = [];
+      for (const type of ["rpc", "spawn", "send", "registered_name", "setnode"]) {
+        results.push(await new Promise((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error(`ws_reply_timeout:${type}`)), 5000);
+          ws.onmessage = e => { clearTimeout(timer); resolve(JSON.parse(e.data)); };
+          ws.onerror = () => { clearTimeout(timer); reject(new Error(`ws_error:${type}`)); };
+          ws.onclose = () => { clearTimeout(timer); reject(new Error(`ws_closed:${type}`)); };
+          ws.send(JSON.stringify({ type, target: "kernel", pid: "<0.1.0>" }));
+        }));
+      }
+      return results;
+    } finally {
+      ws.close();
     }
-    ws.close();
-    return results;
   });
   expect(refusals.every(r => r.type === "error")).toBe(true);
   evidence.refusals = refusals;

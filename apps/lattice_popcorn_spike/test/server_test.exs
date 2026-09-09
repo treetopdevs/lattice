@@ -1,4 +1,4 @@
-# Run from apps/lattice_demo with MIX_ENV=test mix run ../lattice_popcorn_spike/test/server_test.exs
+# Run from apps/lattice_demo with MIX_ENV=test ~/.asdf/shims/mix run ../lattice_popcorn_spike/test/server_test.exs
 Code.require_file("support/server.exs", __DIR__)
 Code.require_file("../browser/lib/realm.ex", __DIR__)
 ExUnit.start()
