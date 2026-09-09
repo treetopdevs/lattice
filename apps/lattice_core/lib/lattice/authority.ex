@@ -1101,8 +1101,6 @@ defmodule Lattice.Authority do
     end
   end
 
-  defp command_mutations(_module, nil, _args), do: []
-
   defp command_mutations(module, cmd, args) do
     module.__apply_command__(cmd, args)
   rescue

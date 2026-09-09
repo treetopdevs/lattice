@@ -1,9 +1,9 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 
-// Copy exact, dependency-free value modules, never the server application tree.
+// Copy exact, explicitly selected v2 value modules, never the server application tree.
 // Generated files are ignored. Re-running before compilation prevents drift.
-export const sources = ["identity.ex", "canonical.ex", "op.ex", "authority/delegation.ex"];
+export const sources = ["identity.ex", "canonical.ex", "op.ex", "authority/delegation.ex", "authority/succession_certificate.ex", "authority.ex", "replica.ex", "log.ex", "dag.ex", "sync.ex", "sync/shape.ex", "reduce.ex", "crdt/causal_list.ex", "crdt/lww.ex", "crdt/or_set.ex", "carrier/wire.ex", "browser_log_store.ex"];
 export async function prepareShared() {
   const hashes = {};
   for (const file of sources) {
