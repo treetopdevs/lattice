@@ -1,3 +1,5 @@
+Code.require_file("replica_server.exs", __DIR__)
+
 defmodule LatticePopcornSpike.SignedEcho do
   @moduledoc "Test-only signature observer behind the unchanged Lattice Gateway."
   use GenServer
@@ -57,6 +59,13 @@ defmodule LatticePopcornSpike.EvidenceHandler do
 
           Map.put(stats, :tabs, tabs)
 
+        {"GET", "/proof/replica"} ->
+          GenServer.call(LatticePopcornSpike.ReplicaServer, :state)
+
+        {"POST", "/proof/revoke"} ->
+          pub = :cowboy_req.parse_qs(req) |> List.keyfind("public_key", 0, {nil, nil}) |> elem(1)
+          GenServer.call(LatticePopcornSpike.ReplicaServer, {:revoke, pub})
+
         {"POST", "/proof/lease"} ->
           tab_id = :cowboy_req.parse_qs(req) |> List.keyfind("tab_id", 0, {nil, nil}) |> elem(1)
 
@@ -80,6 +89,7 @@ defmodule LatticePopcornSpike.Server do
   @moduledoc "Isolated local proof listener using the existing WebSocket handler."
   def start(port) do
     {:ok, _} = LatticePopcornSpike.SignedEcho.start_link([])
+    {:ok, _} = LatticePopcornSpike.ReplicaServer.start_link([])
 
     dispatch =
       :cowboy_router.compile([
@@ -89,6 +99,8 @@ defmodule LatticePopcornSpike.Server do
             %{
               grant_targets: %{
                 "signed_echo" => LatticePopcornSpike.SignedEcho,
+                "replica_demo" => LatticePopcornSpike.ReplicaServer,
+                {"replica_demo", :ops} => ["call"],
                 {"signed_echo", :ops} => ["call"]
               },
               auto_story?: false

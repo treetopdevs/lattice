@@ -120,10 +120,92 @@ requires CSP `unsafe-eval`; it is an explicit **production-readiness non-claim**
 The relaxed CSP is scoped to this separate proof origin. No production headers,
 Gateway policy, existing adversarial tests, or main demo are weakened.
 
-Production transport authentication, durable browser keys, reconnection, v2
-delegations and replica materialization, mobile/browser compatibility, and total
-Wasm memory profiling are further work. Background heartbeat latency is not a
+The original signed-echo proof excludes durable keys, reconnection, v2
+delegations and materialization; the bounded durable-replica demo below adds these
+research paths. Production authentication/key custody, mobile/browser compatibility,
+and total Wasm memory profiling remain further work. Background heartbeat latency is not a
 hard cleanup deadline. AtomVM remains a size/control comparison only.
 
 Sources: [Popcorn OTP source](https://github.com/software-mansion/popcorn/tree/381a5d0e21fc1c853078457462537f0eec65db00/popcorn),
 [JavaScript setup](https://github.com/software-mansion/popcorn/blob/381a5d0e21fc1c853078457462537f0eec65db00/popcorn/js/README.md).
+
+## Durable two-replica demo
+
+The next proof lives at `/replica.html?replica=alice` and
+`/replica.html?replica=bob` on the same built preview described above.
+It runs the exact v2 `Log`, `Sync`, `Authority`, `Reduce`, CRDTs, and wire/storage
+codec inside each Popcorn OTP Worker. Source hashes are retained in `build.json`.
+The server uses those same modules, behind a capability-protected Gateway target.
+The original signed-echo proof remains available at `/`.
+
+1. Start the proof Gateway and built preview using the toolchains above.
+2. Open Alice and Bob in separate tabs. Each starts its own BEAM identity and
+   IndexedDB record. Click **Connect / reconnect** in each, then **Sync** in Alice.
+3. Click **Go offline** in both, enter different notes, and **Save locally**.
+   Reload Alice: its key, signed local note, and log survive, without a connection.
+4. Reconnect both and sync Alice again. Both note lists and op-id sets match.
+5. Disconnect Alice and save another note. Copy Alice's `public_key` from the
+   evidence panel and invoke the administrator-only local fixture:
+
+   ```sh
+   curl -X POST --get --data-urlencode 'public_key=PASTE_ALICE_PUBLIC_KEY' \
+     http://127.0.0.1:4059/proof/revoke
+   ```
+
+6. Reconnect Alice and sync Bob. Alice's concurrent offline note is absent from
+   accepted state, with its op id recorded as `revoked_capability` on both replicas.
+   Saving another note in Alice now fails with that same reason. Reloading retains
+   the signed revocation evidence and recomputes the denial.
+
+**Semantics:** local offline writes are provisional. Lattice preserves commands
+causally before a valid revocation; concurrent and subsequent commands citing the
+revoked delegation are quarantined. Structural log receipt is not semantic
+acceptance. Denied signed ops stay in the DAG as audit evidence and never affect
+materialized notes. The relay's `accepted` array excludes semantically denied ops.
+A duplicate sync returns an empty `accepted` array.
+
+**Persistence contract:** a successful local save or sync resolves only after one
+strict IndexedDB transaction commits the identity seed plus complete signed log.
+Restore rechecks signatures, causal dependencies, the root-bound genesis, and
+current authority; it never reads cached materialization or verdicts. Existing
+records that cannot be read/validated fail closed rather than minting a replacement
+identity. Web Locks permit only one active tab per named storage record. A new
+browser context has separate storage and a separate identity.
+
+**Research boundaries:** the seed passes through trusted host JavaScript into
+IndexedDB; it is not non-extractable, encrypted, XSS-resistant, or protected from
+the browser owner. Replica root selection is trust-on-first-enrollment, then pinned
+by the stored log. Complete storage replacement/rollback is not detected. The local
+fixture enrolls at most two identities and never regrants a revoked identity. It is
+not production authentication or enrollment. Its root/log are in memory; restarting
+the server creates a different replica, which existing browser records refuse.
+For a fresh demo, use a fresh browser profile/context. Storage eviction/clearing can
+lose the local record. The demo caps the complete log at 32 operations and notes at
+256 UTF-8 bytes; it has no compaction, multi-device key recovery, automatic background
+sync, or production custody claims. `unsafe-eval` and COOP/COEP requirements remain.
+
+### Verification
+
+```sh
+# OTP 29, from apps/lattice_popcorn_spike
+npm run prepare:shared
+(cd browser && mix test)
+npm test
+npm run build
+
+# OTP 28, from apps/lattice_demo
+MIX_ENV=test mix run ../lattice_popcorn_spike/test/replica_server_test.exs
+
+# Against fresh proof servers, from apps/lattice_popcorn_spike
+npm run e2e
+npm run e2e:replicas
+```
+
+The Chromium acceptance script uses two independent browser contexts and real
+Workers, exercises reload/reconnect/offline edits, duplicate synchronization,
+concurrent revocation, denial after observed revocation, same-record writer
+exclusion, hard Worker termination/reload, and equality with native server state.
+It writes `evidence/replicas.json` (public keys and signed-log verdicts only, no
+private seeds). Native tests additionally exercise reordered/duplicate delivery,
+tampered signatures, corrupted persistence, and changed roots. CI retains both
+browser proof artifacts and runs on relevant core/Gateway changes as well.
