@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Group-first Roadmap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders:opsz,wght@10..72,500;10..72,700;10..72,800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F3F5F3; --panel:#FCFDFC; --panel-2:#EEF2EF; --ink:#182420; --ink-soft:#41504B; --ink-faint:#6B7A74;
+    --teal:#0E6B5B; --teal-soft:#DDEDE8; --teal-ink:#0B4F44;
+    --amber:#B4551F; --amber-soft:#F6E8DE; --amber-ink:#7E3A12;
+    --violet:#584A93; --violet-soft:#E9E5F4; --violet-ink:#3E3370;
+    --done:#3E7A3E; --done-soft:#E4EFE2; --done-ink:#2B5A2B;
+    --line:#CBD5CF; --line-strong:#9FB0A8; --grid:rgba(14,107,91,.075);
+    --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    --serif:'Source Serif 4',Georgia,'Times New Roman',serif;
+    --disp:'Big Shoulders','Arial Narrow','Helvetica Neue',Arial,sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#111917; --panel:#172120; --panel-2:#1C2725; --ink:#E3EBE6; --ink-soft:#A3B1AA; --ink-faint:#7E8C86;
+      --teal:#5CC2AA; --teal-soft:#153630; --teal-ink:#9BDCC9;
+      --amber:#E69C6A; --amber-soft:#3A2418; --amber-ink:#F2C3A0;
+      --violet:#AFA2E6; --violet-soft:#27223F; --violet-ink:#CFC6F5;
+      --done:#83C283; --done-soft:#1B301B; --done-ink:#B2DDB2;
+      --line:#2B3A34; --line-strong:#48605A; --grid:rgba(92,194,170,.07);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#111917; --panel:#172120; --panel-2:#1C2725; --ink:#E3EBE6; --ink-soft:#A3B1AA; --ink-faint:#7E8C86;
+    --teal:#5CC2AA; --teal-soft:#153630; --teal-ink:#9BDCC9;
+    --amber:#E69C6A; --amber-soft:#3A2418; --amber-ink:#F2C3A0;
+    --violet:#AFA2E6; --violet-soft:#27223F; --violet-ink:#CFC6F5;
+    --done:#83C283; --done-soft:#1B301B; --done-ink:#B2DDB2;
+    --line:#2B3A34; --line-strong:#48605A; --grid:rgba(92,194,170,.07);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+  body{
+    background:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px),var(--paper);
+    background-size:28px 28px,28px 28px,auto;
+    color:var(--ink);font-family:var(--serif);font-size:16px;line-height:1.6;
+  }
+  a{color:var(--teal)}
+  a:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+  .wrap{max-width:1180px;margin:0 auto;padding:40px 28px 72px}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint)}
+  h1{font-family:var(--disp);font-weight:800;font-size:clamp(44px,7vw,84px);line-height:.92;letter-spacing:.005em;text-wrap:balance;margin:10px 0 14px;color:var(--ink)}
+  h1 .thin{font-weight:500;color:var(--teal)}
+  .lede{font-size:19px;line-height:1.5;max-width:64ch;color:var(--ink-soft);text-wrap:pretty}
+  .meta{display:flex;flex-wrap:wrap;gap:10px 22px;margin-top:20px;font-family:var(--mono);font-size:12.5px;color:var(--ink-soft)}
+  .meta b{color:var(--ink);font-weight:500}
+  h2{font-family:var(--disp);font-weight:700;font-size:34px;line-height:1;letter-spacing:.01em;margin:0 0 6px;text-wrap:balance}
+  h3{font-family:var(--disp);font-weight:700;font-size:22px;line-height:1.05;letter-spacing:.01em;margin:0 0 6px}
+  section{margin-top:56px}
+  .sec-head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:2px solid var(--line-strong);padding-bottom:10px;margin-bottom:22px}
+  .sec-head p{color:var(--ink-soft);max-width:70ch;font-size:15px}
+  code,.mono{font-family:var(--mono);font-size:.86em}
+  code{background:var(--panel-2);padding:1px 5px;border-radius:3px;color:var(--ink)}
+
+  /* gates */
+  .gates{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+  @media (max-width:860px){.gates{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media (max-width:560px){.gates{grid-template-columns:1fr}}
+  .gate{background:var(--panel);border:1px solid var(--line);border-top:4px solid var(--line-strong);padding:16px 16px 14px;display:flex;flex-direction:column;gap:8px;min-height:180px}
+  .gate.open{border-top-color:var(--amber)}
+  .gate.partial{border-top-color:var(--violet)}
+  .gate.done{border-top-color:var(--done)}
+  .gate .id{font-family:var(--mono);font-size:12px;letter-spacing:.1em;color:var(--ink-faint)}
+  .gate h3{font-size:24px}
+  .gate .must{font-size:14.5px;color:var(--ink);line-height:1.45}
+  .gate .today{font-size:13.5px;color:var(--ink-soft);line-height:1.45;margin-top:auto;padding-top:8px;border-top:1px dashed var(--line)}
+  .gate .today b{font-family:var(--mono);font-weight:500;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+  .gate.open .today b{color:var(--amber)}
+  .gate.partial .today b{color:var(--violet)}
+  .gate.done .today b{color:var(--done)}
+
+  /* ledger */
+  .ledger{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 32px}
+  @media (max-width:760px){.ledger{grid-template-columns:1fr}}
+  .ledger dl{margin:0}
+  .ledger .row{display:grid;grid-template-columns:150px 1fr;gap:14px;padding:10px 0;border-bottom:1px solid var(--line);align-items:start}
+  .ledger dt{font-family:var(--mono);font-size:12.5px;color:var(--ink-soft);padding-top:3px}
+  .ledger dd{font-size:14.5px;line-height:1.45}
+  .pill{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;border-radius:3px;margin-right:6px;vertical-align:1px;border:1px solid transparent}
+  .pill.done{background:var(--done-soft);color:var(--done-ink);border-color:var(--done)}
+  .pill.open{background:var(--amber-soft);color:var(--amber-ink);border-color:var(--amber)}
+  .pill.part{background:var(--violet-soft);color:var(--violet-ink);border-color:var(--violet)}
+  .pill.ext{background:var(--panel-2);color:var(--ink-soft);border-color:var(--line-strong)}
+
+  /* schedule */
+  .legend{display:flex;flex-wrap:wrap;gap:8px 18px;font-family:var(--mono);font-size:12px;color:var(--ink-soft);margin-bottom:14px}
+  .legend span::before{content:"";display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:6px;vertical-align:-1px;border:1px solid transparent}
+  .legend .l-teal::before{background:var(--teal-soft);border-color:var(--teal)}
+  .legend .l-violet::before{background:var(--violet-soft);border-color:var(--violet)}
+  .legend .l-amber::before{background:var(--amber-soft);border-color:var(--amber)}
+  .legend .l-plain::before{background:var(--panel);border-color:var(--line-strong)}
+  .legend .l-docs::before{background:var(--panel-2);border-color:var(--line)}
+  .scroll{overflow-x:auto;padding-bottom:6px}
+  .sched{display:grid;grid-template-columns:118px repeat(7,minmax(128px,1fr));gap:6px;min-width:1040px;font-size:13px}
+  .sched .hd{font-family:var(--disp);font-weight:700;font-size:20px;letter-spacing:.02em;padding:6px 8px;border-bottom:2px solid var(--line-strong);color:var(--ink)}
+  .sched .hd small{display:block;font-family:var(--mono);font-weight:400;font-size:11px;letter-spacing:.06em;color:var(--ink-faint);text-transform:uppercase;margin-top:2px}
+  .sched .lane{font-family:var(--mono);font-size:12px;color:var(--ink-soft);padding:10px 8px 0;border-right:2px solid var(--line-strong);line-height:1.35}
+  .sched .lane b{display:block;color:var(--ink);font-weight:500}
+  .sched .cell{background:var(--panel);border:1px solid var(--line);padding:6px;display:flex;flex-direction:column;gap:5px;min-height:64px}
+  .chip{display:block;font-family:var(--mono);font-size:11.5px;line-height:1.3;padding:4px 7px;border-radius:3px;border:1px solid var(--line-strong);background:var(--panel);color:var(--ink)}
+  .chip b{font-weight:600}
+  .chip.teal{background:var(--teal-soft);border-color:var(--teal);color:var(--teal-ink)}
+  .chip.violet{background:var(--violet-soft);border-color:var(--violet);color:var(--violet-ink)}
+  .chip.amber{background:var(--amber-soft);border-color:var(--amber);color:var(--amber-ink)}
+  .chip.docs{background:var(--panel-2);border-color:var(--line);color:var(--ink-soft)}
+
+  /* critical path */
+  .paths{display:grid;gap:14px;margin-top:22px}
+  .path{background:var(--panel);border:1px solid var(--line);padding:12px 14px}
+  .path .lbl{font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:8px}
+  .chain{display:flex;flex-wrap:wrap;align-items:center;gap:6px 0}
+  .chain .chip{display:inline-block}
+  .chain .link{width:18px;height:2px;background:var(--line-strong);flex:0 0 18px}
+  .chain .feed{font-family:var(--mono);font-size:11.5px;color:var(--ink-soft);margin-left:12px}
+
+  /* phase tables */
+  .phase{margin-top:34px}
+  .phase-head{display:grid;grid-template-columns:64px 1fr;gap:14px;align-items:start;margin-bottom:10px}
+  .phase-num{font-family:var(--disp);font-weight:800;font-size:52px;line-height:.85;color:var(--line-strong)}
+  .phase-head p{color:var(--ink-soft);font-size:14.5px;max-width:78ch;text-wrap:pretty}
+  table{width:100%;border-collapse:collapse;background:var(--panel);font-size:13.5px;line-height:1.4;min-width:720px}
+  thead th{text-align:left;font-family:var(--mono);font-weight:500;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);padding:8px 10px;border-bottom:2px solid var(--line-strong)}
+  tbody td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  tbody tr:last-child td{border-bottom:0}
+  td.id{font-family:var(--mono);font-weight:600;white-space:nowrap;color:var(--ink)}
+  td.sz,td.rk,td.dep{font-family:var(--mono);font-size:12.5px;white-space:nowrap;font-variant-numeric:tabular-nums}
+  td.dep{white-space:normal;color:var(--ink-soft)}
+  .rk-HIGH{color:var(--amber);font-weight:600}
+  .rk-MED{color:var(--violet)}
+  .rk-LOW{color:var(--done)}
+  td.exit{color:var(--ink-soft)}
+  .tag{font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--ink-faint);display:block;margin-top:2px}
+
+  /* operator panel */
+  .operator{background:var(--amber-soft);border:1px solid var(--amber);padding:20px 22px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 28px}
+  @media (max-width:760px){.operator{grid-template-columns:1fr}}
+  .operator h2{grid-column:1/-1;color:var(--amber-ink);font-size:30px}
+  .operator h3{color:var(--amber-ink);font-size:18px;margin-bottom:4px}
+  .operator ul{padding-left:18px;font-size:14px;color:var(--ink);line-height:1.5}
+  .operator li{margin:3px 0}
+  .operator li b{font-family:var(--mono);font-weight:600;font-size:12.5px}
+
+  /* claims */
+  .claims td.after{font-family:var(--mono);font-weight:600;white-space:nowrap}
+  .claims td.no{color:var(--amber-ink)}
+
+  .foot{margin-top:56px;padding-top:18px;border-top:2px solid var(--line-strong);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;font-size:14px;color:var(--ink-soft)}
+  @media (max-width:760px){.foot{grid-template-columns:1fr}}
+  .foot h3{color:var(--ink);font-size:20px}
+  .foot ul{padding-left:18px;line-height:1.5}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Plan 180 · program roadmap · draft</div>
+  <h1>Group-first <span class="thin">Roadmap</span></h1>
+  <p class="lede">From the corrected map to a Treehouse two-week pilot: the three loss gates built and tested, Toolshed folded in as a module, thread rollover as the volume policy, and a member-operated relay kept as a privacy option. It schedules existing plans and names the new ones; it changes no code and no operator decision.</p>
+  <div class="meta">
+    <span>baseline <b>origin/main af84459b</b></span>
+    <span>read <b>2026-09-04</b></span>
+    <span>open PRs <b>none at read time</b></span>
+    <span>catalog status refreshed <b>2026-09-09 against 495cf3b9c</b></span>
+    <span>this page is a summary; full text <b>plans/180-group-first-roadmap.md</b></span>
+  </div>
+</header>
+
+<section id="gates">
+  <div class="sec-head">
+    <h2>Six exit gates</h2>
+    <p>Plan 177's intention made checkable. "There" is all six holding with evidence in the tree.</p>
+  </div>
+  <div class="gates">
+    <article class="gate open">
+      <div class="id">E1</div><h3>Treehouse on phones</h3>
+      <p class="must">A signed Android candidate passes the Plan 158 physical gate on two unrelated phones and one 9 to 15 person community runs the two-week pilot.</p>
+      <p class="today"><b>Open</b> Contract frozen and pinned. No domain, realm, shell, device evidence or pilot.</p>
+    </article>
+    <article class="gate partial">
+      <div class="id">E2</div><h3>Three loss gates</h3>
+      <p class="must">AF-1, AF-2 and AF-3 each have a merged green Sim loss test mirrored in both runtimes, and AF-1 has a user-facing reseed path.</p>
+      <p class="today"><b>1 of 3</b> AF-1 green. AF-2 fails by design; Plan 179 step 1 merged, steps 2 to 9 open. AF-3 has no design.</p>
+    </article>
+    <article class="gate open">
+      <div class="id">E3</div><h3>Toolshed as a module</h3>
+      <p class="must">Isolation countersign present; custody v2 green in both runtimes; the ledger read model renders facts only with a subject-present presentation.</p>
+      <p class="today"><b>Open</b> Countersign absent. Custody v1 only. Read model reads one Tool log.</p>
+    </article>
+    <article class="gate open">
+      <div class="id">E4</div><h3>Rollover (D3)</h3>
+      <p class="must">The instrument measures ops, bytes and cold-open time against 4,000 / 8 MiB / 5 s and offers archive thread plus create thread.</p>
+      <p class="today"><b>Open</b> Policy only. The frozen vocabulary has no <code>archive thread</code>; a contract amendment is chunk 0.3.</p>
+    </article>
+    <article class="gate partial">
+      <div class="id">E5</div><h3>Honest copy (D1)</h3>
+      <p class="must">Every hosting sentence names who can read and who can withhold; no founder-loss claim precedes both AF-2 and AF-3; the ledgers say what merged.</p>
+      <p class="today"><b>Partial</b> One-pager corrected. Plan 158 still carries the superseded order; README rows 152, 158, 177 are stale.</p>
+    </article>
+    <article class="gate open">
+      <div class="id">E6</div><h3>Member-operated relay</h3>
+      <p class="must">Plan 150 host mode exists as a privacy option with D1 copy and no LAN discovery.</p>
+      <p class="today"><b>Open</b> Plan 150 TODO. Plan 152 still says BLOCKED rather than superseded.</p>
+    </article>
+  </div>
+</section>
+
+<section id="state">
+  <div class="sec-head">
+    <h2>Where main stands</h2>
+    <p>Read from <code>origin/main</code> at <code>af84459b</code>, except the catalog row below, refreshed 2026-09-09 against this branch's actual parent <code>495cf3b9c</code>. The working checkout is 51 commits behind and was not used. Every other row here is a historical point-in-time snapshot; re-read before relying on it.</p>
+  </div>
+  <div class="ledger">
+    <dl>
+      <div class="row"><dt>Wave A1</dt><dd><span class="pill done">closed</span>Pilot carrier runtime, product isolation and migrations, signed Android distribution plus the Device A harness. PRs #45, #48, #49, the distribution closure, #56.</dd></div>
+      <div class="row"><dt>Wave A2 policy</dt><dd><span class="pill done">closed</span><code>command_op_status/3</code>, causal context, full-frontier conflicts, TypeScript parity, adversarial vectors. PR #51.</dd></div>
+      <div class="row"><dt>Wave A2 WSS</dt><dd><span class="pill ext">operator</span>Deployment and recovery not started; needs a host, DNS, TLS, a backup destination and secrets custody.</dd></div>
+      <div class="row"><dt>Wave A2 catalog</dt><dd><span class="pill part">partial</span><code>TransportCatalog</code>, <code>CatalogBootstrap</code> and <code>CatalogTrust</code> (signed bytes, bootstrap observation, pure trust decisions) plus native candidate-only CAS (<code>catalog_store.rs</code>) exist from PR #87; no <code>pilotctl</code>, saga, storage/CAS wiring beyond the native candidate, or installed trust/route activation.</dd></div>
+      <div class="row"><dt>Wave A3 camera</dt><dd><span class="pill open">open</span>No <code>CAMERA</code> declaration or permission bridge yet.</dd></div>
+      <div class="row"><dt>Substrate</dt><dd><span class="pill part">mixed</span>172 in flight in a Codex worktree; 146 at Seam 11; 164, 166, 167, 170, 171, 173, 174, 176 TODO.</dd></div>
+    </dl>
+    <dl>
+      <div class="row"><dt>Plan 177</dt><dd><span class="pill done">merged</span>PR #52 with the AF-1 relay reseed test. README row and plan header still say DRAFT and TODO.</dd></div>
+      <div class="row"><dt>Plan 178</dt><dd><span class="pill done">merged</span>PR #53. Contract and one-pager pinned by <code>contract_test.exs</code>. Header still says DRAFT.</dd></div>
+      <div class="row"><dt>Plan 179</dt><dd><span class="pill part">step 1</span>Docs PR #55 merged: the non-claim sentence and the decorative relabel. Steps 2 to 9 are the L, high-risk build.</dd></div>
+      <div class="row"><dt>Plan 175</dt><dd><span class="pill done">done</span>Decision record in <code>docs/research/succession_tick_provenance.md</code>. PR #54.</dd></div>
+      <div class="row"><dt>Toolshed</dt><dd><span class="pill part">v1</span>Shed and Tool replicas, v1 consent test and vector, a 118-line read model over one log. No v2 atoms.</dd></div>
+      <div class="row"><dt>Treehouse</dt><dd><span class="pill open">contract</span>The contract test, the one-pager and Plan 178. Nothing under <code>lib/</code>.</dd></div>
+    </dl>
+  </div>
+</section>
+
+<section id="schedule">
+  <div class="sec-head">
+    <h2>Four slots, seven waves</h2>
+    <p>The Plan 158 slot shape: a root integrator plus three workers in fresh worktrees, one owner per hot file. Waves are ordered, not dated; a wave starts when its predecessor's merge-result main run is green.</p>
+  </div>
+  <div class="legend">
+    <span class="l-teal">Treehouse product</span>
+    <span class="l-violet">AF gates and substrate</span>
+    <span class="l-plain">Foundation and Toolshed</span>
+    <span class="l-amber">Needs an operator input</span>
+    <span class="l-docs">Docs and ledgers</span>
+  </div>
+  <div class="scroll">
+  <div class="sched" role="table" aria-label="Slot schedule by wave">
+    <div class="hd" role="columnheader"></div>
+    <div class="hd" role="columnheader">R0<small>now</small></div>
+    <div class="hd" role="columnheader">R1</div>
+    <div class="hd" role="columnheader">R2</div>
+    <div class="hd" role="columnheader">R3</div>
+    <div class="hd" role="columnheader">R4</div>
+    <div class="hd" role="columnheader">R5</div>
+    <div class="hd" role="columnheader">R6</div>
+
+    <div class="lane"><b>Root</b>integrator, reviews, merge queue</div>
+    <div class="cell"><span class="chip docs"><b>0.1</b> ledger truth</span><span class="chip docs"><b>0.2</b> Plan 158 normalized</span><span class="chip docs"><b>0.3</b> archive thread amendment</span><span class="chip amber"><b>2.2</b> D4 recorded</span><span class="chip amber">queue D5 D6 D7</span></div>
+    <div class="cell"><span class="chip docs">reviews</span></div>
+    <div class="cell"><span class="chip docs"><b>1.7</b> 178 founder-loss sentence</span><span class="chip violet"><b>3.1</b> AF-3 spike</span></div>
+    <div class="cell"><span class="chip amber"><b>A2c</b> WSS deploy when inputs exist</span><span class="chip violet"><b>3.2</b> planned</span></div>
+    <div class="cell"><span class="chip amber"><b>7.1</b> countersign if given</span><span class="chip amber">pilot go/no-go inputs</span></div>
+    <div class="cell"><span class="chip teal"><b>6.2</b> pilot stewardship</span></div>
+    <div class="cell"><span class="chip docs">pilot evidence, claims ledger</span></div>
+
+    <div class="lane"><b>Worker 1</b>substrate</div>
+    <div class="cell"><span class="chip violet"><b>1.1</b> AF-2 RED probes</span></div>
+    <div class="cell"><span class="chip violet"><b>1.2</b> BEAM judge</span><span class="chip violet"><b>1.3</b> Sim, vectors</span></div>
+    <div class="cell"><span class="chip violet"><b>1.4</b> TS mirror, leases</span><span class="chip violet"><b>1.5</b> compaction</span><span class="chip violet"><b>1.6</b> PR 2 merges</span></div>
+    <div class="cell"><span class="chip violet"><b>2.1</b> successor ops bound</span><span class="chip violet"><b>170</b> redact keys</span></div>
+    <div class="cell"><span class="chip violet"><b>173</b> bounded transport</span><span class="chip violet"><b>176</b> fail closed</span></div>
+    <div class="cell"><span class="chip violet"><b>3.2</b> AF-3 build</span></div>
+    <div class="cell"><span class="chip violet"><b>171</b> restore policy</span><span class="chip"><b>8.1</b> host mode</span><span class="chip violet"><b>167</b> divergence</span></div>
+
+    <div class="lane"><b>Worker 2</b>Treehouse</div>
+    <div class="cell"><span class="chip teal"><b>4.1</b> RED prework: Thread commands first</span></div>
+    <div class="cell"><span class="chip teal"><b>4.1</b> GREEN, genesis after D4, vectors</span></div>
+    <div class="cell"><span class="chip teal"><b>4.2</b> TS mirror on 1.6</span><span class="chip teal"><b>4.3</b> catalog lifecycle; D1 PR merges after A2b</span></div>
+    <div class="cell"><span class="chip teal"><b>5.1</b> TS realm</span></div>
+    <div class="cell"><span class="chip teal"><b>5.2</b> shell</span><span class="chip teal"><b>5.3</b> rollover instrument</span></div>
+    <div class="cell"><span class="chip teal"><b>6.1</b> device gate</span></div>
+    <div class="cell"><span class="chip"><b>8.2</b> reseed in host</span><span class="chip docs">Township B1 or Wave E prep</span></div>
+
+    <div class="lane"><b>Worker 3</b>foundation, Toolshed</div>
+    <div class="cell"><span class="chip"><b>A2b</b> catalog code</span></div>
+    <div class="cell"><span class="chip"><b>A2b</b> merges</span><span class="chip violet"><b>172</b> review</span></div>
+    <div class="cell"><span class="chip"><b>A3</b> camera and links</span></div>
+    <div class="cell"><span class="chip"><b>7.2</b> custody v2 PR 2</span></div>
+    <div class="cell"><span class="chip"><b>7.3</b> custody v2 PR 3</span><span class="chip teal"><b>5.4</b> reseed bundle</span></div>
+    <div class="cell"><span class="chip"><b>7.4</b> ledger read model</span><span class="chip"><b>7.5</b> subject-present</span></div>
+    <div class="cell"><span class="chip amber"><b>7.6</b> module screens, QR, Device C</span></div>
+  </div>
+  </div>
+
+  <div class="paths">
+    <div class="path">
+      <div class="lbl">Critical path to E1 (pilot)</div>
+      <div class="chain">
+        <span class="chip docs"><b>0.3</b></span><span class="link"></span>
+        <span class="chip teal"><b>4.1</b></span><span class="link"></span>
+        <span class="chip teal"><b>4.2</b></span><span class="link"></span>
+        <span class="chip teal"><b>4.3</b> D1 PR after A2b, 1.6</span><span class="link"></span>
+        <span class="chip teal"><b>5.1</b></span><span class="link"></span>
+        <span class="chip teal"><b>5.2</b></span><span class="link"></span>
+        <span class="chip teal"><b>5.3</b></span><span class="link"></span>
+        <span class="chip teal"><b>6.1</b></span><span class="link"></span>
+        <span class="chip teal"><b>6.2</b></span>
+        <span class="feed">A2c, A3, 170, 173, 176 feed 6.1; 2.1 feeds 5.2</span>
+      </div>
+    </div>
+    <div class="path">
+      <div class="lbl">Critical path to E2 (loss gates)</div>
+      <div class="chain">
+        <span class="chip violet"><b>1.1</b></span><span class="link"></span>
+        <span class="chip violet"><b>1.2</b></span><span class="link"></span>
+        <span class="chip violet"><b>1.3</b></span><span class="link"></span>
+        <span class="chip violet"><b>1.4</b></span><span class="link"></span>
+        <span class="chip violet"><b>1.5</b></span><span class="link"></span>
+        <span class="chip violet"><b>1.6</b></span><span class="link"></span>
+        <span class="chip violet"><b>3.1</b></span><span class="link"></span>
+        <span class="chip violet"><b>3.2</b></span>
+        <span class="feed">plus 5.4 for the AF-1 product path</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="phases">
+  <div class="sec-head">
+    <h2>The chunks</h2>
+    <p>One PR per chunk unless noted. Sizes are the repo's S, M, L, XL. Each row's exit is what the PR must prove; the full file carries the details and the STOP pointers.</p>
+  </div>
+
+  <div class="phase">
+    <div class="phase-head"><div class="phase-num">0</div><div><h3>Ledger truth</h3><p>Docs only, this week. Make the tree say what merged, normalize the map, and open the contract for rollover before the domain is built once.</p></div></div>
+    <div class="scroll"><table>
+      <thead><tr><th>ID</th><th>Chunk</th><th>Size</th><th>Risk</th><th>Depends on</th><th>Exit</th></tr></thead>
+      <tbody>
+        <tr><td class="id">0.1</td><td>Ledger truth<span class="tag">Plan 180</span></td><td class="sz">S</td><td class="rk rk-LOW">LOW</td><td class="dep">none</td><td class="exit">README rows 150, 152, 158, 177 and the 177/178 headers say what merged; the three pin suites green; row 180 appended</td></tr>
+        <tr><td class="id">0.2</td><td>Plan 158 normalization<span class="tag">Plan 180</span></td><td class="sz">S-M</td><td class="rk rk-LOW">LOW</td><td class="dep">0.1</td><td class="exit">Group-first order is the body text; the July order is a marked appendix; the pinned Plan 178 paragraph is byte-identical</td></tr>
+        <tr><td class="id">0.3</td><td>Contract amendment: <code>archive thread</code><span class="tag">Plan 178a</span></td><td class="sz">S</td><td class="rk rk-LOW">LOW</td><td class="dep">none</td><td class="exit">A Thread command after <code>moderator tombstone</code>, gated by the <code>:moderator</code> authority (a Thread op sees only its own causal past); denial reason <code>archived thread</code> appended last; re-pinned by the contract test</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="phase">
+    <div class="phase-head"><div class="phase-num">1</div><div><h3>AF-2, the founder-loss clock</h3><p>Plan 179 steps 2 to 9 on one integration branch, landing as one parity-atomic PR. Two workers plus the root reviewer. After the merge, a separate amendment narrows the Plan 178 sentence to exactly what was proved.</p></div></div>
+    <div class="scroll"><table>
+      <thead><tr><th>ID</th><th>Chunk</th><th>Size</th><th>Risk</th><th>Depends on</th><th>Exit</th></tr></thead>
+      <tbody>
+        <tr><td class="id">1.1</td><td>RED: authoring half and oracle probes<span class="tag">179 steps 0, 2</span></td><td class="sz">M</td><td class="rk rk-HIGH">HIGH</td><td class="dep">179 step 1 (done)</td><td class="exit"><code>Sim.beacon/4 witnesses:</code> builds; probes 2a to 2d and the founder-removed test fail for the recorded reason</td></tr>
+        <tr><td class="id">1.2</td><td>GREEN: BEAM judge<span class="tag">179 step 3</span></td><td class="sz">L</td><td class="rk rk-HIGH">HIGH</td><td class="dep">1.1</td><td class="exit">Beacon certificate, ancestry-resolved policy, step bound and horizon, <code>expired?/2</code> parity, root branch unchanged</td></tr>
+        <tr><td class="id">1.3</td><td>Sim helpers, exporter, vectors<span class="tag">179 steps 4, 5</span></td><td class="sz">M</td><td class="rk rk-MED">MED</td><td class="dep">1.2</td><td class="exit">Five new vectors; every pre-existing vector byte-identical, enumerated</td></tr>
+        <tr><td class="id">1.4</td><td>TypeScript mirror and leased authoring<span class="tag">179 steps 6, 6b</span></td><td class="sz">L</td><td class="rk rk-HIGH">HIGH</td><td class="dep">1.3</td><td class="exit"><code>collectBeacons</code> parity; TS authors a beacon-policy genesis and a leased delegation</td></tr>
+        <tr><td class="id">1.5</td><td>Compaction parity, dump vocabulary<span class="tag">179 steps 7, 7b</span></td><td class="sz">M</td><td class="rk rk-MED">MED</td><td class="dep">1.4</td><td class="exit">Extended GATE red then green; fresh-VM restore of a witnessed beacon</td></tr>
+        <tr><td class="id">1.6</td><td>Full gate, claim-boundary docs, index<span class="tag">179 steps 8, 8b, 9</span></td><td class="sz">S</td><td class="rk rk-LOW">LOW</td><td class="dep">1.5</td><td class="exit">PR 2 merges; ADR 0004 and <code>lattice_poc_status.md</code> updated; 158 and 177 status lines appended</td></tr>
+        <tr><td class="id">1.7</td><td>Contract amendment: founder loss after AF-2<span class="tag">Plan 178b</span></td><td class="sz">S</td><td class="rk rk-LOW">LOW</td><td class="dep">1.6 merged</td><td class="exit">Sentence says: witnesses advance the clock, admission by prior delegation, issuer-side revocation only, leased founder grants lapse, unleased ones are permanent</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="phase">
+    <div class="phase-head"><div class="phase-num">2</div><div><h3>AF-2 residue</h3><p>Two gates the spike recorded as open after AF-2: what a witnessed successor may grant itself, and the founder-issued grant that nobody can revoke after founder loss.</p></div></div>
+    <div class="scroll"><table>
+      <thead><tr><th>ID</th><th>Chunk</th><th>Size</th><th>Risk</th><th>Depends on</th><th>Exit</th></tr></thead>
+      <tbody>
+        <tr><td class="id">2.1</td><td>Bound the witnessed successor's self-issued ops<span class="tag">new Plan 181</span></td><td class="sz">M</td><td class="rk rk-MED">MED</td><td class="dep">1.6; merges before 5.2</td><td class="exit"><code>decide_succeed/8</code> checks the self-issued ops against the predecessor's ops in both runtimes; the Plan 162 succession vectors are re-pinned explicitly; lands before any shell exposes succession</td></tr>
+        <tr><td class="id">2.2</td><td>D4: lease founder-issued grants at genesis<span class="tag">Plan 177 amendment, operator</span></td><td class="sz">S</td><td class="rk rk-LOW">LOW</td><td class="dep">operator, R0</td><td class="exit">Recorded in R0, before 4.1 touches <code>create space</code> or any founder-issued grant. Recommended: lease with a long step and admin renewal; declining records D7</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="phase">
+    <div class="phase-head"><div class="phase-num">3</div><div><h3>AF-3, member device loss</h3><p>A spike in the Plan 175 shape, then a build. The vouch is a fact in the log signed by current members, never a score, never a rotation, never a registry.</p></div></div>
+    <div class="scroll"><table>
+      <thead><tr><th>ID</th><th>Chunk</th><th>Size</th><th>Risk</th><th>Depends on</th><th>Exit</th></tr></thead>
+      <tbody>
+        <tr><td class="id">3.1</td><td>Spike: member device loss<span class="tag">new Plan 182, docs only</span></td><td class="sz">M</td><td class="rk rk-LOW">LOW</td><td class="dep">1.6, D6</td><td class="exit"><code>docs/research/member_device_loss.md</code> answers the vouch artifact, grant path, old-key handling, history linkage, TS mirror and negative controls with existing op kinds only</td></tr>
+        <tr><td class="id">3.2</td><td>Build<span class="tag">new Plan 183</span></td><td class="sz">L</td><td class="rk rk-HIGH">HIGH</td><td class="dep">3.1</td><td class="exit">Founder-present and founder-absent Sim tests green in both runtimes; subthreshold, non-member, replayed and removed-signer vouches refused</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="phase">
+    <div class="phase-head"><div class="phase-num">A</div><div><h3>Shared foundation remainder</h3><p>Runs beside Phases 1 to 4. The catalog is built against the Wave A1 local runtime; only the deployment ticket waits for a host.</p></div></div>
+    <div class="scroll"><table>
+      <thead><tr><th>ID</th><th>Chunk</th><th>Size</th><th>Risk</th><th>Depends on</th><th>Exit</th></tr></thead>
+      <tbody>
+        <tr><td class="id">A2b</td><td>Replica catalog and lifecycle (code)<span class="tag">Plan 158 ticket</span></td><td class="sz">L</td><td class="rk rk-MED">MED</td><td class="dep">A1 (done)</td><td class="exit">Signed catalog, <code>pilotctl</code>, the durable provisioning saga with crash injection, limits, removal fan-out and trust tests on the local runtime</td></tr>
+        <tr><td class="id">A2c</td><td>WSS deployment and recovery<span class="tag">Plan 158 ticket</span></td><td class="sz">M</td><td class="rk rk-LOW">LOW</td><td class="dep">operator inputs</td><td class="exit">Public WSS from Wi-Fi and cellular; the clean-host restore drill reproduces its signed cutoff</td></tr>
+        <tr><td class="id">A3</td><td>Native links and camera permissions<span class="tag">Plan 158 ticket</span></td><td class="sz">M</td><td class="rk rk-MED">MED</td><td class="dep">A1 (done)</td><td class="exit">Denial, regrant, cold-start link and wrong-product refusal proven on Device A with zero durable side effect</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="phase">
+    <div class="phase-head"><div class="phase-num">4</div><div><h3>Treehouse domain and cross-runtime parity</h3><p>Wave D1. 4.1 and 4.2 are unmerged prework on one integration branch; the TypeScript half rebases after Plan 179's second PR because both touch the same one-owner files, and the whole D1 PR merges only after the catalog (A2b), which Plan 158 lists as its parent.</p></div></div>
+    <div class="scroll"><table>
+      <thead><tr><th>ID</th><th>Chunk</th><th>Size</th><th>Risk</th><th>Depends on</th><th>Exit</th></tr></thead>
+      <tbody>
+        <tr><td class="id">4.1</td><td>BEAM domain (unmerged prework)<span class="tag">Plan 158 D1</span></td><td class="sz">L</td><td class="rk rk-MED">MED</td><td class="dep">0.3, 2.2</td><td class="exit"><code>Treehouse.Space</code> and <code>Treehouse.Thread</code> with the Thread-level <code>archived</code> field, six pinned denial reasons, ordered <code>effects[]</code>, workflows test T0 to T7 with the T7 succession qualifier, <code>treehouse_*</code> RED vectors</td></tr>
+        <tr><td class="id">4.2</td><td>TypeScript mirror (unmerged prework)<span class="tag">Plan 158 D1</span></td><td class="sz">L</td><td class="rk rk-MED">MED</td><td class="dep">4.1, 1.6</td><td class="exit">Same integration branch as 4.1; product injection, delete-aware causal list, every Township and Toolshed vector still green</td></tr>
+        <tr><td class="id">4.3</td><td>Catalog-coupled lifecycle and the D1 integration PR<span class="tag">Plan 158 D1</span></td><td class="sz">M</td><td class="rk rk-MED">MED</td><td class="dep">4.2, A2b on main</td><td class="exit">4.1, 4.2 and 4.3 merge as one parity-atomic PR: thread saga, join bundle, removal fan-out with <code>removal_pending</code>, route mismatch tests</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="phase">
+    <div class="phase-head"><div class="phase-num">5</div><div><h3>Treehouse realm and shell</h3><p>Wave D2, part one. The product on a desktop package first, converging with Sim over the stable relay, with rollover measured and the AF-1 reseed as a product path.</p></div></div>
+    <div class="scroll"><table>
+      <thead><tr><th>ID</th><th>Chunk</th><th>Size</th><th>Risk</th><th>Depends on</th><th>Exit</th></tr></thead>
+      <tbody>
+        <tr><td class="id">5.1</td><td>TypeScript realm<span class="tag">Plan 158 D2</span></td><td class="sz">L</td><td class="rk rk-MED">MED</td><td class="dep">4.3 merged</td><td class="exit">Authoring, projection, persistence, carrier composition; a headless stable-server gate compares to Sim</td></tr>
+        <tr><td class="id">5.2</td><td>Shell<span class="tag">Plan 158 D2</span></td><td class="sz">L</td><td class="rk rk-MED">MED</td><td class="dep">5.1, D5, 2.1</td><td class="exit">Isolated package, bounded screens, recipient-bound join, separate Use, Post and Sync, empty boot, packaged CI smoke</td></tr>
+        <tr><td class="id">5.3</td><td>D3 rollover instrument<span class="tag">Plan 177 D3</span></td><td class="sz">M</td><td class="rk rk-LOW">LOW</td><td class="dep">5.2, 0.3</td><td class="exit">Ops, bytes and cold-open time measured; archive-and-start control near threshold; benchmark profile support</td></tr>
+        <tr><td class="id">5.4</td><td>Reseed bundle export and import<span class="tag">Plan 177 AF-1</span></td><td class="sz">M</td><td class="rk rk-MED">MED</td><td class="dep">5.1, A2b</td><td class="exit">Member export plus <code>pilotctl seed-from-bundle</code> reproduces the AF-1 test in the product; a stale bundle shows a behind frontier</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="phase">
+    <div class="phase-head"><div class="phase-num">6</div><div><h3>Android candidate and pilot</h3><p>Wave D2, part two. The Plan 158 physical gate, then one community for two weeks under the stop conditions.</p></div></div>
+    <div class="scroll"><table>
+      <thead><tr><th>ID</th><th>Chunk</th><th>Size</th><th>Risk</th><th>Depends on</th><th>Exit</th></tr></thead>
+      <tbody>
+        <tr><td class="id">6.1</td><td>Candidate gate<span class="tag">Plan 158 D2</span></td><td class="sz">M</td><td class="rk rk-MED">MED</td><td class="dep">5.3, A2c, A3, 170, 173, 176</td><td class="exit">Physical gate on Device A and unrelated Device B; benchmark profile at 5,000 ops and 10 MiB with three cold opens under 5 s</td></tr>
+        <tr><td class="id">6.2</td><td>Two-week pilot<span class="tag">Plan 158 D2</span></td><td class="sz">pilot</td><td class="rk rk-MED">MED</td><td class="dep">6.1</td><td class="exit">One community of roughly 9 to 15; stop at 4,000 ops, 8 MiB or a 5 s cold open; evidence exported; audit matches an independent client</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="phase">
+    <div class="phase-head"><div class="phase-num">7</div><div><h3>Toolshed as a module</h3><p>Wave C reshaped by Plan 177 (b). Custody semantics are substrate and may proceed before the countersign; the module UI may not.</p></div></div>
+    <div class="scroll"><table>
+      <thead><tr><th>ID</th><th>Chunk</th><th>Size</th><th>Risk</th><th>Depends on</th><th>Exit</th></tr></thead>
+      <tbody>
+        <tr><td class="id">7.1</td><td>Isolation countersign and module contract<span class="tag">Plan 158 amendment, operator</span></td><td class="sz">S</td><td class="rk rk-LOW">LOW</td><td class="dep">D5</td><td class="exit">Countersign line present; collision table revised; Toolshed one-pager under D1 and no longer a sibling product</td></tr>
+        <tr><td class="id">7.2</td><td>Custody v2 PR 2: offer, request, transfer<span class="tag">Plan 158 C</span></td><td class="sz">L</td><td class="rk rk-HIGH">HIGH</td><td class="dep">A2 policy (done)</td><td class="exit">Exact due binding and the full adversarial exit list green in both runtimes</td></tr>
+        <tr><td class="id">7.3</td><td>Custody v2 PR 3: admission, decline, day ceremony<span class="tag">Plan 158 C</span></td><td class="sz">M-L</td><td class="rk rk-HIGH">HIGH</td><td class="dep">7.2</td><td class="exit">Invitee-bound admission, pinned projection, <code>:legacy_custody_v1</code>, root-only Assert current day, a <code>dispute</code> Tool command</td></tr>
+        <tr><td class="id">7.4</td><td>Custody ledger read model<span class="tag">Plan 177 item 4</span></td><td class="sz">M</td><td class="rk rk-LOW">LOW</td><td class="dep">7.3</td><td class="exit">Per-member facts across Tool logs in both runtimes: lists with op ids, never a count, rate, rank or total</td></tr>
+        <tr><td class="id">7.5</td><td>Subject-present presentation<span class="tag">Plan 177 D2</span></td><td class="sz">M</td><td class="rk rk-MED">MED</td><td class="dep">7.4</td><td class="exit">Challenge signed by the receipts' key; verifier checks against its own log; dispute appended; pull only, within the shed</td></tr>
+        <tr><td class="id">7.6</td><td>Module screens, QR co-signing, Device C gate<span class="tag">Plan 158 C, Plan 160</span></td><td class="sz">XL</td><td class="rk rk-HIGH">HIGH</td><td class="dep">7.1, 7.5, 6.2</td><td class="exit">Toolshed physical gate with Device C as auditor, then a 5 to 8 household pilot</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="phase">
+    <div class="phase-head"><div class="phase-num">8</div><div><h3>Member-operated relay</h3><p>Plan 150 host mode as a privacy option after E1. A reseed is a new relay, never a moved one; the copy names readers and the withholding host.</p></div></div>
+    <div class="scroll"><table>
+      <thead><tr><th>ID</th><th>Chunk</th><th>Size</th><th>Risk</th><th>Depends on</th><th>Exit</th></tr></thead>
+      <tbody>
+        <tr><td class="id">8.1</td><td>Host mode<span class="tag">Plan 150, revised</span></td><td class="sz">L</td><td class="rk rk-MED">MED</td><td class="dep">6.2, 5.4</td><td class="exit">Packaged desktop app supervises the sidecar on loopback plus one interface; QR image or deep link only; D1 copy</td></tr>
+        <tr><td class="id">8.2</td><td>Reseed ceremony inside host mode<span class="tag">Plan 150, revised</span></td><td class="sz">M</td><td class="rk rk-MED">MED</td><td class="dep">8.1, 167</td><td class="exit">The 5.4 import runs on the hosting device; a stale copy is explained by the divergence explainer, not detected</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="phase">
+    <div class="phase-head"><div class="phase-num">9</div><div><h3>Substrate hardening interleave</h3><p>Existing plans placed at the point where skipping them would put a real person at risk. 172 and 173 in either order, then 176: README row 176 lists the other two as its parents.</p></div></div>
+    <div class="scroll"><table>
+      <thead><tr><th>Plan</th><th>What</th><th>Size</th><th>Merge before</th><th>Why there</th></tr></thead>
+      <tbody>
+        <tr><td class="id">172</td><td>TypeScript canonical-encoder strictness</td><td class="sz">S-M</td><td class="dep">176, and 4.2</td><td class="exit">In flight in a Codex worktree; README row 176 lists it as a parent; the Treehouse decoder inherits it</td></tr>
+        <tr><td class="id">173</td><td>Bounded carrier transport</td><td class="sz">M-L</td><td class="dep">176, then 6.1</td><td class="exit">Cellular connects and paged pulls</td></tr>
+        <tr><td class="id">176</td><td>Fail closed at the wire and authority boundary</td><td class="sz">M</td><td class="dep">6.1, after 172 and 173</td><td class="exit">README row 176 lists 172 and 173 as parents; untrusted peers on a public relay</td></tr>
+        <tr><td class="id">170</td><td>Redact private keys from inspect and crash reports</td><td class="sz">S</td><td class="dep">6.1</td><td class="exit">Phones hold pilot identity and crash reports leave the device</td></tr>
+        <tr><td class="id">171</td><td>Policy for every unverified <code>Log.restore/1</code> consumer</td><td class="sz">M</td><td class="dep">7.5</td><td class="exit">An auditor restores bytes it did not author</td></tr>
+        <tr><td class="id">167</td><td>Divergence explainer</td><td class="sz">M</td><td class="dep">8.2</td><td class="exit">The only honest stale-copy explanation</td></tr>
+        <tr><td class="id">164, 166</td><td>Local CI parity; shell typecheck</td><td class="sz">S, M</td><td class="dep">any time</td><td class="exit">Root work that lowers review latency in every wave</td></tr>
+        <tr><td class="id">146, 174</td><td>Witness artifact Seam 11; governance-witness ceremony spike</td><td class="sz">L, M</td><td class="dep">after 6.2</td><td class="exit">Needed before the witnessed succession mobile ceremony is un-hidden; the first beta keeps it hidden by contract</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<section id="operator">
+  <div class="operator">
+    <h2>What only the operator can supply</h2>
+    <div>
+      <h3>Decisions</h3>
+      <ul>
+        <li><b>D4</b> lease every founder-issued grant at genesis, with admin renewal (before 4.1). Recommended: yes.</li>
+        <li><b>D5</b> the isolation countersign making Toolshed a module (before 5.2 picks its package shape, and before 7.6).</li>
+        <li><b>D6</b> the AF-3 vouch shape: threshold, who may sign, what tombstoning an identity means (before 3.2).</li>
+        <li><b>D7</b> if D4 is declined, whether the first pilot accepts that an unleased founder-granted member cannot be removed after founder loss.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Hosting, secrets, devices, people</h3>
+      <ul>
+        <li>One supported Linux host, a DNS name, TCP 443, certificate renewal egress, an encrypted off-host backup destination, a separately held recovery key, a clean restore host, an owner for the 24-hour RPO (A2c).</li>
+        <li>Service identity, a root-bound catalog signer per product, TLS material and peer manifests through secret files with a custodian (A2b, A2c).</li>
+        <li>Device B, an unrelated physical Android, before any two-phone verdict (6.1); Device C for the Toolshed audit (7.6). iOS stays parked.</li>
+        <li>A 9 to 15 person community for a text-only pilot (6.2); 5 to 8 households for Toolshed (7.6).</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="claims">
+  <div class="sec-head">
+    <h2>Claims ledger</h2>
+    <p>What may be said, and only after the named merge. Copy follows evidence; it never precedes it.</p>
+  </div>
+  <div class="scroll"><table class="claims">
+    <thead><tr><th>After</th><th>May say</th><th>Still may not say</th></tr></thead>
+    <tbody>
+      <tr><td class="after">0.1</td><td>The ledgers match main.</td><td class="no">Anything new.</td></tr>
+      <tr><td class="after">1.6</td><td>In Sim, a pinned witness set advances the epoch after the founder realm is removed; admission through a pre-loss delegated capability; revocation by a surviving issuer; lease lapse for leased founder-issued grants.</td><td class="no">Founder loss is survived (not before AF-2 and AF-3 both pass). Founder-granted access is revocable. Anything on a device.</td></tr>
+      <tr><td class="after">3.2</td><td>A member with a new key is re-admitted by group attestation in Sim.</td><td class="no">Recovery, rotation, cross-space identity.</td></tr>
+      <tr><td class="after">4.3</td><td>Treehouse semantics are deterministic in both runtimes; witnessed admin succession is domain evidence with the successor's self-issued ops unbounded until 2.1.</td><td class="no">A product exists. Anything about succession on a device.</td></tr>
+      <tr><td class="after">5.2</td><td>A packaged Treehouse app converges with Sim over the stable relay, whose operator can read the log and can withhold availability.</td><td class="no">Phones. Availability.</td></tr>
+      <tr><td class="after">6.1</td><td>Two unrelated phones converge over public WSS, whose operator can read the log and can withhold availability.</td><td class="no">A pilot happened.</td></tr>
+      <tr><td class="after">6.2</td><td>One assisted two-week pilot completed, with the relay's readers named and its host able to withhold.</td><td class="no">The Plan 178 prohibited phrases, E2EE, availability, safe unbounded history.</td></tr>
+      <tr><td class="after">7.4</td><td>The audit trail is the reputation, rendered as facts.</td><td class="no">Score, karma, rating, any aggregate.</td></tr>
+      <tr><td class="after">8.1</td><td>A member can host the relay and its readers are enumerated.</td><td class="no">Centerless operation. The prohibited hosting phrases.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<footer class="foot">
+  <div>
+    <h3>Outside this roadmap</h3>
+    <ul>
+      <li>Federation, cross-space identity, universal tally (M6).</li>
+      <li>Key rotation, recovery, E2EE (M3).</li>
+      <li>Production compaction; coercion-resistant elections (the Stub stays frozen and false).</li>
+      <li>Host migration, any availability claim, any score or aggregate, any new op kind.</li>
+      <li>Township B waves, iOS, and the Township instrument reports (154, 156, 157) ahead of E1.</li>
+    </ul>
+  </div>
+  <div>
+    <h3>Stop conditions carried forward</h3>
+    <ul>
+      <li>Any founder-loss safety claim before AF-2 and AF-3 both pass; any member-loss claim before 3.2; any prohibited hosting phrase at any time.</li>
+      <li>Any hosting sentence that omits who can read or who can withhold.</li>
+      <li>Any numeric or ranked reputation; any push of negative reputation; any cross-community registry.</li>
+      <li>Any isolation change without the countersign; any BEAM-only or TypeScript-only semantic merge.</li>
+      <li>Any private key, seed or capability secret in a doc, fixture, log or test output.</li>
+    </ul>
+  </div>
+</footer>
+
+</div>
+</body>
+</html>
