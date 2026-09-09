@@ -5,14 +5,14 @@
 
 ## Background
 
-Lattice is an Elixir/Phoenix system designed for local-first, distributed replication. In its current iteration (Lattice 2.0), the system implements replicated state machines running on a **capability-attested log** (managed under `apps/lattice_core`). In parallel, recent work has introduced the **AtomVM browser-tab realm prototype** (`apps/lattice_tab`), which runs BEAM bytecode in an isolated WebAssembly sandbox inside the browser, communicating with the server and other tabs via an Emscripten-backed JavaScript bridge.
+Lattice is an Elixir/Phoenix system designed for local-first, distributed replication. In its current iteration (Lattice 2.0), the system implements replicated state machines running on a **capability-attested log** (managed under `apps/lattice_core`). The May design proposed an AtomVM browser-tab realm; `apps/lattice_tab` is not a shipped implementation in this checkout. The September optional proof is `apps/lattice_popcorn_spike`, using Popcorn OTP/crypto over the existing JSON Gateway.
 
 Currently, the Lattice 2.0 proof-of-concept (POC) handles security and replication through centralized or transparent mechanisms:
 1. **Centralized Capability Verification:** The capability store (`Lattice.CapStore`) is a centralized, in-memory GenServer on the server. Replicas identify themselves using opaque, random capability IDs. Any authorization or delegation requires a round-trip to the server to look up and validate the capability's provenance, lifetime, and caveats.
 2. **Transparent Delegation Chains:** If a capability is attenuated and delegated, the full delegation chain is visible to the validating authority. This compromises privacy, as the structure of the delegation chain reveals organizational relationships and access patterns.
 3. **Unsecured Audit Log:** The replication and audit log (`Lattice.Audit`) is a simple, sequential in-memory list of maps. It lacks cryptographic tamper-evidence (e.g., hash-chaining or Merkle commitments), meaning there is no decentralized way to verify that a replica's log is untampered or matches the canonical state.
 4. **All-or-Nothing State Sync:** State synchronization is performed by downloading a full snapshot of the server-side state (`LatticeServer.DemoHub.snapshot()`). This leaks the entire database state to the replica, preventing fine-grained, privacy-preserving or cell-level state synchronization.
-5. **Constrained Client Environment:** The AtomVM browser realm runs in a highly constrained WebAssembly environment that lacks large integer support, bitstring utilities, and native parallel processing. Running traditional cryptographic operations (like generating heavy zero-knowledge proofs) directly inside the AtomVM virtual machine is computationally impossible.
+5. **Constrained Client Environment:** The AtomVM browser realm runs in a highly constrained WebAssembly environment that lacks large integer support, bitstring utilities, and native parallel processing. Heavy zero-knowledge proof generation was not demonstrated; feasibility requires measurement. These AtomVM constraints do not establish limits of Popcorn OTP/crypto.
 
 Integrating **Zero-Knowledge (ZK) cryptography** (specifically 2024–2026 developments in client-side proving, recursive SNARKs, folding schemes, and zkVMs) presents a clear path to transition Lattice from a centralized proof-of-concept to a secure, private, and trustless local-first system.
 
@@ -76,8 +76,8 @@ Lattice replicas currently download the full state database. To support selectiv
     3. The client verifies that the returned data is a genuine subset of the canonical database state.
 *   **Zero-Knowledge Information Flow Control (IFC):** By executing the data filtering step inside a zk-SNARK, the server can prove that it has withheld all unauthorized data and included all authorized data according to the client’s capability constraints, without exposing the metadata or keys of other database partitions.
 
-### 4. Succinct Proofs in Constrained Environments (AtomVM/WASM)
-Running ZK proof generation directly inside the AtomVM virtual machine is blocked by performance limitations: AtomVM does not natively support big integers, and running complex mathematical interpreters in WebAssembly adds double-virtualization overhead. The solution is a **hybrid split-execution architecture**.
+### 4. Succinct Proofs in Constrained Environments (historical AtomVM/WASM assumptions)
+The original AtomVM proposal anticipated severe performance limitations: AtomVM does not natively support big integers, and running complex mathematical interpreters in WebAssembly adds double-virtualization overhead. The solution is a **hybrid split-execution architecture**.
 
 ```
  +-----------------------------------------------------------+
@@ -163,3 +163,10 @@ While the theoretical advantages of zero-knowledge proofs match Lattice's requir
 4.  **Authenticated Data Structures:**
     *   *Merkle Mountain Ranges (MMR) Spec* (Peter Todd) – [GitHub open-source reference](https://github.com/opentimestamps/opentimestamps-server/blob/master/doc/merkle-mountain-range.md).
     *   *Verkle Trees for Ethereum State* (Vitalik Buterin) – [Ethereum Research](https://ethresear.ch/t/verkle-trees/10423).
+
+## September 2026 runtime scope correction
+
+Popcorn OTP/crypto provides a different runtime family from AtomVM. Test Ed25519
+and canonical integer parity before carrying over old constraints. Successful
+signing does not establish pairing support, practical ZK proving, WebGPU access,
+or acceptable proving time/memory. Those remain independent research gates.

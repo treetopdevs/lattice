@@ -3,7 +3,7 @@
 Status: working research demonstrator with explicitly labeled simulations.
 
 Lattice explores a unified BEAM-shaped process plane where browser tabs, server
-processes, tab-owned workers, bridges, real carrier peers, and planned AtomVM-WASM
+processes, tab-owned workers, bridges, real carrier peers, and planned Popcorn OTP/Wasm
 nodes are treated as realms in one actor topology. The core claim is not that a
 browser becomes a trusted Erlang node. The claim is that cross-realm authority can
 be expressed as object capabilities that preserve OTP-like lifecycle semantics across
@@ -16,7 +16,7 @@ The novel object is the four-way intersection of:
 - object-capability security,
 - OTP supervision, link, monitor, and fault semantics,
 - location-transparent actor messaging across asymmetric trust boundaries,
-- browser tabs and eventual AtomVM-WASM nodes as first-class process realms.
+- browser tabs and planned Popcorn OTP/Wasm workers as first-class process realms.
 
 ## What Is Implemented
 
@@ -59,7 +59,7 @@ The working implementation is in `apps/lattice_core`.
 
 ## What Is Future Work
 
-- Native AtomVM-WASM browser realm implementation against `Lattice.Canonical` and
+- Popcorn OTP/Wasm browser realm implementation against `Lattice.Canonical` and
   `Lattice.Carrier.Wire`.
 - Formal operational semantics mechanized in a proof assistant.
 - Durable replicated capability/audit state.
@@ -105,3 +105,8 @@ runs the flagship tests, records and evaluates the browser story, validates
 claim evidence paths, then writes populated snapshot, graph, and claims
 artifacts under `output/flagship/`. GitHub Actions uses the same path and
 uploads those files with the Playwright video artifacts.
+
+The optional browser runtime proof is in `apps/lattice_popcorn_spike`. Its local
+process API is encapsulated behind a fixed ingress; the server Gateway remains
+the cross-realm authority boundary. Browser ownership/XSS isolation, production
+CSP readiness, and browser distribution are not claims of this spike.

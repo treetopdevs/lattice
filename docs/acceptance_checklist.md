@@ -46,3 +46,11 @@ This file maps the requested POC contract to the current repository state after 
 - WebSocket resume buffers only the short-lived demo stream, not authority or durable history.
 - LiveOps proves a deterministic demo workflow, not production authentication,
   durable audit, real media transport, or clustered failover.
+
+## Optional Popcorn OTP proof
+
+The [Popcorn OTP/crypto spike](../apps/lattice_popcorn_spike/README.md) adds a separately built browser realm
+and a real-browser acceptance harness. Native signing/Gateway tests and bundle
+creation do not establish browser execution. The existing browser-BEAM non-claim
+remains in force until the real Worker acceptance run passes; production CSP
+readiness, browser distribution, and v2 log admission are not claimed.

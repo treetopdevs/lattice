@@ -1,0 +1,15 @@
+{
+  "name": "lattice-popcorn-spike",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prepare:shared": "node scripts/shared.mjs",
+    "test": "node --test test/*.test.mjs",
+    "build": "node scripts/compile.mjs && vite build && node scripts/record-build.mjs",
+    "dev": "node scripts/compile.mjs && vite --host 127.0.0.1",
+    "preview": "node scripts/preview.mjs",
+    "e2e": "node test/browser.mjs"
+  },
+  "dependencies": {"@swmansion/popcorn": "0.4.0-next.0"},
+  "devDependencies": {"vite": "7.3.1", "@playwright/test": "1.61.1"}
+}

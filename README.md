@@ -299,3 +299,11 @@ The core app is plain OTP. The server app adds only:
 - `@playwright/test` for browser E2E validation and the flagship recording.
 
 No browser code stores long-lived secrets, and no tab-facing code exposes arbitrary RPC, `:os.cmd`, code loading, process introspection, raw pids, or global registration.
+
+## Optional Popcorn OTP proof
+
+The [Popcorn OTP/crypto spike](apps/lattice_popcorn_spike/README.md) adds a separately built browser realm
+and a real-browser acceptance harness. Native signing/Gateway tests and bundle
+creation do not establish browser execution. The existing browser-BEAM non-claim
+remains in force until the real Worker acceptance run passes; production CSP
+readiness, browser distribution, and v2 log admission are not claimed.
