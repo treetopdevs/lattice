@@ -1,0 +1,238 @@
+defmodule LatticeCarrierServer.Operator.Fixture do
+  @moduledoc false
+  import ExUnit.Assertions
+  import ExUnit.Callbacks
+  alias Lattice.Authority.Delegation
+  alias Lattice.Carrier.Wire
+  alias Lattice.{Identity, Log, Sim}
+  alias LatticeCarrierServer.Operator.{Journal, Staging}
+
+  def new(opts \\ []) do
+    root = Path.expand(".operator-stage-#{System.unique_integer([:positive])}", File.cwd!())
+    File.mkdir!(root)
+    File.chmod!(root, 0o700)
+    on_exit(fn -> File.rm_rf!(root) end)
+
+    {space, _} =
+      Sim.new(Treehouse.Space, "space:operator", ["creator"], seed: "operator-space")
+      |> Sim.create_replica("creator")
+
+    {space, _} = Sim.command(space, "creator", :create_space, ["Canopy"])
+    member = Base.encode64(Sim.identity(space, "creator").pub)
+    {space, invitation} = Sim.command(space, "creator", :issue_invitation, [member, []])
+
+    acceptance =
+      Treehouse.Invitation.accept(Sim.identity(space, "creator"), space.replica, invitation)
+
+    {space, admission} =
+      Sim.command(space, "creator", :admit_member, [invitation.id, member, "member", acceptance])
+
+    refute Sim.quarantined(space, "creator", admission.id)
+
+    {child, genesis} =
+      Sim.new(
+        Treehouse.Thread,
+        "replica:treehouse:thread:" <>
+          Treehouse.ContinuationFixtures.digest("operator") <>
+          "#authority:bounded-continuation-v1",
+        ["creator", "nominee", "w1", "w2", "w3", "space-member"],
+        seed: "independent-child"
+      )
+      |> reuse_child_creator(Keyword.get(opts, :child_creator), space)
+      |> Sim.create_replica("creator", policies: Keyword.get(opts, :root_policies, %{}))
+
+    child = %{
+      child
+      | realms: Map.put(child.realms, "space-member", Sim.identity(space, "creator"))
+    }
+
+    {child, creation} = Sim.command(child, "creator", :create_thread, ["Branch"])
+    {child, pin, _} = pin_child(child, Keyword.get(opts, :pin_beacon))
+
+    {child, grant} =
+      Sim.grant(child, "creator", "space-member",
+        ops: [:post, :author_edit, :author_tombstone],
+        expires_epoch: 7
+      )
+
+    child_log = Sim.log(child, "creator")
+
+    grant_intro =
+      Enum.find(Log.ops(child_log), fn {_id, op} -> op.body == {:grant, grant} end) |> elem(0)
+
+    {:ok, selected} = Lattice.Authority.continuation_profile(child_log)
+
+    child_review = %{
+      "creation" => creation.id,
+      "profile_genesis" => pin.id,
+      "profile_id" => selected.profile_id,
+      "grants" => [
+        %{
+          "recipient" => Base.encode64(Sim.identity(space, "creator").pub),
+          "delegation" => grant.id,
+          "introduction" => grant_intro
+        }
+      ]
+    }
+
+    # Honest staging never reuses another authority's key for the child root;
+    # a `:child_creator` override intentionally breaks that for a test.
+    if Keyword.get(opts, :child_creator) == nil do
+      assert Sim.identity(space, "creator").pub != Sim.identity(child, "creator").pub
+    end
+
+    {space_with_ref, reference} =
+      Sim.command(space, "creator", :create_thread, [child.replica, "Branch"])
+
+    refute Sim.quarantined(space_with_ref, "creator", reference.id)
+    active_log = Path.join(root, "existing.log")
+    :ok = Log.dump(Sim.log(space, "creator"), active_log)
+    child_source = Path.join(root, "child-source.log")
+    :ok = Log.dump(Sim.log(child, "creator"), child_source)
+    child_bytes = File.read!(child_source)
+    identity = Path.join(root, "service.identity")
+    File.write!(identity, Base.encode16(:crypto.hash(:sha256, "operator-service"), case: :lower))
+    File.chmod!(identity, 0o600)
+
+    instance = %{
+      "name" => "space",
+      "realm" => "service",
+      "identity_file" => identity,
+      "log_file" => active_log,
+      "listener" => %{"ip" => "127.0.0.1", "port" => 0},
+      "trusted_peers" => [
+        %{"realm" => "member", "pubkey" => Base.encode64(Sim.identity(space, "creator").pub)}
+      ]
+    }
+
+    active = Path.join(root, "active.json")
+    File.write!(active, Jason.encode!(%{"version" => 1, "instances" => [instance]}))
+    File.chmod!(active, 0o600)
+    attempt = Base.url_encode64(:crypto.hash(:sha256, "reviewed-attempt"), padding: false)
+    child_path = Staging.artifact_path(root, attempt, Journal.digest(child_bytes))
+
+    next_instance = %{
+      instance
+      | "name" => "thread",
+        "log_file" => child_path,
+        "realm" => "child-service"
+    }
+
+    # Existing Manifest contract requires unique identity files across instances.
+    child_identity = Path.join(root, "child-service.identity")
+
+    File.write!(
+      child_identity,
+      Base.encode16(:crypto.hash(:sha256, "child-service"), case: :lower)
+    )
+
+    File.chmod!(child_identity, 0o600)
+    next_instance = %{next_instance | "identity_file" => child_identity}
+
+    next_instance =
+      Map.update!(next_instance, "trusted_peers", fn peers ->
+        peers ++
+          [
+            %{
+              "realm" => "child-root",
+              "pubkey" => Base.encode64(Sim.identity(child, "creator").pub)
+            }
+          ]
+      end)
+
+    artifacts = [
+      %{
+        kind: :log,
+        bytes: child_bytes,
+        replica: child.replica,
+        op_id: genesis.id,
+        review: child_review
+      },
+      %{
+        kind: :reference,
+        bytes: Jason.encode!(Wire.encode_op(reference)),
+        replica: space.replica,
+        op_id: reference.id,
+        review: nil
+      },
+      %{
+        kind: :manifest,
+        bytes: Jason.encode!(%{"version" => 1, "instances" => [instance, next_instance]}),
+        replica: nil,
+        op_id: nil,
+        review: nil
+      }
+    ]
+
+    request = %{
+      active_manifest: active,
+      attempt: attempt,
+      generation: 1,
+      catalog_head: nil,
+      manifest_digest: Journal.digest(File.read!(active))
+    }
+
+    {:ok,
+     root: root,
+     request: request,
+     artifacts: artifacts,
+     active_log: active_log,
+     active_bytes: File.read!(active_log),
+     child: child,
+     space: space,
+     updated_log: Sim.log(space_with_ref, "creator"),
+     reference: reference}
+  end
+
+  # Honest staging derives the child's root from its own independent seed.
+  # `:reuse_space_root` and `:reuse_carrier_service_key` let a test author the
+  # exact same genesis with the child bootstrap moderator authority collapsed
+  # onto the active Space root or the admitted carrier instance's own
+  # transport identity instead, to prove `Staging` refuses either reuse.
+  defp reuse_child_creator(sim, nil, _space), do: sim
+
+  defp reuse_child_creator(sim, :reuse_space_root, space) do
+    %{sim | realms: Map.put(sim.realms, "creator", Sim.identity(space, "creator"))}
+  end
+
+  defp reuse_child_creator(sim, :reuse_carrier_service_key, _space) do
+    # Matches the exact derivation `Manifest.load/1` applies to the
+    # "child-service" identity file below: sha256(seed) as the raw Ed25519 seed.
+    identity = Identity.from_seed("creator", "child-service")
+    %{sim | realms: Map.put(sim.realms, "creator", identity)}
+  end
+
+  # The honest pin is the shared continuation fixture. `pin_beacon` authors the
+  # same reviewed profile with a caller-chosen epoch-beacon policy instead, so a
+  # test can stage a child whose reviewed profile digest is unchanged while its
+  # genesis names different beacon witnesses.
+  defp pin_child(sim, nil), do: Treehouse.ContinuationFixtures.pin(sim, author: "creator")
+
+  defp pin_child(sim, :reordered_witnesses) do
+    profile = Treehouse.ContinuationFixtures.profile(sim)
+
+    pin_child(sim, %{
+      mode: :witnessed,
+      version: 1,
+      witnesses: Enum.reverse(profile.witnesses),
+      threshold: profile.threshold,
+      max_epoch_step: 1
+    })
+  end
+
+  defp pin_child(sim, beacon) do
+    profile = Treehouse.ContinuationFixtures.profile(sim)
+    root = Sim.identity(sim, "creator")
+    deleg = Delegation.genesis(root, sim.replica, ops: [], roles: [], live: false)
+
+    {sim, op} =
+      Sim.append(
+        sim,
+        root.realm_id,
+        :authority,
+        {:genesis, deleg, %{__continuation__: profile, __beacon__: beacon}}
+      )
+
+    {Sim.sync_all(sim), op, profile}
+  end
+end
