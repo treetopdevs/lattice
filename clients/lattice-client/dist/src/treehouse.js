@@ -185,9 +185,14 @@ export function authorTreehouseWitnessedSuccession(input) {
     return authorCarrierOp({ replica: input.replica, deps: input.deps, signer: input.signer, kind: "authority", cap: ["nil"],
         body: ["tuple", [["atom", "succeed"], ["atom", input.role], ["delegation", input.delegation], ["tuple", [["atom", "witnessed"], input.certificate]]]] });
 }
+const loneSurrogate = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 function term(value) {
-    if (typeof value === "string")
+    if (typeof value === "string") {
+        // TextEncoder would sign U+FFFD in place of a lone surrogate; BEAM refuses invalid UTF-8.
+        if (loneSurrogate.test(value))
+            throw new Error("Treehouse text must be well-formed UTF-16");
         return ["bin", bytesBase64(new TextEncoder().encode(value))];
+    }
     if (Array.isArray(value))
         return ["list", value.map(term)];
     throw new Error("Treehouse arguments must be text or a text list");
