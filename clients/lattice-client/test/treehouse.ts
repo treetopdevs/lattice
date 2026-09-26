@@ -210,7 +210,10 @@ for (const command of [
   { command: "create_thread", title: "lone \uD800 high", threadReplica: "thread:high" },
   { command: "create_thread", title: "lone \uDC00 low", threadReplica: "thread:low" },
   { command: "issue_invitation", recipient: alice, threads: ["thread:one", "thread:\uDBFF"] },
+  { command: "create_thread", title: "\uDC00\uD800", threadReplica: "thread:reversed" },
 ] as TreehouseCommand[]) {
   await assert.rejects(authorTreehouseCommand({ product: "Treehouse.Space", replica: spaceGenesis.replica, deps: [spaceGenesis.id], signer, capId: spaceCap, command }), /well-formed/);
 }
+await authorTreehouseCommand({ product: "Treehouse.Space", replica: spaceGenesis.replica, deps: [spaceGenesis.id], signer, capId: spaceCap,
+  command: { command: "create_thread", title: "tree \u{1F333} \u{10000}\u{10FFFF}", threadReplica: "thread:astral" } });
 console.log("PASS ill-formed UTF-16 text is refused before signing, matching BEAM's invalid-UTF-8 refusal");
