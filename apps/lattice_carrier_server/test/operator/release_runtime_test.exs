@@ -187,13 +187,14 @@ defmodule LatticeCarrierServer.Operator.ReleaseRuntimeTest do
   end
 
   # Restarted processes and Ranch registrations appear asynchronously; a probe
-  # that raises or exits before they exist counts as "not yet".
-  defp eventually(fun, attempts \\ 50) do
-    value =
+  # that raises or exits before they exist counts as "not yet". The last
+  # failure is reported if the condition never holds.
+  defp eventually(fun, attempts \\ 50, last \\ nil) do
+    {value, last} =
       try do
-        fun.()
+        {fun.(), last}
       catch
-        _kind, _reason -> nil
+        kind, reason -> {nil, Exception.format(kind, reason)}
       end
 
     cond do
@@ -202,10 +203,10 @@ defmodule LatticeCarrierServer.Operator.ReleaseRuntimeTest do
 
       attempts > 0 ->
         Process.sleep(50)
-        eventually(fun, attempts - 1)
+        eventually(fun, attempts - 1, last)
 
       true ->
-        flunk("condition never held")
+        flunk("condition never held; last probe failure: #{last || "none"}")
     end
   end
 
