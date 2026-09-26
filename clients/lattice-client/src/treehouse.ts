@@ -79,7 +79,7 @@ export function treehouseCommandBody(product: TreehouseProduct, command: Treehou
   return ["tuple", [["atom", command.command], ["list", args.map(term)]]];
 }
 
-export function authorTreehouseCommand(input: {
+export async function authorTreehouseCommand(input: {
   product: TreehouseProduct; replica: string; deps: string[]; signer: CarrierOpSigner;
   capId: string | null; command: TreehouseCommand;
 }): Promise<CarrierOpFrame> {

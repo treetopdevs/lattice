@@ -77,7 +77,7 @@ export function treehouseCommandBody(product, command) {
         throw new Error("unknown Treehouse command");
     return ["tuple", [["atom", command.command], ["list", args.map(term)]]];
 }
-export function authorTreehouseCommand(input) {
+export async function authorTreehouseCommand(input) {
     return authorCarrierOp({ replica: input.replica, deps: input.deps, signer: input.signer,
         kind: "command", cap: townshipCapTerm(input.capId), body: treehouseCommandBody(input.product, input.command) });
 }
