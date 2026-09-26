@@ -220,6 +220,18 @@ defmodule LatticeCarrierServer.Operator.Fixture do
     })
   end
 
+  defp pin_child(sim, {:max_epoch_step, step}) do
+    profile = Treehouse.ContinuationFixtures.profile(sim)
+
+    pin_child(sim, %{
+      mode: :witnessed,
+      version: 1,
+      witnesses: profile.witnesses,
+      threshold: profile.threshold,
+      max_epoch_step: step
+    })
+  end
+
   defp pin_child(sim, beacon) do
     profile = Treehouse.ContinuationFixtures.profile(sim)
     root = Sim.identity(sim, "creator")

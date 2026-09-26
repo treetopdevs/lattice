@@ -9,12 +9,16 @@ defmodule LatticeCarrierServer.Operator.Staging do
   Generation/catalog-head values remain reviewed operator intent.
   """
   alias Lattice.Authority
+  alias Lattice.Authority.BeaconCertificate
   alias Lattice.Carrier.Wire
   alias Lattice.Log
   alias Lattice.Op
   alias LatticeCarrierServer.Manifest
   alias LatticeCarrierServer.Operator.{Journal, Lock}
   @max_artifact 32 * 1024 * 1024
+  # Adopted founder-lifecycle witness maximum step
+  # (docs/research/treehouse_founder_lifecycle.md).
+  @reviewed_max_epoch_step 1
 
   @spec artifact_path(Path.t(), binary(), binary()) :: Path.t()
   def artifact_path(root, attempt, digest),
@@ -87,6 +91,7 @@ defmodule LatticeCarrierServer.Operator.Staging do
   def inspect_staged(retained, manifest) do
     with {:ok, bundle} <- classify(retained),
          {:ok, space} <- unique_history(bundle.reference.replica, manifest.instances),
+         :ok <- unserved(bundle.child.replica, manifest.instances),
          {:ok, child_log} <- verify_child(bundle.child),
          :ok <- verify_reference(bundle, space),
          :ok <- verify_candidate_manifest(bundle, manifest, space, child_log),
@@ -115,21 +120,31 @@ defmodule LatticeCarrierServer.Operator.Staging do
   # The referenced Space must have exactly one active history. Two instances
   # serving the same replica make roster and replay selection arbitrary.
   defp unique_history(replica, instances) do
-    histories =
-      Enum.reduce_while(instances, [], fn instance, matches ->
-        case Log.restore_verified(instance.log_file) do
-          # An unreadable sibling could otherwise make an ambiguous manifest
-          # look unique, so it refuses instead of being skipped.
-          {:ok, %{log: %{replica: ^replica} = log}} -> {:cont, [log | matches]}
-          {:ok, _other_replica} -> {:cont, matches}
-          _ -> {:halt, :unreadable}
-        end
-      end)
-
-    case histories do
-      [log] -> {:ok, log}
+    case active_histories(replica, instances) do
+      {:ok, [log]} -> {:ok, log}
       _ -> {:error, :invalid_candidate_manifest}
     end
+  end
+
+  # The candidate child must not already be served: a second log file for the
+  # same replica would be a potentially divergent carrier history.
+  defp unserved(replica, instances) do
+    case active_histories(replica, instances) do
+      {:ok, []} -> :ok
+      _ -> {:error, :invalid_candidate_manifest}
+    end
+  end
+
+  defp active_histories(replica, instances) do
+    Enum.reduce_while(instances, {:ok, []}, fn instance, {:ok, matches} ->
+      case Log.restore_verified(instance.log_file) do
+        # An unreadable sibling could otherwise make an ambiguous manifest
+        # look unique, so it refuses instead of being skipped.
+        {:ok, %{log: %{replica: ^replica} = log}} -> {:cont, {:ok, [log | matches]}}
+        {:ok, _other_replica} -> {:cont, {:ok, matches}}
+        _ -> {:halt, :unreadable}
+      end
+    end)
   end
 
   defp request_valid?(r) when is_map(r) do
@@ -268,15 +283,20 @@ defmodule LatticeCarrierServer.Operator.Staging do
   end
 
   # `profile_id` digests only the continuation profile, but any root-authored
-  # genesis policy map also sources the epoch-beacon policy. Beacon witnesses
-  # and threshold are therefore bound to the reviewed profile's own.
+  # genesis policy map also sources the epoch-beacon policy. The whole policy,
+  # as the authority judge normalizes it (witnesses sorted), must equal the
+  # reviewed profile's witnesses and threshold with the adopted step bound.
   defp reviewed_beacon_policy?(policies, profile) do
-    # The reviewed profile's witnesses are normalized (sorted); the pinned
-    # policy carries whatever order was signed, and the runtime sorts too.
     is_map(policies) and Enum.sort(Map.keys(policies)) == [:__beacon__, :__continuation__] and
-      match?(%{mode: :witnessed}, policies.__beacon__) and
-      Enum.sort(policies.__beacon__.witnesses) == profile.witnesses and
-      policies.__beacon__.threshold == profile.threshold
+      BeaconCertificate.normalize_policy(policies.__beacon__) ==
+        {:ok,
+         %{
+           mode: :witnessed,
+           version: 1,
+           witnesses: profile.witnesses,
+           threshold: profile.threshold,
+           max_epoch_step: @reviewed_max_epoch_step
+         }}
   end
 
   defp reviewed_grants(review) do
@@ -317,6 +337,11 @@ defmodule LatticeCarrierServer.Operator.Staging do
          # transport key this way would cross the carrier server's
          # no-semantic-authority boundary.
          true <- Authority.root(child_log) not in [Authority.root(space), admitted.pub],
+         # Inversely, the carrier service key must be no participant's: holding
+         # the Space root's or a member's seed would give the carrier custody of
+         # that participant's authority.
+         true <-
+           Base.encode64(admitted.pub) not in [Base.encode64(Authority.root(space)) | roster],
          true <- bootstrap_peers_exact?(admitted, roster, child_log),
          # Relay ingress is a separate reviewed decision, never a side effect
          # of admitting a candidate child.

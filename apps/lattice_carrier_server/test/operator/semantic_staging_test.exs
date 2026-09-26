@@ -210,6 +210,15 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
              Staging.inspect_staged(hostile.retained, hostile.manifest)
   end
 
+  test "a reviewed profile pin widening the beacon epoch step refuses", _f do
+    # Reviewed witnesses and threshold, but a quorum could jump 65,535 group
+    # days at once and lapse grants the step-one lifecycle expects to keep.
+    hostile = staged(pin_beacon: {:max_epoch_step, 65_535})
+
+    assert {:error, :invalid_staged_signed_artifact} =
+             Staging.inspect_staged(hostile.retained, hostile.manifest)
+  end
+
   test "the reviewed witness set is accepted in any signed order", _f do
     reordered = staged(pin_beacon: :reordered_witnesses)
 
@@ -266,6 +275,60 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
 
     assert {:error, :invalid_candidate_manifest} =
              Staging.inspect_staged(hostile.retained, hostile.manifest)
+  end
+
+  test "a candidate whose carrier service key is a Space participant's refuses", f do
+    # The Space creator is both the Space root and the only roster member.
+    participant = Path.join(f.root, "participant.identity")
+    creator = Lattice.Sim.identity(f.space, "creator")
+    File.write!(participant, Base.encode16(creator.priv, case: :lower))
+    File.chmod!(participant, 0o600)
+
+    candidate = candidate_json(f)
+    [old, child] = candidate["instances"]
+    child = Map.put(child, "identity_file", participant)
+    retained = replace_candidate(f, Map.put(candidate, "instances", [old, child]))
+
+    assert {:error, :invalid_candidate_manifest} =
+             Staging.inspect_staged(retained, f.manifest)
+  end
+
+  test "a child replica already served by an active instance refuses", f do
+    active_json = Jason.decode!(File.read!(f.request.active_manifest))
+    [active_record] = active_json["instances"]
+    served_log = Path.join(f.root, "served-child.log")
+    :ok = Log.dump(Lattice.Sim.log(f.child, "creator"), served_log)
+    served_identity = Path.join(f.root, "served-child.identity")
+
+    File.write!(
+      served_identity,
+      Base.encode16(:crypto.hash(:sha256, "served-child-service"), case: :lower)
+    )
+
+    File.chmod!(served_identity, 0o600)
+
+    served =
+      active_record
+      |> Map.put("name", "served-child")
+      |> Map.put("log_file", served_log)
+      |> Map.put("identity_file", served_identity)
+      |> put_in(["listener", "port"], 41_003)
+
+    served_active_path = Path.join(f.root, "served-active.json")
+
+    File.write!(
+      served_active_path,
+      Jason.encode!(%{"version" => 1, "instances" => [active_record, served]})
+    )
+
+    File.chmod!(served_active_path, 0o600)
+    {:ok, active} = Manifest.load(served_active_path)
+
+    candidate = candidate_json(f)
+    retained = replace_candidate(f, Map.update!(candidate, "instances", &[served | &1]))
+
+    assert {:error, :invalid_candidate_manifest} =
+             Staging.inspect_staged(retained, active)
   end
 
   test "a Space reference already present in active history is not carrier pending", f do
