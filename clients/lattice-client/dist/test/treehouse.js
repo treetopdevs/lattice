@@ -183,3 +183,11 @@ const unicodeResult = materialize(treehouseSpaceSchema, decodeSpace([spaceGenesi
 assert.equal(unicodeResult.quarantineReasons.has(unicodeInvite.id), false);
 assert.deepEqual(unicodeResult.state.threads.map((reference) => reference.replica), unicodeScope);
 console.log("PASS Unicode Thread references follow BEAM byte order in scopes and state");
+for (const command of [
+    { command: "create_thread", title: "lone \uD800 high", threadReplica: "thread:high" },
+    { command: "create_thread", title: "lone \uDC00 low", threadReplica: "thread:low" },
+    { command: "issue_invitation", recipient: alice, threads: ["thread:one", "thread:\uDBFF"] },
+]) {
+    await assert.rejects(authorTreehouseCommand({ product: "Treehouse.Space", replica: spaceGenesis.replica, deps: [spaceGenesis.id], signer, capId: spaceCap, command }), /well-formed/);
+}
+console.log("PASS ill-formed UTF-16 text is refused before signing, matching BEAM's invalid-UTF-8 refusal");
