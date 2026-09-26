@@ -365,6 +365,28 @@ const authoredPostFrame = await authorTownshipCommand({
 });
 check("authored resident post frame", authoredPostFrame, postFixture);
 
+async function refusesIllFormedText(author: () => unknown): Promise<boolean> {
+  try { await author(); } catch (error) { return /well-formed UTF-16/.test(String(error)); }
+  return false;
+}
+for (const [name, command] of [
+  ["lone high surrogate post", { command: "post", text: "lone \uD800 high" }],
+  ["lone low surrogate title", { command: "set_title", text: "lone \uDC00 low" }],
+  ["trailing lone surrogate member in arg list", { command: "admit", member: "resident:\uDBFF" }],
+  ["reversed surrogate pair summary", { command: "set_summary", text: "\uDC00\uD800" }],
+] as const) {
+  check(`${name} is refused before signing`, await refusesIllFormedText(() => authorTownshipCommand({
+    replica: postFixture.replica, deps: postFixture.deps, command, capId, signer: residentAuthor,
+  })), true);
+}
+check("lone surrogate cap id is refused", await refusesIllFormedText(() => townshipCapTerm("cap:\uD800")), true);
+check("lone surrogate revoke id is refused", await refusesIllFormedText(() => townshipRevokeBody("\uDFFF")), true);
+check(
+  "well-formed astral text still encodes as UTF-8",
+  townshipCommandBody({ command: "post", text: "tree \u{1F333}" }),
+  commandBody("post", "tree \u{1F333}"),
+);
+
 const localOpsBeforePost = carrierOpsToSemanticOps(
   vector.clientDivergedCarrierOps.filter((frame) => frame.id !== postFixture.id),
   vector.realmByPubkey,

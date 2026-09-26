@@ -466,7 +466,11 @@ function townshipGenesisPoliciesTerm(
   ];
 }
 
+const loneSurrogate = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+
 function textBase64(value: string): string {
+  // TextEncoder would sign U+FFFD in place of a lone surrogate; BEAM refuses invalid UTF-8.
+  if (loneSurrogate.test(value)) throw new Error("Township text must be well-formed UTF-16");
   return bytesBase64(new TextEncoder().encode(value));
 }
 
