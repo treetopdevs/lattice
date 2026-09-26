@@ -92,6 +92,21 @@ class Protocol(unittest.TestCase):
                 self.committed(name, on_disk, b"a" * 64)
             self.assertEqual(str(ctx.exception), "stale_operator_intent")
 
+    def test_commit_refuses_a_symlinked_service_identity_cleanly(self):
+        root = self.workdir("service-symlink")
+        real = os.path.join(root, "real.identity")
+        with open(real, "wb") as f:
+            f.write(b"a" * 64)
+        os.chmod(real, 0o600)
+        link = os.path.join(root, "service.identity")
+        os.symlink(real, link)
+        record = self.sample()
+        record["artifacts"][0]["path"] = os.path.join(root, "candidate")
+        record["service"].update(identity_file=link, sha256=owner.digest(b"a" * 64))
+        with self.assertRaises(owner.Refusal) as ctx:
+            owner.commit(root, None, json.dumps(record, separators=(",", ":")))
+        self.assertEqual(str(ctx.exception), "unsafe_operator_file")
+
     def test_commit_refuses_a_shared_service_identity_file(self):
         with self.assertRaises(owner.Refusal) as ctx:
             root = self.workdir("service-shared")

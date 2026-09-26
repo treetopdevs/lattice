@@ -355,15 +355,16 @@ defmodule LatticeCarrierServer.Operator.Staging do
   end
 
   # The pending record binds the exact identity bytes whose key was reviewed:
-  # read once and reconfirmed unchanged around the separate key derivation, so
-  # the digest and the key describe the same file. The mutation owner rechecks
-  # that digest before commit, and activation must recheck it before use.
+  # the digest and the key both come from one read, so they describe the same
+  # file. The mutation owner rechecks that digest before commit, and
+  # activation must recheck it before use.
   defp bind_service(admitted) do
     path = admitted.identity_file
 
-    with {:ok, bytes} <- File.read(path),
-         :ok <- Manifest.verify_identity(path, admitted.realm, admitted.pub),
-         {:ok, ^bytes} <- File.read(path) do
+    with :ok <- Journal.identity_location(path),
+         {:ok, bytes} <- File.read(path),
+         {:ok, pub} <- Manifest.identity_public_key(bytes),
+         true <- pub == admitted.pub do
       {:ok,
        %{
          "identity_file" => path,

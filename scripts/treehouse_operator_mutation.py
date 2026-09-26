@@ -176,6 +176,10 @@ def current_service(s):
         raw = file_bytes(s["identity_file"], private=True)
     except FileNotFoundError:
         refuse("stale_operator_intent")
+    except OSError:
+        # O_NOFOLLOW on a symlinked identity (ELOOP) or any other open
+        # failure is a closed refusal, not an opaque persistence failure.
+        refuse("unsafe_operator_file")
     if digest(raw) != s["sha256"]:
         refuse("stale_operator_intent")
 

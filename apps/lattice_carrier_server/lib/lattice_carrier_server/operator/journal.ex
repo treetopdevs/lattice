@@ -22,10 +22,32 @@ defmodule LatticeCarrierServer.Operator.Journal do
   # at all; both must become a closed refusal rather than escaping this guard.
   @spec secure_root(Path.t()) :: :ok | {:error, term()}
   def secure_root(root) do
+    with {:ok, uid} <- effective_uid(), do: secure_directory(Path.expand(root), uid)
+  end
+
+  @doc """
+  Whether `path` is a service identity location the mutation owner accepts:
+  a private regular file with one link, owned by this service user, opened
+  without following a symlink, under an ancestor chain `secure_root/1` accepts.
+  The carrier manifest checks only the file's own mode and owner.
+  """
+  @spec identity_location(Path.t()) :: :ok | {:error, :unsafe_identity_file}
+  def identity_location(path) do
+    with {:ok, uid} <- effective_uid(),
+         :ok <- secure_directory(Path.dirname(path), uid),
+         {:ok, %{type: :regular, links: 1, uid: ^uid, mode: mode}} when band(mode, 0o077) == 0 <-
+           File.lstat(path) do
+      :ok
+    else
+      _ -> {:error, :unsafe_identity_file}
+    end
+  end
+
+  defp effective_uid do
     case System.cmd("id", ["-u"], stderr_to_stdout: true) do
       {uid, 0} ->
         case Integer.parse(String.trim(uid)) do
-          {value, ""} -> secure_directory(Path.expand(root), value)
+          {value, ""} -> {:ok, value}
           _ -> {:error, :unsafe_operator_directory}
         end
 
@@ -186,18 +208,18 @@ defmodule LatticeCarrierServer.Operator.Journal do
 
   @doc """
   Whether a pending record's bound service identity is still exactly the file
-  staging reviewed: unchanged bytes that still derive the bound key for the
-  bound realm. Activation must check this before loading the carrier key.
+  staging reviewed: the same safe location, holding unchanged bytes that
+  derive the bound key. Activation must check this before loading the key.
   """
   @spec service_identity_current?(term()) :: boolean()
   def service_identity_current?(service) do
     with true <- service?(service),
          path = service["identity_file"],
-         {:ok, pub} <- Base.decode64(service["pub"]),
+         :ok <- identity_location(path),
          {:ok, bytes} <- File.read(path),
          true <- digest(bytes) == service["sha256"],
-         :ok <- Manifest.verify_identity(path, service["realm"], pub),
-         {:ok, ^bytes} <- File.read(path) do
+         {:ok, pub} <- Manifest.identity_public_key(bytes),
+         true <- Base.encode64(pub) == service["pub"] do
       true
     else
       _ -> false

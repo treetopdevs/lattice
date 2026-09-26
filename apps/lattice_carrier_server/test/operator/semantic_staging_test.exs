@@ -70,6 +70,40 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
     refute Journal.service_identity_current?(service)
   end
 
+  # The mutation owner opens the identity O_NOFOLLOW, requires one link and a
+  # secure ancestor chain; the carrier manifest checks only the file's own
+  # mode and owner. Staging refuses what the owner would, instead of binding a
+  # candidate that can never commit.
+  test "a symlinked service identity file refuses", f do
+    real = Path.join(f.root, "child-service.identity")
+    link = Path.join(f.root, "linked-service.identity")
+    File.ln_s!(real, link)
+
+    assert {:error, :invalid_candidate_manifest} =
+             Staging.inspect_staged(with_identity_path(f, link), f.manifest)
+  end
+
+  test "a hard-linked service identity file refuses", f do
+    real = Path.join(f.root, "child-service.identity")
+    link = Path.join(f.root, "hardlinked-service.identity")
+    File.ln!(real, link)
+
+    assert {:error, :invalid_candidate_manifest} =
+             Staging.inspect_staged(with_identity_path(f, link), f.manifest)
+  end
+
+  test "a service identity under a group-writable directory refuses", f do
+    shared = Path.join(f.root, "shared")
+    File.mkdir!(shared)
+    File.chmod!(shared, 0o775)
+    path = Path.join(shared, "service.identity")
+    File.cp!(Path.join(f.root, "child-service.identity"), path)
+    File.chmod!(path, 0o600)
+
+    assert {:error, :invalid_candidate_manifest} =
+             Staging.inspect_staged(with_identity_path(f, path), f.manifest)
+  end
+
   test "missing reviewed profile, creation or grant introduction refuses", f do
     [child | rest] = f.retained
     absent = Base.url_encode64(:crypto.hash(:sha256, "absent"), padding: false)
@@ -437,6 +471,16 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
   end
 
   # Points the admitted child instance at an identity file holding `identity`'s seed.
+  defp with_identity_path(f, path) do
+    candidate = candidate_json(f)
+    [old, child] = candidate["instances"]
+
+    replace_candidate(
+      f,
+      Map.put(candidate, "instances", [old, Map.put(child, "identity_file", path)])
+    )
+  end
+
   defp with_service_identity(f, identity) do
     path = Path.join(f.root, "#{identity.realm_id}-as-service.identity")
     File.write!(path, Base.encode16(identity.priv, case: :lower))
