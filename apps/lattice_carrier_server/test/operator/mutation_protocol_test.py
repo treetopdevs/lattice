@@ -34,7 +34,9 @@ class Protocol(unittest.TestCase):
                 "attempt": base64.urlsafe_b64encode(bytes(32)).decode().rstrip("="),
                 "generation": 0, "catalog_head": None, "manifest_digest": "0" * 64,
                 "artifacts": [{"path": "/public/candidate", "sha256": "1" * 64,
-                               "kind": "manifest", "replica": None, "op_id": None, "review": None}]}
+                               "kind": "manifest", "replica": None, "op_id": None, "review": None}],
+                "service": {"identity_file": "/srv/child-service.identity", "realm": "child-service",
+                            "pub": base64.b64encode(bytes(32)).decode(), "sha256": "2" * 64}}
 
     def test_duplicate_keys_after_escapes_and_constants_refuse(self):
         for raw in ['{"version":1,"version":2}', '{"version":1,"ver\\u0073ion":2}',
@@ -51,6 +53,72 @@ class Protocol(unittest.TestCase):
             record[key] = value
             with self.assertRaises(owner.Refusal):
                 owner.record(json.dumps(record))
+
+    def test_service_identity_binding_is_closed_and_canonical(self):
+        good = self.sample()["service"]
+        for bad in [None, dict(good, extra="x"), {k: v for k, v in good.items() if k != "pub"},
+                    dict(good, identity_file="relative/child.identity"),
+                    dict(good, identity_file="/srv/../child.identity"), dict(good, realm=""),
+                    dict(good, pub=base64.b64encode(b"short").decode()), dict(good, pub="not base64"),
+                    dict(good, sha256="A" * 64)]:
+            record = self.sample()
+            record["service"] = bad
+            with self.assertRaises(owner.Refusal, msg=repr(bad)):
+                owner.record(json.dumps(record))
+        record = self.sample()
+        del record["service"]
+        with self.assertRaises(owner.Refusal):
+            owner.record(json.dumps(record))
+
+    def committed(self, name, identity_bytes, bound_bytes):
+        root = self.workdir(name)
+        identity = os.path.join(root, "service.identity")
+        if identity_bytes is not None:
+            with open(identity, "wb") as f:
+                f.write(identity_bytes)
+            os.chmod(identity, 0o600)
+        record = self.sample()
+        record["artifacts"][0]["path"] = os.path.join(root, "candidate")
+        record["service"]["identity_file"] = identity
+        record["service"]["sha256"] = owner.digest(bound_bytes)
+        owner.commit(root, None, json.dumps(record, separators=(",", ":")))
+        return root
+
+    def test_commit_rechecks_the_bound_service_identity_digest(self):
+        root = self.committed("service-current", b"a" * 64, b"a" * 64)
+        self.assertTrue(os.path.exists(os.path.join(root, "operator-journal.json")))
+        for name, on_disk in [("service-rotated", b"b" * 64), ("service-missing", None)]:
+            with self.assertRaises(owner.Refusal) as ctx:
+                self.committed(name, on_disk, b"a" * 64)
+            self.assertEqual(str(ctx.exception), "stale_operator_intent")
+
+    def test_commit_refuses_a_symlinked_service_identity_cleanly(self):
+        root = self.workdir("service-symlink")
+        real = os.path.join(root, "real.identity")
+        with open(real, "wb") as f:
+            f.write(b"a" * 64)
+        os.chmod(real, 0o600)
+        link = os.path.join(root, "service.identity")
+        os.symlink(real, link)
+        record = self.sample()
+        record["artifacts"][0]["path"] = os.path.join(root, "candidate")
+        record["service"].update(identity_file=link, sha256=owner.digest(b"a" * 64))
+        with self.assertRaises(owner.Refusal) as ctx:
+            owner.commit(root, None, json.dumps(record, separators=(",", ":")))
+        self.assertEqual(str(ctx.exception), "unsafe_operator_file")
+
+    def test_commit_refuses_a_shared_service_identity_file(self):
+        with self.assertRaises(owner.Refusal) as ctx:
+            root = self.workdir("service-shared")
+            identity = os.path.join(root, "service.identity")
+            with open(identity, "wb") as f:
+                f.write(b"a" * 64)
+            os.chmod(identity, 0o640)
+            record = self.sample()
+            record["artifacts"][0]["path"] = os.path.join(root, "candidate")
+            record["service"].update(identity_file=identity, sha256=owner.digest(b"a" * 64))
+            owner.commit(root, None, json.dumps(record, separators=(",", ":")))
+        self.assertEqual(str(ctx.exception), "unsafe_operator_file")
 
     def test_raw_binary_canonical_and_bounded(self):
         self.assertEqual(owner.binary("eA=="), b"x")

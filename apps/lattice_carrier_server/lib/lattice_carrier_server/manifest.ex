@@ -267,14 +267,34 @@ defmodule LatticeCarrierServer.Manifest do
 
   defp identity_seed(path) do
     with {:ok, contents} <- File.read(path),
-         trimmed = String.trim(contents),
-         true <- byte_size(trimmed) == 64,
-         {:ok, seed} <- Base.decode16(trimmed, case: :mixed) do
+         {:ok, seed} <- seed_from_contents(contents) do
       {:ok, seed}
     else
       # Never include file contents in the error: a partially corrupt file
       # may still hold recoverable secret bytes.
       _other -> {:error, {:identity_file_corrupt, path}}
+    end
+  end
+
+  defp seed_from_contents(contents) do
+    trimmed = String.trim(contents)
+
+    with true <- byte_size(trimmed) == 64,
+         {:ok, seed} <- Base.decode16(trimmed, case: :mixed) do
+      {:ok, seed}
+    else
+      _other -> :error
+    end
+  end
+
+  @doc false
+  # The public key an identity file's exact contents derive, so a caller that
+  # read the bytes once can bind their digest and key without a second read.
+  @spec identity_public_key(binary()) :: {:ok, binary()} | :error
+  def identity_public_key(contents) when is_binary(contents) do
+    with {:ok, seed} <- seed_from_contents(contents) do
+      {pub, _priv} = :crypto.generate_key(:eddsa, :ed25519, seed)
+      {:ok, pub}
     end
   end
 

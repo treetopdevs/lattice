@@ -32,7 +32,13 @@ defmodule LatticeCarrierServer.Operator.LauncherTest do
             "path" => Path.join(root, "artifact"),
             "sha256" => LatticeCarrierServer.Operator.Journal.digest("artifact")
           }
-        ]
+        ],
+        "service" => %{
+          "identity_file" => Path.join(root, "service.identity"),
+          "realm" => "service",
+          "pub" => Base.encode64(<<0::256>>),
+          "sha256" => LatticeCarrierServer.Operator.Journal.digest("identity")
+        }
       }
 
       assert {:error, :unsupported_operator_platform} =

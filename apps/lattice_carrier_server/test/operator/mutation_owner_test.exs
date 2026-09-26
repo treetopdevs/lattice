@@ -19,6 +19,11 @@ defmodule LatticeCarrierServer.Operator.MutationOwnerTest do
     artifact_path =
       LatticeCarrierServer.Operator.Staging.artifact_path(root, attempt, Journal.digest(bytes))
 
+    identity = Path.join(root, "service.identity")
+    identity_bytes = Base.encode16(:crypto.hash(:sha256, "owner-service"), case: :lower)
+    File.write!(identity, identity_bytes)
+    File.chmod!(identity, 0o600)
+
     record = %{
       "version" => 1,
       "phase" => "carrier_pending",
@@ -35,7 +40,13 @@ defmodule LatticeCarrierServer.Operator.MutationOwnerTest do
           "path" => artifact_path,
           "sha256" => Journal.digest(bytes)
         }
-      ]
+      ],
+      "service" => %{
+        "identity_file" => identity,
+        "realm" => "service",
+        "pub" => Base.encode64(Lattice.Identity.from_seed("service", "owner-service").pub),
+        "sha256" => Journal.digest(identity_bytes)
+      }
     }
 
     plan = %{

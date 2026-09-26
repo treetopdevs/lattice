@@ -29,8 +29,79 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
   end
 
   test "actual bounded child, profile, grant inventory and signed reference replay", f do
-    assert :ok = Staging.inspect_staged(f.retained, f.manifest)
+    assert {:ok, _service} = Staging.inspect_staged(f.retained, f.manifest)
     refute File.exists?(Journal.path(f.root))
+  end
+
+  test "staging binds the admitted service identity file, realm, key and digest", f do
+    identity_file = Path.join(f.root, "child-service.identity")
+    # The fixture's child-service file holds sha256("child-service") as its seed.
+    pub = Lattice.Identity.from_seed("child-service", "child-service").pub
+
+    assert {:ok, service} = Staging.inspect_staged(f.retained, f.manifest)
+
+    assert service == %{
+             "identity_file" => identity_file,
+             "realm" => "child-service",
+             "pub" => Base.encode64(pub),
+             "sha256" => Journal.digest(File.read!(identity_file))
+           }
+
+    assert Journal.service_identity_current?(service)
+  end
+
+  test "a service identity rotated after staging no longer verifies", f do
+    {:ok, service} = Staging.inspect_staged(f.retained, f.manifest)
+
+    File.write!(
+      service["identity_file"],
+      Base.encode16(:crypto.hash(:sha256, "rotated-service"), case: :lower)
+    )
+
+    refute Journal.service_identity_current?(service)
+  end
+
+  test "a same-key rewrite of the identity file no longer matches the bound digest", f do
+    {:ok, service} = Staging.inspect_staged(f.retained, f.manifest)
+    # Same seed, different bytes (upper-case hex): the key still matches, but
+    # the reviewed file is not the one on disk any more.
+    File.write!(service["identity_file"], String.upcase(File.read!(service["identity_file"])))
+
+    refute Journal.service_identity_current?(service)
+  end
+
+  # The mutation owner opens the identity O_NOFOLLOW, requires one link and a
+  # secure ancestor chain; the carrier manifest checks only the file's own
+  # mode and owner. Staging refuses what the owner would, instead of binding a
+  # candidate that can never commit.
+  test "a symlinked service identity file refuses", f do
+    real = Path.join(f.root, "child-service.identity")
+    link = Path.join(f.root, "linked-service.identity")
+    File.ln_s!(real, link)
+
+    assert {:error, :invalid_candidate_manifest} =
+             Staging.inspect_staged(with_identity_path(f, link), f.manifest)
+  end
+
+  test "a hard-linked service identity file refuses", f do
+    real = Path.join(f.root, "child-service.identity")
+    link = Path.join(f.root, "hardlinked-service.identity")
+    File.ln!(real, link)
+
+    assert {:error, :invalid_candidate_manifest} =
+             Staging.inspect_staged(with_identity_path(f, link), f.manifest)
+  end
+
+  test "a service identity under a group-writable directory refuses", f do
+    shared = Path.join(f.root, "shared")
+    File.mkdir!(shared)
+    File.chmod!(shared, 0o775)
+    path = Path.join(shared, "service.identity")
+    File.cp!(Path.join(f.root, "child-service.identity"), path)
+    File.chmod!(path, 0o600)
+
+    assert {:error, :invalid_candidate_manifest} =
+             Staging.inspect_staged(with_identity_path(f, path), f.manifest)
   end
 
   test "missing reviewed profile, creation or grant introduction refuses", f do
@@ -222,7 +293,7 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
   test "the reviewed witness set is accepted in any signed order", _f do
     reordered = staged(pin_beacon: :reordered_witnesses)
 
-    assert :ok = Staging.inspect_staged(reordered.retained, reordered.manifest)
+    assert {:ok, _service} = Staging.inspect_staged(reordered.retained, reordered.manifest)
   end
 
   test "an epoch-beacon policy on the child root genesis refuses", _f do
@@ -280,13 +351,13 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
   test "a second, non-root Space member stages honestly", _f do
     two = staged(second_member: true)
 
-    assert :ok = Staging.inspect_staged(two.retained, two.manifest)
+    assert {:ok, _service} = Staging.inspect_staged(two.retained, two.manifest)
   end
 
   test "a Space whose root is not a roster member stages honestly", _f do
     rootless = staged(second_member: true, root_member: false)
 
-    assert :ok = Staging.inspect_staged(rootless.retained, rootless.manifest)
+    assert {:ok, _service} = Staging.inspect_staged(rootless.retained, rootless.manifest)
   end
 
   test "a candidate whose carrier service key is the Space root's refuses", _f do
@@ -400,6 +471,16 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
   end
 
   # Points the admitted child instance at an identity file holding `identity`'s seed.
+  defp with_identity_path(f, path) do
+    candidate = candidate_json(f)
+    [old, child] = candidate["instances"]
+
+    replace_candidate(
+      f,
+      Map.put(candidate, "instances", [old, Map.put(child, "identity_file", path)])
+    )
+  end
+
   defp with_service_identity(f, identity) do
     path = Path.join(f.root, "#{identity.realm_id}-as-service.identity")
     File.write!(path, Base.encode16(identity.priv, case: :lower))

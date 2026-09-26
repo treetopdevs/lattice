@@ -9,9 +9,11 @@ defmodule LatticeCarrierServer.Operator.Journal do
   """
   import Bitwise
   alias Jason.OrderedObject
+  alias LatticeCarrierServer.Manifest
   alias LatticeCarrierServer.Operator.Lock
-  @fields ~w(version phase attempt generation catalog_head manifest_digest artifacts)
+  @fields ~w(version phase attempt generation catalog_head manifest_digest artifacts service)
   @artifact_fields ~w(kind op_id path replica review sha256)
+  @service_fields ~w(identity_file pub realm sha256)
   @review_fields ~w(creation grants profile_genesis profile_id)
   @grant_fields ~w(delegation introduction recipient)
   @max_bytes 1_048_576
@@ -20,10 +22,32 @@ defmodule LatticeCarrierServer.Operator.Journal do
   # at all; both must become a closed refusal rather than escaping this guard.
   @spec secure_root(Path.t()) :: :ok | {:error, term()}
   def secure_root(root) do
+    with {:ok, uid} <- effective_uid(), do: secure_directory(Path.expand(root), uid)
+  end
+
+  @doc """
+  Whether `path` is a service identity location the mutation owner accepts:
+  a private regular file with one link, owned by this service user, opened
+  without following a symlink, under an ancestor chain `secure_root/1` accepts.
+  The carrier manifest checks only the file's own mode and owner.
+  """
+  @spec identity_location(Path.t()) :: :ok | {:error, :unsafe_identity_file}
+  def identity_location(path) do
+    with {:ok, uid} <- effective_uid(),
+         :ok <- secure_directory(Path.dirname(path), uid),
+         {:ok, %{type: :regular, links: 1, uid: ^uid, mode: mode}} when band(mode, 0o077) == 0 <-
+           File.lstat(path) do
+      :ok
+    else
+      _ -> {:error, :unsafe_identity_file}
+    end
+  end
+
+  defp effective_uid do
     case System.cmd("id", ["-u"], stderr_to_stdout: true) do
       {uid, 0} ->
         case Integer.parse(String.trim(uid)) do
-          {value, ""} -> secure_directory(Path.expand(root), value)
+          {value, ""} -> {:ok, value}
           _ -> {:error, :unsafe_operator_directory}
         end
 
@@ -107,6 +131,10 @@ defmodule LatticeCarrierServer.Operator.Journal do
   end
 
   defp canonical_field("artifacts", artifacts), do: Enum.map(artifacts, &canonical_artifact/1)
+
+  defp canonical_field("service", service) when is_map(service),
+    do: OrderedObject.new(Enum.map(@service_fields, &{&1, service[&1]}))
+
   defp canonical_field(_key, value), do: value
 
   defp canonical_artifact(a) do
@@ -150,10 +178,53 @@ defmodule LatticeCarrierServer.Operator.Journal do
       (r["catalog_head"] == nil or op_id?(r["catalog_head"])) and
       digest?(r["manifest_digest"]) and is_list(r["artifacts"]) and
       length(r["artifacts"]) in 1..128 and Enum.all?(r["artifacts"], &artifact?/1) and
-      length(Enum.uniq_by(r["artifacts"], & &1["path"])) == length(r["artifacts"])
+      length(Enum.uniq_by(r["artifacts"], & &1["path"])) == length(r["artifacts"]) and
+      service?(r["service"])
   end
 
   defp valid?(_), do: false
+
+  # The admitted carrier service identity that staging reviewed: its file, the
+  # realm it serves, the public key derived from it and the digest of the exact
+  # file bytes. Activation must re-verify it before using the key.
+  defp service?(s) when is_map(s) do
+    Enum.sort(Map.keys(s)) == @service_fields and is_binary(s["identity_file"]) and
+      Path.type(s["identity_file"]) == :absolute and
+      Path.expand(s["identity_file"]) == s["identity_file"] and
+      is_binary(s["realm"]) and s["realm"] != "" and public_key?(s["pub"]) and
+      digest?(s["sha256"])
+  end
+
+  defp service?(_), do: false
+
+  defp public_key?(value) when is_binary(value) do
+    case Base.decode64(value) do
+      {:ok, bytes} -> byte_size(bytes) == 32 and Base.encode64(bytes) == value
+      _ -> false
+    end
+  end
+
+  defp public_key?(_), do: false
+
+  @doc """
+  Whether a pending record's bound service identity is still exactly the file
+  staging reviewed: the same safe location, holding unchanged bytes that
+  derive the bound key. Activation must check this before loading the key.
+  """
+  @spec service_identity_current?(term()) :: boolean()
+  def service_identity_current?(service) do
+    with true <- service?(service),
+         path = service["identity_file"],
+         :ok <- identity_location(path),
+         {:ok, bytes} <- File.read(path),
+         true <- digest(bytes) == service["sha256"],
+         {:ok, pub} <- Manifest.identity_public_key(bytes),
+         true <- Base.encode64(pub) == service["pub"] do
+      true
+    else
+      _ -> false
+    end
+  end
 
   defp artifact?(a) when is_map(a) do
     Enum.sort(Map.keys(a)) == @artifact_fields and is_binary(a["path"]) and

@@ -149,17 +149,54 @@ def artifact_record(a):
                     for g in r["grants"]))
 
 
+def service_record(s):
+    if not closed(s, ["identity_file", "realm", "pub", "sha256"]):
+        return False
+    path = s["identity_file"]
+    if type(path) is not str or not os.path.isabs(path) or os.path.normpath(path) != path:
+        return False
+    if type(s["realm"]) is not str or not s["realm"] or not hex_id(s["sha256"]):
+        return False
+    if type(s["pub"]) is not str:
+        return False
+    try:
+        pub = base64.b64decode(s["pub"], validate=True)
+    except ValueError:
+        return False
+    return len(pub) == 32 and base64.b64encode(pub).decode() == s["pub"]
+
+
+def current_service(s):
+    # The admitted carrier identity file must still hold the exact bytes
+    # staging reviewed; a rotation after review is stale intent, never
+    # carried into a pending record. Identity files are private to this
+    # service user, exactly as the carrier manifest requires. The full call is
+    # wrapped because a missing ancestor raises from directory()'s own lstat.
+    try:
+        raw = file_bytes(s["identity_file"], private=True)
+    except FileNotFoundError:
+        refuse("stale_operator_intent")
+    except OSError:
+        # O_NOFOLLOW on a symlinked identity (ELOOP) or any other open
+        # failure is a closed refusal, not an opaque persistence failure.
+        refuse("unsafe_operator_file")
+    if digest(raw) != s["sha256"]:
+        refuse("stale_operator_intent")
+
+
 def record(raw):
     if type(raw) is not str or len(raw.encode()) > MAX_JOURNAL:
         refuse("corrupt_operator_journal")
     r = decode(raw)
-    if (not closed(r, ["version", "phase", "attempt", "generation", "catalog_head", "manifest_digest", "artifacts"])
+    if (not closed(r, ["version", "phase", "attempt", "generation", "catalog_head", "manifest_digest", "artifacts",
+                       "service"])
             or type(r["version"]) is not int or r["version"] != 1 or r["phase"] != "carrier_pending"
             or not op_id(r["attempt"]) or type(r["generation"]) is not int or not 0 <= r["generation"] < SAFE
             or not (r["catalog_head"] is None or op_id(r["catalog_head"])) or not hex_id(r["manifest_digest"])
             or type(r["artifacts"]) is not list or not 1 <= len(r["artifacts"]) <= 128
             or not all(artifact_record(a) for a in r["artifacts"])
-            or len({a["path"] for a in r["artifacts"]}) != len(r["artifacts"])):
+            or len({a["path"] for a in r["artifacts"]}) != len(r["artifacts"])
+            or not service_record(r["service"])):
         refuse("corrupt_operator_journal")
     return r
 
@@ -223,10 +260,12 @@ def commit(root, old, raw):
         if old_record["attempt"] == next_record["attempt"] and old_record != next_record:
             refuse("stale_operator_intent")
     expected(root, old)
+    current_service(next_record["service"])
     # Exclusive temp is deliberately preserved on failure; never guess that an orphan is disposable.
     temporary = os.path.join(root, "operator-journal.json.tmp." + os.urandom(16).hex())
     retain(temporary, raw.encode())
     expected(root, old)
+    current_service(next_record["service"])
     os.replace(temporary, os.path.join(root, "operator-journal.json"))
     sync_dir(root)
     if file_bytes(os.path.join(root, "operator-journal.json"), MAX_JOURNAL, private=True) != raw.encode():
