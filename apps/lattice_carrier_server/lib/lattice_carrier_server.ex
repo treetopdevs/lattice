@@ -66,12 +66,15 @@ defmodule LatticeCarrierServer do
     children = [
       {Holder,
        name: holder,
+       release_owner: Keyword.get(opts, :release_owner),
+       release_route: instance,
        identity: identity,
        source: source,
        relay_realms: relay_realms,
        state_reporter: Keyword.get(opts, :state_reporter)},
       Listener.child_spec(
         instance: instance,
+        release_owner: Keyword.get(opts, :release_owner),
         holder: holder,
         trusted_peers: trusted_peers,
         listener: listener_opts

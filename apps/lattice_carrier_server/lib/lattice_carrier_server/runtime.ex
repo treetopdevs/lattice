@@ -16,17 +16,26 @@ defmodule LatticeCarrierServer.Runtime do
   alias Lattice.Log
   alias LatticeCarrierServer.{Durability, Health, Holder, Manifest}
 
+  alias LatticeCarrierServer.Operator.ReleaseGate
+
   @deployment_key {__MODULE__, :deployment}
   @instance_names_key {__MODULE__, :instance_names}
 
   @spec prepare(nil | Path.t()) :: {:ok, [Supervisor.child_spec()]} | {:error, term()}
-  def prepare(nil) do
-    clear_stale_instances([])
-    :persistent_term.erase(@deployment_key)
-    {:ok, []}
+  def prepare(path) do
+    case deployment() do
+      %{owner: _owner} -> {:error, :controlled_release_owned}
+      _ -> with {:ok, children, _digest} <- do_prepare(path), do: {:ok, children}
+    end
   end
 
-  def prepare(manifest_path) when is_binary(manifest_path) do
+  defp do_prepare(nil) do
+    clear_stale_instances([])
+    :persistent_term.erase(@deployment_key)
+    {:ok, [], nil}
+  end
+
+  defp do_prepare(manifest_path) when is_binary(manifest_path) do
     case Manifest.load(manifest_path) do
       {:ok, manifest} ->
         with :ok <- preflight_instances(manifest.instances) do
@@ -55,12 +64,40 @@ defmodule LatticeCarrierServer.Runtime do
 
           {:ok,
            Enum.map(manifest.instances, &instance_child_spec/1) ++
-             health_children(manifest.health)}
+             health_children(manifest.health), manifest.sha256}
         end
 
       {:error, _reason} = error ->
         clear()
         error
+    end
+  end
+
+  @doc false
+  @spec prepare_owned(nil | Path.t(), ReleaseGate.owner() | nil, boolean()) ::
+          {:ok, list()} | {:error, term()}
+  def prepare_owned(path, owner, extras? \\ false)
+  def prepare_owned(path, nil, _extras?), do: prepare(path)
+
+  def prepare_owned(path, owner, extras?) do
+    with {:ok, lease} <- ReleaseGate.acquire(owner, :preflight),
+         {:ok, children, digest} <- do_prepare(path),
+         :ok <- ReleaseGate.complete(owner, lease, :preflight, self()) do
+      deployment = deployment()
+
+      # The digest of the manifest bytes these routes were built from, never
+      # a second read that could describe a later file.
+      :persistent_term.put(
+        @deployment_key,
+        Map.merge(deployment, %{
+          owner: owner,
+          uncontrolled_routes?: extras?,
+          manifest_path: Path.expand(path),
+          manifest_digest: digest
+        })
+      )
+
+      {:ok, children}
     end
   end
 
@@ -73,7 +110,40 @@ defmodule LatticeCarrierServer.Runtime do
   def start_instance(name) do
     instance = :persistent_term.get(instance_key(name))
 
+    owner =
+      case deployment() do
+        %{owner: owner} -> owner
+        _ -> nil
+      end
+
+    start_owned_instance(instance, owner)
+  end
+
+  defp start_owned_instance(instance, nil), do: start_route(instance, nil)
+
+  defp start_owned_instance(instance, owner) do
+    with {:ok, lease} <- ReleaseGate.acquire(owner, {:route, instance.name}) do
+      case start_route(instance, owner) do
+        {:ok, route} ->
+          case ReleaseGate.complete(owner, lease, {:route, instance.name}, route) do
+            :ok ->
+              {:ok, route}
+
+            error ->
+              Supervisor.stop(route)
+              error
+          end
+
+        error ->
+          ReleaseGate.abandon(owner, lease)
+          error
+      end
+    end
+  end
+
+  defp start_route(instance, owner) do
     LatticeCarrierServer.start_link(
+      release_owner: owner,
       instance: instance.name,
       identity: instance.identity,
       trusted_peers: instance.trusted_peers,
@@ -82,6 +152,15 @@ defmodule LatticeCarrierServer.Runtime do
       source: {:path, instance.log_file},
       listener: instance.listener
     )
+  end
+
+  @doc false
+  @spec startup_allowed?() :: boolean()
+  def startup_allowed? do
+    case deployment() do
+      %{owner: owner} -> ReleaseGate.accepting?(owner)
+      _ -> true
+    end
   end
 
   @doc false
@@ -240,7 +319,11 @@ defmodule LatticeCarrierServer.Runtime.RouteOwner do
   def handle_info({:EXIT, _other, _reason}, state), do: {:noreply, state}
 
   defp schedule_restart(state) do
-    Process.send_after(self(), :start_route, state.backoff_ms)
-    %{state | backoff_ms: min(state.backoff_ms * 2, @max_backoff_ms)}
+    if Runtime.startup_allowed?() do
+      Process.send_after(self(), :start_route, state.backoff_ms)
+      %{state | backoff_ms: min(state.backoff_ms * 2, @max_backoff_ms)}
+    else
+      state
+    end
   end
 end
