@@ -20,7 +20,7 @@ defmodule LatticeCarrierServer.Manifest do
   alias Lattice.Identity
   alias LatticeCarrierServer.Secret
 
-  defstruct [:health, :instances]
+  defstruct [:health, :instances, :sha256]
 
   @type instance :: %{
           ref: {:instance, pos_integer()},
@@ -39,7 +39,8 @@ defmodule LatticeCarrierServer.Manifest do
 
   @type t :: %__MODULE__{
           health: [ip: :inet.ip_address(), port: :inet.port_number()] | nil,
-          instances: [instance()]
+          instances: [instance()],
+          sha256: binary()
         }
 
   # Inline secret material is rejected outright: identity comes from
@@ -60,7 +61,9 @@ defmodule LatticeCarrierServer.Manifest do
          {:ok, bytes} <- read_manifest(path),
          {:ok, decoded} <- decode_manifest(bytes),
          {:ok, manifest} <- parse(decoded, base_dir, expanded_path) do
-      {:ok, manifest}
+      # Digest of the exact bytes parsed, so a caller never pairs this
+      # configuration with a digest of a later file.
+      {:ok, %{manifest | sha256: :crypto.hash(:sha256, bytes)}}
     else
       {:error, {:invalid_manifest, _detail} = reason} -> {:error, reason}
       {:error, detail} -> {:error, {:invalid_manifest, detail}}

@@ -26,11 +26,22 @@ defmodule LatticeCarrierServer.Application do
       {:ok, _pid} = started ->
         started
 
-      {:error, _reason} = error ->
+      {:error, reason} ->
         Runtime.clear()
-        error
+        {:error, preflight_reason(reason)}
     end
   end
+
+  # A refused preflight now runs under the runtime supervisor; start still
+  # returns the structured reason prepare gave, as it did before.
+  defp preflight_reason(
+         {:shutdown,
+          {:failed_to_start_child, LatticeCarrierServer.RuntimeSupervisor,
+           {:shutdown, {:carrier_release_preflight_refused, reason}}}}
+       ),
+       do: reason
+
+  defp preflight_reason(reason), do: reason
 
   @impl Application
   def stop(_state), do: Runtime.clear()
@@ -57,7 +68,7 @@ defmodule LatticeCarrierServer.RuntimeSupervisor do
 
     case LatticeCarrierServer.Runtime.prepare_owned(manifest_path, owner, configured != []) do
       {:ok, children} -> Supervisor.init(configured ++ children, strategy: :one_for_one)
-      {:error, reason} -> raise "carrier release preflight refused: #{inspect(reason)}"
+      {:error, reason} -> exit({:shutdown, {:carrier_release_preflight_refused, reason}})
     end
   end
 

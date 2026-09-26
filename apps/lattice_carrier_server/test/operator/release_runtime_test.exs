@@ -66,6 +66,44 @@ defmodule LatticeCarrierServer.Operator.ReleaseRuntimeTest do
   end
 
   @tag :tmp_dir
+  test "no Ranch resume path reopens accepts on a drained listener", %{tmp_dir: dir} do
+    f = boot(dir)
+    port = LatticeCarrierServer.port(f.name)
+    assert {:ok, _receipt} = ReleaseQuiesce.drain(f.attempt, f.expected)
+    # Suspension terminates the acceptors supervisor that owns the listen
+    # socket; every restart of it goes back through the gated listen/1.
+    assert {:error, _} = :ranch.resume_listener(Listener.ref(f.name))
+    # Ranch's global acceptor restart finds no acceptors supervisor under a
+    # suspended listener and fails its own match rather than reopening it.
+    assert_raise MatchError, fn -> :ranch.restart_all_acceptors() end
+    assert :suspended = :ranch.get_status(Listener.ref(f.name))
+
+    assert {:error, :econnrefused} =
+             :gen_tcp.connect({127, 0, 0, 1}, port, [:binary, active: false], 1_000)
+  end
+
+  @tag :tmp_dir
+  test "the deployment digest is the digest of the exact manifest bytes parsed", %{tmp_dir: dir} do
+    f = boot(dir)
+    manifest = Application.get_env(:lattice_carrier_server, :manifest)
+    assert {:ok, loaded} = LatticeCarrierServer.Manifest.load(manifest)
+    assert loaded.sha256 == :crypto.hash(:sha256, File.read!(manifest))
+    assert Runtime.deployment().manifest_digest == loaded.sha256
+    assert f.expected.manifest_digest == loaded.sha256
+  end
+
+  @tag :tmp_dir
+  test "a refused manifest preflight returns its structured reason from start", %{tmp_dir: dir} do
+    manifest = Path.join(dir, "manifest.json")
+    File.write!(manifest, "{not json")
+    File.chmod!(manifest, 0o600)
+    Application.put_env(:lattice_carrier_server, :manifest, manifest)
+
+    assert {:error, {:lattice_carrier_server, {{:invalid_manifest, :manifest_corrupt}, _}}} =
+             Application.ensure_all_started(:lattice_carrier_server)
+  end
+
+  @tag :tmp_dir
   test "accepted relay remains in sync worker until drain can capture its durable reply", %{
     tmp_dir: dir
   } do

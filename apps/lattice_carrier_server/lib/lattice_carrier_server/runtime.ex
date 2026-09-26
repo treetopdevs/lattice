@@ -25,14 +25,14 @@ defmodule LatticeCarrierServer.Runtime do
   def prepare(path) do
     case deployment() do
       %{owner: _owner} -> {:error, :controlled_release_owned}
-      _ -> do_prepare(path)
+      _ -> with {:ok, children, _digest} <- do_prepare(path), do: {:ok, children}
     end
   end
 
   defp do_prepare(nil) do
     clear_stale_instances([])
     :persistent_term.erase(@deployment_key)
-    {:ok, []}
+    {:ok, [], nil}
   end
 
   defp do_prepare(manifest_path) when is_binary(manifest_path) do
@@ -64,7 +64,7 @@ defmodule LatticeCarrierServer.Runtime do
 
           {:ok,
            Enum.map(manifest.instances, &instance_child_spec/1) ++
-             health_children(manifest.health)}
+             health_children(manifest.health), manifest.sha256}
         end
 
       {:error, _reason} = error ->
@@ -81,17 +81,19 @@ defmodule LatticeCarrierServer.Runtime do
 
   def prepare_owned(path, owner, extras?) do
     with {:ok, lease} <- ReleaseGate.acquire(owner, :preflight),
-         {:ok, children} <- do_prepare(path),
+         {:ok, children, digest} <- do_prepare(path),
          :ok <- ReleaseGate.complete(owner, lease, :preflight, self()) do
       deployment = deployment()
 
+      # The digest of the manifest bytes these routes were built from, never
+      # a second read that could describe a later file.
       :persistent_term.put(
         @deployment_key,
         Map.merge(deployment, %{
           owner: owner,
           uncontrolled_routes?: extras?,
           manifest_path: Path.expand(path),
-          manifest_digest: :crypto.hash(:sha256, File.read!(path))
+          manifest_digest: digest
         })
       )
 
