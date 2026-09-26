@@ -13,21 +13,31 @@ defmodule LatticeCarrierServer.Operator.Fixture do
     File.chmod!(root, 0o700)
     on_exit(fn -> File.rm_rf!(root) end)
 
+    # By default the Space root admits itself as the only member. A test can add
+    # a non-root member (`second_member: true`) and leave the root off the
+    # roster (`root_member: false`) to tell the root apart from the roster.
+    # Each member is {Space realm, child grant realm, bootstrap peer realm}.
+    root_member = [{"creator", "space-member", "member"}]
+    second_member = [{"member2", "space-member2", "member2"}]
+
+    members =
+      if(Keyword.get(opts, :root_member, true), do: root_member, else: []) ++
+        if Keyword.get(opts, :second_member, false), do: second_member, else: []
+
+    space_realms = Enum.uniq(["creator" | Enum.map(members, &elem(&1, 0))])
+
     {space, _} =
-      Sim.new(Treehouse.Space, "space:operator", ["creator"], seed: "operator-space")
+      Sim.new(Treehouse.Space, "space:operator", space_realms, seed: "operator-space")
       |> Sim.create_replica("creator")
 
     {space, _} = Sim.command(space, "creator", :create_space, ["Canopy"])
-    member = Base.encode64(Sim.identity(space, "creator").pub)
-    {space, invitation} = Sim.command(space, "creator", :issue_invitation, [member, []])
+    space = Enum.reduce(members, space, fn {realm, _, _}, acc -> admit_member(acc, realm) end)
 
-    acceptance =
-      Treehouse.Invitation.accept(Sim.identity(space, "creator"), space.replica, invitation)
-
-    {space, admission} =
-      Sim.command(space, "creator", :admit_member, [invitation.id, member, "member", acceptance])
-
-    refute Sim.quarantined(space, "creator", admission.id)
+    # Every Space member receives a reviewed child grant under its own realm.
+    grantees =
+      Enum.map(members, fn {realm, grant_realm, _} ->
+        {grant_realm, Sim.identity(space, realm)}
+      end)
 
     {child, genesis} =
       Sim.new(
@@ -35,44 +45,47 @@ defmodule LatticeCarrierServer.Operator.Fixture do
         "replica:treehouse:thread:" <>
           Treehouse.ContinuationFixtures.digest("operator") <>
           "#authority:bounded-continuation-v1",
-        ["creator", "nominee", "w1", "w2", "w3", "space-member"],
+        ["creator", "nominee", "w1", "w2", "w3"] ++ Enum.map(grantees, &elem(&1, 0)),
         seed: "independent-child"
       )
       |> reuse_child_creator(Keyword.get(opts, :child_creator), space)
       |> Sim.create_replica("creator", policies: Keyword.get(opts, :root_policies, %{}))
 
-    child = %{
-      child
-      | realms: Map.put(child.realms, "space-member", Sim.identity(space, "creator"))
-    }
+    child = %{child | realms: Map.merge(child.realms, Map.new(grantees))}
 
     {child, creation} = Sim.command(child, "creator", :create_thread, ["Branch"])
     {child, pin, _} = pin_child(child, Keyword.get(opts, :pin_beacon))
 
-    {child, grant} =
-      Sim.grant(child, "creator", "space-member",
-        ops: [:post, :author_edit, :author_tombstone],
-        expires_epoch: 7
-      )
+    {child, grants} =
+      Enum.reduce(grantees, {child, []}, fn {realm, identity}, {sim, acc} ->
+        {sim, grant} =
+          Sim.grant(sim, "creator", realm,
+            ops: [:post, :author_edit, :author_tombstone],
+            expires_epoch: 7
+          )
+
+        {sim, acc ++ [{grant, identity}]}
+      end)
 
     child_log = Sim.log(child, "creator")
-
-    grant_intro =
-      Enum.find(Log.ops(child_log), fn {_id, op} -> op.body == {:grant, grant} end) |> elem(0)
-
     {:ok, selected} = Lattice.Authority.continuation_profile(child_log)
 
     child_review = %{
       "creation" => creation.id,
       "profile_genesis" => pin.id,
       "profile_id" => selected.profile_id,
-      "grants" => [
-        %{
-          "recipient" => Base.encode64(Sim.identity(space, "creator").pub),
-          "delegation" => grant.id,
-          "introduction" => grant_intro
-        }
-      ]
+      "grants" =>
+        Enum.map(grants, fn {grant, identity} ->
+          intro =
+            Enum.find(Log.ops(child_log), fn {_id, op} -> op.body == {:grant, grant} end)
+            |> elem(0)
+
+          %{
+            "recipient" => Base.encode64(identity.pub),
+            "delegation" => grant.id,
+            "introduction" => intro
+          }
+        end)
     }
 
     # Honest staging never reuses another authority's key for the child root;
@@ -129,16 +142,21 @@ defmodule LatticeCarrierServer.Operator.Fixture do
     File.chmod!(child_identity, 0o600)
     next_instance = %{next_instance | "identity_file" => child_identity}
 
+    # Bootstrap peers are exactly the Space roster plus the independent child root.
     next_instance =
-      Map.update!(next_instance, "trusted_peers", fn peers ->
-        peers ++
+      Map.put(
+        next_instance,
+        "trusted_peers",
+        Enum.map(members, fn {realm, _, peer_realm} ->
+          %{"realm" => peer_realm, "pubkey" => Base.encode64(Sim.identity(space, realm).pub)}
+        end) ++
           [
             %{
               "realm" => "child-root",
               "pubkey" => Base.encode64(Sim.identity(child, "creator").pub)
             }
           ]
-      end)
+      )
 
     artifacts = [
       %{
@@ -184,6 +202,21 @@ defmodule LatticeCarrierServer.Operator.Fixture do
      reference: reference}
   end
 
+  # The Space root invites and admits `realm`, which signs its own acceptance.
+  defp admit_member(space, realm) do
+    member = Base.encode64(Sim.identity(space, realm).pub)
+    {space, invitation} = Sim.command(space, "creator", :issue_invitation, [member, []])
+
+    acceptance =
+      Treehouse.Invitation.accept(Sim.identity(space, realm), space.replica, invitation)
+
+    {space, admission} =
+      Sim.command(space, "creator", :admit_member, [invitation.id, member, "member", acceptance])
+
+    refute Sim.quarantined(space, "creator", admission.id)
+    space
+  end
+
   # Honest staging derives the child's root from its own independent seed.
   # `:reuse_space_root` and `:reuse_carrier_service_key` let a test author the
   # exact same genesis with the child bootstrap moderator authority collapsed
@@ -217,6 +250,18 @@ defmodule LatticeCarrierServer.Operator.Fixture do
       witnesses: Enum.reverse(profile.witnesses),
       threshold: profile.threshold,
       max_epoch_step: 1
+    })
+  end
+
+  defp pin_child(sim, {:max_epoch_step, step}) do
+    profile = Treehouse.ContinuationFixtures.profile(sim)
+
+    pin_child(sim, %{
+      mode: :witnessed,
+      version: 1,
+      witnesses: profile.witnesses,
+      threshold: profile.threshold,
+      max_epoch_step: step
     })
   end
 

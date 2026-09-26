@@ -210,6 +210,15 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
              Staging.inspect_staged(hostile.retained, hostile.manifest)
   end
 
+  test "a reviewed profile pin widening the beacon epoch step refuses", _f do
+    # Reviewed witnesses and threshold, but a quorum could jump 65,535 group
+    # days at once and lapse grants the step-one lifecycle expects to keep.
+    hostile = staged(pin_beacon: {:max_epoch_step, 65_535})
+
+    assert {:error, :invalid_staged_signed_artifact} =
+             Staging.inspect_staged(hostile.retained, hostile.manifest)
+  end
+
   test "the reviewed witness set is accepted in any signed order", _f do
     reordered = staged(pin_beacon: :reordered_witnesses)
 
@@ -268,6 +277,73 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
              Staging.inspect_staged(hostile.retained, hostile.manifest)
   end
 
+  test "a second, non-root Space member stages honestly", _f do
+    two = staged(second_member: true)
+
+    assert :ok = Staging.inspect_staged(two.retained, two.manifest)
+  end
+
+  test "a Space whose root is not a roster member stages honestly", _f do
+    rootless = staged(second_member: true, root_member: false)
+
+    assert :ok = Staging.inspect_staged(rootless.retained, rootless.manifest)
+  end
+
+  test "a candidate whose carrier service key is the Space root's refuses", _f do
+    # The root is off the roster here, so only the root comparison can refuse.
+    rootless = staged(second_member: true, root_member: false)
+    retained = with_service_identity(rootless, Lattice.Sim.identity(rootless.space, "creator"))
+
+    assert {:error, :invalid_candidate_manifest} =
+             Staging.inspect_staged(retained, rootless.manifest)
+  end
+
+  test "a candidate whose carrier service key is a non-root member's refuses", _f do
+    two = staged(second_member: true)
+    retained = with_service_identity(two, Lattice.Sim.identity(two.space, "member2"))
+
+    assert {:error, :invalid_candidate_manifest} =
+             Staging.inspect_staged(retained, two.manifest)
+  end
+
+  test "a child replica already served by an active instance refuses", f do
+    active_json = Jason.decode!(File.read!(f.request.active_manifest))
+    [active_record] = active_json["instances"]
+    served_log = Path.join(f.root, "served-child.log")
+    :ok = Log.dump(Lattice.Sim.log(f.child, "creator"), served_log)
+    served_identity = Path.join(f.root, "served-child.identity")
+
+    File.write!(
+      served_identity,
+      Base.encode16(:crypto.hash(:sha256, "served-child-service"), case: :lower)
+    )
+
+    File.chmod!(served_identity, 0o600)
+
+    served =
+      active_record
+      |> Map.put("name", "served-child")
+      |> Map.put("log_file", served_log)
+      |> Map.put("identity_file", served_identity)
+      |> put_in(["listener", "port"], 41_003)
+
+    served_active_path = Path.join(f.root, "served-active.json")
+
+    File.write!(
+      served_active_path,
+      Jason.encode!(%{"version" => 1, "instances" => [active_record, served]})
+    )
+
+    File.chmod!(served_active_path, 0o600)
+    {:ok, active} = Manifest.load(served_active_path)
+
+    candidate = candidate_json(f)
+    retained = replace_candidate(f, Map.update!(candidate, "instances", &[served | &1]))
+
+    assert {:error, :invalid_candidate_manifest} =
+             Staging.inspect_staged(retained, active)
+  end
+
   test "a Space reference already present in active history is not carrier pending", f do
     :ok = Log.dump(f.updated_log, f.active_log)
 
@@ -321,6 +397,21 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
 
     assert {:error, :invalid_candidate_manifest} =
              Staging.inspect_staged(retained, ambiguous)
+  end
+
+  # Points the admitted child instance at an identity file holding `identity`'s seed.
+  defp with_service_identity(f, identity) do
+    path = Path.join(f.root, "#{identity.realm_id}-as-service.identity")
+    File.write!(path, Base.encode16(identity.priv, case: :lower))
+    File.chmod!(path, 0o600)
+
+    candidate = candidate_json(f)
+    [old, child] = candidate["instances"]
+
+    replace_candidate(
+      f,
+      Map.put(candidate, "instances", [old, Map.put(child, "identity_file", path)])
+    )
   end
 
   defp candidate_json(f) do
