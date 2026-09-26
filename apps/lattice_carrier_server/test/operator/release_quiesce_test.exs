@@ -101,7 +101,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseQuiesceTest do
     assert Map.has_key?(snapshot.identities, {:holder, "starting"})
   end
 
-  test "replacement gate in same application latch remains closed with new incarnation" do
+  test "replacing a gate that was still accepting starts a fresh accepting incarnation" do
     latch = :atomics.new(1, [])
     start_supervised!({ReleaseGate, latch: latch})
     previous = ReleaseGate.owner()
@@ -110,7 +110,38 @@ defmodule LatticeCarrierServer.Operator.ReleaseQuiesceTest do
     start_supervised!({ReleaseGate, latch: latch})
     current = ReleaseGate.owner()
     refute current == previous
+    assert ReleaseGate.accepting?(current)
+    refute ReleaseGate.accepting?(previous)
+    assert {:error, :release_closed} = ReleaseGate.acquire(previous, :replacement)
+  end
+
+  test "replacement gate after a close began remains closed with new incarnation" do
+    latch = :atomics.new(1, [])
+    start_supervised!({ReleaseGate, latch: latch})
+    previous = ReleaseGate.owner()
+    assert {:ok, _} = ReleaseGate.close(previous, "attempt", %{})
+    stop_supervised!(ReleaseGate)
+    start_supervised!({ReleaseGate, latch: latch})
+    current = ReleaseGate.owner()
+    refute current == previous
     refute ReleaseGate.accepting?(current)
     assert {:error, :release_closed} = ReleaseGate.acquire(current, :replacement)
+  end
+
+  test "replacement gate after an accepting-phase invalidation remains closed" do
+    latch = :atomics.new(1, [])
+    start_supervised!({ReleaseGate, latch: latch})
+    previous = ReleaseGate.owner()
+    assert {:error, :release_closed} = ReleaseGate.finish(previous, make_ref())
+    stop_supervised!(ReleaseGate)
+    start_supervised!({ReleaseGate, latch: latch})
+    refute ReleaseGate.accepting?(ReleaseGate.owner())
+  end
+
+  test "an unrelated message does not disturb the gate" do
+    start_supervised!({ReleaseGate, latch: :atomics.new(1, [])})
+    owner = {pid, _} = ReleaseGate.owner()
+    send(pid, :unrelated)
+    assert ReleaseGate.accepting?(owner)
   end
 end

@@ -113,6 +113,103 @@ defmodule LatticeCarrierServer.Operator.ReleaseRuntimeTest do
   end
 
   @tag :tmp_dir
+  test "a stray message does not crash an accepting gate", %{tmp_dir: dir} do
+    f = boot(dir)
+    {gate, _} = f.owner
+    send(gate, :unexpected)
+    assert ReleaseGate.accepting?(f.owner)
+    assert Process.alive?(gate)
+  end
+
+  @tag :tmp_dir
+  test "a gate crash before any close restarts the routes under a fresh accepting incarnation",
+       %{tmp_dir: dir} do
+    f = boot(dir)
+    monitor = Process.monitor(f.holder)
+    {gate, _} = f.owner
+    Process.exit(gate, :kill)
+    assert_receive {:DOWN, ^monitor, :process, _, _}, 3_000
+
+    # The deployment names the new owner before its routes finish starting;
+    # wait until the restarted route actually serves before draining.
+    current =
+      eventually(fn ->
+        owner = Runtime.deployment().owner
+        holder = GenServer.whereis(Holder.via(f.name))
+
+        owner != f.owner and is_pid(holder) and holder != f.holder and
+          :ranch.get_status(Listener.ref(f.name)) == :running and owner
+      end)
+
+    refute ReleaseGate.accepting?(f.owner)
+    assert ReleaseGate.accepting?(current)
+    assert {:ok, receipt} = ReleaseQuiesce.drain(f.attempt, f.expected)
+    assert ReleaseGate.valid?(current, receipt)
+  end
+
+  @tag :tmp_dir
+  test "a gate crash after close began never reopens admission", %{tmp_dir: dir} do
+    f = boot(dir)
+    assert {:ok, _} = ReleaseGate.close(f.owner, f.attempt, f.expected)
+    assert_gate_crash_stays_closed(f)
+  end
+
+  @tag :tmp_dir
+  test "a gate crash after an accepting-phase invalidation never reopens admission", %{
+    tmp_dir: dir
+  } do
+    f = boot(dir)
+    assert {:error, :release_closed} = ReleaseGate.finish(f.owner, make_ref())
+    refute ReleaseGate.accepting?(f.owner)
+    assert_gate_crash_stays_closed(f)
+  end
+
+  defp assert_gate_crash_stays_closed(f) do
+    monitor = Process.monitor(f.holder)
+    {gate, _} = f.owner
+    Process.exit(gate, :kill)
+    assert_receive {:DOWN, ^monitor, :process, _, _}, 3_000
+    # Whatever replacement the supervisor manages to start must not accept;
+    # failing to start at all is equally closed.
+    Process.sleep(200)
+
+    case Process.whereis(ReleaseGate) do
+      nil -> :ok
+      _pid -> refute ReleaseGate.accepting?(ReleaseGate.owner())
+    end
+
+    holder =
+      Process.whereis(LatticeCarrierServer.Registry) &&
+        GenServer.whereis(Holder.via(f.name))
+
+    if is_pid(holder),
+      do: assert({:error, :release_closed} = Holder.relay(holder, "relay", f.op))
+  end
+
+  # Restarted processes and Ranch registrations appear asynchronously; a probe
+  # that raises or exits before they exist counts as "not yet".
+  defp eventually(fun, attempts \\ 50) do
+    value =
+      try do
+        fun.()
+      catch
+        _kind, _reason -> nil
+      end
+
+    cond do
+      value not in [nil, false] ->
+        value
+
+      attempts > 0 ->
+        Process.sleep(50)
+        eventually(fun, attempts - 1)
+
+      true ->
+        flunk("condition never held")
+    end
+  end
+
+  @tag :tmp_dir
   test "wrong manifest or route inventory refuses without changing journal or log", %{
     tmp_dir: dir
   } do

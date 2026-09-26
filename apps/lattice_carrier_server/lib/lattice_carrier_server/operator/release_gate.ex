@@ -3,8 +3,18 @@ defmodule LatticeCarrierServer.Operator.ReleaseGate do
   Private release-incarnation admission owner. Closing is irreversible within an
   application incarnation. Process loss invalidates observations; it is never
   evidence that an outstanding filesystem effect drained.
+
+  The application's latch records, before the state change, that a close or an
+  invalidation began. A replacement gate therefore starts invalid only after
+  that point; replacing a gate that was still accepting starts a fresh
+  accepting incarnation, and the rest-for-one runtime restarts every route
+  under it.
   """
   use GenServer
+
+  # Latch values: 0 never started, 1 started and accepting, 2 closing began.
+  @open 1
+  @closed 2
 
   @type owner :: {pid(), reference()}
 
@@ -46,12 +56,20 @@ defmodule LatticeCarrierServer.Operator.ReleaseGate do
 
   @impl true
   def init(opts) do
-    first? = :atomics.compare_exchange(Keyword.fetch!(opts, :latch), 1, 0, 1) == :ok
+    latch = Keyword.fetch!(opts, :latch)
+
+    phase =
+      case :atomics.compare_exchange(latch, 1, 0, @open) do
+        :ok -> :accepting
+        @open -> :accepting
+        _closed -> :invalid
+      end
 
     {:ok,
      %{
+       latch: latch,
        incarnation: make_ref(),
-       phase: if(first?, do: :accepting, else: :invalid),
+       phase: phase,
        attempt: nil,
        expected: nil,
        leases: %{},
@@ -130,6 +148,10 @@ defmodule LatticeCarrierServer.Operator.ReleaseGate do
         {:reply, {:error, :release_attempt_changed}, state}
 
       true ->
+        # Written ahead of the phase change: a crash from here on can never
+        # hand the application a replacement gate that accepts again.
+        :atomics.put(state.latch, 1, @closed)
+
         next = %{
           state
           | attempt: attempt,
@@ -197,6 +219,10 @@ defmodule LatticeCarrierServer.Operator.ReleaseGate do
     {:noreply, next}
   end
 
+  # Anything else is not addressed to this gate; crashing on it would restart
+  # every route for no reason.
+  def handle_info(_message, state), do: {:noreply, state}
+
   defp forget_dead_identities(state) do
     identities =
       Enum.reduce(state.identities, %{}, fn {key, {pid, monitor} = identity}, kept ->
@@ -219,7 +245,11 @@ defmodule LatticeCarrierServer.Operator.ReleaseGate do
         state.phase in [:quiescing, :drained]
 
   defp live?(state), do: Enum.all?(state.identities, fn {_, {pid, _}} -> Process.alive?(pid) end)
-  defp invalidate(state), do: %{state | phase: :invalid, receipt: nil}
+
+  defp invalidate(state) do
+    :atomics.put(state.latch, 1, @closed)
+    %{state | phase: :invalid, receipt: nil}
+  end
 
   defp view(state),
     do:
