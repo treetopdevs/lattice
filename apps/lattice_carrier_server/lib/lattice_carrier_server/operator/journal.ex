@@ -9,9 +9,11 @@ defmodule LatticeCarrierServer.Operator.Journal do
   """
   import Bitwise
   alias Jason.OrderedObject
+  alias LatticeCarrierServer.Manifest
   alias LatticeCarrierServer.Operator.Lock
-  @fields ~w(version phase attempt generation catalog_head manifest_digest artifacts)
+  @fields ~w(version phase attempt generation catalog_head manifest_digest artifacts service)
   @artifact_fields ~w(kind op_id path replica review sha256)
+  @service_fields ~w(identity_file pub realm sha256)
   @review_fields ~w(creation grants profile_genesis profile_id)
   @grant_fields ~w(delegation introduction recipient)
   @max_bytes 1_048_576
@@ -107,6 +109,10 @@ defmodule LatticeCarrierServer.Operator.Journal do
   end
 
   defp canonical_field("artifacts", artifacts), do: Enum.map(artifacts, &canonical_artifact/1)
+
+  defp canonical_field("service", service) when is_map(service),
+    do: OrderedObject.new(Enum.map(@service_fields, &{&1, service[&1]}))
+
   defp canonical_field(_key, value), do: value
 
   defp canonical_artifact(a) do
@@ -150,10 +156,53 @@ defmodule LatticeCarrierServer.Operator.Journal do
       (r["catalog_head"] == nil or op_id?(r["catalog_head"])) and
       digest?(r["manifest_digest"]) and is_list(r["artifacts"]) and
       length(r["artifacts"]) in 1..128 and Enum.all?(r["artifacts"], &artifact?/1) and
-      length(Enum.uniq_by(r["artifacts"], & &1["path"])) == length(r["artifacts"])
+      length(Enum.uniq_by(r["artifacts"], & &1["path"])) == length(r["artifacts"]) and
+      service?(r["service"])
   end
 
   defp valid?(_), do: false
+
+  # The admitted carrier service identity that staging reviewed: its file, the
+  # realm it serves, the public key derived from it and the digest of the exact
+  # file bytes. Activation must re-verify it before using the key.
+  defp service?(s) when is_map(s) do
+    Enum.sort(Map.keys(s)) == @service_fields and is_binary(s["identity_file"]) and
+      Path.type(s["identity_file"]) == :absolute and
+      Path.expand(s["identity_file"]) == s["identity_file"] and
+      is_binary(s["realm"]) and s["realm"] != "" and public_key?(s["pub"]) and
+      digest?(s["sha256"])
+  end
+
+  defp service?(_), do: false
+
+  defp public_key?(value) when is_binary(value) do
+    case Base.decode64(value) do
+      {:ok, bytes} -> byte_size(bytes) == 32 and Base.encode64(bytes) == value
+      _ -> false
+    end
+  end
+
+  defp public_key?(_), do: false
+
+  @doc """
+  Whether a pending record's bound service identity is still exactly the file
+  staging reviewed: unchanged bytes that still derive the bound key for the
+  bound realm. Activation must check this before loading the carrier key.
+  """
+  @spec service_identity_current?(term()) :: boolean()
+  def service_identity_current?(service) do
+    with true <- service?(service),
+         path = service["identity_file"],
+         {:ok, pub} <- Base.decode64(service["pub"]),
+         {:ok, bytes} <- File.read(path),
+         true <- digest(bytes) == service["sha256"],
+         :ok <- Manifest.verify_identity(path, service["realm"], pub),
+         {:ok, ^bytes} <- File.read(path) do
+      true
+    else
+      _ -> false
+    end
+  end
 
   defp artifact?(a) when is_map(a) do
     Enum.sort(Map.keys(a)) == @artifact_fields and is_binary(a["path"]) and

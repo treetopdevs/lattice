@@ -12,24 +12,7 @@ defmodule LatticeCarrierServer.Operator.JournalTest do
   end
 
   test "stale complete journal cannot replace retained candidate", %{root: root} do
-    record = %{
-      "version" => 1,
-      "phase" => "carrier_pending",
-      "attempt" => Base.url_encode64(:crypto.hash(:sha256, "attempt"), padding: false),
-      "generation" => 1,
-      "catalog_head" => nil,
-      "manifest_digest" => Journal.digest("manifest"),
-      "artifacts" => [
-        %{
-          "path" => Path.join(root, "artifact"),
-          "sha256" => Journal.digest("bytes"),
-          "kind" => "manifest",
-          "review" => nil,
-          "replica" => nil,
-          "op_id" => nil
-        }
-      ]
-    }
+    record = record(root)
 
     assert :ok = Journal.compare_and_set(root, nil, record)
 
@@ -57,8 +40,49 @@ defmodule LatticeCarrierServer.Operator.JournalTest do
           "replica" => nil,
           "op_id" => nil
         }
-      ]
+      ],
+      "service" => service(root)
     }
+  end
+
+  # A real private identity file: the mutation owner rechecks its digest
+  # before any commit.
+  defp service(root) do
+    path = Path.join(root, "service.identity")
+    bytes = Base.encode16(:crypto.hash(:sha256, "journal-service"), case: :lower)
+    File.write!(path, bytes)
+    File.chmod!(path, 0o600)
+
+    %{
+      "identity_file" => path,
+      "realm" => "service",
+      "pub" => Base.encode64(Lattice.Identity.from_seed("service", "journal-service").pub),
+      "sha256" => Journal.digest(bytes)
+    }
+  end
+
+  test "a service identity changed after review refuses the commit", %{root: root} do
+    record = record(root)
+
+    File.write!(
+      record["service"]["identity_file"],
+      Base.encode16(:crypto.hash(:sha256, "rotated"), case: :lower)
+    )
+
+    assert {:error, {:operator_refused, "stale_operator_intent"}} =
+             Journal.compare_and_set(root, nil, record)
+
+    assert {:ok, nil} = Journal.read(root)
+  end
+
+  test "a missing service identity file refuses the commit", %{root: root} do
+    record = record(root)
+    File.rm!(record["service"]["identity_file"])
+
+    assert {:error, {:operator_refused, "stale_operator_intent"}} =
+             Journal.compare_and_set(root, nil, record)
+
+    assert {:ok, nil} = Journal.read(root)
   end
 
   test "same attempt cannot be rewritten and corruption preserves evidence", %{root: root} do
@@ -137,10 +161,12 @@ defmodule LatticeCarrierServer.Operator.JournalTest do
 
     assert_ordered(
       encoded,
-      ~w(version phase attempt generation catalog_head manifest_digest artifacts)
+      ~w(version phase attempt generation catalog_head manifest_digest artifacts service)
     )
 
     assert_ordered(artifact_json, ~w(kind op_id path replica review sha256))
+    [service_json] = Regex.run(~r/"service":(\{[^}]*\})/, encoded, capture: :all_but_first)
+    assert_ordered(service_json, ~w(identity_file pub realm sha256))
 
     # Encoding is a pure function of the record's values, not of whatever
     # order its keys happened to be inserted in.

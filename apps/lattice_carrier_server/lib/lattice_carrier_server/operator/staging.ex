@@ -55,7 +55,7 @@ defmodule LatticeCarrierServer.Operator.Staging do
         end)
 
       Lock.stage(root, expected, request.attempt, checks, material, fn ->
-        with :ok <- inspect_staged(retained, manifest) do
+        with {:ok, service} <- inspect_staged(retained, manifest) do
           {:ok,
            %{
              "version" => 1,
@@ -75,7 +75,8 @@ defmodule LatticeCarrierServer.Operator.Staging do
                    "op_id" => &1.op_id,
                    "review" => &1.review
                  }
-               )
+               ),
+             "service" => service
            }}
         end
       end)
@@ -87,7 +88,7 @@ defmodule LatticeCarrierServer.Operator.Staging do
   end
 
   @doc false
-  @spec inspect_staged([map()], Manifest.t()) :: :ok | {:error, term()}
+  @spec inspect_staged([map()], Manifest.t()) :: {:ok, map()} | {:error, term()}
   def inspect_staged(retained, manifest) do
     with {:ok, bundle} <- classify(retained),
          {:ok, active} <- active_logs(manifest.instances),
@@ -95,8 +96,8 @@ defmodule LatticeCarrierServer.Operator.Staging do
          :ok <- unserved(bundle.child.replica, active),
          {:ok, child_log} <- verify_child(bundle.child),
          :ok <- verify_reference(bundle, space),
-         :ok <- verify_candidate_manifest(bundle, manifest, space, child_log),
-         do: :ok
+         {:ok, admitted} <- verify_candidate_manifest(bundle, manifest, space, child_log),
+         do: bind_service(admitted)
   catch
     # Total, not only exceptions: a throw or exit escaping into the staging
     # lock owner's callback would leave it without a refusal.
@@ -347,7 +348,29 @@ defmodule LatticeCarrierServer.Operator.Staging do
          # of admitting a candidate child.
          true <- admitted.relay_realms == [],
          true <- Enum.sort(Enum.map(child.review["grants"], & &1["recipient"])) == roster do
-      :ok
+      {:ok, admitted}
+    else
+      _ -> {:error, :invalid_candidate_manifest}
+    end
+  end
+
+  # The pending record binds the exact identity bytes whose key was reviewed:
+  # read once and reconfirmed unchanged around the separate key derivation, so
+  # the digest and the key describe the same file. The mutation owner rechecks
+  # that digest before commit, and activation must recheck it before use.
+  defp bind_service(admitted) do
+    path = admitted.identity_file
+
+    with {:ok, bytes} <- File.read(path),
+         :ok <- Manifest.verify_identity(path, admitted.realm, admitted.pub),
+         {:ok, ^bytes} <- File.read(path) do
+      {:ok,
+       %{
+         "identity_file" => path,
+         "realm" => admitted.realm,
+         "pub" => Base.encode64(admitted.pub),
+         "sha256" => Journal.digest(bytes)
+       }}
     else
       _ -> {:error, :invalid_candidate_manifest}
     end

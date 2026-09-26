@@ -14,6 +14,8 @@ defmodule LatticeCarrierServer.Operator.StagingTest do
              Staging.prepare(f.root, nil, f.request, f.artifacts)
 
     assert record["phase"] == "carrier_pending"
+    assert record["service"]["identity_file"] == Path.join(f.root, "child-service.identity")
+    assert Journal.service_identity_current?(record["service"])
     assert File.read!(f.active_log) == f.active_bytes
 
     for artifact <- f.artifacts do
