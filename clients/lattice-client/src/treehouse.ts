@@ -204,12 +204,25 @@ export function authorTreehouseWitnessedSuccession(input: {
     body: ["tuple", [["atom", "succeed"], ["atom", input.role], ["delegation", input.delegation], ["tuple", [["atom", "witnessed"], input.certificate]]]] });
 }
 
-const loneSurrogate = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+// A code-unit scan, not a lookbehind RegExp: iOS 15 JavaScriptCore cannot parse lookbehind,
+// and this module ships in the shared client bundle.
+function wellFormedUtf16(value: string): boolean {
+  for (let i = 0; i < value.length; i++) {
+    const unit = value.charCodeAt(i);
+    if (unit >= 0xdc00 && unit <= 0xdfff) return false;
+    if (unit >= 0xd800 && unit <= 0xdbff) {
+      const next = value.charCodeAt(i + 1);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) return false;
+      i++;
+    }
+  }
+  return true;
+}
 
 function term(value: unknown): CarrierTerm {
   if (typeof value === "string") {
     // TextEncoder would sign U+FFFD in place of a lone surrogate; BEAM refuses invalid UTF-8.
-    if (loneSurrogate.test(value)) throw new Error("Treehouse text must be well-formed UTF-16");
+    if (!wellFormedUtf16(value)) throw new Error("Treehouse text must be well-formed UTF-16");
     return ["bin", bytesBase64(new TextEncoder().encode(value))];
   }
   if (Array.isArray(value)) return ["list", value.map(term)];
