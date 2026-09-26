@@ -90,8 +90,9 @@ defmodule LatticeCarrierServer.Operator.Staging do
   @spec inspect_staged([map()], Manifest.t()) :: :ok | {:error, term()}
   def inspect_staged(retained, manifest) do
     with {:ok, bundle} <- classify(retained),
-         {:ok, space} <- unique_history(bundle.reference.replica, manifest.instances),
-         :ok <- unserved(bundle.child.replica, manifest.instances),
+         {:ok, active} <- active_logs(manifest.instances),
+         {:ok, space} <- unique_history(bundle.reference.replica, active),
+         :ok <- unserved(bundle.child.replica, active),
          {:ok, child_log} <- verify_child(bundle.child),
          :ok <- verify_reference(bundle, space),
          :ok <- verify_candidate_manifest(bundle, manifest, space, child_log),
@@ -119,30 +120,29 @@ defmodule LatticeCarrierServer.Operator.Staging do
 
   # The referenced Space must have exactly one active history. Two instances
   # serving the same replica make roster and replay selection arbitrary.
-  defp unique_history(replica, instances) do
-    case active_histories(replica, instances) do
-      {:ok, [log]} -> {:ok, log}
+  defp unique_history(replica, active) do
+    case Enum.filter(active, &(&1.replica == replica)) do
+      [log] -> {:ok, log}
       _ -> {:error, :invalid_candidate_manifest}
     end
   end
 
   # The candidate child must not already be served: a second log file for the
   # same replica would be a potentially divergent carrier history.
-  defp unserved(replica, instances) do
-    case active_histories(replica, instances) do
-      {:ok, []} -> :ok
-      _ -> {:error, :invalid_candidate_manifest}
-    end
+  defp unserved(replica, active) do
+    if Enum.any?(active, &(&1.replica == replica)),
+      do: {:error, :invalid_candidate_manifest},
+      else: :ok
   end
 
-  defp active_histories(replica, instances) do
-    Enum.reduce_while(instances, {:ok, []}, fn instance, {:ok, matches} ->
+  # Every active log is read once per inspection and shared by both checks.
+  defp active_logs(instances) do
+    Enum.reduce_while(instances, {:ok, []}, fn instance, {:ok, logs} ->
       case Log.restore_verified(instance.log_file) do
+        {:ok, %{log: log}} -> {:cont, {:ok, [log | logs]}}
         # An unreadable sibling could otherwise make an ambiguous manifest
         # look unique, so it refuses instead of being skipped.
-        {:ok, %{log: %{replica: ^replica} = log}} -> {:cont, {:ok, [log | matches]}}
-        {:ok, _other_replica} -> {:cont, {:ok, matches}}
-        _ -> {:halt, :unreadable}
+        _ -> {:halt, {:error, :invalid_candidate_manifest}}
       end
     end)
   end

@@ -277,20 +277,33 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
              Staging.inspect_staged(hostile.retained, hostile.manifest)
   end
 
-  test "a candidate whose carrier service key is a Space participant's refuses", f do
-    # The Space creator is both the Space root and the only roster member.
-    participant = Path.join(f.root, "participant.identity")
-    creator = Lattice.Sim.identity(f.space, "creator")
-    File.write!(participant, Base.encode16(creator.priv, case: :lower))
-    File.chmod!(participant, 0o600)
+  test "a second, non-root Space member stages honestly", _f do
+    two = staged(second_member: true)
 
-    candidate = candidate_json(f)
-    [old, child] = candidate["instances"]
-    child = Map.put(child, "identity_file", participant)
-    retained = replace_candidate(f, Map.put(candidate, "instances", [old, child]))
+    assert :ok = Staging.inspect_staged(two.retained, two.manifest)
+  end
+
+  test "a Space whose root is not a roster member stages honestly", _f do
+    rootless = staged(second_member: true, root_member: false)
+
+    assert :ok = Staging.inspect_staged(rootless.retained, rootless.manifest)
+  end
+
+  test "a candidate whose carrier service key is the Space root's refuses", _f do
+    # The root is off the roster here, so only the root comparison can refuse.
+    rootless = staged(second_member: true, root_member: false)
+    retained = with_service_identity(rootless, Lattice.Sim.identity(rootless.space, "creator"))
 
     assert {:error, :invalid_candidate_manifest} =
-             Staging.inspect_staged(retained, f.manifest)
+             Staging.inspect_staged(retained, rootless.manifest)
+  end
+
+  test "a candidate whose carrier service key is a non-root member's refuses", _f do
+    two = staged(second_member: true)
+    retained = with_service_identity(two, Lattice.Sim.identity(two.space, "member2"))
+
+    assert {:error, :invalid_candidate_manifest} =
+             Staging.inspect_staged(retained, two.manifest)
   end
 
   test "a child replica already served by an active instance refuses", f do
@@ -384,6 +397,21 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
 
     assert {:error, :invalid_candidate_manifest} =
              Staging.inspect_staged(retained, ambiguous)
+  end
+
+  # Points the admitted child instance at an identity file holding `identity`'s seed.
+  defp with_service_identity(f, identity) do
+    path = Path.join(f.root, "#{identity.realm_id}-as-service.identity")
+    File.write!(path, Base.encode16(identity.priv, case: :lower))
+    File.chmod!(path, 0o600)
+
+    candidate = candidate_json(f)
+    [old, child] = candidate["instances"]
+
+    replace_candidate(
+      f,
+      Map.put(candidate, "instances", [old, Map.put(child, "identity_file", path)])
+    )
   end
 
   defp candidate_json(f) do
