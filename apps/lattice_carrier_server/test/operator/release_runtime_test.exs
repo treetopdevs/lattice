@@ -66,7 +66,9 @@ defmodule LatticeCarrierServer.Operator.ReleaseRuntimeTest do
   end
 
   @tag :tmp_dir
-  test "controlled stop seals the drained incarnation without activating a manifest", %{tmp_dir: dir} do
+  test "controlled stop seals the drained incarnation without activating a manifest", %{
+    tmp_dir: dir
+  } do
     f = boot(dir, 2)
     manifest_bytes = File.read!(f.expected.manifest_path)
     log_bytes = Enum.map(f.expected.instances, &File.read!(&1.log_file))
@@ -89,6 +91,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseRuntimeTest do
   test "forged receipt cannot stop the live release", %{tmp_dir: dir} do
     f = boot(dir)
     assert {:ok, receipt} = ReleaseQuiesce.drain(f.attempt, f.expected)
+
     assert {:error, :release_closed} =
              ReleaseStopSeal.stop_and_seal(f.owner, %{receipt | attempt: nonce("other")}, 100)
 

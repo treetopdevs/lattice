@@ -254,8 +254,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseGate do
         state.phase == :stopping and planned_route_down?(state, ref, reason) ->
           %{
             state
-            | identities:
-                Map.reject(state.identities, fn {_, {_, monitor}} -> monitor == ref end)
+            | identities: Map.reject(state.identities, fn {_, {_, monitor}} -> monitor == ref end)
           }
 
         state.phase != :accepting ->
