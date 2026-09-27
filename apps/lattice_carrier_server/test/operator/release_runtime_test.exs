@@ -2,7 +2,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseRuntimeTest do
   use ExUnit.Case, async: false
   alias Lattice.{Identity, Log, Op}
   alias LatticeCarrierServer.{Holder, Listener, Runtime}
-  alias LatticeCarrierServer.Operator.{ReleaseGate, ReleaseQuiesce}
+  alias LatticeCarrierServer.Operator.{ReleaseGate, ReleaseQuiesce, ReleaseStopSeal}
 
   defmodule GatedSync do
     def sync_file(path) do
@@ -63,6 +63,114 @@ defmodule LatticeCarrierServer.Operator.ReleaseRuntimeTest do
     assert {:error, _} = :ranch.resume_listener(Listener.ref(f.name))
     assert {:error, _} = ReleaseQuiesce.drain(nonce("different"), f.expected)
     assert File.read!(f.path) == before
+  end
+
+  @tag :tmp_dir
+  test "controlled stop seals the drained incarnation without activating a manifest", %{tmp_dir: dir} do
+    f = boot(dir, 2)
+    manifest_bytes = File.read!(f.expected.manifest_path)
+    log_bytes = Enum.map(f.expected.instances, &File.read!(&1.log_file))
+    assert {:ok, receipt} = ReleaseQuiesce.drain(f.attempt, f.expected)
+    assert {:ok, observation} = ReleaseStopSeal.stop_and_seal(f.owner, receipt)
+    assert ReleaseGate.sealed?(f.owner, observation)
+    refute ReleaseGate.valid?(f.owner, receipt)
+    refute ReleaseGate.accepting?(f.owner)
+    assert {:error, :release_closed} = ReleaseQuiesce.drain(f.attempt, f.expected)
+    assert File.read!(f.expected.manifest_path) == manifest_bytes
+    assert Enum.map(f.expected.instances, &File.read!(&1.log_file)) == log_bytes
+
+    for instance <- f.expected.instances do
+      assert {:error, :release_closed} = Runtime.start_instance(instance.name)
+      assert GenServer.whereis(Holder.via(instance.name)) == nil
+    end
+  end
+
+  @tag :tmp_dir
+  test "forged receipt cannot stop the live release", %{tmp_dir: dir} do
+    f = boot(dir)
+    assert {:ok, receipt} = ReleaseQuiesce.drain(f.attempt, f.expected)
+    assert {:error, :release_closed} =
+             ReleaseStopSeal.stop_and_seal(f.owner, %{receipt | attempt: nonce("other")}, 100)
+
+    assert ReleaseGate.valid?(f.owner, receipt)
+    assert GenServer.whereis(Holder.via(f.name)) == f.holder
+  end
+
+  @tag :tmp_dir
+  test "a stale gate incarnation cannot stop a new release", %{tmp_dir: dir} do
+    f = boot(dir)
+    assert {:ok, receipt} = ReleaseQuiesce.drain(f.attempt, f.expected)
+    assert :ok = Application.stop(:lattice_carrier_server)
+    assert {:ok, _} = Application.ensure_all_started(:lattice_carrier_server)
+    current = Runtime.deployment().owner
+    refute current == f.owner
+    assert {:error, :release_stop_refused} = ReleaseStopSeal.stop_and_seal(f.owner, receipt, 100)
+    assert ReleaseGate.accepting?(current)
+    assert is_pid(GenServer.whereis(Holder.via(f.name)))
+  end
+
+  @tag :tmp_dir
+  test "a changed log after drain refuses sealing and leaves admission closed", %{tmp_dir: dir} do
+    f = boot(dir)
+    assert {:ok, receipt} = ReleaseQuiesce.drain(f.attempt, f.expected)
+    File.write!(f.path, "corrupt")
+    assert {:error, :release_bytes_changed} = ReleaseStopSeal.stop_and_seal(f.owner, receipt)
+    refute ReleaseGate.accepting?(f.owner)
+    refute ReleaseGate.valid?(f.owner, receipt)
+    assert File.read!(f.path) == "corrupt"
+  end
+
+  @tag :tmp_dir
+  test "a crashed route cannot produce a stop seal", %{tmp_dir: dir} do
+    f = boot(dir)
+    assert {:ok, receipt} = ReleaseQuiesce.drain(f.attempt, f.expected)
+    monitor = Process.monitor(f.holder)
+    Process.exit(f.holder, :kill)
+    assert_receive {:DOWN, ^monitor, :process, _, _}
+    assert {:error, _} = ReleaseStopSeal.stop_and_seal(f.owner, receipt, 100)
+    refute ReleaseGate.accepting?(f.owner)
+  end
+
+  @tag :tmp_dir
+  test "an uncommanded shutdown after stop begins invalidates the observation", %{tmp_dir: dir} do
+    f = boot(dir)
+    assert {:ok, receipt} = ReleaseQuiesce.drain(f.attempt, f.expected)
+    assert {:ok, _} = ReleaseGate.begin_stop(f.owner, receipt)
+    monitor = Process.monitor(f.holder)
+    Process.exit(f.holder, :shutdown)
+    assert_receive {:DOWN, ^monitor, :process, _, :shutdown}
+    refute ReleaseGate.valid?(f.owner, receipt)
+    assert {:error, _} = ReleaseStopSeal.stop_and_seal(f.owner, receipt, 100)
+    refute ReleaseGate.accepting?(f.owner)
+  end
+
+  @tag :tmp_dir
+  test "a different coordinator cannot forge the seal after stop begins", %{tmp_dir: dir} do
+    f = boot(dir)
+    assert {:ok, receipt} = ReleaseQuiesce.drain(f.attempt, f.expected)
+    assert {:ok, _} = ReleaseGate.begin_stop(f.owner, receipt)
+
+    forged = Task.async(fn -> ReleaseGate.seal(f.owner, receipt, %{routes: :stopped}) end)
+    assert {:error, :release_closed} = Task.await(forged)
+
+    assert ReleaseGate.valid?(f.owner, receipt) == false
+    assert GenServer.whereis(Holder.via(f.name)) == f.holder
+  end
+
+  @tag :tmp_dir
+  test "sealed observation dies with gate incarnation and never reauthorizes a restarted release",
+       %{tmp_dir: dir} do
+    f = boot(dir)
+    assert {:ok, receipt} = ReleaseQuiesce.drain(f.attempt, f.expected)
+    assert {:ok, observation} = ReleaseStopSeal.stop_and_seal(f.owner, receipt)
+    {gate, _} = f.owner
+    Process.exit(gate, :kill)
+    refute ReleaseGate.sealed?(f.owner, observation)
+
+    case Process.whereis(ReleaseGate) do
+      nil -> :ok
+      _ -> refute ReleaseGate.sealed?(ReleaseGate.owner(), observation)
+    end
   end
 
   @tag :tmp_dir
