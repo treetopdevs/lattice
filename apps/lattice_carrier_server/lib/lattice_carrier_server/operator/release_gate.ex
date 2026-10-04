@@ -221,12 +221,22 @@ defmodule LatticeCarrierServer.Operator.ReleaseGate do
   end
 
   def handle_call({:seal, incarnation, receipt, evidence}, {caller, _}, state) do
+    deadline = Map.get(evidence, :deadline)
+
     if incarnation == state.incarnation and state.phase == :stopping and
          state.stopper != nil and elem(state.stopper, 0) == caller and
+         Process.alive?(caller) and is_integer(deadline) and
+         System.monotonic_time(:millisecond) < deadline and
          state.receipt == receipt and map_size(state.leases) == 0 and
          Map.keys(state.identities) == [:preflight] and live?(state) do
       Process.demonitor(elem(state.stopper, 1), [:flush])
-      observation = %{incarnation: incarnation, receipt: receipt, stopped: evidence}
+
+      observation = %{
+        incarnation: incarnation,
+        receipt: receipt,
+        stopped: Map.delete(evidence, :deadline)
+      }
+
       {:reply, {:ok, observation}, %{state | phase: :sealed, receipt: observation, stopper: nil}}
     else
       {:reply, {:error, :release_closed}, state}

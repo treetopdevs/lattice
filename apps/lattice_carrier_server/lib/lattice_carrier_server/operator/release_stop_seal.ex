@@ -14,6 +14,21 @@ defmodule LatticeCarrierServer.Operator.ReleaseStopSeal do
   def stop_and_seal(owner, receipt, timeout \\ 5_000) do
     deadline = System.monotonic_time(:millisecond) + timeout
 
+    task = Task.async(fn -> controlled_stop(owner, receipt, deadline) end)
+
+    case Task.yield(task, remaining(deadline)) do
+      {:ok, result} ->
+        result
+
+      nil ->
+        # The gate monitors this coordinator. Killing it prevents any late
+        # seal, even if the supervisor finishes an already queued shutdown.
+        Task.shutdown(task, :brutal_kill)
+        {:error, :release_timeout}
+    end
+  end
+
+  defp controlled_stop(owner, receipt, deadline) do
     with %{owner: ^owner} = deployment <- Runtime.deployment(),
          true <- not Map.get(deployment, :uncontrolled_routes?, false),
          {:ok, snapshot} <- ReleaseGate.begin_stop(owner, receipt),
@@ -67,7 +82,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseStopSeal do
   end
 
   defp seal_when_stopped(owner, receipt, deadline) do
-    case ReleaseGate.seal(owner, receipt, %{routes: :stopped}) do
+    case ReleaseGate.seal(owner, receipt, %{routes: :stopped, deadline: deadline}) do
       {:error, :release_closed} = error ->
         if remaining(deadline) > 0 do
           Process.sleep(5)
