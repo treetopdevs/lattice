@@ -54,6 +54,19 @@ defmodule LatticeCarrierServer.Operator.ReleaseGate do
   @spec valid?(owner(), map()) :: boolean()
   def valid?({pid, incarnation}, receipt), do: call(pid, {:valid, incarnation, receipt}) == true
 
+  @doc "Begin an irreversible, incarnation-bound stop of an already drained release."
+  @spec begin_stop(owner(), map()) :: {:ok, map()} | {:error, atom()}
+  def begin_stop({pid, incarnation}, receipt), do: call(pid, {:begin_stop, incarnation, receipt})
+
+  @doc "Record a private observation after every owned route has stopped."
+  @spec seal(owner(), map(), map()) :: {:ok, map()} | {:error, atom()}
+  def seal({pid, incarnation}, receipt, evidence),
+    do: call(pid, {:seal, incarnation, receipt, evidence})
+
+  @spec sealed?(owner(), map()) :: boolean()
+  def sealed?({pid, incarnation}, observation),
+    do: call(pid, {:sealed, incarnation, observation}) == true
+
   @impl true
   def init(opts) do
     latch = Keyword.fetch!(opts, :latch)
@@ -75,7 +88,8 @@ defmodule LatticeCarrierServer.Operator.ReleaseGate do
        leases: %{},
        identities: %{},
        epoch: 0,
-       receipt: nil
+       receipt: nil,
+       stopper: nil
      }}
   end
 
@@ -147,6 +161,9 @@ defmodule LatticeCarrierServer.Operator.ReleaseGate do
       state.attempt != nil and (state.attempt != attempt or state.expected != expected) ->
         {:reply, {:error, :release_attempt_changed}, state}
 
+      state.phase in [:stopping, :sealed] ->
+        {:reply, {:error, :release_closed}, state}
+
       true ->
         # Written ahead of the phase change: a crash from here on can never
         # hand the application a replacement gate that accepts again.
@@ -192,16 +209,63 @@ defmodule LatticeCarrierServer.Operator.ReleaseGate do
        incarnation == state.incarnation and state.phase == :drained and
          state.receipt == receipt and live?(state), state}
 
+  def handle_call({:begin_stop, incarnation, receipt}, {caller, _}, state) do
+    if incarnation == state.incarnation and state.phase in [:drained, :stopping] and
+         state.receipt == receipt and live?(state) and
+         (state.phase == :drained or elem(state.stopper, 0) == caller) do
+      stopper = state.stopper || {caller, Process.monitor(caller)}
+      {:reply, {:ok, view(state)}, %{state | phase: :stopping, stopper: stopper}}
+    else
+      {:reply, {:error, :release_closed}, state}
+    end
+  end
+
+  def handle_call({:seal, incarnation, receipt, evidence}, {caller, _}, state) do
+    deadline = Map.get(evidence, :deadline)
+
+    if incarnation == state.incarnation and state.phase == :stopping and
+         state.stopper != nil and elem(state.stopper, 0) == caller and
+         Process.alive?(caller) and is_integer(deadline) and
+         System.monotonic_time(:millisecond) < deadline and
+         state.receipt == receipt and map_size(state.leases) == 0 and
+         Map.keys(state.identities) == [:preflight] and live?(state) do
+      Process.demonitor(elem(state.stopper, 1), [:flush])
+
+      observation = %{
+        incarnation: incarnation,
+        receipt: receipt,
+        stopped: Map.delete(evidence, :deadline)
+      }
+
+      {:reply, {:ok, observation}, %{state | phase: :sealed, receipt: observation, stopper: nil}}
+    else
+      {:reply, {:error, :release_closed}, state}
+    end
+  end
+
+  def handle_call({:sealed, incarnation, observation}, _from, state),
+    do:
+      {:reply,
+       incarnation == state.incarnation and state.phase == :sealed and
+         state.receipt == observation and live?(state), state}
+
   @impl true
-  def handle_info({:DOWN, ref, :process, _pid, _reason}, state) do
+  def handle_info({:DOWN, ref, :process, _pid, reason}, state) do
     owned? =
       Enum.any?(state.leases, fn {_, {_, monitor, _}} -> monitor == ref end) or
-        Enum.any?(state.identities, fn {_, {_, monitor}} -> monitor == ref end)
+        Enum.any?(state.identities, fn {_, {_, monitor}} -> monitor == ref end) or
+        (state.stopper != nil and elem(state.stopper, 1) == ref)
 
     next =
       cond do
         not owned? ->
           state
+
+        state.phase == :stopping and planned_route_down?(state, ref, reason) ->
+          %{
+            state
+            | identities: Map.reject(state.identities, fn {_, {_, monitor}} -> monitor == ref end)
+          }
 
         state.phase != :accepting ->
           invalidate(state)
@@ -245,6 +309,26 @@ defmodule LatticeCarrierServer.Operator.ReleaseGate do
         state.phase in [:quiescing, :drained]
 
   defp live?(state), do: Enum.all?(state.identities, fn {_, {pid, _}} -> Process.alive?(pid) end)
+
+  # A normal process exit is insufficient: its owning supervisor child must
+  # already have been explicitly terminated, rather than restarted after a
+  # crash while the coordinator was preparing its stop.
+  defp planned_route_down?(state, ref, reason) when reason in [:normal, :shutdown] do
+    Enum.any?(state.identities, fn
+      {{kind, name}, {_, ^ref}} when kind in [:route, :holder, :listener] ->
+        Enum.any?(Supervisor.which_children(LatticeCarrierServer.RuntimeSupervisor), fn
+          {{LatticeCarrierServer, ^name}, :undefined, _, _} -> true
+          _ -> false
+        end)
+
+      _ ->
+        false
+    end)
+  catch
+    :exit, _ -> false
+  end
+
+  defp planned_route_down?(_, _, _), do: false
 
   defp invalidate(state) do
     :atomics.put(state.latch, 1, @closed)

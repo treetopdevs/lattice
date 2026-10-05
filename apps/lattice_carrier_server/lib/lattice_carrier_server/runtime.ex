@@ -282,16 +282,17 @@ defmodule LatticeCarrierServer.Runtime.RouteOwner do
   @impl GenServer
   def init(name) do
     Process.flag(:trap_exit, true)
+    {:links, [parent]} = Process.info(self(), :links)
 
     case Runtime.start_instance(name) do
       {:ok, route} ->
         :ok = Runtime.mark_route_started(name)
         Logger.info("carrier pilot instance route started name=#{inspect(name)}")
-        {:ok, %{name: name, route: route, backoff_ms: @initial_backoff_ms}}
+        {:ok, %{name: name, route: route, parent: parent, backoff_ms: @initial_backoff_ms}}
 
       {:error, reason} ->
         if Runtime.route_started?(name) do
-          state = %{name: name, route: nil, backoff_ms: @initial_backoff_ms}
+          state = %{name: name, route: nil, parent: parent, backoff_ms: @initial_backoff_ms}
           {:ok, schedule_restart(state)}
         else
           {:stop, reason}
@@ -315,6 +316,9 @@ defmodule LatticeCarrierServer.Runtime.RouteOwner do
   def handle_info({:EXIT, route, _reason}, %{route: route} = state) do
     {:noreply, state |> Map.put(:route, nil) |> schedule_restart()}
   end
+
+  def handle_info({:EXIT, parent, :shutdown}, %{parent: parent} = state),
+    do: {:stop, :shutdown, state}
 
   def handle_info({:EXIT, _other, _reason}, state), do: {:noreply, state}
 
