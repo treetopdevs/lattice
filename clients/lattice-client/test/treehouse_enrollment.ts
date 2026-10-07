@@ -257,22 +257,23 @@ const threadFramesJoin = framesOf(joinFlow, "thread:general");
 const joinThreadReplica = joinFlow.expect.scope[0] as string;
 {
   const grantStep = joinFlow.steps.find((step) => step.label === "grant general")!;
-  const capability = memberCapability(threadFramesJoin, joinerKey, joinThreadReplica);
+  const thread = { product: "Treehouse.Thread" } as const;
+  const capability = memberCapability(threadFramesJoin, joinerKey, joinThreadReplica, thread);
   assert.equal(capability?.id, grantStep.input.delegationId);
   assert.deepEqual(capability?.ops, ["author_edit", "author_tombstone", "post"]);
   assert.equal(capability?.parent_id, joinFlow.steps.find((step) => step.label === "thread genesis")!.input.delegationId);
-  assert.equal(memberCapability(threadFramesJoin, joinerKey, joinThreadReplica, { command: "post" })?.id, grantStep.input.delegationId);
-  assert.equal(memberCapability(threadFramesJoin, joinerKey, joinThreadReplica, { command: "archive_thread" }), null);
-  assert.equal(memberCapability(threadFramesJoin, joinerKey, "treehouse:other"), null);
-  assert.equal(memberCapability(threadFramesJoin, byName("join_flow").pubkeys.other!, joinThreadReplica), null);
+  assert.equal(memberCapability(threadFramesJoin, joinerKey, joinThreadReplica, { ...thread, command: "post" })?.id, grantStep.input.delegationId);
+  assert.equal(memberCapability(threadFramesJoin, joinerKey, joinThreadReplica, { ...thread, command: "archive_thread" }), null);
+  assert.equal(memberCapability(threadFramesJoin, joinerKey, "treehouse:other", thread), null);
+  assert.equal(memberCapability(threadFramesJoin, byName("join_flow").pubkeys.other!, joinThreadReplica, thread), null);
   // The founder resolves to its root delegation, so the lookup generalizes the issuer-root case.
-  assert.equal(memberCapability(threadFramesJoin, founderKey, joinThreadReplica, { command: "post" })?.id, joinFlow.steps.find((step) => step.label === "thread genesis")!.input.delegationId);
-  // With the product known, a quarantined grant is never offered as a capability.
+  assert.equal(memberCapability(threadFramesJoin, founderKey, joinThreadReplica, { ...thread, command: "post" })?.id, joinFlow.steps.find((step) => step.label === "thread genesis")!.input.delegationId);
+  // A quarantined grant is never offered as a capability, although the frame does carry a delegation to the joiner.
   const wrongParent = byName("wrong_parent_grant");
   const unrooted = wrongParent.logs[0]!;
-  assert.notEqual(memberCapability(unrooted.frames, wrongParent.pubkeys.joiner!, unrooted.replica), null);
-  assert.equal(memberCapability(unrooted.frames, wrongParent.pubkeys.joiner!, unrooted.replica, { product: "Treehouse.Thread" }), null);
-  console.log("PASS memberCapability finds the audience's delegation and refuses quarantined grants when asked");
+  assert(carrierDelegationsFromFrames(unrooted.frames).some((delegation) => delegation.audience === wrongParent.pubkeys.joiner));
+  assert.equal(memberCapability(unrooted.frames, wrongParent.pubkeys.joiner!, unrooted.replica, thread), null);
+  console.log("PASS memberCapability finds the audience's delegation and never offers a quarantined grant");
 }
 
 {

@@ -422,8 +422,9 @@ Behavior (no storage, no network):
   (`treehouse-join-request:v1:`, `treehouse-offer:v1:`, `treehouse-acceptance:v1:`), canonical
   base64url JSON, product marker checked, unknown fields and oversize rejected. Route entries are
   decoded as opaque shaped records here and validated by the shell.
-- `memberCapability(frames, publicKey, replica)`: the delegation whose audience is my key (not only the
-  issuer-root lookup the shell uses today).
+- `memberCapability(frames, publicKey, replica, { product, command? })`: the delegation whose audience is
+  my key (not only the issuer-root lookup the shell uses today). `product` is required, so only honored
+  frames are searched and a quarantined grant is never offered.
 - `authorTreehouseAdmitAndGrant`: given founder signer, current frames, acceptance, produces the
   `admit_member` op plus exact-audience Thread grant ops, one per Thread in scope, in causal order,
   reusing `authorTreehouseCommand` and `authorTownshipDelegation`.

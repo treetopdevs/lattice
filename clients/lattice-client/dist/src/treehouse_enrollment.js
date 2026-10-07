@@ -200,13 +200,14 @@ function threadScope(ops, reasons) {
 /**
  * The delegation naming `publicKey` as audience in `replica`'s frames, optionally one that carries `command`.
  * This generalizes the issuer-root lookup: a joiner's capability is an exact-audience grant, not the root.
- * With `product`, only delegations carried by honored frames qualify, so a quarantined grant is never offered.
+ * `product` is required: only delegations carried by honored frames qualify, so a quarantined grant is never
+ * offered.
  */
-export function memberCapability(frames, publicKey, replica, options = {}) {
+export function memberCapability(frames, publicKey, replica, options) {
     const audience = pubkeyBase64(publicKey);
-    const reasons = options.product === undefined ? null : verdicts(options.product, opsOf(options.product, frames));
+    const reasons = verdicts(options.product, opsOf(options.product, frames));
     for (const frame of frames) {
-        if (frame.replica !== replica || reasons?.has(frame.id))
+        if (frame.replica !== replica || reasons.has(frame.id))
             continue;
         for (const delegation of carrierDelegationsFromFrames([frame])) {
             if (delegation.audience !== audience || delegation.replica !== replica)

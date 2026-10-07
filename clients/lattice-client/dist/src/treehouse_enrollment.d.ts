@@ -39,11 +39,12 @@ export declare function decodeTreehouseAcceptance(text: string): TreehouseAccept
 /**
  * The delegation naming `publicKey` as audience in `replica`'s frames, optionally one that carries `command`.
  * This generalizes the issuer-root lookup: a joiner's capability is an exact-audience grant, not the root.
- * With `product`, only delegations carried by honored frames qualify, so a quarantined grant is never offered.
+ * `product` is required: only delegations carried by honored frames qualify, so a quarantined grant is never
+ * offered.
  */
-export declare function memberCapability(frames: readonly CarrierOpFrame[], publicKey: string | Uint8Array, replica: string, options?: {
+export declare function memberCapability(frames: readonly CarrierOpFrame[], publicKey: string | Uint8Array, replica: string, options: {
+    product: TreehouseProduct;
     command?: string;
-    product?: TreehouseProduct;
 }): CarrierDelegation | null;
 export type TreehouseInvitationReview = {
     ok: true;
