@@ -1,13 +1,25 @@
 import { ed25519 } from "@noble/curves/ed25519.js";
 import {
   authorTownshipGenesis,
+  authorTreehouseAdmitAndGrant,
   authorTreehouseCommand,
+  authorTreehouseIssueInvitation,
   carrierDelegationsFromFrames,
   carrierOpsToSemanticOps,
+  decodeTreehouseAcceptance,
+  decodeTreehouseJoinRequest,
+  decodeTreehouseOffer,
+  encodeTreehouseAcceptance,
+  encodeTreehouseJoinRequest,
+  encodeTreehouseOffer,
+  memberCapability,
   observeTreehouse,
   prepareTreehouseSpaceCreation,
+  reviewTreehouseInvitation,
+  signTreehouseAcceptance,
   townshipReplicaCommitment,
   townshipReplicaRootTag,
+  TREEHOUSE_LITE_THREAD_CAP,
   treehouseCommandDecoders,
   verifyCarrierOp,
 } from "@treetopdevs/lattice-client";
@@ -22,15 +34,36 @@ import {
   byteLength,
   HISTORY_BYTES,
   DRAFT_BYTES,
+  JOIN_INTENT_NAME,
 } from "./treehouse_state";
 import type {
   PreviewNative,
   PreviewState,
   LocalProfile,
   Draft,
+  RelayConfig,
+  RelayRoute,
 } from "./treehouse_state";
+import {
+  mergeRelay,
+  offerRoute,
+  parseRouteList,
+  routesForOffer,
+  validateLocalRealm,
+} from "./treehouse_routes";
 
 export type Observation = ReturnType<typeof observeTreehouse>;
+/** What the person reviews before an offer's routes are persisted (Use, then confirm). */
+export interface OfferReview {
+  space: string;
+  invitationId: string;
+  localRealm: string;
+  threads: { replica: string; archived: boolean }[];
+  routes: RelayRoute[];
+  /** True when retained Space frames already prove the invitation (recipient, scope, not revoked). */
+  invitationVerified: boolean;
+  admitted: boolean;
+}
 export function fromBase64(value: string): Uint8Array {
   return Uint8Array.from(atob(value), (c) => c.charCodeAt(0));
 }
@@ -52,6 +85,8 @@ export class TreehouseWorkflow {
   state = emptyState();
   views = new Map<string, Observation>();
   keyAvailable = false;
+  /** Reviewed but unconfirmed offer routes. Memory only: Use never persists. */
+  private pendingOffer: { review: OfferReview; relay: RelayConfig } | null = null;
   private queue: Promise<unknown> = Promise.resolve();
   constructor(readonly native: PreviewNative) {}
   async open() {
@@ -79,6 +114,7 @@ export class TreehouseWorkflow {
     this.validateProfiles(next, views);
     this.state = next;
     this.views = views;
+    this.pendingOffer = null;
     this.keyAvailable = captured.keyStatus === "available";
     if (
       captured.record !== null &&
@@ -220,6 +256,12 @@ export class TreehouseWorkflow {
   createSpace(name: string) {
     return this.exclusive(async () => {
       if (this.state.profiles.length) throw new Error("local_space_exists");
+      // A key without a Space and without a creation intent only exists after beginJoin.
+      if (
+        this.state.intent?.kind === "join" ||
+        (this.state.intent === null && this.state.publicKey !== null)
+      )
+        throw new Error("join_in_progress");
       await this.creation("space", name);
     });
   }
@@ -230,14 +272,26 @@ export class TreehouseWorkflow {
           .length >= 12
       )
         throw new Error("thread_slots_full");
-      if (!this.state.profiles.some((p) => p.product === "Treehouse.Space"))
-        throw new Error("space_unavailable");
+      const space = this.state.profiles.find(
+        (p) => p.product === "Treehouse.Space",
+      );
+      if (!space) throw new Error("space_unavailable");
+      // Only the Space's root holder can add a Thread. Refuse before any local Thread is authored.
+      if (!this.rootCapability(space)) throw new Error("root_capability_unavailable");
+      // Lite shell: with routes configured, the Space plus three Threads is the whole route set.
+      if (
+        this.state.relay !== null &&
+        (this.views.get(space.replica)!.state.threads as unknown[]).length >=
+          TREEHOUSE_LITE_THREAD_CAP
+      )
+        throw new Error("thread_cap_reached");
       await this.creation("thread", name);
     });
   }
   resumeCreation() {
     const intent = this.state.intent;
     if (!intent) throw new Error("no_incomplete_creation");
+    if (intent.kind === "join") return this.beginJoin().then(() => undefined);
     return intent.kind === "space"
       ? this.createSpace(intent.name)
       : this.createThread(intent.name);
@@ -317,11 +371,32 @@ export class TreehouseWorkflow {
     next.intent = null;
     await this.persist(next, changed);
   }
-  private async author(profile: LocalProfile, command: TreehouseCommand) {
-    const capId = carrierDelegationsFromFrames(profile.frames).find(
+  /** The local key's own root delegation, if it authored one in this profile. */
+  private rootCapability(profile: LocalProfile) {
+    return carrierDelegationsFromFrames(profile.frames).find(
       (d) => d.issuer === this.state.publicKey && d.parent_id === null,
-    )?.id;
-    if (!capId) throw new Error("root_capability_unavailable");
+    );
+  }
+  /** Root delegation for the founder, otherwise an honored exact-audience grant that carries `command`. */
+  private capabilityFor(profile: LocalProfile, command: string): string | null {
+    const root = this.rootCapability(profile);
+    if (root) return root.id;
+    if (this.state.publicKey === null) return null;
+    return (
+      memberCapability(profile.frames, this.state.publicKey, profile.replica, {
+        command,
+        product: profile.product,
+      })?.id ?? null
+    );
+  }
+  /** True when this key holds a capability for `command` in the profile (the Post button's gate). */
+  canAuthor(replica: string, command: string): boolean {
+    const profile = this.state.profiles.find((p) => p.replica === replica);
+    return profile !== undefined && this.capabilityFor(profile, command) !== null;
+  }
+  private async author(profile: LocalProfile, command: TreehouseCommand) {
+    const capId = this.capabilityFor(profile, command.command);
+    if (!capId) throw new Error("no_capability");
     return authorTreehouseCommand({
       product: profile.product,
       replica: profile.replica,
@@ -358,6 +433,255 @@ export class TreehouseWorkflow {
         next.clearedDrafts[replica] = clearDraftVersion;
       await this.persist(next, [profile], new Map([[profile.replica, view]]));
       return frame.id;
+    });
+  }
+  // ---- Plan 181 enrollment: Use, Sign and Sync stay separate actions. Nothing here touches the network.
+  private spaceProfile(): LocalProfile {
+    const space = this.state.profiles.find((p) => p.product === "Treehouse.Space");
+    if (!space) throw new Error("space_unavailable");
+    return space;
+  }
+  private threadFrames(): Record<string, CarrierOpFrame[]> {
+    return Object.fromEntries(
+      this.state.profiles
+        .filter((p) => p.product === "Treehouse.Thread")
+        .map((p) => [p.replica, p.frames]),
+    );
+  }
+  private archived(replica: string): boolean {
+    const view = this.views.get(replica);
+    if (!view) throw new Error("thread_not_available");
+    return (view.state as { archived?: boolean }).archived === true;
+  }
+  /** Joiner: the single explicit key creation, then the public join request. Repeating it repeats the request. */
+  beginJoin() {
+    return this.exclusive(async () => {
+      if (this.state.profiles.length) throw new Error("identity_creation_not_allowed");
+      if (this.state.intent !== null && this.state.intent.kind !== "join")
+        throw new Error("different_creation_pending");
+      if (this.state.publicKey === null) {
+        if (this.state.intent === null)
+          await this.persist({
+            ...structuredClone(this.state),
+            intent: { kind: "join", name: JOIN_INTENT_NAME, nonce: nonce() },
+          });
+        const publicKey = await this.native.initialize();
+        // The key commit clears the join intent: reopening never mints a second key.
+        await this.persist({ ...structuredClone(this.state), publicKey, intent: null });
+        this.keyAvailable = true;
+      }
+      if (!this.keyAvailable) throw new Error("identity_unavailable");
+      return encodeTreehouseJoinRequest({ publicKey: this.state.publicKey! });
+    });
+  }
+  /** Founder: hand-configured route list (JSON). A saved relay is extended, never replaced. */
+  configureRoutes(routeList: string) {
+    return this.exclusive(async () => {
+      const config = parseRouteList(routeList);
+      if (this.state.intent) throw new Error("creation_incomplete");
+      const space = this.spaceProfile();
+      if (!this.rootCapability(space)) throw new Error("root_capability_unavailable");
+      const known = new Set(this.state.profiles.map((p) => p.replica));
+      if (config.routes.some((r) => !known.has(r.replica)))
+        throw new Error("unknown_route_replica");
+      const merged = mergeRelay(this.state.relay, config);
+      if (merged === null) return;
+      await this.persist({ ...structuredClone(this.state), relay: merged });
+    });
+  }
+  /** Founder: sign an `issue_invitation` over the full honored Thread scope and return the offer text. */
+  issueInvitation(joinRequest: string, joinerRealm: string) {
+    return this.exclusive(async () => {
+      const { publicKey: recipient } = decodeTreehouseJoinRequest(joinRequest);
+      const localRealm = validateLocalRealm(joinerRealm);
+      if (this.state.intent) throw new Error("creation_incomplete");
+      const space = this.spaceProfile();
+      const relay = this.state.relay;
+      if (relay === null || !relay.routes.some((r) => r.replica === space.replica))
+        throw new Error("routes_not_configured");
+      // An honored, unrevoked invitation for this recipient with a current scope is reused.
+      const existing = carrierOpsToSemanticOps(
+        space.frames,
+        {},
+        treehouseCommandDecoders("Treehouse.Space"),
+      )
+        .filter(
+          (op) =>
+            op.kind === "command" &&
+            op.command === "issue_invitation" &&
+            op.commandArgs?.[0] === recipient,
+        )
+        .map((op) =>
+          reviewTreehouseInvitation({
+            replica: space.replica,
+            frames: space.frames,
+            invitationId: op.id,
+            recipient,
+          }),
+        )
+        .find((review) => review.ok);
+      let invitationId: string;
+      let threads: { replica: string; archived: boolean }[];
+      if (existing && existing.ok) {
+        const routed = new Set(relay.routes.map((r) => r.replica));
+        if (
+          existing.threads.length > TREEHOUSE_LITE_THREAD_CAP ||
+          existing.threads.some((replica) => !routed.has(replica))
+        )
+          throw new Error("thread_scope_exceeds_routes");
+        invitationId = existing.invitationId;
+        threads = existing.threads.map((replica) => ({
+          replica,
+          archived: this.archived(replica),
+        }));
+      } else {
+        const authored = await authorTreehouseIssueInvitation({
+          signer: this.signer(),
+          replica: space.replica,
+          frames: space.frames,
+          threadFrames: this.threadFrames(),
+          routes: relay.routes,
+          recipient,
+        });
+        const next = structuredClone(this.state);
+        const target = next.profiles.find((p) => p.replica === space.replica)!;
+        target.frames.push(authored.frame);
+        target.outbox.push(authored.frame.id);
+        await this.persist(next, [target]);
+        invitationId = authored.frame.id;
+        threads = authored.threads;
+      }
+      const inScope = new Set([space.replica, ...threads.map((t) => t.replica)]);
+      return encodeTreehouseOffer({
+        space: space.replica,
+        invitationId,
+        localRealm,
+        routes: relay.routes.filter((r) => inScope.has(r.replica)).map(offerRoute),
+        threads,
+      });
+    });
+  }
+  /** Joiner, Use: decode and review an offer. Nothing is persisted until confirmOffer. */
+  useOffer(offerText: string) {
+    return this.exclusive(async (): Promise<OfferReview> => {
+      const offer = decodeTreehouseOffer(offerText);
+      if (this.state.publicKey === null) throw new Error("join_not_begun");
+      if (this.state.intent) throw new Error("creation_incomplete");
+      const held = this.state.profiles.find((p) => p.product === "Treehouse.Space");
+      if (held && held.replica !== offer.space) throw new Error("wrong_replica");
+      const localRealm = validateLocalRealm(offer.localRealm);
+      const routes = routesForOffer(offer.routes, {
+        space: offer.space,
+        threads: offer.threads.map((t) => t.replica),
+      });
+      let invitationVerified = false;
+      let admitted = false;
+      if (held) {
+        const checked = reviewTreehouseInvitation({
+          replica: held.replica,
+          frames: held.frames,
+          invitationId: offer.invitationId,
+          recipient: this.state.publicKey,
+          offerThreads: offer.threads.map((t) => t.replica),
+        });
+        if (!checked.ok) throw new Error(checked.reason);
+        invitationVerified = true;
+        admitted = checked.admitted;
+      }
+      const review: OfferReview = {
+        space: offer.space,
+        invitationId: offer.invitationId,
+        localRealm,
+        threads: offer.threads,
+        routes,
+        invitationVerified,
+        admitted,
+      };
+      this.pendingOffer = { review, relay: { localRealm, routes } };
+      return review;
+    });
+  }
+  /** Joiner, confirm: persist the reviewed routes. Confirming the same offer again changes nothing. */
+  confirmOffer() {
+    return this.exclusive(async () => {
+      const pending = this.pendingOffer;
+      if (!pending) throw new Error("no_pending_offer");
+      const merged = mergeRelay(this.state.relay, pending.relay);
+      if (merged !== null) await this.persist({ ...structuredClone(this.state), relay: merged });
+      this.pendingOffer = null;
+    });
+  }
+  /** Joiner, Sign: review the invitation against the pulled Space, then sign the recipient-bound acceptance. */
+  acceptInvitation(offerText: string) {
+    return this.exclusive(async () => {
+      const offer = decodeTreehouseOffer(offerText);
+      const scope = offer.threads.map((t) => t.replica);
+      const routes = routesForOffer(offer.routes, { space: offer.space, threads: scope });
+      if (this.state.intent) throw new Error("creation_incomplete");
+      const space = this.spaceProfile();
+      const checked = reviewTreehouseInvitation({
+        replica: space.replica,
+        frames: space.frames,
+        invitationId: offer.invitationId,
+        recipient: this.state.publicKey ?? "",
+        offerThreads: scope,
+      });
+      if (!checked.ok) throw new Error(checked.reason);
+      const relay = this.state.relay;
+      if (
+        space.replica !== offer.space ||
+        relay === null ||
+        relay.localRealm !== offer.localRealm ||
+        routes.some((r) => !relay.routes.some((c) => JSON.stringify(c) === JSON.stringify(r)))
+      )
+        throw new Error("offer_not_confirmed");
+      return encodeTreehouseAcceptance(
+        await signTreehouseAcceptance({
+          replica: space.replica,
+          frames: space.frames,
+          invitationId: offer.invitationId,
+          signer: this.signer(),
+        }),
+      );
+    });
+  }
+  /**
+   * Founder: admit the recipient and grant exact-audience Thread capabilities for the whole signed scope,
+   * persisted as one commit. Replaying the same acceptance authors and persists nothing.
+   */
+  admitAndGrant(acceptanceText: string) {
+    return this.exclusive(async () => {
+      const acceptance = decodeTreehouseAcceptance(acceptanceText);
+      if (this.state.intent) throw new Error("creation_incomplete");
+      const space = this.spaceProfile();
+      const authored = await authorTreehouseAdmitAndGrant({
+        signer: this.signer(),
+        replica: space.replica,
+        frames: space.frames,
+        threadFrames: this.threadFrames(),
+        acceptance,
+      });
+      if (authored.admit === null && authored.grants.length === 0)
+        return { admit: null, grants: [] as string[] };
+      const next = structuredClone(this.state);
+      const changed: LocalProfile[] = [];
+      if (authored.admit) {
+        const target = next.profiles.find((p) => p.replica === space.replica)!;
+        target.frames.push(authored.admit);
+        target.outbox.push(authored.admit.id);
+        changed.push(target);
+      }
+      for (const grant of authored.grants) {
+        const target = next.profiles.find((p) => p.replica === grant.replica)!;
+        target.frames.push(grant.frame);
+        target.outbox.push(grant.frame.id);
+        changed.push(target);
+      }
+      await this.persist(next, changed);
+      return {
+        admit: authored.admit?.id ?? null,
+        grants: authored.grants.map((g) => g.frame.id),
+      };
     });
   }
   select(replica: string) {
