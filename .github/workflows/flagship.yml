@@ -341,6 +341,12 @@ jobs:
       - name: TS live carrier Township check
         working-directory: clients/lattice-client
         run: npm run carrier:township:live
+      - name: Treehouse enrollment sync gate against Lattice.Sim
+        # Plan 181 slice 4. Real sockets, a manifest-booted pilot_node.exs relay, kill -9 and restart.
+        # Linux is the supported durability platform, so this is the only durability evidence of the plan.
+        # It needs the :test build that the full suite above produced.
+        working-directory: clients/treehouse-tauri-shell
+        run: npm run gate:enrollment
       - name: Credo (strict)
         run: mix credo --strict
       - name: Sobelow (lattice_server)
