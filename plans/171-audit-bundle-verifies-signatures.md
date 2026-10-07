@@ -548,7 +548,7 @@ For the human or agent who owns this next:
   of G5, and consider stating it in the `AuditBundle` moduledoc alongside the new guarantee.
 - **The general lesson**: `Op.valid?/1` runs in exactly one place on the ingest path
   (`Log.accept/2`). Any code path that constructs a `%Log{}` by another route bypasses it. After
-  this plan every `Log.restore/1` consumer has an explicit policy. `Holder` already had one.
+  this plan every `Log.restore/1` consumer has an explicit policy. `Holder` and `Health` already had one.
   `AuditBundle` and `Registry` gain one here. **When a
   fifth restore consumer appears, it needs one too**; the cheapest guard is a grep in review
   (`grep -rn "Log.restore" apps --include=*.ex | grep -v _build`) against the list of callers
