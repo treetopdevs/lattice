@@ -275,11 +275,16 @@ migrationNative.seed = native.seed;
 const oldEnvelope = JSON.parse(native.record!);
 oldEnvelope.version = 0;
 delete oldEnvelope.clearedDrafts;
+delete oldEnvelope.relay;
+for (const p of oldEnvelope.profiles) delete p.acked;
 migrationNative.record = JSON.stringify(oldEnvelope);
 const migrated = new TreehouseWorkflow(migrationNative);
 await migrated.open();
-assert.equal(JSON.parse(migrationNative.record!).version, 1);
-assert.deepEqual(migrated.state.profiles, oldEnvelope.profiles);
+assert.equal(JSON.parse(migrationNative.record!).version, 2);
+assert.deepEqual(
+  migrated.state.profiles,
+  oldEnvelope.profiles.map((p: object) => ({ ...p, acked: [] })),
+);
 assert.equal(migrated.state.revision, oldEnvelope.revision + 1);
 const migrationAgain = new TreehouseWorkflow(migrationNative);
 await migrationAgain.open();

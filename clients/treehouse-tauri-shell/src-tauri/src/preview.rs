@@ -19,6 +19,10 @@ use std::{
 pub const HISTORY_KEY: &str = "treehouse:preview:history";
 pub const HISTORY_BYTES: usize = 1_048_576;
 pub const DRAFT_BYTES: usize = 16_384;
+/// One Space route plus at most three Thread routes.
+const MAX_ROUTES: usize = 4;
+/// The join intent carries no user text; this constant satisfies the non-empty name rule.
+const JOIN_INTENT_NAME: &str = "join";
 const MAX_REVISION: u64 = 9_007_199_254_740_991;
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -31,6 +35,7 @@ struct Record {
     active: Option<String>,
     intent: Option<Intent>,
     cleared_drafts: BTreeMap<String, u64>,
+    relay: Option<Relay>,
 }
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -38,7 +43,24 @@ struct Profile {
     product: String,
     replica: String,
     frames: Vec<Value>,
+    /// Ids this device authored. Never shrinks.
     outbox: Vec<String>,
+    /// Ids known durable on the relay. Grows only; a subset of the retained frame ids.
+    acked: Vec<String>,
+}
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Relay {
+    local_realm: String,
+    routes: Vec<Route>,
+}
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Route {
+    replica: String,
+    url: String,
+    expected_peer_realm: String,
+    expected_peer_pubkey: String,
 }
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -63,7 +85,7 @@ pub struct OpenResult {
 }
 fn empty() -> Record {
     Record {
-        version: 1,
+        version: 2,
         product: "treehouse".into(),
         revision: 0,
         public_key: None,
@@ -71,6 +93,7 @@ fn empty() -> Record {
         active: None,
         intent: None,
         cleared_drafts: BTreeMap::new(),
+        relay: None,
     }
 }
 fn token(value: &str) -> bool {
@@ -84,6 +107,26 @@ fn replica(value: &str, kind: &str) -> bool {
         .strip_prefix(&format!("replica:treehouse:{kind}:"))
         .and_then(|tail| tail.split_once("#root:"))
         .is_some_and(|(nonce, root)| token(nonce) && token(root))
+}
+fn public_key_text(value: &str) -> bool {
+    BASE64
+        .decode(value)
+        .is_ok_and(|bytes| bytes.len() == 32 && BASE64.encode(bytes) == value)
+}
+fn text(value: &str, limit: usize) -> bool {
+    !value.trim().is_empty() && value.len() <= limit
+}
+fn valid_relay(relay: &Relay) -> bool {
+    let mut replicas = HashSet::new();
+    text(&relay.local_realm, 256)
+        && relay.routes.len() <= MAX_ROUTES
+        && relay.routes.iter().all(|r| {
+            text(&r.replica, 512)
+                && text(&r.url, 2048)
+                && text(&r.expected_peer_realm, 256)
+                && public_key_text(&r.expected_peer_pubkey)
+                && replicas.insert(r.replica.clone())
+        })
 }
 fn parse(raw: Option<&str>) -> Result<Record, String> {
     let Some(raw) = raw else { return Ok(empty()) };
@@ -109,10 +152,45 @@ fn parse(raw: Option<&str>) -> Result<Record, String> {
         map.insert("version".into(), Value::from(1));
         map.insert("clearedDrafts".into(), Value::Object(Default::default()));
     }
+    // Closed v1 envelope: migrates in memory only. Opening never writes; the next
+    // explicit commit persists v2.
+    if value["version"] == 1 {
+        let v1 = [
+            "version",
+            "product",
+            "revision",
+            "publicKey",
+            "profiles",
+            "active",
+            "intent",
+            "clearedDrafts",
+        ];
+        let map = value.as_object_mut().ok_or("invalid_preview_record")?;
+        if map.len() == v1.len() && v1.iter().all(|key| map.contains_key(*key)) {
+            if let Some(profiles) = map.get_mut("profiles").and_then(Value::as_array_mut) {
+                for profile in profiles {
+                    if let Some(profile) = profile.as_object_mut() {
+                        if profile.len() == 4 {
+                            profile.insert("acked".into(), Value::Array(vec![]));
+                        }
+                    }
+                }
+            }
+            map.insert("version".into(), Value::from(2));
+            map.insert("relay".into(), Value::Null);
+        }
+    }
+    // Option fields default to None when absent, but a v2 envelope names relay explicitly.
+    if !value
+        .as_object()
+        .is_some_and(|map| map.contains_key("relay"))
+    {
+        return Err("invalid_preview_record".into());
+    }
     let r: Record =
         serde_json::from_value(value).map_err(|_| "invalid_preview_record".to_string())?;
     let mut names = HashSet::new();
-    if r.version != 1
+    if r.version != 2
         || r.product != "treehouse"
         || r.revision > MAX_REVISION
         || r.profiles.len() > 13
@@ -128,10 +206,14 @@ fn parse(raw: Option<&str>) -> Result<Record, String> {
             return Err("invalid_public_identity".into());
         }
     }
+    if r.relay.as_ref().is_some_and(|relay| !valid_relay(relay)) {
+        return Err("invalid_relay".into());
+    }
     if let Some(i) = &r.intent {
-        if !matches!(i.kind.as_str(), "space" | "thread")
+        if !matches!(i.kind.as_str(), "space" | "thread" | "join")
             || i.name.trim().is_empty()
             || i.name.len() > DRAFT_BYTES
+            || (i.kind == "join" && i.name != JOIN_INTENT_NAME)
             || !token(&i.nonce)
         {
             return Err("invalid_creation_intent".into());
@@ -176,6 +258,11 @@ fn parse(raw: Option<&str>) -> Result<Record, String> {
             || p.outbox.iter().any(|id| !ids.contains(id))
         {
             return Err("incomplete_retained_history".into());
+        }
+        if p.acked.iter().collect::<HashSet<_>>().len() != p.acked.len()
+            || p.acked.iter().any(|id| !ids.contains(id))
+        {
+            return Err("invalid_local_profile".into());
         }
     }
     if r.profiles
@@ -260,7 +347,9 @@ impl PreviewStore {
             let (_, r) = self.captured()?;
             if r.public_key.is_some()
                 || !r.profiles.is_empty()
-                || !r.intent.is_some_and(|i| i.kind == "space")
+                || !r
+                    .intent
+                    .is_some_and(|i| matches!(i.kind.as_str(), "space" | "join"))
             {
                 return Err("identity_creation_not_allowed".into());
             }
@@ -295,7 +384,7 @@ impl PreviewStore {
         }
         let next_record = parse(Some(next))?;
         if serde_json::from_str::<Value>(next).map_err(|_| "invalid_preview_record")?["version"]
-            != 1
+            != 2
         {
             return Err("invalid_preview_record".into());
         }
@@ -313,7 +402,24 @@ impl PreviewStore {
         }
         if old.public_key.is_none()
             && next_record.public_key.is_some()
-            && (!old.profiles.is_empty() || !old.intent.as_ref().is_some_and(|i| i.kind == "space"))
+            && (!old.profiles.is_empty()
+                || !old
+                    .intent
+                    .as_ref()
+                    .is_some_and(|i| matches!(i.kind.as_str(), "space" | "join")))
+        {
+            return Err("identity_creation_not_allowed".into());
+        }
+        // A join intent is only ever created on a record with no identity and no history.
+        if old.intent.is_none()
+            && next_record
+                .intent
+                .as_ref()
+                .is_some_and(|i| i.kind == "join")
+            && (old.public_key.is_some()
+                || !old.profiles.is_empty()
+                || next_record.public_key.is_some()
+                || !next_record.profiles.is_empty())
         {
             return Err("identity_creation_not_allowed".into());
         }
@@ -331,6 +437,7 @@ impl PreviewStore {
                     .outbox
                     .iter()
                     .any(|id| !retained.outbox.contains(id))
+                || previous.acked.iter().any(|id| !retained.acked.contains(id))
                 || previous
                     .frames
                     .iter()
@@ -347,7 +454,18 @@ impl PreviewStore {
                 return Err("creation_intent_changed".into());
             }
         }
-        if let Some(pending) = &old.intent {
+        if old.intent.as_ref().is_some_and(|i| i.kind == "join") {
+            // The join intent is spent by the commit that persists the key: the identity is
+            // present, the intent is gone and no profile exists yet (the first dependency-closed
+            // pulled batch arrives later). The replica strings are the founder's, so the
+            // creation-nonce match used for Space and Thread intents cannot apply.
+            let spent = next_record.intent.is_none();
+            if (spent && (next_record.public_key.is_none() || !next_record.profiles.is_empty()))
+                || (!spent && next_record.public_key.is_some())
+            {
+                return Err("creation_incomplete".into());
+            }
+        } else if let Some(pending) = &old.intent {
             if next_record.intent.is_none()
                 && !next_record.profiles.iter().any(|p| {
                     p.replica.starts_with(&format!(

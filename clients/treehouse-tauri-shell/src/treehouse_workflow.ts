@@ -6,6 +6,8 @@ import {
   carrierOpsToSemanticOps,
   observeTreehouse,
   prepareTreehouseSpaceCreation,
+  townshipReplicaCommitment,
+  townshipReplicaRootTag,
   treehouseCommandDecoders,
   verifyCarrierOp,
 } from "@treetopdevs/lattice-client";
@@ -14,6 +16,7 @@ import type {
   TreehouseCommand,
 } from "@treetopdevs/lattice-client";
 import {
+  assertRetainedMonotonic,
   emptyState,
   parseState,
   byteLength,
@@ -124,7 +127,9 @@ export class TreehouseWorkflow {
       !ids.size ||
       profile.frames.some((f) => f.deps.some((id) => !ids.has(id))) ||
       new Set(profile.outbox).size !== profile.outbox.length ||
-      profile.outbox.some((id) => !ids.has(id))
+      profile.outbox.some((id) => !ids.has(id)) ||
+      new Set(profile.acked).size !== profile.acked.length ||
+      profile.acked.some((id) => !ids.has(id))
     )
       throw new Error("incomplete_retained_history");
     const ops = carrierOpsToSemanticOps(
@@ -135,9 +140,17 @@ export class TreehouseWorkflow {
     const root = ops.find(
       (op) => op.deps.length === 0 && op.authority?.type === "genesis",
     );
+    // The replica's #root: commitment binds it to the genesis author. A joiner holds a
+    // foreign-root profile, so the author need not be the local key, but the commitment
+    // must match whoever authored the genesis.
+    const rootAuthor = root
+      ? profile.frames.find((frame) => frame.id === root.id)?.author
+      : undefined;
     if (
       !root ||
-      profile.frames.find((frame) => frame.id === root.id)?.author !== publicKey
+      rootAuthor === undefined ||
+      townshipReplicaCommitment(profile.replica) !==
+        (await townshipReplicaRootTag(rootAuthor))
     )
       throw new Error("wrong_profile_root");
     const view = observeTreehouse(profile.product, ops);
@@ -185,6 +198,7 @@ export class TreehouseWorkflow {
     if (byteLength(record) > HISTORY_BYTES)
       throw new Error("preview_storage_limit");
     parseState(record);
+    assertRetainedMonotonic(this.state, next);
     const views = new Map(this.views);
     for (const p of changed)
       views.set(
@@ -260,6 +274,7 @@ export class TreehouseWorkflow {
         replica: prepared.replica,
         frames: prepared.pending,
         outbox: prepared.pending.map((f) => f.id),
+        acked: [],
       });
       next.profiles.push(changed[0]!);
       next.active = prepared.replica;
@@ -285,6 +300,7 @@ export class TreehouseWorkflow {
         replica: genesis.replica,
         frames: [genesis, title],
         outbox: [genesis.id, title.id],
+        acked: [],
       };
       const space = next.profiles.find((p) => p.product === "Treehouse.Space")!;
       const reference = await this.author(space, {
