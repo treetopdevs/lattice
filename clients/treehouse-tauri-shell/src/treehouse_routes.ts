@@ -19,7 +19,13 @@ const fail = (label: string): never => {
 };
 
 const realmText = (value: unknown, label: string): string => {
-  if (typeof value !== "string" || !value.trim() || new TextEncoder().encode(value).length > 256)
+  // A realm is pinned for good, so stray whitespace is refused rather than silently kept.
+  if (
+    typeof value !== "string" ||
+    !value.trim() ||
+    value !== value.trim() ||
+    new TextEncoder().encode(value).length > 256
+  )
     return fail(label);
   return value;
 };
@@ -79,8 +85,9 @@ export function validateRoute(value: unknown): RelayRoute {
   };
 }
 
-/** Validate a list: at most four routes, one per replica. */
+/** Validate a list: one to four routes, one per replica. */
 export function validateRoutes(values: unknown[]): RelayRoute[] {
+  if (values.length === 0) return fail("routes_not_configured");
   if (values.length > MAX_ROUTES) return fail("too_many_routes");
   const seen = new Set<string>();
   return values.map((value) => {

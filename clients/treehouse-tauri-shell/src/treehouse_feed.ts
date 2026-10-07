@@ -505,6 +505,7 @@ export function createTreehouseFeedController(
 
     async reconfigure() {
       if (stopped) return;
+      const wasRunning = running;
       epoch++;
       await teardown();
       stopPoll();
@@ -516,7 +517,7 @@ export function createTreehouseFeedController(
       }
       if (routes().length > MAX_ROUTES) throw new Error("too_many_routes");
       options.onState(snapshot());
-      if (autosync) launch();
+      if (autosync || wasRunning) launch();
     },
 
     async stop() {

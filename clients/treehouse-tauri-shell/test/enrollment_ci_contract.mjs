@@ -176,6 +176,7 @@ export function check(workflow, pkg, harnessSource) {
   const timeout = Number(scalar(header, "timeout-minutes", 4));
   if (!Number.isInteger(timeout) || timeout < 30 || timeout > 120) fail("timeout-minutes must be a bounded 30 to 120");
   if (scalar(header, "if", 4) !== undefined) fail("the job must have no if");
+  if (!/^ {4}permissions:\n {6}contents: read\n(?! {6})/mu.test(header)) fail("the job must declare least-privilege permissions: contents: read");
   if (/continue-on-error/u.test(job)) fail("continue-on-error is forbidden in any spelling");
   if (/\|\|\s*(?:true|:|exit\s+0)\b/u.test(job)) fail("|| true style masking is forbidden");
   if (/set\s+\+e/u.test(job)) fail("set +e is forbidden");

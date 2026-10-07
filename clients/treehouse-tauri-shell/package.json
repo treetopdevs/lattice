@@ -25,6 +25,8 @@
     "@tauri-apps/cli": "2.11.4",
     "@types/node": "^26.1.0",
     "@vitejs/plugin-vue": "6.0.7",
+    "@vue/compiler-core": "3.5.39",
+    "@vue/compiler-sfc": "3.5.39",
     "tsx": "4.23.0",
     "typescript": "5.9.3",
     "vite": "8.1.3",

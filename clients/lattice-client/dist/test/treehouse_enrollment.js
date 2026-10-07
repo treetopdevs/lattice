@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { acceptTreehouseInvitation, authorTownshipDelegation, authorTownshipGenesis, authorTreehouseCommand, authorTreehouseAdmitAndGrant, authorTreehouseIssueInvitation, carrierOpsToSemanticOps, decodeTreehouseAcceptance, decodeTreehouseJoinRequest, decodeTreehouseOffer, encodeTreehouseAcceptance, encodeTreehouseJoinRequest, encodeTreehouseOffer, memberCapability, observeTreehouse, reviewTreehouseInvitation, signTreehouseAcceptance, treehouseCommandDecoders, TREEHOUSE_LITE_THREAD_CAP, TREEHOUSE_OFFER_MAX_CHARS, } from "../src/index";
+import { acceptTreehouseInvitation, authorTownshipDelegation, carrierDelegationsFromFrames, authorTownshipGenesis, authorTreehouseCommand, authorTreehouseAdmitAndGrant, authorTreehouseIssueInvitation, carrierOpsToSemanticOps, decodeTreehouseAcceptance, decodeTreehouseJoinRequest, decodeTreehouseOffer, encodeTreehouseAcceptance, encodeTreehouseJoinRequest, encodeTreehouseOffer, memberCapability, observeTreehouse, reviewTreehouseInvitation, signTreehouseAcceptance, treehouseCommandDecoders, TREEHOUSE_LITE_THREAD_CAP, TREEHOUSE_OFFER_MAX_CHARS, } from "../src/index";
 import { frontier } from "../src/sync";
 const here = dirname(fileURLToPath(import.meta.url));
 const scenarios = JSON.parse(readFileSync(join(here, "vectors", "treehouse_enrollment", "enrollment.json"), "utf8"));
@@ -307,6 +307,16 @@ const joinThreadReplica = joinFlow.expect.scope[0];
         threadFrames: { ...landedThreads, [archivedLog.replica]: threadFrames[archivedLog.replica] }, acceptance });
     assert.equal(partial.admit, null);
     assert.deepEqual(partial.grants.map((grant) => grant.replica), [archivedLog.replica]);
+    // An honored grant that carries post but not author_edit and author_tombstone does not satisfy the skip:
+    // the full member grant is still authored for that Thread.
+    const liveFrames = landedThreads[live.replica].filter((frame) => frame.id !== result.grants.find((grant) => grant.replica === live.replica).frame.id);
+    const root = carrierDelegationsFromFrames(liveFrames).find((delegation) => delegation.audience === scenario.pubkeys.founder && delegation.ops.includes("post"));
+    const postOnly = await authorTownshipDelegation({ replica: live.replica, deps: frontier(carrierOpsToSemanticOps(liveFrames, {}, treehouseCommandDecoders("Treehouse.Thread"))),
+        audiencePubkey: scenario.pubkeys.joiner, parentId: root.id, ops: ["post"], roles: [], live: false, signer: founder });
+    const narrow = await authorTreehouseAdmitAndGrant({ signer: founder, replica: space.replica, frames: landedSpace,
+        threadFrames: { ...landedThreads, [live.replica]: [...liveFrames, postOnly] }, acceptance });
+    assert.deepEqual(narrow.grants.map((grant) => grant.replica), [live.replica]);
+    assert.deepEqual([...narrow.grants[0].delegation.ops].sort(), ["author_edit", "author_tombstone", "post"]);
     // Refusals: wrong recipient's acceptance, missing Thread history, a foreign signer.
     const other = signerFor(scenario, "other");
     const forged = b64(await other.sign(new Uint8Array([1])));

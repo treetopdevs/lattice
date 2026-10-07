@@ -496,6 +496,9 @@ for (const [list, pattern] of [
   [JSON.stringify({ localRealm: "f", routes: [routeEntry(spaceReplica, 1, { expectedPeerPubkey: "AAAA" })] }), /invalid_route/],
   [JSON.stringify({ localRealm: "f", routes: [routeEntry(spaceReplica, 1), routeEntry(spaceReplica, 2)] }), /duplicate_route/],
   [JSON.stringify({ localRealm: "f", routes: [1, 2, 3, 4, 5].map((i) => routeEntry(spaceReplica, i)) }), /too_many_routes/],
+  [JSON.stringify({ localRealm: "f", routes: [] }), /routes_not_configured/],
+  [JSON.stringify({ localRealm: " f", routes: [routeEntry(spaceReplica, 1)] }), /invalid_local_realm/],
+  [JSON.stringify({ localRealm: "f", routes: [routeEntry(spaceReplica, 1, { expectedPeerRealm: "server " })] }), /invalid_route/],
 ] as const)
   await unchanged(fNative, () => fApp.configureRoutes(list), pattern);
 await fApp.configureRoutes(routeList(fApp, "founder", 1));

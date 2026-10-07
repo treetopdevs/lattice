@@ -444,6 +444,26 @@ fn relay_routes_are_capped_closed_and_pinned() {
         next["relay"] = bad;
         assert!(store.commit(2, &next.to_string()).is_err());
     }
-    next["relay"] = relay((1..=4).map(route).collect());
+    next["relay"] = relay(vec![route(1), route(2)]);
     assert!(commit(&mut store, 2, &next));
+
+    // Saved routes and the local realm are pinned; only additions are accepted.
+    let replaced_url = json!({"replica":"r1","url":"ws://127.0.0.1:9090","expectedPeerRealm":"server","expectedPeerPubkey":pk(1)});
+    let replaced_key = json!({"replica":"r1","url":"ws://127.0.0.1:8080","expectedPeerRealm":"server","expectedPeerPubkey":pk(9)});
+    next["revision"] = json!(4);
+    for bad in [
+        relay(vec![replaced_url, route(2)]),
+        relay(vec![replaced_key, route(2)]),
+        relay(vec![route(2)]),
+        json!({"localRealm":"other","routes":[route(1), route(2)]}),
+        Value::Null,
+    ] {
+        next["relay"] = bad;
+        assert_eq!(
+            store.commit(3, &next.to_string()).unwrap_err(),
+            "relay_already_configured"
+        );
+    }
+    next["relay"] = relay((1..=4).map(route).collect());
+    assert!(commit(&mut store, 3, &next));
 }

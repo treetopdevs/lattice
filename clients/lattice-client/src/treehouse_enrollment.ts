@@ -344,7 +344,8 @@ export async function authorTreehouseAdmitAndGrant(input: {
 
   const plans = review.threads.map((replica) => {
     const frames = requireFrames(input.threadFrames[replica], replica);
-    if (memberCapability(frames, acceptance.recipient, replica, { command: "post", product: "Treehouse.Thread" }) !== null) return null;
+    if (honoredDelegations(frames, replica).some((delegation) => delegation.audience === acceptance.recipient &&
+      MEMBER_OPS.every((name) => delegation.ops.includes(name)))) return null;
     const parent = honoredDelegations(frames, replica).find((delegation) => delegation.audience === pubkeyBase64(input.signer.publicKey) &&
       MEMBER_OPS.every((name) => delegation.ops.includes(name)));
     if (parent === undefined) throw new Error("no_capability");

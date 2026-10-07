@@ -509,6 +509,8 @@ jobs:
     name: Packaged macOS Treehouse enrollment (dev-trace variant)
     runs-on: macos-15-intel
     timeout-minutes: 90
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout

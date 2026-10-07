@@ -210,6 +210,7 @@ function relay(value: unknown): boolean {
     !keys(value, ["localRealm", "routes"]) ||
     !text(value.localRealm, 256) ||
     !Array.isArray(value.routes) ||
+    value.routes.length === 0 ||
     value.routes.length > MAX_ROUTES
   )
     return false;
@@ -239,12 +240,15 @@ export function assertRetainedMonotonic(
 ): void {
   for (const previous of old.profiles) {
     const retained = next.profiles.find((p) => p.replica === previous.replica);
+    if (!retained || retained.product !== previous.product)
+      throw new Error("retained_history_changed");
+    const outbox = new Set(retained.outbox);
+    const acked = new Set(retained.acked);
+    const frames = new Set(retained.frames.map((f) => f.id));
     if (
-      !retained ||
-      retained.product !== previous.product ||
-      previous.outbox.some((id) => !retained.outbox.includes(id)) ||
-      previous.acked.some((id) => !retained.acked.includes(id)) ||
-      previous.frames.some((f) => !retained.frames.some((c) => c.id === f.id))
+      previous.outbox.some((id) => !outbox.has(id)) ||
+      previous.acked.some((id) => !acked.has(id)) ||
+      previous.frames.some((f) => !frames.has(f.id))
     )
       throw new Error("retained_history_changed");
   }

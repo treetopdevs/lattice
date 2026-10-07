@@ -378,8 +378,12 @@ const live = (h: Harness, replica: string) => h.routeState(replica)?.connection 
   await feed.syncNow();
   assert.equal(h.syncs.length, 4);
   assert.equal(h.sessions.get(f.thread)!.length, 1);
+  // A manually started feed keeps running across a route reconfiguration.
+  await feed.reconfigure();
+  await until(() => h.sessions.get(f.thread)!.length === 2 && live(h, f.thread), "manual feed relaunched");
+  assert.deepEqual(h.timersSet, [60000, 60000], "the poll fallback restarts with the feed");
   await feed.stop();
-  assert.equal(h.timersCleared, 1, "stop clears the poll timer");
+  assert.equal(h.timersCleared, 2, "reconfigure and stop each clear the poll timer");
   console.log("PASS autosync off connects nothing at boot; manual sync syncs once and starts the feed");
 }
 

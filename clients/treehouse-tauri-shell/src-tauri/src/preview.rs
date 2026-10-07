@@ -54,7 +54,7 @@ struct Relay {
     local_realm: String,
     routes: Vec<Route>,
 }
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Route {
     replica: String,
@@ -119,6 +119,7 @@ fn text(value: &str, limit: usize) -> bool {
 fn valid_relay(relay: &Relay) -> bool {
     let mut replicas = HashSet::new();
     text(&relay.local_realm, 256)
+        && !relay.routes.is_empty()
         && relay.routes.len() <= MAX_ROUTES
         && relay.routes.iter().all(|r| {
             text(&r.replica, 512)
@@ -508,6 +509,20 @@ impl PreviewStore {
                     .any(|frame| !retained.frames.iter().any(|candidate| candidate == frame))
             {
                 return Err("retained_history_changed".into());
+            }
+        }
+        // A saved relay set is never replaced: the local realm and every saved route stay exactly as
+        // they were, and only new routes may be added.
+        if let Some(previous) = &old.relay {
+            let kept = next_record.relay.as_ref().is_some_and(|next| {
+                next.local_realm == previous.local_realm
+                    && previous
+                        .routes
+                        .iter()
+                        .all(|route| next.routes.contains(route))
+            });
+            if !kept {
+                return Err("relay_already_configured".into());
             }
         }
         if let (Some(previous), Some(pending)) = (&old.intent, &next_record.intent) {
