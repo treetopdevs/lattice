@@ -165,6 +165,7 @@ jobs:
         run: |
           MIX_ENV=test mix lattice.export_vectors --out clients/lattice-client/test/vectors
           MIX_ENV=test mix run -e 'Lattice.ContinuationVectors.write("clients/lattice-client/test/vectors")'
+          MIX_ENV=test mix run -e 'Treehouse.EnrollmentVectors.write("clients/lattice-client/test/vectors")'
       - name: Regenerate and verify TS-authored continuation operations
         run: |
           npm --prefix clients/lattice-client run continuation:vectors
