@@ -1,9 +1,23 @@
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, ref, shallowRef } from "vue";
+import {
+  computed,
+  defineAsyncComponent,
+  onMounted,
+  onBeforeUnmount,
+  ref,
+  shallowRef,
+} from "vue";
 import { TreehouseWorkflow } from "./treehouse_workflow";
 import { native } from "./native_adapter";
 import WitnessSetup from "./WitnessSetup.vue";
 const workflow = new TreehouseWorkflow(native);
+// Plan 181 decision 11: the enrollment panel and its relay copy exist only in the build made with
+// VITE_TREEHOUSE_ENROLLMENT=1. Vite replaces the flag at build time, so the ordinary and Android builds
+// neither emit the panel chunk nor name it.
+const enrollment = import.meta.env.VITE_TREEHOUSE_ENROLLMENT === "1";
+const EnrollmentPanel = enrollment
+  ? defineAsyncComponent(() => import("./EnrollmentPanel.vue"))
+  : null;
 const state = shallowRef(workflow.state);
 const ready = ref(false),
   busy = ref(false),
@@ -46,6 +60,29 @@ const queued = computed(() =>
 const writable = computed(
   () =>
     ready.value && workflow.keyAvailable && !state.value.intent && !busy.value,
+);
+// The genesis operation is the only one without dependencies; its author is the founder.
+const founderKey = computed(
+  () => space.value?.frames.find((f) => f.deps.length === 0)?.author ?? null,
+);
+const authorLabel = (author: string) =>
+  author === state.value.publicKey
+    ? "You"
+    : author === founderKey.value
+      ? "Founder"
+      : "Member";
+// Posting needs a capability this key holds: the founder's root grant or a member's Thread grant.
+const canPost = computed(
+  () =>
+    writable.value &&
+    active.value !== undefined &&
+    workflow.canAuthor(active.value.replica, "post"),
+);
+const canModerate = computed(
+  () =>
+    writable.value &&
+    active.value !== undefined &&
+    workflow.canAuthor(active.value.replica, "archive_thread"),
 );
 const title = (replica: string) =>
   String(workflow.views.get(replica)?.state.title ?? "Untitled thread");
@@ -98,7 +135,10 @@ async function loadDraft() {
   draftSaved.value = true;
   draftFailed.value = false;
 }
-async function run(action: () => Promise<void>) {
+async function run(
+  action: () => Promise<void>,
+  explain: (cause: unknown) => string = describe,
+) {
   if (busy.value) return;
   busy.value = true;
   error.value = "";
@@ -107,7 +147,7 @@ async function run(action: () => Promise<void>) {
     refresh();
   } catch (cause) {
     refresh();
-    error.value = describe(cause);
+    error.value = explain(cause);
   } finally {
     busy.value = false;
   }
@@ -237,7 +277,9 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
   <div class="app-shell">
     <header class="masthead">
       <a class="wordmark" href="#"
-        >Treehouse<span class="preview">Local preview</span></a
+        >Treehouse<span class="preview">{{
+          enrollment ? "Relay preview" : "Local preview"
+        }}</span></a
       ><span class="recovery">Recovery is not set up</span>
     </header>
     <div v-if="error" role="alert" class="notice error">{{ error }}</div>
@@ -270,7 +312,7 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
         <p>Your saved setup can be retried with the same identity.</p>
         <button :disabled="busy" @click="resume">Finish local setup</button>
       </section>
-      <p class="fine">
+      <p v-if="!enrollment" class="fine">
         There are no members or connections yet. Inviting others and recovery
         come later.
       </p>
@@ -386,7 +428,7 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
             <button
               v-if="!view.state.archived"
               class="quiet"
-              :disabled="!writable"
+              :disabled="!canModerate"
               @click="archive"
             >
               Archive thread</button
@@ -406,10 +448,10 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
               class="post"
             >
               <div class="post-author">
-                <span class="avatar" aria-hidden="true">Y</span
-                ><strong>{{
-                  item.author === state.publicKey ? "You" : "Member"
-                }}</strong
+                <span class="avatar" aria-hidden="true">{{
+                  authorLabel(item.author).charAt(0)
+                }}</span
+                ><strong>{{ authorLabel(item.author) }}</strong
                 ><span>Saved on this device</span>
               </div>
               <form
@@ -466,7 +508,7 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
                   ><button
                     class="text-button"
                     :aria-label="`Hide post ${index + 1} as moderator`"
-                    :disabled="!writable"
+                    :disabled="!canModerate"
                     @click="hide(item.id, true)"
                   >
                     Hide as moderator
@@ -506,7 +548,7 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
               ><button
                 v-if="!view.state.archived"
                 type="submit"
-                :disabled="!writable || !draftText.trim()"
+                :disabled="!canPost || !draftText.trim()"
               >
                 Post
               </button>
@@ -523,6 +565,15 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
         </section>
       </main>
     </div>
+    <component
+      :is="EnrollmentPanel"
+      v-if="EnrollmentPanel && ready"
+      :workflow="workflow"
+      :state="state"
+      :busy="busy"
+      :run="run"
+      :describe="describe"
+    />
     <WitnessSetup />
   </div>
 </template>
