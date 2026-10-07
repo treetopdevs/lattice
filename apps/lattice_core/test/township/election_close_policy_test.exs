@@ -90,7 +90,8 @@ defmodule Township.ElectionClosePolicyTest do
     assert evidence.ballot_digests == [ballot_a.ref.digest]
     assert evidence.prerequisite == :administrative_open_asserted
 
-    assert Election.project(ctx.spec, snapshot(ctx), ctx.artifacts).phase == :setup
+    assert {:ok, %{projection: %{phase: :setup}}} =
+             Election.replay(ctx.spec, snapshot(ctx), ctx.artifacts)
   end
 
   test "a seal that omits a causally prior ballot is invalid", ctx do

@@ -126,10 +126,10 @@ installed under replica B's key and served from there forever. Authenticity woul
 that: a log for A is perfectly self-consistent, it is simply not the log anyone requested. Both
 consumers, and both assertions, are fixed here.
 
-The contrast inside the repo makes it clear this is an oversight rather than a decision. Two
-other consumers of `Log.restore/1` do it correctly:
-`LatticeCarrierServer.Holder.validate_log/1` re-verifies every op, and
-`Township.Election.Projector` does the same. The live carrier projection is also genuinely
+The contrast inside the repo makes it clear this is an oversight rather than a decision.
+`LatticeCarrierServer.Holder.validate_log/1` re-verifies every op restored from a path.
+The election foundation replay validates a board log it already holds and does not call
+`Log.restore/1`. The live carrier projection is also genuinely
 verified — it routes ops through `Sync.deliver` → `Log.accept` → `Op.valid?` and labels itself
 `verification: :arrival`, which is accurate. The bundle path is the one that labels itself
 verified without doing the work.
@@ -293,9 +293,8 @@ Baseline at the planned-at commit: `$MIXCMD test` exits 0.
 **Out of scope** (do NOT touch, even though they look related):
 
 - **`Lattice.Log.restore/1`'s own behaviour and return contract.** Do not make `restore/1`
-  itself verify. It is called by `Holder.restore_path/1`, `Election.Projector`, and
-  `Registry`, and the first two already apply their own validation policy; changing the shared
-  primitive would silently alter them. Add a *separate* function and call it from the consumers
+  itself verify. It is called by `Holder.restore_path/1` and `Registry`. `Holder` already applies its own validation policy. Changing the shared
+  primitive would silently alter those callers. Add a *separate* function and call it from the consumers
   that currently lack a policy — which, after this plan, means `AuditBundle` and `Registry`
   only. **`Registry` is in scope as a caller; the restore primitive is not.**
 - `apps/lattice_carrier_server/lib/lattice_carrier_server/holder.ex` — already correct. You may
@@ -549,8 +548,8 @@ For the human or agent who owns this next:
   of G5, and consider stating it in the `AuditBundle` moduledoc alongside the new guarantee.
 - **The general lesson**: `Op.valid?/1` runs in exactly one place on the ingest path
   (`Log.accept/2`). Any code path that constructs a `%Log{}` by another route bypasses it. After
-  this plan all four `Log.restore/1` consumers have an explicit policy — `Holder` and
-  `Election.Projector` already did, and `AuditBundle` and `Registry` gain one here. **When a
+  this plan every `Log.restore/1` consumer has an explicit policy. `Holder` already had one.
+  `AuditBundle` and `Registry` gain one here. **When a
   fifth restore consumer appears, it needs one too**; the cheapest guard is a grep in review
   (`grep -rn "Log.restore" apps --include=*.ex | grep -v _build`) against the list of callers
   that call `verify_authenticity/1`.

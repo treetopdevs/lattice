@@ -3,7 +3,7 @@ defmodule Township.ElectionProjectionTest do
 
   alias Lattice.{Canonical, Log, Sim}
   alias Township.{Election, ElectionBoard, Matter}
-  alias Township.Election.{ArtifactRef, BoardSnapshot, ProfileRef, Projection, Projector, Spec}
+  alias Township.Election.{ArtifactRef, BoardSnapshot, ProfileRef, Projection, Replay, Spec}
 
   @max_bytes 4_096
   @realms ["supervisor", "registrar", "box_a", "box_b", "trustee_a", "trustee_b"]
@@ -90,7 +90,9 @@ defmodule Township.ElectionProjectionTest do
 
     board = Sim.sync_all(board)
     snapshot = %{context.snapshot | board_log: Sim.log(board, "supervisor")}
-    projection = Election.project(context.spec, snapshot, %{ref.digest => bytes})
+
+    {:ok, %{projection: projection}} =
+      Election.replay(context.spec, snapshot, %{ref.digest => bytes})
 
     assert %Projection{
              election_id: election_id,
@@ -126,23 +128,21 @@ defmodule Township.ElectionProjectionTest do
 
     snapshot = %{context.snapshot | board_log: poisoned_log}
 
-    assert {:ok, view} =
-             Projector.foundation_view(context.spec, snapshot, %{ref.digest => bytes})
+    assert {:ok, replay} = Election.replay(context.spec, snapshot, %{ref.digest => bytes})
 
-    assert Log.has?(view.safe_log, genuine.id)
+    assert Log.has?(replay.safe_log, genuine.id)
 
-    assert Enum.any?(view.commands, fn
+    assert Enum.any?(replay.commands, fn
              {%{id: id}, :submit_ballot, _args} -> id == genuine.id
              _command -> false
            end)
 
     assert %{op_id: genuine_id, reason: :bad_signature} =
-             Enum.find(view.rejected, &(&1.op_id == genuine.id))
+             Enum.find(replay.rejected, &(&1.op_id == genuine.id))
 
     assert genuine_id == genuine.id
 
-    assert %Projection{status: {:pending, [:profile_unselected]}} =
-             Election.project(context.spec, snapshot, %{ref.digest => bytes})
+    assert %Replay{projection: %Projection{status: {:pending, [:profile_unselected]}}} = replay
   end
 
   test "wrong-election and wrong-role publishers stay auditable but do not mutate projection",
@@ -168,7 +168,9 @@ defmodule Township.ElectionProjectionTest do
 
     board = Sim.sync_all(board)
     snapshot = %{context.snapshot | board_log: Sim.log(board, "supervisor")}
-    projection = Election.project(context.spec, snapshot, %{ref.digest => bytes})
+
+    {:ok, %{projection: projection}} =
+      Election.replay(context.spec, snapshot, %{ref.digest => bytes})
 
     assert %{op_id: wrong_role_id, reason: :unauthorized_publisher} =
              Enum.find(projection.rejected, &(&1.op_id == wrong_role.id))
@@ -197,14 +199,17 @@ defmodule Township.ElectionProjectionTest do
     board = Sim.sync_all(board)
     snapshot = %{context.snapshot | board_log: Sim.log(board, "supervisor")}
 
-    assert %Projection{status: {:pending, requirements}} =
-             Election.project(context.spec, snapshot, %{})
+    assert {:ok, %Replay{projection: %Projection{status: {:pending, requirements}}}} =
+             Election.replay(context.spec, snapshot, %{})
 
     assert :profile_unselected in requirements
     assert {:artifact_unavailable, ref.digest} in requirements
 
-    assert %Projection{status: {:invalid, findings}, close_id: nil, phase: :setup} =
-             Election.project(context.spec, snapshot, %{ref.digest => "altered"})
+    assert {:ok,
+            %Replay{
+              projection: %Projection{status: {:invalid, findings}, close_id: nil, phase: :setup}
+            }} =
+             Election.replay(context.spec, snapshot, %{ref.digest => "altered"})
 
     assert Enum.any?(findings, fn finding ->
              finding.reason == :artifact_size_mismatch and finding.digest == ref.digest and
@@ -234,11 +239,11 @@ defmodule Township.ElectionProjectionTest do
     artifacts = Map.new(Enum.zip(Enum.map(refs, & &1.digest), ["ballot-a", "ballot-b"]))
     reversed_artifacts = artifacts |> Enum.reverse() |> Map.new()
 
-    first =
-      Election.project(context.spec, %{context.snapshot | board_log: log}, artifacts)
+    {:ok, first} =
+      Election.replay(context.spec, %{context.snapshot | board_log: log}, artifacts)
 
-    second =
-      Election.project(
+    {:ok, second} =
+      Election.replay(
         context.spec,
         %{context.snapshot | board_log: reversed_log},
         reversed_artifacts
@@ -246,28 +251,21 @@ defmodule Township.ElectionProjectionTest do
 
     assert first == second
 
-    assert Canonical.term(Projection.to_canonical_term(first)) ==
-             Canonical.term(Projection.to_canonical_term(second))
+    assert Canonical.term(Projection.to_canonical_term(first.projection)) ==
+             Canonical.term(Projection.to_canonical_term(second.projection))
   end
 
-  test "malformed and self-asserted contexts are total and can never become final", context do
+  test "malformed and self-asserted contexts fail with no projection", context do
     forged_spec = %{context.spec | schema: "self-asserted"}
-    malformed = Election.project(forged_spec, context.snapshot, %{})
 
-    assert %Projection{election_id: nil, phase: :setup, status: {:invalid, findings}} = malformed
-    assert %{reason: :unsupported_schema} in findings
+    assert {:error, :unsupported_schema} =
+             Election.replay(forged_spec, context.snapshot, %{})
 
-    bad_bound =
-      Election.project(context.spec, %{context.snapshot | max_artifact_byte_size: 0}, %{})
+    assert {:error, :invalid_board_snapshot} =
+             Election.replay(context.spec, %{context.snapshot | max_artifact_byte_size: 0}, %{})
 
-    assert %Projection{phase: :setup, status: {:invalid, _}, close_id: nil} = bad_bound
-
-    bad_artifacts = Election.project(context.spec, context.snapshot, :not_a_map)
-    assert %Projection{phase: :setup, status: {:invalid, _}, close_id: nil} = bad_artifacts
-
-    for projection <- [malformed, bad_bound, bad_artifacts] do
-      refute match?({:final, _}, projection.status)
-    end
+    assert {:error, :malformed_projection_input} =
+             Election.replay(context.spec, context.snapshot, :not_a_map)
   end
 
   test "artifact metadata must match the frozen profile and foundation codec", context do
@@ -300,8 +298,8 @@ defmodule Township.ElectionProjectionTest do
     board = Sim.sync_all(board)
     snapshot = %{context.snapshot | board_log: Sim.log(board, "supervisor")}
 
-    projection =
-      Election.project(context.spec, snapshot, %{
+    {:ok, %{projection: projection}} =
+      Election.replay(context.spec, snapshot, %{
         wrong_profile.digest => "ballot",
         wrong_codec.digest => "ballot"
       })
@@ -346,8 +344,8 @@ defmodule Township.ElectionProjectionTest do
     board = Sim.sync_all(board)
     snapshot = %{context.snapshot | board_log: Sim.log(board, "supervisor")}
 
-    projection =
-      Election.project(context.spec, snapshot, %{ref.digest => "opaque trustee contribution"})
+    {:ok, %{projection: projection}} =
+      Election.replay(context.spec, snapshot, %{ref.digest => "opaque trustee contribution"})
 
     assert %{op_id: spoofed_id, reason: :unauthorized_publisher} =
              Enum.find(projection.rejected, &(&1.op_id == spoofed.id))
@@ -373,11 +371,12 @@ defmodule Township.ElectionProjectionTest do
 
     task =
       Task.async(fn ->
-        Election.project(context.spec, %{context.snapshot | board_log: dense_log}, %{})
+        Election.replay(context.spec, %{context.snapshot | board_log: dense_log}, %{})
       end)
 
     result = Task.yield(task, 1_500) || Task.shutdown(task, :brutal_kill)
-    assert {:ok, %Projection{phase: :setup}} = result
+
+    assert {:ok, {:ok, %Replay{projection: %Projection{phase: :setup}}}} = result
   end
 
   defp artifact_ref(bytes, profile) do
