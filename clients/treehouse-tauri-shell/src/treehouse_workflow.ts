@@ -73,6 +73,13 @@ const nonce = () =>
     .replaceAll("+", "-")
     .replaceAll("/", "_")
     .replaceAll("=", "");
+/** Key-sorted JSON, so byte-equal frames compare equal whatever their property order. */
+const canonicalJson = (value: unknown): string =>
+  JSON.stringify(value, (_key, v) =>
+    v !== null && typeof v === "object" && !Array.isArray(v)
+      ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : 1)))
+      : v,
+  );
 const frontier = (frames: CarrierOpFrame[]) => {
   const referenced = new Set(frames.flatMap((f) => f.deps));
   return frames
@@ -682,6 +689,73 @@ export class TreehouseWorkflow {
         admit: authored.admit?.id ?? null,
         grants: authored.grants.map((g) => g.frame.id),
       };
+    });
+  }
+  /**
+   * Plan 181 slice 3: merge a verified relay pull and relay acknowledgements in one CAS commit. Pulled
+   * frames are retained and acked together; `ackedIds` may name only retained ids this device authored.
+   * Nothing is written when the merge adds nothing. A pull that fails `verifyProfile` (a missing
+   * dependency, a bad root, a Thread the Space does not reference) writes nothing. This runs on the
+   * same queue as every other writer, so a hint-triggered pull cannot race a user post.
+   */
+  mergeSync(replica: string, pulled: CarrierOpFrame[], ackedIds: string[]) {
+    return this.exclusive(async () => {
+      if (this.state.publicKey === null || !this.keyAvailable)
+        throw new Error("identity_unavailable");
+      if (this.state.intent) throw new Error("creation_incomplete");
+      if (!this.state.relay?.routes.some((r) => r.replica === replica))
+        throw new Error("unknown_route_replica");
+      const next = structuredClone(this.state);
+      let profile = next.profiles.find((p) => p.replica === replica);
+      const created = profile === undefined;
+      if (!profile) {
+        profile = {
+          product: replica.startsWith("replica:treehouse:space:")
+            ? "Treehouse.Space"
+            : "Treehouse.Thread",
+          replica,
+          frames: [],
+          outbox: [],
+          acked: [],
+        };
+        next.profiles.push(profile);
+      }
+      const held = new Map(profile.frames.map((f) => [f.id, f]));
+      const acked = new Set(profile.acked);
+      let added = 0;
+      let newlyAcked = 0;
+      for (const frame of pulled) {
+        if (frame.replica !== replica) throw new Error("wrong_replica");
+        const have = held.get(frame.id);
+        if (have) {
+          if (canonicalJson(have) !== canonicalJson(frame))
+            throw new Error("frame_conflict");
+        } else {
+          const copy = structuredClone(frame);
+          profile.frames.push(copy);
+          held.set(copy.id, copy);
+          added++;
+        }
+        if (!acked.has(frame.id)) {
+          acked.add(frame.id);
+          profile.acked.push(frame.id);
+          newlyAcked++;
+        }
+      }
+      for (const id of ackedIds) {
+        if (!held.has(id) || !profile.outbox.includes(id))
+          throw new Error("unknown_ack");
+        if (!acked.has(id)) {
+          acked.add(id);
+          profile.acked.push(id);
+          newlyAcked++;
+        }
+      }
+      if (!created && added === 0 && newlyAcked === 0) return { added, acked: 0 };
+      if (profile.product === "Treehouse.Thread" && next.active === null)
+        next.active = replica;
+      await this.persist(next, [profile]);
+      return { added, acked: newlyAcked };
     });
   }
   select(replica: string) {
