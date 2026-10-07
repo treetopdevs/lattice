@@ -2,7 +2,7 @@ defmodule Township.Election.BoardSnapshot do
   @moduledoc """
   Untrusted inputs needed for one pure foundation projection.
 
-  Callers may build this value, but `Township.Election.project/3` re-verifies the
+  Callers may build this value, but `Township.Election.replay/3` re-verifies the
   Matter link, board root, log structure, and authority on every call.
   """
 

@@ -8,13 +8,13 @@ defmodule Township.Election.ClosePolicy.UnanimousBoxesV1 do
   """
 
   alias Lattice.{Canonical, Dag, Identity, Log, Op}
+  alias Township.Election
 
   alias Township.Election.{
     ArtifactCodec,
     ArtifactRef,
     BoardSnapshot,
     CloseEvidence,
-    Projector,
     Spec
   }
 
@@ -33,7 +33,7 @@ defmodule Township.Election.ClosePolicy.UnanimousBoxesV1 do
   def verify(%Spec{} = spec, %BoardSnapshot{} = snapshot, artifacts, open_certificate_id)
       when is_map(artifacts) and is_binary(open_certificate_id) and
              byte_size(open_certificate_id) > 0 do
-    case Projector.foundation_view(spec, snapshot, artifacts) do
+    case Election.replay(spec, snapshot, artifacts) do
       {:ok, %{findings: [_ | _] = findings}} ->
         {:invalid, sort_terms(findings)}
 

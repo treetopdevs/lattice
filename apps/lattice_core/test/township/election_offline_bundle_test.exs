@@ -118,7 +118,7 @@ defmodule Township.ElectionOfflineBundleTest do
     assert {:ok, decoded} = OfflineBundle.decode(bytes)
     assert decoded == bundle
 
-    expected = Election.project(ctx.spec, ctx.snapshot, ctx.artifacts)
+    {:ok, %{projection: expected}} = Election.replay(ctx.spec, ctx.snapshot, ctx.artifacts)
     assert {:ok, ^expected} = OfflineBundle.verify(bundle)
     assert {:ok, ^expected} = OfflineBundle.verify_bytes(bytes)
     assert %Projection{phase: :setup, status: {:pending, [:profile_unselected]}} = expected
@@ -232,14 +232,11 @@ defmodule Township.ElectionOfflineBundleTest do
       max_artifact_byte_size: bundle.max_artifact_byte_size
     }
 
-    forged_projection = Election.project(bundle.spec, forged_snapshot, bundle.artifacts)
+    assert {:error, :invalid_board_quarantine} =
+             Election.replay(bundle.spec, forged_snapshot, bundle.artifacts)
 
     assert {:error, :invalid_board_quarantine} =
-             OfflineBundle.verify(%{
-               bundle
-               | board_log: forged_log,
-                 projection: forged_projection
-             })
+             OfflineBundle.verify(%{bundle | board_log: forged_log})
   end
 
   test "forged Matter quarantine cannot authenticate an unchanged projection", ctx do

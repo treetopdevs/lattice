@@ -95,6 +95,12 @@ Private seams hidden behind `Township.Election` are:
   assembly; and
 - role runners for registration, close, and trustee protocol work.
 
+The implemented foundation facade is `Township.Election.replay/3`, specified in §10.
+It returns a `Replay` whose projection stays in `:setup`. Close evidence and the
+offline bundle sit outside that walk and call it themselves. Final verification,
+anonymous transport, and a pinned `Protocol` remain later gates. The foundation
+replay takes artifact bytes as a digest map. It does not go through `ArtifactStore`.
+
 The board is a separate replica linked to a `Township.Matter` by immutable election
 configuration. Ballots do not become fields or commands on
 [`Township.Matter`](../../apps/lattice_core/lib/township/matter.ex). W0-W3 remain on the
@@ -305,6 +311,10 @@ transport retransmission deduplication.
 
 ## 8. Lifecycle
 
+The implemented foundation projection does not walk this ladder. Every projection
+`replay/3` returns stays in `:setup`. The phases below are the later gate, once a
+construction profile can verify the certificates that would move an election forward.
+
 Phase is derived from verified certificates and explicit artifact references, never
 from an LWW phase field or whichever concurrent op sorts first.
 
@@ -389,48 +399,81 @@ Rules for every close profile:
 
 ## 10. Projection, replay, and convergence
 
-`Township.Election.project/3` performs a pure reduction over an artifact **set**:
-
-1. validate the Lattice log structurally;
-2. apply Lattice authority analysis to board commands;
-3. extract honored protocol artifacts;
-4. canonicalize and deduplicate by inner artifact digest;
-5. resolve explicit references to a fixed point from the supplied bytes;
-6. verify role signatures, phase certificates, close, and construction proofs; and
-7. derive phase, result, pending requirements, rejected artifacts, faults, and the
-   reviewed claim-set ID.
+The foundation walk is `Township.Election.replay/3`. It is partial:
 
 ```elixir
-%Projection{
-  election_id: election_id,
-  phase: phase,
-  status:
-    {:pending, [Requirement.t()]}
-    | {:invalid, [Finding.t()]}
-    | {:forked, [Finding.t()]}
-    | {:aborted, reason}
-    | {:final, Result.t()},
-  close_id: binary() | nil,
-  rejected: [ArtifactVerdict.t()],
-  faults: [ProtocolFault.t()],
-  claim_set_id: binary()
+@spec replay(Spec.t(), BoardSnapshot.t(), map()) ::
+        {:ok, Replay.t()} | {:error, atom()}
+```
+
+`{:error, reason}` carries no projection and no board detail. A forged spec, a
+snapshot that fails validation, or a non-map artifact set takes this path. There
+is no second `project/3`, and a malformed input is not turned into an invalid
+projection.
+
+A successful `%Township.Election.Replay{}` carries:
+
+```elixir
+%Replay{
+  projection: Projection.t(),
+  spec: Spec.t(),
+  link: Link.t(),
+  safe_log: Log.t(),
+  commands: [{Op.t(), atom(), list()}],
+  artifact_records: [map()],
+  requirements: [term()],
+  findings: [map()],
+  rejected: [map()]
 }
 ```
 
-Every permutation of the same complete op and artifact set must produce byte-identical
-projection output. Partial replicas may report different progress, but none may report
-`:final` without the full close-bound transcript. After complete delivery, they
-converge.
+`requirements` stays its own field. A pending projection prepends
+`:profile_unselected` and is not that list. The walk:
 
-Protocol-invalid artifacts remain immutable audit evidence but do not mutate the
-verified projection. A later conflicting valid certificate changes the current status
-to `:forked`; `state_at` still reproduces each earlier partial view. Under the stated
-honest-signatory assumption, the conflict should be impossible. If it occurs, fail
-closed rather than preserve an earlier displayed result.
+1. re-validates the spec and the board snapshot;
+2. verifies the Matter `link_election` op through `verify_link/3`;
+3. drops structurally invalid board ops and structural quarantine into `rejected`,
+   keeping a safe log of the rest;
+4. checks the board root, then keeps honored commands and records the rest as
+   `rejected`;
+5. resolves each referenced artifact against the supplied digest map.
 
-Large proof artifacts may live outside the hot Lattice log only as immutable digest
-references. Fetching is not part of verification. A replay without all verified bytes
-is `:pending` or `:invalid`, never final. No compaction may discard security-relevant
+Empty findings produce
+`projection.status == {:pending, [:profile_unselected | requirements]}`. Any
+finding produces `{:invalid, findings}`. In both cases the projection is:
+
+```elixir
+%Projection{
+  election_id: link.election_id,
+  phase: :setup,
+  status: status,
+  close_id: nil,
+  rejected: rejected,
+  faults: [],
+  claim_set_id: SecurityProfile.claim_set_id()
+}
+```
+
+Missing artifact bytes are an `:artifact_unavailable` requirement on that
+successful replay. Altered bytes are a finding, so the projection status is
+`:invalid` and the replay is still `{:ok, replay}`. The same complete op set and
+artifact map, in any order, produce the same `Replay`.
+
+`ClosePolicy.UnanimousBoxesV1.verify/4` and `OfflineBundle.build/3` /
+`verify/1` call `replay/3` themselves. They do not accept a caller-built
+`Replay`. The offline bundle stores the projection only. `build/3` replays once
+to fill the package, then `verify/1` replays the packaged inputs and compares
+projections. A bundle is built only when findings and requirements are both
+empty, so its stored projection is pending solely because the profile is
+unselected. Close evidence stays off the projection.
+
+### Later gate
+
+A pinned construction profile may later derive phase, a close id, faults, and a
+final result from verified certificates. That reduction is not this walk. Until
+it exists, no projection from `replay/3` is `:final`, `:forked`, `:aborted`, or
+past `:setup`. A conflicting valid certificate must then fail closed rather than
+keep an earlier displayed result. No compaction may discard security-relevant
 bytes until an offline-verifiable bundle and snapshot trust rule are defined.
 
 ## 11. Security claim contract

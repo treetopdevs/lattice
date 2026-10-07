@@ -4,8 +4,8 @@ defmodule Township.Election.OfflineBundle do
 
   A bundle contains the asserted spec, complete Matter and board logs, every exact
   referenced artifact byte, and the projection observed when the package was built.
-  Verification treats all of those values as untrusted and re-runs the normal pure
-  projector. Extra, missing, or altered artifacts fail closed.
+  Verification treats all of those values as untrusted and re-runs the foundation
+  replay. Extra, missing, or altered artifacts fail closed.
 
   This research codec is an Erlang external-term envelope. It makes no cross-runtime,
   long-term archival, data-availability, finality, or coercion-resistance claim.
@@ -16,7 +16,7 @@ defmodule Township.Election.OfflineBundle do
   alias Lattice.Canonical.Atom, as: CanonicalAtom
   alias Township.{Election, ElectionBoard, Matter}
 
-  alias Township.Election.{BoardSnapshot, ProfileRef, Projection, Projector, Spec}
+  alias Township.Election.{BoardSnapshot, ProfileRef, Projection, Spec}
 
   @schema "township-election-offline-replay-beam-v1"
   @max_envelope_byte_size 64 * 1_024 * 1_024
@@ -35,11 +35,11 @@ defmodule Township.Election.OfflineBundle do
   @wire_atom_modules [
     Authority,
     Delegation,
+    Election,
     ElectionBoard,
     Log,
     Matter,
     Op,
-    Projector,
     Spec,
     __MODULE__
   ]
@@ -85,18 +85,18 @@ defmodule Township.Election.OfflineBundle do
   @doc "Build a complete package after re-verifying the public foundation and artifact set."
   @spec build(Spec.t(), BoardSnapshot.t(), map()) :: {:ok, t()} | {:error, reason()}
   def build(%Spec{} = spec, %BoardSnapshot{} = snapshot, artifacts) when is_map(artifacts) do
-    with {:ok, view} <- Projector.foundation_view(spec, snapshot, artifacts),
-         :ok <- complete_view(view),
-         :ok <- exact_artifact_set(artifacts, view.artifact_records) do
+    with {:ok, replay} <- Election.replay(spec, snapshot, artifacts),
+         :ok <- complete_view(replay),
+         :ok <- exact_artifact_set(artifacts, replay.artifact_records) do
       bundle = %__MODULE__{
         schema: @schema,
-        spec: view.spec,
+        spec: replay.spec,
         matter_log: snapshot.matter_log,
         matter_link_op_id: snapshot.matter_link_op_id,
         board_log: snapshot.board_log,
         max_artifact_byte_size: snapshot.max_artifact_byte_size,
         artifacts: artifacts,
-        projection: Election.project(view.spec, snapshot, artifacts)
+        projection: replay.projection
       }
 
       case verify(bundle) do
@@ -131,12 +131,11 @@ defmodule Township.Election.OfflineBundle do
       max_artifact_byte_size: max_artifact_byte_size
     }
 
-    with {:ok, view} <- Projector.foundation_view(spec, snapshot, artifacts),
-         :ok <- complete_view(view),
-         :ok <- exact_artifact_set(artifacts, view.artifact_records),
-         projection = Election.project(view.spec, snapshot, artifacts),
-         true <- projection == asserted_projection do
-      {:ok, projection}
+    with {:ok, replay} <- Election.replay(spec, snapshot, artifacts),
+         :ok <- complete_view(replay),
+         :ok <- exact_artifact_set(artifacts, replay.artifact_records),
+         true <- replay.projection == asserted_projection do
+      {:ok, replay.projection}
     else
       false -> {:error, :projection_mismatch}
       {:error, _reason} = error -> error
