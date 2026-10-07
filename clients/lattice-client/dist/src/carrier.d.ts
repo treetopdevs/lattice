@@ -67,6 +67,8 @@ export interface SyncCarrierOptions {
     verifier: Verifier;
     submission?: CarrierSubmission;
     expectedReplica: string;
+    /** Product command decoders; omitted keeps the default Township-first table byte for byte. */
+    commandDecoders?: CommandDecoderMap;
 }
 export interface CarrierStateReport {
     state_b64: string;

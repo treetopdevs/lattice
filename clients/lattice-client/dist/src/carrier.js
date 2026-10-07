@@ -719,12 +719,12 @@ export async function syncCarrierOnce(client, localOps, localCarrierFrames, real
         if (!verification.valid)
             throw new Error(`carrier op verification failed: ${frame.id}`);
     }
-    const pulledOps = carrierOpsToSemanticOps(pulledCarrierFrames, realmByPubkey);
+    const pulledOps = carrierOpsToSemanticOps(pulledCarrierFrames, realmByPubkey, options.commandDecoders);
     const peerKnownFrameIds = [];
     const unverifiedCandidateFrames = localCarrierFrames.filter((frame) => {
         let op;
         try {
-            op = carrierOpToSemanticOp(frame, realmByPubkey);
+            op = carrierOpToSemanticOp(frame, realmByPubkey, options.commandDecoders);
         }
         catch {
             return true;

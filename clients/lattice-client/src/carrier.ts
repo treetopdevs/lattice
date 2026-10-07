@@ -101,6 +101,8 @@ export interface SyncCarrierOptions {
   verifier: Verifier;
   submission?: CarrierSubmission;
   expectedReplica: string;
+  /** Product command decoders; omitted keeps the default Township-first table byte for byte. */
+  commandDecoders?: CommandDecoderMap;
 }
 
 export interface CarrierStateReport {
@@ -1112,13 +1114,13 @@ export async function syncCarrierOnce(
     if (!verification.valid) throw new Error(`carrier op verification failed: ${frame.id}`);
   }
 
-  const pulledOps = carrierOpsToSemanticOps(pulledCarrierFrames, realmByPubkey);
+  const pulledOps = carrierOpsToSemanticOps(pulledCarrierFrames, realmByPubkey, options.commandDecoders);
   const peerKnownFrameIds: string[] = [];
 
   const unverifiedCandidateFrames = localCarrierFrames.filter((frame) => {
     let op: Op;
     try {
-      op = carrierOpToSemanticOp(frame, realmByPubkey);
+      op = carrierOpToSemanticOp(frame, realmByPubkey, options.commandDecoders);
     } catch {
       return true;
     }
