@@ -323,6 +323,10 @@ jobs:
       - name: Offline Treehouse native persistence and key boundaries
         working-directory: clients/treehouse-tauri-shell/src-tauri
         run: cargo test --locked
+      - name: Treehouse dev-trace identity seam
+        # Plan 181 5b. The seam is compiled out of the ordinary build, so its tests run only here.
+        working-directory: clients/treehouse-tauri-shell/src-tauri
+        run: cargo test --locked --features treehouse-dev-trace
       - name: TS Township witness fixture preflight
         working-directory: clients/township-tauri-shell
         run: npm run witness:preflight:contract

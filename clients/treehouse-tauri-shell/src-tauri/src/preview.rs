@@ -285,6 +285,13 @@ pub struct PreviewStore {
     db: ProductDatabase,
     keys: Arc<dyn CarrierKeySeedStore>,
     identity_lock: File,
+    /// Plan 181 5b: one fixed test key for the dev-trace packaged variant. Absent from the
+    /// ordinary build, where the key always comes from the platform key store.
+    #[cfg(feature = "treehouse-dev-trace")]
+    fixed_key: Option<SigningKey>,
+    /// Command-name lines for the packaged harness. Never a payload.
+    #[cfg(feature = "treehouse-dev-trace")]
+    trace_file: Option<std::path::PathBuf>,
 }
 impl PreviewStore {
     /// The native app supplies its platform data directory; it is never an IPC argument.
@@ -308,7 +315,47 @@ impl PreviewStore {
             db,
             keys,
             identity_lock,
+            #[cfg(feature = "treehouse-dev-trace")]
+            fixed_key: None,
+            #[cfg(feature = "treehouse-dev-trace")]
+            trace_file: None,
         })
+    }
+    /// Dev-trace seam: a store whose identity is one fixed test key. Nothing is generated and
+    /// nothing is written to a key store, so two instances in two directories never share a
+    /// Keychain alias.
+    #[cfg(feature = "treehouse-dev-trace")]
+    pub fn at_directory_dev(directory: &Path, seed: [u8; 32]) -> Result<Self, String> {
+        Self::at_directory_dev_with(
+            directory,
+            seed,
+            Arc::new(lattice_mobile_core::InMemoryCarrierKeySeedStore::default()),
+        )
+    }
+    /// As `at_directory_dev`, with the (never consulted) key store supplied so tests can prove it.
+    #[cfg(feature = "treehouse-dev-trace")]
+    pub fn at_directory_dev_with(
+        directory: &Path,
+        seed: [u8; 32],
+        keys: Arc<dyn CarrierKeySeedStore>,
+    ) -> Result<Self, String> {
+        let mut store = Self::at_directory(directory, keys)?;
+        store.fixed_key = Some(SigningKey::from_bytes(&seed));
+        Ok(store)
+    }
+    #[cfg(feature = "treehouse-dev-trace")]
+    pub fn with_dev_trace(mut self, file: std::path::PathBuf) -> Self {
+        self.trace_file = Some(file);
+        self
+    }
+    #[cfg(feature = "treehouse-dev-trace")]
+    fn note(&self, command: &str) {
+        use std::io::Write as _;
+        if let Some(file) = &self.trace_file {
+            if let Ok(mut out) = OpenOptions::new().create(true).append(true).open(file) {
+                let _ = writeln!(out, "{command}");
+            }
+        }
     }
     fn captured(&self) -> Result<(Option<String>, Record), String> {
         let raw = self.db.kv_get(HISTORY_KEY).map_err(storage_error)?;
@@ -316,12 +363,21 @@ impl PreviewStore {
         Ok((raw, record))
     }
     fn loaded_key(&self) -> Result<Option<SigningKey>, String> {
+        // The fixed key appears under the same condition `open` uses for `missing_local_history`:
+        // only once the record holds a public key or an intent, so first launch reports absent.
+        #[cfg(feature = "treehouse-dev-trace")]
+        if let Some(fixed) = &self.fixed_key {
+            let (_, r) = self.captured()?;
+            return Ok((r.public_key.is_some() || r.intent.is_some()).then(|| fixed.clone()));
+        }
         self.keys
             .load_seed(KEY_ALIAS)
             .map(|seed| seed.map(|bytes| SigningKey::from_bytes(&bytes)))
             .map_err(|_| "key_store_unavailable".into())
     }
     pub fn open(&self) -> Result<OpenResult, String> {
+        #[cfg(feature = "treehouse-dev-trace")]
+        self.note("treehouse_open");
         let (raw, r) = self.captured()?;
         let key = self
             .loaded_key()?
@@ -342,6 +398,8 @@ impl PreviewStore {
         })
     }
     pub fn initialize(&mut self) -> Result<String, String> {
+        #[cfg(feature = "treehouse-dev-trace")]
+        self.note("treehouse_initialize_identity");
         self.identity_lock.lock_exclusive().map_err(storage_error)?;
         let result = (|| {
             let (_, r) = self.captured()?;
@@ -353,6 +411,10 @@ impl PreviewStore {
             {
                 return Err("identity_creation_not_allowed".into());
             }
+            #[cfg(feature = "treehouse-dev-trace")]
+            if let Some(fixed) = &self.fixed_key {
+                return Ok(BASE64.encode(fixed.verifying_key().as_bytes()));
+            }
             NativeCarrierSigner::new(self.keys.clone())
                 .ensure_key(KEY_ALIAS)
                 .map_err(|_| "key_store_unavailable".into())
@@ -361,6 +423,8 @@ impl PreviewStore {
         result
     }
     pub fn sign(&self, bytes: &str) -> Result<String, String> {
+        #[cfg(feature = "treehouse-dev-trace")]
+        self.note("treehouse_sign_carrier");
         if bytes.len() > 85_336 {
             return Err("signing_limit".into());
         }
@@ -378,6 +442,8 @@ impl PreviewStore {
         Ok(BASE64.encode(key.sign(&bytes).to_bytes()))
     }
     pub fn commit(&mut self, expected_revision: u64, next: &str) -> Result<bool, String> {
+        #[cfg(feature = "treehouse-dev-trace")]
+        self.note("treehouse_commit");
         let (raw, old) = self.captured()?;
         if expected_revision != old.revision {
             return Ok(false);
@@ -488,7 +554,7 @@ impl PreviewStore {
         }
         for (replica, revision) in &next_record.cleared_drafts {
             if old.cleared_drafts.get(replica) != Some(revision) {
-                let current = self.load_draft(replica)?.ok_or("draft_unavailable")?;
+                let current = self.read_draft(replica)?.ok_or("draft_unavailable")?;
                 let old_count = old
                     .profiles
                     .iter()
@@ -544,6 +610,11 @@ impl PreviewStore {
         Ok(Some(draft))
     }
     pub fn load_draft(&self, replica: &str) -> Result<Option<Draft>, String> {
+        #[cfg(feature = "treehouse-dev-trace")]
+        self.note("treehouse_load_draft");
+        self.read_draft(replica)
+    }
+    fn read_draft(&self, replica: &str) -> Result<Option<Draft>, String> {
         let (_, raw) = self.captured_draft(replica)?;
         Self::parse_draft(raw.as_deref())
     }
@@ -553,6 +624,8 @@ impl PreviewStore {
         expected_revision: u64,
         text: &str,
     ) -> Result<Option<Draft>, String> {
+        #[cfg(feature = "treehouse-dev-trace")]
+        self.note("treehouse_save_draft");
         if text.len() > DRAFT_BYTES || expected_revision >= MAX_REVISION {
             return Err("draft_too_large".into());
         }
