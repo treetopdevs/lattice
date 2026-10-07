@@ -121,6 +121,15 @@ function describe(error: unknown): string {
 function refresh() {
   state.value = workflow.state;
 }
+// A background feed sync can merge a joiner's first Thread, which becomes the active one.
+function refreshFromSync() {
+  const before = active.value?.replica;
+  refresh();
+  if (active.value?.replica !== before)
+    void loadDraft().catch((cause) => {
+      error.value = describe(cause);
+    });
+}
 async function loadDraft() {
   if (!active.value) {
     draftText.value = "";
@@ -389,7 +398,11 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
         </div>
         <section v-if="audit" class="audit">
           <h2>Local history</h2>
-          <p>
+          <p v-if="enrollment">
+            These are public operation identifiers. The Sync status panel counts
+            the operations the relay has acknowledged.
+          </p>
+          <p v-else>
             These are public operation identifiers. No operation has a remote
             delivery acknowledgement.
           </p>
@@ -573,6 +586,7 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
       :busy="busy"
       :run="run"
       :describe="describe"
+      :refresh="refreshFromSync"
     />
     <WitnessSetup />
   </div>

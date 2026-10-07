@@ -16,8 +16,11 @@ const ENROLLMENT_FINE_PRINT =
   "Relay routes are hand-configured by an operator and are not signed by any catalog. Recovery comes later.";
 const OLD_FINE_PRINT =
   "There are no members or connections yet. Inviting others and recovery come later.";
-// The Sync label and the Sync status disclosure are added by S3c; every other label is S2c.
+const REMOTE_ACK_OLD =
+  "No operation has a remote delivery acknowledgement.";
 const LABELS = [
+  "Sync",
+  "Sync status",
   "Join a group",
   "Join request",
   "Copy join request",
@@ -113,8 +116,18 @@ for (const literal of [...LABELS, DISCLOSURE, ENROLLMENT_FINE_PRINT])
     `ordinary build leaked enrollment text: ${literal}`,
   );
 assert(!ordinary.includes("subscribeAvailability"));
+assert(!ordinary.includes("carrier hello"), "ordinary build leaked the relay client");
 for (const label of LABELS)
   assert(hasLiteral(enrolled, label), `enrollment build lacks label: ${label}`);
+assert(
+  enrolled.includes("subscribeAvailability"),
+  "enrollment build lacks the relay feed wiring",
+);
+assert(
+  !enrolled.includes(REMOTE_ACK_OLD),
+  "enrollment build still claims no remote acknowledgement exists",
+);
+assert(ordinary.includes(REMOTE_ACK_OLD), "ordinary build lost its audit sentence");
 assert(enrolled.includes("Relay preview"), "enrollment build lacks its masthead tag");
 assert(enrolled.includes(DISCLOSURE), "enrollment build lacks the disclosure");
 assert(
@@ -184,6 +197,36 @@ for (const name of ["acceptInvitation", "admitAndGrant", "post", "issueInvitatio
   const body = new RegExp(`async function ${name}\\(\\)[^]*?\\n\\}`).exec(script);
   assert(body, `no handler ${name}`);
   assert(!/\bsync/i.test(body[0]), `Sign handler ${name} reaches Sync`);
+}
+// Sync is its own button, it is the only one whose handler reaches the network, and the status panel
+// carries the pinned disclosure.
+const syncButtons = buttons.filter((b) => b.handler?.includes("syncRelay"));
+assert.equal(syncButtons.length, 1, "exactly one button runs Sync");
+assert.equal(syncButtons[0].label, "Sync");
+for (const name of ["confirmRoutes", "configureRoutes", "useOffer", "joinGroup"]) {
+  const body = new RegExp(`async function ${name}\\(\\)[^]*?\\n\\}`).exec(script);
+  assert(body, `no handler ${name}`);
+  assert(!/syncRelay|relayLink\.sync\(/.test(body[0]), `${name} reaches Sync`);
+}
+{
+  const panel = sources.find((s) => s.path.endsWith("EnrollmentPanel.vue"));
+  let status = null;
+  walk(panel.sfc.template.ast, (node) => {
+    if (
+      node.type === NodeTypes.ELEMENT &&
+      node.props.some(
+        (p) => p.type === NodeTypes.ATTRIBUTE && p.name === "aria-label" && p.value?.content === "Sync status",
+      )
+    )
+      status = node;
+  });
+  assert(status, "no Sync status section");
+  let interpolations = "";
+  walk(status, (n) => {
+    if (n.type === NodeTypes.INTERPOLATION) interpolations += n.content.loc.source + "\n";
+  });
+  assert(interpolations.includes("DISCLOSURE"), "Sync status lacks the disclosure");
+  assert(/pending/.test(interpolations) && /acked/.test(interpolations), "Sync status lacks counts");
 }
 const shown = ["Use offer", "Accept invitation", "Admit and grant", "Issue invitation"];
 for (const label of shown)

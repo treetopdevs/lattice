@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import type { OfferReview, TreehouseWorkflow } from "./treehouse_workflow";
 import type { PreviewState } from "./treehouse_state";
+import { createPanelSync } from "./treehouse_panel_sync";
 
 // Plan 181 S2c. Loaded only when the app is built with VITE_TREEHOUSE_ENROLLMENT=1. Use (import and
-// review), Sign (accept, admit and grant) and Sync stay separate actions: nothing in this panel touches
-// the network, and no button does more than one of them. Sync arrives with its own button in S3c.
+// review), Sign (accept, admit and grant) and Sync stay separate actions: only the Sync button (and the
+// build-time autosync flag, for routes already saved at boot) touches the network, and no button does more
+// than one of them. Saving or extending routes never connects by itself.
 const props = defineProps<{
   workflow: TreehouseWorkflow;
   state: PreviewState;
@@ -15,6 +17,8 @@ const props = defineProps<{
     explain?: (cause: unknown) => string,
   ) => Promise<void>;
   describe: (cause: unknown) => string;
+  // Called after a background feed sync changed the saved record, so the shell re-reads its state.
+  refresh: () => void;
 }>();
 
 const DISCLOSURE =
@@ -110,6 +114,31 @@ const routeList = ref(""),
   admitted = ref("");
 const copyNote = ref("");
 
+// Sync status. The feed's link state is not reactive, so each status report bumps a counter that the
+// computed below reads together with the saved state (pending and acknowledged counts come from it).
+const statusTick = ref(0);
+const relayLink = createPanelSync({
+  workflow: props.workflow,
+  env: import.meta.env,
+  onStatus: () => {
+    statusTick.value++;
+    props.refresh();
+  },
+});
+const syncStatus = computed(() => {
+  statusTick.value;
+  props.state;
+  return relayLink.status();
+});
+onMounted(() => {
+  relayLink.start().catch((cause: unknown) => {
+    copyNote.value = explain(cause);
+  });
+});
+onBeforeUnmount(() => {
+  void relayLink.stop();
+});
+
 async function copy(text: string) {
   try {
     await navigator.clipboard.writeText(text);
@@ -134,6 +163,7 @@ async function confirmRoutes() {
   await props.run(async () => {
     await props.workflow.confirmOffer();
     confirmed.value = true;
+    await relayLink.routesChanged();
   }, explain);
 }
 async function acceptInvitation() {
@@ -146,6 +176,12 @@ async function acceptInvitation() {
 async function configureRoutes() {
   await props.run(async () => {
     await props.workflow.configureRoutes(routeList.value.trim());
+    await relayLink.routesChanged();
+  }, explain);
+}
+async function syncRelay() {
+  await props.run(async () => {
+    await relayLink.sync();
   }, explain);
 }
 async function issueInvitation() {
@@ -383,6 +419,29 @@ async function admitAndGrant() {
         </li>
       </ul>
       <p class="disclosure">{{ DISCLOSURE }}</p>
+    </section>
+    <section v-if="state.relay" class="notice" aria-label="Sync status">
+      <h3>Sync status</h3>
+      <p role="status">{{ syncStatus.summary }}</p>
+      <ul class="routes">
+        <li v-for="route in syncStatus.routes" :key="route.replica">
+          <code>{{ short(route.replica) }}</code> ({{ route.kind }}):
+          {{ route.connectionLabel }}<br />Waiting for the relay:
+          {{ route.pending }}<br />Acknowledged by the relay: {{ route.acked
+          }}<br />{{ route.holdsRelayLabel }}<br /><span class="muted">{{
+            route.message
+          }}</span>
+        </li>
+      </ul>
+      <p class="disclosure">{{ DISCLOSURE }}</p>
+      <button
+        type="button"
+        aria-label="Sync"
+        :disabled="busy"
+        @click="syncRelay"
+      >
+        Sync
+      </button>
     </section>
     <p v-if="copyNote" role="status" class="muted">{{ copyNote }}</p>
   </section>
