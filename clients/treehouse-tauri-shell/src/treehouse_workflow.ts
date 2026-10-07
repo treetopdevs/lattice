@@ -26,6 +26,7 @@ import {
 import type {
   CarrierOpFrame,
   TreehouseCommand,
+  Verifier,
 } from "@treetopdevs/lattice-client";
 import {
   assertRetainedMonotonic,
@@ -48,6 +49,7 @@ import {
   mergeRelay,
   offerRoute,
   parseRouteList,
+  productOf,
   routesForOffer,
   validateLocalRealm,
 } from "./treehouse_routes";
@@ -67,6 +69,18 @@ export interface OfferReview {
 export function fromBase64(value: string): Uint8Array {
   return Uint8Array.from(atob(value), (c) => c.charCodeAt(0));
 }
+
+/** Strict Ed25519 (no ZIP-215 leniency) over raw bytes: the one signature policy of the shell. */
+export const strictEd25519 = (
+  signature: Uint8Array,
+  bytes: Uint8Array,
+  publicKey: Uint8Array,
+): boolean => ed25519.verify(signature, bytes, publicKey, { zip215: false });
+
+/** The operation verifier, for base64 public keys as frames carry them. */
+export const strictVerifier: Verifier = {
+  verify: async (pub, bytes, sig) => strictEd25519(sig, bytes, fromBase64(pub)),
+};
 const base64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
 const nonce = () =>
   base64(crypto.getRandomValues(new Uint8Array(32)))
@@ -160,10 +174,7 @@ export class TreehouseWorkflow {
       if (frame.replica !== profile.replica || ids.has(frame.id))
         throw new Error("invalid_retained_history");
       ids.add(frame.id);
-      const checked = await verifyCarrierOp(frame, {
-        verify: async (pub, bytes, sig) =>
-          ed25519.verify(sig, bytes, fromBase64(pub), { zip215: false }),
-      });
+      const checked = await verifyCarrierOp(frame, strictVerifier);
       if (!checked.valid) throw new Error("invalid_retained_history");
     }
     if (
@@ -710,9 +721,7 @@ export class TreehouseWorkflow {
       const created = profile === undefined;
       if (!profile) {
         profile = {
-          product: replica.startsWith("replica:treehouse:space:")
-            ? "Treehouse.Space"
-            : "Treehouse.Thread",
+          product: productOf(replica),
           replica,
           frames: [],
           outbox: [],

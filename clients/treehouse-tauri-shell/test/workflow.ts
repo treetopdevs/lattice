@@ -564,7 +564,7 @@ await unchanged(jNative, () => jApp.useOffer(TRUNCATED_HANDOFF), /wrong_product/
 await unchanged(jNative, () => jApp.useOffer(tamper((o) => { o.routes[0]!.url = "ws://example.com:80"; })), /invalid_route/);
 await unchanged(jNative, () => jApp.useOffer(tamper((o) => { o.routes[0]!.expectedPeerPubkey = "AAAA"; })), /invalid_route/);
 await unchanged(jNative, () => jApp.useOffer(tamper((o) => { o.routes.pop(); })), /route_replica_mismatch/);
-await unchanged(jNative, () => jApp.useOffer(tamper((o) => { o.localRealm = "  "; })), /invalid_artifact_payload|invalid_local_realm/);
+await unchanged(jNative, () => jApp.useOffer(tamper((o) => { o.localRealm = "  "; })), /invalid_local_realm/);
 await unchanged(jNative, () => jApp.confirmOffer(), /no_pending_offer/);
 {
   const coldNative = new MemoryNative();
@@ -661,7 +661,7 @@ await unchanged(fNative, () => fApp.admitAndGrant(offer), /wrong_product/);
 await unchanged(fNative, () => fApp.admitAndGrant(wrongAcceptance((a) => { a.acceptance = flipByte(a.acceptance); })), /invalid_acceptance/);
 await unchanged(fNative, () => fApp.admitAndGrant(wrongAcceptance((a) => { a.replica = threadReplica; })), /wrong_replica/);
 await unchanged(fNative, () => fApp.admitAndGrant(wrongAcceptance((a) => { a.recipient = decodeTreehouseJoinRequest(j2Request).publicKey; })), /wrong_recipient/);
-await unchanged(jNative, () => jPulled.admitAndGrant(acceptanceText), /no_capability|root_capability_unavailable/);
+await unchanged(jNative, () => jPulled.admitAndGrant(acceptanceText), /no_capability/);
 {
   // Scope drift: a Thread added after the invitation makes the signed scope stale.
   const drift = clone(fNative);

@@ -252,8 +252,11 @@ defmodule Lattice.Treehouse.R13LiteContractTest do
              "a closed R13-lite row needs the exact-tip run and the merge-result run"
     end
 
-    assert String.contains?(evidence, "Remaining gate") or
-             status in ["LOCAL VERIFIED", "DONE"]
+    # An open row must still name its remaining gate; a closed row is free to drop that wording.
+    unless status in ["LOCAL VERIFIED", "DONE"] do
+      assert String.contains?(evidence, "Remaining gate"),
+             "an open R13-lite row must name its remaining gate"
+    end
   end
 
   test "the roadmap carries the plan 181 allocation note and the execution row" do
@@ -275,7 +278,7 @@ defmodule Lattice.Treehouse.R13LiteContractTest do
 
     row = readme_row()
     assert row =~ "R13-lite"
-    assert row =~ "plans/181-r13-lite-treehouse-enrollment-sync.md" or row =~ "R13-lite"
+    assert row =~ "plans/181-r13-lite-treehouse-enrollment-sync.md"
 
     cells = row |> String.split("|", trim: true) |> Enum.map(&String.trim/1)
     assert length(cells) == 6, "README row 181 must have the table's six columns"
@@ -357,8 +360,7 @@ defmodule Lattice.Treehouse.R13LiteContractTest do
   defp execution_row do
     row =
       Enum.find(ledger_lines(), fn line ->
-        String.starts_with?(line, "| R13-lite |") and
-          String.contains?(line, "Remaining gate")
+        String.starts_with?(line, "| R13-lite | Local implementation tip")
       end)
 
     assert row, "the R13-lite execution evidence row is missing"

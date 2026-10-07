@@ -1,4 +1,3 @@
-import { ed25519 } from "@noble/curves/ed25519.js";
 import { connectCarrierWebSocket } from "@treetopdevs/lattice-client";
 import type {
   CarrierSigner,
@@ -8,7 +7,7 @@ import type {
 import type { TreehouseFeedSession } from "./treehouse_feed";
 import { validateLocalRealm, validateRoute } from "./treehouse_routes";
 import type { RelayRoute } from "./treehouse_state";
-import { fromBase64 } from "./treehouse_workflow";
+import { fromBase64, strictEd25519 } from "./treehouse_workflow";
 import type { TreehouseWorkflow } from "./treehouse_workflow";
 import type { TreehouseRelayConnection } from "./treehouse_sync";
 
@@ -33,8 +32,7 @@ export interface TreehouseRelayConnector {
 }
 
 const defaultVerifier: CarrierVerifier = {
-  verify: (pubkey, bytes, signature) =>
-    ed25519.verify(signature, bytes, pubkey, { zip215: false }),
+  verify: (pubkey, bytes, signature) => strictEd25519(signature, bytes, pubkey),
 };
 
 /**

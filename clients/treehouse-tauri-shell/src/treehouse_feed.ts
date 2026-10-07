@@ -4,6 +4,7 @@ import type {
 } from "@treetopdevs/lattice-client";
 import { MAX_ROUTES } from "./treehouse_state";
 import type { RelayRoute } from "./treehouse_state";
+import { productOf } from "./treehouse_routes";
 import { syncTreehouseRoute } from "./treehouse_sync";
 import type { RouteSyncResult, SyncTreehouseOptions } from "./treehouse_sync";
 import type { TreehouseWorkflow } from "./treehouse_workflow";
@@ -80,7 +81,7 @@ export interface TreehouseFeedController {
 }
 
 const DEFAULT_POLL_MS = 60_000;
-const isSpace = (replica: string) => replica.startsWith("replica:treehouse:space:");
+const isSpace = (replica: string) => productOf(replica) === "Treehouse.Space";
 
 /** Build-time feed flags: `VITE_TREEHOUSE_POLL_MS` (0 disables) and `VITE_TREEHOUSE_AUTOSYNC_ON_MOUNT`. */
 export function treehouseFeedEnv(env: Record<string, string | undefined>): {
@@ -193,6 +194,16 @@ export function createTreehouseFeedController(
   };
 
   const syncRoute = async (route: RelayRoute): Promise<RouteSyncResult> => {
+    // Each route's worker subscribes on its own socket, so a Thread hint can arrive before the Space has
+    // synced even though the queue orders routes that wait together. A Thread merged without its Space
+    // fails the profile check, so the Space syncs first here, and only while no Space profile is held.
+    if (!isSpace(route.replica) && !workflow.state.profiles.some((p) => p.product === "Treehouse.Space")) {
+      const space = routes().find((r) => isSpace(r.replica));
+      if (space) {
+        const first = await syncTreehouseRoute(workflow, space, options.sync);
+        setLink(space.replica, { matchesRelay: first.matchesRelay });
+      }
+    }
     const result = await syncTreehouseRoute(workflow, route, options.sync);
     setLink(route.replica, { matchesRelay: result.matchesRelay });
     return result;
@@ -321,14 +332,17 @@ export function createTreehouseFeedController(
         if (!active(worker)) return;
         const subscription = await session.subscribeAvailability();
         if (!active(worker)) return;
-        attempt = 0;
         setLink(replica, {
           connection: "live",
           generation: subscription.baseline.generation,
           message: "Relay subscription is live.",
         });
         emit(worker);
-        await runSession(worker, session, subscription);
+        // The delay resets only after a completed sync. A subscribe alone proves nothing: a relay whose pulls
+        // the local check rejects would otherwise reconnect at the shortest delay forever.
+        await runSession(worker, session, subscription, () => {
+          attempt = 0;
+        });
       } catch (error) {
         if (!active(worker)) return;
         if (refusal(error)) {
@@ -362,6 +376,7 @@ export function createTreehouseFeedController(
     worker: Worker,
     session: TreehouseFeedSession,
     subscription: CarrierAvailabilitySubscription,
+    synced: () => void,
   ): Promise<void> => {
     const replica = worker.route.replica;
     let live = true;
@@ -381,6 +396,7 @@ export function createTreehouseFeedController(
         setLink(replica, { generation: hint.generation });
         await Promise.race([request(replica), worker.cancelled$]);
         if (!active(worker)) return;
+        synced();
         setLink(replica, { message: "Relay subscription is live." });
         emit(worker);
         worker.settleFirst();

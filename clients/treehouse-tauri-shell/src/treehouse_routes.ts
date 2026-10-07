@@ -1,4 +1,4 @@
-import type { TreehouseOfferRoute } from "@treetopdevs/lattice-client";
+import type { TreehouseOfferRoute, TreehouseProduct } from "@treetopdevs/lattice-client";
 import { MAX_ROUTES } from "./treehouse_state";
 import type { RelayConfig, RelayRoute } from "./treehouse_state";
 
@@ -9,6 +9,9 @@ import type { RelayConfig, RelayRoute } from "./treehouse_state";
 
 const SPACE_REPLICA = /^replica:treehouse:space:[A-Za-z0-9_-]{43}#root:[A-Za-z0-9_-]{43}$/;
 const THREAD_REPLICA = /^replica:treehouse:thread:[A-Za-z0-9_-]{43}#root:[A-Za-z0-9_-]{43}$/;
+/** The one place a replica name is classified: a Space replica, or otherwise a Thread. */
+export const productOf = (replica: string): TreehouseProduct =>
+  replica.startsWith("replica:treehouse:space:") ? "Treehouse.Space" : "Treehouse.Thread";
 const ROUTE_FIELDS = ["replica", "url", "expectedPeerRealm", "expectedPeerPubkey"] as const;
 
 const fail = (label: string): never => {

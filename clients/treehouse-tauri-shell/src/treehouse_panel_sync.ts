@@ -5,6 +5,7 @@ import type {
   TreehouseFeedState,
   TreehouseRouteConnection,
 } from "./treehouse_feed";
+import { productOf } from "./treehouse_routes";
 import { createTreehouseRelayConnector } from "./treehouse_relay_client";
 import type { TreehouseRelayConnector } from "./treehouse_relay_client";
 import type { SyncTreehouseOptions } from "./treehouse_sync";
@@ -47,7 +48,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 export function describeSyncStatus(feed: TreehouseFeedState): PanelSyncStatus {
   const routes = feed.routes.map((route): PanelSyncRouteStatus => ({
     replica: route.replica,
-    kind: route.replica.startsWith("replica:treehouse:space:") ? "Group" : "Thread",
+    kind: productOf(route.replica) === "Treehouse.Space" ? "Group" : "Thread",
     connection: route.connection,
     connectionLabel: CONNECTION_LABELS[route.connection],
     pending: route.pending,

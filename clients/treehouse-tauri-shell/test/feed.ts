@@ -127,6 +127,10 @@ class Harness {
   syncs: string[] = [];
   pulls: string[] = [];
   syncLatch: Promise<void> | null = null;
+  /** Replicas whose sync fails with a non-refusal error (a relay pull the local check rejects). */
+  syncFailures = new Map<string, Error>();
+  /** A held feed connect per replica, so a test can choose which worker subscribes first. */
+  connectLatch = new Map<string, Promise<void>>();
   states: TreehouseFeedState[] = [];
   generation = 1;
   timerFns: (() => void)[] = [];
@@ -144,6 +148,8 @@ class Harness {
       connect: async (route) => {
         this.syncs.push(route.replica);
         if (this.syncLatch) await this.syncLatch;
+        const failure = this.syncFailures.get(route.replica);
+        if (failure) throw failure;
         const conn = this.relay(route.replica).connect();
         const pull = conn.pull.bind(conn);
         conn.pull = async (have: string[]) => {
@@ -165,6 +171,8 @@ class Harness {
       connect: async (route: RelayRoute) => {
         const queued = this.connectErrors.get(route.replica);
         if (queued && queued.length > 0) throw queued.shift()!;
+        const held = this.connectLatch.get(route.replica);
+        if (held) await held;
         const session = new FeedSession(new Hints(this.generation));
         const list = this.sessions.get(route.replica) ?? [];
         list.push(session);
@@ -310,6 +318,27 @@ const live = (h: Harness, replica: string) => h.routeState(replica)?.connection 
   console.log("PASS a failed hint stream closes its socket, backs off, reconnects and resumes");
 }
 
+// ---- 4b. a sync failure after subscribe backs off; the delay resets only after a good sync ------------------
+{
+  const f = await founder();
+  const h = new Harness();
+  h.syncFailures.set(f.thread, new Error("frame_conflict"));
+  const feed = h.controller(f.app);
+  await feed.start();
+  await until(() => h.delays.length >= 6, "six failed sessions back off");
+  assert.deepEqual(h.delays.slice(0, 6), [100, 250, 500, 1000, 2000, 5000], "a repeating sync failure walks the whole backoff table");
+  assert.match(h.routeState(f.thread).message, /frame_conflict/);
+  h.syncFailures.delete(f.thread);
+  await until(() => live(h, f.thread) && h.routeState(f.thread).matchesRelay === true, "a good sync recovers");
+  const delays = h.delays.length;
+  const sessions = h.sessions.get(f.thread)!;
+  sessions.at(-1)!.hints.fail(new Error("carrier websocket closed"));
+  await until(() => h.delays.length > delays, "the next drop backs off");
+  assert.equal(h.delays[delays], 100, "a good sync resets the backoff");
+  await feed.stop();
+  console.log("PASS a repeating sync failure backs off, and only a completed sync resets the delay");
+}
+
 // ---- 5. refused route does not retry; manual sync retries --------------------------------------------
 {
   const f = await founder();
@@ -434,6 +463,41 @@ const live = (h: Harness, replica: string) => h.routeState(replica)?.connection 
   assert.deepEqual(h.syncs.slice(at, at + 3), [one, space, two], "the Space jumps the queued Thread");
   await feed.stop();
   console.log("PASS a queued Space sync outranks a queued Thread sync");
+}
+
+// ---- 8c. a Thread worker that subscribes before the Space still syncs the Space first ---------------------------
+{
+  const f = await founder();
+  const h = new Harness();
+  await syncTreehouseRoute(f.app, f.app.state.relay!.routes.find((r) => r.replica === f.space)!, h.syncOptions());
+  await syncTreehouseRoute(f.app, f.app.state.relay!.routes.find((r) => r.replica === f.thread)!, h.syncOptions());
+  const joiner = await fresh(new FaultNative());
+  const request = await joiner.beginJoin();
+  const offer = await f.app.issueInvitation(request, "joiner");
+  await syncTreehouseRoute(f.app, f.app.state.relay!.routes.find((r) => r.replica === f.space)!, h.syncOptions());
+  await joiner.useOffer(offer);
+  await joiner.confirmOffer();
+  assert.equal(joiner.state.profiles.length, 0, "the joiner holds nothing before its first sync");
+  let release!: () => void;
+  h.connectLatch.set(f.space, new Promise<void>((resolve) => {
+    release = resolve;
+  }));
+  h.syncs = [];
+  const feed = h.controller(joiner);
+  await feed.start();
+  await until(() => live(h, f.thread), "the Thread subscribes while the Space is still held");
+  await until(() => joiner.state.profiles.length === 2, "the Thread sync pulled the Space first, then itself");
+  assert.equal(h.syncs[0], f.space, "the Space is synced before the Thread");
+  await quiet();
+  assert(
+    h.states.every((s) => s.routes.every((r) => !r.message.includes("invalid_space_profiles"))),
+    "no route ever reports invalid_space_profiles",
+  );
+  assert.equal(h.sessions.get(f.thread)!.length, 1, "no reconnect was needed");
+  release();
+  await until(() => live(h, f.space), "the Space worker connects afterwards");
+  await feed.stop();
+  console.log("PASS a Thread that subscribes before the Space syncs the Space first");
 }
 
 // ---- 9. stop cancels the epoch: no state after stop, no late sync ---------------------------------------

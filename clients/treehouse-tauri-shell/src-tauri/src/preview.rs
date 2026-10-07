@@ -198,13 +198,11 @@ fn parse(raw: Option<&str>) -> Result<Record, String> {
     {
         return Err("invalid_preview_record".into());
     }
-    if let Some(key) = &r.public_key {
-        let bytes = BASE64
-            .decode(key)
-            .map_err(|_| "invalid_public_identity".to_string())?;
-        if bytes.len() != 32 || BASE64.encode(bytes) != *key {
-            return Err("invalid_public_identity".into());
-        }
+    if r.public_key
+        .as_deref()
+        .is_some_and(|key| !public_key_text(key))
+    {
+        return Err("invalid_public_identity".into());
     }
     if r.relay.as_ref().is_some_and(|relay| !valid_relay(relay)) {
         return Err("invalid_relay".into());

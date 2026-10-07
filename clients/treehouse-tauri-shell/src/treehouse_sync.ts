@@ -1,4 +1,3 @@
-import { ed25519 } from "@noble/curves/ed25519.js";
 import {
   carrierOpsToSemanticOps,
   syncCarrierOnce,
@@ -8,12 +7,12 @@ import type {
   CarrierOpFrame,
   CarrierRelayClient,
   CarrierSyncClient,
-  TreehouseProduct,
   Verifier,
 } from "@treetopdevs/lattice-client";
 import { MAX_ROUTES } from "./treehouse_state";
 import type { LocalProfile, RelayRoute } from "./treehouse_state";
-import { fromBase64 } from "./treehouse_workflow";
+import { productOf } from "./treehouse_routes";
+import { strictVerifier } from "./treehouse_workflow";
 import type { TreehouseWorkflow } from "./treehouse_workflow";
 
 // Plan 181 slice 3b1. Sync is the only network action of the Treehouse shell and the only caller of the
@@ -68,39 +67,12 @@ const DEFAULT_PULL_ROUNDS = 16;
 const STALL_SLEEP_MS = 250;
 const MAX_STALLS = 40;
 
-const defaultVerifier: Verifier = {
-  verify: async (pub, bytes, sig) =>
-    ed25519.verify(sig, bytes, fromBase64(pub), { zip215: false }),
-};
 const defaultSleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 const frameId = (frame: unknown) => (frame as { id: string }).id;
-const productOf = (replica: string): TreehouseProduct =>
-  replica.startsWith("replica:treehouse:space:")
-    ? "Treehouse.Space"
-    : "Treehouse.Thread";
 const sameSet = (a: Set<string>, b: Set<string>) =>
   a.size === b.size && [...a].every((id) => b.has(id));
-
-/** Remembers the latest advertise so the final fresh frontier can decide the matches-relay flag. */
-class Observed implements CarrierSyncClient, CarrierRelayClient {
-  advertised: string[] = [];
-  constructor(private readonly inner: TreehouseRelayConnection) {}
-  async advertise() {
-    this.advertised = await this.inner.advertise();
-    return this.advertised;
-  }
-  pull(have: string[]) {
-    return this.inner.pull(have);
-  }
-  push(ops: unknown[]) {
-    return this.inner.push(ops);
-  }
-  relay(op: CarrierOpFrame) {
-    return this.inner.relay(op);
-  }
-}
 
 /**
  * Sync every configured route, the Space first so a joiner holds the Space before the Threads it
@@ -152,14 +124,14 @@ export async function syncTreehouseRoute(
   if (!configured) throw new Error("unknown_route_replica");
   const replica = configured.replica;
   const decoders = treehouseCommandDecoders(productOf(replica));
-  const verifier = options.verifier ?? defaultVerifier;
+  const verifier = options.verifier ?? strictVerifier;
   const sleep = options.sleep ?? defaultSleep;
   const maxPullRounds = options.maxPullRounds ?? DEFAULT_PULL_ROUNDS;
   const profileNow = (): LocalProfile | undefined =>
     workflow.state.profiles.find((p) => p.replica === replica);
 
   const connection = await options.connect(configured, relay.localRealm);
-  const client = new Observed(connection);
+  const client = connection;
   const result: RouteSyncResult = {
     replica,
     pulledFrames: 0,
