@@ -477,6 +477,10 @@ jobs:
         working-directory: clients/treehouse-tauri-shell
         run: npm run tauri -- build
 
+      - name: Classify ordinary Treehouse bundle
+        working-directory: clients/treehouse-tauri-shell
+        run: npx --no-install tsx test/assert_bundle_variant.ts src-tauri/target/release/bundle/macos/Treehouse.app ordinary
+
       - name: Real empty Treehouse UI and retained restart
         working-directory: clients/treehouse-tauri-shell
         env:
@@ -496,6 +500,87 @@ jobs:
           name: treehouse-offline-preview
           if-no-files-found: warn
           path: ${{ runner.temp }}/treehouse-preview
+
+  treehouse_packaged_macos_enrollment:
+    # Plan 181 R13-lite. Two instances of one dev-trace test-variant bundle, directory-isolated, with
+    # seeded in-memory test keys, against one harness-launched fixture relay on loopback with a
+    # hand-written manifest. A failure here fails the workflow run, and the only conditional step is the
+    # evidence upload. It is deliberately not in android_pilot.needs.
+    name: Packaged macOS Treehouse enrollment (dev-trace variant)
+    runs-on: macos-15-intel
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up BEAM
+        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
+        with:
+          otp-version: "28.1"
+          elixir-version: "1.19.5"
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            clients/lattice-client/package-lock.json
+            clients/treehouse-tauri-shell/package-lock.json
+
+      - name: Cache Cargo dependencies and build
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            clients/treehouse-tauri-shell/src-tauri/target
+          key: ${{ runner.os }}-${{ runner.arch }}-treehouse-enrollment-tauri-${{ hashFiles('clients/treehouse-tauri-shell/src-tauri/Cargo.lock', 'clients/treehouse-tauri-shell/src-tauri/src/**/*.rs', 'clients/treehouse-tauri-shell/src-tauri/tests/**/*.rs', 'clients/treehouse-tauri-shell/src-tauri/*.json', 'clients/treehouse-tauri-shell/src/**', 'clients/treehouse-tauri-shell/package-lock.json') }}
+          restore-keys: ${{ runner.os }}-${{ runner.arch }}-treehouse-enrollment-tauri-
+
+      - name: Install Elixir dependencies
+        run: env MIX_ENV=test mix deps.get
+
+      - name: Compile BEAM support
+        run: env MIX_ENV=test mix compile
+
+      - name: Install client and shell dependencies
+        run: |
+          npm --prefix clients/lattice-client ci
+          npm --prefix clients/treehouse-tauri-shell ci
+
+      - name: Build lattice-client
+        run: npm --prefix clients/lattice-client run build
+
+      - name: Assert no ordinary Treehouse app data before the run
+        run: test ! -e "$HOME/Library/Application Support/dev.treetop.lattice.treehouse"
+
+      - name: Build packaged Treehouse dev-trace variant
+        working-directory: clients/treehouse-tauri-shell
+        run: npm run tauri:build:dev-trace
+
+      - name: Verify packaged Treehouse enrollment against Lattice.Sim
+        working-directory: clients/treehouse-tauri-shell
+        env:
+          MIX_ENV: test
+          TREEHOUSE_EVIDENCE_DIR: ${{ runner.temp }}/treehouse-enrollment
+        run: npm run packaged:enrollment
+
+      - name: Assert no ordinary Treehouse app data after the run
+        run: test ! -e "$HOME/Library/Application Support/dev.treetop.lattice.treehouse"
+
+      - name: Upload public Treehouse enrollment evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: treehouse-enrollment-evidence
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/treehouse-enrollment/oracle_out.json
+            ${{ runner.temp }}/treehouse-enrollment/result.json
 
   carrier_release:
     name: Packaged carrier restart durability
