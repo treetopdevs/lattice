@@ -132,6 +132,16 @@ and a second pushed generation. It does not mount Vue or launch the Tauri app. R
 consumption, broader participant controls, production deployment, mobile/device custody changes,
 Phase G completion, and receipt-free W4 remain open.
 
+Plan 181 (R13-lite) adds invitation, join, post and sync to the Treehouse Tauri shell, but only in
+a dev-trace test variant build (`VITE_TREEHOUSE_ENROLLMENT=1`); the ordinary and Android builds
+stay local-only. Its gate is two instances of that one test variant against a CI-launched
+`pilot_node.exs` fixture relay whose routes were written by hand into a manifest, compared with
+`Lattice.Sim`. It waives the R11 edge for that one operator hand-configured route set only, so it
+does not complete R13 and claims no catalog, relay replacement, staging, sealing, Keychain
+custody, durable acknowledgement on macOS, mobile or device result, production deployment, Phase G
+completion, or receipt-free W4. The independent review and the hosted exact-tip and merge-result
+runs remain open.
+
 ## Constraints — the "do not implement" boundary (PD-001 §6)
 
 Named and **excluded from this POC**. If one starts looking necessary, question the

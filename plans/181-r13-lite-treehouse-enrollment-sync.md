@@ -6,10 +6,15 @@ and delivered without a numbered plan file).
 
 ## Status
 
-TODO (planned 2026-10-07 at origin/main 981d4225c, revised after review the same day). Nothing in this
-plan is built. Use the status vocabulary of the unified roadmap: LOCAL VERIFIED only after the
-independent review and the hosted exact-tip and merge-result runs close; DONE only on the full exit
-below with the hard-failing CI job green at the exact tip and at the merge result.
+IN PROGRESS (planned 2026-10-07 at origin/main 981d4225c, revised after review the same day). Slices 0
+to 5c2 are committed locally on branch `claude/r13-lite-enrollment-sync-10a2f5` (tip `f7b58c791` before the
+Slice 6 docs commit); see TDD evidence. This is neither LOCAL VERIFIED nor DONE. Still open: the
+independent adversarial review of the exact diff, the hosted `treehouse_packaged_macos_enrollment` run at
+the exact tip, the merge-result run with `packaged_macos` green, and a hosted proof of the G-AX paste
+transfer. The local packaged run was reported passing by its ticket but was not reproduced at the
+Slice 6 commit (the paste preflight failed on four attempts; see TDD evidence). Use the status vocabulary of the unified roadmap: LOCAL VERIFIED only after the independent
+review and the hosted exact-tip and merge-result runs close; DONE only on the full exit below with the
+hard-failing CI job green at the exact tip and at the merge result.
 
 Non-claim line: this plan builds no catalog, replacement, provisioning, device, custody, production,
 pilot, or Phase G capability. See Non-goals and Completion claim.
@@ -239,8 +244,10 @@ Reuse, by symbol (line numbers drift; find them by name):
    exact-audience Thread grants (`post`, `author_edit`, `author_tombstone`, parent is the founder's
    root delegation) for every Thread in the invitation scope, so the joiner can sign posts. Two
    quarantine reasons are pinned exactly and must not be conflated (authority.ex): a post with no
-   capability or an unknown capability id is `no_capability`; a post under a capability that lacks the
-   `post` op is `role_not_granted`. The shell's `post` goes through a capability lookup that refuses
+   capability or an unknown capability id is `no_capability`; a post under a capability whose op set
+   lacks `post` is `operation_not_granted` (authority.ex checks the op set first; `role_not_granted`
+   fires only when a command needs an authority role the capability lacks, which a Thread post never
+   does). The shell's `post` goes through a capability lookup that refuses
    locally when none exists (today it looks up only the root delegation), so the negative tests author
    the grantless post by calling `authorTreehouseCommand` directly with a null or wrong `capId`,
    bypassing the shell's local refusal. The BEAM side uses `Sim.command(..., cap: :none)`.
@@ -350,7 +357,7 @@ Sim ids; (c) delete the log file before respawn: the restart-equality assertion 
 
 Cheap wire negatives, asserted against the live relay and then re-pulled after a `kill -9` respawn:
 (d) a joiner post before its grant is reported `quarantined` with the exact reason (`no_capability` for
-a null capability, `role_not_granted` for a capability lacking `post`) and is still advertised and
+a null capability, `operation_not_granted` for a capability lacking `post`) and is still advertised and
 durable; (e) a bad-signature op is `rejected` and absent after restart; (f) a missing-dependency op is
 `pending` and absent after restart.
 
@@ -433,7 +440,7 @@ frontier (this is the feasibility proof for the exact Sim comparison in Slices 4
 result in TDD evidence); TS state and verdicts equal BEAM for every vector; wrong-recipient acceptance,
 wrong replica, scope mismatch after a new Thread, rebinding, revoked invitation, replayed admit
 (idempotent), grantless member post quarantines with the exact reason `no_capability` identically to
-BEAM, a post under a capability lacking `post` quarantines `role_not_granted`, grant with wrong parent
+BEAM, a post under a capability lacking `post` quarantines `operation_not_granted`, grant with wrong parent
 quarantines; the archived-Thread case (the archived Thread is in the offer scope, and a grant is
 issued for it); an invitation attempt over the route cap refuses `thread_scope_exceeds_routes`;
 artifact decoders refuse wrong product marker, secret-looking fields and oversize input. A dependency
@@ -1082,9 +1089,84 @@ offline-post-drains case; the hard-failing macOS job.
 
 ## TDD evidence
 
-To be filled when built: for each slice, the failing run (command, failing assertion), the passing run,
-and the commit SHAs. The Slice 1b id-parity result, the G-AX decision and its claim wording, and the
-Slice 0 mutation results must be recorded here explicitly.
+Recorded at the Slice 6 docs commit from the per-ticket reports and the commits named below. Base
+`981d4225c`; implementation tip before the docs commit `f7b58c791`. Every slice except S0 shipped its RED
+test and its implementation in one commit, not two, so the RED run is a recorded observation, not a
+separate commit. Nothing here has run on a hosted runner.
+
+| Ticket | Commit | RED observed (stated reason) | GREEN |
+|---|---|---|---|
+| S5a | `692e19a96` | pin amendments; mutation fixtures each failed the pin test, then were reverted | `product_contract.mjs` |
+| S3a | `851e9126d` | decoder seam; RED and implementation share the commit | `npm run carrier:relay-sync` |
+| S2a | `3e9fbe956` | v2 record, join intent lifecycle and `acked` set; v1 never written on open, v2 refused by the frozen v1 reader | shell TS tests, Rust `native_commands` and `storage_lifecycle` |
+| S0 | `34b680db1` | characterization test, not RED (see below) | `treehouse_route_boot_test.exs` |
+| S1a | `f048b5c98` | `UndefinedFunctionError` for `Treehouse.EnrollmentVectors.build/0`, 11 tests invalid | `enrollment_vectors_test.exs` |
+| S1b | `1542c4196` | `TREEHOUSE_LITE_THREAD_CAP` was not exported (module absent) | `npm run treehouse` |
+| S2b | `e8c11e5a2` | `TypeError: jApp.beginJoin is not a function` | `test/workflow.ts` |
+| S2c | `88b7f2eee` | `enrollment build lacks label: Join a group` | `test/enrollment_ui_contract.mjs` |
+| S3b1 | `37f53c456` | `ERR_MODULE_NOT_FOUND` for `src/treehouse_sync` | `test/sync.ts` |
+| S3b2 | `2d82b1714` | `ERR_MODULE_NOT_FOUND` for `src/treehouse_feed` | `test/feed.ts` |
+| S3c | `f38c4c951` | `ERR_MODULE_NOT_FOUND` for `src/treehouse_panel_sync`; `enrollment build lacks label: Sync` | `test/sync_panel.ts`, contract test |
+| S4 | `80353246f` | `ERR_MODULE_NOT_FOUND` for `test/support/relay_peer` | `npm run gate:enrollment` |
+| S5b | `50ed5f581` | seam and classifier absent; an always-loadable-key mutation failed all 7 seam tests | `cargo test --features treehouse-dev-trace`, `test/packaged_bundle_variant.ts` |
+| S5c1 | `f5a389857` | `ERR_MODULE_NOT_FOUND` for `test/support/packaged_ax` (driver unit test) | `npm run packaged:enrollment` |
+| S5c2 | `f7b58c791` | job missing, `packaged_macos` classification step missing, digest mismatch | `test/enrollment_ci_contract.mjs` |
+| S6 | docs commit | `r13_lite_contract_test.exs`: 15 of 17 tests failed (no carve-out, ledger rows, README row, notes) | same file, plus the pinned contract tests |
+
+Slice 0 results (characterization, `34b680db1`): the happy path booted, relayed and restarted with no
+server source change, so the STOP contingency did not trigger. The discriminating mutations all fail as
+designed: omitting the Thread instance fails the Thread route; a Space listener given a Thread challenge
+refuses with `wrong_replica` (server-internal telemetry, pinned in process; the client sees
+`unauthenticated`); a respawn against a log at a different path loses the Sim ids; deleting the log before
+respawn refuses startup (`PILOT_REFUSED`) and recreates nothing. The existing refusals are pinned: dropping
+`relay_realms` yields `read_only`, the joiner cannot relay to the Space route, and a manifest under the
+unresolved macOS `/var` temp path is refused with the exact offender `"/var"`.
+
+Slice 1b id-parity result: TS-authored frames are byte-identical to the BEAM frames, signatures included,
+for all 79 vector steps across the 9 scenarios, built from the public synthetic seeds and the exact Sim
+dependency frontiers. The acceptance signatures recomputed in TS also match. There was no
+dependency-selection difference to fix and no STOP. A dependency perturbation and a flipped signature each
+fail the parity assertion.
+
+G-AX decision (recorded in the S5c1 commit, local macOS only): the paste method (pasteboard write, focus,
+select-all, paste, addressed by pid) passed 20 of 20 byte-exact 8 KiB round trips into the `Paste offer`
+textarea on every local run. The chunked UTF-16 key-event method failed at round 1 (same length, wrong text,
+first difference at index 458) and was removed. Direct `AXValue` set was not tried because it would likely
+not fire the input event that Vue's `v-model` needs. The loopback-mailbox fallback was not built and is not
+used, so the fallback addendum to the permitted sentence does not apply unless the hosted runner fails the
+paste transfer. The hosted runner's pasteboard, Accessibility permission and checkout-chain permissions are
+unproven. At the Slice 6 docs commit the packaged run could not be reproduced: four attempts on this
+machine (two full runs, two preflight-only runs) each failed the G-AX paste preflight, at rounds 17, 16,
+4 and 4 of 20, with the readback the right length but differing at index 0 (the previous text was still
+in the textarea or another text arrived). The macOS console session was not locked, and the frontmost
+application afterwards was a browser, so the machine was in interactive use. The cause is undetermined;
+pasteboard or focus contention is a candidate, and nothing was changed in the helper or the harness. The
+earlier four passing runs are therefore reported but not reproduced, and the paste transfer is not shown
+reliable even locally. The separate S5c0 ticket stopped without a commit (its attempt ran with the macOS
+console session locked and no AX window); the decision data above came from the S5c1 runs on an unlocked session.
+
+Corrections to the plan text found during implementation (the slice bullets above were corrected in place
+where they named a wrong reason):
+
+- A post under a capability whose op set lacks `post` quarantines `operation_not_granted`. `role_not_granted`
+  fires only for a command that needs an authority role, pinned on the `archive_thread` vector.
+- The relay never reports semantic quarantine. A semantically quarantined op arrives in the `accepted`
+  bucket (`Log.accept` classifies structure only) and the exact reason comes from analysis of the pulled
+  log. The `quarantined` bucket is structural only (`bad_signature`), and `rejected` is only
+  `wrong_replica`. The ack rules in design decision 2 apply as written, but "reported quarantined" in
+  Slices 0 and 4 means "accepted by the relay, quarantined by analysis, identical in both clients, the
+  relay log and Sim".
+- `createThread` cannot require a pre-configured Thread route, because a Thread replica string embeds a
+  nonce and a key-bound root tag. The cap is enforced at `issueInvitation`
+  (`thread_scope_exceeds_routes`), and `createThread` refuses `thread_cap_reached` at three honored Threads
+  only when a relay is configured.
+- The offer carries one `localRealm`, the joiner's transport realm; `issueInvitation` takes it as a second
+  argument.
+- The packaged scenario uses one Thread (two routes, 11 ops: 5 Space and 6 Thread); the wrong-artifact
+  label is `wrong_product`; the wrong-key negative in the UI is the refused `relay_already_configured`
+  route paste, while the hello refusal itself is proven headless over the real socket.
+- The relay stop and `kill -9` paths are test-only. The packaged macOS run makes no durable-ack claim; the
+  relay log bytes were unchanged across the restart in every local run, recorded as informational only.
 
 ## Independent review
 
