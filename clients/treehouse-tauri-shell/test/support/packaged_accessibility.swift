@@ -49,6 +49,30 @@ if args[2]=="dump" {
   up.postToPid(pid)
   result = .success
 }
+ else if args[2]=="paste", args.count==4 {
+  // Plan 181 S5c1 transfer mode for multi-KiB artifacts (decision gate G-AX). The text arrives on stdin, never
+  // in argv. It goes on the pasteboard, then select-all and paste are posted to the pid. The harness verifies
+  // the value in the dump. Posting the text as bounded runs of key events was tried and rejected: the readback
+  // differed from the input after a few hundred characters.
+  let input=String(data:FileHandle.standardInput.readDataToEndOfFile(),encoding:.utf8) ?? ""
+  let board=NSPasteboard.general
+  board.clearContents()
+  guard board.setString(input,forType:.string) else {fputs("Pasteboard write failed\n",stderr);exit(4)}
+  NSRunningApplication(processIdentifier:pid)?.activate(options:[])
+  let focused=AXUIElementSetAttributeValue(node,kAXFocusedAttribute as CFString,kCFBooleanTrue)
+  guard focused == .success else {fputs("Visible field could not receive focus\n",stderr);exit(4)}
+  func key(_ code:CGKeyCode) {
+   for isDown in [true,false] {
+    let event=CGEvent(keyboardEventSource:nil,virtualKey:code,keyDown:isDown)!
+    event.flags = .maskCommand;event.postToPid(pid)
+   }
+  }
+  key(0)
+  usleep(80000)
+  key(9)
+  usleep(300000)
+  result = .success
+}
  else {exit(2)}
  guard result == .success else {fputs("Accessibility action refused: \(result.rawValue)\n",stderr);exit(4)}
 }

@@ -1,9 +1,15 @@
 import { spawn } from "node:child_process";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readdirSync, realpathSync, statSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { ed25519 } from "@noble/curves/ed25519.js";
+import { connectCarrierWebSocket, decodeCarrierOpFrame, verifyCarrierOp } from "@treetopdevs/lattice-client";
+import type { CarrierOpFrame } from "@treetopdevs/lattice-client";
+import type { RelayRoute } from "../../src/treehouse_state";
+import { fromBase64 } from "../../src/treehouse_workflow";
 
 // Plan 181 slice 4 harness support: the manifest relay spawner and BEAM helpers. The BEAM helpers are
 // copies of the small functions in the Township shell's beam_peer.ts (they are not imported across
@@ -168,6 +174,59 @@ function awaitExit(child: ChildProcessWithoutNullStreams, ms: number): Promise<n
       resolveExit(code);
     });
   });
+}
+
+export const fileSha256 = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
+
+export interface RelayObserver {
+  /** Sorted op ids the relay advertises for the route. */
+  ids(label: string): Promise<string[]>;
+  /** Every frame the relay serves, each one verified (strict Ed25519). */
+  frames(label: string): Promise<CarrierOpFrame[]>;
+}
+
+/**
+ * A read-only observer client over the same real sockets the apps use: its own seeded transport identity
+ * (pre-seeded in the manifest like the apps'), advertise and pull only, never a relay submission. The
+ * packaged harness uses it as the oracle's view of the relay frontier, so it never reads app storage to
+ * decide what the relay holds.
+ */
+export function createRelayObserver(seed: Uint8Array, routes: Record<string, RelayRoute>): RelayObserver {
+  const verifier = {
+    verify: (pubkey: Uint8Array, bytes: Uint8Array, sig: Uint8Array) => ed25519.verify(sig, bytes, pubkey, { zip215: false }),
+  };
+  const frameVerifier = {
+    verify: async (pub: string, bytes: Uint8Array, sig: Uint8Array) => ed25519.verify(sig, bytes, fromBase64(pub), { zip215: false }),
+  };
+  async function observe<T>(label: string, use: (client: Awaited<ReturnType<typeof connectCarrierWebSocket>>) => Promise<T>) {
+    const route = routes[label];
+    if (!route) throw new Error(`observer has no route for ${label}`);
+    const client = await connectCarrierWebSocket({
+      url: route.url,
+      localRealm: "observer",
+      replica: route.replica,
+      signer: { publicKey: ed25519.getPublicKey(seed), sign: (bytes) => ed25519.sign(bytes, seed) },
+      expectedPeerRealm: route.expectedPeerRealm,
+      expectedPeerPubkey: fromBase64(route.expectedPeerPubkey),
+      verifier,
+    });
+    try {
+      return await use(client);
+    } finally {
+      client.close();
+    }
+  }
+  return {
+    ids: (label) => observe(label, async (client) => [...(await client.advertise())].sort()),
+    frames: (label) =>
+      observe(label, async (client) => {
+        const frames = (await client.pull([])).map(decodeCarrierOpFrame);
+        for (const frame of frames) {
+          if (!(await verifyCarrierOp(frame, frameVerifier)).valid) throw new Error("observer pull failed verification");
+        }
+        return frames;
+      }),
+  };
 }
 
 export async function freeTcpPort(): Promise<number> {

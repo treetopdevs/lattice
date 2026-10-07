@@ -393,11 +393,43 @@ forged_at =
     ev["type"] == "command" and ev["cap"] == "none"
   end)
 
-perturbed = %{
-  trace
-  | "events" =>
-      List.insert_at(trace["events"], forged_at, %{"type" => "sync", "logs" => ["general"]})
-}
+# A trace with no forged post (the packaged UI cannot forge one) perturbs a different frontier: dropping
+# the sync point that precedes the first founder authoring step after a joiner authoring step leaves the
+# founder without the joiner's operation, so the founder's deps (and id) change.
+drop_founder_sync = fn trace ->
+  events = trace["events"]
+  authored = fn ev, realm -> ev["type"] == "command" and ev["realm"] == realm end
+  first_joiner = Enum.find_index(events, &authored.(&1, "joiner"))
+
+  reply =
+    first_joiner &&
+      events
+      |> Enum.with_index()
+      |> Enum.find_value(fn {ev, i} ->
+        if i > first_joiner and authored.(ev, "founder"), do: i
+      end)
+
+  sync_before =
+    reply &&
+      events
+      |> Enum.with_index()
+      |> Enum.filter(fn {ev, i} -> i < reply and ev["type"] == "sync" end)
+      |> List.last()
+
+  if sync_before == nil, do: raise("perturb control target not found")
+  %{trace | "events" => List.delete_at(events, elem(sync_before, 1))}
+end
+
+perturbed =
+  if forged_at do
+    %{
+      trace
+      | "events" =>
+          List.insert_at(trace["events"], forged_at, %{"type" => "sync", "logs" => ["general"]})
+    }
+  else
+    drop_founder_sync.(trace)
+  end
 
 mutate_frames = fn observed, who, label, fun ->
   stores =

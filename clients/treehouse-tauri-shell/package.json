@@ -7,10 +7,12 @@
     "dev": "vite --host 127.0.0.1 --port 5175",
     "typecheck": "vue-tsc --noEmit",
     "build": "npm run typecheck && vite build",
-    "test": "tsx test/workflow.ts && tsx test/storage.ts && tsx test/sync.ts && tsx test/feed.ts && tsx test/sync_panel.ts && node test/product_contract.mjs && node test/enrollment_ui_contract.mjs && tsx test/packaged_bundle_variant.ts && tsx test/witness_binding.ts && tsx test/witness_bridge.ts && node test/android_contract.mjs",
+    "test": "tsx test/workflow.ts && tsx test/storage.ts && tsx test/sync.ts && tsx test/feed.ts && tsx test/sync_panel.ts && node test/product_contract.mjs && node test/enrollment_ui_contract.mjs && tsx test/packaged_bundle_variant.ts && tsx test/packaged_ax_driver.ts && tsx test/witness_binding.ts && tsx test/witness_bridge.ts && node test/android_contract.mjs",
     "packaged": "tsx test/packaged_preview.ts",
     "gate:enrollment": "tsx test/enrollment_sync_gate.ts",
+    "packaged:enrollment": "tsx test/packaged_enrollment.ts",
     "tauri": "tauri",
+    "tauri:build:dev-trace": "VITE_TREEHOUSE_ENROLLMENT=1 VITE_TREEHOUSE_DEV_TRACE=1 VITE_TREEHOUSE_AUTOSYNC_ON_MOUNT=0 VITE_TREEHOUSE_POLL_MS=0 tauri build --features treehouse-dev-trace --bundles app --config src-tauri/tauri.dev-trace.conf.json",
     "native:test": "cargo test --manifest-path src-tauri/Cargo.toml"
   },
   "dependencies": {
