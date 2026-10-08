@@ -19,6 +19,10 @@ use std::{
 pub const HISTORY_KEY: &str = "treehouse:preview:history";
 pub const HISTORY_BYTES: usize = 1_048_576;
 pub const DRAFT_BYTES: usize = 16_384;
+/// One Space route plus at most three Thread routes.
+const MAX_ROUTES: usize = 4;
+/// The join intent carries no user text; this constant satisfies the non-empty name rule.
+const JOIN_INTENT_NAME: &str = "join";
 const MAX_REVISION: u64 = 9_007_199_254_740_991;
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -31,6 +35,7 @@ struct Record {
     active: Option<String>,
     intent: Option<Intent>,
     cleared_drafts: BTreeMap<String, u64>,
+    relay: Option<Relay>,
 }
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -38,7 +43,24 @@ struct Profile {
     product: String,
     replica: String,
     frames: Vec<Value>,
+    /// Ids this device authored. Never shrinks.
     outbox: Vec<String>,
+    /// Ids known durable on the relay. Grows only; a subset of the retained frame ids.
+    acked: Vec<String>,
+}
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Relay {
+    local_realm: String,
+    routes: Vec<Route>,
+}
+#[derive(Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Route {
+    replica: String,
+    url: String,
+    expected_peer_realm: String,
+    expected_peer_pubkey: String,
 }
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -63,7 +85,7 @@ pub struct OpenResult {
 }
 fn empty() -> Record {
     Record {
-        version: 1,
+        version: 2,
         product: "treehouse".into(),
         revision: 0,
         public_key: None,
@@ -71,6 +93,7 @@ fn empty() -> Record {
         active: None,
         intent: None,
         cleared_drafts: BTreeMap::new(),
+        relay: None,
     }
 }
 fn token(value: &str) -> bool {
@@ -84,6 +107,144 @@ fn replica(value: &str, kind: &str) -> bool {
         .strip_prefix(&format!("replica:treehouse:{kind}:"))
         .and_then(|tail| tail.split_once("#root:"))
         .is_some_and(|(nonce, root)| token(nonce) && token(root))
+}
+fn public_key_text(value: &str) -> bool {
+    BASE64
+        .decode(value)
+        .is_ok_and(|bytes| bytes.len() == 32 && BASE64.encode(bytes) == value)
+}
+/// A realm is pinned for good, so it must already be trimmed (treehouse_routes.ts `realmText`).
+fn realm_text(value: &str) -> bool {
+    !value.is_empty() && value.trim() == value && value.len() <= 256
+}
+fn token43(value: &str) -> bool {
+    value.len() == 43
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+}
+/// `replica:treehouse:{space|thread}:<43>#root:<43>`, as the shell's SPACE_REPLICA/THREAD_REPLICA.
+fn route_replica(value: &str) -> bool {
+    let Some(rest) = value
+        .strip_prefix("replica:treehouse:space:")
+        .or_else(|| value.strip_prefix("replica:treehouse:thread:"))
+    else {
+        return false;
+    };
+    rest.split_once("#root:")
+        .is_some_and(|(nonce, root)| token43(nonce) && token43(root))
+}
+/// wss to any host, or ws to a loopback host only; no credentials and no fragment (`validRouteUrl`).
+fn route_url(value: &str) -> bool {
+    // Printable ASCII only, as the shell's `validRouteUrl` requires, so a persisted route always reloads.
+    if value.len() > 2048
+        || value.contains('#')
+        || value.bytes().any(|b| !(0x21..=0x7e).contains(&b))
+    {
+        return false;
+    }
+    // The shell parses with WHATWG URL, which lowercases the scheme and host.
+    let scheme_end = value.find("://").unwrap_or(0);
+    let rest = &value[(scheme_end + 3).min(value.len())..];
+    let secure = match value[..scheme_end].to_ascii_lowercase().as_str() {
+        "wss" => true,
+        "ws" => false,
+        _ => return false,
+    };
+    let authority = rest.split(['/', '?']).next().unwrap_or("");
+    if authority.is_empty() || authority.contains('@') {
+        return false;
+    }
+    // Every host accepted here is one the shell's URL parser also accepts, so a persisted route can
+    // always be reloaded; anything outside these forms is refused.
+    let loopback = match authority.strip_prefix('[') {
+        Some(v6) => match v6.split_once(']') {
+            Some((inner, port)) if port.is_empty() || valid_port(port) => {
+                // Only the canonical text WHATWG serializes to, so both sides accept the same hosts.
+                match inner.parse::<std::net::Ipv6Addr>() {
+                    Ok(address)
+                        if !inner.contains('.')
+                            && address.to_string() == inner.to_ascii_lowercase() =>
+                    {
+                        address.is_loopback()
+                    }
+                    _ => return false,
+                }
+            }
+            _ => return false,
+        },
+        None => {
+            let host = match authority.split_once(':') {
+                Some((host, port)) if valid_port(&format!(":{port}")) => host,
+                Some(_) => return false,
+                None => authority,
+            };
+            match route_host(host) {
+                Some(loopback) => loopback,
+                None => return false,
+            }
+        }
+    };
+    secure || loopback
+}
+/// A name of ASCII letters, digits, `.`, `-` and `_`, or a dotted IPv4 address when the last label is
+/// numeric (WHATWG parses such a host as IPv4). Returns whether it is the loopback name or address.
+fn route_host(host: &str) -> Option<bool> {
+    if host.is_empty()
+        || !host
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'))
+    {
+        return None;
+    }
+    let last = host.trim_end_matches('.').rsplit('.').next().unwrap_or("");
+    // WHATWG's "ends in a number": all decimal digits, or 0x followed only by hex digits. A DNS label
+    // that merely starts with 0x (service.0xcorp) is a name.
+    let lower = last.to_ascii_lowercase();
+    let numeric = !last.is_empty()
+        && (last.bytes().all(|b| b.is_ascii_digit())
+            || lower
+                .strip_prefix("0x")
+                .is_some_and(|hex| hex.bytes().all(|b| b.is_ascii_hexdigit())));
+    if numeric {
+        return host
+            .parse::<std::net::Ipv4Addr>()
+            .ok()
+            .map(|address| address == std::net::Ipv4Addr::LOCALHOST);
+    }
+    Some(host.eq_ignore_ascii_case("localhost"))
+}
+/// `:` followed by an optional canonical decimal port (no leading zeros, never 0, which names no
+/// listening endpoint); WHATWG treats an empty port as the scheme default. The shell applies the same
+/// rule, so both accept the same text.
+fn valid_port(suffix: &str) -> bool {
+    suffix.strip_prefix(':').is_some_and(|port| {
+        port.is_empty()
+            || (!port.starts_with('0')
+                && port.len() <= 5
+                && port.bytes().all(|b| b.is_ascii_digit())
+                && port.parse::<u32>().is_ok_and(|n| n <= 65_535))
+    })
+}
+fn valid_relay(relay: &Relay) -> bool {
+    let mut replicas = HashSet::new();
+    realm_text(&relay.local_realm)
+        && relay.routes.len() <= MAX_ROUTES
+        // Exactly one Space route, so at most three Threads: a pinned set lacking its Space could never
+        // be repaired, since saved routes are only ever extended.
+        && relay
+            .routes
+            .iter()
+            .filter(|r| r.replica.starts_with("replica:treehouse:space:"))
+            .count()
+            == 1
+        && relay.routes.iter().all(|r| {
+            route_replica(&r.replica)
+                && route_url(&r.url)
+                && realm_text(&r.expected_peer_realm)
+                && public_key_text(&r.expected_peer_pubkey)
+                && replicas.insert(r.replica.clone())
+        })
 }
 fn parse(raw: Option<&str>) -> Result<Record, String> {
     let Some(raw) = raw else { return Ok(empty()) };
@@ -109,10 +270,45 @@ fn parse(raw: Option<&str>) -> Result<Record, String> {
         map.insert("version".into(), Value::from(1));
         map.insert("clearedDrafts".into(), Value::Object(Default::default()));
     }
+    // Closed v1 envelope: migrates in memory only. Opening never writes; the next
+    // explicit commit persists v2.
+    if value["version"] == 1 {
+        let v1 = [
+            "version",
+            "product",
+            "revision",
+            "publicKey",
+            "profiles",
+            "active",
+            "intent",
+            "clearedDrafts",
+        ];
+        let map = value.as_object_mut().ok_or("invalid_preview_record")?;
+        if map.len() == v1.len() && v1.iter().all(|key| map.contains_key(*key)) {
+            if let Some(profiles) = map.get_mut("profiles").and_then(Value::as_array_mut) {
+                for profile in profiles {
+                    if let Some(profile) = profile.as_object_mut() {
+                        if profile.len() == 4 {
+                            profile.insert("acked".into(), Value::Array(vec![]));
+                        }
+                    }
+                }
+            }
+            map.insert("version".into(), Value::from(2));
+            map.insert("relay".into(), Value::Null);
+        }
+    }
+    // Option fields default to None when absent, but a v2 envelope names relay explicitly.
+    if !value
+        .as_object()
+        .is_some_and(|map| map.contains_key("relay"))
+    {
+        return Err("invalid_preview_record".into());
+    }
     let r: Record =
         serde_json::from_value(value).map_err(|_| "invalid_preview_record".to_string())?;
     let mut names = HashSet::new();
-    if r.version != 1
+    if r.version != 2
         || r.product != "treehouse"
         || r.revision > MAX_REVISION
         || r.profiles.len() > 13
@@ -120,18 +316,34 @@ fn parse(raw: Option<&str>) -> Result<Record, String> {
     {
         return Err("invalid_preview_record".into());
     }
-    if let Some(key) = &r.public_key {
-        let bytes = BASE64
-            .decode(key)
-            .map_err(|_| "invalid_public_identity".to_string())?;
-        if bytes.len() != 32 || BASE64.encode(bytes) != *key {
-            return Err("invalid_public_identity".into());
+    if r.public_key
+        .as_deref()
+        .is_some_and(|key| !public_key_text(key))
+    {
+        return Err("invalid_public_identity".into());
+    }
+    if r.relay.as_ref().is_some_and(|relay| !valid_relay(relay)) {
+        return Err("invalid_relay".into());
+    }
+    // A held Space and the relay's Space route name the same replica, so a route set pinned for another
+    // group can never be saved beside this one.
+    if let (Some(relay), Some(space)) = (
+        &r.relay,
+        r.profiles.iter().find(|p| p.product == "Treehouse.Space"),
+    ) {
+        if !relay
+            .routes
+            .iter()
+            .any(|route| route.replica == space.replica)
+        {
+            return Err("invalid_relay".into());
         }
     }
     if let Some(i) = &r.intent {
-        if !matches!(i.kind.as_str(), "space" | "thread")
+        if !matches!(i.kind.as_str(), "space" | "thread" | "join")
             || i.name.trim().is_empty()
             || i.name.len() > DRAFT_BYTES
+            || (i.kind == "join" && i.name != JOIN_INTENT_NAME)
             || !token(&i.nonce)
         {
             return Err("invalid_creation_intent".into());
@@ -177,6 +389,11 @@ fn parse(raw: Option<&str>) -> Result<Record, String> {
         {
             return Err("incomplete_retained_history".into());
         }
+        if p.acked.iter().collect::<HashSet<_>>().len() != p.acked.len()
+            || p.acked.iter().any(|id| !ids.contains(id))
+        {
+            return Err("invalid_local_profile".into());
+        }
     }
     if r.profiles
         .iter()
@@ -198,6 +415,13 @@ pub struct PreviewStore {
     db: ProductDatabase,
     keys: Arc<dyn CarrierKeySeedStore>,
     identity_lock: File,
+    /// Plan 181 5b: one fixed test key for the dev-trace packaged variant. Absent from the
+    /// ordinary build, where the key always comes from the platform key store.
+    #[cfg(feature = "treehouse-dev-trace")]
+    fixed_key: Option<SigningKey>,
+    /// Command-name lines for the packaged harness. Never a payload.
+    #[cfg(feature = "treehouse-dev-trace")]
+    trace_file: Option<std::path::PathBuf>,
 }
 impl PreviewStore {
     /// The native app supplies its platform data directory; it is never an IPC argument.
@@ -221,7 +445,47 @@ impl PreviewStore {
             db,
             keys,
             identity_lock,
+            #[cfg(feature = "treehouse-dev-trace")]
+            fixed_key: None,
+            #[cfg(feature = "treehouse-dev-trace")]
+            trace_file: None,
         })
+    }
+    /// Dev-trace seam: a store whose identity is one fixed test key. Nothing is generated and
+    /// nothing is written to a key store, so two instances in two directories never share a
+    /// Keychain alias.
+    #[cfg(feature = "treehouse-dev-trace")]
+    pub fn at_directory_dev(directory: &Path, seed: [u8; 32]) -> Result<Self, String> {
+        Self::at_directory_dev_with(
+            directory,
+            seed,
+            Arc::new(lattice_mobile_core::InMemoryCarrierKeySeedStore::default()),
+        )
+    }
+    /// As `at_directory_dev`, with the (never consulted) key store supplied so tests can prove it.
+    #[cfg(feature = "treehouse-dev-trace")]
+    pub fn at_directory_dev_with(
+        directory: &Path,
+        seed: [u8; 32],
+        keys: Arc<dyn CarrierKeySeedStore>,
+    ) -> Result<Self, String> {
+        let mut store = Self::at_directory(directory, keys)?;
+        store.fixed_key = Some(SigningKey::from_bytes(&seed));
+        Ok(store)
+    }
+    #[cfg(feature = "treehouse-dev-trace")]
+    pub fn with_dev_trace(mut self, file: std::path::PathBuf) -> Self {
+        self.trace_file = Some(file);
+        self
+    }
+    #[cfg(feature = "treehouse-dev-trace")]
+    fn note(&self, command: &str) {
+        use std::io::Write as _;
+        if let Some(file) = &self.trace_file {
+            if let Ok(mut out) = OpenOptions::new().create(true).append(true).open(file) {
+                let _ = writeln!(out, "{command}");
+            }
+        }
     }
     fn captured(&self) -> Result<(Option<String>, Record), String> {
         let raw = self.db.kv_get(HISTORY_KEY).map_err(storage_error)?;
@@ -229,12 +493,21 @@ impl PreviewStore {
         Ok((raw, record))
     }
     fn loaded_key(&self) -> Result<Option<SigningKey>, String> {
+        // The fixed key appears under the same condition `open` uses for `missing_local_history`:
+        // only once the record holds a public key or an intent, so first launch reports absent.
+        #[cfg(feature = "treehouse-dev-trace")]
+        if let Some(fixed) = &self.fixed_key {
+            let (_, r) = self.captured()?;
+            return Ok((r.public_key.is_some() || r.intent.is_some()).then(|| fixed.clone()));
+        }
         self.keys
             .load_seed(KEY_ALIAS)
             .map(|seed| seed.map(|bytes| SigningKey::from_bytes(&bytes)))
             .map_err(|_| "key_store_unavailable".into())
     }
     pub fn open(&self) -> Result<OpenResult, String> {
+        #[cfg(feature = "treehouse-dev-trace")]
+        self.note("treehouse_open");
         let (raw, r) = self.captured()?;
         let key = self
             .loaded_key()?
@@ -255,14 +528,22 @@ impl PreviewStore {
         })
     }
     pub fn initialize(&mut self) -> Result<String, String> {
+        #[cfg(feature = "treehouse-dev-trace")]
+        self.note("treehouse_initialize_identity");
         self.identity_lock.lock_exclusive().map_err(storage_error)?;
         let result = (|| {
             let (_, r) = self.captured()?;
             if r.public_key.is_some()
                 || !r.profiles.is_empty()
-                || !r.intent.is_some_and(|i| i.kind == "space")
+                || !r
+                    .intent
+                    .is_some_and(|i| matches!(i.kind.as_str(), "space" | "join"))
             {
                 return Err("identity_creation_not_allowed".into());
+            }
+            #[cfg(feature = "treehouse-dev-trace")]
+            if let Some(fixed) = &self.fixed_key {
+                return Ok(BASE64.encode(fixed.verifying_key().as_bytes()));
             }
             NativeCarrierSigner::new(self.keys.clone())
                 .ensure_key(KEY_ALIAS)
@@ -272,6 +553,8 @@ impl PreviewStore {
         result
     }
     pub fn sign(&self, bytes: &str) -> Result<String, String> {
+        #[cfg(feature = "treehouse-dev-trace")]
+        self.note("treehouse_sign_carrier");
         if bytes.len() > 85_336 {
             return Err("signing_limit".into());
         }
@@ -289,13 +572,15 @@ impl PreviewStore {
         Ok(BASE64.encode(key.sign(&bytes).to_bytes()))
     }
     pub fn commit(&mut self, expected_revision: u64, next: &str) -> Result<bool, String> {
+        #[cfg(feature = "treehouse-dev-trace")]
+        self.note("treehouse_commit");
         let (raw, old) = self.captured()?;
         if expected_revision != old.revision {
             return Ok(false);
         }
         let next_record = parse(Some(next))?;
         if serde_json::from_str::<Value>(next).map_err(|_| "invalid_preview_record")?["version"]
-            != 1
+            != 2
         {
             return Err("invalid_preview_record".into());
         }
@@ -313,7 +598,24 @@ impl PreviewStore {
         }
         if old.public_key.is_none()
             && next_record.public_key.is_some()
-            && (!old.profiles.is_empty() || !old.intent.as_ref().is_some_and(|i| i.kind == "space"))
+            && (!old.profiles.is_empty()
+                || !old
+                    .intent
+                    .as_ref()
+                    .is_some_and(|i| matches!(i.kind.as_str(), "space" | "join")))
+        {
+            return Err("identity_creation_not_allowed".into());
+        }
+        // A join intent is only ever created on a record with no identity and no history.
+        if old.intent.is_none()
+            && next_record
+                .intent
+                .as_ref()
+                .is_some_and(|i| i.kind == "join")
+            && (old.public_key.is_some()
+                || !old.profiles.is_empty()
+                || next_record.public_key.is_some()
+                || !next_record.profiles.is_empty())
         {
             return Err("identity_creation_not_allowed".into());
         }
@@ -331,12 +633,27 @@ impl PreviewStore {
                     .outbox
                     .iter()
                     .any(|id| !retained.outbox.contains(id))
+                || previous.acked.iter().any(|id| !retained.acked.contains(id))
                 || previous
                     .frames
                     .iter()
                     .any(|frame| !retained.frames.iter().any(|candidate| candidate == frame))
             {
                 return Err("retained_history_changed".into());
+            }
+        }
+        // A saved relay set is never replaced: the local realm and every saved route stay exactly as
+        // they were, and only new routes may be added.
+        if let Some(previous) = &old.relay {
+            let kept = next_record.relay.as_ref().is_some_and(|next| {
+                next.local_realm == previous.local_realm
+                    && previous
+                        .routes
+                        .iter()
+                        .all(|route| next.routes.contains(route))
+            });
+            if !kept {
+                return Err("relay_already_configured".into());
             }
         }
         if let (Some(previous), Some(pending)) = (&old.intent, &next_record.intent) {
@@ -347,7 +664,18 @@ impl PreviewStore {
                 return Err("creation_intent_changed".into());
             }
         }
-        if let Some(pending) = &old.intent {
+        if old.intent.as_ref().is_some_and(|i| i.kind == "join") {
+            // The join intent is spent by the commit that persists the key: the identity is
+            // present, the intent is gone and no profile exists yet (the first dependency-closed
+            // pulled batch arrives later). The replica strings are the founder's, so the
+            // creation-nonce match used for Space and Thread intents cannot apply.
+            let spent = next_record.intent.is_none();
+            if (spent && (next_record.public_key.is_none() || !next_record.profiles.is_empty()))
+                || (!spent && next_record.public_key.is_some())
+            {
+                return Err("creation_incomplete".into());
+            }
+        } else if let Some(pending) = &old.intent {
             if next_record.intent.is_none()
                 && !next_record.profiles.iter().any(|p| {
                     p.replica.starts_with(&format!(
@@ -370,7 +698,7 @@ impl PreviewStore {
         }
         for (replica, revision) in &next_record.cleared_drafts {
             if old.cleared_drafts.get(replica) != Some(revision) {
-                let current = self.load_draft(replica)?.ok_or("draft_unavailable")?;
+                let current = self.read_draft(replica)?.ok_or("draft_unavailable")?;
                 let old_count = old
                     .profiles
                     .iter()
@@ -426,6 +754,11 @@ impl PreviewStore {
         Ok(Some(draft))
     }
     pub fn load_draft(&self, replica: &str) -> Result<Option<Draft>, String> {
+        #[cfg(feature = "treehouse-dev-trace")]
+        self.note("treehouse_load_draft");
+        self.read_draft(replica)
+    }
+    fn read_draft(&self, replica: &str) -> Result<Option<Draft>, String> {
         let (_, raw) = self.captured_draft(replica)?;
         Self::parse_draft(raw.as_deref())
     }
@@ -435,6 +768,8 @@ impl PreviewStore {
         expected_revision: u64,
         text: &str,
     ) -> Result<Option<Draft>, String> {
+        #[cfg(feature = "treehouse-dev-trace")]
+        self.note("treehouse_save_draft");
         if text.len() > DRAFT_BYTES || expected_revision >= MAX_REVISION {
             return Err("draft_too_large".into());
         }

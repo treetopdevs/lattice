@@ -130,6 +130,10 @@ export declare function authorTreehouseWitnessedSuccession(input: {
     delegation: CarrierDelegation;
     certificate: CarrierTerm;
 }): Promise<CarrierOpFrame>;
+/** The fields `command` writes, or null for a command the product does not have. */
+export declare function treehouseCommandFields(product: TreehouseProduct, command: string): readonly string[] | null;
+/** The authority roles a capability must carry to author `command`, from the schema's `gatedBy`. */
+export declare function treehouseCommandRoles(product: TreehouseProduct, command: string): string[];
 /** Explicit injection keeps Treehouse command names independent of Township. */
 export declare function treehouseCommandDecoders(product: TreehouseProduct): CommandDecoderMap;
 export declare function treehouseInvitationAcceptanceBytes(replica: string, invitation: Op): Uint8Array;

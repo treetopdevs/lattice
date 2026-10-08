@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 use treehouse_tauri_shell::preview::{PreviewStore, HISTORY_KEY};
 fn pending() -> Value {
-    json!({"version":1,"product":"treehouse","revision":1,"publicKey":null,"profiles":[],"active":null,"intent":{"kind":"space","name":"Canopy","nonce":"a".repeat(43)},"clearedDrafts":{}})
+    json!({"version":2,"product":"treehouse","revision":1,"publicKey":null,"profiles":[],"active":null,"intent":{"kind":"space","name":"Canopy","nonce":"a".repeat(43)},"clearedDrafts":{},"relay":null})
 }
 #[test]
 fn failed_write_and_unknown_envelope_preserve_original_storage() {
@@ -46,6 +46,7 @@ fn native_boundary_reads_only_the_closed_n_minus_one_envelope_and_requires_curre
     let mut preceding = pending();
     preceding["version"] = json!(0);
     preceding.as_object_mut().unwrap().remove("clearedDrafts");
+    preceding.as_object_mut().unwrap().remove("relay");
     db.kv_set(HISTORY_KEY, &preceding.to_string()).unwrap();
     drop(db);
     let mut store =
@@ -101,4 +102,56 @@ fn product_future_interrupted_and_corrupt_databases_refuse_before_key_creation()
         );
         assert_eq!(std::fs::read(path).unwrap(), before);
     }
+}
+
+#[test]
+fn v1_record_opens_byte_identical_and_only_a_v2_commit_replaces_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let keys = Arc::new(InMemoryCarrierKeySeedStore::default());
+    let mut store = PreviewStore::at_directory(dir.path(), keys.clone()).unwrap();
+    // Reach a real v2 record with a key and a Space, then downgrade its shape to v1.
+    let mut r = pending();
+    assert!(store.commit(0, &r.to_string()).unwrap());
+    let key = store.initialize().unwrap();
+    r["publicKey"] = json!(key);
+    r["revision"] = json!(2);
+    assert!(store.commit(1, &r.to_string()).unwrap());
+    let replica = format!(
+        "replica:treehouse:space:{}#root:{}",
+        "a".repeat(43),
+        "b".repeat(43)
+    );
+    let id = "c".repeat(43);
+    let frame = json!({"v":1,"id":id,"replica":replica,"author":key,"deps":[],"kind":"authority","body":["nil"],"cap":["nil"],"sig":"s"});
+    let mut v1 = r.clone();
+    v1["version"] = json!(1);
+    v1["revision"] = json!(3);
+    v1["intent"] = Value::Null;
+    v1["active"] = json!(replica);
+    v1["profiles"] =
+        json!([{"product":"Treehouse.Space","replica":replica,"frames":[frame],"outbox":[id]}]);
+    v1.as_object_mut().unwrap().remove("relay");
+    drop(store);
+    let db =
+        ProductDatabase::open_path("treehouse", &dir.path().join("treehouse-v1.sqlite3")).unwrap();
+    db.kv_set(HISTORY_KEY, &v1.to_string()).unwrap();
+    drop(db);
+    let mut store = PreviewStore::at_directory(dir.path(), keys).unwrap();
+    assert_eq!(
+        store.open().unwrap().record,
+        Some(v1.to_string()),
+        "opening returns the stored v1 bytes and never writes"
+    );
+    // A v1 next record is refused even with the right revision.
+    let mut again = v1.clone();
+    again["revision"] = json!(4);
+    assert!(store.commit(3, &again.to_string()).is_err());
+    assert_eq!(store.open().unwrap().record, Some(v1.to_string()));
+    // The v2 migration keeps every frame and the outbox, and bumps the revision once.
+    let mut v2 = again.clone();
+    v2["version"] = json!(2);
+    v2["relay"] = Value::Null;
+    v2["profiles"][0]["acked"] = json!([]);
+    assert!(store.commit(3, &v2.to_string()).unwrap());
+    assert_eq!(store.open().unwrap().record, Some(v2.to_string()));
 }

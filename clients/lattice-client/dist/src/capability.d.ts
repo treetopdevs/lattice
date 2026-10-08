@@ -13,3 +13,9 @@ export type CapabilityQuarantineDecision = {
  * evidence stay on their characterized path; shipping carrier ops fail closed.
  */
 export declare function capabilityQuarantine(op: Op, schema: ReplicaSchema, byId: Map<string, Op>, security: AuthoritySecurityProjection, ancCache?: Map<string, Set<string>>): CapabilityQuarantineDecision;
+/**
+ * Why an op authored now, at the log's frontier, could not cite `delegationId`: such an op is causally
+ * before nothing, so every effective revoke on the chain applies, and so does every valid beacon past a
+ * chain link's lease. This is `revokedAsOf`/`expiredAsOf` evaluated at the frontier.
+ */
+export declare function delegationFrontierRefusal(delegationId: string, security: AuthoritySecurityProjection): "revoked_capability" | "lease_expired" | null;

@@ -1,9 +1,23 @@
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, ref, shallowRef } from "vue";
+import {
+  computed,
+  defineAsyncComponent,
+  onMounted,
+  onBeforeUnmount,
+  ref,
+  shallowRef,
+} from "vue";
 import { TreehouseWorkflow } from "./treehouse_workflow";
 import { native } from "./native_adapter";
 import WitnessSetup from "./WitnessSetup.vue";
 const workflow = new TreehouseWorkflow(native);
+// Plan 181 decision 11: the enrollment panel and its relay copy exist only in the build made with
+// VITE_TREEHOUSE_ENROLLMENT=1. Vite replaces the flag at build time, so the ordinary and Android builds
+// neither emit the panel chunk nor name it.
+const enrollment = import.meta.env.VITE_TREEHOUSE_ENROLLMENT === "1";
+const EnrollmentPanel = enrollment
+  ? defineAsyncComponent(() => import("./EnrollmentPanel.vue"))
+  : null;
 const state = shallowRef(workflow.state);
 const ready = ref(false),
   busy = ref(false),
@@ -47,6 +61,40 @@ const writable = computed(
   () =>
     ready.value && workflow.keyAvailable && !state.value.intent && !busy.value,
 );
+// The founder is the author of the Space's committed genesis (the one its #root: commitment names).
+const founderKey = computed(() => (space.value ? workflow.founderKey() : null));
+const authorLabel = (author: string) =>
+  author === state.value.publicKey
+    ? "You"
+    : author === founderKey.value
+      ? "Founder"
+      : "Member";
+// Posting needs a capability this key holds: the founder's root grant or a member's Thread grant.
+const canPost = computed(
+  () =>
+    writable.value &&
+    active.value !== undefined &&
+    workflow.canAuthor(active.value.replica, "post"),
+);
+// A join identity exists but its Space has not synced yet: creating a group would fail with
+// join_in_progress, so the welcome form is not offered.
+const joining = computed(
+  () => state.value.intent === null && state.value.publicKey !== null && space.value === undefined,
+);
+// Only the Space's root holder can add a Thread, so a joined member never sees an action that always fails.
+const canCreateThread = computed(
+  () => writable.value && space.value !== undefined && workflow.canCreateThread(),
+);
+// Each Thread action is gated on its own operation: a grant may carry one without another, and a revoked
+// or lapsed grant carries none.
+const canDo = (command: "archive_thread" | "moderator_tombstone" | "author_edit" | "author_tombstone") =>
+  writable.value &&
+  active.value !== undefined &&
+  workflow.canAuthor(active.value.replica, command);
+const canArchive = computed(() => canDo("archive_thread"));
+const canHideAsModerator = computed(() => canDo("moderator_tombstone"));
+const canEditOwn = computed(() => canDo("author_edit"));
+const canHideOwn = computed(() => canDo("author_tombstone"));
 const title = (replica: string) =>
   String(workflow.views.get(replica)?.state.title ?? "Untitled thread");
 function describe(error: unknown): string {
@@ -84,6 +132,15 @@ function describe(error: unknown): string {
 function refresh() {
   state.value = workflow.state;
 }
+// A background feed sync can merge a joiner's first Thread, which becomes the active one.
+function refreshFromSync() {
+  const before = active.value?.replica;
+  refresh();
+  if (active.value?.replica !== before)
+    void loadDraft().catch((cause) => {
+      error.value = describe(cause);
+    });
+}
 async function loadDraft() {
   if (!active.value) {
     draftText.value = "";
@@ -98,7 +155,10 @@ async function loadDraft() {
   draftSaved.value = true;
   draftFailed.value = false;
 }
-async function run(action: () => Promise<void>) {
+async function run(
+  action: () => Promise<void>,
+  explain: (cause: unknown) => string = describe,
+) {
   if (busy.value) return;
   busy.value = true;
   error.value = "";
@@ -107,7 +167,7 @@ async function run(action: () => Promise<void>) {
     refresh();
   } catch (cause) {
     refresh();
-    error.value = describe(cause);
+    error.value = explain(cause);
   } finally {
     busy.value = false;
   }
@@ -237,7 +297,9 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
   <div class="app-shell">
     <header class="masthead">
       <a class="wordmark" href="#"
-        >Treehouse<span class="preview">Local preview</span></a
+        >Treehouse<span class="preview">{{
+          enrollment ? "Relay preview" : "Local preview"
+        }}</span></a
       ><span class="recovery">Recovery is not set up</span>
     </header>
     <div v-if="error" role="alert" class="notice error">{{ error }}</div>
@@ -252,7 +314,7 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
         Start with an empty space for notes and conversations. This preview
         stays on this device.
       </p>
-      <form v-if="!state.intent" @submit.prevent="createGroup">
+      <form v-if="!state.intent && !joining" @submit.prevent="createGroup">
         <label for="group-name">Group name</label
         ><input
           id="group-name"
@@ -265,12 +327,19 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
           {{ busy ? "Creating…" : "Create local group" }}
         </button>
       </form>
+      <section v-else-if="joining" class="notice" aria-label="Joining a group">
+        <h2>Waiting for your group</h2>
+        <p>
+          Your identity is ready. The group appears here once Sync brings it
+          from the relay after you are admitted.
+        </p>
+      </section>
       <section v-else class="notice">
         <h2>Group setup is incomplete</h2>
         <p>Your saved setup can be retried with the same identity.</p>
         <button :disabled="busy" @click="resume">Finish local setup</button>
       </section>
-      <p class="fine">
+      <p v-if="!enrollment" class="fine">
         There are no members or connections yet. Inviting others and recovery
         come later.
       </p>
@@ -316,12 +385,12 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
             v-model="threadTitle"
             aria-label="Thread title"
             placeholder="What’s on your mind?"
-            :disabled="!writable"
+            :disabled="!canCreateThread"
             maxlength="4000"
           /><button
             class="secondary"
             type="submit"
-            :disabled="!writable || !threadTitle.trim() || threads.length >= 12"
+            :disabled="!canCreateThread || !threadTitle.trim() || threads.length >= 12"
           >
             Create thread
           </button>
@@ -347,7 +416,11 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
         </div>
         <section v-if="audit" class="audit">
           <h2>Local history</h2>
-          <p>
+          <p v-if="enrollment">
+            These are public operation identifiers. The Sync status panel counts
+            the operations the relay has acknowledged.
+          </p>
+          <p v-else>
             These are public operation identifiers. No operation has a remote
             delivery acknowledgement.
           </p>
@@ -386,7 +459,7 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
             <button
               v-if="!view.state.archived"
               class="quiet"
-              :disabled="!writable"
+              :disabled="!canArchive"
               @click="archive"
             >
               Archive thread</button
@@ -406,10 +479,10 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
               class="post"
             >
               <div class="post-author">
-                <span class="avatar" aria-hidden="true">Y</span
-                ><strong>{{
-                  item.author === state.publicKey ? "You" : "Member"
-                }}</strong
+                <span class="avatar" aria-hidden="true">{{
+                  authorLabel(item.author).charAt(0)
+                }}</span
+                ><strong>{{ authorLabel(item.author) }}</strong
                 ><span>Saved on this device</span>
               </div>
               <form
@@ -446,7 +519,7 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
                     "
                     class="text-button"
                     :aria-label="`Edit post ${index + 1}`"
-                    :disabled="!writable"
+                    :disabled="!canEditOwn"
                     @click="
                       editing = item.id;
                       editText = String(item.text);
@@ -459,14 +532,14 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
                     "
                     class="text-button"
                     :aria-label="`Hide post ${index + 1}`"
-                    :disabled="!writable"
+                    :disabled="!canHideOwn"
                     @click="hide(item.id)"
                   >
                     Hide</button
                   ><button
                     class="text-button"
                     :aria-label="`Hide post ${index + 1} as moderator`"
-                    :disabled="!writable"
+                    :disabled="!canHideAsModerator"
                     @click="hide(item.id, true)"
                   >
                     Hide as moderator
@@ -506,7 +579,7 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
               ><button
                 v-if="!view.state.archived"
                 type="submit"
-                :disabled="!writable || !draftText.trim()"
+                :disabled="!canPost || !draftText.trim()"
               >
                 Post
               </button>
@@ -523,6 +596,16 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
         </section>
       </main>
     </div>
+    <component
+      :is="EnrollmentPanel"
+      v-if="EnrollmentPanel && ready"
+      :workflow="workflow"
+      :state="state"
+      :busy="busy"
+      :run="run"
+      :describe="describe"
+      :refresh="refreshFromSync"
+    />
     <WitnessSetup />
   </div>
 </template>

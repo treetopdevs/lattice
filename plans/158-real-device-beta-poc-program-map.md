@@ -125,6 +125,16 @@ Future packet numbers refer to this adopted sequence, not completion. New author
 social-continuity semantics, native guarantees, real custody records and external evidence remain
 their named decision or verification gates. No deployment or secret mutation occurred in R01a.
 
+R13-lite scoped note (2026-10-07, `plans/181-r13-lite-treehouse-enrollment-sync.md`): item 3's
+sentence that R13 cannot enable multi-app enrollment until R11 completes is unchanged and still
+governs R13. The operator directed in chat on 2026-10-07, as recorded in Plan 181: "R13-lite first
+(recommended). Build enrollment and sync for the Treehouse shell against one hand-configured relay
+route, the way the Township shell already does it, and defer catalog replacement to R11c."
+R13-lite is therefore a recorded scope amendment that waives the whole R11 (a, b and c) edge for
+one hand-configured, unreplaceable route set only. It claims no catalog, relay replacement,
+staging, sealing, admitted-service binding or deployment, and R13 stays PLANNED. R14, R15, R16,
+R21a and R27 keep requiring full R13 or R11c.
+
 ### Native execution amendment 2026-09-06 (unified Treehouse R01b)
 
 The operator's instruction to complete the unified proposal authorizes its Android/native

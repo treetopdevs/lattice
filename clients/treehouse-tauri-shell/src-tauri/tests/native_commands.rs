@@ -1,10 +1,11 @@
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use lattice_mobile_core::{CarrierKeySeedStore, InMemoryCarrierKeySeedStore, ProductDatabase};
 use serde_json::{json, Value};
 use std::sync::Arc;
 use treehouse_tauri_shell::preview::PreviewStore;
 fn intent() -> Value {
-    json!({"version":1,"product":"treehouse","revision":1,"publicKey":null,"profiles":[],"active":null,
- "intent":{"kind":"space","name":"Canopy","nonce":"a".repeat(43)},"clearedDrafts":{}})
+    json!({"version":2,"product":"treehouse","revision":1,"publicKey":null,"profiles":[],"active":null,
+ "intent":{"kind":"space","name":"Canopy","nonce":"a".repeat(43)},"clearedDrafts":{},"relay":null})
 }
 fn commit(store: &mut PreviewStore, old: u64, value: &Value) -> bool {
     store.commit(old, &value.to_string()).unwrap()
@@ -25,7 +26,7 @@ fn with_space(mut r: Value) -> Value {
         "b".repeat(43)
     );
     let id = "c".repeat(43);
-    r["profiles"] = json!([{"product":"Treehouse.Space","replica":replica,"frames":[{"v":1,"id":id,"replica":replica,"author":r["publicKey"],"deps":[],"kind":"authority","body":["nil"],"cap":["nil"],"sig":"native-retention-layer-sentinel"}],"outbox":[id]}]);
+    r["profiles"] = json!([{"product":"Treehouse.Space","replica":replica,"frames":[{"v":1,"id":id,"replica":replica,"author":r["publicKey"],"deps":[],"kind":"authority","body":["nil"],"cap":["nil"],"sig":"native-retention-layer-sentinel"}],"outbox":[id],"acked":[]}]);
     r["active"] = json!(replica);
     r["intent"] = Value::Null;
     r["revision"] = json!(3);
@@ -281,4 +282,297 @@ fn corrupt_legacy_draft_refuses_without_creating_a_replacement() {
         Some("invalid retained draft")
     );
     assert_eq!(db.kv_get(DIGEST_DRAFT_KEY).unwrap(), None);
+}
+
+fn join_intent() -> Value {
+    json!({"version":2,"product":"treehouse","revision":1,"publicKey":null,"profiles":[],"active":null,
+ "intent":{"kind":"join","name":"join","nonce":"j".repeat(43)},"clearedDrafts":{},"relay":null})
+}
+fn cleared(key: &str) -> Value {
+    let mut r = join_intent();
+    r["publicKey"] = json!(key);
+    r["intent"] = Value::Null;
+    r["revision"] = json!(2);
+    r
+}
+#[test]
+fn join_intent_mints_exactly_one_key_and_is_cleared_by_the_key_commit() {
+    let dir = tempfile::tempdir().unwrap();
+    let keys = Arc::new(InMemoryCarrierKeySeedStore::default());
+    let mut store = PreviewStore::at_directory(dir.path(), keys.clone()).unwrap();
+    assert!(commit(&mut store, 0, &join_intent()));
+    let key = store.initialize().unwrap();
+    // A crash between key creation and the clearing commit reuses the same key.
+    assert_eq!(store.initialize().unwrap(), key);
+    // Clearing the intent without the key skips the identity and is refused.
+    let mut skip = join_intent();
+    skip["intent"] = Value::Null;
+    skip["revision"] = json!(2);
+    assert_eq!(
+        store.commit(1, &skip.to_string()).unwrap_err(),
+        "creation_incomplete"
+    );
+    // Persisting the key while keeping the intent is not the clearing commit either.
+    let mut keyed = join_intent();
+    keyed["publicKey"] = json!(key);
+    keyed["revision"] = json!(2);
+    assert_eq!(
+        store.commit(1, &keyed.to_string()).unwrap_err(),
+        "creation_incomplete"
+    );
+    assert!(commit(&mut store, 1, &cleared(&key)));
+    let opened = store.open().unwrap();
+    assert_eq!(opened.key_status, "available");
+    assert_eq!(opened.public_key.as_deref(), Some(key.as_str()));
+    // The intent is spent: no second key, from this handle or a reopened one.
+    assert_eq!(
+        store.initialize().unwrap_err(),
+        "identity_creation_not_allowed"
+    );
+    drop(store);
+    let mut reopened = PreviewStore::at_directory(dir.path(), keys.clone()).unwrap();
+    assert_eq!(
+        reopened.initialize().unwrap_err(),
+        "identity_creation_not_allowed"
+    );
+    // Reopening with the key lost mints nothing.
+    let lost = Arc::new(InMemoryCarrierKeySeedStore::default());
+    let mut lost_store = PreviewStore::at_directory(dir.path(), lost.clone()).unwrap();
+    assert_eq!(lost_store.open().unwrap().key_status, "missing");
+    assert_eq!(
+        lost_store.initialize().unwrap_err(),
+        "identity_creation_not_allowed"
+    );
+    assert!(lost.load_seed("device-carrier-v1").unwrap().is_none());
+}
+#[test]
+fn join_intent_never_coexists_with_profiles_or_a_prior_identity() {
+    let dir = tempfile::tempdir().unwrap();
+    let keys = Arc::new(InMemoryCarrierKeySeedStore::default());
+    let mut store = PreviewStore::at_directory(dir.path(), keys.clone()).unwrap();
+    let initial = initialized(&mut store);
+    let saved = with_space(initial);
+    assert!(commit(&mut store, 2, &saved));
+    // A join intent cannot be laid over an existing identity and Space.
+    let mut over = saved.clone();
+    over["intent"] = json!({"kind":"join","name":"join","nonce":"j".repeat(43)});
+    over["revision"] = json!(4);
+    assert_eq!(
+        store.commit(3, &over.to_string()).unwrap_err(),
+        "identity_creation_not_allowed"
+    );
+    // A fresh join record that already carries profiles is refused, and no key is minted.
+    let dir2 = tempfile::tempdir().unwrap();
+    let keys2 = Arc::new(InMemoryCarrierKeySeedStore::default());
+    let mut fresh = PreviewStore::at_directory(dir2.path(), keys2.clone()).unwrap();
+    let mut with_profiles = with_space(join_intent());
+    with_profiles["intent"] = json!({"kind":"join","name":"join","nonce":"j".repeat(43)});
+    with_profiles["revision"] = json!(1);
+    assert!(fresh.commit(0, &with_profiles.to_string()).is_err());
+    assert!(fresh.initialize().is_err());
+    assert!(keys2.load_seed("device-carrier-v1").unwrap().is_none());
+}
+#[test]
+fn joiner_keeps_a_foreign_root_space_profile_and_the_acked_set_only_grows() {
+    let dir = tempfile::tempdir().unwrap();
+    let keys = Arc::new(InMemoryCarrierKeySeedStore::default());
+    let mut store = PreviewStore::at_directory(dir.path(), keys).unwrap();
+    assert!(commit(&mut store, 0, &join_intent()));
+    let key = store.initialize().unwrap();
+    assert!(commit(&mut store, 1, &cleared(&key)));
+    let replica = format!(
+        "replica:treehouse:space:{}#root:{}",
+        "a".repeat(43),
+        "b".repeat(43)
+    );
+    let (g, p) = ("c".repeat(43), "d".repeat(43));
+    let frame = |id: &str, deps: Value| json!({"v":1,"id":id,"replica":replica,"author":"founder","deps":deps,"kind":"authority","body":["nil"],"cap":["nil"],"sig":"s"});
+    let mut joined = cleared(&key);
+    joined["revision"] = json!(3);
+    joined["active"] = json!(replica);
+    joined["profiles"] = json!([{"product":"Treehouse.Space","replica":replica,
+        "frames":[frame(&g, json!([])), frame(&p, json!([g]))],"outbox":[],"acked":[g]}]);
+    // A pulled foreign frame is acked, never pending; the Rust store checks format only.
+    assert!(commit(&mut store, 2, &joined));
+    // acked ids must be retained frame ids.
+    let mut stray = joined.clone();
+    stray["revision"] = json!(4);
+    stray["profiles"][0]["acked"] = json!([g, "z".repeat(43)]);
+    assert!(store.commit(3, &stray.to_string()).is_err());
+    // acked may grow.
+    let mut grown = joined.clone();
+    grown["revision"] = json!(4);
+    grown["profiles"][0]["acked"] = json!([g, p]);
+    assert!(commit(&mut store, 3, &grown));
+    // acked may not shrink, and duplicates are refused.
+    let mut shrunk = grown.clone();
+    shrunk["revision"] = json!(5);
+    shrunk["profiles"][0]["acked"] = json!([g]);
+    assert_eq!(
+        store.commit(4, &shrunk.to_string()).unwrap_err(),
+        "retained_history_changed"
+    );
+    let mut dup = grown.clone();
+    dup["revision"] = json!(5);
+    dup["profiles"][0]["acked"] = json!([g, g, p]);
+    assert!(store.commit(4, &dup.to_string()).is_err());
+}
+#[test]
+fn relay_space_route_must_match_the_held_space() {
+    let dir = tempfile::tempdir().unwrap();
+    let keys = Arc::new(InMemoryCarrierKeySeedStore::default());
+    let mut store = PreviewStore::at_directory(dir.path(), keys).unwrap();
+    let saved = with_space(initialized(&mut store));
+    assert!(commit(&mut store, 2, &saved));
+    let held = saved["profiles"][0]["replica"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let route = |replica: &str| json!({"replica":replica,"url":"wss://relay.example","expectedPeerRealm":"server","expectedPeerPubkey":BASE64.encode([1u8; 32])});
+    let mut next = saved.clone();
+    next["revision"] = json!(4);
+    next["relay"] =
+        json!({"localRealm":"local","routes":[route(&held.replacen("aaaa", "zzzz", 1))]});
+    assert_eq!(
+        store.commit(3, &next.to_string()).unwrap_err(),
+        "invalid_relay"
+    );
+    next["relay"] = json!({"localRealm":"local","routes":[route(&held)]});
+    assert!(commit(&mut store, 3, &next));
+}
+#[test]
+fn relay_routes_are_capped_closed_and_pinned() {
+    let dir = tempfile::tempdir().unwrap();
+    let keys = Arc::new(InMemoryCarrierKeySeedStore::default());
+    let mut store = PreviewStore::at_directory(dir.path(), keys).unwrap();
+    let initial = initialized(&mut store);
+    let pk = |n: u8| BASE64.encode([n; 32]);
+    // Route 1 is the Space; the rest are Threads.
+    let replica = |n: u8| {
+        let nonce: String = std::iter::repeat_n(char::from(b'a' + n), 43).collect();
+        let kind = if n == 1 { "space" } else { "thread" };
+        format!("replica:treehouse:{kind}:{nonce}#root:{}", "R".repeat(43))
+    };
+    let route = |n: u8| json!({"replica":replica(n),"url":"ws://127.0.0.1:8080","expectedPeerRealm":"server","expectedPeerPubkey":pk(n)});
+    let with = |n: u8, field: &str, value: &str| {
+        let mut r = route(n);
+        r[field] = json!(value);
+        r
+    };
+    let relay = |routes: Vec<Value>| json!({"localRealm":"local","routes":routes});
+    let mut next = initial.clone();
+    next["revision"] = json!(3);
+    next["relay"] = relay((1..=5).map(route).collect());
+    assert_eq!(
+        store.commit(2, &next.to_string()).unwrap_err(),
+        "invalid_relay"
+    );
+    // A closed record: unknown or malformed fields refuse before the relay rules run.
+    for bad in [
+        json!({"localRealm":"local","routes":[route(1)],"extra":1}),
+        relay(vec![
+            json!({"replica":"r","url":"ws://x","expectedPeerRealm":"s","expectedPeerPubkey":"short"}),
+        ]),
+    ] {
+        next["relay"] = bad;
+        assert!(store.commit(2, &next.to_string()).is_err());
+    }
+    // The shell's semantic route rules hold at the persistence boundary too.
+    for bad in [
+        relay(vec![route(1), route(1)]),
+        json!({"localRealm":"","routes":[]}),
+        json!({"localRealm":"local","routes":[]}),
+        json!({"localRealm":" local","routes":[route(1)]}),
+        relay(vec![with(1, "replica", "r1")]),
+        relay(vec![with(
+            1,
+            "replica",
+            "replica:treehouse:space:short#root:short",
+        )]),
+        relay(vec![with(1, "url", "http://127.0.0.1:8080")]),
+        relay(vec![with(1, "url", "ws://example.com:8080")]),
+        relay(vec![with(1, "url", "wss://user@example.com")]),
+        relay(vec![with(1, "url", "wss://example.com/#frag")]),
+        relay(vec![with(1, "url", "ws://127.0.0.1:99999")]),
+        relay(vec![with(1, "url", "ws://127.0.0.1:8a")]),
+        relay(vec![with(1, "url", " wss://example.com")]),
+        relay(vec![with(1, "url", "wss://[not-an-ip]")]),
+        relay(vec![with(1, "url", "wss://[fe80::1%25en0]")]),
+        relay(vec![with(1, "url", "wss://1.2.3.999")]),
+        relay(vec![with(1, "url", "wss://ex\u{e4}mple.com")]),
+        relay(vec![with(1, "url", "ws://[::2]:9")]),
+        relay(vec![with(1, "url", "ws://[0:0:0:0:0:0:0:1]:9")]),
+        relay(vec![with(1, "url", "ws://127.1")]),
+        relay(vec![with(1, "url", "wss://[::ffff:1.2.3.4]")]),
+        relay(vec![with(1, "url", "wss://010.0.0.1")]),
+        relay(vec![with(1, "url", "wss://ex%61mple.com")]),
+        relay(vec![with(1, "url", "wss://a.0x1f")]),
+        relay(vec![with(1, "url", "wss://x:000443")]),
+        relay(vec![with(1, "url", "wss://x:0443")]),
+        relay(vec![with(1, "url", "wss://x:0")]),
+        relay(vec![with(1, "url", "wss://foo!bar")]),
+        relay(vec![with(1, "url", "wss://foo$bar")]),
+        relay(vec![with(1, "url", "wss://example.com/\u{e9}")]),
+        // Exactly one Space route: none, or two, is refused.
+        relay((2..=5).map(route).collect()),
+        relay(vec![
+            route(1),
+            with(2, "replica", &replica(1).replacen("bbbb", "zzzz", 1)),
+        ]),
+        relay(vec![with(1, "url", "wss://example.com/\u{1}")]),
+        relay(vec![with(1, "expectedPeerRealm", "server ")]),
+    ] {
+        next["relay"] = bad;
+        assert_eq!(
+            store.commit(2, &next.to_string()).unwrap_err(),
+            "invalid_relay"
+        );
+    }
+    for good in [
+        "wss://relay.example.com:443/carrier",
+        "ws://localhost:1",
+        "ws://LocalHost:1",
+        "ws://[::1]:9",
+        "wss://[::A]",
+        "wss://service.0xcorp",
+        "wss://x:443",
+        "wss://[2001:db8::1]:443",
+        "wss://10.0.0.1",
+        "wss://x:",
+        "ws://[::1]:",
+        "WSS://x",
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut fresh = PreviewStore::at_directory(
+            dir.path(),
+            Arc::new(InMemoryCarrierKeySeedStore::default()),
+        )
+        .unwrap();
+        let mut probe = initialized(&mut fresh);
+        probe["revision"] = json!(3);
+        probe["relay"] = relay(vec![with(1, "url", good)]);
+        assert!(commit(&mut fresh, 2, &probe), "{good} is a valid route url");
+    }
+    next["relay"] = relay(vec![route(1), route(2)]);
+    assert!(commit(&mut store, 2, &next));
+
+    // Saved routes and the local realm are pinned; only additions are accepted.
+    let replaced_url = with(1, "url", "ws://127.0.0.1:9090");
+    let replaced_key = with(1, "expectedPeerPubkey", &pk(9));
+    next["revision"] = json!(4);
+    for bad in [
+        relay(vec![replaced_url, route(2)]),
+        relay(vec![replaced_key, route(2)]),
+        relay(vec![route(1)]),
+        json!({"localRealm":"other","routes":[route(1), route(2)]}),
+        Value::Null,
+    ] {
+        next["relay"] = bad;
+        assert_eq!(
+            store.commit(3, &next.to_string()).unwrap_err(),
+            "relay_already_configured"
+        );
+    }
+    next["relay"] = relay((1..=4).map(route).collect());
+    assert!(commit(&mut store, 3, &next));
 }

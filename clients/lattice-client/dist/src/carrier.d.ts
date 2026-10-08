@@ -37,6 +37,8 @@ export interface ConnectCarrierWebSocketOptions {
     wireVersion?: number;
     sessionVersion?: number;
     webSocket?: WebSocketConstructor;
+    /** Aborting closes the socket and rejects a handshake still waiting on the server. */
+    signal?: AbortSignal;
 }
 export interface CarrierPushReport {
     accepted: string[];
@@ -67,6 +69,8 @@ export interface SyncCarrierOptions {
     verifier: Verifier;
     submission?: CarrierSubmission;
     expectedReplica: string;
+    /** Product command decoders; omitted keeps the default Township-first table byte for byte. */
+    commandDecoders?: CommandDecoderMap;
 }
 export interface CarrierStateReport {
     state_b64: string;

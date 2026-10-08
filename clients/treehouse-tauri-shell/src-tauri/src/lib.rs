@@ -2,6 +2,8 @@
 #[cfg(target_os = "android")]
 mod android_keyring;
 mod catalog_store;
+#[cfg(feature = "treehouse-dev-trace")]
+mod dev_trace;
 mod key_store;
 pub mod preview;
 mod witness_android;
@@ -86,6 +88,10 @@ pub fn run() {
             #[cfg(not(target_os = "android"))]
             let bootstrap: Result<(), String> = Ok(());
             let store = bootstrap.and_then(|()| {
+                #[cfg(feature = "treehouse-dev-trace")]
+                if let Some(dev) = dev_trace::store() {
+                    return dev;
+                }
                 app.path()
                     .app_data_dir()
                     .map_err(|_| "local_store_unavailable".to_string())

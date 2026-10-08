@@ -1,0 +1,298 @@
+import {
+  carrierOpsToSemanticOps,
+  syncCarrierOnce,
+  treehouseCommandDecoders,
+} from "@treetopdevs/lattice-client";
+import type {
+  CarrierOpFrame,
+  CarrierRelayClient,
+  CarrierSyncClient,
+  Verifier,
+} from "@treetopdevs/lattice-client";
+import { MAX_ROUTES } from "./treehouse_state";
+import type { LocalProfile, RelayRoute } from "./treehouse_state";
+import { productOf } from "./treehouse_routes";
+import { strictVerifier } from "./treehouse_workflow";
+import type { TreehouseWorkflow } from "./treehouse_workflow";
+
+// Plan 181 slice 3b1. Sync is the only network action of the Treehouse shell and the only caller of the
+// relay. It pulls and verifies, merges only dependency-closed sets, and submits locally authored frames
+// one signed op at a time. The relay stays a plaintext-readable, availability-withholding transport: its
+// reply decides durability of what this device sent, never semantic authority.
+
+export type TreehouseRelayConnection = CarrierSyncClient &
+  CarrierRelayClient & { close(): void };
+
+export interface SyncTreehouseOptions {
+  /** One authenticated connection per replica route (the hello challenge binds a replica). */
+  connect(route: RelayRoute, localRealm: string, signal?: AbortSignal): Promise<TreehouseRelayConnection>;
+  /** Operation signature check. Defaults to strict Ed25519, as `verifyProfile` uses. */
+  verifier?: Verifier;
+  /** Backoff between rate-limited rounds. Defaults to a real timer; tests inject a fake clock. */
+  sleep?: (ms: number) => Promise<void>;
+  /** Pull rounds allowed while a merged set still has open dependencies. */
+  maxPullRounds?: number;
+  /** Deadline for the dial and for each relay request. A silent relay fails the route instead of hanging. */
+  requestTimeoutMs?: number;
+}
+
+export interface RouteSyncResult {
+  replica: string;
+  /** Frames newly retained from the relay by this sync. */
+  pulledFrames: number;
+  /** Locally authored frames the relay persisted (accepted or structurally quarantined). */
+  ackedSubmissions: number;
+  accepted: string[];
+  quarantined: [string, string][];
+  rejected: [string, string][];
+  /** Relay `pending` bucket: it lacks a dependency and did not persist the op. */
+  relayPending: string[];
+  /** Authored ids not yet durable on the relay: outbox minus acked, after this sync. */
+  pendingIds: string[];
+  /** The relay kept rate-limiting and the retry bound ran out; pending is left for the next sync. */
+  rateLimited: boolean;
+  /** Local ids equal the relay's advertised ids after the sync. Never labelled peer convergence. */
+  matchesRelay: boolean;
+  relayIdCount: number;
+}
+
+export type RouteOutcome =
+  | ({ ok: true } & RouteSyncResult)
+  | { ok: false; replica: string; error: string };
+
+export interface TreehouseSyncResult {
+  routes: RouteOutcome[];
+}
+
+const DEFAULT_PULL_ROUNDS = 16;
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+
+/** Race `work` against a deadline; on expiry run `expire` (which closes the connection) and reject. */
+function deadline<T>(work: Promise<T>, ms: number, expire: () => void): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      expire();
+      reject(new Error("relay_request_timeout"));
+    }, ms);
+  });
+  return Promise.race([work, expired]).finally(() => clearTimeout(timer));
+}
+
+/** The connection with every request bounded by the deadline; `close` passes straight through. */
+function bounded(connection: TreehouseRelayConnection, ms: number): TreehouseRelayConnection {
+  return new Proxy(connection, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver);
+      if (typeof value !== "function" || property === "close") return value;
+      return (...args: unknown[]) => {
+        const out = value.apply(target, args);
+        return out instanceof Promise ? deadline(out, ms, () => target.close()) : out;
+      };
+    },
+  });
+}
+/** One relay token refills in about 83 ms, so a sleeping retry always earns progress when the relay is healthy. */
+const STALL_SLEEP_MS = 250;
+const MAX_STALLS = 40;
+
+const defaultSleep = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+const frameId = (frame: unknown) => (frame as { id: string }).id;
+const sameSet = (a: Set<string>, b: Set<string>) =>
+  a.size === b.size && [...a].every((id) => b.has(id));
+
+/**
+ * Sync every configured route, the Space first so a joiner holds the Space before the Threads it
+ * references. A failing route is reported and does not stop the others. More than four routes, or no
+ * routes, refuses before any connection is made.
+ */
+export async function syncTreehouse(
+  workflow: TreehouseWorkflow,
+  options: SyncTreehouseOptions,
+): Promise<TreehouseSyncResult> {
+  const relay = workflow.state.relay;
+  if (relay === null) throw new Error("routes_not_configured");
+  if (relay.routes.length > MAX_ROUTES) throw new Error("too_many_routes");
+  const ordered = [
+    ...relay.routes.filter((r) => productOf(r.replica) === "Treehouse.Space"),
+    ...relay.routes.filter((r) => productOf(r.replica) === "Treehouse.Thread"),
+  ];
+  const routes: RouteOutcome[] = [];
+  for (const route of ordered) {
+    try {
+      routes.push({ ok: true, ...(await syncTreehouseRoute(workflow, route, options)) });
+    } catch (error) {
+      routes.push({
+        ok: false,
+        replica: route.replica,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  return { routes };
+}
+
+/**
+ * One verified sync of one replica route. Pulled frames are retained only as a dependency-closed set
+ * through `mergeSync` (one CAS commit with their acks). Locally authored frames are submitted one at a
+ * time; an id enters `acked` only after the relay's persisted report (accepted or quarantined) or a fresh
+ * advertise that lists it. The rejected and pending buckets never ack.
+ */
+export async function syncTreehouseRoute(
+  workflow: TreehouseWorkflow,
+  route: RelayRoute,
+  options: SyncTreehouseOptions,
+): Promise<RouteSyncResult> {
+  const relay = workflow.state.relay;
+  if (relay === null) throw new Error("routes_not_configured");
+  if (relay.routes.length > MAX_ROUTES) throw new Error("too_many_routes");
+  // Only a configured route may be dialled; the caller's copy is never trusted over the saved one.
+  const configured = relay.routes.find((r) => r.replica === route.replica);
+  if (!configured) throw new Error("unknown_route_replica");
+  const replica = configured.replica;
+  const decoders = treehouseCommandDecoders(productOf(replica));
+  const verifier = options.verifier ?? strictVerifier;
+  const sleep = options.sleep ?? defaultSleep;
+  const maxPullRounds = options.maxPullRounds ?? DEFAULT_PULL_ROUNDS;
+  const profileNow = (): LocalProfile | undefined =>
+    workflow.state.profiles.find((p) => p.replica === replica);
+
+  const timeout = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+  const dialing = options.connect(configured, relay.localRealm);
+  let timedOut = false;
+  const connection = await deadline(dialing, timeout, () => {
+    timedOut = true;
+    dialing.then((late) => late.close(), () => undefined);
+  });
+  if (timedOut) connection.close();
+  const client = bounded(connection, timeout);
+  const result: RouteSyncResult = {
+    replica,
+    pulledFrames: 0,
+    ackedSubmissions: 0,
+    accepted: [],
+    quarantined: [],
+    rejected: [],
+    relayPending: [],
+    pendingIds: [],
+    rateLimited: false,
+    matchesRelay: false,
+    relayIdCount: 0,
+  };
+  try {
+    // What to submit comes from the relay's own ids, not from the local `acked` set: an ack that is stale
+    // (a relay restored from an older backup) or was written without relay evidence never suppresses
+    // delivery of a frame the relay does not hold.
+    const relayHeld = new Set(await client.advertise());
+    const deliveredNow = new Set<string>();
+    // Verified pulled frames not yet committed, in the relay's causal order.
+    const accumulated = new Map<string, CarrierOpFrame>();
+    let pullRounds = 0;
+    let stalls = 0;
+    for (;;) {
+      const profile = profileNow();
+      const held = profile?.frames ?? [];
+      const heldIds = new Set(held.map(frameId));
+      const outbox = new Set(profile?.outbox ?? []);
+      // Authored frames the relay did not list at the start of this sync and that no report of this sync
+      // has acknowledged yet. Foreign frames are never in the outbox, so never submitted.
+      const candidates = held.filter(
+        (f) => outbox.has(f.id) && !relayHeld.has(f.id) && !deliveredNow.has(f.id),
+      );
+      const localOps = carrierOpsToSemanticOps(
+        [...held, ...accumulated.values()],
+        {},
+        decoders,
+      );
+      const synced = await syncCarrierOnce(client, localOps, candidates, {}, {
+        verifier,
+        submission: "relay",
+        expectedReplica: replica,
+        commandDecoders: decoders,
+      });
+      const report = synced.pushReport;
+      result.accepted.push(...report.accepted);
+      result.quarantined.push(...report.quarantined);
+      result.rejected.push(...report.rejected);
+      result.relayPending.push(...report.pending);
+
+      // Acknowledgements: only frames this call submitted can ack through the report, only authored
+      // frames are ever acked here, and the relay's own persist-before-reply is what makes them durable.
+      const candidateIds = new Set(candidates.map(frameId));
+      const submitted = new Set(synced.pushedFrames.map(frameId));
+      const ackNow = new Set<string>();
+      for (const id of [
+        ...report.accepted,
+        ...report.quarantined.map(([quarantinedId]) => quarantinedId),
+      ])
+        if (submitted.has(id) && candidateIds.has(id)) ackNow.add(id);
+      for (const id of synced.peerReportedFrameIds)
+        if (candidateIds.has(id)) ackNow.add(id);
+
+      let gotNew = 0;
+      for (const frame of synced.pulledFrames as CarrierOpFrame[]) {
+        if (heldIds.has(frame.id) || accumulated.has(frame.id)) continue;
+        accumulated.set(frame.id, frame);
+        gotNew++;
+      }
+      const known = new Set([...heldIds, ...accumulated.keys()]);
+      const open = [...accumulated.values()].some((f) =>
+        f.deps.some((dep) => !known.has(dep)),
+      );
+      // Frames and acks commit together once the pulled set is dependency-closed; acks alone commit
+      // earlier so submitted progress is never redone after a crash.
+      const frames = open ? [] : [...accumulated.values()];
+      for (const id of ackNow) deliveredNow.add(id);
+      if (frames.length > 0 || ackNow.size > 0) {
+        await workflow.mergeSync(replica, frames, [...ackNow]);
+        result.pulledFrames += frames.filter((f) => !heldIds.has(f.id)).length;
+        result.ackedSubmissions += ackNow.size;
+        if (!open) accumulated.clear();
+      }
+      if (open) {
+        pullRounds++;
+        if (gotNew === 0 || pullRounds >= maxPullRounds)
+          throw new Error("pull_incomplete");
+        continue;
+      }
+      const remaining = candidates.filter((f) => !ackNow.has(f.id));
+      if (remaining.length === 0) break;
+      // pushedFrames is shorter than the candidates only when the relay rate-limited the burst.
+      if (submitted.size < candidates.length) {
+        if (ackNow.size > 0 || gotNew > 0) {
+          stalls = 0;
+          continue;
+        }
+        if (++stalls >= MAX_STALLS) {
+          result.rateLimited = true;
+          break;
+        }
+        await sleep(STALL_SLEEP_MS);
+        continue;
+      }
+      // Everything was submitted and the rest is rejected or pending: nothing more to do this sync.
+      break;
+    }
+
+    // A fresh advertise settles duplicates (an empty reply for an op the relay already holds) and gives
+    // the matches-relay flag. Only authored, retained, unacked ids can be acked from it.
+    const frontier = new Set(await client.advertise());
+    const profile = profileNow();
+    const late = (profile?.outbox ?? []).filter(
+      (id) => !profile!.acked.includes(id) && frontier.has(id),
+    );
+    if (late.length > 0) {
+      await workflow.mergeSync(replica, [], late);
+      result.ackedSubmissions += late.length;
+    }
+    const final = profileNow();
+    result.pendingIds = (final?.outbox ?? []).filter((id) => !final!.acked.includes(id));
+    result.relayIdCount = frontier.size;
+    result.matchesRelay = sameSet(new Set((final?.frames ?? []).map(frameId)), frontier);
+    return result;
+  } finally {
+    connection.close();
+  }
+}

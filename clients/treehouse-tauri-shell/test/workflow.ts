@@ -1,5 +1,15 @@
 import assert from "node:assert/strict";
 import { ed25519 } from "@noble/curves/ed25519.js";
+import {
+  authorTreehouseCommand,
+  carrierDelegationsFromFrames,
+  decodeTreehouseAcceptance,
+  decodeTreehouseJoinRequest,
+  decodeTreehouseOffer,
+  encodeTreehouseAcceptance,
+  encodeTreehouseOffer,
+} from "@treetopdevs/lattice-client";
+import type { CarrierOpFrame } from "@treetopdevs/lattice-client";
 import { TreehouseWorkflow } from "../src/treehouse_workflow";
 import { parseState } from "../src/treehouse_state";
 import type { PreviewNative, Draft } from "../src/treehouse_state";
@@ -275,11 +285,16 @@ migrationNative.seed = native.seed;
 const oldEnvelope = JSON.parse(native.record!);
 oldEnvelope.version = 0;
 delete oldEnvelope.clearedDrafts;
+delete oldEnvelope.relay;
+for (const p of oldEnvelope.profiles) delete p.acked;
 migrationNative.record = JSON.stringify(oldEnvelope);
 const migrated = new TreehouseWorkflow(migrationNative);
 await migrated.open();
-assert.equal(JSON.parse(migrationNative.record!).version, 1);
-assert.deepEqual(migrated.state.profiles, oldEnvelope.profiles);
+assert.equal(JSON.parse(migrationNative.record!).version, 2);
+assert.deepEqual(
+  migrated.state.profiles,
+  oldEnvelope.profiles.map((p: object) => ({ ...p, acked: [] })),
+);
 assert.equal(migrated.state.revision, oldEnvelope.revision + 1);
 const migrationAgain = new TreehouseWorkflow(migrationNative);
 await migrationAgain.open();
@@ -288,9 +303,6 @@ console.log(
   "PASS authenticated N-1 metadata migration retains exact signed frames and current reopen",
 );
 
-const { authorTreehouseCommand, carrierDelegationsFromFrames } = await import(
-  "@treetopdevs/lattice-client"
-);
 const quarantineNative = new MemoryNative();
 quarantineNative.seed = native.seed;
 quarantineNative.record = native.record;
@@ -347,3 +359,388 @@ await assert.rejects(
   /incomplete_profile_initialization/,
   "a retained genesis alone cannot be presented as a named group",
 );
+
+// ---- Plan 181 slice 2b: enrollment workflow --------------------------------------------------------------
+const SERVER_KEY = Buffer.alloc(32, 7).toString("base64");
+const UNKNOWN_REPLICA = `replica:treehouse:thread:${"A".repeat(43)}#root:${"B".repeat(43)}`;
+const TRUNCATED_HANDOFF = `township-pairing:v1:${Buffer.from(
+  JSON.stringify({ url: "ws://127.0.0.1:1", replica: "township" }),
+).toString("base64url")}`;
+const fresh = async (n: MemoryNative) => {
+  const w = new TreehouseWorkflow(n);
+  await w.open();
+  return w;
+};
+const clone = (n: MemoryNative) => {
+  const c = new MemoryNative();
+  c.record = n.record;
+  c.seed = n.seed;
+  return c;
+};
+const spaceOf = (a: TreehouseWorkflow) =>
+  a.state.profiles.find((p) => p.product === "Treehouse.Space")!;
+const threadsOf = (a: TreehouseWorkflow) =>
+  a.state.profiles.filter((p) => p.product === "Treehouse.Thread");
+const routeEntry = (replica: string, port: number, over: object = {}) => ({
+  replica,
+  url: `ws://127.0.0.1:${port}`,
+  expectedPeerRealm: "relay",
+  expectedPeerPubkey: SERVER_KEY,
+  ...over,
+});
+const routeList = (a: TreehouseWorkflow, realm: string, only?: number) =>
+  JSON.stringify({
+    localRealm: realm,
+    routes: a.state.profiles
+      .map((p, i) => routeEntry(p.replica, 47000 + i))
+      .slice(0, only),
+  });
+/** Stands in for a verified relay pull: merge the source's frames into the target record. */
+function copyHistory(target: MemoryNative, source: MemoryNative) {
+  const from = parseState(source.record);
+  const into = parseState(target.record);
+  const merged = from.profiles.map((p) => {
+    const have = into.profiles.find((q) => q.replica === p.replica);
+    const ids = new Set(have?.frames.map((f) => f.id));
+    const added = p.frames.filter((f) => !ids.has(f.id)).map((f) => structuredClone(f));
+    return {
+      product: p.product,
+      replica: p.replica,
+      frames: [...(have?.frames ?? []), ...added],
+      outbox: have?.outbox ?? [],
+      acked: [...(have?.acked ?? []), ...added.map((f) => f.id)],
+    };
+  });
+  for (const own of into.profiles)
+    if (!merged.some((m) => m.replica === own.replica)) merged.push(own);
+  into.profiles = merged;
+  into.active ??= merged.at(-1)!.replica;
+  into.revision += 1;
+  target.record = JSON.stringify(into);
+}
+const unchanged = async (n: MemoryNative, run: () => Promise<unknown>, pattern: RegExp) => {
+  const before = n.record;
+  await assert.rejects(run(), pattern);
+  assert.equal(n.record, before, `refusal ${pattern} leaves the saved record untouched`);
+};
+const flipByte = (b64: string) => {
+  const bytes = Buffer.from(b64, "base64");
+  bytes[0]! ^= 1;
+  return bytes.toString("base64");
+};
+
+// Founder: a real Space and Thread, then the hand-configured route list.
+const fNative = new MemoryNative();
+const fApp = await fresh(fNative);
+await fApp.createSpace("Canopy");
+await fApp.createThread("Field notes");
+const spaceReplica = spaceOf(fApp).replica;
+const threadReplica = threadsOf(fApp)[0]!.replica;
+
+// Join intent lifecycle at the workflow level.
+const jNative = new MemoryNative();
+const jApp = await fresh(jNative);
+assert.equal(jNative.creates, 0, "cold start mints no key");
+const joinRequest = await jApp.beginJoin();
+assert.equal(decodeTreehouseJoinRequest(joinRequest).publicKey, jApp.state.publicKey);
+assert.equal(jNative.creates, 1);
+assert.equal(jApp.state.intent, null, "the join intent is cleared by the key commit");
+assert.equal(jApp.state.profiles.length, 0);
+assert.equal(jApp.state.relay, null);
+assert.equal(await jApp.beginJoin(), joinRequest, "a second beginJoin repeats the request");
+assert.equal(jNative.creates, 1);
+const jReopened = await fresh(jNative);
+assert.equal(await jReopened.beginJoin(), joinRequest);
+assert.equal(jNative.creates, 1, "reopening never mints a key");
+await assert.rejects(fApp.beginJoin(), /identity_creation_not_allowed/);
+{
+  const interrupted = new MemoryNative();
+  const app = await fresh(interrupted);
+  const commit = interrupted.commit.bind(interrupted);
+  let refuse = true;
+  interrupted.commit = async (rev, record) => {
+    if (refuse && parseState(record).publicKey) throw new Error("disk_write_refused");
+    return commit(rev, record);
+  };
+  await assert.rejects(app.beginJoin(), /disk_write_refused/);
+  assert.equal(parseState(interrupted.record).intent?.kind, "join");
+  assert.equal(interrupted.creates, 1);
+  refuse = false;
+  const retry = await fresh(interrupted);
+  assert.equal(
+    decodeTreehouseJoinRequest(await retry.beginJoin()).publicKey,
+    retry.state.publicKey,
+  );
+  assert.equal(interrupted.creates, 1, "the interrupted join reuses its single key");
+  const pending = new MemoryNative();
+  const space = await fresh(pending);
+  const pendingCommit = pending.commit.bind(pending);
+  pending.commit = async (rev, record) => {
+    if (parseState(record).publicKey) throw new Error("disk_write_refused");
+    return pendingCommit(rev, record);
+  };
+  await assert.rejects(space.createSpace("Half"), /disk_write_refused/);
+  await assert.rejects(fresh(pending).then((a) => a.beginJoin()), /different_creation_pending/);
+}
+console.log("PASS join intent lifecycle: one key, idempotent request, interrupted retry, no reopen minting");
+
+// Founder refusals before any route exists.
+await unchanged(fNative, () => fApp.issueInvitation(TRUNCATED_HANDOFF, "joiner"), /wrong_product/);
+await unchanged(fNative, () => fApp.issueInvitation(joinRequest, ""), /invalid_local_realm/);
+await unchanged(fNative, () => fApp.issueInvitation(joinRequest, "joiner"), /routes_not_configured/);
+for (const [list, pattern] of [
+  ["not json", /invalid_route_list/],
+  [JSON.stringify({ localRealm: "f", routes: [routeEntry(spaceReplica, 1), routeEntry(UNKNOWN_REPLICA, 2)] }), /unknown_route_replica/],
+  [JSON.stringify({ localRealm: "f", routes: [routeEntry(UNKNOWN_REPLICA, 1)] }), /route_set_needs_one_space/],
+  [JSON.stringify({ localRealm: "f", routes: [routeEntry(spaceReplica, 1, { url: "http://127.0.0.1:1" })] }), /invalid_route/],
+  [JSON.stringify({ localRealm: "f", routes: [routeEntry(spaceReplica, 1, { url: "ws://example.com:80" })] }), /invalid_route/],
+  [JSON.stringify({ localRealm: "f", routes: [routeEntry(spaceReplica, 1, { expectedPeerPubkey: "AAAA" })] }), /invalid_route/],
+  [JSON.stringify({ localRealm: "f", routes: [routeEntry(spaceReplica, 1), routeEntry(spaceReplica, 2)] }), /duplicate_route/],
+  [JSON.stringify({ localRealm: "f", routes: [1, 2, 3, 4, 5].map((i) => routeEntry(spaceReplica, i)) }), /too_many_routes/],
+  [JSON.stringify({ localRealm: "f", routes: [] }), /routes_not_configured/],
+  [JSON.stringify({ localRealm: " f", routes: [routeEntry(spaceReplica, 1)] }), /invalid_local_realm/],
+  [JSON.stringify({ localRealm: "f", routes: [routeEntry(spaceReplica, 1, { expectedPeerRealm: "server " })] }), /invalid_route/],
+] as const)
+  await unchanged(fNative, () => fApp.configureRoutes(list), pattern);
+await fApp.configureRoutes(routeList(fApp, "founder", 1));
+assert.equal(fApp.state.relay!.routes.length, 1);
+assert.equal(fApp.state.relay!.localRealm, "founder");
+await unchanged(fNative, () => fApp.issueInvitation(joinRequest, "joiner"), /thread_scope_exceeds_routes/);
+const beforeSame = fNative.record;
+await fApp.configureRoutes(routeList(fApp, "founder", 1));
+assert.equal(fNative.record, beforeSame, "the same route list is a no-op");
+await unchanged(
+  fNative,
+  () =>
+    fApp.configureRoutes(
+      JSON.stringify({ localRealm: "founder", routes: [routeEntry(spaceReplica, 9999)] }),
+    ),
+  /relay_already_configured/,
+);
+await fApp.configureRoutes(routeList(fApp, "founder"));
+assert.equal(fApp.state.relay!.routes.length, 2, "adding the Thread route extends the set");
+console.log("PASS route list validation, no-op repeat, no replacement, extension only");
+
+// Issue the invitation (Sign only: no network exists in this module).
+const revBeforeIssue = fApp.state.revision;
+const offer = await fApp.issueInvitation(joinRequest, "joiner");
+const offered = decodeTreehouseOffer(offer);
+assert.equal(offered.space, spaceReplica);
+assert.deepEqual(offered.threads, [{ replica: threadReplica, archived: false }]);
+assert.equal(offered.localRealm, "joiner");
+assert.equal(offered.routes.length, 2);
+assert.equal(fApp.state.revision, revBeforeIssue + 1);
+assert.equal(spaceOf(fApp).outbox.includes(offered.invitationId), true);
+assert(!offer.includes(Buffer.from(fNative.seed!).toString("base64")), "no seed in the offer");
+assert.equal(await fApp.issueInvitation(joinRequest, "joiner"), offer, "reissue reuses the invitation");
+assert.equal(fApp.state.revision, revBeforeIssue + 1);
+{
+  // Four honored Threads cannot be carried by the four-route lite shell.
+  const capNative = new MemoryNative();
+  const cap = await fresh(capNative);
+  await cap.createSpace("Wide");
+  for (const t of ["A", "B", "C", "D"]) await cap.createThread(t);
+  await cap.configureRoutes(
+    JSON.stringify({
+      localRealm: "founder",
+      routes: cap.state.profiles.slice(0, 4).map((p, i) => routeEntry(p.replica, 47100 + i)),
+    }),
+  );
+  await unchanged(capNative, () => cap.issueInvitation(joinRequest, "joiner"), /thread_scope_exceeds_routes/);
+  // With a relay configured, a fourth Thread is refused before it is authored.
+  const small = new MemoryNative();
+  const smallApp = await fresh(small);
+  await smallApp.createSpace("Small");
+  for (const t of ["A", "B", "C"]) await smallApp.createThread(t);
+  assert.equal(smallApp.canCreateThread(), true, "no relay yet: only the local limit applies");
+  await smallApp.configureRoutes(routeList(smallApp, "founder"));
+  assert.equal(smallApp.canCreateThread(), false, "the control is off at the route cap");
+  await unchanged(small, () => smallApp.createThread("D"), /thread_cap_reached/);
+}
+console.log("PASS invitation issue, reissue idempotence, route cap refusals");
+
+// Joiner: Use (review) persists nothing, confirm persists routes, wrong input changes nothing.
+const tamper = (edit: (o: ReturnType<typeof decodeTreehouseOffer>) => void) => {
+  const o = structuredClone(offered);
+  edit(o);
+  return encodeTreehouseOffer(o);
+};
+await unchanged(jNative, () => jApp.useOffer(joinRequest), /wrong_product/);
+await unchanged(jNative, () => jApp.useOffer(TRUNCATED_HANDOFF), /wrong_product/);
+await unchanged(jNative, () => jApp.useOffer(tamper((o) => { o.routes[0]!.url = "ws://example.com:80"; })), /invalid_route/);
+await unchanged(jNative, () => jApp.useOffer(tamper((o) => { o.routes[0]!.expectedPeerPubkey = "AAAA"; })), /invalid_route/);
+await unchanged(jNative, () => jApp.useOffer(tamper((o) => { o.routes.pop(); })), /route_replica_mismatch/);
+await unchanged(jNative, () => jApp.useOffer(tamper((o) => { o.localRealm = "  "; })), /invalid_local_realm/);
+await unchanged(jNative, () => jApp.confirmOffer(), /no_pending_offer/);
+{
+  const coldNative = new MemoryNative();
+  const cold = await fresh(coldNative);
+  await unchanged(coldNative, () => cold.useOffer(offer), /join_not_begun/);
+  assert.equal(coldNative.creates, 0);
+  assert.equal(coldNative.record, null);
+  const otherNative = new MemoryNative();
+  const other = await fresh(otherNative);
+  await other.createSpace("Elsewhere");
+  await unchanged(otherNative, () => other.useOffer(offer), /wrong_replica/);
+}
+const beforeUse = jNative.record;
+const review = await jApp.useOffer(offer);
+assert.equal(jNative.record, beforeUse, "Use is review only");
+assert.equal(review.space, spaceReplica);
+assert.equal(review.routes.length, 2);
+assert.equal(review.routes[0]!.expectedPeerPubkey, SERVER_KEY);
+assert.equal(review.invitationVerified, false, "the invitation cannot be verified before the Space is pulled");
+const revBeforeConfirm = jApp.state.revision;
+await jApp.confirmOffer();
+assert.equal(jApp.state.revision, revBeforeConfirm + 1);
+assert.equal(jApp.state.relay!.localRealm, "joiner");
+assert.deepEqual(
+  jApp.state.relay!.routes.map((r) => r.replica),
+  [spaceReplica, threadReplica],
+);
+const afterConfirm = jNative.record;
+await jApp.useOffer(offer);
+await jApp.confirmOffer();
+assert.equal(jNative.record, afterConfirm, "a second confirm of the same offer is a no-op");
+await unchanged(jNative, () => jApp.acceptInvitation(offer), /space_unavailable/);
+console.log("PASS offer review, confirmation and wrong-input refusals leave the record unchanged");
+
+// A second prospective joiner, used for recipient-binding negatives.
+const j2Native = new MemoryNative();
+const j2 = await fresh(j2Native);
+const j2Request = await j2.beginJoin();
+await j2.useOffer(offer);
+await j2.confirmOffer();
+
+// Stand in for the first verified pull on both joiners.
+copyHistory(jNative, fNative);
+copyHistory(j2Native, fNative);
+const jPulled = await fresh(jNative);
+const j2Pulled = await fresh(j2Native);
+assert.equal((await jPulled.useOffer(offer)).invitationVerified, true);
+await unchanged(jNative, () => jPulled.acceptInvitation(tamper((o) => { o.invitationId = "not-an-op"; })), /invitation_not_found/);
+await unchanged(jNative, () => jPulled.acceptInvitation(tamper((o) => { o.threads = []; o.routes.pop(); })), /offer_scope_mismatch/);
+await unchanged(jNative, () => jPulled.acceptInvitation(tamper((o) => { o.routes[0]!.url = "ws://127.0.0.1:1"; })), /offer_not_confirmed/);
+await unchanged(j2Native, () => j2Pulled.acceptInvitation(offer), /wrong_recipient/);
+await unchanged(jNative, () => jPulled.acceptInvitation(joinRequest), /wrong_product/);
+const beforeAccept = jNative.record;
+const acceptanceText = await jPulled.acceptInvitation(offer);
+assert.equal(jNative.record, beforeAccept, "accepting signs but persists nothing");
+const acceptance = decodeTreehouseAcceptance(acceptanceText);
+assert.equal(acceptance.replica, spaceReplica);
+assert.equal(acceptance.invitationId, offered.invitationId);
+assert.equal(acceptance.recipient, jPulled.state.publicKey);
+assert.equal(await jPulled.acceptInvitation(offer), acceptanceText, "the signed acceptance is deterministic");
+console.log("PASS acceptance: wrong recipient, scope, route and replica refusals; acceptance signs only");
+
+// Joiner has no grant yet: the shell refuses locally, and a forged grantless post quarantines exactly.
+assert.equal(jPulled.canAuthor(threadReplica, "post"), false);
+await unchanged(jNative, () => jPulled.command(threadReplica, { command: "post", text: "too early" }), /no_capability/);
+{
+  const forged = clone(jNative);
+  const state = parseState(forged.record);
+  const thread = state.profiles.find((p) => p.replica === threadReplica)!;
+  const pubkey = Uint8Array.from(Buffer.from(state.publicKey!, "base64"));
+  const post = await authorTreehouseCommand({
+    product: "Treehouse.Thread",
+    replica: threadReplica,
+    deps: [thread.frames.at(-1)!.id],
+    capId: null,
+    signer: { publicKey: pubkey, sign: async (bytes) => ed25519.sign(bytes, forged.seed!) },
+    command: { command: "post", text: "grantless" },
+  });
+  thread.frames.push(post);
+  thread.outbox.push(post.id);
+  forged.record = JSON.stringify(state);
+  const reader = await fresh(forged);
+  assert.equal(reader.views.get(threadReplica)!.quarantineReasons.get(post.id), "no_capability");
+  assert.equal(reader.views.get(threadReplica)!.posts.length, 0);
+}
+
+// Founder: admit and grant.
+const wrongAcceptance = (edit: (a: typeof acceptance) => void) => {
+  const a = structuredClone(acceptance);
+  edit(a);
+  return encodeTreehouseAcceptance(a);
+};
+await unchanged(fNative, () => fApp.admitAndGrant(offer), /wrong_product/);
+await unchanged(fNative, () => fApp.admitAndGrant(wrongAcceptance((a) => { a.acceptance = flipByte(a.acceptance); })), /invalid_acceptance/);
+await unchanged(fNative, () => fApp.admitAndGrant(wrongAcceptance((a) => { a.replica = threadReplica; })), /wrong_replica/);
+await unchanged(fNative, () => fApp.admitAndGrant(wrongAcceptance((a) => { a.recipient = decodeTreehouseJoinRequest(j2Request).publicKey; })), /wrong_recipient/);
+await unchanged(jNative, () => jPulled.admitAndGrant(acceptanceText), /no_capability/);
+{
+  // Scope drift: a Thread added after the invitation makes the signed scope stale.
+  const drift = clone(fNative);
+  const driftApp = await fresh(drift);
+  await driftApp.createThread("Added later");
+  await unchanged(drift, () => driftApp.admitAndGrant(acceptanceText), /stale_scope/);
+  const driftJoiner = clone(jNative);
+  copyHistory(driftJoiner, drift);
+  await unchanged(driftJoiner, async () => (await fresh(driftJoiner)).acceptInvitation(offer), /stale_scope/);
+  // Revocation closes the invitation for both sides.
+  const revoked = clone(fNative);
+  const revApp = await fresh(revoked);
+  const rs = parseState(revoked.record);
+  const sp = rs.profiles.find((p) => p.product === "Treehouse.Space")!;
+  const cap = carrierDelegationsFromFrames(sp.frames).find((d) => d.parent_id === null)!;
+  const refs = new Set(sp.frames.flatMap((f) => f.deps));
+  const revoke = await authorTreehouseCommand({
+    product: "Treehouse.Space",
+    replica: sp.replica,
+    deps: sp.frames.filter((f) => !refs.has(f.id)).map((f) => f.id).sort(),
+    capId: cap.id,
+    signer: { publicKey: Uint8Array.from(Buffer.from(rs.publicKey!, "base64")), sign: async (b) => ed25519.sign(b, revoked.seed!) },
+    command: { command: "revoke_invitation", invitationId: offered.invitationId },
+  });
+  sp.frames.push(revoke);
+  sp.outbox.push(revoke.id);
+  rs.revision += 1;
+  revoked.record = JSON.stringify(rs);
+  const revFounder = await fresh(revoked);
+  await unchanged(revoked, () => revFounder.admitAndGrant(acceptanceText), /revoked/);
+  const revJoiner = clone(jNative);
+  copyHistory(revJoiner, revoked);
+  await unchanged(revJoiner, async () => (await fresh(revJoiner)).acceptInvitation(offer), /revoked/);
+  void revApp;
+}
+const revBeforeAdmit = fApp.state.revision;
+const spaceFramesBefore = spaceOf(fApp).frames.length;
+const threadFramesBefore = threadsOf(fApp)[0]!.frames.length;
+const admitted = await fApp.admitAndGrant(acceptanceText);
+assert(admitted.admit);
+assert.equal(admitted.grants.length, 1);
+assert.equal(fApp.state.revision, revBeforeAdmit + 1, "admit and grant persist as one commit");
+assert.equal(spaceOf(fApp).frames.length, spaceFramesBefore + 1);
+assert.equal(threadsOf(fApp)[0]!.frames.length, threadFramesBefore + 1);
+assert(spaceOf(fApp).outbox.includes(admitted.admit!));
+const grantFrame = threadsOf(fApp)[0]!.frames.find((f) => f.id === admitted.grants[0])!;
+const grantDelegation = carrierDelegationsFromFrames([grantFrame as CarrierOpFrame])[0]!;
+assert.equal(grantDelegation.audience, acceptance.recipient);
+assert.deepEqual([...grantDelegation.ops].sort(), ["author_edit", "author_tombstone", "post"]);
+assert.equal(fApp.views.get(spaceReplica)!.quarantineReasons.size, 0);
+const afterAdmit = fNative.record;
+const replay = await fApp.admitAndGrant(acceptanceText);
+assert.deepEqual(replay, { admit: null, grants: [] });
+assert.equal(fNative.record, afterAdmit, "a replayed admit authors nothing and persists nothing");
+console.log("PASS admit and grant: negatives, drift, revocation, one commit and idempotent replay");
+
+// Joiner posts under the member capability, founder pulls it.
+copyHistory(jNative, fNative);
+const jMember = await fresh(jNative);
+assert.equal(jMember.canAuthor(threadReplica, "post"), true);
+assert.equal(jMember.canAuthor(threadReplica, "archive_thread"), false);
+const memberPost = await jMember.command(threadReplica, { command: "post", text: "Hello from the member" });
+const memberView = jMember.views.get(threadReplica)!;
+assert.equal(memberView.posts.at(-1)!.id, memberPost);
+assert.equal(memberView.posts.at(-1)!.author, jMember.state.publicKey);
+assert.equal(memberView.quarantineReasons.size, 0);
+assert(jMember.state.profiles.find((p) => p.replica === threadReplica)!.outbox.includes(memberPost));
+await jMember.command(threadReplica, { command: "author_edit", postId: memberPost, targetId: memberPost, text: "Edited by member" });
+assert.equal(jMember.views.get(threadReplica)!.posts.at(-1)!.text, "Edited by member");
+await unchanged(jNative, () => jMember.command(threadReplica, { command: "archive_thread" }), /no_capability/);
+await assert.rejects(jMember.createThread("Not allowed"), /root_capability_unavailable/);
+copyHistory(fNative, jNative);
+const founderAfter = await fresh(fNative);
+assert.equal(founderAfter.views.get(threadReplica)!.posts.at(-1)!.text, "Edited by member");
+assert.equal(founderAfter.views.get(threadReplica)!.quarantineReasons.size, 0);
+console.log("PASS member post and edit under the exact-audience grant; founder reads it; no root authority for the member");

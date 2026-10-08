@@ -64,6 +64,8 @@ export interface ConnectCarrierWebSocketOptions {
   wireVersion?: number;
   sessionVersion?: number;
   webSocket?: WebSocketConstructor;
+  /** Aborting closes the socket and rejects a handshake still waiting on the server. */
+  signal?: AbortSignal;
 }
 
 export interface CarrierPushReport {
@@ -101,6 +103,8 @@ export interface SyncCarrierOptions {
   verifier: Verifier;
   submission?: CarrierSubmission;
   expectedReplica: string;
+  /** Product command decoders; omitted keeps the default Township-first table byte for byte. */
+  commandDecoders?: CommandDecoderMap;
 }
 
 export interface CarrierStateReport {
@@ -604,14 +608,28 @@ export async function verifyCarrierHello(
     throw new Error("malformed carrier hello");
   }
 
-  const claimedPubkey = base64ToBytes(response.pubkey);
+  // Undecodable key or signature text is a malformed hello, a permanent refusal like the other hello
+  // failures rather than a transient error worth redialing.
+  const decode = (text: string): Uint8Array => {
+    try {
+      return base64ToBytes(text);
+    } catch {
+      throw new Error("malformed carrier hello");
+    }
+  };
+  const claimedPubkey = decode(response.pubkey);
   if (!bytesEqual(claimedPubkey, expectedPubkey)) throw new Error("carrier hello pubkey mismatch");
 
-  const signature = base64ToBytes(response.signature);
+  const signature = decode(response.signature);
+  if (signature.length !== 64) throw new Error("malformed carrier hello");
   const transcript = carrierTranscriptBytes(challenge, expectedRealm, expectedPubkey);
-  if (!(await verifier.verify(expectedPubkey, transcript, signature))) {
-    throw new Error("carrier hello bad signature");
+  let verified = false;
+  try {
+    verified = await verifier.verify(expectedPubkey, transcript, signature);
+  } catch {
+    verified = false;
   }
+  if (!verified) throw new Error("carrier hello bad signature");
 
   return {
     type: "carrier_hello",
@@ -630,8 +648,17 @@ export async function connectCarrierWebSocket(
   const wireVersion = opts.wireVersion ?? carrierOpWireVersion;
   const sessionVersion = opts.sessionVersion ?? carrierSessionVersion;
   const serverNoncePromise = client.receiveServerNonce(wireVersion, sessionVersion);
+  // A server that never answers would otherwise hold the handshake open forever.
+  let onAbort: (() => void) | null = null;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    if (opts.signal === undefined) return;
+    onAbort = () => reject(new Error("carrier connect aborted"));
+    if (opts.signal.aborted) onAbort();
+    else opts.signal.addEventListener("abort", onAbort, { once: true });
+  });
+  aborted.catch(() => undefined);
 
-  try {
+  const handshake = async (): Promise<void> => {
     const [, serverNonce] = await Promise.all([waitForOpen(socket), serverNoncePromise]);
     const challenge = carrierChallenge(opts.localRealm, opts.replica, {
       serverNonce,
@@ -647,11 +674,16 @@ export async function connectCarrierWebSocket(
       opts.expectedPeerPubkey,
       opts.verifier,
     );
+  };
 
+  try {
+    await Promise.race([handshake(), aborted]);
     return client;
   } catch (error) {
     client.close();
     throw error;
+  } finally {
+    if (onAbort !== null) opts.signal?.removeEventListener("abort", onAbort);
   }
 }
 
@@ -1112,13 +1144,13 @@ export async function syncCarrierOnce(
     if (!verification.valid) throw new Error(`carrier op verification failed: ${frame.id}`);
   }
 
-  const pulledOps = carrierOpsToSemanticOps(pulledCarrierFrames, realmByPubkey);
+  const pulledOps = carrierOpsToSemanticOps(pulledCarrierFrames, realmByPubkey, options.commandDecoders);
   const peerKnownFrameIds: string[] = [];
 
   const unverifiedCandidateFrames = localCarrierFrames.filter((frame) => {
     let op: Op;
     try {
-      op = carrierOpToSemanticOp(frame, realmByPubkey);
+      op = carrierOpToSemanticOp(frame, realmByPubkey, options.commandDecoders);
     } catch {
       return true;
     }
