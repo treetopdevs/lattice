@@ -29,6 +29,46 @@ remain explicit.
 Trustworthy user-facing succession, G1 completion, remaining Phase G work, production deployment,
 and W4 also remain.
 
+## Working policy (Round 6, adopted 2026-10-08)
+
+This section is the operating rule set for every plan, packet and PR from Round 6 on. It supersedes
+the per-packet closure ceremony in `plans/roadmaps/treehouse-unified-2026-09-06.md` §3 ("Work order
+and merge discipline") and the "Working rules" in `TREEHOUSE_HANDOFF_2026-09-07.md`; both stay as
+history. Where an older plan's STOP conditions conflict with a rule here, the rule here wins and the
+conflict is noted in that plan's status cell.
+
+1. **Evidence tier equals claim tier.** Core claims need the unit/property suite plus vectors.
+   Packaged claims need one hosted packaged job. Physical claims need a device evidence record. A PR
+   claims exactly the tier its CI ran, in one sentence, and nothing above it.
+2. **One hosted gate per PR.** The exact-tip run is the gate. A merge-result run is required only when
+   the merge is not a fast-forward of a green tip, meaning `git merge-base --is-ancestor <tip> main`
+   fails or the merge commit's tree differs from the tip's tree.
+3. **Review proportional to blast radius.** Every implementation PR gets one adversarial review. A
+   second independent review is required only for diffs under `apps/lattice_core/lib/lattice/authority.ex`,
+   `apps/lattice_core/lib/lattice/authority/`, `canonical.ex`, `apps/lattice_core/lib/lattice/carrier/`,
+   `clients/lattice-client/src/{authority,codec,carrier}.ts`, any `src-tauri/src` custody code, or
+   `.github/workflows`. A review thread is fixed or rejected with one line. A third round on the same
+   class of finding is a design question for the operator, not a fourth round of repairs.
+4. **Plan files stop at 400 lines.** Evidence (SHAs, run ids, review dispositions) lives in the PR
+   description and in one line of the index status cell, not in the plan.
+5. **Status cells are one line.** At most 200 characters. Detail belongs in the plan's Status section.
+6. **No new prose pins.** No new test may assert on sentences in a plan, README, roadmap, one-pager or
+   on source text of another file. Until the claims registry (plan 187) exists, a new claim sentence is
+   pinned at most once, in the owning plan's own contract test, never in `plans/README.md`.
+7. **"Folded into plan X" edits plan X in the same commit.** Otherwise the finding gets its own row.
+8. **No plan whose exit needs an absent external input.** If done criteria require a physical device,
+   a signing identity, a host or an operator approval that does not yet exist, the plan is written as a
+   design plan with the named input in its Depends-on column and is parked until the input arrives.
+9. **Ladders stop at three.** A fourth plan of the same shape (one more platform permutation, one more
+   action rung, one more probe) needs an index note explaining why the generic form is impossible.
+10. **Deprioritized products get no new work.** Township and Toolshed (until R26) receive no new plans;
+    their rows are frozen and their CI is path-scoped (plan 183).
+11. **No audit round over unplanned findings.** A new audit may not start while a prior round holds
+    "record only" findings without a plan, ticket or dated rejection. Round 5c's SEC-01 and CRYPTO-01
+    are now plan 184.
+12. **One ledger.** The unified roadmap is the only execution ledger. A new roadmap supersedes its
+    predecessors and marks them read-only in the same commit; it never stacks on them.
+
 **Landing 001–009 as one effort?** Start from the umbrella goal:
 [000-goal-foundation-and-hardening.md](000-goal-foundation-and-hardening.md). It
 sequences plans 001–009 into gated phases (DX/CI foundation → v2 engine hygiene →
@@ -221,7 +261,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 179 | Witnessed beacons pinned at genesis (AF-2 founder-loss clock) | P1 | S then L | 145, 149, 162, 177, 178 | DONE (PR68 final 5d5e0560; Fable/Sol reviews passed; full source 747 tests + 27 properties; final tip 34067997116 and merge 6f0a555a / run 34068926435 passed. Narrow Core beacon/admission/revocation/lapse proof; general founder survival and physical ceremonies remain later unified gates) |
 | 180 | Group-first roadmap: chunked schedule from the corrected map to the Treehouse two-week pilot (AF-2 and AF-3 builds, Toolshed as a module, D3 rollover, host option) | **P0** | S | 158, 177, 178, 179 | DRAFT (2026-09-04; schedule only, no code; superseded in execution by the unified delivery plan, `plans/roadmaps/treehouse-unified-2026-09-06.md`) |
 | 181 | R13-lite Treehouse enrollment and sync over one hand-configured relay route (test-variant two-instance macOS gate; R13 stays open) | P1 | L | 129-133, R01b, R08, R10, R12 (not R11) | IN PROGRESS (implementation committed locally; independent review and the hosted exact-tip and merge-result runs are open; see `plans/181-r13-lite-treehouse-enrollment-sync.md`) |
-| 182 | Evidence-tier working policy and loop guards in `plans/README.md` (Round 6, S6) | **P0** | S | — | TODO |
+| 182 | Evidence-tier working policy and loop guards in `plans/README.md` (Round 6, S6) | **P0** | S | — | DONE (2026-10-08; policy section at the top of the index) |
 | 183 | Product-scoped CI: `changes` classifier, product job gating, `required` fan-in, vector drift guard, retire `lattice_carrier_spike` (Round 6, S1) | P1 | M | 182 | TODO |
 | 184 | Enforce revocation on `:transfer`/`:succeed` and the dormant-arm holder check (Round 5c SEC-01 and CRYPTO-01, now planned) | **P0** | S–M | 182, 183 | TODO |
 ## Round 6 (deep architecture audit, direction focus, 2026-10-07/08, against `c57c826ad`)
