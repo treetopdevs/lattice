@@ -1311,13 +1311,24 @@ defmodule Lattice.Authority do
     end
   end
 
+  # The claim must meet the holder it saw: a successor whose branch never saw a
+  # concurrent transfer cannot seize the role from that transfer's recipient. The
+  # holder check runs before the tick threshold so the reason is stable.
   defp decide_succession_proof(st, op, role, d, at_tick, anc, %{dormant_ticks: dormant_ticks})
        when is_integer(at_tick) do
+    visible_holder =
+      case holder_acquire_from(st.acquires, anc) do
+        nil -> nil
+        %{holder: holder} -> holder
+      end
+
     last_active = last_active_from(st.acquires, st.heartbeats, anc)
 
-    if at_tick < last_active + dormant_ticks,
-      do: reject(st, op, :premature_succession, role),
-      else: record_acquire(st, op, d, at_tick)
+    cond do
+      st.holder != visible_holder -> reject(st, op, :double_transfer, role)
+      at_tick < last_active + dormant_ticks -> reject(st, op, :premature_succession, role)
+      true -> record_acquire(st, op, d, at_tick)
+    end
   end
 
   defp decide_succession_proof(st, op, role, _d, at_tick, _anc, %{recovery: recovery})
