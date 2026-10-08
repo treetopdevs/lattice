@@ -83,7 +83,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.legacy == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
 
     steps:
       - name: Checkout
@@ -118,11 +118,79 @@ jobs:
           npm --prefix clients/lattice-mobile-core ci
           npm --prefix clients/township-tauri-shell ci
 
+      - name: Runner image key
+        id: image
+        run: echo "key=${ImageOS:-ubuntu}-${ImageVersion:-unversioned}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore apt package cache
+        # The Azure apt mirror behind ubuntu-latest sometimes serves .deb files at ~70 KB/s; run
+        # 37759518040 spent 23 minutes in apt and timed this job out. The cache holds apt's downloaded
+        # archives. apt reuses an archive by file name and size alone, so the next step re-verifies
+        # every cached file against the current authenticated index before apt can see it. A failed
+        # install still saves what completed under a run-specific key that the prefix matches, so a
+        # cold cache seeds across reruns; the exact key is saved only when the install steps succeed
+        # and is then immutable until the runner image or the hashed files change.
+        id: apt_cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/apt-archives
+          key: ${{ runner.os }}-apt-verify-${{ steps.image.outputs.key }}-${{ hashFiles('package-lock.json', '.github/workflows/flagship.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-apt-verify-${{ steps.image.outputs.key }}-
+            ${{ runner.os }}-apt-verify-
+
+      - name: Point apt at the cache and verify its contents against the index
+        shell: bash
+        run: |
+          cache="$HOME/.cache/apt-archives"
+          mkdir -p "$cache/partial"
+          sudo tee /etc/apt/apt.conf.d/99lattice-ci-cache > /dev/null <<EOF
+          Dir::Cache::Archives "$cache";
+          APT::Keep-Downloaded-Packages "true";
+          Acquire::Retries "3";
+          Acquire::http::Timeout "30";
+          Acquire::https::Timeout "30";
+          EOF
+          sudo apt-get update
+          # Keep a cached archive only when the index lists that exact name, version and architecture
+          # with the same SHA256; everything else is dropped (apt itself would trust the file name).
+          staged="$RUNNER_TEMP/apt-staged"
+          mkdir -p "$staged"
+          find "$cache" -mindepth 1 -maxdepth 1 ! -name partial -exec mv -t "$staged" {} +
+          kept=0; dropped=0
+          for deb in "$staged"/*.deb; do
+            [ -e "$deb" ] || continue
+            base=$(basename "$deb" .deb)
+            name=${base%%_*}; arch=${base##*_}; ver=${base#*_}; ver=${ver%_*}
+            ver=$(printf '%b' "${ver//%/\\x}")
+            expected=$( (apt-cache show "$name" 2>/dev/null || true) | awk -v v="Version: $ver" -v a="Architecture: $arch" 'BEGIN { RS = "" } index("\n" $0 "\n", "\n" v "\n") && index("\n" $0 "\n", "\n" a "\n") { for (i = 1; i <= NF; i++) if ($i == "SHA256:") { print $(i + 1); exit } }')
+            actual=$(sha256sum "$deb" | cut -d' ' -f1)
+            if [ -n "$expected" ] && [ "$expected" = "$actual" ]; then mv "$deb" "$cache/"; kept=$((kept + 1)); else dropped=$((dropped + 1)); fi
+          done
+          rm -rf "$staged"
+          echo "apt archive cache: kept $kept verified package(s), dropped $dropped"
+
       - name: Install Playwright browser
+        timeout-minutes: 15
         run: npx playwright install --with-deps chromium
 
       - name: Install ffmpeg
+        timeout-minutes: 15
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Hand the apt archive directory to the runner user
+        if: always() && steps.apt_cache.outputs.cache-primary-key != '' && steps.apt_cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        run: sudo chown -R "$(id -u):$(id -g)" "$HOME/.cache/apt-archives"
+
+      - name: Save apt package cache
+        # After a failed install the key is run-specific, so the next attempt restores it by prefix
+        # and downloads only what is still missing; the verify step above re-checks every file anyway.
+        if: always() && steps.apt_cache.outputs.cache-primary-key != '' && steps.apt_cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/apt-archives
+          key: ${{ steps.apt_cache.outputs.cache-primary-key }}${{ job.status != 'success' && format('-partial-{0}-{1}', github.run_id, github.run_attempt) || '' }}
 
       - name: Verify flagship evidence path
         env:
@@ -144,7 +212,7 @@ jobs:
     name: Unit + property suite
     needs: changes
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -383,7 +451,57 @@ jobs:
         if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run revocation:fixture:contract
+      - name: Runner image key
+        id: image
+        run: echo "key=${ImageOS:-ubuntu}-${ImageVersion:-unversioned}" >> "$GITHUB_OUTPUT"
+      - name: Restore apt package cache
+        # The Azure apt mirror behind ubuntu-latest sometimes serves .deb files at ~70 KB/s; run
+        # 37759518040 spent 23 minutes in apt and timed this job out. The cache holds apt's downloaded
+        # archives. apt reuses an archive by file name and size alone, so the next step re-verifies
+        # every cached file against the current authenticated index before apt can see it. A failed
+        # install still saves what completed under a run-specific key that the prefix matches, so a
+        # cold cache seeds across reruns; the exact key is saved only when the install steps succeed
+        # and is then immutable until the runner image or the hashed files change.
+        id: apt_cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/apt-archives
+          key: ${{ runner.os }}-apt-tauri-${{ steps.image.outputs.key }}-${{ hashFiles('.github/workflows/flagship.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-apt-tauri-${{ steps.image.outputs.key }}-
+            ${{ runner.os }}-apt-tauri-
+      - name: Point apt at the cache and verify its contents against the index
+        shell: bash
+        run: |
+          cache="$HOME/.cache/apt-archives"
+          mkdir -p "$cache/partial"
+          sudo tee /etc/apt/apt.conf.d/99lattice-ci-cache > /dev/null <<EOF
+          Dir::Cache::Archives "$cache";
+          APT::Keep-Downloaded-Packages "true";
+          Acquire::Retries "3";
+          Acquire::http::Timeout "30";
+          Acquire::https::Timeout "30";
+          EOF
+          sudo apt-get update
+          # Keep a cached archive only when the index lists that exact name, version and architecture
+          # with the same SHA256; everything else is dropped (apt itself would trust the file name).
+          staged="$RUNNER_TEMP/apt-staged"
+          mkdir -p "$staged"
+          find "$cache" -mindepth 1 -maxdepth 1 ! -name partial -exec mv -t "$staged" {} +
+          kept=0; dropped=0
+          for deb in "$staged"/*.deb; do
+            [ -e "$deb" ] || continue
+            base=$(basename "$deb" .deb)
+            name=${base%%_*}; arch=${base##*_}; ver=${base#*_}; ver=${ver%_*}
+            ver=$(printf '%b' "${ver//%/\\x}")
+            expected=$( (apt-cache show "$name" 2>/dev/null || true) | awk -v v="Version: $ver" -v a="Architecture: $arch" 'BEGIN { RS = "" } index("\n" $0 "\n", "\n" v "\n") && index("\n" $0 "\n", "\n" a "\n") { for (i = 1; i <= NF; i++) if ($i == "SHA256:") { print $(i + 1); exit } }')
+            actual=$(sha256sum "$deb" | cut -d' ' -f1)
+            if [ -n "$expected" ] && [ "$expected" = "$actual" ]; then mv "$deb" "$cache/"; kept=$((kept + 1)); else dropped=$((dropped + 1)); fi
+          done
+          rm -rf "$staged"
+          echo "apt archive cache: kept $kept verified package(s), dropped $dropped"
       - name: Install Tauri Linux prerequisites
+        timeout-minutes: 15
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -396,6 +514,18 @@ jobs:
             libssl-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev
+      - name: Hand the apt archive directory to the runner user
+        if: always() && steps.apt_cache.outputs.cache-primary-key != '' && steps.apt_cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        run: sudo chown -R "$(id -u):$(id -g)" "$HOME/.cache/apt-archives"
+      - name: Save apt package cache
+        # After a failed install the key is run-specific, so the next attempt restores it by prefix
+        # and downloads only what is still missing; the verify step above re-checks every file anyway.
+        if: always() && steps.apt_cache.outputs.cache-primary-key != '' && steps.apt_cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/apt-archives
+          key: ${{ steps.apt_cache.outputs.cache-primary-key }}${{ job.status != 'success' && format('-partial-{0}-{1}', github.run_id, github.run_attempt) || '' }}
       - name: Tauri native command core
         if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell/src-tauri

@@ -355,10 +355,11 @@ change, so core) must run every job green.
   (and `Android pilot distribution result` if desired). Without protection the fan-in is advisory.
 - Adding a new product directory means adding its prefix to the classifier; an unlisted prefix is
   treated as core (safe, slower).
-- `packaged_macos` still runs five full Tauri builds for the Township smokes; now that it only runs
-  on Township changes, the per-PR cost is gone and the three unflagged smokes
-  (`tauri_stable_relay_onboarding_smoke.ts:198`, `tauri_action_handoff_smoke.ts:291`,
-  `tauri_carrier_feed_smoke.ts:292`) are left alone.
+- `packaged_macos` still runs five full Tauri builds for the Township smokes; now that it only runs on
+  Township changes the per-PR cost is gone, and the three unflagged smokes (`tauri_stable_relay_onboarding_smoke.ts:198`,
+  `tauri_action_handoff_smoke.ts:291`, `tauri_carrier_feed_smoke.ts:292`) are left alone.
+- The apt steps in `verify` and `unit` restore and save `~/.cache/apt-archives` (`actions/cache`) after
+  run 37759518040 lost 23 minutes to a slow Azure mirror. Keep the restore, apt-config and save steps together.
 - Plan 189 may later narrow the `core` prefix by splitting v1 out of `apps/lattice_core`.
 
 ## Execution record (2026-10-08)
@@ -383,8 +384,7 @@ change, so core) must run every job green.
      re-pinned, not loosened: exact gate expressions, exact needs lists, a second digest
      (`TREEHOUSE_PREVIEW_DIGEST`) over the moved bodies so nothing previously pinned is unpinned,
      `required` as the single permitted referrer, and eleven new mutation fixtures (61 subtests, was 48).
-- `actionlint`: five pre-existing `SC2209` warnings, none new. Hosted step 10 and the operator's
-  branch-protection change remain; see the row and PR #107.
+- `actionlint`: five pre-existing `SC2209` warnings, none new. Step 10 and branch protection: row 183, PR #107.
 - Independent second review (Codex, `gpt-6.1-sol`, high reasoning; policy rule 3 for `.github/workflows`):
   REQUEST CHANGES, resolved on the integration branch before the hosted run was recorded:
   1. MAJOR: a `git diff` failure inside the classifier's process substitution escaped `set -e`, leaving
