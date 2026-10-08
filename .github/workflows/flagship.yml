@@ -1233,3 +1233,19 @@ jobs:
             echo "Android pilot distribution did not produce an artifact: result=$DISTRIBUTION_RESULT distributed=${DISTRIBUTED:-false}" >&2
             exit 1
           fi
+
+  required:
+    name: Required checks
+    if: always()
+    needs: [changes, verify, unit, packaged_macos, treehouse_packaged_macos, treehouse_packaged_macos_enrollment, carrier_release, treehouse_android_preview, android_pilot_contract, android_pilot_verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    steps:
+      - name: Fail on any failed or cancelled job
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | grep -E '"result": *"(failure|cancelled)"' && { echo "a required job failed or was cancelled" >&2; exit 1; } || true
+          echo "all required jobs succeeded or were skipped"
