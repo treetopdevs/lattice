@@ -32,6 +32,48 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  changes:
+    name: Classify changed paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+    outputs:
+      core: ${{ steps.classify.outputs.core }}
+      township: ${{ steps.classify.outputs.township }}
+      treehouse: ${{ steps.classify.outputs.treehouse }}
+      legacy: ${{ steps.classify.outputs.legacy }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Classify
+        id: classify
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          core=false; township=false; treehouse=false; legacy=false
+          if [ "$EVENT" = "workflow_dispatch" ] || [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            core=true; township=true; treehouse=true; legacy=true
+          else
+            while IFS= read -r path; do
+              case "$path" in
+                clients/township-tauri-shell/*|apps/township_web/*|apps/township_bench/*|scripts/township_*|scripts/android-pilot/*|playwright.township*.config.mjs) township=true ;;
+                clients/treehouse-tauri-shell/*|tools/android-witness-validator/*|scripts/treehouse_*) treehouse=true ;;
+                apps/lattice_server/*|apps/lattice_demo/*|apps/lattice_stress/*|scripts/lattice_*|playwright.config.mjs|tests/*) legacy=true ;;
+                *) core=true ;;
+              esac
+            done < <(git diff --name-only "$BASE" "$HEAD")
+          fi
+          # Any path outside the product-only prefixes runs everything (fail closed).
+          if [ "$core" = true ]; then township=true; treehouse=true; legacy=true; fi
+          for k in core township treehouse legacy; do echo "$k=${!k}" >> "$GITHUB_OUTPUT"; done
+          echo "core=$core township=$township treehouse=$treehouse legacy=$legacy"
+
   verify:
     name: Verify flagship artifact
     runs-on: ubuntu-latest
