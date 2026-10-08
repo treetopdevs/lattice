@@ -363,6 +363,7 @@ SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 | 188 | **(design)** Authority admission as one guard pipeline, Elixir-only if 185 is GO; absorbs the quadratic and Replica-DSL items (Round 6, S4) | P2 | L | 184, 185 | TODO (planned, plan file not yet written) |
 | 189 | **(design)** Extract the v1 plane to `apps/lattice_v1`; stop booting v1 children in the pilot release; decide `Live`, `Demo.Thread`, the early runtime plane (Round 6, S1 part 2) | P3 | L | 183 | TODO (planned, plan file not yet written) |
 | 190 | Wire atom-vocabulary determinism: decode unknown atom names as `Lattice.Canonical.Atom` so frame admission is a pure function of bytes (the plan 185 spike found five vectors refused by any VM lacking the exporter's atoms) | P1 | M | 184 | TODO |
+| 191 | Policy-validation reason parity: a genesis policy carrying both `dormant_ticks` and `recovery` yields `:invalid_recovery_policy` in Elixir (`authority.ex` decide_succeed) but `recovery_certificate_required` in TS (`carrier.ts` collapses the policy to `"invalid"`); pre-existing, found by the plan 184 second review; needs a vector and one-sided fix | P1 | S | 184 | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
