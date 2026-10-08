@@ -104,7 +104,7 @@ export function delegationFrontierRefusal(
   return null;
 }
 
-function revokedAsOf(
+export function revokedAsOf(
   op: Op,
   delegationId: string,
   byId: Map<string, Op>,

@@ -19,3 +19,4 @@ export declare function capabilityQuarantine(op: Op, schema: ReplicaSchema, byId
  * chain link's lease. This is `revokedAsOf`/`expiredAsOf` evaluated at the frontier.
  */
 export declare function delegationFrontierRefusal(delegationId: string, security: AuthoritySecurityProjection): "revoked_capability" | "lease_expired" | null;
+export declare function revokedAsOf(op: Op, delegationId: string, byId: Map<string, Op>, security: AuthoritySecurityProjection, ancCache: Map<string, Set<string>>): boolean;

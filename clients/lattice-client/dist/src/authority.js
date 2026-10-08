@@ -1,6 +1,7 @@
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { canonicalBase64Bytes, canonicalBytesForWitnessedBeaconClaim, canonicalBytesForCarrierDelegation, canonicalBytesForWitnessedRecoveryPolicy, canonicalBytesForWitnessedSuccessionArtifactId, canonicalBytesForWitnessedSuccessionClaim, verifyCarrierOp, } from "./codec";
+import { revokedAsOf } from "./capability";
 import { carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
 import { ancestors, canonicalOrder, index } from "./dag";
 import { effectViews } from "./op";
@@ -134,14 +135,24 @@ export function analyzeAuthority(schema, ops, included, order, byId, expectedRep
         quarantineReasons.set(opId, reason);
     }
     const quarantinedWrites = new Set(quarantineReasons.keys());
+    // The same revoke evidence the command path consults, so a transfer or
+    // succession under a revoked chain is refused with Elixir's revoked_as_of? rule.
+    const revocation = {
+        delegations,
+        root,
+        effectiveRevokes,
+        honoredSuccessionIntroductions,
+        validBeacons,
+    };
+    const revocationAncestors = new Map();
     const roleDecision = (op, evidence, state) => {
         if (evidence.type === "succeed" &&
             (continuation.family !== "legacy" || evidence.proof.mode === "continuation")) {
             const reason = continuationRejectionReason(op, evidence, state, continuation, byId);
             return { honored: reason === undefined, reason };
         }
-        const honored = authorityWriteHonored(op, evidence, state, delegations, policies, honoredSuccessionIntroductions, byId);
-        return { honored, reason: honored ? undefined : authorityWriteRejectionReason(op, evidence, state, delegations, policies, honoredSuccessionIntroductions, byId) };
+        const honored = authorityWriteHonored(op, evidence, state, delegations, policies, honoredSuccessionIntroductions, byId, revocation, revocationAncestors);
+        return { honored, reason: honored ? undefined : authorityWriteRejectionReason(op, evidence, state, delegations, policies, honoredSuccessionIntroductions, byId, revocation, revocationAncestors) };
     };
     for (const original of admitted) {
         if (continuation.family === "unsupported") {
@@ -522,7 +533,7 @@ function authorityRoleWrite(schema, op) {
     const spec = schema.fields[op.field];
     return spec !== undefined && isAuthorityField(spec);
 }
-function authorityWriteHonored(op, evidence, state, delegations, policies, honoredSuccessionIntroductions, byId) {
+function authorityWriteHonored(op, evidence, state, delegations, policies, honoredSuccessionIntroductions, byId, revocation, revocationAncestors) {
     if (evidence.type === "heartbeat" ||
         evidence.type === "revoke" ||
         evidence.type === "beacon") {
@@ -552,17 +563,17 @@ function authorityWriteHonored(op, evidence, state, delegations, policies, honor
             .reverse()
             .find((acquire) => visible.has(acquire.opId));
         return (delegation.issuerRealm === op.author &&
+            !revokedAsOf(op, delegation.id, byId, revocation, revocationAncestors) &&
             predecessor?.holder === op.author &&
             state.holder === op.author &&
             (continuationFamily(op.replica) === "legacy" || predecessor?.opId === state.acquires.at(-1)?.opId));
     }
     if (evidence.type === "succeed" && evidence.role === op.field) {
-        return (successionRejectionReason(op, evidence, state, delegations, policies, byId) ===
-            undefined);
+        return (successionRejectionReason(op, evidence, state, delegations, policies, byId, revocation, revocationAncestors) === undefined);
     }
     throw new Error(`unsupported authority event ${evidence.type} for ${op.id}`);
 }
-function authorityWriteRejectionReason(op, evidence, state, delegations, policies, honoredSuccessionIntroductions, byId) {
+function authorityWriteRejectionReason(op, evidence, state, delegations, policies, honoredSuccessionIntroductions, byId, revocation, revocationAncestors) {
     if (evidence.type === "heartbeat" ||
         evidence.type === "revoke" ||
         evidence.type === "beacon") {
@@ -584,7 +595,7 @@ function authorityWriteRejectionReason(op, evidence, state, delegations, policie
     }
     if (evidence.type !== "transfer" || evidence.role !== op.field) {
         return evidence.type === "succeed"
-            ? successionRejectionReason(op, evidence, state, delegations, policies, byId)
+            ? successionRejectionReason(op, evidence, state, delegations, policies, byId, revocation, revocationAncestors)
             : undefined;
     }
     if (delegation.audienceRealm !== op.value ||
@@ -593,6 +604,10 @@ function authorityWriteRejectionReason(op, evidence, state, delegations, policie
             !candidateDelegationActivated(delegation, delegations, honoredSuccessionIntroductions, ancestors(op.id, byId), op.field, byId)) ||
         delegation.issuerRealm !== op.author) {
         return "invalid_transfer";
+    }
+    // Structural validity, then revocation, then the holder checks (Elixir decide_transfer).
+    if (revokedAsOf(op, delegation.id, byId, revocation, revocationAncestors)) {
+        return "revoked_capability";
     }
     const visible = ancestors(op.id, byId);
     const holderAtDeps = [...state.acquires]
@@ -607,7 +622,7 @@ function authorityWriteRejectionReason(op, evidence, state, delegations, policie
         return "double_transfer";
     return undefined;
 }
-function successionRejectionReason(op, evidence, state, delegations, policies, byId) {
+function successionRejectionReason(op, evidence, state, delegations, policies, byId, revocation, revocationAncestors) {
     const delegation = evidence.delegation;
     if (evidence.role !== op.field ||
         delegation.audienceRealm !== op.value ||
@@ -618,6 +633,9 @@ function successionRejectionReason(op, evidence, state, delegations, policies, b
         delegation.audienceRealm !== op.author) {
         return "invalid_succession";
     }
+    if (revokedAsOf(op, delegation.id, byId, revocation, revocationAncestors)) {
+        return "revoked_capability";
+    }
     const policy = policies.get(op.field);
     if (policy === undefined || policy.successorRealm !== op.author) {
         return "unauthorized_succession";
@@ -626,6 +644,13 @@ function successionRejectionReason(op, evidence, state, delegations, policies, b
     if (evidence.proof.mode === "legacy") {
         if (policy.mode !== "legacy")
             return "recovery_certificate_required";
+        // The claim must meet the holder it saw (Elixir's dormant arm), checked before
+        // the tick threshold; no visible acquire is a null holder, matching Elixir's nil.
+        const visibleHolder = [...state.acquires]
+            .reverse()
+            .find((acquire) => visible.has(acquire.opId))?.holder ?? null;
+        if (state.holder !== visibleHolder)
+            return "double_transfer";
         const lastActive = Math.max(0, ...state.acquires.flatMap((acquire) => visible.has(acquire.opId) && acquire.atTick !== undefined
             ? [acquire.atTick]
             : []), ...state.heartbeats
