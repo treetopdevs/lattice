@@ -340,3 +340,38 @@ would; this is a core change).
   Treehouse path; it is still required for the Township shell until that shell is retired.
 - The README's Round 5c "vetted but NOT planned" entries for SEC-01 and CRYPTO-01 should be annotated
   "now plan 184" by the index update that lands with this plan.
+
+## Review record (2026-10-08)
+
+- Executed by an Opus executor in an isolated worktree; the reviewer re-ran the done criteria,
+  read the full diff, and integrated eleven commits onto `claude/round6-plans-182-185`.
+- Independent second review (Codex, `gpt-6.1-sol`, high reasoning): REQUEST CHANGES, resolved on the
+  same branch before integration:
+  1. BLOCKER: `collect_revokes/3` counted `:command`/`:inbox`-kind ops with a `{:revoke, id}` body; the
+     TypeScript judge never did, and the new transfer guard turned that into a holder divergence. Fixed
+     by `op.kind == :authority` in Elixir and in both mirror comprehensions; two 2026-09-06
+     characterization pins in `application_compaction_mirror_test.exs` now expect no revocation; new unit
+     test and vector `township_authority_command_shaped_revoke` (fake command quarantines
+     `:malformed_command`, transfer honored). `Sim.revoke/3` authors `:authority` ops (`sim.ex:194-195`),
+     so the normal path is unchanged. Operator note: this is a one-sided Elixir semantic change, aligned
+     to TypeScript, justified by the judge's own rule that quarantined violators confer nothing.
+  2. MAJOR, pre-existing: a genesis policy carrying both `dormant_ticks` and `recovery` yields
+     `:invalid_recovery_policy` in Elixir and `recovery_certificate_required` in TypeScript. Filed as
+     plan row 191; not fixed here.
+  3. MINOR: `conformance.ts` compared reason strings only for `capabilityCase` vectors. It now compares
+     them whenever a vector carries `authorityQuarantine` (71 vectors, all pass).
+  4. Notes accepted as boundaries: clause order agrees across the three judges; the guards also change
+     verdicts for a revoke concurrent with the transfer (`:revoked_capability`), for a second concurrent
+     dormant claim by the same successor (`:double_transfer`), and for a transfer reusing the revoked
+     genesis delegation (`:revoked_capability`); the non-legacy continuation family bypasses both guards
+     by design; no crash paths found; the new tests and scenarios are non-vacuous and their seed-ordering
+     preconditions are asserted.
+- Deviations from the plan text, all documented by the executor: `build_role_timeline` has a second
+  call site (`continuation_review_from_log`) that now also receives revokes; `delegations` and `revokes`
+  travel as one `{delegations, revokes}` argument to respect Credo's arity cap; TypeScript
+  `authorityWriteHonored` also gates on revocation (honored-ness is decided separately from the reason);
+  `revokedAsOf` is exported from `capability.ts`; the plan's "as of" sentence was inverted and the code is
+  the spec (a revoke counts unless `op.id` is in `ancestors[revoke_op]`).
+- Not run: the Township shell has no `npm test` script; its CI steps are the named scripts in
+  `flagship.yml`, which plan 183 scopes to Township changes.
+

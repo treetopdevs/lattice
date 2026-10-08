@@ -263,7 +263,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 181 | R13-lite Treehouse enrollment and sync over one hand-configured relay route (test-variant two-instance macOS gate; R13 stays open) | P1 | L | 129-133, R01b, R08, R10, R12 (not R11) | IN PROGRESS (implementation committed locally; independent review and the hosted exact-tip and merge-result runs are open; see `plans/181-r13-lite-treehouse-enrollment-sync.md`) |
 | 182 | Evidence-tier working policy and loop guards in `plans/README.md` (Round 6, S6) | **P0** | S | — | DONE (2026-10-08; policy section at the top of the index) |
 | 183 | Product-scoped CI: `changes` classifier, product job gating, `required` fan-in, vector drift guard, retire `lattice_carrier_spike` (Round 6, S1) | P1 | M | 182 | TODO |
-| 184 | Enforce revocation on `:transfer`/`:succeed` and the dormant-arm holder check (Round 5c SEC-01 and CRYPTO-01, now planned) | **P0** | S–M | 182, 183 | DONE (2026-10-08; both guards in Elixir, mirror and TS; 3 new vectors; probe: a legacy succeed can cite a self-issued child of a rooted grant, vector written) |
+| 184 | Enforce revocation on `:transfer`/`:succeed` and the dormant-arm holder check (Round 5c SEC-01 and CRYPTO-01, now planned) | **P0** | S–M | 182, 183 | DONE (2026-10-08; both guards in Elixir, mirror and TS; 4 new vectors; Codex second review: blocker fixed by kind-gating revokes; probe: a legacy succeed can cite a revocable chain) |
 ## Round 6 (deep architecture audit, direction focus, 2026-10-07/08, against `c57c826ad`)
 
 An `improve deep` pass asked one question: which architectural shifts would now help the Treehouse
