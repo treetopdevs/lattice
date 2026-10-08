@@ -21,6 +21,6 @@
   "devDependencies": {
     "@dagrejs/dagre": "3.0.0",
     "@playwright/test": "^1.53.0",
-    "vue": "3.5.39"
+    "vue": "3.5.43"
   }
 }
