@@ -37,6 +37,8 @@ export interface ConnectCarrierWebSocketOptions {
     wireVersion?: number;
     sessionVersion?: number;
     webSocket?: WebSocketConstructor;
+    /** Aborting closes the socket and rejects a handshake still waiting on the server. */
+    signal?: AbortSignal;
 }
 export interface CarrierPushReport {
     accepted: string[];

@@ -310,10 +310,18 @@ export async function verifyCarrierHello(challenge, hello, expectedRealm, expect
     if (!bytesEqual(claimedPubkey, expectedPubkey))
         throw new Error("carrier hello pubkey mismatch");
     const signature = decode(response.signature);
+    if (signature.length !== 64)
+        throw new Error("malformed carrier hello");
     const transcript = carrierTranscriptBytes(challenge, expectedRealm, expectedPubkey);
-    if (!(await verifier.verify(expectedPubkey, transcript, signature))) {
-        throw new Error("carrier hello bad signature");
+    let verified = false;
+    try {
+        verified = await verifier.verify(expectedPubkey, transcript, signature);
     }
+    catch {
+        verified = false;
+    }
+    if (!verified)
+        throw new Error("carrier hello bad signature");
     return {
         type: "carrier_hello",
         realm: response.realm,
@@ -328,7 +336,19 @@ export async function connectCarrierWebSocket(opts) {
     const wireVersion = opts.wireVersion ?? carrierOpWireVersion;
     const sessionVersion = opts.sessionVersion ?? carrierSessionVersion;
     const serverNoncePromise = client.receiveServerNonce(wireVersion, sessionVersion);
-    try {
+    // A server that never answers would otherwise hold the handshake open forever.
+    let onAbort = null;
+    const aborted = new Promise((_resolve, reject) => {
+        if (opts.signal === undefined)
+            return;
+        onAbort = () => reject(new Error("carrier connect aborted"));
+        if (opts.signal.aborted)
+            onAbort();
+        else
+            opts.signal.addEventListener("abort", onAbort, { once: true });
+    });
+    aborted.catch(() => undefined);
+    const handshake = async () => {
         const [, serverNonce] = await Promise.all([waitForOpen(socket), serverNoncePromise]);
         const challenge = carrierChallenge(opts.localRealm, opts.replica, {
             serverNonce,
@@ -337,11 +357,18 @@ export async function connectCarrierWebSocket(opts) {
         });
         const hello = await client.request(await signCarrierChallenge(challenge, opts.signer));
         await verifyCarrierHello(challenge, hello, opts.expectedPeerRealm, opts.expectedPeerPubkey, opts.verifier);
+    };
+    try {
+        await Promise.race([handshake(), aborted]);
         return client;
     }
     catch (error) {
         client.close();
         throw error;
+    }
+    finally {
+        if (onAbort !== null)
+            opts.signal?.removeEventListener("abort", onAbort);
     }
 }
 class CarrierAvailabilityRoute {

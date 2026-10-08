@@ -58,8 +58,8 @@ export interface CreateTreehouseFeedControllerOptions {
   workflow: TreehouseWorkflow;
   /** Per-sync connection and verification options (the sync module's own seam). */
   sync: SyncTreehouseOptions;
-  /** One availability connection per route. */
-  connect(route: RelayRoute, localRealm: string): Promise<TreehouseFeedSession>;
+  /** One availability connection per route. The signal aborts a handshake still in progress. */
+  connect(route: RelayRoute, localRealm: string, signal?: AbortSignal): Promise<TreehouseFeedSession>;
   onState(state: TreehouseFeedState): void;
   sleep?(delay: number, signal: AbortSignal): Promise<void>;
   timers?: FeedTimers;
@@ -341,7 +341,13 @@ export function createTreehouseFeedController(
     while (active(worker)) {
       let session: TreehouseFeedSession | null = null;
       try {
-        session = await options.connect(worker.route, workflow.state.relay!.localRealm);
+        // The dial is cancellable: a server that accepts the socket but never completes the handshake
+        // must not hold teardown open. A session that still arrives after cancellation is closed.
+        const dialing = options.connect(worker.route, workflow.state.relay!.localRealm, worker.abort.signal);
+        dialing.then((late) => {
+          if (!active(worker)) late.close();
+        }, () => undefined);
+        session = await Promise.race([dialing, worker.cancelled$]);
         worker.session = session;
         if (!active(worker)) return;
         const subscription = await session.subscribeAvailability();

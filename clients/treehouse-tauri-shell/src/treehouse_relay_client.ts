@@ -28,7 +28,7 @@ export interface TreehouseRelayConnector {
   /** Sync connection: advertise, pull and one-op relay submission. */
   connect(route: RelayRoute, localRealm: string): Promise<TreehouseRelayConnection>;
   /** Availability connection: it can subscribe and close, and by type nothing that submits. */
-  connectFeed(route: RelayRoute, localRealm: string): Promise<TreehouseFeedSession>;
+  connectFeed(route: RelayRoute, localRealm: string, signal?: AbortSignal): Promise<TreehouseFeedSession>;
 }
 
 const defaultVerifier: CarrierVerifier = {
@@ -53,7 +53,7 @@ export function createTreehouseRelayConnector(
 ): TreehouseRelayConnector {
   const verifier = options.verifier ?? defaultVerifier;
 
-  async function dial(route: RelayRoute, localRealm: string) {
+  async function dial(route: RelayRoute, localRealm: string, signal?: AbortSignal) {
     // Validate before any socket exists, and dial only the saved copy of the route.
     const checked = validateRoute(route);
     const realm = validateLocalRealm(localRealm);
@@ -75,13 +75,14 @@ export function createTreehouseRelayConnector(
       verifier,
     };
     if (options.webSocket !== undefined) connectOptions.webSocket = options.webSocket;
+    if (signal !== undefined) connectOptions.signal = signal;
     return connectCarrierWebSocket(connectOptions);
   }
 
   return {
     connect: (route, localRealm) => dial(route, localRealm),
-    async connectFeed(route, localRealm) {
-      const client = await dial(route, localRealm);
+    async connectFeed(route, localRealm, signal) {
+      const client = await dial(route, localRealm, signal);
       return {
         subscribeAvailability: () => client.subscribeAvailability(),
         close: () => client.close(),

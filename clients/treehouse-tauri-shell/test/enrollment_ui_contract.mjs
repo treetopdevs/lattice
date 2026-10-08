@@ -251,6 +251,16 @@ for (const name of ["confirmRoutes", "configureRoutes", "useOffer", "joinGroup"]
   });
   assert.equal(groupForm?.props.find((p) => p.type === NodeTypes.DIRECTIVE && p.name === "if")?.exp?.loc.source,
     "!state.intent && !joining");
+  // While joining, a waiting notice without any action replaces the resume button.
+  let waiting = null;
+  walk(app.sfc.template.ast, (node) => {
+    if (node.type === NodeTypes.ELEMENT && node.props.some((p) => p.type === NodeTypes.ATTRIBUTE && p.name === "aria-label" && p.value?.content === "Joining a group" ) && node.tag === "section") waiting = node;
+  });
+  assert(waiting, "a joining notice exists");
+  assert.equal(waiting.props.find((p) => p.type === NodeTypes.DIRECTIVE && p.name === "else-if")?.exp?.loc.source, "joining");
+  let waitingButtons = 0;
+  walk(waiting, (n) => { if (n.type === NodeTypes.ELEMENT && n.tag === "button") waitingButtons++; });
+  assert.equal(waitingButtons, 0, "the joining notice offers no action");
   assert(/joining = computed\(\s*\(\) => state\.value\.intent === null && state\.value\.publicKey !== null && space\.value === undefined/.test(app.sfc.scriptSetup.content));
   assert.equal(disabledOf((n) => aria(n).includes("as moderator")), "!canHideAsModerator");
   const appScript = app.sfc.scriptSetup.content;

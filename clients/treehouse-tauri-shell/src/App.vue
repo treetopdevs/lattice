@@ -327,6 +327,13 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
           {{ busy ? "Creating…" : "Create local group" }}
         </button>
       </form>
+      <section v-else-if="joining" class="notice" aria-label="Joining a group">
+        <h2>Waiting for your group</h2>
+        <p>
+          Your identity is ready. The group appears here once Sync brings it
+          from the relay after you are admitted.
+        </p>
+      </section>
       <section v-else class="notice">
         <h2>Group setup is incomplete</h2>
         <p>Your saved setup can be retried with the same identity.</p>

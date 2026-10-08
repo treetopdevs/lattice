@@ -637,6 +637,30 @@ const live = (h: Harness, replica: string) => h.routeState(replica)?.connection 
   console.log("PASS reconfigure clears the poll before it waits on a slow drain");
 }
 
+// ---- 10d. a dial that never completes does not hold teardown open; a late session is closed -----------
+{
+  const f = await founder();
+  const h = new Harness();
+  let releaseConnect!: () => void;
+  h.connectLatch.set(f.thread, new Promise<void>((resolve) => {
+    releaseConnect = resolve;
+  }));
+  const feed = h.controller(f.app);
+  await feed.start();
+  await until(() => live(h, f.space), "the Space connects while the Thread dial hangs");
+  let stopped = false;
+  const stopping = feed.stop().then(() => {
+    stopped = true;
+  });
+  await quiet(20);
+  assert.equal(stopped, true, "stop returns although the Thread handshake never completed");
+  releaseConnect();
+  await stopping;
+  await until(() => (h.sessions.get(f.thread) ?? []).length === 1, "the late session arrives");
+  assert.equal(h.sessions.get(f.thread)![0]!.closed, true, "a session that arrives after cancellation is closed");
+  console.log("PASS a dial that never completes does not hold teardown open, and a late session is closed");
+}
+
 // ---- 11. unconfigured and over-cap refuse before any connection ---------------------------------------------
 {
   const bare = await fresh(new FaultNative());
@@ -683,6 +707,8 @@ class ScriptedServer {
   static answerWith: Uint8Array | null = null;
   /** Replaces the hello's pubkey text, to send undecodable base64. */
   static helloPubkey: string | null = null;
+  /** Replaces the hello's signature text, to send a decodable signature of the wrong length. */
+  static helloSignature: string | null = null;
   static sockets: ScriptedServer[] = [];
   private listeners = new Map<string, ((event?: unknown) => void)[]>();
   readonly sent: Record<string, unknown>[] = [];
@@ -723,7 +749,7 @@ class ScriptedServer {
             type: "carrier_hello",
             realm: ScriptedServer.realm,
             pubkey: ScriptedServer.helloPubkey ?? Buffer.from(pub).toString("base64"),
-            signature: Buffer.from(signature).toString("base64"),
+            signature: ScriptedServer.helloSignature ?? Buffer.from(signature).toString("base64"),
           }),
         });
       } else if (message.type === "frontier") {
@@ -810,5 +836,9 @@ class ScriptedServer {
     await assert.rejects(connector.connect(route, "founder"), /^Error: malformed carrier hello$/);
   }
   ScriptedServer.helloPubkey = null;
+  // A canonical signature of the wrong length never reaches the verifier: it is a malformed hello as well.
+  ScriptedServer.helloSignature = "AAAA";
+  await assert.rejects(connector.connect(route, "founder"), /^Error: malformed carrier hello$/);
+  ScriptedServer.helloSignature = null;
   console.log("PASS relay client: fail-closed route validation, native signer, pinned-peer handshake, pull-only feed session");
 }
