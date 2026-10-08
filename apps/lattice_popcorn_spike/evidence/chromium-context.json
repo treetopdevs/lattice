@@ -1,0 +1,57 @@
+{
+  "note": "Context only, not a Tauri measurement: headless Chromium 149.0.7827.55 (Playwright 1.61.1) on the same Mac, judge.html served by scripts/preview.mjs. Produced by scratch scripts during plan 185 step 5; the synthetic log is not committed.",
+  "synthetic": {
+    "scenario": "synthetic_treehouse_thread_4000",
+    "generatedBy": "Lattice.Sim, server toolchain (OTP 28.3.1, Elixir 1.19.5), 4,004 ops = genesis, create_thread, two grants, 4,000 post",
+    "sha256": "7f9e39e4f0dd0035067ef4a1efbe7f714b0b22bd553c4b2481d25fb687b07500",
+    "frames_json_bytes": 2162586,
+    "nativeOtp28": {
+      "elapsed_us": 8588275,
+      "analyze_us": 7581131,
+      "deliver_us": 913226,
+      "decode_us": 32845,
+      "reduce_us": 61073
+    }
+  },
+  "coldLaunchToFirstVerdictMs": [
+    1677,
+    955,
+    999
+  ],
+  "chromium4004": {
+    "roundTripMs": 9259,
+    "ok": true,
+    "op_count": 4004,
+    "elapsed_us": 7904970,
+    "phases_us": {
+      "analyze": 7182344,
+      "decode": 135540,
+      "deliver": 521090,
+      "reduce": 65996
+    },
+    "json_decode_us": 129175,
+    "chunks": 88,
+    "quarantine": 0,
+    "beamMemoryAfter": 18277728,
+    "maxHeadlessProcessRssKbBefore": 332736,
+    "maxHeadlessProcessRssKbPeak": 488000,
+    "perOpUs": 1974
+  },
+  "chromium4004EqualsNative": {
+    "quarantine": true,
+    "holders": true,
+    "state": true
+  },
+  "bridgeLimit": {
+    "observed": "a 100-frame vector (54,766 bytes of frame JSON) returned in 86 ms; 400 frames (215,818 bytes) and 800 frames never reached the VM within 60 s (send pending); chunked base64 transfer of 24 KiB slices then judged 400, 1,000 and 4,004 frames"
+  },
+  "csp": {
+    "'self' 'wasm-unsafe-eval'": "boots, verdict call works",
+    "'self' 'unsafe-eval'": "boots, verdict call works",
+    "'self'": "vm:exited abort (wasm compile blocked)"
+  },
+  "isolation": {
+    "withoutCoopCoep": "vm_boot_failed timeout:init after 10 s; console DataCloneError: SharedArrayBuffer transfer requires self.crossOriginIsolated",
+    "withCoopCoep": "boots in 359 ms"
+  }
+}

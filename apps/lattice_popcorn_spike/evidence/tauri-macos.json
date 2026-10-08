@@ -1,0 +1,146 @@
+{
+  "harness": "test/tauri-judge-macos.mjs",
+  "app": "/Users/nicholas/develop/lattice/.claude/worktrees/agent-afa05cc386b2eb1e1/clients/treehouse-tauri-shell/src-tauri/target/release/bundle/macos/Treehouse Judge Spike.app",
+  "synthetic": "/private/tmp/claude-501/-Users-nicholas-develop-lattice/ef484384-6b70-4b91-9d9f-0979102472fa/scratchpad/judge-data/synthetic_thread_4000.json",
+  "startedAt": "2026-10-08T05:13:09.341Z",
+  "host": {
+    "model": "MacBookPro18,2",
+    "macos": "27.2",
+    "build": "26B5091g"
+  },
+  "launches": [
+    {
+      "index": 1,
+      "outcome": "result",
+      "synthetic": null,
+      "workerProbe": {
+        "sab": "undefined",
+        "coi": false,
+        "wasm": "object"
+      },
+      "crossOriginIsolated": true,
+      "sharedArrayBuffer": false,
+      "launchToResultMs": 11491,
+      "error": {
+        "message": "vm_boot_failed: {\"cause\":{\"t\":\"timeout:init\",\"data\":{\"timeoutMs\":10000}},\"serialized\":{\"t\":\"timeout:init\",\"data\":{\"timeoutMs\":10000}},\"name\":\"PopcornError\"} [object Object] []",
+        "stack": "@tauri://localhost/judge/assets/judge-BoVCBfgQ.js:1:2306",
+        "vmErrors": []
+      },
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)",
+      "launchToPageMs": 1216,
+      "launchToBootedMs": null,
+      "launchToFirstVerdictMs": null,
+      "shellOriginToFirstVerdictMs": null,
+      "vmBootMs": null,
+      "vectors": null,
+      "beamMemoryAfterVectors": null,
+      "beamMemoryAfterSynthetic": null,
+      "peakRssKb": {
+        "app": 142400,
+        "WebContent": 207456,
+        "GPU": 20912,
+        "Networking": 13216
+      },
+      "rssAtEvents": [
+        {
+          "type": "boot_start",
+          "appRssKb": 140688,
+          "webContentRssKb": 87072
+        },
+        {
+          "type": "page",
+          "appRssKb": 142400,
+          "webContentRssKb": 207408
+        }
+      ],
+      "samples": 23
+    },
+    {
+      "index": 2,
+      "outcome": "timeout",
+      "synthetic": null,
+      "workerProbe": {
+        "sab": "undefined",
+        "coi": false,
+        "wasm": "object"
+      },
+      "crossOriginIsolated": true,
+      "sharedArrayBuffer": false,
+      "launchToResultMs": null,
+      "error": null,
+      "userAgent": null,
+      "launchToPageMs": 673,
+      "launchToBootedMs": null,
+      "launchToFirstVerdictMs": null,
+      "shellOriginToFirstVerdictMs": null,
+      "vmBootMs": null,
+      "vectors": null,
+      "beamMemoryAfterVectors": null,
+      "beamMemoryAfterSynthetic": null,
+      "peakRssKb": {
+        "app": 141824,
+        "WebContent": 207984,
+        "GPU": 20976,
+        "Networking": 13024
+      },
+      "rssAtEvents": [
+        {
+          "type": "boot_start",
+          "appRssKb": 139296,
+          "webContentRssKb": 70464
+        },
+        {
+          "type": "page",
+          "appRssKb": 141680,
+          "webContentRssKb": 205584
+        }
+      ],
+      "samples": 89
+    },
+    {
+      "index": 3,
+      "outcome": "timeout",
+      "synthetic": null,
+      "workerProbe": {
+        "sab": "undefined",
+        "coi": false,
+        "wasm": "object"
+      },
+      "crossOriginIsolated": true,
+      "sharedArrayBuffer": false,
+      "launchToResultMs": null,
+      "error": null,
+      "userAgent": null,
+      "launchToPageMs": 660,
+      "launchToBootedMs": null,
+      "launchToFirstVerdictMs": null,
+      "shellOriginToFirstVerdictMs": null,
+      "vmBootMs": null,
+      "vectors": null,
+      "beamMemoryAfterVectors": null,
+      "beamMemoryAfterSynthetic": null,
+      "peakRssKb": {
+        "app": 140848,
+        "WebContent": 207648,
+        "GPU": 20912,
+        "Networking": 12944
+      },
+      "rssAtEvents": [
+        {
+          "type": "boot_start",
+          "appRssKb": 139104,
+          "webContentRssKb": 89504
+        },
+        {
+          "type": "page",
+          "appRssKb": 140704,
+          "webContentRssKb": 207264
+        }
+      ],
+      "samples": 90
+    }
+  ],
+  "medianLaunchToFirstVerdictMs": null,
+  "finishedAt": "2026-10-08T05:15:00.551Z",
+  "traceDir": "/Users/nicholas/Library/Application Support/dev.treetop.lattice.treehouse.judgespike"
+}
