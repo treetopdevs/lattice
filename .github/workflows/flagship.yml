@@ -215,6 +215,8 @@ jobs:
         run: |
           npm --prefix clients/lattice-client run continuation:vectors
           MIX_ENV=test mix test apps/lattice_core/test/treehouse/bounded_continuation_reciprocal_test.exs
+      - name: Committed oracle vectors match regeneration
+        run: git diff --exit-code --stat -- clients/lattice-client/test/vectors
       - name: Typecheck TS client
         working-directory: clients/lattice-client
         run: npm run typecheck
