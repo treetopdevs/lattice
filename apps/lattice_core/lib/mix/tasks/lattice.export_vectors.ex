@@ -211,6 +211,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_authority_revoked_transfer(),
       township_authority_revoked_succession(),
       township_authority_dormant_succession_stale_holder(),
+      township_authority_command_shaped_revoke(),
       township_authority_succession_genesis_poisoning(),
       township_authority_replayed_genesis(),
       township_authority_malformed_heartbeat(),
@@ -2076,6 +2077,63 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
     %{
       name: "township_authority_dormant_succession_stale_holder",
+      kind: "adversarial",
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: Sim.replica(sim),
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      authorityQuarantine: authority_quarantine
+    }
+  end
+
+  defp township_authority_command_shaped_revoke do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:authority-command-shaped-revoke",
+        ["clerk", "resident", "neighbor"],
+        seed: "township:authority-command-shaped-revoke"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+
+    {sim, to_resident} =
+      Sim.transfer(sim, "clerk", "resident", :clerk, ops: [:close_matter, :reopen_matter])
+
+    sim = Sim.sync_all(sim)
+
+    # Only an :authority op revokes; a command carrying a revoke-shaped body is a
+    # malformed command and confers no revocation.
+    {sim, fake_command} = Sim.append(sim, "clerk", :command, {:revoke, to_resident.id})
+    sim = Sim.sync_all(sim)
+
+    {sim, to_neighbor} =
+      Sim.transfer(sim, "resident", "neighbor", :clerk, ops: [:close_matter, :reopen_matter])
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+    transfer = find_transfer_op!(Map.values(Log.ops(log)), to_neighbor.id)
+
+    unless to_neighbor.parent_id == to_resident.id and fake_command.id in transfer.deps do
+      raise "expected the resident to transfer under a child of d1 after the command-shaped revoke"
+    end
+
+    authority_quarantine = authority_quarantine(log)
+
+    unless authority_quarantine == [[fake_command.id, "malformed_command"]] do
+      raise "expected only the command-shaped revoke to quarantine, as malformed_command"
+    end
+
+    unless Authority.holder(Matter, log, :clerk) == Sim.identity(sim, "neighbor").pub do
+      raise "expected the transfer under d1's child to stay honored and move clerk authority"
+    end
+
+    realms = realm_index(sim)
+
+    %{
+      name: "township_authority_command_shaped_revoke",
       kind: "adversarial",
       log: log,
       realms: realms,
