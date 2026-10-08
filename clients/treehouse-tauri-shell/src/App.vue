@@ -76,6 +76,10 @@ const canPost = computed(
     active.value !== undefined &&
     workflow.canAuthor(active.value.replica, "post"),
 );
+// Only the Space's root holder can add a Thread, so a joined member never sees an action that always fails.
+const canCreateThread = computed(
+  () => writable.value && space.value !== undefined && workflow.canCreateThread(),
+);
 // Each moderator action is gated on its own operation: a grant may carry one without the other.
 const canModerate = (command: "archive_thread" | "moderator_tombstone") =>
   writable.value &&
@@ -366,12 +370,12 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
             v-model="threadTitle"
             aria-label="Thread title"
             placeholder="What’s on your mind?"
-            :disabled="!writable"
+            :disabled="!canCreateThread"
             maxlength="4000"
           /><button
             class="secondary"
             type="submit"
-            :disabled="!writable || !threadTitle.trim() || threads.length >= 12"
+            :disabled="!canCreateThread || !threadTitle.trim() || threads.length >= 12"
           >
             Create thread
           </button>

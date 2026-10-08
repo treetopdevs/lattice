@@ -136,7 +136,11 @@ fn route_replica(value: &str) -> bool {
 }
 /// wss to any host, or ws to a loopback host only; no credentials and no fragment (`validRouteUrl`).
 fn route_url(value: &str) -> bool {
-    if value.len() > 2048 || value.contains('#') || value.chars().any(char::is_whitespace) {
+    // Printable ASCII only, as the shell's `validRouteUrl` requires, so a persisted route always reloads.
+    if value.len() > 2048
+        || value.contains('#')
+        || value.bytes().any(|b| !(0x21..=0x7e).contains(&b))
+    {
         return false;
     }
     // The shell parses with WHATWG URL, which lowercases the scheme and host.

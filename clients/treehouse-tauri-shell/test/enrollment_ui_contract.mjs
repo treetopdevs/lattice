@@ -243,6 +243,7 @@ for (const name of ["confirmRoutes", "configureRoutes", "useOffer", "joinGroup"]
   const aria = (node) => node.props.find((p) => p.type === NodeTypes.DIRECTIVE && p.name === "bind" && p.arg?.content === "aria-label")
     ?.exp?.loc.source ?? "";
   assert.equal(disabledOf((n) => textOf(n) === "Archive thread"), "!canArchive");
+  assert.match(disabledOf((n) => textOf(n) === "Create thread"), /^!canCreateThread \|\|/);
   assert.equal(disabledOf((n) => aria(n).includes("as moderator")), "!canHideAsModerator");
   const appScript = app.sfc.scriptSetup.content;
   assert(/canArchive = computed\(\(\) => canModerate\("archive_thread"\)\)/.test(appScript));

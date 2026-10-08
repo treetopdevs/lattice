@@ -312,6 +312,8 @@ for (const url of [
   "wss://[::ffff:1.2.3.4]",
   "wss://010.0.0.1",
   "wss://ex%61mple.com",
+  "wss://example.com/\u00e9",
+  "wss://example.com/\u0001",
 ])
   assert.equal(validRouteUrl(url), false, url);
 
@@ -463,6 +465,9 @@ for (const url of [
   assert.equal(contested.founderKey(), app.state.publicKey);
   assert.notEqual(contested.founderKey(), competitor.author);
   assert.equal(app.founderKey(), app.state.publicKey);
+  // Only the root holder may add a Thread; a joined member is never offered it.
+  assert.equal(app.canCreateThread(), true);
+  assert.equal(contested.canCreateThread(), false);
 }
 // A revoked root delegation is no longer offered: canAuthor stops advertising founder actions.
 {
@@ -488,6 +493,7 @@ for (const url of [
   await reopened.open();
   assert.equal(reopened.canAuthor(space.replica, "create_thread"), false);
   assert.equal(reopened.canAuthor(space.replica, "issue_invitation"), false);
+  assert.equal(reopened.canCreateThread(), false);
 }
 console.log(
   "PASS state v2: in-memory migration, join intent, acked set, relay routes, foreign-root joiner",

@@ -423,6 +423,11 @@ export class TreehouseWorkflow {
     const space = this.state.profiles.find((p) => p.product === "Treehouse.Space");
     return space === undefined ? null : (this.roots.get(space.replica) ?? null);
   }
+  /** True when this key may add a Thread: it holds the Space's live root capability (`createThread`'s own check). */
+  canCreateThread(): boolean {
+    const space = this.state.profiles.find((p) => p.product === "Treehouse.Space");
+    return space !== undefined && this.rootCapability(space) !== undefined;
+  }
   /** True when this key holds a capability for `command` in the profile (the Post button's gate). */
   canAuthor(replica: string, command: string): boolean {
     const profile = this.state.profiles.find((p) => p.replica === replica);

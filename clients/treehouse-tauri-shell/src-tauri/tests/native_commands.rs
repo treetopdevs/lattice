@@ -481,6 +481,8 @@ fn relay_routes_are_capped_closed_and_pinned() {
         relay(vec![with(1, "url", "wss://[::ffff:1.2.3.4]")]),
         relay(vec![with(1, "url", "wss://010.0.0.1")]),
         relay(vec![with(1, "url", "wss://ex%61mple.com")]),
+        relay(vec![with(1, "url", "wss://example.com/\u{e9}")]),
+        relay(vec![with(1, "url", "wss://example.com/\u{1}")]),
         relay(vec![with(1, "expectedPeerRealm", "server ")]),
     ] {
         next["relay"] = bad;
