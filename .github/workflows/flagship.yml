@@ -267,81 +267,107 @@ jobs:
         working-directory: clients/lattice-mobile-core
         run: npm run build
       - name: Install Tauri shell dependencies
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm ci
       - name: TS Township shell typecheck
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run typecheck
       - name: TS Township runtime wiring contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run runtime:wiring:contract
       - name: TS governance witness native bridge
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run governance:native:contract
       - name: TS Township native workflow
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run native:contract
       - name: TS Township intent UI behavior
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run intent-ui:contract
       - name: TS Township action handoff support contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run action-handoff-support:contract
       - name: TS Township action-intent contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run action-intent:contract
       - name: TS Township deep-link dispatcher contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run deeplink:dispatcher:contract
       - name: TS Township action contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run action:contract
       - name: TS Township delegation-grant fixture
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run grant:fixture:contract
       - name: TS Township frontend contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run frontend:contract
       - name: TS Township carrier sync contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run sync:contract
       - name: TS reactive Township feed controller
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run feed:app:contract
       - name: TS live stable carrier availability feed
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run feed:contract
       - name: TS Township carrier peer contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run peer:contract
       - name: TS Township pairing deep-link contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run deeplink:contract
       - name: TS Township pairing deep-link source contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run deeplink:source:contract
       - name: TS Township pairing QR contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run qr:contract
       - name: TS Township pairing QR camera contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run qr:camera:contract
       - name: TS Township pairing discovery contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run discovery:contract
       - name: TS Township canonical probe contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run canonical:probe:contract
       - name: TS mobile secure-store strategy
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run mobile:strategy
       - name: TS Township witness artifact contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run witness:artifact:contract
       - name: TS Township packaged bundle variant contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run bundle:variant:contract
       - name: TS Township revocation fixture contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run revocation:fixture:contract
       - name: Install Tauri Linux prerequisites
@@ -358,6 +384,7 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev
       - name: Tauri native command core
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell/src-tauri
         run: cargo test
       - name: Mobile core native migration matrix
@@ -373,9 +400,11 @@ jobs:
         working-directory: clients/treehouse-tauri-shell/src-tauri
         run: cargo test --locked --features treehouse-dev-trace
       - name: TS Township witness fixture preflight
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run witness:preflight:contract
       - name: Tauri development trace contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell/src-tauri
         run: cargo test --features township-dev-trace --test dev_trace_commands
       - name: TS carrier Township check
