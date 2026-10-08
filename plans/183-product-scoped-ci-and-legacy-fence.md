@@ -383,8 +383,8 @@ change, so core) must run every job green.
      re-pinned, not loosened: exact gate expressions, exact needs lists, a second digest
      (`TREEHOUSE_PREVIEW_DIGEST`) over the moved bodies so nothing previously pinned is unpinned,
      `required` as the single permitted referrer, and eleven new mutation fixtures (61 subtests, was 48).
-- `actionlint` reports five pre-existing `SC2209` warnings on `MIX_ENV=test mix run` lines; none new.
-- Hosted verification (step 10) and the operator's branch-protection change remain; see the row.
+- `actionlint`: five pre-existing `SC2209` warnings, none new. Hosted step 10 and the operator's
+  branch-protection change remain; see the row and PR #107.
 - Independent second review (Codex, `gpt-6.1-sol`, high reasoning; policy rule 3 for `.github/workflows`):
   REQUEST CHANGES, resolved on the integration branch before the hosted run was recorded:
   1. MAJOR: a `git diff` failure inside the classifier's process substitution escaped `set -e`, leaving
@@ -396,9 +396,5 @@ change, so core) must run every job green.
      entry in `git status --porcelain --untracked-files=all -- clients/lattice-client/test/vectors`.
   4. MINOR: the fan-in grep would match an output named `result`. Fixed: `jq` reads each dependency's
      `.result` only.
-  5. Notes accepted: the job matrix is correct for Township PR / Treehouse PR / core PR / Township push
-     to main / dispatch; `required` deliberately excludes the two distribution jobs (distribution
-     enforcement stays with `android_pilot_required`); PR `BASE` is the base tip against GitHub's
-     synthetic merge commit, which is the intended classification; the moved Treehouse steps equal the
-     base bodies and keep their setup; no remaining consumer of the four retired lock entries.
+  5. Notes accepted without change; see the PR #107 comment for the job matrix and the other notes.
 
