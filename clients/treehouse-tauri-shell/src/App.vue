@@ -76,12 +76,13 @@ const canPost = computed(
     active.value !== undefined &&
     workflow.canAuthor(active.value.replica, "post"),
 );
-const canModerate = computed(
-  () =>
-    writable.value &&
-    active.value !== undefined &&
-    workflow.canAuthor(active.value.replica, "archive_thread"),
-);
+// Each moderator action is gated on its own operation: a grant may carry one without the other.
+const canModerate = (command: "archive_thread" | "moderator_tombstone") =>
+  writable.value &&
+  active.value !== undefined &&
+  workflow.canAuthor(active.value.replica, command);
+const canArchive = computed(() => canModerate("archive_thread"));
+const canHideAsModerator = computed(() => canModerate("moderator_tombstone"));
 const title = (replica: string) =>
   String(workflow.views.get(replica)?.state.title ?? "Untitled thread");
 function describe(error: unknown): string {
@@ -439,7 +440,7 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
             <button
               v-if="!view.state.archived"
               class="quiet"
-              :disabled="!canModerate"
+              :disabled="!canArchive"
               @click="archive"
             >
               Archive thread</button
@@ -519,7 +520,7 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
                   ><button
                     class="text-button"
                     :aria-label="`Hide post ${index + 1} as moderator`"
-                    :disabled="!canModerate"
+                    :disabled="!canHideAsModerator"
                     @click="hide(item.id, true)"
                   >
                     Hide as moderator

@@ -223,6 +223,11 @@ const make = (
   assert.match(none.summary, /no relay routes/i);
   const clean = describeSyncStatus(feed({ pending: 0 }));
   assert.match(clean.summary, /acknowledged/i);
+  // A mismatch can be a local post still waiting for the relay, so the label never claims the device is
+  // missing relay operations.
+  const differs = describeSyncStatus(feed({ matchesRelay: false })).routes[0]!.holdsRelayLabel;
+  assert.equal(differs, "This device and the relay do not list the same operations yet.");
+  assert(!/does not hold|missing/i.test(differs));
   const text = JSON.stringify([view, none, clean]).toLowerCase();
   for (const forbidden of ["converged", "everyone has", "peers have", "guarantee", "decentralized", "provisioned"])
     assert(!text.includes(forbidden), `status copy must not say: ${forbidden}`);

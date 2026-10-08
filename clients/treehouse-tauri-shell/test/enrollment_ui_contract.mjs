@@ -228,6 +228,26 @@ for (const name of ["confirmRoutes", "configureRoutes", "useOffer", "joinGroup"]
   assert(interpolations.includes("DISCLOSURE"), "Sync status lacks the disclosure");
   assert(/pending/.test(interpolations) && /acked/.test(interpolations), "Sync status lacks counts");
 }
+// Each moderator action is gated on its own operation, never on another one's capability.
+{
+  const app = sources.find((s) => s.path === "src/App.vue");
+  const disabledOf = (predicate) => {
+    let found = null;
+    walk(app.sfc.template.ast, (node) => {
+      if (node.type !== NodeTypes.ELEMENT || node.tag !== "button" || !predicate(node)) return;
+      found = node.props.find((p) => p.type === NodeTypes.DIRECTIVE && p.name === "bind" && p.arg?.content === "disabled")
+        ?.exp?.loc.source ?? null;
+    });
+    return found;
+  };
+  const aria = (node) => node.props.find((p) => p.type === NodeTypes.DIRECTIVE && p.name === "bind" && p.arg?.content === "aria-label")
+    ?.exp?.loc.source ?? "";
+  assert.equal(disabledOf((n) => textOf(n) === "Archive thread"), "!canArchive");
+  assert.equal(disabledOf((n) => aria(n).includes("as moderator")), "!canHideAsModerator");
+  const appScript = app.sfc.scriptSetup.content;
+  assert(/canArchive = computed\(\(\) => canModerate\("archive_thread"\)\)/.test(appScript));
+  assert(/canHideAsModerator = computed\(\(\) => canModerate\("moderator_tombstone"\)\)/.test(appScript));
+}
 const shown = ["Use offer", "Accept invitation", "Admit and grant", "Issue invitation"];
 for (const label of shown)
   assert(buttons.some((b) => b.label === label && b.handler), `${label} is not a button`);

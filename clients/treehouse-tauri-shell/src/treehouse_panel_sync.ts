@@ -59,7 +59,9 @@ export function describeSyncStatus(feed: TreehouseFeedState): PanelSyncStatus {
         ? "Not synced yet."
         : route.matchesRelay
           ? "This device holds every operation the relay lists."
-          : "The relay lists operations this device does not hold yet.",
+          // Neutral on purpose: a local post still waiting for the relay differs the same way as a relay
+          // operation not pulled yet, and the pending count already reports the first.
+          : "This device and the relay do not list the same operations yet.",
     message: route.message,
   }));
   const pending = routes.reduce((n, r) => n + r.pending, 0);
