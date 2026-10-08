@@ -38,10 +38,19 @@ export function compareVerdict(vector, result) {
   const holdersEqual = holders.every(h => h.oracle === undefined || h.browser === h.oracle);
   const browserState = JSON.parse(result.state);
   const stateEqual = same(browserState, expected.state);
-  const pass = quarantine.equal && idsEqual && holdersEqual && stateEqual;
+  // Every signed frame must be admitted and judged: a frame that Sync.deliver rejected, left
+  // pending or quarantined structurally can leave quarantine, holders and state unchanged (a
+  // corrupted standalone heartbeat, for instance), so equality alone would overstate the result.
+  // op_count is the log's unique size (Log.accept is idempotent), so count distinct frames;
+  // Sim-exported vectors never repeat a frame today.
+  const frames = new Set(vector.oracleCarrierOps.map(frame => JSON.stringify(frame))).size;
+  const structural = result.structural ?? null;
+  const admitted = structural !== null && result.op_count === frames
+    && structural.rejected === 0 && structural.pending === 0 && structural.quarantined === 0;
+  const pass = quarantine.equal && idsEqual && holdersEqual && stateEqual && admitted;
   return {
     pass, quarantine: { ...quarantine, idsEqual }, holders: { equal: holdersEqual, roles: holders },
-    state: { equal: stateEqual },
+    state: { equal: stateEqual }, admission: { equal: admitted, opCount: result.op_count ?? null, frames, structural },
     ...(pass ? {} : { oracle, browser: { quarantine: browserPairs, quarantineIds: result.quarantine_ids, state: browserState } })
   };
 }

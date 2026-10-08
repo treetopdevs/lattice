@@ -939,12 +939,13 @@ function successionRejectionReason(
   const visible = ancestors(op.id, byId as Map<string, Op>);
   if (evidence.proof.mode === "legacy") {
     if (policy.mode !== "legacy") return "recovery_certificate_required";
-    // The claim must meet the holder it saw (Elixir's dormant arm), checked before
-    // the tick threshold; no visible acquire is a null holder, matching Elixir's nil.
-    const visibleHolder = [...state.acquires]
+    // The claim must have seen the acquire that currently holds the timeline (Elixir's
+    // dormant arm): acquires are compared, not holder keys, so a round trip or a
+    // self-transfer the claim never saw also rejects. Checked before the tick threshold.
+    const visibleAcquire = [...state.acquires]
       .reverse()
-      .find((acquire) => visible.has(acquire.opId))?.holder ?? null;
-    if (state.holder !== visibleHolder) return "double_transfer";
+      .find((acquire) => visible.has(acquire.opId));
+    if (visibleAcquire?.opId !== state.acquires.at(-1)?.opId) return "double_transfer";
     const lastActive = Math.max(
       0,
       ...state.acquires.flatMap((acquire) =>

@@ -170,7 +170,10 @@ built preview, load each vector that has `oracleCarrierOps` (skip and list the o
 `vector_verdict`, and assert per vector that `quarantine` equals the vector's `authorityQuarantine`
 (sorted), that every role in `holders` equals the oracle state's holder for that role, and that `state`
 equals the oracle state. The **vector pass rule**: a vector passes only when all three hold, or, under
-the recorded "not attempted" fallback above, when quarantine and holders hold. Write
+the recorded "not attempted" fallback above, when quarantine and holders hold; in every case the reply
+must also show every frame admitted (`op_count` equals the frame count and the structural `rejected`,
+`pending` and `quarantined` counts are zero), since a structurally refused inert frame can leave all
+three comparisons unchanged. Write
 `evidence/vectors.json` with per-vector pass/fail, the three comparison results (or "not attempted"
 for state), elapsed, and the list of skipped scenarios. Add
 `"e2e:vectors": "node test/vector-browser.mjs"` to the spike's `package.json`.
@@ -230,7 +233,7 @@ Thresholds (adjustable by the operator; record any adjustment):
 
 | Criterion | GO requires |
 |---|---|
-| Vector equality | every loaded vector passes the step 3 vector pass rule (quarantine, holders and state; quarantine plus holders only under the recorded "not attempted" fallback); skipped scenarios listed with a reason that is not "mismatch" |
+| Vector equality | every loaded vector passes the step 3 vector pass rule (quarantine, holders and state, plus every frame admitted; quarantine plus holders only under the recorded "not attempted" fallback); skipped scenarios listed with a reason that is not "mismatch" |
 | macOS cold start to first verdict | ≤ 3,000 ms (median of three) |
 | Memory with the 4,000-op log | ≤ 300 MB process RSS |
 | Bundle | ≤ 16 MB raw, ≤ 6 MB compressed |

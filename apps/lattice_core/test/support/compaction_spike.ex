@@ -1204,7 +1204,9 @@ defmodule Lattice.CompactionSpike do
        })
        when is_integer(at_tick) do
     cond do
-      tl.holder != seeded_holder_at(tl, op_anc) ->
+      # Acquires are compared, not holder keys (authority.ex dormant arm): an unseen
+      # round trip or self-transfer leaves the same holder under a new acquire.
+      seeded_holder_acquire_at(tl, op_anc) != List.last(continuation_acquires(tl)) ->
         seeded_reject(tl, op, :double_transfer)
 
       at_tick < seeded_last_active(tl, op_anc) + dormant_ticks ->

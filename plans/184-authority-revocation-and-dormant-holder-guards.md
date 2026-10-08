@@ -374,4 +374,11 @@ would; this is a core change).
   the spec (a revoke counts unless `op.id` is in `ancestors[revoke_op]`).
 - Not run: the Township shell has no `npm test` script; its CI steps are the named scripts in
   `flagship.yml`, which plan 183 scopes to Township changes.
+- Post-integration finding (Codex connector on PR #107, P1, 2026-10-08): the dormant arm compared
+  holder keys, so a round trip (`h -> b -> h`) or a self-transfer the claim never saw left the same
+  holder key under a new acquire and the stale claim was honored. All three judges now compare the
+  visible acquire with the timeline's last acquire (the idiom the non-legacy transfer arm already
+  used); two unit tests and vector `township_authority_dormant_succession_stale_acquire` pin it. Not
+  changed: a heartbeat the claim never saw still does not reject it (heartbeats are activity, not
+  acquires, and the legacy tick is untrusted by ADR 0004); see the PR comment.
 

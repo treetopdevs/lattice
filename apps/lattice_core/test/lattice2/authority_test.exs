@@ -262,6 +262,67 @@ defmodule Lattice2.AuthorityTest do
              pub(sim, "b")
   end
 
+  test "a dormant-tick succession that has not seen a transfer and its return is quarantined" do
+    # The holder key is h both before and after the unseen round trip; only the
+    # acquire differs, so a holder-identity check alone would admit the claim.
+    sim =
+      Sim.new(Lattice.Demo.Thread, @replica, ["h", "s", "b"], seed: "auth:stale-dormant:return:1")
+
+    {sim, _g} =
+      Sim.create_replica(sim, "h", policies: %{moderator: %{successor: "s", dormant_ticks: 3}})
+
+    sim = Sim.sync_all(sim)
+    sim = sim |> Sim.partition("h", "s") |> Sim.partition("b", "s")
+
+    {sim, _to_b} = Sim.transfer(sim, "h", "b", :moderator)
+    sim = Sim.sync(sim, "h", "b")
+    {sim, to_h} = Sim.transfer(sim, "b", "h", :moderator)
+    transfer_bh = transfer_op!(Sim.log(sim, "b"), to_h.id)
+    sim = Sim.sync(sim, "h", "b")
+
+    {sim, succeed} = Sim.succeed(sim, "s", :moderator, at_tick: 3)
+
+    # Precondition: canonical order judges the return before the claim.
+    assert transfer_bh.id < succeed.id
+
+    sim =
+      sim
+      |> Sim.heal("h", "s")
+      |> Sim.heal("b", "s")
+      |> Sim.sync_all()
+
+    assert {true, :double_transfer} = Sim.quarantined(sim, "h", succeed.id)
+
+    assert Lattice.Authority.holder(Lattice.Demo.Thread, Sim.log(sim, "h"), :moderator) ==
+             pub(sim, "h")
+  end
+
+  test "a dormant-tick succession that has not seen the holder re-acquire is quarantined" do
+    sim =
+      Sim.new(Lattice.Demo.Thread, @replica, ["h", "s"], seed: "auth:stale-dormant:self:1")
+
+    {sim, _g} =
+      Sim.create_replica(sim, "h", policies: %{moderator: %{successor: "s", dormant_ticks: 3}})
+
+    sim = Sim.sync_all(sim)
+    sim = Sim.partition(sim, "h", "s")
+
+    # h re-acquires the role from itself: a new acquire under the same holder key.
+    {sim, to_h} = Sim.transfer(sim, "h", "h", :moderator)
+    transfer_hh = transfer_op!(Sim.log(sim, "h"), to_h.id)
+    assert Sim.quarantined(sim, "h", transfer_hh.id) == false
+
+    {sim, succeed} = Sim.succeed(sim, "s", :moderator, at_tick: 3)
+    assert transfer_hh.id < succeed.id
+
+    sim = sim |> Sim.heal("h", "s") |> Sim.sync_all()
+
+    assert {true, :double_transfer} = Sim.quarantined(sim, "h", succeed.id)
+
+    assert Lattice.Authority.holder(Lattice.Demo.Thread, Sim.log(sim, "h"), :moderator) ==
+             pub(sim, "h")
+  end
+
   test "bad-arity command ops are quarantined instead of disappearing" do
     {sim, _g} = base() |> Sim.create_replica("server")
     {sim, grant} = Sim.grant(sim, "server", "tab", ops: [:post])

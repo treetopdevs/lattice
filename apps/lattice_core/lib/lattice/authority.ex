@@ -1318,25 +1318,25 @@ defmodule Lattice.Authority do
     end
   end
 
-  # The claim must have seen the acquire of the current timeline holder: it is
+  # The claim must have seen the acquire that currently holds the timeline: it is
   # rejected whenever any acquire after its causal position reached the timeline
-  # first in canonical order (a concurrent transfer, or a second concurrent dormant
-  # claim by the same successor). The holder check runs before the tick threshold
-  # so the reason is stable.
+  # first in canonical order (a concurrent transfer, a round trip or self-transfer
+  # that leaves the same holder key under a new acquire, or a second concurrent
+  # dormant claim by the same successor). Acquires are compared, not holder keys,
+  # for that reason; the check runs before the tick threshold so the reason is stable.
   defp decide_succession_proof(st, op, role, d, at_tick, anc, %{dormant_ticks: dormant_ticks})
        when is_integer(at_tick) do
-    visible_holder =
-      case holder_acquire_from(st.acquires, anc) do
-        nil -> nil
-        %{holder: holder} -> holder
-      end
-
     last_active = last_active_from(st.acquires, st.heartbeats, anc)
 
     cond do
-      st.holder != visible_holder -> reject(st, op, :double_transfer, role)
-      at_tick < last_active + dormant_ticks -> reject(st, op, :premature_succession, role)
-      true -> record_acquire(st, op, d, at_tick)
+      holder_acquire_from(st.acquires, anc) != List.last(st.acquires) ->
+        reject(st, op, :double_transfer, role)
+
+      at_tick < last_active + dormant_ticks ->
+        reject(st, op, :premature_succession, role)
+
+      true ->
+        record_acquire(st, op, d, at_tick)
     end
   end
 

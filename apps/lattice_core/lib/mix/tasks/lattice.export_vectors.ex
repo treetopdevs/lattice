@@ -211,6 +211,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_authority_revoked_transfer(),
       township_authority_revoked_succession(),
       township_authority_dormant_succession_stale_holder(),
+      township_authority_dormant_succession_stale_acquire(),
       township_authority_command_shaped_revoke(),
       township_authority_succession_genesis_poisoning(),
       township_authority_replayed_genesis(),
@@ -2077,6 +2078,84 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
     %{
       name: "township_authority_dormant_succession_stale_holder",
+      kind: "adversarial",
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: Sim.replica(sim),
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      authorityQuarantine: authority_quarantine
+    }
+  end
+
+  defp township_authority_dormant_succession_stale_acquire do
+    # The role leaves the clerk and comes back while the successor is partitioned:
+    # the holder key the claim saw is the current one, the acquire is not. A judge
+    # that compared holder keys alone would honor the stale claim.
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:authority-dormant-succession-stale-acquire",
+        ["clerk", "resident", "neighbor"],
+        # Seed chosen so canonical order judges the unseen return before the claim.
+        seed: "township:authority-dormant-succession-stale-acquire:1"
+      )
+
+    {sim, _genesis} =
+      Sim.create_replica(sim, "clerk",
+        policies: %{clerk: %{successor: "resident", dormant_ticks: 3}}
+      )
+
+    sim = Sim.sync_all(sim)
+    sim = sim |> Sim.partition("clerk", "resident") |> Sim.partition("neighbor", "resident")
+
+    {sim, to_neighbor} =
+      Sim.transfer(sim, "clerk", "neighbor", :clerk, ops: [:close_matter, :reopen_matter])
+
+    sim = Sim.sync(sim, "clerk", "neighbor")
+
+    {sim, to_clerk} =
+      Sim.transfer(sim, "neighbor", "clerk", :clerk, ops: [:close_matter, :reopen_matter])
+
+    sim = Sim.sync(sim, "clerk", "neighbor")
+
+    {sim, succession} =
+      Sim.succeed(sim, "resident", :clerk,
+        at_tick: 3,
+        ops: [:close_matter, :reopen_matter]
+      )
+
+    sim =
+      sim
+      |> Sim.heal("clerk", "resident")
+      |> Sim.heal("neighbor", "resident")
+      |> Sim.sync_all()
+
+    log = Sim.log(sim, "clerk")
+    ops = Map.values(Log.ops(log))
+    outbound = find_transfer_op!(ops, to_neighbor.id)
+    return = find_transfer_op!(ops, to_clerk.id)
+
+    unless outbound.id not in succession.deps and return.id not in succession.deps and
+             return.id < succession.id do
+      raise "expected the unseen round trip to be concurrent with and judged before the claim"
+    end
+
+    authority_quarantine = authority_quarantine(log)
+
+    unless authority_quarantine == [[succession.id, "double_transfer"]] do
+      raise "expected only the claim that never saw the round trip to quarantine"
+    end
+
+    unless Authority.holder(Matter, log, :clerk) == Sim.identity(sim, "clerk").pub do
+      raise "expected the clerk to keep clerk authority after the round trip"
+    end
+
+    realms = realm_index(sim)
+
+    %{
+      name: "township_authority_dormant_succession_stale_acquire",
       kind: "adversarial",
       log: log,
       realms: realms,
