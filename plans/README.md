@@ -53,8 +53,9 @@ conflict is noted in that plan's status cell.
    description and in one line of the index status cell, not in the plan.
 5. **Status cells are one line.** At most 200 characters. Detail belongs in the plan's Status section.
 6. **No new prose pins.** No new test may assert on sentences in a plan, README, roadmap, one-pager or
-   on source text of another file. Until the claims registry (plan 187) exists, a new claim sentence is
-   pinned at most once, in the owning plan's own contract test, never in `plans/README.md`.
+   on source text of another file. One exception until the claims registry (plan 187) exists: a new
+   claim sentence may be pinned at most once, in the owning plan's own contract test, never in
+   `plans/README.md`.
 7. **"Folded into plan X" edits plan X in the same commit.** Otherwise the finding gets its own row.
 8. **No plan whose exit needs an absent external input.** If done criteria require a physical device,
    a signing identity, a host or an operator approval that does not yet exist, the plan is written as a
@@ -264,6 +265,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 182 | Evidence-tier working policy and loop guards in `plans/README.md` (Round 6, S6) | **P0** | S | — | DONE (2026-10-08; policy section at the top of the index) |
 | 183 | Product-scoped CI: `changes` classifier, product job gating, `required` fan-in, vector drift guard, retire `lattice_carrier_spike` (Round 6, S1) | P1 | M | 182 | DONE (2026-10-08; PR #107 run 37730117496 core path green; Township-only probe PR #106 run 37730090852 skipped the expected jobs with Required checks green; operator: enable branch protection) |
 | 184 | Enforce revocation on `:transfer`/`:succeed` and the dormant-arm holder check (Round 5c SEC-01 and CRYPTO-01, now planned) | **P0** | S–M | 182, 183 | DONE (2026-10-08; both guards in Elixir, mirror and TS; 4 new vectors; Codex second review: blocker fixed by kind-gating revokes; probe: a legacy succeed can cite a revocable chain) |
+
 ## Round 6 (deep architecture audit, direction focus, 2026-10-07/08, against `c57c826ad`)
 
 **Outcome (2026-10-08):** 182 and 184 DONE; 183 integrated with its hosted proof in PR #107 and the Township-only probe PR #106; 185 NO-GO on two independent blockers (the Wire atom-vocabulary defect, now plan 190, and macOS WKWebView exposing no `SharedArrayBuffer` under Tauri 2.11); rows 190–192 filed from findings made during execution.
@@ -359,7 +361,7 @@ cover it); the two authority guards in plan 184 were re-verified against source.
 SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 
 
-| 185 | **(spike)** One judge runtime: Popcorn-hosted `lattice_core` judge inside the Treehouse Tauri webview, vector-equal, measured, GO/NO-GO (Round 6, S2) | P1 | M | 182, 183 | NO-GO (2026-10-08): 63/68 vectors equal, 5 refused by the Wire atom defect (plan 190); macOS WKWebView lacks SharedArrayBuffer, Popcorn cannot boot; Android wry panic (row 192) |
+| 185 | **(spike)** One judge runtime: Popcorn-hosted `lattice_core` judge inside the Treehouse Tauri webview, vector-equal, measured, GO/NO-GO (Round 6, S2) | P1 | M | 182, 183 | DONE (NO-GO 2026-10-08: 63/68 vectors equal, 5 refused by the Wire atom defect, plan 190; macOS WKWebView lacks SharedArrayBuffer so Popcorn cannot boot; Android wry panic, row 192) |
 | 186 | Shared shell kit `clients/lattice-shell-kit` (feed, outbox sync, routes, relay client, BEAM test peer, packaged harness); Treehouse consumes it (Round 6, S3) | P2 | M | 183 | TODO (planned, plan file not yet written) |
 | 187 | Claims as data: one registry, generated status, retire prose-pinning contract tests; folds plans 164/166 and the Township probe lazy-load (Round 6, S5) | P2 | S–M | 182 | TODO (planned, plan file not yet written) |
 | 188 | **(design)** Authority admission as one guard pipeline, Elixir-only if 185 is GO; absorbs the quadratic and Replica-DSL items (Round 6, S4) | P2 | L | 184, 185 | TODO (planned, plan file not yet written) |
@@ -367,6 +369,7 @@ SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 | 190 | Wire atom-vocabulary determinism: decode unknown atom names as `Lattice.Canonical.Atom` so frame admission is a pure function of bytes (the plan 185 spike found five vectors refused by any VM lacking the exporter's atoms) | P1 | M | 184 | TODO |
 | 191 | Policy-validation reason parity: a genesis policy carrying both `dormant_ticks` and `recovery` yields `:invalid_recovery_policy` in Elixir (`authority.ex` decide_succeed) but `recovery_certificate_required` in TS (`carrier.ts` collapses the policy to `"invalid"`); pre-existing, found by the plan 184 second review; needs a vector and one-sided fix | P1 | S | 184 | TODO |
 | 192 | Treehouse Android debug APK panics about 11 s after launch on the API 34 emulator (`wry-0.55.1` `android/main_pipe.rs:417`, `GetUrl` reply to a dropped receiver); the ordinary build panics too; CI only compiles the APK so no job sees it (found by plan 185) | P1 | S–M | — | TODO |
+| 193 | Revocation on the bounded continuation arm: `Continuation.judge/7` (Elixir) and `continuationRejectionReason` (TS) honor a continuation succession whose delegation chain is revoked-as-of the claim; plan 184 scoped this arm out. Same shape as 184: guard in both judges plus the mirror, one vector, second review (policy rule 3) | P1 | S–M | 184 | TODO (filed 2026-10-08 from a PR #107 review finding) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

@@ -98,7 +98,7 @@ for (let i = 1; i <= launches; i++) {
   const r = run.result ?? {};
   const first = run.events.find(e => e.type === "first_verdict");
   const summary = {
-    index: i, outcome, synthetic: run.synthetic,
+    index: i, outcome, syntheticRequested: run.synthetic,
     workerProbe: r.workerProbe ?? run.events.find(e => e.type === "page")?.workerProbe ?? null,
     crossOriginIsolated: r.crossOriginIsolated ?? run.events.find(e => e.type === "page")?.crossOriginIsolated ?? null,
     sharedArrayBuffer: r.sharedArrayBuffer ?? run.events.find(e => e.type === "page")?.sharedArrayBuffer ?? null,

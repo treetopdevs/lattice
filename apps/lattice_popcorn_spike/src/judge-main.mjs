@@ -31,14 +31,14 @@ const call = async (command, timeoutMs) => {
 window.judge = Object.freeze({
   ready: () => ready.then(() => ({ ...marks, crossOriginIsolated: globalThis.crossOriginIsolated === true })),
   verdict: async (schema, frames, realms, timeoutMs = 600000) => {
-    const text = JSON.stringify(frames);
-    if (text.length <= CHUNK_BYTES) {
+    // The bridge limit is in bytes, so measure UTF-8 bytes (text.length counts UTF-16 code units).
+    const bytes = new TextEncoder().encode(JSON.stringify(frames));
+    if (bytes.length <= CHUNK_BYTES) {
       const command = { command: "vector_verdict", schema, frames };
       if (realms) command.realms = realms;
       return call(command, timeoutMs);
     }
     // Popcorn 0.4.0-next.0 cannot deliver one JS-to-VM message much above 64 KiB: send base64 chunks.
-    const bytes = new TextEncoder().encode(text);
     for (let i = 0; i < bytes.length; i += CHUNK_BYTES) {
       const reply = await call({ command: "vector_chunk", data: toBase64(bytes.subarray(i, i + CHUNK_BYTES)) }, 60000);
       if (!reply.ok) return reply;

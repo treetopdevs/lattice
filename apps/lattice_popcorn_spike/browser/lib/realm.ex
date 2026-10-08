@@ -118,7 +118,9 @@ defmodule LatticeBrowser.Realm do
 
       {reply, %{state | buffer: [], buffered: 0}}
     else
-      invalid(state)
+      # Every buffered-verdict attempt consumes the buffer, so a malformed command
+      # cannot leave stale bytes for the next chunk sequence to append to.
+      invalid(%{state | buffer: [], buffered: 0})
     end
   end
 

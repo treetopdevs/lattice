@@ -182,7 +182,8 @@ conformance passes.
 
 Create `apps/lattice_core/test/lattice2/wire_atom_vocabulary_test.exs`. For each of the five vectors
 named above (read from `clients/lattice-client/test/vectors`), start an isolated node with
-`:peer.start_link(%{name: ..., args: ~c"-pa " ++ Enum.join(:code.get_path(), " ") |> String.to_charlist()})`
+`:peer.start_link(%{name: ..., args: [~c"-pa" | :code.get_path()]})` (one argument string per list
+element; `:code.get_path/0` already returns charlists)
 (OTP 28 `:peer`; one node for the whole module, started in `setup_all`, stopped with `:peer.stop/1`).
 Before decoding, assert in the peer via `:erpc.call/4` that `Code.ensure_loaded?(Mix.Tasks.Lattice.ExportVectors)`
 is false and that `String.to_existing_atom/1` raises for each of `"seize_records"`, `"ghost"`,

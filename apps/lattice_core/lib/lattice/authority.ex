@@ -1312,9 +1312,11 @@ defmodule Lattice.Authority do
     end
   end
 
-  # The claim must meet the holder it saw: a successor whose branch never saw a
-  # concurrent transfer cannot seize the role from that transfer's recipient. The
-  # holder check runs before the tick threshold so the reason is stable.
+  # The claim must have seen the acquire of the current timeline holder: it is
+  # rejected whenever any acquire after its causal position reached the timeline
+  # first in canonical order (a concurrent transfer, or a second concurrent dormant
+  # claim by the same successor). The holder check runs before the tick threshold
+  # so the reason is stable.
   defp decide_succession_proof(st, op, role, d, at_tick, anc, %{dormant_ticks: dormant_ticks})
        when is_integer(at_tick) do
     visible_holder =

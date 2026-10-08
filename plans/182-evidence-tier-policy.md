@@ -74,7 +74,7 @@ supersedes, by reference, the per-packet closure ceremony in the unified roadmap
 
 ## Commands you will need
 
-| Purpose | Command (run from the repo root) | Expected on success |
+| Purpose | Command (run from the repo root, after the `PATH` export in the toolchain note below) | Expected on success |
 |---|---|---|
 | Row 121 pin | `~/.asdf/shims/mix test apps/lattice_core/test/township/audit_bundle_test.exs` | 0 failures (if the only failure mentions `township_bench` or `cargo`, see STOP conditions) |
 | Row 122 pin | `~/.asdf/shims/mix test apps/lattice_core/test/township/read_model_test.exs` | 0 failures |
@@ -82,8 +82,10 @@ supersedes, by reference, the per-packet closure ceremony in the unified roadmap
 | Row 181 pin | `~/.asdf/shims/mix test apps/lattice_core/test/treehouse/r13_lite_contract_test.exs` | 0 failures |
 | Scope check | `git status --porcelain` | only `plans/README.md` (and, after step 3, `plans/roadmaps/treehouse-unified-2026-09-06.md`) |
 
-Toolchain note from `AGENTS.md`: invoke mix as `~/.asdf/shims/mix`; `mix` on `PATH` is a broken
-mise shim on the primary machine. The four tests need the TypeScript client built once on a fresh
+Toolchain note from `AGENTS.md`: before any command in the table run
+`export PATH="$HOME/.asdf/installs/erlang/28.3.1/bin:$HOME/.asdf/installs/elixir/1.19.5-otp-28/bin:$PATH"`
+so the OTP 28 / Elixir 1.19 binaries win over Homebrew Erlang in spawned VMs, and invoke mix as
+`~/.asdf/shims/mix`; `mix` on `PATH` is a broken mise shim on the primary machine. The four tests need the TypeScript client built once on a fresh
 checkout (`npm --prefix clients/lattice-client ci && npm --prefix clients/lattice-client run build`).
 
 ## Scope
@@ -138,8 +140,9 @@ conflict is noted in that plan's status cell.
    description and in one line of the index status cell, not in the plan.
 5. **Status cells are one line.** At most 200 characters. Detail belongs in the plan's Status section.
 6. **No new prose pins.** No new test may assert on sentences in a plan, README, roadmap, one-pager or
-   on source text of another file. Until the claims registry (plan 187) exists, a new claim sentence is
-   pinned at most once, in the owning plan's own contract test, never in `plans/README.md`.
+   on source text of another file. One exception until the claims registry (plan 187) exists: a new
+   claim sentence may be pinned at most once, in the owning plan's own contract test, never in
+   `plans/README.md`.
 7. **"Folded into plan X" edits plan X in the same commit.** Otherwise the finding gets its own row.
 8. **No plan whose exit needs an absent external input.** If done criteria require a physical device,
    a signing identity, a host or an operator approval that does not yet exist, the plan is written as a

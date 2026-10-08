@@ -97,7 +97,7 @@ GO / NO-GO. It ships nothing to the ordinary app.
 | Purpose | Command | Expected |
 |---|---|---|
 | Browser toolchain | `cd apps/lattice_popcorn_spike && cat .tool-versions` then `asdf install` for those versions | OTP 29.0.6, Elixir 1.20.4 |
-| Spike baseline | `cd apps/lattice_popcorn_spike && npm ci && npm run prepare:shared && (cd browser && mix deps.get && mix test) && npm test && npm run build` | all pass; `dist/build.json` written |
+| Spike baseline | `cd apps/lattice_popcorn_spike && export PATH="$HOME/.asdf/shims:$PATH" && npm ci && npm run prepare:shared && (cd browser && mix deps.get && mix test) && npm test && npm run build` (the shim resolves the spike's `.tool-versions`; `scripts/compile.mjs` spawns `mix` from `PATH`, so the export covers it too; bare `mix` is a broken mise shim) | all pass; `dist/build.json` written |
 | Browser proof (needs Chromium) | `npm run e2e:replicas` with the proof servers from `README.md` running | `evidence/replicas.json` written, pass |
 | Hosted proof | `gh workflow run popcorn-spike.yml --ref <branch>` | `browser-proof` green |
 | Treehouse shell | `cd clients/treehouse-tauri-shell && npm ci && npm test && npm run build` | pass |
@@ -145,9 +145,10 @@ lists them). Start with `demo/thread.ex`, `township/matter.ex`, `township/electi
 `toolshed/shed.ex`, `toolshed/tool.ex`, `authority/consent.ex`, `treehouse/space.ex`,
 `treehouse/thread.ex`, `treehouse/invitation.ex`, and add whatever those `alias`/`import` transitively
 (`grep -n "alias\|import" <file>`). If a pulled-in module calls `Jason`, add `{:jason, "~> 1.4"}` to
-`browser/mix.exs` deps (pure Elixir). Compile with `npm run build`. If a module fails only on a
-warning-as-error under Elixir 1.20, compile that one module without `--warnings-as-errors` for the
-spike and record the warning in the decision doc; a hard error is a STOP.
+`browser/mix.exs` deps (pure Elixir). Compile with `npm run build`, which runs
+`mix compile --warnings-as-errors` for the whole browser project and has no module-scoped bypass. A
+module that fails only on a warning under Elixir 1.20 is therefore a STOP like a hard error: record
+the module and the warning text in the decision doc and stop (do not patch core; see STOP conditions).
 
 **Verify**: `npm run build` succeeds; `dist/build.json` lists the added source hashes.
 
@@ -165,8 +166,10 @@ not reproducible directly, compare `quarantine` and `holders` exactly and record
 
 Add `test/vector-browser.mjs` modeled on `test/replica-browser.mjs`: launch Chromium against the
 built preview, load each vector that has `oracleCarrierOps` (skip and list the others), send
-`vector_verdict`, and assert `quarantine` equals the vector's `authorityQuarantine` (sorted). Write
-`evidence/vectors.json` with per-vector pass/fail, elapsed, and the list of skipped scenarios. Add
+`vector_verdict`, and assert per vector that `quarantine` equals the vector's `authorityQuarantine`
+(sorted), that every role in `holders` equals the oracle state's holder for that role, and that `state`
+equals the oracle state; a vector passes only when all three hold. Write `evidence/vectors.json` with
+per-vector pass/fail, the three comparison results, elapsed, and the list of skipped scenarios. Add
 `"e2e:vectors": "node test/vector-browser.mjs"` to the spike's `package.json`.
 
 **Verify**: `npm run e2e:vectors` reports N passed, 0 failed, with the skipped list; attach
