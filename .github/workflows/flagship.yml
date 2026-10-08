@@ -1010,7 +1010,7 @@ jobs:
     # main push or an explicit main-branch dispatch can enter the protected
     # environment and read pilot signing secrets.
     name: Android pilot distribution worker
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.changes.outputs.township == 'true'
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.changes.outputs.township == 'true' && needs.unit.result == 'success' && needs.android_pilot_verify.result == 'success' && needs.packaged_macos.result == 'success' && (needs.verify.result == 'success' || needs.verify.result == 'skipped') }}
     needs:
       - verify
       - unit
