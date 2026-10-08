@@ -4,20 +4,25 @@ Optional research target based on Lattice `af84459` and Popcorn main
 `381a5d0e21fc1c853078457462537f0eec65db00`. Both npm and Hex are locked to
 `0.4.0-next.0`. The published crypto runtime manifest identifies OTP **29.0.6**.
 
-**Status: implemented and built; browser acceptance still pending.** Native realm,
-host lifecycle, and native WebSocket proof tests pass. This environment denied the
-local Chromium launch (`socket() EPERM`) and the supported cloud browser's local
-URL (`ERR_BLOCKED_BY_CLIENT`). Neither establishes a browser runtime failure.
-Do not upgrade the main README/paper's browser-BEAM non-claim until the real
-browser gate below passes. See [verification.md](verification.md).
+**Status: implemented, built, and passing its Chromium gate.** Native realm,
+host lifecycle, and native WebSocket proof tests pass, and the `browser-proof` job of
+`.github/workflows/popcorn-spike.yml` (`npm run e2e` then `npm run e2e:replicas`
+against the real Gateway) is green; the latest green run is
+[37718664268](https://github.com/treetopdevs/lattice/actions/runs/37718664268)
+(2026-10-08, head `81a712360`). That gate is Chromium only: it is not a WebKit,
+Android System WebView, Tauri, or production claim, and it does not change the root
+README's browser-BEAM wording. See [verification.md](verification.md).
 
 ## Design adjustments
 
 - `browser/` is a standalone Mix project. There is deliberately no top-level
   spike `mix.exs`; the umbrella discovers only direct child Mix projects. Its
   OTP 28 server build never imports the OTP 29 browser app or Popcorn.
-- `scripts/shared.mjs` copies exactly four Lattice value modules into ignored
-  generated sources: Identity, Canonical, Op, and Authority.Delegation. It does
+- `scripts/shared.mjs` copies twenty core files byte-for-byte from
+  `apps/lattice_core/lib/lattice/` into ignored generated sources: Identity,
+  Canonical, Op, Authority with its Delegation, SuccessionCertificate, Continuation,
+  ContinuationCertificate and BeaconCertificate modules, Replica, Log, Dag, Sync,
+  Sync.Shape, Reduce, the three CRDTs, Carrier.Wire, and BrowserLogStore. It does
   not fork the encoder or start the server supervision tree. Build preparation
   refreshes those files; `dist/build.json` records their hashes and asset hashes.
 - A supervised `LatticeBrowser.Realm` registers as `LatticeBrowser.Bridge`.
