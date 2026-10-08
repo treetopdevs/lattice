@@ -39,13 +39,14 @@ export declare function decodeTreehouseAcceptance(text: string): TreehouseAccept
 /**
  * The delegation naming `publicKey` as audience in `replica`'s frames, optionally one that carries `command`.
  * This generalizes the issuer-root lookup: a joiner's capability is an exact-audience grant, not the root.
- * `product` is required: only live delegations qualify, so a quarantined or revoked grant is never offered.
+ * `product` is required: only usable delegations qualify, so a quarantined, revoked or lapsed grant is never
+ * offered.
  */
 export declare function memberCapability(frames: readonly CarrierOpFrame[], publicKey: string | Uint8Array, replica: string, options: {
     product: TreehouseProduct;
     command?: string;
 }): CarrierDelegation | null;
-/** Delegations an op authored at the current frontier of `replica` can cite: honored and unrevoked. */
+/** Delegations an op authored at the current frontier of `replica` can cite: honored, unrevoked and unexpired. */
 export declare function liveTreehouseDelegations(product: TreehouseProduct, frames: readonly CarrierOpFrame[], replica: string): CarrierDelegation[];
 export type TreehouseInvitationReview = {
     ok: true;

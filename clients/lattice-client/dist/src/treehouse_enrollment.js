@@ -2,7 +2,8 @@ import { ed25519 } from "@noble/curves/ed25519.js";
 import { canonicalBase64Bytes } from "./codec";
 import { carrierDelegationsFromFrames, carrierOpsToSemanticOps } from "./carrier";
 import { compareUtf8 } from "./op";
-import { materialize } from "./materialize";
+import { authoritySecurity, materialize } from "./materialize";
+import { delegationFrontierRefusal } from "./capability";
 import { frontier } from "./sync";
 import { authorTownshipDelegation } from "./township";
 import { acceptTreehouseInvitation, authorTreehouseCommand, observeTreehouse, treehouseCommandDecoders, treehouseInvitationAcceptanceBytes, treehouseSpaceSchema, treehouseThreadSchema, } from "./treehouse";
@@ -204,42 +205,32 @@ function threadScope(ops, reasons) {
 /**
  * The delegation naming `publicKey` as audience in `replica`'s frames, optionally one that carries `command`.
  * This generalizes the issuer-root lookup: a joiner's capability is an exact-audience grant, not the root.
- * `product` is required: only live delegations qualify, so a quarantined or revoked grant is never offered.
+ * `product` is required: only usable delegations qualify, so a quarantined, revoked or lapsed grant is never
+ * offered.
  */
 export function memberCapability(frames, publicKey, replica, options) {
     const audience = pubkeyBase64(publicKey);
-    return honoredDelegations(options.product, frames, replica).find(({ delegation, revoked }) => !revoked &&
+    return honoredDelegations(options.product, frames, replica).find(({ delegation, refusal }) => refusal === null &&
         delegation.audience === audience && (options.command === undefined || delegation.ops.includes(options.command)))
         ?.delegation ?? null;
 }
-/** Delegations an op authored at the current frontier of `replica` can cite: honored and unrevoked. */
+/** Delegations an op authored at the current frontier of `replica` can cite: honored, unrevoked and unexpired. */
 export function liveTreehouseDelegations(product, frames, replica) {
-    return honoredDelegations(product, frames, replica).filter(({ revoked }) => !revoked).map(({ delegation }) => delegation);
+    return honoredDelegations(product, frames, replica).filter(({ refusal }) => refusal === null).map(({ delegation }) => delegation);
 }
 /**
- * Delegations carried by honored frames of `replica`, each marked revoked when an honored revoke names it or any
- * ancestor in its chain. Only an unrevoked one can be cited by an op authored at the current frontier: a revoke
- * leaves the delegation's own frame honored and quarantines only later citing ops, so the quarantine map alone
- * cannot exclude it.
+ * Delegations carried by honored frames of `replica`, each with the reason an op authored now could not cite
+ * it (`revoked_capability` or `lease_expired`, from the reducer's own authority projection), or null when it is
+ * usable. A revoke or a lapsed lease leaves the delegation's own frame honored and quarantines only later
+ * citing ops, so the quarantine map alone cannot exclude it.
  */
 function honoredDelegations(product, frames, replica) {
     const ops = opsOf(product, frames);
     const reasons = verdicts(product, ops);
-    const honored = frames.filter((frame) => frame.replica === replica && !reasons.has(frame.id))
-        .flatMap((frame) => carrierDelegationsFromFrames([frame])).filter((delegation) => delegation.replica === replica);
-    const byId = new Map(honored.map((delegation) => [delegation.id, delegation]));
-    const revokes = new Set(ops.flatMap((op) => !reasons.has(op.id) && op.kind === "authority" && op.authority?.type === "revoke"
-        ? [op.authority.delegationId] : []));
-    const isRevoked = (delegation) => {
-        const seen = new Set();
-        for (let current = delegation; current !== undefined && !seen.has(current.id); current = current.parent_id === null ? undefined : byId.get(current.parent_id)) {
-            if (revokes.has(current.id))
-                return true;
-            seen.add(current.id);
-        }
-        return false;
-    };
-    return honored.map((delegation) => ({ delegation, revoked: isRevoked(delegation) }));
+    const security = authoritySecurity(schemaOf(product), ops, replica);
+    return frames.filter((frame) => frame.replica === replica && !reasons.has(frame.id))
+        .flatMap((frame) => carrierDelegationsFromFrames([frame])).filter((delegation) => delegation.replica === replica)
+        .map((delegation) => ({ delegation, refusal: delegationFrontierRefusal(delegation.id, security) }));
 }
 /**
  * Review one invitation against retained Space frames. The scope returned is the signed scope, every honored
@@ -351,13 +342,15 @@ export async function authorTreehouseAdmitAndGrant(input) {
         const delegations = honoredDelegations("Treehouse.Thread", frames, replica);
         const full = (delegation) => MEMBER_OPS.every((name) => delegation.ops.includes(name));
         const member = delegations.filter(({ delegation }) => delegation.audience === acceptance.recipient && full(delegation));
-        if (member.some(({ revoked }) => !revoked))
+        if (member.some(({ refusal }) => refusal === null))
             return null;
-        // Re-authoring the same grant yields the same delegation id, which the revoke still names, so a revoked
-        // member grant is refused rather than replaced by a grant that is dead on arrival.
-        if (member.length > 0)
+        // Re-authoring the same grant yields the same delegation id, which the revoke or lapsed lease still
+        // applies to, so an unusable member grant is refused rather than replaced by one dead on arrival.
+        if (member.some(({ refusal }) => refusal === "revoked_capability"))
             throw new Error("grant_revoked");
-        const parent = delegations.find(({ delegation, revoked }) => !revoked &&
+        if (member.length > 0)
+            throw new Error("grant_expired");
+        const parent = delegations.find(({ delegation, refusal }) => refusal === null &&
             delegation.audience === pubkeyBase64(input.signer.publicKey) && full(delegation))?.delegation;
         if (parent === undefined)
             throw new Error("no_capability");

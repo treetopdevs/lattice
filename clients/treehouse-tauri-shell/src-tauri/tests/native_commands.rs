@@ -470,6 +470,11 @@ fn relay_routes_are_capped_closed_and_pinned() {
         relay(vec![with(1, "url", "wss://example.com/#frag")]),
         relay(vec![with(1, "url", "ws://127.0.0.1:99999")]),
         relay(vec![with(1, "url", " wss://example.com")]),
+        relay(vec![with(1, "url", "wss://[not-an-ip]")]),
+        relay(vec![with(1, "url", "wss://[fe80::1%25en0]")]),
+        relay(vec![with(1, "url", "wss://1.2.3.999")]),
+        relay(vec![with(1, "url", "wss://ex\u{e4}mple.com")]),
+        relay(vec![with(1, "url", "ws://[::2]:9")]),
         relay(vec![with(1, "expectedPeerRealm", "server ")]),
     ] {
         next["relay"] = bad;
@@ -483,6 +488,9 @@ fn relay_routes_are_capped_closed_and_pinned() {
         "ws://localhost:1",
         "ws://LocalHost:1",
         "ws://[::1]:9",
+        "ws://[0:0:0:0:0:0:0:1]:9",
+        "wss://[2001:db8::1]:443",
+        "wss://10.0.0.1",
         "WSS://x",
     ] {
         let dir = tempfile::tempdir().unwrap();

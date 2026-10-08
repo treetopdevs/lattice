@@ -151,18 +151,53 @@ fn route_url(value: &str) -> bool {
     if authority.is_empty() || authority.contains('@') {
         return false;
     }
-    let host = match authority.strip_prefix('[') {
+    // Every host accepted here is one the shell's URL parser also accepts, so a persisted route can
+    // always be reloaded; anything outside these forms is refused.
+    let loopback = match authority.strip_prefix('[') {
         Some(v6) => match v6.split_once(']') {
-            Some((inner, port)) if port.is_empty() || valid_port(port) => format!("[{inner}]"),
+            Some((inner, port)) if port.is_empty() || valid_port(port) => {
+                match inner.parse::<std::net::Ipv6Addr>() {
+                    Ok(address) => address.is_loopback(),
+                    Err(_) => return false,
+                }
+            }
             _ => return false,
         },
-        None => match authority.split_once(':') {
-            Some((host, port)) if valid_port(&format!(":{port}")) => host.to_ascii_lowercase(),
-            Some(_) => return false,
-            None => authority.to_ascii_lowercase(),
-        },
+        None => {
+            let host = match authority.split_once(':') {
+                Some((host, port)) if valid_port(&format!(":{port}")) => host,
+                Some(_) => return false,
+                None => authority,
+            };
+            match route_host(host) {
+                Some(loopback) => loopback,
+                None => return false,
+            }
+        }
     };
-    !host.is_empty() && (secure || matches!(host.as_str(), "127.0.0.1" | "localhost" | "[::1]"))
+    secure || loopback
+}
+/// A name of ASCII letters, digits, `.`, `-` and `_`, or a dotted IPv4 address when the last label is
+/// numeric (WHATWG parses such a host as IPv4). Returns whether it is the loopback name or address.
+fn route_host(host: &str) -> Option<bool> {
+    if host.is_empty()
+        || !host
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'))
+    {
+        return None;
+    }
+    let last = host.trim_end_matches('.').rsplit('.').next().unwrap_or("");
+    let numeric = !last.is_empty()
+        && (last.bytes().all(|b| b.is_ascii_digit())
+            || last.to_ascii_lowercase().starts_with("0x"));
+    if numeric {
+        return host
+            .parse::<std::net::Ipv4Addr>()
+            .ok()
+            .map(|address| address == std::net::Ipv4Addr::LOCALHOST);
+    }
+    Some(host.eq_ignore_ascii_case("localhost"))
 }
 fn valid_port(suffix: &str) -> bool {
     suffix.strip_prefix(':').is_some_and(|port| {

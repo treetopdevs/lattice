@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { acceptTreehouseInvitation, authorTownshipDelegation, authorTownshipRevocation, carrierDelegationsFromFrames, authorTownshipGenesis, authorTreehouseCommand, authorTreehouseAdmitAndGrant, authorTreehouseIssueInvitation, carrierOpsToSemanticOps, decodeTreehouseAcceptance, decodeTreehouseJoinRequest, decodeTreehouseOffer, encodeTreehouseAcceptance, encodeTreehouseJoinRequest, encodeTreehouseOffer, memberCapability, observeTreehouse, reviewTreehouseInvitation, signTreehouseAcceptance, treehouseCommandDecoders, TREEHOUSE_LITE_THREAD_CAP, TREEHOUSE_OFFER_MAX_CHARS, } from "../src/index";
+import { acceptTreehouseInvitation, authorCarrierOp, authorTownshipDelegation, authorTownshipRevocation, carrierDelegationsFromFrames, authorTownshipGenesis, authorTreehouseCommand, authorTreehouseAdmitAndGrant, authorTreehouseIssueInvitation, carrierOpsToSemanticOps, decodeTreehouseAcceptance, decodeTreehouseJoinRequest, decodeTreehouseOffer, encodeTreehouseAcceptance, encodeTreehouseJoinRequest, encodeTreehouseOffer, liveTreehouseDelegations, memberCapability, observeTreehouse, reviewTreehouseInvitation, signTreehouseAcceptance, treehouseCommandDecoders, TREEHOUSE_LITE_THREAD_CAP, TREEHOUSE_OFFER_MAX_CHARS, } from "../src/index";
 import { frontier } from "../src/sync";
 const here = dirname(fileURLToPath(import.meta.url));
 const scenarios = JSON.parse(readFileSync(join(here, "vectors", "treehouse_enrollment", "enrollment.json"), "utf8"));
@@ -417,6 +417,27 @@ async function founderWorld(threadCount, archive = []) {
     await assert.rejects(() => authorTreehouseAdmitAndGrant({ signer: founderSigner, replica: world.replica, frames: removedSpace, threadFrames: regrantThreads, acceptance }), /member_removed/);
     console.log("PASS TS founder issues, joiner accepts, founder admits and grants, joiner posts under the member capability");
     console.log("PASS a revoked grant is never offered or silently re-issued; a removed member is not re-admitted by replay");
+    // A leased grant is offered until a valid root beacon passes its epoch, and never after. The reducer
+    // confirms the lapse: a post under it after the beacon is lease_expired.
+    const leaseThread = revokedGrant.replica;
+    const leaseBase = world.threads[leaseThread];
+    const leaseHolder = signerFromSeed("treehouse-ts-enrollment:lease-holder");
+    const leaseRoot = carrierDelegationsFromFrames(leaseBase).find((delegation) => delegation.parent_id === null);
+    const leased = await authorTownshipDelegation({ replica: leaseThread, deps: frontier(opsOf("Treehouse.Thread", leaseBase)),
+        audiencePubkey: leaseHolder.publicKey, parentId: leaseRoot.id, ops: ["post"], roles: [], live: false, expiresEpoch: 3, signer: founderSigner });
+    const leasedFrames = [...leaseBase, leased];
+    const leasedId = carrierDelegationsFromFrames([leased])[0].id;
+    assert.equal(memberCapability(leasedFrames, leaseHolder.publicKey, leaseThread, { command: "post", product: "Treehouse.Thread" })?.id, leasedId);
+    const beacon = await authorCarrierOp({ replica: leaseThread, deps: frontier(opsOf("Treehouse.Thread", leasedFrames)), kind: "authority",
+        body: ["tuple", [["atom", "beacon"], ["int", 5]]], cap: ["nil"], signer: founderSigner });
+    const lapsedFrames = [...leasedFrames, beacon];
+    assert.equal(observeTreehouse("Treehouse.Thread", opsOf("Treehouse.Thread", lapsedFrames)).quarantineReasons.has(beacon.id), false, "the beacon is valid");
+    assert.equal(memberCapability(lapsedFrames, leaseHolder.publicKey, leaseThread, { command: "post", product: "Treehouse.Thread" }), null);
+    assert.equal(liveTreehouseDelegations("Treehouse.Thread", lapsedFrames, leaseThread).some((delegation) => delegation.id === leasedId), false);
+    const latePost = await authorTreehouseCommand({ product: "Treehouse.Thread", replica: leaseThread, deps: frontier(opsOf("Treehouse.Thread", lapsedFrames)),
+        signer: leaseHolder, capId: leasedId, command: { command: "post", text: "late" } });
+    assert.equal(observeTreehouse("Treehouse.Thread", opsOf("Treehouse.Thread", [...lapsedFrames, latePost])).quarantineReasons.get(latePost.id), "lease_expired");
+    console.log("PASS a leased grant is never offered once a valid beacon passes its epoch");
 }
 {
     // Route cap and missing routes.

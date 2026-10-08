@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { emptyState, parseState, HISTORY_BYTES } from "../src/treehouse_state";
+import { validRouteUrl } from "../src/treehouse_routes";
 const good = emptyState();
 assert.deepEqual(parseState(JSON.stringify(good)), good);
 for (const change of [
@@ -277,6 +278,34 @@ for (const acked of [[token("z")], [token("c"), token("c")], ["bad"]]) {
   ])
     assert.throws(() => parseState(JSON.stringify(bad)), /invalid_relay/);
 }
+
+// The shell's URL rule accepts and refuses the same set as the native store (native_commands.rs), so a
+// route the native store persists always reloads.
+for (const url of [
+  "wss://relay.example.com:443/carrier",
+  "ws://localhost:1",
+  "ws://LocalHost:1",
+  "ws://[::1]:9",
+  "ws://[0:0:0:0:0:0:0:1]:9",
+  "wss://[2001:db8::1]:443",
+  "wss://10.0.0.1",
+  "WSS://x",
+])
+  assert.equal(validRouteUrl(url), true, url);
+for (const url of [
+  "http://127.0.0.1:8080",
+  "ws://example.com:8080",
+  "wss://user@example.com",
+  "wss://example.com/#frag",
+  "ws://127.0.0.1:99999",
+  " wss://example.com",
+  "wss://[not-an-ip]",
+  "wss://[fe80::1%25en0]",
+  "wss://1.2.3.999",
+  "wss://ex\u00e4mple.com",
+  "ws://[::2]:9",
+])
+  assert.equal(validRouteUrl(url), false, url);
 
 // join intent: the fixed name constant only, no user text.
 {

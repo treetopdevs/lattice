@@ -1,5 +1,6 @@
 import type { Op } from "./op";
 import type { ReplicaSchema } from "./schema";
+import type { AuthoritySecurityProjection } from "./authority";
 /**
  * Thrown by {@link materialize} when a log changes an authority role but the
  * reducer cannot fully validate that history — evidence is missing for a
@@ -50,4 +51,6 @@ export interface Materialized {
  * This is a pure function of its inputs, so Sim can remain the conformance
  * oracle for state, quarantine, and order.
  */
+/** The authority security projection `materialize` judges `ops` with (all ops included). */
+export declare function authoritySecurity(schema: ReplicaSchema, ops: Op[], expectedReplica?: string): AuthoritySecurityProjection;
 export declare function materialize(schema: ReplicaSchema, ops: Op[], included?: ReadonlySet<string>, carrierAuthorityReport?: CarrierAuthorityReportDiagnostic | null, expectedReplica?: string): Materialized;

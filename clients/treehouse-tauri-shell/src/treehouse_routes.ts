@@ -42,8 +42,9 @@ export function validRouteUrl(value: string): boolean {
   } catch {
     return false;
   }
-  // URL() silently trims and strips whitespace, so the pinned text must carry none.
-  if (/\s/.test(value) || url.username || url.password || url.hash || value.length > 2048) return false;
+  // URL() silently trims and strips whitespace, so the pinned text must carry none. Hosts stay ASCII so
+  // the native store, which checks the raw text, judges the same host.
+  if (/[^\x21-\x7e]/.test(value) || url.username || url.password || url.hash || value.length > 2048) return false;
   if (url.protocol === "wss:") return true;
   return (
     url.protocol === "ws:" &&

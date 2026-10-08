@@ -84,6 +84,26 @@ export function capabilityQuarantine(
   return { quarantined: false };
 }
 
+/**
+ * Why an op authored now, at the log's frontier, could not cite `delegationId`: such an op is causally
+ * before nothing, so every effective revoke on the chain applies, and so does every valid beacon past a
+ * chain link's lease. This is `revokedAsOf`/`expiredAsOf` evaluated at the frontier.
+ */
+export function delegationFrontierRefusal(
+  delegationId: string,
+  security: AuthoritySecurityProjection,
+): "revoked_capability" | "lease_expired" | null {
+  const chain = delegationChainIds(delegationId, security);
+  if (security.effectiveRevokes.some((revoke) => chain.has(revoke.delegationId)))
+    return "revoked_capability";
+  for (const id of chain) {
+    const expires = security.delegations.get(id)?.delegation?.expiresEpoch;
+    if (expires != null && security.validBeacons.some((beacon) => BigInt(beacon.epoch) > BigInt(expires)))
+      return "lease_expired";
+  }
+  return null;
+}
+
 function revokedAsOf(
   op: Op,
   delegationId: string,

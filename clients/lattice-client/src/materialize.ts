@@ -6,6 +6,7 @@ import { index, depth, canonicalOrder } from "./dag";
 import { isQuarantined } from "./quarantine";
 import { lww, orSet, causalList } from "./crdt/reducers";
 import { analyzeAuthority } from "./authority";
+import type { AuthoritySecurityProjection } from "./authority";
 import { commandConflicts } from "./policy";
 
 /**
@@ -88,6 +89,14 @@ export interface Materialized {
  * This is a pure function of its inputs, so Sim can remain the conformance
  * oracle for state, quarantine, and order.
  */
+/** The authority security projection `materialize` judges `ops` with (all ops included). */
+export function authoritySecurity(schema: ReplicaSchema, ops: Op[], expectedReplica?: string): AuthoritySecurityProjection {
+  const byId = index(ops);
+  const authorityIncluded = new Set(ops.filter((op) => op.structuralError === undefined).map((op) => op.id));
+  const authorityOrder = canonicalOrder(ops, byId).filter((id) => authorityIncluded.has(id));
+  return analyzeAuthority(schema, ops, authorityIncluded, authorityOrder, byId, expectedReplica).security;
+}
+
 export function materialize(
   schema: ReplicaSchema,
   ops: Op[],
