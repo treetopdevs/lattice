@@ -944,6 +944,7 @@ defmodule Lattice.Authority do
 
   defp collect_revokes(ordered, delegations, root) do
     for op <- ordered,
+        op.kind == :authority,
         match?({:revoke, _}, op.body),
         {:revoke, deleg_id} = op.body,
         revoke_authorized?(op, deleg_id, delegations, root) do

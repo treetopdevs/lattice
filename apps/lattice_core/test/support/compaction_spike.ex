@@ -1008,6 +1008,7 @@ defmodule Lattice.CompactionSpike do
 
     retained =
       for op <- ordered,
+          op.kind == :authority,
           match?({:revoke, _}, op.body),
           {:revoke, deleg_id} = op.body,
           do: %{op_id: op.id, deleg_id: deleg_id, author: op.author, covered?: false}
@@ -1954,6 +1955,7 @@ defmodule Lattice.CompactionSpike do
 
   defp collect_raw_revokes(ordered) do
     for op <- ordered,
+        op.kind == :authority,
         match?({:revoke, _}, op.body),
         {:revoke, deleg_id} = op.body,
         do: %{op_id: op.id, deleg_id: deleg_id, author: op.author}
