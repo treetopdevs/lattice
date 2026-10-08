@@ -263,7 +263,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 181 | R13-lite Treehouse enrollment and sync over one hand-configured relay route (test-variant two-instance macOS gate; R13 stays open) | P1 | L | 129-133, R01b, R08, R10, R12 (not R11) | IN PROGRESS (implementation committed locally; independent review and the hosted exact-tip and merge-result runs are open; see `plans/181-r13-lite-treehouse-enrollment-sync.md`) |
 | 182 | Evidence-tier working policy and loop guards in `plans/README.md` (Round 6, S6) | **P0** | S | — | DONE (2026-10-08; policy section at the top of the index) |
 | 183 | Product-scoped CI: `changes` classifier, product job gating, `required` fan-in, vector drift guard, retire `lattice_carrier_spike` (Round 6, S1) | P1 | M | 182 | TODO |
-| 184 | Enforce revocation on `:transfer`/`:succeed` and the dormant-arm holder check (Round 5c SEC-01 and CRYPTO-01, now planned) | **P0** | S–M | 182, 183 | TODO |
+| 184 | Enforce revocation on `:transfer`/`:succeed` and the dormant-arm holder check (Round 5c SEC-01 and CRYPTO-01, now planned) | **P0** | S–M | 182, 183 | DONE (2026-10-08; both guards in Elixir, mirror and TS; 3 new vectors; probe: a legacy succeed can cite a self-issued child of a rooted grant, vector written) |
 ## Round 6 (deep architecture audit, direction focus, 2026-10-07/08, against `c57c826ad`)
 
 An `improve deep` pass asked one question: which architectural shifts would now help the Treehouse
@@ -471,7 +471,7 @@ the next plan-162 execution can absorb the two authority guards.
 
 **Production core (`apps/lattice_core`)**:
 
-- **CRYPTO-01 — dormant succession has no holder-consistency guard**
+- **CRYPTO-01 — dormant succession has no holder-consistency guard** *(now plan 184, DONE 2026-10-08)*
   (`authority.ex:681-688`). `decide_succession_proof`'s dormant-ticks arm checks only
   `at_tick >= last_active + dormant_ticks` then `record_acquire/4`; it never compares `st.holder`
   to the ancestor-visible holder. The witnessed arm (`:707-708`) requires `st.holder == holder` from
@@ -484,7 +484,7 @@ the next plan-162 execution can absorb the two authority guards.
   vector-regeneration cost, rejects more without changing what a valid succession op means —
   exactly the class plan 162's existing 2b guards belong to. MED risk (may quarantine edge cases
   that currently converge; enumerate succession vectors per plan 162's STOP conditions).
-- **SEC-01 — revocation is not enforced for `:transfer` / `:succeed` authority ops**
+- **SEC-01 — revocation is not enforced for `:transfer` / `:succeed` authority ops** *(now plan 184, DONE 2026-10-08)*
   (`authority.ex:641-657`, `:661-678`). `decide_transfer/8` and `decide_succeed/8` check
   `deleg_valid[d.id]` (delegation-chain validity) but never consult `revokes`.
   `revoked_as_of?/5` (`:910-917`) is called only inside `cap_ok/8` (`:898`), i.e. only for `:command`
