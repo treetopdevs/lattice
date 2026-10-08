@@ -6,6 +6,7 @@
     "prepare:shared": "node scripts/shared.mjs",
     "test": "node --test test/*.test.mjs",
     "build": "node scripts/compile.mjs && vite build && node scripts/record-build.mjs",
+    "build:judge": "node scripts/compile.mjs && vite build --base=/judge/ --outDir=dist-judge --emptyOutDir && LATTICE_POPCORN_DIST=dist-judge node scripts/record-build.mjs",
     "dev": "node scripts/compile.mjs && vite --host 127.0.0.1",
     "preview": "node scripts/preview.mjs",
     "e2e": "node test/browser.mjs",
