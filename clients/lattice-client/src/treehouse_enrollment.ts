@@ -210,6 +210,11 @@ const verdicts = (product: TreehouseProduct, ops: Op[]) => materialize(schemaOf(
 const honoredOps = (ops: Op[], reasons: ReadonlyMap<string, string>) => ops.filter((op) => !reasons.has(op.id));
 const pubkeyBase64 = (key: string | Uint8Array) => typeof key === "string" ? key : btoa(String.fromCharCode(...key));
 
+/** Current Space membership, read from the materialized `members` set. */
+function treehouseMembers(ops: Op[]): Set<string> {
+  return new Set(materialize(treehouseSpaceSchema, ops).state.members as string[]);
+}
+
 /** Honored `create_thread` references, de-duplicated and sorted exactly like the BEAM invitation scope. */
 function threadScope(ops: Op[], reasons: ReadonlyMap<string, string>): string[] {
   return [...new Set(honoredOps(ops, reasons).filter((op) => op.kind === "command" && op.command === "create_thread")
@@ -219,24 +224,44 @@ function threadScope(ops: Op[], reasons: ReadonlyMap<string, string>): string[] 
 /**
  * The delegation naming `publicKey` as audience in `replica`'s frames, optionally one that carries `command`.
  * This generalizes the issuer-root lookup: a joiner's capability is an exact-audience grant, not the root.
- * `product` is required: only delegations carried by honored frames qualify, so a quarantined grant is never
- * offered.
+ * `product` is required: only live delegations qualify, so a quarantined or revoked grant is never offered.
  */
 export function memberCapability(
   frames: readonly CarrierOpFrame[], publicKey: string | Uint8Array, replica: string,
   options: { product: TreehouseProduct; command?: string },
 ): CarrierDelegation | null {
   const audience = pubkeyBase64(publicKey);
-  const reasons = verdicts(options.product, opsOf(options.product, frames));
-  for (const frame of frames) {
-    if (frame.replica !== replica || reasons.has(frame.id)) continue;
-    for (const delegation of carrierDelegationsFromFrames([frame])) {
-      if (delegation.audience !== audience || delegation.replica !== replica) continue;
-      if (options.command !== undefined && !delegation.ops.includes(options.command)) continue;
-      return delegation;
+  return honoredDelegations(options.product, frames, replica).find(({ delegation, revoked }) => !revoked &&
+    delegation.audience === audience && (options.command === undefined || delegation.ops.includes(options.command)))
+    ?.delegation ?? null;
+}
+
+/**
+ * Delegations carried by honored frames of `replica`, each marked revoked when an honored revoke names it or any
+ * ancestor in its chain. Only an unrevoked one can be cited by an op authored at the current frontier: a revoke
+ * leaves the delegation's own frame honored and quarantines only later citing ops, so the quarantine map alone
+ * cannot exclude it.
+ */
+function honoredDelegations(
+  product: TreehouseProduct, frames: readonly CarrierOpFrame[], replica: string,
+): { delegation: CarrierDelegation; revoked: boolean }[] {
+  const ops = opsOf(product, frames);
+  const reasons = verdicts(product, ops);
+  const honored = frames.filter((frame) => frame.replica === replica && !reasons.has(frame.id))
+    .flatMap((frame) => carrierDelegationsFromFrames([frame])).filter((delegation) => delegation.replica === replica);
+  const byId = new Map(honored.map((delegation) => [delegation.id, delegation]));
+  const revokes = new Set(ops.flatMap((op) => !reasons.has(op.id) && op.kind === "authority" && op.authority?.type === "revoke"
+    ? [op.authority.delegationId] : []));
+  const isRevoked = (delegation: CarrierDelegation): boolean => {
+    const seen = new Set<string>();
+    for (let current: CarrierDelegation | undefined = delegation; current !== undefined && !seen.has(current.id);
+      current = current.parent_id === null ? undefined : byId.get(current.parent_id)) {
+      if (revokes.has(current.id)) return true;
+      seen.add(current.id);
     }
-  }
-  return null;
+    return false;
+  };
+  return honored.map((delegation) => ({ delegation, revoked: isRevoked(delegation) }));
 }
 
 // ---- Review ----------------------------------------------------------------------------------------------
@@ -267,6 +292,9 @@ export function reviewTreehouseInvitation(input: {
   if (input.offerThreads !== undefined && JSON.stringify([...input.offerThreads].sort(compareUtf8)) !== JSON.stringify(signed)) return refuse("offer_scope_mismatch");
   const admitted = honored.some((op) => op.kind === "command" && op.command === "admit_member" &&
     op.commandArgs?.[0] === invitation.id && op.commandArgs[1] === recipient);
+  // Admission is read from current membership: a later honored removal is not undone by replaying this
+  // invitation. Re-enrolling a removed member needs a fresh invitation.
+  if (admitted && !treehouseMembers(ops).has(recipient)) return refuse("member_removed");
   return { ok: true, invitationId: invitation.id, recipient, threads: [...signed], admitted };
 }
 
@@ -345,10 +373,15 @@ export async function authorTreehouseAdmitAndGrant(input: {
 
   const plans = review.threads.map((replica) => {
     const frames = requireFrames(input.threadFrames[replica], replica);
-    if (honoredDelegations(frames, replica).some((delegation) => delegation.audience === acceptance.recipient &&
-      MEMBER_OPS.every((name) => delegation.ops.includes(name)))) return null;
-    const parent = honoredDelegations(frames, replica).find((delegation) => delegation.audience === pubkeyBase64(input.signer.publicKey) &&
-      MEMBER_OPS.every((name) => delegation.ops.includes(name)));
+    const delegations = honoredDelegations("Treehouse.Thread", frames, replica);
+    const full = (delegation: CarrierDelegation) => MEMBER_OPS.every((name) => delegation.ops.includes(name));
+    const member = delegations.filter(({ delegation }) => delegation.audience === acceptance.recipient && full(delegation));
+    if (member.some(({ revoked }) => !revoked)) return null;
+    // Re-authoring the same grant yields the same delegation id, which the revoke still names, so a revoked
+    // member grant is refused rather than replaced by a grant that is dead on arrival.
+    if (member.length > 0) throw new Error("grant_revoked");
+    const parent = delegations.find(({ delegation, revoked }) => !revoked &&
+      delegation.audience === pubkeyBase64(input.signer.publicKey) && full(delegation))?.delegation;
     if (parent === undefined) throw new Error("no_capability");
     return { replica, frames, parent };
   });
@@ -372,7 +405,3 @@ export async function authorTreehouseAdmitAndGrant(input: {
   return { admit, grants };
 }
 
-function honoredDelegations(frames: readonly CarrierOpFrame[], replica: string): CarrierDelegation[] {
-  const reasons = verdicts("Treehouse.Thread", opsOf("Treehouse.Thread", frames));
-  return frames.filter((frame) => frame.replica === replica && !reasons.has(frame.id)).flatMap((frame) => carrierDelegationsFromFrames([frame]));
-}

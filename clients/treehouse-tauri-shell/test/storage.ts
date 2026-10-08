@@ -384,6 +384,35 @@ for (const acked of [[token("z")], [token("c"), token("c")], ["bad"]]) {
     new TreehouseWorkflow(joiner).open(),
     /wrong_profile_root/,
   );
+
+  // An authentic competing genesis on the founder's replica, retained before the committed one, does
+  // not displace it: the root is selected by the #root: commitment, and the competitor is quarantined.
+  const competitorDelegation = await authorCarrierDelegation({
+    replica: space.replica,
+    audiencePubkey: signer.publicKey,
+    parentId: null,
+    live: true,
+    signer,
+    ops: ["create_space"],
+    roles: ["admin"],
+  });
+  const competitor = await authorCarrierOp({
+    replica: space.replica,
+    deps: [],
+    kind: "authority",
+    body: townshipGenesisBody(competitorDelegation, {}),
+    cap: ["nil"],
+    signer,
+  });
+  joiner.record = foreign({
+    ...space,
+    frames: [competitor, ...space.frames],
+    outbox: [],
+    acked: [competitor.id, ...space.frames.map((f) => f.id)],
+  });
+  const contested = new TreehouseWorkflow(joiner);
+  await contested.open();
+  assert.equal(contested.state.profiles[0]!.replica, space.replica);
 }
 console.log(
   "PASS state v2: in-memory migration, join intent, acked set, relay routes, foreign-root joiner",

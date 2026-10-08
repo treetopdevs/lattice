@@ -552,6 +552,34 @@ const live = (h: Harness, replica: string) => h.routeState(replica)?.connection 
   console.log("PASS reconfigure cancels the old epoch and starts a fresh one");
 }
 
+// ---- 10b. teardown waits for an in-flight sync; its result never lands in the next epoch ---------------
+{
+  const f = await founder();
+  const h = new Harness();
+  const feed = h.controller(f.app);
+  await feed.start();
+  await until(() => live(h, f.thread) && live(h, f.space) && h.syncs.length === 2, "settled");
+  let release!: () => void;
+  h.syncLatch = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  h.sessions.get(f.thread)![0]!.hints.push(5);
+  await until(() => h.syncs.length === 3, "a hint sync is in flight");
+  let reconfigured = false;
+  const done = feed.reconfigure().then(() => {
+    reconfigured = true;
+  });
+  await quiet(30);
+  assert.equal(reconfigured, false, "reconfigure waits for the in-flight sync to finish");
+  h.syncLatch = null;
+  release();
+  await done;
+  assert.equal(h.routeState(f.thread).matchesRelay, null, "the old sync wrote no state into the new epoch");
+  await until(() => live(h, f.thread) && live(h, f.space), "fresh epoch live");
+  await feed.stop();
+  console.log("PASS teardown awaits an in-flight sync and keeps its result out of the next epoch");
+}
+
 // ---- 11. unconfigured and over-cap refuse before any connection ---------------------------------------------
 {
   const bare = await fresh(new FaultNative());

@@ -144,9 +144,15 @@ export function createTreehouseFeedController(
   // before the Threads that reference it. A hint that arrives mid-sync waits as one trailing sync.
   const queued = new Map<
     string,
-    { promise: Promise<RouteSyncResult>; resolve(r: RouteSyncResult): void; reject(e: unknown): void }
+    {
+      epoch: number;
+      promise: Promise<RouteSyncResult>;
+      resolve(r: RouteSyncResult): void;
+      reject(e: unknown): void;
+    }
   >();
-  let draining = false;
+  // The running drain, so teardown can wait for an in-flight route sync before a new epoch starts.
+  let draining: Promise<void> | null = null;
 
   const routes = (): RelayRoute[] => workflow.state.relay?.routes ?? [];
 
@@ -193,7 +199,11 @@ export function createTreehouseFeedController(
     link.set(replica, { ...current, ...patch });
   };
 
-  const syncRoute = async (route: RelayRoute): Promise<RouteSyncResult> => {
+  const syncRoute = async (route: RelayRoute, at: number): Promise<RouteSyncResult> => {
+    // A sync that outlives its epoch must not write route state into the next one.
+    const record = (replica: string, matchesRelay: boolean): void => {
+      if (!stopped && at === epoch) setLink(replica, { matchesRelay });
+    };
     // Each route's worker subscribes on its own socket, so a Thread hint can arrive before the Space has
     // synced even though the queue orders routes that wait together. A Thread merged without its Space
     // fails the profile check, so the Space syncs first here, and only while no Space profile is held.
@@ -201,40 +211,42 @@ export function createTreehouseFeedController(
       const space = routes().find((r) => isSpace(r.replica));
       if (space) {
         const first = await syncTreehouseRoute(workflow, space, options.sync);
-        setLink(space.replica, { matchesRelay: first.matchesRelay });
+        record(space.replica, first.matchesRelay);
       }
     }
     const result = await syncTreehouseRoute(workflow, route, options.sync);
-    setLink(route.replica, { matchesRelay: result.matchesRelay });
+    record(route.replica, result.matchesRelay);
     return result;
   };
 
-  const drain = async (): Promise<void> => {
-    if (draining) return;
-    draining = true;
-    try {
-      while (queued.size > 0) {
-        const replica =
-          [...queued.keys()].find(isSpace) ?? [...queued.keys()][0]!;
-        const waiter = queued.get(replica)!;
-        queued.delete(replica);
-        const route = routes().find((r) => r.replica === replica);
-        try {
-          if (!route) throw new Error("unknown_route_replica");
-          const result = await syncRoute(route);
-          waiter.resolve(result);
-          if (isSpace(replica) && result.pulledFrames > 0)
-            for (const thread of routes().filter((r) => !isSpace(r.replica)))
-              request(thread.replica).catch((error: unknown) => {
-                setLink(thread.replica, { message: `Sync failed: ${errorMessage(error)}` });
-                emit();
-              });
-        } catch (error) {
-          waiter.reject(error);
-        }
+  const drain = (): Promise<void> => {
+    draining ??= drainQueue().finally(() => {
+      draining = null;
+    });
+    return draining;
+  };
+
+  const drainQueue = async (): Promise<void> => {
+    while (queued.size > 0) {
+      const replica =
+        [...queued.keys()].find(isSpace) ?? [...queued.keys()][0]!;
+      const waiter = queued.get(replica)!;
+      queued.delete(replica);
+      const route = routes().find((r) => r.replica === replica);
+      try {
+        if (waiter.epoch !== epoch) throw new Error("feed_reconfigured");
+        if (!route) throw new Error("unknown_route_replica");
+        const result = await syncRoute(route, waiter.epoch);
+        waiter.resolve(result);
+        if (isSpace(replica) && result.pulledFrames > 0 && waiter.epoch === epoch && !stopped)
+          for (const thread of routes().filter((r) => !isSpace(r.replica)))
+            request(thread.replica).catch((error: unknown) => {
+              setLink(thread.replica, { message: `Sync failed: ${errorMessage(error)}` });
+              emit();
+            });
+      } catch (error) {
+        waiter.reject(error);
       }
-    } finally {
-      draining = false;
     }
   };
 
@@ -250,7 +262,7 @@ export function createTreehouseFeedController(
       });
       // A rejection that nobody awaits is reported through route state, never as an unhandled rejection.
       promise.catch(() => undefined);
-      waiter = { promise, resolve, reject };
+      waiter = { epoch, promise, resolve, reject };
       queued.set(replica, waiter);
     }
     const promise = waiter.promise;
@@ -456,6 +468,9 @@ export function createTreehouseFeedController(
     const previous = [...workers.values()];
     workers = new Map();
     for (const worker of previous) cancel(worker);
+    // Requests queued for the old route set never run in the new one.
+    for (const waiter of queued.values()) waiter.reject(new Error("feed_reconfigured"));
+    queued.clear();
     await Promise.all(previous.map((w) => w.done));
   };
 
@@ -508,6 +523,9 @@ export function createTreehouseFeedController(
       const wasRunning = running;
       epoch++;
       await teardown();
+      // A cancelled worker stops waiting on its sync, but the sync itself runs on to its commit. The new
+      // epoch starts only once it has, so no old-epoch commit or route state lands after the relaunch.
+      await draining;
       stopPoll();
       link.clear();
       running = false;

@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import {
-  acceptTreehouseInvitation, authorTownshipDelegation, carrierDelegationsFromFrames, authorTownshipGenesis, authorTreehouseCommand,
+  acceptTreehouseInvitation, authorTownshipDelegation, authorTownshipRevocation, carrierDelegationsFromFrames, authorTownshipGenesis, authorTreehouseCommand,
   authorTreehouseAdmitAndGrant, authorTreehouseIssueInvitation, carrierOpsToSemanticOps,
   decodeTreehouseAcceptance, decodeTreehouseJoinRequest, decodeTreehouseOffer, encodeTreehouseAcceptance,
   encodeTreehouseJoinRequest, encodeTreehouseOffer, memberCapability, observeTreehouse,
@@ -436,7 +436,34 @@ async function founderWorld(threadCount: number, archive: number[] = []) {
     assert.equal(after.quarantineReasons.get(post.id), archived ? "application_archived_thread" : undefined);
     assert.equal(after.posts.length, archived ? 0 : 1);
   }
+  // A revoked grant is never offered, although its own frame stays honored, and replaying admit-and-grant
+  // refuses it. The reducer confirms the revoke is effective: a post under the old grant is revoked_capability.
+  const revokedGrant = admitted.grants.find((grant) => world.threads[grant.replica]!.length !== 3)!;
+  const grantedFrames = [...world.threads[revokedGrant.replica]!, revokedGrant.frame];
+  const revoke = await authorTownshipRevocation({ replica: revokedGrant.replica, deps: frontier(opsOf("Treehouse.Thread", grantedFrames)),
+    signer: founderSigner, delegationId: revokedGrant.delegation.id });
+  const revokedFrames = [...grantedFrames, revoke];
+  assert.equal(observeTreehouse("Treehouse.Thread", opsOf("Treehouse.Thread", revokedFrames)).quarantineReasons.has(revokedGrant.frame.id), false);
+  assert.equal(memberCapability(revokedFrames, joinerPub, revokedGrant.replica, { command: "post", product: "Treehouse.Thread" }), null);
+  const stalePost = await authorTreehouseCommand({ product: "Treehouse.Thread", replica: revokedGrant.replica, deps: frontier(opsOf("Treehouse.Thread", revokedFrames)),
+    signer: joinerSigner, capId: revokedGrant.delegation.id, command: { command: "post", text: "late" } });
+  assert.equal(observeTreehouse("Treehouse.Thread", opsOf("Treehouse.Thread", [...revokedFrames, stalePost])).quarantineReasons.get(stalePost.id), "revoked_capability");
+  const regrantThreads = Object.fromEntries(admitted.grants.map((grant) =>
+    [grant.replica, grant.replica === revokedGrant.replica ? revokedFrames : [...world.threads[grant.replica]!, grant.frame]]));
+  await assert.rejects(() => authorTreehouseAdmitAndGrant({ signer: founderSigner, replica: world.replica, frames: landedSpace, threadFrames: regrantThreads, acceptance }),
+    /grant_revoked/);
+  // A member removed after admission is not re-admitted by replaying the same invitation.
+  const removeCap = memberCapability(landedSpace, founderSigner.publicKey, world.replica, { command: "remove_member", product: "Treehouse.Space" })!;
+  const removal = await authorTreehouseCommand({ product: "Treehouse.Space", replica: world.replica, deps: frontier(opsOf("Treehouse.Space", landedSpace)),
+    signer: founderSigner, capId: removeCap.id, command: { command: "remove_member", recipient: joinerPub } });
+  const removedSpace = [...landedSpace, removal];
+  assert.deepEqual(observeTreehouse("Treehouse.Space", opsOf("Treehouse.Space", removedSpace)).state.members, []);
+  assert.deepEqual(reviewTreehouseInvitation({ replica: world.replica, frames: removedSpace, invitationId: issued.frame.id, recipient: joinerPub }),
+    { ok: false, reason: "member_removed" });
+  await assert.rejects(() => authorTreehouseAdmitAndGrant({ signer: founderSigner, replica: world.replica, frames: removedSpace, threadFrames: regrantThreads, acceptance }),
+    /member_removed/);
   console.log("PASS TS founder issues, joiner accepts, founder admits and grants, joiner posts under the member capability");
+  console.log("PASS a revoked grant is never offered or silently re-issued; a removed member is not re-admitted by replay");
 }
 
 {

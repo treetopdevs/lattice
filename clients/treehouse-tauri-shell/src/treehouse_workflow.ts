@@ -191,22 +191,22 @@ export class TreehouseWorkflow {
       {},
       treehouseCommandDecoders(profile.product),
     );
-    const root = ops.find(
-      (op) => op.deps.length === 0 && op.authority?.type === "genesis",
-    );
     // The replica's #root: commitment binds it to the genesis author. A joiner holds a
     // foreign-root profile, so the author need not be the local key, but the commitment
-    // must match whoever authored the genesis.
-    const rootAuthor = root
-      ? profile.frames.find((frame) => frame.id === root.id)?.author
-      : undefined;
-    if (
-      !root ||
-      rootAuthor === undefined ||
-      townshipReplicaCommitment(profile.replica) !==
-        (await townshipReplicaRootTag(rootAuthor))
-    )
-      throw new Error("wrong_profile_root");
+    // must match whoever authored the genesis. A relay serves authentic quarantined
+    // frames too, so a competing genesis may precede the committed one: select by the
+    // commitment, never by position.
+    const commitment = townshipReplicaCommitment(profile.replica);
+    let root: (typeof ops)[number] | undefined;
+    for (const op of ops) {
+      if (op.deps.length !== 0 || op.authority?.type !== "genesis") continue;
+      const author = profile.frames.find((frame) => frame.id === op.id)?.author;
+      if (author !== undefined && commitment === (await townshipReplicaRootTag(author))) {
+        root = op;
+        break;
+      }
+    }
+    if (!root) throw new Error("wrong_profile_root");
     const view = observeTreehouse(profile.product, ops);
     if (view.quarantineReasons.has(root.id) || view.order.length !== ids.size)
       throw new Error("invalid_profile_root");
