@@ -221,8 +221,15 @@ fn valid_port(suffix: &str) -> bool {
 fn valid_relay(relay: &Relay) -> bool {
     let mut replicas = HashSet::new();
     realm_text(&relay.local_realm)
-        && !relay.routes.is_empty()
         && relay.routes.len() <= MAX_ROUTES
+        // Exactly one Space route, so at most three Threads: a pinned set lacking its Space could never
+        // be repaired, since saved routes are only ever extended.
+        && relay
+            .routes
+            .iter()
+            .filter(|r| r.replica.starts_with("replica:treehouse:space:"))
+            .count()
+            == 1
         && relay.routes.iter().all(|r| {
             route_replica(&r.replica)
                 && route_url(&r.url)

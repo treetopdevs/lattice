@@ -92,17 +92,23 @@ export function validateRoute(value: unknown): RelayRoute {
   };
 }
 
-/** Validate a list: one to four routes, one per replica. */
+/**
+ * Validate a list: one route per replica, exactly one of them the Space, and at most three Threads. A saved
+ * set is pinned and only extended, so a set without its Space route could never be repaired.
+ */
 export function validateRoutes(values: unknown[]): RelayRoute[] {
   if (values.length === 0) return fail("routes_not_configured");
   if (values.length > MAX_ROUTES) return fail("too_many_routes");
   const seen = new Set<string>();
-  return values.map((value) => {
+  const routes = values.map((value) => {
     const route = validateRoute(value);
     if (seen.has(route.replica)) return fail("duplicate_route");
     seen.add(route.replica);
     return route;
   });
+  if (routes.filter((route) => productOf(route.replica) === "Treehouse.Space").length !== 1)
+    return fail("route_set_needs_one_space");
+  return routes;
 }
 
 /** The operator-typed route list: `{"localRealm": ..., "routes": [...]}` as JSON text. */

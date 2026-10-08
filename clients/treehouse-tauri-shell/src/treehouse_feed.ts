@@ -524,11 +524,12 @@ export function createTreehouseFeedController(
       if (stopped) return;
       const wasRunning = running;
       epoch++;
+      // Stop the poll before waiting: a tick during a slow drain would keep refilling the queue.
+      stopPoll();
       await teardown();
       // A cancelled worker stops waiting on its sync, but the sync itself runs on to its commit. The new
       // epoch starts only once it has, so no old-epoch commit or route state lands after the relaunch.
       await draining;
-      stopPoll();
       link.clear();
       running = false;
       if (workflow.state.relay === null) {

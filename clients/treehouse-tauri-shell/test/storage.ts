@@ -137,8 +137,9 @@ const withProfile = (overrides: Record<string, unknown> = {}) => ({
   ],
   active: spaceReplica,
 });
+// Route 1 is the Space; the rest are Threads.
 const route = (n: number) => ({
-  replica: `replica:treehouse:thread:${String.fromCharCode(97 + n).repeat(43)}#root:${"R".repeat(43)}`,
+  replica: `replica:treehouse:${n === 1 ? "space" : "thread"}:${String.fromCharCode(97 + n).repeat(43)}#root:${"R".repeat(43)}`,
   url: "ws://127.0.0.1:8080",
   expectedPeerRealm: "server",
   expectedPeerPubkey: pk(n),
@@ -275,6 +276,9 @@ for (const acked of [[token("z")], [token("c"), token("c")], ["bad"]]) {
     relay([{ ...four[0], url: "ws://example.com:8080" }]),
     relay([{ ...four[0], url: " wss://example.com" }]),
     relay([{ ...four[0], expectedPeerRealm: "server " }]),
+    // Exactly one Space route.
+    relay([route(2), route(3)]),
+    relay([four[0], { ...route(2), replica: four[0]!.replica.replace("bbbb", "zzzz") }]),
   ])
     assert.throws(() => parseState(JSON.stringify(bad)), /invalid_relay/);
 }

@@ -424,9 +424,11 @@ fn relay_routes_are_capped_closed_and_pinned() {
     let mut store = PreviewStore::at_directory(dir.path(), keys).unwrap();
     let initial = initialized(&mut store);
     let pk = |n: u8| BASE64.encode([n; 32]);
+    // Route 1 is the Space; the rest are Threads.
     let replica = |n: u8| {
         let nonce: String = std::iter::repeat_n(char::from(b'a' + n), 43).collect();
-        format!("replica:treehouse:thread:{nonce}#root:{}", "R".repeat(43))
+        let kind = if n == 1 { "space" } else { "thread" };
+        format!("replica:treehouse:{kind}:{nonce}#root:{}", "R".repeat(43))
     };
     let route = |n: u8| json!({"replica":replica(n),"url":"ws://127.0.0.1:8080","expectedPeerRealm":"server","expectedPeerPubkey":pk(n)});
     let with = |n: u8, field: &str, value: &str| {
@@ -482,6 +484,12 @@ fn relay_routes_are_capped_closed_and_pinned() {
         relay(vec![with(1, "url", "wss://010.0.0.1")]),
         relay(vec![with(1, "url", "wss://ex%61mple.com")]),
         relay(vec![with(1, "url", "wss://example.com/\u{e9}")]),
+        // Exactly one Space route: none, or two, is refused.
+        relay((2..=5).map(route).collect()),
+        relay(vec![
+            route(1),
+            with(2, "replica", &replica(1).replacen("bbbb", "zzzz", 1)),
+        ]),
         relay(vec![with(1, "url", "wss://example.com/\u{1}")]),
         relay(vec![with(1, "expectedPeerRealm", "server ")]),
     ] {
@@ -524,7 +532,7 @@ fn relay_routes_are_capped_closed_and_pinned() {
     for bad in [
         relay(vec![replaced_url, route(2)]),
         relay(vec![replaced_key, route(2)]),
-        relay(vec![route(2)]),
+        relay(vec![route(1)]),
         json!({"localRealm":"other","routes":[route(1), route(2)]}),
         Value::Null,
     ] {

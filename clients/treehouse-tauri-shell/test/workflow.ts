@@ -490,7 +490,8 @@ await unchanged(fNative, () => fApp.issueInvitation(joinRequest, ""), /invalid_l
 await unchanged(fNative, () => fApp.issueInvitation(joinRequest, "joiner"), /routes_not_configured/);
 for (const [list, pattern] of [
   ["not json", /invalid_route_list/],
-  [JSON.stringify({ localRealm: "f", routes: [routeEntry(UNKNOWN_REPLICA, 1)] }), /unknown_route_replica/],
+  [JSON.stringify({ localRealm: "f", routes: [routeEntry(spaceReplica, 1), routeEntry(UNKNOWN_REPLICA, 2)] }), /unknown_route_replica/],
+  [JSON.stringify({ localRealm: "f", routes: [routeEntry(UNKNOWN_REPLICA, 1)] }), /route_set_needs_one_space/],
   [JSON.stringify({ localRealm: "f", routes: [routeEntry(spaceReplica, 1, { url: "http://127.0.0.1:1" })] }), /invalid_route/],
   [JSON.stringify({ localRealm: "f", routes: [routeEntry(spaceReplica, 1, { url: "ws://example.com:80" })] }), /invalid_route/],
   [JSON.stringify({ localRealm: "f", routes: [routeEntry(spaceReplica, 1, { expectedPeerPubkey: "AAAA" })] }), /invalid_route/],

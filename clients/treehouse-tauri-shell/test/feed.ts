@@ -614,6 +614,29 @@ const live = (h: Harness, replica: string) => h.routeState(replica)?.connection 
   console.log("PASS teardown awaits an in-flight sync and keeps its result out of the next epoch");
 }
 
+// ---- 10c. reconfigure clears the poll before it waits on a slow drain ----------------------------------
+{
+  const f = await founder();
+  const h = new Harness();
+  const feed = h.controller(f.app, { pollMs: 60000 });
+  await feed.start();
+  await until(() => live(h, f.thread) && live(h, f.space) && h.syncs.length === 2, "settled");
+  let release!: () => void;
+  h.syncLatch = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  h.sessions.get(f.thread)![0]!.hints.push(5);
+  await until(() => h.syncs.length === 3, "a slow sync is in flight");
+  const done = feed.reconfigure();
+  await quiet(10);
+  assert.equal(h.timersCleared, 1, "the poll is cleared before reconfigure waits on the drain");
+  h.syncLatch = null;
+  release();
+  await done;
+  await feed.stop();
+  console.log("PASS reconfigure clears the poll before it waits on a slow drain");
+}
+
 // ---- 11. unconfigured and over-cap refuse before any connection ---------------------------------------------
 {
   const bare = await fresh(new FaultNative());

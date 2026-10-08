@@ -246,8 +246,11 @@ for (const name of ["confirmRoutes", "configureRoutes", "useOffer", "joinGroup"]
   assert.match(disabledOf((n) => textOf(n) === "Create thread"), /^!canCreateThread \|\|/);
   assert.equal(disabledOf((n) => aria(n).includes("as moderator")), "!canHideAsModerator");
   const appScript = app.sfc.scriptSetup.content;
-  assert(/canArchive = computed\(\(\) => canModerate\("archive_thread"\)\)/.test(appScript));
-  assert(/canHideAsModerator = computed\(\(\) => canModerate\("moderator_tombstone"\)\)/.test(appScript));
+  assert.equal(disabledOf((n) => /^`Edit post /.test(aria(n))), "!canEditOwn");
+  assert.equal(disabledOf((n) => /^`Hide post \$\{index \+ 1\}`$/.test(aria(n))), "!canHideOwn");
+  for (const [name, command] of [["canArchive", "archive_thread"], ["canHideAsModerator", "moderator_tombstone"],
+    ["canEditOwn", "author_edit"], ["canHideOwn", "author_tombstone"]])
+    assert(appScript.includes(`${name} = computed(() => canDo("${command}"))`), `${name} gates ${command}`);
 }
 const shown = ["Use offer", "Accept invitation", "Admit and grant", "Issue invitation"];
 for (const label of shown)

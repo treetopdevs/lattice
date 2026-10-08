@@ -80,13 +80,16 @@ const canPost = computed(
 const canCreateThread = computed(
   () => writable.value && space.value !== undefined && workflow.canCreateThread(),
 );
-// Each moderator action is gated on its own operation: a grant may carry one without the other.
-const canModerate = (command: "archive_thread" | "moderator_tombstone") =>
+// Each Thread action is gated on its own operation: a grant may carry one without another, and a revoked
+// or lapsed grant carries none.
+const canDo = (command: "archive_thread" | "moderator_tombstone" | "author_edit" | "author_tombstone") =>
   writable.value &&
   active.value !== undefined &&
   workflow.canAuthor(active.value.replica, command);
-const canArchive = computed(() => canModerate("archive_thread"));
-const canHideAsModerator = computed(() => canModerate("moderator_tombstone"));
+const canArchive = computed(() => canDo("archive_thread"));
+const canHideAsModerator = computed(() => canDo("moderator_tombstone"));
+const canEditOwn = computed(() => canDo("author_edit"));
+const canHideOwn = computed(() => canDo("author_tombstone"));
 const title = (replica: string) =>
   String(workflow.views.get(replica)?.state.title ?? "Untitled thread");
 function describe(error: unknown): string {
@@ -504,7 +507,7 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
                     "
                     class="text-button"
                     :aria-label="`Edit post ${index + 1}`"
-                    :disabled="!writable"
+                    :disabled="!canEditOwn"
                     @click="
                       editing = item.id;
                       editText = String(item.text);
@@ -517,7 +520,7 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
                     "
                     class="text-button"
                     :aria-label="`Hide post ${index + 1}`"
-                    :disabled="!writable"
+                    :disabled="!canHideOwn"
                     @click="hide(item.id)"
                   >
                     Hide</button
