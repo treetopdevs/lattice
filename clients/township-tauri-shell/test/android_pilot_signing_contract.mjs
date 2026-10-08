@@ -2,6 +2,16 @@
 // fail-closed external pilot keystore signing, monotonic version codes,
 // pilot hardening config, and the dev-only probe lane staying out of the
 // pilot artifact path.
+//
+// Re-pinned for plan 183 on 2026-10-08. Plan 183 scopes flagship.yml jobs by product through a
+// `changes` classifier, so `verify` can now be skipped. Three pins moved, each still exact:
+// - DISTRIBUTION_JOB_IF is the full android_pilot expression. It starts with !cancelled() so a
+//   skipped `verify` no longer skips distribution through implicit success(), and it requires the
+//   explicit dependency results instead (verify may be success or skipped, the rest must succeed).
+// - android_pilot.needs gains `changes`, which its township gate reads.
+// - android_pilot_verify is no longer unconditional: it carries exactly the township gate and needs
+//   exactly [android_pilot_contract, changes]. It stays secret-free and runs on every pull request
+//   that touches Township.
 
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
@@ -52,7 +62,7 @@ const { evaluateSignature, lineagePinFailures, normalizeCertPin } = await import
   "../scripts/android-pilot/verify_apk_signature.mjs"
 );
 
-const DISTRIBUTION_JOB_IF = "github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')";
+const DISTRIBUTION_JOB_IF = "!cancelled() && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.changes.outputs.township == 'true' && needs.unit.result == 'success' && needs.android_pilot_verify.result == 'success' && needs.packaged_macos.result == 'success' && (needs.verify.result == 'success' || needs.verify.result == 'skipped')";
 
 function workflowJob(name) {
   const job = workflowDocument.jobs?.[name];
@@ -263,7 +273,7 @@ test("direct pilot-secret references exist only inside the protected distributio
   }
   assert.deepEqual(secretJobs, ["android_pilot"]);
   assert.equal(job.environment, "android-pilot");
-  assert.deepEqual(job.needs, ["verify", "unit", "packaged_macos", "android_pilot_verify"]);
+  assert.deepEqual(job.needs, ["verify", "unit", "packaged_macos", "android_pilot_verify", "changes"]);
   assert.deepEqual(job.permissions, { contents: "read" });
   const secretSteps = workflowSteps(job).filter((step) =>
     /secrets\.TOWNSHIP_PILOT_/.test(JSON.stringify(step)),
@@ -427,8 +437,8 @@ test("the pilot contract installs dependencies without registry audit before exe
 test("secret-free Android verification remains runnable on pull requests", () => {
   const job = workflowJob("android_pilot_verify");
   assert.equal(job.environment, undefined);
-  assert.equal(job.if, undefined);
-  assert.equal(job.needs, "android_pilot_contract");
+  assert.equal(workflowIfExpression(job), "needs.changes.outputs.township == 'true'");
+  assert.deepEqual(job.needs, ["android_pilot_contract", "changes"]);
   assert.deepEqual(job.permissions, { contents: "read" });
   assert.doesNotMatch(JSON.stringify(job), /secrets\.TOWNSHIP_PILOT_/);
   const evidenceUpload = workflowSteps(job).find(
