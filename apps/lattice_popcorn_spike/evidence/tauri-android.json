@@ -1,0 +1,48 @@
+{
+  "harness": "test/tauri-judge-android.mjs",
+  "apk": "/Users/nicholas/develop/lattice/.claude/worktrees/agent-afa05cc386b2eb1e1/clients/treehouse-tauri-shell/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk",
+  "startedAt": "2026-10-08T05:31:24.138Z",
+  "device": {
+    "model": "sdk_gphone64_arm64",
+    "sdk": "34",
+    "abi": "arm64-v8a",
+    "webview": "com.google.android.webview, 113.0.5672.136"
+  },
+  "launches": [
+    {
+      "index": 1,
+      "outcome": "timeout",
+      "crossOriginIsolated": null,
+      "sharedArrayBuffer": null,
+      "workerProbe": null,
+      "userAgent": null,
+      "error": null,
+      "launchToPageMs": null,
+      "launchToBootedMs": null,
+      "launchToFirstVerdictMs": null,
+      "vmBootMs": null,
+      "vectors": null,
+      "beamMemoryAfterVectors": null,
+      "synthetic": null,
+      "beamMemoryAfterSynthetic": null,
+      "meminfoAtEvents": [],
+      "meminfoAtEnd": {
+        "totalPssKb": null,
+        "totalRssKb": null
+      }
+    }
+  ],
+  "finishedAt": "2026-10-08T05:32:07.919Z",
+  "observations": {
+    "panic": [
+      "thread '<unnamed>' (7344) panicked at /Users/nicholas/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wry-0.55.1/src/android/main_pipe.rs:417:26:",
+      "called `Result::unwrap()` on an `Err` value: \"SendError(..)\""
+    ],
+    "panicAfterLaunchMs": "about 10,400 to 11,600 ms on the three judge-spike launches whose launch time was recorded; every launch (judge-spike and ordinary) ended in this panic",
+    "ordinaryApkSamePanic": true,
+    "judgeAssetsEmbedded": "libtreehouse_tauri_shell.so contains /judge/judge.html, /judge/assets/beam-CjoXtISj.wasm, /judge/assets/otp/lib/elixir.tar",
+    "collectorEvents": 0,
+    "devtoolsPageUrlAt2s": "http://tauri.localhost/ (shell page; the judge page never reported)",
+    "emulator": "AVD seesend_api34 started -read-only -no-snapshot-save -no-window -gpu swiftshader_indirect"
+  }
+}
