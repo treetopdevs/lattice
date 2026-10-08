@@ -214,12 +214,12 @@ fn route_host(host: &str) -> Option<bool> {
     }
     Some(host.eq_ignore_ascii_case("localhost"))
 }
-/// `:` followed by an optional canonical decimal port (no leading zeros); WHATWG treats an empty port
-/// as the scheme default. The shell refuses non-canonical ports too, so both accept the same text.
+/// `:` followed by an optional canonical decimal port (no leading zeros, never 0, which names no
+/// listening endpoint); WHATWG treats an empty port as the scheme default. The shell applies the same
+/// rule, so both accept the same text.
 fn valid_port(suffix: &str) -> bool {
     suffix.strip_prefix(':').is_some_and(|port| {
         port.is_empty()
-            || port == "0"
             || (!port.starts_with('0')
                 && port.len() <= 5
                 && port.bytes().all(|b| b.is_ascii_digit())

@@ -100,6 +100,10 @@ function refusal(error: unknown): boolean {
   return (
     text.startsWith("carrier hello ") ||
     text === "malformed carrier hello" ||
+    // An endpoint that speaks another protocol version, or a broken nonce, will not change on redial.
+    text === "malformed carrier nonce" ||
+    text === "unsupported carrier operation wire version" ||
+    text === "unsupported carrier session version" ||
     text === "carrier peer error: unauthenticated" ||
     text === "invalid_route" ||
     text === "invalid_local_realm" ||

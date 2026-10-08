@@ -357,6 +357,24 @@ const live = (h: Harness, replica: string) => h.routeState(replica)?.connection 
   console.log("PASS a refused route stops retrying until a manual sync");
 }
 
+// ---- 5b. nonce and protocol-version failures are permanent refusals too -------------------------------
+for (const message of [
+  "malformed carrier nonce",
+  "unsupported carrier operation wire version",
+  "unsupported carrier session version",
+]) {
+  const f = await founder();
+  const h = new Harness();
+  h.connectErrors.set(f.thread, [new Error(message)]);
+  const feed = h.controller(f.app);
+  await feed.start();
+  await until(() => h.routeState(f.thread)?.connection === "refused", `refused on ${message}`);
+  await quiet(40);
+  assert.equal(h.sessions.get(f.thread)?.length ?? 0, 0, `${message} is not redialed`);
+  await feed.stop();
+}
+console.log("PASS nonce and protocol-version failures settle in refused instead of redialing");
+
 // ---- 6. autosync off: nothing connects at boot; manual sync syncs and starts the subscription ----------
 {
   const f = await founder();

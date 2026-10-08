@@ -321,6 +321,7 @@ for (const url of [
   "wss://a.0x1f",
   "wss://x:000443",
   "wss://x:0443",
+  "wss://x:0",
   "wss://example.com/\u00e9",
   "wss://example.com/\u0001",
 ])
