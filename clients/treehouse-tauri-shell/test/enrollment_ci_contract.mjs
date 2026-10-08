@@ -74,6 +74,22 @@ function jobHeader(job) {
   return at === -1 ? job : job.slice(0, at);
 }
 
+/** Every entry of the job-level `permissions:` mapping, blank lines and comments skipped; null when absent. */
+function permissions(header) {
+  const at = header.search(/^ {4}permissions:/mu);
+  if (at === -1) return null;
+  const [first, ...rest] = header.slice(at).split("\n");
+  const inline = first.replace(/^ {4}permissions:/u, "").trim();
+  if (inline !== "") return [inline];
+  const entries = [];
+  for (const line of rest) {
+    if (line.trim() === "" || line.trim().startsWith("#")) continue;
+    if (!line.startsWith("      ")) break;
+    entries.push(line.trim());
+  }
+  return entries;
+}
+
 function withKey(step, key) {
   const match = step.match(new RegExp(`^ {10}${key}:\\s*(.*)$`, "m"));
   return match?.[1]?.trim();
@@ -176,7 +192,8 @@ export function check(workflow, pkg, harnessSource) {
   const timeout = Number(scalar(header, "timeout-minutes", 4));
   if (!Number.isInteger(timeout) || timeout < 30 || timeout > 120) fail("timeout-minutes must be a bounded 30 to 120");
   if (scalar(header, "if", 4) !== undefined) fail("the job must have no if");
-  if (!/^ {4}permissions:\n {6}contents: read\n(?! {6})/mu.test(header)) fail("the job must declare least-privilege permissions: contents: read");
+  if (JSON.stringify(permissions(header)) !== JSON.stringify(["contents: read"]))
+    fail("the job must declare exactly least-privilege permissions: contents: read");
   if (/continue-on-error/u.test(job)) fail("continue-on-error is forbidden in any spelling");
   if (/\|\|\s*(?:true|:|exit\s+0)\b/u.test(job)) fail("|| true style masking is forbidden");
   if (/set\s+\+e/u.test(job)) fail("set +e is forbidden");
@@ -379,6 +396,13 @@ test("the job is a sibling of packaged_macos and a distinct job", () => {
 
 const mutations = {
   "job removed": (text) => text.replace(findJob(text, JOB) ?? "", ""),
+  "permissions removed": (text) => mutateJob(text, (job) => mutate(job, "    permissions:\n      contents: read\n", "")),
+  "permissions write-all": (text) =>
+    mutateJob(text, (job) => mutate(job, "    permissions:\n      contents: read\n", "    permissions: write-all\n")),
+  "extra permission after a blank line": (text) =>
+    mutateJob(text, (job) => mutate(job, "      contents: read\n", "      contents: read\n\n      id-token: write\n")),
+  "extra permission after a comment": (text) =>
+    mutateJob(text, (job) => mutate(job, "      contents: read\n", "      contents: read\n      # needed later\n      packages: write\n")),
   "wrong runner": (text) => mutateJob(text, (job) => mutate(job, "macos-15-intel", "macos-latest")),
   "no timeout": (text) => mutateJob(text, (job) => job.replace(/^ {4}timeout-minutes:.*\n/mu, "")),
   "unbounded timeout": (text) =>

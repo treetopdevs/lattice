@@ -212,6 +212,8 @@ export function createTreehouseFeedController(
       if (space) {
         const first = await syncTreehouseRoute(workflow, space, options.sync);
         record(space.replica, first.matchesRelay);
+        // A reconfigure or stop during the Space pre-sync ends this sync before it dials the next route.
+        if (stopped || at !== epoch) throw new Error("feed_reconfigured");
       }
     }
     const result = await syncTreehouseRoute(workflow, route, options.sync);

@@ -469,6 +469,7 @@ fn relay_routes_are_capped_closed_and_pinned() {
         relay(vec![with(1, "url", "wss://user@example.com")]),
         relay(vec![with(1, "url", "wss://example.com/#frag")]),
         relay(vec![with(1, "url", "ws://127.0.0.1:99999")]),
+        relay(vec![with(1, "url", "ws://127.0.0.1:8a")]),
         relay(vec![with(1, "url", " wss://example.com")]),
         relay(vec![with(1, "url", "wss://[not-an-ip]")]),
         relay(vec![with(1, "url", "wss://[fe80::1%25en0]")]),
@@ -491,6 +492,8 @@ fn relay_routes_are_capped_closed_and_pinned() {
         "ws://[0:0:0:0:0:0:0:1]:9",
         "wss://[2001:db8::1]:443",
         "wss://10.0.0.1",
+        "wss://x:",
+        "ws://[::1]:",
         "WSS://x",
     ] {
         let dir = tempfile::tempdir().unwrap();

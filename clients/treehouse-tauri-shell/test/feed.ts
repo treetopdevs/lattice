@@ -504,6 +504,40 @@ const live = (h: Harness, replica: string) => h.routeState(replica)?.connection 
   console.log("PASS a Thread that subscribes before the Space syncs the Space first");
 }
 
+// ---- 8d. a stop during the Space pre-sync ends the old sync before it dials the Thread --------------------
+{
+  const f = await founder();
+  const h = new Harness();
+  await syncTreehouseRoute(f.app, f.app.state.relay!.routes.find((r) => r.replica === f.space)!, h.syncOptions());
+  await syncTreehouseRoute(f.app, f.app.state.relay!.routes.find((r) => r.replica === f.thread)!, h.syncOptions());
+  const joiner = await fresh(new FaultNative());
+  const offer = await f.app.issueInvitation(await joiner.beginJoin(), "joiner");
+  await syncTreehouseRoute(f.app, f.app.state.relay!.routes.find((r) => r.replica === f.space)!, h.syncOptions());
+  await joiner.useOffer(offer);
+  await joiner.confirmOffer();
+  let releaseConnect!: () => void;
+  h.connectLatch.set(f.space, new Promise<void>((resolve) => {
+    releaseConnect = resolve;
+  }));
+  let releaseSync!: () => void;
+  h.syncLatch = new Promise<void>((resolve) => {
+    releaseSync = resolve;
+  });
+  h.syncs = [];
+  const feed = h.controller(joiner);
+  await feed.start();
+  await until(() => h.syncs.length === 1, "the Thread's Space pre-sync is in flight");
+  assert.equal(h.syncs[0], f.space);
+  const stopping = feed.stop();
+  releaseConnect();
+  await stopping;
+  h.syncLatch = null;
+  releaseSync();
+  await quiet(50);
+  assert.deepEqual(h.syncs, [f.space], "the stopped feed never dialed the Thread after its Space pre-sync");
+  console.log("PASS a stop during the Space pre-sync ends the old sync before the Thread");
+}
+
 // ---- 9. stop cancels the epoch: no state after stop, no late sync ---------------------------------------
 {
   const f = await founder();

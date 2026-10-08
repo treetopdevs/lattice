@@ -289,6 +289,8 @@ for (const url of [
   "ws://[0:0:0:0:0:0:0:1]:9",
   "wss://[2001:db8::1]:443",
   "wss://10.0.0.1",
+  "wss://x:",
+  "ws://[::1]:",
   "WSS://x",
 ])
   assert.equal(validRouteUrl(url), true, url);
@@ -298,6 +300,7 @@ for (const url of [
   "wss://user@example.com",
   "wss://example.com/#frag",
   "ws://127.0.0.1:99999",
+  "ws://127.0.0.1:8a",
   " wss://example.com",
   "wss://[not-an-ip]",
   "wss://[fe80::1%25en0]",

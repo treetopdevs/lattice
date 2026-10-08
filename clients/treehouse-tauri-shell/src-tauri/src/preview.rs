@@ -199,12 +199,13 @@ fn route_host(host: &str) -> Option<bool> {
     }
     Some(host.eq_ignore_ascii_case("localhost"))
 }
+/// `:` followed by an optional port; WHATWG treats an empty port as the scheme default.
 fn valid_port(suffix: &str) -> bool {
     suffix.strip_prefix(':').is_some_and(|port| {
-        !port.is_empty()
-            && port.len() <= 5
-            && port.bytes().all(|b| b.is_ascii_digit())
-            && port.parse::<u32>().is_ok_and(|n| n <= 65_535)
+        port.is_empty()
+            || port.len() <= 5
+                && port.bytes().all(|b| b.is_ascii_digit())
+                && port.parse::<u32>().is_ok_and(|n| n <= 65_535)
     })
 }
 fn valid_relay(relay: &Relay) -> bool {
