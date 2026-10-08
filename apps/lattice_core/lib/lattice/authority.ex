@@ -231,6 +231,7 @@ defmodule Lattice.Authority do
         ancestors,
         delegations,
         valid,
+        collect_revokes(ordered, delegations, root),
         collect_policies(ordered, delegations, valid),
         context
       )
@@ -542,6 +543,7 @@ defmodule Lattice.Authority do
            ancestors,
            delegations,
            deleg_valid,
+           revokes,
            policies,
            continuation
          )}
@@ -1083,6 +1085,7 @@ defmodule Lattice.Authority do
          ancestors,
          delegations,
          deleg_valid,
+         revokes,
          policies,
          continuation
        ) do
@@ -1122,13 +1125,33 @@ defmodule Lattice.Authority do
           end
 
         {:transfer, d, at_tick} ->
-          decide_transfer(st, op, role, d, at_tick, ancestors, deleg_valid, continuation.family)
+          decide_transfer(
+            st,
+            op,
+            role,
+            d,
+            at_tick,
+            ancestors,
+            deleg_valid,
+            {delegations, revokes},
+            continuation.family
+          )
 
         {:succeed, d, proof} ->
           if continuation.family != :legacy or Continuation.proof?(proof) do
             decide_continuation(st, op, role, d, proof, ancestors, continuation)
           else
-            decide_succeed(st, op, role, d, proof, ancestors, deleg_valid, policies)
+            decide_succeed(
+              st,
+              op,
+              role,
+              d,
+              proof,
+              ancestors,
+              deleg_valid,
+              {delegations, revokes},
+              policies
+            )
           end
 
         {:heartbeat, at_tick} ->
@@ -1206,7 +1229,19 @@ defmodule Lattice.Authority do
     }
   end
 
-  defp decide_transfer(st, op, role, d, at_tick, ancestors, deleg_valid, family) do
+  # Clause order mirrors cap_ok/9: structural validity, then revocation, then the
+  # holder checks, so a transfer under a revoked chain reports :revoked_capability.
+  defp decide_transfer(
+         st,
+         op,
+         role,
+         d,
+         at_tick,
+         ancestors,
+         deleg_valid,
+         {delegations, revokes},
+         family
+       ) do
     anc = Map.get(ancestors, op.id, MapSet.new())
     holder_at_deps = holder_from_acquires(st.acquires, anc)
 
@@ -1214,6 +1249,9 @@ defmodule Lattice.Authority do
       not delegation_valid_at?(deleg_valid[d.id], st.acquires, anc) or
         op.author != d.issuer or not MapSet.member?(d.roles, role) ->
         reject(st, op, :invalid_transfer, role)
+
+      revoked_as_of?(op, d, delegations, revokes, ancestors) ->
+        reject(st, op, :revoked_capability, role)
 
       holder_at_deps != op.author ->
         reject(st, op, :transfer_not_holder, role)
@@ -1239,7 +1277,17 @@ defmodule Lattice.Authority do
     end
   end
 
-  defp decide_succeed(st, op, role, d, proof, ancestors, deleg_valid, policies) do
+  defp decide_succeed(
+         st,
+         op,
+         role,
+         d,
+         proof,
+         ancestors,
+         deleg_valid,
+         {delegations, revokes},
+         policies
+       ) do
     anc = Map.get(ancestors, op.id, MapSet.new())
     policy = Map.get(policies, role)
 
@@ -1248,6 +1296,9 @@ defmodule Lattice.Authority do
         op.author != d.audience or op.author != d.issuer or
           not MapSet.member?(d.roles, role) ->
         reject(st, op, :invalid_succession, role)
+
+      revoked_as_of?(op, d, delegations, revokes, ancestors) ->
+        reject(st, op, :revoked_capability, role)
 
       is_nil(policy) or op.author != policy.successor ->
         reject(st, op, :unauthorized_succession, role)
