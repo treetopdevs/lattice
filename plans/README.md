@@ -266,6 +266,8 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 184 | Enforce revocation on `:transfer`/`:succeed` and the dormant-arm holder check (Round 5c SEC-01 and CRYPTO-01, now planned) | **P0** | S–M | 182, 183 | DONE (2026-10-08; both guards in Elixir, mirror and TS; 4 new vectors; Codex second review: blocker fixed by kind-gating revokes; probe: a legacy succeed can cite a revocable chain) |
 ## Round 6 (deep architecture audit, direction focus, 2026-10-07/08, against `c57c826ad`)
 
+**Outcome (2026-10-08):** 182 and 184 DONE; 183 integrated with its hosted proof in PR #107 and the Township-only probe PR #106; 185 NO-GO on two independent blockers (the Wire atom-vocabulary defect, now plan 190, and macOS WKWebView exposing no `SharedArrayBuffer` under Tauri 2.11); rows 190–192 filed from findings made during execution.
+
 An `improve deep` pass asked one question: which architectural shifts would now help the Treehouse
 direction, using this repo's own stuck loops as evidence. Three read-only auditors (runtime
 duplication, core substrate shape, loop history) plus direct reads; every load-bearing citation was
@@ -357,13 +359,14 @@ cover it); the two authority guards in plan 184 were re-verified against source.
 SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 
 
-| 185 | **(spike)** One judge runtime: Popcorn-hosted `lattice_core` judge inside the Treehouse Tauri webview, vector-equal, measured, GO/NO-GO (Round 6, S2) | P1 | M | 182, 183 | TODO |
+| 185 | **(spike)** One judge runtime: Popcorn-hosted `lattice_core` judge inside the Treehouse Tauri webview, vector-equal, measured, GO/NO-GO (Round 6, S2) | P1 | M | 182, 183 | NO-GO (2026-10-08): 63/68 vectors equal, 5 refused by the Wire atom defect (plan 190); macOS WKWebView lacks SharedArrayBuffer, Popcorn cannot boot; Android wry panic (row 192) |
 | 186 | Shared shell kit `clients/lattice-shell-kit` (feed, outbox sync, routes, relay client, BEAM test peer, packaged harness); Treehouse consumes it (Round 6, S3) | P2 | M | 183 | TODO (planned, plan file not yet written) |
 | 187 | Claims as data: one registry, generated status, retire prose-pinning contract tests; folds plans 164/166 and the Township probe lazy-load (Round 6, S5) | P2 | S–M | 182 | TODO (planned, plan file not yet written) |
 | 188 | **(design)** Authority admission as one guard pipeline, Elixir-only if 185 is GO; absorbs the quadratic and Replica-DSL items (Round 6, S4) | P2 | L | 184, 185 | TODO (planned, plan file not yet written) |
 | 189 | **(design)** Extract the v1 plane to `apps/lattice_v1`; stop booting v1 children in the pilot release; decide `Live`, `Demo.Thread`, the early runtime plane (Round 6, S1 part 2) | P3 | L | 183 | TODO (planned, plan file not yet written) |
 | 190 | Wire atom-vocabulary determinism: decode unknown atom names as `Lattice.Canonical.Atom` so frame admission is a pure function of bytes (the plan 185 spike found five vectors refused by any VM lacking the exporter's atoms) | P1 | M | 184 | TODO |
 | 191 | Policy-validation reason parity: a genesis policy carrying both `dormant_ticks` and `recovery` yields `:invalid_recovery_policy` in Elixir (`authority.ex` decide_succeed) but `recovery_certificate_required` in TS (`carrier.ts` collapses the policy to `"invalid"`); pre-existing, found by the plan 184 second review; needs a vector and one-sided fix | P1 | S | 184 | TODO |
+| 192 | Treehouse Android debug APK panics about 11 s after launch on the API 34 emulator (`wry-0.55.1` `android/main_pipe.rs:417`, `GetUrl` reply to a dropped receiver); the ordinary build panics too; CI only compiles the APK so no job sees it (found by plan 185) | P1 | S–M | — | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

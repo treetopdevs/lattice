@@ -281,3 +281,27 @@ Update `plans/README.md` row 185 in one line with the verdict and the decision d
 - The compiler split (OTP 29 / Elixir 1.20 for the browser vs 28 / 1.19 for the server) is a standing
   cost; if GO, align the server toolchain or pin the browser one in `.tool-versions` at the root.
 - `popcorn-spike.yml` is path-filtered on `apps/lattice_core/**`; it will run on the shared-set change.
+
+## Execution record (2026-10-08)
+
+- Executed by an Opus executor in an isolated worktree; the reviewer overrode the step 3 STOP so steps
+  4–6 could still be measured, then integrated eight commits onto `claude/round6-plans-182-185`.
+- Decision record: `docs/research/one_judge_runtime_spike.md`. Verdict **NO-GO (2026-10-08)**, on two
+  independent blockers: (1) vector equality 63/68, the five refusals being the pre-existing
+  `Lattice.Carrier.Wire` atom-vocabulary defect that also fails natively (now plan 190); (2) macOS
+  WKWebView under Tauri 2.11.5 reports `crossOriginIsolated: true` but exposes no `SharedArrayBuffer`,
+  which Popcorn 0.4.0-next.0 needs, so the runtime never boots in the Treehouse webview (the plan's
+  header STOP in substance). Android: the debug APK, judge-spike and ordinary alike, panics in `wry`
+  about 11 s after launch on the API 34 emulator (row 192); nothing measured there.
+- Numbers that did land: Chromium cold start to first verdict median 999 ms; 4,004-op synthetic log
+  judged in 7.9 s in-BEAM (about 1,974 µs per op, `Authority.analyze/2` dominating natively too);
+  bundle 12,950,737 bytes raw / 5,591,179 compressed (under both thresholds); `'wasm-unsafe-eval'`
+  suffices in isolated Chromium; Popcorn's JS-to-VM bridge drops single messages above about 64 KiB,
+  so the spike sends chunks.
+- The ordinary Treehouse build is byte-identical to the base build (no Popcorn, judge or collector
+  strings; bundle classifier and shell `npm test` pass). Evidence files are committed under
+  `apps/lattice_popcorn_spike/evidence/`.
+- Operator decisions: approve plan 190; decide whether a `SharedArrayBuffer`-dependent judge runtime
+  remains a desktop candidate (options in the record: a threadless Popcorn build, a WKWebView setting
+  that exposes it, or a different desktop host).
+
