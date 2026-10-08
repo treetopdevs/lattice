@@ -196,6 +196,33 @@ defmodule Lattice2.AuthorityTest do
              pub(sim, "b")
   end
 
+  test "a command-kind op with a revoke-shaped body does not revoke" do
+    sim =
+      Sim.new(Lattice.Demo.Thread, @replica, ["root", "b", "c"],
+        seed: "auth:command-shaped-revoke"
+      )
+
+    {sim, _g} = Sim.create_replica(sim, "root")
+    {sim, d1} = Sim.transfer(sim, "root", "b", :moderator)
+    sim = Sim.sync_all(sim)
+
+    # Only an :authority op can revoke; a command carrying the same body is just a
+    # malformed command and must not reach the revocation set.
+    {sim, fake_revoke} = Sim.append(sim, "root", :command, {:revoke, d1.id})
+    sim = Sim.sync_all(sim)
+
+    {sim, to_c} = Sim.transfer(sim, "b", "c", :moderator)
+    assert to_c.parent_id == d1.id
+    transfer_bc = transfer_op!(Sim.log(sim, "b"), to_c.id)
+    sim = Sim.sync_all(sim)
+
+    assert Sim.quarantined(sim, "root", transfer_bc.id) == false
+    assert {true, :malformed_command} = Sim.quarantined(sim, "root", fake_revoke.id)
+
+    assert Lattice.Authority.holder(Lattice.Demo.Thread, Sim.log(sim, "root"), :moderator) ==
+             pub(sim, "c")
+  end
+
   test "a dormant-tick succession that has not seen a concurrent transfer is quarantined" do
     # Seed chosen so the precondition below holds (canonical order is by op id).
     sim =
