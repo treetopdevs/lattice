@@ -60,6 +60,10 @@ jobs:
           if [ "$EVENT" = "workflow_dispatch" ] || [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
             core=true; township=true; treehouse=true; legacy=true
           else
+            # Run the diff before classifying so a failure exits here under set -e and fails the job
+            # (fail closed) instead of leaving every output false inside a process substitution.
+            # --no-renames lists both sides of a move, so the source product is classified too.
+            git diff --no-renames --name-only "$BASE" "$HEAD" > "$RUNNER_TEMP/changed-paths.txt"
             while IFS= read -r path; do
               case "$path" in
                 clients/township-tauri-shell/*|apps/township_web/*|apps/township_bench/*|scripts/township_*|scripts/android-pilot/*|playwright.township*.config.mjs) township=true ;;
@@ -67,7 +71,7 @@ jobs:
                 apps/lattice_server/*|apps/lattice_demo/*|apps/lattice_stress/*|scripts/lattice_*|playwright.config.mjs|tests/*) legacy=true ;;
                 *) core=true ;;
               esac
-            done < <(git diff --name-only "$BASE" "$HEAD")
+            done < "$RUNNER_TEMP/changed-paths.txt"
           fi
           # Any path outside the product-only prefixes runs everything (fail closed).
           if [ "$core" = true ]; then township=true; treehouse=true; legacy=true; fi
@@ -216,7 +220,14 @@ jobs:
           npm --prefix clients/lattice-client run continuation:vectors
           MIX_ENV=test mix test apps/lattice_core/test/treehouse/bounded_continuation_reciprocal_test.exs
       - name: Committed oracle vectors match regeneration
-        run: git diff --exit-code --stat -- clients/lattice-client/test/vectors
+        run: |
+          git diff --exit-code --stat -- clients/lattice-client/test/vectors
+          untracked="$(git status --porcelain --untracked-files=all -- clients/lattice-client/test/vectors)"
+          if [ -n "$untracked" ]; then
+            echo "regenerated vectors that are not committed:" >&2
+            echo "$untracked" >&2
+            exit 1
+          fi
       - name: Typecheck TS client
         working-directory: clients/lattice-client
         run: npm run typecheck
@@ -1249,5 +1260,11 @@ jobs:
         env:
           RESULTS: ${{ toJSON(needs) }}
         run: |
-          echo "$RESULTS" | grep -E '"result": *"(failure|cancelled)"' && { echo "a required job failed or was cancelled" >&2; exit 1; } || true
+          # Parse each direct dependency's .result only, so an output that happens to be named
+          # "result" cannot trip the fan-in. skipped passes: the classifier found that product untouched.
+          if echo "$RESULTS" | jq -e 'to_entries | map(.value.result) | any(. == "failure" or . == "cancelled")' > /dev/null; then
+            echo "a required job failed or was cancelled:" >&2
+            echo "$RESULTS" | jq -r 'to_entries[] | "\(.key)=\(.value.result)"' >&2
+            exit 1
+          fi
           echo "all required jobs succeeded or were skipped"
