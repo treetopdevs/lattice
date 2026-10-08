@@ -438,6 +438,24 @@ async function founderWorld(threadCount, archive = []) {
         signer: leaseHolder, capId: leasedId, command: { command: "post", text: "late" } });
     assert.equal(observeTreehouse("Treehouse.Thread", opsOf("Treehouse.Thread", [...lapsedFrames, latePost])).quarantineReasons.get(latePost.id), "lease_expired");
     console.log("PASS a leased grant is never offered once a valid beacon passes its epoch");
+    // A delegation-shaped term nested inside a signed but inert authority body is not authority evidence: it
+    // never counts as a member grant, so it cannot suppress the real grant, and it is never offered.
+    const inertThread = admitted.grants.find((grant) => grant.replica !== revokedGrant.replica).replica;
+    const inertBase = world.threads[inertThread];
+    const unpublished = await authorTownshipDelegation({ replica: inertThread, deps: frontier(opsOf("Treehouse.Thread", inertBase)),
+        audiencePubkey: joinerPub, parentId: carrierDelegationsFromFrames(inertBase).find((delegation) => delegation.parent_id === null).id,
+        ops: ["post", "author_edit", "author_tombstone"], roles: [], live: false, signer: founderSigner });
+    const findDelegationTerm = (term) => term?.[0] === "delegation" ? term
+        : Array.isArray(term?.[1]) ? term[1].map(findDelegationTerm).find(Boolean) : undefined;
+    const inert = await authorCarrierOp({ replica: inertThread, deps: frontier(opsOf("Treehouse.Thread", inertBase)), kind: "authority",
+        body: ["tuple", [["atom", "note"], findDelegationTerm(unpublished.body)]], cap: ["nil"], signer: founderSigner });
+    const inertFrames = [...inertBase, inert];
+    assert.equal(carrierDelegationsFromFrames([inert]).length, 1, "the nested term is delegation-shaped");
+    assert.equal(memberCapability(inertFrames, joinerPub, inertThread, { command: "post", product: "Treehouse.Thread" }), null);
+    const inertThreads = Object.fromEntries(Object.entries(world.threads).map(([replica, frames]) => [replica, replica === inertThread ? inertFrames : frames]));
+    const throughInert = await authorTreehouseAdmitAndGrant({ signer: founderSigner, replica: world.replica, frames: spaceFrames, threadFrames: inertThreads, acceptance });
+    assert(throughInert.grants.some((grant) => grant.replica === inertThread), "the real grant is still authored");
+    console.log("PASS a delegation nested in an inert authority body is never treated as a grant");
 }
 {
     // Route cap and missing routes.

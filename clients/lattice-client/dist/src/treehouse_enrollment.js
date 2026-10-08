@@ -219,17 +219,22 @@ export function liveTreehouseDelegations(product, frames, replica) {
     return honoredDelegations(product, frames, replica).filter(({ refusal }) => refusal === null).map(({ delegation }) => delegation);
 }
 /**
- * Delegations carried by honored frames of `replica`, each with the reason an op authored now could not cite
- * it (`revoked_capability` or `lease_expired`, from the reducer's own authority projection), or null when it is
- * usable. A revoke or a lapsed lease leaves the delegation's own frame honored and quarantines only later
- * citing ops, so the quarantine map alone cannot exclude it.
+ * Delegations the reducer's own authority projection validated, each introduced by an honored frame of
+ * `replica`, with the reason an op authored now could not cite it (`revoked_capability` or `lease_expired`),
+ * or null when it is usable. A delegation-shaped term nested elsewhere in a frame body is not authority
+ * evidence and never appears. A revoke or a lapsed lease leaves the delegation's own frame honored and
+ * quarantines only later citing ops, so the quarantine map alone cannot exclude it.
  */
 function honoredDelegations(product, frames, replica) {
     const ops = opsOf(product, frames);
     const reasons = verdicts(product, ops);
     const security = authoritySecurity(schemaOf(product), ops, replica);
     return frames.filter((frame) => frame.replica === replica && !reasons.has(frame.id))
-        .flatMap((frame) => carrierDelegationsFromFrames([frame])).filter((delegation) => delegation.replica === replica)
+        .flatMap((frame) => carrierDelegationsFromFrames([frame]).filter((delegation) => {
+        const record = security.delegations.get(delegation.id);
+        return delegation.replica === replica && record?.delegation != null && record.validation.valid &&
+            record.introductionOpIds.includes(frame.id);
+    }))
         .map((delegation) => ({ delegation, refusal: delegationFrontierRefusal(delegation.id, security) }));
 }
 /**
