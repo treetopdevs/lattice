@@ -221,6 +221,107 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 179 | Witnessed beacons pinned at genesis (AF-2 founder-loss clock) | P1 | S then L | 145, 149, 162, 177, 178 | DONE (PR68 final 5d5e0560; Fable/Sol reviews passed; full source 747 tests + 27 properties; final tip 34067997116 and merge 6f0a555a / run 34068926435 passed. Narrow Core beacon/admission/revocation/lapse proof; general founder survival and physical ceremonies remain later unified gates) |
 | 180 | Group-first roadmap: chunked schedule from the corrected map to the Treehouse two-week pilot (AF-2 and AF-3 builds, Toolshed as a module, D3 rollover, host option) | **P0** | S | 158, 177, 178, 179 | DRAFT (2026-09-04; schedule only, no code; superseded in execution by the unified delivery plan, `plans/roadmaps/treehouse-unified-2026-09-06.md`) |
 | 181 | R13-lite Treehouse enrollment and sync over one hand-configured relay route (test-variant two-instance macOS gate; R13 stays open) | P1 | L | 129-133, R01b, R08, R10, R12 (not R11) | IN PROGRESS (implementation committed locally; independent review and the hosted exact-tip and merge-result runs are open; see `plans/181-r13-lite-treehouse-enrollment-sync.md`) |
+| 182 | Evidence-tier working policy and loop guards in `plans/README.md` (Round 6, S6) | **P0** | S | — | TODO |
+| 183 | Product-scoped CI: `changes` classifier, product job gating, `required` fan-in, vector drift guard, retire `lattice_carrier_spike` (Round 6, S1) | P1 | M | 182 | TODO |
+| 184 | Enforce revocation on `:transfer`/`:succeed` and the dormant-arm holder check (Round 5c SEC-01 and CRYPTO-01, now planned) | **P0** | S–M | 182, 183 | TODO |
+## Round 6 (deep architecture audit, direction focus, 2026-10-07/08, against `c57c826ad`)
+
+An `improve deep` pass asked one question: which architectural shifts would now help the Treehouse
+direction, using this repo's own stuck loops as evidence. Three read-only auditors (runtime
+duplication, core substrate shape, loop history) plus direct reads; every load-bearing citation was
+re-opened against source at `c57c826ad`. The advisor record with the full evidence lives in the
+operator's plan file for that session; the durable parts are here.
+
+**Headline**: the project keeps three implementations of the authority judge in lockstep
+(`authority.ex` 1,689 + `authority/` 1,079; `authority.ts` 1,943 plus `capability.ts`/`policy.ts`/
+`quarantine.ts`/`materialize.ts`/`continuation.ts`; the 1,973-line test-only `compaction_spike.ex`
+mirror), held equal by 91 vector files from a 5,276-line exporter, and has spent six plans and three
+audit rounds on their drift. The Popcorn spike already runs the real `authority.ex`, `reduce.ex` and
+`wire.ex` in Chromium Wasm (`scripts/shared.mjs` copies twenty core files byte-exact with recorded
+hashes; `browser/lib/durable.ex` calls `Authority.analyze/2` and `Reduce.reduce/3`; the Chromium gate
+passed three times on 2026-10-08). Plan 185 is the measured spike that decides whether the
+TypeScript judge can be retired. Everything else that looked architectural is process, fenced by
+plan 182's working policy at the top of this index.
+
+### The loops (what not to do)
+
+| # | Loop | Evidence (verified) | Do instead |
+|---|---|---|---|
+| A1 | Two runtimes judge the same semantics | parity plans 140, 147, 148, 162, 163, 172, 176; one-writer rule on five files; `docs/lattice2_design.md:160-164` warns against this stack | decide for one judge runtime (185); freeze the TS semantic surface until then |
+| A2 | The judge accretes arms; audits find missing cross-checks between arms | SEC-01 and CRYPTO-01 open since 08-07 (`authority.ex:1209-1312`); five succession mechanisms since July; `family` branch at `:133-184` | plan 184 now; one guard pipeline later (188) |
+| A3 | Hardest-later features before the product loop | `catalog_trust.ex` 2,288 lines + 1,380 TS for replacement trust R13-lite did not need; 9,034 Kotlin/Java lines of witness validator with no device | product loop first; hardening behind a working loop |
+| A4 | Evidence apparatus outweighs product | `plans/` 46,891 lines > `lattice_core/lib` 26,569; Township tests 41,831 for 12,190 src; PR #104 ≈3,000 product lines in +21,881; prose pins in four tests | policy 182; claims as data 187 |
+| A5 | Copy, not share, across shells | plan 181 "copy and parameterize", "do not import across shells"; App.vue 2,454 with ten probe modules statically imported | shared shell kit 186 |
+| A6 | Frozen surfaces still run and get audited | v1 job every push (0 commits since Aug); Township smokes and Android jobs on Treehouse PRs; carrier-spike decision deferred four rounds; M4 refactor merged after DO NOT LAND | product-scoped CI 183; v1 extraction 189 |
+| A7 | Ladders | plans 033-120 (88 plans in three days of creation, parked 07-11); 135-139 XL rungs | cap at three (policy rule 9) |
+| A8 | External-input gates never arrived | Device B 80-90 days, keystore 80, host 70, codesigning 78, Keychain 31 | policy rule 8 |
+| A9 | Re-aims stacked roadmaps | six roadmap layers July-September; build map still "single entry point" | policy rule 12 |
+| A10 | Substrate couplings the product pays for | pilot release boots eight v1 GenServers (`lattice_core/application.ex:10-18`); Python mutation owner from a compile-time source path (`operator/lock.ex:12`); dummy authority-field writes and judge re-entry in `space.ex:57-94,298` | 189; 188; recorded below |
+
+### Execution order
+
+182 (policy, first) → 183 (CI fence) → 184 (guards) → 185 (spike) → 186 and 187 (independent) →
+188 (after 185's verdict) → 189 (P3). Plans 182-185 are written; 186-189 are reserved rows.
+
+### Vetted but not planned this round
+
+- Quadratic work in the judge: `++ [x]` at `authority.ex:1191,1334,1355,1367`; per-command rebuild of
+  `visible_ops`/`verdicts` from full ancestor sets (`:1384-1404`); `catalog_trust.ex:934,985,1231`
+  re-run `analyze` per target. Folds into 188.
+- Judge re-entry from a policy hook (`space.ex:298` calls `Authority.continuation_profile/1` inside
+  `command_op_status/3`) and dummy authority-field writes for role gating (`space.ex:57-94`): a Replica
+  DSL gap (no `role:`/`policy:` per command). Design question for 188; dummy fields are likely in vector state bytes.
+- Python mutation owner (`apps/lattice_carrier_server/lib/lattice_carrier_server/operator/lock.ex:12`,
+  helper path resolved at compile time; journal schema validated in Elixir and Python): replace with a
+  port program shipped in the release or generate both validators from one schema. Revisit when R11 resumes.
+- Two CBOR encoders in TypeScript (`codec.ts` and `carrier.ts:1420`); the governance-witness claim
+  encoded in Rust without an Elixir vector; the witness-binding claim encoded in five places. Shrinks
+  on a 185 GO; otherwise a small follow-on.
+- `lattice.export_vectors.ex` (5,276 lines, 55 commits since June) compiled into the production lib;
+  move to a conformance app or `test/support` after 185.
+- Committed `clients/lattice-client/dist/` (130 tracked files): ignore and build in CI; check no shell
+  imports `dist/` unbuilt.
+- `packaged_macos` runs five full Tauri builds; three Township smokes ignore the existing
+  `TOWNSHIP_SKIP_*_APP_BUILD` pattern. Left alone now that 183 scopes the job to Township changes.
+- `Lattice.Authority.Consent` is Toolshed-only; `Registry`/`Materializer`/`Promise`/`Clock` (723 lines)
+  have no product consumer; `Lattice.Live` is the only v2-to-v1 code edge and has one test consumer. Decision items for 189.
+- Cross-library Ed25519 edge-case vectors (OTP `:crypto`, noble `zip215:false`, dalek `verify_strict`,
+  JCA): LOW-confidence investigate item; after 185.
+- Stale status docs: Popcorn README and root README still say browser acceptance is pending although
+  the gate passes (185 step 1 fixes the spike README); `TOWNSHIP_BUILD_MAP.md:14,570` names a branch
+  that does not exist; `clients/lattice-client/CLAUDE.md` names an Expo consumer that does not exist.
+  Folds into 187.
+- Township probe modules statically imported at `App.vue:96-144` (~4,000 lines in the shell bundle):
+  deferred behind 187 because `test/frontend_shell.mjs` pins `App.vue` source text; Township is frozen (rule 10).
+
+### Considered and rejected
+
+- **Rewrite the core in Rust (native + Wasm) with BEAM as oracle only.** A third judge; the worst form of A1.
+- **Delete the TypeScript client now.** The shells need its transport, codec and canonical bytes whatever
+  185 decides; only the semantic modules would go, and only on GO.
+- **Drop the vector oracle.** It caught every Round 3/4/5 parity bug; 185 shrinks its scope, nothing removes it.
+- **Production compaction or E2EE now.** Explicit program exclusions; thread rollover and the plaintext
+  disclosure are the adopted pilot answers.
+- **Un-park CD1 / device-hosted relay.** Rejected by plan 177(c); R13-lite pins against it.
+- **Merge the two Tauri shells.** Township is frozen; merging imports its 42k-line test estate into the
+  product path. 183 fences it and 186 shares code instead.
+
+### Round 6 coverage note
+
+Audited: the plan ledger and roadmaps as history, `apps/lattice_core` lib and test shape, all eleven
+umbrella apps' roles and dependencies, the four client packages, the Popcorn spike, CI shape and run
+durations, `tools/android-witness-validator` by line count only. Not audited: `deps/`, `node_modules/`,
+`_build/`, generated `dist/` internals, the behavior of the parked Android/iOS probe estate,
+performance beyond the algorithmic hazards named above. Security was not re-swept (Rounds 4-5c
+cover it); the two authority guards in plan 184 were re-verified against source. Round 5c's
+SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
+
+
+| 185 | **(spike)** One judge runtime: Popcorn-hosted `lattice_core` judge inside the Treehouse Tauri webview, vector-equal, measured, GO/NO-GO (Round 6, S2) | P1 | M | 182, 183 | TODO |
+| 186 | Shared shell kit `clients/lattice-shell-kit` (feed, outbox sync, routes, relay client, BEAM test peer, packaged harness); Treehouse consumes it (Round 6, S3) | P2 | M | 183 | TODO (planned, plan file not yet written) |
+| 187 | Claims as data: one registry, generated status, retire prose-pinning contract tests; folds plans 164/166 and the Township probe lazy-load (Round 6, S5) | P2 | S–M | 182 | TODO (planned, plan file not yet written) |
+| 188 | **(design)** Authority admission as one guard pipeline, Elixir-only if 185 is GO; absorbs the quadratic and Replica-DSL items (Round 6, S4) | P2 | L | 184, 185 | TODO (planned, plan file not yet written) |
+| 189 | **(design)** Extract the v1 plane to `apps/lattice_v1`; stop booting v1 children in the pilot release; decide `Live`, `Demo.Thread`, the early runtime plane (Round 6, S1 part 2) | P3 | L | 183 | TODO (planned, plan file not yet written) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
