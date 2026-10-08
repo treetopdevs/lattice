@@ -1120,7 +1120,7 @@ defmodule Lattice2.ApplicationCompactionMirrorTest do
     assert_application_matches_full(Thread, log, frontier)
   end
 
-  test "covered same-id delegation seed authorizes cross-kind retained revokes" do
+  test "covered same-id delegation seed ignores cross-kind retained revokes" do
     for kind <- [:command, :inbox] do
       {log, frontier, later, invalid_intro} = same_id_revoke_log(kind)
       full = Authority.analyze(PolicyReplica, log)
