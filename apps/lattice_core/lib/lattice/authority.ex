@@ -471,7 +471,12 @@ defmodule Lattice.Authority do
     end
   end
 
-  @doc "True if a valid revoke of `delegation_id` currently exists (live-path check)."
+  @doc """
+  True if a valid revoke of `delegation_id` currently exists (live-path check).
+
+  Same predicate as `analyze/2`: only an `:authority`-kind op revokes, so the live path and
+  the carrier staging path agree with the judge about a command-shaped `{:revoke, id}` body.
+  """
   @spec revoked?(Log.t(), String.t()) :: boolean()
   def revoked?(%Log{} = log, delegation_id) do
     ordered = Log.topo_ops(log)
@@ -484,7 +489,8 @@ defmodule Lattice.Authority do
     root = resolve_root(ordered, delegations, deleg_valid, commitment)
 
     Enum.any?(ordered, fn op ->
-      match?({:revoke, ^delegation_id}, op.body) and
+      op.kind == :authority and
+        match?({:revoke, ^delegation_id}, op.body) and
         revoke_authorized?(op, delegation_id, delegations, root)
     end)
   end

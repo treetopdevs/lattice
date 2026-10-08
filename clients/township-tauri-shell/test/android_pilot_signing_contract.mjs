@@ -540,13 +540,17 @@ test("runbook requires server-side environment protection as the pilot-secret bo
   assert.doesNotMatch(custodyRunbook, /repo secrets are the fallback/i);
   assert.match(custodyRunbook, /pilot-lineage keystore is never committed, never generated on CI/i);
   assert.match(custodyRunbook, /ephemeral-ci-throwaway/);
-  for (const pinnedPath of ["docs/android_pilot_*", "docs/android_pilot_*/**", "plans/15[89]-*"]) {
-    for (const event of ["push", "pull_request"]) {
-      const paths = workflowDocument.on[event].paths;
-      assert.ok(paths.indexOf(pinnedPath) > paths.indexOf("!**/*.md"), `${pinnedPath} must be re-included last for ${event}`);
-      assert.ok(!paths.includes(`!${pinnedPath}`));
-    }
+  // The workflow is never path-filtered: a filtered workflow does not start on a docs-only change,
+  // so the custody runbook could change unchecked and a required check would never report. The
+  // classifier routes the pilot docs to the Township jobs instead.
+  for (const event of ["push", "pull_request"]) {
+    const trigger = workflowDocument.on[event] ?? {};
+    assert.equal(trigger.paths, undefined, `${event} must not filter paths`);
+    assert.equal(trigger["paths-ignore"], undefined, `${event} must not ignore paths`);
   }
+  const classify = workflowDocument.jobs.changes.steps.find((step) => step.id === "classify");
+  assert.ok(classify, "the changes job must classify paths");
+  assert.match(classify.run, /^\s*docs\/android_pilot_\*\) township=true ;;$/mu, "pilot docs must route to the Township jobs");
 });
 
 test("the release build script is the pilot lane", () => {

@@ -1,24 +1,12 @@
 name: Flagship evidence
 
 on:
+  # No path filter: a path-filtered workflow never starts on a docs-only PR, and a required check
+  # that never reports blocks the merge. The `changes` job decides what a change needs instead.
   push:
     branches:
       - main
-    paths:
-      - '**'
-      - '!docs/**'
-      - '!**/*.md'
-      - 'docs/android_pilot_*'
-      - 'docs/android_pilot_*/**'
-      - 'plans/15[89]-*'
   pull_request:
-    paths:
-      - '**'
-      - '!docs/**'
-      - '!**/*.md'
-      - 'docs/android_pilot_*'
-      - 'docs/android_pilot_*/**'
-      - 'plans/15[89]-*'
   workflow_dispatch:
     inputs:
       require_android_pilot:
@@ -56,7 +44,7 @@ jobs:
           HEAD: ${{ github.sha }}
         run: |
           set -euo pipefail
-          core=false; township=false; treehouse=false; legacy=false
+          core=false; township=false; treehouse=false; legacy=false; docs=false
           if [ "$EVENT" = "workflow_dispatch" ] || [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
             core=true; township=true; treehouse=true; legacy=true
           else
@@ -69,6 +57,12 @@ jobs:
                 clients/township-tauri-shell/*|apps/township_web/*|apps/township_bench/*|scripts/township_*|scripts/android-pilot/*|playwright.township*.config.mjs) township=true ;;
                 clients/treehouse-tauri-shell/*|tools/android-witness-validator/*|scripts/treehouse_*) treehouse=true ;;
                 apps/lattice_server/*|apps/lattice_demo/*|apps/lattice_stress/*|scripts/lattice_*|playwright.config.mjs|tests/*) legacy=true ;;
+                docs/android_pilot_*) township=true ;;
+                docs/township_*) township=true ;;
+                # Other prose: the tests that pin it run inside `unit`, which always runs, so no
+                # product or packaged job is needed. A document read by a product-gated step must
+                # be routed to that product above.
+                docs/*|*.md) docs=true ;;
                 *) core=true ;;
               esac
             done < "$RUNNER_TEMP/changed-paths.txt"
@@ -76,7 +70,7 @@ jobs:
           # Any path outside the product-only prefixes runs everything (fail closed).
           if [ "$core" = true ]; then township=true; treehouse=true; legacy=true; fi
           for k in core township treehouse legacy; do echo "$k=${!k}" >> "$GITHUB_OUTPUT"; done
-          echo "core=$core township=$township treehouse=$treehouse legacy=$legacy"
+          echo "core=$core township=$township treehouse=$treehouse legacy=$legacy docs=$docs"
 
   verify:
     name: Verify flagship artifact
@@ -134,41 +128,13 @@ jobs:
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cache/apt-archives
-          key: ${{ runner.os }}-apt-verify-${{ steps.image.outputs.key }}-${{ hashFiles('package-lock.json', '.github/workflows/flagship.yml') }}
+          key: ${{ runner.os }}-apt-verify-${{ steps.image.outputs.key }}-${{ hashFiles('package-lock.json', '.github/workflows/flagship.yml', '.github/scripts/apt_archive_cache.sh') }}
           restore-keys: |
             ${{ runner.os }}-apt-verify-${{ steps.image.outputs.key }}-
             ${{ runner.os }}-apt-verify-
 
       - name: Point apt at the cache and verify its contents against the index
-        shell: bash
-        run: |
-          cache="$HOME/.cache/apt-archives"
-          mkdir -p "$cache/partial"
-          sudo tee /etc/apt/apt.conf.d/99lattice-ci-cache > /dev/null <<EOF
-          Dir::Cache::Archives "$cache";
-          APT::Keep-Downloaded-Packages "true";
-          Acquire::Retries "3";
-          Acquire::http::Timeout "30";
-          Acquire::https::Timeout "30";
-          EOF
-          sudo apt-get update
-          # Keep a cached archive only when the index lists that exact name, version and architecture
-          # with the same SHA256; everything else is dropped (apt itself would trust the file name).
-          staged="$RUNNER_TEMP/apt-staged"
-          mkdir -p "$staged"
-          find "$cache" -mindepth 1 -maxdepth 1 ! -name partial -exec mv -t "$staged" {} +
-          kept=0; dropped=0
-          for deb in "$staged"/*.deb; do
-            [ -e "$deb" ] || continue
-            base=$(basename "$deb" .deb)
-            name=${base%%_*}; arch=${base##*_}; ver=${base#*_}; ver=${ver%_*}
-            ver=$(printf '%b' "${ver//%/\\x}")
-            expected=$( (apt-cache show "$name" 2>/dev/null || true) | awk -v v="Version: $ver" -v a="Architecture: $arch" 'BEGIN { RS = "" } index("\n" $0 "\n", "\n" v "\n") && index("\n" $0 "\n", "\n" a "\n") { for (i = 1; i <= NF; i++) if ($i == "SHA256:") { print $(i + 1); exit } }')
-            actual=$(sha256sum "$deb" | cut -d' ' -f1)
-            if [ -n "$expected" ] && [ "$expected" = "$actual" ]; then mv "$deb" "$cache/"; kept=$((kept + 1)); else dropped=$((dropped + 1)); fi
-          done
-          rm -rf "$staged"
-          echo "apt archive cache: kept $kept verified package(s), dropped $dropped"
+        run: .github/scripts/apt_archive_cache.sh
 
       - name: Install Playwright browser
         timeout-minutes: 15
@@ -466,40 +432,12 @@ jobs:
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cache/apt-archives
-          key: ${{ runner.os }}-apt-tauri-${{ steps.image.outputs.key }}-${{ hashFiles('.github/workflows/flagship.yml') }}
+          key: ${{ runner.os }}-apt-tauri-${{ steps.image.outputs.key }}-${{ hashFiles('.github/workflows/flagship.yml', '.github/scripts/apt_archive_cache.sh') }}
           restore-keys: |
             ${{ runner.os }}-apt-tauri-${{ steps.image.outputs.key }}-
             ${{ runner.os }}-apt-tauri-
       - name: Point apt at the cache and verify its contents against the index
-        shell: bash
-        run: |
-          cache="$HOME/.cache/apt-archives"
-          mkdir -p "$cache/partial"
-          sudo tee /etc/apt/apt.conf.d/99lattice-ci-cache > /dev/null <<EOF
-          Dir::Cache::Archives "$cache";
-          APT::Keep-Downloaded-Packages "true";
-          Acquire::Retries "3";
-          Acquire::http::Timeout "30";
-          Acquire::https::Timeout "30";
-          EOF
-          sudo apt-get update
-          # Keep a cached archive only when the index lists that exact name, version and architecture
-          # with the same SHA256; everything else is dropped (apt itself would trust the file name).
-          staged="$RUNNER_TEMP/apt-staged"
-          mkdir -p "$staged"
-          find "$cache" -mindepth 1 -maxdepth 1 ! -name partial -exec mv -t "$staged" {} +
-          kept=0; dropped=0
-          for deb in "$staged"/*.deb; do
-            [ -e "$deb" ] || continue
-            base=$(basename "$deb" .deb)
-            name=${base%%_*}; arch=${base##*_}; ver=${base#*_}; ver=${ver%_*}
-            ver=$(printf '%b' "${ver//%/\\x}")
-            expected=$( (apt-cache show "$name" 2>/dev/null || true) | awk -v v="Version: $ver" -v a="Architecture: $arch" 'BEGIN { RS = "" } index("\n" $0 "\n", "\n" v "\n") && index("\n" $0 "\n", "\n" a "\n") { for (i = 1; i <= NF; i++) if ($i == "SHA256:") { print $(i + 1); exit } }')
-            actual=$(sha256sum "$deb" | cut -d' ' -f1)
-            if [ -n "$expected" ] && [ "$expected" = "$actual" ]; then mv "$deb" "$cache/"; kept=$((kept + 1)); else dropped=$((dropped + 1)); fi
-          done
-          rm -rf "$staged"
-          echo "apt archive cache: kept $kept verified package(s), dropped $dropped"
+        run: .github/scripts/apt_archive_cache.sh
       - name: Install Tauri Linux prerequisites
         timeout-minutes: 15
         run: |

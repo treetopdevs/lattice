@@ -221,6 +221,9 @@ defmodule Lattice2.AuthorityTest do
 
     assert Lattice.Authority.holder(Lattice.Demo.Thread, Sim.log(sim, "root"), :moderator) ==
              pub(sim, "c")
+
+    # The live-path check (Live.authorize, carrier staging) agrees with the judge.
+    refute Lattice.Authority.revoked?(Sim.log(sim, "root"), d1.id)
   end
 
   test "a dormant-tick succession that has not seen a concurrent transfer is quarantined" do

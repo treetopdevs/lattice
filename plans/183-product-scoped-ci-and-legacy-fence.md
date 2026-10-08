@@ -354,7 +354,8 @@ change, so core) must run every job green.
 - Operator action after merge: enable branch protection on `main` requiring only `Required checks`
   (and `Android pilot distribution result` if desired). Without protection the fan-in is advisory.
 - Adding a new product directory means adding its prefix to the classifier; an unlisted prefix is
-  treated as core (safe, slower).
+  treated as core (safe, slower). The workflow has no `paths` filter (a filtered workflow never
+  reports a required check on a docs-only PR); `docs/**` and `*.md` outside a product run only `unit`.
 - `packaged_macos` still runs five full Tauri builds for the Township smokes; now that it only runs on
   Township changes the per-PR cost is gone, and the three unflagged smokes (`tauri_stable_relay_onboarding_smoke.ts:198`,
   `tauri_action_handoff_smoke.ts:291`, `tauri_carrier_feed_smoke.ts:292`) are left alone.
@@ -380,10 +381,9 @@ change, so core) must run every job green.
      `${{ !cancelled() && ... && needs.unit.result == 'success' && needs.android_pilot_verify.result == 'success' && needs.packaged_macos.result == 'success' && (needs.verify.result == 'success' || needs.verify.result == 'skipped') }}`
      (wrapped because a plain scalar cannot start with `!`). No other job has a skippable dependency.
   3. `enrollment_ci_contract.mjs` and `android_pilot_signing_contract.mjs` pinned the pre-183 structure
-     (digest over `packaged_macos`, "no job-level if", "no other referrer", exact four needs). They were
-     re-pinned, not loosened: exact gate expressions, exact needs lists, a second digest
-     (`TREEHOUSE_PREVIEW_DIGEST`) over the moved bodies so nothing previously pinned is unpinned,
-     `required` as the single permitted referrer, and eleven new mutation fixtures (61 subtests, was 48).
+     (digest over `packaged_macos`, "no job-level if", "no other referrer", exact four needs). Re-pinned,
+     not loosened: exact gate expressions and needs lists, a second digest (`TREEHOUSE_PREVIEW_DIGEST`)
+     over the moved bodies, `required` as the single permitted referrer, eleven new mutation fixtures (61 subtests, was 48).
 - `actionlint`: five pre-existing `SC2209` warnings, none new. Step 10 and branch protection: row 183, PR #107.
 - Independent second review (Codex, `gpt-6.1-sol`, high reasoning; policy rule 3 for `.github/workflows`):
   REQUEST CHANGES, resolved on the integration branch before the hosted run was recorded:
