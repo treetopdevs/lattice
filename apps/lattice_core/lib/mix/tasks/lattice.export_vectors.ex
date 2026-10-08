@@ -208,6 +208,9 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_authority_rooted_grant_as_genesis(),
       township_authority_nongenesis_root(),
       township_authority_cross_role_succession_transfer(),
+      township_authority_revoked_transfer(),
+      township_authority_revoked_succession(),
+      township_authority_dormant_succession_stale_holder(),
       township_authority_succession_genesis_poisoning(),
       township_authority_replayed_genesis(),
       township_authority_malformed_heartbeat(),
@@ -1890,6 +1893,197 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
         "expectedReason" => "invalid_transfer",
         "successionOperationId" => succession.id
       }
+    }
+  end
+
+  defp township_authority_revoked_transfer do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:authority-revoked-transfer",
+        ["clerk", "resident", "neighbor"],
+        seed: "township:authority-revoked-transfer"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+
+    {sim, to_resident} =
+      Sim.transfer(sim, "clerk", "resident", :clerk, ops: [:close_matter, :reopen_matter])
+
+    sim = Sim.sync_all(sim)
+    {sim, revoke} = Sim.revoke(sim, "clerk", to_resident.id)
+    sim = Sim.sync_all(sim)
+
+    {sim, to_neighbor} =
+      Sim.transfer(sim, "resident", "neighbor", :clerk, ops: [:close_matter, :reopen_matter])
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+    transfer = find_transfer_op!(Map.values(Log.ops(log)), to_neighbor.id)
+
+    unless to_neighbor.parent_id == to_resident.id and revoke.id in transfer.deps do
+      raise "expected the resident to transfer under a child of its revoked delegation"
+    end
+
+    authority_quarantine = authority_quarantine(log)
+
+    unless authority_quarantine == [[transfer.id, "revoked_capability"]] do
+      raise "expected only the transfer under the revoked chain to quarantine"
+    end
+
+    unless Authority.holder(Matter, log, :clerk) == Sim.identity(sim, "resident").pub do
+      raise "expected the revoked-chain transfer not to move clerk authority"
+    end
+
+    realms = realm_index(sim)
+
+    %{
+      name: "township_authority_revoked_transfer",
+      kind: "adversarial",
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: Sim.replica(sim),
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      authorityQuarantine: authority_quarantine
+    }
+  end
+
+  defp township_authority_revoked_succession do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:authority-revoked-succession",
+        ["clerk", "resident"],
+        seed: "township:authority-revoked-succession"
+      )
+
+    {sim, _genesis} =
+      Sim.create_replica(sim, "clerk",
+        policies: %{clerk: %{successor: "resident", dormant_ticks: 3}}
+      )
+
+    {sim, grant} =
+      Sim.grant(sim, "clerk", "resident",
+        ops: [:close_matter, :reopen_matter],
+        roles: [:clerk]
+      )
+
+    sim = Sim.sync_all(sim)
+    {sim, revoke} = Sim.revoke(sim, "clerk", grant.id)
+    sim = Sim.sync_all(sim)
+
+    # A legacy succession may cite a self-issued child of a rooted grant, so the
+    # grant's revoke names the claim's chain.
+    resident = Sim.identity(sim, "resident")
+
+    succession_child =
+      Delegation.new(resident, Sim.replica(sim), resident.pub,
+        ops: [:close_matter, :reopen_matter],
+        roles: [:clerk],
+        parent_id: grant.id
+      )
+
+    {sim, succession} =
+      Sim.append(sim, "resident", :authority, {:succeed, :clerk, succession_child, 3})
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    unless revoke.id in succession.deps do
+      raise "expected the succession to follow the revoke of its parent grant"
+    end
+
+    authority_quarantine = authority_quarantine(log)
+
+    unless authority_quarantine == [[succession.id, "revoked_capability"]] do
+      raise "expected only the succession under the revoked chain to quarantine"
+    end
+
+    unless Authority.holder(Matter, log, :clerk) == Sim.identity(sim, "clerk").pub do
+      raise "expected the revoked-chain succession not to move clerk authority"
+    end
+
+    realms = realm_index(sim)
+
+    %{
+      name: "township_authority_revoked_succession",
+      kind: "adversarial",
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: Sim.replica(sim),
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      authorityQuarantine: authority_quarantine
+    }
+  end
+
+  defp township_authority_dormant_succession_stale_holder do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:authority-dormant-succession-stale-holder",
+        ["clerk", "resident", "neighbor"],
+        # Seed chosen so canonical order judges the unseen transfer before the claim.
+        seed: "township:authority-dormant-succession-stale-holder:3"
+      )
+
+    {sim, _genesis} =
+      Sim.create_replica(sim, "clerk",
+        policies: %{clerk: %{successor: "resident", dormant_ticks: 3}}
+      )
+
+    sim = Sim.sync_all(sim)
+    sim = sim |> Sim.partition("clerk", "resident") |> Sim.partition("neighbor", "resident")
+
+    {sim, to_neighbor} =
+      Sim.transfer(sim, "clerk", "neighbor", :clerk, ops: [:close_matter, :reopen_matter])
+
+    sim = Sim.sync(sim, "clerk", "neighbor")
+
+    {sim, succession} =
+      Sim.succeed(sim, "resident", :clerk,
+        at_tick: 3,
+        ops: [:close_matter, :reopen_matter]
+      )
+
+    sim =
+      sim
+      |> Sim.heal("clerk", "resident")
+      |> Sim.heal("neighbor", "resident")
+      |> Sim.sync_all()
+
+    log = Sim.log(sim, "clerk")
+    transfer = find_transfer_op!(Map.values(Log.ops(log)), to_neighbor.id)
+
+    unless transfer.id not in succession.deps and transfer.id < succession.id do
+      raise "expected the unseen transfer to be concurrent with and judged before the claim"
+    end
+
+    authority_quarantine = authority_quarantine(log)
+
+    unless authority_quarantine == [[succession.id, "double_transfer"]] do
+      raise "expected only the claim that never saw the transfer to quarantine"
+    end
+
+    unless Authority.holder(Matter, log, :clerk) == Sim.identity(sim, "neighbor").pub do
+      raise "expected the transfer recipient to keep clerk authority"
+    end
+
+    realms = realm_index(sim)
+
+    %{
+      name: "township_authority_dormant_succession_stale_holder",
+      kind: "adversarial",
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: Sim.replica(sim),
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      authorityQuarantine: authority_quarantine
     }
   end
 
@@ -4068,6 +4262,16 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       %Op{kind: :authority, body: {:grant, %Delegation{id: id}}} -> id == delegation_id
       _ -> false
     end) || raise "missing grant introduction for delegation #{delegation_id}"
+  end
+
+  defp find_transfer_op!(ops, delegation_id) do
+    Enum.find(ops, fn
+      %Op{kind: :authority, body: {:transfer, _role, %Delegation{id: id}, _tick}} ->
+        id == delegation_id
+
+      _ ->
+        false
+    end) || raise "missing transfer introduction for delegation #{delegation_id}"
   end
 
   defp permutations([]), do: [[]]
