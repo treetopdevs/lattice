@@ -244,6 +244,14 @@ for (const name of ["confirmRoutes", "configureRoutes", "useOffer", "joinGroup"]
     ?.exp?.loc.source ?? "";
   assert.equal(disabledOf((n) => textOf(n) === "Archive thread"), "!canArchive");
   assert.match(disabledOf((n) => textOf(n) === "Create thread"), /^!canCreateThread \|\|/);
+  // The welcome group form is not offered while a join identity waits for its Space.
+  let groupForm = null;
+  walk(app.sfc.template.ast, (node) => {
+    if (node.type === NodeTypes.ELEMENT && node.tag === "form" && textOf(node).includes("Group name")) groupForm = node;
+  });
+  assert.equal(groupForm?.props.find((p) => p.type === NodeTypes.DIRECTIVE && p.name === "if")?.exp?.loc.source,
+    "!state.intent && !joining");
+  assert(/joining = computed\(\s*\(\) => state\.value\.intent === null && state\.value\.publicKey !== null && space\.value === undefined/.test(app.sfc.scriptSetup.content));
   assert.equal(disabledOf((n) => aria(n).includes("as moderator")), "!canHideAsModerator");
   const appScript = app.sfc.scriptSetup.content;
   assert.equal(disabledOf((n) => /^`Edit post /.test(aria(n))), "!canEditOwn");

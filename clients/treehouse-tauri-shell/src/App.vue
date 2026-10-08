@@ -76,6 +76,11 @@ const canPost = computed(
     active.value !== undefined &&
     workflow.canAuthor(active.value.replica, "post"),
 );
+// A join identity exists but its Space has not synced yet: creating a group would fail with
+// join_in_progress, so the welcome form is not offered.
+const joining = computed(
+  () => state.value.intent === null && state.value.publicKey !== null && space.value === undefined,
+);
 // Only the Space's root holder can add a Thread, so a joined member never sees an action that always fails.
 const canCreateThread = computed(
   () => writable.value && space.value !== undefined && workflow.canCreateThread(),
@@ -309,7 +314,7 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
         Start with an empty space for notes and conversations. This preview
         stays on this device.
       </p>
-      <form v-if="!state.intent" @submit.prevent="createGroup">
+      <form v-if="!state.intent && !joining" @submit.prevent="createGroup">
         <label for="group-name">Group name</label
         ><input
           id="group-name"

@@ -606,10 +606,19 @@ export async function verifyCarrierHello(
     throw new Error("malformed carrier hello");
   }
 
-  const claimedPubkey = base64ToBytes(response.pubkey);
+  // Undecodable key or signature text is a malformed hello, a permanent refusal like the other hello
+  // failures rather than a transient error worth redialing.
+  const decode = (text: string): Uint8Array => {
+    try {
+      return base64ToBytes(text);
+    } catch {
+      throw new Error("malformed carrier hello");
+    }
+  };
+  const claimedPubkey = decode(response.pubkey);
   if (!bytesEqual(claimedPubkey, expectedPubkey)) throw new Error("carrier hello pubkey mismatch");
 
-  const signature = base64ToBytes(response.signature);
+  const signature = decode(response.signature);
   const transcript = carrierTranscriptBytes(challenge, expectedRealm, expectedPubkey);
   if (!(await verifier.verify(expectedPubkey, transcript, signature))) {
     throw new Error("carrier hello bad signature");

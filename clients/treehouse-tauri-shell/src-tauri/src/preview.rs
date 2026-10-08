@@ -198,9 +198,14 @@ fn route_host(host: &str) -> Option<bool> {
         return None;
     }
     let last = host.trim_end_matches('.').rsplit('.').next().unwrap_or("");
+    // WHATWG's "ends in a number": all decimal digits, or 0x followed only by hex digits. A DNS label
+    // that merely starts with 0x (service.0xcorp) is a name.
+    let lower = last.to_ascii_lowercase();
     let numeric = !last.is_empty()
         && (last.bytes().all(|b| b.is_ascii_digit())
-            || last.to_ascii_lowercase().starts_with("0x"));
+            || lower
+                .strip_prefix("0x")
+                .is_some_and(|hex| hex.bytes().all(|b| b.is_ascii_hexdigit())));
     if numeric {
         return host
             .parse::<std::net::Ipv4Addr>()

@@ -483,6 +483,7 @@ fn relay_routes_are_capped_closed_and_pinned() {
         relay(vec![with(1, "url", "wss://[::ffff:1.2.3.4]")]),
         relay(vec![with(1, "url", "wss://010.0.0.1")]),
         relay(vec![with(1, "url", "wss://ex%61mple.com")]),
+        relay(vec![with(1, "url", "wss://a.0x1f")]),
         relay(vec![with(1, "url", "wss://example.com/\u{e9}")]),
         // Exactly one Space route: none, or two, is refused.
         relay((2..=5).map(route).collect()),
@@ -505,6 +506,7 @@ fn relay_routes_are_capped_closed_and_pinned() {
         "ws://LocalHost:1",
         "ws://[::1]:9",
         "wss://[::A]",
+        "wss://service.0xcorp",
         "wss://[2001:db8::1]:443",
         "wss://10.0.0.1",
         "wss://x:",

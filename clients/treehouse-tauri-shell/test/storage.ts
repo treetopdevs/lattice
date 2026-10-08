@@ -291,6 +291,7 @@ for (const url of [
   "ws://LocalHost:1",
   "ws://[::1]:9",
   "wss://[::A]",
+  "wss://service.0xcorp",
   "wss://[2001:db8::1]:443",
   "wss://10.0.0.1",
   "wss://x:",
@@ -316,6 +317,7 @@ for (const url of [
   "wss://[::ffff:1.2.3.4]",
   "wss://010.0.0.1",
   "wss://ex%61mple.com",
+  "wss://a.0x1f",
   "wss://example.com/\u00e9",
   "wss://example.com/\u0001",
 ])

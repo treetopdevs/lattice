@@ -681,6 +681,8 @@ class ScriptedServer {
   static serverSeed = SERVER_SEED;
   static realm = "relay";
   static answerWith: Uint8Array | null = null;
+  /** Replaces the hello's pubkey text, to send undecodable base64. */
+  static helloPubkey: string | null = null;
   static sockets: ScriptedServer[] = [];
   private listeners = new Map<string, ((event?: unknown) => void)[]>();
   readonly sent: Record<string, unknown>[] = [];
@@ -720,7 +722,7 @@ class ScriptedServer {
           data: JSON.stringify({
             type: "carrier_hello",
             realm: ScriptedServer.realm,
-            pubkey: Buffer.from(pub).toString("base64"),
+            pubkey: ScriptedServer.helloPubkey ?? Buffer.from(pub).toString("base64"),
             signature: Buffer.from(signature).toString("base64"),
           }),
         });
@@ -802,5 +804,11 @@ class ScriptedServer {
   ScriptedServer.realm = "impostor";
   await assert.rejects(connector.connect(route, "founder"), /malformed carrier hello/);
   ScriptedServer.realm = "relay";
+  // Undecodable key text is a malformed hello too, so the feed refuses the route instead of redialing it.
+  for (const text of ["not base64!", "AAAA="]) {
+    ScriptedServer.helloPubkey = text;
+    await assert.rejects(connector.connect(route, "founder"), /^Error: malformed carrier hello$/);
+  }
+  ScriptedServer.helloPubkey = null;
   console.log("PASS relay client: fail-closed route validation, native signer, pinned-peer handshake, pull-only feed session");
 }
