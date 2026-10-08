@@ -944,3 +944,5 @@ test("evidence stores structured outcomes, never screenshots or general logcat",
     "allowlisted step details must still redact sensitive content",
   );
 });
+
+// Plan 183 step 10 classifier probe (throwaway branch): a Township-only change.
