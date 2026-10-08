@@ -76,6 +76,8 @@ jobs:
 
   verify:
     name: Verify flagship artifact
+    needs: changes
+    if: needs.changes.outputs.legacy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -136,6 +138,7 @@ jobs:
 
   unit:
     name: Unit + property suite
+    needs: changes
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -402,6 +405,8 @@ jobs:
 
   packaged_macos:
     name: Packaged macOS convergence
+    needs: changes
+    if: needs.changes.outputs.township == 'true'
     runs-on: macos-15-intel
     timeout-minutes: 90
 
@@ -517,6 +522,8 @@ jobs:
 
   treehouse_packaged_macos:
     name: Packaged macOS Treehouse preview
+    needs: changes
+    if: needs.changes.outputs.treehouse == 'true'
     runs-on: macos-15-intel
     timeout-minutes: 60
 
@@ -601,6 +608,8 @@ jobs:
     # hand-written manifest. A failure here fails the workflow run, and the only conditional step is the
     # evidence upload. It is deliberately not in android_pilot.needs.
     name: Packaged macOS Treehouse enrollment (dev-trace variant)
+    needs: changes
+    if: needs.changes.outputs.treehouse == 'true'
     runs-on: macos-15-intel
     timeout-minutes: 90
     permissions:
@@ -680,6 +689,8 @@ jobs:
 
   carrier_release:
     name: Packaged carrier restart durability
+    needs: changes
+    if: needs.changes.outputs.core == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -706,6 +717,8 @@ jobs:
 
   treehouse_android_preview:
     name: Treehouse Android compile and binding bytes
+    needs: changes
+    if: needs.changes.outputs.treehouse == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -797,6 +810,8 @@ jobs:
 
   android_pilot_contract:
     name: Android pilot security contract
+    needs: changes
+    if: needs.changes.outputs.township == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -826,7 +841,8 @@ jobs:
     # Secret-free verification runs on every event. Its throwaway certificate
     # is never called pilot and its APK is never uploaded for distribution.
     name: Android signing-path verification
-    needs: android_pilot_contract
+    needs: [android_pilot_contract, changes]
+    if: needs.changes.outputs.township == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
@@ -963,12 +979,13 @@ jobs:
     # main push or an explicit main-branch dispatch can enter the protected
     # environment and read pilot signing secrets.
     name: Android pilot distribution worker
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.changes.outputs.township == 'true'
     needs:
       - verify
       - unit
       - packaged_macos
       - android_pilot_verify
+      - changes
     runs-on: ubuntu-latest
     timeout-minutes: 90
     environment: android-pilot
