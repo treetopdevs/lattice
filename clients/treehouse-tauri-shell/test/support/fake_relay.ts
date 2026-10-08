@@ -34,6 +34,8 @@ export class FakeRelay {
   readonly forced = new Map<string, Forced>();
   /** Ids hidden from the next advertise only (a stale advertise). */
   hideOnce = new Set<string>();
+  /** How many advertises `hideOnce` covers before it clears. */
+  hideOnceFor = 1;
   /** Ids hidden from every advertise. */
   hideAlways = new Set<string>();
   /** Return at most this many missing frames per pull, newest first (open dependencies on a page). */
@@ -62,7 +64,10 @@ export class FakeRelay {
 
   advertisedIds(): string[] {
     const ids = [...this.log.keys(), ...this.stored].filter((id) => !this.hideAlways.has(id) && !this.hideOnce.has(id));
-    this.hideOnce = new Set();
+    if (--this.hideOnceFor <= 0) {
+      this.hideOnce = new Set();
+      this.hideOnceFor = 1;
+    }
     return ids.sort();
   }
 

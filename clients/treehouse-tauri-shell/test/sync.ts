@@ -149,9 +149,11 @@ async function founder(trace: string[] = []) {
   assert.equal(stranded.acked.length, 0, "pending survives");
   f.native.failCommit = false;
   const rebooted = await fresh(f.native);
-  // The relay advertises stale first (hides the frame), so the frame is resubmitted and the relay
-  // answers with an empty report (it already holds the op). The id is acked only through the advertise path.
+  // The relay advertises stale first (hides the frame from the sync's opening advertise and the exchange's
+  // own), so the frame is resubmitted and the relay answers with an empty report (it already holds the op).
+  // The id is acked only through the closing advertise.
   relay.hideOnce = new Set(stranded.outbox);
+  relay.hideOnceFor = 2;
   const eventsBefore = relay.events.length;
   await syncTreehouseRoute(rebooted, route, relays.options());
   assert(relay.events.slice(eventsBefore).some((e) => e === `relay:${post}`), "the resubmission happened");
@@ -345,3 +347,52 @@ for (const replica of [f.space, f.thread]) {
 const final = await syncTreehouse(f.app, relays.options());
 assert.equal(final.routes.every((r) => r.ok && r.matchesRelay), true, "matches relay after a settled sync");
 console.log("PASS fake-relay enrollment: pull, accept, grant, member post and convergence with acked equal retained");
+
+// ---- an ack without relay evidence never suppresses delivery ------------------------------------------
+{
+  const f = await founder();
+  const relays = new Relays();
+  const route = f.app.state.relay!.routes.find((r) => r.replica === f.thread)!;
+  await syncTreehouseRoute(f.app, route, relays.options());
+  const post = await f.app.command(f.thread, { command: "post", text: "unsent" });
+  // Write the ack straight through the record path, with nothing from the relay behind it.
+  await f.app.mergeSync(f.thread, [], [post]);
+  assert(profileOf(f.native, f.thread).acked.includes(post));
+  const relay = relays.for(f.thread);
+  assert(!(await relay.connect().advertise()).includes(post), "the relay does not hold it yet");
+  const result = await syncTreehouseRoute(f.app, route, relays.options());
+  assert((await relay.connect().advertise()).includes(post), "the sync delivered it anyway");
+  assert.deepEqual(result.accepted, [post]);
+  assert.equal(result.matchesRelay, true);
+  console.log("PASS an ack without relay evidence never suppresses delivery");
+}
+
+// ---- a relay that stops answering fails the route within the request deadline -------------------------
+{
+  const f = await founder();
+  const relays = new Relays();
+  const route = f.app.state.relay!.routes.find((r) => r.replica === f.thread)!;
+  let closed = false;
+  const silent: SyncTreehouseOptions = relays.options({
+    requestTimeoutMs: 30,
+    connect: async (r) => {
+      const conn = relays.for(r.replica).connect();
+      conn.advertise = () => new Promise<string[]>(() => undefined);
+      const close = conn.close.bind(conn);
+      conn.close = () => {
+        closed = true;
+        close();
+      };
+      return conn;
+    },
+  });
+  await assert.rejects(syncTreehouseRoute(f.app, route, silent), /relay_request_timeout/);
+  assert.equal(closed, true, "the timed-out connection is closed");
+  // A dial that never completes is bounded the same way.
+  await assert.rejects(
+    syncTreehouseRoute(f.app, route, relays.options({ requestTimeoutMs: 30, connect: () => new Promise(() => undefined) })),
+    /relay_request_timeout/,
+  );
+  console.log("PASS a relay that stops answering fails the route within the request deadline");
+}
+

@@ -418,6 +418,29 @@ fn joiner_keeps_a_foreign_root_space_profile_and_the_acked_set_only_grows() {
     assert!(store.commit(4, &dup.to_string()).is_err());
 }
 #[test]
+fn relay_space_route_must_match_the_held_space() {
+    let dir = tempfile::tempdir().unwrap();
+    let keys = Arc::new(InMemoryCarrierKeySeedStore::default());
+    let mut store = PreviewStore::at_directory(dir.path(), keys).unwrap();
+    let saved = with_space(initialized(&mut store));
+    assert!(commit(&mut store, 2, &saved));
+    let held = saved["profiles"][0]["replica"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let route = |replica: &str| json!({"replica":replica,"url":"wss://relay.example","expectedPeerRealm":"server","expectedPeerPubkey":BASE64.encode([1u8; 32])});
+    let mut next = saved.clone();
+    next["revision"] = json!(4);
+    next["relay"] =
+        json!({"localRealm":"local","routes":[route(&held.replacen("aaaa", "zzzz", 1))]});
+    assert_eq!(
+        store.commit(3, &next.to_string()).unwrap_err(),
+        "invalid_relay"
+    );
+    next["relay"] = json!({"localRealm":"local","routes":[route(&held)]});
+    assert!(commit(&mut store, 3, &next));
+}
+#[test]
 fn relay_routes_are_capped_closed_and_pinned() {
     let dir = tempfile::tempdir().unwrap();
     let keys = Arc::new(InMemoryCarrierKeySeedStore::default());

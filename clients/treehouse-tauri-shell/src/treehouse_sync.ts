@@ -32,6 +32,8 @@ export interface SyncTreehouseOptions {
   sleep?: (ms: number) => Promise<void>;
   /** Pull rounds allowed while a merged set still has open dependencies. */
   maxPullRounds?: number;
+  /** Deadline for the dial and for each relay request. A silent relay fails the route instead of hanging. */
+  requestTimeoutMs?: number;
 }
 
 export interface RouteSyncResult {
@@ -63,6 +65,33 @@ export interface TreehouseSyncResult {
 }
 
 const DEFAULT_PULL_ROUNDS = 16;
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+
+/** Race `work` against a deadline; on expiry run `expire` (which closes the connection) and reject. */
+function deadline<T>(work: Promise<T>, ms: number, expire: () => void): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      expire();
+      reject(new Error("relay_request_timeout"));
+    }, ms);
+  });
+  return Promise.race([work, expired]).finally(() => clearTimeout(timer));
+}
+
+/** The connection with every request bounded by the deadline; `close` passes straight through. */
+function bounded(connection: TreehouseRelayConnection, ms: number): TreehouseRelayConnection {
+  return new Proxy(connection, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver);
+      if (typeof value !== "function" || property === "close") return value;
+      return (...args: unknown[]) => {
+        const out = value.apply(target, args);
+        return out instanceof Promise ? deadline(out, ms, () => target.close()) : out;
+      };
+    },
+  });
+}
 /** One relay token refills in about 83 ms, so a sleeping retry always earns progress when the relay is healthy. */
 const STALL_SLEEP_MS = 250;
 const MAX_STALLS = 40;
@@ -130,8 +159,15 @@ export async function syncTreehouseRoute(
   const profileNow = (): LocalProfile | undefined =>
     workflow.state.profiles.find((p) => p.replica === replica);
 
-  const connection = await options.connect(configured, relay.localRealm);
-  const client = connection;
+  const timeout = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+  const dialing = options.connect(configured, relay.localRealm);
+  let timedOut = false;
+  const connection = await deadline(dialing, timeout, () => {
+    timedOut = true;
+    dialing.then((late) => late.close(), () => undefined);
+  });
+  if (timedOut) connection.close();
+  const client = bounded(connection, timeout);
   const result: RouteSyncResult = {
     replica,
     pulledFrames: 0,
@@ -146,6 +182,11 @@ export async function syncTreehouseRoute(
     relayIdCount: 0,
   };
   try {
+    // What to submit comes from the relay's own ids, not from the local `acked` set: an ack that is stale
+    // (a relay restored from an older backup) or was written without relay evidence never suppresses
+    // delivery of a frame the relay does not hold.
+    const relayHeld = new Set(await client.advertise());
+    const deliveredNow = new Set<string>();
     // Verified pulled frames not yet committed, in the relay's causal order.
     const accumulated = new Map<string, CarrierOpFrame>();
     let pullRounds = 0;
@@ -154,10 +195,12 @@ export async function syncTreehouseRoute(
       const profile = profileNow();
       const held = profile?.frames ?? [];
       const heldIds = new Set(held.map(frameId));
-      const acked = new Set(profile?.acked ?? []);
       const outbox = new Set(profile?.outbox ?? []);
-      // pending = outbox minus acked. Foreign frames are never in the outbox, so never pending.
-      const candidates = held.filter((f) => outbox.has(f.id) && !acked.has(f.id));
+      // Authored frames the relay did not list at the start of this sync and that no report of this sync
+      // has acknowledged yet. Foreign frames are never in the outbox, so never submitted.
+      const candidates = held.filter(
+        (f) => outbox.has(f.id) && !relayHeld.has(f.id) && !deliveredNow.has(f.id),
+      );
       const localOps = carrierOpsToSemanticOps(
         [...held, ...accumulated.values()],
         {},
@@ -201,6 +244,7 @@ export async function syncTreehouseRoute(
       // Frames and acks commit together once the pulled set is dependency-closed; acks alone commit
       // earlier so submitted progress is never redone after a crash.
       const frames = open ? [] : [...accumulated.values()];
+      for (const id of ackNow) deliveredNow.add(id);
       if (frames.length > 0 || ackNow.size > 0) {
         await workflow.mergeSync(replica, frames, [...ackNow]);
         result.pulledFrames += frames.filter((f) => !heldIds.has(f.id)).length;

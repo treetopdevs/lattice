@@ -325,6 +325,20 @@ fn parse(raw: Option<&str>) -> Result<Record, String> {
     if r.relay.as_ref().is_some_and(|relay| !valid_relay(relay)) {
         return Err("invalid_relay".into());
     }
+    // A held Space and the relay's Space route name the same replica, so a route set pinned for another
+    // group can never be saved beside this one.
+    if let (Some(relay), Some(space)) = (
+        &r.relay,
+        r.profiles.iter().find(|p| p.product == "Treehouse.Space"),
+    ) {
+        if !relay
+            .routes
+            .iter()
+            .any(|route| route.replica == space.replica)
+        {
+            return Err("invalid_relay".into());
+        }
+    }
     if let Some(i) = &r.intent {
         if !matches!(i.kind.as_str(), "space" | "thread" | "join")
             || i.name.trim().is_empty()
