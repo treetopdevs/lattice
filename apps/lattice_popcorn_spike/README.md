@@ -25,6 +25,14 @@ README's browser-BEAM wording. See [verification.md](verification.md).
   Sync.Shape, Reduce, the three CRDTs, Carrier.Wire, and BrowserLogStore. It does
   not fork the encoder or start the server supervision tree. Build preparation
   refreshes those files; `dist/build.json` records their hashes and asset hashes.
+- Plan 185 adds, for the vector-verdict harness, thirteen domain files copied the
+  same way from `apps/lattice_core/lib/` (Township.Matter and ElectionBoard,
+  Toolshed.Shed and Tool with Lattice.Authority.Consent, Lattice.Demo.Thread, and
+  Treehouse Space, Thread, Invitation, TransportCatalog and the three
+  MemberContinuity modules) plus the exact byte prefix of
+  `lib/mix/tasks/lattice.export_vectors.ex` that defines its two fixture schemas.
+  TransportCatalog and MemberContinuityAuthoring call Jason, so the browser project
+  depends on `jason` 1.4.5 (pure Elixir, the server lock's version).
 - A supervised `LatticeBrowser.Realm` registers as `LatticeBrowser.Bridge`.
   The page receives a fixed command facade, not Popcorn's VM/process API. Only
   the trusted host forwards server events. Commands and pending work are bounded.
