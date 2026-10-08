@@ -57,6 +57,7 @@ import { ed25519 } from "@noble/curves/ed25519.js";
 import {
   authorCarrierDelegation,
   authorCarrierOp,
+  authorTownshipRevocation,
   authorTreehouseCommand,
   carrierDelegationsFromFrames,
   townshipGenesisBody,
@@ -136,7 +137,7 @@ const withProfile = (overrides: Record<string, unknown> = {}) => ({
   active: spaceReplica,
 });
 const route = (n: number) => ({
-  replica: `r${n}`,
+  replica: `replica:treehouse:thread:${String.fromCharCode(97 + n).repeat(43)}#root:${"R".repeat(43)}`,
   url: "ws://127.0.0.1:8080",
   expectedPeerRealm: "server",
   expectedPeerPubkey: pk(n),
@@ -265,6 +266,14 @@ for (const acked of [[token("z")], [token("c"), token("c")], ["bad"]]) {
     relay([{ ...four[0], expectedPeerRealm: "  " }]),
     relay([four[0], four[0]]),
     { ...relay(four), relay: { localRealm: "", routes: four } },
+    // The semantic rules the route list was accepted under also hold when a record is loaded.
+    relay([]),
+    { ...relay(four), relay: { localRealm: " local", routes: four } },
+    relay([{ ...four[0], replica: "r1" }]),
+    relay([{ ...four[0], url: "http://127.0.0.1:8080" }]),
+    relay([{ ...four[0], url: "ws://example.com:8080" }]),
+    relay([{ ...four[0], url: " wss://example.com" }]),
+    relay([{ ...four[0], expectedPeerRealm: "server " }]),
   ])
     assert.throws(() => parseState(JSON.stringify(bad)), /invalid_relay/);
 }
@@ -413,6 +422,31 @@ for (const acked of [[token("z")], [token("c"), token("c")], ["bad"]]) {
   const contested = new TreehouseWorkflow(joiner);
   await contested.open();
   assert.equal(contested.state.profiles[0]!.replica, space.replica);
+}
+// A revoked root delegation is no longer offered: canAuthor stops advertising founder actions.
+{
+  const founder = new MemoryNative();
+  const app = new TreehouseWorkflow(founder);
+  await app.open();
+  await app.createSpace("Canopy");
+  const space = app.state.profiles[0]!;
+  assert.equal(app.canAuthor(space.replica, "create_thread"), true);
+  const root = carrierDelegationsFromFrames(space.frames).find((d) => d.parent_id === null)!;
+  const referenced = new Set(space.frames.flatMap((f) => f.deps));
+  const revoke = await authorTownshipRevocation({
+    replica: space.replica,
+    deps: space.frames.filter((f) => !referenced.has(f.id)).map((f) => f.id),
+    signer: { publicKey: ed25519.getPublicKey(founder.seed!), sign: async (bytes) => ed25519.sign(bytes, founder.seed!) },
+    delegationId: root.id,
+  });
+  const record = JSON.parse(founder.record!);
+  record.profiles[0].frames.push(revoke);
+  record.profiles[0].acked.push(revoke.id);
+  founder.record = JSON.stringify(record);
+  const reopened = new TreehouseWorkflow(founder);
+  await reopened.open();
+  assert.equal(reopened.canAuthor(space.replica, "create_thread"), false);
+  assert.equal(reopened.canAuthor(space.replica, "issue_invitation"), false);
 }
 console.log(
   "PASS state v2: in-memory migration, join intent, acked set, relay routes, foreign-root joiner",

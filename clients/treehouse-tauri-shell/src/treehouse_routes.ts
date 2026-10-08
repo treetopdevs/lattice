@@ -42,7 +42,8 @@ export function validRouteUrl(value: string): boolean {
   } catch {
     return false;
   }
-  if (url.username || url.password || url.hash || value.length > 2048) return false;
+  // URL() silently trims and strips whitespace, so the pinned text must carry none.
+  if (/\s/.test(value) || url.username || url.password || url.hash || value.length > 2048) return false;
   if (url.protocol === "wss:") return true;
   return (
     url.protocol === "ws:" &&

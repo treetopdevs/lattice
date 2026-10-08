@@ -424,7 +424,16 @@ fn relay_routes_are_capped_closed_and_pinned() {
     let mut store = PreviewStore::at_directory(dir.path(), keys).unwrap();
     let initial = initialized(&mut store);
     let pk = |n: u8| BASE64.encode([n; 32]);
-    let route = |n: u8| json!({"replica":format!("r{n}"),"url":"ws://127.0.0.1:8080","expectedPeerRealm":"server","expectedPeerPubkey":pk(n)});
+    let replica = |n: u8| {
+        let nonce: String = std::iter::repeat_n(char::from(b'a' + n), 43).collect();
+        format!("replica:treehouse:thread:{nonce}#root:{}", "R".repeat(43))
+    };
+    let route = |n: u8| json!({"replica":replica(n),"url":"ws://127.0.0.1:8080","expectedPeerRealm":"server","expectedPeerPubkey":pk(n)});
+    let with = |n: u8, field: &str, value: &str| {
+        let mut r = route(n);
+        r[field] = json!(value);
+        r
+    };
     let relay = |routes: Vec<Value>| json!({"localRealm":"local","routes":routes});
     let mut next = initial.clone();
     next["revision"] = json!(3);
@@ -433,23 +442,66 @@ fn relay_routes_are_capped_closed_and_pinned() {
         store.commit(2, &next.to_string()).unwrap_err(),
         "invalid_relay"
     );
+    // A closed record: unknown or malformed fields refuse before the relay rules run.
     for bad in [
         json!({"localRealm":"local","routes":[route(1)],"extra":1}),
         relay(vec![
             json!({"replica":"r","url":"ws://x","expectedPeerRealm":"s","expectedPeerPubkey":"short"}),
         ]),
-        relay(vec![route(1), route(1)]),
-        json!({"localRealm":"","routes":[]}),
     ] {
         next["relay"] = bad;
         assert!(store.commit(2, &next.to_string()).is_err());
+    }
+    // The shell's semantic route rules hold at the persistence boundary too.
+    for bad in [
+        relay(vec![route(1), route(1)]),
+        json!({"localRealm":"","routes":[]}),
+        json!({"localRealm":"local","routes":[]}),
+        json!({"localRealm":" local","routes":[route(1)]}),
+        relay(vec![with(1, "replica", "r1")]),
+        relay(vec![with(
+            1,
+            "replica",
+            "replica:treehouse:space:short#root:short",
+        )]),
+        relay(vec![with(1, "url", "http://127.0.0.1:8080")]),
+        relay(vec![with(1, "url", "ws://example.com:8080")]),
+        relay(vec![with(1, "url", "wss://user@example.com")]),
+        relay(vec![with(1, "url", "wss://example.com/#frag")]),
+        relay(vec![with(1, "url", "ws://127.0.0.1:99999")]),
+        relay(vec![with(1, "url", " wss://example.com")]),
+        relay(vec![with(1, "expectedPeerRealm", "server ")]),
+    ] {
+        next["relay"] = bad;
+        assert_eq!(
+            store.commit(2, &next.to_string()).unwrap_err(),
+            "invalid_relay"
+        );
+    }
+    for good in [
+        "wss://relay.example.com:443/carrier",
+        "ws://localhost:1",
+        "ws://LocalHost:1",
+        "ws://[::1]:9",
+        "WSS://x",
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut fresh = PreviewStore::at_directory(
+            dir.path(),
+            Arc::new(InMemoryCarrierKeySeedStore::default()),
+        )
+        .unwrap();
+        let mut probe = initialized(&mut fresh);
+        probe["revision"] = json!(3);
+        probe["relay"] = relay(vec![with(1, "url", good)]);
+        assert!(commit(&mut fresh, 2, &probe), "{good} is a valid route url");
     }
     next["relay"] = relay(vec![route(1), route(2)]);
     assert!(commit(&mut store, 2, &next));
 
     // Saved routes and the local realm are pinned; only additions are accepted.
-    let replaced_url = json!({"replica":"r1","url":"ws://127.0.0.1:9090","expectedPeerRealm":"server","expectedPeerPubkey":pk(1)});
-    let replaced_key = json!({"replica":"r1","url":"ws://127.0.0.1:8080","expectedPeerRealm":"server","expectedPeerPubkey":pk(9)});
+    let replaced_url = with(1, "url", "ws://127.0.0.1:9090");
+    let replaced_key = with(1, "expectedPeerPubkey", &pk(9));
     next["revision"] = json!(4);
     for bad in [
         relay(vec![replaced_url, route(2)]),

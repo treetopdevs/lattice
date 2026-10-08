@@ -113,18 +113,74 @@ fn public_key_text(value: &str) -> bool {
         .decode(value)
         .is_ok_and(|bytes| bytes.len() == 32 && BASE64.encode(bytes) == value)
 }
-fn text(value: &str, limit: usize) -> bool {
-    !value.trim().is_empty() && value.len() <= limit
+/// A realm is pinned for good, so it must already be trimmed (treehouse_routes.ts `realmText`).
+fn realm_text(value: &str) -> bool {
+    !value.is_empty() && value.trim() == value && value.len() <= 256
+}
+fn token43(value: &str) -> bool {
+    value.len() == 43
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+}
+/// `replica:treehouse:{space|thread}:<43>#root:<43>`, as the shell's SPACE_REPLICA/THREAD_REPLICA.
+fn route_replica(value: &str) -> bool {
+    let Some(rest) = value
+        .strip_prefix("replica:treehouse:space:")
+        .or_else(|| value.strip_prefix("replica:treehouse:thread:"))
+    else {
+        return false;
+    };
+    rest.split_once("#root:")
+        .is_some_and(|(nonce, root)| token43(nonce) && token43(root))
+}
+/// wss to any host, or ws to a loopback host only; no credentials and no fragment (`validRouteUrl`).
+fn route_url(value: &str) -> bool {
+    if value.len() > 2048 || value.contains('#') || value.chars().any(char::is_whitespace) {
+        return false;
+    }
+    // The shell parses with WHATWG URL, which lowercases the scheme and host.
+    let scheme_end = value.find("://").unwrap_or(0);
+    let rest = &value[(scheme_end + 3).min(value.len())..];
+    let secure = match value[..scheme_end].to_ascii_lowercase().as_str() {
+        "wss" => true,
+        "ws" => false,
+        _ => return false,
+    };
+    let authority = rest.split(['/', '?']).next().unwrap_or("");
+    if authority.is_empty() || authority.contains('@') {
+        return false;
+    }
+    let host = match authority.strip_prefix('[') {
+        Some(v6) => match v6.split_once(']') {
+            Some((inner, port)) if port.is_empty() || valid_port(port) => format!("[{inner}]"),
+            _ => return false,
+        },
+        None => match authority.split_once(':') {
+            Some((host, port)) if valid_port(&format!(":{port}")) => host.to_ascii_lowercase(),
+            Some(_) => return false,
+            None => authority.to_ascii_lowercase(),
+        },
+    };
+    !host.is_empty() && (secure || matches!(host.as_str(), "127.0.0.1" | "localhost" | "[::1]"))
+}
+fn valid_port(suffix: &str) -> bool {
+    suffix.strip_prefix(':').is_some_and(|port| {
+        !port.is_empty()
+            && port.len() <= 5
+            && port.bytes().all(|b| b.is_ascii_digit())
+            && port.parse::<u32>().is_ok_and(|n| n <= 65_535)
+    })
 }
 fn valid_relay(relay: &Relay) -> bool {
     let mut replicas = HashSet::new();
-    text(&relay.local_realm, 256)
+    realm_text(&relay.local_realm)
         && !relay.routes.is_empty()
         && relay.routes.len() <= MAX_ROUTES
         && relay.routes.iter().all(|r| {
-            text(&r.replica, 512)
-                && text(&r.url, 2048)
-                && text(&r.expected_peer_realm, 256)
+            route_replica(&r.replica)
+                && route_url(&r.url)
+                && realm_text(&r.expected_peer_realm)
                 && public_key_text(&r.expected_peer_pubkey)
                 && replicas.insert(r.replica.clone())
         })

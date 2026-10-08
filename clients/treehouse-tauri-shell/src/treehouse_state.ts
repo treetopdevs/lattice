@@ -2,6 +2,7 @@ import type {
   CarrierOpFrame,
   TreehouseProduct,
 } from "@treetopdevs/lattice-client";
+import { validateLocalRealm, validateRoutes } from "./treehouse_routes";
 
 /** Preview envelope only; this is not the per-Thread pilot capacity claim. */
 export const HISTORY_BYTES = 1_048_576;
@@ -198,37 +199,18 @@ function ackedSet(acked: unknown, frames: unknown[]): boolean {
   const ids = new Set(frames.map((f) => (object(f) ? f.id : undefined)));
   return acked.every((id) => typeof id === "string" && ids.has(id));
 }
-function text(value: unknown, limit: number): boolean {
-  return (
-    typeof value === "string" && !!value.trim() && byteLength(value) <= limit
-  );
-}
+/** The same semantic rules the route list was accepted under (treehouse_routes.ts). */
 function relay(value: unknown): boolean {
   if (value === null) return true;
-  if (
-    !object(value) ||
-    !keys(value, ["localRealm", "routes"]) ||
-    !text(value.localRealm, 256) ||
-    !Array.isArray(value.routes) ||
-    value.routes.length === 0 ||
-    value.routes.length > MAX_ROUTES
-  )
+  if (!object(value) || !keys(value, ["localRealm", "routes"]) || !Array.isArray(value.routes))
     return false;
-  const replicas = new Set<string>();
-  for (const r of value.routes) {
-    if (
-      !object(r) ||
-      !keys(r, ["replica", "url", "expectedPeerRealm", "expectedPeerPubkey"]) ||
-      !text(r.replica, 512) ||
-      !text(r.url, 2048) ||
-      !text(r.expectedPeerRealm, 256) ||
-      !publicKey(r.expectedPeerPubkey) ||
-      replicas.has(r.replica as string)
-    )
-      return false;
-    replicas.add(r.replica as string);
+  try {
+    validateLocalRealm(value.localRealm);
+    validateRoutes(value.routes);
+    return true;
+  } catch {
+    return false;
   }
-  return true;
 }
 /**
  * Retained history, the outbox and the acknowledged set only grow. The native store

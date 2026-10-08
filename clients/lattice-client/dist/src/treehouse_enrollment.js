@@ -212,6 +212,10 @@ export function memberCapability(frames, publicKey, replica, options) {
         delegation.audience === audience && (options.command === undefined || delegation.ops.includes(options.command)))
         ?.delegation ?? null;
 }
+/** Delegations an op authored at the current frontier of `replica` can cite: honored and unrevoked. */
+export function liveTreehouseDelegations(product, frames, replica) {
+    return honoredDelegations(product, frames, replica).filter(({ revoked }) => !revoked).map(({ delegation }) => delegation);
+}
 /**
  * Delegations carried by honored frames of `replica`, each marked revoked when an honored revoke names it or any
  * ancestor in its chain. Only an unrevoked one can be cited by an op authored at the current frontier: a revoke

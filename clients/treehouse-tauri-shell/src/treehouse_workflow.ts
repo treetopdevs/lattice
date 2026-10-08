@@ -12,6 +12,7 @@ import {
   encodeTreehouseAcceptance,
   encodeTreehouseJoinRequest,
   encodeTreehouseOffer,
+  liveTreehouseDelegations,
   memberCapability,
   observeTreehouse,
   prepareTreehouseSpaceCreation,
@@ -390,10 +391,13 @@ export class TreehouseWorkflow {
     await this.persist(next, changed);
   }
   /** The local key's own root delegation, if it authored one in this profile. */
+  /** The local key's root delegation, while it is honored and unrevoked. */
   private rootCapability(profile: LocalProfile) {
-    return carrierDelegationsFromFrames(profile.frames).find(
-      (d) => d.issuer === this.state.publicKey && d.parent_id === null,
-    );
+    return liveTreehouseDelegations(
+      profile.product,
+      profile.frames,
+      profile.replica,
+    ).find((d) => d.issuer === this.state.publicKey && d.parent_id === null);
   }
   /** Root delegation for the founder, otherwise an honored exact-audience grant that carries `command`. */
   private capabilityFor(profile: LocalProfile, command: string): string | null {

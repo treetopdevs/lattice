@@ -45,6 +45,8 @@ export declare function memberCapability(frames: readonly CarrierOpFrame[], publ
     product: TreehouseProduct;
     command?: string;
 }): CarrierDelegation | null;
+/** Delegations an op authored at the current frontier of `replica` can cite: honored and unrevoked. */
+export declare function liveTreehouseDelegations(product: TreehouseProduct, frames: readonly CarrierOpFrame[], replica: string): CarrierDelegation[];
 export type TreehouseInvitationReview = {
     ok: true;
     invitationId: string;
