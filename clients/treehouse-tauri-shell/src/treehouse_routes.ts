@@ -50,6 +50,8 @@ export function validRouteUrl(value: string): boolean {
   const authority = value.slice(value.indexOf("://") + 3).split(/[/?#]/)[0] ?? "";
   const host = authority.startsWith("[") ? authority.slice(0, authority.indexOf("]") + 1) : authority.split(":")[0]!;
   if (host.toLowerCase() !== url.hostname) return false;
+  // A name uses the native store's alphabet: letters, digits, `.`, `-` and `_` (URL() also keeps `!`, `$`, …).
+  if (!host.startsWith("[") && !/^[A-Za-z0-9._-]+$/.test(host)) return false;
   // A port, when written, is canonical decimal (no leading zeros) and not 0, which names no listening
   // endpoint; the native store requires the same.
   const port = authority.slice(host.length);

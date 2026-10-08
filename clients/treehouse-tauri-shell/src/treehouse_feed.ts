@@ -6,7 +6,7 @@ import { MAX_ROUTES } from "./treehouse_state";
 import type { RelayRoute } from "./treehouse_state";
 import { productOf } from "./treehouse_routes";
 import { syncTreehouseRoute } from "./treehouse_sync";
-import type { RouteSyncResult, SyncTreehouseOptions } from "./treehouse_sync";
+import type { RouteSyncResult, SyncTreehouseOptions, TreehouseRelayConnection } from "./treehouse_sync";
 import type { TreehouseWorkflow } from "./treehouse_workflow";
 
 // Plan 181 slice 3b2. The feed controller keeps one availability subscription per configured route and
@@ -157,6 +157,43 @@ export function createTreehouseFeedController(
   >();
   // The running drain, so teardown can wait for an in-flight route sync before a new epoch starts.
   let draining: Promise<void> | null = null;
+  // Aborted by stop and reconfigure: it closes the sync connections of the old epoch, so a relay that
+  // stops answering cannot leave the drain, and with it reconfigure, pending forever.
+  let syncAbort = new AbortController();
+
+  const syncOptions = (signal: AbortSignal): SyncTreehouseOptions => ({
+    ...options.sync,
+    async connect(route, localRealm) {
+      if (signal.aborted) throw new Error("feed_reconfigured");
+      let rejectDial!: (reason: unknown) => void;
+      const aborted = new Promise<never>((_resolve, reject) => {
+        rejectDial = reject;
+      });
+      aborted.catch(() => undefined);
+      const onDialAbort = (): void => rejectDial(new Error("feed_reconfigured"));
+      signal.addEventListener("abort", onDialAbort, { once: true });
+      const dialing = options.sync.connect(route, localRealm, signal);
+      dialing.then((late) => {
+        if (signal.aborted) late.close();
+      }, () => undefined);
+      let connection: TreehouseRelayConnection;
+      try {
+        connection = await Promise.race([dialing, aborted]);
+      } finally {
+        signal.removeEventListener("abort", onDialAbort);
+      }
+      // Closing rejects any request still waiting on the relay. The listener goes when the sync closes.
+      const close = connection.close.bind(connection);
+      const onAbort = (): void => close();
+      signal.addEventListener("abort", onAbort, { once: true });
+      return Object.assign(connection, {
+        close() {
+          signal.removeEventListener("abort", onAbort);
+          close();
+        },
+      });
+    },
+  });
 
   const routes = (): RelayRoute[] => workflow.state.relay?.routes ?? [];
 
@@ -204,6 +241,7 @@ export function createTreehouseFeedController(
   };
 
   const syncRoute = async (route: RelayRoute, at: number): Promise<RouteSyncResult> => {
+    const sync = syncOptions(syncAbort.signal);
     // A sync that outlives its epoch must not write route state into the next one.
     const record = (replica: string, matchesRelay: boolean): void => {
       if (!stopped && at === epoch) setLink(replica, { matchesRelay });
@@ -214,13 +252,13 @@ export function createTreehouseFeedController(
     if (!isSpace(route.replica) && !workflow.state.profiles.some((p) => p.product === "Treehouse.Space")) {
       const space = routes().find((r) => isSpace(r.replica));
       if (space) {
-        const first = await syncTreehouseRoute(workflow, space, options.sync);
+        const first = await syncTreehouseRoute(workflow, space, sync);
         record(space.replica, first.matchesRelay);
         // A reconfigure or stop during the Space pre-sync ends this sync before it dials the next route.
         if (stopped || at !== epoch) throw new Error("feed_reconfigured");
       }
     }
-    const result = await syncTreehouseRoute(workflow, route, options.sync);
+    const result = await syncTreehouseRoute(workflow, route, sync);
     record(route.replica, result.matchesRelay);
     return result;
   };
@@ -537,9 +575,12 @@ export function createTreehouseFeedController(
       // Stop the poll before waiting: a tick during a slow drain would keep refilling the queue.
       stopPoll();
       await teardown();
-      // A cancelled worker stops waiting on its sync, but the sync itself runs on to its commit. The new
-      // epoch starts only once it has, so no old-epoch commit or route state lands after the relaunch.
+      // A cancelled worker stops waiting on its sync, but the sync itself runs on to its commit. Abort its
+      // relay I/O, then wait for the drain, so no old-epoch commit or route state lands after the relaunch
+      // and a relay that stops answering cannot hold the reconfigure open.
+      syncAbort.abort();
       await draining;
+      syncAbort = new AbortController();
       link.clear();
       running = false;
       if (workflow.state.relay === null) {
@@ -558,6 +599,7 @@ export function createTreehouseFeedController(
       stopPoll();
       for (const waiter of queued.values()) waiter.reject(new Error("feed_stopped"));
       queued.clear();
+      syncAbort.abort();
       await teardown();
     },
   };

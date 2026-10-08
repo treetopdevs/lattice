@@ -127,6 +127,8 @@ class Harness {
   syncs: string[] = [];
   pulls: string[] = [];
   syncLatch: Promise<void> | null = null;
+  /** Pulls wait until their connection is closed, like a relay that stops answering. */
+  stallPulls = false;
   /** Replicas whose sync fails with a non-refusal error (a relay pull the local check rejects). */
   syncFailures = new Map<string, Error>();
   /** A held feed connect per replica, so a test can choose which worker subscribes first. */
@@ -152,8 +154,16 @@ class Harness {
         if (failure) throw failure;
         const conn = this.relay(route.replica).connect();
         const pull = conn.pull.bind(conn);
+        // Like the real carrier client, closing rejects every request still waiting on the relay.
+        const stalled: ((reason: unknown) => void)[] = [];
+        const close = conn.close.bind(conn);
+        conn.close = () => {
+          close();
+          for (const reject of stalled.splice(0)) reject(new Error("carrier websocket closed"));
+        };
         conn.pull = async (have: string[]) => {
           this.pulls.push(route.replica);
+          if (this.stallPulls) return new Promise<never>((_resolve, reject) => stalled.push(reject));
           return pull(have);
         };
         return conn;
@@ -604,7 +614,7 @@ console.log("PASS nonce and protocol-version failures settle in refused instead 
   console.log("PASS reconfigure cancels the old epoch and starts a fresh one");
 }
 
-// ---- 10b. teardown waits for an in-flight sync; its result never lands in the next epoch ---------------
+// ---- 10b. reconfigure aborts an in-flight sync; its result never lands in the next epoch -----------------
 {
   const f = await founder();
   const h = new Harness();
@@ -617,19 +627,40 @@ console.log("PASS nonce and protocol-version failures settle in refused instead 
   });
   h.sessions.get(f.thread)![0]!.hints.push(5);
   await until(() => h.syncs.length === 3, "a hint sync is in flight");
+  // The dial never completes on its own: reconfigure aborts it instead of waiting forever.
+  await feed.reconfigure();
+  assert.equal(h.routeState(f.thread).matchesRelay, null, "the old sync wrote no state into the new epoch");
+  h.syncLatch = null;
+  release();
+  await quiet(30);
+  assert.equal(h.routeState(f.thread).matchesRelay === true || h.routeState(f.thread).matchesRelay === null, true);
+  await until(() => live(h, f.thread) && live(h, f.space), "fresh epoch live");
+  await feed.stop();
+  console.log("PASS reconfigure aborts an in-flight sync and keeps its result out of the next epoch");
+}
+
+// ---- 10e. a relay that never answers a pull cannot hold reconfigure open --------------------------------
+{
+  const f = await founder();
+  const h = new Harness();
+  const feed = h.controller(f.app);
+  await feed.start();
+  await until(() => live(h, f.thread) && live(h, f.space) && h.syncs.length === 2, "settled");
+  h.stallPulls = true;
+  const pulls = h.pulls.length;
+  h.sessions.get(f.thread)![0]!.hints.push(5);
+  await until(() => h.pulls.length > pulls, "a pull is waiting on a silent relay");
   let reconfigured = false;
   const done = feed.reconfigure().then(() => {
     reconfigured = true;
   });
   await quiet(30);
-  assert.equal(reconfigured, false, "reconfigure waits for the in-flight sync to finish");
-  h.syncLatch = null;
-  release();
+  assert.equal(reconfigured, true, "reconfigure closed the stalled sync connection instead of waiting on it");
   await done;
-  assert.equal(h.routeState(f.thread).matchesRelay, null, "the old sync wrote no state into the new epoch");
+  h.stallPulls = false;
   await until(() => live(h, f.thread) && live(h, f.space), "fresh epoch live");
   await feed.stop();
-  console.log("PASS teardown awaits an in-flight sync and keeps its result out of the next epoch");
+  console.log("PASS a relay that never answers a pull cannot hold reconfigure open");
 }
 
 // ---- 10c. reconfigure clears the poll before it waits on a slow drain ----------------------------------

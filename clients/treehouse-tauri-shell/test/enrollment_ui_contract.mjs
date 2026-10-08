@@ -270,6 +270,23 @@ for (const name of ["confirmRoutes", "configureRoutes", "useOffer", "joinGroup"]
     ["canEditOwn", "author_edit"], ["canHideOwn", "author_tombstone"]])
     assert(appScript.includes(`${name} = computed(() => canDo("${command}"))`), `${name} gates ${command}`);
 }
+// Actions that sign, persist or dial need the local key; Use offer (a local review) does not.
+{
+  const panel = sources.find((s) => s.path.endsWith("EnrollmentPanel.vue"));
+  const disabledOf = (label) => {
+    let found = null;
+    walk(panel.sfc.template.ast, (node) => {
+      if (node.type !== NodeTypes.ELEMENT || node.tag !== "button") return;
+      if (!node.props.some((p) => p.type === NodeTypes.ATTRIBUTE && p.name === "aria-label" && p.value?.content === label)) return;
+      found = node.props.find((p) => p.type === NodeTypes.DIRECTIVE && p.name === "bind" && p.arg?.content === "disabled")?.exp?.loc.source ?? "";
+    });
+    return found;
+  };
+  for (const label of ["Accept invitation", "Confirm routes", "Configure routes", "Issue invitation", "Admit and grant", "Sync"])
+    assert(/!signing\b/.test(disabledOf(label) ?? ""), `${label} is gated on the local key`);
+  assert(!/signing/.test(disabledOf("Use offer") ?? ""), "Use offer stays a local review");
+  assert(/const signing = computed\(\(\) => props\.state\.publicKey !== null && props\.workflow\.keyAvailable\)/.test(panel.sfc.scriptSetup.content));
+}
 const shown = ["Use offer", "Accept invitation", "Admit and grant", "Issue invitation"];
 for (const label of shown)
   assert(buttons.some((b) => b.label === label && b.handler), `${label} is not a button`);

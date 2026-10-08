@@ -96,6 +96,8 @@ const isFounder = computed(
     founderKey.value === props.state.publicKey,
 );
 const canJoin = computed(() => props.state.profiles.length === 0);
+// Signing, persisting and the relay handshake need the local key; review and copy actions do not.
+const signing = computed(() => props.state.publicKey !== null && props.workflow.keyAvailable);
 const short = (replica: string) =>
   replica.replace("replica:treehouse:", "").slice(0, 28);
 
@@ -262,7 +264,7 @@ async function admitAndGrant() {
         <button
           type="button"
           aria-label="Accept invitation"
-          :disabled="busy || !offerText.trim() || !space"
+          :disabled="busy || !signing || !offerText.trim() || !space"
           @click="acceptInvitation"
         >
           Accept invitation
@@ -297,7 +299,7 @@ async function admitAndGrant() {
         <button
           type="button"
           aria-label="Confirm routes"
-          :disabled="busy || confirmed"
+          :disabled="busy || !signing || confirmed"
           @click="confirmRoutes"
         >
           {{ confirmed ? "Routes saved" : "Confirm routes" }}
@@ -337,7 +339,7 @@ async function admitAndGrant() {
         type="button"
         class="secondary"
         aria-label="Configure routes"
-        :disabled="busy || !routeList.trim()"
+        :disabled="busy || !signing || !routeList.trim()"
         @click="configureRoutes"
       >
         Configure routes
@@ -361,7 +363,7 @@ async function admitAndGrant() {
       <button
         type="button"
         aria-label="Issue invitation"
-        :disabled="busy || !joinRequestPaste.trim() || !joinerRealm.trim()"
+        :disabled="busy || !signing || !joinRequestPaste.trim() || !joinerRealm.trim()"
         @click="issueInvitation"
       >
         Issue invitation
@@ -395,7 +397,7 @@ async function admitAndGrant() {
       <button
         type="button"
         aria-label="Admit and grant"
-        :disabled="busy || !acceptancePaste.trim()"
+        :disabled="busy || !signing || !acceptancePaste.trim()"
         @click="admitAndGrant"
       >
         Admit and grant
@@ -435,7 +437,7 @@ async function admitAndGrant() {
       <button
         type="button"
         aria-label="Sync"
-        :disabled="busy"
+        :disabled="busy || !signing"
         @click="syncRelay"
       >
         Sync

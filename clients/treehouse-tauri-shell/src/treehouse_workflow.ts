@@ -423,10 +423,12 @@ export class TreehouseWorkflow {
     const space = this.state.profiles.find((p) => p.product === "Treehouse.Space");
     return space === undefined ? null : (this.roots.get(space.replica) ?? null);
   }
-  /** True when this key may add a Thread: it holds the Space's live root capability (`createThread`'s own check). */
+  /** True when `createThread` would proceed: the Space's live root capability, and room under the route cap. */
   canCreateThread(): boolean {
     const space = this.state.profiles.find((p) => p.product === "Treehouse.Space");
-    return space !== undefined && this.rootCapability(space) !== undefined;
+    if (space === undefined || this.rootCapability(space) === undefined) return false;
+    const threads = (this.views.get(space.replica)?.state.threads as unknown[] | undefined) ?? [];
+    return this.state.relay === null || threads.length < TREEHOUSE_LITE_THREAD_CAP;
   }
   /** True when this key holds a capability for `command` in the profile (the Post button's gate). */
   canAuthor(replica: string, command: string): boolean {

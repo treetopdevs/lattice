@@ -104,7 +104,7 @@ export function createPanelSync(options: PanelSyncOptions): PanelSync {
   const flags = treehouseFeedEnv(options.env ?? {});
   const controller: TreehouseFeedController = createTreehouseFeedController({
     workflow: options.workflow,
-    sync: { ...options.sync, connect: (route, realm) => connector.connect(route, realm) },
+    sync: { ...options.sync, connect: (route, realm, signal) => connector.connect(route, realm, signal) },
     connect: (route, realm, signal) => connector.connectFeed(route, realm, signal),
     onState: (state) => options.onStatus(describeSyncStatus(state)),
     pollMs: flags.pollMs,

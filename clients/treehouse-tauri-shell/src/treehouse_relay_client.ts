@@ -26,7 +26,7 @@ export interface TreehouseRelayConnectorOptions {
 
 export interface TreehouseRelayConnector {
   /** Sync connection: advertise, pull and one-op relay submission. */
-  connect(route: RelayRoute, localRealm: string): Promise<TreehouseRelayConnection>;
+  connect(route: RelayRoute, localRealm: string, signal?: AbortSignal): Promise<TreehouseRelayConnection>;
   /** Availability connection: it can subscribe and close, and by type nothing that submits. */
   connectFeed(route: RelayRoute, localRealm: string, signal?: AbortSignal): Promise<TreehouseFeedSession>;
 }
@@ -80,7 +80,7 @@ export function createTreehouseRelayConnector(
   }
 
   return {
-    connect: (route, localRealm) => dial(route, localRealm),
+    connect: (route, localRealm, signal) => dial(route, localRealm, signal),
     async connectFeed(route, localRealm, signal) {
       const client = await dial(route, localRealm, signal);
       return {

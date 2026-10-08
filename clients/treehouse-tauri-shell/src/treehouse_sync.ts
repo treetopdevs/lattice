@@ -25,7 +25,7 @@ export type TreehouseRelayConnection = CarrierSyncClient &
 
 export interface SyncTreehouseOptions {
   /** One authenticated connection per replica route (the hello challenge binds a replica). */
-  connect(route: RelayRoute, localRealm: string): Promise<TreehouseRelayConnection>;
+  connect(route: RelayRoute, localRealm: string, signal?: AbortSignal): Promise<TreehouseRelayConnection>;
   /** Operation signature check. Defaults to strict Ed25519, as `verifyProfile` uses. */
   verifier?: Verifier;
   /** Backoff between rate-limited rounds. Defaults to a real timer; tests inject a fake clock. */

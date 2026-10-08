@@ -552,7 +552,9 @@ assert.equal(fApp.state.revision, revBeforeIssue + 1);
   const smallApp = await fresh(small);
   await smallApp.createSpace("Small");
   for (const t of ["A", "B", "C"]) await smallApp.createThread(t);
+  assert.equal(smallApp.canCreateThread(), true, "no relay yet: only the local limit applies");
   await smallApp.configureRoutes(routeList(smallApp, "founder"));
+  assert.equal(smallApp.canCreateThread(), false, "the control is off at the route cap");
   await unchanged(small, () => smallApp.createThread("D"), /thread_cap_reached/);
 }
 console.log("PASS invitation issue, reissue idempotence, route cap refusals");
