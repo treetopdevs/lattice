@@ -106,6 +106,8 @@ const frontier = (frames: CarrierOpFrame[]) => {
 export class TreehouseWorkflow {
   state = emptyState();
   views = new Map<string, Observation>();
+  /** Each verified replica's committed genesis author: the key its #root: commitment names. */
+  private roots = new Map<string, string>();
   keyAvailable = false;
   /** Reviewed but unconfirmed offer routes. Memory only: Use never persists. */
   private pendingOffer: { review: OfferReview; relay: RelayConfig } | null = null;
@@ -208,6 +210,8 @@ export class TreehouseWorkflow {
       }
     }
     if (!root) throw new Error("wrong_profile_root");
+    // The commitment fixes the root for good, so recording it before the remaining checks is safe.
+    this.roots.set(profile.replica, profile.frames.find((frame) => frame.id === root.id)!.author);
     const view = observeTreehouse(profile.product, ops);
     if (view.quarantineReasons.has(root.id) || view.order.length !== ids.size)
       throw new Error("invalid_profile_root");
@@ -410,6 +414,14 @@ export class TreehouseWorkflow {
         product: profile.product,
       })?.id ?? null
     );
+  }
+  /**
+   * The founder: the author of the Space's committed genesis, the one its #root: commitment names. A
+   * competing genesis a relay serves first is never taken for it. Null before a Space is held.
+   */
+  founderKey(): string | null {
+    const space = this.state.profiles.find((p) => p.product === "Treehouse.Space");
+    return space === undefined ? null : (this.roots.get(space.replica) ?? null);
   }
   /** True when this key holds a capability for `command` in the profile (the Post button's gate). */
   canAuthor(replica: string, command: string): boolean {

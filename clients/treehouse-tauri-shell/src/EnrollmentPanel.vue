@@ -87,10 +87,8 @@ const explain = (cause: unknown) => {
 const space = computed(() =>
   props.state.profiles.find((p) => p.product === "Treehouse.Space"),
 );
-// The genesis operation is the only one without dependencies, and its author is the founder.
-const founderKey = computed(
-  () => space.value?.frames.find((f) => f.deps.length === 0)?.author ?? null,
-);
+// The founder is the author of the Space's committed genesis (the one its #root: commitment names).
+const founderKey = computed(() => (space.value ? props.workflow.founderKey() : null));
 const isFounder = computed(
   () =>
     space.value !== undefined &&

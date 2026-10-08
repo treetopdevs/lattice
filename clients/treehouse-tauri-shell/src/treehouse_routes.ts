@@ -45,6 +45,11 @@ export function validRouteUrl(value: string): boolean {
   // URL() silently trims and strips whitespace, so the pinned text must carry none. Hosts stay ASCII so
   // the native store, which checks the raw text, judges the same host.
   if (/[^\x21-\x7e]/.test(value) || url.username || url.password || url.hash || value.length > 2048) return false;
+  // The host must already be in the form URL() normalizes it to (127.1 or a long IPv6 form is refused), so
+  // the native store, which checks the raw text, accepts exactly the same hosts.
+  const authority = value.slice(value.indexOf("://") + 3).split(/[/?#]/)[0] ?? "";
+  const host = authority.startsWith("[") ? authority.slice(0, authority.indexOf("]") + 1) : authority.split(":")[0]!;
+  if (host.toLowerCase() !== url.hostname) return false;
   if (url.protocol === "wss:") return true;
   return (
     url.protocol === "ws:" &&

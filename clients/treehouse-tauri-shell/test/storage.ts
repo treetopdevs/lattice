@@ -286,7 +286,7 @@ for (const url of [
   "ws://localhost:1",
   "ws://LocalHost:1",
   "ws://[::1]:9",
-  "ws://[0:0:0:0:0:0:0:1]:9",
+  "wss://[::A]",
   "wss://[2001:db8::1]:443",
   "wss://10.0.0.1",
   "wss://x:",
@@ -307,6 +307,11 @@ for (const url of [
   "wss://1.2.3.999",
   "wss://ex\u00e4mple.com",
   "ws://[::2]:9",
+  "ws://[0:0:0:0:0:0:0:1]:9",
+  "ws://127.1",
+  "wss://[::ffff:1.2.3.4]",
+  "wss://010.0.0.1",
+  "wss://ex%61mple.com",
 ])
   assert.equal(validRouteUrl(url), false, url);
 
@@ -454,6 +459,10 @@ for (const url of [
   const contested = new TreehouseWorkflow(joiner);
   await contested.open();
   assert.equal(contested.state.profiles[0]!.replica, space.replica);
+  // The founder shown is the committed genesis author, never the competitor served first.
+  assert.equal(contested.founderKey(), app.state.publicKey);
+  assert.notEqual(contested.founderKey(), competitor.author);
+  assert.equal(app.founderKey(), app.state.publicKey);
 }
 // A revoked root delegation is no longer offered: canAuthor stops advertising founder actions.
 {

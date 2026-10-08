@@ -156,9 +156,15 @@ fn route_url(value: &str) -> bool {
     let loopback = match authority.strip_prefix('[') {
         Some(v6) => match v6.split_once(']') {
             Some((inner, port)) if port.is_empty() || valid_port(port) => {
+                // Only the canonical text WHATWG serializes to, so both sides accept the same hosts.
                 match inner.parse::<std::net::Ipv6Addr>() {
-                    Ok(address) => address.is_loopback(),
-                    Err(_) => return false,
+                    Ok(address)
+                        if !inner.contains('.')
+                            && address.to_string() == inner.to_ascii_lowercase() =>
+                    {
+                        address.is_loopback()
+                    }
+                    _ => return false,
                 }
             }
             _ => return false,

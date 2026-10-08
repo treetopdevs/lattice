@@ -6,7 +6,7 @@ import { authoritySecurity, materialize } from "./materialize";
 import { delegationFrontierRefusal } from "./capability";
 import { frontier } from "./sync";
 import { authorTownshipDelegation } from "./township";
-import { acceptTreehouseInvitation, authorTreehouseCommand, observeTreehouse, treehouseCommandDecoders, treehouseInvitationAcceptanceBytes, treehouseSpaceSchema, treehouseThreadSchema, } from "./treehouse";
+import { acceptTreehouseInvitation, authorTreehouseCommand, observeTreehouse, treehouseCommandDecoders, treehouseCommandRoles, treehouseInvitationAcceptanceBytes, treehouseSpaceSchema, treehouseThreadSchema, } from "./treehouse";
 // Plan 181 slice 1b: pure invitation and join helpers over frames and artifacts. No storage, no network,
 // no route handling (the shell validates routes) and no signing material in any artifact.
 /** The lite shell configures the Space plus at most this many Threads (four routes in all). */
@@ -206,12 +206,14 @@ function threadScope(ops, reasons) {
  * The delegation naming `publicKey` as audience in `replica`'s frames, optionally one that carries `command`.
  * This generalizes the issuer-root lookup: a joiner's capability is an exact-audience grant, not the root.
  * `product` is required: only usable delegations qualify, so a quarantined, revoked or lapsed grant is never
- * offered.
+ * offered. With `command`, the delegation must also grant that operation and every role the command needs.
  */
 export function memberCapability(frames, publicKey, replica, options) {
     const audience = pubkeyBase64(publicKey);
+    const roles = options.command === undefined ? [] : treehouseCommandRoles(options.product, options.command);
     return honoredDelegations(options.product, frames, replica).find(({ delegation, refusal }) => refusal === null &&
-        delegation.audience === audience && (options.command === undefined || delegation.ops.includes(options.command)))
+        delegation.audience === audience && (options.command === undefined ||
+        (delegation.ops.includes(options.command) && roles.every((role) => delegation.roles.includes(role)))))
         ?.delegation ?? null;
 }
 /** Delegations an op authored at the current frontier of `replica` can cite: honored, unrevoked and unexpired. */

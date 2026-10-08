@@ -2,6 +2,7 @@ import { ed25519 } from "@noble/curves/ed25519.js";
 import { authorCarrierDelegation, authorCarrierOp, verifyCarrierOp } from "./codec";
 import { base64ToBytes, canonicalTerm, carrierDelegationsFromFrames, carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
 import { compareUtf8, effectViews } from "./op";
+import { gatedBy } from "./schema";
 import { authorTownshipGenesis, authorTownshipRevocation, townshipCapTerm } from "./township";
 import { materialize } from "./materialize";
 import { canonicalOrder, depth, index } from "./dag";
@@ -250,6 +251,33 @@ function decoder(arity, command, effects) {
             const first = complete[0] ?? effect("__authority", "write", null);
             return { ...first, command, effects: complete, commandArgs: args };
         } };
+}
+// The fields each command's decoder writes. A decoder's effect fields never depend on its arguments, so a
+// command's required roles follow from these and the schema's `gatedBy`; a test pins this table to the
+// decoders' real effects.
+const TREEHOUSE_COMMAND_FIELDS = {
+    "Treehouse.Thread": {
+        create_thread: ["title", "moderation"], post: ["posts"], author_edit: ["posts"], author_tombstone: ["posts"],
+        moderator_tombstone: ["posts", "moderation"], archive_thread: ["archived"],
+    },
+    "Treehouse.Space": {
+        catalog_bootstrap_v1: ["admin_actions"], attest_member_key_v1: ["admin_actions"], create_space: ["name", "admin_actions"],
+        create_thread: ["threads", "admin_actions"], issue_invitation: ["invitations", "admin_actions"],
+        revoke_invitation: ["revoked_invitations", "admin_actions"], admit_member: ["members", "membership_events", "admin_actions"],
+        remove_member: ["members", "membership_events", "admin_actions"],
+    },
+};
+/** The fields `command` writes, or null for a command the product does not have. */
+export function treehouseCommandFields(product, command) {
+    return Object.hasOwn(TREEHOUSE_COMMAND_FIELDS[product], command) ? TREEHOUSE_COMMAND_FIELDS[product][command] : null;
+}
+/** The authority roles a capability must carry to author `command`, from the schema's `gatedBy`. */
+export function treehouseCommandRoles(product, command) {
+    const schema = product === "Treehouse.Space" ? treehouseSpaceSchema : treehouseThreadSchema;
+    const fields = treehouseCommandFields(product, command);
+    if (fields === null)
+        throw new Error("unknown_command");
+    return [...new Set(fields.map((field) => gatedBy(schema, field)).filter((role) => role !== null))];
 }
 /** Explicit injection keeps Treehouse command names independent of Township. */
 export function treehouseCommandDecoders(product) {

@@ -4,12 +4,31 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { acceptTreehouseInvitation, authorCarrierOp, authorTownshipDelegation, authorTownshipRevocation, carrierDelegationsFromFrames, authorTownshipGenesis, authorTreehouseCommand, authorTreehouseAdmitAndGrant, authorTreehouseIssueInvitation, carrierOpsToSemanticOps, decodeTreehouseAcceptance, decodeTreehouseJoinRequest, decodeTreehouseOffer, encodeTreehouseAcceptance, encodeTreehouseJoinRequest, encodeTreehouseOffer, liveTreehouseDelegations, memberCapability, observeTreehouse, reviewTreehouseInvitation, signTreehouseAcceptance, treehouseCommandDecoders, TREEHOUSE_LITE_THREAD_CAP, TREEHOUSE_OFFER_MAX_CHARS, } from "../src/index";
+import { acceptTreehouseInvitation, authorCarrierOp, authorTownshipDelegation, authorTownshipRevocation, carrierDelegationsFromFrames, authorTownshipGenesis, authorTreehouseCommand, authorTreehouseAdmitAndGrant, authorTreehouseIssueInvitation, carrierOpsToSemanticOps, decodeTreehouseAcceptance, decodeTreehouseJoinRequest, decodeTreehouseOffer, encodeTreehouseAcceptance, encodeTreehouseJoinRequest, encodeTreehouseOffer, liveTreehouseDelegations, memberCapability, observeTreehouse, reviewTreehouseInvitation, signTreehouseAcceptance, treehouseCommandDecoders, treehouseCommandFields, treehouseCommandRoles, TREEHOUSE_LITE_THREAD_CAP, TREEHOUSE_OFFER_MAX_CHARS, } from "../src/index";
 import { frontier } from "../src/sync";
 const here = dirname(fileURLToPath(import.meta.url));
 const scenarios = JSON.parse(readFileSync(join(here, "vectors", "treehouse_enrollment", "enrollment.json"), "utf8"));
 const byName = (name) => scenarios.find((scenario) => scenario.name === name);
 assert.equal(scenarios.length, 9);
+// The static command-field table behind treehouseCommandRoles matches the decoders: the same commands, and
+// every decoded command in the corpus writes exactly its listed fields.
+for (const product of ["Treehouse.Space", "Treehouse.Thread"])
+    for (const command of treehouseCommandDecoders(product).keys())
+        assert.notEqual(treehouseCommandFields(product, command), null, `${product} ${command} has a field entry`);
+{
+    let checked = 0;
+    for (const scenario of scenarios)
+        for (const log of scenario.logs)
+            for (const op of carrierOpsToSemanticOps(log.frames, {}, treehouseCommandDecoders(log.product)))
+                if (op.kind === "command" && op.command !== undefined && op.effects !== undefined) {
+                    assert.deepEqual([...new Set(op.effects.map((effect) => effect.field))].sort(), [...treehouseCommandFields(log.product, op.command)].sort(), `${log.product} ${op.command} fields`);
+                    checked++;
+                }
+    assert(checked > 20, "the corpus exercises the decoders");
+    assert.deepEqual(treehouseCommandRoles("Treehouse.Thread", "archive_thread"), ["moderator"]);
+    assert.deepEqual(treehouseCommandRoles("Treehouse.Thread", "post"), []);
+    assert.deepEqual(treehouseCommandRoles("Treehouse.Space", "admit_member"), ["admin"]);
+}
 const signerFromSeed = (text) => {
     const seed = createHash("sha256").update(text).digest();
     return { publicKey: ed25519.getPublicKey(seed), sign: (bytes) => ed25519.sign(bytes, seed) };
@@ -240,6 +259,13 @@ const joinThreadReplica = joinFlow.expect.scope[0];
     const unrooted = wrongParent.logs[0];
     assert(carrierDelegationsFromFrames(unrooted.frames).some((delegation) => delegation.audience === wrongParent.pubkeys.joiner));
     assert.equal(memberCapability(unrooted.frames, wrongParent.pubkeys.joiner, unrooted.replica, thread), null);
+    // A capability must carry every role its command needs: a grant of archive_thread without the moderator
+    // role is never offered for archive_thread, though it still serves post, which needs no role.
+    const grantless = byName("grantless_post");
+    const general = grantless.logs.find((log) => log.label === "thread:general");
+    const noRole = grantless.steps.find((step) => step.label === "grant archive without moderator").input.delegationId;
+    assert.equal(memberCapability(general.frames, grantless.pubkeys.joiner, general.replica, { ...thread, command: "archive_thread" }), null);
+    assert.equal(memberCapability(general.frames, grantless.pubkeys.joiner, general.replica, { ...thread, command: "post" })?.id, noRole);
     console.log("PASS memberCapability finds the audience's delegation and never offers a quarantined grant");
 }
 {

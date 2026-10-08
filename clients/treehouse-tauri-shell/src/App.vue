@@ -61,10 +61,8 @@ const writable = computed(
   () =>
     ready.value && workflow.keyAvailable && !state.value.intent && !busy.value,
 );
-// The genesis operation is the only one without dependencies; its author is the founder.
-const founderKey = computed(
-  () => space.value?.frames.find((f) => f.deps.length === 0)?.author ?? null,
-);
+// The founder is the author of the Space's committed genesis (the one its #root: commitment names).
+const founderKey = computed(() => (space.value ? workflow.founderKey() : null));
 const authorLabel = (author: string) =>
   author === state.value.publicKey
     ? "You"

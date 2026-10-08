@@ -10,7 +10,7 @@ import { delegationFrontierRefusal } from "./capability";
 import { frontier } from "./sync";
 import { authorTownshipDelegation } from "./township";
 import {
-  acceptTreehouseInvitation, authorTreehouseCommand, observeTreehouse, treehouseCommandDecoders,
+  acceptTreehouseInvitation, authorTreehouseCommand, observeTreehouse, treehouseCommandDecoders, treehouseCommandRoles,
   treehouseInvitationAcceptanceBytes, treehouseSpaceSchema, treehouseThreadSchema,
 } from "./treehouse";
 import type { TreehouseProduct } from "./treehouse";
@@ -226,15 +226,17 @@ function threadScope(ops: Op[], reasons: ReadonlyMap<string, string>): string[] 
  * The delegation naming `publicKey` as audience in `replica`'s frames, optionally one that carries `command`.
  * This generalizes the issuer-root lookup: a joiner's capability is an exact-audience grant, not the root.
  * `product` is required: only usable delegations qualify, so a quarantined, revoked or lapsed grant is never
- * offered.
+ * offered. With `command`, the delegation must also grant that operation and every role the command needs.
  */
 export function memberCapability(
   frames: readonly CarrierOpFrame[], publicKey: string | Uint8Array, replica: string,
   options: { product: TreehouseProduct; command?: string },
 ): CarrierDelegation | null {
   const audience = pubkeyBase64(publicKey);
+  const roles = options.command === undefined ? [] : treehouseCommandRoles(options.product, options.command);
   return honoredDelegations(options.product, frames, replica).find(({ delegation, refusal }) => refusal === null &&
-    delegation.audience === audience && (options.command === undefined || delegation.ops.includes(options.command)))
+    delegation.audience === audience && (options.command === undefined ||
+      (delegation.ops.includes(options.command) && roles.every((role) => delegation.roles.includes(role)))))
     ?.delegation ?? null;
 }
 
