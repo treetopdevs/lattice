@@ -824,7 +824,9 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
     check("legacy beacon history preserves state and holders", stableComparisonValue(migrated.state), stableComparisonValue(migration.state));
     check("legacy beacon history has exactly the authorized audit delta", sortedPairs([...migrated.quarantineReasons]), sortedPairs([...migration.legacyReasonPairs, [migration.auditDeltaOperationId, "unauthorized_beacon"]]));
   }
-  if (vec.capabilityCase !== undefined) {
+  // Plan 184: compare reason strings whenever the oracle pins them, not only for
+  // capabilityCase vectors, so a wrong TypeScript reason cannot pass silently.
+  if (vec.capabilityCase !== undefined || exp.authorityQuarantine !== undefined) {
     const reasoned = full as typeof full & {
       quarantineReasons?: ReadonlyMap<string, string>;
     };
