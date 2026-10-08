@@ -9,7 +9,8 @@
     "dev": "node scripts/compile.mjs && vite --host 127.0.0.1",
     "preview": "node scripts/preview.mjs",
     "e2e": "node test/browser.mjs",
-    "e2e:replicas": "node test/replica-browser.mjs"
+    "e2e:replicas": "node test/replica-browser.mjs",
+    "e2e:vectors": "node test/vector-browser.mjs"
   },
   "dependencies": {"@swmansion/popcorn": "0.4.0-next.0"},
   "devDependencies": {"vite": "7.3.6", "@playwright/test": "1.61.1"}

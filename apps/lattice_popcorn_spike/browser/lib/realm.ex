@@ -9,7 +9,7 @@ defmodule LatticeBrowser.Realm do
   """
   use GenServer
   alias Lattice.{Canonical, Identity, Op}
-  alias LatticeBrowser.Durable
+  alias LatticeBrowser.{Durable, Judge}
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: LatticeBrowser.Bridge)
@@ -60,6 +60,19 @@ defmodule LatticeBrowser.Realm do
   defp command(%{"command" => "replica_upload"} = cmd, %{durable: durable} = state)
        when map_size(cmd) == 1 and not is_nil(durable) do
     {%{"ok" => true, "ops" => Durable.upload(durable)}, state}
+  end
+
+  # Plan 185: judge one signed vector with the shared Authority/Reduce. Read-only:
+  # it never touches the durable replica or the signing identity.
+  defp command(
+         %{"command" => "vector_verdict", "schema" => schema, "frames" => frames} = cmd,
+         state
+       ) do
+    if Enum.all?(Map.keys(cmd), &(&1 in ["command", "schema", "frames", "realms"])) do
+      {Judge.verdict(schema, frames, Map.get(cmd, "realms")), state}
+    else
+      invalid(state)
+    end
   end
 
   defp command(%{"command" => "status"} = cmd, state) when map_size(cmd) == 1 do
