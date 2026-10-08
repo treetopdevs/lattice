@@ -360,3 +360,29 @@ change, so core) must run every job green.
   (`tauri_stable_relay_onboarding_smoke.ts:198`, `tauri_action_handoff_smoke.ts:291`,
   `tauri_carrier_feed_smoke.ts:292`) are left alone.
 - Plan 189 may later narrow the `core` prefix by splitting v1 out of `apps/lattice_core`.
+
+## Execution record (2026-10-08)
+
+- Executed by a Sonnet executor in an isolated worktree (steps 1–9); the reviewer re-ran the YAML
+  parse, the drift guard, the six workflow-parsing tests and the client gate on the integrated branch
+  and integrated ten commits onto `claude/round6-plans-182-185`. Step 10 (hosted) is the reviewer's.
+- Deviations, each approved before it was made:
+  1. Step 1 found the committed `continuation/authority.json` differed from regeneration in key order
+     only (57 entries, zero differing values). Cause: `Lattice.ContinuationVectors.write/1` encoded plain
+     atom-keyed maps, whose iteration order follows atom creation order and so varies by VM. Instead of
+     committing the noise, the writer now deep-sorts keys (same helper shape as
+     `enrollment_vectors.ex`), the file was regenerated once, and a second regeneration is byte-stable.
+     `continuation_vectors.ex` was added to scope for that change only.
+  2. The executor found that `android_pilot` needs `verify` and `packaged_macos`, both now skippable, so
+     GitHub's implicit `success()` would have skipped distribution on a Township-only push to `main` and
+     `android_pilot_required` would have passed silently. Its `if:` is now
+     `${{ !cancelled() && ... && needs.unit.result == 'success' && needs.android_pilot_verify.result == 'success' && needs.packaged_macos.result == 'success' && (needs.verify.result == 'success' || needs.verify.result == 'skipped') }}`
+     (wrapped because a plain scalar cannot start with `!`). No other job has a skippable dependency.
+  3. `enrollment_ci_contract.mjs` and `android_pilot_signing_contract.mjs` pinned the pre-183 structure
+     (digest over `packaged_macos`, "no job-level if", "no other referrer", exact four needs). They were
+     re-pinned, not loosened: exact gate expressions, exact needs lists, a second digest
+     (`TREEHOUSE_PREVIEW_DIGEST`) over the moved bodies so nothing previously pinned is unpinned,
+     `required` as the single permitted referrer, and eleven new mutation fixtures (61 subtests, was 48).
+- `actionlint` reports five pre-existing `SC2209` warnings on `MIX_ENV=test mix run` lines; none new.
+- Hosted verification (step 10) and the operator's branch-protection change remain; see the row.
+
