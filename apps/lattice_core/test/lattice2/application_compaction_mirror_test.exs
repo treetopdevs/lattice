@@ -657,7 +657,7 @@ defmodule Lattice2.ApplicationCompactionMirrorTest do
     end
   end
 
-  test "command and inbox revoke-shaped bodies remain inside profile and affect later caps" do
+  test "command and inbox revoke-shaped bodies remain inside profile but do not revoke" do
     for kind <- [:command, :inbox] do
       {sim, genesis} = founded_policy("revoke-shape-#{kind}")
       frontier = Log.frontier(Sim.log(sim, "root"))
@@ -667,7 +667,8 @@ defmodule Lattice2.ApplicationCompactionMirrorTest do
       log = Sim.log(sim, "root")
       full = Authority.analyze(PolicyReplica, log)
 
-      assert full.reasons[later.id] == :revoked_capability
+      # Since plan 184, non-authority revoke-shaped bodies confer no revocation.
+      assert full.reasons[later.id] == nil
 
       assert Map.get(full.reasons, revoke.id, :honored) ==
                if(kind == :command, do: :malformed_command, else: :honored)
@@ -1119,13 +1120,14 @@ defmodule Lattice2.ApplicationCompactionMirrorTest do
     assert_application_matches_full(Thread, log, frontier)
   end
 
-  test "covered same-id delegation seed authorizes cross-kind retained revokes" do
+  test "covered same-id delegation seed ignores cross-kind retained revokes" do
     for kind <- [:command, :inbox] do
       {log, frontier, later, invalid_intro} = same_id_revoke_log(kind)
       full = Authority.analyze(PolicyReplica, log)
 
       assert full.reasons[invalid_intro.id] == :bad_delegation_sig
-      assert full.reasons[later.id] == :revoked_capability
+      # Since plan 184, non-authority revoke-shaped bodies confer no revocation.
+      assert full.reasons[later.id] == nil
       assert_application_matches_full(PolicyReplica, log, frontier)
     end
   end

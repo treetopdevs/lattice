@@ -6,7 +6,7 @@ defmodule LatticeBrowser.MixProject do
       app: :lattice_browser,
       version: "0.1.0",
       elixir: "~> 1.19",
-      deps: [{:popcorn, "0.4.0-next.0"}]
+      deps: [{:popcorn, "0.4.0-next.0"}, {:jason, "~> 1.4"}]
     ]
   end
 

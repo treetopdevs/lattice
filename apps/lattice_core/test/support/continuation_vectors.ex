@@ -10,7 +10,7 @@ defmodule Lattice.ContinuationVectors do
     path = Path.join(out, "continuation")
     File.mkdir_p!(path)
     vectors = cases() ++ refusal_cases() ++ shape_cases() ++ Enum.map(0..12, &cycle/1)
-    File.write!(Path.join(path, "authority.json"), Jason.encode!(vectors, pretty: true))
+    File.write!(Path.join(path, "authority.json"), Jason.encode!(ordered(vectors), pretty: true))
     :ok
   end
 
@@ -290,4 +290,17 @@ defmodule Lattice.ContinuationVectors do
       certificates: certificates
     }
   end
+
+  # Plain atom-keyed maps iterate in VM-internal order (atom creation order), so the committed
+  # bytes would depend on the VM that wrote them. Emit string keys in sorted order instead, so the
+  # corpus is byte-stable and a drift check against the committed files is sound.
+  defp ordered(value) when is_map(value) do
+    value
+    |> Enum.map(fn {key, item} -> {to_string(key), ordered(item)} end)
+    |> Enum.sort_by(&elem(&1, 0))
+    |> Jason.OrderedObject.new()
+  end
+
+  defp ordered(value) when is_list(value), do: Enum.map(value, &ordered/1)
+  defp ordered(value), do: value
 end

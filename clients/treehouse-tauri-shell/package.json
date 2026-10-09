@@ -13,6 +13,7 @@
     "packaged:enrollment": "tsx test/packaged_enrollment.ts",
     "tauri": "tauri",
     "tauri:build:dev-trace": "VITE_TREEHOUSE_ENROLLMENT=1 VITE_TREEHOUSE_DEV_TRACE=1 VITE_TREEHOUSE_AUTOSYNC_ON_MOUNT=0 VITE_TREEHOUSE_POLL_MS=0 tauri build --features treehouse-dev-trace --bundles app --config src-tauri/tauri.dev-trace.conf.json",
+    "tauri:build:judge-spike": "npm --prefix ../../apps/lattice_popcorn_spike run build:judge && VITE_TREEHOUSE_JUDGE_SPIKE=1 tauri build --bundles app --config src-tauri/tauri.judge-spike.conf.json",
     "native:test": "cargo test --manifest-path src-tauri/Cargo.toml"
   },
   "dependencies": {

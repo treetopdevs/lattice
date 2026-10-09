@@ -176,6 +176,13 @@ Atomic merge units: R03, R04, R10, R14, R19b, R24 and R25 each keep BEAM, TypeSc
 
 Every packet closes with exact base/PR/merge SHAs, changed files, named tests and results, review findings and disposition, required PR-tip and merge-result checks, achieved evidence tier and remaining limitations. Each implementation packet receives an adversarial review of its exact diff; semantic fixes receive another review. A field packet closes with an immutable evidence record. Code-complete waiting for hardware is a separate status, never DONE. Shared CI failure, missing approval or budget blockage is recorded as a blocker, not a passing check.
 
+Amendment 2026-10-08 (Plan 182): the closure, review and hosted-run requirements in this subsection
+are superseded by the "Working policy (Round 6)" section of `plans/README.md`. One exact-tip hosted
+run gates a PR; a merge-result run is required only for a non-fast-forward merge; a second
+independent review is required only for the files that policy names. Packet status vocabulary
+(PLANNED, IN PROGRESS, LOCAL VERIFIED, DONE) and the evidence tiers (Core, Packaged, Physical)
+are unchanged.
+
 ## 4. Product behavior that must survive the synthesis
 
 ### Domain and archival: R10, R15

@@ -380,20 +380,6 @@ defmodule Lattice.CompactionSpike do
 
     seeded_base = %{base | delegations: seed.delegations, roles: seed.roles}
 
-    timelines =
-      Map.new(all_roles(module), fn role ->
-        {role,
-         build_seeded_timeline(
-           role,
-           seeded_base,
-           [],
-           ancestors,
-           seed.deleg_valid,
-           base.policies,
-           seed.continuation
-         )}
-      end)
-
     ctx = %{
       module: module,
       anc: ancestors,
@@ -408,6 +394,21 @@ defmodule Lattice.CompactionSpike do
       beacons: covered_lease_beacons,
       valid_beacons: snapshot.covered_valid_beacons
     }
+
+    timelines =
+      Map.new(all_roles(module), fn role ->
+        {role,
+         build_seeded_timeline(
+           role,
+           seeded_base,
+           [],
+           ancestors,
+           seed.deleg_valid,
+           base.policies,
+           seed.continuation,
+           ctx
+         )}
+      end)
 
     unsupported_reasons =
       if seed.continuation.family == :unsupported,
@@ -909,7 +910,16 @@ defmodule Lattice.CompactionSpike do
     timelines =
       Map.new(all_roles(module), fn role ->
         {role,
-         build_seeded_timeline(role, snapshot, ordered, anc, deleg_valid, policies, continuation)}
+         build_seeded_timeline(
+           role,
+           snapshot,
+           ordered,
+           anc,
+           deleg_valid,
+           policies,
+           continuation,
+           ctx
+         )}
       end)
 
     role_reasons =
@@ -998,6 +1008,7 @@ defmodule Lattice.CompactionSpike do
 
     retained =
       for op <- ordered,
+          op.kind == :authority,
           match?({:revoke, _}, op.body),
           {:revoke, deleg_id} = op.body,
           do: %{op_id: op.id, deleg_id: deleg_id, author: op.author, covered?: false}
@@ -1046,7 +1057,8 @@ defmodule Lattice.CompactionSpike do
          anc,
          deleg_valid,
          policies,
-         continuation
+         continuation,
+         ctx
        ) do
     seed = Map.get(snapshot.roles, role, %{last_acquire: nil, last_active_tick: 0})
 
@@ -1073,12 +1085,12 @@ defmodule Lattice.CompactionSpike do
           seeded_genesis(tl, op, role, d, deleg_valid)
 
         {:transfer, d, tick} ->
-          seeded_transfer(tl, op, role, d, tick, anc, deleg_valid, continuation.family)
+          seeded_transfer(tl, op, role, d, tick, anc, deleg_valid, ctx, continuation.family)
 
         {:succeed, d, proof} ->
           if continuation.family != :legacy or Continuation.proof?(proof),
             do: seeded_continuation(tl, op, role, d, proof, anc, continuation),
-            else: seeded_succeed(tl, op, role, d, proof, anc, deleg_valid, policies)
+            else: seeded_succeed(tl, op, role, d, proof, anc, deleg_valid, ctx, policies)
 
         {:heartbeat, tick} ->
           seeded_heartbeat(tl, op, tick, anc)
@@ -1125,13 +1137,16 @@ defmodule Lattice.CompactionSpike do
     end
   end
 
-  defp seeded_transfer(tl, op, role, d, tick, anc, deleg_valid, family) do
+  defp seeded_transfer(tl, op, role, d, tick, anc, deleg_valid, ctx, family) do
     op_anc = Map.get(anc, op.id, MapSet.new())
 
     cond do
       not seeded_delegation_valid_at?(deleg_valid[d.id], tl, op_anc) or
         op.author != d.issuer or not MapSet.member?(d.roles, role) ->
         seeded_reject(tl, op, :invalid_transfer)
+
+      seeded_revoked_as_of?(op, d, ctx) ->
+        seeded_reject(tl, op, :revoked_capability)
 
       seeded_holder_at(tl, op_anc) != op.author ->
         seeded_reject(tl, op, :transfer_not_holder)
@@ -1160,7 +1175,7 @@ defmodule Lattice.CompactionSpike do
     end
   end
 
-  defp seeded_succeed(tl, op, role, d, proof, anc, deleg_valid, policies) do
+  defp seeded_succeed(tl, op, role, d, proof, anc, deleg_valid, ctx, policies) do
     op_anc = Map.get(anc, op.id, MapSet.new())
     policy = Map.get(policies, role)
 
@@ -1169,6 +1184,9 @@ defmodule Lattice.CompactionSpike do
         op.author != d.audience or op.author != d.issuer or
           not MapSet.member?(d.roles, role) ->
         seeded_reject(tl, op, :invalid_succession)
+
+      seeded_revoked_as_of?(op, d, ctx) ->
+        seeded_reject(tl, op, :revoked_capability)
 
       is_nil(policy) or op.author != policy.successor ->
         seeded_reject(tl, op, :unauthorized_succession)
@@ -1185,9 +1203,18 @@ defmodule Lattice.CompactionSpike do
          dormant_ticks: dormant_ticks
        })
        when is_integer(at_tick) do
-    if at_tick < seeded_last_active(tl, op_anc) + dormant_ticks,
-      do: seeded_reject(tl, op, :premature_succession),
-      else: seeded_acquire(tl, op, d, at_tick)
+    cond do
+      # Acquires are compared, not holder keys (authority.ex dormant arm): an unseen
+      # round trip or self-transfer leaves the same holder under a new acquire.
+      seeded_holder_acquire_at(tl, op_anc) != List.last(continuation_acquires(tl)) ->
+        seeded_reject(tl, op, :double_transfer)
+
+      at_tick < seeded_last_active(tl, op_anc) + dormant_ticks ->
+        seeded_reject(tl, op, :premature_succession)
+
+      true ->
+        seeded_acquire(tl, op, d, at_tick)
+    end
   end
 
   defp seeded_succession_proof(tl, op, _role, _d, at_tick, _op_anc, %{recovery: recovery})
@@ -1930,6 +1957,7 @@ defmodule Lattice.CompactionSpike do
 
   defp collect_raw_revokes(ordered) do
     for op <- ordered,
+        op.kind == :authority,
         match?({:revoke, _}, op.body),
         {:revoke, deleg_id} = op.body,
         do: %{op_id: op.id, deleg_id: deleg_id, author: op.author}

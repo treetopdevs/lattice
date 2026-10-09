@@ -9,7 +9,10 @@ defmodule LatticeBrowser.Realm do
   """
   use GenServer
   alias Lattice.{Canonical, Identity, Op}
-  alias LatticeBrowser.Durable
+  alias LatticeBrowser.{Durable, Judge}
+
+  @max_chunk 65_536
+  @max_buffer 33_554_432
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: LatticeBrowser.Bridge)
@@ -17,7 +20,15 @@ defmodule LatticeBrowser.Realm do
   @impl true
   def init(_opts) do
     {:ok,
-     %{identity: Identity.generate("popcorn-spike"), tab: nil, phase: :new, seq: 0, durable: nil}}
+     %{
+       identity: Identity.generate("popcorn-spike"),
+       tab: nil,
+       phase: :new,
+       seq: 0,
+       durable: nil,
+       buffer: [],
+       buffered: 0
+     }}
   end
 
   @impl true
@@ -60,6 +71,57 @@ defmodule LatticeBrowser.Realm do
   defp command(%{"command" => "replica_upload"} = cmd, %{durable: durable} = state)
        when map_size(cmd) == 1 and not is_nil(durable) do
     {%{"ok" => true, "ops" => Durable.upload(durable)}, state}
+  end
+
+  # Plan 185: judge one signed vector with the shared Authority/Reduce. Read-only:
+  # it never touches the durable replica or the signing identity.
+  defp command(
+         %{"command" => "vector_verdict", "schema" => schema, "frames" => frames} = cmd,
+         state
+       ) do
+    if Enum.all?(Map.keys(cmd), &(&1 in ["command", "schema", "frames", "realms"])) do
+      {Judge.verdict(schema, frames, Map.get(cmd, "realms")), state}
+    else
+      invalid(state)
+    end
+  end
+
+  # Plan 185: a Popcorn 0.4.0-next.0 JS-to-VM message is capped near the Wasm stack size, so
+  # a multi-megabyte vector arrives as base64 chunks of its frames JSON and is judged once whole.
+  defp command(%{"command" => "vector_chunk", "data" => data} = cmd, state)
+       when map_size(cmd) == 2 and is_binary(data) and byte_size(data) <= @max_chunk do
+    with {:ok, bytes} <- Base.decode64(data),
+         total when total <= @max_buffer <- state.buffered + byte_size(bytes) do
+      {%{"ok" => true, "buffered" => total},
+       %{state | buffer: [state.buffer, bytes], buffered: total}}
+    else
+      _ -> {%{"ok" => false, "error" => "invalid_chunk"}, %{state | buffer: [], buffered: 0}}
+    end
+  end
+
+  defp command(%{"command" => "vector_verdict_buffered", "schema" => schema} = cmd, state) do
+    if Enum.all?(Map.keys(cmd), &(&1 in ["command", "schema", "realms"])) do
+      started = System.monotonic_time(:microsecond)
+      decoded = Jason.decode(IO.iodata_to_binary(state.buffer))
+      json_us = System.monotonic_time(:microsecond) - started
+
+      reply =
+        case decoded do
+          {:ok, frames} when is_list(frames) ->
+            schema
+            |> Judge.verdict(frames, Map.get(cmd, "realms"))
+            |> Map.put("json_decode_us", json_us)
+
+          _ ->
+            %{"ok" => false, "error" => "invalid_buffer"}
+        end
+
+      {reply, %{state | buffer: [], buffered: 0}}
+    else
+      # Every buffered-verdict attempt consumes the buffer, so a malformed command
+      # cannot leave stale bytes for the next chunk sequence to append to.
+      invalid(%{state | buffer: [], buffered: 0})
+    end
   end
 
   defp command(%{"command" => "status"} = cmd, state) when map_size(cmd) == 1 do

@@ -75,7 +75,7 @@ export function delegationFrontierRefusal(delegationId, security) {
     }
     return null;
 }
-function revokedAsOf(op, delegationId, byId, security, ancCache) {
+export function revokedAsOf(op, delegationId, byId, security, ancCache) {
     const chainIds = delegationChainIds(delegationId, security);
     return security.effectiveRevokes.some((revoke) => chainIds.has(revoke.delegationId) &&
         !ancestors(revoke.opId, byId, ancCache).has(op.id));

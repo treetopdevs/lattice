@@ -2,7 +2,8 @@ import { readFile, readdir, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 
-const root = new URL("../dist/", import.meta.url);
+// Plan 185: the Treehouse judge-spike copy is built into dist-judge/ with base /judge/.
+const root = new URL(`../${process.env.LATTICE_POPCORN_DIST || "dist"}/`, import.meta.url);
 const assets = [];
 async function inventory(dir) {
   for (const entry of await readdir(dir, { withFileTypes: true })) {

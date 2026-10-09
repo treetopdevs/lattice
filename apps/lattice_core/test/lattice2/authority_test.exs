@@ -20,6 +20,13 @@ defmodule Lattice2.AuthorityTest do
 
   defp pub(sim, realm), do: Sim.identity(sim, realm).pub
 
+  defp transfer_op!(log, delegation_id) do
+    Enum.find(
+      Log.topo_ops(log),
+      &match?({:transfer, _role, %Delegation{id: ^delegation_id}, _tick}, &1.body)
+    ) || flunk("transfer op for delegation #{inspect(delegation_id)} not in log")
+  end
+
   test "behavior 5: a command whose cap does not chain to a valid delegation is quarantined" do
     {sim, _g} = base() |> Sim.create_replica("server")
     # tab never received any grant; it forges a post op with no capability.
@@ -162,6 +169,158 @@ defmodule Lattice2.AuthorityTest do
     assert {true, :revoked_capability} = Sim.quarantined(sim, "server", after_post.id)
     assert "before revoke" in Sim.state(sim, "server").messages
     refute "after revoke" in Sim.state(sim, "server").messages
+  end
+
+  test "a holder whose delegation chain is revoked cannot transfer the role" do
+    sim =
+      Sim.new(Lattice.Demo.Thread, @replica, ["root", "b", "c"], seed: "auth:revoked-transfer")
+
+    {sim, _g} = Sim.create_replica(sim, "root")
+    {sim, d1} = Sim.transfer(sim, "root", "b", :moderator)
+    sim = Sim.sync_all(sim)
+
+    # root revokes the delegation that carried the role to b, and b sees it.
+    {sim, _r} = Sim.revoke(sim, "root", d1.id)
+    sim = Sim.sync_all(sim)
+
+    # b still holds the role on the timeline, but its chain is revoked: a transfer
+    # citing a child of d1 must not move the role.
+    {sim, to_c} = Sim.transfer(sim, "b", "c", :moderator)
+    assert to_c.parent_id == d1.id
+    transfer_bc = transfer_op!(Sim.log(sim, "b"), to_c.id)
+    sim = Sim.sync_all(sim)
+
+    assert {true, :revoked_capability} = Sim.quarantined(sim, "root", transfer_bc.id)
+
+    assert Lattice.Authority.holder(Lattice.Demo.Thread, Sim.log(sim, "root"), :moderator) ==
+             pub(sim, "b")
+  end
+
+  test "a command-kind op with a revoke-shaped body does not revoke" do
+    sim =
+      Sim.new(Lattice.Demo.Thread, @replica, ["root", "b", "c"],
+        seed: "auth:command-shaped-revoke"
+      )
+
+    {sim, _g} = Sim.create_replica(sim, "root")
+    {sim, d1} = Sim.transfer(sim, "root", "b", :moderator)
+    sim = Sim.sync_all(sim)
+
+    # Only an :authority op can revoke; a command carrying the same body is just a
+    # malformed command and must not reach the revocation set.
+    {sim, fake_revoke} = Sim.append(sim, "root", :command, {:revoke, d1.id})
+    sim = Sim.sync_all(sim)
+
+    {sim, to_c} = Sim.transfer(sim, "b", "c", :moderator)
+    assert to_c.parent_id == d1.id
+    transfer_bc = transfer_op!(Sim.log(sim, "b"), to_c.id)
+    sim = Sim.sync_all(sim)
+
+    assert Sim.quarantined(sim, "root", transfer_bc.id) == false
+    assert {true, :malformed_command} = Sim.quarantined(sim, "root", fake_revoke.id)
+
+    assert Lattice.Authority.holder(Lattice.Demo.Thread, Sim.log(sim, "root"), :moderator) ==
+             pub(sim, "c")
+
+    # The live-path check (Live.authorize, carrier staging) agrees with the judge.
+    refute Lattice.Authority.revoked?(Sim.log(sim, "root"), d1.id)
+  end
+
+  test "a dormant-tick succession that has not seen a concurrent transfer is quarantined" do
+    # Seed chosen so the precondition below holds (canonical order is by op id).
+    sim =
+      Sim.new(Lattice.Demo.Thread, @replica, ["h", "s", "b"], seed: "auth:stale-dormant:1")
+
+    {sim, _g} =
+      Sim.create_replica(sim, "h", policies: %{moderator: %{successor: "s", dormant_ticks: 3}})
+
+    sim = Sim.sync_all(sim)
+    sim = sim |> Sim.partition("h", "s") |> Sim.partition("b", "s")
+
+    # h hands the role to b; b sees it, the successor s does not.
+    {sim, to_b} = Sim.transfer(sim, "h", "b", :moderator)
+    transfer_hb = transfer_op!(Sim.log(sim, "h"), to_b.id)
+    sim = Sim.sync(sim, "h", "b")
+
+    # On its own branch s sees only h's genesis acquire at tick 0 and claims at
+    # the dormancy threshold.
+    {sim, succeed} = Sim.succeed(sim, "s", :moderator, at_tick: 3)
+
+    # Precondition: canonical order judges the transfer before the claim, so the
+    # claim meets a holder (b) it never saw.
+    assert transfer_hb.id < succeed.id
+
+    sim =
+      sim
+      |> Sim.heal("h", "s")
+      |> Sim.heal("b", "s")
+      |> Sim.sync_all()
+
+    assert {true, :double_transfer} = Sim.quarantined(sim, "h", succeed.id)
+
+    assert Lattice.Authority.holder(Lattice.Demo.Thread, Sim.log(sim, "h"), :moderator) ==
+             pub(sim, "b")
+  end
+
+  test "a dormant-tick succession that has not seen a transfer and its return is quarantined" do
+    # The holder key is h both before and after the unseen round trip; only the
+    # acquire differs, so a holder-identity check alone would admit the claim.
+    sim =
+      Sim.new(Lattice.Demo.Thread, @replica, ["h", "s", "b"], seed: "auth:stale-dormant:return:1")
+
+    {sim, _g} =
+      Sim.create_replica(sim, "h", policies: %{moderator: %{successor: "s", dormant_ticks: 3}})
+
+    sim = Sim.sync_all(sim)
+    sim = sim |> Sim.partition("h", "s") |> Sim.partition("b", "s")
+
+    {sim, _to_b} = Sim.transfer(sim, "h", "b", :moderator)
+    sim = Sim.sync(sim, "h", "b")
+    {sim, to_h} = Sim.transfer(sim, "b", "h", :moderator)
+    transfer_bh = transfer_op!(Sim.log(sim, "b"), to_h.id)
+    sim = Sim.sync(sim, "h", "b")
+
+    {sim, succeed} = Sim.succeed(sim, "s", :moderator, at_tick: 3)
+
+    # Precondition: canonical order judges the return before the claim.
+    assert transfer_bh.id < succeed.id
+
+    sim =
+      sim
+      |> Sim.heal("h", "s")
+      |> Sim.heal("b", "s")
+      |> Sim.sync_all()
+
+    assert {true, :double_transfer} = Sim.quarantined(sim, "h", succeed.id)
+
+    assert Lattice.Authority.holder(Lattice.Demo.Thread, Sim.log(sim, "h"), :moderator) ==
+             pub(sim, "h")
+  end
+
+  test "a dormant-tick succession that has not seen the holder re-acquire is quarantined" do
+    sim =
+      Sim.new(Lattice.Demo.Thread, @replica, ["h", "s"], seed: "auth:stale-dormant:self:1")
+
+    {sim, _g} =
+      Sim.create_replica(sim, "h", policies: %{moderator: %{successor: "s", dormant_ticks: 3}})
+
+    sim = Sim.sync_all(sim)
+    sim = Sim.partition(sim, "h", "s")
+
+    # h re-acquires the role from itself: a new acquire under the same holder key.
+    {sim, to_h} = Sim.transfer(sim, "h", "h", :moderator)
+    transfer_hh = transfer_op!(Sim.log(sim, "h"), to_h.id)
+    assert Sim.quarantined(sim, "h", transfer_hh.id) == false
+
+    {sim, succeed} = Sim.succeed(sim, "s", :moderator, at_tick: 3)
+    assert transfer_hh.id < succeed.id
+
+    sim = sim |> Sim.heal("h", "s") |> Sim.sync_all()
+
+    assert {true, :double_transfer} = Sim.quarantined(sim, "h", succeed.id)
+
+    assert Lattice.Authority.holder(Lattice.Demo.Thread, Sim.log(sim, "h"), :moderator) ==
+             pub(sim, "h")
   end
 
   test "bad-arity command ops are quarantined instead of disappearing" do

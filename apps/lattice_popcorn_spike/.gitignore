@@ -3,4 +3,5 @@
 /browser/lib/shared/
 /node_modules/
 /dist/
+/dist-judge/
 /evidence/

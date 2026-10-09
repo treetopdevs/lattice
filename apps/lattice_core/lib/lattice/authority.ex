@@ -231,6 +231,7 @@ defmodule Lattice.Authority do
         ancestors,
         delegations,
         valid,
+        collect_revokes(ordered, delegations, root),
         collect_policies(ordered, delegations, valid),
         context
       )
@@ -470,7 +471,12 @@ defmodule Lattice.Authority do
     end
   end
 
-  @doc "True if a valid revoke of `delegation_id` currently exists (live-path check)."
+  @doc """
+  True if a valid revoke of `delegation_id` currently exists (live-path check).
+
+  Same predicate as `analyze/2`: only an `:authority`-kind op revokes, so the live path and
+  the carrier staging path agree with the judge about a command-shaped `{:revoke, id}` body.
+  """
   @spec revoked?(Log.t(), String.t()) :: boolean()
   def revoked?(%Log{} = log, delegation_id) do
     ordered = Log.topo_ops(log)
@@ -483,7 +489,8 @@ defmodule Lattice.Authority do
     root = resolve_root(ordered, delegations, deleg_valid, commitment)
 
     Enum.any?(ordered, fn op ->
-      match?({:revoke, ^delegation_id}, op.body) and
+      op.kind == :authority and
+        match?({:revoke, ^delegation_id}, op.body) and
         revoke_authorized?(op, delegation_id, delegations, root)
     end)
   end
@@ -542,6 +549,7 @@ defmodule Lattice.Authority do
            ancestors,
            delegations,
            deleg_valid,
+           revokes,
            policies,
            continuation
          )}
@@ -942,6 +950,7 @@ defmodule Lattice.Authority do
 
   defp collect_revokes(ordered, delegations, root) do
     for op <- ordered,
+        op.kind == :authority,
         match?({:revoke, _}, op.body),
         {:revoke, deleg_id} = op.body,
         revoke_authorized?(op, deleg_id, delegations, root) do
@@ -1083,6 +1092,7 @@ defmodule Lattice.Authority do
          ancestors,
          delegations,
          deleg_valid,
+         revokes,
          policies,
          continuation
        ) do
@@ -1122,13 +1132,33 @@ defmodule Lattice.Authority do
           end
 
         {:transfer, d, at_tick} ->
-          decide_transfer(st, op, role, d, at_tick, ancestors, deleg_valid, continuation.family)
+          decide_transfer(
+            st,
+            op,
+            role,
+            d,
+            at_tick,
+            ancestors,
+            deleg_valid,
+            {delegations, revokes},
+            continuation.family
+          )
 
         {:succeed, d, proof} ->
           if continuation.family != :legacy or Continuation.proof?(proof) do
             decide_continuation(st, op, role, d, proof, ancestors, continuation)
           else
-            decide_succeed(st, op, role, d, proof, ancestors, deleg_valid, policies)
+            decide_succeed(
+              st,
+              op,
+              role,
+              d,
+              proof,
+              ancestors,
+              deleg_valid,
+              {delegations, revokes},
+              policies
+            )
           end
 
         {:heartbeat, at_tick} ->
@@ -1206,7 +1236,19 @@ defmodule Lattice.Authority do
     }
   end
 
-  defp decide_transfer(st, op, role, d, at_tick, ancestors, deleg_valid, family) do
+  # Clause order mirrors cap_ok/9: structural validity, then revocation, then the
+  # holder checks, so a transfer under a revoked chain reports :revoked_capability.
+  defp decide_transfer(
+         st,
+         op,
+         role,
+         d,
+         at_tick,
+         ancestors,
+         deleg_valid,
+         {delegations, revokes},
+         family
+       ) do
     anc = Map.get(ancestors, op.id, MapSet.new())
     holder_at_deps = holder_from_acquires(st.acquires, anc)
 
@@ -1214,6 +1256,9 @@ defmodule Lattice.Authority do
       not delegation_valid_at?(deleg_valid[d.id], st.acquires, anc) or
         op.author != d.issuer or not MapSet.member?(d.roles, role) ->
         reject(st, op, :invalid_transfer, role)
+
+      revoked_as_of?(op, d, delegations, revokes, ancestors) ->
+        reject(st, op, :revoked_capability, role)
 
       holder_at_deps != op.author ->
         reject(st, op, :transfer_not_holder, role)
@@ -1239,7 +1284,17 @@ defmodule Lattice.Authority do
     end
   end
 
-  defp decide_succeed(st, op, role, d, proof, ancestors, deleg_valid, policies) do
+  defp decide_succeed(
+         st,
+         op,
+         role,
+         d,
+         proof,
+         ancestors,
+         deleg_valid,
+         {delegations, revokes},
+         policies
+       ) do
     anc = Map.get(ancestors, op.id, MapSet.new())
     policy = Map.get(policies, role)
 
@@ -1248,6 +1303,9 @@ defmodule Lattice.Authority do
         op.author != d.audience or op.author != d.issuer or
           not MapSet.member?(d.roles, role) ->
         reject(st, op, :invalid_succession, role)
+
+      revoked_as_of?(op, d, delegations, revokes, ancestors) ->
+        reject(st, op, :revoked_capability, role)
 
       is_nil(policy) or op.author != policy.successor ->
         reject(st, op, :unauthorized_succession, role)
@@ -1260,13 +1318,26 @@ defmodule Lattice.Authority do
     end
   end
 
+  # The claim must have seen the acquire that currently holds the timeline: it is
+  # rejected whenever any acquire after its causal position reached the timeline
+  # first in canonical order (a concurrent transfer, a round trip or self-transfer
+  # that leaves the same holder key under a new acquire, or a second concurrent
+  # dormant claim by the same successor). Acquires are compared, not holder keys,
+  # for that reason; the check runs before the tick threshold so the reason is stable.
   defp decide_succession_proof(st, op, role, d, at_tick, anc, %{dormant_ticks: dormant_ticks})
        when is_integer(at_tick) do
     last_active = last_active_from(st.acquires, st.heartbeats, anc)
 
-    if at_tick < last_active + dormant_ticks,
-      do: reject(st, op, :premature_succession, role),
-      else: record_acquire(st, op, d, at_tick)
+    cond do
+      holder_acquire_from(st.acquires, anc) != List.last(st.acquires) ->
+        reject(st, op, :double_transfer, role)
+
+      at_tick < last_active + dormant_ticks ->
+        reject(st, op, :premature_succession, role)
+
+      true ->
+        record_acquire(st, op, d, at_tick)
+    end
   end
 
   defp decide_succession_proof(st, op, role, _d, at_tick, _anc, %{recovery: recovery})

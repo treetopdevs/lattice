@@ -73,7 +73,6 @@ All tests must pass and formatting must be clean before considering any change d
 | `apps/township_web` | Phoenix/LiveView read-only Township instrument with a Vue 3.5 causal-replay island over the verified bundle or optional pull-only carrier projection |
 | `apps/lattice_demo` | Demo servers, tab workers, and the deterministic/browser demo mix tasks |
 | `apps/lattice_stress` | Adversarial stress lab: races, WS abuse, load/soak, property tests, `mix lattice.stress` |
-| `apps/lattice_carrier_spike` | Spike code for a real (non-simulated) carrier |
 | `apps/lattice_node_spike` | Real second-process Cowboy peer fixtures and Township/Thread convergence scenarios |
 | `apps/township_bench` | M4/G13 election cost-model benchmark harness; builds a Rustler NIF, so `cargo` must be on `PATH` |
 

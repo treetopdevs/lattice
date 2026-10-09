@@ -1,0 +1,21 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Treehouse Judge Spike",
+  "identifier": "dev.treetop.lattice.treehouse.judgespike",
+  "build": {
+    "beforeBuildCommand": "npm run build && rm -rf dist/judge && cp -R ../../apps/lattice_popcorn_spike/dist-judge dist/judge"
+  },
+  "app": {
+    "security": {
+      "headers": {
+        "Cross-Origin-Opener-Policy": "same-origin",
+        "Cross-Origin-Embedder-Policy": "require-corp"
+      },
+      "csp": {
+        "connect-src": "'self' ipc: http://ipc.localhost http://127.0.0.1:47185",
+        "script-src": "'self' 'wasm-unsafe-eval'",
+        "worker-src": "'self' blob:"
+      }
+    }
+  }
+}

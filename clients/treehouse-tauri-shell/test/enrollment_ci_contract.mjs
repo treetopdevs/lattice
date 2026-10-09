@@ -11,22 +11,45 @@ import { fileURLToPath } from "node:url";
 // precedent mobile_core_native_ci_contract.mjs). `check` returns a list of violations for a workflow text
 // and a package.json object, and every mutation fixture below must make it return a non-empty list. A text
 // check alone is not feasibility proof: the hosted job still has to finish green.
+//
+// Re-pinned for plan 183 on 2026-10-08 (product-scoped CI). Every pin below stayed exact; none was deleted or
+// loosened. What moved, and why:
+// - The five ordinary Treehouse preview steps (build, ordinary-bundle classification, restart, replay, upload)
+//   moved out of packaged_macos into a new sibling job, treehouse_packaged_macos, so Township-only changes
+//   skip them. The classification-step checks, the ordering after the ordinary build and the upload-artifact
+//   pin now read that job. packaged_macos is pinned by digest over all its remaining step bodies, and the
+//   moved bodies (plus the setup steps copied with them) stay pinned by a second digest, so no step body that
+//   was pinned before is unpinned now.
+// - This job now carries exactly the treehouse product gate and needs exactly the changes classifier, instead
+//   of having no job-level if.
+// - android_pilot.needs gains the changes classifier. The enrollment job is still not a distribution
+//   dependency: exactly one other job, the required fan-in, may reference it.
 
 const shellRoot = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
 const repoRoot = resolve(shellRoot, "..", "..");
 
 const JOB = "treehouse_packaged_macos_enrollment";
+const PREVIEW_JOB = "treehouse_packaged_macos";
+const ENROLLMENT_GATE = "needs.changes.outputs.treehouse == 'true'";
 const SHELL_DIR = "clients/treehouse-tauri-shell";
 const CLASSIFY_STEP = "Classify ordinary Treehouse bundle";
 const BUILD_STEP_CALL = "npm run tauri:build:dev-trace";
 const EVIDENCE_DIR = "${{ runner.temp }}/treehouse-enrollment";
 const REAL_DATA = "dev.treetop.lattice.treehouse";
 
-// Digest of every packaged_macos step body except the added classification step. These bodies are
-// operator-reviewed and pinned: the classification step is the only add-only edit this plan makes there.
-const PACKAGED_MACOS_DIGEST = "a7457cfa3c27586c7b75003254d1f12ca12f3e998ac4cf7bc7a375a0fb278637";
+// Digest of every packaged_macos step body. These bodies are operator-reviewed and pinned.
+// Re-pinned for plan 183 on 2026-10-08: the Treehouse preview steps (and the classification step) left this job,
+// so the digest now covers the Township smokes and their setup only. It was a7457cfa3c27586c… before the move.
+const PACKAGED_MACOS_DIGEST = "0b2ccbc32d2e01785653ff3a7952b8bb09710dd9b7242710c0ab1d899ef5c085";
 
-const ANDROID_PILOT_NEEDS = ["verify", "unit", "packaged_macos", "android_pilot_verify"];
+// Digest of every treehouse_packaged_macos step body except the classification step, which is checked
+// structurally below. Added for plan 183 on 2026-10-08 so the moved preview bodies stay pinned exactly as
+// they were while they lived in packaged_macos (the old digest covered them).
+const TREEHOUSE_PREVIEW_DIGEST = "032cc785f32d8f3dd7af93a8e2e0d2c97445795f3becbb8292079899d4b04d4d";
+
+// Re-pinned for plan 183 on 2026-10-08: android_pilot also needs the changes classifier, whose output its
+// township gate reads. The list is exact and in workflow order.
+const ANDROID_PILOT_NEEDS = ["verify", "unit", "packaged_macos", "android_pilot_verify", "changes"];
 
 function jobBlocks(workflow) {
   const jobsStart = workflow.indexOf("\njobs:\n");
@@ -125,8 +148,24 @@ function sha(text) {
 function packagedMacosDigest(workflow) {
   const job = findJob(workflow, "packaged_macos");
   if (!job) return undefined;
+  return sha(stepBlocks(job).join(""));
+}
+
+function previewDigest(workflow) {
+  const job = findJob(workflow, PREVIEW_JOB);
+  if (!job) return undefined;
   const bodies = stepBlocks(job).filter((step) => stepName(step) !== CLASSIFY_STEP);
   return sha(bodies.join(""));
+}
+
+/** The job-level needs as a list, for the block-list, flow-list and single-name spellings. */
+function needsOf(job) {
+  const block = /^ {4}needs:\n((?: {6}- .*\n)+)/mu.exec(job);
+  if (block) return [...block[1].matchAll(/- (\S+)/gu)].map((m) => m[1]);
+  const flow = /^ {4}needs:\s*\[([^\]]*)\]\s*$/mu.exec(job);
+  if (flow) return flow[1].split(",").map((name) => name.trim()).filter(Boolean);
+  const single = /^ {4}needs:\s*([A-Za-z0-9_-]+)\s*$/mu.exec(job);
+  return single ? [single[1]] : [];
 }
 
 function pinnedUses(job, action) {
@@ -143,18 +182,24 @@ export function check(workflow, pkg, harnessSource) {
 
   const job = findJob(workflow, JOB);
   const macos = findJob(workflow, "packaged_macos");
+  const preview = findJob(workflow, PREVIEW_JOB);
   if (!job) {
     fail(`job ${JOB} is missing`);
   }
   if (!macos) fail("job packaged_macos is missing");
+  if (!preview) fail(`job ${PREVIEW_JOB} is missing`);
 
-  // Existing packaged_macos: add-only classification step, every other body pinned by digest.
-  if (macos) {
-    const steps = stepBlocks(macos);
+  // packaged_macos keeps the Township smokes only: every remaining step body is pinned by digest.
+  if (macos && packagedMacosDigest(workflow) !== PACKAGED_MACOS_DIGEST)
+    fail("packaged_macos step bodies changed");
+
+  // The ordinary Treehouse preview job: add-only classification step, every other body pinned by digest.
+  if (preview) {
+    const steps = stepBlocks(preview);
     const names = steps.map(stepName);
     const buildAt = names.indexOf("Build ordinary offline Treehouse app");
     const classifyAt = names.indexOf(CLASSIFY_STEP);
-    if (classifyAt === -1) fail("packaged_macos lacks the ordinary bundle classification step");
+    if (classifyAt === -1) fail(`${PREVIEW_JOB} lacks the ordinary bundle classification step`);
     else {
       if (classifyAt <= buildAt || buildAt === -1) fail("classification must run after the ordinary build");
       const classify = steps[classifyAt];
@@ -165,23 +210,24 @@ export function check(workflow, pkg, harnessSource) {
       if (/^ {6,8}(?:- )?(?:if|continue-on-error):/mu.test(classify) || /\|\|/u.test(run))
         fail("classification must be unconditional and blocking");
     }
-    if (packagedMacosDigest(workflow) !== PACKAGED_MACOS_DIGEST)
-      fail("packaged_macos step bodies other than the classification step changed");
+    if (previewDigest(workflow) !== TREEHOUSE_PREVIEW_DIGEST)
+      fail(`${PREVIEW_JOB} step bodies other than the classification step changed`);
   }
 
-  // android_pilot needs stays exactly the pinned four; the new job is no one's dependency.
+  // android_pilot needs stays exactly the pinned list. The enrollment job is no distribution dependency;
+  // the only job that may reference it is the required fan-in, which must.
   const pilot = findJob(workflow, "android_pilot");
   if (pilot) {
-    const needs = [...(/^ {4}needs:\n((?: {6}- .*\n)+)/mu.exec(pilot)?.[1] ?? "").matchAll(/- (\S+)/gu)].map(
-      (m) => m[1],
-    );
-    if (JSON.stringify(needs) !== JSON.stringify(ANDROID_PILOT_NEEDS))
-      fail("android_pilot needs must stay the existing four jobs");
+    if (JSON.stringify(needsOf(pilot)) !== JSON.stringify(ANDROID_PILOT_NEEDS))
+      fail("android_pilot needs must be exactly the pinned list");
   } else fail("android_pilot is missing");
-  for (const other of jobBlocks(workflow)) {
-    if (jobName(other) === JOB) continue;
-    if (new RegExp(`\\b${JOB}\\b`, "u").test(other)) fail(`${jobName(other)} must not reference ${JOB}`);
-  }
+  const referrers = jobBlocks(workflow)
+    .filter((other) => jobName(other) !== JOB && new RegExp(`\\b${JOB}\\b`, "u").test(other))
+    .map(jobName);
+  if (JSON.stringify(referrers) !== JSON.stringify(["required"]))
+    fail(`exactly one other job, required, may reference ${JOB}`);
+  const requiredJob = findJob(workflow, "required");
+  if (!requiredJob || !needsOf(requiredJob).includes(JOB)) fail(`required must list ${JOB} in its needs`);
 
   if (!job) return problems;
 
@@ -191,7 +237,10 @@ export function check(workflow, pkg, harnessSource) {
   if (scalar(header, "runs-on", 4) !== "macos-15-intel") fail("runs-on must be macos-15-intel");
   const timeout = Number(scalar(header, "timeout-minutes", 4));
   if (!Number.isInteger(timeout) || timeout < 30 || timeout > 120) fail("timeout-minutes must be a bounded 30 to 120");
-  if (scalar(header, "if", 4) !== undefined) fail("the job must have no if");
+  if ((header.match(/^ {4}if:/gmu) ?? []).length !== 1 || scalar(header, "if", 4) !== ENROLLMENT_GATE)
+    fail(`the job must carry exactly one job-level if, ${ENROLLMENT_GATE}`);
+  if (JSON.stringify(needsOf(job)) !== JSON.stringify(["changes"]))
+    fail("the job must need exactly the changes classifier");
   if (JSON.stringify(permissions(header)) !== JSON.stringify(["contents: read"]))
     fail("the job must declare exactly least-privilege permissions: contents: read");
   if (/continue-on-error/u.test(job)) fail("continue-on-error is forbidden in any spelling");
@@ -230,8 +279,8 @@ export function check(workflow, pkg, harnessSource) {
       fail(`${action} pin must match packaged_macos`);
   }
   const uploadPin = pinnedUses(job, "actions/upload-artifact");
-  const releaseUploadPin = macos ? pinnedUses(macos, "actions/upload-artifact") : undefined;
-  if (uploadPin !== releaseUploadPin) fail("upload-artifact pin must match packaged_macos");
+  const releaseUploadPin = preview ? pinnedUses(preview, "actions/upload-artifact") : undefined;
+  if (uploadPin !== releaseUploadPin) fail(`upload-artifact pin must match ${PREVIEW_JOB}`);
 
   const checkoutAt = index((step) => usesOf(step).startsWith("actions/checkout@"));
   const beamAt = index((step) => usesOf(step).startsWith("erlef/setup-beam@"));
@@ -480,7 +529,7 @@ const mutations = {
     }),
   "classification step removed": (text) =>
     text.replace(
-      stepBlocks(findJob(text, "packaged_macos")).find((step) => stepName(step) === CLASSIFY_STEP) ?? "",
+      stepBlocks(findJob(text, PREVIEW_JOB)).find((step) => stepName(step) === CLASSIFY_STEP) ?? "",
       "",
     ),
   "classification asserts dev_trace": (text) =>
@@ -488,9 +537,48 @@ const mutations = {
   "classification masked": (text) =>
     mutate(text, "Treehouse.app ordinary", "Treehouse.app ordinary || true"),
   "packaged_macos step body edited": (text) =>
+    mutate(text, "run: npm run tauri:feed:smoke\n", "run: npm run tauri:feed:smoke -- --skip\n"),
+  "preview job step body edited": (text) =>
     mutate(text, "run: npm run packaged\n", "run: npm run packaged -- --skip\n"),
+  "classification step moved back into packaged_macos": (text) => {
+    const classify = stepBlocks(findJob(text, PREVIEW_JOB)).find((step) => stepName(step) === CLASSIFY_STEP);
+    assert.ok(classify, "the classification step must exist to move it");
+    const macos = findJob(text, "packaged_macos");
+    return text.replace(classify, "").replace(macos, `${macos.trimEnd()}\n\n${classify}\n`);
+  },
+  "preview job upload pin differs": (text) => {
+    const job = findJob(text, PREVIEW_JOB);
+    return text.replace(job, job.replace(/(actions\/upload-artifact@)[0-9a-f]{40}/u, "$1" + "0".repeat(40)));
+  },
   "android_pilot needs extended": (text) =>
-    mutate(text, "      - android_pilot_verify\n    runs-on: ubuntu-latest\n    timeout-minutes: 90\n    environment: android-pilot", `      - android_pilot_verify\n      - ${JOB}\n    runs-on: ubuntu-latest\n    timeout-minutes: 90\n    environment: android-pilot`),
+    mutate(text, "      - android_pilot_verify\n      - changes\n    runs-on: ubuntu-latest\n    timeout-minutes: 90\n    environment: android-pilot", `      - android_pilot_verify\n      - changes\n      - ${JOB}\n    runs-on: ubuntu-latest\n    timeout-minutes: 90\n    environment: android-pilot`),
+  "android_pilot needs drops changes": (text) =>
+    mutate(text, "      - android_pilot_verify\n      - changes\n    runs-on: ubuntu-latest\n    timeout-minutes: 90\n    environment: android-pilot", "      - android_pilot_verify\n    runs-on: ubuntu-latest\n    timeout-minutes: 90\n    environment: android-pilot"),
+  "enrollment gate altered": (text) =>
+    mutateJob(text, (job) =>
+      mutate(job, "    if: needs.changes.outputs.treehouse == 'true'\n", "    if: needs.changes.outputs.township == 'true'\n"),
+    ),
+  "enrollment gate removed": (text) =>
+    mutateJob(text, (job) => mutate(job, "    if: needs.changes.outputs.treehouse == 'true'\n", "")),
+  "enrollment gate widened": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "    if: needs.changes.outputs.treehouse == 'true'\n",
+        "    if: needs.changes.outputs.treehouse == 'true' || always()\n",
+      ),
+    ),
+  "enrollment job stops needing the classifier": (text) =>
+    mutateJob(text, (job) => mutate(job, "    needs: changes\n", "")),
+  "required drops the enrollment job": (text) =>
+    mutate(text, "treehouse_packaged_macos, treehouse_packaged_macos_enrollment, ", "treehouse_packaged_macos, "),
+  "required removed": (text) => text.replace(findJob(text, "required") ?? "", ""),
+  "a second job references the enrollment job": (text) =>
+    mutate(
+      text,
+      "  carrier_release:\n    name: Packaged carrier restart durability\n    needs: changes\n",
+      `  carrier_release:\n    name: Packaged carrier restart durability\n    needs: [changes, ${JOB}]\n`,
+    ),
 };
 
 for (const [name, apply] of Object.entries(mutations)) {
@@ -537,4 +625,14 @@ test("a harness without the oracle or a failing exit fails the contract", () => 
 
 test("the pinned packaged_macos digest is a real sha256", () => {
   assert.match(PACKAGED_MACOS_DIGEST, /^[0-9a-f]{64}$/u);
+});
+
+test("the pinned treehouse_packaged_macos digest is a real sha256", () => {
+  assert.match(TREEHOUSE_PREVIEW_DIGEST, /^[0-9a-f]{64}$/u);
+});
+
+test("the Treehouse preview job is a distinct sibling of packaged_macos", () => {
+  const names = jobBlocks(workflow).map(jobName);
+  assert.equal(names.filter((name) => name === PREVIEW_JOB).length, 1);
+  assert.ok(names.includes("packaged_macos"));
 });

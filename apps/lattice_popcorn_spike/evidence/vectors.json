@@ -1,0 +1,2976 @@
+{
+  "harness": "test/vector-browser.mjs",
+  "runtime": "chromium",
+  "passed": false,
+  "startedAt": "2026-10-08T05:16:34.965Z",
+  "vectors": [
+    {
+      "file": "toolshed_custody_consent.json",
+      "scenario": "toolshed_custody_consent",
+      "schema": "Toolshed.Tool",
+      "sha256": "4b8d8b0161981a0d2ed8c18c448887ec60a6b9c89826c706f4deb9dbe8330cb4",
+      "frames": 11,
+      "pass": true,
+      "elapsed_us": 12630,
+      "phases_us": {
+        "analyze": 3421,
+        "decode": 5020,
+        "deliver": 4049,
+        "reduce": 140
+      },
+      "roundTripMs": 39,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "custody",
+            "browser": "owner",
+            "oracle": "owner"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_authority_cross_replica_replay.json",
+      "scenario": "township_authority_cross_replica_replay",
+      "schema": "Township.Matter",
+      "sha256": "8ea63ef4197479c61aa6b2ae568d11b9447626453aa2aad4629419b8c5a6c7f3",
+      "frames": 5,
+      "pass": true,
+      "elapsed_us": 3295,
+      "phases_us": {
+        "analyze": 1965,
+        "decode": 305,
+        "deliver": 964,
+        "reduce": 61
+      },
+      "roundTripMs": 7,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_authority_cross_role_succession_transfer.json",
+      "scenario": "township_authority_cross_role_succession_transfer",
+      "schema": "DualAuthorityFixture",
+      "sha256": "913d0d308522daa489789138b7c52047575c820f52a407c0408f928d76e0a92b",
+      "frames": 5,
+      "pass": true,
+      "elapsed_us": 3946,
+      "phases_us": {
+        "analyze": 2421,
+        "decode": 356,
+        "deliver": 1084,
+        "reduce": 85
+      },
+      "roundTripMs": 8,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "successor",
+            "oracle": "successor"
+          },
+          {
+            "role": "mayor",
+            "browser": "successor",
+            "oracle": "successor"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_authority_delegation_id_collision.json",
+      "scenario": "township_authority_delegation_id_collision",
+      "schema": "Township.Matter",
+      "sha256": "2e3c0086a80424f6224d6fbf321abc941c440ca7bd903cdd5be0983672257800",
+      "frames": 2,
+      "pass": true,
+      "elapsed_us": 1744,
+      "phases_us": {
+        "analyze": 991,
+        "decode": 150,
+        "deliver": 569,
+        "reduce": 34
+      },
+      "roundTripMs": 4,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_authority_double_transfer.json",
+      "scenario": "township_authority_double_transfer",
+      "schema": "Township.Matter",
+      "sha256": "4a68ab0d317141ced2608cda72e1f862b6c7933d05bd145cfbdfc0ddbaf13e59",
+      "frames": 3,
+      "pass": true,
+      "elapsed_us": 2710,
+      "phases_us": {
+        "analyze": 1736,
+        "decode": 240,
+        "deliver": 684,
+        "reduce": 50
+      },
+      "roundTripMs": 6,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "resident",
+            "oracle": "resident"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_authority_embedded_replica_bypass.json",
+      "scenario": "township_authority_embedded_replica_bypass",
+      "schema": "Township.Matter",
+      "sha256": "ae83666be830d424337bb5a12f718a74efe3e3beb8d052dc15bc533b78dc496c",
+      "frames": 1,
+      "pass": true,
+      "elapsed_us": 956,
+      "phases_us": {
+        "analyze": 600,
+        "decode": 95,
+        "deliver": 231,
+        "reduce": 30
+      },
+      "roundTripMs": 2,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": null,
+            "oracle": null
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_authority_forged_delegation_id.json",
+      "scenario": "township_authority_forged_delegation_id",
+      "schema": "Township.Matter",
+      "sha256": "2f24f343e1a192f2853df13fb149a12de2462b16bb6374d6e68929244c21b4dd",
+      "frames": 1,
+      "pass": true,
+      "elapsed_us": 501,
+      "phases_us": {
+        "analyze": 146,
+        "decode": 81,
+        "deliver": 249,
+        "reduce": 25
+      },
+      "roundTripMs": 2,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": null,
+            "oracle": null
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_authority_forged_delegation_sig.json",
+      "scenario": "township_authority_forged_delegation_sig",
+      "schema": "Township.Matter",
+      "sha256": "3e35f1e301a89dd54d753e21907808d597d5991fdefa5b96acfc31a8b9f510f1",
+      "frames": 1,
+      "pass": true,
+      "elapsed_us": 695,
+      "phases_us": {
+        "analyze": 350,
+        "decode": 135,
+        "deliver": 185,
+        "reduce": 25
+      },
+      "roundTripMs": 3,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": null,
+            "oracle": null
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_authority_forged_root.json",
+      "scenario": "township_authority_forged_root",
+      "schema": "Township.Matter",
+      "sha256": "dd06e012814567cc9a0bb90fab78575aaab609b432cb8bdbfa9b94298114968f",
+      "frames": 1,
+      "pass": true,
+      "elapsed_us": 790,
+      "phases_us": {
+        "analyze": 500,
+        "decode": 85,
+        "deliver": 175,
+        "reduce": 30
+      },
+      "roundTripMs": 3,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": null,
+            "oracle": null
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_authority_forged_transfer.json",
+      "scenario": "township_authority_forged_transfer",
+      "schema": "Township.Matter",
+      "sha256": "56d4b21eb4ad22691e6e27c7eae9c9d0760a90ad7374b80c2a77033fab8f938f",
+      "frames": 4,
+      "pass": true,
+      "elapsed_us": 1635,
+      "phases_us": {
+        "analyze": 800,
+        "decode": 199,
+        "deliver": 585,
+        "reduce": 51
+      },
+      "roundTripMs": 4,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_authority_malformed_heartbeat.json",
+      "scenario": "township_authority_malformed_heartbeat",
+      "schema": "Township.Matter",
+      "sha256": "cc9d55f6630f5eb3f5d023e89918c03e4a71b505ff0701731032099b548ab245",
+      "frames": 3,
+      "pass": true,
+      "elapsed_us": 1590,
+      "phases_us": {
+        "analyze": 844,
+        "decode": 209,
+        "deliver": 491,
+        "reduce": 46
+      },
+      "roundTripMs": 4,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "resident",
+            "oracle": "resident"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_authority_malformed_transfer.json",
+      "scenario": "township_authority_malformed_transfer",
+      "schema": "Township.Matter",
+      "sha256": "171fdf64474e6b766c63bb8b40b0c5cbd9c5c20e8c9e92277343aa4a90c51d4a",
+      "frames": 3,
+      "pass": true,
+      "elapsed_us": 1260,
+      "phases_us": {
+        "analyze": 555,
+        "decode": 215,
+        "deliver": 450,
+        "reduce": 40
+      },
+      "roundTripMs": 3,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_authority_nongenesis_root.json",
+      "scenario": "township_authority_nongenesis_root",
+      "schema": "Township.Matter",
+      "sha256": "73c0e7adcf8ac40108a9f01bdd2c63db3e908a0f18bef49e8daa4080463734b0",
+      "frames": 2,
+      "pass": true,
+      "elapsed_us": 1415,
+      "phases_us": {
+        "analyze": 885,
+        "decode": 155,
+        "deliver": 345,
+        "reduce": 30
+      },
+      "roundTripMs": 3,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_authority_replayed_genesis.json",
+      "scenario": "township_authority_replayed_genesis",
+      "schema": "Township.Matter",
+      "sha256": "b2b16bd1bf2022f0ba596352d4303a61ca1506ae4ed6c52af601e2fca5d023f0",
+      "frames": 3,
+      "pass": true,
+      "elapsed_us": 1590,
+      "phases_us": {
+        "analyze": 805,
+        "decode": 245,
+        "deliver": 485,
+        "reduce": 55
+      },
+      "roundTripMs": 4,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_authority_rooted_grant_as_genesis.json",
+      "scenario": "township_authority_rooted_grant_as_genesis",
+      "schema": "Township.Matter",
+      "sha256": "dce753085cfb4e1a15bb3d8070463c245e24a0f7a10b85bc46c097a1896dbc05",
+      "frames": 4,
+      "pass": true,
+      "elapsed_us": 2750,
+      "phases_us": {
+        "analyze": 1720,
+        "decode": 315,
+        "deliver": 650,
+        "reduce": 65
+      },
+      "roundTripMs": 5,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_authority_rooted_transfer_not_holder.json",
+      "scenario": "township_authority_rooted_transfer_not_holder",
+      "schema": "Township.Matter",
+      "sha256": "ef0d561e0a20f930a9329662f7094e63e2d93f6dcb5fbb2848b7aea88ea5fc9f",
+      "frames": 3,
+      "pass": true,
+      "elapsed_us": 2150,
+      "phases_us": {
+        "analyze": 1464,
+        "decode": 200,
+        "deliver": 440,
+        "reduce": 46
+      },
+      "roundTripMs": 4,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_authority_succession_capability_laundering.json",
+      "scenario": "township_authority_succession_capability_laundering",
+      "schema": "Township.Matter",
+      "sha256": "3f1ea6e626fe10b7564ada875ed2f2e67b1bdbcce5aca77f7cb12653368e4b74",
+      "frames": 5,
+      "pass": true,
+      "elapsed_us": 2189,
+      "phases_us": {
+        "analyze": 1159,
+        "decode": 269,
+        "deliver": 696,
+        "reduce": 65
+      },
+      "roundTripMs": 4,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_authority_succession_genesis_poisoning.json",
+      "scenario": "township_authority_succession_genesis_poisoning",
+      "schema": "Township.Matter",
+      "sha256": "16e654d32cbcad55288fb3d79b4c712a89e56b8001dcc771f87cd311cf48143d",
+      "frames": 5,
+      "pass": true,
+      "elapsed_us": 2830,
+      "phases_us": {
+        "analyze": 1740,
+        "decode": 315,
+        "deliver": 700,
+        "reduce": 75
+      },
+      "roundTripMs": 6,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "mallory",
+            "oracle": "mallory"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_authority_unattenuated_transfer.json",
+      "scenario": "township_authority_unattenuated_transfer",
+      "schema": "Township.Matter",
+      "sha256": "ceefa082ca74dc8a7e72f771ae85803c95a39cf44393b0b9eb898ffec2a4b4f8",
+      "frames": 2,
+      "pass": false,
+      "elapsed_us": null,
+      "phases_us": null,
+      "roundTripMs": 3,
+      "structural": null,
+      "oracle": {
+        "quarantine": [
+          [
+            "j7nS4wacunoqM0XIzrIzmbZPjpyGDCe3X43rFFio3Lo",
+            "invalid_transfer"
+          ]
+        ],
+        "quarantineIds": [
+          "j7nS4wacunoqM0XIzrIzmbZPjpyGDCe3X43rFFio3Lo"
+        ],
+        "state": {
+          "clerk": "clerk",
+          "clerk_locked": false,
+          "members": [],
+          "posts": [],
+          "summary": "",
+          "title": ""
+        }
+      },
+      "browser": {
+        "error": "malformed_op",
+        "undecodable": [
+          {
+            "id": "j7nS4wacunoqM0XIzrIzmbZPjpyGDCe3X43rFFio3Lo",
+            "index": 1
+          }
+        ],
+        "decodableSubset": {
+          "elapsed_us": 825,
+          "holders": {
+            "clerk": "qULzrom7P9OeTHRFDq72bIsyiH7nq1wT5hMwswBYWv8="
+          },
+          "ok": true,
+          "op_count": 1,
+          "phases_us": {
+            "analyze": 535,
+            "decode": 79,
+            "deliver": 186,
+            "reduce": 25
+          },
+          "quarantine": [],
+          "quarantine_ids": [],
+          "state": "{\"clerk\":\"clerk\",\"clerk_locked\":false,\"members\":[],\"posts\":[],\"summary\":\"\",\"title\":\"\"}",
+          "structural": {
+            "pending": 0,
+            "quarantined": 0,
+            "rejected": 0
+          }
+        }
+      }
+    },
+    {
+      "file": "township_authority_undeclared_role_tick.json",
+      "scenario": "township_authority_undeclared_role_tick",
+      "schema": "Township.Matter",
+      "sha256": "e9c5af8ad4a41f21e6cd918aa1df9c07143a631cc349455682e4870a05a96d2f",
+      "frames": 3,
+      "pass": false,
+      "elapsed_us": null,
+      "phases_us": null,
+      "roundTripMs": 3,
+      "structural": null,
+      "oracle": {
+        "quarantine": [
+          [
+            "1Q6vFawAlrtchFszINXBrnHUTlJq1oy8hqBOcy01Ftc",
+            "malformed_term"
+          ],
+          [
+            "t596FwFdJYuhSXn2wMV9my2RprXCaNyo4AgqQ2Cn5FM",
+            "malformed_term"
+          ]
+        ],
+        "quarantineIds": [
+          "1Q6vFawAlrtchFszINXBrnHUTlJq1oy8hqBOcy01Ftc",
+          "t596FwFdJYuhSXn2wMV9my2RprXCaNyo4AgqQ2Cn5FM"
+        ],
+        "state": {
+          "clerk": "clerk",
+          "clerk_locked": false,
+          "members": [],
+          "posts": [],
+          "summary": "",
+          "title": ""
+        }
+      },
+      "browser": {
+        "error": "malformed_op",
+        "undecodable": [
+          {
+            "id": "1Q6vFawAlrtchFszINXBrnHUTlJq1oy8hqBOcy01Ftc",
+            "index": 1
+          },
+          {
+            "id": "t596FwFdJYuhSXn2wMV9my2RprXCaNyo4AgqQ2Cn5FM",
+            "index": 2
+          }
+        ],
+        "decodableSubset": {
+          "elapsed_us": 800,
+          "holders": {
+            "clerk": "GmQlteDH2NBojZxR/NSPMVU7jEa6L6vwVqhw3SLK/IU="
+          },
+          "ok": true,
+          "op_count": 1,
+          "phases_us": {
+            "analyze": 524,
+            "decode": 59,
+            "deliver": 191,
+            "reduce": 26
+          },
+          "quarantine": [],
+          "quarantine_ids": [],
+          "state": "{\"clerk\":\"clerk\",\"clerk_locked\":false,\"members\":[],\"posts\":[],\"summary\":\"\",\"title\":\"\"}",
+          "structural": {
+            "pending": 0,
+            "quarantined": 0,
+            "rejected": 0
+          }
+        }
+      }
+    },
+    {
+      "file": "township_authority_unrooted_grant.json",
+      "scenario": "township_authority_unrooted_grant",
+      "schema": "Township.Matter",
+      "sha256": "706c62a699cc38f4781c8be9180f13a67ffe2d8908c157237a1f1d2a765bc167",
+      "frames": 3,
+      "pass": true,
+      "elapsed_us": 1375,
+      "phases_us": {
+        "analyze": 746,
+        "decode": 164,
+        "deliver": 425,
+        "reduce": 40
+      },
+      "roundTripMs": 3,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_beacon_unauthorized.json",
+      "scenario": "township_beacon_unauthorized",
+      "schema": "Township.Matter",
+      "sha256": "ff972b00856067c19d57f08e31b063f14e53b7f7a415f383ccc0483ad02b4d7c",
+      "frames": 6,
+      "pass": true,
+      "elapsed_us": 1975,
+      "phases_us": {
+        "analyze": 934,
+        "decode": 235,
+        "deliver": 741,
+        "reduce": 65
+      },
+      "roundTripMs": 4,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_beacon_witnessed_advance.json",
+      "scenario": "township_beacon_witnessed_advance",
+      "schema": "Township.Matter",
+      "sha256": "eb229260b2a2e90bab6677836c5f57cadb2661cefcb29ad4df6fdde8e4feef7f",
+      "frames": 11,
+      "pass": true,
+      "elapsed_us": 5436,
+      "phases_us": {
+        "analyze": 2540,
+        "decode": 1041,
+        "deliver": 1679,
+        "reduce": 176
+      },
+      "roundTripMs": 12,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_beacon_witnessed_certificate_metadata.json",
+      "scenario": "township_beacon_witnessed_certificate_metadata",
+      "schema": "Township.Matter",
+      "sha256": "cdffbc49df3db34865535564133a1dc10c4c3e8bf2187cf06f1c96f5233ea9be",
+      "frames": 6,
+      "pass": false,
+      "elapsed_us": null,
+      "phases_us": null,
+      "roundTripMs": 10,
+      "structural": null,
+      "oracle": {
+        "quarantine": [
+          [
+            "0nPrhWXDe7OvXfMyuY9KyKRNzMt-NQiZH5IEPY6rpkA",
+            "unauthorized_beacon"
+          ],
+          [
+            "UQ2245ig20ERBlZoZbvE7ReXZbxOYIL6QQFXeTBvEiQ",
+            "unauthorized_beacon"
+          ],
+          [
+            "fGvGDQnUw2xUzeXzbNXjbvXUYulw9TJpiIGYkjUh9P4",
+            "unauthorized_beacon"
+          ],
+          [
+            "nYGtl7v1awRIkf-CIZi_qtawBjZe3Q_LoJtPlZPZTHA",
+            "unauthorized_beacon"
+          ]
+        ],
+        "quarantineIds": [
+          "0nPrhWXDe7OvXfMyuY9KyKRNzMt-NQiZH5IEPY6rpkA",
+          "UQ2245ig20ERBlZoZbvE7ReXZbxOYIL6QQFXeTBvEiQ",
+          "fGvGDQnUw2xUzeXzbNXjbvXUYulw9TJpiIGYkjUh9P4",
+          "nYGtl7v1awRIkf-CIZi_qtawBjZe3Q_LoJtPlZPZTHA"
+        ],
+        "state": {
+          "clerk": "clerk",
+          "clerk_locked": false,
+          "members": [],
+          "posts": [],
+          "summary": "",
+          "title": ""
+        }
+      },
+      "browser": {
+        "error": "malformed_op",
+        "undecodable": [
+          {
+            "id": "0nPrhWXDe7OvXfMyuY9KyKRNzMt-NQiZH5IEPY6rpkA",
+            "index": 2
+          }
+        ],
+        "decodableSubset": {
+          "elapsed_us": 2305,
+          "holders": {
+            "clerk": "zcOckYZGoOuqyty9CmJBPzjhhFFILQlWih98dxobvKU="
+          },
+          "ok": true,
+          "op_count": 2,
+          "phases_us": {
+            "analyze": 520,
+            "decode": 365,
+            "deliver": 1385,
+            "reduce": 35
+          },
+          "quarantine": [
+            [
+              "nYGtl7v1awRIkf-CIZi_qtawBjZe3Q_LoJtPlZPZTHA",
+              "unauthorized_beacon"
+            ]
+          ],
+          "quarantine_ids": [
+            "nYGtl7v1awRIkf-CIZi_qtawBjZe3Q_LoJtPlZPZTHA"
+          ],
+          "state": "{\"clerk\":\"clerk\",\"clerk_locked\":false,\"members\":[],\"posts\":[],\"summary\":\"\",\"title\":\"\"}",
+          "structural": {
+            "pending": 3,
+            "quarantined": 0,
+            "rejected": 0
+          }
+        }
+      }
+    },
+    {
+      "file": "township_beacon_witnessed_concurrent.json",
+      "scenario": "township_beacon_witnessed_concurrent",
+      "schema": "Township.Matter",
+      "sha256": "b605c8f3796a7ee8e28c44ec7f8b959a99eb6b60620832437fa12130a810b269",
+      "frames": 4,
+      "pass": true,
+      "elapsed_us": 2519,
+      "phases_us": {
+        "analyze": 1215,
+        "decode": 560,
+        "deliver": 685,
+        "reduce": 59
+      },
+      "roundTripMs": 7,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_beacon_witnessed_founder_loss.json",
+      "scenario": "township_beacon_witnessed_founder_loss",
+      "schema": "Township.Matter",
+      "sha256": "accb994988c517b26af68cebcb9571d5d4b2f63ada93bde6f61339ddf3e4a141",
+      "frames": 11,
+      "pass": true,
+      "elapsed_us": 5209,
+      "phases_us": {
+        "analyze": 2635,
+        "decode": 794,
+        "deliver": 1661,
+        "reduce": 119
+      },
+      "roundTripMs": 11,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "resident",
+            "oracle": "resident"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_beacon_witnessed_high_legacy.json",
+      "scenario": "township_beacon_witnessed_high_legacy",
+      "schema": "Township.Matter",
+      "sha256": "26bb1670d5f3455a5b5093984f1c09f347a89573d2a476c85ec82dec7d764017",
+      "frames": 7,
+      "pass": true,
+      "elapsed_us": 2479,
+      "phases_us": {
+        "analyze": 1120,
+        "decode": 389,
+        "deliver": 906,
+        "reduce": 64
+      },
+      "roundTripMs": 5,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_beacon_witnessed_high_nonroot.json",
+      "scenario": "township_beacon_witnessed_high_nonroot",
+      "schema": "Township.Matter",
+      "sha256": "c818ff1ce4c271bb3bbd2f52fcb3cede90c98c9db3ea3479ee51e9efd3bb2ec2",
+      "frames": 5,
+      "pass": true,
+      "elapsed_us": 2499,
+      "phases_us": {
+        "analyze": 1150,
+        "decode": 530,
+        "deliver": 750,
+        "reduce": 69
+      },
+      "roundTripMs": 5,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_beacon_witnessed_horizon.json",
+      "scenario": "township_beacon_witnessed_horizon",
+      "schema": "Township.Matter",
+      "sha256": "693f0be68546796837e3e237bb338d3ba2bacbeed0bfb2c933a0a58bde9c922c",
+      "frames": 5,
+      "pass": true,
+      "elapsed_us": 2080,
+      "phases_us": {
+        "analyze": 931,
+        "decode": 385,
+        "deliver": 699,
+        "reduce": 65
+      },
+      "roundTripMs": 5,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_beacon_witnessed_large_policy_integer.json",
+      "scenario": "township_beacon_witnessed_large_policy_integer",
+      "schema": "Township.Matter",
+      "sha256": "0da6962f5faba592c12e3f66dd42b97bb05aa62088360add67fc68114bff1c7a",
+      "frames": 7,
+      "pass": true,
+      "elapsed_us": 4366,
+      "phases_us": {
+        "analyze": 2365,
+        "decode": 816,
+        "deliver": 1110,
+        "reduce": 75
+      },
+      "roundTripMs": 9,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_beacon_witnessed_policy_metadata.json",
+      "scenario": "township_beacon_witnessed_policy_metadata",
+      "schema": "Township.Matter",
+      "sha256": "e4c5722f38502e9158d4343fc6541de0f8dd3ec073df391e1bc2f593d5208d72",
+      "frames": 11,
+      "pass": false,
+      "elapsed_us": null,
+      "phases_us": null,
+      "roundTripMs": 14,
+      "structural": null,
+      "oracle": {
+        "quarantine": [],
+        "quarantineIds": [],
+        "state": {
+          "clerk": "resident",
+          "clerk_locked": false,
+          "members": [],
+          "posts": [],
+          "summary": "",
+          "title": "Other policy survives"
+        }
+      },
+      "browser": {
+        "error": "malformed_op",
+        "undecodable": [
+          {
+            "id": "j2DzjP5skfPTPHRQM8BRZsTLKgoAO9jhi-bQmL0XsNo",
+            "index": 5
+          }
+        ],
+        "decodableSubset": {
+          "elapsed_us": 4721,
+          "holders": {
+            "clerk": "zcOckYZGoOuqyty9CmJBPzjhhFFILQlWih98dxobvKU="
+          },
+          "ok": true,
+          "op_count": 5,
+          "phases_us": {
+            "analyze": 1486,
+            "decode": 930,
+            "deliver": 2250,
+            "reduce": 55
+          },
+          "quarantine": [],
+          "quarantine_ids": [],
+          "state": "{\"clerk\":\"clerk\",\"clerk_locked\":false,\"members\":[],\"posts\":[],\"summary\":\"\",\"title\":\"\"}",
+          "structural": {
+            "pending": 5,
+            "quarantined": 0,
+            "rejected": 0
+          }
+        }
+      }
+    },
+    {
+      "file": "township_beacon_witnessed_raw_duplicate_deps.json",
+      "scenario": "township_beacon_witnessed_raw_duplicate_deps",
+      "schema": "Township.Matter",
+      "sha256": "5ca96786bd71a3bfbb8e2b92c05eacef922687ea89e41533b0c5b2fe2a28f61d",
+      "frames": 5,
+      "pass": true,
+      "elapsed_us": 2766,
+      "phases_us": {
+        "analyze": 1336,
+        "decode": 426,
+        "deliver": 929,
+        "reduce": 75
+      },
+      "roundTripMs": 7,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_beacon_witnessed_subthreshold.json",
+      "scenario": "township_beacon_witnessed_subthreshold",
+      "schema": "Township.Matter",
+      "sha256": "054dcf07887e6fbb187fb2e264ce2a288167d66314dc96d1d11015cdae54ea31",
+      "frames": 18,
+      "pass": true,
+      "elapsed_us": 6395,
+      "phases_us": {
+        "analyze": 1641,
+        "decode": 1885,
+        "deliver": 2619,
+        "reduce": 250
+      },
+      "roundTripMs": 16,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_beacon_witnessed_unbound_root.json",
+      "scenario": "township_beacon_witnessed_unbound_root",
+      "schema": "Township.Matter",
+      "sha256": "45911146b0894dea14ecaced3ea96636fa5eb965c6f24b95352829ffd1c70474",
+      "frames": 7,
+      "pass": true,
+      "elapsed_us": 3234,
+      "phases_us": {
+        "analyze": 1580,
+        "decode": 530,
+        "deliver": 1045,
+        "reduce": 79
+      },
+      "roundTripMs": 7,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_capability_invalid.json",
+      "scenario": "township_capability_invalid",
+      "schema": "Township.Matter",
+      "sha256": "00c880c8066d4f8e7571d806f673675b765c0a33979ffdac8922c5d16079c027",
+      "frames": 3,
+      "pass": true,
+      "elapsed_us": 1530,
+      "phases_us": {
+        "analyze": 855,
+        "decode": 185,
+        "deliver": 445,
+        "reduce": 45
+      },
+      "roundTripMs": 4,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_capability_missing.json",
+      "scenario": "township_capability_missing",
+      "schema": "Township.Matter",
+      "sha256": "71684de356590cb54e7a0b7faab9803d018b7c4968b4bea7807d197f914a8a22",
+      "frames": 2,
+      "pass": true,
+      "elapsed_us": 1015,
+      "phases_us": {
+        "analyze": 521,
+        "decode": 114,
+        "deliver": 340,
+        "reduce": 40
+      },
+      "roundTripMs": 4,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_capability_not_visible.json",
+      "scenario": "township_capability_not_visible",
+      "schema": "Township.Matter",
+      "sha256": "d3f99477b3bc4a50ce8193bdc582a40d45f455738bf85041b58f489788074f24",
+      "frames": 3,
+      "pass": true,
+      "elapsed_us": 1690,
+      "phases_us": {
+        "analyze": 940,
+        "decode": 175,
+        "deliver": 495,
+        "reduce": 80
+      },
+      "roundTripMs": 4,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_capability_operation_not_granted.json",
+      "scenario": "township_capability_operation_not_granted",
+      "schema": "Township.Matter",
+      "sha256": "dda7dbb4d9965876dfbdbd4b5442b34846c8e42b125a9fd8d3edc98143602983",
+      "frames": 3,
+      "pass": true,
+      "elapsed_us": 1820,
+      "phases_us": {
+        "analyze": 1100,
+        "decode": 220,
+        "deliver": 455,
+        "reduce": 45
+      },
+      "roundTripMs": 4,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_capability_revoked_causal.json",
+      "scenario": "township_capability_revoked_causal",
+      "schema": "Township.Matter",
+      "sha256": "e7b2205698d1b3da6135c8f10da0ead74e6dd7776a48c74ebd2d43d0aaecd1b9",
+      "frames": 6,
+      "pass": true,
+      "elapsed_us": 2135,
+      "phases_us": {
+        "analyze": 964,
+        "decode": 310,
+        "deliver": 790,
+        "reduce": 71
+      },
+      "roundTripMs": 5,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_capability_revoked_chain.json",
+      "scenario": "township_capability_revoked_chain",
+      "schema": "Township.Matter",
+      "sha256": "5cd2e65d6071558632fcc2ac6f45fac7dc82564b155b001dee105ea1f5b3ee24",
+      "frames": 5,
+      "pass": true,
+      "elapsed_us": 2531,
+      "phases_us": {
+        "analyze": 1480,
+        "decode": 261,
+        "deliver": 725,
+        "reduce": 65
+      },
+      "roundTripMs": 5,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_capability_role_not_granted.json",
+      "scenario": "township_capability_role_not_granted",
+      "schema": "Township.Matter",
+      "sha256": "c3b2ab56a20168b2a0ad731de39d6bc329c40c8e2962e16f6b9824ff6da75089",
+      "frames": 4,
+      "pass": true,
+      "elapsed_us": 1831,
+      "phases_us": {
+        "analyze": 1009,
+        "decode": 186,
+        "deliver": 575,
+        "reduce": 61
+      },
+      "roundTripMs": 4,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_capability_wrong_audience.json",
+      "scenario": "township_capability_wrong_audience",
+      "schema": "Township.Matter",
+      "sha256": "0217692a38f8ac3cc1169e1717d2392b0d87d991390b29e02a8e5550a1a2e078",
+      "frames": 3,
+      "pass": true,
+      "elapsed_us": 1776,
+      "phases_us": {
+        "analyze": 986,
+        "decode": 171,
+        "deliver": 534,
+        "reduce": 85
+      },
+      "roundTripMs": 3,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_carrier_w1.json",
+      "scenario": "township_carrier_w1",
+      "schema": "Township.Matter",
+      "sha256": "d37dd2a7b477a90363b8e9b3791caa9494f8ea8197435d87d98c980137be3ddf",
+      "frames": 11,
+      "pass": true,
+      "elapsed_us": 3595,
+      "phases_us": {
+        "analyze": 1574,
+        "decode": 484,
+        "deliver": 1391,
+        "reduce": 146
+      },
+      "roundTripMs": 7,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "ids (vector has no authorityQuarantine)",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "resident",
+            "oracle": "resident"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_causal_list_partition.json",
+      "scenario": "township_causal_list_partition",
+      "schema": "Township.Matter",
+      "sha256": "99a6a85bce8cfc3c1e1e5cc676a0d2da564b80e97b00dd09b79fef3db866c9fc",
+      "frames": 7,
+      "pass": true,
+      "elapsed_us": 2309,
+      "phases_us": {
+        "analyze": 986,
+        "decode": 310,
+        "deliver": 889,
+        "reduce": 124
+      },
+      "roundTripMs": 5,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_foreign_replica_injection.json",
+      "scenario": "township_foreign_replica_injection",
+      "schema": "Township.Matter",
+      "sha256": "087f6810c793aea99459d724fa73f7988fea7917df05204d6830bd78c6b651aa",
+      "frames": 4,
+      "pass": true,
+      "elapsed_us": 2011,
+      "phases_us": {
+        "analyze": 1124,
+        "decode": 245,
+        "deliver": 571,
+        "reduce": 71
+      },
+      "roundTripMs": 4,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_genesis_projection_parity.json",
+      "scenario": "township_genesis_projection_parity",
+      "schema": "Township.Matter",
+      "sha256": "a3a14392a93e7dc7f368c7bf3dbd829e9407e4f20bc7feb3347886dc01b516e5",
+      "frames": 3,
+      "pass": true,
+      "elapsed_us": 2276,
+      "phases_us": {
+        "analyze": 1270,
+        "decode": 401,
+        "deliver": 555,
+        "reduce": 50
+      },
+      "roundTripMs": 5,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_lease_expired.json",
+      "scenario": "township_lease_expired",
+      "schema": "Township.Matter",
+      "sha256": "8593b794ba7768e0331294d206ea2eae2c5ed5b6c2ecd1216ab9fc9acd83ba28",
+      "frames": 5,
+      "pass": true,
+      "elapsed_us": 1954,
+      "phases_us": {
+        "analyze": 986,
+        "decode": 245,
+        "deliver": 664,
+        "reduce": 59
+      },
+      "roundTripMs": 3,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_lease_expired_chain.json",
+      "scenario": "township_lease_expired_chain",
+      "schema": "Township.Matter",
+      "sha256": "ed731a15bdcbce732762455f60c9c4068e728cf4a4961cc6db84a2dc6086ebbf",
+      "frames": 5,
+      "pass": true,
+      "elapsed_us": 2535,
+      "phases_us": {
+        "analyze": 1305,
+        "decode": 504,
+        "deliver": 676,
+        "reduce": 50
+      },
+      "roundTripMs": 4,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_lease_renewed.json",
+      "scenario": "township_lease_renewed",
+      "schema": "Township.Matter",
+      "sha256": "bdf18ca822b8ef817c58c5f3e82a7c89349441c3f35c100bce626bd24d4fe73e",
+      "frames": 6,
+      "pass": true,
+      "elapsed_us": 2534,
+      "phases_us": {
+        "analyze": 1234,
+        "decode": 325,
+        "deliver": 890,
+        "reduce": 85
+      },
+      "roundTripMs": 5,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_lease_valid_causal.json",
+      "scenario": "township_lease_valid_causal",
+      "schema": "Township.Matter",
+      "sha256": "96c57eaafac0f8434db42a994ae986526728fec8fc9f8aa2514b23f16a5ae3fa",
+      "frames": 4,
+      "pass": true,
+      "elapsed_us": 1571,
+      "phases_us": {
+        "analyze": 831,
+        "decode": 170,
+        "deliver": 500,
+        "reduce": 70
+      },
+      "roundTripMs": 3,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_link_election.json",
+      "scenario": "township_link_election",
+      "schema": "Township.Matter",
+      "sha256": "633e7043a4ef97b3700634c246112a5e0949fc6035a2a8a2b5bc74eac93f3dd8",
+      "frames": 3,
+      "pass": true,
+      "elapsed_us": 1630,
+      "phases_us": {
+        "analyze": 950,
+        "decode": 190,
+        "deliver": 450,
+        "reduce": 40
+      },
+      "roundTripMs": 3,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_policy_application_denied_excluded_from_state.json",
+      "scenario": "township_policy_application_denied_excluded_from_state",
+      "schema": "PolicyFixture",
+      "sha256": "08ccef2f8e3fda04ff15913ff00f85bd39121b45b66e3b324769edcfa23db11f",
+      "frames": 3,
+      "pass": true,
+      "elapsed_us": 1116,
+      "phases_us": {
+        "analyze": 510,
+        "decode": 131,
+        "deliver": 410,
+        "reduce": 65
+      },
+      "roundTripMs": 2,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": []
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_policy_concurrent_target_not_visible.json",
+      "scenario": "township_policy_concurrent_target_not_visible",
+      "schema": "PolicyFixture",
+      "sha256": "4faaf6a80b289677cbaf48bf1540ede09b674d888dc9f98bf864c77391c89c20",
+      "frames": 4,
+      "pass": true,
+      "elapsed_us": 1720,
+      "phases_us": {
+        "analyze": 949,
+        "decode": 185,
+        "deliver": 525,
+        "reduce": 61
+      },
+      "roundTripMs": 4,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": []
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_policy_full_frontier_conflict_delivery_order.json",
+      "scenario": "township_policy_full_frontier_conflict_delivery_order",
+      "schema": "PolicyFixture",
+      "sha256": "25dad48b34bfaf775784c214c65763bfc80a4b89c4ff541fcf98e78bcc1e9651",
+      "frames": 6,
+      "pass": true,
+      "elapsed_us": 2406,
+      "phases_us": {
+        "analyze": 1195,
+        "decode": 371,
+        "deliver": 780,
+        "reduce": 60
+      },
+      "roundTripMs": 5,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": []
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_policy_honored_target.json",
+      "scenario": "township_policy_honored_target",
+      "schema": "PolicyFixture",
+      "sha256": "7698ad9664423b383eee97af376a0c87a05216a35da3a599ad252e31ae17632e",
+      "frames": 3,
+      "pass": true,
+      "elapsed_us": 1169,
+      "phases_us": {
+        "analyze": 525,
+        "decode": 160,
+        "deliver": 430,
+        "reduce": 54
+      },
+      "roundTripMs": 3,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": []
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_policy_partial_frontier_reclassification.json",
+      "scenario": "township_policy_partial_frontier_reclassification",
+      "schema": "PolicyFixture",
+      "sha256": "ed595888c0e6088c5860788e8e8b454d78221ff2715ef6d1c8cbdf976e67ffd5",
+      "frames": 4,
+      "pass": true,
+      "elapsed_us": 1736,
+      "phases_us": {
+        "analyze": 930,
+        "decode": 196,
+        "deliver": 565,
+        "reduce": 45
+      },
+      "roundTripMs": 4,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": []
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_policy_target_reason_taxonomy.json",
+      "scenario": "township_policy_target_reason_taxonomy",
+      "schema": "PolicyFixture",
+      "sha256": "11c5fd992e96ba787f337b6f6ed90ed6d8a142ddb67d8bdaa6023cc93b9128bb",
+      "frames": 13,
+      "pass": false,
+      "elapsed_us": null,
+      "phases_us": null,
+      "roundTripMs": 7,
+      "structural": null,
+      "oracle": {
+        "quarantine": [
+          [
+            "37zf1ux2bHdbKBOfMf1VKM257RsPfYDyUX7p1AzDlAs",
+            "application_target_quarantined"
+          ],
+          [
+            "E_EhOYEP9mOeZ-jV60i1Ak8MwJE8aNXXYNU-7jBgfsU",
+            "application_denied"
+          ],
+          [
+            "JdC-MexOcCCYeVFPPdqItHbmzLMvyOx0rYcxbh1neJI",
+            "no_capability"
+          ],
+          [
+            "OoD0jl4p3tHKA-WxNmy2gcE8xYZ8sUl3C4eYgf3S3FI",
+            "application_wrong_target"
+          ],
+          [
+            "TWXfxuSAMxyfksfdEKJuF14LoBJJ7GcQFB_Zg1YF11o",
+            "no_capability"
+          ],
+          [
+            "lbfHvJHPD8qQGsM-hTQPmB8bk_h0f4xCuu6tO_wN4yg",
+            "malformed_command"
+          ],
+          [
+            "u4-e2eIXR-35vwKY5Ra85_skMTij9Pt8b83s-3hIuWI",
+            "application_target_quarantined"
+          ],
+          [
+            "vVV4MGlNBz0AdaAKx_3ft3TbHGAugn5sN0EJvxIfJm0",
+            "application_target_quarantined"
+          ],
+          [
+            "yzWcC6NiKWfOw-lQxfEcsU7fXHbyOI68ebIh733nX4E",
+            "application_target_quarantined"
+          ]
+        ],
+        "quarantineIds": [
+          "37zf1ux2bHdbKBOfMf1VKM257RsPfYDyUX7p1AzDlAs",
+          "E_EhOYEP9mOeZ-jV60i1Ak8MwJE8aNXXYNU-7jBgfsU",
+          "JdC-MexOcCCYeVFPPdqItHbmzLMvyOx0rYcxbh1neJI",
+          "OoD0jl4p3tHKA-WxNmy2gcE8xYZ8sUl3C4eYgf3S3FI",
+          "TWXfxuSAMxyfksfdEKJuF14LoBJJ7GcQFB_Zg1YF11o",
+          "lbfHvJHPD8qQGsM-hTQPmB8bk_h0f4xCuu6tO_wN4yg",
+          "u4-e2eIXR-35vwKY5Ra85_skMTij9Pt8b83s-3hIuWI",
+          "vVV4MGlNBz0AdaAKx_3ft3TbHGAugn5sN0EJvxIfJm0",
+          "yzWcC6NiKWfOw-lQxfEcsU7fXHbyOI68ebIh733nX4E"
+        ],
+        "state": {
+          "events": [
+            {
+              "kind": "source",
+              "label": "honored record"
+            },
+            {
+              "key": "taxonomy",
+              "kind": "claim",
+              "label": "wrong-kind record"
+            },
+            {
+              "kind": "reference",
+              "target": "5p_nNrEzMQQYR6WYGDZlkbAoEdq2qVu394Hx34Mol4k"
+            }
+          ]
+        }
+      },
+      "browser": {
+        "error": "malformed_op",
+        "undecodable": [
+          {
+            "id": "lbfHvJHPD8qQGsM-hTQPmB8bk_h0f4xCuu6tO_wN4yg",
+            "index": 2
+          }
+        ],
+        "decodableSubset": {
+          "elapsed_us": 3535,
+          "holders": {},
+          "ok": true,
+          "op_count": 2,
+          "phases_us": {
+            "analyze": 509,
+            "decode": 330,
+            "deliver": 2655,
+            "reduce": 41
+          },
+          "quarantine": [],
+          "quarantine_ids": [],
+          "state": "{\"events\":[{\"kind\":\"source\",\"label\":\"honored record\"}]}",
+          "structural": {
+            "pending": 10,
+            "quarantined": 0,
+            "rejected": 0
+          }
+        }
+      }
+    },
+    {
+      "file": "township_revoke_unauthorized.json",
+      "scenario": "township_revoke_unauthorized",
+      "schema": "Township.Matter",
+      "sha256": "c0419ffc5469a2f5cc54538312eda9f6aaa25812b19ca6deeb029ff2f1b5622e",
+      "frames": 4,
+      "pass": true,
+      "elapsed_us": 1885,
+      "phases_us": {
+        "analyze": 1021,
+        "decode": 200,
+        "deliver": 604,
+        "reduce": 60
+      },
+      "roundTripMs": 4,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "clerk",
+            "oracle": "clerk"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_succession_unproven_tick.json",
+      "scenario": "township_succession_unproven_tick",
+      "schema": "Township.Matter",
+      "sha256": "63fc79c3941da72518b1bb6833edf965e26aef28e39775ca2c79a64fcfd62388",
+      "frames": 2,
+      "pass": true,
+      "elapsed_us": 1225,
+      "phases_us": {
+        "analyze": 730,
+        "decode": 145,
+        "deliver": 315,
+        "reduce": 35
+      },
+      "roundTripMs": 3,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "resident",
+            "oracle": "resident"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_succession_w3.json",
+      "scenario": "township_succession_w3",
+      "schema": "Township.Matter",
+      "sha256": "4b69d9d77f7dcb61d9ad9c3446523d3706418735317e952f8714d20619bdde81",
+      "frames": 7,
+      "pass": true,
+      "elapsed_us": 2620,
+      "phases_us": {
+        "analyze": 1170,
+        "decode": 349,
+        "deliver": 1011,
+        "reduce": 90
+      },
+      "roundTripMs": 6,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "resident",
+            "oracle": "resident"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_succession_witnessed_recovery.json",
+      "scenario": "township_succession_witnessed_recovery",
+      "schema": "Township.Matter",
+      "sha256": "08e86caba306f069a29ddf679453bbc0c561033267f702754d9f3e95ca6a514a",
+      "frames": 5,
+      "pass": true,
+      "elapsed_us": 3606,
+      "phases_us": {
+        "analyze": 1835,
+        "decode": 776,
+        "deliver": 940,
+        "reduce": 55
+      },
+      "roundTripMs": 8,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "resident",
+            "oracle": "resident"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "township_zoning_variance_24.json",
+      "scenario": "township_zoning_variance_24",
+      "schema": "Township.Matter",
+      "sha256": "d991c4d92905e55e87566be907a6f00af29f7374334587a9f2aaf3291c4488c1",
+      "frames": 13,
+      "pass": true,
+      "elapsed_us": 4365,
+      "phases_us": {
+        "analyze": 1761,
+        "decode": 555,
+        "deliver": 1839,
+        "reduce": 210
+      },
+      "roundTripMs": 8,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "clerk",
+            "browser": "resident",
+            "oracle": "resident"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "treehouse_space_map_order.json",
+      "scenario": "treehouse_space_map_order",
+      "schema": "Treehouse.Space",
+      "sha256": "cefb9e5d3948396559dfbfb9171bc3c69960d68c662e2fcaaee784552e3b0bd9",
+      "frames": 17,
+      "pass": true,
+      "elapsed_us": 3911,
+      "phases_us": {
+        "analyze": 995,
+        "decode": 561,
+        "deliver": 2070,
+        "reduce": 285
+      },
+      "roundTripMs": 8,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "admin",
+            "browser": "root",
+            "oracle": "root"
+          },
+          {
+            "role": "moderator",
+            "browser": "root",
+            "oracle": "root"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "treehouse_space_membership.json",
+      "scenario": "treehouse_space_membership",
+      "schema": "Treehouse.Space",
+      "sha256": "165475dc948d9ab3f0acd726ff485f6b1db5022bafc4f9a1cfa372e55eea0b11",
+      "frames": 21,
+      "pass": true,
+      "elapsed_us": 7480,
+      "phases_us": {
+        "analyze": 3735,
+        "decode": 895,
+        "deliver": 2430,
+        "reduce": 420
+      },
+      "roundTripMs": 12,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "admin",
+            "browser": "root",
+            "oracle": "root"
+          },
+          {
+            "role": "moderator",
+            "browser": "root",
+            "oracle": "root"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "treehouse_space_roles.json",
+      "scenario": "treehouse_space_roles",
+      "schema": "Treehouse.Space",
+      "sha256": "7952f029c62f13d44f2e496eada59c1863fa7302e7a2aab063a3c90cad6f0bb0",
+      "frames": 7,
+      "pass": true,
+      "elapsed_us": 4125,
+      "phases_us": {
+        "analyze": 2590,
+        "decode": 455,
+        "deliver": 999,
+        "reduce": 81
+      },
+      "roundTripMs": 8,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "admin",
+            "browser": "bob",
+            "oracle": "bob"
+          },
+          {
+            "role": "moderator",
+            "browser": "bob",
+            "oracle": "bob"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "treehouse_space_succession.json",
+      "scenario": "treehouse_space_succession",
+      "schema": "Treehouse.Space",
+      "sha256": "ce3f3855a70f96171da762fde2b01e4c1cfa10faa97c972b45b6a896ac1a2d8c",
+      "frames": 5,
+      "pass": true,
+      "elapsed_us": 2410,
+      "phases_us": {
+        "analyze": 1205,
+        "decode": 399,
+        "deliver": 705,
+        "reduce": 101
+      },
+      "roundTripMs": 6,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "admin",
+            "browser": "alice",
+            "oracle": "alice"
+          },
+          {
+            "role": "moderator",
+            "browser": "root",
+            "oracle": "root"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "treehouse_thread_archive.json",
+      "scenario": "treehouse_thread_archive",
+      "schema": "Treehouse.Thread",
+      "sha256": "b5113a919866ed6265b149096c7c304efa7cca9898029bd69eb5d69a8eecc004",
+      "frames": 16,
+      "pass": true,
+      "elapsed_us": 4344,
+      "phases_us": {
+        "analyze": 1600,
+        "decode": 565,
+        "deliver": 2005,
+        "reduce": 174
+      },
+      "roundTripMs": 8,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "moderator",
+            "browser": "root",
+            "oracle": "root"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    },
+    {
+      "file": "treehouse_thread_conflicts.json",
+      "scenario": "treehouse_thread_conflicts",
+      "schema": "Treehouse.Thread",
+      "sha256": "7e882713809227fc079e4e28172b7b6c7147c122a62262e758eb2c6ba5484d1b",
+      "frames": 9,
+      "pass": true,
+      "elapsed_us": 3121,
+      "phases_us": {
+        "analyze": 1465,
+        "decode": 405,
+        "deliver": 1131,
+        "reduce": 120
+      },
+      "roundTripMs": 6,
+      "structural": {
+        "pending": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "quarantine": {
+        "equal": true,
+        "compared": "[id, reason] pairs",
+        "idsEqual": true
+      },
+      "holders": {
+        "equal": true,
+        "roles": [
+          {
+            "role": "moderator",
+            "browser": "root",
+            "oracle": "root"
+          }
+        ]
+      },
+      "state": {
+        "equal": true
+      }
+    }
+  ],
+  "skipped": [
+    {
+      "file": "township_join_w0.json",
+      "scenario": "township_join_w0",
+      "schema": "Township.Matter",
+      "sha256": "b93d06b9e3875d3533fd07d85302514e71689757e257ecd56f9f5a9a2ac8d0c9",
+      "reason": "no oracleCarrierOps: a TS-shaped `ops` vector with no signed frames for the BEAM judge to decode"
+    },
+    {
+      "file": "township_partial_log_lww.json",
+      "scenario": "township_partial_log_lww",
+      "schema": "Township.Matter",
+      "sha256": "6d492f3854ff91a51442a826f5aa448ac83ca1625b94436a53eec76550e4136f",
+      "reason": "no oracleCarrierOps: a TS-shaped `ops` vector with no signed frames for the BEAM judge to decode"
+    },
+    {
+      "file": "township_random_101.json",
+      "scenario": "township_random_101",
+      "schema": "Township.Matter",
+      "sha256": "3efd546c1053beb08a9065b12c5169f22906604024fc3051f591441fbdaa8146",
+      "reason": "no oracleCarrierOps: a TS-shaped `ops` vector with no signed frames for the BEAM judge to decode"
+    },
+    {
+      "file": "township_random_202.json",
+      "scenario": "township_random_202",
+      "schema": "Township.Matter",
+      "sha256": "bdb3e4fdecc620ef2e054392e5d30d6edcabad346b9c26423545fca8bb098e4f",
+      "reason": "no oracleCarrierOps: a TS-shaped `ops` vector with no signed frames for the BEAM judge to decode"
+    },
+    {
+      "file": "township_random_303.json",
+      "scenario": "township_random_303",
+      "schema": "Township.Matter",
+      "sha256": "ef3305dd691691ca8c07e4a9121e126049ddde208913b063d95c6fb546dbc46a",
+      "reason": "no oracleCarrierOps: a TS-shaped `ops` vector with no signed frames for the BEAM judge to decode"
+    },
+    {
+      "file": "township_random_404.json",
+      "scenario": "township_random_404",
+      "schema": "Township.Matter",
+      "sha256": "6fa219b6b106d988f5d0e9bcc422d46c2ac92b762044ac8fd028cff116d5af02",
+      "reason": "no oracleCarrierOps: a TS-shaped `ops` vector with no signed frames for the BEAM judge to decode"
+    },
+    {
+      "file": "township_random_505.json",
+      "scenario": "township_random_505",
+      "schema": "Township.Matter",
+      "sha256": "d63b76b1def42024e39dfafb5765cc802b2d72939d79d4907baf22bf55329663",
+      "reason": "no oracleCarrierOps: a TS-shaped `ops` vector with no signed frames for the BEAM judge to decode"
+    }
+  ],
+  "consoleErrors": [],
+  "build": {
+    "shared": {
+      "identity.ex": "70148a338e16d40fc41e6562f0525af3f42c4fd252be688382aabbd6f5f9e7e7",
+      "canonical.ex": "6a108f096a1f3a4eb5b8f857af686e3f4c034eae5683ed5f32766a3de59f157a",
+      "op.ex": "b10bf19d270a56f4491004c3e501718904ee4b4f963f6524e5e866149c7346e2",
+      "authority/delegation.ex": "484cf77109b2fc1b40a34c31bd403088f2187a4bdd3671db0070696bd1e238ef",
+      "authority/succession_certificate.ex": "59ce0878365aaba4fad182f3fe520cbba43a855991ae4785463e704fe3ffaa03",
+      "authority/continuation.ex": "d456e5e819fe93522d23270a12f337c79264dde0a4e505341ba9216555d9b5eb",
+      "authority/continuation_certificate.ex": "03e4219b40634b8ff9022065795293441d2bf7839526a552f4e9d4824105e72d",
+      "authority/beacon_certificate.ex": "b9eb288a1e3fe08e6bd6b11d360cba7c3a76359e100bcf96140a25cc5c3752ae",
+      "authority.ex": "172d460c61c837a831245e87b48c28d11a6f3cf9f4247b5fa280886c1fb8c8f6",
+      "replica.ex": "e5b74eb98808d75c737d0dcd132c043fdedc8d149f7d1208e6c406b3252a612e",
+      "log.ex": "37a1272ff67e628dbd98c2a30825a6a015d73ca4585e9437834829df6addd734",
+      "dag.ex": "7b078c228fd4b0309f4e87401f28801d8b7abc7eb9e58456d247a1073d5b162b",
+      "sync.ex": "d783e174a7e77d7aeaf0bfe265268331047675a97d7e8e66e3e0032b7cd91dae",
+      "sync/shape.ex": "a8e8205ff52f88cc2a94dee21aafdb8745fdee99e0375929261253ea883c99a7",
+      "reduce.ex": "bc2ce45119a9d024ad421015b374114d74d20846a26103675f9e169cfb8e10d8",
+      "crdt/causal_list.ex": "5433860b515724f1aaee6246700b8b6f41088c9072a16afe02c98fabfd439132",
+      "crdt/lww.ex": "09fca44c0bdcc8175d67b27a8e1ca051cb901eac4a6c38000bcf004e39e28a3b",
+      "crdt/or_set.ex": "3ed976c73545d4f96376289c473be79e6d3ec7afa1d9e794171d7b38b440c33e",
+      "carrier/wire.ex": "0f74b9c42eb58e4d8afb5390afa719fc833c491409c2c7344efc3e4d3e01cd82",
+      "browser_log_store.ex": "c539c23cd66a0ec05a5ed27c7b5103c3a5816bdf7c5358b98ccd4a86b7c13fdf",
+      "lib/lattice/demo/thread.ex": "0c05584e450509a9474368e9b30b313a6fbe93b116d3c425f99f15e73ee5f701",
+      "lib/lattice/authority/consent.ex": "29443d95e604d0285e3c149c9f1d1b689154a22529ee984e5d682138de9ff60f",
+      "lib/township/matter.ex": "232b4388fe1dafb6533b10330956cd091bfb4d24454ce0677e687c2153086022",
+      "lib/township/election_board.ex": "f05b9519b483920eb6eb222eea4eec12fe9fd199d207287c60eefcf4f047f32a",
+      "lib/toolshed/shed.ex": "be03f5232c0afe4849f8201b43c65d1e98e12d788f520e6348402be812b8035b",
+      "lib/toolshed/tool.ex": "c74e764be1402225fe95e9d4a88a70fe9250200681105ed7ff8045bb59e098f3",
+      "lib/treehouse/space.ex": "7d64b67da9bac0328cd47602f2dfe73ce8eb491192b9b364df4f9a14b2ef223e",
+      "lib/treehouse/thread.ex": "3e606d3cf670864b75c57aa28e0de43e8c3cb1c5db0dce6cfd195cdc06b824cd",
+      "lib/treehouse/invitation.ex": "4564a021a11f2f9f9a55b0696397e44f367da392955d6003725798b85de9fba3",
+      "lib/treehouse/transport_catalog.ex": "340c02a6ed64093951624098c5ac53e65eff7dad6d86e331ebf1a6256a11feaa",
+      "lib/treehouse/member_continuity.ex": "79a2cc891ec7954294a95dd74ff37632bed3b765d84d1cbda5c43f253df6411f",
+      "lib/treehouse/member_continuity_certificate.ex": "b6fef1d9930d6341450e64394bf91e9ff5ec41b78374377147436fafe717c03c",
+      "lib/treehouse/member_continuity_authoring.ex": "30fddfb7f7e3c705b163b7e84fea720960cdfa4a4f5f89b8bd650cdc768aec41",
+      "lib/mix/tasks/lattice.export_vectors.ex#prefix": "11be5c41bb02f163afdd1924b9b7e35ad74e56fc6110cb8389a3a4c288222672",
+      "lib/mix/tasks/lattice.export_vectors.ex": "abe2aaefc430b6a790c2b2ae2138082f7688142d88326a86e04224b07793fe40"
+    },
+    "assets": 30
+  },
+  "browserVersion": "149.0.7827.55",
+  "boot": {
+    "moduleStartMs": 96.49000000953674,
+    "bootStartMs": 97.25999999046326,
+    "bootDoneMs": 445.30000001192093,
+    "crossOriginIsolated": true,
+    "navigationToReadyMs": 449
+  },
+  "firstVerdictMs": 490,
+  "vm": {
+    "distributed": false,
+    "elixir": "1.20.4",
+    "memory_bytes": 17553440,
+    "ok": true,
+    "otp": "29",
+    "phase": "new",
+    "public_key": "rWGV+Jz+ituQWf6DVlhY15Jmi9MpWL2uRKrYErGygCw=",
+    "tab_id": null
+  },
+  "summary": {
+    "loaded": 68,
+    "passed": 63,
+    "failed": 5,
+    "skipped": 7,
+    "failedScenarios": [
+      "township_authority_unattenuated_transfer",
+      "township_authority_undeclared_role_tick",
+      "township_beacon_witnessed_certificate_metadata",
+      "township_beacon_witnessed_policy_metadata",
+      "township_policy_target_reason_taxonomy"
+    ],
+    "skippedScenarios": [
+      "township_join_w0",
+      "township_partial_log_lww",
+      "township_random_101",
+      "township_random_202",
+      "township_random_303",
+      "township_random_404",
+      "township_random_505"
+    ],
+    "structuralRejectOrQuarantine": []
+  },
+  "finishedAt": "2026-10-08T05:16:36.674Z"
+}

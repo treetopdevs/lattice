@@ -1,24 +1,12 @@
 name: Flagship evidence
 
 on:
+  # No path filter: a path-filtered workflow never starts on a docs-only PR, and a required check
+  # that never reports blocks the merge. The `changes` job decides what a change needs instead.
   push:
     branches:
       - main
-    paths:
-      - '**'
-      - '!docs/**'
-      - '!**/*.md'
-      - 'docs/android_pilot_*'
-      - 'docs/android_pilot_*/**'
-      - 'plans/15[89]-*'
   pull_request:
-    paths:
-      - '**'
-      - '!docs/**'
-      - '!**/*.md'
-      - 'docs/android_pilot_*'
-      - 'docs/android_pilot_*/**'
-      - 'plans/15[89]-*'
   workflow_dispatch:
     inputs:
       require_android_pilot:
@@ -32,10 +20,64 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  changes:
+    name: Classify changed paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+    outputs:
+      core: ${{ steps.classify.outputs.core }}
+      township: ${{ steps.classify.outputs.township }}
+      treehouse: ${{ steps.classify.outputs.treehouse }}
+      legacy: ${{ steps.classify.outputs.legacy }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Classify
+        id: classify
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          core=false; township=false; treehouse=false; legacy=false; docs=false
+          if [ "$EVENT" = "workflow_dispatch" ] || [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            core=true; township=true; treehouse=true; legacy=true
+          else
+            # Run the diff before classifying so a failure exits here under set -e and fails the job
+            # (fail closed) instead of leaving every output false inside a process substitution.
+            # --no-renames lists both sides of a move, so the source product is classified too.
+            git diff --no-renames --name-only "$BASE" "$HEAD" > "$RUNNER_TEMP/changed-paths.txt"
+            while IFS= read -r path; do
+              case "$path" in
+                clients/township-tauri-shell/*|apps/township_web/*|apps/township_bench/*|scripts/township_*|scripts/android-pilot/*|playwright.township*.config.mjs) township=true ;;
+                clients/treehouse-tauri-shell/*|tools/android-witness-validator/*|scripts/treehouse_*) treehouse=true ;;
+                apps/lattice_server/*|apps/lattice_demo/*|apps/lattice_stress/*|scripts/lattice_*|playwright.config.mjs|tests/*) legacy=true ;;
+                docs/android_pilot_*) township=true ;;
+                docs/township_*) township=true ;;
+                # Other prose: the tests that pin it run inside `unit`, which always runs, so no
+                # product or packaged job is needed. A document read by a product-gated step must
+                # be routed to that product above.
+                docs/*|*.md) docs=true ;;
+                *) core=true ;;
+              esac
+            done < "$RUNNER_TEMP/changed-paths.txt"
+          fi
+          # Any path outside the product-only prefixes runs everything (fail closed).
+          if [ "$core" = true ]; then township=true; treehouse=true; legacy=true; fi
+          for k in core township treehouse legacy; do echo "$k=${!k}" >> "$GITHUB_OUTPUT"; done
+          echo "core=$core township=$township treehouse=$treehouse legacy=$legacy docs=$docs"
+
   verify:
     name: Verify flagship artifact
+    needs: changes
+    if: needs.changes.outputs.legacy == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
 
     steps:
       - name: Checkout
@@ -70,11 +112,51 @@ jobs:
           npm --prefix clients/lattice-mobile-core ci
           npm --prefix clients/township-tauri-shell ci
 
+      - name: Runner image key
+        id: image
+        run: echo "key=${ImageOS:-ubuntu}-${ImageVersion:-unversioned}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore apt package cache
+        # The Azure apt mirror behind ubuntu-latest sometimes serves .deb files at ~70 KB/s; run
+        # 37759518040 spent 23 minutes in apt and timed this job out. The cache holds apt's downloaded
+        # archives. apt reuses an archive by file name and size alone, so the next step re-verifies
+        # every cached file against the current authenticated index before apt can see it. A failed
+        # install still saves what completed under a run-specific key that the prefix matches, so a
+        # cold cache seeds across reruns; the exact key is saved only when the install steps succeed
+        # and is then immutable until the runner image or the hashed files change.
+        id: apt_cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/apt-archives
+          key: ${{ runner.os }}-apt-verify-${{ steps.image.outputs.key }}-${{ hashFiles('package-lock.json', '.github/workflows/flagship.yml', '.github/scripts/apt_archive_cache.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-apt-verify-${{ steps.image.outputs.key }}-
+            ${{ runner.os }}-apt-verify-
+
+      - name: Point apt at the cache and verify its contents against the index
+        run: .github/scripts/apt_archive_cache.sh
+
       - name: Install Playwright browser
+        timeout-minutes: 15
         run: npx playwright install --with-deps chromium
 
       - name: Install ffmpeg
+        timeout-minutes: 15
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Hand the apt archive directory to the runner user
+        if: always() && steps.apt_cache.outputs.cache-primary-key != '' && steps.apt_cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        run: sudo chown -R "$(id -u):$(id -g)" "$HOME/.cache/apt-archives"
+
+      - name: Save apt package cache
+        # After a failed install the key is run-specific, so the next attempt restores it by prefix
+        # and downloads only what is still missing; the verify step above re-checks every file anyway.
+        if: always() && steps.apt_cache.outputs.cache-primary-key != '' && steps.apt_cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/apt-archives
+          key: ${{ steps.apt_cache.outputs.cache-primary-key }}${{ job.status != 'success' && format('-partial-{0}-{1}', github.run_id, github.run_attempt) || '' }}
 
       - name: Verify flagship evidence path
         env:
@@ -94,8 +176,9 @@ jobs:
 
   unit:
     name: Unit + property suite
+    needs: changes
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -170,6 +253,15 @@ jobs:
         run: |
           npm --prefix clients/lattice-client run continuation:vectors
           MIX_ENV=test mix test apps/lattice_core/test/treehouse/bounded_continuation_reciprocal_test.exs
+      - name: Committed oracle vectors match regeneration
+        run: |
+          git diff --exit-code --stat -- clients/lattice-client/test/vectors
+          untracked="$(git status --porcelain --untracked-files=all -- clients/lattice-client/test/vectors)"
+          if [ -n "$untracked" ]; then
+            echo "regenerated vectors that are not committed:" >&2
+            echo "$untracked" >&2
+            exit 1
+          fi
       - name: Typecheck TS client
         working-directory: clients/lattice-client
         run: npm run typecheck
@@ -222,84 +314,132 @@ jobs:
         working-directory: clients/lattice-mobile-core
         run: npm run build
       - name: Install Tauri shell dependencies
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm ci
       - name: TS Township shell typecheck
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run typecheck
       - name: TS Township runtime wiring contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run runtime:wiring:contract
       - name: TS governance witness native bridge
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run governance:native:contract
       - name: TS Township native workflow
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run native:contract
       - name: TS Township intent UI behavior
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run intent-ui:contract
       - name: TS Township action handoff support contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run action-handoff-support:contract
       - name: TS Township action-intent contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run action-intent:contract
       - name: TS Township deep-link dispatcher contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run deeplink:dispatcher:contract
       - name: TS Township action contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run action:contract
       - name: TS Township delegation-grant fixture
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run grant:fixture:contract
       - name: TS Township frontend contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run frontend:contract
       - name: TS Township carrier sync contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run sync:contract
       - name: TS reactive Township feed controller
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run feed:app:contract
       - name: TS live stable carrier availability feed
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run feed:contract
       - name: TS Township carrier peer contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run peer:contract
       - name: TS Township pairing deep-link contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run deeplink:contract
       - name: TS Township pairing deep-link source contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run deeplink:source:contract
       - name: TS Township pairing QR contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run qr:contract
       - name: TS Township pairing QR camera contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run qr:camera:contract
       - name: TS Township pairing discovery contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run discovery:contract
       - name: TS Township canonical probe contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run canonical:probe:contract
       - name: TS mobile secure-store strategy
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run mobile:strategy
       - name: TS Township witness artifact contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run witness:artifact:contract
       - name: TS Township packaged bundle variant contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run bundle:variant:contract
       - name: TS Township revocation fixture contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run revocation:fixture:contract
+      - name: Runner image key
+        id: image
+        run: echo "key=${ImageOS:-ubuntu}-${ImageVersion:-unversioned}" >> "$GITHUB_OUTPUT"
+      - name: Restore apt package cache
+        # The Azure apt mirror behind ubuntu-latest sometimes serves .deb files at ~70 KB/s; run
+        # 37759518040 spent 23 minutes in apt and timed this job out. The cache holds apt's downloaded
+        # archives. apt reuses an archive by file name and size alone, so the next step re-verifies
+        # every cached file against the current authenticated index before apt can see it. A failed
+        # install still saves what completed under a run-specific key that the prefix matches, so a
+        # cold cache seeds across reruns; the exact key is saved only when the install steps succeed
+        # and is then immutable until the runner image or the hashed files change.
+        id: apt_cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/apt-archives
+          key: ${{ runner.os }}-apt-tauri-${{ steps.image.outputs.key }}-${{ hashFiles('.github/workflows/flagship.yml', '.github/scripts/apt_archive_cache.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-apt-tauri-${{ steps.image.outputs.key }}-
+            ${{ runner.os }}-apt-tauri-
+      - name: Point apt at the cache and verify its contents against the index
+        run: .github/scripts/apt_archive_cache.sh
       - name: Install Tauri Linux prerequisites
+        timeout-minutes: 15
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -312,7 +452,20 @@ jobs:
             libssl-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev
+      - name: Hand the apt archive directory to the runner user
+        if: always() && steps.apt_cache.outputs.cache-primary-key != '' && steps.apt_cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        run: sudo chown -R "$(id -u):$(id -g)" "$HOME/.cache/apt-archives"
+      - name: Save apt package cache
+        # After a failed install the key is run-specific, so the next attempt restores it by prefix
+        # and downloads only what is still missing; the verify step above re-checks every file anyway.
+        if: always() && steps.apt_cache.outputs.cache-primary-key != '' && steps.apt_cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/apt-archives
+          key: ${{ steps.apt_cache.outputs.cache-primary-key }}${{ job.status != 'success' && format('-partial-{0}-{1}', github.run_id, github.run_attempt) || '' }}
       - name: Tauri native command core
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell/src-tauri
         run: cargo test
       - name: Mobile core native migration matrix
@@ -328,9 +481,11 @@ jobs:
         working-directory: clients/treehouse-tauri-shell/src-tauri
         run: cargo test --locked --features treehouse-dev-trace
       - name: TS Township witness fixture preflight
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
         run: npm run witness:preflight:contract
       - name: Tauri development trace contract
+        if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell/src-tauri
         run: cargo test --features township-dev-trace --test dev_trace_commands
       - name: TS carrier Township check
@@ -360,6 +515,8 @@ jobs:
 
   packaged_macos:
     name: Packaged macOS convergence
+    needs: changes
+    if: needs.changes.outputs.township == 'true'
     runs-on: macos-15-intel
     timeout-minutes: 90
 
@@ -473,6 +630,60 @@ jobs:
         working-directory: clients/township-tauri-shell
         run: npm run tauri:feed:smoke
 
+  treehouse_packaged_macos:
+    name: Packaged macOS Treehouse preview
+    needs: changes
+    if: needs.changes.outputs.treehouse == 'true'
+    runs-on: macos-15-intel
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up BEAM
+        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
+        with:
+          otp-version: "28.1"
+          elixir-version: "1.19.5"
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            clients/lattice-client/package-lock.json
+            clients/lattice-mobile-core/package-lock.json
+            clients/township-tauri-shell/package-lock.json
+            clients/treehouse-tauri-shell/package-lock.json
+
+      - name: Cache Cargo dependencies and build
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            clients/township-tauri-shell/src-tauri/target
+            clients/treehouse-tauri-shell/src-tauri/target
+          key: ${{ runner.os }}-${{ runner.arch }}-township-tauri-${{ hashFiles('clients/treehouse-tauri-shell/src-tauri/Cargo.lock', 'clients/treehouse-tauri-shell/src-tauri/src/**/*.rs', 'clients/treehouse-tauri-shell/src-tauri/tests/**/*.rs', 'clients/township-tauri-shell/src-tauri/Cargo.lock', 'clients/township-tauri-shell/src-tauri/src/**/*.rs') }}
+          restore-keys: ${{ runner.os }}-${{ runner.arch }}-township-tauri-
+
+      - name: Install Elixir dependencies
+        run: env MIX_ENV=test mix deps.get
+
+      - name: Compile BEAM support
+        run: env MIX_ENV=test mix compile
+
+      - name: Install client and shell dependencies
+        run: |
+          npm --prefix clients/lattice-client ci
+          npm --prefix clients/lattice-client run build
+          npm --prefix clients/treehouse-tauri-shell ci
+
       - name: Build ordinary offline Treehouse app
         working-directory: clients/treehouse-tauri-shell
         run: npm run tauri -- build
@@ -507,6 +718,8 @@ jobs:
     # hand-written manifest. A failure here fails the workflow run, and the only conditional step is the
     # evidence upload. It is deliberately not in android_pilot.needs.
     name: Packaged macOS Treehouse enrollment (dev-trace variant)
+    needs: changes
+    if: needs.changes.outputs.treehouse == 'true'
     runs-on: macos-15-intel
     timeout-minutes: 90
     permissions:
@@ -586,6 +799,8 @@ jobs:
 
   carrier_release:
     name: Packaged carrier restart durability
+    needs: changes
+    if: needs.changes.outputs.core == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -612,6 +827,8 @@ jobs:
 
   treehouse_android_preview:
     name: Treehouse Android compile and binding bytes
+    needs: changes
+    if: needs.changes.outputs.treehouse == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -703,6 +920,8 @@ jobs:
 
   android_pilot_contract:
     name: Android pilot security contract
+    needs: changes
+    if: needs.changes.outputs.township == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -732,7 +951,8 @@ jobs:
     # Secret-free verification runs on every event. Its throwaway certificate
     # is never called pilot and its APK is never uploaded for distribution.
     name: Android signing-path verification
-    needs: android_pilot_contract
+    needs: [android_pilot_contract, changes]
+    if: needs.changes.outputs.township == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
@@ -869,12 +1089,13 @@ jobs:
     # main push or an explicit main-branch dispatch can enter the protected
     # environment and read pilot signing secrets.
     name: Android pilot distribution worker
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.changes.outputs.township == 'true' && needs.unit.result == 'success' && needs.android_pilot_verify.result == 'success' && needs.packaged_macos.result == 'success' && (needs.verify.result == 'success' || needs.verify.result == 'skipped') }}
     needs:
       - verify
       - unit
       - packaged_macos
       - android_pilot_verify
+      - changes
     runs-on: ubuntu-latest
     timeout-minutes: 90
     environment: android-pilot
@@ -1093,3 +1314,25 @@ jobs:
             echo "Android pilot distribution did not produce an artifact: result=$DISTRIBUTION_RESULT distributed=${DISTRIBUTED:-false}" >&2
             exit 1
           fi
+
+  required:
+    name: Required checks
+    if: always()
+    needs: [changes, verify, unit, packaged_macos, treehouse_packaged_macos, treehouse_packaged_macos_enrollment, carrier_release, treehouse_android_preview, android_pilot_contract, android_pilot_verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    steps:
+      - name: Fail on any failed or cancelled job
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          # Parse each direct dependency's .result only, so an output that happens to be named
+          # "result" cannot trip the fan-in. skipped passes: the classifier found that product untouched.
+          if echo "$RESULTS" | jq -e 'to_entries | map(.value.result) | any(. == "failure" or . == "cancelled")' > /dev/null; then
+            echo "a required job failed or was cancelled:" >&2
+            echo "$RESULTS" | jq -r 'to_entries[] | "\(.key)=\(.value.result)"' >&2
+            exit 1
+          fi
+          echo "all required jobs succeeded or were skipped"

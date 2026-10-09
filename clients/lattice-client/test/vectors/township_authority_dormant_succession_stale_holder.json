@@ -1,0 +1,288 @@
+{
+  "expectAtFrontier": [],
+  "expectAtFullFrontier": {
+    "authorityQuarantine": [
+      [
+        "ZJZ4A13SFu_bnAUHiffK4gFjIGYyaxrlmvLzsGJK7vY",
+        "double_transfer"
+      ]
+    ],
+    "quarantine": [
+      "ZJZ4A13SFu_bnAUHiffK4gFjIGYyaxrlmvLzsGJK7vY"
+    ],
+    "state": {
+      "clerk": "neighbor",
+      "clerk_locked": false,
+      "members": [],
+      "posts": [],
+      "summary": "",
+      "title": ""
+    },
+    "winners": {
+      "clerk": "2CutTOxwaRHYzPBWFMRSeHapvfx8ytRUMRQP2cXxGDs",
+      "clerk_locked": null,
+      "summary": null,
+      "title": null
+    }
+  },
+  "generatedBy": "Lattice.Sim",
+  "ops": [
+    {
+      "author": "clerk",
+      "command": "genesis clerk",
+      "deps": [],
+      "field": "clerk",
+      "hash": "tXSZTqlEisYA6wNz6VRNY18Lv4jSi-wGsSFnxIk3uz8",
+      "id": "tXSZTqlEisYA6wNz6VRNY18Lv4jSi-wGsSFnxIk3uz8",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "clerk"
+    },
+    {
+      "author": "clerk",
+      "command": "transfer clerk",
+      "deps": [
+        "tXSZTqlEisYA6wNz6VRNY18Lv4jSi-wGsSFnxIk3uz8"
+      ],
+      "field": "clerk",
+      "hash": "2CutTOxwaRHYzPBWFMRSeHapvfx8ytRUMRQP2cXxGDs",
+      "id": "2CutTOxwaRHYzPBWFMRSeHapvfx8ytRUMRQP2cXxGDs",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "neighbor"
+    },
+    {
+      "author": "resident",
+      "command": "succeed clerk",
+      "deps": [
+        "tXSZTqlEisYA6wNz6VRNY18Lv4jSi-wGsSFnxIk3uz8"
+      ],
+      "field": "clerk",
+      "hash": "ZJZ4A13SFu_bnAUHiffK4gFjIGYyaxrlmvLzsGJK7vY",
+      "id": "ZJZ4A13SFu_bnAUHiffK4gFjIGYyaxrlmvLzsGJK7vY",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "resident"
+    }
+  ],
+  "oracleCarrierOps": [
+    {
+      "author": "+fc6FF6klLvaFUyXLb0OsBvWprukMbhNAaDPwdnFSJg=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "+fc6FF6klLvaFUyXLb0OsBvWprukMbhNAaDPwdnFSJg=",
+              "id": "Xqd2jY9uqAi0C8xk1JioGDL7pcGWRZGbgjp7R2OtHGQ",
+              "issuer": "+fc6FF6klLvaFUyXLb0OsBvWprukMbhNAaDPwdnFSJg=",
+              "live": true,
+              "ops": [
+                "admit",
+                "close_matter",
+                "link_election",
+                "post",
+                "remove_member",
+                "reopen_matter",
+                "set_summary",
+                "set_title"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:authority-dormant-succession-stale-holder#root:whnpglj7ZOHzRg3Z4dSyPxf59eWbNFrCUjK9ZXKRY2A",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "sI3OLwvFl36NohMaU3JDUoQbfJTXpMWLBZPSYaDldOVP9ROcDlC16UF4LyIn+m39GsfY5o5aT7V87qNdFuRBDA=="
+            }
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "clerk"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "successor"
+                      ],
+                      [
+                        "bin",
+                        "LT376IQ16nrT01VVnCqnDr++BVarMksI7cKlDGiivks="
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "dormant_ticks"
+                      ],
+                      [
+                        "int",
+                        3
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [],
+      "id": "tXSZTqlEisYA6wNz6VRNY18Lv4jSi-wGsSFnxIk3uz8",
+      "kind": "authority",
+      "replica": "replica:matter:authority-dormant-succession-stale-holder#root:whnpglj7ZOHzRg3Z4dSyPxf59eWbNFrCUjK9ZXKRY2A",
+      "sig": "li/ktGj5wPCzzZ3bLbC76SxJE1AR6vJyyxxLbt8tgzw8OlWAhT0cnw5EwAPcpwNH+fbnrD62YmtCuzgheoJMDg==",
+      "v": 1
+    },
+    {
+      "author": "+fc6FF6klLvaFUyXLb0OsBvWprukMbhNAaDPwdnFSJg=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "transfer"
+          ],
+          [
+            "atom",
+            "clerk"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "HRE2Sg5Ic3a7FCC2gNUGfw9Vxo/vAYooZQ6KZhUY35U=",
+              "id": "nNDFOuGZiUBzsvUPJmkq618Pfi3HUh0hUD99kL8ZrH4",
+              "issuer": "+fc6FF6klLvaFUyXLb0OsBvWprukMbhNAaDPwdnFSJg=",
+              "live": false,
+              "ops": [
+                "close_matter",
+                "reopen_matter"
+              ],
+              "parent_id": "Xqd2jY9uqAi0C8xk1JioGDL7pcGWRZGbgjp7R2OtHGQ",
+              "replica": "replica:matter:authority-dormant-succession-stale-holder#root:whnpglj7ZOHzRg3Z4dSyPxf59eWbNFrCUjK9ZXKRY2A",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "sqAWcA/UhhsC/enTP4ZR5uTFqo7ZGzNg8qImUgxVRJKQZbEbBsHOTWl2zDaGdQHwvItA9OMzlCGXPxGx4xklDg=="
+            }
+          ],
+          [
+            "int",
+            0
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "tXSZTqlEisYA6wNz6VRNY18Lv4jSi-wGsSFnxIk3uz8"
+      ],
+      "id": "2CutTOxwaRHYzPBWFMRSeHapvfx8ytRUMRQP2cXxGDs",
+      "kind": "authority",
+      "replica": "replica:matter:authority-dormant-succession-stale-holder#root:whnpglj7ZOHzRg3Z4dSyPxf59eWbNFrCUjK9ZXKRY2A",
+      "sig": "eWg5zuydWyS0aV6QfLLRBYdAeEOugd3rrdHBSGZwt3NIE+4ZkS4N3FI31/DzuOjHCWb0+rBnmLIeQ5womGU4BQ==",
+      "v": 1
+    },
+    {
+      "author": "LT376IQ16nrT01VVnCqnDr++BVarMksI7cKlDGiivks=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "succeed"
+          ],
+          [
+            "atom",
+            "clerk"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "LT376IQ16nrT01VVnCqnDr++BVarMksI7cKlDGiivks=",
+              "id": "5NtrWgJc2b6j1d0_LrQ2wH8PiYe3AKhmpEy9l0W2QF8",
+              "issuer": "LT376IQ16nrT01VVnCqnDr++BVarMksI7cKlDGiivks=",
+              "live": false,
+              "ops": [
+                "close_matter",
+                "reopen_matter"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:authority-dormant-succession-stale-holder#root:whnpglj7ZOHzRg3Z4dSyPxf59eWbNFrCUjK9ZXKRY2A",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "RMjxIpKlQg+WpTwArnXYXPLXq4P2gSbqyzE4PGTKCthPptSb/4meEQInAWz6p1jjKyRuMoXgtodMERgdOUnmAw=="
+            }
+          ],
+          [
+            "int",
+            3
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "tXSZTqlEisYA6wNz6VRNY18Lv4jSi-wGsSFnxIk3uz8"
+      ],
+      "id": "ZJZ4A13SFu_bnAUHiffK4gFjIGYyaxrlmvLzsGJK7vY",
+      "kind": "authority",
+      "replica": "replica:matter:authority-dormant-succession-stale-holder#root:whnpglj7ZOHzRg3Z4dSyPxf59eWbNFrCUjK9ZXKRY2A",
+      "sig": "0u1Min/sUCgKTjSC+BtHaIM5XX+eOV6gMGHgEW1L2xSILapTFhfEd3fch+oAm9vkf86vxG+sJ7BtulaCfo9VDQ==",
+      "v": 1
+    }
+  ],
+  "perspectives": [],
+  "realmByPubkey": {
+    "+fc6FF6klLvaFUyXLb0OsBvWprukMbhNAaDPwdnFSJg=": "clerk",
+    "HRE2Sg5Ic3a7FCC2gNUGfw9Vxo/vAYooZQ6KZhUY35U=": "neighbor",
+    "LT376IQ16nrT01VVnCqnDr++BVarMksI7cKlDGiivks=": "resident"
+  },
+  "replica": "replica:matter:authority-dormant-succession-stale-holder#root:whnpglj7ZOHzRg3Z4dSyPxf59eWbNFrCUjK9ZXKRY2A",
+  "scenario": "township_authority_dormant_succession_stale_holder",
+  "scenarioKind": "adversarial",
+  "schema": {
+    "fields": {
+      "clerk": {
+        "authority": "clerk"
+      },
+      "clerk_locked": {
+        "default": false,
+        "gatedBy": "clerk",
+        "merge": "lww"
+      },
+      "members": {
+        "merge": "or_set"
+      },
+      "posts": {
+        "merge": "causal_list"
+      },
+      "summary": {
+        "default": "",
+        "merge": "lww"
+      },
+      "title": {
+        "default": "",
+        "merge": "lww"
+      }
+    },
+    "name": "Township.Matter"
+  }
+}

@@ -2,6 +2,16 @@
 // fail-closed external pilot keystore signing, monotonic version codes,
 // pilot hardening config, and the dev-only probe lane staying out of the
 // pilot artifact path.
+//
+// Re-pinned for plan 183 on 2026-10-08. Plan 183 scopes flagship.yml jobs by product through a
+// `changes` classifier, so `verify` can now be skipped. Three pins moved, each still exact:
+// - DISTRIBUTION_JOB_IF is the full android_pilot expression. It starts with !cancelled() so a
+//   skipped `verify` no longer skips distribution through implicit success(), and it requires the
+//   explicit dependency results instead (verify may be success or skipped, the rest must succeed).
+// - android_pilot.needs gains `changes`, which its township gate reads.
+// - android_pilot_verify is no longer unconditional: it carries exactly the township gate and needs
+//   exactly [android_pilot_contract, changes]. It stays secret-free and runs on every pull request
+//   that touches Township.
 
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
@@ -52,7 +62,7 @@ const { evaluateSignature, lineagePinFailures, normalizeCertPin } = await import
   "../scripts/android-pilot/verify_apk_signature.mjs"
 );
 
-const DISTRIBUTION_JOB_IF = "github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')";
+const DISTRIBUTION_JOB_IF = "!cancelled() && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.changes.outputs.township == 'true' && needs.unit.result == 'success' && needs.android_pilot_verify.result == 'success' && needs.packaged_macos.result == 'success' && (needs.verify.result == 'success' || needs.verify.result == 'skipped')";
 
 function workflowJob(name) {
   const job = workflowDocument.jobs?.[name];
@@ -263,7 +273,7 @@ test("direct pilot-secret references exist only inside the protected distributio
   }
   assert.deepEqual(secretJobs, ["android_pilot"]);
   assert.equal(job.environment, "android-pilot");
-  assert.deepEqual(job.needs, ["verify", "unit", "packaged_macos", "android_pilot_verify"]);
+  assert.deepEqual(job.needs, ["verify", "unit", "packaged_macos", "android_pilot_verify", "changes"]);
   assert.deepEqual(job.permissions, { contents: "read" });
   const secretSteps = workflowSteps(job).filter((step) =>
     /secrets\.TOWNSHIP_PILOT_/.test(JSON.stringify(step)),
@@ -427,8 +437,8 @@ test("the pilot contract installs dependencies without registry audit before exe
 test("secret-free Android verification remains runnable on pull requests", () => {
   const job = workflowJob("android_pilot_verify");
   assert.equal(job.environment, undefined);
-  assert.equal(job.if, undefined);
-  assert.equal(job.needs, "android_pilot_contract");
+  assert.equal(workflowIfExpression(job), "needs.changes.outputs.township == 'true'");
+  assert.deepEqual(job.needs, ["android_pilot_contract", "changes"]);
   assert.deepEqual(job.permissions, { contents: "read" });
   assert.doesNotMatch(JSON.stringify(job), /secrets\.TOWNSHIP_PILOT_/);
   const evidenceUpload = workflowSteps(job).find(
@@ -530,13 +540,17 @@ test("runbook requires server-side environment protection as the pilot-secret bo
   assert.doesNotMatch(custodyRunbook, /repo secrets are the fallback/i);
   assert.match(custodyRunbook, /pilot-lineage keystore is never committed, never generated on CI/i);
   assert.match(custodyRunbook, /ephemeral-ci-throwaway/);
-  for (const pinnedPath of ["docs/android_pilot_*", "docs/android_pilot_*/**", "plans/15[89]-*"]) {
-    for (const event of ["push", "pull_request"]) {
-      const paths = workflowDocument.on[event].paths;
-      assert.ok(paths.indexOf(pinnedPath) > paths.indexOf("!**/*.md"), `${pinnedPath} must be re-included last for ${event}`);
-      assert.ok(!paths.includes(`!${pinnedPath}`));
-    }
+  // The workflow is never path-filtered: a filtered workflow does not start on a docs-only change,
+  // so the custody runbook could change unchecked and a required check would never report. The
+  // classifier routes the pilot docs to the Township jobs instead.
+  for (const event of ["push", "pull_request"]) {
+    const trigger = workflowDocument.on[event] ?? {};
+    assert.equal(trigger.paths, undefined, `${event} must not filter paths`);
+    assert.equal(trigger["paths-ignore"], undefined, `${event} must not ignore paths`);
   }
+  const classify = workflowDocument.jobs.changes.steps.find((step) => step.id === "classify");
+  assert.ok(classify, "the changes job must classify paths");
+  assert.match(classify.run, /^\s*docs\/android_pilot_\*\) township=true ;;$/mu, "pilot docs must route to the Township jobs");
 });
 
 test("the release build script is the pilot lane", () => {
