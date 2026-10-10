@@ -6,15 +6,12 @@ and delivered without a numbered plan file).
 
 ## Status
 
-IN PROGRESS (planned 2026-10-07 at origin/main 981d4225c, revised after review the same day). Slices 0
-to 5c2 are committed locally on branch `claude/r13-lite-enrollment-sync-10a2f5` (tip `f7b58c791` before the
-Slice 6 docs commit); see TDD evidence. This is neither LOCAL VERIFIED nor DONE. Still open: the
-independent adversarial review of the exact diff, the hosted `treehouse_packaged_macos_enrollment` run at
-the exact tip, the merge-result run with `packaged_macos` green, and a hosted proof of the G-AX paste
-transfer. The local packaged run was reported passing by its ticket but was not reproduced at the
-Slice 6 commit (the paste preflight failed on four attempts; see TDD evidence). Use the status vocabulary of the unified roadmap: LOCAL VERIFIED only after the independent
-review and the hosted exact-tip and merge-result runs close; DONE only on the full exit below with the
-hard-failing CI job green at the exact tip and at the merge result.
+DONE (2026-10-10), at the tier Packaged macOS CI. The hosted `treehouse_packaged_macos_enrollment` job
+and `packaged_macos` were green at the exact tip in run 37718664290, and on main in run 37977222181; the
+evidence, review dispositions and follow-up rows 195 to 202 are in the `plans/README.md` row 181 and the
+closeout PR #108. Round 6 working policy rules 1 and 2 superseded this
+plan's older exit items for a local packaged run and a separate merge-result run; the conflict is noted
+here and the Round 6 rules won. R13 itself stays PLANNED and every non-claim below stays.
 
 Non-claim line: this plan builds no catalog, replacement, provisioning, device, custody, production,
 pilot, or Phase G capability. See Non-goals and Completion claim.
@@ -1179,6 +1176,9 @@ dev-trace seam absent from the ordinary binary (string scan and classifier); enr
 the ordinary bundle; no claim language beyond the permitted sentence; the post-hoc Sim oracle derives
 deps from Sim only and its negative controls fail; the harness never reads app storage to drive the UI.
 
+Done 2026-10-10 (three Claude lenses plus a Codex second review); dispositions are in PR #108 and rows
+195 to 202 of `plans/README.md` (rule 4).
+
 ## Verification
 
 Local, macOS, from the worktree root:
@@ -1280,9 +1280,9 @@ background delivery, no E2EE.
 1. Should the ordinary (and Android) Treehouse builds expose enrollment and relay UI? The plan's default
    is no: build-flag gated, test variant only, so the R12 local-only exit, CSP and `Local preview`
    label stay honest. Exposing it later needs a wss CSP decision and an honest relabel.
-2. Is the new `treehouse_packaged_macos_enrollment` job to be added as a required status check in branch
-   protection? The plan only guarantees that it fails the workflow run; it does not touch the pinned
-   `android_pilot.needs` list.
+2. Answered (2026-10-10): `treehouse_packaged_macos_enrollment` is already in the `required` fan-in of
+   `flagship.yml` from plan 183, so the workflow fails without it; making `Required checks` a required
+   status check in branch protection is the operator's step.
 
 ## Appendix: Review disposition
 
