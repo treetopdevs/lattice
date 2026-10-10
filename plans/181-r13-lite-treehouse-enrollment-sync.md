@@ -9,7 +9,7 @@ and delivered without a numbered plan file).
 DONE (2026-10-10), at the tier Packaged macOS CI. The hosted `treehouse_packaged_macos_enrollment` job
 and `packaged_macos` were green at the exact tip in run 37718664290, and on main in run 37977222181; the
 evidence, review dispositions and follow-up rows 195 to 202 are in the `plans/README.md` row 181 and the
-closeout PR (branch `claude/181-r13-lite-closeout`). Round 6 working policy rules 1 and 2 superseded this
+closeout PR #108. Round 6 working policy rules 1 and 2 superseded this
 plan's older exit items for a local packaged run and a separate merge-result run; the conflict is noted
 here and the Round 6 rules won. R13 itself stays PLANNED and every non-claim below stays.
 
