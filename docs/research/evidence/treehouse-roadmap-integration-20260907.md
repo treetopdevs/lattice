@@ -257,7 +257,9 @@ merge-result run is not separately required when the merge commit has the tip's 
 - Main `c8867c50404e96678668d3fa5b82d966f5058e32`: run 37977222181, the first complete green main run, with
   the hosted job logging "PASS G-AX: 20 byte-exact 8 KiB round trips by paste".
 - Independent review (three Claude lenses and a Codex second review): 27 findings, 0 fixed, 16 filed into
-  plan index rows 195 to 202, 11 rejected. Open PR threads 46 and 48 went to rows and 47 was rejected.
+  plan index rows 195 to 202, 11 rejected. All 48 PR #104 threads are answered and resolved: 47 was rejected, and 46 and 48 were answered as
+  operator design questions (rows 196 and 199) because each is at least the fifth round of its class,
+  which rule 3 routes to the operator instead of another repair.
 - Not reproduced locally: the paste preflight stayed flaky on an interactively used machine, cause
   undetermined, so the hosted job is the evidence and the local packaged runs above stay unreproduced.
 

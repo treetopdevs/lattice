@@ -237,11 +237,12 @@ defmodule Lattice.Treehouse.R13LiteContractTest do
     assert status in @status_vocabulary
 
     if status in ["LOCAL VERIFIED", "DONE"] do
+      # Round 6 rule 2: the exact-tip run is the gate; the merge SHA lets a reader check the tree match.
       assert length(Regex.scan(~r/\b[0-9a-f]{40}\b/, evidence)) >= 2,
              "a closed R13-lite row needs the exact tip and the merge SHA"
 
-      assert length(Regex.scan(~r/\brun \d{8,}\b/, evidence)) >= 2,
-             "a closed R13-lite row needs the exact-tip run and the merge-result run"
+      assert Regex.match?(~r/\brun \d{8,}\b/, evidence),
+             "a closed R13-lite row needs the exact-tip run"
     end
 
     # An open row must still name its remaining gate; a closed row is free to drop that wording.

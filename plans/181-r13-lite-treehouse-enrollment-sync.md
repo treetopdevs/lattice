@@ -1176,29 +1176,8 @@ dev-trace seam absent from the ordinary binary (string scan and classifier); enr
 the ordinary bundle; no claim language beyond the permitted sentence; the post-hoc Sim oracle derives
 deps from Sim only and its negative controls fail; the harness never reads app storage to drive the UI.
 
-Disposition (2026-10-10; three Claude lenses plus a Codex second review): 27 findings, 0 fixed, 16 filed into
-eight rows, 11 rejected. Rows are in `plans/README.md`.
-
-- Fixed: none.
-- Row 195: acks of own frames the relay reports quarantined (ack-on-nonserved-bucket), with the FakeRelay mismatch.
-- Row 196: design question, one deadline and abort at the carrier-client boundary (unbounded-await, Thread 46).
-- Row 197: a relay error reply aborts the whole route sync in `submitCarrierFrames`.
-- Row 198: design question, one route and realm alphabet for TS, Rust and the CSP (validator-parity).
-- Row 199: design question, one capability snapshot for the shell UI (ui-capability-gating, Thread 48).
-- Row 200: four missing refusal messages in the enrollment panel.
-- Row 201: the ordinary-versus-test variant is decided only by build env, with no packaged assertion.
-- Row 202: packaged harness hardening (draft-textarea waits, store-only founder match, sqlite3 busy timeout).
-- Thread 47 and L1-5: rejected, reachable only by a direct `treehouse_commit` call whose caller can already sign.
-- L1-6: rejected, a deliberate tested design with a labelled cost and a capped 5 s redial.
-- L3-1: not a defect, a wording constraint this closeout follows (exact-tip, partial and first-complete runs named as such).
-- L3-2: not a defect, the closeout edits the status pins in the same commit and adds none.
-- L3-3: refuted, ids, frames and stores are compared byte for byte and the reason map is checked against Sim.
-- L3-4: refuted, the unmutated baseline is not rescued and all four controls fail by real comparison.
-- L3-9: refuted, `result.json` holds only fixed non-secret fields.
-- L3-10: rejected, a log-wording nit disclosed at the point of use and in this plan.
-- L3-11: rejected, hardening of a source-text pin that rule 6 says not to extend.
-- C1: refuted, the claim is Sim replay equals the relay logs and both stores, which the oracle checks.
-- C3: refuted, direct-IPC only, and the proposed rule would break a member's second offer.
+Done 2026-10-10 (three Claude lenses plus a Codex second review); dispositions are in PR #108 and rows
+195 to 202 of `plans/README.md` (rule 4).
 
 ## Verification
 
