@@ -241,7 +241,7 @@ defmodule Lattice.Treehouse.R13LiteContractTest do
       assert length(Regex.scan(~r/\b[0-9a-f]{40}\b/, evidence)) >= 2,
              "a closed R13-lite row needs the exact tip and the merge SHA"
 
-      assert Regex.match?(~r/\brun \d{8,}\b/, evidence),
+      assert Regex.match?(~r/\bexact-tip run \d{8,}\b/i, evidence),
              "a closed R13-lite row needs the exact-tip run"
     end
 
