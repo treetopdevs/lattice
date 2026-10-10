@@ -223,7 +223,7 @@ evidence section.
 Not reproduced at Slice 6: At the Slice 6 docs commit the packaged run could not be reproduced: four attempts on this machine (two full runs, two preflight-only runs) each failed the G-AX paste preflight, at rounds 17, 16, 4 and 4 of 20, with the readback the right length but differing at index 0 (the previous text was still in the textarea or another text arrived). The macOS console session was not locked, and the frontmost application afterwards was a browser, so the machine was in interactive use. The cause is undetermined; pasteboard or focus contention is a candidate, and nothing was changed in the helper or the harness. The earlier four passing runs are therefore reported but not reproduced, and the paste transfer is not shown reliable even locally. Until a run passes, the local packaged evidence is the ticket
 report only, and the packaged claim is unverified here.
 
-### Remaining gates
+### Remaining gates at the Slice 6 docs commit (closed in the closeout below)
 
 - Independent adversarial review of the exact diff against the Plan 181 checklist, and its dispositions.
 - Hosted `treehouse_packaged_macos_enrollment` job green at the exact tip, and again at the merge result
@@ -237,12 +237,29 @@ report only, and the packaged claim is unverified here.
 - Base, PR and merge SHAs, the exact-tip and merge-result run ids, and the tree match, recorded in the
   Execution evidence table when they exist.
 
-### Permitted statement (not yet earned)
+### Permitted statement (earned)
 
-The statement below may be used only after every remaining gate closes. It is pinned whole by
+The remaining gates closed (see the closeout below), so the statement below may now be used. It is pinned whole by
 `apps/lattice_core/test/treehouse/r13_lite_contract_test.exs`, so its qualifications cannot be quoted away:
 
 > Two instances of one dev-trace test-variant macOS Treehouse bundle, each with a directory-isolated store and a seeded in-memory test key (not Keychain custody), complete invite, join, post, converge, restart, converge against one CI-launched pilot_node.exs fixture relay (loopback, macOS directory-sync approximation) whose Space and Thread routes were configured by hand in a manifest; only semantic membership and Thread grants are enrolled in the log, and transport admission of both instances was pre-seeded in that manifest; the final op ids, frame bytes, state and verdicts equal Lattice.Sim. The relay operator and anyone with its host, backups or admitted transport peers can read the plaintext log, and the host can withhold availability; the relay cannot decide semantic authority or erase device-held history. The routes are not catalog-signed, provisioned, staged, sealed, admitted-service-bound or replaceable. Desktop macOS CI only.
+
+### Closeout (2026-10-10)
+
+Status: DONE at the tier Packaged macOS CI. Round 6 rules 1 and 2 (`plans/README.md`, Working policy)
+supersede the older exit text above, so one hosted packaged job at the exact tip is the gate and a
+merge-result run is not separately required when the merge commit has the tip's tree.
+
+- Exact tip `81a71236058c79e5de630c9c95ee17c4d6905c2c` (PR #104 head, base `981d4225c`): run 37718664290, the
+  packaged enrollment job and `packaged_macos` green.
+- Merge commit `c57c826ad0be2cc568f1297fb65742a5d6adc3bb`, same tree as the tip: run 37719176792, both
+  green; its Unit job was cancelled at Sobelow, so this run is partial evidence only.
+- Main `c8867c50404e96678668d3fa5b82d966f5058e32`: run 37977222181, the first complete green main run, with
+  the hosted job logging "PASS G-AX: 20 byte-exact 8 KiB round trips by paste".
+- Independent review (three Claude lenses and a Codex second review): 27 findings, 0 fixed, 16 filed into
+  plan index rows 195 to 202, 11 rejected. Open PR threads 46 and 48 went to rows and 47 was rejected.
+- Not reproduced locally: the paste preflight stayed flaky on an interactively used machine, cause
+  undetermined, so the hosted job is the evidence and the local packaged runs above stay unreproduced.
 
 ### Required non-claims
 

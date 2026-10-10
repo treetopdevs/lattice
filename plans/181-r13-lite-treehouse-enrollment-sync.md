@@ -6,15 +6,7 @@ and delivered without a numbered plan file).
 
 ## Status
 
-IN PROGRESS (planned 2026-10-07 at origin/main 981d4225c, revised after review the same day). Slices 0
-to 5c2 are committed locally on branch `claude/r13-lite-enrollment-sync-10a2f5` (tip `f7b58c791` before the
-Slice 6 docs commit); see TDD evidence. This is neither LOCAL VERIFIED nor DONE. Still open: the
-independent adversarial review of the exact diff, the hosted `treehouse_packaged_macos_enrollment` run at
-the exact tip, the merge-result run with `packaged_macos` green, and a hosted proof of the G-AX paste
-transfer. The local packaged run was reported passing by its ticket but was not reproduced at the
-Slice 6 commit (the paste preflight failed on four attempts; see TDD evidence). Use the status vocabulary of the unified roadmap: LOCAL VERIFIED only after the independent
-review and the hosted exact-tip and merge-result runs close; DONE only on the full exit below with the
-hard-failing CI job green at the exact tip and at the merge result.
+DONE (2026-10-10), at the tier Packaged macOS CI. The hosted `treehouse_packaged_macos_enrollment` job and `packaged_macos` were green at the exact tip in run 37718664290, and on main in run 37977222181; the evidence, review dispositions and follow-up rows 195 to 202 are in the `plans/README.md` row 181 and the closeout PR (branch `claude/181-r13-lite-closeout`). Round 6 working policy rules 1 and 2 superseded this plan's older exit items for a local packaged run and a separate merge-result run; the conflict is noted here and the Round 6 rules won. R13 itself stays PLANNED and every non-claim below stays.
 
 Non-claim line: this plan builds no catalog, replacement, provisioning, device, custody, production,
 pilot, or Phase G capability. See Non-goals and Completion claim.
@@ -1179,6 +1171,30 @@ dev-trace seam absent from the ordinary binary (string scan and classifier); enr
 the ordinary bundle; no claim language beyond the permitted sentence; the post-hoc Sim oracle derives
 deps from Sim only and its negative controls fail; the harness never reads app storage to drive the UI.
 
+Disposition (2026-10-10; three Claude lenses plus a Codex second review): 27 findings, 0 fixed, 16 filed into
+eight rows, 11 rejected. Rows are in `plans/README.md`.
+
+- Fixed: none.
+- Row 195: acks of own frames the relay reports quarantined (ack-on-nonserved-bucket), with the FakeRelay mismatch.
+- Row 196: design question, one deadline and abort at the carrier-client boundary (unbounded-await, Thread 46).
+- Row 197: a relay error reply aborts the whole route sync in `submitCarrierFrames`.
+- Row 198: design question, one route and realm alphabet for TS, Rust and the CSP (validator-parity).
+- Row 199: design question, one capability snapshot for the shell UI (ui-capability-gating, Thread 48).
+- Row 200: four missing refusal messages in the enrollment panel.
+- Row 201: the ordinary-versus-test variant is decided only by build env, with no packaged assertion.
+- Row 202: packaged harness hardening (draft-textarea waits, store-only founder match, sqlite3 busy timeout).
+- Thread 47 and L1-5: rejected, reachable only by a direct `treehouse_commit` call whose caller can already sign.
+- L1-6: rejected, a deliberate tested design with a labelled cost and a capped 5 s redial.
+- L3-1: not a defect, a wording constraint this closeout follows (exact-tip, partial and first-complete runs named as such).
+- L3-2: not a defect, the closeout edits the status pins in the same commit and adds none.
+- L3-3: refuted, ids, frames and stores are compared byte for byte and the reason map is checked against Sim.
+- L3-4: refuted, the unmutated baseline is not rescued and all four controls fail by real comparison.
+- L3-9: refuted, `result.json` holds only fixed non-secret fields.
+- L3-10: rejected, a log-wording nit disclosed at the point of use and in this plan.
+- L3-11: rejected, hardening of a source-text pin that rule 6 says not to extend.
+- C1: refuted, the claim is Sim replay equals the relay logs and both stores, which the oracle checks.
+- C3: refuted, direct-IPC only, and the proposed rule would break a member's second offer.
+
 ## Verification
 
 Local, macOS, from the worktree root:
@@ -1280,9 +1296,9 @@ background delivery, no E2EE.
 1. Should the ordinary (and Android) Treehouse builds expose enrollment and relay UI? The plan's default
    is no: build-flag gated, test variant only, so the R12 local-only exit, CSP and `Local preview`
    label stay honest. Exposing it later needs a wss CSP decision and an honest relabel.
-2. Is the new `treehouse_packaged_macos_enrollment` job to be added as a required status check in branch
-   protection? The plan only guarantees that it fails the workflow run; it does not touch the pinned
-   `android_pilot.needs` list.
+2. Answered (2026-10-10): `treehouse_packaged_macos_enrollment` is already in the `required` fan-in of
+   `flagship.yml` from plan 183, so the workflow fails without it; making `Required checks` a required
+   status check in branch protection is the operator's step.
 
 ## Appendix: Review disposition
 

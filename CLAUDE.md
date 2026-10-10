@@ -139,8 +139,8 @@ stay local-only. Its gate is two instances of that one test variant against a CI
 `Lattice.Sim`. It waives the R11 edge for that one operator hand-configured route set only, so it
 does not complete R13 and claims no catalog, relay replacement, staging, sealing, Keychain
 custody, durable acknowledgement on macOS, mobile or device result, production deployment, Phase G
-completion, or receipt-free W4. The independent review and the hosted exact-tip and merge-result
-runs remain open.
+completion, or receipt-free W4. The independent review and the hosted exact-tip and main runs closed (runs 37718664290,
+37719176792 and 37977222181); follow-up rows 195 to 202 are in the plan index.
 
 ## Constraints — the "do not implement" boundary (PD-001 §6)
 
