@@ -2123,12 +2123,15 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     )
   end
 
-  # Row 191: a `recovery` arm missing a required key is refused the same way.
+  # Row 191: a `recovery` arm whose only defect is a missing `threshold` is refused the same way.
   defp township_authority_incomplete_recovery_policy do
     hand_authored_policy_vector(
       "township_authority_incomplete_recovery_policy",
       fn resident ->
-        %{successor: resident.pub, recovery: %{mode: :witnessed, version: 1, witnesses: []}}
+        %{
+          successor: resident.pub,
+          recovery: %{mode: :witnessed, version: 1, witnesses: [resident.pub]}
+        }
       end,
       ["invalid_recovery_policy", "invalid_recovery_policy"]
     )

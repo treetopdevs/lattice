@@ -3,17 +3,17 @@
   "expectAtFullFrontier": {
     "authorityQuarantine": [
       [
-        "bP397Q2lkXIqQjnJy8G28b-dYvJ7mAH9ltvHnuusycI",
+        "48AiM1PlSnGF06VwMlDdf-tvdU4fRPgPxMSL6Qcz1gw",
         "invalid_recovery_policy"
       ],
       [
-        "tWf49rLKE5ts-N_rYY7QTHKTSwljrPFZ8PbzCV08Lrk",
+        "l2c_z19GVV48RKsHNW7BUEejAyf4L4RBGeS_3cjGYag",
         "invalid_recovery_policy"
       ]
     ],
     "quarantine": [
-      "bP397Q2lkXIqQjnJy8G28b-dYvJ7mAH9ltvHnuusycI",
-      "tWf49rLKE5ts-N_rYY7QTHKTSwljrPFZ8PbzCV08Lrk"
+      "48AiM1PlSnGF06VwMlDdf-tvdU4fRPgPxMSL6Qcz1gw",
+      "l2c_z19GVV48RKsHNW7BUEejAyf4L4RBGeS_3cjGYag"
     ],
     "state": {
       "clerk": "clerk",
@@ -24,7 +24,7 @@
       "title": ""
     },
     "winners": {
-      "clerk": "L6xU8eD4P_XFcdi1i1QglkNP7MDMAIRSR_fOTp98MYs",
+      "clerk": "G5IXVY-_kwuSthsvFXek9_aalOcZsLI-rpI7Dy1R2oY",
       "clerk_locked": null,
       "summary": null,
       "title": null
@@ -37,8 +37,8 @@
       "command": "genesis clerk",
       "deps": [],
       "field": "clerk",
-      "hash": "L6xU8eD4P_XFcdi1i1QglkNP7MDMAIRSR_fOTp98MYs",
-      "id": "L6xU8eD4P_XFcdi1i1QglkNP7MDMAIRSR_fOTp98MYs",
+      "hash": "G5IXVY-_kwuSthsvFXek9_aalOcZsLI-rpI7Dy1R2oY",
+      "id": "G5IXVY-_kwuSthsvFXek9_aalOcZsLI-rpI7Dy1R2oY",
       "kind": "authority",
       "mutation": "write",
       "value": "clerk"
@@ -47,11 +47,11 @@
       "author": "resident",
       "command": "succeed clerk",
       "deps": [
-        "L6xU8eD4P_XFcdi1i1QglkNP7MDMAIRSR_fOTp98MYs"
+        "G5IXVY-_kwuSthsvFXek9_aalOcZsLI-rpI7Dy1R2oY"
       ],
       "field": "clerk",
-      "hash": "bP397Q2lkXIqQjnJy8G28b-dYvJ7mAH9ltvHnuusycI",
-      "id": "bP397Q2lkXIqQjnJy8G28b-dYvJ7mAH9ltvHnuusycI",
+      "hash": "l2c_z19GVV48RKsHNW7BUEejAyf4L4RBGeS_3cjGYag",
+      "id": "l2c_z19GVV48RKsHNW7BUEejAyf4L4RBGeS_3cjGYag",
       "kind": "authority",
       "mutation": "write",
       "value": "resident"
@@ -60,11 +60,11 @@
       "author": "resident",
       "command": "succeed clerk",
       "deps": [
-        "bP397Q2lkXIqQjnJy8G28b-dYvJ7mAH9ltvHnuusycI"
+        "l2c_z19GVV48RKsHNW7BUEejAyf4L4RBGeS_3cjGYag"
       ],
       "field": "clerk",
-      "hash": "tWf49rLKE5ts-N_rYY7QTHKTSwljrPFZ8PbzCV08Lrk",
-      "id": "tWf49rLKE5ts-N_rYY7QTHKTSwljrPFZ8PbzCV08Lrk",
+      "hash": "48AiM1PlSnGF06VwMlDdf-tvdU4fRPgPxMSL6Qcz1gw",
+      "id": "48AiM1PlSnGF06VwMlDdf-tvdU4fRPgPxMSL6Qcz1gw",
       "kind": "authority",
       "mutation": "write",
       "value": "resident"
@@ -145,7 +145,12 @@
                             ],
                             [
                               "list",
-                              []
+                              [
+                                [
+                                  "bin",
+                                  "SeyKxORAIe/TfI2PUNnYbhZDlfJUjo24PwALBMKXM1o="
+                                ]
+                              ]
                             ]
                           ]
                         ]
@@ -172,10 +177,10 @@
         "nil"
       ],
       "deps": [],
-      "id": "L6xU8eD4P_XFcdi1i1QglkNP7MDMAIRSR_fOTp98MYs",
+      "id": "G5IXVY-_kwuSthsvFXek9_aalOcZsLI-rpI7Dy1R2oY",
       "kind": "authority",
       "replica": "replica:matter:authority_incomplete_recovery_policy",
-      "sig": "4zEOJwfRjRjoRAc0o/SEBcGwLrJ4iVcm/3QPk8tGkMOscVNBDp9P3+dDzt9VmClaLrGCastb/FOPjBp58hWUBw==",
+      "sig": "3QhrD5Tq24XtN46bPDMmz8ObabBDnZTm3AmgN33GEIpNEPfJ+ax8+JJ6jmtDcbXGeV0ExZoFIuq3tAQgsNNMDA==",
       "v": 1
     },
     {
@@ -220,12 +225,12 @@
         "nil"
       ],
       "deps": [
-        "L6xU8eD4P_XFcdi1i1QglkNP7MDMAIRSR_fOTp98MYs"
+        "G5IXVY-_kwuSthsvFXek9_aalOcZsLI-rpI7Dy1R2oY"
       ],
-      "id": "bP397Q2lkXIqQjnJy8G28b-dYvJ7mAH9ltvHnuusycI",
+      "id": "l2c_z19GVV48RKsHNW7BUEejAyf4L4RBGeS_3cjGYag",
       "kind": "authority",
       "replica": "replica:matter:authority_incomplete_recovery_policy",
-      "sig": "zwaZSmP4zcF+AtHZeu5tO4PN+siJulV5f8JcU05qVJPU2UgrPlWZB2E58MB3fmASnNyL0qUXJx+gShCx1tw/Bg==",
+      "sig": "A2NZgodMkn/CdTNjt6I6R0VIrrW4PKklO1so0mW1S42nv/2yDZ6GJPJo2h67VKdFCCMXFpH/PjzPfZikDlP6CA==",
       "v": 1
     },
     {
@@ -345,7 +350,7 @@
                           ],
                           [
                             "bin",
-                            "TDZ4VThlRDRQX1hGY2RpMWkxUWdsa05QN01ETUFJUlNSX2ZPVHA5OE1Zcw=="
+                            "RzVJWFZZLV9rd3VTdGhzdkZYZWs5X2FhbE9jWnNMSS1ycEk3RHkxUjJvWQ=="
                           ]
                         ]
                       ]
@@ -379,7 +384,7 @@
                               ],
                               [
                                 "bin",
-                                "EcykX2S9yO5P43oLjBP5GCgn/j8oRVRQPECfMke/TwiaasouylLO9czKWvhRC7QyTABbevzpd3MyIMpzKjygCQ=="
+                                "UitE5IkSNybmidUSNw8QH4xqj/u49rD5OETufMOJQYZ798gYaSxFXJBr2Mj96LTAXw5wSoulGoxZRL4RqkinDw=="
                               ]
                             ]
                           ]
@@ -404,7 +409,7 @@
                               ],
                               [
                                 "bin",
-                                "gRzHMPoTm6nWOjMC3s+kY76YIlo4lKNZcfDDoI5GRZeWkFGmkquErq6fUMjBi5DRCOdLGi1Zk9eR1oPpSIdgDQ=="
+                                "7DBlslAt9IFRjjELtD6OWcaGPsLB+ViuTXmZj4eBqA2G2dfaUyMyYFRImxQJFi8us0yXSQelrCp960b1tpSLCg=="
                               ]
                             ]
                           ]
@@ -422,12 +427,12 @@
         "nil"
       ],
       "deps": [
-        "bP397Q2lkXIqQjnJy8G28b-dYvJ7mAH9ltvHnuusycI"
+        "l2c_z19GVV48RKsHNW7BUEejAyf4L4RBGeS_3cjGYag"
       ],
-      "id": "tWf49rLKE5ts-N_rYY7QTHKTSwljrPFZ8PbzCV08Lrk",
+      "id": "48AiM1PlSnGF06VwMlDdf-tvdU4fRPgPxMSL6Qcz1gw",
       "kind": "authority",
       "replica": "replica:matter:authority_incomplete_recovery_policy",
-      "sig": "TRLC61d09zseNkSVIww2H6W+Z9qXNfL1yA3gux9Q8FU+idB5ZI+4z0iNZXRMDllgci2vBY2EA9+UZLrAnTCmCw==",
+      "sig": "QvIYfpw/jnOZb7faXDv4XlFSxQOBW2kTsLv3nki6HSjNdyWzHRmFkbL4iE974mYfJ8qY7/O/rs0oo6paFhG2DQ==",
       "v": 1
     }
   ],
