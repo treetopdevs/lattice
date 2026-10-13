@@ -951,6 +951,71 @@ jobs:
             clients/treehouse-tauri-shell/src-tauri/gen/android/app/build/reports/
             clients/treehouse-tauri-shell/src-tauri/gen/android/buildSrc/build/test-results/
 
+  treehouse_android_launch:
+    # Row 192: the compile job never starts the app, so the wry main-pipe panic that killed every
+    # launch about 11 s in went unseen. This job launches the debug APK on an API 34 emulator and
+    # fails if it panics or is gone after the settle window. x86_64, because hosted arm64 runners
+    # cannot run a hardware-accelerated emulator.
+    name: Treehouse Android launch on emulator
+    needs: changes
+    if: needs.changes.outputs.treehouse == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            clients/lattice-client/package-lock.json
+            clients/treehouse-tauri-shell/package-lock.json
+      - name: Install Android NDK and Rust target
+        run: |
+          echo "y" | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            "ndk;27.1.12297006" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+          rustup target add x86_64-linux-android
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.1.12297006" >> "$GITHUB_ENV"
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+      - name: Install client and shell dependencies
+        run: |
+          npm --prefix clients/lattice-client ci
+          npm --prefix clients/lattice-client run build
+          npm --prefix clients/treehouse-tauri-shell ci
+      - name: Build debug Treehouse APK for the emulator
+        shell: bash
+        working-directory: clients/treehouse-tauri-shell
+        env:
+          CARGO_BUILD_JOBS: "4"
+        run: npm run tauri -- android build --debug --apk --ci --target x86_64
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Launch on the API 34 emulator
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          emulator-options: -no-window -no-snapshot-save -noaudio -no-boot-anim -gpu swiftshader_indirect
+          disable-animations: true
+          script: bash clients/treehouse-tauri-shell/test/android_launch_smoke.sh clients/treehouse-tauri-shell/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk "$RUNNER_TEMP/treehouse-android-launch" 40
+      - name: Upload launch evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: treehouse-android-launch-evidence
+          if-no-files-found: warn
+          path: ${{ runner.temp }}/treehouse-android-launch/
+
   android_pilot_contract:
     name: Android pilot security contract
     needs: changes
@@ -1351,7 +1416,7 @@ jobs:
   required:
     name: Required checks
     if: always()
-    needs: [changes, verify, unit, packaged_macos, treehouse_packaged_macos, treehouse_packaged_macos_enrollment, carrier_release, treehouse_android_preview, android_pilot_contract, android_pilot_verify]
+    needs: [changes, verify, unit, packaged_macos, treehouse_packaged_macos, treehouse_packaged_macos_enrollment, carrier_release, treehouse_android_preview, treehouse_android_launch, android_pilot_contract, android_pilot_verify]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions:
