@@ -935,9 +935,20 @@ function successionRejectionReason(
   if (policy === undefined || policy.successorRealm !== op.author) {
     return "unauthorized_succession";
   }
+  // Elixir `decide_succeed/9`: a policy carrying both arms refuses every proof shape.
+  if (policy.mode === "invalid" && policy.shape === "conflicting") {
+    return "invalid_recovery_policy";
+  }
 
   const visible = ancestors(op.id, byId as Map<string, Op>);
   if (evidence.proof.mode === "legacy") {
+    if (policy.mode === "invalid" && policy.shape === "unarmed") return "invalid_succession";
+    if (policy.mode === "invalid" && policy.shape === "malformed_recovery") {
+      return "invalid_recovery_policy";
+    }
+    if (policy.mode === "witnessed" && witnessedRecoveryPolicyId(policy.recovery) === null) {
+      return "invalid_recovery_policy";
+    }
     if (policy.mode !== "legacy") return "recovery_certificate_required";
     // The claim must have seen the acquire that currently holds the timeline (Elixir's
     // dormant arm): acquires are compared, not holder keys, so a round trip or a
@@ -964,7 +975,10 @@ function successionRejectionReason(
   }
 
   if (evidence.proof.mode !== "witnessed") return "invalid_succession";
-  if (policy.mode !== "witnessed") {
+  // Elixir's witnessed clause matches any `recovery` key, so a malformed arm reaches the
+  // holder checks and then fails claim construction as `invalid_recovery_policy`.
+  const malformedRecovery = policy.mode === "invalid" && policy.shape === "malformed_recovery";
+  if (policy.mode !== "witnessed" && !malformedRecovery) {
     return "witnessed_recovery_not_configured";
   }
   if (op.replica === undefined) return "recovery_claim_mismatch";
@@ -986,6 +1000,7 @@ function successionRejectionReason(
     return "recovery_claim_mismatch";
   }
 
+  if (policy.mode !== "witnessed") return "invalid_recovery_policy";
   const policyId = witnessedRecoveryPolicyId(policy.recovery);
   if (policyId === null) return "invalid_recovery_policy";
   const expectedClaim: WitnessedSuccessionClaimEvidence = {

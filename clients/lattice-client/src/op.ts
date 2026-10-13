@@ -81,6 +81,8 @@ export interface InvalidSuccessionPolicyEvidence {
   mode: "invalid";
   successorRealm: string;
   successor: string;
+  /** Which keys made it invalid; selects the reason Elixir `decide_succeed/9` gives. */
+  shape: "conflicting" | "unarmed" | "malformed_recovery" | "malformed_dormant";
 }
 
 /** Succession policy conferred by a valid genesis. */

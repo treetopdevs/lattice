@@ -1543,22 +1543,26 @@ function successionPolicies(term, realmByPubkey) {
         const successorRealm = realmForPubkey(successor, realmByPubkey);
         const hasDormantTicks = policy.has("dormant_ticks");
         const hasRecovery = policy.has("recovery");
-        if (hasDormantTicks === hasRecovery) {
-            policies[role] = { mode: "invalid", successorRealm, successor };
+        if (hasDormantTicks && hasRecovery) {
+            policies[role] = { mode: "invalid", successorRealm, successor, shape: "conflicting" };
+            continue;
+        }
+        if (!hasDormantTicks && !hasRecovery) {
+            policies[role] = { mode: "invalid", successorRealm, successor, shape: "unarmed" };
             continue;
         }
         if (hasDormantTicks) {
             const dormantTicks = nonNegativeInteger(policy.get("dormant_ticks"));
             policies[role] =
                 dormantTicks === null
-                    ? { mode: "invalid", successorRealm, successor }
+                    ? { mode: "invalid", successorRealm, successor, shape: "malformed_dormant" }
                     : { mode: "legacy", successorRealm, successor, dormantTicks };
             continue;
         }
         const recovery = witnessedRecoveryPolicy(policy.get("recovery"));
         policies[role] =
             recovery === null
-                ? { mode: "invalid", successorRealm, successor }
+                ? { mode: "invalid", successorRealm, successor, shape: "malformed_recovery" }
                 : { mode: "witnessed", successorRealm, successor, recovery };
     }
     return Object.keys(policies).length > 0 ? policies : undefined;
