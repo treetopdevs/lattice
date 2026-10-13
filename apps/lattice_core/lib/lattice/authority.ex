@@ -1332,6 +1332,10 @@ defmodule Lattice.Authority do
       holder_acquire_from(st.acquires, anc) != List.last(st.acquires) ->
         reject(st, op, :double_transfer, role)
 
+      # Row 191: a signed policy may carry any canonical term here; refuse, never raise.
+      not is_integer(dormant_ticks) ->
+        reject(st, op, :invalid_succession, role)
+
       at_tick < last_active + dormant_ticks ->
         reject(st, op, :premature_succession, role)
 

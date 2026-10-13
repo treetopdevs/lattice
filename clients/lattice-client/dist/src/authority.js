@@ -662,8 +662,8 @@ function successionRejectionReason(op, evidence, state, delegations, policies, b
             .reverse()
             .find((acquire) => visible.has(acquire.opId));
         const staleClaim = visibleAcquire?.opId !== state.acquires.at(-1)?.opId;
-        if (policy.mode === "invalid" && policy.shape === "malformed_dormant" && staleClaim) {
-            return "double_transfer";
+        if (policy.mode === "invalid" && policy.shape === "malformed_dormant") {
+            return staleClaim ? "double_transfer" : "invalid_succession";
         }
         if (policy.mode !== "legacy")
             return "recovery_certificate_required";

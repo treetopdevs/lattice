@@ -1209,6 +1209,9 @@ defmodule Lattice.CompactionSpike do
       seeded_holder_acquire_at(tl, op_anc) != List.last(continuation_acquires(tl)) ->
         seeded_reject(tl, op, :double_transfer)
 
+      not is_integer(dormant_ticks) ->
+        seeded_reject(tl, op, :invalid_succession)
+
       at_tick < seeded_last_active(tl, op_anc) + dormant_ticks ->
         seeded_reject(tl, op, :premature_succession)
 
