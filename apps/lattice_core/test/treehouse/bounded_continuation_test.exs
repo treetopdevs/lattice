@@ -292,6 +292,41 @@ defmodule Treehouse.BoundedContinuationTest do
     assert Sim.quarantined(sim, "member1", command.id) != false
   end
 
+  test "V12 a continuation whose own delegation is revoked as of the claim refuses (row 193)" do
+    for kind <- [:space, :thread] do
+      {sim, _genesis, pin, profile, epoch} = ready(kind: kind)
+
+      # Delegation ids are content hashes, so a probe branch learns the claim's id.
+      {_probe, candidate} = F.continue(sim, "nominee", pin, profile, epoch_basis: [epoch.id])
+      {:succeed, _role, delegation, _proof} = candidate.body
+
+      {sim, revoke} = Sim.revoke(sim, "founder", delegation.id)
+      sim = Sim.sync_all(sim)
+      {sim, claim} = F.continue(sim, "nominee", pin, profile, epoch_basis: [epoch.id])
+      {:succeed, _role, ^delegation, _proof} = claim.body
+      assert revoke.id in claim.deps
+
+      assert Sim.quarantined(sim, "nominee", claim.id) == {true, :revoked_capability}
+
+      assert Authority.holder_epoch(sim.module, Sim.log(sim, "nominee"), F.role(sim)).op_id !=
+               claim.id
+    end
+  end
+
+  test "V12 a revoke that follows an honored continuation does not void it retroactively" do
+    {sim, _genesis, pin, profile, epoch} = ready()
+    {sim, claim} = F.continue(sim, "nominee", pin, profile, epoch_basis: [epoch.id])
+    {:succeed, _role, delegation, _proof} = claim.body
+    sim = Sim.sync_all(sim)
+    {sim, _revoke} = Sim.revoke(sim, "founder", delegation.id)
+    sim = Sim.sync_all(sim)
+
+    assert Sim.quarantined(sim, "nominee", claim.id) == false
+
+    assert Authority.holder_epoch(sim.module, Sim.log(sim, "nominee"), F.role(sim)).op_id ==
+             claim.id
+  end
+
   test "V04 equal maximal causal beacons and clipped portable horizon bind exact basis" do
     {sim, _genesis, pin, profile, _epoch} = ready()
     {left, a} = Sim.beacon(sim, "w1", 1, witnesses: ["w1", "w2"])
