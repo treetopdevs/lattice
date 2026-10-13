@@ -148,7 +148,10 @@ export function analyzeAuthority(schema, ops, included, order, byId, expectedRep
     const roleDecision = (op, evidence, state) => {
         if (evidence.type === "succeed" &&
             (continuation.family !== "legacy" || evidence.proof.mode === "continuation")) {
-            const reason = continuationRejectionReason(op, evidence, state, continuation, byId);
+            const reason = continuationRejectionReason(op, evidence, state, continuation, byId) ??
+                // Row 193 (Elixir decide_continuation/8): an otherwise valid claim under its own
+                // revoked delegation confers nothing; a revoked predecessor stays a historical ceiling.
+                (revokedAsOf(op, evidence.delegation.id, byId, revocation, revocationAncestors) ? "revoked_capability" : undefined);
             return { honored: reason === undefined, reason };
         }
         const honored = authorityWriteHonored(op, evidence, state, delegations, policies, honoredSuccessionIntroductions, byId, revocation, revocationAncestors);

@@ -1146,7 +1146,16 @@ defmodule Lattice.Authority do
 
         {:succeed, d, proof} ->
           if continuation.family != :legacy or Continuation.proof?(proof) do
-            decide_continuation(st, op, role, d, proof, ancestors, continuation)
+            decide_continuation(
+              st,
+              op,
+              role,
+              d,
+              proof,
+              ancestors,
+              {delegations, revokes},
+              continuation
+            )
           else
             decide_succeed(
               st,
@@ -1275,12 +1284,20 @@ defmodule Lattice.Authority do
     end
   end
 
-  defp decide_continuation(st, op, role, d, proof, ancestors, context) do
+  # Row 193: an otherwise valid continuation whose own delegation is revoked as of the
+  # claim confers nothing, as in decide_succeed/9. Only the claim's chain counts; a
+  # revoked predecessor delegation remains a historical ceiling.
+  defp decide_continuation(st, op, role, d, proof, ancestors, {delegations, revokes}, context) do
     anc = Map.get(ancestors, op.id, MapSet.new())
 
     case Continuation.judge(context, op, role, d, proof, st.acquires, anc) do
-      {:ok, epoch} -> record_acquire(st, op, d, epoch)
-      {:error, reason} -> reject(st, op, reason, role)
+      {:ok, epoch} ->
+        if revoked_as_of?(op, d, delegations, revokes, ancestors),
+          do: reject(st, op, :revoked_capability, role),
+          else: record_acquire(st, op, d, epoch)
+
+      {:error, reason} ->
+        reject(st, op, reason, role)
     end
   end
 
