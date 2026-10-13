@@ -82,6 +82,19 @@ defmodule Lattice.CarrierWireAtomVocabularyTest do
     assert Jason.encode!(%{"ops" => [unknown]}) == Jason.encode!(%{"ops" => [:post]})
   end
 
+  test "an audit bundle renders an unknown name as the atom it names" do
+    name = absent_name("bundle")
+    dir = Path.join(System.tmp_dir!(), "row190-bundle-#{System.unique_integer([:positive])}")
+    on_exit(fn -> File.rm_rf(dir) end)
+    sim = Sim.new(Matter, "replica:matter:row190-bundle", ["clerk"], seed: "row190-bundle")
+    {sim, _} = Sim.create_replica(sim, "clerk")
+    {sim, _} = Sim.command(sim, "clerk", :set_title, [%CanonicalAtom{name: name}])
+    assert {:ok, _} = Township.AuditBundle.write(dir, Sim.log(sim, "clerk"))
+    state = dir |> Path.join("state.json") |> File.read!()
+    assert state =~ ~s("#{name}")
+    refute state =~ ~s("name":)
+  end
+
   test "a genesis whose policy term is an unknown name is inert, as a warm non-map atom is" do
     for policies <- [:ok, %CanonicalAtom{name: absent_name("policy")}] do
       sim = Sim.new(Matter, "replica:matter:row190-policy-term", ["clerk"], seed: "row190")
@@ -125,9 +138,9 @@ defmodule Lattice.CarrierWireAtomVocabularyTest do
     assert verdict.(%CanonicalAtom{name: absent_name("role")}) == warm
   end
 
-  for mode <- ["preloaded", "cold"] do
+  for mode <- ["preloaded", "unloaded"] do
     # "preloaded" loads every lattice_core module except the exporter task before
-    # decoding; "cold" decodes first, so Wire must load the schema vocabulary itself.
+    # decoding; "unloaded" decodes first, so Wire must load the schema vocabulary itself.
     test "the five plan 185 vectors decode and judge equally in a #{mode} VM without the exporter's atoms" do
       run_cold_vm(unquote(mode))
     end
@@ -162,14 +175,11 @@ defmodule Lattice.CarrierWireAtomVocabularyTest do
   defp cold_script do
     ~S'''
     [mode, dir | pairs] = System.argv()
-    {:ok, modules} = :application.get_key(:lattice_core, :modules) |> then(fn
-      :undefined -> Application.load(:lattice_core); :application.get_key(:lattice_core, :modules)
-      other -> other
-    end)
-
-    # Load every lattice_core module except the exporter task itself (its source is the
-    # only place the scenario atoms are literals); its nested fixtures are schemas.
+    # "unloaded" leaves even the lattice_core application metadata unloaded before the
+    # first decode, so Wire must load it before scanning.
     if mode == "preloaded" do
+      :ok = Application.load(:lattice_core)
+      {:ok, modules} = :application.get_key(:lattice_core, :modules)
       for m <- modules, m != Mix.Tasks.Lattice.ExportVectors, do: Code.ensure_loaded(m)
     end
 

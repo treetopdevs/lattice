@@ -118,21 +118,39 @@ defmodule Lattice.Carrier.Wire do
 
   # A name decodes to an atom only if this VM holds one, so decoding before the code that
   # spells a protocol tag or a schema's roles and commands is loaded would leave those names
-  # as `Lattice.Canonical.Atom` for good. Load that code once, before the first decode:
-  # lattice_core and every application that depends on it, minus Mix tasks (the vector
-  # exporter is the only source of some scenario atoms). Embedded releases load it at boot.
+  # as `Lattice.Canonical.Atom` for good. Before decoding, load lattice_core and every loaded
+  # application that depends on it, minus Mix tasks (the vector exporter is the only source of
+  # some scenario atoms). The scan reruns whenever the set of loaded applications grows.
+  # Embedded releases load all of it at boot.
   defp ensure_vocabulary do
-    unless :persistent_term.get({__MODULE__, :vocabulary}, false) do
-      for {app, _, _} <- Application.loaded_applications(),
-          app == :lattice_core or :lattice_core in (Application.spec(app, :applications) || []),
-          module <- Application.spec(app, :modules) || [],
-          not String.starts_with?(Atom.to_string(module), "Elixir.Mix.Tasks."),
-          do: Code.ensure_loaded(module)
+    loaded = loaded_applications()
+    count = length(loaded)
 
-      :persistent_term.put({__MODULE__, :vocabulary}, true)
+    unless :persistent_term.get({__MODULE__, :vocabulary}, 0) == count do
+      results =
+        for {app, _, _} <- loaded,
+            app == :lattice_core or :lattice_core in (Application.spec(app, :applications) || []),
+            module <- Application.spec(app, :modules) || [],
+            not String.starts_with?(Atom.to_string(module), "Elixir.Mix.Tasks."),
+            do: Code.ensure_loaded(module)
+
+      # A module that failed to load leaves the scan uncached, so the next decode retries it.
+      if Enum.all?(results, &match?({:module, _}, &1)),
+        do: :persistent_term.put({__MODULE__, :vocabulary}, count)
     end
 
     :ok
+  end
+
+  defp loaded_applications do
+    loaded = Application.loaded_applications()
+
+    if List.keymember?(loaded, :lattice_core, 0) do
+      loaded
+    else
+      _ = Application.load(:lattice_core)
+      Application.loaded_applications()
+    end
   end
 
   @spec encode_ops([Op.t()]) :: [map()]
