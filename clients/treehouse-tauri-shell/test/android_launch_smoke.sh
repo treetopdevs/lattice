@@ -39,7 +39,10 @@ done
 echo "pid after ${settle}s=${alive:-none}"
 
 status=0
-if grep -nE "panicked at|E RustPanic|FATAL EXCEPTION|Fatal signal" "$out/logcat.txt"; then
+# Attribute crashes to Treehouse's launched process (threadtime column 3 is the pid); the full
+# device log stays in the evidence. A different pid fails the survival check below.
+if awk -v pid="${pid:-none}" '$3 == pid' "$out/logcat.txt" |
+  grep -nE "panicked at|E RustPanic|FATAL EXCEPTION|Fatal signal"; then
   echo "Treehouse panicked or crashed after launch" >&2
   status=1
 fi
