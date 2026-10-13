@@ -1307,7 +1307,7 @@ defmodule Lattice.Authority do
       revoked_as_of?(op, d, delegations, revokes, ancestors) ->
         reject(st, op, :revoked_capability, role)
 
-      is_nil(policy) or op.author != policy.successor ->
+      not is_map(policy) or op.author != Map.get(policy, :successor) ->
         reject(st, op, :unauthorized_succession, role)
 
       Map.has_key?(policy, :recovery) and Map.has_key?(policy, :dormant_ticks) ->

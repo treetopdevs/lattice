@@ -393,4 +393,33 @@ defmodule Lattice2.AuthorityTest do
       assert result.holders == analysis.holders
     end
   end
+
+  test "a role policy naming no successor refuses a claim as unauthorized_succession" do
+    for policy <- [%{dormant_ticks: 0}, "x"] do
+      sim = Sim.new(Township.Matter, "replica:matter:row191-successor", ["clerk", "resident"])
+      clerk = Sim.identity(sim, "clerk")
+
+      d =
+        Delegation.genesis(clerk, Sim.replica(sim),
+          ops: [:close_matter],
+          roles: [:clerk],
+          live: true
+        )
+
+      {sim, genesis} = Sim.append(sim, "clerk", :authority, {:genesis, d, %{clerk: policy}})
+      sim = Sim.sync_all(sim)
+      {sim, claim} = Sim.succeed(sim, "resident", :clerk, at_tick: 3, ops: [:close_matter])
+      log = Sim.log(sim, "resident")
+      analysis = Lattice.Authority.analyze(Township.Matter, log)
+      assert analysis.reasons == %{claim.id => :unauthorized_succession}, inspect(policy)
+
+      for at <- [[genesis.id], Log.frontier(log)] do
+        assert {:ok, snapshot, retained} =
+                 Lattice.CompactionSpike.compact(Township.Matter, log, at)
+
+        result = Lattice.CompactionSpike.reduce_compacted(Township.Matter, snapshot, retained)
+        assert result.reasons == analysis.reasons
+      end
+    end
+  end
 end
