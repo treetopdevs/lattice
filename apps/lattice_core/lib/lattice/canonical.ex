@@ -17,6 +17,16 @@ defmodule Lattice.Canonical.Atom do
   def new(_name), do: {:error, :invalid_atom_name}
 end
 
+# Renders and serializes as the atom it names, so projections over a frame whose names
+# the decoding VM lacks (row 190) produce the same text and JSON as a VM that holds them.
+defimpl String.Chars, for: Lattice.Canonical.Atom do
+  def to_string(%Lattice.Canonical.Atom{name: name}), do: name
+end
+
+defimpl Jason.Encoder, for: Lattice.Canonical.Atom do
+  def encode(%Lattice.Canonical.Atom{name: name}, opts), do: Jason.Encode.string(name, opts)
+end
+
 defmodule Lattice.Canonical do
   @moduledoc """
   Deterministic canonical bytes for signed Lattice values.

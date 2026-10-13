@@ -3,8 +3,9 @@ defmodule Lattice.CarrierWireAtomVocabularyTest do
   # atoms the decoding VM happens to hold.
   use ExUnit.Case, async: true
 
-  alias Lattice.Authority.Delegation
-  alias Lattice.{Canonical, Carrier.Wire, Identity, Op}
+  alias Lattice.Authority.{Delegation, SuccessionCertificate}
+  alias Lattice.{Authority, Canonical, Carrier.Wire, Identity, Op, Sim}
+  alias Township.Matter
   alias Lattice.Canonical.Atom, as: CanonicalAtom
 
   @vectors Path.expand("../../../../clients/lattice-client/test/vectors", __DIR__)
@@ -72,6 +73,56 @@ defmodule Lattice.CarrierWireAtomVocabularyTest do
 
     assert decoded == op
     assert Op.valid?(decoded)
+  end
+
+  test "an unknown name renders and serializes as the atom it names" do
+    unknown = %CanonicalAtom{name: "post"}
+    assert to_string(unknown) == to_string(:post)
+    assert Enum.join([unknown, :clerk], ",") == "post,clerk"
+    assert Jason.encode!(%{"ops" => [unknown]}) == Jason.encode!(%{"ops" => [:post]})
+  end
+
+  test "a genesis whose policy term is an unknown name is inert, as a warm non-map atom is" do
+    for policies <- [:ok, %CanonicalAtom{name: absent_name("policy")}] do
+      sim = Sim.new(Matter, "replica:matter:row190-policy-term", ["clerk"], seed: "row190")
+      {sim, genesis} = Sim.create_replica(sim, "clerk")
+      clerk = Sim.identity(sim, "clerk")
+
+      # An empty, non-live root genesis is the shape the continuation pin scan reads.
+      pin = Delegation.genesis(clerk, Sim.replica(sim), ops: [], roles: [], live: false)
+      {sim, _} = Sim.append(sim, "clerk", :authority, {:genesis, pin, policies})
+      analysis = Authority.analyze(Matter, Sim.log(sim, "clerk"))
+      assert analysis.reasons == %{}, inspect(policies)
+      assert analysis.holder_epochs[:clerk].op_id == genesis.id
+    end
+  end
+
+  test "a certificate naming an unknown role fails the claim comparison, not its shape" do
+    [w1, w2] = Enum.map(["w1", "w2"], &Identity.from_seed(&1, "row190-certificate-" <> &1))
+    holder = Identity.from_seed("holder", "row190-certificate-holder")
+    successor = Identity.from_seed("successor", "row190-certificate-successor")
+    policy = %{mode: :witnessed, version: 1, witnesses: [w1.pub, w2.pub], threshold: 2}
+
+    {:ok, expected} =
+      SuccessionCertificate.claim(
+        "replica:row190",
+        :clerk,
+        holder.pub,
+        "epoch",
+        successor.pub,
+        policy
+      )
+
+    verdict = fn role ->
+      %{expected | role: role}
+      |> SuccessionCertificate.new([w1, w2])
+      |> SuccessionCertificate.verify(expected, policy)
+    end
+
+    warm = verdict.(:post)
+    assert {:error, reason} = warm
+    refute reason == :malformed_recovery_certificate
+    assert verdict.(%CanonicalAtom{name: absent_name("role")}) == warm
   end
 
   for mode <- ["preloaded", "cold"] do
