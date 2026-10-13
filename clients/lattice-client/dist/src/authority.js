@@ -962,11 +962,11 @@ function collectDelegations(ops) {
             existing.delegation = delegation;
             existing.introductionOpIds.push(op.id);
         }
-        else if (delegationKey(existing.delegation) === delegationKey(delegation)) {
-            existing.introductionOpIds.push(op.id);
-        }
         else {
-            existing.delegation = null;
+            // Elixir collect_valid_delegation_intro/3: self-consistency binds the id to the
+            // payload, so a second valid introduction can differ only in its signature. Keep the
+            // first; nulling it let the issuer void a root revoke with a twin signature.
+            existing.introductionOpIds.push(op.id);
         }
     }
     return delegations;

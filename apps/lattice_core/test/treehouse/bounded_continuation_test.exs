@@ -326,6 +326,36 @@ defmodule Treehouse.BoundedContinuationTest do
     end
   end
 
+  # The `space:revoked-delegation` corpus delegation re-signed with Ed25519 nonce r = 7 by
+  # clients/lattice-client/test/bounded_continuation.ts (twinSignedRevokedDelegation).
+  @twin_sig "uGJAn7XExBI98qv3RiuI8EGtNt1oZM6HL9VHK+NjxbFTiJ9P46qh2j3lsr68p4PLpTCOkTmNvr9VhsEOWBFvDQ=="
+
+  test "V12 a twin-signed reintroduction of the revoked delegation does not void the revoke" do
+    {sim, genesis} = F.new(kind: :space, label: "vectors-space")
+    {sim, pin, profile} = F.pin(sim)
+    {sim, epoch} = Sim.beacon(sim, "founder", 0)
+    sim = Sim.sync_all(sim)
+    {_probe, candidate} = F.continue(sim, "nominee", pin, profile, epoch_basis: [epoch.id])
+    {:succeed, _role, delegation, _proof} = candidate.body
+    twin = %{delegation | sig: Base.decode64!(@twin_sig)}
+    assert twin.sig != delegation.sig and Delegation.valid_sig?(twin)
+
+    {parallel, intro} = Sim.append(sim, "nominee", :authority, {:grant, twin}, deps: [genesis.id])
+    {sim, _revoke} = Sim.revoke(sim, "founder", delegation.id)
+    {sim, claim} = F.continue(Sim.sync_all(sim), "nominee", pin, profile, epoch_basis: [epoch.id])
+
+    ops =
+      Map.put(
+        Log.ops(Sim.log(sim, "nominee")),
+        intro.id,
+        Log.ops(Sim.log(parallel, "nominee"))[intro.id]
+      )
+
+    log = Log.from_ops(sim.replica, ops)
+    analysis = Authority.analyze(sim.module, log)
+    assert analysis.reasons == %{claim.id => :revoked_capability}
+  end
+
   test "V12 a revoke that follows an honored continuation does not void it retroactively" do
     {sim, _genesis, pin, profile, epoch} = ready()
     {sim, claim} = F.continue(sim, "nominee", pin, profile, epoch_basis: [epoch.id])

@@ -106,4 +106,6 @@ async function twinSignedRevokedDelegation(vectors: Vector[]): Promise<void> {
   const revoke = ops.find((op) => op.authority?.type === "revoke")!;
   assert.equal(result.quarantineReasons.get(claim.id), "revoked_capability", "twin-signed claim stays revoked");
   assert.equal(result.quarantineReasons.get(revoke.id), undefined, "the root revoke stays authorized");
+  assert.deepEqual([...result.quarantineReasons], [[claim.id, "revoked_capability"]],
+    "only the claim quarantines (bounded_continuation_test V12 twin pins the BEAM verdict)");
 }
