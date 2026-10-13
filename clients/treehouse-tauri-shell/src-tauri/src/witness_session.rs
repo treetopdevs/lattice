@@ -73,7 +73,18 @@ pub(crate) fn page_load_document<R: Runtime>(
     webview: &Webview<R>,
     event_url: &Url,
 ) -> Result<Url, &'static str> {
-    if PAGE_LOAD_QUERIES_URL {
+    page_load_document_with(webview, event_url, PAGE_LOAD_QUERIES_URL)
+}
+
+/// On Android the Finished-time comparison with the ticket is therefore against the
+/// native event URL; `snapshot` still re-queries the live document, off the UI thread,
+/// before any operation runs.
+fn page_load_document_with<R: Runtime>(
+    webview: &Webview<R>,
+    event_url: &Url,
+    query: bool,
+) -> Result<Url, &'static str> {
+    if query {
         webview.url().map_err(|_| SESSION_REFUSED)
     } else {
         Ok(event_url.clone())
@@ -296,4 +307,13 @@ pub mod test_adapter {
     ) -> Result<SessionSnapshot, &'static str> {
         session.capture(facts.facts())
     }
+    /// Both arms of the page-load document source; the host build re-queries.
+    pub fn page_load_document<R: Runtime>(
+        webview: &Webview<R>,
+        event_url: &str,
+        query: bool,
+    ) -> Result<Url, &'static str> {
+        page_load_document_with(webview, &event_url.parse().unwrap(), query)
+    }
+    pub const PAGE_LOAD_QUERIES_URL: bool = super::PAGE_LOAD_QUERIES_URL;
 }
