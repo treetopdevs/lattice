@@ -262,6 +262,24 @@ jobs:
             echo "$untracked" >&2
             exit 1
           fi
+      - name: Committed TS client dist matches build
+        # The package exports and the shells' file: dependency resolve to dist/src/index.js, so a src
+        # edit committed without its rebuilt dist leaves them running the old code (c9a8748ec). The step
+        # builds for itself rather than trusting an earlier build to have run, and from an empty dist,
+        # because tsc never deletes outputs: a tracked file whose source is gone shows as a deletion.
+        run: |
+          rm -rf clients/lattice-client/dist
+          npm --prefix clients/lattice-client run build
+          if ! git diff --exit-code --stat -- clients/lattice-client/dist; then
+            echo "clients/lattice-client/dist is stale: run rm -rf dist && npm run build there and commit the result" >&2
+            exit 1
+          fi
+          untracked="$(git status --porcelain --untracked-files=all -- clients/lattice-client/dist)"
+          if [ -n "$untracked" ]; then
+            echo "built dist files that are not committed:" >&2
+            echo "$untracked" >&2
+            exit 1
+          fi
       - name: Typecheck TS client
         working-directory: clients/lattice-client
         run: npm run typecheck
