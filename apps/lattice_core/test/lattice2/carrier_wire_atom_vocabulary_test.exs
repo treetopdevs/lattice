@@ -138,6 +138,42 @@ defmodule Lattice.CarrierWireAtomVocabularyTest do
     assert verdict.(%CanonicalAtom{name: absent_name("role")}) == warm
   end
 
+  test "a protocol tag decodes as its atom in a VM that has loaded nothing but Wire" do
+    vector = Path.join(@vectors, "township_capability_revoked_chain.json")
+
+    script = """
+    false = :code.is_loaded(Lattice.Authority)
+    {:module, _} = Code.ensure_loaded(Lattice.Carrier.Wire)
+    frames = #{inspect(vector)} |> File.read!() |> Jason.decode!() |> Map.fetch!("oracleCarrierOps")
+    {:ok, ops} = Lattice.Carrier.Wire.decode_ops(frames)
+    tags = for %{body: body} <- ops, is_tuple(body), do: elem(body, 0)
+    true = :revoke in tags and Enum.all?(tags, &is_atom/1)
+    # Application modules stay the host's to load (member continuity's cold contract).
+    false = :code.is_loaded(Treehouse.MemberContinuity)
+    IO.puts("ROW190_PROTOCOL_TAGS_OK")
+    """
+
+    direct = Path.expand("~/.asdf/installs/elixir/1.19.5-otp-28/bin/elixir")
+    executable = if File.exists?(direct), do: direct, else: "elixir"
+
+    {output, status} =
+      System.cmd(
+        executable,
+        [
+          "-pa",
+          Application.app_dir(:lattice_core, "ebin"),
+          "-pa",
+          Application.app_dir(:jason, "ebin"),
+          "-e",
+          script
+        ],
+        stderr_to_stdout: true
+      )
+
+    assert status == 0, output
+    assert output =~ "ROW190_PROTOCOL_TAGS_OK"
+  end
+
   for mode <- ["preloaded", "unloaded"] do
     # "preloaded" loads every lattice_core module except the exporter task before
     # decoding; "unloaded" decodes first, so Wire must load the schema vocabulary itself.
@@ -175,18 +211,21 @@ defmodule Lattice.CarrierWireAtomVocabularyTest do
   defp cold_script do
     ~S'''
     [mode, dir | pairs] = System.argv()
-    # "unloaded" leaves even the lattice_core application metadata unloaded before the
-    # first decode, so Wire must load it before scanning.
+    schemas = %{
+      "Township.Matter" => Township.Matter,
+      "PolicyFixture" => Mix.Tasks.Lattice.ExportVectors.PolicyFixture
+    }
+
+    # "unloaded" loads only the vectors' schema modules, the host's documented duty, and
+    # leaves even the lattice_core application metadata unloaded: Wire must load the
+    # protocol vocabulary itself before the first decode.
+    for module <- Map.values(schemas), do: Code.ensure_loaded!(module)
+
     if mode == "preloaded" do
       :ok = Application.load(:lattice_core)
       {:ok, modules} = :application.get_key(:lattice_core, :modules)
       for m <- modules, m != Mix.Tasks.Lattice.ExportVectors, do: Code.ensure_loaded(m)
     end
-
-    schemas = %{
-      "Township.Matter" => Township.Matter,
-      "PolicyFixture" => Mix.Tasks.Lattice.ExportVectors.PolicyFixture
-    }
 
     pairs
     |> Enum.chunk_every(2)

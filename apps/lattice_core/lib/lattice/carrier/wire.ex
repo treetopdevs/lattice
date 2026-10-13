@@ -116,41 +116,26 @@ defmodule Lattice.Carrier.Wire do
 
   defp decode_op_frame(_), do: {:error, :malformed_op}
 
-  # A name decodes to an atom only if this VM holds one, so decoding before the code that
-  # spells a protocol tag or a schema's roles and commands is loaded would leave those names
-  # as `Lattice.Canonical.Atom` for good. Before decoding, load lattice_core and every loaded
-  # application that depends on it, minus Mix tasks (the vector exporter is the only source of
-  # some scenario atoms). The scan reruns whenever the set of loaded applications grows.
-  # Embedded releases load all of it at boot.
+  # A name decodes to an atom only if this VM holds one, so a protocol tag decoded before the
+  # module that spells it was loaded would stay `Lattice.Canonical.Atom` for good (a
+  # `{:revoke, id}` the judge then ignores). Load lattice_core's own `Lattice.*` modules once,
+  # before the first decode. Application atoms (schema roles and commands) remain the
+  # responsibility of the schema modules the host loads, as for `Lattice.Log.restore/1`.
   defp ensure_vocabulary do
-    loaded = loaded_applications()
-    count = length(loaded)
+    unless :persistent_term.get({__MODULE__, :vocabulary}, false) do
+      _ = Application.load(:lattice_core)
 
-    unless :persistent_term.get({__MODULE__, :vocabulary}, 0) == count do
       results =
-        for {app, _, _} <- loaded,
-            app == :lattice_core or :lattice_core in (Application.spec(app, :applications) || []),
-            module <- Application.spec(app, :modules) || [],
-            not String.starts_with?(Atom.to_string(module), "Elixir.Mix.Tasks."),
+        for module <- Application.spec(:lattice_core, :modules) || [],
+            String.starts_with?(Atom.to_string(module), "Elixir.Lattice."),
             do: Code.ensure_loaded(module)
 
       # A module that failed to load leaves the scan uncached, so the next decode retries it.
-      if Enum.all?(results, &match?({:module, _}, &1)),
-        do: :persistent_term.put({__MODULE__, :vocabulary}, count)
+      if results != [] and Enum.all?(results, &match?({:module, _}, &1)),
+        do: :persistent_term.put({__MODULE__, :vocabulary}, true)
     end
 
     :ok
-  end
-
-  defp loaded_applications do
-    loaded = Application.loaded_applications()
-
-    if List.keymember?(loaded, :lattice_core, 0) do
-      loaded
-    else
-      _ = Application.load(:lattice_core)
-      Application.loaded_applications()
-    end
   end
 
   @spec encode_ops([Op.t()]) :: [map()]
