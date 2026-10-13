@@ -328,9 +328,22 @@ jobs:
       - name: Install TS mobile core dependencies
         working-directory: clients/lattice-mobile-core
         run: npm ci
-      - name: Build TS mobile core
-        working-directory: clients/lattice-mobile-core
-        run: npm run build
+      - name: Build TS mobile core and check committed dist
+        # The TS client's dist guard, for the shells' file: dependency on lattice-mobile-core, whose dist
+        # is also tracked and resolves to dist/src/index.js.
+        run: |
+          rm -rf clients/lattice-mobile-core/dist
+          npm --prefix clients/lattice-mobile-core run build
+          if ! git diff --exit-code --stat -- clients/lattice-mobile-core/dist; then
+            echo "clients/lattice-mobile-core/dist is stale: run rm -rf dist && npm run build there and commit the result" >&2
+            exit 1
+          fi
+          untracked="$(git status --porcelain --untracked-files=all -- clients/lattice-mobile-core/dist)"
+          if [ -n "$untracked" ]; then
+            echo "built dist files that are not committed:" >&2
+            echo "$untracked" >&2
+            exit 1
+          fi
       - name: Install Tauri shell dependencies
         if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
