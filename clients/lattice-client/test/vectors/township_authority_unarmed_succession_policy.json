@@ -1,0 +1,430 @@
+{
+  "expectAtFrontier": [],
+  "expectAtFullFrontier": {
+    "authorityQuarantine": [
+      [
+        "TzfEj59rWytDaoUxuq-eacZREaj-p4sB9EF6kk9Uj-M",
+        "witnessed_recovery_not_configured"
+      ],
+      [
+        "VG0lmFxe1n84E1CuOKASN4KURO9IRhUfaICWaNhjrnY",
+        "invalid_succession"
+      ]
+    ],
+    "quarantine": [
+      "TzfEj59rWytDaoUxuq-eacZREaj-p4sB9EF6kk9Uj-M",
+      "VG0lmFxe1n84E1CuOKASN4KURO9IRhUfaICWaNhjrnY"
+    ],
+    "state": {
+      "clerk": "clerk",
+      "clerk_locked": false,
+      "members": [],
+      "posts": [],
+      "summary": "",
+      "title": ""
+    },
+    "winners": {
+      "clerk": "tNDjQegSW72oWGk1i1THAsXCYqMLtZ5LXXScEf4r-tw",
+      "clerk_locked": null,
+      "summary": null,
+      "title": null
+    }
+  },
+  "generatedBy": "Lattice.Sim",
+  "ops": [
+    {
+      "author": "clerk",
+      "command": "genesis clerk",
+      "deps": [],
+      "field": "clerk",
+      "hash": "tNDjQegSW72oWGk1i1THAsXCYqMLtZ5LXXScEf4r-tw",
+      "id": "tNDjQegSW72oWGk1i1THAsXCYqMLtZ5LXXScEf4r-tw",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "clerk"
+    },
+    {
+      "author": "resident",
+      "command": "succeed clerk",
+      "deps": [
+        "tNDjQegSW72oWGk1i1THAsXCYqMLtZ5LXXScEf4r-tw"
+      ],
+      "field": "clerk",
+      "hash": "VG0lmFxe1n84E1CuOKASN4KURO9IRhUfaICWaNhjrnY",
+      "id": "VG0lmFxe1n84E1CuOKASN4KURO9IRhUfaICWaNhjrnY",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "resident"
+    },
+    {
+      "author": "resident",
+      "command": "succeed clerk",
+      "deps": [
+        "VG0lmFxe1n84E1CuOKASN4KURO9IRhUfaICWaNhjrnY"
+      ],
+      "field": "clerk",
+      "hash": "TzfEj59rWytDaoUxuq-eacZREaj-p4sB9EF6kk9Uj-M",
+      "id": "TzfEj59rWytDaoUxuq-eacZREaj-p4sB9EF6kk9Uj-M",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "resident"
+    }
+  ],
+  "oracleCarrierOps": [
+    {
+      "author": "Rkj1NzFkRKCGQB0PGQUMPZk22WnJa+2t6s4Ikp5sydM=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "Rkj1NzFkRKCGQB0PGQUMPZk22WnJa+2t6s4Ikp5sydM=",
+              "id": "P3tSi8k9hoxs04TcwF5jKCseVkukakRiAiVQVVZ6OV8",
+              "issuer": "Rkj1NzFkRKCGQB0PGQUMPZk22WnJa+2t6s4Ikp5sydM=",
+              "live": true,
+              "ops": [
+                "close_matter",
+                "reopen_matter"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:authority_unarmed_succession_policy",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "LKuf7Iy8gPGWQsGAWdq2IlPBr26eKgVvVD9sdLecDNRCMMpnP9fssyvr1O1gencc5Ipv2X35gAdvi30hanczDQ=="
+            }
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "clerk"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "successor"
+                      ],
+                      [
+                        "bin",
+                        "BEi3A3xMbxxyjWU8mRZrbO02hXYNyXxuGnHo57Y9aVY="
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [],
+      "id": "tNDjQegSW72oWGk1i1THAsXCYqMLtZ5LXXScEf4r-tw",
+      "kind": "authority",
+      "replica": "replica:matter:authority_unarmed_succession_policy",
+      "sig": "8teqwowOqDAmmGCK1upOMJxDNAdSy4rSQ52Sgr8fh5BAy6Zv5Hm7AXjkJH/vVpLO5r5Iutoetf6sHUqMSjZMCg==",
+      "v": 1
+    },
+    {
+      "author": "BEi3A3xMbxxyjWU8mRZrbO02hXYNyXxuGnHo57Y9aVY=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "succeed"
+          ],
+          [
+            "atom",
+            "clerk"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "BEi3A3xMbxxyjWU8mRZrbO02hXYNyXxuGnHo57Y9aVY=",
+              "id": "hApIP8L5j-pvuZV4aEp8bRBN5SNShdnNGa50eMyUzBk",
+              "issuer": "BEi3A3xMbxxyjWU8mRZrbO02hXYNyXxuGnHo57Y9aVY=",
+              "live": false,
+              "ops": [
+                "close_matter",
+                "reopen_matter"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:authority_unarmed_succession_policy",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "ibhaSJqlAhIdyTgww4CLGL1U3Et1Pih0hEkiEZbSzFd75x/SqsH3EKkPkj20W5G5V04AEAfBKBg/A5ut/TvfBw=="
+            }
+          ],
+          [
+            "int",
+            3
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "tNDjQegSW72oWGk1i1THAsXCYqMLtZ5LXXScEf4r-tw"
+      ],
+      "id": "VG0lmFxe1n84E1CuOKASN4KURO9IRhUfaICWaNhjrnY",
+      "kind": "authority",
+      "replica": "replica:matter:authority_unarmed_succession_policy",
+      "sig": "Fp8aO18ZQyCTgx7qQo/Mq0eyfGL7ImK1m3KN6BewsnxpsPN0evCknKJaAw5O3h3LkYAxkrnBHUxmDvVlqx+qCA==",
+      "v": 1
+    },
+    {
+      "author": "BEi3A3xMbxxyjWU8mRZrbO02hXYNyXxuGnHo57Y9aVY=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "succeed"
+          ],
+          [
+            "atom",
+            "clerk"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "BEi3A3xMbxxyjWU8mRZrbO02hXYNyXxuGnHo57Y9aVY=",
+              "id": "hApIP8L5j-pvuZV4aEp8bRBN5SNShdnNGa50eMyUzBk",
+              "issuer": "BEi3A3xMbxxyjWU8mRZrbO02hXYNyXxuGnHo57Y9aVY=",
+              "live": false,
+              "ops": [
+                "close_matter",
+                "reopen_matter"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:authority_unarmed_succession_policy",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "ibhaSJqlAhIdyTgww4CLGL1U3Et1Pih0hEkiEZbSzFd75x/SqsH3EKkPkj20W5G5V04AEAfBKBg/A5ut/TvfBw=="
+            }
+          ],
+          [
+            "tuple",
+            [
+              [
+                "atom",
+                "witnessed"
+              ],
+              [
+                "map",
+                [
+                  [
+                    [
+                      "atom",
+                      "claim"
+                    ],
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "role"
+                          ],
+                          [
+                            "atom",
+                            "clerk"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "holder"
+                          ],
+                          [
+                            "bin",
+                            "Rkj1NzFkRKCGQB0PGQUMPZk22WnJa+2t6s4Ikp5sydM="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "replica"
+                          ],
+                          [
+                            "bin",
+                            "cmVwbGljYTptYXR0ZXI6YXV0aG9yaXR5X3VuYXJtZWRfc3VjY2Vzc2lvbl9wb2xpY3k="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "version"
+                          ],
+                          [
+                            "int",
+                            1
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "policy_id"
+                          ],
+                          [
+                            "bin",
+                            "dW5waW5uZWQ="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "successor"
+                          ],
+                          [
+                            "bin",
+                            "BEi3A3xMbxxyjWU8mRZrbO02hXYNyXxuGnHo57Y9aVY="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "holder_epoch"
+                          ],
+                          [
+                            "bin",
+                            "dE5EalFlZ1NXNzJvV0drMWkxVEhBc1hDWXFNTHRaNUxYWFNjRWY0ci10dw=="
+                          ]
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "signatures"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "map",
+                          [
+                            [
+                              [
+                                "atom",
+                                "witness"
+                              ],
+                              [
+                                "bin",
+                                "cmA+VvzGVtqQCN3QQ81fdhYZn2mJ19a2B8ssUsrjBAE="
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "signature"
+                              ],
+                              [
+                                "bin",
+                                "OM+fmUJO+98nlKaKfAmRV9Z5XGxXeGU9/ZAkTcSiZ18v0wfPnVJ9FnHpIMrdZzblphY3b1b/5GnBBwJDSZ8bBw=="
+                              ]
+                            ]
+                          ]
+                        ],
+                        [
+                          "map",
+                          [
+                            [
+                              [
+                                "atom",
+                                "witness"
+                              ],
+                              [
+                                "bin",
+                                "gWRXwfpNkMlsnBn0xEkAWtBXmZjo8gWsmISiKvdY58Q="
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "signature"
+                              ],
+                              [
+                                "bin",
+                                "koPQlmcEO63d33m0yhbI0ggR1bXI7a26BkqjfGa66XvWu3oy8z4FPnxyKnVo0HdjoGd9l2hDXBruE27BvuNmDg=="
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "VG0lmFxe1n84E1CuOKASN4KURO9IRhUfaICWaNhjrnY"
+      ],
+      "id": "TzfEj59rWytDaoUxuq-eacZREaj-p4sB9EF6kk9Uj-M",
+      "kind": "authority",
+      "replica": "replica:matter:authority_unarmed_succession_policy",
+      "sig": "XPyQZBYo5KlKATCreTUp6DOgj0/zUTGejEeBMa+ipPNwbZxswTkAanE9h0vlthBU5dVS6sSep8hIKMCZqBkZAA==",
+      "v": 1
+    }
+  ],
+  "perspectives": [],
+  "realmByPubkey": {
+    "BEi3A3xMbxxyjWU8mRZrbO02hXYNyXxuGnHo57Y9aVY=": "resident",
+    "Rkj1NzFkRKCGQB0PGQUMPZk22WnJa+2t6s4Ikp5sydM=": "clerk",
+    "cmA+VvzGVtqQCN3QQ81fdhYZn2mJ19a2B8ssUsrjBAE=": "witness_a",
+    "gWRXwfpNkMlsnBn0xEkAWtBXmZjo8gWsmISiKvdY58Q=": "witness_b"
+  },
+  "replica": "replica:matter:authority_unarmed_succession_policy",
+  "scenario": "township_authority_unarmed_succession_policy",
+  "scenarioKind": "adversarial",
+  "schema": {
+    "fields": {
+      "clerk": {
+        "authority": "clerk"
+      },
+      "clerk_locked": {
+        "default": false,
+        "gatedBy": "clerk",
+        "merge": "lww"
+      },
+      "members": {
+        "merge": "or_set"
+      },
+      "posts": {
+        "merge": "causal_list"
+      },
+      "summary": {
+        "default": "",
+        "merge": "lww"
+      },
+      "title": {
+        "default": "",
+        "merge": "lww"
+      }
+    },
+    "name": "Township.Matter"
+  }
+}
