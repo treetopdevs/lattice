@@ -214,6 +214,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_authority_unarmed_succession_policy(),
       township_authority_malformed_recovery_policy(),
       township_authority_incomplete_recovery_policy(),
+      township_authority_malformed_dormant_stale_claim(),
       township_authority_dormant_succession_stale_holder(),
       township_authority_dormant_succession_stale_acquire(),
       township_authority_command_shaped_revoke(),
@@ -2214,6 +2215,71 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
     %{
       name: name,
+      kind: "adversarial",
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: Sim.replica(sim),
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      authorityQuarantine: authority_quarantine
+    }
+  end
+
+  # Row 191 review: a non-integer `dormant_ticks` reaches Elixir's dormant clause, whose
+  # stale-holder check refuses a claim that never saw the current acquire before it reads
+  # the tick threshold. (A claim that passes that check makes Elixir raise; not exported.)
+  defp township_authority_malformed_dormant_stale_claim do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:authority-malformed-dormant-stale-claim",
+        ["clerk", "resident", "neighbor"],
+        seed: "township:authority-malformed-dormant-stale-claim:1"
+      )
+
+    {sim, _genesis} =
+      Sim.create_replica(sim, "clerk",
+        policies: %{clerk: %{successor: "resident", dormant_ticks: "x"}}
+      )
+
+    sim = Sim.sync_all(sim)
+    sim = sim |> Sim.partition("clerk", "resident") |> Sim.partition("neighbor", "resident")
+
+    {sim, to_neighbor} =
+      Sim.transfer(sim, "clerk", "neighbor", :clerk, ops: [:close_matter, :reopen_matter])
+
+    sim = Sim.sync(sim, "clerk", "neighbor")
+
+    {sim, succession} =
+      Sim.succeed(sim, "resident", :clerk,
+        at_tick: 3,
+        ops: [:close_matter, :reopen_matter]
+      )
+
+    sim =
+      sim
+      |> Sim.heal("clerk", "resident")
+      |> Sim.heal("neighbor", "resident")
+      |> Sim.sync_all()
+
+    log = Sim.log(sim, "clerk")
+    transfer = find_transfer_op!(Map.values(Log.ops(log)), to_neighbor.id)
+
+    unless transfer.id not in succession.deps and transfer.id < succession.id do
+      raise "expected the unseen transfer to be concurrent with and judged before the claim"
+    end
+
+    authority_quarantine = authority_quarantine(log)
+
+    unless authority_quarantine == [[succession.id, "double_transfer"]] do
+      raise "expected the stale claim under a malformed dormant policy to be double_transfer"
+    end
+
+    realms = realm_index(sim)
+
+    %{
+      name: "township_authority_malformed_dormant_stale_claim",
       kind: "adversarial",
       log: log,
       realms: realms,
