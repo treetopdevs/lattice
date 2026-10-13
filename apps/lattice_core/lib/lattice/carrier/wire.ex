@@ -41,11 +41,14 @@ defmodule Lattice.Carrier.Wire do
 
   Like op decoding, this preserves generic map/mapset normalization. A closed
   artifact protocol must reject duplicate raw fields before calling this seam.
-  It is not a strict canonical-envelope or signature verifier.
+  It is not a strict canonical-envelope or signature verifier. Unlike op frames, a
+  standalone value still refuses an atom name this VM does not hold, because the
+  closed artifact protocols built on it match their vocabulary as atoms.
   """
   @spec decode_value(term()) :: {:ok, term()} | {:error, :malformed_term}
   def decode_value(value) do
     with {:ok, decoded} <- decode_term(value),
+         true <- existing_atoms_only?(decoded),
          true <- Canonical.signable?(decoded) do
       {:ok, decoded}
     else
@@ -380,6 +383,24 @@ defmodule Lattice.Carrier.Wire do
        do: {:ok, epoch}
 
   defp decode_expires_epoch(_), do: {:error, :malformed_term}
+
+  defp existing_atoms_only?(%CanonicalAtom{}), do: false
+
+  defp existing_atoms_only?(%Delegation{ops: ops, roles: roles}),
+    do: Enum.all?(ops, &is_atom/1) and Enum.all?(roles, &is_atom/1)
+
+  defp existing_atoms_only?(%MapSet{} = set), do: Enum.all?(set, &existing_atoms_only?/1)
+
+  defp existing_atoms_only?(value) when is_map(value),
+    do: Enum.all?(value, fn {k, v} -> existing_atoms_only?(k) and existing_atoms_only?(v) end)
+
+  defp existing_atoms_only?(value) when is_list(value),
+    do: Enum.all?(value, &existing_atoms_only?/1)
+
+  defp existing_atoms_only?(value) when is_tuple(value),
+    do: value |> Tuple.to_list() |> existing_atoms_only?()
+
+  defp existing_atoms_only?(_value), do: true
 
   @op_kind_names Map.new(@op_kinds, &{Atom.to_string(&1), &1})
 
