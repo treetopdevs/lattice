@@ -83,7 +83,8 @@ defmodule Lattice.CarrierWireTest do
           {"issuer", "not base64"},
           {"audience", "not base64"},
           {"sig", "not base64"},
-          {"ops", ["definitely_not_an_existing_atom"]},
+          # Row 190: an unknown op name now decodes as Lattice.Canonical.Atom.
+          {"ops", [123]},
           {"roles", [123]}
         ] do
       assert {:error, :malformed_op} =
