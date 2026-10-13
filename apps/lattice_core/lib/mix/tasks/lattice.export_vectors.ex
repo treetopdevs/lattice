@@ -215,6 +215,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_authority_malformed_recovery_policy(),
       township_authority_incomplete_recovery_policy(),
       township_authority_malformed_dormant_stale_claim(),
+      township_authority_malformed_dormant_claim(),
       township_authority_dormant_succession_stale_holder(),
       township_authority_dormant_succession_stale_acquire(),
       township_authority_command_shaped_revoke(),
@@ -2228,7 +2229,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
   # Row 191 review: a non-integer `dormant_ticks` reaches Elixir's dormant clause, whose
   # stale-holder check refuses a claim that never saw the current acquire before it reads
-  # the tick threshold. (A claim that passes that check makes Elixir raise; not exported.)
+  # the tick threshold.
   defp township_authority_malformed_dormant_stale_claim do
     sim =
       Sim.new(
@@ -2280,6 +2281,57 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
     %{
       name: "township_authority_malformed_dormant_stale_claim",
+      kind: "adversarial",
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: Sim.replica(sim),
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      authorityQuarantine: authority_quarantine
+    }
+  end
+
+  # Row 191 review: a claim that saw the current acquire, under a non-integer
+  # `dormant_ticks`, refuses as invalid_succession instead of raising in the judge.
+  defp township_authority_malformed_dormant_claim do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:authority-malformed-dormant-claim",
+        ["clerk", "resident"],
+        seed: "township:authority-malformed-dormant-claim"
+      )
+
+    {sim, _genesis} =
+      Sim.create_replica(sim, "clerk",
+        policies: %{clerk: %{successor: "resident", dormant_ticks: "x"}}
+      )
+
+    sim = Sim.sync_all(sim)
+
+    {sim, succession} =
+      Sim.succeed(sim, "resident", :clerk,
+        at_tick: 3,
+        ops: [:close_matter, :reopen_matter]
+      )
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+    authority_quarantine = authority_quarantine(log)
+
+    unless authority_quarantine == [[succession.id, "invalid_succession"]] do
+      raise "expected a malformed dormant threshold to refuse the claim as invalid_succession"
+    end
+
+    unless Authority.holder(Matter, log, :clerk) == Sim.identity(sim, "clerk").pub do
+      raise "expected the malformed dormant policy not to move clerk authority"
+    end
+
+    realms = realm_index(sim)
+
+    %{
+      name: "township_authority_malformed_dormant_claim",
       kind: "adversarial",
       log: log,
       realms: realms,
