@@ -262,6 +262,8 @@ jobs:
             echo "$untracked" >&2
             exit 1
           fi
+      - name: TS client distribution guard regression
+        run: node --test scripts/tests/client_dist_guard.mjs
       - name: Committed TS client dist matches build
         # The package exports and the shells' file: dependency resolve to dist/src/index.js, so a src
         # edit committed without its rebuilt dist leaves them running the old code (c9a8748ec). The step
