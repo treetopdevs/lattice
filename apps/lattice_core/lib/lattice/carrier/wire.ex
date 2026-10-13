@@ -72,19 +72,24 @@ defmodule Lattice.Carrier.Wire do
   end
 
   @spec decode_op(term()) :: {:ok, Op.t()} | {:error, :malformed_op}
-  def decode_op(%{
-        "v" => @version,
-        "id" => id,
-        "replica" => replica,
-        "author" => author_b64,
-        "deps" => deps,
-        "kind" => kind,
-        "body" => body,
-        "cap" => cap,
-        "sig" => sig_b64
-      })
-      when is_binary(id) and is_binary(replica) and is_binary(author_b64) and is_list(deps) and
-             is_binary(kind) and is_binary(sig_b64) do
+  def decode_op(frame) do
+    ensure_vocabulary()
+    decode_op_frame(frame)
+  end
+
+  defp decode_op_frame(%{
+         "v" => @version,
+         "id" => id,
+         "replica" => replica,
+         "author" => author_b64,
+         "deps" => deps,
+         "kind" => kind,
+         "body" => body,
+         "cap" => cap,
+         "sig" => sig_b64
+       })
+       when is_binary(id) and is_binary(replica) and is_binary(author_b64) and is_list(deps) and
+              is_binary(kind) and is_binary(sig_b64) do
     with true <- Enum.all?(deps, &is_binary/1),
          {:ok, author} <- Base.decode64(author_b64),
          {:ok, sig} <- Base.decode64(sig_b64),
@@ -109,7 +114,26 @@ defmodule Lattice.Carrier.Wire do
     end
   end
 
-  def decode_op(_), do: {:error, :malformed_op}
+  defp decode_op_frame(_), do: {:error, :malformed_op}
+
+  # A name decodes to an atom only if this VM holds one, so decoding before the code that
+  # spells a protocol tag or a schema's roles and commands is loaded would leave those names
+  # as `Lattice.Canonical.Atom` for good. Load that code once, before the first decode:
+  # lattice_core and every application that depends on it, minus Mix tasks (the vector
+  # exporter is the only source of some scenario atoms). Embedded releases load it at boot.
+  defp ensure_vocabulary do
+    unless :persistent_term.get({__MODULE__, :vocabulary}, false) do
+      for {app, _, _} <- Application.loaded_applications(),
+          app == :lattice_core or :lattice_core in (Application.spec(app, :applications) || []),
+          module <- Application.spec(app, :modules) || [],
+          not String.starts_with?(Atom.to_string(module), "Elixir.Mix.Tasks."),
+          do: Code.ensure_loaded(module)
+
+      :persistent_term.put({__MODULE__, :vocabulary}, true)
+    end
+
+    :ok
+  end
 
   @spec encode_ops([Op.t()]) :: [map()]
   def encode_ops(ops), do: Enum.map(ops, &encode_op/1)

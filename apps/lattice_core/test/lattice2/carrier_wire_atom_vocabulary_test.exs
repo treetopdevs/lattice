@@ -74,7 +74,15 @@ defmodule Lattice.CarrierWireAtomVocabularyTest do
     assert Op.valid?(decoded)
   end
 
-  test "the five plan 185 vectors decode and judge equally in a VM without the exporter's atoms" do
+  for mode <- ["preloaded", "cold"] do
+    # "preloaded" loads every lattice_core module except the exporter task before
+    # decoding; "cold" decodes first, so Wire must load the schema vocabulary itself.
+    test "the five plan 185 vectors decode and judge equally in a #{mode} VM without the exporter's atoms" do
+      run_cold_vm(unquote(mode))
+    end
+  end
+
+  defp run_cold_vm(mode) do
     script = Path.join(System.tmp_dir!(), "row190-cold-#{System.unique_integer([:positive])}.exs")
     on_exit(fn -> File.rm(script) end)
     File.write!(script, cold_script())
@@ -87,7 +95,8 @@ defmodule Lattice.CarrierWireAtomVocabularyTest do
 
     direct = Path.expand("~/.asdf/installs/elixir/1.19.5-otp-28/bin/elixir")
     executable = if File.exists?(direct), do: direct, else: "elixir"
-    args = paths ++ [script, @vectors | Enum.flat_map(@cold_vectors, fn {v, a} -> [v, a] end)]
+    pairs = Enum.flat_map(@cold_vectors, fn {v, a} -> [v, a] end)
+    args = paths ++ [script, mode, @vectors | pairs]
     {output, status} = System.cmd(executable, args, stderr_to_stdout: true)
 
     assert status == 0, output
@@ -101,7 +110,7 @@ defmodule Lattice.CarrierWireAtomVocabularyTest do
 
   defp cold_script do
     ~S'''
-    [dir | pairs] = System.argv()
+    [mode, dir | pairs] = System.argv()
     {:ok, modules} = :application.get_key(:lattice_core, :modules) |> then(fn
       :undefined -> Application.load(:lattice_core); :application.get_key(:lattice_core, :modules)
       other -> other
@@ -109,7 +118,9 @@ defmodule Lattice.CarrierWireAtomVocabularyTest do
 
     # Load every lattice_core module except the exporter task itself (its source is the
     # only place the scenario atoms are literals); its nested fixtures are schemas.
-    for m <- modules, m != Mix.Tasks.Lattice.ExportVectors, do: Code.ensure_loaded(m)
+    if mode == "preloaded" do
+      for m <- modules, m != Mix.Tasks.Lattice.ExportVectors, do: Code.ensure_loaded(m)
+    end
 
     schemas = %{
       "Township.Matter" => Township.Matter,
@@ -143,9 +154,32 @@ defmodule Lattice.CarrierWireAtomVocabularyTest do
             |> Enum.map(fn {id, r} -> [id, Atom.to_string(r)] end)
             |> Enum.sort()
 
+          state = Lattice.Reduce.reduce(module, log, quarantine: analysis.quarantine)
+
+          state =
+            case vector["schema"]["name"] do
+              "PolicyFixture" ->
+                %{"events" => state.events}
+
+              _ ->
+                clerk = analysis.holders[:clerk]
+
+                %{
+                  "title" => state.title,
+                  "summary" => state.summary,
+                  "posts" => state.posts,
+                  "members" => state.members,
+                  "clerk" => clerk && vector["realmByPubkey"][Base.encode64(clerk)],
+                  "clerk_locked" => state.clerk_locked?
+                }
+            end
+
+          state = state |> Jason.encode!() |> Jason.decode!()
+
           cond do
             Lattice.Log.size(log) != length(ops) -> {:op_count, Lattice.Log.size(log)}
             reasons != Enum.sort(expected["authorityQuarantine"]) -> {:reasons, reasons}
+            state != expected["state"] -> {:state, state}
             true -> :ok
           end
         end
