@@ -300,16 +300,29 @@ defmodule Treehouse.BoundedContinuationTest do
       {_probe, candidate} = F.continue(sim, "nominee", pin, profile, epoch_basis: [epoch.id])
       {:succeed, _role, delegation, _proof} = candidate.body
 
+      before_revoke = Log.frontier(Sim.log(sim, "nominee"))
       {sim, revoke} = Sim.revoke(sim, "founder", delegation.id)
       sim = Sim.sync_all(sim)
+      after_revoke = Log.frontier(Sim.log(sim, "nominee"))
       {sim, claim} = F.continue(sim, "nominee", pin, profile, epoch_basis: [epoch.id])
       {:succeed, _role, ^delegation, _proof} = claim.body
       assert revoke.id in claim.deps
 
       assert Sim.quarantined(sim, "nominee", claim.id) == {true, :revoked_capability}
 
-      assert Authority.holder_epoch(sim.module, Sim.log(sim, "nominee"), F.role(sim)).op_id !=
-               claim.id
+      log = Sim.log(sim, "nominee")
+      analysis = Authority.analyze(sim.module, log)
+      assert Authority.holder_epoch(sim.module, log, F.role(sim)).op_id != claim.id
+
+      # The seeded compaction judge mirrors the live arm at every cut. (A cut that covers
+      # the revoke before its target delegation is introduced judges the revoke itself
+      # differently; that forward-reference limit of the spike is outside this arm.)
+      for at <- [before_revoke, after_revoke, Log.frontier(log)] do
+        assert {:ok, snapshot, retained} = CompactionSpike.compact(sim.module, log, at)
+        result = CompactionSpike.reduce_compacted(sim.module, snapshot, retained)
+        assert result.reasons[claim.id] == analysis.reasons[claim.id]
+        assert result.holders == analysis.holders
+      end
     end
   end
 

@@ -1089,7 +1089,7 @@ defmodule Lattice.CompactionSpike do
 
         {:succeed, d, proof} ->
           if continuation.family != :legacy or Continuation.proof?(proof),
-            do: seeded_continuation(tl, op, role, d, proof, anc, continuation),
+            do: seeded_continuation(tl, op, role, d, proof, anc, ctx, continuation),
             else: seeded_succeed(tl, op, role, d, proof, anc, deleg_valid, ctx, policies)
 
         {:heartbeat, tick} ->
@@ -1166,12 +1166,18 @@ defmodule Lattice.CompactionSpike do
   defp continuation_acquires(tl),
     do: if(tl.seed_acquire, do: [tl.seed_acquire | tl.acquires], else: tl.acquires)
 
-  defp seeded_continuation(tl, op, role, d, proof, ancestors, context) do
+  # Mirrors decide_continuation/8: an accepted claim under its own revoked chain rejects.
+  defp seeded_continuation(tl, op, role, d, proof, ancestors, ctx, context) do
     anc = MapSet.union(context.covered_ids, Map.get(ancestors, op.id, MapSet.new()))
 
     case Continuation.judge(context, op, role, d, proof, continuation_acquires(tl), anc) do
-      {:ok, epoch} -> seeded_acquire(tl, op, d, epoch)
-      {:error, reason} -> seeded_reject(tl, op, reason)
+      {:ok, epoch} ->
+        if seeded_revoked_as_of?(op, d, ctx),
+          do: seeded_reject(tl, op, :revoked_capability),
+          else: seeded_acquire(tl, op, d, epoch)
+
+      {:error, reason} ->
+        seeded_reject(tl, op, reason)
     end
   end
 
