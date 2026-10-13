@@ -216,6 +216,8 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_authority_incomplete_recovery_policy(),
       township_authority_malformed_dormant_stale_claim(),
       township_authority_malformed_dormant_claim(),
+      township_authority_successorless_policy(),
+      township_authority_non_map_policy(),
       township_authority_dormant_succession_stale_holder(),
       township_authority_dormant_succession_stale_acquire(),
       township_authority_command_shaped_revoke(),
@@ -2136,6 +2138,24 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
         }
       end,
       ["invalid_recovery_policy", "invalid_recovery_policy"]
+    )
+  end
+
+  # Row 191 review: a role policy without `:successor`, or one that is not a map, names no
+  # successor; both proof shapes refuse as unauthorized_succession rather than raising.
+  defp township_authority_successorless_policy do
+    hand_authored_policy_vector(
+      "township_authority_successorless_policy",
+      fn _resident -> %{dormant_ticks: 0} end,
+      ["unauthorized_succession", "unauthorized_succession"]
+    )
+  end
+
+  defp township_authority_non_map_policy do
+    hand_authored_policy_vector(
+      "township_authority_non_map_policy",
+      fn _resident -> "x" end,
+      ["unauthorized_succession", "unauthorized_succession"]
     )
   end
 
