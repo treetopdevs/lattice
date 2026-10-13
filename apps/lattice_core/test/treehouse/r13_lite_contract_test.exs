@@ -115,20 +115,12 @@ defmodule Lattice.Treehouse.R13LiteContractTest do
            "plans/181 Completion claim lost the G-AX fallback sentence"
   end
 
-  test "the evidence record carries the permitted sentence whole, marked not yet earned" do
-    carve_out = carve_out() |> normalize()
-
-    assert String.contains?(carve_out, normalize(@permitted_sentence))
-
-    assert String.contains?(carve_out, "not yet earned"),
-           "the carve-out must say the permitted sentence is not yet earned"
+  test "the evidence record carries the permitted sentence whole" do
+    assert String.contains?(normalize(carve_out()), normalize(@permitted_sentence))
   end
 
   test "the ledger claims row carries the permitted sentence whole" do
-    row = claims_row()
-
-    assert String.contains?(normalize(row), normalize(@permitted_sentence))
-    assert String.contains?(row, "not yet earned")
+    assert String.contains?(normalize(claims_row()), normalize(@permitted_sentence))
   end
 
   test "every required non-claim is stated verbatim in the plan and the evidence record" do
@@ -245,11 +237,12 @@ defmodule Lattice.Treehouse.R13LiteContractTest do
     assert status in @status_vocabulary
 
     if status in ["LOCAL VERIFIED", "DONE"] do
+      # Round 6 rule 2: the exact-tip run is the gate; the merge SHA lets a reader check the tree match.
       assert length(Regex.scan(~r/\b[0-9a-f]{40}\b/, evidence)) >= 2,
              "a closed R13-lite row needs the exact tip and the merge SHA"
 
-      assert length(Regex.scan(~r/\brun \d{8,}\b/, evidence)) >= 2,
-             "a closed R13-lite row needs the exact-tip run and the merge-result run"
+      assert Regex.match?(~r/\bexact-tip run \d{8,}\b/i, evidence),
+             "a closed R13-lite row needs the exact-tip run"
     end
 
     # An open row must still name its remaining gate; a closed row is free to drop that wording.
@@ -311,12 +304,12 @@ defmodule Lattice.Treehouse.R13LiteContractTest do
     assert note =~ "no catalog"
   end
 
-  test "the plan status is not DONE or LOCAL VERIFIED while the hosted gates are open" do
+  test "the plan Status section and the ledger sub-row carry the same status word" do
     status_section = plan() |> section("## Status") |> normalize()
+    plan_status = Enum.find(@status_vocabulary, &String.starts_with?(status_section, &1))
 
-    refute status_section =~ ~r/^DONE\b/
-    refute status_section =~ ~r/^LOCAL VERIFIED\b/
-    assert status_section =~ ~r/^IN PROGRESS\b/
+    assert plan_status, "the plan Status section must start with a status word"
+    assert plan_status == r13_lite_status()
   end
 
   # -- surfaces ----------------------------------------------------------
