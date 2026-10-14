@@ -7,7 +7,7 @@
 > in `plans/README.md` — unless a reviewer dispatched you and told you they
 > maintain the index.
 >
-> **Drift check (run first)**: `git diff --stat 1017cb8..HEAD -- apps/lattice_carrier_server/lib/lattice_carrier_server/operator/ apps/lattice_carrier_server/lib/lattice_carrier_server/durability.ex apps/lattice_carrier_server/lib/lattice_carrier_server/holder.ex apps/lattice_carrier_server/test/operator/release_runtime_test.exs apps/lattice_carrier_server/test/township_projection_test.exs`
+> **Drift check (run first)**: `git diff --stat 1017cb8..HEAD -- apps/lattice_carrier_server/lib/lattice_carrier_server/operator/ apps/lattice_carrier_server/lib/lattice_carrier_server/durability.ex apps/lattice_carrier_server/lib/lattice_carrier_server/holder.ex apps/lattice_carrier_server/test/operator/release_runtime_test.exs apps/lattice_carrier_server/test/township_projection_test.exs apps/lattice_carrier_server/priv/server_node.exs`
 > If any in-scope file changed since this plan was written, compare the
 > "Current state" excerpts against the live code before proceeding; on a
 > mismatch, treat it as a STOP condition.
@@ -50,7 +50,8 @@ re-derived offline; plan 203's report already labels them that way.
   released case where drain waits and succeeds.
 - `apps/lattice_carrier_server/test/township_projection_test.exs:60` — "a client-signed relay
   survives a second-BEAM restart and matches Sim". Its second-BEAM launch helper is the pattern for
-  the crash scenario; reuse the helper, not the Township replica.
+  the crash scenario; reuse the helper, not the Township replica. The process it launches and
+  crashes is `apps/lattice_carrier_server/priv/server_node.exs`.
 
 ## Commands you will need
 
@@ -82,8 +83,13 @@ the core tier only, one adversarial review, exact-tip hosted run as the gate.
 
 ### Step 1 — Test support
 
-Copy `boot/1` from `release_runtime_test.exs` (lines 666-723) and `GatedSync` (lines 7-21) into
-`test/support/fault_scenario.ex`; do not edit the original test. Each scenario creates its replica
+Copy `boot/1` from `release_runtime_test.exs` (lines 666-723), `GatedSync` (lines 7-21) **and the
+lifecycle of its `setup` (lines 28-49)** into `test/support/fault_scenario.ex`; do not edit the
+original test. Mix has already started `:lattice_carrier_server`, and `boot/1` only changes the
+manifest and calls `Application.ensure_all_started/1`, so without the setup's
+`Application.stop/1` first (and its `on_exit` restore of `:manifest`, `:server_options` and the
+running app) the test would inspect the pre-existing deployment and never get `f.holder`. Mark the
+test module `async: false`. Each scenario creates its replica
 with an id derived deterministically from the scenario name and seed, so the verifier table can
 compute the expected `log.replica` the same way.
 
