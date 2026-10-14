@@ -10,6 +10,9 @@ const busyBufferText = { status: 1, stderr: Buffer.from("Error: stepping, databa
 const missingTable = { status: 1, stderr: "Error: in prepare, no such table: kv\n" };
 const tableLocked = { status: 6, stderr: "Error: in prepare, database table is locked (6)\n" };
 const killed = { status: null, stderr: "" };
+const killedAfterLocked = { status: null, signal: "SIGTERM", stderr: "Error: in prepare, database is locked (5)\n" };
+const missingBinary = Object.assign(new Error("spawnSync sqlite3 ENOENT"), { code: "ENOENT", status: null });
+const overflowed = { status: null, signal: "SIGTERM", code: "ENOBUFS", stderr: "database is locked" };
 
 function scripted<T>(failures: unknown[], value: T): { read: () => T; calls: () => number } {
   let calls = 0;
@@ -29,6 +32,9 @@ assert.equal(isSqliteBusy(busyBufferText), true, "a Buffer stderr is decoded");
 assert.equal(isSqliteBusy(missingTable), false, "a missing table is not busy");
 assert.equal(isSqliteBusy(tableLocked), false, "SQLITE_LOCKED (6) is not busy");
 assert.equal(isSqliteBusy(killed), false, "a signal kill is not busy");
+assert.equal(isSqliteBusy(killedAfterLocked), false, "a signal kill is not busy even after the locked text");
+assert.equal(isSqliteBusy(missingBinary), false, "a missing sqlite3 binary is not busy");
+assert.equal(isSqliteBusy(overflowed), false, "a maxBuffer overflow is not busy");
 assert.equal(isSqliteBusy(new Error("database is locked")), false, "only stderr text counts");
 assert.equal(isSqliteBusy("database is locked"), false, "a thrown string is not busy");
 assert.equal(isSqliteBusy(null), false);
@@ -50,9 +56,9 @@ const stuck = scripted([busy, busy, busy, busy, busy, busy], "[]");
 assert.throws(() => retryOnSqliteBusy(stuck.read, 4, 1), (error) => error === busy);
 assert.equal(stuck.calls(), 5, "a lock that never clears fails after the last retry");
 
-const started = Date.now();
+const started = performance.now();
 const backoff = scripted([busy, busy], "[]");
 retryOnSqliteBusy(backoff.read, 4, 20);
-assert.ok(Date.now() - started >= 55, "attempts are separated by an exponential backoff (20 ms + 40 ms)");
+assert.ok(performance.now() - started >= 55,"attempts are separated by an exponential backoff (20 ms + 40 ms)");
 
 console.log("  ✓ only SQLITE_BUSY is retried, with backoff, and other failures surface on the first attempt");

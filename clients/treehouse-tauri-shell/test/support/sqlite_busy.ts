@@ -8,7 +8,9 @@
  */
 export function isSqliteBusy(error: unknown): boolean {
   if (typeof error !== "object" || error === null) return false;
-  const { status, stderr } = error as { status?: unknown; stderr?: unknown };
+  const { status, signal, code, stderr } = error as { status?: unknown; signal?: unknown; code?: unknown; stderr?: unknown };
+  // A killed child or a spawn failure (ENOENT, ENOBUFS) is not a lock, whatever it printed.
+  if (signal != null || typeof code === "string") return false;
   if (status === 5) return true;
   const text = typeof stderr === "string" ? stderr : Buffer.isBuffer(stderr) ? stderr.toString("utf8") : "";
   return /database is locked/.test(text);
