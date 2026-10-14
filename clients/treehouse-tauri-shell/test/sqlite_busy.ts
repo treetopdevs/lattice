@@ -3,7 +3,8 @@ import { isSqliteBusy, retryOnSqliteBusy } from "./support/sqlite_busy";
 
 console.log("\n▸ Treehouse packaged store reader SQLITE_BUSY retry");
 
-// Shapes of the error execFileSync throws when sqlite3 exits non-zero (encoding "utf8" gives string stderr).
+// Shapes of the error execFileSync throws when sqlite3 exits non-zero, is killed, or fails to spawn
+// (encoding "utf8" gives string stderr).
 const busy = { status: 5, stderr: "Error: in prepare, database is locked (5)\n" };
 const busyBySignalText = { status: null, stderr: "Error: in prepare, database is locked (5)\n" };
 const busyBufferText = { status: 1, stderr: Buffer.from("Error: stepping, database is locked (261)\n") };

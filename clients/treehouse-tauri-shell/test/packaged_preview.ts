@@ -34,7 +34,8 @@ const priorArtifact = replayDirectory
     )
   : null;
 function rows(): { key: string; value: string }[] {
-  // A lock that outlives the busy timeout is retried with backoff; other errors surface at once.
+  // A lock that outlives the busy timeout is retried with backoff;
+  // every other error surfaces at once.
   const output = retryOnSqliteBusy(() =>
     execFileSync(
       "sqlite3",
