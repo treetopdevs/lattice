@@ -33,7 +33,10 @@ alive="$("$adb" shell pidof "$pkg" | tr -d '\r' || true)"
 for _ in 1 2 3 4 5; do
   "$adb" shell uiautomator dump /sdcard/treehouse-ui.xml > /dev/null || true
   "$adb" shell cat /sdcard/treehouse-ui.xml > "$out/ui.xml" || true
-  grep -qF 'text="Treehouse"' "$out/ui.xml" && break
+  # Break only when both required texts are present; the final check below needs both.
+  if grep -qF 'text="Treehouse"' "$out/ui.xml" && grep -qF 'text="Local preview"' "$out/ui.xml"; then
+    break
+  fi
   sleep 2
 done
 echo "pid after ${settle}s=${alive:-none}"
