@@ -86,12 +86,13 @@ Locally, run mix through the asdf shim with the OTP 28/Elixir 1.19 bin directori
 ```bash
 export PATH="$HOME/.asdf/installs/erlang/28.3.1/bin:$HOME/.asdf/installs/elixir/1.19.5-otp-28/bin:$PATH"
 alias mix="$HOME/.asdf/shims/mix"
+OUT="$(mktemp -d)"
 mix format --check-formatted
 mix test apps/lattice_core/test/lattice/fault_scenario_test.exs
 mix test apps/lattice_carrier_server/test/fault_scenario_test.exs
-mix lattice.fault run revoke_offline --seed demo --out "$TMPDIR/fault"
-mix lattice.fault verify "$TMPDIR/fault/revoke_offline"
-mix lattice.fault report "$TMPDIR/fault"        # writes $TMPDIR/fault/index.html
+mix lattice.fault run revoke_offline --seed demo --out "$OUT"
+mix lattice.fault verify "$OUT/revoke_offline"
+mix lattice.fault report "$OUT"               # writes $OUT/index.html
 ```
 
 ## Scope
@@ -165,13 +166,16 @@ single-module scenario has the prefix-free name `trust_graph.dot`.
 `state` is the SHA-256 of `:erlang.term_to_binary(Lattice.state(module, log), [:deterministic])`;
 `frontier` is the SHA-256 of the sorted frontier ids joined by `\n`.
 
-`Evidence.verify(dir)` restores every `logs/*.log` with `Lattice.Log.restore/1`, re-runs
+`Evidence.verify(dir)` restores every `logs/*.log` with `Lattice.Log.restore_verified/1` (never
+`restore/1`, which leaves hashes, signatures and dependency closure unchecked), re-runs
 `Lattice.Authority.analyze/2` and `Lattice.state/2`, recomputes every hash, the quarantine table and
 every check, and returns `{:ok, evidence}` only if the recomputed `evidence.json` is byte-identical
 to the stored one. Otherwise `{:error, [mismatch]}`.
 
-**Verify**: unit test round-trips a two-realm evidence directory, then flips one byte in a log
-file and asserts `{:error, _}`.
+**Verify**: unit test round-trips a two-realm evidence directory, then asserts `{:error, _}` for
+two tampers: one flipped byte in a log file, and a deliberate forgery, where one op's body is
+altered and the log is re-encoded with `Log.dump/2` and `evidence.json` is rewritten to match the
+forged results. Only `restore_verified/1` catches the second one.
 
 ### Step 2 — `partition_converge` (action: disconnect replica)
 
@@ -198,7 +202,10 @@ writer's later ops cite delegations their own log has never seen and quarantine 
 `:capability_not_visible` whether or not anything is revoked, which defeats the negative control.
 The scenario asserts `pre_revoke_honored` precisely to catch a missing sync. Then:
 
-1. `writer` posts once (pre-revoke; must be honored).
+1. `writer` posts once (pre-revoke; must be honored), then `Sim.sync_all/1` the thread sim. The
+   judge treats any op that is not a causal ancestor of the revoke as revoked-as-of
+   (`authority.ex` `revoked_as_of?/5`, ~line 1643), so an unsynced post would be concurrent with
+   the revoke and quarantined.
 2. Partition `writer` from `root` and `peer`.
 3. `root` revokes `writer`'s thread cap and the admin delegation.
 4. `writer`, still partitioned, posts twice and authors `Space.transfer_admin/4` to `peer`.
@@ -236,9 +243,15 @@ any holder, so a bare path holder would fail early for an unrelated reason. Boot
 runtime exactly as `test/operator/release_runtime_test.exs` does in its `setup` (line ~28, using
 `test/support/operator/fixture.ex`), then stall that runtime's holder worker the way
 `durability_test.exs:209` stalls a durable write, then call `ReleaseQuiesce.drain/3` with a short
-timeout. Invariant **`fail_closed`** — checks: `drain_returned_error` *and*
-`drain_error_is_holder_timeout` (the reason is the capture deadline, not a validation error; if
-`drain/3` gives no distinguishable reason, that is a STOP), `admission_closed` (a valid
+timeout. Concretely: arm `InjectedDurability.arm_failure(dir, :slow_sync_file)` with a
+`persistence_timeout_ms` longer than the drain timeout, start one signed relay so the holder is busy
+persisting, then call `drain/3`. `drain/3` collapses every capture failure into
+`{:error, :release_refused}` (`release_quiesce.ex:40-48`), so the reason cannot show *where* it
+failed; observe it instead. Invariant **`fail_closed`** — checks: `drain_returned_error`,
+`drain_reached_capture` (after the error every expected listener reports
+`:ranch.get_status(Listener.ref(name)) == :suspended`; `drain/3` suspends listeners only after the
+deployment and manifest validation pass and immediately before holder capture),
+`admission_closed` (a valid
 signed relay submitted after close is refused and the on-disk log bytes are unchanged),
 `acked_subset_of_persisted` (every op the client saw acknowledged is in `Log.restore` of the path).
 
@@ -248,6 +261,12 @@ Using the second-BEAM helper pattern from `township_projection_test.exs:60` with
 `:erlang.halt/1` on the peer (not a graceful stop), restart it from the same path, resend the client's
 outbox. Invariant **`durable_ack`** — checks: `acked_survive_restart`, `duplicates_silent` (resent
 acked frames change nothing), `frontier_after_equals_sim`, `state_after_equals_sim`.
+
+**Negative controls.** 4a: the same run without `arm_failure` must make `drain/3` succeed, so
+`drain_returned_error` is false and the verdict is `violated`. 4b: restart the relay from a fresh
+empty copy of the log path instead of the original path (simulated lost persistence), which must
+make `acked_survive_restart` false and the verdict `violated`. Both controls are test assertions,
+not shipped scenarios.
 
 **Verify**: `mix test apps/lattice_carrier_server/test/fault_scenario_test.exs` passes three times
 in a row; with `LATTICE_FAULT_OUT` set, `mix lattice.fault verify` accepts both directories (log
@@ -283,7 +302,8 @@ with one line (rule 5): date, the four verdicts, and the PR number.
 
 - Core: `fault_scenario_test.exs` — evidence round-trip and tamper; `partition_converge` held plus
   negative control; `revoke_offline` held plus negative control; same-seed byte identity for both.
-- Carrier: `fault_scenario_test.exs` — `stall_shutdown` and `crash_relay` held, three consecutive runs.
+- Carrier: `fault_scenario_test.exs` — `stall_shutdown` and `crash_relay` held, plus their negative
+  controls, three consecutive runs.
 - Full gate: prepare the clients as `AGENTS.md` describes (`npm --prefix clients/lattice-client ci`,
   `... run build`, `npm --prefix clients/treehouse-tauri-shell ci`), then the root `mix verify`.
   The new core modules compile into the umbrella dependency that the reciprocal Treehouse tests
@@ -292,7 +312,7 @@ with one line (rule 5): date, the four verdicts, and the PR number.
 ## Done criteria
 
 - Both core scenarios produce byte-identical evidence for the same seed, and `verify` accepts them.
-- Each core scenario has a negative control that the checker reports as `violated`.
+- All four scenarios have a negative control that the checker reports as `violated`.
 - Both carrier scenarios pass three runs in a row and emit evidence when asked.
 - `mix lattice.fault report` renders all four cards.
 - No diff under `authority.ex`, `sim.ex`, `canonical.ex`, carrier runtime `lib/`, `township*`.
