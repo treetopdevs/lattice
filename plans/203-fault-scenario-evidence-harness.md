@@ -259,8 +259,12 @@ from `release_runtime_test.exs:339-352`: install the observer, swap the holder's
 `:sys.replace_state(f.holder, &Map.put(&1, :durability, GatedSync))` (arming `InjectedDurability`
 does nothing here; the fixture's holder uses `Durability.Posix`), start one signed relay in a task,
 and `assert_receive {:sync_entered, worker}` so the holder is provably blocked in persistence
-**before** `drain/3` is called. Then call `drain/3` with a short timeout and never send
-`:continue_sync` until the checks are taken. (That existing test shows the released case: drain
+**before** `drain/3` is called. Then call `drain/3` with a short timeout. The sync runs in a task,
+but the holder waits for it inside `handle_call` (`holder.ex:386-404`), so the holder answers nothing
+while the gate is held. Order the checks accordingly: take `drain_returned_error`,
+`drain_reached_capture` and the unchanged-bytes half of `admission_closed` while the gate is still
+held; then send `:continue_sync`, await the original relay, and only then submit the second relay for
+the refusal half of `admission_closed`. (That existing test shows the released-in-time case: drain
 waits and succeeds.) `drain/3` collapses every capture failure into
 `{:error, :release_refused}` (`release_quiesce.ex:40-48`), so the reason cannot show *where* it
 failed; observe it instead. Invariant **`fail_closed`** — checks: `drain_returned_error`,
