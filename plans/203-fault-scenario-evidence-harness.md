@@ -223,7 +223,9 @@ The scenario asserts `pre_revoke_honored` precisely to catch a missing sync. The
    the revoke and quarantined.
 2. Partition `writer` from `root` and `peer`.
 3. `root` revokes `writer`'s thread cap and the admin delegation.
-4. `writer`, still partitioned, posts twice and authors `Space.transfer_admin/4` to `peer`.
+4. `writer`, still partitioned, posts twice and transfers `:admin` to `peer` with
+   `Sim.transfer(space, "writer", "peer", :admin, ops: [])`, which appends the op to `writer`'s log
+   (`Space.transfer_admin/4` only returns an op and would leave nothing to propagate).
 5. Heal; `sync_all` on both sims.
 
 - **Invariant `identical_quarantine`** — checks: `states_equal` (per sim), `pre_revoke_honored`,
@@ -258,8 +260,10 @@ byte-identity and from `verify`.
 **4a `stall_shutdown`** (action: stall shutdown). `drain/3` validates `Runtime.deployment/0`, the
 exact manifest and instance inventory, and suspends registered Ranch listeners before it captures
 any holder, so a bare path holder would fail early for an unrelated reason. Boot the controlled
-runtime exactly as `test/operator/release_runtime_test.exs` does in its `setup` (line ~28, using
-`test/support/operator/fixture.ex`), then stall that runtime's holder with the gated-sync pattern
+runtime the way `test/operator/release_runtime_test.exs` does: its `setup` (lines 28-49) only
+stops and restores the application, and the runtime with `f.holder`, `f.attempt` and `f.expected`
+comes from the private `boot/1` (lines 666-723). Move that helper into
+`test/support/fault_scenario.ex` (or copy it there; do not edit the original test), then stall that runtime's holder with the gated-sync pattern
 from `release_runtime_test.exs:339-352`: install the observer, swap the holder's durability with
 `:sys.replace_state(f.holder, &Map.put(&1, :durability, GatedSync))` (arming `InjectedDurability`
 does nothing here; the fixture's holder uses `Durability.Posix`), start one signed relay in a task,
@@ -316,7 +320,10 @@ at report time and matched), **recorded** (a process-level check, such as `admis
 "unverified". `evidence.json` marks each check with `"source": "replay" | "process"` so the report
 does not infer it. `verify` never trusts that field: it holds a verifier-owned table of each
 scenario's check names and their source, and rejects any directory with an unknown check name,
-a missing check, or a `source` that differs from the table. A recorded check is the test run's own claim, not outsider-checkable evidence;
+a missing check, or a `source` that differs from the table. The same table fixes each scenario's
+log prefixes and the replica module for each (`thread` → `Treehouse.Thread`, `space` →
+`Treehouse.Space`); `verify` rejects a `module` field or log prefix that differs **before** any
+replay, so an authentic log from another module cannot stand in for a named scenario. A recorded check is the test run's own claim, not outsider-checkable evidence;
 the card says so in its legend, and a `held` verdict on such a card never renders as verified. This is the
 demonstration surface for this plan.
 
