@@ -39,6 +39,10 @@ function rows(): { key: string; value: string }[] {
       [
         "-readonly",
         "-json",
+        // The app writes under a 5 s busy timeout; the CLI reader must wait too,
+        // or it fails with "database is locked (5)" during a write.
+        "-cmd",
+        ".timeout 10000",
         database,
         "SELECT key,value FROM kv ORDER BY key;",
       ],
