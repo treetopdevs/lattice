@@ -1433,17 +1433,20 @@ function delegationKey(delegation) {
         roles: [...delegation.roles].sort(),
     });
 }
-const selfConsistentDelegations = new WeakMap();
+const selfConsistentDelegations = new Map();
 /**
  * True when the cited delegation evidence carries a valid signature for its own content.
  * This is the introduction bar Elixir's `collect_valid_delegation_intro` applies: an
  * invalid-signature introduction must not match a verified delegation by content alone.
  */
 function introducedWithValidSignature(delegation) {
-    let verdict = selfConsistentDelegations.get(delegation);
+    // Keyed by the whole evidence, sig included: a re-signed or mutated object must never
+    // reuse another object's verdict.
+    const cacheKey = JSON.stringify(delegation);
+    let verdict = selfConsistentDelegations.get(cacheKey);
     if (verdict === undefined) {
         verdict = delegationSelfConsistent(delegation);
-        selfConsistentDelegations.set(delegation, verdict);
+        selfConsistentDelegations.set(cacheKey, verdict);
     }
     return verdict;
 }

@@ -1994,7 +1994,7 @@ function delegationKey(delegation: AuthorityDelegationEvidence): string {
   });
 }
 
-const selfConsistentDelegations = new WeakMap<AuthorityDelegationEvidence, boolean>();
+const selfConsistentDelegations = new Map<string, boolean>();
 
 /**
  * True when the cited delegation evidence carries a valid signature for its own content.
@@ -2002,10 +2002,13 @@ const selfConsistentDelegations = new WeakMap<AuthorityDelegationEvidence, boole
  * invalid-signature introduction must not match a verified delegation by content alone.
  */
 function introducedWithValidSignature(delegation: AuthorityDelegationEvidence): boolean {
-  let verdict = selfConsistentDelegations.get(delegation);
+  // Keyed by the whole evidence, sig included: a re-signed or mutated object must never
+  // reuse another object's verdict.
+  const cacheKey = JSON.stringify(delegation);
+  let verdict = selfConsistentDelegations.get(cacheKey);
   if (verdict === undefined) {
     verdict = delegationSelfConsistent(delegation);
-    selfConsistentDelegations.set(delegation, verdict);
+    selfConsistentDelegations.set(cacheKey, verdict);
   }
   return verdict;
 }
