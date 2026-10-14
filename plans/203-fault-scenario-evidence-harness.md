@@ -85,7 +85,7 @@ Locally, run mix through the asdf shim with the OTP 28/Elixir 1.19 bin directori
 
 ```bash
 export PATH="$HOME/.asdf/installs/erlang/28.3.1/bin:$HOME/.asdf/installs/elixir/1.19.5-otp-28/bin:$PATH"
-alias mix="$HOME/.asdf/shims/mix"
+mix() { "$HOME/.asdf/shims/mix" "$@"; }
 OUT="$(mktemp -d)"
 mix format --check-formatted
 mix test apps/lattice_core/test/lattice/fault_scenario_test.exs
