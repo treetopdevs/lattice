@@ -1,0 +1,288 @@
+{
+  "expectAtFrontier": [],
+  "expectAtFullFrontier": {
+    "authorityQuarantine": [
+      [
+        "Z73hazgaJYaRJevHMCd8Aot2NvSe03yGSGhERe0avXI",
+        "double_transfer"
+      ]
+    ],
+    "quarantine": [
+      "Z73hazgaJYaRJevHMCd8Aot2NvSe03yGSGhERe0avXI"
+    ],
+    "state": {
+      "clerk": "neighbor",
+      "clerk_locked": false,
+      "members": [],
+      "posts": [],
+      "summary": "",
+      "title": ""
+    },
+    "winners": {
+      "clerk": "2FzlfK72RTOmrFNyXOivEDdM_Sn59qM2jSgV2T-3huA",
+      "clerk_locked": null,
+      "summary": null,
+      "title": null
+    }
+  },
+  "generatedBy": "Lattice.Sim",
+  "ops": [
+    {
+      "author": "clerk",
+      "command": "genesis clerk",
+      "deps": [],
+      "field": "clerk",
+      "hash": "3Eonvja6TOrDmU2XMI3COsUevufB1FhW61VaaX8ceNQ",
+      "id": "3Eonvja6TOrDmU2XMI3COsUevufB1FhW61VaaX8ceNQ",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "clerk"
+    },
+    {
+      "author": "clerk",
+      "command": "transfer clerk",
+      "deps": [
+        "3Eonvja6TOrDmU2XMI3COsUevufB1FhW61VaaX8ceNQ"
+      ],
+      "field": "clerk",
+      "hash": "2FzlfK72RTOmrFNyXOivEDdM_Sn59qM2jSgV2T-3huA",
+      "id": "2FzlfK72RTOmrFNyXOivEDdM_Sn59qM2jSgV2T-3huA",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "neighbor"
+    },
+    {
+      "author": "resident",
+      "command": "succeed clerk",
+      "deps": [
+        "3Eonvja6TOrDmU2XMI3COsUevufB1FhW61VaaX8ceNQ"
+      ],
+      "field": "clerk",
+      "hash": "Z73hazgaJYaRJevHMCd8Aot2NvSe03yGSGhERe0avXI",
+      "id": "Z73hazgaJYaRJevHMCd8Aot2NvSe03yGSGhERe0avXI",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "resident"
+    }
+  ],
+  "oracleCarrierOps": [
+    {
+      "author": "RjGe/ED3UCYr6zPrR2RGwxj5aKEYPoFhufwACnIbxq4=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "RjGe/ED3UCYr6zPrR2RGwxj5aKEYPoFhufwACnIbxq4=",
+              "id": "KxQ8bTMiGQx99U6XJs5R1P84RNccI4HVp_GHG50KAyg",
+              "issuer": "RjGe/ED3UCYr6zPrR2RGwxj5aKEYPoFhufwACnIbxq4=",
+              "live": true,
+              "ops": [
+                "admit",
+                "close_matter",
+                "link_election",
+                "post",
+                "remove_member",
+                "reopen_matter",
+                "set_summary",
+                "set_title"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:authority-malformed-dormant-stale-claim#root:PgKH35JH8rMlIHcyQ9BvDdLw5xNfcVJIYIFVR5kkahU",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "Z+pkTrJiXvMWVkGZTgxjzvRlor+MbyD1RSDurMMk0Ycl9QSUVCyFv7hfmntqW3zq8Qj1HPbQYTzHmDEqyR8UDQ=="
+            }
+          ],
+          [
+            "map",
+            [
+              [
+                [
+                  "atom",
+                  "clerk"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "successor"
+                      ],
+                      [
+                        "bin",
+                        "xWjYyok5TuzoEeh/jOyfc65C478WNnD0o1wtOZNgZmM="
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "dormant_ticks"
+                      ],
+                      [
+                        "bin",
+                        "eA=="
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [],
+      "id": "3Eonvja6TOrDmU2XMI3COsUevufB1FhW61VaaX8ceNQ",
+      "kind": "authority",
+      "replica": "replica:matter:authority-malformed-dormant-stale-claim#root:PgKH35JH8rMlIHcyQ9BvDdLw5xNfcVJIYIFVR5kkahU",
+      "sig": "pGn0hUem8MG5fAP5aukCcIb/9K+cQIaMvDGYEvY+X3Guyp77EsL3+fj4LG1JsK3dudurTnmXNnblEzwMAX+LCQ==",
+      "v": 1
+    },
+    {
+      "author": "RjGe/ED3UCYr6zPrR2RGwxj5aKEYPoFhufwACnIbxq4=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "transfer"
+          ],
+          [
+            "atom",
+            "clerk"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "52si/hrg4Y4R4ts+7ZC6K9CGMlPS+dqjB+oaY1aH/0k=",
+              "id": "EVxfQjJg63uc_RXLHJn5DYo9NMvzzsyGubI-SndHeHo",
+              "issuer": "RjGe/ED3UCYr6zPrR2RGwxj5aKEYPoFhufwACnIbxq4=",
+              "live": false,
+              "ops": [
+                "close_matter",
+                "reopen_matter"
+              ],
+              "parent_id": "KxQ8bTMiGQx99U6XJs5R1P84RNccI4HVp_GHG50KAyg",
+              "replica": "replica:matter:authority-malformed-dormant-stale-claim#root:PgKH35JH8rMlIHcyQ9BvDdLw5xNfcVJIYIFVR5kkahU",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "AAu3I/FFVcg+/dYr9oFK7RrEWU4sJYja6+CzK2VAkTWSuJWybvCyZ+kfFdomTRVWv2sc6/YWAUNi7fBVJxxyDw=="
+            }
+          ],
+          [
+            "int",
+            0
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "3Eonvja6TOrDmU2XMI3COsUevufB1FhW61VaaX8ceNQ"
+      ],
+      "id": "2FzlfK72RTOmrFNyXOivEDdM_Sn59qM2jSgV2T-3huA",
+      "kind": "authority",
+      "replica": "replica:matter:authority-malformed-dormant-stale-claim#root:PgKH35JH8rMlIHcyQ9BvDdLw5xNfcVJIYIFVR5kkahU",
+      "sig": "6Mbtk242WKshGL5KumZJ6mRruuAMsYrZnr0mEjD7zKh9MQKfdHb9P8oEksWGGruaFqH0bX5RgHdRF2J0Y7PFBA==",
+      "v": 1
+    },
+    {
+      "author": "xWjYyok5TuzoEeh/jOyfc65C478WNnD0o1wtOZNgZmM=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "succeed"
+          ],
+          [
+            "atom",
+            "clerk"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "xWjYyok5TuzoEeh/jOyfc65C478WNnD0o1wtOZNgZmM=",
+              "id": "l4kzjVzq2lCM0xHVyiRs0z0fetqu9S2LpXsKpbVfDYg",
+              "issuer": "xWjYyok5TuzoEeh/jOyfc65C478WNnD0o1wtOZNgZmM=",
+              "live": false,
+              "ops": [
+                "close_matter",
+                "reopen_matter"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:authority-malformed-dormant-stale-claim#root:PgKH35JH8rMlIHcyQ9BvDdLw5xNfcVJIYIFVR5kkahU",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "H98/pUCVADGHYQvi6iXzOFh/HqTGGe0tsDWj7k7ZnEfnrPr6N5wqEk9Zykr8rvm31HOJvH6ngPvmryS2Apg1Dg=="
+            }
+          ],
+          [
+            "int",
+            3
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "3Eonvja6TOrDmU2XMI3COsUevufB1FhW61VaaX8ceNQ"
+      ],
+      "id": "Z73hazgaJYaRJevHMCd8Aot2NvSe03yGSGhERe0avXI",
+      "kind": "authority",
+      "replica": "replica:matter:authority-malformed-dormant-stale-claim#root:PgKH35JH8rMlIHcyQ9BvDdLw5xNfcVJIYIFVR5kkahU",
+      "sig": "URzENTfFnhbg8FdARqbUeTrdo9gypdiJ+zRAPbmhAaI6AINFZDZIovbqHGY8RFHQQDHP/cEqq1cRaoAjVm2DBg==",
+      "v": 1
+    }
+  ],
+  "perspectives": [],
+  "realmByPubkey": {
+    "52si/hrg4Y4R4ts+7ZC6K9CGMlPS+dqjB+oaY1aH/0k=": "neighbor",
+    "RjGe/ED3UCYr6zPrR2RGwxj5aKEYPoFhufwACnIbxq4=": "clerk",
+    "xWjYyok5TuzoEeh/jOyfc65C478WNnD0o1wtOZNgZmM=": "resident"
+  },
+  "replica": "replica:matter:authority-malformed-dormant-stale-claim#root:PgKH35JH8rMlIHcyQ9BvDdLw5xNfcVJIYIFVR5kkahU",
+  "scenario": "township_authority_malformed_dormant_stale_claim",
+  "scenarioKind": "adversarial",
+  "schema": {
+    "fields": {
+      "clerk": {
+        "authority": "clerk"
+      },
+      "clerk_locked": {
+        "default": false,
+        "gatedBy": "clerk",
+        "merge": "lww"
+      },
+      "members": {
+        "merge": "or_set"
+      },
+      "posts": {
+        "merge": "causal_list"
+      },
+      "summary": {
+        "default": "",
+        "merge": "lww"
+      },
+      "title": {
+        "default": "",
+        "merge": "lww"
+      }
+    },
+    "name": "Township.Matter"
+  }
+}

@@ -1188,7 +1188,7 @@ defmodule Lattice.CompactionSpike do
       seeded_revoked_as_of?(op, d, ctx) ->
         seeded_reject(tl, op, :revoked_capability)
 
-      is_nil(policy) or op.author != policy.successor ->
+      not is_map(policy) or op.author != Map.get(policy, :successor) ->
         seeded_reject(tl, op, :unauthorized_succession)
 
       Map.has_key?(policy, :recovery) and Map.has_key?(policy, :dormant_ticks) ->
@@ -1208,6 +1208,9 @@ defmodule Lattice.CompactionSpike do
       # round trip or self-transfer leaves the same holder under a new acquire.
       seeded_holder_acquire_at(tl, op_anc) != List.last(continuation_acquires(tl)) ->
         seeded_reject(tl, op, :double_transfer)
+
+      not is_integer(dormant_ticks) ->
+        seeded_reject(tl, op, :invalid_succession)
 
       at_tick < seeded_last_active(tl, op_anc) + dormant_ticks ->
         seeded_reject(tl, op, :premature_succession)

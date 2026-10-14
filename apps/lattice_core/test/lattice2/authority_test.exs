@@ -365,4 +365,61 @@ defmodule Lattice2.AuthorityTest do
     refute MapSet.member?(analysis.quarantine, post.id)
     assert "kept" in Lattice.state(Lattice.Demo.Thread, log).messages
   end
+
+  # Row 191: a non-integer dormant threshold refuses the claim instead of raising, and
+  # the seeded compaction judge agrees at every cut.
+  test "a malformed dormant_ticks refuses a fresh claim as invalid_succession" do
+    sim = Sim.new(Township.Matter, "replica:matter:row191-dormant", ["clerk", "resident"])
+
+    {sim, genesis} =
+      Sim.create_replica(sim, "clerk",
+        policies: %{clerk: %{successor: "resident", dormant_ticks: "x"}}
+      )
+
+    sim = Sim.sync_all(sim)
+    {sim, claim} = Sim.succeed(sim, "resident", :clerk, at_tick: 3, ops: [:close_matter])
+    log = Sim.log(sim, "resident")
+    analysis = Lattice.Authority.analyze(Township.Matter, log)
+
+    assert analysis.reasons == %{claim.id => :invalid_succession}
+    assert analysis.holder_epochs[:clerk].op_id == genesis.id
+
+    for at <- [[genesis.id], Log.frontier(log)] do
+      assert {:ok, snapshot, retained} =
+               Lattice.CompactionSpike.compact(Township.Matter, log, at)
+
+      result = Lattice.CompactionSpike.reduce_compacted(Township.Matter, snapshot, retained)
+      assert result.reasons == analysis.reasons
+      assert result.holders == analysis.holders
+    end
+  end
+
+  test "a role policy naming no successor refuses a claim as unauthorized_succession" do
+    for policy <- [%{dormant_ticks: 0}, "x"] do
+      sim = Sim.new(Township.Matter, "replica:matter:row191-successor", ["clerk", "resident"])
+      clerk = Sim.identity(sim, "clerk")
+
+      d =
+        Delegation.genesis(clerk, Sim.replica(sim),
+          ops: [:close_matter],
+          roles: [:clerk],
+          live: true
+        )
+
+      {sim, genesis} = Sim.append(sim, "clerk", :authority, {:genesis, d, %{clerk: policy}})
+      sim = Sim.sync_all(sim)
+      {sim, claim} = Sim.succeed(sim, "resident", :clerk, at_tick: 3, ops: [:close_matter])
+      log = Sim.log(sim, "resident")
+      analysis = Lattice.Authority.analyze(Township.Matter, log)
+      assert analysis.reasons == %{claim.id => :unauthorized_succession}, inspect(policy)
+
+      for at <- [[genesis.id], Log.frontier(log)] do
+        assert {:ok, snapshot, retained} =
+                 Lattice.CompactionSpike.compact(Township.Matter, log, at)
+
+        result = Lattice.CompactionSpike.reduce_compacted(Township.Matter, snapshot, retained)
+        assert result.reasons == analysis.reasons
+      end
+    end
+  end
 end

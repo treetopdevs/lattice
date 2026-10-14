@@ -210,6 +210,14 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_authority_cross_role_succession_transfer(),
       township_authority_revoked_transfer(),
       township_authority_revoked_succession(),
+      township_authority_conflicting_succession_policy(),
+      township_authority_unarmed_succession_policy(),
+      township_authority_malformed_recovery_policy(),
+      township_authority_incomplete_recovery_policy(),
+      township_authority_malformed_dormant_stale_claim(),
+      township_authority_malformed_dormant_claim(),
+      township_authority_successorless_policy(),
+      township_authority_non_map_policy(),
       township_authority_dormant_succession_stale_holder(),
       township_authority_dormant_succession_stale_acquire(),
       township_authority_command_shaped_revoke(),
@@ -2011,6 +2019,339 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
 
     %{
       name: "township_authority_revoked_succession",
+      kind: "adversarial",
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: Sim.replica(sim),
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      authorityQuarantine: authority_quarantine
+    }
+  end
+
+  # Row 191: a policy carrying both `dormant_ticks` and `recovery` refuses every
+  # succession proof shape with one reason, before either arm runs.
+  defp township_authority_conflicting_succession_policy do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:authority-conflicting-succession-policy",
+        ["clerk", "resident", "witness_a", "witness_b"],
+        seed: "township:authority-conflicting-succession-policy"
+      )
+
+    {sim, _genesis} =
+      Sim.create_replica(sim, "clerk",
+        policies: %{
+          clerk: %{
+            successor: "resident",
+            dormant_ticks: 3,
+            recovery: %{
+              mode: :witnessed,
+              version: 1,
+              witnesses: ["witness_a", "witness_b"],
+              threshold: 2
+            }
+          }
+        }
+      )
+
+    sim = Sim.sync_all(sim)
+
+    {sim, legacy} =
+      Sim.succeed(sim, "resident", :clerk,
+        at_tick: 3,
+        ops: [:close_matter, :reopen_matter]
+      )
+
+    {sim, witnessed} =
+      Sim.succeed(sim, "resident", :clerk,
+        witnesses: ["witness_a", "witness_b"],
+        ops: [:close_matter, :reopen_matter]
+      )
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+    authority_quarantine = authority_quarantine(log)
+
+    unless authority_quarantine ==
+             Enum.sort([
+               [legacy.id, "invalid_recovery_policy"],
+               [witnessed.id, "invalid_recovery_policy"]
+             ]) do
+      raise "expected both proof shapes to quarantine on the conflicting policy"
+    end
+
+    unless Authority.holder(Matter, log, :clerk) == Sim.identity(sim, "clerk").pub do
+      raise "expected the conflicting policy not to move clerk authority"
+    end
+
+    realms = realm_index(sim)
+
+    %{
+      name: "township_authority_conflicting_succession_policy",
+      kind: "adversarial",
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: Sim.replica(sim),
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      authorityQuarantine: authority_quarantine
+    }
+  end
+
+  # Row 191: a hand-authored genesis policy with neither arm refuses a tick proof as
+  # `:invalid_succession` and a certificate as `:witnessed_recovery_not_configured`.
+  defp township_authority_unarmed_succession_policy do
+    hand_authored_policy_vector(
+      "township_authority_unarmed_succession_policy",
+      fn resident -> %{successor: resident.pub} end,
+      ["invalid_succession", "witnessed_recovery_not_configured"]
+    )
+  end
+
+  # Row 191: a malformed `recovery` arm refuses both proof shapes as
+  # `:invalid_recovery_policy`.
+  defp township_authority_malformed_recovery_policy do
+    hand_authored_policy_vector(
+      "township_authority_malformed_recovery_policy",
+      fn resident ->
+        %{
+          successor: resident.pub,
+          recovery: %{mode: :witnessed, version: 1, witnesses: [], threshold: 2}
+        }
+      end,
+      ["invalid_recovery_policy", "invalid_recovery_policy"]
+    )
+  end
+
+  # Row 191: a `recovery` arm whose only defect is a missing `threshold` is refused the same way.
+  defp township_authority_incomplete_recovery_policy do
+    hand_authored_policy_vector(
+      "township_authority_incomplete_recovery_policy",
+      fn resident ->
+        %{
+          successor: resident.pub,
+          recovery: %{mode: :witnessed, version: 1, witnesses: [resident.pub]}
+        }
+      end,
+      ["invalid_recovery_policy", "invalid_recovery_policy"]
+    )
+  end
+
+  # Row 191 review: a role policy without `:successor`, or one that is not a map, names no
+  # successor; both proof shapes refuse as unauthorized_succession rather than raising.
+  defp township_authority_successorless_policy do
+    hand_authored_policy_vector(
+      "township_authority_successorless_policy",
+      fn _resident -> %{dormant_ticks: 0} end,
+      ["unauthorized_succession", "unauthorized_succession"]
+    )
+  end
+
+  defp township_authority_non_map_policy do
+    hand_authored_policy_vector(
+      "township_authority_non_map_policy",
+      fn _resident -> "x" end,
+      ["unauthorized_succession", "unauthorized_succession"]
+    )
+  end
+
+  defp hand_authored_policy_vector(name, policy_fun, [tick_reason, certificate_reason]) do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:" <> String.replace_prefix(name, "township_", ""),
+        ["clerk", "resident", "witness_a", "witness_b"],
+        seed: "township:" <> name
+      )
+
+    clerk = Sim.identity(sim, "clerk")
+    resident = Sim.identity(sim, "resident")
+
+    delegation =
+      Delegation.genesis(clerk, Sim.replica(sim),
+        ops: [:close_matter, :reopen_matter],
+        roles: [:clerk],
+        live: true
+      )
+
+    {sim, genesis} =
+      Sim.append(
+        sim,
+        "clerk",
+        :authority,
+        {:genesis, delegation, %{clerk: policy_fun.(resident)}}
+      )
+
+    sim = Sim.sync_all(sim)
+
+    {sim, tick_claim} =
+      Sim.succeed(sim, "resident", :clerk,
+        at_tick: 3,
+        ops: [:close_matter, :reopen_matter]
+      )
+
+    # No valid recovery policy exists to derive a claim from, so the certificate signs
+    # a claim bound to an unpinned policy id; the policy arm refuses it first.
+    certificate =
+      SuccessionCertificate.new(
+        %{
+          version: 1,
+          replica: Sim.replica(sim),
+          role: :clerk,
+          holder: clerk.pub,
+          holder_epoch: genesis.id,
+          successor: resident.pub,
+          policy_id: "unpinned"
+        },
+        Enum.map(["witness_a", "witness_b"], &Sim.identity(sim, &1))
+      )
+
+    {sim, certificate_claim} =
+      Sim.succeed(sim, "resident", :clerk,
+        certificate: certificate,
+        ops: [:close_matter, :reopen_matter]
+      )
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+    authority_quarantine = authority_quarantine(log)
+
+    unless authority_quarantine ==
+             Enum.sort([
+               [tick_claim.id, tick_reason],
+               [certificate_claim.id, certificate_reason]
+             ]) do
+      raise "expected #{name} to refuse both proof shapes with the pinned reasons"
+    end
+
+    unless Authority.holder(Matter, log, :clerk) == clerk.pub do
+      raise "expected #{name} not to move clerk authority"
+    end
+
+    realms = realm_index(sim)
+
+    %{
+      name: name,
+      kind: "adversarial",
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: Sim.replica(sim),
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      authorityQuarantine: authority_quarantine
+    }
+  end
+
+  # Row 191 review: a non-integer `dormant_ticks` reaches Elixir's dormant clause, whose
+  # stale-holder check refuses a claim that never saw the current acquire before it reads
+  # the tick threshold.
+  defp township_authority_malformed_dormant_stale_claim do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:authority-malformed-dormant-stale-claim",
+        ["clerk", "resident", "neighbor"],
+        seed: "township:authority-malformed-dormant-stale-claim:1"
+      )
+
+    {sim, _genesis} =
+      Sim.create_replica(sim, "clerk",
+        policies: %{clerk: %{successor: "resident", dormant_ticks: "x"}}
+      )
+
+    sim = Sim.sync_all(sim)
+    sim = sim |> Sim.partition("clerk", "resident") |> Sim.partition("neighbor", "resident")
+
+    {sim, to_neighbor} =
+      Sim.transfer(sim, "clerk", "neighbor", :clerk, ops: [:close_matter, :reopen_matter])
+
+    sim = Sim.sync(sim, "clerk", "neighbor")
+
+    {sim, succession} =
+      Sim.succeed(sim, "resident", :clerk,
+        at_tick: 3,
+        ops: [:close_matter, :reopen_matter]
+      )
+
+    sim =
+      sim
+      |> Sim.heal("clerk", "resident")
+      |> Sim.heal("neighbor", "resident")
+      |> Sim.sync_all()
+
+    log = Sim.log(sim, "clerk")
+    transfer = find_transfer_op!(Map.values(Log.ops(log)), to_neighbor.id)
+
+    unless transfer.id not in succession.deps and transfer.id < succession.id do
+      raise "expected the unseen transfer to be concurrent with and judged before the claim"
+    end
+
+    authority_quarantine = authority_quarantine(log)
+
+    unless authority_quarantine == [[succession.id, "double_transfer"]] do
+      raise "expected the stale claim under a malformed dormant policy to be double_transfer"
+    end
+
+    realms = realm_index(sim)
+
+    %{
+      name: "township_authority_malformed_dormant_stale_claim",
+      kind: "adversarial",
+      log: log,
+      realms: realms,
+      perspectives: [],
+      replica: Sim.replica(sim),
+      realmByPubkey: carrier_realm_by_pubkey(realms),
+      oracleCarrierOps: carrier_ops(log),
+      authorityQuarantine: authority_quarantine
+    }
+  end
+
+  # Row 191 review: a claim that saw the current acquire, under a non-integer
+  # `dormant_ticks`, refuses as invalid_succession instead of raising in the judge.
+  defp township_authority_malformed_dormant_claim do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:authority-malformed-dormant-claim",
+        ["clerk", "resident"],
+        seed: "township:authority-malformed-dormant-claim"
+      )
+
+    {sim, _genesis} =
+      Sim.create_replica(sim, "clerk",
+        policies: %{clerk: %{successor: "resident", dormant_ticks: "x"}}
+      )
+
+    sim = Sim.sync_all(sim)
+
+    {sim, succession} =
+      Sim.succeed(sim, "resident", :clerk,
+        at_tick: 3,
+        ops: [:close_matter, :reopen_matter]
+      )
+
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+    authority_quarantine = authority_quarantine(log)
+
+    unless authority_quarantine == [[succession.id, "invalid_succession"]] do
+      raise "expected a malformed dormant threshold to refuse the claim as invalid_succession"
+    end
+
+    unless Authority.holder(Matter, log, :clerk) == Sim.identity(sim, "clerk").pub do
+      raise "expected the malformed dormant policy not to move clerk authority"
+    end
+
+    realms = realm_index(sim)
+
+    %{
+      name: "township_authority_malformed_dormant_claim",
       kind: "adversarial",
       log: log,
       realms: realms,

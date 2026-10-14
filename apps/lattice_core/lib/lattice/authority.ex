@@ -1307,7 +1307,7 @@ defmodule Lattice.Authority do
       revoked_as_of?(op, d, delegations, revokes, ancestors) ->
         reject(st, op, :revoked_capability, role)
 
-      is_nil(policy) or op.author != policy.successor ->
+      not is_map(policy) or op.author != Map.get(policy, :successor) ->
         reject(st, op, :unauthorized_succession, role)
 
       Map.has_key?(policy, :recovery) and Map.has_key?(policy, :dormant_ticks) ->
@@ -1331,6 +1331,10 @@ defmodule Lattice.Authority do
     cond do
       holder_acquire_from(st.acquires, anc) != List.last(st.acquires) ->
         reject(st, op, :double_transfer, role)
+
+      # Row 191: a signed policy may carry any canonical term here; refuse, never raise.
+      not is_integer(dormant_ticks) ->
+        reject(st, op, :invalid_succession, role)
 
       at_tick < last_active + dormant_ticks ->
         reject(st, op, :premature_succession, role)
