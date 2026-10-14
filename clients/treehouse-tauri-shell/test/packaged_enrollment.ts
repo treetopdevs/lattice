@@ -33,6 +33,7 @@ import {
 import type { PilotRelay } from "./support/relay_peer";
 import { assertNoSecrets, assertScannerDetects } from "./support/secret_scan";
 import { SeededNative } from "./support/seeded_native";
+import { retryOnSqliteBusy } from "./support/sqlite_busy";
 
 // Plan 181 S5c1. The packaged two-instance macOS harness: two launches of one dev-trace Treehouse bundle,
 // each with a directory-isolated store and a seeded in-memory test key (not Keychain custody), driven only
@@ -185,18 +186,13 @@ const waitText = (app: App, text: string, attempts = 150) => waitUi(app, text, a
 
 function rows(app: App): { key: string; value: string }[] {
   if (!existsSync(app.database)) return [];
-  for (let attempt = 0; ; attempt++) {
-    try {
-      return JSON.parse(
-        execFileSync("sqlite3", ["-readonly", "-json", app.database, "SELECT key,value FROM kv ORDER BY key;"], {
-          encoding: "utf8",
-          maxBuffer: 64 * 1024 * 1024,
-        }) || "[]",
-      );
-    } catch (error) {
-      if (attempt >= 4) throw error;
-    }
-  }
+  const output = retryOnSqliteBusy(() =>
+    execFileSync("sqlite3", ["-readonly", "-json", app.database, "SELECT key,value FROM kv ORDER BY key;"], {
+      encoding: "utf8",
+      maxBuffer: 64 * 1024 * 1024,
+    }),
+  );
+  return JSON.parse(output || "[]");
 }
 const recordOf = (app: App) => rows(app).find((row) => row.key === "treehouse:preview:history")?.value ?? null;
 const stateOf = (app: App): PreviewState => parseState(recordOf(app));

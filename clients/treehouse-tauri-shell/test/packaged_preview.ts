@@ -8,6 +8,7 @@ import { createHash } from "node:crypto";
 import { TreehouseWorkflow } from "../src/treehouse_workflow";
 import { parseState } from "../src/treehouse_state";
 import type { PreviewNative, Draft } from "../src/treehouse_state";
+import { retryOnSqliteBusy } from "./support/sqlite_busy";
 const evidence =
   process.env.TREEHOUSE_EVIDENCE_DIR ?? "/tmp/treehouse-r12-packaged-green";
 const binary = resolve(
@@ -33,7 +34,8 @@ const priorArtifact = replayDirectory
     )
   : null;
 function rows(): { key: string; value: string }[] {
-  return JSON.parse(
+  // A lock that outlives the busy timeout is retried with backoff; other errors surface at once.
+  const output = retryOnSqliteBusy(() =>
     execFileSync(
       "sqlite3",
       [
@@ -46,9 +48,10 @@ function rows(): { key: string; value: string }[] {
         database,
         "SELECT key,value FROM kv ORDER BY key;",
       ],
-      { encoding: "utf8" },
-    ) || "[]",
+      { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+    ),
   );
+  return JSON.parse(output || "[]");
 }
 try {
   await access(appData);
