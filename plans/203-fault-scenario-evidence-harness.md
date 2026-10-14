@@ -119,7 +119,10 @@ mix lattice.fault report "$TMPDIR/fault"        # writes $TMPDIR/fault/index.htm
 ## Git workflow
 
 Branch `claude/plan-203-fault-scenarios` from `main`. One commit per step. Open one PR at the end;
-its description states the claim tier in one sentence (core) and nothing above it.
+its description states the claim tier in one sentence (core) and nothing above it. Per the index
+working policy: the PR gets one adversarial review (no file here is on the second-review list) and
+every thread is fixed or rejected with one line; the exact-tip hosted run is the gate, plus a
+merge-result run only if the merge is not a fast-forward of that green tip.
 
 ## Steps
 
@@ -131,7 +134,7 @@ Define `Lattice.FaultScenario.Evidence`. One scenario writes one directory:
 <out>/<scenario>/
   evidence.json        # schema below, canonical key order, no timestamps
   logs/<realm>.log     # Lattice.Log.dump/2 per replica, final state
-  trust_graph.dot      # Lattice.Graph.Export of the first replica's final log
+  trust_graph.<prefix>.dot  # one per log prefix, from the first realm's final log of that prefix
 ```
 
 `evidence.json`:
@@ -155,6 +158,10 @@ Every `<log>` key is the basename of a file under `logs/` without `.log` (`a`, o
 `thread.writer`), so each log file maps to exactly one `replicas` entry and one quarantine column.
 `verify` rejects a directory whose `logs/` file set and `replicas` key set differ.
 
+Build each graph with `Lattice.Graph.ReplicaSnapshot.build(module, log)` and write it with
+`ReplicaSnapshot.export(snapshot, :dot)`; `Graph.Export` takes a snapshot, never a `Log`. A
+single-module scenario has the prefix-free name `trust_graph.dot`.
+
 `state` is the SHA-256 of `:erlang.term_to_binary(Lattice.state(module, log), [:deterministic])`;
 `frontier` is the SHA-256 of the sorted frontier ids joined by `\n`.
 
@@ -168,7 +175,8 @@ file and asserts `{:error, _}`.
 
 ### Step 2 — `partition_converge` (action: disconnect replica)
 
-Two realms, `"a"` and `"b"`, on `Treehouse.Thread`, both holding a `:post` cap. Partition; `a`
+Two realms, `"a"` and `"b"`, on `Treehouse.Thread`, both holding a `:post` cap. `Sim.sync_all/1`
+after the grants so each holder's log contains its delegation; then partition; `a`
 posts 3, `b` posts 3; heal; `sync_all`.
 
 - **Invariant `convergence`** — checks: `frontiers_equal`, `states_equal`, `op_ids_equal`,
@@ -184,7 +192,11 @@ scenario twice with the same seed produces byte-identical directories (`diff -r`
 
 Realms `"root"`, `"writer"`, `"peer"`. Use `Treehouse.Space` for the admin role and
 `Treehouse.Thread` for posts, following `domain_test.exs:55-100`. Grant `writer` a thread `:post`
-cap; transfer `:admin` to `writer` on the Space. Then:
+cap; transfer `:admin` to `writer` on the Space; then `Sim.sync_all/1` **both** sims.
+`Sim.grant/4` and `Sim.transfer/5` append only to the issuer's log, so without this sync the
+writer's later ops cite delegations their own log has never seen and quarantine as
+`:capability_not_visible` whether or not anything is revoked, which defeats the negative control.
+The scenario asserts `pre_revoke_honored` precisely to catch a missing sync. Then:
 
 1. `writer` posts once (pre-revoke; must be honored).
 2. Partition `writer` from `root` and `peer`.
@@ -201,8 +213,8 @@ cap; transfer `:admin` to `writer` on the Space. Then:
   `{"space": ..., "thread": ...}` keyed by the log-name prefix. Cross-realm checks compare only
   logs with the same prefix.
 - **Negative control**: build the same scenario without step 3 and assert the checker reports
-  `post_revoke_posts_quarantined: false` and `verdict: "violated"`. This proves the evidence can
-  fail.
+  `post_revoke_posts_quarantined: false` and `verdict: "violated"`, **and** that nothing at all is
+  quarantined in that run. This proves the revoke, not a setup gap, caused the quarantine.
 
 Do not pin *which* realm holds `:admin` after the revoke; that is the judge's call and is covered by
 plan 184's vectors. This scenario pins only that the revoked holder's transfer did not take effect
@@ -218,9 +230,15 @@ evidence schema when `LATTICE_FAULT_OUT` is set (otherwise they assert only). Ta
 `@tag :fault_evidence`. Timings may be recorded under `"observed_ms"` but are excluded from
 byte-identity and from `verify`.
 
-**4a `stall_shutdown`** (action: stall shutdown). Start a relay-enabled path holder; inject a stalled
-durable write the same way `durability_test.exs:209` does; call `ReleaseQuiesce.drain/3` with a short
-timeout. Invariant **`fail_closed`** — checks: `drain_returned_error`, `admission_closed` (a valid
+**4a `stall_shutdown`** (action: stall shutdown). `drain/3` validates `Runtime.deployment/0`, the
+exact manifest and instance inventory, and suspends registered Ranch listeners before it captures
+any holder, so a bare path holder would fail early for an unrelated reason. Boot the controlled
+runtime exactly as `test/operator/release_runtime_test.exs` does in its `setup` (line ~28, using
+`test/support/operator/fixture.ex`), then stall that runtime's holder worker the way
+`durability_test.exs:209` stalls a durable write, then call `ReleaseQuiesce.drain/3` with a short
+timeout. Invariant **`fail_closed`** — checks: `drain_returned_error` *and*
+`drain_error_is_holder_timeout` (the reason is the capture deadline, not a validation error; if
+`drain/3` gives no distinguishable reason, that is a STOP), `admission_closed` (a valid
 signed relay submitted after close is refused and the on-disk log bytes are unchanged),
 `acked_subset_of_persisted` (every op the client saw acknowledged is in `Log.restore` of the path).
 
@@ -246,7 +264,8 @@ at report time and matched), **recorded** (a process-level check, such as `admis
 **failed**. A card is "verified" only if every check is replayed; a card with recorded checks reads
 "replay verified, process checks recorded", never plain "verified". A card whose replay fails reads
 "unverified". `evidence.json` marks each check with `"source": "replay" | "process"` so the report
-does not infer it. This is the
+does not infer it. A recorded check is the test run's own claim, not outsider-checkable evidence;
+the card says so in its legend, and a `held` verdict on such a card never renders as verified. This is the
 demonstration surface for this plan.
 
 `mix lattice.fault run all --seed demo --out <dir>` runs the two core scenarios, then the report.
@@ -265,7 +284,10 @@ with one line (rule 5): date, the four verdicts, and the PR number.
 - Core: `fault_scenario_test.exs` — evidence round-trip and tamper; `partition_converge` held plus
   negative control; `revoke_offline` held plus negative control; same-seed byte identity for both.
 - Carrier: `fault_scenario_test.exs` — `stall_shutdown` and `crash_relay` held, three consecutive runs.
-- Full suite: `mix test` for `lattice_core` and `lattice_carrier_server` stays green.
+- Full gate: prepare the clients as `AGENTS.md` describes (`npm --prefix clients/lattice-client ci`,
+  `... run build`, `npm --prefix clients/treehouse-tauri-shell ci`), then the root `mix verify`.
+  The new core modules compile into the umbrella dependency that the reciprocal Treehouse tests
+  use, so the two app suites alone are not enough.
 
 ## Done criteria
 
@@ -274,6 +296,9 @@ with one line (rule 5): date, the four verdicts, and the PR number.
 - Both carrier scenarios pass three runs in a row and emit evidence when asked.
 - `mix lattice.fault report` renders all four cards.
 - No diff under `authority.ex`, `sim.ex`, `canonical.ex`, carrier runtime `lib/`, `township*`.
+- Root `mix verify` passes after client preparation.
+- The PR's exact-tip hosted run is green (plus the merge-result run if required), and its one
+  adversarial review has every thread dispositioned.
 - The PR description claims the core tier only.
 
 ## STOP conditions
