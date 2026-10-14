@@ -1,4 +1,4 @@
-# Plan 203: Fault-scenario evidence harness — four scripted faults, one invariant each, replayable evidence
+# Plan 203: Fault-scenario evidence harness — scripted Sim faults, one invariant each, replayable evidence
 
 > **Executor instructions**: Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to the
@@ -7,7 +7,7 @@
 > in `plans/README.md` — unless a reviewer dispatched you and told you they
 > maintain the index.
 >
-> **Drift check (run first)**: `git diff --stat 1017cb8..HEAD -- apps/lattice_core/lib/lattice/sim.ex apps/lattice_core/lib/lattice/authority.ex apps/lattice_core/lib/treehouse/space.ex apps/lattice_core/lib/treehouse/thread.ex apps/lattice_carrier_server/lib/lattice_carrier_server/operator/ apps/lattice_carrier_server/lib/lattice_carrier_server/durability.ex apps/lattice_carrier_server/lib/lattice_carrier_server/holder.ex`
+> **Drift check (run first)**: `git diff --stat 1017cb8..HEAD -- apps/lattice_core/lib/lattice/sim.ex apps/lattice_core/lib/lattice/authority.ex apps/lattice_core/lib/treehouse/space.ex apps/lattice_core/lib/treehouse/thread.ex`
 > If any in-scope file changed since this plan was written, compare the
 > "Current state" excerpts against the live code before proceeding; on a
 > mismatch, treat it as a STOP condition.
@@ -16,7 +16,7 @@
 
 - **Priority**: P2
 - **Effort**: M
-- **Risk**: LOW (additive; no change to the authority judge, the wire, or the carrier server's runtime code)
+- **Risk**: LOW (additive; no change to the authority judge, the wire, or carrier code)
 - **Depends on**: 184 (revocation on `:transfer`/`:succeed`, DONE), 182 (policy)
 - **Category**: dx / demonstration (turns existing guarantees into repeatable, falsifiable evidence)
 - **Planned at**: commit `1017cb8`, 2026-10-14
@@ -40,6 +40,10 @@ while offline, keeps writing (a thread post *and* an admin `:transfer`), then he
 must converge and quarantine the same ops for the same reasons. Convergence alone is any CRDT;
 authority enforced over concurrent offline history is what Lattice adds, and plan 184 is what makes
 the `:transfer` half of it hold.
+
+The two process-level faults (stalled shutdown, relay crash) are **plan 204**. They write this
+plan's evidence format and appear in the same report; they were split out during review because
+their process timing is best written against this plan's landed code.
 
 ### Policy fit
 
@@ -65,16 +69,6 @@ the `:transfer` half of it hold.
 - `apps/lattice_core/test/treehouse/domain_test.exs:55-100` — a working pattern that drives
   `Treehouse.Space` and `Treehouse.Thread` through `Sim`, grants a thread cap with `ops: [:post]`,
   posts, revokes, and checks quarantine. Copy its setup shape.
-- `apps/lattice_carrier_server/lib/lattice_carrier_server/operator/release_quiesce.ex` —
-  `drain(attempt, expected, timeout \\ 5_000)` closes admission, suspends listeners and captures
-  holders; timeouts and ambiguous identity return `{:error, _}`.
-- `apps/lattice_carrier_server/test/operator/release_quiesce_test.exs:14` — "closing actual owned
-  Holder refuses a valid signed relay without changing bytes".
-- `apps/lattice_carrier_server/test/durability_test.exs:209` — "a stalled durable relay is refused
-  within a bounded time and the holder survives"; `:106` — ack follows file sync, rename, dir sync.
-- `apps/lattice_carrier_server/test/township_projection_test.exs:60` — "a client-signed relay
-  survives a second-BEAM restart and matches Sim". Its second-BEAM launch helper is the pattern for
-  the crash scenario; reuse the helper, not the Township replica.
 - `apps/lattice_core/lib/mix/tasks/lattice.graph.snapshot.ex` and `Lattice.Graph.Export` — the
   existing trust-graph exporters.
 
@@ -89,7 +83,6 @@ mix() { "$HOME/.asdf/shims/mix" "$@"; }
 OUT="$(mktemp -d)"
 mix format --check-formatted
 mix test apps/lattice_core/test/lattice2/fault_scenario_test.exs
-mix test apps/lattice_carrier_server/test/fault_scenario_test.exs
 mix lattice.fault run revoke_offline --seed demo --out "$OUT"
 mix lattice.fault verify "$OUT/revoke_offline"
 mix lattice.fault report "$OUT"               # writes $OUT/index.html
@@ -104,10 +97,7 @@ mix lattice.fault report "$OUT"               # writes $OUT/index.html
 - `apps/lattice_core/lib/lattice/fault_scenario/evidence.ex` — evidence encode/decode/verify.
 - `apps/lattice_core/lib/mix/tasks/lattice.fault.ex` — `run`, `verify`, `report`.
 - `apps/lattice_core/test/lattice2/fault_scenario_test.exs`.
-- `apps/lattice_carrier_server/test/support/fault_scenario.ex` and
-  `apps/lattice_carrier_server/test/fault_scenario_test.exs` — the two process-level scenarios
-  (step 4). Test-only: fault injection never ships in the `lattice_carrier_pilot` release.
-- One new row in `plans/README.md`.
+- Rows 203 and 204 in `plans/README.md`.
 
 **Out of scope**
 
@@ -116,6 +106,7 @@ mix lattice.fault report "$OUT"               # writes $OUT/index.html
 - Any LiveView, Vue or Tauri panel. Any write control anywhere.
 - Free-form fault controls, randomized fault schedules, property-based fault search.
 - Township modules, `township_web`, the TS client.
+- The process-level scenarios (plan 204).
 
 ## Git workflow
 
@@ -180,8 +171,8 @@ core scenarios, `verify` therefore also **re-runs the named scenario from its re
 requires the whole regenerated directory (logs, `evidence.json`, DOT files) to be byte-identical
 to the one supplied. This binds the evidence to the scripted operation set; it is possible only
 because Sim keys and signatures are deterministic from the seed (the same property Step 2's
-same-seed check asserts). Process-level directories cannot be re-run offline, so their cards stay
-"replay verified, process checks recorded" (Step 5).
+same-seed check asserts). Plan 204's process-level directories cannot be re-run offline, so their
+cards read "replay verified, process checks recorded" (Step 4).
 
 **Verify**: unit test round-trips a two-realm evidence directory, then asserts `{:error, _}` for
 two tampers: one flipped byte in a log file, and a deliberate forgery, where one op's body is
@@ -199,8 +190,12 @@ posts 3, `b` posts 3; heal; `sync_all`.
 - **Invariant `convergence`** — checks: `frontiers_equal`, `states_equal`, `op_ids_equal`,
   `matches_oracle` (each realm's state equals a single-log reference built by appending every op
   to one log in topological order), `nothing_quarantined`.
-- **Negative control** (in the test, not the scenario): drop one op from `b`'s dumped log before
-  `verify`; assert the recomputed `frontiers_equal` is false and `verify` reports a mismatch.
+- **Negative control** (in the test, not the scenario): remove one current frontier op (a leaf
+  no other op depends on) from `b`'s final log, rebuild it with `Log.from_ops/2` so the cached
+  `referenced` set stays consistent, and dump it. Dropping a non-leaf, or deleting from `log.ops`
+  directly, fails authenticity or dependency closure first and proves nothing about convergence.
+  Assert `restore_verified/1` accepts the rebuilt log, the recomputed `frontiers_equal` is false,
+  and `verify` reports a mismatch.
 
 **Verify**: `mix test apps/lattice_core/test/lattice2/fault_scenario_test.exs` passes; running the
 scenario twice with the same seed produces byte-identical directories (`diff -r`).
@@ -250,62 +245,7 @@ and that every realm agrees.
 **Verify**: tests pass; `mix lattice.fault run revoke_offline --seed demo` then `verify` prints
 `held`; two runs are byte-identical.
 
-### Step 4 — Process-level scenarios in `lattice_carrier_server` (test-only)
-
-These need real processes, so they live in the carrier server's test tree and write the same
-evidence schema when `LATTICE_FAULT_OUT` is set (otherwise they assert only). Tag both
-`@tag :fault_evidence`. Timings may be recorded under `"observed_ms"` but are excluded from
-byte-identity and from `verify`.
-
-**4a `stall_shutdown`** (action: stall shutdown). `drain/3` validates `Runtime.deployment/0`, the
-exact manifest and instance inventory, and suspends registered Ranch listeners before it captures
-any holder, so a bare path holder would fail early for an unrelated reason. Boot the controlled
-runtime the way `test/operator/release_runtime_test.exs` does: its `setup` (lines 28-49) only
-stops and restores the application, and the runtime with `f.holder`, `f.attempt` and `f.expected`
-comes from the private `boot/1` (lines 666-723). Move that helper into
-`test/support/fault_scenario.ex` (or copy it there; do not edit the original test), then stall that runtime's holder with the gated-sync pattern
-from `release_runtime_test.exs:339-352`: install the observer, swap the holder's durability with
-`:sys.replace_state(f.holder, &Map.put(&1, :durability, GatedSync))` (arming `InjectedDurability`
-does nothing here; the fixture's holder uses `Durability.Posix`), start one signed relay in a task,
-and `assert_receive {:sync_entered, worker}` so the holder is provably blocked in persistence
-**before** `drain/3` is called. Then call `drain/3` with a short timeout. The sync runs in a task,
-but the holder waits for it inside `handle_call` (`holder.ex:386-404`), so the holder answers nothing
-while the gate is held. Order the checks accordingly: take `drain_returned_error`,
-`drain_reached_capture` and the unchanged-bytes half of `admission_closed` while the gate is still
-held; then send `:continue_sync`, await the original relay, and only then submit the second relay for
-the refusal half of `admission_closed`. (That existing test shows the released-in-time case: drain
-waits and succeeds.) `drain/3` collapses every capture failure into
-`{:error, :release_refused}` (`release_quiesce.ex:40-48`), so the reason cannot show *where* it
-failed; observe it instead. Invariant **`fail_closed`** — checks: `drain_returned_error`,
-`drain_reached_capture` (after the error every expected listener reports
-`:ranch.get_status(Listener.ref(name)) == :suspended`; `drain/3` suspends listeners only after the
-deployment and manifest validation pass and immediately before holder capture),
-`admission_closed` (a valid
-signed relay submitted after close is refused and the on-disk log bytes are unchanged),
-`acked_subset_of_persisted` (every op the client saw acknowledged is in the log `Log.restore_verified/1` returns for the path; an unverifiable log fails the check).
-
-**4b `crash_relay`** (action: crash gateway — in this codebase the "gateway" is the carrier relay).
-Using the second-BEAM helper pattern from `township_projection_test.exs:60` with
-`Treehouse.Thread`: relay N signed posts, record the acknowledged set, kill the peer BEAM with
-`:erlang.halt/1` on the peer (not a graceful stop), restart it from the same path, resend the client's
-outbox. Take `acked_survive_restart` **immediately after restart and before any resend** (pull the
-restarted relay's frontier and ops); resending first would repopulate a lost log and hide the loss.
-Invariant **`durable_ack`** — checks, in this order: `acked_survive_restart` (pre-resend),
-then after the resend `duplicates_silent` (resent acked frames change nothing),
-`frontier_after_equals_sim`, `state_after_equals_sim`.
-
-**Negative controls.** 4a: the same run with `:continue_sync` sent before `drain/3` times out (the
-released case) must make `drain/3` succeed, so
-`drain_returned_error` is false and the verdict is `violated`. 4b: restart the relay from a fresh
-empty copy of the log path instead of the original path (simulated lost persistence), which must
-make `acked_survive_restart` false and the verdict `violated`. Both controls are test assertions,
-not shipped scenarios.
-
-**Verify**: `mix test apps/lattice_carrier_server/test/fault_scenario_test.exs` passes three times
-in a row; with `LATTICE_FAULT_OUT` set, `mix lattice.fault verify` accepts both directories (log
-replay checks only; process checks are recorded, not re-derived — `verify` must say so in its output).
-
-### Step 5 — Static report
+### Step 4 — Static report
 
 `mix lattice.fault report <out>` writes `<out>/index.html`: one self-contained page, no external
 assets, one card per scenario showing fault, invariant, verdict, the check list, the replica hash
@@ -313,8 +253,8 @@ table and the quarantine table (realms as columns). The page reads only `evidenc
 `"`, `'`) including scenario names, log names, check names, quarantine values and verifier errors,
 and
 gives every check one of three badges: **replayed** (re-derived from `logs/` by `Evidence.verify/1`
-at report time and matched), **recorded** (a process-level check, such as `admission_closed` or
-`acked_survive_restart`, that `verify` cannot re-derive and only copies from `evidence.json`), or
+at report time and matched), **recorded** (a process-level check from plan 204, such as
+`admission_closed`, that `verify` cannot re-derive and only copies from `evidence.json`), or
 **failed**. A card is "verified" only if every check is replayed; a card with recorded checks reads
 "replay verified, process checks recorded", never plain "verified". A card whose replay fails reads
 "unverified". `evidence.json` marks each check with `"source": "replay" | "process"` so the report
@@ -328,36 +268,34 @@ the card says so in its legend, and a `held` verdict on such a card never render
 demonstration surface for this plan.
 
 `mix lattice.fault run all --seed demo --out <dir>` runs the two core scenarios, then the report.
-The process-level scenarios join the report only if their directories already exist in `<dir>`.
+Plan 204's directories join the report when they exist in `<dir>`. This plan's test covers the
+"recorded" badge with a synthetic process-sourced check in a test-only table entry.
 
 **Verify**: a unit test feeds a directory whose log basename and check name contain
 `<script>`/quote characters and asserts the rendered page contains only their escaped forms. Open the
 generated page; all cards show `held`; corrupt one log and regenerate; that
 card shows "unverified".
 
-### Step 6 — Index row
+### Step 5 — Index row
 
 Row 203 was added to `plans/README.md` when this plan was written. Set its status cell to DONE
-with one line (rule 5): date, the four verdicts, and the PR number.
+with one line (rule 5): date, the two verdicts, and the PR number.
 
 ## Test plan
 
 - Core: `fault_scenario_test.exs` — evidence round-trip and tamper; `partition_converge` held plus
   negative control; `revoke_offline` held plus negative control; same-seed byte identity for both.
-- Carrier: `fault_scenario_test.exs` — `stall_shutdown` and `crash_relay` held, plus their negative
-  controls, three consecutive runs.
 - Full gate: prepare the clients as `AGENTS.md` describes (`npm --prefix clients/lattice-client ci`,
   `... run build`, `npm --prefix clients/treehouse-tauri-shell ci`), then the root `mix verify`.
   The new core modules compile into the umbrella dependency that the reciprocal Treehouse tests
-  use, so the two app suites alone are not enough.
+  use, so the core suite alone is not enough.
 
 ## Done criteria
 
 - Both core scenarios produce byte-identical evidence for the same seed, and `verify` accepts them.
-- All four scenarios have a negative control that the checker reports as `violated`.
-- Both carrier scenarios pass three runs in a row and emit evidence when asked.
-- `mix lattice.fault report` renders all four cards.
-- No diff under `authority.ex`, `sim.ex`, `canonical.ex`, carrier runtime `lib/`, `township*`.
+- Both scenarios have a negative control that the checker reports as `violated`.
+- `mix lattice.fault report` renders both cards, plus the synthetic recorded-check card in the test.
+- No diff under `authority.ex`, `sim.ex`, `canonical.ex`, `apps/lattice_carrier_server`, `township*`.
 - Root `mix verify` passes after client preparation, and the per-app Sobelow gates from `AGENTS.md`
   pass (`cd apps/lattice_server && ~/.asdf/shims/mix sobelow --exit --skip`, same in
   `apps/township_web`); this plan touches neither app, so they must simply stay green. Every local
@@ -374,8 +312,6 @@ with one line (rule 5): date, the four verdicts, and the PR number.
   reverse). That is a finding against the judge: file a row, do not change the scenario to pass.
 - `Treehouse.Space` cannot be driven through `Sim` for the `:admin` transfer without changes to
   `sim.ex`. Report; do not edit `sim.ex` in this plan.
-- The second-BEAM helper is Township-coupled in a way that cannot be reused without editing
-  Township test support.
 - Same-seed runs are not byte-identical and the cause is outside this plan's code (for example in
   `Op.new/6` or signing). That is a determinism finding, not a harness bug.
 - The plan would exceed 400 lines to finish (rule 4).
