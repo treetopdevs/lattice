@@ -1975,9 +1975,16 @@ function browserBase64(value: Uint8Array): string {
   return btoaFn(String.fromCharCode(...value));
 }
 
+/**
+ * Identity of a delegation's content. The signature is excluded: a content-addressed
+ * delegation can be introduced under a second valid signature, and Elixir keys every
+ * downstream check by id and the first valid introduction, so TS must not compare sigs.
+ * Each introduction is still signature-checked in collectDelegations.
+ */
 function delegationKey(delegation: AuthorityDelegationEvidence): string {
   return JSON.stringify({
     ...delegation,
+    sig: undefined,
     ops: [...delegation.ops].sort(),
     roles: [...delegation.roles].sort(),
   });
