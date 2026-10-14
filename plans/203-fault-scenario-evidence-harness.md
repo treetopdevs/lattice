@@ -80,7 +80,12 @@ the `:transfer` half of it hold.
 
 ## Commands you will need
 
+Locally, run mix through the asdf shim with the OTP 28/Elixir 1.19 bin directories first on `PATH`
+(the plan index's toolchain reminder); in GitHub Actions plain `mix` works:
+
 ```bash
+export PATH="$HOME/.asdf/installs/erlang/28.3.1/bin:$HOME/.asdf/installs/elixir/1.19.5-otp-28/bin:$PATH"
+alias mix="$HOME/.asdf/shims/mix"
 mix format --check-formatted
 mix test apps/lattice_core/test/lattice/fault_scenario_test.exs
 mix test apps/lattice_carrier_server/test/fault_scenario_test.exs
@@ -139,12 +144,16 @@ Define `Lattice.FaultScenario.Evidence`. One scenario writes one directory:
   "module": "Elixir.Treehouse.Thread",
   "fault": "partition writer; revoke writer cap; writer posts and transfers; heal",
   "invariant": "identical_quarantine",
-  "replicas": { "<realm>": { "frontier": "<hex sha256>", "state": "<hex sha256>" } },
-  "quarantine": [ { "op": "<op id>", "reasons": { "<realm>": "revoked_capability" } } ],
-  "checks": [ { "name": "states_equal", "ok": true } ],
+  "replicas": { "<log>": { "frontier": "<hex sha256>", "state": "<hex sha256>" } },
+  "quarantine": [ { "op": "<op id>", "reasons": { "<log>": "revoked_capability" } } ],
+  "checks": [ { "name": "states_equal", "source": "replay", "ok": true } ],
   "verdict": "held"
 }
 ```
+
+Every `<log>` key is the basename of a file under `logs/` without `.log` (`a`, or
+`thread.writer`), so each log file maps to exactly one `replicas` entry and one quarantine column.
+`verify` rejects a directory whose `logs/` file set and `replicas` key set differ.
 
 `state` is the SHA-256 of `:erlang.term_to_binary(Lattice.state(module, log), [:deterministic])`;
 `frontier` is the SHA-256 of the sorted frontier ids joined by `\n`.
@@ -187,8 +196,10 @@ cap; transfer `:admin` to `writer` on the Space. Then:
   `post_revoke_posts_quarantined`, `post_revoke_transfer_quarantined` (reason
   `:revoked_capability`), `reasons_identical_across_realms`, `admin_holder_identical` (every realm
   reports the same `:admin` holder) and `peer_never_admin` (no realm reports `peer` as holder).
-- One evidence directory covers both sims: `logs/space.<realm>.log` and `logs/thread.<realm>.log`.
-  `module` becomes a map `{"space": ..., "thread": ...}`.
+- One evidence directory covers both sims: `logs/space.<realm>.log` and `logs/thread.<realm>.log`,
+  so `replicas` holds keys such as `space.root` and `thread.root`. `module` becomes a map
+  `{"space": ..., "thread": ...}` keyed by the log-name prefix. Cross-realm checks compare only
+  logs with the same prefix.
 - **Negative control**: build the same scenario without step 3 and assert the checker reports
   `post_revoke_posts_quarantined: false` and `verdict: "violated"`. This proves the evidence can
   fail.
@@ -229,7 +240,13 @@ replay checks only; process checks are recorded, not re-derived — `verify` mus
 `mix lattice.fault report <out>` writes `<out>/index.html`: one self-contained page, no external
 assets, one card per scenario showing fault, invariant, verdict, the check list, the replica hash
 table and the quarantine table (realms as columns). The page reads only `evidence.json` files and
-marks a card "unverified" unless `Evidence.verify/1` passed at report time. This is the
+gives every check one of three badges: **replayed** (re-derived from `logs/` by `Evidence.verify/1`
+at report time and matched), **recorded** (a process-level check, such as `admission_closed` or
+`acked_survive_restart`, that `verify` cannot re-derive and only copies from `evidence.json`), or
+**failed**. A card is "verified" only if every check is replayed; a card with recorded checks reads
+"replay verified, process checks recorded", never plain "verified". A card whose replay fails reads
+"unverified". `evidence.json` marks each check with `"source": "replay" | "process"` so the report
+does not infer it. This is the
 demonstration surface for this plan.
 
 `mix lattice.fault run all --seed demo --out <dir>` runs the two core scenarios, then the report.
