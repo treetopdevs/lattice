@@ -1524,6 +1524,7 @@ function validDelegation(
   return (
     record !== undefined &&
     record.delegation !== null &&
+    introducedWithValidSignature(delegation) &&
     delegationKey(record.delegation) === delegationKey(delegation) &&
     record.validation.valid
   );
@@ -1537,6 +1538,7 @@ function successionCandidate(
   return (
     record !== undefined &&
     record.delegation !== null &&
+    introducedWithValidSignature(delegation) &&
     delegationKey(record.delegation) === delegationKey(delegation) &&
     !record.validation.valid &&
     record.validation.reason === "succession_candidate" &&
@@ -1556,6 +1558,7 @@ function candidateDelegationActivated(
   if (
     record === undefined ||
     record.delegation === null ||
+    !introducedWithValidSignature(delegation) ||
     delegationKey(record.delegation) !== delegationKey(delegation) ||
     record.validation.valid ||
     record.validation.reason !== "succession_candidate" ||
@@ -1856,6 +1859,7 @@ function collectInvalidGenesisReasons(
     if (
       record === undefined ||
       record.delegation === null ||
+      !introducedWithValidSignature(evidence.delegation) ||
       delegationKey(record.delegation) !== delegationKey(evidence.delegation) ||
       record.invalidIntroductionReasons.has(op.id)
     ) {
@@ -1977,9 +1981,9 @@ function browserBase64(value: Uint8Array): string {
 
 /**
  * Identity of a delegation's content. The signature is excluded: a content-addressed
- * delegation can be introduced under a second valid signature, and Elixir keys every
- * downstream check by id and the first valid introduction, so TS must not compare sigs.
- * Each introduction is still signature-checked in collectDelegations.
+ * delegation can be introduced under a second valid signature, and Elixir keys downstream
+ * checks by id and the first valid introduction. Identity alone is not enough to honor
+ * evidence, so every match also requires `introducedWithValidSignature`.
  */
 function delegationKey(delegation: AuthorityDelegationEvidence): string {
   return JSON.stringify({
@@ -1988,4 +1992,20 @@ function delegationKey(delegation: AuthorityDelegationEvidence): string {
     ops: [...delegation.ops].sort(),
     roles: [...delegation.roles].sort(),
   });
+}
+
+const selfConsistentDelegations = new WeakMap<AuthorityDelegationEvidence, boolean>();
+
+/**
+ * True when the cited delegation evidence carries a valid signature for its own content.
+ * This is the introduction bar Elixir's `collect_valid_delegation_intro` applies: an
+ * invalid-signature introduction must not match a verified delegation by content alone.
+ */
+function introducedWithValidSignature(delegation: AuthorityDelegationEvidence): boolean {
+  let verdict = selfConsistentDelegations.get(delegation);
+  if (verdict === undefined) {
+    verdict = delegationSelfConsistent(delegation);
+    selfConsistentDelegations.set(delegation, verdict);
+  }
+  return verdict;
 }
