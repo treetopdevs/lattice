@@ -258,7 +258,7 @@ failed; observe it instead. Invariant **`fail_closed`** — checks: `drain_retur
 deployment and manifest validation pass and immediately before holder capture),
 `admission_closed` (a valid
 signed relay submitted after close is refused and the on-disk log bytes are unchanged),
-`acked_subset_of_persisted` (every op the client saw acknowledged is in `Log.restore` of the path).
+`acked_subset_of_persisted` (every op the client saw acknowledged is in the log `Log.restore_verified/1` returns for the path; an unverifiable log fails the check).
 
 **4b `crash_relay`** (action: crash gateway — in this codebase the "gateway" is the carrier relay).
 Using the second-BEAM helper pattern from `township_projection_test.exs:60` with
