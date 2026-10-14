@@ -161,7 +161,9 @@ Every `<log>` key is the basename of a file under `logs/` without `.log` (`a`, o
 
 Build each graph with `Lattice.Graph.ReplicaSnapshot.build(module, log)` and write it with
 `ReplicaSnapshot.export(snapshot, :dot)`; `Graph.Export` takes a snapshot, never a `Log`. A
-single-module scenario has the prefix-free name `trust_graph.dot`.
+single-module scenario has the prefix-free name `trust_graph.dot`. `verify` regenerates every
+expected DOT file from the verified logs and requires byte equality; a missing, extra or altered
+DOT file is a mismatch.
 
 `state` is the SHA-256 of `:erlang.term_to_binary(Lattice.state(module, log), [:deterministic])`;
 `frontier` is the SHA-256 of the sorted frontier ids joined by `\n`.
@@ -241,11 +243,14 @@ byte-identity and from `verify`.
 exact manifest and instance inventory, and suspends registered Ranch listeners before it captures
 any holder, so a bare path holder would fail early for an unrelated reason. Boot the controlled
 runtime exactly as `test/operator/release_runtime_test.exs` does in its `setup` (line ~28, using
-`test/support/operator/fixture.ex`), then stall that runtime's holder worker the way
-`durability_test.exs:209` stalls a durable write, then call `ReleaseQuiesce.drain/3` with a short
-timeout. Concretely: arm `InjectedDurability.arm_failure(dir, :slow_sync_file)` with a
-`persistence_timeout_ms` longer than the drain timeout, start one signed relay so the holder is busy
-persisting, then call `drain/3`. `drain/3` collapses every capture failure into
+`test/support/operator/fixture.ex`), then stall that runtime's holder with the gated-sync pattern
+from `release_runtime_test.exs:339-352`: install the observer, swap the holder's durability with
+`:sys.replace_state(f.holder, &Map.put(&1, :durability, GatedSync))` (arming `InjectedDurability`
+does nothing here; the fixture's holder uses `Durability.Posix`), start one signed relay in a task,
+and `assert_receive {:sync_entered, worker}` so the holder is provably blocked in persistence
+**before** `drain/3` is called. Then call `drain/3` with a short timeout and never send
+`:continue_sync` until the checks are taken. (That existing test shows the released case: drain
+waits and succeeds.) `drain/3` collapses every capture failure into
 `{:error, :release_refused}` (`release_quiesce.ex:40-48`), so the reason cannot show *where* it
 failed; observe it instead. Invariant **`fail_closed`** — checks: `drain_returned_error`,
 `drain_reached_capture` (after the error every expected listener reports
@@ -259,10 +264,14 @@ signed relay submitted after close is refused and the on-disk log bytes are unch
 Using the second-BEAM helper pattern from `township_projection_test.exs:60` with
 `Treehouse.Thread`: relay N signed posts, record the acknowledged set, kill the peer BEAM with
 `:erlang.halt/1` on the peer (not a graceful stop), restart it from the same path, resend the client's
-outbox. Invariant **`durable_ack`** — checks: `acked_survive_restart`, `duplicates_silent` (resent
-acked frames change nothing), `frontier_after_equals_sim`, `state_after_equals_sim`.
+outbox. Take `acked_survive_restart` **immediately after restart and before any resend** (pull the
+restarted relay's frontier and ops); resending first would repopulate a lost log and hide the loss.
+Invariant **`durable_ack`** — checks, in this order: `acked_survive_restart` (pre-resend),
+then after the resend `duplicates_silent` (resent acked frames change nothing),
+`frontier_after_equals_sim`, `state_after_equals_sim`.
 
-**Negative controls.** 4a: the same run without `arm_failure` must make `drain/3` succeed, so
+**Negative controls.** 4a: the same run with `:continue_sync` sent before `drain/3` times out (the
+released case) must make `drain/3` succeed, so
 `drain_returned_error` is false and the verdict is `violated`. 4b: restart the relay from a fresh
 empty copy of the log path instead of the original path (simulated lost persistence), which must
 make `acked_survive_restart` false and the verdict `violated`. Both controls are test assertions,
@@ -316,7 +325,9 @@ with one line (rule 5): date, the four verdicts, and the PR number.
 - Both carrier scenarios pass three runs in a row and emit evidence when asked.
 - `mix lattice.fault report` renders all four cards.
 - No diff under `authority.ex`, `sim.ex`, `canonical.ex`, carrier runtime `lib/`, `township*`.
-- Root `mix verify` passes after client preparation.
+- Root `mix verify` passes after client preparation, and the per-app Sobelow gates from `AGENTS.md`
+  pass (`cd apps/lattice_server && mix sobelow --exit --skip`, same in `apps/township_web`); this
+  plan touches neither app, so they must simply stay green.
 - The PR's exact-tip hosted run is green (plus the merge-result run if required), and its one
   adversarial review has every thread dispositioned.
 - The PR description claims the core tier only.
