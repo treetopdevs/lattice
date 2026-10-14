@@ -1994,6 +1994,8 @@ function delegationKey(delegation: AuthorityDelegationEvidence): string {
   });
 }
 
+// Bounded: evidence is peer-supplied, so an unbounded cache is a memory-exhaustion path.
+const SELF_CONSISTENT_CACHE_LIMIT = 4096;
 const selfConsistentDelegations = new Map<string, boolean>();
 
 /**
@@ -2008,6 +2010,9 @@ function introducedWithValidSignature(delegation: AuthorityDelegationEvidence): 
   let verdict = selfConsistentDelegations.get(cacheKey);
   if (verdict === undefined) {
     verdict = delegationSelfConsistent(delegation);
+    if (selfConsistentDelegations.size >= SELF_CONSISTENT_CACHE_LIMIT) {
+      selfConsistentDelegations.clear();
+    }
     selfConsistentDelegations.set(cacheKey, verdict);
   }
   return verdict;
