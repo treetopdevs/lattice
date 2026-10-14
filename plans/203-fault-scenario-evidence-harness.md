@@ -174,10 +174,21 @@ DOT file is a mismatch.
 every check, and returns `{:ok, evidence}` only if the recomputed `evidence.json` is byte-identical
 to the stored one. Otherwise `{:error, [mismatch]}`.
 
+Authentic logs are not necessarily complete (`log.ex:131-133`: `restore_verified/1` does not prove
+completeness), so dropping the same leaf op from every log would still replay cleanly. For the two
+core scenarios, `verify` therefore also **re-runs the named scenario from its recorded `seed`** and
+requires the whole regenerated directory (logs, `evidence.json`, DOT files) to be byte-identical
+to the one supplied. This binds the evidence to the scripted operation set; it is possible only
+because Sim keys and signatures are deterministic from the seed (the same property Step 2's
+same-seed check asserts). Process-level directories cannot be re-run offline, so their cards stay
+"replay verified, process checks recorded" (Step 5).
+
 **Verify**: unit test round-trips a two-realm evidence directory, then asserts `{:error, _}` for
 two tampers: one flipped byte in a log file, and a deliberate forgery, where one op's body is
 altered and the log is re-encoded with `Log.dump/2` and `evidence.json` is rewritten to match the
-forged results. Only `restore_verified/1` catches the second one.
+forged results. Only `restore_verified/1` catches the second one. A third tamper removes the same
+leaf post from every log and regenerates `evidence.json` and the DOT files; only the seeded re-run
+catches it.
 
 ### Step 2 — `partition_converge` (action: disconnect replica)
 
