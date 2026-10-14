@@ -263,7 +263,9 @@ scenario's check names and their source, and rejects any directory with an unkno
 a missing check, or a `source` that differs from the table. The same table fixes each scenario's
 log prefixes and the replica module for each (`thread` → `Treehouse.Thread`, `space` →
 `Treehouse.Space`); `verify` rejects a `module` field or log prefix that differs **before** any
-replay, so an authentic log from another module cannot stand in for a named scenario. A recorded check is the test run's own claim, not outsider-checkable evidence;
+replay, so an authentic log from another module cannot stand in for a named scenario. It also
+pins each scenario's `fault` and `invariant` text; a mismatch is rejected, so an edited
+`evidence.json` cannot relabel a card with a different fault or guarantee. A recorded check is the test run's own claim, not outsider-checkable evidence;
 the card says so in its legend, and a `held` verdict on such a card never renders as verified. This is the
 demonstration surface for this plan.
 
