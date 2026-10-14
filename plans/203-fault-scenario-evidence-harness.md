@@ -7,7 +7,7 @@
 > in `plans/README.md` — unless a reviewer dispatched you and told you they
 > maintain the index.
 >
-> **Drift check (run first)**: `git diff --stat 1017cb8..HEAD -- apps/lattice_core/lib/lattice/sim.ex apps/lattice_core/lib/lattice/authority.ex apps/lattice_core/lib/treehouse/space.ex apps/lattice_core/lib/treehouse/thread.ex apps/lattice_carrier_server/lib/lattice_carrier_server/operator/release_quiesce.ex apps/lattice_carrier_server/lib/lattice_carrier_server/durability.ex apps/lattice_carrier_server/lib/lattice_carrier_server/holder.ex`
+> **Drift check (run first)**: `git diff --stat 1017cb8..HEAD -- apps/lattice_core/lib/lattice/sim.ex apps/lattice_core/lib/lattice/authority.ex apps/lattice_core/lib/treehouse/space.ex apps/lattice_core/lib/treehouse/thread.ex apps/lattice_carrier_server/lib/lattice_carrier_server/operator/ apps/lattice_carrier_server/lib/lattice_carrier_server/durability.ex apps/lattice_carrier_server/lib/lattice_carrier_server/holder.ex`
 > If any in-scope file changed since this plan was written, compare the
 > "Current state" excerpts against the live code before proceeding; on a
 > mismatch, treat it as a STOP condition.
