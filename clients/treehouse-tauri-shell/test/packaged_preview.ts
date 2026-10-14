@@ -8,6 +8,7 @@ import { createHash } from "node:crypto";
 import { TreehouseWorkflow } from "../src/treehouse_workflow";
 import { parseState } from "../src/treehouse_state";
 import type { PreviewNative, Draft } from "../src/treehouse_state";
+import { readKv, readStore } from "./support/store_read";
 const evidence =
   process.env.TREEHOUSE_EVIDENCE_DIR ?? "/tmp/treehouse-r12-packaged-green";
 const binary = resolve(
@@ -32,23 +33,9 @@ const priorArtifact = replayDirectory
       await readFile(resolve(replayDirectory, "public-preview.json"), "utf8"),
     )
   : null;
+// Read-only, and waits out a write in progress instead of failing "database is locked".
 function rows(): { key: string; value: string }[] {
-  return JSON.parse(
-    execFileSync(
-      "sqlite3",
-      [
-        "-readonly",
-        "-json",
-        // The app writes under a 5 s busy timeout; the CLI reader must wait too,
-        // or it fails with "database is locked (5)" during a write.
-        "-cmd",
-        ".timeout 10000",
-        database,
-        "SELECT key,value FROM kv ORDER BY key;",
-      ],
-      { encoding: "utf8" },
-    ) || "[]",
-  );
+  return readKv(database);
 }
 try {
   await access(appData);
@@ -65,17 +52,13 @@ try {
       "Only the exact test-owned public history can be replayed",
     );
   } else {
-    const frames = execFileSync(
-      "sqlite3",
-      ["-readonly", database, "SELECT count(*) FROM frames;"],
-      { encoding: "utf8" },
-    ).trim();
+    const frames = readStore(database, "SELECT count(*) AS n FROM frames;");
     assert.equal(
       retained.length,
       0,
       "A clean account is required; existing Treehouse records are preserved.",
     );
-    assert.equal(frames, "0");
+    assert.deepEqual(frames, [{ n: 0 }]);
   }
 } catch (error) {
   if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;

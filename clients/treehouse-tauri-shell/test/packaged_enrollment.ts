@@ -32,6 +32,7 @@ import {
 } from "./support/relay_peer";
 import type { PilotRelay } from "./support/relay_peer";
 import { assertNoSecrets, assertScannerDetects } from "./support/secret_scan";
+import { readKv } from "./support/store_read";
 import { SeededNative } from "./support/seeded_native";
 
 // Plan 181 S5c1. The packaged two-instance macOS harness: two launches of one dev-trace Treehouse bundle,
@@ -183,20 +184,9 @@ const waitText = (app: App, text: string, attempts = 150) => waitUi(app, text, a
 
 // ---- read-only store evidence ------------------------------------------------------------------------
 
+// Read-only; a read during an app write waits on SQLite's busy handler instead of retrying.
 function rows(app: App): { key: string; value: string }[] {
-  if (!existsSync(app.database)) return [];
-  for (let attempt = 0; ; attempt++) {
-    try {
-      return JSON.parse(
-        execFileSync("sqlite3", ["-readonly", "-json", app.database, "SELECT key,value FROM kv ORDER BY key;"], {
-          encoding: "utf8",
-          maxBuffer: 64 * 1024 * 1024,
-        }) || "[]",
-      );
-    } catch (error) {
-      if (attempt >= 4) throw error;
-    }
-  }
+  return existsSync(app.database) ? readKv(app.database) : [];
 }
 const recordOf = (app: App) => rows(app).find((row) => row.key === "treehouse:preview:history")?.value ?? null;
 const stateOf = (app: App): PreviewState => parseState(recordOf(app));
