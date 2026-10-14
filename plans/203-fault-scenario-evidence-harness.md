@@ -88,7 +88,7 @@ export PATH="$HOME/.asdf/installs/erlang/28.3.1/bin:$HOME/.asdf/installs/elixir/
 mix() { "$HOME/.asdf/shims/mix" "$@"; }
 OUT="$(mktemp -d)"
 mix format --check-formatted
-mix test apps/lattice_core/test/lattice/fault_scenario_test.exs
+mix test apps/lattice_core/test/lattice2/fault_scenario_test.exs
 mix test apps/lattice_carrier_server/test/fault_scenario_test.exs
 mix lattice.fault run revoke_offline --seed demo --out "$OUT"
 mix lattice.fault verify "$OUT/revoke_offline"
@@ -103,7 +103,7 @@ mix lattice.fault report "$OUT"               # writes $OUT/index.html
   checker (steps 1–3).
 - `apps/lattice_core/lib/lattice/fault_scenario/evidence.ex` — evidence encode/decode/verify.
 - `apps/lattice_core/lib/mix/tasks/lattice.fault.ex` — `run`, `verify`, `report`.
-- `apps/lattice_core/test/lattice/fault_scenario_test.exs`.
+- `apps/lattice_core/test/lattice2/fault_scenario_test.exs`.
 - `apps/lattice_carrier_server/test/support/fault_scenario.ex` and
   `apps/lattice_carrier_server/test/fault_scenario_test.exs` — the two process-level scenarios
   (step 4). Test-only: fault injection never ships in the `lattice_carrier_pilot` release.
@@ -202,14 +202,16 @@ posts 3, `b` posts 3; heal; `sync_all`.
 - **Negative control** (in the test, not the scenario): drop one op from `b`'s dumped log before
   `verify`; assert the recomputed `frontiers_equal` is false and `verify` reports a mismatch.
 
-**Verify**: `mix test apps/lattice_core/test/lattice/fault_scenario_test.exs` passes; running the
+**Verify**: `mix test apps/lattice_core/test/lattice2/fault_scenario_test.exs` passes; running the
 scenario twice with the same seed produces byte-identical directories (`diff -r`).
 
 ### Step 3 — `revoke_offline` (action: revoke writer; the canonical scenario)
 
 Realms `"root"`, `"writer"`, `"peer"`. Use `Treehouse.Space` for the admin role and
 `Treehouse.Thread` for posts, following `domain_test.exs:55-100`. Grant `writer` a thread `:post`
-cap; transfer `:admin` to `writer` on the Space; then `Sim.sync_all/1` **both** sims.
+cap; transfer `:admin` to `writer` on the Space with `Sim.transfer(space, "root", "writer", :admin, ops: [])`
+(the default `ops: [:lock, :unlock]` does not attenuate the Space genesis delegation, so the
+transfer would be invalid before anything is revoked); then `Sim.sync_all/1` **both** sims.
 `Sim.grant/4` and `Sim.transfer/5` append only to the issuer's log, so without this sync the
 writer's later ops cite delegations their own log has never seen and quarantine as
 `:capability_not_visible` whether or not anything is revoked, which defeats the negative control.
@@ -232,6 +234,9 @@ The scenario asserts `pre_revoke_honored` precisely to catch a missing sync. The
   so `replicas` holds keys such as `space.root` and `thread.root`. `module` becomes a map
   `{"space": ..., "thread": ...}` keyed by the log-name prefix. Cross-realm checks compare only
   logs with the same prefix.
+- Add the check `writer_admin_before_revoke` (every realm reports `writer` as `:admin` holder
+  after the initial sync), so an invalid setup transfer fails loudly instead of masquerading as
+  a revocation effect.
 - **Negative control**: build the same scenario without step 3 and assert the checker reports
   `post_revoke_posts_quarantined: false` and `verdict: "violated"`, **and** that nothing at all is
   quarantined in that run. This proves the revoke, not a setup gap, caused the quarantine.
@@ -300,7 +305,9 @@ replay checks only; process checks are recorded, not re-derived — `verify` mus
 
 `mix lattice.fault report <out>` writes `<out>/index.html`: one self-contained page, no external
 assets, one card per scenario showing fault, invariant, verdict, the check list, the replica hash
-table and the quarantine table (realms as columns). The page reads only `evidence.json` files and
+table and the quarantine table (realms as columns). The page reads only `evidence.json` files, HTML-escapes every evidence-derived value (`&`, `<`, `>`,
+`"`, `'`) including scenario names, log names, check names, quarantine values and verifier errors,
+and
 gives every check one of three badges: **replayed** (re-derived from `logs/` by `Evidence.verify/1`
 at report time and matched), **recorded** (a process-level check, such as `admission_closed` or
 `acked_survive_restart`, that `verify` cannot re-derive and only copies from `evidence.json`), or
@@ -316,7 +323,9 @@ demonstration surface for this plan.
 `mix lattice.fault run all --seed demo --out <dir>` runs the two core scenarios, then the report.
 The process-level scenarios join the report only if their directories already exist in `<dir>`.
 
-**Verify**: open the generated page; all cards show `held`; corrupt one log and regenerate; that
+**Verify**: a unit test feeds a directory whose log basename and check name contain
+`<script>`/quote characters and asserts the rendered page contains only their escaped forms. Open the
+generated page; all cards show `held`; corrupt one log and regenerate; that
 card shows "unverified".
 
 ### Step 6 — Index row
@@ -343,8 +352,11 @@ with one line (rule 5): date, the four verdicts, and the PR number.
 - `mix lattice.fault report` renders all four cards.
 - No diff under `authority.ex`, `sim.ex`, `canonical.ex`, carrier runtime `lib/`, `township*`.
 - Root `mix verify` passes after client preparation, and the per-app Sobelow gates from `AGENTS.md`
-  pass (`cd apps/lattice_server && mix sobelow --exit --skip`, same in `apps/township_web`); this
-  plan touches neither app, so they must simply stay green.
+  pass (`cd apps/lattice_server && ~/.asdf/shims/mix sobelow --exit --skip`, same in
+  `apps/township_web`); this plan touches neither app, so they must simply stay green. Every local
+  `mix` here means the asdf shim with the `AGENTS.md` PATH prefix, as in "Commands you will need".
+- Every new `lib/` module carries `@moduledoc`, and every public function `@spec` (`AGENTS.md`
+  conventions for v2 modules).
 - The PR's exact-tip hosted run is green (plus the merge-result run if required), and its one
   adversarial review has every thread dispositioned.
 - The PR description claims the core tier only.
