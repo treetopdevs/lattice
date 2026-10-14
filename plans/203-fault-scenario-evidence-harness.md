@@ -7,7 +7,7 @@
 > in `plans/README.md` — unless a reviewer dispatched you and told you they
 > maintain the index.
 >
-> **Drift check (run first)**: `git diff --stat 1017cb8..HEAD -- apps/lattice_core/lib/lattice/sim.ex apps/lattice_core/lib/lattice/authority.ex apps/lattice_core/lib/treehouse/space.ex apps/lattice_core/lib/treehouse/thread.ex apps/lattice_carrier_server/lib/lattice_carrier_server/operator/release_quiesce.ex apps/lattice_carrier_server/lib/lattice_carrier_server/durability.ex`
+> **Drift check (run first)**: `git diff --stat 1017cb8..HEAD -- apps/lattice_core/lib/lattice/sim.ex apps/lattice_core/lib/lattice/authority.ex apps/lattice_core/lib/treehouse/space.ex apps/lattice_core/lib/treehouse/thread.ex apps/lattice_carrier_server/lib/lattice_carrier_server/operator/release_quiesce.ex apps/lattice_carrier_server/lib/lattice_carrier_server/durability.ex apps/lattice_carrier_server/lib/lattice_carrier_server/holder.ex`
 > If any in-scope file changed since this plan was written, compare the
 > "Current state" excerpts against the live code before proceeding; on a
 > mismatch, treat it as a STOP condition.
@@ -307,7 +307,9 @@ at report time and matched), **recorded** (a process-level check, such as `admis
 **failed**. A card is "verified" only if every check is replayed; a card with recorded checks reads
 "replay verified, process checks recorded", never plain "verified". A card whose replay fails reads
 "unverified". `evidence.json` marks each check with `"source": "replay" | "process"` so the report
-does not infer it. A recorded check is the test run's own claim, not outsider-checkable evidence;
+does not infer it. `verify` never trusts that field: it holds a verifier-owned table of each
+scenario's check names and their source, and rejects any directory with an unknown check name,
+a missing check, or a `source` that differs from the table. A recorded check is the test run's own claim, not outsider-checkable evidence;
 the card says so in its legend, and a `held` verdict on such a card never renders as verified. This is the
 demonstration surface for this plan.
 
